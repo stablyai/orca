@@ -232,7 +232,7 @@ describe('MacOSNativeProviderClient', () => {
     firstSocket.emit('close')
 
     const capabilities = {
-      protocolVersion: 1,
+      protocolVersion: 2,
       supports: {}
     }
     secondSocket.emit(
@@ -273,7 +273,7 @@ describe('MacOSNativeProviderClient', () => {
     const secondRequest = JSON.parse(secondSocket.writes[0]!) as { id: number }
 
     const capabilities = {
-      protocolVersion: 1,
+      protocolVersion: 2,
       supports: {}
     }
     secondSocket.emit(
@@ -314,11 +314,11 @@ describe('MacOSNativeProviderClient', () => {
       `${JSON.stringify({
         id: secondRequest.id,
         ok: true,
-        result: { protocolVersion: 1, supports: {} }
+        result: { protocolVersion: 2, supports: {} }
       })}\n`
     )
 
-    await expect(secondCall).resolves.toMatchObject({ protocolVersion: 1 })
+    await expect(secondCall).resolves.toMatchObject({ protocolVersion: 2 })
   })
 
   it('rejects actions that the native provider does not advertise', async () => {
@@ -347,6 +347,27 @@ describe('MacOSNativeProviderClient', () => {
     await expect(call).rejects.toMatchObject({
       code: 'unsupported_capability',
       message: expect.stringContaining('actions.setValue')
+    })
+    expect(socket.writes).toHaveLength(1)
+  })
+
+  it('rejects Desktop App calls on a helper that does not advertise them', async () => {
+    const { MacOSNativeProviderClient } = await loadClientModule()
+    const client = new MacOSNativeProviderClient()
+
+    const call = client.desktopApp('listDesktopWindows', {})
+    await vi.waitFor(() => expect(sockets).toHaveLength(1))
+    const socket = sockets[0]!
+    await vi.waitFor(() => expect(socket.writes).toHaveLength(1))
+    const handshakeRequest = JSON.parse(socket.writes[0]!) as { id: number }
+    socket.emit(
+      'data',
+      `${JSON.stringify({ id: handshakeRequest.id, ok: true, result: macOSProviderCapabilities() })}\n`
+    )
+
+    await expect(call).rejects.toMatchObject({
+      code: 'unsupported_capability',
+      message: expect.stringContaining('desktopApp.listWindows')
     })
     expect(socket.writes).toHaveLength(1)
   })
@@ -457,10 +478,10 @@ describe('MacOSNativeProviderClient', () => {
       `${JSON.stringify({
         id: request.id,
         ok: true,
-        result: { protocolVersion: 1, supports: {} }
+        result: { protocolVersion: 2, supports: {} }
       })}\n`
     )
-    await expect(call).resolves.toMatchObject({ protocolVersion: 1 })
+    await expect(call).resolves.toMatchObject({ protocolVersion: 2 })
   })
 
   it('does not let a superseded startup clean up the replacement helper token', async () => {
@@ -503,10 +524,10 @@ describe('MacOSNativeProviderClient', () => {
       `${JSON.stringify({
         id: secondRequest.id,
         ok: true,
-        result: { protocolVersion: 1, supports: {} }
+        result: { protocolVersion: 2, supports: {} }
       })}\n`
     )
-    await expect(secondCall).resolves.toMatchObject({ protocolVersion: 1 })
+    await expect(secondCall).resolves.toMatchObject({ protocolVersion: 2 })
   })
 
   it('terminates the helper process when socket startup fails', async () => {
@@ -635,10 +656,10 @@ describe('MacOSNativeProviderClient', () => {
       `${JSON.stringify({
         id: secondRequest.id,
         ok: true,
-        result: { protocolVersion: 1, supports: {} }
+        result: { protocolVersion: 2, supports: {} }
       })}\n`
     )
-    await expect(secondCall).resolves.toMatchObject({ protocolVersion: 1 })
+    await expect(secondCall).resolves.toMatchObject({ protocolVersion: 2 })
   })
 
   it('reaps the helper process when the active socket closes on its own', async () => {
@@ -715,10 +736,10 @@ describe('MacOSNativeProviderClient', () => {
       `${JSON.stringify({
         id: secondRequest.id,
         ok: true,
-        result: { protocolVersion: 1, supports: {} }
+        result: { protocolVersion: 2, supports: {} }
       })}\n`
     )
-    await expect(secondCall).resolves.toMatchObject({ protocolVersion: 1 })
+    await expect(secondCall).resolves.toMatchObject({ protocolVersion: 2 })
   })
 })
 
@@ -727,7 +748,7 @@ function macOSProviderCapabilities(actions: Partial<Record<string, boolean>> = {
     platform: 'darwin',
     provider: 'orca-computer-use-macos',
     providerVersion: '1.0.0',
-    protocolVersion: 1,
+    protocolVersion: 2,
     supports: {
       apps: { list: true, bundleIds: true, pids: true },
       windows: {

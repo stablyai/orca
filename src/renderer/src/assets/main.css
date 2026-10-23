@@ -95,6 +95,9 @@
   --color-agent-question: var(--agent-question);
   --color-agent-working: var(--agent-working);
   --color-agent-question-text: var(--agent-question-text);
+  --color-agent-control: var(--agent-control);
+  --color-agent-control-surface: var(--agent-control-surface);
+  --color-agent-control-surface-foreground: var(--agent-control-surface-foreground);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
@@ -237,6 +240,11 @@
   --agent-working: var(--color-yellow-500);
   /* Legible weight for text/glyphs on a tinted --agent-question surface. */
   --agent-question-text: var(--color-orange-700);
+  /* "An agent is driving this app right now" (desktop app pane border, cursor, stop pill).
+     Same hue in both themes. */
+  --agent-control: #d97757;
+  --agent-control-surface: #faf9f5;
+  --agent-control-surface-foreground: #141413;
   /* Workspace PR-state tones: same hue in both themes so a status keeps its
      identity when the theme flips. */
   --workspace-status-done: #c7a594;
@@ -3408,4 +3416,23 @@ html.native-shell .app-layout {
 
 .icon-superscript-count[data-multiple-digits='true'] {
   letter-spacing: -0.02em;
+}
+
+/* Desktop app pane: "an agent is driving this app" indicator. */
+.desktop-app-agent-glow {
+  box-shadow:
+    inset 0 0 15px color-mix(in srgb, var(--agent-control) 70%, transparent),
+    inset 0 0 25px color-mix(in srgb, var(--agent-control) 50%, transparent),
+    inset 0 0 35px color-mix(in srgb, var(--agent-control) 20%, transparent);
+}
+
+.desktop-app-agent-cursor-glow {
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--agent-control) 90%, transparent))
+    drop-shadow(0 0 10px color-mix(in srgb, var(--agent-control) 45%, transparent));
+}
+
+.desktop-app-agent-pill {
+  box-shadow:
+    0 40px 80px color-mix(in srgb, var(--agent-control) 24%, transparent),
+    0 4px 14px color-mix(in srgb, var(--agent-control) 24%, transparent);
 }

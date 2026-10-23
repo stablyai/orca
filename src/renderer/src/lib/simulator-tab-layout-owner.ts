@@ -1,16 +1,19 @@
-// Simulator tab opens in a layout-owner build: the window sends the open under a proposed tab id
+// Simulator (and other live-surface) tab opens in a layout-owner build: the window sends the open under a proposed tab id
 // (the emulator pane attaches by it); main's frame draws the tab, and only then is it surfaced.
 
 import { createBrowserUuid } from './browser-uuid'
 import { openContentTabThroughLayoutOwner } from '@/runtime/layout-owner-content-tab-open'
 import { afterPendingTab, isPendingTab } from '@/runtime/layout-owner-pending-tabs'
 import type { AppState } from '@/store/types'
+import type { LiveSurfaceContentType } from '../../../shared/tab-types'
 import { isFrameDrawnServerWorkspace } from '@/runtime/web-session-tabs-sync/frame-drawn-server-workspaces'
 import { runtimeEnvironmentIdUnlessTwin } from './resolve-owner'
 import { noteDesktopCreatedServerTab } from './desktop-created-server-tabs'
 
 export type SimulatorTabOpen = {
   worktreeId: string
+  /** Which live-surface tab; absent means the simulator. */
+  kind?: LiveSurfaceContentType
   label: string
   /** The group the tab joins, or the group a new right split goes beside. */
   groupId: string
@@ -41,16 +44,27 @@ export function openSimulatorTabThroughLayoutOwner(
         split: { besideGroupId: open.groupId, direction: 'right' as const }
       }
     : { groupId: open.groupId }
+  const kind = open.kind ?? 'simulator'
   const sent = openContentTabThroughLayoutOwner(state, {
     worktreeId: open.worktreeId,
     entityId: tabId,
-    command: { type: 'openSimulatorTab', tabId, ...placement },
+    // Older mains read an absent kind as 'simulator'.
+    command: {
+      type: 'openSimulatorTab',
+      tabId,
+      ...(kind === 'simulator' ? {} : { kind }),
+      ...placement
+    },
     facts: { label: open.label },
     shown: open.surface,
     drawHere: () => open.drawHere(tabId)
   })
   if (!sent) {
     return null
+  }
+  // Only the simulator is one tab per worktree; other live surfaces open as many as asked.
+  if (kind !== 'simulator') {
+    return tabId
   }
   opening.set(open.worktreeId, tabId)
   afterPendingTab(tabId, () => {

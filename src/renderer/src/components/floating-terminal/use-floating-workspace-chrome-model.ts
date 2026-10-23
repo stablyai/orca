@@ -6,6 +6,10 @@ import { useTabGroupWorkspaceModel } from '@/components/tab-group/useTabGroupWor
 import { resolveGroupTabFromVisibleId } from '@/components/tab-group/tab-group-visible-id'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { resolveFloatingWorkspaceSurfaceModel } from './floating-workspace-surface-model'
+import {
+  isLiveSurfaceContentType,
+  type WorkspaceVisibleTabType
+} from '../../../../shared/tab-types'
 
 const EMPTY_TERMINAL_TABS: readonly TerminalTab[] = []
 
@@ -39,7 +43,7 @@ export function useFloatingWorkspaceChromeModel() {
     activeTab &&
     activeTab.contentType !== 'terminal' &&
     activeTab.contentType !== 'browser' &&
-    activeTab.contentType !== 'simulator' &&
+    !isLiveSurfaceContentType(activeTab.contentType) &&
     activeTab.contentType !== 'agent-session'
       ? activeTab.id
       : null
@@ -49,15 +53,15 @@ export function useFloatingWorkspaceChromeModel() {
   const activeEditorFile = activeEditorUnifiedId
     ? (model.editorItems.find((item) => item.tabId === activeEditorUnifiedId) ?? null)
     : null
-  const activeTabType: 'browser' | 'terminal' | 'simulator' | 'editor' | 'agent-session' =
+  const activeTabType: WorkspaceVisibleTabType =
     activeTab?.contentType === 'browser'
       ? 'browser'
       : activeTab?.contentType === 'terminal'
         ? 'terminal'
         : activeTab?.contentType === 'agent-session'
           ? 'agent-session'
-          : activeTab?.contentType === 'simulator'
-            ? 'simulator'
+          : activeTab && isLiveSurfaceContentType(activeTab.contentType)
+            ? activeTab.contentType
             : 'editor'
 
   const hasVisibleFloatingTabs = surface.kind === 'workspace'
@@ -77,7 +81,7 @@ export function useFloatingWorkspaceChromeModel() {
         if (tab.contentType === 'browser') {
           return model.browserItems.some((item) => item.tabId === tab.id)
         }
-        if (tab.contentType === 'simulator' || tab.contentType === 'agent-session') {
+        if (isLiveSurfaceContentType(tab.contentType) || tab.contentType === 'agent-session') {
           return true
         }
         return model.editorItems.some((item) => item.tabId === tab.id)

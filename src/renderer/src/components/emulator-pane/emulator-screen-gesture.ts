@@ -62,7 +62,10 @@ export function buildEmulatorGesturePoint(
   return edge === undefined ? { ...point, type } : { ...point, type, edge }
 }
 
-function resolveSimulatorScreenContentRect(rect: RectLike, streamSize: StreamSize): ContentRect {
+export function resolveSimulatorScreenContentRect(
+  rect: RectLike,
+  streamSize: StreamSize
+): ContentRect {
   let contentLeft = rect.left
   let contentTop = rect.top
   let contentWidth = rect.width
@@ -81,7 +84,7 @@ function resolveSimulatorScreenContentRect(rect: RectLike, streamSize: StreamSiz
   return { left: contentLeft, top: contentTop, width: contentWidth, height: contentHeight }
 }
 
-function normalizeWheelDelta(
+export function normalizeWheelDelta(
   delta: number,
   deltaMode: number | undefined,
   pageSize: number

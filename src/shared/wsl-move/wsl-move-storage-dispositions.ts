@@ -26,6 +26,8 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
     item: 72,
     note: 'CSV column widths and PDF scale, keyed by worktree id, runtime and file path.'
   },
+  'src/renderer/src/components/desktop-app-pane/desktop-app-target-memory.ts':
+    notApplicableDisposition(45, 'Keyed by tab id; the Desktop App tab is macOS only.'),
   'src/renderer/src/components/native-chat/native-chat-composer-draft-journal.ts':
     notApplicableDisposition(45, 'Keyed by session id.'),
   'src/renderer/src/components/native-chat/native-chat-composer-draft-storage.ts':

@@ -8,6 +8,7 @@ import { isWebRuntimeSessionActive } from '../../runtime/web-runtime-session-env
 import { openTabBarEntry, type TabCreateEntryArgs } from '../tab-bar/tab-create-entry-action'
 import { openMobileEmulatorTab } from '@/lib/open-mobile-emulator-tab'
 import { ensureSimulatorTab, getSimulatorTabForWorktree } from '@/lib/ensure-simulator-tab'
+import { canOpenDesktopAppTab, openDesktopAppTab } from '@/lib/open-desktop-app-tab'
 import { buildDuplicatedBrowserTabOptions } from '@/lib/duplicate-browser-tab-options'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { browserWorkspaceHasRemoteOwner } from '@/runtime/remote-browser-tab-ownership'
@@ -57,6 +58,11 @@ export function useTabGroupCreationCommands({
           }).catch((error) => {
             toast.error(error instanceof Error ? error.message : String(error))
           })
+        }
+      : undefined,
+    newDesktopAppTab: canOpenDesktopAppTab()
+      ? () => {
+          openDesktopAppTab(worktreeId, groupId)
         }
       : undefined,
     openEntry: async (args: TabCreateEntryArgs) => {

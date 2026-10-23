@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { LIVE_SURFACE_CONTENT_TYPES } from '../tab-types'
 import { isTerminalLeafId } from '../stable-pane-id'
 import { SleepCommand, StartPaneCommand, WakeCommand } from './workspace-layout-sleep-wake-params'
 import { RenameTabsCommand } from './workspace-layout-rename-tabs-params'
@@ -243,6 +244,7 @@ const SetDefaultTabsAppliedCommand = z.object({
 const OpenSimulatorTabCommand = z.object({
   type: z.literal('openSimulatorTab'),
   ...OnTab,
+  kind: z.enum(LIVE_SURFACE_CONTENT_TYPES).optional(),
   groupId: z.string().min(1).optional(),
   afterTabId: z.string().min(1).optional(),
   index: z.number().int().nonnegative().optional(),

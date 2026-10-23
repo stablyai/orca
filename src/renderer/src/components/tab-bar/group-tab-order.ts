@@ -1,6 +1,7 @@
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
 import type { AppState } from '../../store/types'
 import { reconcileTabOrder } from './reconcile-order'
+import { isLiveSurfaceContentType } from '../../../../shared/tab-types'
 
 export type VisibleTabRef = {
   type: 'terminal' | 'editor' | 'agent-session' | 'browser' | 'simulator'
@@ -45,7 +46,7 @@ export function getGroupVisibleTabOrder(
         ? { type: 'browser', id: tab.entityId, tabId: tab.id }
         : null
     }
-    if (tab.contentType === 'simulator') {
+    if (isLiveSurfaceContentType(tab.contentType)) {
       return simulatorTabIds.has(tab.id) ? { type: 'simulator', id: tab.id, tabId: tab.id } : null
     }
     if (tab.contentType === 'agent-session') {
@@ -184,7 +185,7 @@ export function getActiveTabNavOrder(
   const simulatorIds =
     ids.simulatorIds ??
     (state.unifiedTabsByWorktree[worktreeId] ?? [])
-      .filter((tab) => tab.contentType === 'simulator')
+      .filter((tab) => isLiveSurfaceContentType(tab.contentType))
       .map((tab) => tab.id)
   const agentSessionIds =
     ids.agentSessionIds ??

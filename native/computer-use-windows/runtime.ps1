@@ -147,6 +147,203 @@ public static class OrcaDesktopWin32 {
 }
 "@
 
+# Why a second type: the Desktop App pane drives a window in the background, so it needs
+# window enumeration and posted messages that never activate the target, unlike the
+# foreground SendInput path above.
+Add-Type -TypeDefinition @'
+using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+using System.Text;
+
+public static class OrcaDesktopAppWin32 {
+    [StructLayout(LayoutKind.Sequential)]
+    public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct POINT { public int X; public int Y; }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct GUITHREADINFO {
+        public int cbSize; public int flags; public IntPtr hwndActive; public IntPtr hwndFocus;
+        public IntPtr hwndCapture; public IntPtr hwndMenuOwner; public IntPtr hwndMoveSize;
+        public IntPtr hwndCaret; public RECT rcCaret;
+    }
+
+    public sealed class WindowInfo {
+        public long Handle; public int ProcessId; public string Title; public string ClassName;
+        public int X; public int Y; public int Width; public int Height;
+    }
+
+    private delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr lParam);
+
+    [DllImport("user32.dll")] private static extern bool EnumWindows(EnumWindowsProc callback, IntPtr lParam);
+    [DllImport("user32.dll")] private static extern bool IsWindow(IntPtr hwnd);
+    [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
+    [DllImport("user32.dll")] private static extern bool IsIconic(IntPtr hwnd);
+    [DllImport("user32.dll")] private static extern IntPtr GetWindow(IntPtr hwnd, uint command);
+    [DllImport("user32.dll")] private static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")] private static extern IntPtr GetWindowLongPtr(IntPtr hwnd, int index);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetWindowTextW(IntPtr hwnd, StringBuilder text, int max);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetClassNameW(IntPtr hwnd, StringBuilder text, int max);
+    [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out int processId);
+    [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hwnd, out RECT rect);
+    [DllImport("user32.dll")] private static extern bool ScreenToClient(IntPtr hwnd, ref POINT point);
+    [DllImport("user32.dll")] private static extern IntPtr ChildWindowFromPointEx(IntPtr hwnd, POINT point, uint flags);
+    [DllImport("user32.dll")] private static extern bool PostMessageW(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam);
+    [DllImport("user32.dll")] private static extern bool GetGUIThreadInfo(uint threadId, ref GUITHREADINFO info);
+    [DllImport("user32.dll")] private static extern uint MapVirtualKeyW(uint code, uint mapType);
+    [DllImport("user32.dll")] private static extern short VkKeyScanW(char character);
+    [DllImport("user32.dll")] private static extern IntPtr SetThreadDpiAwarenessContext(IntPtr context);
+    [DllImport("user32.dll")] private static extern IntPtr GetWindowDpiAwarenessContext(IntPtr hwnd);
+    [DllImport("user32.dll")] private static extern bool PhysicalToLogicalPointForPerMonitorDPI(IntPtr hwnd, ref POINT point);
+    [DllImport("dwmapi.dll")] private static extern int DwmGetWindowAttribute(IntPtr hwnd, int attribute, out RECT value, int size);
+    [DllImport("dwmapi.dll", EntryPoint = "DwmGetWindowAttribute")] private static extern int DwmGetWindowAttributeInt(IntPtr hwnd, int attribute, out int value, int size);
+
+    private const uint GW_OWNER = 4;
+    private const uint GA_ROOT = 2;
+    private const int GWL_EXSTYLE = -20;
+    private const long WS_EX_TOOLWINDOW = 0x80;
+    private const long WS_EX_NOACTIVATE = 0x08000000;
+    private const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
+    private const int DWMWA_CLOAKED = 14;
+    // CWP_SKIPINVISIBLE | CWP_SKIPDISABLED | CWP_SKIPTRANSPARENT
+    private const uint CWP_FLAGS = 0x1 | 0x2 | 0x4;
+
+    // Why: per-monitor-v2 awareness makes bounds and points physical pixels, the same space the
+    // captured video frame uses; DPI-virtualized coordinates would offset clicks on scaled monitors.
+    // Returns the thread's previous context for RestoreDpiContext: the serve loop reuses this
+    // thread for every later operation, which expects the awareness it started with.
+    public static IntPtr UsePhysicalPixels() {
+        try { return SetThreadDpiAwarenessContext(new IntPtr(-4)); } catch (EntryPointNotFoundException) { return IntPtr.Zero; }
+    }
+
+    public static void RestoreDpiContext(IntPtr previous) {
+        if (previous == IntPtr.Zero) { return; }
+        try { SetThreadDpiAwarenessContext(previous); } catch (EntryPointNotFoundException) { }
+    }
+
+    public static List<WindowInfo> ListWindows() {
+        var windows = new List<WindowInfo>();
+        EnumWindows((hwnd, _) => {
+            var info = Describe(hwnd);
+            if (info != null && IsUserWindow(hwnd)) { windows.Add(info); }
+            return true;
+        }, IntPtr.Zero);
+        return windows;
+    }
+
+    public static WindowInfo Describe(IntPtr hwnd) {
+        if (!IsWindow(hwnd)) { return null; }
+        int processId;
+        GetWindowThreadProcessId(hwnd, out processId);
+        RECT rect;
+        if (DwmGetWindowAttribute(hwnd, DWMWA_EXTENDED_FRAME_BOUNDS, out rect, Marshal.SizeOf(typeof(RECT))) != 0) {
+            if (!GetWindowRect(hwnd, out rect)) { return null; }
+        }
+        var title = new StringBuilder(512);
+        GetWindowTextW(hwnd, title, title.Capacity);
+        var className = new StringBuilder(256);
+        GetClassNameW(hwnd, className, className.Capacity);
+        return new WindowInfo {
+            Handle = hwnd.ToInt64(), ProcessId = processId, Title = title.ToString(), ClassName = className.ToString(),
+            X = rect.Left, Y = rect.Top, Width = rect.Right - rect.Left, Height = rect.Bottom - rect.Top
+        };
+    }
+
+    // Mirrors the macOS list: visible, on-screen, top-level app windows only.
+    private static bool IsUserWindow(IntPtr hwnd) {
+        if (!IsWindowVisible(hwnd) || IsIconic(hwnd) || GetWindow(hwnd, GW_OWNER) != IntPtr.Zero) { return false; }
+        long exStyle = GetWindowLongPtr(hwnd, GWL_EXSTYLE).ToInt64();
+        if ((exStyle & WS_EX_TOOLWINDOW) != 0 || (exStyle & WS_EX_NOACTIVATE) != 0) { return false; }
+        int cloaked;
+        // Why: UWP frames and windows on other virtual desktops stay "visible" but cloaked.
+        if (DwmGetWindowAttributeInt(hwnd, DWMWA_CLOAKED, out cloaked, sizeof(int)) == 0 && cloaked != 0) { return false; }
+        return true;
+    }
+
+    public static bool IsTopLevel(IntPtr hwnd) {
+        return IsWindow(hwnd) && GetAncestor(hwnd, GA_ROOT) == hwnd;
+    }
+
+    // Deepest enabled, visible child under the screen point, so posted clicks reach the
+    // control the user aimed at (buttons, edits) instead of the frame.
+    public static IntPtr ChildAt(IntPtr top, int screenX, int screenY) {
+        var current = top;
+        for (var depth = 0; depth < 32; depth++) {
+            var point = new POINT { X = screenX, Y = screenY };
+            ScreenToClient(current, ref point);
+            var child = ChildWindowFromPointEx(current, point, CWP_FLAGS);
+            if (child == IntPtr.Zero || child == current) { break; }
+            current = child;
+        }
+        return current;
+    }
+
+    // Why: PostMessage does not rescale lParam, and a DPI-virtualized (unaware or system-aware)
+    // target reads it in its own logical pixels; physical points would land up to 2x off.
+    public static POINT TargetScreenPoint(IntPtr hwnd, int screenX, int screenY) {
+        var point = new POINT { X = screenX, Y = screenY };
+        try { PhysicalToLogicalPointForPerMonitorDPI(hwnd, ref point); } catch (EntryPointNotFoundException) { }
+        return point;
+    }
+
+    public static IntPtr ClientLParam(IntPtr hwnd, int screenX, int screenY) {
+        var point = TargetScreenPoint(hwnd, screenX, screenY);
+        var previous = IntPtr.Zero;
+        try { previous = SetThreadDpiAwarenessContext(GetWindowDpiAwarenessContext(hwnd)); } catch (EntryPointNotFoundException) { }
+        try {
+            ScreenToClient(hwnd, ref point);
+        } finally {
+            if (previous != IntPtr.Zero) { SetThreadDpiAwarenessContext(previous); }
+        }
+        return PackPoint(point.X, point.Y);
+    }
+
+    public static IntPtr ScreenLParam(IntPtr hwnd, int screenX, int screenY) {
+        var point = TargetScreenPoint(hwnd, screenX, screenY);
+        return PackPoint(point.X, point.Y);
+    }
+
+    public static IntPtr PackPoint(int x, int y) {
+        return new IntPtr(((y & 0xffff) << 16) | (x & 0xffff));
+    }
+
+    public static void Post(IntPtr hwnd, uint message, long wParam, IntPtr lParam) {
+        if (!PostMessageW(hwnd, message, new IntPtr(wParam), lParam)) {
+            throw new InvalidOperationException("window_not_found: the window stopped accepting input");
+        }
+    }
+
+    // Keyboard messages go to the control focused inside the target's own UI thread, which
+    // Windows tracks per thread, so the target keeps its caret without becoming foreground.
+    public static IntPtr KeyboardTarget(IntPtr top) {
+        int processId;
+        var threadId = GetWindowThreadProcessId(top, out processId);
+        var info = new GUITHREADINFO();
+        info.cbSize = Marshal.SizeOf(typeof(GUITHREADINFO));
+        if (GetGUIThreadInfo(threadId, ref info) && info.hwndFocus != IntPtr.Zero && GetAncestor(info.hwndFocus, GA_ROOT) == top) {
+            return info.hwndFocus;
+        }
+        return top;
+    }
+
+    public static IntPtr KeyLParam(int virtualKey, bool extended, bool keyUp, bool alt) {
+        long scan = MapVirtualKeyW((uint)virtualKey, 0) & 0xff;
+        long value = 1 | (scan << 16);
+        if (extended) { value |= 1L << 24; }
+        if (alt) { value |= 1L << 29; }
+        if (keyUp) { value |= (1L << 30) | (1L << 31); }
+        return new IntPtr(unchecked((int)value));
+    }
+
+    public static int VirtualKeyForChar(char character) {
+        var scan = VkKeyScanW(character);
+        return scan == -1 ? -1 : scan & 0xff;
+    }
+}
+'@
+
 $MaxNodes = 1200
 $MaxDepth = 64
 $TextLimit = 500
@@ -1183,6 +1380,206 @@ function Send-OrcaPasteText([IntPtr]$WindowHandle, [string]$Text) {
     }
 }
 
+$DesktopAppMessages = @{
+    KeyDown = 0x0100; KeyUp = 0x0101; Char = 0x0102; SysKeyDown = 0x0104; SysKeyUp = 0x0105
+    MouseMove = 0x0200; LeftDown = 0x0201; LeftUp = 0x0202; LeftDouble = 0x0203
+    RightDown = 0x0204; RightUp = 0x0205; RightDouble = 0x0206; Wheel = 0x020A; HorizontalWheel = 0x020E
+}
+# Why: navigation keys live on the extended keyboard block; without bit 24 some controls read
+# them as numeric-keypad keys (e.g. Home becomes "7").
+$DesktopAppExtendedKeys = @(0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x2D, 0x2E)
+$DesktopAppMaxWheelDelta = 10000
+
+function Get-OrcaDesktopProcess([int]$ProcessId) {
+    try { Get-Process -Id $ProcessId -ErrorAction Stop } catch { $null }
+}
+
+function Test-OrcaDesktopWindowAllowed($Process, [string]$Title) {
+    try { Assert-OrcaProcessAllowed $Process } catch { return $false }
+    $lowered = $Title.ToLowerInvariant()
+    foreach ($fragment in $BlockedAppFragments) {
+        if ($lowered.Contains($fragment)) { return $false }
+    }
+    $true
+}
+
+# Window list for the Desktop App pane: same shape as the macOS helper's `listDesktopWindows`.
+function Get-OrcaDesktopWindows($ExcludePid) {
+    $excluded = 0
+    if ($null -ne $ExcludePid) { $excluded = [int]$ExcludePid }
+    $processes = @{}
+    $windows = New-Object System.Collections.Generic.List[object]
+    foreach ($info in [OrcaDesktopAppWin32]::ListWindows()) {
+        if ($info.ProcessId -eq $excluded -or $info.ProcessId -eq $PID) { continue }
+        if ([string]::IsNullOrWhiteSpace($info.Title) -or $info.ClassName -in @("Progman", "WorkerW", "Shell_TrayWnd")) { continue }
+        if ($info.Width -le 0 -or $info.Height -le 0) { continue }
+        if (-not $processes.ContainsKey($info.ProcessId)) { $processes[$info.ProcessId] = Get-OrcaDesktopProcess $info.ProcessId }
+        $process = $processes[$info.ProcessId]
+        if ($null -eq $process -or -not (Test-OrcaDesktopWindowAllowed $process $info.Title)) { continue }
+        $windows.Add([pscustomobject]@{
+            windowId = [int64]$info.Handle
+            pid = [int]$info.ProcessId
+            appName = Get-OrcaAppName $process
+            bundleId = [string]$process.ProcessName
+            title = [string]$info.Title
+            bounds = [pscustomobject]@{ x = $info.X; y = $info.Y; width = $info.Width; height = $info.Height }
+        })
+    }
+    @($windows.ToArray())
+}
+
+# Why not Get-OrcaPositiveInteger: it defaults a missing value to 1, and pid 1 or window 1
+# must never be targeted by accident.
+function Get-OrcaDesktopId($Value, [string]$Name) {
+    if ($null -eq $Value) { throw "$Name is required" }
+    $number = [int64]$Value
+    if ($number -le 0) { throw "$Name must be a positive integer" }
+    $number
+}
+
+function Resolve-OrcaDesktopTarget($Operation) {
+    $processId = [int](Get-OrcaDesktopId $Operation.pid "pid")
+    $windowId = Get-OrcaDesktopId $Operation.windowId "windowId"
+    $handle = [IntPtr]$windowId
+    if (-not [OrcaDesktopAppWin32]::IsTopLevel($handle)) { throw "window_not_found: window $windowId is gone" }
+    $info = [OrcaDesktopAppWin32]::Describe($handle)
+    if ($null -eq $info -or $info.ProcessId -ne $processId) { throw "window_not_found: window $windowId does not belong to pid $processId" }
+    $process = Get-OrcaDesktopProcess $processId
+    if ($null -eq $process) { throw "appNotFound(`"$processId`")" }
+    if (-not (Test-OrcaDesktopWindowAllowed $process $info.Title)) { throw "appBlocked(`"$($process.ProcessName)`")" }
+    [pscustomobject]@{ handle = $handle; info = $info }
+}
+
+function Get-OrcaDesktopScreenPoint($Target, $Payload) {
+    $x = Get-OrcaRequiredNumber $Payload.x "x"
+    $y = Get-OrcaRequiredNumber $Payload.y "y"
+    # Why: input is window-relative like the macOS helper; a point outside the window would
+    # land on whatever app happens to sit there.
+    if ($x -lt 0 -or $y -lt 0 -or $x -ge $Target.info.Width -or $y -ge $Target.info.Height) {
+        throw "invalid_argument: point ($x, $y) is outside the window"
+    }
+    [pscustomobject]@{ x = [int][Math]::Round($Target.info.X + $x); y = [int][Math]::Round($Target.info.Y + $y) }
+}
+
+function Send-OrcaDesktopClick($Target, $Payload) {
+    $point = Get-OrcaDesktopScreenPoint $Target $Payload
+    $count = Get-OrcaPositiveInteger $Payload.clickCount "clickCount"
+    if ($count -gt 3) { throw "invalid_argument: clickCount must be 1 to 3" }
+    $isRight = $Payload.button -eq "right"
+    if (-not $isRight -and $Payload.button -ne "left") { throw "unsupported mouse button: $($Payload.button)" }
+    $down = if ($isRight) { $DesktopAppMessages.RightDown } else { $DesktopAppMessages.LeftDown }
+    $up = if ($isRight) { $DesktopAppMessages.RightUp } else { $DesktopAppMessages.LeftUp }
+    $double = if ($isRight) { $DesktopAppMessages.RightDouble } else { $DesktopAppMessages.LeftDouble }
+    $buttonFlag = if ($isRight) { 0x0002 } else { 0x0001 }
+    $child = [OrcaDesktopAppWin32]::ChildAt($Target.handle, $point.x, $point.y)
+    $lParam = [OrcaDesktopAppWin32]::ClientLParam($child, $point.x, $point.y)
+    [OrcaDesktopAppWin32]::Post($child, $DesktopAppMessages.MouseMove, 0, $lParam)
+    # Why one press: the pane sends one click per real press, with clickCount as that press's
+    # position in the sequence. Real double clicks arrive as down, up, DBLCLK, up, so the
+    # second press is the DBLCLK message.
+    $message = Get-OrcaDesktopPressMessage $count $down $double
+    [OrcaDesktopAppWin32]::Post($child, $message, $buttonFlag, $lParam)
+    [OrcaDesktopAppWin32]::Post($child, $up, 0, $lParam)
+}
+
+function Get-OrcaDesktopPressMessage([int]$Count, [uint32]$Down, [uint32]$Double) {
+    if ($Count -eq 2) { $Double } else { $Down }
+}
+
+function Send-OrcaDesktopScroll($Target, $Payload) {
+    $point = Get-OrcaDesktopScreenPoint $Target $Payload
+    $deltaX = Get-OrcaRequiredNumber $Payload.deltaX "deltaX"
+    $deltaY = Get-OrcaRequiredNumber $Payload.deltaY "deltaY"
+    $child = [OrcaDesktopAppWin32]::ChildAt($Target.handle, $point.x, $point.y)
+    # Why: wheel messages carry screen coordinates, unlike button messages.
+    $lParam = [OrcaDesktopAppWin32]::ScreenLParam($child, $point.x, $point.y)
+    # Pixel deltas from the pane become wheel units (120 per notch, about 100 px); the sign is
+    # flipped for vertical because WM_MOUSEWHEEL treats positive as "away from the user".
+    $vertical = [int][Math]::Max(-$DesktopAppMaxWheelDelta, [Math]::Min($DesktopAppMaxWheelDelta, [Math]::Round(-$deltaY * 1.2)))
+    $horizontal = [int][Math]::Max(-$DesktopAppMaxWheelDelta, [Math]::Min($DesktopAppMaxWheelDelta, [Math]::Round($deltaX * 1.2)))
+    if ($vertical -ne 0) { [OrcaDesktopAppWin32]::Post($child, $DesktopAppMessages.Wheel, (($vertical -band 0xffff) -shl 16), $lParam) }
+    if ($horizontal -ne 0) { [OrcaDesktopAppWin32]::Post($child, $DesktopAppMessages.HorizontalWheel, (($horizontal -band 0xffff) -shl 16), $lParam) }
+}
+
+function Send-OrcaDesktopText($Target, [string]$Text) {
+    $focus = [OrcaDesktopAppWin32]::KeyboardTarget($Target.handle)
+    foreach ($character in $Text.ToCharArray()) {
+        if ($character -eq "`r") { continue }
+        $code = if ($character -eq "`n") { 0x0D } else { [int][char]$character }
+        [OrcaDesktopAppWin32]::Post($focus, $DesktopAppMessages.Char, $code, [IntPtr]1)
+    }
+}
+
+function Get-OrcaDesktopVirtualKey([string]$Key) {
+    $map = @{
+        "return" = 0x0D; "enter" = 0x0D; "tab" = 0x09; "escape" = 0x1B; "esc" = 0x1B; "backspace" = 0x08
+        "forwarddelete" = 0x2E; "delete" = 0x2E; "space" = 0x20; "left" = 0x25; "up" = 0x26; "right" = 0x27
+        "down" = 0x28; "home" = 0x24; "end" = 0x23; "pageup" = 0x21; "pagedown" = 0x22; "insert" = 0x2D
+    }
+    $normalized = $Key.ToLowerInvariant()
+    if ($map.ContainsKey($normalized)) { return $map[$normalized] }
+    if ($normalized -match '^f([1-9]|1[0-2])$') { return 0x6F + [int]$Matches[1] }
+    if ($Key.Length -eq 1) {
+        $virtualKey = [OrcaDesktopAppWin32]::VirtualKeyForChar($Key[0])
+        if ($virtualKey -ge 0) { return $virtualKey }
+    }
+    throw "unsupported key: $Key"
+}
+
+function Send-OrcaDesktopKey($Target, [string]$KeySpec) {
+    $parts = @($KeySpec.Split("+") | ForEach-Object { $_.Trim().ToLowerInvariant() } | Where-Object { $_ -ne "" })
+    if ($parts.Count -eq 0) { throw "unsupported key: $KeySpec" }
+    $key = $parts[$parts.Count - 1]
+    $modifiers = @(if ($parts.Count -gt 1) { $parts[0..($parts.Count - 2)] })
+    foreach ($modifier in $modifiers) {
+        if ($modifier -notin @("cmd", "command", "ctrl", "control", "alt", "option", "shift")) { throw "unsupported modifier: $modifier" }
+    }
+    $hasControl = @($modifiers | Where-Object { $_ -in @("cmd", "command", "ctrl", "control") }).Count -gt 0
+    $hasAlt = @($modifiers | Where-Object { $_ -in @("alt", "option") }).Count -gt 0
+    $hasShift = $modifiers -contains "shift"
+    # Why: posted messages leave the real keyboard state untouched, so a target reading
+    # GetKeyState would never see a posted Ctrl. Ctrl+letter is delivered as the control
+    # character edit controls already act on (Ctrl+A = 0x01, Ctrl+C = 0x03, ...).
+    $controlCharacter = $hasControl -and -not $hasAlt -and -not $hasShift -and $key -match '^[a-z]$'
+    if (-not $controlCharacter -and ($hasControl -or $hasShift)) {
+        throw "unsupported capability: $KeySpec cannot be delivered to a background window on this platform"
+    }
+    $virtualKey = if ($controlCharacter) { 0 } else { Get-OrcaDesktopVirtualKey $key }
+    $focus = [OrcaDesktopAppWin32]::KeyboardTarget($Target.handle)
+    if ($controlCharacter) {
+        [OrcaDesktopAppWin32]::Post($focus, $DesktopAppMessages.Char, ([int][char]$key - 0x60), [IntPtr]1)
+        return
+    }
+    $extended = $DesktopAppExtendedKeys -contains $virtualKey
+    $downMessage = if ($hasAlt) { $DesktopAppMessages.SysKeyDown } else { $DesktopAppMessages.KeyDown }
+    $upMessage = if ($hasAlt) { $DesktopAppMessages.SysKeyUp } else { $DesktopAppMessages.KeyUp }
+    [OrcaDesktopAppWin32]::Post($focus, $downMessage, $virtualKey, [OrcaDesktopAppWin32]::KeyLParam($virtualKey, $extended, $false, $hasAlt))
+    [OrcaDesktopAppWin32]::Post($focus, $upMessage, $virtualKey, [OrcaDesktopAppWin32]::KeyLParam($virtualKey, $extended, $true, $hasAlt))
+}
+
+function Invoke-OrcaDesktopInput($Operation) {
+    $payload = $Operation.input
+    if ($null -eq $payload) { throw "invalid_argument: input is required" }
+    $target = Resolve-OrcaDesktopTarget $Operation
+    switch ([string]$payload.kind) {
+        "click" { Send-OrcaDesktopClick $target $payload }
+        "scroll" { Send-OrcaDesktopScroll $target $payload }
+        "text" { Send-OrcaDesktopText $target ([string]$payload.text) }
+        "key" { Send-OrcaDesktopKey $target (Get-OrcaRequiredString $payload.key "key") }
+        default { throw "invalid_argument: unsupported input kind $($payload.kind)" }
+    }
+    # Why: posted messages are the only path that never activates the target, so every
+    # delivery is synthetic; the macOS-only accessibility path has no background equivalent here.
+    "synthetic"
+}
+
+# Desktop App operations work in physical pixels (the captured frame's space) and put the thread's
+# DPI awareness back after, so later operations in this serve loop keep their coordinates.
+function Invoke-OrcaInPhysicalPixels([scriptblock]$Action) {
+    $previous = [OrcaDesktopAppWin32]::UsePhysicalPixels()
+    try { & $Action } finally { [OrcaDesktopAppWin32]::RestoreDpiContext($previous) }
+}
+
 function Invoke-OrcaOperation($Operation) {
     $includeScreenshot = -not [bool]$Operation.noScreenshot
     if ($Operation.tool -eq "handshake") {
@@ -1194,6 +1591,12 @@ function Invoke-OrcaOperation($Operation) {
     if ($Operation.tool -eq "list_windows") {
         $list = Get-OrcaWindowList $Operation.app
         return [pscustomobject]@{ ok = $true; app = $list.app; windows = @($list.windows) }
+    }
+    if ($Operation.tool -eq "list_desktop_windows") {
+        return [pscustomobject]@{ ok = $true; desktopWindows = @(Invoke-OrcaInPhysicalPixels { Get-OrcaDesktopWindows $Operation.excludePid }) }
+    }
+    if ($Operation.tool -eq "desktop_input") {
+        return [pscustomobject]@{ ok = $true; path = Invoke-OrcaInPhysicalPixels { Invoke-OrcaDesktopInput $Operation } }
     }
     if ($Operation.tool -eq "get_app_state") {
         return [pscustomobject]@{ ok = $true; snapshot = New-OrcaSnapshot $Operation.app $includeScreenshot $Operation.windowId $Operation.windowIndex ([bool]$Operation.restoreWindow) }

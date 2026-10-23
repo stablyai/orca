@@ -218,6 +218,27 @@ try {
         $MaxDepth = $originalMaxDepth
     }
 
+    # Desktop App pane input helpers that run before any window message is posted.
+    $target = [pscustomobject]@{ handle = [IntPtr]::Zero; info = [pscustomobject]@{ X = 100; Y = 50; Width = 400; Height = 300 } }
+    $point = Get-OrcaDesktopScreenPoint $target ([pscustomobject]@{ x = 10.4; y = 20.6 })
+    Assert-TestEqual "$($point.x),$($point.y)" "110,71" "desktop point is window-relative"
+    $outside = $null
+    try { Get-OrcaDesktopScreenPoint $target ([pscustomobject]@{ x = 400; y = 1 }) | Out-Null } catch { $outside = $_.Exception.Message }
+    Assert-TestEqual ($outside -like "invalid_argument:*") $true "desktop point outside window is rejected"
+    $missingPid = $null
+    try { Get-OrcaDesktopId $null "pid" | Out-Null } catch { $missingPid = $_.Exception.Message }
+    Assert-TestEqual $missingPid "pid is required" "desktop pid never defaults"
+    Assert-TestEqual (Get-OrcaDesktopVirtualKey "pagedown") 0x22 "desktop page down key"
+    Assert-TestEqual (Get-OrcaDesktopVirtualKey "forwarddelete") 0x2E "desktop forward delete key"
+    Assert-TestEqual (Get-OrcaDesktopVirtualKey "f5") 0x74 "desktop function key"
+    $chord = $null
+    try { Send-OrcaDesktopKey $target "shift+cmd+z" } catch { $chord = $_.Exception.Message }
+    Assert-TestEqual ($chord -like "unsupported capability:*") $true "desktop unsupported chord degrades"
+    $presses = @(1, 2, 3 | ForEach-Object { Get-OrcaDesktopPressMessage $_ 0x0201 0x0203 })
+    Assert-TestEqual ($presses -join ",") "513,515,513" "desktop click sends one press, DBLCLK on the second"
+    $windowsCount = @(Get-OrcaDesktopWindows $PID).Count
+    Assert-TestEqual ($windowsCount -ge 0) $true "desktop window list runs"
+
     Write-Output "windows-snapshot-render-tests-ok"
 } finally {
     Remove-Item -LiteralPath $operationPath -Force -ErrorAction SilentlyContinue

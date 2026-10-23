@@ -16,7 +16,8 @@ export const COMPUTER_ERROR_CODES = {
   invalid_argument: 'invalid_argument',
   action_timeout: 'action_timeout',
   screenshot_failed: 'screenshot_failed',
-  accessibility_error: 'accessibility_error'
+  accessibility_error: 'accessibility_error',
+  desktop_app_stopped_by_user: 'desktop_app_stopped_by_user'
 } as const
 
 export type ComputerErrorCode = keyof typeof COMPUTER_ERROR_CODES
@@ -91,6 +92,8 @@ export type ComputerActionMetadata = {
   fallbackReason?: string | null
   targetWindowId?: number | null
   targetWindowIndex?: number | null
+  // Window-relative point the action landed on (macOS provider only).
+  targetPoint?: { x: number; y: number } | null
   verification?: ComputerActionVerification
 }
 
@@ -165,6 +168,11 @@ export type ComputerProviderCapabilities = {
       dialogs: boolean
       dock: boolean
       menubar: boolean
+    }
+    // Desktop App pane: background window listing and input; absent where unsupported.
+    desktopApp?: {
+      listWindows: boolean
+      input: boolean
     }
   }
 }

@@ -5,6 +5,7 @@ import { requestEditorFileClose } from '../editor/editor-autosave'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { closeWorkspaceBrowserTab } from '@/lib/workspace-browser-tab-close'
 import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
+import { isLiveSurfaceContentType } from '../../../../shared/tab-types'
 
 export function createWorkspaceTabCloseCommands({
   worktreeId,
@@ -68,7 +69,7 @@ export function createWorkspaceTabCloseCommands({
       if (!plan.closesLocally || plan.localCloseReason === 'cleanup') {
         return
       }
-    } else if (item.contentType === 'simulator') {
+    } else if (isLiveSurfaceContentType(item.contentType)) {
       closeUnifiedTab(item.id)
     } else {
       const canCloseTab = closeEditorIfUnreferenced(item.entityId, item.id, whenEmptied)

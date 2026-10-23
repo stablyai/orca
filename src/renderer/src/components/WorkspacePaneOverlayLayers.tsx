@@ -2,11 +2,12 @@ import type { ActivityTerminalPortalTarget } from './activity/activity-terminal-
 import TerminalPaneOverlayLayer from './terminal-pane/TerminalPaneOverlayLayer'
 import { RetainedBrowserPaneOverlayLayer } from './browser-pane/assemble-chrome/BrowserPaneOverlayLayer'
 import EmulatorPaneOverlayLayer from './emulator-pane/EmulatorPaneOverlayLayer'
+import DesktopAppPaneOverlayLayer from './desktop-app-pane/DesktopAppPaneOverlayLayer'
 import StructuredAgentSessionPaneOverlayLayer from './native-chat/StructuredAgentSessionPaneOverlayLayer'
 import AiVaultSessionDropLayer from './tab-group/AiVaultSessionDropLayer'
 
 /**
- * The retained pane hosts for one workspace: terminal, browser, emulator and structured-chat
+ * The retained pane hosts for one workspace: terminal, browser, emulator, desktop app and structured-chat
  * panes anchored onto the group tree's pane bodies, plus the vault drop layer. Shared by every
  * host of the group tree so pane lifecycle (retention, parking, guest paint) has one owner.
  */
@@ -59,7 +60,10 @@ export function WorkspacePaneOverlayLayers({
         mountEligible={mountRetainedBrowserOverlay}
       />
       {mountEmulatorOverlay ? (
-        <EmulatorPaneOverlayLayer worktreeId={worktreeId} isWorktreeActive={isVisible} />
+        <>
+          <EmulatorPaneOverlayLayer worktreeId={worktreeId} isWorktreeActive={isVisible} />
+          <DesktopAppPaneOverlayLayer worktreeId={worktreeId} isWorktreeActive={isVisible} />
+        </>
       ) : null}
       <StructuredAgentSessionPaneOverlayLayer
         worktreeId={worktreeId}

@@ -1013,6 +1013,13 @@
               "bf4f2a8a72": "Could not start the emulator. Check iOS or Android emulator setup and try another device."
             }
           }
+        },
+        "desktop": {
+          "app": {
+            "tab": {
+              "42cef4eb31": "Desktop App"
+            }
+          }
         }
       },
       "orchestration": {
@@ -3999,7 +4006,22 @@
                   "1baeb07c17": "ios simulator",
                   "8a580f88cf": "iphone",
                   "7ecdc5ef08": "ipad",
-                  "14965cc123": "mobile"
+                  "14965cc123": "mobile",
+                  "c9e8df95d8": "New Desktop App",
+                  "d0b6a5b6ff": "desktop app",
+                  "5a1b0e2d40": "native app",
+                  "cd5b036f44": "window",
+                  "d364c9667c": "computer use",
+                  "f05611f5bd": "app window"
+                }
+              }
+            },
+            "bar": {
+              "static": {
+                "create": {
+                  "menu": {
+                    "b7f15e1cd8": "New Desktop App"
+                  }
                 }
               }
             }
@@ -18643,6 +18665,45 @@
         "cancelled": "This plain SSH terminal was closed before it started.",
         "terminalUnavailable": "Orca couldn’t open a terminal here.",
         "openHint": "Keeps you working on the host while Orca can’t set up there."
+      },
+      "desktop": {
+        "app": {
+          "pane": {
+            "DesktopAppAgentOverlay": {
+              "6ae3316ee2": "The agent was stopped for this app",
+              "db20d7f6de": "An agent is controlling this app",
+              "7a502d7891": "Allow again",
+              "371b67dea5": "Stop agent"
+            },
+            "DesktopAppPane": {
+              "c294a5cd7e": "Pick an app window to show it here. You and your agents can click, scroll and type in it without leaving Orca."
+            },
+            "desktop": {
+              "app": {
+                "pane": {
+                  "toolbar": {
+                    "883e3130f3": "Desktop App",
+                    "81d7882862": "Live",
+                    "125a87c4a2": "Connecting…",
+                    "907a45c75b": "Choose window",
+                    "bd517e7e2b": "Refresh window list"
+                  }
+                }
+              }
+            },
+            "use": {
+              "desktop": {
+                "app": {
+                  "capture": {
+                    "006a3c21a6": "The window was closed or can no longer be captured.",
+                    "e7c7008edc": "Screen capture was blocked. Allow Orca in System Settings › Privacy & Security › Screen Recording, then reopen this tab.",
+                    "2464eff017": "Screen capture was blocked. Allow Orca to capture the screen in your system settings, then reopen this tab."
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     },
     "i18n": {

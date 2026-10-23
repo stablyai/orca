@@ -70,7 +70,8 @@ const {
   registerLocalhostWorktreeLabelHandlersMock,
   registerNativeChatHandlersMock,
   registerEmulatorFrameStreamHandlersMock,
-  registerEmulatorVideoStreamHandlersMock
+  registerEmulatorVideoStreamHandlersMock,
+  registerDesktopAppHandlersMock
 } = vi.hoisted(() => ({
   getPathMock: vi.fn(() => '/test/user-data'),
   listEnvironmentsMock: vi.fn(() => []),
@@ -141,7 +142,8 @@ const {
   registerLocalhostWorktreeLabelHandlersMock: vi.fn(),
   registerNativeChatHandlersMock: vi.fn(),
   registerEmulatorFrameStreamHandlersMock: vi.fn(),
-  registerEmulatorVideoStreamHandlersMock: vi.fn()
+  registerEmulatorVideoStreamHandlersMock: vi.fn(),
+  registerDesktopAppHandlersMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -294,6 +296,10 @@ vi.mock('../emulator-frame-stream', () => ({
 
 vi.mock('../emulator-video-stream', () => ({
   registerEmulatorVideoStreamHandlers: registerEmulatorVideoStreamHandlersMock
+}))
+
+vi.mock('../../desktop-app/desktop-app-ipc', () => ({
+  registerDesktopAppHandlers: registerDesktopAppHandlersMock
 }))
 
 vi.mock('../filesystem', () => ({
@@ -510,6 +516,7 @@ describe('registerCoreHandlers', () => {
     registerNativeChatHandlersMock.mockReset()
     registerEmulatorFrameStreamHandlersMock.mockReset()
     registerEmulatorVideoStreamHandlersMock.mockReset()
+    registerDesktopAppHandlersMock.mockReset()
   })
 
   it('passes the store through to handler registrars that need it', async () => {
@@ -627,6 +634,7 @@ describe('registerCoreHandlers', () => {
     })
     expect(registerEmulatorFrameStreamHandlersMock).toHaveBeenCalled()
     expect(registerEmulatorVideoStreamHandlersMock).toHaveBeenCalled()
+    expect(registerDesktopAppHandlersMock).toHaveBeenCalled()
     expect(registerFilesystemHandlersMock).toHaveBeenCalledWith(store)
     expect(registerRuntimeHandlersMock).toHaveBeenCalledWith(runtime)
     expect(registerRuntimeEnvironmentHandlersMock).toHaveBeenCalledWith(store)

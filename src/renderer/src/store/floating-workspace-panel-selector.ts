@@ -1,6 +1,7 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { AppState } from './types'
+import { isLiveSurfaceContentType } from '../../../shared/tab-types'
 
 export type FloatingWorkspacePanelVisibilityState = Pick<
   AppState,
@@ -75,7 +76,7 @@ export function selectFloatingVisibleTabCount(state: FloatingVisibleTabCountStat
       count += terminalIds.has(tab.entityId) ? 1 : 0
     } else if (tab.contentType === 'browser') {
       count += browserIds.has(tab.entityId) ? 1 : 0
-    } else if (tab.contentType === 'simulator' || tab.contentType === 'agent-session') {
+    } else if (isLiveSurfaceContentType(tab.contentType) || tab.contentType === 'agent-session') {
       // Why: simulator and structured-chat unified tabs have no separate backing
       // record; the tab itself is the visible floating workspace item.
       count += 1

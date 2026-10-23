@@ -18,6 +18,11 @@ export function computerUseErrorRecoveryData(
       return recoverWith(
         'Do not continue with this app through computer-use; choose a non-sensitive target or ask the user to handle it manually.'
       )
+    case 'desktop_app_stopped_by_user':
+      return recoverWith(
+        'The user pressed Stop on this app in Orca. Do not retry any `orca computer` action on it.',
+        'Tell the user what you were about to do and ask them to press "Allow again" in the Desktop App tab if they want you to continue.'
+      )
     case 'window_not_found':
       return recoverWith(
         'Run `orca computer list-windows --app <app> --json` and target one of the listed windows.',
