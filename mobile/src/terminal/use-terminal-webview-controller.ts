@@ -54,6 +54,7 @@ export function useTerminalWebViewController(
   const {
     terminalTheme,
     textScale = 1,
+    terminalFont = null,
     onWebReady,
     onEngineError,
     onSelectionMode,
@@ -140,6 +141,9 @@ export function useTerminalWebViewController(
       // Why: reload clears queued commands, so readiness must always restore the
       // native-selected theme even when its value did not change in React.
       sendToDocument({ type: 'set-theme', terminalTheme })
+      if (terminalFont) {
+        sendToDocument({ type: 'set-font', font: terminalFont })
+      }
       flushPendingMessages()
     },
     [
@@ -148,6 +152,7 @@ export function useTerminalWebViewController(
       flushPendingMessages,
       onWebReady,
       sendToDocument,
+      terminalFont,
       terminalTheme
     ]
   )
@@ -248,6 +253,13 @@ export function useTerminalWebViewController(
   useEffect(() => {
     postMessage({ type: 'set-font-scale', fontScale: textScale })
   }, [postMessage, textScale])
+
+  // Why: readiness sends the font itself, so a queued copy would load the same file twice.
+  useEffect(() => {
+    if (isWebReadyRef.current) {
+      sendToDocument({ type: 'set-font', font: terminalFont })
+    }
+  }, [sendToDocument, terminalFont])
 
   const fitDimensions = useCallback(
     (frame: TerminalFrame) => {

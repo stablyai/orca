@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
 import {
@@ -102,6 +103,39 @@ describeRender('terminal font startup and late painting', () => {
       expect(
         await page.evaluate(() => document.fonts.check('13px "Orca Nerd Font Symbols"', '\ue0b0'))
       ).toBe(false)
+      expect(await page.evaluate(() => globalThis.__orcaTerminalEngineErrors)).toEqual([])
+    } finally {
+      await page.close()
+    }
+  }, 300_000)
+
+  it('swaps to an imported font and back, refitting the grid to its cell width', async () => {
+    const geist = readFileSync(
+      new URL('../../docs/site/src/assets/fonts/Geist-Regular.ttf', import.meta.url)
+    )
+    const source = `data:font/ttf;base64,${geist.toString('base64')}`
+    const { page } = await openTerminal()
+    try {
+      await openProbeTerminal(page)
+      await page.evaluate(() => globalThis.__orcaTerminalProbe.write('WWWW iiii 한글 abc'))
+      const fitCols = () => page.evaluate(() => globalThis.__orcaTerminalProbe.fit()?.cols ?? null)
+      const defaultCols = await fitCols()
+      expect(defaultCols).toBeGreaterThan(0)
+      await page.evaluate((font) => globalThis.__orcaTerminalProbe.setFont(font), { source })
+      // A proportional face measures a different cell than the monospace stack.
+      await expect.poll(fitCols, { timeout: 30_000 }).not.toBe(defaultCols)
+      expect(
+        await page.evaluate(
+          () => [...document.fonts].filter((f) => /Orca Terminal Font/.test(f.family)).length
+        )
+      ).toBe(1)
+      await page.evaluate(() => globalThis.__orcaTerminalProbe.setFont(null))
+      await expect.poll(fitCols, { timeout: 30_000 }).toBe(defaultCols)
+      expect(
+        await page.evaluate(
+          () => [...document.fonts].filter((f) => /Orca Terminal Font/.test(f.family)).length
+        )
+      ).toBe(0)
       expect(await page.evaluate(() => globalThis.__orcaTerminalEngineErrors)).toEqual([])
     } finally {
       await page.close()

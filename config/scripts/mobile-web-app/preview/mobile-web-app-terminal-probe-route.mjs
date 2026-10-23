@@ -60,6 +60,7 @@ export default function TerminalProbeRoute() {
   // The terminal frame as React Native laid it out, which is what the session fits.
   const frameRef = useRef({ width: 0, height: 0 })
   const [mounted, setMounted] = useState(true)
+  const [terminalFont, setTerminalFont] = useState(null)
   const onSelectionCopy = useCallback((text) => {
     globalThis.__orcaTerminalCopied = text
   }, [])
@@ -79,7 +80,8 @@ export default function TerminalProbeRoute() {
       selectAll: () => handleRef.current?.doSelectAll(),
       fit: () => handleRef.current?.fitDimensions(frameRef.current),
       awaitReady: () => handleRef.current?.awaitReady(),
-      setMounted: (next) => setMounted(next)
+      setMounted: (next) => setMounted(next),
+      setFont: (font) => setTerminalFont(font)
     }
     const onBeforeInput = (event) => {
       globalThis.__orcaTerminalBeforeInput.push({
@@ -102,6 +104,7 @@ export default function TerminalProbeRoute() {
         {mounted ? (
           <TerminalWebView
             ref={handleRef}
+            terminalFont={terminalFont}
             onWebReady={onWebReady}
             onEngineError={onEngineError}
             onSelectionCopy={onSelectionCopy}

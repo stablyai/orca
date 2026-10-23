@@ -25,6 +25,7 @@ export function MobileSessionActiveContent({
     client,
     terminals,
     terminalTextScale,
+    terminalFont,
     setTerminalTextScale,
     terminalTextScaleRevisionRef,
     activeHandle,
@@ -212,6 +213,7 @@ export function MobileSessionActiveContent({
           keyboardLift={terminal.handle === activeHandle ? activeTerminalKeyboardLift : 0}
           terminalTheme={terminal.terminalTheme}
           textScale={terminalTextScale}
+          terminalFont={terminalFont}
           onTextScaleChange={(scale) => {
             // Why: pinch-to-zoom reports a new preset; persist it so the size sticks across panes and launches.
             terminalTextScaleRevisionRef.current += 1

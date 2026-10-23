@@ -15,7 +15,8 @@ import {
   mediaReleaseParamsSchema,
   mediaReleaseResultSchema,
   mediaNameParamsSchema,
-  mediaNameResultSchema
+  mediaNameResultSchema,
+  BRIDGE_MEDIA_READ_MAX_BYTES
 } from './bridge-media-verbs'
 import { PAGE_STORAGE_MAX_KEY_CHARS } from '../page-storage-keys'
 
@@ -47,7 +48,8 @@ export const BRIDGE_NATIVE_VERB_NAMES = [
   'native.audio.start',
   'native.audio.read',
   'native.audio.stop',
-  'native.storage.read'
+  'native.storage.read',
+  'native.font.read'
 ] as const
 
 export type BridgeNativeVerb = (typeof BRIDGE_NATIVE_VERB_NAMES)[number]
@@ -99,6 +101,20 @@ export const storageReadParamsSchema = z.strictObject({
 })
 export const storageReadResultSchema = z.strictObject({ value: z.string().nullable() })
 
+/** The media read's range, which fits a reply frame and is a multiple of three, so the page joins
+ *  each chunk's base64 into one data URL without decoding. */
+export const BRIDGE_TERMINAL_FONT_CHUNK_BYTES = BRIDGE_MEDIA_READ_MAX_BYTES
+
+// The imported terminal font, read a range at a time under the reply cap.
+export const terminalFontReadParamsSchema = z.strictObject({
+  fileName: z.string().regex(/^font-\d+\.(ttf|otf|woff|woff2)$/),
+  offset: z.number().int().min(0)
+})
+export const terminalFontReadResultSchema = z.strictObject({
+  size: z.number().int().min(0),
+  base64: z.string()
+})
+
 export const BRIDGE_NATIVE_VERBS: Readonly<Record<BridgeNativeVerb, BridgeNativeVerbSpec>> = {
   'native.clipboard.write': {
     params: clipboardWriteParamsSchema,
@@ -144,6 +160,10 @@ export const BRIDGE_NATIVE_VERBS: Readonly<Record<BridgeNativeVerb, BridgeNative
   'native.storage.read': {
     params: storageReadParamsSchema,
     result: storageReadResultSchema
+  },
+  'native.font.read': {
+    params: terminalFontReadParamsSchema,
+    result: terminalFontReadResultSchema
   }
 }
 

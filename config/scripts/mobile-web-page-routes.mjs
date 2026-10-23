@@ -178,6 +178,8 @@ export const MOBILE_WEB_PAGE_ROUTES = [
     ],
     // `native.media.name` gives a file the composer attaches its real name; an older shell lacks it
     // and the page names the file from its type, so the attach still works.
-    optionalGrants: ['externalNavigation', 'native.media.name']
+    // `native.font.read` brings the font imported in the shell's settings; an older shell
+    // lacks it and the terminal keeps its default stack.
+    optionalGrants: ['externalNavigation', 'native.media.name', 'native.font.read']
   }
 ]

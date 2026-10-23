@@ -11,6 +11,7 @@ import { startSelectionStateAndEviction } from './selection-state-and-eviction'
 import { startSurfaceSwap } from './surface-swap'
 import { startSurfaceTouchGestures, stopSurfaceTouchGestures } from './surface-touch-gestures'
 import { startTapDispatch, stopTapDispatch } from './tap-dispatch'
+import { stopTerminalFont } from './terminal-font'
 import { stopTerminalInit } from './terminal-init'
 import { startTextScaling } from './text-scaling'
 import { stopViewportTransform } from './viewport-transform'
@@ -93,6 +94,7 @@ export function stopTerminalDocument(scope: TerminalDocumentScope) {
   stopNormalBufferSmoothScroll(scope)
   stopHostNotify(scope)
   stopTerminalInit(scope)
+  stopTerminalFont(scope)
   stopWebglRecovery(scope)
   stopFitScale(scope)
   stopViewportTransform(scope)

@@ -36,7 +36,9 @@ export const PAGE_STORAGE_EXACT_KEYS = [
   /** Whether the terminal's command inputs offer autocorrect. */
   'orca:terminalAutocompleteEnabled',
   /** Whether a terminal link opens in Orca's browser or the phone's. */
-  'orca:terminalLinkOpenMode'
+  'orca:terminalLinkOpenMode',
+  /** The imported terminal font's name and stored file, which the page fetches over a verb. */
+  'orca:terminalFont'
 ] as const
 
 export const PAGE_STORAGE_KEY_PREFIXES = [

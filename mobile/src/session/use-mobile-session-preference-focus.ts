@@ -7,6 +7,7 @@ import {
   loadTerminalTextScale
 } from '../storage/preferences'
 import type { MobileSessionKeyboardStateModel } from './use-mobile-session-keyboard-state'
+import { useTerminalFont } from './use-terminal-font'
 
 export function useMobileSessionPreferenceFocus(
   scope: Pick<
@@ -53,5 +54,6 @@ export function useMobileSessionPreferenceFocus(
       }
     }, [])
   )
-  return { terminalPreferencesReady }
+  const terminalFont = useTerminalFont()
+  return { terminalPreferencesReady, terminalFont }
 }

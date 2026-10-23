@@ -317,7 +317,8 @@ describe('the bundled native document', () => {
     // 53: the bottom row backdrop extends a uniform row into the fractional gap.
     // 54: `src/shared/prose-url-boundary`, so a tapped url ends where desktop's link does.
     // 56: OSC 52 copies reach the device through desktop's own parser, `src/shared/osc52-clipboard`.
-    expect(inputs).toHaveLength(56)
+    // 57: `terminal-font` loads the user's imported face.
+    expect(inputs).toHaveLength(57)
     expect(script).not.toContain('__commonJS')
     // `__esm` wrappers are esbuild's answer to a cycle, and a cycle would make a module's top level
     // run at first import rather than where the bundle places it.
