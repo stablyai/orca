@@ -29,6 +29,7 @@ export type MobileNotificationDispatchEvent = {
   title: string
   body: string
   worktreeId?: string
+  paneKey?: string
   /** See `NotificationDispatchRequest.executionHost`; old phones ignore it and open the desktop's. */
   executionHost?: `runtime:${string}`
   notificationId?: string

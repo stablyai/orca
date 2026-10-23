@@ -99,6 +99,29 @@ export function isViewingWorkspaceTarget(target: {
   )
 }
 
+function paneKeyMatches(actual: string | undefined, expected: string | undefined): boolean {
+  if (paramMatches(actual, expected)) {
+    return true
+  }
+  if (!actual || !expected) {
+    return false
+  }
+  const actualColon = actual.lastIndexOf(':')
+  const expectedColon = expected.lastIndexOf(':')
+  if (actualColon <= 0 || expectedColon <= 0) {
+    return false
+  }
+  const actualLeaf = actual.slice(actualColon + 1)
+  const expectedLeaf = expected.slice(expectedColon + 1)
+  if (!actualLeaf || actualLeaf !== expectedLeaf) {
+    return false
+  }
+  return (
+    actual.startsWith('structured-agent-session-') ||
+    expected.startsWith('structured-agent-session-')
+  )
+}
+
 export function isViewingNotificationTarget(target: {
   hostId?: string
   worktreeId?: string
@@ -112,7 +135,7 @@ export function isViewingNotificationTarget(target: {
   if (!target.paneKey || !viewing?.paneKey) {
     return true
   }
-  return paramMatches(viewing.paneKey, target.paneKey)
+  return paneKeyMatches(viewing.paneKey, target.paneKey)
 }
 
 export function shouldSuppressNotificationWhileViewing(

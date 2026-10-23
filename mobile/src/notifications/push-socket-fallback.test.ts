@@ -110,6 +110,18 @@ describe('classifyNotificationTone & resolveEventPaneKey', () => {
       })
     ).toBe('tab-1:leaf-2')
   })
+
+  it('derives structured agent session paneKey from structuredOrigin or agent-attention notificationId', () => {
+    const fromOrigin = resolveEventPaneKey({
+      structuredOrigin: { sessionId: 'sess-42' }
+    })
+    expect(fromOrigin).toMatch(/^structured-agent-session-sess-42:[0-9a-f-]{36}$/)
+    expect(
+      resolveEventPaneKey({
+        notificationId: 'agent-attention:wt-1:sess-42:completion:1'
+      })
+    ).toBe(fromOrigin)
+  })
 })
 
 describe('presentSocketNotificationFallback', () => {

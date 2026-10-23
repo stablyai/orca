@@ -120,6 +120,7 @@ export function createNotificationDeliveryService(
             title: notificationOptions.title,
             body: notificationOptions.body,
             worktreeId: request.worktreeId,
+            ...(!request.notificationId && request.paneKey ? { paneKey: request.paneKey } : {}),
             ...(request.executionHost ? { executionHost: request.executionHost } : {}),
             ...(request.notificationId ? { notificationId: request.notificationId } : {}),
             // Why: background push needs the agent's real state to pick "needs input"

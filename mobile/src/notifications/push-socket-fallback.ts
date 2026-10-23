@@ -18,6 +18,10 @@ import { loadNotificationDeliveryPreferences } from './notification-delivery-pre
 import { deriveHostFingerprint } from './push-host-fingerprint'
 import type { OrcaPushPayload } from './push-payload'
 import { isHostPushRegistered } from './push-registration'
+import {
+  structuredAgentSessionPaneKey,
+  structuredAgentSessionTabId
+} from '../../../src/shared/structured-agent-session-projection'
 
 const URGENT_TEXT_PATTERN = /\b(waiting for input|needs input|permission|approval|blocked)\b/i
 
@@ -38,21 +42,46 @@ export function classifyNotificationTone(
 }
 
 export function resolveEventPaneKey(
-  event: Pick<DesktopNotificationDispatchEvent, 'paneKey' | 'notificationId'>
+  event: Pick<DesktopNotificationDispatchEvent, 'paneKey' | 'notificationId' | 'structuredOrigin'>
 ): string | undefined {
   if (typeof event.paneKey === 'string' && event.paneKey.trim().length > 0) {
     return event.paneKey.trim()
   }
-  if (typeof event.notificationId === 'string' && event.notificationId.startsWith('agent:')) {
-    const parts = event.notificationId.split(':')
-    if (parts.length >= 4 && parts[2]) {
-      try {
-        const decoded = decodeURIComponent(parts[2]).trim()
-        if (decoded.length > 0) {
-          return decoded
+  const structuredSessionId = event.structuredOrigin?.sessionId?.trim()
+  if (structuredSessionId) {
+    return structuredAgentSessionPaneKey(
+      structuredAgentSessionTabId(structuredSessionId),
+      structuredSessionId
+    )
+  }
+  if (typeof event.notificationId === 'string') {
+    if (event.notificationId.startsWith('agent:')) {
+      const parts = event.notificationId.split(':')
+      if (parts.length >= 4 && parts[2]) {
+        try {
+          const decoded = decodeURIComponent(parts[2]).trim()
+          if (decoded.length > 0) {
+            return decoded
+          }
+        } catch {
+          return undefined
         }
-      } catch {
-        return undefined
+      }
+    }
+    if (event.notificationId.startsWith('agent-attention:')) {
+      const parts = event.notificationId.split(':')
+      if (parts.length >= 3 && parts[2]) {
+        try {
+          const sessionId = decodeURIComponent(parts[2]).trim()
+          if (sessionId.length > 0) {
+            return structuredAgentSessionPaneKey(
+              structuredAgentSessionTabId(sessionId),
+              sessionId
+            )
+          }
+        } catch {
+          return undefined
+        }
       }
     }
   }

@@ -2,6 +2,7 @@ import { useCallback } from 'react'
 import { useRouter } from 'expo-router'
 import { hostStackHostRoute } from '../navigation/host-stack-navigation'
 import { useOpenHostStackRoute } from '../navigation/use-open-host-stack-route'
+import { dispatchInPageNotificationNavigation } from './in-page-notification-navigation'
 import {
   notificationCredentialRecoveryRoute,
   type NotificationNavigationTarget
@@ -19,6 +20,16 @@ export function useOpenNotificationRoute(): (target: NotificationNavigationTarge
         return
       }
       if (target.sessionTarget) {
+        if (
+          dispatchInPageNotificationNavigation({
+            hostId: target.hostId,
+            worktreeId: target.sessionTarget.params.worktreeId,
+            paneKey: target.sessionTarget.params.paneKey,
+            executionHost: target.sessionTarget.params.executionHost
+          })
+        ) {
+          return
+        }
         openHostStackRoute(target.hostId, target.sessionTarget)
         return
       }

@@ -33,6 +33,7 @@ vi.mock('../transport/client-context.web', () => ({
 }))
 
 import { encodeInPageNotificationTarget } from '../notifications/in-page-notification-navigation'
+import { structuredAgentSessionPaneKey } from '../../../src/shared/structured-agent-session-projection'
 import { useNotificationPaneNavigation } from './use-notification-pane-navigation'
 
 /** A real leaf id: `parsePaneKey` refuses anything that is not one, so a made-up key parses to
@@ -56,6 +57,15 @@ const TABS: MobileSessionTab[] = [
     leafId: LEAF,
     title: 'second',
     terminal: 'pty-b',
+    isActive: false
+  },
+  {
+    type: 'agent-session',
+    id: 'structured-agent-session-sess-99',
+    sessionId: 'sess-99',
+    title: 'Native Chat',
+    agent: 'claude',
+    status: 'waiting-approval',
     isActive: false
   }
 ]
@@ -254,5 +264,12 @@ describe('the page pane hook', () => {
       )
     })
     expect(switched.map((tab) => tab.id)).toEqual(['second'])
+  })
+
+  it('switches to an agent-session tab even when paneKey carries the desktop structured tab id prefix', () => {
+    render(true)
+    const desktopPaneKey = structuredAgentSessionPaneKey('desktop-structured-tab-1', 'sess-99')
+    deliver(desktopPaneKey)
+    expect(switched.map((tab) => tab.id)).toEqual(['structured-agent-session-sess-99'])
   })
 })

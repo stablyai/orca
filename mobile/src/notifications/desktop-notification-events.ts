@@ -13,6 +13,9 @@ export type DesktopNotificationDispatchEvent = {
   notificationId?: string
   notificationSeq?: number
   notificationEpoch?: string
+  structuredOrigin?: {
+    sessionId?: string
+  }
 }
 
 export type DismissNotificationEvent = {

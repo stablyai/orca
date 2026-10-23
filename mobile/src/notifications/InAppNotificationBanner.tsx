@@ -119,8 +119,12 @@ export function InAppNotificationBanner() {
       executionHost: banner.executionHost
     })
     if (onSameWorkspace) {
-      if (onNativeSessionRoute && banner.paneKey && target) {
-        openNotificationRoute(target)
+      if (banner.paneKey && target) {
+        if (onNativeSessionRoute) {
+          openNotificationRoute(target)
+        } else if (onSameHost && target.sessionTarget) {
+          router.replace(hostStackRouteHref(target.sessionTarget))
+        }
       }
       return
     }

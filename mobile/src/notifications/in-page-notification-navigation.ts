@@ -16,6 +16,7 @@ type InPageNotificationTarget = {
 type InPageNotificationHandler = (target: InPageNotificationTarget) => boolean
 
 const handlersByHostId = new Map<string, InPageNotificationHandler>()
+const activeInPageHostKeys = new Set<string>()
 const ENCODED_TARGET_PREFIX = 'orca-nav:'
 let nextNavigationSeq = 0
 
@@ -95,6 +96,7 @@ export function noteInPageStorageWrite(
   if (key === LAST_VISITED_WORKTREE_STORAGE_KEY && value !== null) {
     const visited = readLastVisitedWorktreeOnHost(value, hostId)
     if (visited) {
+      activeInPageHostKeys.add(normalizeHostKey(hostId))
       setViewingWorkspace({
         hostId,
         worktreeId: visited.worktreeId,
@@ -114,6 +116,7 @@ export function noteInPageBackClaim(
 ): void {
   reportPageBackClaim(claimed)
   if (!claimed && isHostRouteOf(routePathname, hostId)) {
+    activeInPageHostKeys.delete(normalizeHostKey(hostId))
     setViewingWorkspace(null)
   }
 }
@@ -152,9 +155,14 @@ export function useInPageNotificationBridge(params: {
     setViewingWorkspace
   } = params
   const enabled =
-    pageReady && !overlay && (pageRouteWorkspace(route.pathname) !== null || ownsHostArea)
+    pageReady &&
+    !overlay &&
+    (pageRouteWorkspace(route.pathname) !== null ||
+      ownsHostArea ||
+      isHostRouteOf(route.pathname, hostId))
   useEffect(() => {
     return () => {
+      activeInPageHostKeys.delete(normalizeHostKey(hostId))
       setViewingWorkspace(null)
     }
   }, [hostId, setViewingWorkspace])
@@ -164,6 +172,13 @@ export function useInPageNotificationBridge(params: {
     }
     return registerInPageNotificationNavigation(hostId, (target) => {
       if (isFocused && !isFocused()) {
+        return false
+      }
+      if (
+        pageRouteWorkspace(route.pathname) === null &&
+        !ownsHostArea &&
+        !activeInPageHostKeys.has(normalizeHostKey(hostId))
+      ) {
         return false
       }
       const encoded = encodeInPageNotificationTarget(target)
@@ -176,5 +191,5 @@ export function useInPageNotificationBridge(params: {
       })
       return true
     })
-  }, [enabled, hostId, isFocused, publishRoute, route])
+  }, [enabled, hostId, isFocused, ownsHostArea, publishRoute, route])
 }

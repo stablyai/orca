@@ -17,16 +17,23 @@ export function notificationPaneTab(tabs: readonly MobileSessionTab[], paneKey: 
   if (!pane) {
     return undefined
   }
-  return tabs.find((tab) =>
-    tab.type === 'terminal'
-      ? (tab.parentTabId ?? tab.id) === pane.tabId && tab.leafId === pane.leafId
-      : tab.type === 'agent-session' &&
-        (tab.id === pane.tabId ||
-          structuredAgentSessionPaneKey(
-            structuredAgentSessionTabId(tab.sessionId),
-            tab.sessionId
-          ) === paneKey)
-  )
+  return tabs.find((tab) => {
+    if (tab.type === 'terminal') {
+      return (tab.parentTabId ?? tab.id) === pane.tabId && tab.leafId === pane.leafId
+    }
+    if (tab.type === 'agent-session') {
+      const expectedPaneKey = structuredAgentSessionPaneKey(
+        structuredAgentSessionTabId(tab.sessionId),
+        tab.sessionId
+      )
+      return (
+        tab.id === pane.tabId ||
+        expectedPaneKey === paneKey ||
+        expectedPaneKey.endsWith(`:${pane.leafId}`)
+      )
+    }
+    return false
+  })
 }
 
 export function sessionTabPaneKey(tab: MobileSessionTab | undefined): string | undefined {
@@ -35,7 +42,7 @@ export function sessionTabPaneKey(tab: MobileSessionTab | undefined): string | u
   }
   if (tab.type === 'terminal') {
     const tabId = tab.parentTabId ?? tab.id
-    return tabId && tab.leafId ? `${tabId}:${tab.leafId}` : undefined
+    return tabId && tab.leafId ? `${tabId}:${tab.leafId}` : `terminal:${tab.id}`
   }
   if (tab.type === 'agent-session') {
     return structuredAgentSessionPaneKey(
@@ -43,5 +50,5 @@ export function sessionTabPaneKey(tab: MobileSessionTab | undefined): string | u
       tab.sessionId
     )
   }
-  return undefined
+  return `${tab.type}:${tab.id}`
 }
