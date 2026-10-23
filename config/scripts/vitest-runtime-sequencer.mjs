@@ -10,11 +10,13 @@ export default class RuntimeSequencer extends BaseSequencer {
 
   async sort(specifications) {
     const inherited = await super.sort(specifications)
-    if (new Set(inherited.map((spec) => spec.project.name)).size < 2) {
+    const windowsBoundary = process.env.ORCA_WINDOWS_BOUNDARY_TIMINGS === '1'
+    if (!windowsBoundary && new Set(inherited.map((spec) => spec.project.name)).size < 2) {
       return inherited
     }
-    // Start long contracts across both runtimes instead of leaving Node until the end.
-    const baseline = this.timingBaseline ?? readTimingBaseline('unit')
+    // Start long contracts first while retaining execution groups and isolation.
+    const baseline =
+      this.timingBaseline ?? readTimingBaseline(windowsBoundary ? 'windowsBoundary' : 'unit')
     const key = (spec) => relative(this.ctx.config.root, spec.moduleId).replaceAll('\\', '/')
     const { weighted } = rankFilesByDuration(
       [...new Set(inherited.map(key))],

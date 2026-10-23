@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { BaseSequencer } from 'vitest/node'
 import RuntimeSequencer from './vitest-runtime-sequencer.mjs'
 
@@ -57,4 +57,24 @@ it('retains Vitest ordering and default sharding for a single runtime', async ()
   const sequencer = new RuntimeSequencer(context, timingBaseline)
   expect(await sequencer.sort(specs)).toEqual(await new BaseSequencer(context).sort(specs))
   expect(sequencer.shard).toBe(BaseSequencer.prototype.shard)
+})
+
+it('starts long Windows boundaries first only when opted in, preserving groups and every file', async () => {
+  vi.stubEnv('ORCA_WINDOWS_BOUNDARY_TIMINGS', '1')
+  try {
+    const specs = [
+      specification('short.test.ts', 'node'),
+      specification('unknown.test.ts', 'node'),
+      specification('long.test.ts', 'node'),
+      specification('medium.test.ts', 'node', 1),
+      specification('long.test.ts', 'node', 0, false)
+    ]
+    const sequencer = new RuntimeSequencer(context, timingBaseline)
+    const ordered = await sequencer.sort(specs)
+    expect(ordered).toEqual([specs[2], specs[1], specs[0], specs[4], specs[3]])
+    expect(new Set(ordered)).toEqual(new Set(specs))
+    expect(sequencer.shard).toBe(BaseSequencer.prototype.shard)
+  } finally {
+    vi.unstubAllEnvs()
+  }
 })

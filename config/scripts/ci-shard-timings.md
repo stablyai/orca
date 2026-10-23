@@ -16,6 +16,32 @@ retaining project filters, skipped tests and complete serial groups within files
 The workflow verifies selected test IDs against full discovery before executing.
 Dedicated SSH, native IME, WSL and first-paint lanes are unchanged.
 
+## Windows boundary scheduling
+
+The Windows package boundary step opts into the same duration ranking with
+`ORCA_WINDOWS_BOUNDARY_TIMINGS=1`. It uses the separate `windowsBoundary` weights,
+retains every discovered file and Vitest's four workers and isolation, and keeps
+the CPU-load tree-kill invocation separate. Other single-runtime invocations keep
+Vitest's default ordering.
+
+The baseline records all 78 completed files from successful Windows job
+[120595181977, run 40005925085, attempt 1](https://github.com/stablyai/orca/actions/runs/40005925085/job/120595181977):
+687 tests passed, 57 skipped, Node 24.22.1, `windows-2022`, checkout
+`b13e24cd8660bf44baabe92f5f5c23a442008994`. Weights are logged test-body durations,
+excluding imports and setup. Unknown files use the existing positive median.
+The 53.361-second PTY suite finished last after starting about 94 seconds into
+the 147.63-second Vitest invocation. Its small file size placed it late in
+Vitest's cold ordering; duration ranking starts it first.
+
+Replaying the same four-worker scheduling with those durations projects
+100.544 to 87.200 seconds of test-body work on the critical worker. A second
+successful job, [120587491157, run 40003680345](https://github.com/stablyai/orca/actions/runs/40003680345/job/120587491157),
+contains the identical 78-file inventory and projects 101.181 to 86.180 seconds
+using the first run's ranking. These are scheduling projections using current
+file sizes for the previous cold order, not observed hosted speedups. Imports,
+process startup, and contention remain outside the model. No assertions or test
+work are removed. Full PR checks qualify the changed ordering on Windows.
+
 ## Evidence and limits
 
 `ci-shard-timings.json` records source runs. Unit report provenance and contributing
