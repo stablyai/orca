@@ -147,10 +147,10 @@ describe('Linear issue queries', () => {
           comments: {
             nodes: [
               {
-                id: 'comment-1',
-                body: '![First](https://uploads.linear.app/w/image?signature=fresh)',
-                createdAt: '2026-01-02T03:04:05.000Z',
-                user: { displayName: 'Ada', avatarUrl: 'https://example.com/a.png' }
+                id: 'comment-3',
+                body: 'Third',
+                createdAt: '2026-01-02T03:06:05.000Z',
+                user: null
               },
               {
                 id: 'comment-2',
@@ -159,10 +159,10 @@ describe('Linear issue queries', () => {
                 user: { displayName: 'Grace', avatarUrl: null }
               },
               {
-                id: 'comment-3',
-                body: 'Third',
-                createdAt: '2026-01-02T03:06:05.000Z',
-                user: null
+                id: 'comment-1',
+                body: '![First](https://uploads.linear.app/w/image?signature=fresh)',
+                createdAt: '2026-01-02T03:04:05.000Z',
+                user: { displayName: 'Ada', avatarUrl: 'https://example.com/a.png' }
               }
             ]
           }
