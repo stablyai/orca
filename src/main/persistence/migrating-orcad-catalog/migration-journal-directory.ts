@@ -11,6 +11,10 @@ import { readNodeFileSyncWithinLimit } from '../../../shared/node-bounded-file-r
 import { syncDirectoryDurablySync } from '../../durable-file-write'
 
 const JOURNAL_FILE = /^[A-Za-z0-9_-]{1,128}\.json$/
+// `<id>.json.<pid>.<ms>.<rand>.tmp`: a durable write that died before its rename.
+const JOURNAL_TEMPORARY = /^[A-Za-z0-9_-]{1,128}\.json\.(\d+)\.\d+\.[0-9a-f]+\.tmp$/
+// Spares a write another instance may still be finishing.
+const TEMPORARY_SWEEP_MIN_AGE_MS = 60_000
 
 export type MigrationJournalDirectory<T extends { migrationId: string }> = {
   directory: (userDataPath: string) => string
@@ -30,6 +34,7 @@ export function createMigrationJournalDirectory<T extends { migrationId: string 
 }): MigrationJournalDirectory<T> {
   // Why: hidden-row checks run on every list call, and each record may embed a full manifest.
   const parsed = new Map<string, { key: string; records: T[] }>()
+  const swept = new Set<string>()
   const directory = (userDataPath: string): string => join(userDataPath, options.directoryName)
   const fileVersion = (path: string): string => {
     try {
@@ -72,6 +77,10 @@ export function createMigrationJournalDirectory<T extends { migrationId: string 
         names = readdirSync(dir)
       } catch (error) {
         throw options.unreadable(errorMessage(error))
+      }
+      if (!swept.has(dir)) {
+        swept.add(dir)
+        removeOrphanedTemporaries(dir, names)
       }
       const files: { name: string; path: string }[] = []
       for (const name of names) {
@@ -125,6 +134,24 @@ export function createMigrationJournalDirectory<T extends { migrationId: string 
         syncDirectoryDurablySync(dir)
       }
       changed(userDataPath)
+    }
+  }
+}
+
+/** Once per directory and process: another process's write that never reached its rename. */
+function removeOrphanedTemporaries(dir: string, names: readonly string[]): void {
+  for (const name of names) {
+    const pid = JOURNAL_TEMPORARY.exec(name)?.[1]
+    if (!pid || Number(pid) === process.pid) {
+      continue
+    }
+    const path = join(dir, name)
+    try {
+      if (Date.now() - statSync(path).mtimeMs >= TEMPORARY_SWEEP_MIN_AGE_MS) {
+        rmSync(path, { force: true })
+      }
+    } catch {
+      // Gone already, or unreadable; it carries no journal state either way.
     }
   }
 }
