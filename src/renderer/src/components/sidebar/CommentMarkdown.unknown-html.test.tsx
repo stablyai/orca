@@ -52,4 +52,78 @@ describe('CommentMarkdown unknown HTML as text', () => {
 
     expect(markup).not.toContain('se-tabs')
   })
+
+  it('keeps allowed HTML when an attribute mentions an unknown tag', () => {
+    const markup = renderChat('<kbd title="use <Button>">Ctrl</kbd>')
+
+    expect(markup).toContain('<kbd title="use &lt;Button&gt;">Ctrl</kbd>')
+  })
+
+  it('does not reveal HTML comments that mention unknown tags', () => {
+    const markup = renderChat('before <!-- <Button /> --> after')
+
+    expect(markup).not.toContain('Button')
+    expect(markup).toContain('before  after')
+  })
+
+  it('preserves the existing bare URL punctuation boundary in chat', () => {
+    const markup = renderChat('See https://example.com/a。Next')
+
+    expect(markup).toContain('href="https://example.com/a"')
+    expect(markup).not.toContain('href="https://example.com/a%E3%80%82Next"')
+  })
+
+  it('keeps multiline XML literal and preserves its line breaks', () => {
+    const markup = renderChat('<project>\n<name>orca</name>\n</project>')
+
+    expect(markup).toContain('&lt;project&gt;<br/>')
+    expect(markup).toContain('&lt;name&gt;orca&lt;/name&gt;<br/>')
+    expect(markup).toContain('&lt;/project&gt;')
+    expect(markup).not.toContain('<project>')
+  })
+
+  it('keeps literal tags in a growing reply', () => {
+    const markup = renderToStaticMarkup(
+      <NativeChatMarkdown content="use a <se-tabs>" growing streaming />
+    )
+
+    expect(markup).toContain('a &lt;se-tabs&gt;')
+  })
+
+  it('leaves fenced code untouched', () => {
+    const markup = renderChat('```tsx\n<Button />\n```')
+
+    expect(markup).toContain('&lt;Button /&gt;\n</code></pre>')
+  })
+
+  it('leaves angle-bracket URL and email autolinks intact', () => {
+    const markup = renderChat('<https://example.com> and <orca@example.com>')
+
+    expect(markup).toContain('href="https://example.com"')
+    expect(markup).toContain('href="mailto:orca@example.com"')
+  })
+
+  it('still sanitizes unsafe attributes and URLs on allowed HTML', () => {
+    const markup = renderChat('<a href="javascript:alert(1)" onclick="alert(2)">link</a>')
+
+    expect(markup).toContain('>link</a>')
+    expect(markup).not.toContain('javascript:')
+    expect(markup).not.toContain('onclick')
+  })
+
+  it('keeps disallowed elements inert even when they have executable attributes', () => {
+    const markup = renderChat('<iframe srcdoc="<script>alert(1)</script>"></iframe>')
+
+    expect(markup).toContain('&lt;iframe')
+    expect(markup).not.toContain('<iframe')
+    expect(markup).not.toContain('<script')
+  })
+
+  it('still renders an allowed disclosure', () => {
+    const markup = renderChat('<details><summary>More</summary>\n\nbody\n\n</details>')
+
+    expect(markup).toContain('<details>')
+    expect(markup).toContain('<summary>More</summary>')
+    expect(markup).toContain('body')
+  })
 })

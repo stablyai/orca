@@ -4,7 +4,8 @@ type MarkdownNode = {
   children?: MarkdownNode[]
 }
 
-const HTML_TAG_NAME_PATTERN = /<\/?([A-Za-z][A-Za-z0-9-]*)/g
+const HTML_TAG_NAME_PATTERN =
+  /<!--[\s\S]*?(?:-->|$)|<\/?([A-Za-z][A-Za-z0-9-]*)(?:[^"'<>]|"[^"]*"|'[^']*')*>/g
 
 const PHRASING_PARENT_TYPES = new Set([
   'paragraph',
@@ -19,7 +20,8 @@ const PHRASING_PARENT_TYPES = new Set([
 
 function hasUnknownTag(html: string, allowedTagNames: ReadonlySet<string>): boolean {
   for (const match of html.matchAll(HTML_TAG_NAME_PATTERN)) {
-    if (!allowedTagNames.has(match[1].toLowerCase())) {
+    const name = match[1]
+    if (name && !allowedTagNames.has(name.toLowerCase())) {
       return true
     }
   }

@@ -208,12 +208,10 @@ const commentMarkdownSanitizeSchema = {
 
 // Why: runs before remark-breaks so newlines inside the escaped HTML still break.
 const unknownHtmlAsTextRemarkPlugins = [
-  remarkGfm,
-  remarkGitHubCallouts,
   remarkUnknownHtmlAsText(
     new Set((commentMarkdownSanitizeSchema.tagNames ?? []).map((name) => name.toLowerCase()))
   ),
-  remarkBreaks
+  ...remarkPlugins
 ]
 
 // Why: GitHub comments often include safe raw HTML (`<sub>`, `<details>`,
