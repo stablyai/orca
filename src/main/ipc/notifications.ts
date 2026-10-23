@@ -1,4 +1,4 @@
-import { BrowserWindow, Notification, ipcMain, powerMonitor } from 'electron'
+import { BrowserWindow, ipcMain, powerMonitor } from 'electron'
 import { readDesktopAwayState } from '../notifications/desktop-away-state'
 import type { Store } from '../persistence'
 import type {
@@ -17,6 +17,7 @@ import { activeNotificationsById } from './native-notification-lifecycle'
 import { deliverNativeNotification } from './native-notification-delivery'
 import { removeReadMacosNotifications } from './macos-notification-center'
 import { createNotificationDeliveryService } from '../notifications/notification-delivery-service'
+import { isDesktopNotificationSupported } from '../notifications/notification-support'
 import { createAnnouncedNotificationRegistry } from '../notifications/announced-notification-registry'
 import { registerNotificationSoundHandlers } from './notification-sound-ipc'
 import { openNotificationSystemSettings } from './notification-system-settings-link'
@@ -44,7 +45,7 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
 
   // Why: Electron's main process can't read macOS auth status; expose only what we can observe (platform support + whether we've prompted).
   const getPermissionStatus = (): NotificationPermissionStatusResult => ({
-    supported: Notification.isSupported(),
+    supported: isDesktopNotificationSupported(),
     platform: process.platform,
     requested: store.getUI().notificationPermissionRequested === true
   })
@@ -54,7 +55,7 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
     'notifications:probeDelivery',
     async (_event, args?: { force?: boolean }): Promise<NotificationDeliveryProbeResult> => {
       // Why: macOS-only — Windows/Linux have no first-use permission dialog, so the onboarding card never renders there.
-      if (process.platform !== 'darwin' || !Notification.isSupported()) {
+      if (process.platform !== 'darwin' || !isDesktopNotificationSupported()) {
         return { state: 'unsupported', authoritative: false }
       }
       // Why: probes surface the macOS permission dialog, so mark startup registration done to avoid a second prompt later.
@@ -152,7 +153,7 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
       BrowserWindow.getAllWindows().find((window) => !window.isDestroyed()) ?? null,
     isWindowVisible: isMainWindowVisible,
     setTrayAttention,
-    isNotificationSupported: () => Notification.isSupported(),
+    isNotificationSupported: () => isDesktopNotificationSupported(),
     dispatchMobileNotification: runtime
       ? (payload) => runtime.dispatchMobileNotification(payload)
       : null,
