@@ -1,3 +1,5 @@
+import { isEventTargetInsideFloatingWorkspacePanel } from '@/lib/floating-workspace-terminal-actions'
+
 export type ViewerZoomDirection = 'in' | 'out' | 'reset'
 
 const VIEWER_ZOOM_REQUEST_EVENT = 'orca:viewer-zoom-request'
@@ -16,9 +18,19 @@ export function requestViewerZoom(direction: ViewerZoomDirection): boolean {
 
 export function listenForViewerZoomRequests(
   onZoom: (direction: ViewerZoomDirection) => void,
+  rootRef: { readonly current: HTMLElement | null },
   priority: 'pane' | 'popup' = 'pane'
 ): () => void {
   const listener = (event: Event): void => {
+    const root = rootRef.current
+    if (
+      !root ||
+      (priority !== 'popup' &&
+        isEventTargetInsideFloatingWorkspacePanel(document.activeElement) !==
+          isEventTargetInsideFloatingWorkspacePanel(root))
+    ) {
+      return
+    }
     const direction: unknown = event instanceof CustomEvent ? event.detail : null
     if (direction === 'in' || direction === 'out' || direction === 'reset') {
       event.preventDefault()

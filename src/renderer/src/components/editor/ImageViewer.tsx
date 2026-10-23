@@ -236,6 +236,7 @@ export default function ImageViewer({
             ? currentZoom * IMAGE_VIEWER_ZOOM_STEP
             : currentZoom / IMAGE_VIEWER_ZOOM_STEP
         }),
+      isPopupOpen ? popupSurfaceRef : inlineSurfaceRef,
       isPopupOpen ? 'popup' : 'pane'
     )
   }, [

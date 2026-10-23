@@ -68,6 +68,20 @@ describe('PdfViewer app zoom ownership', () => {
     expect(readPdfScalePreference('report')).toBe('page-width')
   })
 
+  it('leaves zoom unclaimed when text in the floating workspace has focus', () => {
+    renderPdf(true)
+    const floating = document.createElement('textarea')
+    floating.dataset.floatingTerminalPanel = ''
+    document.body.appendChild(floating)
+    try {
+      floating.focus()
+      expect(requestViewerZoom('in')).toBe(false)
+      expect(viewers[0].currentScale).toBe(1)
+    } finally {
+      floating.remove()
+    }
+  })
+
   it('leaves zoom to the focused pane when this PDF is in an unfocused split or hidden worktree', () => {
     renderPdf(false)
 

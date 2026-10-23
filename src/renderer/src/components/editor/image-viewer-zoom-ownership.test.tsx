@@ -100,6 +100,65 @@ describe('ImageViewer app zoom ownership', () => {
     expect(screen.getAllByText('125%')).toHaveLength(2)
   })
 
+  it('routes between main and floating image owners using DOM focus', () => {
+    const image = (filePath: string) => (
+      <EditorCommandOwnerContext value={true}>
+        <ImageViewer content={PNG} filePath={filePath} mimeType="image/png" />
+      </EditorCommandOwnerContext>
+    )
+    render(
+      <>
+        <div data-testid="main" tabIndex={-1}>
+          {image('/repo/main.png')}
+        </div>
+        <div data-testid="floating" data-floating-terminal-panel="" tabIndex={-1}>
+          {image('/repo/floating.png')}
+        </div>
+      </>
+    )
+    const main = screen.getByTestId('main')
+    const floating = screen.getByTestId('floating')
+
+    floating.focus()
+    expect(zoom('in')).toBe(true)
+    expect(within(floating).getByText('125%')).toBeTruthy()
+    expect(within(main).getByText('100%')).toBeTruthy()
+
+    main.focus()
+    expect(zoom('in')).toBe(true)
+    expect(within(main).getByText('125%')).toBeTruthy()
+    expect(within(floating).getByText('125%')).toBeTruthy()
+
+    floating.focus()
+    fireEvent.click(within(floating).getByTitle('Open image in popup'))
+    expect(zoom('in')).toBe(true)
+    expect(within(screen.getByRole('dialog')).getByText('156%')).toBeTruthy()
+    expect(within(main).getByText('125%')).toBeTruthy()
+    expect(within(floating).getByText('125%')).toBeTruthy()
+  })
+
+  it.each([true, false])(
+    'leaves text zoom unclaimed across surfaces (floating image: %s)',
+    (floating) => {
+      render(
+        <>
+          <div data-floating-terminal-panel={floating ? '' : undefined}>
+            <EditorCommandOwnerContext value={true}>
+              <ImageViewer content={PNG} filePath="/repo/shot.png" mimeType="image/png" />
+            </EditorCommandOwnerContext>
+          </div>
+          <div data-floating-terminal-panel={floating ? undefined : ''}>
+            <textarea aria-label="Other editor" />
+          </div>
+        </>
+      )
+      screen.getByRole('textbox', { name: 'Other editor' }).focus()
+
+      expect(zoom('in')).toBe(false)
+      expect(screen.getByText('100%')).toBeTruthy()
+    }
+  )
+
   it('leaves zoom to the focused pane when this image is in an unfocused split or hidden worktree', () => {
     renderImage(false)
 

@@ -179,8 +179,9 @@ function PdfDocumentViewer({
     if (!isCommandOwner) {
       return
     }
-    return listenForViewerZoomRequests((direction) =>
-      direction === 'reset' ? zoomReset() : stepZoom(direction)
+    return listenForViewerZoomRequests(
+      (direction) => (direction === 'reset' ? zoomReset() : stepZoom(direction)),
+      rootRef
     )
   }, [isCommandOwner, stepZoom, zoomReset])
 

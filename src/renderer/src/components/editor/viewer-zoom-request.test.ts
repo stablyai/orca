@@ -7,7 +7,7 @@ describe('requestViewerZoom', () => {
     expect(requestViewerZoom('in')).toBe(false)
 
     const onZoom = vi.fn()
-    const stop = listenForViewerZoomRequests(onZoom)
+    const stop = listenForViewerZoomRequests(onZoom, { current: document.body })
     expect(requestViewerZoom('out')).toBe(true)
     expect(onZoom).toHaveBeenCalledWith('out')
 
