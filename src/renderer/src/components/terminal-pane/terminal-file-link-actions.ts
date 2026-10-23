@@ -1,3 +1,4 @@
+import type { RuntimeNativeChatFileContext } from '../../../../shared/runtime-file-contracts'
 import type { LinkActionRequest } from '@/components/link-actions/link-action-request'
 import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
 import { buildHttpLinkActions } from '@/lib/http-link-destinations'
@@ -29,6 +30,8 @@ export type TerminalFileLinkActionDeps = {
   wslDistro?: string | null
   /** The paired-server terminal that printed the link; lets its host grant a file outside workspaces. */
   terminalHandle?: string | null
+  /** The chat that links the file; lets its host grant a file outside workspaces. */
+  nativeChatContext?: RuntimeNativeChatFileContext | null
   onOpenFailure?: (failure: FileOpenFailure) => void
   /** The tab that owns the link; editor opens place themselves relative to its group. */
   sourceTabId?: string | null

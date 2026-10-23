@@ -27,6 +27,19 @@ import { assertPreviewWithinTransportBudget } from '../../files/file-preview-bud
 import { SshHostNotServedError } from '../../../providers/ssh-host-not-served-error'
 import { isMobileBinaryPath } from '../../files/mobile-file-kind'
 import { writeTerminalArtifactFile } from './artifact-write'
+import {
+  isDeviceNamespacePath,
+  isNetworkSharePath,
+  isWindowsReservedDeviceName
+} from '../../../ipc/automatic-load-path-text'
+
+function isRefusedNativeChatPath(filePath: string): boolean {
+  return (
+    isNetworkSharePath(filePath) ||
+    isDeviceNamespacePath(filePath) ||
+    isWindowsReservedDeviceName(filePath)
+  )
+}
 
 export class RuntimeTerminalArtifacts {
   private readonly grants: RuntimeTerminalFileGrants
@@ -46,12 +59,21 @@ export class RuntimeTerminalArtifacts {
     return resolveAllowedLocalTerminalArtifactPath(args.absolutePath, args.worktreePath)
   }
 
+  /**
+   * Any file on this host a chat links: the caller can already run commands here, so no proof the
+   * chat named it is asked for. A share or device is refused by its path text, before and after
+   * links resolve; the grant itself refuses pipes and sockets by type.
+   */
   async resolveNativeChatArtifactPath(
     absolutePath: string,
     connectionId?: string
-  ): Promise<string> {
+  ): Promise<string | null> {
     requireReachableFilesystemRoute(getConnectionExecutionHostId(connectionId))
-    return canonicalPathForArtifactComparison(absolutePath)
+    if (isRefusedNativeChatPath(absolutePath)) {
+      return null
+    }
+    const artifactPath = await canonicalPathForArtifactComparison(absolutePath)
+    return isRefusedNativeChatPath(artifactPath) ? null : artifactPath
   }
 
   async resolveAbsoluteFileGrant(args: {
@@ -64,7 +86,7 @@ export class RuntimeTerminalArtifacts {
   }): Promise<RuntimeTerminalPathResolution> {
     const { stats, contentDigest } = await statLocalTerminalArtifact(args.artifactPath)
     const isDirectory = stats.isDirectory()
-    if (!isDirectory && isTerminalArtifactHardLinked(stats)) {
+    if (!isDirectory && (!stats.isFile() || isTerminalArtifactHardLinked(stats))) {
       return {
         worktree: args.worktreeId,
         relativePath: null,

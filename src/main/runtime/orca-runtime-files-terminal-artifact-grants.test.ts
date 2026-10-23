@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { link, mkdtemp, readFile, realpath, symlink, writeFile } from 'node:fs/promises'
+import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { enoent, resolveAuthorizedPathMock, statMock } from './orca-runtime-files-mock-registry'
@@ -66,13 +67,9 @@ describe('RuntimeFileCommands', () => {
       expect(statMock).not.toHaveBeenCalled()
     })
 
-    it('keeps old-client behavior without native-chat provenance', async () => {
+    it('keeps old-client behavior without a native-chat context', async () => {
       const artifactPath = await tempFile('result.json', '{}')
-      const hasRecentNativeChatOutputPath = vi.fn(() => true)
-      const { commands } = createRuntimeFileCommands({
-        path: '/repo',
-        hasRecentNativeChatOutputPath
-      })
+      const { commands } = createRuntimeFileCommands({ path: '/repo' })
 
       const result = await commands.resolveTerminalPath('id:wt-1', artifactPath, null, 'client-a')
 
@@ -83,16 +80,11 @@ describe('RuntimeFileCommands', () => {
         isDirectory: false
       })
       expect(result.openTarget).toBeUndefined()
-      expect(hasRecentNativeChatOutputPath).not.toHaveBeenCalled()
     })
 
-    it('mints an exact-path grant for an out-of-worktree path cited by native chat', async () => {
+    it('mints a read-only exact-path grant for any host file a chat links', async () => {
       const artifactPath = await tempFile('chat-result.html', '<h1>Result</h1>')
-      const hasRecentNativeChatOutputPath = vi.fn(() => true)
-      const { commands } = createRuntimeFileCommands({
-        path: '/repo',
-        hasRecentNativeChatOutputPath
-      })
+      const { commands } = createRuntimeFileCommands({ path: '/repo' })
 
       const result = await commands.resolveTerminalPath(
         'id:wt-1',
@@ -104,12 +96,6 @@ describe('RuntimeFileCommands', () => {
         { tabId: 'tab-1', sessionId: 'session-1' }
       )
 
-      expect(hasRecentNativeChatOutputPath).toHaveBeenCalledWith(
-        'wt-1',
-        { tabId: 'tab-1', sessionId: 'session-1' },
-        artifactPath,
-        artifactPath
-      )
       expect(result).toMatchObject({
         worktree: 'wt-1',
         relativePath: null,
@@ -136,15 +122,29 @@ describe('RuntimeFileCommands', () => {
       await expect(readFile(artifactPath, 'utf8')).resolves.toBe('<h1>Result</h1>')
     })
 
-    it('binds a cited symlink alias to its canonical read-only target', async () => {
+    it('renews a chat grant for a phone that re-resolves without crossWorkspace', async () => {
+      // Why: phones re-resolve expired previews with only the chat context (old and new builds).
+      const artifactPath = await tempFile('chat-report.pdf', '%PDF-1.7')
+      const { commands } = createRuntimeFileCommands({ path: '/repo' })
+
+      const result = await commands.resolveTerminalPath(
+        'id:wt-1',
+        artifactPath,
+        null,
+        'client-a',
+        null,
+        undefined,
+        { tabId: 'tab-1', sessionId: 'session-1' }
+      )
+
+      expect(result).toMatchObject({ exists: true, openTarget: { kind: 'absolute-file' } })
+    })
+
+    it('binds a linked symlink alias to its canonical read-only target', async () => {
       const artifactPath = await tempFile('chat-target.html', '<h1>Result</h1>')
       const citedPath = join(artifactPath, '..', 'chat-citation.html')
       await symlink(artifactPath, citedPath)
-      const hasRecentNativeChatOutputPath = vi.fn(() => true)
-      const { commands } = createRuntimeFileCommands({
-        path: '/repo',
-        hasRecentNativeChatOutputPath
-      })
+      const { commands } = createRuntimeFileCommands({ path: '/repo' })
 
       const result = await commands.resolveTerminalPath(
         'id:wt-1',
@@ -156,12 +156,6 @@ describe('RuntimeFileCommands', () => {
         { tabId: 'tab-1', sessionId: 'session-1' }
       )
 
-      expect(hasRecentNativeChatOutputPath).toHaveBeenCalledWith(
-        'wt-1',
-        { tabId: 'tab-1', sessionId: 'session-1' },
-        citedPath,
-        citedPath
-      )
       expect(result).toMatchObject({
         absolutePath: await realpath(artifactPath),
         exists: true,
@@ -173,35 +167,34 @@ describe('RuntimeFileCommands', () => {
       })
     })
 
-    it('refuses an out-of-worktree chat path without transcript provenance', async () => {
-      const artifactPath = await tempFile('uncited-result.html', '<h1>Secret</h1>')
-      const hasRecentNativeChatOutputPath = vi.fn(() => false)
-      const { commands } = createRuntimeFileCommands({
-        path: '/repo',
-        hasRecentNativeChatOutputPath
-      })
+    it.skipIf(process.platform === 'win32')(
+      'refuses a named pipe a chat links instead of waiting on it',
+      async () => {
+        const dir = await mkdtemp(join(tmpdir(), 'orca-chat-pipe-'))
+        tempDirs.push(dir)
+        const pipePath = join(dir, 'report.png')
+        execFileSync('mkfifo', [pipePath])
+        const { commands } = createRuntimeFileCommands({ path: '/repo' })
 
-      const result = await commands.resolveTerminalPath(
-        'id:wt-1',
-        artifactPath,
-        null,
-        'client-a',
-        null,
-        true,
-        { tabId: 'tab-1', sessionId: 'session-1' }
-      )
+        const result = await commands.resolveTerminalPath(
+          'id:wt-1',
+          pipePath,
+          null,
+          'client-a',
+          null,
+          true,
+          { tabId: 'tab-1', sessionId: 'session-1' }
+        )
 
-      expect(result).toMatchObject({ relativePath: null, exists: false })
-      expect(result.openTarget).toBeUndefined()
-      expect(hasRecentNativeChatOutputPath).toHaveBeenCalledTimes(1)
-    })
+        expect(result).toMatchObject({ relativePath: null, exists: false })
+        expect(result.openTarget).toBeUndefined()
+      }
+    )
 
     it('refuses native-chat tilde paths when the workspace runs in WSL', async () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-      const hasRecentNativeChatOutputPath = vi.fn(() => true)
       const { commands } = createRuntimeFileCommands({
-        path: String.raw`\\wsl.localhost\Ubuntu\work\repo`,
-        hasRecentNativeChatOutputPath
+        path: String.raw`\\wsl.localhost\Ubuntu\work\repo`
       })
 
       const result = await commands.resolveTerminalPath(
@@ -215,7 +208,6 @@ describe('RuntimeFileCommands', () => {
       )
 
       expect(result).toMatchObject({ relativePath: null, absolutePath: null, exists: false })
-      expect(hasRecentNativeChatOutputPath).not.toHaveBeenCalled()
     })
 
     it('does not mint an absolute terminal artifact grant for an unobserved path', async () => {

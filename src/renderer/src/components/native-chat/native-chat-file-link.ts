@@ -15,6 +15,8 @@ export type NativeChatFileLinkContext = {
   runtimeEnvironmentId: string | null
   /** The chat's own tab (terminal or agent-session); editor opens place beside its group. */
   sourceTabId?: string
+  /** The chat's agent session, named with its tab when the host grants a file outside workspaces. */
+  chatSessionId?: string
 }
 
 export type NativeChatResolvedFileLink = {

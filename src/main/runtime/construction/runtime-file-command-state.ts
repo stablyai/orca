@@ -1,11 +1,9 @@
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
-import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import type { GitAdmissionTier } from '../../git/command-runner/git-exec-options'
 import type { LocalProjectGhExecOptions } from '../../project-runtime-git-options'
 import type { RuntimeTerminalAgentStatus } from '../../../shared/runtime-terminal-contracts'
 import { OrcaRuntimeWithPreservedBranchCleanup } from './runtime-host-services'
 import { RuntimeFileCommands } from '../orca-runtime-files'
-import { nativeChatTranscriptIncludesPath } from '../../native-chat/native-chat-file-provenance'
 import { createRuntimeFileWatcherRemoval } from '../runtime-file-watcher-removal'
 import { RuntimeGitCommands } from '../orca-runtime-git'
 import { RuntimeHostedReviewCommands } from '../runtime-hosted-review-commands'
@@ -67,10 +65,6 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
     pathText: string,
     absolutePath: string
   ): boolean
-  protected abstract getMobileSessionTabsForWorktree(
-    worktreeId: string,
-    clientNavigationId?: string
-  ): RuntimeMobileSessionTabsResult
   protected abstract resolveRuntimeGitTarget(worktreeSelector: string): Promise<{
     worktree: ResolvedWorktree
     repo?: Repo
@@ -127,13 +121,6 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
       this.resolveTerminalFileUriHostname(terminalHandle),
     hasRecentTerminalOutputPath: (terminalHandle, pathText, absolutePath) =>
       this.hasRecentTerminalOutputPath(terminalHandle, pathText, absolutePath),
-    hasRecentNativeChatOutputPath: (worktreeId, context, pathText, absolutePath) =>
-      nativeChatTranscriptIncludesPath({
-        tabs: this.getMobileSessionTabsForWorktree(worktreeId).tabs,
-        context,
-        pathText,
-        absolutePath
-      }),
     resolveRuntimeGitTarget: (selector) => this.resolveRuntimeGitTarget(selector),
     openFile: createRuntimeEditorFileOpener({
       getNotifier: () => this.notifier,

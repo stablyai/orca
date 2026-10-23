@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { rm, writeFile } from 'node:fs/promises'
+import { constants, open, rm, writeFile } from 'node:fs/promises'
+import { runProcess } from '@orca/process-host'
 import type * as FsPromises from 'node:fs/promises'
 import { openMock, resolveAuthorizedPathMock } from './orca-runtime-files-mock-registry'
 import {
@@ -67,6 +68,49 @@ describe('terminal artifact swap detection', () => {
     const result = await resolveTerminalArtifactPath(commands, artifactPath)
     return { commands, target: absoluteFileTarget(result) }
   }
+
+  it.skipIf(process.platform === 'win32').each(['read', 'preview', 'write'] as const)(
+    'refuses a FIFO replacement promptly during grant %s consumption',
+    async (operation) => {
+      vi.useRealTimers()
+      const artifactPath = await tempFile('result.txt', 'original')
+      const { commands, target } = await grantFor(artifactPath)
+      await rm(artifactPath)
+      const fifo = await runProcess({ program: 'mkfifo', args: [artifactPath], timeoutMs: 2000 })
+      expect(fifo.code).toBe(0)
+      const args = ['id:wt-1', target.grantId, target.absolutePath] as const
+      const action =
+        operation === 'read'
+          ? commands.readTerminalArtifactFile(...args, 'client-a')
+          : operation === 'preview'
+            ? commands.readTerminalArtifactPreview(...args, 'client-a')
+            : commands.writeTerminalArtifactFile(...args, 'changed', 'client-a')
+      const pending = action.then(
+        () => 'accepted',
+        (error: Error) => error.message
+      )
+      let timer: ReturnType<typeof setTimeout> | undefined
+      try {
+        const outcome = await Promise.race([
+          pending,
+          new Promise<string>((resolve) => {
+            timer = setTimeout(() => resolve('blocked'), 500)
+          })
+        ])
+        if (outcome === 'blocked') {
+          // Release a regressed blocking reader so a failing test leaves no filesystem job behind.
+          const writer = await open(artifactPath, constants.O_WRONLY | constants.O_NONBLOCK).catch(
+            () => null
+          )
+          await writer?.close()
+          await pending
+        }
+        expect(outcome).toBe('terminal_file_grant_stale')
+      } finally {
+        clearTimeout(timer)
+      }
+    }
+  )
 
   it('rejects a same-size preview swap that the granted stat cannot tell apart', async () => {
     replayFirstStatPerPath()

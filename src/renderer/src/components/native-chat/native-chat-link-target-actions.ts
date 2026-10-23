@@ -5,6 +5,7 @@ import {
 } from '@/lib/http-link-destinations'
 import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
 import type { AppState } from '@/store/types'
+import type { RuntimeNativeChatFileContext } from '../../../../shared/runtime-file-contracts'
 import {
   buildFileLinkActions,
   type FileLinkActions,
@@ -40,6 +41,15 @@ export function resolveNativeChatHttpLinkRouting(
   }
 }
 
+/** The chat a host file link comes from, so its host may grant a file outside its workspaces. */
+export function nativeChatHostFileContext(
+  context: NativeChatFileLinkContext
+): RuntimeNativeChatFileContext | null {
+  return context.sourceTabId && context.chatSessionId
+    ? { tabId: context.sourceTabId, sessionId: context.chatSessionId }
+    : null
+}
+
 /** How a chat file link opens; an underlined link must answer every open, so a miss says why. */
 export function nativeChatFileOpenDeps(
   target: NativeChatResolvedFileLink,
@@ -50,6 +60,7 @@ export function nativeChatFileOpenDeps(
     worktreePath: context.worktreePath,
     runtimeEnvironmentId: context.runtimeEnvironmentId,
     sourceTabId: context.sourceTabId,
+    nativeChatContext: nativeChatHostFileContext(context),
     onOpenFailure: (failure) => showFileLinkOpenFailureToast(target.absolutePath, failure)
   }
 }

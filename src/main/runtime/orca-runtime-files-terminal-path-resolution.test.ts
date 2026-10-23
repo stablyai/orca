@@ -54,12 +54,8 @@ describe('RuntimeFileCommands', () => {
       })
     })
 
-    it('keeps in-worktree resolution unchanged when chat provenance is present', async () => {
-      const hasRecentNativeChatOutputPath = vi.fn(() => true)
-      const { commands } = createRuntimeFileCommands({
-        path: '/repo',
-        hasRecentNativeChatOutputPath
-      })
+    it('keeps in-worktree resolution unchanged for a native-chat link', async () => {
+      const { commands } = createRuntimeFileCommands({ path: '/repo' })
       statAsFile()
 
       const result = await commands.resolveTerminalPath(
@@ -73,7 +69,6 @@ describe('RuntimeFileCommands', () => {
       )
 
       expect(result).toMatchObject({ relativePath: 'src/index.ts', exists: true })
-      expect(hasRecentNativeChatOutputPath).not.toHaveBeenCalled()
     })
 
     it('resolves an absolute path through a known sibling workspace', async () => {
@@ -364,11 +359,7 @@ describe('RuntimeFileCommands', () => {
     })
 
     it('still refuses a native-chat ~/ path on a remote worktree', async () => {
-      const hasRecentNativeChatOutputPath = vi.fn(() => true)
-      const { commands, store } = createRuntimeFileCommands({
-        path: '/repo',
-        hasRecentNativeChatOutputPath
-      })
+      const { commands, store } = createRuntimeFileCommands({ path: '/repo' })
       store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
 
       const result = await commands.resolveTerminalPath(
@@ -382,7 +373,6 @@ describe('RuntimeFileCommands', () => {
       )
 
       expect(result).toMatchObject({ relativePath: null, exists: false })
-      expect(hasRecentNativeChatOutputPath).not.toHaveBeenCalled()
     })
   })
 })

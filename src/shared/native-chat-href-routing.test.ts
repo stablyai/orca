@@ -127,6 +127,22 @@ describe('routeNativeChatHref', () => {
     expect(routeNativeChatHref('localhost:3000')).toEqual({ kind: 'none' })
   })
 
+  it('reads a sandbox: link as the absolute path on the chat host', () => {
+    expect(routeNativeChatHref('sandbox:/mnt/data/report.png')).toEqual({
+      kind: 'file',
+      pathText: '/mnt/data/report.png',
+      line: null
+    })
+    expect(routeNativeChatHref('SANDBOX:/mnt/data/Q3%20report.pdf')).toEqual({
+      kind: 'file',
+      pathText: '/mnt/data/Q3 report.pdf',
+      line: null
+    })
+    // A relative or host-qualified sandbox address names no file on the chat host.
+    expect(routeNativeChatHref('sandbox:report.png')).toEqual({ kind: 'none' })
+    expect(routeNativeChatHref('sandbox://host/report.png')).toEqual({ kind: 'none' })
+  })
+
   it('drops anchors, unknown schemes, malformed file URIs, and empty hrefs', () => {
     expect(routeNativeChatHref('#section')).toEqual({ kind: 'none' })
     expect(routeNativeChatHref(undefined)).toEqual({ kind: 'none' })

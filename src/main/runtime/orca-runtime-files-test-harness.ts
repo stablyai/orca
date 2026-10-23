@@ -45,7 +45,6 @@ export function createRuntimeFileCommands(options?: {
   resolveTerminalContext?: ReturnType<typeof vi.fn>
   resolveTerminalFileUriHostname?: ReturnType<typeof vi.fn>
   hasRecentTerminalOutputPath?: ReturnType<typeof vi.fn>
-  hasRecentNativeChatOutputPath?: ReturnType<typeof vi.fn>
 }) {
   const store = {
     getSettings: vi.fn(() => ({ followSymlinkedDirectories: false })),
@@ -87,9 +86,6 @@ export function createRuntimeFileCommands(options?: {
       ? { resolveTerminalFileUriHostname: options.resolveTerminalFileUriHostname }
       : {}),
     hasRecentTerminalOutputPath: options?.hasRecentTerminalOutputPath ?? vi.fn(() => true),
-    ...(options?.hasRecentNativeChatOutputPath
-      ? { hasRecentNativeChatOutputPath: options.hasRecentNativeChatOutputPath }
-      : {}),
     resolveRuntimeGitTarget: options?.resolveRuntimeGitTarget ?? vi.fn(),
     openFile: options?.openFile ?? vi.fn(),
     ...(options?.openDiff ? { openDiff: options.openDiff } : {})

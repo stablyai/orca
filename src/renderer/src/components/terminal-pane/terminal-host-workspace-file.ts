@@ -11,6 +11,7 @@ import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import {
   TERMINAL_PATH_CROSS_WORKSPACE_RUNTIME_CAPABILITY,
+  type RuntimeNativeChatFileContext,
   type RuntimeTerminalPathResolution
 } from '../../../../shared/runtime-file-contracts'
 
@@ -34,6 +35,12 @@ export type HostGrantedFile = {
   absolutePath: string
   grantId: string
   isDirectory: false
+}
+
+/** Who links a host file outside its workspaces: the terminal that printed it, or a chat there. */
+export type HostFileLinkSource = {
+  terminalHandle?: string | null
+  nativeChatContext?: RuntimeNativeChatFileContext | null
 }
 
 /** The host answered: it has no file there this client may open. Transport failures stay other errors. */
@@ -82,15 +89,16 @@ async function statClientLocalFile(
 
 /**
  * A clicked paired-server link outside its own workspace: the server, not this client's catalog
- * copy, says which of its workspaces holds the path, or grants it when the terminal printed it.
- * A path it disowns without a grant falls to this computer. Null when the link is not a
+ * copy, says which of its workspaces holds the path, or grants it when the terminal printed it or
+ * a chat links it. A terminal path it disowns without a grant falls to this computer. Null when the link is not a
  * paired-server path outside the source workspace; throws when neither can open it.
  */
 export async function resolveHostWorkspaceFile(
   context: RuntimeFileOperationArgs,
   absolutePath: string,
-  terminalHandle?: string | null
+  source: HostFileLinkSource = {}
 ): Promise<HostWorkspaceFile | HostGrantedFile | ClientLocalFile | null> {
+  const { terminalHandle, nativeChatContext } = source
   const environmentId = runtimeTargetEnvironmentId(context.target)
   if (
     !environmentId ||
@@ -106,8 +114,10 @@ export async function resolveHostWorkspaceFile(
       worktree: toRuntimeWorktreeSelector(context.worktreeId),
       pathText: absolutePath,
       crossWorkspace: true,
-      // Why: the host grants a file outside its workspaces only to the terminal that printed it.
-      ...(terminalHandle ? { terminal: terminalHandle } : {})
+      // Why: the host grants a file outside its workspaces only to the terminal that printed it,
+      // or to a chat on that host.
+      ...(terminalHandle ? { terminal: terminalHandle } : {}),
+      ...(nativeChatContext ? { nativeChatContext } : {})
     },
     { timeoutMs: 15_000 }
   )
@@ -128,6 +138,10 @@ export async function resolveHostWorkspaceFile(
     if (resolved.exists) {
       // Why: an ungranted host path (a directory, or one no terminal printed) is still the host's.
       throw refusal
+    }
+    if (nativeChatContext) {
+      // Why: the chat's agent wrote this path on its host; this computer's copy is not that file.
+      throw new HostFileRefusal(`File not found on its host: ${absolutePath}`)
     }
     return statClientLocalFile(environmentId, absolutePath, refusal)
   }

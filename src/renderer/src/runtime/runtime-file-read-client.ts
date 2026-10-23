@@ -21,7 +21,10 @@ import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import { chatScratchFileAddress } from './runtime-chat-scratch-file-address'
 import { isAgentSessionAttachmentStorePath } from '../../../shared/agent-session-attachments'
 import type { LocalFileAccess } from '../../../shared/local-file-access'
-import { readRuntimeTerminalArtifactContent } from './runtime-terminal-artifact-read'
+import {
+  readChatLinkedRuntimeFilePreview,
+  readRuntimeTerminalArtifactContent
+} from './runtime-terminal-artifact-read'
 import {
   pagedTextFileResult,
   pinRemoteFileAddress,
@@ -148,6 +151,10 @@ export async function readRuntimeFilePreview(
     )
   }
   if (!remoteArgs) {
+    const chatLinkedPreview = readChatLinkedRuntimeFilePreview(context, filePath)
+    if (chatLinkedPreview) {
+      return chatLinkedPreview
+    }
     if (hasRemoteRuntimeOwner(context)) {
       throw new Error('Remote file is outside the owning runtime worktree')
     }

@@ -8,6 +8,7 @@ export type NativeChatHrefRoute =
 
 const WEB_SCHEME_PATTERN = /^(?:https?|mailto):/i
 const SCHEME_PATTERN = /^[A-Za-z][A-Za-z0-9+.-]*:/
+const SANDBOX_PATH_PATTERN = /^sandbox:(\/(?!\/).*)$/is
 // Why: `README.md:5` is a file location; the scheme pattern alone reads `README.md:` as a scheme.
 const BARE_FILE_LOCATION_PATTERN = /^[^\s:/\\?#]+\.[\p{L}\p{N}_+-]+:\d+(?::\d+)?$/u
 export const NATIVE_CHAT_FILE_HREF_PREFIX = '#orca-native-chat-file='
@@ -107,6 +108,12 @@ export function routeNativeChatHref(href: string | null | undefined): NativeChat
   }
   if (WEB_SCHEME_PATTERN.test(trimmed)) {
     return { kind: 'web', url: trimmed }
+  }
+  const sandboxPath = SANDBOX_PATH_PATTERN.exec(trimmed)?.[1]
+  if (sandboxPath) {
+    // Why: models trained on hosted code sandboxes cite `sandbox:/abs/path` for files they wrote;
+    // where the agent runs here, that is the absolute path on the chat's own host.
+    trimmed = sandboxPath
   }
   if (/^file:/i.test(trimmed)) {
     let url: URL

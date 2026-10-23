@@ -365,10 +365,7 @@ describe('RuntimeFileCommands', () => {
     })
 
     it('refuses a native-chat artifact on an SSH target as not served', async () => {
-      const { commands, store } = createRuntimeFileCommands({
-        path: '/repo',
-        hasRecentNativeChatOutputPath: vi.fn(() => true)
-      })
+      const { commands, store } = createRuntimeFileCommands({ path: '/repo' })
       store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
 
       await expect(

@@ -21,7 +21,6 @@ type RuntimeTerminalPathHost = Pick<
   | 'resolveTerminalContext'
   | 'resolveTerminalFileUriHostname'
   | 'hasRecentTerminalOutputPath'
-  | 'hasRecentNativeChatOutputPath'
 >
 type RuntimeTerminalArtifactAuthority = Pick<
   RuntimeTerminalArtifacts,
@@ -126,19 +125,14 @@ export class RuntimeTerminalPathResolver {
         }
       }
 
-      if (
-        nativeChatContext &&
-        (await this.host.hasRecentNativeChatOutputPath?.(
-          worktree.id,
-          nativeChatContext,
-          pathText,
-          absolutePath
-        ))
-      ) {
+      if (nativeChatContext) {
         const artifactPath = await this.artifacts.resolveNativeChatArtifactPath(
           absolutePath,
           connectionId
         )
+        if (!artifactPath) {
+          return { ...empty, relativePath, absolutePath }
+        }
         return await this.artifacts.resolveAbsoluteFileGrant({
           worktreeId: worktree.id,
           artifactPath,

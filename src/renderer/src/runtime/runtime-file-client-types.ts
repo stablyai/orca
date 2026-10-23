@@ -1,5 +1,6 @@
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { LocalFileAccess } from '../../../shared/local-file-access'
+import type { RuntimeNativeChatFileContext } from '../../../shared/runtime-file-contracts'
 
 export type RuntimeReadableFileContent = {
   mediaUrl?: string
@@ -37,6 +38,8 @@ export type RuntimeFileOperationArgs = {
   expectedSshTargetId?: string
   expectedSshConnectionGeneration?: number
   expectedExternalSshTargetId?: string
+  /** The chat that links a host file outside every workspace; its host grants the read. */
+  nativeChatContext?: RuntimeNativeChatFileContext
 }
 
 export type RuntimeFileDownloadResult =

@@ -234,6 +234,7 @@ describe('RuntimeFileCommands', () => {
       openMock.mockResolvedValue({
         stat: vi.fn(async () => ({
           isDirectory: () => false,
+          isFile: () => true,
           size: 2,
           dev: 1,
           ino: 2,

@@ -85,17 +85,35 @@ export async function assertLocalTerminalArtifactPathStillCanonical(
   }
 }
 
-export async function openLocalTerminalArtifactGrant(
-  grant: TerminalFileGrant,
+export async function openLocalTerminalArtifactPath(
+  absolutePath: string,
   flags: number
 ): Promise<FileHandle> {
-  await assertLocalTerminalArtifactPathStillCanonical(grant.absolutePath)
+  await assertLocalTerminalArtifactPathStillCanonical(absolutePath)
   try {
-    return await open(grant.absolutePath, flags | OPEN_NOFOLLOW)
+    // A path can become a FIFO after granting; validate the opened descriptor without waiting.
+    return await open(absolutePath, flags | OPEN_NOFOLLOW | (constants.O_NONBLOCK ?? 0))
   } catch (error) {
     if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ELOOP') {
       throw new Error('terminal_file_grant_stale')
     }
+    throw error
+  }
+}
+
+export async function openLocalTerminalArtifactGrant(
+  grant: TerminalFileGrant,
+  flags: number
+): Promise<FileHandle> {
+  const handle = await openLocalTerminalArtifactPath(grant.absolutePath, flags)
+  try {
+    if (!(await handle.stat()).isFile()) {
+      throw new Error('terminal_file_grant_stale')
+    }
+    await assertLocalTerminalArtifactPathStillCanonical(grant.absolutePath)
+    return handle
+  } catch (error) {
+    await handle.close()
     throw error
   }
 }

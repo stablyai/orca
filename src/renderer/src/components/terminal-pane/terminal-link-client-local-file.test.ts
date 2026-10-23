@@ -121,6 +121,37 @@ describe('a link to this computer printed in a paired-server terminal', () => {
     )
   })
 
+  it('never reads this computer for a chat link the host does not have', async () => {
+    // Why: the chat's agent wrote the path on its host; a same-named local file is not that file.
+    hostDisowns('/mnt/data/report.pdf')
+    const onOpenFailure = vi.fn()
+
+    openDetectedFilePath('/mnt/data/report.pdf', null, null, {
+      ...serverWorkspace,
+      nativeChatContext: { tabId: 'tab-1', sessionId: 'session-1' },
+      onOpenFailure
+    })
+    await flushDoubleRaf()
+
+    expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'files.resolveTerminalPath',
+        params: {
+          worktree: 'id:wt-feat',
+          pathText: '/mnt/data/report.pdf',
+          crossWorkspace: true,
+          nativeChatContext: { tabId: 'tab-1', sessionId: 'session-1' }
+        }
+      })
+    )
+    expect(statMock).not.toHaveBeenCalled()
+    expect(openFileMock).not.toHaveBeenCalled()
+    expect(onOpenFailure).toHaveBeenCalledWith({
+      verdict: 'missing',
+      error: new Error('File not found on its host: /mnt/data/report.pdf')
+    })
+  })
+
   it('keeps the host refusal when this computer does not have the file either', async () => {
     hostDisowns('/etc/orca-missing')
     statMock.mockRejectedValueOnce(new Error('ENOENT: no such file'))
@@ -194,62 +225,76 @@ describe('a link to this computer printed in a paired-server terminal', () => {
     expect(onOpenFailure).toHaveBeenCalledWith(expect.objectContaining({ verdict: 'unverifiable' }))
   })
 
-  it('opens a path the host granted read-only from the host, never from this computer', async () => {
-    runtimeEnvironmentCallMock.mockResolvedValueOnce({
-      id: 'rpc-1',
-      ok: true,
-      result: {
-        worktree: 'wt-feat',
-        relativePath: null,
-        absolutePath: '/tmp/artifact.txt',
-        exists: true,
-        isDirectory: false,
-        openTarget: {
-          kind: 'absolute-file',
-          provider: 'local',
+  it.each([
+    { source: 'terminal', openWithSystemDefault: false },
+    { source: 'terminal', openWithSystemDefault: true },
+    { source: 'chat', openWithSystemDefault: false },
+    { source: 'chat', openWithSystemDefault: true }
+  ])(
+    'opens a $source host grant in a read-only tab with default-app gesture=$openWithSystemDefault',
+    async ({ source, openWithSystemDefault }) => {
+      runtimeEnvironmentCallMock.mockResolvedValueOnce({
+        id: 'rpc-1',
+        ok: true,
+        result: {
+          worktree: 'wt-feat',
+          relativePath: null,
           absolutePath: '/tmp/artifact.txt',
-          grantId: 'g-1'
-        }
-      },
-      _meta: { runtimeId: 'remote-runtime' }
-    })
-    const onOpenFailure = vi.fn()
-
-    openDetectedFilePath('/tmp/artifact.txt', null, null, {
-      ...serverWorkspace,
-      terminalHandle: 'term-1',
-      openWithSystemDefault: true,
-      onOpenFailure
-    })
-    await flushDoubleRaf()
-
-    expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        method: 'files.resolveTerminalPath',
-        params: {
-          worktree: 'id:wt-feat',
-          pathText: '/tmp/artifact.txt',
-          crossWorkspace: true,
-          terminal: 'term-1'
-        }
+          exists: true,
+          isDirectory: false,
+          openTarget: {
+            kind: 'absolute-file',
+            provider: 'local',
+            absolutePath: '/tmp/artifact.txt',
+            grantId: 'g-1'
+          }
+        },
+        _meta: { runtimeId: 'remote-runtime' }
       })
-    )
-    expect(statMock).not.toHaveBeenCalled()
-    expect(openFilePathMock).not.toHaveBeenCalled()
-    expect(downloadAndOpenRemoteTerminalFile).not.toHaveBeenCalled()
-    expect(onOpenFailure).not.toHaveBeenCalled()
-    expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        filePath: '/tmp/artifact.txt',
-        relativePath: '/tmp/artifact.txt',
-        worktreeId: 'wt-feat',
-        runtimeEnvironmentId: 'env-1',
-        readOnly: true,
-        terminalArtifactGrantId: 'g-1'
-      }),
-      { forceContentReload: true }
-    )
-  })
+      const onOpenFailure = vi.fn()
+
+      const owner =
+        source === 'chat'
+          ? { nativeChatContext: { tabId: 'tab-1', sessionId: 'session-1' } }
+          : { terminalHandle: 'term-1' }
+      openDetectedFilePath('/tmp/artifact.txt', null, null, {
+        ...serverWorkspace,
+        ...owner,
+        openWithSystemDefault,
+        onOpenFailure
+      })
+      await flushDoubleRaf()
+
+      expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          method: 'files.resolveTerminalPath',
+          params: {
+            worktree: 'id:wt-feat',
+            pathText: '/tmp/artifact.txt',
+            crossWorkspace: true,
+            ...(source === 'chat'
+              ? { nativeChatContext: { tabId: 'tab-1', sessionId: 'session-1' } }
+              : { terminal: 'term-1' })
+          }
+        })
+      )
+      expect(statMock).not.toHaveBeenCalled()
+      expect(openFilePathMock).not.toHaveBeenCalled()
+      expect(onOpenFailure).not.toHaveBeenCalled()
+      expect(downloadAndOpenRemoteTerminalFile).not.toHaveBeenCalled()
+      expect(openFileMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          filePath: '/tmp/artifact.txt',
+          relativePath: '/tmp/artifact.txt',
+          worktreeId: 'wt-feat',
+          runtimeEnvironmentId: 'env-1',
+          readOnly: true,
+          terminalArtifactGrantId: 'g-1'
+        }),
+        { forceContentReload: true }
+      )
+    }
+  )
 
   it('never reads this computer for a host directory outside its workspaces', async () => {
     runtimeEnvironmentCallMock.mockResolvedValueOnce({
