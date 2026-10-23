@@ -86,6 +86,16 @@ const KNOWN_PREEXISTING_I2_FAILURES: Record<string, number> = {
   // regression, by replaying it against the previous build
   // (`build-serialize-addon-at-ref.mjs --ref origin/main`): I1 and I3 both hold.
   'dsh-tui-ready-no-key': 10,
+  // dsh-tui 0.12/0.13 readiness captures, serializer untouched: the same row-0 true-colour
+  // background leak, plus the one-column-short cursor after a shrink seen for OMP.
+  'dsh-tui-0-12-0-cold-start': 28,
+  'dsh-tui-0-12-0-cold-start-zh': 16,
+  'dsh-tui-0-12-0-slash-menu': 2,
+  'dsh-tui-0-12-0-turn': 12,
+  'dsh-tui-0-13-0-cold-start': 38,
+  'dsh-tui-0-13-0-cold-start-80x24': 8,
+  'dsh-tui-0-13-0-cold-start-zh': 21,
+  'dsh-tui-0-13-0-turn': 12,
   // Capacity capture (#28231): identical attribute leaks with the pre-capture serializer.
   'codex-model-capacity-fullscreen': 12,
   // Hermes banner cells restore with an extra bold bit under the jitter schedule.

@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-10-08T22:52:04.830Z",
+  "platform": "darwin",
+  "command": ["<scratch>/dsh-or", ".", "--yolo"],
+  "cols": 120,
+  "rows": 40,
+  "note": "dsh-tui 0.13.0 launcher and profile on @deepseek-ai/dsh 0.2.0-rc.2, macOS arm64, OpenRouter nvidia/nemotron-3-super-120b-a12b:free via an isolated DSH_HOME, DSH_TUI_LANG=en, scratch workspace; onboarding already completed; one turn (\"Reply only DSH_OK. Do not use tools.\") typed into the launchpad at 8s, Enter at 9.5s, through to the idle chat composer after",
+  "exitCode": 0
+}

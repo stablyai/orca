@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-10-08T22:48:55.785Z",
+  "platform": "darwin",
+  "command": ["<scratch>/dsh-or", ".", "--yolo"],
+  "cols": 120,
+  "rows": 40,
+  "note": "dsh-tui 0.13.0 launcher and profile on @deepseek-ai/dsh 0.2.0-rc.2, macOS arm64, OpenRouter nvidia/nemotron-3-super-120b-a12b:free via an isolated DSH_HOME, DSH_TUI_LANG=en, scratch workspace; first-run welcome guide (step 1, no DEEPSEEK_API_KEY), which 0.13 opens at launch until the guide is completed",
+  "exitCode": 0
+}
