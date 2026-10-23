@@ -2,6 +2,7 @@ import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import { writeForegroundTerminalChunk } from '@/lib/pane-manager/pane-terminal-foreground-render-settle'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import { ensureArabicShapingJoinerForText } from '@/lib/pane-manager/terminal-arabic-shaping-joiner'
+import { isXtermInstanceDisposed } from '@/lib/pane-manager/xterm-instance-disposed'
 import {
   captureTerminalParseProgressGeneration,
   hasTerminalParseProgressSince,
@@ -78,6 +79,26 @@ type ReplayGuardWriteCallbacks = {
   onWriteFailure: () => void
 }
 
+type ReplayGuardReleaseReason = 'parsed' | 'lost-completion' | 'wedged' | 'target-disposed'
+
+// Why: a disposed xterm drops queued completions silently, so its guards must settle here instead of certifying a wedge.
+const pendingGuardReleasesByTerminal = new WeakMap<
+  ReplayGuardWriteTarget,
+  Set<(reason: ReplayGuardReleaseReason) => void>
+>()
+
+/** Settle every pending replay guard on an xterm that was just disposed. */
+export function releaseReplayGuardsForDisposedTerminal(terminal: ReplayGuardWriteTarget): void {
+  const releases = pendingGuardReleasesByTerminal.get(terminal)
+  if (!releases) {
+    return
+  }
+  pendingGuardReleasesByTerminal.delete(terminal)
+  for (const release of releases) {
+    release('target-disposed')
+  }
+}
+
 /**
  * Engage the replay counter for one write and return its settlement callbacks.
  * Release runs exactly once — from write completion or the probe-certified stall
@@ -94,7 +115,7 @@ function engageReplayGuard(
   map.set(paneId, (map.get(paneId) ?? 0) + 1)
   let released = false
   let timer: ReturnType<typeof setTimeout> | null = null
-  const release = (reason: 'parsed' | 'lost-completion' | 'wedged'): void => {
+  const release = (reason: ReplayGuardReleaseReason): void => {
     if (released) {
       return
     }
@@ -103,6 +124,7 @@ function engageReplayGuard(
       clearTimeout(timer)
       timer = null
     }
+    pendingGuardReleasesByTerminal.get(terminal)?.delete(release)
     const remaining = (map.get(paneId) ?? 1) - 1
     if (remaining <= 0) {
       map.delete(paneId)
@@ -121,12 +143,31 @@ function engageReplayGuard(
       recordRendererCrashBreadcrumb('terminal_replay_guard_wedged_release', breadcrumbData)
       // Why: a rejected replay or silent probe makes the pipeline undeliverable; recover instead of a fossil that eats input.
       notifyUndeliverableWrite(terminal, 'replay-wedged')
+    } else if (reason === 'target-disposed') {
+      console.warn(
+        `[terminal] replay guard released for pane ${paneId} — its xterm was disposed before the replay parsed`
+      )
+      recordRendererCrashBreadcrumb('terminal_replay_guard_disposed_target_release', breadcrumbData)
     }
     onRelease?.()
   }
+  let pendingReleases = pendingGuardReleasesByTerminal.get(terminal)
+  if (!pendingReleases) {
+    pendingReleases = new Set()
+    pendingGuardReleasesByTerminal.set(terminal, pendingReleases)
+  }
+  pendingReleases.add(release)
+  // Why not 'wedged': a replaced xterm parses nothing, so no reply can leak, and certifying it would remount its live successor.
+  const releaseIfTargetDisposed = (): boolean => {
+    if (!isXtermInstanceDisposed(terminal)) {
+      return false
+    }
+    release('target-disposed')
+    return true
+  }
   const armWedgeDeadline = (quietSinceGeneration: number): void => {
     timer = setTimeout(() => {
-      if (released) {
+      if (released || releaseIfTargetDisposed()) {
         return
       }
       // Why: completions after the probe prove the FIFO is alive, just behind; certify wedged only after a fully quiet window.
@@ -138,7 +179,7 @@ function engageReplayGuard(
     }, stallCheckMs)
   }
   const probeForStall = (): void => {
-    if (released) {
+    if (released || releaseIfTargetDisposed()) {
       return
     }
     const probeQueuedAtGeneration = captureTerminalParseProgressGeneration(terminal)
@@ -179,8 +220,11 @@ export function replayIntoTerminal(
   if (!data) {
     return
   }
-  // Why: a certified-dead pipeline never parses; retrying only re-arms a guard for another wedged release, so skip it.
-  if (isTerminalWritePipelineCertifiedDead(pane.terminal)) {
+  // Why: a certified-dead or disposed pipeline never parses; a guard would only wait out a false wedge.
+  if (
+    isTerminalWritePipelineCertifiedDead(pane.terminal) ||
+    isXtermInstanceDisposed(pane.terminal)
+  ) {
     return
   }
   ensureArabicShapingJoinerForText(pane.terminal, data)
@@ -211,8 +255,11 @@ export function replayIntoTerminalAsync(
   if (!data) {
     return Promise.resolve()
   }
-  // Why: same certified-dead short-circuit as replayIntoTerminal; resolve so awaited chains don't hang on a dead parser.
-  if (isTerminalWritePipelineCertifiedDead(pane.terminal)) {
+  // Why: same short-circuit as replayIntoTerminal; resolve so awaited chains don't hang on a dead parser.
+  if (
+    isTerminalWritePipelineCertifiedDead(pane.terminal) ||
+    isXtermInstanceDisposed(pane.terminal)
+  ) {
     return Promise.resolve()
   }
   ensureArabicShapingJoinerForText(pane.terminal, data)

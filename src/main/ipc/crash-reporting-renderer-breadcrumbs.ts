@@ -54,6 +54,7 @@ const COALESCED_RENDERER_BREADCRUMB_NAMES = new Set([
   'renderer_error',
   'renderer_unhandled_rejection',
   'terminal_safe_fit_retry_exhausted',
+  'terminal_replay_guard_disposed_target_release',
   DUPLICATE_TAB_OWNER_BREADCRUMB,
   PARK_VERDICT_CHURN_BREADCRUMB,
   REACT_COMMIT_CASCADE_BREADCRUMB,
@@ -70,7 +71,12 @@ const RENDERER_BREADCRUMB_COALESCE_MS = 30_000
 // mounted pane within ~60ms. Windows crash F0BKR84AHEH lost 26-90% of its
 // 30-entry ring to two such bursts. `suppressedSinceLast` keeps the pane count
 // — the only signal these carry — in one slot.
-const NAME_ONLY_COALESCED_BREADCRUMB_NAMES = new Set(['terminal_safe_fit_retry_exhausted'])
+// terminal_replay_guard_disposed_target_release: one park/remount wave can settle
+// several replays per pane; the count is the signal.
+const NAME_ONLY_COALESCED_BREADCRUMB_NAMES = new Set([
+  'terminal_safe_fit_retry_exhausted',
+  'terminal_replay_guard_disposed_target_release'
+])
 // Why: the 30-slot ring is the scarce sink; the durable span stream is not. For
 // bounded-rate pane telemetry whose multiplicity is the whole signal, spans are the
 // only place a burst survives the restart that clears the ring, so coalesce the ring

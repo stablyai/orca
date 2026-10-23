@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import {
   isPaneReplaying,
+  releaseReplayGuardsForDisposedTerminal,
   replayIntoTerminal,
   replayIntoTerminalAsync,
   waitForTerminalReplayWritesParsed,
@@ -12,6 +13,7 @@ import {
   _resetWritePipelineHealthForTests,
   captureTerminalParseProgressGeneration,
   hasTerminalParseProgressSince,
+  isTerminalWritePipelineCertifiedDead,
   notifyUndeliverableWrite,
   registerUndeliverableWriteHandler
 } from '@/lib/pane-manager/terminal-write-pipeline-health'
@@ -49,6 +51,8 @@ type FakeTerminal = {
   }
   _core: {
     refresh: (start: number, end: number, sync?: boolean) => void
+    // Mirrors the private flag isXtermInstanceDisposed reads.
+    _store: { _isDisposed: boolean }
   }
   refresh: (start: number, end: number) => void
   /** Flush all pending xterm write callbacks, simulating parse completion. */
@@ -68,7 +72,8 @@ function makeFakePane(paneId: number): { pane: ManagedPane; terminal: FakeTermin
       }
     },
     _core: {
-      refresh() {}
+      refresh() {},
+      _store: { _isDisposed: false }
     },
     refresh() {},
     write(data: string, cb?: () => void) {
@@ -260,6 +265,91 @@ describe('replay-guard', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('settles a replay whose xterm is disposed before parsing without certifying a wedge', () => {
+    vi.useFakeTimers()
+    try {
+      const ref = makeRef()
+      const { pane, terminal } = makeFakePane(1)
+      const { pane: successor, terminal: successorTerminal } = makeFakePane(1)
+      const onUndeliverable = vi.fn()
+      registerUndeliverableWriteHandler(pane.terminal, onUndeliverable)
+
+      replayIntoTerminal(pane, ref, 'reveal snapshot', { stallCheckMs: 400 })
+      // The reveal replaces the xterm before its WriteBuffer runs; disposal drops the completion silently.
+      terminal._core._store._isDisposed = true
+      terminal.pendingCallbacks.length = 0
+      replayIntoTerminal(successor, ref, 'successor snapshot', { stallCheckMs: 400 })
+      successorTerminal.flush()
+      vi.advanceTimersByTime(2_000)
+
+      expect(terminal.lastData).toEqual(['reveal snapshot'])
+      expect(isPaneReplaying(ref, 1)).toBe(false)
+      expect(onUndeliverable).not.toHaveBeenCalled()
+      expect(isTerminalWritePipelineCertifiedDead(pane.terminal)).toBe(false)
+      expect(isTerminalWritePipelineCertifiedDead(successor.terminal)).toBe(false)
+      expect(mocks.recordRendererCrashBreadcrumb).toHaveBeenCalledWith(
+        'terminal_replay_guard_disposed_target_release',
+        expect.objectContaining({ paneId: 1 })
+      )
+      expect(mocks.recordRendererCrashBreadcrumb).not.toHaveBeenCalledWith(
+        'terminal_replay_guard_wedged_release',
+        expect.anything()
+      )
+      _resetWritePipelineHealthForTests(pane.terminal)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('settles pending guards immediately when their xterm is disposed', async () => {
+    vi.useFakeTimers()
+    try {
+      const ref = makeRef()
+      const { pane, terminal } = makeFakePane(1)
+      const onUndeliverable = vi.fn()
+      registerUndeliverableWriteHandler(pane.terminal, onUndeliverable)
+      let resolved = false
+      void replayIntoTerminalAsync(pane, ref, 'snapshot', { stallCheckMs: 400 }).then(() => {
+        resolved = true
+      })
+      replayIntoTerminal(pane, ref, 'epilogue', { stallCheckMs: 400 })
+      expect(isPaneReplaying(ref, 1)).toBe(true)
+
+      terminal._core._store._isDisposed = true
+      releaseReplayGuardsForDisposedTerminal(pane.terminal)
+      await Promise.resolve()
+
+      expect(isPaneReplaying(ref, 1)).toBe(false)
+      expect(resolved).toBe(true)
+      vi.advanceTimersByTime(2_000)
+      expect(terminal.lastData).toEqual(['snapshot', 'epilogue'])
+      expect(onUndeliverable).not.toHaveBeenCalled()
+      expect(mocks.recordRendererCrashBreadcrumb).toHaveBeenCalledTimes(2)
+      expect(mocks.recordRendererCrashBreadcrumb).toHaveBeenCalledWith(
+        'terminal_replay_guard_disposed_target_release',
+        expect.objectContaining({ paneId: 1 })
+      )
+      expect(mocks.recordRendererCrashBreadcrumb).not.toHaveBeenCalledWith(
+        'terminal_replay_guard_wedged_release',
+        expect.anything()
+      )
+      _resetWritePipelineHealthForTests(pane.terminal)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('skips replays into an already-disposed xterm', () => {
+    const ref = makeRef()
+    const { pane, terminal } = makeFakePane(1)
+    terminal._core._store._isDisposed = true
+
+    replayIntoTerminal(pane, ref, 'late replay')
+
+    expect(terminal.lastData).toHaveLength(0)
+    expect(isPaneReplaying(ref, 1)).toBe(false)
   })
 
   it('short-circuits replays into a certified-dead terminal', () => {
