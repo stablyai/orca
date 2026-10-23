@@ -107,6 +107,20 @@ describe('ClaudeUsageStore', () => {
     rmSync(tempUserData, { recursive: true, force: true })
   })
 
+  it('resolves the current profile roots before dispatching the worker scan', async () => {
+    const resolveProfileDirs = vi
+      .fn()
+      .mockResolvedValue(['selected/projects', 'selected/transcripts'])
+    const store = new ClaudeUsageStore(createBackingStore(), resolveProfileDirs)
+    await store.setEnabled(true)
+    await store.refresh(true)
+    expect(scanClaudeUsageFilesViaWorker).toHaveBeenCalledWith(
+      [],
+      expect.objectContaining({ reuse: false }),
+      ['selected/projects', 'selected/transcripts']
+    )
+  })
+
   it('defaults a null legacy opt-in while invalidating the cache', () => {
     writeFileSync(
       join(tempUserData, 'orca-claude-usage.json'),

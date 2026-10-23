@@ -1,75 +1,24 @@
 import { readFileSync, statSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { AgentTokenUsageReporter } from './agent-token-usage-reporter'
-import type { AgentTokenSession } from './agent-token-usage'
-import type { AgentTokenUsage } from '../../shared/telemetry-agent-token-usage-schema'
 import { isTelemetryEnabled } from '../telemetry/client'
 import { join, parse } from 'node:path'
 import { AnalyticsSessionIdStore, type AnalyticsSessionId } from './analytics-session-id-store'
 import type { Store } from '../persistence'
 import { UsageCacheSnapshotWriter } from '../usage-cache-snapshot-writer'
 import { loadKnownUsageWorktreesByRepo } from '../usage-worktree-metadata'
-import type { UsageScanWorktreeRef } from './usage-provider-contract'
+import type {
+  UsageProviderStoreState,
+  UsageProviderStoreLifecycleConfig,
+  PublicUsageProviderScanState
+} from './usage-provider-contract'
 import { createWorktreeRefs, getUsageWorktreeFingerprint } from './usage-worktree-refs'
 import { UsageInlineCachePreservation } from './usage-inline-cache-preservation'
-import {
-  usageSourceCachePath,
-  type UsageCacheSplitRequest,
-  type UsageCacheSplitResult,
-  type UsageSourceCacheRef
-} from './usage-source-cache-file'
+import { usageSourceCachePath } from './usage-source-cache-file'
 
 const STALE_MS = 5 * 60_000
 // Keep large cache parsing on the worker; small reports retain synchronous reads.
 const MAIN_THREAD_PARSE_MAX_BYTES = 8 * 1024 * 1024
-
-type UsageProviderScanState = {
-  enabled: boolean
-  lastScanStartedAt: number | null
-  lastScanCompletedAt: number | null
-  lastScanError: string | null
-}
-
-type UsageProviderStoreState<SourceKey extends string> = {
-  schemaVersion: number
-  worktreeFingerprint: string | null
-  sessions: unknown[]
-  dailyAggregates: unknown[]
-  scanState: UsageProviderScanState
-} & Record<SourceKey, unknown[]>
-
-type UsageProviderStoreLifecycleConfig<
-  SourceKey extends string,
-  State extends UsageProviderStoreState<SourceKey>,
-  DataPresenceKey extends string
-> = {
-  logTag: string
-  resolveCacheFile: () => string
-  createDefaultState: () => State
-  normalizeState: (state: State) => State
-  parseReport?: (
-    text: string,
-    parsed?: State,
-    integrityVerified?: boolean
-  ) => State | Promise<State>
-  serializeReport?: (state: State) => string
-  providerId?: 'claude'
-  sourceKey: SourceKey
-  dataPresenceKey: DataPresenceKey
-  tokenUsage?: {
-    provider: AgentTokenUsage['provider']
-    selectSessions: (state: State) => AgentTokenSession[]
-  }
-  scan: (
-    worktrees: UsageScanWorktreeRef[],
-    sourceCache: UsageSourceCacheRef
-  ) => Promise<Pick<State, 'sessions' | 'dailyAggregates'>>
-  splitCacheFile: (request: UsageCacheSplitRequest) => Promise<UsageCacheSplitResult>
-}
-
-type PublicUsageProviderScanState<DataPresenceKey extends string> = UsageProviderScanState & {
-  isScanning: boolean
-} & Record<DataPresenceKey, boolean>
 
 export abstract class UsageProviderStoreLifecycle<
   SourceKey extends string,
@@ -81,6 +30,7 @@ export abstract class UsageProviderStoreLifecycle<
   private readonly loaded: Promise<void>
   private readonly schemaVersion: number
   private scanPromise: Promise<void> | null = null
+  private rescanRequested = false
   private tokenReporter: AgentTokenUsageReporter | null = null
   private analyticsSessionIds: AnalyticsSessionIdStore | null = null
   private readonly writer: UsageCacheSnapshotWriter
@@ -137,7 +87,10 @@ export abstract class UsageProviderStoreLifecycle<
     return this.getScanState()
   }
 
-  async refresh(force = false): Promise<PublicUsageProviderScanState<DataPresenceKey>> {
+  async refresh(
+    force = false,
+    options: { rerunIfScanning?: boolean } = {}
+  ): Promise<PublicUsageProviderScanState<DataPresenceKey>> {
     await this.loaded
     if (!this.state.scanState.enabled) {
       return this.getScanState()
@@ -149,7 +102,7 @@ export abstract class UsageProviderStoreLifecycle<
         return this.getScanState()
       }
     }
-    await this.runScan()
+    await this.runScan(options.rerunIfScanning ?? false)
     return this.getScanState()
   }
 
@@ -260,44 +213,51 @@ export abstract class UsageProviderStoreLifecycle<
     })
   }
 
-  private async runScan(): Promise<void> {
+  private async runScan(rerunIfScanning: boolean): Promise<void> {
     if (this.scanPromise) {
+      this.rescanRequested ||= rerunIfScanning
       await this.scanPromise
       return
     }
 
-    this.state.scanState.lastScanStartedAt = Date.now()
-    this.state.scanState.lastScanError = null
-
     // Assign before yielding so concurrent refreshes share one scan.
     this.scanPromise = (async () => {
-      try {
-        const repos = this.store.getRepos()
-        const worktreesByRepo = loadKnownUsageWorktreesByRepo(this.store, repos)
-        const worktreeFingerprint = getUsageWorktreeFingerprint(worktreesByRepo)
-        const result = await this.config.scan(createWorktreeRefs(repos, worktreesByRepo), {
-          path: usageSourceCachePath(this.config.resolveCacheFile()),
-          schemaVersion: this.schemaVersion,
-          worktreeFingerprint,
-          reuse: this.state.worktreeFingerprint === worktreeFingerprint
-        })
-        this.state.sessions = result.sessions
-        this.state.dailyAggregates = result.dailyAggregates
-        this.state.worktreeFingerprint = worktreeFingerprint
-        this.state.schemaVersion = this.schemaVersion
-        this.inlineCache.active = false
-        this.state.scanState.lastScanCompletedAt = Date.now()
+      do {
+        this.rescanRequested = false
+        this.state.scanState.lastScanStartedAt = Date.now()
         this.state.scanState.lastScanError = null
-        // Persistence failures do not turn a successful source scan into a scan failure.
-        await this.writeToDisk().catch(() => {})
-        await this.reportTokenUsage()
-      } catch (error) {
-        this.state.scanState.lastScanError = error instanceof Error ? error.message : String(error)
-        await this.writeToDisk().catch(() => {})
-      } finally {
-        this.scanPromise = null
+        try {
+          const repos = this.store.getRepos()
+          const worktreesByRepo = loadKnownUsageWorktreesByRepo(this.store, repos)
+          const worktreeFingerprint = getUsageWorktreeFingerprint(worktreesByRepo)
+          const result = await this.config.scan(createWorktreeRefs(repos, worktreesByRepo), {
+            path: usageSourceCachePath(this.config.resolveCacheFile()),
+            schemaVersion: this.schemaVersion,
+            worktreeFingerprint,
+            reuse: this.state.worktreeFingerprint === worktreeFingerprint
+          })
+          this.state.sessions = result.sessions
+          this.state.dailyAggregates = result.dailyAggregates
+          this.state.worktreeFingerprint = worktreeFingerprint
+          this.state.schemaVersion = this.schemaVersion
+          this.inlineCache.active = false
+          this.state.scanState.lastScanCompletedAt = Date.now()
+          this.state.scanState.lastScanError = null
+          // Persistence failures do not turn a successful source scan into a scan failure.
+          await this.writeToDisk().catch(() => {})
+          await this.reportTokenUsage()
+        } catch (error) {
+          this.state.scanState.lastScanError =
+            error instanceof Error ? error.message : String(error)
+          await this.writeToDisk().catch(() => {})
+        }
+      } while (this.rescanRequested && this.state.scanState.enabled)
+    })().finally(async () => {
+      this.scanPromise = null
+      if (this.rescanRequested && this.state.scanState.enabled) {
+        await this.runScan(false)
       }
-    })()
+    })
 
     await this.scanPromise
   }

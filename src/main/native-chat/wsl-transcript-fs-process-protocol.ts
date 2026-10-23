@@ -1,11 +1,17 @@
+import type { BigIntStats } from 'node:fs'
+
+export type TranscriptBigIntStat = Pick<BigIntStats, 'dev' | 'ino' | 'size' | 'mtimeNs' | 'ctimeNs'>
+
 export type WslTranscriptFsProcessCall =
   | { operation: 'access'; path: string }
   | { operation: 'stat' | 'lstat' | 'readdir'; path: string }
+  | { operation: 'statBigInt'; path: string }
   // Kept as its own member so the reusable-call Exclude below can strip it:
   // Exclude compares whole union members, not individual operation literals.
   | { operation: 'open'; path: string }
   | { operation: 'readfile'; path: string; encoding: BufferEncoding }
   | { operation: 'read'; handleId: number; position: number; length: number }
+  | { operation: 'fstatBigInt'; handleId: number }
   | { operation: 'close'; handleId: number }
 
 // The intersection distributes over the union, so `{ ...call, id }` composes
@@ -15,7 +21,7 @@ export type WslTranscriptFsProcessRequest = WslTranscriptFsProcessCall & { id: n
 /** Calls a pooled process may serve; open/read/close manage a pinned handle. */
 export type WslTranscriptFsReusableProcessCall = Exclude<
   WslTranscriptFsProcessCall,
-  { operation: 'open' | 'read' | 'close' }
+  { operation: 'open' | 'read' | 'close' | 'fstatBigInt' }
 >
 
 export type WslTranscriptFsDirent = {

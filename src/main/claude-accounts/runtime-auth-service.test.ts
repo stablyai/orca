@@ -6,14 +6,23 @@ const fakes = vi.hoisted(() => ({
   host: {
     prepareLaunch: async () => ({ runtime: 'host' }),
     publish: () => {},
-    systemDefaultHome: () => '/host/.claude'
+    systemDefaultHome: () => '/host/.claude',
+    preparation: () => ({ configDir: '/host/.claude-custom', provenance: 'system' })
   },
   wsl: {
     prepareLaunch: async (distro: string) => ({ runtime: 'wsl', wslDistro: distro }),
-    preparation: async (distro: string) => ({ runtime: 'wsl', wslDistro: distro }),
     publish: async (_distro: string): Promise<void> => {},
-    runningDistros: async (): Promise<string[]> => []
+    runningDistros: async (): Promise<string[]> => [],
+    preparation: async (distro: string) => ({
+      runtime: 'wsl',
+      wslDistro: distro,
+      configDir: String.raw`\\wsl.localhost\Ubuntu\home\ada\.claude`,
+      provenance: 'wsl:Ubuntu:system'
+    })
   }
+}))
+vi.mock('../wsl/wsl-guest-environment', () => ({
+  getWslGuestEnvironment: async () => ({ claudeConfigDir: '/home/ada/.claude-custom' })
 }))
 vi.mock('../../shared/app-environment', () => ({
   getAppEnvironment: () => ({ getPath: () => '/data/orca' })
@@ -59,6 +68,43 @@ afterEach(() => {
 })
 
 describe('ClaudeRuntimeAuthService', () => {
+  it('uses the routed host profile without probing WSL', async () => {
+    const auth = service('darwin', { localAccountRuntime: 'wsl' })
+    await expect(auth.getUsageProfileDirs()).resolves.toEqual([
+      '/host/.claude-custom/projects',
+      '/host/.claude-custom/transcripts'
+    ])
+  })
+
+  it('reads the system-default WSL login environment config directory', async () => {
+    const auth = service('win32', { localAccountRuntime: 'wsl', localAccountWslDistro: 'Ubuntu' })
+    await expect(auth.getUsageProfileDirs()).resolves.toEqual([
+      String.raw`\\wsl.localhost\Ubuntu\home\ada\.claude-custom\projects`,
+      String.raw`\\wsl.localhost\Ubuntu\home\ada\.claude-custom\transcripts`
+    ])
+  })
+
+  it('keeps the selected managed WSL profile isolated from the system default', async () => {
+    const profile = String.raw`\\wsl.localhost\Ubuntu\home\ada\.local\share\orca\claude-profiles\account\home`
+    vi.spyOn(fakes.wsl, 'preparation').mockResolvedValue({
+      runtime: 'wsl',
+      wslDistro: 'Ubuntu',
+      configDir: profile,
+      provenance: 'profile:account:wsl:Ubuntu'
+    })
+    const auth = service('win32', { localAccountRuntime: 'wsl', localAccountWslDistro: 'Ubuntu' })
+    await expect(auth.getUsageProfileDirs()).resolves.toEqual([
+      `${profile}\\projects`,
+      `${profile}\\transcripts`
+    ])
+  })
+
+  it('reports an unavailable selected WSL runtime rather than scanning host history', async () => {
+    vi.spyOn(fakes.wsl, 'preparation').mockRejectedValue(new Error('WSL unavailable'))
+    const auth = service('win32', { localAccountRuntime: 'wsl' })
+    await expect(auth.getUsageProfileDirs()).rejects.toThrow('WSL unavailable')
+  })
+
   it('skips a quota preparation for a stopped distro instead of booting it', async () => {
     const preparation = vi.spyOn(fakes.wsl, 'preparation')
     const auth = service('win32', {}, async () => false)
@@ -70,7 +116,7 @@ describe('ClaudeRuntimeAuthService', () => {
     const running = service('win32')
     await expect(
       running.prepareForRateLimitFetch({ runtime: 'wsl', wslDistro: 'Ubuntu' })
-    ).resolves.toEqual({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+    ).resolves.toMatchObject({ runtime: 'wsl', wslDistro: 'Ubuntu' })
   })
 
   it('keeps a stale WSL account setting on the host off Windows', async () => {

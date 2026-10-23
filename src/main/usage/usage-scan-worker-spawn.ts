@@ -54,18 +54,15 @@ function getSharedClient(): UsageScanWorkerClient {
  */
 export function scanClaudeUsageFilesViaWorker(
   worktrees: UsageScanWorktreeRef[],
-  sourceCache: UsageSourceCacheRef
+  sourceCache: UsageSourceCacheRef,
+  profileDirs = claudeProfileTranscriptDirs()
 ): Promise<{
   sessions: ClaudeUsageSession[]
   dailyAggregates: ClaudeUsageDailyAggregate[]
 }> {
   return scanClaudeUsageOnWorker(
     (body) =>
-      getSharedClient().scan(
-        body.providerId === 'claude'
-          ? { ...body, profileDirs: claudeProfileTranscriptDirs() }
-          : body
-      ),
+      getSharedClient().scan(body.providerId === 'claude' ? { ...body, profileDirs } : body),
     worktrees,
     sourceCache
   )

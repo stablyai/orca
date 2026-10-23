@@ -110,6 +110,16 @@ class TestUsageStore extends UsageProviderStoreLifecycle<
   TestState,
   'hasAnyTestData'
 > {
+  private writeOverride: (() => Promise<void>) | undefined
+
+  setWriteOverride(write: () => Promise<void>): void {
+    this.writeOverride = write
+  }
+
+  protected override writeToDisk(): Promise<void> {
+    return this.writeOverride ? this.writeOverride() : super.writeToDisk()
+  }
+
   constructor(cacheFile: string, scan: TestScan, splitCacheFile: TestSplit) {
     super(
       {
@@ -453,6 +463,46 @@ describe('UsageProviderStoreLifecycle', () => {
     })
     expect(writeProbe.opens).toBe(1)
     expect(store.getState().sessions).toEqual([{ id: 'session' }])
+  })
+
+  it('queues one follow-up scan when the selected profile changes during a scan', async () => {
+    const firstScan = createDeferred<TestScanResult>()
+    const secondScan = createDeferred<TestScanResult>()
+    scan.mockReturnValueOnce(firstScan.promise).mockReturnValueOnce(secondScan.promise)
+    const store = createStore()
+    store.replaceState(makeState({ scanState: { enabled: true } }))
+    const first = store.refresh(true)
+    await vi.waitFor(() => expect(scan).toHaveBeenCalledTimes(1))
+    const updated = store.refresh(true, { rerunIfScanning: true })
+    const duplicate = store.refresh(true, { rerunIfScanning: true })
+    await Promise.resolve()
+    firstScan.resolve({ sessions: [{ id: 'old-profile' }], dailyAggregates: [] })
+    await vi.waitFor(() => expect(scan).toHaveBeenCalledTimes(2))
+    secondScan.resolve({ sessions: [{ id: 'new-profile' }], dailyAggregates: [] })
+    await Promise.all([first, updated, duplicate])
+    expect(store.getState().sessions).toEqual([{ id: 'new-profile' }])
+    expect(scan).toHaveBeenCalledTimes(2)
+  })
+
+  it('retains a profile refresh arriving between scan completion and cleanup', async () => {
+    const writeGate = createDeferred<void>()
+    const writeOverride = vi.fn(() => writeGate.promise)
+    scan
+      .mockResolvedValueOnce({ sessions: [{ id: 'old-profile' }], dailyAggregates: [] })
+      .mockResolvedValueOnce({ sessions: [{ id: 'new-profile' }], dailyAggregates: [] })
+    const store = createStore()
+    store.setWriteOverride(writeOverride)
+    store.replaceState(makeState({ scanState: { enabled: true } }))
+    const first = store.refresh(true)
+    await vi.waitFor(() => expect(writeOverride).toHaveBeenCalledTimes(1))
+    let updated: Promise<unknown> | undefined
+    writeGate.resolve()
+    queueMicrotask(() => {
+      updated = store.refresh(true, { rerunIfScanning: true })
+    })
+    await vi.waitFor(() => expect(scan).toHaveBeenCalledTimes(2))
+    await Promise.all([first, updated])
+    expect(store.getState().sessions).toEqual([{ id: 'new-profile' }])
   })
 
   it('vetoes a superseded generation before rename', async () => {
