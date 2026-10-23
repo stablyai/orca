@@ -43,25 +43,41 @@ export function cookieEncryptionVersion(encryptedBuffer: Buffer): string | null 
   return /^v\d\d$/.test(version) ? version : null
 }
 
-// Why: a named cause must carry only its exact count; tied causes fall back to unknown.
+// Why: a named cause must carry only its exact count; tied causes fall back to unknown, except a
+// missing secret-tool, whose install fix stays actionable whatever it ties with.
 export function buildUndecryptableWarning(counts: {
   decryptFailed: number
   appBoundFailed: number
   keyringUnavailableFailed: number
+  secretToolMissingFailed: number
 }): BrowserCookieImportSummary['warning'] {
   if (counts.decryptFailed === 0) {
     return undefined
   }
   const unknownFailed =
-    counts.decryptFailed - counts.appBoundFailed - counts.keyringUnavailableFailed
+    counts.decryptFailed -
+    counts.appBoundFailed -
+    counts.keyringUnavailableFailed -
+    counts.secretToolMissingFailed
   const rankedCauses = [
     { reason: 'app-bound-encryption' as const, count: counts.appBoundFailed },
     { reason: 'linux-keyring-unavailable' as const, count: counts.keyringUnavailableFailed },
+    { reason: 'linux-secret-tool-missing' as const, count: counts.secretToolMissingFailed },
     { reason: 'unknown' as const, count: unknownFailed }
   ].sort((left, right) => right.count - left.count)
-  const [dominant, runnerUp] = rankedCauses
+  const [leader, runnerUp] = rankedCauses
+  // Why: a missing secret-tool has an exact install fix, so a tie must not hide it behind unknown.
+  const dominant =
+    leader.count === runnerUp.count &&
+    counts.secretToolMissingFailed === leader.count &&
+    leader.count > 0
+      ? rankedCauses.find((cause) => cause.reason === 'linux-secret-tool-missing')!
+      : leader
 
-  if (dominant.reason === 'unknown' || dominant.count === runnerUp.count) {
+  if (
+    dominant.reason === 'unknown' ||
+    (dominant.reason !== 'linux-secret-tool-missing' && dominant.count === runnerUp.count)
+  ) {
     return { code: 'cookies-undecryptable', failedCookies: counts.decryptFailed, reason: 'unknown' }
   }
 

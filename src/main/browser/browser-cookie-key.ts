@@ -23,6 +23,10 @@ function runKeychainCommand(program: string, args: readonly string[], timeoutMs:
   return result.stdout.trim()
 }
 
+function isMissingBinaryError(err: unknown): boolean {
+  return err instanceof Error && 'code' in err && err.code === 'ENOENT'
+}
+
 export function getEncryptionKey(
   keychainService: string,
   keychainAccount: string,
@@ -70,6 +74,7 @@ export function getLinuxEncryptionKey(
   const v10Key = pbkdf2Sync('peanuts', PBKDF2_SALT, 1, PBKDF2_KEY_LENGTH, 'sha1')
 
   let keyringPassword = ''
+  let secretToolMissing = false
   try {
     // Why: GNOME keyring stores the Chrome Safe Storage password via secret-tool.
     keyringPassword = runKeychainCommand(
@@ -77,13 +82,19 @@ export function getLinuxEncryptionKey(
       ['lookup', 'service', keychainService, 'account', keychainAccount],
       5_000
     )
-  } catch {
-    // Why: fall back to application-based lookup used by newer Chromium versions.
-    try {
-      const app = keychainAccount.toLowerCase().replaceAll(' ', '')
-      keyringPassword = runKeychainCommand('secret-tool', ['lookup', 'application', app], 5_000)
-    } catch {
-      diag('  Linux keyring unavailable — v11 cookies cannot be decrypted')
+  } catch (err) {
+    if (isMissingBinaryError(err)) {
+      // Why: a missing binary is not a locked keyring, and the fallback lookup uses the same binary.
+      secretToolMissing = true
+      diag('  secret-tool is not installed (libsecret-tools) — v11 cookies cannot be decrypted')
+    } else {
+      // Why: fall back to application-based lookup used by newer Chromium versions.
+      try {
+        const app = keychainAccount.toLowerCase().replaceAll(' ', '')
+        keyringPassword = runKeychainCommand('secret-tool', ['lookup', 'application', app], 5_000)
+      } catch {
+        diag('  Linux keyring unavailable — v11 cookies cannot be decrypted')
+      }
     }
   }
 
@@ -91,7 +102,8 @@ export function getLinuxEncryptionKey(
     return {
       mode: 'aes-128-cbc',
       keysByVersion: { v10: v10Key },
-      keyringUnavailable: true
+      keyringUnavailable: true,
+      ...(secretToolMissing ? { secretToolMissing: true } : {})
     }
   }
 

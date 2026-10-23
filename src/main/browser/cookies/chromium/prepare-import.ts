@@ -269,6 +269,7 @@ export async function prepareChromiumCookieImport(
       decryptFailed: 0,
       appBoundFailed: 0,
       keyringUnavailableFailed: 0,
+      secretToolMissingFailed: 0,
       integritySkipped: 0,
       nonTransplantableSkipped: 0,
       partitionSkipped: nativePlan.skips.length,

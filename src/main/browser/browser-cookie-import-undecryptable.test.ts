@@ -6,7 +6,7 @@ import type { CookiesGetFilter } from 'electron'
 const {
   appGetPathMock,
   createDecipherivMock,
-  execFileSyncMock,
+  spawnSyncMock,
   sessionFromPartitionMock,
   dialogShowOpenDialogMock,
   setPendingCookieImportMock,
@@ -15,7 +15,7 @@ const {
 } = vi.hoisted(() => ({
   appGetPathMock: vi.fn(),
   createDecipherivMock: vi.fn(),
-  execFileSyncMock: vi.fn(),
+  spawnSyncMock: vi.fn(),
   sessionFromPartitionMock: vi.fn(),
   dialogShowOpenDialogMock: vi.fn(),
   setPendingCookieImportMock: vi.fn(),
@@ -34,7 +34,7 @@ vi.mock('./browser-session-registry', () => ({
     clearPendingCookieImport: clearPendingCookieImportMock
   }
 }))
-vi.mock('node:child_process', () => ({ execFileSync: execFileSyncMock }))
+vi.mock('node:child_process', () => ({ spawnSync: spawnSyncMock }))
 vi.mock('node:fs', async (importOriginal) => ({ ...(await importOriginal<typeof NodeFs>()) }))
 vi.mock('electron', () => ({
   app: { getPath: appGetPathMock },
@@ -131,9 +131,12 @@ describe('importCookiesFromBrowser — undecryptable cookies', () => {
     })
     platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
     // Why: both secret-tool lookups failing is exactly the keyring-unavailable case.
-    execFileSyncMock.mockImplementation(() => {
-      throw new Error('secret-tool: no such service')
-    })
+    spawnSyncMock.mockImplementation(() => ({
+      status: 1,
+      signal: null,
+      stdout: Buffer.alloc(0),
+      stderr: Buffer.alloc(0)
+    }))
   })
 
   afterEach(() => {
@@ -178,6 +181,28 @@ describe('importCookiesFromBrowser — undecryptable cookies', () => {
       reason: 'linux-keyring-unavailable'
     })
     expect(cookiesSetMock).not.toHaveBeenCalled()
+  })
+
+  it('reports a missing secret-tool instead of a locked keyring, without a second lookup', async () => {
+    spawnSyncMock.mockImplementation(() => ({
+      error: Object.assign(new Error('spawnSync secret-tool ENOENT'), { code: 'ENOENT' })
+    }))
+    const sourceCookiesPath = seedProfile(
+      encryptLinuxChromiumCookie('wrong-key-garbage', 'peanuts', 'v11')
+    )
+
+    const result = await importCookiesFromBrowser(chromeBrowser(sourceCookiesPath), 'persist:test')
+
+    expect(spawnSyncMock).toHaveBeenCalledTimes(1)
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      return
+    }
+    expect(result.summary.warning).toEqual({
+      code: 'cookies-undecryptable',
+      failedCookies: 1,
+      reason: 'linux-secret-tool-missing'
+    })
   })
 
   it.each([0, 1])(

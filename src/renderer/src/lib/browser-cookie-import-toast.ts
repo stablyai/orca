@@ -18,6 +18,7 @@ const HANDLED_WARNING_CODES: Record<CookieImportWarningCode, true> = {
 const HANDLED_UNDECRYPTABLE_REASONS: Record<UndecryptableReason, true> = {
   'app-bound-encryption': true,
   'linux-keyring-unavailable': true,
+  'linux-secret-tool-missing': true,
   unknown: true
 }
 
@@ -77,6 +78,18 @@ function formatCookieImportWarning(warning: CookieImportWarning): string {
             : translate(
                 'auto.lib.browser.cookie.import.toast.undecryptableKeyring',
                 '{{value0}} cookies could not be decrypted because the system keyring was unavailable. Unlock your login keyring (or install a Secret Service provider such as gnome-keyring) and import again.',
+                { value0: warning.failedCookies }
+              )
+        case 'linux-secret-tool-missing':
+          return warning.otherFailedCookies
+            ? translate(
+                'auto.lib.browser.cookie.import.toast.undecryptableSecretToolMissingMixed',
+                '{{value0}} cookies could not be decrypted because the secret-tool command is not installed; {{value1}} more could not be decrypted for another reason. Install libsecret-tools (or your distribution’s libsecret tools package) and import again.',
+                { value0: warning.failedCookies, value1: warning.otherFailedCookies }
+              )
+            : translate(
+                'auto.lib.browser.cookie.import.toast.undecryptableSecretToolMissing',
+                '{{value0}} cookies could not be decrypted because the secret-tool command is not installed. Install libsecret-tools (or your distribution’s libsecret tools package) and import again.',
                 { value0: warning.failedCookies }
               )
         case 'unknown':

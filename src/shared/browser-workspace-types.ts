@@ -208,7 +208,11 @@ export type BrowserCookieImportSummary = {
         code: 'cookies-undecryptable'
         failedCookies: number
         otherFailedCookies?: number
-        reason: 'app-bound-encryption' | 'linux-keyring-unavailable' | 'unknown'
+        reason:
+          | 'app-bound-encryption'
+          | 'linux-keyring-unavailable'
+          | 'linux-secret-tool-missing'
+          | 'unknown'
       }
 }
 

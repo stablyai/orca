@@ -67,7 +67,11 @@ export function scanChromiumCookieRows(
         if (appBoundIneligible) {
           context.appBoundFailed++
         } else if (keyringIneligible) {
-          context.keyringUnavailableFailed++
+          if (sourceKey?.mode === 'aes-128-cbc' && sourceKey.secretToolMissing) {
+            context.secretToolMissingFailed++
+          } else {
+            context.keyringUnavailableFailed++
+          }
         }
         context.skipped++
         continue
@@ -174,7 +178,8 @@ export function scanChromiumCookieRows(
   context.undecryptableWarning = buildUndecryptableWarning({
     decryptFailed: context.decryptFailed,
     appBoundFailed: context.appBoundFailed,
-    keyringUnavailableFailed: context.keyringUnavailableFailed
+    keyringUnavailableFailed: context.keyringUnavailableFailed,
+    secretToolMissingFailed: context.secretToolMissingFailed
   })
 
   // Why: an older remote client ignores the new counter and would present this loss as success.

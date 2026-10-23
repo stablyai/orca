@@ -60,6 +60,7 @@ export type ChromiumImportContext = {
   decryptFailed: number
   appBoundFailed: number
   keyringUnavailableFailed: number
+  secretToolMissingFailed: number
   integritySkipped: number
   nonTransplantableSkipped: number
   partitionSkipped: number
