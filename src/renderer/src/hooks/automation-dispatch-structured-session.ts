@@ -185,13 +185,16 @@ export async function tryDispatchReusableAutomationSession(args: {
       return false
     }
     let reuseSawWorking = false
-    const handleReusableAgentStatus = (payload: { state: string }): void => {
+    const handleReusableAgentStatus = (payload: {
+      state: string
+      mainAgent?: { outcome?: Parameters<typeof completion.handleAgentDone>[0] }
+    }): void => {
       if (payload.state === 'working') {
         reuseSawWorking = true
         return
       }
       if (payload.state === 'done' && reuseSawWorking) {
-        completion.handleAgentDone()
+        completion.handleAgentDone(payload.mainAgent?.outcome)
       }
     }
     const reuseCompletionStartedAt = Date.now()

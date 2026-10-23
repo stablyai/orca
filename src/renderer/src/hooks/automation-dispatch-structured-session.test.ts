@@ -572,4 +572,81 @@ describe('automation dispatch structured chat session', () => {
       }
     }
   )
+
+  it.each(['success', 'failure', 'cancellation'] as const)(
+    'retains pending %s verdict when dual terminal status sources fire before dispatch settles',
+    async (outcome) => {
+      state.settings = { experimentalNativeChat: false }
+      let oscDone: ((payload: Record<string, unknown>) => void) | undefined
+      const finalize = vi.fn(async () => null)
+      mockLaunchAgentBackgroundSession.mockImplementation(
+        async (args: { onAgentStatus: (payload: Record<string, unknown>) => void }) => {
+          oscDone = args.onAgentStatus
+          return {
+            tabId: 'tab-terminal',
+            paneKey: 'pane-terminal',
+            ptyId: 'pty-terminal',
+            releaseRuntimeObservers: () => {},
+            terminalOwnership: { release: vi.fn(), finalize }
+          }
+        }
+      )
+      mockMarkDispatchResult.mockImplementation(async (result: { status: string }) => {
+        if (result.status !== 'dispatched') {
+          return
+        }
+        const now = Date.now() + 10
+        state.agentStatusByPaneKey = {
+          'pane-terminal': {
+            paneKey: 'pane-terminal',
+            state: 'done',
+            mainAgent: { state: 'done', outcome, stateStartedAt: now },
+            prompt: 'Do exactly one job',
+            updatedAt: now,
+            stateStartedAt: now,
+            lastAssistantMessage: 'Turn output',
+            stateHistory: []
+          }
+        }
+        latestStoreSubscriber?.()
+        oscDone?.({ state: 'done', lastAssistantMessage: 'Turn output' })
+      })
+
+      await handleAutomationDispatchRequest({
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only these automation fields are read by the dispatch handler.
+        automation: {
+          id: 'auto-1',
+          projectId: 'repo-1',
+          prompt: 'Do exactly one job',
+          precheck: null,
+          agentId: 'claude',
+          workspaceMode: 'new_per_run',
+          workspaceId: null,
+          baseBranch: null,
+          setupDecision: 'skip',
+          reuseSession: false
+        } as never,
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only these run fields are read by the dispatch handler.
+        run: {
+          id: `run-dual-${outcome}`,
+          automationId: 'auto-1',
+          title: 'Run',
+          scheduledFor: 1_000,
+          trigger: 'scheduled',
+          workspaceId: null,
+          workspaceDisplayName: null
+        } as never,
+        dispatchToken: `token-dual-${outcome}`
+      })
+
+      const finalWrite = mockMarkDispatchResult.mock.calls
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: mockMarkDispatchResult receives AutomationDispatchResult objects with a status field.
+        .map((call) => call[0] as { status: string })
+        .find((call) => call.status !== 'dispatched')
+      expect(finalWrite?.status).toBe(outcome === 'success' ? 'completed' : 'dispatch_failed')
+      if (outcome !== 'success') {
+        expect(finalize).not.toHaveBeenCalled()
+      }
+    }
+  )
 })

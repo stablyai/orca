@@ -141,7 +141,7 @@ export async function handleAutomationDispatchRequest({
         if (payload.state !== 'done' || payload.sessionBoundary === true) {
           return
         }
-        completion.handleAgentDone()
+        completion.handleAgentDone(payload.mainAgent?.outcome)
       },
       onExit: (_ptyId, code) => {
         completion.handleExit(code)

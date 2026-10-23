@@ -161,12 +161,14 @@ export function createAutomationDispatchCompletion(args: {
     })
   }
   const handleAgentDone = (outcome?: AgentTurnOutcome): void => {
-    if (completionMarked) {
+    if (completionMarked || outcome === 'unconfirmed') {
       return
     }
     if (!dispatchMarked) {
       pendingDone = true
-      pendingDoneOutcome = outcome
+      if (outcome !== undefined) {
+        pendingDoneOutcome = outcome
+      }
       return
     }
     settleLateResult(markCompletionResult(outcome))
