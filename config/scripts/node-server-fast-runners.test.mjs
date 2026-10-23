@@ -5,8 +5,9 @@ import { parse } from 'yaml'
 
 const workflow = parse(readFileSync('.github/workflows/node-server-tests.yml', 'utf8'))
 
-function runnerFor(job, os, fast) {
+function runnerFor(job, os, fast, eventName = 'workflow_dispatch') {
   return runInNewContext(job['runs-on'].slice(3, -2), {
+    github: { event_name: eventName },
     inputs: { fast_runners: fast },
     matrix: { os },
     fromJSON: JSON.parse
@@ -64,6 +65,9 @@ it.each([
 ])('sizes %s for its work without changing default callers', (name, hostedRunner, fastRunner) => {
   expect(runnerFor(workflow.jobs[name], undefined, false)).toBe(hostedRunner)
   expect(runnerFor(workflow.jobs[name], undefined, true)).toBe(fastRunner)
+  expect(runnerFor(workflow.jobs[name], undefined, undefined, 'pull_request')).toBe(
+    name === 'changes' ? fastRunner : hostedRunner
+  )
 })
 
 it('still builds and uploads cross-compiled Windows template addons on the x64 lane', () => {
