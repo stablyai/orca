@@ -27,6 +27,7 @@ import {
 import { ConversationTab } from '../conversation/tab'
 import { ChecksTab } from '../checks/tab'
 import { PRFilesCombinedDiffViewer } from '../files/combined-diff-viewer'
+import { PRFilesReviewLayout } from '../files/review-layout'
 
 export function PullRequestPageTabs({
   tab,
@@ -202,21 +203,35 @@ export function PullRequestPageTabs({
               {translate('auto.components.PullRequestPage.6ad2c1ab9c', 'No files changed.')}
             </div>
           ) : (
-            <PRFilesCombinedDiffViewer
-              files={files}
+            <PRFilesReviewLayout
+              item={displayWorkItem ?? workItem}
               comments={comments}
-              repoPath={repoPath ?? ''}
-              repoId={effectiveRepoId ?? ''}
+              participants={details?.participants ?? []}
+              canComment={detailsLoaded && !loading}
+              repoPath={repoPath}
+              repoId={effectiveRepoId}
               sourceContext={sourceContext}
-              prNumber={workItem.number}
+              issueNumber={workItem.number}
+              itemType={workItem.type}
               prRepo={resolvePullRequestRepo(workItem, projectOrigin)}
-              prUrl={workItem.url}
-              headSha={details?.headSha}
-              baseSha={details?.baseSha}
-              pendingViewedPaths={pendingViewedPaths}
               onCommentAdded={appendOptimisticComment}
-              onViewedChange={handlePRFileViewedChange}
-            />
+            >
+              <PRFilesCombinedDiffViewer
+                files={files}
+                comments={comments}
+                repoPath={repoPath ?? ''}
+                repoId={effectiveRepoId ?? ''}
+                sourceContext={sourceContext}
+                prNumber={workItem.number}
+                prRepo={resolvePullRequestRepo(workItem, projectOrigin)}
+                prUrl={workItem.url}
+                headSha={details?.headSha}
+                baseSha={details?.baseSha}
+                pendingViewedPaths={pendingViewedPaths}
+                onCommentAdded={appendOptimisticComment}
+                onViewedChange={handlePRFileViewedChange}
+              />
+            </PRFilesReviewLayout>
           )}
         </TabsContent>
       </div>

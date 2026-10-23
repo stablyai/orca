@@ -18,8 +18,13 @@ import type { TaskSourceContext } from '../../../../../shared/task-source-contex
 import type { MentionOption } from '../page-types'
 import { MentionTextarea } from '../mentions/textarea'
 
+const COMPACT_COMMENT_MAX_HEIGHT = 240
+const PANEL_COMMENT_MAX_HEIGHT = 480
+
+/** Compose a general comment for the selected work item and retain its draft after failed sends. */
 export function GHCommentComposer({
   className,
+  layout = 'compact',
   repoPath,
   repoId,
   sourceContext,
@@ -30,6 +35,7 @@ export function GHCommentComposer({
   onCommentAdded
 }: {
   className?: string
+  layout?: 'compact' | 'panel'
   repoPath: string
   repoId?: string | null
   sourceContext?: TaskSourceContext | null
@@ -43,6 +49,7 @@ export function GHCommentComposer({
   const [submitting, setSubmitting] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const mountedRef = useMountedRef()
+  const panelLayout = layout === 'panel'
 
   const autoGrow = useCallback(() => {
     const el = textareaRef.current
@@ -50,8 +57,10 @@ export function GHCommentComposer({
       return
     }
     el.style.height = 'auto'
-    el.style.height = `${Math.max(80, Math.min(el.scrollHeight, 240))}px`
-  }, [])
+    const minHeight = panelLayout ? 192 : 80
+    const maxHeight = panelLayout ? PANEL_COMMENT_MAX_HEIGHT : COMPACT_COMMENT_MAX_HEIGHT
+    el.style.height = `${Math.max(minHeight, Math.min(el.scrollHeight, maxHeight))}px`
+  }, [panelLayout])
 
   const handleSubmit = useCallback(async () => {
     const bodyState = getCommentBodySubmitState(body)
@@ -140,10 +149,13 @@ export function GHCommentComposer({
         }}
         onKeyDown={handleKeyDown}
         placeholder={translate('auto.components.PullRequestPage.d2030fc8cd', 'Add a comment…')}
-        rows={4}
+        rows={panelLayout ? 8 : 4}
         mentionOptions={mentionOptions}
-        wrapperClassName="flex min-h-20 w-full items-stretch"
-        className="scrollbar-sleek block h-20 max-h-[240px] min-h-20 w-full resize-none overflow-y-auto rounded-md border border-input bg-card px-3 py-2 pb-12 pr-12 text-[13px] leading-5 placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        wrapperClassName="flex w-full items-stretch"
+        className={cn(
+          'scrollbar-sleek block w-full resize-none overflow-y-auto rounded-md border border-input bg-card px-3 py-2 pb-12 pr-12 text-[13px] leading-5 placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+          panelLayout ? 'h-48 max-h-[480px] min-h-48' : 'h-20 max-h-[240px] min-h-20'
+        )}
       />
       <Tooltip>
         <TooltipTrigger asChild>

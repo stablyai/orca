@@ -22,6 +22,10 @@ Right-click a notification to mark unread — useful when you've triaged somethi
 
 Turn off specific categories (system, sound, chip-only) under [Settings → Notifications](/docs/settings).
 
+To receive a desktop alert when a scheduled agent finishes, enable **Enable Notifications** and **Agent Task Complete**. Turn off **Suppress While Focused** if you also want alerts while the triggering workspace is visible. This preference applies to all agent-completion alerts, not just one automation.
+
+Use **Send Test Notification** to verify delivery on your computer. A completed automation can notify even when its result is "no updates"; a quiet monitor needs a scheduled precheck or event filtering. See [Scheduled automations](/docs/cli/automations) for setup and manual-run inspection.
+
 ## Custom sounds
 
 Pick a custom desktop notification sound per category under [Settings → Notifications](/docs/settings) — point at any audio file on disk, or pick from Orca's built-in set. Useful when you want agent-finished pings to stand out from system mail and Slack.
