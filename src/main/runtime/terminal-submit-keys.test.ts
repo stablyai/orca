@@ -31,19 +31,23 @@ describe('submit-key protocol state without prompt retention', () => {
   })
   it('recognizes human Enter after an interrupted paste without treating body newlines as submit', () => {
     const keys = new TerminalSubmitKeys()
-    keys.record('\x1b[200~invented\rbody', 'human')
+    keys.record('\x1b[200~invented\rbody\x1b[20', 'human')
     expect(keys.take()).toBeUndefined()
     keys.interruptPaste()
     keys.record('\r', 'human')
     expect(keys.take()).toBe('human')
   })
-  it('accepts the unmodified kitty Enter and consumes only the latest submit author', () => {
-    const keys = new TerminalSubmitKeys()
-    keys.record('\x1b[13u', 'human')
-    keys.record('draft text', 'programmatic')
-    expect(keys.take()).toBe('human')
-    keys.record('\r', 'human')
-    keys.record('\r', 'programmatic')
-    expect(keys.take()).toBe('programmatic')
-  })
+  it.each(['13', '13;1'])(
+    'accepts split unmodified kitty Enter %s and consumes only the latest submit author',
+    (params) => {
+      const keys = new TerminalSubmitKeys()
+      keys.record(`\x1b[${params}`, 'programmatic')
+      keys.record('u', 'human')
+      keys.record('draft text', 'programmatic')
+      expect(keys.take()).toBe('human')
+      keys.record('\r', 'human')
+      keys.record('\r', 'programmatic')
+      expect(keys.take()).toBe('programmatic')
+    }
+  )
 })
