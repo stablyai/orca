@@ -56,6 +56,24 @@ describe('PowerShell OSC 133 bootstrap', () => {
     expect(codexHomeRestore).toBeLessThan(script.indexOf('LanguageMode -eq "FullLanguage"'))
   })
 
+  it('publishes the shell-ready marker from the first prompt when the ready feature rides the env', () => {
+    const script = getPowerShellOsc133Bootstrap()
+
+    // Why env-gated: Windows pwsh panes get the same bootstrap byte for byte and
+    // never set the variable, so the emission is inert there.
+    expect(script).toContain('777;orca-shell-ready')
+    expect(script).toContain('$env:ORCA_SHELL_FEATURES -split')
+    expect(script).toContain('Remove-Item Env:\\ORCA_SHELL_FEATURES')
+    const promptAt = script.indexOf('function Global:prompt')
+    const markerAt = script.indexOf('777;orca-shell-ready')
+    const dGateAt = script.indexOf('HasSeenPrompt) {')
+    expect(promptAt).toBeGreaterThan(-1)
+    expect(markerAt).toBeGreaterThan(promptAt)
+    // Why before the D gate: the marker must precede the first prompt's own
+    // markers so the barrier releases before any command-marker bookkeeping.
+    expect(markerAt).toBeLessThan(dGateAt)
+  })
+
   it('encodes commands as UTF-16LE base64 for PowerShell -EncodedCommand', () => {
     expect(encodePowerShellCommand('Write-Output ok')).toBe(
       Buffer.from('Write-Output ok', 'utf16le').toString('base64')
