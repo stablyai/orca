@@ -171,21 +171,26 @@ describe('createBrowserSlice runtime guard', () => {
     expect(store.getState().browserSessionProfiles[0]?.id).toBe('local-default')
   })
 
-  it('does not import local browser cookies while a runtime environment is active', async () => {
+  it('targets the active client-hosted environment for manual file imports', async () => {
     const store = createTestStore()
     store.setState({ settings: settingsWithRuntime('env-1') })
 
     const result = await store.getState().importCookiesToProfile('default')
 
-    expect(mockApi.browser.sessionImportCookies).not.toHaveBeenCalled()
+    expect(mockApi.browser.sessionImportCookies).toHaveBeenCalledWith({
+      profileId: 'default',
+      environmentId: 'env-1'
+    })
     expect(result).toMatchObject({
       ok: false,
+      reason: 'canceled',
       executionHostId: 'runtime:env-1',
       executionHostLabel: 'env-1'
     })
     expect(store.getState().browserSessionImportState).toMatchObject({
       profileId: 'default',
-      status: 'error'
+      status: 'idle',
+      error: null
     })
   })
 

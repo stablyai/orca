@@ -199,7 +199,10 @@ export type BrowserApi = {
   identityGet: () => Promise<BrowserIdentityModeStatus | null>
   identitySet: (mode: BrowserUserAgentMode) => Promise<BrowserIdentityModeSetResult | null>
   sessionDeleteProfile: (args: { profileId: string }) => Promise<boolean>
-  sessionImportCookies: (args: { profileId: string }) => Promise<BrowserCookieImportResult>
+  sessionImportCookies: (args: {
+    profileId: string
+    environmentId?: string
+  }) => Promise<BrowserCookieImportResult>
   sessionResolvePartition: (args: { profileId: string | null }) => Promise<string | null>
   sessionDetectBrowsers: () => Promise<DetectedBrowserInfo[]>
   /** Null when the environment's pages are not client-hosted on this desktop. */

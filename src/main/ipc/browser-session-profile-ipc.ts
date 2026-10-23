@@ -1,6 +1,9 @@
 import { BrowserWindow, ipcMain } from 'electron'
 import { browserSessionRegistry } from '../browser/browser-session-registry'
-import { importCookiesIntoClientRoutePartition } from '../browser/browser-client-route-cookie-import'
+import {
+  importCookiesIntoClientRoutePartition,
+  importCookieFileIntoClientRoutePartition
+} from '../browser/browser-client-route-cookie-import'
 import { clientRouteCookieImportSources } from '../browser/client-route-cookie-import-source-store'
 import { getPairedRuntimeBrowserClientRouteIdentity } from '../browser/paired-runtime-browser-client-host-runtime'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
@@ -94,9 +97,27 @@ export function registerBrowserSessionProfileHandlers(): void {
 
   ipcMain.handle(
     'browser:session:importCookies',
-    async (event, args: { profileId: string }): Promise<BrowserCookieImportResult> => {
+    async (
+      event,
+      args: { profileId: string; environmentId?: string }
+    ): Promise<BrowserCookieImportResult> => {
       if (!isTrustedBrowserRenderer(event.sender)) {
         return { ok: false, reason: 'Not authorized' }
+      }
+      if (args.environmentId !== undefined) {
+        if (typeof args.environmentId !== 'string' || args.environmentId.length === 0) {
+          return { ok: false, reason: 'Invalid runtime environment.' }
+        }
+        const parent = BrowserWindow.fromWebContents(event.sender)
+        return (
+          (await importCookieFileIntoClientRoutePartition(
+            { environmentId: args.environmentId, browserProfileId: args.profileId },
+            () => pickCookieFile(parent)
+          )) ?? {
+            ok: false,
+            reason: 'Cookie file import requires a browser hosted on this device.'
+          }
+        )
       }
       const profile = browserSessionRegistry.getProfile(args.profileId)
       if (!profile) {
