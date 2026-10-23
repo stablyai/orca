@@ -18,7 +18,7 @@ import { BrowserManagerVisibility } from './browser-manager-visibility'
 export abstract class BrowserManagerNavigation extends BrowserManagerVisibility {
   resolveBrowserGuestRequestUserAgent(
     request: Parameters<BrowserSessionRequestUserAgentResolver>[0]
-  ): BrowserTabIdentity {
+  ): BrowserTabIdentity | undefined {
     const processIdentity = getBrowserProcessUserAgentIdentity()
     const googleAuth = googleAuthTabIdentity()
     const pendingNavigation =
@@ -49,6 +49,18 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
     }
     if (googleAuthEnabled && standingOverride?.userAgent === googleAuth.userAgent) {
       return googleAuth
+    }
+    // With no Orca override standing, an unfamiliar UA is what Chromium presents on its own: an
+    // automation client's CDP override (an agent emulating a device), or our clear still in flight.
+    // The document already shows it with matching hints; restamping would contradict the page.
+    if (
+      request.webContentsId !== undefined &&
+      !standingOverride &&
+      request.currentUserAgent !== undefined &&
+      request.currentUserAgent !== processIdentity.userAgent &&
+      request.currentUserAgent !== googleAuth.userAgent
+    ) {
+      return undefined
     }
     // Shared and service worker requests carry no webContentsId, and resolving a session-wide mobile
     // intent for one put the mobile UA on the wire for a context whose own navigator.userAgent is
