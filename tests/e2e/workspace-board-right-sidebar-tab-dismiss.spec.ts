@@ -1,11 +1,7 @@
 import { test, expect } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 
-/**
- * Why: on a narrow window the board sheet covers the right sidebar while the
- * sidebar's tab strip stays clickable in the titlebar, so a tab click used to
- * switch the panel invisibly behind the board.
- */
+// Why: on narrow windows the titlebar tab strip switches panels the board covers.
 test.describe('Workspace board right-sidebar tab dismiss', () => {
   test.skip(process.platform !== 'darwin', 'Linux and Windows draw the tab strip under the board')
 

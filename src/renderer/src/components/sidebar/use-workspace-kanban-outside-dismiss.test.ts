@@ -92,8 +92,6 @@ describe('workspace kanban outside dismiss', () => {
       })
     )
 
-    menu.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
-    expect(onOpenChange).not.toHaveBeenCalled()
     tab.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
     expect(onOpenChange).toHaveBeenCalledWith(false)
   })

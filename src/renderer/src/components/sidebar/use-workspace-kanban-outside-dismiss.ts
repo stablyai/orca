@@ -30,12 +30,6 @@ export function isWorkspaceBoardKeepOpenTarget(target: EventTarget | null): bool
   return Boolean(element?.closest(WORKSPACE_BOARD_KEEP_OPEN_SELECTOR))
 }
 
-// Why: these controls switch content the board can cover (e.g. right-sidebar
-// tabs in the titlebar), so they must close it or the change stays hidden.
-function isWorkspaceBoardDismissTarget(target: EventTarget | null): boolean {
-  return Boolean(eventTargetElement(target)?.closest('[data-workspace-board-dismiss]'))
-}
-
 export function useWorkspaceKanbanOutsideDismiss(params: {
   open: boolean
   boardRef: React.RefObject<HTMLDivElement | null>
@@ -57,7 +51,8 @@ export function useWorkspaceKanbanOutsideDismiss(params: {
       if (event.target instanceof Node && content.contains(event.target)) {
         return
       }
-      if (isWorkspaceBoardDismissTarget(event.target)) {
+      // Why: titlebar tabs switch content the board covers, so it must close to show it.
+      if (eventTargetElement(event.target)?.closest('[data-workspace-board-dismiss]')) {
         onOpenChange(false)
         return
       }
