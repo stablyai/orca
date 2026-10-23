@@ -9,7 +9,9 @@ import type { Store } from '../loading-store/store'
 import { wslMoveAutomationHostFilterUpdate } from './wsl-move-automation-filter-rewrite'
 import { registerWslMoveDesktopRewriteStore } from './wsl-move-desktop-rewrite-stores'
 import { wslMoveRewriteScope, type WslMoveRewriteScope } from './wsl-move-rewrite-scope'
+import { withWslMoveEchoedBrowserTabs } from './wsl-move-echoed-browser-tabs'
 import { withWslMoveSeededViewState } from './wsl-move-seeded-view-state'
+import { workspaceIdsNamedByPartition } from '../../../shared/workspace-session-stranded-partition-adoption'
 import { wslMoveHostSessionSeed, wslMoveSessionGlobalsPatch } from './wsl-move-session-rewrite'
 import { rewriteWslMoveUiRouting } from './wsl-move-ui-routing-rewrite'
 
@@ -110,34 +112,47 @@ export function applyWslMoveSessionFocus(
   return true
 }
 
-/** Seeds the host partition with the carried rows of moved workspaces it lacks; returns their ids. */
+/**
+ * Seeds the host partition with the carried rows of moved workspaces it lacks; returns their ids.
+ * `overEchoes` is the unload redo of a window open across the move: that window's save of the
+ * host's tabs named the moved workspaces without what only the seed carries, so its browser tabs
+ * and drafts are added beside it there. Ids returned are those written.
+ */
 export function applyWslMoveHostSessionSeed(
   profile: Pick<Store, 'getWorkspaceSession' | 'setWorkspaceSession'>,
   cutover: Pick<WslMoveCutover, 'manifest' | 'destinationEnvironmentId'>,
   scope: WslMoveRewriteScope,
-  alreadySeeded: ReadonlySet<string>
+  alreadySeeded: ReadonlySet<string>,
+  overEchoes = false
 ): string[] {
   const carried = cutover.manifest.payload.dormantState?.workspaceSession
   if (!carried) {
     return []
   }
   const hostId = scope.destinationHostId
-  const seed = wslMoveHostSessionSeed(
-    carried,
-    profile.getWorkspaceSession(hostId),
-    scope,
-    alreadySeeded
+  const existing = profile.getWorkspaceSession(hostId)
+  const seed = wslMoveHostSessionSeed(carried, existing, scope, alreadySeeded)
+  const seededIds = new Set(seed?.workspaceIds ?? [])
+  const echoedIds = new Set(
+    overEchoes
+      ? [...workspaceIdsNamedByPartition(existing)].filter(
+          (workspaceId) => scope.inScope(workspaceId) && !seededIds.has(workspaceId)
+        )
+      : []
   )
-  if (!seed) {
-    return []
-  }
+  const base = seed?.session ?? existing
+  const withBrowserTabs = withWslMoveEchoedBrowserTabs(base, carried, echoedIds)
   const withViewState = withWslMoveSeededViewState(
-    seed.session,
+    withBrowserTabs ?? base,
     profile.getWorkspaceSession(LOCAL_EXECUTION_HOST_ID),
     { ...scope, destinationEnvironmentId: cutover.destinationEnvironmentId },
-    new Set(seed.workspaceIds)
+    new Set([...seededIds, ...echoedIds])
   )
+  const next = withViewState ?? withBrowserTabs ?? seed?.session
+  if (!next) {
+    return []
+  }
   // A move's one-shot seed, or its redo after a stale window; layout commands refuse runtime hosts.
-  profile.setWorkspaceSession(withViewState ?? seed.session, hostId)
-  return seed.workspaceIds
+  profile.setWorkspaceSession(next, hostId)
+  return [...seededIds, ...echoedIds]
 }

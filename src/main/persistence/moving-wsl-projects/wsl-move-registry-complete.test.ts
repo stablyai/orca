@@ -69,7 +69,7 @@ const source = wslMoverProfile('mixed-windows-wsl', 'source')
 const MOVED = source.session.activeWorktreeId ?? ''
 const MOVED_ON_HOST = 'repo-a::/home/dev/app'
 
-const committedMove = (migrationId = 'move-1') =>
+const committedMove = (migrationId = 'move-1', carried: WorkspaceSessionState = carriedSession()) =>
   wslMoveCutoverFixture(
     migrationId,
     'destination-committed',
@@ -83,7 +83,7 @@ const committedMove = (migrationId = 'move-1') =>
       sparsePresets: [],
       retiredWorktreeNames: [],
       retiredWorktreeNamespaces: [],
-      workspaceSession: carriedSession()
+      workspaceSession: carried
     }
   )
 
@@ -104,6 +104,23 @@ function carriedSession(): WorkspaceSessionState {
     unifiedTabs: { [MOVED_ON_HOST]: [unifiedTab('tab-1', MOVED_ON_HOST, 'group-1')] },
     tabGroups: { [MOVED_ON_HOST]: [tabGroup('group-1', MOVED_ON_HOST, ['tab-1'])] },
     activeGroupIdByWorktree: { [MOVED_ON_HOST]: 'group-1' }
+  }
+}
+
+function browserWorkspace(
+  id: string
+): NonNullable<WorkspaceSessionState['browserTabsByWorktree']>[string][number] {
+  return {
+    id,
+    worktreeId: MOVED_ON_HOST,
+    url: 'https://example.com/',
+    title: 'Example',
+    loading: false,
+    faviconUrl: null,
+    canGoBack: false,
+    canGoForward: false,
+    loadError: null,
+    createdAt: 1
   }
 }
 
@@ -369,6 +386,53 @@ describe('WSL move with the complete desktop rewrite registry', () => {
     expect(reapplyWslMoveRewritesAtUnload(testState.dir, store)).toBe(0)
     expect(store.getUI().visibleWorkspaceHostIds).toEqual(['local'])
     expect(journal()).toEqual([finished])
+  })
+
+  it("adds the carried browser tab beside the old window's echo at unload, keeping the echo", async () => {
+    // awin verify-4: the moving window saved its mirror of the host's tabs (no browser tab) over
+    // the seed, and the unload's redo skipped the workspace because that mirror named it.
+    windowOpen = true
+    const carried = carriedSession()
+    carried.browserTabsByWorktree = { [MOVED_ON_HOST]: [browserWorkspace('bw-1')] }
+    carried.unifiedTabs = {
+      [MOVED_ON_HOST]: [
+        unifiedTab('tab-1', MOVED_ON_HOST, 'group-1'),
+        { ...unifiedTab('bw-1', MOVED_ON_HOST, 'group-1'), contentType: 'browser' }
+      ]
+    }
+    carried.tabGroups = { [MOVED_ON_HOST]: [tabGroup('group-1', MOVED_ON_HOST, ['tab-1', 'bw-1'])] }
+    seedWslMoveCutover(testState.dir, committedMove('move-1', carried))
+    loadWslMoveFence(testState.dir)
+    await runWslMoveDesktopRewritePass({ userDataPath: testState.dir })
+    recordRendererStores()
+    // The echo: the host's terminal, now bound to a live host session, and a draft made since.
+    const echo: WorkspaceSessionState = {
+      ...carriedSession(),
+      remoteSessionIdsByTabId: { 'tab-1': 'host-session-1' },
+      openFilesByWorktree: {
+        [MOVED_ON_HOST]: [
+          {
+            filePath: '/home/dev/app/notes.md',
+            relativePath: 'notes.md',
+            worktreeId: MOVED_ON_HOST,
+            language: 'markdown',
+            runtimeEnvironmentId: 'wsl:Ubuntu',
+            dirtyDraftContent: 'typed after the move'
+          }
+        ]
+      }
+    }
+    store.setWorkspaceSession(echo, HOST)
+
+    expect(reapplyWslMoveRewritesAtUnload(testState.dir, store)).toBeGreaterThan(0)
+    const host = store.getWorkspaceSession(HOST)
+    expect(host.browserTabsByWorktree?.[MOVED_ON_HOST]?.map((tab) => tab.id)).toEqual(['bw-1'])
+    expect(host.tabGroups?.[MOVED_ON_HOST]?.[0]?.tabOrder).toEqual(['tab-1', 'bw-1'])
+    expect(host.unifiedTabs?.[MOVED_ON_HOST]?.map((tab) => tab.id)).toEqual(['tab-1', 'bw-1'])
+    expect(host.remoteSessionIdsByTabId).toEqual({ 'tab-1': 'host-session-1' })
+    expect(host.openFilesByWorktree?.[MOVED_ON_HOST]).toEqual(
+      echo.openFilesByWorktree?.[MOVED_ON_HOST]
+    )
   })
 
   it('leaves the additive rewrites alone at unload when no window saw the rewrite', async () => {

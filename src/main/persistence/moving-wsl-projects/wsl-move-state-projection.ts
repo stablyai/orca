@@ -201,7 +201,7 @@ export function projectWslMoveState(
     automationRuns: byId(
       state.automationRuns.filter((run) => automationIds.has(run.automationId)).map(withoutSetupId)
     ),
-    session: projectWslMoveSession(input.session, ownerInScope),
+    session: projectWslMoveSession(withoutOwnerFileBindings(input.session, aliases), ownerInScope),
     ui: projectWslMoveUi(
       input.ui ?? {},
       input.session,
@@ -219,6 +219,31 @@ export function projectWslMoveState(
   )
   dropSelfPriorIds(canonical)
   return canonical
+}
+
+/** A file bound to its owning host is that host's file whether or not the binding is written. */
+function withoutOwnerFileBindings<T extends Partial<WorkspaceSessionState>>(
+  session: T,
+  aliases: ReadonlySet<string>
+): T {
+  if (!session.openFilesByWorktree) {
+    return session
+  }
+  return {
+    ...session,
+    openFilesByWorktree: Object.fromEntries(
+      Object.entries(session.openFilesByWorktree).map(([owner, files]) => [
+        owner,
+        files.map(({ runtimeEnvironmentId, ...file }) =>
+          runtimeEnvironmentId === undefined ||
+          runtimeEnvironmentId === null ||
+          aliases.has(runtimeEnvironmentId)
+            ? file
+            : { ...file, runtimeEnvironmentId }
+        )
+      ])
+    )
+  }
 }
 
 /** Catalog rows are sets: their order carries no meaning, and an import may reorder them. */
