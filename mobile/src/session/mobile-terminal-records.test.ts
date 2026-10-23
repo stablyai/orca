@@ -187,15 +187,16 @@ describe('mobile terminal records', () => {
   })
 
   it('treats a browser load failure appearing or changing as a session-tab change', () => {
-    const page: MobileTerminalSessionTab = {
+    const url = 'http://localhost:3000/'
+    const page: Parameters<typeof mobileSessionTabsEqual>[0][number] = {
       type: 'browser',
       id: 'browser-1',
-      url: 'http://localhost:3000/',
+      url,
       loading: false
     }
     const refused = {
       ...page,
-      loadError: { code: -102, description: 'ERR_CONNECTION_REFUSED', validatedUrl: page.url! }
+      loadError: { code: -102, description: 'ERR_CONNECTION_REFUSED', validatedUrl: url }
     }
     expect(mobileSessionTabsEqual([page], [refused])).toBe(false)
     expect(

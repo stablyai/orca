@@ -206,7 +206,7 @@ export function translateLoadFailurePiece(id: BrowserLoadFailureCopyId): string 
 function formatLoadFailureNetworkText(
   loadError: BrowserLoadError,
   failure: BrowserLoadFailureDescription
-): { title: string; description: string } {
+): { title: string; description: string | null } {
   return formatBrowserLoadFailureText(loadError, failure, (id, values) =>
     LOAD_FAILURE_PIECES[id](values)
   )
