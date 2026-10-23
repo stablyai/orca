@@ -63,7 +63,11 @@ export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRu
 
   private readonly paneLaunchConfigOf: PaneLaunchConfigOf = (paneKey, agent) => {
     for (const pty of this.ptysById.values()) {
-      if (pty.paneKey === paneKey && pty.launchConfig && pty.launchAgent === agent) {
+      if (
+        pty.launchConfig &&
+        pty.launchAgent === agent &&
+        this.paneOfPty(pty).paneKey === paneKey
+      ) {
         return pty.launchConfig
       }
     }

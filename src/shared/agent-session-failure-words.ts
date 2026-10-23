@@ -18,7 +18,7 @@ import {
 import type { AgentSessionConversationCommand } from './agent-session-conversation-command'
 import { cliMissingSentence, notSignedInSentence } from './agent-session-availability-sentences'
 import {
-  codexInstallationFailureWords,
+  agentCliInstallationFailureWords,
   sayAgentSessionFailureEnglish,
   type AgentSessionFailureCopyId,
   type AgentSessionFailureCopyValues,
@@ -134,7 +134,7 @@ function startRetry(
 
 function couldNot(verb: 'couldNotStart' | 'couldNotRestart'): Sentence {
   return (context, fact, _surface, say) => {
-    const installationFailure = codexInstallationFailureWords(fact.refusal, say)
+    const installationFailure = agentCliInstallationFailureWords(fact.refusal, say)
     if (installationFailure) {
       return installationFailure
     }

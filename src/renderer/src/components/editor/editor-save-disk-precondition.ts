@@ -2,6 +2,7 @@ import type { AppState } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { toEditorModelUri } from './editor-model-uri'
 import { getEditorModelOwnerKey } from './editor-model-owner'
+import { editorBufferSiblingViewIds } from '@/store/slices/editor/buffers/editor-buffer-views'
 import { detectLanguage } from '@/lib/language-detect'
 import { getDefaultMarkdownViewMode, getMarkdownViewModes } from './markdown-preview-controls'
 import type { FileWriteResult } from '../../../../shared/file-write-disk-precondition'
@@ -32,7 +33,7 @@ export function editorTabModelUri(state: AppState, file: OpenFile): string {
 }
 
 /** Whether the tab edits its Monaco model directly; rich, notebook, CSV and preview views don't. */
-function isCodeViewTab(state: AppState, file: OpenFile): boolean {
+export function isCodeViewTab(state: AppState, file: OpenFile): boolean {
   // Why: the Changes view renders its own diff model, not the shared text model.
   if (file.mode !== 'edit' || state.editorViewMode?.[file.id] === 'changes') {
     return false
@@ -49,20 +50,12 @@ function isCodeViewTab(state: AppState, file: OpenFile): boolean {
   return views.length === 0 || view === 'source'
 }
 
-/**
- * Code-view tabs showing the same live model as `file`, `file` included. They share the model's
- * text, so a write or Keep may advance their baseline; any other view is guarded on its own.
- */
+/** Every view of `file`'s buffer record, `file` included: they share its text, baseline and conflict. */
 export function editorModelSiblingTabs(state: AppState, file: OpenFile): OpenFile[] {
-  if (!isCodeViewTab(state, file)) {
-    return [file]
-  }
-  const modelUri = editorTabModelUri(state, file)
-  return state.openFiles.filter(
-    (tab) =>
-      tab.id === file.id ||
-      (isCodeViewTab(state, tab) && editorTabModelUri(state, tab) === modelUri)
-  )
+  const viewIds = new Set(editorBufferSiblingViewIds(state, file.id))
+  viewIds.add(file.id)
+  const views = state.openFiles.filter((tab) => viewIds.has(tab.id))
+  return views.some((tab) => tab.id === file.id) ? views : [file, ...views]
 }
 
 /**
@@ -71,18 +64,18 @@ export function editorModelSiblingTabs(state: AppState, file: OpenFile): OpenFil
  * write gets the writer's compatibility fallback: the client reads and compares, then writes.
  */
 export type EditorSavePrecondition =
-  | { kind: 'guarded'; signature: string; allowMissing: boolean }
+  | { kind: 'guarded'; signature: string; allowMissing: boolean; requireLosslessUtf8?: boolean }
   | { kind: 'explicit-overwrite' }
   | { kind: 'blocked'; reason: 'no-baseline' }
 
 export type EditorSaveWrite = Exclude<EditorSavePrecondition, { kind: 'blocked' }>
 
-/** A code-view model is dirty when any tab of it holds unsaved edits; other views answer for themselves. */
+/** Whether `file`'s buffer record holds unsaved edits (every view mirrors it). */
 export function isEditorModelDirty(state: AppState, file: OpenFile): boolean {
   return editorModelSiblingTabs(state, file).some((tab) => tab.isDirty)
 }
 
-/** The tab holding the model's unsaved text; it may be a sibling of `file`, not `file` itself. */
+/** A view of `file`'s record holding its unsaved text; views of one record share one draft. */
 export function editorModelDraftHolder(state: AppState, file: OpenFile): OpenFile | undefined {
   return editorModelSiblingTabs(state, file).find(
     (tab) => tab.isDirty && state.editorDrafts[tab.id] !== undefined
@@ -90,8 +83,8 @@ export function editorModelDraftHolder(state: AppState, file: OpenFile): OpenFil
 }
 
 /**
- * The one disk version of a code-view model: every tab sharing the model holds the same value, set
- * only here. Other views keep their own. Returns the sibling tabs whose value moved.
+ * Moves the record's one disk version, so every view of it moves too. Returns the other views
+ * whose value moved.
  */
 export function setEditorDiskBaseline(
   state: AppState,
@@ -99,15 +92,13 @@ export function setEditorDiskBaseline(
   signature: string | undefined
 ): OpenFile[] {
   const file = state.openFiles.find((openFile) => openFile.id === fileId)
-  const moved: OpenFile[] = []
-  for (const tab of file ? editorModelSiblingTabs(state, file) : []) {
-    if (tab.lastKnownDiskSignature !== signature) {
-      state.setLastKnownDiskSignature(tab.id, signature)
-      if (tab.id !== fileId) {
-        moved.push(tab)
-      }
-    }
+  if (!file) {
+    return []
   }
+  const moved = editorModelSiblingTabs(state, file).filter(
+    (tab) => tab.id !== fileId && tab.lastKnownDiskSignature !== signature
+  )
+  state.setLastKnownDiskSignature(fileId, signature)
   return moved
 }
 
@@ -128,7 +119,12 @@ export function editorSavePrecondition(
     return { kind: 'blocked', reason: 'no-baseline' }
   }
   // Why: autosave must not resurrect a file deleted behind the editor's back; explicit saves may.
-  return { kind: 'guarded', signature: baseline, allowMissing: trigger !== 'autosave' }
+  return {
+    kind: 'guarded',
+    signature: baseline,
+    allowMissing: trigger !== 'autosave',
+    requireLosslessUtf8: trigger === 'autosave' || trigger === 'restart'
+  }
 }
 
 /** The only file write editor save code makes. */
@@ -146,7 +142,11 @@ export function writeEditorSave(
     content,
     access,
     write.kind === 'guarded'
-      ? { expectedSignature: write.signature, allowMissing: write.allowMissing }
+      ? {
+          expectedSignature: write.signature,
+          allowMissing: write.allowMissing,
+          ...(write.requireLosslessUtf8 ? { requireLosslessUtf8: true } : {})
+        }
       : undefined,
     beforeSend
   )

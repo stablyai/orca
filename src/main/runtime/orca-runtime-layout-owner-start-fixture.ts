@@ -8,7 +8,9 @@ import { applyCommandToSession } from '../persistence/terminal-topology/terminal
 import { resolveHostId } from '../persistence/loading-store/session-host-partitions'
 import { withDurableRuntimeStore, withRuntimePaneAdmission } from './runtime-durable-store-fixture'
 import { OrcaRuntimeService } from './orca-runtime'
+import { committingSpawn } from './bind-first-pane.test-fixture'
 import type { RuntimeNotifier } from './runtime-notifier-contract'
+import type { PaneResumeOutcome } from '../../shared/workspace-layout/workspace-layout-published'
 
 export const REPO = {
   id: 'repo-1',
@@ -25,6 +27,9 @@ export class ProvisioningRuntime extends OrcaRuntimeService {
   }
   startStatusOf(paneKey: string) {
     return this.paneStartStatuses?.peek(paneKey) ?? null
+  }
+  resumeOutcomeOf(paneKey: string) {
+    return this.paneResumeOutcomes?.peek(paneKey) ?? null
   }
 }
 
@@ -60,11 +65,18 @@ export function setupLayoutOwnerRuntime() {
     }))
   })
   let spawned = 0
-  const spawn = vi.fn(async (_args: { tabId?: string; leafId?: string }) => ({
-    id: `pty-${++spawned}`
-  }))
+  const spawn = vi.fn(
+    async (_args: {
+      tabId?: string
+      leafId?: string
+      onResumeOutcome?: (ptyId: string, outcome: PaneResumeOutcome) => void
+    }) => ({
+      id: `pty-${++spawned}`
+    })
+  )
   runtime.setPtyController({
-    spawn,
+    // The host's spawn commit binds the pane before main registers the terminal (bind-first).
+    spawn: committingSpawn(runtime, spawn),
     write: () => true,
     kill: () => true,
     getForegroundProcess: async () => null
@@ -79,7 +91,6 @@ export function setupLayoutOwnerRuntime() {
     renameTerminal,
     focusTerminal: vi.fn(),
     closeTerminal: vi.fn(),
-    sleepWorktree: vi.fn(),
     terminalFitOverrideChanged: vi.fn(),
     terminalDriverChanged: vi.fn()
   })

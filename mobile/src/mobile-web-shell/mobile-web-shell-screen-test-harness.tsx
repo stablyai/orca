@@ -2,11 +2,17 @@ import { createElement, type ComponentType, type ReactElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { vi, type Mock } from 'vitest'
 import type { FakeRpcClient } from './bridge-host-test-fakes'
+import {
+  createDownloadProgressFeed,
+  downloadFraction,
+  type PublishedDownloadProgressFeed
+} from './download-progress-feed'
 import type {
   MobileWebShellSessionState,
   MobileWebShellUpdateNotice
 } from './mobile-web-shell-session-contract'
 import type { ShellPageFrame } from './shell-page-frame'
+import type { NativeStackState } from './native-stack-return'
 
 /**
  * Everything the screen's cases mock away, as one mutable record, plus the helpers that mount it.
@@ -28,6 +34,10 @@ export type ScreenDependencies = {
   back: Mock
   /** What the native stack answers: false is a page opened as the first screen on it. */
   canGoBack: boolean
+  /** The navigation container's whole state; undefined before it is ready. */
+  rootState: NativeStackState | undefined
+  /** Actions the screen dispatched onto its own place on the stack. */
+  dispatch: Mock
   pathname: string
   pageRoutes: readonly string[]
   routeGrants: readonly string[]
@@ -39,6 +49,8 @@ export type ScreenDependencies = {
   /** Whether the view refuses what it is handed, which is a page the post never reached. */
   postFails: boolean
   state: MobileWebShellSessionState
+  /** Moved with every `fetching` state a render is handed, as the hook moves it on dispatch. */
+  downloadProgress: PublishedDownloadProgressFeed
   /** Non-null when the generation on screen is a fallback from an update the shell refused. */
   updateNotice: MobileWebShellUpdateNotice | null
   /** What the session reducer says about the page's handshake; true only for the fence's case. */
@@ -96,6 +108,8 @@ export function createScreenDependencies(): ScreenDependencies {
     push: vi.fn(),
     back: vi.fn(),
     canGoBack: true,
+    rootState: undefined,
+    dispatch: vi.fn(),
     pathname: '/h/host-1',
     pageRoutes: ['/h/[hostId]'],
     routeGrants: DEFAULT_ROUTE_GRANTS,
@@ -104,6 +118,7 @@ export function createScreenDependencies(): ScreenDependencies {
     posted: [],
     postFails: false,
     state: { kind: 'checking' },
+    downloadProgress: createDownloadProgressFeed(),
     updateNotice: null,
     pageReady: false,
     pageFrame: 'pending',
@@ -133,6 +148,7 @@ export function resetScreenDependencies(dependencies: ScreenDependencies): void 
   dependencies.reportPagePainted.mockReset()
   dependencies.snapshotUnreadable = false
   dependencies.storageRefreshes = 0
+  dependencies.downloadProgress = createDownloadProgressFeed()
   dependencies.lifecycle.length = 0
   dependencies.viewRenders = 0
   dependencies.posted.length = 0
@@ -145,6 +161,8 @@ export function resetScreenDependencies(dependencies: ScreenDependencies): void 
   dependencies.openUrl.mockReset()
   dependencies.openUrl.mockImplementation(() => Promise.resolve(true))
   dependencies.canGoBack = true
+  dependencies.rootState = undefined
+  dependencies.dispatch.mockReset()
   dependencies.pathname = '/h/host-1'
   dependencies.updateNotice = null
   dependencies.backHandlers.clear()
@@ -200,12 +218,19 @@ function element(Screen: ScreenComponent): ReactElement {
   })
 }
 
+function setScreenState(dependencies: ScreenDependencies, state: MobileWebShellSessionState): void {
+  dependencies.state = state
+  if (state.kind === 'fetching') {
+    dependencies.downloadProgress.publish(downloadFraction(state.receivedBytes, state.totalBytes))
+  }
+}
+
 export async function renderScreen(
   Screen: ScreenComponent,
   dependencies: ScreenDependencies,
   state: MobileWebShellSessionState
 ): Promise<ReactTestRenderer> {
-  dependencies.state = state
+  setScreenState(dependencies, state)
   const rendered: { tree: ReactTestRenderer | null } = { tree: null }
   await act(async () => {
     rendered.tree = create(element(Screen))
@@ -223,7 +248,7 @@ export async function updateScreen(
   tree: ReactTestRenderer,
   state: MobileWebShellSessionState
 ): Promise<void> {
-  dependencies.state = state
+  setScreenState(dependencies, state)
   await act(async () => {
     tree.update(element(Screen))
   })

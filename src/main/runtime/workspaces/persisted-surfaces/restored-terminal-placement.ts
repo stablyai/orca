@@ -167,6 +167,7 @@ export abstract class OrcaRuntimeWithRestoredTerminalPlacement extends OrcaRunti
           : [...this.ptysById.values()].filter((pty) =>
               [...scope].some((worktreeId) => worktreeIdsEqual(worktreeId, pty.worktreeId))
             ),
+      paneOf: (pty) => this.paneOfPty(pty),
       // A window spawn holds its workspace's lock until its pane is recorded (spawn-run.ts), and a
       // registration in flight is binding one, as a census reads it (pty-terminal-summary.ts).
       isStillBinding: (pty) =>

@@ -1,3 +1,5 @@
+import { ptyIncarnationById, ptyOwnership } from '../provider/ownership-state'
+import { attachOnlyViewOf } from '../pane/attach-only-view'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
 import { resolveAgentLaunchPaneVerdict } from '../../../agent-launch/agent-launch-pane-attachment'
 import { AGENT_LAUNCH_PANE_REFUSED_CODE } from '../../../../shared/agent-launch-pane-verdict'
@@ -107,7 +109,21 @@ export async function beginPtyIpcSpawn(
       ? pendingRuntimePaneCreatesByOwnerKey.get(earlyReservationKey)
       : undefined
     if (pendingRuntimeCreate) {
-      await pendingRuntimeCreate.promise
+      const created = await pendingRuntimeCreate.promise
+      // Why: main's start of this pane carries the payload a view paints from; attaching to the
+      // provider again adds a round trip. A start that carries none, or no longer owns its
+      // terminal, leaves the view to attach as today.
+      if (
+        attachOnlyViewOf(args) &&
+        created &&
+        created.id === args.sessionId &&
+        (created.coldRestore || typeof created.snapshot === 'string') &&
+        ptyOwnership.has(created.id) &&
+        (created.incarnationId === undefined ||
+          ptyIncarnationById.get(created.id) === created.incarnationId)
+      ) {
+        return created
+      }
     }
   }
   ctx.earlyStablePaneOwner =

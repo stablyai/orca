@@ -4,7 +4,6 @@ type TabLookup = Record<string, { id: string }[]>
 
 export type ResourceSessionNavigationDeps = {
   tabsByWorktree: TabLookup
-  setOpen: (open: boolean) => void
   setActiveView: (view: 'terminal') => void
   activateAndRevealWorktree: (worktreeId: string) => unknown
   activateTabAndFocusPane: (
@@ -23,8 +22,6 @@ export function navigateResourceSessionToTab(
   paneKey: string | null,
   deps: ResourceSessionNavigationDeps
 ): void {
-  deps.setOpen(false)
-
   for (const [worktreeId, tabs] of Object.entries(deps.tabsByWorktree)) {
     if (tabs.some((tab) => tab.id === tabId)) {
       deps.activateAndRevealWorktree(worktreeId)

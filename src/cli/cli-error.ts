@@ -84,6 +84,10 @@ export function formatCliError(error: unknown, context: CliErrorContext = {}): s
   if (conflict) {
     return formatMessageWithNextSteps(stripAutomationOwnerConflictCode(message), conflict.nextSteps)
   }
+  const sidecarExit = computerSidecarExitRecovery(error, context)
+  if (sidecarExit) {
+    return formatMessageWithNextSteps(message, sidecarExit.nextSteps)
+  }
   if (error instanceof RuntimeClientError) {
     const nextSteps = nextStepsFromData(error.data)
     if (nextSteps.length > 0) {
@@ -120,7 +124,10 @@ export function reportCliError(error: unknown, json: boolean, context: CliErrorC
   const selector = contextRecovery(errorCode(error), context)
   if (json) {
     if (error instanceof RuntimeRpcFailureError) {
-      const response = withAutomationOwnerConflictRecovery(error.response)
+      const sidecarExit = computerSidecarExitRecovery(error, context)
+      const response = sidecarExit
+        ? { ...error.response, error: { ...error.response.error, data: sidecarExit } }
+        : withAutomationOwnerConflictRecovery(error.response)
       console.log(
         JSON.stringify(
           selector
@@ -217,7 +224,24 @@ function nextStepsFromData(data: unknown): string[] {
   return []
 }
 
+/** Read here, not from the error's data: the servers that send this predate the hint (#31777). */
+function computerSidecarExitRecovery(error: unknown, context: CliErrorContext) {
+  if (
+    context.commandPath?.[0] !== 'computer' ||
+    errorCode(error) !== 'accessibility_error' ||
+    !(error instanceof Error) ||
+    !error.message.startsWith('computer sidecar exited with code')
+  ) {
+    return undefined
+  }
+  return computerUseErrorRecoveryData('accessibility_error', error.message)
+}
+
 function localCliErrorData(error: unknown, context: CliErrorContext): unknown {
+  const sidecarExit = computerSidecarExitRecovery(error, context)
+  if (sidecarExit) {
+    return sidecarExit
+  }
   const selector = contextRecovery(errorCode(error), context)
   // Why: error-specific recovery must win over the generic computer fallback.
   if (error instanceof RuntimeClientError && error.data !== undefined) {

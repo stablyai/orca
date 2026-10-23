@@ -9,8 +9,7 @@ export type OwnedSessionTeardownEntryPoint =
   | 'sleep'
   | 'disconnect'
 
-/** `stop-pending-28445`: decided, but the stop itself lands with #28445. */
-type OwnedSessionTeardownDecision = 'stop' | 'retain' | 'stop-pending-28445'
+type OwnedSessionTeardownDecision = 'stop' | 'retain'
 
 const REMOVAL = {
   pty: 'stop',
@@ -27,10 +26,10 @@ export const OWNED_SESSION_TEARDOWN = {
   'worktree-removal': REMOVAL,
   'folder-removal': REMOVAL,
   'project-removal': REMOVAL,
-  // Sleep keeps tabs, so pages and launch records survive to wake.
+  // Sleep keeps tabs, so pages and launch records survive to wake. Main stops the chats.
   sleep: {
     pty: 'stop',
-    'structured-chat': 'stop-pending-28445',
+    'structured-chat': 'stop',
     'host-browser': 'retain',
     launch: 'retain'
   },

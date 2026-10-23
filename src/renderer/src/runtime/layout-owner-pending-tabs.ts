@@ -50,6 +50,10 @@ export function afterPendingTab(tabId: string, run: (outcome: Outcome) => void):
   }
 }
 
+export function isPendingTab(tabId: string): boolean {
+  return pending.has(tabId)
+}
+
 /** The group a pending open asked for. */
 export function pendingTabGroupId(tabId: string): string | undefined {
   const ask = pending.get(tabId)?.ask

@@ -25,6 +25,7 @@ export type StructuredAgentSessionRevisionJournal = Pick<
 export type StructuredAgentSessionHistoryJournal = Pick<
   AgentSessionJournal,
   | 'epoch'
+  | 'cursor'
   | 'visitItems'
   | 'visitItemsWithLinkage'
   | 'item'

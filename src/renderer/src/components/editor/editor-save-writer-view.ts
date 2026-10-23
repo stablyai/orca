@@ -3,6 +3,7 @@ import type { OpenFile } from '@/store/slices/editor'
 import { assertEditorFileOperationCurrent } from '@/lib/editor-file-operation-owner'
 import { editorBufferSiblingViewIds } from '@/store/slices/editor/buffers/editor-buffer-views'
 import type { EditorSaveTrigger } from './editor-save-disk-precondition'
+import { canAutoSaveOpenFile } from './editor-autosave'
 
 function hasCurrentProvenance(state: AppState, file: OpenFile): boolean {
   if (!file.operationProvenance) {
@@ -29,9 +30,14 @@ export function editorSaveWriterView(
   if (trigger === 'user' || trigger === 'overwrite') {
     return asked
   }
+  // Why: the record's first view may be a CSV preview or read-only; writing through it throws.
+  const mayWrite = (view: OpenFile): boolean =>
+    trigger === 'autosave'
+      ? canAutoSaveOpenFile(view)
+      : view.readOnly !== true && view.csvPreviewOnly !== true
   for (const viewId of editorBufferSiblingViewIds(state, fileId)) {
     const view = state.openFiles.find((openFile) => openFile.id === viewId)
-    if (view && view.readOnly !== true && hasCurrentProvenance(state, view)) {
+    if (view && mayWrite(view) && hasCurrentProvenance(state, view)) {
       return view
     }
   }

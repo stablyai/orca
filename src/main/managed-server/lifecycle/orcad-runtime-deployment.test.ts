@@ -127,6 +127,7 @@ let flushes: number
 
 function setupStore(overrides: { repos?: { connectionId: string }[] } = {}) {
   const store = {
+    ...emptyDependentStateStore(),
     allocateSshTargetGeneration: () => 9,
     flushPendingOrThrowAsync: async () => {
       flushes += 1
@@ -134,7 +135,6 @@ function setupStore(overrides: { repos?: { connectionId: string }[] } = {}) {
     },
     getFolderWorkspaces: () => [],
     getRepos: () => overrides.repos ?? [],
-    ...emptyDependentStateStore(),
     getSshTarget: (id: string) => (id === target.id ? target : undefined),
     getSshTargets: () => [target],
     updateSshTarget: (_id: string, updates: Partial<SshTarget>) => {
@@ -568,13 +568,13 @@ describe('createManagedOrcadEnvironment', () => {
 
   it('does not contact the host when the claim cannot be made durable', async () => {
     const claims = new SshTargetOrcadClaims({
+      ...emptyDependentStateStore(),
       allocateSshTargetGeneration: () => 9,
       flushPendingOrThrowAsync: async () => {
         throw new Error('disk full')
       },
       getFolderWorkspaces: () => [],
       getRepos: () => [],
-      ...emptyDependentStateStore(),
       getSshTarget: () => target,
       getSshTargets: () => [target],
       updateSshTarget: (_id, updates) => (target = { ...target, ...updates })

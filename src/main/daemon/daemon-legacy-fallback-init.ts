@@ -13,16 +13,23 @@ import type { DaemonSpawner } from './daemon-spawner'
 import { DegradedDaemonPtyProvider } from './degraded-daemon-pty-provider'
 import { createSeveredDaemonController } from './daemon-severed-restart'
 
-/** Keeps live legacy daemon sessions when the current daemon cannot start or take its lease. */
-export async function tryInstallLegacyFallbackOnCurrentFailure(input: {
+export type TryInstallLegacyFallbackOnCurrentFailureInput = {
   error: unknown
   signal?: AbortSignal
   runtimeDir: string
   newSpawner: DaemonSpawner
   newAdapter: DaemonPtyAdapter
-}): Promise<true> {
+  probeCurrentDaemonSpawn: () => Promise<boolean>
+}
+
+/** Keeps live legacy daemon sessions when the current daemon cannot start or take its lease. */
+export async function tryInstallLegacyFallbackOnCurrentFailure(
+  input: TryInstallLegacyFallbackOnCurrentFailureInput
+): Promise<true> {
   releaseDaemonAdoptionLease(input.newSpawner.getHandle())
-  await input.newAdapter.disconnectOnly().catch(() => {})
+  await input.newAdapter.disconnectOnly().catch(() => {
+    input.newAdapter.dispose()
+  })
   if (input.signal?.aborted) {
     throw input.error
   }
@@ -37,9 +44,15 @@ export async function tryInstallLegacyFallbackOnCurrentFailure(input: {
     current: input.newAdapter,
     legacy: legacyAdapters,
     fallback: getLocalPtyProvider(),
-    currentAvailable: false
+    currentAvailable: false,
+    probeCurrentDaemonSpawn: input.probeCurrentDaemonSpawn
   })
-  await degradedProvider.discoverDaemonSessions()
+  try {
+    await degradedProvider.discoverDaemonSessions()
+  } catch (discoveryError) {
+    await degradedProvider.disconnectOnly().catch(() => {})
+    throw new AggregateError([input.error, discoveryError], 'Legacy daemon fallback failed')
+  }
   if (input.signal?.aborted) {
     await degradedProvider.disconnectOnly()
     return true

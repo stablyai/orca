@@ -9,8 +9,12 @@ import type { AppState } from '@/store/types'
 const mocks = vi.hoisted(() => ({ callRuntimeRpc: vi.fn() }))
 vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
 
-import { recordLayoutApply, sendLayoutApply, type WindowLayoutCommand } from './layout-apply-send'
-import { sendGeneratedTabTitles } from './generated-tab-titles-send'
+import {
+  recordLayoutApply,
+  sendLayoutApply,
+  sendToServerMain,
+  type WindowLayoutCommand
+} from './layout-apply-send'
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
 import { createInitialTerminalThroughLayoutOwner } from '@/store/terminals/terminal-tab-create-through-layout-owner'
 
@@ -61,7 +65,8 @@ const COMMANDS: WindowLayoutCommand[] = [
   { type: 'closePane', tabId: 't', leafId: 'l' },
   { type: 'closeTabs', tabIds: ['t'] },
   { type: 'renameTab', tabId: 't', kind: 'custom', title: 'x' },
-  { type: 'moveTab', tabId: 't', toGroupId: 'g', index: 0 },
+  // An anchored move too, so no server, old or new, is sent the anchor.
+  { type: 'moveTab', tabId: 't', toGroupId: 'g', index: 0, afterTabId: 's' },
   { type: 'createTerminalTab', tabId: 't', leafId: 'l' },
   { type: 'sleep', tabId: 't', paneKeys: ['t:l'], records: [] },
   { type: 'setDefaultTabsApplied' }
@@ -90,14 +95,18 @@ describe.each(PAIRED_WORKSPACES)('$name', ({ workspaceId, rows }) => {
     expect(handlers.apply).not.toHaveBeenCalled()
   })
 
-  it('a batch of generated titles sends nothing and is the caller’s to show', () => {
-    const answer = vi.fn()
+  it('an editor hand-over reaches that server’s main, never this window’s', () => {
+    mocks.callRuntimeRpc.mockReturnValue(new Promise(() => {}))
+    sendToServerMain(
+      'env-b',
+      workspaceId,
+      { type: 'openEditorTab', tabId: 't', fileId: 'f', contentType: 'editor' },
+      vi.fn()
+    )
 
-    expect(
-      sendGeneratedTabTitles(rows, [{ worktreeId: workspaceId, tabId: 't', title: 'x' }], answer)
-    ).toEqual([false])
-    expect(layoutApplyCalls()).toEqual([])
-    expect(answer).not.toHaveBeenCalled()
+    expect(layoutApplyCalls().map((call) => call[0])).toEqual([
+      { kind: 'environment', environmentId: 'env-b' }
+    ])
   })
 
   it('the activation terminal create sends nothing', () => {
@@ -137,8 +146,8 @@ describe('layout.apply senders', () => {
   // A new sender must go through sendLayoutApply or carry the same guard, plus a case above.
   it('are only the guarded paths pinned above', () => {
     expect(layoutApplySenders(path.resolve(__dirname, '..'))).toEqual({
-      'runtime/generated-tab-titles-send.ts': 1,
-      'runtime/layout-apply-send.ts': 1,
+      // Only sendLayoutApply and sendToServerMain (layout-apply-send.ts) call it.
+      'runtime/layout-apply-call.ts': 1,
       // Tests' stand-in for main: it answers layout.apply, never sends it.
       'runtime/layout-apply-test-transport.test-fixture.ts': 1,
       'store/terminals/terminal-tab-create-through-layout-owner.ts': 1

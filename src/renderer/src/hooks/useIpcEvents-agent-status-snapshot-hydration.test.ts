@@ -359,12 +359,12 @@ describe('useIpcEvents agent status snapshot integration', () => {
     )
   })
 
-  it('applies a large snapshot with one status and two bounded title publications', async () => {
+  it('applies a large snapshot with one status and bounded title publications', async () => {
     const paneCount = 100
     const snapshot: AgentStatusSetData[] = []
     const worktrees: AppState['worktreesByRepo'][string] = []
     const tabsByWorktree: AppState['tabsByWorktree'] = {}
-    // Tab-bar entries, so a layout-owner build sends the titles to main.
+    // Tab-bar entries, so a layout-owner build leaves the titles to main.
     const unifiedTabsByWorktree: AppState['unifiedTabsByWorktree'] = {}
     const terminalLayoutsByTabId: AppState['terminalLayoutsByTabId'] = {}
     for (let index = 0; index < paneCount; index += 1) {
@@ -455,10 +455,10 @@ describe('useIpcEvents agent status snapshot integration', () => {
       expect(store.getState().tabsByWorktree['wt-snapshot-99']?.[0]?.title).toBe(
         'Pi - action required'
       )
-      // A layout-owner build sends main the snapshot's titles as one rename; main's frame (not
-      // modelled here) draws them, so the window writes them in neither case twice.
+      // A layout-owner build's main derives the titles from its own agent status, and its frame
+      // (not modelled here) draws them: the window sends and writes none.
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-        expect(renamed()).toEqual([paneCount])
+        expect(store.getState().tabsByWorktree['wt-snapshot-99']?.[0]?.generatedTitle).toBeFalsy()
       } else {
         expect(store.getState().tabsByWorktree['wt-snapshot-99']?.[0]?.generatedTitle).toBeTruthy()
       }
@@ -469,7 +469,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
 
     expect(relevantPublications).toBe(ORCA_LAYOUT_OWNER_IS_MAIN ? 2 : 3)
     unsubscribe()
-    expect(renamed()).toEqual(ORCA_LAYOUT_OWNER_IS_MAIN ? [paneCount] : [])
+    expect(renamed()).toEqual([])
   })
 
   it('indexes one 100-pane tab and its split tree once per snapshot', async () => {

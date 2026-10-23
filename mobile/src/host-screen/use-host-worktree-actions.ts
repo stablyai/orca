@@ -13,7 +13,6 @@ import {
 } from '../transport/execution-host-scoped-rpc-client'
 import { serverUpdateNeededNotice } from '../host-route-notice'
 import type { ConnectionState } from '../transport/types'
-import { setHostRouteNewWorktreeVisible } from '../host-route-action-state'
 import { leaveHostRoute } from '../host-route-exit'
 import {
   getWorktreeRowIdentity,
@@ -55,8 +54,6 @@ export function useHostWorktreeActions(args: {
     state
   } = args
   const {
-    newWorktreeModalRef,
-    newWorktreeModalVisibleRef,
     pinnedIds,
     setActionError,
     setConfirmRemoveHost,
@@ -64,7 +61,7 @@ export function useHostWorktreeActions(args: {
     setOptimisticActiveWorktreeIdentity,
     setPinnedIds,
     serverWorkspaces,
-    setRouteActionState,
+    setNewWorktreeVisible,
     setServerNotice,
     setServerWorkspaces,
     setSleptIds,
@@ -82,18 +79,14 @@ export function useHostWorktreeActions(args: {
     leaveHostRoute(router)
   }, [router])
 
-  const openNewWorktreeModal = useCallback(() => {
-    const modal = newWorktreeModalRef.current
-    if (!modal) {
-      return
-    }
-    newWorktreeModalVisibleRef.current = true
-    modal.open()
-  }, [])
-
-  const setShowNewWorktreeVisible = useCallback((visible: boolean) => {
-    setRouteActionState((current) => setHostRouteNewWorktreeVisible(current, visible))
-  }, [])
+  const openNewWorktreeModal = useCallback(
+    () => setNewWorktreeVisible(true),
+    [setNewWorktreeVisible]
+  )
+  const closeNewWorktreeModal = useCallback(
+    () => setNewWorktreeVisible(false),
+    [setNewWorktreeVisible]
+  )
 
   const updateLocalPins = useCallback(
     (worktreeId: string, pinned: boolean) => {
@@ -307,8 +300,8 @@ export function useHostWorktreeActions(args: {
     navigateFromHostList,
     openFloatingWorkspace,
     openNewWorktreeModal,
+    closeNewWorktreeModal,
     openWorktreeSession,
-    setShowNewWorktreeVisible,
     putWorktreeToSleep,
     togglePin
   }

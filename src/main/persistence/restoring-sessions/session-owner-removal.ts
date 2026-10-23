@@ -54,6 +54,13 @@ export function deleteScannedSessionFieldsForOwners(
       }
     }
   }
+  if (next.closedTerminalPanesByPaneKey) {
+    for (const [paneKey, record] of Object.entries(next.closedTerminalPanesByPaneKey)) {
+      if (isRemovedOwner(record.worktreeId)) {
+        delete next.closedTerminalPanesByPaneKey[paneKey]
+      }
+    }
+  }
   next.activeWorktreeIdsOnShutdown = next.activeWorktreeIdsOnShutdown?.filter(
     (worktreeId) => !isRemovedOwner(worktreeId)
   )

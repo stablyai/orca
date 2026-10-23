@@ -29,6 +29,7 @@ import {
   FAKE_AGENT_WINDOWS_SHELL
 } from './helpers/fake-agent-command-override'
 import { FAKE_CODEX_LAUNCH_PROBES_SOURCE } from './helpers/fake-codex-launch-probes'
+import { LAYOUT_OWNER_BUILD } from './helpers/layout-owner-build'
 
 type SpawnEvent = { args: string[]; pid: number }
 type TerminalIdentity = Pick<
@@ -421,7 +422,8 @@ async function faultProjectionAndActivate(
     },
     {
       activeTabId,
-      identities: terminals.map(({ tabId, leafId }) => ({ tabId, leafId })),
+      // Why none with the switch on: main's frames own the bindings, and no window write drops one.
+      identities: LAYOUT_OWNER_BUILD ? [] : terminals,
       worktreeId
     }
   )

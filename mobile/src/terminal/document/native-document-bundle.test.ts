@@ -315,7 +315,9 @@ describe('the bundled native document', () => {
     // `terminal-grid-fit` is the one fit of that box and `terminal-cell-box` its one comparison,
     // both shared with the app. 52: `cell-metrics` and `selection-mode` split out to break cycles.
     // 53: the bottom row backdrop extends a uniform row into the fractional gap.
-    expect(inputs).toHaveLength(53)
+    // 54: `src/shared/prose-url-boundary`, so a tapped url ends where desktop's link does.
+    // 56: OSC 52 copies reach the device through desktop's own parser, `src/shared/osc52-clipboard`.
+    expect(inputs).toHaveLength(56)
     expect(script).not.toContain('__commonJS')
     // `__esm` wrappers are esbuild's answer to a cycle, and a cycle would make a module's top level
     // run at first import rather than where the bundle places it.

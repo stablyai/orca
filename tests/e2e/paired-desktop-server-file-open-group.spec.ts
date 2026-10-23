@@ -9,14 +9,11 @@
  */
 import { existsSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import { pairedRuntimeConnectionFromOffer } from '../../src/shared/paired-runtime-connection'
-import { decodePairingOffer } from '../../src/shared/pairing'
-import { subscribeRemoteRuntimeRequest } from '../../src/shared/remote-runtime-client'
 import { HOST_TERMINAL_SURFACE_SEPARATOR } from '../../src/shared/terminal-surface-id'
 import { LAYOUT_INTENTS_RUNTIME_CAPABILITY } from '../../src/shared/workspace-layout/layout-intents-capability'
 import type { PublishedWorkspaceLayout } from '../../src/shared/workspace-layout/workspace-layout-published'
-import { readWorkspaceLayoutStreamFrame } from '../../src/shared/workspace-layout/workspace-layout-stream-frames'
 import { expect, test } from './helpers/orca-app'
+import { readServerLayout } from './helpers/paired-desktop-server-layout'
 import {
   launchHeadlessPairedRuntimeHost,
   type HeadlessPairedRuntimeHost
@@ -29,38 +26,6 @@ import {
 const LAYOUT_OWNER_BUILD = existsSync(
   path.join(process.cwd(), 'out', 'main', 'ORCA_LAYOUT_OWNER_MAIN')
 )
-
-/** The server's own layout of the workspace: the first snapshot of a stream of the test's own. */
-async function readServerLayout(
-  host: HeadlessPairedRuntimeHost,
-  worktreeId: string
-): Promise<PublishedWorkspaceLayout | null> {
-  let resolveSnapshot: (value: unknown) => void = () => {}
-  const snapshot = new Promise<unknown>((resolve) => {
-    resolveSnapshot = resolve
-  })
-  const subscription = await subscribeRemoteRuntimeRequest<unknown>(
-    pairedRuntimeConnectionFromOffer(decodePairingOffer(host.offer.pairingUrl)),
-    'layout.subscribe',
-    { workspaces: [worktreeId] },
-    30_000,
-    {
-      onResponse: (response) => resolveSnapshot(response.ok ? response.result : null),
-      onError: () => resolveSnapshot(null),
-      onClose: () => resolveSnapshot(null)
-    }
-  )
-  try {
-    const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 10_000))
-    const frame = readWorkspaceLayoutStreamFrame(await Promise.race([snapshot, timeout]))
-    if (frame?.type !== 'snapshot') {
-      return null
-    }
-    return frame.workspaces.find((entry) => entry.key === worktreeId)?.layout ?? null
-  } finally {
-    subscription.close()
-  }
-}
 
 function groupOfTab(layout: PublishedWorkspaceLayout | null, tabId: string): string | null {
   return layout?.groups.find((group) => group.tabIds.includes(tabId))?.id ?? null

@@ -115,6 +115,7 @@ vi.mock('@/lib/ephemeral-vm-worktree-creation', async (importOriginal) => ({
 }))
 
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { ensureWorktreeHasInitialTerminal } from '@/lib/worktree-initial-terminal-seeding'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import { queueWorkspaceActivationTerminalFocus } from '@/lib/workspace-activation-terminal-focus'
 import { runBackgroundWorktreeCreation } from './worktree-creation-flow'
@@ -204,6 +205,38 @@ describe('a creation that finishes after the user moved on (#9944)', () => {
       sidebarRevealBehavior: 'auto',
       navigationIntent: 'user-open'
     })
+  })
+
+  it('names the server a create went to when it activates or seeds the new workspace (L277)', async () => {
+    const watching = await submitCreate(
+      makeCreateResult(),
+      makeRequest({ executionHostId: 'runtime:remote-a' })
+    )
+    watching()
+    await vi.waitFor(() => expect(store.removePendingWorktreeCreation).toHaveBeenCalled())
+    expect(activateAndRevealWorktree).toHaveBeenCalledWith(
+      'wt-1',
+      expect.objectContaining({ executionHostId: 'runtime:remote-a' })
+    )
+
+    vi.clearAllMocks()
+    store.pendingWorktreeCreations = {}
+    const away = await submitCreate(
+      makeCreateResult(),
+      makeRequest({ executionHostId: 'runtime:remote-a' })
+    )
+    selectWorkspace('wt-other')
+    away()
+    await vi.waitFor(() => expect(store.removePendingWorktreeCreation).toHaveBeenCalled())
+    expect(ensureWorktreeHasInitialTerminal).toHaveBeenCalledWith(
+      store,
+      'wt-1',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      expect.objectContaining({ executionHostId: 'runtime:remote-a' })
+    )
   })
 
   it('toasts when the user left for another app view', async () => {

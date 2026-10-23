@@ -169,7 +169,7 @@ describe('WorkspaceLifecycleQueue', () => {
     }
     // The requester gets the unconfirmed reply (today's toast); the workspace stays as observed.
     expect(await queue.submit(KEY, sleep)).toEqual({ postStopVerified: false })
-    expect(queue.isPaused(KEY)).toBe(true)
+    expect(queue.pausedKeys().includes(KEY)).toBe(true)
     expect(queue.hints()).toEqual({ [KEY]: { kind: 'sleep', queuedBehind: 0, paused: true } })
 
     // A command issued while paused waits behind the pause; it is neither refused nor run.
@@ -194,7 +194,7 @@ describe('WorkspaceLifecycleQueue', () => {
     retry()
     expect(await waking).toBe('woken')
     expect(log).toEqual(['sleep', 'observe', 'observe', 'observe'])
-    expect(queue.isPaused(KEY)).toBe(false)
+    expect(queue.pausedKeys().includes(KEY)).toBe(false)
     expect(queue.hints()).toEqual({})
   })
 
@@ -219,7 +219,7 @@ describe('WorkspaceLifecycleQueue', () => {
     reachable = true
     expect(await queue.submit(KEY, sleep)).toBe(true)
     expect(sleeps).toBe(2)
-    expect(queue.isPaused(KEY)).toBe(false)
+    expect(queue.pausedKeys().includes(KEY)).toBe(false)
   })
 
   it('pauses on lost contact mid-run, but not on a definite failure', async () => {
@@ -232,9 +232,9 @@ describe('WorkspaceLifecycleQueue', () => {
       lostContact: (error) => error instanceof Error && error.message === 'lost'
     })
     await expect(queue.submit(KEY, lost('refused'))).rejects.toThrow('refused')
-    expect(queue.isPaused(KEY)).toBe(false)
+    expect(queue.pausedKeys().includes(KEY)).toBe(false)
     await expect(queue.submit(KEY, lost('lost'))).rejects.toThrow('lost')
-    expect(queue.isPaused(KEY)).toBe(true)
+    expect(queue.pausedKeys().includes(KEY)).toBe(true)
   })
 
   it('acknowledges a delete issued while paused and runs it once the owner answers', async () => {
@@ -265,7 +265,7 @@ describe('WorkspaceLifecycleQueue', () => {
     reachable = true
     retry()
     expect(await deleting).toBe('deleted')
-    expect(queue.isPaused(KEY)).toBe(false)
+    expect(queue.pausedKeys().includes(KEY)).toBe(false)
   })
 
   it('runs a forced delete past the pause at once, in place of an unforced one waiting', async () => {
@@ -294,7 +294,7 @@ describe('WorkspaceLifecycleQueue', () => {
     await expect(waiting).rejects.toThrow(WORKSPACE_DELETED_ERROR)
     expect(await forced).toBe('deleted')
     expect(log).toEqual(['forced'])
-    expect(queue.isPaused(KEY)).toBe(false)
+    expect(queue.pausedKeys().includes(KEY)).toBe(false)
   })
 
   it('starts commands in arrival order even when an earlier one is still looking up its workspace', async () => {

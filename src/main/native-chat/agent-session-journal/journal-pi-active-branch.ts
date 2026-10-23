@@ -164,17 +164,9 @@ export function createPiTranscriptCollector<T>(
           }
           processedRows += 1
           processedBytes += Buffer.byteLength(row.raw_line, 'utf8')
-          const record = parseJsonObject(row.raw_line)
-          if (record) {
-            const message =
-              record.type === 'compaction' || record.type === 'branch_summary'
-                ? piSummaryMessage(record, row.fallback_id)
-                : asRecord(record.message)?.role === 'system'
-                  ? null
-                  : decodeOmpTranscriptLine(row.raw_line, row.fallback_id)
-            if (message) {
-              keep(toItem(message, identify(row.raw_line, row.line_index)))
-            }
+          const message = decodePiSessionEntryLine(row.raw_line, row.fallback_id)
+          if (message) {
+            keep(toItem(message, identify(row.raw_line, row.line_index)))
           }
           if (
             processedBytes >= 1024 * 1024 ||
@@ -209,6 +201,24 @@ export function createPiTranscriptCollector<T>(
       closePiImportDatabase(db)
     }
   }
+}
+
+/** One saved Pi entry as a chat shows it: summaries for compaction and abandoned branches, nothing
+ *  for a system prompt, else the decoder Pi shares with omp. */
+export function decodePiSessionEntryLine(
+  line: string,
+  fallbackId: string
+): NativeChatMessage | null {
+  const record = parseJsonObject(line)
+  if (!record) {
+    return null
+  }
+  if (record.type === 'compaction' || record.type === 'branch_summary') {
+    return piSummaryMessage(record, fallbackId)
+  }
+  return asRecord(record.message)?.role === 'system'
+    ? null
+    : decodeOmpTranscriptLine(line, fallbackId)
 }
 
 function piSummaryMessage(

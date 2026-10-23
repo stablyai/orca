@@ -2,6 +2,7 @@
 // from the store's own view, without reading the window's session back, and leaves the store as
 // the full build does (the apply check, installed below).
 
+import { NO_HELD_TABS } from '@/store/workspace-layout-frame-held-tabs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { applyLayoutCommand } from '../../../shared/workspace-layout/workspace-layout-commands'
@@ -229,6 +230,7 @@ describe('the apply check on a flush that built one workspace in full', () => {
         fullBuilt: ['repo-other::/elsewhere'],
         workspaceBuilt: [GIT_KEY],
         rowFieldsTaken: new Map(),
+        held: NO_HELD_TABS,
         selectTakenMovedTabs: (state) => state
       })
     // Precondition: the store as booted is what the full build shows.
@@ -262,6 +264,7 @@ describe('the apply check on a flush that built one workspace in full', () => {
         fullBuilt: ['repo-other::/elsewhere'],
         workspaceBuilt: [GIT_KEY],
         rowFieldsTaken: new Map(),
+        held: NO_HELD_TABS,
         selectTakenMovedTabs: (state) => withMovedTabsSelected(state, [moved])
       })
     // Precondition: the flush's selection changes what the workspace shows.

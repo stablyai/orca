@@ -86,7 +86,7 @@ describe('resumeSleepingAgentSessionsForWorktree — SSH panes and stale worktre
   })
 
   it('resumes a leaf whose ssh pty is gone while its target is connected', () => {
-    const record = makeRecord({ origin: 'worktree-sleep' })
+    const record = makeRecord({ origin: 'quit' })
     setStoreState({
       activeWorktreeId: 'wt-other',
       tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-1', 'wt-1')] },

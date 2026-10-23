@@ -22,9 +22,16 @@ import {
   getStructuredAgentSessionLaunchOwner,
   getStructuredLaunchStateBySessionId
 } from './structured-agent-session-launch-registry'
-import { structuredAgentSessionFocusOwner } from '@/runtime/structured-agent-session-owner'
+import {
+  structuredAgentSessionFocusOwner,
+  structuredAgentSessionTargetForHost
+} from '@/runtime/structured-agent-session-owner'
+import { holdFrameDrawnProvisionalChatTab } from './frame-drawn-chat-tab-placement'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import { recordOpenedAgentSessionTabInLayoutOwner } from '@/runtime/agent-session-tab-layout-owner'
+import {
+  openAgentSessionTabThroughLayoutOwner,
+  type OpenedAgentSessionTab
+} from './structured-agent-session-tab-open-through-layout-owner'
 import {
   clearWebSessionFocusIntentIfMatches,
   peekWebSessionFocusIntent,
@@ -147,7 +154,7 @@ export function openStructuredAgentSessionProvisionalTab(args: {
   /** The tab the chat opens right after, in that tab's group. */
   afterTabId?: string
   activate?: boolean
-}): Tab {
+}): OpenedAgentSessionTab {
   const state = useAppStore.getState()
   const existing = findStructuredLaunchTab(args)
   if (existing) {
@@ -165,26 +172,57 @@ export function openStructuredAgentSessionProvisionalTab(args: {
   const group = state.groupsByWorktree?.[args.worktreeId]?.find((entry) =>
     entry.tabOrder.includes(tabId)
   )
-  const tab = state.createUnifiedTab(args.worktreeId, 'agent-session', {
-    id: tabId,
-    entityId: args.sessionId,
-    executionHostId: args.executionHostId,
-    agentSessionAgent: args.agent,
-    label: defaultAgentChatLabel(args.agent),
-    targetGroupId:
-      group?.id ??
-      (address?.worktreeId === args.worktreeId ? address.targetGroupId : args.targetGroupId),
-    ...(args.afterTabId ? { afterTabId: args.afterTabId } : {}),
-    activate: args.activate !== false
-  })
-  // Switch point: main records the chat tab the window just drew.
-  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-    recordOpenedAgentSessionTabInLayoutOwner(useAppStore.getState(), tab)
+  const targetGroupId =
+    group?.id ??
+    (address?.worktreeId === args.worktreeId ? address.targetGroupId : args.targetGroupId)
+  const drawHere = (): Tab => {
+    const tab = state.createUnifiedTab(args.worktreeId, 'agent-session', {
+      id: tabId,
+      entityId: args.sessionId,
+      executionHostId: args.executionHostId,
+      agentSessionAgent: args.agent,
+      label: defaultAgentChatLabel(args.agent),
+      targetGroupId,
+      ...(args.afterTabId ? { afterTabId: args.afterTabId } : {}),
+      activate: args.activate !== false
+    })
+    const target = structuredAgentSessionTargetForHost(args.executionHostId)
+    holdFrameDrawnProvisionalChatTab(target, args.worktreeId, tab.id)
+    if (args.activate !== false) {
+      state.setActiveTabType('agent-session', args.worktreeId)
+    }
+    return tab
   }
-  if (args.activate !== false) {
-    state.setActiveTabType('agent-session', args.worktreeId)
+  // Switch point: main opens the chat's tab and its frame draws it.
+  const sent = ORCA_LAYOUT_OWNER_IS_MAIN
+    ? openAgentSessionTabThroughLayoutOwner({
+        worktreeId: args.worktreeId,
+        executionHostId: args.executionHostId,
+        sessionId: args.sessionId,
+        agent: args.agent,
+        ...(targetGroupId ? { targetGroupId } : {}),
+        // A reserved slot names where the chat goes: after the tab before it.
+        ...(args.afterTabId
+          ? { afterTabId: args.afterTabId }
+          : slotAnchor(address, args.worktreeId)),
+        activate: args.activate !== false,
+        drawHere
+      })
+    : null
+  return sent ?? drawHere()
+}
+
+/** The last tab still before a reserved chat slot, which main places the chat after. */
+function slotAnchor(
+  address: StructuredLaunchSurfaceAddress | undefined,
+  worktreeId: string
+): { afterTabId?: string } {
+  if (address?.worktreeId !== worktreeId) {
+    return {}
   }
-  return tab
+  const tabs = useAppStore.getState().unifiedTabsByWorktree[worktreeId] ?? []
+  const afterTabId = address.precedingTabIds.findLast((id) => tabs.some((tab) => tab.id === id))
+  return afterTabId ? { afterTabId } : {}
 }
 
 export function materializeStructuredLaunchSurface(launch: LaunchSurface, activate?: false): void {

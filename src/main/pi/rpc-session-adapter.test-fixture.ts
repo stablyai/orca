@@ -44,7 +44,10 @@ export class FakeConnection implements PiRpcConnection {
   private readonly exitListeners: (() => void)[] = []
   requestOverride?: (command: string) => Promise<unknown> | undefined
   abortRequest?: () => void
-  constructor(readonly handlers: JsonlRpcAgentConnectionOptions) {}
+  constructor(
+    readonly handlers: JsonlRpcAgentConnectionOptions,
+    private readonly reported: { thinkingLevel?: string } = {}
+  ) {}
   async request(command: string): Promise<unknown> {
     this.requests.push(command)
     const override = this.requestOverride?.(command)
@@ -52,7 +55,7 @@ export class FakeConnection implements PiRpcConnection {
       return override
     }
     if (command === 'get_state') {
-      return state
+      return { ...state, ...this.reported }
     }
     if (command === 'get_available_models') {
       return { models: [state.model] }
@@ -121,7 +124,8 @@ export function reportedEvent<T extends PiLifecycleEvent['type']>(
 
 export async function setup(
   options: Readonly<Record<string, string>> = {},
-  eventSink?: (sink: StructuredAgentSessionEventSink) => StructuredAgentSessionEventSink
+  eventSink?: (sink: StructuredAgentSessionEventSink) => StructuredAgentSessionEventSink,
+  reported?: ConstructorParameters<typeof FakeConnection>[1]
 ) {
   const rig = await openProviderTimelineRig({ agent: 'pi', sessionId })
   const connections: FakeConnection[] = []
@@ -152,7 +156,7 @@ export async function setup(
   }))
   const openConnection = vi.fn(
     (_launch: ProviderProcessLaunch, handlers: JsonlRpcAgentConnectionOptions) => {
-      const connection = new FakeConnection(handlers)
+      const connection = new FakeConnection(handlers, reported)
       connections.push(connection)
       return connection
     }

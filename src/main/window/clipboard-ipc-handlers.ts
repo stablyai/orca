@@ -39,7 +39,7 @@ import {
   scheduleLegacyRemoteClipboardFileCleanup
 } from './clipboard-remote-file-copy'
 import { saveClipboardImageBufferInRuntime } from './clipboard-runtime-image-upload'
-import { uploadPastedImageToAgentSessionAttachments } from '../ipc/agent-session-attachment-upload'
+import { uploadPasteToAgentSessionAttachments } from '../ipc/agent-session-attachment-upload'
 import { readWindowsClipboardImageFileAsPng } from './clipboard-windows-image-file'
 import { readClipboardImageSource } from './clipboard-image-source'
 import { readClipboardCopiedFilePaths } from './clipboard-copied-file-paths'
@@ -48,6 +48,7 @@ import { readClipboardNativeImage } from './clipboard-native-image'
 import { publishClipboardText } from './clipboard-text-publisher'
 import { isDashboardPopoutRenderer } from './dashboard-popout-window'
 import { restoreNativeChatPastes } from './native-chat-paste-files'
+import { savePastedTextAsFile, type SavePastedTextAsFileArgs } from './native-chat-pasted-text-file'
 import { agentSessionPastedImageName } from '../../shared/agent-session-attachments'
 import type { AgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store'
 
@@ -72,7 +73,7 @@ async function saveClipboardImageBufferForTarget(
   const runtimeEnvironmentId = args?.runtimeEnvironmentId?.trim()
   // A structured chat on a paired server keeps its pasted images in that server's store.
   if (runtimeEnvironmentId && args?.agentSessionAttachment) {
-    return uploadPastedImageToAgentSessionAttachments(
+    return uploadPasteToAgentSessionAttachments(
       args.agentSessionAttachment,
       runtimeEnvironmentId,
       app.getPath('userData'),
@@ -117,6 +118,7 @@ export function registerClipboardHandlers(
   ipcMain.removeHandler('clipboard:writeImage')
   ipcMain.removeHandler('clipboard:writeFile')
   ipcMain.removeHandler('clipboard:saveImageAsTempFile')
+  ipcMain.removeHandler('clipboard:savePastedTextAsFile')
   ipcMain.removeHandler('clipboard:readImageThumbnail')
   ipcMain.removeHandler('clipboard:hasImage')
   ipcMain.removeHandler('clipboard:readFilePaths')
@@ -188,6 +190,10 @@ export function registerClipboardHandlers(
       return saveClipboardImageBufferForTarget(image.toPNG(), args, handlerOptions)
     }
   )
+  ipcMain.handle('clipboard:savePastedTextAsFile', (event, args: SavePastedTextAsFileArgs) => {
+    assertTrustedClipboardSender(event)
+    return savePastedTextAsFile(args, handlerOptions.localChatAttachmentStore)
+  })
   // Why: copy the actual file to the OS clipboard so pasting in Finder/Explorer
   // drops the file itself, not its path as text.
   ipcMain.handle(
@@ -201,7 +207,7 @@ export function registerClipboardHandlers(
       if (request.connectionId) {
         throw new SshHostNotServedError(request.connectionId)
       }
-      const deps = makeClipboardFileDeps(async (path) => {
+      const resolveFilePath: ClipboardFileDeps['resolveFilePath'] = async (path) => {
         try {
           const authorizedPath = await resolveDesktopAuthorizedPath(path, store)
           await stat(authorizedPath)
@@ -212,8 +218,14 @@ export function registerClipboardHandlers(
           }
           return { ok: false, reason: isENOENT(error) ? 'not-found' : 'invalid-path' }
         }
+      }
+      return writeFileToClipboard(request.filePath, {
+        platform: process.platform,
+        desktop: process.env.XDG_CURRENT_DESKTOP,
+        resolveFilePath,
+        writeBuffer: (format, buffer) => clipboard.writeBuffer(format, buffer),
+        runProcess
       })
-      return writeFileToClipboard(request.filePath, deps)
     }
   )
   ipcMain.handle('clipboard:writeText', async (event, text: string) => {
@@ -292,18 +304,6 @@ function normalizeClipboardWriteFileRequest(args: unknown): ClipboardWriteFileRe
     return { filePath, connectionId }
   }
   return { filePath }
-}
-
-function makeClipboardFileDeps(
-  resolveFilePath: ClipboardFileDeps['resolveFilePath']
-): ClipboardFileDeps {
-  return {
-    platform: process.platform,
-    desktop: process.env.XDG_CURRENT_DESKTOP,
-    resolveFilePath,
-    writeBuffer: (format, buffer) => clipboard.writeBuffer(format, buffer),
-    runProcess
-  }
 }
 
 function assertTrustedClipboardSender(event: IpcMainInvokeEvent): void {

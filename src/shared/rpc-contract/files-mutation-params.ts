@@ -32,7 +32,8 @@ export const FileWrite = FileMutationOpen.extend({
 export const FileWriteIfUnchanged = FileWrite.extend({
   diskPrecondition: z.object({
     expectedSignature: z.string().min(1).max(64),
-    allowMissing: z.boolean().optional()
+    allowMissing: z.boolean().optional(),
+    requireLosslessUtf8: z.boolean().optional()
   })
 })
 

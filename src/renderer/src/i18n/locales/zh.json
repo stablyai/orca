@@ -24,7 +24,7 @@
   "settings": {
     "chat": {
       "permissionsTitle": "新聊天的权限",
-      "permissionsDescription": "仅适用于新聊天。在终端中打开的智能体使用设置 → 智能体 → 智能体权限。",
+      "permissionsDescription": "仅适用于新聊天。各智能体的默认设置位于设置 → 智能体。",
       "description": "选择聊天的外观和行为方式。",
       "names": {
         "title": "聊天名称",
@@ -206,6 +206,7 @@
       "savedEnvironment": "已保存的值 · 输入以替换",
       "newEnvironment": "值",
       "removeEnvironment": "删除",
+      "environmentUnclosedQuote": "请闭合引号以保存环境变量。",
       "loadingHost": "正在加载智能体设置…",
       "updateHost": "请更新此服务器以编辑其智能体启动设置。",
       "readFailed": "无法读取智能体设置。请检查主机连接并重试。",
@@ -7093,9 +7094,8 @@
           "ee110e1830": "没有默认的基本参考"
         },
         "BrowserDefaultZoomSetting": {
-          "2622126877": "缩放级别应用于新打开的浏览器选项卡。",
-          "bbeec087d3": "应用于新打开的浏览器选项卡。",
-          "265597101f": "默认缩放"
+          "265597101f": "默认缩放",
+          "siteDefault": "未单独设置缩放的网站使用的缩放级别。"
         },
         "BrowserHomePageSetting": {
           "d4ddcd0056": "保存",
@@ -7626,7 +7626,7 @@
           "1f32ba27a6": "自定义",
           "a182c5125e": "git用户名",
           "sourceControlGroupOrderTitle": "源代码管理分组顺序",
-          "sourceControlGroupOrderDescription": "选择在源代码管理中优先显示“更改”、“已暂存更改”还是“未跟踪文件”。",
+          "sourceControlGroupOrderDescription": "选择在源代码管理中优先显示“已暂存更改”还是“更改”。",
           "changesFirst": "更改优先",
           "stagedFirst": "已暂存优先",
           "untrackedFirst": "未跟踪优先",
@@ -10139,7 +10139,7 @@
             "5ecd91c5ef": "创建工作树时添加到分支名称的前缀。",
             "68bd65fdb8": "分支前缀",
             "sourceControlGroupOrderTitle": "源代码管理分组顺序",
-            "sourceControlGroupOrderDescription": "选择在源代码管理中优先显示“更改”、“已暂存更改”还是“未跟踪文件”。",
+            "sourceControlGroupOrderDescription": "选择在源代码管理中优先显示“已暂存更改”还是“更改”。",
             "groupOrder": "分组顺序",
             "changesFirst": "更改优先",
             "stagedFirst": "已暂存优先",
@@ -12684,7 +12684,7 @@
           "reassurance": "在各个主机上运行，通过你自己的 SSH 连接访问。你的代码和文件留在原处。只有 Orca 的项目、标签页和终端列表会移到该主机。"
         },
         "sshHostServer": {
-          "sourceChanged": "较旧版本的 Orca 更改了此主机的项目。要重新连接，请将这些更改迁移到此主机上的 Orca 服务器，或保留服务器版本。",
+          "sourceChanged": "此计算机上有此主机的 Orca 服务器尚未包含的项目或文件夹，通常是由较旧版本的 Orca 添加的。要重新连接，请将它们迁移到此主机上的 Orca 服务器，或保留服务器版本。",
           "deploying": "正在 {{host}} 上设置 Orca…",
           "converting": "正在迁移到 {{host}} 上的 Orca…",
           "connecting": "正在连接到 {{host}} 上的 Orca…",
@@ -12856,7 +12856,7 @@
         "SshRestoreRemovedHosts": {
           "title": "恢复已移除的主机？",
           "description": "你在 Orca 中移除的 ~/.ssh/config 主机将重新出现在设置和所有主机选择器中。",
-          "none": "没有从 ~/.ssh/config 移除的主机。",
+          "none": "没有在 Orca 中移除且可恢复的 ~/.ssh/config 主机。",
           "confirm": "恢复"
         },
         "SshTargetList": {
@@ -13241,9 +13241,9 @@
             "dcc294f28d": "（结果被截断）"
           },
           "SearchFilters": {
-            "01e4671ccf": "要排除的文件（例如 *.min.js、dist/**）",
+            "01e4671ccf": "例如 *.min.js、dist/**",
             "0a6412a895": "要排除的文件",
-            "8a77efcbd1": "要包含的文件（例如 *.ts、src/**）",
+            "8a77efcbd1": "例如 *.ts、src/**",
             "a69ee1bd0e": "要包含的文件"
           },
           "SearchHeader": {
@@ -14489,13 +14489,31 @@
             "sourceActionsUnavailable": "转录来源不可用。"
           },
           "AiVaultScanProgressStrip": {
+            "agentChecked": "{{agent}}：已检查 {{settled}} / {{total}} 个历史记录候选项",
             "fileCount_one": "{{value0}} 个文件",
             "fileCount_other": "{{value0}} 个文件",
             "databaseCount_one": "{{value0}} 个数据库",
             "databaseCount_other": "{{value0}} 个数据库",
             "scanning": "正在扫描 {{value0}}",
-            "reading": "正在读取 {{value0}} 个文件",
+            "checking": "正在检查 {{value0}}",
             "scanned": "已扫描 {{value0}}"
+          },
+          "run": {
+            "source": {
+              "control": {
+                "agent": {
+                  "action": {
+                    "start": {
+                      "git": {
+                        "operation": {
+                          "running": "请等待正在运行的 Git 操作完成。"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       },
@@ -16294,6 +16312,9 @@
             }
           }
         },
+        "staleViewEdit": {
+          "rejected": "文件已在另一个视图中更改，因此你在此视图中最近输入的内容已被丢弃。"
+        },
         "richMarkdownLargeTextPaste": {
           "tooLarge": "粘贴内容过大。",
           "stopped": "大浆糊还没完成就停了。",
@@ -16308,11 +16329,11 @@
           "copy": "复制作业"
         },
         "ExternalFileChangeBanner": {
-          "7c41e90d12": "This file changed on disk while you have unsaved edits. Overwrite replaces the newer disk content.",
+          "7c41e90d12": "当你有未保存的编辑时，磁盘上的文件发生了更改。覆盖将替换磁盘上较新的内容。",
           "3fa2b8d417": "从磁盘重新加载",
           "a95d02c644": "保留我的编辑",
-          "overwrite": "Overwrite",
-          "keepHint": "Keeps your version. Your next save replaces the version on disk.",
+          "overwrite": "覆盖",
+          "keepHint": "保留你的版本。下次保存时将替换磁盘上的版本。",
           "5c02de9b31": "已从磁盘重新加载",
           "d1e830fa22": "撤销",
           "90b2ce7d43": "比较"
@@ -16353,10 +16374,13 @@
               }
             },
             "stale": {
-              "notice": "This file changed on disk since your edits. Use the banner to compare, reload, or overwrite."
+              "notice": "自你编辑以来，磁盘上的文件发生了更改。请使用横幅进行比较、重新加载或覆盖。"
             },
             "sectionStale": {
-              "notice": "This file changed on disk since this section loaded."
+              "notice": "此部分加载后，磁盘上的文件发生了更改。"
+            },
+            "notUtf8": {
+              "notice": "由于 {{name}} 不是 UTF-8 文本，已暂停自动保存。请手动保存以将其转换为 UTF-8。"
             }
           }
         },
@@ -16597,16 +16621,16 @@
                 "addQuickCommand": "添加快捷命令",
                 "newQuickCommand": "新的快捷命令",
                 "splitChatRight": "拆分聊天权限",
-                "moveChatRight": "向右移动聊天",
+                "newChatRight": "在右侧新建聊天",
                 "chatPaneRight": "聊天窗格右侧",
                 "splitChatDown": "拆分聊天",
-                "moveChatDown": "下移聊天",
+                "newChatBelow": "在下方新建聊天",
                 "chatPaneBelow": "下面的聊天窗格"
               },
               "splitChatRight": "右侧拆分聊天",
-              "splitChatRightDescription": "在右侧的拆分窗格中打开活动聊天。",
+              "splitChatRightDescription": "在右侧的拆分窗格中打开新聊天。",
               "splitChatDown": "拆分聊天",
-              "splitChatDownDescription": "在下面的拆分窗格中打开活动聊天。"
+              "splitChatDownDescription": "在下面的拆分窗格中打开新聊天。"
             }
           },
           "palette": {
@@ -16663,7 +16687,6 @@
             "95af781091": "向智能体发送反馈",
             "ac39b9366b": "发送",
             "a3508d7e6e": "{{value0}} 注释{{value1}} 准备就绪。选择另一个元素或复制所有反馈。",
-            "f796c774a4": "在上面输入 URL 即可开始浏览。",
             "366bf5d62c": "新标签",
             "1c78adc73d": "在外部打开",
             "da68d35f7b": "在默认浏览器中打开失败页面",
@@ -16677,7 +16700,6 @@
             "ec75d0c412": "打开浏览器开发工具",
             "fc9be38f6f": "注释页面元素",
             "fdfc7fe0ef": "抓取页面元素",
-            "a8f37f70c3": "检查页面",
             "1b179ab561": "复制页面网址",
             "f7ab83f7ed": "在默认浏览器中打开页面",
             "0e080d820e": "重新加载",
@@ -16740,7 +16762,21 @@
             "09a9489aa5": "显示",
             "2a4c4b8e1f": "复制",
             "b71dc3d930": "重新连接",
-            "fileUrlUnsupported": "此浏览器选项卡无法打开本地文件。对文件使用“打开侧面预览”。"
+            "fileUrlUnsupported": "此浏览器选项卡无法打开本地文件。对文件使用“打开侧面预览”。",
+            "addToDictionary": "添加到词典",
+            "undo": "撤销",
+            "redo": "重做",
+            "cut": "剪切",
+            "paste": "粘贴",
+            "pasteAndMatchStyle": "粘贴并匹配样式",
+            "pasteAsPlainText": "粘贴为纯文本",
+            "selectAll": "全选",
+            "openImageInNewTab": "在新标签页中打开图片",
+            "saveImage": "保存图片",
+            "copyImage": "复制图片",
+            "copyImageAddress": "复制图片地址",
+            "searchSelection": "使用 {{value0}} 搜索“{{value1}}”",
+            "inspect": "检查"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "取消",
@@ -16765,7 +16801,16 @@
             "bf648471c5": "创建中…",
             "53bbe3dab4": "已从文件导入 {{value0}} 个 Cookie。",
             "c5f0e4d3b2a1": "已从 {{value1}} ({{value2}}) 导入 {{value0}} 个 Cookie。",
-            "d6a1f5e4c3b2": "已从 {{value1}} 导入 {{value0}} 个 Cookie。"
+            "d6a1f5e4c3b2": "已从 {{value1}} 导入 {{value0}} 个 Cookie。",
+            "zoom": "缩放",
+            "zoomOut": "缩小",
+            "zoomIn": "放大",
+            "resetZoom": "重置缩放",
+            "appearance": "外观",
+            "appearanceMatchOrca": "与 Orca 一致",
+            "appearanceLight": "浅色",
+            "appearanceDark": "深色",
+            "zoomPercent": "缩放 {{value0}}%"
           },
           "GrabConfirmationSheet": {
             "314a0aaa5b": "附加到 AI",
@@ -18238,6 +18283,21 @@
         "copyFailed": "无法复制链接。",
         "signingIn": "正在登录…",
         "cancel": "取消"
+      },
+      "plainSshTerminal": {
+        "open": "打开普通 SSH 终端",
+        "unmanaged": "普通 SSH — 非托管。这不是 Orca 工作区：此处的智能体和标签页不会被跟踪，且此终端不会恢复。关闭它会结束 SSH 会话。",
+        "ended": "ssh 已以代码 {{code}} 退出。阅读完毕后请关闭此窗口。",
+        "title": "普通 SSH · {{host}}",
+        "minimize": "最小化",
+        "close": "关闭并结束会话",
+        "unknownTarget": "此 SSH 主机已不再保存在 Orca 中。",
+        "notBlocked": "Orca 现在可以再次连接到此主机，请改用其终端。仅在 Orca 无法在该主机上完成设置时使用普通 SSH。",
+        "alreadyOpen": "另一个 Orca 窗口已打开到此主机的普通 SSH 终端。",
+        "endedBySignal": "ssh 已停止（信号 {{signal}}）。阅读完毕后请关闭此窗口。",
+        "cancelled": "此普通 SSH 终端在启动前已关闭。",
+        "terminalUnavailable": "Orca 无法在此处打开终端。",
+        "openHint": "在 Orca 无法在该主机上完成设置时，仍可让你继续在主机上工作。"
       }
     },
     "i18n": {
@@ -18340,9 +18400,9 @@
         "couldNotStart": "{{agent}} 无法启动。",
         "editSavedArguments": "请在设置 > 智能体 > 参数中编辑。",
         "couldNotRestart": "{{agent}} 无法重新启动。",
+        "cliTooOld": "{{agent}} {{installedVersion}} 版本过旧，无法用于聊天。请更新到 {{minimumVersion}} 或更高版本。",
         "startTimedOut": "{{agent}} 启动时间过长（{{seconds}} 秒后 {{method}} 仍无响应）。",
         "startTimedOutKeepsHappening": "如果此问题持续出现，运行此聊天的计算机可能负载过重。",
-        "codexCliTooOld": "Codex {{installedVersion}} 版本过旧，无法用于聊天。请更新到 {{minimumVersion}} 或更高版本。",
         "notSignedIn": "{{agent}} 尚未登录。",
         "claudeSystemNotSignedIn": "Claude 尚未登录。请运行 `{{loginCommand}}`，或在 Claude 账户设置中选择账户。",
         "claudeManagedNotSignedIn": "此 Claude 账户尚未登录。请在 Claude 账户设置中重新登录。",
@@ -18487,6 +18547,8 @@
         "settleEarlierMessage": "请等待之前的消息送达，或重试该消息。",
         "queueTooLarge": "队列中等待的文本过多。",
         "shrinkQueue": "请删除一条排队的消息，或等待其送达，然后重试。",
+        "messageTooLarge": "超过了单条消息 256 KB 的上限。",
+        "shortenMessage": "请缩短或拆分后再发送。",
         "optionRejected": "智能体未接受此设置。",
         "goalsUnsupported": "此智能体不支持目标。",
         "agentRefused": "智能体拒绝了此请求。",
@@ -18529,6 +18591,11 @@
         "uploadingFile": "正在上传 {{name}}…",
         "removeAttachment": "移除附件",
         "pastedImageLabel": "粘贴的图片",
+        "pastedTextLabel": "粘贴的文本",
+        "pasteNotSavedLabel": "粘贴未保存",
+        "pasteNotSaved": "此粘贴内容未保存。请重新粘贴或将其移除。",
+        "pastedTextTooLarge": "此次粘贴会使消息超过单条消息 256 KB 的上限。请缩短后再粘贴。",
+        "imageUnavailable": "预览不可用",
         "draftNotSaved": "此草稿尚未保存成功。Orca 会继续尝试。",
         "imageNotBroughtBack": "无法随此草稿恢复 {{name}}。请重新附加或将其移除。",
         "pastedImageNotBroughtBack": "无法随此草稿恢复这张粘贴的图片。请将其移除，如仍需要请重新粘贴。",
@@ -18798,8 +18865,14 @@
         "reason": "原因",
         "needsAccess": "需要访问的路径",
         "plan": {
-          "file": "计划文件"
+          "file": "计划文件",
+          "reviewTitle": "审阅建议的计划",
+          "refineHint": "优化计划会关闭审阅，以便你发送要更改的内容。"
         }
+      },
+      "imagePreview": {
+        "fileActions": "文件操作",
+        "linkActions": "链接操作"
       },
       "launchPromptNotDelivered": "未送达 — 请检查终端",
       "taskList": {
@@ -19030,7 +19103,7 @@
       "thought": "已思考",
       "thoughtForDuration": "思考了 {{duration}}",
       "structuredSessionHostDeclined": "已在终端中打开 {{value0}}",
-      "structuredSessionHostDeclinedDescription": "此服务器无法在此工作区中运行 {{value0}} 聊天。",
+      "structuredSessionHostDeclinedDescription": "此工作区无法运行 {{value0}} 聊天。",
       "structuredSessionHostUnreachable": "无法连接到 {{value0}}",
       "structuredSessionHostUnreachableDescription": "Orca 未打开 {{value0}} 聊天。请检查与服务器的连接，然后重试。",
       "hostOutage": {
@@ -19374,7 +19447,11 @@
           "discarded_other": "{{count}} 个文件中未保存的编辑将被放弃：",
           "moreFiles": "及另外 {{value}} 个",
           "blocked_one": "请先保存或关闭 {{name}} 中 {{count}} 个未保存的文件",
-          "blocked_other": "请先保存或关闭 {{name}} 中 {{count}} 个未保存的文件"
+          "blocked_other": "请先保存或关闭 {{name}} 中 {{count}} 个未保存的文件",
+          "closedToast_one": "已关闭 {{workspace}} 中 {{count}} 个有未保存编辑的文件",
+          "closedToast_other": "已关闭 {{workspace}} 中 {{count}} 个有未保存编辑的文件",
+          "reopen": "重新打开",
+          "reopenFailed": "部分文件无法重新打开。请打开工作区，然后再次尝试“重新打开”。"
         }
       }
     },
@@ -19704,6 +19781,27 @@
     }
   },
   "browser": {
+    "newTab": {
+      "emptyHint": "在上方搜索或输入网址。你访问过的网站、此工作区中运行的开发服务器，以及它的 PR 和议题会显示在这里。",
+      "openServerFailed": "无法打开 {{address}}",
+      "removedFromHistory": "已从历史记录中移除“{{title}}”",
+      "removeSuggestion": "从历史记录中移除",
+      "state": {
+        "closed": "已关闭",
+        "draft": "草稿",
+        "merged": "已合并",
+        "open": "打开"
+      },
+      "suggested": "建议",
+      "thisWorkspace": "此工作区",
+      "undo": "撤销",
+      "checks": {
+        "failing": "检查失败",
+        "passing": "检查通过",
+        "pending": "检查待定"
+      },
+      "runningElsewhere": "{{count}} 个正在其他工作区中运行"
+    },
     "loadFailure": {
       "connectionNotSecure": "连接不安全",
       "cantReachHost": "无法访问 {{value0}}",
@@ -19964,8 +20062,12 @@
       "status": "PR #{{number}} 未链接"
     },
     "discard": {
+      "deleteUntrackedFileDescription": "这将永久删除此未跟踪文件。此操作无法撤销。",
+      "deleteUntrackedFilesDescription": "这将永久删除这 {{count}} 个未跟踪文件。此操作无法撤销。",
       "restoreStagedVersionDescription": "这将恢复最后一个暂存版本并放弃删除。此操作无法撤消。",
-      "unstagedChangesDescription": "这将恢复对此文件的未暂存更改。此操作无法撤消。"
+      "unstagedChangesDescription": "这将恢复对此文件的未暂存更改。此操作无法撤消。",
+      "unstagedSelectionIncludingUntrackedDescription": "这将还原未暂存的更改，并永久删除此选择中的任何未跟踪文件。此操作无法撤销。",
+      "unstagedFilesIncludingUntrackedDescription": "这将还原未暂存的更改，并永久删除这 {{count}} 个文件中的任何未跟踪文件。此操作无法撤销。"
     }
   },
   "rendererRecovery": {
@@ -20335,7 +20437,12 @@
     }
   },
   "fileSearch": {
-    "failed": "搜索失败。再试一次。"
+    "failed": "搜索失败。再试一次。",
+    "filters": {
+      "toggle": "切换搜索详情",
+      "active": "{{count}} 个已启用"
+    },
+    "noResults": "没有结果。请尝试其他搜索或调整筛选条件。"
   },
   "csv": {
     "detectingDelimiter": "正在检测分隔符…",
@@ -20631,5 +20738,84 @@
       "preparingLabel": "正在准备更新",
       "preparingAriaLabel": "正在准备更新。点击展开。"
     }
+  },
+  "onboarding": {
+    "language": {
+      "back": "语言",
+      "requestPrompt": "你希望 Orca 支持哪种语言？",
+      "requestSuccess": "语言请求已记录。你可以继续设置。",
+      "requestError": "无法记录你的请求。请重试。",
+      "retry": "重试",
+      "requestAction": "请求语言支持",
+      "title": "显示语言",
+      "device": "系统语言：{{language}}",
+      "unsupported": "系统语言：{{language}}。暂不支持此语言。",
+      "unknown": "无法检测系统语言。请在下方选择语言。",
+      "loadError": "无法加载此语言。请重试。",
+      "saveError": "无法保存你的语言偏好设置。请重试。",
+      "other": "其他语言…",
+      "settingsError": "无法加载你的设置。",
+      "loadingSettings": "正在加载设置…",
+      "loading": "正在加载语言…",
+      "saving": "正在保存语言…"
+    }
+  },
+  "resourceManager": {
+    "pty": {
+      "bound": "有标签页",
+      "unbound": "无标签页",
+      "unavailable": "不可用",
+      "ownerPresent": "存在",
+      "ownerAbsent": "不存在",
+      "ownerUnknown": "未知",
+      "sessionId": "Orca 会话 ID",
+      "incarnation": "实例编号",
+      "workspace": "工作区",
+      "cwd": "上次报告的 cwd",
+      "binding": "标签页",
+      "agentOwnership": "智能体所有权证据",
+      "observationTime": "观察时间",
+      "pid": "PID",
+      "idCopied": "已复制 Orca 会话 ID",
+      "copyFailed": "无法复制 Orca 会话 ID",
+      "detailsNamed": "{{terminal}} 的详情",
+      "goToTerminal": "转到终端",
+      "copyId": "复制 Orca 会话 ID",
+      "refreshBeforeEnd": "刷新 PTY 前无法结束。",
+      "endUnsupported": "无法结束此终端。其主机不支持所需的安全检查。请从其标签页或所在主机关闭它。",
+      "checkingTabs": "正在检查标签页…",
+      "endTitle": "结束 {{terminal}}？",
+      "endDescription": "这会结束终端及其子进程。未保存的工作可能会丢失。",
+      "lastProcess": "最后看到的进程：{{process}}",
+      "cancel": "取消",
+      "ending": "正在结束…",
+      "end": "结束终端",
+      "unassigned": "未分配",
+      "thisComputer": "此计算机",
+      "localOwnedCount_one": "此计算机上的 {{count}} 个 Orca PTY",
+      "localOwnedCount_other": "此计算机上的 {{count}} 个 Orca PTY",
+      "withoutTab": "{{count}} 个没有标签页",
+      "observedTime": "上次观察于 {{time}}",
+      "failed": "无法验证：无法刷新本地终端。正在显示上次观察到的终端。",
+      "retry": "重试",
+      "loading": "正在加载终端…",
+      "noLocalOrcaPtys": "没有本地 Orca PTY",
+      "openNamed": "打开 {{terminal}}",
+      "endNamed": "结束 {{terminal}}",
+      "endShort": "结束",
+      "endHint": "结束此终端及其子进程。",
+      "claimed": "智能体现在拥有此终端。请刷新后重试。",
+      "attached": "客户端现在已连接到此终端。请刷新后重试。",
+      "unverifiableEnd": "无法验证：主机无法确认结果。终端可能仍在运行。"
+    },
+    "resources": "资源",
+    "ptys": "PTY",
+    "localDaemonScope": "这会影响此计算机上的终端。",
+    "countUnavailable": "终端数量不可用",
+    "openToObserve": "打开“资源”以查看终端会话。",
+    "refresh": "刷新",
+    "restartLocal": "重启本地守护进程",
+    "killAllLocal": "结束所有本地会话",
+    "killFailed": "无法结束终端。将保留上次观察到的会话。"
   }
 }

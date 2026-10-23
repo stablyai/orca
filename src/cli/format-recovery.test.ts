@@ -217,6 +217,41 @@ describe('CLI error recovery', () => {
     expect(output).toContain('Fix the command flags or RPC params')
   })
 
+  it('tells an older server to reprovision when its computer sidecar is missing', () => {
+    // An older orcad answers with the generic provider steps, which never name the server install.
+    const error = new RuntimeRpcFailureError({
+      id: 'req_sidecar_exit',
+      ok: false,
+      error: {
+        code: 'accessibility_error',
+        message: 'computer sidecar exited with code 1',
+        data: {
+          nextSteps: [
+            'Run `orca computer capabilities --json` to confirm the provider is available before retrying.'
+          ]
+        }
+      },
+      _meta: { runtimeId: 'runtime_orcad' }
+    })
+
+    const output = formatCliError(error, { commandPath: ['computer', 'list-apps'] })
+    expect(output).toContain('update or reprovision the server')
+
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    reportCliError(error, true, { commandPath: ['computer', 'list-apps'] })
+    expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toMatchObject({
+      error: {
+        code: 'accessibility_error',
+        data: {
+          nextSteps: expect.arrayContaining([
+            expect.stringContaining('update or reprovision the server')
+          ])
+        }
+      }
+    })
+    log.mockRestore()
+  })
+
   it('does not replace mutation recovery with generic runtime startup advice', () => {
     const error = new RuntimeClientError(
       'runtime_unavailable',

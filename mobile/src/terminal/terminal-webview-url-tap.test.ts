@@ -157,6 +157,15 @@ describe('findUrlAtColumn', () => {
     expect(findUrlAtColumn(line, line.length - 1)).toBeNull()
   })
 
+  it('ends the tapped URL at CJK punctuation', () => {
+    const line = '投稿（https://github.com/stablyai/orca/pull/1078）。'
+
+    expect(findUrlAtColumn(line, line.indexOf('1078'))).toBe(
+      'https://github.com/stablyai/orca/pull/1078'
+    )
+    expect(findUrlAtColumn(line, line.indexOf('）'))).toBeNull()
+  })
+
   it('only matches http(s) schemes', () => {
     const line = 'ftp://example.com/file and file:///etc/hosts'
 

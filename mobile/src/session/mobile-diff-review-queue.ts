@@ -207,7 +207,8 @@ function statusEntryToQueueItem(
 
 function branchEntryToQueueItem(
   entry: MobileGitBranchChangeEntry,
-  input: BuildMobileDiffReviewQueueInput
+  input: BuildMobileDiffReviewQueueInput,
+  comments: readonly DiffComment[]
 ): MobileDiffReviewQueueItem {
   const scope: DiffReviewScope = 'branch'
   const key = createMobileDiffReviewFileKey(scope, 'branch', entry.path, entry.oldPath)
@@ -215,7 +216,7 @@ function branchEntryToQueueItem(
   const reviewFileState = input.reviewState.files[key]
   const counts = queueNoteCounts(
     { filePath: entry.path, oldPath: entry.oldPath, scope, diffIdentity },
-    input.comments
+    comments
   )
   return {
     key,
@@ -243,11 +244,21 @@ function branchEntryToQueueItem(
 export function buildMobileDiffReviewQueue(
   input: BuildMobileDiffReviewQueueInput
 ): MobileDiffReviewQueueItem[] {
+  const commentsByPath = new Map<string, DiffComment[]>()
+  for (const comment of input.comments) {
+    const comments = commentsByPath.get(comment.filePath) ?? []
+    comments.push(comment)
+    commentsByPath.set(comment.filePath, comments)
+  }
   const queue = [
     ...input.statusEntries
       .filter(isPlaceableStatusEntry)
-      .map((entry) => statusEntryToQueueItem(entry, input.comments, input.reviewState)),
-    ...input.branchEntries.map((entry) => branchEntryToQueueItem(entry, input))
+      .map((entry) =>
+        statusEntryToQueueItem(entry, commentsByPath.get(entry.path) ?? [], input.reviewState)
+      ),
+    ...input.branchEntries.map((entry) =>
+      branchEntryToQueueItem(entry, input, commentsByPath.get(entry.path) ?? [])
+    )
   ]
   if (queue.length > 1) {
     const collator = new Intl.Collator(undefined, { numeric: true })

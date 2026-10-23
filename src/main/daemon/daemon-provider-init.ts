@@ -38,7 +38,8 @@ import {
   DaemonSpawner,
   getDaemonPidPath,
   getDaemonSocketPath,
-  getDaemonTokenPath
+  getDaemonTokenPath,
+  type DaemonProcessHandle
 } from './daemon-spawner'
 import { tryInstallLegacyFallbackOnCurrentFailure } from './daemon-legacy-fallback-init'
 import { clearSeveredDaemon, installSeveredDaemonController } from './daemon-host-image-state'
@@ -46,6 +47,20 @@ import {
   createSeveredDaemonController,
   hasSeveredDaemonBeenReplaced
 } from './daemon-severed-restart'
+
+// Why the incarnation gate: a severed daemon passes health checks for hours, so only a
+// new daemon at the endpoint (after a crash respawn or restart) may take fresh terminals.
+function probeCurrentDaemonCanSpawn(
+  socketPath: string,
+  tokenPath: string,
+  runtimeDir: string,
+  quarantine: DaemonProcessHandle['quarantine']
+): () => Promise<boolean> {
+  return async () =>
+    (quarantine !== 'host-image-severed' ||
+      hasSeveredDaemonBeenReplaced(getDaemonPidPath(runtimeDir))) &&
+    (await checkDaemonHealth(socketPath, tokenPath)) === 'healthy'
+}
 
 // Why: daemon init runs concurrent with window load, so an in-process t timestamp (not harness stderr timing) measures cold-start.
 function logDaemonMilestone(event: string, details: Record<string, unknown> = {}): void {
@@ -95,7 +110,13 @@ export async function initDaemonPtyProvider(
         runtimeDir,
         packagedAppVersion: newSpawner.staleDaemonRecycleVersion,
         historyPath: getHistoryDir()
-      })
+      }),
+      probeCurrentDaemonSpawn: probeCurrentDaemonCanSpawn(
+        getDaemonSocketPath(runtimeDir),
+        getDaemonTokenPath(runtimeDir),
+        runtimeDir,
+        newSpawner.getHandle()?.quarantine
+      )
     })
     return
   }
@@ -159,7 +180,13 @@ export async function initDaemonPtyProvider(
       signal,
       runtimeDir,
       newSpawner,
-      newAdapter
+      newAdapter,
+      probeCurrentDaemonSpawn: probeCurrentDaemonCanSpawn(
+        info.socketPath,
+        info.tokenPath,
+        runtimeDir,
+        quarantine
+      )
     })
     return
   }
@@ -178,12 +205,12 @@ export async function initDaemonPtyProvider(
             current: newAdapter,
             legacy: legacyAdapters,
             fallback: getLocalPtyProvider(),
-            // Why the incarnation gate: a severed daemon passes health checks for hours, so only a
-            // new daemon at the endpoint (after a crash respawn or restart) may take fresh terminals.
-            probeCurrentDaemonSpawn: async () =>
-              (quarantine !== 'host-image-severed' ||
-                hasSeveredDaemonBeenReplaced(getDaemonPidPath(runtimeDir))) &&
-              (await checkDaemonHealth(info.socketPath, info.tokenPath)) === 'healthy'
+            probeCurrentDaemonSpawn: probeCurrentDaemonCanSpawn(
+              info.socketPath,
+              info.tokenPath,
+              runtimeDir,
+              quarantine
+            )
           })
         : legacyAdapters.length > 0 || isHoldingForNewerProtocolDaemon()
           ? new DaemonPtyRouter({

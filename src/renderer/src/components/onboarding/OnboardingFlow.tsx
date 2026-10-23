@@ -1,3 +1,4 @@
+import { OnboardingLanguageSwitcher } from './OnboardingLanguageSwitcher'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { isEditableTarget } from '@/lib/editable-target'
@@ -138,6 +139,7 @@ export default function OnboardingFlow({
     (currentStep.id === 'notifications'
       ? translate('components.onboarding.flow.actions.addFirstProject', 'Add your first project')
       : translate('components.onboarding.flow.actions.continue', 'Continue'))
+  const [languagePickerOpen, setLanguagePickerOpen] = useState(false)
   const [skipConfirmOpen, setSkipConfirmOpen] = useState(false)
   const skipConfirmAdvancedViaRef = useRef<'button' | 'keyboard'>('button')
   const { next: flowNext, dismissOnboarding: flowDismissOnboarding } = flow
@@ -146,13 +148,13 @@ export default function OnboardingFlow({
     (advancedVia: 'button' | 'keyboard') => {
       // Why: click-off / Escape dismissal stays available on every step,
       // including the final notifications step, so the modal never feels stuck.
-      if (busyLabel || skipConfirmOpen) {
+      if (busyLabel || skipConfirmOpen || languagePickerOpen) {
         return
       }
       skipConfirmAdvancedViaRef.current = advancedVia
       setSkipConfirmOpen(true)
     },
-    [busyLabel, skipConfirmOpen]
+    [busyLabel, skipConfirmOpen, languagePickerOpen]
   )
 
   const confirmSkipOnboarding = useCallback(() => {
@@ -165,6 +167,9 @@ export default function OnboardingFlow({
   // re-bind on every render of the parent (flow object identity changes).
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
+      if (languagePickerOpen || skipConfirmOpen) {
+        return
+      }
       // Why: don't hijack Enter / Cmd+Enter while the user is typing into the
       // clone-URL input or any other editable field on a step.
       if (isEditableTarget(event.target)) {
@@ -180,11 +185,11 @@ export default function OnboardingFlow({
     }
     addAppKeyListener('keydown', onKeyDown)
     return () => removeAppKeyListener('keydown', onKeyDown)
-  }, [flowNext])
+  }, [flowNext, languagePickerOpen, skipConfirmOpen])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape' || skipConfirmOpen) {
+      if (event.key !== 'Escape' || skipConfirmOpen || languagePickerOpen) {
         return
       }
       event.preventDefault()
@@ -192,7 +197,7 @@ export default function OnboardingFlow({
     }
     addAppKeyListener('keydown', onKeyDown)
     return () => removeAppKeyListener('keydown', onKeyDown)
-  }, [requestSkipConfirmation, skipConfirmOpen])
+  }, [requestSkipConfirmation, skipConfirmOpen, languagePickerOpen])
 
   return (
     <TooltipProvider delayDuration={0} skipDelayDuration={0}>
@@ -226,16 +231,22 @@ export default function OnboardingFlow({
           )}
         >
           <div className="relative flex h-full min-h-0 flex-col px-6 pb-6 pt-8 sm:px-8 sm:pb-8 sm:pt-9">
-            <div className="flex items-center gap-3 text-base font-semibold tracking-tight">
-              <img
-                src={logo}
-                alt=""
-                aria-hidden="true"
-                className="h-7 w-auto shrink-0 invert dark:invert-0"
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 text-base font-semibold tracking-tight">
+                <img
+                  src={logo}
+                  alt=""
+                  aria-hidden="true"
+                  className="h-7 w-auto shrink-0 invert dark:invert-0"
+                />
+                <span>
+                  {translate('auto.components.onboarding.OnboardingFlow.a249f81538', 'Orca')}
+                </span>
+              </div>
+              <OnboardingLanguageSwitcher
+                open={languagePickerOpen}
+                onOpenChange={setLanguagePickerOpen}
               />
-              <span>
-                {translate('auto.components.onboarding.OnboardingFlow.a249f81538', 'Orca')}
-              </span>
             </div>
 
             <div className="mt-10 flex items-center gap-2 transition-[margin-top] duration-[760ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none">

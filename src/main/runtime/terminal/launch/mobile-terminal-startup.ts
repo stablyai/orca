@@ -6,8 +6,7 @@ import {
   isResumableTuiAgent,
   normalizeAgentProviderSession,
   type AgentProviderSessionMetadata,
-  type SleepingAgentLaunchConfig,
-  type SleepingAgentSessionRecord
+  type SleepingAgentLaunchConfig
 } from '../../../../shared/agent-session-resume'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import {
@@ -30,6 +29,15 @@ export type MobileTerminalCommandOptions = {
   agentPrompt?: string
   launchConfig?: SleepingAgentLaunchConfig
   launchAgent?: TuiAgent
+}
+
+/** What a resume reads from a recorded session; a SleepingAgentSessionRecord is one. */
+export type ResumableAgentSessionSource = {
+  agent: TuiAgent
+  providerSession: AgentProviderSessionMetadata
+  /** The capture's connection; undefined when the caller compared hosts itself. */
+  connectionId?: string | null
+  launchConfig?: SleepingAgentLaunchConfig
 }
 
 export type MobileTerminalCommand = {
@@ -56,7 +64,7 @@ export abstract class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends
   /** The `--resume` launch for a pane's recorded agent session, as the host window's cold restore builds it. */
   protected resolveMobileSessionResumeCommand(
     workspace: TerminalWorkspaceLaunchScope,
-    record: SleepingAgentSessionRecord
+    record: ResumableAgentSessionSource
   ): MobileTerminalResumeCommand | null {
     const providerSession = normalizeAgentProviderSession(record.providerSession)
     if (!this.store || !providerSession || !isResumableTuiAgent(record.agent)) {

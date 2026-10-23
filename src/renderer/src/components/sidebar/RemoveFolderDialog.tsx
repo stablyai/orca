@@ -18,6 +18,7 @@ import {
 import { countOpenRepoTerminalTabs } from '@/store/repos/repo-removal'
 import { getRecipeVmSshTargetForHost } from '@/lib/recipe-vm-managed-host'
 import { RemovalUnsavedFilesNotice } from './RemovalUnsavedFilesNotice'
+import { confirmUnsavedDiscard } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
 import { projectRemovalTargets } from './removal-unsaved-files'
 import {
   selectDetectedWorktreesByRepo,
@@ -124,10 +125,14 @@ const RemoveFolderDialog = React.memo(function RemoveFolderDialog() {
   const handleConfirm = useCallback(() => {
     // Why: without the opener's host a bare id could remove another host's row (#13071).
     if (repoId && hostId) {
-      void removeProject(repoId, { hostId, errorFeedback: 'toast' })
+      void removeProject(repoId, {
+        hostId,
+        errorFeedback: 'toast',
+        confirmedDiscards: confirmUnsavedDiscard(useAppStore.getState, unsavedTargets)
+      })
     }
     closeModal()
-  }, [closeModal, hostId, removeProject, repoId])
+  }, [closeModal, hostId, removeProject, repoId, unsavedTargets])
 
   const handleOpenChange = useCallback(
     (open: boolean) => {

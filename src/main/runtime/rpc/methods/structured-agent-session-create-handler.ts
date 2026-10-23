@@ -118,6 +118,10 @@ export async function handleStructuredAgentSessionCreate(
     runtime: ctx.runtime,
     caller: callerFor(ctx),
     prepared,
-    activate: true
+    activate: true,
+    placedByWindow: ctx.caller?.kind === 'desktop',
+    ...('tabPlacement' in params && params.tabPlacement
+      ? { tabPlacement: params.tabPlacement }
+      : {})
   })
 }

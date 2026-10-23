@@ -84,6 +84,9 @@ export function useMobileTerminalPaste({
       } else {
         const image = await clipboard.readImage()
         if (!image) {
+          // Why: null is also iOS refusing the read ("Don't Allow Paste") or an image it cannot decode.
+          onError()
+          showToast("Couldn't read the clipboard", 1500)
           refreshCanPaste()
           return
         }
@@ -108,16 +111,23 @@ export function useMobileTerminalPaste({
       }
       // Why: paste lives in the accessory row and must not overtake pending IME text.
       const flushedPendingInput = await flushPendingLiveInputBeforeExternalSend(targetHandle)
-      if (!flushedPendingInput) {
+      const currentClient = clientRef.current
+      if (!currentClient || connStateRef.current !== 'connected') {
+        onError()
+        showToast('Paste failed (disconnected)', 1500)
         return
       }
-      const currentClient = clientRef.current
       if (
-        !currentClient ||
-        connStateRef.current !== 'connected' ||
         targetHandle !== activeHandleRef.current ||
         activeSessionTabTypeRef.current !== 'terminal'
       ) {
+        onError()
+        showToast('Paste canceled (terminal changed)', 1500)
+        return
+      }
+      if (!flushedPendingInput) {
+        onError()
+        showToast('Paste failed', 1500)
         return
       }
       const response = await terminalInputSend.request(currentClient, {

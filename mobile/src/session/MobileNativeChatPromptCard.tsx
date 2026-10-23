@@ -74,7 +74,8 @@ export function MobileNativeChatPromptCard({
           return accepted
         }}
         onCancel={async () => {
-          const accepted = (await onCancelAsk?.()) ?? false
+          // The agent is not waiting on this card, and Escape would interrupt its turn.
+          const accepted = ask.replyAsMessage ? true : ((await onCancelAsk?.()) ?? false)
           if (accepted) {
             onDismissAsk?.()
           }

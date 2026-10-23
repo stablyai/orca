@@ -1,6 +1,11 @@
 import { ipcRenderer } from 'electron'
 import type { BrowserViewportOverride } from '../../shared/browser-workspace-types'
 import type {
+  BrowserPageSiteDisplay,
+  BrowserSiteColorScheme
+} from '../../shared/browser-site-display'
+import type { BrowserPageZoomDirection } from '../../shared/browser-page-zoom'
+import type {
   BrowserWebAuthnAccountRequest,
   BrowserWebAuthnAccountResponse
 } from '../../shared/browser-webauthn-account'
@@ -68,12 +73,31 @@ export const browserGuestRegistrationAndDownloadsApi = {
   },
   respondPagePrompt: (response: BrowserPagePromptResponse): Promise<BrowserPagePromptResult> =>
     ipcRenderer.invoke('browser:respondPagePrompt', response),
-  openDevTools: (args: { browserPageId: string }): Promise<boolean> =>
-    ipcRenderer.invoke('browser:openDevTools', args),
+  openDevTools: (args: {
+    browserPageId: string
+    inspectAt?: { x: number; y: number }
+  }): Promise<boolean> => ipcRenderer.invoke('browser:openDevTools', args),
+  addWordToDictionary: (args: { browserPageId: string; word: string }): Promise<boolean> =>
+    ipcRenderer.invoke('browser:addWordToDictionary', args),
+  copyImageAt: (args: {
+    browserPageId: string
+    point: { x: number; y: number }
+  }): Promise<boolean> => ipcRenderer.invoke('browser:copyImageAt', args),
   setViewportOverride: (args: {
     browserPageId: string
     override: BrowserViewportOverride | null
   }): Promise<boolean> => ipcRenderer.invoke('browser:setViewportOverride', args),
+  getPageSiteDisplay: (args: { browserPageId: string }): Promise<BrowserPageSiteDisplay | null> =>
+    ipcRenderer.invoke('browser:getPageSiteDisplay', args),
+  zoomPage: (args: {
+    browserPageId: string
+    direction: BrowserPageZoomDirection
+  }): Promise<BrowserPageSiteDisplay | null> => ipcRenderer.invoke('browser:zoomPage', args),
+  setPageSiteColorScheme: (args: {
+    browserPageId: string
+    colorScheme: BrowserSiteColorScheme | null
+  }): Promise<BrowserPageSiteDisplay | null> =>
+    ipcRenderer.invoke('browser:setPageSiteColorScheme', args),
   reportViewportScrollState: (args: {
     browserPageId: string
     state: {

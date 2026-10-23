@@ -25,6 +25,7 @@ import type {
   AgentModelCatalogProbe,
   AgentModelCatalogSuccess
 } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
+import type { AgentModelCatalogLookup } from '../native-chat/agent-model-catalog/agent-model-catalog-discovery'
 import {
   AgentModelCatalogProbeError,
   runAgentModelCatalogListing
@@ -103,7 +104,7 @@ export function createClaudeModelCatalogProbe(
   const resolve = async (
     accountHome: Parameters<AgentModelCatalogProbe>[0],
     cwd?: string,
-    savedOnly = false
+    lookup: AgentModelCatalogLookup = 'recover'
   ) => {
     const configuredArgs = claudeStructuredLaunchArgs(
       cwd ? ((await deps.resolveLaunchArgs?.()) ?? []) : []
@@ -122,12 +123,8 @@ export function createClaudeModelCatalogProbe(
     const args = argsFor(true)
     const launchDeps = {
       ...deps,
-      ...(savedOnly
-        ? {
-            resolveInheritedEnv: deps.resolveSavedEnvironment,
-            refreshEnvironmentAfterMiss: undefined
-          }
-        : {}),
+      ...(lookup === 'saved' ? { resolveInheritedEnv: deps.resolveSavedEnvironment } : {}),
+      ...(lookup === 'recover' ? {} : { refreshEnvironmentAfterMiss: undefined }),
       ...(cwd ? { resolveWorkingDirectory: () => cwd } : {})
     }
     const sources = await resolveClaudeChildEnvSources(launchDeps)

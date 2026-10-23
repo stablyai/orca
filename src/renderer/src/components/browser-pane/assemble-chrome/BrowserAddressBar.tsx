@@ -16,6 +16,14 @@ import { useBrowserAddressBarClickSelect } from './use-browser-address-bar-click
 import { useBrowserAddressBarDismissal } from './use-browser-address-bar-dismissal'
 import type { BrowserAddressBarEditSessionBinding } from './use-browser-address-bar-edit-session'
 import BrowserAddressBarSuggestionList from './BrowserAddressBarSuggestionList'
+import { BrowserLoadProgress } from './browser-load-progress'
+
+function clearTimerRef(timerRef: { current: number | null }): void {
+  if (timerRef.current !== null) {
+    window.clearTimeout(timerRef.current)
+    timerRef.current = null
+  }
+}
 
 type BrowserAddressBarProps = {
   /** The page this bar edits; its worktree's other open pages are offered as "Switch to tab". */
@@ -35,6 +43,8 @@ type BrowserAddressBarProps = {
   editSession?: BrowserAddressBarEditSessionBinding | null
   /** Replaces the leading globe (e.g. the SSH egress indicator). */
   leadingIcon?: React.ReactNode
+  loading?: boolean
+  loadFailed?: boolean
 }
 
 export default function BrowserAddressBar({
@@ -47,7 +57,9 @@ export default function BrowserAddressBar({
   inputRef,
   dismissSuggestionsRef,
   editSession,
-  leadingIcon
+  leadingIcon,
+  loading = false,
+  loadFailed = false
 }: BrowserAddressBarProps): React.ReactElement {
   const [open, setOpen] = useState(false)
   const [selectedValueOverride, setSelectedValueOverride] = useState<string | null>(null)
@@ -68,14 +80,8 @@ export default function BrowserAddressBar({
   const overlay = useBrowserAddressBarOverlay(slotRef, open)
 
   const clearAddressBarTimers = useCallback((): void => {
-    if (blurCloseTimerRef.current !== null) {
-      window.clearTimeout(blurCloseTimerRef.current)
-      blurCloseTimerRef.current = null
-    }
-    if (closingResetTimerRef.current !== null) {
-      window.clearTimeout(closingResetTimerRef.current)
-      closingResetTimerRef.current = null
-    }
+    clearTimerRef(blurCloseTimerRef)
+    clearTimerRef(closingResetTimerRef)
   }, [])
 
   const setAddressBarFormRef = useCallback(
@@ -175,10 +181,7 @@ export default function BrowserAddressBar({
   }, [clearInline, onChange])
 
   const dismissSuggestions = useCallback((): void => {
-    if (blurCloseTimerRef.current !== null) {
-      window.clearTimeout(blurCloseTimerRef.current)
-      blurCloseTimerRef.current = null
-    }
+    clearTimerRef(blurCloseTimerRef)
     restoreTypedQuery()
     setOpen(false)
   }, [restoreTypedQuery])
@@ -206,14 +209,14 @@ export default function BrowserAddressBar({
     if (closingRef.current) {
       return
     }
-    if (blurCloseTimerRef.current !== null) {
-      window.clearTimeout(blurCloseTimerRef.current)
-      blurCloseTimerRef.current = null
-    }
+    clearTimerRef(blurCloseTimerRef)
     inputRef.current?.select()
     openedAtRef.current = Date.now()
-    setOpen(true)
-  }, [inputRef])
+    // Why: an empty bar is a blank tab, whose New Tab page already lists what the dropdown would.
+    if (value !== '') {
+      setOpen(true)
+    }
+  }, [inputRef, value])
 
   const handleBlur = useCallback(() => {
     // Why: delay close so that clicking a suggestion item registers before
@@ -227,9 +230,7 @@ export default function BrowserAddressBar({
     // — producing the "flash then disappear" on first click.
     const elapsed = Date.now() - openedAtRef.current
     const grace = elapsed < 400
-    if (blurCloseTimerRef.current !== null) {
-      window.clearTimeout(blurCloseTimerRef.current)
-    }
+    clearTimerRef(blurCloseTimerRef)
     blurCloseTimerRef.current = window.setTimeout(() => {
       blurCloseTimerRef.current = null
       if (grace && inputRef.current && document.activeElement === inputRef.current) {
@@ -255,9 +256,7 @@ export default function BrowserAddressBar({
       } else {
         onNavigate(url)
       }
-      if (closingResetTimerRef.current !== null) {
-        window.clearTimeout(closingResetTimerRef.current)
-      }
+      clearTimerRef(closingResetTimerRef)
       closingResetTimerRef.current = window.setTimeout(() => {
         closingResetTimerRef.current = null
         closingRef.current = false
@@ -393,7 +392,7 @@ export default function BrowserAddressBar({
               // pixels the squeezed slot has left.
               overlay
                 ? 'absolute inset-x-3 top-1/2 z-30 -translate-y-1/2 shadow-[0_10px_24px_rgba(0,0,0,0.18)]'
-                : 'min-w-0 flex-1'
+                : 'relative min-w-0 flex-1'
             )}
             // Why: when squeezed the input is zero-width, so clicks land on the
             // form padding — forward them to the input so it expands and edits.
@@ -444,6 +443,7 @@ export default function BrowserAddressBar({
               aria-controls="browser-history-listbox"
               aria-autocomplete="list"
             />
+            <BrowserLoadProgress loading={loading} failed={loadFailed} />
           </form>
         </PopoverTrigger>
         {suggestions.length > 0 && (

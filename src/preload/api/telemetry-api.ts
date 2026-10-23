@@ -1,3 +1,4 @@
+import type { ResourceViewAdmission } from '../../shared/resource-view-admission'
 import type { TelemetryConsentState } from '../../shared/telemetry-consent-types'
 import type { MemorySnapshot, StatsSummary } from '../../shared/process-stats-types'
 
@@ -31,7 +32,9 @@ export type DiagnosticsUploadPayload =
     }
 
 export type MemoryApi = {
-  getSnapshot: () => Promise<MemorySnapshot>
+  getSnapshot: (admission?: ResourceViewAdmission) => Promise<MemorySnapshot>
+  resourceWindowVisible: () => Promise<boolean>
+  onResourceWindowVisibility: (callback: (visible: boolean) => void) => () => void
 }
 
 export type DiagnosticsApi = {

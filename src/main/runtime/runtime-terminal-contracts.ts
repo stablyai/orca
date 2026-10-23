@@ -114,6 +114,9 @@ export type TerminalCreateOptions = {
   keepPaneOnStartFailure?: true
   /** With `keepPaneOnStartFailure`: a start already known to fail; only its pane is written. */
   startFailure?: Error
+  /** Layout-owner build: main's start wakes the pane's sleeping record in place of the window's
+   *  own restore, so it publishes whether the agent came back. */
+  resumesSleepingRecord?: true
   /** Refuse, rather than attach, when `tabId`/`leafId` name a pane whose PTY is already live. */
   requireFreshPane?: boolean
   sessionId?: string
@@ -219,6 +222,8 @@ export type TerminalHandleRecord = {
   leafId: string
   ptyId: string | null
   ptyGeneration: number
+  /** Issue-time stamp of the pane main bound a terminal handle for; read only by recoverTerminalPane. */
+  issuedForPaneKey?: string
 }
 
 export type OrchestrationCompatibilityTerminalAuthority = {
@@ -299,4 +304,15 @@ export type RuntimeAgentPromptWriteOptions = Omit<RuntimeTerminalWriteOptions, '
   observationTimeoutMs?: number
   requestId?: string
   onInputAccepted?: (send: RuntimeTerminalSend) => void
+  /** `wait` holds the write while the agent asks for permission instead of refusing it with
+   *  `agent_prompt_blocked`; an answer, a process exit or binding change, or `signal` ends the hold. */
+  onPermission?: 'refuse' | 'wait'
+  /** The binding the caller admitted (`getTerminalPromptRequestBinding`); a different process is
+   *  refused with `terminal_handle_stale` instead of receiving the text. */
+  expectedBinding?: AgentPromptExpectedBinding
+  /** Runs as soon as the write carrying Enter is accepted (OMP's paste frame included), before any
+   *  later abort check can throw: the text is submitted whatever the call then answers. */
+  onSubmitWritten?: () => void
 }
+
+export type AgentPromptExpectedBinding = { ptyId: string; processIncarnation: string }

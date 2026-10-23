@@ -61,7 +61,7 @@ export const PERSISTED_PORT_TARGETING: OrcadManagedTunnelTargeting = {
   verifyIdentity: async () => ({ verdict: 'verified' })
 }
 
-export type VerifiedOrcadForwardArgs = {
+type VerifiedOrcadForwardArgs = {
   targetId: string
   connection: SshConnection
   forwards: SshPortForwardManager

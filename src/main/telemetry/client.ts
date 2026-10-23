@@ -91,6 +91,11 @@ export function initTelemetry(store: Store): void {
     BUILD_IDENTITY as 'stable' | 'rc'
   )
 
+  const languageCohort = settings.telemetry?.onboardingLanguageCohort
+  if (languageCohort === 'control' || languageCohort === 'treatment') {
+    commonProps.onboarding_language_v1 = languageCohort
+  }
+
   // Fail-closed: a bad `install_id` (e.g. empty from a migration bug) would collapse all events into one distinct_id.
   // Validated once here (not per `track()`): `commonProps` is a session-lifetime singleton that can't drift.
   const parsedCommon = commonPropsSchema.safeParse(commonProps)

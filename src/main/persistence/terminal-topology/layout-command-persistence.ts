@@ -2,8 +2,10 @@ import type {
   CommandOf,
   LayoutApplyOutcome,
   LayoutCommand,
+  LayoutEffects,
   LayoutRefusalCode
 } from '../../../shared/workspace-layout/workspace-layout-command-types'
+import type { LayoutLiveContext } from './terminal-pane-admission'
 import {
   resolveHostId,
   type SessionHostPartitionOperations
@@ -73,28 +75,51 @@ export class LayoutCommandPersistence {
     this[layoutCommandPersistenceContext] = { runtime, sessions, writeLater }
   }
 
-  /** Applies to each partition holding the command's tab, routed partition first (local if none). */
+  /**
+   * Applies to each partition holding the command's tab, routed partition first (local if none).
+   * `onEffects` gets the routed partition's effects once the change is written; the reply never
+   * carries them.
+   */
   applyLayoutCommand(
     command: LayoutCommand,
-    hostIds: readonly string[] = []
+    hostIds: readonly string[] = [],
+    run: {
+      live?: LayoutLiveContext
+      stopBeforeWrite?: (ptyIds: readonly string[]) => boolean
+      onEffects?: (effects: LayoutEffects) => void
+    } = {}
   ): Promise<LayoutApplyOutcome> {
     const context = this[layoutCommandPersistenceContext]
     const resolved = hostIds.length > 0 ? hostIds.map(resolveHostId) : [resolveHostId()]
+    let effects: LayoutEffects | undefined
     const commit = raisingBindingGenerations(
       context.runtime,
       resolved,
       (hostId) => context.sessions.getWorkspaceSession(hostId),
-      applyLayout(resolved, command, topologyCommitContext(context))
+      applyLayout(resolved, command, topologyCommitContext(context), {
+        live: run.live,
+        stopBeforeWrite: run.stopBeforeWrite,
+        noteEffects: (noted) => (effects = noted)
+      })
     )
     // Switch point: a terminal close stands once applied, as the switch-off window shows it.
-    if (ORCA_LAYOUT_OWNER_IS_MAIN && context.writeLater && isTerminalClose(command)) {
-      return keptOnWriteFailure(
-        (mutate) => context.runtime.runDurableMutation(mutate),
-        writingOnly(resolved, commit),
-        context.writeLater
-      )
+    const applied: Promise<LayoutApplyOutcome> =
+      ORCA_LAYOUT_OWNER_IS_MAIN && context.writeLater && isTerminalClose(command)
+        ? keptOnWriteFailure(
+            (mutate) => context.runtime.runDurableMutation(mutate),
+            writingOnly(resolved, commit),
+            context.writeLater
+          )
+        : context.runtime.runDurableMutation(writingOnly(resolved, commit))
+    if (!run.onEffects) {
+      return applied
     }
-    return context.runtime.runDurableMutation(writingOnly(resolved, commit))
+    return applied.then((outcome) => {
+      if (outcome.ok && effects) {
+        run.onEffects?.(effects)
+      }
+      return outcome
+    })
   }
 
   /** One disk move's editor renames, a command per partition: all written in one durable write or,

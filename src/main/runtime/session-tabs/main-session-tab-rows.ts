@@ -1,10 +1,9 @@
-// Layout-owner builds, before main holds browser and chat records (D3b): a workspace main owns
-// publishes its terminal and editor rows, tab order and groups from main's layout
-// (projectSessionTabs). The window's live publication supplies what the user sees: selection, the
-// focused pane, dirty state and live terminal titles (main's copy of the view lags a debounced
-// save), the rows main's model does not hold (browser, chat, diff and other view-only editor rows)
-// and the facts only the window has (terminal theme, agent status, launch drafts, a markdown
-// view's mode, file id and draft version).
+// Layout-owner builds: a workspace main owns publishes its rows, tab order and groups from main's
+// layout (projectSessionTabs). The window's live publication supplies what the user sees: selection,
+// the focused pane, dirty state and live terminal titles (main's copy of the view lags a debounced
+// save), the rows main's layout does not list yet, and the facts only the window has (terminal
+// theme, agent status, launch drafts, a markdown view's mode, file id, draft version and untitled
+// flag).
 
 import type { RuntimeMobileSessionSnapshotTab } from '../../../shared/runtime-mobile-session-tab-contracts'
 import { orderIdOf, placeInMainGroups, withStrayIn } from './main-session-tab-group-placement'
@@ -22,8 +21,9 @@ export type MainSessionTabRows = Omit<
 >
 
 /**
- * Rows main's layout answers for: terminals and edit-mode files (the model holds no diff or
- * preview-only tab). Any other row is the window's until D3b.
+ * Rows main's layout answers for, with the window's facts: terminals and edit-mode files. Main also
+ * lists browser, chat, diff and markdown-preview rows, but the window's row of the same id stands
+ * whole while the window lists it (its draft is what makes a diff dirty).
  */
 function isMainRow(row: Row): boolean {
   return (
@@ -92,7 +92,9 @@ function withWindowFacts(row: Row, windowRow: Row | undefined, rules: MergeRules
       isDirty: windowRow.isDirty,
       mode: windowRow.mode,
       sourceFileId: windowRow.sourceFileId,
-      documentVersion: windowRow.documentVersion
+      documentVersion: windowRow.documentVersion,
+      // The saved session never records untitled; a phone save must not make its file.
+      ...(windowRow.isUntitled ? { isUntitled: true as const } : {})
     }
   }
   if (row.type === 'file' && windowRow?.type === 'file') {

@@ -40,6 +40,7 @@ export function useSourceControlPanelModel() {
     entries,
     fetchUpstreamStatus,
     grouped,
+    handleOpenDiff,
     handleStageAllPrimary,
     hostedReview,
     hostedReviewCreateCopy,
@@ -58,6 +59,7 @@ export function useSourceControlPanelModel() {
     isHostedReviewStateLoading,
     isRemoteOperationActive,
     openModal,
+    openCommittedDiff,
     refreshActiveGitStatusAfterMutation,
     remoteStatus,
     remoteStatusForActions,
@@ -153,6 +155,8 @@ export function useSourceControlPanelModel() {
     entries,
     branchEntries,
     branchSummary,
+    handleOpenDiff,
+    openCommittedDiff,
     sourceControlRef
   })
   const entryMutations = useSourceControlEntryMutations({

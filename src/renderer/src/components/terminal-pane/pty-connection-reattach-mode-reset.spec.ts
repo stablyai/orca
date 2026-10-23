@@ -12,6 +12,13 @@ import {
 import { replayEpilogue } from './pty-connection-test-replay-epilogue'
 import { STARTUP_CWD_FALLBACK_NOTICE } from '../../../../shared/startup-cwd-fallback'
 import { flushAsyncTicks } from './pty-connection-test-async'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import {
+  bindsPaneInStore,
+  expectWindowStartAskedMain,
+  mainLayoutApplyTransport,
+  mainStartsPaneAs
+} from './pty-connection-test-main-pane-start-fixtures'
 import {
   withMockedDocumentActiveElement,
   configureTerminalFocusMode,
@@ -74,6 +81,7 @@ export function registerPtyConnectionReattachModeResetTests(): void {
         }
       })
       await installTerminalTestGlobals()
+      ;(await mainLayoutApplyTransport()).reset()
     })
 
     afterEach(async () => {
@@ -417,10 +425,11 @@ export function registerPtyConnectionReattachModeResetTests(): void {
       let activePtyId = 'tab-pty'
       transport.getPtyId.mockImplementation(() => activePtyId)
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
-        if (sessionId) {
+        if (sessionId === 'tab-pty') {
           throw new Error('restored session is gone')
         }
-        // Main answered the spawn by adopting a durable session instead.
+        // Main answered the spawn by adopting a durable session instead; switch on, main's start
+        // bound the pane to it and the window's attach is answered so.
         activePtyId = 'adopted-pty'
         return {
           id: 'adopted-pty',
@@ -444,13 +453,28 @@ export function registerPtyConnectionReattachModeResetTests(): void {
           restoredLeafId: LEAF_1,
           restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
         })
+        if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+          await mainStartsPaneAs({
+            ptyId: 'adopted-pty',
+            bind: bindsPaneInStore(() => mockStoreState, 'tab-1', LEAF_1)
+          })
+        }
 
         connectPanePty(pane as never, manager as never, deps as never)
         await flushAsyncTicks(30)
 
         expect(transport.connect).toHaveBeenCalledTimes(2)
         expect(transport.connect.mock.calls[0]?.[0]?.sessionId).toBe('tab-pty')
-        expect(transport.connect.mock.calls[1]?.[0]?.sessionId).toBeUndefined()
+        if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+          // The gone session asks main to start the pane; the attach to it meets the payload.
+          await expectWindowStartAskedMain(transport, `tab-1:${LEAF_1}`)
+          expect(transport.connect.mock.calls[1]?.[0]).toMatchObject({
+            sessionId: 'adopted-pty',
+            attachOnlyView: true
+          })
+        } else {
+          expect(transport.connect.mock.calls[1]?.[0]?.sessionId).toBeUndefined()
+        }
         const writes = (pane.terminal.write as ReturnType<typeof vi.fn>).mock.calls.map(
           ([data]) => data as string
         )

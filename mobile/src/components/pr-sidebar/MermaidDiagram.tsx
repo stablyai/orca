@@ -16,7 +16,7 @@ export type MermaidDiagramProps = {
  * process to sandbox in. The fence is mermaid's own `securityLevel: 'strict'`, which runs the
  * serialized SVG through DOMPurify before handing it back — a `<script>`, an `on*` attribute or a
  * `javascript:` href in a diagram label reaches this document as nothing at all. That is measured
- * in `config/scripts/mobile-web-app-mermaid-render.test.mjs`, in both engines, against a hostile
+ * in `config/scripts/mobile-web-app/mobile-web-app-mermaid-render.test.mjs`, in both engines, against a hostile
  * fixture. The source is a JS string argument, not text spliced into an inline `<script>`, so it
  * needs no escaping.
  *

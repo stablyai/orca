@@ -128,6 +128,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
 
       - name: Configure git author
         run: |
@@ -851,6 +852,13 @@ jobs:
           TAG: ${{ needs.cut.outputs.tag }}
         run: node config/scripts/create-draft-release.mjs "$TAG"
 
+  dependency-security:
+    needs: cut
+    if: needs.cut.outputs.should_release == 'true' && !contains(needs.cut.outputs.tag, '-')
+    uses: ./.github/workflows/dependency-security.yml
+    with:
+      ref: refs/tags/${{ needs.cut.outputs.tag }}
+
   terminal-rendering-golden:
     needs: cut
     if: needs.cut.outputs.should_release == 'true'
@@ -902,6 +910,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
           cache: pnpm
 
       # Why: Linux terminal golden E2E uses the same native install path as
@@ -1128,6 +1137,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
           cache: pnpm
 
       # Why: keep the non-blocking evidence lane on the same Linux native
@@ -1351,6 +1361,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
           cache: pnpm
           cache-dependency-path: |
             pnpm-lock.yaml
@@ -2377,6 +2388,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
 
       - name: Run isolated macOS release build
         id: dispatch
@@ -2413,6 +2425,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
 
       - name: Require the exact isolated macOS release build to succeed
         run: node config/scripts/run-release-mac-build-workflow.mjs wait
@@ -2430,6 +2443,7 @@ jobs:
   publish-release:
     needs:
       - cut
+      - dependency-security
       - build
       - build-mac
       - verify-mac-build
@@ -2440,6 +2454,7 @@ jobs:
     if: >-
       !cancelled() &&
       needs.cut.result == 'success' &&
+      (needs.dependency-security.result == 'success' || contains(needs.cut.outputs.tag, '-')) &&
       needs.build.result == 'success' &&
       needs.build-mac.result == 'success' &&
       needs.verify-mac-build.result == 'success' &&
@@ -2457,6 +2472,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
 
       - name: Verify release is still draft
         env:

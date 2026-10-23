@@ -37,6 +37,7 @@ export const PROVIDER_FRAME_CLASSIFICATIONS = {
     'turn/started': 'status-chrome',
     'hook/started': 'suppressed-benign',
     'turn/completed': 'status-chrome',
+    // A failed hook surfaces (catalog below); a refused prompt writes its own row before this.
     'hook/completed': 'suppressed-benign',
     'turn/diff/updated': 'suppressed-benign',
     'turn/plan/updated': 'timeline-substantive',
@@ -135,7 +136,7 @@ export const PROVIDER_FRAME_CLASSIFICATIONS = {
     'message:system:permission_denied': 'error-surface',
     'message:prompt_suggestion': 'status-chrome',
     'message:system:mirror_error': 'error-surface',
-    // Written by its own row (`claude-informational-row`): a warning in its words, else nothing.
+    // Written by its own row (`claude-informational-row`): a warning, a halting one as a hook's outcome.
     'message:system:informational': 'status-chrome',
     'message:conversation_reset': 'status-chrome',
     // A `started`/`completed`/`cancelled` state for one queued command uuid and

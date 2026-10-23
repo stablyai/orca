@@ -222,7 +222,7 @@ describe('guarded editor saves under races', () => {
     return { store, a, b }
   }
 
-  it('finishes queued identical sibling saves the same way, ending on the saved text', async () => {
+  it('coalesces saves from two views of one record into one write, ending on the saved text', async () => {
     const gate = deferred()
     const disk = stubGuardedDisk({ [GUARDED_PATH]: 'A' }, () => gate.promise)
     const { store, a, b } = openSharedModelTabs('A')
@@ -251,10 +251,10 @@ describe('guarded editor saves under races', () => {
       gate.resolve()
       await saves
 
-      // Each save is guarded against the advanced baseline and rewrites identical bytes.
-      expect(disk.writeFile).toHaveBeenCalledTimes(2)
+      // The second save queues behind the first and finds the record clean.
+      expect(disk.writeFile).toHaveBeenCalledTimes(1)
       expect(disk.files.get(GUARDED_PATH)).toBe('X')
-      expect([...shown.values()]).toEqual(['X', 'X'])
+      expect(shown.get(a.id)).toBe('X')
       for (const tab of store.getState().openFiles) {
         expect(tab.isDirty).toBe(false)
         expect(tab.externalMutation).toBeUndefined()
@@ -289,7 +289,7 @@ describe('guarded editor saves under races', () => {
     }
   })
 
-  it('after Keep, pushes no text to a clean sibling, keeps its cache, and saves the kept edits', async () => {
+  it('after Keep, every view keeps the kept edits and its cache, and the save writes them', async () => {
     const disk = stubGuardedDisk({ [GUARDED_PATH]: 'agent rewrite' })
     const { store, a, b } = openSharedModelTabs('A')
     store.getState().setEditorDraft(a.id, 'kept edits')
@@ -308,8 +308,8 @@ describe('guarded editor saves under races', () => {
     try {
       keepTabEditsOverExternalChange(store.getState().openFiles[0])
       await vi.advanceTimersByTimeAsync(0)
-      expect(store.getState().editorDrafts[b.id]).toBeUndefined()
-      // The model holds the unsaved kept edits, so the sibling's cache is not dropped for disk.
+      expect(store.getState().editorDrafts[b.id]).toBe('kept edits')
+      // The record holds the unsaved kept edits, so no view's cache is dropped for disk.
       expect(dropped).toEqual([])
 
       await requestEditorFileSave({ fileId: a.id })

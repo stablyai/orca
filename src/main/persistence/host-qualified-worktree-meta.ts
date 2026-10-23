@@ -1,5 +1,10 @@
 import { getRepoRegistrationHostIds } from '../../shared/repo-host-identity'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../shared/execution-host'
+import { isLocalOnlyWorktreeMetaId } from '../../shared/worktree/local-only-worktree-meta-ids'
 import type { Repo } from '../../shared/repo-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
@@ -23,15 +28,20 @@ export type HostQualifiedWorktreeMetaStore = {
 }
 
 /** Canonical host snapshot, with a filtered legacy fallback for partial test/compatibility stores. */
-export function readAllWorktreeMetaForHost(
-  store: Pick<HostQualifiedWorktreeMetaStore, 'getAllWorktreeMeta' | 'getAllWorktreeMetaForHost'>,
+export function readAllWorktreeMetaForHost<
+  TMeta extends { hostId?: ExecutionHostId } = WorktreeMeta
+>(
+  store: {
+    getAllWorktreeMeta: () => Record<string, TMeta>
+    getAllWorktreeMetaForHost?: (executionHostId: ExecutionHostId) => Record<string, TMeta>
+  },
   executionHostId: ExecutionHostId
-): Record<string, WorktreeMeta> {
+): Record<string, TMeta> {
   const qualified = store.getAllWorktreeMetaForHost?.(executionHostId)
   if (qualified) {
     return qualified
   }
-  const projected: Record<string, WorktreeMeta> = {}
+  const projected: Record<string, TMeta> = {}
   for (const [worktreeId, meta] of Object.entries(store.getAllWorktreeMeta())) {
     if (!meta.hostId || meta.hostId === executionHostId) {
       projected[worktreeId] = meta
@@ -84,6 +94,10 @@ export function resolveWorktreeMetaOwner(
   },
   worktreeId: string
 ): HostWorktreeTarget | undefined {
+  // Why: no repo stands behind these ids, so without this their id-only writes were dropped.
+  if (isLocalOnlyWorktreeMetaId(worktreeId)) {
+    return hostWorktreeTarget({ id: worktreeId, hostId: LOCAL_EXECUTION_HOST_ID })
+  }
   const repoId = getRepoIdFromWorktreeId(worktreeId)
   const owners = store.getRepos().filter((repo) => repo.id === repoId)
   // Why: the raw-id row's stamp names whichever twin wrote first, not the twin the caller means.

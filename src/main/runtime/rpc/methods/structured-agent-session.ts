@@ -153,13 +153,15 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
     permission: 'workspace',
     params: OptionsParams,
     handler: async (params, ctx) => {
-      const host = requireStructuredCleanupHost(ctx)
+      requireStructuredCapability(ctx)
+      // Noted before the host is required: a close that fails still refuses the create it raced.
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
         noteStructuredAgentSessionClose(
           params.sessionId,
-          host.deps.store.getRecord(params.sessionId) !== null
+          (getStructuredAgentSessionHost()?.deps.store.getRecord(params.sessionId) ?? null) !== null
         )
       }
+      const host = requireStructuredCleanupHost(ctx)
       // Terminal-disposal closes use this RPC without the session-tabs retirement RPC.
       if (typeof host.setSessionTabVisibility === 'function') {
         await host.setSessionTabVisibility(params.sessionId, false)

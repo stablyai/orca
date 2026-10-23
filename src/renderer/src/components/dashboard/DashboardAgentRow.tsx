@@ -24,7 +24,7 @@ import {
 } from '../../../../shared/agent-main-agent-verdict'
 import { agentVerdictStatusLine } from '@/lib/agent-verdict-status-line'
 import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardData'
-import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
+import { getAgentRowPrimaryText } from '../../../../shared/agent-row-primary-text'
 import { useAgentRowConversationName } from './use-agent-row-conversation-name'
 import { lastEnteredDoneAt } from './agent-finished-timestamp'
 import {
@@ -340,7 +340,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
           stoppingLabel ??
           (presentation.attention ? programStatusAttentionLine(presentation.attention) : null) ??
           // A blocked row (auth) shows no tool line, so the program's block stands in for it.
-          (!showsTool && agent.entry.programStatus?.state === 'blocked'
+          (agent.state === 'blocked' && agent.entry.programStatus?.state === 'blocked'
             ? programStatusAttentionLine({
                 ...(agent.entry.programStatus.kind ? { kind: agent.entry.programStatus.kind } : {}),
                 ...(presentation.message ? { message: presentation.message } : {})

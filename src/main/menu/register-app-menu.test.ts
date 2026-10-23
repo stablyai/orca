@@ -331,6 +331,21 @@ describe('registerAppMenu', () => {
     expect(send).not.toHaveBeenCalled()
   })
 
+  it('pastes into DevTools instead of the Orca pane when DevTools holds focus (#16285)', () => {
+    const send = vi.fn()
+    const devToolsContents = { paste: vi.fn() }
+    getFocusedWindowMock.mockReturnValue({ webContents: { send } })
+    getFocusedWebContentsMock.mockReturnValue(devToolsContents)
+    registerAppMenu(buildMenuOptions())
+
+    getSubmenu(getTemplate(), 'Edit')
+      .find((item) => item.label === 'Paste')
+      ?.click?.({} as never, {} as never, {} as never)
+
+    expect(devToolsContents.paste).toHaveBeenCalledOnce()
+    expect(send).not.toHaveBeenCalled()
+  })
+
   it.each(['darwin', 'linux', 'win32'] as const)(
     'routes Edit selection actions through the focused Orca window on %s',
     (platform) => {

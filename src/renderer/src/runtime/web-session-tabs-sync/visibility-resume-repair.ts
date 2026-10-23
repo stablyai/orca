@@ -21,6 +21,7 @@ export function applyVisibilityResumeRepairs(
       frames: decided.map(({ environmentId, snapshot, decision }) => ({
         environmentId,
         worktreeId: snapshot.worktree,
+        source: snapshot,
         decision,
         expectedEnvironmentConnectionGeneration:
           batch.environments.get(environmentId)?.expectedEnvironmentConnectionGeneration,

@@ -4,12 +4,12 @@
  * foreign server never reaches the repair; it fails the build as a foreign answer instead.
  */
 import type { KnownRuntimeEnvironment } from '../../../shared/runtime-environments'
-import { pairingRevisionOf, type ManagedOrcadPairingRepairs } from './orcad-managed-pairing-repair'
+import { pairingRevisionOf, type ManagedOrcadPairingGate } from './orcad-managed-pairing-repair'
 import { OrcadManagedPairingRejectedError } from './orcad-managed-tunnel-identity'
 
 export type ManagedOrcadPairingRecovery = {
   resolve: (environmentId: string) => KnownRuntimeEnvironment
-  repairs: ManagedOrcadPairingRepairs
+  repairs: ManagedOrcadPairingGate
   /** Forwards on the new pairing; the refusal already removed the old forward. */
   ensure: (environment: KnownRuntimeEnvironment) => Promise<void>
 }
@@ -37,7 +37,7 @@ export async function buildWithPairingRepair(
     if (!(error instanceof OrcadManagedPairingRejectedError)) {
       throw error
     }
-    console.warn('[ssh] The managed Orca server refused this desktop; pairing again:', error)
+    console.warn('[managed-orcad] The Orca server refused this desktop; pairing again:', error)
   }
   // Why the refused revision: a repair another caller already landed is joined, not redone.
   const repaired = await recovery.repairs.repair(environmentId, pairingRevisionOf(refused))

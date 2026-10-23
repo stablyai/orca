@@ -1,5 +1,6 @@
 import Database from '../../../sqlite/sync-database'
 import { attachOrchestrationDbMethods } from './attach-orchestration-db-methods'
+import type { MailHandBack } from './messages/helper-mailbox-hand-back'
 import { hardenOrchestrationDatabaseFiles } from './database-file-permissions'
 import { backfillFederatedStubHomeRuns } from './federation/federated-stub-home-run-backfill'
 import type { OrchestrationDbMethods } from './orchestration-db-methods'
@@ -24,6 +25,10 @@ class OrchestrationDbCore {
   // per-terminal fan-out. Only createDispatchContext flips this false→true.
   hasAnyDispatchContextsCache: boolean | undefined
   localMutationCallerFingerprint: string | undefined
+  // Why: in memory only; the re-armed rows themselves are what restart recovery reads.
+  pendingMailHandBacks: MailHandBack[] = []
+  /** The runtime's wake for mail a settlement handed to a Run, called once the transaction ends. */
+  mailHandBackListener: ((handBack: MailHandBack) => void) | undefined
 
   constructor(dbPath: (string & {}) | ':memory:') {
     this.db = new Database(dbPath)

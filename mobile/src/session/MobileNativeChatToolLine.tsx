@@ -159,7 +159,7 @@ export function MobileNativeChatToolLine({
   fontScale,
   onOpenFile
 }: {
-  /** Tags the line for the page's place-hold. */
+  /** Tags the line, so the page keeps the reader on it. */
   memberId?: string
   block: NativeChatToolCallBlock | NativeChatToolResultBlock
   /** This call's output, when the run paired one to it. */

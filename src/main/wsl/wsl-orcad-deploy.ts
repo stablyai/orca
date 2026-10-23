@@ -4,6 +4,7 @@
  * No pairing here: the stdio bridge (C5) connects to the loopback port this reports.
  */
 import { getAppEnvironment } from '../../shared/app-environment'
+import type { PairingOffer } from '../../shared/pairing'
 import { ORCAD_MANAGED_REMOTE_PORT } from '../../shared/orcad-managed-runtime'
 import type { ServeReadiness } from '../server/serve-readiness'
 import type { WslHostDeferredUpdate } from '../../shared/wsl-host-types'
@@ -84,6 +85,8 @@ export type WslOrcadDeployOptions = {
   createTransport?: (target: WslOrcadHostTarget) => OrcadHostTransport & { dispose?(): void }
   readRegistryId?: (distro: string) => Promise<string | null>
   readIncumbent?: typeof readWslOrcadIncumbent
+  /** This desktop's enrolled pairing, which the incumbent's terminal count authenticates with. */
+  pairedOffer?: PairingOffer | null
   /** The orcad template to deploy from; defaults to the packaged one (the C10 lane swaps it). */
   templateDir?: string
 }
@@ -179,7 +182,8 @@ async function launchOverTransport(
     incumbentVersion && incumbentVersion !== candidateVersion
       ? await (options.readIncumbent ?? readWslOrcadIncumbent)({
           context,
-          slot
+          slot,
+          paired: options.pairedOffer ?? null
         })
       : null
   const deployed = await deployOrcad({

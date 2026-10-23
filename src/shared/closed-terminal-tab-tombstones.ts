@@ -37,10 +37,11 @@ export const closedTerminalTabTombstoneSchema = z.object({
 export const CLOSED_TERMINAL_TAB_TOMBSTONE_TTL_MS = 30 * 24 * 60 * 60 * 1000
 export const MAX_CLOSED_TERMINAL_TAB_TOMBSTONES = 500
 
-export function pruneClosedTerminalTabTombstones(
-  map: ClosedTerminalTabTombstonesByTabId | undefined,
+/** Also bounds main's closed-pane records (closed-terminal-panes.ts), under the same TTL and cap. */
+export function pruneClosedTerminalTabTombstones<Closed extends { closedAt: number }>(
+  map: Record<string, Closed> | undefined,
   now: number
-): ClosedTerminalTabTombstonesByTabId {
+): Record<string, Closed> {
   const entries = Object.entries(map ?? {}).filter(
     ([, tombstone]) => now - tombstone.closedAt <= CLOSED_TERMINAL_TAB_TOMBSTONE_TTL_MS
   )

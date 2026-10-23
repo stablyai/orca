@@ -3,7 +3,7 @@ import { buildAnyShellStdoutFence } from '../../shared/posix-stdout-fence'
 
 const COMMAND_ONLY_SHELLS = new Set(['sh', 'dash', 'csh', 'tcsh'])
 
-export type SshLoginShellCommand = {
+type SshLoginShellCommand = {
   command: string
   /** The payload's own stdout, or null when the login shell never ran it. */
   readStdout: (stdout: string) => string | null

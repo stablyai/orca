@@ -5,6 +5,7 @@ import type {
   MobileTerminalTheme,
   TerminalKeyboardAvoidanceMetrics,
   TerminalModes,
+  TerminalPointerInput,
   TerminalWebViewHandle
 } from '../terminal/terminal-webview-contract'
 
@@ -19,10 +20,11 @@ type TerminalPaneViewProps = {
   onSelectionMode: (handle: string, active: boolean) => void
   onSelectionCopy: (handle: string, text: string) => void
   onSelectionEvicted: (handle: string) => void
+  onClipboardWrite: (handle: string, text: string) => void
   onModesChanged: (handle: string, modes: TerminalModes) => void
   onKeyboardAvoidanceMetrics: (handle: string, metrics: TerminalKeyboardAvoidanceMetrics) => void
   onHaptic: (kind: 'selection' | 'success' | 'error' | 'edge-bump') => void
-  onTerminalInput: (handle: string, bytes: string) => void
+  onTerminalInput: (handle: string, bytes: string, input?: TerminalPointerInput) => void
   onTerminalQueryReply: (handle: string, bytes: string) => void
   onTerminalTap: (handle: string) => void
   onFileTap: (handle: string, pathText: string, line: number | null, column: number | null) => void
@@ -42,6 +44,7 @@ export function TerminalPaneView({
   onSelectionMode,
   onSelectionCopy,
   onSelectionEvicted,
+  onClipboardWrite,
   onModesChanged,
   onKeyboardAvoidanceMetrics,
   onHaptic,
@@ -81,10 +84,11 @@ export function TerminalPaneView({
         onSelectionMode={(a) => onSelectionMode(handle, a)}
         onSelectionCopy={(t) => onSelectionCopy(handle, t)}
         onSelectionEvicted={() => onSelectionEvicted(handle)}
+        onClipboardWrite={(t) => onClipboardWrite(handle, t)}
         onModesChanged={(m) => onModesChanged(handle, m)}
         onKeyboardAvoidanceMetrics={(m) => onKeyboardAvoidanceMetrics(handle, m)}
         onHaptic={onHaptic}
-        onTerminalInput={(bytes) => onTerminalInput(handle, bytes)}
+        onTerminalInput={(bytes, input) => onTerminalInput(handle, bytes, input)}
         onTerminalQueryReply={(bytes) => onTerminalQueryReply(handle, bytes)}
         onTerminalTap={() => onTerminalTap(handle)}
         onFileTap={(pathText, line, column) => onFileTap(handle, pathText, line, column)}

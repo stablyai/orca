@@ -5,7 +5,7 @@ import type { LinearIssue } from '../linear/issue-types'
 import type { LinearCollectionResult } from '../linear/workspace-types'
 import type { BaseRefSearchResult } from '../repo-types'
 import { parseJiraIssueUrl } from '../jira-issue-url'
-import { buildJiraTextMatchJql } from '../jira-search-input-jql'
+import { buildJiraTextMatchJql } from '../jira/jira-search-input-jql'
 import type { GitHubIssueOrPRLink } from '../github/links'
 import {
   buildSmartWorkspaceUrlSourceRows,

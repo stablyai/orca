@@ -184,5 +184,4 @@ patchedDependencies:
   ws@8.22.0: config/patches/ws@8.22.0.patch
   oxlint-plugin-anti-slop@0.1.2: config/patches/oxlint-plugin-anti-slop@0.1.2.patch
   monaco-editor@0.55.1: config/patches/monaco-editor@0.55.1.patch
-  braces@3.0.3: config/patches/braces@3.0.3.patch
   sprintf-js@1.1.3: config/patches/sprintf-js@1.1.3.patch

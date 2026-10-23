@@ -222,7 +222,7 @@ describe('rekeyOpenFilesForPathChange', () => {
     expect(moved.filePath).toBe('/repo/named.md')
   })
 
-  it('installs the move-echo gate + provenance on a dirty destination when moveOperationId is set', async () => {
+  it('installs the move-echo provenance on a dirty destination when moveOperationId is set', async () => {
     seedEditTab()
     const oldId = useAppStore.getState().openFiles[0]!.id
     const newPath = '/repo/sub/a.md'
@@ -233,16 +233,13 @@ describe('rekeyOpenFilesForPathChange', () => {
     })
 
     const moved = useAppStore.getState().openFiles[0]!
-    // Autosave is gated synchronously by the same commit that re-homes the tab.
-    expect(moved.pendingLiveDiskVerification).toBe(true)
     expect(moved.pendingSelfMoveEcho).toEqual({ operationId: 'op-42', targetPath: newPath })
   })
 
-  it('does not gate a tab already showing the changed-on-disk banner', async () => {
+  it('does not verify a tab already showing the changed-on-disk banner', async () => {
     seedEditTab()
     const oldId = useAppStore.getState().openFiles[0]!.id
-    // A dirty tab that already conflicts with disk: autosave is suspended by the
-    // banner; gating it would strand the gate (verification skips a 'changed' tab).
+    // A dirty tab that already conflicts with disk keeps its banner.
     useAppStore.getState().setExternalMutation(oldId, 'changed')
 
     await rekey({
@@ -252,7 +249,6 @@ describe('rekeyOpenFilesForPathChange', () => {
 
     const moved = useAppStore.getState().openFiles[0]!
     expect(moved.externalMutation).toBe('changed')
-    expect(moved.pendingLiveDiskVerification).toBeUndefined()
     expect(moved.pendingSelfMoveEcho).toBeUndefined()
   })
 
@@ -272,7 +268,7 @@ describe('rekeyOpenFilesForPathChange', () => {
     expect(reveal.filePath).toBe('/repo/sub/a.md')
   })
 
-  it('does not gate a clean destination', async () => {
+  it('does not verify a clean destination', async () => {
     seedEditTab()
     const oldId = useAppStore.getState().openFiles[0]!.id
     useAppStore.getState().markFileDirty(oldId, false)
@@ -283,7 +279,6 @@ describe('rekeyOpenFilesForPathChange', () => {
     })
 
     const moved = useAppStore.getState().openFiles[0]!
-    expect(moved.pendingLiveDiskVerification).toBeUndefined()
     expect(moved.pendingSelfMoveEcho).toBeUndefined()
   })
 

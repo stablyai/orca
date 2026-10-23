@@ -56,6 +56,17 @@ describe('editorSaveWriterView', () => {
     expect(editorSaveWriterView(sharedState([readOnly, fresh]), 'ro', 'autosave')?.id).toBe('fresh')
   })
 
+  it.each(['autosave', 'restart'] as const)(
+    '%s skips a CSV preview or read-only view listed first',
+    (trigger) => {
+      const csv = view('csv', { csvPreviewOnly: true })
+      const readOnly = view('ro', { readOnly: true })
+      expect(editorSaveWriterView(sharedState([csv, readOnly, fresh]), 'csv', trigger)?.id).toBe(
+        'fresh'
+      )
+    }
+  )
+
   it('autosave has no writer when every view is stale', () => {
     expect(editorSaveWriterView(sharedState([old]), 'old', 'autosave')).toBeNull()
   })

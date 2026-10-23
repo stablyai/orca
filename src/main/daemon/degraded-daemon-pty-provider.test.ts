@@ -585,6 +585,55 @@ describe('DegradedDaemonPtyProvider', () => {
     })
   })
 
+  it('forwards current daemon data and exit while startup availability is false', () => {
+    const current = createDaemonAdapter('daemon')
+    const fallback = createProvider('fallback')
+    const provider = new DegradedDaemonPtyProvider({
+      current,
+      legacy: [],
+      fallback,
+      currentAvailable: false
+    })
+    const dataSpy = vi.fn()
+    const exitSpy = vi.fn()
+    provider.onData(dataSpy)
+    provider.onExit(exitSpy)
+
+    current.emitData('current-session', 'bytes')
+    current.emitExit('current-session', 0)
+
+    expect(dataSpy).toHaveBeenCalledWith({ id: 'current-session', data: 'bytes' })
+    expect(exitSpy).toHaveBeenCalledWith({ id: 'current-session', code: 0 })
+    expect(current.listProcesses).not.toHaveBeenCalled()
+  })
+
+  it('admits the current adapter to owner recovery only after its spawn probe succeeds', async () => {
+    const current = createDaemonAdapter('daemon', ['current-session'])
+    const legacy = createDaemonAdapter('legacy', ['legacy-session'])
+    const fallback = createProvider('fallback')
+    const provider = new DegradedDaemonPtyProvider({
+      current,
+      legacy: [legacy],
+      fallback,
+      currentAvailable: false,
+      probeCurrentDaemonSpawn: async () => true
+    })
+
+    await provider.listProcesses()
+    await provider.reconcileOnStartup(new Set())
+    expect(current.listProcesses).not.toHaveBeenCalled()
+    expect(current.reconcileOnStartup).not.toHaveBeenCalled()
+    expect(legacy.reconcileOnStartup).toHaveBeenCalledOnce()
+
+    await expect(provider.recoverFreshSpawnRouting()).resolves.toBe(true)
+    await provider.listProcesses()
+    await provider.reconcileOnStartup(new Set())
+
+    expect(current.listProcesses).toHaveBeenCalledOnce()
+    expect(current.reconcileOnStartup).toHaveBeenCalledOnce()
+    expect(legacy.listProcesses).toHaveBeenCalled()
+  })
+
   it('preserves explicit sequence accounting on daemon data events', () => {
     const current = createDaemonAdapter('daemon')
     const fallback = createProvider('fallback')

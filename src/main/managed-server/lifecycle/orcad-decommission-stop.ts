@@ -17,7 +17,7 @@ import type {
 } from '../../../shared/orcad-stop-request'
 import { errorMessage } from '../../../shared/error-message'
 
-export type OrcadDecommissionStopSettlement =
+type OrcadDecommissionStopSettlement =
   | { state: 'exited'; retirement: OrcadDaemonRetirementVerdict }
   /** orcad never acted on the request and keeps serving; the verdict says why it was withdrawn. */
   | { state: 'withdrawn'; verdict: 'live' | 'unverifiable'; reason: string }

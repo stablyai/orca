@@ -26,7 +26,7 @@ import { isMacPlatform, nativeChatToggleShortcutLabel } from './native-chat-shor
 import { TabWorkspaceLayoutMenuSection } from '@/components/tab-bar/TabWorkspaceLayoutMenuSection'
 import { canMoveTabToNewPaneColumn } from '@/components/tab-bar/tab-move-to-pane-column'
 import { isEditableTarget } from '@/lib/editable-target'
-import { findNativeChatPasteField } from '@/lib/native-chat-paste-request'
+import { findEditablePrimarySelectionPasteTarget } from '@/lib/primary-selection-paste'
 import { NativeChatCopyOrcaSessionIdMenuItem } from './NativeChatCopyOrcaSessionIdMenuItem'
 import { NativeChatSelectionQuote } from './NativeChatSelectionQuote'
 import { NativeChatPaneMenuItems } from './NativeChatPaneMenuItems'
@@ -52,7 +52,6 @@ type NativeChatContextMenuState = {
   point: { x: number; y: number }
   selectedText: string
   canPaste: boolean
-  pasteOrigin: HTMLTextAreaElement | null
   image?: NativeChatCopyImage
   target: NativeChatContextMenuTarget
   returnFocusTo: Element | null
@@ -88,7 +87,7 @@ export type NativeChatContextMenuTargetArgs = {
 }
 
 export type NativeChatContextMenuActions = {
-  onPaste: (origin?: HTMLTextAreaElement) => void
+  onPaste: () => void
   onSplitRight: () => void
   onSplitDown: () => void
   canEqualizePaneSizes: boolean
@@ -160,7 +159,6 @@ export function useNativeChatContextMenu({
     point: { x: 0, y: 0 },
     selectedText: '',
     canPaste: false,
-    pasteOrigin: null,
     target: noNativeChatContextMenuTarget,
     returnFocusTo: null
   })
@@ -191,8 +189,15 @@ export function useNativeChatContextMenu({
 
   const onContextMenuCapture = useCallback(
     (event: React.MouseEvent<HTMLElement>) => {
-      event.preventDefault()
       event.stopPropagation()
+      if (opensNativeEditableMenu(event.target)) {
+        // A cancelled event opens no native menu that could consume the hint.
+        if (!event.defaultPrevented) {
+          window.api.ui.markPlainTextContextMenuTarget()
+        }
+        return
+      }
+      event.preventDefault()
       if (!enabled) {
         return
       }
@@ -202,7 +207,6 @@ export function useNativeChatContextMenu({
         point: { x: event.clientX, y: event.clientY },
         selectedText: getNativeChatSelectedText(rootRef.current),
         canPaste: isEditableTarget(event.target),
-        pasteOrigin: findNativeChatPasteField(event.target, rootRef.current),
         returnFocusTo: rootRef.current?.ownerDocument.activeElement ?? null,
         image: readNativeChatCopyImage(event.target),
         target: readNativeChatContextMenuTarget(event.target, {
@@ -253,7 +257,6 @@ export function useNativeChatContextMenu({
             setState((prev) => ({
               ...prev,
               image: undefined,
-              pasteOrigin: null,
               target: noNativeChatContextMenuTarget,
               returnFocusTo: null
             }))
@@ -280,7 +283,7 @@ export function useNativeChatContextMenu({
             rewind={rewind}
           />
           {state.canPaste ? (
-            <DropdownMenuItem onSelect={() => actions.onPaste(state.pasteOrigin ?? undefined)}>
+            <DropdownMenuItem onSelect={() => actions.onPaste()}>
               <Clipboard />
               {translate('auto.components.terminal.pane.TerminalContextMenu.0a917b591a', 'Paste')}
             </DropdownMenuItem>
@@ -340,9 +343,17 @@ export function useNativeChatContextMenu({
 
 function keepSelectionThroughMenuPress(event: React.PointerEvent<HTMLElement>): void {
   // Why: left alone, the press that opens the menu collapses the selection before contextmenu fires.
-  if (event.button === 2 || (isMacPlatform() && event.ctrlKey)) {
+  if (
+    (event.button === 2 || (isMacPlatform() && event.ctrlKey)) &&
+    !opensNativeEditableMenu(event.target)
+  ) {
     event.preventDefault()
   }
+}
+
+// Why: only Chromium's own menu for a typing target carries the OS spellchecker's suggestions.
+function opensNativeEditableMenu(target: EventTarget | null): boolean {
+  return findEditablePrimarySelectionPasteTarget(target) !== null
 }
 
 function getNativeChatSelectedText(root: HTMLElement | null): string {

@@ -292,21 +292,19 @@ async function decodeReplacementItems(input: {
 /**
  * A message whose only content is a tool invocation becomes a tool-call item so
  * the reducer renders it as one. Everything else stays a message item with its
- * blocks bounded in place.
+ * adoption limits applied only when supplied.
  */
-function legacyItemBody(
+export function legacyItemBody(
   message: NativeChatMessage,
-  limits: JournalPayloadLimits
+  limits?: JournalPayloadLimits
 ): AgentJournalItemBody {
   const only = message.blocks.length === 1 ? message.blocks[0] : undefined
   if (only?.type === 'tool-call') {
-    // Legacy transcripts are untrusted and can contain arbitrarily large tool
-    // arguments. Keep them on the same bounded path as live events before the
-    // replacement epoch is published.
+    // Adoption bounds bulk before publishing its replacement epoch; catch-up admits whole batches.
     return {
       kind: 'tool-call',
       name: only.name,
-      input: boundToolInput(only.input, limits),
+      input: limits ? boundToolInput(only.input, limits) : only.input,
       ...(only.callId !== undefined ? { callId: only.callId } : {}),
       state: 'completed'
     }
@@ -314,7 +312,7 @@ function legacyItemBody(
   return {
     kind: 'message',
     role: message.role,
-    blocks: message.blocks.map((block) => boundBlock(block, limits))
+    blocks: limits ? message.blocks.map((block) => boundBlock(block, limits)) : message.blocks
   }
 }
 

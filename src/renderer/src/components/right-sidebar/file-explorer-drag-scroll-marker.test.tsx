@@ -280,7 +280,7 @@ function HandlersProbe({ scrollRef }: { scrollRef: React.RefObject<HTMLDivElemen
   capturedHandlers = useFileExplorerHandlers({
     activeWorktreeId: 'wt-1',
     runtimeEnvironmentId: null,
-    openWorkspaceFile: vi.fn(),
+    openFile: vi.fn(),
     makePreviewFilePermanent: vi.fn(),
     toggleDir: vi.fn(),
     loadDir: vi.fn(),

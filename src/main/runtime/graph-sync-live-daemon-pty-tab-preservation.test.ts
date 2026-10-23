@@ -16,6 +16,7 @@ import type {
   RuntimeMobileSessionTabsResult
 } from '../../shared/runtime-types'
 import { OrcaRuntimeService } from './orca-runtime'
+import { committingSpawn } from './bind-first-pane.test-fixture'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => ({ isDestroyed: () => false })) },
@@ -131,30 +132,41 @@ function createHarness() {
 
   const spawnedTabIdByWorktree = new Map<string, string>()
   const spawn = vi.fn(
-    async (args: {
-      worktreeId: string
-      tabId: string
-      leafId: string
-      persistHostSessionBinding?: boolean
-    }) => {
-      const ptyId = PTY_ID_BY_WORKTREE[args.worktreeId]!
-      spawnedTabIdByWorktree.set(args.worktreeId, args.tabId)
-      // Why: only the host binding contract decides this — the test must not
-      // hand the runtime an ownership signal the create path did not produce.
-      if (args.persistHostSessionBinding) {
-        persistPtyBinding(args.worktreeId, args.tabId, args.leafId, ptyId)
+    committingSpawn(
+      runtime,
+      async (args: {
+        worktreeId?: string
+        tabId?: string
+        leafId?: string
+        persistHostSessionBinding?: boolean
+      }) => {
+        const { worktreeId, tabId, leafId } = args
+        if (!worktreeId || !tabId || !leafId) {
+          throw new Error('pane spawn without a worktree, tab and leaf')
+        }
+        const ptyId = PTY_ID_BY_WORKTREE[worktreeId]!
+        spawnedTabIdByWorktree.set(worktreeId, tabId)
+        // Why: only the host binding contract decides this — the test must not
+        // hand the runtime an ownership signal the create path did not produce.
+        if (args.persistHostSessionBinding) {
+          persistPtyBinding(worktreeId, tabId, leafId, ptyId)
+        }
+        return { id: ptyId }
       }
-      return { id: ptyId }
-    }
+    )
   )
   runtime.setPtyController({
     spawn,
     write: () => true,
     kill: vi.fn(() => true),
-    stopAndWait: vi.fn(async () => true),
+    // As the PTY host's stop: a confirmed stop has delivered the terminal's exit first.
+    stopAndWait: vi.fn(async (ptyId: string) => {
+      runtime.onPtyExit(ptyId, 0)
+      return true
+    }),
     listProcesses: vi.fn(async () => []),
     getForegroundProcess: async () => null
-  } as never)
+  })
   // The host runs the full desktop app: a window IS attached.
   runtime.attachWindow(1)
 

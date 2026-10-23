@@ -317,8 +317,12 @@ describe('useStructuredAgentSession options', () => {
   })
 
   it('sends the pick again as a new operation after a pending admission refusal', async () => {
+    const refreshedOptions = Promise.withResolvers<typeof OPTIONS>()
     let attempts = 0
     mocks.call.mockImplementation((_target, method) => {
+      if (method === 'agentSession.options' && fence === 4) {
+        return refreshedOptions.promise
+      }
       if (method !== 'agentSession.setOption') {
         // The hook also holds the session while it is mounted; only option writes are attempts.
         return Promise.resolve(method === 'agentSession.options' ? OPTIONS : null)
@@ -360,7 +364,8 @@ describe('useStructuredAgentSession options', () => {
     })
     fence = 4
     rerender()
-    await waitFor(() => expect(result.current.optionSnapshot).toHaveLength(2))
+    expect(result.current.optionSnapshot.every((entry) => !entry.settable)).toBe(true)
+    await act(async () => refreshedOptions.resolve(OPTIONS))
     await act(async () => {
       expect(await result.current.setStructuredOption('model', 'gpt-fast')).toBe(true)
     })

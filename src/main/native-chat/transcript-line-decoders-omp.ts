@@ -13,6 +13,7 @@ import {
   type NativeChatMessage
 } from '../../shared/native-chat-types'
 import type { AgentSessionTokenUsage } from '../../shared/agent-session-context-usage'
+import { buildImageDataUri } from '../../shared/image-data-uri'
 import {
   asRecord,
   extractString,
@@ -268,12 +269,14 @@ function ompContentBlock(record: Record<string, unknown> | null): NativeChatBloc
       const name = extractString(record.name) ?? 'tool'
       return { type: 'tool-call', name, input: record.arguments }
     }
-    case 'image':
-      // Why: omp stores images as content-addressed blob handles
-      // (`blob:sha256:…`) rather than a path or URL, so there is nothing the
-      // renderer can load. Dropping the block matches how the Claude mapper
-      // treats an image record with neither source.
-      return null
+    case 'image': {
+      const data = extractString(record.data)
+      const url =
+        data && !data.startsWith('blob:')
+          ? buildImageDataUri(extractString(record.mimeType) ?? undefined, data)
+          : null
+      return url ? { type: 'image-ref', url } : null
+    }
     default:
       return null
   }

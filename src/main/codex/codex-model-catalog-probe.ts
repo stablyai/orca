@@ -16,6 +16,7 @@ import type {
   AgentModelCatalogProbe,
   AgentModelCatalogSuccess
 } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
+import type { AgentModelCatalogLookup } from '../native-chat/agent-model-catalog/agent-model-catalog-discovery'
 
 export type CodexModelCatalogProbeDeps = CodexStructuredInvocationDeps & {
   /** Existing captured environment only: saved preference reads never recover a missing CLI. */
@@ -52,17 +53,16 @@ export function createCodexModelCatalogProbe(
   const resolve = async (
     accountHome: Parameters<AgentModelCatalogProbe>[0],
     cwd?: string,
-    savedOnly = false
+    lookup: AgentModelCatalogLookup = 'recover'
   ) => {
     const accountHomePath = requireLegacyAgentSessionAccountHome(accountHome).path
     const overlay = { ...deps.resolveEnv?.() }
+    const readEnvironment =
+      lookup === 'saved' ? deps.resolveSavedEnvironment : deps.resolveEnvironment
     const { command, environment } = await resolveCodexStructuredInvocation({
       ...deps,
-      resolveEnvironment: async () => ({
-        ...(await (savedOnly ? deps.resolveSavedEnvironment?.() : deps.resolveEnvironment?.())),
-        ...overlay
-      }),
-      ...(savedOnly ? { refreshEnvironmentAfterMiss: undefined } : {}),
+      resolveEnvironment: async () => ({ ...(await readEnvironment?.()), ...overlay }),
+      ...(lookup === 'recover' ? {} : { refreshEnvironmentAfterMiss: undefined }),
       ...(cwd ? { resolveWorkingDirectory: () => cwd } : {})
     })
     const args = [

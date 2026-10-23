@@ -32,6 +32,7 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
           package-manager-cache: false
       - name: Checkout the workflow policy
         uses: actions/checkout@v6

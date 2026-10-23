@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makeTuiIdleRuntime } from './tui-idle-wait-test-harness'
 import { waitForTranscriptIdle } from './agent-transcript-pane-test-harness'
+import { registerBoundPty } from './bind-first-pane.test-fixture'
 import { RuntimeMachineName } from './runtime-machine-name'
 import type { RuntimeSyncWindowGraph } from '../../shared/runtime-types'
 import type { OrcaRuntimeService } from './orca-runtime'
@@ -44,7 +45,7 @@ async function makeRuntime(launchAgent: TuiAgent | null, foreground = 'codex') {
   })
   runtime.attachWindow(1)
   runtime.syncWindowGraph(1, GRAPH)
-  runtime.registerPty(PTY_ID, WORKTREE_ID, null, {
+  registerBoundPty(runtime, PTY_ID, WORKTREE_ID, null, {
     tabId: TAB_ID,
     leafId: LEAF_ID,
     incarnationId: 'followups-inc',

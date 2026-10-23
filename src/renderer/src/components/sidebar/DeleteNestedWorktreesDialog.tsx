@@ -14,6 +14,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { getAllWorktreesFromState, getWorktreeOnHostFromState } from '@/store/selectors'
 import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
 import { RemovalUnsavedFilesNotice } from './RemovalUnsavedFilesNotice'
+import { confirmUnsavedDiscard } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
@@ -81,6 +82,7 @@ export function DeleteNestedWorktreesDialog({
     if (!plan || deleting) {
       return
     }
+    const confirmedDiscards = confirmUnsavedDiscard(useAppStore.getState, unsavedTargets)
     setDeleting(true)
     setOpen(false)
     setError(null)
@@ -96,7 +98,10 @@ export function DeleteNestedWorktreesDialog({
     })
     state.markWorktreesDeleting(nestedRows)
     try {
-      const result = await state.removeWorktree(target, true, { approvedNestedWorktrees: plan })
+      const result = await state.removeWorktree(target, true, {
+        approvedNestedWorktrees: plan,
+        confirmedDiscards
+      })
       if (!result.ok) {
         setPlan(null)
         toast.error(

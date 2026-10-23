@@ -41,6 +41,8 @@ export function createStartingWorkerDispatch(
     /** Who is dispatching, for nesting depth. Required so a new caller must decide. */
     creator: DispatchCreator
     maxDepth: number
+    /** A worker's own Dispatch that authorized this helper; it must still be the creator here. */
+    requiredCreatorDispatchId?: string
   }
 ): { dispatch: DispatchContextRow; worker: WorkerDispatchRow; task: TaskRow } {
   this.db.exec('BEGIN IMMEDIATE')
@@ -133,6 +135,16 @@ export function createStartingWorkerDispatch(
 
     const id = generateId('ctx')
     const creatorDispatchId = this.resolveCreatorDispatchId(params.creator)
+    if (
+      params.requiredCreatorDispatchId !== undefined &&
+      creatorDispatchId !== params.requiredCreatorDispatchId
+    ) {
+      throw new OrchestrationError(
+        'consumer_fenced',
+        `Dispatch ${params.requiredCreatorDispatchId} is no longer this caller's active work, so it cannot start a helper.`,
+        { effectsApplied: false }
+      )
+    }
     if (params.mutationReceipt) {
       this.db
         .prepare(

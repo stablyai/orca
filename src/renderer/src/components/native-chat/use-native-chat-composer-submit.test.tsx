@@ -5,6 +5,8 @@ import type { NativeChatStructuredComposerTransport } from './native-chat-compos
 import type { NativeChatPickerItem } from '../../../../shared/native-chat-picker-items'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
 import { useNativeChatComposerSubmit } from './use-native-chat-composer-submit'
+import { updateNativeChatComposerDraft } from './native-chat-composer-draft-store'
+import { nativeChatPastedTextOperations } from './native-chat-pasted-text-reference'
 import {
   clearNativeChatDraftCacheForTests,
   readNativeChatDraftCache,
@@ -76,6 +78,42 @@ function harness(options: {
 }
 
 describe('composer goal mode', () => {
+  it.each([false, true])(
+    'admits the actual ordinary/goal candidate only after completion, goal=%s',
+    async (goal) => {
+      const setObjective = vi.fn(async () => true)
+      const { hook, calls, onError, type } = harness({
+        draft: '/go',
+        threadGoal: { setObjective }
+      })
+      if (goal) {
+        act(() => hook.result.current.goalMode.interceptPick(vi.fn())(GOAL_ITEM))
+      }
+      const token = '[Pasted text](orca-paste:00000000-0000-4000-8000-000000000000)'
+      type(token, 0)
+      const id = '00000000-0000-4000-8000-000000000000'
+      nativeChatPastedTextOperations.set(id, { scopeKey: SCOPE, text: 'original' })
+      act(() => hook.result.current.send())
+      expect(onError).not.toHaveBeenCalled()
+      nativeChatPastedTextOperations.clear()
+      act(() => hook.result.current.send())
+      expect(onError).toHaveBeenCalledWith('This paste was not saved. Paste it again or remove it.')
+      expect(calls.sendStructured).not.toHaveBeenCalled()
+      expect(readNativeChatDraftCache(SCOPE)).toBe(token)
+      updateNativeChatComposerDraft(
+        SCOPE,
+        { pastedTextFiles: { [id]: '/p/saved.txt' } },
+        'immediate'
+      )
+      await act(async () => hook.result.current.send())
+      if (goal) {
+        expect(setObjective).toHaveBeenCalledWith('@/p/saved.txt')
+      } else {
+        expect(calls.sendStructured).toHaveBeenCalledWith(token, [])
+      }
+    }
+  )
+
   it('enters goal mode on a /goal pick and drops the token from the draft', () => {
     const { hook, calls } = harness({ draft: '/go', threadGoal: { setObjective: vi.fn() } })
     const pick = vi.fn()

@@ -26,6 +26,7 @@ import type { PtyProcessInspection } from '../providers/pty-process-inspection'
 import type { WriteSettlement } from '../../shared/pty-write-settlement'
 import type { StartupCwdFallback } from '../../shared/startup-cwd-fallback'
 import type { TerminalInputKind } from '../../shared/terminal-input-kind'
+import type { PaneResumeOutcome } from '../../shared/workspace-layout/workspace-layout-published'
 
 export type PtyInventoryRefreshOptions = {
   includeForegroundProcessEvidence?: boolean
@@ -100,6 +101,8 @@ export type RuntimePtyController = {
     signal?: AbortSignal
     refuseSleptWorktree?: boolean
     onPtySpawnCommitted?: () => void
+    /** Layout-owner build: whether a fresh start resumed its agent, told before its bind is written. */
+    onResumeOutcome?: (ptyId: string, outcome: PaneResumeOutcome) => void
     paneSpawnOperation?: PaneSpawnOperation
     adoptedStablePane?: {
       result: PtySpawnResult

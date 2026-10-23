@@ -10,7 +10,7 @@ import type { SshTargetOwner } from '../../shared/ssh-types'
 import type { KnownHostsOutcome } from './config/ssh-known-hosts'
 
 /** Phase 1 ships no dialog; `prompt` is reserved for Phase 2 and never produced today. */
-export type HostKeyAction = 'accept' | 'accept-and-remember' | 'reject' | 'prompt'
+type HostKeyAction = 'accept' | 'accept-and-remember' | 'reject' | 'prompt'
 
 export type HostKeyDecision = {
   action: HostKeyAction

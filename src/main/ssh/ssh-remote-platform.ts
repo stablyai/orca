@@ -1,9 +1,9 @@
 import type { RelayPlatform } from './remote-exec/remote-frame-protocol'
 
 export type RemotePathFlavor = 'posix' | 'windows'
-export type RemoteCommandDialect = 'posix' | 'powershell'
-export type RemoteOperatingSystem = 'linux' | 'darwin' | 'win32'
-export type RemoteArchitecture = 'x64' | 'arm64'
+type RemoteCommandDialect = 'posix' | 'powershell'
+type RemoteOperatingSystem = 'linux' | 'darwin' | 'win32'
+type RemoteArchitecture = 'x64' | 'arm64'
 
 export type RemoteHostPlatform = {
   relayPlatform: RelayPlatform

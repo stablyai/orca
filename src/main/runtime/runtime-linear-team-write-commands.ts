@@ -2,12 +2,13 @@ import {
   resolve,
   isPathInsideOrEqual,
   getLinearStatus,
-  LinearAgentAccessError,
-  getLinearCurrentIssueFromWorktree,
-  resolveLegacyLinearLinkWorkspace,
-  linearError,
   listLinearTeamsOrThrow
 } from './runtime-linear-command-dependencies'
+import { LinearAgentAccessError, linearError } from '../linear/issue-context/errors'
+import {
+  getLinearCurrentIssueFromWorktree,
+  resolveLegacyLinearLinkWorkspace
+} from '../linear/issue-context/current'
 import type {
   LinearCurrentIssueContextHints,
   LinearErrorCode,

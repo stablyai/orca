@@ -5,7 +5,8 @@ import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/e
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import type {
   LayoutApplyOutcome,
-  LayoutCommand
+  LayoutCommand,
+  LayoutEffects
 } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import type { DurableProfileStateMutation } from '../loading-store/store-runtime-state'
 import {
@@ -13,12 +14,24 @@ import {
   partitionEditorViewsOf
 } from '../loading-store/layout-editor-views'
 import { keepWslMoveFrozenSessionsForStore } from '../moving-wsl-projects/wsl-move-session-freeze'
-import { applyCommandToSession, type PaneLayoutChange } from './terminal-pane-admission'
+import {
+  applyCommandToSession,
+  type LayoutLiveContext,
+  type PaneLayoutChange
+} from './terminal-pane-admission'
 import { writeMovedLeafProfileRecords } from './terminal-leaf-move'
 import { writeRestorable } from './restorable-write'
 import { assignWorkspaceSessionPartition } from './terminal-topology-membership'
 import { resolveWindowPaneDetach, type WindowPaneDetachCommand } from './window-pane-detach'
 import type { TerminalTopologyCommitContext } from './terminal-topology-commit'
+
+/** The runtime's side of a layout command: live facts in, the routed partition's effects out. */
+export type LayoutCommandRun = {
+  live?: LayoutLiveContext
+  /** Stops the terminals the command replaces, before its write; false keeps their bindings. */
+  stopBeforeWrite?: (ptyIds: readonly string[]) => boolean
+  noteEffects?: (effects: LayoutEffects) => void
+}
 
 // A paused WSL move keeps its local rows as the quiesce left them.
 export function keepFrozen(
@@ -71,12 +84,22 @@ export function commitWindowPaneDetach(
 export function commitLayoutCommand(
   hostIds: readonly ExecutionHostId[],
   command: LayoutCommand,
-  context: TerminalTopologyCommitContext
+  context: TerminalTopologyCommitContext,
+  run: LayoutCommandRun = {}
 ): DurableProfileStateMutation<LayoutApplyOutcome> {
-  const changes = hostIds.map((hostId) => changeIn(hostId, command, context))
+  const changes = hostIds.map((hostId) => changeIn(hostId, command, context, run.live))
   const routed = changes[0]?.change.value
   if (!routed) {
     return { value: { ok: false, code: 'workspace_not_found' }, persist: false }
+  }
+  const effects = routed.ok ? changes[0]!.change.effects : undefined
+  // Why before the write: a terminal that would not stop keeps its pane. A write that then fails
+  // restores the binding to the stopped terminal, which the pane's next start replaces.
+  if (effects?.stopPtyIds.length && run.stopBeforeWrite?.(effects.stopPtyIds) === false) {
+    return { value: { ok: false, code: 'pane_already_bound' }, persist: false }
+  }
+  if (effects) {
+    run.noteEffects?.(effects)
   }
   return written(routed, routed.ok ? changes.filter(({ change }) => change.value.ok) : [], context)
 }
@@ -100,7 +123,8 @@ type PartitionChange = { hostId: ExecutionHostId; change: PaneLayoutChange<Layou
 function changeIn(
   hostId: ExecutionHostId,
   command: LayoutCommand,
-  context: TerminalTopologyCommitContext
+  context: TerminalTopologyCommitContext,
+  live?: LayoutLiveContext
 ): PartitionChange {
   const { editorViews } = context
   return {
@@ -109,7 +133,8 @@ function changeIn(
       hostId,
       context.getSession(hostId),
       command,
-      editorViews && partitionEditorViewsOf(editorViews, hostId)
+      editorViews && partitionEditorViewsOf(editorViews, hostId),
+      live
     )
   }
 }

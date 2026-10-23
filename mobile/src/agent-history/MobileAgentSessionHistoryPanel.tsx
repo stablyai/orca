@@ -42,7 +42,11 @@ const SCOPE_TABS: { scope: AiVaultScope; label: string }[] = [
   { scope: 'all', label: 'All' }
 ]
 
-export function MobileAgentSessionHistoryPanel({
+export function MobileAgentSessionHistoryPanel(props: MobileAgentSessionHistoryPanelProps) {
+  return <MobileAgentSessionHistoryPanelContent key={props.hostId} {...props} />
+}
+
+function MobileAgentSessionHistoryPanelContent({
   hostId,
   worktreeId,
   name = ''

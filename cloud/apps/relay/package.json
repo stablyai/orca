@@ -15,22 +15,23 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@hono/node-server": "^2.1.2",
+    "@hono/node-server": "^2.1.5",
     "@orca-cloud/postgres-schema": "workspace:*",
     "@orca-cloud/relay-contract": "workspace:*",
-    "hono": "^4.13.11",
+    "hono": "^4.13.13",
     "jose": "^6.2.12",
-    "pg": "^8.22.0",
+    "pg": "^8.23.1",
     "tweetnacl": "^1.0.3",
     "ws": "^8.22.0",
-    "zod": "^3.25.76"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@types/node": "^24.19.0",
-    "@types/pg": "^8.20.0",
-    "@types/ws": "^8.18.1",
+    "@types/node": "^24.19.2",
+    "@types/pg": "^8.23.1",
+    "@types/ws": "^8.18.2",
     "tsx": "^4.23.15",
-    "typescript": "^5.9.3",
-    "vitest": "^4.1.12"
+    "typescript": "^7.0.2",
+    "typescript-api": "npm:typescript@6.0.3",
+    "vitest": "^5.0.5"
   }
 }

@@ -59,7 +59,6 @@ vi.mock('electron', () => ({
 vi.mock('../window/foreground-activation-policy', () => ({
   isBackgroundLaunch: mocks.backgroundLaunch
 }))
-vi.mock('@electron-toolkit/utils', () => ({ is: { dev: true } }))
 vi.mock('./cli-launch-redirect', () => ({
   maybeRedirectCliLaunch: () => ({ redirected: false, status: 0 })
 }))

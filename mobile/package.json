@@ -60,6 +60,7 @@
     "react-dom": "19.2.8",
     "react-native": "^0.83.10",
     "react-native-gesture-handler": "^2.31.2",
+    "react-native-libsodium": "1.7.0",
     "react-native-reanimated": "4.3.4",
     "react-native-safe-area-context": "^5.7.0",
     "react-native-screens": "^4.24.0",

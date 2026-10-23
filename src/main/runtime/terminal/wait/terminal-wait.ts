@@ -48,6 +48,8 @@ function shouldProbeVisibleScreen(
 type RuntimeTerminalWaitDependencies = TuiIdleEvidenceSource & {
   defaultTimeoutMs: number
   getLivePty(handle: string): { pty: RuntimePtyWorktreeRecord } | null
+  /** A disconnected terminal that may still run, so an exit wait keeps waiting for its end. */
+  exitUnsettled(pty: RuntimePtyWorktreeRecord): boolean
   getLiveLeaf(handle: string): { leaf: RuntimeLeafRecord }
   startVisibleReadProbe(
     waiter: TerminalWaiter,
@@ -86,7 +88,7 @@ export class RuntimeTerminalWait {
     const condition = options?.condition ?? 'exit'
     const pty = this.deps.getLivePty(handle)
     if (pty) {
-      if (condition === 'exit' && !pty.pty.connected) {
+      if (condition === 'exit' && !pty.pty.connected && !this.deps.exitUnsettled(pty.pty)) {
         return buildPtyTerminalWaitResult(handle, condition, pty.pty)
       }
       const ptyWaitText = buildTerminalWaitText(
@@ -135,7 +137,11 @@ export class RuntimeTerminalWait {
         if (!live) {
           this.waiters.remove(waiter)
           reject(new Error('terminal_handle_stale'))
-        } else if (condition === 'exit' && !live.pty.connected) {
+        } else if (
+          condition === 'exit' &&
+          !live.pty.connected &&
+          !this.deps.exitUnsettled(live.pty)
+        ) {
           this.waiters.resolve(waiter, buildPtyTerminalWaitResult(handle, condition, live.pty))
         } else if (condition === 'tui-idle') {
           const livePtyWaitText = buildTerminalWaitText(

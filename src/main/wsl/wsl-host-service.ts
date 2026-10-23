@@ -36,6 +36,8 @@ export type WslHostConnector = {
   readOrcadPublicKey(distro: string): Promise<string | null>
   /** User-initiated; may boot the distro. An intent retries or forces a skipped update. */
   connect(distro: string, options?: { intent?: WslHostConnectIntent }): Promise<WslOrcadConnection>
+  /** The user asked again: a standing pairing-repair failure or spent cap must not answer it. */
+  forgetPairingFailures?(environmentId: string): void
   get(distro: string): WslOrcadConnection | null
   /** Checks the paired server without starting a stopped or unconfirmed distro. */
   isReachable(distro: string, environmentId: string): Promise<boolean>
@@ -217,6 +219,7 @@ export class WslHostService {
     if (refusal || this.removing.has(environmentId)) {
       throw new Error(refusal?.message ?? WSL_HOST_REMOVING_MESSAGE)
     }
+    this.wsl.forgetPairingFailures?.(environmentId)
     await this.wsl.connect(record.distro, options)
   }
 

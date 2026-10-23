@@ -101,11 +101,3 @@ export function isEditorBufferIdentityRetired(
 ): boolean {
   return identity.environmentId !== null && retiredEnvironmentIds.includes(identity.environmentId)
 }
-
-/**
- * A record id no identity key can equal. Records on a retired environment move here and are never
- * merged into the replacement machine's records, even with an identical path and baseline.
- */
-export function detachedEditorBufferId(viewId: string): string {
-  return `detached:${viewId}`
-}

@@ -24,11 +24,11 @@ import {
   getSshTargetRegistryStore
 } from '../../ssh/targets/ssh-target-registry'
 
-export const ORCAD_BIND_HOST = '127.0.0.1'
+const ORCAD_BIND_HOST = '127.0.0.1'
 
 // Why empty: managed slots always carry their pinned runtime marker, so a marker-less slot
 // fails to launch instead of silently running on whatever Node the host has.
-export const MANAGED_ORCAD_LEGACY_NODE_PATH = ''
+const MANAGED_ORCAD_LEGACY_NODE_PATH = ''
 
 export function requireManagedOrcadInfrastructure() {
   const targetStore = requireManagedOrcadTargetStore()

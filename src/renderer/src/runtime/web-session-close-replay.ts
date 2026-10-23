@@ -38,6 +38,7 @@ export type WebSessionCloseReplay = {
   /** Every host id the close suppressed; the first is the one sent. */
   hostTabIds: readonly string[]
   intentKey: string
+  force?: true
 }
 
 // Session-scoped on purpose: after a reload a held close starts a fresh attempt count.
@@ -137,7 +138,8 @@ export function holdWebSessionCloseForReplay(
   store: PairedTerminalTabCloseIntentStore,
   owner: WebSessionIntentOwner,
   worktreeId: string,
-  hostTabIds: readonly string[]
+  hostTabIds: readonly string[],
+  options: { force?: boolean } = {}
 ): void {
   hideHeldClose(owner, worktreeId, hostTabIds)
   if (!worktreeId || !hostTabIds[0]) {
@@ -149,7 +151,8 @@ export function holdWebSessionCloseForReplay(
       hostTabIds: [...hostTabIds],
       worktreeId,
       closedAt: Date.now(),
-      ...(owner.pairingRevision !== undefined ? { pairingRevision: owner.pairingRevision } : {})
+      ...(owner.pairingRevision !== undefined ? { pairingRevision: owner.pairingRevision } : {}),
+      ...(options.force ? { force: true as const } : {})
     })
   )
 }
@@ -213,7 +216,13 @@ export function takeDueWebSessionCloseReplays(
     attempt.inFlight = true
     attempt.attempts += 1
     attemptsByIntent.set(key, attempt)
-    due.push({ owner, worktreeId: intent.worktreeId, hostTabIds: intent.hostTabIds, intentKey })
+    due.push({
+      owner,
+      worktreeId: intent.worktreeId,
+      hostTabIds: intent.hostTabIds,
+      intentKey,
+      ...(intent.force ? { force: true as const } : {})
+    })
   }
   if (dropped.length > 0) {
     changeHeldIntents(store, environmentId, () => store.clear(environmentId, dropped))

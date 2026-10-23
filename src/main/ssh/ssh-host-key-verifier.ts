@@ -17,7 +17,7 @@ import {
 } from './config/ssh-known-hosts'
 import { decideHostKey, type HostKeyDecision, type HostKeyPolicy } from './ssh-host-key-decision'
 
-export type TrustedHostKeyLookup = (query: {
+type TrustedHostKeyLookup = (query: {
   host: string
   port: number
   keyType: string
@@ -157,7 +157,7 @@ export function orderServerHostKeyAlgorithms(
   return [...preferred, ...supported.filter((algorithm) => !preferredSet.has(algorithm))]
 }
 
-export type VerifyCallback = (accept: boolean) => void
+type VerifyCallback = (accept: boolean) => void
 
 /**
  * The ssh2 `hostVerifier`.

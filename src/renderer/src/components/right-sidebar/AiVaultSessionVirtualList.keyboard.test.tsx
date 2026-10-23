@@ -8,6 +8,8 @@ import type { StructuredAgentLaunchSettlement } from '@/lib/structured-agent-lau
 import type { AgentSessionLaunchVerdict } from '@/lib/agent-session-launch-plan'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
@@ -78,7 +80,22 @@ vi.mock('@/lib/activate-ai-vault-structured-session', async (importOriginal) => 
       structuredSession: { sessionId: string; workspaceId: string }
     }) => {
       const tabs = useAppStore.getState().unifiedTabsByWorktree[s.workspaceId] ?? []
-      if (!tabs.some((tab) => tab.entityId === s.sessionId)) {
+      if (tabs.some((tab) => tab.entityId === s.sessionId)) {
+        return true
+      }
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        // Switch-on, the host's republished chat reaches the window as main's frame.
+        await layoutApplyTestTransport.call({
+          command: {
+            type: 'openAgentSessionTab',
+            workspace: s.workspaceId,
+            tabId: s.sessionId,
+            sessionId: s.sessionId,
+            agent: 'claude'
+          }
+        })
+        await layoutApplyTestTransport.settle()
+      } else {
         useAppStore.getState().createUnifiedTab(s.workspaceId, 'agent-session', {
           id: s.sessionId,
           entityId: s.sessionId,
@@ -91,7 +108,23 @@ vi.mock('@/lib/activate-ai-vault-structured-session', async (importOriginal) => 
   )
 }))
 
+// Switch-on, main opens and closes the chat tabs and its frames draw them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await importOriginal())
+)
+
 import { AiVaultSessionVirtualList } from './AiVaultSessionVirtualList'
+import {
+  drawTabsFromMain,
+  type TabsDrawnFromMain
+} from '@/store/slices/tabs-drawn-from-main.test-fixture'
 
 class NoopResizeObserver {
   observe(): void {}
@@ -222,7 +255,11 @@ beforeEach(() => {
   })
 })
 
+let main: TabsDrawnFromMain | undefined
+
 afterEach(() => {
+  main?.close()
+  main = undefined
   cleanup()
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
@@ -270,6 +307,7 @@ describe('Session History keyboard selection', () => {
         agentSessionAgent: 'claude'
       })
     }
+    main = await drawTabsFromMain(useAppStore)
     const order = () => store().groupsByWorktree[workspaceId]?.[0]?.tabOrder
     const resumed = structuredAgentSessionTabId('new')
     const confirm = vi.fn<(options: unknown) => Promise<boolean>>()
@@ -278,6 +316,7 @@ describe('Session History keyboard selection', () => {
     const settle = async () =>
       act(async () => {
         await new Promise((resolve) => setTimeout(resolve, 0))
+        await main?.settle()
       })
     const pick = async (settlement: StructuredAgentLaunchSettlement, enter = press) => {
       launch.settlement = settlement
@@ -339,6 +378,7 @@ describe('Session History keyboard selection', () => {
         agentSessionAgent: 'claude'
       })
     }
+    main = await drawTabsFromMain(useAppStore)
     const order = () => useAppStore.getState().groupsByWorktree[workspaceId]?.[0]?.tabOrder
     const dismiss = vi.fn()
     const { press } = renderList({
@@ -357,6 +397,7 @@ describe('Session History keyboard selection', () => {
       press('Enter')
       await act(async () => {
         await new Promise((resolve) => setTimeout(resolve, 0))
+        await main?.settle()
       })
     }
     await refusedBy('old')

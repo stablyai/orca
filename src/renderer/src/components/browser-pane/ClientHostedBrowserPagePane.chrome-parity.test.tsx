@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   BrowserCertificateFailure,
@@ -14,7 +14,11 @@ import type {
   BrowserHistoryNavigateCommand,
   BrowserPageCommandTarget
 } from '../../../../shared/browser-page-command-target'
-import type { BrowserPageZoomCommand } from '../../../../shared/browser-page-zoom'
+import type { BrowserPageSiteDisplay } from '../../../../shared/browser-site-display'
+import {
+  normalizeBrowserPageZoomLevel,
+  type BrowserPageZoomCommand
+} from '../../../../shared/browser-page-zoom'
 
 const toastMocks = vi.hoisted(() => ({
   loading: vi.fn(),
@@ -54,6 +58,8 @@ let reloadRequests = paneChannel<BrowserPageCommandTarget>()
 let hardReloadRequests = paneChannel<BrowserPageCommandTarget>()
 let zoomRequests = paneChannel<BrowserPageZoomCommand>()
 let openDevTools = vi.fn(async () => true)
+let copyImageAt = vi.fn(async () => true)
+let zoomPage = vi.fn(async (): Promise<BrowserPageSiteDisplay | null> => null)
 let proceedCertificate = vi.fn(async () => ({ ok: true as const }))
 let openUrl = vi.fn(async () => {})
 let writeClipboardText = vi.fn(async () => {})
@@ -69,6 +75,13 @@ beforeEach(() => {
   hardReloadRequests = paneChannel()
   zoomRequests = paneChannel()
   openDevTools = vi.fn(async () => true)
+  copyImageAt = vi.fn(async () => true)
+  zoomPage = vi.fn(async () => ({
+    site: 'example.com',
+    zoomLevel: normalizeBrowserPageZoomLevel(1),
+    siteHasZoom: true,
+    colorScheme: null
+  }))
   proceedCertificate = vi.fn(async () => ({ ok: true as const }))
   openUrl = vi.fn(async () => {})
   writeClipboardText = vi.fn(async () => {})
@@ -78,7 +91,9 @@ beforeEach(() => {
       onContextMenuDismissed: contextMenuDismissed.subscribe,
       onPermissionDenied: permissionDenied.subscribe,
       openDevTools,
-      proceedCertificate
+      copyImageAt,
+      proceedCertificate,
+      zoomPage
     },
     ui: {
       onFindInBrowserPage: (_source: unknown, callback: () => void) =>
@@ -113,12 +128,54 @@ describe('ClientHostedBrowserPagePane chrome parity', () => {
     expect(webview.goBack).toHaveBeenCalledTimes(1)
 
     act(() => contextMenu.emit(contextMenuEvent()))
-    act(() => screen.getByRole('menuitem', { name: 'Inspect Page' }).click())
-    expect(openDevTools).toHaveBeenCalledWith({ browserPageId: 'page-a' })
+    act(() => screen.getByRole('menuitem', { name: 'Inspect' }).click())
+    expect(openDevTools).toHaveBeenCalledWith({
+      browserPageId: 'page-a',
+      inspectAt: { x: 10, y: 10 }
+    })
 
     act(() => contextMenu.emit(contextMenuEvent()))
     act(() => screen.getByRole('menuitem', { name: 'Copy Page URL' }).click())
     expect(writeClipboardText).toHaveBeenCalledWith('https://example.internal/app')
+  })
+
+  it('shows what was clicked instead of page actions, and runs edits on the guest', () => {
+    const { webview } = renderPane()
+    const editable = {
+      canUndo: false,
+      canRedo: false,
+      canCut: false,
+      canCopy: false,
+      canPaste: true,
+      canSelectAll: true,
+      spelling: { suggestions: ['quick'], misspelledWord: 'quikc' }
+    }
+    const menuLabels = (): (string | null)[] =>
+      screen.getAllByRole('menuitem').map((item) => item.textContent)
+
+    act(() => contextMenu.emit(contextMenuEvent({ x: 30, y: 40, editable })))
+    expect(menuLabels()).not.toContain('Back')
+    expect(screen.getByRole('menuitem', { name: 'Cut' })).toHaveProperty('disabled', true)
+    act(() => screen.getByRole('menuitem', { name: 'quick' }).click())
+    expect(webview.replaceMisspelling).toHaveBeenCalledWith('quick')
+
+    act(() => contextMenu.emit(contextMenuEvent({ editable })))
+    act(() => screen.getByRole('menuitem', { name: 'Paste' }).click())
+    expect(webview.paste).toHaveBeenCalledTimes(1)
+
+    act(() =>
+      contextMenu.emit(
+        contextMenuEvent({
+          x: 30,
+          y: 40,
+          image: { url: 'data:image/png;base64,AA', canCopy: true }
+        })
+      )
+    )
+    // Why: a data: image has no URL a tab can load on its own.
+    expect(menuLabels()).not.toContain('Open Image in New Tab')
+    act(() => screen.getByRole('menuitem', { name: 'Copy Image' }).click())
+    expect(copyImageAt).toHaveBeenCalledWith({ browserPageId: 'page-a', point: { x: 30, y: 40 } })
   })
 
   it('opens Find from the chord in chrome and from the chord forwarded out of the guest', () => {
@@ -169,21 +226,18 @@ describe('ClientHostedBrowserPagePane chrome parity', () => {
     expect(webview.goForward).toHaveBeenCalledTimes(1)
   })
 
-  it('zooms the retained guest and shows the level while the chord lands', () => {
-    const { webview } = renderPane()
+  it('zooms its own page and shows the level main settled on', async () => {
+    renderPane()
     // The HUD is aria-hidden until a zoom lands, so it has to be queried past that gate.
     const indicator = screen.getByRole('status', { hidden: true })
     expect(indicator.getAttribute('aria-hidden')).toBe('true')
 
     act(() => zoomRequests.emit({ browserPageId: 'page-b', direction: 'in' }))
-    expect(webview.setZoomLevel).not.toHaveBeenCalled()
-
     act(() => zoomRequests.emit({ browserPageId: 'page-a', direction: 'in' }))
 
-    expect(webview.setZoomLevel).toHaveBeenCalledTimes(1)
-    expect(webview.setZoomLevel.mock.calls[0]![0]).toBeGreaterThan(0)
-    expect(indicator.getAttribute('aria-hidden')).toBe('false')
-    expect(indicator.textContent).not.toBe('100%')
+    expect(zoomPage.mock.calls).toEqual([[{ browserPageId: 'page-a', direction: 'in' }]])
+    await waitFor(() => expect(indicator.getAttribute('aria-hidden')).toBe('false'))
+    expect(indicator.textContent).toBe('125%')
   })
 
   it('offers Proceed Anyway on a certificate failure and sends it to the local session', () => {
@@ -388,8 +442,10 @@ function contextMenuEvent(
     selectionText: '',
     canGoBack: true,
     canGoForward: false,
+    editable: null,
+    image: null,
     ...overrides
-  } as BrowserContextMenuRequestedEvent
+  }
 }
 
 function renderPane(
@@ -458,6 +514,8 @@ function createWebview(): Electron.WebviewTag & { setZoomLevel: ReturnType<typeo
     blur: vi.fn(),
     goBack: vi.fn(),
     goForward: vi.fn(),
+    paste: vi.fn(),
+    replaceMisspelling: vi.fn(),
     reload: vi.fn(),
     reloadIgnoringCache: vi.fn(),
     stop: vi.fn(),

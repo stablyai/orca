@@ -323,7 +323,7 @@ describe('NewWorktreeModal project targets', () => {
     await flushUpdates()
 
     expect(renderer.root.findAll((node) => node.props.label === 'Workspace name')).toHaveLength(1)
-    expect(sendRequest).toHaveBeenCalledWith('preflight.detectAgents')
+    expect(sendRequest).toHaveBeenCalledWith('preflight.detectAgents', { repoId: 'folder-1' })
     expect(sendRequest).not.toHaveBeenCalledWith('ssh.getState', expect.anything())
     expect(sendRequest.mock.calls.map(([method]) => method)).not.toContain(
       'worktree.prefetchCreateBase'
@@ -468,16 +468,16 @@ describe('NewWorktreeModal project targets', () => {
     const listCalls = () =>
       desktop.sendRequest.mock.calls.filter(([method]) => method === MOBILE_RELAY_HOSTS_LIST_METHOD)
     // The host list's own names: no server rows have loaded behind a sheet opened from Home.
-    const sheet = (routeVisible: boolean) =>
+    const sheet = (visible: boolean) =>
       createElement(NewWorktreeModalController, {
-        routeVisible,
+        visible,
         client: desktop,
         hostCapabilities: [MOBILE_DESKTOP_RELAY_RUNTIME_CAPABILITY],
         hostId: 'host-1',
         hostLabelById: new Map(),
         openExternalUrl: () => {},
         onCreated: () => {},
-        onRouteVisibleChange: () => {}
+        onClose: () => {}
       })
 
     await act(async () => {

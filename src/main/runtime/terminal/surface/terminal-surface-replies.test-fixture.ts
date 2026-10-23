@@ -76,6 +76,8 @@ export function surfaceRuntime(
   }
   const runtimeStore = {
     ...harness.runtimeStore,
+    // The runtime's own session write, as the Store applies it: then tells its write listeners.
+    setWorkspaceSession: vi.fn((next: WorkspaceSessionState) => setSession(next)),
     getWorkspaceSessionHostIds: () => ['local'],
     // A terminal's binding write, as the Store applies it: then tells its write listeners.
     persistPtyBinding: async (

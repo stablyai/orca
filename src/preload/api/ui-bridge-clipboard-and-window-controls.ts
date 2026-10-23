@@ -3,6 +3,7 @@ import { ipcRenderer, webFrame } from 'electron'
 import {
   richMarkdownContextMenuCommandChannel,
   richMarkdownContextMenuTargetChannel,
+  plainTextContextMenuTargetChannel,
   type RichMarkdownContextMenuCommandPayload,
   type RichMarkdownContextMenuTableTarget
 } from '../../shared/rich-markdown-context-menu'
@@ -52,20 +53,11 @@ export const uiClipboardAndWindowControlsApi = {
   respondTerminalTabClose: (response) => {
     ipcRenderer.send('ui:terminalTabCloseResponse', response)
   },
-  onSleepWorktree: (callback: (data: { worktreeId: string }) => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, data: { worktreeId: string }) =>
-      callback(data)
-    ipcRenderer.on('ui:sleepWorktree', listener)
-    return () => ipcRenderer.removeListener('ui:sleepWorktree', listener)
-  },
-  onWorktreeSleepRequest: (callback) => {
-    const listener = (_event: Electron.IpcRendererEvent, request: Parameters<typeof callback>[0]) =>
-      callback(request)
-    ipcRenderer.on('ui:worktreeSleepRequest', listener)
-    return () => ipcRenderer.removeListener('ui:worktreeSleepRequest', listener)
-  },
-  respondWorktreeSleep: (response) => {
-    ipcRenderer.send('ui:worktreeSleepResponse', response)
+  onWorkspaceSleep: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, notice: Parameters<typeof callback>[0]) =>
+      callback(notice)
+    ipcRenderer.on('ui:workspaceSleep', listener)
+    return () => ipcRenderer.removeListener('ui:workspaceSleep', listener)
   },
   onResumeSleepingAgents: (callback: (data: { worktreeId: string }) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: { worktreeId: string }) =>
@@ -92,6 +84,11 @@ export const uiClipboardAndWindowControlsApi = {
     /** With `forNativeChatDraft`: a structured chat on this machine, whose sends claim its pastes. */
     forStructuredChat?: boolean
   }): Promise<string | null> => ipcRenderer.invoke('clipboard:saveImageAsTempFile', args),
+  savePastedTextAsFile: (args: {
+    text: string
+    runtimeEnvironmentId?: string | null
+    agentSessionAttachment?: AgentSessionAttachmentClipboardTarget
+  }): Promise<string> => ipcRenderer.invoke('clipboard:savePastedTextAsFile', args),
   clipboardHasImage: (): Promise<boolean> => ipcRenderer.invoke('clipboard:hasImage'),
   readClipboardFilePaths: (): Promise<string[]> => ipcRenderer.invoke('clipboard:readFilePaths'),
   restoreNativeChatPastes: (
@@ -139,6 +136,9 @@ export const uiClipboardAndWindowControlsApi = {
   },
   setRichMarkdownContextMenuTarget: (target: RichMarkdownContextMenuTableTarget | null): void => {
     ipcRenderer.send(richMarkdownContextMenuTargetChannel, target)
+  },
+  markPlainTextContextMenuTarget: (): void => {
+    ipcRenderer.send(plainTextContextMenuTargetChannel)
   },
   setTerminalInputFocused: (focused: boolean): void => {
     ipcRenderer.send('ui:setTerminalInputFocused', focused)

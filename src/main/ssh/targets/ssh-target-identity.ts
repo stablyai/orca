@@ -9,7 +9,7 @@ import type { SshTarget } from '../../../shared/ssh-types'
  */
 export type SshIdentityFields = Pick<SshTarget, 'configHost' | 'host' | 'port' | 'username'>
 
-export function normalizeSshIdentityPart(value: string | undefined): string {
+function normalizeSshIdentityPart(value: string | undefined): string {
   return value?.trim().toLowerCase() ?? ''
 }
 

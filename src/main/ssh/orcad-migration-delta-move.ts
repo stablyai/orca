@@ -43,12 +43,18 @@ import {
   retireProvenExitedLeases,
   type CensusHostRelayTerminals
 } from './orcad-migration-terminal-gate'
-import { currentOrcadSourceFingerprint } from './orcad-retained-source'
+import {
+  currentOrcadSourceFingerprint,
+  orcadCatalogFingerprint,
+  unmovedOrcadSourceRows,
+  withKeptOrcadSourceRows
+} from './orcad-retained-source'
+import { collectOrcadMigrationSourceCatalog } from '../persistence/migrating-orcad-catalog/orcad-source-catalog'
 import type { SshTargetOrcadClaims } from './targets/ssh-target-orcad-claims'
 import { orcadMigrationRefusalReason } from './orcad-migration-refusal-reason'
 import { errorMessage } from '../../shared/error-message'
 
-export type OrcadDeltaMoveArgs = {
+type OrcadDeltaMoveArgs = {
   userDataPath: string
   store: Store
   claims: SshTargetOrcadClaims
@@ -243,10 +249,12 @@ export async function keepOrcadServerVersion(args: {
   if (!environmentId || !args.target.orcadFence?.sourceChangedAt || !head) {
     throw new Error('orcad_delta_not_changed')
   }
+  const current = collectOrcadMigrationSourceCatalog(args.store, args.target)
+  const unmoved = unmovedOrcadSourceRows(current, committedOrcadMigrationChain(chain))
   writeOrcadMigrationSourceCutover(args.userDataPath, {
-    ...head,
+    ...withKeptOrcadSourceRows(head, unmoved),
     // Keeping the server's version is the explicit reconcile: the source as it is now is the baseline.
-    sourceBaselineFingerprint: currentOrcadSourceFingerprint(args.store, args.target)
+    sourceBaselineFingerprint: orcadCatalogFingerprint(current)
   })
   args.store.updateSshTarget(args.target.id, { orcadFence: { environmentId } })
   await args.claims.flush()

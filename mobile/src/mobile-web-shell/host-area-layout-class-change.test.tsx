@@ -87,6 +87,7 @@ const store: GenerationStore = {
     throw new Error('not reached')
   },
   abortStagedGeneration: async () => undefined,
+  openReusableAssets: async () => ({ has: () => false, check: async () => false }),
   sweepStagedGenerations: async () => undefined,
   deleteHostCache: async () => undefined,
   recordUpdateFailure: async () => undefined,

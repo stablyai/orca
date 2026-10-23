@@ -128,7 +128,8 @@ describe('the sleep, wake and start commands on a resume record', () => {
     expect(woken.ok && leafOf(woken.model, leaf(1))).toMatchObject({ resume: { origin: 'live' } })
   })
 
-  it('refuses a plain start of an unbound pane holding a resume record', () => {
+  // C1c: a start resumes the agent from the pane's record, so a record no longer refuses it.
+  it('starts an unbound pane holding a resume record, keeping the record to resume from', () => {
     const context = testContext()
     const unboundPane = `tab-unbound:${leaf(4)}`
     const { layout } = load(localDesktopSession())
@@ -147,10 +148,9 @@ describe('the sleep, wake and start commands on a resume record', () => {
     ).model
     expect(leafOf(held, leaf(4))!.resume).toBeDefined()
     const start = { type: 'startPane' as const, workspace: GIT_KEY, paneKey: unboundPane }
-    expect(applyLayoutCommand(held, start, context)).toMatchObject({
-      ok: false,
-      code: 'pane_sleeping'
-    })
+    const started = applyLayoutCommand(held, start, context)
+    expect(started.ok && started.effects?.startPaneKeys).toEqual([unboundPane])
+    expect(started.ok && leafOf(started.model, leaf(4))!.resume).toBeDefined()
     // A bound pane's resume record does not stop it: its terminal runs.
     const bound = { type: 'startPane' as const, workspace: GIT_KEY, paneKey: shellPane }
     const live = build(

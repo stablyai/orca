@@ -13,6 +13,7 @@ import type { TerminalPaneSplitSource } from '../../shared/feature-education-tel
 import type { TerminalRevealIdentity } from '../../shared/terminal-reveal-identity'
 import type { TerminalPaneRevealTarget } from '../../shared/terminal-pane-reveal'
 import type { TuiAgent } from '../../shared/tui-agent'
+import type { WorkspaceSleepNotice } from '../../shared/workspace-sleep'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import type { ClientHostedBrowserRowsEvent } from '../../shared/client-hosted-browser-rows'
 import type {
@@ -158,7 +159,8 @@ export type RuntimeNotifier = {
     tabId: string,
     options?: { localPtyTeardownOwnedExternally?: boolean; force?: boolean }
   ): Promise<void>
-  sleepWorktree(worktreeId: string): void
+  /** A sleep main runs, for the window to follow; optional as only the real bridge wires it. */
+  workspaceSleepChanged?(notice: WorkspaceSleepNotice): void
   // Why: a phone opening a worktree wakes its slept agents by asking the host
   // renderer to run its own navigation-free wake (experimental agent sleep);
   // the runtime has no in-memory sleeping records or wake authority. Optional to
