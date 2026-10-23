@@ -12,8 +12,8 @@ import { describe, expect, it } from 'vitest'
  * (electron/electron#53989); 43.7.4 fixes it. A downgrade past either re-ships the bug,
  * and nothing else in the tree would notice.
  */
-// 43.7.8 fixes find-in-page looping across host iframes (electron/electron#54199).
-const MINIMUM_ELECTRON_VERSION = '43.7.8'
+// 43.8.1 blocks compromised eMudhra CAs and fixes concurrent verify-proc bypass (electron/electron#55047).
+const MINIMUM_ELECTRON_VERSION = '43.8.1'
 
 function parseVersion(specifier: string): [number, number, number] {
   const match = /(\d+)\.(\d+)\.(\d+)/.exec(specifier)
@@ -35,7 +35,7 @@ function meetsRuntimeFloor(specifier: string): boolean {
 }
 
 describe('electron runtime floor', () => {
-  it('pins Electron at or above the startup, webview-detach and find-in-page fixes', () => {
+  it('pins Electron at or above the startup, browser and certificate security fixes', () => {
     const packageJson = JSON.parse(
       readFileSync(join(__dirname, '../../package.json'), 'utf-8')
     ) as { devDependencies: Record<string, string> }

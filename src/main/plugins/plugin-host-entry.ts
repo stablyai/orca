@@ -6,6 +6,9 @@
  */
 import { createPluginWorkerRuntime } from './plugin-host-runtime'
 import type { PluginWorkerChildMessage } from '../../shared/plugins/plugin-host-protocol'
+import { removeDistrustedRootsFromDefaultTlsTrust } from '../../shared/distrusted-tls-certificates'
+
+removeDistrustedRootsFromDefaultTlsTrust()
 
 function sendToParent(message: PluginWorkerChildMessage): void {
   process.send?.(message)

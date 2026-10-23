@@ -1,6 +1,5 @@
-import { createHash } from 'node:crypto'
-
 import { normalizeCertificateError } from '../../shared/browser-certificate-errors'
+import { getPemCertificateSha256 } from '../../shared/pem-certificate-sha256'
 
 export { normalizeCertificateError }
 
@@ -14,16 +13,5 @@ export function getSupportedCertificateErrorCode(error: string): number | null {
 }
 
 export function getLeafCertificateSha256(certificate: Electron.Certificate): string | null {
-  const match = certificate.data.match(
-    /-----BEGIN CERTIFICATE-----([\s\S]*?)-----END CERTIFICATE-----/
-  )
-  if (!match) {
-    return null
-  }
-  try {
-    const der = Buffer.from(match[1].replace(/\s+/g, ''), 'base64')
-    return der.length > 0 ? createHash('sha256').update(der).digest('hex') : null
-  } catch {
-    return null
-  }
+  return getPemCertificateSha256(certificate.data)
 }

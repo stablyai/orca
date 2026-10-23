@@ -12,6 +12,7 @@ import {
 import { selectServeRuntime } from './orcad-local-serve-selection'
 import { pruneDesktopOrcadArtifactCache } from './orcad-artifact-cache-retention'
 import { findAppImageNodeRuntime } from '../node-runtime/appimage-bundled-node-runtime'
+import { removeDistrustedRootsFromDefaultTlsTrust } from '../../shared/distrusted-tls-certificates'
 
 function flagValue(argv: readonly string[], flag: string): string | null {
   const index = argv.indexOf(flag)
@@ -42,6 +43,7 @@ async function run(argv: readonly string[]): Promise<void> {
   process.stdout.write(`${formatServeRuntimeSelection(selection)}\n`, () => process.exit(0))
 }
 
+removeDistrustedRootsFromDefaultTlsTrust()
 run(process.argv.slice(2)).catch((error: unknown) => {
   // Any failure here is a reason to serve on Electron, never to fail `orca serve`.
   const reason = `orcad selection failed: ${error instanceof Error ? error.message : String(error)}`

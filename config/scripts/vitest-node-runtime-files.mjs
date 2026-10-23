@@ -23,6 +23,9 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/ai-vault/session-scanner-scope-walk.test.ts',
   // Electron main bridges streams with Node's implementation.
   'src/main/host/electron-http-client.test.ts',
+  // Node's default CA store APIs and X509 key export.
+  'src/shared/distrusted-tls-certificates.test.ts',
+  'src/main/network/distrusted-certificate-verify-proc.test.ts',
   'src/main/daemon/daemon-init-provider-installation.test.ts',
   'src/main/orcad/orcad-daemon-teardown-linux.test.ts',
   'src/renderer/src/components/terminal-pane/pty-input-write-queue.test.ts',

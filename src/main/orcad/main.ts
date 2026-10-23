@@ -24,6 +24,7 @@ import {
 } from '../../shared/windows-breakaway-launch'
 import { runWindowsBreakawayLaunchIfRequested } from '../../shared/windows-breakaway-launcher'
 import { parseArgs } from './orcad-command-arguments'
+import { removeDistrustedRootsFromDefaultTlsTrust } from '../../shared/distrusted-tls-certificates'
 
 // Why exit before the preflight: reaching this line means the whole module graph resolved
 // under plain Node, which is all the build guard needs to prove. Probing natives or
@@ -62,6 +63,7 @@ if (process.argv[2] === '--orcad-structured-provider-load-check') {
 
 function startOrcadProcess(): void {
   try {
+    removeDistrustedRootsFromDefaultTlsTrust()
     const argv = process.argv.slice(2)
     if ((argv.includes('--help') || argv.includes('-h')) && parseArgs(argv).help) {
       void main(argv).catch(failStartup)

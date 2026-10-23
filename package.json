@@ -282,7 +282,7 @@
     "devalue": "6.0.2",
     "diff": "8.0.4",
     "dompurify": "3.4.16",
-    "electron": "43.7.8",
+    "electron": "43.8.1",
     "electron-builder": "26.15.3",
     "electron-vite": "^6.0.0",
     "emoji-picker-react": "^4.22.3",

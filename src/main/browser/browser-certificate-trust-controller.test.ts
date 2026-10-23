@@ -292,6 +292,7 @@ describe('BrowserCertificateTrustController', () => {
     for (const event of [
       certificateEvent({ controller, guest, url: 'https://example.com/' }),
       certificateEvent({ controller, guest, error: 'ERR_CERT_DATE_INVALID' }),
+      certificateEvent({ controller, guest, error: 'net::ERR_CERT_REVOKED' }),
       certificateEvent({ controller, guest, isMainFrame: false })
     ]) {
       expect(event.callback).toHaveBeenCalledOnce()

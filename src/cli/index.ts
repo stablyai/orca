@@ -21,6 +21,7 @@ import type { RuntimeClient } from './runtime-client'
 import { COMMAND_SPECS } from './specs'
 import { resolveOrchestrationCliExecutable } from './runtime/orchestration-recovery-command'
 import { refuseConflictingSessionCallerFlags } from './session-caller-flags'
+import { removeDistrustedRootsFromDefaultTlsTrust } from '../shared/distrusted-tls-certificates'
 
 export { COMMAND_SPECS } from './specs'
 export { buildCurrentWorktreeSelector, normalizeWorktreeSelector } from './selectors'
@@ -250,5 +251,6 @@ async function runAgentTeamsTmuxShim(argv: string[]): Promise<void> {
 }
 
 if (require.main === module) {
+  removeDistrustedRootsFromDefaultTlsTrust()
   void main()
 }

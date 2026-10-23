@@ -10,6 +10,8 @@ import {
 import { openMainWindow as openMainWindowController } from './startup/main-window-controller'
 import { mainProcessState as state } from './startup/main-process-state'
 import { runMainProcessPreflight } from './startup/main-process-preflight'
+import { removeDistrustedRootsFromDefaultTlsTrust } from '../shared/distrusted-tls-certificates'
+import { installDistrustedCertificateVerifyProc } from './network/distrusted-certificate-verify-proc'
 import { registerMainProcessIpcHandlers } from './startup/main-process-ipc-bootstrap'
 import { initializeMainProcessReady } from './startup/main-process-ready'
 import { installMainProcessQuitHandlers } from './startup/main-process-quit'
@@ -100,6 +102,10 @@ const handleMacAppActivation = createMacAppActivationHandler({
   getWindow: () => state.mainWindow,
   requestActivation: requestDesktopActivation
 })
+
+// Why before preflight: no session or TLS socket can exist yet, so nothing escapes the distrust.
+removeDistrustedRootsFromDefaultTlsTrust()
+installDistrustedCertificateVerifyProc()
 
 const preflightReady = runMainProcessPreflight({
   focusExistingWindow,
