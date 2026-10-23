@@ -1,4 +1,5 @@
 import { buildDefaultSettings } from '../../../../shared/default-global-settings'
+import { getDefaultVoiceControlSettings } from '../../../../shared/constants'
 import { createRoot } from 'react-dom/client'
 import { useAppStore } from '@/store'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -92,7 +93,8 @@ export function installBrowserLinkMaterializationProbe() {
         openAiApiKeyConfigured: false,
         microphoneDeviceId: null,
         microphoneDeviceLabel: null,
-        unloadModelAfterMinutes: 15
+        unloadModelAfterMinutes: 15,
+        control: getDefaultVoiceControlSettings()
       }
     })
   useAppStore.setState({
