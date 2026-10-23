@@ -51,12 +51,23 @@ export function createFakeWslHostConnector(
   const port = offer ? Number(new URL(offer.endpoint).port) : 0
   const active = new Map<string, WslOrcadConnection>()
   const key = (distro: string): string => distro.toLowerCase()
+  const readDistros = () =>
+    config.distrosFile
+      ? FakeDistrosSchema.parse(JSON.parse(readFileSync(config.distrosFile, 'utf8')))
+      : config.distros
+  // Why: a test marks a distro stopped in distrosFile, which ends its server as a real shutdown would.
+  const stoppedSince = (distro: string): boolean => {
+    const stopped = readDistros().some(
+      (entry) => key(entry.name) === key(distro) && entry.state === 'stopped'
+    )
+    if (stopped && active.delete(key(distro))) {
+      onChange(distro, null, { state: 'closed' })
+    }
+    return stopped
+  }
   return {
     listDistros: async () =>
-      (config.distrosFile
-        ? FakeDistrosSchema.parse(JSON.parse(readFileSync(config.distrosFile, 'utf8')))
-        : config.distros
-      ).map((distro, index) => ({
+      readDistros().map((distro, index) => ({
         ...distro,
         id: `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`
       })),
@@ -88,7 +99,7 @@ export function createFakeWslHostConnector(
       return connection
     },
     get: (distro) => active.get(key(distro)) ?? null,
-    isReachable: async (distro) => active.has(key(distro)),
+    isReachable: async (distro) => !stoppedSince(distro) && active.has(key(distro)),
     disconnect: async (distro) => {
       if (active.delete(key(distro))) {
         onChange(distro, null, { state: 'closed' })

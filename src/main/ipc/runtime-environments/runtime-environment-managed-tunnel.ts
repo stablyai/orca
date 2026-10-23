@@ -29,11 +29,17 @@ import { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry
 import { connectionManager, getCurrentMainWindow } from '../ssh/ssh-ipc-context'
 import { getWslHostService } from '../../wsl/wsl-host-service-instance'
 import { assertWslHostReachable } from '../../wsl/wsl-host-gate'
+import { wslHostStoppedForPhoneMessage } from '../../wsl/wsl-host-add-admission'
+import { RemoteRuntimeClientError } from '../../../shared/remote-runtime-client-error'
 import { broadcastSshState } from '../ssh/ssh-renderer-broadcast'
+
+/** `wslStart: 'never'` serves a WSL host only while it runs: a paired phone never boots a distro. */
+export type ManagedRuntimeCallPreparation = { wslStart?: 'never' }
 
 export async function resolveManagedRuntimeEnvironment(
   userDataPath: string,
-  selector: string
+  selector: string,
+  preparation?: ManagedRuntimeCallPreparation
 ): Promise<ReturnType<typeof resolveEnvironment>> {
   const environment = resolveEnvironment(userDataPath, selector)
   // Every call, subscription and status probe passes here, so a gated-off WSL host is never reached.
@@ -41,14 +47,34 @@ export async function resolveManagedRuntimeEnvironment(
   const host = classifyRuntimeEnvironmentHost(environment)
   switch (host.kind) {
     case 'wsl':
-      // Reached over the wsl.exe bridge; connects only when an open project or terminal needs it.
-      await getWslHostService()?.ensureForRuntimeCall(environment.id)
+      await prepareWslHostForCall(environment, preparation)
       break
     case 'network':
       await prepareNetworkServerForCall(userDataPath, environment)
       break
   }
   return resolveEnvironment(userDataPath, environment.id)
+}
+
+async function prepareWslHostForCall(
+  environment: KnownRuntimeEnvironment,
+  preparation: ManagedRuntimeCallPreparation | undefined
+): Promise<void> {
+  const service = getWslHostService()
+  if (preparation?.wslStart === 'never') {
+    if (!service) {
+      const distro =
+        environment.orcadDeployment?.kind === 'wsl' ? environment.orcadDeployment.distro : null
+      throw new RemoteRuntimeClientError(
+        'remote_runtime_unavailable',
+        wslHostStoppedForPhoneMessage(distro ?? environment.id)
+      )
+    }
+    await service.requireRunningWithoutStart(environment.id)
+    return
+  }
+  // Reached over the wsl.exe bridge; connects only when an open project or terminal needs it.
+  await service?.ensureForRuntimeCall(environment.id)
 }
 
 async function prepareNetworkServerForCall(

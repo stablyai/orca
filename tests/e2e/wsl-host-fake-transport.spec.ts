@@ -4,19 +4,11 @@
  * host through the real add-host UI, adds a project on it, and runs a terminal there.
  */
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import {
-  _electron as electron,
-  type ElectronApplication,
-  type Page
-} from '@stablyai/playwright-test'
-import { getE2ECompletedOnboardingProfile } from './helpers/e2e-completed-onboarding-profile'
-import { getOrcaElectronLaunchArgs } from './helpers/electron-launch-args'
-import { cleanupE2EDaemons, closeElectronAppForE2E } from './helpers/electron-process-shutdown'
-import { createElectronHomeIsolation } from './helpers/electron-home-isolation'
-import { expect, forwardElectronProcessLogs, test } from './helpers/orca-app'
+import type { ElectronApplication, Page } from '@stablyai/playwright-test'
+import { expect, test, type forwardElectronProcessLogs } from './helpers/orca-app'
 import { RuntimeClient } from '../../src/cli/runtime/client'
 import { createRuntimeDesktopPairingOffer } from './helpers/paired-electron-client'
 import { encodePairingOffer } from '../../src/shared/pairing'
@@ -25,7 +17,6 @@ import {
   addWslHostEnvironment,
   findWslHostDeployment
 } from '../../src/shared/runtime-environment-wsl-host-store'
-import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../src/shared/wsl-host-internal-gate'
 import { openSidebarProjectDialog } from './helpers/sidebar-project-dialog'
 import { ensureTerminalVisible, waitForSessionReady } from './helpers/store'
 import {
@@ -34,82 +25,16 @@ import {
   waitForActiveTerminalManager,
   waitForTerminalOutput
 } from './helpers/terminal'
+import {
+  fakeWslConnects,
+  launchDesktopWithFakeWsl,
+  setWslHostsEnabled
+} from './helpers/wsl-host-fake-desktop'
 
 const WSL_ENVIRONMENT_ID = 'wsl:ubuntu'
 const WSL_HOST_LABEL = 'Ubuntu (WSL)'
 const UBUNTU_DISTRO = { name: 'Ubuntu', state: 'running', version: 2 }
 const LEGACY_DISTRO = { name: 'Legacy', state: 'stopped', version: 1 }
-
-async function launchDesktopWithFakeWsl(
-  pairingCode: string,
-  testInfo: Parameters<typeof forwardElectronProcessLogs>[1],
-  fakeOverrides: Record<string, unknown> = {},
-  options: { internalGate?: boolean; beforeLaunch?: (userDataDir: string) => void } = {}
-): Promise<{
-  app: ElectronApplication
-  page: Page
-  userDataDir: string
-  dispose: () => Promise<void>
-}> {
-  const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-wsl-desktop-'))
-  writeFileSync(
-    path.join(userDataDir, 'orca-data.json'),
-    `${JSON.stringify(getE2ECompletedOnboardingProfile(), null, 2)}\n`
-  )
-  options.beforeLaunch?.(userDataDir)
-  const { ELECTRON_RUN_AS_NODE: _unused, ...cleanEnv } = process.env
-  void _unused
-  const isolation = createElectronHomeIsolation({
-    inheritedEnv: cleanEnv,
-    launchEnv: {},
-    extraEnv: {
-      // WSL hosts exist only behind this internal gate; the gated-off test leaves it closed.
-      ...(options.internalGate === false ? {} : { [WSL_HOSTS_INTERNAL_GATE_ENV]: '1' }),
-      ORCA_E2E_FAKE_WSL_HOSTS: JSON.stringify({
-        distros: [
-          { name: 'Ubuntu', state: 'running', version: 2 },
-          { name: 'Legacy', state: 'stopped', version: 1 }
-        ],
-        pairingCode,
-        ...fakeOverrides
-      })
-    },
-    userDataDir
-  })
-  const app = await electron.launch({
-    args: getOrcaElectronLaunchArgs(path.join(process.cwd(), 'out', 'main', 'index.js'), false),
-    env: { ...isolation.env, NODE_ENV: 'development', ORCA_E2E_HEADLESS: '1' }
-  })
-  forwardElectronProcessLogs(app, testInfo)
-  const dispose = async (): Promise<void> => {
-    await closeElectronAppForE2E(app)
-    await cleanupE2EDaemons(userDataDir)
-    rmSync(userDataDir, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 })
-  }
-  try {
-    const page = await app.firstWindow({ timeout: 120_000 })
-    await page.waitForLoadState('domcontentloaded')
-    await waitForSessionReady(page)
-    return { app, page, userDataDir, dispose }
-  } catch (error) {
-    await dispose()
-    throw error
-  }
-}
-
-/** Every distro the fake connector was asked to start, from the log file it appends to. */
-function fakeWslConnects(connectLogFile: string): string[] {
-  return existsSync(connectLogFile)
-    ? readFileSync(connectLogFile, 'utf8').split('\n').filter(Boolean)
-    : []
-}
-
-async function setWslHostsEnabled(page: Page, enabled: boolean): Promise<void> {
-  await page.evaluate(async (experimentalWslHosts) => {
-    const settings = await window.api.settings.set({ experimentalWslHosts })
-    window.__store?.setState({ settings })
-  }, enabled)
-}
 
 async function settleAnimations(page: Page): Promise<void> {
   // Why finite only: spinners and pulses run forever; the dialog and popover fades do not.

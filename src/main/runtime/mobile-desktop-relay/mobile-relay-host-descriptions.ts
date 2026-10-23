@@ -39,7 +39,8 @@ export function describeRelayHosts(
         identity: { pairingRevision: identity.pairingRevision, runtimeId: identity.runtimeId },
         label: host.label,
         health: host.health,
-        relay: relayVerdict(host.health, answer)
+        relay: relayVerdict(host.health, answer),
+        ...(identity.orcadDeployment?.kind === 'wsl' ? { startsOnDesktop: true as const } : {})
       }
     ]
   })

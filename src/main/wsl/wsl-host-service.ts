@@ -4,6 +4,7 @@
  * or while a project or terminal the user has open needs it; never for background work.
  */
 import { errorMessage } from '../../shared/error-message'
+import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
 import { removeWslHostEnvironment } from '../../shared/runtime-environment-wsl-host-store'
 import {
   readWslHostDeployments,
@@ -22,6 +23,7 @@ import { persistWslHostConnection, toWslHostStatus } from './wsl-host-connection
 import {
   sameWslDistro,
   wslHostNotConnectedMessage,
+  wslHostStoppedForPhoneMessage,
   WSL_HOST_REMOVING_MESSAGE,
   wslHostRunRefusal
 } from './wsl-host-add-admission'
@@ -241,6 +243,25 @@ export class WslHostService {
       throw new Error(wslHostNotConnectedMessage(record.distro))
     }
     await connector.connect(record.distro)
+  }
+
+  /** A paired phone's call: serve a host that already runs, never start its distro for it. */
+  async requireRunningWithoutStart(environmentId: string): Promise<void> {
+    const refusal = wslHostRunRefusal(this.deps)
+    if (refusal || this.removing.has(environmentId)) {
+      throw new Error(refusal?.message ?? WSL_HOST_REMOVING_MESSAGE)
+    }
+    const record = this.recordForEnvironment(environmentId)
+    const connector = this.connector
+    if (!record || !connector || !(await connector.isReachable(record.distro, environmentId))) {
+      const message = wslHostStoppedForPhoneMessage(record?.distro ?? environmentId)
+      throw new RemoteRuntimeClientError('remote_runtime_unavailable', message)
+    }
+  }
+
+  /** Connected now, by the desktop's own last status; never probes or starts the distro. */
+  isConnected(environmentId: string): boolean {
+    return this.statuses.get(environmentId)?.state === 'ready'
   }
 
   /** Whether anything may still be started for this distro (spawn guard). */

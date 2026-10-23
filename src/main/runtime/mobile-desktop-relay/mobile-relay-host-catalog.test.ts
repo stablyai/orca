@@ -59,7 +59,7 @@ function fakeHosts(
     id: string
     name: string
     snapshot: RuntimeHostStatusSnapshot
-    orcadDeployment?: { sshTargetId: string }
+    orcadDeployment?: { sshTargetId: string } | { kind: 'wsl' }
     runtimeId?: string | null
     pairedDeviceId?: string
   }[]
@@ -179,6 +179,26 @@ describe('mobile relay host catalog', () => {
     ])
     const renamed = catalog(hosts, new Map([['ssh:devbox', 'Build box']])).catalog
     expect(renamed.list().hosts.map((host) => host.label)).toEqual(['Build box'])
+  })
+
+  it('marks a WSL host as one only the desktop starts, so a phone can say where to start it', () => {
+    const { hosts } = fakeHosts([
+      {
+        id: 'wsl:ubuntu',
+        name: 'Ubuntu (WSL)',
+        snapshot: snapshot('wsl:ubuntu', 'unreachable'),
+        orcadDeployment: { kind: 'wsl' }
+      }
+    ])
+    expect(catalog(hosts).catalog.list().hosts).toEqual([
+      {
+        hostId: 'runtime:wsl%3Aubuntu',
+        label: 'Ubuntu (WSL)',
+        health: 'connecting',
+        relay: 'unavailable',
+        startsOnDesktop: true
+      }
+    ])
   })
 
   it('does not list a managed server while its SSH host is reached over the SSH relay', () => {

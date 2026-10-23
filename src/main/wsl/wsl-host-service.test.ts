@@ -294,6 +294,26 @@ describe('WslHostService', () => {
     expect(connector.connect).toHaveBeenCalledTimes(3)
   })
 
+  it("serves a phone only from a running host and never boots it, even for the desktop's open work", async () => {
+    const connector = makeConnector([UBUNTU])
+    const service = makeService(connector)
+    await service.add({ distro: 'Ubuntu' })
+    connector.connect.mockClear()
+    connector.isReachable.mockResolvedValue(true)
+    await service.requireRunningWithoutStart('wsl:ubuntu')
+
+    connector.isReachable.mockResolvedValue(false)
+    service.setVisibleWork(['wsl:ubuntu'])
+    await vi.waitFor(() => expect(connector.connect).toHaveBeenCalledTimes(1))
+    await expect(service.requireRunningWithoutStart('wsl:ubuntu')).rejects.toMatchObject({
+      code: 'remote_runtime_unavailable',
+      message:
+        'The WSL host Ubuntu isn’t running. Open one of its projects on your computer to start it.'
+    })
+    // Only the desktop's own demand started it; the phone's refused call added nothing.
+    expect(connector.connect).toHaveBeenCalledTimes(1)
+  })
+
   it('refuses a connect while the experiment is off, but still removes the host', async () => {
     const connector = makeConnector([UBUNTU])
     const service = makeService(connector)

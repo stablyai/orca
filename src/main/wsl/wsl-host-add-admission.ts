@@ -15,6 +15,11 @@ export function wslHostNotConnectedMessage(distro: string): string {
   return `The WSL host ${distro} isn’t connected. Open one of its projects or connect it in Settings → Remote Orca Servers.`
 }
 
+/** Shown on a paired phone: only the desktop starts a distro, so the phone is told where to. */
+export function wslHostStoppedForPhoneMessage(distro: string): string {
+  return `The WSL host ${distro} isn’t running. Open one of its projects on your computer to start it.`
+}
+
 /** Why no WSL host may run at all right now; null when they may. */
 export function wslHostRunRefusal(gate: {
   isEnabled: () => boolean

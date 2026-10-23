@@ -13,6 +13,8 @@ export type MobileRelayHost = {
   label: string
   health: ExecutionHostHealth
   relay: MobileRelayHostRelay
+  /** This desktop's own WSL distro: a phone never starts it, so `unavailable` means "start it there". */
+  startsOnDesktop?: true
 }
 
 export type MobileRelayHostsListResult = { hosts: MobileRelayHost[] }

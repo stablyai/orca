@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => {
     environments,
     reads,
     ensureForRuntimeCall: vi.fn(async () => {}),
+    requireRunningWithoutStart: vi.fn(async () => {}),
     hasWslService: true,
     ensureTunnel: vi.fn(async () => {}),
     rebuildTunnel: vi.fn(async () => {}),
@@ -35,7 +36,12 @@ vi.mock('../../../shared/runtime-environment-store', () => ({
 }))
 vi.mock('../../wsl/wsl-host-service-instance', () => ({
   getWslHostService: () =>
-    mocks.hasWslService ? { ensureForRuntimeCall: mocks.ensureForRuntimeCall } : null
+    mocks.hasWslService
+      ? {
+          ensureForRuntimeCall: mocks.ensureForRuntimeCall,
+          requireRunningWithoutStart: mocks.requireRunningWithoutStart
+        }
+      : null
 }))
 vi.mock('../../ssh/managed-server-update-deps', () => ({ managedServerUpdateDeps: () => ({}) }))
 vi.mock('../../managed-server/lifecycle/orcad-managed-tunnel', () => ({
@@ -156,6 +162,26 @@ describe('resolving a runtime for a call, by host kind', () => {
       read: 2
     })
     expect(mocks.ensureTunnel).not.toHaveBeenCalled()
+  })
+
+  it("serves a phone's call only from a WSL host already running, never starting it", async () => {
+    const noStart = { wslStart: 'never' } as const
+    await expect(resolveManagedRuntimeEnvironment('/u', 'wsl:ubuntu', noStart)).resolves.toEqual({
+      ...wsl,
+      read: 2
+    })
+    expect(mocks.requireRunningWithoutStart).toHaveBeenCalledWith('wsl:ubuntu')
+    expect(mocks.ensureForRuntimeCall).not.toHaveBeenCalled()
+
+    mocks.requireRunningWithoutStart.mockRejectedValueOnce(new Error('stopped'))
+    await expect(resolveManagedRuntimeEnvironment('/u', 'wsl:ubuntu', noStart)).rejects.toThrow(
+      'stopped'
+    )
+    mocks.hasWslService = false
+    await expect(resolveManagedRuntimeEnvironment('/u', 'wsl:ubuntu', noStart)).rejects.toThrow(
+      'The WSL host Ubuntu isn’t running. Open one of its projects on your computer to start it.'
+    )
+    expect(mocks.ensureForRuntimeCall).not.toHaveBeenCalled()
   })
 
   it('refuses a WSL host with the gate closed', async () => {

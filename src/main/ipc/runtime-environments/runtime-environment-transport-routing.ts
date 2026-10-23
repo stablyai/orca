@@ -2,7 +2,10 @@ import { getRuntimeEnvironmentStatus } from './runtime-environment-status-probe'
 import { getPreferredPairedRuntimeConnection } from '../../../shared/runtime-environments'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
 import { resolveEnvironment, markEnvironmentUsed } from '../../../shared/runtime-environment-store'
-import { resolveManagedRuntimeEnvironment } from './runtime-environment-managed-tunnel'
+import {
+  resolveManagedRuntimeEnvironment,
+  type ManagedRuntimeCallPreparation
+} from './runtime-environment-managed-tunnel'
 import { recordRuntimeEnvironmentUsage } from './runtime-environment-usage-record'
 import type {
   RuntimeOrchestrationEnvelope,
@@ -38,7 +41,11 @@ export async function callRuntimeEnvironment(
   timeoutMs?: number,
   expectedEnvironmentPairingRevision?: number,
   envelope?: RuntimeOrchestrationEnvelope,
-  options?: { signal?: AbortSignal; expectedEnvironmentRuntimeId?: string }
+  options?: {
+    signal?: AbortSignal
+    expectedEnvironmentRuntimeId?: string
+    preparation?: ManagedRuntimeCallPreparation
+  }
 ): Promise<RuntimeRpcResponse<unknown>> {
   if (method === 'status.get') {
     const environment = resolveEnvironment(userDataPath, selector)
@@ -72,7 +79,8 @@ export async function callRuntimeEnvironment(
       async () => {
         const currentEnvironment = await resolveManagedRuntimeEnvironment(
           userDataPath,
-          environment.id
+          environment.id,
+          options?.preparation
         )
         const revisionFailure = runtimeEnvironmentRevisionFailure(
           currentEnvironment,
@@ -166,13 +174,14 @@ export async function subscribeRuntimeEnvironment(
     onClose: () => void
   },
   isCurrent: () => boolean = () => true,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  preparation?: ManagedRuntimeCallPreparation
 ): Promise<RemoteRuntimeSubscription> {
   const callbacks = {
     ...rawCallbacks,
     onEvent: decodeSessionTabsDeltaEvents(method, rawCallbacks.onEvent)
   }
-  const environment = await resolveManagedRuntimeEnvironment(userDataPath, selector)
+  const environment = await resolveManagedRuntimeEnvironment(userDataPath, selector, preparation)
   const pairedConnection = getPreferredPairedRuntimeConnection(environment)
   const effectiveTimeoutMs = timeoutMs ?? DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS
   let markedUsed = false
