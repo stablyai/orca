@@ -1,0 +1,32 @@
+{
+  "batch": "root-0012",
+  "reviewer": "root",
+  "source_commit": "8d94ed06570adb2b7300cf16fe9f43b4680e3f2b",
+  "reviewed_files": 8,
+  "original_declaration_sites": 0,
+  "manual_case_records": 96,
+  "production_changes": false,
+  "review_scope": "Read complete eight archive source/driver/support files, every static fixture and expanded table, transform/provenance and actual current branch graph/reader/framer. Read current resolver, recovery and history suites as supporting evidence; do not mark those permanent files reviewed here. Historical rewind suite and verifier module are absent from current source.",
+  "checks": [
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 node --expose-gc docs/audits/claude-branch-proof-streaming/reproduce.cjs /tmp/orca-root-0012-branch-proof-results.json",
+      "result": "Exit 1 at exact reverse-patch source fence before all phases. No current proof pass.",
+      "log": "/tmp/orca-root-0012-branch-proof.log"
+    },
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 node docs/audits/claude-branch-proof-streaming/regressions.mjs /tmp/orca-root-0012-regression-results.json",
+      "result": "Exit 1 at exact reverse-patch source fence before runner startup. No suites ran.",
+      "log": "/tmp/orca-root-0012-regressions.log"
+    },
+    {
+      "command": "node parityCases() enumeration; original/final SHA-256 reconciliation",
+      "result": "51 table fixtures enumerated, all eight original/final files match source commit. Enumeration is not test execution."
+    }
+  ],
+  "limitations": [
+    "Archived historical graph retained unchanged; no dependency downgrade, source fence weakening, production mutation or app window.",
+    "No current-head parity/allocation/growth/duration/verifier/regression passes claimed. Static declaration hints are zero; explicit manual case records classify standalone assertions.",
+    "Archived regressor asserts report success, not exact file/case totals; verifier injection flag is not asserted. Scope claims reflect those limits.",
+    "Memory samples and synthetic timing do not identify incident causes or guarantee a total memory cap."
+  ]
+}

@@ -17,7 +17,6 @@ src/components/agent-monitoring-indicators.test.ts
 src/components/bottom-drawer-close-lifecycle.test.ts
 src/components/bottom-drawer-window-handback.test.ts
 src/components/codex-reset-credit-capability.test.ts
-src/components/mobile-agent-icon-gradient.test.ts
 src/components/pr-sidebar/PRCommentsSection.test.ts
 src/diagnostics/connection-diagnostics-submission.test.ts
 src/dictation/mobile-dictation-setup.test.ts

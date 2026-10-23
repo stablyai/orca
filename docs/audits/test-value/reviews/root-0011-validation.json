@@ -1,0 +1,39 @@
+{
+  "batch": "root-0011",
+  "reviewer": "root",
+  "source_commit": "8d94ed06570adb2b7300cf16fe9f43b4680e3f2b",
+  "reviewed_files": 2,
+  "original_declaration_sites": 9,
+  "manual_driver_groups": 1,
+  "case_decisions": {
+    "keep": 9,
+    "fix": 1
+  },
+  "production_changes": false,
+  "review_scope": "Read complete permanent source-budget fixture and all nine bodies, archival driver, actual current history collector/reader, branch proof/replay and bounded-file reader. Current history uses two streaming ancestry passes; archival proof describes the earlier one-read contract.",
+  "checks": [
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 node config/scripts/run-vitest.mjs run --config config/vitest.config.ts src/main/claude/claude-history-window-source-budget.test.ts",
+      "result": "9 tests passed, zero skips/failures.",
+      "log": "/tmp/orca-root-0011-history-suite.log"
+    },
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 node docs/audits/claude-history-window-budget/reproduce.mjs",
+      "result": "Exit 1 at intentional reverse-patch source fence for claude-structured-history-window.ts; archival phases not run.",
+      "log": "/tmp/orca-root-0011-history-proof.log"
+    },
+    {
+      "command": "pnpm exec oxfmt --check src/main/claude/claude-history-window-source-budget.test.ts",
+      "result": "Passed."
+    },
+    {
+      "command": "pnpm exec oxlint src/main/claude/claude-history-window-source-budget.test.ts",
+      "result": "Passed, no diagnostics."
+    }
+  ],
+  "limitations": [
+    "Only test wording/comment changed; no assertion, file/protocol/runtime behavior changed. Shared Node path/file APIs preserve cross-platform scope; local validation was Linux.",
+    "Largest stream chunk is not a retained-memory, heap, RSS or leak measurement. Existing real source/descriptor/prompt/growth/error assertions are retained.",
+    "Branch-proof streaming archives remain unreviewed and are excluded from this batch, even though their entrypoint drift was inspected."
+  ]
+}
