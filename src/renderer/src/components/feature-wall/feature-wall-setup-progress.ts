@@ -68,8 +68,6 @@ export function getFeatureWallSetupProgress(
     computerUseUnavailable: input.computerUseUnavailable === true
   })
   const stepDone: Record<FeatureWallSetupStepId, boolean> = {
-    // Why: null is the untouched Auto default; 'blank' is only written when the user
-    // deliberately picks Blank Terminal or clears the default, which is also a choice.
     'default-agent': Boolean(input.settings?.defaultTuiAgent),
     'add-two-repos': input.gitRepoCount >= 2,
     notifications:

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { getDefaultSettings } from '../../../../shared/constants'
 import type { FeatureWallSetupProgressInput } from './feature-wall-setup-progress'
 import { getFeatureWallSetupProgress } from './feature-wall-setup-progress'
 import {
@@ -191,9 +192,12 @@ describe('getFeatureWallSetupProgress', () => {
   it('treats a deliberately cleared default agent as a completed choice', () => {
     const stepDone = (defaultTuiAgent: 'blank' | 'claude' | null): boolean =>
       getFeatureWallSetupProgress(
-        makeInput({ settings: { defaultTuiAgent, notifications: {} } as never })
+        makeInput({
+          settings: { ...getDefaultSettings('/tmp/orca-setup-progress'), defaultTuiAgent }
+        })
       ).stepDone['default-agent']
 
+    expect(getFeatureWallSetupProgress(makeInput()).stepDone['default-agent']).toBe(false)
     expect(stepDone(null)).toBe(false)
     expect(stepDone('blank')).toBe(true)
     expect(stepDone('claude')).toBe(true)
