@@ -33,9 +33,18 @@ describe('ACP session options', () => {
     const options = new AcpStructuredOptions()
     options.adoptSession({ configOptions })
     const { models, current } = options.read()
-    // The effort menu belongs to the model running now; nothing is anyone's default.
+    // Session-level effort options apply across listed models; current effort seeds defaultEffort.
     expect(models).toEqual([
-      { id: 'model-a', label: 'Model A', isDefault: false, efforts: [] },
+      {
+        id: 'model-a',
+        label: 'Model A',
+        isDefault: false,
+        efforts: [
+          { value: 'low', label: 'Low' },
+          { value: 'high', label: 'High' }
+        ],
+        defaultEffort: 'high'
+      },
       {
         id: 'model-b',
         label: 'Model B',
@@ -43,7 +52,8 @@ describe('ACP session options', () => {
         efforts: [
           { value: 'low', label: 'Low' },
           { value: 'high', label: 'High' }
-        ]
+        ],
+        defaultEffort: 'high'
       }
     ])
     expect(current).toEqual({ model: 'model-b', effort: 'high', confirmed: ['model', 'effort'] })

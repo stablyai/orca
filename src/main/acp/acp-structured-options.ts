@@ -170,7 +170,12 @@ export class AcpStructuredOptions {
     const models: AgentSessionModelOption[] = listed.map((model) => {
       const info = this.models?.availableModels.find((entry) => entry.modelId === model.id)
       const advertised = info ? this.dialect.modelEfforts?.(info) : undefined
-      const sessionMenu = { efforts: model.id === currentModel ? sessionEfforts : [] }
+      const sessionMenu = this.dialect.modelEfforts
+        ? { efforts: model.id === currentModel ? sessionEfforts : [] }
+        : {
+            efforts: sessionEfforts,
+            ...(effortOption?.currentValue ? { defaultEffort: effortOption.currentValue } : {})
+          }
       return {
         ...model,
         isDefault: false,
