@@ -1,7 +1,8 @@
 export const GRAB_GUEST_REACT_SCRIPT = `  function isElementFixed(el) {
     var current = el;
-    var depth = 0;
-    while (current && current !== document.body && depth++ < 100) {
+    var seen = new Set();
+    while (current && current !== document.body && !seen.has(current)) {
+      seen.add(current);
       var position = window.getComputedStyle(current).position;
       if (position === 'fixed' || position === 'sticky') return true;
       current = shadowComposedParent(current);

@@ -10,7 +10,7 @@ export const BROWSER_SHADOW_DOM_SCRIPT = `
   function shadowSelectionRoots(element) {
     var roots = [];
     var seen = new Set();
-    for (var depth = 0; element && depth < 100; depth++) {
+    while (element) {
       if (seen.has(element)) break;
       seen.add(element);
       var root = element.getRootNode();
@@ -35,8 +35,20 @@ export const BROWSER_SHADOW_DOM_SCRIPT = `
   }
 
   function shadowFindSelected(attribute, value) {
-    var stack = [document.documentElement];
     var selected = null;
+    var candidates = document.querySelectorAll('[' + attribute + ']');
+    for (var i = 0; i < candidates.length; i++) {
+      if (candidates[i].getAttribute(attribute) !== value) continue;
+      if (selected) return null;
+      selected = candidates[i];
+    }
+    // Native document queries preserve large light DOMs; only shadow traversal is bounded.
+    var stack = [];
+    var elements = document.querySelectorAll('*');
+    for (var i = 0; i < elements.length; i++) {
+      var root = elements[i].shadowRoot;
+      if (root && root.firstElementChild) stack.push(root.firstElementChild);
+    }
     var inspected = 0;
     while (stack.length && inspected < 10000) {
       var element = stack.pop();
