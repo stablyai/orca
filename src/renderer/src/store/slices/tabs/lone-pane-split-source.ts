@@ -1,4 +1,5 @@
 import { resolveRightSplitTargetGroupId } from '@/lib/right-split-target-group'
+import { isFrameDrawnByAnyServer } from '@/runtime/web-session-tabs-sync/frame-drawn-server-workspace-set'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 import type {
   Tab,
@@ -23,7 +24,8 @@ export function findLonePaneSourceGroupId(
   worktreeId: string,
   requestedGroupId?: string
 ): string | null {
-  if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
+  // Why: a server's frames own that workspace's groups; a desktop-minted split would fight them.
+  if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID || isFrameDrawnByAnyServer(worktreeId)) {
     return null
   }
   const layout = state.layoutByWorktree?.[worktreeId]
@@ -63,6 +65,7 @@ export function findSplitOppositeGroupId(
   const layout = state.layoutByWorktree?.[worktreeId]
   if (
     worktreeId === FLOATING_TERMINAL_WORKTREE_ID ||
+    isFrameDrawnByAnyServer(worktreeId) ||
     layout?.type !== 'split' ||
     layout.first.type !== 'leaf' ||
     layout.second.type !== 'leaf'
