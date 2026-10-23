@@ -16,7 +16,7 @@ export type JsonObject = Record<string, unknown>
 
 export const FILE_VERSION = 1
 const PLATFORM_KEYS: readonly KeybindingPlatform[] = ['darwin', 'linux', 'win32']
-const ROOT_KEYS = new Set(['$schema', 'version', 'keybindings', 'platforms'])
+const ROOT_KEYS = new Set(['$schema', 'version', 'keybindings', 'platforms', 'copyMode'])
 
 export function isJsonObject(value: unknown): value is JsonObject {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)

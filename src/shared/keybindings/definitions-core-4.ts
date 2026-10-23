@@ -3,6 +3,14 @@ import { platformBindings } from './definitions-support'
 
 export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
   {
+    id: 'terminal.enterCopyMode',
+    title: 'Enter Copy Mode',
+    group: 'Terminal Panes',
+    scope: 'terminal',
+    searchKeywords: ['shortcut', 'terminal', 'copy', 'mode', 'vim', 'tmux'],
+    defaultBindings: platformBindings(['Mod+Shift+X'])
+  },
+  {
     id: 'chat.find',
     title: 'Find in chat',
     group: 'Chat',

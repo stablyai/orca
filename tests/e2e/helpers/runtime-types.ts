@@ -34,6 +34,7 @@ export type PaneManagerLike = {
   splitPane(paneId: number, direction: 'vertical' | 'horizontal'): ManagedPaneHandle | null
   closePane(paneId: number): void
   movePane: PaneManager['movePane']
+  fitAllPanes: PaneManager['fitAllPanes']
   setActivePane(paneId: number, opts?: { focus?: boolean }): void
   suspendRendering(): void
   resumeRendering(): void

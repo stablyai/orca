@@ -25,7 +25,9 @@ type XtermRendererInternals = {
 
 export type PaneWebglCanvasDprRepairState = 'current' | 'deferred' | 'repaired'
 
-export function repairPaneWebglCanvasDpr(pane: ManagedPane): PaneWebglCanvasDprRepairState {
+export function repairPaneWebglCanvasDpr(
+  pane: Pick<ManagedPane, 'id' | 'terminal'>
+): PaneWebglCanvasDprRepairState {
   const renderer = (
     pane.terminal as unknown as {
       _core?: { _renderService?: { _renderer?: { value?: XtermRendererInternals } } }
@@ -80,6 +82,8 @@ export function repairPaneWebglCanvasDpr(pane: ManagedPane): PaneWebglCanvasDprR
   return 'repaired'
 }
 
-export function repairPaneWebglCanvasDprMismatch(pane: ManagedPane): boolean {
+export function repairPaneWebglCanvasDprMismatch(
+  pane: Pick<ManagedPane, 'id' | 'terminal'>
+): boolean {
   return repairPaneWebglCanvasDpr(pane) === 'repaired'
 }

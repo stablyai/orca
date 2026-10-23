@@ -1,4 +1,5 @@
 import type { PreloadApi } from '../../../../preload/api-types'
+import { normalizeTerminalCopyModeConfig } from '../../../../shared/terminal-copy-mode-config'
 import {
   findKeybindingConflicts,
   formatKeybindingList,
@@ -45,6 +46,7 @@ export function getWebKeybindingPlatform(): KeybindingPlatform {
 export function readWebKeybindingDocument(): WebKeybindingDocument {
   const document = readJson(KEYBINDINGS_STORAGE_KEY, createEmptyWebKeybindingDocument())
   return {
+    copyMode: document.copyMode,
     version: 1,
     keybindings: isJsonObject(document.keybindings)
       ? (document.keybindings as KeybindingOverrides)
@@ -75,6 +77,7 @@ export function getWebKeybindingSnapshot(): KeybindingFileSnapshot {
   )
 
   return {
+    copyMode: normalizeTerminalCopyModeConfig(document.copyMode, platform, diagnostics),
     path: 'Browser local storage',
     platform,
     exists: window.localStorage.getItem(KEYBINDINGS_STORAGE_KEY) !== null,
@@ -123,6 +126,7 @@ export function writeWebKeybindingAction(
   }
 
   writeJson(KEYBINDINGS_STORAGE_KEY, {
+    copyMode: readWebKeybindingDocument().copyMode,
     version: 1,
     keybindings: currentSnapshot.commonOverrides,
     platforms: {

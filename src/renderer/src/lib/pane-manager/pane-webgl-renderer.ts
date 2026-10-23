@@ -159,7 +159,7 @@ export function disposeWebgl(
   }
 }
 
-function releaseXtermWebglContext(webglAddon: ManagedPaneInternal['webglAddon']): void {
+export function releaseXtermWebglContext(webglAddon: WebglAddon | null): void {
   try {
     // Why: xterm removes the canvas on dispose, but Windows/ANGLE can keep the
     // driver context alive long enough for rapid terminal activation to hit

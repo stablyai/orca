@@ -12,6 +12,7 @@ import type {
 import { translate } from '@/i18n/i18n'
 
 export type WebKeybindingDocument = {
+  copyMode?: unknown
   version: 1
   keybindings: KeybindingOverrides
   platforms: Partial<Record<KeybindingPlatform, KeybindingOverrides>>

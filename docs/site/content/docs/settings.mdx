@@ -141,6 +141,69 @@ Settings are grouped into panes. Everything here is searchable with `Cmd-,` then
 - **Send Review Notes to Agent** ships unbound; assign it here to open the send-notes menu for the active worktree's diff notes without using the mouse.
 - **Delete workspace** defaults to `Cmd+Shift+Backspace` on macOS and `Ctrl+Shift+Backspace` on Windows / Linux. Hover the sidebar workspace you mean to delete; Orca still asks for confirmation.
 
+### Terminal copy mode
+
+Enter **Copy Mode** with `Cmd+Shift+X` on macOS or `Ctrl+Shift+X` on Windows/Linux, or search for **Enter Copy Mode** in the command palette. Remap the entry action under **Shortcuts**.
+
+Copy mode freezes the active terminal's text and retained scrollback while the program continues running. Move the separate cursor with `h` / `j` / `k` / `l` or the arrow keys. Press `v` to start or cancel a character selection, then `y` to copy it. Successful copies return to live output by default; set `exitOnCopy` to `false` to remain in copy mode. Press `Esc` or `q` to exit without copying. Inline images are not copied. On entry, the copy view keeps the terminal's font settings and rendering backend. The frozen text rewraps to fit the copy-mode pane when it is resized; the cursor and selection stay on the same text.
+
+The basic Vim motions are available in both directions, including while selecting:
+
+| Movement                        | Backward / upward | Forward / downward |
+| ------------------------------- | ----------------- | ------------------ |
+| Character                       | `h`               | `l`                |
+| Logical line                    | `k`               | `j`                |
+| Line boundary                   | `0`               | `$`                |
+| Non-whitespace line boundary    | `^`               | `g_`               |
+| Word start                      | `b`               | `w`                |
+| Word end                        | `ge`              | `e`                |
+| Whitespace-delimited word start | `B`               | `W`                |
+| Whitespace-delimited word end   | `gE`              | `E`                |
+| Half page                       | `Ctrl+u`          | `Ctrl+d`           |
+
+A soft-wrapped line is one logical line. Line-end motions stop on the last printed character rather than the terminal's right edge; `$` includes printed trailing spaces, while `g_` skips them. Lowercase word motions distinguish words from punctuation; uppercase word motions split only on whitespace. There are no numeric counts, search, whole-page, paragraph, viewport-position, or buffer-boundary commands.
+
+For finer control, open the keybindings file from **Shortcuts** and add a root `copyMode` section:
+
+```json
+{
+  "version": 1,
+  "keybindings": {
+    "terminal.enterCopyMode": ["Mod+Shift+X"]
+  },
+  "copyMode": {
+    "exitOnCopy": false,
+    "bindings": {
+      "left": ["h", "ArrowLeft"],
+      "down": ["j", "ArrowDown"],
+      "up": ["k", "ArrowUp"],
+      "right": ["l", "ArrowRight"],
+      "lineStart": ["0"],
+      "lineEnd": ["$"],
+      "firstNonBlank": ["^"],
+      "lastNonBlank": ["g _"],
+      "wordForward": ["w"],
+      "wordBackward": ["b"],
+      "wordEnd": ["e"],
+      "previousWordEnd": ["g e"],
+      "bigWordForward": ["Shift+W"],
+      "bigWordBackward": ["Shift+B"],
+      "bigWordEnd": ["Shift+E"],
+      "previousBigWordEnd": ["g Shift+E"],
+      "halfPageUp": ["Ctrl+u"],
+      "halfPageDown": ["Ctrl+d"],
+      "toggleSelection": ["v"],
+      "copy": ["y"],
+      "exit": ["Escape", "q"]
+    }
+  }
+}
+```
+
+`Mod` means Command on macOS and Control elsewhere. `exitOnCopy` defaults to `true`; set it to `false` to keep selecting after copying. Missing actions keep their default keys. An empty array disables an action, but at least one exit key is required. New default motions yield to overlapping custom controls from older configurations, including custom `w` or `g` bindings. Other invalid values or conflicting keys/prefixes appear in the existing shortcut diagnostics and fall back to defaults.
+
+Write uppercase motions as `Shift+W`, `Shift+B`, and `Shift+E` in configuration. Separate two strokes with a space, as in `g e`, `g Shift+E`, or `g _`; both strokes are configurable, and these sequences work only inside copy mode. `$`, `^`, and `_` may be written directly. Reload the keybindings file after editing; changes apply the next time copy mode opens. No global tmux-style prefix is introduced.
+
 ## Repository
 
 - Per-repo base ref and hooks.

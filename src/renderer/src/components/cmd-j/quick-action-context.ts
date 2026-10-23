@@ -1,4 +1,6 @@
 import type { AppState } from '@/store/types'
+import { useAppStore } from '@/store'
+import { resolveTerminalCopyModeTarget } from '@/components/terminal-pane/terminal-copy-mode-targets'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
@@ -17,6 +19,7 @@ export type CmdJUnavailableReason =
   | 'ssh-disconnected'
   | 'no-active-group'
   | 'no-active-chat'
+  | 'no-active-terminal'
   | 'client-action-unsupported'
 
 export type CmdJQuickActionAvailability =
@@ -44,6 +47,8 @@ export type CmdJQuickActionContext = {
   openCreateWorkspace: () => void
   deleteActiveWorkspace: () => void
   openAddQuickCommand: () => void
+  canEnterCopyMode?: boolean
+  enterCopyMode?: () => boolean
   canSplitActiveChat?: boolean
   splitActiveChat?: (direction: NativeChatSplitDirection) => boolean
 }
@@ -199,6 +204,14 @@ export function buildCmdJQuickActionContext(args: {
     openCreateWorkspace: args.openCreateWorkspace,
     deleteActiveWorkspace: args.deleteActiveWorkspace,
     openAddQuickCommand: args.openAddQuickCommand,
+    canEnterCopyMode:
+      resolveTerminalCopyModeTarget(args.state, activeWorktreeId, activeGroupId) !== null,
+    enterCopyMode: () =>
+      resolveTerminalCopyModeTarget(
+        useAppStore.getState(),
+        activeWorktreeId,
+        activeGroupId
+      )?.enter() ?? false,
     canSplitActiveChat: canRunNativeChatSplitTarget(args.state, activeChatTarget),
     splitActiveChat: (direction) =>
       runActiveNativeChatSplit(activeWorktreeId, activeGroupId, direction)
@@ -218,6 +231,8 @@ export function getUnavailableQuickActionMessage(
       return `Can't ${actionTitle.toLowerCase()} — workspace is disconnected.`
     case 'no-active-group':
       return `Can't ${actionTitle.toLowerCase()} — no tab group is available.`
+    case 'no-active-terminal':
+      return `Can't ${actionTitle.toLowerCase()} — no terminal pane is active.`
     case 'no-active-chat':
       return `Can't ${actionTitle.toLowerCase()} — no movable chat is active.`
     case 'client-action-unsupported':

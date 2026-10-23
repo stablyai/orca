@@ -20369,6 +20369,18 @@
       "body": "El trabajo en segundo plano en este equipo se ha atascado. Es posible que la escritura y las terminales nuevas no funcionen. Reiniciar el servicio de terminal finaliza sus terminales y comandos en ejecución.",
       "review": "Revisar las opciones de reinicio",
       "title": "Es posible que el servicio de terminal necesite reiniciarse"
+    },
+    "copyMode": {
+      "selecting": "Modo de copia · Seleccionando",
+      "active": "Modo de copia",
+      "move": "Mover",
+      "select": "Seleccionar",
+      "copy": "Copiar",
+      "exit": "Salir: {{keys}}",
+      "copyFailed": "No se pudo copiar la selección del terminal. Inténtalo de nuevo.",
+      "openFailed": "No se pudo abrir el modo de copia del terminal. Inténtalo de nuevo.",
+      "enter": "Entrar en modo de copia",
+      "description": "Selecciona y copia texto del terminal con el teclado."
     }
   },
   "quickOpen": {

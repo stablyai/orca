@@ -577,3 +577,39 @@
   color: #a1a1aa;
   background: rgba(24, 24, 27, 0.85);
 }
+
+.terminal-copy-mode {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: var(--foreground);
+}
+
+.terminal-copy-mode:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+
+.terminal-copy-mode-viewport {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.terminal-copy-mode-grid {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.terminal-copy-mode-cursor {
+  position: absolute;
+  z-index: 1;
+  pointer-events: none;
+  outline: 2px solid var(--copy-mode-cursor-color);
+  outline-offset: -2px;
+  background: color-mix(in srgb, var(--copy-mode-cursor-color) 20%, transparent);
+}

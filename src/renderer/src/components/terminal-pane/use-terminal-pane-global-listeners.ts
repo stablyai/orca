@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useTerminalFontZoom } from './useTerminalFontZoom'
+import { useTerminalCopyMode } from './use-terminal-copy-mode'
 import { useTerminalKeyboardShortcuts } from './terminal-keyboard-hook'
 import { useTerminalPaneGlobalEffects } from './use-terminal-pane-global-effects'
 import { safeFitAndThen } from '@/lib/pane-manager/pane-tree-ops'
@@ -58,6 +59,7 @@ export function useTerminalPaneGlobalListeners(controller: TerminalPaneCloseCont
   } = controller
 
   useTerminalFontZoom({ isActive, containerRef, managerRef, paneFontSizesRef, settingsRef })
+  useTerminalCopyMode({ tabId, isActive, isVisible, managerRef, containerRef })
   useTerminalKeyboardShortcuts({
     tabId,
     worktreeId,
