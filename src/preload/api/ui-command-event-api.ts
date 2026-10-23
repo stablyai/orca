@@ -72,6 +72,12 @@ export type UiCommandEventApi = {
   onStateChanged: (callback: (ui: PersistedUIState) => void) => () => void
   onOpenSettings: (callback: () => void) => () => void
   consumePendingOpenSettings: () => Promise<boolean>
+  /** Main confirmed Quit and Stop All Sessions; consume the request before acting. */
+  onQuitAndStopAllSessions: (callback: () => void) => () => void
+  /** Consumes the one-shot Quit and Stop All Sessions request; true at most once per request. */
+  consumePendingQuitAndStopAllSessions: () => Promise<boolean>
+  /** Tells main every session stopped, so it can quit; the web client never gets a request to answer. */
+  quitAfterStoppingAllSessions?: () => void
   onOpenSkillShare: (callback: (shareId: string) => void) => () => void
   consumePendingSkillShare: () => Promise<string | null>
   /** OS "Open With" Markdown/CSV/TSV documents; the local IPC name is retained. */

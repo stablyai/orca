@@ -260,7 +260,8 @@
     "help": "帮助",
     "paste": "粘贴",
     "copy": "复制",
-    "selectAll": "全选"
+    "selectAll": "全选",
+    "quitAndStopAllSessions": "停止所有会话并退出..."
   },
   "tray": {
     "openOrca": "打开 Orca",
@@ -20823,5 +20824,16 @@
     "restartLocal": "重启本地守护进程",
     "killAllLocal": "结束所有本地会话",
     "killFailed": "无法结束终端。将保留上次观察到的会话。"
+  },
+  "quitAndStopAllSessions": {
+    "title": "停止所有会话并退出",
+    "message": "停止所有终端会话并退出 Orca？",
+    "detail": "Orca 会关闭所有终端标签页并停止其会话（包括在终端中运行的智能体），然后退出。远程主机上的终端会话可能会在远程继续运行。未保存的终端工作将丢失，关闭的标签页在下次启动时不会恢复。此操作不可撤销。",
+    "confirm": "停止会话并退出",
+    "cancel": "取消",
+    "failed": "未能停止所有终端会话，因此 Orca 仍保持打开。",
+    "ok": "确定",
+    "unavailableMessage": "Orca 目前无法停止所有终端会话。",
+    "unavailableDetail": "未停止任何内容。请在终端打开后重试。如果某个终端显示它是在较新版本的 Orca 中打开的，请先重新打开它。如果终端已经打开，请退出并重新打开 Orca，然后重试。"
   }
 }

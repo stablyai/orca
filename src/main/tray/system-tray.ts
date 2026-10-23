@@ -22,6 +22,8 @@ export type SystemTrayOptions = {
   onCheckForUpdates: () => void
   /** Quit Orca for real (caller must set the quitting latch before quitting). */
   onQuit: () => void
+  /** Confirm, then quit with every terminal session stopped; omitted where the item must not show (serve mode). */
+  onQuitAndStopAllSessions?: () => void
 }
 
 // Why: Electron's Tray is GC-collected and its icon vanishes if no live
@@ -295,6 +297,14 @@ function buildTrayMenu(opts: SystemTrayOptions): Menu {
             click: safeMenuAction(() => opts.onCheckForUpdates())
           },
           { type: 'separator' }
+        ] satisfies Electron.MenuItemConstructorOptions[])
+      : []),
+    ...(opts.onQuitAndStopAllSessions
+      ? ([
+          {
+            label: translateMain('menu.quitAndStopAllSessions', 'Quit and Stop All Sessions...'),
+            click: safeMenuAction(opts.onQuitAndStopAllSessions)
+          }
         ] satisfies Electron.MenuItemConstructorOptions[])
       : []),
     { label: translateMain('tray.quit', 'Quit'), click: safeMenuAction(() => opts.onQuit()) }

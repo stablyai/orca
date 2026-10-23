@@ -16,7 +16,8 @@ const {
   getCurrentDaemonMacTccAttributionHealthMock,
   getDaemonFolderAccessMismatchMock,
   refreshDaemonFolderAccessProbeMock,
-  resetFolderAccessForDaemonMock
+  resetFolderAccessForDaemonMock,
+  isHoldingForNewerProtocolDaemonMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   removeHandlerMock: vi.fn(),
@@ -29,7 +30,8 @@ const {
   refreshDaemonFolderAccessProbeMock: vi.fn(async () => {}),
   resetFolderAccessForDaemonMock: vi.fn<() => Promise<FolderAccessResetResult>>(async () => ({
     outcome: 'unsupported'
-  }))
+  })),
+  isHoldingForNewerProtocolDaemonMock: vi.fn(() => false)
 }))
 
 vi.mock('electron', () => ({
@@ -43,6 +45,10 @@ vi.mock('../daemon/daemon-folder-access-mismatch', () => ({
 
 vi.mock('../daemon/daemon-folder-access-reset', () => ({
   resetFolderAccessForDaemon: resetFolderAccessForDaemonMock
+}))
+
+vi.mock('../daemon/daemon-newer-protocol-hold', () => ({
+  isHoldingForNewerProtocolDaemon: isHoldingForNewerProtocolDaemonMock
 }))
 
 vi.mock('../daemon/daemon-provider-restart', () => ({
@@ -198,6 +204,7 @@ describe('pty:management IPC handlers', () => {
     getDaemonFolderAccessMismatchMock.mockReset().mockReturnValue(null)
     refreshDaemonFolderAccessProbeMock.mockReset().mockResolvedValue(undefined)
     resetFolderAccessForDaemonMock.mockReset().mockResolvedValue({ outcome: 'unsupported' })
+    isHoldingForNewerProtocolDaemonMock.mockReset().mockReturnValue(false)
   })
 
   afterEach(() => {
@@ -311,7 +318,7 @@ describe('pty:management IPC handlers', () => {
         killedSessionIds: string[]
       }>
       // Why: advance the loop's sleeps one at a time. Between each sleep the
-      // handler awaits collectSessions (a microtask), so we need to flush
+      // handler awaits listSessionsOfEveryAdapter (a microtask), so we need to flush
       // pending microtasks before advancing the next timer.
       for (let i = 0; i < pollCount; i += 1) {
         await Promise.resolve()
@@ -461,6 +468,97 @@ describe('pty:management IPC handlers', () => {
         killedCount: 1,
         remainingCount: 1,
         killedSessionIds: ['b']
+      })
+    })
+
+    it('keeps a session remaining, and stops polling after one timed-out listing, while its daemon stops answering', async () => {
+      const current = makeAdapter(5, [])
+      current.listSessions = vi
+        .fn()
+        .mockResolvedValueOnce([makeSession('a')].map(({ protocolVersion: _pv, ...rest }) => rest))
+        // Why 30 s: a wedged daemon fails a listing only at the client's request timeout.
+        .mockImplementation(
+          () =>
+            new Promise((_resolve, reject) =>
+              setTimeout(() => reject(new Error('request timed out')), 30_000)
+            )
+        )
+      const { registerDaemonManagementHandlers } = await importFresh()
+      getDaemonProviderMock.mockReturnValue(await makeRouter(current))
+      registerDaemonManagementHandlers()
+
+      const result = buildHandlerMap()['pty:management:killAll']({})
+      await vi.advanceTimersByTimeAsync(40_000)
+
+      // The initial listing, then one poll that times out past the 6.5 s window.
+      expect(current.listSessions).toHaveBeenCalledTimes(2)
+      await expect(result).resolves.toEqual({
+        killedCount: 0,
+        remainingCount: 1,
+        killedSessionIds: []
+      })
+    })
+
+    it('counts a generation that answered while another keeps failing, and flags the sweep', async () => {
+      const currentSessions = [makeSession('a')]
+      const current = makeAdapter(5, [])
+      current.listSessions = vi.fn(async () =>
+        currentSessions.map(({ protocolVersion: _pv, ...rest }) => rest)
+      )
+      current.shutdown = vi.fn(async () => {
+        currentSessions.length = 0
+      })
+      const legacy = makeAdapter(3, [])
+      legacy.listSessions = vi.fn(async () => {
+        throw new Error('legacy daemon stopped answering')
+      })
+      const { registerDaemonManagementHandlers } = await importFresh()
+      getDaemonProviderMock.mockReturnValue(await makeRouter(current, [legacy]))
+      registerDaemonManagementHandlers()
+
+      const handlers = buildHandlerMap()
+      const result = await runKillAllWithPolls(handlers['pty:management:killAll'])
+
+      expect(result).toEqual({
+        killedCount: 1,
+        remainingCount: 0,
+        killedSessionIds: ['a'],
+        listingIncomplete: true
+      })
+      // The answering generation ends the sweep at the first poll.
+      expect(current.listSessions).toHaveBeenCalledTimes(2)
+    })
+
+    it("flags a sweep while a newer build's daemon is held, since its sessions are never listed", async () => {
+      isHoldingForNewerProtocolDaemonMock.mockReturnValue(true)
+      const { registerDaemonManagementHandlers } = await importFresh()
+      getDaemonProviderMock.mockReturnValue(await makeRouter(makeAdapter(5, [])))
+      registerDaemonManagementHandlers()
+
+      const handlers = buildHandlerMap()
+      const result = await runKillAllWithPolls(handlers['pty:management:killAll'])
+
+      expect(result).toEqual({
+        killedCount: 0,
+        remainingCount: 0,
+        killedSessionIds: [],
+        listingIncomplete: true
+      })
+    })
+
+    it('flags a sweep that has no daemon provider to list', async () => {
+      const { registerDaemonManagementHandlers } = await importFresh()
+      getDaemonProviderMock.mockReturnValue(null)
+      registerDaemonManagementHandlers()
+
+      const handlers = buildHandlerMap()
+      const result = await runKillAllWithPolls(handlers['pty:management:killAll'])
+
+      expect(result).toEqual({
+        killedCount: 0,
+        remainingCount: 0,
+        killedSessionIds: [],
+        listingIncomplete: true
       })
     })
   })

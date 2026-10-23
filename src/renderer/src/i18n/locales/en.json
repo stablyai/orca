@@ -493,7 +493,8 @@
     "help": "Help",
     "paste": "Paste",
     "copy": "Copy",
-    "selectAll": "Select All"
+    "selectAll": "Select All",
+    "quitAndStopAllSessions": "Quit and Stop All Sessions..."
   },
   "tray": {
     "openOrca": "Open Orca",
@@ -21115,5 +21116,16 @@
     "restartLocal": "Restart local daemon",
     "killAllLocal": "Kill all local sessions",
     "killFailed": "The terminal could not be ended. Last-observed sessions are retained."
+  },
+  "quitAndStopAllSessions": {
+    "confirm": "Stop Sessions and Quit",
+    "cancel": "Cancel",
+    "title": "Quit and Stop All Sessions",
+    "message": "Stop all terminal sessions and quit Orca?",
+    "detail": "Orca closes every terminal tab and stops its session, including agents running in terminals, then quits. Terminal sessions on remote hosts may keep running there. Unsaved terminal work is lost, and the closed tabs don't come back on next launch. This can't be undone.",
+    "failed": "Couldn't stop every terminal session, so Orca stayed open.",
+    "ok": "OK",
+    "unavailableMessage": "Orca can't stop every terminal session right now.",
+    "unavailableDetail": "Nothing was stopped. Try again once your terminals have opened. If a terminal says it was opened in a newer version of Orca, reopen it first. If your terminals are already open, quit and reopen Orca, then try again."
   }
 }

@@ -118,6 +118,8 @@ export const mainProcessState = {
   recoveryReloadInFlight: createWebContentsTimedFlag(),
   // Why: a tray "Settings…" click can precede the renderer's ui:openSettings listener; it pulls this one-shot on mount.
   pendingOpenSettings: createWebContentsTimedFlag(),
+  // Why: a confirmed Quit and Stop All Sessions can open the window; its renderer pulls this one-shot on mount.
+  pendingQuitAndStopAllSessions: createWebContentsTimedFlag(),
   skillShareDeepLinks: new SkillShareDeepLinkState(),
   // Why: a Finder/Explorer "Open With" can land before any window exists; the renderer pulls this buffer on mount.
   osOpenedDocuments: new OsOpenedDocumentState(),

@@ -260,7 +260,8 @@
     "help": "Ayuda",
     "paste": "Pegar",
     "copy": "Copiar",
-    "selectAll": "Seleccionar todo"
+    "selectAll": "Seleccionar todo",
+    "quitAndStopAllSessions": "Salir y detener todas las sesiones..."
   },
   "tray": {
     "openOrca": "Abrir Orca",
@@ -20795,5 +20796,16 @@
       "loading": "Cargando idioma…",
       "saving": "Guardando idioma…"
     }
+  },
+  "quitAndStopAllSessions": {
+    "title": "Salir y detener todas las sesiones",
+    "message": "¿Detener todas las sesiones de terminal y salir de Orca?",
+    "detail": "Orca cierra todas las pestañas de terminal y detiene sus sesiones, incluidos los agentes que se ejecutan en terminales, y luego se cierra. Las sesiones de terminal en hosts remotos pueden seguir ejecutándose allí. Se pierde el trabajo de terminal no guardado y las pestañas cerradas no vuelven en el próximo inicio. Esta acción no se puede deshacer.",
+    "confirm": "Detener sesiones y salir",
+    "cancel": "Cancelar",
+    "failed": "No se pudieron detener todas las sesiones de terminal, así que Orca sigue abierto.",
+    "ok": "Aceptar",
+    "unavailableMessage": "Orca no puede detener todas las sesiones de terminal en este momento.",
+    "unavailableDetail": "No se detuvo nada. Vuelve a intentarlo cuando se hayan abierto tus terminales. Si una terminal indica que se abrió en una versión más reciente de Orca, vuelve a abrirla primero. Si tus terminales ya están abiertas, cierra Orca, vuelve a abrirlo y vuelve a intentarlo."
   }
 }

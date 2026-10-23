@@ -380,7 +380,8 @@
     "help": "Aide",
     "paste": "Coller",
     "copy": "Copier",
-    "selectAll": "Tout sélectionner"
+    "selectAll": "Tout sélectionner",
+    "quitAndStopAllSessions": "Quitter et arrêter toutes les sessions..."
   },
   "tray": {
     "openOrca": "Ouvrir Orca",
@@ -20805,5 +20806,16 @@
       "loading": "Chargement de la langue…",
       "saving": "Enregistrement de la langue…"
     }
+  },
+  "quitAndStopAllSessions": {
+    "title": "Quitter et arrêter toutes les sessions",
+    "message": "Arrêter toutes les sessions de terminal et quitter Orca ?",
+    "detail": "Orca ferme tous les onglets de terminal et arrête leurs sessions, y compris les agents qui tournent dans des terminaux, puis quitte. Les sessions de terminal sur des hôtes distants peuvent continuer d'y tourner. Tout travail non enregistré dans un terminal est perdu et les onglets fermés ne reviennent pas au prochain lancement. Cette action est irréversible.",
+    "confirm": "Arrêter les sessions et quitter",
+    "cancel": "Annuler",
+    "failed": "Impossible d'arrêter toutes les sessions de terminal, Orca reste donc ouvert.",
+    "ok": "OK",
+    "unavailableMessage": "Orca ne peut pas arrêter toutes les sessions de terminal pour le moment.",
+    "unavailableDetail": "Rien n'a été arrêté. Réessayez une fois vos terminaux ouverts. Si un terminal indique qu'il a été ouvert dans une version plus récente d'Orca, rouvrez-le d'abord. Si vos terminaux sont déjà ouverts, quittez puis relancez Orca, et réessayez."
   }
 }
