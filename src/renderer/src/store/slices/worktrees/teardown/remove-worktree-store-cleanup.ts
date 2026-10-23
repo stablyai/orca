@@ -109,6 +109,7 @@ export function applyRemoveWorktreeSuccessState(
       expandedDirs: omitByWorktree(s.expandedDirs),
       // Why: clear the huge-status marker so it doesn't linger after the worktree is gone.
       gitStatusHugeByWorktree: omitByWorktree(s.gitStatusHugeByWorktree),
+      gitStatusReadErrorByWorktree: omitByWorktree(s.gitStatusReadErrorByWorktree),
       // Why: git status/compare caches stop refreshing once the worktree is deleted; remove them so no stale badges/diffs linger.
       gitStatusByWorktree: omitByWorktree(s.gitStatusByWorktree),
       gitStatusHeadByWorktree: omitByWorktree(s.gitStatusHeadByWorktree),

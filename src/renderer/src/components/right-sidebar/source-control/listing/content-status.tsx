@@ -3,12 +3,13 @@ import { translate } from '@/i18n/i18n'
 import type { GitConflictOperation } from '../../../../../../shared/git-status-types'
 import { ConflictSummaryCard, OperationBanner } from './conflict-status-cards'
 import { EmptyState } from './empty-state'
+import { StatusReadFailedBanner } from './status-read-failed-banner'
 import { TooManyChangesBanner } from './too-many-changes-banner'
 
 /**
  * Renders the banners and empty states that sit above the source control file list: conflict
- * summary or in-progress operation, the huge-repository warning, and the empty state matching the
- * current filter (none, too large, or no matches).
+ * summary or in-progress operation, the huge-repository and failed-read warnings, and the empty
+ * state matching the current filter (none, too large, or no matches).
  */
 export function SourceControlContentStatus({
   unresolvedConflictCount,
@@ -20,6 +21,7 @@ export function SourceControlContentStatus({
   onResolveWithAi,
   onReviewConflicts,
   repositoryHuge,
+  statusReadError,
   worktreeId,
   onRetryStatus,
   onStageAllChanges,
@@ -41,6 +43,7 @@ export function SourceControlContentStatus({
   onResolveWithAi: () => void
   onReviewConflicts: () => void
   repositoryHuge: { limit: number } | null | undefined
+  statusReadError?: string
   worktreeId: string
   onRetryStatus: (signal: AbortSignal) => Promise<void>
   onStageAllChanges: () => Promise<void>
@@ -91,6 +94,15 @@ export function SourceControlContentStatus({
             onRetry={onRetryStatus}
             onStageAll={onStageAllChanges}
             isStageAllDisabled={isExecutingBulk}
+          />
+        </div>
+      )}
+      {statusReadError !== undefined && (
+        <div className="px-3 pb-2">
+          <StatusReadFailedBanner
+            key={worktreeId}
+            error={statusReadError}
+            onRetry={onRetryStatus}
           />
         </div>
       )}

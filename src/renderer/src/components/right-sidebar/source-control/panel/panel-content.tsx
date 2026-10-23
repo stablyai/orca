@@ -65,6 +65,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
     setBaseRefDialogOpen,
     sourceControlAiActionsVisible,
     sourceControlViewMode,
+    statusReadError,
     toggleSection,
     toggleSubmodule,
     toggleTreeDir,
@@ -78,8 +79,12 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
 
   const hasFilteredUncommittedEntries = displaySections.length > 0
   const hasFilteredBranchEntries = filteredBranchEntries.length > 0
+  // Why: a failed status read lists nothing, which must not read as a clean workspace.
   const showGenericEmptyState =
-    !hasUncommittedEntries && branchSummary?.status === 'ready' && branchEntries.length === 0
+    statusReadError === undefined &&
+    !hasUncommittedEntries &&
+    branchSummary?.status === 'ready' &&
+    branchEntries.length === 0
 
   return (
     <>
@@ -100,6 +105,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
           )
         }}
         repositoryHuge={repositoryHuge}
+        statusReadError={statusReadError}
         worktreeId={currentWorktreeId}
         onRetryStatus={refreshActiveGitStatus}
         onStageAllChanges={handleStageWorktreeChanges}

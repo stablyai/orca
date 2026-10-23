@@ -82,6 +82,9 @@ export type GitStatusResult = {
   // "too many changes" state.
   didHitLimit?: boolean
   statusLength?: number
+  // Why: set when `git status` itself failed, so `entries` is empty because nothing was
+  // read, not because the tree is clean. Holds Git's error text. Optional for old hosts.
+  readError?: string
   // Only computed when the request carried a merge-base OID (the renderer's
   // visibility gate). Omission means deferred, skipped, or an older host.
   branchLineTotal?: GitBranchLineTotal

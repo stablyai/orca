@@ -28,6 +28,8 @@ export type EditorGitSlice = {
   gitStatusHeadByWorktree: Record<string, string>
   // Why: set when status hit the entry limit; SCM shows "too many changes" and pauses polling. `{ limit }` when huge, else absent.
   gitStatusHugeByWorktree: Record<string, { limit: number }>
+  // Why: Git's error text while status cannot be read; the last known entries stay in place. Absent when the last read succeeded.
+  gitStatusReadErrorByWorktree: Record<string, string>
   // Why: absent means "not known exact" (stale fork point, old server, capped listing); never fall back to a previous total.
   gitBranchLineTotalByWorktree: Record<string, GitBranchLineTotal | null>
   gitIgnoredPathsByWorktree: Record<string, string[]>
