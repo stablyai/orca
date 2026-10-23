@@ -5,6 +5,7 @@
 // recording it would make the durable handle chain lie about what this session
 // actually proved.
 
+import { throwIfSignalAborted } from '../../shared/abort-signal-reason'
 import {
   isCodexAppServerRequestError,
   type CodexAppServerConnection
@@ -63,7 +64,6 @@ export async function openCodexThread(
   launch: {
     cwd: string
     resumeThreadId: string | null
-    resumePath?: string | null
     supersedeIfUnsaved?: boolean
     permissionPolicy?: CodexStructuredPermissionPolicy
     /** Why: Codex renders a thread's base instructions for its opening model; a first turn on
@@ -74,7 +74,9 @@ export async function openCodexThread(
     /** Env every command the agent runs must see, whatever the user's shell environment policy. */
     commandEnv?: Record<string, string>
   },
-  timeoutMs: number | undefined
+  /** null: no deadline; the start that opens the thread bounds it (`signal`). */
+  timeoutMs: number | null | undefined,
+  signal?: AbortSignal
 ): Promise<CodexOpenedThread> {
   const resumeThreadId = launch.resumeThreadId
   const config = { ...launch.threadConfig, ...shellEnvironmentSetConfig(launch.commandEnv) }
@@ -83,12 +85,14 @@ export async function openCodexThread(
     ...launch.permissionPolicy,
     ...(Object.keys(config).length > 0 ? { config } : {})
   }
-  const startThread = (): Promise<unknown> =>
-    connection.request(
+  const startThread = (): Promise<unknown> => {
+    throwIfSignalAborted(signal)
+    return connection.request(
       'thread/start',
       { ...threadSettings, ...(launch.model ? { model: launch.model } : {}) },
       { timeoutMs }
     )
+  }
   let supersededThreadId: string | undefined
   let opened: unknown
   if (!resumeThreadId) {
@@ -97,16 +101,17 @@ export async function openCodexThread(
     // No model: naming one makes Codex skip the thread's saved model, provider and effort.
     const resumeParams = {
       threadId: resumeThreadId,
-      ...threadSettings,
-      ...(launch.resumePath ? { path: launch.resumePath } : {})
+      ...threadSettings
     }
     try {
+      throwIfSignalAborted(signal)
       opened = await connection.request(
         'thread/resume',
         { ...resumeParams, excludeTurns: true },
         { timeoutMs }
       )
     } catch (error) {
+      throwIfSignalAborted(signal)
       if (!launch.supersedeIfUnsaved || !isCodexNoRolloutError(error, resumeThreadId)) {
         throw error
       }

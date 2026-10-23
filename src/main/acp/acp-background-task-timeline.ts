@@ -4,10 +4,6 @@ import {
   isSettledBackgroundTaskState
 } from '../../shared/native-chat-background-task-row'
 import type { NativeChatBackgroundTaskBlock } from '../../shared/native-chat-types'
-import {
-  boundInlineText,
-  DEFAULT_JOURNAL_PAYLOAD_LIMITS
-} from '../native-chat/agent-session-journal/journal-payload-bounds'
 import type {
   ProviderTimelineEvent,
   ProviderTimelineJoin
@@ -41,12 +37,6 @@ export class AcpBackgroundTaskTimeline {
         kind: update.kind ?? previous?.kind ?? fallbackKind ?? 'unknown',
         label: update.label ?? previous?.label ?? fallbackLabel ?? update.taskId,
         state: update.state
-      }
-      for (const key of ['label', 'summary', 'error', 'outputFile'] as const) {
-        const text = block[key]
-        if (text !== undefined) {
-          block[key] = boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
-        }
       }
       if (isSettledBackgroundTaskState(block.state)) {
         this.running.delete(block.taskId)

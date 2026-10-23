@@ -11,6 +11,7 @@ import { useAppStore } from '@/store'
 import { createTerminalGitHubPRLinkDetector } from '../../../../shared/terminal-github-pr-link-detector'
 import {
   AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS,
+  AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS,
   isAgentTaskCompleteOsNotificationEnabledFromState,
   isAgentTaskCompleteTrackingEnabledFromState
 } from './agent-task-complete-policy'
@@ -28,6 +29,8 @@ import {
   registerTerminalSideEffectFactConsumer
 } from './terminal-side-effect-facts-handler'
 import { dispatchTerminalNotification } from './use-notification-dispatch'
+import { hasPendingHookLaneCompletion } from '@/hooks/agent-hook-completion-notifications'
+import { hookLaneTitleTurnEndEvidence } from '@/hooks/agent-hook-turn-end-ownership'
 import { acquireHiddenRendererPtyDeliveryClaim } from './pty-renderer-delivery-claims'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 
@@ -84,6 +87,7 @@ export function startParkedTerminalByteWatcher(
   let wroteRuntimeTitleSlot = false
   let bellNotificationTimer: ReturnType<typeof setTimeout> | null = null
   let agentTaskCompleteTimer: ReturnType<typeof setTimeout> | null = null
+  let ownedIdleTimer: ReturnType<typeof setTimeout> | null = null
 
   const clearBellNotificationTimer = (): void => {
     if (bellNotificationTimer !== null) {
@@ -96,6 +100,10 @@ export function startParkedTerminalByteWatcher(
     if (agentTaskCompleteTimer !== null) {
       clearTimeout(agentTaskCompleteTimer)
       agentTaskCompleteTimer = null
+    }
+    if (ownedIdleTimer !== null) {
+      clearTimeout(ownedIdleTimer)
+      ownedIdleTimer = null
     }
   }
 
@@ -118,6 +126,13 @@ export function startParkedTerminalByteWatcher(
         return
       }
       pendingBellNotification = false
+      // Why: the hook lane's pending Done announces this burst's turn end, superseding the BEL as a pane completion does.
+      if (
+        hasPendingHookLaneCompletion(paneKey, ptyId) &&
+        isAgentTaskCompleteOsNotificationEnabled(useAppStore.getState())
+      ) {
+        return
+      }
       dispatchTerminalNotification(worktreeId, {
         source: 'terminal-bell',
         paneKey,
@@ -171,13 +186,30 @@ export function startParkedTerminalByteWatcher(
         // Why: completion supersedes a concurrent BEL so each burst yields exactly one OS notification (live-path parity).
         pendingBellNotification = false
         clearBellNotificationTimer()
-        dispatchTerminalNotification(worktreeId, {
-          source: 'agent-task-complete',
-          terminalTitle: title,
-          paneKey,
-          ptyId,
-          workspaceOwner
-        })
+        const evidence = (): 'identified' | 'ambiguous' | null => {
+          const foreground = useAppStore.getState().paneForegroundAgentByPaneKey[paneKey]?.agent
+          return hookLaneTitleTurnEndEvidence(paneKey, ptyId, title, foreground ?? null)
+        }
+        const dispatchIdleCompletion = (): void => {
+          dispatchTerminalNotification(worktreeId, {
+            source: 'agent-task-complete',
+            terminalTitle: title,
+            paneKey,
+            ptyId,
+            workspaceOwner
+          })
+        }
+        if (evidence() !== 'identified') {
+          dispatchIdleCompletion()
+          return
+        }
+        // Why: as on a mounted pane, an end the host then calls ambiguous keeps main's title completion.
+        ownedIdleTimer = setTimeout(() => {
+          ownedIdleTimer = null
+          if (!disposed && evidence() === 'ambiguous') {
+            dispatchIdleCompletion()
+          }
+        }, AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS - PARKED_NOTIFICATION_GRACE_MS)
       }, PARKED_NOTIFICATION_GRACE_MS)
     },
     onAgentBecameWorking: (): void => {

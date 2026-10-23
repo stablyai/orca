@@ -156,6 +156,19 @@ describe('runtime-selector flags on locally pinned CLI commands', () => {
     expect(runtimeClientConstructorMock).toHaveBeenCalledWith(undefined, 'm4air')
   })
 
+  // Why: the pre-check matches names loosely but the connection lookup is exact, so `build` for a
+  // server saved as `Build` passed the check and then failed with "Unknown environment: build".
+  it('connects to the server an --environment name in another case resolved to', async () => {
+    pairRuntimeEnvironment(listEnvironmentsMock, 'env-m4air', 'M4Air')
+    fakeMachineNameRuntime('M4 Air')
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    runtimeClientConstructorMock.mockClear()
+
+    await main(['host', 'name', '--environment', 'm4air', '--json'], '/tmp/repo')
+
+    expect(runtimeClientConstructorMock).toHaveBeenCalledWith(undefined, 'env-m4air')
+  })
+
   /** The selectors an agent's environment carries: set empty, which the CLI reads as unset. */
   function agentSelectors(): void {
     process.env.ORCA_ENVIRONMENT = ''

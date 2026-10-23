@@ -455,3 +455,28 @@ describe('terminal context-menu paste on a covered pane', () => {
     expect(answerRef.current.value).toBe('')
   })
 })
+
+describe('pane menu paste opened on a question answer', () => {
+  it('fills that answer rather than the mounted composer', async () => {
+    const root = document.createElement('div')
+    const composer = composerHandle()
+    const answer = document.createElement('input')
+    answer.setAttribute('data-native-chat-answer-field', '')
+    root.append(composer.element, answer)
+    document.body.append(root)
+    let pasteInto: ((origin?: HTMLTextAreaElement | HTMLInputElement) => void) | undefined
+    function Probe(): null {
+      pasteInto = useNativeChatPasteBridge({
+        rootRef: { current: root },
+        composerRef: { current: composer }
+      })
+      return null
+    }
+    render(<Probe />)
+    await act(async () => {
+      pasteInto?.(answer)
+    })
+    expect(answer.value).toBe('menu text')
+    expect(composer.pasteFromClipboard).not.toHaveBeenCalled()
+  })
+})

@@ -23,6 +23,7 @@ export function framesDrawWorkspace(state: AppState): (key: string) => boolean {
  */
 export function onWorkspaceStartsDrawing(
   store: HeldWorkspacesStore,
+  draws: (state: AppState) => (key: string) => boolean,
   unshown: () => string[],
   onDrawn: () => void
 ): () => void {
@@ -35,8 +36,7 @@ export function onWorkspaceStartsDrawing(
       return
     }
     held = state
-    const drawn = framesDrawWorkspace(state)
-    if (unshown().some(drawn)) {
+    if (unshown().some(draws(state))) {
       onDrawn()
     }
   })

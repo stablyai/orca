@@ -19,10 +19,6 @@ import {
   parseOrcadMigrationClientState
 } from './orcad-migration/orcad-migration-client-state'
 import {
-  assertOrcadMigrationEditorDraftsDeclarationReferences,
-  parseOrcadMigrationEditorDraftsDeclaration
-} from './orcad-migration/orcad-migration-editor-drafts'
-import {
   assertUnique,
   boundedArray,
   MAX_ORCAD_MIGRATION_DORMANT_NAMESPACES,
@@ -91,12 +87,7 @@ export function parseOrcadMigrationDormantState(value: unknown): OrcadMigrationD
       : { automationRuns: parseOrcadMigrationDormantAutomationRuns(record.automationRuns) }),
     ...(record.clientState === undefined
       ? {}
-      : { clientState: parseOrcadMigrationClientState(record.clientState) }),
-    ...(record.editorDraftsBlob === undefined
-      ? {}
-      : {
-          editorDraftsBlob: parseOrcadMigrationEditorDraftsDeclaration(record.editorDraftsBlob)
-        })
+      : { clientState: parseOrcadMigrationClientState(record.clientState) })
   }
   assertUnique(payload.worktreeMeta, (entry) => entry.worktreeId, 'worktree_meta')
   assertUnique(payload.worktreeMeta, (entry) => entry.sourceKey, 'worktree_meta_source')
@@ -174,12 +165,6 @@ export function assertOrcadMigrationDormantStateReferences(args: {
       owns,
       repositoryIds: args.repositoryIds
     })
-  }
-  if (args.dormantState.editorDraftsBlob) {
-    assertOrcadMigrationEditorDraftsDeclarationReferences(
-      args.dormantState.workspaceSession,
-      args.dormantState.editorDraftsBlob
-    )
   }
   assertOrcadMigrationScrollbackReferences(
     args.dormantState.workspaceSession,

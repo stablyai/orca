@@ -253,6 +253,17 @@ export function handleMonacoLargeTextPaste(
   event.stopPropagation()
 
   options.onPasteStart?.()
-  void executeMonacoLargeTextPaste(monacoEditor, text, options).then(options.onPasteResult)
+  // Why the catch: a throwing paste must still settle, or its start-side state never releases.
+  void executeMonacoLargeTextPaste(monacoEditor, text, options)
+    .catch((error: unknown) => {
+      console.error('[editor] large paste failed', error)
+      return {
+        status: 'cancelled',
+        reason: 'target-unavailable',
+        byteLength: ownershipMeasurement.byteLength,
+        chunksWritten: 0
+      } as const
+    })
+    .then(options.onPasteResult)
   return { status: 'handled' }
 }

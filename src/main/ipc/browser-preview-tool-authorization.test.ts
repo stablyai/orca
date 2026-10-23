@@ -125,10 +125,16 @@ const BROWSER_PAGE_CHANNELS = [
   'browser:isGuestRegistered',
   'browser:unregisterGuest',
   'browser:respondWebAuthnAccount',
+  'browser:respondPagePrompt',
   'browser:proceedCertificate',
   'browser:activeTabChanged',
   'browser:openDevTools',
+  'browser:addWordToDictionary',
+  'browser:copyImageAt',
   'browser:setViewportOverride',
+  'browser:getPageSiteDisplay',
+  'browser:zoomPage',
+  'browser:setPageSiteColorScheme',
   'browser:publishClientPageMetadata',
   'browser:cancelDownload',
   'browser:session:listProfiles',
@@ -144,7 +150,10 @@ const BROWSER_PAGE_CHANNELS = [
   'browser:session:importFromBrowser',
   // Process-wide identity: reads/writes the host's own user-agent choice, never a viewed guest.
   'browser:identity:get',
-  'browser:identity:set'
+  'browser:identity:set',
+  // Remembered site answers for a browser profile, never a viewed guest.
+  'browser:sitePermissions:list',
+  'browser:sitePermissions:set'
 ]
 
 type Handler = (event: { sender: Electron.WebContents }, args: unknown) => unknown

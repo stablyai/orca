@@ -19,7 +19,7 @@ const STORE_FILE_NAME = 'ssh-host-keys.json'
 const STORE_VERSION = 1
 const MAX_PORT = 65535
 
-export type TrustedHostKeyRecord = {
+type TrustedHostKeyRecord = {
   /** Lower-cased `HostKeyAlias` or resolved hostname — never the Orca target label (D2 lookup key). */
   host: string
   port: number
@@ -34,7 +34,7 @@ export type TrustedHostKeyRecord = {
  * Our store holds neither CA nor revoked entries, so it can only reach four of the six outcomes —
  * but they are the same four, so a caller can union this with `matchKnownHosts` untranslated.
  */
-export type HostKeyStoreOutcome = Extract<
+type HostKeyStoreOutcome = Extract<
   KnownHostsOutcome,
   'match' | 'mismatch' | 'unknown-type-known-host' | 'unknown'
 >

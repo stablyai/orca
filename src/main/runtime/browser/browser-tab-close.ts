@@ -1,11 +1,13 @@
 import type { RuntimeBrowserTabQueries } from './browser-tab-queries'
-import { retireRuntimeBrowserClientPage } from './browser-client-page-close'
+import {
+  resolveClientPageToClose,
+  retireRuntimeBrowserClientPage
+} from './browser-client-page-close'
 import { BrowserError } from '../../browser/browser-error'
 import { randomUUID } from 'node:crypto'
 import { ipcMain } from 'electron'
 import type { RuntimeBrowserCommandHost } from './browser-command-contracts'
 import type { RuntimeBrowserCommandTargets } from './browser-command-targets'
-import type { RuntimeBrowserTabCatalog } from './browser-tab-catalog'
 
 export class RuntimeBrowserTabClose {
   constructor(
@@ -29,8 +31,7 @@ export class RuntimeBrowserTabClose {
     private readonly targets: Pick<
       RuntimeBrowserCommandTargets,
       'resolveBrowserWorktreeId' | 'retireGhostBrowserSessionRow'
-    >,
-    private readonly catalog: Pick<RuntimeBrowserTabCatalog, 'assertClientPageWorkspace'>
+    >
   ) {}
 
   async browserTabClose(params: {
@@ -38,22 +39,7 @@ export class RuntimeBrowserTabClose {
     page?: string
     worktree?: string
   }): Promise<{ closed: boolean }> {
-    const pages = this.host.getRuntimeBrowserPageRegistry()
-    let clientPage = params.page ? pages.getPage(params.page) : undefined
-    if (clientPage) {
-      await this.catalog.assertClientPageWorkspace(clientPage, params.worktree)
-    } else if (!params.page) {
-      const workspaceId = params.worktree
-        ? (await this.host.resolveBrowserWorkspace(params.worktree)).id
-        : undefined
-      if (pages.listPages(workspaceId).length > 0) {
-        const tab =
-          params.index !== undefined
-            ? (await this.queries.browserTabList({ worktree: params.worktree })).tabs[params.index]
-            : (await this.queries.browserTabCurrent({ worktree: params.worktree })).tab
-        clientPage = tab ? pages.getPage(tab.browserPageId) : undefined
-      }
-    }
+    const clientPage = await resolveClientPageToClose(this.host, this.queries, params)
     if (clientPage) {
       return retireRuntimeBrowserClientPage(this.host, clientPage)
     }

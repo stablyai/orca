@@ -2,6 +2,7 @@ import type { Store } from '../../persistence'
 import type { SshRepoReadoption, SshTarget } from '../../../shared/ssh-types'
 import { RUNTIME_OWNED_SSH_TARGET_ID_PREFIX } from '../../../shared/execution-host'
 import { normalizeSshConfigAlias } from '../../../shared/ssh-config-alias'
+import { isLegacyConfigImportTarget } from '../../../shared/ssh-target-source'
 import { loadUserSshConfig, sshConfigHostsToTargets } from '../config/ssh-config-parser'
 import { SshTargetOrcadClaims } from '../targets/ssh-target-orcad-claims'
 import {
@@ -284,14 +285,4 @@ export function allowsDirectSshRelay(target: SshTarget): boolean {
     return false
   }
   return !target.orcadFence || target.orcadFence.sourceChangedAt !== undefined
-}
-
-function isLegacyConfigImportTarget(target: SshTarget): boolean {
-  const alias = target.configHost ?? target.label
-  // Why: legacy manual and imported targets both lack `source`. Only adopt the
-  // old import shape, where the SSH alias was kept as label/configHost while
-  // host stored the resolved HostName; otherwise preserve the user's target.
-  return Boolean(
-    alias && target.label === alias && target.configHost === alias && target.host !== alias
-  )
 }

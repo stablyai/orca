@@ -29,7 +29,7 @@ import type { OrcadSlotOptions } from '../../ssh/orcad-recovery-slot'
 import type { OrcadDecommissionResult } from '../../../shared/orcad-decommission'
 import type { OrcadTerminalCensus } from '../../../shared/orcad-terminal-census'
 
-export type OrcadDecommissionOptions = OrcadSlotOptions & {
+type OrcadDecommissionOptions = OrcadSlotOptions & {
   /** The record the caller reviewed; a changed host record refuses rather than guessing. */
   record: OrcadActivationRecord
   /** Taken by the caller just before; any live or uncounted terminal refuses. */

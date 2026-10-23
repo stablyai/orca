@@ -225,9 +225,9 @@ export class ClaudeJournalPrompts {
     return admission
   }
 
-  retryPendingCancellations(): void {
+  retryPendingCancellations(): StructuredAgentSessionSinkAdmission {
     if (this.pendingCancellationTotal === 0) {
-      return
+      return ADMITTED
     }
     for (const [promptKey, entry] of this.items) {
       if (!entry.cancellationPending) {
@@ -235,13 +235,14 @@ export class ClaudeJournalPrompts {
       }
       const admission = this.admitCancellation(promptKey)
       if (!admission.accepted && admission.reason === 'backpressure') {
-        return
+        return admission
       }
       const retained = this.items.get(promptKey)
       if (retained) {
         this.setCancellationPending(retained, false)
       }
     }
+    return ADMITTED
   }
 
   resolve(promptKey: string): void {

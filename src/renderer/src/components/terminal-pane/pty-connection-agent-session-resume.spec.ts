@@ -1,6 +1,14 @@
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import {
+  bindsPaneInStore,
+  expectNoWindowStart,
+  expectWindowStartAskedMain,
+  mainLayoutApplyTransport,
+  mainStartsPaneAs
+} from './pty-connection-test-main-pane-start-fixtures'
 import { flushAsyncTicks } from './pty-connection-test-async'
 import { UUID_RE } from './pty-connection-test-constants'
 import {
@@ -29,6 +37,9 @@ export function registerPtyConnectionAgentSessionResumeTests(): void {
     return buildPaneConnectionDeps(() => mockStoreState, overrides)
   }
 
+  /** Main's frame binding tab-1's pane 2. */
+  const bindLeaf2 = bindsPaneInStore(() => mockStoreState, 'tab-1', LEAF_2)
+
   describe('connectPanePty', () => {
     beforeEach(async () => {
       vi.resetModules()
@@ -47,6 +58,7 @@ export function registerPtyConnectionAgentSessionResumeTests(): void {
         }
       })
       await installTerminalTestGlobals()
+      ;(await mainLayoutApplyTransport()).reset()
     })
 
     afterEach(async () => {
@@ -118,6 +130,15 @@ export function registerPtyConnectionAgentSessionResumeTests(): void {
       await flushAsyncTicks(20)
       await vi.advanceTimersByTimeAsync(70)
 
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        // Main resumes the agent; the window only attaches to the cold-restored terminal and paints it.
+        expect(transport.connect).toHaveBeenCalledWith(
+          expect.objectContaining({ sessionId: 'lost-pty', attachOnlyView: true })
+        )
+        expectNoWindowStart(transport, mockStoreState)
+        expect(transport.sendInput).not.toHaveBeenCalled()
+        return
+      }
       const reattachArgs = transport.connect.mock.calls.find(
         ([args]) => args.sessionId === 'lost-pty'
       )?.[0]
@@ -303,6 +324,15 @@ export function registerPtyConnectionAgentSessionResumeTests(): void {
       await flushAsyncTicks(20)
       await vi.advanceTimersByTimeAsync(70)
 
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        // Main resumes from the live entry; the window only attaches and paints.
+        expect(transport.connect).toHaveBeenCalledWith(
+          expect.objectContaining({ sessionId: 'lost-pty', attachOnlyView: true })
+        )
+        expectNoWindowStart(transport, mockStoreState)
+        expect(transport.sendInput).not.toHaveBeenCalled()
+        return
+      }
       expect(transport.sendInput).not.toHaveBeenCalled()
       expect(transport.connect).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -386,6 +416,16 @@ export function registerPtyConnectionAgentSessionResumeTests(): void {
         await flushAsyncTicks(20)
         await vi.advanceTimersByTimeAsync(70)
 
+        if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+          // Main's start carries the one resume; the window's one connect is an attach.
+          expect(transport.connect).toHaveBeenCalledTimes(1)
+          expect(transport.connect).toHaveBeenCalledWith(
+            expect.objectContaining({ sessionId: retainedPtyId, attachOnlyView: true })
+          )
+          expectNoWindowStart(transport, mockStoreState)
+          expect(mockStoreState.tabsByWorktree['wt-1']).toHaveLength(1)
+          return
+        }
         expect(transport.connect).toHaveBeenCalledTimes(1)
         expect(transport.attach).not.toHaveBeenCalled()
         const options = transport.connect.mock.calls[0]?.[0] as {
@@ -474,6 +514,14 @@ export function registerPtyConnectionAgentSessionResumeTests(): void {
       await flushAsyncTicks(20)
       await vi.advanceTimersByTimeAsync(70)
 
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        // Main picks the resume recipe; the window neither builds nor registers one.
+        expect(transport.connect).toHaveBeenCalledWith(
+          expect.objectContaining({ sessionId: 'lost-pty', attachOnlyView: true })
+        )
+        expectNoWindowStart(transport, mockStoreState)
+        return
+      }
       expect(mockStoreState.getAgentLaunchConfigForStatusEntry).toHaveBeenCalledWith(
         expect.objectContaining({ paneKey, agentType: 'codex' })
       )
@@ -555,6 +603,7 @@ export function registerPtyConnectionAgentSessionResumeTests(): void {
         restoredLeafId: LEAF_2,
         restoredPtyIdByLeafId: { [LEAF_2]: staleSessionId }
       })
+      await mainStartsPaneAs({ ptyId: 'pty-main', bind: bindLeaf2, transport })
 
       connectPanePty(pane as never, manager as never, deps as never)
       await flushAsyncTicks(10)
@@ -563,6 +612,17 @@ export function registerPtyConnectionAgentSessionResumeTests(): void {
         1,
         expect.objectContaining({ sessionId: staleSessionId })
       )
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        // The reattach found no terminal: main starts the pane and keeps its record; the window
+        // starts no fresh shell of its own.
+        await expectWindowStartAskedMain(transport, paneKey, mockStoreState)
+        expect(transport.connect).toHaveBeenLastCalledWith(
+          expect.objectContaining({ sessionId: 'pty-main', attachOnlyView: true })
+        )
+        expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalled()
+        expect(deps.onPtyErrorRef.current).not.toHaveBeenCalled()
+        return
+      }
       expect(transport.connect).toHaveBeenNthCalledWith(
         2,
         expect.not.objectContaining({ sessionId: expect.any(String) })

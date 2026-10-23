@@ -15,7 +15,7 @@ import {
   writeTerminalOutput
 } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { recordTerminalOutput } from '@/lib/pane-manager/pane-scroll'
-import { presentPaneViewportPreservingSynchronizedOutput } from '@/lib/pane-manager/pane-webgl-renderer'
+import { presentPaneViewport } from '@/lib/pane-manager/pane-webgl-renderer'
 import {
   buildMainModelSnapshotReplayWrites,
   hasPositiveTerminalDimensions,
@@ -56,6 +56,7 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
       // Repeat markers for the drop episode this banner disclosed are ignored.
       session.hiddenOutputRestoreDisclosedGap = { ptyId, episode }
     }
+    session.requestRemoteProgramRedraw('restore-unavailable')
   }
 
   // Why an ack instead of retiring on the serve: the pane can dispose across the serialize +
@@ -165,6 +166,7 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
             // live-path constant, not the replay baseline — nothing repaints here,
             // so the pane is handed back to whatever is still running.
             session.writeReplayData(RESET_AFTER_BYTE_GAP)
+            session.requestRemoteProgramRedraw('restore-imageless')
           } else {
             for (const replayChunk of buildMainModelSnapshotReplayWrites(snapshot, {
               skipAltFrame: skippedAltFrame,
@@ -196,7 +198,7 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
           recordTerminalOutput(session.pane.terminal)
           await waitForTerminalReplayWritesParsed(session.pane.terminal)
           if (session.deps.isVisibleRef.current) {
-            presentPaneViewportPreservingSynchronizedOutput(session.pane)
+            presentPaneViewport(session.pane)
             recordTerminalFreezeBreadcrumb('stale-pixel-restore-present', {
               paneId: session.pane.id
             })

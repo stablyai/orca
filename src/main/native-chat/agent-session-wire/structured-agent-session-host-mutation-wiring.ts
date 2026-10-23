@@ -33,13 +33,14 @@ export function createStructuredAgentSessionHostMutationContext(
     conversation: input.lifetime.conversation,
     readChildWork: input.clientDelivery.readChildWork,
     publishChildWork: input.clientDelivery.publishChildWork,
+    publishWorkChanged: (sessionId) => input.clientDelivery.publishGenerationEnded(sessionId),
     captureChildWorkStops: input.clientDelivery.captureChildWorkStops,
     childWorkOpen: input.clientDelivery.childWorkOpen,
     childWorkIncomplete: input.clientDelivery.childWorkIncomplete,
     serialize: input.serialize,
     openConversation: input.conversationDelivery.open,
-    ensureAgent: (sessionId) =>
-      agentStart.ensureStructuredAgentSessionAgentForOperation(input.attachContext(), sessionId),
+    claimAgent: (sessionId) => agentStart.claimOperationStart(input.attachContext(), sessionId),
+    startFlights: input.runtimeState.startFlights,
     startupAttempts: input.runtimeState.startupAttempts,
     deliveryOrder: input.runtimeState.deliveryOrder,
     joinChildClose: (sessionId) =>

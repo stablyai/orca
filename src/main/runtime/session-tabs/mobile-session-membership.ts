@@ -8,6 +8,8 @@ import type {
   RuntimeSyncedLeaf
 } from '../../../shared/runtime-types'
 import { retireTerminalSurfacesFromSnapshot } from '../mobile-session-terminal-retirement'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { startedMainTerminalSurfaces } from '../terminal/surface/main-terminal-surfaces'
 
 export abstract class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal {
   abstract getTerminalWorktreeIdForPaneKey(
@@ -96,11 +98,12 @@ export abstract class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends O
       return false
     }
     const pty = this.ptysById.get(candidatePtyId)
-    const pane = parsePaneKey(pty?.paneKey ?? '')
+    const recorded = this.paneOfPty(pty)
+    const pane = parsePaneKey(recorded.paneKey ?? '')
     return Boolean(
       pty?.connected &&
       pty.worktreeId === worktreeId &&
-      pty.tabId === parentTabId &&
+      recorded.tabId === parentTabId &&
       pane?.leafId === leafId
     )
   }
@@ -108,13 +111,19 @@ export abstract class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends O
   protected reconcileMobileSessionRetirementFences(
     leaves: readonly RuntimeSyncedLeaf[]
   ): RuntimeSyncedLeaf[] {
-    return leaves.filter((leaf) =>
-      this.isMobileSessionSurfaceMembershipAllowed(
-        leaf.worktreeId,
-        leaf.tabId,
-        leaf.leafId,
-        leaf.ptyId
-      )
+    // Switch point: main's own panes are the membership record; the window-era fence is not asked.
+    const mainOwns = ORCA_LAYOUT_OWNER_IS_MAIN
+      ? startedMainTerminalSurfaces(this)?.ownedWorkspaces()
+      : null
+    return leaves.filter(
+      (leaf) =>
+        mainOwns?.has(leaf.worktreeId) ||
+        this.isMobileSessionSurfaceMembershipAllowed(
+          leaf.worktreeId,
+          leaf.tabId,
+          leaf.leafId,
+          leaf.ptyId
+        )
     )
   }
 

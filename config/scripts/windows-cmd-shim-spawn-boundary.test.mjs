@@ -45,8 +45,6 @@ const WINDOWS_SHIM_SPAWN_ALLOWLIST = [
   'config/scripts/run-ssh-staged-upload-reliability.mjs',
   'config/scripts/run-terminal-ibus-hangul-e2e.mjs',
   'config/scripts/run-terminal-scale-perf-e2e.mjs',
-  // Routes its shim through an explicit `cmd.exe /d /s /c`, which is the correct form.
-  'config/scripts/verify-skill-update-roundtrip.mjs',
   'tests/tools/benchmarks/startup-time-bench.mjs',
   'tests/tools/benchmarks/worktree-deletion-dev-bench.mjs',
   'tests/tools/repro-terminal-send-submit.mjs'

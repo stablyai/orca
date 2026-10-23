@@ -68,10 +68,15 @@ export async function prepareRuntimePtySpawn(
     shellOverride: args.shellOverride,
     plannedPty: args.launchRuntime?.pty,
     projectRuntimeSource: { kind: 'store', store: ctx.deps.store },
+    preAdopted: ctx.preAdoptedStablePane !== null,
     getSettings: ctx.deps.getSettings,
     resolveStartupCwd: ctx.deps.resolvePtySpawnStartupCwd
   })
   ctx.cwd = target.cwd
+  ctx.requestedCwd = target.requestedCwd
+  ctx.prevalidatedCwd = target.prevalidatedCwd
+  ctx.startupCwdFallback = target.startupCwdFallback
+  ctx.correctStartupCwd = target.correctStartupCwd
   ctx.terminalRuntimeOptions = target.terminalRuntimeOptions
   ctx.daemonShellOverride = ctx.terminalRuntimeOptions.shellOverride
   ctx.expectedWslDistro = target.expectedWslDistro
@@ -120,8 +125,6 @@ export async function prepareRuntimePtySpawn(
       jcodeRuntimeDir: jcodeEnv?.[JCODE_RUNTIME_DIR_ENV_KEY]
     })
   }
-  // Why: a dropped resume still applies here, but this controller's result has no field for
-  // notifyResumeUnavailable — runtime/relay panes start fresh without the notice.
   const hostEnv = await resolvePtySpawnHostEnv({
     launchAgent: args.launchAgent,
     command: args.command,
@@ -144,6 +147,7 @@ export async function prepareRuntimePtySpawn(
   })
   ctx.launchCommand = hostEnv.launchCommand
   ctx.codexResumeArgvDropped = hostEnv.codexResumeLaunch.droppedResumeArgv
+  ctx.codexResumeUnavailable = hostEnv.codexResumeLaunch.notifyResumeUnavailable
   ctx.env = hostEnv.env
   ctx.selectedCodexHomePath = hostEnv.selectedCodexHomePath
   ctx.codexResumeHomeSelected = hostEnv.codexResumeHomeSelected

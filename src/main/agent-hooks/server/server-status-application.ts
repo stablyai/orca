@@ -5,6 +5,7 @@ import { getCohortAtEmit } from '../../telemetry/cohort-classifier'
 import { track } from '../../telemetry/client'
 import { isCommandCodeNewTurnWhileWorking } from '../../../shared/command-code-turn-boundary'
 import { isNewTurnEvent } from '../../../shared/agent-hook-listener/provider-event-routing'
+import { reduceHostTurnEnd } from '../../../shared/agent-hook-turn-end-timing'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import type {
   AgentStatusObservation,
@@ -81,13 +82,18 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
       isReplay: _isReplay,
       ...payload
     } = previous
-    const refreshed = deriveCliWriterTopology({
-      ...payload,
-      receivedAt: now,
-      evidenceObservedAt: now,
-      stateStartedAt,
-      observation: this.stampObservation(payload, 'osc', now)
-    }, mutationBefore ?? previous, this.cliWriterExecutionMatches, newRun)
+    const refreshed = deriveCliWriterTopology(
+      {
+        ...payload,
+        receivedAt: now,
+        evidenceObservedAt: now,
+        stateStartedAt,
+        observation: this.stampObservation(payload, 'osc', now)
+      },
+      mutationBefore ?? previous,
+      this.cliWriterExecutionMatches,
+      newRun
+    )
     const firstRuntimeObservation = !this.runtimeObservedStatusPaneKeys.has(refreshed.paneKey)
     this.runtimeObservedStatusPaneKeys.add(refreshed.paneKey)
     if (!this.writeLegacyStatusRow(refreshed)) {
@@ -152,14 +158,31 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
         ? previous.stateStartedAt
         : (observedAt ?? now)
     const turnStartedAt = resolveTurnStartedAt(previous, payload, observedAt ?? now)
+    // Why: a relay's row was minted on the relay, which saw the event; main only restates it.
+    const { hostTurn, ...turnEnd } = reduceHostTurnEnd(
+      previous,
+      payload,
+      observedAt ?? now,
+      payload.connectionId === null
+    )
+    const {
+      stopHookActive: _stopHookActive,
+      nativeTurnKey: _nativeTurnKey,
+      turnEndedAt: _turnEndedAt,
+      turnEndDisposition: _turnEndDisposition,
+      hostTurn: _hostTurn,
+      ...event
+    } = payload
     // Why: `stateStartedAt` tracks the current state, while `receivedAt` tracks every arrival.
     return {
-      ...payload,
+      ...event,
       receivedAt: now,
       evidenceObservedAt: observedAt ?? this.resolveEvidenceObservedAt(payload, previous, now),
       stateStartedAt,
       // Always written here, so a producer can never declare it.
-      turnStartedAt
+      turnStartedAt,
+      ...turnEnd,
+      ...(hostTurn ? { hostTurn } : {})
     }
   }
 

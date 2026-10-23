@@ -29,7 +29,8 @@ function acquisition(fence: number, spawnToken: string): AgentSessionAcquisition
       origin: 'created',
       mintedAtFence: fence,
       observedAt: 1
-    }
+    },
+    acquisitionGeneration: `generation-${fence}`
   }
 }
 
@@ -38,6 +39,7 @@ function adapterOf(
 ): StructuredAgentSessionAdapter {
   return {
     acquire: vi.fn(async ({ fence, spawnToken }) => acquisition(fence, spawnToken)),
+    open: vi.fn(async () => ({ reportedOptions: { model: '' } })),
     releaseAcquisition,
     hasOwnedAcquisition: () => true,
     dispatch: vi.fn(),
@@ -60,30 +62,6 @@ describe('StructuredAgentSessionAdapterRouter.releaseAcquisition', () => {
     await expect(router.releaseAcquisition({ sessionId: 'session-1' })).resolves.toBe(false)
     expect(claude.releaseAcquisition).toHaveBeenCalledTimes(2)
     expect(codex.releaseAcquisition).not.toHaveBeenCalled()
-  })
-})
-
-describe('StructuredAgentSessionAdapterRouter.readAcquisitionOptions', () => {
-  it('keeps the existing live read for providers without acquisition options', async () => {
-    const claude = adapterOf(vi.fn(async () => true))
-    claude.readOptions = vi.fn(async () => ({
-      current: { model: 'reported-model', effort: 'high' },
-      models: []
-    }))
-    const router = claudeAndCodexRouter(
-      { claude, codex: adapterOf(vi.fn(async () => false)) },
-      async () => {}
-    )
-    await router.acquire({ identity: claudeIdentity('session-1'), fence: 1, spawnToken: 'spawn-1' })
-
-    await expect(
-      router.readAcquisitionOptions({
-        sessionId: 'session-1',
-        fence: 1,
-        priorOptions: { model: 'saved-model', personality: 'concise' }
-      })
-    ).resolves.toEqual({ model: 'reported-model', effort: 'high', personality: 'concise' })
-    expect(claude.readOptions).toHaveBeenCalledOnce()
   })
 })
 

@@ -5,7 +5,9 @@ import type { WorktreePushTargetStore } from './worktree-push-target-cleanup'
 const { gitExecFileAsyncMock } = vi.hoisted(() => ({ gitExecFileAsyncMock: vi.fn() }))
 vi.mock('../git/runner', () => ({ gitExecFileAsync: gitExecFileAsyncMock }))
 
-import { materializeWorktreePushTargetRemote } from './worktree-remote'
+import { ipcGitWorktreeTarget, materializeWorktreePushTargetRemote } from './worktree-remote'
+import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
+import { mergeWorktreeMetaForWrite } from '../persistence/loading-store/worktree-meta-write-normalization'
 
 const REPO_PATH = '/repo-root'
 const FORK_URL = 'git@github.com:contributor/orca.git'
@@ -342,10 +344,14 @@ describe('materializeWorktreePushTargetRemote', () => {
     })
     const target = forkTarget()
     const setWorktreeMeta = vi.fn()
+    // The write lands on the id's only repo row.
     const store: WorktreePushTargetStore = {
       getAllWorktreeMeta: () => ({}),
+      getRepos: () => [
+        { id: 'worktree-1', path: REPO_PATH, displayName: 'r', badgeColor: '#000', addedAt: 1 }
+      ],
       setWorktreeMeta
-    } as unknown as WorktreePushTargetStore
+    }
 
     const result = await materializeWorktreePushTargetRemote(
       REPO_PATH,
@@ -353,13 +359,134 @@ describe('materializeWorktreePushTargetRemote', () => {
       store,
       undefined,
       {},
-      'worktree-1'
+      ipcGitWorktreeTarget({ worktreeId: 'worktree-1' })
     )
 
     expect(result).toEqual({ ...target, remoteCreated: true })
-    expect(setWorktreeMeta).toHaveBeenCalledWith('worktree-1', {
-      pushTarget: { ...target, remoteCreated: true }
+    expect(setWorktreeMeta).toHaveBeenCalledWith(
+      hostWorktreeTarget({ id: 'worktree-1', hostId: 'local' }),
+      {
+        pushTarget: { ...target, remoteCreated: true }
+      }
+    )
+  })
+
+  it('records the mint on the copy whose git ran, even when the repo has a twin on another host', async () => {
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'remote' && args[1] === 'get-url') {
+        throw new Error('No such remote')
+      }
+      return { stdout: '', stderr: '' }
     })
+    const target = forkTarget()
+    const setWorktreeMeta = vi.fn()
+    const repo = {
+      id: 'worktree-1',
+      path: REPO_PATH,
+      displayName: 'r',
+      badgeColor: '#000',
+      addedAt: 1
+    }
+    const store: WorktreePushTargetStore = {
+      getAllWorktreeMeta: () => ({}),
+      getRepos: () => [
+        { ...repo, executionHostId: 'local' },
+        { ...repo, connectionId: 'box', executionHostId: 'ssh:box' }
+      ],
+      setWorktreeMeta
+    }
+
+    await materializeWorktreePushTargetRemote(
+      REPO_PATH,
+      target,
+      store,
+      undefined,
+      {},
+      ipcGitWorktreeTarget({ worktreeId: 'worktree-1' })
+    )
+
+    expect(setWorktreeMeta).toHaveBeenCalledWith(
+      hostWorktreeTarget({ id: 'worktree-1', hostId: 'local' }),
+      { pushTarget: { ...target, remoteCreated: true } }
+    )
+  })
+
+  it("never adopts a remote as Orca's because a twin on another host created one", async () => {
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'remote' && args[1] === 'get-url') {
+        return { stdout: `${FORK_URL}\n`, stderr: '' }
+      }
+      if (args[0] === 'symbolic-ref') {
+        return { stdout: 'contributor/fix\n', stderr: '' }
+      }
+      return { stdout: '', stderr: '' }
+    })
+    const target = forkTarget()
+    const setWorktreeMeta = vi.fn()
+    const repo = { id: 'repo', path: REPO_PATH, displayName: 'r', badgeColor: '#000', addedAt: 1 }
+    const store: WorktreePushTargetStore = {
+      // The SSH twin's Orca-created remote shares this remote's name and URL.
+      getAllWorktreeMeta: () => ({
+        'repo::/ssh-wt': mergeWorktreeMetaForWrite(undefined, {
+          hostId: 'ssh:box',
+          pushTarget: { ...target, remoteCreated: true }
+        })
+      }),
+      getRepos: () => [repo, { ...repo, connectionId: 'box', executionHostId: 'ssh:box' }],
+      setWorktreeMeta
+    }
+
+    const result = await materializeWorktreePushTargetRemote(
+      REPO_PATH,
+      target,
+      store,
+      'repo',
+      {},
+      ipcGitWorktreeTarget({ worktreeId: 'repo::/local-wt' })
+    )
+
+    expect(result.remoteCreated).not.toBe(true)
+    expect(setWorktreeMeta).not.toHaveBeenCalled()
+  })
+
+  it("never reuses a remote as Orca's because a twin on another host minted it", async () => {
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'remote' && args[1] === 'get-url') {
+        throw new Error('No such remote')
+      }
+      if (args[0] === 'remote' && args[1] === '-v') {
+        return { stdout: `fork-x\t${FORK_URL} (fetch)\nfork-x\t${FORK_URL} (push)`, stderr: '' }
+      }
+      if (args[0] === 'remote' && args.length === 1) {
+        return { stdout: 'fork-x', stderr: '' }
+      }
+      return { stdout: '', stderr: '' }
+    })
+    const target = forkTarget()
+    const setWorktreeMeta = vi.fn()
+    const repo = { id: 'repo', path: REPO_PATH, displayName: 'r', badgeColor: '#000', addedAt: 1 }
+    const store: WorktreePushTargetStore = {
+      getAllWorktreeMeta: () => ({
+        'repo::/ssh-wt': mergeWorktreeMetaForWrite(undefined, {
+          hostId: 'ssh:box',
+          pushTarget: { ...target, remoteName: 'fork-x', remoteCreated: true }
+        })
+      }),
+      getRepos: () => [repo, { ...repo, connectionId: 'box', executionHostId: 'ssh:box' }],
+      setWorktreeMeta
+    }
+
+    const result = await materializeWorktreePushTargetRemote(
+      REPO_PATH,
+      target,
+      store,
+      'repo',
+      {},
+      ipcGitWorktreeTarget({ worktreeId: 'repo::/local-wt' })
+    )
+
+    expect(result.remoteName).toBe('fork-x')
+    expect(result.remoteCreated).not.toBe(true)
   })
 
   it('does not touch the store when no worktreeId is provided', async () => {

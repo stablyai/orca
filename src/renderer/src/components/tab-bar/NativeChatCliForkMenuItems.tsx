@@ -34,6 +34,7 @@ export function NativeChatCliForkMenuItems({
     <>
       {leadingSeparator ? <DropdownMenuSeparator /> : null}
       <AiVaultSessionSurfaceSwitchMenuItems
+        action="switch"
         menuKind="dropdown"
         tooltipSide="right"
         cliPending={pending}

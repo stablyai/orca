@@ -6,32 +6,25 @@ import type { AiVaultSession } from '../../shared/ai-vault-types'
 import type { FileWithMtime, SessionAccumulator } from './session-scanner-types'
 import type { TranscriptMessageSink } from './session-transcript-consumers'
 import {
-  addPreviewMessage,
   createAccumulator,
   finalizeSession,
   sessionIdFromFileName,
   updateTimeline
 } from './session-scanner-accumulator'
-import {
-  normalizeFullFirstUserPromptText,
-  shouldCaptureFullFirstUserPrompt
-} from './session-scanner-first-user-prompt'
+import { addSessionContent, addSessionText } from './session-scanner-messages'
 import {
   extractGrokFirstUserPromptText,
   stripGrokUserQueryEnvelope
 } from './session-scanner-grok-user-text'
 import {
   asRecord,
-  extractPreviewContentText,
   extractString,
-  normalizePreviewText,
   normalizeTitleText,
   numberValue,
-  parseJsonObject,
-  sliceAtCodeUnitLimit
+  parseJsonObject
 } from './session-scanner-values'
 
-const GROK_USER_QUERY_PREVIEW_SCAN_LIMIT = 4096
+const GROK_PREVIEW_SCAN_LIMIT = 4096
 
 export async function parseGrokSessionFile(
   file: FileWithMtime,
@@ -87,37 +80,28 @@ async function consumeGrokChatHistory(
       }
 
       if (role === 'user') {
-        // Why: first-prompt copy must be the typed ask inside <user_query>, never
-        // the injected <user_info> bootstrap row.
-        const firstPromptBody = extractGrokFirstUserPromptText(record.content)
-        const text = firstPromptBody
-          ? normalizePreviewText(capGrokPreviewSource(firstPromptBody))
-          : null
-
-        if (firstPromptBody) {
-          accumulator.title ??= normalizeTitleText(firstPromptBody)
-          if (shouldCaptureFullFirstUserPrompt() && !accumulator.firstUserPrompt) {
-            accumulator.firstUserPrompt = normalizeFullFirstUserPromptText(firstPromptBody)
-          }
-        }
-
+        const text = extractGrokFirstUserPromptText(record.content)
         if (text) {
-          addPreviewMessage(accumulator, {
-            role: 'user',
+          accumulator.title ??= normalizeTitleText(text)
+          addSessionText(accumulator, {
+            role,
             text,
-            timestamp: extractString(record.timestamp),
-            seedFirstUserPrompt: false
+            timestamp: record.timestamp,
+            previewScanLimit: GROK_PREVIEW_SCAN_LIMIT
           })
         }
         continue
       }
 
-      addPreviewMessage(accumulator, {
-        role: 'assistant',
-        text: extractGrokContentText(record.content),
-        timestamp: extractString(record.timestamp),
-        seedFirstUserPrompt: false
-      })
+      addSessionContent(
+        accumulator,
+        role,
+        typeof record.content === 'string'
+          ? stripGrokUserQueryEnvelope(record.content)
+          : record.content,
+        record.timestamp,
+        { previewScanLimit: GROK_PREVIEW_SCAN_LIMIT }
+      )
     }
   } catch (error) {
     // Summary-only sessions still provide enough metadata for the Vault list. A
@@ -132,20 +116,4 @@ async function consumeGrokChatHistory(
     lines.close()
     input.destroy()
   }
-}
-
-export function extractGrokContentText(value: unknown): string | null {
-  if (typeof value === 'string') {
-    return extractGrokStringContentText(value)
-  }
-  return extractPreviewContentText(value)
-}
-
-function capGrokPreviewSource(text: string): string {
-  return sliceAtCodeUnitLimit(text, GROK_USER_QUERY_PREVIEW_SCAN_LIMIT)
-}
-
-function extractGrokStringContentText(text: string): string | null {
-  const unwrapped = stripGrokUserQueryEnvelope(text)
-  return normalizePreviewText(capGrokPreviewSource(unwrapped))
 }

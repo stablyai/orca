@@ -10,6 +10,11 @@ import {
   resolveNativeChatTabDirectoryResolution,
   type NativeChatTabDirectoryState
 } from './native-chat-tab-directory'
+import {
+  selectDetectedWorktreesByRepo,
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspace-record-selectors'
 
 export type NativeChatSkillStateInputs = Pick<
   AppState,
@@ -50,9 +55,9 @@ export function selectNativeChatSkillStateInputs(state: AppState): NativeChatSki
     // Why: the owner resolver needs the picked host and detected rows to tell twins apart.
     activeWorkspaceExecutionHostId: state.activeWorkspaceExecutionHostId,
     activeWorktreeId: state.activeWorktreeId,
-    detectedWorktreesByRepo: state.detectedWorktreesByRepo,
+    detectedWorktreesByRepo: selectDetectedWorktreesByRepo(state),
     floatingWorkspacePath: state.floatingWorkspacePath,
-    folderWorkspaces: state.folderWorkspaces,
+    folderWorkspaces: selectFolderWorkspaces(state),
     projectGroups: state.projectGroups,
     projects: state.projects,
     repos: state.repos,
@@ -61,7 +66,7 @@ export function selectNativeChatSkillStateInputs(state: AppState): NativeChatSki
     structuredSessionLaunchDirectoryByTabId: state.structuredSessionLaunchDirectoryByTabId,
     tabsByWorktree: state.tabsByWorktree,
     unifiedTabsByWorktree: state.unifiedTabsByWorktree,
-    worktreesByRepo: state.worktreesByRepo
+    worktreesByRepo: selectWorktreesByRepo(state)
   }
 }
 

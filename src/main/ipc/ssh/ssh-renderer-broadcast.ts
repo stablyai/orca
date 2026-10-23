@@ -58,11 +58,6 @@ function withSshRemotePlatform(targetId: string, state: SshConnectionState): Ssh
   }
 }
 
-export function connectionSupportsFolderDownload(targetId: string): boolean {
-  // Why: connections without an explicit transport are ssh2-shaped; only a confirmed system-SSH transport lacks the SFTP-only capability.
-  return connectionManager?.getConnection(targetId)?.usesSystemSshTransport?.() !== true
-}
-
 /**
  * Forgets a host's managed-server decision once its server is unlinked, and republishes the
  * connection without it. The republish is also what drops the host's cached worktree scans, so
@@ -95,22 +90,6 @@ export function broadcastPortForwards(
   })
 }
 
-export function broadcastDetectedPorts(
-  getMainWindow: () => BrowserWindow | null,
-  targetId: string,
-  ports: DetectedPort[],
-  options?: Parameters<typeof enrichSshDetectedPorts>[3]
-): void {
-  const win = getMainWindow()
-  if (!win || win.isDestroyed()) {
-    return
-  }
-  win.webContents.send('ssh:detected-ports-changed', {
-    targetId,
-    ports: enrichDetected(targetId, ports, options)
-  })
-}
-
 function listForwardsEnriched(targetId: string): ReturnType<SshPortForwardManager['listForwards']> {
   const raw = portForwardManager!.listForwards(targetId)
   if (!persistedStore) {
@@ -133,12 +112,4 @@ export function enrichDetected(
     undefined,
     options
   )
-}
-
-export function broadcastDetectedPortsFromCurrentWindow(
-  targetId: string,
-  ports: DetectedPort[],
-  _platform: string
-): void {
-  broadcastDetectedPorts(getCurrentMainWindow, targetId, ports)
 }

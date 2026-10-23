@@ -19,10 +19,11 @@ import { LegacyRelayExitProofs, LegacyRelayRetry } from './legacy-relay-bridge-t
 import type { LegacyRelayClient } from './legacy-relay-client'
 import type { LegacyRelayBridgeHost } from './legacy-relay-bridge-registry'
 import type { LegacyRelayTargetBridge } from './legacy-relay-target-bridge'
+import { PtyRetirementWithoutProof } from '../../pty-exit-proof'
 
 type StopTarget = Pick<
   LegacyRelayTargetBridge,
-  'paneState' | 'liveRoute' | 'listedIncarnation' | 'refresh'
+  'paneState' | 'paneReplaced' | 'liveRoute' | 'listedIncarnation' | 'refresh'
 >
 
 /**
@@ -30,6 +31,9 @@ type StopTarget = Pick<
  * connection that showed it. Neither, for a stop recorded while the relay couldn't be asked.
  */
 type PendingStop = { incarnationId?: string; client?: LegacyRelayClient }
+
+/** How a bridged stop was proven: the bridge saw the exit, or it holds no such terminal. */
+export type LegacyRelayStopProof = 'reported' | 'gone'
 
 /** How long a sent unfenced stop keeps its pane tracked for the relay's exit report. */
 const UNFENCED_EXIT_WAIT_MS = 5_000
@@ -88,20 +92,29 @@ export class LegacyRelayPaneStops {
     return sent ? { status: 'requested' } : { status: 'unverifiable' }
   }
 
-  /** True only once the relay proves the exit (its report, or a complete listing without it). */
+  /**
+   * Non-null only once the relay proves the exit: `reported` when the bridge saw it (and already
+   * published it), `gone` when the bridge holds no such terminal. Null when unproven.
+   */
   async stopAndWait(
     ptyId: string,
     bridge: StopTarget | null,
     deadlineMs: number
-  ): Promise<boolean> {
+  ): Promise<LegacyRelayStopProof | null> {
     // Armed before the stop is sent, so an exit that beats its reply, or a lost reply, still counts.
-    const exited = this.exits.wait(ptyId, Math.max(1, deadlineMs - Date.now()))
+    const exited = this.exits
+      .wait(ptyId, Math.max(1, deadlineMs - Date.now()))
+      .then((proven) => (proven ? ('reported' as const) : null))
     // A stop sent to a live pane may still prove out after a failed reply; an unsent one cannot.
     const sendable = bridge?.paneState(ptyId) === 'live'
     const stopped = this.stop(ptyId, bridge).then((result) =>
-      result.status === 'exited' ? true : result.status === 'requested' || sendable ? exited : false
+      result.status === 'exited'
+        ? ('gone' as const)
+        : result.status === 'requested' || sendable
+          ? exited
+          : null
     )
-    return Promise.race([exited.then((proven) => proven || stopped), stopped])
+    return Promise.race([exited.then((proven) => proven ?? stopped), stopped])
   }
 
   /** The bridge saw the pane exit. */
@@ -127,6 +140,9 @@ export class LegacyRelayPaneStops {
       pending = true
       if (state === 'live') {
         void this.send(ptyId, bridge)
+      } else if (bridge.paneReplaced(ptyId)) {
+        // Its process's relay lost its socket to another: no stop can be fenced to it.
+        this.abandon(ptyId, bridge)
       }
     }
     if (pending) {
@@ -193,7 +209,11 @@ export class LegacyRelayPaneStops {
     this.closing.delete(ptyId)
     const relayPtyId = parseAppSshPtyId(ptyId)?.relayPtyId
     if (relayPtyId) {
-      this.host()?.retireLease(this.targetId, relayPtyId)
+      this.host()?.retireLease(
+        this.targetId,
+        relayPtyId,
+        PtyRetirementWithoutProof.because('the old relay could not be sent a stop fenced to it')
+      )
     }
     // The next listing drops the pane it still holds for that lease; after an attempted stop, only
     // once the relay's exit report had its chance, since dropping the pane first would hide it.

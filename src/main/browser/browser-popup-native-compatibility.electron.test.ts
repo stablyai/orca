@@ -14,6 +14,7 @@ import {
   status,
   setPopupFixtureEvidenceName
 } from './browser-popup-compatibility-cdp-fixture'
+import { waitForHiddenFrameInput } from './hidden-frame-input-readiness-fixture'
 import { MIN_POPUP_CONTENT_HEIGHT, MIN_POPUP_CONTENT_WIDTH } from './popup-window-minimum-size'
 
 setPopupFixtureEvidenceName('native-electron-evidence.json')
@@ -109,7 +110,7 @@ describe('hidden Chromium native popup request compatibility', () => {
       if (name === 'route') {
         expect(status().native.creation.at(-1)).toMatchObject({
           firstNavigationPolicy: 'disable_non_proxied_udp',
-          firstNavigationTitle: origin,
+          firstNavigationTitle: 'about:blank',
           firstNavigationOwner: expect.any(Number)
         })
       }
@@ -312,14 +313,13 @@ describe('hidden Chromium native popup request compatibility', () => {
             },
             { targetOrigin, opaque, shift }
           )
+          const post = page.frameLocator('#frame-probe').locator('#frame-post')
           if (opaque) {
-            // Prime hidden Linux OOPIF hit testing and the route's root gesture gate.
+            await waitForHiddenFrameInput(post)
+            // Opaque frame input does not reach the route's root gesture gate.
             await page.locator('#frame-gesture').click()
           }
-          await page
-            .frameLocator('#frame-probe')
-            .locator('#frame-post')
-            .click(shift ? { modifiers: ['Shift'] } : {})
+          await post.click(shift ? { modifiers: ['Shift'] } : {})
           await expect
             .poll(() => receipts.slice(before).find((receipt) => receipt.path === '/frame-post'))
             .toMatchObject({

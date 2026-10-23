@@ -3,10 +3,9 @@
 # This is a RATCHET: counts may only go DOWN. Layout moves to one runtime owner; do not add
 # writers. Prune after removing writers: pnpm check:layout-writer-ratchets --prune
 1 src/main/ipc/pty/ipc/leaf-move.ts
-1 src/main/ipc/pty/ipc/spawn-commit-persist.ts
 1 src/main/ipc/pty/pane/pane-owner-replacement.ts
 3 src/main/ipc/pty/pane/stable-owner.ts
-1 src/main/ipc/pty/runtime/spawn-commit.ts
+2 src/main/ipc/pty/spawn-commit-binding.ts
 1 src/main/ipc/renderer-shutdown-checkpoint.ts
 1 src/main/ipc/runtime-environments/runtime-environment-removal-cleanup.ts
 1 src/main/ipc/runtime-environments/runtime-environment-session-reconcile.ts
@@ -71,5 +70,6 @@
 4 src/main/runtime/workspace-session-worktree-id.ts
 1 src/main/runtime/workspaces/session-hosts/get-runtime-id.ts
 2 src/main/runtime/workspaces/workspace-file-session-targets.ts
+1 src/main/ssh/orcad-migration-source-retention.ts
 1 src/main/ssh/targets/ssh-target-id-migration.ts
 2 src/main/terminal-scrollback-snapshots.ts

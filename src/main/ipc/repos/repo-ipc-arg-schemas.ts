@@ -29,12 +29,6 @@ export const ProjectGroupSelectorArgs = z.object({
   groupId: z.string().min(1)
 })
 
-export const ProjectGroupMoveProjectArgs = z.object({
-  projectId: z.string().min(1),
-  groupId: z.string().nullable(),
-  order: z.number().finite().optional()
-})
-
 export const ProjectHostSetupExistingFolderIpcArgs = z.object({
   projectId: z.string().min(1),
   projectProviderIdentity: z
@@ -76,6 +70,14 @@ const IpcExecutionHostId = z
     }
     return hostId
   })
+
+// Why optional: the row's host; without it the first row with the id moves, as before.
+export const ProjectGroupMoveProjectArgs = z.object({
+  projectId: z.string().min(1),
+  groupId: z.string().nullable(),
+  order: z.number().finite().optional(),
+  hostId: IpcExecutionHostId.optional()
+})
 
 export const ProjectHostSetupCreateIpcArgs = z.object({
   projectId: z.string().min(1),

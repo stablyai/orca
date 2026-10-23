@@ -7,7 +7,7 @@ import type { RpcClient } from '../../transport/rpc-client'
 import type { MobilePrActions } from '../../session/use-mobile-pr-actions'
 import { unlinkMobilePr } from '../../source-control/mobile-pr-link'
 import { ConfirmModal } from '../ConfirmModal'
-import { canShowMobilePRAutoMergeControl } from './pr-auto-merge-availability'
+import { canShowGitHubPRAutoMergeControl } from '../../../../src/shared/github/pull-request-auto-merge-availability'
 import { resolveMobilePrMergeMethod, resolvePrActionAvailability } from './pr-actions-state'
 import { prActionsStyles as styles } from './pr-actions-styles'
 
@@ -44,7 +44,7 @@ export function PRActionsSection({ pr, actions, client, worktreeId, onUnlinked }
   const unlinkBusy = unlinking || mergeBusy || autoMergeBusy || stateBusy
   const showAutoMerge =
     avail.canAutoMerge &&
-    canShowMobilePRAutoMergeControl({
+    canShowGitHubPRAutoMergeControl({
       ...pr,
       autoMergeEnabled: autoMerge || pr.autoMergeEnabled === true
     })

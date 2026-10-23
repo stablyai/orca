@@ -35,8 +35,9 @@ export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeW
     if (!pty.connected) {
       throw new Error('terminal_exited')
     }
-    const parsedPaneKey = parsePaneKey(pty.paneKey ?? '')
-    const parentTabId = pty.tabId?.trim()
+    const recorded = this.paneOfPty(pty)
+    const parsedPaneKey = parsePaneKey(recorded.paneKey ?? '')
+    const parentTabId = recorded.tabId?.trim()
     if (!parentTabId || !parsedPaneKey) {
       throw new Error('terminal_handle_stale')
     }
@@ -81,6 +82,8 @@ export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeW
       leafId,
       persistHostSessionBinding: true,
       placement: runtimeSplitPlacement(parsedPaneKey.leafId, direction),
+      // Layout-owner build: views mounting the pane from main's frame attach, never spawn.
+      ...this.paneStartStatusArgs({}),
       ...(sourceAuthority.persisted
         ? {
             expectedSourceBinding: {
@@ -188,7 +191,7 @@ export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeW
         }
       }
       try {
-        this.ptyController.retireRejectedPty?.(result.id, stopped)
+        this.ptyController.retireRejectedPty?.(result.id, stopped, result.incarnationId)
       } catch {
         // Best-effort cleanup; preserve the original split authority error.
       }

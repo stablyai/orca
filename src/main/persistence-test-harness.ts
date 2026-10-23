@@ -5,6 +5,7 @@ import type { Project, ProjectHostSetup } from '../shared/project-types'
 import type { Repo } from '../shared/repo-types'
 import type { WorkspaceLineage, WorktreeLineage } from '../shared/worktree/lineage-types'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../shared/workspace-scope'
+import { getRepoIdFromWorktreeId } from '../shared/worktree/id'
 import type { PersistedState } from '../shared/persisted-state-types'
 import { getDefaultPersistedState } from '../shared/constants'
 import type { SshRemotePtyLease } from '../shared/ssh-types'
@@ -164,6 +165,23 @@ export const makeRepo = (overrides: Partial<Repo> = {}): Repo => ({
   addedAt: 1,
   ...overrides
 })
+
+/**
+ * The repos of the given workspaces, as a real profile registers them: main's load drops a stored
+ * layout whose repo is not registered.
+ */
+export function workspaceRepos(...worktreeIds: string[]): Repo[] {
+  return [...new Set(worktreeIds.map(getRepoIdFromWorktreeId))].map((id) => makeRepo({ id }))
+}
+
+/** Registers the repos of the given workspaces in a running store; see `workspaceRepos`. */
+export function registerWorkspaceRepos(store: Store, ...worktreeIds: string[]): void {
+  for (const repo of workspaceRepos(...worktreeIds)) {
+    if (!store.getRepo(repo.id)) {
+      store.addRepo(repo)
+    }
+  }
+}
 
 export const makeProject = (overrides: Partial<Project> = {}): Project => ({
   id: 'project-1',

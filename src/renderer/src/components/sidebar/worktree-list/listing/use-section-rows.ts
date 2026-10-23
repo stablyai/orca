@@ -36,8 +36,10 @@ import {
   mergeDraggedHostSectionOrder,
   orderHostSectionOptions
 } from '../../../../../../shared/sidebar-list/host-section-order'
+import type { ExecutionHostRegistryEntry } from '../../../../../../shared/execution-host-registry'
 import { buildSidebarHostOptions } from '../../sidebar-host-options'
 import { selectPendingWorktreeCreationKeys } from './pending-worktree-creation-keys'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 type SectionRowsArgs = {
   agentSendTargetWorktreeId?: string | null
@@ -69,7 +71,7 @@ type SectionRowsArgs = {
 // tier wrapped around them.
 export function useSidebarSectionRows(args: SectionRowsArgs) {
   const { repos, worktrees, repoMap, defaultHostId } = args
-  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
+  const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
   const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
@@ -278,8 +280,10 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
     [sectionRows]
   )
 
+  const headerHostOptions: readonly ExecutionHostRegistryEntry[] = hostOptions
   return {
     occurrencePlan: rowPlan.occurrencePlan,
+    hostOptions: headerHostOptions,
     effectiveCollapsedGroups,
     rows,
     sectionRows,

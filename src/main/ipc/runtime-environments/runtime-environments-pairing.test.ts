@@ -1,5 +1,8 @@
 import type { RuntimeHostStatusSnapshot } from '../../../shared/runtime-host-status'
-import { resetRuntimeEnvironmentStatusOwners } from './runtime-environment-request-connections'
+import {
+  getRuntimeEnvironmentStatusSnapshots,
+  resetRuntimeEnvironmentStatusOwners
+} from './runtime-environment-request-connections'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { EventEmitter } from 'node:events'
 import { tmpdir } from 'node:os'
@@ -410,7 +413,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     await expect(
       verifyAndAdd(null, {
         name: 'desk',
-        pairingCode: pairingCode('ws://100.76.32.125:6768')
+        pairingCode: pairingCode('ws://100.76.32.125:6768', { keyByte: 2 })
       })
     ).resolves.toMatchObject({
       ok: false,
@@ -418,6 +421,97 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       message: 'A server named "desk" already exists.'
     })
     expect(environmentStore.listEnvironments(userDataPath)).toHaveLength(1)
+  })
+
+  it('refreshes the saved server when a verified link is for it, and retires its old connection', async () => {
+    registerRuntimeEnvironmentHandlers(store as never)
+    const saved = environmentStore.addEnvironmentFromPairingCode(userDataPath, {
+      name: 'desk',
+      pairingCode: pairingCode('ws://100.76.32.125:6768')
+    })
+    sendRemoteRuntimeRequestMock.mockResolvedValue({
+      id: 'status',
+      ok: true,
+      result: runtimeStatus(),
+      _meta: { runtimeId: 'runtime-a' }
+    })
+    const verifyAndAdd = handler<
+      { name: string; pairingCode: string },
+      { ok: boolean; updatedExisting?: boolean; environment?: { id: string; name: string } }
+    >('runtimeEnvironments:verifyAndAddFromPairingCode')
+
+    await expect(
+      verifyAndAdd(null, {
+        name: 'desk over relay',
+        pairingCode: pairingCode('ws://192.0.2.10:6768', { deviceToken: 'second-token' })
+      })
+    ).resolves.toMatchObject({
+      ok: true,
+      updatedExisting: true,
+      environment: { id: saved.id, name: 'desk' }
+    })
+    expect(environmentStore.listEnvironments(userDataPath)).toHaveLength(1)
+    expect(environmentStore.resolveEnvironmentPairingOffer(userDataPath, saved.id)).toMatchObject({
+      endpoint: 'ws://192.0.2.10:6768',
+      deviceToken: 'second-token'
+    })
+    expect(closeRemoteRuntimeRequestConnectionMock).toHaveBeenCalledWith(saved.id)
+  })
+
+  it('does not stamp a refresh that a newer one overtook with its stale verification', async () => {
+    registerRuntimeEnvironmentHandlers(store as never)
+    const saved = environmentStore.addEnvironmentFromPairingCode(userDataPath, {
+      name: 'desk',
+      pairingCode: pairingCode('ws://100.76.32.125:6768')
+    })
+    sendRemoteRuntimeRequestMock.mockResolvedValue({
+      id: 'status',
+      ok: true,
+      result: runtimeStatus(),
+      _meta: { runtimeId: 'runtime-a' }
+    })
+    // An overlapping re-add lands while this one retires the old connection.
+    let overtaken = false
+    closeRemoteRuntimeRequestConnectionMock.mockImplementation(() => {
+      const current = environmentStore.resolveEnvironmentPairingOffer(userDataPath, saved.id)
+      if (overtaken || current.deviceToken !== 'second-token') {
+        return
+      }
+      overtaken = true
+      // The newer pairing answers as another process, so only a stale stamp reads runtime-a.
+      const newer = { ...runtimeStatus(), runtimeId: 'runtime-b' }
+      for (const mock of [
+        sendRemoteRuntimeRequestMock,
+        sendRemoteRuntimeSharedControlRequestMock
+      ]) {
+        mock.mockResolvedValue({
+          id: 'status',
+          ok: true,
+          result: newer,
+          _meta: { runtimeId: 'runtime-b' }
+        })
+      }
+      environmentStore.addOrUpdateEnvironmentFromPairingCode(userDataPath, {
+        name: 'desk',
+        pairingCode: pairingCode('ws://192.0.2.11:6768', { deviceToken: 'third-token' }),
+        now: Date.now() + 60_000
+      })
+    })
+    const verifyAndAdd = handler<{ name: string; pairingCode: string }, { ok: boolean }>(
+      'runtimeEnvironments:verifyAndAddFromPairingCode'
+    )
+
+    await verifyAndAdd(null, {
+      name: 'desk again',
+      pairingCode: pairingCode('ws://192.0.2.10:6768', { deviceToken: 'second-token' })
+    })
+
+    expect(overtaken).toBe(true)
+    const snapshot = getRuntimeEnvironmentStatusSnapshots().find(
+      (entry) => entry.environmentId === saved.id
+    )
+    expect(snapshot).toBeDefined()
+    expect(['runtime-b', undefined]).toContain(snapshot?.status?.runtimeId)
   })
 
   it('requires an explicit Advanced selection before removing the Active Server', async () => {
@@ -433,7 +527,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     )
 
     expect(() => remove(null, { selector: added.environment.id })).toThrow(
-      'Choose another one in Advanced before removing it.'
+      'Choose another one under New projects open on before removing it.'
     )
     expect(activeRuntimeEnvironmentId).toBe(added.environment.id)
     expect(store.updateSettings).not.toHaveBeenCalled()

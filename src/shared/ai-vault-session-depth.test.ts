@@ -142,3 +142,14 @@ describe('Agent Session History scope truncation', () => {
     }
   })
 })
+
+describe('truncateAiVaultListResult symlinked scope', () => {
+  it('keeps a session whose host alias is in scope when depth drops out-of-scope rows', () => {
+    const linked = { ...session('linked', '/data/src/api', 1), cwdAliases: ['/home/me/work/api'] }
+    const other = session('other', '/elsewhere', 2)
+
+    const truncated = truncateAiVaultListResult(result([other, linked]), 0, ['/home/me/work/api'])
+
+    expect(truncated.sessions.map((entry) => entry.id)).toEqual(['linked'])
+  })
+})

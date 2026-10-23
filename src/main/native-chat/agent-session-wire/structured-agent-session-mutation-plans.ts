@@ -6,13 +6,13 @@
 // others' current answer.
 
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
+import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
 import {
   AGENT_MESSAGE_SOURCE,
   USER_MESSAGE_SOURCE,
   type AgentSessionMessageSource
 } from '../../../shared/agent-session-message-source'
-import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import type { AgentSessionOperationOutcome } from '../../../shared/agent-session-operation-ledger'
 import type {
   AgentSessionCancelResult,
@@ -37,7 +37,6 @@ import {
 import {
   performPrompt,
   performSend,
-  performSetOption,
   type AgentSessionTurnContext,
   type TurnOutcome
 } from './structured-agent-session-turns'
@@ -158,7 +157,7 @@ export function sendPlan(
     recoverUnknownFromDurableState: true,
     // `retryUnknown` is a compatibility-only client signal. A recorded send
     // always replays and never reaches the provider twice.
-    run: (ctx) => {
+    run: async (ctx) => {
       // Asked at acceptance: a send accepted after this one is queued behind it.
       params.beforeRun?.()
       const source = sendSource(params)
@@ -336,9 +335,13 @@ export function setOptionPlan(params: {
   return {
     method: 'agentSession.setOption',
     fields: { key: params.key, value: params.value },
-    run: (ctx) => performSetOption(ctx, params),
-    // A pending row may have crashed before the adapter call. Reapplying the
-    // same assignment is safe; only a settled success can be answered directly.
+    run: async (ctx) => {
+      const options = { ...ctx.persistedOptions, [params.key]: params.value }
+      await ctx.persistOptions(options)
+      ctx.publish()
+      return { ok: true, value: { ...params, options } }
+    },
+    // Reapply unsettled picks; only a settled success can be replayed directly.
     replay: (ctx, outcome) =>
       outcome.status === 'succeeded'
         ? {

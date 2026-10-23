@@ -7,10 +7,14 @@ import {
   type AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire-refusals'
 import type {
+  AgentJournalCursor,
   AgentJournalItemIdentity,
   AgentJournalThreadGoal
 } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session-wire'
+import type {
+  AgentSessionMutationEnvelope,
+  AgentSessionOptionsResult
+} from '../../../shared/agent-session-wire'
 import type {
   AgentSessionThreadGoalChange,
   AgentSessionThreadGoalResult
@@ -19,6 +23,7 @@ import type { StructuredAgentSessionAdapter } from './structured-agent-session-a
 import type { StructuredAgentRegistry } from './structured-agent-registry'
 import type { MutationPlan } from './structured-agent-session-mutation-plans'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
+import { throwIfSignalAborted } from '../../../shared/abort-signal-reason'
 import { contextStructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 
 function refused(
@@ -66,7 +71,7 @@ export function journalRecordsThreadGoalChange(
 
 export async function performThreadGoalChange(
   ctx: AgentSessionTurnContext,
-  input: { clientOperationId: string; change: AgentSessionThreadGoalChange }
+  input: { clientOperationId: string; change: AgentSessionThreadGoalChange; signal?: AbortSignal }
 ): Promise<TurnOutcome<AgentSessionThreadGoalResult>> {
   if (
     !ctx.adapter.changeThreadGoal ||
@@ -84,6 +89,7 @@ export async function performThreadGoalChange(
   }
   // Journal first: an active goal starts provider work at once, and the objective
   // must land ahead of that work in the transcript.
+  throwIfSignalAborted(input.signal)
   if (change.kind === 'set') {
     await ctx.journal.appendItem(
       identity,
@@ -105,11 +111,13 @@ export async function performThreadGoalChange(
   }
   let result: Awaited<ReturnType<typeof ctx.adapter.changeThreadGoal>>
   try {
+    throwIfSignalAborted(input.signal)
     result = await ctx.adapter.changeThreadGoal({
       sessionId: ctx.sessionId,
       fence: ctx.fence,
       change,
-      replacesGoal
+      replacesGoal,
+      signal: input.signal
     })
   } catch (error) {
     await withdrawObjective()
@@ -125,6 +133,7 @@ export async function performThreadGoalChange(
 export function threadGoalPlan(params: {
   envelope: AgentSessionMutationEnvelope
   change: AgentSessionThreadGoalChange
+  signal?: AbortSignal
 }): MutationPlan<AgentSessionThreadGoalResult> {
   const value: AgentSessionThreadGoalResult = { change: params.change.kind }
   return {
@@ -133,7 +142,8 @@ export function threadGoalPlan(params: {
     run: (ctx) =>
       performThreadGoalChange(ctx, {
         clientOperationId: params.envelope.clientOperationId,
-        change: params.change
+        change: params.change,
+        signal: params.signal
       }),
     // A lost response is answered from the journal, which the provider keeps
     // current; otherwise the change runs again, which is safe for every kind.
@@ -146,4 +156,16 @@ export function threadGoalPlan(params: {
         : null,
     rerunWhenReplayMissing: () => true
   }
+}
+
+/** A goal the host can change, or one only the agent's own `/goal` changes, reported apart. */
+export function structuredAgentSessionThreadGoalReport(
+  hostChangesGoal: boolean,
+  current: AgentJournalThreadGoal | null,
+  contextFloor: { contextFloor?: AgentJournalCursor }
+): Pick<AgentSessionOptionsResult, 'threadGoal' | 'reportedThreadGoal'> {
+  if (hostChangesGoal) {
+    return { threadGoal: { current, ...contextFloor } }
+  }
+  return current ? { reportedThreadGoal: { current, ...contextFloor } } : {}
 }

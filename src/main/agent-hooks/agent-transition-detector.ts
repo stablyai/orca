@@ -1,12 +1,15 @@
 import { resolveAgentStatusWorktreeId } from '../../shared/agent-status-worktree-attribution'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import {
+  agentPhaseTransition,
   hookRowAgentPhase,
   hookRowTransition,
   nextAgentPhase,
+  titleAgentPhase,
   type AgentPhase,
   type AgentTransition
 } from '../../shared/agent-transitions'
+import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
 import {
   getConnectionExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
@@ -23,15 +26,18 @@ export type AgentTransitionStore = Pick<
 export type AgentPaneWorkspace = { worktreeId: string; sshHostId: ExecutionHostId | null }
 
 export type AgentPaneChange =
-  /** A status that predates this observer (restored, replayed, present at attach): never news. */
+  /** A status that predates this observer (restored, replayed, present at attach, a hookless
+   *  agent's first title): never news. */
   | {
       kind: 'seeded'
       paneKey: string
       workspace: AgentPaneWorkspace
       phase: AgentPhase
       at: number
+      /** A first title: an idle one may follow no turn at all. */
+      fromTitle?: true
     }
-  /** Every look not reported as seeded, changed or not; null: no row or no workspace. */
+  /** Every hook look not reported as seeded, changed or not; null: no row or no workspace. */
   | {
       kind: 'observed'
       paneKey: string
@@ -51,6 +57,7 @@ export type AgentPaneChange =
     }
 
 type TrackedPane = { workspace: AgentPaneWorkspace; phase: AgentPhase }
+type TitlePane = { ptyId: string; releaseExit: () => void }
 
 export function agentPaneWorkspace(
   worktreeId: string,
@@ -68,17 +75,22 @@ export function sameAgentPaneWorkspace(
 }
 
 /**
- * Per-pane agent transitions from the hook server's status store: prompt submitted, turn finished,
- * errored, needs input. Runs on every host; panes at rest are not kept.
+ * Per-pane agent transitions from the hook server's status store, and from hookless agents' titles
+ * where no hook row reports the pane: prompt submitted, turn finished, errored, needs input. One
+ * phase per pane, so a title-tracked turn a hook row finishes is a finish. Runs on every host; panes
+ * at rest are not kept.
  */
 export class AgentTransitionDetector {
   private readonly panes = new Map<string, TrackedPane>()
+  /** Hookless panes seen since their PTY started: the first title seeds, it is not a transition. */
+  private readonly titlePanes = new Map<string, TitlePane>()
   private readonly listeners = new Set<(change: AgentPaneChange) => void>()
   private store: AgentTransitionStore | null = null
 
   constructor(
     private readonly deps: {
       resolveTabWorktreeId: (tabId: string) => string | undefined
+      subscribeToPtyExit: (ptyId: string, listener: () => void) => () => void
       now: () => number
     }
   ) {}
@@ -118,9 +130,64 @@ export class AgentTransitionDetector {
     }
   }
 
-  /** Whether hooks report this pane, so its title is not read for status. */
-  hasHookRow(paneKey: string): boolean {
-    return this.latestRow(paneKey) !== null
+  /** Hookless agents' titles. Hook authority is per pane, as in Smart's attention. */
+  noteTerminalSideEffects(batch: TerminalSideEffectBatch): void {
+    const { worktreeId, paneKey } = batch
+    if (!worktreeId || !paneKey) {
+      return
+    }
+    for (const fact of batch.facts) {
+      if (fact.kind === 'title' && !this.latestRow(paneKey)) {
+        // A cleared stale working title is a timer's guess, not a finish.
+        const phase = fact.staleWorkingTitleClear ? 'rest' : titleAgentPhase(fact.rawTitle)
+        this.observeTitle(
+          batch.ptyId,
+          paneKey,
+          agentPaneWorkspace(worktreeId, batch.connectionId),
+          phase
+        )
+      }
+    }
+  }
+
+  private observeTitle(
+    ptyId: string,
+    paneKey: string,
+    workspace: AgentPaneWorkspace,
+    phase: AgentPhase
+  ): void {
+    const known = this.titlePanes.get(paneKey)
+    if (known?.ptyId === ptyId) {
+      this.advance(paneKey, workspace, phase, this.deps.now(), agentPhaseTransition)
+      return
+    }
+    // A new PTY in the pane is a new agent; the last one left with its terminal.
+    if (known) {
+      this.endTitlePane(paneKey)
+    }
+    let exited = false
+    const releaseExit = this.deps.subscribeToPtyExit(ptyId, () => {
+      exited = true
+      this.endTitlePane(paneKey)
+    })
+    if (exited) {
+      return
+    }
+    this.titlePanes.set(paneKey, { ptyId, releaseExit })
+    const now = this.deps.now()
+    // The pane leaves its old workspace first, so a reader never takes the leave for the new one.
+    this.leaveIfMoved(paneKey, workspace, now)
+    this.emit({ kind: 'seeded', paneKey, workspace, phase, at: now, fromTitle: true })
+    this.track(paneKey, workspace, phase)
+  }
+
+  private endTitlePane(paneKey: string): void {
+    this.titlePanes.get(paneKey)?.releaseExit()
+    this.titlePanes.delete(paneKey)
+    // A hook row that took the pane over still reports it.
+    if (!this.latestRow(paneKey)) {
+      this.advance(paneKey, null, 'rest', this.deps.now(), () => null)
+    }
   }
 
   private observe(paneKey: string, seed: boolean): void {
@@ -133,28 +200,27 @@ export class AgentTransitionDetector {
     const observed = row ? hookRowAgentPhase(row) : 'rest'
     const restored = !!row && (seed || !!row.restoredUnconfirmed || !!row.isReplay)
     if (row && workspace && restored) {
+      this.leaveIfMoved(paneKey, workspace, now)
       this.emit({ kind: 'seeded', paneKey, workspace, phase: observed, at: row.stateStartedAt })
-    } else {
-      this.emit({ kind: 'observed', paneKey, workspace, phase: observed, at: now })
-    }
-    const previous = this.panes.get(paneKey)
-    if (previous && !sameAgentPaneWorkspace(previous.workspace, workspace)) {
-      this.panes.delete(paneKey)
-      this.emit({
-        kind: 'moved',
-        paneKey,
-        workspace: previous.workspace,
-        from: previous.phase,
-        to: 'rest',
-        at: now,
-        transition: null
-      })
-    }
-    if (!row || !workspace) {
+      this.track(paneKey, workspace, observed)
       return
     }
-    if (restored) {
-      this.track(paneKey, workspace, observed)
+    this.emit({ kind: 'observed', paneKey, workspace, phase: observed, at: now })
+    this.advance(paneKey, row ? workspace : null, observed, now, (from, to) =>
+      row ? hookRowTransition(from, to, row) : null
+    )
+  }
+
+  /** The pane observed in `observed`; a pane that left or changed workspace rests where it was. */
+  private advance(
+    paneKey: string,
+    workspace: AgentPaneWorkspace | null,
+    observed: AgentPhase,
+    now: number,
+    transitionOf: (from: AgentPhase, to: AgentPhase) => AgentTransition | null
+  ): void {
+    this.leaveIfMoved(paneKey, workspace, now)
+    if (!workspace) {
       return
     }
     const from = this.panes.get(paneKey)?.phase ?? 'rest'
@@ -170,7 +236,24 @@ export class AgentTransitionDetector {
       from,
       to,
       at: now,
-      transition: hookRowTransition(from, to, row)
+      transition: transitionOf(from, to)
+    })
+  }
+
+  private leaveIfMoved(paneKey: string, workspace: AgentPaneWorkspace | null, now: number): void {
+    const previous = this.panes.get(paneKey)
+    if (!previous || sameAgentPaneWorkspace(previous.workspace, workspace)) {
+      return
+    }
+    this.panes.delete(paneKey)
+    this.emit({
+      kind: 'moved',
+      paneKey,
+      workspace: previous.workspace,
+      from: previous.phase,
+      to: 'rest',
+      at: now,
+      transition: null
     })
   }
 
@@ -182,8 +265,9 @@ export class AgentTransitionDetector {
     }
   }
 
-  // The window applies a pane's rows in arrival order, so the newest is the one it holds.
-  private latestRow(paneKey: string): AgentStatusIpcPayload | null {
+  /** The row the pane's phase reads. The window applies a pane's rows in arrival order, so the
+   *  newest is the one it holds. */
+  latestRow(paneKey: string): AgentStatusIpcPayload | null {
     let latest: AgentStatusIpcPayload | null = null
     for (const row of this.store?.getStatusSnapshotForPane(paneKey) ?? []) {
       if (!row.providerSessionOnly && (!latest || row.receivedAt > latest.receivedAt)) {

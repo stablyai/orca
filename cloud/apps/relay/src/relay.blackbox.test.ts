@@ -17,7 +17,7 @@ import nacl from 'tweetnacl'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import WebSocket from 'ws'
 import type { RawData } from 'ws'
-import { assignmentLeaseKeyId } from './assignment-lease.js'
+import { assignmentLeaseKeyId } from './assignment/assignment-lease.js'
 import { RelayAssignmentStore } from './assignment-store.js'
 import {
   encodeMembership,
@@ -1542,7 +1542,7 @@ describe('served relay URL', () => {
       expect(await failed).toMatchObject({
         type: 'control-error',
         reqId: 'fault-install',
-        code: 'injected SQL failure'
+        code: 'control_operation_failed'
       })
       const status = nextMessage(host.socket)
       host.socket.send(
@@ -1642,7 +1642,7 @@ describe('served relay URL', () => {
       expect(await directFailure).toMatchObject({
         type: 'control-error',
         reqId: 'fallback-install',
-        code: 'injected SQL failure'
+        code: 'control_operation_failed'
       })
       const status = nextMessage(host.socket)
       host.socket.send(

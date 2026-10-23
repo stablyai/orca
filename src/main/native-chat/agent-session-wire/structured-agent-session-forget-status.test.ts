@@ -84,7 +84,6 @@ function ownerRecord(): AgentSessionRecord {
       leaseDeadlineAt: 100,
       lastRenewedAt: 1,
       handoffOperationId: null,
-      journalCheckpoint: null,
       claimKeyId: 'fixture-key',
       claimStatus: 'live',
       unreconciled: false,
@@ -191,6 +190,7 @@ function attachContext(
       adoptEventSink: () => undefined,
       probeOwner: async () => ({ outcome: 'pid-absent' }),
       discardEventSink: () => undefined,
+      startFlights: new Map(),
       acquireAborts: new StructuredAgentSessionAcquireAborts()
     },
     sessions,

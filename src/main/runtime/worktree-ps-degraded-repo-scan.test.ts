@@ -23,6 +23,10 @@ vi.mock('../git/worktree', async (importOriginal) => ({
 
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { OrcaRuntimeService } from './orca-runtime'
+import {
+  hostWorktreeTarget,
+  type HostWorktreeTarget
+} from '../../shared/worktree/host-qualified-identity'
 
 const REPO_ID = 'repo-remote'
 const REPO_PATH = '/home/user/projects/app'
@@ -72,7 +76,6 @@ type StoreOptions = {
   connectionId?: string
   metaById?: Record<string, ReturnType<typeof makeMeta>>
   removeWorktreeLineage?: ReturnType<typeof vi.fn>
-  removeWorkspaceLineage?: ReturnType<typeof vi.fn>
   /** Extra `getRepos()` rows appended after the primary one, for same-id-on-two-hosts coverage. */
   coHostedRepos?: { id: string; path: string; connectionId?: string }[]
 }
@@ -103,7 +106,7 @@ function makeStore(options: StoreOptions = {}) {
     ],
     getAllWorktreeMeta: vi.fn(() => metaById),
     getWorktreeMeta: (id: string) => metaById[id],
-    setWorktreeMeta: (id: string, meta: Record<string, unknown>) => {
+    setWorktreeMeta: ({ id }: HostWorktreeTarget, meta: Record<string, unknown>) => {
       metaById[id] = { ...(metaById[id] ?? makeMeta()), ...meta } as never
       return metaById[id]
     },
@@ -111,7 +114,6 @@ function makeStore(options: StoreOptions = {}) {
     getAllWorktreeLineage: () => lineageById,
     getAllWorkspaceLineage: () => ({ [`worktree:${WORKTREE_ID}`]: { parentWorkspaceKey: null } }),
     removeWorktreeLineage: options.removeWorktreeLineage ?? vi.fn(),
-    removeWorkspaceLineage: options.removeWorkspaceLineage ?? vi.fn(),
     getGitHubCache: () => undefined as never,
     getSettings: () => ({
       workspaceDir: '/tmp/workspaces',
@@ -310,35 +312,31 @@ describe('worktree.ps on a degraded repo scan', () => {
 
   it('drops and prunes a worktree that a healthy scan no longer reports', async () => {
     const removeWorktreeLineage = vi.fn()
-    const removeWorkspaceLineage = vi.fn()
     listWorktreesStrictMock.mockResolvedValue([
       { path: REPO_PATH, head: 'abc', branch: 'main', isBare: false, isMainWorktree: true }
     ])
-    const runtime = new OrcaRuntimeService(
-      makeStore({ removeWorktreeLineage, removeWorkspaceLineage }) as never
-    )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial store mock; the code under test reads only the members it defines.
+    const runtime = new OrcaRuntimeService(makeStore({ removeWorktreeLineage }) as never)
 
     const result = await runtime.getWorktreePs(10_000)
 
     expect(result.worktrees.map((worktree) => worktree.worktreeId)).not.toContain(WORKTREE_ID)
-    expect(removeWorktreeLineage).toHaveBeenCalledWith(WORKTREE_ID)
-    expect(removeWorkspaceLineage).toHaveBeenCalledWith(`worktree:${WORKTREE_ID}`)
+    expect(removeWorktreeLineage).toHaveBeenCalledWith(
+      hostWorktreeTarget({ id: WORKTREE_ID, hostId: 'local' })
+    )
   })
 
   it('does not prune lineage while a scan is stalled', async () => {
     vi.useFakeTimers()
     try {
       const removeWorktreeLineage = vi.fn()
-      const removeWorkspaceLineage = vi.fn()
       listWorktreesStrictMock.mockImplementation(neverSettles)
-      const runtime = new OrcaRuntimeService(
-        makeStore({ removeWorktreeLineage, removeWorkspaceLineage }) as never
-      )
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial store mock; the code under test reads only the members it defines.
+      const runtime = new OrcaRuntimeService(makeStore({ removeWorktreeLineage }) as never)
 
       await advancePastRepoScanBudget(runtime.getWorktreePs(10_000))
 
       expect(removeWorktreeLineage).not.toHaveBeenCalled()
-      expect(removeWorkspaceLineage).not.toHaveBeenCalled()
     } finally {
       vi.useRealTimers()
     }

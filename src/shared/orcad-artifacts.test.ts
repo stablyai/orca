@@ -1,5 +1,6 @@
-import { readdirSync } from 'node:fs'
-import { join } from 'node:path'
+import { readFileSync, readdirSync } from 'node:fs'
+import { createRequire } from 'node:module'
+import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { BUNDLED_RIPGREP_PLATFORMS, bundledRipgrepBinaryName } from './bundled-ripgrep'
 import { SERVER_TARGETS } from './node-runtime-pin'
@@ -16,6 +17,7 @@ import {
   orcadArtifactFilenames,
   orcadBunRuntimeFilename,
   orcadMobileWebAssetFilenames,
+  orcadNodePtySlotFiles,
   orcadNodeRuntimeRelativePath,
   orcadTemplateCommonFilenames,
   orcadTemplateTargetFilenames
@@ -84,9 +86,40 @@ describe('standalone runtime artifacts', () => {
       'conpty.node',
       'conpty_console_list.node',
       'conpty/conpty.dll',
-      'conpty/OpenConsole.exe'
+      'conpty/OpenConsole.exe',
+      'pty.node',
+      'winpty.dll',
+      'winpty-agent.exe'
     ])
   })
+
+  // #30906: node-pty picks winpty below build 18309, so a ConPTY-only slot left 1809 with no PTY.
+  it.each(['win32-x64', 'win32-arm64'])(
+    'ships every native module the %s slot node-pty JS can load',
+    (target) => {
+      const nodePtyDir = dirname(createRequire(import.meta.url).resolve('node-pty/package.json'))
+      const windowsJs = ORCAD_NODE_PTY_JS_ARTIFACTS.filter((file) =>
+        /\/lib\/(?:windows|conpty)[^/]*\.js$/.test(file)
+      )
+      const loaded = new Set(
+        windowsJs.flatMap((file) =>
+          [
+            ...readFileSync(
+              join(nodePtyDir, file.slice('node_modules/node-pty/'.length)),
+              'utf8'
+            ).matchAll(/loadNativeModule\('([\w-]+)'\)/g)
+          ].map((match) => match[1])
+        )
+      )
+      expect([...loaded].sort()).toEqual(['conpty', 'conpty_console_list', 'pty'])
+      const slot = orcadNodePtySlotFiles(target)
+      for (const name of loaded) {
+        expect(slot).toContain(`${name}.node`)
+      }
+      // winpty's pty.node links winpty.dll, which starts winpty-agent.exe from its own folder.
+      expect(slot).toEqual(expect.arrayContaining(['winpty.dll', 'winpty-agent.exe']))
+    }
+  )
 
   // Without it orcad's data-root privacy check fails closed and a Windows slot never starts.
   it('requires the Windows security addon in every Windows slot and nowhere else', () => {

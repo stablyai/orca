@@ -109,7 +109,14 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
     usage: 'orca automations run <id> [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'id'],
     positionalArgs: ['id'],
-    examples: ['orca automations run 2f9e...', 'orca automations run --id 2f9e... --json']
+    notes: [
+      'Use the full automation UUID from orca automations list; shortened prefixes are not accepted.',
+      'A queued or dispatching run has been accepted but may not have a workspace or terminal yet. Use orca automations runs --id <automation-id> to follow its progress.'
+    ],
+    examples: [
+      'orca automations run 497bafa9-5a97-4f85-9e48-2b211b8f31fa',
+      'orca automations run --id 497bafa9-5a97-4f85-9e48-2b211b8f31fa --json'
+    ]
   },
   {
     path: ['automations', 'runs'],

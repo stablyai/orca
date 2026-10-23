@@ -2,6 +2,7 @@
 // to: it ended, the thread stopped running, or the child is gone. Held in memory only.
 
 import type { AgentSessionCancelOutcome } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import type { CodexDispatchEchoes } from './codex-structured-dispatch-echo'
 import {
   codexThreadStoppedRunning,
@@ -142,7 +143,8 @@ export async function interruptOpeningCodexTurn(
  * by then.
  */
 export async function codexRunningOrOpeningTurn(
-  session: CodexOpeningTurnSession
+  session: CodexOpeningTurnSession,
+  signal?: AbortSignal
 ): Promise<string | null> {
   const running = [...(session.activeTurnIds ?? [])].at(-1)
   if (running) {
@@ -155,7 +157,10 @@ export async function codexRunningOrOpeningTurn(
   if (!answered) {
     return null
   }
-  await session.turnOpenWaits.wait(answered, CODEX_TURN_OPEN_WAIT_MS)
+  await waitForPromiseWithSignal(
+    session.turnOpenWaits.wait(answered, CODEX_TURN_OPEN_WAIT_MS),
+    signal
+  )
   if (session.activeTurnIds?.has(answered)) {
     return answered
   }

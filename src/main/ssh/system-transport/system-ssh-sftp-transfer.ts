@@ -17,7 +17,7 @@ import { SystemSshCommandExitError, throwIfAborted } from './system-ssh-operatio
 import { runProcess } from '@orca/process-host'
 
 /** The host answered, but not with an sftp subsystem. The caller must fall back, not fail. */
-export class SftpSubsystemUnavailableError extends Error {
+class SftpSubsystemUnavailableError extends Error {
   constructor(detail: string) {
     super(`Remote host has no usable sftp subsystem: ${detail}`)
     this.name = 'SftpSubsystemUnavailableError'
@@ -73,7 +73,7 @@ function systemSftpCandidates(sshPath: string | null, platform: NodeJS.Platform)
 }
 
 /** Locate the sftp client paired with the system ssh binary. Returns null when there is none. */
-export function findSystemSftp(): string | null {
+function findSystemSftp(): string | null {
   if (process.env.ORCA_SYSTEM_SFTP_PATH) {
     return process.env.ORCA_SYSTEM_SFTP_PATH
   }
@@ -120,7 +120,7 @@ function findSftpOnPath(): string | null {
  */
 const SUBSYSTEM_REFUSED_PATTERN = /subsystem request failed|no such file or directory.*sftp-server/i
 
-export type SftpBatchOptions = SystemSshBuildArgsOptions & { signal?: AbortSignal }
+type SftpBatchOptions = SystemSshBuildArgsOptions & { signal?: AbortSignal }
 
 /**
  * Runs one sftp batch script.

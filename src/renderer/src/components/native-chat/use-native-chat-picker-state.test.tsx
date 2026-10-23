@@ -20,6 +20,7 @@ function pickerMode(draft: string, recalledFromHistory: boolean): string {
         agentCommands: [{ name: 'clear' }],
         recalledFromHistory,
         disabled,
+        isComposing: () => false,
         textareaRef: { current: null },
         setDraft,
         setCaret: vi.fn(),

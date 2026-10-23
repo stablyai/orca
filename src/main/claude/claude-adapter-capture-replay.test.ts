@@ -171,7 +171,7 @@ async function replayCapture(name: string): Promise<Replay> {
         requestedAt: nowMs,
         fence: 7
       })
-      expect(outcome).toEqual({ state: 'admitted' })
+      expect(outcome).toMatchObject({ state: 'admitted' })
       const sent = claude.connections[0]!.sent.at(-1)?.uuid
       if (typeof sent !== 'string' || before.has(sent)) {
         throw new Error('replay could not read the dispatched uuid')

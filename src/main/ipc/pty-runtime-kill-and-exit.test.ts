@@ -189,7 +189,8 @@ describe('registerPtyHandlers', () => {
     expect(runtime.onPtyExit).toHaveBeenCalledWith('local-pty', -1, undefined)
     expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:exit', {
       id: 'local-pty',
-      code: -1
+      code: -1,
+      hostId: LOCAL_EXECUTION_HOST_ID
     })
   })
   it('does not synthesize a duplicate renderer exit when kill emits provider exit', async () => {
@@ -238,7 +239,7 @@ describe('registerPtyHandlers', () => {
       providerExitObserved: true
     })
     expect(mainWindow.webContents.send.mock.calls.filter((call) => call[0] === 'pty:exit')).toEqual(
-      [['pty:exit', { id: 'local-pty', code: 0 }]]
+      [['pty:exit', { id: 'local-pty', code: 0, hostId: LOCAL_EXECUTION_HOST_ID }]]
     )
   })
   it('reconciles a late provider exit without repeating the synthetic renderer exit', async () => {
@@ -288,7 +289,7 @@ describe('registerPtyHandlers', () => {
     })
     expect(runtime.markPtyStopRequested).toHaveBeenCalledTimes(2)
     expect(mainWindow.webContents.send.mock.calls.filter((call) => call[0] === 'pty:exit')).toEqual(
-      [['pty:exit', { id: 'local-pty', code: -1 }]]
+      [['pty:exit', { id: 'local-pty', code: -1, hostId: LOCAL_EXECUTION_HOST_ID }]]
     )
   })
   it('waits for the desktop startup barrier before renderer local spawns resolve the provider', async () => {
@@ -488,7 +489,8 @@ describe('registerPtyHandlers', () => {
       })
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:exit', {
         id: result.id,
-        code: 0
+        code: 0,
+        hostId: LOCAL_EXECUTION_HOST_ID
       })
     } finally {
       vi.useRealTimers()

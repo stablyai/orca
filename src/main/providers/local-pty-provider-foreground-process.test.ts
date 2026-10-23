@@ -160,9 +160,15 @@ describe('LocalPtyProvider', () => {
   describe('hasChildProcesses', () => {
     it('fences full inspection with the original PTY incarnation across awaits', async () => {
       const { id, incarnationId } = await provider.spawn({ cols: 80, rows: 24 })
-      await expect(provider.inspectProcess(id, { expectedIncarnationId: 'replacement' })).resolves.toMatchObject({ childProcessEvidence: 'unverifiable' })
+      await expect(
+        provider.inspectProcess(id, { expectedIncarnationId: 'replacement' })
+      ).resolves.toMatchObject({ childProcessEvidence: 'unverifiable' })
       let resolveScan!: (resolution: { available: boolean; processName: string }) => void
-      resolveAgentForegroundProcessMock.mockReturnValue(new Promise((resolve) => { resolveScan = resolve }))
+      resolveAgentForegroundProcessMock.mockReturnValue(
+        new Promise((resolve) => {
+          resolveScan = resolve
+        })
+      )
       const inspection = provider.inspectProcess(id, { expectedIncarnationId: incarnationId })
       exitCb?.({ exitCode: 0 })
       resolveScan({ available: true, processName: 'zsh' })

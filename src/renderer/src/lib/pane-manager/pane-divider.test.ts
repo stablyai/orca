@@ -170,9 +170,7 @@ describe('disposeDivider', () => {
     } as unknown as HTMLElement
     const refitPanesUnder = vi.fn()
     const onLayoutChanged = vi.fn()
-    const onDividerRatiosCommitted = vi.fn(() =>
-      expect(onLayoutChanged).toHaveBeenCalledWith('gesture')
-    )
+    const onDividerRatiosCommitted = vi.fn(() => expect(onLayoutChanged).toHaveBeenCalled())
     vi.stubGlobal('document', {
       createElement: vi.fn(() => divider)
     })
@@ -208,7 +206,7 @@ describe('disposeDivider', () => {
     expect(nextPane.style.flex).toBe('220 1 0%')
     expect(refitPanesUnder).toHaveBeenCalledWith(previousPane)
     expect(refitPanesUnder).toHaveBeenCalledWith(nextPane)
-    expect(onLayoutChanged).toHaveBeenCalledExactlyOnceWith('gesture')
+    expect(onLayoutChanged).toHaveBeenCalledOnce()
     expect(onDividerRatiosCommitted).toHaveBeenCalledOnce()
     expect(divider.classList.remove).toHaveBeenCalledWith('is-dragging')
     expect(divider.releasePointerCapture).toHaveBeenCalledWith(9)

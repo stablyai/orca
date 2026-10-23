@@ -3,6 +3,8 @@ import { hasStateBackup } from './legacy-json/profile-state-legacy-backup-path'
 import { profileStateJsonExportPaths } from './legacy-json/profile-state-export-path'
 import { profileStateDatabaseBackups } from './profile-state-backup-path'
 import { hasProfileStateAuthorityMarker } from './profile-state-authority-marker'
+import type { ProfileStateRepairSection } from './profile-state-section-repair'
+import { profileStateSectionLabels } from './profile-state-section-labels'
 
 type ProfileStateRecoveryLocation = {
   dataFile: string
@@ -40,15 +42,28 @@ export class ProfileStateRecoveryRequiredError extends Error {
   readonly databaseFile: string
   readonly exportPaths: readonly string[]
   readonly backupPaths: readonly string[]
+  readonly profileId: string
+  /** Set when only these sections are damaged, so the rest of the profile can be kept. */
+  readonly repairableSections?: readonly ProfileStateRepairSection[]
 
-  constructor(options: ProfileStateRecoveryLocation, cause: unknown) {
+  constructor(
+    options: ProfileStateRecoveryLocation,
+    cause: unknown,
+    repairableSections?: readonly ProfileStateRepairSection[]
+  ) {
     super(
-      `SQLite profile state could not be read; choose a retained backup or JSON export to recover the profile`,
+      repairableSections
+        ? `Damaged profile sections: ${profileStateSectionLabels(repairableSections.map(({ domain }) => domain)).join(', ')}; run \`orca profile state rollback --repair --profile-id ${options.profileId}\` to replace only those sections from backups`
+        : `SQLite profile state could not be read; choose a retained backup or JSON export to recover the profile`,
       { cause }
     )
     this.name = 'ProfileStateRecoveryRequiredError'
     this.dataFile = options.dataFile
     this.databaseFile = options.databaseFile
+    this.profileId = options.profileId
+    if (repairableSections) {
+      this.repairableSections = repairableSections
+    }
     // Recovery guidance must survive a permissions failure while enumerating the directory.
     // The startup error still names the canonical paths and remains typed for fail-closed handling.
     try {

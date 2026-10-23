@@ -1,14 +1,33 @@
 /**
- * When each environment's ready control socket last heard from its server. A leaf module: the
- * serving gate reads it without importing the connection cache, which imports the gate back.
+ * Each environment's control socket and when it last heard from its server while ready. A leaf
+ * module: the serving gate reads it without importing the connection cache, which imports the gate back.
  */
-const sources = new Map<string, () => number | null>()
+export type SharedControlSocket = {
+  isReady(): boolean
+  readonly socketGeneration: { peek(): number }
+  request(method: string, params: unknown, timeoutMs: number): Promise<unknown>
+}
+
+/** A ready control socket; `socket` changes whenever it reconnects or the connection is replaced. */
+export type ReadySharedControlSocket = {
+  environmentId: string
+  socket: string
+  request: SharedControlSocket['request']
+}
+
+const sources = new Map<
+  string,
+  { connection: SharedControlSocket; answeredAt: () => number | null; instance: number }
+>()
+// Why: a replacement connection restarts its socket generation, so the key needs the instance too.
+let nextInstance = 0
 
 export function setSharedControlAnswerSource(
   environmentId: string,
-  source: () => number | null
+  connection: SharedControlSocket,
+  answeredAt: () => number | null
 ): void {
-  sources.set(environmentId, source)
+  sources.set(environmentId, { connection, answeredAt, instance: ++nextInstance })
 }
 
 export function clearSharedControlAnswerSource(environmentId: string): void {
@@ -17,5 +36,21 @@ export function clearSharedControlAnswerSource(environmentId: string): void {
 
 /** Null while there is no ready control socket for the environment. */
 export function getRemoteRuntimeSharedControlAnsweredAt(environmentId: string): number | null {
-  return sources.get(environmentId)?.() ?? null
+  return sources.get(environmentId)?.answeredAt() ?? null
+}
+
+/** Every ready control socket, without opening one. */
+export function listReadySharedControlSockets(): ReadySharedControlSocket[] {
+  return [...sources.entries()].flatMap(([environmentId, { connection, instance }]) =>
+    connection.isReady()
+      ? [
+          {
+            environmentId,
+            socket: `${instance}:${connection.socketGeneration.peek()}`,
+            request: (method: string, params: unknown, timeoutMs: number) =>
+              connection.request(method, params, timeoutMs)
+          }
+        ]
+      : []
+  )
 }

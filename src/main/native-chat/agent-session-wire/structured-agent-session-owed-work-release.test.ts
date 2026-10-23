@@ -201,12 +201,10 @@ describe('a Claude chat whose CLI is still starting', () => {
   })
 
   it('gives a message held while starting a full idle window after startup lands to open its turn', async () => {
+    claude = fakeClaude({ replayUuid: null })
     await attachStarting()
     const connection = claude.connections[0]
     // Claude echoes a prompt only when it starts that turn, which a loaded machine delays.
-    connection.send = async (message) => {
-      connection.sent.push(message)
-    }
     const held = await send('sent while starting')
     expect(connection.sent).toEqual([])
     expect(await dispatchState(held)).toBe('pending')
@@ -234,7 +232,7 @@ describe('a Claude chat whose CLI is still starting', () => {
     await host.flushStreamedEvents(SESSION)
     await waitOutSeveralSweeps()
     expect(host.hasSession(SESSION)).toBe(true)
-    expect(await dispatchState(held)).toBe('accepted')
+    await vi.waitFor(async () => expect(await dispatchState(held)).toBe('accepted'))
   })
 
   it('stops the agent and closes the conversation once its turn has finished and it idled', async () => {

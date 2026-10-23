@@ -1,3 +1,4 @@
+import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -160,8 +161,12 @@ describe('WSL move session freeze: other session writers', () => {
   })
 
   it('keeps the frozen rows when the workspace owner is removed', () => {
-    store.removeWorkspaceSessionStateForWorktree(MOVING)
-    store.removeWorkspaceSessionStateForWorktree(STAYING)
+    store.removeWorkspaceSessionStateForWorktree(
+      hostWorktreeTarget({ id: MOVING, hostId: 'local' })
+    )
+    store.removeWorkspaceSessionStateForWorktree(
+      hostWorktreeTarget({ id: STAYING, hostId: 'local' })
+    )
     expect(titles(store)).toEqual({ moving: ['slept'], staying: undefined })
   })
 })

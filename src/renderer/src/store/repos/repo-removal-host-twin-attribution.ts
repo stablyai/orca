@@ -13,6 +13,7 @@ import {
   getOpenFileExecutionHostId,
   hasOpenFileExecutionHostEvidence
 } from '@/lib/unified-tab-host-ownership'
+import { selectDetectedWorktreesByRepo, selectWorktreesByRepo } from '../workspace-record-selectors'
 
 /**
  * State under a worktree id that a surviving host also publishes, attributed to the removed host.
@@ -96,8 +97,8 @@ export function removedHostCanonicalizer(
 ): (evidence: HostEvidence) => HostEvidence {
   const repoId = getRepoIdFromWorktreeId(worktreeId)
   const removedRow = [
-    ...(state.worktreesByRepo[repoId] ?? []),
-    ...(state.detectedWorktreesByRepo[repoId]?.worktrees ?? [])
+    ...(selectWorktreesByRepo(state)[repoId] ?? []),
+    ...(selectDetectedWorktreesByRepo(state)[repoId]?.worktrees ?? [])
   ].find((row) => row.id === worktreeId && row.hostId === removedHostId)
   return (evidence) =>
     evidence &&

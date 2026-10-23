@@ -62,6 +62,11 @@ export function isProgramStatusKind(value: unknown): value is ProgramStatusKind 
   return PROGRAM_STATUS_KINDS.some((kind) => kind === value)
 }
 
+/** Approvals and questions belong to the running turn; a sign-in or unnamed block outlives it. */
+export function isTurnScopedProgramStatusKind(kind: ProgramStatusKind | undefined): boolean {
+  return kind === 'permission' || kind === 'question'
+}
+
 /** Live states: the only ones whose reports may carry `progress`. */
 export function programStatusStateCarriesProgress(state: ProgramStatusState | 'clear'): boolean {
   return state === 'working' || state === 'blocked'

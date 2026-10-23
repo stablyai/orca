@@ -127,12 +127,13 @@ export function uploadBufferToAgentSessionAttachments(
   })
 }
 
-/** A pasted image for a structured chat on a paired server, stored in that server's store. */
-export async function uploadPastedImageToAgentSessionAttachments(
+/** A paste for a structured chat on a paired server, stored in that server's store. */
+export async function uploadPasteToAgentSessionAttachments(
   target: AgentSessionAttachmentClipboardTarget,
   runtimeEnvironmentId: string,
   userDataPath: string,
-  buffer: Buffer
+  buffer: Buffer,
+  name: string = agentSessionPastedImageName(Date.now(), randomUUID())
 ): Promise<string> {
   const stored = await uploadBufferToAgentSessionAttachments(
     {
@@ -140,7 +141,7 @@ export async function uploadPastedImageToAgentSessionAttachments(
       environmentId: resolveEnvironment(userDataPath, runtimeEnvironmentId).id,
       userDataPath
     },
-    agentSessionPastedImageName(Date.now(), randomUUID()),
+    name,
     buffer
   )
   return stored.path

@@ -61,15 +61,21 @@ function executableName(command: string): string {
   return splitExecutable(command).name
 }
 
-// Why: versions before STA-10471 spawned the same argv with ExitOnForwardFailure=yes, and
-// versions before #24863's fix without LogLevel=INFO.
+// Why: versions before STA-10471 spawned the same argv with ExitOnForwardFailure=yes, versions
+// before #24863's fix without LogLevel=INFO, and earlier versions often without `-S none`.
 function normalizeForwardArgv(args: readonly string[]): string[] {
   const normalized: string[] = []
   let droppedLogLevel = false
+  let droppedControlPath = false
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index] ?? ''
     if (!droppedLogLevel && arg === '-o' && args[index + 1] === 'LogLevel=INFO') {
       droppedLogLevel = true
+      index += 1
+      continue
+    }
+    if (!droppedControlPath && arg === '-S' && args[index + 1] === 'none') {
+      droppedControlPath = true
       index += 1
       continue
     }

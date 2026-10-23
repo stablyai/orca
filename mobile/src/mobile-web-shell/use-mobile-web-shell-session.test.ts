@@ -2,9 +2,13 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { MOBILE_WEB_BUNDLE_CAPABILITY } from '../../../src/shared/mobile-web-bundle/mobile-web-bundle-capability'
-import type { MobileWebBundleFetchResult } from '../transport/mobile-web-bundle-fetch'
+import type {
+  MobileWebBundleFetchProgress,
+  MobileWebBundleFetchResult
+} from '../transport/mobile-web-bundle-fetch'
 import type { MobileWebBundleManifestRead } from '../transport/mobile-web-bundle-reply-schemas'
 import type { ActiveGeneration, GenerationStore, StagedGeneration } from './generation-store'
+import type { DownloadProgressFeed } from './download-progress-feed'
 import type { MobileWebShellSessionState } from './mobile-web-shell-session-contract'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 
@@ -31,7 +35,11 @@ type Doubles = {
   manifestReads: number
   manifestClients: unknown[]
   manifestRejection: unknown
-  fetches: { signal: AbortSignal; settle: Settle<MobileWebBundleFetchResult> }[]
+  fetches: {
+    signal: AbortSignal
+    onProgress: (progress: MobileWebBundleFetchProgress) => void
+    settle: Settle<MobileWebBundleFetchResult>
+  }[]
   manifest: MobileWebBundleManifestRead
 }
 
@@ -90,9 +98,12 @@ vi.mock('../transport/rpc-operation', () => ({
   }
 }))
 vi.mock('../transport/mobile-web-bundle-fetch', () => ({
-  fetchMobileWebBundle: (args: { signal: AbortSignal }) =>
+  fetchMobileWebBundle: (args: {
+    signal: AbortSignal
+    onProgress: (progress: MobileWebBundleFetchProgress) => void
+  }) =>
     new Promise<MobileWebBundleFetchResult>((resolve) => {
-      doubles.fetches.push({ signal: args.signal, settle: resolve })
+      doubles.fetches.push({ signal: args.signal, onProgress: args.onProgress, settle: resolve })
     })
 }))
 
@@ -156,6 +167,7 @@ function createFakeStore(): {
     abortStagedGeneration: async () => {
       aborted += 1
     },
+    openReusableAssets: async () => ({ has: () => false, check: async () => false }),
     sweepStagedGenerations: async () => undefined,
     deleteHostCache: async () => undefined,
     recordUpdateFailure: async () => undefined,
@@ -214,6 +226,7 @@ type Mounted = {
   documentLoaded: () => void
   pageReady: () => void
   pagePainted: () => void
+  downloadProgress: () => DownloadProgressFeed
   timers: ReturnType<typeof createTimerSeam>
 }
 
@@ -231,6 +244,7 @@ async function mount(store: GenerationStore): Promise<Mounted> {
     pagePainted: () => void
     states: MobileWebShellSessionState[]
     handshakes: boolean[]
+    downloadProgress: DownloadProgressFeed | null
   } = {
     retry: () => {},
     documentStarted: () => {},
@@ -238,7 +252,8 @@ async function mount(store: GenerationStore): Promise<Mounted> {
     pageReady: () => {},
     pagePainted: () => {},
     states: [],
-    handshakes: []
+    handshakes: [],
+    downloadProgress: null
   }
   function Probe() {
     const session = useMobileWebShellSession({
@@ -258,6 +273,7 @@ async function mount(store: GenerationStore): Promise<Mounted> {
     handle.pagePainted = session.reportPagePainted
     handle.states.push(session.state)
     handle.handshakes.push(session.pageReady)
+    handle.downloadProgress = session.downloadProgress
     return null
   }
   const rendered: { tree: ReactTestRenderer | null } = { tree: null }
@@ -278,6 +294,12 @@ async function mount(store: GenerationStore): Promise<Mounted> {
     documentLoaded: () => handle.documentLoaded(),
     pageReady: () => handle.pageReady(),
     pagePainted: () => handle.pagePainted(),
+    downloadProgress: () => {
+      if (handle.downloadProgress === null) {
+        throw new Error('the hook never rendered')
+      }
+      return handle.downloadProgress
+    },
     timers
   }
 }
@@ -326,6 +348,7 @@ describe('the hybrid shell runner', () => {
     inFlight.settle({
       manifest: doubles.manifest,
       assets: new Map(),
+      reused: [],
       totalBytes: 2048,
       elapsedMs: 1
     })
@@ -364,6 +387,7 @@ describe('the hybrid shell runner', () => {
     inFlight.settle({
       manifest: doubles.manifest,
       assets: new Map(),
+      reused: [],
       totalBytes: 2048,
       elapsedMs: 1
     })
@@ -407,6 +431,28 @@ describe('the hybrid shell runner', () => {
     })
   })
 
+  it('moves the download feed as progress is dispatched, without waiting for a render', async () => {
+    const fake = createFakeStore()
+    const mounted = await mount(fake.store)
+    fake.settleCacheRead(null)
+    await flush()
+    const fetch = doubles.fetches[0]
+    if (fetch === undefined) {
+      throw new Error('no download was started')
+    }
+    const heard: number[] = []
+    mounted.downloadProgress().subscribe((fraction) => heard.push(fraction))
+    const renders = mounted.states().length
+    // Outside act: React commits nothing here, as on a JS thread the replies keep busy.
+    fetch.onProgress({ completedAssets: 0, totalAssets: 2, receivedBytes: 1024, totalBytes: 4096 })
+    fetch.onProgress({ completedAssets: 1, totalAssets: 2, receivedBytes: 4096, totalBytes: 4096 })
+    expect(heard).toEqual([0.25, 1])
+    expect(mounted.states()).toHaveLength(renders)
+    await act(async () => {
+      mounted.tree.unmount()
+    })
+  })
+
   it('abandons the download still in flight when Try again starts a new one', async () => {
     const fake = createFakeStore()
     const mounted = await mount(fake.store)
@@ -420,7 +466,13 @@ describe('the hybrid shell runner', () => {
       mounted.retry()
     })
     expect(first.signal.aborted).toBe(true)
-    first.settle({ manifest: doubles.manifest, assets: new Map(), totalBytes: 2048, elapsedMs: 1 })
+    first.settle({
+      manifest: doubles.manifest,
+      assets: new Map(),
+      reused: [],
+      totalBytes: 2048,
+      elapsedMs: 1
+    })
     await flush()
     expect(fake.staged()).toBe(0)
     await act(async () => {

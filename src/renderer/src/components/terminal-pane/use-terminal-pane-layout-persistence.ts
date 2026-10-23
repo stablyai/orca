@@ -12,7 +12,6 @@ import {
   sanitizeTerminalLayoutPaneTitles
 } from '../../../../shared/terminal-pane-title-sanitization'
 import type { TerminalPaneStartupController } from './use-terminal-pane-startup-actions'
-import type { PaneLayoutEditIntent } from '../../../../shared/rpc-contract/session-tabs-schemas-params'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
 import { notePendingPaneTitleRename } from '@/runtime/pending-pane-title-renames'
@@ -43,7 +42,7 @@ export function useTerminalPaneLayoutPersistence(controller: TerminalPaneStartup
     chatOwnerRef.current = { chatLeafId, isChatViewMode }
   }, [chatLeafId, isChatViewMode])
   const persistLayoutSnapshot = useCallback(
-    (intent?: PaneLayoutEditIntent): void => {
+    (): void => {
       const manager = managerRef.current
       const container = containerRef.current
       if (!manager || !container) {
@@ -138,8 +137,7 @@ export function useTerminalPaneLayoutPersistence(controller: TerminalPaneStartup
         remotePaneLayoutPusherRef.current?.push({
           worktreeId,
           tabId,
-          layout: clearedEveryTitle ? { ...layout, titlesByLeafId: {} } : layout,
-          intent
+          layout: clearedEveryTitle ? { ...layout, titlesByLeafId: {} } : layout
         })
       }
       for (const leafId of currentLeafIds) {
@@ -189,7 +187,7 @@ export function useTerminalPaneLayoutPersistence(controller: TerminalPaneStartup
         removedTitleLeafIdsRef.current.add(leafId)
       }
       // Why: every caller is a user clearing a pane title.
-      persistLayoutSnapshot('gesture')
+      persistLayoutSnapshot()
     },
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
     [persistLayoutSnapshot]
@@ -202,7 +200,7 @@ export function useTerminalPaneLayoutPersistence(controller: TerminalPaneStartup
       if (leafId) {
         removedTitleLeafIdsRef.current.delete(leafId)
       }
-      persistLayoutSnapshot('gesture')
+      persistLayoutSnapshot()
     },
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Refs are stable.
     [persistLayoutSnapshot]
@@ -216,20 +214,22 @@ export function useTerminalPaneLayoutPersistence(controller: TerminalPaneStartup
   /** A user's title for a pane, trimmed and non-empty; null clears it. */
   const changePaneTitle = useCallback(
     (paneId: number, title: string | null) => {
-      const showTitle = (): void => showPaneTitle(paneId, title)
       const leafId = managerRef.current?.getPanes().find((pane) => pane.id === paneId)?.leafId
-      if (leafId) {
-        const layout = useAppStore.getState().terminalLayoutsByTabId[tabId]
-        notePendingPaneTitleRename({ leafId, title, layout })
+      const showTitle = (): void => {
+        if (leafId) {
+          const layout = useAppStore.getState().terminalLayoutsByTabId[tabId]
+          notePendingPaneTitleRename({ leafId, title, layout })
+        }
+        showPaneTitle(paneId, title)
       }
-      // Switch point: main renames the pane first; the window then shows the title.
+      // Switch point: main renames the pane and its frame draws the title.
       if (
         ORCA_LAYOUT_OWNER_IS_MAIN &&
         leafId &&
         sendLayoutCommandToOwner(
           worktreeId,
           { type: 'renamePane', tabId, leafId, title },
-          { apply: showTitle, asToday: showTitle }
+          { apply: () => {}, asToday: showTitle }
         )
       ) {
         return

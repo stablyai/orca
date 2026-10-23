@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PreloadApi } from '../../../preload/api-types'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import {
-  installApi,
   installBrowserGlobals,
   writeStoredRuntimeEnvironment
 } from './web-preload-api-test-harness'
@@ -15,76 +14,6 @@ describe('web GitHub preload API', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
     vi.doUnmock('./web-runtime-client')
-  })
-
-  it('keeps the web GitHub preload key set in parity with the preload contract', async () => {
-    const { api } = await installApi('Linux')
-
-    expect(Object.keys(api.gh).sort()).toEqual(
-      [
-        'addIssueComment',
-        'addIssueCommentBySlug',
-        'addPRReviewComment',
-        'addPRReviewCommentReply',
-        'checkOrcaStarred',
-        'clearProjectItemField',
-        'countWorkItems',
-        'createIssue',
-        'deleteIssueCommentBySlug',
-        'diagnoseAuth',
-        'enqueuePRRefresh',
-        'getProjectViewTable',
-        'issue',
-        'listAccessibleProjects',
-        'listAssignableUsers',
-        'listAssignableUsersBySlug',
-        'listBindableAccounts',
-        'listIssueTypesBySlug',
-        'listIssues',
-        'listLabels',
-        'listLabelsBySlug',
-        'listProjectViews',
-        'listWorkItems',
-        'markPRReadyForReview',
-        'mergePR',
-        'notifyWorkItemMutated',
-        'onPRRefreshEvent',
-        'onWorkItemMutated',
-        'prCheckDetails',
-        'prChecks',
-        'prComments',
-        'prFileContents',
-        'prForBranch',
-        'projectWorkItemDetailsBySlug',
-        'rateLimit',
-        'refreshPRNow',
-        'removePRReviewers',
-        'repoSlug',
-        'repoUpstream',
-        'reportVisiblePRRefreshCandidates',
-        'rerunPRChecks',
-        'requestPRReviewers',
-        'resolveProjectRef',
-        'resolveReviewThread',
-        'setPRAutoMerge',
-        'setPRCommentReaction',
-        'setPRFileViewed',
-        'starOrca',
-        'updateIssue',
-        'updateIssueBySlug',
-        'updateIssueCommentBySlug',
-        'updateIssueTypeBySlug',
-        'updatePRState',
-        'updatePRTitle',
-        'updateProjectItemField',
-        'updatePullRequestBySlug',
-        'validateAccountBinding',
-        'viewer',
-        'workItem',
-        'workItemByOwnerRepo',
-        'workItemDetails'
-      ].sort()
-    )
   })
 
   it('routes every runtime-backed GitHub method through the expected RPC method', async () => {

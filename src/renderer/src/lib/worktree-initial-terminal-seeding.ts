@@ -131,7 +131,11 @@ export function ensureWorktreeHasInitialTerminal(
   }
 
   const backendStartupTerminalSpawned = opts?.backendStartupTerminalSpawned === true
-  const hostAuthority = resolveWorkspaceTerminalHostAuthority(ownerState, worktreeId)
+  const hostAuthority = resolveWorkspaceTerminalHostAuthority(
+    ownerState,
+    worktreeId,
+    opts?.executionHostId
+  )
   // Why: explicit spawn evidence survives the new-worktree ownership race; a host that owns terminal creation provides the same authority for later activations.
   if (backendStartupTerminalSpawned || hostAuthority === 'live') {
     const existingTerminalTabId = store.tabsByWorktree[worktreeId]?.[0]?.id

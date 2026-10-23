@@ -8,7 +8,7 @@ import {
   type AgentChatPermissionMode
 } from './agent-chat-permission-mode'
 import type { AgentSessionOptionCatalog } from './agent-session-option-catalog'
-import type { NativeChatSessionOptionRecord } from './native-chat-session-option-state'
+import type { StructuredAgentSessionOptionRecord } from './structured-agent-session-option-state'
 import type { SessionOptionDescriptor } from './native-chat-session-options'
 
 /** English names and descriptions for surfaces without a translation catalog. */
@@ -57,9 +57,9 @@ function agentDescriptions(agent: string): Partial<Record<AgentChatPermissionMod
 /** Only decides whether the menu offers Approve for me, by the host's own rule. */
 function currentModelSupportsAutoMode(
   catalog: AgentSessionOptionCatalog | null,
-  record: NativeChatSessionOptionRecord
+  record: StructuredAgentSessionOptionRecord
 ): boolean {
-  const model = record.model?.value
+  const model = record.values.model?.value
   return (
     catalog !== null &&
     chatModelSupportsAutoMode(catalog.models, typeof model === 'string' ? model : undefined)
@@ -68,8 +68,9 @@ function currentModelSupportsAutoMode(
 
 export function structuredAgentSessionPermissionDescriptor(state: {
   catalog: AgentSessionOptionCatalog | null
-  record: NativeChatSessionOptionRecord
+  record: StructuredAgentSessionOptionRecord
   permissionMode: string | null
+  pendingId?: string | null
 }): SessionOptionDescriptor | null {
   const support = agentChatPermissionModes(state.record.agent)
   const current = support?.modes.find((mode) => mode === state.permissionMode)
@@ -78,7 +79,8 @@ export function structuredAgentSessionPermissionDescriptor(state: {
   }
   const offered = offeredChatPermissionModes(
     support,
-    current === 'auto' || currentModelSupportsAutoMode(state.catalog, state.record)
+    current === 'auto' ||
+      (state.pendingId !== 'model' && currentModelSupportsAutoMode(state.catalog, state.record))
   )
   return {
     id: AGENT_CHAT_PERMISSION_MODE_OPTION_ID,

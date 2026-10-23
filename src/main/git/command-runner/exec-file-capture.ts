@@ -8,6 +8,8 @@ import { createAbortError } from './abort-error'
 import { killSpawnedCommandTree } from './spawned-command-tree-kill'
 import { DEFAULT_GIT_MAX_BUFFER } from './git-exec-options'
 import type { GitAdmissionTier } from './git-exec-options'
+import { workerExecFile } from './worker-exec-file'
+import type { WorkerThreadChildProcess } from '../../worker-thread-child-process/worker-thread-child-process'
 
 type ExecFileCaptureOptions = Omit<ExecFileOptions, 'timeout'> & {
   timeout?: number
@@ -19,6 +21,7 @@ type ExecFileCaptureOptions = Omit<ExecFileOptions, 'timeout'> & {
   /** Called once when the deadline — not an abort — is what ended the process. */
   onDeadlineKill?: () => void
   onStderr?: (chunk: string) => void
+  spawnOnWorkerThread?: boolean
 }
 
 const GIT_TERMINATION_BARRIER_FALLBACK_TIMEOUT_MS = 2_147_000_000
@@ -111,7 +114,10 @@ function isExecFileResultObject(
 }
 
 /** A second, passive stderr listener: execFile still captures every byte. */
-function observeStderr(child: ChildProcess, observer: (chunk: string) => void): void {
+function observeStderr(
+  child: ChildProcess | WorkerThreadChildProcess,
+  observer: (chunk: string) => void
+): void {
   const onData = (chunk: string | Buffer): void => {
     try {
       observer(typeof chunk === 'string' ? chunk : chunk.toString('utf8'))
@@ -139,7 +145,9 @@ export function execFileCapture(
 
     let settled = false
     let terminating = false
-    let child: ChildProcess | null = null
+    let child: ChildProcess | WorkerThreadChildProcess | null = null
+    // Native macOS first; Windows/WSL keep their existing tree-termination path.
+    const useWorker = options.spawnOnWorkerThread === true && process.platform === 'darwin'
     let timer: NodeJS.Timeout | null = null
     let terminationReported = false
     const reportChildTerminated = (): void => {
@@ -195,7 +203,8 @@ export function execFileCapture(
     try {
       const spawnStartedAt = performance.now()
       // Why: our abort listener owns tree cleanup; Node's signal handler could kill wsl.exe before taskkill sees its children.
-      child = execFile(
+      const capture = useWorker ? workerExecFile : execFile
+      child = capture(
         command,
         args,
         {
@@ -227,7 +236,8 @@ export function execFileCapture(
     }
 
     child.once('error', (error) => {
-      if (!child?.pid) {
+      // A lost worker may have spawned a child whose PID never reached us; only close proves termination.
+      if (!useWorker && !child?.pid) {
         reportChildTerminated()
       }
       if (!terminating) {
@@ -240,7 +250,12 @@ export function execFileCapture(
     }
 
     if (options.stdin !== undefined) {
-      endSubprocessStdin(child.stdin, options.stdin)
+      if ('id' in child) {
+        child.stdin.write(options.stdin)
+        child.stdin.end()
+      } else {
+        endSubprocessStdin(child.stdin, options.stdin)
+      }
     }
 
     // Why: Node's timeout waits forever on signal-ignoring CLIs; enforce our own deadline with bounded tree cleanup.

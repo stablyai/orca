@@ -43,6 +43,7 @@ export const IDLE_MS = STRUCTURED_AGENT_SESSION_IDLE_MS
 export const SWEEP_INTERVAL_MS = 5
 
 export type RestTestAdapter = {
+  open: StructuredAgentSessionAdapter['open']
   acquire: Mock<StructuredAgentSessionAdapter['acquire']>
   closeSession: Mock<NonNullable<StructuredAgentSessionAdapter['closeSession']>>
   dispatch: Mock<StructuredAgentSessionAdapter['dispatch']>
@@ -50,7 +51,6 @@ export type RestTestAdapter = {
     NonNullable<StructuredAgentSessionAdapter['acknowledgeSessionRelease']>
   >
   holdsDispatch: Mock<NonNullable<StructuredAgentSessionAdapter['holdsDispatch']>>
-  startUnavailable: Mock<NonNullable<StructuredAgentSessionAdapter['startUnavailable']>>
   readOptions: Mock<NonNullable<StructuredAgentSessionAdapter['readOptions']>>
 }
 
@@ -67,11 +67,16 @@ export type RestTestRig = {
     forget: Mock
     readChildWork: Mock<(subject: unknown) => AgentChildWorkView[]>
   }
-  /** Wraps an acquire so its child stays `starting`: every other child proves its start once
+  /** Wraps a spawn so its child stays `starting`: every other child proves its start once
    *  published. */
   heldStart: (
     acquire: StructuredAgentSessionAdapter['acquire']
   ) => StructuredAgentSessionAdapter['acquire']
+  proveStart: (child: {
+    sessionId: string
+    fence: number
+    acquisitionGeneration: string
+  }) => Promise<void>
   /** Opens a fresh host over the same store and journals: what a restart leaves behind. */
   restart: (deps?: Partial<StructuredAgentSessionHostDeps>) => Promise<StructuredAgentSessionHost>
   dispose: () => Promise<void>
@@ -149,6 +154,9 @@ export async function createRestTestRig(
   }
   let store = await openTestAgentSessionRecordStore(root)
   const adapter: RestTestAdapter = {
+    open: async () => ({
+      reportedOptions: { model: '' }
+    }),
     acquire: vi.fn(async ({ fence, spawnToken }) => ({
       acquisitionGeneration: `generation-${++generations}`,
       process: { hostId: 'local', pid: 4242, processStartTimeMs: 1_700_000_000_000, spawnToken },
@@ -166,7 +174,6 @@ export async function createRestTestRig(
     dispatch: vi.fn(async () => acceptedDispatch()),
     acknowledgeSessionRelease: vi.fn(),
     holdsDispatch: vi.fn(() => false),
-    startUnavailable: vi.fn(() => undefined),
     readOptions: vi.fn(async () => ({ models: [], current: { model: 'gpt-live' } }))
   }
   const starts = structuredAgentSessionHeldStarts(() => rig.host)
@@ -201,6 +208,7 @@ export async function createRestTestRig(
     statusEvents,
     sink,
     heldStart: starts.held,
+    proveStart: starts.prove,
     restart: async (overrides = {}) => {
       await rig.host.flushAllStreamedEvents().catch(() => undefined)
       store = await openTestAgentSessionRecordStore(root)

@@ -5,6 +5,7 @@ import type {
   ParsedAgentStatusPayload
 } from '../../../../shared/agent-status-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import { tabHasProtectedTitle } from '../../../../shared/agent-generated-tab-title-rules'
 import type { DropAgentStatusByWorktreeOptions, RetainedAgentEntry } from './agent-status-contract'
 import type { AgentStatusTabPrefixDropState } from './agent-status-drop-reducer'
 
@@ -41,18 +42,14 @@ export function agentStatusTabAlreadyHasProtectedOrGeneratedTitle(
   const ownerTabs = worktreeId ? state.tabsByWorktree[worktreeId] : undefined
   if (ownerTabs) {
     const tab = ownerTabs.find((candidate) => candidate.id === tabId)
-    return Boolean(
-      tab?.customTitle?.trim() || tab?.quickCommandLabel?.trim() || tab?.generatedTitle?.trim()
-    )
+    return Boolean(tab && (tabHasProtectedTitle(tab) || tab.generatedTitle?.trim()))
   }
   for (const tabs of Object.values(state.tabsByWorktree)) {
     const tab = tabs.find((candidate) => candidate.id === tabId)
     if (!tab) {
       continue
     }
-    return Boolean(
-      tab.customTitle?.trim() || tab.quickCommandLabel?.trim() || tab.generatedTitle?.trim()
-    )
+    return Boolean(tabHasProtectedTitle(tab) || tab.generatedTitle?.trim())
   }
   return false
 }

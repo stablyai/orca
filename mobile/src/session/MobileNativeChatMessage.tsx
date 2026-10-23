@@ -21,7 +21,11 @@ import type {
 import { MobileSourceCopyButton } from '../components/MobileSourceCopyButton'
 import { nativeChatMessagePlainText } from './mobile-native-chat-message-plain-text'
 import { deriveNativeChatRowContent } from '../../../src/shared/native-chat-row-content'
-import { MobileNativeChatReasoningRow } from './MobileNativeChatReasoningRow'
+import {
+  MobileNativeChatGroupedThought,
+  MobileNativeChatReasoningRow
+} from './MobileNativeChatReasoningRow'
+import { mobileNativeChatRowId } from './mobile-native-chat-reading-place'
 import { nativeChatWorkRunEntries } from '../../../src/shared/native-chat-work-run'
 import { nativeChatReasoningDisclosureKey } from '../../../src/shared/native-chat-reasoning-row'
 import { MobileNativeChatTurnStatus } from './MobileNativeChatTurnStatus'
@@ -42,13 +46,15 @@ import type { NativeChatTurnStatus } from './use-mobile-native-chat-turn-status'
 import { styles } from './mobile-native-chat-message-styles'
 import { agentMessageAttribution } from './mobile-agent-message-attribution'
 import { MobileNativeChatVisualContext } from './mobile-native-chat-visual-context'
+import { useMobileNativeChatFullMessage } from './MobileNativeChatFullContent'
 import { MobileNativeChatPacedProse } from './MobileNativeChatPacedProse'
 import { Prose } from './MobileNativeChatProse'
 
 function MobileNativeChatMessageImpl({
-  message,
+  message: rowMessage,
+  rowKey,
+  runOwner,
   mayStillGrow = false,
-  toolsExpanded = false,
   previousTodoWrite,
   previousUpdatePlan,
   fontScale = 1,
@@ -77,9 +83,11 @@ function MobileNativeChatMessageImpl({
   onToggleUserMessage
 }: {
   message: NativeChatMessage
+  /** The row's place on the page, kept while older messages join it; tags the row. */
+  rowKey?: string
+  runOwner?: string
   /** The newest assistant row of a live turn with no prompt open: its last text may still grow. */
   mayStillGrow?: boolean
-  toolsExpanded?: boolean
   /** The last plan each task-list tool wrote before this row, so an update reads as its changes. */
   previousTodoWrite?: NativeChatToolCallBlock
   previousUpdatePlan?: NativeChatToolCallBlock
@@ -104,8 +112,7 @@ function MobileNativeChatMessageImpl({
   workRun?: readonly NativeChatMessage[]
   /** A later member of a work run, which its first row draws. */
   joinsWorkRun?: boolean
-  /** Folded behind its settled turn's "Worked for" row. The Tools toggle still shows it, or that
-   *  toggle would do nothing on every settled turn. */
+  /** Folded behind its settled turn's "Worked for" row. */
   foldedAway?: boolean
   /** The reasoning disclosures the reader opened, for thoughts drawn inside the work run. */
   openReasoning?: ReadonlySet<string>
@@ -126,6 +133,7 @@ function MobileNativeChatMessageImpl({
   userMessageOpen?: boolean
   onToggleUserMessage?: (messageId: string) => void
 }): React.JSX.Element {
+  const { shown: message, showFull, recovery } = useMobileNativeChatFullMessage(rowMessage)
   // Another agent's message is set apart from the person's bubble, left-aligned and named.
   const attribution = agentMessageAttribution('Message from', message.from)
   const isUser = message.role === 'user' && attribution === null
@@ -145,10 +153,9 @@ function MobileNativeChatMessageImpl({
     }
     const thought = (thoughtMessage: NativeChatMessage): React.JSX.Element => (
       // Keyed by the thought, so it stays mounted as calls arrive after it.
-      <MobileNativeChatReasoningRow
+      <MobileNativeChatGroupedThought
         key={`thought:${thoughtMessage.id}`}
         message={thoughtMessage}
-        markdown={deriveNativeChatRowContent(thoughtMessage.blocks).markdown}
         fontScale={fontScale}
         live={activeTurnIsWorking === true}
         expanded={openReasoning?.has(nativeChatReasoningDisclosureKey(thoughtMessage.id)) === true}
@@ -206,14 +213,14 @@ function MobileNativeChatMessageImpl({
     />
   ) : null
   // A receipt outlives the fold, as on desktop: it is the record of what the reader answered.
-  if (joinsWorkRun || (foldedAway && !toolsExpanded && !receipt)) {
+  if (joinsWorkRun || (foldedAway && !receipt)) {
     return <>{statusRow}</>
   }
   if (receipt) {
     return (
       <>
         {turnStatusAbove ? statusRow : null}
-        <View style={styles.row}>
+        <View style={styles.row} testID={mobileNativeChatRowId(rowKey ?? message.id)}>
           <MobileNativeChatResolutionReceipt
             body={receipt}
             awaiting={awaiting}
@@ -234,7 +241,7 @@ function MobileNativeChatMessageImpl({
       <>
         {turnStatusAbove ? statusRow : null}
         {draws ? (
-          <View style={styles.row}>
+          <View style={styles.row} testID={mobileNativeChatRowId(rowKey ?? message.id)}>
             <MobileNativeChatReasoningRow
               message={message}
               markdown={markdown}
@@ -245,6 +252,7 @@ function MobileNativeChatMessageImpl({
               onOpenFile={onOpenFile}
               onLongPress={onLongPress}
             />
+            {showFull}
           </View>
         ) : null}
         {turnStatusAbove ? null : statusRow}
@@ -281,7 +289,10 @@ function MobileNativeChatMessageImpl({
     <>
       {/* A turn with no user bubble carries its bar above its first row. */}
       {turnStatusAbove ? statusRow : null}
-      <View style={[styles.row, isUser && styles.rowUser]}>
+      <View
+        style={[styles.row, isUser && styles.rowUser]}
+        testID={mobileNativeChatRowId(rowKey ?? message.id)}
+      >
         <Content
           onLongPress={onLongPress}
           style={[
@@ -313,6 +324,8 @@ function MobileNativeChatMessageImpl({
                 fontScale={fontScale}
                 open={userMessageOpen === true}
                 onToggle={() => onToggleUserMessage?.(message.id)}
+                recovery={recovery}
+                status={showFull}
               >
                 {proseRows(drawnProse.filter((block) => !isImageRefBlock(block)))}
               </MobileNativeChatUserMessageFold>
@@ -327,15 +340,12 @@ function MobileNativeChatMessageImpl({
               {(block, index, shown) => proseRow(block, index, shown.text, shown.revealing)}
             </MobileNativeChatPacedProse>
           )}
+          {isUser ? null : showFull}
           {askRow}
           {showToolRun ? (
             <ToolRun
               blocks={tools}
-              // Opening the turn reveals its runs folded, as on desktop; the Tools toggle is the
-              // default every run and line reads, and a reader's own choice is kept per default.
-              defaultExpanded={toolsExpanded}
-              expandChildren={toolsExpanded}
-              disclosureId={message.id}
+              disclosureId={runOwner ?? rowKey ?? message.id}
               asides={asides}
               activeTurnIsWorking={structuredActivityUi ? activeTurnIsWorking : undefined}
               trailing={trailingRun}

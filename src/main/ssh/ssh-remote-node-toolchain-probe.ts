@@ -3,7 +3,7 @@ import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { quotePowerShellLiteral as powerShellLiteral } from '../../shared/powershell-native-argument'
 
 /** The host-Node floor for the npm path. */
-export const MIN_HOST_NODE_MAJOR = 18
+const MIN_HOST_NODE_MAJOR = 18
 const NODE_VERSION_MARKER = '__ORCA_NODE_VERSION__'
 const NPM_VERSION_MARKER = '__ORCA_NPM_VERSION__'
 

@@ -19,6 +19,8 @@ export type MonacoEditorMountParams = {
   filePath: string
   viewStateKey: string
   viewStateId: string | undefined
+  // Why: a read-only mirror of another tab's id must not move that tab's cursor line or take its reveals.
+  passiveMirror?: boolean
   worktreeId: string | undefined
   autoHeight: boolean
   autoHeightLineHeight: number

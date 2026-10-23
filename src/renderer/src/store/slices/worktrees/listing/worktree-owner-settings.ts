@@ -9,6 +9,7 @@ import { getRepoIdFromWorktreeId } from '../../worktree-helpers'
 import { isRuntimeSelectorNotFoundError } from './runtime-worktree-rpc-errors'
 import { persistWorktreeMeta } from '../metadata/worktree-meta-persist'
 import type { WorktreeSliceGet } from './worktree-slice-types'
+import { selectWorktreesByRepo } from '../../../workspace-record-selectors'
 
 /** Replaces only the copy on `hostId`; a same-id twin on another host is a different worktree. */
 export function replaceWorktreeInRepoLists(
@@ -17,13 +18,13 @@ export function replaceWorktreeInRepoLists(
   hostId: ExecutionHostId
 ): Record<string, Worktree[]> {
   const repoId = getRepoIdFromWorktreeId(updatedWorktree.id)
-  const current = state.worktreesByRepo[repoId]
+  const current = selectWorktreesByRepo(state)[repoId]
   if (!current) {
-    return state.worktreesByRepo
+    return selectWorktreesByRepo(state)
   }
   const options = worktreeHostMatchOptions(state, repoId, hostId)
   return {
-    ...state.worktreesByRepo,
+    ...selectWorktreesByRepo(state),
     [repoId]: current.map((worktree) =>
       worktree.id === updatedWorktree.id && worktreeMatchesHost(worktree, hostId, options)
         ? updatedWorktree

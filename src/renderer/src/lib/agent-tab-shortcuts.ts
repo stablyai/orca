@@ -7,10 +7,8 @@ import { ALL_TUI_AGENTS } from '../../../shared/tui-agent-display-names'
 import { normalizeDisabledTuiAgents, pickTuiAgent } from '../../../shared/tui-agent-selection'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { AppState } from '@/store/types'
-import {
-  loadDetectedAgentsForWorktree,
-  type WorktreeAgentInventoryState
-} from '@/lib/agent-detection-target-inventory'
+import { loadDetectedAgentsForWorktree } from '@/lib/agent-detection-target-inventory'
+import { readAgentLaunchPreferencesForWorktree } from '@/components/settings/use-host-agent-launch-preferences'
 
 export type BoundAgentTabAction = {
   agent: TuiAgent
@@ -62,15 +60,13 @@ export function resolveDefaultAgentForNewTab(args: {
 
 /** The new-tab default agent for a workspace, from the agents its own host reports. */
 export async function resolveDefaultAgentForWorktreeNewTab(
-  getState: () => WorktreeAgentInventoryState & Pick<AppState, 'settings'>,
+  getState: () => AppState,
   worktreeId: string
 ): Promise<TuiAgent | null> {
   const detectedAgentIds = await loadDetectedAgentsForWorktree(getState(), worktreeId)
-  // Why: settings may change while the host answers; pick with the current ones.
-  const state = getState()
+  // Why: preferences may change while the host answers; pick with the current ones.
   return resolveDefaultAgentForNewTab({
-    defaultTuiAgent: state.settings?.defaultTuiAgent,
-    detectedAgentIds,
-    disabledTuiAgents: state.settings?.disabledTuiAgents
+    ...readAgentLaunchPreferencesForWorktree(getState(), worktreeId),
+    detectedAgentIds
   })
 }

@@ -1,4 +1,14 @@
-import { link, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises'
+import {
+  chmod,
+  link,
+  mkdir,
+  mkdtemp,
+  readFile,
+  realpath,
+  rm,
+  symlink,
+  writeFile
+} from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -7,15 +17,20 @@ import type { RuntimeStore } from '../../runtime/runtime-store-contract'
 import { createLocalFilesystemProvider } from '../../providers/local-filesystem-provider'
 import {
   checkLocalDiskWritePrecondition,
-  diskSignatureOfUtf8
+  diskSignatureOfUtf8,
+  writeLocalTextFileWithDiskPrecondition
 } from './local-disk-write-precondition'
 import type * as LocalRegularFileRead from './local-regular-file-read'
 import type * as NodeFsPromises from 'node:fs/promises'
 
 const fileRead = vi.hoisted(() => {
-  const state: { understateSizeBy: number; hangPath: string | null; openError: Error | null } = {
+  const state: {
+    understateSizeBy: number
+    blockedRead: { path: string; entered: () => void; wait: Promise<void> } | null
+    openError: Error | null
+  } = {
     understateSizeBy: 0,
-    hangPath: null,
+    blockedRead: null,
     openError: null
   }
   return state
@@ -51,14 +66,14 @@ vi.mock('node:fs/promises', async (importOriginal) => {
       return zeroInodes.enabled ? Object.assign(stats, { ino: 0n }) : stats
     },
     // Why: holds one save between its passed check and its write, where a competing save must wait.
-    writeFile: async (...args: Parameters<typeof actual.writeFile>) => {
+    writeFile: vi.fn(async (...args: Parameters<typeof actual.writeFile>) => {
       const gate = typeof args[1] === 'string' ? writeGates.get(args[1]) : undefined
       if (gate) {
         gate.entered()
         await gate.release
       }
       return actual.writeFile(...args)
-    }
+    })
   }
 })
 vi.mock('./local-regular-file-read', async (importOriginal) => {
@@ -70,9 +85,10 @@ vi.mock('./local-regular-file-read', async (importOriginal) => {
       if (fileRead.openError) {
         throw fileRead.openError
       }
-      if (filePath === fileRead.hangPath) {
-        // A read stuck on a dead network or WSL mount.
-        await new Promise(() => undefined)
+      const blockedRead = fileRead.blockedRead
+      if (blockedRead?.path === filePath) {
+        blockedRead.entered()
+        await blockedRead.wait
       }
       const opened = await actual.openLocalRegularFile(filePath)
       opened.stats.size -= fileRead.understateSizeBy
@@ -83,13 +99,29 @@ vi.mock('./local-regular-file-read', async (importOriginal) => {
 
 let base: string
 
+function pauseFileRead(path: string) {
+  let entered: () => void = () => undefined
+  let release: () => void = () => undefined
+  const reached = new Promise<void>((resolve) => {
+    entered = resolve
+  })
+  fileRead.blockedRead = {
+    path,
+    entered,
+    wait: new Promise<void>((resolve) => {
+      release = resolve
+    })
+  }
+  return { reached, release: () => release() }
+}
+
 beforeEach(async () => {
   base = await mkdtemp(join(await realpath(tmpdir()), 'orca-disk-write-precondition-'))
 })
 
 afterEach(async () => {
   fileRead.understateSizeBy = 0
-  fileRead.hangPath = null
+  fileRead.blockedRead = null
   fileRead.openError = null
   realpathFailure.path = null
   writeGates.clear()
@@ -104,10 +136,66 @@ describe('checkLocalDiskWritePrecondition', () => {
     await writeFile(filePath, content)
 
     await expect(
-      checkLocalDiskWritePrecondition(filePath, {
-        expectedSignature: getDiskBaselineSignature(content)
-      })
+      checkLocalDiskWritePrecondition(
+        filePath,
+        {
+          expectedSignature: getDiskBaselineSignature(content)
+        },
+        'my save'
+      )
     ).resolves.toBeNull()
+  })
+
+  it.each([2, 1024 * 1024 + 2])(
+    'refuses lossy automatic baseline matches (%i bytes)',
+    async (size) => {
+      const filePath = join(base, 'invalid.ts')
+      const old = Buffer.alloc(size, 0x61)
+      old[size - 1] = 0xfe
+      const newer = Buffer.from(old)
+      newer[size - 1] = 0xff
+      await writeFile(filePath, newer)
+      const decoded = old.toString('utf8')
+      const expectedSignature = getDiskBaselineSignature(decoded)
+      await expect(
+        writeLocalTextFileWithDiskPrecondition(filePath, decoded, {
+          expectedSignature,
+          requireLosslessUtf8: true
+        })
+      ).resolves.toEqual({ ok: false, diskConflict: 'not-utf8' })
+      expect(await readFile(filePath)).toEqual(newer)
+      await expect(
+        writeLocalTextFileWithDiskPrecondition(filePath, decoded, { expectedSignature })
+      ).resolves.toEqual({ ok: true })
+      expect(await readFile(filePath)).toEqual(Buffer.from(decoded))
+    }
+  )
+
+  it.each([0, 1024 * 1024 + 2])(
+    'lets an automatic save edit valid UTF-8 that contains U+FFFD (%i padding)',
+    async (padding) => {
+      const filePath = join(base, 'replacement-char.ts')
+      const original = `${'a'.repeat(padding)}\uFFFD`
+      await writeFile(filePath, original)
+      await expect(
+        writeLocalTextFileWithDiskPrecondition(filePath, `${original}!`, {
+          expectedSignature: getDiskBaselineSignature(original),
+          requireLosslessUtf8: true
+        })
+      ).resolves.toEqual({ ok: true })
+      expect(await readFile(filePath, 'utf8')).toBe(`${original}!`)
+    }
+  )
+
+  it('reports an automatic save over a changed non-UTF-8 file as changed', async () => {
+    const filePath = join(base, 'latin1.ts')
+    await writeFile(filePath, Buffer.from([0x63, 0x61, 0x66, 0xe9]))
+    await expect(
+      writeLocalTextFileWithDiskPrecondition(filePath, 'x', {
+        expectedSignature: getDiskBaselineSignature('other'),
+        requireLosslessUtf8: true
+      })
+    ).resolves.toEqual({ ok: false, diskConflict: 'changed' })
   })
 
   it('reports a same-size external rewrite as changed', async () => {
@@ -115,9 +203,13 @@ describe('checkLocalDiskWritePrecondition', () => {
     await writeFile(filePath, 'agent')
 
     await expect(
-      checkLocalDiskWritePrecondition(filePath, {
-        expectedSignature: getDiskBaselineSignature('human')
-      })
+      checkLocalDiskWritePrecondition(
+        filePath,
+        {
+          expectedSignature: getDiskBaselineSignature('human')
+        },
+        'my save'
+      )
     ).resolves.toBe('changed')
   })
 
@@ -126,9 +218,13 @@ describe('checkLocalDiskWritePrecondition', () => {
     await writeFile(filePath, 'x'.repeat(100))
 
     await expect(
-      checkLocalDiskWritePrecondition(filePath, {
-        expectedSignature: getDiskBaselineSignature('short')
-      })
+      checkLocalDiskWritePrecondition(
+        filePath,
+        {
+          expectedSignature: getDiskBaselineSignature('short')
+        },
+        'my save'
+      )
     ).resolves.toBe('changed')
   })
 
@@ -138,9 +234,13 @@ describe('checkLocalDiskWritePrecondition', () => {
     fileRead.understateSizeBy = 10
 
     await expect(
-      checkLocalDiskWritePrecondition(filePath, {
-        expectedSignature: getDiskBaselineSignature('ab')
-      })
+      checkLocalDiskWritePrecondition(
+        filePath,
+        {
+          expectedSignature: getDiskBaselineSignature('ab')
+        },
+        'my save'
+      )
     ).resolves.toBe('changed')
   })
 
@@ -148,12 +248,54 @@ describe('checkLocalDiskWritePrecondition', () => {
     const filePath = join(base, 'gone.ts')
     const expectedSignature = getDiskBaselineSignature('was here')
 
-    await expect(checkLocalDiskWritePrecondition(filePath, { expectedSignature })).resolves.toBe(
-      'missing'
-    )
     await expect(
-      checkLocalDiskWritePrecondition(filePath, { expectedSignature, allowMissing: true })
+      checkLocalDiskWritePrecondition(filePath, { expectedSignature }, 'my save')
+    ).resolves.toBe('missing')
+    await expect(
+      checkLocalDiskWritePrecondition(
+        filePath,
+        { expectedSignature, allowMissing: true },
+        'my save'
+      )
     ).resolves.toBeNull()
+  })
+})
+
+describe('a changed disk that already holds the save', () => {
+  const baseline = { expectedSignature: getDiskBaselineSignature('original') }
+
+  it.each([
+    ['the same length as the baseline', 'origin2'],
+    ['a length the baseline cannot decode to', 'x'.repeat(100)],
+    ['multi-byte text', 'café ☕ 𝄞\r\n']
+  ])('passes when disk holds exactly the bytes being saved (%s)', async (_label, content) => {
+    const filePath = join(base, 'a.ts')
+    await writeFile(filePath, content)
+
+    await expect(checkLocalDiskWritePrecondition(filePath, baseline, content)).resolves.toBe(
+      'identical'
+    )
+  })
+
+  it('compares bytes, so a BOM or a line-ending difference still refuses', async () => {
+    const filePath = join(base, 'a.ts')
+    await writeFile(filePath, '\uFEFFmine\n')
+    await expect(checkLocalDiskWritePrecondition(filePath, baseline, 'mine\n')).resolves.toBe(
+      'changed'
+    )
+    await writeFile(filePath, 'mine\r\n')
+    await expect(checkLocalDiskWritePrecondition(filePath, baseline, 'mine\n')).resolves.toBe(
+      'changed'
+    )
+  })
+
+  it('treats invalid UTF-8 on disk as different from its decoded text', async () => {
+    const filePath = join(base, 'a.ts')
+    await writeFile(filePath, Buffer.from([0x61, 0xff]))
+
+    await expect(checkLocalDiskWritePrecondition(filePath, baseline, 'a\uFFFD')).resolves.toBe(
+      'changed'
+    )
   })
 })
 
@@ -196,6 +338,45 @@ describe('local provider guarded write', () => {
       })
     ).resolves.toEqual({ ok: false, diskConflict: 'changed' })
     expect(await readFile(filePath, 'utf8')).toBe('edited')
+
+    await expect(
+      provider().writeFileWithDiskPrecondition(filePath, 'edited', {
+        expectedSignature: getDiskBaselineSignature('original')
+      })
+    ).resolves.toEqual({ ok: true, unchanged: true })
+  })
+
+  it.each(['original', 'edited'])(
+    'does not write identical bytes against baseline %s',
+    async (baseline) => {
+      const filePath = join(base, 'identical.ts')
+      await writeFile(filePath, 'edited')
+      vi.mocked(writeFile).mockClear()
+
+      await expect(
+        provider().writeFileWithDiskPrecondition(filePath, 'edited', {
+          expectedSignature: getDiskBaselineSignature(baseline)
+        })
+      ).resolves.toEqual({ ok: true, unchanged: true })
+      expect(writeFile).not.toHaveBeenCalled()
+    }
+  )
+
+  it('accepts identical content on a read-only file without opening it for write', async () => {
+    const filePath = join(base, 'read-only.ts')
+    await writeFile(filePath, 'edited')
+    await chmod(filePath, 0o444)
+    vi.mocked(writeFile).mockClear()
+    try {
+      await expect(
+        provider().writeFileWithDiskPrecondition(filePath, 'edited', {
+          expectedSignature: getDiskBaselineSignature('original')
+        })
+      ).resolves.toEqual({ ok: true, unchanged: true })
+      expect(writeFile).not.toHaveBeenCalled()
+    } finally {
+      await chmod(filePath, 0o644)
+    }
   })
 
   it('lets only one of two concurrent saves from the same baseline write', async () => {
@@ -241,16 +422,22 @@ describe('local provider guarded write', () => {
     await writeFile(stuck, 'original')
     await writeFile(other, 'original')
     zeroInodes.enabled = true
-    fileRead.hangPath = stuck
+    const readGate = pauseFileRead(stuck)
     const fromBaseline = { expectedSignature: getDiskBaselineSignature('original') }
 
-    void provider().writeFileWithDiskPrecondition(stuck, 'edited', fromBaseline)
-    const outcome = await Promise.race([
-      provider().writeFileWithDiskPrecondition(other, 'edited', fromBaseline),
-      new Promise((resolve) => setTimeout(() => resolve('blocked'), 1_000))
-    ])
+    const guardedSave = provider().writeFileWithDiskPrecondition(stuck, 'edited', fromBaseline)
+    try {
+      await readGate.reached
+      const outcome = await Promise.race([
+        provider().writeFileWithDiskPrecondition(other, 'edited', fromBaseline),
+        new Promise((resolve) => setTimeout(() => resolve('blocked'), 1_000))
+      ])
 
-    expect(outcome).toEqual({ ok: true })
+      expect(outcome).toEqual({ ok: true })
+    } finally {
+      readGate.release()
+      await guardedSave
+    }
   })
 
   it('keeps saves ordered when a queued restore creates the file mid-queue', async () => {
@@ -402,35 +589,45 @@ describe('local provider guarded write', () => {
     const other = join(base, 'other.ts')
     await writeFile(stuck, 'original')
     await writeFile(other, 'original')
-    fileRead.hangPath = stuck
+    const readGate = pauseFileRead(stuck)
     const fromBaseline = { expectedSignature: getDiskBaselineSignature('original') }
 
-    void provider().writeFileWithDiskPrecondition(stuck, 'edited', fromBaseline)
-    const otherSave = provider().writeFileWithDiskPrecondition(other, 'edited', fromBaseline)
-    const outcome = await Promise.race([
-      otherSave,
-      new Promise((resolve) => setTimeout(() => resolve('blocked'), 1_000))
-    ])
+    const guardedSave = provider().writeFileWithDiskPrecondition(stuck, 'edited', fromBaseline)
+    try {
+      await readGate.reached
+      const outcome = await Promise.race([
+        provider().writeFileWithDiskPrecondition(other, 'edited', fromBaseline),
+        new Promise((resolve) => setTimeout(() => resolve('blocked'), 1_000))
+      ])
 
-    expect(outcome).toEqual({ ok: true })
+      expect(outcome).toEqual({ ok: true })
+    } finally {
+      readGate.release()
+      await guardedSave
+    }
   })
 
   it('writes a save with no precondition directly, not queued behind a stuck guarded save', async () => {
     const filePath = join(base, 'stuck.ts')
     await writeFile(filePath, 'original')
-    fileRead.hangPath = filePath
+    const readGate = pauseFileRead(filePath)
 
-    void provider().writeFileWithDiskPrecondition(filePath, 'guarded', {
+    const guardedSave = provider().writeFileWithDiskPrecondition(filePath, 'guarded', {
       expectedSignature: getDiskBaselineSignature('original')
     })
-    const plainSave = provider().writeFileWithDiskPrecondition(filePath, 'plain', undefined)
-    const outcome = await Promise.race([
-      plainSave,
-      new Promise((resolve) => setTimeout(() => resolve('blocked'), 1_000))
-    ])
+    try {
+      await readGate.reached
+      const outcome = await Promise.race([
+        provider().writeFileWithDiskPrecondition(filePath, 'plain', undefined),
+        new Promise((resolve) => setTimeout(() => resolve('blocked'), 1_000))
+      ])
 
-    expect(outcome).toEqual({ ok: true })
-    expect(await readFile(filePath, 'utf-8')).toBe('plain')
+      expect(outcome).toEqual({ ok: true })
+      expect(await readFile(filePath, 'utf-8')).toBe('plain')
+    } finally {
+      readGate.release()
+      await guardedSave
+    }
   })
 
   it('does not read a permission error whose path names ENOENT as a missing file', async () => {
@@ -441,10 +638,14 @@ describe('local provider guarded write', () => {
     )
 
     await expect(
-      checkLocalDiskWritePrecondition(filePath, {
-        expectedSignature: getDiskBaselineSignature('original'),
-        allowMissing: true
-      })
+      checkLocalDiskWritePrecondition(
+        filePath,
+        {
+          expectedSignature: getDiskBaselineSignature('original'),
+          allowMissing: true
+        },
+        'my save'
+      )
     ).rejects.toThrow('EACCES')
   })
 

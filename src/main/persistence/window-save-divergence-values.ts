@@ -28,7 +28,7 @@ const ID_KEYS = new Set([
  * launch env and transcript path; editor views carry git snapshots): only their size is logged.
  */
 const OPAQUE_RECORDS = new Set(['file', 'editor view'])
-const OPAQUE_FIELDS = new Set(['sleeping', 'value'])
+const OPAQUE_FIELDS = new Set(['sleeping', 'resume', 'value'])
 const MAX_SHOWN_ID_LENGTH = 80
 /** A daemon terminal id embeds its worktree id, which may be a long path. */
 const MAX_SHOWN_PTY_ID_LENGTH = 256

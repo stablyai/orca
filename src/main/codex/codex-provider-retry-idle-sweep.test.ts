@@ -51,6 +51,9 @@ beforeEach(async () => {
   closeSession = vi.fn(async () => true)
   const store = await openTestAgentSessionRecordStore(root)
   const adapter: StructuredAgentSessionAdapter = {
+    open: async () => ({
+      reportedOptions: { model: '' }
+    }),
     acquire: async ({ fence, spawnToken, events }) => {
       sink = events ?? null
       return {

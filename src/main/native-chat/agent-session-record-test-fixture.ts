@@ -32,7 +32,6 @@ export function agentSessionRecordFixture(
       leaseDeadlineAt: 0,
       lastRenewedAt: 0,
       handoffOperationId: null,
-      journalCheckpoint: null,
       claimKeyId: 'test-key',
       claimStatus: 'released',
       unreconciled: false,

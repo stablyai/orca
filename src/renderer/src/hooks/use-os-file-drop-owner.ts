@@ -25,7 +25,7 @@ type OsFileDropContext<Destination> = {
 }
 
 type OsFileDropOwnerOptions<Destination> = {
-  consumer: DroppedPathConsumer
+  consumer: DroppedPathConsumer | ((destination: Destination | undefined) => DroppedPathConsumer)
   sequence: OsFileDropSequence
   canAccept?: boolean | ((event: DragEvent) => boolean)
   captureDestination?: (event: DragEvent) => Destination
@@ -118,6 +118,8 @@ export function useOsFileDropOwner<Destination = undefined>(
         if (captureDestination) {
           context.destination = captureDestination(event)
         }
+        const preparationConsumer =
+          typeof consumer === 'function' ? consumer(context.destination) : consumer
         const queueDelivery = (
           prepared: PreparedDroppedPaths | Promise<PreparedDroppedPaths>
         ): void => {
@@ -191,7 +193,10 @@ export function useOsFileDropOwner<Destination = undefined>(
         const preparation = (async (): Promise<PreparedDroppedPaths> => {
           let prepared: PreparedDroppedPaths
           try {
-            prepared = await window.api.fs.prepareDroppedPaths({ paths, consumer })
+            prepared = await window.api.fs.prepareDroppedPaths({
+              paths,
+              consumer: preparationConsumer
+            })
           } catch {
             prepared = {
               paths: [],

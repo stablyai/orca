@@ -22,7 +22,8 @@ import {
   THREAD,
   NOW,
   ATTENTION_READ,
-  REWIND_METHOD
+  REWIND_METHOD,
+  ITEM_DETAIL_METHOD
 } from './structured-agent-session-surface-calls'
 
 export {
@@ -33,6 +34,7 @@ export {
   ATTENTION_READ,
   REWIND_METHOD,
   CONVERSATION_OUTLINE_METHOD,
+  ITEM_DETAIL_METHOD,
   STATUS_FEED_METHOD,
   TURN_COMPLETION_FEED_METHOD,
   STRUCTURED_CALLS
@@ -108,14 +110,16 @@ export function createIntentParams(): Record<string, unknown> {
 export function sendParams(
   text: string,
   fence: number,
-  sentDelivery?: 'queue-if-active'
+  sentDelivery?: 'queue-if-active',
+  options?: Readonly<Record<string, string>>
 ): Record<string, unknown> {
   return structuredAgentSessionMessageSendMutation({
     sessionId: SESSION,
     clientOperationId: operationId(),
     expectedRuntimeFence: fence,
     body: structuredAgentSessionSendBody(text, []),
-    ...(sentDelivery ? { delivery: sentDelivery } : {})
+    ...(sentDelivery ? { delivery: sentDelivery } : {}),
+    ...(options ? { options } : {})
   })
 }
 
@@ -178,6 +182,8 @@ export function paramsFor(method: string): unknown {
     }
     case 'agentSession.history':
       return { sessionId: SESSION, direction: 'tail' }
+    case ITEM_DETAIL_METHOD:
+      return { sessionId: SESSION, itemId: 'item-1' }
     case 'agentSession.sleepWorkspace':
       return { workspaceId: WORKSPACE }
     case 'agentSession.currentRequests':

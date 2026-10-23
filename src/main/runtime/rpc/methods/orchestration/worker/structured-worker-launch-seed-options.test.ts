@@ -71,7 +71,8 @@ describe('the create the seed options land in', () => {
       runtime: {
         resolveStructuredAgentSessionCreateIntent: async () => settingsResolved
       } as never,
-      ensureHost: async () => ({}) as never,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this prepare path touches only host.deps.modelCatalog, absent here, so options pass through unchecked.
+      ensureHost: async () => ({ deps: {} }) as never,
       envelope: {
         sessionId: 'sess_1',
         clientOperationId: 'op_1',
@@ -124,7 +125,8 @@ describe('a new Claude chat seeded from a remembered model the saved listing no 
     expect(read).toHaveBeenCalledWith({
       agent: 'claude',
       workspacePath: '/repo/wt',
-      savedOnly: true
+      savedOnly: true,
+      verifiedOnly: true
     })
   })
 })

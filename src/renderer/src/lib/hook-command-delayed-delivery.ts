@@ -1,4 +1,9 @@
 import { useAppStore } from '@/store'
+import {
+  selectDetectedWorktreesByRepo,
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspace-record-selectors'
 
 type AppStoreSnapshot = ReturnType<typeof useAppStore.getState>
 
@@ -45,26 +50,26 @@ function ensurePendingHookCommandSubscription(): void {
   // Capture references so unrelated PTY/status updates do not rescan every
   // runtime worktree waiting for its first mirrored terminal tab.
   let previousTabsByWorktree = initial.tabsByWorktree
-  let previousWorktreesByRepo = initial.worktreesByRepo
-  let previousDetectedWorktreesByRepo = initial.detectedWorktreesByRepo
-  let previousFolderWorkspaces = initial.folderWorkspaces
+  let previousWorktreesByRepo = selectWorktreesByRepo(initial)
+  let previousDetectedWorktreesByRepo = selectDetectedWorktreesByRepo(initial)
+  let previousFolderWorkspaces = selectFolderWorkspaces(initial)
   let previousWorktreeLookup = initial.getKnownWorktreeById
   unsubscribePendingHookCommandDeliveries = useAppStore.subscribe((state) => {
     // Why: only these slices (or the test-adapter lookup itself) can change
     // whether a pending worktree exists or has received its first tab.
     if (
       state.tabsByWorktree === previousTabsByWorktree &&
-      state.worktreesByRepo === previousWorktreesByRepo &&
-      state.detectedWorktreesByRepo === previousDetectedWorktreesByRepo &&
-      state.folderWorkspaces === previousFolderWorkspaces &&
+      selectWorktreesByRepo(state) === previousWorktreesByRepo &&
+      selectDetectedWorktreesByRepo(state) === previousDetectedWorktreesByRepo &&
+      selectFolderWorkspaces(state) === previousFolderWorkspaces &&
       state.getKnownWorktreeById === previousWorktreeLookup
     ) {
       return
     }
     previousTabsByWorktree = state.tabsByWorktree
-    previousWorktreesByRepo = state.worktreesByRepo
-    previousDetectedWorktreesByRepo = state.detectedWorktreesByRepo
-    previousFolderWorkspaces = state.folderWorkspaces
+    previousWorktreesByRepo = selectWorktreesByRepo(state)
+    previousDetectedWorktreesByRepo = selectDetectedWorktreesByRepo(state)
+    previousFolderWorkspaces = selectFolderWorkspaces(state)
     previousWorktreeLookup = state.getKnownWorktreeById
     flushPendingHookCommandDeliveries()
   })

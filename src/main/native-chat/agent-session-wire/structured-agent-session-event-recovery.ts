@@ -1,7 +1,6 @@
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import type { StructuredAgentSessionLifecycleEvent } from './structured-agent-session-adapter'
 import { holdUnsentSends } from '../agent-session-journal/journal-unsent-send-hold'
-import { structuredAgentSessionHostInstance } from './structured-agent-session-queued-pause'
 import { stopAgentSessionProviderRoot } from './structured-agent-session-provider-exit-proof'
 import type {
   StructuredAgentSessionHostDeps,
@@ -10,10 +9,7 @@ import type {
   StructuredAgentSessionProviderChildIdentity
 } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionSinkBarrier } from './structured-agent-session-event-sink'
-import {
-  settleStructuredAgentSessionOptionsReported,
-  settleStructuredAgentSessionProviderStarted
-} from './structured-agent-session-provider-started'
+import { settleStructuredAgentSessionOptionsReported } from './structured-agent-session-provider-started'
 import {
   endExitedStructuredAgentSessionChildUnderSerialize,
   settleStructuredAgentSessionChildExit,
@@ -46,7 +42,8 @@ export class StructuredAgentSessionEventRecovery {
       failStartingChild: (
         sessionId: string,
         child: StructuredAgentSessionProviderChildIdentity,
-        error: unknown
+        error: unknown,
+        openMs: number
       ) => Promise<void>
       trackOpen: <T>(open: Promise<T>) => Promise<T>
     }
@@ -67,15 +64,11 @@ export class StructuredAgentSessionEventRecovery {
       ...this.context,
       logger: deps.logger,
       startupAttempts: runtimeState.startupAttempts,
+      startFlights: runtimeState.startFlights,
       holdUnrunSends: async (sessionId, fence, cause) => {
         const journal = this.context.sessions.get(sessionId)?.journal
         if (journal) {
-          await holdUnsentSends(journal, {
-            fence,
-            hostInstance: structuredAgentSessionHostInstance(),
-            hold: { cause },
-            unrun: true
-          })
+          await holdUnsentSends(journal, { fence, hold: { cause }, unrun: true })
         }
       },
       route: {
@@ -96,22 +89,28 @@ export class StructuredAgentSessionEventRecovery {
     endExitedStructuredAgentSessionChildUnderSerialize(this.exitContext, sessionId, child, exit)
 
   recoverAfterSinkFailure(sessionId: string, error: unknown): void {
-    if (this.sinkFailures.has(sessionId)) {
+    const child = this.context.sessions.get(sessionId)?.child
+    const heldAtFailure = new Set(child?.heldSends?.())
+    if (!child || this.sinkFailures.has(sessionId)) {
       return
     }
     this.sinkFailures.add(sessionId)
     void this.context
       .serialize(sessionId, async () => {
-        const child = this.context.sessions.get(sessionId)?.child
         const stop =
           this.context.deps.adapter.forceCloseSession ?? this.context.deps.adapter.closeSession
-        if (!child || !stop || !(await stopAgentSessionProviderRoot(() => stop(sessionId)))) {
+        if (
+          this.context.sessions.get(sessionId)?.child !== child ||
+          !stop ||
+          !(await stopAgentSessionProviderRoot(() => stop(sessionId)))
+        ) {
           return
         }
         // Ended in the same step as the stop, so no report of that close can end it first as a
         // quiet rest: Orca stopped the provider because its own journal failed.
         await this.endExitedChildUnderSerialize(sessionId, child, {
           expected: false,
+          heldSends: heldAtFailure,
           reason: `journal sink failure: ${error instanceof Error ? error.message : String(error)}`,
           failure: agentSessionFailureFact('hostFault')
         })
@@ -133,9 +132,6 @@ export class StructuredAgentSessionEventRecovery {
    *  nothing restarts the child. The next send does, through the delivery loop, which also owns any
    *  message still queued. */
   async handle(event: StructuredAgentSessionLifecycleEvent): Promise<void> {
-    if (event.type === 'started') {
-      return settleStructuredAgentSessionProviderStarted(this.context, event)
-    }
     if (event.type === 'options-reported') {
       return settleStructuredAgentSessionOptionsReported(this.context, event)
     }

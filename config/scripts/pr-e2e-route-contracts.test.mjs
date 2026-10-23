@@ -16,6 +16,7 @@ import { testImportClosure } from './e2e-test-import-closure.mjs'
 import { isLayoutOracleSource, LAYOUT_ORACLE_E2E_SPECS } from './pr-layout-oracle-route.mjs'
 import {
   hasNativeImeSourceChange,
+  MANUAL_ONLY_E2E_SPECS,
   PR_E2E_SOURCE_ROUTES,
   selectPrE2eSpecs,
   shouldRunReusablePrE2e
@@ -396,14 +397,16 @@ describe('orcad-e2e-routing', () => {
     expect(jobs['orcad-ssh-docker'].needs).toEqual(['build'])
   })
 
-  it('runs every managed-SSH spec in one sharded lane, only when one is routed', () => {
+  it('passes the requested managed-SSH specs to the sharded lane', () => {
     const lane = jobs['orcad-ssh-docker']
     expect(lane.if).toBe(
       `inputs.test_files == '' || contains(inputs.test_files, '${MANAGED_SSH_E2E_SPEC_PREFIX}')`
     )
-    expect(lane.strategy.matrix.shard).toEqual(['1/2', '2/2'])
+    expect(lane.strategy.matrix.shard).toBe(
+      `\${{ fromJSON(inputs.managed_ssh_shards || '["1/2","2/2"]') }}`
+    )
     const run = lane.steps.find((step) => step.env?.ORCA_E2E_SSH_DOCKER === '1').run
-    expect(run).toContain(` ${MANAGED_SSH_E2E_SPEC_PREFIX} `)
+    expect(run).toContain('"${TEST_FILES[@]}"')
     expect(run).toContain('--shard="$SHARD"')
     for (const spec of [
       ORCAD_AUTO_CONVERT_E2E_SPEC,
@@ -494,7 +497,9 @@ describe('managed-SSH remote sources routing', () => {
       .filter((name) => /^ssh-orcad-.*\.spec\.ts$/.test(name))
       .map((name) => `tests/e2e/${name}`)
     expect(specs.length).toBeGreaterThan(0)
-    expect(specs.filter((spec) => !routed.has(spec))).toEqual([])
+    expect(
+      specs.filter((spec) => !routed.has(spec) && !MANUAL_ONLY_E2E_SPECS.includes(spec))
+    ).toEqual([])
   })
 
   it('starts the lane for remote product sources no hand-kept route names', () => {
@@ -511,7 +516,11 @@ describe('managed-SSH remote sources routing', () => {
       // #30047 and #30060: sidebar sleep and project removal.
       'src/renderer/src/components/sidebar/sleep-worktree-flow.ts',
       'src/renderer/src/components/sidebar/ssh-host-remove-resolution.ts',
-      'src/renderer/src/store/repos/repo-removal.ts'
+      'src/renderer/src/store/repos/repo-removal.ts',
+      // #30775: the pane banner for a managed server that refused this desktop.
+      'src/renderer/src/components/terminal-pane/TerminalRemoteRuntimeReconnectBanner.tsx',
+      'src/renderer/src/components/terminal-pane/use-managed-pairing-refused.ts',
+      'src/renderer/src/components/terminal-pane/TerminalPaneRuntimePortals.tsx'
     ]) {
       expect(existsSync(join(projectDir, file)), file).toBe(true)
       expect(selectsManagedSshLane(file), file).toBe(true)

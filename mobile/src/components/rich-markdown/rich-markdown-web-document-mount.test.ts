@@ -17,7 +17,7 @@ import type { MobileRichMarkdownEditorMessage } from '../mobile-rich-markdown-ed
  * reporting into a host that has gone.
  *
  * What a browser makes of the sheet is not a question this environment can answer and is measured
- * in `config/scripts/mobile-web-app-rich-markdown-render.test.mjs` instead.
+ * in `config/scripts/mobile-web-app/mobile-web-app-rich-markdown-render.test.mjs` instead.
  */
 const mounted: RichMarkdownWebDocument[] = []
 

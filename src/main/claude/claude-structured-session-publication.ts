@@ -18,6 +18,7 @@ export function createClaudeSessionPublication(input: {
   acquisitionGeneration: string
   /** The record's chain already heads this provider session: the link resumes, never creates. */
   continuesChain: boolean
+  forkedFromKey?: string
   prompts: ClaudePromptRegistry
   translator: ClaudeJournalTranslator | null
   events: ClaudeSession['events']
@@ -32,6 +33,7 @@ export function createClaudeSessionPublication(input: {
     sessionId: input.providerSessionId,
     leafUuid: input.leafUuid,
     resumed: input.continuesChain,
+    ...(input.forkedFromKey ? { forkedFromKey: input.forkedFromKey } : {}),
     fence: input.fence,
     ...(input.linkId ? { linkId: input.linkId } : {}),
     observedAt: input.observedAt
@@ -63,7 +65,10 @@ export function createClaudeSessionPublication(input: {
       reportedOptions: {},
       reportedModelMutation: 0,
       confirmedOptions: new Set(),
-      restoreSkippedOptions: new Set(),
+      // Only choices carried in this child's launch can skip their first write.
+      appliedInputOptions: new Map(
+        [...(input.options ?? [])].filter(([key]) => key === 'model' || key === 'effort')
+      ),
       launchedModel: null,
       fastModeAtStart: false,
       translator: input.translator,

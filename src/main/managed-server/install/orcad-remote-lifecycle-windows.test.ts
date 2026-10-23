@@ -16,8 +16,8 @@ vi.mock('./remote-install-lock', () => ({
   RELAY_INSTALL_LOCK_NAME: '.install-lock'
 }))
 vi.mock('./remote-install-transfers', () => ({
-  uploadRelayDirectory: vi.fn().mockResolvedValue(undefined),
-  writeRelayFile: vi.fn().mockResolvedValue(undefined)
+  uploadRemoteInstallDirectory: vi.fn().mockResolvedValue(undefined),
+  writeRemoteInstallFile: vi.fn().mockResolvedValue(undefined)
 }))
 vi.mock('./orcad-remote-record-file', async (importOriginal) => ({
   ...(await importOriginal<typeof RecordFile>()),
@@ -159,6 +159,7 @@ function scriptWindowsHost(log: string[], activeRecord: string | null = null): v
 }
 
 function options(): OrcadDeployOptions {
+  const census = { liveSessions: 0, startedSinceActivation: 0, daemonProtocolVersion: 3 }
   return {
     conn: Object.assign(Object.create(null), { writeFile: vi.fn().mockResolvedValue(undefined) }),
     host,
@@ -169,7 +170,9 @@ function options(): OrcadDeployOptions {
     userDataDir: 'C:/Users/u/.orca',
     bindHost: '127.0.0.1',
     port: 7777,
-    census: { liveSessions: 0, startedSinceActivation: 0, daemonProtocolVersion: 3 },
+    census,
+    recountCensus: async () => census,
+    releaseIncumbentAdmission: async () => {},
     readinessTimeoutMs: 1_000,
     sleep: async () => {},
     now: () => new Date('2026-10-02T00:00:00.000Z')

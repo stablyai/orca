@@ -1,4 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { delimiter, join } from 'node:path'
 import { openCodexAppServerConnection } from './codex-app-server-connection'
 import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../shared/agent-session-caller-env'
 import { sealStructuredSessionChild } from '../runtime/structured-session-child-env'
@@ -20,7 +23,8 @@ const DEV_CLI_LAUNCHER = /^[^:;]*[\\/]cli[\\/]bin[\\/]orca-dev$/
 /** The sealed env a Codex launch of `sessionId` spawns with, over a shell env of `env`. */
 async function codexChildEnv(
   env: Record<string, string>,
-  sessionId: string
+  sessionId: string,
+  command = 'codex'
 ): Promise<Record<string, string>> {
   const record = agentSessionRecordFixture({
     sessionId,
@@ -30,7 +34,7 @@ async function codexChildEnv(
   const launch = await createCodexStructuredLaunchResolver({
     store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
     resolveEnvironment: async () => env,
-    resolveCommand: () => 'codex',
+    resolveCommand: () => command,
     resolveLaunchArgs: () => []
   })({
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a launch reads only the session id of its identity here.
@@ -150,6 +154,42 @@ describe('the spawned Codex child', () => {
   afterEach(() => {
     vi.unstubAllEnvs()
   })
+
+  it.skipIf(process.platform === 'win32')(
+    'starts the persistent shebang CLI with its sibling Node over a competing PATH runtime',
+    async () => {
+      const root = mkdtempSync(join(tmpdir(), 'orca-codex-shebang-'))
+      try {
+        const selectedBin = join(root, 'selected', 'bin')
+        const competingBin = join(root, 'other', 'bin')
+        mkdirSync(selectedBin, { recursive: true })
+        mkdirSync(competingBin, { recursive: true })
+        symlinkSync(process.execPath, join(selectedBin, 'node'))
+        writeFileSync(join(competingBin, 'node'), '#!/bin/sh\nexit 79\n', { mode: 0o755 })
+        const command = join(selectedBin, 'codex')
+        writeFileSync(command, `#!/usr/bin/env node\n${ENV_REPORTING_APP_SERVER}`, { mode: 0o755 })
+        const env = await codexChildEnv({ PATH: competingBin }, 'shebang-session', command)
+        const connection = await openCodexAppServerConnection({
+          command,
+          args: ['app-server'],
+          cwd: root,
+          env
+        })
+        try {
+          await expect(connection.request('test/env')).resolves.toMatchObject({
+            sessionId: 'shebang-session',
+            path: expect.stringMatching(DEV_CLI_BIN_FIRST),
+            cliCommand: expect.stringMatching(DEV_CLI_LAUNCHER)
+          })
+          expect(env.PATH.split(delimiter).slice(1)).toEqual([selectedBin, competingBin])
+        } finally {
+          await connection.close()
+        }
+      } finally {
+        rmSync(root, { recursive: true, force: true })
+      }
+    }
+  )
 
   it("runs with its own session id and this app's CLI, over an id inherited by Orca itself", async () => {
     // The builder's output is an overlay on process.env, so only the spawned child proves the id

@@ -1,7 +1,36 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+// @vitest-environment happy-dom
+
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
 import type { OpenFilePathRekey } from './editor'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { drawTabsFromMain, type TabsDrawnFromMain } from './tabs-drawn-from-main.test-fixture'
+
+// Switch on: main renames the tabs, and its frame rekeys the content (T1 transport, apply mode).
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await importOriginal())
+)
+
+let main: TabsDrawnFromMain
+
+/** The rekey once every open is drawn, then main's answer and the frame that carries it. */
+async function rekey(
+  args: Parameters<AppState['rekeyOpenFilesForPathChange']>[0]
+): Promise<ReturnType<AppState['rekeyOpenFilesForPathChange']>> {
+  await main.settle()
+  const result = useAppStore.getState().rekeyOpenFilesForPathChange(args)
+  await main.settle()
+  return result
+}
 
 // Stage-1 foundation: rekeyOpenFilesForPathChange atomically retargets an open
 // edit session across an Orca-owned move (no close/reopen), preserving all
@@ -45,16 +74,19 @@ function rekeyFor(oldId: string, newPath: string, newRel: string): OpenFilePathR
 }
 
 describe('rekeyOpenFilesForPathChange', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     useAppStore.setState(useAppStore.getInitialState(), true)
+    main = await drawTabsFromMain(useAppStore)
   })
 
-  it('retargets the session preserving draft, dirty, baseline, cursor, view, active, tab bar', () => {
+  afterEach(() => main.close())
+
+  it('retargets the session preserving draft, dirty, baseline, cursor, view, active, tab bar', async () => {
     seedEditTab()
     const oldId = useAppStore.getState().openFiles[0]!.id
     const newPath = '/repo/sub/a.md'
 
-    const result = useAppStore.getState().rekeyOpenFilesForPathChange({
+    const result = await rekey({
       rekeys: [rekeyFor(oldId, newPath, 'sub/a.md')]
     })
 
@@ -77,43 +109,49 @@ describe('rekeyOpenFilesForPathChange', () => {
     expect(s.tabBarOrderByWorktree['wt-1']).toEqual([newPath])
   })
 
-  it('migrates unified tab entityId/id and group order', () => {
+  it('migrates unified tab entityId/id and group order', async () => {
     seedEditTab()
+    await main.settle()
     const oldId = useAppStore.getState().openFiles[0]!.id
-    const tab: Tab = {
-      id: oldId,
-      entityId: oldId,
-      contentType: 'editor',
-      groupId: 'g1',
-      title: 'a.md'
-    } as never
-    const group: TabGroup = {
-      id: 'g1',
-      tabOrder: [oldId],
-      activeTabId: oldId,
-      recentTabIds: [oldId]
-    } as never
-    useAppStore.setState({
-      unifiedTabsByWorktree: { 'wt-1': [tab] },
-      groupsByWorktree: { 'wt-1': [group] }
-    } as never)
+    // Switch on, main's frame drew the tab under its own id; off, a tab keyed by its file's id.
+    if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
+      const tab: Tab = {
+        id: oldId,
+        entityId: oldId,
+        contentType: 'editor',
+        groupId: 'g1',
+        title: 'a.md'
+      } as never
+      const group: TabGroup = {
+        id: 'g1',
+        tabOrder: [oldId],
+        activeTabId: oldId,
+        recentTabIds: [oldId]
+      } as never
+      useAppStore.setState({
+        unifiedTabsByWorktree: { 'wt-1': [tab] },
+        groupsByWorktree: { 'wt-1': [group] }
+      } as never)
+    }
+    const tabBefore = useAppStore.getState().unifiedTabsByWorktree['wt-1']![0]!
     const newPath = '/repo/sub/a.md'
+    const movedTabId = tabBefore.id === oldId ? newPath : tabBefore.id
 
-    useAppStore.getState().rekeyOpenFilesForPathChange({
+    await rekey({
       rekeys: [rekeyFor(oldId, newPath, 'sub/a.md')]
     })
 
     const s = useAppStore.getState()
     const movedTab = s.unifiedTabsByWorktree['wt-1']![0]!
     expect(movedTab.entityId).toBe(newPath)
-    expect(movedTab.id).toBe(newPath)
+    expect(movedTab.id).toBe(movedTabId)
     const movedGroup = s.groupsByWorktree['wt-1']![0]!
-    expect(movedGroup.tabOrder).toEqual([newPath])
-    expect(movedGroup.activeTabId).toBe(newPath)
-    expect(movedGroup.recentTabIds).toEqual([newPath])
+    expect(movedGroup.tabOrder).toEqual([movedTabId])
+    expect(movedGroup.activeTabId).toBe(movedTabId)
+    expect(movedGroup.recentTabIds).toEqual([movedTabId])
   })
 
-  it('rejects a collision with a distinct live session and mutates nothing', () => {
+  it('rejects a collision with a distinct live session and mutates nothing', async () => {
     seedEditTab()
     const oldId = useAppStore.getState().openFiles[0]!.id
     // A second, unrelated open tab already lives at the destination id.
@@ -130,7 +168,7 @@ describe('rekeyOpenFilesForPathChange', () => {
     )
     const before = useAppStore.getState().openFiles.map((f) => f.id)
 
-    const result = useAppStore.getState().rekeyOpenFilesForPathChange({
+    const result = await rekey({
       rekeys: [rekeyFor(oldId, '/repo/sub/a.md', 'sub/a.md')]
     })
 
@@ -138,11 +176,11 @@ describe('rekeyOpenFilesForPathChange', () => {
     expect(useAppStore.getState().openFiles.map((f) => f.id)).toEqual(before)
   })
 
-  it('reports stale when a source id is no longer open, mutating nothing', () => {
+  it('reports stale when a source id is no longer open, mutating nothing', async () => {
     seedEditTab()
     const before = useAppStore.getState().openFiles.map((f) => f.id)
 
-    const result = useAppStore.getState().rekeyOpenFilesForPathChange({
+    const result = await rekey({
       rekeys: [rekeyFor('editor:gone', '/repo/sub/a.md', 'sub/a.md')]
     })
 
@@ -150,7 +188,7 @@ describe('rekeyOpenFilesForPathChange', () => {
     expect(useAppStore.getState().openFiles.map((f) => f.id)).toEqual(before)
   })
 
-  it('consumes untitled status on an explicit rename', () => {
+  it('consumes untitled status on an explicit rename', async () => {
     const state = useAppStore.getState()
     state.openFile(
       {
@@ -166,7 +204,7 @@ describe('rekeyOpenFilesForPathChange', () => {
     )
     const oldId = useAppStore.getState().openFiles[0]!.id
 
-    useAppStore.getState().rekeyOpenFilesForPathChange({
+    await rekey({
       rekeys: [
         {
           oldFileId: oldId,
@@ -184,52 +222,44 @@ describe('rekeyOpenFilesForPathChange', () => {
     expect(moved.filePath).toBe('/repo/named.md')
   })
 
-  it('installs the move-echo gate + provenance on a dirty destination when moveOperationId is set', () => {
+  it('installs the move-echo provenance on a dirty destination when moveOperationId is set', async () => {
     seedEditTab()
     const oldId = useAppStore.getState().openFiles[0]!.id
     const newPath = '/repo/sub/a.md'
 
-    useAppStore.getState().rekeyOpenFilesForPathChange({
+    await rekey({
       rekeys: [rekeyFor(oldId, newPath, 'sub/a.md')],
       moveOperationId: 'op-42'
     })
 
     const moved = useAppStore.getState().openFiles[0]!
-    // Autosave is gated synchronously by the same commit that re-homes the tab.
-    expect(moved.pendingLiveDiskVerification).toBe(true)
     expect(moved.pendingSelfMoveEcho).toEqual({ operationId: 'op-42', targetPath: newPath })
   })
 
-  it('does not gate a tab already showing the changed-on-disk banner', () => {
+  it('does not verify a tab already showing the changed-on-disk banner', async () => {
     seedEditTab()
     const oldId = useAppStore.getState().openFiles[0]!.id
-    // A dirty tab that already conflicts with disk: autosave is suspended by the
-    // banner; gating it would strand the gate (verification skips a 'changed' tab).
-    useAppStore.setState((s) => ({
-      openFiles: s.openFiles.map((f) =>
-        f.id === oldId ? { ...f, externalMutation: 'changed' as const } : f
-      )
-    }))
+    // A dirty tab that already conflicts with disk keeps its banner.
+    useAppStore.getState().setExternalMutation(oldId, 'changed')
 
-    useAppStore.getState().rekeyOpenFilesForPathChange({
+    await rekey({
       rekeys: [rekeyFor(oldId, '/repo/sub/a.md', 'sub/a.md')],
       moveOperationId: 'op-42'
     })
 
     const moved = useAppStore.getState().openFiles[0]!
     expect(moved.externalMutation).toBe('changed')
-    expect(moved.pendingLiveDiskVerification).toBeUndefined()
     expect(moved.pendingSelfMoveEcho).toBeUndefined()
   })
 
-  it('migrates a pending editor reveal keyed by fileId to the new tab id', () => {
+  it('migrates a pending editor reveal keyed by fileId to the new tab id', async () => {
     seedEditTab()
     const oldId = useAppStore.getState().openFiles[0]!.id
     useAppStore.setState({
       pendingEditorReveal: { fileId: oldId, filePath: '/repo/a.md', line: 40, requestId: 1 }
     } as never)
 
-    useAppStore.getState().rekeyOpenFilesForPathChange({
+    await rekey({
       rekeys: [rekeyFor(oldId, '/repo/sub/a.md', 'sub/a.md')]
     })
 
@@ -238,22 +268,21 @@ describe('rekeyOpenFilesForPathChange', () => {
     expect(reveal.filePath).toBe('/repo/sub/a.md')
   })
 
-  it('does not gate a clean destination', () => {
+  it('does not verify a clean destination', async () => {
     seedEditTab()
     const oldId = useAppStore.getState().openFiles[0]!.id
     useAppStore.getState().markFileDirty(oldId, false)
 
-    useAppStore.getState().rekeyOpenFilesForPathChange({
+    await rekey({
       rekeys: [rekeyFor(oldId, '/repo/sub/a.md', 'sub/a.md')],
       moveOperationId: 'op-42'
     })
 
     const moved = useAppStore.getState().openFiles[0]!
-    expect(moved.pendingLiveDiskVerification).toBeUndefined()
     expect(moved.pendingSelfMoveEcho).toBeUndefined()
   })
 
-  it('detaches a moved tab from the host mirror so the snapshot cannot cull it', () => {
+  it('detaches a moved tab from the host mirror so the snapshot cannot cull it', async () => {
     seedEditTab()
     const oldId = useAppStore.getState().openFiles[0]!.id
     useAppStore.setState((s) => ({
@@ -262,14 +291,14 @@ describe('rekeyOpenFilesForPathChange', () => {
       )
     }))
 
-    useAppStore.getState().rekeyOpenFilesForPathChange({
+    await rekey({
       rekeys: [rekeyFor(oldId, '/repo/sub/a.md', 'sub/a.md')]
     })
 
     expect(useAppStore.getState().openFiles[0]!.mirroredFromRuntimeSession).toBeUndefined()
   })
 
-  it('leaves a reveal keyed by another worktree file id untouched when only the path matches', () => {
+  it('leaves a reveal keyed by another worktree file id untouched when only the path matches', async () => {
     seedEditTab()
     // A same-path tab in a second worktree: the reveal belongs to it, not to the rekeyed tab.
     useAppStore.getState().openFile(
@@ -290,7 +319,7 @@ describe('rekeyOpenFilesForPathChange', () => {
       pendingEditorReveal: { fileId: otherWorktreeId, filePath: '/repo/a.md', line: 40 }
     } as never)
 
-    const result = useAppStore.getState().rekeyOpenFilesForPathChange({
+    const result = await rekey({
       rekeys: [rekeyFor(rekeyedId, '/repo/sub/a.md', 'sub/a.md')]
     })
 
@@ -303,14 +332,14 @@ describe('rekeyOpenFilesForPathChange', () => {
     expect(reveal.filePath).toBe('/repo/a.md')
   })
 
-  it('migrates a pending editor reveal to the new path', () => {
+  it('migrates a pending editor reveal to the new path', async () => {
     seedEditTab()
     const oldId = useAppStore.getState().openFiles[0]!.id
     useAppStore.setState({
       pendingEditorReveal: { filePath: '/repo/a.md', requestId: 1 }
     } as never)
 
-    useAppStore.getState().rekeyOpenFilesForPathChange({
+    await rekey({
       rekeys: [rekeyFor(oldId, '/repo/sub/a.md', 'sub/a.md')]
     })
 

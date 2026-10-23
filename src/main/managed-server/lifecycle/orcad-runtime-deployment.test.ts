@@ -7,7 +7,7 @@ import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../../shared/pairi
 import { getManagedOrcadFenceEnvironmentId } from '../../../shared/managed-orcad-ssh-owner'
 import { writeOrcadMigrationSourceCutover } from '../../ssh/orcad-migration-cutover-journal'
 import { orcadMigrationCutoverFixture } from '../../ssh/orcad-migration-cutover-fixture'
-import { listEnvironments } from '../../../shared/runtime-environment-store'
+import { listEnvironments, resolveEnvironment } from '../../../shared/runtime-environment-store'
 import type { SshTarget } from '../../../shared/ssh-types'
 import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
 import { SshTargetOrcadClaims } from '../../ssh/targets/ssh-target-orcad-claims'
@@ -127,6 +127,7 @@ let flushes: number
 
 function setupStore(overrides: { repos?: { connectionId: string }[] } = {}) {
   const store = {
+    ...emptyDependentStateStore(),
     allocateSshTargetGeneration: () => 9,
     flushPendingOrThrowAsync: async () => {
       flushes += 1
@@ -134,7 +135,6 @@ function setupStore(overrides: { repos?: { connectionId: string }[] } = {}) {
     },
     getFolderWorkspaces: () => [],
     getRepos: () => overrides.repos ?? [],
-    ...emptyDependentStateStore(),
     getSshTarget: (id: string) => (id === target.id ? target : undefined),
     getSshTargets: () => [target],
     updateSshTarget: (_id: string, updates: Partial<SshTarget>) => {
@@ -174,7 +174,7 @@ beforeEach(() => {
   mocks.probe.mockResolvedValue(readiness())
   mocks.startTunnel.mockResolvedValue(46_768)
   mocks.closeTunnel.mockResolvedValue(undefined)
-  mocks.ensureTunnel.mockResolvedValue(undefined)
+  mocks.ensureTunnel.mockImplementation(resolveEnvironment)
   mocks.localVersion.mockReturnValue(VERSION)
   mocks.wake.mockResolvedValue({ outcome: 'serving' })
 })
@@ -568,13 +568,13 @@ describe('createManagedOrcadEnvironment', () => {
 
   it('does not contact the host when the claim cannot be made durable', async () => {
     const claims = new SshTargetOrcadClaims({
+      ...emptyDependentStateStore(),
       allocateSshTargetGeneration: () => 9,
       flushPendingOrThrowAsync: async () => {
         throw new Error('disk full')
       },
       getFolderWorkspaces: () => [],
       getRepos: () => [],
-      ...emptyDependentStateStore(),
       getSshTarget: () => target,
       getSshTargets: () => [target],
       updateSshTarget: (_id, updates) => (target = { ...target, ...updates })

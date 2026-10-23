@@ -1,3 +1,5 @@
+import { ownRetainedString } from './own-retained-string'
+
 export const NDJSON_MAX_LINE_BYTES = 16 * 1024 * 1024
 
 const REJECTED_LINE_PREFIX_MAX_BYTES = 64 * 1024
@@ -21,6 +23,7 @@ export type NdjsonRejectedRecord =
       maxLineBytes: number
       observedBytes: number
       prefix: string
+      droppedCompleteRecords?: true
     }
   | { kind: 'invalid-json'; line: string; error: Error }
 
@@ -35,10 +38,6 @@ export type IncrementalNdjsonFramer = {
 export type IncrementalNdjsonFramerOptions = {
   maxLineBytes?: number
   shouldPause?: () => boolean
-}
-
-function errorFrom(value: unknown): Error {
-  return value instanceof Error ? value : new Error(String(value))
 }
 
 function boundedUtf8Prefix(value: string, maxBytes: number): string {
@@ -58,6 +57,11 @@ function boundedUtf8Prefix(value: string, maxBytes: number): string {
   return value.slice(0, low)
 }
 
+// Why: a strict slice is a V8 SlicedString that pins all of `source`; the whole string needs no copy.
+function detachFrom(part: string, source: string): string {
+  return part.length === source.length ? part : ownRetainedString(part)
+}
+
 /** Incremental main-process NDJSON framing with bounded unterminated-line retention. */
 export function createIncrementalNdjsonFramer(
   onRecord: (record: unknown, line: string) => void,
@@ -73,6 +77,7 @@ export function createIncrementalNdjsonFramer(
   let prefixSegments: string[] = []
   let prefixBytes = 0
   let discardingOversizedLine = false
+  let discardingPausedSuffix = false
   let pendingInput: string | null = null
   let pausedCompleteInput: string[] = []
   let pausedCompleteInputBytes = 0
@@ -100,7 +105,7 @@ export function createIncrementalNdjsonFramer(
     prefixBytes += prefix === segment ? segmentBytes : Buffer.byteLength(prefix, 'utf8')
   }
 
-  const queuePausedCompleteInput = (complete: string): void => {
+  const queuePausedCompleteInput = (complete: string, source: string): void => {
     if (complete.length === 0 || pausedCompleteInputOverflowed) {
       return
     }
@@ -111,32 +116,39 @@ export function createIncrementalNdjsonFramer(
         kind: 'line-too-long',
         maxLineBytes: maxQueuedCompleteInputBytes,
         observedBytes: pausedCompleteInputBytes + completeBytes,
-        prefix: boundedUtf8Prefix(complete, REJECTED_LINE_PREFIX_MAX_BYTES)
+        droppedCompleteRecords: true,
+        prefix: ownRetainedString(boundedUtf8Prefix(complete, REJECTED_LINE_PREFIX_MAX_BYTES))
       })
       return
     }
-    pausedCompleteInput.push(complete)
+    pausedCompleteInput.push(detachFrom(complete, source))
     pausedCompleteInputBytes += completeBytes
   }
 
-  const retainPendingSuffix = (suffix: string): void => {
+  const retainPendingSuffix = (suffix: string, source: string): void => {
     if (suffix.length === 0) {
       pendingInput = null
       return
     }
     const suffixBytes = Buffer.byteLength(suffix, 'utf8')
     if (suffixBytes > maxPendingInputBytes) {
+      pendingInput = null
+      discardingPausedSuffix = true
       onRejected({
         kind: 'line-too-long',
         maxLineBytes: maxPendingInputBytes,
         observedBytes: suffixBytes,
-        prefix: boundedUtf8Prefix(suffix, REJECTED_LINE_PREFIX_MAX_BYTES)
+        prefix: ownRetainedString(boundedUtf8Prefix(suffix, REJECTED_LINE_PREFIX_MAX_BYTES))
       })
-      pendingInput = null
-      discardingOversizedLine = true
       return
     }
-    pendingInput = suffix
+    pendingInput = detachFrom(suffix, source)
+  }
+
+  const retainPausedInput = (input: string, source = input): void => {
+    const newlineIndex = input.lastIndexOf('\n')
+    queuePausedCompleteInput(newlineIndex === -1 ? '' : input.slice(0, newlineIndex + 1), source)
+    retainPendingSuffix(newlineIndex === -1 ? input : input.slice(newlineIndex + 1), source)
   }
 
   const process = (input: string): void => {
@@ -158,21 +170,23 @@ export function createIncrementalNdjsonFramer(
       } else {
         const segmentBytes = unbounded ? 0 : Buffer.byteLength(segment, 'utf8')
         const nextLineBytes = lineBytes + segmentBytes
-        if (!unbounded) {
-          rememberPrefix(segment, segmentBytes)
-        }
         if (nextLineBytes > maxLineBytes) {
+          rememberPrefix(segment, segmentBytes)
           const rejected: NdjsonRejectedRecord = {
             kind: 'line-too-long',
             maxLineBytes,
             observedBytes: nextLineBytes,
-            prefix: prefixSegments.join('')
+            prefix: ownRetainedString(prefixSegments.join(''))
           }
           clearLine()
           discardingOversizedLine = !hasNewline
           onRejected(rejected)
         } else if (!hasNewline) {
-          lineSegments.push(segment)
+          const pending = detachFrom(segment, input)
+          if (!unbounded) {
+            rememberPrefix(pending, segmentBytes)
+          }
+          lineSegments.push(pending)
           lineBytes = nextLineBytes
           return
         } else {
@@ -184,7 +198,11 @@ export function createIncrementalNdjsonFramer(
             try {
               parsed = JSON.parse(line)
             } catch (error) {
-              onRejected({ kind: 'invalid-json', line, error: errorFrom(error) })
+              onRejected({
+                kind: 'invalid-json',
+                line,
+                error: error instanceof Error ? error : new Error(String(error))
+              })
               continue
             }
             onRecord(parsed, line)
@@ -193,12 +211,7 @@ export function createIncrementalNdjsonFramer(
       }
 
       if (options.shouldPause?.() && cursor < input.length) {
-        const remainder = input.slice(cursor)
-        const newlineIndex = remainder.lastIndexOf('\n')
-        const complete = newlineIndex === -1 ? '' : remainder.slice(0, newlineIndex + 1)
-        const suffix = newlineIndex === -1 ? remainder : remainder.slice(newlineIndex + 1)
-        queuePausedCompleteInput(complete)
-        retainPendingSuffix(suffix)
+        retainPausedInput(input.slice(cursor), input)
         return
       }
     }
@@ -206,36 +219,32 @@ export function createIncrementalNdjsonFramer(
 
   return {
     feed(chunk): void {
-      if (chunk.length === 0) {
-        return
-      }
       if (pausedCompleteInputBytes > 0 && !options.shouldPause?.()) {
         const queued = pausedCompleteInput
         pausedCompleteInput = []
         pausedCompleteInputBytes = 0
         process(queued.join(''))
       }
-      if (pendingInput !== null || pausedCompleteInputBytes > 0) {
-        // Complete records are retained as a separate bounded queue. The pending
-        // input limit applies only to the final, actually incomplete record.
-        if (pendingInput === null) {
-          if (options.shouldPause?.()) {
-            const newlineIndex = chunk.lastIndexOf('\n')
-            const complete = newlineIndex === -1 ? '' : chunk.slice(0, newlineIndex + 1)
-            const suffix = newlineIndex === -1 ? chunk : chunk.slice(newlineIndex + 1)
-            queuePausedCompleteInput(complete)
-            retainPendingSuffix(suffix)
-            return
-          }
-          process(chunk)
+      const endedPausedSuffix = discardingPausedSuffix
+      // The dropped tail follows the queued records; only new bytes can finish it.
+      if (discardingPausedSuffix) {
+        const newlineIndex = chunk.indexOf('\n')
+        if (newlineIndex === -1) {
           return
         }
-        const combined = pendingInput + chunk
-        const newlineIndex = combined.lastIndexOf('\n')
-        const complete = newlineIndex === -1 ? '' : combined.slice(0, newlineIndex + 1)
-        const suffix = newlineIndex === -1 ? combined : combined.slice(newlineIndex + 1)
-        queuePausedCompleteInput(complete)
-        retainPendingSuffix(suffix)
+        discardingPausedSuffix = false
+        chunk = chunk.slice(newlineIndex + 1)
+      }
+      if (chunk.length === 0) {
+        return
+      }
+
+      if (pendingInput !== null) {
+        retainPausedInput(pendingInput + chunk)
+        return
+      }
+      if ((pausedCompleteInputBytes > 0 || endedPausedSuffix) && options.shouldPause?.()) {
+        retainPausedInput(chunk)
         return
       }
       process(chunk)
@@ -258,14 +267,18 @@ export function createIncrementalNdjsonFramer(
           // behind any newly queued records so it cannot overtake them.
           const queuedSuffix = pendingInput
           pendingInput = null
-          retainPendingSuffix(`${queuedSuffix ?? ''}${input}`)
+          const suffix = `${queuedSuffix ?? ''}${input}`
+          retainPendingSuffix(suffix, suffix)
         } else {
           process(input)
         }
       }
     },
     takeTail(): string {
-      const tail = discardingOversizedLine ? '' : `${lineSegments.join('')}${pendingInput ?? ''}`
+      const tail =
+        discardingOversizedLine || discardingPausedSuffix
+          ? ''
+          : `${lineSegments.join('')}${pendingInput ?? ''}`
       clearLine()
       pendingInput = null
       return tail
@@ -273,6 +286,7 @@ export function createIncrementalNdjsonFramer(
     reset(): void {
       clearLine()
       discardingOversizedLine = false
+      discardingPausedSuffix = false
       pendingInput = null
       pausedCompleteInput = []
       pausedCompleteInputBytes = 0
@@ -290,14 +304,9 @@ export function encodeNdjson(msg: unknown, maxLineBytes = NDJSON_MAX_LINE_BYTES)
   return `${line}\n`
 }
 
-export type NdjsonParser = {
-  feed(chunk: string): void
-  reset(): void
-}
+export type NdjsonParser = Pick<IncrementalNdjsonFramer, 'feed' | 'reset'>
 
-export type NdjsonParserOptions = {
-  maxLineBytes?: number
-}
+export type NdjsonParserOptions = Pick<IncrementalNdjsonFramerOptions, 'maxLineBytes'>
 
 export function createNdjsonParser(
   onMessage: (msg: unknown) => void,

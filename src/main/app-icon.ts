@@ -5,7 +5,6 @@ import {
 } from 'node:child_process'
 import { dirname, resolve } from 'node:path'
 import { app, BrowserWindow, nativeImage } from 'electron'
-import { is } from '@electron-toolkit/utils'
 import classicIcon from '../../resources/icon.png?asset'
 import classicDevIcon from '../../resources/icon-dev.png?asset'
 import watercolorIcon from '../../resources/app-icons/orca-watercolor.png?asset'
@@ -15,7 +14,7 @@ import blueMacDockIcon from '../../resources/app-icons/orca-blue.png?asset&asarU
 import { normalizeAppIconId, type AppIconId } from '../shared/app-icon'
 
 const APP_ICON_PATHS = {
-  classic: is.dev ? classicDevIcon : classicIcon,
+  classic: !app.isPackaged ? classicDevIcon : classicIcon,
   watercolor: watercolorIcon,
   blue: blueIcon
 } satisfies Record<AppIconId, string>
@@ -261,7 +260,7 @@ function clearMacCustomIconMetadata(execFile: ExecFile, appBundlePath: string): 
 
 export function persistMacDockIcon(value: unknown, options: PersistMacDockIconOptions = {}): void {
   const platform = options.platform ?? process.platform
-  const isDevApp = options.isDevApp ?? (is.dev || !app.isPackaged)
+  const isDevApp = options.isDevApp ?? !app.isPackaged
   if (platform !== 'darwin' || isDevApp) {
     return
   }

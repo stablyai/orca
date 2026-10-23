@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 
 vi.mock('expo-router', () => ({ useFocusEffect: () => {} }))
-vi.mock('react-native', () => ({}))
+vi.mock('react-native', () => ({ AppState: {} }))
 vi.mock('../transport/host-removal-lifecycle', () => ({ removeHostAndCloseClient: async () => {} }))
 vi.mock('../host-route-exit', () => ({ leaveHostRoute: () => {} }))
 vi.mock('../cache/worktree-cache', () => ({
@@ -126,7 +126,7 @@ async function mountScreen(first: RpcClient, hostCapabilities: string[]): Promis
   function Probe(): null {
     const [, setTick] = useState(0)
     rerender = () => setTick((tick) => tick + 1)
-    const state = useHostScreenState('host-1', undefined)
+    const state = useHostScreenState('host-1')
     state.clientRef.current = client
     const catalog = useHostWorktreeCatalog({
       client,

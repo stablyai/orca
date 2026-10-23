@@ -2,13 +2,18 @@
 
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SshTargetCard } from './SshTargetCard'
 import { TooltipProvider } from '../ui/tooltip'
 import type { SshConnectionState, SshTarget } from '../../../../shared/ssh-types'
 
+beforeEach(() => {
+  Object.assign(window, { api: { runtimeEnvironments: {} } })
+})
+
 afterEach(() => {
   document.body.innerHTML = ''
+  Reflect.deleteProperty(window, 'api')
 })
 
 const target: SshTarget = {
@@ -95,5 +100,39 @@ describe('an SSH host its managed server does not serve', () => {
     })
 
     expect(container.textContent).not.toContain('This SSH host isn’t supported')
+  })
+})
+
+describe('the compact SSH host row', () => {
+  it('stays quiet while disconnected and names the key file only', async () => {
+    const container = await renderCard(undefined, {
+      ...target,
+      identityFile: '/Users/me/.ssh/id_ed25519'
+    })
+
+    expect(container.textContent).toContain('deploy@build-01.internal:22 · id_ed25519')
+    expect(container.textContent).not.toContain('Disconnected')
+    expect(container.textContent).toContain('Connect')
+  })
+
+  it('shows a live status and offers Disconnect when connected', async () => {
+    const container = await renderCard({
+      targetId: 'target-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    })
+
+    expect(container.textContent).toContain('Connected')
+    expect(container.textContent).toContain('Disconnect')
+  })
+
+  it('marks a host held by a managed server with a chip', async () => {
+    const container = await renderCard(undefined, {
+      ...target,
+      orcadFence: { environmentId: 'env-1' }
+    })
+
+    expect(container.textContent).toContain('Orca server')
   })
 })

@@ -26,7 +26,8 @@ export type DesktopBrowserBridgeManagerDeps = {
   execute(
     candidate: DesktopBrowserBridgeCandidate,
     request: DesktopBrowserBridgeRequest,
-    signal: AbortSignal
+    signal: AbortSignal,
+    hostRevoked: AbortSignal
   ): Promise<DesktopBrowserBridgeOutcome>
   log(message: string): void
   setTimer?(run: () => void, delayMs: number): ReturnType<typeof setTimeout>
@@ -125,7 +126,8 @@ export class DesktopBrowserBridgeManager {
     }
     const connection = new DesktopBrowserBridgeConnection({
       subscribe: this.deps.subscribe(environmentId),
-      execute: (request, signal) => this.deps.execute(entry.candidate, request, signal),
+      execute: (request, signal, hostRevoked) =>
+        this.deps.execute(entry.candidate, request, signal, hostRevoked),
       onReady: () => {
         entry.failures = 0
         this.deps.log(`attached: host=${entry.candidate.hostLabel} env=${environmentId}`)

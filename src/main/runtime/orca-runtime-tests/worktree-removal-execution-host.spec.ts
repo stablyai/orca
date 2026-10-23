@@ -25,6 +25,7 @@ import {
   _settlePendingWorktreeRemovalsForTests
 } from '../../worktree-background-removal'
 import { RuntimeWorktreeRemovalInFlight } from '../runtime-worktree-removal-in-flight'
+import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 const REMOTE_REPO_PATH = '/remote/repo'
 
@@ -42,8 +43,8 @@ function makeRemoteRepoStore(
   const metaById: Record<string, WorktreeMeta> = {
     [TEST_WORKTREE_ID]: makeWorktreeMeta({ hostId: executionHostId, ...metaOverrides })
   }
-  const removeWorktreeMeta = vi.fn((worktreeId: string, hostId?: string) => {
-    if (!hostId || metaById[worktreeId]?.hostId === hostId) {
+  const removeWorktreeMeta = vi.fn(({ id: worktreeId, hostId }: HostWorktreeTarget) => {
+    if (metaById[worktreeId]?.hostId === hostId) {
       delete metaById[worktreeId]
     }
   })
@@ -57,7 +58,7 @@ function makeRemoteRepoStore(
       getRepo: (id: string) => (id === repo.id ? repo : undefined),
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
         return metaById[worktreeId]
       },

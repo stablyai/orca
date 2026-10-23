@@ -212,6 +212,24 @@ function spawnWindowsFallbackChain(
   return null
 }
 
+export type PtyExecutableSpawnParams = Pick<
+  ShellSpawnParams,
+  'termName' | 'cols' | 'rows' | 'cwd' | 'env' | 'ptySpawn'
+> & { file: string; args: string[] }
+
+/** One executable with an argv array, no shell and no fallback; throws when it can't start. */
+export function spawnPtyExecutable(params: PtyExecutableSpawnParams): pty.IPty {
+  const { file, args, termName = 'xterm-256color', cols, rows, cwd, env, ptySpawn } = params
+  return ptySpawn(file, args, {
+    name: termName,
+    cols,
+    rows,
+    cwd,
+    env,
+    ...windowsConptyDllOptions()
+  })
+}
+
 /**
  * Attempt to spawn a PTY shell. If the primary shell fails, try fallback shells
  * (Unix: zsh/bash/sh; Windows: the PowerShell -> cmd.exe chain) before giving up.
@@ -239,13 +257,15 @@ export function spawnShellWithFallback(params: ShellSpawnParams): ShellSpawnResu
     try {
       const wrapped = wrapShellSpawnForMacosTccAttribution(shellPath, shellArgs, env)
       return {
-        process: ptySpawn(wrapped.file, wrapped.args, {
-          name: termName,
+        process: spawnPtyExecutable({
+          file: wrapped.file,
+          args: wrapped.args,
+          termName,
           cols,
           rows,
           cwd,
           env,
-          ...windowsConptyDllOptions()
+          ptySpawn
         }),
         shellPath,
         reportsChildExitStatus: hostReportsChildExitStatus(wrapped.file)

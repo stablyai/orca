@@ -55,7 +55,9 @@ Dispatch lifecycle messages never target groups.
 ## Questions and gates
 
 A worker uses `ask`; its timeout leaves one durable question pending, which the
-worker resumes by message ID. The coordinator answers that message with `reply`.
+worker resumes by message ID. The coordinator answers that message with `reply`;
+a helper's question goes to the worker that started it, which answers it the
+same way.
 
 Use a gate only for a coordinator-owned Task-DAG decision:
 

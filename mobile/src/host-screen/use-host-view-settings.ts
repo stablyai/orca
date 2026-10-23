@@ -58,7 +58,7 @@ export function useHostViewSettings(args: {
 
   // Merge the desktop's shared view settings (PersistedUIState) onto local state so desktop changes appear here.
   const syncViewSettingsFromDesktop = useCallback(
-    async (options: { reconnected?: boolean } = {}) => {
+    async (options: { resend?: boolean } = {}) => {
       if (!client || connState !== 'connected') {
         return
       }
@@ -89,7 +89,7 @@ export function useHostViewSettings(args: {
         const waiting =
           pendingChanges && ui
             ? pendingChanges.reconcile(ui, {
-                reconnected: options.reconnected === true,
+                resend: options.resend === true,
                 sentByOpId: opsAtRequest
               })
             : []

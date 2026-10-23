@@ -103,6 +103,23 @@ describe('renderer web client projection', () => {
     expect(existsSync(join(root, 'out/web/assets/logo.png'))).toBe(true)
     expect(existsSync(join(root, 'out/web/assets/desktop-entry.js'))).toBe(false)
     expect(existsSync(join(root, 'out/web/stale.js'))).toBe(false)
+    const sharedFiles = JSON.parse(
+      readFileSync(join(root, 'out/renderer/.orca-web-client-files.json'), 'utf8')
+    )
+    expect(sharedFiles).toEqual(
+      expect.arrayContaining([
+        'web-index.html',
+        'assets/web-entry.js',
+        'assets/web-shared.js',
+        'assets/editor.worker-fixture.js',
+        'assets/web.css',
+        'assets/lazy.js',
+        'assets/logo.png'
+      ])
+    )
+    expect(sharedFiles).not.toContain('assets/desktop-entry.js')
+    expect(sharedFiles).not.toContain('.vite/manifest.json')
+    expect(sharedFiles).not.toContain('index.html')
     expect(readFileSync(join(root, 'out/web/assets/web.css'), 'utf8')).toBe('.root{color:red}\n')
   })
 

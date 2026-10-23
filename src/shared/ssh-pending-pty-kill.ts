@@ -18,7 +18,7 @@ export type SshPendingPtyKill = {
 
 /** Whether a relay PTY id names exactly one process: current relays mint `pty2:<epoch>:<n>` with a
  *  fresh epoch per start, so the id never recurs. Legacy `pty-N` ids restart at 1. */
-function isEpochScopedRelayPtyId(relayPtyId: string): boolean {
+export function isEpochScopedRelayPtyId(relayPtyId: string): boolean {
   return relayPtyId.startsWith('pty2:')
 }
 

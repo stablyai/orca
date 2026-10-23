@@ -6,6 +6,8 @@ import type { TerminalDocumentStart, TerminalViewportChange } from './document/d
 import { TERMINAL_DOCUMENT_ELEMENT_STYLE, TERMINAL_DOCUMENT_MARKUP } from './terminal-webview-html'
 import { scopeStyleToHost } from '../style-scoping/document-style-scoping'
 import { XTERM_ENGINE_CSS } from './terminal-webview-engine-css.generated'
+import terminalNerdFontUrl from '../../assets/fonts/SymbolsNerdFontMono-Regular.woff2'
+import { terminalNerdFontCss } from './terminal-nerd-font-css.mjs'
 import { createTerminalDocument } from './document/create-terminal-document'
 import type { TerminalWebViewCommand } from './terminal-webview-messages'
 
@@ -51,7 +53,7 @@ const HOST_CLASS = 'orca-terminal-document-host'
  * behind entirely and every remaining selector is prefixed with the host's class, so nothing here
  * can match an element the terminal does not own. That is also what makes leaving the sheet in
  * the head after unmount the right trade: it matches nothing once the host has dropped the class,
- * the next mount wants it back, and re-parsing 11 KiB per mount is all removing it would buy.
+ * the next mount wants it back, and re-parsing the sheet per mount is all removing it would buy.
  */
 function ensureDocumentStyle() {
   if (document.getElementById(STYLE_ELEMENT_ID)) {
@@ -62,7 +64,7 @@ function ensureDocumentStyle() {
   const prefix = `.${HOST_CLASS}`
   const engine = scopeStyleToHost(XTERM_ENGINE_CSS, prefix)
   const elements = scopeStyleToHost(TERMINAL_DOCUMENT_ELEMENT_STYLE, prefix)
-  style.textContent = `${engine}\n${elements}\n${hostFrameStyle(prefix)}`
+  style.textContent = `${terminalNerdFontCss(terminalNerdFontUrl)}\n${engine}\n${elements}\n${hostFrameStyle(prefix)}`
   document.head.appendChild(style)
 }
 
@@ -217,6 +219,11 @@ function startPageDocument(
     // `stopHostNotify` takes it off with everything else.
     installErrorReporter: (report) => {
       const errorListener = (event: ErrorEvent) => {
+        // The window is the whole app's: a browser notice with no error behind it (a ResizeObserver
+        // loop elsewhere on the page) is not this terminal failing, and before ready it is fatal.
+        if (!event.error) {
+          return
+        }
         report(event.message, event.filename, event.lineno, event.colno, event.error)
       }
       window.addEventListener('error', errorListener)

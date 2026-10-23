@@ -36,6 +36,8 @@ export const UNIT_EXCLUDE = [
   'tests/e2e/relay-region-compatibility.unit.test.ts',
   'tests/e2e/relay-region-correction.unit.test.ts',
   // Electron probes with in-process deadlines; the package job runs them serially.
+  'src/main/browser/popup-origin-chrome.electron.test.ts',
+  'src/main/browser/browser-link-materialization.electron.test.ts',
   'src/main/browser/browser-client-page-renderer-lifecycle.electron.test.ts',
   'src/main/browser/browser-route-tcp-egress.electron.test.ts',
   'src/main/browser/browser-route-webrtc-egress.electron.test.ts',

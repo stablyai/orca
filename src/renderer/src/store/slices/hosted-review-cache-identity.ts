@@ -1,4 +1,5 @@
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { composeRepoCacheKey } from '../../../../shared/github/github-cache-key'
 import {
   getSettingsFocusedExecutionHostId,
   normalizeExecutionHostId,
@@ -24,7 +25,7 @@ export function getHostedReviewCacheKey(
   hasRepoOwner = false
 ): string {
   const scope = getHostedReviewCacheHostScope(settings, connectionId, executionHostId, hasRepoOwner)
-  return `${scope}::${repoId ?? repoPath}::${branch}`
+  return composeRepoCacheKey(scope, repoId ?? repoPath, branch)
 }
 
 function getHostedReviewCacheHostScope(

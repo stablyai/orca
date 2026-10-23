@@ -95,7 +95,7 @@ function useCombinedDiffSectionPasses({
     sideBySide: false,
     structureRevision: sectionRowKeys.structureRevision,
     totalSize: 0,
-    viewStateKey: 'scaling-test',
+    memoryLeaseRef: { current: null },
     virtualizer: FAKE_VIRTUALIZER
   })
   const treeNavigation = useCombinedDiffTreeNavigation({

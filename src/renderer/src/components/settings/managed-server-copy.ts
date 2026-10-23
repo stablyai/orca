@@ -68,7 +68,7 @@ export function conversionBlockerLabel(blocker: OrcadMigrationBlocker): string {
     case 'orcad_migration_owner_unrecorded':
       return translate(
         'auto.components.settings.managedServers.blocker.owned',
-        'This SSH host already belongs to a managed server.'
+        'Orca already runs on this SSH host.'
       )
     case 'orcad_migration_direct_ssh_repositories':
     case 'orcad_migration_direct_ssh_folder_workspaces':
@@ -143,8 +143,8 @@ export function managedServerOutcomeLabel(result: {
   const code = result.code ?? ''
   if (code === 'orcad_stop_active_environment') {
     return translate(
-      'auto.components.settings.managedServers.outcome.activeServer',
-      'Not done: this server is the default host for new projects. Choose another one in Advanced before stopping it.'
+      'auto.components.settings.managedServers.outcome.defaultServer',
+      'Not done: this server is the default host for new projects. Choose another one under New projects open on before stopping it.'
     )
   }
   if (result.verdict === 'live' || LIVE_TERMINAL_CODES.has(code)) {

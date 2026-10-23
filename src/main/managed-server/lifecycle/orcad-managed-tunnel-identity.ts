@@ -23,10 +23,13 @@ import type { ServeReadiness } from '../../server/serve-readiness'
 import { orcadBoundPort } from './orcad-managed-bound-port'
 import { tunneledOrcadPairingCode } from '../../ssh/orcad-tunneled-pairing'
 
-/** `unreachable` means nothing answered; it is never evidence about which server holds the port. */
+/**
+ * `unreachable` means nothing answered; it is never evidence about which server holds the port.
+ * `unpaired` is our server (it completed the handshake with the pinned key) refusing our token.
+ */
 export type OrcadTunnelIdentity =
   | { verdict: 'verified' }
-  | { verdict: 'foreign' | 'unreachable'; detail: string }
+  | { verdict: 'foreign' | 'unreachable' | 'unpaired'; detail: string }
 
 export const ORCAD_IDENTITY_MISMATCH_CODE = 'orcad_identity_mismatch'
 
@@ -35,10 +38,35 @@ export class OrcadManagedIdentityError extends Error {
   constructor(remotePort: number, detail: string) {
     super(
       `${ORCAD_IDENTITY_MISMATCH_CODE}: the server on remote port ${remotePort} is not this ` +
-        `managed Orca server (another Orca may be using that port): ${detail}`
+        `host’s Orca server (another Orca may be using that port): ${detail}`
     )
     this.name = 'OrcadManagedIdentityError'
   }
+}
+
+export const ORCAD_PAIRING_REJECTED_CODE = 'orcad_pairing_rejected'
+
+/** The host's own server no longer accepts this desktop's pairing; another port won't help. */
+export class OrcadManagedPairingRejectedError extends Error {
+  readonly code = ORCAD_PAIRING_REJECTED_CODE
+  constructor(detail: string) {
+    super(
+      `${ORCAD_PAIRING_REJECTED_CODE}: this host’s Orca server no longer accepts ` +
+        `this desktop's pairing (its saved devices were reset, or this desktop was removed ` +
+        `there), so reconnecting alone won't restore access: ${detail}`
+    )
+    this.name = 'OrcadManagedPairingRejectedError'
+  }
+}
+
+/** The refusal for an answer that is not this desktop's server, or no longer accepts its pairing. */
+export function orcadIdentityRefusal(
+  remotePort: number,
+  identity: Exclude<OrcadTunnelIdentity, { verdict: 'verified' }>
+): Error {
+  return identity.verdict === 'unpaired'
+    ? new OrcadManagedPairingRejectedError(identity.detail)
+    : new OrcadManagedIdentityError(remotePort, identity.detail)
 }
 
 // Why 4001/4003: a runtime that rejects our keys closes the socket rather than replying.
@@ -46,6 +74,14 @@ const FOREIGN_CLOSE_CODES = new Set([4001, 4003])
 
 export function classifyOrcadTunnelIdentityFailure(error: unknown): OrcadTunnelIdentity {
   const detail = error instanceof Error ? error.message : String(error)
+  // Why access-grant only: that refusal arrives sealed, so the holder of our pinned key sent it.
+  if (
+    error instanceof RemoteRuntimeClientError &&
+    error.code === 'unauthorized' &&
+    error.pairingStage === 'access-grant'
+  ) {
+    return { verdict: 'unpaired', detail }
+  }
   if (error instanceof RemoteRuntimeClientError && FOREIGN_CLOSE_CODES.has(error.closeCode ?? 0)) {
     return { verdict: 'foreign', detail }
   }
@@ -104,7 +140,7 @@ export function deployedOrcadTunnelChecks(
         ? verifyOrcadPairingIdentity(pairedRuntimeConnectionFromOffer(pairing), {
             runtimeId: readiness.runtimeId || null
           })
-        : { verdict: 'foreign', detail: 'The managed Orca server published an invalid pairing.' }
+        : { verdict: 'foreign', detail: 'This host’s Orca server published an invalid pairing.' }
     }
   }
 }

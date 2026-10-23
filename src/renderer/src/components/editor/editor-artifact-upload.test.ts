@@ -16,7 +16,7 @@ vi.mock('@/store', () => ({
   useAppStore: { getState: () => ({ editorDrafts: mocks.drafts }) }
 }))
 vi.mock('./editor-pending-flush', () => ({
-  flushPendingEditorChange: mocks.flush
+  flushPendingEditorBuffer: mocks.flush
 }))
 
 beforeEach(() => {
@@ -80,7 +80,7 @@ describe('Editor artifact upload', () => {
   })
 
   it('flushes and reads the latest unsaved editor buffer', () => {
-    mocks.flush.mockImplementation((fileId: string) => {
+    mocks.flush.mockImplementation((_state: unknown, fileId: string) => {
       mocks.drafts[fileId] = '# Latest edit'
     })
 
@@ -92,7 +92,7 @@ describe('Editor artifact upload', () => {
         'text/markdown'
       ).content
     ).toBe('# Latest edit')
-    expect(mocks.flush).toHaveBeenCalledWith('/repo/notes.md')
+    expect(mocks.flush).toHaveBeenCalledWith(expect.anything(), '/repo/notes.md')
   })
 
   it('shares Markdown and HTML documents only', () => {

@@ -1,6 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import type { Tab } from '../../shared/tab-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { withChatTabChanges, type ChatTabChange } from './agent-session-tab-layout'
+
+// rollback build (switch-off) — delete with the switch-off code post-flip
+vi.mock('../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
 
 const WT = 'repo-1::/tmp/worktree-a'
 
@@ -40,6 +44,53 @@ describe('a windowless host’s chat tab saves', () => {
     expect(firstGroup).toBeTruthy()
     expect(groups).toHaveLength(1)
     expect(groups[0]?.id).not.toBe(firstGroup)
+  })
+
+  // L270: the placement rule is shared, so an open with no client place must save as before.
+  it('save a chat opened with no client place at the end of the remembered active group', () => {
+    const tab = (sessionId: string, groupId: string): Tab => ({
+      id: `structured-agent-session-${sessionId}`,
+      entityId: sessionId,
+      groupId,
+      worktreeId: WT,
+      contentType: 'agent-session',
+      label: 'Chat',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 1
+    })
+    const twoGroups: WorkspaceSessionState = {
+      ...EMPTY,
+      unifiedTabs: { [WT]: [tab('a', 'group-1'), tab('c', 'group-2'), tab('d', 'group-2')] },
+      tabGroups: {
+        [WT]: [
+          {
+            id: 'group-1',
+            worktreeId: WT,
+            activeTabId: null,
+            tabOrder: ['structured-agent-session-a']
+          },
+          {
+            id: 'group-2',
+            worktreeId: WT,
+            activeTabId: null,
+            tabOrder: ['structured-agent-session-c', 'structured-agent-session-d']
+          }
+        ]
+      },
+      activeGroupIdByWorktree: { [WT]: 'group-2' }
+    }
+
+    const saved = change(twoGroups, [open('b')])
+
+    expect(saved.tabGroups?.[WT]?.map((group) => [group.id, group.tabOrder])).toEqual([
+      ['group-1', ['structured-agent-session-a']],
+      [
+        'group-2',
+        ['structured-agent-session-c', 'structured-agent-session-d', 'structured-agent-session-b']
+      ]
+    ])
   })
 
   // Preserved legacy behaviour: with the build switch off a duplicate chat tab id is still saved.

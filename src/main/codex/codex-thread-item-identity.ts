@@ -51,6 +51,7 @@ export function codexItemIdentity(input: {
   turnId: string | null
   item: CodexThreadItem
   ordinals: CodexTurnOrdinals
+  historyImport?: true
 }): AgentJournalItemIdentity {
   const { item, turnId } = input
   if (turnId && isCodexMessageItemType(item.type)) {
@@ -61,5 +62,10 @@ export function codexItemIdentity(input: {
       ordinal: input.ordinals.ordinalFor(input.threadId, turnId, item.id)
     }
   }
-  return { provider: 'orca', clientMessageId: `codex-item:${input.threadId}:${item.id}` }
+  return {
+    provider: 'orca',
+    clientMessageId: input.historyImport
+      ? `codex-history-item:${JSON.stringify([1, input.threadId, turnId, item.id])}`
+      : `codex-item:${input.threadId}:${item.id}`
+  }
 }

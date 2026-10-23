@@ -15,6 +15,7 @@ import { execFileSync, spawnSync } from 'node:child_process'
 import { afterEach, describe, expect, it } from 'vitest'
 import { resolveCodexShellLaunchPreflightCommand } from './codex-shell-launch-preflight'
 import {
+  CODEX_COMMAND_IDENTITY_ENV_KEYS,
   getFishCodexShellLaunchPreflight,
   getPosixCodexShellLaunchPreflight,
   getPowerShellCodexShellLaunchPreflight
@@ -178,7 +179,9 @@ function expectNamedAliasSurvives(shell: string, enableAliases: string): void {
       env: {
         ...process.env,
         PATH: `${bin}${delimiter}${process.env.PATH ?? ''}`,
-        ORCA_CODEX_LAUNCH_PREFLIGHT: join(bin, 'orca-test')
+        ORCA_CODEX_LAUNCH_PREFLIGHT: join(bin, 'orca-test'),
+        // Why: a run inside an Orca terminal inherits its identity, which the wrapper forwards.
+        ...Object.fromEntries(CODEX_COMMAND_IDENTITY_ENV_KEYS.map((key) => [key, '']))
       }
     }
   )

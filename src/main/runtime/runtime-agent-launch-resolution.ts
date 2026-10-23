@@ -1,3 +1,4 @@
+import { getRepoRoutingConnectionId } from '../../shared/execution-host'
 import { createHash } from 'node:crypto'
 import type { Repo } from '../../shared/repo-types'
 import type { TuiAgent } from '../../shared/tui-agent'
@@ -106,10 +107,10 @@ export function inferCapturedClaudeAgentTeamsMode(
 }
 
 export function getAgentLaunchPlatformForRepo(
-  repo: Pick<Repo, 'connectionId' | 'path'>,
+  repo: Pick<Repo, 'connectionId' | 'executionHostId' | 'path'>,
   projectRuntime?: ProjectExecutionRuntimeResolution
 ): NodeJS.Platform {
-  return repo.connectionId
+  return getRepoRoutingConnectionId(repo)
     ? remoteExecutionPlatform(repo.path)
     : executionRuntimePlatform(projectRuntime, undefined, process.platform)
 }

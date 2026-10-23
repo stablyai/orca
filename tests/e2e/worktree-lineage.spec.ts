@@ -251,7 +251,6 @@ test.describe('Worktree Lineage', () => {
           }))
         }
       })
-      window.api.ephemeralVm.suspendWorkspace = async () => null
     })
 
     await worktreeOption(orcaPage, parentId).click({ button: 'right' })

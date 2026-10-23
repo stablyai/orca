@@ -17,10 +17,7 @@ import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agen
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { JournalStopAcceptor } from '../agent-session-journal/journal-stop-acceptance'
 import { JournalQueuedMessages } from '../agent-session-journal/journal-queued-messages'
-import {
-  rotateStructuredAgentSessionHostInstanceForTests,
-  structuredQueuePauses
-} from './structured-agent-session-queued-pause'
+import { structuredQueuePauses } from './structured-agent-session-queued-pause'
 import {
   createQueuedMessageTestRig,
   eventually,
@@ -41,7 +38,6 @@ let currentRig: QueuedMessageTestRig | undefined
 const observationClock = createStructuredSessionObservationClock(() => rig.host, SESSION)
 beforeEach(() => observationClock.start())
 let host: QueuedMessageTestRig['host']
-let store: QueuedMessageTestRig['store']
 let dispatch: QueuedMessageTestRig['dispatch']
 
 beforeEach(async () => {
@@ -49,7 +45,7 @@ beforeEach(async () => {
   // A Stop ends the agent's session, so the next send starts a child that resumes the thread.
   rig = await createQueuedMessageTestRig({ restartable: true })
   currentRig = rig
-  ;({ host, store, dispatch } = rig)
+  ;({ host, dispatch } = rig)
 })
 
 afterEach(async () => {
@@ -168,8 +164,8 @@ describe('drain', () => {
 
   it('takes no serialized drain step while the session is working, then drains when the work settles', async () => {
     const working = await workingSend()
-    // Read only by a drain step, so it marks one.
-    const step = vi.spyOn(JournalQueuedMessages.prototype, 'deliveredByEchoOwed')
+    // Read only by a hand-off, which only a drain step makes here.
+    const step = vi.spyOn(JournalQueuedMessages.prototype, 'assertConsumable')
     const queued = await send('waits for the turn', 'queue-if-active').result
     await send('and another', 'queue-if-active').result
     if (!queued.ok || !('queued' in queued.value)) {
@@ -220,32 +216,6 @@ describe('drain', () => {
     await eventually(async () =>
       expect(await drafts()).toMatchObject([{ messageId: draftId, state: 'returned' }])
     )
-  })
-
-  it('a skipped settlement hook heals on the next drain step, not only at the next open', async () => {
-    const working = await workingSend()
-    const queued = await send('refused while the hook fails', 'queue-if-active').result
-    if (!queued.ok || !('queued' in queued.value)) {
-      throw new Error('expected a queued receipt')
-    }
-    const draftId = queued.value.queued.messageId
-    await settleAccepted(working, 'a')
-    await eventually(async () => expect(await rig.handoff(draftId)).toBeDefined())
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    const hook = vi
-      .spyOn(JournalQueuedMessages.prototype, 'onRowInTransaction')
-      .mockImplementationOnce(() => {
-        throw new Error('bookkeeping failed')
-      })
-    try {
-      await rig.settleRejected(await rig.handoffId(draftId), 'provider refused this payload')
-      await eventually(async () =>
-        expect(await drafts()).toMatchObject([{ messageId: draftId, state: 'returned' }])
-      )
-    } finally {
-      hook.mockRestore()
-      warn.mockRestore()
-    }
   })
 
   it('a waiting draft behind a returned card does not drain until the card is acted on (S5)', async () => {
@@ -344,9 +314,8 @@ describe('held drafts', () => {
     expect(page.ok && page.page.queuedMessages?.[0]?.pausedReason).toBe(
       QUEUED_MESSAGE_PAUSED_SEND_FAILED
     )
-    // The marker is stored on the row, so a host restart keeps "Couldn't send"
-    // instead of downgrading the card to a plain pause.
-    rotateStructuredAgentSessionHostInstanceForTests()
+    // The marker is a journal row, so a reread keeps "Couldn't send" instead of downgrading the
+    // card to a plain pause.
     const restarted = await host.history({ sessionId: SESSION, direction: 'tail' })
     expect(restarted.ok && restarted.page.queuedMessages?.[0]?.pausedReason).toBe(
       QUEUED_MESSAGE_PAUSED_SEND_FAILED
@@ -736,25 +705,6 @@ describe('/clear', () => {
     }
     expect(await drafts(replacementId)).toEqual([{ messageId: draftId, state: 'returned' }])
     expect(await rig.queuePause(replacementId)).toBeNull()
-  })
-
-  it('a clear an older build left prepared holds no draft: it drains when the turn settles', async () => {
-    const working = await workingSend()
-    const queued = await send('behind the clear', 'queue-if-active').result
-    if (!queued.ok || !('queued' in queued.value)) {
-      throw new Error('expected a queued receipt')
-    }
-    const draftId = queued.value.queued.messageId
-    await store.setConversationCommand(SESSION, 1, {
-      command: 'clear',
-      runtimeFence: 1,
-      operationId: hostTestOperationId(),
-      callerKey: CALLER.callerKey,
-      phase: 'prepared',
-      state: 'unknown'
-    })
-    await settleAccepted(working, 'a')
-    await eventually(async () => expect(await rig.handoff(draftId)).toBeDefined())
   })
 
   it('a clear with no drafts keeps the existing conversation open', async () => {

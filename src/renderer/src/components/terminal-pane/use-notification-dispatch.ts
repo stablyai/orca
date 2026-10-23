@@ -21,6 +21,7 @@ import type {
   AgentCompletionDispatchMeta,
   AgentCompletionStatusSnapshot
 } from './agent-completion-coordinator-types'
+import type { NotificationDispatchResult } from '../../../../shared/notification-settings-types'
 import { getNotificationWorkspaceLabels } from './terminal-notification-state'
 import { createTerminalAttentionSurface } from './terminal-attention-surface'
 import {
@@ -61,6 +62,8 @@ export type TerminalNotificationEvent = TerminalNotificationBinding & {
   terminalTitle?: string
   agentStatusSnapshot?: AgentCompletionStatusSnapshot
   agentCompletionSource?: AgentCompletionDispatchMeta['source']
+  /** Main's answer to the delivery request this event sends (null: no answer). */
+  onDispatchResult?: (result: NotificationDispatchResult | null) => void
 }
 
 /**
@@ -73,7 +76,7 @@ export type TerminalNotificationEvent = TerminalNotificationBinding & {
 export function dispatchTerminalNotification(
   worktreeId: string,
   event: TerminalNotificationEvent
-): void {
+): boolean {
   const state = useAppStore.getState()
   // Why: the completion title is the live identity. If it explicitly names an
   // agent, any snapshot from another agent is stale pane-reuse residue and must
@@ -105,7 +108,7 @@ export function dispatchTerminalNotification(
   ) {
     // Why: a title-only idle signal can race behind active hook state; a
     // confirmed process exit is independent authority that the turn ended.
-    return
+    return false
   }
   // Why: a process can die before its hook emits done; do not label the
   // resulting completion notification with that stale active state or prompt.
@@ -120,7 +123,7 @@ export function dispatchTerminalNotification(
     event.source === 'agent-task-complete' &&
     isSupersededAgentCompletionSnapshot(storedAgentStatus, eventAgentStatusSnapshot)
   ) {
-    return
+    return false
   }
   const agentNotificationStateStartedAt =
     eventAgentStatusSnapshot?.stateStartedAt ?? freshStoredAgentStatus?.stateStartedAt
@@ -137,7 +140,7 @@ export function dispatchTerminalNotification(
     createTerminalAttentionSurface(state)
   )
   if (!attentionDecision.admitted) {
-    return
+    return false
   }
 
   // Desktop settings are applied in main after independent mobile delivery.
@@ -168,7 +171,9 @@ export function dispatchTerminalNotification(
         })
       : null
 
+  let requested = false
   const requestDelivery = (request: AgentAttentionDeliveryRequest): void => {
+    requested = true
     const owner = resolveTerminalNotificationOwner(state, worktreeId, event)
     const executionHost = notificationExecutionHostForOwner(owner)
     deliverAgentAttentionNotification(
@@ -184,7 +189,8 @@ export function dispatchTerminalNotification(
         isActiveWorktree: request.workspaceIsActive,
         ...agentSnapshot
       },
-      sound
+      sound,
+      event.onDispatchResult
     )
   }
 
@@ -192,13 +198,16 @@ export function dispatchTerminalNotification(
     unread: state.markAgentAttentionUnread,
     requestDelivery
   })
+  return requested
 }
 
 export function useNotificationDispatch(
   worktreeId: string
 ): (event: TerminalNotificationEvent) => void {
   return useCallback(
-    (event: TerminalNotificationEvent) => dispatchTerminalNotification(worktreeId, event),
+    (event: TerminalNotificationEvent) => {
+      dispatchTerminalNotification(worktreeId, event)
+    },
     [worktreeId]
   )
 }

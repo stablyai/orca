@@ -15,7 +15,7 @@ import type { FilesystemPathFlavor } from '../../shared/filesystem-entry-types'
 
 export type SshApi = {
   listTargets: () => Promise<SshTarget[]>
-  // Removed-target id → last known label, for a friendly host name on workspaces still pinned to a removed target.
+  // Last known labels keyed by removed target ID, for workspaces still pinned to them.
   listRemovedTargetLabels: () => Promise<Record<string, string>>
   addTarget: (args: { target: SshTargetCreateInput }) => Promise<SshTargetAddResult>
   updateTarget: (args: { id: string; updates: SshTargetUpdateInput }) => Promise<SshTarget>

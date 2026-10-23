@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GitPushTarget } from '../../shared/worktree/types'
 import type { Repo } from '../../shared/repo-types'
 import type { Store } from '../persistence'
+import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 const { materializeLocalMock, getLocalProjectWorktreeGitOptionsMock } = vi.hoisted(() => ({
   materializeLocalMock: vi.fn(),
@@ -92,14 +93,32 @@ describe('triggerTerminalSpawnPushTargetMaterialization', () => {
       STORE,
       REPO_ID,
       { wslDistro: 'Ubuntu' },
-      'worktree-1'
+      hostWorktreeTarget({ id: 'worktree-1', hostId: 'local' })
     )
   })
 
   it('is a no-op for an SSH repo, never materializing on this machine', () => {
     triggerTerminalSpawnPushTargetMaterialization(WORKTREE_PATH, forkTarget(), SSH_REPO, STORE)
+    // A row stamped with a remote host but no connection id is just as remote.
+    const stampedOnly: Repo = { ...LOCAL_REPO, executionHostId: 'ssh:box' }
+    triggerTerminalSpawnPushTargetMaterialization(WORKTREE_PATH, forkTarget(), stampedOnly, STORE)
     expect(materializeLocalMock).not.toHaveBeenCalled()
     expect(getLocalProjectWorktreeGitOptionsMock).not.toHaveBeenCalled()
+  })
+
+  it("records on a server's own runtime-stamped row, whose git runs here", () => {
+    const serverRow: Repo = { ...LOCAL_REPO, executionHostId: 'runtime:env-1' }
+    triggerTerminalSpawnPushTargetMaterialization(
+      WORKTREE_PATH,
+      forkTarget(),
+      serverRow,
+      STORE,
+      REPO_ID,
+      'worktree-1'
+    )
+    expect(materializeLocalMock.mock.calls[0]?.[5]).toEqual(
+      hostWorktreeTarget({ id: 'worktree-1', hostId: 'runtime:env-1' })
+    )
   })
 
   it('falls back to default git options when WSL project runtime resolution throws', () => {

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
+import { terminalOwnerRows } from '../terminal/terminal-tab-owner-rows.test-fixture'
 
 vi.mock('../confirmation-dialog-context', () => ({
   useConfirmationDialog: () => async () => true
@@ -343,6 +344,7 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
     storeBox.state = {
       ...storeBox.state,
       settings: { activeRuntimeEnvironmentId: 'env-1' },
+      ...terminalOwnerRows('env-1'),
       tabsByWorktree: {
         'wt-1': [...currentState.tabsByWorktree['wt-1'], secondTerminal]
       },

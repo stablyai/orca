@@ -17,7 +17,7 @@ vi.mock('./use-mobile-structured-agent-state', () => ({
   useMobileStructuredAgentState: () => ({
     state,
     stateRef,
-    loadingOlder: false,
+    olderPages: 'idle',
     loadEarlier: vi.fn()
   })
 }))
@@ -128,6 +128,7 @@ function Harness({
       sendOptions: false,
       conversationStop: false,
       permissionModes: false,
+      itemDetail: false,
       phoneAttachments: false
     },
     onSendError: vi.fn()

@@ -5,6 +5,7 @@ import {
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
 import { useAppStore } from '@/store'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import { isWorkspaceSleepRecord } from '../../../shared/workspace-sleep'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
 import { getSleepingRecordTabId } from './sleeping-agent-wake-requests'
 import { resolveActivationPtyListScope } from './worktree-activation-pty-inventory'
@@ -158,22 +159,28 @@ function getCanonicalPassiveWakeRecords(
  * spawn is awaited.
  */
 export function wakeSleepingAgentsForWorktreeInBackground(worktreeId: string): void {
-  const worktreeRecords = Object.values(
-    useAppStore.getState().sleepingAgentSessionsByPaneKey
-  ).filter((record) => record.worktreeId === worktreeId)
+  const sleptRecords = Object.values(useAppStore.getState().sleepingAgentSessionsByPaneKey).filter(
+    (record) => record.worktreeId === worktreeId
+  )
   // Why: nothing is slept here, so there is no wake work. Skipping is what keeps
   // a phone browsing many worktrees from permanently background-mounting each one
   // (and reattaching its PTYs) on the desktop host it is paired to.
-  if (worktreeRecords.length === 0) {
+  if (sleptRecords.length === 0) {
     return
   }
 
+  // Why all records: a workspace sleep's still-mounted panes wake here too, through main's resume.
   const wokenClaimKeys = new Set<string>()
   window.dispatchEvent(
     new CustomEvent<WakeHibernatedAgentsWorktreeDetail>(WAKE_HIBERNATED_AGENTS_WORKTREE_EVENT, {
       detail: { worktreeId, wokenClaimKeys }
     })
   )
+  // Why: main resumes a workspace sleep's records; the steps below are the window's own hibernation.
+  const worktreeRecords = sleptRecords.filter((record) => !isWorkspaceSleepRecord(record))
+  if (worktreeRecords.length === 0) {
+    return
+  }
   // Why: only a passive completed-hibernation record has a not-yet-mounted pane
   // that needs a fresh-connect cold-restore (step b). Non-passive records are
   // recovered by step (c) into a fresh tab, mounted in step (d).

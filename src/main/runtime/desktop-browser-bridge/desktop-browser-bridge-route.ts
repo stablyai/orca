@@ -11,6 +11,7 @@ import {
   isDesktopBrowserBridgeMethod
 } from '../../../shared/desktop-browser-bridge-protocol'
 import type { RpcCallerIdentity } from '../rpc/rpc-caller-identity'
+import { assertClientOpenableUrl } from '../browser/browser-client-page-opening'
 import type { DesktopBrowserBridgeRegistry } from './desktop-browser-bridge-registry'
 
 export type DesktopBrowserBridgeRoute = { handled: false } | { handled: true; result: unknown }
@@ -25,6 +26,7 @@ export async function routeDesktopBrowserBridgeRpc(options: {
   caller: RpcCallerIdentity | undefined
   hostEnabled: boolean
   registry: DesktopBrowserBridgeRegistry
+  /** This host serves browser commands itself: its own engine, or a desktop hosting its pages. */
   localBrowserAvailable: boolean
   resolveWorkspace(selector: string): Promise<{ id: string }>
   signal?: AbortSignal
@@ -37,7 +39,10 @@ export async function routeDesktopBrowserBridgeRpc(options: {
   ) {
     return { handled: false }
   }
-  const forwarded = isDesktopBrowserBridgeMethod(method)
+  // Why tabCreate: open-url is `tab create --url` to the desktop, so it adds no new desktop surface
+  // and an older bridged desktop already runs it under the same scope, URL and focus rules.
+  const forwardedMethod = method === 'browser.openUrl' ? 'browser.tabCreate' : method
+  const forwarded = isDesktopBrowserBridgeMethod(forwardedMethod)
   if (!options.registry.hasAttachment()) {
     if (options.localBrowserAvailable || !forwarded) {
       return { handled: false }
@@ -57,6 +62,9 @@ export async function routeDesktopBrowserBridgeRpc(options: {
     )
   }
   const params: Record<string, unknown> = isRecord(options.params) ? { ...options.params } : {}
+  if (method === 'browser.openUrl') {
+    assertClientOpenableUrl(String(params.url))
+  }
   let workspaceId: string | undefined
   // Why resolve here: only orcad knows this host's selectors (path:, branch:, active).
   if (typeof params.worktree === 'string' && params.worktree.length > 0) {
@@ -66,8 +74,8 @@ export async function routeDesktopBrowserBridgeRpc(options: {
     delete params.worktree
   }
   const result = await options.registry.forward(
-    { method, params, ...(workspaceId ? { workspaceId } : {}) },
-    { timeoutMs: forwardTimeoutMs(method, params), signal: options.signal }
+    { method: forwardedMethod, params, ...(workspaceId ? { workspaceId } : {}) },
+    { timeoutMs: forwardTimeoutMs(forwardedMethod, params), signal: options.signal }
   )
   return { handled: true, result }
 }

@@ -134,12 +134,10 @@ async function installFeed(state: Partial<AppState>) {
 
 async function phoneList(state: Partial<AppState>): Promise<string[]> {
   const { installed, full } = await installFeed(state)
-  const { catalog, view } = phoneInputsFromWindowState(full)
-  const { sectionRows, activeRowKeys } = phoneAdapter.buildSidebarFeedRows(
-    phoneAdapter.readSidebarFeedDomains(installed),
-    catalog,
-    view
-  )
+  const domains = phoneAdapter.readSidebarFeedDomains(installed)
+  expect(domains.projectCatalog?.repos.length).toBeGreaterThan(0)
+  const { catalog, view } = phoneInputsFromWindowState(full, domains)
+  const { sectionRows, activeRowKeys } = phoneAdapter.buildSidebarFeedRows(domains, catalog, view)
   return projectParityRows(sectionRows, activeRowKeys)
 }
 
@@ -262,11 +260,11 @@ describe('sidebar list parity: desktop window and feed reader', () => {
     ],
     'open folder workspace': [
       parityActiveState('folder:fw-remote', 'ssh:gpu-vm'),
-      /^FOLDER folder-workspace:fw-remote .* ACTIVE$/
+      /^FOLDER folder-workspace:ssh:gpu-vm\|folder:fw-remote .* ACTIVE$/
     ],
     'open server folder workspace': [
       parityActiveState('folder:fw-server', 'runtime:env-1'),
-      /^FOLDER folder-workspace:fw-server group=pg-server-folders .* ACTIVE$/
+      /^FOLDER folder-workspace:runtime:env-1\|folder:fw-server group=pg-server-folders .* ACTIVE$/
     ],
     'hide CLI-created': [
       { hideCliCreatedWorkspaces: true },

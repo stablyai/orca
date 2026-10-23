@@ -116,7 +116,7 @@ it('launches on its own private folder with file sign-in and no other Google cre
 
 it('runs the chat permission mode picked mid-chat as the server mode on the next send', async () => {
   let resumed = false
-  const { rig, host, fence } = await openHostRig({
+  const { rig, host, fence, ready } = await openHostRig({
     spec: ANTIGRAVITY,
     initialize: RESUMES,
     script: (agent) => {
@@ -137,6 +137,7 @@ it('runs the chat permission mode picked mid-chat as the server mode on the next
     providerHandle: undefined
   })
   expect(await host.attach(CALLER, attach)).toMatchObject({ ok: true })
+  await ready()
   resumed = true
   const modes: unknown[] = []
   let child = rig.child()
@@ -172,14 +173,16 @@ it('refuses a new start while its sign-in changes, and stops one already startin
     spec: ANTIGRAVITY,
     script: (agent) => agent.on('session/new', () => {})
   })
-  const starting = rig.acquire().catch((error: unknown) => error)
+  const starting = rig.acquire()
   await rig.frame('session/new')
   const signIn = deferred<void>()
   const operation = gate.run(
     async () => {},
     () => signIn.promise
   )
-  expect(String(await starting)).toContain('closed while starting')
+  await starting
+  expect(rig.openFailure()).toMatchObject({ name: 'AcpConnectionClosedError' })
+  expect(rig.child().exited).toBe(true)
   await expect(rig.acquire()).rejects.toMatchObject({ reason: 'accountSwitchInProgress' })
   signIn.resolve()
   await operation

@@ -12,7 +12,10 @@ import {
   nativeChatPendingAttachmentSnapshot,
   takeNativeChatPendingAttachment
 } from './native-chat-pending-attachment-cache'
-import { imageReferenceToken } from '../../../../shared/native-chat-image-reference'
+import {
+  imageReferenceInsertion,
+  imageReferenceToken
+} from '../../../../shared/native-chat-image-reference'
 import { withoutImageReferenceNodes } from './native-chat-prompt-document-text'
 
 /** A chip for each image at the caret, or after the draft when the editor takes no input. */
@@ -31,9 +34,7 @@ export function insertImageReferences(
   }
   const before = input.value.slice(0, input.selectionStart)
   const after = input.value.slice(input.selectionEnd)
-  input.insertText(
-    `${before && !/\s$/.test(before) ? ' ' : ''}${tokens}${/^\s/.test(after) ? '' : ' '}`
-  )
+  input.insertText(imageReferenceInsertion(before, after, ids))
 }
 
 /** Every chip of an image that left the row; ids are unique, so no other draft holds one. */

@@ -1,12 +1,23 @@
+import {
+  journalItemEchoFields,
+  journalItemEchoRestatement,
+  type JournalItemEcho
+} from './journal-item-echo'
 // Republishing a live item set into a fresh epoch.
 //
 // One transaction: discard the old epoch's rows, insert the epoch row plus the
-// replacement items, and move the session projection.
+// replacement items and the queue's cards still owed an answer, and move the
+// session projection.
 
+import { sameJournalConversation } from './journal-history-origin'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import {
+  agentJournalItemKey,
+  agentJournalSubmissionKey
+} from '../../../shared/agent-session-journal-item-key'
 
 import type {
+  AgentJournalCursor,
   AgentJournalItemBody,
   AgentJournalItemIdentity,
   AgentJournalProducerLinkage,
@@ -26,6 +37,8 @@ import {
   buildJournalSubmissionRow,
   journalRowBase
 } from './journal-row-builders'
+import { buildJournalQueueRow } from './journal-queue-events'
+import type { JournalQueueRestatement } from './journal-queued-messages'
 import {
   buildJournalQueueReopenRow,
   buildJournalQueueClearRow,
@@ -41,8 +54,10 @@ import {
 } from './journal-row-table'
 import type { AgentJournalEpochReason, JournalRow } from './journal-row-schema'
 import { assertJournalFence } from './journal-write-guards'
+import type { JournalOperationReceipt } from './journal-row-writer'
 
 export type JournalReplacementItem = AgentJournalProducerLinkage & {
+  echoOf?: JournalItemEcho['echoOf']
   identity: AgentJournalItemIdentity
   body: AgentJournalItemBody
   observedAt?: number
@@ -62,10 +77,13 @@ export function replaceJournalEpoch(input: {
   reason: AgentJournalEpochReason
   fence: number
   items: readonly JournalReplacementItem[]
+  receipt?: (cursor: AgentJournalCursor) => JournalOperationReceipt
   previous?: JournalReducerState
   /** Restated in the new epoch, or the rewind would release cards the person stopped, or bring
    *  back a /clear pause they already lifted. */
   queuePause: JournalQueuePauseRestatement
+  /** The cards restated ahead of the carried submissions, which relink theirs. */
+  queue: JournalQueueRestatement
   now: () => number
   mintEpoch: () => string
   /** Called the instant the transaction commits, before any fallible follow-up. */
@@ -73,10 +91,21 @@ export function replaceJournalEpoch(input: {
 }): void {
   const epoch = input.mintEpoch()
   const state = createJournalReducerState(input.identity.sessionId, epoch)
+  const providerHandle = agentSessionJournalProviderHandle(input.identity)
+  const previousOrigin = input.previous?.historyOrigin
+  const restate =
+    input.reason !== 'legacy_import' &&
+    input.reason !== 'session_created' &&
+    previousOrigin &&
+    sameJournalConversation(previousOrigin.providerHandle, providerHandle)
   const epochRow: JournalRow = {
     kind: 'epoch',
-    reason: input.reason,
-    providerHandle: agentSessionJournalProviderHandle(input.identity),
+    reason:
+      input.reason === 'legacy_import' && input.items.length === 0
+        ? 'session_created'
+        : input.reason,
+    providerHandle,
+    ...(restate ? { historyOrigin: previousOrigin.raw } : {}),
     ...journalRowBase(epoch, 1, input.fence, input.now())
   }
   const rows: JournalRow[] = [epochRow]
@@ -86,6 +115,14 @@ export function replaceJournalEpoch(input: {
       state,
       identity: item.identity,
       body: item.body,
+      ...journalItemEchoFields(item),
+      ...(input.previous && input.reason !== 'legacy_import' && input.reason !== 'session_created'
+        ? journalItemEchoRestatement(
+            input.previous.itemEchoes,
+            input.previous.aliases.get(agentJournalItemKey(item.identity)) ??
+              agentJournalItemKey(item.identity)
+          )
+        : {}),
       seq: state.lastSequence + 1,
       fence: input.fence,
       ownerFence: item.ownerFence,
@@ -97,6 +134,19 @@ export function replaceJournalEpoch(input: {
     assertJournalFence(row.fence, state.highestFence)
     applyJournalRow(state, row)
     rows.push(row)
+  }
+  for (const { messageId, change } of input.queue.cards) {
+    if (change) {
+      const row = buildJournalQueueRow(
+        state,
+        messageId,
+        change,
+        state.lastSequence + 1,
+        input.now()
+      )
+      applyJournalRow(state, row)
+      rows.push(row)
+    }
   }
   // An accepted message that never reached the agent survives a provider history replacement.
   const queued = [...(input.previous?.submissions.values() ?? [])]
@@ -145,6 +195,7 @@ export function replaceJournalEpoch(input: {
   }
 
   const { sessionId } = input.identity
+  const receipt = input.receipt?.({ epoch, sequence: state.lastSequence })
   input.database.transaction((db) => {
     const retired = readJournalSessionEpoch(db, sessionId)
     if (retired !== null) {
@@ -153,12 +204,16 @@ export function replaceJournalEpoch(input: {
     for (const row of rows) {
       insertJournalRow(db, sessionId, row)
     }
+    input.queue.receipt.write(db)
     publishJournalSessionEpoch(db, input.identity, epoch)
+    receipt?.write(db)
   })
+  input.queue.receipt.committed()
 
   // COMMIT landed: on disk the superseded rows are gone and this epoch is the
   // live one. The caller adopts that immediately, or a later failure leaves the
   // live store writing into an epoch whose rows were just deleted.
   state.oldestSequence = 1
   input.onPublished({ state, newer: null, damage: null })
+  receipt?.committed()
 }

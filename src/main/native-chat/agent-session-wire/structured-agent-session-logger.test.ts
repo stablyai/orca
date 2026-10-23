@@ -5,7 +5,10 @@ import {
   agentSessionRefusalError,
   refuse
 } from '../../../shared/agent-session-wire-refusals'
-import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import {
+  createStructuredAgentSessionLogger,
+  neverThrowingStructuredAgentSessionLogger
+} from './structured-agent-session-logger'
 import {
   STRUCTURED_AGENT_SESSION_LOG_REPEAT_WINDOW_MS as WINDOW_MS,
   createStructuredAgentSessionLogRepeats
@@ -61,6 +64,20 @@ describe('a failure that repeats', () => {
 
     renew()
     expect(written()).toHaveLength(2)
+  })
+
+  it('writes a timing but does not tell repeats apart by it', () => {
+    const logger = createStructuredAgentSessionLogger({ now: () => clock })
+    for (const openMs of [30_001, 30_002]) {
+      logger.warn('a provider could not finish starting', {
+        scope: 'provider-open-failed',
+        sessionId: 'session-1',
+        openMs,
+        error: new Error('thread/start exceeded 30000ms')
+      })
+    }
+    expect(written()).toHaveLength(1)
+    expect(written()[0]?.attributes).toMatchObject({ openMs: 30_001 })
   })
 
   it('never merges different sessions, scopes, levels, messages or errors', () => {
@@ -208,5 +225,24 @@ describe('what an Error leaves in the trace file', () => {
       error: new Error('x', { cause: Object.assign(new Error('no space'), { code: 'ENOSPC' }) })
     })
     expect(written()[0]?.attributes['errorCause']).toEqual(['Error: no space [ENOSPC]'])
+  })
+})
+
+describe('a logger that throws', () => {
+  it('never throws into the operation it reports, and still prints what failed', () => {
+    const loggerError = new Error('logger broke')
+    const broken = () => {
+      throw loggerError
+    }
+    const logger = neverThrowingStructuredAgentSessionLogger({ warn: broken, error: broken })
+    const error = new Error('what failed')
+
+    expect(() => logger.warn('a step failed', { scope: 'step', error })).not.toThrow()
+    expect(() => logger.error('a step failed', { scope: 'step', error })).not.toThrow()
+    expect(console.warn).toHaveBeenCalledWith('[agent-session] a step failed', {
+      scope: 'step',
+      error,
+      loggerError
+    })
   })
 })

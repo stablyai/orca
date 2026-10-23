@@ -91,6 +91,11 @@ export function stubLayout({
 } = {}): () => void {
   const scrollTops = new WeakMap<HTMLElement, number>()
   const restores = [
+    overrideLayoutProperty('clientWidth', {
+      get(this: HTMLElement): number {
+        return this.hasAttribute('data-native-chat-scroll') ? 800 : 0
+      }
+    }),
     overrideLayoutProperty('offsetHeight', {
       get(this: HTMLElement): number {
         if (this.hasAttribute('data-native-chat-scroll')) {

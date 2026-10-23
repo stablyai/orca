@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
@@ -40,13 +40,24 @@ export default function BrowserSettingsScreen({
   const [linkMode, setLinkMode] = useState<MobileTerminalLinkOpenMode>('orca-browser')
   const [pickerOpen, setPickerOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const selectionRevision = useRef(0)
+  const failedSelectionRevision = useRef<number | null>(null)
+  const savedMode = useRef<MobileTerminalLinkOpenMode>('orca-browser')
+  const hasSaved = useRef(false)
 
   useEffect(() => {
     let active = true
     void loadTerminalLinkOpenMode().then(
       (mode) => {
-        if (active) {
-          setLinkMode(mode)
+        if (!hasSaved.current) {
+          savedMode.current = mode
+        }
+        if (
+          active &&
+          (selectionRevision.current === 0 ||
+            failedSelectionRevision.current === selectionRevision.current)
+        ) {
+          setLinkMode(savedMode.current)
         }
       },
       () => {
@@ -62,10 +73,20 @@ export default function BrowserSettingsScreen({
 
   const selectLinkMode = useCallback((mode: MobileTerminalLinkOpenMode) => {
     setError(null)
-    // Optimistic, as base was: the row shows the tapped mode before the write lands.
+    const revision = ++selectionRevision.current
     setLinkMode(mode)
-    void saveTerminalLinkOpenMode(mode).catch(() =>
-      setError('Could not save browser preferences. Try again.')
+    void saveTerminalLinkOpenMode(mode).then(
+      () => {
+        savedMode.current = mode
+        hasSaved.current = true
+      },
+      () => {
+        if (revision === selectionRevision.current) {
+          failedSelectionRevision.current = revision
+          setLinkMode(savedMode.current)
+          setError('Could not save browser preferences. Try again.')
+        }
+      }
     )
   }, [])
 

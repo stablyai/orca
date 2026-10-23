@@ -6,6 +6,7 @@ import {
   type ReadyProjectHostSetupOption
 } from '@/lib/project-host-setup-options'
 import { translate } from '@/i18n/i18n'
+import { boundHostList } from '@/components/host-picker/bounded-host-list'
 
 export type EphemeralVmRecipeOption = NonNullable<OrcaHooks['environmentRecipes']>[number]
 
@@ -54,11 +55,15 @@ function matches(haystack: string, query: string): boolean {
   return haystack.toLowerCase().includes(query)
 }
 
-/** Ready hosts first, then hosts that still need a connection or a project location. */
+/**
+ * Ready hosts first, then hosts that still need a connection or a project location. Ready hosts
+ * already hold the project, so they are few; the rest can be every configured SSH host, so they
+ * are bounded and ranked by name.
+ */
 function buildHostRows(
   hostOptions: readonly ProjectHostSetupOption[],
   query: string
-): RunTargetRowModel[] {
+): { rows: RunTargetRowModel[]; hiddenHostCount: number } {
   const hostMatches = (option: ProjectHostSetupOption): boolean =>
     query === '' ||
     matches(option.label, query) ||
@@ -69,22 +74,34 @@ function buildHostRows(
     (option): option is ReadyProjectHostSetupOption =>
       option.kind === 'ready' && hostMatches(option)
   )
-  const needsSetup = hostOptions.filter(
-    (option): option is NeedsSetupProjectHostOption =>
-      option.kind === 'needs-setup' && hostMatches(option)
+  const needsSetup = boundHostList(
+    hostOptions
+      .filter(
+        (option): option is NeedsSetupProjectHostOption =>
+          option.kind === 'needs-setup' && hostMatches(option)
+      )
+      .map((option) => ({
+        id: getProjectHostSetupSelectionKey(option),
+        label: option.label,
+        searchText: option.detail,
+        option
+      })),
+    // Why the query again: ranks an exact name first so typing it always reaches the host.
+    { query }
   )
-  return [
+  const rows: RunTargetRowModel[] = [
     ...ready.map((option) => ({
       key: `host:${getProjectHostSetupSelectionKey(option)}`,
       kind: 'ready' as const,
       option
     })),
-    ...needsSetup.map((option) => ({
-      key: `needs:${getProjectHostSetupSelectionKey(option)}`,
+    ...needsSetup.shown.map(({ id, option }) => ({
+      key: `needs:${id}`,
       kind: 'needs-setup' as const,
       option
     }))
   ]
+  return { rows, hiddenHostCount: needsSetup.hiddenCount }
 }
 
 function matchRecipes(
@@ -127,12 +144,18 @@ export function buildRunTargetRows({
   recipes: readonly EphemeralVmRecipeOption[]
   query: string
   hasAddHost: boolean
-}): { rows: RunTargetRowModel[]; matchedRecipes: EphemeralVmRecipeOption[] } {
+}): {
+  rows: RunTargetRowModel[]
+  matchedRecipes: EphemeralVmRecipeOption[]
+  /** Hosts the row limit left out; typing narrows them in. */
+  hiddenHostCount: number
+} {
   const trimmed = query.trim().toLowerCase()
   const matchedRecipes = matchRecipes(recipes, trimmed)
+  const hostRows = buildHostRows(hostOptions, trimmed)
   const rows: RunTargetRowModel[] = [
-    ...buildHostRows(hostOptions, trimmed),
+    ...hostRows.rows,
     ...buildSubmenuRows(matchedRecipes.length > 0, hasAddHost)
   ]
-  return { rows, matchedRecipes }
+  return { rows, matchedRecipes, hiddenHostCount: hostRows.hiddenHostCount }
 }

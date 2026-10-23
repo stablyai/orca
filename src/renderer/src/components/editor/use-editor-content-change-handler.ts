@@ -3,6 +3,7 @@ import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import type { DiffContent, FileContent } from './editor-panel-content-types'
 import { isEditorContentUnchanged } from './editor-content-dirty-state'
+import { applyEditorBufferText } from './editor-buffer-adapter'
 
 /**
  * Builds the editor's content-change handler: record the draft, then reconcile
@@ -24,6 +25,7 @@ export function useEditorContentChangeHandler({
 }): (file: OpenFile | null, content: string) => void {
   const markFileDirty = useAppStore((s) => s.markFileDirty)
   const setEditorDraft = useAppStore((s) => s.setEditorDraft)
+  const clearEditorDraft = useAppStore((s) => s.clearEditorDraft)
   const fileContentsRef = useRef(fileContents)
   const diffContentsRef = useRef(diffContents)
   useLayoutEffect(() => {
@@ -40,6 +42,7 @@ export function useEditorContentChangeHandler({
         return
       }
       setEditorDraft(file.id, content)
+      applyEditorBufferText(useAppStore.getState(), file, content)
       const ignoreTrailingWhitespace = file.language === 'markdown'
       if (file.mode === 'edit') {
         const original = fileContentsRef.current[file.id]?.content ?? ''
@@ -47,12 +50,16 @@ export function useEditorContentChangeHandler({
           file.id,
           !isEditorContentUnchanged(content, original, ignoreTrailingWhitespace)
         )
+        // Why: back at the saved text, a kept draft could later restore stale text into the model.
+        if (content === original) {
+          clearEditorDraft(file.id)
+        }
         return
       }
       const diffContent = diffContentsRef.current[file.id]
       const original = diffContent?.kind === 'text' ? diffContent.modifiedContent : ''
       markFileDirty(file.id, !isEditorContentUnchanged(content, original, ignoreTrailingWhitespace))
     },
-    [markFileDirty, setEditorDraft]
+    [clearEditorDraft, markFileDirty, setEditorDraft]
   )
 }

@@ -11,7 +11,8 @@ import { AGENT_BROWSER_CLEANUP_TIMEOUT_MS } from './agent-browser-bridge-types'
 import { releaseHeldPageInput } from './guest-direct-key-input'
 import {
   captureRemoteCliBrowserRevocation,
-  captureRemoteCliBrowserScope
+  captureRemoteCliBrowserScope,
+  runOutsideRemoteCliBrowserScope
 } from '../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 
 export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown {
@@ -93,7 +94,7 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
                 const gate = (): void => assertNotRevoked(target.webContentsId)
                 gate()
                 return origin.bridged
-                  ? this.runHostCommand(session, target.webContentsId, gate, origin.revoked, () =>
+                  ? this.runHostCommand(session, target.webContentsId, gate, origin, () =>
                       execute(session, target)
                     )
                   : execute(session, target)
@@ -130,11 +131,13 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
     sessionName: string,
     webContentsId: number,
     gate: () => void,
-    revoked: AbortSignal | undefined,
+    { revoked, hostRevoked }: { revoked?: AbortSignal; hostRevoked?: AbortSignal },
     execute: () => Promise<T>
   ): Promise<T> {
     return runWithRemoteCliPageAdmission(webContentsId, gate, execute, {
       revoked,
+      hostRevoked,
+      inPageTurn: (work) => this.enqueueDesktopPageWork(sessionName, work),
       // Why keep the queue: commands waiting on the page still run, on a fresh helper session.
       retire: () =>
         this.destroySession(sessionName, {
@@ -149,6 +152,19 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
             )
           : Promise.resolve()
       }
+    })
+  }
+
+  /** Desktop-owned page work, run in the page's turn so it cannot interleave with a command. */
+  private enqueueDesktopPageWork(sessionName: string, work: () => Promise<void>): Promise<unknown> {
+    return new Promise((resolve, reject) => {
+      let queue = this.commandQueues.get(sessionName)
+      if (!queue) {
+        queue = []
+        this.commandQueues.set(sessionName, queue)
+      }
+      queue.push({ execute: () => runOutsideRemoteCliBrowserScope(work), resolve, reject })
+      void this.processQueue(sessionName)
     })
   }
 

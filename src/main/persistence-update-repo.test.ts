@@ -23,6 +23,8 @@ import {
   getLocalWorktreeScanGeneration,
   isLocalWorktreeScanGenerationCurrent
 } from './local-worktree-scan-generation'
+import { hostWorktreeTarget } from '../shared/worktree/host-qualified-identity'
+import { removeWorktreeMetaRow } from './persistence/host-qualified-worktree-meta'
 
 // Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
@@ -365,7 +367,9 @@ describe('Store', () => {
     const store = await createStore()
     store.addRepo(makeRepo({ id: 'r1', path: '/repo', kind: 'folder', displayName: 'Repo' }))
     const workspaceId = 'r1::/repo::workspace:11111111-1111-4111-8111-111111111111'
-    store.setWorktreeMeta(workspaceId, { displayName: 'Second workspace' })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: workspaceId, hostId: 'local' }), {
+      displayName: 'Second workspace'
+    })
 
     expect(() =>
       store.updateProjectHostSetup({
@@ -375,7 +379,7 @@ describe('Store', () => {
     ).toThrow("This folder project has 1 other workspace that a Git project can't show")
     expect(store.getRepo('r1')).toMatchObject({ kind: 'folder', displayName: 'Repo' })
 
-    store.removeWorktreeMeta(workspaceId)
+    removeWorktreeMetaRow(store, workspaceId, undefined)
     expect(
       store.updateProjectHostSetup({ setupId: 'r1', updates: { kind: 'git' } })?.repo
     ).toMatchObject({ kind: 'git' })
@@ -460,7 +464,9 @@ describe('Store', () => {
   it('deletes repo-backed project host setups by removing the compatibility repo', async () => {
     const store = await createStore()
     store.addRepo(makeRepo({ id: 'r1', path: '/repo' }))
-    store.setWorktreeMeta('r1::/path/wt1', { displayName: 'wt1' })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: 'r1::/path/wt1', hostId: 'local' }), {
+      displayName: 'wt1'
+    })
 
     const result = store.deleteProjectHostSetup({ setupId: 'r1' })
 

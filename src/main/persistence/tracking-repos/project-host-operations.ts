@@ -11,6 +11,7 @@ import type {
 } from '../../../shared/project-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { Repo } from '../../../shared/repo-types'
+import type { RepoHostTarget } from '../../../shared/repo-host-identity'
 import { getRepoExecutionHostId, normalizeExecutionHostId } from '../../../shared/execution-host'
 import { normalizeProjectRuntimePreference } from '../../../shared/project-execution-runtime'
 import { findProjectHostSetup } from '../../../shared/project-host-setup-target'
@@ -31,7 +32,7 @@ export type ProjectHostMutationOperations = {
     setup: ProjectHostSetup,
     updates: ProjectHostSetupUpdateArgs['updates']
   ) => ProjectHostSetup
-  removeProjectForHost: (id: string, hostId: ProjectHostSetup['hostId']) => void
+  removeProjectForHost: (target: RepoHostTarget) => void
   scheduleSave: () => void
 }
 
@@ -65,8 +66,8 @@ export class ProjectHostPersistenceOperations {
     return this.operations.updateIndependentProjectHostSetup(setup, updates)
   }
 
-  private removeProjectForHost(id: string, hostId: ProjectHostSetup['hostId']): void {
-    this.operations.removeProjectForHost(id, hostId)
+  private removeProjectForHost(target: RepoHostTarget): void {
+    this.operations.removeProjectForHost(target)
   }
 
   private scheduleSave(): void {
@@ -195,7 +196,7 @@ export class ProjectHostPersistenceOperations {
     // With no exact row the setup is stale, and the path below drops just the setup.
     const repo = this.findSetupRepo(setup)
     if (repo) {
-      this.removeProjectForHost(repo.id, setup.hostId)
+      this.removeProjectForHost(repo)
       return { project, setup, repo: this.hydrateRepo(repo) }
     }
     this.state.projectHostSetups = this.state.projectHostSetups.filter((entry) => entry !== setup)

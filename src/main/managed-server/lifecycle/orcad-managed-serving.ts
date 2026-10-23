@@ -36,8 +36,7 @@ export const MANAGED_ORCAD_FENCED_DETAIL =
   'An update, rollback or recovery holds this host; it was not started.'
 
 /** The host has no active version, e.g. another desktop stopped it; a connect redeploys it. */
-export const MANAGED_ORCAD_NOT_ACTIVATED_DETAIL =
-  'This host has no activated managed server to start.'
+export const MANAGED_ORCAD_NOT_ACTIVATED_DETAIL = 'This host has no activated Orca server to start.'
 
 const PROBE_TIMEOUT_MS = 5_000
 // Why: a connect checks right after its fresh tunnel did; one verdict serves both, on that
@@ -155,7 +154,7 @@ async function wakeIfStopped(
       if (await input.probe(input.environment, PROBE_TIMEOUT_MS)) {
         return { state: 'serving' }
       }
-      const detail = 'The managed Orca server process is live but is not answering.'
+      const detail = 'This host’s Orca server process is live but is not answering.'
       console.warn(`[ssh] The managed Orca server on ${label} is not answering: ${detail}`)
       return { state: 'unverifiable', detail }
     }

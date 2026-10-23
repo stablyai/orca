@@ -37,7 +37,7 @@ export function MobileQueuedMessageCardRow({
   ...actions
 }: QueuedMessageCardRowProps): React.JSX.Element {
   if (editor) {
-    // The editor's own head line stands in for the icon, the actions and the caption.
+    // The editor replaces the icon, the text, the actions and the caption.
     return (
       <View
         testID="queued-card-row"

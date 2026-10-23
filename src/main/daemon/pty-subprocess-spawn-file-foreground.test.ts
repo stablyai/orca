@@ -267,13 +267,17 @@ it('accepts only a complete actual-shell Git Bash launch chain', async () => {
   const shellPath = 'C:\\Program Files\\Git\\bin\\bash.exe'
   const handle = createHandle(false, shellPath)
   members.mockReturnValue(new Set([100, 102]))
-  readWindows.mockResolvedValue([{ pid: 100, ppid: 1, name: 'bash.exe', creationTimeMs: 1 },
-    { pid: 102, ppid: 100, name: 'bash.exe', creationTimeMs: 2 }])
+  readWindows.mockResolvedValue([
+    { pid: 100, ppid: 1, name: 'bash.exe', creationTimeMs: 1 },
+    { pid: 102, ppid: 100, name: 'bash.exe', creationTimeMs: 2 }
+  ])
   expect(await handle.inspectChildProcesses?.()).toBe('no-children')
   readWindows.mockResolvedValue([{ pid: 100, ppid: 1, name: 'bash.exe' }])
   expect(await handle.inspectChildProcesses?.()).toBe('unverifiable')
-  readWindows.mockResolvedValue([{ pid: 100, ppid: 1, name: 'bash.exe' },
-    { pid: 102, ppid: 100, name: 'agent.exe' }])
+  readWindows.mockResolvedValue([
+    { pid: 100, ppid: 1, name: 'bash.exe' },
+    { pid: 102, ppid: 100, name: 'agent.exe' }
+  ])
   expect(await handle.inspectChildProcesses?.()).toBe('children')
   members.mockReturnValue(new Set([102]))
   expect(await handle.inspectChildProcesses?.()).toBe('unverifiable')

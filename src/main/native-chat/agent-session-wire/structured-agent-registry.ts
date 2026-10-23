@@ -16,12 +16,16 @@ export type StructuredAgentRegistration = {
 
 type AdapterMethod = keyof StructuredAgentSessionAdapter
 
-/** The adapter methods each declared capability needs. */
-function requiredAdapterMethods(capabilities: AgentSessionCapabilities): AdapterMethod[] {
+/** The adapter methods each declared capability needs. A rewind is either the provider's own,
+ *  observed on recovery, or a fork the agent's next launch makes. */
+function requiredAdapterMethods(
+  capabilities: AgentSessionCapabilities,
+  adapter: StructuredAgentSessionAdapter
+): AdapterMethod[] {
   return [
     ...(capabilities.compact ? (['compact'] as const) : []),
     ...(capabilities.threadGoal ? (['changeThreadGoal'] as const) : []),
-    ...(capabilities.rewind ? (['rewind', 'recoverRewind'] as const) : [])
+    ...(capabilities.rewind && !adapter.forkForRewind ? (['rewind', 'recoverRewind'] as const) : [])
   ]
 }
 
@@ -35,7 +39,7 @@ export class StructuredAgentRegistry {
       if (byAgent.has(agent)) {
         throw new Error(`structured agent ${agent} is registered twice`)
       }
-      const missing = requiredAdapterMethods(capabilities).find(
+      const missing = requiredAdapterMethods(capabilities, registration.adapter).find(
         (method) => !registration.adapter[method]
       )
       if (missing) {

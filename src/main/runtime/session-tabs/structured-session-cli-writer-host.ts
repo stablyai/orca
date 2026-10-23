@@ -105,7 +105,7 @@ export abstract class OrcaRuntimeWithStructuredSessionCliWriterHost extends Orca
             }))
           }),
         sleeping: (workspaceId) =>
-          [...this.terminalSleepStateByWorktreeId.values()].some(
+          [...this.terminalSleepStateByHostWorktree.values()].some(
             (state) =>
               state.worktreeId === workspaceId &&
               (state.phase === 'sleeping' ||

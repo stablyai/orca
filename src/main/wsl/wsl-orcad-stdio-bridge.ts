@@ -40,3 +40,28 @@ export function listenWslOrcadStdioBridge(
     dependencies
   )
 }
+
+type WslOrcadStdioBridgeListen = (
+  transport: OrcadHostTransport,
+  options: WslOrcadStdioBridgeOptions
+) => Promise<StartedPortForward>
+
+/** A persisted local port may be taken by now; a free one beats no connection. */
+export async function listenWslOrcadStdioBridgeOnPreferredPort(
+  transport: OrcadHostTransport,
+  options: WslOrcadStdioBridgeOptions,
+  listen: WslOrcadStdioBridgeListen = listenWslOrcadStdioBridge
+): Promise<StartedPortForward> {
+  try {
+    return await listen(transport, options)
+  } catch (error) {
+    if (options.localPort === 0) {
+      throw error
+    }
+    console.warn(
+      `[wsl] Could not rebind local port ${options.localPort}; picking another:`,
+      error instanceof Error ? error.message : error
+    )
+    return listen(transport, { ...options, localPort: 0 })
+  }
+}

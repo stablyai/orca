@@ -1,3 +1,4 @@
+import { FAKE_APP_SERVER } from './__fixtures__/codex-connection-app-server'
 import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
 import type { EventEmitter } from 'node:events'
 import { realpathSync } from 'node:fs'
@@ -15,6 +16,7 @@ import {
 } from './codex-app-server-connection'
 import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../provider-process/provider-process-supervisor'
 import { isCodexAppServerUnsupportedError } from './codex-app-server-session'
+import { providerRequestTimeoutOf } from '../provider-process/provider-request-timeout'
 import { isCodexAppServerHandshakeExitUnprovenError } from './codex-app-server-handshake-exit-proof'
 
 // close() waits out the supervisor's own stop before forcing the tree.
@@ -37,36 +39,6 @@ afterEach(() => {
  * a stub, but it is the only thing that proves the spawn, the environment, and
  * both traffic directions actually work end to end.
  */
-const FAKE_APP_SERVER = String.raw`
-  const readline = require('node:readline')
-  const send = (payload) => process.stdout.write(JSON.stringify(payload) + '\n')
-  readline.createInterface({ input: process.stdin }).on('line', (line) => {
-    const message = JSON.parse(line)
-    if (message.method === 'initialize') return send({ id: message.id, result: {} })
-    if (message.method === 'test/env') {
-      return send({ id: message.id, result: { codexHome: process.env.CODEX_HOME ?? null } })
-    }
-    if (message.method === 'test/cwd') {
-      return send({ id: message.id, result: { cwd: process.cwd() } })
-    }
-    if (message.method === 'test/notify') {
-      send({ method: 'turn/started', params: { threadId: 'thread-1', turn: { id: 'turn-7' } } })
-      return send({ id: message.id, result: {} })
-    }
-    if (message.method === 'test/ask') {
-      return send({ id: 99, method: 'item/fileChange/requestApproval', params: { itemId: 'i1' } })
-    }
-    if (message.method === 'test/refuse') {
-      return send({ id: message.id, error: { code: -32602, message: 'bad params' } })
-    }
-    if (message.method === 'test/missing') {
-      return send({ id: message.id, error: { code: -32601, message: 'method not found' } })
-    }
-    if (message.id === 99) {
-      return send({ method: 'test/answered', params: message })
-    }
-  })
-`
 
 async function openFakeServer(
   handlers: CodexAppServerConnectionHandlers = {},
@@ -403,7 +375,9 @@ describe('openCodexAppServerConnection', () => {
 
     const slow = rejection(connection.request('turn/interrupt', undefined, { timeoutMs: 50 }))
     await vi.advanceTimersByTimeAsync(60)
-    expect((await slow).name).toBe('CodexAppServerTimeoutError')
+    const timedOut = await slow
+    expect(timedOut.name).toBe('CodexAppServerTimeoutError')
+    expect(providerRequestTimeoutOf(timedOut)).toEqual({ method: 'turn/interrupt', timeoutMs: 50 })
     const id = Number(written.find((frame) => frame.method === 'turn/interrupt')?.id)
     child.stdout.write(`${JSON.stringify({ id, result: {} })}\n`)
     child.stdout.write(`${JSON.stringify({ id: 999, error: { message: 'no such request' } })}\n`)

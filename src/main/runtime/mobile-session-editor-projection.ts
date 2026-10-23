@@ -92,7 +92,7 @@ export function buildHeadlessMobileSessionEditorTabs(
 }
 
 /** The record the phone's tab names: two owners can hold one path, so by the id it was listed under. */
-function listedFile(
+export function findListedEditorFile(
   files: readonly PersistedOpenFile[],
   session: WorkspaceSessionState,
   worktreeId: string,
@@ -117,7 +117,7 @@ export function retireHeadlessEditorTab(
 ): WorkspaceSessionState | null {
   const files = session.openFilesByWorktree?.[worktreeId] ?? []
   const file = ORCA_LAYOUT_OWNER_IS_MAIN
-    ? listedFile(files, session, worktreeId, tab)
+    ? findListedEditorFile(files, session, worktreeId, tab)
     : files.find((candidate) => candidate.filePath === tab.filePath)
   if (!file) {
     return null

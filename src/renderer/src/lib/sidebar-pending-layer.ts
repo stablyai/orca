@@ -5,7 +5,10 @@ import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { getFolderWorkspaceWorktreeHostId } from '../../../shared/folder-workspace-worktree'
 import type { Repo } from '../../../shared/repo-types'
 import type { SidebarFeedDomains } from '../../../shared/sidebar-list/sidebar-feed-domains'
-import type { PairedServerWorkspaceRow } from '../../../shared/sidebar-list/paired-server-rows'
+import {
+  buildPairedServerRows,
+  type PairedServerWorkspaceRow
+} from '../../../shared/sidebar-list/paired-server-rows'
 import { buildWorkspaceRows, type WorkspaceRow } from '../../../shared/sidebar-list/workspace-rows'
 import type { WorktreeLineage } from '../../../shared/worktree/lineage-types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
@@ -243,10 +246,6 @@ export function holdCreatedSidebarWorkspace(workspace: CreatedWorkspace): void {
           getFolderWorkspaceWorktreeHostId(workspace.folderWorkspace)
         ]
   const host = parseExecutionHostId(rawHostId)
-  // A paired server's new row reaches main by the server's change event (pairedServerRows).
-  if (host?.kind === 'runtime') {
-    return
-  }
   const entry = {
     opId: ++lastOpId,
     worktreeId,
@@ -278,6 +277,19 @@ function patch<Row extends Partial<Pick<WorkspaceRow, RowWriteField>>>(
   return patched
 }
 
+function withMissing<Key, Row>(
+  rows: ReadonlyMap<Key, Row>,
+  added: ReadonlyMap<Key, Row>
+): Map<Key, Row> {
+  const merged = new Map(rows)
+  for (const [key, row] of added) {
+    if (!merged.has(key)) {
+      merged.set(key, row)
+    }
+  }
+  return merged
+}
+
 /** Main's inputs with the window's pending operations over them; the same object when none. */
 export function overlaySidebarPendingLayer(
   domains: SidebarFeedDomains,
@@ -288,34 +300,30 @@ export function overlaySidebarPendingLayer(
   if (writes.length === 0 && created.length === 0) {
     return domains
   }
-  const workspaces = new Map(domains.workspaces)
-  const createdRows = buildWorkspaceRows({
+  const createdCatalog = {
+    ...catalog,
     worktrees: created.flatMap(({ workspace }) =>
       'worktree' in workspace ? [workspace.worktree] : []
     ),
     folderWorkspaces: created.flatMap(({ workspace }) =>
       'folderWorkspace' in workspace ? [workspace.folderWorkspace] : []
-    ),
-    repos: catalog.repos,
-    lineageById: catalog.lineageById
-  })
-  for (const [identity, row] of createdRows) {
-    if (!workspaces.has(identity)) {
-      workspaces.set(identity, row)
-    }
+    )
   }
+  const workspaces = withMissing(domains.workspaces, buildWorkspaceRows(createdCatalog))
+  // Main lists a paired server's new row only once the server's own list reaches it.
+  const pairedServerRows = withMissing(
+    domains.pairedServerRows,
+    buildPairedServerRows(createdCatalog)
+  )
   const touched = new Set(writes.map((write) => write.worktreeId))
   for (const [identity, row] of workspaces) {
     if (touched.has(row.id)) {
       workspaces.set(identity, patch(row, row.id, rowHostId(row), writes))
     }
   }
-  let pairedServerRows = domains.pairedServerRows
-  for (const [key, row] of domains.pairedServerRows) {
+  for (const [key, row] of pairedServerRows) {
     if (touched.has(row.worktreeId)) {
-      const patched = new Map(pairedServerRows)
-      patched.set(key, patch(row, row.worktreeId, serverRowHostId(row), writes))
-      pairedServerRows = patched
+      pairedServerRows.set(key, patch(row, row.worktreeId, serverRowHostId(row), writes))
     }
   }
   return { ...domains, workspaces, pairedServerRows }

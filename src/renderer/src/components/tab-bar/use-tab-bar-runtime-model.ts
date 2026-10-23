@@ -11,7 +11,7 @@ import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTar
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
-import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 import { useOptionalShortcutLabel, useShortcutLabel } from '@/hooks/useShortcutLabel'
 import {
@@ -27,6 +27,7 @@ import {
 import { shouldShowWindowsShellMenu } from './windows-shell-menu-visibility'
 import { createUnifiedTabLookup } from './tab-bar-item-model'
 import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 const isWindows = navigator.userAgent.includes('Windows')
 export const isMacOs = navigator.userAgent.includes('Mac')
@@ -125,7 +126,7 @@ export function useTabBarRuntimeModel({
   const settings = useAppStore((s) => s.settings)
   // Why: use the worktree's owning host so offered Windows shells match the host that actually runs the terminal.
   const activeRuntimeEnvironmentId = useAppStore((s) =>
-    runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(s, worktreeId)
+    runtimeEnvironmentIdOrLocalUnlessTwin(s, worktreeId)
   )
   // Why: retained tab strips rerun selectors on every store write; reuse canonical indexes, don't flatten both slices here.
   const worktreeConnectionId = useAppStore(
@@ -174,7 +175,7 @@ export function useTabBarRuntimeModel({
   const projects = useAppStore((s) => (needsLocalProjectRuntime ? s.projects : EMPTY_PROJECTS))
   const repos = useAppStore((s) => (needsLocalProjectRuntime ? s.repos : EMPTY_REPOS))
   const worktreesByRepo = useAppStore((s) =>
-    needsLocalProjectRuntime ? s.worktreesByRepo : EMPTY_WORKTREES_BY_REPO
+    needsLocalProjectRuntime ? selectWorktreesByRepo(s) : EMPTY_WORKTREES_BY_REPO
   )
   const localProjectRuntime = useMemo(() => {
     if (!needsLocalProjectRuntime) {

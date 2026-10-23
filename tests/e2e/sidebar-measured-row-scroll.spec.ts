@@ -127,7 +127,7 @@ test('keeps a collapsed group visible when an idle card below it grows', async (
     if (!group) {
       throw new Error('Fixture group was not created')
     }
-    await store.getState().moveProjectToGroup(member.id, group.id)
+    await store.getState().moveProjectToGroup(member, group.id)
     const state = store.getState()
     state.setGroupBy('repo')
     state.setProjectOrderBy('manual')

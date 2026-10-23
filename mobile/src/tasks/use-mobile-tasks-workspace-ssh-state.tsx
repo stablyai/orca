@@ -123,7 +123,12 @@ export function useMobileTasksWorkspaceSshState(model: WorkspaceSparseActionsMod
             connectionId: workspaceCreateTargetRepo.connectionId
           })
         }
-      : { operation: localAgentDetectionRead, reply: localAgentDetectionRead.request(repoClient) }
+      : {
+          operation: localAgentDetectionRead,
+          reply: localAgentDetectionRead.request(repoClient, {
+            repoId: workspaceCreateTargetRepo.id
+          })
+        }
     void detection.reply
       .then((reply) => {
         if (stale) {

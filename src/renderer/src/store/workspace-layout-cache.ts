@@ -4,6 +4,7 @@
 
 import { stableJson } from '../../../shared/workspace-layout/workspace-layout-load-report'
 import type { PublishedWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-published'
+import { applyWorkspaceLayoutRecordChange } from '../../../shared/workspace-layout/workspace-layout-records'
 import type { WorkspaceLayoutChangeFrame } from '../../../shared/workspace-layout/workspace-layout-stream-frames'
 
 export type WorkspaceLayoutCache = Readonly<Record<string, PublishedWorkspaceLayout>>
@@ -11,8 +12,10 @@ export type WorkspaceLayoutCache = Readonly<Record<string, PublishedWorkspaceLay
 export const EMPTY_WORKSPACE_LAYOUT_CACHE: WorkspaceLayoutCache = {}
 
 /**
- * The cache's only writer (design 3.3's `applyFromRuntime`): replaces from the runtime's frame;
- * nothing edits, merges or saves it. Returns the same cache when nothing changed.
+ * The cache's only writer (design 3.3's `applyFromRuntime`): replaces from the runtime's frame,
+ * or applies its changed records to the workspace they name; nothing else edits, merges or saves
+ * it. Returns the same cache when nothing changed. Throws on records that do not fit the cache:
+ * the stream must then be fetched again.
  */
 export function applyLayoutFrame(
   cache: WorkspaceLayoutCache,
@@ -28,6 +31,18 @@ export function applyLayoutFrame(
       }
       const { [frame.key]: _removed, ...rest } = cache
       return rest
+    }
+    case 'records': {
+      const next: Record<string, PublishedWorkspaceLayout> = { ...cache }
+      for (const change of frame.workspaces) {
+        const layout = applyWorkspaceLayoutRecordChange(next[change.key], change)
+        if (layout) {
+          next[change.key] = layout
+        } else {
+          delete next[change.key]
+        }
+      }
+      return frame.workspaces.length > 0 ? next : cache
     }
     case 'snapshot': {
       // Keeps each equal entry, so a reconnect with unchanged data re-renders nothing.

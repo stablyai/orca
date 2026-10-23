@@ -187,16 +187,12 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
   const handleRestartExitedPane = useCallback(
     (processExit: PaneProcessExit) => {
       clearPaneProcessExit(processExit.paneId)
-      const leafId = managerRef.current
-        ?.getPanes()
-        .find((candidate) => candidate.id === processExit.paneId)?.leafId
-      // Why Codex: preserves the pre-existing fallback; a null startup has always relaunched Codex here.
-      const startup =
-        resolveTerminalProcessExitRestartStartup(processExit) ??
-        (leafId ? buildAccountRestartStartup('codex', leafId) : null)
-      handleRestartPane(processExit.paneId, startup, { focus: true })
+      // Why no agent fallback: a null startup means a plain shell; account switches restart via their own path.
+      handleRestartPane(processExit.paneId, resolveTerminalProcessExitRestartStartup(processExit), {
+        focus: true
+      })
     },
-    [buildAccountRestartStartup, clearPaneProcessExit, handleRestartPane, managerRef]
+    [clearPaneProcessExit, handleRestartPane]
   )
 
   const handleCloseExitedPane = useCallback(

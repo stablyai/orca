@@ -107,13 +107,23 @@ describe('getWorkItemDetails', () => {
         return { stdout: '[]' }
       }
       if (endpoint === 'projects/g%2Fp/merge_requests/12/reviewers') {
-        return { stdout: '[]' }
+        return { stdout: JSON.stringify([{ user: { id: 1, username: 'alice', name: 'Alice' } }]) }
       }
       if (endpoint === 'projects/g%2Fp/merge_requests/12/approvals') {
-        return { stdout: JSON.stringify({ approvals_required: 0, approvals_left: 0 }) }
+        return {
+          stdout: JSON.stringify({
+            approvals_required: 1,
+            approvals_left: 0,
+            approved_by: [{ user: { id: 1, username: 'alice', name: 'Alice' } }]
+          })
+        }
       }
       if (endpoint === 'projects/g%2Fp/merge_requests/12/approval_state') {
-        return { stdout: JSON.stringify({ rules: [] }) }
+        return {
+          stdout: JSON.stringify({
+            rules: [{ id: 5, name: 'Maintainer', approvals_required: 1, approved: true }]
+          })
+        }
       }
       if (endpoint === 'projects/g%2Fp/merge_requests/12/diffs?per_page=100') {
         return {
@@ -139,11 +149,56 @@ describe('getWorkItemDetails', () => {
       additions: 1,
       deletions: 1
     })
+    expect(details?.reviewers).toMatchObject([{ id: 1, username: 'alice' }])
+    expect(details?.approvalState).toMatchObject({
+      approvalsRequired: 1,
+      approvalsLeft: 0,
+      approvedBy: [{ id: 1, username: 'alice' }],
+      rules: [{ id: 5, approved: true }]
+    })
+    expect(glabExecFileAsyncMock.mock.calls).toHaveLength(8)
     expect(glabExecFileAsyncMock.mock.calls.map(([args]) => args)).toContainEqual([
       'api',
       'projects/g%2Fp/merge_requests/12/diffs?per_page=100'
     ])
     expect(glabExecFileAsyncMock.mock.calls.flatMap(([args]) => args)).not.toContain('--paginate')
+
+    glabExecFileAsyncMock.mockClear()
+    const explicitFull = await getWorkItemDetails(
+      '/repo',
+      12,
+      'mr',
+      undefined,
+      undefined,
+      undefined,
+      {},
+      {
+        includeReviewDetails: true
+      }
+    )
+    expect(explicitFull).toEqual(details)
+    expect(glabExecFileAsyncMock.mock.calls).toHaveLength(8)
+
+    glabExecFileAsyncMock.mockClear()
+    const checks = await getWorkItemDetails(
+      '/repo',
+      12,
+      'mr',
+      undefined,
+      undefined,
+      undefined,
+      {},
+      {
+        includeReviewDetails: false
+      }
+    )
+    expect(checks).toEqual({ ...details, files: [], reviewers: [], approvalState: undefined })
+    expect(glabExecFileAsyncMock.mock.calls.map(([args]) => args.at(-1)).sort()).toEqual([
+      'projects/g%2Fp/merge_requests/12',
+      'projects/g%2Fp/merge_requests/12/discussions?per_page=100',
+      'projects/g%2Fp/pipelines/99/bridges?per_page=100',
+      'projects/g%2Fp/pipelines/99/jobs?per_page=100'
+    ])
   })
 
   it('expands bridge child-pipeline jobs into the checks list', async () => {
@@ -251,6 +306,78 @@ describe('getWorkItemDetails', () => {
       status: 'failed',
       pipelineId: 99
     })
+
+    glabExecFileAsyncMock.mockClear()
+    const narrow = await getWorkItemDetails(
+      '/repo',
+      12,
+      'mr',
+      undefined,
+      undefined,
+      undefined,
+      {},
+      {
+        includeReviewDetails: false
+      }
+    )
+    expect(narrow).toEqual({ ...details, approvalState: undefined })
+    expect(glabExecFileAsyncMock.mock.calls.map(([args]) => args.at(-1)).sort()).toEqual([
+      'projects/g%2Fp/merge_requests/12',
+      'projects/g%2Fp/merge_requests/12/discussions?per_page=100',
+      'projects/g%2Fp/pipelines/200/jobs?per_page=100',
+      'projects/g%2Fp/pipelines/99/bridges?per_page=100',
+      'projects/g%2Fp/pipelines/99/jobs?per_page=100'
+    ])
+  })
+
+  it('preserves issue details when review enrichment is disabled', async () => {
+    glabExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args.at(-1) === 'projects/g%2Fp/issues/12') {
+        return {
+          stdout: JSON.stringify({
+            iid: 12,
+            title: 'Issue',
+            state: 'opened',
+            description: 'Issue body',
+            assignees: [{ username: 'alice' }]
+          })
+        }
+      }
+      if (args.at(-1) === 'projects/g%2Fp/issues/12/discussions?per_page=100') {
+        return {
+          stdout: JSON.stringify([
+            {
+              id: 'issue-thread',
+              notes: [{ id: 7, body: 'Issue note', author: { username: 'alice' } }]
+            }
+          ])
+        }
+      }
+      throw new Error(`unexpected issue detail endpoint: ${args.at(-1)}`)
+    })
+    const full = await getWorkItemDetails('/repo', 12, 'issue')
+    const fullCalls = glabExecFileAsyncMock.mock.calls.map(([args]) => args)
+    expect(full).toMatchObject({
+      body: 'Issue body',
+      assignees: ['alice'],
+      comments: [{ body: 'Issue note' }]
+    })
+    glabExecFileAsyncMock.mockClear()
+    const narrow = await getWorkItemDetails(
+      '/repo',
+      12,
+      'issue',
+      undefined,
+      undefined,
+      undefined,
+      {},
+      {
+        includeReviewDetails: false
+      }
+    )
+    expect(narrow).toEqual(full)
+    expect(glabExecFileAsyncMock.mock.calls.map(([args]) => args)).toEqual(fullCalls)
+    expect(fullCalls).toHaveLength(2)
   })
 
   // Why: each fetch spawns a `glab` binary (a remote exec over SSH) and this runs on the Checks

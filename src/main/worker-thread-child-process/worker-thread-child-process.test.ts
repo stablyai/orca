@@ -1,11 +1,9 @@
 import { EventEmitter } from 'node:events'
+import { createHash } from 'node:crypto'
 import { existsSync } from 'node:fs'
-import { mkdtemp, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { MessageChannel, Worker, type MessagePort } from 'node:worker_threads'
 import { runProcess } from '@orca/process-host'
-import { build } from 'esbuild'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import {
   IDLE_TEARDOWN_MS,
@@ -13,6 +11,7 @@ import {
   type WorkerThreadChildProcess
 } from './worker-thread-child-process'
 import { serveWorkerThreadChildProcesses } from './worker-thread-child-process-server'
+import { createWorkerThreadChildProcessTestEntry } from './worker-thread-child-process-worker.test-fixtures'
 
 // Both halves joined by a real MessageChannel, so every event crosses structured
 // clone exactly as it does between the main thread and the worker.
@@ -93,6 +92,43 @@ afterEach(() => {
 })
 
 describe('WorkerThreadChildProcessHost over a message channel', () => {
+  it('delivers large stdout and stderr exactly across backpressure and buffer transfer', async () => {
+    const blocks = 64
+    const bytes = Buffer.alloc(64 * 1024, 0x61)
+    const script = `
+      const bytes = Buffer.alloc(64 * 1024, 0x61);
+      (async () => {
+        for (let i = 0; i < ${blocks}; i++) {
+          for (const pipe of [process.stdout, process.stderr]) {
+            await new Promise((resolve, reject) =>
+              pipe.write(bytes, error => error ? reject(error) : resolve()));
+          }
+        }
+      })().catch(() => process.exitCode = 1);
+    `
+    const child = makeConnectedHost().spawn({ program: process.execPath, args: ['-e', script] })
+    const expected = createHash('sha256')
+    const stdout = createHash('sha256')
+    const stderr = createHash('sha256')
+    let received = 0
+    child.stdout.on('data', (chunk: Buffer) => {
+      stdout.update(chunk)
+      received += chunk.length
+    })
+    child.stderr.on('data', (chunk: Buffer) => {
+      stderr.update(chunk)
+      received += chunk.length
+    })
+    for (let i = 0; i < blocks; i++) {
+      expected.update(bytes)
+    }
+    expect(await waitForClose(child)).toEqual([0, null])
+    const digest = expected.digest('hex')
+    expect(stdout.digest('hex')).toBe(digest)
+    expect(stderr.digest('hex')).toBe(digest)
+    expect(received).toBe(blocks * bytes.length * 2)
+  })
+
   it('runs a real piped child across the message boundary', async () => {
     const child = makeConnectedHost().spawn({
       program: process.execPath,
@@ -236,22 +272,14 @@ describe('WorkerThreadChildProcessHost over a message channel', () => {
 describe('WorkerThreadChildProcessHost on a real worker thread', () => {
   let directory = ''
   let entryPath = ''
+  let dispose: (() => Promise<void>) | undefined
 
   beforeAll(async () => {
-    directory = await mkdtemp(join(tmpdir(), 'orca-worker-child-'))
-    entryPath = join(directory, 'worker-thread-child-process-entry.cjs')
-    await build({
-      entryPoints: [join(__dirname, 'worker-thread-child-process-entry.ts')],
-      outfile: entryPath,
-      bundle: true,
-      platform: 'node',
-      format: 'cjs',
-      logLevel: 'silent'
-    })
+    ;({ directory, entryPath, dispose } = await createWorkerThreadChildProcessTestEntry())
   }, 60_000)
 
   afterAll(async () => {
-    await rm(directory, { recursive: true, force: true })
+    await dispose?.()
   })
 
   it.each([

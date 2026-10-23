@@ -3,13 +3,14 @@ import { agentSessionOwnerBindingsEqual } from '../../../../shared/claimed-agent
 import { addNodePtyRecoveryHint } from '../../../daemon/node-pty-error-hints'
 import type { Store } from '../../../persistence'
 import type { IPtyProvider } from '../../../providers/pty-provider-contract'
-import { ptyIncarnationById, ptyOwnership } from './ownership-state'
+import { isCurrentPtyExit, ptyIncarnationById, ptyOwnership } from './ownership-state'
 import { getRelayPtyId } from './registry'
 import {
   KEEP_HISTORY_STOP_POLL_MS,
   KEEP_HISTORY_STOP_SETTLE_MS
 } from '../delivery/visibility-state'
 import { clearProviderPtyState } from './state-cleanup'
+import { PtyExitProof, type PtyRetirementEvidence } from '../../../pty-exit-proof'
 
 export function normalizeNodePtySpawnError(err: unknown): Error {
   const rawMessage = err instanceof Error ? err.message : String(err)
@@ -46,7 +47,7 @@ export async function isProviderPtyLive(
 ): Promise<boolean> {
   // Why: bound the liveness list RPC by the teardown deadline so a wedged daemon
   // fails fast; undefined keeps the provider default for all other callers.
-  return (await provider.listProcesses(deadlineMs !== undefined ? { deadlineMs } : undefined)).some(
+  return (await provider.listProcesses({ deadlineMs, ptyIds: [ptyId] })).some(
     (session) => session.id === ptyId
   )
 }
@@ -55,7 +56,9 @@ export async function isProviderAgentSessionOwnerLive(
   provider: IPtyProvider,
   owner: AgentSessionOwnerBinding
 ): Promise<boolean> {
-  const session = (await provider.listProcesses()).find((candidate) => candidate.id === owner.ptyId)
+  const session = (await provider.listProcesses({ ptyIds: [owner.ptyId] })).find(
+    (candidate) => candidate.id === owner.ptyId
+  )
   if (!session) {
     return false
   }
@@ -75,12 +78,14 @@ export async function isProviderAgentSessionOwnerLive(
 export async function verifyPtyStopped(
   provider: IPtyProvider,
   ptyId: string,
-  opts: { keepHistory?: boolean; deadlineMs?: number } | undefined
+  opts: { keepHistory?: boolean; deadlineMs?: number } | undefined,
+  exitObserved = false
 ): Promise<boolean> {
   if (await isProviderPtyLive(provider, ptyId, opts?.deadlineMs)) {
     return false
   }
-  if (!opts?.keepHistory) {
+  // Why: this incarnation's observed exit is the proof; the settle poll only guards an unobserved stop.
+  if (!opts?.keepHistory || exitObserved) {
     return true
   }
   const settleDeadline = Date.now() + KEEP_HISTORY_STOP_SETTLE_MS
@@ -99,16 +104,27 @@ export async function verifyPtyStopped(
   return true
 }
 
+/** Returns the retired incarnation, or `null` when the proof names a different incarnation than
+ *  the record's: a same-id respawn owns it now, so nothing is retired. A proof naming none still
+ *  retires: owner reconciliation can stamp the same process's incarnation mid-stop. */
 export function finishPtyShutdown(
   id: string,
   connectionId: string | null | undefined,
-  store: Store | undefined
-): string | undefined {
+  store: Store | undefined,
+  evidence: PtyRetirementEvidence
+): string | undefined | null {
+  if (
+    evidence instanceof PtyExitProof &&
+    evidence.incarnationId !== undefined &&
+    !isCurrentPtyExit({ id, incarnationId: evidence.incarnationId })
+  ) {
+    return null
+  }
   const incarnationId = ptyIncarnationById.get(id)
   clearProviderPtyState(id)
   if (connectionId) {
     // Keeps any relay-era undelivered stop on the lease: only host evidence may retire it.
-    store?.markSshRemotePtyLease(connectionId, getRelayPtyId(connectionId, id), 'terminated')
+    store?.markSshRemotePtyLease(connectionId, getRelayPtyId(connectionId, id), evidence)
   }
   ptyOwnership.delete(id)
   return incarnationId

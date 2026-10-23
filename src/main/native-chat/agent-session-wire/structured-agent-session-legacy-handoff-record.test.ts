@@ -51,6 +51,9 @@ function openHost(): void {
     store,
     adapter: startsWhenPublished(
       {
+        open: async () => ({
+          reportedOptions: { model: '' }
+        }),
         acquire,
         closeSession: vi.fn(async () => true),
         releaseAcquisition: vi.fn(async () => true),
@@ -129,7 +132,7 @@ beforeEach(async () => {
   stopOwnerProcess = vi.fn()
   dispatch = vi.fn(async () => ({ state: 'admitted' as const }))
   acquire = vi.fn(async ({ fence, spawnToken }) => ({
-    providerChildPhase: 'starting' as const,
+    acquisitionGeneration: globalThis.crypto.randomUUID(),
     process: { hostId: 'local', pid: 4242, processStartTimeMs: NOW - 1_000, spawnToken },
     link: {
       linkId: `link-${fence}`,

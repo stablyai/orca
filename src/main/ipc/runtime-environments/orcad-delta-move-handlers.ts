@@ -34,7 +34,7 @@ export function registerOrcadDeltaMoveHandlers(getUserDataPath: () => string): v
         (entry) => entry.id === target.orcadFence?.environmentId
       )
       if (!environment) {
-        throw new Error('The managed Orca server for this host is no longer registered.')
+        throw new Error('This host’s Orca server is no longer registered.')
       }
       const result = await runOrcadDeltaMove({
         userDataPath,
@@ -42,11 +42,11 @@ export function registerOrcadDeltaMoveHandlers(getUserDataPath: () => string): v
         claims,
         target,
         environment,
-        destination: orcadMigrationDestinationFor(environment),
+        connectDestination: async () =>
+          orcadMigrationDestinationFor(
+            await ensureOrcadManagedTunnel(userDataPath, environment.id)
+          ),
         censusHost: censusHostRelayTerminalsFor(target),
-        ensureTunnel: async () => {
-          await ensureOrcadManagedTunnel(userDataPath, environment.id)
-        },
         runTargetLifecycle
       })
       if (result.outcome === 'moved') {

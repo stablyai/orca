@@ -36,6 +36,12 @@ import type {
   SkillRemoveRequest
 } from '../../shared/skill-install-contract'
 import type { SkillProviderRootOverrides } from '../skills/skill-provider-destinations'
+import type {
+  BundledSkillExecuteRequest,
+  BundledSkillInstallResult,
+  BundledSkillPlan,
+  BundledSkillPlanRequest
+} from '../../shared/bundled-skill-plan'
 export type RuntimeSkillCommandSurface = {
   setSkillCloudService(service: SkillCloudService): void
   assertAgentSkillSharingAllowed(): void
@@ -98,6 +104,8 @@ export type RuntimeSkillCommandSurface = {
     signal?: AbortSignal,
     onProgress?: (progress: SkillBundleInstallProgress) => void
   ): Promise<SkillBundleInstallResult>
+  planLocalBundledSkills(request: BundledSkillPlanRequest): Promise<BundledSkillPlan>
+  executeLocalBundledSkills(request: BundledSkillExecuteRequest): Promise<BundledSkillInstallResult>
   getSharedSkillInstallProgress(operationId: string): SkillBundleInstallProgress | null
   cancelSharedSkillInstall(operationId: string): boolean
   previewSharedSkillInstallRequest(

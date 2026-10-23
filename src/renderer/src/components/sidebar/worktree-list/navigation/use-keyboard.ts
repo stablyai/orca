@@ -19,6 +19,7 @@ import {
   resolveCycledWorktreeId
 } from '../../worktree-keyboard-cycle'
 import { findPreferredRenderRowIndexForWorktreeIdentity } from './render-row-lookup'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
 export function useWorktreeListKeyboardNavigation(args: {
   rows: HostSectionRow[]
@@ -126,11 +127,11 @@ export function useWorktreeListKeyboardNavigation(args: {
       }
     }
 
-    window.addEventListener('keydown', handleKeyDown, { capture: true })
+    addAppKeyListener('keydown', handleKeyDown)
     window.addEventListener('pointerdown', endListNavigation, { capture: true })
     window.addEventListener('focusout', endListNavigation, { capture: true })
     return () => {
-      window.removeEventListener('keydown', handleKeyDown, { capture: true })
+      removeAppKeyListener('keydown', handleKeyDown)
       window.removeEventListener('pointerdown', endListNavigation, { capture: true })
       window.removeEventListener('focusout', endListNavigation, { capture: true })
     }

@@ -1,7 +1,7 @@
 // How a durable session record becomes a Codex process launch.
 //
 // Every input is read back from the record the store already made durable, not
-// from the call that triggered the acquire. A client that attaches twice must
+// from the call that triggered spawn. A client that attaches twice must
 // land in the same working directory under the same account home, and a resume
 // must name the thread this session actually proved — never one a caller asks
 // for, which is how a resume becomes a fork wearing a resume's name.
@@ -13,7 +13,6 @@ import { resolveAgainAfterRefreshOnMissingProgram } from '../native-chat/structu
 import type { StructuredAgentLaunchPartResolver } from '../runtime/structured-agent-launch-composition'
 import type { CodexStructuredLaunch } from './codex-structured-session-adapter'
 import { codexStructuredPermissionPolicy } from './codex-structured-permission-policy'
-import { resolvePinnedCodexRolloutProof } from './codex-pinned-rollout-proof'
 import { codexStructuredLaunchArgs } from './codex-structured-launch-args'
 import {
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
@@ -25,7 +24,6 @@ export type CodexStructuredLaunchPartDeps = {
   resolveLaunchArgs: () => Promise<string[]> | string[]
   /** Overridden in tests; production scans the boot-cached PATH and version-manager dirs. */
   resolveCommand?: (options?: { pathEnv?: string | null; homePath?: string }) => string
-  resolveRollout?: typeof resolvePinnedCodexRolloutProof
 }
 
 export type CodexStructuredInvocationDeps = Pick<
@@ -49,7 +47,7 @@ export type CodexStructuredInvocation = {
  * The one place a structured Codex child's binary and environment are
  * resolved. The session launch and the session-less catalog probe both build
  * on it, so a probe can never list under a different binary or env than the
- * session it stands in for. Env VALUES stay out of the catalog fingerprint:
+ * session it stands in for. Inherited env values stay out of the catalog fingerprint:
  * drift there heals on the next refresh.
  */
 export function resolveCodexStructuredInvocation(
@@ -75,7 +73,7 @@ async function readCodexStructuredInvocation(
   return { command, environment }
 }
 
-/** Codex's part of a launch: its binary, thread arguments, account home, resume proof and visuals. */
+/** Codex's part of a launch: its binary, thread arguments, account home and visuals. */
 export function codexStructuredLaunchPart(
   deps: CodexStructuredLaunchPartDeps
 ): StructuredAgentLaunchPartResolver<CodexStructuredLaunch> {
@@ -96,7 +94,6 @@ export function codexStructuredLaunchPart(
     // The same saved options every turn sends, so the thread and its turns name one model.
     const model = record.options?.model
     const visuals = await basis.visuals()
-    // Before the rollout scan, so a missing floating folder is still the refusal that wins.
     await basis.launchDirectory()
     return {
       launch: {
@@ -112,15 +109,7 @@ export function codexStructuredLaunchPart(
         // States every posture outright: a resume inherits the last one for any field left absent.
         permissionPolicy: codexStructuredPermissionPolicy(basis.permissionMode ?? 'ask'),
         ...(model ? { model } : {}),
-        ...(visuals ? { visuals } : {}),
-        ...(resumeThreadId
-          ? {
-              resumePath: await (deps.resolveRollout ?? resolvePinnedCodexRolloutProof)(
-                accountHome.path,
-                resumeThreadId
-              )
-            }
-          : {})
+        ...(visuals ? { visuals } : {})
       },
       env: withNativeChatVisualsEnv(
         { ...environment, ...(accountHome.path ? { CODEX_HOME: accountHome.path } : {}) },
@@ -130,7 +119,8 @@ export function codexStructuredLaunchPart(
       inheritedEnvToDelete: [
         ...(visuals ? [] : [NATIVE_CHAT_SCRATCH_DIR_ENV]),
         LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV
-      ]
+      ],
+      cliRuntimeCommand: command
     }
   }
 }

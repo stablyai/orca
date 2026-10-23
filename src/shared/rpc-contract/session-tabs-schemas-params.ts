@@ -35,7 +35,12 @@ export const ActivateTab = WorktreeTabSelector.extend({
 export const CloseTab = ActivateTab.extend({
   // Why: optional preserves authenticated legacy user closes; lifecycle intent
   // uses the additive evidence-bearing method instead.
-  reason: z.literal('user').optional()
+  // 'replay' is a held user close re-sent after reconnect; only sent to hosts advertising
+  // SESSION_TAB_CLOSE_REPLAY_REASON_RUNTIME_CAPABILITY.
+  reason: z.enum(['user', 'replay']).optional(),
+  // Why: the user confirmed closing a pinned tab. Older hosts strip it and keep refusing, so
+  // clients send it only to hosts advertising SESSION_TAB_CLOSE_FORCE_RUNTIME_CAPABILITY.
+  force: z.literal(true).optional()
 })
 
 export const CloseLifecycleTab = ActivateTab.extend({
@@ -111,10 +116,6 @@ export const TerminalPaneLayoutNodeSchema = z
     })
   )
 
-const PaneLayoutEditIntentSchema = z.literal('gesture')
-
-export type PaneLayoutEditIntent = z.infer<typeof PaneLayoutEditIntentSchema>
-
 export const UpdatePaneLayout = WorktreeTabSelector.extend({
   tabId: z
     .unknown()
@@ -125,9 +126,8 @@ export const UpdatePaneLayout = WorktreeTabSelector.extend({
   chatLeafId: z.string().max(128).nullable().optional(),
   titlesByLeafId: z.record(z.string(), z.string()).optional(),
   // Why: panes the user renamed in this edit; the rest of titlesByLeafId is a resend, not a rename.
-  renamedLeafIds: z.array(z.string().max(128)).max(64).optional().catch(undefined),
-  // Why: marks a user's layout gesture; .catch keeps a newer client's unknown intent from failing the edit.
-  intent: PaneLayoutEditIntentSchema.optional().catch(undefined)
+  // An older client's `intent: 'gesture'` tag is stripped unread: renamedLeafIds is the one delta.
+  renamedLeafIds: z.array(z.string().max(128)).max(64).optional().catch(undefined)
 })
 
 export const SetTabProps = WorktreeTabSelector.extend({

@@ -20,6 +20,7 @@ import {
 } from './state-equality-files'
 import { shouldRetainStructuredAgentSessionLaunchTab } from '@/lib/structured-agent-session-launch-registry'
 import { executionHostIdForSessionTabsOwner } from '../local-structured-session-owner'
+import { isUnlistedCreatedChat } from '@/lib/structured-agent-session-unlisted-created-chats'
 
 export function prepareWebSessionTabsSnapshotBrowser(
   base: ReturnType<typeof prepareWebSessionTabsSnapshotBase>
@@ -185,7 +186,8 @@ export function prepareWebSessionTabsSnapshotBrowser(
       return (
         !publishedAgentSessionIds.has(tab.entityId) &&
         (!agentSessionsAffirmed ||
-          shouldRetainStructuredAgentSessionLaunchTab(worktreeId, tab.entityId))
+          shouldRetainStructuredAgentSessionLaunchTab(worktreeId, tab.entityId) ||
+          isUnlistedCreatedChat(worktreeId, tab.entityId))
       )
     }
     if (tab.contentType === 'browser') {

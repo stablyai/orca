@@ -32,7 +32,7 @@ describe('Pi model catalog', () => {
         ORCA_PANE_KEY: 'p'
       }),
       resolveCommand: () => '/opt/pi/bin/pi',
-      probeVersion: async () => true,
+      probeVersion: async () => ({ version: '0.84.0' }),
       homePath: '/home/user',
       runListing
     })
@@ -53,7 +53,7 @@ describe('Pi model catalog', () => {
     const probe = createPiModelCatalogProbe({
       resolveEnvironment: async () => ({ PATH: '/usr/bin' }),
       resolveCommand: () => '/opt/pi/bin/pi',
-      probeVersion: async () => false,
+      probeVersion: async () => ({ version: '0.83.9' }),
       runListing
     })
     await expect(probe({ variable: 'PI_CODING_AGENT_DIR', path: '/homes/pi-a' })).rejects.toThrow(

@@ -195,9 +195,18 @@ export function mapBridgeError(message: string): RuntimeClientError {
     return new RuntimeClientError('invalid_argument', text)
   }
   if (/ModuleNotFoundError: No module named 'gi'|PyGObject|python3-gi/i.test(text)) {
+    const interpreter = /PyGObject unavailable in interpreter: (.+)/.exec(text)?.[1]?.trim()
     return new RuntimeClientError(
       'unsupported_capability',
-      'Linux Computer Use requires python3-gi and AT-SPI packages. Install python3-gi gir1.2-atspi-2.0 at-spi2-core, then retry.'
+      interpreter
+        ? `Linux Computer Use requires python3-gi and AT-SPI packages, which the python3 it ran (${interpreter}) cannot load. Install python3-gi gir1.2-atspi-2.0 at-spi2-core for that interpreter, or put a python3 that has them (usually /usr/bin/python3) first on PATH, then retry.`
+        : 'Linux Computer Use requires python3-gi and AT-SPI packages. Install python3-gi gir1.2-atspi-2.0 at-spi2-core, then retry.'
+    )
+  }
+  if (/spawn python3 ENOENT/.test(text)) {
+    return new RuntimeClientError(
+      'unsupported_capability',
+      "Computer use isn't available on this host: Linux Computer Use runs python3, and none is on PATH. Install python3 with python3-gi gir1.2-atspi-2.0 at-spi2-core, then retry."
     )
   }
   if (/not a valid secondary action|action.*not supported/i.test(text)) {

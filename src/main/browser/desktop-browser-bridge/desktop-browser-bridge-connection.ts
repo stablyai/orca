@@ -33,9 +33,11 @@ export class DesktopBrowserBridgeConnection {
   constructor(
     private readonly options: {
       subscribe: DesktopBrowserBridgeSubscribe
+      /** `hostRevoked` fires only when this attachment ends, never at one command's cancel. */
       execute(
         request: DesktopBrowserBridgeRequest,
-        signal: AbortSignal
+        signal: AbortSignal,
+        hostRevoked: AbortSignal
       ): Promise<DesktopBrowserBridgeOutcome>
       onReady(): void
       /** Called once, when the attachment ends for any reason other than close(). */
@@ -120,7 +122,7 @@ export class DesktopBrowserBridgeConnection {
     }
     let outcome: DesktopBrowserBridgeOutcome
     try {
-      outcome = await this.options.execute(request, AbortSignal.any(signals))
+      outcome = await this.options.execute(request, AbortSignal.any(signals), this.revoked.signal)
     } finally {
       if (this.cancellations.get(request.requestId) === cancelled) {
         this.cancellations.delete(request.requestId)

@@ -102,7 +102,7 @@ export function registerNestedRepoImportHandler(mainWindow: BrowserWindow, store
           const group = groupResolver.getGroupForRepo(repoPath)
           if (existing) {
             if (group) {
-              store.moveProjectToGroup(existing.id, group.id, projectGroupOrder)
+              store.moveProjectToGroup(existing, group.id, projectGroupOrder)
             }
             importedProjectIdsByRepoPath.set(normalizedImportRepoPath, existing.id)
             results.push({ path: repoPath, projectId: existing.id, status: 'already-known' })

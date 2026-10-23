@@ -101,7 +101,7 @@ const DISPLAY_LABELS = [
 ] satisfies readonly (readonly [string, TerminalAgent])[]
 
 const GEMINI_GLYPHS = [GEMINI_WORKING, GEMINI_SILENT_WORKING, GEMINI_IDLE, GEMINI_PERMISSION]
-const ANTIGRAVITY_MODEL_TITLE_RE = /^(?:agy|antigravity)(?:\s*[·—:-]\s*|\s+)gemini\s+\d/i
+const ANTIGRAVITY_MODEL_TITLE_RE = /^(?:agy|antigravity)(?:\s*[\u00B7\u2014:-]\s*|\s+)gemini\s+\d/i
 
 /**
  * Orca renders `<task text>… - <agent>` and owns the suffix; task text cannot reach past it.

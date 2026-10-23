@@ -14,6 +14,8 @@ import {
 type RemoteCliBrowserScope = {
   workspaceId: string
   revoked?: AbortSignal
+  /** The host's attachment ending; unlike `revoked`, one command's cancel or deadline never fires it. */
+  hostRevoked?: AbortSignal
   /** True only for a guest that browses through this host's SSH route right now. */
   admitGuest?: (webContentsId: number) => boolean
 }
@@ -24,10 +26,16 @@ export function runInRemoteCliBrowserScope<T>(
   workspaceId: string,
   run: () => Promise<T>,
   revoked?: AbortSignal,
-  admitGuest?: (webContentsId: number) => boolean
+  admitGuest?: (webContentsId: number) => boolean,
+  hostRevoked?: AbortSignal
 ): Promise<T> {
   return scope.run(
-    { workspaceId, ...(revoked ? { revoked } : {}), ...(admitGuest ? { admitGuest } : {}) },
+    {
+      workspaceId,
+      ...(revoked ? { revoked } : {}),
+      ...(admitGuest ? { admitGuest } : {}),
+      ...(hostRevoked ? { hostRevoked } : {})
+    },
     run
   )
 }
@@ -63,12 +71,15 @@ export function captureRemoteCliBrowserScope(): {
   bridged: boolean
   /** Fires when the host behind the command is revoked. */
   revoked?: AbortSignal
+  /** Fires only when the host's attachment ends. */
+  hostRevoked?: AbortSignal
   run<T>(work: () => T): T
 } {
   const active = scope.getStore()
   return {
     bridged: active !== undefined,
     revoked: active?.revoked,
+    hostRevoked: active?.hostRevoked,
     run: (work) => (active ? scope.run(active, work) : scope.exit(work))
   }
 }

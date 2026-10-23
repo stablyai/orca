@@ -13,6 +13,7 @@ import {
 } from './orca-runtime-test-fixtures.spec'
 import { registerRuntimeWindowLifecycle } from '../window/runtime-window-lifecycle'
 import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
+import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 vi.mock('electron', () => ({ ipcMain: { on: vi.fn(), removeListener: vi.fn() } }))
 
@@ -30,7 +31,7 @@ async function createScannedRuntime(): Promise<InstanceType<typeof OrcaRuntimeSe
     ...store,
     getAllWorktreeMeta: () => metaById,
     getWorktreeMeta: (id: string) => metaById[id],
-    setWorktreeMeta: (id: string, meta: Partial<WorktreeMeta>) => {
+    setWorktreeMeta: ({ id }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
       metaById[id] = { ...metaById[id], ...meta }
       return metaById[id]
     }

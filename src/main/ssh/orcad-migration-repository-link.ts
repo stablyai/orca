@@ -99,7 +99,7 @@ async function serverHeldRowsToLink(
 }
 
 /** The source the cutover was cut from: the real store less any project or group it linked. */
-export function linkedOrcadMigrationSource(
+function linkedOrcadMigrationSource(
   store: Store,
   cutover: Pick<
     OrcadMigrationSourceCutover,

@@ -1,4 +1,5 @@
 import type { AgentSessionArgumentProblem } from '../../shared/agent-session-failure'
+import { findInErrorChain } from '../provider-process/provider-error-chain'
 
 /** A saved Arguments refusal with only the option name, never its value. */
 export class StructuredAgentArgumentsError extends Error {
@@ -22,23 +23,8 @@ export class StructuredAgentArgumentsError extends Error {
 }
 
 /** Finds a typed Arguments refusal through acquisition wrappers. */
-export function argumentProblemOf(
-  error: unknown,
-  depth = 0
-): AgentSessionArgumentProblem | undefined {
-  if (depth >= 6 || !(error instanceof Error)) {
-    return undefined
-  }
-  if (error instanceof StructuredAgentArgumentsError) {
-    return error.argumentProblem
-  }
-  if (error instanceof AggregateError) {
-    for (const inner of error.errors) {
-      const problem = argumentProblemOf(inner, depth + 1)
-      if (problem) {
-        return problem
-      }
-    }
-  }
-  return argumentProblemOf(error.cause, depth + 1)
+export function argumentProblemOf(error: unknown): AgentSessionArgumentProblem | undefined {
+  return findInErrorChain(error, (inner) =>
+    inner instanceof StructuredAgentArgumentsError ? inner.argumentProblem : undefined
+  )
 }

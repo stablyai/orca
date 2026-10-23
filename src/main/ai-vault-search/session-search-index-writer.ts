@@ -5,7 +5,7 @@ import type {
   TranscriptReadOutcome,
   TranscriptSessionIdentity
 } from '../ai-vault/session-transcript-consumers'
-import { ownRetainedString } from '../../shared/own-retained-string'
+import { SessionSearchWriteBuffer } from './session-search-write-buffer'
 import { EMPTY_CONTENT_HASH, foldContentHash } from './session-search-content-hash'
 import type {
   SessionSearchFileIdentity,
@@ -58,17 +58,8 @@ type FileCursor = Pick<FileRow, 'session_row_id' | 'byte_offset'>
 export type SessionSearchFileWrite = {
   /**
    * Buffers one message, committing a chunk when the buffer reaches the ceiling
-   * — and only while this read can name the session it is writing.
-   *
-   * A chunk's rows answer searches the moment they land, so a read with no
-   * `identity` would publish them under a session with an empty id, an empty
-   * title and a null cwd, and an interrupted read would leave that prefix
-   * behind for good. The readers that supply no identity are the whole-file
-   * ones (Grok, Cursor, Gemini, OpenCode), whose formats are rewritten in place
-   * and have no resumable state to ask; they are also small — the largest on
-   * the author's machine is 5 MB — so buffering one to the end and committing
-   * it whole costs nothing. Chunking stays reserved for the readers that can
-   * say which session this is before the read ends.
+   * when this read can name the session. Anonymous reads spill privately instead,
+   * preserving their all-or-nothing publication without retaining the whole file.
    */
   add(message: TranscriptMessage): void
   /**
@@ -85,6 +76,7 @@ export type SessionSearchFileWrite = {
 export class SessionSearchIndexWriter {
   private readonly records: SessionSearchFileRecords
   private readonly activeWrites = new Map<string, { removed: boolean; readers: number }>()
+  private readonly pendingBuffers = new Set<SessionSearchWriteBuffer>()
   private closed = false
 
   constructor(
@@ -193,6 +185,10 @@ export class SessionSearchIndexWriter {
 
   close(): void {
     this.closed = true
+    for (const buffer of this.pendingBuffers) {
+      buffer.clear()
+    }
+    this.pendingBuffers.clear()
     for (const active of this.activeWrites.values()) {
       active.removed = true
     }
@@ -213,8 +209,8 @@ export class SessionSearchIndexWriter {
   ): SessionSearchFileWrite {
     const db = this.db
     const path = candidate.file.path
-    const buffer: TranscriptMessage[] = []
-    let bufferedChars = 0
+    const buffer = new SessionSearchWriteBuffer(this.commitChars)
+    this.pendingBuffers.add(buffer)
     // What this write believes the file record holds. Re-read inside every
     // transaction: a `removeFile` or another writer between two chunks means
     // these rows no longer continue anything, and committing on top of that
@@ -233,8 +229,8 @@ export class SessionSearchIndexWriter {
         return
       }
       released = true
-      buffer.length = 0
-      bufferedChars = 0
+      buffer.clear()
+      this.pendingBuffers.delete(buffer)
       lifetime.readers--
       if (lifetime.readers === 0 && this.activeWrites.get(path) === lifetime) {
         this.activeWrites.delete(path)
@@ -309,7 +305,7 @@ export class SessionSearchIndexWriter {
             }
             replaced = true
           }
-          for (const row of buffer) {
+          for (const row of buffer.rows()) {
             insertSearchMessage(db, session, row)
           }
           if (decoded) {
@@ -319,7 +315,7 @@ export class SessionSearchIndexWriter {
             // session they hang off is written with whatever the parser has
             // decoded rather than left empty until a read that may never end.
             // `add` refuses to chunk without this, so it is never absent here.
-            this.records.updateProvisionalSession(session, named)
+            this.records.updateProvisionalSession(session, named, candidate)
           }
           this.records.upsertFile(
             candidate,
@@ -342,8 +338,7 @@ export class SessionSearchIndexWriter {
         session_row_id: session,
         byte_offset: outcome ? outcome.byteOffset : PARTIAL_FILE_CURSOR
       }
-      buffer.length = 0
-      bufferedChars = 0
+      buffer.clear()
       return true
     }
 
@@ -359,19 +354,17 @@ export class SessionSearchIndexWriter {
         // message had been buffered let a single one carry a transaction as far
         // past the ceiling as it was large.
         for (const row of searchMessageRows([message])) {
-          // FTS rows are slices of a multi-megabyte JSONL line.
-          row.text = ownRetainedString(row.text)
-          buffer.push(row)
-          bufferedChars += row.text.length
-          if (bufferedChars < this.commitChars) {
+          buffer.add(row)
+          if (!buffer.ready && (!identity || !buffer.hasSpilled)) {
             continue
           }
-          // Publishing a chunk under a session nothing can identify is worse
-          // than holding the buffer: the rows answer searches at once, and an
-          // interrupted read leaves that prefix for good. A read with nothing
-          // to name it keeps buffering and commits whole at `finish`.
           const named = identity?.() ?? null
-          if (named && !write(null, named)) {
+          if (!buffer.ready && !named) {
+            continue
+          }
+          if (!named) {
+            buffer.spill()
+          } else if (!write(null, named)) {
             fenced = true
             discard()
             return

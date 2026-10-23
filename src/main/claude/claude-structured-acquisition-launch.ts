@@ -106,7 +106,6 @@ export async function resolveClaudeAcquisitionLaunch(args: {
       options: spawn.sdkOptions,
       savedOptions: {
         options: spawn.options,
-        skipped: spawn.skipped,
         fastModeAtStart: spawn.fastModeAtStart
       }
     }

@@ -165,6 +165,33 @@ describe('the words written beside a failure fact', () => {
     ).toBe("Codex couldn't start. Start a new chat to continue.")
   })
 
+  it("names a too-old agent's installed and minimum versions, and still reads Codex's legacy fact", () => {
+    const words = (details: Record<string, unknown>) =>
+      agentSessionFailureSentence(
+        readAgentSessionFailureFact({
+          kind: 'startFailed',
+          refusal: {
+            code: 'agent_session_operation_invalid',
+            details: { reason: 'attachFailed', ...details }
+          }
+        })!,
+        'row',
+        {}
+      )
+    expect(
+      words({
+        agentInstallation: {
+          agent: 'opencode',
+          installedVersion: '1.0.0',
+          minimumVersion: '1.18.31'
+        }
+      })
+    ).toBe('OpenCode 1.0.0 is too old for chats. Update to 1.18.31 or newer.')
+    expect(
+      words({ codexInstallation: { installedVersion: '0.135.0', minimumVersion: '0.136.0' } })
+    ).toBe('Codex 0.135.0 is too old for chats. Update to 0.136.0 or newer.')
+  })
+
   it('says a start refused beside a process Orca could not stop in its own words', () => {
     const refused = (context: { command?: 'compact'; retryControl?: boolean } = {}) =>
       agentSessionFailureSentence(

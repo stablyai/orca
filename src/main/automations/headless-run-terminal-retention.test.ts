@@ -20,6 +20,7 @@ function makeRun(
     status,
     error: status === 'dispatch_failed' ? 'agent missing' : null,
     terminalPaneKey: `tab-${id}:1`,
+    terminalPtyId: `pty-${id}`,
     dispatchedAt,
     startedAt: dispatchedAt,
     createdAt: dispatchedAt
@@ -33,6 +34,11 @@ function harness(runs: AutomationRun[]) {
   // Runs whose shell is proven alone at its prompt; any other is unproven, as a live agent reads.
   const idleShell = new Set<string>()
   const dead = new Set<string>()
+  // Runs in a workspace made for them; their sleep succeeds unless it declines.
+  const ownWorkspace = new Set<string>()
+  const sleepDeclines = new Set<string>()
+  const sleepAttempts: string[] = []
+  const slept: string[] = []
   const lanes = new Map<string, Promise<void>>()
   const retention = createHeadlessRunTerminalRetention({
     inAutomationLane: (automationId, operation) =>
@@ -46,11 +52,33 @@ function harness(runs: AutomationRun[]) {
       closed.push(run.terminalPaneKey ?? '')
       return true
     },
+    runOwnsWorkspace: (run) => ownWorkspace.has(run.id),
+    sleepRunWorkspace: async (run) => {
+      sleepAttempts.push(run.id)
+      if (sleepDeclines.has(run.id)) {
+        return false
+      }
+      slept.push(run.id)
+      run.terminalPtyId = null
+      return true
+    },
     forgetRunTerminal: async (run) => {
       forgotten.push(run)
     }
   })
-  return { retention, closed, forgotten, use, idleShell, dead, lanes }
+  return {
+    retention,
+    closed,
+    forgotten,
+    use,
+    idleShell,
+    dead,
+    ownWorkspace,
+    sleepDeclines,
+    sleepAttempts,
+    slept,
+    lanes
+  }
 }
 
 beforeEach(() => {
@@ -297,6 +325,8 @@ describe('headless run terminal retention', () => {
       runTerminalAlive: () => true,
       shellAloneAtPrompt: async () => false,
       closeRunTerminal,
+      runOwnsWorkspace: () => false,
+      sleepRunWorkspace: async () => false,
       forgetRunTerminal: async (run) => {
         h.forgotten.push(run)
       },
@@ -316,5 +346,73 @@ describe('headless run terminal retention', () => {
     finishClose()
     await sweeping
     expect(await sawForgotten).toEqual(['r0'])
+  })
+
+  it('sleeps a completed run in its own workspace instead of closing it, and keeps it asleep', async () => {
+    const runs = [0, 1, 2, 3].map((n) => makeRun(`r${n}`, n))
+    const h = harness(runs)
+    h.ownWorkspace.add('r0')
+    await h.retention.sweep()
+    vi.advanceTimersByTime(RUN_TERMINAL_GRACE_MS)
+    await h.retention.sweep()
+    expect(h.slept).toEqual(['r0'])
+    expect(h.closed).toEqual([])
+    expect(h.forgotten).toEqual([])
+
+    // Later sweeps and an update's drain leave the slept pane to resume its agent.
+    await h.retention.sweep()
+    await h.retention.drain()
+    expect(h.slept).toEqual(['r0'])
+    expect(h.forgotten.map((run) => run.id)).not.toContain('r0')
+  })
+
+  it('closes a completed run whose workspace is shared', async () => {
+    const runs = [0, 1, 2, 3].map((n) => makeRun(`r${n}`, n))
+    const h = harness(runs)
+    await h.retention.sweep()
+    vi.advanceTimersByTime(RUN_TERMINAL_GRACE_MS)
+    await h.retention.sweep()
+    expect(h.slept).toEqual([])
+    expect(h.closed).toEqual(['tab-r0:1'])
+    expect(h.forgotten.map((run) => run.id)).toEqual(['r0'])
+  })
+
+  it('closes a failed run in its own workspace, and never sleeps or closes a used one', async () => {
+    const runs = [
+      makeRun('failed', 0, 'dispatch_failed'),
+      makeRun('typed', 1),
+      ...[2, 3, 4].map((n) => makeRun(`done${n}`, n))
+    ]
+    const h = harness(runs)
+    h.ownWorkspace.add('failed')
+    h.ownWorkspace.add('typed')
+    h.idleShell.add('failed')
+    h.use.set('typed', 'used')
+    await h.retention.drain()
+    expect(h.slept).toEqual([])
+    expect(h.closed.toSorted()).toEqual([
+      'tab-done2:1',
+      'tab-done3:1',
+      'tab-done4:1',
+      'tab-failed:1'
+    ])
+  })
+
+  it('keeps a run in its own workspace whose sleep declines or fails, retrying each sweep', async () => {
+    const runs = [0, 1, 2, 3].map((n) => makeRun(`r${n}`, n))
+    const h = harness(runs)
+    h.ownWorkspace.add('r0')
+    h.sleepDeclines.add('r0')
+    await h.retention.sweep()
+    vi.advanceTimersByTime(RUN_TERMINAL_GRACE_MS)
+    await h.retention.sweep()
+    await h.retention.sweep()
+    expect(h.sleepAttempts).toEqual(['r0', 'r0'])
+    expect(h.closed).toEqual([])
+    expect(h.forgotten).toEqual([])
+
+    h.sleepDeclines.delete('r0')
+    await h.retention.sweep()
+    expect(h.slept).toEqual(['r0'])
   })
 })

@@ -1,6 +1,7 @@
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { SshPendingPtyKill } from '../../../shared/ssh-pending-pty-kill'
 import type { SshRemotePtyLease } from '../../../shared/ssh-types'
+import type { PtyRetirementEvidence } from '../../pty-exit-proof'
 import { invalidateLocalWorktreeMetadataPruneInputs } from '../../local-worktree-metadata-prune-gate'
 import { pruneRetiredSshRemotePtyLeaseTombstones } from './ssh-pty-lease-tombstone-retention'
 
@@ -22,14 +23,16 @@ export function getSshRemotePtyLeases(
   return leases.filter((lease) => targetId === undefined || lease.targetId === targetId)
 }
 
-/** `terminated` is the only state written now: an operator close or a proven exit, which unbinds
- *  the pane. `expired` would say the client lost its route and must keep the binding. */
+/** Writes `terminated`, the only state written now: an operator close or a proven exit, which
+ *  unbinds the pane. `expired` would say the client lost its route and must keep the binding. */
 export function markSshRemotePtyLease(
   operations: SshPtyLeaseOperations,
   targetId: string,
   ptyId: string,
-  state: 'terminated'
+  // Why unread: the type makes each retirement name its evidence (src/main/pty-exit-proof.ts).
+  _evidence: PtyRetirementEvidence
 ): void {
+  const state = 'terminated'
   const relayPtyId = operations.toStoredPtyId(targetId, ptyId)
   const lease = operations.state.sshRemotePtyLeases?.find(
     (entry) => entry.targetId === targetId && entry.ptyId === relayPtyId

@@ -1,6 +1,7 @@
 import type { Repo } from '../repo-types'
 import type { Worktree } from '../worktree/types'
 import { getWorktreeHostIdentity } from '../worktree/host-qualified-identity'
+import { getFolderWorkspaceHostIdentity } from '../folder-workspace-worktree'
 import { getWorktreeLineageGroupKey } from './group-keys'
 import {
   getExpandedWorktreeOccurrences,
@@ -16,6 +17,7 @@ import type {
   NewExternalWorktreesInboxRow,
   PendingCreationRef,
   PendingCreationRow,
+  RepoOfWorktree,
   Row
 } from './row-types'
 
@@ -65,7 +67,7 @@ export function buildNewExternalWorktreesInboxRow(
 
 export function appendWorktreeRows(
   result: Row[],
-  repoMap: Map<string, Repo>,
+  repoOf: RepoOfWorktree,
   plan: WorktreeOccurrencePlan<Worktree>,
   options: {
     collapsedGroups: Set<string>
@@ -75,9 +77,18 @@ export function appendWorktreeRows(
     hostContextLabelByWorktreeIdentity?: ReadonlyMap<string, string>
   }
 ): void {
-  const occurrences = getExpandedWorktreeOccurrences(
-    plan.bySection.get(options.sectionKey) ?? [],
-    (worktree) => options.collapsedGroups.has(getWorktreeLineageGroupKey(worktree))
+  const sectionOccurrences = plan.bySection.get(options.sectionKey) ?? []
+  // Keep disclosure membership available while child rows are collapsed.
+  const childIdsByParent = new Map<string, string[]>()
+  for (const occurrence of sectionOccurrences) {
+    if (occurrence.parent) {
+      const children = childIdsByParent.get(occurrence.parent.key) ?? []
+      children.push(occurrence.row.id)
+      childIdsByParent.set(occurrence.parent.key, children)
+    }
+  }
+  const occurrences = getExpandedWorktreeOccurrences(sectionOccurrences, (worktree) =>
+    options.collapsedGroups.has(getWorktreeLineageGroupKey(worktree))
   )
   for (const occurrence of occurrences) {
     const worktree = occurrence.row
@@ -87,11 +98,12 @@ export function appendWorktreeRows(
       rowKey: occurrence.key,
       sectionKey: occurrence.sectionKey,
       worktree,
-      repo: repoMap.get(worktree.repoId),
+      repo: repoOf(worktree),
       depth: occurrence.depth,
       groupDepth: options.groupDepth,
       isLastLineageChild: occurrence.isLastChild,
       lineageChildCount: occurrence.childCount,
+      lineageChildWorktreeIds: childIdsByParent.get(occurrence.key),
       showProjectName: occurrence.showProjectName,
       hostContextLabel:
         options.hostContextLabelByWorktreeIdentity?.get(getWorktreeHostIdentity(worktree)) ??
@@ -107,14 +119,15 @@ export function appendWorktreeRows(
 }
 
 /** The one folder-workspace row constructor, shared by the project-group,
- *  grouped-lane and flat emitters so their rows cannot diverge. */
+ *  grouped-lane and flat emitters so their rows cannot diverge. Keyed by host: two hosts can
+ *  share a folder id. */
 export function buildFolderWorkspaceRow(
   pair: RenderableFolderWorkspace,
   groupDepth: number
 ): FolderWorkspaceRow {
   return {
     type: 'folder-workspace',
-    key: `folder-workspace:${pair.folderWorkspace.id}`,
+    key: `folder-workspace:${getFolderWorkspaceHostIdentity(pair.folderWorkspace)}`,
     folderWorkspace: pair.folderWorkspace,
     projectGroup: pair.projectGroup,
     depth: 0,

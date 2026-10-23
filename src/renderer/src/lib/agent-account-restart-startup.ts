@@ -61,7 +61,12 @@ export function resolveAgentAccountRestartResumeStartup(
     return null
   }
   const projectRuntime = getLocalProjectExecutionRuntimeContext(state, args.worktreeId)
-  if (projectRuntime?.status === 'resolved' && projectRuntime.runtime.kind === 'wsl') {
+  // Why Codex only: a WSL Claude resume reads the guest's selected-account pointer at launch.
+  if (
+    agent === 'codex' &&
+    projectRuntime?.status === 'resolved' &&
+    projectRuntime.runtime.kind === 'wsl'
+  ) {
     return null
   }
   const worktree = state.getKnownWorktreeById(args.worktreeId)

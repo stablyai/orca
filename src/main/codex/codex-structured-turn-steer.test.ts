@@ -38,7 +38,9 @@ async function rig(routes: Record<string, CodexTestRoute>) {
   const methods = () =>
     connection.calls
       .map(({ method }) => method)
-      .filter((method) => method !== 'model/list' && method !== 'config/read')
+      .filter(
+        (method) => !['initialize', 'model/list', 'config/read', 'skills/list'].includes(method)
+      )
   const endTurn = (turnId: string, status: 'completed' | 'interrupted') =>
     connection.handlers.onNotification?.('turn/completed', {
       threadId: CODEX_TEST_THREAD_ID,
@@ -64,7 +66,7 @@ describe('a Codex send while a turn runs', () => {
     })
     startTurn(connection, 'turn-1')
 
-    expect(await send('client-1')).toEqual({ state: 'admitted' })
+    expect(await send('client-1')).toMatchObject({ state: 'admitted' })
     expect(methods()).toEqual(['thread/start', 'turn/steer'])
     expect(connection.calls.at(-1)?.params).toEqual({
       threadId: CODEX_TEST_THREAD_ID,
@@ -91,7 +93,7 @@ describe('a Codex send while a turn runs', () => {
     })
     startTurn(connection, 'turn-1')
 
-    expect(await send('client-1')).toEqual({ state: 'admitted' })
+    expect(await send('client-1')).toMatchObject({ state: 'admitted' })
     echoUserMessage(connection, { turnId: 'turn-1', itemId: 'item-u1', clientId: 'client-1' })
     endTurn('turn-1', 'completed')
 
@@ -119,7 +121,7 @@ describe('a Codex send while a turn runs', () => {
     })
     startTurn(connection, 'turn-1')
 
-    expect(await send('client-1')).toEqual({ state: 'admitted' })
+    expect(await send('client-1')).toMatchObject({ state: 'admitted' })
     expect(methods()).toEqual(['thread/start', 'turn/steer', 'turn/start'])
     expect(connection.calls.at(-1)?.params).toMatchObject({ clientUserMessageId: 'client-1' })
   })
@@ -140,7 +142,7 @@ describe('a Codex send while a turn runs', () => {
     })
     startTurn(connection, 'turn-1')
 
-    expect(await send('client-1')).toEqual({ state: 'admitted' })
+    expect(await send('client-1')).toMatchObject({ state: 'admitted' })
     expect(methods()).toEqual(['thread/start', 'turn/steer', 'turn/steer'])
     expect(connection.calls.at(-1)?.params).toMatchObject({ expectedTurnId: 'turn-2' })
     endTurn('turn-2', 'interrupted')
@@ -150,8 +152,8 @@ describe('a Codex send while a turn runs', () => {
     ])
   })
 
-  it('is rejected in Codex words and disarmed when Codex refuses the steer and the start', async () => {
-    const { connection, settlements, send, methods } = await rig({
+  it('is rejected in Codex words when Codex refuses the steer and the start', async () => {
+    const { connection, send, methods } = await rig({
       'turn/steer': () => {
         throw refusedSteer('active turn cannot be steered')
       },
@@ -176,8 +178,6 @@ describe('a Codex send while a turn runs', () => {
       }
     })
     expect(methods()).toEqual(['thread/start', 'turn/steer', 'turn/start'])
-    echoUserMessage(connection, { turnId: 'turn-1', itemId: 'item-u1', clientId: 'client-1' })
-    expect(settlements).toEqual([])
   })
 
   it('never re-sends a steer that may have landed, and keeps it armed for its echo', async () => {
@@ -202,7 +202,7 @@ describe('a Codex send while a turn runs', () => {
     startTurn(connection, 'turn-0')
     endTurn('turn-0', 'completed')
 
-    expect(await send('client-1')).toEqual({ state: 'admitted' })
+    expect(await send('client-1')).toMatchObject({ state: 'admitted' })
     expect(methods()).toEqual(['thread/start', 'turn/start'])
   })
 })
@@ -211,12 +211,12 @@ describe('a Codex send made after Codex answered an earlier one, before it opene
   /** A Codex before 0.148, which names a steered start falsely and steers only an opened turn. */
   async function answeredUnopened() {
     const rig = await codexTurnLifecycleRig({ legacyStartAnswers: true })
-    expect(await rig.send('client-1')).toEqual({ state: 'admitted' })
+    expect(await rig.send('client-1')).toMatchObject({ state: 'admitted' })
     const sending = rig.send('client-2')
     expect(await settledWithin(sending)).toBe('held')
     const methods = () =>
       rig.codex.connections[0]!.calls.map(({ method }) => method).filter(
-        (method) => method !== 'model/list' && method !== 'config/read'
+        (method) => !['initialize', 'model/list', 'config/read', 'skills/list'].includes(method)
       )
     expect(methods()).toEqual(['thread/start', 'turn/start'])
     return { ...rig, sending, methods }
@@ -227,7 +227,7 @@ describe('a Codex send made after Codex answered an earlier one, before it opene
 
     rig.turns.start()
 
-    expect(await rig.sending).toEqual({ state: 'admitted' })
+    expect(await rig.sending).toMatchObject({ state: 'admitted' })
     expect(rig.methods()).toEqual(['thread/start', 'turn/start', 'turn/steer'])
     expect(await rig.adapter.cancelTurn({ sessionId: 'session-1', fence: 7 })).toEqual({
       cancelled: true,
@@ -247,7 +247,7 @@ describe('a Codex send made after Codex answered an earlier one, before it opene
 
     rig.turns.end('failed')
 
-    expect(await rig.sending).toEqual({ state: 'admitted' })
+    expect(await rig.sending).toMatchObject({ state: 'admitted' })
     expect(rig.methods()).toEqual(['thread/start', 'turn/start', 'turn/start'])
   })
 })
@@ -259,19 +259,19 @@ describe('a Codex send after a turn Codex answered and never opened', () => {
 
   it('waits for that turn once, and never again', async () => {
     const rig = await codexTurnLifecycleRig({ legacyStartAnswers: true })
-    expect(await rig.send('client-1')).toEqual({ state: 'admitted' })
+    expect(await rig.send('client-1')).toMatchObject({ state: 'admitted' })
     // Before 0.148 a turn that fails before it starts reports only an `error`.
     rig.turns.failUnopened('invalid turn settings')
 
     vi.useFakeTimers()
     const waited = rig.send('client-2')
     await vi.advanceTimersByTimeAsync(CODEX_TURN_OPEN_WAIT_MS)
-    expect(await waited).toEqual({ state: 'admitted' })
+    expect(await waited).toMatchObject({ state: 'admitted' })
     vi.useRealTimers()
     rig.turns.start()
     rig.turns.echo('client-2')
     rig.turns.end('completed')
 
-    expect(await settledWithin(rig.send('client-3'))).toEqual({ state: 'admitted' })
+    expect(await settledWithin(rig.send('client-3'))).toMatchObject({ state: 'admitted' })
   })
 })

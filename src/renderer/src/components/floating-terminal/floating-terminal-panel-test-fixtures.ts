@@ -12,6 +12,8 @@ export type FloatingPanelStoreState = {
   groupsByWorktree: Record<string, TabGroup[]>
   unifiedTabsByWorktree: Record<string, Tab[]>
   openFiles: OpenFile[]
+  editorBufferIdOf: Record<string, string>
+  editorBufferViews: Record<string, readonly string[]>
   activeGroupIdByWorktree: Record<string, string | null>
   activeTabIdByWorktree: Record<string, string | null>
   layoutByWorktree: Record<string, TabGroupLayoutNode>

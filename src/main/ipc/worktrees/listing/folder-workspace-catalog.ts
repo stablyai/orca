@@ -7,6 +7,7 @@ import { mergeWorktreeMetaForWrite } from '../../../persistence/loading-store/wo
 import { isWslMoveRepoBlocked } from '../../../persistence/moving-wsl-projects/wsl-move-background-backoff'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import {
+  hostWorktreeTargetForRepo,
   readAllWorktreeMetaForHost,
   readWorktreeMetaForHost
 } from '../../../persistence/host-qualified-worktree-meta'
@@ -34,7 +35,8 @@ function folderMetaWriter(
   repo: Repo
 ): (worktreeId: string, updates: Partial<WorktreeMeta>) => WorktreeMeta {
   if (!isWslMoveRepoBlocked(repo)) {
-    return (worktreeId, updates) => store.setWorktreeMeta(worktreeId, updates)
+    return (worktreeId, updates) =>
+      store.setWorktreeMeta(hostWorktreeTargetForRepo(worktreeId, repo), updates)
   }
   return (worktreeId, updates) => {
     const existing = store.getWorktreeMeta(worktreeId)

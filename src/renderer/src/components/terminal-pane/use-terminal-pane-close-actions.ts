@@ -54,7 +54,7 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
         return
       }
       const ptyId = paneTransportsRef.current.get(paneId)?.getPtyId() ?? null
-      closeWebRuntimeTerminal(ptyId)
+      closeWebRuntimeTerminal(ptyId, worktreeId)
       clearSessionRestoredBannerForPane(paneId)
       const leafId = manager.getLeafId(paneId)
       if (leafId) {

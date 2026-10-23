@@ -16,13 +16,17 @@ import {
 import { normalizeAgentProviderSession } from '../../../shared/agent-session-resume'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
 import { isClientOnlyUnverifiableInspection } from '../../../shared/terminal-process-inspection'
-import type { CodexAccountSelectionTarget } from '../../../shared/codex-selection-lane'
+import {
+  normalizeCodexAccountSelectionTarget,
+  type CodexAccountSelectionTarget
+} from '../../../shared/codex-selection-lane'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type {
   ClaudeManagedAccount,
   ClaudeRateLimitAccountsState
 } from '../../../shared/managed-account-types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import { resolvePaneAgentSessionId } from '@/components/terminal-pane/pane-agent-session-id'
 import { resolveAgentAccountRestartResumeStartup } from './agent-account-restart-startup'
 import { getRendererAppPlatform } from './renderer-app-platform'
 import {
@@ -206,6 +210,14 @@ export async function findMovableClaudeSessions(args: {
         leafId: pane.leafId
       })
     }
+  }
+  // Why: a Windows host cannot see processes inside WSL, so the guest's hooks and shell marks decide.
+  if (normalizeCodexAccountSelectionTarget(args.target).runtime === 'wsl') {
+    const state = useAppStore.getState()
+    return candidates.filter(
+      (candidate) =>
+        resolvePaneAgentSessionId(state, makePaneKey(candidate.tabId, candidate.leafId)) !== null
+    )
   }
   const inForeground = await Promise.all(
     candidates.map((candidate) =>

@@ -20,6 +20,7 @@ import {
   startWorktreeAgentRowsCachePass,
   type WorktreeAgentRowsCache
 } from './worktree-agent-rows-cache'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 const EMPTY_COUNTS: Record<DashboardBucket, number> = {
   attention: 0,
@@ -76,7 +77,7 @@ function selectActiveDashboardWorkspaces(
   if (
     memo &&
     memo.repos === state.repos &&
-    memo.worktreesByRepo === state.worktreesByRepo &&
+    memo.worktreesByRepo === selectWorktreesByRepo(state) &&
     memo.folderWorkspaces === state.folderWorkspaces &&
     memo.projectGroups === state.projectGroups
   ) {
@@ -86,7 +87,7 @@ function selectActiveDashboardWorkspaces(
   if (cache) {
     cache.activeWorkspaces = {
       repos: state.repos,
-      worktreesByRepo: state.worktreesByRepo,
+      worktreesByRepo: selectWorktreesByRepo(state),
       folderWorkspaces: state.folderWorkspaces,
       projectGroups: state.projectGroups,
       workspaces

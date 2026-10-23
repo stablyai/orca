@@ -40,6 +40,7 @@ import {
   getVisibleWorktreeTerminalActivityTabs,
   getWorktreeIdsWithStructuredChat
 } from '../../visible-worktree-activity-inputs'
+import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 
 export type SidebarWorktreeFilters = ReturnType<typeof useSidebarWorktreeFilters>
 
@@ -114,7 +115,10 @@ const REVEAL_WORKSPACE: Record<keyof WorkspaceRowFilters, (context: RevealContex
         state.ptyIdsByTabId,
         browserTabsByWorktree,
         liveAgentWorktrees,
-        getWorktreeIdsWithStructuredChat(state.unifiedTabsByWorktree)
+        getWorktreeIdsWithStructuredChat(
+          state.unifiedTabsByWorktree,
+          state.structuredChatSleptAtByPaneKey
+        )
       )
     ) {
       state.setShowSleepingWorkspaces(true)
@@ -128,7 +132,7 @@ function getRevealTargetHostId(state: AppState, worktree: Worktree, repo: Repo |
   const defaultHostId = getSettingsFocusedExecutionHostId(state.settings)
   const workspaceScope = parseWorkspaceKey(worktree.id)
   if (workspaceScope?.type === 'folder') {
-    const folderWorkspace = state.folderWorkspaces.find(
+    const folderWorkspace = selectFolderWorkspaces(state).find(
       (candidate) => candidate.id === workspaceScope.folderWorkspaceId
     )
     if (folderWorkspace) {

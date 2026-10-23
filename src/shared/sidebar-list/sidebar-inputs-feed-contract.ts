@@ -6,8 +6,9 @@ export const SIDEBAR_INPUTS_SCHEMA_VERSION = 1
 /**
  * What the inputs mean: bumps whenever the same inputs would build a different list.
  * 2: desktop facts carry the focused host, host labels and pinned placement (#30462).
+ * 3: activity and review are keyed by row identity (host + id), not by bare id.
  */
-export const SIDEBAR_INPUTS_SEMANTICS_VERSION = 2
+export const SIDEBAR_INPUTS_SEMANTICS_VERSION = 3
 
 /** A page's encoded ceiling. A phone's bridge frame (640 KiB) holds it with the RPC envelope. */
 export const SIDEBAR_INPUTS_PAGE_MAX_BYTES = 256 * 1024

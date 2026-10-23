@@ -142,7 +142,7 @@ export function installDesktopBrowserBridge(options: {
         }
       )
     },
-    execute: (candidate, request, signal) =>
+    execute: (candidate, request, signal, hostRevoked) =>
       executeDesktopBrowserBridgeRequest(
         request,
         {
@@ -171,7 +171,8 @@ export function installDesktopBrowserBridge(options: {
             getDispatcher().dispatch({ id: randomUUID(), authToken: '', method, params }),
           audit: (entry) => log(`audit ${JSON.stringify(entry)}`)
         },
-        signal
+        signal,
+        hostRevoked
       ),
     log
   })

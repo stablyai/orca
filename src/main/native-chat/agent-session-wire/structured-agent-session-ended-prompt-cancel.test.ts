@@ -74,9 +74,7 @@ async function endedCardAndLiveTurn(): Promise<{ journal: AgentSessionJournal; i
   await turn('turn-2', LIVE)
   await journal.queuedMessages.insert({
     messageId: 'queued-1',
-    body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'after this' }] },
-    fingerprint: 'queued-1',
-    hostInstance: 'host-1'
+    body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'after this' }] }
   })
   return { journal, itemId: card.itemId }
 }

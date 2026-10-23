@@ -52,6 +52,7 @@ function harness() {
     writes.push(row)
   }
   const journal: StructuredAgentSessionRevisionJournal = {
+    item: () => null,
     epoch: 'epoch-1',
     itemBody: (itemId) => rows.get(itemId)?.body ?? null,
     visitItems: (visit) => {

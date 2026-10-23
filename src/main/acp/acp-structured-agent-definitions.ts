@@ -30,8 +30,8 @@ export function acpStructuredAgentDefinition(spec: AcpLaunchSpec): StructuredAge
       compact: spec.compaction === true,
       threadGoal: false,
       contextUsage: true,
-      // An agent that does not also advertise images at its start has a message with one refused.
-      imagePrompts: spec.imagePrompts === true,
+      // Narrowed per chat by what the agent advertises at its start.
+      imagePrompts: true,
       steering: 'queue',
       // Orca answers every permission request the agent sends; the agent decides when it asks.
       approvalEnforcement: 'orca'

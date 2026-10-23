@@ -18,12 +18,12 @@ describe('splitWorktreeSortOrderByHost', () => {
   it('groups worktree ids by owner host, preserving relative order', () => {
     const groups = splitWorktreeSortOrderByHost(state, ['runtime-repo::wt-b', 'local-repo::wt-a'])
     expect(groups).toEqual([
-      { hostId: 'runtime:env-1', orderedIds: ['runtime-repo::wt-b'] },
-      { hostId: 'local', orderedIds: ['local-repo::wt-a'] }
+      { hostId: 'runtime:env-1', orderedIds: ['runtime-repo::wt-b'], rowHostIds: ['local'] },
+      { hostId: 'local', orderedIds: ['local-repo::wt-a'], rowHostIds: ['local'] }
     ])
   })
 
-  it('routes legacy worktrees without an explicit owner to the focused host', () => {
+  it('keeps legacy worktrees without an explicit owner local, whatever server is focused', () => {
     const groups = splitWorktreeSortOrderByHost(
       {
         settings: { activeRuntimeEnvironmentId: 'focused-env' },
@@ -32,7 +32,7 @@ describe('splitWorktreeSortOrderByHost', () => {
       },
       ['legacy::wt']
     )
-    expect(groups).toEqual([{ hostId: 'runtime:focused-env', orderedIds: ['legacy::wt'] }])
+    expect(groups).toEqual([{ hostId: 'local', orderedIds: ['legacy::wt'], rowHostIds: ['local'] }])
   })
 
   it('leaves out a twin and a row only a repo row places on a server', () => {
@@ -68,8 +68,8 @@ describe('splitWorktreeSortOrderByHost', () => {
       ['twin::wt', 'stale-hub::wt', 'hub::wt', 'local-repo::wt-a']
     )
     expect(groups).toEqual([
-      { hostId: 'runtime:hub-env', orderedIds: ['hub::wt'] },
-      { hostId: 'local', orderedIds: ['local-repo::wt-a'] }
+      { hostId: 'runtime:hub-env', orderedIds: ['hub::wt'], rowHostIds: ['ssh:box'] },
+      { hostId: 'local', orderedIds: ['local-repo::wt-a'], rowHostIds: ['local'] }
     ])
   })
 })

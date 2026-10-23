@@ -1,3 +1,4 @@
+import { createPaneBindingStore } from './pty-launch-race-test-fixture'
 // Test-only: one real OrcaRuntimeService wired into the real pty handlers, so both launch lanes
 // reach the same fake provider. Window lane: pty:spawn. Host lane: createTerminal / createAgentSession
 // through the runtime controller registerPtyHandlers installs. Suites still declare the IPC vi.mock block.
@@ -10,6 +11,7 @@ import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { TerminalWorkspaceLaunchScope } from '../runtime/runtime-legacy-worker-terminal-recovery-types'
 import {
   IDENTITY_ENV_KEYS,
+  launchWorkspaceId,
   type LaunchWorkspace
 } from '../../shared/launch-parity-window-request.test-fixture'
 import { isHiddenRendererPty } from './pty-hidden-delivery-gate'
@@ -127,6 +129,7 @@ type ScopeResolver = {
 }
 
 export type ParityLanes = {
+  store: ReturnType<typeof createPaneBindingStore>
   runtime: OrcaRuntimeService
   /** The local daemon provider's spawn mock. */
   provider: Mock
@@ -145,7 +148,8 @@ export function startParityLanes(
   }
 ): ParityLanes {
   const settings = parityMainSettings(args.settings)
-  const persistPtyBinding = vi.fn(async () => true)
+  const bindingStore = createPaneBindingStore()
+  const persistPtyBinding = bindingStore.bindingWrites
   const { repo: scopeRepo, folderWorkspace } = launchScope(args.workspace)
   // A folder's contained repo is saved too, so the host can borrow its runtime if it would.
   const repo =
@@ -154,6 +158,7 @@ export function startParityLanes(
       ? launchScope({ kind: 'repo', path: args.workspace.repoPath }).repo
       : null)
   const store = {
+    ...bindingStore,
     getSettings: () => settings,
     getProjects: () => [
       {
@@ -168,11 +173,9 @@ export function startParityLanes(
     getRepos: () => (repo ? [repo] : []),
     getAllWorktreeMeta: () => ({}),
     getWorktreeMeta: () => undefined,
-    getWorkspaceSession: () => ({ tabsByWorktree: {}, terminalLayoutsByTabId: {} }),
     getFolderWorkspace: () => folderWorkspace ?? undefined,
     getFolderWorkspaces: () => (folderWorkspace ? [folderWorkspace] : []),
-    getProjectGroups: () => [{ id: 'pg-1', name: 'group', parentPath: null, connectionId: null }],
-    persistPtyBinding
+    getProjectGroups: () => [{ id: 'pg-1', name: 'group', parentPath: null, connectionId: null }]
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: launches read only the store members defined above; the rest of the persistence store is unreachable here.
   const runtime = new OrcaRuntimeService(store as never)
@@ -181,7 +184,10 @@ export function startParityLanes(
       throw args.spawnError
     }
     // A fresh id per spawn, so one case's hidden mark never reads into the next.
-    return { id: options.sessionId ?? `remote-pty-${++remoteSpawns}` }
+    return {
+      id: options.sessionId ?? `remote-pty-${++remoteSpawns}`,
+      startupCwdSource: 'request' as const
+    }
   })
   suite.installDaemonTestProvider({ spawn: provider })
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handlers read the window, runtime, settings and store members these fakes define.
@@ -210,11 +216,11 @@ export function startParityLanes(
     renameTerminal: vi.fn(),
     focusTerminal: vi.fn(),
     closeTerminal: vi.fn(),
-    sleepWorktree: vi.fn(),
     terminalFitOverrideChanged: vi.fn(),
     terminalDriverChanged: vi.fn()
   })
   return {
+    store,
     runtime,
     provider,
     persistPtyBinding,
@@ -258,4 +264,19 @@ export async function providerFacts(provider: Mock): Promise<Record<string, unkn
 
 export function recordOf(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? { ...value } : {}
+}
+
+export async function spawnBoth(
+  lanes: ParityLanes,
+  workspace: LaunchWorkspace,
+  window: Record<string, unknown>,
+  host: Record<string, unknown> = {}
+): Promise<Record<'window' | 'host', Record<string, unknown>>> {
+  const worktreeId = launchWorkspaceId(workspace)
+  const result = recordOf(
+    await lanes.spawnWindow({ cols: 80, rows: 24, cwd: workspace.path, worktreeId, ...window })
+  )
+  const windowFacts = { ...(await providerFacts(lanes.provider)), result }
+  const created = recordOf(await lanes.runtime.createTerminal(`id:${worktreeId}`, host))
+  return { window: windowFacts, host: { ...(await providerFacts(lanes.provider)), created } }
 }

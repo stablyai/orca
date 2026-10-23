@@ -21,7 +21,6 @@ function witnessed() {
       AGENTS[sessionId] ? ({ provider: AGENTS[sessionId] } as AgentSessionRecord) : null,
     childWorkOpen: () => false,
     childWork: () => undefined,
-    startAnswered: () => undefined,
     capsule: { record: async (markers) => void recorded.push([...markers]) },
     teardownId: 'teardown',
     now: () => 1,

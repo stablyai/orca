@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { Repo } from '../../shared/repo-types'
+import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 import {
   renameWorktreeFolderOnFirstWork,
   type FirstWorkFolderRenameDeps
@@ -42,7 +43,7 @@ describe('renameWorktreeFolderOnFirstWork', () => {
       '/ws/worktree-creation-spinner'
     )
     expect(deps.migrateWorktreeIdentity).toHaveBeenCalledWith(
-      OLD_ID,
+      hostWorktreeTarget({ id: OLD_ID, hostId: 'local' }),
       'repo1::/ws/worktree-creation-spinner'
     )
     expect(deps.notifyWorktreeRenamed).toHaveBeenCalledWith(
@@ -66,7 +67,7 @@ describe('renameWorktreeFolderOnFirstWork', () => {
     )
     expect(result).toBe(true)
     expect(deps.migrateWorktreeIdentity).toHaveBeenCalledWith(
-      FOLDER_WORKSPACE_ID,
+      hostWorktreeTarget({ id: FOLDER_WORKSPACE_ID, hostId: 'local' }),
       'repo1::/ws/worktree-creation-spinner::workspace:12345678-1234-1234-1234-123456789abc'
     )
     expect(deps.notifyWorktreeRenamed).toHaveBeenCalledWith(

@@ -4,9 +4,9 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   flushOrcadProfileStoreForShutdown,
   installOrcadShutdownSignals,
-  ORCAD_SHUTDOWN_DEADLINE_MS,
   startOrcadWithLifecycle
 } from './orcad-lifecycle'
+import { ORCAD_SHUTDOWN_DEADLINE_MS } from './orcad-stop-deadlines'
 
 /** Installs the real signal handlers with process.exit captured instead of exiting. */
 function captureShutdown() {

@@ -96,7 +96,8 @@ export function useLocalImageSrc(
   filePath: string,
   connectionId?: string | null,
   runtimeContext?: LocalImageRuntimeContext | null,
-  access?: LocalFileAccess
+  access?: LocalFileAccess,
+  retryKey?: number
 ): string | undefined {
   const [generation, setGeneration] = useState(getLocalImageCacheGeneration())
   const externalSrc =
@@ -156,7 +157,7 @@ export function useLocalImageSrc(
     return () => {
       cancelled = true
     }
-  }, [cacheKey, externalSrc, generation])
+  }, [cacheKey, externalSrc, generation, retryKey])
 
   return displaySrc
 }

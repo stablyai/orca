@@ -78,10 +78,13 @@ describe.runIf(RUN)('managed orcad on a Windows OpenSSH host', () => {
           bindHost: '127.0.0.1',
           port: 0
         }
+        const idle = { liveSessions: 0, startedSinceActivation: 0, daemonProtocolVersion: null }
         const deployed = await deployOrcad({
           ...options,
           target: context.serverTarget,
-          census: { liveSessions: 0, startedSinceActivation: 0, daemonProtocolVersion: null }
+          census: idle,
+          recountCensus: async () => idle,
+          releaseIncumbentAdmission: async () => {}
         })
         receipt.deploy = deployed
         expect(deployed.outcome).toBe('installed-and-activated')

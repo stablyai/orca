@@ -179,11 +179,16 @@ export async function releaseHeldPageInput(
     if (release.method === 'Input.dispatchKeyEvent') {
       return await dispatchPageKeyEvent(webContents, release.params, send, guardFocus)
     }
-    const result = await send(release.method, release.params)
-    if (release.method === 'Input.dispatchMouseEvent') {
-      const button = normalizeCdpPointerButton(String(release.params.button))
-      releaseCdpPointerButton(cdpPointerStateFor(webContents), button)
+    if (release.method !== 'Input.dispatchMouseEvent') {
+      return await send(release.method, release.params)
     }
+    const button = normalizeCdpPointerButton(String(release.params.button))
+    const state = cdpPointerStateFor(webContents)
+    const remaining = { ...state }
+    releaseCdpPointerButton(remaining, button)
+    // Why the live mask: another caller's button may still be down; reporting none would drop it.
+    const result = await send(release.method, { ...release.params, buttons: remaining.buttons })
+    releaseCdpPointerButton(state, button)
     return result
   } finally {
     lease.release()

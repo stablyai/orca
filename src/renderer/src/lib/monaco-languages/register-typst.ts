@@ -5,7 +5,6 @@ import { registerTextMateLanguage } from './textmate-language-registration'
 type MonacoModule = typeof Monaco
 
 export const TYPST_LANGUAGE_ID = 'typst'
-export const TYPST_TEXTMATE_SCOPE = 'source.typst'
 
 export const typstLanguageConfiguration: Monaco.languages.LanguageConfiguration = {
   comments: {

@@ -93,7 +93,7 @@ describe('Store.applyLayoutCommand sleep and wake (layout.apply)', () => {
     })
   })
 
-  it('wakes only the named pane; the other sleeping pane keeps its record', async () => {
+  it('a record-only wake drops only the named pane’s record', async () => {
     const { store, directory } = await storeWithSplitTab()
     const left = record(LEFT, 'left-session')
     await store.applyLayoutCommand({
@@ -106,7 +106,8 @@ describe('Store.applyLayoutCommand sleep and wake (layout.apply)', () => {
     const reply = await store.applyLayoutCommand({
       type: 'wake',
       workspace: WORKTREE,
-      paneKeys: [left.paneKey]
+      paneKeys: [left.paneKey],
+      recordOnly: true
     })
 
     expect(reply).toEqual({ ok: true, result: { woken: [left.paneKey] } })
@@ -114,6 +115,28 @@ describe('Store.applyLayoutCommand sleep and wake (layout.apply)', () => {
     expect(session.sleepingAgentSessionsByPaneKey).toEqual({
       [`${TAB}:${RIGHT}`]: record(RIGHT, 'right-session')
     })
+  })
+
+  it('a wake starts the pane and keeps its record, which the start resumes from', async () => {
+    const { store } = await storeWithSplitTab()
+    const left = record(LEFT, 'left-session')
+    await store.applyLayoutCommand({
+      type: 'sleep',
+      workspace: WORKTREE,
+      paneKeys: [left.paneKey],
+      records: [left]
+    })
+    const onEffects = vi.fn()
+
+    const reply = await store.applyLayoutCommand(
+      { type: 'wake', workspace: WORKTREE, paneKeys: [left.paneKey] },
+      [],
+      { onEffects }
+    )
+
+    expect(reply).toEqual({ ok: true, result: { woken: [left.paneKey] } })
+    expect(onEffects).toHaveBeenCalledWith({ stopPtyIds: [], startPaneKeys: [left.paneKey] })
+    expect(store.getWorkspaceSession().sleepingAgentSessionsByPaneKey?.[left.paneKey]).toEqual(left)
   })
 
   it('wakes nothing for a pane that holds no record', async () => {
@@ -143,5 +166,47 @@ describe('Store.applyLayoutCommand sleep and wake (layout.apply)', () => {
       store.getWorkspaceSession('ssh:target-1').sleepingAgentSessionsByPaneKey?.[left.paneKey]
     ).toEqual(left)
     expect(store.getWorkspaceSession().sleepingAgentSessionsByPaneKey).toBeUndefined()
+  })
+})
+
+describe('Store.applyLayoutCommand restartPane (layout.apply)', () => {
+  const restart = { type: 'restartPane', workspace: WORKTREE, paneKey: `${TAB}:${LEFT}` } as const
+
+  it('stops the pane’s terminal before it writes the pane unbound, then starts it', async () => {
+    const { store, directory } = await storeWithSplitTab()
+    const order: string[] = []
+    const stopBeforeWrite = vi.fn(() => {
+      order.push(
+        `stop, bound to ${store.getWorkspaceSession().terminalLayoutsByTabId[TAB]?.ptyIdsByLeafId?.[LEFT]}`
+      )
+      return true
+    })
+    const onEffects = vi.fn(() => order.push('start'))
+
+    const reply = await store.applyLayoutCommand(restart, [], { stopBeforeWrite, onEffects })
+
+    expect(reply).toMatchObject({ ok: true })
+    expect(stopBeforeWrite).toHaveBeenCalledWith(['pty-left'])
+    expect(order).toEqual(['stop, bound to pty-left', 'start'])
+    const session = (await reopenTopologyStore(store, directory)).getWorkspaceSession()
+    expect(session.terminalLayoutsByTabId[TAB]?.ptyIdsByLeafId?.[LEFT]).toBeUndefined()
+  })
+
+  it('keeps the pane bound and starts nothing when its terminal would not stop', async () => {
+    const { store, directory } = await storeWithSplitTab()
+    const onEffects = vi.fn()
+
+    const reply = await store.applyLayoutCommand(restart, [], {
+      stopBeforeWrite: () => false,
+      onEffects
+    })
+
+    expect(reply).toEqual({ ok: false, code: 'pane_already_bound' })
+    expect(onEffects).not.toHaveBeenCalled()
+    const session = (await reopenTopologyStore(store, directory)).getWorkspaceSession()
+    expect(session.terminalLayoutsByTabId[TAB]?.ptyIdsByLeafId).toEqual({
+      [LEFT]: 'pty-left',
+      [RIGHT]: 'pty-right'
+    })
   })
 })

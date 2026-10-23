@@ -1,4 +1,4 @@
-FROM node:22-bookworm-slim
+FROM node:22.23.4-bookworm-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV NODE_PATH=/usr/local/lib/node_modules

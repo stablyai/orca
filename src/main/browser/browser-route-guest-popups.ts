@@ -203,7 +203,6 @@ export function createBrowserRouteGuestPopupController(input: {
         return allowNativeBrowserPopup({
           // Electron reports a script-opened child to the contents whose handler answered.
           opener: source,
-          targetUrl: details?.url ?? normalized,
           options,
           background: details?.disposition === 'background-tab',
           canPresent: () => !disposed && navigationAllowed(ORCA_BROWSER_BLANK_URL),

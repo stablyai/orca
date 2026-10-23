@@ -26,6 +26,8 @@ describe('parseAntigravityUsageStdout', () => {
       {
         id: 'gemini-weekly',
         name: 'Gemini Models',
+        group: 'Gemini Models',
+        windowName: 'Weekly Limit Remaining',
         usedPercent: 0,
         windowMinutes: 10_080,
         resetsAt: new Date('2026-10-07T08:08:35Z').getTime(),
@@ -34,6 +36,8 @@ describe('parseAntigravityUsageStdout', () => {
       {
         id: '3p-weekly',
         name: 'Claude and GPT models',
+        group: 'Claude and GPT models',
+        windowName: 'Weekly Limit Remaining',
         usedPercent: 0,
         windowMinutes: 10_080,
         resetsAt: new Date('2026-10-07T08:08:35Z').getTime(),
@@ -120,6 +124,45 @@ describe('parseAntigravityUsageEnvelope', () => {
     ])
   })
 
+  it('fills the structured group and window name the renderer labels pools from', () => {
+    const reading = parseAntigravityUsageEnvelope(
+      envelope([
+        {
+          name: 'Gemini Models',
+          buckets: [
+            { id: 'gemini-5h', name: '5h Limit Remaining', window: '5h', remaining_fraction: 1 },
+            { id: 'gemini-weekly', window: 'weekly', remaining_fraction: 1 }
+          ]
+        }
+      ])
+    )
+
+    expect(reading?.buckets[0]).toMatchObject({
+      group: 'Gemini Models',
+      windowName: '5h Limit Remaining'
+    })
+    expect(reading?.buckets[1]).toMatchObject({ group: 'Gemini Models' })
+    expect(reading?.buckets[1]).not.toHaveProperty('windowName')
+  })
+
+  it('keeps only the four window fields on the session and weekly summaries', () => {
+    const reading = parseAntigravityUsageEnvelope(
+      envelope([
+        {
+          name: 'Gemini Models',
+          buckets: [
+            { id: 'gemini-5h', name: '5h Limit Remaining', window: '5h', remaining_fraction: 1 },
+            { id: 'gemini-weekly', name: 'Weekly', window: 'weekly', remaining_fraction: 1 }
+          ]
+        }
+      ])
+    )
+
+    const window = { usedPercent: 0, resetsAt: null, resetDescription: null }
+    expect(reading?.session).toEqual({ ...window, windowMinutes: 300 })
+    expect(reading?.weekly).toEqual({ ...window, windowMinutes: 10_080 })
+  })
+
   it('drops a disabled bucket instead of drawing it as unused', () => {
     const reading = parseAntigravityUsageEnvelope(
       envelope([
@@ -171,12 +214,23 @@ describe('parseAntigravityUsageEnvelope', () => {
       envelope([
         {
           name: 'Gemini Models',
-          buckets: [{ id: 'gemini-monthly', window: 'monthly', remaining_fraction: 0.4 }]
+          buckets: [
+            {
+              id: 'gemini-monthly',
+              name: 'Monthly Limit Remaining',
+              window: 'monthly',
+              remaining_fraction: 0.4
+            }
+          ]
         }
       ])
     )
 
-    expect(reading?.buckets[0]).toMatchObject({ usedPercent: 60, windowMinutes: 0 })
+    expect(reading?.buckets[0]).toMatchObject({
+      usedPercent: 60,
+      windowMinutes: 0,
+      windowName: 'Monthly Limit Remaining'
+    })
     expect(reading?.session).toBeNull()
     expect(reading?.weekly).toBeNull()
   })

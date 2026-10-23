@@ -23,7 +23,7 @@ import {
 } from '../project-runtime-git-options'
 import { getWorktreeSharedLinkPaths } from '../git/worktree-shared-directories'
 import { getRepoExecutionHostId, getRepoSshConnectionId } from '../../shared/execution-host'
-import { getRepoHostedReviewExecutionHostId } from '../source-control/hosted-review-execution-host'
+import { getStoredRepoExecutionHostId } from '../repo-execution-host'
 
 function assertRegisteredRepo(repoPath: string, store: Store, repoId?: string): Repo {
   if (repoId) {
@@ -115,7 +115,7 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
     }
     const review = await getHostedReviewForBranch({
       repoPath: repo.path,
-      executionHostId: getRepoHostedReviewExecutionHostId(repo),
+      executionHostId: getStoredRepoExecutionHostId(repo),
       branch: args.branch,
       linkedGitHubPR: args.linkedGitHubPR ?? null,
       fallbackGitHubPR: args.linkedGitHubPR == null ? (args.fallbackGitHubPR ?? null) : null,
@@ -148,7 +148,7 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
       return getHostedReviewCreationEligibility({
         ...args,
         repoPath: worktreePath,
-        executionHostId: getRepoHostedReviewExecutionHostId(repo),
+        executionHostId: getStoredRepoExecutionHostId(repo),
         localGitExecOptions: { ...localGitOptions, admissionTier: 'interactive' as const }
       })
     }
@@ -184,7 +184,7 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
       draft: args.draft,
       ...(args.useTemplate !== undefined ? { useTemplate: args.useTemplate } : {})
     }
-    const executionHostId = getRepoHostedReviewExecutionHostId(repo)
+    const executionHostId = getStoredRepoExecutionHostId(repo)
     const result = executionOptions
       ? await createHostedReview(worktreePath, input, executionHostId, executionOptions)
       : await createHostedReview(worktreePath, input, executionHostId)
@@ -227,7 +227,7 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
       const result = await createStackedHostedReview(
         worktreePath,
         input,
-        getRepoHostedReviewExecutionHostId(repo),
+        getStoredRepoExecutionHostId(repo),
         executionOptions
       )
       if (result.ok && !stats.hasCountedPR(result.url)) {

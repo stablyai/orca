@@ -5,6 +5,10 @@ import { createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import type { AgentJournalRenderItem } from '../../../src/shared/agent-session-journal-types'
+import type { RpcClient } from '../transport/rpc-client'
+import { MobileNativeChatItemSourceContext } from './mobile-native-chat-item-read'
+import { useMobileNativeChatMessageDetail } from './use-mobile-native-chat-message-detail'
 
 vi.mock('react-native', async () => {
   const React = await import('react')
@@ -171,4 +175,83 @@ it("opens a grouped thought's own actions on a long press, not the run's first r
       .props.onLongPress()
   })
   expect(openActions).toHaveBeenCalledWith(thought)
+})
+
+it('loads a shortened grouped thought from its own source between two tool rows', async () => {
+  const fullText = 'x'.repeat(99_991) + 'FULL TAIL'
+  const shortened: NativeChatMessage = {
+    ...thought,
+    shortened: true,
+    blocks: [{ type: 'text', text: fullText.slice(0, 70_000) }]
+  }
+  const item: AgentJournalRenderItem = {
+    itemId: thought.id,
+    sequence: 1,
+    revision: 2,
+    observedAt: 2_000,
+    body: {
+      kind: 'message',
+      role: 'reasoning',
+      state: 'completed',
+      completedAt: 2_000,
+      blocks: [{ type: 'text', text: fullText }]
+    }
+  }
+  const sendRequest = vi.fn(async () => ({ id: 'detail', ok: true as const, result: { item } }))
+  const client: RpcClient = {
+    sendRequest,
+    subscribe: () => () => {},
+    updateTerminalSubscriptionViewport: () => {},
+    getState: () => 'connected',
+    getReconnectAttempt: () => 0,
+    getLastConnectedAt: () => 0,
+    onStateChange: () => () => {},
+    notifyForeground: () => {},
+    close: () => {}
+  }
+  const source = { client, sessionId: 'session' }
+  const messages = [read, shortened, command]
+  function Transcript() {
+    const detail = useMobileNativeChatMessageDetail(messages, source)
+    return createElement(
+      MobileNativeChatItemSourceContext.Provider,
+      { value: { ...source, messageDetail: detail.detail } },
+      createElement(MobileNativeChatMessage, {
+        message: read,
+        workRun: detail.messages,
+        openReasoning: new Set([nativeChatReasoningDisclosureKey(thought.id)]),
+        onToggleReasoning: vi.fn(),
+        structuredActivityUi: true,
+        activeTurnIsWorking: false
+      })
+    )
+  }
+  await act(async () => {
+    renderer = create(createElement(Transcript))
+  })
+  const tree = renderer!
+  act(() =>
+    tree.root
+      .find((node) => String(node.type) === 'Pressable' && node.props.accessibilityLiveRegion)
+      .props.onPress()
+  )
+  expect(textIn(tree.root)).toContain('Read 1 file and ran 1 command')
+  const showFull = tree.root.find(
+    (node) =>
+      String(node.type) === 'Pressable' &&
+      node.props.accessibilityRole === 'button' &&
+      textIn(node).includes('Show full message')
+  )
+  await act(async () => {
+    showFull.props.onPress()
+  })
+  expect(sendRequest).toHaveBeenCalledExactlyOnceWith(
+    'agentSession.item',
+    { sessionId: source.sessionId, itemId: thought.id },
+    expect.any(Object)
+  )
+  const markdown = tree.root.find((node) => String(node.type) === 'MobileMarkdown')
+  expect(markdown.props.content).toBe(fullText)
+  expect(textIn(tree.root)).not.toContain('Show full message')
+  expect(textIn(tree.root)).toEqual(expect.arrayContaining(['Read', 'a.ts', 'pnpm test']))
 })

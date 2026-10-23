@@ -13,6 +13,7 @@ import {
   _resetPendingWorktreeRemovalsForTests,
   startBackgroundWorktreeRemoval
 } from '../worktree-background-removal'
+import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
@@ -36,9 +37,6 @@ vi.mock('../github/client', async () =>
 )
 vi.mock('../source-control/hosted-review', async () =>
   (await import('./worktrees-test-module-mocks')).hostedReviewModuleMock()
-)
-vi.mock('../providers/ssh-filesystem-dispatch', async () =>
-  (await import('./worktrees-test-module-mocks')).sshFilesystemDispatchModuleMock()
 )
 vi.mock('./worktree-symlinks', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeSymlinksModuleMock()
@@ -154,7 +152,9 @@ describe('worktrees:remove in the background', () => {
     const result = await reply
     expect(result).toMatchObject({ preservedBranch: { branchName: 'feature', head: 'feature' } })
     expect(result.removing).toBeUndefined()
-    expect(store.removeWorktreeMeta).toHaveBeenCalledWith(featureId, 'local')
+    expect(store.removeWorktreeMeta).toHaveBeenCalledWith(
+      hostWorktreeTarget({ id: featureId, hostId: 'local' })
+    )
     const after = await listRepoRows()
     expect(after.map((row) => row.id)).not.toContain(featureId)
   })

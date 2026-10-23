@@ -120,6 +120,18 @@ describe('writeHooksJson', () => {
     expect(existsSync(targetPath)).toBe(false)
   })
 
+  it.skipIf(process.platform === 'win32')(
+    'keeps an owner-only config owner-only when it rewrites it',
+    () => {
+      writeFileSync(configPath, '{"hooks":{}}\n')
+      chmodSync(configPath, 0o600)
+
+      writeHooksJson(configPath, { hooks: { Stop: [] } })
+
+      expect(statSync(configPath).mode & 0o777).toBe(0o600)
+    }
+  )
+
   it('writes the config as formatted JSON', () => {
     const config: HooksConfig = {
       hooks: { Stop: [{ hooks: [{ type: 'command', command: 'foo' }] }] }

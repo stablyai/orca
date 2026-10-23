@@ -156,7 +156,7 @@ export function SessionInlineDetails({
               <MessagesSquare className="size-3.5" />
               {translate(
                 'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewNativeChat',
-                'Resume in New Native Chat'
+                'Resume in New Chat'
               )}
             </Button>
           ) : null}
@@ -177,7 +177,7 @@ export function SessionInlineDetails({
                   <SquareTerminal className="size-3.5" />
                   {translate(
                     'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewCli',
-                    'Resume in New CLI'
+                    'Resume in New Terminal'
                   )}
                 </Button>
               </TooltipTrigger>

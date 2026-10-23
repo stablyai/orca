@@ -83,13 +83,17 @@ export function probeRemoteInstallCompleteCommand(
   remoteInstallDir: string,
   requiredFilenames: readonly string[]
 ): string {
+  if (!isWindowsRemoteHost(host)) {
+    // Why relative to the dir: repeating a long slot path per artifact pushed the probe past the
+    // exec-size budget gateways enforce (#30491). The subshell keeps the cd from leaking.
+    const fileTests = requiredFilenames
+      .map((filename) => `&& test -f ${quotePosixShell(filename)} `)
+      .join('')
+    return `(cd ${quotePosixShell(remoteInstallDir)} 2>/dev/null ${fileTests}) && echo OK || echo MISSING`
+  }
   const required = requiredFilenames.map((filename) =>
     joinRemotePath(host, remoteInstallDir, filename)
   )
-  if (!isWindowsRemoteHost(host)) {
-    const fileTests = required.map((path) => `&& test -f ${quotePosixShell(path)} `).join('')
-    return `test -d ${quotePosixShell(remoteInstallDir)} ${fileTests}&& echo OK || echo MISSING`
-  }
   return powerShellCommand(
     [
       `$dir = ${powerShellLiteral(remoteInstallDir)}`,

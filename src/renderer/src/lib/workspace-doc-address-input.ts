@@ -8,6 +8,7 @@ import { htmlFilePathFromUrl } from '../../../shared/html-file-url'
 import { authorityKey } from '../../../shared/host-authority'
 import { resolveOwner } from './resolve-owner'
 import { translate } from '@/i18n/i18n'
+import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 
 function workspaceHostKey(state: AppState, workspaceId: string): string | null {
   const match = resolveOwner(state, { workspaceId })
@@ -38,7 +39,7 @@ function ownedWorktreeRoots(
       roots.push({ worktreeId: worktree.id, root: worktree.path })
     }
   }
-  for (const folder of state.folderWorkspaces) {
+  for (const folder of selectFolderWorkspaces(state)) {
     const worktreeId = folderWorkspaceKey(folder.id)
     if (
       worktreeId !== currentWorktreeId &&

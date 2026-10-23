@@ -63,7 +63,9 @@ it.each([false, true])('keeps cold authority with read failure=%s', async (failR
     )
     if (index === 0) {
       const context = jsonLines([{ type: 'turn_context', payload: { cwd: '/repo' } }])
+      const { atime, mtime } = await stat(path)
       await appendFile(path, `\n${context}\n`)
+      await utimes(path, atime, mtime)
     }
     const { mtimeMs, size: sizeBytes, mtime } = await stat(path)
     const parsed = await parseAgentSessionFileCached(

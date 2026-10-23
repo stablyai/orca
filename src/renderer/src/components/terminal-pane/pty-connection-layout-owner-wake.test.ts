@@ -16,10 +16,22 @@ import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
+import {
+  bindsPaneInStore,
+  expectWindowStartAskedMain,
+  mainLayoutApplyTransport,
+  mainStartsPaneAs
+} from './pty-connection-test-main-pane-start-fixtures'
 
 const mocks = vi.hoisted(() => ({ wake: vi.fn() }))
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
 vi.mock('@/store/terminals/terminal-sleep-layout-owner', () => ({
   recordPaneWakeThroughLayoutOwner: mocks.wake
 }))
@@ -62,13 +74,15 @@ describe('wake through main in a layout-owner build', () => {
       }
     })
     await installTerminalTestGlobals()
+    ;(await mainLayoutApplyTransport()).reset()
   })
 
   afterEach(async () => {
     await restoreTerminalTestGlobals()
   })
 
-  it('records the wake of the revealed pane alone, once its agent resumed', async () => {
+  // Main's start of the revealed pane is its wake: the window records none of its own.
+  it('asks main to start the revealed pane alone, and records no wake itself', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-pane-2')
     transportFactoryQueue.push(transport)
@@ -93,6 +107,10 @@ describe('wake through main in a layout-owner build', () => {
     mocks.wake.mockImplementation(() => {
       recordHeldAtWake = paneKey in mockStoreState.sleepingAgentSessionsByPaneKey
     })
+    await mainStartsPaneAs({
+      ptyId: 'pty-main',
+      bind: bindsPaneInStore(() => mockStoreState, 'tab-1', leafIdForPane(2))
+    })
     const binding = connectPanePty(...args)
     await flushAsyncTicks()
     const onPtyExit = createdTransportOptions[0]?.onPtyExit
@@ -106,12 +124,18 @@ describe('wake through main in a layout-owner build', () => {
     binding.noteVisibilityResume()
     await flushAsyncTicks()
 
-    const resumeConnectOptions: { command?: string } | undefined =
-      transport.connect.mock.calls.at(-1)?.[0]
-    expect(resumeConnectOptions?.command).toContain('sess-shown')
-    expect(mocks.wake).toHaveBeenCalledTimes(1)
-    expect(mocks.wake).toHaveBeenCalledWith(expect.anything(), 'wt-1', paneKey)
-    expect(recordHeldAtWake).toBe(true)
-    expect(mockStoreState.sleepingAgentSessionsByPaneKey).not.toHaveProperty(paneKey)
+    // The revealed pane alone asks main to start it, then attaches to main's terminal.
+    await expectWindowStartAskedMain(transport, paneKey, mockStoreState)
+    expect((await mainLayoutApplyTransport()).sentOfType('startPane')).toEqual([
+      expect.objectContaining({ paneKey })
+    ])
+    expect(transport.connect).toHaveBeenLastCalledWith(
+      expect.objectContaining({ sessionId: 'pty-main', attachOnlyView: true })
+    )
+    expect(mocks.wake).not.toHaveBeenCalled()
+    expect(recordHeldAtWake).toBeUndefined()
+    // Main keeps the pane's record; the other pane's record is untouched.
+    expect(mockStoreState.sleepingAgentSessionsByPaneKey).toHaveProperty(paneKey)
+    expect(mockStoreState.sleepingAgentSessionsByPaneKey).toHaveProperty(otherPaneKey)
   })
 })

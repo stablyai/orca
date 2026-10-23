@@ -59,8 +59,9 @@ export class SessionSearchIndexConsumer implements TranscriptConsumer {
 
   beginRead(start: TranscriptReadStart): TranscriptReadConsumer | null {
     const { candidate } = start
+    // Covered at this exact stat, the index holds every byte: a replace or an append, such as a
+    // second agent's fold of a shared transcript, has nothing to add.
     if (
-      start.mode === 'replace' &&
       SELF_CONTAINED_TRANSCRIPT_AGENTS[candidate.agent] &&
       (candidate.file.sidecar === undefined || candidate.file.sidecar === 'none') &&
       this.store.coversTranscript(candidate)

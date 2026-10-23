@@ -5,6 +5,7 @@ import {
   type AgentHookUnavailableEnvelope,
   type AgentHookRelayEnvelope
 } from '../shared/agent-hook-relay'
+import { fitInteractivePrompt } from '../shared/agent-status-field-normalization'
 import type { RelayDispatcher } from './dispatcher'
 
 // Why: shed the biggest, most reconstructible fields first — state/paneKey must survive or the pane
@@ -37,14 +38,6 @@ type RedeliveryState = {
 }
 
 const redeliveryByDispatcher = new WeakMap<RelayDispatcher, RedeliveryState>()
-// Why: some agents submit option labels verbatim, so only presentation-only fields may shrink.
-const COMPACTABLE_INTERACTIVE_PROMPT_FIELDS = new Set([
-  'description',
-  'detail',
-  'header',
-  'question',
-  'summary'
-])
 
 function fitsProducerFrame(dispatcher: RelayDispatcher, params: Record<string, unknown>): boolean {
   return dispatcher.producerEnvelopeBudget(AGENT_HOOK_NOTIFICATION_METHOD, params) >= 0
@@ -60,23 +53,6 @@ function toNotificationParams(
     : { ...params, [AGENT_HOOK_SHED_FIELDS_KEY]: [...shedFields] }
 }
 
-function compactInteractivePromptValue(value: unknown, maxStringLength: number): unknown {
-  if (Array.isArray(value)) {
-    return value.map((item) => compactInteractivePromptValue(item, maxStringLength))
-  }
-  if (!value || typeof value !== 'object') {
-    return value
-  }
-  return Object.fromEntries(
-    Object.entries(value).map(([key, item]) => [
-      key,
-      typeof item === 'string' && COMPACTABLE_INTERACTIVE_PROMPT_FIELDS.has(key)
-        ? item.slice(0, maxStringLength)
-        : compactInteractivePromptValue(item, maxStringLength)
-    ])
-  )
-}
-
 function fitWaitingInteractivePrompt(
   dispatcher: RelayDispatcher,
   envelope: AgentHookRelayEnvelope,
@@ -86,33 +62,18 @@ function fitWaitingInteractivePrompt(
   if (!prompt) {
     return null
   }
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(prompt)
-  } catch {
-    parsed = undefined
-  }
-  const promptAtLimit = (limit: number): string =>
-    parsed === undefined
-      ? prompt.slice(0, limit)
-      : JSON.stringify(compactInteractivePromptValue(parsed, limit))
-  let low = 1
-  let high = prompt.length
-  let fitted: AgentHookRelayEnvelope | null = null
-  while (low <= high) {
-    const mid = Math.floor((low + high) / 2)
-    const candidate = {
-      ...envelope,
-      payload: { ...envelope.payload, interactivePrompt: promptAtLimit(mid) }
-    }
-    if (fitsProducerFrame(dispatcher, toNotificationParams(candidate, shedFields))) {
-      fitted = candidate
-      low = mid + 1
-    } else {
-      high = mid - 1
-    }
-  }
-  return fitted
+  const fitted = fitInteractivePrompt(prompt, (interactivePrompt) =>
+    fitsProducerFrame(
+      dispatcher,
+      toNotificationParams(
+        { ...envelope, payload: { ...envelope.payload, interactivePrompt } },
+        shedFields
+      )
+    )
+  )
+  return fitted === null
+    ? null
+    : { ...envelope, payload: { ...envelope.payload, interactivePrompt: fitted } }
 }
 
 /** Returns the ids of the clients that rejected the frame; a rejected client is never written to. */

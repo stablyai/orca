@@ -24,7 +24,6 @@ function awaitOpen() {
   }
   state.host.deps.adapter.acquire = async (input) => ({
     ...(await acquire(input)),
-    providerChildPhase: 'starting',
     acquisitionGeneration: 'awaited-open'
   })
   const pending = Promise.withResolvers<StructuredAgentSessionProviderOpenResult>()

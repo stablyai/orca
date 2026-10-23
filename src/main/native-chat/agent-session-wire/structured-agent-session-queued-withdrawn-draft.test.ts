@@ -5,7 +5,6 @@
 // under a fresh submission id.
 
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { JournalQueuedMessages } from '../agent-session-journal/journal-queued-messages'
 import { JournalStopAcceptor } from '../agent-session-journal/journal-stop-acceptance'
 import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
 import { holdDelivery } from './structured-agent-session-delivery-hold.test-fixture'
@@ -133,54 +132,4 @@ it('a Stop whose acceptance fails takes back no hand-off; the draft sends as it 
   await eventually(async () => expect((await rig.handoff(a))?.handedOverAt).toBeDefined())
   expect(await rig.handoffId(a)).toBe(firstA)
   expect((await rig.submission(firstA))?.dispatchState).not.toBe('rejected')
-})
-
-/** A consumed card whose delivery is held, so a Stop withdraws it ahead of its handover; the
- *  settlement hook throws on that withdrawal's row, leaving the card owed a return. */
-async function stopWithSkippedSettlement(): Promise<{ a: string; working: string }> {
-  const working = await rig.workingSend()
-  const a = await queuedDraft('A')
-  const { release } = holdDelivery()
-  await rig.settleAccepted(working, 'working')
-  await eventually(async () => expect(await rig.handoff(a)).toBeDefined())
-  const settle = JournalQueuedMessages.prototype.onRowInTransaction
-  let skipped = false
-  const hook = vi
-    .spyOn(JournalQueuedMessages.prototype, 'onRowInTransaction')
-    .mockImplementation(function (this: JournalQueuedMessages, db, row) {
-      if (!skipped && row.kind === 'dispatch' && row.state === 'rejected') {
-        skipped = true
-        throw new Error('bookkeeping failed')
-      }
-      return settle.call(this, db, row)
-    })
-  const warned = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-  try {
-    const stopped = rig.stop()
-    release()
-    expect(await stopped).toMatchObject({ ok: true })
-  } finally {
-    hook.mockRestore()
-    warned.mockRestore()
-    release()
-  }
-  expect(skipped).toBe(true)
-  return { a, working }
-}
-
-it("a Stop whose withdrawal's settlement was skipped still pauses the card it sent back", async () => {
-  const { a } = await stopWithSkippedSettlement()
-  // The drain heals the skipped return; the Stop's row already pauses whatever comes back.
-  await eventually(async () => expect(await rig.queuePause()).toEqual({ reason: 'stopped' }))
-  await observationClock.observe(250)
-  // Healed back to waiting, but the Stop's pause holds it: it does not send.
-  expect(await rig.drafts()).toEqual([{ messageId: a, state: 'waiting' }])
-  expect(await rig.resume()).toMatchObject({ ok: true, value: { resumed: true } })
-  await eventually(async () =>
-    expect(
-      (await rig.host.journalSnapshot(SESSION)).submissions.filter(
-        (entry) => entry.queuedMessageId === a
-      )
-    ).toHaveLength(2)
-  )
 })

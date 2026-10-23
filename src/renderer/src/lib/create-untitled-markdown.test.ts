@@ -10,6 +10,7 @@ import {
 } from '@/runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+import { getDiskBaselineSignature } from '../../../shared/disk-baseline-signature'
 
 const LOCAL: RuntimeClientTarget = { kind: 'local' }
 
@@ -70,6 +71,82 @@ describe('createUntitledMarkdownFile', () => {
       expectedExecutionHostId: 'local'
     })
     expect(pathExists).toHaveBeenCalledTimes(3)
+  })
+
+  it.each(['original text {{title}}', ''])(
+    'recovers exact text into a collision-safe new path (%j)',
+    async (content) => {
+      const pathExists = vi.fn().mockResolvedValueOnce(true).mockResolvedValue(false)
+      const createFile = vi
+        .fn()
+        .mockRejectedValueOnce(new Error('EEXIST'))
+        .mockResolvedValue(undefined)
+      const writeFile = vi.fn().mockResolvedValue(undefined)
+      vi.stubGlobal('window', { api: { fs: { pathExists, createFile, writeFile } } })
+      await expect(
+        createUntitledMarkdownFile('/active', 'wt', undefined, LOCAL, {
+          recoveredDocument: { originalPath: 'C:\\removed\\note.ts', content }
+        })
+      ).resolves.toMatchObject({
+        filePath: '/active/note (recovered 3).ts',
+        relativePath: 'note (recovered 3).ts',
+        language: 'typescript',
+        isUntitled: true,
+        deleteUntouchedOnClose: false
+      })
+      expect(writeFile).toHaveBeenCalledTimes(1)
+      expect(writeFile).toHaveBeenCalledWith(
+        expect.objectContaining({
+          filePath: '/active/note (recovered 3).ts',
+          content,
+          diskPrecondition: { expectedSignature: getDiskBaselineSignature('') }
+        })
+      )
+      expect(createFile).not.toHaveBeenCalledWith(
+        expect.objectContaining({ filePath: 'C:\\removed\\note.ts' })
+      )
+    }
+  )
+
+  it('never overwrites or deletes a file another writer filled after the create', async () => {
+    const createFile = vi.fn().mockResolvedValue(undefined)
+    const writeFile = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, diskConflict: 'changed' })
+      .mockResolvedValue(undefined)
+    const deletePath = vi.fn()
+    vi.stubGlobal('window', {
+      api: {
+        fs: { pathExists: vi.fn().mockResolvedValue(false), createFile, writeFile, deletePath }
+      }
+    })
+    await expect(
+      createUntitledMarkdownFile('/active', 'wt', undefined, LOCAL, {
+        recoveredDocument: { originalPath: '/removed/a.md', content: 'text' }
+      })
+    ).resolves.toMatchObject({ filePath: '/active/a (recovered 2).md' })
+    expect(writeFile).toHaveBeenCalledTimes(2)
+    expect(deletePath).not.toHaveBeenCalled()
+  })
+
+  it('keeps the created path when a recovered write fails', async () => {
+    const deletePath = vi.fn()
+    vi.stubGlobal('window', {
+      api: {
+        fs: {
+          pathExists: vi.fn().mockResolvedValue(false),
+          createFile: vi.fn().mockResolvedValue(undefined),
+          writeFile: vi.fn().mockRejectedValue(new Error('disk full')),
+          deletePath
+        }
+      }
+    })
+    await expect(
+      createUntitledMarkdownFile('/active', 'wt', undefined, LOCAL, {
+        recoveredDocument: { originalPath: '/removed/a.md', content: 'text' }
+      })
+    ).rejects.toThrow('disk full')
+    expect(deletePath).not.toHaveBeenCalled()
   })
 
   it('throws a descriptive error when untitled names are exhausted', async () => {

@@ -8,11 +8,9 @@ import {
   assertWorktreeCleanForRemoval,
   beginWatcherInstall,
   closeLocalWatcherForWorktreePathMock,
-  closeRemoteWatcherForWorktreePathMock,
   deleteWorktreeHistoryDirMock,
   forceDeleteLocalBranchMock,
   forgetLocalWatcherRemovalSnapshotMock,
-  forgetRemoteWatcherRemovalSnapshotMock,
   getEffectiveHooks,
   gitRunner,
   join,
@@ -24,7 +22,6 @@ import {
   removeWorktree,
   removeWorktreeLinkedPathsMock,
   restoreLocalWatcherAfterFailedRemovalMock,
-  restoreRemoteWatcherAfterFailedRemovalMock,
   rm,
   runHook,
   setPlatform,
@@ -42,6 +39,7 @@ import {
   syncSinglePty
 } from '../orca-runtime-test-fixtures.spec'
 import { createWorktreeRemovalRuntime } from '../orca-runtime-test-scenario-builders.spec'
+import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 // Why: these fixtures register an SSH provider, which models a connected relay session — and a
 // connected session has always read the host's `$HOME`. The removal guards refuse without it.
@@ -88,13 +86,10 @@ describe('OrcaRuntimeService', () => {
     })
 
     expect(localProvider.listProcesses).not.toHaveBeenCalled()
-    expect(closeRemoteWatcherForWorktreePathMock).toHaveBeenCalledWith('ssh-1', TEST_WORKTREE_PATH)
-    // The remote directory survives, so its watchers are restored, not forgotten.
-    expect(restoreRemoteWatcherAfterFailedRemovalMock).toHaveBeenCalledWith(
-      'ssh-1',
-      TEST_WORKTREE_PATH
-    )
-    expect(forgetRemoteWatcherRemovalSnapshotMock).not.toHaveBeenCalled()
+    // The remote path never had a desktop watcher, so none is closed, restored or forgotten.
+    expect(closeLocalWatcherForWorktreePathMock).not.toHaveBeenCalled()
+    expect(restoreLocalWatcherAfterFailedRemovalMock).not.toHaveBeenCalled()
+    expect(forgetLocalWatcherRemovalSnapshotMock).not.toHaveBeenCalled()
   })
 
   it('does not remove a runtime worktree when watcher teardown cannot release it', async () => {
@@ -394,7 +389,9 @@ describe('OrcaRuntimeService', () => {
       })
       // The repo resolved to the local host, so the metadata purge names it —
       // an unqualified purge would evict a same-id row owned by another host.
-      expect(removeWorktreeMeta).toHaveBeenCalledWith(worktreeId, 'local')
+      expect(removeWorktreeMeta).toHaveBeenCalledWith(
+        hostWorktreeTarget({ id: worktreeId, hostId: 'local' })
+      )
     } finally {
       gitSpy.mockRestore()
     }

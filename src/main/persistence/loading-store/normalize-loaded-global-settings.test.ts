@@ -163,6 +163,17 @@ describe('the new-chat permission setting', () => {
   })
 })
 
+describe('scoped new-chat permission defaults', () => {
+  it('preserves an agent override across load while rejecting unsupported stored modes', () => {
+    const normalized = normalizeLegacyProfile({
+      nativeChatPermissionMode: 'full-access',
+      agentNativeChatPermissionModes: { codex: 'auto', claude: 'ask', omp: 'auto', unknown: 'auto' }
+    })
+    expect(normalized.agentNativeChatPermissionModes).toEqual({ codex: 'auto', claude: 'ask' })
+    expect(normalized.nativeChatPermissionMode).toBe('full-access')
+  })
+})
+
 describe('terminal default shell', () => {
   it('trims a hand-edited value and treats whitespace-only as unset', () => {
     expect(

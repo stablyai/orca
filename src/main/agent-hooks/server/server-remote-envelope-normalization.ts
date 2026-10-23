@@ -33,6 +33,8 @@ export type RemoteAgentStatusEnvelope = {
   providerSession?: unknown
   providerSessionOnly?: unknown
   isReplay?: boolean
+  turnEndedAt?: unknown
+  turnEndDisposition?: unknown
   /** Payload fields the relay dropped to fit an oversized frame; validated below. */
   shedFields?: unknown
   claudeRunningNonAgentTask?: unknown

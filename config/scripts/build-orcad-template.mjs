@@ -38,7 +38,7 @@ import {
 import { runProcessSync } from '@orca/process-host'
 import { verifyPackagedOrcadTemplate } from './verify-packaged-orcad-template.cjs'
 import { readOrcadMobileWebAssetFilenames } from './orcad-mobile-web-bundle.mjs'
-import { assertNotDarkBuild } from '../dark-build-switches.cjs'
+import { assertNotDarkBuild, darkBuildMarkers } from '../dark-build-switches.cjs'
 
 const root = resolve(import.meta.dirname, '../..')
 const outputDir = join(root, 'out', 'orcad-template')
@@ -175,13 +175,23 @@ function stageCompatTarget(compat, basePackageDir) {
   return { files }
 }
 
+/**
+ * `--dark-test-template` lets a dark switch through for test servers only; the template then
+ * carries the switch's marker, which packaging refuses.
+ */
+export function assertTemplateBuildAllowed(argv = process.argv, env = process.env) {
+  if (!argv.includes('--dark-test-template')) {
+    // The template is what releases ship as the server; a dark build must never become one.
+    assertNotDarkBuild([], env)
+  }
+}
+
 function sameBytes(left, right) {
   return sha256(left) === sha256(right)
 }
 
 async function main() {
-  // The template is what releases ship as the server; a dark build must never become one.
-  assertNotDarkBuild([])
+  assertTemplateBuildAllowed()
   const templateTargets = requestedTemplateTargets()
   rmSync(buildDir, { recursive: true, force: true })
   const packages = Object.fromEntries(
@@ -224,6 +234,10 @@ async function main() {
     `${JSON.stringify({ schemaVersion: 3, commonSha256, targets }, null, 2)}\n`
   )
   verifyPackagedOrcadTemplate(join(root, 'out'), templateTargets)
+  // Outside the manifest, so deploys never copy it; it marks the whole template as test-only.
+  for (const marker of darkBuildMarkers()) {
+    writeFileSync(join(outputDir, marker.fileName), marker.text)
+  }
   rmSync(buildDir, { recursive: true, force: true })
   process.stdout.write(`[build-orcad-template] ok — ${Object.keys(targets).length} targets\n`)
 }

@@ -10,9 +10,10 @@ type Lane = {
   tail: Promise<void>
   places: Set<StructuredAgentSessionDeliveryPlace>
   sends: Map<string, StructuredAgentSessionDeliveryPlace>
+  active: Set<string>
 }
 
-/** One delivery order; journal commits retire sends, bounded callers retire operations. */
+/** One delivery order; active handovers retain their place through settlement. */
 export class StructuredAgentSessionDeliveryOrder {
   private readonly lanes = new Map<string, Lane>()
 
@@ -21,7 +22,7 @@ export class StructuredAgentSessionDeliveryOrder {
     const lane = this.lanes.get(sessionId)
     const ids = new Set(queued.map((submission) => submission.clientMessageId))
     for (const [id, place] of lane?.sends ?? []) {
-      if (!ids.has(id)) {
+      if (!ids.has(id) && !lane?.active.has(id)) {
         lane?.sends.delete(id)
         place.release()
       }
@@ -41,7 +42,8 @@ export class StructuredAgentSessionDeliveryOrder {
     const lane = this.lanes.get(sessionId) ?? {
       tail: Promise.resolve(),
       places: new Set(),
-      sends: new Map()
+      sends: new Map(),
+      active: new Set()
     }
     this.lanes.set(sessionId, lane)
     const done = Promise.withResolvers<void>()
@@ -64,13 +66,30 @@ export class StructuredAgentSessionDeliveryOrder {
     return this.lanes.get(sessionId)?.sends.get(messageId)?.before ?? Promise.resolve()
   }
 
+  activateSend(sessionId: string, messageId: string): () => void {
+    const lane = this.lanes.get(sessionId)
+    const place = lane?.sends.get(messageId)
+    lane?.active.add(messageId)
+    return () => {
+      lane?.active.delete(messageId)
+      lane?.sends.delete(messageId)
+      place?.release()
+    }
+  }
+
+  hasActiveSend(sessionId: string): boolean {
+    return (this.lanes.get(sessionId)?.active.size ?? 0) > 0
+  }
+
   /** Queued messages keep their journal rows, but stop ordering operations when delivery parks. */
   parkSends(sessionId: string): void {
     const lane = this.lanes.get(sessionId)
-    for (const place of lane?.sends.values() ?? []) {
-      place.release()
+    for (const [id, place] of lane?.sends ?? []) {
+      if (!lane?.active.has(id)) {
+        lane?.sends.delete(id)
+        place.release()
+      }
     }
-    lane?.sends.clear()
   }
 
   dispose(): void {

@@ -15,11 +15,24 @@ const FINGERPRINT_RE = /^[a-f0-9]{64}$/
  * partition name can no longer be derived and is therefore always an orphan.
  * `lastUsedAt` orders capacity eviction; 0 marks an entry written before the
  * store recorded it, which is therefore evicted first.
+ * `aliasFingerprints` are newer identities adopted onto the partition. They sit beside
+ * `fingerprint` rather than replacing it, so an older build that reads only `fingerprint`
+ * still finds the same jar instead of reporting a binding conflict.
  */
 export type BrowserRoutePartitionBinding = {
   fingerprint: string
   storageScope: string | null
   lastUsedAt: number
+  aliasFingerprints?: readonly string[]
+}
+
+export const MAX_ALIAS_FINGERPRINTS = 2
+
+export function bindingAnswersTo(
+  binding: BrowserRoutePartitionBinding,
+  fingerprint: string
+): boolean {
+  return binding.fingerprint === fingerprint || !!binding.aliasFingerprints?.includes(fingerprint)
 }
 
 export function assertBinding(partition: string, fingerprint: string): void {
@@ -111,13 +124,33 @@ function parseBinding(legacy: boolean, entry: unknown): BrowserRoutePartitionBin
     return null
   }
   const lastUsedAt = parseLastUsedAt(candidate.lastUsedAt)
+  const aliases = parseAliasFingerprints(
+    'aliasFingerprints' in entry ? entry.aliasFingerprints : undefined
+  )
+  const optional = aliases.length > 0 ? { aliasFingerprints: aliases } : {}
   if (candidate.storageScope === null) {
-    return { fingerprint: candidate.fingerprint, storageScope: null, lastUsedAt }
+    return { fingerprint: candidate.fingerprint, storageScope: null, lastUsedAt, ...optional }
   }
   if (typeof candidate.storageScope !== 'string' || !FINGERPRINT_RE.test(candidate.storageScope)) {
     return null
   }
-  return { fingerprint: candidate.fingerprint, storageScope: candidate.storageScope, lastUsedAt }
+  return {
+    fingerprint: candidate.fingerprint,
+    storageScope: candidate.storageScope,
+    lastUsedAt,
+    ...optional
+  }
+}
+
+// Why lenient: an alias only widens lookup, so a malformed one is dropped rather than
+// making the whole binding file unreadable.
+function parseAliasFingerprints(value: unknown): readonly string[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  return value
+    .filter((alias): alias is string => typeof alias === 'string' && FINGERPRINT_RE.test(alias))
+    .slice(-MAX_ALIAS_FINGERPRINTS)
 }
 
 // Why: absent on entries written before eviction existed, which must evict first.

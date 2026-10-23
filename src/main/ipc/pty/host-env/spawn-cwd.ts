@@ -1,4 +1,4 @@
-import { statSync } from 'node:fs'
+import { stat } from 'node:fs/promises'
 import type { Store } from '../../../persistence'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
@@ -70,13 +70,14 @@ export function resolvePtySpawnStartupCwd(
   })
 }
 
-export function localStartupCwdDirectoryExists(path: string): boolean {
-  // Why: Win32 statSync on \\wsl.localhost 9P shares can falsely report ENOENT; defer to the provider's WSL-aware validation.
+export async function localStartupCwdDirectoryExists(path: string): Promise<boolean> {
+  // Why: Win32 stat on \\wsl.localhost 9P shares can falsely report ENOENT; defer to the provider's WSL-aware validation.
   if (isWslUncPath(path)) {
     return true
   }
+  // Why async: a statSync on a dead network mount would freeze the whole main process.
   try {
-    return statSync(path).isDirectory()
+    return (await stat(path)).isDirectory()
   } catch {
     return false
   }

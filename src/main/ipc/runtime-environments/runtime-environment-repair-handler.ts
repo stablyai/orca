@@ -1,8 +1,7 @@
 import { ipcMain } from 'electron'
 import type { VerifyAndAddRuntimeEnvironmentResult } from '../../../shared/remote-pairing-verification'
 import { verifyAndRepairRuntimeEnvironmentFromPairingCode } from './runtime-environment-pairing-verification'
-import { getRuntimeEnvironmentStatusOwner } from './runtime-environment-request-connections'
-import { clearRuntimeEnvironmentManualDisconnect } from './runtime-environment-manual-disconnect'
+import { publishVerifiedPairing } from './runtime-environment-verified-pairing-publish'
 
 export function registerRuntimeEnvironmentRepairHandler({
   getUserDataPath,
@@ -18,20 +17,9 @@ export function registerRuntimeEnvironmentRepairHandler({
       args: { selector: string; pairingCode: string }
     ): Promise<VerifyAndAddRuntimeEnvironmentResult> => {
       const result = await verifyAndRepairRuntimeEnvironmentFromPairingCode(getUserDataPath(), args)
-      if (!result.ok) {
-        return result
+      if (result.ok) {
+        await publishVerifiedPairing(getUserDataPath(), result, { invalidateTransport })
       }
-      const environmentId = result.environment.id
-      // Why before invalidating: a manually disconnected server would not get a fresh owner.
-      clearRuntimeEnvironmentManualDisconnect(environmentId)
-      // Retires the owner blocked under the revoked pairing; its replacement keys on the new revision.
-      await invalidateTransport(environmentId)
-      getRuntimeEnvironmentStatusOwner(getUserDataPath(), environmentId).acceptVerified({
-        id: 'status.get',
-        ok: true,
-        result: result.runtimeStatus,
-        _meta: { runtimeId: result.runtimeStatus.runtimeId }
-      })
       return result
     }
   )

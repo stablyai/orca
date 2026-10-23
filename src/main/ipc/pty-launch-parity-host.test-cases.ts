@@ -193,7 +193,10 @@ export function expectedHostProvider(c: HostLaunchCase): Record<string, unknown>
     env: {},
     ...provider,
     ...(c.os === 'win32' ? { terminalWindowsWslDistro } : {}),
-    // main today: the host lane stamps ORCA_WORKSPACE_ID on folders only.
-    orcaEnv: c.workspace.kind === 'folder' ? [...FOLDER_ENV_KEYS, ...HOST_ENV_KEYS] : HOST_ENV_KEYS
+    // Like the window lane, the host lane stamps ORCA_WORKSPACE_ID for every workspace kind.
+    orcaEnv:
+      c.workspace.kind === 'folder'
+        ? [...FOLDER_ENV_KEYS, ...HOST_ENV_KEYS]
+        : ['ORCA_WORKSPACE_ID', ...HOST_ENV_KEYS]
   }
 }

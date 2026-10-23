@@ -8,7 +8,10 @@ import {
 } from '../../workspace-kanban-sidebar-drop'
 import { updateSidebarDragPreviewPosition } from '../../worktree-sidebar-pointer-drag-dom'
 import { getPointerDropStatusTarget, shouldPreferSidebarStatusDropTarget } from './status-target'
-import type { WorktreeDropCommitContext } from './drop-commit-context'
+import type {
+  ShouldShowWorkspaceBoardDropIndicator,
+  WorktreeDropCommitContext
+} from './drop-commit-context'
 import {
   applyWorktreeDropPreview,
   applyWorktreeLineageDropPreview,
@@ -28,10 +31,7 @@ export type WorktreePointerDragFrameArgs = {
   workspaceBoardOpen: boolean
   onWorkspaceBoardDragPreviewStart: () => void
   onWorkspaceBoardDragPreviewCommit: () => void
-  shouldShowWorkspaceBoardDropIndicator: (
-    worktreeIds: readonly string[],
-    status: WorkspaceStatus
-  ) => boolean
+  shouldShowWorkspaceBoardDropIndicator: ShouldShowWorkspaceBoardDropIndicator
   setWorktreeDragState: React.Dispatch<React.SetStateAction<WorktreeRowDragState>>
   setDragOverStatus: (status: WorkspaceStatus | null) => void
   setPinDragOver: (pinDragOver: boolean) => void
@@ -113,7 +113,11 @@ export function flushWorktreePointerDragFrame(args: WorktreePointerDragFrameArgs
     shouldShowDropIndicator: (target) =>
       Boolean(
         target.status &&
-        args.shouldShowWorkspaceBoardDropIndicator(drag.reorderDraggedIds, target.status)
+        args.shouldShowWorkspaceBoardDropIndicator(
+          drag.reorderDraggedIds,
+          target.status,
+          drag.draggedCopies
+        )
       )
   })
   drag.latestBoardDropTarget = {

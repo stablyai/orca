@@ -95,7 +95,7 @@ export function sidebarInputsChanged(
     : { state: { ...state, noticed: notice }, request: null }
 }
 
-/** The read failed; the next ready, foreground or notice reads again. */
+/** The read failed; its reader retries with a refresh, which reads past every notice so far. */
 export function sidebarInputsReadFailed(
   state: SidebarInputsFeedState,
   requestId: number

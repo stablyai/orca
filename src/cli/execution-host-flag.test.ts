@@ -20,7 +20,7 @@ vi.mock('./runtime-client', () => ({
 }))
 
 import {
-  assertEnvironmentSelectorResolvable,
+  resolveEnvironmentSelectorForStore,
   hostFilterMatchesHostId,
   parseHostFlag,
   resolveHostFlagEnvironmentId,
@@ -179,6 +179,23 @@ describe('resolveHostFlagEnvironmentId', () => {
       code: 'invalid_argument',
       data: { knownEnvironments: [{ id: 'env-1', name: 'gpu' }] }
     })
+  })
+
+  it('accepts ORCA_ENVIRONMENT naming the runtime host in another case', async () => {
+    listEnvironmentsMock.mockReturnValue([environment('env-1', 'Build')])
+    resolveEnvironmentMock.mockImplementation(() => {
+      throw new Error('Unknown environment: build')
+    })
+
+    await expect(
+      resolveHostFlagEnvironmentId(flags({ host: 'runtime:env-1' }), {
+        listSshTargets: listSshTargetsMock,
+        verifySshTargets: listSshTargetsMock,
+        pairingCode: null,
+        environmentSelector: { value: 'build', label: 'ORCA_ENVIRONMENT' }
+      })
+    ).resolves.toBe('env-1')
+    resolveEnvironmentMock.mockReset()
   })
 
   it('accepts --environment naming the same server as the runtime host', async () => {
@@ -434,7 +451,7 @@ describe('ambiguous environment names', () => {
       environment('env-2', 'awin')
     ])
 
-    await expect(assertEnvironmentSelectorResolvable('awin', listSshTargetsMock)).rejects.toThrow(
+    await expect(resolveEnvironmentSelectorForStore('awin', listSshTargetsMock)).rejects.toThrow(
       '2 paired servers are named awin'
     )
   })
@@ -451,18 +468,31 @@ describe('ambiguous environment names', () => {
   })
 })
 
-describe('assertEnvironmentSelectorResolvable', () => {
+describe('resolveEnvironmentSelectorForStore', () => {
   it('accepts a paired server by name or id', async () => {
     listEnvironmentsMock.mockReturnValue([environment('env-1', 'awin')])
     listSshTargetsMock.mockClear()
 
-    await expect(
-      assertEnvironmentSelectorResolvable('awin', listSshTargetsMock)
-    ).resolves.toBeUndefined()
-    await expect(
-      assertEnvironmentSelectorResolvable('env-1', listSshTargetsMock)
-    ).resolves.toBeUndefined()
+    await expect(resolveEnvironmentSelectorForStore('awin', listSshTargetsMock)).resolves.toBe(
+      'awin'
+    )
+    await expect(resolveEnvironmentSelectorForStore('env-1', listSshTargetsMock)).resolves.toBe(
+      'env-1'
+    )
     expect(listSshTargetsMock).not.toHaveBeenCalled()
+  })
+
+  // Why: the store matches names exactly, so a loosely matched name has to leave here as the id;
+  // an exact one stays as typed, which `orca status` shows as the target.
+  it('hands back the id for a name typed in another case or quoted', async () => {
+    listEnvironmentsMock.mockReturnValue([environment('env-1', 'Build')])
+
+    await expect(resolveEnvironmentSelectorForStore('build', listSshTargetsMock)).resolves.toBe(
+      'env-1'
+    )
+    await expect(resolveEnvironmentSelectorForStore('"BUILD"', listSshTargetsMock)).resolves.toBe(
+      'env-1'
+    )
   })
 
   // Why: the inverse of the --host case, and the one the report actually hit — a name that is
@@ -472,7 +502,7 @@ describe('assertEnvironmentSelectorResolvable', () => {
     listSshTargetsMock.mockResolvedValue([{ id: 'ssh-1-a', label: 'openclaw' }])
 
     await expect(
-      assertEnvironmentSelectorResolvable('openclaw', listSshTargetsMock)
+      resolveEnvironmentSelectorForStore('openclaw', listSshTargetsMock)
     ).rejects.toMatchObject({
       code: 'invalid_argument',
       data: {
@@ -485,8 +515,8 @@ describe('assertEnvironmentSelectorResolvable', () => {
     listEnvironmentsMock.mockReturnValue([])
     listSshTargetsMock.mockResolvedValue([])
 
-    await expect(
-      assertEnvironmentSelectorResolvable('nowhere', listSshTargetsMock)
-    ).rejects.toThrow('no paired Orca server is named or has id nowhere')
+    await expect(resolveEnvironmentSelectorForStore('nowhere', listSshTargetsMock)).rejects.toThrow(
+      'no paired Orca server is named or has id nowhere'
+    )
   })
 })

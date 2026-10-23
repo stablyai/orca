@@ -14,7 +14,6 @@ import {
   type AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire'
 import { createStructuredAgentSessionOperationId } from '../../../shared/structured-agent-session-mutation'
-import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
 import { queuedSendAnswer } from './structured-agent-session-queued-send-answer'
 import { structuredAgentSessionSendBlock } from './structured-agent-session-send-preparation'
 import { queuedMessagesPublishedBytesRefusal } from './structured-agent-session-queued-published-bytes'
@@ -28,14 +27,13 @@ import type { AgentSessionTurnContext } from './structured-agent-session-turns'
 import { QueuedMessageNotConsumableError } from '../agent-session-journal/queued-message-consume-error'
 import type { QueuedMessageRow } from '../agent-session-journal/queued-message-table'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
-import {
-  structuredAgentSessionHostInstance,
-  structuredQueuePauses
-} from './structured-agent-session-queued-pause'
+import { structuredQueuePauses } from './structured-agent-session-queued-pause'
 import { nextSendableQueuedCard } from '../agent-session-journal/queued-message-pause'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { agentSessionAttachmentExpiredRefusal } from './structured-agent-session-turns'
 import { isAgentSessionAttachmentExpiredError } from '../agent-session-attachments/agent-session-attachment-claims'
+import { captureStructuredExecutionOptions } from './structured-agent-session-execution-options'
+import type { JournalOperationReceipt } from '../agent-session-journal/journal-row-writer'
 
 /** Waiting, not held on its own, and not positioned behind a returned card or a
  *  card the queue's pause holds: the queue never reorders. The admission rule
@@ -146,7 +144,14 @@ export async function maybeQueueStructuredAgentSessionSend(
   },
   ctx: Pick<
     AgentSessionTurnContext,
-    'sessionId' | 'journal' | 'fence' | 'operationReceipt' | 'currentWork'
+    | 'sessionId'
+    | 'journal'
+    | 'fence'
+    | 'operationReceipt'
+    | 'currentWork'
+    | 'agents'
+    | 'agent'
+    | 'persistedOptions'
   >,
   params: {
     envelope: { clientOperationId: string }
@@ -199,6 +204,10 @@ export async function maybeQueueStructuredAgentSessionSend(
   if (refusal) {
     return { ok: false, refusal }
   }
+  const captured = captureStructuredExecutionOptions(ctx, params.options)
+  if ('refusal' in captured) {
+    return { ok: false, refusal: captured.refusal }
+  }
   // The insert notifies through the journal's commit listener: publication and
   // the drain re-derive with no call here to forget.
   let row: QueuedMessageRow
@@ -207,11 +216,8 @@ export async function maybeQueueStructuredAgentSessionSend(
       {
         messageId: clientMessageId,
         body: params.body,
-        // In the session that will send it: the reducer aliases the provider's echo by exactly this.
-        fingerprint: agentSessionSendBodyFingerprint(ctx.sessionId, params.body),
-        hostInstance: structuredAgentSessionHostInstance(),
         // Applied when the card goes out, to the turn it starts.
-        ...(params.options ? { options: params.options } : {}),
+        options: captured.options,
         ...(params.userSend ? { requireAttachments: true } : {})
       },
       ctx.operationReceipt
@@ -240,6 +246,7 @@ export type QueuedMessageDrainDeps = {
   currentWork: (sessionId: string) => StructuredAgentSessionCurrentWork | null
   /** The consumed submission is ordinary #22821 work from here on. */
   wakeDelivery: (sessionId: string) => void
+  submissionReceipt?: (sessionId: string) => JournalOperationReceipt
   logger: StructuredAgentSessionLogger
 }
 
@@ -274,9 +281,8 @@ export class StructuredAgentSessionQueuedMessageDrain {
     // and each schedules again; the step re-reads every gate.
     try {
       if (
-        !journal.queuedMessages.settlementOwed() &&
-        (oldestActionableQueuedMessage(journal, true) === null ||
-          this.deps.currentWork(sessionId)?.working() !== false)
+        oldestActionableQueuedMessage(journal, true) === null ||
+        this.deps.currentWork(sessionId)?.working() !== false
       ) {
         return
       }
@@ -309,16 +315,6 @@ export class StructuredAgentSessionQueuedMessageDrain {
       return
     }
     const journal = session.journal
-    if (journal.queuedMessages.settlementOwed() || journal.queuedMessages.deliveredByEchoOwed()) {
-      // A live per-row hook was skipped; heal now, before a draft sends, rather than at reopen.
-      await journal.queuedMessages.settleOwed().catch((error: unknown) => {
-        this.deps.logger.warn('settling owed queued-message bookkeeping failed', {
-          scope: 'queued-settle-owed',
-          sessionId,
-          error
-        })
-      })
-    }
     const fence = this.deps.conversationFence(sessionId)
     // Whatever clears a hold publishes or commits, which re-derives this step.
     const record = this.deps.getRecord(sessionId)
@@ -341,23 +337,17 @@ export class StructuredAgentSessionQueuedMessageDrain {
           fence,
           handoverRecorded: true
         },
-        {
-          messageId: next.messageId,
-          expect: 'waiting',
-          settledByOp: null,
-          hostInstance: structuredAgentSessionHostInstance(),
-          yieldsToPause: true
-        }
+        { messageId: next.messageId, expect: 'waiting', yieldsToPause: true },
+        this.deps.submissionReceipt?.(sessionId)
       )
     } catch (error) {
       if (error instanceof QueuedMessageNotConsumableError) {
         // Lost a race with a Send-now, a Delete or a Stop; their transition stands.
         return
       }
-      // Pre-consume failure: the draft stays waiting, held with the marker on
-      // the card (a stored fact, so it survives eviction and restart). The
-      // hold's own commit notification publishes it. An explicit Send retries;
-      // no automatic retry loop.
+      // The hand-off was not written: the card stays waiting, held with the marker on it (a
+      // journal row, so it survives eviction and restart). The hold's own commit publishes it.
+      // An explicit Send retries; no automatic retry loop.
       await journal.queuedMessages
         .hold({ messageIds: [next.messageId], reason: QUEUED_MESSAGE_PAUSED_SEND_FAILED })
         .catch(() => {})

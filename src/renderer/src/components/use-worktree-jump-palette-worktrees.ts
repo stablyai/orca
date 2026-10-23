@@ -40,6 +40,7 @@ export function useWorktreeJumpPaletteWorktrees({
   ptyIdsByTabId,
   browserTabsByWorktree,
   unifiedTabsByWorktree,
+  structuredChatSleptAtByPaneKey,
   activeWorktreeId,
   activeWorkspaceExecutionHostId,
   runtimeEnvironments,
@@ -81,7 +82,8 @@ export function useWorktreeJumpPaletteWorktrees({
   )
   const worktreeIdsWithStructuredChat = getStructuredChatWorktreeIds(
     showSleepingWorkspaces,
-    unifiedTabsByWorktree
+    unifiedTabsByWorktree,
+    structuredChatSleptAtByPaneKey
   )
   const emptyQueryVisibleWorktrees = useMemo(() => {
     // Why no project or host scope: the palette ignores the sidebar's scope; filterPredicate scopes it.

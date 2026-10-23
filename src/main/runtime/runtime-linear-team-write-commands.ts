@@ -2,12 +2,13 @@ import {
   resolve,
   isPathInsideOrEqual,
   getLinearStatus,
-  LinearAgentAccessError,
-  getLinearCurrentIssueFromWorktree,
-  resolveLegacyLinearLinkWorkspace,
-  linearError,
   listLinearTeamsOrThrow
 } from './runtime-linear-command-dependencies'
+import { LinearAgentAccessError, linearError } from '../linear/issue-context/errors'
+import {
+  getLinearCurrentIssueFromWorktree,
+  resolveLegacyLinearLinkWorkspace
+} from '../linear/issue-context/current'
 import type {
   LinearCurrentIssueContextHints,
   LinearErrorCode,
@@ -271,7 +272,7 @@ export class RuntimeLinearTeamWriteCommands extends RuntimeLinearDedupeCommands 
       if (backfill?.workspaceId) {
         // The answer still serves this lookup; persisting it waits out a WSL move.
         if (!isWslMoveWorktreeBlocked(worktree.id, worktree.hostId, worktree.path)) {
-          this.setWorktreeMeta(worktree.id, {
+          this.setWorktreeMeta(worktree, {
             linkedLinearIssueWorkspaceId: backfill.workspaceId,
             linkedLinearIssueOrganizationUrlKey: backfill.organizationUrlKey ?? null
           })

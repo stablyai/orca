@@ -96,7 +96,6 @@
 1 tests/e2e/tab-rename-paste-ownership.spec.ts
 1 tests/e2e/tab-rename.spec.ts
 3 tests/e2e/tasks-page.spec.ts
-5 tests/e2e/terminal-account-restart.unit.test.ts
 1 tests/e2e/terminal-codex-cursor-jitter-repro.spec.ts
 4 tests/e2e/terminal-codex-hidden-startup-background.spec.ts
 1 tests/e2e/terminal-codex-local-typing-latency.spec.ts

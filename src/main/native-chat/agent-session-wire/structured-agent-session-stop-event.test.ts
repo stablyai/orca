@@ -1,3 +1,4 @@
+import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 // A Stop's event, through the real host: written in the Stop's serialized step as it is accepted,
 // before the interrupt and before anything that ends the child, naming the turn, who asked and
 // the target it captured; never by a Stop that stopped nothing.
@@ -54,10 +55,16 @@ async function queuedDraft(text: string): Promise<string> {
 }
 
 /** The provider's turn row for the working send, which may land after a Stop. */
-async function turnRow(turnId: string, state: 'running' | 'interrupted') {
+async function turnRow(turnId: string, state: 'running' | 'interrupted', userId?: string) {
   return journal().appendItem(
     { provider: 'codex', threadId: 'thread-1', turnId, ordinal: 999 },
-    { kind: 'turn', turnId, state, startedAt: 1 },
+    {
+      kind: 'turn',
+      turnId,
+      state,
+      startedAt: 1,
+      ...(userId ? { userItemId: agentJournalSubmissionKey(userId) } : {})
+    },
     { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
 }
@@ -197,7 +204,7 @@ describe("a Stop's event", () => {
     const working = await rig.workingSend()
     await rig.stop()
     const between = await queuedDraft('queued between the presses')
-    await turnRow('turn-1', 'running')
+    await turnRow('turn-1', 'running', working)
     await rig.stop()
     expect(stopEvents()).toHaveLength(1)
     await rig.settleAccepted(working, 'stopped')
@@ -207,10 +214,10 @@ describe("a Stop's event", () => {
 
   it('a second press after a card sent into the turn settled unknown writes again', async () => {
     rig = await createQueuedMessageTestRig()
-    await rig.workingSend()
+    const working = await rig.workingSend()
     await rig.stop()
     // The turn the working send started opens after that turnless Stop; the card goes into it.
-    await turnRow('turn-1', 'running')
+    await turnRow('turn-1', 'running', working)
     const steered = await queuedDraft('sent into the turn between the presses')
     await rig.sendNow(steered)
     await eventually(async () => expect((await rig.handoff(steered))?.handedOverAt).toBeDefined())
@@ -224,28 +231,30 @@ describe("a Stop's event", () => {
     expect(stopEvents()).toHaveLength(2)
   })
 
-  it('a second press after a card was sent into the turn writes again, and holds that card', async () => {
+  it('a second press after a card was sent into the turn writes again, and the card stays sent', async () => {
     rig = await createQueuedMessageTestRig()
     const working = await rig.workingSend()
     await rig.stop()
     // The turn the working send started opens after that turnless Stop; the card goes into it.
-    await turnRow('turn-1', 'running')
+    await turnRow('turn-1', 'running', working)
     const steered = await queuedDraft('sent into the turn between the presses')
     await rig.sendNow(steered)
     await eventually(async () => expect((await rig.handoff(steered))?.handedOverAt).toBeDefined())
     await rig.stop()
     expect(stopEvents()).toHaveLength(2)
-    await withdraw(await rig.handoffId(steered))
+    const handoff = await rig.handoffId(steered)
+    await withdraw(handoff)
     await rig.settleAccepted(working, 'stopped')
     await observationClock.observe(250)
-    expect(await rig.drafts()).toEqual([{ messageId: steered, state: 'waiting' }])
-    expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
+    // Handed over before the Stop with nothing proving the agent never got it: never re-queued.
+    expect(await rig.drafts()).toEqual([])
+    expect((await rig.submission(handoff))?.dispatchState).toBe('rejected')
   })
 
   it('naming no turn, names the turn running when it takes effect', async () => {
     rig = await createQueuedMessageTestRig()
-    await rig.workingSend()
-    await turnRow('turn-1', 'running')
+    const working = await rig.workingSend()
+    await turnRow('turn-1', 'running', working)
     await rig.stop()
     expect(stopEvents()).toMatchObject([{ reason: 'user-stop', turnId: 'turn-1' }])
   })
@@ -267,7 +276,7 @@ describe("a Stop's event", () => {
   it('names a turn that ended while the next card is sent but shows no turn yet: writes nothing, and the card runs', async () => {
     rig = await createQueuedMessageTestRig()
     const working = await rig.workingSend()
-    await turnRow('turn-1', 'running')
+    await turnRow('turn-1', 'running', working)
     const next = await queuedDraft('sent when turn-1 ends')
     await rig.settleAccepted(working, 'working')
     await turnRow('turn-1', 'interrupted')
@@ -295,8 +304,8 @@ describe("a Stop's event", () => {
     // Stop and the drain share one serialized lane, so this interleaving is forced: a pause
     // written after the drain chose the card must still hold it in the claim's transaction.
     vi.spyOn(open, 'appendSubmission').mockImplementation(async (input, consume) => {
-      // The queue's own claim is the one no operation settles.
-      if (consume?.settledByOp === null && consume.messageId === draftId && !injected) {
+      // The queue's own claim is the one that yields to a pause.
+      if (consume?.yieldsToPause && consume.messageId === draftId && !injected) {
         injected = true
         await open.appendStopEvent({ reason: 'user-stop' }, input.fence)
       }

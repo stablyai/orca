@@ -17,11 +17,16 @@ import type {
   Worktree
 } from '../../../../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostRegistryEntry } from '../../../../../../shared/execution-host-registry'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 import type { ImportedWorktreeCardActionState } from '../../imported-worktrees-card-actions'
 import type { NewExternalWorktreesInboxActionState } from '../../new-external-worktrees-inbox-actions'
-import type { WorktreeDragGroup } from '../../worktree-manual-order'
-import type { WorktreeStatusDropAtIndexArgs } from '../drag/drop-commit-context'
+import type {
+  ShouldShowWorkspaceBoardDropIndicator,
+  WorktreeDropCommitContext,
+  WorktreeReorderArgs,
+  WorktreeStatusDropAtIndexArgs
+} from '../drag/drop-commit-context'
 import type { ProjectGroupingModel } from '../../../../../../shared/project-section-grouping'
 import type {
   PinnedWorktreeDisplayPolicy,
@@ -31,7 +36,9 @@ import type {
 export const EMPTY_PROJECT_GROUPS: readonly ProjectGroup[] = []
 export type VirtualizedWorktreeViewportProps = {
   occurrencePlan?: WorktreeOccurrencePlan<Worktree>
+  visibleProjectRepoIdsBySection?: ReadonlyMap<string, ReadonlySet<string>>
   rows: HostSectionRow[]
+  hostOptions?: readonly ExecutionHostRegistryEntry[]
   activeWorktreeId: string | null
   activeWorkspaceExecutionHostId: ExecutionHostId | null
   currentWorktreeId: string | null
@@ -88,26 +95,18 @@ export type VirtualizedWorktreeViewportProps = {
   /** The host-filtered groups the rows were built from; reveal must walk the same parents. */
   visibleProjectGroups?: readonly ProjectGroup[]
   onMoveWorktreeToStatus: (worktreeId: string, status: WorkspaceStatus) => void
-  onMoveWorktreesToStatus: (worktreeIds: readonly string[], status: WorkspaceStatus) => void
+  onMoveWorktreesToStatus: WorktreeDropCommitContext['onMoveWorktreesToStatus']
   onMoveWorktreesToStatusAtIndex: (args: WorktreeStatusDropAtIndexArgs) => void
   onPinWorktree: (worktreeId: string) => void
-  onPinWorktrees: (worktreeIds: readonly string[]) => void
+  onPinWorktrees: WorktreeDropCommitContext['onPinWorktrees']
   onDropWorktreesOnWorkspaceBoard: (args: WorktreeStatusDropAtIndexArgs) => void
   workspaceBoardOpen: boolean
   onWorktreeCardClick?: () => void
   onWorkspaceBoardDragPreviewStart: () => void
   onWorkspaceBoardDragPreviewCommit: () => void
   onWorkspaceBoardDragPreviewCancel: () => void
-  shouldShowWorkspaceBoardDropIndicator: (
-    worktreeIds: readonly string[],
-    status: WorkspaceStatus
-  ) => boolean
-  onReorderWorktrees: (args: {
-    groups: readonly WorktreeDragGroup[]
-    sourceGroupKey: string
-    draggedIds: readonly string[]
-    dropIndex: number
-  }) => void
+  shouldShowWorkspaceBoardDropIndicator: ShouldShowWorkspaceBoardDropIndicator
+  onReorderWorktrees: (args: WorktreeReorderArgs) => void
   // Why: grouping remounts the viewport, add/delete stays mounted; bridge both so the virtualizer never resets to scrollTop 0.
   scrollOffsetRef: React.MutableRefObject<number>
   scrollAnchorRef: React.MutableRefObject<VirtualizedScrollAnchor>

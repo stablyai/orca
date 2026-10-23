@@ -6,6 +6,8 @@ import type { AiVaultScanWork } from '../../shared/ai-vault-scan-progress'
 import {
   AI_VAULT_SCAN_PROGRESS_INTERVAL_MS,
   noteAiVaultScanFileFound,
+  aiVaultScanWork,
+  openAiVaultScanSource,
   noteAiVaultScanWorkChanged,
   trackAiVaultScanProgress
 } from './ai-vault-scan-progress'
@@ -102,4 +104,20 @@ describe('scan progress reporting', () => {
     expect(reports.some((work) => work.stage === 'finding')).toBe(true)
     expect(reports.at(-1)).toMatchObject({ stage: 'reading', read: { done: 3, total: 3 } })
   })
+})
+
+it('keeps source ownership and final facts independent of immediate and trailing sink faults', () => {
+  vi.useFakeTimers()
+  const signal = new AbortController().signal
+  const sink = vi.fn(() => {
+    throw new Error('Synthetic reporting sink fault')
+  })
+  const stop = trackAiVaultScanProgress(signal, sink, () => Date.now())
+  const close = openAiVaultScanSource(signal, 'claude')
+  expect(aiVaultScanWork(signal)?.agents[0]?.walking).toBe(true)
+  close()
+  expect(() => vi.advanceTimersByTime(AI_VAULT_SCAN_PROGRESS_INTERVAL_MS)).not.toThrow()
+  expect(sink).toHaveBeenCalledTimes(2)
+  expect(aiVaultScanWork(signal)?.agents).toEqual([])
+  stop()
 })

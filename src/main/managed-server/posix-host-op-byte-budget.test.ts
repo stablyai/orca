@@ -55,14 +55,17 @@ import {
   readOrcadReadinessCommand
 } from './install/orcad-remote-launch'
 import {
+  createExecProbedStageCommand,
   installNodeRuntimeFromHostArchiveCommand,
   probeRemoteNodeRuntimeCommand,
   promoteRemoteNodeRuntimeCommand,
   recheckAndPromoteRemoteNodeRuntimeCommand,
-  remoteNodeRuntimePresentCommand,
-  remoteSha256Command
+  remoteNodeRuntimePresentCommand
 } from './install/orcad-remote-node-runtime'
+import { remoteSha256Command } from './install/remote-sha256-command'
+import { hostDownloadNodeRuntimeCommand } from './install/remote-node-runtime-host-download'
 import { remoteOrcadBuildHashCommand } from './install/orcad-remote-build-hash'
+import { remoteFreeSpaceProbeCommand } from './install/remote-install-out-of-space'
 import { sweepStaleRuntimeStagesCommand } from './install/remote-node-runtime-store-gc'
 import { orcadProfilePreflightCommand } from './install/orcad-remote-preflight'
 import {
@@ -92,19 +95,10 @@ import { orcadPosixStdioBridgeCommand } from './lifecycle/orcad-stdio-bridge-scr
 // fence-guarded command, wrapped uncompressed as a host without gzip/base64 receives it.
 const POSIX_HOST_OP_BYTE_BUDGET = 6 * 1024
 
-// Ops already past the budget, at their measured size. Ceilings may only shrink. The snapshot
-// capture/restore/clear ops leave when they move onto the Node host script (R4-10b, decision D-J);
-// install-lock steal and anything else that runs before a verified Node must shrink in shell.
+// Ops already past the budget, at their measured size. Ceilings may only shrink.
 const OVER_BUDGET_CEILINGS: Readonly<Record<string, number>> = {
-  // #30618 added old-snapshot pruning and failure cleanup to the capture; R4-10b moves it to Node.
-  captureOrcadStateSnapshotCommand: 17_407,
-  restoreOrcadStateSnapshotCommand: 20_805,
-  clearOrcadStateSnapshotMembersCommand: 9_175,
   tryStealInstallLockCommand: 9_022,
-  serializedStateMutationCommand: 6_529,
-  orcadLaunchCommand: 8_181,
-  'orcadLaunchCommand (WSL setsid)': 6_498,
-  probeRemoteInstallCompleteCommand: 12_189
+  orcadLaunchCommand: 7_130
 }
 
 type HostCase = { host: RemoteHostPlatform; target: NodeRuntimeTarget; nodePath: string }
@@ -157,8 +151,12 @@ function promoteArgs({
 
 const BUILDERS: Readonly<Record<string, (c: HostCase) => string>> = {
   serializedStateMutationCommand: () => serializedStateMutationCommand(baseDir, ':', 20, fence),
+  // As activation runs it: pruning every other capture but the recorded one.
   captureOrcadStateSnapshotCommand: ({ host }) =>
-    captureOrcadStateSnapshotCommand(host, userDataDir, snapshotDir, baseDir),
+    captureOrcadStateSnapshotCommand(host, userDataDir, snapshotDir, baseDir, {
+      snapshotsRoot: `${baseDir}/orcad-snapshots`,
+      keep: [snapshotDir.slice(snapshotDir.lastIndexOf('/') + 1), 'pre-1.4.298-rc.3-1750000000000']
+    }),
   probeOrcadStateSnapshotCommand: ({ host }) =>
     probeOrcadStateSnapshotCommand(host, snapshotDir, baseDir),
   restoreOrcadStateSnapshotCommand: ({ host }) =>
@@ -187,6 +185,11 @@ const BUILDERS: Readonly<Record<string, (c: HostCase) => string>> = {
   readOrcadReadinessCommand: ({ host }) => readOrcadReadinessCommand(host, slotDir),
   orcadLivenessProbeCommand: ({ host }) => orcadLivenessProbeCommand(host, slotDir),
   remoteSha256Command: ({ nodePath }) => remoteSha256Command(`'${nodePath}'`),
+  remoteFreeSpaceProbeCommand: ({ nodePath }) => remoteFreeSpaceProbeCommand(nodePath),
+  hostDownloadNodeRuntimeCommand: ({ host, nodePath, target }) =>
+    hostDownloadNodeRuntimeCommand(host, { stageDir: `${nodePath}.stage-${token}`, target }),
+  createExecProbedStageCommand: ({ host, nodePath }) =>
+    createExecProbedStageCommand(host, `${nodePath}.stage-${token}`),
   probeRemoteNodeRuntimeCommand: ({ host, nodePath, target }) =>
     probeRemoteNodeRuntimeCommand(host, nodePath, target),
   remoteNodeRuntimePresentCommand: ({ host, nodePath }) =>

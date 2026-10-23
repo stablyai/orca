@@ -16,6 +16,13 @@ import {
   closeRemoteRuntimeRequestConnection,
   getRuntimeEnvironmentStatusOwner
 } from './runtime-environment-request-connections'
+import { setRefusedPairingHandlers } from './runtime-environment-pairing-refusal-registry'
+import {
+  handleManagedSharedControlRefusal,
+  recoverRefusedManagedPairing
+} from './runtime-environment-managed-pairing-refusal'
+import { setManagedOrcadPairingRepairedListener } from '../../managed-server/lifecycle/orcad-managed-pairing-repaired-listener'
+import { forgetFailedManagedOrcadPairingRepair } from '../../managed-server/lifecycle/orcad-managed-tunnel'
 import { registerRuntimeEnvironmentRecoveryHandler } from './runtime-environment-recovery-handler'
 import { registerRuntimeEnvironmentRepairHandler } from './runtime-environment-repair-handler'
 import { advanceRuntimeEnvironmentTransportGeneration } from './runtime-environment-transport-generation'
@@ -143,6 +150,14 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
     invalidateTransport: invalidateRuntimeEnvironmentTransport
   })
   registerRuntimeEnvironmentPassiveHandlers(getUserDataPath)
+  setManagedOrcadPairingRepairedListener(invalidateRuntimeEnvironmentTransport)
+  setRefusedPairingHandlers({
+    recover: (environmentId) => recoverRefusedManagedPairing(getUserDataPath(), environmentId),
+    sharedControl: (environmentId) =>
+      handleManagedSharedControlRefusal(getUserDataPath(), environmentId),
+    connectRequested: (environmentId) =>
+      forgetFailedManagedOrcadPairingRepair(getUserDataPath(), environmentId)
+  })
   for (const environment of listEnvironments(getUserDataPath())) {
     if (
       !isRuntimeEnvironmentManuallyDisconnected(environment.id) &&

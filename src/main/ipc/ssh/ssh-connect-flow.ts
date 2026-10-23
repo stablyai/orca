@@ -11,6 +11,8 @@ import {
   runAttributedToSshOwner
 } from '../../ssh/connection/ssh-connection-attribution'
 import { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'
+import { getManagedOrcadFenceEnvironmentId } from '../../../shared/managed-orcad-ssh-owner'
+import { noteRuntimeEnvironmentConnectRequested } from '../runtime-environments/runtime-environment-pairing-refusal-registry'
 import {
   decideHostServer,
   recheckWhenManagedFenceClears,
@@ -57,6 +59,13 @@ export async function connectTarget(
     return admitConnect(targetId)
   }
   clearSshCredentialDeclined(targetId)
+  // Why explicit only: an automatic connect (startup restore) must not lift the re-pair cap.
+  const managedEnvironmentId = getManagedOrcadFenceEnvironmentId(
+    getSshTargetRegistryStore()?.getTarget(targetId)
+  )
+  if (managedEnvironmentId) {
+    noteRuntimeEnvironmentConnectRequested(managedEnvironmentId)
+  }
   const liftedEnvironments = liftSshHostUserDisconnect(targetId)
   try {
     return await admitConnect(targetId)

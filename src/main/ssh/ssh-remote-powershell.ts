@@ -12,7 +12,7 @@ const WINDOWS_REMOTE_COMMAND_LINE_BUDGET_CHARS = 8_000
  * chosen after a probe — but where it exists it reads a redirected stdin correctly, which Windows
  * PowerShell 5.1 does not (see `system-ssh-file-binary-transfer.ts`).
  */
-export type WindowsPowerShellExecutable = 'powershell.exe' | 'pwsh.exe'
+type WindowsPowerShellExecutable = 'powershell.exe' | 'pwsh.exe'
 
 // Why: `-EncodedCommand` is not execution-policy gated (only `-File` is), so `-ExecutionPolicy
 // Bypass` was a no-op here — and it is one of the most heavily EDR-flagged PowerShell tokens.

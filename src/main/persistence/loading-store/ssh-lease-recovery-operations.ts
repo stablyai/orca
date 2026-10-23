@@ -1,5 +1,6 @@
 import type { SshPendingPtyKill } from '../../../shared/ssh-pending-pty-kill'
 import type { SshRemotePtyLease } from '../../../shared/ssh-types'
+import type { PtyRetirementEvidence } from '../../pty-exit-proof'
 import {
   getSshRemotePtyLeases as getSshRemotePtyLeasesOperation,
   markSshRemotePtyLease as markSshRemotePtyLeaseOperation,
@@ -56,8 +57,8 @@ export class SshLeaseRecoveryOperations {
     )
   }
 
-  markSshRemotePtyLease(targetId: string, ptyId: string, state: 'terminated'): void {
-    markSshRemotePtyLeaseOperation(getSshPtyLeaseOperations(this), targetId, ptyId, state)
+  markSshRemotePtyLease(targetId: string, ptyId: string, evidence: PtyRetirementEvidence): void {
+    markSshRemotePtyLeaseOperation(getSshPtyLeaseOperations(this), targetId, ptyId, evidence)
   }
 
   setSshRemotePtyLeasePendingKill(

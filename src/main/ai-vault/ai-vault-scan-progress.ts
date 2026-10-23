@@ -20,7 +20,12 @@ export function trackAiVaultScanProgress(
   const tally = new AiVaultScanTally()
   const publish = (): void => {
     lastReportedAt = now()
-    report(tally.snapshot())
+    const snapshot = tally.snapshot()
+    try {
+      report(snapshot)
+    } catch {
+      // Reporting cannot interrupt scanning or strand source ownership.
+    }
   }
   const workChanged = (): void => {
     if (trailing) {
@@ -90,17 +95,15 @@ export function noteAiVaultScanDatabases(
   reporter?.workChanged()
 }
 
-/** Discovery is over: the scan now reads `total` more transcripts. */
-export function noteAiVaultScanReading(signal: AbortSignal | undefined, total: number): void {
+/** The scan has registered all candidate opportunities. */
+export function noteAiVaultScanReading(signal: AbortSignal | undefined): void {
   const reporter = signal ? reporters.get(signal) : undefined
-  reporter?.tally.startReading(total)
+  reporter?.tally.startReading()
   reporter?.workChanged()
 }
 
-export function noteAiVaultScanFilesRead(signal: AbortSignal | undefined, count: number): void {
-  const reporter = signal ? reporters.get(signal) : undefined
-  reporter?.tally.addRead(count)
-  reporter?.workChanged()
+export function aiVaultScanWorkload(signal: AbortSignal | undefined) {
+  return tallyFor(signal)?.workload
 }
 
 /** Sends the tally after a batch of files was counted. */

@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { SPEECH_MODEL_CATALOG } from './model-catalog'
 import { ModelManager } from './model-manager'
+import { openElectronSpeechDownloadRequest } from '../host/electron-speech-services'
 
 const { netRequestMock } = vi.hoisted(() => ({
   netRequestMock: vi.fn()
@@ -55,7 +56,7 @@ describe('ModelManager download failures', () => {
         })
       }
       netRequestMock.mockReturnValue(request)
-      const manager = new ModelManager(dir)
+      const manager = new ModelManager(dir, openElectronSpeechDownloadRequest)
 
       await expect(manager.downloadModel(manifest.id)).rejects.toThrow('network down')
 

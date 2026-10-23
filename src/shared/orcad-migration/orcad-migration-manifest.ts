@@ -14,7 +14,6 @@ import type {
   OrcadMigrationTerminalScrollbackSnapshot
 } from './orcad-migration-scrollback'
 import type { OrcadMigrationBlobUploadState } from './orcad-migration-blob-transfer'
-import type { OrcadMigrationEditorDraftsDeclaration } from './orcad-migration-editor-drafts'
 
 import { isRecord } from './orcad-migration-manifest-fields'
 
@@ -93,11 +92,6 @@ export type OrcadMigrationDormantStatePayload = {
   automationRuns?: AutomationRun[]
   /** Client-owned durable intent projected to the destination authority. */
   clientState?: OrcadMigrationClientStatePayload
-  /**
-   * The `editor-drafts` blob holding the named entries' unsaved buffers. Only sent to a host that
-   * advertises that kind: an older parser drops this field and would commit without the drafts.
-   */
-  editorDraftsBlob?: OrcadMigrationEditorDraftsDeclaration
 }
 
 export type OrcadMigrationManifest = {
@@ -151,6 +145,18 @@ export type OrcadMigrationCatalogState =
     }
 
 export type OrcadMigrationCatalogAbortResult = OrcadMigrationCatalogState & {
+  aborted: boolean
+  durableAbsent?: true
+}
+
+export type OrcadMigrationCatalogReference = Pick<
+  OrcadMigrationManifest,
+  'migrationId' | 'manifestSha256'
+>
+
+/** An abort by reference: no receipt, since an evicted one is rebuilt only from the manifest. */
+export type OrcadMigrationCatalogReferenceAbortResult = OrcadMigrationCatalogReference & {
+  state: 'absent' | 'committed'
   aborted: boolean
   durableAbsent?: true
 }

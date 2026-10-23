@@ -112,7 +112,7 @@ describe('Claude root-exit stop', () => {
           journal,
           params,
           child: {
-            generation: acquisition.acquisitionGeneration ?? null,
+            generation: acquisition.acquisitionGeneration,
             fence,
             phase: 'ready'
           }

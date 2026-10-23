@@ -147,12 +147,16 @@ describe('mobile transcript tool result paging', () => {
         current().loadEarlier()
         await Promise.resolve()
       })
-      expect(sendRequest).toHaveBeenCalledWith('nativeChat.readSession', {
-        agent: 'claude',
-        sessionId: 'remote-session',
-        limit: hasCursor ? 60 : 100,
-        ...(hasCursor ? { beforeOffset: 700 } : {})
-      })
+      expect(sendRequest).toHaveBeenCalledWith(
+        'nativeChat.readSession',
+        {
+          agent: 'claude',
+          sessionId: 'remote-session',
+          limit: hasCursor ? 60 : 100,
+          ...(hasCursor ? { beforeOffset: 700 } : {})
+        },
+        expect.objectContaining({ budgetSpansConnect: true })
+      )
       expect(current().messages.map((row) => row.id)).toEqual([
         'prompt',
         'older-calls',

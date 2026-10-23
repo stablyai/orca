@@ -106,8 +106,8 @@ export function addWslHostEnvironment(
 }
 
 /**
- * Keeps a WSL host's pairing and ports current after orcad relaunched (a new device token) or
- * the bridge moved. Returns whether the pairing changed, so callers retire stale transports.
+ * Saves an explicit re-pair or moved bridge. Server restarts retain the paired client grant.
+ * Returns whether the pairing changed, so callers retire stale transports.
  */
 export function refreshWslHostPairing(
   userDataPath: string,

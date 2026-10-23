@@ -1,11 +1,13 @@
 import { spawn as nodeSpawn, type ChildProcess } from 'node:child_process'
 import { admitProcessTreeKill } from './process-tree-kill-gate'
-import { windowsSystem32Binary } from './windows-system-binary'
+import {
+  startWindowsTreeKill,
+  trackedWindowsTreeKill,
+  waitForWindowsTreeKill
+} from './windows-tree-kill'
 
 const PROBE_INTERVAL_MS = 25
 const SUBPROCESS_TIMEOUT_MS = 2_000
-// Allow the same taskkill startup budget as the other Windows tree-cleanup paths.
-const WINDOWS_TASKKILL_TIMEOUT_MS = 5_000
 const MAX_PS_OUTPUT_BYTES = 8 * 1024 * 1024
 
 /**
@@ -34,6 +36,12 @@ export function signalProcessTree(child: ChildProcess, signal?: NodeJS.Signals):
     return Promise.resolve(true)
   }
   if (process.platform === 'win32') {
+    // Why first: a root that the in-flight taskkill already killed must join
+    // that kill's verdict, not read as a reaped pid.
+    const tracked = trackedWindowsTreeKill(child)
+    if (tracked) {
+      return waitForWindowsTreeKill(tracked)
+    }
     // Why the exit check: once the child is reaped its pid is Windows' to
     // reissue, and `taskkill /t /f` walks whatever tree owns it *now* — a
     // recycled pid can be one of Orca's own Chromium processes (#10680). The
@@ -99,43 +107,7 @@ function taskkillTree(
     killRoot(child, signal)
     return Promise.resolve(false)
   }
-  return new Promise((resolve) => {
-    let killer: ChildProcess
-    try {
-      killer = nodeSpawn(
-        windowsSystem32Binary('taskkill.exe'),
-        ['/pid', String(rootPid), '/t', '/f'],
-        {
-          stdio: 'ignore',
-          windowsHide: true,
-          shell: false
-        }
-      )
-    } catch {
-      killRoot(child, signal)
-      resolve(false)
-      return
-    }
-    let settled = false
-    const finish = (fallback: boolean): void => {
-      if (settled) {
-        return
-      }
-      settled = true
-      clearTimeout(timer)
-      if (fallback) {
-        killRoot(child, signal)
-      }
-      resolve(!fallback)
-    }
-    killer.once('error', () => finish(true))
-    killer.once('close', (code) => finish(code !== 0))
-    const timer = setTimeout(() => {
-      killer.kill()
-      finish(true)
-    }, WINDOWS_TASKKILL_TIMEOUT_MS)
-    timer.unref?.()
-  })
+  return waitForWindowsTreeKill(startWindowsTreeKill(child, rootPid, () => killRoot(child, signal)))
 }
 
 async function waitForPosixProcessGroupQuiescence(processGroupId: number): Promise<boolean> {

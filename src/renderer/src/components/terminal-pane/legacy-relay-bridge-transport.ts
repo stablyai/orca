@@ -42,6 +42,23 @@ export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransp
     viewer = null
   }
 
+  /** Issue order of this pane's attaches, and which one the held viewer came from. */
+  const seqs = { issued: 0, viewer: 0 }
+
+  // Overlapping attaches (connect, attach, reattach) each get a viewer; the newest issued keeps
+  // its own, whichever answers last, and every other one is handed back.
+  const adoptViewer = (seq: number, acquisitionId: number): void => {
+    if (seq < seqs.viewer) {
+      api?.detach({ ptyId, acquisitionId })
+      return
+    }
+    if (viewer !== null && viewer !== acquisitionId) {
+      api?.detach({ ptyId, acquisitionId: viewer })
+    }
+    viewer = acquisitionId
+    seqs.viewer = seq
+  }
+
   const release = (): void => {
     epoch += 1
     unsubscribe.forEach((dispose) => dispose())
@@ -85,6 +102,7 @@ export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransp
     }
     reattaching = true
     const at = epoch
+    const seq = ++seqs.issued
     try {
       // The screen comes through onReplay in output order: applied from this reply instead, its
       // clear would erase output the relay printed after it.
@@ -93,7 +111,7 @@ export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransp
         return
       }
       if (result.status === 'attached') {
-        viewer = result.acquisitionId
+        adoptViewer(seq, result.acquisitionId)
         clearUnreachable()
       } else if (result.status === 'exited' || result.status === 'not-bridged') {
         clearUnreachable()
@@ -168,6 +186,7 @@ export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransp
     mode = 'bridge'
     subscribe()
     const at = epoch
+    const seq = ++seqs.issued
     const result = await api.attach({ ptyId })
     if (!stillWanted(at, result)) {
       return undefined
@@ -184,7 +203,7 @@ export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransp
       showUnreachable()
       return { id: ptyId, isReattach: true, replay: '' }
     }
-    viewer = result.acquisitionId
+    adoptViewer(seq, result.acquisitionId)
     return { id: ptyId, isReattach: true, replay: result.replay }
   }
 

@@ -14,6 +14,7 @@ import {
 import type { DescendantTreeVerdict } from '../pty-descendant-exit-verification'
 import { isMissingProviderExecutable } from './provider-executable-missing'
 import { supervisedProviderSpawnFailure } from './provider-spawn-failure-report'
+import { guardSupervisedProviderGroup } from './provider-group-orphan-guard'
 import {
   acceptProviderRootExit,
   closeProviderProcess,
@@ -96,8 +97,9 @@ export function spawnManagedProviderProcess(
     cwd: spec.cwd,
     env: spec.env,
     detached: spec.detached,
-    stdio: ['pipe', 'pipe', 'pipe']
+    stdio: ['pipe', 'pipe', 'pipe', ...spec.groupReportStdio]
   })
+  guardSupervisedProviderGroup(child, { site: options.site, supervised: spec.supervised })
   const listeners = new Set<(exit: ProviderProcessExit) => void>()
   let observed: ProviderProcessExit | null = null
   let spawnFailed = false
@@ -199,7 +201,10 @@ export function spawnManagedProviderProcess(
       return exitProof.run(async () => {
         // The one already-exited guard. It observed nothing, so an earlier close's findings stay.
         if (observed && !tree) {
-          const result: ProviderProcessCloseResult = { root: 'exited', tree: null }
+          const result: ProviderProcessCloseResult = {
+            root: 'exited',
+            tree: null
+          }
           lastCloseResult ??= result
           return result
         }

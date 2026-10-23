@@ -3,10 +3,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const h = vi.hoisted(() => ({
   restore: vi.fn(async () => {}),
   removeAllForwards: vi.fn(async () => {}),
+  closeManagedTunnels: vi.fn(async () => {}),
   disconnect: vi.fn(async () => {}),
   getState: vi.fn(() => ({ targetId: 't1', status: 'connected', error: null, reconnectAttempt: 0 }))
 }))
 
+vi.mock('../../managed-server/lifecycle/orcad-managed-tunnel', () => ({
+  closeOrcadManagedTunnel: vi.fn(async () => {}),
+  closeOrcadManagedTunnelsForTarget: h.closeManagedTunnels
+}))
 vi.mock('./ssh-managed-port-forward-restore', () => ({ restoreManagedHostPortForwards: h.restore }))
 vi.mock('./ssh-ipc-context', () => ({
   connectionManager: { getState: h.getState, disconnect: h.disconnect, getConnection: vi.fn() },
@@ -65,5 +70,11 @@ describe('saved port forwards on a managed host', () => {
   it('closes the local listeners on disconnect even though no relay session exists', async () => {
     await disconnectRegisteredSshTarget('t1')
     expect(h.removeAllForwards).toHaveBeenCalledWith('t1')
+  })
+
+  // Why: a system-SSH managed tunnel is its own `ssh -L`, which the session's disconnect never ends.
+  it('closes the managed server tunnels the session carried', async () => {
+    await disconnectRegisteredSshTarget('t1')
+    expect(h.closeManagedTunnels).toHaveBeenCalledWith('t1')
   })
 })

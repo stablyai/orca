@@ -5,7 +5,7 @@ import type { NativeChatReservedAttachment } from './native-chat-session-attachm
 export type UseNativeChatComposerPasteArgs = {
   targetKey?: string
   attachmentScopeKey?: string
-  agent: AgentType
+  agent?: AgentType
   /** Re-read after awaits so a mid-paste disable guards the composer. */
   disabled: boolean
   caret: number

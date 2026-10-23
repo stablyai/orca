@@ -3,6 +3,7 @@ import { cancelSelect, enterSelect } from './selection-mode'
 import { notify } from './host-notify'
 import { viewportToCell } from './viewport-cell'
 import type { TerminalDocumentScope } from './document-scope'
+import { queuedNormalBufferScrollReachesRow } from './normal-buffer-smooth-scroll'
 import { notifyTerminalSurfaceTap } from './surface-tap'
 import {
   eventTargetInRoot,
@@ -73,6 +74,13 @@ export function armLongPress(scope: TerminalDocumentScope, touch: Touch) {
       return
     }
     enterSelect(scope, c.col, c.row)
+    // Keep the long-press finger on the selection instead of scrolling beneath it.
+    if (scope.sel && scope.touchDispatch.mode === 'surface') {
+      scope.sel.activeHandle = 'end'
+      scope.touchDispatch.mode = 'select-drag'
+      scope.touchDispatch.touchId = scope.longPressOrigin.identifier
+      scope.tapCandidate = null
+    }
   }, LONG_PRESS_MS)
 }
 
@@ -240,7 +248,9 @@ function onDocumentTouchEnd(scope: TerminalDocumentScope, e: TouchEvent) {
       touches.length === 0 &&
       scope.tapCandidate &&
       scope.selMode !== 'select' &&
-      Date.now() - scope.tapCandidate.t <= TAP_MAX_MS
+      Date.now() - scope.tapCandidate.t <= TAP_MAX_MS &&
+      // Why: a lift can beat the frame that commits the row; movement that cancelled out leaves a tap.
+      !queuedNormalBufferScrollReachesRow(scope)
     ) {
       notifyTerminalSurfaceTap(scope, scope.tapCandidate.x, scope.tapCandidate.y, true)
     }

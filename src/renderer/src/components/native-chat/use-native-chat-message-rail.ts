@@ -5,7 +5,8 @@
 // is itself moving — and settling on it is what makes the highlight feel like a
 // position report instead of a flicker.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { findActiveNativeChatRailItem } from './native-chat-active-rail-item'
 import { ALIGN_ARRIVED_PX } from './use-native-chat-viewport-align'
 import {
@@ -161,15 +162,18 @@ export function useNativeChatMessageRail({
     }
   }, [items, readActiveId])
 
-  useEffect(() => {
+  // Measured before first paint: the transcript's padding follows wideEnough, so a late read shifts the text.
+  useLayoutEffect(() => {
     const element = scrollRef.current
     if (!element || typeof ResizeObserver === 'undefined') {
       return
     }
-    const observer = new ResizeObserver(() => {
+    const measure = (): void => {
       setWideEnough(element.clientWidth >= NATIVE_CHAT_RAIL_MIN_WIDTH_PX)
       setMaxTicks(nativeChatRailTickCapacity(element.clientHeight))
-    })
+    }
+    measure()
+    const observer = new ResizeObserver(() => flushSync(measure))
     observer.observe(element)
     return () => observer.disconnect()
   }, [scrollRef])

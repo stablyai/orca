@@ -8,8 +8,8 @@ export const CLAUDE_STRUCTURED_AGENT: DirectoryAccountAgentDefinition = {
   handleTransport: CLAUDE_STRUCTURED_HANDLE_NAMESPACE.transport,
   accountHomeVariable: 'CLAUDE_CONFIG_DIR',
   capabilities: {
-    // Orca's marker-based rewind proof can never pass on the real binary; rewind returns via a fork.
-    rewind: false,
+    // By forking the kept conversation; see the adapter's forkForRewind.
+    rewind: true,
     compact: true,
     threadGoal: false,
     // A session at rest still reports the usage its journal recorded.

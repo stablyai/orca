@@ -35,6 +35,7 @@ export type MarkdownBlockContext = MarkdownInlineContext & {
   /** Interactive children own their touches and must forward the row action. */
   rowLongPress?: () => void
   directives: readonly NativeChatVisualDirective[]
+  renderImage?: (href: string, alt: string) => ReactNode
   renderVisual?: (directive: NativeChatVisualDirective, index: number) => ReactNode
   mermaidOccurrences: Map<string, number>
 }
@@ -152,6 +153,9 @@ function renderBlock(
             {ctx.renderVisual(directive, visual)}
           </Fragment>
         ) : null
+      }
+      if (node.children.length === 1 && only?.type === 'image' && ctx.renderImage) {
+        return <Fragment key={key}>{ctx.renderImage(only.url, only.alt ?? '')}</Fragment>
       }
       if (node.children.length === 1 && only?.type === 'image' && /^https?:\/\//i.test(only.url)) {
         return (

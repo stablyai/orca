@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { isAbortSignalReason } from '../../shared/abort-signal-reason'
 import {
   forgetRetiredWaiter,
   forgetWaiter,
@@ -20,6 +21,7 @@ import { dispatchWriteOutcomeUnknownReason } from '../native-chat/agent-session-
 import { DISPATCH_REJECTED_QUEUE_FULL } from '../../shared/structured-agent-session-dispatch-rejection'
 import {
   agentSessionFailureFact,
+  providerDiagnostic,
   type SubmissionRejectionFact
 } from '../../shared/agent-session-failure'
 import type { AgentJournalDispatchRejection } from '../../shared/agent-session-failure-words'
@@ -28,6 +30,8 @@ import {
   claudeUserMessageWasProvablyUnwritten
 } from './claude-agent-sdk-user-message-queue'
 import { AgentSessionPreDispatchError } from '../native-chat/agent-session-wire/structured-agent-session-operation-settlement'
+import { isAgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-option-error'
+import { ClaudeControlRequestError } from './claude-stream-json-connection'
 
 const MAX_ACTIVE_DISPATCH_WAITERS = 64
 
@@ -56,21 +60,25 @@ export function rejectClaudeDispatchWaiters(
   const retiredWaiters = session.retiredDispatchWaiters.filter((waiter) =>
     named.has(waiter.sentUuid)
   )
-  for (const waiter of activeWaiters) {
-    forgetWaiter(session, waiter)
-    waiter.resolve(null)
-  }
-  for (const waiter of retiredWaiters) {
-    forgetRetiredWaiter(session, waiter)
-  }
-  for (const waiter of [...activeWaiters, ...retiredWaiters]) {
+  // Each released as it is reported: one dropped before its report reads as held by nobody.
+  const report = (waiter: ClaudeDispatchWaiter): void => {
     if (waiter.clientMessageId) {
       onSettledLate?.({
         clientMessageId: waiter.clientMessageId,
         state: 'rejected',
+        unrun: true,
         ...claudeDispatchRejection(fact)
       })
     }
+  }
+  for (const waiter of activeWaiters) {
+    forgetWaiter(session, waiter)
+    waiter.resolve(null)
+    report(waiter)
+  }
+  for (const waiter of retiredWaiters) {
+    forgetRetiredWaiter(session, waiter)
+    report(waiter)
   }
 }
 
@@ -115,6 +123,7 @@ export async function dispatchClaudeTurn(
     requestedAt?: number
     /** The frame's uuid, for a caller that correlates the provider's answer to it. */
     sentUuid?: string
+    signal?: AbortSignal
   },
   beforeDispatch?: () => Promise<void>
 ): Promise<AgentSessionDispatchOutcome> {
@@ -168,8 +177,25 @@ export async function dispatchClaudeTurn(
   } catch (error) {
     const replay = pending.replay
     if (!replay) {
-      if (error instanceof AgentSessionPreDispatchError) {
+      // A Stop during authorization, before the SDK took the frame, stays the abort the host reads.
+      if (
+        error instanceof AgentSessionPreDispatchError ||
+        isAbortSignalReason(input.signal, error)
+      ) {
         throw error
+      }
+      if (isAgentSessionOptionRejectedError(error)) {
+        return {
+          state: 'rejected',
+          ...claudeDispatchRejection(
+            agentSessionFailureFact(
+              'providerRejected',
+              error.cause instanceof ClaudeControlRequestError
+                ? { detail: providerDiagnostic(error.message, 'person') }
+                : {}
+            )
+          )
+        }
       }
       return { state: 'rejected', ...claudeWriteFailureRejection(error) }
     }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { readAssignmentInventorySnapshot } from './assignment-inventory-snapshot.js'
+import { readAssignmentInventorySnapshot } from './assignment/assignment-inventory-snapshot.js'
 import { REGIONAL_REHOME_ARRIVAL_WINDOW_MS } from './regional-rehome-abort-reason.js'
 import {
   RelayAssignmentStore as BaseRelayAssignmentStore,

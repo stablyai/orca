@@ -51,12 +51,24 @@ describe('queued edit methods', () => {
   })
 
   it.each([
-    ['agentSession.queuedMessageUpdate', update, 'queuedMessageUpdate'],
-    ['agentSession.queuedMessageEditHold', acquire, 'queuedMessageEditHold']
-  ] as const)('%s reaches the host as the authenticated caller', async (method, params, name) => {
-    expect(await call(method, params, STRUCTURED_CLIENT)).toMatchObject({ ok: true })
-    expect(hostCalls[name]).toHaveBeenCalledWith({ callerKey: 'trusted-local:runtime' }, params)
-  })
+    // This client reads no image cards, so the host refuses it an edit that would make one.
+    [
+      'agentSession.queuedMessageUpdate',
+      update,
+      'queuedMessageUpdate',
+      { queuedImageCards: false }
+    ],
+    ['agentSession.queuedMessageEditHold', acquire, 'queuedMessageEditHold', {}]
+  ] as const)(
+    '%s reaches the host as the authenticated caller',
+    async (method, params, name, hostOnly) => {
+      expect(await call(method, params, STRUCTURED_CLIENT)).toMatchObject({ ok: true })
+      expect(hostCalls[name]).toHaveBeenCalledWith(
+        { callerKey: 'trusted-local:runtime' },
+        { ...params, ...hostOnly }
+      )
+    }
+  )
 
   it('a release passes cleanup admission even for an audience that cannot start this agent', async () => {
     hostCalls.sessionAgent = vi.fn(() => 'pi')

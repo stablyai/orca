@@ -212,7 +212,7 @@ function PickerOption({
           <span className="block truncate text-xs text-muted-foreground">{description}</span>
         ) : null}
         {annotation ? (
-          <span className="block truncate text-2xs text-muted-foreground">{annotation}</span>
+          <span className="block break-all text-xs text-muted-foreground">{annotation}</span>
         ) : null}
       </span>
       {item.kind === 'skill' ? (
@@ -281,6 +281,9 @@ function PickerOptionButton({
 }
 
 function getPickerAnnotation(item: NativeChatPickerItem): string | null {
+  if (item.kind === 'skill' && item.location) {
+    return item.location
+  }
   if (item.kind === 'command' && item.skillCollision) {
     return translate(
       'components.native-chat.composer.skillCommandCollision',

@@ -64,6 +64,7 @@ export function MobileNativeChatLiveLine({
       {reasoning && open ? (
         <View style={styles.body}>
           <MobileNativeChatReasoningBody
+            positionKey={nativeChatReasoningDisclosureKey(reasoning.message.id)}
             markdown={reasoning.markdown}
             fontScale={fontScale}
             onOpenFile={onOpenFile}

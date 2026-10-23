@@ -4,12 +4,12 @@ import {
 } from './opencode-transcript-capture-limits'
 import type { AiVaultSession, AiVaultSessionPreviewMessage } from '../../shared/ai-vault-types'
 import {
-  addPreviewMessage,
   createAccumulator,
   finalizeSession,
   updateTimeline,
   timestampIso
 } from './session-scanner-accumulator'
+import { addDecodedSessionMessage } from './session-scanner-messages'
 import {
   normalizeFullFirstUserPromptText,
   shouldCaptureFullFirstUserPrompt
@@ -295,26 +295,13 @@ export async function parseOpenCode2SqliteSession(args: {
         : probedRows.slice(0, OPENCODE2_PREVIEW_LIMIT).toReversed()
       for (const previewRow of previewRows) {
         const role = mapPreviewRole(previewRow.type)
-        if (args.messages?.active) {
-          for (const message of decodeOpenCode2Message(
-            previewRow.data,
-            role,
-            timestampIso(previewRow.time_created)
-          )) {
-            args.messages.push(message)
-          }
-        }
-        const text = extractOpenCode2MessageText(previewRow.data)
-        if (!text) {
-          continue
-        }
-        addPreviewMessage(accumulator, {
-          role,
-          publishMessage: false,
-          text,
-          timestamp: previewRow.time_created,
-          seedFirstUserPrompt: false
-        })
+        addDecodedSessionMessage(
+          accumulator,
+          decodeOpenCode2Message(previewRow.data, role, timestampIso(previewRow.time_created), {
+            includeTools: accumulator.messages.active
+          }),
+          { seedFirstUserPrompt: false }
+        )
       }
     }
 

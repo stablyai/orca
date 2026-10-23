@@ -77,12 +77,25 @@ const slot = {
 }
 const census = { liveSessions: 0, startedSinceActivation: 0, daemonProtocolVersion: 3 }
 const deploy = (): Promise<unknown> =>
-  deployOrcad({ ...slot, localOrcadDir: '/local/out/orcad', target: 'linux-x64-glibc', census })
+  deployOrcad({
+    ...slot,
+    localOrcadDir: '/local/out/orcad',
+    target: 'linux-x64-glibc',
+    census,
+    recountCensus: async () => census,
+    releaseIncumbentAdmission: async () => {}
+  })
 const rollback = (): Promise<unknown> =>
   rollbackOrcad({
     ...slot,
     record: FakeOrcadHost.newRecord(),
     census,
+    recountCensus: async () => ({
+      liveSessions: 0,
+      startedSinceActivation: 0,
+      daemonProtocolVersion: 3
+    }),
+    releaseIncumbentAdmission: async () => {},
     targetBuildHash: BUILD_HASH,
     targetDaemonProtocol: { protocolVersion: 3, previousProtocolVersions: [1, 2] }
   })

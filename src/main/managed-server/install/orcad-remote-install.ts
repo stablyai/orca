@@ -17,7 +17,7 @@ import { ORCAD_FENCE_OWNER_FILENAME } from '../activation/orcad-activation-fence
 import { forgetHeldOrcadFence, rememberHeldOrcadFence } from '../../ssh/orcad-held-fence-tokens'
 import { exitedOwnLockProof } from '../../ssh/orcad-exited-own-lock'
 import { orcadWindowsBaseDir } from './orcad-remote-windows-node'
-import { uploadRelayDirectory, writeRelayFile } from './remote-install-transfers'
+import { uploadRemoteInstallDirectory, writeRemoteInstallFile } from './remote-install-transfers'
 import {
   abandonInstall,
   finalizeInstall,
@@ -33,6 +33,8 @@ export async function installOrcadBundle(
     target: NodeRuntimeTarget
     /** The locally verified pinned Node archive, fetched only when the host lacks the runtime. */
     nodeRuntimeArchive: () => Promise<string>
+    /** Where a hand-copied Node archive is used offline; named when no download works. */
+    nodeRuntimeOfflineArchivePath?: string
     /** WSL only: skip re-hashing a runtime whose stat signature is unchanged since it hashed to the pin. */
     recordedNodeRuntimeProbe?: boolean
     signal?: AbortSignal
@@ -47,6 +49,7 @@ export async function installOrcadBundle(
     slotDir: remoteDir,
     target: options.target,
     archivePath: options.nodeRuntimeArchive,
+    offlineArchivePath: options.nodeRuntimeOfflineArchivePath,
     signal: options.signal,
     ...(options.recordedNodeRuntimeProbe
       ? { posixProbeCommand: recordedRemoteNodeRuntimeProbeCommand }
@@ -88,9 +91,15 @@ export async function installOrcadBundle(
     ) {
       return
     }
-    await uploadRelayDirectory(options.conn, options.localOrcadDir, remoteDir, options.host, {
-      signal: options.signal
-    })
+    await uploadRemoteInstallDirectory(
+      options.conn,
+      options.localOrcadDir,
+      remoteDir,
+      options.host,
+      {
+        signal: options.signal
+      }
+    )
     if (options.host.os !== 'win32') {
       await execCommand(
         options.conn,
@@ -101,7 +110,7 @@ export async function installOrcadBundle(
         }
       )
     }
-    await writeRelayFile(
+    await writeRemoteInstallFile(
       options.conn,
       options.host,
       joinRemotePath(options.host, remoteDir, ORCAD_INSTALL_MODEL.versionFilename),

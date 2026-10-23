@@ -21,8 +21,12 @@ function packagedResources({ index, assets = [], cli = true }) {
   if (cli) {
     mkdirSync(join(outDir, 'cli'), { recursive: true })
   }
-  const webDir = join(outDir, 'web')
+  const webDir = join(outDir, 'renderer')
   mkdirSync(join(webDir, 'assets'), { recursive: true })
+  writeFileSync(
+    join(webDir, '.orca-web-client-files.json'),
+    JSON.stringify(['web-index.html', ...assets])
+  )
   if (index !== undefined) {
     writeFileSync(join(webDir, 'web-index.html'), index)
   }
@@ -64,6 +68,48 @@ describe('assertPackagedWebClient', () => {
     expect(() => assertPackagedWebClient(packagedResources({ index: '<html></html>' }))).toThrow(
       /references no/
     )
+  })
+
+  it.each([
+    null,
+    {},
+    ['assets/web.js'],
+    ['web-index.html', 'index.html'],
+    ['web-index.html', 'assets/../private'],
+    ['web-index.html', 'assets//private'],
+    ['web-index.html', 'assets/./private'],
+    ['web-index.html', 'assets/a\\private'],
+    ['web-index.html', 'assets/private.js.map'],
+    ['web-index.html', '/assets/a'],
+    ['web-index.html', 'assets/a\0.js'],
+    ['web-index.html', 3]
+  ])('rejects malformed shared web manifests: %j', (files) => {
+    const resourcesDir = packagedResources({
+      index: INDEX,
+      assets: ['assets/web.js', 'assets/web.css']
+    })
+    writeFileSync(
+      join(resourcesDir, 'app.asar.unpacked/out/renderer/.orca-web-client-files.json'),
+      JSON.stringify(files)
+    )
+    expect(() => assertPackagedWebClient(resourcesDir)).toThrow(/invalid web file manifest/)
+  })
+
+  it('fails when a transitive worker is missing even though HTML assets exist', () => {
+    const resourcesDir = packagedResources({
+      index: INDEX,
+      assets: ['assets/web.js', 'assets/web.css']
+    })
+    writeFileSync(
+      join(resourcesDir, 'app.asar.unpacked/out/renderer/.orca-web-client-files.json'),
+      JSON.stringify([
+        'web-index.html',
+        'assets/web.js',
+        'assets/web.css',
+        'assets/editor.worker.js'
+      ])
+    )
+    expect(() => assertPackagedWebClient(resourcesDir)).toThrow(/editor.worker.js/)
   })
 
   it('fails when the CLI the web root resolves from is not unpacked', () => {

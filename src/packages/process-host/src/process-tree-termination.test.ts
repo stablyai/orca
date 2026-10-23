@@ -127,7 +127,7 @@ describe('forceTerminateProcessTree', () => {
     })
   })
 
-  it('bounds a hung Windows taskkill and leaves tree termination unverified', async () => {
+  it('stops waiting on a slow Windows taskkill without abandoning it', async () => {
     await withWindows(async () => {
       vi.useFakeTimers()
       const child = mockProcess(1234)
@@ -138,6 +138,31 @@ describe('forceTerminateProcessTree', () => {
       await vi.advanceTimersByTimeAsync(5_000)
 
       await expect(pending).resolves.toBe(false)
+      // Killing either now would orphan the descendants taskkill has not reached.
+      expect(taskkill.kill).not.toHaveBeenCalled()
+      expect(child.kill).not.toHaveBeenCalled()
+
+      // A retry joins the same taskkill and sees its late success.
+      const retry = forceTerminateProcessTree(child)
+      taskkill.emit('close', 0)
+      await expect(retry).resolves.toBe(true)
+      expect(spawnMock).toHaveBeenCalledOnce()
+      expect(child.kill).not.toHaveBeenCalled()
+    })
+  })
+
+  it('abandons a wedged Windows taskkill at its deadline and kills the root', async () => {
+    await withWindows(async () => {
+      vi.useFakeTimers()
+      const child = mockProcess(1234)
+      const taskkill = mockProcess(5678)
+      spawnMock.mockReturnValue(taskkill)
+      void forceTerminateProcessTree(child)
+
+      await vi.advanceTimersByTimeAsync(29_999)
+      expect(taskkill.kill).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(1)
+
       expect(taskkill.kill).toHaveBeenCalledOnce()
       expect(child.kill).toHaveBeenCalledWith('SIGKILL')
       taskkill.emit('close', 0)

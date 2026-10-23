@@ -34,6 +34,9 @@ export const hostScreenSecondaryStyles = StyleSheet.create({
     color: colors.textMuted,
     marginLeft: spacing.xs
   },
+  sectionPendingSpinner: {
+    marginLeft: spacing.sm
+  },
   separator: {
     height: 1,
     backgroundColor: colors.borderSubtle,

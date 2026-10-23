@@ -309,6 +309,32 @@ describe('wakeSleepingAgentsForWorktreeInBackground', () => {
     expect(Object.keys(sleepingRecords)).toHaveLength(12)
   })
 
+  it("wakes a workspace sleep's mounted panes, leaving the resume itself to main", () => {
+    const slept: SleepingAgentSessionRecord = {
+      worktreeId: 'wt-1',
+      paneKey: 'tab-slept:leaf-1',
+      tabId: 'tab-slept',
+      agent: 'claude',
+      prompt: '',
+      state: 'done',
+      origin: 'worktree-sleep',
+      capturedAt: 1,
+      updatedAt: 1,
+      providerSession: { key: 'session_id', id: 'session-slept' },
+      restoreOnTabOpenOnly: true
+    }
+    sleepingRecords = { [slept.paneKey]: slept }
+    const rec = recordEvents()
+
+    wakeSleepingAgentsForWorktreeInBackground('wt-1')
+
+    rec.stop()
+    // Why: a phone opening a slept workspace resumes its finished agents in their mounted panes.
+    expect(rec.events).toEqual(['wake:wt-1'])
+    expect(rec.mountDetails).toEqual([])
+    expect(resumeSpy).not.toHaveBeenCalled()
+  })
+
   it('still background-mounts hibernated panes alongside lazily restored slept panes', () => {
     sleepingRecords = {
       'tab-slept:leaf-1': {

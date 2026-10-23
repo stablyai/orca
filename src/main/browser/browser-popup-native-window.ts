@@ -1,12 +1,12 @@
 import { app, type BrowserWindow, type WebContents } from 'electron'
 import { isBackgroundLaunch } from '../window/foreground-activation-policy'
-import { safeOrigin } from './browser-manager-types'
 import type { PopupChildWindowOptions, PopupOriginBarWindow } from './popup-origin-bar-window'
 import {
   isNativeBrowserPopupWindow,
   markNativeBrowserPopupWindow
 } from './native-browser-popup-windows'
 import { MIN_POPUP_CONTENT_HEIGHT, MIN_POPUP_CONTENT_WIDTH } from './popup-window-minimum-size'
+import { describeCommittedPopupOrigin } from './popup-committed-origin'
 
 const rejectedNativePopups = new WeakSet<BrowserWindow>()
 // Why: like Electron, an opener's latest script admission answers the next child it shows.
@@ -34,7 +34,6 @@ export function isNativeBrowserPopupRequest(input: {
  */
 export function allowNativeBrowserPopup(input: {
   opener: WebContents
-  targetUrl: string
   options: Electron.BrowserWindowConstructorOptions
   background?: boolean
   canPresent?: () => boolean
@@ -90,7 +89,7 @@ export function allowNativeBrowserPopup(input: {
     action: 'allow',
     overrideBrowserWindowOptions: {
       ...input.options,
-      title: safeOrigin(input.targetUrl),
+      title: 'about:blank',
       fullscreenable: false,
       show: mayPresent && !input.background,
       // Content-sized like origin-bar popups, so resizeTo cannot hide the origin title.
@@ -159,7 +158,6 @@ function rejectNativeBrowserPopup(window: BrowserWindow): void {
 /** The native frame is the trust surface; public APIs cannot reparent its primary contents. */
 export function prepareNativeBrowserPopup(
   window: BrowserWindow,
-  initialUrl: string,
   prepareContent?: (contents: WebContents) => boolean
 ): PopupOriginBarWindow {
   const contents = window.webContents
@@ -195,19 +193,24 @@ export function prepareNativeBrowserPopup(
     rejectNativeBrowserPopup(window)
     return popup
   }
-  const updateOrigin = (url: string): void => {
+  const updateOrigin = (): void => {
     if (!window.isDestroyed()) {
-      window.setTitle(safeOrigin(url))
+      window.setTitle(describeCommittedPopupOrigin(contents).label)
     }
   }
   window.on('page-title-updated', (event) => event.preventDefault())
   // A blocked/uncommitted redirect must never lend its origin to the old document.
-  contents.on('did-navigate', (_event, url) => updateOrigin(url))
-  contents.on('did-navigate-in-page', (_event, url, isMainFrame) => {
+  contents.on('did-navigate', updateOrigin)
+  contents.on('did-navigate-in-page', (_event, _url, isMainFrame) => {
     if (isMainFrame) {
-      updateOrigin(url)
+      updateOrigin()
     }
   })
-  updateOrigin(initialUrl)
+  contents.on('did-fail-load', (_event, _errorCode, _errorDescription, _url, isMainFrame) => {
+    if (isMainFrame) {
+      updateOrigin()
+    }
+  })
+  updateOrigin()
   return popup
 }

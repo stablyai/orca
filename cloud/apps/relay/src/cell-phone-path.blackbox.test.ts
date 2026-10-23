@@ -385,6 +385,22 @@ describe('the memory phone path', () => {
     await new Promise((resolve) => setTimeout(resolve, 50))
     expect(await confirm('confirm-1')).toMatchObject({ type: 'control-error', code: 'confirmation_not_active' })
     expect(reserve.phoneStatements()[0]).toBe('BEGIN')
+    expect(warnings('orca_relay_resume_confirm_failed')).toEqual([
+      {
+        event: 'orca_relay_resume_confirm_failed',
+        code: 'confirmation_not_active',
+        phonePath: 'db',
+        cellId: reserve.config.cellId
+      }
+    ])
+  })
+
+  it('does not count a lease release that failed after a committed confirm as a failed confirm', async () => {
+    const { reserve, confirm } = await splicedPhone('db')
+    vi.spyOn(reserve.relay.assignments, 'releaseActivity').mockRejectedValueOnce(new Error('connection terminated'))
+    // As today, the desktop still hears the release failure.
+    expect(await confirm('confirm-1')).toMatchObject({ type: 'control-error' })
+    expect(warnings('orca_relay_resume_confirm_failed')).toEqual([])
   })
 
   it('keeps the database confirm statement for statement while phonePath is db', async () => {
@@ -452,4 +468,63 @@ describe('the memory phone path', () => {
       })
     }
   })
+
+  // E-dep-6 in miniature: the staging drill blocks one memory cell's database for 10 minutes.
+  it('rides out a database outage: splices keep forwarding, new work fails cleanly and recovers', async () => {
+    let now = Date.now()
+    const reserve = await cell(() => now)
+    reserve.setAdmitMode('reserve', { phonePath: 'memory' })
+    const seated = await reserve.bookedHost(3)
+    const confirm = async (reqId: string, basisConnId: string) => {
+      const answer = Promise.race([
+        nextFrame(seated.socket, 'device-resume-confirmed'),
+        nextFrame(seated.socket, 'control-error')
+      ])
+      seated.socket.send(JSON.stringify({ type: 'device-resume-confirm', v: 1, reqId, basisConnId }))
+      return await answer
+    }
+    const splice = async (fill: number) => {
+      await reserve.installDevice(seated.identity.hostId, token(fill), { relayDeviceId: `device-${fill}` })
+      const connOpen = nextFrame(seated.socket, 'conn-open')
+      const phone = await reserve.dialPhone(seated.identity.hostId, token(fill))
+      const basisConnId = String((await connOpen).connId)
+      const data = await reserve.attachData(await connOpen, seated.ack.generation)
+      expect(await phone.hello).toMatchObject({ ok: true })
+      return { phone, data, basisConnId }
+    }
+    const confirmed = await splice(1)
+    expect(await confirm('confirm-a', confirmed.basisConnId)).toMatchObject({ type: 'device-resume-confirmed' })
+    const inFlight = await splice(2)
+
+    reserve.database.failing = () => true
+    // A seated phone keeps working.
+    const relayed = new Promise<string>((resolve) =>
+      confirmed.data.once('message', (frame) => resolve(String(frame)))
+    )
+    confirmed.phone.socket.send('still here')
+    expect(await relayed).toBe('still here')
+    // A new resume and a confirm fail cleanly; nothing crashes.
+    expect((await (await reserve.dialPhone(seated.identity.hostId, token(1))).closed).code).toBe(4503)
+    expect(await confirm('confirm-b', inFlight.basisConnId)).toMatchObject({ type: 'control-error' })
+    // Flipped back during the block: the in-flight confirm still finishes on its memory basis.
+    reserve.setAdmitMode('db', { phonePath: 'memory' })
+    reserve.database.failing = null
+    reserve.database.statements.length = 0
+    expect(await confirm('confirm-c', inFlight.basisConnId)).toMatchObject({ type: 'device-resume-confirmed' })
+    expect(reserve.phoneStatements().filter((sql) => !sql.includes('relay_assignment'))[0]).toBe(CONFIRM_DEVICE_READ)
+    // And new resumes take the database path again.
+    const connOpen = nextFrame(seated.socket, 'conn-open')
+    await reserve.dialPhone(seated.identity.hostId, token(1))
+    expect(await connOpen).toMatchObject({ kind: 'resume' })
+
+    // Audit rows held past 10 minutes of outage are dropped and counted, never written late.
+    reserve.database.failing = (sql) => sql.startsWith('INSERT INTO relay_audit_events')
+    now += 11 * 60 * 1000
+    await reserve.relay.store.resumeAudit.flush()
+    reserve.database.failing = null
+    const written = await reserve.raw.query(`SELECT id FROM relay_audit_events WHERE type = 'resume-confirmed'`)
+    expect(written).toEqual([])
+    expect(reserve.relay.runtimeCounts().resumeAuditDropped).toBe(2)
+  })
 })
+

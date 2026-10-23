@@ -50,11 +50,14 @@ function fixture(arch = 'x64') {
     ['conpty.node', Buffer.concat([peImage({ arch }), CYGWIN_BREAKAWAY_MARKER])],
     ['conpty_console_list.node', peImage({ arch })],
     ['conpty/conpty.dll', peImage({ arch })],
-    ['conpty/OpenConsole.exe', peImage({ arch })]
+    ['conpty/OpenConsole.exe', peImage({ arch })],
+    ['pty.node', peImage({ arch })],
+    ['winpty.dll', peImage({ arch })],
+    ['winpty-agent.exe', peImage({ arch })]
   ]) {
     write(join(slotDir, file), bytes)
     files[file] = sha256Of(join(slotDir, file))
-    if (file === 'conpty_console_list.node') {
+    if (file !== 'conpty.node' && !file.startsWith('conpty/')) {
       write(join(sourceDir, 'prebuilds', slot, file), bytes)
     }
     if (file.startsWith('conpty/')) {
@@ -119,7 +122,7 @@ describe('Windows server prebuild cache validation', () => {
     f.save()
     expect(() => validateWindowsPrebuildCache(f)).toThrow(/exactly the current ConPTY payload/)
     const extra = fixture()
-    writeFileSync(join(extra.slotDir, 'pty.node'), 'upstream fallback')
+    writeFileSync(join(extra.slotDir, 'conpty.pdb'), 'upstream symbols')
     expect(() => validateWindowsPrebuildCache(extra)).toThrow(/exactly the current ConPTY payload/)
     const missing = fixture()
     rmSync(join(missing.slotDir, 'conpty/OpenConsole.exe'))
@@ -224,7 +227,8 @@ describe('Windows server prebuild cache inputs', () => {
           'process-spec',
           'windows-command-line',
           'windows-cmd-shim-resolution',
-          'windows-system-binary'
+          'windows-system-binary',
+          'windows-tree-kill'
         ].map((name) => `src/packages/process-host/src/${name}.ts`)
       )
     )
@@ -238,6 +242,25 @@ describe('Windows server prebuild cache inputs', () => {
     )
   })
 
+  it('reuses native binaries across app versions but invalidates every other manifest field', () => {
+    const repository = mkdtempSync(join(tmpdir(), 'orca-prebuild-version-key-'))
+    temporary.push(repository)
+    const source = resolve(import.meta.dirname, '../..')
+    for (const relative of WINDOWS_PREBUILD_CACHE_INPUTS) {
+      mkdirSync(dirname(join(repository, relative)), { recursive: true })
+      cpSync(join(source, relative), join(repository, relative))
+    }
+    const path = join(repository, 'package.json')
+    const manifest = JSON.parse(readFileSync(path, 'utf8'))
+    const before = windowsPrebuildCacheIdentity({ ...options, repository }).key
+    writeFileSync(path, JSON.stringify({ ...manifest, version: '999.0.0' }))
+    expect(windowsPrebuildCacheIdentity({ ...options, repository }).key).toBe(before)
+    for (const field of Object.keys(manifest).filter((field) => field !== 'version')) {
+      writeFileSync(path, JSON.stringify({ ...manifest, [field]: 'changed' }))
+      expect(windowsPrebuildCacheIdentity({ ...options, repository }).key).not.toBe(before)
+    }
+  })
+
   it.each(WINDOWS_PREBUILD_CACHE_INPUTS)('invalidates a changed %s input', (file) => {
     const repository = mkdtempSync(join(tmpdir(), 'orca-prebuild-key-'))
     temporary.push(repository)
@@ -249,7 +272,12 @@ describe('Windows server prebuild cache inputs', () => {
     const before = windowsPrebuildCacheIdentity({ ...options, repository }).key
     writeFileSync(
       join(repository, file),
-      `${readFileSync(join(repository, file), 'utf8')}\nchanged input`
+      file === 'package.json'
+        ? JSON.stringify({
+            ...JSON.parse(readFileSync(join(repository, file), 'utf8')),
+            engines: { node: 'changed' }
+          })
+        : `${readFileSync(join(repository, file), 'utf8')}\nchanged input`
     )
     expect(windowsPrebuildCacheIdentity({ ...options, repository }).key).not.toBe(before)
   })

@@ -1,4 +1,4 @@
-import { JIRA_IMAGE_CAPABILITY } from './jira-attachment-image'
+import { JIRA_IMAGE_CAPABILITY } from './jira/jira-attachment-image'
 
 export const JIRA_ISSUE_SUMMARY_RUNTIME_CAPABILITY = 'jira.issue-summary-generation.v1' as const
 export const JIRA_USER_FIELDS_RUNTIME_CAPABILITY = 'jira.user-fields.v1' as const

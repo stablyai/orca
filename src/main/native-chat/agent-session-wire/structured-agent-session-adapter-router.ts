@@ -6,7 +6,6 @@ import type {
 } from '../../../shared/agent-session-record'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import type { StructuredAgentSessionAcquisitionReceipt } from './structured-agent-session-startup-attempt-contract'
-import { readNativeSessionOptions } from './structured-agent-session-option-restoration'
 import type {
   StructuredAgentRegistration,
   StructuredAgentRegistry
@@ -53,13 +52,7 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
     return releaseSessionRoute(input, this.routes, () => this.adapters())
   }
 
-  open: NonNullable<StructuredAgentSessionAdapter['open']> = (input) => {
-    const adapter = this.owner(input.sessionId)
-    if (!adapter.open) {
-      return Promise.reject(new Error('The provider cannot open a published child.'))
-    }
-    return adapter.open(input)
-  }
+  open: StructuredAgentSessionAdapter['open'] = (input) => this.owner(input.sessionId).open(input)
 
   dispatch: StructuredAgentSessionAdapter['dispatch'] = (input) =>
     this.owner(input.sessionId).dispatch(input)
@@ -79,6 +72,11 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   rewind: NonNullable<StructuredAgentSessionAdapter['rewind']> = (input) =>
     this.owner(input.sessionId).rewind?.(input) ??
     Promise.resolve({ ok: false, reason: 'unsupported' })
+
+  forkForRewind: NonNullable<StructuredAgentSessionAdapter['forkForRewind']> = (input) =>
+    this.capabilityOwner(input.record.sessionId, input.record.provider)?.adapter.forkForRewind?.(
+      input
+    ) ?? Promise.resolve({ ok: false, reason: 'unsupported' })
 
   recoverRewind: NonNullable<StructuredAgentSessionAdapter['recoverRewind']> = (input) =>
     this.owner(input.sessionId).recoverRewind?.(input) ??
@@ -124,9 +122,6 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
     this.liveOwnerOrNull(sessionId)?.holdsLiveProviderProcess?.(sessionId, acquisitionGeneration) ??
     false
 
-  startUnavailable: NonNullable<StructuredAgentSessionAdapter['startUnavailable']> = (sessionId) =>
-    this.liveOwnerOrNull(sessionId)?.startUnavailable?.(sessionId)
-
   stopEndsSession = (sessionId: string): boolean =>
     this.liveOwnerOrNull(sessionId)?.stopEndsSession?.(sessionId) ?? false
 
@@ -145,6 +140,10 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   atRestCommands: StructuredAgentSessionAtRestCommands = {
     read: (record) =>
       this.agents.registration(record.provider)?.adapter.atRestCommands?.read(record),
+    settled: async (record, budgetMs) => {
+      const source = this.agents.registration(record.provider)?.adapter.atRestCommands
+      return source?.settled ? source.settled(record, budgetMs) : source?.read(record)
+    },
     onChange: (listener) => {
       const stops = this.adapters().flatMap((adapter) =>
         adapter.atRestCommands ? [adapter.atRestCommands.onChange(listener)] : []
@@ -159,8 +158,8 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   setOption: StructuredAgentSessionAdapter['setOption'] = (input) =>
     this.owner(input.sessionId).setOption(input)
 
-  startAnswered = (sessionId: string): boolean | undefined =>
-    this.liveOwnerOrNull(sessionId)?.startAnswered?.(sessionId)
+  projectOptions: StructuredAgentSessionAdapter['projectOptions'] = (sessionId, options) =>
+    this.liveOwnerOrNull(sessionId)?.projectOptions?.(sessionId, options)
 
   prepareReadOptions = (input: { sessionId: string; fence: number }) =>
     this.liveOwnerOrNull(input.sessionId)?.prepareReadOptions?.(input)
@@ -171,17 +170,6 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
       throw new Error(`structured session ${input.sessionId} does not report options`)
     }
     return reader(input)
-  }
-
-  readAcquisitionOptions = (input: {
-    sessionId: string
-    fence: number
-    priorOptions?: Readonly<Record<string, string>>
-  }) => {
-    const adapter = this.owner(input.sessionId)
-    return adapter.readAcquisitionOptions
-      ? adapter.readAcquisitionOptions(input)
-      : readNativeSessionOptions({ adapter, ...input })
   }
 
   readOptionRestoreFailures = (sessionId: string): readonly string[] =>

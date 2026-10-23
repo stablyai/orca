@@ -13,12 +13,14 @@ import {
 } from '../../shared/worktree/id'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { planWorktreeFolderRename } from '../ipc/worktree-folder-rename-target'
+import { hostWorktreeTargetForRepo } from '../persistence/host-qualified-worktree-meta'
+import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 export type FirstWorkFolderRenameDeps = {
   getRepo: (repoId: string) => Repo | undefined
   getSettings: () => Parameters<typeof planWorktreeFolderRename>[0]['settings']
   /** Re-key all worktreeId-keyed state from the old (path-derived) id to the new. */
-  migrateWorktreeIdentity: (oldWorktreeId: string, newWorktreeId: string) => void
+  migrateWorktreeIdentity: (target: HostWorktreeTarget, newWorktreeId: string) => void
   /** Invalidate caches + tell the renderer the worktree's id changed (old->new) so
    *  it re-keys its state instead of treating the rename as a deletion. */
   notifyWorktreeRenamed: (repoId: string, oldWorktreeId: string, newWorktreeId: string) => void
@@ -67,7 +69,7 @@ export async function renameWorktreeFolderOnFirstWork(
   await deps.moveWorktree(repo.path, plan.oldPath, plan.newPath)
   // Order: move first (point of no return), then re-key identity synchronously so
   // nothing interleaves before the worktree's state is re-bound to the new id.
-  deps.migrateWorktreeIdentity(worktreeId, plan.newWorktreeId)
+  deps.migrateWorktreeIdentity(hostWorktreeTargetForRepo(worktreeId, repo), plan.newWorktreeId)
   deps.notifyWorktreeRenamed(repo.id, worktreeId, plan.newWorktreeId)
   return true
 }

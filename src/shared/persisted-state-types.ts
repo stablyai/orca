@@ -45,6 +45,8 @@ export type PersistedMobileClientTabSelection = {
   activeTabId: string | null
   activeGroupId: string | null
   activeTabIdByGroupId: Readonly<Record<string, string>>
+  /** Top-level tabs the client showed, most recent last. */
+  recentTabIds?: string[]
 }
 
 /** deviceId → worktreeId → selection. */

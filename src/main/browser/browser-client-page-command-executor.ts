@@ -38,9 +38,10 @@ import {
   navigateBrowserClientPageCommand
 } from './browser-client-page-command-execution'
 import { publishBrowserClientRetainedPage } from './browser-client-page-availability'
-import type {
-  BrowserClientPageAuthorityIdentity,
-  BrowserClientPageCommandExecutorDependencies
+import {
+  pageAuthorityIdentity,
+  type BrowserClientPageAuthorityIdentity,
+  type BrowserClientPageCommandExecutorDependencies
 } from './browser-client-page-command-executor-dependencies'
 
 export class BrowserClientPageCommandExecutor {
@@ -51,14 +52,12 @@ export class BrowserClientPageCommandExecutor {
   private readonly profileSwitches = new BrowserClientProfileSwitches()
   private readonly navigationFence = new BrowserClientPageNavigationFence()
   private closePromise: Promise<void> | null = null
-  private authorityConnectionIdentity: string
-  private legacyAuthorityConnectionIdentity: string
+  private authority: BrowserClientPageAuthorityIdentity
   private authorityTransitioning = false
   private closed = false
 
   constructor(private readonly dependencies: BrowserClientPageCommandExecutorDependencies) {
-    this.authorityConnectionIdentity = dependencies.authorityConnectionIdentity
-    this.legacyAuthorityConnectionIdentity = dependencies.legacyAuthorityConnectionIdentity
+    this.authority = pageAuthorityIdentity(dependencies)
     this.maxPages = dependencies.maxPages ?? BROWSER_CLIENT_HOST_PAGE_INVENTORY_MAX_PAGES
     if (
       !Number.isInteger(this.maxPages) ||
@@ -103,8 +102,7 @@ export class BrowserClientPageCommandExecutor {
           pages: this.pages,
           dependencies: {
             ...this.dependencies,
-            authorityConnectionIdentity: this.authorityConnectionIdentity,
-            legacyAuthorityConnectionIdentity: this.legacyAuthorityConnectionIdentity
+            ...this.authority
           },
           assertAvailable: () =>
             this.navigationFence.assertAvailable(this.closed || this.authorityTransitioning),
@@ -212,8 +210,7 @@ export class BrowserClientPageCommandExecutor {
     if (this.closed || !this.authorityTransitioning || !input.authorityConnectionIdentity) {
       throw new Error('browser_client_page_authority_transition_unavailable')
     }
-    this.authorityConnectionIdentity = input.authorityConnectionIdentity
-    this.legacyAuthorityConnectionIdentity = input.legacyAuthorityConnectionIdentity
+    this.authority = pageAuthorityIdentity(input)
     this.authorityTransitioning = false
   }
 
@@ -260,8 +257,7 @@ export class BrowserClientPageCommandExecutor {
     await createReservedBrowserClientPage(
       {
         ...this.dependencies,
-        authorityConnectionIdentity: this.authorityConnectionIdentity,
-        legacyAuthorityConnectionIdentity: this.legacyAuthorityConnectionIdentity,
+        ...this.authority,
         retireSupersededExecutionHostPages: (route) =>
           retireSupersededExecutionHostPages(this.pages.values(), route, (id, generation) =>
             this.retirePage(id, generation)

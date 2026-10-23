@@ -5,10 +5,14 @@ import {
 import { isChromiumInternalErrorUrl } from './browser-manager-types'
 import { BrowserManagerGuestPopupPolicy } from './browser-manager-guest-popup-policy'
 import { allowPageUnload } from './browser-guest-unload-policy'
+import { initiatingFrameUrl } from './browser-external-app-launch'
 
 export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManagerGuestPopupPolicy {
   protected installGuestNavigationPolicy(guest: Electron.WebContents): () => void {
-    const navigationGuard = (event: Electron.Event, url: string): boolean => {
+    const navigationGuard = (
+      event: Electron.Event<{ initiator?: Electron.WebFrameMain | null }>,
+      url: string
+    ): boolean => {
       // Why: Turnstile loads challenge resources via blob:; blocking them trips error 600010. Allow only http(s) blobs, not opaque ones.
       if (url.startsWith('blob:https://') || url.startsWith('blob:http://')) {
         return true
@@ -21,6 +25,7 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
       if (!normalizeBrowserNavigationUrl(url)) {
         // Why: will-attach-webview only validates the initial src; keep enforcing the allowlist on later navs.
         event.preventDefault()
+        this.requestExternalAppLaunch(guest, url, () => initiatingFrameUrl(event.initiator))
         return false
       }
       return true
@@ -36,7 +41,7 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
     }
 
     const willRedirectHandler = (
-      event: Electron.Event,
+      event: Electron.Event<Electron.WebContentsWillRedirectEventParams>,
       url: string,
       _isInPlace: boolean,
       isMainFrame: boolean
@@ -131,6 +136,7 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
       // Why: a committed nav makes the did-start-navigation stash obsolete; drop it so a later ERR_ABORTED can't restore an error over it.
       this.clearedLoadErrorsByGuestId.delete(guest.id)
       this.certificateTrustController?.onMainFrameNavigationCommitted(guest.id, url)
+      this.siteDisplayController?.onMainFrameNavigationCommitted(guest.id)
       // Why: an offscreen page has no renderer to publish its row, so this commit is the only
       // moment paired clients can learn the new url — every failure path above already announces.
       this.notifyBrowserGuestStateChanged(guest.id)

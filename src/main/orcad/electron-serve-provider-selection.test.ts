@@ -16,6 +16,9 @@ vi.mock('@orca/process-host', async (importOriginal) => ({
   spawnProcess: spawnProcessMock
 }))
 
+// Why: the installed-app path is real on a Mac, and the park would register in the real home.
+vi.mock('./orcad-browser-install-park', () => ({ openOrcadBrowserInstallPark: () => null }))
+
 import { resolveOrcadBrowserProvider, type OrcadBrowserProvider } from './orcad-browser-provider'
 
 const FAKE_SIDECAR = join(import.meta.dirname, '__fixtures__', 'fake-orcad-electron-sidecar.cjs')

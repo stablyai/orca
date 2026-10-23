@@ -1,4 +1,13 @@
-import { closeSync, openSync, readSync, readdirSync, statSync, type Stats } from 'node:fs'
+import {
+  closeSync,
+  constants,
+  fstatSync,
+  openSync,
+  readSync,
+  readdirSync,
+  statSync,
+  type Stats
+} from 'node:fs'
 
 const TRANSCRIPT_READ_MAX_BYTES = 1024 * 1024
 const TRANSCRIPT_LINE_MAX_BYTES = 256 * 1024
@@ -15,6 +24,33 @@ export type JsonRecord = Record<string, unknown>
 
 export function record(value: unknown): JsonRecord | undefined {
   return typeof value === 'object' && value !== null ? (value as JsonRecord) : undefined
+}
+
+export function readJsonlFirstRecord(filePath: string): JsonRecord | undefined {
+  let fd: number | undefined
+  try {
+    // Nonblocking open prevents a FIFO from stalling hook handling before the descriptor check.
+    fd = openSync(
+      filePath,
+      constants.O_RDONLY | (process.platform === 'win32' ? 0 : constants.O_NONBLOCK)
+    )
+    if (!fstatSync(fd).isFile()) {
+      return undefined
+    }
+    const buffer = Buffer.allocUnsafe(64 * 1024)
+    const bytesRead = readSync(fd, buffer, 0, buffer.length, 0)
+    const newline = buffer.subarray(0, bytesRead).indexOf(0x0a)
+    if (newline === -1) {
+      return undefined
+    }
+    return record(JSON.parse(buffer.toString('utf8', 0, newline)))
+  } catch {
+    return undefined
+  } finally {
+    if (fd !== undefined) {
+      closeSync(fd)
+    }
+  }
 }
 
 /** Returns undefined when the file is unreadable, distinguishing a vanished rollout from one with no new lines.

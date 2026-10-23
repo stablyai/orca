@@ -349,7 +349,7 @@ orca skills install --all --dry-run
 orca skills update --all
 ```
 
-`install` / `update` shell out to the same `npx skills` commands Settings uses. They do not contact the Orca runtime. See [Orca skills](/docs/cli/skills#keep-skills-up-to-date).
+`install` / `update` run Orca's own skill installer on the machine that runs them, the same planner the app's **Update skills** uses. They do not contact the Orca runtime or need `npx`. See [Orca skills](/docs/cli/skills#keep-skills-up-to-date).
 
 ## Account (host-local runtime)
 

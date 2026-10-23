@@ -4,7 +4,7 @@ import { isWslUncPath } from '../../../../shared/wsl-paths'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import {
   getExecutionHostIdForWorktree,
-  runtimeEnvironmentIdWithLegacyFallbackUnlessTwin
+  runtimeEnvironmentIdOrLocalUnlessTwin
 } from '@/lib/worktree-runtime-owner'
 import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
 import type { AppState } from '@/store/types'
@@ -90,10 +90,7 @@ export function resolveTerminalInputHostPlatform(args: {
 
   const host = parseExecutionHostId(getExecutionHostIdForWorktree(args.state, args.worktreeId))
   if (host?.kind === 'ssh') {
-    const ownerEnvironmentId = runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(
-      args.state,
-      args.worktreeId
-    )
+    const ownerEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(args.state, args.worktreeId)
     return ownerEnvironmentId
       ? (args.state.sshStateByEnvironment
           .get(ownerEnvironmentId)

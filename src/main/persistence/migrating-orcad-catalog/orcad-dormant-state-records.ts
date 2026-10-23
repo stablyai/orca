@@ -16,10 +16,9 @@ import {
 import { recordRetirementNamespaceRegistry } from '../../worktree-retirement-namespace'
 import {
   applyPreparedOrcadMigrationWorkspaceSession,
+  prepareOrcadMigrationWorkspaceSession,
   type PreparedOrcadMigrationWorkspaceSession
 } from './orcad-destination-workspace-session'
-import { prepareOrcadMigrationSessionWithDrafts } from './orcad-destination-editor-drafts'
-import type { OrcadMigrationEditorDraft } from '../../../shared/orcad-migration/orcad-migration-editor-drafts'
 import {
   applyPreparedOrcadMigrationAutomationState,
   prepareOrcadMigrationAutomationState,
@@ -47,11 +46,9 @@ export type PreparedOrcadMigrationDormantState = {
   clientState: PreparedOrcadMigrationClientState
 }
 
-/** `editorDrafts`: the verified declared drafts at commit; absent while staging. */
 export function prepareOrcadMigrationDormantState(
   manifest: OrcadMigrationManifest,
-  state: PersistedState,
-  editorDrafts?: readonly OrcadMigrationEditorDraft[]
+  state: PersistedState
 ): PreparedOrcadMigrationDormantState {
   const payload = manifest.payload.dormantState
   if (!payload) {
@@ -119,7 +116,7 @@ export function prepareOrcadMigrationDormantState(
         entry.registry
       )
     })),
-    workspaceSession: prepareOrcadMigrationSessionWithDrafts(payload, state, editorDrafts),
+    workspaceSession: prepareOrcadMigrationWorkspaceSession(payload.workspaceSession, state),
     automationState: prepareOrcadMigrationAutomationState(
       payload.automations,
       payload.automationRuns,

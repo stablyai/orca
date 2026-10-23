@@ -14,7 +14,10 @@ import {
   type OrcadMigrationSourceCutover
 } from '../../shared/orcad-migration/orcad-migration-source-cutover'
 import type { SshTarget } from '../../shared/ssh-types'
-import { createOrcadMigrationManifest } from './orcad-migration-manifest-export'
+import {
+  assertOrcadMigrationRequestFits,
+  createOrcadMigrationManifest
+} from './orcad-migration-manifest-export'
 import {
   findOrcadMigrationSourceCutoverForTarget,
   removeOrcadMigrationSourceCutover,
@@ -147,6 +150,8 @@ export async function fenceOrcadMigrationSource(args: {
     { ...target, generation },
     { migrationId: randomUUID(), destinationEnvironmentId: args.destinationEnvironmentId }
   )
+  // Before the journal: a fence on a manifest no request can carry could never be released.
+  assertOrcadMigrationRequestFits({ manifest })
   const cutover: OrcadMigrationSourceCutover = {
     version: ORCAD_MIGRATION_SOURCE_CUTOVER_VERSION,
     migrationId: manifest.migrationId,
@@ -182,7 +187,7 @@ export async function fenceOrcadMigrationSource(args: {
 type FenceReleaseArgs = { userDataPath: string; claims: SshTargetOrcadClaims; signal?: AbortSignal }
 
 /** Undoes a fence nothing remote has seen. */
-export async function releaseUnstagedFence(
+async function releaseUnstagedFence(
   args: FenceReleaseArgs,
   cutover: OrcadMigrationSourceCutover
 ): Promise<void> {
@@ -230,9 +235,9 @@ export async function releaseUndeployedMigrationFence(args: {
 function fenceStateReason(state: OrcadMigrationFenceState): string {
   switch (state.state) {
     case 'owned-by-deploy':
-      return 'This SSH host already belongs to a managed server.'
+      return 'Orca already runs on this SSH host.'
     case 'fenced-unverifiable':
-      return 'This SSH host is held for a migration whose record is missing. Recover it from the managed server first.'
+      return 'This SSH host is held for a migration whose record is missing. Recover it from this host’s Orca server first.'
     case 'stale-journal':
       return 'A migration record names this SSH host but its fence is gone. Resolve that migration first.'
     case 'fenced':

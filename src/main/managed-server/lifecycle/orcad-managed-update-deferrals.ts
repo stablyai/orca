@@ -18,7 +18,7 @@ export function clearManagedOrcadUpdateDeferral(environmentId: string): void {
   deferrals.delete(environmentId)
 }
 
-export function readManagedOrcadUpdateDeferral(environmentId: string): RecordedDeferral | null {
+function readManagedOrcadUpdateDeferral(environmentId: string): RecordedDeferral | null {
   return deferrals.get(environmentId) ?? null
 }
 

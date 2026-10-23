@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import type {
   OrcadMigrationCatalogAbortResult,
+  OrcadMigrationCatalogReferenceAbortResult,
   OrcadMigrationCatalogState,
   OrcadMigrationManifest
 } from '../../shared/orcad-migration/orcad-migration-manifest'
 import {
+  abortStagedOrcadMigrationCatalogByReferenceDurably,
   abortStagedOrcadMigrationCatalogDurably,
   commitStagedOrcadMigrationCatalogDurably,
   stageOrcadMigrationCatalogDurably
@@ -73,6 +75,34 @@ describe('durable orcad migration catalog import', () => {
 
     await expect(abortStagedOrcadMigrationCatalogDurably(args)).rejects.toThrow('disk full')
     await expect(abortStagedOrcadMigrationCatalogDurably(args)).resolves.toEqual({
+      ...unchanged,
+      durableAbsent: true
+    })
+    expect(flush).toHaveBeenCalledTimes(2)
+  })
+
+  it('answers an abort by reference absent only once its flush succeeds', async () => {
+    const reference = { migrationId: 'migration-1', manifestSha256: 'a'.repeat(64) }
+    const aborted: OrcadMigrationCatalogReferenceAbortResult = {
+      ...reference,
+      state: 'absent',
+      aborted: true
+    }
+    const unchanged: OrcadMigrationCatalogReferenceAbortResult = { ...aborted, aborted: false }
+    const abort = vi.fn().mockReturnValueOnce(aborted).mockReturnValueOnce(unchanged)
+    const flush = vi.fn().mockRejectedValueOnce(new Error('disk full')).mockResolvedValue(undefined)
+    const args = {
+      store: {
+        abortStagedOrcadMigrationCatalogByReference: abort,
+        flushPendingOrThrowAsync: flush
+      },
+      reference
+    }
+
+    await expect(abortStagedOrcadMigrationCatalogByReferenceDurably(args)).rejects.toThrow(
+      'disk full'
+    )
+    await expect(abortStagedOrcadMigrationCatalogByReferenceDurably(args)).resolves.toEqual({
       ...unchanged,
       durableAbsent: true
     })

@@ -1,0 +1,226 @@
+{
+  "activeRepoId": "repo-local",
+  "activeWorktreeId": "repo-local::/fixture/local",
+  "activeTabId": "tab-shell",
+  "tabsByWorktree": {
+    "repo-local::/fixture/local": [
+      {
+        "id": "tab-shell",
+        "ptyId": "pty-shell",
+        "title": "Terminal 1",
+        "defaultTitle": "Terminal 1",
+        "worktreeId": "repo-local::/fixture/local",
+        "customTitle": null,
+        "color": null,
+        "sortOrder": 0,
+        "createdAt": 1
+      },
+      {
+        "id": "tab-build",
+        "ptyId": null,
+        "title": "Terminal 2",
+        "defaultTitle": "Terminal 2",
+        "worktreeId": "repo-local::/fixture/local",
+        "customTitle": "Build",
+        "color": null,
+        "sortOrder": 1,
+        "createdAt": 2
+      }
+    ]
+  },
+  "terminalLayoutsByTabId": {
+    "tab-shell": {
+      "root": {
+        "type": "split",
+        "direction": "vertical",
+        "first": {
+          "type": "leaf",
+          "leafId": "11111111-1111-4111-8111-111111111111"
+        },
+        "second": {
+          "type": "leaf",
+          "leafId": "33333333-1111-4111-8111-111111111111"
+        }
+      },
+      "activeLeafId": "11111111-1111-4111-8111-111111111111",
+      "expandedLeafId": null,
+      "ptyIdsByLeafId": {
+        "11111111-1111-4111-8111-111111111111": "pty-shell"
+      }
+    },
+    "tab-build": {
+      "root": {
+        "type": "leaf",
+        "leafId": "22222222-1111-4111-8111-111111111111"
+      },
+      "activeLeafId": "22222222-1111-4111-8111-111111111111",
+      "expandedLeafId": null,
+      "ptyIdsByLeafId": {}
+    }
+  },
+  "openFilesByWorktree": {
+    "repo-local::/fixture/local": [
+      {
+        "filePath": "/fixture/local/README.md",
+        "relativePath": "README.md",
+        "language": "markdown",
+        "worktreeId": "repo-local::/fixture/local"
+      }
+    ]
+  },
+  "markdownFrontmatterVisible": {},
+  "browserTabsByWorktree": {
+    "repo-local::/fixture/local": [
+      {
+        "id": "browser-docs",
+        "sessionProfileId": null,
+        "pageIds": ["page-docs"],
+        "createdAt": 4,
+        "worktreeId": "repo-local::/fixture/local",
+        "url": "https://example.com/docs",
+        "title": "Docs",
+        "loading": false,
+        "faviconUrl": null,
+        "canGoBack": false,
+        "canGoForward": false,
+        "loadError": null
+      }
+    ]
+  },
+  "browserPagesByWorkspace": {
+    "browser-docs": [
+      {
+        "id": "page-docs",
+        "workspaceId": "browser-docs",
+        "worktreeId": "repo-local::/fixture/local",
+        "url": "https://example.com/docs",
+        "title": "Docs",
+        "loading": false,
+        "faviconUrl": null,
+        "canGoBack": false,
+        "canGoForward": false,
+        "loadError": null,
+        "createdAt": 4
+      }
+    ]
+  },
+  "activeBrowserTabIdByWorktree": {},
+  "activeFileIdByWorktree": {},
+  "activeTabTypeByWorktree": {},
+  "browserUrlHistory": [],
+  "defaultTerminalTabsAppliedByWorktreeId": {
+    "repo-local::/fixture/local": true
+  },
+  "unifiedTabs": {
+    "repo-local::/fixture/local": [
+      {
+        "id": "tab-shell",
+        "entityId": "tab-shell",
+        "groupId": "aa34db2e-c345-5d9d-a3e5-ddd4ac94492b",
+        "worktreeId": "repo-local::/fixture/local",
+        "executionHostId": "local",
+        "contentType": "terminal",
+        "label": "Terminal 1",
+        "customLabel": null,
+        "color": null,
+        "sortOrder": 0,
+        "createdAt": 1
+      },
+      {
+        "id": "tab-readme",
+        "entityId": "/fixture/local/README.md",
+        "groupId": "aa34db2e-c345-5d9d-a3e5-ddd4ac94492b",
+        "worktreeId": "repo-local::/fixture/local",
+        "executionHostId": "local",
+        "contentType": "editor",
+        "label": "",
+        "customLabel": null,
+        "color": null,
+        "sortOrder": 1,
+        "createdAt": 3
+      },
+      {
+        "id": "tab-docs",
+        "entityId": "browser-docs",
+        "groupId": "aa34db2e-c345-5d9d-a3e5-ddd4ac94492b",
+        "worktreeId": "repo-local::/fixture/local",
+        "executionHostId": "local",
+        "contentType": "browser",
+        "label": "",
+        "customLabel": null,
+        "color": null,
+        "sortOrder": 2,
+        "createdAt": 4
+      },
+      {
+        "id": "tab-build",
+        "entityId": "tab-build",
+        "groupId": "00000000-0000-4000-8000-000000000001",
+        "worktreeId": "repo-local::/fixture/local",
+        "executionHostId": "local",
+        "contentType": "terminal",
+        "label": "Terminal 2",
+        "customLabel": "Build",
+        "color": null,
+        "sortOrder": 0,
+        "createdAt": 2
+      }
+    ]
+  },
+  "tabGroups": {
+    "repo-local::/fixture/local": [
+      {
+        "id": "aa34db2e-c345-5d9d-a3e5-ddd4ac94492b",
+        "worktreeId": "repo-local::/fixture/local",
+        "activeTabId": "tab-shell",
+        "tabOrder": ["tab-shell", "tab-readme", "tab-docs"]
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000001",
+        "worktreeId": "repo-local::/fixture/local",
+        "activeTabId": "tab-build",
+        "tabOrder": ["tab-build"]
+      }
+    ]
+  },
+  "tabGroupLayouts": {
+    "repo-local::/fixture/local": {
+      "type": "split",
+      "direction": "horizontal",
+      "first": {
+        "type": "leaf",
+        "groupId": "aa34db2e-c345-5d9d-a3e5-ddd4ac94492b"
+      },
+      "second": {
+        "type": "leaf",
+        "groupId": "00000000-0000-4000-8000-000000000001"
+      },
+      "ratio": 0.5
+    }
+  },
+  "terminalTopologyRevisionByRepoId": {
+    "repo-local": 5
+  },
+  "terminalPtyIncarnationsByPaneKey": {
+    "tab-shell:11111111-1111-4111-8111-111111111111": "inc-shell"
+  },
+  "closedTerminalTabTombstonesByTabId": {
+    "tab-scratch": {
+      "reason": "user",
+      "closedAt": 1700000000000,
+      "worktreeId": "repo-local::/fixture/local"
+    }
+  },
+  "closedTerminalPanesByPaneKey": {
+    "tab-scratch:44444444-1111-4111-8111-111111111111": {
+      "ptyId": "pty-scratch",
+      "incarnationId": "inc-scratch",
+      "worktreeId": "repo-local::/fixture/local",
+      "closedAt": 1700000000000
+    }
+  },
+  "terminalSurfaceTombstonesByPaneKey": {},
+  "activeTabIdByWorktree": {
+    "repo-local::/fixture/local": "tab-shell"
+  }
+}

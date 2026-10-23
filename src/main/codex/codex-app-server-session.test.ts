@@ -20,7 +20,7 @@ describe('runCodexAppServerSession environment', () => {
         const message = JSON.parse(line)
         if (typeof message.id !== 'number') return
         const result = message.method === 'env/get'
-          ? { codexHome: process.env.CODEX_HOME ?? null }
+          ? { codexHome: process.env.CODEX_HOME ?? null, cwd: process.cwd() }
           : {}
         process.stdout.write(JSON.stringify({ id: message.id, result }) + '\n')
       })
@@ -31,13 +31,14 @@ describe('runCodexAppServerSession environment', () => {
         command: process.execPath,
         cliPath: null,
         args: ['-e', server],
+        cwd: __dirname,
         envToDelete: ['CODEX_HOME'],
         timeoutMs: 5_000
       },
       ({ request }) => request('env/get')
     )
 
-    expect(result).toEqual({ codexHome: null })
+    expect(result).toEqual({ codexHome: null, cwd: __dirname })
   })
 
   it('keeps the session alive after a large legitimate response', async () => {

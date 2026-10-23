@@ -6,17 +6,20 @@ import {
   type AgentJournalSubmission
 } from '../../../shared/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import { readAgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
 import { journalRenderItem } from './journal-render-item'
 import { statedOrDerivedTurnScope, upsertJournalItem } from './journal-item-fold'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalRow } from './journal-row-schema'
 import { journalDispatchRowApplies } from './journal-dispatch-settlement'
-import { isAgentSessionOptions } from '../../../shared/agent-session-record'
+import { DISPATCH_DOUBT_PROVIDER_ENDED_UNANSWERED } from './journal-dispatch-doubt-reasons'
+import { dispatchWasWithdrawn } from '../../../shared/structured-agent-session-dispatch-rejection'
 
 export function applyJournalSubmission(
   state: JournalReducerState,
   row: Extract<JournalRow, { kind: 'submission' }>
 ): void {
+  const options = readAgentSessionExecutionOptions(row.options)
   state.submissions.set(row.clientMessageId, {
     clientMessageId: row.clientMessageId,
     fence: row.fence,
@@ -36,8 +39,8 @@ export function applyJournalSubmission(
     // Kept as written, a newer build's kind too; an undecodable one as an empty kind, so neither
     // reads as a row without one.
     ...(row.source !== undefined ? { source: { kind: storedSourceKind(row.source) } } : {}),
-    // A stored value this build cannot read only loses the model it carried, never the row.
-    ...(isAgentSessionOptions(row.options) ? { options: row.options } : {})
+    // A stored value this build cannot read only loses the choices it carried, never the row.
+    ...(options ? { options } : {})
   })
   const itemId = agentJournalSubmissionKey(row.clientMessageId)
   // A message handed over later belongs to no turn until its handover names one.
@@ -69,12 +72,43 @@ export function placeHandedOverMessage(
     return
   }
   const { sequenceIndex: _acceptedAt, ...accepted } = item
-  state.items.set(itemId, {
-    ...accepted,
+  const place = {
     sequence: row.seq,
     observedAt: row.ts,
     turnScope: row.turnScope ?? state.derivedTurnScope.scopeFor(item.body)
-  })
+  }
+  state.items.set(itemId, { ...accepted, ...place })
+  if (submission.queuedMessageId !== undefined) {
+    state.queuedHandOffPlaces.set(submission.clientMessageId, place)
+  }
+}
+
+/**
+ * A queued card's hand-off refused with no proof the agent never got it: it may have run, so its
+ * message reads as sent and is never sent again. With a turn it was answered into, it reads as
+ * that turn's unconfirmed message, where it was handed over, and the turn's own end says Stop; a
+ * withdrawal before any turn opened reads as a person's own send a Stop took back. Derived on
+ * every fold from the stored rejection, which stays as written.
+ */
+export function foldQueuedHandOffInDoubt(
+  state: JournalReducerState,
+  submission: AgentJournalSubmission
+): void {
+  const itemId = agentJournalSubmissionKey(submission.clientMessageId)
+  const item = state.items.get(itemId)
+  const place = state.queuedHandOffPlaces.get(submission.clientMessageId)
+  if (item && place) {
+    const { sequenceIndex: _rejectedAt, ...rest } = item
+    state.items.set(itemId, { ...rest, ...place })
+  }
+  if (dispatchWasWithdrawn(submission) && !submission.answeredInTurn) {
+    delete submission.queuedMessageId
+    return
+  }
+  submission.dispatchState = 'unknown'
+  submission.reason = DISPATCH_DOUBT_PROVIDER_ENDED_UNANSWERED
+  submission.recovered = true
+  delete submission.rejection
 }
 
 /** A rejected message — queued, handed over, or sent directly — joins the conversation where it was

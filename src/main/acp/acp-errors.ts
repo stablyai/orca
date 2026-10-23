@@ -1,4 +1,5 @@
 import type { AuthMethod } from './generated/acp-protocol.generated'
+import { withProviderRequestTimeout } from '../provider-process/provider-request-timeout'
 
 export class AcpRpcError extends Error {
   constructor(
@@ -79,8 +80,12 @@ export class AcpConnectionClosedError extends Error {
 }
 
 export class AcpRequestTimeoutError extends Error {
-  constructor(readonly method: string) {
+  constructor(
+    readonly method: string,
+    timeoutMs: number
+  ) {
     super(`ACP request timed out: ${method}`)
     this.name = 'AcpRequestTimeoutError'
+    withProviderRequestTimeout(this, { method, timeoutMs })
   }
 }

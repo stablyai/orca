@@ -451,3 +451,32 @@ describe('live work still refuses, naming what blocks', () => {
     )
   })
 })
+
+describe('#30610: one terminal pane saved in two tabs', () => {
+  function reported(): PersistedState {
+    const state = sourceState()
+    const leaf = { type: 'leaf' as const, leafId: 'same-leaf' }
+    host(state).tabsByWorktree = { [WORKTREE_A]: [terminal('tab-a'), terminal('tab-b')] }
+    host(state).terminalLayoutsByTabId = {
+      'tab-a': { root: leaf, activeLeafId: 'same-leaf', expandedLeafId: null },
+      'tab-b': { root: leaf, activeLeafId: 'same-leaf', expandedLeafId: null }
+    }
+    return state
+  }
+
+  it('refuses on this desktop, naming the tabs, instead of sending the server a conflict', () => {
+    const state = reported()
+    expect(exportState(state).payload.dormantState?.workspaceSession).toBeUndefined()
+    expect(census(state).counts['workspace-session']).toBe(1)
+    expect(refusal(state)).toBe(
+      'This SSH host cannot move yet: saved tabs and panes (one terminal pane saved in two tabs, "tab-a" and "tab-b", in /srv/repo: close one of them).'
+    )
+  })
+
+  it('"Move anyway" leaves the saved tabs on this desktop and moves the rest', () => {
+    const state = reported()
+    state.sshTargets[0]!.managedServerLeaveBehind = { confirmedAt: '2026-10-19T00:00:00.000Z' }
+    expect(census(state).totalCount).toBe(0)
+    expect(exportState(state).payload.dormantState?.workspaceSession).toBeUndefined()
+  })
+})

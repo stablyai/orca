@@ -107,7 +107,7 @@ export function tabBarRuntimeModelStubs(): Record<string, () => Record<string, u
     detectedAgents: () => ({ useDetectedAgents: () => DETECTED_AGENTS }),
     detectionTarget: () => ({ useAgentDetectionTargetForWorktree: () => null }),
     connectionContext: () => ({ getConnectionIdFromState: () => null }),
-    runtimeOwner: () => ({ runtimeEnvironmentIdWithLegacyFallbackUnlessTwin: () => null }),
+    runtimeOwner: () => ({ runtimeEnvironmentIdOrLocalUnlessTwin: () => null }),
     nativeChatReadability: () => ({ isNativeChatTranscriptLocalReadable: () => false }),
     creationPolicy: () => ({ getClientCreationActionPolicy: () => CREATION_POLICY }),
     agentProjections: () => ({ selectTabBarAgentProjections: () => AGENT_PROJECTIONS }),

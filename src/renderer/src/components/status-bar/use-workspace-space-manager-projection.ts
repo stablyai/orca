@@ -145,13 +145,22 @@ export function useWorkspaceSpaceManagerProjection(args: {
     setGitStatusByWorktreeIdentity
   ])
 
-  useEffect(() => {
-    const visibleWorktreeIdentities = new Set(rows.map(getWorkspaceSpaceWorktreeIdentity))
-    const candidates = getWorkspaceSpaceGitStatusRefreshCandidates(sourceRows, {
+  // Status results must not restart the queue that produced them.
+  const gitStatusCandidates = useMemo(() => {
+    const visibleWorktreeIdentities = new Set(
+      filterWorkspaceSpaceRows(sourceRows, query, onlyDeletable).map(
+        getWorkspaceSpaceWorktreeIdentity
+      )
+    )
+    return getWorkspaceSpaceGitStatusRefreshCandidates(sourceRows, {
       activeWorktreeId,
       activeExecutionHostId: activeWorkspaceExecutionHostId,
       visibleWorktreeIdentities
     })
+  }, [sourceRows, query, onlyDeletable, activeWorktreeId, activeWorkspaceExecutionHostId])
+
+  useEffect(() => {
+    const candidates = gitStatusCandidates
     if (candidates.length === 0) {
       return
     }
@@ -174,13 +183,7 @@ export function useWorkspaceSpaceManagerProjection(args: {
     return () => {
       cancelled = true
     }
-  }, [
-    activeWorktreeId,
-    activeWorkspaceExecutionHostId,
-    refreshWorkspaceGitStatus,
-    rows,
-    sourceRows
-  ])
+  }, [refreshWorkspaceGitStatus, gitStatusCandidates])
 
   const inspectedWorktree =
     rows.find((row) => getWorkspaceSpaceWorktreeIdentity(row) === nextInspectedWorktreeId) ??

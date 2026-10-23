@@ -17,3 +17,6 @@ export const RELAY_PHONE_CLOSE_REASON = {
   // missed hostAttachDeadlineMs; the phone redials the same cell once, quickly.
   HOST_ATTACH_TIMEOUT: 'attach-timeout'
 } as const
+
+export type RelayPhoneCloseReason =
+  (typeof RELAY_PHONE_CLOSE_REASON)[keyof typeof RELAY_PHONE_CLOSE_REASON]

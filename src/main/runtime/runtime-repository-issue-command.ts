@@ -1,4 +1,4 @@
-import { getStoredRepoSshConnectionId } from '../repo-execution-host'
+import { getRepoDialableSshTargetId } from '../../shared/execution-host'
 import type { GitRuntimeOptions } from '../git/git-runtime-options'
 import type { Repo } from '../../shared/repo-types'
 import { readIssueCommand, writeIssueCommand } from '../issue-command-file'
@@ -27,7 +27,7 @@ export class RuntimeRepositoryIssueCommand {
         source: 'none' as const
       }
     }
-    const connectionId = getStoredRepoSshConnectionId(repo)
+    const connectionId = getRepoDialableSshTargetId(repo)
     if (!connectionId) {
       return readIssueCommand(repo.path)
     }
@@ -49,7 +49,7 @@ export class RuntimeRepositoryIssueCommand {
       return { ok: true }
     }
     // Why: an `ssh:` repo is not served here; the write is dropped, as when it was unreachable.
-    if (!getStoredRepoSshConnectionId(repo)) {
+    if (!getRepoDialableSshTargetId(repo)) {
       await writeIssueCommand(repo.path, content, () => this.deps.getLocalGitArgs(repo)[0] ?? {})
     }
     return { ok: true }

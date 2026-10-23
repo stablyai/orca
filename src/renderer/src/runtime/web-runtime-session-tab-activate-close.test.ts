@@ -6,10 +6,13 @@ import {
   replayWebSessionTabCloses
 } from './web-runtime-session-tab-lifecycle'
 import {
-  queueWebSessionCloseReplay,
+  holdWebSessionCloseForReplay,
   resetWebSessionCloseReplaysForTests,
   takeDueWebSessionCloseReplays
 } from './web-session-close-replay'
+import { appPairedTerminalTabCloseIntentStore as INTENTS } from './paired-terminal-tab-close-intent-store'
+import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
+import { createPairedTerminalTabCloseIntentTestStore } from '../store/terminals/paired-terminal-tab-close-intent.test-fixture'
 import {
   peekWebSessionFocusIntent,
   resetWebSessionFocusIntentForTests
@@ -96,7 +99,8 @@ afterEach(() => {
 describe('web runtime session tab actions', () => {
   beforeEach(() => {
     vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
-    mocks.getState.mockReturnValue({
+    const intents = createPairedTerminalTabCloseIntentTestStore()
+    mocks.getState.mockImplementation(() => ({
       settings: {
         activeRuntimeEnvironmentId: ENVIRONMENT_ID
       },
@@ -104,8 +108,9 @@ describe('web runtime session tab actions', () => {
       terminalLayoutsByTabId: {},
       activeTabIdByWorktree: {},
       activeGroupIdByWorktree: {},
-      setActiveWorktree: mocks.setActiveWorktree
-    })
+      setActiveWorktree: mocks.setActiveWorktree,
+      ...intents.getState()
+    }))
     mocks.resolveHostSessionTabIdForWebSessionTab.mockImplementation(
       (_state, args: { tabId: string }) =>
         args.tabId === 'local-browser-unified' ? 'host-browser-unified' : null
@@ -626,7 +631,12 @@ describe('web runtime session tab actions', () => {
         Date.now() + 60_000
       )
     ).toBe(true)
-    const due = takeDueWebSessionCloseReplays(owner, WORKTREE_ID, new Set(['host-browser-unified']))
+    const due = takeDueWebSessionCloseReplays(
+      INTENTS,
+      ENVIRONMENT_ID,
+      WORKTREE_ID,
+      new Set(['host-browser-unified'])
+    )
     expect(due.map((replay) => replay.hostTabIds[0])).toEqual(['host-browser-unified'])
 
     await replayWebSessionTabCloses(ENVIRONMENT_ID, due)
@@ -643,7 +653,12 @@ describe('web runtime session tab actions', () => {
       params: { tabId: 'host-browser-unified', reason: 'user' }
     })
     expect(
-      takeDueWebSessionCloseReplays(owner, WORKTREE_ID, new Set(['host-browser-unified']))
+      takeDueWebSessionCloseReplays(
+        INTENTS,
+        ENVIRONMENT_ID,
+        WORKTREE_ID,
+        new Set(['host-browser-unified'])
+      )
     ).toEqual([])
   })
 
@@ -680,9 +695,12 @@ describe('web runtime session tab actions', () => {
       )
     ).toBe(true)
     expect(
-      takeDueWebSessionCloseReplays(owner, WORKTREE_ID, new Set(['host-browser-unified'])).map(
-        (replay) => replay.hostTabIds[0]
-      )
+      takeDueWebSessionCloseReplays(
+        INTENTS,
+        ENVIRONMENT_ID,
+        WORKTREE_ID,
+        new Set(['host-browser-unified'])
+      ).map((replay) => replay.hostTabIds[0])
     ).toEqual(['host-browser-unified'])
   })
 
@@ -722,11 +740,16 @@ describe('web runtime session tab actions', () => {
       const runtimeCall = vi.fn().mockRejectedValue(new Error('socket hang up'))
       stubRuntimeEnvironmentBridge({ call: runtimeCall })
       const owner = { environmentId: ENVIRONMENT_ID }
-      queueWebSessionCloseReplay(owner, WORKTREE_ID, ['host-browser-unified'])
+      holdWebSessionCloseForReplay(INTENTS, owner, WORKTREE_ID, ['host-browser-unified'])
 
       await replayWebSessionTabCloses(
         ENVIRONMENT_ID,
-        takeDueWebSessionCloseReplays(owner, WORKTREE_ID, new Set(['host-browser-unified']))
+        takeDueWebSessionCloseReplays(
+          INTENTS,
+          ENVIRONMENT_ID,
+          WORKTREE_ID,
+          new Set(['host-browser-unified'])
+        )
       )
       const callsAfterReplay = runtimeCall.mock.calls.length
       await vi.advanceTimersByTimeAsync(5_000)
@@ -749,15 +772,27 @@ describe('web runtime session tab actions', () => {
   it('never replays a held close to an environment re-paired since', async () => {
     const runtimeCall = vi.fn()
     stubRuntimeEnvironmentBridge({ call: runtimeCall })
-    const staleOwner = { environmentId: ENVIRONMENT_ID, pairingRevision: 99 }
-    queueWebSessionCloseReplay(staleOwner, WORKTREE_ID, ['host-browser-unified'])
-
-    await replayWebSessionTabCloses(
+    replaceRuntimeEnvironmentRevisions([{ id: ENVIRONMENT_ID, createdAt: 0, pairingRevision: 1 }])
+    const owner = { environmentId: ENVIRONMENT_ID, pairingRevision: 1 }
+    holdWebSessionCloseForReplay(INTENTS, owner, WORKTREE_ID, ['host-browser-unified'])
+    const due = takeDueWebSessionCloseReplays(
+      INTENTS,
       ENVIRONMENT_ID,
-      takeDueWebSessionCloseReplays(staleOwner, WORKTREE_ID, new Set(['host-browser-unified']))
+      WORKTREE_ID,
+      new Set(['host-browser-unified'])
     )
+    // Re-paired between the snapshot that made it due and the send.
+    replaceRuntimeEnvironmentRevisions([{ id: ENVIRONMENT_ID, createdAt: 0, pairingRevision: 2 }])
 
+    try {
+      await replayWebSessionTabCloses(ENVIRONMENT_ID, due)
+    } finally {
+      replaceRuntimeEnvironmentRevisions([])
+    }
+
+    expect(due).toHaveLength(1)
     expect(runtimeCall).not.toHaveBeenCalled()
+    expect(INTENTS.getIntents()?.[ENVIRONMENT_ID]).toBeUndefined()
   })
 
   it('does not hold a lifecycle close the host never received', async () => {
@@ -773,7 +808,8 @@ describe('web runtime session tab actions', () => {
 
     expect(
       takeDueWebSessionCloseReplays(
-        { environmentId: ENVIRONMENT_ID },
+        INTENTS,
+        ENVIRONMENT_ID,
         WORKTREE_ID,
         new Set(['host-browser-unified'])
       )

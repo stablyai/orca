@@ -1,9 +1,11 @@
 import {
   closeTestStores,
-  testState,
   createStore,
-  writeDataFile,
-  makeTerminalTab
+  makeTerminalTab,
+  registerWorkspaceRepos,
+  testState,
+  workspaceRepos,
+  writeDataFile
 } from './persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
@@ -68,7 +70,7 @@ describe('Store', () => {
   it('remaps legacy SSH lease leaf ids by PTY when the layout is already normalized', async () => {
     writeDataFile({
       schemaVersion: 1,
-      repos: [],
+      repos: workspaceRepos('wt1'),
       worktreeMeta: {},
       settings: {},
       ui: {},
@@ -320,6 +322,7 @@ describe('Store', () => {
 
   it('reconciles only the incarnation of an unchanged durable PTY binding', async () => {
     const store = await createStore()
+    registerWorkspaceRepos(store, 'wt1')
     const paneKey = `tab1:${TEST_LEAF_1}`
     store.setWorkspaceSession({
       ...getDefaultWorkspaceSession(),

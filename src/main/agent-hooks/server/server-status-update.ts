@@ -120,6 +120,8 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
             }
           : undefined,
       incoming: terminalOwnedPayload.payload.agentType,
+      // Why local only: a relayed row carries its execution host's owner verdict, not a sender.
+      incomingProcess: payload.connectionId ? undefined : incoming.agentPresence?.process,
       now
     })
     if (
@@ -141,10 +143,16 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     if (terminalOwnedPayload.providerSessionOnly) {
       // Why: identity-only rows survive replay but must not emit prompt telemetry or a fabricated status.
       onAccepted?.()
-      const enriched = deriveCliWriterTopology({
-        ...this.attachStatusTiming(terminalOwnedPayload, now),
-        observation: this.stampObservation(terminalOwnedPayload, origin, now)
-      }, rowBefore, this.cliWriterExecutionMatches, newRun, incoming.agentPresence?.process)
+      const enriched = deriveCliWriterTopology(
+        {
+          ...this.attachStatusTiming(terminalOwnedPayload, now),
+          observation: this.stampObservation(terminalOwnedPayload, origin, now)
+        },
+        rowBefore,
+        this.cliWriterExecutionMatches,
+        newRun,
+        incoming.agentPresence?.process
+      )
       this.clearAssistantMessageRetry(enriched.paneKey)
       this.runtimeObservedStatusPaneKeys.delete(enriched.paneKey)
       if (!this.writeLegacyStatusRow(enriched)) {
@@ -270,10 +278,16 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       runningNonAgentTask === undefined
         ? unpairedPayload
         : { ...unpairedPayload, claudeRunningNonAgentTask: runningNonAgentTask }
-    const enriched = deriveCliWriterTopology({
-      ...this.attachStatusTiming(pairedPayload, now, observedAt),
-      observation: this.stampObservation(pairedPayload, origin, observedAt ?? now)
-    }, rowBefore, this.cliWriterExecutionMatches, newRun, incoming.agentPresence?.process)
+    const enriched = deriveCliWriterTopology(
+      {
+        ...this.attachStatusTiming(pairedPayload, now, observedAt),
+        observation: this.stampObservation(pairedPayload, origin, observedAt ?? now)
+      },
+      rowBefore,
+      this.cliWriterExecutionMatches,
+      newRun,
+      incoming.agentPresence?.process
+    )
     if (
       typeof enriched.payload.turnCompletedAt === 'number' &&
       Number.isFinite(enriched.payload.turnCompletedAt)

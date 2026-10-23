@@ -21,11 +21,11 @@ import type { RawData } from 'ws'
 import { CellAdmitEffectiveWriter } from './cell-admit-effective-writer.js'
 import { ReserveDeadMan, reserveDeadManWindowMs } from './cell-reserve-dead-man.js'
 import { createRelayApp } from './app.js'
-import { classifyAssignmentLease } from './assignment-lease.js'
+import { classifyAssignmentLease } from './assignment/assignment-lease.js'
 import { defaultIntakePerSec, type CellFlags } from './cell-flags.js'
 import { CellReserveBook } from './cell-reserve-book.js'
 import type { DemoteRequest, ReserveRequest } from './cell-reserve-contract.js'
-import { AssignmentLeaseShadow } from './assignment-lease-shadow.js'
+import { AssignmentLeaseShadow } from './assignment/assignment-lease-shadow.js'
 import { RelayAssignmentStore } from './assignment-store.js'
 import type { RelayConfig } from './config.js'
 import { RelayCredentialStore } from './credential-store.js'
@@ -275,7 +275,7 @@ export function createRelayServer(
               }))
             ),
         demote: (seat, row) => {
-          reservePlacement?.demoteSeat(seat)
+          reservePlacement?.demoteSeat(seat, 'reconcile')
           // The re-assign mints above the row, so the mirror can take it.
           reservePlacement?.raiseEpochFloor(seat, row.epoch)
           console.warn(
@@ -876,6 +876,10 @@ export function createRelayServer(
     dataSockets.close()
     store.resumeAudit.stop()
   })
+  const resumeAuditDropped = (): number => {
+    const drops = store.resumeAudit.drops()
+    return drops.overflow + drops.aged
+  }
   const runtimeCounts = () => {
     const ledgerCounts = connectionLedger?.counts()
     return {
@@ -883,6 +887,7 @@ export function createRelayServer(
       preAuthConnections,
       ...sessions.runtimeCounts(),
       queuedBytes: queuedBytes.current(),
+      ...(config.role === 'cell' ? { resumeAuditDropped: resumeAuditDropped() } : {}),
       ...(ledgerCounts
         ? {
             inFlightConnections: ledgerCounts.inFlightConnections,

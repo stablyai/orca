@@ -68,7 +68,13 @@ describe('short-lived Codex app-server session spawn', () => {
 
     await expect(
       runCodexAppServerSession(
-        { command: '/bin/codex', cliPath: null, args: ['app-server'], timeoutMs: 1_000 },
+        {
+          command: '/bin/codex',
+          cliPath: null,
+          args: ['app-server'],
+          cwd: '/workspace',
+          timeoutMs: 1_000
+        },
         async () => null,
         spawnImpl
       )
@@ -78,8 +84,10 @@ describe('short-lived Codex app-server session spawn', () => {
     expect(program).toBe(process.execPath)
     expect(args.slice(args.indexOf('--') + 1)).toEqual(['/bin/codex', 'app-server'])
     expect(options.detached).toBe(true)
+    expect(options.cwd).toBe('/workspace')
     expect(decodedSupervisorSpec(options.env)).toMatchObject({
       lifetime: 'session',
+      cwd: '/workspace',
       ownerPid: process.pid
     })
   })

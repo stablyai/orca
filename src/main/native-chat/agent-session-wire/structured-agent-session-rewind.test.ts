@@ -67,11 +67,13 @@ beforeEach(async () => {
     {
       supportsCreate: (_location, agent) => agent === 'codex',
       supportsLocation: () => true,
+      open: async () => ({
+        reportedOptions: { model: '' }
+      }),
       acquire: async (input) => {
         acquires.push(input)
         sink = input.events!
         return {
-          providerChildPhase: 'starting' as const,
           process: {
             hostId: 'local',
             pid: 4000 + acquires.length,

@@ -1,5 +1,7 @@
 import { expect, vi } from 'vitest'
+import { AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
 import { RuntimeSubscriptionRegistry } from '../../../src/main/runtime/runtime-subscription-registry'
+import { resetStructuredAgentSessionClosesBeforeCreateForTests } from '../../../src/main/runtime/rpc/methods/structured-agent-session-close-before-create'
 import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session-create-capabilities'
 import {
   attachParams,
@@ -14,6 +16,8 @@ import type {
 } from './versioned-agent-session-wire'
 
 export function runtimeStub(overrides: Record<string, unknown> = {}): unknown {
+  // A fresh runtime remembers no chat closed before its create; scenarios reuse one session id.
+  resetStructuredAgentSessionClosesBeforeCreateForTests()
   const subscriptions = new RuntimeSubscriptionRegistry()
   return {
     getRuntimeId: () => 'runtime-1',
@@ -136,5 +140,14 @@ export async function expectDeclaredSurfaceExecutes(
         result
       })
     }
+  }
+}
+
+export function expectItemDetailNegotiation(builds: readonly AgentSessionWireBuild[]): void {
+  expect(builds[0]?.capabilities).toContain(AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY)
+  for (const build of builds) {
+    expect(build.capabilities.includes(AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY)).toBe(
+      build.methodNames.includes('agentSession.item')
+    )
   }
 }

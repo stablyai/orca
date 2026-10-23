@@ -21,21 +21,10 @@ const SELECT_ROWS_AFTER = `SELECT seq, ts, row_json FROM journal_rows
 WHERE session_id = ? AND epoch = ? AND seq > ? ORDER BY seq ASC`
 const SELECT_ROWS_AFTER_LIMITED = `${SELECT_ROWS_AFTER} LIMIT ?`
 const DELETE_EPOCH = 'DELETE FROM journal_rows WHERE session_id = ? AND epoch = ?'
-const SELECT_LAST_ACTIVITY = 'SELECT MAX(ts) AS ts FROM journal_rows WHERE session_id = ?'
 
 export function readJournalSessionEpoch(db: Database.Database, sessionId: string): string | null {
   const epoch = db.prepare(SELECT_EPOCH).get(sessionId)?.epoch
   return typeof epoch === 'string' ? epoch : null
-}
-
-/** When the chat's newest row was saved, across every epoch; null for a chat with no rows. One
- *  aggregate over the chat's key range, so no row body reaches this process. */
-export function readJournalSessionLastActivityAt(
-  db: Database.Database,
-  sessionId: string
-): number | null {
-  const ts = db.prepare(SELECT_LAST_ACTIVITY).get(sessionId)?.ts
-  return typeof ts === 'number' ? ts : null
 }
 
 /** Points the chat at `epoch`. Only an epoch change writes this row. */

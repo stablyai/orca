@@ -3,6 +3,7 @@ import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { useDroppable } from '@dnd-kit/core'
 import { useAppStore } from '../../store'
 import TabBar from '../tab-bar/TabBar'
+import { WorkspaceEmptyState } from '../WorkspaceEmptyState'
 
 import { TabBarQuickCommandsButton } from '../tab-bar/TabBarQuickCommandsButton'
 import { TabGroupPaneActionsMenu } from './TabGroupPaneActionsMenu'
@@ -20,6 +21,7 @@ import { useClientHostedBrowserRows } from '@/lib/pane-manager/client-hosted-bro
 import { resolveClientHostedBrowserRowStripGroupId } from '../tab-bar/client-hosted-browser-row-strip-placement'
 import { useEditorGroupFileDropOwner } from '../editor/use-editor-group-file-drop-owner'
 import { cn } from '@/lib/utils'
+import { UNFOCUSED_SPLIT_GROUP_OPACITY } from './split-group-dim'
 
 const EditorPanel = lazy(() => import('../editor/EditorPanel'))
 const EMPTY_GROUPS: readonly TabGroup[] = []
@@ -259,9 +261,10 @@ export default function TabGroupPanel({
               touchesBottomEdge || suppressBottomBorder ? '' : 'border-b'
             } border-border ${
               isFocused && !touchesBottomEdge && !suppressBottomBorder ? 'border-b-accent' : ''
-            } ${isFocused ? '' : 'opacity-95'}`
+            }`
           : ''
       }`}
+      style={hasSplitGroups && !isFocused ? { opacity: UNFOCUSED_SPLIT_GROUP_OPACITY } : undefined}
       onPointerDown={commands.focusGroup}
       // Why: keyboard/AT focus can enter a split group without a pointer event, so sync group focus to DOM focus for global shortcuts.
       onFocusCapture={commands.focusGroup}
@@ -327,6 +330,12 @@ export default function TabGroupPanel({
         className="relative flex-1 min-h-0 overflow-hidden"
         style={bodyAnchorStyle}
       >
+        {isVisible &&
+        !activeTab &&
+        model.groupTabs.length === 0 &&
+        clientHostedRows.length === 0 ? (
+          <WorkspaceEmptyState worktreeId={worktreeId} groupId={groupId} />
+        ) : null}
         {/* Why: empty anchor so the agent-sessions tour reads as a terminal-area tip, not toolbar chrome. */}
         {isFocused ? (
           <div

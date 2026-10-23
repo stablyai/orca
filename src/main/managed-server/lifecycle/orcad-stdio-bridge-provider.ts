@@ -42,7 +42,7 @@ export class OrcadStdioBridgePortForwardProvider implements SshPortForwardProvid
   ) {}
 
   // System SSH runs each bridge socket as an exec over its ControlMaster, or as its own login
-  // when multiplexing is off; the transport only picks it once forwarding was refused.
+  // when multiplexing is off; the transport only picks it once a forward did not start.
   canHandle(conn: SshConnection): boolean {
     return conn.getClient() !== null || conn.usesSystemSshTransport()
   }

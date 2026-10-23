@@ -22,6 +22,7 @@ import type { RemoteTrackingBase } from './runtime-remote-fetch-controller'
 import type { RuntimeStore } from './runtime-store-contract'
 import { attributedSparsePresetId } from '../ipc/sparse-preset-attribution'
 import type { WorktreeCreateTimingRecorder } from '../worktree-create-timing'
+import { hostWorktreeTargetForRepo } from '../persistence/host-qualified-worktree-meta'
 
 export async function materializeRuntimeLocalWorktree<T>(args: {
   request: RuntimeManagedWorktreeCreateArgs
@@ -74,7 +75,7 @@ export async function materializeRuntimeLocalWorktree<T>(args: {
     { requestedName: effectiveRequestedName, sanitizedName: effectiveSanitizedName }
   )
   const meta = timing.timeSync('persist_metadata', () =>
-    store.setWorktreeMeta(worktreeId, {
+    store.setWorktreeMeta(hostWorktreeTargetForRepo(worktreeId, repo), {
       instanceId: randomUUID(),
       ...getProjectHostSetupWorktreeMeta(store.getProjectHostSetups?.() ?? [], repo),
       lastActivityAt: now,

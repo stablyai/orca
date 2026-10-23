@@ -37,19 +37,44 @@ describe('web runtime call pinned to the probed runtime', () => {
 
   it('sends a runtime-pinned write only on the connection where that runtime answered', async () => {
     await callEnvironmentEnvelope('env-1', 'status.get')
+
+    await callEnvironmentEnvelope('env-1', 'files.write', {}, 15_000, undefined, 'runtime-a')
+
+    expect(session.client.call).toHaveBeenCalledTimes(2)
+    expect(session.client.call).toHaveBeenLastCalledWith(
+      'files.write',
+      {},
+      { timeoutMs: 15_000, expectedConnectionEpoch: 1 }
+    )
+  })
+
+  it('refuses a runtime-pinned write after the client reconnected to another runtime', async () => {
+    await callEnvironmentEnvelope('env-1', 'status.get')
     // The same client reconnects to an older server before the write is sent.
     session.client.connectionEpoch = 2
     session.client.runtimeId = 'runtime-b'
+
+    await expect(
+      callEnvironmentEnvelope('env-1', 'files.write', {}, 15_000, undefined, 'runtime-a')
+    ).rejects.toThrow(RUNTIME_CONNECTION_CHANGED_MESSAGE)
+    expect(session.client.call).not.toHaveBeenCalledWith(
+      'files.write',
+      expect.anything(),
+      expect.anything()
+    )
+  })
+
+  // Why: the status owner's reconnect probes bypass this wrapper, so cached callers would never recover.
+  it('re-probes a reconnect to the same runtime and pins the write to the new connection', async () => {
+    await callEnvironmentEnvelope('env-1', 'status.get')
+    session.client.connectionEpoch = 2
 
     await callEnvironmentEnvelope('env-1', 'files.write', {}, 15_000, undefined, 'runtime-a')
 
     expect(session.client.call).toHaveBeenLastCalledWith(
       'files.write',
       {},
-      {
-        timeoutMs: 15_000,
-        expectedConnectionEpoch: 1
-      }
+      { timeoutMs: 15_000, expectedConnectionEpoch: 2 }
     )
   })
 
@@ -57,6 +82,10 @@ describe('web runtime call pinned to the probed runtime', () => {
     await expect(
       callEnvironmentEnvelope('env-1', 'files.write', {}, 15_000, undefined, 'runtime-never-probed')
     ).rejects.toThrow(RUNTIME_CONNECTION_CHANGED_MESSAGE)
-    expect(session.client.call).not.toHaveBeenCalled()
+    expect(session.client.call).not.toHaveBeenCalledWith(
+      'files.write',
+      expect.anything(),
+      expect.anything()
+    )
   })
 })

@@ -165,13 +165,14 @@ describe('a failed ACP turn says why', () => {
     expect(failures.map((failure) => failure.body.text)).toEqual([REASON])
   })
 
-  it('names a rate-limited turn the provider gave no words for, without inventing a reason', async () => {
+  it('upgrades an early diagnostic to a usage failure without a later downgrade', async () => {
     const f = await openAcpFixtureRig()
     const lane = f.lane()
     const prompt = lane.openPrompt('c1', 1000)
     f.apply(lane.notification('_x.ai/queue/changed', queued(prompt.promptId), 1001))
+    f.apply(lane.notification('_x.ai/session_notification', retryFailed, 1002))
     f.apply(
-      lane.notification('_x.ai/session_notification', ended(prompt.promptId, 'rate_limit'), 1002)
+      lane.notification('_x.ai/session_notification', ended(prompt.promptId, 'rate_limit'), 1003)
     )
     f.apply(
       lane.notification(
@@ -180,9 +181,15 @@ describe('a failed ACP turn says why', () => {
         1003
       )
     )
+    f.apply(lane.promptFailed('c1', rpcError, 1004))
     const failures = statusRows(await f.rig.rows())
     expect(failures.map((failure) => failure.body)).toEqual([
-      { kind: 'status', tone: 'error', text: 'Grok usage limit reached.' }
+      {
+        kind: 'status',
+        tone: 'warning',
+        text: 'The agent hit its usage limit. Send a message once it resets to continue.',
+        failure: { kind: 'usageLimitReached', detail: { text: REASON, audience: 'person' } }
+      }
     ])
     expect((await f.rig.turns())[0]?.outcome).toBe('failure')
   })

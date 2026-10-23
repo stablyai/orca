@@ -109,6 +109,7 @@ export function createCodexJournalTranslator(
       return restoreCodexJournalThread({
         threadId,
         thread,
+        historyImport: deps.historyImport,
         currentTurnIds: activeTurns.byThread,
         ordinals: items.ordinals,
         handleItem: (event) =>
@@ -200,14 +201,14 @@ export function createCodexJournalTranslator(
         return suppressionAdmission.accepted ? prompts.handle(event) : suppressionAdmission
       }
       if (event.type === 'server-request') {
-        return genericFrames.appendUnhandled(
-          `request:${event.method}`,
-          event.params,
-          event.threadId
-        )
+        const requestKey = `request:${event.method}`
+        return genericFrames.appendUnhandled(requestKey, event.params, event.threadId)
       }
       if (event.type === 'provider-frame') {
         return genericFrames.appendUnhandled(event.kind, event.payload, event.threadId)
+      }
+      if (event.type !== 'notification') {
+        return CODEX_JOURNAL_ADMITTED
       }
       if (event.method === 'turn/started' || event.method === 'turn/completed') {
         return event.method === 'turn/started'

@@ -101,6 +101,21 @@ export function editorGroupStillExists({
   return groups.some((group) => group.id === groupId)
 }
 
+function canOpenEditorFileDrop(
+  captured: EditorFileDropContext,
+  destination: EditorFileDropDestination
+): boolean {
+  if (!editorGroupStillExists(destination)) {
+    return false
+  }
+  const current = captureEditorFileDropContext(destination.worktreeId)
+  if (!current || !sameEditorFileDropOwner(captured, current)) {
+    showOwnerChangedError()
+    return false
+  }
+  return true
+}
+
 /**
  * Captures the destination workspace's host at drop time and returns the open
  * step; a host change before preparation finishes refuses instead of re-routing.
@@ -114,12 +129,7 @@ export function captureEditorFileDropOpen(
     return async () => undefined
   }
   return async (paths) => {
-    if (paths.length === 0 || !editorGroupStillExists(destination)) {
-      return
-    }
-    const current = captureEditorFileDropContext(destination.worktreeId)
-    if (!current || !sameEditorFileDropOwner(captured, current)) {
-      showOwnerChangedError()
+    if (paths.length === 0 || !canOpenEditorFileDrop(captured, destination)) {
       return
     }
     await openEditorFileDropPaths(captured, destination, paths)
@@ -127,10 +137,11 @@ export function captureEditorFileDropOpen(
 }
 
 async function openEditorFileDropPaths(
-  { fileContext, worktreePath, connectionId }: EditorFileDropContext,
+  context: EditorFileDropContext,
   destination: EditorFileDropDestination,
   paths: readonly string[]
 ): Promise<void> {
+  const { fileContext, worktreePath, connectionId } = context
   const store = useAppStore.getState()
   const { worktreeId, groupId } = destination
   const groupOptions = groupId ? { targetGroupId: groupId } : null
@@ -155,11 +166,11 @@ async function openEditorFileDropPaths(
         destinationDir,
         { ensureDestinationDir: true, nameExtensionlessImages: true }
       )
-      if (!editorGroupStillExists(destination)) {
+      if (!canOpenEditorFileDrop(context, destination)) {
         return
       }
       for (const result of results) {
-        if (!editorGroupStillExists(destination)) {
+        if (!canOpenEditorFileDrop(context, destination)) {
           return
         }
         if (result.status !== 'imported' || result.kind === 'directory') {
@@ -199,7 +210,7 @@ async function openEditorFileDropPaths(
   for (const filePath of paths) {
     try {
       const stat = await statUserOpenedPath(fileContext, filePath)
-      if (!editorGroupStillExists(destination)) {
+      if (!canOpenEditorFileDrop(context, destination)) {
         return
       }
       if (stat.isDirectory) {

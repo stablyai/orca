@@ -43,10 +43,6 @@ vi.mock(
 )
 vi.mock('../git/worktree', async () => (await import('./filesystem-test-harness')).gitWorktreeMock)
 vi.mock(
-  '../providers/ssh-filesystem-dispatch',
-  async () => (await import('./filesystem-test-harness')).sshFilesystemDispatchMock
-)
-vi.mock(
   '../text-generation/commit-message-text-generation',
   async () => (await import('./filesystem-test-harness')).textGenerationModuleMock
 )
@@ -249,6 +245,13 @@ describe('registerFilesystemHandlers', () => {
     )
 
     expect(statMock).toHaveBeenCalledWith(targetPath)
+    realpathMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
+    await expect(
+      handlers.get('fs:pathExists')!(null, {
+        filePath: path.resolve('/state/agent-session-attachments/upload/gone.png'),
+        access: { kind: 'chat-image' }
+      })
+    ).resolves.toBe(false)
   })
 
   it('allows deletePath when a registered worktree parent resolves to a macOS canonical alias', async () => {

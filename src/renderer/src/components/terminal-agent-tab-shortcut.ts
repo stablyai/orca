@@ -2,6 +2,7 @@ import type { KeybindingActionId, KeybindingOverrides } from '../../../shared/ke
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { useAppStore } from '../store'
 import { readDetectedAgentsForWorktree } from '@/lib/agent-detection-target-inventory'
+import { readAgentLaunchPreferencesForWorktree } from '@/components/settings/use-host-agent-launch-preferences'
 import {
   listBoundAgentTabActions,
   resolveDefaultAgentForNewTab,
@@ -25,11 +26,11 @@ export function resolveTerminalAgentTabShortcut({
   matchShortcut: (actionId: KeybindingActionId) => boolean
 }): TerminalAgentTabShortcut {
   const state = useAppStore.getState()
+  const preferences = readAgentLaunchPreferencesForWorktree(state, activeWorktreeId)
   if (matchShortcut('tab.newAgent')) {
     const agent = resolveDefaultAgentForNewTab({
-      defaultTuiAgent: state.settings?.defaultTuiAgent,
-      detectedAgentIds: readDetectedAgentsForWorktree(state, activeWorktreeId),
-      disabledTuiAgents: state.settings?.disabledTuiAgents
+      ...preferences,
+      detectedAgentIds: readDetectedAgentsForWorktree(state, activeWorktreeId)
     })
     // Why: the cached list is empty until the host's probe lands (e.g. a paired server's
     // workspace right after it opens); ask that host instead of reporting no agent.
@@ -41,7 +42,7 @@ export function resolveTerminalAgentTabShortcut({
           pendingAgent: resolveDefaultAgentForWorktreeNewTab(useAppStore.getState, activeWorktreeId)
         }
   }
-  for (const bound of listBoundAgentTabActions(keybindings, state.settings?.disabledTuiAgents)) {
+  for (const bound of listBoundAgentTabActions(keybindings, preferences.disabledTuiAgents)) {
     if (matchShortcut(bound.actionId)) {
       return { actionId: bound.actionId, agent: bound.agent }
     }

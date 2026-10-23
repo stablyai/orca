@@ -2,10 +2,12 @@
  * Closing run terminals on a headless host. The desktop closes a run's terminal when the run
  * completes; on orcad nobody does, so schedules leave a shell and a PTY per run until the host
  * runs out. A run terminal stays open for a grace period and the newest few per automation stay
- * viewable; older ones are closed. A completed run's terminal is closed as is. A failed or
- * never-finishing run's is closed only once the shell is proven alone at its prompt, since a timed
- * out agent may still be alive. A terminal a client typed into or is viewing, or one whose use
- * this host cannot tell, is never closed: as on the desktop, that terminal is the user's.
+ * viewable; older ones are closed. A completed run in a workspace made for it sleeps instead, as
+ * on the desktop, so its tab resumes the agent, or stays while it cannot; any other completed
+ * run's terminal is closed. A failed or never-finishing run's is closed only once the shell is
+ * proven alone at its prompt, since a timed out agent may still be alive. A terminal a client
+ * typed into or is viewing, or one whose use this host cannot tell, is never closed: as on the
+ * desktop, that terminal is the user's.
  */
 import {
   isFinalAutomationRunStatus,
@@ -34,6 +36,13 @@ export type HeadlessRunTerminalRetentionDeps = {
    * nothing, when the pane is gone or now holds another PTY (a restart put a new one there).
    */
   closeRunTerminal: (run: AutomationRun) => Promise<boolean>
+  /** Whether the run's workspace was made for that run, not shared with others. */
+  runOwnsWorkspace: (run: AutomationRun) => boolean
+  /**
+   * Sleeps the run's own workspace, keeping its tab to resume the agent, and drops only the run's
+   * PTY id. False, sleeping nothing, when another terminal there is live or the sleep failed.
+   */
+  sleepRunWorkspace: (run: AutomationRun) => Promise<boolean>
   /** Drops the closed terminal from the run, keeping its status, error and output. */
   forgetRunTerminal: (run: AutomationRun) => Promise<void>
   /** The automation's dispatch lane; a sweep reads and closes its runs' terminals inside it. */
@@ -77,7 +86,7 @@ export function createHeadlessRunTerminalRetention(deps: HeadlessRunTerminalRete
     automationId: string,
     policy: { keep: number; graceMs: number }
   ): Promise<number> => {
-    let closedCount = 0
+    let releasedCount = 0
     let kept = 0
     const ownedPaneKeys = new Set<string>()
     const runs = deps
@@ -86,6 +95,8 @@ export function createHeadlessRunTerminalRetention(deps: HeadlessRunTerminalRete
         (run): run is PanedRun =>
           run.automationId === automationId &&
           Boolean(run.terminalPaneKey) &&
+          // Why: no PTY left to release; a slept run's pane must keep resuming it.
+          Boolean(run.terminalPtyId) &&
           !STARTING.has(run.status)
       )
       .toSorted((a, b) => automationRunRecency(b) - automationRunRecency(a))
@@ -113,25 +124,33 @@ export function createHeadlessRunTerminalRetention(deps: HeadlessRunTerminalRete
         if (!(await mayClose(run, policy.graceMs))) {
           continue
         }
+        // Why: as on the desktop, a run's own workspace sleeps or stays; closing it loses the session.
+        if (run.status === 'completed' && deps.runOwnsWorkspace(run)) {
+          if (await deps.sleepRunWorkspace(run)) {
+            firstSeenAt.delete(run.id)
+            releasedCount += 1
+          }
+          continue
+        }
         if (await deps.closeRunTerminal(run)) {
-          closedCount += 1
+          releasedCount += 1
         }
         await forget(run)
       } catch (error) {
         console.error('[automations] could not close a run terminal:', error)
       }
     }
-    return closedCount
+    return releasedCount
   }
 
   const sweepOnce = async (policy: { keep: number; graceMs: number }): Promise<number> => {
-    let closedCount = 0
+    let releasedCount = 0
     for (const automationId of new Set(deps.listRuns().map((run) => run.automationId))) {
-      closedCount += await deps.inAutomationLane(automationId, () =>
+      releasedCount += await deps.inAutomationLane(automationId, () =>
         sweepAutomation(automationId, policy)
       )
     }
-    return closedCount
+    return releasedCount
   }
 
   const sweep = (): Promise<void> => {

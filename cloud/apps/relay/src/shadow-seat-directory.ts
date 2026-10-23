@@ -89,7 +89,7 @@ const SeatFeedSchema = z.object({
     .object({ perSec: z.number().nonnegative(), burst: z.number(), tokens: z.number() })
     .optional(),
   flagsApplied: z
-    .object({ generation: z.union([z.string(), z.number()]), flags: z.record(z.unknown()) })
+    .object({ generation: z.union([z.string(), z.number()]), flags: z.record(z.string(), z.unknown()) })
     .optional(),
   // What the cell acts on: reserve also while a flip back is still leasing its controls, or
   // db once its dead-man has flipped it back. Absent from older images.

@@ -21,6 +21,8 @@ import {
 import { writeAgentJournalTurnRow } from '../native-chat/agent-session-timeline/agent-journal-turn-row-revision'
 import type { ClaudeCommandTurn } from './claude-command-turn'
 import { createClaudeTurnOpener, type ClaudeTurnSource } from './claude-turn-opening'
+import { refineClaudeQuotaTurnEnd } from './claude-terminal-failure'
+import type { ClaudeUsageLimitEvidence } from './claude-usage-limits'
 import type { ClaudeStartedSend } from './claude-structured-session-state'
 
 export type ClaudeOpenTurnDeps = {
@@ -35,6 +37,7 @@ export type ClaudeOpenTurnDeps = {
 
 export class ClaudeOpenTurn {
   private current: ClaudeCurrentTurn | null = null
+  usageLimitEvidence: ClaudeUsageLimitEvidence | null = null
   /** Provider output may not reopen a turn after the session ended or a turn
    *  failed: nothing would ever close the turn it opened, and the row would read
    *  working for the life of the session. Only an accepted send lifts it. */
@@ -125,6 +128,7 @@ export class ClaudeOpenTurn {
    *  later would sweep THIS turn. The replaced turn is recorded superseded: a newer
    *  request ended it, whoever sent that request. */
   open(turn: ClaudeCurrentTurn, observedAt: number): void {
+    this.usageLimitEvidence = null
     this.deps.onOpen?.()
     if (this.current) {
       this.deps.turnSuperseded()
@@ -143,6 +147,7 @@ export class ClaudeOpenTurn {
   /** A conversation command the host opened a turn for. Its row is the host's, already written,
    *  so only an end is published; the command's result is what ends it. */
   beginCommand(turn: ClaudeCurrentTurn): void {
+    this.usageLimitEvidence = null
     this.deps.onOpen?.()
     if (this.current) {
       this.deps.turnSuperseded()
@@ -167,6 +172,7 @@ export class ClaudeOpenTurn {
   /** The command was never sent; its turn is the host's to settle. */
   forgetCommand(turnId: string): void {
     if (this.current?.command && this.current.turnId === turnId) {
+      this.usageLimitEvidence = null
       this.current = null
     }
   }
@@ -185,12 +191,18 @@ export class ClaudeOpenTurn {
   /** End the open turn, if one is open, and clear the live activity line. The
    *  context facts the end brings ride the same revision. */
   settle(end: ClaudeTurnEnd, contextUsage?: AgentSessionContextUsage): void {
+    const quotaEnd =
+      this.current !== null &&
+      end.outcome === undefined &&
+      this.usageLimitEvidence?.cause === 'quota'
+    this.suppressReopenOnFailure(quotaEnd)
     // Every settle is a provider cycle ending (result, idle, child exit).
     this.cycleWorkObserved = false
+    this.usageLimitEvidence = null
     // Even with no turn open: work a suppressed turn produced still ends here.
     this.deps.endOpenWork(end.completedAt)
     if (this.current) {
-      this.publish(this.current, end, contextUsage)
+      this.publish(this.current, end, contextUsage, quotaEnd)
       this.current = null
     }
     this.deps.sink.setActivity?.(null)
@@ -216,15 +228,18 @@ export class ClaudeOpenTurn {
   private publish(
     turn: ClaudeCurrentTurn,
     end?: ClaudeTurnEnd,
-    contextUsage?: AgentSessionContextUsage
+    contextUsage?: AgentSessionContextUsage,
+    quotaEnd = false
   ): void {
     const item = claudeTurnLifecycleItem(turn, end)
-    writeAgentJournalTurnRow(
-      this.deps.sink,
-      { identity: item.identity },
-      { lifecycle: item.body, ...(contextUsage ? { contextUsage } : {}) },
-      { publish: false, options: item.options }
-    )
+    const write = { lifecycle: item.body, ...(contextUsage ? { contextUsage } : {}) }
+    if (quotaEnd && refineClaudeQuotaTurnEnd(this.deps.sink, item.identity, write)) {
+      return
+    }
+    writeAgentJournalTurnRow(this.deps.sink, { identity: item.identity }, write, {
+      publish: false,
+      options: item.options
+    })
     // Keyed apart, so this never replaces the start's publication while it still waits to run.
     this.deps.sink.publish({ coalescingKey: item.publishCoalescingKey })
   }

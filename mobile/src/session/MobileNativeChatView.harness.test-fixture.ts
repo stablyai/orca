@@ -17,6 +17,7 @@ export type Overrides = {
   sendErrorMessage?: string | null
   onClearSendError?: () => void
   inputLockReason?: 'disconnected' | 'waiting' | null
+  composerText?: string
   onSend?: (text: string) => Promise<boolean>
   pending?: Parameters<typeof MobileNativeChatView>[0]['pending']
   structuredActivityUi?: boolean
@@ -29,6 +30,7 @@ export type Overrides = {
   sendSurfaceId?: string
   keyboardInset?: number
   hasMore?: boolean
+  olderPages?: Parameters<typeof MobileNativeChatView>[0]['olderPages']
   onLoadEarlier?: () => void
   status?: Parameters<typeof MobileNativeChatView>[0]['status']
   error?: string
@@ -75,7 +77,7 @@ export function installChatViewHooks(): void {
     renderer = null
     scrollToEnd.mockReset()
     scrollToOffset.mockReset()
-    pageScroller.scrollHeight = 0
+    Object.assign(pageScroller, { scrollTop: 0, scrollHeight: 0, clientHeight: 500 })
     vi.unstubAllGlobals()
   })
 }
@@ -139,6 +141,17 @@ export async function pressSend(): Promise<void> {
   await act(async () => {
     await composer.props.onPress()
   })
+}
+
+/** What the list reports from a scroll, drag or momentum event, in a 500-tall viewport. */
+export function scrollEvent(y: number, contentHeight: number) {
+  return {
+    nativeEvent: {
+      contentOffset: { y },
+      contentSize: { height: contentHeight },
+      layoutMeasurement: { height: 500 }
+    }
+  }
 }
 
 export async function scrollAwayFromTail(): Promise<void> {

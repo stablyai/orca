@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
-import { Pressable, ScrollView, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
+import { MobileNativeChatOwnedScrollView } from './MobileNativeChatOwnedScrollView'
 import { ChevronRight, FileMinus2, FilePen, FilePlus2 } from 'lucide-react-native'
 import {
   NATIVE_CHAT_DIFF_CARD_COPY,
@@ -83,7 +84,17 @@ function DiffRow({
 
 /** The card's rows in their own bounded box. Its own component so a collapsed card
  *  builds none of them. */
-function DiffCardRows({ file, fontScale }: { file: NativeChatEditFile; fontScale: number }) {
+function DiffCardRows({
+  file,
+  fontScale,
+  disclosureKey,
+  rootIdentity
+}: {
+  file: NativeChatEditFile
+  fontScale: number
+  disclosureKey?: string
+  rootIdentity?: string
+}) {
   const onLayout = useMobileNativeChatOpenedDetail()
   const type = toolType(fontScale).code
   // A snippet-relative number would read as a file position, so the gutter is blank
@@ -95,7 +106,9 @@ function DiffCardRows({ file, fontScale }: { file: NativeChatEditFile; fontScale
   // Desktop's row identity: the line itself, and which repeat of it this is.
   const seen = new Map<string, number>()
   return (
-    <ScrollView
+    <MobileNativeChatOwnedScrollView
+      rootIdentity={rootIdentity ?? `diff:${file.path}`}
+      positionKey={disclosureKey ?? `diff:${file.path}`}
       style={[styles.codeBox, styles.diffBody]}
       nestedScrollEnabled
       keyboardShouldPersistTaps="handled"
@@ -114,7 +127,7 @@ function DiffCardRows({ file, fontScale }: { file: NativeChatEditFile; fontScale
           />
         )
       })}
-    </ScrollView>
+    </MobileNativeChatOwnedScrollView>
   )
 }
 
@@ -123,18 +136,18 @@ function DiffCardRows({ file, fontScale }: { file: NativeChatEditFile; fontScale
 export function MobileNativeChatDiffCard({
   file,
   fontScale,
-  defaultExpanded = false,
   disclosureKey,
+  rootIdentity,
   onOpenFile
 }: {
   file: NativeChatEditFile
   fontScale: number
-  defaultExpanded?: boolean
   /** Identity this card's open state is remembered under while it is unmounted. */
   disclosureKey?: string
+  rootIdentity?: string
   onOpenFile?: (path: string) => void
 }): React.JSX.Element {
-  const [expanded, setExpanded] = useMobileNativeChatDisclosure(disclosureKey, defaultExpanded)
+  const [expanded, setExpanded] = useMobileNativeChatDisclosure(disclosureKey, false)
   const hasBody = file.lines.length > 0
   const copyText = useMemo(() => nativeChatEditFilePatchText(file.lines), [file.lines])
   const type = toolType(fontScale)
@@ -201,7 +214,14 @@ export function MobileNativeChatDiffCard({
           accessibilityLabel={NATIVE_CHAT_DIFF_CARD_COPY.copyDiff}
         />
       </View>
-      {hasBody && expanded ? <DiffCardRows file={file} fontScale={fontScale} /> : null}
+      {hasBody && expanded ? (
+        <DiffCardRows
+          file={file}
+          fontScale={fontScale}
+          disclosureKey={disclosureKey}
+          rootIdentity={rootIdentity}
+        />
+      ) : null}
     </View>
   )
 }

@@ -4,42 +4,86 @@ import { getDiskBaselineSignature, getWrittenContentDiskSignature } from './disk
 export const FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY =
   'files.write.disk-precondition.v1' as const
 
+// Why separate: v1 hosts can rewrite identical text and cannot enforce lossless automatic saves.
+export const FILE_WRITE_IDENTICAL_RUNTIME_CAPABILITY = 'files.write.identical-noop.v1' as const
+
 export const FILE_WRITE_IF_UNCHANGED_METHOD = 'files.writeIfUnchanged'
+
+/**
+ * Whether the host's guarded write can be sent as is. A v1 host can't check bytes or skip identical
+ * text, so only automatic saves (which must refuse non-UTF-8 files) pay for a client-side read first.
+ */
+export function hostEnforcesPrecondition(
+  capabilities: readonly unknown[],
+  precondition: FileWriteDiskPrecondition
+): boolean {
+  return (
+    capabilities.includes(FILE_WRITE_IDENTICAL_RUNTIME_CAPABILITY) ||
+    (capabilities.includes(FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY) &&
+      precondition.requireLosslessUtf8 !== true)
+  )
+}
 
 /** Refuse the write unless disk still holds the content this signature was taken over. */
 export type FileWriteDiskPrecondition = {
   expectedSignature: string
   /** A missing file is written (recreated) instead of refused. */
   allowMissing?: boolean
+  /** Automatic saves refuse a file that isn't valid UTF-8 rather than convert it unasked. */
+  requireLosslessUtf8?: boolean
 }
 
-export type FileWriteDiskConflict = 'changed' | 'missing'
+/** `not-utf8`: an automatic save met bytes it can't round-trip; older clients read it as `changed`. */
+export type FileWriteDiskConflict = 'changed' | 'missing' | 'not-utf8'
 
-export type FileWriteResult = { ok: true } | { ok: false; diskConflict: FileWriteDiskConflict }
+export type FileWriteDiskComparison = FileWriteDiskConflict | 'identical' | null
+
+export type FileWriteResult =
+  | { ok: true; unchanged?: boolean }
+  | { ok: false; diskConflict: FileWriteDiskConflict }
 
 export const FILE_WRITE_OK: FileWriteResult = { ok: true }
+export const FILE_WRITE_UNCHANGED: FileWriteResult = { ok: true, unchanged: true }
 
-/** `current` is the decoded disk text, `null` when missing, `undefined` when not comparable text. */
+/** `current` is the decoded disk text, `null` when missing, `undefined` when not comparable text; `content` is the text being saved. */
 export function compareDiskWritePrecondition(
   precondition: FileWriteDiskPrecondition,
-  current: string | null | undefined
-): FileWriteDiskConflict | null {
+  current: string | null | undefined,
+  content: string
+): FileWriteDiskComparison {
   if (current === null) {
     return precondition.allowMissing === true ? null : 'missing'
   }
   if (current === undefined) {
     return 'changed'
   }
-  return getDiskBaselineSignature(current) === precondition.expectedSignature ? null : 'changed'
+  // Why: U+FFFD may stand for bytes a decode dropped, so decoded equality proves nothing.
+  if (current === content && !current.includes('\uFFFD')) {
+    return 'identical'
+  }
+  if (getDiskBaselineSignature(current) !== precondition.expectedSignature) {
+    return 'changed'
+  }
+  // Why: decoded text can't tell a real U+FFFD from replaced bytes, so a reader of text stays conservative.
+  return precondition.requireLosslessUtf8 && current.includes('\uFFFD') ? 'not-utf8' : null
 }
 
 /** Why: old hosts answer `{ ok: true }` or nothing; only an explicit `ok: false` is a refusal. */
 export function parseFileWriteResult(value: unknown): FileWriteResult {
-  if (typeof value !== 'object' || value === null || !('ok' in value) || value.ok !== false) {
+  if (typeof value !== 'object' || value === null || !('ok' in value)) {
     return FILE_WRITE_OK
   }
+  if (value.ok !== false) {
+    return value.ok === true && 'unchanged' in value && value.unchanged === true
+      ? FILE_WRITE_UNCHANGED
+      : FILE_WRITE_OK
+  }
   const diskConflict = 'diskConflict' in value ? value.diskConflict : undefined
-  return { ok: false, diskConflict: diskConflict === 'missing' ? 'missing' : 'changed' }
+  return {
+    ok: false,
+    diskConflict:
+      diskConflict === 'missing' || diskConflict === 'not-utf8' ? diskConflict : 'changed'
+  }
 }
 
 /** Only a not-found answer proves the file is gone; a lost transport proves nothing. */
@@ -79,7 +123,7 @@ export function diskConflictFromReadFailure(
   error: unknown
 ): FileWriteDiskConflict | null {
   if (isConfirmedFileNotFoundError(error)) {
-    return compareDiskWritePrecondition(precondition, null)
+    return precondition.allowMissing === true ? null : 'missing'
   }
   // Why: the baseline was read whole, so content too big to read now cannot match it.
   if (isFileTooLargeToReadError(error)) {

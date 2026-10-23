@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { BootstrapSplitManager } from './terminal-pane-bootstrap-split-record'
 import type { PtyConnectionDeps } from './pty-connection-types'
-import { runTerminalPaneBootstrapSplits } from './terminal-pane-mount-bootstrap'
+import {
+  runTerminalPaneBootstrapSplits,
+  type BootstrapSplitManager
+} from './terminal-pane-mount-bootstrap'
 
 // Only startup is read by the bootstrap; the full PTY dependency bag belongs to mounting.
 function startupDeps(): PtyConnectionDeps {

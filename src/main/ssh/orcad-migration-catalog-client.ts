@@ -26,8 +26,7 @@ import { parsePairingCode } from '../../shared/pairing'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
 import { ORCAD_MIGRATION_CATALOG_RUNTIME_CAPABILITY } from '../../shared/orcad-runtime-capabilities'
 import { sendRemoteRuntimeRequestWithStatusPreflight } from '../../shared/remote-runtime-client'
-import { REMOTE_RUNTIME_MAX_INBOUND_REQUEST_JSON_BYTES } from '../../shared/remote-runtime-memory-limits'
-import { describeOversizedOrcadMigrationPayload } from './orcad-migration-manifest-export'
+import { assertOrcadMigrationRequestFits } from './orcad-migration-manifest-export'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import { AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
 import { hasExtraAgentArgs } from '../../shared/automation-extra-agent-args'
@@ -54,9 +53,6 @@ export type CatalogRequestOptions = {
   timeoutMs?: number
   expectedRuntimeId?: string
 }
-
-// Request id, device token, method name and JSON framing around the params.
-const REQUEST_ENVELOPE_RESERVE_BYTES = 1024
 
 const METHOD_BY_OPERATION: Record<OrcadCatalogMigrationOperation, string> = {
   abort: 'orcad.migration.abortCatalog',
@@ -231,18 +227,7 @@ async function request(
   const params = expectedBlobs.length > 0 ? { manifest, expectedBlobs } : { manifest }
   // A manifest under the validation cap can still overflow the host's sealed frame (more so with
   // expectedBlobs); the host would answer by closing the socket, so refuse before sending.
-  const paramsBytes = Buffer.byteLength(JSON.stringify(params), 'utf8')
-  if (
-    paramsBytes + REQUEST_ENVELOPE_RESERVE_BYTES >
-    REMOTE_RUNTIME_MAX_INBOUND_REQUEST_JSON_BYTES
-  ) {
-    throw new Error(
-      describeOversizedOrcadMigrationPayload(
-        manifest.payload,
-        REMOTE_RUNTIME_MAX_INBOUND_REQUEST_JSON_BYTES - REQUEST_ENVELOPE_RESERVE_BYTES
-      )
-    )
-  }
+  assertOrcadMigrationRequestFits(params)
   const carriesExtraAgentArgs =
     (operation === 'stage' || operation === 'commit') &&
     (manifest.payload.dormantState?.automations ?? []).some((automation) =>
@@ -270,7 +255,7 @@ async function request(
   return response.result
 }
 
-async function sendSupportedMigrationRequest(
+export async function sendSupportedMigrationRequest(
   pairing: NonNullable<ReturnType<typeof parsePairingCode>>,
   method: string,
   params: unknown,

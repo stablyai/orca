@@ -5,7 +5,6 @@ import type { SplitTerminalPaneDetail } from '@/constants/terminal'
 import { BACKGROUND_WORKTREE_MEASURE_WINDOW_MS } from '../terminal/background-terminal-worktree-visibility'
 import {
   _resetTerminalPaneSplitRequestRoutingForTests,
-  cancelQueuedTerminalPaneSplitForLeaf,
   cancelQueuedTerminalPaneSplitRequests,
   dispatchTerminalPaneSplitRequest,
   hasTerminalPaneSplitMountLease,
@@ -13,8 +12,7 @@ import {
   registerTerminalPaneSplitRequestHandler,
   resolveTerminalPaneSplitSourceId,
   takeQueuedTerminalPaneSplitRequests,
-  TERMINAL_PANE_SPLIT_QUEUE_CAPACITY,
-  withoutQueuedMainSplits
+  TERMINAL_PANE_SPLIT_QUEUE_CAPACITY
 } from './terminal-pane-split-request-routing'
 
 const SOURCE_LEAF_ID = '11111111-1111-4111-8111-111111111111'
@@ -136,79 +134,5 @@ describe('parked terminal split request routing', () => {
     expect(second).toHaveBeenCalledWith(expect.objectContaining({ worktreeId: 'repo::/two' }))
     unregisterFirst()
     unregisterSecond()
-  })
-})
-
-describe('withoutQueuedMainSplits', () => {
-  const SOURCE = '11111111-1111-4111-8111-111111111111'
-  const NEW = '22222222-2222-4222-8222-222222222222'
-  const layout = {
-    root: {
-      type: 'split' as const,
-      direction: 'vertical' as const,
-      first: { type: 'leaf' as const, leafId: SOURCE },
-      second: { type: 'leaf' as const, leafId: NEW }
-    },
-    activeLeafId: SOURCE,
-    expandedLeafId: null
-  }
-
-  it('leaves out a pane whose queued split main asked for, so that request mounts it with its command', () => {
-    _resetTerminalPaneSplitRequestRoutingForTests()
-    queueTerminalPaneSplitRequest({
-      tabId: 'tab-1',
-      worktreeId: 'wt-1',
-      paneRuntimeId: 1,
-      sourceLeafId: SOURCE,
-      direction: 'vertical',
-      newLeafId: NEW,
-      command: 'make test'
-    })
-
-    expect(withoutQueuedMainSplits(layout, 'tab-1', 'wt-1').root).toEqual({
-      type: 'leaf',
-      leafId: SOURCE
-    })
-    expect(withoutQueuedMainSplits(layout, 'tab-2', 'wt-1')).toBe(layout)
-    expect(takeQueuedTerminalPaneSplitRequests('tab-1', 'wt-1')[0]).toMatchObject({
-      newLeafId: NEW,
-      command: 'make test'
-    })
-    expect(withoutQueuedMainSplits(layout, 'tab-1', 'wt-1')).toBe(layout)
-    _resetTerminalPaneSplitRequestRoutingForTests()
-  })
-})
-
-describe('cancelQueuedTerminalPaneSplitForLeaf', () => {
-  const split = (newLeafId: string): SplitTerminalPaneDetail => ({
-    ...splitRequest('tab-parked'),
-    worktreeId: 'wt-1',
-    newLeafId
-  })
-
-  it('drops only the closed pane’s split, and the lease with the tab’s last one', () => {
-    queueTerminalPaneSplitRequest(split('leaf-a'))
-    queueTerminalPaneSplitRequest(split('leaf-b'))
-
-    cancelQueuedTerminalPaneSplitForLeaf('tab-parked', 'leaf-a')
-    expect(hasTerminalPaneSplitMountLease('tab-parked')).toBe(true)
-    cancelQueuedTerminalPaneSplitForLeaf('tab-other', 'leaf-b')
-    expect(hasTerminalPaneSplitMountLease('tab-parked')).toBe(true)
-
-    cancelQueuedTerminalPaneSplitForLeaf('tab-parked', 'leaf-b')
-    expect(hasTerminalPaneSplitMountLease('tab-parked')).toBe(false)
-    expect(takeQueuedTerminalPaneSplitRequests('tab-parked', 'wt-1')).toEqual([])
-  })
-
-  it('keeps the lease of another split still waiting there', () => {
-    queueTerminalPaneSplitRequest(split('leaf-a'))
-    queueTerminalPaneSplitRequest(split('leaf-b'))
-
-    cancelQueuedTerminalPaneSplitForLeaf('tab-parked', 'leaf-b')
-
-    expect(hasTerminalPaneSplitMountLease('tab-parked')).toBe(true)
-    expect(
-      takeQueuedTerminalPaneSplitRequests('tab-parked', 'wt-1').map((r) => r.newLeafId)
-    ).toEqual(['leaf-a'])
   })
 })

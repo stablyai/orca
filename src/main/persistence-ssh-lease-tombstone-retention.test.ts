@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { TEST_LEAF_1 } from './persistence-session-fixtures'
+import { PtyExitProof } from './pty-exit-proof'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
@@ -76,7 +77,11 @@ describe('operator-closed SSH lease tombstones', () => {
   it('keeps the tombstone while a binding the scrub could not reach still names the pty', async () => {
     const store = await storeWithDetachedPaneBinding()
 
-    store.markSshRemotePtyLease('ssh-1', 'ssh:ssh-1@@remote-pty', 'terminated')
+    store.markSshRemotePtyLease(
+      'ssh-1',
+      'ssh:ssh-1@@remote-pty',
+      PtyExitProof.from('exit-observed', undefined)
+    )
 
     // `isRestorablePtyBinding` still consults this row to refuse replaying that binding.
     expect(store.getSshRemotePtyLeases('ssh-1')).toEqual([
@@ -93,7 +98,11 @@ describe('operator-closed SSH lease tombstones', () => {
       { targetId: 'ssh-1', ptyId: 'remote-pty', state: 'attached', pendingKill }
     ])
 
-    store.markSshRemotePtyLease('ssh-1', 'ssh:ssh-1@@remote-pty', 'terminated')
+    store.markSshRemotePtyLease(
+      'ssh-1',
+      'ssh:ssh-1@@remote-pty',
+      PtyExitProof.from('exit-observed', undefined)
+    )
 
     expect(store.getSshRemotePtyLeases('ssh-1')).toEqual([
       expect.objectContaining({ ptyId: 'remote-pty', state: 'terminated', pendingKill })
@@ -124,7 +133,11 @@ describe('operator-closed SSH lease tombstones', () => {
       { targetId: 'ssh-1', ptyId: 'remote-pty-3', state: 'attached' }
     ])
 
-    store.markSshRemotePtyLease('ssh-1', 'ssh:ssh-1@@remote-pty-3', 'terminated')
+    store.markSshRemotePtyLease(
+      'ssh-1',
+      'ssh:ssh-1@@remote-pty-3',
+      PtyExitProof.from('exit-observed', undefined)
+    )
 
     expect(store.getSshRemotePtyLeases('ssh-1')).toEqual([
       expect.objectContaining({
@@ -147,7 +160,11 @@ describe('operator-closed SSH lease tombstones', () => {
     ])
     expect(store.getSshRemotePtyLeases()).toHaveLength(4)
 
-    store.markSshRemotePtyLease('ssh-1', 'ssh:ssh-1@@remote-pty-1', 'terminated')
+    store.markSshRemotePtyLease(
+      'ssh-1',
+      'ssh:ssh-1@@remote-pty-1',
+      PtyExitProof.from('exit-observed', undefined)
+    )
 
     // Other targets are untouched: the pass is scoped to the one whose bindings were just scrubbed.
     expect(store.getSshRemotePtyLeases()).toEqual([

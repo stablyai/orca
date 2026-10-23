@@ -11,7 +11,7 @@ import {
 import { readOrcaCliVersion } from './cli-version'
 import { dispatch } from './dispatch'
 import {
-  assertEnvironmentSelectorResolvable,
+  resolveEnvironmentSelectorForStore,
   resolveHostFlagEnvironmentId
 } from './execution-host-flag'
 import { fetchSshTargetSummaries, listSshTargets } from './host-selector-alternatives'
@@ -124,9 +124,10 @@ export async function main(
     // with the cross-kind hint rather than a bare store error at first use.
     const listSshTargetsForSuggestion = async (): Promise<{ id: string; label: string }[]> =>
       listSshTargets(new RuntimeClientClass(undefined, undefined, null, null))
-    if (typeof environmentSelector === 'string') {
-      await assertEnvironmentSelectorResolvable(environmentSelector, listSshTargetsForSuggestion)
-    }
+    const storeEnvironmentSelector =
+      typeof environmentSelector === 'string'
+        ? await resolveEnvironmentSelectorForStore(environmentSelector, listSshTargetsForSuggestion)
+        : null
     // Why: --host runtime:<id> names a paired server, not a filter over this
     // runtime's rows, so it has to pick the connection before the client exists.
     // An ambient ORCA_ENVIRONMENT is checked for disagreement too — silently
@@ -167,9 +168,7 @@ export async function main(
     // An explicit --host runtime:<id> outranks an ambient pairing code or environment.
     const remotePairingCode =
       hostEnvironmentId !== null ? null : typeof pairingCode === 'string' ? pairingCode : suppressed
-    const remoteEnvironment =
-      hostEnvironmentId ??
-      (typeof environmentSelector === 'string' ? environmentSelector : suppressed)
+    const remoteEnvironment = hostEnvironmentId ?? storeEnvironmentSelector ?? suppressed
     let client: RuntimeClient | undefined
     await dispatch(parsed.commandPath, {
       flags: parsed.flags,

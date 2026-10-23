@@ -11,7 +11,14 @@ if test "$__orca_codex_type" = file
     if test -x "$ORCA_CODEX_LAUNCH_PREFLIGHT"
       command "$ORCA_CODEX_LAUNCH_PREFLIGHT" agent hooks prepare-codex >/dev/null 2>&1; or true
     end
-    if test "$ORCA_CODEX_ISOLATE" != 0; and not string match -qr -- '^(agents|queue|--no-daemon|--remote|--remote=.*)$' $argv; and command codex --help 2>/dev/null </dev/null | string match -q -- '*--no-daemon*'
+    if test "$ORCA_CODEX_ISOLATE" != 0; and not string match -qr -- '^(agents|queue|--remote|--remote=.*)$' $argv
+      test -n "$ORCA_TERMINAL_HANDLE"; and not string match -q -- "*'*" "$ORCA_TERMINAL_HANDLE"; and set argv -c "shell_environment_policy.set.ORCA_TERMINAL_HANDLE='$ORCA_TERMINAL_HANDLE'" $argv
+      test -n "$ORCA_PANE_KEY"; and not string match -q -- "*'*" "$ORCA_PANE_KEY"; and set argv -c "shell_environment_policy.set.ORCA_PANE_KEY='$ORCA_PANE_KEY'" $argv
+      test -n "$ORCA_WORKTREE_ID"; and not string match -q -- "*'*" "$ORCA_WORKTREE_ID"; and set argv -c "shell_environment_policy.set.ORCA_WORKTREE_ID='$ORCA_WORKTREE_ID'" $argv
+      test -n "$ORCA_WORKSPACE_ID"; and not string match -q -- "*'*" "$ORCA_WORKSPACE_ID"; and set argv -c "shell_environment_policy.set.ORCA_WORKSPACE_ID='$ORCA_WORKSPACE_ID'" $argv
+      test -n "$ORCA_USER_DATA_PATH"; and not string match -q -- "*'*" "$ORCA_USER_DATA_PATH"; and set argv -c "shell_environment_policy.set.ORCA_USER_DATA_PATH='$ORCA_USER_DATA_PATH'" $argv
+    end
+    if test "$ORCA_CODEX_ISOLATE" != 0; and not string match -qr -- '^(agents|queue|--remote|--no-daemon|--remote=.*)$' $argv; and command codex --help 2>/dev/null </dev/null | string match -q -- '*--no-daemon*'
       set argv --no-daemon $argv
     end
     command codex $argv

@@ -44,6 +44,11 @@ export const runtimeRepoListSchema = z
  */
 export const detectedAgentsSchema = z.array(z.unknown())
 
+/** `preflight.refreshAgents` wraps the same list with PATH diagnostics the drawer never reads. */
+export const refreshedAgentsSchema = z
+  .looseObject({ agents: detectedAgentsSchema })
+  .transform((reply) => reply.agents)
+
 /**
  * The workspace file paths native chat suggests, from either the search or the legacy inventory.
  *

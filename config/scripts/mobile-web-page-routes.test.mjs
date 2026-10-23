@@ -5,7 +5,7 @@ import {
 } from '../../src/shared/mobile-web-bundle/manifest-contract.ts'
 import { resolveMobileWebPageRoutes } from './build-mobile-web-app-bundle.mjs'
 import { MOBILE_WEB_PAGE_ROUTES } from './mobile-web-page-routes.mjs'
-import { routePathnameFromKey } from './mobile-web-app-route-manifest.mjs'
+import { routePathnameFromKey } from './mobile-web-app/mobile-web-app-route-manifest.mjs'
 
 /**
  * Which screens this desktop declares as page routes, and whether the bundle can render each.

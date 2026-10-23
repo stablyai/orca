@@ -14,7 +14,7 @@ import { settleOrcadDecommissionStop } from './orcad-decommission-stop'
 import type { OrcadSlotOptions } from '../../ssh/orcad-recovery-slot'
 import type { OrcadManagedStopContext } from '../../../shared/orcad-stop-request'
 
-export type OrcadRollbackBarrier =
+type OrcadRollbackBarrier =
   | { state: 'retired' }
   /** orcad withdrew the stop and keeps serving: nothing changed. */
   | { state: 'withdrawn'; reason: string }
@@ -65,7 +65,7 @@ export async function stopIncumbentBehindTerminalBarrier(
   }
 }
 
-export type OrcadRollbackBarrierRefusal = {
+type OrcadRollbackBarrierRefusal = {
   outcome: 'refused' | 'failed'
   code: string
   reason: string

@@ -84,12 +84,31 @@ describe('first structured chat prompt', () => {
   })
 
   it('names a chat by what was asked, not by where its images sat', () => {
+    const withImages = (text: string, images: number, itemId: string) =>
+      message('', {
+        itemId,
+        body: {
+          kind: 'message',
+          role: 'user',
+          blocks: [
+            ...Array.from({ length: images }, () => ({
+              type: 'image-ref' as const,
+              path: '/tmp/a.png'
+            })),
+            { type: 'text', text }
+          ]
+        }
+      })
     expect(
       firstStructuredAgentSessionPrompt([
-        message('[Image #1] '),
-        message('compare [Image #1] with [Image #2]', { itemId: 'second' })
+        withImages('[Image #1] ', 1, 'first'),
+        withImages('compare [Image #1] with [Image #2]', 2, 'second')
       ])
     ).toBe('compare  with')
+    // A marker the user typed, with no image of that number, is their text.
+    expect(firstStructuredAgentSessionPrompt([message('Explain [Image #1]')])).toBe(
+      'Explain [Image #1]'
+    )
   })
 
   it('skips punctuation-only entries in favor of the first text request', () => {

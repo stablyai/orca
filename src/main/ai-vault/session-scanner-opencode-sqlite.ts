@@ -1,10 +1,6 @@
 import type { AiVaultSession, AiVaultSessionPreviewMessage } from '../../shared/ai-vault-types'
-import {
-  addPreviewMessage,
-  createAccumulator,
-  finalizeSession,
-  updateTimeline
-} from './session-scanner-accumulator'
+import { createAccumulator, finalizeSession, updateTimeline } from './session-scanner-accumulator'
+import { addPreviewMessage } from './session-scanner-messages'
 import {
   normalizeFullFirstUserPromptText,
   shouldCaptureFullFirstUserPrompt
@@ -310,9 +306,7 @@ export function readOpenCodeSqliteSession(args: {
       addPreviewMessage(accumulator, {
         role: mapPreviewRole(previewRow.role),
         text,
-        timestamp: previewRow.time_created,
-        // Preview window is newest-N; first-prompt is loaded separately below.
-        seedFirstUserPrompt: false
+        timestamp: previewRow.time_created
       })
       if (previewRow.role === 'user' && !accumulator.title) {
         accumulator.title =

@@ -21,8 +21,11 @@ import {
 } from '../../../shared/agent-session-wire-refusals'
 import { AgentSessionAcquisitionRefusal } from './structured-agent-session-adapter'
 import { providerExecutableMissing } from '../../provider-process/provider-executable-missing'
+import { providerRequestTimeoutOf } from '../../provider-process/provider-request-timeout'
+import { findInErrorChain } from '../../provider-process/provider-error-chain'
 import { argumentProblemOf } from '../structured-agent-arguments-error'
-import { codexInstallationProblemOf } from '../../codex/codex-cli-installation-error'
+import { agentCliInstallationProblemOf } from '../agent-cli-installation-error'
+import { agentCliInstallationFacts } from '../../../shared/agent-cli-installation-problem'
 
 /** Start refusals whose situation is itself what the person reads, with its own next step. */
 const TYPED_START_REFUSALS = [
@@ -52,34 +55,25 @@ export function withObservedProviderExit<TError extends Error>(error: TError): T
   return Object.assign(error, { providerExitObserved: true })
 }
 
-/** Whether the adapter saw the child exit on its own. Follows `cause` and the errors a cleanup
- *  aggregated, since the acquisition errors wrap what the adapter threw. */
-export function providerExitObserved(error: unknown, depth = 0): boolean {
-  if (depth >= 6 || !(error instanceof Error)) {
-    return false
-  }
-  if ('providerExitObserved' in error && error.providerExitObserved === true) {
-    return true
-  }
-  if (
-    error instanceof AggregateError &&
-    error.errors.some((inner) => providerExitObserved(inner, depth + 1))
-  ) {
-    return true
-  }
-  return providerExitObserved(error.cause, depth + 1)
+/** Whether the error's chain marks an exit the adapter saw on its own. */
+export function providerExitObserved(error: unknown): boolean {
+  return (
+    findInErrorChain(error, (inner) =>
+      'providerExitObserved' in inner && inner.providerExitObserved === true ? true : undefined
+    ) ?? false
+  )
 }
 
 /** A start that did not land. A refusal the adapter typed keeps its situation, and an exit the
  *  adapter observed says the provider stopped; anything else blames no one — it may be Orca's, or
  *  a spawn that failed. Either keeps the provider's diagnostic when the error carried one. */
 export function providerStartupFailureFact(cause?: unknown): SubmissionRejectionFact {
-  const codexInstallation = codexInstallationProblemOf(cause)
-  if (codexInstallation) {
+  const installation = agentCliInstallationProblemOf(cause)
+  if (installation) {
     return agentSessionFailureFact('startFailed', {
       refusal: {
         code: 'agent_session_operation_invalid',
-        details: { reason: 'attachFailed', codexInstallation }
+        details: { reason: 'attachFailed', ...agentCliInstallationFacts(installation) }
       }
     })
   }
@@ -95,10 +89,12 @@ export function providerStartupFailureFact(cause?: unknown): SubmissionRejection
   if (providerExecutableMissing(cause)) {
     return agentSessionFailureFact('cliMissing')
   }
-  return agentSessionFailureFact(
-    providerExitObserved(cause) ? 'providerStartFailed' : 'startFailed',
-    { detail: providerDiagnosticOf(cause), argumentProblem: argumentProblemOf(cause) }
-  )
+  const exited = providerExitObserved(cause)
+  return agentSessionFailureFact(exited ? 'providerStartFailed' : 'startFailed', {
+    detail: providerDiagnosticOf(cause),
+    argumentProblem: argumentProblemOf(cause),
+    ...(exited ? {} : { requestTimeout: providerRequestTimeoutOf(cause) })
+  })
 }
 
 /** A child that ended before it proved its start: an exit is a start that failed, keeping the

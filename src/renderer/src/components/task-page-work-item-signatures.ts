@@ -1,7 +1,8 @@
 import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 
+// Why the host: a twin's two hosts return the same PR under one repo id.
 export function taskPageWorkItemKey(item: GitHubWorkItem): string {
-  return `${item.repoId}\u0000${item.id}`
+  return `${item.repoId}\u0000${item.repoHostId ?? ''}\u0000${item.id}`
 }
 
 export function sortedStrings(values: readonly string[] | undefined): string {

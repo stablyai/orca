@@ -93,6 +93,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
       tabs: this.tabs,
       session,
       getPaneKey: (leaf) => this.makeRuntimePaneKey(leaf),
+      paneOf: (pty) => this.paneOfPty(pty),
       getTitleDisplayClear: (ptyId) => this.getPtyTitleDisplayClear(ptyId),
       getSummary
     })
@@ -110,6 +111,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
         repoById,
         ptysById: this.ptysById,
         tabs: this.tabs,
+        paneOf: (pty) => this.paneOfPty(pty),
         getTerminalHandlesForPty: (ptyId) => this.getExistingTerminalHandlesForPtyId(ptyId),
         getSummary
       })
@@ -298,6 +300,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
         )
       },
       ...(this.structuredAgentStatusSinkFn ? { statusSink: this.structuredAgentStatusSinkFn } : {}),
+      conversationNaming: nameChat,
       // A closed chat settles the Dispatch it was working, as a closed terminal does.
       onSessionTabHidden: (sessionId) => this.onStructuredSessionTabHidden(sessionId),
       attentionDelivery: createStructuredAttentionMobileDelivery({

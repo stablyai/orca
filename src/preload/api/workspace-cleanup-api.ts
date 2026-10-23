@@ -12,6 +12,7 @@ import type {
   WorkspaceSpaceScanProgress
 } from '../../shared/workspace-space-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
+import type { WorkspaceSpaceChange } from '../../shared/workspace-space-change'
 
 export type WorkspaceCleanupApi = {
   scan: (
@@ -19,7 +20,7 @@ export type WorkspaceCleanupApi = {
     onProgress?: (progress: WorkspaceCleanupScanProgress) => void
   ) => Promise<WorkspaceCleanupScanResult>
   cancelScan?: (scanId: string) => Promise<boolean>
-  /** Last persisted broad-scan snapshot; null until one completes or when the cache is stale/corrupt. */
+  /** Null until a scan completes or when its cache is stale/corrupt. */
   getCachedScan: () => Promise<WorkspaceCleanupScanResult | null>
   dismiss: (args: WorkspaceCleanupDismissArgs) => Promise<void>
   clearDismissals: () => Promise<void>
@@ -30,7 +31,7 @@ export type WorkspaceCleanupApi = {
 
 export type WorkspaceSpaceApi = {
   analyze: () => Promise<WorkspaceSpaceAnalyzeResult>
-  /** Last persisted analysis (topLevelItems pruned to bound the payload); null until one completes. */
+  /** Cached analysis prunes topLevelItems to bound the payload. */
   getCachedAnalysis: () => Promise<WorkspaceSpaceAnalysis | null>
   cancel: () => Promise<boolean>
   onProgress: (callback: (progress: WorkspaceSpaceScanProgress) => void) => () => void
@@ -41,9 +42,17 @@ export type WorkspaceSpaceApi = {
   onWindowStateRequested?: (callback: () => void) => () => void
   onWindowClosed?: (callback: () => void) => () => void
   onWindowState?: (callback: (state: unknown) => void) => () => void
-  revealWorktree?: (worktreeId: string, executionHostId?: ExecutionHostId) => Promise<void>
+  revealWorktree?: (
+    worktreeId: string,
+    executionHostId?: ExecutionHostId,
+    change?: WorkspaceSpaceChange
+  ) => Promise<void>
   onRevealWorktree?: (
-    callback: (worktreeId: string, executionHostId?: ExecutionHostId) => void
+    callback: (
+      worktreeId: string,
+      executionHostId?: ExecutionHostId,
+      change?: WorkspaceSpaceChange
+    ) => void
   ) => () => void
   requestWorktreeRefresh?: () => Promise<void>
   onWorktreeRefreshRequested?: (callback: () => void) => () => void

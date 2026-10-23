@@ -1,3 +1,4 @@
+import { journalItemEchoFields } from './journal-item-echo'
 import { isDeepStrictEqual } from 'node:util'
 import { agentJournalLinkageFields } from '../../../shared/agent-session-journal-producer'
 import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
@@ -155,6 +156,7 @@ export class JournalLifecycleBatchAppender {
           return !previouslyPlanned &&
             existing &&
             isDeepStrictEqual(existing.body, only.body) &&
+            (!Object.hasOwn(only, 'echoOf') || current.itemEchoes.has(itemId)) &&
             (only.linkage === undefined ||
               isDeepStrictEqual(
                 agentJournalLinkageFields(existing),
@@ -168,6 +170,7 @@ export class JournalLifecycleBatchAppender {
                   only.body,
                   {
                     ...only.linkage,
+                    ...journalItemEchoFields(only),
                     turnScope: only.turnScope,
                     fence: input.fence,
                     ownerFence: only.ownerFence,

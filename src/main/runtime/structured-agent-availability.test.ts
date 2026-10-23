@@ -27,9 +27,12 @@ vi.mock('./structured-agent-runtime-metadata', () => ({
 
 import { installStructuredAgentAvailability } from './structured-agent-availability'
 
+const READY = { status: 'ready', version: '2.0.14' } as const
+const TOO_OLD = { status: 'tooOld', version: '2.0.13', minimumVersion: '2.0.14' } as const
+
 beforeEach(() => {
   mocks.refreshed.clear()
-  mocks.observe.mockReset().mockResolvedValue('supported')
+  mocks.observe.mockReset().mockResolvedValue(READY)
   mocks.recapture.mockReset().mockResolvedValue(undefined)
 })
 
@@ -57,7 +60,7 @@ it('shares a host-home snapshot even if shell recapture fails, retaining it with
     if (agent === 'pi') {
       throw new Error('Command setting not runnable')
     }
-    return agent === 'opencode' ? 'unsupported' : 'supported'
+    return agent === 'opencode' ? TOO_OLD : READY
   })
   const { availability } = install()
   const first = vi.fn()
@@ -79,7 +82,7 @@ it('shares a host-home snapshot even if shell recapture fails, retaining it with
   expect(mocks.observe).toHaveBeenCalledTimes(3)
 })
 
-it('replaces the snapshot on a launch setting or Refresh, which first recaptures the shell', async () => {
+it('recaptures for settings and uses the completed capture on Refresh', async () => {
   const { availability, change } = install()
   const read = vi.fn()
   availability.subscribe(read)
@@ -88,15 +91,16 @@ it('replaces the snapshot on a launch setting or Refresh, which first recaptures
   change({ agentCmdOverrides: { pi: '/opt/pi' } })
   await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(2))
   const capture = Promise.withResolvers<void>()
-  let version = 'unsupported'
+  let version: typeof READY | typeof TOO_OLD = TOO_OLD
   mocks.observe.mockImplementation(async () => version)
   mocks.recapture.mockImplementation(() => capture.promise)
   mocks.refreshed.forEach((listener) => listener())
+  expect(mocks.recapture).toHaveBeenCalledTimes(2)
   change({ agentDefaultEnv: { pi: { PI_TEST: 'updated' } } })
   await new Promise<void>((resolve) => setImmediate(resolve))
   expect(read).toHaveBeenCalledTimes(2)
-  expect(mocks.observe).toHaveBeenCalledTimes(6)
-  version = 'supported'
+  expect(mocks.observe).toHaveBeenCalledTimes(9)
+  version = READY
   capture.resolve()
   await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(3))
   expect(read.mock.lastCall?.[0]).toContainEqual({ agent: 'opencode', state: 'available' })
@@ -104,7 +108,7 @@ it('replaces the snapshot on a launch setting or Refresh, which first recaptures
 
 it('captures fresh shell facts for a first subscriber even when Refresh had no listener', async () => {
   const capture = Promise.withResolvers<void>()
-  let version = 'unsupported'
+  let version: typeof READY | typeof TOO_OLD = TOO_OLD
   mocks.observe.mockImplementation(async () => version)
   mocks.recapture.mockImplementation(() => capture.promise)
   mocks.refreshed.forEach((listener) => listener())
@@ -113,7 +117,7 @@ it('captures fresh shell facts for a first subscriber even when Refresh had no l
   availability.subscribe(read)
   await new Promise<void>((resolve) => setImmediate(resolve))
   expect(mocks.observe).not.toHaveBeenCalled()
-  version = 'supported'
+  version = READY
   capture.resolve()
   await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(1))
   expect(read.mock.lastCall?.[0]).toContainEqual({ agent: 'opencode', state: 'available' })

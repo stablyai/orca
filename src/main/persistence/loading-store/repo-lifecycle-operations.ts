@@ -78,7 +78,9 @@ export class RepoLifecycleOperations {
     return getRepoOrderOperations(this).reorderReposForHost(orderedIds, hostId)
   }
 
-  removeProjectForHost(id: string, hostId: ExecutionHostId): void {
+  removeProjectForHost(target: RepoHostTarget): void {
+    const id = target.id
+    const hostId = getRepoExecutionHostId(target)
     const repoRemoved = this[repoLifecycleOperationsContext].runtime.state.repos.some(
       (repo) => repo.id === id && getRepoExecutionHostId(repo) === hostId
     )

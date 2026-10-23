@@ -5,7 +5,12 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
-import { HOST_TEST_NOW as NOW } from './structured-agent-session-host-test-data'
+import {
+  HOST_TEST_NOW as NOW,
+  HOST_TEST_SESSION as SESSION,
+  hostTestAttachParams
+} from './structured-agent-session-host-test-data'
+import { CALLER } from './structured-agent-session-host-test-harness'
 import { StructuredAgentRegistry } from './structured-agent-registry'
 import { interruptedRestart } from './structured-agent-session-restart-interruption-test-harness'
 
@@ -69,4 +74,22 @@ it('lists a recorded failure of such a chat as not retryable', async () => {
   expect(await host.restartResume.listFailures()).toMatchObject([
     { sessionId: marker!.sessionId, retryable: false }
   ])
+})
+
+it('keeps such a chat readable and refuses to start its agent', async () => {
+  const { host, store, acquire } = await interruptedRestart(
+    undefined,
+    undefined,
+    undefined,
+    codexOnAnotherTransport()
+  )
+  const fence = store.getRecord(SESSION)!.lease.runtimeFence
+
+  expect(await host.attach(CALLER, hostTestAttachParams(fence))).toMatchObject({
+    ok: false,
+    refusal: { code: 'structured_agent_session_unsupported' }
+  })
+  expect(acquire).not.toHaveBeenCalled()
+  expect(store.getRecord(SESSION)!.lease.runtimeFence).toBe(fence)
+  expect(await host.history({ sessionId: SESSION, direction: 'tail' })).toMatchObject({ ok: true })
 })

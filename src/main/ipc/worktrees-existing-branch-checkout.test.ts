@@ -10,6 +10,10 @@ import {
 } from './worktrees-test-module-mocks'
 import { handlers, setupWorktreeHandlers, store } from './worktrees-test-harness'
 import type { WorktreeRuntimeStub } from './worktrees-test-runtime-stub'
+import {
+  hostWorktreeTarget,
+  type HostWorktreeTarget
+} from '../../shared/worktree/host-qualified-identity'
 
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
@@ -33,9 +37,6 @@ vi.mock('../github/client', async () =>
 )
 vi.mock('../source-control/hosted-review', async () =>
   (await import('./worktrees-test-module-mocks')).hostedReviewModuleMock()
-)
-vi.mock('../providers/ssh-filesystem-dispatch', async () =>
-  (await import('./worktrees-test-module-mocks')).sshFilesystemDispatchModuleMock()
 )
 vi.mock('./worktree-symlinks', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeSymlinksModuleMock()
@@ -144,7 +145,7 @@ describe('registerWorktreeHandlers', () => {
       { checkoutExistingBranch: true }
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::/workspace/fix-bug-0',
+      hostWorktreeTarget({ id: 'repo-1::/workspace/fix-bug-0', hostId: 'local' }),
       expect.objectContaining({ preserveBranchOnDelete: true })
     )
     expect(result).toMatchObject({
@@ -202,7 +203,7 @@ describe('registerWorktreeHandlers', () => {
       { checkoutExistingBranch: true }
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::/workspace/my-folder',
+      hostWorktreeTarget({ id: 'repo-1::/workspace/my-folder', hostId: 'local' }),
       expect.objectContaining({ preserveBranchOnDelete: true })
     )
     expect(result).toMatchObject({
@@ -312,7 +313,7 @@ describe('registerWorktreeHandlers', () => {
         isMainWorktree: false
       }
     ])
-    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+    store.setWorktreeMeta.mockImplementation((_target: HostWorktreeTarget, meta) => meta)
     getPRForBranchMock.mockResolvedValueOnce({
       number: 42,
       title: 'Selected PR',
@@ -347,7 +348,7 @@ describe('registerWorktreeHandlers', () => {
       { cwd: '/workspace/fix-title' }
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::/workspace/fix-title',
+      hostWorktreeTarget({ id: 'repo-1::/workspace/fix-title', hostId: 'local' }),
       expect.objectContaining({
         baseRef: 'refs/remotes/origin/main',
         linkedPR: 42
@@ -373,7 +374,7 @@ describe('registerWorktreeHandlers', () => {
         isMainWorktree: false
       }
     ])
-    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+    store.setWorktreeMeta.mockImplementation((_target: HostWorktreeTarget, meta) => meta)
 
     await handlers['worktrees:create'](null, {
       repoId: 'repo-1',
@@ -386,7 +387,7 @@ describe('registerWorktreeHandlers', () => {
     })
 
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::/workspace/fix-title',
+      hostWorktreeTarget({ id: 'repo-1::/workspace/fix-title', hostId: 'local' }),
       expect.objectContaining({
         baseRef: 'refs/remotes/origin/main',
         linkedGitLabMR: 7
@@ -407,7 +408,7 @@ describe('registerWorktreeHandlers', () => {
         isMainWorktree: false
       }
     ])
-    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+    store.setWorktreeMeta.mockImplementation((_target: HostWorktreeTarget, meta) => meta)
     getHostedReviewForBranchMock.mockResolvedValueOnce({
       provider: 'bitbucket',
       number: 11,
@@ -438,7 +439,7 @@ describe('registerWorktreeHandlers', () => {
       {}
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::/workspace/bitbucket-title',
+      hostWorktreeTarget({ id: 'repo-1::/workspace/bitbucket-title', hostId: 'local' }),
       expect.objectContaining({ linkedBitbucketPR: 11 })
     )
     expect(getHostedReviewForBranchMock).toHaveBeenCalledWith(
@@ -494,7 +495,7 @@ describe('registerWorktreeHandlers', () => {
       {}
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::/workspace/bitbucket-title-2',
+      hostWorktreeTarget({ id: 'repo-1::/workspace/bitbucket-title-2', hostId: 'local' }),
       expect.objectContaining({ linkedBitbucketPR: 11 })
     )
   })

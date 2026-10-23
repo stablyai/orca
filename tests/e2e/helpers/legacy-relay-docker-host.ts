@@ -16,8 +16,6 @@ import {
 } from '../cross-version-wire/released-relay-transport'
 import { execDockerSshHostTargetCommand, type DockerSshHostTarget } from './docker-ssh-host-target'
 
-const NODE_PTY_SLOT = 'linux-x64-glibc'
-
 export type DockerReleasedRelay = { dir: string; version: string }
 
 export type DockerRelayInstance = { sockPath: string; relayPtyId: string }
@@ -54,11 +52,17 @@ export async function installReleasedRelayOnDockerHost(
   const dir = `/root/.orca-remote/relay-${version}`
   const staging = mkdtempSync(path.join(os.tmpdir(), 'orca-legacy-relay-'))
   try {
+    // Why the host's arch: a Docker host on an arm64 machine runs arm64 containers.
+    const arch = execDockerSshHostTargetCommand(target, 'uname -m') === 'aarch64' ? 'arm64' : 'x64'
     const pty = path.join(staging, 'node_modules', 'node-pty')
     cpSync(path.join(orcadTemplateDir, 'node_modules', 'node-pty'), pty, { recursive: true })
-    cpSync(path.join(orcadTemplateDir, 'targets', NODE_PTY_SLOT, 'node_modules', 'node-pty'), pty, {
-      recursive: true
-    })
+    cpSync(
+      path.join(orcadTemplateDir, 'targets', `linux-${arch}-glibc`, 'node_modules', 'node-pty'),
+      pty,
+      {
+        recursive: true
+      }
+    )
     // Why dereference: the bundle is a real file here, never the checkout's symlink.
     cpSync(path.join(bundleDir, 'relay.js'), path.join(staging, 'relay.js'), { dereference: true })
     execDockerSshHostTargetCommand(target, `mkdir -p ${quotePosixShell(dir)}`)

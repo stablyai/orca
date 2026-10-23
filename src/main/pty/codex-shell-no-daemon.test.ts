@@ -12,6 +12,7 @@ import { delimiter, join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
+  CODEX_COMMAND_IDENTITY_ENV_KEYS,
   getFishCodexShellLaunchPreflight,
   getPosixCodexShellLaunchPreflight
 } from '../../shared/codex-shell-function'
@@ -188,6 +189,8 @@ function run(
       ...process.env,
       PATH: `${sandbox.bin}${delimiter}${process.env.PATH ?? ''}`,
       CODEX_HOME: join(sandbox.bin, '..', 'codex-home'),
+      // Why: a run inside an Orca terminal inherits its identity, which the wrapper forwards.
+      ...Object.fromEntries(CODEX_COMMAND_IDENTITY_ENV_KEYS.map((key) => [key, ''])),
       ...env
     }
   })
@@ -289,6 +292,90 @@ describe('codex wrapper --no-daemon rule', () => {
       })
     })
   }
+
+  describe('caller identity for commands Codex runs', () => {
+    const identity = {
+      ORCA_TERMINAL_HANDLE: 'term_abc',
+      ORCA_USER_DATA_PATH: '/Users/a b/Library/Application Support/orca $HOME \\x "q"'
+    }
+    const identityOverrides = [
+      "shell_environment_policy.set.ORCA_TERMINAL_HANDLE='term_abc'",
+      `shell_environment_policy.set.ORCA_USER_DATA_PATH='${identity.ORCA_USER_DATA_PATH}'`
+    ]
+    // Why unordered: the overrides set distinct keys, so only which ones arrive matters.
+    const splitOverrides = (line: string): { overrides: string[]; rest: string[] } => {
+      const [, ...words] = line.split('|')
+      const overrides: string[] = []
+      const rest: string[] = []
+      for (let i = 0; i < words.length; i++) {
+        if (words[i] === '-c') {
+          overrides.push(words[++i])
+        } else {
+          rest.push(words[i])
+        }
+      }
+      return { overrides: overrides.toSorted(), rest }
+    }
+
+    for (const [shell, available] of shells) {
+      it.skipIf(!available)(
+        `${shell} forwards set identity keys, except where the shared server is chosen`,
+        () => {
+          const sandbox = makeSandbox(HELP_WITH_FLAG)
+          const result = run(
+            shell,
+            [
+              codexCall(shell, ['x']),
+              codexCall(shell, ['--no-daemon', 'x']),
+              codexCall(shell, ['agents']),
+              codexCall(shell, ['--remote', 'ws://h'])
+            ].join('\n'),
+            sandbox,
+            identity
+          )
+
+          expect(result.stderr).toBe('')
+          expect(lines(result.stdout).map(splitOverrides)).toEqual([
+            { overrides: identityOverrides, rest: ['--no-daemon', 'x'] },
+            { overrides: identityOverrides, rest: ['--no-daemon', 'x'] },
+            { overrides: [], rest: ['agents'] },
+            { overrides: [], rest: ['--remote', 'ws://h'] }
+          ])
+        }
+      )
+
+      it.skipIf(!available)(`${shell} forwards identity to Codex 0.155 and older too`, () => {
+        const sandbox = makeSandbox(HELP_WITHOUT_FLAG)
+        const result = run(shell, codexCall(shell, ['x']), sandbox, identity)
+
+        expect(lines(result.stdout).map(splitOverrides)).toEqual([
+          { overrides: identityOverrides, rest: ['x'] }
+        ])
+      })
+
+      it.skipIf(!available)(`${shell} skips a value holding an apostrophe`, () => {
+        const sandbox = makeSandbox(HELP_WITHOUT_FLAG)
+        const result = run(shell, codexCall(shell, ['x']), sandbox, {
+          ORCA_TERMINAL_HANDLE: 'term_abc',
+          ORCA_USER_DATA_PATH: "/Users/o'brien/orca'"
+        })
+
+        expect(lines(result.stdout).map(splitOverrides)).toEqual([
+          { overrides: [identityOverrides[0]], rest: ['x'] }
+        ])
+      })
+
+      it.skipIf(!available)(`${shell} forwards nothing with ORCA_CODEX_ISOLATE=0`, () => {
+        const sandbox = makeSandbox(HELP_WITH_FLAG)
+        const result = run(shell, codexCall(shell, ['x']), sandbox, {
+          ...identity,
+          ORCA_CODEX_ISOLATE: '0'
+        })
+
+        expect(lines(result.stdout)).toEqual(['ARGV|x'])
+      })
+    }
+  })
 
   for (const [shell, enableAliases] of [
     ['bash', 'shopt -s expand_aliases'],

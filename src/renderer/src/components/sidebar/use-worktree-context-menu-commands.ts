@@ -57,7 +57,7 @@ export function useWorktreeContextMenuCommands(args: {
     )
   }, [args])
   const handleTogglePin = useCallback(() => {
-    args.setWorktreesPinnedAndReveal([args.worktree.id], !args.worktree.isPinned)
+    args.setWorktreesPinnedAndReveal([args.worktree], !args.worktree.isPinned)
   }, [args])
   const handleCreateGroupFromRepo = useCallback(() => {
     if (!args.repo) {
@@ -78,10 +78,9 @@ export function useWorktreeContextMenuCommands(args: {
       if (!args.repo) {
         return
       }
-      const hostId = getRepoExecutionHostId(args.repo)
-      const group = await args.createProjectGroup(name, hostId)
+      const group = await args.createProjectGroup(name, getRepoExecutionHostId(args.repo))
       if (group) {
-        await args.moveProjectToGroup(args.repo.id, group.id, undefined, hostId)
+        await args.moveProjectToGroup(args.repo, group.id)
       }
     },
     [args]
@@ -91,18 +90,13 @@ export function useWorktreeContextMenuCommands(args: {
       if (!args.repo || args.repo.projectGroupId === groupId) {
         return
       }
-      void args.moveProjectToGroup(
-        args.repo.id,
-        groupId,
-        undefined,
-        getRepoExecutionHostId(args.repo)
-      )
+      void args.moveProjectToGroup(args.repo, groupId)
     },
     [args]
   )
   const handleRemoveProjectFromGroup = useCallback(() => {
     if (args.repo) {
-      void args.moveProjectToGroup(args.repo.id, null, undefined, getRepoExecutionHostId(args.repo))
+      void args.moveProjectToGroup(args.repo, null)
     }
   }, [args])
   const handleAssignWorkspaceStatus = useCallback(

@@ -7,7 +7,8 @@ import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
 import { worktreeIdentityKey } from '../../../../shared/worktree/id'
 import type { RuntimeTerminalRead, RuntimeTerminalSummary } from '../../../../shared/runtime-types'
 import { getLatestPtyTitle } from '../../runtime-worktree-status-projection'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
+import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import {
   ptyHoldsRecordedSurface,
   type PtySurfaceTopology
@@ -17,10 +18,7 @@ import type { TerminalHandleRecord } from '../../runtime-terminal-contracts'
 import { readTerminalTail } from '../../terminal-tail-read'
 import { structuredWorkerTerminalRefusal } from '../../structured-worker-terminal-refusal'
 import { randomUUID } from 'node:crypto'
-
-export type LiveTerminalPty = ReturnType<
-  OrcaRuntimeWithBuildPtyTerminalSummary['getLivePtyForHandle']
->
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
 export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntimeWithGetPtyRecordForPaneKey {
   protected abstract bindPtyIncarnationHandle(
@@ -41,16 +39,15 @@ export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntime
   ): RuntimeTerminalSummary {
     const worktree = worktreesById.get(pty.worktreeId)
 
-    const pane = parsePaneKey(pty.paneKey ?? '')
-    const orphaned = !ptyHoldsRecordedSurface(pty, this.ptySurfaceTopology())
-    // A restarted host's terminal has no title yet; until it has one, its tab's saved name stands in.
-    const title =
-      getLatestPtyTitle(this.getPtyDisplayRecord(pty)) ??
-      (orphaned ? null : this.getSavedTerminalTabCustomTitle(pty.worktreeId, pty.tabId))
+    const recorded = this.paneOfPty(pty)
+    const pane = parsePaneKey(recorded.paneKey ?? '')
+    const orphaned = !ptyHoldsRecordedSurface(pty.ptyId, recorded, this.ptySurfaceTopology())
+    const processTitle = getLatestPtyTitle(this.getPtyDisplayRecord(pty))
+    const title = this.getPtyManualTitle(pty, orphaned) ?? processTitle
     const paneTitle =
-      orphaned || !pty.tabId || !pane
+      orphaned || !recorded.tabId || !pane
         ? null
-        : this.getSavedPaneTitle(pty.worktreeId, pty.tabId, pane.leafId)
+        : this.getSavedPaneTitle(pty.worktreeId, recorded.tabId, pane.leafId)
     // A live process awaiting its pane binding is not evidence of an orphan.
     if (
       orphaned &&
@@ -64,13 +61,13 @@ export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntime
       ptyId: pty.ptyId,
       incarnationId: pty.incarnationId,
       orphaned,
-      ...(orphaned && pane && pane.tabId === pty.tabId && pty.paneKey
-        ? { recordedPaneKey: pty.paneKey }
+      ...(orphaned && pane && pane.tabId === recorded.tabId && recorded.paneKey
+        ? { recordedPaneKey: recorded.paneKey }
         : {}),
       worktreeId: pty.worktreeId,
       worktreePath: worktree?.path ?? '',
       branch: worktree?.branch ?? '',
-      tabId: orphaned ? `pty:${pty.ptyId}` : pty.tabId!,
+      tabId: orphaned ? `pty:${pty.ptyId}` : recorded.tabId!,
       // SAFETY: A later binding read does not prove the cached pane was present.
       leafId: orphaned ? `pty:${pty.ptyId}` : pane!.leafId,
       title,
@@ -84,20 +81,20 @@ export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntime
       ...this.resolvePaneAgentIdentityField(
         pty.launchAgent,
         pty.foregroundAgent,
-        title,
-        pty.paneKey ?? null
+        processTitle,
+        recorded.paneKey
       )
     }
   }
 
-  protected getSavedTerminalTabCustomTitle(
-    worktreeId: string,
-    tabId: string | null
-  ): string | null {
-    const tab = this.getWorkspaceSessionForWorktree(worktreeId)?.tabsByWorktree[worktreeId]?.find(
-      (candidate) => candidate.id === tabId
-    )
-    return tab?.customTitle?.trim() || null
+  /** The terminal's manual name: its saved tab's, or the rename's while no saved tab holds it. */
+  protected getPtyManualTitle(pty: RuntimePtyWorktreeRecord, orphaned: boolean): string | null {
+    const tab = orphaned
+      ? undefined
+      : this.getWorkspaceSessionForWorktree(pty.worktreeId)?.tabsByWorktree[pty.worktreeId]?.find(
+          (candidate) => candidate.id === this.paneOfPty(pty).tabId
+        )
+    return tab ? tab.customTitle?.trim() || null : (pty.manualTitle ?? null)
   }
 
   protected getLiveLeafForHandle(handle: string): {
@@ -140,7 +137,11 @@ export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntime
         record = this.handles.get(handle)
       }
     }
-    if (!record || record.runtimeId !== this.runtimeId || !record.tabId.startsWith('pty:')) {
+    if (
+      !record ||
+      record.runtimeId !== this.runtimeId ||
+      !(record.tabId.startsWith('pty:') || this.mainPaneOwnHandle(handle, record))
+    ) {
       return null
     }
     if (!record.ptyId) {
@@ -153,6 +154,27 @@ export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntime
     // Why: renderer adoption can race with CLI reads; keep ptyId → handle populated so summaries don't mint a second handle for the same terminal.
     this.handleByPtyId.set(record.ptyId, handle)
     return { record, pty }
+  }
+
+  /**
+   * Layout-owner builds: the pane main binds a terminal to adopts the terminal's own handle (the
+   * one it was created under), and that handle keeps naming the terminal, with or without a window.
+   * The own-handle check stands in for the pane's epoch fence: a new incarnation drops it.
+   */
+  private mainPaneOwnHandle(handle: string, record: TerminalHandleRecord): boolean {
+    if (
+      !ORCA_LAYOUT_OWNER_IS_MAIN ||
+      !record.ptyId ||
+      !isTerminalLeafId(record.leafId) ||
+      !isValidTerminalTabId(record.tabId) ||
+      this.handleByPtyId.get(record.ptyId) !== handle
+    ) {
+      return false
+    }
+    return (
+      this.paneOfPty(this.ptysById.get(record.ptyId)).paneKey ===
+      makePaneKey(record.tabId, record.leafId)
+    )
   }
 
   protected assertLiveTerminalHandleTargetsPty(handle: string, expectedPtyId: string): void {

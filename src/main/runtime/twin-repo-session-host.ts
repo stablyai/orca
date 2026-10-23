@@ -5,6 +5,7 @@ import {
   toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../shared/execution-host'
+import type { Repo } from '../../shared/repo-types'
 import type { Worktree } from '../../shared/worktree/types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { WORKSPACE_SESSION_FIELD_OWNERSHIP } from '../../shared/workspace-session-host-field-ownership'
@@ -17,10 +18,7 @@ import type { RuntimeStore } from './runtime-store-contract'
 
 export type CachedWorktreeHost = Pick<Worktree, 'id' | 'hostId' | 'runtimeOwnerEnvironmentId'>
 
-type TwinRepoStore = Pick<
-  RuntimeStore,
-  'getRepos' | 'getWorkspaceSession' | 'getWorkspaceSessionHostIds'
->
+type TwinRepoStore = Pick<RuntimeStore, 'getWorkspaceSession' | 'getWorkspaceSessionHostIds'>
 
 const WORKTREE_KEYED_FIELDS = new Set(
   Object.entries(WORKSPACE_SESSION_FIELD_OWNERSHIP)
@@ -59,14 +57,13 @@ function cachedWorktreeHostId(worktree: CachedWorktreeHost): ExecutionHostId | n
  */
 export function resolveTwinRepoSessionHostId(
   store: TwinRepoStore,
+  repos: readonly Repo[],
   repoId: string,
   worktreeId: string,
   cachedWorktrees: readonly CachedWorktreeHost[] | null
 ): ExecutionHostId | null {
   const twins = contestedPartitionHosts(
-    (store.getRepos?.() ?? [])
-      .filter((repo) => repo.id === repoId)
-      .map((repo) => getRepoExecutionHostId(repo))
+    repos.filter((repo) => repo.id === repoId).map((repo) => getRepoExecutionHostId(repo))
   )
   if (twins.length < 2) {
     return null

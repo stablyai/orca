@@ -2,7 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SidebarFeedDomains } from '../../../shared/sidebar-list/sidebar-feed-domains'
 import { buildWorkspaceRows, type WorkspaceRow } from '../../../shared/sidebar-list/workspace-rows'
 import type { PairedServerWorkspaceRow } from '../../../shared/sidebar-list/paired-server-rows'
-import { makeRepo, makeWorktree } from '@/components/worktree-jump-palette-test-fixtures'
+import { parseExecutionHostId } from '../../../shared/execution-host'
+import { composeWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
+import {
+  makeFolderWorkspace,
+  makeRepo,
+  makeWorktree
+} from '@/components/worktree-jump-palette-test-fixtures'
 import type { DesktopSidebarFeed } from './desktop-sidebar-feed'
 
 vi.mock('../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
@@ -27,7 +33,12 @@ function domains(
   serverRows: PairedServerWorkspaceRow[] = []
 ): SidebarFeedDomains {
   return {
-    workspaces: new Map(rows.map((row) => [`${row.hostId}|${row.id}`, row])),
+    workspaces: new Map(
+      rows.map((row) => [
+        composeWorktreeHostIdentity(parseExecutionHostId(row.hostId)?.id, row.id),
+        row
+      ])
+    ),
     activity: new Map(),
     review: new Map(),
     creations: new Map(),
@@ -35,6 +46,7 @@ function domains(
     pairedServerRows: new Map(serverRows.map((row) => [row.key, row])),
     repoIcons: new Map(),
     desktop: null,
+    projectCatalog: null,
     retention: null
   }
 }
@@ -164,6 +176,37 @@ describe('sidebar pending layer', () => {
     install(domains([rowOf()]))
     expect(ids(domains([rowOf()]))).toEqual([local.id, created.id])
     install(domains([rowOf(), rowOf(created)]))
+    expect(layer.readSidebarPendingLayer().created).toEqual([])
+  })
+
+  it('lists a workspace created on a paired server until main lists the server’s row', async () => {
+    const layer = await load()
+    const worktree = makeWorktree('api::/w/new', 'new', { hostId: 'runtime:env-1' })
+    const folder = makeFolderWorkspace({ executionHostId: 'runtime:env-1', name: 'Notes' })
+    layer.holdCreatedSidebarWorkspace({ worktree })
+    layer.holdCreatedSidebarWorkspace({ folderWorkspace: folder })
+    const keys = (main: SidebarFeedDomains) => [
+      ...layer
+        .overlaySidebarPendingLayer(main, layer.readSidebarPendingLayer(), CATALOG)
+        .pairedServerRows.keys()
+    ]
+    // Main answered the create, but the server's list has not reached it yet.
+    install(domains([]))
+    expect(keys(domains([]))).toEqual([
+      'runtime:env-1|api::/w/new',
+      'runtime:env-1|folder:folder-1'
+    ])
+    expect(
+      layer
+        .overlaySidebarPendingLayer(domains([]), layer.readSidebarPendingLayer(), CATALOG)
+        .pairedServerRows.get('runtime:env-1|folder:folder-1')
+    ).toMatchObject({ kind: 'folder', displayName: 'Notes' })
+    const listed = layer.overlaySidebarPendingLayer(
+      domains([]),
+      layer.readSidebarPendingLayer(),
+      CATALOG
+    ).pairedServerRows
+    install(domains([], [...listed.values()]))
     expect(layer.readSidebarPendingLayer().created).toEqual([])
   })
 

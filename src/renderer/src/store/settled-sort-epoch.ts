@@ -15,6 +15,7 @@ import {
 } from '../../../shared/sidebar-list/sort-settle'
 import type { AppState } from './types'
 import { getIndexedAllWorktrees } from './worktree-repo-index'
+import { selectWorktreesByRepo } from './workspace-record-selectors'
 
 function countLiveWorktrees(worktreesByRepo: AppState['worktreesByRepo']): number {
   let count = 0
@@ -52,12 +53,12 @@ export function installSettledSortEpoch(
   api.subscribe((state, previous) => {
     const epochBumped = state.sortEpoch !== previous.sortEpoch
     // Why also on row writes: a bump-less add during a pending window must still settle now.
-    const rowsChanged = state.worktreesByRepo !== previous.worktreesByRepo
+    const rowsChanged = selectWorktreesByRepo(state) !== selectWorktreesByRepo(previous)
     dispatch({
       kind: 'write',
       change:
         epochBumped || rowsChanged
-          ? { epochBumped, liveCount: countLiveWorktrees(state.worktreesByRepo) }
+          ? { epochBumped, liveCount: countLiveWorktrees(selectWorktreesByRepo(state)) }
           : null,
       settled: state.settledSortEpoch === state.sortEpoch,
       sortBy: state.sortBy,

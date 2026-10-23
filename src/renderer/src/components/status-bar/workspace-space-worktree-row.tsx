@@ -1,15 +1,11 @@
-import { AlertTriangle, FolderSearch, GitBranch, Server, Trash2 } from 'lucide-react'
+import { AlertTriangle, GitBranch, Server, Trash2 } from 'lucide-react'
 import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-space-types'
+import type { GitStatusEntry } from '../../../../shared/git-status-types'
 import { cn } from '@/lib/utils'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuTrigger
-} from '../ui/context-menu'
-import { getRevealInFileManagerLabel, revealInFileManager } from '@/lib/reveal-in-file-manager'
+import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '../ui/context-menu'
+import { isPortaledRowMenuClick, isRowActivationKey } from '@/lib/list-row-interaction'
 import { HoverCard, HoverCardTrigger } from '../ui/hover-card'
 import {
   formatBytes,
@@ -28,12 +24,19 @@ import { WorkspaceDecisionHoverCard } from './workspace-space-decision-hover-car
 import { WorkspaceSpaceStatusBadge } from './workspace-space-status-badge'
 import { describeWorktreeDeleteError } from '../sidebar/worktree-delete-error-display'
 import { formatShortTimeAgo } from '@/lib/short-time-ago'
+import { WorkspaceSpaceChanges } from './workspace-space-changes'
+import { WORKSPACE_SPACE_TABLE_GRID_CLASS } from './workspace-space-table-layout'
+import {
+  WorkspaceSpaceWorktreeActions,
+  WorkspaceSpaceWorktreeMenuItems
+} from './workspace-space-worktree-actions'
 
 export function WorkspaceSpaceWorktreeRow({
   worktree,
   selected,
   inspected,
   decisionDetails,
+  changedFiles,
   gitRefreshState,
   deleteState,
   onToggleSelected,
@@ -46,6 +49,7 @@ export function WorkspaceSpaceWorktreeRow({
   selected: boolean
   inspected: boolean
   decisionDetails: WorkspaceDecisionDetails
+  changedFiles?: readonly GitStatusEntry[]
   gitRefreshState?: WorkspaceGitRefreshState
   deleteState?: WorkspaceSpaceDeleteState
   onToggleSelected: () => void
@@ -57,7 +61,13 @@ export function WorkspaceSpaceWorktreeRow({
   const isDeleting = deleteState?.isDeleting ?? false
   const deleteError = deleteState?.error ? describeWorktreeDeleteError(deleteState.error) : null
   const canForceDelete = deleteState?.canForceDelete ?? false
-  const canDelete = isWorkspaceSpaceRowReadyToDelete(worktree, decisionDetails) && !isDeleting
+  const canSelect = isWorkspaceSpaceRowReadyToDelete(worktree, decisionDetails) && !isDeleting
+  const canDelete =
+    worktree.canDelete &&
+    !worktree.isMainWorktree &&
+    worktree.status === 'ok' &&
+    decisionDetails.canOpenWorkspace &&
+    !isDeleting
   const handleForceDelete = (event: React.MouseEvent<HTMLButtonElement>): void => {
     event.preventDefault()
     event.stopPropagation()
@@ -68,23 +78,29 @@ export function WorkspaceSpaceWorktreeRow({
       role="button"
       tabIndex={0}
       aria-busy={isDeleting}
-      onClick={onInspect}
+      data-current={inspected ? 'true' : undefined}
+      onClick={(event) => {
+        if (!isPortaledRowMenuClick(event)) {
+          onInspect()
+        }
+      }}
       onKeyDown={(event) => {
-        if (event.key !== 'Enter' && event.key !== ' ') {
+        if (!isRowActivationKey(event)) {
           return
         }
         event.preventDefault()
         onInspect()
       }}
       className={cn(
-        'grid w-full cursor-pointer grid-cols-[1.75rem_minmax(0,1.4fr)_minmax(5rem,0.55fr)_5.5rem_6rem_9.5rem] items-center gap-2 border-b border-border/45 px-3 py-1 text-left text-xs transition-colors last:border-b-0 hover:bg-accent/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        WORKSPACE_SPACE_TABLE_GRID_CLASS,
+        'w-full cursor-pointer items-center border-b border-border/45 px-3 py-1 text-left text-xs transition-colors last:border-b-0 hover:bg-accent/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         inspected && 'bg-accent/55',
         isDeleting && 'cursor-wait opacity-50 grayscale hover:bg-transparent'
       )}
     >
       <CheckButton
-        checked={canDelete && selected}
-        disabled={!canDelete}
+        checked={canSelect && selected}
+        disabled={!canSelect}
         label={translate(
           'auto.components.status.bar.WorkspaceSpaceManagerPanel.0d1c78d749',
           'Select {{value0}}',
@@ -153,47 +169,44 @@ export function WorkspaceSpaceWorktreeRow({
       </div>
 
       <div className="flex items-center justify-end gap-1">
-        {canDelete ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            aria-label={translate('workspaceSpace.deleteOne', 'Delete {{value0}}', {
-              value0: worktree.displayName
-            })}
-            title={translate('workspaceSpace.deleteOne', 'Delete {{value0}}', {
-              value0: worktree.displayName
-            })}
-            onClick={(event) => {
-              event.stopPropagation()
-              onDelete()
-            }}
-            onKeyDown={(event) => event.stopPropagation()}
-          >
-            <Trash2 className="size-3.5" />
-          </Button>
-        ) : null}
-        <HoverCard openDelay={250} closeDelay={120}>
-          <HoverCardTrigger asChild>
-            <span
-              className="inline-flex"
-              onClick={(event) => event.stopPropagation()}
-              onKeyDown={(event) => event.stopPropagation()}
-            >
-              <WorkspaceSpaceStatusBadge
-                worktree={worktree}
-                decisionDetails={decisionDetails}
-                deleteState={deleteState}
-              />
-            </span>
-          </HoverCardTrigger>
-          <WorkspaceDecisionHoverCard
+        {!isDeleting && !deleteState?.error && changedFiles && changedFiles.length > 0 ? (
+          <WorkspaceSpaceChanges
             worktree={worktree}
-            details={decisionDetails}
-            gitRefreshState={gitRefreshState}
-            onOpenWorkspace={onOpenWorkspace}
+            entries={changedFiles}
+            canOpen={decisionDetails.canOpenWorkspace}
           />
-        </HoverCard>
+        ) : (
+          <HoverCard openDelay={250} closeDelay={120}>
+            <HoverCardTrigger asChild>
+              <span
+                className="inline-flex"
+                onClick={(event) => event.stopPropagation()}
+                onKeyDown={(event) => event.stopPropagation()}
+              >
+                <WorkspaceSpaceStatusBadge
+                  worktree={worktree}
+                  decisionDetails={decisionDetails}
+                  deleteState={deleteState}
+                />
+              </span>
+            </HoverCardTrigger>
+            <WorkspaceDecisionHoverCard
+              worktree={worktree}
+              details={decisionDetails}
+              gitRefreshState={gitRefreshState}
+              onOpenWorkspace={onOpenWorkspace}
+            />
+          </HoverCard>
+        )}
+      </div>
+      <div className="flex justify-end">
+        <WorkspaceSpaceWorktreeActions
+          worktree={worktree}
+          canDelete={canDelete}
+          canOpenWorkspace={decisionDetails.canOpenWorkspace}
+          isDeleting={isDeleting}
+          onDelete={onDelete}
+        />
       </div>
     </div>
   )
@@ -202,21 +215,14 @@ export function WorkspaceSpaceWorktreeRow({
     <ContextMenu>
       <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
       <ContextMenuContent>
-        <ContextMenuItem
-          onSelect={() =>
-            void revealInFileManager(worktree.path, worktree.executionHostId ?? 'unresolved')
-          }
-        >
-          <FolderSearch className="size-3.5" />
-          {getRevealInFileManagerLabel()}
-        </ContextMenuItem>
-        <ContextMenuItem variant="destructive" disabled={!canDelete} onSelect={onDelete}>
-          <Trash2 className="size-3.5" />
-          {translate(
-            'auto.components.status.bar.WorkspaceSpaceManagerPanel.792a214457',
-            'Delete workspace'
-          )}
-        </ContextMenuItem>
+        <WorkspaceSpaceWorktreeMenuItems
+          context
+          worktree={worktree}
+          canDelete={canDelete}
+          canOpenWorkspace={decisionDetails.canOpenWorkspace}
+          isDeleting={isDeleting}
+          onDelete={onDelete}
+        />
       </ContextMenuContent>
     </ContextMenu>
   )

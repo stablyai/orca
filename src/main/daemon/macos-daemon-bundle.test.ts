@@ -178,7 +178,7 @@ it('stops at the shared deadline and removes the staging copy', async () => {
     return controller.signal.aborted ? { ...ok, code: null } : (signed?.(spec) ?? ok)
   })
   await expect(materializeMacDaemonBundle(copies, controller.signal)).rejects.toThrow(
-    'Could not copy the macOS terminal host'
+    'Could not copy Orca Terminal Host.app'
   )
   expect(await readdir(copies)).toEqual([])
 })

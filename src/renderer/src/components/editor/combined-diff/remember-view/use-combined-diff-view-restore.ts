@@ -15,16 +15,20 @@ import {
 import type { CombinedDiffEntrySet } from '../resolve-changes/use-combined-diff-entry-set'
 import type { CombinedDiffSectionLoadRegistry } from '../load-sections/combined-diff-section-load-registry'
 import { clearPendingSectionReloadTimers } from '../load-sections/combined-diff-section-load-registry'
+import { combinedDiffViewPreferences } from './combined-diff-view-memory'
 import {
-  combinedDiffScrollAnchorCache,
-  combinedDiffScrollTopCache,
-  combinedDiffViewPreferences,
-  combinedDiffViewStateCache
-} from './combined-diff-view-memory'
+  claimCombinedDiffView,
+  readCombinedDiffViewMemory,
+  releaseCombinedDiffView,
+  rememberCombinedDiffView,
+  type CombinedDiffViewLease,
+  type CombinedDiffViewSuccession
+} from './combined-diff-view-cache'
 
 export type CombinedDiffViewRestore = {
   invalidateViewStateCache: () => void
   latestDomScrollAnchorRef: React.RefObject<VirtualizedScrollAnchor>
+  memoryLeaseRef: React.RefObject<CombinedDiffViewLease | null>
   scrollAnchorRef: React.RefObject<VirtualizedScrollAnchor>
   scrollOffsetRef: React.RefObject<number>
 }
@@ -37,7 +41,9 @@ export function useCombinedDiffViewRestore({
   setSectionHeights,
   setSections,
   setSideBySide,
-  viewStateKey
+  succession,
+  viewStateKey,
+  worktreeId
 }: {
   entrySet: CombinedDiffEntrySet
   gitStatusEntries: GitStatusEntry[]
@@ -46,7 +52,10 @@ export function useCombinedDiffViewRestore({
   setSectionHeights: React.Dispatch<React.SetStateAction<Record<number, number>>>
   setSections: React.Dispatch<React.SetStateAction<DiffSection[]>>
   setSideBySide: React.Dispatch<React.SetStateAction<boolean>>
+  /** Set for tab-scoped keys so a reopened tab restores the view its closed predecessor left. */
+  succession?: CombinedDiffViewSuccession
   viewStateKey: string
+  worktreeId: string
 }): CombinedDiffViewRestore {
   const {
     entries,
@@ -66,16 +75,41 @@ export function useCombinedDiffViewRestore({
     supersededLoadIndicesRef
   } = registry
 
-  // Why useState and not `useRef(expr)`: the latter re-reads all three caches on every render and
+  // Why useState and not `useRef(expr)`: the latter re-reads the cache on every render and
   // throws the result away, and an anchor seeds legitimately to null so a nullish guard would keep
   // re-reading. useState's initializer runs once without writing a ref during render.
-  const [restoreSeed] = useState<{ offset: number; anchor: VirtualizedScrollAnchor }>(() => ({
-    offset: combinedDiffScrollTopCache.get(viewStateKey) ?? 0,
-    anchor: combinedDiffScrollAnchorCache.get(viewStateKey) ?? null
-  }))
+  const [restoreSeed] = useState<{ offset: number; anchor: VirtualizedScrollAnchor }>(() => {
+    // Why: preview the inherited view here — the claim below moves it only after this first render seeds the virtualizer.
+    const memory = readCombinedDiffViewMemory(
+      viewStateKey,
+      succession ? { worktreeId, succession } : undefined
+    )
+    return { offset: memory?.scrollTop ?? 0, anchor: memory?.scrollAnchor ?? null }
+  })
   const scrollOffsetRef = useRef(restoreSeed.offset)
   const scrollAnchorRef = useRef<VirtualizedScrollAnchor>(restoreSeed.anchor)
   const latestDomScrollAnchorRef = useRef<VirtualizedScrollAnchor>(restoreSeed.anchor)
+
+  // Why: keep above CombinedDiffViewer's persist/scroll hooks so the lease exists before their effects write.
+  const memoryLeaseRef = useRef<CombinedDiffViewLease | null>(null)
+  const successionContentKey = succession?.contentKey
+  const successionScopeId = succession?.scopeId
+  const isSuccessionScopeOpen = succession?.isScopeOpen
+  useLayoutEffect(() => {
+    const lease = claimCombinedDiffView(
+      viewStateKey,
+      worktreeId,
+      successionContentKey !== undefined && successionScopeId !== undefined && isSuccessionScopeOpen
+        ? {
+            contentKey: successionContentKey,
+            scopeId: successionScopeId,
+            isScopeOpen: isSuccessionScopeOpen
+          }
+        : undefined
+    )
+    memoryLeaseRef.current = lease
+    return () => releaseCombinedDiffView(lease)
+  }, [isSuccessionScopeOpen, successionContentKey, successionScopeId, viewStateKey, worktreeId])
 
   // Why: tab/worktree switches unmount this viewer; cache by pane key so remount restores sections+scroll before repaint.
   const initializedEntryStateRef = useRef<{
@@ -98,7 +132,8 @@ export function useCombinedDiffViewRestore({
       hasUncommittedEntriesSnapshot
     }
     deferredLoadRequestsRef.current.clear()
-    const cached = combinedDiffViewStateCache.get(viewStateKey)
+    const memory = readCombinedDiffViewMemory(viewStateKey)
+    const cached = memory?.view
     const canRestoreSnapshotSectionsByKey =
       hasUncommittedEntriesSnapshot &&
       cached !== undefined &&
@@ -133,14 +168,14 @@ export function useCombinedDiffViewRestore({
         })
       )
       loadingIndicesRef.current.clear()
-      scrollOffsetRef.current = combinedDiffScrollTopCache.get(viewStateKey) ?? cached.scrollTop
-      scrollAnchorRef.current = combinedDiffScrollAnchorCache.get(viewStateKey) ?? null
+      scrollOffsetRef.current = memory.scrollTop ?? 0
+      scrollAnchorRef.current = memory.scrollAnchor ?? null
       latestDomScrollAnchorRef.current = scrollAnchorRef.current
       return
     }
 
-    scrollOffsetRef.current = combinedDiffScrollTopCache.get(viewStateKey) ?? 0
-    scrollAnchorRef.current = combinedDiffScrollAnchorCache.get(viewStateKey) ?? null
+    scrollOffsetRef.current = memory?.scrollTop ?? 0
+    scrollAnchorRef.current = memory?.scrollAnchor ?? null
     latestDomScrollAnchorRef.current = scrollAnchorRef.current
     // Why: separates "this row is uncounted" from "this pass skipped counting",
     // which decides whether an uncounted row is cheap. Per pass, not per view:
@@ -209,12 +244,13 @@ export function useCombinedDiffViewRestore({
   ])
 
   const invalidateViewStateCache = useCallback((): void => {
-    combinedDiffViewStateCache.delete(viewStateKey)
-  }, [viewStateKey])
+    rememberCombinedDiffView(memoryLeaseRef.current, { view: undefined })
+  }, [])
 
   return {
     invalidateViewStateCache,
     latestDomScrollAnchorRef,
+    memoryLeaseRef,
     scrollAnchorRef,
     scrollOffsetRef
   }

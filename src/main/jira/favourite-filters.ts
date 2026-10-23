@@ -1,7 +1,7 @@
 import {
   normalizeJiraFavouriteFilters,
   type JiraFavouriteFilterList
-} from '../../shared/jira-favourite-filters'
+} from '../../shared/jira/jira-favourite-filters'
 import { JiraFavouriteFilterParams } from '../../shared/rpc-contract/jira-favourite-filter-params'
 import { apiBasePath, jiraRequest } from './authenticated-request'
 import { getClients } from './client'

@@ -141,7 +141,8 @@ describe('floating titlebar close actions', () => {
   it('routes a dirty last reference through the shared save confirmation', () => {
     useAppStore.setState({
       unifiedTabsByWorktree: { [worktreeId]: [editor] },
-      openFiles: [makeOpenFile({ id: sharedFileId, worktreeId, isDirty: true })]
+      openFiles: [makeOpenFile({ id: sharedFileId, worktreeId, isDirty: true })],
+      editorBuffers: {}
     })
 
     actions().closeFloatingItemConfirmed(editor.id)
