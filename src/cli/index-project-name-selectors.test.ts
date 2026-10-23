@@ -54,8 +54,6 @@ const ORCA_PROJECT = {
 }
 const PROJECT_LIST_FIXTURE = okFixture('req_project_list', { projects: [ORCA_PROJECT] })
 
-// Why: #30367 — the names `orca project list` and `orca host list` print were rejected by the
-// commands that take --project and --host; only the generated ids worked.
 describe('orca cli project and host names', () => {
   useWorktreeAwarenessEnvironment({
     callMock,
@@ -66,8 +64,6 @@ describe('orca cli project and host names', () => {
     spawnMock
   })
 
-  // Why: the issue's own repro — the names `orca project list` and `orca host list` print were
-  // rejected, and only the generated ids worked.
   it('filters project setups by the display name and host name the list commands print', async () => {
     queueFixtures(
       callMock,
@@ -162,8 +158,6 @@ describe('orca cli project and host names', () => {
     )
   })
 
-  // Why: a project whose only setup is not ready must not fall through to another project whose
-  // display name happens to equal the id that was typed.
   it('keeps an exact project id even when another project is named that id', async () => {
     queueFixtures(
       callMock,

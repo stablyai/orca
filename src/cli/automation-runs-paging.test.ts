@@ -19,7 +19,6 @@ function run(index: number, snapshotBytes = 0): AutomationRun {
   } as unknown as AutomationRun
 }
 
-/** A paired host: pages when asked, and refuses any reply a remote connection cannot carry. */
 function pairedHost(runs: AutomationRun[], options: { pages: boolean } = { pages: true }) {
   return vi.fn(async (params: { automationId?: string; limit?: number; cursor?: string }) => {
     const result =
@@ -35,7 +34,6 @@ function pairedHost(runs: AutomationRun[], options: { pages: boolean } = { pages
 
 describe('readAllAutomationRuns', () => {
   it('reads a history larger than one remote reply, in order and without gaps', async () => {
-    // 430 runs of ~23 KB is ~10 MB, which a single unpaged reply could not carry.
     const runs = Array.from({ length: 430 }, (_, index) => run(index, 23_000))
     const host = pairedHost(runs)
     const result = await readAllAutomationRuns(host, undefined)

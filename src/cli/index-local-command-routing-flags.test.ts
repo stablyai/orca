@@ -50,7 +50,6 @@ import { pairRuntimeEnvironment, useWorktreeAwarenessEnvironment } from './index
 
 const SSH_TARGET = { id: 'ssh-1777360569033-yvz2mp', label: 'openclaw', remotePlatform: 'win32' }
 
-/** Every SSH-target lookup answers with the one target only this machine's runtime knows about. */
 function queueSshTargetLookups(count: number): void {
   queueFixtures(
     callMock,
@@ -58,11 +57,7 @@ function queueSshTargetLookups(count: number): void {
   )
 }
 
-/**
- * A runtime that answers `status.get` with the name it currently publishes: the stored override
- * when one is set, else the detected name. `settings.update` replies with the real `{ settings }`
- * envelope so a handler reading a bare `machineName` off it prints `undefined`.
- */
+/** Mirror the settings.update envelope and publish the effective name through status.get. */
 function fakeMachineNameRuntime(detectedName: string): { updates: unknown[] } {
   const updates: unknown[] = []
   let override = ''
@@ -114,7 +109,6 @@ describe('runtime-selector flags on locally pinned CLI commands', () => {
     expect(
       printed.result.hosts.find((host: { id: string }) => host.id === SSH_TARGET.id).platform
     ).toBe('win32')
-    // The tell: `runtimeId: local` is only honest if no routed client was ever built.
     expect(runtimeClientConstructorMock).toHaveBeenCalledWith(null, null)
   })
 
@@ -131,10 +125,8 @@ describe('runtime-selector flags on locally pinned CLI commands', () => {
       .slice(0, 3)
       .map((call) => JSON.parse(String(call[0])))
     expect(first.result).toEqual({ machineName: 'm4airs-Air', platform: 'darwin' })
-    // The write reply is `{ settings }`; the printed name must be what the runtime publishes now.
     expect(second.result).toEqual({ machineName: 'build-server', platform: 'darwin' })
     expect(second._meta.runtimeId).toBe('runtime-1')
-    // A blank `--name` returns to the detected name — and prints it, not an empty string.
     expect(third.result.machineName).toBe('m4airs-Air')
     expect(logSpy.mock.calls[3]?.[0]).toBe('m4airs-Air (darwin)')
     expect(runtime.updates).toEqual([{ machineName: ' build-server ' }, { machineName: '' }])
@@ -156,8 +148,6 @@ describe('runtime-selector flags on locally pinned CLI commands', () => {
     expect(runtimeClientConstructorMock).toHaveBeenCalledWith(undefined, 'm4air')
   })
 
-  // Why: the pre-check matches names loosely but the connection lookup is exact, so `build` for a
-  // server saved as `Build` passed the check and then failed with "Unknown environment: build".
   it('connects to the server an --environment name in another case resolved to', async () => {
     pairRuntimeEnvironment(listEnvironmentsMock, 'env-m4air', 'M4Air')
     fakeMachineNameRuntime('M4 Air')
@@ -169,7 +159,6 @@ describe('runtime-selector flags on locally pinned CLI commands', () => {
     expect(runtimeClientConstructorMock).toHaveBeenCalledWith(undefined, 'env-m4air')
   })
 
-  /** The selectors an agent's environment carries: set empty, which the CLI reads as unset. */
   function agentSelectors(): void {
     process.env.ORCA_ENVIRONMENT = ''
     process.env.ORCA_PAIRING_CODE = ''
@@ -203,8 +192,6 @@ describe('runtime-selector flags on locally pinned CLI commands', () => {
   })
 
   it('routes `host name` through an ambient ORCA_ENVIRONMENT, unlike the pinned `host list`', async () => {
-    // Why: the pin used to cover the whole `host` family, which silently answered for this machine
-    // when the shell was pointed at another one. `host name` describes one runtime, so it routes.
     process.env.ORCA_ENVIRONMENT = 'm4air'
     pairRuntimeEnvironment(listEnvironmentsMock, 'env-m4air', 'm4air')
     fakeMachineNameRuntime('M4 Air')
@@ -217,14 +204,12 @@ describe('runtime-selector flags on locally pinned CLI commands', () => {
     expect(printed.ok).toBe(true)
     expect(printed.result.machineName).toBe('M4 Air')
     expect(printed._meta.runtimeId).toBe('runtime-1')
-    // The ambient selector is left for the client to honour; a `null` here would pin it local.
     expect(runtimeClientConstructorMock).toHaveBeenCalledWith(undefined, undefined)
     expect(runtimeClientConstructorMock).not.toHaveBeenCalledWith(null, null)
   })
 
   it('refuses to rename a runtime that does not publish a machine name', async () => {
-    // Why: an older runtime's strict settings schema answers the write with a bare `invalid_params`;
-    // the field's absence from status is the tell, so the CLI refuses before writing anything.
+    // Missing status support lets the CLI reject the rename before an older settings schema rejects it.
     pairRuntimeEnvironment(listEnvironmentsMock, 'env-m4air', 'm4air')
     callMock.mockImplementation(async (method: string) => {
       if (method === 'status.get') {
@@ -263,9 +248,6 @@ describe('runtime-selector flags on locally pinned CLI commands', () => {
   })
 
   it('rejects `host list --environment` instead of answering with a half-routed listing', async () => {
-    // Why: pre-fix this routed the SSH lookup to m4air while reading paired servers from this
-    // machine, dropped the openclaw row, and still stamped `_meta.runtimeId: "local"` — one
-    // listing describing two hosts, which reads as "m4air has no SSH targets".
     pairRuntimeEnvironment(listEnvironmentsMock, 'env-m4air', 'm4air')
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     runtimeClientConstructorMock.mockClear()
@@ -317,8 +299,6 @@ describe('runtime-selector flags on locally pinned CLI commands', () => {
   })
 
   it('keeps `host list` local when ORCA_ENVIRONMENT is set ambiently', async () => {
-    // Why: the ambient variable produced the same two-machine listing as the explicit flag, with
-    // no flag to reject. Pinning the family is what makes `runtimeId: local` true in both cases.
     process.env.ORCA_ENVIRONMENT = 'm4air'
     pairRuntimeEnvironment(listEnvironmentsMock, 'env-m4air', 'm4air')
     queueSshTargetLookups(1)
@@ -336,7 +316,6 @@ describe('runtime-selector flags on locally pinned CLI commands', () => {
   })
 
   it('still treats --environment as the selector argument on `environment show` and `rm`', async () => {
-    // Why: the guard must not fire where the flag names the row to act on rather than a route.
     const environment = {
       id: 'env-m4air',
       name: 'm4air',

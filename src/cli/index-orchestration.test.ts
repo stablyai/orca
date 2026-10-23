@@ -133,7 +133,6 @@ describe('orca cli worktree awareness', () => {
   })
 
   it("refuses an agent session's caller flag naming another caller before any request", async () => {
-    // One chokepoint for every verb: the spec says which flag names the caller.
     process.env.ORCA_AGENT_SESSION_ID = 'f7a1c0de-1111-4222-8333-444455556666'
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     try {
@@ -213,7 +212,6 @@ describe('orca cli worktree awareness', () => {
     expect(callMock).not.toHaveBeenCalled()
     expect(process.exitCode).toBe(1)
 
-    // Reset exitCode so subsequent tests don't inherit the failure.
     process.exitCode = priorExitCode
     errSpy.mockRestore()
   })

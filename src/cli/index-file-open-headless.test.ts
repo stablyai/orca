@@ -15,7 +15,6 @@ import { main } from './index'
 import { okFixture } from './test-fixtures'
 import { RuntimeRpcFailureError } from './runtime/types'
 
-// What a headless server (`orca serve`, orcad) answers today: the bare token, flattened (#29822).
 function headlessRefusal(): RuntimeRpcFailureError {
   return new RuntimeRpcFailureError({
     id: 'req_open',

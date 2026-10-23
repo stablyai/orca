@@ -46,7 +46,7 @@ import { okFixture, queueFixtures } from './test-fixtures'
 
 describe('COMMAND_SPECS collision check', () => {
   it('has no duplicate command or alias paths', () => {
-    // Why: first-match resolution would silently shadow duplicate aliases.
+    // First-match resolution would silently shadow duplicate aliases.
     const seen = new Set<string>()
     for (const spec of COMMAND_SPECS) {
       for (const path of specPaths(spec)) {
@@ -82,8 +82,7 @@ describe('command aliases dispatch to the canonical handler', () => {
 
   afterEach(() => {
     callMock.mockReset()
-    // Why: restore console.log so a downstream describe's vi.spyOn starts from a
-    // clean spy — otherwise this block's --json output leaks into its calls[0].
+    // Restore the spy so later describe blocks cannot inherit these calls.
     logSpy.mockRestore()
   })
 
@@ -148,8 +147,6 @@ describe('command aliases dispatch to the canonical handler', () => {
     }
   })
 
-  // #19334: a failed archive hook blocks removal, so the CLI must exit non-zero rather than
-  // report a delete that did not happen — and the waiver must ride its own flag, never --force.
   it('exits non-zero when worktree removal is refused by a failed archive hook', async () => {
     queueFixtures(callMock, okFixture('req_show', { worktree: { hostId: 'local' } }))
     callMock.mockRejectedValueOnce(
@@ -179,7 +176,6 @@ describe('command aliases dispatch to the canonical handler', () => {
     }
   })
 
-  // #19334 S4: the waiver only applies to a hook that ran, so alone it silently does nothing.
   it('rejects the archive-hook waiver without --run-hooks instead of ignoring it', async () => {
     queueFixtures(callMock, okFixture('req_show', { worktree: { hostId: 'local' } }))
     const priorExitCode = process.exitCode
@@ -191,7 +187,6 @@ describe('command aliases dispatch to the canonical handler', () => {
       )
 
       expect(process.exitCode).toBe(1)
-      // The removal must never have been attempted.
       expect(callMock).not.toHaveBeenCalledWith('worktree.rm', expect.anything())
     } finally {
       process.exitCode = priorExitCode
@@ -240,7 +235,6 @@ describe('command aliases dispatch to the canonical handler', () => {
     runtimeClientConstructorMock.mockClear()
     await main(['agent-context', '--json'], '/tmp/repo')
 
-    // Why: pure local read — proves the SSH/offline property (no RPC).
     expect(runtimeClientConstructorMock).not.toHaveBeenCalled()
     expect(callMock).not.toHaveBeenCalled()
     const schema = JSON.parse(String(logSpy.mock.calls.at(-1)?.[0]))

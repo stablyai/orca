@@ -57,6 +57,7 @@ on:
       - 'tests/e2e/helpers/compiled-orca-cli.ts'
       - 'tests/e2e/helpers/windows-host-orcad-processes.ts'
       - 'config/ci/windows-ssh-provider/**'
+      - 'config/ci/windows-lifecycle-receipt.ps1'
       - '.github/workflows/ssh-windows-hosts.yml'
       - '.github/actions/prepare-orcad-prebuilds/**'
       - '.github/actions/restore-pnpm-verification/**'

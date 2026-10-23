@@ -72,9 +72,6 @@ describe('omittedHostIds selector annotation', () => {
   })
 
   it('marks a stale runtime host that no caller can select', async () => {
-    // Why: `omittedHostIds` is built from the runtime's own bookkeeping, so it names `runtime:`
-    // ids for servers that are no longer paired. An agent looping over the list to complete a
-    // partial listing hard-errors on those — 6 of 9 in the recorded QA run.
     pairRuntimeEnvironment(listEnvironmentsMock, 'env-paired', 'm4air')
     queueFixtures(
       callMock,
@@ -133,8 +130,6 @@ describe('omittedHostIds selector annotation', () => {
   ] as const)(
     'only suggests flags that `%s %s` accepts',
     async (group, action, requestId, rows) => {
-      // Why: `--host local` / `--host ssh:<id>` were suggested here, and the listing rejected
-      // them as unknown flags, breaking the agent loop the annotation exists for (#29901).
       pairRuntimeEnvironment(listEnvironmentsMock, 'env-paired', 'm4air')
       queueFixtures(
         callMock,
@@ -166,7 +161,7 @@ describe('omittedHostIds selector annotation', () => {
           expect(spec?.allowedFlags).toContain(selector.split(' ')[0].replace(/^--/, ''))
         }
       }
-      // An SSH host is reached through the answering runtime, so no target lookup is needed.
+      // SSH hosts are reached through the answering runtime, without another target lookup.
       expect(callMock).toHaveBeenCalledTimes(1)
     }
   )
@@ -192,8 +187,6 @@ describe('omittedHostIds selector annotation', () => {
   })
 
   it('never keeps a host id out of omittedHostIds', async () => {
-    // Why: filtering the unreachable ones would shrink what the listing admits it did not cover.
-    // The gap is real whether or not this machine can name the host that owns it.
     listEnvironmentsMock.mockReturnValue([])
     queueFixtures(
       callMock,

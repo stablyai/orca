@@ -31,10 +31,6 @@ function automation(overrides: Partial<Automation> = {}): Automation {
   }
 }
 
-// `orca automations run` sends users to `orca automations show` to find out where
-// an automation lives. The stored `executionTarget*` fields survive their host's
-// removal untouched, so printing only those renders a dead automation byte-for-byte
-// like a healthy one and the named recovery step cannot be completed.
 describe('formatAutomationShow reports the host the authority projects', () => {
   it('distinguishes a live SSH host from a replaced one by its incarnation', () => {
     const live = formatAutomationShow({
@@ -58,7 +54,7 @@ describe('formatAutomationShow reports the host the authority projects', () => {
     })
 
     expect(output).toContain('host: orphan (no host can run this automation)')
-    // The stored pin stays visible; it is the record's history, not its current owner.
+    // Keep the stored target as history, separately from current host ownership.
     expect(output).toContain('target: ssh:box-1')
   })
 
@@ -71,8 +67,6 @@ describe('formatAutomationShow reports the host the authority projects', () => {
     expect(output).toContain('host: self')
   })
 
-  // An older authority projects no owner; inventing one from the stored fields would
-  // report a removed host as healthy.
   it('omits the host line when the authority reports no owner', () => {
     const output = formatAutomationShow({ automation: automation() })
 

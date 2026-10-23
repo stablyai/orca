@@ -449,7 +449,7 @@ describe('orca cli worktree awareness', () => {
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const priorExitCode = process.exitCode
 
-    // `active` resolves through worktree.list, so any RPC here means validation ran too late.
+    // Resolving active makes an RPC, so no calls proves validation ran first.
     await main(['worktree', 'set', '--worktree', 'active', ...flags, '--json'], '/tmp/repo')
 
     expect(callMock).not.toHaveBeenCalled()

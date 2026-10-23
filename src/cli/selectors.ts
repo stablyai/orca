@@ -37,21 +37,13 @@ export function normalizeWorktreeSelector(selector: string, cwd: string): string
   return selector
 }
 
-/**
- * Rewrites the Linux path a WSL shell prints into the UNC path the runtime stored (#16628).
- *
- * Why here and not in the runtime: only the CLI sits in the distro, so only it can
- * prove which distro the typed path belongs to. Translating once at this chokepoint
- * covers `worktree show`, `terminal list --worktree` and `worktree rm --worktree`.
- */
+/** Resolve Linux selectors to stored UNC paths here, where the caller's distro is known. */
 export async function resolveCallerDistroPathSelector(
   selector: string,
   cwd: string,
   client: RuntimeClient
 ): Promise<string> {
-  // Why not WSL_DISTRO_NAME: it is also set for a Linux-native CLI whose runtime stores
-  // POSIX paths, so it would name a distro for a caller that has none. ORCA_CLI_CWD, which
-  // the WSL launcher always sets and which arrives here as the invocation cwd, proves it.
+  // A UNC cwd proves Windows/WSL routing; WSL_DISTRO_NAME is also set for Linux-native runtimes.
   const callerDistro = parseWslUncPath(cwd)?.distro
   const linuxPath = selector.startsWith('path:') ? selector.slice(5) : ''
   const isLinuxMountedPath = /^\/mnt\/[A-Za-z](?:\/|$)/.test(linuxPath)
@@ -73,8 +65,7 @@ export async function resolveCallerDistroPathSelector(
       ? isWslUncPathForLinuxMountedPath(worktree.path, linuxPath)
       : isWslUncPathForCallerLinuxPath(worktree.path, linuxPath, callerDistro!)
   )
-  // Why the stored spelling rather than a synthesized UNC path: an unmatched selector must
-  // reach the runtime verbatim and fail as the caller typed it, never as a guessed distro.
+  // Preserve unmatched input verbatim; synthesizing a UNC path could guess the wrong distro.
   return match ? `path:${match.path}` : selector
 }
 
@@ -94,8 +85,7 @@ function assertLocalCwdWorktreeSelector(selector: string, client: RuntimeClient)
   if (!client.isRemote) {
     return
   }
-  // Why: a paired CLI's cwd belongs to the client machine, not the runtime
-  // server, so cwd-derived worktree selectors are only valid locally.
+  // A paired CLI's cwd belongs to the client filesystem, so it cannot identify server worktrees.
   throw new RuntimeClientError(
     'invalid_argument',
     `${selector} is a local cwd shortcut and cannot be resolved against a remote runtime. Pass an explicit server-side worktree selector such as identity:<identity>, id:<repo-id>::<path>, name:<displayName>, branch:<branch>, issue:<number>, or path:<absolute-server-path>.`
@@ -118,10 +108,7 @@ export async function resolveCurrentWorktreeSelection(
   const worktrees = await client.call<RuntimeWorktreeListResult>('worktree.list', {
     limit: 10_000
   })
-  // Why: users expect "active/current" to mean the enclosing managed worktree
-  // even from nested subdirectories. Resolve to the concrete runtime row here:
-  // duplicate repo registrations can expose the same Git worktree path, and a
-  // path selector would throw selector_ambiguous after losing the repo id.
+  // Preserve the repo id: duplicate registrations can make a bare path selector ambiguous.
   const selection = selectEnclosingWorktreeSelectionOnHost(
     worktrees.result.worktrees,
     cwd,
@@ -167,8 +154,7 @@ export async function getRequiredWorktreeSelector(
   return await normalizeWorktreeSelectorForCaller(value, cwd, client)
 }
 
-// Why: local browser commands default to the current worktree by auto-resolving
-// from cwd. Remote commands omit worktree so the runtime uses server-side focus.
+// Remote commands leave worktree unset to use server-side focus.
 export async function getBrowserWorktreeSelector(
   flags: Map<string, string | boolean>,
   cwd: string,
@@ -188,18 +174,13 @@ export async function getBrowserWorktreeSelector(
   if (client.isRemote) {
     return undefined
   }
-  // Default: auto-resolve from cwd
   try {
     return await resolveCurrentWorktreeSelector(cwd, client)
   } catch {
-    // Not inside a managed worktree — no filter
     return undefined
   }
 }
 
-// Why: mirrors browser's implicit active-tab targeting. When --terminal is
-// omitted, resolve the active terminal in the current worktree so commands
-// like `orca terminal send --text "hello" --enter` Just Work.
 export async function getTerminalHandle(
   flags: Map<string, string | boolean>,
   cwd: string,
@@ -270,7 +251,6 @@ export async function getComputerCommandTarget(
   }
 }
 
-// Match browser targeting: workspace by default, explicit device/emulator/worktree overrides.
 export type EmulatorCliTarget = {
   worktree?: string
   device?: string
