@@ -1,38 +1,37 @@
 /**
- * A slept pane's scrollback lives only in the daemon's checkpoint, never in a renderer snapshot, so
- * a WSL move reads it right after its Sleep and carries it on the snapshot channel under the pane's
- * own ref. Each buffer is spooled to a file, so only hashes and sizes stay in memory.
+ * A paused pane's history lives in the daemon's checkpoint, so a WSL move reads it right after its
+ * Sleep and carries it as a `terminal-history` blob (checkpoint, cwd and size) for the host's own
+ * daemon to cold-restore once. Each document is spooled to a file; only hashes stay in memory.
  */
 import { createHash } from 'node:crypto'
-import {
-  closeSync,
-  mkdirSync,
-  openSync,
-  readFileSync,
-  readSync,
-  rmSync,
-  writeFileSync
-} from 'node:fs'
+import { closeSync, mkdirSync, openSync, readSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { ORCAD_MIGRATION_SCROLLBACK_CHUNK_BYTES } from '../../../shared/orcad-migration/orcad-migration-scrollback'
+import type { OrcadMigrationBlobDescriptor } from '../../../shared/orcad-migration/orcad-migration-blob-transfer'
+import { ORCAD_MIGRATION_BLOB_KIND_CONTRACTS } from '../../../shared/orcad-migration/orcad-migration-blob-transfer'
+import {
+  ORCAD_MIGRATION_TERMINAL_HISTORY_VERSION,
+  type OrcadMigrationTerminalHistoryDocument
+} from '../../../shared/orcad-migration/orcad-migration-terminal-history'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import type { WslMoveRequest } from '../../../shared/wsl-move/wsl-move-driver-types'
 import { parsePtySessionId } from '../../../shared/pty-session-id-format'
 import { collectLeafIds } from '../../../shared/terminal-pane-layout-tree'
-import { TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT } from '../../../shared/terminal-scrollback-limits'
-import type { OrcadMigrationSnapshotSource } from '../../ssh/orcad-migration-snapshot-coordinator'
-import {
-  decodeFromFirstUtf8Boundary,
-  makeTerminalScrollbackSnapshotRef
-} from '../../terminal-scrollback-snapshots'
+import type { ColdRestoreInfo } from '../../daemon/history-reader'
+import type { TerminalCheckpointFile } from '../../daemon/types'
+import type { OrcadMigrationBlobSource } from '../../ssh/orcad-migration-blob-coordinator'
+import { orcadMigrationTerminalHistoryKey } from '../migrating-orcad-catalog/orcad-terminal-history-installer'
 import type { WslMoveDriverDeps } from './wsl-move-driver-ports'
-import type { ColdRestoreReader, WslMoveRestoreHintPane } from './wsl-move-restore-hints'
+import {
+  wslMoveHostLinuxCwd,
+  type ColdRestoreReader,
+  type WslMoveRestoreHintPane
+} from './wsl-move-restore-hints'
 
 export type WslMoveSleptBuffer = { path: string; sha256: string; byteLength: number }
 
 export type WslMoveSleptScrollback = {
-  /** Keyed `tabId:leafId`. */
+  /** Each pane's `terminal-history` document, keyed by pane key. */
   buffers: ReadonlyMap<string, WslMoveSleptBuffer>
   /** User-facing: panes whose latest history can't be read. The move refuses rather than drop it. */
   problems: readonly string[]
@@ -41,6 +40,7 @@ export type WslMoveSleptScrollback = {
 }
 
 const SPOOL_DIR = 'wsl-move-slept-scrollback'
+const MAX_HISTORY_BYTES = ORCAD_MIGRATION_BLOB_KIND_CONTRACTS['terminal-history'].maxBytes
 
 export function emptyWslMoveSleptScrollback(): WslMoveSleptScrollback {
   return { buffers: new Map(), problems: [], dispose: () => {} }
@@ -88,23 +88,77 @@ export async function unreadableSleptHistory(
   return [...slept.problems]
 }
 
-/** For the export: a slept pane's buffer, read from its spool file only while it is hashed. */
-export function sleptScrollbackReader(
+/** For the export: the panes whose history travels as a blob, so no snapshot also paints it. */
+export function daemonHistoryLeafOf(
   slept: WslMoveSleptScrollback
-): ((tabId: string, leafId: string) => Buffer | null) | undefined {
+): ((tabId: string, leafId: string) => boolean) | undefined {
   if (slept.buffers.size === 0) {
     return undefined
   }
-  return (tabId, leafId) => {
-    const entry = slept.buffers.get(`${tabId}:${leafId}`)
-    return entry ? readFileSync(entry.path) : null
+  // Why not makePaneKey: it throws on a non-UUID leaf, which a carried pane never has.
+  return (tabId, leafId) => isTerminalLeafId(leafId) && slept.buffers.has(`${tabId}:${leafId}`)
+}
+
+/**
+ * Each pane's `terminal-history` blob, read from its spool file as the channel asks for it. Only a
+ * pane whose layout the manifest moves: the host refuses history for a pane it would not hold.
+ */
+export function wslMoveTerminalHistoryBlobs(
+  slept: WslMoveSleptScrollback,
+  manifest: {
+    payload: {
+      dormantState?: {
+        workspaceSession?: Pick<WorkspaceSessionState, 'terminalLayoutsByTabId'> | null
+      }
+    }
+  }
+): {
+  descriptors: OrcadMigrationBlobDescriptor[]
+  source: OrcadMigrationBlobSource
+} {
+  const byKey = new Map<string, WslMoveSleptBuffer>()
+  const descriptors: OrcadMigrationBlobDescriptor[] = []
+  const layouts = manifest.payload.dormantState?.workspaceSession?.terminalLayoutsByTabId ?? {}
+  for (const [paneKey, entry] of slept.buffers) {
+    const pane = parsePaneKey(paneKey)
+    if (!pane || !collectLeafIds(layouts[pane.tabId]?.root).includes(pane.leafId)) {
+      continue
+    }
+    const key = orcadMigrationTerminalHistoryKey(paneKey)
+    byKey.set(key, entry)
+    descriptors.push({
+      blobKind: 'terminal-history',
+      key,
+      sha256: entry.sha256,
+      byteLength: entry.byteLength
+    })
+  }
+  return {
+    descriptors,
+    source: {
+      readChunk: async (requested, offset, maxBytes) => {
+        const entry = byKey.get(requested.key)
+        if (!entry || entry.sha256 !== requested.sha256) {
+          throw new Error(`orcad_migration_source_blob_changed:${requested.blobKind}`)
+        }
+        const length = Math.max(0, Math.min(maxBytes, entry.byteLength - offset))
+        const chunk = Buffer.alloc(length)
+        const fd = openSync(entry.path, 'r')
+        try {
+          readSync(fd, chunk, 0, length, offset)
+        } finally {
+          closeSync(fd)
+        }
+        return chunk
+      }
+    }
   }
 }
 
 /**
- * Production reader: each pane's checkpoint as cold restore would replay it (scrollback, then the
- * screen), kept to the newest bytes one stored snapshot holds. Sleep ends a session cleanly, which
- * is exactly why its clean end is not a reason to skip the checkpoint here.
+ * Production reader: each pane's checkpoint exactly as a cold restore here would replay it, written
+ * as the checkpoint the host's daemon restores once. Sleep ends a session cleanly, which is exactly
+ * why its clean end is not a reason to skip the checkpoint here.
  */
 export async function readWslMoveSleptScrollbackFromHistory(
   reader: ColdRestoreReader,
@@ -112,12 +166,17 @@ export async function readWslMoveSleptScrollbackFromHistory(
   distro: string,
   spoolRoot: string,
   /** What the tab bar calls it; an id means nothing to the user. */
-  tabTitle: (tabId: string) => string | null = () => null
+  tabTitle: (tabId: string) => string | null = () => null,
+  now: () => Date = () => new Date()
 ): Promise<WslMoveSleptScrollback> {
   const buffers = new Map<string, WslMoveSleptBuffer>()
   const problems: string[] = []
   const noCheckpoint: string[] = []
   const dispose = (): void => rmSync(spoolRoot, { recursive: true, force: true })
+  const tabName = (tabId: string): string => {
+    const title = tabTitle(tabId)
+    return title ? `"${title}"` : tabId
+  }
   try {
     mkdirSync(spoolRoot, { recursive: true, mode: 0o700 })
     for (const [index, pane] of panes.entries()) {
@@ -134,31 +193,31 @@ export async function readWslMoveSleptScrollbackFromHistory(
       }
       // A checkpoint behind an unreadable log is older than the pane: moving it would lose the rest.
       if (detection.status === 'unreadable' || detection.hasUnreadableRecovery) {
-        const title = tabTitle(leaf.tabId)
         problems.push(
-          `saved terminal history Orca could not fully read for the tab ${title ? `"${title}"` : leaf.tabId}`
+          `saved terminal history Orca could not fully read for the tab ${tabName(leaf.tabId)}`
         )
         continue
       }
-      const { scrollbackAnsi, snapshotAnsi } = detection.restoreInfo
-      // awin verify-5: an open pane carried 140 B after 3,000 lines; say where each pane's bytes came from.
-      console.info(
-        `[wsl-move] Slept pane ${leaf.tabId}: scrollback ${scrollbackAnsi.length} chars, screen ` +
-          `${snapshotAnsi.length} chars, cwd ${detection.restoreInfo.cwd ? 'set' : 'none'}` +
-          `${detection.cwdFromSpawn ? ' (spawn folder)' : ''}`
-      )
-      // Cold restore fills scrollbackAnsi from snapshotAnsi for a normal screen, so both hold the
-      // whole buffer; on the alternate screen scrollbackAnsi is the normal buffer behind the TUI.
-      const buffer = detection.restoreInfo.modes?.alternateScreen
-        ? scrollbackAnsi || snapshotAnsi
-        : snapshotAnsi || scrollbackAnsi
-      const bytes = capped(Buffer.from(buffer, 'utf8'))
-      if (bytes.length === 0) {
+      const shellCwd = pane.shellCwd && /^\/(?!\/)/.test(pane.shellCwd) ? pane.shellCwd : null
+      const cwd = shellCwd ?? wslMoveHostLinuxCwd(detection.restoreInfo.cwd, pane, distro)
+      const document: OrcadMigrationTerminalHistoryDocument = {
+        version: ORCAD_MIGRATION_TERMINAL_HISTORY_VERSION,
+        paneKey: pane.paneKey,
+        cwd,
+        cols: detection.restoreInfo.cols,
+        rows: detection.restoreInfo.rows,
+        checkpoint: checkpointOf(detection.restoreInfo, cwd, now())
+      }
+      const bytes = Buffer.from(JSON.stringify(document), 'utf8')
+      if (bytes.length > MAX_HISTORY_BYTES) {
+        problems.push(
+          `more saved terminal history than one move carries for the tab ${tabName(leaf.tabId)}`
+        )
         continue
       }
-      const path = join(spoolRoot, `${index}.bin`)
+      const path = join(spoolRoot, `${index}.json`)
       writeFileSync(path, bytes, { mode: 0o600 })
-      buffers.set(`${leaf.tabId}:${leaf.leafId}`, {
+      buffers.set(pane.paneKey, {
         path,
         sha256: createHash('sha256').update(bytes).digest('hex'),
         byteLength: bytes.length
@@ -168,7 +227,6 @@ export async function readWslMoveSleptScrollbackFromHistory(
     dispose()
     throw error
   }
-  // The awin run moved panes empty with no trace of why: say what each pane had.
   console.info(
     `[wsl-move] Slept terminal history: ${buffers.size} carried, ${problems.length} unreadable, ` +
       `${noCheckpoint.length} with no checkpoint${noCheckpoint.length > 0 ? ` (${noCheckpoint.join(', ')})` : ''}, ` +
@@ -181,55 +239,31 @@ export function wslMoveSleptSpoolRoot(userDataPath: string, migrationId: string)
   return join(userDataPath, SPOOL_DIR, migrationId)
 }
 
-function capped(bytes: Buffer): Buffer {
-  return bytes.length > TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT
-    ? Buffer.from(
-        decodeFromFirstUtf8Boundary(bytes.subarray(-TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT)),
-        'utf8'
-      )
-    : bytes
-}
-
-/** The store's snapshot reader, answering a slept pane's ref from its spool file. */
-export function withSleptSnapshots(
-  source: OrcadMigrationSnapshotSource,
-  slept: WslMoveSleptScrollback
-): OrcadMigrationSnapshotSource {
-  if (slept.buffers.size === 0) {
-    return source
-  }
-  const byRef = new Map<string, WslMoveSleptBuffer>()
-  for (const [key, entry] of slept.buffers) {
-    const split = key.lastIndexOf(':')
-    byRef.set(makeTerminalScrollbackSnapshotRef(key.slice(0, split), key.slice(split + 1)), entry)
-  }
+// What the daemon's own checkpoint writer would hold for this restore; no log is carried with it.
+function checkpointOf(
+  info: ColdRestoreInfo,
+  cwd: string | null,
+  checkpointedAt: Date
+): TerminalCheckpointFile {
+  // A normal screen's buffer is the snapshot; cold restore refills scrollback from it on read.
+  const scrollbackAnsi =
+    !info.modes.alternateScreen && info.scrollbackAnsi === info.snapshotAnsi
+      ? ''
+      : info.scrollbackAnsi
   return {
-    readOrcadMigrationSourceSnapshotChunk: (manifest, ref, offset) => {
-      const descriptor = manifest.payload.dormantState?.terminalScrollbackSnapshots?.find(
-        (entry) => entry.ref === ref
-      )
-      const entry = byRef.get(ref)
-      // A ref the manifest signed from the store (not this spool) is the store's to serve.
-      if (!descriptor || !entry || entry.sha256 !== descriptor.sha256) {
-        return source.readOrcadMigrationSourceSnapshotChunk(manifest, ref, offset)
-      }
-      const length = Math.max(
-        0,
-        Math.min(ORCAD_MIGRATION_SCROLLBACK_CHUNK_BYTES, entry.byteLength - offset)
-      )
-      const chunk = Buffer.alloc(length)
-      const fd = openSync(entry.path, 'r')
-      try {
-        readSync(fd, chunk, 0, length, offset)
-      } finally {
-        closeSync(fd)
-      }
-      return {
-        bytesBase64: chunk.toString('base64'),
-        totalBytes: entry.byteLength,
-        eof: offset + length >= entry.byteLength
-      }
-    }
+    snapshotAnsi: info.snapshotAnsi,
+    scrollbackAnsi,
+    ...(info.oscLinks ? { oscLinks: info.oscLinks } : {}),
+    rehydrateSequences: info.rehydrateSequences,
+    ...(info.pendingEscapeTailAnsi ? { pendingEscapeTailAnsi: info.pendingEscapeTailAnsi } : {}),
+    cwd,
+    cols: info.cols,
+    rows: info.rows,
+    modes: info.modes,
+    scrollbackLines: info.scrollbackLines ?? 0,
+    ...(info.lastTitle ? { lastTitle: info.lastTitle } : {}),
+    ...(info.terminalOwner ? { terminalOwner: info.terminalOwner } : {}),
+    checkpointedAt: checkpointedAt.toISOString()
   }
 }
 

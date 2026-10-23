@@ -15,7 +15,8 @@ const MAX_TERMINAL_DIMENSION = 10_000
 export type OrcadMigrationTerminalHistoryDocument = {
   version: typeof ORCAD_MIGRATION_TERMINAL_HISTORY_VERSION
   paneKey: string
-  cwd: string
+  /** The shell's last folder on the host; null when the source never knew it. */
+  cwd: string | null
   cols: number
   rows: number
   /** The daemon's own checkpoint.json; the destination's history reader validates it on restore. */
@@ -30,7 +31,7 @@ const DocumentSchema = z
     paneKey: z
       .string()
       .refine((value) => value.length <= MAX_PANE_KEY_LEN && parsePaneKey(value) !== null),
-    cwd: z.string().refine(isOrcadMigrationTerminalRestoreHintCwd),
+    cwd: z.string().refine(isOrcadMigrationTerminalRestoreHintCwd).nullable(),
     cols: DimensionSchema,
     rows: DimensionSchema,
     checkpoint: z.record(z.string(), z.unknown())
