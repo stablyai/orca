@@ -1,3 +1,19 @@
+export type DesktopNotificationDispatchEvent = {
+  type: 'notification'
+  legacySocketAllowed?: boolean
+  desktopAllowed?: boolean
+  desktopAway?: boolean
+  source?: 'agent-task-complete' | 'terminal-bell' | 'test' | 'plugin'
+  title?: string
+  body?: string
+  worktreeId?: string
+  executionHost?: string
+  paneKey?: string
+  notificationId?: string
+  notificationSeq?: number
+  notificationEpoch?: string
+}
+
 export type DismissNotificationEvent = {
   type: 'dismiss'
   notificationId: string

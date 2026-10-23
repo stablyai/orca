@@ -1,6 +1,10 @@
 import { requestNotificationCatchup } from './push-dismissal-reconciliation'
 import { dismissHostPushNotification } from './push-socket-dismissal'
-import type { DismissNotificationEvent } from './desktop-notification-events'
+import { presentSocketNotificationFallback } from './push-socket-fallback'
+import type {
+  DesktopNotificationDispatchEvent,
+  DismissNotificationEvent
+} from './desktop-notification-events'
 import type { RpcClient } from '../transport/rpc-client'
 
 export {
@@ -27,6 +31,15 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
     }
     if (!disposed && event.type === 'dismiss') {
       void dismissHostPushNotification(event as DismissNotificationEvent, hostId).catch(() => {})
+      return
+    }
+    if (!disposed && event.type === 'notification') {
+      void presentSocketNotificationFallback(
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a notification frame on this stream is the desktop dispatch event.
+        event as DesktopNotificationDispatchEvent,
+        hostId,
+        () => disposed
+      ).catch(() => {})
     }
   })
 

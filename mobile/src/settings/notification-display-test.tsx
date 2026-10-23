@@ -3,6 +3,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useAllHostClients } from '../transport/use-all-host-clients'
 import { loadHostCatalog } from '../transport/host-store'
 import { pushDeliveryTest } from '../notifications/mobile-push-delivery-test-operations'
+import { sendLocalNotificationDisplayTest } from '../notifications/push-socket-fallback'
+import { getDevicePushToken } from '../notifications/push-token'
 import type { RpcFailure } from '../transport/types'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 
@@ -33,6 +35,7 @@ export function NotificationDisplayTest({ onTroubleshoot }: { onTroubleshoot: ()
         throw new Error('Connect a desktop and try again.')
       }
       let unavailable = 'Update your desktop to run this test.'
+      let sawNotRegistered = false
       for (const { client } of connected) {
         const reply = await pushDeliveryTest.request(client, null, {
           timeoutMs: 20000,
@@ -53,6 +56,7 @@ export function NotificationDisplayTest({ onTroubleshoot }: { onTroubleshoot: ()
           return
         }
         if (result?.reason === 'not_registered') {
+          sawNotRegistered = true
           unavailable = 'Reconnect to register this phone for notifications.'
           continue
         }
@@ -61,6 +65,13 @@ export function NotificationDisplayTest({ onTroubleshoot }: { onTroubleshoot: ()
             ? 'Too many notifications. Try again later.'
             : 'Could not send through Orca’s push service. Try again.'
         )
+      }
+      if (sawNotRegistered && (await getDevicePushToken().catch(() => null)) === null) {
+        await sendLocalNotificationDisplayTest()
+        setMessage(
+          'Sent a local test notification. Live connection alerts are active on this device.'
+        )
+        return
       }
       throw new Error(unavailable)
     } catch (error) {
