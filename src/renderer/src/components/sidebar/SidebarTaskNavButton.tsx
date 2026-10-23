@@ -13,6 +13,7 @@ import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { useRepoMap } from '@/store/selectors'
+import { useTaskProviderConnections } from '@/components/feature-wall/use-integration-connection-status'
 import { translate } from '@/i18n/i18n'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { getTaskPresetQuery } from '../../../../shared/task-preset-query'
@@ -73,6 +74,8 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
   const linearStatus = useAppStore((s) => s.linearStatus)
   const linearStatusChecked = useAppStore((s) => s.linearStatusChecked)
   const checkLinearConnection = useAppStore((s) => s.checkLinearConnection)
+  const jiraStatusChecked = useAppStore((s) => s.jiraStatusChecked)
+  const checkJiraConnection = useAppStore((s) => s.checkJiraConnection)
   const prefetchWorkItems = useAppStore((s) => s.prefetchWorkItems)
   const activeRepoId = useAppStore((s) => s.activeRepoId)
   const defaultTaskViewPreset = useAppStore((s) => s.settings?.defaultTaskViewPreset ?? 'all')
@@ -81,19 +84,22 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
     [rawVisibleTaskProviders]
   )
   const preflightStatusCurrent = preflightStatusContextKey === expectedPreflightContextKey
+  const taskProviderConnections = useTaskProviderConnections()
   const visibleTaskProviders = React.useMemo(
     () =>
       restoreAvailableDefaultTaskProvider(
         preferredVisibleTaskProviders,
         {
           gitlabInstalled: preflightStatusCurrent && preflightStatus?.glab?.installed === true,
-          linearConnected: linearStatus.connected === true
+          linearConnected: linearStatus.connected === true,
+          connected: taskProviderConnections
         },
         defaultTaskSource
       ),
     [
       defaultTaskSource,
       linearStatus.connected,
+      taskProviderConnections,
       preferredVisibleTaskProviders,
       preflightStatusCurrent,
       preflightStatus?.glab?.installed
@@ -111,8 +117,14 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
     if (!linearStatusChecked) {
       void checkLinearConnection()
     }
+    // Why: Jira hides once its status settles as disconnected; without a check its icon lingers.
+    if (!jiraStatusChecked) {
+      void checkJiraConnection()
+    }
   }, [
+    checkJiraConnection,
     checkLinearConnection,
+    jiraStatusChecked,
     linearStatusChecked,
     preflightStatusChecked,
     preflightStatusCurrent,
