@@ -265,11 +265,9 @@ describe('buildRelayUnattendedGitEnv', () => {
     expect(env.GIT_TERMINAL_PROMPT).toBe('0')
     expect(env.GCM_INTERACTIVE).toBe('never')
     expect(env.GIT_ASKPASS).toBe('/opt/noninteractive-credential-feeder')
-    expect(env.GIT_CONFIG_COUNT).toBe('2')
-    expect(env.GIT_CONFIG_KEY_0).toBe('credential.interactive')
-    expect(env.GIT_CONFIG_VALUE_0).toBe('false')
-    expect(env.GIT_CONFIG_KEY_1).toBe('credential.guiPrompt')
-    expect(env.GIT_CONFIG_VALUE_1).toBe('false')
+    // Why scalar-only: the guard must not emit the indexed GIT_CONFIG_*
+    // protocol (issue #26594); GCM_INTERACTIVE 'never' covers both entries.
+    expect(env.GIT_CONFIG_COUNT).toBeUndefined()
     expect(env.GIT_SSH_COMMAND).toBeUndefined()
     expect(env.LC_ALL).toBe('en_US.UTF-8')
     expect(env.PATH?.split(':')).toEqual(expect.arrayContaining(['/custom/bin', '/usr/bin']))
