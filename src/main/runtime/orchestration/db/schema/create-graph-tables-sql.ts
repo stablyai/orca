@@ -117,6 +117,8 @@ CREATE TABLE IF NOT EXISTS tasks (
   run_id        TEXT NOT NULL DEFAULT '${LEGACY_RUN_ID}',
   parent_id     TEXT,
   created_by_terminal_handle TEXT,
+  worktree_id    TEXT,
+  branch         TEXT,
   created_by_pane_key TEXT,
   created_by_process_incarnation TEXT,
   created_by_run_generation INTEGER,

@@ -12,6 +12,7 @@ import {
 import { exposeMessage } from './mailbox-message-receipt'
 import { resolveOrchestrationParty } from '../../../../orchestration/orchestration-party'
 import { recordReceiptBeforeNudge, replayMutationNudge } from './mutation-replay-nudge'
+import { resolveTaskTerminalProvenance } from '../task-provenance'
 import { resolveReplyRecipient } from './recipient-routing'
 import { helperQuestionAnswerer } from './helper-question-answerer'
 import {
@@ -182,12 +183,13 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
     name: 'orchestration.taskCreate',
     permission: 'workspace',
     params: TaskCreateParams,
-    handler: (
+    handler: async (
       params,
       { orchestrationCompatibilityEvidence, orchestrationCaller, runtime, legacyCoordinatorRunId }
     ) => {
       const db = runtime.getOrchestrationDb()
       const deps = params.deps ? parseOrchestrationTaskDepsFlag(params.deps) : undefined
+      const provenance = await resolveTaskTerminalProvenance(runtime, params.callerTerminalHandle)
       const run = resolveRunScope(runtime, {
         runId: params.run,
         callerTerminalHandle: params.callerTerminalHandle,
@@ -214,6 +216,8 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
         deps,
         parentId: params.parent,
         createdByTerminalHandle: creatorHandle ?? undefined,
+        worktreeId: provenance.worktreeId,
+        branch: provenance.branch ?? undefined,
         ...(creatorAuthority?.paneKey && creatorAuthority.processIncarnation
           ? {
               createdByPaneKey: creatorAuthority.paneKey,
@@ -252,7 +256,8 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
       const joined = db.listTasksWithDispatch({
         status: params.status as TaskStatus,
         ready: params.ready,
-        runId: run.id
+        runId: run.id,
+        worktreeId: params.worktree
       })
       const tasks = joined.map((row) => {
         const { assignee_handle, dispatch_id, ...base } = row
@@ -265,7 +270,8 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
         runId: run.id,
         legacyReadOnly: run.legacy === 1,
         tasks: params.brief ? abbreviateOrchestrationTasks(tasks) : tasks,
-        count: tasks.length
+        count: tasks.length,
+        ...(params.worktree ? { worktreeFilterApplied: params.worktree } : {})
       }
     }
   }),
