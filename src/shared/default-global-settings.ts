@@ -203,6 +203,7 @@ export function buildDefaultSettings(args: {
     devPluginPaths: [],
     claudeAgentTeamsDefaultDisabledMigrated: true,
     sshRemoteCliControlExistingHostsMigrated: true,
+    bobDefaultDisabledMigrated: true,
     skipDeleteWorktreeConfirm: false,
     alwaysForceDeleteWorktrees: false,
     alwaysForceDeletePreservedBranches: false,

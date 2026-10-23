@@ -1,3 +1,4 @@
+import { BOB_COMPOSER_PLACEHOLDER_PREFIXES } from './bob-tui-strings'
 import type { DraftPasteReadySignal, TuiAgentConfig } from './tui-agent-config'
 import { createOpenCodeAgentRowScanner } from './opencode-agent-row-scanner'
 import { createCodexComposerReadyScanner } from './codex-composer-ready-scanner'
@@ -35,8 +36,8 @@ type DraftPasteReadySignalSpec = {
   markerAnchor: string | null
   /** Bytes that revoke `markerAnchor` again, for anchors that describe a mode the agent can leave. */
   markerAnchorEnd: string | null
-  /** Composer-ready marker, or null for signals that only use the quiet window. */
-  marker: string | null
+  /** Composer-ready marker(s), or null for signals that only use the quiet window. */
+  marker: string | readonly string[] | null
   /** Bytes that arm the quiet-window fallback, or null when the signal has none. */
   quietAnchor: string | null
 }
@@ -96,6 +97,14 @@ const DRAFT_PASTE_READY_SIGNALS: Record<SingleSignal, DraftPasteReadySignalSpec>
     // its own — but keep it armed as the floor for a build that renders inline and never
     // switches to the alternate screen, where the marker anchor would never arm.
     quietAnchor: DECSET_BRACKETED_PASTE
+  },
+  // Why: Bob emits neither bracketed-paste nor alternate-screen bytes before first input,
+  // so its capture-proven, shell-specific composer prefix must stand on its own.
+  'bob-composer-prompt': {
+    markerAnchor: null,
+    markerAnchorEnd: null,
+    marker: BOB_COMPOSER_PLACEHOLDER_PREFIXES,
+    quietAnchor: null
   },
   'render-quiet-after-bracketed-paste': {
     markerAnchor: null,
@@ -220,6 +229,9 @@ function createSingleSignalScanner(readySignal: SingleSignal): {
     marker: signalMarker,
     quietAnchor
   } = DRAFT_PASTE_READY_SIGNALS[readySignal]
+  const signalMarkers = typeof signalMarker === 'string' ? [signalMarker] : signalMarker
+  const hasMarker = (text: string): boolean =>
+    signalMarkers !== null && signalMarkers.some((marker) => text.includes(marker))
 
   /**
    * Why: an anchor the agent can leave (the alternate screen) has to be tracked in
@@ -251,7 +263,7 @@ function createSingleSignalScanner(readySignal: SingleSignal): {
       const segmentStart = Math.max(cursor, carriedLength)
       const segment =
         leaveIndex === -1 ? window.slice(segmentStart) : window.slice(segmentStart, leaveIndex)
-      if ((postAnchorRecent + segment).includes(signalMarker ?? '')) {
+      if (hasMarker(postAnchorRecent + segment)) {
         return true
       }
       if (leaveIndex === -1) {
@@ -272,7 +284,11 @@ function createSingleSignalScanner(readySignal: SingleSignal): {
       if (!sawQuietAnchor && quietAnchor !== null && combined.includes(quietAnchor)) {
         sawQuietAnchor = true
       }
-      if (signalMarker !== null && markerAnchor !== null) {
+      if (signalMarker !== null && markerAnchor === null) {
+        if (hasMarker(combined)) {
+          return { ready: true, armQuietTimer: false }
+        }
+      } else if (signalMarker !== null && markerAnchor !== null) {
         if (markerAnchorEnd !== null) {
           // Why: carry only the bytes an anchor could straddle, so already-scanned
           // output is never re-walked into a second enter/leave transition.
@@ -287,13 +303,13 @@ function createSingleSignalScanner(readySignal: SingleSignal): {
           if (anchorIndex !== -1) {
             sawMarkerAnchor = true
             const postAnchorChunk = combined.slice(anchorIndex + markerAnchor.length)
-            if (postAnchorChunk.includes(signalMarker)) {
+            if (hasMarker(postAnchorChunk)) {
               return { ready: true, armQuietTimer: false }
             }
             postAnchorRecent = postAnchorChunk.slice(-512)
           }
         } else {
-          if (data.includes(signalMarker) || (postAnchorRecent + data).includes(signalMarker)) {
+          if (hasMarker(data) || hasMarker(postAnchorRecent + data)) {
             return { ready: true, armQuietTimer: false }
           }
           postAnchorRecent = (postAnchorRecent + data).slice(-512)

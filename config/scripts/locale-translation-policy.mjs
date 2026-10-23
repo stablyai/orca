@@ -52,6 +52,7 @@ export const NEVER_TRANSLATE_VALUES = new Set([
   'Goose',
   'Grok',
   'Hermes',
+  'IBM Bob',
   'Jcode',
   'Jira',
   'Kilocode',

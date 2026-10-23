@@ -14,11 +14,24 @@ export type DraftPasteMarkerSignal =
   | 'grok-composer-prompt'
   | 'dsh-composer-prompt'
   | 'zcode-composer-prompt'
+  | 'bob-composer-prompt'
 
 /** Submit signals may also ask for a grace (`readyAfterMs`); only the paste waiters honour it. */
 export type DraftPasteReadySignal = DraftPasteMarkerSignal | 'opencode-agent-row'
 
 export type TuiAgentDetectionRuntime = NodeJS.Platform | 'wsl'
+
+/**
+ * Probe that identifies an unrelated tool owning the same executable name.
+ * A match excludes the agent from detection; anything else (including a failed
+ * probe) keeps it, so a misbehaving binary can never hide a real install.
+ */
+export type TuiAgentIdentityExclusion = {
+  args: readonly string[]
+  excludePattern: RegExp
+  /** When set, a successful probe must also match this, or the agent is excluded. */
+  requirePattern?: RegExp
+}
 
 export type TuiAgentConfig = {
   detectCmd: string
@@ -28,6 +41,8 @@ export type TuiAgentConfig = {
   detectRequiredCommands?: readonly string[]
   /** Detection runtimes where this launch mode is not available as a detected agent. */
   detectUnsupportedRuntimes?: readonly TuiAgentDetectionRuntime[]
+  /** Disambiguates a detectCmd shared with an unrelated tool (see TuiAgentIdentityExclusion). */
+  detectIdentityExclusion?: TuiAgentIdentityExclusion
   launchCmd: string
   /** Platform-specific launch command when the public binary name differs. */
   launchCmdByPlatform?: Partial<Record<NodeJS.Platform, string>>

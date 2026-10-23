@@ -25,6 +25,7 @@ import {
   AGY_AGENT_NAME_RE,
   DROID_AGENT_NAME_RE,
   HERMES_AGENT_NAME_RE,
+  IBM_BOB_AGENT_NAME_RE,
   titleHasAgentName,
   titleHasAnyLegacyAgentName
 } from './agent-name-token-match'
@@ -33,7 +34,13 @@ import { isLegacyPiCompatibleTitle } from './pi-compatible-synthetic-title'
 import { memoizeTitleClassification } from './terminal-title-classification-memo'
 import { getWrapperTitleSegments } from './terminal-title-wrapper-segments'
 
-export { AGY_AGENT_NAME_RE, DROID_AGENT_NAME_RE, HERMES_AGENT_NAME_RE, titleHasAgentName }
+export {
+  AGY_AGENT_NAME_RE,
+  DROID_AGENT_NAME_RE,
+  HERMES_AGENT_NAME_RE,
+  IBM_BOB_AGENT_NAME_RE,
+  titleHasAgentName
+}
 
 export type AgentStatus = 'working' | 'permission' | 'idle'
 
@@ -123,7 +130,8 @@ export function containsAgentName(title: string): boolean {
     containsLegacyAgentName(title) ||
     AGY_AGENT_NAME_RE.test(title) ||
     DROID_AGENT_NAME_RE.test(title) ||
-    HERMES_AGENT_NAME_RE.test(title)
+    HERMES_AGENT_NAME_RE.test(title) ||
+    IBM_BOB_AGENT_NAME_RE.test(title)
   )
 }
 

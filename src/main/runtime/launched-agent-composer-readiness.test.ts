@@ -75,7 +75,9 @@ const EXPECTED_LANES: Record<TuiAgent, LaunchedAgentReadinessLane> = {
   'mistral-vibe': 'tui-idle',
   'qwen-code': 'tui-idle',
   rovo: 'tui-idle',
-  jcode: 'tui-idle'
+  jcode: 'tui-idle',
+  // Bob emits no hook before first input; its committed captures prove the composer marker.
+  bob: 'composer-marker'
 }
 
 const FIXTURES = join(__dirname, '__fixtures__')
