@@ -5,6 +5,7 @@ import {
   getProjectProviderIdentity
 } from '../../../src/shared/project-host-setup-projection'
 import { getHostContextLabel } from '../../../src/shared/worktree/host-context-labels'
+import { getMobileWorkspaceRepoSelectionKey } from '../worktree/new-workspace-dialog-repo-selection'
 
 type WorkspaceRepo = Pick<Repo, 'id' | 'displayName' | 'path'> &
   Partial<
@@ -90,11 +91,10 @@ export function buildNewWorkspaceRunTargetOptions<TRepo extends WorkspaceRepo>(
     if (getProjectIdentityKey(repo) !== projectId) {
       continue
     }
-    const hostId = getRepoExecutionHostId(repo)
-    if (!options.has(hostId)) {
-      // Keyed by host: a repo id names one repo per host, so two hosts can share one.
-      options.set(hostId, {
-        id: hostId,
+    const id = getMobileWorkspaceRepoSelectionKey(repo)
+    if (!options.has(id)) {
+      options.set(id, {
+        id,
         ...getNewWorkspaceRunTarget(repo, localPlatform, hostLabelById),
         repo
       })

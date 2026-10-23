@@ -2,6 +2,8 @@
 
 import { renderHook } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
+import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
+import { resolveWorkspaceCreationTarget } from '@/lib/project-host-workspace-target'
 import { useDraftTargetSync, type DraftTargetSyncInput } from './draft-target-sync'
 
 function createRepo(id: string): DraftTargetSyncInput['eligibleRepos'][number] {
@@ -52,6 +54,40 @@ function createState(overrides: Partial<DraftTargetSyncInput> = {}): DraftTarget
 }
 
 describe('useDraftTargetSync', () => {
+  it('persists an unresolved checkout choice and its host without repairing it to the first repo', () => {
+    const remoteIdentity = {
+      canonicalKey: 'github.com/acme/app',
+      remoteName: 'origin',
+      remoteUrl: 'https://github.com/acme/app.git'
+    }
+    const repos = ['checkout-a', 'checkout-b'].map((id) => ({
+      ...createRepo(id),
+      gitRemoteIdentity: remoteIdentity
+    }))
+    const projection = projectHostSetupProjectionFromRepos(repos)
+    const selectedWorkspaceTarget = resolveWorkspaceCreationTarget({
+      eligibleRepos: repos,
+      projects: projection.projects,
+      projectHostSetups: projection.setups,
+      projectId: projection.projects[0].id,
+      hostId: 'local'
+    })
+    const state = createState({ eligibleRepos: repos, selectedWorkspaceTarget })
+
+    renderHook(() => useDraftTargetSync(state))
+
+    expect(selectedWorkspaceTarget.status).toBe('ambiguous')
+    expect(state.setNewWorkspaceDraft).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoId: null,
+        projectId: projection.projects[0].id,
+        hostId: 'local',
+        projectHostSetupId: null
+      })
+    )
+    expect(state.setRepoId).not.toHaveBeenCalled()
+  })
+
   it('persists the current external draft before repairing an empty repo target', () => {
     const calls: string[] = []
     const setNewWorkspaceDraft = vi.fn(() => calls.push('persist'))

@@ -4,6 +4,7 @@ import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
+import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 import type { SmartSourceSelection } from './source-selection-decisions'
@@ -152,13 +153,18 @@ export function useReviewBaseSelectionFixture(initialReview?: GitHubWorkItem) {
     setSelectedProjectHostSetupOverrideId: vi.fn(),
     setSelectedProjectHostSetupOverrideHostId: vi.fn()
   })
+  const projectTargets = projectHostSetupProjectionFromRepos(common.eligibleRepos)
   const project = useProjectTargetActions({
     ...common,
+    hostOptions: [],
+    setPendingInitialWorkspaceTarget: vi.fn(),
+    setSelectedProjectHostSetupOverrideId: vi.fn(),
+    setSelectedProjectHostSetupOverrideHostId: vi.fn(),
     handleRepoChange: target.handleRepoChange,
     actionableHostIds: new Set([LOCAL_EXECUTION_HOST_ID]),
     projectGroups: [folderGroup],
-    projectHostSetups: [],
-    projects: [],
+    projectHostSetups: projectTargets.setups,
+    projects: projectTargets.projects,
     repos: [repo, replacementRepo],
     setRepoId,
     selectedWorkspaceTarget: { status: 'unavailable', reason: 'no-eligible-repo' },

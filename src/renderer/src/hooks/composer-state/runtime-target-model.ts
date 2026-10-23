@@ -9,7 +9,10 @@ import type { AgentStartupShell } from '../../../../shared/tui-agent-startup-she
 import type { ExecutionHostPlatformFact } from '@/lib/execution-host-facts'
 import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
 import type { ProjectHostSetupOption } from '@/lib/project-host-setup-options'
-import type { WorkspaceCreationTargetResolution } from '@/lib/project-host-workspace-target'
+import type {
+  WorkspaceCreationTarget,
+  WorkspaceCreationTargetResolution
+} from '@/lib/project-host-workspace-target'
 
 export type ComposerRuntimeTargetModel = {
   isProjectGroupTarget: boolean
@@ -32,6 +35,7 @@ export type ComposerRuntimeTargetModel = {
   folderDetectedIds: TuiAgent[] | null
   folderDetectedAgentIds: Set<TuiAgent> | null
   selectedWorkspaceTarget: WorkspaceCreationTargetResolution
+  runTargetChoiceCandidates: readonly WorkspaceCreationTarget[] | null
   resolvedRepoId: string
   selectedRepo: Repo | undefined
   selectedRepoIsGit: boolean

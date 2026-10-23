@@ -90,6 +90,12 @@ export function useComposerSourceState(
     actionableHostIds: target.composerTargetStore.actionableHostIds,
     eligibleRepos: target.composerTargetStore.eligibleRepos,
     handleRepoChange: targetChangeActions.handleRepoChange,
+    hostOptions: target.composerTargetStore.hostOptions,
+    setPendingInitialWorkspaceTarget: target.initialTargetState.setPendingInitialWorkspaceTarget,
+    setSelectedProjectHostSetupOverrideId:
+      target.initialTargetState.setSelectedProjectHostSetupOverrideId,
+    setSelectedProjectHostSetupOverrideHostId:
+      target.initialTargetState.setSelectedProjectHostSetupOverrideHostId,
     initialProjectGroupAppliedRef: target.initialTargetState.initialProjectGroupAppliedRef,
     isProjectGroupTarget: target.runtimeTargetSelection.isProjectGroupTarget,
     linkedWorkItem: target.sourceContextState.linkedWorkItem,

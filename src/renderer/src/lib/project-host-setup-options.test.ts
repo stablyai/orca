@@ -220,9 +220,7 @@ describe('buildProjectHostSetupOptions', () => {
     )
   })
 
-  it('collapses duplicate ready setups on one host to the setup creation actually uses', () => {
-    // Why: a linked worktree added as its own project projected a second ready `local` setup for the
-    // same project, which rendered as repeated identical "Local Mac" rows separated only by path.
+  it('keeps distinct ready checkout paths on the same host', () => {
     const options = buildProjectHostSetupOptions({
       projectId: 'project-1',
       eligibleRepos: [repo('main-checkout'), repo('worktree-a'), repo('worktree-b')],
@@ -237,11 +235,13 @@ describe('buildProjectHostSetupOptions', () => {
     })
 
     expect(options).toEqual([
-      expect.objectContaining({ id: 'main', kind: 'ready', label: LOCAL_HOST_LABEL })
+      expect.objectContaining({ id: 'main', kind: 'ready', label: LOCAL_HOST_LABEL }),
+      expect.objectContaining({ id: 'dup-a', path: '/Users/dev/worktrees/pr-1908' }),
+      expect.objectContaining({ id: 'dup-b', path: '/Users/dev/worktrees/pr-3235' })
     ])
   })
 
-  it('keeps one ready choice per host when a project is set up on several hosts', () => {
+  it('keeps every ready checkout when a project is set up on several hosts', () => {
     const options = buildProjectHostSetupOptions({
       projectId: 'project-1',
       eligibleRepos: [repo('local-repo'), repo('local-dup'), repo('remote-repo')],
@@ -253,7 +253,7 @@ describe('buildProjectHostSetupOptions', () => {
       ]
     })
 
-    expect(options.map((option) => option.id)).toEqual(['local', 'remote'])
+    expect(options.map((option) => option.id)).toEqual(['local-dup', 'local', 'remote'])
   })
 
   it('includes known hosts that still need project setup', () => {

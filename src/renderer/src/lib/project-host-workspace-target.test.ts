@@ -57,6 +57,23 @@ function makeSetup(
 }
 
 describe('project-host workspace target resolution', () => {
+  it.each([{ activeRepoId: 'removed' }, { draftRepoId: 'removed' }])(
+    'requires a checkout choice when stale context falls back to a project: %j',
+    (context) => {
+      expect(
+        resolveWorkspaceCreationTarget({
+          eligibleRepos: [makeRepo('first'), makeRepo('second')],
+          projects: [makeProject('project', ['first', 'second'])],
+          projectHostSetups: [
+            makeSetup('first', 'project', 'local', 'first'),
+            makeSetup('second', 'project', 'local', 'second')
+          ],
+          ...context
+        })
+      ).toMatchObject({ status: 'ambiguous', projectId: 'project' })
+    }
+  )
+
   it('falls back to a local setup for a local-only repo', () => {
     const repo = makeRepo('orca')
 
@@ -147,7 +164,7 @@ describe('project-host workspace target resolution', () => {
     })
   })
 
-  it('resolves duplicate repo ids to a ready setup when no host is focused', () => {
+  it('asks for a host when a duplicate repo id has no host authority', () => {
     const localRepo = makeRepo('orca', { path: '/local/orca' })
     const sshRepo = makeRepo('orca', { path: '/remote/orca', connectionId: 'builder' })
     const projects = [makeProject('github:stablyai/orca', ['orca'])]
@@ -166,13 +183,11 @@ describe('project-host workspace target resolution', () => {
         actionableHostIds: new Set(['local', 'ssh:builder'])
       })
     ).toMatchObject({
-      status: 'ready',
-      target: {
-        hostId: 'local',
-        projectHostSetupId: 'local-setup',
-        repoId: 'orca',
-        repo: { path: '/local/orca' }
-      }
+      status: 'ambiguous',
+      candidates: [
+        expect.objectContaining({ hostId: 'local' }),
+        expect.objectContaining({ hostId: 'ssh:builder' })
+      ]
     })
   })
 
@@ -206,10 +221,7 @@ describe('project-host workspace target resolution', () => {
     })
   })
 
-  it('canonicalizes a stale same-host setup id to the setup the picker shows', () => {
-    // Why: the run-target picker renders one row per host. A draft persisted before that collapse
-    // can still name a duplicate local setup; creation must land in the displayed path, not a
-    // transient worktree path the user never sees.
+  it('honors the exact same-host setup named by a draft', () => {
     const repos = [makeRepo('orca-main'), makeRepo('orca-worktree')]
     const projects = [makeProject('github:stablyai/orca', ['orca-main', 'orca-worktree'])]
     const projectHostSetups = [
@@ -226,7 +238,7 @@ describe('project-host workspace target resolution', () => {
 
     expect(resolution).toMatchObject({
       status: 'ready',
-      target: { projectHostSetupId: 'orca-main', repoId: 'orca-main', hostId: 'local' }
+      target: { projectHostSetupId: 'orca-worktree', repoId: 'orca-worktree', hostId: 'local' }
     })
   })
 

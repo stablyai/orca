@@ -81,6 +81,10 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
         fallbackName: fallbackCreatureName
       })
 
+      if (selectedWorkspaceTarget.status === 'ambiguous') {
+        return
+      }
+
       if (!repoId || !selectedRepo) {
         showProjectRequiredError()
         return

@@ -29,6 +29,7 @@ function createInput(repos: Repo[]): Parameters<typeof useComposerInitialTargetS
     actionableHostIds: new Set(['local', 'ssh:builder']),
     decisions,
     eligibleRepos: repos,
+    hostOptions: [],
     initialProjectGroupId: undefined,
     initialRepoId: 'mapped',
     initialTaskSourceContext: jiraSourceContext,

@@ -5,6 +5,10 @@ type ProjectTargetActionsInput = Pick<
   | 'actionableHostIds'
   | 'eligibleRepos'
   | 'handleRepoChange'
+  | 'hostOptions'
+  | 'setPendingInitialWorkspaceTarget'
+  | 'setSelectedProjectHostSetupOverrideId'
+  | 'setSelectedProjectHostSetupOverrideHostId'
   | 'initialProjectGroupAppliedRef'
   | 'isProjectGroupTarget'
   | 'linkedWorkItem'
@@ -45,13 +49,17 @@ import {
 } from '@/lib/new-workspace-project-options'
 import { translate } from '@/i18n/i18n'
 import { getFolderSourceRepos } from '@/components/sidebar/folder-workspace-composer-helpers'
-import { resolveWorkspaceCreationRepoId } from '@/lib/project-host-workspace-target'
+import { resolveWorkspaceCreationTarget } from '@/lib/project-host-workspace-target'
 
 export function useProjectTargetActions(input: ProjectTargetActionsInput) {
   const {
     actionableHostIds,
     eligibleRepos,
     handleRepoChange,
+    hostOptions,
+    setPendingInitialWorkspaceTarget,
+    setSelectedProjectHostSetupOverrideId,
+    setSelectedProjectHostSetupOverrideHostId,
     initialProjectGroupAppliedRef,
     isProjectGroupTarget,
     linkedWorkItem,
@@ -135,24 +143,40 @@ export function useProjectTargetActions(input: ProjectTargetActionsInput) {
       setSelectedProjectGroupId(null)
       const preferredHostId =
         selectedWorkspaceTarget.status === 'ready' ? selectedWorkspaceTarget.target.hostId : null
-      // Why: pass the current host as a preference (focusedHostScope), not a hard hostId — pinning made selecting a project set up only on another host a silent no-op.
-      const nextRepoId = resolveWorkspaceCreationRepoId({
+      // Prefer the current host while allowing projects set up only on another host.
+      const resolution = resolveWorkspaceCreationTarget({
         eligibleRepos,
         projects,
         projectHostSetups,
+        hosts: hostOptions,
         projectId,
         focusedHostScope: preferredHostId ?? workspaceHostScope,
         actionableHostIds
       })
-      if (!nextRepoId) {
+      if (resolution.status === 'ambiguous') {
+        handleRepoChange('', { forceResetStartFrom: true })
+        const firstHostId = resolution.candidates[0]?.hostId ?? null
+        const hostId = resolution.candidates.every((candidate) => candidate.hostId === firstHostId)
+          ? firstHostId
+          : null
+        setPendingInitialWorkspaceTarget({ projectId, hostId, projectHostSetupId: null })
         return
       }
-      handleRepoChange(nextRepoId, { forceResetStartFrom: isProjectGroupTarget })
+      if (resolution.status !== 'ready') {
+        return
+      }
+      handleRepoChange(resolution.target.repoId, { forceResetStartFrom: isProjectGroupTarget })
+      setSelectedProjectHostSetupOverrideId(resolution.target.projectHostSetupId)
+      setSelectedProjectHostSetupOverrideHostId(resolution.target.hostId)
     },
     [
       eligibleRepos,
       actionableHostIds,
       handleRepoChange,
+      hostOptions,
+      setPendingInitialWorkspaceTarget,
+      setSelectedProjectHostSetupOverrideId,
+      setSelectedProjectHostSetupOverrideHostId,
       isProjectGroupTarget,
       linkedWorkItem,
       projectGroups,

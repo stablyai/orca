@@ -10,6 +10,7 @@ import { useFolderWorkspaceComposerPathStatus } from '@/components/sidebar/folde
 import { useDetectedAgents } from '@/hooks/useDetectedAgents'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { resolveWorkspaceCreationTarget } from '@/lib/project-host-workspace-target'
+import { getWorkspaceCreationTargetChoice } from '@/lib/workspace-creation-target-choice'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { getLocalRepoProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
@@ -106,6 +107,7 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
         eligibleRepos,
         projects,
         projectHostSetups,
+        hosts: hostOptions,
         draftRepoId: requestedRepoId,
         projectId: pendingInitialWorkspaceTarget?.projectId,
         hostId: pendingInitialWorkspaceTarget?.hostId,
@@ -120,6 +122,7 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
     [
       actionableHostIds,
       eligibleRepos,
+      hostOptions,
       pendingInitialWorkspaceTarget,
       projectHostSetups,
       projects,
@@ -196,8 +199,8 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
     settings?.terminalWindowsShell
   )
 
-  const selectedRepoProjectId =
-    selectedWorkspaceTarget.status === 'ready' ? selectedWorkspaceTarget.target.projectId : null
+  const { projectId: selectedRepoProjectId, candidates: runTargetChoiceCandidates } =
+    getWorkspaceCreationTargetChoice(selectedWorkspaceTarget)
 
   const selectedProjectId = selectedProjectGroup
     ? `project-group:${selectedProjectGroup.id}`
@@ -308,6 +311,7 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
     folderDetectedIds,
     folderDetectedAgentIds,
     selectedWorkspaceTarget,
+    runTargetChoiceCandidates,
     resolvedRepoId,
     selectedRepo,
     selectedRepoIsGit,

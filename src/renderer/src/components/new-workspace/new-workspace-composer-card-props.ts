@@ -58,6 +58,7 @@ export type NewWorkspaceComposerCardProps = {
   onRepoChange: (value: string) => void
   onProjectChange: (value: string) => void
   projectHostSetupOptions?: ProjectHostSetupOption[]
+  runTargetChoiceCandidates?: readonly { repoId: string; hostId: string }[] | null
   selectedProjectHostSetupId?: string | null
   onProjectHostSetupChange?: (setupId: string) => void
   ephemeralVmRecipes?: EphemeralVmRecipeOption[]

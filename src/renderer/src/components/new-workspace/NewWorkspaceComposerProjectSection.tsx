@@ -18,6 +18,7 @@ type NewWorkspaceComposerProjectSectionProps = Pick<
   | 'selectedProjectId'
   | 'onProjectChange'
   | 'projectError'
+  | 'runTargetChoiceCandidates'
   | 'showAddProjectButton'
   | 'projectLabel'
   | 'projectPlaceholder'
@@ -55,6 +56,7 @@ export function NewWorkspaceComposerProjectSection({
   selectedProjectId = null,
   onProjectChange,
   projectError,
+  runTargetChoiceCandidates,
   showAddProjectButton = true,
   projectLabel,
   projectPlaceholder,
@@ -162,6 +164,15 @@ export function NewWorkspaceComposerProjectSection({
             onConnectHost={handleConnectRunTargetHost}
             onSetLocation={handleSetLocation}
           />
+          {(runTargetChoiceCandidates?.length ?? 0) > 1 ? (
+            <p role="status" className="text-2xs text-muted-foreground">
+              {translate(
+                'auto.components.NewWorkspaceComposerCard.runTargetChoiceRequired',
+                'This project is set up in {{value0}} places. Choose which one to create in.',
+                { value0: runTargetChoiceCandidates?.length ?? 0 }
+              )}
+            </p>
+          ) : null}
           {ephemeralVmRecipeError ? (
             <p className="whitespace-pre-line text-[11px] text-destructive">
               {ephemeralVmRecipeError}

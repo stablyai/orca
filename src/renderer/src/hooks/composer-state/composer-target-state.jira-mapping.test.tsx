@@ -299,8 +299,8 @@ describe('unavailable mapped Jira destinations', () => {
     expect(result.current.initialTargetState.repoId).toBe(currentRepo.id)
   })
 
-  it('aligns the repo identity with the canonical same-host setup after recovery', () => {
-    const { result, canonicalRepo } = renderUnavailableMappedComposer({
+  it('preserves the mapped checkout when a same-host sibling is present after recovery', () => {
+    const { result, mappedRepo } = renderUnavailableMappedComposer({
       canonicalSameHostSetup: true
     })
     expect(result.current.runtimeTargetSelection.selectedWorkspaceTarget.status).toBe('unavailable')
@@ -308,11 +308,11 @@ describe('unavailable mapped Jira destinations', () => {
 
     expect(result.current.runtimeTargetSelection.selectedWorkspaceTarget).toMatchObject({
       status: 'ready',
-      target: { repo: canonicalRepo, hostId: 'ssh:builder' }
+      target: { repo: mappedRepo, hostId: 'ssh:builder' }
     })
-    expect(result.current.runtimeTargetSelection.selectedRepo).toBe(canonicalRepo)
-    expect(result.current.initialTargetState.repoId).toBe(canonicalRepo.id)
-    expect(result.current.runtimeTargetSelection.repoIdRef.current).toBe(canonicalRepo.id)
+    expect(result.current.runtimeTargetSelection.selectedRepo).toBe(mappedRepo)
+    expect(result.current.initialTargetState.repoId).toBe(mappedRepo.id)
+    expect(result.current.runtimeTargetSelection.repoIdRef.current).toBe(mappedRepo.id)
     expect(result.current.sourceContextState.taskSourceContext).toEqual(jiraSource)
     expect(result.current.sourceContextState.linkedWorkItem?.jiraIdentifier).toBe('APP-1')
   })

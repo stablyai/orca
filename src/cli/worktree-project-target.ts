@@ -1,4 +1,8 @@
 import { normalizeExecutionHostId, type ParsedExecutionHost } from '../shared/execution-host'
+import {
+  chooseReadyProjectHostSetup,
+  isReadyProjectHostSetup
+} from '../shared/project-host-setup-choice'
 import type { ProjectHostSetup } from '../shared/project-types'
 import { hostFilterMatchesHostId, resolveHostFlagTarget } from './execution-host-flag'
 import { findProjectSetups, setupHostId } from './project-selector'
@@ -27,18 +31,31 @@ function getPresentStringFlag(
 }
 
 export function hasWorkspaceProjectTarget(flags: Map<string, string | boolean>): boolean {
-  return flags.has('project') || flags.has('host') || flags.has('project-host-setup')
+  return (
+    flags.has('project') ||
+    flags.has('host') ||
+    flags.has('project-host-setup') ||
+    flags.has('project-host-setup-base64')
+  )
 }
 
 export function assertWorkspaceTargetFlagsCompatible(flags: Map<string, string | boolean>): void {
   const hasProjectTarget = hasWorkspaceProjectTarget(flags)
+  if (flags.has('project-host-setup') && flags.has('project-host-setup-base64')) {
+    throw new RuntimeClientError('invalid_argument', 'Choose one project host setup selector.')
+  }
   if (flags.has('repo') && hasProjectTarget) {
     throw new RuntimeClientError(
       'invalid_argument',
       'Choose either --repo or project target flags, not both.'
     )
   }
-  if (flags.has('host') && !flags.has('project') && !flags.has('project-host-setup')) {
+  if (
+    flags.has('host') &&
+    !flags.has('project') &&
+    !flags.has('project-host-setup') &&
+    !flags.has('project-host-setup-base64')
+  ) {
     throw new RuntimeClientError(
       'invalid_argument',
       '--host requires --project unless --project-host-setup is provided.'
@@ -54,29 +71,60 @@ function selectSetupOnHost(
   selectorLabel: string
 ): ProjectHostSetup | undefined {
   if (host) {
-    return (
-      candidates.find((candidate) => normalizeExecutionHostId(candidate.hostId) === host.id) ??
-      candidates.find((candidate) => hostFilterMatchesHostId(host, candidate.hostId))
+    const exact = candidates.filter(
+      (candidate) => normalizeExecutionHostId(candidate.hostId) === host.id
+    )
+    return pickSingleSetup(
+      exact.length > 0
+        ? exact
+        : candidates.filter((candidate) => hostFilterMatchesHostId(host, candidate.hostId)),
+      selectorLabel,
+      host
     )
   }
   // Why: one host is not a choice, so demanding --host for it was ceremony. Two are a choice, and
   // picking one would run the command on a machine the caller never named.
   const hostIds = new Set(candidates.map(setupHostId))
   if (hostIds.size <= 1) {
-    return candidates[0]
+    return pickSingleSetup(candidates, selectorLabel)
   }
   throw new RuntimeClientError(
     'invalid_argument',
-    `Ambiguous ${selectorLabel}: it is set up on ${hostIds.size} hosts. Pass --host to choose one.`,
+    `Ambiguous ${terminalSafe(selectorLabel)}: it is set up on ${hostIds.size} hosts. Pass --host to choose one.`,
     {
       knownProjectHostSetups: candidates.map(summarizeSetup),
       nextSteps: [
         ...candidates.map(
-          (candidate) => `Use --host ${setupHostId(candidate)} for ${candidate.path}.`
+          (candidate) =>
+            `Use --host ${terminalSafe(setupHostId(candidate))} for ${terminalSafe(candidate.path)}.`
         ),
         'Run `orca host list` to see every machine you can target and the flag for each.'
       ]
     }
+  )
+}
+
+function pickSingleSetup(
+  candidates: readonly ProjectHostSetup[],
+  selectorLabel: string,
+  host?: ParsedExecutionHost
+): ProjectHostSetup | undefined {
+  const choice = chooseReadyProjectHostSetup(candidates)
+  if (choice.status !== 'ambiguous') {
+    return choice.status === 'single' ? choice.setup : undefined
+  }
+  const listed = choice.candidates
+    .map((candidate) => {
+      const selector = /^[A-Za-z0-9._:-]+$/.test(candidate.id)
+        ? `--project-host-setup=${candidate.id}`
+        : `--project-host-setup-base64=${Buffer.from(candidate.id).toString('base64url')}`
+      return `  ${selector}  ${terminalSafe(candidate.path)}`
+    })
+    .join('\n')
+  throw new RuntimeClientError(
+    'invalid_argument',
+    `Ambiguous ${terminalSafe(selectorLabel)}: ${choice.candidates.length} ready setups${host ? ` on ${terminalSafe(host.id)}` : ''}; pass a --project-host-setup selector shown below to choose one:\n${listed}`,
+    { knownProjectHostSetups: choice.candidates.map(summarizeSetup) }
   )
 }
 
@@ -92,7 +140,21 @@ export async function resolveProjectCreateTarget(
   flags: Map<string, string | boolean>,
   client: RuntimeClient
 ): Promise<ProjectCreateTarget | undefined> {
-  const projectHostSetupId = getPresentStringFlag(flags, 'project-host-setup')
+  const rawSetupId = getPresentStringFlag(flags, 'project-host-setup')
+  const encodedSetupId = getPresentStringFlag(flags, 'project-host-setup-base64')
+  if (rawSetupId && encodedSetupId) {
+    throw new RuntimeClientError('invalid_argument', 'Choose one project host setup selector.')
+  }
+  const decodedSetupId = encodedSetupId
+    ? Buffer.from(encodedSetupId, 'base64url').toString('utf8')
+    : undefined
+  if (
+    encodedSetupId &&
+    (!decodedSetupId || Buffer.from(decodedSetupId).toString('base64url') !== encodedSetupId)
+  ) {
+    throw new RuntimeClientError('invalid_argument', 'Invalid --project-host-setup-base64 value.')
+  }
+  const projectHostSetupId = rawSetupId ?? decodedSetupId
   const projectId = getPresentStringFlag(flags, 'project')
   const host = await resolveHostFlagTarget(flags, client)
   if (!projectHostSetupId && !projectId && !host) {
@@ -112,18 +174,17 @@ export async function resolveProjectCreateTarget(
     }
     throw error
   }
-  const ready = result.result.setups.filter((candidate) => candidate.setupState === 'ready')
   // Match against every setup so an exact id with no ready setup never falls through to a name.
   const candidates =
     projectId === undefined || projectHostSetupId
       ? []
       : (await findProjectSetups(client, result.result.setups, projectId)).filter(
-          (candidate) => candidate.setupState === 'ready'
+          isReadyProjectHostSetup
         )
   // Why --host applies to both: setup ids are per host, so the same id can name two setups.
   const setup = projectHostSetupId
     ? selectSetupOnHost(
-        ready.filter((candidate) => candidate.id === projectHostSetupId),
+        findReadySetupsById(result.result.setups, projectHostSetupId),
         host,
         `--project-host-setup ${projectHostSetupId}`
       )
@@ -132,14 +193,14 @@ export async function resolveProjectCreateTarget(
     if (projectHostSetupId) {
       throw new RuntimeClientError(
         'invalid_argument',
-        `Project host setup is not ready or was not found: ${projectHostSetupId}${host ? ` on ${host.id}` : ''}`
+        `Project host setup is not ready or was not found: ${terminalSafe(projectHostSetupId)}${host ? ` on ${terminalSafe(host.id)}` : ''}`
       )
     }
     // Why: blaming the host when no project matched sent callers to debug the wrong flag.
     if (candidates.length === 0) {
       throw new RuntimeClientError(
         'invalid_argument',
-        `No ready setup found for --project ${projectId} on any host.`,
+        `No ready setup found for --project ${terminalSafe(projectId ?? '')} on any host.`,
         {
           nextSteps: [
             'Run `orca project list` for project ids and names, and `orca project setups` for where each is set up.'
@@ -149,13 +210,14 @@ export async function resolveProjectCreateTarget(
     }
     throw new RuntimeClientError(
       'invalid_argument',
-      `Project is not set up on the selected host: ${projectId}${host ? ` on ${host.id}` : ''}`,
+      `Project is not set up on the selected host: ${terminalSafe(projectId ?? '')}${host ? ` on ${terminalSafe(host.id)}` : ''}`,
       // Why: when the project is set up somewhere just not here, the recoverable answer is which
       // hosts do have it — otherwise the caller has to go re-derive the listing by hand.
       {
         knownProjectHostSetups: candidates.map(summarizeSetup),
         nextSteps: candidates.map(
-          (candidate) => `Use --host ${setupHostId(candidate)} for ${candidate.path}.`
+          (candidate) =>
+            `Use --host ${terminalSafe(setupHostId(candidate))} for ${terminalSafe(candidate.path)}.`
         )
       }
     )
@@ -165,6 +227,24 @@ export async function resolveProjectCreateTarget(
     repoHostId: setupHostId(setup),
     setup
   }
+}
+
+function findReadySetupsById(
+  setups: readonly ProjectHostSetup[],
+  requestedId: string
+): ProjectHostSetup[] {
+  return setups.filter(
+    (candidate) => candidate.id === requestedId && isReadyProjectHostSetup(candidate)
+  )
+}
+
+// Escape backslashes first so literal escape text and control characters stay distinct.
+function terminalSafe(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(
+    // oxlint-disable-next-line no-control-regex -- persisted metadata must not control terminal output
+    /[\u0000-\u001f\u007f-\u009f\u061c\u200b-\u200f\u2028\u2029\u202a-\u202e\u2060-\u2069\ufeff]/g,
+    (character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`
+  )
 }
 
 // Why the worktree id, not the selector: a host-scoped `identity:` selector carries no repo id.

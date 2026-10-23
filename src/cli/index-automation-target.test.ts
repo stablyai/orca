@@ -213,7 +213,10 @@ describe('orca cli worktree awareness', () => {
     )
   })
 
-  it('resolves project-host-setup flags for automation edit with explicit run context', async () => {
+  it.each([
+    ['--project-host-setup', 'setup-gpu'],
+    ['--project-host-setup-base64', Buffer.from('setup-gpu').toString('base64url')]
+  ])('resolves %s for automation edit with explicit run context', async (flag, selector) => {
     queueFixtures(
       callMock,
       okFixture('req_project_setups', {
@@ -240,10 +243,7 @@ describe('orca cli worktree awareness', () => {
     )
     vi.spyOn(console, 'log').mockImplementation(() => {})
 
-    await main(
-      ['automations', 'edit', 'auto-1', '--project-host-setup', 'setup-gpu', '--json'],
-      '/tmp/repo'
-    )
+    await main(['automations', 'edit', 'auto-1', flag, selector, '--json'], '/tmp/repo')
 
     expect(callMock).toHaveBeenNthCalledWith(1, 'projectHostSetup.list')
     expect(callMock).toHaveBeenNthCalledWith(

@@ -37,6 +37,12 @@ describe('new workspace create gates', () => {
     )
   })
 
+  it('blocks creating before an ambiguous run target is chosen', () => {
+    expect(
+      getQuickComposerCreateDisabled({ ...readyInput, hasUnresolvedRunTargetChoice: true })
+    ).toBe(true)
+  })
+
   it('blocks quick create synchronously for unresolved source intent', () => {
     const blocked = { ...readyInput, sourceIntentBlocksCreate: true }
 

@@ -75,7 +75,7 @@ describe('new workspace project targets', () => {
     })
   })
 
-  it('shows one target per host when the project has multiple local worktrees', () => {
+  it('offers each checkout when one host has multiple checkouts of the project', () => {
     const upstream = { owner: 'stablyai', repo: 'orca' }
     const repos = [
       { id: 'local-a', displayName: 'orca-a', path: '/src/orca-a', upstream },
@@ -89,14 +89,33 @@ describe('new workspace project targets', () => {
       }
     ]
     const projectId = buildNewWorkspaceProjectOptions(repos)[0]?.id ?? null
+    const options = buildNewWorkspaceRunTargetOptions(repos, projectId, 'darwin')
 
-    expect(buildNewWorkspaceRunTargetOptions(repos, projectId, 'darwin')).toEqual([
-      expect.objectContaining({ id: 'local', label: LOCAL_HOST_LABEL, detail: '/src/orca-a' }),
+    expect(options).toEqual([
+      expect.objectContaining({ label: LOCAL_HOST_LABEL, detail: '/src/orca-a', repo: repos[0] }),
+      expect.objectContaining({ label: LOCAL_HOST_LABEL, detail: '/src/orca-b', repo: repos[1] }),
       expect.objectContaining({
-        id: 'ssh:build-server',
         label: 'build-server',
-        detail: '/home/dev/orca'
+        detail: '/home/dev/orca',
+        repo: repos[2]
       })
+    ])
+    expect(new Set(options.map((option) => option.id)).size).toBe(3)
+  })
+
+  it('deduplicates exact checkouts while preserving repo id twins on different hosts', () => {
+    const upstream = { owner: 'stablyai', repo: 'orca' }
+    const local = { id: 'repo', displayName: 'orca', path: '/src/orca', upstream }
+    const server = { ...local, path: '/srv/orca', executionHostId: 'runtime:server' as const }
+    const folder = { id: 'folder', displayName: 'notes', path: '/notes' }
+    const repos = [local, local, server, folder]
+    const projects = buildNewWorkspaceProjectOptions(repos)
+    const options = buildNewWorkspaceRunTargetOptions(repos, projects[0]?.id ?? null)
+
+    expect(options.map((option) => option.repo)).toEqual([local, server])
+    expect(new Set(options.map((option) => option.id)).size).toBe(2)
+    expect(buildNewWorkspaceRunTargetOptions(repos, projects[1]?.id ?? null)).toEqual([
+      expect.objectContaining({ repo: folder })
     ])
   })
 })

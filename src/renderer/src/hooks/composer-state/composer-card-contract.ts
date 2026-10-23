@@ -7,6 +7,7 @@ export type ComposerCardSourceProps = Pick<
   | 'repoId'
   | 'projectOptions'
   | 'selectedProjectId'
+  | 'runTargetChoiceCandidates'
   | 'selectedRepoIsGit'
   | 'projectHostSetupOptions'
   | 'selectedProjectHostSetupId'

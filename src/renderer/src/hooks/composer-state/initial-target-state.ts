@@ -5,6 +5,7 @@ type ComposerInitialTargetStateInput = Pick<
   ComposerModel,
   | 'actionableHostIds'
   | 'eligibleRepos'
+  | 'hostOptions'
   | 'decisions'
   | 'initialProjectGroupId'
   | 'initialRepoId'
@@ -33,6 +34,7 @@ export function useComposerInitialTargetState(input: ComposerInitialTargetStateI
     actionableHostIds,
     decisions,
     eligibleRepos,
+    hostOptions,
     initialProjectGroupId,
     initialRepoId,
     initialTaskSourceContext,
@@ -82,13 +84,14 @@ export function useComposerInitialTargetState(input: ComposerInitialTargetStateI
     eligibleRepos,
     projects,
     projectHostSetups,
+    hosts: hostOptions,
     draftRepoId,
     initialRepoId,
     activeRepoId: seedActiveRepoId,
     projectId: initialRunSeed.projectId,
     hostId: initialRunSeed.hostId,
     projectHostSetupId: initialRunSeed.projectHostSetupId,
-    projectHostSetupHostId: initialWorkspaceTarget ? initialRunSeed.hostId : null,
+    projectHostSetupHostId: initialRunSeed.hostId,
     focusedHostScope: workspaceHostScope,
     actionableHostIds
   })
@@ -96,16 +99,26 @@ export function useComposerInitialTargetState(input: ComposerInitialTargetStateI
   const resolvedInitialRepoId =
     resolvedInitialWorkspaceTarget.status === 'ready'
       ? resolvedInitialWorkspaceTarget.target.repoId
-      : initialWorkspaceTarget
+      : resolvedInitialWorkspaceTarget.status === 'unavailable'
         ? (draftRepoId ?? initialRepoId ?? '')
         : ''
 
   const [pendingInitialWorkspaceTarget, setPendingInitialWorkspaceTarget] = useState<
     ComposerInitialTargetModel['initialRunSeed'] | null
   >(
-    initialWorkspaceTarget && resolvedInitialWorkspaceTarget.status === 'unavailable'
-      ? initialRunSeed
-      : null
+    resolvedInitialWorkspaceTarget.status === 'ambiguous'
+      ? {
+          projectId: resolvedInitialWorkspaceTarget.projectId,
+          hostId: initialRunSeed.hostId,
+          projectHostSetupId: null
+        }
+      : resolvedInitialWorkspaceTarget.status === 'unavailable' &&
+          (initialWorkspaceTarget ||
+            initialRunSeed.projectId ||
+            initialRunSeed.hostId ||
+            initialRunSeed.projectHostSetupId)
+        ? initialRunSeed
+        : null
   )
 
   const [internalRepoId, setInternalRepoId] = useState<string>(resolvedInitialRepoId)

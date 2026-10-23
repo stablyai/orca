@@ -20,6 +20,7 @@ export function useComposerTargetState(
     actionableHostIds: composerTargetStore.actionableHostIds,
     decisions: composerTargetStore.decisions,
     eligibleRepos: composerTargetStore.eligibleRepos,
+    hostOptions: composerTargetStore.hostOptions,
     initialProjectGroupId: composerTargetStore.initialProjectGroupId,
     initialRepoId: composerTargetStore.initialRepoId,
     initialTaskSourceContext: composerTargetStore.initialTaskSourceContext,

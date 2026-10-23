@@ -7,6 +7,7 @@ const AUTOMATION_TARGET_FLAGS = [
   'project',
   'host',
   'project-host-setup',
+  'project-host-setup-base64',
   'source-context',
   'workspace-mode',
   'base-branch'
@@ -57,6 +58,7 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
       'Trigger accepts hourly, daily, weekdays, weekly, a 5-field cron expression, or an RRULE string.',
       'When --repo is omitted, the CLI uses the enclosing Orca worktree when one can be resolved from cwd.',
       'Use --project, or --project-host-setup, to run on a specific project host setup. --project takes the project id or the display name from `orca project list`, and --host is only needed when the project is set up on more than one host.',
+      'For multiple checkouts on one host, use the exact setup selector from the ambiguity error. Encoded --project-host-setup-base64 selectors preserve unusual IDs.',
       '--host takes local, ssh:<target-id>, runtime:<environment-id>, or the bare host name `orca host list` prints for any of them.',
       'Use --source-context with a JSON TaskSourceContext when task/provider data should come from a specific host/account; pass null on edit to clear it.',
       'Use --workspace to run in an existing worktree; otherwise the automation creates a new worktree per run.',

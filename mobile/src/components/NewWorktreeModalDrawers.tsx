@@ -1,5 +1,5 @@
 import { View } from 'react-native'
-import { getRepoExecutionHostId } from '../../../src/shared/execution-host'
+import { getMobileWorkspaceRepoSelectionKey } from '../worktree/new-workspace-dialog-repo-selection'
 import type { SmartModeAvailabilityInput } from '../tasks/mobile-smart-source-modes'
 import type { PasteRepoCandidate } from '../tasks/smart-source-paste-intent'
 import type { useMobileComposerSource } from '../tasks/use-mobile-composer-source'
@@ -91,7 +91,9 @@ export function NewWorktreeModalDrawers(props: {
         visible={props.visible && props.drawerView === 'runTarget'}
         title="Run on"
         items={props.runTargetPickerItems}
-        selectedId={props.selectedRepo ? getRepoExecutionHostId(props.selectedRepo) : ''}
+        selectedId={
+          props.selectedRepo ? getMobileWorkspaceRepoSelectionKey(props.selectedRepo) : ''
+        }
         onSelect={(item) => props.onRepoChange(item.repo)}
         onClose={props.onTransitionToForm}
         renderIcon={(item) => <HostKindIcon hostId={item.hostId} size={16} />}

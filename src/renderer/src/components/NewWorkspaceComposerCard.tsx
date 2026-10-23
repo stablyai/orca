@@ -73,6 +73,7 @@ export default function NewWorkspaceComposerCard(
     setupConfig,
     setupControlsEnabled = true,
     selectedProjectId = null,
+    runTargetChoiceCandidates = null,
     parentWorktreeId,
     onParentWorktreeIdChange,
     selectedRepoExecutionHostId,
@@ -320,6 +321,7 @@ export default function NewWorkspaceComposerCard(
           projectDescriptionId={projectDescriptionId}
           onAddProject={handleAddProject}
           focusNameInput={focusNameInput}
+          runTargetChoiceCandidates={runTargetChoiceCandidates}
           shouldShowRunTargetPicker={shouldShowRunTargetPicker}
           handleProjectHostSetupChange={(setupId) => onProjectHostSetupChange?.(setupId)}
           handleAddSshHost={() => setAddRemoteHostMode('ssh')}

@@ -245,7 +245,7 @@ export function useTargetChangeActions(input: TargetChangeActionsInput) {
       // Why: a just-created setup lands in the store before the memoized picker
       // options refresh. Rebuild through the same builder rather than reading the
       // raw record — repo eligibility, ephemeral-VM/runtime-owned host exclusion,
-      // and one-setup-per-host dedupe all decide which setup creation resolves to.
+      // all decide which setup creation resolves to.
       // Skipping them can retarget to a location other than the one just chosen.
       const target =
         option?.kind === 'ready'

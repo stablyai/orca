@@ -89,7 +89,6 @@ export default function RunTargetCombobox({
     readyHostOptions.find(isSelected) ??
     // Why: a selection on a merged machine's other id still belongs to that machine's one row.
     readyHostOptions.find((option) => option.aliasSetups?.some(isSelected)) ??
-    readyHostOptions[0] ??
     null
   const selectedRecipe = recipes.find((recipe) => recipe.id === recipeValue) ?? null
   const armedRow = rows.find((row) => row.key === armedKey) ?? rows[0] ?? null

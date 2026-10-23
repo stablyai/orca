@@ -458,6 +458,80 @@ describe('NewWorktreeModal project targets', () => {
     expect(onCreated).toHaveBeenCalledWith('srv-wt', expect.any(String), undefined, 'runtime:env-1')
   })
 
+  it.each(['local', 'runtime'] as const)(
+    'creates from the second checkout on the selected %s host',
+    async (target) => {
+      const secondRepo = { ...repos[0]!, id: 'repo-2', path: '/second/orca' }
+      const checkouts = [repos[0]!, secondRepo]
+      const reply = (method: string, listed: unknown[]) =>
+        Promise.resolve({
+          ok: true,
+          result:
+            method === 'repo.list'
+              ? { repos: listed }
+              : method === 'status.get'
+                ? { hostPlatform: 'linux' }
+                : method === 'settings.get'
+                  ? { settings: {} }
+                  : method === 'worktree.create'
+                    ? {
+                        worktree: { id: 'second-wt', displayName: 'second-wt', path: '/second/wt' }
+                      }
+                    : {}
+        })
+      const desktop = vi.fn((method: string) =>
+        reply(method, target === 'local' ? checkouts : repos)
+      )
+      const server = vi.fn((method: string) => reply(method, checkouts))
+      const onCreated = vi.fn()
+
+      await act(async () => {
+        renderer = create(
+          createElement(NewWorktreeModal, {
+            visible: true,
+            client: requestsOnly(desktop),
+            serverClients:
+              target === 'runtime' ? new Map([['runtime:env-1', requestsOnly(server)]]) : undefined,
+            hostId: 'host-1',
+            onCreated,
+            onClose: () => {},
+            openExternalUrl: () => {}
+          })
+        )
+      })
+      await flushUpdates()
+      const picker = runTargetPicker(renderer)
+      const options: { id: string; repo: { id: string; path: string } }[] = picker.props.items
+      const second = options.find((option) => option.repo.id === secondRepo.id)
+      expect(second).toBeDefined()
+      await act(async () => picker.props.onSelect(second))
+      await flushUpdates()
+      expect(runTargetPicker(renderer).props.selectedId).toBe(second?.id)
+      expect(
+        renderer.root.find((node) => node.props.runTarget !== undefined).props.runTarget.detail
+      ).toBe(secondRepo.path)
+      act(() => sourceInputs(renderer)[0]!.props.onChangeText('second-wt'))
+      const form = renderer.root.find((node) => typeof node.props.onCreate === 'function')
+      await act(async () => form.props.onCreate())
+      await flushUpdates()
+
+      const selectedClient = target === 'runtime' ? server : desktop
+      const otherClient = target === 'runtime' ? desktop : server
+      expect(selectedClient).toHaveBeenCalledWith(
+        'worktree.create',
+        expect.objectContaining({ repo: 'id:repo-2', name: 'second-wt' }),
+        expect.anything()
+      )
+      expect(otherClient.mock.calls.map(([method]) => method)).not.toContain('worktree.create')
+      expect(onCreated).toHaveBeenCalledWith(
+        'second-wt',
+        expect.any(String),
+        undefined,
+        target === 'runtime' ? 'runtime:env-1' : undefined
+      )
+    }
+  )
+
   it("offers the desktop's servers, by name, in a sheet opened before the list has them", async () => {
     const serverRepo = { ...repos[0]!, id: 'server-repo', path: '/srv/orca' }
     // One desktop: its own repos, its server list, and a server's repos relayed through it.
@@ -558,7 +632,7 @@ describe('NewWorktreeModal project targets', () => {
     await act(async () => picker.props.onSelect(picker.props.items[1]))
     await flushUpdates()
 
-    expect(runTargetPicker(renderer).props.selectedId).toBe('runtime:env-1')
+    expect(runTargetPicker(renderer).props.selectedId).toBe(picker.props.items[1].id)
     expect(
       renderer.root.find((node) => node.props.runTarget !== undefined).props.runTarget.detail
     ).toBe('/srv/orca')

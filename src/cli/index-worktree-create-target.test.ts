@@ -185,7 +185,10 @@ describe('orca cli worktree awareness', () => {
     })
   })
 
-  it('resolves project-host-setup directly for worktree.create', async () => {
+  it.each([
+    ['--project-host-setup', 'setup-gpu'],
+    ['--project-host-setup-base64', Buffer.from('setup-gpu').toString('base64url')]
+  ])('resolves %s directly for worktree.create', async (flag, selector) => {
     queueFixtures(
       callMock,
       okFixture('req_project_setups', {
@@ -213,16 +216,7 @@ describe('orca cli worktree awareness', () => {
     vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await main(
-      [
-        'worktree',
-        'create',
-        '--project-host-setup',
-        'setup-gpu',
-        '--name',
-        'feature',
-        '--no-parent',
-        '--json'
-      ],
+      ['worktree', 'create', flag, selector, '--name', 'feature', '--no-parent', '--json'],
       '/tmp/repo'
     )
 

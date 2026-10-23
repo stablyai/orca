@@ -52,6 +52,10 @@ export function resolveMobileNewWorkspaceDialogRepoId({
   return resolvedRepo?.id ?? ''
 }
 
+export function getMobileWorkspaceRepoSelectionKey(repo: MobileNewWorkspaceDialogRepo): string {
+  return JSON.stringify([getMobileRepoExecutionHostId(repo), repo.id])
+}
+
 /** Whether two listed repos are the same one: a repo id names one repo per host, not overall. */
 export function isSameMobileWorkspaceRepo(
   a: MobileNewWorkspaceDialogRepo,

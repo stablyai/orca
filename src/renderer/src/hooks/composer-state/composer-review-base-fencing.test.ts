@@ -144,6 +144,22 @@ const canceledCases = providers.flatMap((provider) =>
 )
 
 describe('review base selection ownership', () => {
+  it('clears folder source state when returning to a project with the same repository id', () => {
+    const { result } = renderHook(useReviewBaseSelectionFixture)
+    const originalRepoId = result.current.repoId
+    act(() => result.current.handleProjectChange('project-group:folder'))
+    expect(result.current.repoId).toBe(originalRepoId)
+    act(() => result.current.handleBaseBranchChange('folder-source-base'))
+    expect(result.current.baseBranch).toBe('folder-source-base')
+
+    act(() => result.current.handleProjectChange(`repo:${originalRepoId}`))
+
+    expect(result.current.selectedProjectGroupId).toBeNull()
+    expect(result.current.repoId).toBe(originalRepoId)
+    expect(result.current.baseBranch).toBeUndefined()
+    expect(result.current.compareBaseRef).toBeUndefined()
+  })
+
   it.each(canceledCases)(
     'ignores old $provider $outcome after $action',
     async ({ provider, action, outcome }) => {

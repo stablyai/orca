@@ -80,6 +80,7 @@ export function buildComposerCardProps(state: ComposerModel) {
     selectedEphemeralVmRecipeId,
     selectedProjectHostSetupId,
     selectedProjectId,
+    runTargetChoiceCandidates,
     selectedRepo,
     selectedRepoConnectInProgress,
     selectedRepoConnectionId,
@@ -123,6 +124,7 @@ export function buildComposerCardProps(state: ComposerModel) {
     sourceIntentBlocksCreate,
     requiresExplicitSetupChoice,
     hasSetupDecision: Boolean(setupDecision),
+    hasUnresolvedRunTargetChoice: (runTargetChoiceCandidates?.length ?? 0) > 1,
     selectedRepoRequiresConnection,
     sparseError
   })
@@ -135,6 +137,7 @@ export function buildComposerCardProps(state: ComposerModel) {
     repoId,
     projectOptions,
     selectedProjectId,
+    runTargetChoiceCandidates: isProjectGroupTarget ? null : runTargetChoiceCandidates,
     selectedRepoIsGit: isProjectGroupTarget ? true : selectedRepoIsGit,
     onRepoChange: isProjectGroupTarget ? handleFolderSourceRepoChange : handleRepoChange,
     onProjectChange: handleProjectChange,

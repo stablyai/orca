@@ -65,6 +65,16 @@ export function useDraftTargetSync(state: DraftTargetSyncInput): void {
     tuiAgent
   } = state
 
+  const firstChoiceHostId =
+    selectedWorkspaceTarget.status === 'ambiguous'
+      ? selectedWorkspaceTarget.candidates[0]?.hostId
+      : null
+  const ambiguousChoiceHostId =
+    selectedWorkspaceTarget.status === 'ambiguous' &&
+    selectedWorkspaceTarget.candidates.every((candidate) => candidate.hostId === firstChoiceHostId)
+      ? (firstChoiceHostId ?? null)
+      : null
+
   // Persist draft whenever relevant fields change (full-page only).
   useEffect(() => {
     if (!persistDraft) {
@@ -77,14 +87,16 @@ export function useDraftTargetSync(state: DraftTargetSyncInput): void {
           ? null
           : selectedWorkspaceTarget.status === 'ready'
             ? selectedWorkspaceTarget.target.projectId
-            : null,
+            : selectedWorkspaceTarget.status === 'ambiguous'
+              ? selectedWorkspaceTarget.projectId
+              : null,
       projectGroupId: selectedProjectGroup?.id ?? null,
       hostId:
         selectedProjectGroup !== null
           ? null
           : selectedWorkspaceTarget.status === 'ready'
             ? selectedWorkspaceTarget.target.hostId
-            : null,
+            : ambiguousChoiceHostId,
       projectHostSetupId:
         selectedProjectGroup !== null
           ? null
@@ -107,6 +119,7 @@ export function useDraftTargetSync(state: DraftTargetSyncInput): void {
     })
   }, [
     persistDraft,
+    ambiguousChoiceHostId,
     agentPrompt,
     attachmentPaths,
     baseBranch,
@@ -129,13 +142,24 @@ export function useDraftTargetSync(state: DraftTargetSyncInput): void {
 
   // Auto-pick the first eligible repo if we somehow start with none selected.
   useEffect(() => {
-    if (isProjectGroupTarget || pendingInitialWorkspaceTarget) {
+    if (
+      isProjectGroupTarget ||
+      pendingInitialWorkspaceTarget ||
+      selectedWorkspaceTarget.status === 'ambiguous'
+    ) {
       return
     }
     if (!repoId && eligibleRepos[0]?.id) {
       setRepoId(eligibleRepos[0].id)
     }
-  }, [eligibleRepos, isProjectGroupTarget, pendingInitialWorkspaceTarget, repoId, setRepoId])
+  }, [
+    eligibleRepos,
+    isProjectGroupTarget,
+    pendingInitialWorkspaceTarget,
+    repoId,
+    selectedWorkspaceTarget.status,
+    setRepoId
+  ])
 
   useEffect(() => {
     if (!selectedProjectGroup) {
