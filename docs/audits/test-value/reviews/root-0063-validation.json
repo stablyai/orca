@@ -1,0 +1,42 @@
+{
+  "batch": "root-0063",
+  "reviewer": "root",
+  "source_commit": "89b3d382847f10b31a731ebd7e18aad022a4b15a",
+  "reviewed_files": 1,
+  "original_declarations": 22,
+  "inline_command_controls": 4,
+  "case_records": 26,
+  "decisions": {
+    "keep": 26
+  },
+  "production_changes": false,
+  "test_source_changes": false,
+  "checks": [
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/cli/handlers/linear.test.ts",
+      "result": "1 suite /22 tests passed",
+      "log": "/tmp/orca-root-0063-tests.log",
+      "log_sha256": "1177cd98ed43fc78003d589e32312613f976387e2d428a564bff55f00ded8e83"
+    }
+  ],
+  "integrity": {
+    "original_and_final_hashes_verified": true,
+    "records_sha256": "5b8bf444f1db4c22da5beb0e723616d14b0381ede3a7f6c197d81cfabbd9ec66",
+    "supporting_source_hashes": {
+      "src/cli/handlers/linear.ts": "1495941a97a5691962019c1ff800245b34d285e416de91b522187dc4ca2aa256",
+      "src/cli/handlers/linear-comment-write.ts": "9a072466f28dbf4699434da97f725e008bfad743197bcdacf55117c2b1fbbb5a",
+      "src/cli/handlers/linear-list-issues.ts": "10ca237cc07854b22b82ae19412e61f439523cfb1c9491af0bcbe9da5c36fd32",
+      "src/cli/handlers/linear-relation-write.ts": "f4adeb3435193f66391f5974230acb3588a41be7b34f413f9bc2fea3c23ae04e",
+      "src/cli/handlers/linear-save-issue.ts": "3fc9ff4463d6bbbceae2f8041d4fbd06fa6e9561b94d577bbdb7465ca391bdd2",
+      "src/cli/linear-request-builders.ts": "cfc77de04a7e46db5ec69035679acc08495ecae87e6a0bf47a2c8a9121857c7a",
+      "src/cli/linear-save-issue-request.ts": "41f3a555dd0c104dde82731f1766f48b497eebfc2796be76de18b3bed3738c08",
+      "src/cli/command-body-input.ts": "94ff2731e6929d1d84b18e199c50fea79196da97ab26b7c519a65b7392cc9679",
+      "src/cli/linear-format.ts": "ca6c71ef124cf5d6c7bd6269c7f3668de5827ae24d72b0e3edc72f52efb7a7b6"
+    }
+  },
+  "limitations": [
+    "All runtime/API calls are mocks. No live Linear read/write or remote connection is made.",
+    "Controlled stdin stream exercises actual body assembly; it does not invoke interactive login or a real terminal.",
+    "Linux test execution establishes portable CLI dispatch and injected remote context, not native macOS/Windows integration."
+  ]
+}

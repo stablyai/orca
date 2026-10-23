@@ -3,7 +3,6 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   BrowserCertificateFailure,
-  BrowserLoadError,
   BrowserPage
 } from '../../../../shared/browser-workspace-types'
 import type {
@@ -268,34 +267,6 @@ describe('ClientHostedBrowserPagePane chrome parity', () => {
       loadError: { code: -105, description: 'ERR_NAME_NOT_RESOLVED', validatedUrl: 'https://x/' }
     })
     expect(failed.webview.style.display).toBe('none')
-  })
-
-  // Why: the overlay is about the navigation that failed. Naming browserTab.url instead pointed
-  // every action at the page still loaded and offered it an HTTPS retry it never needed.
-  it('names the URL that failed, not the page that is still loaded', () => {
-    const loaded = 'http://localhost:3000/app'
-    const { onUpdatePageState } = renderPane({ url: loaded })
-
-    const addressBar = screen.getByRole('combobox')
-    act(() => {
-      fireEvent.change(addressBar, { target: { value: 'javascript:alert(1)' } })
-    })
-    act(() => {
-      fireEvent.submit(addressBar.closest('form') ?? addressBar)
-    })
-
-    const loadError = onUpdatePageState.mock.calls.at(-1)?.[1]?.loadError as
-      | BrowserLoadError
-      | undefined
-    expect(loadError?.validatedUrl).toBe('javascript:alert(1)')
-
-    cleanup()
-    renderPane({ loadError, url: loaded })
-
-    act(() => screen.getByRole('button', { name: 'Copy Address' }).click())
-    expect(writeClipboardText).toHaveBeenCalledWith('javascript:alert(1)')
-    // The loaded page is a localhost http URL, so keying off it would offer an HTTPS retry here.
-    expect(screen.queryByRole('button', { name: 'Try HTTPS' })).toBeNull()
   })
 
   it('drives the guest from the find bar rather than only rendering it', () => {

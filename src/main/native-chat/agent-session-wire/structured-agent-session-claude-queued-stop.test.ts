@@ -42,6 +42,8 @@ let host: StructuredAgentSessionHost
 let adapter: ClaudeStructuredSessionAdapter
 let store: AgentSessionRecordStore
 let queued: string[]
+/** Sends the CLI reports cancelled through `command_lifecycle` as it takes the interrupt. */
+let lifecycleCancelled: string[]
 let claude: ReturnType<typeof fakeClaude>
 
 beforeEach(async () => {
@@ -49,15 +51,26 @@ beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-claude-queued-stop-'))
   resetHostTestOperationIds()
   queued = []
+  lifecycleCancelled = []
   claude = fakeClaude({
     replayUuid: null,
     initProof: 'session-start',
     // What the real CLI answers: cancel_queued cancels the queue, a plain interrupt keeps it.
     routes: {
-      interrupt: (params) =>
-        params?.cancelQueued
+      interrupt: (params) => {
+        for (const commandUuid of lifecycleCancelled.splice(0)) {
+          claude.connections[0]!.handlers.onMessage?.({
+            type: 'command_lifecycle',
+            command_uuid: commandUuid,
+            state: 'cancelled',
+            uuid: `lifecycle-${commandUuid}`,
+            session_id: PROVIDER_SESSION_ID
+          })
+        }
+        return params?.cancelQueued
           ? { still_queued: [], cancelled: queued.splice(0) }
           : { still_queued: [...queued] }
+      }
     }
   })
   const lifecycle: Promise<void>[] = []
@@ -306,7 +319,8 @@ it('leaves a host-queued follow-up and a newer turn running when the Stop names 
   expect(rows).not.toContain('The provider had already finished this turn.')
 }, 15_000)
 
-it('a card sent now into the running turn comes back paused when Stop withdraws it, and is not sent again', async () => {
+// The CLI's own report that it removed the send unrun is the proof a queued card needs to wait again.
+it('a card sent now into the running turn comes back paused when Claude reports it cancelled unrun, and is not sent again', async () => {
   const connection = claude.connections[0]!
   const turnId = await openFirstTurn(connection)
   const body = hostTestMessage('And then this.')
@@ -327,7 +341,7 @@ it('a card sent now into the running turn comes back paused when Stop withdraws 
   expect(sentNow).toMatchObject({ ok: true })
   // Folded into the running turn: Claude holds it until that turn ends.
   await eventually(() => expect(connection.sent).toHaveLength(2))
-  queued.push(String(connection.sent.at(-1)!.uuid))
+  lifecycleCancelled.push(String(connection.sent.at(-1)!.uuid))
   const sends = async () =>
     (await host.journalSnapshot(SESSION)).submissions
       .filter((entry) => entry.queuedMessageId === cardId)

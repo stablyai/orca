@@ -83,6 +83,7 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
         host.state().latestAcceptedTurnSequence,
         host.journal().queuedMessages.pauses()
       ),
+    queueRestatement: () => host.journal().queuedMessages.restatement(),
     cursor: host.cursor,
     adopt: host.adopt
   })
@@ -96,17 +97,6 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
       ...(previous ? { previous } : {}),
       now: host.now()
     })
-  const queuedMessages = new JournalQueuedMessages({
-    sessionId: host.identity.sessionId,
-    now: host.now,
-    serialize: host.serialize,
-    database: host.database,
-    readOnly: host.readOnly,
-    state: host.state,
-    reopenFloor: () => host.journal().reopenFloor(),
-    committed: host.notifyCommitted,
-    claimAttachments
-  })
   const rowWriter = new JournalRowWriter({
     sessionId: host.identity.sessionId,
     now: host.now,
@@ -116,11 +106,18 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
     highestFence: () => host.state().highestFence,
     nextSequence: () => host.state().lastSequence + 1,
     commit: host.commit,
-    // Every rejection is a dispatch row through this one writer; the draft
-    // returned-transition rides it so no path can bypass the hook.
-    inTransaction: (db, row) => queuedMessages.onRowInTransaction(db, row),
-    rolledBack: () => queuedMessages.invalidate(),
     streamedTextRevision: (row) => isJournalStreamedTextRevision(host.state(), row)
+  })
+  const queuedMessages = new JournalQueuedMessages({
+    sessionId: host.identity.sessionId,
+    serialize: host.serialize,
+    database: host.database,
+    readOnly: host.readOnly,
+    state: host.state,
+    reopenFloor: () => host.journal().reopenFloor(),
+    writer: rowWriter,
+    committed: host.notifyCommitted,
+    claimAttachments
   })
   const lifecycleBatchAppender = new JournalLifecycleBatchAppender({
     state: host.state,
@@ -137,12 +134,9 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
       cards: queuedMessages
     }),
     stops: new JournalStopAcceptor({ writer: rowWriter, state: host.state }),
-    // Behind the stored fact: settles drafts whose consumed submission the loaded journal shows
-    // refused (a downgrade wrote no hook), then prunes. Bookkeeping, never failing the open.
+    // Moves the cards an earlier build wrote into the journal, once per open; never fails it.
     restore: () =>
-      restoreJournalStore(host, { epochController }).then(() =>
-        queuedMessages.repairAndPruneAtOpen()
-      ),
+      restoreJournalStore(host, { epochController }).then(() => queuedMessages.importAtOpen()),
     rowWriter,
     submissionWriter: new JournalSubmissionWriter({
       state: host.state,

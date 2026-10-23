@@ -10,7 +10,7 @@ import type {
   JiraSavedFilter,
   JiraSavedFilterState
 } from '../../../shared/jira-saved-filters'
-import type { TaskPageLinearViewStateModel } from './use-task-page-linear-view-state'
+import type { TaskPageLinearViewStateModel } from './task-page/linear/use-task-page-linear-view-state'
 import { translate } from '@/i18n/i18n'
 
 const EMPTY_SAVED_FILTER_STATE: JiraSavedFilterState = { filters: [], activeFilterId: null }

@@ -30,6 +30,7 @@ import { isTerminalLinkDirectActivation } from './terminal-link-activation'
 import { getTerminalBufferPositionForMouseEvent } from './terminal-mouse-buffer-position'
 import type { TerminalLinkActionContext } from './terminal-link-action-request'
 import { handleTerminalFileLink } from './terminal-file-link-actions'
+import { showFileLinkOpenFailureToast } from '@/lib/file-link-open-failure-toast'
 
 export { openDetectedFilePath } from './terminal-file-open-routing'
 export { mapTerminalFilePath } from './terminal-file-open-routing'
@@ -157,7 +158,9 @@ export function createFilePathLinkProvider(
                           runtimeEnvironmentId,
                           wslDistro: deps.wslDistro,
                           terminalHandle,
-                          sourceTabId: deps.sourceTabId
+                          sourceTabId: deps.sourceTabId,
+                          onOpenFailure: (failure) =>
+                            showFileLinkOpenFailureToast(mappedPath, failure)
                         },
                         deps.getLinkActionContext?.(paneId)
                       )
@@ -253,7 +256,8 @@ export function installFilePathLinkClickFallback(
         terminalHandle: deps.getRuntimeTerminalHandleForPane?.(paneId) ?? null,
         pathExistsCache: deps.pathExistsCache,
         openWithSystemDefault: Boolean(event.shiftKey),
-        sourceTabId: deps.sourceTabId
+        sourceTabId: deps.sourceTabId,
+        onOpenFailure: showFileLinkOpenFailureToast
       }
     )
     if (opened) {

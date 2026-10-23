@@ -1,0 +1,26 @@
+{
+  "original_declaration_sites": 13,
+  "expanded_fixture_cases": 20,
+  "review_scope": "Complete two-file historical graph review plus permanent-suite/identity/projection evidence. Supporting current suites are not separately marked reviewed.",
+  "checks": [
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 node docs/audits/acknowledged-tab-retirement/reproduce.mjs",
+      "exit_code": 1,
+      "result": "Rejected before either suite phase: ENOENT for retired src/main/runtime/orca-runtime-close-mobile-session-tab.ts. No current-head test pass claimed.",
+      "log": "/tmp/orca-root-0014-ack-proof.log"
+    }
+  ],
+  "limitations": [
+    "SSH arms cover persisted host partitions, not live SSH.",
+    "Historical incarnation table arm also changes leaf/binding; permanent suite separately isolates same-leaf/same-PTY incarnation replacement.",
+    "Disk-failure arm checks rejection and persisted disk row, not successful in-memory rollback.",
+    "Archived source graph and old process-runner entrypoint are preserved unchanged."
+  ],
+  "batch": "root-0014",
+  "reviewer": "root",
+  "source_commit": "92dfb4fda69e746e96786ea7af417813ac441394",
+  "reviewed_files": 2,
+  "case_records": 23,
+  "production_changes": false,
+  "test_source_changes": false
+}

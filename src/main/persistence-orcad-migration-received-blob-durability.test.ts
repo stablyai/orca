@@ -69,7 +69,6 @@ function commitDurably(store: Store, input: OrcadMigrationManifest) {
   })
 }
 
-/** Restore hints staged and durable; returns the disk state before any commit. */
 async function stageHints(store: Store) {
   const hints = encodeHints('/home/me/src')
   const base = manifest()
@@ -110,7 +109,7 @@ describe('orcad migration received blobs wait for a durable commit', () => {
     const { input, expectedBlobs, stagedDisk } = await stageHints(store)
     await commitWithFailedFlush(store, input)
 
-    // The in-memory receipt answers "committed", but nothing it received may be consumed yet.
+    // An in-memory commit receipt cannot authorize consuming blobs before durability.
     expect(getOrcadMigrationCatalogState({ store, manifest: input }).state).toBe('committed')
     expect(existsSync(receivedHintsPath(input))).toBe(true)
     expect(hint(store)).toBeNull()

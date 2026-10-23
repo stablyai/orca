@@ -1,6 +1,7 @@
 import { resolve, relative, isAbsolute, sep, dirname } from 'node:path'
 import { statSync } from 'node:fs'
 import { realpath } from 'node:fs/promises'
+import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 
 /**
  * Check whether resolvedTarget is equal to or a descendant of resolvedBase.
@@ -121,6 +122,11 @@ export function isENOENT(error: unknown): boolean {
   // trusted to run our relay. normalizeExistingPath is unaffected either way: its realpath runs
   // locally and always carries a real .code, so symlink containment cannot be spoofed this way.
   return ENOENT_MESSAGE.test(error.message)
+}
+
+/** An existence probe's "not there": also ENOTDIR, since `file.txt/child` cannot exist either. */
+export function isPathAbsentError(error: unknown): boolean {
+  return isENOENT(error) || isDefinitiveAbsence(error)
 }
 
 export async function normalizeExistingPath(resolvedPath: string): Promise<string> {

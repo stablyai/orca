@@ -1,11 +1,4 @@
-/**
- * Builds a directory that counts as a user's real zsh config root.
- *
- * Why a fixture: the inherited-ZDOTDIR guard only accepts a directory that
- * actually holds a zsh startup file, so tests can no longer use a made-up path.
- *
- * Test support only; nothing under src/main imports this at runtime.
- */
+/** Ownership checks require a real startup file, so config-dir fixtures cannot be made-up paths. */
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 

@@ -6,14 +6,12 @@ import { REFERENCE_HANDLER_GROUP } from './reference-handler-group'
 
 export type HandlerGroup = {
   name: string
-  // Why: eager string keys let dispatch build (and duplicate-check) the whole
-  // command table without loading any group's transitive module graph.
+  // Eager keys allow routing and duplicate checks without importing each handler graph.
   keys: readonly string[]
   load: () => Promise<Record<string, CommandHandler>>
 }
 
-// Why: `keys` mirrors each group's exported record and is verified against the
-// real exports by handler-group-manifest.test.ts, so drift fails CI, not dispatch.
+// handler-group-manifest.test.ts checks keys against the real exports to prevent drift.
 export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   JIRA_HANDLER_GROUP,
   LINEAR_HANDLER_GROUP,

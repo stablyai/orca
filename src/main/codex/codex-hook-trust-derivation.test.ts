@@ -35,7 +35,7 @@ const hashesOf = (answer: CodexHookAnswer) => (answer.kind === 'hashes' ? answer
 type Scratch = { home: string; project: string }
 type ListedHook = Record<string, unknown>
 
-/** A hooks/list entry as Codex 0.129+ reports it. */
+/** Codex 0.129+ includes hook approval hashes. */
 function listed(sourcePath: string, label: string, groupIndex = 0, hash = `sha256:${label}`) {
   return {
     key: `${sourcePath}:${label}:${groupIndex}:0`,
@@ -51,7 +51,7 @@ function listed(sourcePath: string, label: string, groupIndex = 0, hash = `sha25
   }
 }
 
-/** Codex 0.128's shape: listed, with no hash and no approval status. */
+/** Codex 0.128 lists hooks without hashes or approval status. */
 function listedWithoutApprovals(sourcePath: string, label: string, groupIndex = 0): ListedHook {
   return {
     key: `${sourcePath}:${label}:${groupIndex}:0`,
@@ -62,7 +62,6 @@ function listedWithoutApprovals(sourcePath: string, label: string, groupIndex = 
   }
 }
 
-/** Every copy of Orca's scratch entry Codex lists: group 0, after the dummy group, and the project's. */
 function everyCopy(scratch: Scratch, hashFor: (label: string, copy: number) => string) {
   const home = join(scratch.home, 'hooks.json')
   const project = join(scratch.project, '.codex', 'hooks.json')
@@ -73,7 +72,6 @@ function everyCopy(scratch: Scratch, hashFor: (label: string, copy: number) => s
   ])
 }
 
-/** Stands in for Codex's app-server, answering hooks/list from what `respond` lists. */
 function answerHooksList(respond: (scratch: Scratch) => ListedHook[]): Scratch[] {
   const scratches: Scratch[] = []
   mocks.runCodexAppServerSession.mockImplementation(
@@ -167,7 +165,7 @@ describe('deriveCodexHookHashes', () => {
   it('answers that Codex 0.128 needs no approval when it lists the entry with no hash', async () => {
     answerHooksList((scratch) => {
       const home = join(scratch.home, 'hooks.json')
-      // Why: Codex 0.128 does not know Interrupt, so it never lists it.
+      // Codex 0.128 predates Interrupt.
       return LABELS.flatMap((label) =>
         label === 'interrupt'
           ? []
@@ -281,7 +279,7 @@ describe('readCodexHookHashes', () => {
         ...scratch,
         listings: [
           listed('/s/home/hooks.json', 'stop'),
-          // Why: a hook from another source with the same command must not count.
+          // The same command from another source must not count.
           listed('/real/home/hooks.json', 'session_start'),
           { ...listed('/s/home/hooks.json', 'pre_tool_use'), command: '/other/codex-hook.sh' },
           listed('/s/home/hooks.json', 'post_tool_use', 1)

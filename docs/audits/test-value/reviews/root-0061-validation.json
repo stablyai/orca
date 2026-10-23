@@ -1,0 +1,59 @@
+{
+  "batch": "root-0061",
+  "reviewer": "root",
+  "source_commit": "89b3d382847f10b31a731ebd7e18aad022a4b15a",
+  "reviewed_files": 2,
+  "original_declarations": 8,
+  "parameter_controls": 8,
+  "case_records": 16,
+  "decisions": {
+    "keep": 13,
+    "fix": 3
+  },
+  "production_changes": false,
+  "checks": [
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/cli/handlers/interactive-login-interruption.test.ts src/cli/handlers/jira-write.test.ts",
+      "baseline": "2 suites /14 tests passed",
+      "reviewed": "2 suites /14 tests passed"
+    },
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm tc:cli",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm exec oxlint src/cli/handlers/interactive-login-interruption.test.ts",
+      "result": "passed"
+    }
+  ],
+  "mutation_controls": [
+    {
+      "mutation": "replace actual POSIX grace wait with zero milliseconds",
+      "original_exit_code": 0,
+      "reviewed_exit_code": 1,
+      "observed_failure": "Reviewed4999ms assertion sees premature SIGKILL; original waits5000ms before checking and passes.",
+      "production_restored": true
+    }
+  ],
+  "integrity": {
+    "original_and_final_hashes_verified": true,
+    "records_sha256": "37203a7897016810d818735b57bcf5d59defcb7beccb3b8ee2a26aa3824b836d",
+    "supporting_source_hashes": {
+      "src/cli/handlers/interactive-login-interruption.ts": "c6622124b15a8763d11a1c2bc42263ecc06a3239f4a9163cc75e8c3ce178c32e",
+      "src/cli/handlers/jira-write.ts": "332b85093543a5ee0ee08c48da070f177b1881bb6574feb8153e0d21037486e3",
+      "src/cli/jira-target.ts": "42bfef9635f23eb7d3bc6fde3fb141b4e546a83ba7601d6f25ed55daf7bc486d"
+    }
+  },
+  "log_hashes": {
+    "/tmp/orca-root-0061-original-tests.log": "b4ae53a1a5bf42697713dc4d49b52a8026c599f7d40fa5be4e34caeb282b6857",
+    "/tmp/orca-root-0061-reviewed-tests.log": "9a0ee7abdeb3e47dc5f6c4c1336f7d1e6a893885d52654439f3a8f95ab9f4229",
+    "/tmp/orca-root-0061-typecheck.log": "64350cfafba2dd6bb61adf325923dc3c41762eb81a276ff9302796e6e77b09bc",
+    "/tmp/orca-root-0061-oxlint.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/tmp/orca-root-0061-early-kill-original.log": "7c97a9ffea9f78c5beca653a906004989dbce4a4dfab76599b7baa790c2dc159",
+    "/tmp/orca-root-0061-early-kill-reviewed.log": "fc6d81c6a537b78af9604729fce7e7f536d4152e10bd373ad20cf3642d45c0a9"
+  },
+  "limitations": [
+    "All child processes/taskkill and Jira transports are mocked; tests run on Linux with injected Windows/macOS platform branches. No live process is terminated and no Jira write is sent.",
+    "Fake-time boundaries establish default grace/fallback policy; real OS scheduling and process-tree behavior remain outside these unit cases."
+  ]
+}

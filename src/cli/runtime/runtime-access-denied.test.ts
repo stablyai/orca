@@ -109,7 +109,7 @@ describe('runtime access denied', () => {
     }
   )
 
-  // Why: a dead Orca leaves its socket behind, and the sandbox denies it before ECONNREFUSED.
+  // Sandbox denial can mask ECONNREFUSED on a dead runtime’s leftover socket.
   it('gives not-running advice when the denied endpoint belongs to a dead pid', async () => {
     mockKill('ESRCH')
     const human = formatCliError(await deniedRequest('EPERM'))

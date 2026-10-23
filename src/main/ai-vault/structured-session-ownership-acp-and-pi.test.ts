@@ -72,8 +72,7 @@ describe('Session History rows owned by OpenCode, Grok, OMP and Pi chats', () =>
       sessionId: OPENCODE_ID,
       filePath: `/Users/me/.local/share/opencode/opencode.db#${OPENCODE_ID}`
     },
-    // One 2.x conversation lists as an `opencode2` row whichever command its chat runs, and an
-    // upgraded database keeps a 1.x copy under the same id.
+    // Upgraded OpenCode databases can retain both history formats under one conversation id.
     {
       handle: acp('opencode2', OPENCODE_ID),
       rowAgent: 'opencode2' as const,
@@ -146,7 +145,6 @@ describe('terminal resumes of a conversation an OpenCode chat owns', () => {
     `opencode -c`,
     `opencode --continue`,
     `opencode --session`,
-    // Ids compare in any case.
     `opencode --session ${OPENCODE_ID.toLowerCase()}`,
     // After `--` the flag is prompt text, so the session is resumed, not forked.
     `opencode -s ${OPENCODE_ID} -- --fork`
@@ -161,14 +159,12 @@ describe('terminal resumes of a conversation an OpenCode chat owns', () => {
     `opencode -c --fork`,
     `opencode`,
     `opencode export ${OPENCODE_ID}`,
-    // The `-c` belongs to bash, not to OpenCode.
     `cd /Users/me/src/opencode && bash -c 'make'`
   ])('allows %s', async (command) => {
     installOwnership({ handle: acp('opencode', OPENCODE_ID) })
     await allowed(command)
   })
 
-  // Either command name can run the program whose chat owns the conversation.
   it.each([
     `opencode --session ${OPENCODE_ID}`,
     `opencode2 --standalone --session '${OPENCODE_ID}'`
@@ -334,7 +330,7 @@ describe('another agent named in a command', () => {
   })
 })
 
-// The guard runs on every terminal.send text, so a long text naming agents often must stay linear.
+// terminal.send parses every submission, so frequent agent names must not cause repeated scans.
 describe('parsing cost', () => {
   afterEach(() => vi.restoreAllMocks())
 

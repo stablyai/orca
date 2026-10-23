@@ -97,7 +97,6 @@ describe('browser file channel negotiation', () => {
     }
     transport.bind(sender)
     expect(transport.available).toBe(false)
-    // Old host: the caller may keep its local fallback, unlike a lost or unbound channel.
     expect(transport.availability).toBe('unsupported')
 
     const negotiatedSender = {
@@ -139,13 +138,12 @@ describe('browser file channel negotiation', () => {
 
     expect(host.fileChannelAvailability).toBe('unavailable')
 
-    // Old host: it attached, and its authority never named a file channel version.
     host.authority = { fileChannelProtocolVersion: undefined }
     expect(host.fileChannelAvailability).toBe('unsupported')
 
     host.authority = { fileChannelProtocolVersion: 1 }
     host.lease.authority = { fileChannelProtocolVersion: 1 }
-    // Mirror acceptAuthority, the only production writer of lease.authority.
+    // Match acceptAuthority’s lease update.
     host.lease.fileChannelActive = true
     expect(host.fileChannelAvailability).toBe('negotiated')
 

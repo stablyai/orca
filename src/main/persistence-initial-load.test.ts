@@ -26,7 +26,6 @@ import {
   isLocalWorktreeScanGenerationCurrent
 } from './local-worktree-scan-generation'
 
-// Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),
   sshConfigHostsToTargetsMock: vi.fn()
@@ -78,7 +77,6 @@ describe('Store', () => {
     await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
-  // ── 1. Defaults when no file exists ──────────────────────────────────
 
   it('returns empty repos when no data file exists', async () => {
     const store = await createStore()
@@ -161,7 +159,7 @@ describe('Store', () => {
 
   it('does not restore a terminal tab after its durable close flush returns', async () => {
     const store = await createStore()
-    // Registered on purpose: rows owned by an unregistered repo id are swept as orphans on load.
+    // Register the owner so orphan cleanup does not discard the session on reload.
     store.addRepo(makeRepo({ id: 'repo-1', path: '/repo-1' }))
     const worktreeId = 'repo-1::/tmp/worktree-1'
     const tabId = 'terminal-1'
@@ -390,7 +388,6 @@ describe('Store', () => {
     })
     const store = await createStore()
 
-    // A re-probe that now prefers the `upstream` remote rewrites the derived project id.
     store.updateRepo(
       { id: 'r1' },
       {

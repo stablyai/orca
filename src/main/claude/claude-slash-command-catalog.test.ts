@@ -34,7 +34,6 @@ describe('claude slash command catalog', () => {
   it('seeds from the init frame that proved the session', () => {
     expect(new ClaudeSlashCommandCatalog(init()).commands).toHaveLength(4)
     expect(new ClaudeSlashCommandCatalog().commands).toBeUndefined()
-    // A frame of the right subtype but without the array is not a catalog.
     expect(
       new ClaudeSlashCommandCatalog({ type: 'system', subtype: 'init' }).commands
     ).toBeUndefined()
@@ -59,8 +58,7 @@ describe('claude slash command catalog', () => {
   })
 
   it('keeps a project skill a skill after the agent cds out of the launch folder', () => {
-    // Captured on 2.1.280: after `cd` into an --add-dir, `skills` drops the launch folder's
-    // project skills while `slash_commands` still lists them.
+    // Captured CLI behavior: cd changes skills while slash_commands retains launch-folder project skills.
     const catalog = new ClaudeSlashCommandCatalog(
       init({ cwd: '/repo', slash_commands: ['qa-project'], skills: ['qa-project'] })
     )

@@ -5,7 +5,7 @@ import {
   buildJiraStatusCatalog,
   getJiraStatusCatalogScopeKey
 } from './task-page-jira-status-catalog'
-import type { TaskPageLinearCollectionEffectsModel } from './use-task-page-linear-collection-effects'
+import type { TaskPageLinearCollectionEffectsModel } from './task-page/linear/use-task-page-linear-collection-effects'
 import { useEffect, useMemo, useRef } from 'react'
 import {
   getSingleJiraProjectScope,

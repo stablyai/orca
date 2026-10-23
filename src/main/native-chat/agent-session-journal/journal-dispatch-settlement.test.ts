@@ -4,20 +4,24 @@ import {
   type SubmissionRejectionKind
 } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
-import {
-  DISPATCH_REJECTED_CANCELLED,
-  DISPATCH_REJECTED_HOST_RESTARTED
-} from '../../../shared/structured-agent-session-dispatch-rejection'
-import { rejectedDraftSettlement } from './journal-dispatch-settlement'
+import { DISPATCH_REJECTED_HOST_RESTARTED } from '../../../shared/structured-agent-session-dispatch-rejection'
+import { queuedHandOffOutcome } from './journal-dispatch-settlement'
 import {
   journalPendingSubmissionResolutions,
   type JournalPendingSubmission
 } from './journal-pending-submission-recovery'
 
-function settle(kind: SubmissionRejectionKind) {
-  return rejectedDraftSettlement(
-    agentSessionFailureWords(agentSessionFailureFact(kind), { surface: 'rejection' })
+/** A card's hand-off, handed to the agent unless `held`, refused with `kind`. */
+function settle(kind: SubmissionRejectionKind, proof: { held?: true; unrun?: true } = {}) {
+  const words = agentSessionFailureWords(
+    agentSessionFailureFact(kind, proof.unrun ? { neverReachedAgent: true } : {}),
+    { surface: 'rejection' }
   )
+  return queuedHandOffOutcome({
+    ...words,
+    handoverRecorded: true,
+    ...(proof.held ? {} : { handedOverAt: 1 })
+  })
 }
 
 describe('what a rejection does to the draft it was consumed from', () => {
@@ -56,22 +60,19 @@ describe('what a rejection does to the draft it was consumed from', () => {
     ])
   })
 
-  it("a Stop's withdrawal sends it back to waiting, under the queue's pause rather than a hold of its own", () => {
-    expect(settle('cancelled')).toEqual({ state: 'waiting' })
-    expect(rejectedDraftSettlement({ reason: DISPATCH_REJECTED_CANCELLED })).toEqual({
-      state: 'waiting'
-    })
-    expect(settle('notDelivered')).toEqual({ state: 'waiting' })
+  it('a Stop waits it again only where Orca proves the agent never got it', () => {
+    expect(settle('cancelled', { held: true })).toBe('waiting')
+    expect(settle('cancelled', { unrun: true })).toBe('waiting')
+    expect(settle('cancelled')).toBe('inDoubt')
+    expect(settle('notDelivered')).toBe('inDoubt')
   })
 
-  // Whoever sent it, it waits under the reopen's pause like every card the chat closed with.
   it('a restart or close before hand-over sends it back to waiting, with no hold of its own', () => {
     for (const kind of ['hostRestarted', 'chatClosed'] as const) {
-      expect(settle(kind)).toEqual({ state: 'waiting' })
+      expect(settle(kind, { held: true })).toBe('waiting')
     }
-    expect(rejectedDraftSettlement({ reason: DISPATCH_REJECTED_HOST_RESTARTED })).toEqual({
-      state: 'waiting'
-    })
+    // An older host's send carries no hand-over record: it may have gone at once.
+    expect(queuedHandOffOutcome({ reason: DISPATCH_REJECTED_HOST_RESTARTED })).toBe('inDoubt')
   })
 
   it('a failure returns the card for the user to act on', () => {
@@ -83,10 +84,8 @@ describe('what a rejection does to the draft it was consumed from', () => {
       'writeFailed',
       'queueFull'
     ] as const) {
-      expect(settle(kind)).toEqual({ state: 'returned' })
+      expect(settle(kind)).toBe('returned')
     }
-    expect(rejectedDraftSettlement({ reason: 'the provider said no' })).toEqual({
-      state: 'returned'
-    })
+    expect(queuedHandOffOutcome({ reason: 'the provider said no' })).toBe('returned')
   })
 })

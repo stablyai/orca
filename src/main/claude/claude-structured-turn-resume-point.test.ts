@@ -50,7 +50,6 @@ function liveRecord(): AgentSessionRecord {
   }
 }
 
-/** An owner whose durable record is updated the way the runtime adapter updates it. */
 async function liveOwner(
   persistResumePoint?: ClaudeStructuredSessionAdapterDeps['persistResumePoint']
 ) {
@@ -131,7 +130,6 @@ describe('Claude durable resume point at turn end', () => {
     const { store, frame, turn } = await liveOwner()
     await turn('u1', 'a1')
     await turn('u2', 'a2')
-    // The next turn starts, then the host dies before its reply or any close path.
     frame({ type: 'user', uuid: 'u3' })
     await tick()
     const head = store.record.providerHandleChain.at(-1)!.handle
@@ -151,7 +149,7 @@ describe('Claude durable resume point at turn end', () => {
         providerHandle: claudeProviderHandle(PROVIDER_SESSION_ID, 'a2')
       }
     })
-    // Bookkeeping only: Claude continues from the end of its own conversation.
+    // Resume the conversation without rewinding to the bookkeeping cursor.
     expect(launch).toMatchObject({ resumeLeafUuid: 'a2', options: { resume: PROVIDER_SESSION_ID } })
     expect(launch.options).not.toHaveProperty('resumeSessionAt')
   })
@@ -201,7 +199,6 @@ describe('Claude durable resume point at turn end', () => {
       await turn('u1', 'a1')
       expect(persist).toHaveBeenCalledTimes(1)
       failing = false
-      // A turn that ends without a new message, such as an interrupted one, keeps the same leaf.
       frame({ type: 'result', subtype: 'error_during_execution', uuid: 'a1-result-2' })
       await tick()
       expect(persist).toHaveBeenCalledTimes(2)
@@ -222,7 +219,6 @@ describe('Claude durable resume point at turn end', () => {
     frame({ type: 'result', subtype: 'success', uuid: 'a2-result' })
     await adapter.drainObservedExits()
     await tick()
-    // A result with no owner behind it is not a completed turn; the exit keeps the last one.
     expect(persist).toHaveBeenCalledTimes(1)
     expect(persistedHandles).toEqual([expect.objectContaining({ leafUuid: 'a1' })])
   })

@@ -60,6 +60,7 @@ export function useMobileNativeChatController(args: {
   } = args
   const {
     activeChatAgent,
+    activeChatAgentConfirmed,
     activeChatAgentRef,
     activeChatResolution,
     activeChatSessionId,
@@ -169,10 +170,11 @@ export function useMobileNativeChatController(args: {
   })
 
   // Every chat write gates on both: the lease proves the input floor is ours, and
-  // `connState` collapses a render before the lease does on disconnect.
+  // `connState` collapses a render before the lease does on disconnect. A remembered-only
+  // agent may have exited to a shell, so it never writes.
   const inputSendable = activeChatStructured
     ? client != null && activeChatSessionId != null && connState === 'connected'
-    : nativeChatInputLeaseReady && connState === 'connected'
+    : nativeChatInputLeaseReady && connState === 'connected' && activeChatAgentConfirmed
 
   const {
     answerAsk: bridgeAnswerAsk,

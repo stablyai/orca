@@ -106,12 +106,26 @@ describe('the file preview Retry while the host is unreachable', () => {
     transport.forceReconnect = null
     const rendered = await render()
     expect(retryButtons(rendered)).toHaveLength(0)
-    const sendRequest = vi.fn(() => new Promise(() => {}))
+    const sendRequest = vi.fn(async () => ({
+      id: 'reconnected',
+      ok: true,
+      result: { content: '# Recovered preview', truncated: false, byteLength: 19 },
+      _meta: { runtimeId: 'host' }
+    }))
     transport.connection = { client: { sendRequest }, state: 'connected' }
     await act(async () => {
       rendered.update(createElement(MobileFilePreviewScreen, { route: ROUTE }))
     })
-    expect(sendRequest).toHaveBeenCalled()
+    expect(sendRequest).toHaveBeenCalledWith('files.read', {
+      worktree: 'id:wt-1',
+      relativePath: 'README.md'
+    })
+    expect(
+      rendered.root.find((node) => String(node.type) === 'MobileFileMarkdownPreview').props.content
+    ).toBe('# Recovered preview')
+    expect(
+      rendered.root.findAll((node) => node.props.children === 'Waiting for desktop...')
+    ).toHaveLength(0)
   })
 })
 

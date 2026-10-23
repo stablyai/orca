@@ -58,19 +58,13 @@ export function fakeClaude(
     initSessionId?: string
     initUuid?: string
     initModel?: string
-    /** 'session-start' (default) mirrors live with a SessionStart hook installed: its
-     *  frame proves the session and system/init arrives only when the first command starts a
-     *  cycle; 'none' mirrors live without one.
-     *  'init' emits init at startup — an UNMEASURED shape, opt-in only. */
+    /** Default: live SessionStart proof; 'none': no hook; 'init': unmeasured startup shape. */
     initProof?: 'init' | 'session-start' | 'none'
     initAccount?: unknown
     initCommands?: unknown
-    /** The initialize result's `models`, which the SDK also answers `list_models` from. */
     initModels?: unknown[]
-    /** What `get_context_usage` answers; defaults to an empty, unusable report. */
     contextUsage?: unknown
     exitBeforeInit?: string
-    /** Host-clock delay before the CLI answers initialize, as on a loaded machine. */
     initDelayMs?: number
     settings?: unknown
     replayUuid?: string | null
@@ -91,9 +85,7 @@ export function fakeClaude(
     routes[subtype]?.(params)
   const openConnection: typeof openClaudeStreamJsonConnection = async (launch, handlers = {}) => {
     let cycleInitEmitted = false
-    // Keys mirror the real system/init frame, which carries `model` but no
-    // effort of any kind: the current effort only comes back from get_settings.
-    // Never add a field the CLI does not send.
+    // Live init reports model; effort comes only from get_settings.
     const emitCycleInit = (): void => {
       cycleInitEmitted = true
       handlers.onMessage?.({
@@ -128,13 +120,9 @@ export function fakeClaude(
           throw new Error('Query closed before response received')
         }
         if (options.initProof === 'init') {
-          // UNMEASURED startup shape, kept only as an explicit opt-in: live
-          // sessions prove startup with a SessionStart hook frame instead.
           emitCycleInit()
         } else if (options.initProof !== 'none') {
-          // The live order with a SessionStart hook installed (Orca's status hooks):
-          // its frames arrive first; system/init only when a cycle starts. Without
-          // one, nothing arrives before the first turn ('none').
+          // Live SessionStart hooks precede system/init, which waits for the first cycle.
           handlers.onMessage?.({
             type: 'system',
             subtype: 'hook_started',
@@ -152,8 +140,6 @@ export function fakeClaude(
         }
         return {
           models: options.initModels ?? [{ value: 'claude-sonnet', displayName: 'Sonnet' }],
-          // Capabilities ride the initialize result, where startup facts read
-          // them regardless of when the first init frame arrives.
           ...(options.capabilities ? { capabilities: options.capabilities } : {}),
           ...(options.initCommands === undefined ? {} : { commands: options.initCommands }),
           ...(options.initAccount === undefined ? {} : { account: options.initAccount })
@@ -165,8 +151,7 @@ export function fakeClaude(
       },
       getSettings: async () => {
         connection.calls.push({ subtype: 'get_settings' })
-        // Shape measured from Claude Code 2.1.258: {applied, effective, sources}. A launch
-        // `--effort` shows only in `applied`, with no `effective.effortLevel` (2.1.280).
+        // Captured in 2.1.280: launch --effort appears in applied, not effective.effortLevel.
         const launched = launch.options.effort
         return (
           options.settings ?? {
@@ -214,8 +199,7 @@ export function fakeClaude(
           await beforeDispatch()
         }
         connection.sent.push(message)
-        // Live: the first command starts a request cycle, whose init precedes
-        // the replay. Later cycles are the test's own frames.
+        // Emit live init-before-replay ordering once; tests supply later cycles.
         if (message.type === 'user' && !cycleInitEmitted && options.initProof !== 'none') {
           emitCycleInit()
         }
@@ -278,7 +262,6 @@ export function adapterAtPublishFor(
       resumesTranscript: false,
       continuesChain: false,
       ...launch,
-      // As the composed launch seals it: the reservation's token is the child's, whatever came before.
       env: { ...launch.env, [ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV]: spawnToken }
     }),
     onEvent: (event) => events.push(event),
@@ -316,8 +299,7 @@ export async function acquired(
     identity: identityFor(),
     fence: 7,
     spawnToken: 'spawn-9',
-    // Production acquires with a journal sink, and turn identity lives on the
-    // translator it builds; without one this fixture models no session that ships.
+    // A journal sink enables the translator that owns turn identity.
     events: recordingJournalSink()
   })
   return adapter
@@ -329,12 +311,10 @@ export function recordingJournalSink(): StructuredAgentSessionEventSink {
 
 export const tick = (): Promise<void> => new Promise((resolve) => setImmediate(resolve))
 
-/** Delivers one frame from Claude on `connection`, under the provider session it runs. */
 export function claudeFrame(connection: FakeConnection, message: Record<string, unknown>): void {
   connection.handlers.onMessage?.({ session_id: PROVIDER_SESSION_ID, ...message })
 }
 
-/** Whether anything sent to Claude on `connection` carries `text`. */
 export function claudeWasSent(connection: FakeConnection, text: string): boolean {
   return connection.sent.some((message) => JSON.stringify(message).includes(text))
 }

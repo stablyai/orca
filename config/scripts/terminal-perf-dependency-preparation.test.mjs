@@ -47,6 +47,7 @@ function select(options = {}) {
         ...process.env,
         GITHUB_OUTPUT: output,
         RUNNER_KIND: options.kind ?? 'github-hosted',
+        RUNNER_NAME: options.name ?? 'GitHub Actions 1',
         JOB_CONTAINER: options.container ?? '',
         RUNNER_OS: options.os ?? 'Linux',
         RUNNER_ARCH: options.arch ?? 'X64'
@@ -75,6 +76,12 @@ it('keeps the shared preparation route for the qualified older lifecycle', () =>
       }
     })
   ).toBe('shared=true')
+})
+
+it('uses shared preparation on Blacksmith while preserving historical-ref fallback', () => {
+  const runner = { kind: 'self-hosted', name: 'blacksmith-4vcpu-ubuntu-2404-test' }
+  expect(select(runner)).toBe('shared=true')
+  expect(select({ ...runner, manifest: {} })).toBe('shared=false')
 })
 
 it.each([

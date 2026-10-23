@@ -29,6 +29,7 @@ import {
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
 
 export function registerQueuedMessagePauseTests(): void {
   const IDENTITY: AgentSessionJournalIdentity = {
@@ -38,7 +39,6 @@ export function registerQueuedMessagePauseTests(): void {
     agent: 'claude',
     providerHandle: claudeProviderHandle('native-1', null)
   }
-  const HOST = 'proc-1'
 
   let root: string
   let clock = 1_000
@@ -46,6 +46,10 @@ export function registerQueuedMessagePauseTests(): void {
 
   function message(text: string): AgentJournalMessageItem {
     return { kind: 'message', role: 'user', blocks: [{ type: 'text', text }] }
+  }
+
+  function fingerprintOf(text: string): string {
+    return agentSessionSendBodyFingerprint(IDENTITY.sessionId, message(text))
   }
 
   function open(): Promise<AgentSessionJournal> {
@@ -58,19 +62,13 @@ export function registerQueuedMessagePauseTests(): void {
   }
 
   function queueDraft(journal: AgentSessionJournal, messageId: string) {
-    return journal.queuedMessages.insert({
-      messageId,
-      body: message(messageId),
-      fingerprint: `fp-${messageId}`,
-      hostInstance: HOST
-    })
+    return journal.queuedMessages.insert({ messageId, body: message(messageId) })
   }
 
   function clearContext(journal: AgentSessionJournal) {
     return journal.context.clear(
       { operationId: `clear-${++clock}`, afterFence: 0, clearedAt: clock },
-      { write: () => {}, committed: () => {} },
-      `caller-clear-${clock}`
+      { write: () => {}, committed: () => {} }
     )
   }
 
@@ -309,7 +307,7 @@ export function registerQueuedMessagePauseTests(): void {
         journal.appendSubmission(
           {
             clientMessageId: id,
-            payloadFingerprint: 'fp-draft-1',
+            payloadFingerprint: fingerprintOf('draft-1'),
             body: message('draft-1'),
             fence: 0,
             handoverRecorded: true
@@ -317,8 +315,6 @@ export function registerQueuedMessagePauseTests(): void {
           {
             messageId: 'draft-1',
             expect: 'waiting',
-            settledByOp: null,
-            hostInstance: HOST,
             ...(automatic ? { yieldsToPause: true as const } : {})
           }
         )
@@ -433,12 +429,12 @@ export function registerQueuedMessagePauseTests(): void {
       await journal.appendSubmission(
         {
           clientMessageId: 'send-now-1',
-          payloadFingerprint: 'fp-steered',
+          payloadFingerprint: fingerprintOf('steered'),
           body: message('steered'),
           fence: 0,
           handoverRecorded: true
         },
-        { messageId: 'steered', expect: 'waiting', settledByOp: null, hostInstance: HOST }
+        { messageId: 'steered', expect: 'waiting' }
       )
       await userStop(journal)
       await queueDraft(journal, 'after')
@@ -463,7 +459,7 @@ export function registerQueuedMessagePauseTests(): void {
         journal.appendSubmission(
           {
             clientMessageId: 'drain-newer',
-            payloadFingerprint: 'fp-newer',
+            payloadFingerprint: fingerprintOf('newer'),
             body: message('newer'),
             fence: 0,
             handoverRecorded: true
@@ -471,8 +467,6 @@ export function registerQueuedMessagePauseTests(): void {
           {
             messageId: 'newer',
             expect: 'waiting',
-            settledByOp: null,
-            hostInstance: HOST,
             yieldsToPause: true
           }
         )
@@ -551,12 +545,12 @@ export function registerQueuedMessagePauseTests(): void {
       await journal.appendSubmission(
         {
           clientMessageId: 'drain-1',
-          payloadFingerprint: 'fp-in-flight',
+          payloadFingerprint: fingerprintOf('in-flight'),
           body: message('in-flight'),
           fence: 0,
           handoverRecorded: true
         },
-        { messageId: 'in-flight', expect: 'waiting', settledByOp: null, hostInstance: HOST }
+        { messageId: 'in-flight', expect: 'waiting' }
       )
       journal = await reopen(journal)
       await journal.resolveDispatch({
@@ -622,19 +616,17 @@ export function registerQueuedMessagePauseTests(): void {
 
     it("reads an earlier build's stored 'kept' and 'stopped' holds as none; send_failed stays", async () => {
       let journal = await open()
-      for (const id of ['was-kept', 'was-stopped', 'failed']) {
-        await queueDraft(journal, id)
-      }
-      await journal.queuedMessages.hold({ messageIds: ['failed'], reason: 'send_failed' })
       const db = new Database(journalDatabasePath(root))
-      for (const [id, stored] of [
-        ['was-kept', 'kept'],
-        ['was-stopped', 'stopped']
-      ]) {
-        db.prepare('UPDATE queued_messages SET hold_reason = ? WHERE message_id = ?').run(
-          stored,
-          id
-        )
+      for (const [position, id, stored] of [
+        [1, 'was-kept', 'kept'],
+        [2, 'was-stopped', 'stopped'],
+        [3, 'failed', 'send_failed']
+      ] as const) {
+        db.prepare(
+          `INSERT INTO queued_messages (session_id, message_id, position, body_json, fingerprint,
+             created_at, host_instance, state, hold_reason)
+           VALUES (?, ?, ?, ?, '', 0, 'earlier', 'waiting', ?)`
+        ).run(IDENTITY.sessionId, id, position, JSON.stringify(message(id)), stored)
       }
       db.close()
       journal = await reopen(journal)

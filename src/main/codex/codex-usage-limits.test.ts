@@ -37,7 +37,6 @@ describe('a Codex usage limit', () => {
         secondary: { usedPercent: 100, windowDurationMins: 10080, resetsAt: RESETS_AT_S }
       }
     })
-    // An update may carry only what changed; the spent weekly window still stands.
     notify('account/rateLimits/updated', {
       rateLimits: {
         primary: { usedPercent: 41, windowDurationMins: 300, resetsAt: RESETS_AT_S - 3600 }

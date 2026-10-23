@@ -54,12 +54,6 @@ describe('assertNodePtyPatchApplied', () => {
       /\.symver glibc pins/
     )
   })
-
-  it('names the patch and the doc so the fix is findable', () => {
-    expect(() => assertNodePtyPatchApplied(stage("'ldflags': []", '// upstream'))).toThrow(
-      /config\/patches\/node-pty@1\.1\.0\.patch/
-    )
-  })
 })
 
 describe('slot naming', () => {

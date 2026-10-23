@@ -1,12 +1,4 @@
-// Claude task frames, read as each child's own account of itself.
-//
-// A child is live from its `task_started` until its own terminal `task_updated` or
-// `task_notification`; nothing else ends it. A roster (`background_tasks_changed`), a turn ending
-// or a spawn call returning is the parent's view of the child, not the child's, and the CLI sends
-// every child its own terminal frame, so none of them settles one. When the session ends, however
-// it ends, the host settles what is still live as unknown. A live child blocked on a permission
-// request reads waiting; no task frame says so, so the caller hands over which children a request
-// blocks. Edges wait here until the frame is journaled, then take the host clock.
+// Roster changes, turn endings and spawn results cannot settle a child.
 
 import type {
   AgentChildWorkKind,
@@ -39,11 +31,10 @@ import {
 type DecodedClaudeTask = {
   kind: AgentChildWorkKind
   backgrounded: boolean
-  /** The provider has reported it running; a monitor that never has reads as monitoring. */
+  /** Monitors stay monitoring until the provider reports them running. */
   running: boolean
   name?: string
   description?: string
-  /** The spawn call of the current run. */
   toolUseId?: string
 }
 
@@ -68,26 +59,23 @@ function observation(
     kind: task.kind,
     residency: task.backgrounded ? 'background' : 'foreground',
     state: waiting ? 'waiting' : task.running || task.kind !== 'monitor' ? 'working' : 'monitoring',
-    // The published row names a task's type as both its name and its agent type.
     ...(task.name ? { name: task.name, agentType: task.name } : {}),
     ...(task.description ? { description: task.description } : {}),
     ...(facts.totalTokens !== undefined ? { totalTokens: facts.totalTokens } : {}),
     ...(operation ? { operation } : {}),
     ...(facts.lastMessage ? { lastMessage: facts.lastMessage } : {}),
-    // Only a backgrounded task has a stop the host can target.
+    // Only background tasks expose a stop target.
     stoppable: task.backgrounded
   }
 }
 
 export class ClaudeChildWorkDecoder {
   private readonly live = new Map<string, DecodedClaudeTask>()
-  /** Ended task ids, with the spawn call each ended under and how. Kept for the session: a
-   *  forgotten id would read a wake under the same spawn call as a settled child. */
+  /** Retain ended runs for the session to distinguish wakes from late starts. */
   private readonly ended = new Map<
     string,
     { run: string | undefined; outcome: AgentChildWorkOutcome }
   >()
-  /** The children a pending permission request blocks, as the caller last derived them. */
   private waiting: ReadonlySet<string> = new Set()
   private pending: PendingEdge[] = []
 
@@ -110,7 +98,6 @@ export class ClaudeChildWorkDecoder {
         this.updated(id, record(message.patch))
         return
       case 'task_notification':
-        // Its `tool_use_id` names the run that ended (captured on a resumed agent's second run).
         this.end(id, message.status, {
           runId: taskAliasId(message.tool_use_id),
           lastMessage: taskText(message.summary),
@@ -119,8 +106,6 @@ export class ClaudeChildWorkDecoder {
     }
   }
 
-  /** Which children a pending request blocks, re-derived by the caller before every drain. A
-   *  live child that starts or stops waiting is a live edge of its own. */
   observeWaiting(waiting: ReadonlySet<string>): void {
     const previous = this.waiting
     this.waiting = waiting
@@ -132,7 +117,6 @@ export class ClaudeChildWorkDecoder {
     }
   }
 
-  /** The provider session is gone: the host settles what it still holds live. */
   clear(): void {
     this.live.clear()
     this.ended.clear()
@@ -147,7 +131,6 @@ export class ClaudeChildWorkDecoder {
   }
 
   private started(id: string, message: Record<string, unknown>): void {
-    // Work the CLI hides from its own transcript is not a child the user sees.
     if (message.ambient === true || message.skip_transcript === true) {
       return
     }
@@ -155,9 +138,7 @@ export class ClaudeChildWorkDecoder {
     const existing = this.live.get(id)
     const ended = existing ? undefined : this.ended.get(id)
     const restart = ended !== undefined
-    // Under the spawn call a run ended with, a start after it completed is that run waking (the
-    // CLI ends a helper's turn while work it started runs, then resumes it when that work ends);
-    // after any other ending it is the ended run's late start.
+    // Only successful runs can wake under the same spawn call; other starts are late frames.
     if (ended?.run !== undefined && ended.run === toolUseId && ended.outcome !== 'succeeded') {
       return
     }
@@ -186,7 +167,7 @@ export class ClaudeChildWorkDecoder {
     if (!task) {
       return
     }
-    // Progress `description` is the current activity ("Running <tool>"), not the task's name.
+    // Progress descriptions describe the current activity, not the task.
     this.upsert(
       id,
       { ...task, name: task.name ?? taskName(message) },
@@ -203,7 +184,7 @@ export class ClaudeChildWorkDecoder {
       return
     }
     const existing = this.live.get(id)
-    // Only a start re-opens an ended task; a late update from its run does not.
+    // Late updates cannot reopen an ended task.
     if (!existing && this.ended.has(id)) {
       return
     }
@@ -241,7 +222,7 @@ export class ClaudeChildWorkDecoder {
     this.report(id, task, facts, restart)
   }
 
-  /** Whether the child waits is read at drain, so every live edge a drain carries agrees. */
+  /** Read waiting state at drain so all queued live edges agree. */
   private report(id: string, task: DecodedClaudeTask, facts: ClaudeTaskFacts, restart = false) {
     this.pending.push((observedAt) => ({
       type: 'live',

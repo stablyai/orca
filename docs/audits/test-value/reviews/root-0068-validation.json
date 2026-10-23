@@ -1,0 +1,222 @@
+{
+  "batch": "root-0068",
+  "reviewer": "root",
+  "source_commit": "5d32f372e76983b6436d5700ce688990662e7243",
+  "reviewed_files": 1,
+  "original_declarations": 21,
+  "case_records": 21,
+  "explicit_parameter_rows": 5,
+  "passing_runtime_cases": 24,
+  "decisions": {
+    "keep": 7,
+    "fix": 14
+  },
+  "production_changes": false,
+  "checks": [
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/cli/handlers/orchestration-worker-cli.test.ts --reporter=json --outputFile=/tmp/orca-root-0068-baseline-tests.json",
+      "result": "passed",
+      "exit_code": 0,
+      "report": "/tmp/orca-root-0068-baseline-tests.json",
+      "report_sha256": "7004e00e55d57cf224fe8f1a1008e29bf1b27479c373b1a86b8bfe9d3833fbaf",
+      "log": "/tmp/orca-root-0068-baseline-tests.log",
+      "log_sha256": "7b13cb7f8fd765c1f85495ccf3166676b4f9da74b8a97dcf80d56aaa8a1b91da",
+      "passing_runtime_cases": 24,
+      "evidence_phase": "original baseline"
+    },
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/cli/handlers/orchestration-worker-cli.test.ts --reporter=json --outputFile=/tmp/orca-root-0068-reviewed-tests.json",
+      "result": "passed",
+      "exit_code": 0,
+      "report": "/tmp/orca-root-0068-reviewed-tests.json",
+      "report_sha256": "9c974f94890db510dcda02106e13add8c03eb2f4847a8d16a7c05f05db5d2dfe",
+      "log": "/tmp/orca-root-0068-reviewed-tests.log",
+      "log_sha256": "21638432933389d88372167a3f4d0f6312410b61d1663a53a3133923de5c7c61",
+      "passing_runtime_cases": 24,
+      "evidence_phase": "historical reviewed pass before final style/parsed-flag adjustment"
+    },
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/cli/handlers/orchestration-worker-cli.test.ts --reporter=json --outputFile=/tmp/orca-root-0068-final-tests.json",
+      "result": "passed",
+      "exit_code": 0,
+      "report": "/tmp/orca-root-0068-final-tests.json",
+      "report_sha256": "edf13018ac65e985d315f494f88670a7425eb5f1d1cfc9459f6eca631abf6c70",
+      "log": "/tmp/orca-root-0068-final-tests.log",
+      "log_sha256": "e74556e4776c702cd351397407db19268275ec7f0609fe1c9096ba88a06f4eb1",
+      "passing_runtime_cases": 24,
+      "evidence_phase": "historical reviewed pass before final style/parsed-flag adjustment"
+    },
+    {
+      "command": "pnpm exec oxlint src/cli/handlers/orchestration-worker-cli.test.ts",
+      "result": "passed",
+      "exit_code": 0,
+      "log": "/tmp/orca-root-0068-lint.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "command": "pnpm exec oxfmt --check src/cli/handlers/orchestration-worker-cli.test.ts",
+      "result": "passed",
+      "exit_code": 0,
+      "log": "/tmp/orca-root-0068-format.log",
+      "log_sha256": "40b223ad82c15debd657ab48f9473de002f232b3b9952793cf227fcea706bc3e"
+    },
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm tc:cli",
+      "result": "passed",
+      "exit_code": 0,
+      "log": "/tmp/orca-root-0068-final-typecheck.log",
+      "log_sha256": "64350cfafba2dd6bb61adf325923dc3c41762eb81a276ff9302796e6e77b09bc"
+    },
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/cli/handlers/orchestration-worker-cli.test.ts --reporter=default --reporter=json --outputFile=/tmp/orca-root-0068-reviewed-restored.json",
+      "exit_code": 0,
+      "passed": 24,
+      "failed": 0,
+      "failures": [],
+      "report": "/tmp/orca-root-0068-reviewed-restored.json",
+      "report_sha256": "514195fb4e8d6c99669a7604bdb33d31aa6d03346a5deb5523c0c43e01fa5f55",
+      "log": "/tmp/orca-root-0068-reviewed-restored.log",
+      "log_sha256": "ea04f39c701cbf4d1724739192b9192e80d396480703e447b4d0cd698481e916",
+      "test_sha256": "2a798f348da32d1642984346f0f574fc98d47e0aabef0935babbf8193e8d4dda",
+      "production_sha256": "e93e6413b9fb5c25827b77f83b99e68c097d94bf230f22a8caaca4ea9f67f584",
+      "result": "passed",
+      "evidence_phase": "final reviewed bytes after all changes"
+    }
+  ],
+  "mutation": {
+    "batch": "root-0068",
+    "defect": "Strip only the host warning from the response passed to the actual worker-start writer, preserving the formatter.",
+    "production_path": "src/cli/handlers/orchestration/worker-launch-handler.ts",
+    "original_source_sha256": "e93e6413b9fb5c25827b77f83b99e68c097d94bf230f22a8caaca4ea9f67f584",
+    "mutated_source_sha256": "08c96d426105aacc81df0f87409c20749e5ebc60100fe6897940b39696ae6283",
+    "restored_source_sha256": "e93e6413b9fb5c25827b77f83b99e68c097d94bf230f22a8caaca4ea9f67f584",
+    "original_test_sha256": "e333252d2d76586f3c48f9330fc3b43eaf4b9e3fbe9181d5a85b55f14f59a830",
+    "reviewed_test_sha256": "2a798f348da32d1642984346f0f574fc98d47e0aabef0935babbf8193e8d4dda",
+    "entire_worker_suite_executed_each_phase": true,
+    "results": {
+      "original-control": {
+        "command": [
+          "pnpm",
+          "test",
+          "src/cli/handlers/orchestration-worker-cli.test.ts",
+          "--reporter=default",
+          "--reporter=json",
+          "--outputFile=/tmp/orca-root-0068-original-control.json"
+        ],
+        "exit_code": 0,
+        "passed": 24,
+        "failed": 0,
+        "failures": [],
+        "report": "/tmp/orca-root-0068-original-control.json",
+        "report_sha256": "6253423741106fe5fb1f3343132a1dd78bece3866cc21251b532e320b8e5b8e7",
+        "log": "/tmp/orca-root-0068-original-control.log",
+        "log_sha256": "2765fc0b091558f3622257091557fefa8f083d5b92947c68059c99dcfbb54ce2",
+        "test_sha256": "e333252d2d76586f3c48f9330fc3b43eaf4b9e3fbe9181d5a85b55f14f59a830",
+        "production_sha256": "e93e6413b9fb5c25827b77f83b99e68c097d94bf230f22a8caaca4ea9f67f584"
+      },
+      "original-warning-mutant": {
+        "command": [
+          "pnpm",
+          "test",
+          "src/cli/handlers/orchestration-worker-cli.test.ts",
+          "--reporter=default",
+          "--reporter=json",
+          "--outputFile=/tmp/orca-root-0068-original-warning-mutant.json"
+        ],
+        "exit_code": 0,
+        "passed": 24,
+        "failed": 0,
+        "failures": [],
+        "report": "/tmp/orca-root-0068-original-warning-mutant.json",
+        "report_sha256": "e6fe0a187367effc3d71634fa0fe537a1f9d79be0105922aba6455ab80912548",
+        "log": "/tmp/orca-root-0068-original-warning-mutant.log",
+        "log_sha256": "010a1e24ec8559a235ced9fa009955f77458f2843a5fd963277577b256dcbadd",
+        "test_sha256": "e333252d2d76586f3c48f9330fc3b43eaf4b9e3fbe9181d5a85b55f14f59a830",
+        "production_sha256": "08c96d426105aacc81df0f87409c20749e5ebc60100fe6897940b39696ae6283"
+      },
+      "reviewed-warning-mutant": {
+        "command": [
+          "pnpm",
+          "test",
+          "src/cli/handlers/orchestration-worker-cli.test.ts",
+          "--reporter=default",
+          "--reporter=json",
+          "--outputFile=/tmp/orca-root-0068-reviewed-warning-mutant.json"
+        ],
+        "exit_code": 1,
+        "passed": 23,
+        "failed": 1,
+        "failures": [
+          {
+            "title": "prints a reveal warning for a live background worker",
+            "messages": [
+              "AssertionError: expected 'Worker ctx_1 [ready] for task_1' to contain 'Warning: Terminal term_worker is runn\u2026'\n    at /home/neil/orca/workspaces/orca/comprehensive-test-audit-7/src/cli/handlers/orchestration-worker-cli.test.ts:315:27\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:20"
+            ]
+          }
+        ],
+        "report": "/tmp/orca-root-0068-reviewed-warning-mutant.json",
+        "report_sha256": "0735eb4fb01df27590bda2c72fa690a3c10c50f5ec794f8c99552ba35bcfd1d3",
+        "log": "/tmp/orca-root-0068-reviewed-warning-mutant.log",
+        "log_sha256": "0874751a36d21ae460306b299eb3c6db8fd206a2eb4f0a289b6e772feebc5bfe",
+        "test_sha256": "2a798f348da32d1642984346f0f574fc98d47e0aabef0935babbf8193e8d4dda",
+        "production_sha256": "08c96d426105aacc81df0f87409c20749e5ebc60100fe6897940b39696ae6283"
+      },
+      "reviewed-restored": {
+        "command": [
+          "pnpm",
+          "test",
+          "src/cli/handlers/orchestration-worker-cli.test.ts",
+          "--reporter=default",
+          "--reporter=json",
+          "--outputFile=/tmp/orca-root-0068-reviewed-restored.json"
+        ],
+        "exit_code": 0,
+        "passed": 24,
+        "failed": 0,
+        "failures": [],
+        "report": "/tmp/orca-root-0068-reviewed-restored.json",
+        "report_sha256": "514195fb4e8d6c99669a7604bdb33d31aa6d03346a5deb5523c0c43e01fa5f55",
+        "log": "/tmp/orca-root-0068-reviewed-restored.log",
+        "log_sha256": "ea04f39c701cbf4d1724739192b9192e80d396480703e447b4d0cd698481e916",
+        "test_sha256": "2a798f348da32d1642984346f0f574fc98d47e0aabef0935babbf8193e8d4dda",
+        "production_sha256": "e93e6413b9fb5c25827b77f83b99e68c097d94bf230f22a8caaca4ea9f67f584"
+      }
+    }
+  },
+  "integrity": {
+    "records_sha256": "350d6cd3495001129f3c7fa34b9332418d34b55b5d3b5e8987b2241fa56ed7b9",
+    "original_and_final_hashes_verified": true,
+    "exact_original_case_slices_verified": 21,
+    "exact_parameter_rows_verified": 5,
+    "evidence_files_verified": 12,
+    "production_restoration_verified": true,
+    "original_snapshot_sha256": "77668c081400d717af6d4495fb81751e0c939efef0ed72df6e7a6fab9bdfc6db",
+    "plan_sha256": "0df58e0f6879c7db51f3e3ab2d274ef8c57d732246e10e063931420abf26b7be",
+    "record_generator_sha256": "893a81bbfa8c9ac10f7d188cf405b53833fad89254e3a883538dc39ee6a56b43",
+    "mutation_script_sha256": "81e58d0ccb344a2047f8e1d643b4248cff2c17dac79643363503473c2b6999f2",
+    "prior_records_sha256": "8df51a1a3e0bfd415f9a468863909543a73ffdc90f8f7bf2c7cda73b5c905881"
+  },
+  "limitations": [
+    "Injected RPC ports exercise actual CLI request mapping, flag validation and real writer/formatter/console data flow. No actual worker, remote host, native app or shell launches.",
+    "Existing21 declarations and all24 runtime cases are retained; temporary production warning stripping is fully restored. The regression proof shows the old full suite passes and the reviewed suite fails only the intended reveal-warning case."
+  ],
+  "integration_followup": {
+    "reason": "Changed-code quality rejected new context assertions. Use actual RuntimeClient instances with a stubbed call method and checked handler contexts. All same26 combined runtime cases and CLI typecheck pass. Original mutation evidence remains explicitly historical for its recorded pre-integration test hashes.",
+    "files": [
+      "src/cli/handlers/orchestration-task-list-brief.test.ts",
+      "src/cli/handlers/orchestration-worker-cli.test.ts"
+    ],
+    "test_report": "/tmp/orca-audit-7-checked-client-tests.json",
+    "test_report_sha256": "b04eff93ae15df51b827ae57e36d0c3d8dfe6dfe1d014ac890a275a52eecef78",
+    "test_log": "/tmp/orca-audit-7-checked-client-tests.log",
+    "test_log_sha256": "e90a1e7c905dba85c5d7f7da2456d3d5579e2a18569e39a9f96ee4fd2a082c3d",
+    "typecheck_command": "ORCA_BACKGROUND_LAUNCH=1 pnpm tc:cli",
+    "typecheck_log": "/tmp/orca-audit-7-checked-client-typecheck.log",
+    "typecheck_log_sha256": "64350cfafba2dd6bb61adf325923dc3c41762eb81a276ff9302796e6e77b09bc",
+    "exit_codes": {
+      "tests": 0,
+      "typecheck": 0
+    },
+    "checked_plan_sha256": "3fd7c446736855386e9f63134ec2fdd79ac205a76a649751a2a6f5b08be7dec5"
+  }
+}

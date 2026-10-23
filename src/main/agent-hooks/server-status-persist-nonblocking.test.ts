@@ -24,7 +24,6 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   return { ...actual, rename: vi.fn(actual.rename) }
 })
 
-// Regression guard for STA-8446 / #22804: a slow last-status rename must not stall hook ingress.
 describe('last-status persistence stays off the main thread', () => {
   let userDataPath: string
   let server: AgentHookServer
@@ -32,7 +31,7 @@ describe('last-status persistence stays off the main thread', () => {
   const lastStatusPath = (): string => join(userDataPath, 'agent-hooks', 'last-status.json')
   const readPrompt = (): unknown =>
     JSON.parse(readFileSync(lastStatusPath(), 'utf8')).entries[PANE]?.payload?.prompt
-  // Why filter: the endpoint file is written synchronously at start, which is not the status path.
+  // Exclude synchronous endpoint startup writes from status-persistence checks.
   const statusRenameSyncCalls = (): number =>
     vi.mocked(fs.renameSync).mock.calls.filter(([, to]) => String(to) === lastStatusPath()).length
   const prompt = (text: string): Promise<Response> =>
@@ -76,14 +75,13 @@ describe('last-status persistence stays off the main thread', () => {
       )
     ])
 
-    // Hook ingress and timers both progress while the rename is stuck.
     const timerFired = new Promise<boolean>((resolve) => setTimeout(() => resolve(true), 5))
     expect((await prompt('while renaming')).status).toBe(204)
     expect(await timerFired).toBe(true)
     expect(writeSync).not.toHaveBeenCalled()
     expect(statusRenameSyncCalls()).toBe(0)
 
-    // Quit flushes while the older rename is still held; releasing it afterwards must not undo that.
+    // An older async rename must not undo the synchronous quit flush.
     server.flushStatusPersistSync()
     expect(writeSync).toHaveBeenCalledTimes(1)
     expect(readPrompt()).toBe('while renaming')

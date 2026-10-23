@@ -1,8 +1,4 @@
-// How a durable session record becomes an ACP agent launch, on the machine this runtime runs on.
-//
-// Every input is read back from the record the store made durable, never from the call that
-// triggered the acquire: the working directory, the account home, and the provider session a
-// resume names are the ones this session proved.
+// Launch from durable record values for the working directory, pinned account and resume session.
 
 import { delimiter } from 'node:path'
 import { homedir } from 'node:os'
@@ -53,59 +49,46 @@ export type AcpStructuredLaunch = {
   command: string
   args: string[]
   cwd: string
-  /** The child's sealed environment; a read that starts no child gets the agent's own. */
+  /** Sealed for spawns; recovery reads use the unsealed agent environment. */
   env: Record<string, string>
-  /** Keys the child must not inherit from this process's own environment. */
   envToDelete: string[]
   fullAccess: boolean
-  /** The provider session to load; null starts a new one. */
   resume: {
     sessionId: string
-    /** The chain key of the session to load, which a fresh session names if it takes over. */
     key: string
-    /** Only a session this chat created and never exchanged a turn on may be one the agent never
-     *  saved, and so be superseded. Read only when the agent cannot reopen it. */
+    /** A chat-created session with no exchanged turn may never have been saved. */
     mayBeUnsaved: () => boolean
-    /** Keys of the conversations the chain says the agent lost whose warning row the chat does not
-     *  hold, as when the attach that would have written it failed. Read once the start succeeds. */
+    /** Lost conversations whose warning rows are missing; read after startup succeeds. */
     unannouncedLosses: () => string[]
   } | null
 }
 
 export type AcpStructuredLaunchPartDeps = {
-  /** The chat's journal as it stands, read without opening it; null when it has none. */
+  /** Reads without opening the journal. */
   readJournal: (sessionId: string) => JournalLoad | null
   resolveCommand?: typeof resolveCliCommand
   homePath?: string
-  /** The environment the child process inherits at spawn; this process's own by default. */
   inheritedEnv?: NodeJS.ProcessEnv
   probeVersion?: AgentCliVersionReader
-  /** Orca's data folder on this host, which holds the spec's managed runtime. */
   dataDirectory: string
 } & Pick<AcpLaunchVisualsDeps, 'logger'>
 
-/** What a launch's binary and environment are read from; a catalog probe reads the same. */
 export type AcpLaunchInvocationDeps = {
-  /** The shared base env; re-read per acquisition. */
+  /** Reread per acquisition. */
   resolveEnvironment: () => Promise<Record<string, string>>
-  /** The user's per-agent environment overlay from settings. */
   resolveLaunchEnv?: (agent: string) => Record<string, string>
-  /** The user's per-agent Command setting, re-read per acquisition; none runs the stock binary. */
+  /** Reread per acquisition; absent uses the stock command. */
   resolveCommandSettings?: () => StructuredAgentCommandSettings
-  /** Rereads that env when the agent's program is not found in it; absent never retries. */
+  /** Optional environment refresh after a missing-program lookup. */
   refreshEnvironmentAfterMiss?: (askedAt: number) => Promise<void>
-  /** Where the program starts, for a PATH entry relative to it; Orca's own when absent. */
+  /** Resolves relative PATH entries against the launch directory. */
   resolveWorkingDirectory?: () => Promise<string> | string
 } & Pick<
   AcpStructuredLaunchPartDeps,
   'resolveCommand' | 'homePath' | 'inheritedEnv' | 'dataDirectory'
 >
 
-/** The binary a launch with `env` spawns: the applicable Command setting when set, else the stock
- *  binary from PATH, then the agent's own install directories. A spec with a managed runtime runs
- *  its installed release before those, and a copy from them only beside every pinned member; the
- *  bare name when none qualifies. A create's version check resolves through here too, so it asks
- *  about the same file. A null `dataDirectory` skips the installed release. */
+/** Prefer explicit commands, then managed releases, then complete pinned copies on PATH. */
 export function resolveAcpLaunchCommand(
   spec: AcpLaunchSpec,
   env: Readonly<Record<string, string>>,
@@ -145,8 +128,6 @@ export function resolveAcpLaunchCommand(
   return (found !== spec.command && copyBesidePinnedMembers(found, pin)) || spec.command
 }
 
-/** What `command`'s `--version` says against the spec's minimums; asked only when the spec names
- *  some or `wantVersion`. */
 export async function checkAcpLaunchVersion(
   spec: AcpLaunchSpec,
   launch: { command: string; cwd: string; env: Record<string, string> },
@@ -163,9 +144,7 @@ export async function checkAcpLaunchVersion(
   )
 }
 
-/** The binary and environment any child of this agent runs under for `accountHome`: a session's
- *  launch and a catalog probe both resolve here, so neither can reach another account or install,
- *  and both reread the environment once when the program is missing from it. */
+/** Resolve chats and probes consistently; optionally refresh once after a missing-program lookup. */
 export function resolveAcpLaunchInvocation(
   spec: AcpLaunchSpec,
   accountHome: AgentSessionAccountHome,
@@ -197,8 +176,6 @@ async function readAcpLaunchInvocation(
   return { command, env, envToDelete }
 }
 
-/** An ACP agent's part of a launch: its binary under the pinned account, the release check, the
- *  visuals skill, its arguments and the provider session to reattach. */
 export function acpStructuredLaunchPart(
   spec: AcpLaunchSpec,
   deps: AcpStructuredLaunchPartDeps
@@ -222,7 +199,7 @@ export function acpStructuredLaunchPart(
     )
     const cwd = await basis.launchDirectory()
     const visuals = spec.visualsSkill ? await basis.visuals() : null
-    // Again at every launch: the binary on PATH may have changed since the chat was created.
+    // PATH may have changed since chat creation.
     const launchVersion = await checkAcpLaunchVersion(
       spec,
       { command, cwd, env },
@@ -242,7 +219,6 @@ export function acpStructuredLaunchPart(
           inherited: deps.inheritedEnv ?? process.env
         })
       : null
-    // The chat's own mode, as the host decided it for this start; a start naming none asks.
     const fullAccess = basis.permissionMode === 'full-access'
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
     return {
@@ -267,7 +243,7 @@ export function acpStructuredLaunchPart(
       inheritedEnvToDelete: [
         ...STRUCTURED_CHILD_ENV_TO_DELETE,
         ...envToDelete,
-        // Without visuals, a folder Orca itself inherited (started from a chat) names another chat's.
+        // An inherited scratch directory belongs to a different chat.
         ...(skill ? [] : [NATIVE_CHAT_SCRATCH_DIR_ENV]),
         LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV
       ]
@@ -275,8 +251,7 @@ export function acpStructuredLaunchPart(
   }
 }
 
-/** Proof the chat holds no turn of provider session `nativeId`; a journal that does not read whole,
- *  or does not read at all, proves nothing. */
+/** Missing journals count as empty; read errors or damaged/newer journals cannot prove no exchange. */
 function nothingExchangedOn(
   readJournal: AcpStructuredLaunchPartDeps['readJournal'],
   sessionId: string,
@@ -303,8 +278,7 @@ function nothingExchangedOn(
   return true
 }
 
-/** Derived on every start, never stored: a row an attach failure dropped is written by the next
- *  start that succeeds. A journal that does not read whole proves nothing, so none is written. */
+/** Retry missing loss-warning rows on successful starts; unreadable journals suppress new warnings. */
 function unannouncedLosses(
   readJournal: AcpStructuredLaunchPartDeps['readJournal'],
   sessionId: string,
@@ -337,6 +311,6 @@ function unannouncedLosses(
       written.add(spelled)
     }
   }
-  // Any session's row counts: one an unused replacement wrote stays when the agent supersedes it.
+  // Warnings survive even if the replacement session that wrote them is superseded.
   return lost.filter((key) => !written.has(providerTimelineKeyPart(acpSessionNotRestoredItem(key))))
 }

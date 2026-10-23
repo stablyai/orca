@@ -255,16 +255,12 @@ async function runFixture(mode: FixtureMode): Promise<FixtureResult> {
 }
 
 describe('partitioned cookies under a failed replace-imported-domains import', () => {
-  // Why (STA-4097): this rollback undoes deletions the import already made to the user's own
-  // cookies. Rebuilding them with cookies.set dropped partitionKey silently, so a CHIPS cookie
-  // came back as an ordinary one and no restart recovered it.
   it('site A: restores a CHIPS cookie with its partition after a later removal rejects', async () => {
     const result = await runFixture('site-a')
 
     expect(result.beforePartitionKey).toEqual(EXPECTED_PARTITION_KEY)
-    // Why: without this the fixture could pass on a cookie that was never partitioned.
+    // Electron omits the partition key even for this verified CHIPS cookie.
     expect(result.electronGetSawPartitionKey).toBe(false)
-    // Why: assert the rollback was reached, not just that the jar looks right at the end.
     expect(result.snapshotCalls).toBe(1)
     expect(result.removeCallsBeforeThrow).toBeGreaterThanOrEqual(1)
     expect(result.restoreCalls).toBe(1)

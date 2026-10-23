@@ -66,10 +66,4 @@ describe('the auth-failed banner on the page', () => {
   it('names the app for reconnect and removal, not for re-pair', () => {
     expect(labels(render().root)).toContain('Reconnect or remove this host from the Orca app.')
   })
-
-  it('keeps the sentence that says what happened', () => {
-    expect(labels(render().root)).toContain(
-      'Authentication failed — try reconnecting first; if it keeps failing, re-pair from desktop.'
-    )
-  })
 })

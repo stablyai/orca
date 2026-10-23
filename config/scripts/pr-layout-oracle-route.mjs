@@ -62,6 +62,7 @@ const LAYOUT_ORACLE_PREFIXES = [
   '.github/scripts/e2e-with-window-manager.sh',
   // The job itself: the called workflow, its window-spec lane picker, and this route.
   '.github/workflows/e2e.yml',
+  '.github/scripts/prepare-ubuntu-apt.sh',
   'config/scripts/ci-e2e-job-selection.mjs',
   'config/scripts/pr-layout-oracle-route.mjs'
 ]

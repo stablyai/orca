@@ -84,7 +84,7 @@ function processHostExportsExist(packageDir: string): boolean {
   )
 }
 
-/** Hash code and its file list, without rereading the 260MB Electron image; unchanged files reuse cached hashes. */
+/** Fingerprint code and layout without hashing the large Electron executable. */
 export function collectDaemonHostBuildInventory(
   sources: DaemonHostSources
 ): DaemonHostBuildInventory | null {

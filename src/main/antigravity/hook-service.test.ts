@@ -29,7 +29,6 @@ const ANTIGRAVITY_POST_TOOL_USE_COMMAND =
   process.platform === 'win32' ? 'antigravity-post-tool-use.cmd' : 'antigravity-hook.sh'
 const ANTIGRAVITY_PRE_TOOL_USE_COMMAND =
   process.platform === 'win32' ? 'antigravity-pre-tool-use.cmd' : 'antigravity-hook.sh'
-// Why: the gate decision Orca is allowed to emit — "allow" would auto-approve every observed tool call.
 const PRE_TOOL_USE_DECISION = '{"decision":"ask"}'
 const POLICY_OVERRIDING_DECISIONS = ['allow', 'deny', 'force_ask', 'deny_unless_prior_grant']
 
@@ -108,15 +107,12 @@ describe('AntigravityHookService', () => {
       expect(
         readFileSync(join(homeDir, '.orca', 'agent-hooks', 'antigravity-hook-post.cjs'), 'utf8')
       ).toContain('/hook/antigravity')
-      // Why (#9358/#9941): delayed expansion eats `!` out of percent-expanded curl args.
       expect(script).toContain('setlocal DisableDelayedExpansion')
     } else {
       expect(script).toContain('hook_event_name=${ORCA_ANTIGRAVITY_EVENT}')
       expect(script).toContain(`payload=$(${POSIX_HOOK_JSON_STDIN_READER})`)
       expect(script).toContain("payload='{}'")
       expect(script).not.toContain('if [ -z "$payload" ]; then\n  exit 0\nfi')
-      // Why: payload is piped to curl via stdin (`payload@-`) so it never lands
-      // on the curl command line (EDR oversized-command-line false positive).
       expect(script).toContain('printf \'%s\' "$payload" | curl')
       expect(script).toContain('--data-urlencode "payload@-"')
       expect(script).not.toContain('--data-urlencode "payload=${payload}"')
@@ -151,7 +147,6 @@ describe('AntigravityHookService', () => {
       )
 
       expect(result.status).toBe(0)
-      // Why: Antigravity reads silence/`{}` on PreToolUse as a deny (#2426), so the exact payload is the contract.
       expect(result.stdout).toBe(`${PRE_TOOL_USE_DECISION}\n`)
     }
   )
@@ -172,7 +167,7 @@ describe('AntigravityHookService', () => {
         encoding: 'utf8'
       })
 
-      // Why: hooks.json lives in ~/.gemini and outlives ~/.orca, so a swept script must not deny every tool call.
+      // Config under .gemini can outlive managed scripts under .orca.
       expect(result.status).toBe(0)
       expect(result.stdout).toBe(`${PRE_TOOL_USE_DECISION}\n`)
     }
@@ -269,7 +264,6 @@ describe('AntigravityHookService', () => {
         const wrapper = readFileSync(join(homeDir, '.orca', 'agent-hooks', wrapperFileName), 'utf8')
         expect(wrapper).toContain(`set "ORCA_ANTIGRAVITY_EVENT=${eventName}"`)
         expect(wrapper).toContain('call "%ORCA_ANTIGRAVITY_CORE%"')
-        // Why: the wrapper is the stdin owner when the core script is gone, so it must answer the gate itself.
         if (eventName === 'PreToolUse') {
           expect(wrapper).toContain(`echo ${PRE_TOOL_USE_DECISION}`)
         }
@@ -399,7 +393,6 @@ describe('AntigravityHookService', () => {
       'orca-status': Record<string, { command?: string; hooks?: { command: string }[] }[]>
     }
     expect(config['orca-status'].OldEvent).toBeUndefined()
-    // Why: the pre-a480e6b7 PreToolUse entry pointed at a script with no gate branch; it must be replaced, not kept.
     const preToolCommands = config['orca-status'].PreToolUse.flatMap((definition) =>
       (definition.hooks ?? []).map((hook) => hook.command)
     )
@@ -420,7 +413,7 @@ describe('AntigravityHookService', () => {
   it('replaces legacy backslash Windows entries and keeps user hooks', () => {
     withPlatform('win32', () => {
       const configPath = join(homeDir, '.gemini', 'config', 'hooks.json')
-      // The pre-forward-slash bare paths: Git Bash strips their backslashes and exits 127.
+      // Git Bash strips backslashes from legacy bare paths.
       const legacyStop = 'C:\\Users\\ada\\.orca\\agent-hooks\\antigravity-stop.cmd'
       const legacyPreToolUse = 'C:\\Users\\ada\\.orca\\agent-hooks\\antigravity-pre-tool-use.cmd'
       const userHook = { type: 'command', command: 'C:\\tools\\user-hook.cmd' }

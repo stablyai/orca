@@ -1,0 +1,471 @@
+{
+  "batch": "root-0082",
+  "status": "implemented-and-validated",
+  "reviewer": "root",
+  "source_commit": "b174e53f69b5f2335c8ce42363b73c3feb06c8dd",
+  "review_records_sha256": "668985fa90037e4a5c2c5d2684c192e2064a52a9873c124d0c521bb5bde5db1f",
+  "reviewed_files": 1,
+  "original_declarations": 23,
+  "final_declarations": 23,
+  "explicit_parameter_rows": 7,
+  "parameter_declarations": 2,
+  "runtime_cases_per_full_run": 28,
+  "case_decisions": {
+    "keep": 10,
+    "fix": 13,
+    "consolidate": 0,
+    "remove": 0
+  },
+  "scope": "Read all 23 declarations, both parameter tables, complete fixture/hook setup and relevant production paths. Keep all 28 runtime cases; strengthen independent project output, selected SSH-host filtering, complete clone identity and structured refusals. Replace assertion-dependent process-status restoration with suite teardown. No actual repository, setup, server, network or native app operation.",
+  "changes": [
+    "Exercise actual human project formatting and require the complete GitHub identity and providerless folder rows in one output; the original --json case checked only the project.list call and could pass with broken human output.",
+    "Require a structured incompatible_runtime refusal after method_not_found, retain actionable update text and exclude the raw unknown-method message; exit state is reset/restored even if an assertion fails.",
+    "Preserve unknown runtime-host rejection, empty known environments and no setup-list dispatch; require the false error envelope and failure-safe exit cleanup.",
+    "An actual empty SSH-target response must produce structured invalid_argument and the named missing-target message, without fetching setups; teardown restores exit state after failure.",
+    "A paired environment mistakenly selected via ssh must return structured invalid_argument plus --environment awin recovery; preserve its real paired-store and empty-target inputs.",
+    "Add a second setup on a different SSH host and require only the full selected row, so bypassing host filtering fails; resolve the user label through the actual target lookup rather than pre-normalizing the flag.",
+    "Malformed runtime: must produce structured invalid_argument and the exact invalid-host explanation before any runtime request; reset and restore process status with suite hooks.",
+    "Conflicting runtime-host and pairing-code selection must reject with structured invalid_argument, specific mutually exclusive selector advice and no runtime request; cleanup must run after assertion failure.",
+    "Paired-server setup must reject a client-relative path before any RPC, require structured invalid_argument and retain the remote absolute-path explanation.",
+    "SSH setup must reject the same relative spelling even on a local runtime connection because the path belongs to the SSH target; require structured invalid_argument and no request.",
+    "Pairing-code repo.add must reject client-relative input with structured invalid_argument and absolute remote-path advice before any request.",
+    "Require the complete clone request, including projectId, runtime hostId and clone URL beside unchanged Windows destination, so a correct destination cannot hide cloning the wrong repository.",
+    "Require status.get as the sole request, a single structured incompatible_runtime refusal with host-target update explanation, and failure status; the original no-delete-only assertion could pass for unrelated early errors."
+  ],
+  "source_domains": "Complete original/final source, every declaration/array/loop/lifecycle span, all seven literal parameter rows with separate reasons, and all 28 baseline/reviewed runtime instances are embedded in the ledger.",
+  "runtime_results": [
+    {
+      "phase": "isolated-baseline",
+      "cwd": "/tmp/orca-root-0082-pre-review/isolated-repo",
+      "command_normalized": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--config",
+        "config/vitest.config.ts",
+        "src/cli/index-project-setup.test.ts",
+        "--maxWorkers=1",
+        "--reporter=json",
+        "--outputFile=/tmp/orca-root-0082-pre-review/baseline.json"
+      ],
+      "environment": {
+        "ORCA_BACKGROUND_LAUNCH": "1"
+      },
+      "exit_code": 0,
+      "passed": 28,
+      "failed": 0,
+      "skipped": 0,
+      "report": "/tmp/orca-root-0082-pre-review/baseline.json",
+      "report_sha256": "9941150e6e57d624083269cfff85a3124ead3dc20e8b7bb7eb0c834b4ed951a6",
+      "log": "/tmp/orca-root-0082-pre-review/baseline.log",
+      "log_sha256": "170f9bd0e9978f1f3298c6ccc00c566c120ed4820b158680bfa5215ac8fc6f75"
+    },
+    {
+      "phase": "isolated-reviewed",
+      "cwd": "/tmp/orca-root-0082-pre-review/isolated-repo",
+      "command_normalized": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--config",
+        "config/vitest.config.ts",
+        "src/cli/index-project-setup.test.ts",
+        "--maxWorkers=1",
+        "--reporter=json",
+        "--outputFile=/tmp/orca-root-0082-pre-review/reviewed.json"
+      ],
+      "environment": {
+        "ORCA_BACKGROUND_LAUNCH": "1"
+      },
+      "exit_code": 0,
+      "passed": 28,
+      "failed": 0,
+      "skipped": 0,
+      "report": "/tmp/orca-root-0082-pre-review/reviewed.json",
+      "report_sha256": "5cbea09d6615e280e5cf5d3ff6719f4afa47deb40ef519f489057095e4b5bc37",
+      "log": "/tmp/orca-root-0082-pre-review/reviewed.log",
+      "log_sha256": "20ae35b2149ceefb5a16ffac3a418365cd02dbf83ea6cd85e9715a790e17649a"
+    }
+  ],
+  "mutations": [
+    {
+      "name": "wrong-providerless-project-output",
+      "production": "src/cli/project-format.ts",
+      "test": "src/cli/index-project-setup.test.ts",
+      "production_sha256": "23283f5ccda28ee097db5f35816769f0db14282f963f7d95b0b5a2e4d7c0df9b",
+      "mutated_sha256": "6dc12ac19aa2ab5c6220d5a3443f75c32ea37e937eb6655846b36f364ddc081a",
+      "mutant_source": "/tmp/orca-root-0082-pre-review/mutations/wrong-providerless-project-output/production-mutant.source",
+      "runs": [
+        {
+          "mode": "original",
+          "cwd": "/tmp/orca-root-0082-pre-review/isolated-repo",
+          "command": [
+            "node",
+            "/home/neil/orca/workspaces/orca/comprehensive-test-audit-9/node_modules/vitest/vitest.mjs",
+            "run",
+            "--config",
+            "config/vitest.config.ts",
+            "src/cli/index-project-setup.test.ts",
+            "--maxWorkers=1",
+            "--reporter=json",
+            "--outputFile=/tmp/orca-root-0082-pre-review/mutations/wrong-providerless-project-output/original.json",
+            "-t",
+            "lists projects through"
+          ],
+          "environment": {
+            "ORCA_BACKGROUND_LAUNCH": "1"
+          },
+          "exit_code": 0,
+          "passed": 1,
+          "failed": 0,
+          "skipped": 27,
+          "test_sha256": "1e481b226f4538b4225cc12162b376e1932b72034ce1242918d31a417acaf5b7",
+          "report": "/tmp/orca-root-0082-pre-review/mutations/wrong-providerless-project-output/original.json",
+          "report_sha256": "2feff7c0663a6a867b956fadef42a953584f9e051d034a786a1751698ed73978",
+          "log": "/tmp/orca-root-0082-pre-review/mutations/wrong-providerless-project-output/original.log",
+          "log_sha256": "d326295dc130c65167201f33690e9b4498fc5e821de790996df0d656c711e38e",
+          "failures": []
+        },
+        {
+          "mode": "reviewed",
+          "cwd": "/tmp/orca-root-0082-pre-review/isolated-repo",
+          "command": [
+            "node",
+            "/home/neil/orca/workspaces/orca/comprehensive-test-audit-9/node_modules/vitest/vitest.mjs",
+            "run",
+            "--config",
+            "config/vitest.config.ts",
+            "src/cli/index-project-setup.test.ts",
+            "--maxWorkers=1",
+            "--reporter=json",
+            "--outputFile=/tmp/orca-root-0082-pre-review/mutations/wrong-providerless-project-output/reviewed.json",
+            "-t",
+            "lists projects through"
+          ],
+          "environment": {
+            "ORCA_BACKGROUND_LAUNCH": "1"
+          },
+          "exit_code": 1,
+          "passed": 0,
+          "failed": 1,
+          "skipped": 27,
+          "test_sha256": "8de84503fbc64f484b03e03630d3d8545a81d49f090a45064aa238701ee038ff",
+          "report": "/tmp/orca-root-0082-pre-review/mutations/wrong-providerless-project-output/reviewed.json",
+          "report_sha256": "accc20835bd888561396db9a91435ea94cdc1449e3fe0839a29be09bd1921bba",
+          "log": "/tmp/orca-root-0082-pre-review/mutations/wrong-providerless-project-output/reviewed.log",
+          "log_sha256": "e7fcfd6ffb5269324d0bea964e77490e49c45345d20593563bf79af53ac1bbc1",
+          "failures": [
+            {
+              "title": "lists projects through the project-first runtime API",
+              "messages": [
+                "AssertionError: expected \"log\" to be called once with arguments: [ Array(1) ]\n\nReceived:\n\n  1st log call:\n\n  [\n    \"github:stablyai/orca  Orca  github:stablyai/orca\n- folder:notes  Notes  no-provider\",\n+ folder:notes  Notes  unknown\",\n  ]\n\n\nNumber of calls: 1\n\n    at Proxy.<anonymous> (file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/index.aTZaPVhf.js:2265:10)\n    at Proxy.<anonymous> (file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/index.aTZaPVhf.js:1958:14)\n    at Proxy.methodWrapper (file:///home/neil/.local/share/pnpm/store/v11/links/@/chai/6.3.0/25b5fcf6626be1440275f25f04f4b64170f3760bb1da107f5691c470b8dd65d1/node_modules/chai/index.js:1737:25)\n    at /tmp/orca-root-0082-pre-review/isolated-repo/src/cli/index-project-setup.test.ts:132:20\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:20"
+              ]
+            }
+          ]
+        }
+      ],
+      "copied_production_restored": true,
+      "shared_production_unchanged": true
+    },
+    {
+      "name": "wrong-clone-url",
+      "production": "src/cli/handlers/project.ts",
+      "test": "src/cli/index-project-setup.test.ts",
+      "production_sha256": "4b8fa1a88a9d7743a6bc5787cb9f8951675170cee20795376617fa1e143db5dd",
+      "mutated_sha256": "ae60e6c529e0b3a450a40a63b34dad26480720acf065e9e1505cd8f838a99e28",
+      "mutant_source": "/tmp/orca-root-0082-pre-review/mutations/wrong-clone-url/production-mutant.source",
+      "runs": [
+        {
+          "mode": "original",
+          "cwd": "/tmp/orca-root-0082-pre-review/isolated-repo",
+          "command": [
+            "node",
+            "/home/neil/orca/workspaces/orca/comprehensive-test-audit-9/node_modules/vitest/vitest.mjs",
+            "run",
+            "--config",
+            "config/vitest.config.ts",
+            "src/cli/index-project-setup.test.ts",
+            "--maxWorkers=1",
+            "--reporter=json",
+            "--outputFile=/tmp/orca-root-0082-pre-review/mutations/wrong-clone-url/original.json",
+            "-t",
+            "sends a windows destination"
+          ],
+          "environment": {
+            "ORCA_BACKGROUND_LAUNCH": "1"
+          },
+          "exit_code": 0,
+          "passed": 1,
+          "failed": 0,
+          "skipped": 27,
+          "test_sha256": "1e481b226f4538b4225cc12162b376e1932b72034ce1242918d31a417acaf5b7",
+          "report": "/tmp/orca-root-0082-pre-review/mutations/wrong-clone-url/original.json",
+          "report_sha256": "44282e3f4e181ab2567f7004b9dc09d5e06f7e78013f43e3168ef3d6aaab33ee",
+          "log": "/tmp/orca-root-0082-pre-review/mutations/wrong-clone-url/original.log",
+          "log_sha256": "dbe59701f981572ab5bd75505047ea731816b8846cb68d8f12430389345c4ba7",
+          "failures": []
+        },
+        {
+          "mode": "reviewed",
+          "cwd": "/tmp/orca-root-0082-pre-review/isolated-repo",
+          "command": [
+            "node",
+            "/home/neil/orca/workspaces/orca/comprehensive-test-audit-9/node_modules/vitest/vitest.mjs",
+            "run",
+            "--config",
+            "config/vitest.config.ts",
+            "src/cli/index-project-setup.test.ts",
+            "--maxWorkers=1",
+            "--reporter=json",
+            "--outputFile=/tmp/orca-root-0082-pre-review/mutations/wrong-clone-url/reviewed.json",
+            "-t",
+            "sends a windows destination"
+          ],
+          "environment": {
+            "ORCA_BACKGROUND_LAUNCH": "1"
+          },
+          "exit_code": 1,
+          "passed": 0,
+          "failed": 1,
+          "skipped": 27,
+          "test_sha256": "8de84503fbc64f484b03e03630d3d8545a81d49f090a45064aa238701ee038ff",
+          "report": "/tmp/orca-root-0082-pre-review/mutations/wrong-clone-url/reviewed.json",
+          "report_sha256": "e6aa4e123af0584812cd5852286b69035526624f492b9194086adb76f083bcd5",
+          "log": "/tmp/orca-root-0082-pre-review/mutations/wrong-clone-url/reviewed.log",
+          "log_sha256": "6c1a76022bc9de411b493ce1673027d10b46318fd1d4894741867a224ef68372",
+          "failures": [
+            {
+              "title": "sends a windows destination to the routed host instead of joining it to the local cwd",
+              "messages": [
+                "AssertionError: expected \"vi.fn()\" to be called with arguments: [ 'projectHostSetup.clone', { \u2026(5) } ]\n\nReceived:\n\n  1st vi.fn() call:\n\n  [\n-   \"projectHostSetup.clone\",\n-   {\n-     \"destination\": \"C:\\\\orca-probe\",\n-     \"displayName\": undefined,\n-     \"hostId\": \"runtime:awin\",\n-     \"projectId\": \"github:stablyai/orca\",\n-     \"url\": \"https://github.com/stablyai/orca.git\",\n-   },\n+   \"project.list\",\n  ]\n\n  2nd vi.fn() call:\n\n@@ -3,8 +3,8 @@\n    {\n      \"destination\": \"C:\\\\orca-probe\",\n      \"displayName\": undefined,\n      \"hostId\": \"runtime:awin\",\n      \"projectId\": \"github:stablyai/orca\",\n-     \"url\": \"https://github.com/stablyai/orca.git\",\n+     \"url\": \"https://example.com/wrong.git\",\n    },\n  ]\n\n\nNumber of calls: 2\n\n    at Proxy.<anonymous> (file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/index.aTZaPVhf.js:2249:10)\n    at Proxy.<anonymous> (file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/index.aTZaPVhf.js:1958:14)\n    at Proxy.methodWrapper (file:///home/neil/.local/share/pnpm/store/v11/links/@/chai/6.3.0/25b5fcf6626be1440275f25f04f4b64170f3760bb1da107f5691c470b8dd65d1/node_modules/chai/index.js:1737:25)\n    at /tmp/orca-root-0082-pre-review/isolated-repo/src/cli/index-project-setup.test.ts:659:22\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:20"
+              ]
+            }
+          ]
+        }
+      ],
+      "copied_production_restored": true,
+      "shared_production_unchanged": true
+    },
+    {
+      "name": "wrong-host-target-refusal-code",
+      "production": "src/cli/handlers/project.ts",
+      "test": "src/cli/index-project-setup.test.ts",
+      "production_sha256": "4b8fa1a88a9d7743a6bc5787cb9f8951675170cee20795376617fa1e143db5dd",
+      "mutated_sha256": "0190c41fc02653dc034e98daf3e6b5fdafc83c059021894903b4f0cb8e1f2d92",
+      "mutant_source": "/tmp/orca-root-0082-pre-review/mutations/wrong-host-target-refusal-code/production-mutant.source",
+      "runs": [
+        {
+          "mode": "original",
+          "cwd": "/tmp/orca-root-0082-pre-review/isolated-repo",
+          "command": [
+            "node",
+            "/home/neil/orca/workspaces/orca/comprehensive-test-audit-9/node_modules/vitest/vitest.mjs",
+            "run",
+            "--config",
+            "config/vitest.config.ts",
+            "src/cli/index-project-setup.test.ts",
+            "--maxWorkers=1",
+            "--reporter=json",
+            "--outputFile=/tmp/orca-root-0082-pre-review/mutations/wrong-host-target-refusal-code/original.json",
+            "-t",
+            "refuses --host on a server"
+          ],
+          "environment": {
+            "ORCA_BACKGROUND_LAUNCH": "1"
+          },
+          "exit_code": 0,
+          "passed": 1,
+          "failed": 0,
+          "skipped": 27,
+          "test_sha256": "1e481b226f4538b4225cc12162b376e1932b72034ce1242918d31a417acaf5b7",
+          "report": "/tmp/orca-root-0082-pre-review/mutations/wrong-host-target-refusal-code/original.json",
+          "report_sha256": "7cb966d50e676adfbabe086fc6495fef33c01539ba6b96c5870e6d13ff00a253",
+          "log": "/tmp/orca-root-0082-pre-review/mutations/wrong-host-target-refusal-code/original.log",
+          "log_sha256": "636765878a96add0446c945a424ae9bacc678e26dfe9c7240c78951ec962d854",
+          "failures": []
+        },
+        {
+          "mode": "reviewed",
+          "cwd": "/tmp/orca-root-0082-pre-review/isolated-repo",
+          "command": [
+            "node",
+            "/home/neil/orca/workspaces/orca/comprehensive-test-audit-9/node_modules/vitest/vitest.mjs",
+            "run",
+            "--config",
+            "config/vitest.config.ts",
+            "src/cli/index-project-setup.test.ts",
+            "--maxWorkers=1",
+            "--reporter=json",
+            "--outputFile=/tmp/orca-root-0082-pre-review/mutations/wrong-host-target-refusal-code/reviewed.json",
+            "-t",
+            "refuses --host on a server"
+          ],
+          "environment": {
+            "ORCA_BACKGROUND_LAUNCH": "1"
+          },
+          "exit_code": 1,
+          "passed": 0,
+          "failed": 1,
+          "skipped": 27,
+          "test_sha256": "8de84503fbc64f484b03e03630d3d8545a81d49f090a45064aa238701ee038ff",
+          "report": "/tmp/orca-root-0082-pre-review/mutations/wrong-host-target-refusal-code/reviewed.json",
+          "report_sha256": "364b762e80748677bf8738c019c2ac18fa7700f8e2cac4f03db70f387dfeae9b",
+          "log": "/tmp/orca-root-0082-pre-review/mutations/wrong-host-target-refusal-code/reviewed.log",
+          "log_sha256": "659cf6513d68d519bd0d52b5a221d2108249b270ebffdad46a1812a738c80fdc",
+          "failures": [
+            {
+              "title": "refuses --host on a server that would ignore it and act on the first same-id twin",
+              "messages": [
+                "AssertionError: expected { id: 'local', ok: false, \u2026(2) } to match object { ok: false, error: { \u2026(2) } }\n(3 matching properties omitted from actual)\n    at Proxy.<anonymous> (file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/index.aTZaPVhf.js:2066:10)\n    at Proxy.<anonymous> (file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/index.aTZaPVhf.js:1958:14)\n    at Proxy.methodWrapper (file:///home/neil/.local/share/pnpm/store/v11/links/@/chai/6.3.0/25b5fcf6626be1440275f25f04f4b64170f3760bb1da107f5691c470b8dd65d1/node_modules/chai/index.js:1737:25)\n    at /tmp/orca-root-0082-pre-review/isolated-repo/src/cli/index-project-setup.test.ts:855:59\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:20"
+              ]
+            }
+          ]
+        }
+      ],
+      "copied_production_restored": true,
+      "shared_production_unchanged": true
+    },
+    {
+      "name": "unfiltered-ssh-project-setups",
+      "production": "src/cli/handlers/project.ts",
+      "test": "src/cli/index-project-setup.test.ts",
+      "production_sha256": "4b8fa1a88a9d7743a6bc5787cb9f8951675170cee20795376617fa1e143db5dd",
+      "mutated_sha256": "56399afd0546b67a6f7ca5bf50f7836994b39da404d3fc427ded92eb41b0e2bc",
+      "mutant_source": "/tmp/orca-root-0082-pre-review/mutations/unfiltered-ssh-project-setups/production-mutant.source",
+      "runs": [
+        {
+          "mode": "original",
+          "cwd": "/tmp/orca-root-0082-pre-review/isolated-repo",
+          "command": [
+            "node",
+            "/home/neil/orca/workspaces/orca/comprehensive-test-audit-9/node_modules/vitest/vitest.mjs",
+            "run",
+            "--config",
+            "config/vitest.config.ts",
+            "src/cli/index-project-setup.test.ts",
+            "--maxWorkers=1",
+            "--reporter=json",
+            "--outputFile=/tmp/orca-root-0082-pre-review/mutations/unfiltered-ssh-project-setups/original.json",
+            "-t",
+            "resolves an ssh label"
+          ],
+          "environment": {
+            "ORCA_BACKGROUND_LAUNCH": "1"
+          },
+          "exit_code": 0,
+          "passed": 1,
+          "failed": 0,
+          "skipped": 27,
+          "test_sha256": "1e481b226f4538b4225cc12162b376e1932b72034ce1242918d31a417acaf5b7",
+          "report": "/tmp/orca-root-0082-pre-review/mutations/unfiltered-ssh-project-setups/original.json",
+          "report_sha256": "821cd31c7f14ee3804ff430c77950f72aae60e4833dd6e263f32b4b6b0fd5ebd",
+          "log": "/tmp/orca-root-0082-pre-review/mutations/unfiltered-ssh-project-setups/original.log",
+          "log_sha256": "aef544d8744d6585fb1c7ff44889f3b030a017facbd875b2305a8e3395f2eece",
+          "failures": []
+        },
+        {
+          "mode": "reviewed",
+          "cwd": "/tmp/orca-root-0082-pre-review/isolated-repo",
+          "command": [
+            "node",
+            "/home/neil/orca/workspaces/orca/comprehensive-test-audit-9/node_modules/vitest/vitest.mjs",
+            "run",
+            "--config",
+            "config/vitest.config.ts",
+            "src/cli/index-project-setup.test.ts",
+            "--maxWorkers=1",
+            "--reporter=json",
+            "--outputFile=/tmp/orca-root-0082-pre-review/mutations/unfiltered-ssh-project-setups/reviewed.json",
+            "-t",
+            "resolves an ssh label"
+          ],
+          "environment": {
+            "ORCA_BACKGROUND_LAUNCH": "1"
+          },
+          "exit_code": 1,
+          "passed": 0,
+          "failed": 1,
+          "skipped": 27,
+          "test_sha256": "8de84503fbc64f484b03e03630d3d8545a81d49f090a45064aa238701ee038ff",
+          "report": "/tmp/orca-root-0082-pre-review/mutations/unfiltered-ssh-project-setups/reviewed.json",
+          "report_sha256": "d180882e6b0589be6333b413e53356b2ac4acba601d5a67f61d661a5ce8ac421",
+          "log": "/tmp/orca-root-0082-pre-review/mutations/unfiltered-ssh-project-setups/reviewed.log",
+          "log_sha256": "040299f1572594c99cc40b73fba76102df2c3e1e8089eec701ff6ea2384d6387",
+          "failures": [
+            {
+              "title": "resolves an ssh label to its target id before filtering",
+              "messages": [
+                "AssertionError: expected \"log\" to be called once with arguments: [ Array(1) ]\n\nReceived:\n\n  1st log call:\n\n  [\n-   \"setup-openclaw  project:github:stablyai/orca  host:ssh:ssh-123-abc  ready  /home/me/orca\",\n+   \"setup-openclaw  project:github:stablyai/orca  host:ssh:ssh-123-abc  ready  /home/me/orca\n+ setup-other-host  project:github:stablyai/orca  host:ssh:other-target  ready  /home/me/other\",\n  ]\n\n\nNumber of calls: 1\n\n    at Proxy.<anonymous> (file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/index.aTZaPVhf.js:2265:10)\n    at Proxy.<anonymous> (file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/index.aTZaPVhf.js:1958:14)\n    at Proxy.methodWrapper (file:///home/neil/.local/share/pnpm/store/v11/links/@/chai/6.3.0/25b5fcf6626be1440275f25f04f4b64170f3760bb1da107f5691c470b8dd65d1/node_modules/chai/index.js:1737:25)\n    at /tmp/orca-root-0082-pre-review/isolated-repo/src/cli/index-project-setup.test.ts:325:20\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:20"
+              ]
+            }
+          ]
+        }
+      ],
+      "copied_production_restored": true,
+      "shared_production_unchanged": true
+    }
+  ],
+  "restoration": {
+    "isolated_mutated_sources_restored": true,
+    "shared_production_unchanged": true,
+    "shared_selected_test_unchanged": true
+  },
+  "limitations": [
+    "Linux host only; Windows/UNC and remote paths are protocol fixture values, not native filesystem operations.",
+    "Actual CLI parsing/dispatch/formatting with controlled runtime ports; no real setup, clone, delete, network or app launch.",
+    "Physical isolated source copy uses node_modules for dependencies; no install or pnpm command was run in it."
+  ],
+  "root_integration": {
+    "mode": "Tracked source integrated and validated in audit-9",
+    "checkout": "/home/neil/orca/workspaces/orca/comprehensive-test-audit-9",
+    "integration_base_commit": "b174e53f69b5f2335c8ce42363b73c3feb06c8dd",
+    "source_files_verified": 1,
+    "production_evidence_sha256_verified": true,
+    "original_source_commits_preserved": true,
+    "integrated_test_command": [
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--config",
+      "config/vitest.config.ts",
+      "src/cli/index-device-commands.test.ts",
+      "src/cli/index-environment-commands.test.ts",
+      "src/cli/index-file-open-headless.test.ts",
+      "src/cli/index-jira.test.ts",
+      "src/cli/index-local-command-routing-flags.test.ts",
+      "src/cli/index-memory-diagnostics.test.ts",
+      "src/cli/index-omitted-host-scope-selectors.test.ts",
+      "src/cli/index-orchestration.test.ts",
+      "src/cli/index-project-name-selectors.test.ts",
+      "src/cli/index-project-setup.test.ts",
+      "--maxWorkers=2",
+      "--reporter=json",
+      "--outputFile=/tmp/orca-audit9-integrated-cli-root82-tests.json"
+    ],
+    "environment": {
+      "ORCA_BACKGROUND_LAUNCH": "1"
+    },
+    "test_exit_code": 0,
+    "aggregate_passed": 126,
+    "selected_passed": 28,
+    "failed": 0,
+    "skipped": 0,
+    "report": "/tmp/orca-audit9-integrated-cli-root82-tests.json",
+    "report_sha256": "18a60aba5e0b08f3755a83eb9f85729256b4eece6a70c44f5bd594cf0fcf3b52",
+    "log": "/tmp/orca-audit9-integrated-cli-root82-tests.log",
+    "log_sha256": "43ba61811a2386ebdb91751974892be90869713b85723b343fabafade82a1ab0",
+    "full_sources_and_evidence_hashes_verified": true,
+    "supported_typecheck": {
+      "command": ["pnpm", "tc:cli"],
+      "exit_code": 0,
+      "log": "/tmp/orca-audit9-typecheck-cli-root82.log",
+      "log_sha256": "64350cfafba2dd6bb61adf325923dc3c41762eb81a276ff9302796e6e77b09bc"
+    },
+    "changed_code_quality": {
+      "command": ["pnpm", "run", "check:code-quality:changed"],
+      "exit_code": 0,
+      "log": "/tmp/orca-audit9-code-quality-root82.log",
+      "log_sha256": "836c0c4bff06b0e4b1f01016cbaf742d17560b8ff3195a6c5c23581753d921e5"
+    }
+  }
+}

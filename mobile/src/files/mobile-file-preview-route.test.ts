@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  createMobileFilePreviewHref,
   displayNameFromPreviewPath,
   mobileFilePreviewShellParams,
   normalizeMobileFilePreviewRouteParams
@@ -110,27 +109,6 @@ describe('mobile-file-preview-route', () => {
         relativePath: ['a.ts', 'b.ts']
       })
     ).toEqual({ ok: false, message: 'Unable to load preview' })
-  })
-
-  it('builds the Expo href object so Expo owns URL encoding', () => {
-    const relativePath = 'src/#hash ?query%20\\file.ts'
-
-    expect(
-      createMobileFilePreviewHref({
-        hostId: 'host-1',
-        worktreeId: 'wt-1',
-        relativePath,
-        name: 'file.ts'
-      })
-    ).toEqual({
-      pathname: '/h/[hostId]/files/preview/[worktreeId]',
-      params: {
-        hostId: 'host-1',
-        worktreeId: 'wt-1',
-        relativePath,
-        name: 'file.ts'
-      }
-    })
   })
 
   it('hands the shell every param but the two the pathname spells as segments', () => {

@@ -25,7 +25,7 @@ import {
   mergeClaudeProfilePromptHistory
 } from './claude-profile-prompt-history'
 
-// Not `sessions`: Claude's live-process registry, bound to its own folder's daemon.
+// Exclude `sessions`: its live-process registry belongs to each folder's daemon.
 export const CLAUDE_PROFILE_HISTORY_DIRS = [
   'projects',
   'session-env',
@@ -40,7 +40,7 @@ export const CLAUDE_PROFILE_HISTORY_DIRS = [
 
 type MoveResult = { retained: number; failed: unknown[] }
 
-/** Keeps going past a failed entry so one locked file never hides the rest. */
+// One locked entry must not prevent merging the rest.
 function moveHistoryTree(source: string, destination: string, result: MoveResult): void {
   for (const item of readdirSync(source, { withFileTypes: true })) {
     const from = join(source, item.name)
@@ -102,7 +102,7 @@ function mergeDirectory(
     try {
       drainDirectory(pending, destination, report, name)
     } catch (error) {
-      // Why: an unreadable leftover is reported and kept; it must not stop the share itself.
+      // Preserve unreadable leftovers without preventing link publication.
       warnClaudeProfile(report, name, error)
     }
   }
@@ -126,7 +126,7 @@ function mergeDirectory(
     renameFileWithWindowsRetry(source, pending)
   }
   try {
-    // Why: a junction needs no Windows privilege; Node's lstat reports it as a symlink.
+    // Junctions avoid Windows symlink privilege requirements.
     symlinkSync(destination, source, platform === 'win32' ? 'junction' : 'dir')
   } catch (error) {
     if (current) {
@@ -144,7 +144,7 @@ function mergeDirectory(
   return 'linked'
 }
 
-/** Undoes an earlier build's `sessions` link into the default home; Claude recreates the folder. */
+// Undo legacy session sharing; Claude recreates its per-folder process registry.
 function unlinkSharedSessions(profile: string, home: string): ClaudeProfileSurfaceOutcome {
   const source = join(profile, 'sessions')
   if (!lstatIfPresent(source)?.isSymbolicLink()) {
@@ -162,10 +162,7 @@ function unlinkSharedSessions(profile: string, home: string): ClaudeProfileSurfa
   return 'synced'
 }
 
-/**
- * Pools a profile's sessions and prompt history into the default home. Execution-host paths only;
- * callers go through provisionClaudeAccountProfile, which gates and creates the profile.
- */
+/** Call after profile ownership checks and creation on the execution host. */
 export async function shareClaudeProfileHistory(args: {
   profileHome: string
   userHome: string

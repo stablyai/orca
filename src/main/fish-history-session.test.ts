@@ -17,8 +17,7 @@ const SESSION_A = fishHistorySessionName(HASH_A)
 
 describe('fish history session naming', () => {
   it('mints a session name that is a valid fish variable value', () => {
-    // fish falls back to the shared default for anything that is not a valid
-    // variable name, which would silently un-isolate the worktree.
+    // Invalid fish variable names silently select shared history.
     expect(SESSION_A).toBe('orca_a1b2c3d4e5f60718')
     expect(SESSION_A).toMatch(/^[A-Za-z_][A-Za-z0-9_]*$/)
   })
@@ -38,9 +37,6 @@ describe('fish history session naming', () => {
 })
 
 describe('fish history directory resolution', () => {
-  // Why join rather than literals: the separator is platform-specific, and on
-  // Windows `isAbsolute('/data')` is also true, so a hardcoded '/data/fish'
-  // fails there for a reason that has nothing to do with the behavior tested.
   it('follows XDG_DATA_HOME when it is absolute', () => {
     expect(resolveFishHistoryDir({ XDG_DATA_HOME: '/data', HOME: '/home/me' })).toBe(
       join('/data', 'fish')
@@ -100,7 +96,7 @@ describe('fish history deletion', () => {
     expect(existsSync(foreign)).toBe(true)
   })
 
-  // Why skipped on Windows: symlinkSync needs Developer Mode or elevation there.
+  // Windows symlinks require Developer Mode or elevation.
   it.skipIf(process.platform === 'win32')(
     'refuses to follow a symlink out of the fish data dir',
     () => {
@@ -142,7 +138,6 @@ describe('orphaned fish history sweep', () => {
   })
 
   it("never touches the user's own history files", () => {
-    // The whole safety of the sweep rests on the orca_<hex>_ prefix.
     const untouched = ['fish_history', 'work_history', 'orca_history', 'orca_nothex_history']
     for (const name of untouched) {
       writeFileSync(join(fishDir, name), 'mine\n')
@@ -162,8 +157,7 @@ describe('orphaned fish history sweep', () => {
   })
 
   it('spares a file younger than the age guard, since the live set is a snapshot', () => {
-    // The reachable race: a worktree created after the snapshot but before the
-    // sweep looks dead while it is actively writing the history it owns.
+    // A workspace created after the live-set snapshot must keep its actively written history.
     const fresh = join(fishDir, `${fishHistorySessionName(HASH_B)}_history`)
     writeFileSync(fresh, 'just created\n')
 
@@ -197,11 +191,7 @@ describe('orphaned fish history sweep', () => {
   })
 })
 
-/**
- * A relay host keyed by its CLIENT's worktree ids shares one fish data dir with
- * any desktop Orca on the same machine, whose live set knows nothing of those
- * ids. The name is the only thing that keeps that sweep off remote history.
- */
+// Desktop live sets cannot account for remote clients’ history; prefixes keep their sweeps separate.
 describe('relay fish history naming', () => {
   let relayRoot: string
 
@@ -228,7 +218,6 @@ describe('relay fish history naming', () => {
     writeFileSync(relayFile, 'relay')
     writeFileSync(desktopFile, 'desktop')
 
-    // A live set with neither hash in it: everything attributable is orphaned.
     const removed = sweepOrphanedFishHistoryFiles(new Set(['deadbeef']), [dir])
 
     expect(removed).toBe(1)

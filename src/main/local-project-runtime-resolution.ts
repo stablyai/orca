@@ -29,15 +29,7 @@ import {
 import { resolveManagedSshHostLoginShell } from './pty/managed-ssh-host-login-shell'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host'
 
-/**
- * The slice of the store runtime resolution actually reads. Structural rather
- * than the full `Store` so narrowed stores -- the Orca runtime's `RuntimeStore`,
- * worktree root preparation -- resolve the same runtime the create path does
- * instead of silently falling back to host placement.
- *
- * Members stay optional because those stores declare them optional; the
- * `typeof` guards below are what actually decide whether resolution can run.
- */
+// Structural typing lets narrowed runtime stores use the same resolution as workspace creation.
 export type ProjectRuntimeResolutionStore = {
   getProjects?: Store['getProjects']
   getRepo?: Store['getRepo']
@@ -99,8 +91,7 @@ export function resolveLocalProjectRuntimeForRepo(
   return resolveLocalProjectRuntime(store, project)
 }
 
-/** Same choice the renderer makes for a workspace: the project's runtime, else the distro of a
- *  WSL-share path, else the global default. Works for a repo with no project too. */
+/** Match renderer precedence: project preference, WSL-share distro, then global default. */
 export function resolveLocalWorkspaceRuntime(
   store: ProjectRuntimeResolutionStore,
   repo: Repo,
@@ -117,8 +108,7 @@ export function resolveLocalWorkspaceRuntime(
     project?.localWindowsRuntimePreference,
     workspacePath
   )
-  // A `\\wsl$` path proves its distro exists, and main's distro cache can be stale; the window
-  // checks such a path against no cache either.
+  // WSL-share paths supply their distro; ignore potentially stale discovery caches for inferred preferences.
   return resolveLocalProjectRuntime(
     store,
     { id: project?.id ?? repo.id, localWindowsRuntimePreference: preference },
@@ -127,8 +117,7 @@ export function resolveLocalWorkspaceRuntime(
   )
 }
 
-/** The one local repo whose project runs a folder workspace on this machine; none for a folder
- *  pinned to another host or spanning several repos. */
+/** A folder inherits a runtime only from a single repo on the local host. */
 export function findLocalFolderWorkspaceRuntimeRepo(
   state: FolderWorkspaceHostState,
   folderWorkspaceId: string
@@ -155,8 +144,7 @@ export type LaunchScopeRuntimeStore = ProjectRuntimeResolutionStore & {
   getProjectGroups?: () => ProjectGroup[]
 }
 
-/** A launch scope's runtime, as the window reads it for a workspace. A remote scope has none: its
- *  host plans for itself. */
+/** Remote scopes resolve their runtime on their own host. */
 export function resolveLocalLaunchScopeRuntime(
   store: LaunchScopeRuntimeStore,
   scope: {
@@ -210,8 +198,7 @@ export function resolveLocalProjectRuntimesForRepos(
     if (matchingRepoIds.length === 0) {
       continue
     }
-    // Why: one project runtime applies to every source repo in that project;
-    // resolving it once prevents mobile polls from rescanning project settings.
+    // Resolve once per project to avoid repeated settings scans during mobile polls.
     const runtime = resolveLocalProjectRuntime(store, project, settings)
     for (const repoId of matchingRepoIds) {
       runtimeByRepoId.set(repoId, runtime)
@@ -238,7 +225,7 @@ type LocalPtySettings = Partial<
   Pick<GlobalSettings, 'terminalWindowsShell' | 'terminalWindowsWslDistro' | 'terminalDefaultShell'>
 >
 
-/** A local PTY's shell and distro. Throws for a runtime that needs repair. */
+/** Throws for a Windows runtime that needs repair. */
 export function resolveLocalPtyOptions(
   settings: LocalPtySettings | undefined,
   projectRuntime: ProjectExecutionRuntimeResolution | undefined,
@@ -260,8 +247,7 @@ export function resolveLocalPtyOptions(
       }
 }
 
-/** A plain terminal's PTY: the project-only runtime and `COMSPEC`, as the spawn picks when no
- *  agent plan brought its own. */
+/** Plain terminals use the project runtime and fall back to COMSPEC for the Windows host shell. */
 export function resolvePlainTerminalPtyOptions(
   store: ProjectRuntimeResolutionStore | undefined,
   settings: LocalPtySettings | undefined,

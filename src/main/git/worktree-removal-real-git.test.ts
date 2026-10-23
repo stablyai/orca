@@ -8,6 +8,7 @@ import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { promisify } from 'node:util'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { installRealWorkerThreadChildProcesses } from '../worker-thread-child-process/worker-thread-child-process-real.test-fixtures'
 import { removeTree } from '../../shared/windows-transient-lock-removal'
 import { classifyWorktreeForceDeleteReason } from '../../shared/worktree/removal'
 import { formatWorktreeRemovalError } from '../ipc/worktree-logic'
@@ -18,6 +19,8 @@ import { removeStaleLocalWorktreeRegistration } from '../local-worktree-removal-
 import { sweepStaleWorktreeTrash, WORKTREE_TRASH_DIR_NAME } from '../worktree-trash'
 
 const execFileAsync = promisify(execFile)
+
+installRealWorkerThreadChildProcesses()
 
 let scratchDir = ''
 let repoPath = ''

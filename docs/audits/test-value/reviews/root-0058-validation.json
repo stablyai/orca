@@ -1,0 +1,61 @@
+{
+  "batch": "root-0058",
+  "reviewer": "root",
+  "source_commit": "89b3d382847f10b31a731ebd7e18aad022a4b15a",
+  "reviewed_files": 4,
+  "original_declarations": 39,
+  "inline_command_controls": 8,
+  "case_records": 47,
+  "decisions": {
+    "keep": 42,
+    "fix": 3,
+    "consolidate": 2
+  },
+  "production_changes": false,
+  "checks": [
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/cli/handlers/computer-action-routing.test.ts src/cli/handlers/computer-action-validation.test.ts src/cli/handlers/computer-state-formatting.test.ts src/cli/handlers/computer.test.ts",
+      "baseline": "4 suites / 39 tests passed",
+      "reviewed": "4 suites / 38 tests passed; one duplicate consolidated",
+      "logs": ["/tmp/orca-root-0058-original-tests.log", "/tmp/orca-root-0058-final-tests.log"]
+    },
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm run tc:cli",
+      "result": "passed",
+      "log": "/tmp/orca-root-0058-typecheck.log"
+    },
+    {
+      "command": "pnpm exec oxlint <three changed CLI test files>",
+      "result": "passed",
+      "log": "/tmp/orca-root-0058-oxlint.log"
+    },
+    {
+      "command": "pnpm exec oxfmt --write <three changed CLI test files>",
+      "result": "applied before final runtime/typecheck validation"
+    }
+  ],
+  "mutation_controls": [
+    {
+      "mutation": "corrupt exported screenshot bytes",
+      "version": "original",
+      "exit_code": 0,
+      "log": "/tmp/orca-root-0058-corrupt-screenshot-original.log"
+    },
+    {
+      "mutation": "corrupt exported screenshot bytes",
+      "version": "reviewed",
+      "exit_code": 1,
+      "log": "/tmp/orca-root-0058-corrupt-screenshot-reviewed.log"
+    }
+  ],
+  "integrity": {
+    "original_and_final_hashes_verified": true,
+    "records_sha256": "2541698e2b72b6bebe48b02c7d0f841b15cee192de730e221caff73da78a071d",
+    "production_sources_restored": true
+  },
+  "limitations": [
+    "RPC clients are mocked: no real click/keyboard input, focus, permission window, screenshot capture or native app is invoked.",
+    "Screenshot byte equality covers fixture Base64 export to actual isolated storage; bytes are not a real encoded PNG capture.",
+    "Linux local CLI dispatch validation; native platform and real runtime delivery remain separate pending suites."
+  ]
+}

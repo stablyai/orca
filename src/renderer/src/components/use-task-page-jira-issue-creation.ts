@@ -1,4 +1,4 @@
-import type { TaskPageLinearIssueCreationModel } from './use-task-page-linear-issue-creation'
+import type { TaskPageLinearIssueCreationModel } from './task-page/linear/use-task-page-linear-issue-creation'
 import { useCallback } from 'react'
 import {
   buildJiraCreateSubmission,

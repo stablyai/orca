@@ -24,10 +24,7 @@ import {
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { settleStaleStructuredAgentSessionState } from './structured-agent-session-dead-generation-settlement'
 import { structuredAgentSessionFailureWordsContext } from './structured-agent-session-send-preparation'
-import {
-  markStructuredQueueReopen,
-  structuredAgentSessionHostInstance
-} from './structured-agent-session-queued-pause'
+import { markStructuredQueueReopen } from './structured-agent-session-queued-pause'
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession
@@ -118,11 +115,7 @@ export async function openStructuredAgentSessionConversationJournal(
   }
   try {
     // Before a Stop this open serves can withdraw one: a Stop never withdraws a card.
-    await holdUnsentSends(journal, {
-      fence,
-      hostInstance: structuredAgentSessionHostInstance(),
-      hold: { cause: 'hostRestarted' }
-    })
+    await holdUnsentSends(journal, { fence, hold: { cause: 'hostRestarted' } })
   } catch (error) {
     // The row stays queued. The delivery loop's first step tries again before it hands anything
     // over; if that fails too, the loop fails and rejects every queued send.

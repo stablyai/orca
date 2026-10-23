@@ -47,7 +47,7 @@ async function stoppingChild(reportsOutcome: boolean) {
     stdio: [agent.stdin, agent.stdout, stderr, null, null] satisfies PipedChildProcess['stdio']
   })
   const spawn = vi.fn<PipedProcessSpawner>(() => child)
-  // Teardown is simulated: no signal or process-table operation can reach the machine.
+  // Stub teardown so fixture PIDs cannot reach real process operations.
   teardown.mockImplementation(async () => {
     child.emit('exit', 0, null)
     return 'exited'
@@ -155,7 +155,6 @@ describe('Grok child outcome during a full host Stop', () => {
     const [unavailable] = await fixture.rosters()
     expect(fixture.childWork.views()).toMatchObject([{ membership: 'settled', outcome: 'unknown' }])
     expect(unavailable.row.itemId).toBe(fixture.original.row.itemId)
-    // Contact was lost when the session ended, a moment the host observed.
     expect(unavailable.block).toEqual({
       ...fixture.original.block,
       state: 'unverifiable',

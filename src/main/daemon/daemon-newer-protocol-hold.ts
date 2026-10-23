@@ -17,11 +17,7 @@ const PID_FILE_PATTERN = /^daemon-v(\d+)\.pid$/
 let heldProtocols: readonly number[] = []
 let reopenInFlight: Promise<NewerDaemonReopenResult> | null = null
 
-/**
- * Reads only a newer daemon's PID record and endpoint; this build cannot speak its protocol and
- * never touches its files. An unidentifiable owner falls back to the endpoint, the same
- * tiebreaker killStaleDaemon uses, so a dead leftover never holds a tab forever.
- */
+/** This build cannot speak the newer protocol; inspect its PID and endpoint without mutating its files. */
 async function classifyNewerProtocolDaemon(
   runtimeDir: string,
   protocolVersion: number
@@ -30,7 +26,7 @@ async function classifyNewerProtocolDaemon(
   const byEndpoint = async (): Promise<ProcessLivenessVerdict['status']> => {
     let outcome = await probeSocketConnect(socketPath)
     if (outcome === 'unknown') {
-      // Why: a stalled main loop can fire the probe timeout before a dead socket's refusal lands.
+      // A stalled main loop can fire timeout before the dead socket's refusal arrives.
       await new Promise<void>((resolve) => setImmediate(resolve))
       outcome = await probeSocketConnect(socketPath)
     }
@@ -40,11 +36,10 @@ async function classifyNewerProtocolDaemon(
   try {
     contents = readFileSync(getDaemonPidPath(runtimeDir, protocolVersion), 'utf8')
   } catch (error) {
-    // Why: a daemon removes its own record as it exits.
     return hasErrorCode(error, 'ENOENT') ? 'exited' : byEndpoint()
   }
   const parsed = parseDaemonPidFile(contents)
-  // Why pid > 0: an empty record parses as pid 0, which names no process.
+  // An empty legacy record parses as PID 0, which is not a daemon PID.
   if (!parsed || !Number.isInteger(parsed.pid) || parsed.pid <= 0) {
     return byEndpoint()
   }
@@ -57,7 +52,6 @@ async function classifyNewerProtocolDaemon(
   if (identity === 'match') {
     return 'live'
   }
-  // Why mismatch is exited: the pid is gone or now names another process.
   return identity === 'mismatch' ? 'exited' : byEndpoint()
 }
 
@@ -67,7 +61,7 @@ export async function discoverNewerProtocolHolds(runtimeDir: string): Promise<vo
   try {
     names = readdirSync(runtimeDir)
   } catch {
-    // No runtime dir means no newer daemon.
+    // Discovery errors leave no known newer-protocol records.
   }
   const versions = names
     .map((name) => Number(PID_FILE_PATTERN.exec(name)?.[1]))
@@ -82,7 +76,7 @@ export function isHoldingForNewerProtocolDaemon(): boolean {
   return heldProtocols.length > 0
 }
 
-/** A held session's saved screen, read from history without spawning; null when none was saved. */
+/** Read the held session's saved screen without spawning. */
 export async function readNewerDaemonHeldScreen(
   sessionId: string,
   historyPath = getDaemonHistoryDir()
@@ -115,10 +109,7 @@ async function stopNewerProtocolDaemon(
   )
 }
 
-/**
- * Stops every held newer daemon by signal only: this build cannot speak its protocol. Held
- * terminals are released only when every one is confirmed exited.
- */
+/** Release held terminals only after every newer daemon is confirmed exited; this build cannot use their RPCs. */
 export function reopenNewerDaemonTerminals(
   runtimeDir = getDaemonRuntimeDir()
 ): Promise<NewerDaemonReopenResult> {

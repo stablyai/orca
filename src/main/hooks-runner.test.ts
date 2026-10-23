@@ -22,8 +22,6 @@ vi.mock('fs', () => ({
 vi.mock('child_process', () => ({
   exec: vi.fn(),
   execFileSync: execFileSyncMock,
-  // runner.ts imports these from child_process; stubs prevent
-  // "missing export" errors when the mock is resolved transitively.
   execFile: vi.fn(),
   spawn: vi.fn()
 }))
@@ -63,7 +61,6 @@ describe('createSetupRunnerScript', () => {
           ORCA_WORKTREE_PATH: 'C:\\repo\\feature\\',
           ORCA_WORKSPACE_NAME: 'feature'
         }),
-        // Why: native Windows worktrees without a configured setup shell keep the cmd runner.
         shell: { family: 'cmd' }
       })
       expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalledWith(
@@ -111,7 +108,7 @@ describe('createSetupRunnerScript', () => {
           ORCA_WORKTREE_PATH: '/c/repo/feature',
           CONDUCTOR_ROOT_PATH: '/c/Users/jinwo/git/orca',
           GHOSTX_ROOT_PATH: '/c/Users/jinwo/git/orca',
-          // Why: a display name, never a path — it must survive the conversion untouched.
+          // Workspace names are labels and must not undergo path conversion.
           ORCA_WORKSPACE_NAME: 'feature'
         }),
         shell: { family: 'posix' }
@@ -121,7 +118,7 @@ describe('createSetupRunnerScript', () => {
         '#!/usr/bin/env bash\nset -e\npnpm install\n',
         'utf-8'
       )
-      // Why: chmod over a native Windows path is meaningless; only the WSL branch sets the bit.
+      // Only guest Linux paths need chmod; native Windows paths do not.
       expect(vi.mocked(fs.chmodSync)).not.toHaveBeenCalledWith(
         'C:\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.sh',
         0o755
@@ -185,8 +182,7 @@ describe('createSetupRunnerScript', () => {
 
     const runner = buildWindowsRunnerScript('echo hello!world!')
 
-    // Why: launchers invoke the runner under cmd /v:on, so the runner must disable delayed
-    // expansion itself or `!world!` is consumed as a variable reference.
+    // Disable inherited cmd delayed expansion so !world! remains literal.
     expect(runner).toContain('setlocal EnableExtensions DisableDelayedExpansion')
     expect(runner).toContain('call echo hello!world!')
   })
@@ -194,10 +190,7 @@ describe('createSetupRunnerScript', () => {
   it('refuses to run a shebang script as a batch command', async () => {
     const { buildWindowsRunnerScript } = await import('./setup-runner-script-text')
 
-    // Regression: a POSIX script reaching the cmd runner (no Git Bash terminal, or an SSH
-    // Windows host) must not have its interpreter-agnostic prefix executed under cmd —
-    // `pnpm install` would run and only a later bash-only line would fail, leaving the
-    // worktree half set up.
+    // Reject POSIX scripts before cmd runs even their portable prefix and leaves setup incomplete.
     const runner = buildWindowsRunnerScript('#!/usr/bin/env bash\npnpm install\nsource .env')
 
     expect(runner).not.toContain('call pnpm install')
@@ -218,8 +211,7 @@ describe('createSetupRunnerScript', () => {
   it.skipIf(process.platform === 'win32')(
     'runs a script whose shebang carries invocation-only bash flags',
     async () => {
-      // Regression: `set` rejects `-l`/`-s`/`-i` with exit 2, and the runner's own `set -e` turns
-      // that into an aborted setup before the first user line.
+      // Reapplying login/interactive flags through set would abort before the first user line.
       const { buildPosixRunnerScript } = await import('./setup-runner-script-text')
       const { mkdtempSync, rmSync, writeFileSync } = await vi.importActual<typeof NodeFs>('node:fs')
       const { execFileSync } = await vi.importActual<typeof NodeChildProcess>('node:child_process')
@@ -435,7 +427,7 @@ describe('createIssueCommandRunnerScript', () => {
         { wslDistro: 'Ubuntu' }
       )
 
-      // Why: the runner path is written back in native Windows form, so the launch needs /mnt again.
+      // Runner paths are stored in Windows form and need /mnt translation again at launch.
       expect(result.runnerScriptPath).toBe('C:\\repo\\.git\\orca\\issue-command-runner.sh')
       expect(result.shell).toEqual({ family: 'posix', executable: 'wsl.exe' })
     } finally {

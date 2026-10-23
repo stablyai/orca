@@ -31,7 +31,6 @@ async function clearAssigneeAfter(failure: Error): Promise<unknown> {
   throw new Error('expected the write to fail')
 }
 
-// Pins which write failures say "may have been applied" (round-2 S5), so a dropped code is deliberate.
 describe('Jira write outcome-unknown codes', () => {
   it.each([
     'runtime_timeout',

@@ -4,13 +4,11 @@
 // #5377/#6635). Running the native module here turns a watcher fault into a
 // contained child crash the host can recover from, instead of killing the app
 // and every agent session in it.
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import type * as ParcelWatcher from '@parcel/watcher'
 import { loadParcelWatcher } from './parcel-watcher-module-loader'
 import { startShallowWatcher } from './parcel-watcher-shallow-subscription'
 import { detectShallowWatchDelivery } from './shallow-watch-delivery-probe'
+import { startWatcherDeliveryCanary } from './parcel-watcher-delivery-canary'
 import {
   createWatcherProcessEventDeliveryQueue,
   type WatcherProcessEventDeliveryQueue
@@ -25,91 +23,6 @@ import { errorMessage } from '../../shared/error-message'
 
 type WatcherSubscription = {
   unsubscribe: () => Promise<void>
-}
-
-// Canary self-check. Why: @parcel/watcher can wedge silently — a lock-order
-// inversion between Debounce::notify (debounce mutex → watcher mutex) and
-// Watcher teardown (watcher mutex → debounce mutex in ~Watcher) deadlocks the
-// single process-wide debounce thread, after which every subscription still
-// acks but no events are ever delivered. The canary watches a private temp
-// dir and touches a file in it; consecutive missed deliveries mean event
-// delivery is dead, so exit and let the host respawn a fresh process.
-const CANARY_INTERVAL_MS = 10_000
-const CANARY_EVENT_TIMEOUT_MS = 5_000
-const CANARY_MAX_MISSES = 2
-
-async function startCanary(getStableActivityRevision: () => number | null): Promise<void> {
-  const configuredCanaryDir = process.env.ORCA_WATCHER_CANARY_DIR
-  let canaryDir: string
-  let lastEventAt = 0
-  try {
-    canaryDir = configuredCanaryDir ?? mkdtempSync(join(tmpdir(), 'orca-watcher-canary-'))
-    const watcher = await loadParcelWatcher()
-    // Why: pin the Windows backend like the main subscriptions do, so the
-    // canary never probes for Watchman.
-    const opts = (
-      process.platform === 'win32' ? { backend: 'windows' } : {}
-    ) as ParcelWatcher.Options
-    await watcher.subscribe(
-      canaryDir,
-      (err) => {
-        if (!err) {
-          lastEventAt = Date.now()
-        }
-      },
-      opts
-    )
-  } catch (err) {
-    process.stderr.write(`[parcel-watcher-process] canary unavailable: ${errorMessage(err)}\n`)
-    return
-  }
-  process.on('exit', () => {
-    if (configuredCanaryDir) {
-      return
-    }
-    try {
-      rmSync(canaryDir, { recursive: true, force: true })
-    } catch {
-      // Temp dir cleanup is best-effort.
-    }
-  })
-
-  let misses = 0
-  setInterval(() => {
-    // Why: Parcel holds its shared backend mutex throughout each initial tree
-    // crawl, which legitimately starves canary delivery. Only apply the 5 s
-    // event SLA after every requested subscription has finished crawling.
-    const activityRevision = getStableActivityRevision()
-    if (activityRevision === null) {
-      misses = 0
-      return
-    }
-    const probedAt = Date.now()
-    try {
-      writeFileSync(join(canaryDir, 'canary.txt'), String(probedAt))
-    } catch {
-      return
-    }
-    setTimeout(() => {
-      // A root may start crawling after this probe was written. Invalidate the
-      // probe instead of misclassifying lifecycle work as a delivery deadlock.
-      if (getStableActivityRevision() !== activityRevision) {
-        misses = 0
-        return
-      }
-      if (lastEventAt >= probedAt) {
-        misses = 0
-        return
-      }
-      misses++
-      if (misses >= CANARY_MAX_MISSES) {
-        process.stderr.write(
-          '[parcel-watcher-process] event delivery wedged (canary starved); restarting watcher process\n'
-        )
-        process.exit(2)
-      }
-    }, CANARY_EVENT_TIMEOUT_MS)
-  }, CANARY_INTERVAL_MS)
 }
 
 function main(): void {
@@ -147,18 +60,20 @@ function main(): void {
   const subscriptions = new Map<number, Promise<WatcherSubscription | null>>()
   const liveSubscriptionIds = new Set<number>()
   const eventDeliveries = new Map<number, WatcherProcessEventDeliveryQueue>()
-  let pendingSubscriptionCrawls = 0
+  let pendingCrawlStartedAt: number | null = null
   let activeSubscriptionCrawlId: number | null = null
   let subscriptionActivityRevision = 0
+  let lastNativeCallbackAt = 0
   let nativeLifecycleTail = Promise.resolve()
 
+  // Native subscribes run one at a time under runNativeWatcherLifecycleExclusive.
   const beginSubscriptionCrawl = (): void => {
-    pendingSubscriptionCrawls++
+    pendingCrawlStartedAt = Date.now()
     subscriptionActivityRevision++
   }
 
   const finishSubscriptionCrawl = (): void => {
-    pendingSubscriptionCrawls--
+    pendingCrawlStartedAt = null
     subscriptionActivityRevision++
   }
 
@@ -214,6 +129,7 @@ function main(): void {
           return await watcher.subscribe(
             dir,
             (err, events) => {
+              lastNativeCallbackAt = Date.now()
               if (rootDeleted) {
                 return
               }
@@ -324,12 +240,15 @@ function main(): void {
     }
   })
 
-  void startCanary(() => {
-    if (pendingSubscriptionCrawls > 0 || liveSubscriptionIds.size === 0) {
-      return null
-    }
-    return subscriptionActivityRevision
-  })
+  void startWatcherDeliveryCanary(
+    () => ({
+      revision: subscriptionActivityRevision,
+      liveSubscriptions: liveSubscriptionIds.size,
+      pendingCrawlStartedAt,
+      lastNativeCallbackAt
+    }),
+    (state) => send({ op: 'delivery-health', state })
+  )
 
   // Why: if the host dies (or kills us during shutdown), exit immediately —
   // process death releases every native watcher handle without running the

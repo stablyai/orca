@@ -1,8 +1,3 @@
-// A send made while a Codex turn runs goes in as `turn/steer` naming that turn, so the
-// send is bound to the turn that carries it and that turn's end can settle it. A steer
-// Codex refuses took no input, so the send steers a turn opened meanwhile, once, or else
-// falls back to `turn/start`. A send made before Codex opens an earlier send's turn waits for it.
-
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { CodexAppServerRequestError } from './codex-app-server-request-error'
 import {
@@ -61,7 +56,7 @@ describe('a Codex send while a turn runs', () => {
   it('steers into that turn by name, and that turn ending unechoed withdraws it', async () => {
     const { connection, settlements, send, methods, endTurn } = await rig({
       'turn/steer': () => ({ turnId: 'turn-1' }),
-      // A Codex before 0.148 answers a steered start with a turn that never opens.
+      // Pre-0.148 turn/start replies can name a nonexistent turn for steered input.
       'turn/start': () => ({ turn: { id: 'submission-7' } })
     })
     startTurn(connection, 'turn-1')
@@ -132,7 +127,6 @@ describe('a Codex send while a turn runs', () => {
       'turn/steer': () => {
         steers += 1
         if (steers === 1) {
-          // Codex moved on to a turn Orca did not start; its frames land before the refusal is read.
           endTurn('turn-1', 'completed')
           startTurn(connection, 'turn-2')
           throw refusedSteer('expected active turn id `turn-1` but found `turn-2`')
@@ -208,7 +202,6 @@ describe('a Codex send while a turn runs', () => {
 })
 
 describe('a Codex send made after Codex answered an earlier one, before it opened that turn', () => {
-  /** A Codex before 0.148, which names a steered start falsely and steers only an opened turn. */
   async function answeredUnopened() {
     const rig = await codexTurnLifecycleRig({ legacyStartAnswers: true })
     expect(await rig.send('client-1')).toMatchObject({ state: 'admitted' })
@@ -233,7 +226,6 @@ describe('a Codex send made after Codex answered an earlier one, before it opene
       cancelled: true,
       turnId: 'turn-1'
     })
-    // Codex answers the interrupt, then ends the turn, which settles both.
     await vi.waitFor(() =>
       expect(rig.settlements.map(({ clientMessageId }) => clientMessageId).sort()).toEqual([
         'client-1',

@@ -130,8 +130,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     if (this.sessions.get(sessionId)?.connection === acquisition.connection) {
       event()
     } else if (acquisition.isOverflowed) {
-      // Pre-publication overflow is an acquisition failure, not a dropped
-      // notification; tear down the child so callers retry explicitly.
+      // Overflow fails acquisition; close the child so callers can retry.
       void acquisition.connection?.close()
     }
   }
@@ -156,8 +155,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
       settleCodexSendsInEndedTurn(session, event, (settlement) =>
         this.deps.onDispatchSettledLate?.({ sessionId: event.sessionId, ...settlement })
       )
-      // After the admission check, so a refused frame is observed by the child records
-      // only on the retry that also reaches the journal.
+      // Child records observe refused frames only after a retry reaches the journal.
       session.backgroundTasks.observe(event, session.prompts.takeAbandonedCommands())
       // After the journal and the parent's republished row, never ahead of either.
       session.backgroundTasks.publishChildWork()
@@ -186,15 +184,13 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     )
   }
 
-  /** The tracker's own roster. No host decision reads it: the host's child records are the one
-   *  owner of "what runs", and this stays only so tests can hold the two rule sets side by side. */
+  /** Test-only compatibility roster; host decisions use durable child records. */
   backgroundTaskState = (sessionId: string): AgentSessionBackgroundTaskState | null | undefined =>
     this.sessions.get(sessionId)?.backgroundTasks.state
 
   heldSends = (sessionId: string): ReadonlySet<string> | undefined =>
     this.sessions.get(sessionId)?.dispatchEchoes.heldSends()
 
-  // `ended` is set in the same turn as the connection's own exit report.
   holdsLiveProviderProcess = (sessionId: string, acquisitionGeneration: string): boolean => {
     const session = this.sessions.get(sessionId)
     const starting = this.acquisitions.get(sessionId)
@@ -271,7 +267,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
   recoverRewind: NonNullable<StructuredAgentSessionAdapter['recoverRewind']> = (input) =>
     codexRewind.recoverCodexRewind(this.session(input.sessionId), input, this.deps.requestTimeoutMs)
 
-  /** The ack is Codex's receipt; the translator ends the command's turn from the turn it opens. */
+  /** The reply acknowledges receipt; the translator observes turn completion separately. */
   compact: NonNullable<StructuredAgentSessionAdapter['compact']> = async (input) => {
     const session = this.session(input.sessionId)
     session.translator?.beginCommand(input.command)
@@ -285,7 +281,6 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     } catch (error) {
       session.translator?.forgetCommand(input.command.turnId)
       if (isCodexAppServerRequestError(error)) {
-        // Codex's own words, when it gave any, are the one part of the error a person can use.
         return {
           state: 'rejected',
           ...codexDispatchRejection(
@@ -312,7 +307,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
   async setOption(
     input: StructuredAgentSessionSetOptionInput
   ): Promise<Readonly<Record<string, string>>> {
-    // `fastMode` is an older client's toggle, applied as a tier; it never rides on a turn.
+    // Legacy fastMode maps to a service tier before dispatch.
     if (!isCodexTurnOptionKey(input.key) && input.key !== 'fastMode') {
       throw new Error(`codex app-server has no thread option named ${input.key}`)
     }

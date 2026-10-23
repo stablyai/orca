@@ -1,0 +1,74 @@
+{
+  "batch": "root-0056",
+  "reviewer": "root",
+  "source_commit": "89b3d382847f10b31a731ebd7e18aad022a4b15a",
+  "reviewed_files": 6,
+  "original_declarations": 64,
+  "explicit_parameter_controls": 42,
+  "nested_selector_controls": 8,
+  "case_records": 114,
+  "decisions": {
+    "keep": 100,
+    "consolidate": 2,
+    "fix": 12
+  },
+  "production_changes": false,
+  "checks": [
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/cli/handler-group-manifest.test.ts src/cli/handlers/account.test.ts src/cli/handlers/agent-hooks-load-boundary.test.ts src/cli/handlers/agent-hooks-prepare-codex-isolated-home.test.ts src/cli/handlers/agent-hooks.test.ts src/cli/handlers/artifacts.test.ts",
+      "baseline": "6 suites / 89 tests passed",
+      "reviewed": "6 suites / 88 tests passed; one duplicate consolidated",
+      "logs": ["/tmp/orca-root-0056-original-tests.log", "/tmp/orca-root-0056-final-tests.log"]
+    },
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm run tc:cli",
+      "result": "passed",
+      "log": "/tmp/orca-root-0056-typecheck.log"
+    },
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm run check:code-quality:changed -- origin/main",
+      "result": "passed, zero new findings including React Doctor",
+      "log": "/tmp/orca-root-0056-quality.log"
+    },
+    {
+      "command": "pnpm exec oxfmt --write src/cli/handlers/account.test.ts src/cli/handlers/agent-hooks.test.ts src/cli/handlers/artifacts.test.ts",
+      "result": "applied; final hashes recorded after formatting"
+    }
+  ],
+  "mutation_controls": [
+    {
+      "control": "preflight-after-read",
+      "version": "original",
+      "exit_code": 0,
+      "log": "/tmp/orca-root-0056-preflight-after-read-original.log"
+    },
+    {
+      "control": "preflight-after-read",
+      "version": "reviewed",
+      "exit_code": 1,
+      "log": "/tmp/orca-root-0056-preflight-after-read-reviewed.log"
+    },
+    {
+      "control": "wsl-no-rpc",
+      "version": "original",
+      "exit_code": 0,
+      "log": "/tmp/orca-root-0056-wsl-no-rpc-original.log"
+    },
+    {
+      "control": "wsl-no-rpc",
+      "version": "reviewed",
+      "exit_code": 1,
+      "log": "/tmp/orca-root-0056-wsl-no-rpc-reviewed.log"
+    }
+  ],
+  "integrity": {
+    "original_and_final_hashes_verified": true,
+    "records_sha256": "52497e53b48da7f4eb9c89a0cb8184f59e5adaad8af1a37cac7cb83554b3a6a9",
+    "production_sources_restored": true
+  },
+  "limitations": [
+    "Local Linux execution with platform-specific spawn/RPC mocks; native Windows/macOS process and Keychain behavior still require CI or their native environments.",
+    "SQLite profile and temporary file effects run against actual isolated local storage. No live account login, remote host, Codex process or visible UI launched.",
+    "Fail-open preparation and capability checks observe the CLI transport contract through mocks, not a real mixed-version runtime."
+  ]
+}

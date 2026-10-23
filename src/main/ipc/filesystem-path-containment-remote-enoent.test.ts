@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { isENOENT } from './filesystem-path-containment'
+import { isENOENT, isPathAbsentError } from './filesystem-path-containment'
 
 /**
  * Creating a worktree over SSH failed with a raw
@@ -65,5 +65,20 @@ describe('isENOENT across the SSH relay boundary', () => {
     expect(isENOENT('ENOENT: no such file or directory')).toBe(false)
     expect(isENOENT(null)).toBe(false)
     expect(isENOENT(undefined)).toBe(false)
+  })
+})
+
+describe('isPathAbsentError', () => {
+  it('treats a path under a file as absent, but not a denied one', () => {
+    // Why: `a.txt/b.txt` is the hard-wrap guess a terminal link click probes (#32128).
+    const underFile = Object.assign(new Error("ENOTDIR: not a directory, stat '/r/a.txt/b.txt'"), {
+      code: 'ENOTDIR'
+    })
+    const denied = Object.assign(new Error("EACCES: permission denied, stat '/root/x'"), {
+      code: 'EACCES'
+    })
+
+    expect(isPathAbsentError(underFile)).toBe(true)
+    expect(isPathAbsentError(denied)).toBe(false)
   })
 })

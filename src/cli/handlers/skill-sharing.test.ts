@@ -1,21 +1,25 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { REPEATED_FLAG_SEPARATOR } from '../args'
-import { RuntimeRpcFailureError } from '../runtime-client'
+import { RuntimeClient, RuntimeRpcFailureError } from '../runtime-client'
+import type { HandlerContext } from '../dispatch'
 import { SKILL_SHARING_HANDLERS } from './skill-sharing'
 
 const successMeta = { runtimeId: 'runtime-1' }
 
 function context(
-  call: ReturnType<typeof vi.fn>,
+  call: RuntimeClient['call'],
   flags = new Map<string, string | boolean>(),
   options: { isRemote?: boolean; json?: boolean } = {}
-) {
+): HandlerContext {
+  const client = new RuntimeClient('/tmp/orca-skill-sharing-test', 60_000, null, null)
+  vi.spyOn(client, 'call').mockImplementation(call)
+  vi.spyOn(client, 'isRemote', 'get').mockReturnValue(options.isRemote ?? false)
   return {
-    client: { call, isRemote: options.isRemote ?? false },
+    client,
     cwd: '/repo',
     flags,
     json: options.json ?? false
-  } as never
+  }
 }
 
 afterEach(() => {
@@ -135,9 +139,17 @@ describe('skill sharing CLI handlers', () => {
       { timeoutMs: 600_000 }
     )
     const output = String(log.mock.calls[0][0])
-    expect(output).toContain('shr_public')
-    expect(output).toContain('pkg_public')
-    expect(output).not.toMatch(/token|secret/i)
+    expect(JSON.parse(output).result).toEqual({
+      url: 'https://share.onorca.dev/skills/share/shr_public',
+      shareId: 'shr_public',
+      packageId: 'pkg_public',
+      versionId: 'ver_public',
+      bundleName: 'team-skills',
+      skills: [
+        { id: 'alpha-id', name: 'alpha', description: null },
+        { id: 'beta-id', name: 'beta', description: null }
+      ]
+    })
   })
 
   it('normalizes a human-readable bundle name before publishing', async () => {

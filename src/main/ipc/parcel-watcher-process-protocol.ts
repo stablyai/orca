@@ -38,3 +38,5 @@ export type WatcherToHostMessage =
   | { op: 'cancel-requires-restart'; id: number }
   | { op: 'unsubscribe-failed'; id: number; message: string }
   | { op: 'unsubscribed'; id: number }
+  // Internal: child and host always ship in the same build.
+  | { op: 'delivery-health'; state: 'healthy' | 'stalled' | 'unknown' }

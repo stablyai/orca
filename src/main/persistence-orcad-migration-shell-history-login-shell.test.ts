@@ -22,7 +22,7 @@ const { missingShells, presentShells } = vi.hoisted(() => ({
   presentShells: new Set<string>()
 }))
 
-// Lets cases hide or provide shells for the real pane resolution; every other path is the real fs.
+// Override shell discovery only; other paths use the real filesystem.
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
   return {
@@ -51,7 +51,7 @@ vi.mock('./telemetry/client', () => ({ track: vi.fn() }))
 
 let desktopHistory: string
 
-// The WSL bridge's lone `bash_history`, written by whatever the distro's login shell is.
+// A lone WSL bash_history must follow the host’s resolved pane shell.
 async function moveLoneBridgeHistory(
   content: string,
   paneShellPath?: () => string,
@@ -117,7 +117,6 @@ describe('moved WSL history lands under the shell a host pane runs', () => {
   it.skipIf(process.platform === 'win32')(
     'a configured zsh that is not executable falls back as the spawn does, to bash',
     async () => {
-      // Real pane resolution: SHELL names zsh, but no zsh exists, so the spawn falls back to bash.
       vi.stubEnv('SHELL', '/usr/bin/zsh')
       missingShells.add('/usr/bin/zsh')
       missingShells.add('/bin/zsh')

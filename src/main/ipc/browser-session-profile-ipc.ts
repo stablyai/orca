@@ -16,6 +16,8 @@ import type {
   BrowserSessionProfile,
   BrowserSessionProfileScope
 } from '../../shared/browser-workspace-types'
+import type { ManagedBrowserProfileOwner } from '../../shared/browser-profile-scope'
+import { ensureManagedBrowserProfile } from '../browser/browser-managed-session-profiles'
 import {
   getBrowserIdentityModeStatus,
   setBrowserIdentityMode
@@ -34,6 +36,7 @@ export function registerBrowserSessionProfileHandlers(): void {
   ipcMain.removeHandler('browser:session:listProfiles')
   ipcMain.removeHandler('browser:session:createProfile')
   ipcMain.removeHandler('browser:session:deleteProfile')
+  ipcMain.removeHandler('browser:session:ensureManagedProfile')
   ipcMain.removeHandler('browser:identity:get')
   ipcMain.removeHandler('browser:identity:set')
   ipcMain.removeHandler('browser:session:importCookies')
@@ -59,6 +62,14 @@ export function registerBrowserSessionProfileHandlers(): void {
       }
       return await browserSessionRegistry.createProfile(args.scope, args.label)
     }
+  )
+
+  ipcMain.handle(
+    'browser:session:ensureManagedProfile',
+    (event, args: { owner: ManagedBrowserProfileOwner; label: string }) =>
+      isTrustedBrowserRenderer(event.sender)
+        ? ensureManagedBrowserProfile(args?.owner, args?.label)
+        : null
   )
 
   ipcMain.handle('browser:identity:get', (event) => {

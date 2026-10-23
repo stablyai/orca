@@ -21,7 +21,7 @@ vi.mock('electron', () => ({
 const WORKTREE = 'repo1::/worktree'
 const OTHER_WORKTREE = 'repo1::/other-worktree'
 
-/** The renderer's own publication: it knows only about the tab it created. */
+// Simulate a window snapshot that knows only its own tab.
 function rendererSession(): WorkspaceSessionState {
   return {
     ...getDefaultWorkspaceSession(),
@@ -47,7 +47,6 @@ function persistedTabIds(session: WorkspaceSessionState, worktreeId: string): st
   return (session.tabsByWorktree?.[worktreeId] ?? []).map((tab) => tab.id)
 }
 
-/** `orca terminal create`: the runtime writes the pane, then binds the terminal it started. */
 async function startRuntimePane(
   store: Awaited<ReturnType<typeof createStore>>,
   pane: { worktreeId: string; tabId: string; leafId: string; ptyId: string; incarnationId?: string }
@@ -87,14 +86,13 @@ describe('runtime-admitted terminal membership survives a stale renderer replay'
     ).toBe(true)
     const session = store.getWorkspaceSession()
     expect(persistedTabIds(session, WORKTREE)).toContain('host-tab')
-    // Written with its tab-bar entry and group, so no view reads a row the tab bar lacks.
     expect(session.unifiedTabs?.[WORKTREE]?.map((tab) => tab.entityId)).toContain('host-tab')
     expect(session.tabGroups?.[WORKTREE]?.flatMap((group) => group.tabOrder)).toContain('host-tab')
     expect(session.terminalLayoutsByTabId['host-tab']?.ptyIdsByLeafId).toEqual({
       [TEST_LEAF_2]: 'host-pty'
     })
 
-    // The renderer's debounced writer flushes a snapshot taken before the create.
+    // Replay the window’s debounced snapshot taken before runtime admission.
     store.setWorkspaceSession(rendererSession())
 
     expect(persistedTabIds(store.getWorkspaceSession(), WORKTREE)).toContain('host-tab')
@@ -137,7 +135,6 @@ describe('runtime-admitted terminal membership survives a stale renderer replay'
     )
   })
 
-  // Polarity: a renderer spawn racing its own writer must not freeze the tab list.
   it('leaves renderer-owned membership alone when the runtime did not admit the pane', async () => {
     const store = await createStore()
     store.setWorkspaceSession(rendererSession())
@@ -153,9 +150,7 @@ describe('runtime-admitted terminal membership survives a stale renderer replay'
     expect(persistedTabIds(store.getWorkspaceSession(), WORKTREE)).toEqual(['renderer-tab'])
   })
 
-  // Closing must still work afterwards. Closes are host-driven: the retirement is
-  // computed from the store's own session (see stageTerminalSurfaceRetirements),
-  // which is what outranks the fence this create just raised.
+  // Authoritative retirement derives state from Store and must outrank the admission fence.
   it('still lets the authoritative retirement path close the runtime-admitted tab', async () => {
     const store = await createStore()
     store.setWorkspaceSession(rendererSession())
@@ -176,7 +171,6 @@ describe('runtime-admitted terminal membership survives a stale renderer replay'
         incarnationId: 'host-incarnation'
       })
     )
-    // A stale renderer replay must not resurrect it either.
     store.setWorkspaceSession(rendererSession())
 
     expect(persistedTabIds(store.getWorkspaceSession(), WORKTREE)).toEqual(['renderer-tab'])

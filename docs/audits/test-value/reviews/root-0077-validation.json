@@ -1,0 +1,136 @@
+{
+  "batch": "root-0077",
+  "source_commit": "f1157821ce03d7c59323f95a4bac521f13bb841e",
+  "files": 1,
+  "original_declarations": 11,
+  "final_declarations": 11,
+  "original_explicit_parameter_rows": 6,
+  "runtime_cases": 15,
+  "decisions": {
+    "keep": 7,
+    "fix": 4
+  },
+  "records_sha256": "260988b313fe8394cddb5cc0f65a815329c8a70e683bb380af1bcbb73dabb3ce",
+  "commands": [
+    {
+      "name": "baseline-tests",
+      "exit_code": 0,
+      "log": "/tmp/orca-root-0077-baseline-tests.log",
+      "log_sha256": "7bc447c06e3ce21d8c90e59edc37516448b6fd2396154769ae2e778aec89936e",
+      "report": "/tmp/orca-root-0077-baseline-tests.json",
+      "report_sha256": "ba71ceb38876fcdc9fae2f018a578726fc1d7800f54cb6d957d5d1aa03be0042",
+      "passed": 15,
+      "failed": 0,
+      "skipped": 0,
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/cli/index-agent-launch.test.ts --reporter=default --reporter=json --outputFile=/tmp/orca-root-0077-baseline-tests.json"
+    },
+    {
+      "name": "final-tests",
+      "exit_code": 0,
+      "log": "/tmp/orca-root-0077-final-tests.log",
+      "log_sha256": "4155e8070a41602aa10fabfbd19266aec8a3d37878d9e3ef2ab645288a5721ce",
+      "report": "/tmp/orca-root-0077-final-tests.json",
+      "report_sha256": "ae7a04af04327911c8c7847a01aab802aef8435a23a95650576fd0b80b738afe",
+      "passed": 15,
+      "failed": 0,
+      "skipped": 0,
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/cli/index-agent-launch.test.ts --reporter=default --reporter=json --outputFile=/tmp/orca-root-0077-final-tests.json"
+    },
+    {
+      "name": "typecheck",
+      "exit_code": 0,
+      "log": "/tmp/orca-root-0077-typecheck.log",
+      "log_sha256": "64350cfafba2dd6bb61adf325923dc3c41762eb81a276ff9302796e6e77b09bc",
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm tc:cli"
+    },
+    {
+      "name": "lint",
+      "exit_code": 0,
+      "log": "/tmp/orca-root-0077-lint.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec oxlint src/cli/index-agent-launch.test.ts"
+    },
+    {
+      "name": "format",
+      "exit_code": 0,
+      "log": "/tmp/orca-root-0077-format.log",
+      "log_sha256": "40b223ad82c15debd657ab48f9473de002f232b3b9952793cf227fcea706bc3e",
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec oxfmt --check src/cli/index-agent-launch.test.ts"
+    }
+  ],
+  "mutations": [
+    {
+      "defect": "replace-recovery-identity",
+      "production_path": "src/cli/agent-launch-request.ts",
+      "test_path": "src/cli/index-agent-launch.test.ts",
+      "original_production_sha256": "a16a500dfccfb671f4400d9e49bdf97d6f032e44b5fe405da62f5777a7c9ccb4",
+      "mutant_production_sha256": "e6e284f62515d1992846a83d5317f5c5e1543be73e1a760ee69346344c318dcb",
+      "original_test_sha256": "322e7db82d46cda23d02e169d68f8c7d5eefa4122f457da0f4ab94722be1a80d",
+      "reviewed_test_sha256": "643308cd22bc5f435c103c183b1bbe6d2ecbee796d180fe52f5365f9d2bf49ba",
+      "results": [
+        {
+          "phase": "original",
+          "command": [
+            "pnpm",
+            "test",
+            "src/cli/index-agent-launch.test.ts",
+            "-t",
+            "returns an exact recovery command and removes blind retry advice after a lost reply",
+            "--maxWorkers=1",
+            "--reporter=default",
+            "--reporter=json",
+            "--outputFile=/tmp/orca-root-0077-replace-recovery-identity-original.json"
+          ],
+          "exit_code": 0,
+          "passed": 1,
+          "failed": 0,
+          "failures": [],
+          "test_sha256": "322e7db82d46cda23d02e169d68f8c7d5eefa4122f457da0f4ab94722be1a80d",
+          "production_sha256": "e6e284f62515d1992846a83d5317f5c5e1543be73e1a760ee69346344c318dcb",
+          "report": "/tmp/orca-root-0077-replace-recovery-identity-original.json",
+          "report_sha256": "faea00c71bda386d9fd9929a6df9aa7318c96c3c71eecdb5e8e0da6d84613a46",
+          "log": "/tmp/orca-root-0077-replace-recovery-identity-original.log",
+          "log_sha256": "c423b9605d5c6e337d1b9cbb4a859c2f35422066fe675a5646b3c44db6c30b3b"
+        },
+        {
+          "phase": "reviewed",
+          "command": [
+            "pnpm",
+            "test",
+            "src/cli/index-agent-launch.test.ts",
+            "-t",
+            "returns an exact recovery command and removes blind retry advice after a lost reply",
+            "--maxWorkers=1",
+            "--reporter=default",
+            "--reporter=json",
+            "--outputFile=/tmp/orca-root-0077-replace-recovery-identity-reviewed.json"
+          ],
+          "exit_code": 1,
+          "passed": 0,
+          "failed": 1,
+          "failures": [
+            {
+              "title": "returns an exact recovery command and removes blind retry advice after a lost reply",
+              "messages": [
+                "AssertionError: expected [ [ 'agent.launchReplay', \u2026(1) ] ] to deeply equal [ [ 'agent.launchReplay', \u2026(1) ] ]\n    at /home/neil/orca/workspaces/orca/comprehensive-test-audit-8/src/cli/index-agent-launch.test.ts:195:27\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:20"
+              ]
+            }
+          ],
+          "test_sha256": "643308cd22bc5f435c103c183b1bbe6d2ecbee796d180fe52f5365f9d2bf49ba",
+          "production_sha256": "e6e284f62515d1992846a83d5317f5c5e1543be73e1a760ee69346344c318dcb",
+          "report": "/tmp/orca-root-0077-replace-recovery-identity-reviewed.json",
+          "report_sha256": "2e2b869eb44d7b0747a4ff147eb64fa9bc6874b6675a078d324d8970c7087346",
+          "log": "/tmp/orca-root-0077-replace-recovery-identity-reviewed.log",
+          "log_sha256": "1b3fd6b222a6f999b4ade2b8589f60cb0effde2cba2e479252c3ab8cdbb2d995"
+        }
+      ],
+      "production_restored": true,
+      "test_restored": true
+    }
+  ],
+  "limitations": [
+    "Baseline was rerun with verified original Git bytes installed; reviewed bytes were restored in finally. The initial unconstrained startup run is superseded.",
+    "Mutation comparisons run only their named focused case; final whole batches passed with clean production restored.",
+    "Runtime/child-process endpoints are mocked. No app, native focus, SSH connection or terminal launch was performed."
+  ]
+}

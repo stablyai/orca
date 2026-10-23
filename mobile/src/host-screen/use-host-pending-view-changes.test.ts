@@ -1,5 +1,6 @@
 import { createElement } from 'react'
-import { act, create } from 'react-test-renderer'
+import { act, create as createRenderer } from 'react-test-renderer'
+
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../../src/shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
@@ -8,7 +9,7 @@ import {
   SetCollapsedParams,
   type SetCollapsedRequest
 } from '../../../src/shared/rpc-contract/workspace-view-collapse-params'
-import type { RpcClient } from '../transport/rpc-client'
+import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
 import type { RpcResponse } from '../transport/types'
 import { INITIAL_MOBILE_VIEW } from '../worktree/workspace-view-settings'
 import {
@@ -24,6 +25,21 @@ import {
   type PendingViewOutcome
 } from './use-host-pending-view-changes'
 
+const renderers = new Set<ReturnType<typeof createRenderer>>()
+function create(...args: Parameters<typeof createRenderer>): ReturnType<typeof createRenderer> {
+  const renderer = createRenderer(...args)
+  renderers.add(renderer)
+  return renderer
+}
+function unmountRenderers(): void {
+  act(() => {
+    for (const renderer of renderers) {
+      renderer.unmount()
+    }
+  })
+  renderers.clear()
+}
+
 function ok(): RpcResponse {
   return {
     id: 'r',
@@ -38,8 +54,9 @@ function refused(code: string): RpcResponse {
 }
 
 function mount(sendRequest: (method: string, params: unknown) => Promise<RpcResponse>) {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook calls only sendRequest.
-  const client = { sendRequest: vi.fn(sendRequest) } as unknown as RpcClient
+  const client = new FakeSession('connected')
+  client.sendRequest.mockImplementation((method, params) => sendRequest(method, params))
+  const send = client.sendRequest
   let changes: HostPendingViewChanges | null = null
   function Probe(): null {
     changes = useSwitchedHostPendingViewChanges(client)
@@ -48,7 +65,7 @@ function mount(sendRequest: (method: string, params: unknown) => Promise<RpcResp
   act(() => {
     create(createElement(Probe))
   })
-  return { client, current: () => changes! }
+  return { client, send, current: () => changes! }
 }
 
 async function flush(): Promise<void> {
@@ -59,18 +76,22 @@ async function flush(): Promise<void> {
 }
 
 afterEach(() => {
+  unmountRenderers()
   vi.useRealTimers()
 })
 
 describe('the phone’s own option changes', () => {
   it('show as pending until the desktop acknowledges them', async () => {
-    let answer: (reply: RpcResponse) => void = () => {}
+    let answer: ((reply: RpcResponse) => void) | undefined
     const screen = mount(() => new Promise((resolve) => (answer = resolve)))
     let outcome: Promise<PendingViewOutcome> | null = null
     act(() => {
       outcome = screen.current().controls.sendView({ groupBy: 'none' }, { groupBy: 'none' })
     })
     expect(screen.current().status.pending).toHaveLength(1)
+    if (answer === undefined) {
+      throw new Error('view write never started')
+    }
     answer(ok())
     await flush()
     expect(await outcome).toBe('settled')
@@ -125,7 +146,10 @@ describe('the phone’s own option changes', () => {
     act(() => {
       screen.current().controls.reconcile({ sortBy: 'recent' }, { resend: true, sentByOpId })
     })
-    expect(screen.client.sendRequest).toHaveBeenCalledTimes(2)
+    expect(screen.send.mock.calls).toEqual([
+      ['ui.set', { sortBy: 'name' }],
+      ['ui.set', { sortBy: 'name' }]
+    ])
     act(() => {
       screen.current().controls.reconcile({ sortBy: 'name' }, { resend: false, sentByOpId })
     })
@@ -152,6 +176,10 @@ describe('the phone’s own option changes', () => {
     act(() => void screen.current().controls.sendCollapse('a', true))
     act(() => void screen.current().controls.sendCollapse('a', false))
     await flush()
+    expect(screen.send.mock.calls.map(([method, params]) => ({ method, params }))).toEqual([
+      { method: 'ui.setCollapsed', params: expect.objectContaining({ key: 'a', collapsed: true }) },
+      { method: 'ui.setCollapsed', params: expect.objectContaining({ key: 'a', collapsed: false }) }
+    ])
     const [first, second] = sent
     expect(second.opId.writer).toBe(first.opId.writer)
     expect(second.opId.seq).toBeGreaterThan(first.opId.seq)

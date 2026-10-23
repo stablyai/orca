@@ -1,0 +1,60 @@
+{
+  "batch": "root-0062",
+  "reviewer": "root",
+  "source_commit": "89b3d382847f10b31a731ebd7e18aad022a4b15a",
+  "reviewed_files": 1,
+  "original_declarations": 13,
+  "inline_command_controls": 11,
+  "case_records": 24,
+  "decisions": {
+    "keep": 7,
+    "fix": 14,
+    "consolidate": 3
+  },
+  "production_changes": false,
+  "checks": [
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/cli/handlers/managed-server.test.ts",
+      "baseline": "1 suite /13 tests passed",
+      "reviewed": "1 suite /12 tests passed; duplicate stop/status consolidated"
+    },
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm tc:cli",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm exec oxlint src/cli/handlers/managed-server.test.ts",
+      "result": "passed"
+    }
+  ],
+  "mutation_controls": [
+    {
+      "mutation": "shrink managed-server action timeout from 20 minutes to 60 seconds",
+      "original_exit_code": 0,
+      "reviewed_exit_code": 1,
+      "observed_failure": "Original expected producer constant changed with mutation and passed; independently expected 1,200,000ms fails stop/forget/update/recover payload assertions.",
+      "production_restored": true
+    }
+  ],
+  "integrity": {
+    "original_and_final_hashes_verified": true,
+    "records_sha256": "953aa8238292d7e73107e0568302eabe9f0417b71c9d4eded8f80bd09bd71b0e",
+    "supporting_source_hashes": {
+      "src/cli/handlers/managed-server.ts": "e7a43d22032224e86719844a4dd858554573fc6247c0e1b14a8be3836485db62",
+      "src/cli/handlers/managed-server-reconnect.ts": "ca0ba0b3fc654e90f61a4aa7b64bfc30258be15b6442d3539d565fadccd2c43c",
+      "src/cli/handlers/managed-server-format.ts": "82667f9b0079ad7339cdc024a840c394c2f3d0d27814dad228cf937d30fd38d0"
+    }
+  },
+  "log_hashes": {
+    "/tmp/orca-root-0062-original-tests.log": "a05c6c17e08ad01f41fa1c13838f73114d5f19346c00d8bfae69bd3cf58bb344",
+    "/tmp/orca-root-0062-reviewed-tests.log": "720c381c0d77c79c2e7f32c59d112da6eebcb3e9e00f6d1038b7c6a42e7819ce",
+    "/tmp/orca-root-0062-typecheck.log": "64350cfafba2dd6bb61adf325923dc3c41762eb81a276ff9302796e6e77b09bc",
+    "/tmp/orca-root-0062-oxlint.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/tmp/orca-root-0062-short-timeout-original.log": "d552214043bbb6c5dbd7be279abb0b8019d7db6ced19f790bb61dad148c6891a",
+    "/tmp/orca-root-0062-short-timeout-reviewed.log": "abd2d0550a9ae2c13481f366a9eff7778a1748c248a1fc157525ee507b3b0936"
+  },
+  "limitations": [
+    "Runtime capability/action/status transports are mocks. No SSH host, live daemon, stop, forget, recovery, deployment or filesystem mutation is invoked.",
+    "Default budget assertion establishes CLI request policy; real desktop deadlines and remote runtime outcomes remain outside this suite."
+  ]
+}

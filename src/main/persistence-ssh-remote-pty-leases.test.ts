@@ -15,7 +15,6 @@ import { sshRemotePtyLeaseAllowsReattach } from '../shared/ssh-types'
 import { TEST_LEAF_1, TEST_LEAF_2 } from './persistence-session-fixtures'
 import { PtyExitProof } from './pty-exit-proof'
 
-// Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),
   sshConfigHostsToTargetsMock: vi.fn()
@@ -55,7 +54,6 @@ vi.mock('./telemetry/cohort-classifier', () => ({
   getCohortAtEmit: getCohortAtEmitMock
 }))
 
-/** One SSH pane bound to `ssh:ssh-1@@remote-pty` in both the tab row and the leaf map. */
 async function storeWithBoundSshPane(): Promise<Awaited<ReturnType<typeof createStore>>> {
   const store = createStoreWithSshRemotePtyLeases([
     {
@@ -205,9 +203,7 @@ describe('Store', () => {
     })
   })
 
-  // A partial renderer map is only repaired when a lease says the omitted sibling still belongs to
-  // this host. `expired` says the client lost its route, not that the sibling died — repair it.
-  // `terminated` is the operator-close state and must stay refused.
+  // Expired leases still prove a sibling may run remotely; terminated leases must not restore its binding.
   it.each([
     ['expired', { [TEST_LEAF_1]: 'remote-pty-1', [TEST_LEAF_2]: 'remote-pty-2' }],
     ['terminated', { [TEST_LEAF_1]: 'remote-pty-1' }]
@@ -270,7 +266,6 @@ describe('Store', () => {
         }
       })
 
-      // The renderer republishes only the leaf it still knows about.
       store.setWorkspaceSession({
         activeRepoId: 'r1',
         activeWorktreeId: 'wt1',
@@ -573,7 +568,6 @@ describe('Store', () => {
       PtyExitProof.from('exit-observed', undefined)
     )
 
-    // An unresolved id would have left the lease `attached`; this unbound row is retired instead.
     expect(store.getSshRemotePtyLeases('ssh-1')).toEqual([])
   })
 
@@ -637,12 +631,7 @@ describe('Store', () => {
   })
 })
 
-/**
- * The lease loader is a strict whitelist, so a field it does not name is stripped on every launch
- * and the mark that keeps a superseded predecessor out of the reattach set would silently stop
- * working. Both skew directions are Rule 1 of docs/reference/remote-wire-compatibility.md: this
- * build reads a row an older one wrote, and an older build ignores the keys it never heard of.
- */
+// Round-trip retirement marks through the strict loader; older rows omit them and older builds ignore them.
 describe('ssh remote pty lease route-retirement marks survive the disk round trip', () => {
   beforeEach(() => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
@@ -686,8 +675,7 @@ describe('ssh remote pty lease route-retirement marks survive the disk round tri
     expect(store.getSshRemotePtyLeases('ssh-1').filter(sshRemotePtyLeaseAllowsReattach)).toEqual([])
   })
 
-  // A row an older build wrote carries neither mark. Absence must read as "orphan", which is the
-  // reattachable answer — the older build had no way to say otherwise.
+  // Missing retirement marks on older rows must preserve reattachability.
   it('reads a row written before the marks existed as a reattachable orphan', async () => {
     persistLeases([
       { targetId: 'ssh-1', ptyId: 'pty-1', state: 'expired', createdAt: 1, updatedAt: 2 }

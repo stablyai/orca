@@ -23,11 +23,7 @@ describe('detectInstalledBrowsers — Comet', () => {
   const originalHome = process.env.HOME
 
   beforeEach(() => {
-    // Why: browser-cookie-import.ts uses destructured named imports from
-    // 'node:fs' which are bound at module-load time. Without vi.resetModules(),
-    // only the first test's vi.doMock takes effect — subsequent tests see the
-    // cached module with the first mock still applied. resetModules must run
-    // BEFORE each doMock so the next import() picks up the fresh mock factory.
+    // Reset cached imports before installing each filesystem mock.
     vi.resetModules()
     Object.defineProperty(process, 'platform', { value: 'darwin' })
     process.env.HOME = '/Users/test'

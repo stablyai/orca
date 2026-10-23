@@ -25,7 +25,11 @@ export class StatementRecordingDatabase implements RelayDatabase {
     return await this.inner.query(sql, params)
   }
 
-  async queryLocked(sql: string, params: unknown[] = [], options: RelayLockOptions = {}): Promise<SqlRow[]> {
+  async queryLocked(
+    sql: string,
+    params: unknown[] = [],
+    options: RelayLockOptions = {}
+  ): Promise<SqlRow[]> {
     this.statements.push(`${normalized(sql)} [locked]`)
     return await this.inner.queryLocked(sql, params, options)
   }
@@ -36,16 +40,17 @@ export class StatementRecordingDatabase implements RelayDatabase {
   ): Promise<T> {
     this.statements.push('BEGIN')
     try {
-      return await this.inner.transaction(
-        async (transaction) => {
-          const recording = new StatementRecordingDatabase(transaction, this.statements)
-          recording.failing = this.failing
-          return await operation(recording)
-        },
-        options
-      )
-    } finally {
+      const result = await this.inner.transaction(async (transaction) => {
+        const recording = new StatementRecordingDatabase(transaction, this.statements)
+        recording.failing = this.failing
+        return await operation(recording)
+      }, options)
+
       this.statements.push('COMMIT')
+      return result
+    } catch (error) {
+      this.statements.push('ROLLBACK')
+      throw error
     }
   }
 

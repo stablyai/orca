@@ -48,6 +48,7 @@ describe('an update this shell refused falls back to the generation that already
 
   it('opens the cached generation rather than walling a host it can still reach', () => {
     const step = refused()
+    expect(step.session.updateNotice).toBe('update-failed')
     expect(step.session.state).toEqual({ kind: 'activating', source: 'cache' })
     expect(withoutRecord(step.effects)).toEqual([
       {
@@ -121,11 +122,6 @@ describe('an update this shell refused falls back to the generation that already
     // The wall, not the download-failed screen: what is wrong is the bundle against this host, and
     // "Try again" would re-run a refusal that is not about the link.
     expect(withoutRecord(step.effects)).toEqual([])
-  })
-
-  it('serves the generation that is still inside the window, which is the case above inverted', () => {
-    expect(refused().session.state).toEqual({ kind: 'activating', source: 'cache' })
-    expect(refused().session.updateNotice).toBe('update-failed')
   })
 
   it('shows the download failure when the cached bundle never carried the route, before any wall', () => {

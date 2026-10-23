@@ -3,8 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 
-// Only the thread hop is replaced: the implementations below are the repo's own
-// in-process readers, which the worker entry calls on the other side.
+// Replace the worker transport with its real in-process readers.
 vi.mock('./session-scanner-opencode-sqlite-worker-spawn', async () => {
   const list = await import('./session-scanner-opencode-sqlite-list')
   const list2 = await import('./session-scanner-opencode2-sqlite-list')
@@ -54,18 +53,6 @@ import {
   resetTranscriptConsumersForTests,
   type TranscriptMessage
 } from './session-transcript-consumers'
-
-/*
- * The guard the OpenCode capture gap needed.
- *
- * Every consumer of the transcript reader -- the search index today, a digest
- * tomorrow -- sees an agent only through the messages its parser publishes. A
- * parser can list a session, show a preview and resume it correctly while
- * publishing nothing at all, which is exactly how 606 OpenCode sessions came to
- * hold zero indexed messages. Nothing above this layer can tell the difference,
- * so the assertion has to live here: one fixture per supported agent, read the
- * way the app reads it, and every agent has to say something.
- */
 
 const OPENCODE_SQLITE_SESSION = 'ses_capture_guard'
 
@@ -136,12 +123,8 @@ function spokeIn(read: CapturedRead): boolean {
 it('publishes at least one user or assistant message for every source it reads', async () => {
   const reads = await readEveryAgentVault()
 
-  // Per source, not per agent: OpenCode has two storage shapes, and asking only
-  // that *some* OpenCode session spoke is exactly the question that read as
-  // healthy while every SQLite session in the vault was silent.
+  // Check every storage source: one working OpenCode format must not mask another’s missing messages.
   expect(reads.filter((read) => !spokeIn(read)).map((read) => read.path)).toEqual([])
-  // And the vault really does cover every agent, so a new one cannot be added
-  // without a fixture that proves it publishes.
   expect(new Set(reads.map((read) => read.agent))).toEqual(new Set(AI_VAULT_AGENTS))
 })
 
@@ -158,15 +141,11 @@ it('publishes an OpenCode SQLite session through the same channel as every file 
       timestamp: expect.any(String)
     },
     {
-      // Reasoning folds into the turn's own words, ahead of the text part it
-      // preceded, exactly as a thinking block does for a file provider.
       role: 'assistant',
       text: 'Weighing which parts carry words.\nEvery part of every turn.',
       timestamp: expect.any(String)
     },
     {
-      // The call line and what came back, in one message: OpenCode writes both
-      // on one part where a file provider writes a call block and a result.
       role: 'tool',
       text: 'bash: rg --count quokka\nsrc/main/ai-vault: 3',
       timestamp: expect.any(String)

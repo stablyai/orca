@@ -19,7 +19,7 @@ vi.mock('electron', () => ({
 
 vi.mock('./telemetry/client', () => ({ track: vi.fn() }))
 
-// A kind with no installer yet, so the channel's own behaviour is all that runs.
+// Use a blob kind without an installer to isolate channel behavior.
 const bytes = Buffer.from('session record one\nsession record two\n')
 const blob: OrcadMigrationBlobDescriptor = {
   blobKind: 'agent-session-records',

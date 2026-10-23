@@ -1,0 +1,229 @@
+{
+  "batch": "root-0075",
+  "source_commit": "88b47bc7d8785e615b2e79a5dc75ab1991cc2265",
+  "files": 1,
+  "original_declarations": 26,
+  "final_declarations": 26,
+  "original_explicit_parameter_rows": 10,
+  "runtime_cases": 33,
+  "decisions": {
+    "keep": 21,
+    "fix": 3,
+    "consolidate": 2
+  },
+  "records_sha256": "faf0c36b4250863129058ef08c7f8c6f041e6869a24320e2b10059f7c4a39399",
+  "commands": [
+    {
+      "name": "baseline-tests",
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/cli/handlers/terminal.test.ts --reporter=default --reporter=json --outputFile=/tmp/orca-root-0075-baseline-tests.json",
+      "exit_code": 0,
+      "log": "/tmp/orca-root-0075-baseline-tests.log",
+      "log_sha256": "118afb46e306d1d051167705ba2ad39209ca34ad472557298c1156a4d83ff929",
+      "report": "/tmp/orca-root-0075-baseline-tests.json",
+      "report_sha256": "b7755bec2575008da29feb8586474cf6684b0182422d372e8b785a6a7aefd197",
+      "passed": 33,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "reviewed-tests",
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/cli/handlers/terminal.test.ts --reporter=default --reporter=json --outputFile=/tmp/orca-root-0075-reviewed-tests.json",
+      "exit_code": 0,
+      "log": "/tmp/orca-root-0075-reviewed-tests.log",
+      "log_sha256": "cffcab09a4775eac30be1f50212533acf7be73b7f33827659cb8805a28fe3185",
+      "report": "/tmp/orca-root-0075-reviewed-tests.json",
+      "report_sha256": "f8eb8f357e054aa88d08dc2836cf8707836baf5c82d7901af0e2d24471d25399",
+      "passed": 33,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "final-tests",
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/cli/handlers/terminal.test.ts --reporter=default --reporter=json --outputFile=/tmp/orca-root-0075-final-tests.json",
+      "exit_code": 0,
+      "log": "/tmp/orca-root-0075-final-tests.log",
+      "log_sha256": "5ea367c671c31b0651e51ad7acaeca78afd13f8a6844cd696aa86ebe7de52190",
+      "report": "/tmp/orca-root-0075-final-tests.json",
+      "report_sha256": "d313231f350ebc9fed32128a0f6594dc5b9e525cc6bf30c825c979b686b2b161",
+      "passed": 33,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "typecheck",
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm tc:cli",
+      "exit_code": 0,
+      "log": "/tmp/orca-root-0075-typecheck.log",
+      "log_sha256": "64350cfafba2dd6bb61adf325923dc3c41762eb81a276ff9302796e6e77b09bc"
+    },
+    {
+      "name": "lint",
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec oxlint src/cli/handlers/terminal.test.ts",
+      "exit_code": 0,
+      "log": "/tmp/orca-root-0075-lint.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "format",
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec oxfmt --check src/cli/handlers/terminal.test.ts",
+      "exit_code": 0,
+      "log": "/tmp/orca-root-0075-format.log",
+      "log_sha256": "40b223ad82c15debd657ab48f9473de002f232b3b9952793cf227fcea706bc3e"
+    }
+  ],
+  "mutations": [
+    {
+      "defect": "wrong-bulk-close-method",
+      "production_path": "src/cli/handlers/terminal-close.ts",
+      "test_path": "src/cli/handlers/terminal.test.ts",
+      "original_production_sha256": "af0cd1c7e113b4c158a5a0996399e8acee70b47576fac26b0dd6e35ce97e3bbd",
+      "mutant_production_sha256": "d564cae40d83c8f850d26159bdee0f95347e6d234521c558a01f42feb3efc9f8",
+      "original_test_sha256": "5cabc0c0cd7c6f4e15b0ae6bc7b48127b5dddb53364e2bbff553eb3f83a4b11c",
+      "reviewed_test_sha256": "937a39e0d3ce1db894793c510030928f7cc9952eea0f224bc617632e62eb74fa",
+      "results": [
+        {
+          "phase": "original",
+          "command": [
+            "pnpm",
+            "test",
+            "src/cli/handlers/terminal.test.ts",
+            "-t",
+            "fails safely before mutation when the host predates bulk close",
+            "--maxWorkers=1",
+            "--reporter=default",
+            "--reporter=json",
+            "--outputFile=/tmp/orca-root-0075-wrong-bulk-close-method-original.json"
+          ],
+          "exit_code": 0,
+          "passed": 1,
+          "failed": 0,
+          "failures": [],
+          "test_sha256": "5cabc0c0cd7c6f4e15b0ae6bc7b48127b5dddb53364e2bbff553eb3f83a4b11c",
+          "production_sha256": "d564cae40d83c8f850d26159bdee0f95347e6d234521c558a01f42feb3efc9f8",
+          "report": "/tmp/orca-root-0075-wrong-bulk-close-method-original.json",
+          "report_sha256": "9b65e3974f9f25074f2b7be22c8e8090d06bc5f569a5eb444c443b9d7a5a0672",
+          "log": "/tmp/orca-root-0075-wrong-bulk-close-method-original.log",
+          "log_sha256": "8ed30fda5dc9a3b6af9f25da652193fb16b1abea481554d644170a090ceff695"
+        },
+        {
+          "phase": "reviewed",
+          "command": [
+            "pnpm",
+            "test",
+            "src/cli/handlers/terminal.test.ts",
+            "-t",
+            "fails safely before mutation when the host predates bulk close",
+            "--maxWorkers=1",
+            "--reporter=default",
+            "--reporter=json",
+            "--outputFile=/tmp/orca-root-0075-wrong-bulk-close-method-reviewed.json"
+          ],
+          "exit_code": 1,
+          "passed": 0,
+          "failed": 1,
+          "failures": [
+            {
+              "title": "fails safely before mutation when the host predates bulk close",
+              "messages": [
+                "AssertionError: expected \"vi.fn()\" to be called once with arguments: [ 'terminal.closeAll', \u2026(1) ]\n\nReceived:\n\n  1st vi.fn() call:\n\n  [\n-   \"terminal.closeAll\",\n+   \"terminal.closeAll-wrong\",\n    {\n      \"worktree\": \"id:repo::/worktree\",\n    },\n  ]\n\n\nNumber of calls: 1\n\n    at Proxy.<anonymous> (file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/index.aTZaPVhf.js:2265:10)\n    at Proxy.<anonymous> (file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/index.aTZaPVhf.js:1958:14)\n    at Proxy.methodWrapper (file:///home/neil/.local/share/pnpm/store/v11/links/@/chai/6.3.0/25b5fcf6626be1440275f25f04f4b64170f3760bb1da107f5691c470b8dd65d1/node_modules/chai/index.js:1737:25)\n    at /home/neil/orca/workspaces/orca/comprehensive-test-audit-8/src/cli/handlers/terminal.test.ts:262:18\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:20"
+              ]
+            }
+          ],
+          "test_sha256": "937a39e0d3ce1db894793c510030928f7cc9952eea0f224bc617632e62eb74fa",
+          "production_sha256": "d564cae40d83c8f850d26159bdee0f95347e6d234521c558a01f42feb3efc9f8",
+          "report": "/tmp/orca-root-0075-wrong-bulk-close-method-reviewed.json",
+          "report_sha256": "35545ba9dabfa4b6c11a0a6e7ee8a265ddf699e8c8f45d2e341abecbdef68e1a",
+          "log": "/tmp/orca-root-0075-wrong-bulk-close-method-reviewed.log",
+          "log_sha256": "20db840aac4811c1c5b14c6bd0b0b51fadf56ba3a5c9c289f247ddc0c9575451"
+        }
+      ],
+      "production_restored": true,
+      "test_restored": true
+    },
+    {
+      "defect": "unprinted-legacy-receipt",
+      "production_path": "src/cli/handlers/terminal-send.ts",
+      "test_path": "src/cli/handlers/terminal.test.ts",
+      "original_production_sha256": "81dd60339ec2e08180a2f362fe95325309104d1ac5147d19e8f176476d60b972",
+      "mutant_production_sha256": "de4e718b9178f25f1f50d28772d249e2424c00d5f36ea0320596175049753f1d",
+      "original_test_sha256": "5cabc0c0cd7c6f4e15b0ae6bc7b48127b5dddb53364e2bbff553eb3f83a4b11c",
+      "reviewed_test_sha256": "937a39e0d3ce1db894793c510030928f7cc9952eea0f224bc617632e62eb74fa",
+      "results": [
+        {
+          "phase": "original",
+          "command": [
+            "pnpm",
+            "test",
+            "src/cli/handlers/terminal.test.ts",
+            "-t",
+            "labels an old-host response as non-idempotent without claiming submission",
+            "--maxWorkers=1",
+            "--reporter=default",
+            "--reporter=json",
+            "--outputFile=/tmp/orca-root-0075-unprinted-legacy-receipt-original.json"
+          ],
+          "exit_code": 0,
+          "passed": 1,
+          "failed": 0,
+          "failures": [],
+          "test_sha256": "5cabc0c0cd7c6f4e15b0ae6bc7b48127b5dddb53364e2bbff553eb3f83a4b11c",
+          "production_sha256": "de4e718b9178f25f1f50d28772d249e2424c00d5f36ea0320596175049753f1d",
+          "report": "/tmp/orca-root-0075-unprinted-legacy-receipt-original.json",
+          "report_sha256": "74d431621f973e45548c7ab731d5a5d2b5438f1e95e3adaf4d4b51090ad93fb4",
+          "log": "/tmp/orca-root-0075-unprinted-legacy-receipt-original.log",
+          "log_sha256": "7d219894d96be53d52ca7a7b136c17b40fed766758aeb738f4860ac49090a392"
+        },
+        {
+          "phase": "reviewed",
+          "command": [
+            "pnpm",
+            "test",
+            "src/cli/handlers/terminal.test.ts",
+            "-t",
+            "labels an old-host response as non-idempotent without claiming submission",
+            "--maxWorkers=1",
+            "--reporter=default",
+            "--reporter=json",
+            "--outputFile=/tmp/orca-root-0075-unprinted-legacy-receipt-reviewed.json"
+          ],
+          "exit_code": 1,
+          "passed": 0,
+          "failed": 1,
+          "failures": [
+            {
+              "title": "labels an old-host response as non-idempotent without claiming submission",
+              "messages": [
+                "AssertionError: expected undefined to deeply equal { \u2026(7) }\n    at /home/neil/orca/workspaces/orca/comprehensive-test-audit-8/src/cli/handlers/terminal.test.ts:607:75\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:20"
+              ]
+            }
+          ],
+          "test_sha256": "937a39e0d3ce1db894793c510030928f7cc9952eea0f224bc617632e62eb74fa",
+          "production_sha256": "de4e718b9178f25f1f50d28772d249e2424c00d5f36ea0320596175049753f1d",
+          "report": "/tmp/orca-root-0075-unprinted-legacy-receipt-reviewed.json",
+          "report_sha256": "02d6cdad3fb5e04e48a09d24c04450d29d1ff4e6c13be6e9f598a128773afa74",
+          "log": "/tmp/orca-root-0075-unprinted-legacy-receipt-reviewed.log",
+          "log_sha256": "06930a5ae4b0d2184ab7dbcc53ec4c728adb11d4366f05720bb5251300ebffeb"
+        }
+      ],
+      "production_restored": true,
+      "test_restored": true
+    }
+  ],
+  "integrity": {
+    "exact_original_case_slices_verified": 26,
+    "exact_parameter_rows_verified": 10,
+    "original_and_reviewed_hashes_verified": true,
+    "production_restoration_verified": true,
+    "original_snapshot_sha256": "6c96569c94bcad40ae39dba4ef96ea6631f85d1df84d5545d0c19b05c6c6b73f",
+    "plan_sha256": "b5aac7d0aa080789dd73796829462c43984bb2e3316d6604c789b785c137201b"
+  },
+  "limitations": [
+    "All 26 declarations and ten explicit table rows remain, expanding to 33 runtime cases. Text-only/bare-Enter and failed/retried send sequences remain separate within-case controls.",
+    "Both mutations select only the intended individual case. Each original case passes and each reviewed case fails; no whole-suite mutation result is claimed. The final whole suite passes after restoring production.",
+    "RuntimeClient.call and optional full status response are mocked on Linux; no real PTY close, prompt delivery, shell spawn, socket, native focus or application launch is claimed.",
+    "The original bulk-close compatibility case failed during active-worktree lookup. It now uses an explicit identity and verifies that the refusal is from the intended bulk-close RPC.",
+    "The legacy accepted prompt receipt is now inspected in printed JSON. The permission-refusal case retains its exact human output, with its title narrowed to that observable result.",
+    "Redundant checks of absent fields on injected response objects were removed after preserving error/output controls.",
+    "Supporting source reads do not complete reviews of other pending suites."
+  ]
+}

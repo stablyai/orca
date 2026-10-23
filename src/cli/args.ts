@@ -38,7 +38,7 @@ function setFlagValue(
   flags.set(name, value)
 }
 
-/** The most specific spec whose path prefixes `path`, so a group never shadows a leaf. */
+// Prefer the longest path so command groups cannot shadow leaf commands.
 function specForPathPrefix(
   specs: readonly CommandSpec[],
   path: readonly string[]
@@ -75,9 +75,7 @@ export function parseArgs(
     }
 
     const assignment = token.slice(2)
-    // Why: `--flag=value` is the only unambiguous way to pass a value that
-    // itself starts with `--` (e.g. `--text=--help`); the space-separated form
-    // treats a `--`-leading next token as a new flag, so it can't express one.
+    // --flag=value permits values starting with -- without treating them as another flag.
     const equalsIndex = assignment.indexOf('=')
     if (equalsIndex !== -1) {
       flagEntries.push([assignment.slice(0, equalsIndex), assignment.slice(equalsIndex + 1)])
@@ -89,7 +87,7 @@ export function parseArgs(
       flagEntries.push([flag, true])
       continue
     }
-    // Why: a pre-command flag must not consume a registry-resolvable command path.
+    // Pre-command flags must not consume a registered command path.
     if (commandPath.length === 0 && i + 1 === commandIndex) {
       flagEntries.push([flag, true])
       continue
@@ -176,7 +174,6 @@ export function supportsBrowserPageFlag(commandPath: string[]): boolean {
   ].includes(joined)
 }
 
-// Why: validation and agent discovery must expose the same effective flag set.
 export function effectiveAllowedFlags(spec: CommandSpec): string[] {
   if (spec.argumentMode === 'passthrough') {
     return []
@@ -208,14 +205,12 @@ export function isCommandGroup(specs: CommandSpec[], commandPath: string[]): boo
 export function normalizeCommandPositionals(specs: CommandSpec[], parsed: ParsedArgs): ParsedArgs {
   for (const spec of specs) {
     const positionalArgs = spec.positionalArgs ?? []
-    // Why: aliased paths still need canonicalization when there are no positionals.
+    // Alias-only paths still need canonicalization without positional arguments.
     if (positionalArgs.length === 0 && !spec.aliases) {
       continue
     }
-    // Why: canonicalize aliases before validation and dispatch so both use one key.
     for (const base of specPaths(spec)) {
-      // Why: `< 0` (not `<= 0`) so an exact base match with zero positionals
-      // still canonicalizes an aliased path; upper bound guards over-consumption.
+      // Zero positionals still permit an exact alias match.
       const positionalCount = parsed.commandPath.length - base.length
       if (
         positionalCount < 0 ||
@@ -228,8 +223,7 @@ export function normalizeCommandPositionals(specs: CommandSpec[], parsed: Parsed
       }
       const flags = new Map(parsed.flags)
       const values = parsed.commandPath.slice(base.length)
-      // Why: validation runs inside main's error-reporting path, so normalization
-      // records ambiguity instead of throwing before CLI errors can be formatted.
+      // Record ambiguity here; validation reports it through the CLI error formatter.
       const providedPositionals = values.map(
         (_, index) => positionalArgs[Math.min(index, positionalArgs.length - 1)]
       )

@@ -10,20 +10,17 @@ import {
   type ClaudeProfileReport
 } from './claude-profile-report'
 
-/** `refused`: the profile failed its ownership gate and no surface was touched. */
+/** `refused` means ownership validation failed before any writes. */
 export type ClaudeProfileSetupReport = ClaudeProfileReport & { outcome: 'refused' | 'prepared' }
 
-/**
- * The one entry for setting up a managed Claude profile. Runs on the execution host that owns the
- * profile; for WSL that is inside the guest, never across a UNC path.
- */
+/** Run on the execution host; WSL profiles must be set up inside the guest. */
 export async function provisionClaudeAccountProfile(args: {
   dataRoot: string
   profile: ClaudeProfileDescriptor
   userHome: string
-  /** The user's own CLAUDE_CONFIG_DIR (see readUserClaudeConfigDir); `~/.claude` when unset. */
+  /** The user's own CLAUDE_CONFIG_DIR; defaults to `~/.claude`. */
   userConfigDir?: string
-  /** Null when Orca's Claude hooks are turned off. Runs after the settings copy so its entries survive it. */
+  /** Runs after settings are copied so hook entries survive; null disables installation. */
   installHooks: ((target: { configDir: string }) => AgentHookInstallStatus) | null
   platform?: NodeJS.Platform
 }): Promise<ClaudeProfileSetupReport> {
@@ -70,7 +67,7 @@ export async function provisionClaudeAccountProfile(args: {
     }
     return 'merged'
   })
-  // Last: a setup cut off before here leaves no marker, so the next launch waits for a full one.
+  // Mark last so interrupted setup is retried before the next launch.
   markSetUp()
   return { outcome: 'prepared', ...report }
 }

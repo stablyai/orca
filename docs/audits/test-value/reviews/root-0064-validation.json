@@ -1,0 +1,63 @@
+{
+  "batch": "root-0064",
+  "reviewer": "root",
+  "source_commit": "89b3d382847f10b31a731ebd7e18aad022a4b15a",
+  "reviewed_files": 3,
+  "original_declarations": 16,
+  "case_records": 16,
+  "decisions": {
+    "keep": 14,
+    "fix": 2
+  },
+  "production_changes": false,
+  "checks": [
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/cli/handlers/orchestration-caller-identity-cli.test.ts src/cli/handlers/orchestration-check-identity.test.ts src/cli/handlers/orchestration-federated-legacy-settlement.test.ts",
+      "baseline": "3 suites /16 tests passed",
+      "reviewed": "3 suites /16 tests passed"
+    },
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm tc:cli",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm exec oxlint src/cli/handlers/orchestration-caller-identity-cli.test.ts src/cli/handlers/orchestration-check-identity.test.ts src/cli/handlers/orchestration-federated-legacy-settlement.test.ts",
+      "result": "passed"
+    }
+  ],
+  "mutation_controls": [
+    {
+      "mutation": "Change worker completion send RPC method from orchestration.send to orchestration.sendWrong",
+      "original_exit_code": 0,
+      "reviewed_exit_code": 1,
+      "observed_failure": "Original accepts any mocked RPC method with the attested fixture. Reviewed positive case rejects the wrong send method; negative attestation control remains independently asserted.",
+      "production_restored": true
+    }
+  ],
+  "integrity": {
+    "original_and_final_hashes_verified": true,
+    "records_sha256": "4dc74a0c599653ce398e7ac5536a545484e0b1f9c6c73b3d45cfab28f2249d2c",
+    "supporting_source_hashes": {
+      "src/cli/handlers/orchestration/terminal-identity.ts": "17dbbe6811ece95b3645b6df2ec93697bca335e5b09d1f9d5ec9c7e552384306",
+      "src/cli/handlers/orchestration/dispatch-handlers.ts": "8ac03748e2c1e7e62892d2b061061a9e2c15326bf12a15915cfcbf98b404f3e6",
+      "src/cli/handlers/orchestration/task-handlers.ts": "a3421ada9a349c1ffde7ba38203459d9a7cb83502b9adf8eb6038661872c7988",
+      "src/cli/handlers/orchestration/message-check-handler.ts": "34bd1b02a753a0a249aebf3d5f39548bddea7e6afae102e42ee23a669abbff39",
+      "src/cli/handlers/orchestration/message-send-handler.ts": "b8e8e7941f3fa99a9dd782de98be1a296904e0a57e5257a9f75869fdda3036d3",
+      "src/cli/handlers/orchestration/message-payload.ts": "c27711a5b5f875ec5e93d9eaa0ba4fb23b679596f4ff9d7375fea80cf02db33c",
+      "src/cli/handlers/orchestration/mutation-request.ts": "66158d48995b0f98b828ec6304ec9cd2bc9d3bed7b1b30253fee403f389f4408",
+      "src/cli/handlers/orchestration-worker-settlement.ts": "5f2b7946d08cbcead9de95d8b56697502d2f11e7eefd3d462c4d4ced1a875ce9"
+    }
+  },
+  "log_hashes": {
+    "/tmp/orca-root-0064-original-tests.log": "8a952c87b51595f939095e210d0e51a9fa7e59ad50c13fbb397a1a063b3a29ad",
+    "/tmp/orca-root-0064-reviewed-tests.log": "58c673986df12bca520acadb2d84824b743f90fb59d9e33bf65584a8290f0a56",
+    "/tmp/orca-root-0064-typecheck.log": "64350cfafba2dd6bb61adf325923dc3c41762eb81a276ff9302796e6e77b09bc",
+    "/tmp/orca-root-0064-oxlint.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/tmp/orca-root-0064-wrong-method-original.log": "fa0882dc3d01a5e13507dcf0697fa96f72c387e743afbee2214dbc3f42f5e036",
+    "/tmp/orca-root-0064-wrong-method-reviewed.log": "4c2521a2ca4b21d6d4d36dd5f7557368952ae0f9fc5505a2db9a09ca8758bc54"
+  },
+  "limitations": [
+    "Transport, terminal selector and output writer are mocks; real handler admission, pane remint, payload serialization and settlement interpretation execute. No live coordinator, worker, remote host or mailbox is mutated.",
+    "Positive legacy attestation covers accepted worker-server authority; broader settlement combinations and runtime authorization remain outside these three suites."
+  ]
+}

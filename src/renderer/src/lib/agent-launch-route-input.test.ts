@@ -400,12 +400,11 @@ describe('buildAgentLaunchRouteInput', () => {
       )
     })
 
-    // The browser client's handshake never says it reads structured sessions, so the server
-    // would refuse its chat.
-    it('keeps the host terminal for a browser client', () => {
+    // The browser client runs the desktop's chat and its handshake says so (#32145).
+    it('opens a chat for a browser client too', () => {
       mocks.isWebClientLocation.mockReturnValue(true)
       try {
-        expect(routeFor(pairedStore(CURRENT_SERVER), args)).toBe('terminal-tui')
+        expect(routeFor(pairedStore(CURRENT_SERVER), args)).toBe('structured-native-chat')
       } finally {
         mocks.isWebClientLocation.mockReturnValue(false)
       }

@@ -65,7 +65,7 @@ async function createResetService(
     } as never,
     createRuntimeHome() as never
   )
-  /** The usage refresh that follows a reset, which moves the offer. */
+  // Simulate a post-reset usage refresh changing the offer revision.
   const refresh = () => {
     state.codex = { ...state.codex!, updatedAt: state.codex!.updatedAt + 1 }
   }

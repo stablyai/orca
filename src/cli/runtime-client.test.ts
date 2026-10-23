@@ -62,9 +62,7 @@ function writeMetadata(
 }
 
 function findUnusedPid(seed = 200_000): number {
-  // Why: the stale-bootstrap test must point metadata at a definitely-dead
-  // process. Hard-coding a small PID is host-dependent and flakes when that
-  // PID happens to be alive on the machine running the suite.
+  // Find a dead PID at runtime; a fixed PID may belong to a live process on this host.
   let pid = Math.max(seed, process.pid + 10_000)
   while (pid < 2_000_000) {
     try {
@@ -77,9 +75,7 @@ function findUnusedPid(seed = 200_000): number {
   return 2_000_000
 }
 
-// Why: these tests create Unix domain socket servers in temp directories.
-// Windows does not support Unix domain sockets in the same way, causing
-// EACCES errors on listen(), so the suite is skipped on that platform.
+// Temp-path Unix sockets fail with EACCES on Windows.
 describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
   it('adds an opaque durable request ID only to orchestration mutations', async () => {
     const userDataPath = makeRuntimeClientFixture()
@@ -398,7 +394,6 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
     await expect(client.openOrca(100)).rejects.toMatchObject({
       code: 'desktop_activation_blocked'
     })
-    // A blocked runtime can't promote, so we bail before spawning the app.
     expect(launchOrcaApp).not.toHaveBeenCalled()
   })
 
@@ -408,8 +403,7 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
     const server = createServer((socket) => {
       sockets.add(socket)
       socket.once('close', () => sockets.delete(socket))
-      // Why: keep the socket open without replying so the client timeout path
-      // is exercised against a real hung runtime connection.
+      // Leave the connection open without a reply to exercise the timeout against a real socket.
     })
     servers.add(server)
     await new Promise<void>((resolve) => server.listen(endpoint, resolve))

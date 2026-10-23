@@ -1,0 +1,50 @@
+{
+  "batch": "root-0065",
+  "reviewer": "root",
+  "source_commit": "89b3d382847f10b31a731ebd7e18aad022a4b15a",
+  "reviewed_files": 4,
+  "original_declarations": 15,
+  "case_records": 16,
+  "decisions": {
+    "keep": 15,
+    "fix": 1
+  },
+  "production_changes": false,
+  "checks": [
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/cli/handlers/orchestration-gate-cli.test.ts src/cli/handlers/orchestration-legacy-read-only.test.ts src/cli/handlers/orchestration-lifecycle-json-rejection.test.ts src/cli/handlers/orchestration-migration.test.ts",
+      "baseline": "15 passed /1 failed: inherited CODEX_THREAD_ID selected Codex refusal instead of generic sender guidance",
+      "reviewed": "4 suites /16 tests passed after clearing and restoring CODEX_THREAD_ID"
+    },
+    {
+      "command": "pnpm exec oxlint and oxfmt --check on the four reviewed paths",
+      "result": "passed"
+    }
+  ],
+  "integrity": {
+    "original_and_final_hashes_verified": true,
+    "records_sha256": "cb06ba4b41c6fe40896ea645fd268a64cd77ac3b6c473f6d612e9cb71cad494d",
+    "supporting_source_hashes": {
+      "src/cli/handlers/orchestration/gate-handlers.ts": "669abda34a67e66c30b7c024710994af3b7d7b5134bc7d306bbb7737e1835037",
+      "src/cli/handlers/orchestration/terminal-identity.ts": "17dbbe6811ece95b3645b6df2ec93697bca335e5b09d1f9d5ec9c7e552384306",
+      "src/cli/handlers/orchestration/message-inbox-handlers.ts": "049ae8d586dbee22e0716c60e1855b86cc81a55c9db2bdb840a731b88b29909d",
+      "src/cli/handlers/orchestration/message-check-handler.ts": "34bd1b02a753a0a249aebf3d5f39548bddea7e6afae102e42ee23a669abbff39",
+      "src/cli/handlers/orchestration/message-send-handler.ts": "b8e8e7941f3fa99a9dd782de98be1a296904e0a57e5257a9f75869fdda3036d3",
+      "src/cli/handlers/orchestration-worker-settlement.ts": "5f2b7946d08cbcead9de95d8b56697502d2f11e7eefd3d462c4d4ced1a875ce9",
+      "src/shared/orchestration-check-output.ts": "900597c3285f8e5a541ee9c190943ff9426ef4d6603f3eca2cd0dfa5211e7b01",
+      "src/shared/structured-session-marker.ts": "ee5721b69ac9ecd2aeec64f165dec4b97549a102fd87c0dde93345b03582a683",
+      "src/cli/orchestration-mutation-recovery.ts": "2a122b19241be3aea3355f0ad9d59c18e60f442f2a84de294e116ed3409e64f4",
+      "src/cli/format.ts": "f4ff6e2216c90a2a7ddc706957cd966f1510e7ff7304bdfd89d935d9665778d9"
+    }
+  },
+  "log_hashes": {
+    "/tmp/orca-root-0065-tests.log": "514765b78b2a1f74fffa4bb5bbdf646505d8af183c6f6a9bf2eb817338adadbe",
+    "/tmp/orca-root-0065-reviewed-tests.log": "336adf2722c80c435d2445653555510716ee5fdc2350f610c43496d2b415e57b",
+    "/tmp/orca-root-0065-oxlint.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/tmp/orca-root-0065-format.log": "35207f2f3e89aaf068e034763d42e61db5af1469492b58685c7fdd9b6f5aef93"
+  },
+  "limitations": [
+    "Runtime RPC/selector and output writer ports are injected. Actual CLI parsing, gate identity resolution, legacy output transformation, settlement interpretation and JSON error reporting execute. No live remote host, gate, message or terminal is mutated.",
+    "No production mutation was needed for the environment-isolation repair; the inherited-runner baseline failure independently demonstrated the unstable branch selection."
+  ]
+}

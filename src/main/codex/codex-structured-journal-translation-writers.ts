@@ -1,7 +1,3 @@
-// The translator's writers, built once. Split out so the translator reads as
-// routing, and so one place shows that every writer is handed the same
-// row attribution: the producer each child thread is, and the turn scope.
-
 import { CodexJournalCompactions } from './codex-structured-journal-compactions'
 import type { CodexJournalTranslatorDeps } from './codex-structured-journal-contracts'
 import { CodexJournalGenericFrames } from './codex-structured-journal-generic-frames'
@@ -25,8 +21,7 @@ export function createCodexJournalTranslatorWriters(deps: CodexJournalTranslator
     activeTurn,
     commandScope: (turnId) => commands.scopeFor(turnId)
   })
-  // The translator and the background-task tracker both feed these from the same frames, which
-  // repeat harmlessly; the rows only read them.
+  // Translator and background tracker can feed the same frame; execution updates are idempotent.
   const executions = deps.subagentExecutions ?? new CodexSubagentExecutions()
   const { linkageFor } = new CodexSubagentLinkage({ primaryThreadId, executions })
   const attributionFor: CodexRowAttribution = (threadId, turnId) => ({
@@ -39,7 +34,6 @@ export function createCodexJournalTranslatorWriters(deps: CodexJournalTranslator
     producerDeps,
     activeTurn,
     (threadId, turnId) => genericFrames.suppress(threadId, turnId),
-    // A collab call's row names its helpers the way their own rows do.
     (threadId) => executions.label(threadId)
   )
   return {

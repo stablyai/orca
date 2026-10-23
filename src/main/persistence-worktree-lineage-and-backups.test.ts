@@ -23,7 +23,6 @@ import { folderWorkspaceKey, worktreeWorkspaceKey } from '../shared/workspace-sc
 import { hostWorktreeTarget } from '../shared/worktree/host-qualified-identity'
 import { removeWorktreeMetaRow } from './persistence/host-qualified-worktree-meta'
 
-// Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),
   sshConfigHostsToTargetsMock: vi.fn()
@@ -75,7 +74,6 @@ describe('Store', () => {
     await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
-  // ── getAllWorktreeMeta ─────────────────────────────────────────────
 
   it('getAllWorktreeMeta returns all entries', async () => {
     const store = await createStore()
@@ -86,8 +84,6 @@ describe('Store', () => {
     expect(all['a'].displayName).toBe('A')
     expect(all['b'].displayName).toBe('B')
   })
-
-  // ── removeWorktreeMeta ─────────────────────────────────────────────
 
   it('removeWorktreeMeta deletes a single entry', async () => {
     const store = await createStore()
@@ -182,12 +178,10 @@ describe('Store', () => {
     expect(store.getWorkspaceLineage(unrelatedLineage.childWorkspaceKey)).toEqual(unrelatedLineage)
   })
 
-  // ── Live Claude PTY session ids (STA-1246) ─────────────────────────
-
   describe('mobileClientTabSelectionsByDeviceId', () => {
     it('persists device tab selections across reloads and drops malformed payloads', async () => {
       const store = await createStore()
-      // Registered on purpose: rows owned by an unregistered repo id are swept as orphans on load.
+      // Register the owner so orphan cleanup cannot erase the fixture on reload.
       store.addRepo(makeRepo({ id: 'repo-1', path: '/repo-1' }))
       store.setMobileClientTabSelections({
         'device-a': {
@@ -417,8 +411,6 @@ describe('Store', () => {
       expect(store.getSettings().theme).toBe('dark')
     })
   })
-
-  // ── Concurrent write serialization (issue #1158) ───────────────────
 
   describe('concurrent write serialization', () => {
     it('chains debounced writes via pendingWrite so they run sequentially', async () => {

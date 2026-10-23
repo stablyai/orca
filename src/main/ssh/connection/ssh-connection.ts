@@ -33,6 +33,7 @@ import {
   isDefiniteSystemSshHostFailure
 } from '../ssh-reconnect-error-classification'
 import { buildConnectConfig } from './ssh-connect-config'
+import { withSkippedIdentityFileDetail, type SkippedIdentityFiles } from '../ssh-auth-resolution'
 import { createSshOperationAbortError, type SshExecOptions } from './ssh-exec-options'
 import type { SshConnectionCallbacks, SshCredentialKind } from './ssh-connection-callbacks'
 import { collectKeyboardInteractiveResponses } from '../ssh-keyboard-interactive'
@@ -469,7 +470,8 @@ export class SshConnection {
     // Why: a synchronous spawn throw bypasses the probe's catch, so clear system-transport state here or exec/sftp keep routing through the failed transport.
     this.resetSystemTransport()
 
-    const config = buildConnectConfig(this.target, resolved)
+    const skippedIdentityFiles: SkippedIdentityFiles = new Map()
+    const config = buildConnectConfig(this.target, resolved, { skippedIdentityFiles })
 
     // Why: ssh2 doesn't support ProxyCommand/ProxyJump natively; spawn the resolved proxy and pipe its stdin/stdout as config.sock.
     const effectiveProxy = resolveEffectiveProxy(this.target, resolved)
@@ -491,9 +493,11 @@ export class SshConnection {
     } catch (err) {
       await recoverFailedSsh2Attempt(
         err,
-        { config, resolved, effectiveProxy },
+        { config, resolved, effectiveProxy, skippedIdentityFiles },
         this.credentialFallbackHost(connectGeneration)
-      )
+      ).catch((finalErr: unknown) => {
+        throw withSkippedIdentityFileDetail(finalErr, skippedIdentityFiles)
+      })
     }
   }
 

@@ -168,7 +168,7 @@ export function InlineInputRow({
         }}
         onKeyUp={imeEnter.onKeyUp}
         onCompositionStart={() => imeEnter.setComposing(true)}
-        onCompositionEnd={() => imeEnter.setComposing(false)}
+        onCompositionEnd={(e) => imeEnter.setComposing(false, e.data)}
         onFocus={clearBlurTimeout}
         onBlur={(e) => {
           imeEnter.reset()

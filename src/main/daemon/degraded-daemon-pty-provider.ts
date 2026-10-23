@@ -90,7 +90,6 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
 
   spawn = (opts: PtySpawnOptions): Promise<PtySpawnResult> => this.ownerRecovery.spawn(opts)
 
-  // Why refuse the fallback route (unknown ids resolve to it): see attachDaemonOwnedSession.
   attach = (id: string): ReturnType<IPtyProvider['attach']> =>
     attachDaemonOwnedSession(this.providerFor(id), this.fallback, id)
 
@@ -107,7 +106,7 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     return await this.ownerRecovery.probe(id)
   }
 
-  // Why: an unknown id cannot borrow listing authority from the fresh-spawn provider.
+  // Unknown IDs cannot borrow listing authority from the fresh-spawn provider.
   providesAgentSessionOwnerListings = (ptyId: string): boolean =>
     this.ownerRecovery.getVerifiedRoute(ptyId)?.providesAgentSessionOwnerListings?.(ptyId) === true
 
@@ -166,7 +165,6 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     id: string,
     opts?: { scrollbackRows?: number }
   ): Promise<PtyProviderBufferSnapshot | null> {
-    // Why: recovery must reach the legacy adapter that owns the thinned session model.
     return (await this.providerFor(id).getBufferSnapshot?.(id, opts)) ?? null
   }
 
@@ -241,9 +239,7 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     )
   }
 
-  // Why: main subscribes on the routed provider, so without this the dead-endpoint
-  // fan-out reaches no listener and only the written pane recovers (STA-2373). Daemon
-  // adapters only — the local fallback has no dead-socket problem.
+  // Forward daemon endpoint failures so every affected pane can recover (STA-2373).
   onWriteUnavailable(callback: (payload: { id: string }) => void): () => void {
     return combineUnsubscribes(
       this.allDaemonAdapters().map((adapter) => adapter.onWriteUnavailable(callback))
@@ -312,7 +308,6 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     return shutdownDegradedFallbackSessions(this.sessionProviders, this.fallback)
   }
 
-  /** Sessions routed to the preserved daemon, or to the local fallback a restart also ends. */
   getSessionIdsRoutedTo(route: 'current-daemon' | 'fallback'): string[] {
     const target = route === 'fallback' ? this.fallback : this.current
     return listProviderSessionIds(this.sessionProviders, target)
@@ -321,7 +316,7 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   fanoutCurrentDaemonSyntheticExits(code: number, exit: { replacedByRestart?: true } = {}): void {
     for (const id of this.getSessionIdsRoutedTo('current-daemon')) {
       this.ownerRecovery.forgetRoute(id)
-      // Why: restart kills listed sessions even when the adapter did not track them active.
+      // Restart also kills listed sessions the adapter never tracked as active.
       // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration
       for (const listener of [...this.exitListeners]) {
         listener({ id, code, ...exit })

@@ -1,0 +1,194 @@
+{
+  "batch": "root-0071",
+  "files": 2,
+  "original_declarations": 29,
+  "original_explicit_parameter_rows": 26,
+  "runtime_cases": 47,
+  "decisions": {
+    "keep": 24,
+    "fix": 5
+  },
+  "commands": [
+    {
+      "name": "baseline-tests",
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/cli/handlers/profile-state-recovery-admission.test.ts src/cli/handlers/profile-state.test.ts --reporter=default --reporter=json --outputFile=/tmp/orca-root-0071-baseline-tests.json",
+      "exit_code": 0,
+      "log": "/tmp/orca-root-0071-baseline-tests.log",
+      "log_sha256": "8a26ff6bfaf0c41b0aa62e041f2881d47341a6a99cfb650e650f18a1ee72d179",
+      "report": "/tmp/orca-root-0071-baseline-tests.json",
+      "report_sha256": "9e963748960f99e9ef4ec0e3275571a707dd5266279c675ad822df4b863d6b62",
+      "passed": 47,
+      "failed": 0
+    },
+    {
+      "name": "reviewed-tests",
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/cli/handlers/profile-state-recovery-admission.test.ts src/cli/handlers/profile-state.test.ts --reporter=default --reporter=json --outputFile=/tmp/orca-root-0071-reviewed-tests.json",
+      "exit_code": 0,
+      "log": "/tmp/orca-root-0071-reviewed-tests.log",
+      "log_sha256": "838fea66547c3287eb23e2aff36a3cd694dd532014feac882c73c8b05f33bb98",
+      "report": "/tmp/orca-root-0071-reviewed-tests.json",
+      "report_sha256": "9bef678b1ddc54a4d677ef29b07e508d6a53f3da5e4ff8a7cde5b72267611fa4",
+      "passed": 47,
+      "failed": 0
+    },
+    {
+      "name": "lint",
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec oxlint src/cli/handlers/profile-state-recovery-admission.test.ts src/cli/handlers/profile-state.test.ts",
+      "exit_code": 0,
+      "log": "/tmp/orca-root-0071-lint.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "format",
+      "command": "pnpm exec oxfmt --check src/cli/handlers/profile-state-recovery-admission.test.ts src/cli/handlers/profile-state.test.ts",
+      "exit_code": 0,
+      "log": "/tmp/orca-root-0071-format.log",
+      "log_sha256": "5c0f52f5d8f15d3ff304f5c12a57adb52867c58709673030f760592f495da3ec"
+    },
+    {
+      "name": "typecheck",
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm tc:cli",
+      "exit_code": 0,
+      "log": "/tmp/orca-root-0071-typecheck.log",
+      "log_sha256": "64350cfafba2dd6bb61adf325923dc3c41762eb81a276ff9302796e6e77b09bc"
+    },
+    {
+      "name": "final-tests",
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/cli/handlers/profile-state-recovery-admission.test.ts src/cli/handlers/profile-state.test.ts --reporter=default --reporter=json --outputFile=/tmp/orca-root-0071-final-tests.json",
+      "exit_code": 0,
+      "passed": 47,
+      "failed": 0,
+      "report": "/tmp/orca-root-0071-final-tests.json",
+      "report_sha256": "c2d0d852b9b7bcf1892b33d071e06c6944f06f41e6581cb7c55f1706e68c308f",
+      "log": "/tmp/orca-root-0071-final-tests.log",
+      "log_sha256": "30e5c3dd8c2d18f457518cefdb8aef21ee1fda38cedfb4ea46478ecae55b4bc1"
+    }
+  ],
+  "mutation": {
+    "defect": "Ignore a reachable headless runtime during profile-state recovery",
+    "production_path": "src/cli/handlers/profile-state.ts",
+    "original_source_sha256": "fb42dc4e60312b6d8af85af302be4c59def1a92fc388579796598034c30617de",
+    "restored_source_sha256": "fb42dc4e60312b6d8af85af302be4c59def1a92fc388579796598034c30617de",
+    "original_test_sha256": "8cdb996571078bfbd43a5e5d2ab31dd3df2fc442753cb47e0cb16866c0981d6e",
+    "reviewed_test_sha256": "ba6e85e57389cfcd1bde3f7ca103cbbe647fa3db63baf425ae2f46933e3b6148",
+    "results": {
+      "original-control": {
+        "command": [
+          "pnpm",
+          "test",
+          "src/cli/handlers/profile-state.test.ts",
+          "--reporter=default",
+          "--reporter=json",
+          "--outputFile=/tmp/orca-root-0071-original-control.json"
+        ],
+        "exit_code": 0,
+        "passed": 32,
+        "failed": 0,
+        "failures": [],
+        "log": "/tmp/orca-root-0071-original-control.log",
+        "report": "/tmp/orca-root-0071-original-control.json",
+        "test_sha256": "8cdb996571078bfbd43a5e5d2ab31dd3df2fc442753cb47e0cb16866c0981d6e",
+        "production_sha256": "fb42dc4e60312b6d8af85af302be4c59def1a92fc388579796598034c30617de",
+        "log_sha256": "c7fcbf86c39833e0518129e76597a83a06e1408184359d7e11ef26cf77316830",
+        "report_sha256": "bb305e6045f4195bfeeaf201c97ca6e77b478d1007b2890471510c62fab9f5cc"
+      },
+      "original-unreachable-guard-mutant": {
+        "command": [
+          "pnpm",
+          "test",
+          "src/cli/handlers/profile-state.test.ts",
+          "--reporter=default",
+          "--reporter=json",
+          "--outputFile=/tmp/orca-root-0071-original-unreachable-guard-mutant.json"
+        ],
+        "exit_code": 0,
+        "passed": 32,
+        "failed": 0,
+        "failures": [],
+        "log": "/tmp/orca-root-0071-original-unreachable-guard-mutant.log",
+        "report": "/tmp/orca-root-0071-original-unreachable-guard-mutant.json",
+        "test_sha256": "8cdb996571078bfbd43a5e5d2ab31dd3df2fc442753cb47e0cb16866c0981d6e",
+        "production_sha256": "1030a3fc6b645ff3f9d0f74af708aa944d4fc6c3dd0d741670e1f9a3c1b64673",
+        "log_sha256": "1b4366d8d268869e8ac6606fefcfdeb89eb532fb05ba07255fc9e11e9393a26c",
+        "report_sha256": "f4d92caf625c35687a7d7cd99f27a9fdba6081d45d390d28e0ee4f89e3397f80"
+      },
+      "reviewed-unreachable-guard-mutant": {
+        "command": [
+          "pnpm",
+          "test",
+          "src/cli/handlers/profile-state.test.ts",
+          "--reporter=default",
+          "--reporter=json",
+          "--outputFile=/tmp/orca-root-0071-reviewed-unreachable-guard-mutant.json"
+        ],
+        "exit_code": 1,
+        "passed": 29,
+        "failed": 3,
+        "failures": [
+          {
+            "title": "refuses rollback while runtime is reachable: --revision",
+            "messages": [
+              "AssertionError: expected false to be true // Object.is equality\n    at /home/neil/orca/workspaces/orca/comprehensive-test-audit-7/src/cli/handlers/profile-state.test.ts:416:48\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:20"
+            ]
+          },
+          {
+            "title": "refuses rollback while runtime is reachable: --current-json",
+            "messages": [
+              "AssertionError: expected false to be true // Object.is equality\n    at /home/neil/orca/workspaces/orca/comprehensive-test-audit-7/src/cli/handlers/profile-state.test.ts:416:48\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:20"
+            ]
+          },
+          {
+            "title": "refuses rollback while runtime is reachable: --latest-json",
+            "messages": [
+              "AssertionError: expected 'Unable to read profile state database\u2026' to contain 'Stop Orca'\n    at /home/neil/orca/workspaces/orca/comprehensive-test-audit-7/src/cli/handlers/profile-state.test.ts:420:63\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:20"
+            ]
+          }
+        ],
+        "log": "/tmp/orca-root-0071-reviewed-unreachable-guard-mutant.log",
+        "report": "/tmp/orca-root-0071-reviewed-unreachable-guard-mutant.json",
+        "test_sha256": "ba6e85e57389cfcd1bde3f7ca103cbbe647fa3db63baf425ae2f46933e3b6148",
+        "production_sha256": "1030a3fc6b645ff3f9d0f74af708aa944d4fc6c3dd0d741670e1f9a3c1b64673",
+        "log_sha256": "c61dcd96e11a4a8795c8f27e217deaa6d54dcda8611eaedc52b452ce0c704589",
+        "report_sha256": "8007f3ba508d4c62ea2b0bd7d9266b05bd306cbc109bfe718112ba1e9617025b"
+      },
+      "reviewed-restored": {
+        "command": [
+          "pnpm",
+          "test",
+          "src/cli/handlers/profile-state.test.ts",
+          "--reporter=default",
+          "--reporter=json",
+          "--outputFile=/tmp/orca-root-0071-reviewed-restored.json"
+        ],
+        "exit_code": 0,
+        "passed": 32,
+        "failed": 0,
+        "failures": [],
+        "log": "/tmp/orca-root-0071-reviewed-restored.log",
+        "report": "/tmp/orca-root-0071-reviewed-restored.json",
+        "test_sha256": "ba6e85e57389cfcd1bde3f7ca103cbbe647fa3db63baf425ae2f46933e3b6148",
+        "production_sha256": "fb42dc4e60312b6d8af85af302be4c59def1a92fc388579796598034c30617de",
+        "log_sha256": "50be7414c52cae2999ea96b78de3953d5beed39f224309943b1aa88f2e203c3c",
+        "report_sha256": "624ddc51425d48a19f152a76e31d31b29be853c69679a17391c4a305f0c4acbf"
+      }
+    }
+  },
+  "rejected_initial_attempt": {
+    "kind": "rejected harness evidence",
+    "reason": "Unchecked initial string replacement did not change app.running fixture. Original and reviewed tests both32 pass; no mutation discrimination claimed."
+  },
+  "integrity": {
+    "records_sha256": "a459086b6f41224b95570547c2bb60d69bc1c8f7dd38a4189c59e83cc31c160f",
+    "exact_original_case_slices_verified": 29,
+    "exact_parameter_rows_verified": 26,
+    "original_and_reviewed_hashes_verified": true,
+    "production_restoration_verified": true,
+    "original_snapshot_sha256": "e2e8b1ea97ec67d81cc42ea4a3489ec1c8b4900eaf7af0ff8174a82037feec82",
+    "plan_sha256": "2373ca7c936ebb22bfe5befba0abf791eac48e6047996e10e86c25cfa6688762"
+  },
+  "limitations": [
+    "Actual filesystem and SQLite recovery ran on Linux with RuntimeClient status mocked. No native Windows/macOS execution or app launch is claimed.",
+    "All29 declarations retained;26 explicit parameter rows expand to47 runtime cases. Final whole two-file47-case run passed after the fixture correction and production restoration.",
+    "The initial unchecked fixture string replacement missed its target. It is preserved as rejected harness evidence; only the corrected fixture comparison demonstrates32 original passes and3 intended reviewed failures."
+  ]
+}
