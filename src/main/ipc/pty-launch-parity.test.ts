@@ -1,6 +1,5 @@
 import * as spawnRouting from './pty/host-env/fresh-spawn-routing'
 import * as teamsShim from '../runtime/claude-agent-teams-shim-env'
-import * as claudeResumeConfig from '../claude/claude-session-resume-config'
 import { WorktreeTerminalMutationLock } from '../runtime/worktree-terminal-mutation-lock'
 import * as teamsPlan from '../runtime/terminal/launch/agent-teams-launch-plan'
 import { SessionNotFoundError } from '../daemon/daemon-errors'
@@ -655,15 +654,9 @@ describe('launch facts outside the tables', () => {
 
   // C5a-2: requests that join one claimed start share its failure; only the request that started it counts it.
   it('host lane: concurrent resumes of one Claude session count one failed start once', async () => {
-    vi.spyOn(claudeResumeConfig, 'prepareClaudeSessionResumeConfig').mockResolvedValue({
-      outcome: 'resume',
-      configDir: '/home/test/.claude',
-      userHome: '/home/test',
-      source: 'managed'
-    })
     setMainPlatform('darwin')
     classifyErrorMock.mockReturnValue({ error_class: 'binary_not_found' })
-    const lanes = startParityLanes(suite, { workspace: POSIX_REPO })
+    const lanes = startParityLanes(suite, { workspace: POSIX_REPO, admitClaudeStore: true })
     lanes.provider.mockImplementation(async () => {
       await new Promise((resolve) => setTimeout(resolve, 100))
       throw new Error('spawn boom')
@@ -688,15 +681,9 @@ describe('launch facts outside the tables', () => {
   })
 
   it('host lane: a Claude resume its claim refuses counts one failed start', async () => {
-    vi.spyOn(claudeResumeConfig, 'prepareClaudeSessionResumeConfig').mockResolvedValueOnce({
-      outcome: 'resume',
-      configDir: '/home/test/.claude',
-      userHome: '/home/test',
-      source: 'managed'
-    })
     setMainPlatform('darwin')
     classifyErrorMock.mockReturnValue({ error_class: 'unknown' })
-    const lanes = startParityLanes(suite, { workspace: POSIX_REPO })
+    const lanes = startParityLanes(suite, { workspace: POSIX_REPO, admitClaudeStore: true })
     vi.spyOn(agentSessionOwners, 'ensure').mockRejectedValueOnce(
       new Error('agent_session_conflict')
     )
