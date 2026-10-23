@@ -103,8 +103,15 @@ export function localGitOptionsForTarget(target: RuntimeGitTarget): GitRuntimeOp
   return target.executionHostId === LOCAL_EXECUTION_HOST_ID ? (target.localGitOptions ?? {}) : {}
 }
 
-export function normalizeRuntimeGitRelativePath(filePath: string): string {
-  const relativePath = normalizeRuntimeRelativePath(filePath)
+export function normalizeRuntimeGitRelativePath(
+  filePath: string,
+  target: RuntimeGitTarget
+): string {
+  const rootPath =
+    target.executionHostId === LOCAL_EXECUTION_HOST_ID && target.localGitOptions?.wslDistro
+      ? undefined
+      : target.worktree.path
+  const relativePath = normalizeRuntimeRelativePath(filePath, rootPath)
   if (relativePath === '') {
     // Why: an empty Git pathspec can mutate the whole worktree.
     throw new Error('invalid_relative_path')

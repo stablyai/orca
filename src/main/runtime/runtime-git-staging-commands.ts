@@ -13,14 +13,14 @@ export class RuntimeGitStagingCommands {
 
   async stageRuntimeGitPath(worktreeSelector: string, filePath: string): Promise<{ ok: true }> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    const relativePath = normalizeRuntimeGitRelativePath(filePath)
+    const relativePath = normalizeRuntimeGitRelativePath(filePath, target)
     await requireRuntimeGitProvider(target).stageFile(target.worktree.path, relativePath)
     return { ok: true }
   }
 
   async unstageRuntimeGitPath(worktreeSelector: string, filePath: string): Promise<{ ok: true }> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    const relativePath = normalizeRuntimeGitRelativePath(filePath)
+    const relativePath = normalizeRuntimeGitRelativePath(filePath, target)
     await requireRuntimeGitProvider(target).unstageFile(target.worktree.path, relativePath)
     return { ok: true }
   }
@@ -31,7 +31,7 @@ export class RuntimeGitStagingCommands {
     scope?: GitStageWorktreeScope
   ): Promise<{ ok: true } & Partial<GitStageWorktreeScopeReceipt>> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    const relativePaths = filePaths.map((path) => normalizeRuntimeGitRelativePath(path))
+    const relativePaths = filePaths.map((path) => normalizeRuntimeGitRelativePath(path, target))
     // Why: every provider throws when its host did not run the scoped stage, so success is a receipt.
     await requireRuntimeGitProvider(target).bulkStageFiles(
       target.worktree.path,
@@ -46,7 +46,7 @@ export class RuntimeGitStagingCommands {
     filePaths: string[]
   ): Promise<{ ok: true }> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    const relativePaths = filePaths.map((path) => normalizeRuntimeGitRelativePath(path))
+    const relativePaths = filePaths.map((path) => normalizeRuntimeGitRelativePath(path, target))
     await requireRuntimeGitProvider(target).bulkUnstageFiles(target.worktree.path, relativePaths)
     return { ok: true }
   }
@@ -56,14 +56,14 @@ export class RuntimeGitStagingCommands {
     filePaths: string[]
   ): Promise<{ ok: true }> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    const relativePaths = filePaths.map((path) => normalizeRuntimeGitRelativePath(path))
+    const relativePaths = filePaths.map((path) => normalizeRuntimeGitRelativePath(path, target))
     await requireRuntimeGitProvider(target).bulkDiscardChanges(target.worktree.path, relativePaths)
     return { ok: true }
   }
 
   async discardRuntimeGitPath(worktreeSelector: string, filePath: string): Promise<{ ok: true }> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    const relativePath = normalizeRuntimeGitRelativePath(filePath)
+    const relativePath = normalizeRuntimeGitRelativePath(filePath, target)
     await requireRuntimeGitProvider(target).discardChanges(target.worktree.path, relativePath)
     return { ok: true }
   }

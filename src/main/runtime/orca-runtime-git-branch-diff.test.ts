@@ -29,7 +29,7 @@ describe('RuntimeGitCommands branch diff', () => {
     getBranchDiffMock.mockReset()
   })
 
-  it('forwards the pinned head through normalized nested paths', async () => {
+  it('forwards the pinned head without rewriting POSIX filenames', async () => {
     const mergeBase = 'a'.repeat(40)
     const headOid = 'b'.repeat(40)
     const result = {
@@ -59,7 +59,7 @@ describe('RuntimeGitCommands branch diff', () => {
 
     expect(getBranchDiffMock).toHaveBeenCalledWith(
       '/repo',
-      { mergeBase, headOid, filePath: 'src/file.ts', oldPath: 'src/old-file.ts' },
+      { mergeBase, headOid, filePath: 'src\\file.ts', oldPath: 'src\\old-file.ts' },
       { admissionTier: 'interactive' }
     )
   })
