@@ -1,4 +1,4 @@
-import { app, BrowserWindow, session } from 'electron'
+import { app, session } from 'electron'
 import { applyBackgroundActivationPolicy } from '../window/foreground-activation-policy'
 import { applyElectronProxySettings } from '../network/proxy-settings'
 import { installElectronProxyRequestGuard } from '../network/electron-proxy-request-guard'
@@ -18,7 +18,6 @@ import { isWslDistroRegistered } from '../wsl/wsl-distro-registry-id'
 import { runWslMoveStartupRewrite } from '../persistence/moving-wsl-projects/wsl-move-startup-rewrite'
 import { installWslMoveRetention } from '../persistence/moving-wsl-projects/wsl-move-retention'
 import { registerWslMoveDesktopRewriteRegistry } from '../persistence/moving-wsl-projects/wsl-move-desktop-rewrite-registry'
-import { reapplyWslMoveFocusRewrites } from '../persistence/moving-wsl-projects/wsl-move-stale-window-reapply'
 import { sweepOrphanedWslMoveSleptSpools } from '../persistence/moving-wsl-projects/wsl-move-slept-spool-sweep'
 import { enableWslHostAutomations } from '../ipc/wsl-host-automation-enable'
 import { scheduleWslMoveRewriteRetry } from '../persistence/moving-wsl-projects/wsl-move-rewrite-retry'
@@ -171,15 +170,14 @@ export async function initializeReadyFoundation(): Promise<void> {
   const userDataPath = getAppEnvironment().getPath('userData')
   registerWslMoveDesktopRewriteRegistry({
     profile: store,
-    windowOpen: () => BrowserWindow.getAllWindows().some((window) => !window.isDestroyed()),
     orchestrationDatabasePath: orchestrationDbFile(userDataPath),
     hostAutomations: {
       enable: (environmentId, ids) => enableWslHostAutomations(userDataPath, environmentId, ids)
     },
     browserCookies: productionWslMoveBrowserCookieCopyDependencies(userDataPath)
   })
-  // Resets a move interrupted before commit, corrects stale focus on finished ones, then finishes
-  // one that committed; main-process-ready waits on all three, bounded. Gated off, none runs.
+  // Resets a move interrupted before commit, then finishes one that committed; main-process-ready
+  // waits on both, bounded. Gated off, neither runs.
   state.wslMoveStartupRewriteReady = runWslMoveStartupRewrite(
     { userDataPath },
     {
@@ -188,9 +186,6 @@ export async function initializeReadyFoundation(): Promise<void> {
           isWslDistroRegistered(distro, distroGuid)
         )
         sweepOrphanedWslMoveSleptSpools(userDataPath)
-      },
-      reapply: () => {
-        reapplyWslMoveFocusRewrites(userDataPath, store)
       }
     }
   )

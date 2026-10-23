@@ -10,20 +10,17 @@ import {
 } from './wsl-move-desktop-rewrite'
 
 // A pass is a few profile writes and flushes; past this the window opens and the pass finishes
-// behind it, with the stale-hydration risk this wait otherwise closes.
+// behind it, holding the window's saves and reloading it.
 export const WSL_MOVE_STARTUP_REWRITE_WAIT_MS = 5_000
 
 export type WslMoveStartupRewriteSteps = {
   /** Resets a move interrupted before commit; its failure never skips what follows. */
   recover?: () => Promise<unknown>
-  /** Corrects what a stale window wrote over a finished rewrite; must not throw. */
-  reapply?: () => void
 }
 
 /**
- * Resolves when the pass finishes or the wait runs out; at once with the gate closed. `recover`,
- * then `reapply`, run first inside the same wait, so a finished move is corrected even when the
- * pass is slow.
+ * Resolves when the pass finishes or the wait runs out; at once with the gate closed. `recover`
+ * runs first inside the same wait. A pass that finishes behind the window reloads it.
  */
 export function runWslMoveStartupRewrite(
   options: WslMoveDesktopRewritePassOptions,
@@ -41,13 +38,6 @@ export function runWslMoveStartupRewrite(
     .then(steps.recover)
     .catch((error: unknown) => {
       console.warn('[wsl-move] Startup recovery failed before the desktop rewrite:', error)
-    })
-    .then(steps.reapply)
-    .catch((error: unknown) => {
-      console.warn(
-        '[wsl-move] Re-applying a finished move failed before the desktop rewrite:',
-        error
-      )
     })
     .then(() => runWslMoveDesktopRewritePass(options))
   return Promise.race([pass, waited]).finally(() => clearTimeout(timer))

@@ -9,6 +9,7 @@ import { BrowserWindow, ipcMain, webContents, type WebContents } from 'electron'
 import type { Store } from '../persistence'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
 import { isFeatureInteractionId } from '../../shared/feature-interactions'
+import { isWslMoveWindowWriteHeld } from '../persistence/moving-wsl-projects/wsl-move-window-write-hold'
 
 let trustedUIRendererWebContentsId: number | null = null
 
@@ -86,7 +87,10 @@ export function registerUIHandlers(
   })
 
   ipcMain.handle('ui:set', (_event, args: Partial<PersistedUIState>) => {
-    store.updateUI(args)
+    // A window a WSL move rewrote under is stale until main reloads it.
+    if (!isWslMoveWindowWriteHeld()) {
+      store.updateUI(args)
+    }
   })
 
   ipcMain.handle('ui:recordFeatureInteraction', (_event, id: unknown) => {
