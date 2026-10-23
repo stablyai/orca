@@ -25,6 +25,7 @@ import type { CliApi } from './api/cli-install-api'
 import type { CrashReportsApi, FeedbackApi } from './api/crash-report-api'
 import type { DashboardApi, TerminalPreviewApi } from './api/dashboard-api'
 import type { DocPreviewApi } from './api/doc-preview-api'
+import type { DetachedTerminalApi } from './api/detached-terminal-api'
 import type { EmulatorApi } from './api/emulator-api'
 import type { EphemeralVmApi } from './api/ephemeral-vm-api'
 import type { ExportApi, FilesystemApi } from './api/filesystem-api'
@@ -114,6 +115,7 @@ export type PreloadApi = {
   notifications: NotificationsApi
   onboarding: OnboardingApi
   dashboard: DashboardApi
+  detachedTerminal: DetachedTerminalApi
   terminalPreview: TerminalPreviewApi
   macosTccPrompts: MacosTccPromptsApi
   developerPermissions: DeveloperPermissionsApi

@@ -48,6 +48,8 @@ export type TerminalState = {
   /** Whether main's start of a pane resumed its agent, by pane key, for the terminal it names
    *  (layout-owner build). Live state, never saved. */
   terminalPaneResumeOutcomesByPaneKey: Record<string, TerminalPaneResumeOutcome>
+  /** Window-local view state. Deliberately excluded from WorkspaceSessionState. */
+  detachedTerminalByTabId: Record<string, { ptyId: string }>
   /** Ordinary-park scrollback, tabId -> leafId -> buffer. Never uploaded to a peer; see
    *  WorkspaceSessionState.localOnlyScrollbackByTabId. Read via resolveLeafScrollbackBuffers only. */
   localOnlyScrollbackByTabId: Record<string, Record<string, string>>

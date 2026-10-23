@@ -1,22 +1,31 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { handlers, ipcMainMock, isDashboardPopoutRendererMock, isTrustedUIRendererMock } =
-  vi.hoisted(() => {
-    const map = new Map<string, (...args: unknown[]) => unknown>()
-    return {
-      handlers: map,
-      ipcMainMock: {
-        removeHandler: vi.fn(),
-        handle: (channel: string, fn: (...args: unknown[]) => unknown) => map.set(channel, fn)
-      },
-      isDashboardPopoutRendererMock: vi.fn(() => true),
-      isTrustedUIRendererMock: vi.fn(() => false)
-    }
-  })
+const {
+  handlers,
+  ipcMainMock,
+  isDashboardPopoutRendererMock,
+  isDetachedTerminalRendererForPtyMock,
+  isTrustedUIRendererMock
+} = vi.hoisted(() => {
+  const map = new Map<string, (...args: unknown[]) => unknown>()
+  return {
+    handlers: map,
+    ipcMainMock: {
+      removeHandler: vi.fn(),
+      handle: (channel: string, fn: (...args: unknown[]) => unknown) => map.set(channel, fn)
+    },
+    isDashboardPopoutRendererMock: vi.fn(() => true),
+    isDetachedTerminalRendererForPtyMock: vi.fn((_sender: unknown, _ptyId: string) => false),
+    isTrustedUIRendererMock: vi.fn(() => false)
+  }
+})
 
 vi.mock('electron', () => ({ ipcMain: ipcMainMock }))
 vi.mock('../window/dashboard-popout-window', () => ({
   isDashboardPopoutRenderer: isDashboardPopoutRendererMock
+}))
+vi.mock('../window/detached-terminal-window', () => ({
+  isDetachedTerminalRendererForPty: isDetachedTerminalRendererForPtyMock
 }))
 vi.mock('./ui', () => ({
   isTrustedUIRenderer: isTrustedUIRendererMock
@@ -87,7 +96,68 @@ describe('registerTerminalPreviewHandlers', () => {
   beforeEach(() => {
     handlers.clear()
     isDashboardPopoutRendererMock.mockReturnValue(true)
+    isDetachedTerminalRendererForPtyMock.mockReturnValue(false)
     isTrustedUIRendererMock.mockReturnValue(false)
+  })
+
+  it('admits a detached companion renderer only for its own PTY across all channels', async () => {
+    const runtime = makeRuntime()
+    const sender = makeSender()
+    isDashboardPopoutRendererMock.mockReturnValue(false)
+    isDetachedTerminalRendererForPtyMock.mockImplementation((_s, ptyId) => ptyId === 'p1')
+    registerTerminalPreviewHandlers(runtime as never)
+
+    await expect(
+      handlers.get('terminalPreview:connect')!(eventFor(sender), { ptyId: 'p1' })
+    ).resolves.toEqual({
+      snapshot: { data: 'screen', cols: 80, rows: 20, seq: 5 },
+      replay: []
+    })
+    await expect(
+      handlers.get('terminalPreview:input')!(eventFor(sender), { ptyId: 'p1', data: 'x' })
+    ).resolves.toBe(true)
+    await expect(
+      handlers.get('terminalPreview:fit')!(eventFor(sender), { ptyId: 'p1', cols: 80, rows: 20 })
+    ).resolves.toEqual({ cols: 80, rows: 20 })
+    handlers.get('terminalPreview:ack')!(eventFor(sender), { ptyId: 'p1', bytes: 1 })
+    handlers.get('terminalPreview:unsubscribe')!(eventFor(sender), { ptyId: 'p1' })
+
+    expect(runtime.writeTerminalPreviewInput).toHaveBeenCalledWith('p1', 'x')
+    expect(runtime.updateRemoteDesktopViewer).toHaveBeenCalledWith(
+      'p1',
+      'dashboard-popout:1',
+      'dashboard-popout:1',
+      80,
+      20
+    )
+    expect(runtime.unsubscribe).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects a detached companion renderer requesting any other PTY', async () => {
+    const runtime = makeRuntime()
+    const sender = makeSender()
+    isDashboardPopoutRendererMock.mockReturnValue(false)
+    isDetachedTerminalRendererForPtyMock.mockImplementation((_s, ptyId) => ptyId === 'p1')
+    registerTerminalPreviewHandlers(runtime as never)
+
+    await expect(
+      handlers.get('terminalPreview:connect')!(eventFor(sender), { ptyId: 'p-other' })
+    ).resolves.toEqual({ snapshot: null, replay: [] })
+    await expect(
+      handlers.get('terminalPreview:input')!(eventFor(sender), { ptyId: 'p-other', data: 'x' })
+    ).resolves.toBe(false)
+    await expect(
+      handlers.get('terminalPreview:fit')!(eventFor(sender), {
+        ptyId: 'p-other',
+        cols: 80,
+        rows: 20
+      })
+    ).resolves.toBeNull()
+    handlers.get('terminalPreview:ack')!(eventFor(sender), { ptyId: 'p-other', bytes: 1 })
+    handlers.get('terminalPreview:unsubscribe')!(eventFor(sender), { ptyId: 'p-other' })
+
+    expect(runtime.writeTerminalPreviewInput).not.toHaveBeenCalled()
+    expect(runtime.updateRemoteDesktopViewer).not.toHaveBeenCalled()
   })
   afterEach(() => {
     vi.clearAllMocks()

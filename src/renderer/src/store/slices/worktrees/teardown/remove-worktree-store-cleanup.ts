@@ -69,6 +69,7 @@ export function applyRemoveWorktreeSuccessState(
       nativeChatLaunchDraftByTabId: omitByTabId(s.nativeChatLaunchDraftByTabId),
       unverifiedPtyLossTabIds: omitByTabId(s.unverifiedPtyLossTabIds),
       localOnlyScrollbackByTabId: omitByTabId(s.localOnlyScrollbackByTabId),
+      detachedTerminalByTabId: omitByTabId(s.detachedTerminalByTabId),
       // Why: closeTab deletes these per-tab maps but removeWorktree missed them, leaking a split pane's expand flags.
       expandedPaneByTabId: omitByTabId(s.expandedPaneByTabId),
       canExpandPaneByTabId: omitByTabId(s.canExpandPaneByTabId),

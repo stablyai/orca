@@ -5,6 +5,7 @@ import type {
 } from '../../shared/terminal-preview'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { isDashboardPopoutRenderer } from '../window/dashboard-popout-window'
+import { isDetachedTerminalRendererForPty } from '../window/detached-terminal-window'
 import { isTrustedUIRenderer } from './ui'
 import {
   TERMINAL_PREVIEW_OUTPUT_BATCH_MAX_BYTES,
@@ -17,11 +18,13 @@ function isValidPtyId(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0 && value.length <= PREVIEW_ID_MAX_LENGTH
 }
 
-// Why: the preview dialog has two hosts — the pop-out window and the main
-// renderer's in-window overlay. The trusted UI renderer already has full PTY
-// access through the regular terminal channels, so admitting it adds no reach.
-function isTerminalPreviewRenderer(sender: WebContents): boolean {
-  return isDashboardPopoutRenderer(sender) || isTrustedUIRenderer(sender)
+// Why: dashboard popout and trusted UI can preview any PTY; companion renderers are limited to their own PTY.
+function isTerminalPreviewAllowed(sender: WebContents, ptyId: string): boolean {
+  return (
+    isDashboardPopoutRenderer(sender) ||
+    isTrustedUIRenderer(sender) ||
+    isDetachedTerminalRendererForPty(sender, ptyId)
+  )
 }
 /** Pop-out terminal transport with an atomic snapshot/live boundary. */
 export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): void {
@@ -90,7 +93,7 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
       event,
       args: { ptyId?: unknown; opts?: { scrollbackRows?: unknown } }
     ): Promise<TerminalPreviewConnectResult> => {
-      if (!isTerminalPreviewRenderer(event.sender) || !isValidPtyId(args?.ptyId)) {
+      if (!isValidPtyId(args?.ptyId) || !isTerminalPreviewAllowed(event.sender, args.ptyId)) {
         return { snapshot: null, replay: [] }
       }
       const ptyId = args.ptyId
@@ -166,8 +169,8 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
     'terminalPreview:input',
     (event, args: { ptyId?: unknown; data?: unknown }): Promise<boolean> => {
       if (
-        !isTerminalPreviewRenderer(event.sender) ||
         !isValidPtyId(args?.ptyId) ||
+        !isTerminalPreviewAllowed(event.sender, args.ptyId) ||
         typeof args.data !== 'string'
       ) {
         return Promise.resolve(false)
@@ -180,8 +183,8 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
     'terminalPreview:ack',
     (event, args: { ptyId?: unknown; bytes?: unknown }): void => {
       if (
-        !isTerminalPreviewRenderer(event.sender) ||
         !isValidPtyId(args?.ptyId) ||
+        !isTerminalPreviewAllowed(event.sender, args.ptyId) ||
         typeof args.bytes !== 'number' ||
         !Number.isFinite(args.bytes) ||
         args.bytes <= 0 ||
@@ -204,8 +207,8 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
       args: { ptyId?: unknown; cols?: unknown; rows?: unknown }
     ): Promise<{ cols: number; rows: number } | null> => {
       if (
-        !isTerminalPreviewRenderer(event.sender) ||
         !isValidPtyId(args?.ptyId) ||
+        !isTerminalPreviewAllowed(event.sender, args.ptyId) ||
         typeof args.cols !== 'number' ||
         typeof args.rows !== 'number' ||
         !Number.isFinite(args.cols) ||
@@ -251,7 +254,7 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
   )
 
   ipcMain.handle('terminalPreview:unsubscribe', (event, args: { ptyId?: unknown }): void => {
-    if (!isTerminalPreviewRenderer(event.sender) || !isValidPtyId(args?.ptyId)) {
+    if (!isValidPtyId(args?.ptyId) || !isTerminalPreviewAllowed(event.sender, args.ptyId)) {
       return
     }
     subscriptionsByContents.get(event.sender.id)?.get(args.ptyId)?.dispose()

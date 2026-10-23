@@ -655,4 +655,32 @@ describe('removeWorktree state cleanup', () => {
     // The same reference should be returned (no unnecessary shallow copy)
     expect(store.getState().editorDrafts).toBe(drafts)
   })
+
+  it('closes companion windows and drops detached terminal state for removed worktree tabs', async () => {
+    const store = createTestStore()
+    const removed = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+    const removedTab = makeTerminalTab({ id: 'tab-removed', worktreeId: removed.id })
+    const survivingTab = makeTerminalTab({ id: 'tab-surviving', worktreeId: 'repo1::/path/wt2' })
+
+    const closeDetachedSpy = vi.spyOn(store.getState(), 'closeDetachedTerminalWindow')
+    store.setState({
+      worktreesByRepo: { repo1: [removed] },
+      tabsByWorktree: {
+        [removed.id]: [removedTab],
+        'repo1::/path/wt2': [survivingTab]
+      },
+      detachedTerminalByTabId: {
+        'tab-removed': { ptyId: 'pty-1' },
+        'tab-surviving': { ptyId: 'pty-2' }
+      }
+    })
+
+    await store.getState().removeWorktree({ id: removed.id, executionHostId: null })
+
+    expect(closeDetachedSpy).toHaveBeenCalledWith('tab-removed')
+    expect(closeDetachedSpy).not.toHaveBeenCalledWith('tab-surviving')
+    expect(store.getState().detachedTerminalByTabId).toEqual({
+      'tab-surviving': { ptyId: 'pty-2' }
+    })
+  })
 })

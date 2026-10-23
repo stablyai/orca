@@ -87,6 +87,10 @@ export async function tearDownRemovedWorktreeRendererState(args: {
   const tabs = get().tabsByWorktree[worktreeId] ?? []
   const tabIds = new Set(tabs.map((t) => t.id))
 
+  for (const tabId of tabIds) {
+    get().closeDetachedTerminalWindow(tabId)
+  }
+
   // Why: this path deletes tabsByWorktree wholesale (not via closeTab), so purge the module-level tab maps here too.
   detachedHeadAutoDerivedDisplayNames.delete(worktreeId)
   forgetForegroundTerminalTabs(tabIds)

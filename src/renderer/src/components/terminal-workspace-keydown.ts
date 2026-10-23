@@ -77,6 +77,16 @@ export function handleTerminalWorkspaceKeyDown(
     handleNewTab()
     return
   }
+  if (!event.repeat && !floatingWorkspaceFocused && matchShortcut('tab.moveToNewWindow')) {
+    const state = useAppStore.getState()
+    const activeTab = state.getActiveTab(activeWorktreeId)
+    if (activeTab?.contentType === 'terminal') {
+      event.preventDefault()
+      notifyTerminalCapture('tab.moveToNewWindow')
+      void state.detachTerminalTab(activeTab.entityId)
+    }
+    return
+  }
 
   if (!event.repeat) {
     const agentShortcut = resolveTerminalAgentTabShortcut({

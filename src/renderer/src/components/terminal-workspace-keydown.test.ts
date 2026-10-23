@@ -7,6 +7,7 @@ import { switchFloatingWorkspaceTab } from '@/lib/floating-workspace-terminal-ac
 import { dispatchWorkspaceTabCommand } from '@/lib/workspace-tab-commands'
 import type { Tab } from '../../../shared/tab-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import { DEFINITIONS_BY_ID } from '../../../shared/keybindings'
 import {
   ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT,
   type EditorRequestCmdSaveDetail
@@ -132,6 +133,41 @@ describe('handleTerminalWorkspaceKeyDown editor.save', () => {
   it('does not swallow the chord outside the workspace view', () => {
     mocks.state.activeView = 'tasks'
     expect(pressCmdS()).toEqual([])
+  })
+})
+
+describe('handleTerminalWorkspaceKeyDown tab.moveToNewWindow', () => {
+  it('detaches the active terminal tab when the user-assigned chord matches', () => {
+    expect(DEFINITIONS_BY_ID.get('tab.moveToNewWindow')?.defaultBindings).toEqual({
+      darwin: [],
+      linux: [],
+      win32: []
+    })
+    const detachTerminalTab = vi.fn()
+    mocks.state = {
+      detachTerminalTab,
+      getActiveTab: () => ({ contentType: 'terminal', entityId: 'term-1' })
+    }
+    const target = document.createElement('div')
+    const event = new KeyboardEvent('keydown', {
+      key: 'd',
+      metaKey: true,
+      shiftKey: true,
+      cancelable: true
+    })
+    Object.defineProperty(event, 'target', { value: target })
+
+    handleTerminalWorkspaceKeyDown(
+      event,
+      {
+        ...controller,
+        keybindings: { 'tab.moveToNewWindow': ['Mod+Shift+D'] }
+      },
+      'darwin'
+    )
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(detachTerminalTab).toHaveBeenCalledWith('term-1')
   })
 })
 

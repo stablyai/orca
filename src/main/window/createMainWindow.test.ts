@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+const closeAllDetachedTerminalWindowsMock = vi.hoisted(() => vi.fn())
+
 vi.mock('electron', async () =>
   (await import('./createMainWindow-test-harness')).electronModuleMock()
 )
@@ -15,7 +17,8 @@ vi.mock('../browser/browser-route-session-runtime', async () => ({
     isAllowedPartition: (await import('./createMainWindow-test-harness')).routePartitionAllowedMock
   },
   browserRouteWebContentsRegistry: {
-    attachGuest: (await import('./createMainWindow-test-harness')).attachRouteGuestMock
+    attachGuest: (await import('./createMainWindow-test-harness')).attachRouteGuestMock,
+    retireRenderer: vi.fn()
   }
 }))
 vi.mock('../browser/browser-client-page-renderer-runtime', async () => {
@@ -25,6 +28,9 @@ vi.mock('../browser/browser-client-page-renderer-runtime', async () => {
     retireBrowserClientPageRenderer: harness.retireClientPageRendererMock
   }
 })
+vi.mock('./detached-terminal-window', () => ({
+  closeAllDetachedTerminalWindows: closeAllDetachedTerminalWindowsMock
+}))
 
 import { createMainWindow, loadMainWindow } from './createMainWindow'
 import { ipcMain } from 'electron'
@@ -91,6 +97,104 @@ describe('createMainWindow', () => {
 
     expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(1)
     expect(browserWindowInstance.loadURL).not.toHaveBeenCalled()
+  })
+
+  it('closes detached terminal companions when the main window closes', () => {
+    const handlers = new Map<string, () => void>()
+    const browserWindowInstance = {
+      webContents: {
+        on: vi.fn(),
+        setZoomLevel: vi.fn(),
+        setBackgroundThrottling: vi.fn(),
+        invalidate: vi.fn(),
+        setWindowOpenHandler: vi.fn(),
+        send: vi.fn(),
+        isDevToolsOpened: vi.fn(),
+        openDevTools: vi.fn(),
+        closeDevTools: vi.fn()
+      },
+      on: vi.fn((event: string, callback: () => void) => handlers.set(event, callback)),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => true),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
+    }
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+
+    createMainWindow(null)
+    handlers.get('closed')?.()
+
+    expect(closeAllDetachedTerminalWindowsMock).toHaveBeenCalledOnce()
+  })
+
+  it('closes all detached terminal windows when the renderer process crashes or reloads', () => {
+    // Why every handler: several modules listen for did-start-navigation on this webContents.
+    const webContentsHandlers = new Map<string, ((...args: any[]) => void)[]>()
+    const emit = (event: string, ...args: any[]): void => {
+      for (const handler of webContentsHandlers.get(event) ?? []) {
+        handler(...args)
+      }
+    }
+    const browserWindowInstance = {
+      webContents: {
+        id: 1,
+        getURL: vi.fn(() => 'file:///opt/orca/renderer/index.html'),
+        isLoadingMainFrame: vi.fn(() => false),
+        on: vi.fn((event: string, callback: (...args: any[]) => void) =>
+          webContentsHandlers.set(event, [...(webContentsHandlers.get(event) ?? []), callback])
+        ),
+        setZoomLevel: vi.fn(),
+        setBackgroundThrottling: vi.fn(),
+        invalidate: vi.fn(),
+        setWindowOpenHandler: vi.fn(),
+        send: vi.fn(),
+        isDevToolsOpened: vi.fn(),
+        openDevTools: vi.fn(),
+        closeDevTools: vi.fn()
+      },
+      on: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => true),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
+    }
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+
+    createMainWindow(null)
+    closeAllDetachedTerminalWindowsMock.mockClear()
+
+    emit('render-process-gone')
+    expect(closeAllDetachedTerminalWindowsMock).toHaveBeenCalledTimes(1)
+
+    // In-place navigation should NOT close detached windows
+    emit('did-start-navigation', {}, 'file:///opt/orca/renderer/index.html#hash', true, true)
+    expect(closeAllDetachedTerminalWindowsMock).toHaveBeenCalledTimes(1)
+
+    // Subframe navigation should NOT close detached windows
+    emit('did-start-navigation', {}, 'https://example.com', false, false)
+    expect(closeAllDetachedTerminalWindowsMock).toHaveBeenCalledTimes(1)
+
+    // Main-frame reload/navigation closes detached windows
+    emit('did-start-navigation', {}, 'file:///opt/orca/renderer/index.html', false, true)
+    expect(closeAllDetachedTerminalWindowsMock).toHaveBeenCalledTimes(2)
+
+    // Document load completion should NOT close detached windows (a companion may have opened during load)
+    emit('did-finish-load')
+    expect(closeAllDetachedTerminalWindowsMock).toHaveBeenCalledTimes(2)
   })
 
   it('enables renderer sandboxing and opens external links safely', () => {

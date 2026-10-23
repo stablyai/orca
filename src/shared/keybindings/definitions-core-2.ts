@@ -74,6 +74,15 @@ export const KEYBINDING_DEFINITION_CORE_2: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings(['Mod+T'])
   },
   {
+    id: 'tab.moveToNewWindow',
+    title: 'Move terminal tab to new window',
+    group: 'Tabs',
+    scope: 'tabs',
+    searchKeywords: ['shortcut', 'tab', 'terminal', 'window', 'detach', 'move'],
+    defaultBindings: { darwin: [], linux: [], win32: [] },
+    allowInTerminal: true
+  },
+  {
     id: 'tab.newAgent',
     title: 'New agent tab (default agent)',
     group: 'Tabs',

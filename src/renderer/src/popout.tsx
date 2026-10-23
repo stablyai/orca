@@ -9,6 +9,10 @@ import './assets/main.css'
 import { StrictMode, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { DashboardPopoutRoot } from './components/dashboard-popout/DashboardPopoutRoot'
+import {
+  DetachedTerminalWindow,
+  readDetachedTerminalWindowParams
+} from './components/detached-terminal/DetachedTerminalWindow'
 import { RecoverableRenderErrorBoundary } from './components/error-boundaries/RecoverableRenderErrorBoundary'
 import {
   installRendererCrashDiagnostics,
@@ -26,6 +30,7 @@ import { installOsFileDropCancellationGuard } from './lib/os-file-drop-cancellat
 
 const disposeOsFileDropGuard = installOsFileDropCancellationGuard()
 import.meta.hot?.dispose(disposeOsFileDropGuard)
+const detachedTerminalParams = readDetachedTerminalWindowParams(window.location.search)
 // Why: the pop-out window is a separate BrowserWindow with its own React root,
 // so it must run the same renderer bootstrap as main.tsx (crash diagnostics,
 // theme, i18n, error boundary) rather than inheriting anything from the main
@@ -106,6 +111,9 @@ function PopoutSettingsSync(): null {
 
 function PopoutRoot(): React.JSX.Element {
   useTranslation()
+  if (detachedTerminalParams) {
+    return <DetachedTerminalWindow {...detachedTerminalParams} />
+  }
   return (
     <RecoverableRenderErrorBoundary
       boundaryId="dashboard-popout.root"

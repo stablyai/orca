@@ -37,6 +37,7 @@ import type { NativeChatTabSession } from './tab-session-history-switch'
 import type { StructuredChatTabNamingFailure } from '@/runtime/structured-conversation-name'
 import { useNativeChatNamingFailure } from './use-native-chat-naming-failure'
 import { NativeChatNamingErrorBlock, NativeChatNamingFailedDialog } from './NativeChatNamingFailure'
+import { DetachedTerminalTabIndicator, type DetachedWindow } from './DetachedTerminalTabIndicator'
 
 /** What the strip draws for a terminal or native chat tab; never a source of agent identity. */
 type SortableTabModel = Pick<
@@ -80,6 +81,7 @@ export type SortableTabProps = {
   nativeChat?: NativeChatTabSession
   /** A native chat whose generated name failed, unless the user named the tab. */
   namingFailure?: StructuredChatTabNamingFailure | null
+  detachedWindow?: DetachedWindow
 }
 
 export default function SortableTab({
@@ -111,7 +113,8 @@ export default function SortableTab({
   onToggleViewMode,
   canSplitTerminal = true,
   nativeChat,
-  namingFailure
+  namingFailure,
+  detachedWindow
 }: SortableTabProps): React.JSX.Element {
   const naming = useNativeChatNamingFailure(namingFailure)
   // Why: agent-completion unread exists even with terminal-attention off; collapse both sources to one primitive so unrelated tabs don't re-render.
@@ -138,12 +141,8 @@ export default function SortableTab({
   })
 
   // Why: no transform/transition/opacity so tabs stay anchored during drag, only the insertion bar moves (see TabBar.tsx).
-  const {
-    open: menuOpen,
-    openingId,
-    onOpenChange: setMenuOpen,
-    onComplete
-  } = useSortableTabContextMenu()
+  const menu = useSortableTabContextMenu()
+  const { open: menuOpen, onOpenChange: setMenuOpen } = menu
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
   const {
     isEditing,
@@ -181,9 +180,7 @@ export default function SortableTab({
 
   // Why: while editing, drop drag listeners so typing can't start a drag; attributes stay spread to keep dnd-kit a11y.
   const dragListeners = isEditing ? undefined : listeners
-  const handleActivate = useCallback(() => {
-    onActivate(tab.id)
-  }, [onActivate, tab.id])
+  const handleActivate = useCallback(() => onActivate(tab.id), [onActivate, tab.id])
   // Why: defer activation to pointer-up so a drag doesn't switch tabs or steal focus mid-gesture (tab-strip-pointer-activation).
   const { onPointerDown: onTabPointerDown } = useTabStripPointerActivation({
     onActivate: handleActivate,
@@ -252,6 +249,7 @@ export default function SortableTab({
         isActive={isActive}
         progress={programProgress}
       />
+      {detachedWindow?.isDetached ? <DetachedTerminalTabIndicator /> : null}
       {isPinned && !isEditing && (
         <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />
       )}
@@ -404,8 +402,8 @@ export default function SortableTab({
       </div>
 
       <SortableTabContextMenu
-        sessionSwitchOpening={openingId}
-        onSessionSwitchComplete={onComplete}
+        sessionSwitchOpening={menu.openingId}
+        onSessionSwitchComplete={menu.onComplete}
         tab={tab}
         unifiedTabId={unifiedTabId}
         groupId={groupId}
@@ -431,6 +429,7 @@ export default function SortableTab({
         onToggleViewMode={onToggleViewMode}
         canSplitTerminal={canSplitTerminal}
         nativeChat={nativeChat}
+        detachedWindow={detachedWindow}
       />
       {naming ? <NativeChatNamingFailedDialog naming={naming} chatName={displayTitle} /> : null}
     </>
