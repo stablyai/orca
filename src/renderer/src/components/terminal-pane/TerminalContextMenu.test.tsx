@@ -5,7 +5,7 @@ import TerminalContextMenu from './TerminalContextMenu'
 import { translate } from '@/i18n/i18n'
 import type { KeybindingOverrides } from '../../../../shared/keybindings'
 
-type ItemProps = { onSelect?: () => void; children?: React.ReactNode }
+type ItemProps = { disabled?: boolean; onSelect?: () => void; children?: React.ReactNode }
 
 const items = vi.hoisted(() => ({ list: [] as ItemProps[] }))
 const shortcuts = vi.hoisted(() => ({ list: [] as string[] }))
@@ -71,6 +71,8 @@ function renderMenu(overrides: Record<string, unknown> = {}): string {
     onCopy: vi.fn(),
     onSelectAll: vi.fn(),
     onPaste: vi.fn(),
+    onRevealInFileManager: vi.fn(),
+    revealInFileManagerBlocked: false,
     onSplitRight: vi.fn(),
     onSplitDown: vi.fn(),
     keybindings: {},
@@ -129,17 +131,31 @@ describe('TerminalContextMenu', () => {
     expect(items.list.length).toBeGreaterThan(0)
   })
 
-  // Why: revealing a terminal file link lives in its click popover, not the right-click menu.
-  it.each(['Macintosh', 'Windows NT 10.0', 'Linux'])(
-    'offers no file-manager reveal item on %s',
-    (userAgent) => {
-      vi.stubGlobal('navigator', { userAgent })
-      renderMenu()
-      const labels = items.list.map((item) => childrenText(item.children))
-      expect(labels.length).toBeGreaterThan(0)
-      expect(labels.some((label) => /Reveal in|Open Containing Folder/.test(label))).toBe(false)
-    }
-  )
+  it.each([
+    ['Macintosh', 'Reveal in Finder'],
+    ['Windows NT 10.0', 'Reveal in File Explorer'],
+    ['Linux', 'Open Containing Folder']
+  ])('shows the platform reveal action directly after Paste on %s', (userAgent, label) => {
+    vi.stubGlobal('navigator', { userAgent })
+    const onRevealInFileManager = vi.fn()
+    renderMenu({ onRevealInFileManager })
+    const labels = items.list.map((item) => childrenText(item.children))
+    const pasteIndex = labels.findIndex((candidate) => candidate.startsWith('Paste'))
+
+    expect(labels[pasteIndex + 1]).toBe(label)
+    items.list[pasteIndex + 1]?.onSelect?.()
+    expect(onRevealInFileManager).toHaveBeenCalledTimes(1)
+  })
+
+  it('disables remote reveal with the local-only hint', () => {
+    const rendered = renderMenu({ revealInFileManagerBlocked: true })
+    const item = items.list.find((candidate) =>
+      childrenText(candidate.children).startsWith('Open Containing Folder')
+    )
+
+    expect(item?.disabled).toBe(true)
+    expect(rendered).toContain('Local only')
+  })
 
   it('renders a "Copy Context" item that triggers onCopyAgentSessionContext (issue #5020)', () => {
     const onCopyAgentSessionContext = vi.fn()

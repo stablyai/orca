@@ -125,6 +125,7 @@ export function cleanupTerminalPaneMount(args: {
   }
   panePtyBindingsRef.current.clear()
   paneTransportsRef.current.clear()
+  deps.resolveContextMenuFileLinkRef.current = null
   manager.destroy()
   managerRef.current = null
   if (e2eConfig.exposeStore && window.__paneManagers?.get(tabId) === manager) {

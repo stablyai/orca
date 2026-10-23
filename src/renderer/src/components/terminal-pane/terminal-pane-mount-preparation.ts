@@ -20,6 +20,7 @@ import {
 import type { LinkHandlerDeps } from './terminal-link-handlers'
 import type { TerminalLinkActionContext } from './terminal-link-action-request'
 import type { TerminalHttpLinkActionDestinations } from './terminal-url-link-hit-testing'
+import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
 import type { PtyConnectionDeps } from './pty-connection-types'
 import type { UseTerminalPaneLifecycleDeps } from './terminal-pane-lifecycle-types'
 import type { TerminalPaneLifecycleRefs } from './use-terminal-pane-lifecycle-refs'
@@ -37,6 +38,7 @@ import {
   resolveTerminalHomePathFromEnv,
   extractUncHost
 } from './terminal-pane-lifecycle-primitives'
+import { createTerminalContextMenuFileLinkResolver } from './terminal-context-menu-file-link-resolver'
 
 export type TerminalPaneMountPreparation = {
   container: HTMLDivElement
@@ -54,9 +56,7 @@ export type TerminalPaneMountPreparation = {
   fileOpenLinkHint: string
   getPaneLinkCwd: (paneId: number) => string
   getUrlOpenLinkHint: (paneId: number) => string
-  getHttpLinkSourceOwnerForPane: (
-    paneId: number
-  ) => ReturnType<typeof resolveTerminalHttpLinkSourceOwner>
+  getHttpLinkSourceOwnerForPane: (paneId: number) => HttpLinkSourceOwner
   canOpenOwnedBrowserForPane: (paneId: number) => boolean
   getHttpLinkActionDestinations: (paneId: number) => TerminalHttpLinkActionDestinations
   getLinkActionContext: (paneId: number) => TerminalLinkActionContext | null
@@ -105,9 +105,7 @@ export function prepareTerminalPaneMount(
     : resolvePaneWslDistro(useAppStore.getState(), deps.worktreeId, worktreePath)
   const getPaneLinkCwd = (paneId: number): string =>
     resolvePaneLinkCwd(deps.paneCwdRef.current, paneId, startupCwd)
-  const getHttpLinkSourceOwnerForPane = (
-    paneId: number
-  ): ReturnType<typeof resolveTerminalHttpLinkSourceOwner> =>
+  const getHttpLinkSourceOwnerForPane = (paneId: number): HttpLinkSourceOwner =>
     resolveTerminalHttpLinkSourceOwner(paneTransports.get(paneId))
   const canOpenOwnedBrowserForPane = (paneId: number): boolean => {
     const sourceOwner = getHttpLinkSourceOwnerForPane(paneId)
@@ -178,6 +176,7 @@ export function prepareTerminalPaneMount(
     getLinkActionContext,
     sourceTabId: deps.tabId
   }
+  deps.resolveContextMenuFileLinkRef.current = createTerminalContextMenuFileLinkResolver(linkDeps)
   let resizeRaf: number | null = null
   const queueResizeAll = (focusActive: boolean): void => {
     if (resizeRaf !== null) {

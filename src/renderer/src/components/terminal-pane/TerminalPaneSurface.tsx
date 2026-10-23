@@ -258,6 +258,8 @@ export function TerminalPaneSurface({
         onCopy={() => void contextMenu.onCopy()}
         onSelectAll={contextMenu.onSelectAll}
         onPaste={() => void contextMenu.onPaste()}
+        onRevealInFileManager={() => void contextMenu.onRevealInFileManager()}
+        revealInFileManagerBlocked={contextMenu.revealInFileManagerBlocked}
         onSplitRight={contextMenu.onSplitRight}
         onSplitDown={contextMenu.onSplitDown}
         keybindings={keybindings}

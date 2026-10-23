@@ -18,6 +18,7 @@ import type { ReplayingPanesRef } from './replay-guard'
 import type { TerminalLinkActionRequester } from './terminal-link-action-request'
 import type { TerminalLinkRoutingPreferenceRequester } from './terminal-url-link-hit-testing'
 import type { SessionRestoredBannerReason } from './session-restored-banner-pane-state'
+import type { TerminalContextMenuFileLinkResolver } from './terminal-context-menu-file-link-resolver'
 
 export type TerminalPaneStartup = Exclude<PtyPaneStartup, null>
 
@@ -54,6 +55,7 @@ export type UseTerminalPaneLifecycleDeps = {
   paneTransportsRef: React.RefObject<Map<number, PtyTransport>>
   /** Per-pane live cwd (from the OSC 7 handler). */
   paneCwdRef: React.RefObject<PaneCwdMap>
+  resolveContextMenuFileLinkRef: React.RefObject<TerminalContextMenuFileLinkResolver | null>
   paneMode2031Ref: React.RefObject<Map<number, boolean>>
   paneKittyKeyboardModesRef: React.RefObject<Map<number, TerminalKittyKeyboardModeTracker>>
   paneLastThemeModeRef: React.RefObject<Map<number, 'dark' | 'light'>>

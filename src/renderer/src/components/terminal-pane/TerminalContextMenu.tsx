@@ -3,6 +3,7 @@ import {
   Clipboard,
   Copy,
   Eraser,
+  ExternalLink,
   GitFork,
   Maximize2,
   MessageSquare,
@@ -36,6 +37,8 @@ import { AgentSessionContextCopyMenuItem } from './AgentSessionContextCopyMenuIt
 import { ClearPaneTitleMenuItem } from './ClearPaneTitleMenuItem'
 import type { TerminalQuickCommandMenuHost } from '@/hooks/use-terminal-quick-command-hosts'
 import { TerminalQuickCommandsSubmenu } from './TerminalQuickCommandsSubmenu'
+import { LocalOnlyMenuHint } from '@/components/local-only-menu-hint'
+import { getRevealInFileManagerLabel } from '@/lib/reveal-in-file-manager'
 
 type TerminalContextMenuProps = {
   open: boolean
@@ -48,6 +51,8 @@ type TerminalContextMenuProps = {
   onCopy: () => void
   onSelectAll: () => void
   onPaste: () => void
+  onRevealInFileManager: () => void
+  revealInFileManagerBlocked: boolean
   onSplitRight: () => void
   onSplitDown: () => void
   keybindings: KeybindingOverrides
@@ -140,6 +145,8 @@ function TerminalContextMenuItems({
   onCopy,
   onSelectAll,
   onPaste,
+  onRevealInFileManager,
+  revealInFileManagerBlocked,
   onSplitRight,
   onSplitDown,
   keybindings,
@@ -206,6 +213,11 @@ function TerminalContextMenuItems({
         <Clipboard />
         {translate('auto.components.terminal.pane.TerminalContextMenu.0a917b591a', 'Paste')}
         <DropdownMenuShortcut>{shortcuts.paste}</DropdownMenuShortcut>
+      </DropdownMenuItem>
+      <DropdownMenuItem disabled={revealInFileManagerBlocked} onSelect={onRevealInFileManager}>
+        <ExternalLink />
+        {getRevealInFileManagerLabel()}
+        {revealInFileManagerBlocked ? <LocalOnlyMenuHint /> : null}
       </DropdownMenuItem>
       <TerminalQuickCommandsSubmenu
         hosts={quickCommandHosts}

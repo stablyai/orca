@@ -1,14 +1,10 @@
 import { useCallback, useRef } from 'react'
-import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { PtyTransport } from './pty-transport-types'
-import type { PaneCwdMap } from './resolve-split-cwd'
+import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
 import { isTerminalAgentQuickCommand } from '../../../../shared/terminal-quick-commands'
 import { sendTerminalQuickCommandToPane } from './terminal-quick-command-dispatch'
 import type { TerminalPasteSource } from './terminal-paste-model'
 import { runQuickCommandInNewTab } from '@/lib/run-quick-command-in-new-tab'
-import type { PreparedAgentSessionFork } from './terminal-agent-session-fork'
-import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
 import { pasteTerminalPaneMenuClipboard } from './terminal-pane-menu-paste'
 import {
   copyTerminalPaneMenuAgentSessionId,
@@ -28,64 +24,17 @@ import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { resolvePaneAgentSessionId } from './pane-agent-session-id'
 import { resetTerminalInputModes } from './terminal-input-mode-reset'
 import { equalizeTerminalPanes } from './terminal-pane-layout-owner-commands'
-
-type UseTerminalPaneContextMenuDeps = {
-  managerRef: React.RefObject<PaneManager | null>
-  paneTransportsRef: React.RefObject<Map<number, PtyTransport>>
-  paneCwdRef: React.RefObject<PaneCwdMap>
-  containerRef: React.RefObject<HTMLDivElement | null>
-  tabId: string
-  worktreeId: string
-  groupId: string | null
-  fallbackCwd: string
-  toggleExpandPane: (paneId: number) => void
-  onRequestClosePane: (paneId: number) => void
-  onClearPaneScrollback: (pane: ManagedPane) => void
-  onSetTitle: (paneId: number) => void
-  onClearPaneTitle: (paneId: number) => void
-  onPasteError: (message: string) => void
-  onAgentSessionForkReady: (fork: PreparedAgentSessionFork) => void
-  onAgentSessionContinuationReady: (request: AgentSessionContinuationRequest) => void
-  forceBracketedMultilineTextPaste: boolean
-  rightClickToPaste: boolean
-}
-
-type TerminalMenuState = {
-  open: boolean
-  setOpen: React.Dispatch<React.SetStateAction<boolean>>
-  point: { x: number; y: number }
-  menuOpenedAtRef: React.RefObject<number>
-  paneCount: number
-  menuPaneId: number | null
-  onContextMenuCapture: (event: React.MouseEvent<HTMLDivElement>) => void
-  onMouseDownCapture: (event: React.MouseEvent<HTMLDivElement>) => void
-  onPaneTitleContextMenu: (event: React.MouseEvent<HTMLElement>, paneId: number) => void
-  onCopy: () => Promise<void>
-  onSelectAll: () => void
-  onCopyTerminalId: () => Promise<void>
-  onCopyPaneId: () => Promise<void>
-  onCopyAgentSessionId: () => Promise<void>
-  onPaste: () => Promise<void>
-  onSplitRight: () => void
-  onSplitDown: () => void
-  onEqualizePaneSizes: () => void
-  onClosePane: () => void
-  onClearScreen: () => void
-  onResetTerminal: () => void
-  onForkAgentSession: () => Promise<void>
-  onContinueAgentSessionInNewSession: () => void
-  onCopyAgentSessionContext: () => Promise<void>
-  onQuickCommand: (command: TerminalQuickCommand, historyId: string) => void
-  onToggleExpand: () => void
-  onSetTitle: () => void
-  onClearPaneTitle: () => void
-  runForPane: <Result>(paneId: number, action: () => Result) => Result
-}
+import { buildTerminalPaneContextMenuReveal } from './terminal-pane-context-menu-reveal'
+import type {
+  TerminalMenuState,
+  UseTerminalPaneContextMenuDeps
+} from './terminal-pane-context-menu-types'
 
 export function useTerminalPaneContextMenu({
   managerRef,
   paneTransportsRef,
   paneCwdRef,
+  resolveContextMenuFileLinkRef,
   containerRef,
   tabId,
   worktreeId,
@@ -138,6 +87,7 @@ export function useTerminalPaneContextMenu({
     setOpen,
     point,
     menuOpenedAtRef,
+    contextMenuFilePathRef,
     onContextMenuCapture,
     onMouseDownCapture,
     onPaneTitleContextMenu
@@ -145,6 +95,7 @@ export function useTerminalPaneContextMenu({
     managerRef,
     containerRef,
     contextPaneIdRef,
+    resolveContextMenuFileLinkRef,
     rightClickToPaste,
     pasteResolvedPane
   })
@@ -291,11 +242,22 @@ export function useTerminalPaneContextMenu({
     }
   }
 
+  const { menuPane, onRevealInFileManager, revealInFileManagerBlocked } =
+    buildTerminalPaneContextMenuReveal({
+      contextMenuFilePathRef,
+      fallbackCwd,
+      open,
+      paneCwdRef,
+      paneTransportsRef,
+      resolveMenuPane,
+      worktreeId
+    })
+
   // Why: PaneManager.getPanes() allocates public pane wrappers. Closed menus
   // do not need pane counts or target identity, so avoid that work on every
   // render across hundreds of mounted terminal tabs.
   const paneCount = open ? (managerRef.current?.getPanes().length ?? 1) : 1
-  const menuPaneId = open ? (resolveMenuPane()?.id ?? null) : null
+  const menuPaneId = menuPane?.id ?? null
 
   return {
     open,
@@ -313,6 +275,8 @@ export function useTerminalPaneContextMenu({
     onCopyPaneId,
     onCopyAgentSessionId,
     onPaste,
+    onRevealInFileManager,
+    revealInFileManagerBlocked,
     onSplitRight,
     onSplitDown,
     onEqualizePaneSizes,
