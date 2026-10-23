@@ -1,5 +1,5 @@
 import type { JiraIssue } from '../../../shared/jira-types'
-import { parseJiraStatusError } from '../../../shared/jira-status-error'
+import { parseJiraStatusError } from '../../../shared/jira/jira-status-error'
 
 export type TaskPageJiraLoadError = {
   title: string
