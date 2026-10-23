@@ -1,3 +1,4 @@
+import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as BrowserOwnership } from '../../session-tabs/mobile-session-publication-preservation'
 import type { OrcaRuntimeWithPruneMobileSessionTabGroupLayout as MobileSessionProjection } from './prune-mobile-session-tab-group-layout'
 import type { OrcaRuntimeWithCloseStructuredAgentSessionTab as StructuredSessionClose } from '../../session-tabs/structured-session-tab-close'
 import type { OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh as MobileSessionRefresh } from './perform-mobile-session-pty-records-refresh'
@@ -23,6 +24,17 @@ import { SSH_PANE_RECOVERY_GRACE_MS } from '../../orca-runtime-core'
 import { findTerminalTabIdForLeaf } from '../../../persistence/terminal-topology/terminal-topology-membership'
 
 export abstract class OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs extends OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspaceSession {
+  protected abstract getAcceptedRendererIdentityKeysForMobileSessionSnapshot(
+    ...args: Parameters<BrowserOwnership['getAcceptedRendererIdentityKeysForMobileSessionSnapshot']>
+  ): ReturnType<BrowserOwnership['getAcceptedRendererIdentityKeysForMobileSessionSnapshot']>
+  protected abstract isRendererOwnedMobileBrowserTab(
+    ...args: Parameters<BrowserOwnership['isRendererOwnedMobileBrowserTab']>
+  ): ReturnType<BrowserOwnership['isRendererOwnedMobileBrowserTab']>
+  protected abstract getMobileSessionPublicationEpochAfterHeadlessBrowserChange(
+    ...args: Parameters<
+      BrowserOwnership['getMobileSessionPublicationEpochAfterHeadlessBrowserChange']
+    >
+  ): ReturnType<BrowserOwnership['getMobileSessionPublicationEpochAfterHeadlessBrowserChange']>
   protected abstract findPtyForMobileTerminalTab(
     ...args: Parameters<MobileSessionProjection['findPtyForMobileTerminalTab']>
   ): ReturnType<MobileSessionProjection['findPtyForMobileTerminalTab']>
@@ -45,9 +57,7 @@ export abstract class OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs e
     ...args: Parameters<OwnedMobileTerminalCreate['createRuntimeOwnedMobileSessionTerminal']>
   ): ReturnType<OwnedMobileTerminalCreate['createRuntimeOwnedMobileSessionTerminal']>
 
-  // Why: keep an existing snapshot's browser tabs in sync with the live bridge
-  // without rebuilding stable terminal state. Replaces browser entries with the
-  // current live set and rewrites the browser portion of the primary group order.
+  // Refresh browser rows without rebuilding stable terminal state.
   protected reconcileHeadlessMobileSessionBrowserTabs(
     worktreeId: string,
     existing: RuntimeMobileSessionTabsSnapshot
@@ -55,12 +65,18 @@ export abstract class OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs e
     const existingBrowserTabs = existing.tabs.filter(
       (tab): tab is RuntimeMobileSessionBrowserTab => tab.type === 'browser'
     )
+    if (this.offscreenBrowserBackend) {
+      return this.reconcileOffscreenOwnedMobileSessionBrowserTabs(
+        worktreeId,
+        existing,
+        existingBrowserTabs
+      )
+    }
     const publishedBrowserTabs = this.buildHeadlessMobileSessionBrowserTabs(worktreeId)
     // An attached renderer owns its browser rows; the client-page registry cannot retire them.
-    const rendererBrowserTabs =
-      this.getAvailableAuthoritativeWindow() && !this.offscreenBrowserBackend
-        ? existingBrowserTabs.filter((tab) => tab.placement?.kind !== 'client')
-        : []
+    const rendererBrowserTabs = this.getAvailableAuthoritativeWindow()
+      ? existingBrowserTabs.filter((tab) => tab.placement?.kind !== 'client')
+      : []
     // Keyed by id so no row can publish twice whatever the two sources overlap on; a freshly
     // built row wins over the retained one it replaces.
     const liveById = new Map(
@@ -97,6 +113,71 @@ export abstract class OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs e
       : (nextTabs.find((tab) => tab.isActive) ?? nextTabs[0] ?? null)
     this.storeMobileSessionSnapshot(worktreeId, {
       ...existing,
+      snapshotVersion: existing.snapshotVersion + 1,
+      ...(activeStillPresent
+        ? {}
+        : { activeTabId: active?.id ?? null, activeTabType: active?.type ?? null }),
+      tabGroups,
+      tabs: nextTabs
+    })
+  }
+
+  // Why: offscreen live pages replace only headless-owned rows; unmounted renderer tabs stay.
+  protected reconcileOffscreenOwnedMobileSessionBrowserTabs(
+    worktreeId: string,
+    existing: RuntimeMobileSessionTabsSnapshot,
+    existingBrowserTabs: RuntimeMobileSessionBrowserTab[]
+  ): void {
+    // An unaccepted renderer epoch cannot acquire offscreen rows.
+    if (
+      !this.isHeadlessBuiltMobileSessionPublicationBase(existing.publicationEpoch) &&
+      !this.getAcceptedRendererIdentityKeysForMobileSessionSnapshot(existing)
+    ) {
+      return
+    }
+    const existingHeadlessBrowserTabs = existingBrowserTabs.filter(
+      (tab) => !this.isRendererOwnedMobileBrowserTab(existing, tab)
+    )
+    const rendererBrowserPageIds = new Set(
+      existingBrowserTabs
+        .filter((tab) => this.isRendererOwnedMobileBrowserTab(existing, tab))
+        .flatMap((tab) => tab.browserPageId ?? [])
+    )
+    const liveBrowserTabs = this.buildHeadlessMobileSessionBrowserTabs(worktreeId).filter(
+      (tab) => !rendererBrowserPageIds.has(tab.browserPageId ?? '')
+    )
+    const existingHeadlessBrowserIds = new Set(
+      existingHeadlessBrowserTabs.flatMap((tab) => [tab.id, tab.browserWorkspaceId])
+    )
+    if (headlessBrowserTabsUnchanged(liveBrowserTabs, existingHeadlessBrowserTabs)) {
+      return
+    }
+    const retainedTabs = existing.tabs.filter(
+      (tab) => tab.type !== 'browser' || !existingHeadlessBrowserIds.has(tab.id)
+    )
+    const nextTabs: RuntimeMobileSessionSnapshotTab[] = [...retainedTabs, ...liveBrowserTabs]
+    const liveIds = liveBrowserTabs.map((tab) => tab.id)
+    const liveIdSet = new Set(liveIds)
+    const tabGroups = appendBrowserTabOrder(
+      (existing.tabGroups ?? []).map((group) => ({
+        ...group,
+        tabOrder: group.tabOrder.filter(
+          (id) => liveIdSet.has(id) || !existingHeadlessBrowserIds.has(id)
+        )
+      })),
+      liveIds
+    )
+    const activeStillPresent = nextTabs.some((tab) => tab.id === existing.activeTabId)
+    const active = activeStillPresent
+      ? null
+      : (nextTabs.find((tab) => tab.isActive) ?? nextTabs[0] ?? null)
+    this.storeMobileSessionSnapshot(worktreeId, {
+      ...existing,
+      publicationEpoch: this.getMobileSessionPublicationEpochAfterHeadlessBrowserChange(
+        existing,
+        nextTabs,
+        'headless-hydrated'
+      ),
       snapshotVersion: existing.snapshotVersion + 1,
       ...(activeStillPresent
         ? {}

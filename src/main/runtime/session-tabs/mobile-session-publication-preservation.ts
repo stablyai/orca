@@ -1,6 +1,7 @@
 import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as ScheduleMobileSessionTabsChangedMethods } from './session-tabs-change-publication'
 import { OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs } from './mobile-session-preservation'
 import type {
+  RuntimeMobileSessionBrowserTab,
   RuntimeMobileSessionSnapshotTab,
   RuntimeMobileSessionTabsRemovedResult,
   RuntimeMobileSessionTabsSnapshot
@@ -89,12 +90,12 @@ export abstract class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab ex
       if (!this.offscreenBrowserBackend) {
         return false
       }
-      // Why: in a renderer-based merged snapshot the browser entries can also
-      // be renderer-owned, so only pages the offscreen bridge still lists are
-      // runtime-owned and preservable; a pure renderer epoch preserves none.
+      // Why: current merges keep the renderer publisher epoch unchanged, so
+      // runtime-owned pages are those absent from the accepted identity set.
+      // `:headless-merge:` remains a legacy marker when that pair is gone.
       return (
         this.isHeadlessBuiltMobileSessionPublicationBase(snapshot.publicationEpoch) ||
-        (snapshot.publicationEpoch.includes(':headless-merge:') &&
+        (this.isRuntimeOwnedBrowserOnRendererPublication(snapshot, tab) &&
           typeof tab.browserPageId === 'string' &&
           this.getListedBrowserTabsByPageId(snapshot.worktree).has(tab.browserPageId))
       )
@@ -132,6 +133,84 @@ export abstract class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab ex
   // read as runtime-owned.
   protected isHeadlessBuiltMobileSessionPublicationBase(publicationEpoch: string): boolean {
     return isHeadlessBuiltPublication(publicationEpoch)
+  }
+
+  protected getAcceptedRendererIdentityKeysForMobileSessionSnapshot(
+    snapshot: RuntimeMobileSessionTabsSnapshot
+  ): ReadonlySet<string> | null {
+    const baseEpoch = snapshot.publicationEpoch.split(':headless-merge:')[0]
+    const accepted = this.acceptedRendererMobileSnapshotByWorktree.get(snapshot.worktree)
+    return accepted?.publicationEpoch === baseEpoch ? accepted.rendererTabIdentityKeys : null
+  }
+
+  // Why: current getMerged keeps the renderer publisher epoch; accepted
+  // identity is the owner split. Legacy `:headless-merge:` still names a
+  // mixed snapshot when that pair is missing.
+  protected isRuntimeOwnedBrowserOnRendererPublication(
+    snapshot: RuntimeMobileSessionTabsSnapshot,
+    tab: RuntimeMobileSessionBrowserTab
+  ): boolean {
+    const rendererTabIdentityKeys =
+      this.getAcceptedRendererIdentityKeysForMobileSessionSnapshot(snapshot)
+    if (rendererTabIdentityKeys) {
+      return !getMobileSessionSnapshotTabIdentityKeys(tab).some((id) =>
+        rendererTabIdentityKeys.has(id)
+      )
+    }
+    return snapshot.publicationEpoch.includes(':headless-merge:')
+  }
+
+  protected isHeadlessOwnedMobileBrowserTab(
+    snapshot: RuntimeMobileSessionTabsSnapshot,
+    tab: RuntimeMobileSessionBrowserTab
+  ): boolean {
+    if (this.isHeadlessBuiltMobileSessionPublicationBase(snapshot.publicationEpoch)) {
+      return true
+    }
+    const rendererTabIdentityKeys =
+      this.getAcceptedRendererIdentityKeysForMobileSessionSnapshot(snapshot)
+    if (rendererTabIdentityKeys) {
+      return !getMobileSessionSnapshotTabIdentityKeys(tab).some((id) =>
+        rendererTabIdentityKeys.has(id)
+      )
+    }
+    return false
+  }
+
+  protected isRendererOwnedMobileBrowserTab(
+    snapshot: RuntimeMobileSessionTabsSnapshot,
+    tab: RuntimeMobileSessionBrowserTab
+  ): boolean {
+    if (tab.placement?.kind === 'client') {
+      return false
+    }
+    return !this.isHeadlessOwnedMobileBrowserTab(snapshot, tab)
+  }
+
+  protected getMobileSessionPublicationEpochAfterHeadlessBrowserChange(
+    snapshot: RuntimeMobileSessionTabsSnapshot,
+    nextTabs: readonly RuntimeMobileSessionSnapshotTab[],
+    headlessEpochPrefix: 'headless' | 'headless-hydrated'
+  ): string {
+    if (this.isHeadlessBuiltMobileSessionPublicationBase(snapshot.publicationEpoch)) {
+      return `${headlessEpochPrefix}:${Date.now().toString(36)}`
+    }
+    const rendererTabIdentityKeys =
+      this.getAcceptedRendererIdentityKeysForMobileSessionSnapshot(snapshot)
+    if (!rendererTabIdentityKeys) {
+      return snapshot.publicationEpoch
+    }
+    const preservedTabs = nextTabs.filter(
+      (tab) =>
+        !getMobileSessionSnapshotTabIdentityKeys(tab).some((id) => rendererTabIdentityKeys.has(id))
+    )
+    const baseEpoch = snapshot.publicationEpoch.split(':headless-merge:')[0]
+    return preservedTabs.length === 0
+      ? baseEpoch
+      : this.getMergedMobileSessionPublicationEpoch(
+          { ...snapshot, publicationEpoch: baseEpoch },
+          preservedTabs
+        )
   }
 
   protected getMergedMobileSessionPublicationEpoch(

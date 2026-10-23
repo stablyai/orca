@@ -411,16 +411,13 @@ export default function BrowserAddressBar({
                 'Search or enter URL'
               )}
               onFocus={handleFocus}
-              onMouseDown={addressBarClickSelect.onMouseDown}
-              onClick={addressBarClickSelect.onClick}
+              {...addressBarClickSelect}
               onBlur={handleBlur}
               onKeyDown={handleKeyDown}
               onSelect={acceptOnCaretMove}
               data-orca-browser-address-bar="true"
               className="h-auto border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0"
-              spellCheck={false}
-              autoCapitalize="none"
-              autoCorrect="off"
+              {...{ spellCheck: false, autoCapitalize: 'none', autoCorrect: 'off' }}
               onChange={(event) => {
                 const nextValue = event.target.value
                 // Why: typing creates a new suggestion list, so keyboard selection
@@ -459,8 +456,7 @@ export default function BrowserAddressBar({
             }}
           >
             <BrowserAddressBarSuggestionList
-              suggestions={suggestions}
-              selectedValue={selectedValue}
+              {...{ suggestions, selectedValue }}
               onSelectedValueChange={setSelectedValueOverride}
               onSelect={handleSelect}
               hasSwitchTarget={switchToTab.hasSwitchTarget}
