@@ -118,10 +118,15 @@ async function openMobileFileTapAsync<T extends FileTapSessionTab>(
     return
   }
   if (options.confirmResolvedOpen) {
-    const targetPath =
+    const displayBasePath =
       resolved.relativePath ||
       resolved.openTarget?.absolutePath ||
       resolved.absolutePath ||
+      options.pathText
+    const copyPath =
+      resolved.openTarget?.absolutePath ||
+      resolved.absolutePath ||
+      resolved.relativePath ||
       options.pathText
     const locationSuffix =
       options.line !== null
@@ -130,9 +135,9 @@ async function openMobileFileTapAsync<T extends FileTapSessionTab>(
     options.triggerOpenFeedback()
     options.confirmResolvedOpen(
       {
-        title: displayNameFromPath(targetPath) ?? 'File',
-        displayPath: `${targetPath}${locationSuffix}`,
-        copyPath: targetPath
+        title: displayNameFromPath(displayBasePath) ?? 'File',
+        displayPath: `${displayBasePath}${locationSuffix}`,
+        copyPath
       },
       () => {
         void completeResolvedMobileFileTapOpen(options, resolved, false).catch(() => {

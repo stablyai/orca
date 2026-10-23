@@ -751,16 +751,15 @@ describe('openMobileFileTap', () => {
     const client = createClient([
       ok({
         worktree: 'wt-1',
-        relativePath: null,
-        absolutePath: 'C:/Users/me/.gemini/brain/note.md',
+        relativePath: 'src/note.md',
+        absolutePath: 'C:/repo/src/note.md',
         exists: true,
         isDirectory: false,
         openTarget: {
-          kind: 'absolute-file',
+          kind: 'worktree-file',
           provider: 'local',
-          absolutePath: 'C:/Users/me/.gemini/brain/note.md',
-          grantId: 'grant-1',
-          readOnly: true
+          relativePath: 'src/note.md',
+          absolutePath: 'C:/repo/src/note.md'
         }
       })
     ])
@@ -775,7 +774,7 @@ describe('openMobileFileTap', () => {
       client,
       hostId: 'host-1',
       worktreeId: 'wt-1',
-      pathText: 'C:/Users/me/.gemini/brain/note.md',
+      pathText: 'src/note.md',
       terminalHandle: 'terminal-1',
       line: 15,
       column: 2,
@@ -795,8 +794,8 @@ describe('openMobileFileTap', () => {
     expect(confirmResolvedOpen).toHaveBeenCalledWith(
       {
         title: 'note.md',
-        displayPath: 'C:/Users/me/.gemini/brain/note.md:15:2',
-        copyPath: 'C:/Users/me/.gemini/brain/note.md'
+        displayPath: 'src/note.md:15:2',
+        copyPath: 'C:/repo/src/note.md'
       },
       expect.any(Function)
     )
