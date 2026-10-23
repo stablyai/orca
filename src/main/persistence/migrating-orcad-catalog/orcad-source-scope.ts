@@ -171,6 +171,22 @@ export function orcadMigrationOwnerMatchesScope(
   )
 }
 
+/**
+ * An unqualified key naming a moved repo that another host also registers: it may be this move's
+ * row or the other host's, so a WSL move can neither carry nor ignore what it owns.
+ */
+export function orcadMigrationOwnerKeyIsAmbiguous(
+  value: string | null | undefined,
+  scope: OrcadMigrationSourceScope
+): boolean {
+  if (!value || isWorktreeHostIdentity(value)) {
+    return false
+  }
+  return [...scope.sharedRepoIds].some(
+    (repoId) => scope.repoIds.has(repoId) && ownerKeyBelongsToRepo(value, repoId)
+  )
+}
+
 export function unqualifyOrcadMigrationOwnerKey(value: string): string {
   return isWorktreeHostIdentity(value) ? getWorktreeIdFromHostIdentity(value) : value
 }

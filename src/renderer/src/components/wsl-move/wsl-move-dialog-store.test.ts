@@ -89,7 +89,7 @@ describe('preview', () => {
     expect(state.stage === 'preview' && state.selected).toHaveLength(3)
     expect(state.stage === 'preview' && state.preview).toBe(READY)
     expect(api.preview).toHaveBeenCalledTimes(1)
-    expect(api.preview).toHaveBeenCalledWith({ distro: 'Ubuntu' })
+    expect(api.preview).toHaveBeenCalledWith({ distro: 'Ubuntu', sleptPanes: [] })
   })
 
   it('opened from one project, checks only it and previews that selection', async () => {
@@ -97,7 +97,8 @@ describe('preview', () => {
     expect(api.preview).toHaveBeenLastCalledWith({
       distro: 'Ubuntu',
       repoIds: ['web'],
-      folderWorkspaceIds: []
+      folderWorkspaceIds: [],
+      sleptPanes: []
     })
     const state = dialog()
     expect(state.stage === 'preview' && state.selected).toEqual([{ kind: 'repo', id: 'web' }])

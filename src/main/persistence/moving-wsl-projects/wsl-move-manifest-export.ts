@@ -33,6 +33,8 @@ import type { Store } from '../../persistence'
 import { compareKeys } from '../migrating-orcad-catalog/orcad-source-key-order'
 import { wslUncPathToLinux } from '../../../shared/wsl-paths'
 import { createUncToLinuxPathRewriter } from './wsl-move-path-rewriter'
+import { withoutWindowsShellChoices } from './wsl-move-windows-shell-choices'
+import { withoutPtyBindings } from './wsl-move-session-rewrite'
 
 export type WslMoveManifestExportRequest = {
   migrationId: string
@@ -47,6 +49,8 @@ export type WslMoveManifestExportRequest = {
   /** plan.repoIds: the exact scope. */
   repoIds: readonly string[]
   folderWorkspaceIds: readonly string[]
+  /** Slept panes' daemon history: their only copy of the scrollback. */
+  sleptScrollback?: (tabId: string, leafId: string) => Buffer | null
 }
 
 export type WslMoveManifestExport = {
@@ -71,6 +75,8 @@ export class WslMoveScopeChangedError extends Error {
     this.name = 'WslMoveScopeChangedError'
   }
 }
+
+const UNSIGNED_DIGEST = '0'.repeat(64)
 
 export type WslMoveManifestExportStore = Pick<
   Store,
@@ -136,7 +142,8 @@ export function exportWslMoveManifest(
   const inspection = store.inspectOrcadMigrationSourceDormantState(
     source,
     catalog,
-    request.destinationEnvironmentId
+    request.destinationEnvironmentId,
+    request.sleptScrollback
   )
   blockers.push(...inspection.blockedSessionItems, ...inspection.leftBehindItems)
   for (const [kind, count] of Object.entries(inspection.blockedCounts)) {
@@ -146,24 +153,46 @@ export function exportWslMoveManifest(
       )
     }
   }
-  const dormantState = inspection.payload
+  const dormantState = inspection.payload.workspaceSession
+    ? {
+        ...inspection.payload,
+        // Desktop PTY ids name no host terminal: a moved pane bound to one never reads its history.
+        workspaceSession: withoutWindowsShellChoices(
+          withoutPtyBindings(inspection.payload.workspaceSession)
+        )
+      }
+    : inspection.payload
   const rewriter = createUncToLinuxPathRewriter(request.distro)
   const payload = rewriteOrcadMigrationPayloadPaths(
     { ...catalog, ...(hasDormantState(dormantState) ? { dormantState } : {}) },
     rewriter
   )
-  const unsigned = {
-    version: ORCAD_MIGRATION_MANIFEST_VERSION,
-    migrationId: request.migrationId,
-    createdAt: request.now().toISOString(),
-    source,
-    payload,
-    destinationEnvironmentId: request.destinationEnvironmentId
-  }
-  const manifest = parseOrcadMigrationManifest({
+  // Sign what the journal and the host read back: the parsed form (the parser keeps only the fields
+  // it knows, so a session field it drops would break the digest) of the JSON (an in-memory value
+  // with toJSON serializes differently), never the live objects.
+  const unsigned: Omit<OrcadMigrationManifest, 'manifestSha256'> = JSON.parse(
+    JSON.stringify({
+      version: ORCAD_MIGRATION_MANIFEST_VERSION,
+      migrationId: request.migrationId,
+      createdAt: request.now().toISOString(),
+      source,
+      payload,
+      destinationEnvironmentId: request.destinationEnvironmentId
+    })
+  )
+  const { manifestSha256: _unsigned, ...normalized } = parseOrcadMigrationManifest({
     ...unsigned,
-    manifestSha256: computeOrcadMigrationManifestSha256(unsigned)
+    manifestSha256: UNSIGNED_DIGEST
   })
+  const manifestSha256 = computeOrcadMigrationManifestSha256(normalized)
+  if (manifestSha256 !== computeOrcadMigrationManifestSha256(unsigned)) {
+    // Not refused (the parsed form is what moves), but a field the parser drops does not move.
+    console.warn(
+      '[wsl-move] The manifest parser dropped fields of the exported state:',
+      differingPaths(unsigned, normalized).join(', ')
+    )
+  }
+  const manifest: OrcadMigrationManifest = { ...normalized, manifestSha256 }
   const worktreeIds = scopedWorktreeIds(repos, { ...catalog, dormantState })
   const workspaceKeys = [
     ...worktreeIds,
@@ -246,4 +275,28 @@ function scopedWorktreeIds(
     }
   }
   return [...ids].sort(compareKeys)
+}
+
+/** The first few JSON paths where the parsed manifest differs from the export, for the log. */
+function differingPaths(left: unknown, right: unknown, path = '$', found: string[] = []): string[] {
+  if (found.length >= 8) {
+    return found
+  }
+  if (typeof left !== 'object' || left === null || typeof right !== 'object' || right === null) {
+    if (JSON.stringify(left) !== JSON.stringify(right)) {
+      found.push(path)
+    }
+    return found
+  }
+  const keys = new Set([...Object.keys(left), ...Object.keys(right)])
+  for (const key of keys) {
+    // Array indexes are folded so one dropped field names its shape, not every row.
+    const step = Array.isArray(left) ? `${path}[]` : `${path}.${key}`
+    const before = found.length
+    differingPaths(Reflect.get(left, key), Reflect.get(right, key), step, found)
+    if (Array.isArray(left) && found.length > before) {
+      return found
+    }
+  }
+  return found
 }

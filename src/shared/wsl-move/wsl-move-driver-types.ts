@@ -10,6 +10,8 @@ export type WslMoveRequest = {
   distro: string
   repoIds?: string[]
   folderWorkspaceIds?: string[]
+  /** The window's bindings of panes with no live terminal: main retires a slept pane's on Sleep. */
+  sleptPanes?: { paneKey: string; sessionId: string }[]
 }
 
 export type WslMoveRowRef = { kind: 'repo' | 'folder'; id: string }

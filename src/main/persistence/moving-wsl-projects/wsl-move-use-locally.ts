@@ -61,7 +61,7 @@ export function bringWslMovedProjectBack(
   } catch (error) {
     const detail = describe(error)
     return detail === 'wsl_move_superseded'
-      ? { released: false, reason: 'superseded' }
+      ? { released: false, reason: 'superseded', ...newerMoveOf(userDataPath, move) }
       : { released: false, reason: 'failed', detail }
   }
   const { scopeRepoIds, scopeFolderWorkspaceIds } = move.manifest.source
@@ -70,6 +70,25 @@ export function bringWslMovedProjectBack(
     distro: move.manifest.source.distro,
     repoIds: [...scopeRepoIds],
     folderWorkspaceIds: [...scopeFolderWorkspaceIds]
+  }
+}
+
+/** The move that has to come back first, so the refusal can name its projects. */
+function newerMoveOf(
+  userDataPath: string,
+  move: WslMoveCutover
+): { newerMove?: { repoIds: string[]; folderWorkspaceIds: string[] } } {
+  try {
+    const newest = listWslMoveCutoverChain(userDataPath, move.journalKey).at(-1)
+    if (!newest || newest.migrationId === move.migrationId) {
+      return {}
+    }
+    const { scopeRepoIds, scopeFolderWorkspaceIds } = newest.manifest.source
+    return {
+      newerMove: { repoIds: [...scopeRepoIds], folderWorkspaceIds: [...scopeFolderWorkspaceIds] }
+    }
+  } catch {
+    return {}
   }
 }
 

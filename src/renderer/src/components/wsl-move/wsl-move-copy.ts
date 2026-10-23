@@ -86,6 +86,12 @@ export function wslMoveRefusalMessage(
         'Some terminals, agents or automations in these projects are busy. Nothing was moved.'
       )
     case 'wsl_move_export_incomplete':
+      if (context === 'preview') {
+        return translate(
+          'wslMove.refusal.exportIncompletePreview',
+          "Some saved state in these projects can't move yet:"
+        )
+      }
       return translate(
         'wslMove.refusal.exportIncomplete',
         'Some saved state in these projects cannot move yet, so nothing was moved:'

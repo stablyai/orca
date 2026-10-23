@@ -112,7 +112,7 @@ function isSessionField(field: string): field is keyof WorkspaceSessionState {
 }
 
 /** Every local PTY binding (item 36): the host starts its own terminals. */
-function withoutPtyBindings(session: WorkspaceSessionState): WorkspaceSessionState {
+export function withoutPtyBindings(session: WorkspaceSessionState): WorkspaceSessionState {
   const {
     remoteSessionIdsByTabId: _remoteSessions,
     terminalPtyIncarnationsByPaneKey: _incarnations,

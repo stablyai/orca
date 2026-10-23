@@ -12,7 +12,13 @@ const WslMoveRequestSchema = z.object({
     .max(255)
     .regex(/^[^\\/:*?"<>|\0]+$/),
   repoIds: Ids.optional(),
-  folderWorkspaceIds: Ids.optional()
+  folderWorkspaceIds: Ids.optional(),
+  sleptPanes: z
+    .array(
+      z.object({ paneKey: z.string().min(1).max(1_024), sessionId: z.string().min(1).max(1_024) })
+    )
+    .max(10_000)
+    .optional()
 })
 
 export function parseWslMoveRequest(value: unknown): WslMoveRequest | null {

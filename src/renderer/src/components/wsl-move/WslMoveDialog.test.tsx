@@ -126,7 +126,7 @@ describe('preview', () => {
       }
     })
     expect(markup).toContain('Already on the Ubuntu host.')
-    expect(markup).toContain('cannot move yet')
+    expect(markup).toContain('can&#x27;t move yet')
     expect(markup).toContain('1 draft can’t move with this project yet.')
   })
 })

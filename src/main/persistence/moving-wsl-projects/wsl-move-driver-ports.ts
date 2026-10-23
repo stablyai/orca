@@ -19,6 +19,7 @@ import type { OrcadMigrationDestinationCatalog } from '../../ssh/orcad-migration
 import type { OrcadMigrationSnapshotSource } from '../../ssh/orcad-migration-snapshot-coordinator'
 import type { WslMoveHostHolding } from './wsl-move-delta-plan'
 import type { WslMoveQuiesceDeps } from './wsl-move-quiesce'
+import type { WslMoveSleptScrollback } from './wsl-move-slept-scrollback'
 import type { WslMoveRestoreHintPane } from './wsl-move-restore-hints'
 import type {
   WslMoveManifestExport,
@@ -84,6 +85,19 @@ export type WslMoveDriverDeps = {
     'sleepWorkspaces' | 'livePtyIds' | 'captureRestoreHints' | 'proveExited'
   >
   snapshots: OrcadMigrationSnapshotSource
+  /**
+   * After Sleep, each paused pane's daemon checkpoint as the buffer a terminal restores from. A
+   * slept pane has no renderer snapshot, so this is its only scrollback.
+   */
+  sleptScrollback?: (
+    panes: readonly WslMoveRestoreHintPane[],
+    distro: string,
+    migrationId: string,
+    /** The scope's workspaces, for panes slept before the move (no live terminal to list). */
+    workspaceIds: readonly string[],
+    /** The window's bindings of slept panes, which main no longer holds; checked before use. */
+    reported: readonly WslMoveRestoreHintPane[]
+  ) => Promise<WslMoveSleptScrollback>
   shellHistory: (
     distro: string,
     worktrees: WslMoveManifestExport['worktrees']

@@ -49,6 +49,9 @@
       "useHereDescription": "Orca will open this project here as it was before the move. Your code is not affected: it never moved. Changes made on the {{distro}} host since the move, such as new tabs and chats, stay on the host and do not come back. Projects moved with it come back too. The project also stays on the {{distro}} host until you remove it there. This window reloads.",
       "useHereConfirm": "Use on this computer",
       "useHereSuperseded": "A later move to the {{distro}} host includes this project. Bring that one back first.",
+      "useHereRefusedTitle": "Can't use {{name}} here yet",
+      "useHereRefusedOk": "OK",
+      "useHereSupersededBy": "{{names}} moved to the {{distro}} host after this project. Use those on this computer again first, then this project.",
       "useHereMoveRunning": "A move to the {{distro}} host is still running. Try again once it ends.",
       "useHereFailed": "Could not bring this project back to this computer."
     }
@@ -20914,6 +20917,7 @@
       "hostUpdateRequired": "The {{distro}} host runs an older version of Orca. Update it in Settings, then try again.",
       "terminalsBlocked": "Some terminals, agents or automations in these projects are busy. Nothing was moved.",
       "exportIncomplete": "Some saved state in these projects cannot move yet, so nothing was moved:",
+      "exportIncompletePreview": "Some saved state in these projects can't move yet:",
       "tooLarge": "These projects have too much saved state to move in one step. Move fewer projects at a time.",
       "pauseFailed": "Orca could not pause the terminals in these projects, so nothing was moved. Paused terminals start again when you open them. Try again.",
       "scopeChanged": "A project changed while the move was getting ready, so nothing was moved. Check the projects and try again.",

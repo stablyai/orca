@@ -21,4 +21,6 @@ export type WslMoveUseLocallyResult =
       released: false
       reason: 'gated-off' | 'not-moved' | 'superseded' | 'move-running' | 'failed'
       detail?: string
+      /** `superseded`: the newest move of the distro, which has to come back first. */
+      newerMove?: { repoIds: string[]; folderWorkspaceIds: string[] }
     }

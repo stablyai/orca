@@ -1,7 +1,10 @@
-import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { ConfirmationDialogContextValue } from '@/components/confirmation-dialog-context'
-import type { WslMovedProject } from '../../../shared/wsl-move/wsl-moved-project'
+import { useAppStore } from '@/store'
+import type {
+  WslMovedProject,
+  WslMoveUseLocallyResult
+} from '../../../shared/wsl-move/wsl-moved-project'
 
 /**
  * "Use on this computer again" for a project a WSL host owns: after a plain confirmation, the
@@ -31,11 +34,47 @@ export async function bringWslMovedProjectBack(
   })
   // On success main reloads the window, which hydrates the whole pre-move session from disk.
   if (!result.released) {
-    toast.error(wslMoveUseHereRefusalMessage(result.reason, project.distro))
+    // A dialog, not a toast: a toast sat behind the update notice on awin and read as nothing.
+    await confirm({
+      title: translate('sidebar.wslMoved.useHereRefusedTitle', "Can't use {{name}} here yet", {
+        name: project.displayName
+      }),
+      description: wslMoveUseHereRefusalMessage(result, project.distro),
+      confirmLabel: translate('sidebar.wslMoved.useHereRefusedOk', 'OK'),
+      acknowledgeOnly: true,
+      initialFocus: 'confirm'
+    })
   }
 }
 
-function wslMoveUseHereRefusalMessage(reason: string, distro: string): string {
+/** The newer move's projects by name, as the sidebar lists them; ids alone mean nothing to the user. */
+function newerMoveNames(
+  newerMove: { repoIds: string[]; folderWorkspaceIds: string[] } | undefined
+): string[] {
+  if (!newerMove) {
+    return []
+  }
+  return useAppStore
+    .getState()
+    .wslMovedProjects.filter((moved) =>
+      (moved.kind === 'repo' ? newerMove.repoIds : newerMove.folderWorkspaceIds).includes(moved.id)
+    )
+    .map((moved) => moved.displayName)
+}
+
+function wslMoveUseHereRefusalMessage(
+  result: Extract<WslMoveUseLocallyResult, { released: false }>,
+  distro: string
+): string {
+  const { reason } = result
+  const names = reason === 'superseded' ? newerMoveNames(result.newerMove) : []
+  if (names.length > 0) {
+    return translate(
+      'sidebar.wslMoved.useHereSupersededBy',
+      '{{names}} moved to the {{distro}} host after this project. Use those on this computer again first, then this project.',
+      { names: names.join(', '), distro }
+    )
+  }
   if (reason === 'superseded') {
     return translate(
       'sidebar.wslMoved.useHereSuperseded',

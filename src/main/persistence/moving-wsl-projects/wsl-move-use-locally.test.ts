@@ -71,7 +71,9 @@ describe('bringWslMovedProjectBack', () => {
     )
     expect(bringWslMovedProjectBack(userDataPath, { repoId: 'repo-1' })).toEqual({
       released: false,
-      reason: 'superseded'
+      reason: 'superseded',
+      // awin verify-3: the refusal named no move, so nothing said what to bring back first.
+      newerMove: { repoIds: ['repo-9'], folderWorkspaceIds: [] }
     })
     expect(hidden().has('repo-1')).toBe(true)
     // The newest one can go, and then the earlier one becomes the newest.

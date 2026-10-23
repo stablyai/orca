@@ -34,6 +34,18 @@ import {
   listWslMovePanes,
   type WslMoveGateFactSources
 } from '../persistence/moving-wsl-projects/wsl-move-gate-facts'
+import {
+  classifyWslGuestPaneForeground,
+  parseWslGuestPaneProcesses,
+  WSL_GUEST_PANE_PROCESS_SCRIPT
+} from '../persistence/moving-wsl-projects/wsl-move-guest-foreground'
+import {
+  listWslMoveSleptSessionPanes,
+  readWslMoveSleptScrollbackFromHistory,
+  withSleptSessionPanes,
+  wslMoveTabTitle,
+  wslMoveSleptSpoolRoot
+} from '../persistence/moving-wsl-projects/wsl-move-slept-scrollback'
 import { scheduleWslMoveRewriteRetry } from '../persistence/moving-wsl-projects/wsl-move-rewrite-retry'
 import { captureWslMoveRestoreHints } from '../persistence/moving-wsl-projects/wsl-move-restore-hints'
 import {
@@ -52,6 +64,7 @@ import { listRemoteOrcadFolderCatalog } from '../ssh/orcad-server-folder-workspa
 import { makeTerminalScrollbackSnapshotRef } from '../terminal-scrollback-snapshots'
 import { requestWorktreeSleepFromRenderer } from '../window/worktree-sleep-request-relay'
 import { getWslHostService } from '../wsl/wsl-host-service-instance'
+import { runWslProcess } from '../wsl/wsl-runner'
 import { isWslDistroRegistered } from '../wsl/wsl-distro-registry-id'
 import { defaultWslOrcadEnvironmentId } from '../wsl/wsl-orcad-deploy'
 import { tryGetProviderForPty } from './pty/provider/registry'
@@ -73,6 +86,24 @@ export function createWslMoveDriverDeps(
       return inspectPtyProviderProcessForRenderer(provider, ptyId, { scanChildProcesses: true })
     },
     agentRows: (paneKey) => agentHookServer.getStatusSnapshotForPane(paneKey),
+    ...(process.platform === 'win32'
+      ? {
+          guestForegrounds: async (distro: string, paneKeys: readonly string[]) => {
+            const result = await runWslProcess({
+              distro,
+              script: WSL_GUEST_PANE_PROCESS_SCRIPT,
+              loginPath: 'none',
+              timeoutMs: 5_000,
+              maxOutputBytes: 1_048_576
+            })
+            if (result.code !== 0 || result.timedOut || result.outputTruncated) {
+              return new Map()
+            }
+            const rows = parseWslGuestPaneProcesses(result.stdout)
+            return new Map(paneKeys.map((key) => [key, classifyWslGuestPaneForeground(rows, key)]))
+          }
+        }
+      : {}),
     scrollbackBytes: async (tabId, leafId) =>
       (await store.statTerminalScrollbackSnapshotSize(
         makeTerminalScrollbackSnapshotRef(tabId, leafId)
@@ -127,6 +158,17 @@ export function createWslMoveDriverDeps(
       }
     },
     snapshots: store,
+    sleptScrollback: (panes, distro, migrationId, workspaceIds, reported) =>
+      readWslMoveSleptScrollbackFromHistory(
+        new HistoryReader(getDaemonHistoryDir()),
+        withSleptSessionPanes(
+          panes,
+          listWslMoveSleptSessionPanes(store.getWorkspaceSession(), workspaceIds, reported)
+        ),
+        distro,
+        wslMoveSleptSpoolRoot(userDataPath, migrationId),
+        (tabId) => wslMoveTabTitle(store.getWorkspaceSession(), tabId)
+      ),
     shellHistory: (distro, worktrees) => buildWslMoveShellHistoryBlobs({ distro, worktrees }),
     // The window reload is the renderer's (`reloadRequired`), through restart preparation.
     finishOnDesktop: async () => {

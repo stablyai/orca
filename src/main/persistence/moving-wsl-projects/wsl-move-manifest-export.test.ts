@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../../../shared/constants'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import type { PersistedState } from '../../../shared/persisted-state-types'
@@ -232,6 +232,227 @@ describe('exportWslMoveManifest', () => {
     }
     state.workspaceSession.sleepingAgentSessionsByPaneKey = { [record.paneKey]: record }
     expect(exportWslMoveManifest(storeFor(state), REQUEST).blockers.length).toBeGreaterThan(0)
+  })
+
+  it("is not refused by another project's agent session or unsaved draft", () => {
+    // On awin, any agent or draft anywhere on this desktop refused every WSL move (D1b-10 run).
+    const state = sourceState()
+    const elsewhere: SleepingAgentSessionRecord = {
+      paneKey: 'windows-shell:missing-leaf',
+      tabId: 'windows-shell',
+      worktreeId: OTHER_WORKTREE,
+      agent: 'codex',
+      providerSession: { key: 'session_id', id: 'session-2' },
+      prompt: 'Saved prompt',
+      state: 'done',
+      capturedAt: 1,
+      updatedAt: 1,
+      connectionId: null,
+      origin: 'quit'
+    }
+    state.workspaceSession.sleepingAgentSessionsByPaneKey = { [elsewhere.paneKey]: elsewhere }
+    state.workspaceSession.openFilesByWorktree = {
+      [OTHER_WORKTREE]: [
+        {
+          filePath: 'C:\\code\\win\\notes.md',
+          relativePath: 'notes.md',
+          worktreeId: OTHER_WORKTREE,
+          language: 'markdown',
+          dirtyDraftContent: 'unsaved'
+        }
+      ]
+    }
+    expect(exportWslMoveManifest(storeFor(state), REQUEST).blockers).toEqual([])
+  })
+
+  it('is not refused by a project an earlier move retained, whose agent stays here', () => {
+    const state = sourceState()
+    const retainedWorktree = 'old::\\\\wsl.localhost\\Ubuntu\\home\\me\\old'
+    state.repos.push(repo('old', '\\\\wsl.localhost\\Ubuntu\\home\\me\\old'))
+    const record: SleepingAgentSessionRecord = {
+      paneKey: 'old-shell:missing-leaf',
+      tabId: 'old-shell',
+      worktreeId: retainedWorktree,
+      agent: 'claude',
+      providerSession: { key: 'session_id', id: 'session-3' },
+      prompt: 'Saved prompt',
+      state: 'done',
+      capturedAt: 1,
+      updatedAt: 1,
+      connectionId: null,
+      origin: 'quit'
+    }
+    state.workspaceSession.sleepingAgentSessionsByPaneKey = { [record.paneKey]: record }
+    expect(exportWslMoveManifest(storeFor(state), REQUEST).blockers).toEqual([])
+  })
+
+  it('signs what the host and the journal will read, even with in-memory dates', () => {
+    // A row added this session can still hold a Date the next load would read back as a string. The
+    // signature covered "{}" for it while the host hashed the string, so the first move after adding
+    // a project reset with a digest mismatch until a restart (D1b-10 run on awin).
+    const state = sourceState()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the in-memory shape the load normalizes.
+    ;(state.repos[0] as unknown as Record<string, unknown>).lastSeenAt = new Date(
+      '2026-10-20T00:00:00.000Z'
+    )
+    const { manifest } = exportWslMoveManifest(storeFor(state), REQUEST)
+    expect(() =>
+      assertOrcadMigrationManifestDigest(JSON.parse(JSON.stringify(manifest)))
+    ).not.toThrow()
+  })
+
+  it("shares no object with the live state, so a later sleep can't change what was signed", () => {
+    const state = sourceState()
+    const { manifest } = exportWslMoveManifest(storeFor(state), REQUEST)
+    // Sleep and the session freeze mutate the live session after the export signs it.
+    for (const tabs of Object.values(state.workspaceSession.tabsByWorktree)) {
+      for (const tab of tabs) {
+        tab.title = 'renamed by sleep'
+      }
+    }
+    expect(() =>
+      assertOrcadMigrationManifestDigest(JSON.parse(JSON.stringify(manifest)))
+    ).not.toThrow()
+  })
+
+  describe('only the selected projects can refuse it', () => {
+    const agentIn = (
+      worktreeId: string,
+      tabId: string,
+      leafId: string
+    ): SleepingAgentSessionRecord => ({
+      paneKey: `${tabId}:${leafId}`,
+      tabId,
+      worktreeId,
+      agent: 'codex',
+      providerSession: { key: 'session_id', id: `session-${tabId}` },
+      prompt: 'Saved prompt',
+      state: 'done',
+      capturedAt: 1,
+      updatedAt: 1,
+      connectionId: null,
+      origin: 'live'
+    })
+    const layout = (leafId: string) => ({
+      root: { type: 'leaf' as const, leafId },
+      activeLeafId: leafId,
+      expandedLeafId: null
+    })
+
+    it('is not refused by a live agent with its tab open, and a draft, in another project', () => {
+      const state = sourceState()
+      const other = agentIn(OTHER_WORKTREE, 'windows-shell', 'win-leaf')
+      state.workspaceSession.terminalLayoutsByTabId = { 'windows-shell': layout('elsewhere') }
+      state.workspaceSession.sleepingAgentSessionsByPaneKey = { [other.paneKey]: other }
+      state.workspaceSession.openFilesByWorktree = {
+        [OTHER_WORKTREE]: [
+          {
+            filePath: 'C:\\code\\win\\notes.md',
+            relativePath: 'notes.md',
+            worktreeId: OTHER_WORKTREE,
+            language: 'markdown',
+            dirtyDraftContent: 'unsaved'
+          }
+        ]
+      }
+      expect(exportWslMoveManifest(storeFor(state), REQUEST).blockers).toEqual([])
+    })
+
+    it('is still refused by the same kinds of state in the selected project', () => {
+      const state = sourceState()
+      const own = agentIn(WORKTREE, 'feature-shell', 'feature-leaf')
+      state.workspaceSession.terminalLayoutsByTabId = { 'feature-shell': layout('elsewhere') }
+      state.workspaceSession.sleepingAgentSessionsByPaneKey = { [own.paneKey]: own }
+      state.workspaceSession.openFilesByWorktree = {
+        [WORKTREE]: [
+          {
+            filePath: '/home/me/app-feature/notes.md',
+            relativePath: 'notes.md',
+            worktreeId: WORKTREE,
+            language: 'markdown',
+            dirtyDraftContent: 'unsaved',
+            runtimeEnvironmentId: 'some-other-server'
+          }
+        ]
+      }
+      const { blockers } = exportWslMoveManifest(storeFor(state), REQUEST)
+      expect(blockers).toEqual(
+        expect.arrayContaining([
+          expect.stringMatching(/codex session saved in/),
+          expect.stringMatching(/unsaved changes to/)
+        ])
+      )
+    })
+
+    it('never silently leaves behind an agent whose key may be the selected project', () => {
+      // `app` is also registered by an SSH host, so an unqualified `app::` key names either.
+      const state = sourceState()
+      state.repos.push(repo('app', '/srv/app', { connectionId: 'box' }))
+      const own = agentIn(WORKTREE, 'feature-shell', 'feature-leaf')
+      state.workspaceSession.terminalLayoutsByTabId = { 'feature-shell': layout('elsewhere') }
+      state.workspaceSession.sleepingAgentSessionsByPaneKey = { [own.paneKey]: own }
+      expect(exportWslMoveManifest(storeFor(state), REQUEST).blockers).toEqual([
+        expect.stringMatching(/codex session saved in/)
+      ])
+    })
+  })
+
+  it('signs the session as the host parses it, even with a field the parser drops', () => {
+    // The awin run: a move right after sleeping terminals reset with a digest mismatch, because the
+    // signature covered session fields the manifest parser does not keep.
+    const state = sourceState()
+    const sleptTab: Record<string, unknown> = {
+      ...state.workspaceSession.tabsByWorktree[WORKTREE]![0]
+    }
+    sleptTab.fieldNoParserKeeps = 1
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: an extra field on a real tab.
+    state.workspaceSession.tabsByWorktree[WORKTREE] = [sleptTab as unknown as TerminalTab]
+    const { manifest } = exportWslMoveManifest(storeFor(state), REQUEST)
+    expect(() =>
+      assertOrcadMigrationManifestDigest(JSON.parse(JSON.stringify(manifest)))
+    ).not.toThrow()
+  })
+
+  it('carries no desktop PTY binding, so the moved pane reads its history from the host', () => {
+    // awin verify-4: the host's session kept the desktop's PTY ids, so the client took each pane
+    // for a live terminal, skipped the scrollback read, and opened a fresh prompt.
+    const state = sourceState()
+    const leaf = '11111111-1111-4111-8111-111111111111'
+    const tab = state.workspaceSession.tabsByWorktree[WORKTREE]![0]!
+    state.workspaceSession.tabsByWorktree[WORKTREE] = [{ ...tab, ptyId: `${WORKTREE}@@81c7100a` }]
+    state.workspaceSession.terminalLayoutsByTabId = {
+      [tab.id]: {
+        root: { type: 'leaf', leafId: leaf },
+        activeLeafId: leaf,
+        expandedLeafId: null,
+        ptyIdsByLeafId: { [leaf]: `${WORKTREE}@@81c7100a` },
+        buffersByLeafId: { [leaf]: 'history' }
+      }
+    }
+    const { manifest } = exportWslMoveManifest(storeFor(state), REQUEST)
+    const session = manifest.payload.dormantState?.workspaceSession
+    const layout = Object.values(session?.terminalLayoutsByTabId ?? {})[0]
+    expect(layout?.scrollbackRefsByLeafId?.[leaf]).toBeTruthy()
+    expect(layout).not.toHaveProperty('ptyIdsByLeafId')
+    expect(Object.values(session?.tabsByWorktree ?? {}).flat()[0]?.ptyId).toBeNull()
+  })
+
+  it("drops a tab's Windows shell choice on purpose, never through the parser", () => {
+    // awin verify-3: every preview and move warned that the parser dropped shellOverride.
+    const state = sourceState()
+    const tab = state.workspaceSession.tabsByWorktree[WORKTREE]![0]!
+    state.workspaceSession.tabsByWorktree[WORKTREE] = [
+      { ...tab, shellOverride: 'wsl.exe', forceHostRuntime: true }
+    ]
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { manifest } = exportWslMoveManifest(storeFor(state), REQUEST)
+    const moved = Object.values(
+      manifest.payload.dormantState?.workspaceSession?.tabsByWorktree ?? {}
+    )
+    expect(moved.flat()).toHaveLength(1)
+    expect(moved.flat()[0]).not.toHaveProperty('shellOverride')
+    expect(warn).not.toHaveBeenCalled()
+    warn.mockRestore()
   })
 
   it('refuses to sign a scope naming a project that is no longer here', () => {

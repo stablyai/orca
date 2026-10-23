@@ -106,12 +106,34 @@ describe('WSL move renderer store rewrites', () => {
     expect(client.record).not.toHaveBeenCalled()
   })
 
-  it('never throws when the move list is unavailable', async () => {
-    client.list.mockRejectedValue(new Error('no bridge'))
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    await expect((await loadRunner()).runWslMoveRendererStoreRewrites()).resolves.toBeUndefined()
-    expect(warn).toHaveBeenCalled()
-    warn.mockRestore()
+  it('never throws when the move list is unavailable, and asks again later', async () => {
+    vi.useFakeTimers()
+    try {
+      client.list.mockRejectedValueOnce(new Error('main not ready')).mockResolvedValue([])
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      await expect((await loadRunner()).runWslMoveRendererStoreRewrites()).resolves.toBeUndefined()
+      expect(warn).toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(2_000)
+      expect(client.list).toHaveBeenCalledTimes(2)
+      await vi.advanceTimersByTimeAsync(120_000)
+      expect(client.list).toHaveBeenCalledTimes(2)
+      warn.mockRestore()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not retry a record another window was refused', async () => {
+    vi.useFakeTimers()
+    try {
+      client.list.mockResolvedValue([move({ storeIds: ['quick-open-history'] })])
+      client.record.mockResolvedValue({ recorded: false, reason: 'not-main-window' })
+      await (await loadRunner()).runWslMoveRendererStoreRewrites()
+      await vi.advanceTimersByTimeAsync(120_000)
+      expect(client.record).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('adds a host copy beside each moved entry, then records every store', async () => {
@@ -132,6 +154,28 @@ describe('WSL move renderer store rewrites', () => {
     expect(client.record.mock.calls).toEqual(
       WSL_MOVE_RENDERER_REWRITE_STORE_IDS.map((id) => ['move-1', id])
     )
+  })
+
+  it('retries a store main refused to record instead of leaving the move stuck', async () => {
+    // On awin the marker landed but the ledger entry never did, so every later move was refused.
+    vi.useFakeTimers()
+    try {
+      seedStorage()
+      client.list.mockResolvedValue([move({ storeIds: ['quick-open-history'] })])
+      client.record.mockResolvedValueOnce({ recorded: false, reason: 'gated-off' })
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      await (await loadRunner()).runWslMoveRendererStoreRewrites()
+      expect(client.record).toHaveBeenCalledTimes(1)
+      await vi.advanceTimersByTimeAsync(2_000)
+      expect(client.record).toHaveBeenCalledTimes(2)
+      expect(client.record).toHaveBeenLastCalledWith('move-1', 'quick-open-history')
+      // Recorded now: no further retry.
+      await vi.advanceTimersByTimeAsync(120_000)
+      expect(client.record).toHaveBeenCalledTimes(2)
+      warn.mockRestore()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('does not re-apply a landed store after a reload, but still records it if pending', async () => {

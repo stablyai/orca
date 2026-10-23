@@ -63,11 +63,19 @@ export function collectOrcadMigrationSourceWorkspaceSession(
   source: OrcadMigrationManifestSource,
   catalog: OrcadMigrationCatalogPayload,
   storage?: TerminalScrollbackSnapshotStorage,
-  leaveBehind = false
+  leaveBehind = false,
+  sleptLeafScrollback?: (tabId: string, leafId: string) => Buffer | null
 ): OrcadMigrationSourceWorkspaceSessionInspection {
   let collected: OrcadMigrationSourceWorkspaceSessionInspection
   try {
-    collected = collectWorkspaceSession(state, source, catalog, storage, leaveBehind)
+    collected = collectWorkspaceSession(
+      state,
+      source,
+      catalog,
+      storage,
+      leaveBehind,
+      sleptLeafScrollback
+    )
   } catch (error) {
     console.warn('[migration] Unreadable workspace session blocks the move:', error)
     collected = {
@@ -98,7 +106,8 @@ function collectWorkspaceSession(
   source: OrcadMigrationManifestSource,
   catalog: OrcadMigrationCatalogPayload,
   storage: TerminalScrollbackSnapshotStorage | undefined,
-  leaveBehind: boolean
+  leaveBehind: boolean,
+  sleptLeafScrollback: ((tabId: string, leafId: string) => Buffer | null) | undefined
 ): OrcadMigrationSourceWorkspaceSessionInspection {
   const sourceScope = createOrcadMigrationExportScope({ source, catalog, repos: state.repos })
   const fragments: SessionFragment[] = []
@@ -176,7 +185,8 @@ function collectWorkspaceSession(
       const projected = projectOrcadMigrationSessionScrollback(
         projectSessionToDestination(fragment, scope),
         storage,
-        leaveBehind
+        leaveBehind,
+        sleptLeafScrollback
       )
       blockedItems.push(...projected.blockedItems)
       leftBehindItems.push(...projected.leftBehindItems)

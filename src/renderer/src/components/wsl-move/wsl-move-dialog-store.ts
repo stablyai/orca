@@ -15,6 +15,8 @@ import type {
   WslMoveUnfinished
 } from '../../../../shared/wsl-move/wsl-move-driver-types'
 import type { LazyChunkRecoveryReloadOutcome } from '@/lib/lazy-chunk-recovery-reload'
+import { useAppStore } from '@/store'
+import { collectWslMoveSleptPaneBindings } from './wsl-move-slept-pane-bindings'
 
 /** Projects listed with a checkbox; from main's whole-distro preview, or the catalog fallback. */
 export type WslMoveCandidates = { repoIds: string[]; folderWorkspaceIds: string[] }
@@ -114,7 +116,10 @@ function refusedPreview(detail: string): WslMovePreview {
 
 async function previewOf(request: WslMoveRequest): Promise<WslMovePreview> {
   try {
-    return await window.api.wslMove.preview(request)
+    return await window.api.wslMove.preview({
+      ...request,
+      sleptPanes: collectWslMoveSleptPaneBindings(useAppStore.getState())
+    })
   } catch (error) {
     console.warn('[wsl-move] Preview failed:', error)
     return refusedPreview('preview-failed')
@@ -244,7 +249,10 @@ export async function startWslMove(): Promise<void> {
   })
   let result: WslMoveResult
   try {
-    result = await window.api.wslMove.start(requestOf(distro, selected))
+    result = await window.api.wslMove.start({
+      ...requestOf(distro, selected),
+      sleptPanes: collectWslMoveSleptPaneBindings(useAppStore.getState())
+    })
   } catch (error) {
     // The IPC itself failed; main's own failures arrive as results.
     console.warn('[wsl-move] Start failed:', error)

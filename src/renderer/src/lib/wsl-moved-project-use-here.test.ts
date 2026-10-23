@@ -5,8 +5,10 @@ import type {
   WslMoveUseLocallyResult
 } from '../../../shared/wsl-move/wsl-moved-project'
 
-const toastError = vi.hoisted(() => vi.fn())
-vi.mock('sonner', () => ({ toast: { error: toastError } }))
+const movedProjects = vi.hoisted((): { kind: string; id: string; displayName: string }[] => [])
+vi.mock('@/store', () => ({
+  useAppStore: { getState: () => ({ wslMovedProjects: movedProjects }) }
+}))
 
 const { bringWslMovedProjectBack } = await import('./wsl-moved-project-use-here')
 
@@ -22,6 +24,16 @@ function stubApi(result: WslMoveUseLocallyResult): ReturnType<typeof vi.fn> {
   const useProjectHereAgain = vi.fn(async () => result)
   vi.stubGlobal('window', { api: { wslMove: { useProjectHereAgain } } })
   return useProjectHereAgain
+}
+
+/** Confirms, then returns the refusal notice: a dialog that only acknowledges. */
+async function refusalShown(): Promise<string | undefined> {
+  const confirm = vi.fn(async (_options: ConfirmationDialogOptions) => true)
+  await bringWslMovedProjectBack(project, confirm)
+  // awin verify-4: a toast for this sat behind the update notice, so nothing seemed to happen.
+  expect(confirm).toHaveBeenCalledTimes(2)
+  expect(confirm.mock.calls[1]?.[0]).toMatchObject({ acknowledgeOnly: true })
+  return confirm.mock.calls[1]?.[0]?.description
 }
 
 describe('bringWslMovedProjectBack', () => {
@@ -53,21 +65,37 @@ describe('bringWslMovedProjectBack', () => {
       repoIds: ['repo-1'],
       folderWorkspaceIds: []
     })
-    await bringWslMovedProjectBack(project, async () => true)
+    const confirm = vi.fn(async (_options: ConfirmationDialogOptions) => true)
+    await bringWslMovedProjectBack(project, confirm)
     expect(call).toHaveBeenCalledWith({ kind: 'repo', id: 'repo-1' })
-    expect(toastError).not.toHaveBeenCalled()
+    expect(confirm).toHaveBeenCalledTimes(1)
   })
 
   it('explains a refusal', async () => {
     stubApi({ released: false, reason: 'superseded' })
-    await bringWslMovedProjectBack(project, async () => true)
-    expect(toastError).toHaveBeenCalledWith(expect.stringContaining('A later move'))
+    expect(await refusalShown()).toEqual(expect.stringContaining('A later move'))
+  })
+
+  it('names the newer move to bring back first', async () => {
+    // awin verify-3: undoing an older move said nothing about which newer one blocked it.
+    movedProjects.splice(0, movedProjects.length, {
+      kind: 'repo',
+      id: 'repo-9',
+      displayName: 'Repo 9'
+    })
+    stubApi({
+      released: false,
+      reason: 'superseded',
+      newerMove: { repoIds: ['repo-9'], folderWorkspaceIds: [] }
+    })
+    expect(await refusalShown()).toBe(
+      'Repo 9 moved to the Ubuntu host after this project. Use those on this computer again first, then this project.'
+    )
   })
 
   it('asks to wait while a move of the distro still runs', async () => {
     stubApi({ released: false, reason: 'move-running' })
-    await bringWslMovedProjectBack(project, async () => true)
-    expect(toastError).toHaveBeenCalledWith(
+    expect(await refusalShown()).toBe(
       'A move to the Ubuntu host is still running. Try again once it ends.'
     )
   })

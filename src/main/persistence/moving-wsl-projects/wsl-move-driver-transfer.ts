@@ -30,6 +30,19 @@ export function advanceWslMove(
   return next
 }
 
+/** The move's bytes as progress shows them: the terminal history sent while staging, then the blobs. */
+export function wslMoveCopyBytes(
+  quiesced: Pick<WslMoveCutover, 'manifest'>,
+  blobs: readonly Pick<OrcadMigrationBlobDescriptor, 'byteLength'>[]
+): { snapshotBytes: number; bytesTotal: number } {
+  const snapshots = quiesced.manifest.payload.dormantState?.terminalScrollbackSnapshots ?? []
+  const snapshotBytes = snapshots.reduce((sum, snapshot) => sum + snapshot.byteLength, 0)
+  return {
+    snapshotBytes,
+    bytesTotal: snapshotBytes + blobs.reduce((sum, blob) => sum + blob.byteLength, 0)
+  }
+}
+
 export async function stageWslMove(
   deps: TransferDeps,
   host: WslMoveHost,

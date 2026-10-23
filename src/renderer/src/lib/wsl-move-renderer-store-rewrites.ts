@@ -82,8 +82,14 @@ function writeAppliedMarker(marker: string): void {
   }
 }
 
-async function rewriteMove(move: WslMovePendingRendererRewrite): Promise<void> {
+// Main's refusals a later call can clear. Another window (`not-main-window`) never becomes the main
+// one, and the rest mean the store is no longer pending.
+const RETRYABLE_RECORD_REASONS: ReadonlySet<string> = new Set(['gated-off', 'failed'])
+
+/** True when a store's ledger entry still has to land: the move stays unfinished until it does. */
+async function rewriteMove(move: WslMovePendingRendererRewrite): Promise<boolean> {
   const scope = wslMoveRendererRewriteScope(move)
+  let unrecorded = false
   for (const storeId of WSL_MOVE_RENDERER_REWRITE_STORE_IDS) {
     const marker = `${move.migrationId}:${storeId}`
     try {
@@ -92,32 +98,56 @@ async function rewriteMove(move: WslMovePendingRendererRewrite): Promise<void> {
         writeAppliedMarker(marker)
       }
       if (move.storeIds.includes(storeId)) {
-        await recordWslMoveRendererStoreRewritten(move.migrationId, storeId)
+        const result = await recordWslMoveRendererStoreRewritten(move.migrationId, storeId)
+        if (!result.recorded && RETRYABLE_RECORD_REASONS.has(result.reason)) {
+          // A refused record left the move stuck until the next app start (D1b-10 run).
+          console.warn(`[wsl-move] Renderer rewrite ${storeId} not recorded: ${result.reason}`)
+          unrecorded = true
+        }
       }
     } catch (error) {
       // No marker and no ledger entry: the next startup tries this store again.
       console.warn(`[wsl-move] Renderer rewrite ${storeId} of ${move.migrationId} paused:`, error)
+      unrecorded = true
     }
   }
+  return unrecorded
 }
 
 let inFlight: Promise<void> | null = null
+// Backoff for a pass that left a store unrecorded; past the last, the next startup tries again.
+const RETRY_DELAYS_MS = [2_000, 5_000, 15_000, 30_000, 60_000]
+let retryTimer: ReturnType<typeof setTimeout> | null = null
 
 /** Never throws; a second call while one runs joins it, so no store is applied twice at once. */
-export function runWslMoveRendererStoreRewrites(): Promise<void> {
-  inFlight ??= rewritePendingMoves().finally(() => {
-    inFlight = null
-  })
+export function runWslMoveRendererStoreRewrites(attempt = 0): Promise<void> {
+  inFlight ??= rewritePendingMoves()
+    .then((unrecorded) => {
+      const delay = RETRY_DELAYS_MS[attempt]
+      if (unrecorded && delay !== undefined && retryTimer === null) {
+        retryTimer = setTimeout(() => {
+          retryTimer = null
+          void runWslMoveRendererStoreRewrites(attempt + 1)
+        }, delay)
+      }
+    })
+    .finally(() => {
+      inFlight = null
+    })
   return inFlight
 }
 
-async function rewritePendingMoves(): Promise<void> {
+async function rewritePendingMoves(): Promise<boolean> {
+  let unrecorded = false
   try {
     const moves = await listPendingWslMoveRendererRewrites()
     for (const move of moves) {
-      await rewriteMove(move)
+      unrecorded = (await rewriteMove(move)) || unrecorded
     }
   } catch (error) {
+    // Transient (main not ready yet); the backoff bounds a bridge that never answers.
     console.warn('[wsl-move] Could not list renderer rewrites:', error)
+    unrecorded = true
   }
+  return unrecorded
 }

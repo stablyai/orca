@@ -25,7 +25,7 @@ export type WslMoveRestoreHintCapture = {
   staleCwdPaneKeys: string[]
 }
 
-type ColdRestoreReader = {
+export type ColdRestoreReader = {
   detectColdRestoreState: (
     sessionId: string,
     opts?: { ignoreCleanEnd?: boolean; wslDistro?: string }

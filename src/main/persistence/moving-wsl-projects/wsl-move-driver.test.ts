@@ -183,6 +183,61 @@ describe('moveProjectsToWslHost', () => {
     expect(journal()).toEqual([])
   })
 
+  it('says why when the manifest it signed is not what the journal reads back', async () => {
+    // What the awin run saw as a bare "everything was put back": no journal, no reason.
+    world.exportOverride = (exported, call) =>
+      call === 2
+        ? { ...exported, manifest: { ...exported.manifest, manifestSha256: '0'.repeat(64) } }
+        : exported
+    const result = await moveProjectsToWslHost(world.deps, request)
+
+    expect(result).toMatchObject({ outcome: 'refused', code: 'wsl_move_export_incomplete' })
+    expect(result.outcome === 'refused' && result.reasons?.[0]).toMatch(/digest_mismatch/)
+    expect(journal()).toEqual([])
+  })
+
+  it("refuses rather than move a slept pane whose history it can't fully read", async () => {
+    const dispose = vi.fn()
+    const sleptPanes = [{ paneKey: 't1:leaf', sessionId: 'w@@slept' }]
+    let reported: unknown
+    world.deps.sleptScrollback = async (_panes, _distro, _id, _workspaces, fromWindow) => {
+      reported = fromWindow
+      return {
+        buffers: new Map(),
+        problems: ['saved terminal history Orca could not fully read for tab t1'],
+        dispose
+      }
+    }
+    const result = await moveProjectsToWslHost(world.deps, { ...request, sleptPanes })
+
+    expect(result).toMatchObject({
+      outcome: 'refused',
+      code: 'wsl_move_export_incomplete',
+      reasons: ['saved terminal history Orca could not fully read for tab t1']
+    })
+    expect(journal()).toEqual([])
+    expect(dispose).toHaveBeenCalledTimes(1)
+    // The window's bindings of panes slept earlier reach the reader.
+    expect(reported).toEqual(sleptPanes)
+  })
+
+  it("says in the preview that a slept pane's history can't be read", async () => {
+    // awin verify-4: only Start refused; the preview showed the move as ready.
+    const dispose = vi.fn()
+    world.deps.sleptScrollback = async () => ({
+      buffers: new Map(),
+      problems: ['saved terminal history Orca could not fully read for the tab "build"'],
+      dispose
+    })
+    expect(await previewWslMove(world.deps, request)).toMatchObject({
+      outcome: 'refused',
+      code: 'wsl_move_export_incomplete',
+      reasons: ['saved terminal history Orca could not fully read for the tab "build"']
+    })
+    expect(dispose).toHaveBeenCalledTimes(1)
+    expect(journal()).toEqual([])
+  })
+
   it('refuses a second move of the same distro while one runs', async () => {
     let release: () => void = () => {}
     const sleep = world.deps.quiesce.sleepWorkspaces

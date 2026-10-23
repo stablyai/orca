@@ -50,6 +50,8 @@ type HostScrollbackLeaf = { leafId: string; ref: string }
 type HostScrollbackPlan = {
   environmentId: string
   leaves: HostScrollbackLeaf[]
+  /** Undefined until this client has a fresh status for the host; the read waits for one. */
+  supported: boolean | undefined
 }
 type FetchedHostScrollbackLeaf = HostScrollbackLeaf & { buffer: string | null }
 
@@ -104,7 +106,7 @@ const settledKeys = new Set<string>()
 // Why: a known local copy needs no further stat IPC on remount.
 const localSnapshotRefs = new Set<string>()
 const inFlightByTabId = new Map<string, Promise<void>>()
-const warmingEnvironmentIds = new Set<string>()
+const warmingByEnvironmentId = new Map<string, Promise<void>>()
 
 function attemptKey(environmentId: string, tabId: string, ref: string): string {
   return `${environmentId}\0${tabId}\0${ref}`
@@ -121,15 +123,23 @@ function hasLocalSnapshotCached(ref: string, deps: HostTerminalScrollbackHydrati
   return true
 }
 
-function warmCapability(environmentId: string, deps: HostTerminalScrollbackHydrationDeps): void {
-  if (warmingEnvironmentIds.has(environmentId)) {
-    return
+function warmCapability(
+  environmentId: string,
+  deps: HostTerminalScrollbackHydrationDeps
+): Promise<void> {
+  const warming = warmingByEnvironmentId.get(environmentId)
+  if (warming) {
+    return warming
   }
-  warmingEnvironmentIds.add(environmentId)
-  void Promise.resolve()
+  const pending = Promise.resolve()
     .then(() => deps.warmHostSupportsRead(environmentId))
-    .catch(() => {})
-    .finally(() => warmingEnvironmentIds.delete(environmentId))
+    .then(
+      () => {},
+      () => {}
+    )
+    .finally(() => warmingByEnvironmentId.delete(environmentId))
+  warmingByEnvironmentId.set(environmentId, pending)
+  return pending
 }
 
 function planHostScrollbackHydration(
@@ -162,13 +172,11 @@ function planHostScrollbackHydration(
   if (leaves.length === 0) {
     return null
   }
-  // Why: holding on an unknown host would cost every mount a status round trip; mount now and
-  // learn the answer in the background so later mounts can hold.
+  // Why hold on an unknown host too: mount is the only replay, so a pane that mounts before the
+  // status answers (a moved tab opened a minute after the last probe) opens empty for good.
+  // Only a pane with a ref and no local copy gets here, and a definite answer settles it.
   const supported = deps.peekHostSupportsRead(environmentId)
-  if (supported === undefined) {
-    warmCapability(environmentId, deps)
-  }
-  return supported === true ? { environmentId, leaves } : null
+  return supported === false ? null : { environmentId, leaves, supported }
 }
 
 async function readLeaf(
@@ -201,6 +209,12 @@ async function fetchHostScrollback(
   const deadline = setTimeout(() => controller.abort(), HOST_TERMINAL_SCROLLBACK_HOLD_MS)
   let fetched: FetchedHostScrollbackLeaf[]
   try {
+    if (plan.supported === undefined) {
+      await warmCapability(plan.environmentId, deps)
+      if (controller.signal.aborted || deps.peekHostSupportsRead(plan.environmentId) !== true) {
+        return
+      }
+    }
     fetched = await Promise.all(
       plan.leaves.map((leaf) =>
         readLeaf(tabId, worktreeId, plan.environmentId, leaf, controller.signal, deps)
@@ -238,7 +252,7 @@ async function fetchHostScrollback(
 /**
  * Starts reading a host-run tab's stored scrollback from its host when this client has no copy,
  * so the pane paints its history after a move deleted (or a web client never had) the local one.
- * Decides synchronously and holds only for a host already known to serve the read; returns null
+ * Decides synchronously and holds unless the host is known not to serve the read; returns null
  * when there is nothing to fetch. The promise never rejects and settles by the hold bound.
  */
 export function startHostTerminalScrollbackHydration(
@@ -265,5 +279,5 @@ export function resetHostTerminalScrollbackHydrationForTests(): void {
   settledKeys.clear()
   localSnapshotRefs.clear()
   inFlightByTabId.clear()
-  warmingEnvironmentIds.clear()
+  warmingByEnvironmentId.clear()
 }
