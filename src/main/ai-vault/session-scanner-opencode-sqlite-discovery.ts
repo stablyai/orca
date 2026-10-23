@@ -4,6 +4,7 @@ import { discoverFiles } from './session-scanner-discovery'
 import { splitOpenCodeSqliteCandidate } from './session-scanner-opencode-sqlite-paths'
 import { listOpenCodeSqliteSessionsViaWorker } from './session-scanner-opencode-sqlite-worker-spawn'
 import type { FileWithMtime, SessionFileDiscovery } from './session-scanner-types'
+import { scopeWalksAgentFiles } from './session-scope-cwd'
 
 // Why: keep the SQLite discovery + dedup layer separate from the parser so
 // each file stays under the max-lines lint rule and the discovery layer can
@@ -40,56 +41,58 @@ export async function discoverOpenCodeSessions(args: {
   dbPaths: readonly string[]
   limitPerAgent: number
   issues: AiVaultScanIssue[]
+  scopePaths?: readonly string[]
   signal?: AbortSignal
 }): Promise<SessionFileDiscovery> {
-  const [fileDiscovery, sqliteCandidates] = await Promise.all([
+  const walksScope = scopeWalksAgentFiles('opencode', args.scopePaths)
+  // Why (#8864): the SQLite list leg runs on a worker thread; only this leg
+  // moves off the main thread, the filesystem scan stays inline.
+  const listSqlite = (scopePaths?: readonly string[]) =>
+    listOpenCodeSqliteSessionsViaWorker({
+      dbPaths: args.dbPaths,
+      limit: args.limitPerAgent,
+      issues: args.issues,
+      scopePaths,
+      signal: args.signal
+    })
+  const [fileDiscovery, sqliteCandidates, sqliteScopeCandidates] = await Promise.all([
     discoverFiles({
       rootDir: join(args.storageDir, 'session'),
       limit: args.limitPerAgent,
       agent: 'opencode',
       issues: args.issues,
-      extensions: ['.json']
-    }),
-    // Why (#8864): the SQLite list leg runs on a worker thread; only this leg
-    // moves off the main thread, the filesystem scan stays inline.
-    listOpenCodeSqliteSessionsViaWorker({
-      dbPaths: args.dbPaths,
-      limit: args.limitPerAgent,
-      issues: args.issues,
+      extensions: ['.json'],
+      keepScopeFiles: walksScope,
       signal: args.signal
-    })
+    }),
+    listSqlite(),
+    walksScope ? listSqlite(args.scopePaths) : undefined
   ])
 
   const sqliteFiles = sqliteCandidates.map((c) => c.file)
+  const sqliteScopeFiles = sqliteScopeCandidates?.map((c) => c.file)
   // Why: on mixed installs the same OpenCode session may appear once via the
   // SQLite DB and once via a stale legacy JSON file. SQLite is the source of
   // truth on 1.17.x, so drop file-based duplicates when a SQLite entry with
   // the same sessionId already exists. Deduping at the file level also avoids
   // parsing the same session twice.
-  if (sqliteFiles.length === 0) {
-    return {
-      agent: 'opencode' as const,
-      rootDir: fileDiscovery.rootDir,
-      files: fileDiscovery.files
-    }
-  }
   const sqliteSessionIds = new Set<string>()
-  for (const file of sqliteFiles) {
+  for (const file of [...sqliteFiles, ...(sqliteScopeFiles ?? [])]) {
     const parsed = splitOpenCodeSqliteCandidate(file.path)
     if (parsed) {
       sqliteSessionIds.add(parsed.sessionId)
     }
   }
-  const dedupedFileDiscovery: FileWithMtime[] = []
-  for (const file of fileDiscovery.files) {
-    if (!sqliteSessionIds.has(sessionIdFromLegacyFilePath(file.path))) {
-      dedupedFileDiscovery.push(file)
-    }
-  }
+  const withoutSqliteDuplicates = (files: readonly FileWithMtime[]): FileWithMtime[] =>
+    files.filter((file) => !sqliteSessionIds.has(sessionIdFromLegacyFilePath(file.path)))
+  const scopeFiles = walksScope
+    ? [...withoutSqliteDuplicates(fileDiscovery.scopeFiles ?? []), ...(sqliteScopeFiles ?? [])]
+    : undefined
 
   return {
     agent: 'opencode' as const,
     rootDir: fileDiscovery.rootDir,
-    files: [...dedupedFileDiscovery, ...sqliteFiles]
+    files: [...withoutSqliteDuplicates(fileDiscovery.files), ...sqliteFiles],
+    ...(scopeFiles ? { scopeFiles } : {})
   }
 }

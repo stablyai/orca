@@ -7,8 +7,14 @@ import ts from 'typescript-api'
 const require = createRequire(import.meta.url)
 const editorEntry = require.resolve('monaco-editor/esm/vs/editor/editor.main.js')
 export const associationsPath = fileURLToPath(
-  new URL('../../src/renderer/src/lib/monaco-language-associations.json', import.meta.url)
+  new URL('../../src/shared/editor-language/monaco-language-associations.json', import.meta.url)
 )
+
+// Monaco omits common Ruby task, template and configuration files.
+const rubyAssociations = {
+  extensions: ['.rake', '.ru', '.jbuilder', '.thor'],
+  filenames: ['Guardfile', 'Capfile', 'Podfile', 'Brewfile', 'Vagrantfile']
+}
 
 // Read registration metadata without importing Monaco or executing its grammar loaders.
 export function readMonacoAssociations() {
@@ -61,6 +67,12 @@ export function readMonacoAssociations() {
         }
         if (!metadata.id) {
           throw new Error(`Missing language id in ${file}`)
+        }
+        if (metadata.id === 'ruby') {
+          metadata.extensions = [
+            ...new Set([...metadata.extensions, ...rubyAssociations.extensions])
+          ]
+          metadata.filenames = [...new Set([...metadata.filenames, ...rubyAssociations.filenames])]
         }
         registrations.push(metadata)
       }

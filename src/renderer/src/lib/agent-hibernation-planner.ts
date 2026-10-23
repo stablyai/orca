@@ -1,4 +1,5 @@
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import {
   getEligiblePane,
@@ -117,6 +118,10 @@ export function planAgentHibernationCandidates(
     // worktree on top of that parked nothing in the tree a user actually works in — where a 16 GB
     // host accumulates its idle agents (#16211).
     if (!worktreeId || tabs.length === 0) {
+      continue
+    }
+    // Floating terminals stay running when idle; the user must not need a hibernation resume.
+    if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
       continue
     }
     if (

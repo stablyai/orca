@@ -19,7 +19,6 @@ import {
 } from './worktree-host-ownership'
 import { fetchKnownSshWorktreesForRepo } from './known-ssh-worktree-fetch'
 import { notifyRuntimeScopeForbiddenIfNeeded } from './runtime-scope-forbidden-toast'
-import { settingsForRepoOwner } from './worktree-owner-settings'
 
 export function createFetchDetectedWorktrees(
   set: WorktreeSliceSet,
@@ -46,18 +45,14 @@ export function createFetchDetectedWorktrees(
         await fetchKnownSshWorktreesForRepo(set, repoId, parsedHost.id)
         return null
       }
-      const refresh = await listDetectedWorktreesForRepoCoalesced(
-        settingsForRepoOwner(ownerState, repoId, hostId),
-        repoId,
-        {
-          executionHostId: hostId,
-          directSshAuthority,
-          connectionId: repoOwner?.connectionId,
-          knownWorktreeIds: getKnownWorktreeIdsForPurge(ownerState, repoId, hostId),
-          isStaleCatalogPublication: (result) =>
-            isStaleWorktreeCatalogPublication(get(), repoId, hostId, result.catalogVersion)
-        }
-      )
+      const refresh = await listDetectedWorktreesForRepoCoalesced(repoId, {
+        executionHostId: hostId,
+        directSshAuthority,
+        connectionId: repoOwner?.connectionId,
+        knownWorktreeIds: getKnownWorktreeIdsForPurge(ownerState, repoId, hostId),
+        isStaleCatalogPublication: (result) =>
+          isStaleWorktreeCatalogPublication(get(), repoId, hostId, result.catalogVersion)
+      })
       if (refresh.status !== 'admitted') {
         return null
       }

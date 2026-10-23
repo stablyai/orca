@@ -2,6 +2,8 @@
 // a store of its own or ingested by a real hook server.
 
 import { expect } from 'vitest'
+import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
 import { createAgentChildWorkAdmission } from '../../shared/agent-status-child-work-admission'
 import type { AgentChildWorkRecord } from '../../shared/agent-status-child-work'
 import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
@@ -70,7 +72,9 @@ export function toolResult(
   })
 }
 
-type Delivery = { kind: 'journal' | 'legacy' | 'evidence'; detail: string }
+type Delivery = { kind: 'journal' | 'publish' | 'evidence'; detail: string }
+
+export type JournaledItem = Pick<AgentJournalRenderItem, 'itemId' | 'body' | 'sequence' | 'agentId'>
 
 /** The host clock the adapter stamps evidence with; a replay moves it to each frame's time. */
 export const T0 = 1_700_000_000_500
@@ -125,8 +129,6 @@ export async function producer(host?: AgentHookServer) {
     readProcessStartTime: async () => 1_700_000_000_000,
     now: () => clock,
     persistHandle: async () => {},
-    onBackgroundTasksChanged: (_sessionId, state) =>
-      deliveries.push({ kind: 'legacy', detail: String(state?.tasks?.length ?? 0) }),
     onChildWorkEvidence: (sessionId, evidence) => {
       expect(sessionId).toBe('session-1')
       deliveries.push({ kind: 'evidence', detail: evidence.map((edge) => edge.type).join(',') })
@@ -138,15 +140,25 @@ export async function producer(host?: AgentHookServer) {
       }
     }
   })
+  /** What the adapter journaled, keyed by identity in first-write order, as the journal folds it. */
+  const journalItems = new Map<string, JournaledItem>()
   const journal: StructuredAgentSessionEventSink = {
-    appendItem: (identity, _body, options) => {
+    appendItem: (identity, body, options) => {
       deliveries.push({ kind: 'journal', detail: JSON.stringify(identity) })
+      const itemId = agentJournalItemKey(identity)
+      journalItems.set(itemId, {
+        itemId,
+        body,
+        sequence: journalItems.get(itemId)?.sequence ?? journalItems.size + 1,
+        ...(options?.agentId ? { agentId: options.agentId } : {})
+      })
       if (options?.agentId !== undefined) {
         stamps.push(options)
       }
     },
     appendTombstone: () => {},
-    publish: () => {}
+    // Production's journal publication is what republishes the parent's own row.
+    publish: () => deliveries.push({ kind: 'publish', detail: '' })
   }
   await adapter.acquire({
     identity: identityFor(),
@@ -170,5 +182,19 @@ export async function producer(host?: AgentHookServer) {
     host ? host.getStructuredChildWork(parent) : store.getChildren(parent)
   const byDescription = (description: string) =>
     records().find((record) => record.description === description)
-  return { adapter, store, send, replay, records, byDescription, evidenceLog, stamps, ingested }
+  return {
+    adapter,
+    claude,
+    /** The host clock the replay has reached. */
+    now: () => clock,
+    store,
+    send,
+    replay,
+    records,
+    byDescription,
+    evidenceLog,
+    stamps,
+    ingested,
+    journalItems
+  }
 }

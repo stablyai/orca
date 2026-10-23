@@ -37,7 +37,6 @@ type MobileCreateTestNotifier = {
   renameTerminal: TestMock
   closeTerminal: (tabId: string, leafId?: string) => void
   closeSessionTab: TestMock
-  sleepWorktree: TestMock
   terminalFitOverrideChanged: TestMock
   terminalDriverChanged: TestMock
 }
@@ -216,7 +215,9 @@ function makePostRevealWorkerRecoveryHarness(
     undefined,
     { canRecoverPersistentLocalPtys: () => true }
   )
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This recovery fixture reaches only the listed planner, terminal settlement and authority lookup methods.
   runtime.setOrchestrationDb({
+    reconcileMissingWorkerTerminal: vi.fn(),
     getActiveDispatchForTerminal: () => undefined,
     listLegacyWorkerTerminalRecoveryRows: () => [
       {
@@ -340,20 +341,23 @@ function createMobileCreateTestNotifier(
     renameTerminal: vi.fn(),
     closeTerminal,
     closeSessionTab: vi.fn(),
-    sleepWorktree: vi.fn(),
     terminalFitOverrideChanged: vi.fn(),
     terminalDriverChanged: vi.fn()
   }
 }
 
-function createWorktreeRemovalRuntime(runtimeStore: unknown = store): RuntimeService {
+function createWorktreeRemovalRuntime(
+  runtimeStore: unknown = store,
+  deps: ConstructorParameters<typeof OrcaRuntimeService>[2] = {}
+): RuntimeService {
   const emptyPtyProvider = {
     listProcesses: vi.fn(async () => []),
     shutdown: vi.fn(async () => {})
   }
   return new OrcaRuntimeService(runtimeStore as never, undefined, {
-    getLocalProvider: () => emptyPtyProvider as never,
-    getSshProvider: () => emptyPtyProvider as never
+    ...deps,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: removal sweeps call only listProcesses and shutdown.
+    getLocalProvider: () => emptyPtyProvider as never
   })
 }
 
@@ -437,13 +441,16 @@ async function reconcileWithToken(runtime: RuntimeService, token: string): Promi
     fetchPromise: Promise.resolve({ ok: true })
   })
 }
-function createSideEffectRuntime(): {
+function createSideEffectRuntime(
+  checkHookAgentPresence?: (paneKey: string) => Promise<'live' | 'unverifiable' | 'exited' | null>
+): {
   runtime: RuntimeService
   batches: TerminalSideEffectBatch[]
 } {
   const batches: TerminalSideEffectBatch[] = []
   const runtime = new OrcaRuntimeService(store, undefined, {
-    onTerminalSideEffects: (batch) => batches.push(batch)
+    onTerminalSideEffects: (batch) => batches.push(batch),
+    checkHookAgentPresence
   })
   return { runtime, batches }
 }

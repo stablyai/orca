@@ -17,6 +17,7 @@ import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
 import {
   interruptedRestart,
+  QUIT_CUT_NOTICE,
   statusNotes
 } from './structured-agent-session-restart-interruption-test-harness'
 import { CALLER, envelope } from './structured-agent-session-host-test-harness'
@@ -29,6 +30,7 @@ import {
   HOST_TEST_SESSION as SESSION,
   hostTestMessage
 } from './structured-agent-session-host-test-data'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 afterEach(() => vi.restoreAllMocks())
 
@@ -384,8 +386,8 @@ it("refuses an automatic continuation when the user's message was accepted first
   expect(result.continued).toMatchObject([{ outcome: 'refused', reason: SUPERSEDED }])
   await vi.waitFor(() => expect(dispatch).toHaveBeenCalledOnce(), COLD_START)
   expect(sentTexts(dispatch)).toEqual(['A new request'])
-  // Nothing the user did failed: no row reached the reader, and nothing is kept.
-  expect(await statusNotes(host)).toEqual([])
+  // Nothing the user did failed: no row but the quit's own about the cut, and nothing is kept.
+  expect(await statusNotes(host)).toEqual([QUIT_CUT_NOTICE])
   expect(
     events.some(
       (event) =>
@@ -450,6 +452,7 @@ describe('reading the chat against where the offer was taken', () => {
       }
     }
     const withdrawal = createStructuredAgentSessionRestartOfferWithdrawal({
+      logger: createStructuredAgentSessionLogger(),
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fact reads only the journal's cursor and submissions and the child fields given here.
       sessions: new Map([[SESSION, session as never]]),
       now: () => NOW,
@@ -527,6 +530,7 @@ describe('reading the chat against where the offer was taken', () => {
         }
       }
       const withdrawal = createStructuredAgentSessionRestartOfferWithdrawal({
+        logger: createStructuredAgentSessionLogger(),
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fact reads only the journal's cursor and submissions and the child fields given here.
         sessions: new Map([[SESSION, session as never]]),
         now: () => afterCrash,

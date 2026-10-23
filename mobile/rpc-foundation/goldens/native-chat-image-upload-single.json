@@ -4,13 +4,23 @@
   "family": "nativeChat.image-upload",
   "namedDeltas": [],
   "values": {
-    "5c7ed03288e6": {
+    "0d87f193fb59": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": [
+        {
+          "path": "/tmp/img-1.png",
+          "previewUri": "file:///a.png"
+        }
+      ]
+    },
+    "15d714ff61ff": {
       "failure": {
         "$rpc": "null"
       },
       "uploaded": [
         {
-          "contentFingerprint": "f75f583c67e2aaf12284c94d09b56e3caa9d7b93b71565d2fd3e09ef635cef8d",
           "path": "/tmp/img-1.png",
           "previewUri": "file:///a.png"
         }
@@ -71,17 +81,13 @@
       "ordinal": 1,
       "value": {}
     },
-    "9a61808dee44": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": [
-        {
-          "contentFingerprint": "f75f583c67e2aaf12284c94d09b56e3caa9d7b93b71565d2fd3e09ef635cef8d",
-          "path": "/tmp/img-1.png",
-          "previewUri": "file:///a.png"
-        }
-      ]
+    "dd123d00d140": {
+      "name": "image-uploaded",
+      "ordinal": 8,
+      "value": {
+        "path": "/tmp/img-1.png",
+        "previewUri": "file:///a.png"
+      }
     },
     "ec8f73d25f26": {
       "name": "clipboard.commitImageUpload#1",
@@ -150,15 +156,6 @@
           }
         }
       }
-    },
-    "f4c66fc96af9": {
-      "name": "image-uploaded",
-      "ordinal": 8,
-      "value": {
-        "contentFingerprint": "f75f583c67e2aaf12284c94d09b56e3caa9d7b93b71565d2fd3e09ef635cef8d",
-        "path": "/tmp/img-1.png",
-        "previewUri": "file:///a.png"
-      }
     }
   },
   "recording": {
@@ -170,10 +167,10 @@
           "sender": ["7c2e3ea286aa", "f05e4695ffa3", "ec8f73d25f26"],
           "payloads": ["6696a47819e1", "814ccd56a769", "8452698ac11a"],
           "settlements": {
-            "normal": "9a61808dee44"
+            "normal": "0d87f193fb59"
           },
-          "state": "5c7ed03288e6",
-          "effects": ["994fccf9b305", "f4c66fc96af9"]
+          "state": "15d714ff61ff",
+          "effects": ["994fccf9b305", "dd123d00d140"]
         }
       }
     ]

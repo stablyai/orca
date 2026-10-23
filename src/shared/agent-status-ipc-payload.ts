@@ -4,6 +4,7 @@
 // other. Re-exported from agent-status-types, so existing import sites are unchanged.
 
 import type { StructuredHostStatus } from './agent-hook-listener/listener-event'
+import type { ProgramStatusFacet } from './program-status/facet'
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
 import type { WithAgentStatusObservation } from './agent-status-observation'
 import type {
@@ -13,7 +14,8 @@ import type {
 } from './agent-status-run'
 import type {
   AgentStatusOrchestrationContext,
-  ParsedAgentStatusPayload
+  ParsedAgentStatusPayload,
+  TurnEndDisposition
 } from './agent-status-types'
 
 /** A PTY the pane-key migration could not move, reported for operator triage. */
@@ -59,14 +61,25 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
    *  own turn-opening event. Optional: old hosts and turns opened unseen omit it, and readers fall
    *  back to `stateStartedAt`. */
   turnStartedAt?: number
+  /** When the main agent's latest turn ended, stamped by the execution host from the agent's own
+   *  turn-end event and kept through restatements. Absent from old hosts and unclassified agents. */
+  turnEndedAt?: number
+  /** How the host identified that end; absent from old hosts (legacy). */
+  turnEndDisposition?: TurnEndDisposition
   orchestration?: AgentStatusOrchestrationContext
   providerSession?: AgentProviderSessionMetadata
   /** Resume identity update only; the status-shaped fields are transport placeholders. */
   providerSessionOnly?: boolean
   /** Live-only Command Code turn boundary key; not persisted to last-status.json. */
   promptInteractionKey?: string
+  /** See AgentStatusEntry.programStatus. Live-only; older peers ignore it. */
+  programStatus?: ProgramStatusFacet
+  /** Only `programStatus` changed: readers patch the facet and treat nothing else as news. */
+  programStatusOnly?: true
   /** See AgentStatusEntry.restoredUnconfirmed — hydrated nonterminal provenance. */
   restoredUnconfirmed?: boolean
+  /** A re-send of a cached row (reconnect or listener replay), not a new transition. */
+  isReplay?: boolean
   /** Present on rows the structured session host projects; `owned` keeps them fresh past the
    *  staleness window because the host still runs the provider child. */
   structuredHost?: StructuredHostStatus
@@ -84,7 +97,12 @@ export type AgentStatusCacheIdentity = {
 
 /** Wire shape for ordinary pane teardown or a stamped SSH disconnect batch. */
 export type AgentStatusClearIpcPayload =
-  | { paneKey: string }
+  | {
+      paneKey: string
+      statusUnavailable?: true
+      /** An OSC 7501 program took back its own row, so even a `done` row goes. */
+      programStatusRemoved?: true
+    }
   | {
       transient: true
       connectionId: string

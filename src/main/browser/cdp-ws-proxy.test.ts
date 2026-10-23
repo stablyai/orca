@@ -390,6 +390,117 @@ describe('CdpWsProxy', () => {
     client.close()
   })
 
+  it.each(['Page.bringToFront', 'Target.activateTarget'])(
+    'answers %s without focusing or forwarding it',
+    async (method) => {
+      const client = await connect(endpoint)
+
+      const response = await sendAndReceive(client, { id: 9, method, params: {} })
+
+      expect(response.result).toEqual({})
+      expect(mock.webContents.focus).not.toHaveBeenCalled()
+      expect(getSendCommandMethods(mock)).toEqual(['Page.enable'])
+      client.close()
+    }
+  )
+
+  it('types root-session keys and text into an embedded guest without focusing it', async () => {
+    mock.webContents.getType.mockReturnValue('webview')
+    const client = await connect(endpoint)
+
+    await sendAndReceive(client, { id: 11, method: 'DOM.focus', params: { backendNodeId: 5 } })
+    const insert = await sendAndReceive(client, {
+      id: 12,
+      method: 'Input.insertText',
+      params: { text: 'hi' }
+    })
+    const key = await sendAndReceive(client, {
+      id: 13,
+      method: 'Input.dispatchKeyEvent',
+      params: { type: 'keyDown', key: 'Enter', text: '\r' }
+    })
+
+    expect(insert.result).toEqual({})
+    expect(key.result).toEqual({})
+    expect(mock.webContents.focus).not.toHaveBeenCalled()
+    // Why: each delivery probes focus, and text/keys then wait for the page to handle them.
+    expect(getSendCommandMethods(mock)).toEqual([
+      'Page.enable',
+      'DOM.focus',
+      'Runtime.evaluate',
+      'DOM.focus',
+      'Runtime.evaluate',
+      'Runtime.evaluate',
+      'Runtime.evaluate'
+    ])
+    expect(mock.webContents.sendInputEvent.mock.calls.map(([event]) => event)).toEqual([
+      { type: 'char', keyCode: 'h', modifiers: [], skipIfUnhandled: true },
+      { type: 'char', keyCode: 'i', modifiers: [], skipIfUnhandled: true },
+      { type: 'keyDown', keyCode: 'Enter', modifiers: [], skipIfUnhandled: true },
+      { type: 'char', keyCode: '\r', modifiers: [], skipIfUnhandled: true }
+    ])
+    client.close()
+  })
+
+  it('keeps pipelined root-session keys in order', async () => {
+    mock.webContents.getType.mockReturnValue('webview')
+    const client = await connect(endpoint)
+    const replies: unknown[] = []
+    const allReplied = new Promise<void>((resolve) => {
+      client.on('message', (data) => {
+        replies.push(JSON.parse(data.toString()).id)
+        if (replies.length === 3) {
+          resolve()
+        }
+      })
+    })
+
+    for (const [id, type] of [
+      [21, 'rawKeyDown'],
+      [22, 'keyUp'],
+      [23, 'rawKeyDown']
+    ] as const) {
+      client.send(
+        JSON.stringify({ id, method: 'Input.dispatchKeyEvent', params: { type, key: 'Tab' } })
+      )
+    }
+    await allReplied
+
+    expect(replies).toEqual([21, 22, 23])
+    expect(mock.webContents.sendInputEvent.mock.calls.map(([event]) => event.type)).toEqual([
+      'keyDown',
+      'keyUp',
+      'keyDown'
+    ])
+    client.close()
+  })
+
+  it('forwards child-frame session input unchanged and without focusing', async () => {
+    mock.webContents.getType.mockReturnValue('webview')
+    const client = await connect(endpoint)
+
+    await sendAndReceive(client, {
+      id: 31,
+      method: 'Input.dispatchKeyEvent',
+      params: { type: 'keyDown', key: 'a', text: 'a' },
+      sessionId: 'oopif-session'
+    })
+    await sendAndReceive(client, {
+      id: 32,
+      method: 'Input.insertText',
+      params: { text: 'a' },
+      sessionId: 'oopif-session'
+    })
+
+    expect(mock.webContents.focus).not.toHaveBeenCalled()
+    expect(mock.webContents.sendInputEvent).not.toHaveBeenCalled()
+    expect(getSendCommandCalls(mock).slice(1)).toEqual([
+      ['Input.dispatchKeyEvent', { type: 'keyDown', key: 'a', text: 'a' }, 'oopif-session'],
+      ['Input.insertText', { text: 'a' }, 'oopif-session']
+    ])
+    client.close()
+  })
+
   it('still focuses the guest for Input.insertText', async () => {
     const client = await connect(endpoint)
 

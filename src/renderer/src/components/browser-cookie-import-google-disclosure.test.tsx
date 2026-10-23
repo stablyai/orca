@@ -54,6 +54,7 @@ describe('cookie-import Google disclosure footer', () => {
       'browser toolbar overflow',
       () => (
         <BrowserToolbarMenuDropdown
+          browserPageId="page-1"
           menuOpen
           onMenuOpenChange={vi.fn()}
           allProfiles={[]}
@@ -67,6 +68,9 @@ describe('cookie-import Google disclosure footer', () => {
           onImportFromFile={vi.fn()}
           viewportPresetId={null}
           onApplyViewportPreset={vi.fn()}
+          siteDisplay={null}
+          onZoomPage={vi.fn()}
+          onSetSiteColorScheme={vi.fn()}
           overflow={{
             triggerRef: createRef<HTMLButtonElement>(),
             tools: [],

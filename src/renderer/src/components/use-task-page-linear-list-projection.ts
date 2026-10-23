@@ -1,6 +1,6 @@
 import type { TaskPageLinearListSelectionModel } from './use-task-page-linear-list-selection'
 import { useMemo, useCallback, useEffect } from 'react'
-import { filterLinearIssuesBySearchQuery } from '@/components/task-page-linear-in-orca-issues'
+import { filterLinearIssuesBySearchQuery } from '@/components/task-page/linear/task-page-linear-in-orca-issues'
 import {
   clampLinearIssueListLimit,
   LINEAR_ISSUE_LIST_MAX

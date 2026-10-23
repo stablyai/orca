@@ -3,13 +3,15 @@ import type { AgentStatusSlice } from './agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
 import { pruneMigrationUnsupportedEntries } from './agent-status-migration-unsupported-entries'
 import {
+  getTabIdFromPaneKey,
   normalizePaneKeySet,
+  openNonTerminalTabIds,
   paneKeyMatchesAnyTabPrefix,
   retainedAgentEntryFromLive,
   shouldReplaceRetainedWithLive
 } from './agent-status-pane-key-tab-binding'
 import { removePaneKeys } from './agent-status-pane-keyed-records'
-import { agentTurnStoppedByUser } from '../../../../shared/agent-main-agent-verdict'
+import { agentTurnEndedOnPurpose } from '../../../../shared/agent-main-agent-verdict'
 
 export function createAgentStatusWorktreeDropActions(
   runtime: AgentStatusRuntime
@@ -20,9 +22,13 @@ export function createAgentStatusWorktreeDropActions(
       let hadLive = false
       set((s) => {
         const tabPrefixes = (s.tabsByWorktree[worktreeId] ?? []).map((tab) => `${tab.id}:`)
-        const liveEntries = Object.entries(s.agentStatusByPaneKey).filter(
-          ([paneKey, entry]) =>
-            entry.worktreeId === worktreeId || paneKeyMatchesAnyTabPrefix(paneKey, tabPrefixes)
+        // An open chat's row is its host's: the chat tab's projection removes it on close.
+        const chatTabIds = openNonTerminalTabIds(s, worktreeId)
+        const ownedByWorktree = (paneKey: string, entryWorktreeId: string | undefined): boolean =>
+          !chatTabIds.has(getTabIdFromPaneKey(paneKey) ?? '') &&
+          (entryWorktreeId === worktreeId || paneKeyMatchesAnyTabPrefix(paneKey, tabPrefixes))
+        const liveEntries = Object.entries(s.agentStatusByPaneKey).filter(([paneKey, entry]) =>
+          ownedByWorktree(paneKey, entry.worktreeId)
         )
         const liveKeys = liveEntries.map(([paneKey]) => paneKey)
         const liveKeySet = new Set(liveKeys)
@@ -30,10 +36,7 @@ export function createAgentStatusWorktreeDropActions(
           (paneKey) => paneKeyMatchesAnyTabPrefix(paneKey, tabPrefixes) || liveKeySet.has(paneKey)
         )
         const retainedKeys = Object.entries(s.retainedAgentsByPaneKey)
-          .filter(
-            ([paneKey, retained]) =>
-              retained.worktreeId === worktreeId || paneKeyMatchesAnyTabPrefix(paneKey, tabPrefixes)
-          )
+          .filter(([paneKey, retained]) => ownedByWorktree(paneKey, retained.worktreeId))
           .map(([paneKey]) => paneKey)
         const retainedKeySet = new Set(retainedKeys)
         const migrationUnsupported = pruneMigrationUnsupportedEntries(
@@ -64,7 +67,7 @@ export function createAgentStatusWorktreeDropActions(
               allowedPaneKeys.has(paneKey) &&
               entry.state === 'done' &&
               entry.agentType !== undefined &&
-              !agentTurnStoppedByUser(entry)
+              !agentTurnEndedOnPurpose(entry)
             ) {
               retainedEvidence.set(
                 paneKey,

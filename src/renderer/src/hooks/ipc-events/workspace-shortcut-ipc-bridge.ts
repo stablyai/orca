@@ -95,6 +95,8 @@ export function registerWorkspaceShortcutIpcBridge(unsubs: (() => void)[]): void
       if (target) {
         activateAndRevealWorkspace(target.id, {
           navigationIntent: 'user-open',
+          // Why: the digit addresses a workspace-list row, so show the list it acted on.
+          showWorkspaceList: true,
           ...(target.executionHostId ? { executionHostId: target.executionHostId } : {})
         })
       }

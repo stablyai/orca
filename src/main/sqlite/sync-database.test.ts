@@ -213,7 +213,7 @@ describe('SyncDatabase read-only opens under contention', () => {
       thrown = error
     }
 
-    expect(thrown).toMatchObject({ [process.versions.bun ? 'errno' : 'errcode']: 5 })
+    expect(thrown).toMatchObject({ errcode: 5 })
     expect((thrown as Error).message).toContain('database is locked')
     expect(Date.now() - startedAt).toBeLessThan(200)
   })

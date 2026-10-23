@@ -6,7 +6,7 @@ import Database from '../../../../sqlite/sync-database'
 import { OrchestrationDb } from '../orchestration-db'
 import { dropDerivedDeliverySchema } from './derived-delivery-test-fixture'
 import { resolveOrchestrationMigrationStartVersion } from '../../orchestration-schema-version-skew'
-import { createRootDispatch } from '../root-dispatch-test-fixture'
+import { createRootDispatch, reattachDispatchConsumer } from '../root-dispatch-test-fixture'
 import { SCHEMA_VERSION } from '../contract-constants'
 
 describe('derived delivery migration', () => {
@@ -213,7 +213,7 @@ describe('derived delivery migration', () => {
         processIncarnation: 'worker:2'
       }
       if (consumerSource === 'dispatch') {
-        peer.mintDispatchCapability(authority)
+        reattachDispatchConsumer(peer, authority)
       } else {
         peer.prepareRemoteAttachmentAuthority({
           ...authority,

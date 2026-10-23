@@ -1,15 +1,15 @@
 import type { RuntimeTerminalWaitBlockedReason } from '../../shared/runtime-types'
 
-// Why rows, from each dialog's first `·` on: codex-terminal-readiness.ts takes a `·` after the
+// Why rows, from each dialog's first `·` on: codex.json's provisional_startup takes a `·` after the
 // startup header for the live chat's footer, so each dialog must be matched by the time that `·`
 // lands. Why not headings: Codex 0.157+ paints them by cell diff over its startup screen, so the
 // text copy can lose letters and spaces (`updat available`); these rows are fixed literals.
 // Update: `Update available · 0.157.1 → 0.158.0`, then `enter continue · esc skip`.
-const CODEX_UPDATE_ROW_RE = /available\s*·\s*\d+\.\d+|enter\s*continue\s*·\s*esc\s*skip/g
+const CODEX_UPDATE_ROW_RE = /available\s*\u00B7\s*\d+\.\d+|enter\s*continue\s*\u00B7\s*esc\s*skip/g
 // Why not `esc back`: Codex's mid-session pickers end `enter confirm · esc back`.
-const CODEX_HOOKS_REVIEW_KEY_ROW_RE = /enter\s*confirm\s*·(?!\s*esc\s*back)/g
+const CODEX_HOOKS_REVIEW_KEY_ROW_RE = /enter\s*confirm\s*\u00B7(?!\s*esc\s*back)/g
 // Why both verbs: the retired-model notice says `continue`, the new-model announcement `confirm`.
-const CODEX_MODEL_MIGRATION_KEY_ROW_RE = /enter\/esc\s*(?:continue|confirm)\s*·/g
+const CODEX_MODEL_MIGRATION_KEY_ROW_RE = /enter\/esc\s*(?:continue|confirm)\s*\u00B7/g
 
 function lastMatchIndex(text: string, row: RegExp): number {
   let index = -1

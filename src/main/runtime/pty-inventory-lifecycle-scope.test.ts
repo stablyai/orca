@@ -25,7 +25,7 @@ describe('lifecycle invalidation respects inventory scope and retry bounds', () 
       reply.resolve([processRow('ssh:host-b@@child')])
       expect(await pending).toBeNull()
       expect(list).toHaveBeenCalledTimes(1)
-      expect(list.mock.calls[0][0]).toBe('host-b')
+      expect(list.mock.calls[0][0]).toBe('ssh:host-b')
       expect(hasPty).not.toHaveBeenCalled()
       expect(runtime.capture(id).connected).toBe(true)
     }
@@ -88,7 +88,7 @@ describe('lifecycle invalidation respects inventory scope and retry bounds', () 
     const a = deferred<PtyProcessInfo[]>()
     const b = deferred<PtyProcessInfo[]>()
     const { runtime } = createInventoryRuntime((connection) =>
-      connection === 'a' ? a.promise : b.promise
+      connection === 'ssh:a' ? a.promise : b.promise
     )
     const pa = runtime.read('a')
     const pb = runtime.read('b')

@@ -1,3 +1,8 @@
+import {
+  isAgentChatPermissionMode,
+  normalizeAgentNativeChatPermissionModes
+} from '../../../../shared/agent-chat-permission-mode'
+import { normalizeNativeChatAppearanceSettings } from '../../../../shared/native-chat-appearance-settings'
 import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../../../../shared/auto-rename-branch-from-work-settings'
 import {
   getDefaultSettings,
@@ -69,8 +74,12 @@ export function mergeHostWebUIState(
     hideWorkspacesFromOtherDevices: local.hideWorkspacesFromOtherDevices === true,
     manualRepoOrder: local.manualRepoOrder,
     workspaceHostOrder: local.workspaceHostOrder,
+    sidebarOpen: local.sidebarOpen,
     agentsVisibleHostIds: local.agentsVisibleHostIds,
     agentsFilterRepoIds: local.agentsFilterRepoIds,
+    agentsHideWorkspacesFromOtherDevices: local.agentsHideWorkspacesFromOtherDevices === true,
+    agentsHideAutomationGeneratedWorkspaces: local.agentsHideAutomationGeneratedWorkspaces === true,
+    agentsHideCliCreatedWorkspaces: local.agentsHideCliCreatedWorkspaces === true,
     agentsShowChildAgents: local.agentsShowChildAgents,
     agentsCompactMode: local.agentsCompactMode,
     agentsShowSearch: local.agentsShowSearch,
@@ -79,7 +88,12 @@ export function mergeHostWebUIState(
     activityClearedAtByPaneKey: local.activityClearedAtByPaneKey,
     manuallyUnreadTurnsByPaneKey: local.manuallyUnreadTurnsByPaneKey
   } satisfies Record<PairingLocalUiField, unknown> & Partial<PersistedUIState>
-  return { ...mergeWebUIState(local, incoming), ...pinned }
+  return {
+    ...mergeWebUIState(local, incoming),
+    ...pinned,
+    // Old hosts omit this field; a cached arm must not make their strict ui.set reject mode changes.
+    statusBarCompactChangeNoticeDismissed: incoming.statusBarCompactChangeNoticeDismissed !== false
+  }
 }
 
 export function mergeFeatureInteractionState(
@@ -139,6 +153,8 @@ export function mergeSettings(
     ...base,
     ...updates,
     notifications: {
+      // Why: browser-stored settings can predate a newer notification field.
+      ...defaults.notifications,
       ...base.notifications,
       ...updates.notifications
     },
@@ -163,6 +179,11 @@ export function mergeSettings(
     terminalCustomThemes: normalizeTerminalCustomThemes(
       updates.terminalCustomThemes ?? base.terminalCustomThemes
     ),
+    nativeChatAppearance: normalizeNativeChatAppearanceSettings(
+      Object.hasOwn(updates, 'nativeChatAppearance')
+        ? updates.nativeChatAppearance
+        : base.nativeChatAppearance
+    ),
     uiLanguage: normalizeUiLanguage(updates.uiLanguage ?? base.uiLanguage)
   }
   return {
@@ -170,5 +191,24 @@ export function mergeSettings(
     ...normalizeAutoRenameBranchFromWorkDefaultOn(merged, {
       preserveExplicitValue: options.preserveAutoRenameBranchFromWorkUpdate
     })
+  }
+}
+
+/** The host's new-chat permission default (the host seeds from it), kept only when a known mode. */
+export function runtimeChatPermissionSetting(
+  settings: Partial<GlobalSettings>,
+  includeAgentOverrides = true
+): Pick<GlobalSettings, 'nativeChatPermissionMode' | 'agentNativeChatPermissionModes'> {
+  return {
+    ...(isAgentChatPermissionMode(settings.nativeChatPermissionMode)
+      ? { nativeChatPermissionMode: settings.nativeChatPermissionMode }
+      : {}),
+    ...(includeAgentOverrides
+      ? {
+          agentNativeChatPermissionModes: normalizeAgentNativeChatPermissionModes(
+            settings.agentNativeChatPermissionModes
+          )
+        }
+      : {})
   }
 }

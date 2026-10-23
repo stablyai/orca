@@ -21,9 +21,10 @@ import {
 import { ensureTerminalVisible, waitForSessionReady } from './helpers/store'
 import { openProfileStateDatabaseReadOnly } from '../../src/main/persistence/profile-state/profile-state-database'
 import { readProfileStateSnapshot } from '../../src/main/persistence/profile-state/profile-state-documents'
-import { ProfileStateSqliteAuthority } from '../../src/main/persistence/profile-state/profile-state-sqlite-authority'
 import { acquireProfileStateMaintenance } from '../../src/main/persistence/profile-state/profile-state-access'
-import { restoreProfileStateJsonExport } from '../../src/main/persistence/profile-state/legacy-json/profile-state-recovery'
+import { rollbackProfileState } from '../../src/main/persistence/profile-state/profile-state-recovery-command'
+import { profileStateJsonExportPaths } from '../../src/main/persistence/profile-state/legacy-json/profile-state-export-path'
+import type { ProfileStateRecoverySelector } from '../../src/shared/profile-state-recovery-command'
 import {
   discoverActivePtyId,
   execInTerminal,
@@ -105,36 +106,23 @@ function materializeLegacyProfileJson(userDataDir: string): void {
   }
 }
 
-function publishLegacyCompatibilitySnapshot(userDataDir: string): string {
+function readLegacyJsonArtifacts(userDataDir: string): Record<string, string> {
   const profileDirectory = path.join(userDataDir, 'profiles', DEFAULT_LOCAL_ORCA_PROFILE_ID)
   const dataPath = path.join(profileDirectory, 'orca-data.json')
-  const databasePath = path.join(profileDirectory, 'profile-state.db')
-  const authority = new ProfileStateSqliteAuthority(databasePath, DEFAULT_LOCAL_ORCA_PROFILE_ID)
-  try {
-    authority.readSerializedState()
-    const revision = authority.writeJsonCompatibilityExport(dataPath)
-    if (revision === undefined) {
-      throw new Error('Expected the candidate profile to have a persisted revision')
-    }
-    return dataPath
-  } finally {
-    authority.close()
-  }
+  return Object.fromEntries(
+    [dataPath, ...profileStateJsonExportPaths(dataPath)]
+      .filter((file) => existsSync(file))
+      .map((file) => [path.basename(file), readFileSync(file, 'utf8')])
+  )
 }
 
-function restoreLegacyProfileJson(userDataDir: string): void {
-  const profileDirectory = path.join(userDataDir, 'profiles', DEFAULT_LOCAL_ORCA_PROFILE_ID)
-  const databasePath = path.join(profileDirectory, 'profile-state.db')
-  const dataFile = path.join(profileDirectory, 'orca-data.json')
+function restoreLegacyProfileJson(
+  userDataDir: string,
+  selector: ProfileStateRecoverySelector = { kind: 'current-json' }
+) {
   const maintenance = acquireProfileStateMaintenance(userDataDir)
   try {
-    restoreProfileStateJsonExport({
-      maintenance,
-      databasePath,
-      dataFile,
-      exportPath: dataFile,
-      profileId: DEFAULT_LOCAL_ORCA_PROFILE_ID
-    })
+    return rollbackProfileState(userDataDir, selector, maintenance)
   } finally {
     maintenance.release()
   }
@@ -312,7 +300,7 @@ test('upgrades a legacy daemon session and keeps it stable after relaunch', asyn
 })
 
 // oxlint-disable-next-line no-empty-pattern -- This mixed-version test owns its Electron launches.
-test('restores a JSON compatibility snapshot and migrates it on normal restart', async ({}, testInfo) => {
+test('exports the latest SQLite state for rollback without mirroring ordinary shutdown', async ({}, testInfo) => {
   test.setTimeout(240_000)
 
   const session = createRestartSession(testInfo)
@@ -322,6 +310,7 @@ test('restores a JSON compatibility snapshot and migrates it on normal restart',
     const candidateLaunch = await session.launch()
     candidateApp = candidateLaunch.app
     await waitForSessionReady(candidateLaunch.page)
+    const retainedJson = readLegacyJsonArtifacts(session.userDataDir)
     const marker = 17
     await candidateLaunch.page.evaluate(async (terminalFontSize) => {
       const updateSettings = window.__store?.getState().updateSettingsOrThrow
@@ -348,13 +337,13 @@ test('restores a JSON compatibility snapshot and migrates it on normal restart',
     const databasePath = path.join(profileDirectory, 'profile-state.db')
     await session.close(candidateApp)
     candidateApp = null
-    const dataPath = publishLegacyCompatibilitySnapshot(session.userDataDir)
+    expect(readLegacyJsonArtifacts(session.userDataDir)).toEqual(retainedJson)
+    const dataPath = path.join(profileDirectory, 'orca-data.json')
     expect(existsSync(databasePath)).toBe(true)
-    expect(existsSync(dataPath)).toBe(true)
 
-    // Restore the exported JSON, then exercise normal first migration again.
     await cleanupE2EDaemons(session.userDataDir)
-    restoreLegacyProfileJson(session.userDataDir)
+    const rollback = restoreLegacyProfileJson(session.userDataDir, { kind: 'latest-json' })
+    expect(rollback.revision).toBeGreaterThan(1)
     expect(existsSync(databasePath)).toBe(false)
     expect(JSON.parse(readFileSync(dataPath, 'utf8')).settings.terminalFontSize).toBe(marker)
     const reupgradedLaunch = await session.launch()
@@ -380,7 +369,7 @@ test('restores a JSON compatibility snapshot and migrates it on normal restart',
   }
 })
 
-test('real packaged old build reads compatibility JSON before candidate re-import', async ({
+test('real packaged old build reads the latest explicit JSON rollback before candidate re-import', async ({
   browserName: _browserName
 }, testInfo) => {
   test.setTimeout(300_000)
@@ -397,6 +386,8 @@ test('real packaged old build reads compatibility JSON before candidate re-impor
   try {
     const candidateLaunch = await session.launch()
     candidateApp = candidateLaunch.app
+    await waitForSessionReady(candidateLaunch.page)
+    const retainedJson = readLegacyJsonArtifacts(session.userDataDir)
     const marker = 19
     await candidateLaunch.page.evaluate(async (terminalFontSize) => {
       const updateSettings = window.__store?.getState().updateSettingsOrThrow
@@ -412,6 +403,7 @@ test('real packaged old build reads compatibility JSON before candidate re-impor
       .toBe(marker)
     await session.close(candidateApp)
     candidateApp = null
+    expect(readLegacyJsonArtifacts(session.userDataDir)).toEqual(retainedJson)
 
     const databasePath = path.join(
       session.userDataDir,
@@ -419,12 +411,11 @@ test('real packaged old build reads compatibility JSON before candidate re-impor
       DEFAULT_LOCAL_ORCA_PROFILE_ID,
       'profile-state.db'
     )
-    const compatibilityPath = publishLegacyCompatibilitySnapshot(session.userDataDir)
     expect(existsSync(databasePath)).toBe(true)
-    expect(existsSync(compatibilityPath)).toBe(true)
     await cleanupE2EDaemons(session.userDataDir)
-    // A pre-migration build reads the canonical JSON restored by rollback.
-    restoreLegacyProfileJson(session.userDataDir)
+    const rollback = restoreLegacyProfileJson(session.userDataDir, { kind: 'latest-json' })
+    expect(rollback.revision).toBeGreaterThan(1)
+    expect(existsSync(databasePath)).toBe(false)
 
     const oldLaunch = await launchPackagedOldProfile({
       executablePath: executablePath!,
@@ -437,6 +428,10 @@ test('real packaged old build reads compatibility JSON before candidate re-impor
       .toMatchObject({
         terminalFontSize: marker
       })
+    const olderBuildMarker = 21
+    await oldLaunch.page.evaluate(async (terminalFontSize) => {
+      await window.api.settings.set({ terminalFontSize })
+    }, olderBuildMarker)
     await closeElectronAppForE2E(oldApp)
     oldApp = null
 
@@ -450,7 +445,7 @@ test('real packaged old build reads compatibility JSON before candidate re-impor
           ),
         { timeout: 30_000 }
       )
-      .toBe(marker)
+      .toBe(olderBuildMarker)
     expect(existsSync(databasePath)).toBe(true)
   } finally {
     for (const app of [reupgradedApp, oldApp, candidateApp]) {
@@ -462,7 +457,7 @@ test('real packaged old build reads compatibility JSON before candidate re-impor
   }
 })
 
-test('fails closed when a packaged old build mutates live SQLite compatibility JSON', async ({
+test('fails closed when a packaged old build mutates JSON outside an explicit rollback', async ({
   browserName: _browserName
 }, testInfo) => {
   test.setTimeout(300_000)
@@ -501,7 +496,9 @@ test('fails closed when a packaged old build mutates live SQLite compatibility J
       DEFAULT_LOCAL_ORCA_PROFILE_ID
     )
     const databasePath = path.join(profileDirectory, 'profile-state.db')
-    const compatibilityPath = publishLegacyCompatibilitySnapshot(session.userDataDir)
+    // Deliberately bypass rollback to reproduce an unsupported mixed-authority profile.
+    materializeLegacyProfileJson(session.userDataDir)
+    const compatibilityPath = path.join(profileDirectory, 'orca-data.json')
     expect(existsSync(databasePath)).toBe(true)
     expect(existsSync(compatibilityPath)).toBe(true)
 

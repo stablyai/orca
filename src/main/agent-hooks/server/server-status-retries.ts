@@ -1,14 +1,17 @@
+import { pollCodexTranscriptStatus } from '../../../shared/agent-hook-listener/providers/codex-transcript-poll'
 import { normalizeHookPayload } from '../../../shared/agent-hook-listener'
 import {
   hasPendingAgentResultText,
   preparePendingGrokResultDiscovery
 } from '../../../shared/agent-hook-listener/grok-result-discovery'
 import type { AgentHookSource } from '../../../shared/agent-hook-relay'
+import { pickHostTurnEnd } from '../../../shared/agent-status-types'
 import {
   shouldPollHookTranscript,
+  hookTranscriptWatchPath,
   transcriptPollUpdate
 } from '../../../shared/agent-hook-listener/transcript-poll-policy'
-import { CodexSubagentPollScheduler } from '../../../shared/codex-subagent-poll-scheduler'
+import { AgentTranscriptPollScheduler } from '../../../shared/agent-transcript-poll-scheduler'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import {
   ASSISTANT_MESSAGE_RETRY_ATTEMPTS,
@@ -24,7 +27,7 @@ type TranscriptPoll = {
 }
 
 export abstract class AgentHookServerStatusRetries extends AgentHookServerStatusUpdate {
-  private readonly transcriptPollScheduler = new CodexSubagentPollScheduler<TranscriptPoll>(
+  private readonly transcriptPollScheduler = new AgentTranscriptPollScheduler<TranscriptPoll>(
     CODEX_SUBAGENT_POLL_MS,
     (paneKey, poll) => this.runTranscriptPoll(paneKey, poll)
   )
@@ -55,11 +58,15 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     if (source !== 'codex' && source !== 'muse') {
       return
     }
-    this.transcriptPollScheduler.clear(original.paneKey)
     if (!shouldPollHookTranscript(this.state, source, original)) {
+      this.transcriptPollScheduler.clear(original.paneKey)
       return
     }
-    this.transcriptPollScheduler.schedule(original.paneKey, { source, body, original })
+    this.transcriptPollScheduler.schedule(
+      original.paneKey,
+      { source, body, original },
+      hookTranscriptWatchPath(this.state, source, original.paneKey)
+    )
   }
 
   private runTranscriptPoll(paneKey: string, poll: TranscriptPoll): void {
@@ -73,7 +80,10 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     ) {
       return
     }
-    const normalized = normalizeHookPayload(this.state, source, body, this.env)
+    const normalized =
+      source === 'codex'
+        ? pollCodexTranscriptStatus(this.state, original, body, this.env)
+        : normalizeHookPayload(this.state, source, body, this.env)
     if (!normalized) {
       return
     }
@@ -154,6 +164,10 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
       return
     }
     // Why: some agents POST Stop before their transcript line is flushed; discovery is event-driven, later content retries stay timed.
-    this.applyNormalizedStatus(normalized.event, normalized.onAccepted)
+    // The retry only adds text to the same turn end, so it restates that end instead of minting one.
+    this.applyNormalizedStatus(
+      { ...normalized.event, ...pickHostTurnEnd(current) },
+      normalized.onAccepted
+    )
   }
 }

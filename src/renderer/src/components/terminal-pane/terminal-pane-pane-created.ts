@@ -2,7 +2,7 @@ import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import type { PaneSpawnHints } from '@/lib/pane-manager/pane-manager-types'
 import { useAppStore } from '@/store'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
-import { createOsc52OscHandler } from './osc52-clipboard'
+import { createOsc52OscHandler } from '../../../../shared/osc52-clipboard'
 import {
   showOsc52ClipboardBlockedToast,
   showOsc52ClipboardFailedToast
@@ -21,6 +21,7 @@ import type { PtyPreconnectInputEntry } from './pty-preconnect-input-buffer'
 import { guardParserHandler } from './terminal-parser-handler-guard'
 import { isPaneReplaying } from './replay-guard'
 import { connectPanePty } from './pty-connection'
+import { completePaneSpawnPlacement } from './terminal-pane-spawn-placement'
 import {
   createQueuedStartupConsumer,
   resolvePaneSeedCwd,
@@ -39,7 +40,7 @@ export function createTerminalPaneCreatedHandler(
 ): (pane: ManagedPane, spawnHints?: PaneSpawnHints) => void {
   // Split spawn hints let the renderer pane appear before a slow inherited-cwd lookup finishes.
   return (pane, spawnHints) => {
-    const { deps, refs, ptyDeps, startupWithSetupSplitWait, startup, osc7UncHost } = context
+    const { deps, refs, ptyDeps, startup, osc7UncHost } = context
     const manager = deps.managerRef.current
     if (!manager) {
       return
@@ -169,7 +170,7 @@ export function createTerminalPaneCreatedHandler(
     context.applyAppearance(manager)
     const onQueuedStartupSpawned = createQueuedStartupConsumer(
       ptyDeps.startup,
-      startupWithSetupSplitWait,
+      startup,
       () => useAppStore.getState().consumeTabStartupCommand(deps.tabId),
       () => useAppStore.getState().pendingStartupByTabId[deps.tabId] === startup
     )
@@ -202,6 +203,15 @@ export function createTerminalPaneCreatedHandler(
         : {}),
       ...(effectiveSpawnHints?.cwd ? { cwd: effectiveSpawnHints.cwd } : {}),
       ...(effectiveSpawnHints?.cwdPromise ? { cwdPromise: effectiveSpawnHints.cwdPromise } : {}),
+      ...(effectiveSpawnHints?.placement
+        ? {
+            placement: completePaneSpawnPlacement(effectiveSpawnHints.placement, {
+              worktreeId: deps.worktreeId,
+              tabId: deps.tabId,
+              container: deps.containerRef.current
+            })
+          }
+        : {}),
       restoredPtyIdByLeafId: effectiveSpawnHints?.ptyId
         ? {
             ...ptyDeps.restoredPtyIdByLeafId,

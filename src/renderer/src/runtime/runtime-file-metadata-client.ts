@@ -1,14 +1,16 @@
 import type { MarkdownDocument } from '../../../shared/filesystem-entry-types'
 import type { RuntimeFileOperationArgs } from './runtime-file-client-types'
 import { assertLocalFilesystemFallbackAllowed, getRemoteFileArgs } from './runtime-file-routing'
-import { callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
+import { callRuntimeRpc } from './runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
+import type { LocalFileAccess } from '../../../shared/local-file-access'
+import { localAccess } from './runtime-file-read-client'
 
 export async function listRuntimeMarkdownDocuments(
   context: RuntimeFileOperationArgs,
   rootPath: string
 ): Promise<MarkdownDocument[]> {
-  const target = getActiveRuntimeTarget(context.settings)
+  const target = context.target
   if (target.kind !== 'environment' || !context.worktreeId) {
     return window.api.fs.listMarkdownDocuments({
       rootPath,
@@ -25,14 +27,16 @@ export async function listRuntimeMarkdownDocuments(
 
 export async function statRuntimePath(
   context: RuntimeFileOperationArgs,
-  absolutePath: string
+  absolutePath: string,
+  access?: LocalFileAccess
 ): Promise<{ size: number; isDirectory: boolean; mtime: number }> {
   const remoteArgs = getRemoteFileArgs(context, absolutePath)
   if (!remoteArgs) {
     assertLocalFilesystemFallbackAllowed(context)
     return window.api.fs.stat({
       filePath: absolutePath,
-      connectionId: context.connectionId
+      connectionId: context.connectionId,
+      ...localAccess(context.connectionId, access)
     })
   }
   return callRuntimeRpc<{ size: number; isDirectory: boolean; mtime: number }>(

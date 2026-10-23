@@ -38,7 +38,9 @@ import {
 } from '../../runtime/agent-session-record-store-test-harness'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
-import { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import { JournalLifecycleBatchAppender } from '../agent-session-journal/journal-lifecycle-batch-appender'
+import * as recoveryResolution from './structured-agent-session-recovery-resolution'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 import {
@@ -50,6 +52,12 @@ import {
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import {
+  claudeProviderHandle,
+  codexProviderHandle
+} from '../../../shared/agent-session-provider-handle-encoding'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const CALLER = { callerKey: 'client-1' }
 const DEAD_OWNER: AgentSessionProcessIdentity = {
@@ -104,7 +112,6 @@ function wedgedRecord(overrides: WedgeOverrides): PersistedAgentSessionRecord {
       leaseDeadlineAt: NOW - 9_000,
       lastRenewedAt: NOW - 10_000,
       handoffOperationId: overrides.handoffOperationId ?? null,
-      journalCheckpoint: null,
       claimKeyId: 'key-1',
       claimStatus: overrides.claimStatus,
       unreconciled: false,
@@ -121,16 +128,21 @@ async function seedStore(record: PersistedAgentSessionRecord): Promise<void> {
 /** Every recorded owner in these fixtures is long gone; that is the present-time evidence. */
 function openHost(overrides: Partial<StructuredAgentSessionHostDeps> = {}): void {
   host = new StructuredAgentSessionHost({
+    agents: NO_STRUCTURED_AGENTS,
+    logger: createStructuredAgentSessionLogger(),
     store,
     adapter: {
+      open: async () => ({
+        reportedOptions: { model: '' }
+      }),
       acquire,
-      releaseAcquisition: vi.fn(async () => undefined),
+      releaseAcquisition: vi.fn(async () => false),
       dispatch: vi.fn(),
       cancelTurn: vi.fn(),
       answerPrompt: vi.fn(),
       setOption: vi.fn(),
       supportsCreate: () => true
-    } as unknown as StructuredAgentSessionAdapter,
+    },
     journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-new',
@@ -142,13 +154,17 @@ function openHost(overrides: Partial<StructuredAgentSessionHostDeps> = {}): void
 
 /** The host starting the agent with no message to deliver, as an operation that needs it does. */
 function startAgent(): Promise<unknown> {
-  return host['serialize'](SESSION, () => host['mutationContext']().ensureAgent(SESSION))
+  const context = host['mutationContext']()
+  return context
+    .serialize(SESSION, async () => context.claimAgent(SESSION))
+    .then((claim) => claim.outcome)
 }
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-wedged-profile-'))
   resetHostTestOperationIds()
   acquire = vi.fn(async ({ fence }) => ({
+    acquisitionGeneration: globalThis.crypto.randomUUID(),
     process: {
       hostId: 'local',
       pid: 4242,
@@ -157,7 +173,7 @@ beforeEach(async () => {
     },
     link: {
       linkId: `link-${fence}`,
-      handle: { provider: 'codex', threadId: THREAD },
+      handle: codexProviderHandle(THREAD),
       origin: 'resumed' as const,
       mintedAtFence: fence,
       observedAt: NOW
@@ -194,8 +210,8 @@ async function seedRunningTurn(provider: 'codex' | 'claude' = 'codex'): Promise<
       agent: provider,
       providerHandle:
         provider === 'codex'
-          ? { kind: 'codex', threadId: THREAD }
-          : { kind: 'claude', sessionId: 'provider-session-alpha-1', leafUuid: null }
+          ? codexProviderHandle(THREAD)
+          : claudeProviderHandle('provider-session-alpha-1', null)
     },
     database: openTestJournalHostDatabase(root)
   })
@@ -353,10 +369,10 @@ describe('already-wedged profiles become usable on load', () => {
       // What the sidebar reads: every status this restart published says the chat is not working.
       expect(published.filter((summary) => summary.sessionId === SESSION)).not.toEqual([])
       expect(published.map((summary) => summary.status)).not.toContain('working')
-      // A crash is not something the user did: no outcome is claimed, so no reader files it as a
-      // cancellation the user already knows about.
+      // A crash is not something the user did: a proven one reads as an interruption and an
+      // unprovable one as unconfirmed, so no reader files it as a cancellation the user knows about.
       expect(published.map((summary) => summary.turnOutcome)).toEqual(
-        published.map(() => undefined)
+        published.map(() => (verdict.state === 'interrupted' ? 'interruption' : 'unconfirmed'))
       )
     }
   )
@@ -455,7 +471,7 @@ describe('already-wedged profiles become usable on load', () => {
       })
       // The read restore's settlement fails, and nothing retries it.
       const failing = vi
-        .spyOn(AgentSessionJournal.prototype, 'appendLifecycleBatch')
+        .spyOn(JournalLifecycleBatchAppender.prototype, 'appendPlanned')
         .mockRejectedValue(new Error('journal unavailable'))
       await host.restoreReadableSessions()
       failing.mockRestore()
@@ -492,7 +508,17 @@ describe('already-wedged profiles become usable on load', () => {
       stopOwnerProcess
     })
 
-    await host.restoreReadableSessions()
+    const resolveRecovery = recoveryResolution.resolveStructuredSessionRecovery
+    const recovery = vi
+      .spyOn(recoveryResolution, 'resolveStructuredSessionRecovery')
+      .mockImplementation((deps, sessionId) =>
+        resolveRecovery({ ...deps, delay: async () => {} }, sessionId)
+      )
+    try {
+      await host.restoreReadableSessions()
+    } finally {
+      recovery.mockRestore()
+    }
 
     expect(stopOwnerProcess.mock.calls).toEqual([
       [DEAD_OWNER.pid, 'SIGTERM'],
@@ -533,9 +559,10 @@ describe('already-wedged profiles become usable on load', () => {
     }
   )
 
-  it('marks a running turn left behind by a released lease unverifiable on a cold acquire', async () => {
+  it('interrupts a running turn left behind by a released lease on a cold acquire', async () => {
     // No settlement latch: the record was released cleanly, but the journal still says a turn is
-    // running. The child that wrote it is gone and nothing observed its exit.
+    // running. Nothing observed the child's exit, but the runtime that held it was replaced, and
+    // nothing after its start proves it alive.
     await seedStore(wedgedRecord({ claimStatus: 'released', handoffStage: null }))
     await seedRunningTurn()
     openHost()
@@ -545,8 +572,9 @@ describe('already-wedged profiles become usable on load', () => {
     expect(acquire).toHaveBeenCalledOnce()
     expect(turnLifecycle('turn-1')).toEqual({
       turnId: 'turn-1',
-      state: 'unverifiable',
+      state: 'interrupted',
       startedAt: NOW - 5_000,
+      completedAt: NOW - 5_000,
       recovered: true
     })
     expect(
@@ -602,7 +630,7 @@ describe('already-wedged profiles become usable on load', () => {
     // The conversation survived: the codex thread was resumed, not recreated.
     expect(store.getRecord(SESSION)?.providerHandleChain[0]).toMatchObject({
       linkId: 'codex-13-link',
-      handle: { threadId: THREAD }
+      handle: { nativeId: THREAD }
     })
     // Why NOT acquired here: startup spawning a provider child for every recovered record is the
     // accumulation this stack removed. Unlatching is the migration's job; spawning is a hold's.
@@ -674,10 +702,11 @@ describe('already-wedged profiles become usable on load', () => {
     acquire.mockImplementation(async ({ fence }) => {
       order.push('acquire')
       return {
+        acquisitionGeneration: globalThis.crypto.randomUUID(),
         process: { hostId: 'local', pid: 4242, processStartTimeMs: 1, spawnToken: 'spawn-new' },
         link: {
           linkId: `link-${fence}`,
-          handle: { provider: 'codex' as const, threadId: THREAD },
+          handle: codexProviderHandle(THREAD),
           origin: 'resumed' as const,
           mintedAtFence: fence,
           observedAt: NOW

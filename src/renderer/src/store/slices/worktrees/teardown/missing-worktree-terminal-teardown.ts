@@ -1,5 +1,5 @@
-import { callRuntimeRpc, getActiveRuntimeTarget } from '../../../../runtime/runtime-rpc-client'
-import type { AppState } from '../../../types'
+import { callRuntimeRpc } from '../../../../runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import type { DetectedWorktreeListResult } from '../../../../../../shared/worktree/types'
 import { isRuntimeMethodNotFoundError } from '../listing/runtime-worktree-rpc-errors'
 
@@ -9,7 +9,8 @@ import { isRuntimeMethodNotFoundError } from '../listing/runtime-worktree-rpc-er
 const missingWorktreeTeardownsInFlight = new Map<string, Promise<void>>()
 
 export async function teardownMissingWorktreeTerminalsBestEffort(
-  settings: AppState['settings'],
+  /** The host whose listing found the worktrees missing. */
+  target: RuntimeClientTarget,
   repoId: string,
   connectionId: string | null | undefined,
   // Why: refreshes that never purge omit this; an absent snapshot means
@@ -25,7 +26,6 @@ export async function teardownMissingWorktreeTerminalsBestEffort(
   if (missingIds.length === 0) {
     return
   }
-  const target = getActiveRuntimeTarget(settings)
   const normalizedConnectionId = connectionId ?? null
   const key = [
     target.kind === 'local' ? 'local' : `runtime:${target.environmentId}`,

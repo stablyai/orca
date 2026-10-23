@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   FlatList,
@@ -9,8 +9,10 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { ChevronLeft, X } from 'lucide-react-native'
-import { useRouteHandoff } from '../navigation/route-handoff'
-import { useHostClient, useForceReconnect } from '../transport/client-context'
+import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
+import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
+import { useForceReconnect } from '../transport/host-client-hooks'
+import { useWorkspaceClient } from '../transport/use-workspace-client'
 import { connectionRetryAction } from '../transport/connection-retry-action'
 import { getWorktreeLabel } from '../session/worktree-label'
 import {
@@ -20,7 +22,7 @@ import {
   type FileExplorerRow
 } from './file-tree'
 import type { RpcFailure } from '../transport/types'
-import { colors } from '../theme/mobile-theme'
+import { colors, spacing } from '../theme/mobile-theme'
 import {
   beginDirectoryLoad,
   createDirectoryLoadRevisions,
@@ -28,11 +30,13 @@ import {
   resetDirectoryLoadRevisions,
   type DirectoryLoadRevisions
 } from './directory-load-revisions'
-import { directoryCacheFromFileList, isMobileMethodUnavailableError } from './file-list-fallback'
+import { isMobileMethodUnavailableError } from '../transport/mobile-method-unavailable'
+import { directoryCacheFromFileList } from './file-list-fallback'
 import { fileDirectoryRead, legacyFileListRead } from './mobile-file-explorer-operations'
 import { fileExplorerStyles as styles } from './mobile-file-explorer-styles'
 import { MobileFileExplorerRow } from './mobile-file-explorer-row'
 import { navigateToMobileFilePreview } from './mobile-file-preview-navigation'
+import { MobileLoadErrorState } from '../components/MobileLoadErrorState'
 
 export function MobileFileExplorerPanel(props: {
   hostId: string
@@ -42,15 +46,17 @@ export function MobileFileExplorerPanel(props: {
   onRequestClose?: () => void
 }) {
   const { hostId, worktreeId, name, embedded, onRequestClose } = props
-  const router = useRouteHandoff()
-  const { client, state: connState } = useHostClient(hostId)
+  const router = useWorkspaceRouteHandoff()
+  const executionHost = useWorkspaceExecutionHost()
+  const { client, state: connState } = useWorkspaceClient(hostId)
   const forceReconnect = useForceReconnect()
   const scopeRef = useRef('')
-  const scope = `${hostId}:${worktreeId}`
+  const scope = JSON.stringify([hostId, executionHost, worktreeId])
   scopeRef.current = scope
   const directoryLoadRevisionsRef = useRef<DirectoryLoadRevisions>(createDirectoryLoadRevisions())
   const pendingDirectoryRetriesRef = useRef<Set<string>>(new Set())
   const directoryCacheRef = useRef<DirectoryCache>({})
+  const [panelWidth, setPanelWidth] = useState(0)
   const [directoryCache, setDirectoryCache] = useState<DirectoryCache>({})
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
   const [loading, setLoading] = useState(true)
@@ -159,6 +165,7 @@ export function MobileFileExplorerPanel(props: {
           ...prev,
           [relativePath]: { entries }
         }))
+        return 'directory' as const
       } catch (err) {
         if (
           !isCurrentDirectoryLoad(directoryLoadRevisionsRef.current, scopeRef.current, loadToken)
@@ -207,9 +214,40 @@ export function MobileFileExplorerPanel(props: {
     directoryCacheRef.current = directoryCache
   }, [directoryCache])
 
+  const refreshExpandedDirectories = useEffectEvent(() => {
+    setDirectoryCache((previous) =>
+      Object.fromEntries(
+        Object.entries(previous).filter(([path]) => path === '' || expanded.has(path))
+      )
+    )
+    for (const relativePath of expanded) {
+      if (getDirectoryCacheState(directoryCacheRef.current, relativePath)) {
+        void loadDirectory(relativePath)
+      }
+    }
+  })
+
   useEffect(() => {
-    void loadDirectory('')
-  }, [hostId, loadDirectory])
+    let cancelled = false
+    resetDirectoryLoadRevisions(directoryLoadRevisionsRef.current)
+    setDirectoryCache((previous) =>
+      Object.fromEntries(
+        Object.entries(previous).map(([path, state]) => [
+          path,
+          state?.loading ? { entries: state.entries, error: 'Folder load interrupted' } : state
+        ])
+      )
+    )
+    void loadDirectory('').then((result) => {
+      // Legacy roots replace their entire synthesized cache; only readDir roots need child reads.
+      if (!cancelled && result === 'directory') {
+        refreshExpandedDirectories()
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [scope, loadDirectory])
 
   useEffect(() => {
     if (connState !== 'connected' || pendingDirectoryRetriesRef.current.size === 0) {
@@ -281,6 +319,7 @@ export function MobileFileExplorerPanel(props: {
     return (
       <MobileFileExplorerRow
         item={item}
+        maximumIndentation={Math.max(0, panelWidth / 3 - spacing.lg)}
         expanded={expanded}
         onPreviewFile={previewFile}
         onRetryDirectory={retryDirectory}
@@ -336,14 +375,7 @@ export function MobileFileExplorerPanel(props: {
       <ActivityIndicator size="small" color={colors.textSecondary} />
     </View>
   ) : error ? (
-    <View style={styles.state}>
-      <Text style={styles.errorText}>{error}</Text>
-      {rootRetry ? (
-        <Pressable style={styles.retryButton} onPress={rootRetry}>
-          <Text style={styles.retryText}>Retry</Text>
-        </Pressable>
-      ) : null}
-    </View>
+    <MobileLoadErrorState message={error} onRetry={rootRetry} />
   ) : rows.length === 0 ? (
     <View style={styles.state}>
       <Text style={styles.emptyText}>No files found</Text>
@@ -361,7 +393,10 @@ export function MobileFileExplorerPanel(props: {
   // Embedded: the dock column owns safe-area/layout, so render a plain View and
   // a non-inset header. Full-screen: keep the SafeAreaView top inset + chrome.
   return (
-    <View style={styles.container}>
+    <View
+      style={styles.container}
+      onLayout={({ nativeEvent }) => setPanelWidth(nativeEvent.layout.width)}
+    >
       {embedded ? (
         <View style={styles.header}>{headerBar}</View>
       ) : (

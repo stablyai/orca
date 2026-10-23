@@ -1,22 +1,17 @@
 import { useAppStore } from '../../store'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
-import type { PtyTransport } from './pty-transport'
+import type { PtyTransport } from './pty-transport-types'
 import { getConnectionId } from '@/lib/connection-context'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import type { TerminalPasteSource, TerminalPasteTextOptions } from './terminal-paste-model'
 import {
-  executeTerminalPastePlan,
-  planTerminalPasteWithYield,
-  type TerminalPasteSource,
-  type TerminalPasteTextOptions
-} from './terminal-paste-coordinator'
-import { resolveTerminalPasteRuntime } from './terminal-paste-runtime'
-import { getTerminalPasteSshRemotePlatform } from './terminal-paste-ssh-platform'
+  resolveTerminalPasteRuntime,
+  resolveTerminalPasteRuntimeEnvironmentId
+} from './terminal-paste-runtime'
 import {
   isTerminalPanePasteFocusCurrent,
   isTerminalPanePasteTargetCurrent
 } from './terminal-paste-target-state'
-import { pasteTerminalText } from './terminal-bracketed-paste'
-import { writeTerminalPastePtyInput } from './terminal-pty-paste-writer'
+import { pasteTextIntoTerminalPane } from './terminal-pane-paste-dispatch'
 import { formatTerminalPasteExecutionError } from './terminal-paste-errors'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
 import { scheduleImagePasteWebglAtlasRecovery } from './terminal-webgl-atlas-recovery'
@@ -64,36 +59,23 @@ export function createTerminalPanePasteExecution(
     text: string,
     options?: TerminalPasteTextOptions
   ): Promise<void> => {
-    const connectionId = getConnectionId(worktreeId) ?? null
     const transport = paneTransportsRef.current.get(pane.id)
     const ptyId = transport?.getPtyId() ?? null
     const keyboardOwnedPaste =
       source === 'keyboard' || source === 'paste-event' || source === 'app-menu'
-    const plan = await planTerminalPasteWithYield({
+    const execution = await pasteTextIntoTerminalPane({
+      pane,
       text,
       source,
-      target: {
-        kind: 'terminal',
-        paneId: pane.id,
-        leafId: pane.leafId,
+      ptyId,
+      runtime: resolveTerminalPasteRuntime({
+        platform: shortcutPlatform,
         ptyId,
-        runtime: resolveTerminalPasteRuntime({
-          platform: shortcutPlatform,
-          ptyId,
-          connectionId,
-          remotePlatform: getTerminalPasteSshRemotePlatform(connectionId),
-          transport,
-          isWindowsConpty: forceBracketedMultilineTextPaste
-        })
-      },
-      forceBracketedPaste: options?.forceBracketedPaste,
-      forceBracketedPasteForMultiline: options?.forceBracketedPasteForMultiline,
-      terminalBracketedPasteMode: pane.terminal.modes.bracketedPasteMode
-    })
-    const execution = await executeTerminalPastePlan(plan, {
-      pasteText: (pasteText, pasteOptions) =>
-        pasteTerminalText(pane.terminal, pasteText, pasteOptions),
-      writePty: (data) => writeTerminalPastePtyInput(transport, data, 'driving'),
+        transport,
+        isWindowsConpty: forceBracketedMultilineTextPaste
+      }),
+      transport,
+      inputKind: 'driving',
       isTargetCurrent: () => {
         if (!isPanePasteTargetMounted(pane, transport, ptyId)) {
           return false
@@ -104,7 +86,8 @@ export function createTerminalPanePasteExecution(
           paneContainer: pane.container
         })
       },
-      canContinue: () => isPanePasteTargetMounted(pane, transport, ptyId)
+      canContinue: () => isPanePasteTargetMounted(pane, transport, ptyId),
+      planOptions: options
     })
     if (execution.status !== 'pasted') {
       setTerminalError(formatTerminalPasteExecutionError(execution.reason))
@@ -125,9 +108,10 @@ export function createTerminalPanePasteExecution(
       .readClipboardText
   ): void => {
     const connectionId = getConnectionId(worktreeId) ?? null
-    const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(
+    const runtimeEnvironmentId = resolveTerminalPasteRuntimeEnvironmentId(
       useAppStore.getState(),
-      worktreeId
+      worktreeId,
+      paneTransportsRef.current.get(pane.id)
     )
     const activeElementAtDispatch = document.activeElement
     void pasteTerminalClipboard({

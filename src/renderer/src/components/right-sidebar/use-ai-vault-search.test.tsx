@@ -333,3 +333,38 @@ it('is neither searching nor holding a query for a blank box', async () => {
   expect(result.current.hasQuery).toBe(false)
   unmount()
 })
+
+// #22453: a host's index is not this client's to turn on, so its "off" must not wall the list.
+it.each(['disabled', 'no-service'] as const)(
+  'falls back to the title filter when a single host answers %s',
+  async (reason) => {
+    searchSessions.mockResolvedValue({ kind: 'unavailable', reason })
+    const initialProps = { query: 'needle' }
+    const { result, rerender, unmount } = renderHook(
+      ({ query }) => useAiVaultPanelSearch(query, ALL_AGENTS, undefined, 'ssh:box', 'relevance'),
+      { initialProps }
+    )
+    await debounce()
+    expect(result.current.searching).toBe(false)
+    expect(result.current.titleOnly).toBe(true)
+    expect(result.current.loading).toBe(false)
+
+    // Further typing filters titles without asking that host again.
+    rerender({ query: 'needles' })
+    await debounce()
+    expect(searchSessions).toHaveBeenCalledOnce()
+    expect(result.current.searching).toBe(false)
+    unmount()
+  }
+)
+
+it('keeps full-text search for a host that is merely not ready', async () => {
+  searchSessions.mockResolvedValue({ kind: 'unavailable', reason: 'not-ready' })
+  const { result, unmount } = renderHook(() =>
+    useAiVaultPanelSearch('needle', ALL_AGENTS, undefined, 'ssh:box', 'relevance')
+  )
+  await debounce()
+  expect(result.current.searching).toBe(true)
+  expect(result.current.titleOnly).toBe(false)
+  unmount()
+})

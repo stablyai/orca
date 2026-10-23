@@ -1,7 +1,10 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { useMobileNativeChatSendError } from './use-mobile-native-chat-send-error'
+import {
+  useMobileNativeChatSendError,
+  type MobileNativeChatCommandRefusalCauses
+} from './use-mobile-native-chat-send-error'
 
 type HookApi = ReturnType<typeof useMobileNativeChatSendError>
 
@@ -13,13 +16,17 @@ describe('useMobileNativeChatSendError', () => {
 
   function Harness({
     scopeKey,
-    bannerMounted = true
+    bannerMounted = true,
+    causes = null
   }: {
     scopeKey: string | null
     bannerMounted?: boolean
+    causes?: MobileNativeChatCommandRefusalCauses | null
   }): null {
     const api = useMobileNativeChatSendError({ scopeKey, showToast })
     api.bannerMountedRef.current = bannerMounted
+    // As the route does each render, with what the chat shows.
+    api.keepWhile(causes)
     apiRef.current = api
     return null
   }
@@ -47,6 +54,52 @@ describe('useMobileNativeChatSendError', () => {
     act(() => renderer?.unmount())
     renderer = null
     vi.useRealTimers()
+  })
+
+  async function showing(causes: MobileNativeChatCommandRefusalCauses): Promise<void> {
+    await act(async () => {
+      renderer?.update(createElement(Harness, { scopeKey: 'terminal-1', causes }))
+    })
+  }
+
+  it('a /clear refused while the agent works goes when the agent stops, and stays gone', async () => {
+    const line = "The agent is still working. Run /clear when it's done."
+    await render()
+    await showing({ working: true, prompt: false })
+    await act(async () => api().show(line, { refusedWhile: 'working' }))
+    expect(api().message).toBe(line)
+    await showing({ working: true, prompt: false })
+    expect(api().message).toBe(line)
+
+    await showing({ working: false, prompt: false })
+    expect(api().message).toBeNull()
+    // Dropped, not hidden: the agent working again is not what that press was refused for.
+    await showing({ working: true, prompt: false })
+    expect(api().message).toBeNull()
+  })
+
+  it('a refusal behind a question goes once it is answered', async () => {
+    await render()
+    await showing({ working: false, prompt: true })
+    await act(async () =>
+      api().show("Answer the agent's question or approval, then run /clear.", {
+        refusedWhile: 'prompt'
+      })
+    )
+    await showing({ working: false, prompt: false })
+    expect(api().message).toBeNull()
+  })
+
+  it('a failure naming nothing the phone shows, or background tasks it cannot see, stays', async () => {
+    await render()
+    await act(async () => api().show('Message not sent'))
+    await showing({ working: false, prompt: false })
+    expect(api().message).toBe('Message not sent')
+    await act(async () =>
+      api().show('Background tasks are still running.', { refusedWhile: 'background' })
+    )
+    await showing({ working: false, prompt: false })
+    expect(api().message).toBe('Background tasks are still running.')
   })
 
   it('holds a failure for four seconds, then drops it', async () => {
@@ -101,6 +154,10 @@ describe('useMobileNativeChatSendError', () => {
 
     await act(async () => {
       renderer?.update(createElement(Harness, { scopeKey: 'terminal-2' }))
+    })
+    expect(api().message).toBeNull()
+    await act(async () => {
+      renderer?.update(createElement(Harness, { scopeKey: 'terminal-1' }))
     })
     expect(api().message).toBeNull()
   })

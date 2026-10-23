@@ -2,6 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { resolve } from 'node:path'
 import type { Store } from '../persistence'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
+import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
+import type { Repo } from '../../shared/repo-types'
+import { getDefaultRepoHookSettings } from '../../shared/constants'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import type { AddWorktreeOptions } from '../git/worktree'
 import {
@@ -32,6 +35,7 @@ const mocks = vi.hoisted(() => ({
   resolveShared: vi.fn<() => Promise<string[]>>(),
   resolveInclude: vi.fn<() => Promise<string[]>>(),
   copyPaths: vi.fn<() => Promise<string[]>>(),
+  effectiveHooks: vi.fn(),
   created: {
     path: '',
     head: 'abc123',
@@ -52,6 +56,7 @@ vi.mock('../git/repo', () => ({
   getBranchConflictKind: mocks.branchConflict
 }))
 vi.mock('../git/git-username', () => ({ resolveLocalGitUsername: async () => '' }))
+vi.mock('../hooks', () => ({ getEffectiveHooks: mocks.effectiveHooks }))
 vi.mock('../git/worktree-base-ref-probe', () => ({ hasLocalWorktreeBaseRef: mocks.hasBase }))
 vi.mock('./runtime-worktree-create-git', () => ({
   resolveCreateBranchName: mocks.branchName,
@@ -81,13 +86,33 @@ vi.mock('../ipc/worktree-symlinks', () => ({
 }))
 
 import { createRuntimeLocalManagedWorktree } from './runtime-local-worktree-create'
+import { WorktreeCreateSetupChoiceRefusedError } from './worktree-create-setup-choice-refusal'
 import type { PreparationRearmHolder } from '../worktree-create-preparation'
+import {
+  createWorktreeCreateTimingRecorder,
+  type WorktreeCreateTimingRecorder
+} from '../worktree-create-timing'
+import type { SparsePreset } from '../../shared/worktree/create-types'
+import { withoutInFlightWorktreeCreates } from '../worktree-create-in-flight'
 
 const worktreePath = resolve('/worktrees', 'app')
 
+const writtenMeta: Partial<WorktreeMeta>[] = []
+const WEB_PRESET: SparsePreset = {
+  id: 'preset-web',
+  repoId: 'repo-1',
+  name: 'web',
+  directories: ['apps/web', 'packages/ui'],
+  createdAt: 0,
+  updatedAt: 0
+}
+const readSparsePresets = vi.fn<(repoId: string) => SparsePreset[]>()
+
 function createWorktree(
   request: Partial<RuntimeManagedWorktreeCreateArgs> = {},
-  rearm: PreparationRearmHolder = { fire: () => {} }
+  rearm: PreparationRearmHolder = { fire: () => {} },
+  timing: WorktreeCreateTimingRecorder = createWorktreeCreateTimingRecorder(),
+  repoOverrides: Partial<Repo> = {}
 ) {
   const store = {
     getSettings: () => ({
@@ -96,20 +121,34 @@ function createWorktree(
       refreshLocalBaseRefOnWorktreeCreate: false,
       branchPrefix: ''
     }),
-    setWorktreeMeta: (_id: string, updates: Partial<WorktreeMeta>) => updates
+    setWorktreeMeta: (_target: HostWorktreeTarget, updates: Partial<WorktreeMeta>) => {
+      writtenMeta.push(updates)
+      return updates
+    },
+    getSparsePresets: (repoId: string): SparsePreset[] => readSparsePresets(repoId)
   }
   return createRuntimeLocalManagedWorktree({
     request: { repoSelector: 'repo-1', name: 'app', baseBranch: 'main', ...request },
-    repo: { id: 'repo-1', path: '/repo', displayName: 'Repo', badgeColor: '#000000', addedAt: 0 },
+    repo: {
+      id: 'repo-1',
+      path: '/repo',
+      displayName: 'Repo',
+      badgeColor: '#000000',
+      addedAt: 0,
+      ...repoOverrides
+    },
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: All store methods reached by this isolated create path are supplied above.
     store: store as Store,
     createdWithAgent: undefined,
     resolveRemoteTrackingBase: mocks.remoteBase,
     hasRemoteTrackingRef: mocks.hasRemoteRef,
-    refreshRemoteTrackingBase: mocks.refresh,
-    fetchRemote: mocks.fetch,
+    // Why: a vi.fn marks the promise it returns as handled; a fresh promise keeps
+    // an unawaited fetch rejection visible to the unhandled-rejection checks.
+    refreshRemoteTrackingBase: async (...refreshArgs) => await mocks.refresh(...refreshArgs),
+    fetchRemote: async (...fetchArgs) => await mocks.fetch(...fetchArgs),
     onWorktreeMetadataPersisted: () => undefined,
-    rearm
+    rearm,
+    timing
   })
 }
 
@@ -143,6 +182,83 @@ beforeEach(() => {
   mocks.resolveShared.mockResolvedValue([])
   mocks.resolveInclude.mockResolvedValue(['.env'])
   mocks.copyPaths.mockResolvedValue([])
+  mocks.effectiveHooks.mockReturnValue(null)
+  readSparsePresets.mockReturnValue([WEB_PRESET])
+})
+
+describe('runtime create listing hold', () => {
+  const rows = [{ path: worktreePath }]
+
+  it('holds the checkout during Git creation and releases it once metadata is saved', async () => {
+    mocks.consume.mockImplementation(async () => {
+      expect(withoutInFlightWorktreeCreates('repo-1', rows)).toEqual([])
+      return { status: 'hit', result: {}, rearm: mocks.rearm }
+    })
+    mocks.resolveShared.mockImplementation(async () => {
+      expect(withoutInFlightWorktreeCreates('repo-1', rows)).toBe(rows)
+      return []
+    })
+    await createWorktree()
+    expect(mocks.resolveShared).toHaveBeenCalledOnce()
+  })
+
+  it('releases the checkout when Git creation fails', async () => {
+    mocks.consume.mockRejectedValue(new Error('checkout failed'))
+    await expect(createWorktree()).rejects.toThrow('checkout failed')
+    expect(withoutInFlightWorktreeCreates('repo-1', rows)).toBe(rows)
+  })
+})
+
+describe('runtime nested-workspaces layout', () => {
+  const addedPath = (): string => String(mocks.add.mock.calls[0]?.[1])
+
+  it('honors the client choice over the host default', async () => {
+    mocks.consume.mockResolvedValue({ status: 'miss', reason: 'disabled', rearm: mocks.rearm })
+    await createWorktree({ nestWorkspaces: true })
+    expect(addedPath()).toBe(resolve('/worktrees', 'repo', 'app'))
+  })
+
+  it('falls back to the host setting when the client sends none', async () => {
+    mocks.consume.mockResolvedValue({ status: 'miss', reason: 'disabled', rearm: mocks.rearm })
+    await createWorktree({})
+    expect(addedPath()).toBe(worktreePath)
+  })
+})
+
+describe('runtime keep-local-main-up-to-date choice', () => {
+  const addRefreshArg = (): unknown => mocks.add.mock.calls[0]?.[4]
+  const addOptions = (): AddWorktreeOptions | undefined => mocks.add.mock.calls[0]?.[6]
+
+  beforeEach(() => {
+    mocks.consume.mockResolvedValue({ status: 'miss', reason: 'disabled', rearm: mocks.rearm })
+    mocks.remoteBase.mockResolvedValue({
+      remote: 'origin',
+      branch: 'main',
+      ref: 'refs/remotes/origin/main',
+      base: 'origin/main'
+    })
+  })
+
+  it('refreshes local main when the client turned it on, over the host default', async () => {
+    await createWorktree({ refreshLocalBaseRefOnWorktreeCreate: true })
+    expect(mocks.consume).toHaveBeenCalledWith(
+      expect.objectContaining({ refreshLocalBaseRef: true })
+    )
+    expect(addRefreshArg()).toBe(true)
+    expect(addOptions()?.suggestLocalBaseRefUpdate).toBeUndefined()
+  })
+
+  it('suppresses the suggestion the client already dismissed', async () => {
+    await createWorktree({ localBaseRefSuggestionDismissed: true })
+    expect(addRefreshArg()).toBe(false)
+    expect(addOptions()?.suggestLocalBaseRefUpdate).toBeUndefined()
+  })
+
+  it('keeps the host setting and suggestion when the client sends neither', async () => {
+    await createWorktree({})
+    expect(addRefreshArg()).toBe(false)
+    expect(addOptions()?.suggestLocalBaseRefUpdate).toBe(true)
+  })
 })
 
 describe('runtime prepared-worktree replenishment', () => {
@@ -216,6 +332,41 @@ describe('runtime prepared-worktree replenishment', () => {
   })
 })
 
+describe('runtime create timing', () => {
+  it('times the add with the prepared-checkout consume inside it, and lists the worktrees', async () => {
+    mocks.listing.mockResolvedValue({
+      created: mocks.created,
+      worktrees: [mocks.created, mocks.created, mocks.created],
+      listingComplete: true
+    })
+    const timing = createWorktreeCreateTimingRecorder()
+
+    await createWorktree({}, undefined, timing)
+
+    expect(mocks.consume).toHaveBeenCalledWith(expect.objectContaining({ timing }))
+    const finished = timing.finish()
+    expect(finished.phases.map((phase) => phase.phase)).toEqual(
+      expect.arrayContaining([
+        'resolve_name',
+        'git_worktree_add',
+        'list_created_worktree',
+        'persist_metadata',
+        'copy_worktreeinclude'
+      ])
+    )
+    expect(finished).toMatchObject({ executionHost: 'local', worktreeCount: 3 })
+  })
+
+  it('records a sparse create as a miss without consulting the prepared checkout', async () => {
+    const timing = createWorktreeCreateTimingRecorder()
+
+    await createWorktree({ sparseCheckout: { directories: ['src'] } }, undefined, timing)
+
+    expect(mocks.consume).not.toHaveBeenCalled()
+    expect(timing.finish().preparedCheckout).toEqual({ status: 'miss', reason: 'sparse_checkout' })
+  })
+})
+
 describe('runtime create Git priority', () => {
   it.each([undefined, 'Ubuntu'])(
     'preserves interactive priority and routing on %s',
@@ -282,6 +433,30 @@ describe('runtime create Git priority', () => {
     }
   })
 
+  it.each([
+    ['exactly its directories', ['packages/ui', 'apps/web'], 'preset-web'],
+    ['an edited selection', ['apps/web'], undefined]
+  ])('records the sparse preset only for %s', async (_case, directories, recorded) => {
+    writtenMeta.length = 0
+    await createWorktree({ sparseCheckout: { directories, presetId: 'preset-web' } })
+
+    expect(writtenMeta.find((meta) => meta.sparseDirectories)?.sparsePresetId).toBe(recorded)
+  })
+
+  it('still creates the worktree, with no sparse preset, when presets cannot be read', async () => {
+    writtenMeta.length = 0
+    readSparsePresets.mockImplementation(() => {
+      throw new Error('corrupt presets')
+    })
+    await createWorktree({
+      sparseCheckout: { directories: ['apps/web', 'packages/ui'], presetId: 'preset-web' }
+    })
+
+    const sparseMeta = writtenMeta.find((meta) => meta.sparseDirectories)
+    expect(sparseMeta?.sparseDirectories).toEqual(['apps/web', 'packages/ui'])
+    expect(sparseMeta?.sparsePresetId).toBeUndefined()
+  })
+
   it('preserves priority for sparse creates and remote base refreshes', async () => {
     const base = {
       remote: 'origin',
@@ -304,5 +479,306 @@ describe('runtime create Git priority', () => {
       expect.objectContaining(options)
     )
     expect(mocks.consume).not.toHaveBeenCalled()
+  })
+})
+
+describe('runtime create PR conflict probe', () => {
+  const remoteTrackingBase = {
+    remote: 'origin',
+    branch: 'main',
+    base: 'origin/main',
+    ref: 'refs/remotes/origin/main'
+  }
+
+  beforeEach(() => {
+    mocks.branchName.mockImplementation(async (_path, _override, name: string) => name)
+  })
+
+  it('runs the first name PR lookup while the base fetch is still in flight', async () => {
+    mocks.remoteBase.mockResolvedValue(remoteTrackingBase)
+    let finishFetch!: () => void
+    mocks.refresh.mockReturnValue(
+      new Promise((resolve) => {
+        finishFetch = () => resolve({ ok: true })
+      })
+    )
+    let fetchPendingAtLookup = false
+    mocks.githubPr.mockImplementation(async () => {
+      fetchPendingAtLookup = mocks.refresh.mock.calls.length === 1
+      finishFetch?.()
+      return null
+    })
+
+    await createWorktree()
+
+    expect(fetchPendingAtLookup).toBe(true)
+    expect(mocks.githubPr).toHaveBeenCalledWith('/repo', 'app', {})
+    expect(mocks.consume).toHaveBeenCalledWith(
+      expect.objectContaining({
+        branch: 'app',
+        options: expect.objectContaining({ remoteTrackingBase })
+      })
+    )
+  })
+
+  it('suffixes past a PR on the first name', async () => {
+    mocks.githubPr.mockResolvedValueOnce({ number: 7, state: 'closed' }).mockResolvedValue(null)
+
+    await createWorktree()
+
+    expect(mocks.githubPr.mock.calls.map(([, branch]) => branch)).toEqual(['app', 'app-2'])
+    expect(mocks.consume).toHaveBeenCalledWith(expect.objectContaining({ branch: 'app-2' }))
+  })
+
+  it.each([undefined, 'Ubuntu'])(
+    'probes the next name for a PR once the first name collides, routed for %s',
+    async (wslDistro) => {
+      const routing = wslDistro ? { wslDistro } : {}
+      mocks.routing.mockReturnValue(routing)
+      mocks.branchConflict.mockResolvedValueOnce('local').mockResolvedValue(null)
+
+      await createWorktree()
+
+      expect(mocks.githubPr).toHaveBeenCalledOnce()
+      expect(mocks.githubPr).toHaveBeenCalledWith('/repo', 'app-2', routing)
+    }
+  )
+
+  it('skips a later name that already has a PR', async () => {
+    mocks.branchConflict.mockResolvedValueOnce('local').mockResolvedValue(null)
+    mocks.githubPr.mockResolvedValueOnce({ number: 7, state: 'closed' }).mockResolvedValue(null)
+
+    await createWorktree()
+
+    expect(mocks.githubPr.mock.calls.map(([, branch]) => branch)).toEqual(['app-2', 'app-3'])
+    expect(mocks.consume).toHaveBeenCalledWith(expect.objectContaining({ branch: 'app-3' }))
+  })
+
+  it('reports the naming failure when the started base fetch also fails', async () => {
+    mocks.remoteBase.mockResolvedValue(remoteTrackingBase)
+    mocks.refresh.mockRejectedValue(new Error('offline'))
+    mocks.branchConflict.mockResolvedValue('local')
+    const unhandled = vi.fn()
+    process.on('unhandledRejection', unhandled)
+    try {
+      await expect(createWorktree()).rejects.toThrow('Branch "app-')
+      await new Promise((resolve) => setImmediate(resolve))
+      expect(mocks.refresh).toHaveBeenCalledOnce()
+      expect(unhandled).not.toHaveBeenCalled()
+      expect(mocks.consume).not.toHaveBeenCalled()
+    } finally {
+      process.off('unhandledRejection', unhandled)
+    }
+  })
+
+  it('runs the first name PR lookup while the origin fetch is still in flight', async () => {
+    mocks.hasBase.mockResolvedValue(false)
+    let finishFetch!: () => void
+    mocks.fetch.mockReturnValue(
+      new Promise<void>((resolve) => {
+        finishFetch = resolve
+      })
+    )
+    let fetchPendingAtLookup = false
+    mocks.githubPr.mockImplementation(async () => {
+      fetchPendingAtLookup = mocks.fetch.mock.calls.length === 1
+      finishFetch?.()
+      return null
+    })
+
+    await createWorktree()
+
+    expect(fetchPendingAtLookup).toBe(true)
+    expect(mocks.fetch).toHaveBeenCalledWith('/repo', 'origin', {})
+    expect(mocks.consume).toHaveBeenCalledWith(expect.objectContaining({ branch: 'app' }))
+  })
+
+  it('reports the naming failure when the started origin fetch also fails', async () => {
+    mocks.hasBase.mockResolvedValue(false)
+    mocks.fetch.mockRejectedValue(new Error('offline'))
+    mocks.branchConflict.mockResolvedValue('local')
+    const unhandled = vi.fn()
+    process.on('unhandledRejection', unhandled)
+    try {
+      await expect(createWorktree()).rejects.toThrow('Branch "app-')
+      await new Promise((resolve) => setImmediate(resolve))
+      expect(mocks.fetch).toHaveBeenCalledOnce()
+      expect(unhandled).not.toHaveBeenCalled()
+      expect(mocks.consume).not.toHaveBeenCalled()
+    } finally {
+      process.off('unhandledRejection', unhandled)
+    }
+  })
+})
+
+describe('runtime create base without a tracking ref', () => {
+  const originMain = {
+    remote: 'origin',
+    branch: 'main',
+    ref: 'refs/remotes/origin/main',
+    base: 'origin/main'
+  }
+
+  beforeEach(() => {
+    mocks.remoteBase.mockResolvedValue(originMain)
+    mocks.hasRemoteRef.mockResolvedValue(false)
+    // Only the local branch the remote names exists; `origin/main` itself does not resolve.
+    mocks.hasBase.mockImplementation(async (_repo: string, ref: string) => ref === 'main')
+  })
+
+  it('fetches the remote base first and creates from it when the fetch works', async () => {
+    mocks.refresh.mockImplementation(async () => {
+      mocks.hasRemoteRef.mockResolvedValue(true)
+      return { ok: true }
+    })
+
+    const result = await createWorktree({ baseBranch: 'origin/main' })
+
+    expect(mocks.refresh).toHaveBeenCalledOnce()
+    expect(mocks.consume).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baseBranch: 'origin/main',
+        options: expect.objectContaining({ remoteTrackingBase: originMain })
+      })
+    )
+    expect(result).not.toHaveProperty('baseFallback')
+    expect(result.worktree.baseRef).toBe('refs/remotes/origin/main')
+  })
+
+  it('names the workspace only after the fetch has settled', async () => {
+    let refreshSettled = false
+    mocks.refresh.mockImplementation(async () => {
+      await Promise.resolve()
+      mocks.hasRemoteRef.mockResolvedValue(true)
+      refreshSettled = true
+      return { ok: true }
+    })
+    const settledAtNaming: boolean[] = []
+    mocks.canCheckout.mockImplementation(async () => {
+      settledAtNaming.push(refreshSettled)
+      return false
+    })
+
+    await createWorktree({ baseBranch: 'origin/main', branchNameOverride: 'app' })
+
+    expect(settledAtNaming).toEqual([true])
+    expect(mocks.canCheckout).toHaveBeenCalledWith('/repo', 'app', 'origin/main', {})
+    expect(mocks.branchConflict).toHaveBeenCalledWith('/repo', 'app', 'origin/main', {}, undefined)
+  })
+
+  it('keeps the not-found error when the fetch works but the tracking ref is still missing', async () => {
+    mocks.hasBase.mockResolvedValue(false)
+    mocks.refresh.mockResolvedValue({ ok: true })
+
+    await expect(createWorktree({ baseBranch: 'origin/main' })).rejects.toThrow(
+      'Base ref "origin/main" was not found after fetching.'
+    )
+    expect(mocks.consume).not.toHaveBeenCalled()
+  })
+
+  it('creates from the local branch and reports it when the fetch fails', async () => {
+    mocks.refresh.mockResolvedValue({ ok: false, errorKind: 'git_error' })
+
+    const result = await createWorktree({ baseBranch: 'origin/main', allowLocalBaseFallback: true })
+
+    expect(mocks.consume).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baseBranch: 'main',
+        options: expect.not.objectContaining({ remoteTrackingBase: expect.anything() })
+      })
+    )
+    expect(result.baseFallback).toEqual({ requestedRef: 'origin/main', localRef: 'main' })
+    expect(result.addResult).not.toHaveProperty('baseFallback')
+    expect(result.worktree.baseRef).toBe('main')
+  })
+
+  it('decides the base before branch reuse and conflict checks', async () => {
+    mocks.refresh.mockResolvedValue({ ok: false, errorKind: 'git_error' })
+
+    await createWorktree({
+      baseBranch: 'origin/main',
+      branchNameOverride: 'app',
+      allowLocalBaseFallback: true
+    })
+
+    expect(mocks.refresh.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.canCheckout.mock.invocationCallOrder[0]
+    )
+    expect(mocks.canCheckout).toHaveBeenCalledWith('/repo', 'app', 'main', {})
+    expect(mocks.branchConflict).toHaveBeenCalledWith('/repo', 'app', 'main', {}, undefined)
+  })
+
+  it("keeps the network error when the fetch fails and there's no local branch", async () => {
+    mocks.hasBase.mockResolvedValue(false)
+    mocks.refresh.mockResolvedValue({ ok: false, errorKind: 'git_error' })
+
+    await expect(
+      createWorktree({ baseBranch: 'origin/main', allowLocalBaseFallback: true })
+    ).rejects.toThrow(
+      'Could not refresh base ref "origin/main" from "origin". Check your network and try again.'
+    )
+    expect(mocks.branchName).not.toHaveBeenCalled()
+    expect(mocks.consume).not.toHaveBeenCalled()
+  })
+
+  it('keeps the network error for a create that did not opt into the fallback', async () => {
+    mocks.refresh.mockResolvedValue({ ok: false, errorKind: 'git_error' })
+
+    await expect(createWorktree({ baseBranch: 'origin/main' })).rejects.toThrow(
+      'Could not refresh base ref "origin/main" from "origin". Check your network and try again.'
+    )
+    expect(mocks.consume).not.toHaveBeenCalled()
+  })
+
+  it('uses a local ref of the requested name without fetching or reporting a fallback', async () => {
+    mocks.hasBase.mockResolvedValue(true)
+
+    const result = await createWorktree({ baseBranch: 'origin/main' })
+
+    expect(mocks.refresh).not.toHaveBeenCalled()
+    expect(mocks.consume).toHaveBeenCalledWith(
+      expect.objectContaining({ baseBranch: 'origin/main' })
+    )
+    expect(result).not.toHaveProperty('baseFallback')
+  })
+})
+
+describe('runtime create setup decision', () => {
+  const askRepo: Partial<Repo> = {
+    hookSettings: { ...getDefaultRepoHookSettings(), setupRunPolicy: 'ask' }
+  }
+
+  beforeEach(() => {
+    mocks.effectiveHooks.mockReturnValue({ scripts: { setup: 'pnpm install' } })
+  })
+
+  it('refuses an ask repo with no decision before any git work', async () => {
+    const timing = createWorktreeCreateTimingRecorder()
+    // No requested base, so a create that got past the check would resolve the default base.
+    const request = { baseBranch: undefined }
+    const refusal = await createWorktree(request, undefined, timing, askRepo).catch(
+      (error: unknown) => error
+    )
+    expect(refusal).toBeInstanceOf(WorktreeCreateSetupChoiceRefusedError)
+    expect(refusal).toMatchObject({ message: 'Setup decision required for this repository' })
+    // Hooks come from the main checkout (no worktree path): the new worktree doesn't exist yet.
+    expect(mocks.effectiveHooks.mock.calls).toEqual([[expect.objectContaining({ path: '/repo' })]])
+    for (const gitWork of [mocks.defaultBase, mocks.remoteBase, mocks.hasBase, mocks.refresh]) {
+      expect(gitWork).not.toHaveBeenCalled()
+    }
+    expect(mocks.fetch).not.toHaveBeenCalled()
+    expect(mocks.branchName).not.toHaveBeenCalled()
+    expect(mocks.consume).not.toHaveBeenCalled()
+    expect(mocks.add).not.toHaveBeenCalled()
+    // The refusal's failure telemetry still says where the create ran.
+    expect(timing.finish().executionHost).toBe('local')
+  })
+
+  it.each([
+    ['an explicit decision', { setupDecision: 'skip' as const }],
+    ['runHooks', { runHooks: true }]
+  ])('creates an ask repo once the request carries %s', async (_label, request) => {
+    await createWorktree(request, undefined, undefined, askRepo)
+    expect(mocks.consume).toHaveBeenCalledOnce()
   })
 })

@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
-import { registerSshPtyProvider, getLocalPtyProvider } from './pty'
 import { installPtyInspectIpcHandlers } from './pty/ipc/inspect'
-import { ptyOwnership } from './pty/provider/ownership-state'
+import { setRuntimeDesktopSurface } from '../runtime/runtime-desktop-surface'
+import type { PtyProcessInfo } from '../providers/pty-provider-contract'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -49,53 +49,19 @@ vi.mock('../codex/codex-state-db-backfill-recovery', () =>
 )
 
 describe('scoped activation PTY inventory', () => {
-  const { handlers, installDaemonTestProvider } = setupPtyIpcSuite()
+  const { handlers, mainWindowIpcEvent, installDaemonTestProvider } = setupPtyIpcSuite()
 
   function install() {
     const localList = vi.fn(async () => [{ id: 'local', cwd: '/', title: 'shell' }])
     installDaemonTestProvider({ listProcesses: localList })
-    const remoteLists = Array.from({ length: 50 }, (_, index) => {
-      const list = vi.fn(async () => [
-        {
-          id: `ssh:host-${index}@@pty-1`,
-          cwd: '/remote',
-          title: 'agent',
-          worktreeId: 'repo::/remote'
-        }
-      ])
-      registerSshPtyProvider(`host-${index}`, {
-        ...getLocalPtyProvider(),
-        listProcesses: list,
-        providesAgentSessionOwnerListings: () => true
-      })
-      return list
-    })
     const startup = vi.fn(async () => {})
     installPtyInspectIpcHandlers({ getLocalPtyProviderStartupPromise: startup })
     const list = (scope?: unknown) => handlers.get('pty:listSessions')!(null, scope)
-    return { localList, remoteLists, startup, list }
+    return { localList, startup, list }
   }
 
-  it('queries only the chosen SSH provider and preserves workspace and ownership evidence', async () => {
-    const { list, localList, remoteLists, startup } = install()
-    expect(await list({ connectionId: 'host-17' })).toEqual([
-      {
-        id: 'ssh:host-17@@pty-1',
-        cwd: '/remote',
-        title: 'agent',
-        worktreeId: 'repo::/remote',
-        agentOwnership: 'absent'
-      }
-    ])
-    expect(remoteLists[17]).toHaveBeenCalledOnce()
-    expect(remoteLists.reduce((count, mock) => count + mock.mock.calls.length, 0)).toBe(1)
-    expect(localList).not.toHaveBeenCalled()
-    expect(startup).not.toHaveBeenCalled()
-    expect(ptyOwnership.get('ssh:host-17@@pty-1')).toBe('host-17')
-  })
-
-  it('waits for local startup and never visits remote providers for a local scope', async () => {
-    const { list, localList, remoteLists, startup } = install()
+  it('waits for local startup for a local scope', async () => {
+    const { list, localList, startup } = install()
     let release!: () => void
     startup.mockImplementation(
       () =>
@@ -108,32 +74,179 @@ describe('scoped activation PTY inventory', () => {
     release()
     await pending
     expect(localList).toHaveBeenCalledOnce()
-    expect(remoteLists.every((mock) => mock.mock.calls.length === 0)).toBe(true)
   })
 
-  it('propagates selected-host failure and never substitutes the local inventory', async () => {
-    const { list, localList, remoteLists } = install()
-    remoteLists[3].mockRejectedValue(new Error('relay unavailable'))
-    await expect(list({ connectionId: 'host-3' })).rejects.toThrow('relay unavailable')
-    await expect(list({ connectionId: 'missing' })).rejects.toThrow('No PTY provider')
+  it('fails an SSH scope and never substitutes the local inventory', async () => {
+    const { list, localList } = install()
+    await expect(list({ connectionId: 'host-3' })).rejects.toThrow('No PTY provider')
     expect(localList).not.toHaveBeenCalled()
   })
 
-  it.each([null, {}, { connectionId: '' }, { connectionId: 42 }])(
-    'rejects malformed scope %j before inventory admission',
-    async (scope) => {
-      const { list, localList, remoteLists } = install()
-      await expect(list(scope)).rejects.toThrow('invalid_pty_session_list_scope')
-      expect(localList).not.toHaveBeenCalled()
-      expect(remoteLists.every((mock) => mock.mock.calls.length === 0)).toBe(true)
-    }
-  )
+  it.each([
+    null,
+    {},
+    { connectionId: '' },
+    { connectionId: 42 },
+    { connectionId: null, includeUnrouted: 'yes' },
+    { connectionId: null, includeUnrouted: true }
+  ])('rejects malformed scope %j before inventory admission', async (scope) => {
+    const { list, localList } = install()
+    await expect(list(scope)).rejects.toThrow('invalid_pty_session_list_scope')
+    expect(localList).not.toHaveBeenCalled()
+  })
 
-  it('preserves unscoped diagnostic inventory and its remote-error fallback', async () => {
-    const { list, localList, remoteLists } = install()
-    remoteLists[3].mockRejectedValue(new Error('relay unavailable'))
-    expect(await list()).toHaveLength(50)
+  it('lists only the local inventory without a scope', async () => {
+    const { list, localList } = install()
+    expect(await list()).toHaveLength(1)
     expect(localList).toHaveBeenCalledOnce()
-    expect(remoteLists.every((mock) => mock.mock.calls.length === 1)).toBe(true)
+  })
+
+  it('shows reused ids in diagnostics without borrowing another generation’s stop capability', async () => {
+    const processes: PtyProcessInfo[] = [
+      { id: 'reused', incarnationId: 'A', rootProcessId: 101, cwd: '/', title: 'old' },
+      { id: 'reused', incarnationId: 'B', rootProcessId: 202, cwd: '/', title: 'new' },
+      { id: 'unrelated', incarnationId: 'C', cwd: '/', title: 'shell' }
+    ]
+    const localList = vi.fn(async () => processes)
+    installDaemonTestProvider({
+      listProcesses: localList,
+      supportsFencedTermination: () => true,
+      providesAgentSessionOwnerListings: () => true
+    })
+    installPtyInspectIpcHandlers({ getLocalPtyProviderStartupPromise: () => undefined })
+    setRuntimeDesktopSurface({
+      showNotification: () => false,
+      findWindowById: () => null,
+      onIpc: () => {},
+      removeIpcListener: () => {},
+      isResourceViewVisible: () => true
+    })
+    try {
+      const sessions: unknown = await handlers.get('pty:listSessions')!(
+        mainWindowIpcEvent,
+        { connectionId: null, includeUnrouted: true },
+        { resourceManagerView: true }
+      )
+      expect(localList).toHaveBeenCalledExactlyOnceWith({ includeUnrouted: true })
+      expect(sessions).toEqual([
+        expect.objectContaining({
+          id: 'reused',
+          incarnationId: 'A',
+          rootProcessId: 101,
+          fencedTermination: false,
+          agentOwnership: 'unknown'
+        }),
+        expect.objectContaining({
+          id: 'reused',
+          incarnationId: 'B',
+          rootProcessId: 202,
+          fencedTermination: false,
+          agentOwnership: 'unknown'
+        }),
+        expect.objectContaining({
+          id: 'unrelated',
+          fencedTermination: true,
+          agentOwnership: 'absent'
+        })
+      ])
+      localList.mockClear()
+      await handlers.get('pty:listSessions')!(null, { connectionId: null })
+      expect(localList).toHaveBeenCalledExactlyOnceWith()
+    } finally {
+      setRuntimeDesktopSurface(null)
+    }
+  })
+
+  it('keeps Resources on the routed incarnation while the PTY view sees every daemon', async () => {
+    const current: PtyProcessInfo = {
+      id: 'reused',
+      incarnationId: 'A',
+      cwd: '/current',
+      title: 'current',
+      inventorySourceId: 'current-daemon',
+      routed: false
+    }
+    const legacy: PtyProcessInfo = {
+      id: 'reused',
+      incarnationId: 'B',
+      cwd: '/legacy',
+      title: 'legacy',
+      inventorySourceId: 'legacy-daemon',
+      routed: true
+    }
+    const localList = vi.fn(async (opts?: { includeUnrouted?: boolean }) =>
+      opts?.includeUnrouted ? [current, legacy] : [legacy]
+    )
+    installDaemonTestProvider({ listProcesses: localList })
+    installPtyInspectIpcHandlers({ getLocalPtyProviderStartupPromise: () => undefined })
+    setRuntimeDesktopSurface({
+      showNotification: () => false,
+      findWindowById: () => null,
+      onIpc: () => {},
+      removeIpcListener: () => {},
+      isResourceViewVisible: () => true
+    })
+    try {
+      const list = handlers.get('pty:listSessions')!
+      await expect(
+        list(mainWindowIpcEvent, undefined, { resourceManagerView: true })
+      ).resolves.toEqual([expect.objectContaining({ incarnationId: 'B' })])
+      expect(localList).toHaveBeenLastCalledWith()
+      await expect(
+        list(
+          mainWindowIpcEvent,
+          { connectionId: null, includeUnrouted: true },
+          { resourceManagerView: true }
+        )
+      ).resolves.toEqual([
+        expect.objectContaining({ incarnationId: 'A', routed: false }),
+        expect.objectContaining({ incarnationId: 'B', routed: true })
+      ])
+    } finally {
+      setRuntimeDesktopSurface(null)
+    }
+  })
+
+  it('retains same-id legacy processes from distinct diagnostic sources', async () => {
+    installDaemonTestProvider({
+      listProcesses: async () => [
+        {
+          id: 'reused',
+          cwd: '/first',
+          title: 'shell',
+          inventorySourceId: 'first',
+          rootProcessId: 101
+        },
+        {
+          id: 'reused',
+          cwd: '/second',
+          title: 'shell',
+          inventorySourceId: 'second',
+          rootProcessId: 202
+        }
+      ]
+    })
+    installPtyInspectIpcHandlers({ getLocalPtyProviderStartupPromise: () => undefined })
+    setRuntimeDesktopSurface({
+      showNotification: () => false,
+      findWindowById: () => null,
+      onIpc: () => {},
+      removeIpcListener: () => {},
+      isResourceViewVisible: () => true
+    })
+    try {
+      await expect(
+        handlers.get('pty:listSessions')!(
+          mainWindowIpcEvent,
+          { connectionId: null, includeUnrouted: true },
+          { resourceManagerView: true }
+        )
+      ).resolves.toEqual([
+        expect.objectContaining({ inventorySourceId: 'first', rootProcessId: 101 }),
+        expect.objectContaining({ inventorySourceId: 'second', rootProcessId: 202 })
+      ])
+    } finally {
+      setRuntimeDesktopSurface(null)
+    }
   })
 })

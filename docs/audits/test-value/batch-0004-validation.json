@@ -1,0 +1,273 @@
+{
+  "batch": "comprehensive-test-audit-4",
+  "base_commit": "8f6283b32bcdefa746613e4c28d04bb1fe954eb9",
+  "reviewed_original_files": 204,
+  "repeat_review_files": 1,
+  "new_case_records": 1104,
+  "repeat_review_case_records": 9,
+  "separate_mobile_auxiliary_controls": 83,
+  "test_support_changes": {
+    "files": 42,
+    "added_lines": 417,
+    "removed_lines": 570,
+    "net_lines": -153,
+    "production_files_changed": 0
+  },
+  "tracker": {
+    "counts": {
+      "files": 16928,
+      "declarations": 118993,
+      "reviewed": 691,
+      "stale": 0,
+      "unreviewed": 16237,
+      "removed": 8
+    },
+    "latest_original_case_records": 4498,
+    "errors": []
+  },
+  "checks": [
+    {
+      "command": "node docs/audits/test-value/refresh.mjs",
+      "result": "passed; every original/final digest and recognized original declaration covered; no stale records",
+      "log": "/tmp/orca-audit-4-refresh-final.log"
+    },
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm run check:code-quality:changed -- origin/main",
+      "result": "passed; zero new findings in all six scans and SAFETY rationale check",
+      "log": "/tmp/orca-audit-4-quality.log"
+    },
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm run check:react-doctor:changed -- origin/main",
+      "result": "passed; zero changed-line errors, including cloud",
+      "log": "/tmp/orca-audit-4-react-doctor.log"
+    },
+    {
+      "command": "git diff --check origin/main",
+      "result": "passed"
+    }
+  ],
+  "batch_evidence": [
+    {
+      "path": "docs/audits/test-value/reviews/cloud-0004.jsonl",
+      "sha256": "e076b83c34ea7119b2e178f70ccbe78f42380cc5abb2e560306292180f455083"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/cloud-0004-validation.json",
+      "sha256": "4103046f51161453d3f1a2b2b603a224ddb8a9e965cf48a44ea2d7e26972f628"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/config-0004.jsonl",
+      "sha256": "d002967f6ef72cbb096d9b0b19f81cd9ef4dcf3e8e7c4d47522d6eb1df2429ea"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/config-0004-validation.json",
+      "sha256": "4b04564cb447b67d665b15132da83fff1beeb7d7208a7a8d0fcda4a35f7f6814"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/mobile-0004.jsonl",
+      "sha256": "abfbd356d1a2356c25202bff7fff7ed0e5c59ca08b548905ab101841b2824a69"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/mobile-0004-validation.json",
+      "sha256": "efdbfe7fd3dc7c2527f58263ef5bb751afd81834884414d77882309fd8b50768"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/root-0014.jsonl",
+      "sha256": "d9b0cf5518762049a3a8a4130796021d9d6f1fbed0381d312681af12f1804308"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/root-0014-validation.json",
+      "sha256": "ac4ce3ca53a0294eab6f00b0336387551fa5cece24d844d0c4bafdde95e36bfb"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/root-0015.jsonl",
+      "sha256": "000a0809843d83f31ecf1bd6e831805839d35ddd689e3ebef72c5dc6ccd35086"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/root-0015-validation.json",
+      "sha256": "bbc1ca1877620512b562c018a35fe89c550e3b2a0ec5a09a632a22ca12718ae0"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/root-0016.jsonl",
+      "sha256": "0be33f8c14f7934f33ebc958d5c7b704a45a9af15b8349f498aaea670009e16a"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/root-0016-validation.json",
+      "sha256": "c4f5f66ce556c9b2a18a35eb3430c5abe1b958981007653bf10af5db6169ab1b"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/root-0017.jsonl",
+      "sha256": "2a3e9fd41ea1de4b82a09d200efeb69b68f3b0b1ce33a753b29a617e9888daf4"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/root-0017-validation.json",
+      "sha256": "eedc04743c4ebc8a18cd20638664c2c785cbbbfd4ce2ec429044a9d1c4f47aad"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/root-0018.jsonl",
+      "sha256": "92ed12cdb39d0516551d3612114a1f5ee5a9033013b4d2e3913ee0a89b08e27c"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/root-0018-validation.json",
+      "sha256": "2f0812612976d64194ade0afb9277d726c58931e2f0ba3f0dfffa1404a0cef2b"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/root-0019.jsonl",
+      "sha256": "2cad15eee77ee0e66eaf491af82a76351b8737d53704719a73694811d5eb61d8"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/root-0019-validation.json",
+      "sha256": "bd49e4f5ca1c50b5b1a5a79c51cf1aa0273915e269f0f2b9a25a6d4a0bec9033"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/root-0020.jsonl",
+      "sha256": "f59e182ced1ffdd3ee0659110eb777bc2aa5c5de41d6fad9482455f9c7d0236e"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/root-0020-validation.json",
+      "sha256": "34ad833620c3b7342570781b04c18d2ab66dddb22408e16430efd1060eedfc8a"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/root-0021.jsonl",
+      "sha256": "b3726ae85bdb75426d921e63c787af6dcc59c4bd5db368cebd02f9708fbc5745"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/root-0021-validation.json",
+      "sha256": "104c16671c73515ae2d4e06f596d641d97eb9d1ed8d53c27ee02591760ef87fe"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/root-0022.jsonl",
+      "sha256": "343df90bd22f0c990180ee161c4287ef58a7f0cc062072f0b60c334f916798f5"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/root-0022-validation.json",
+      "sha256": "777dc09783954a006636895e3d996fcee28e8e3e7f26bfee32bd61e93ea3fe53"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/root-0023.jsonl",
+      "sha256": "bae2c71b1af6bfdc29c3e16a6c2c72fd764cb3e3dde3d1781e0fd138604e2fa7"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/root-0023-validation.json",
+      "sha256": "f78b02263feba2a02504ec9752146ddbba57c3b95fc499006c0066c4b782ebe1"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/root-0024.jsonl",
+      "sha256": "c10dbbc22ba6c1739dde7e756765409feee98ef228bfc3b2e25bd6cf5ca52045"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/root-0024-validation.json",
+      "sha256": "b1bb1460f2b163585d46e8a7ef7dce1af81ad99698b88d3a1d4dc0e207e8f6a5"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/root-0025.jsonl",
+      "sha256": "815dec3919dbc2d9e52c4819f541a8c26b780f625d6a8765c7cffdb361a1620c"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/root-0025-validation.json",
+      "sha256": "feb3ff5c44c77654d95f3eb744fc4affb9dba9692bd9b0006b1d54cce971abe6"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/root-0026.jsonl",
+      "sha256": "69f5aaced280f7ed7dffb435acbd3cc26a7a1a4cd173d73e9f7bd36873730a96"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/root-0026-validation.json",
+      "sha256": "63bb3e64a286020454419b92aa6a746cd1bd13a0c4f47efbb9e9d9f7a393b1ef"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/root-0027.jsonl",
+      "sha256": "5af0ebf2f2f35ac4810684e69b2df081628914c56769f07ba1cc0d28cfeb00b9"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/root-0027-validation.json",
+      "sha256": "252a99e1af0cddb0a072a6955762706ac09ef4451d579bca8ce559d5c67b6390"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/root-0028.jsonl",
+      "sha256": "a7f0175bb0a401885906bec7b210b5aee6f904e8e8e37c32d660bf8fb205022c"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/root-0028-validation.json",
+      "sha256": "06bb626dbe5f275ad26a59c5645fa7a464eca919e6ad058603b49375954d7ebb"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/root-0029.jsonl",
+      "sha256": "8054563d7c4bb751ddab2192f82a877b6a772c5036d493805372e2c0208fd659"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/root-0029-validation.json",
+      "sha256": "ba3834be161d81ba3ad4e0e8f22aa87cfa97d4a78c334d5a413cc48ce4ed69fe"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/root-0030.jsonl",
+      "sha256": "4ef7df8d58b0652125b568a01f9af293dd5f515a986b0dec7132e23ec0a764e7"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/root-0030-validation.json",
+      "sha256": "59af7d560b0e956e6996395c2d175ae410b5b0b0a069f6303c6efa235262748c"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/root-0031.jsonl",
+      "sha256": "fb08e6eadf039cbd38907ff8dd770a2e73494549126ec4224b243b79dee4707a"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/root-0031-validation.json",
+      "sha256": "9c17609ce1219ea5b43794a52fba924cfc461a161f88fe22c9970085cb02dcaf"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/root-0032.jsonl",
+      "sha256": "c72ac7333e80fba4ee3b2e224fd2d8f249e0b37c6039b42c46a65737ef73bb26"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/root-0032-validation.json",
+      "sha256": "58b65d52f4d62d832e79355c78afebc6e78e32d6026b0a9f3d9d9b303c3e9a43"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/root-0033.jsonl",
+      "sha256": "38ddea13443b7c040383cdb24a31adc4fe8e670ecb3f8ed44903ccb72e66297c"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/root-0033-validation.json",
+      "sha256": "d6ad6d6e957b690dfebaef23d016631b4669b842b3af79054d10025c399ea2cb"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/root-0034.jsonl",
+      "sha256": "c3c16b666f67136d276b4c5dbf209e0edcd307658eb49997298ae90804357fae"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/root-0034-validation.json",
+      "sha256": "9ca6ee97e5aaa9c970dbceebaa410e4014afd60fd612eec893abc99abcbd08ec"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/root-0035.jsonl",
+      "sha256": "11f550a6f17e7fe4b5542e35699d8ef32e8080a24601903bfb1f42efe927feaf"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/root-0035-validation.json",
+      "sha256": "491d08ec0f8e8abe0cd8dc651b86eec13ca4386db670f3440775b627284d34e8"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/root-0036.jsonl",
+      "sha256": "605d6ec7255c5380a7563d91113ae82fd305f101ccd32c4873c35d138f4c7383"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/root-0036-validation.json",
+      "sha256": "0278c070470bc5098c83a3b5b795918413ae496de69d8dc2d1da122ea0fa3848"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/root-0037.jsonl",
+      "sha256": "6a231512a66232ef22c2b06e88dcf863ba2491e14544cb068b41377d53d2531f"
+    },
+    {
+      "path": "docs/audits/test-value/reviews/root-0037-validation.json",
+      "sha256": "3224cb0209da786d5cffeca62aebe2a2e370d25fe2a208cb5e436f70c424e506"
+    }
+  ],
+  "validation_scope": "Cloud, config, mobile and root validation files record executed tests, detected mutations, initial failures and exact platform/source limits. These evidence files distinguish aggregate passing reruns from a full clean run. No production code changes.",
+  "limitations": [
+    "The comprehensive audit remains in progress: 16,237 inventory files unreviewed and final runner/entrypoint reconciliation pending.",
+    "Native Kotlin/Swift toolchains and live/manual mobile environments unavailable locally; local tests do not establish macOS/Windows execution.",
+    "Historical proof source/hash rejections remain recorded limitations, not current passes. Node 26 local runs do not replace supported Node 24 CI."
+  ]
+}

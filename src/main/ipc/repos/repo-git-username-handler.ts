@@ -1,8 +1,7 @@
 import { ipcMain } from 'electron'
 import type { Store } from '../../persistence'
 import { isFolderRepo } from '../../../shared/repo-kind'
-import { getSshGitProvider } from '../../providers/ssh-git-dispatch'
-import { getSshGitUsername, resolveLocalGitUsername } from '../../git/git-username'
+import { resolveLocalGitUsername } from '../../git/git-username'
 
 export function registerRepoGitUsernameHandler(store: Store): void {
   ipcMain.handle('repos:getGitUsername', async (_event, args: { repoId: string }) => {
@@ -10,13 +9,9 @@ export function registerRepoGitUsernameHandler(store: Store): void {
     if (!repo || isFolderRepo(repo)) {
       return ''
     }
-    // Why: remote repos keep their git config on the remote host, so resolve the username there.
+    // Why: an SSH repo's git config lives on a host this process does not serve.
     if (repo.connectionId) {
-      const provider = getSshGitProvider(repo.connectionId)
-      if (!provider) {
-        return ''
-      }
-      return getSshGitUsername(provider, repo.path)
+      return ''
     }
     return resolveLocalGitUsername(repo.path)
   })

@@ -120,8 +120,6 @@ function buildSession(
     reportError: vi.fn(),
     startFreshSpawn: vi.fn(),
     startFreshColdRestoreAgentResume: vi.fn(),
-    armDirectSshPaneRetryTimeout: vi.fn(),
-    canAdoptCapturedDirectSshRetryPty: vi.fn(() => true),
     ...overrides
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test bag covers every member runDeferredSessionReattachChoice reads.

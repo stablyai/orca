@@ -45,7 +45,7 @@ export function isActiveEntryOption(option: TabEntryOption): option is ActiveEnt
 
 export function getActiveOptionId(option: ActiveOption): string {
   if (option.kind === 'agent') {
-    return `agent:${option.option.agent}`
+    return option.option.id ?? `agent:${option.option.agent}`
   }
   if (option.kind === 'menu') {
     return `menu:${option.option.id}`

@@ -1,6 +1,8 @@
 import type { ParsedAgentStatusPayload } from './agent-status-types'
 import { parseAgentStatusPayload } from './agent-status-types'
 import { ownRetainedString } from './own-retained-string'
+import type { ProgramStatusFacet } from './program-status/facet'
+import type { AgentStatus } from './agent-title-core'
 
 const OSC_AGENT_STATUS_PREFIX = '\x1b]9999;'
 
@@ -24,7 +26,21 @@ export type ProcessedAgentStatusChunk = {
   cleanData: string
   payloads: ParsedAgentStatusPayload[]
   lastPayloadCleanOffset: number | null
+  /** Each payload's end offset in `cleanData`, so other in-band status can merge in byte order. */
+  payloadCleanOffsets?: number[]
+  /** The subset of `payloads` projected from OSC 7501 records; these yield to the pane's hook row. */
+  programStatusPayloads?: ReadonlySet<ParsedAgentStatusPayload>
+  /** The subset of those whose program left no records (see ProgramStatusPayload.removesRow). */
+  programStatusRowRemovals?: ReadonlySet<ParsedAgentStatusPayload>
+  /** The chunk's net OSC 7501 facet change: new facet, `null` when cleared, absent when unchanged. */
+  programStatusFacet?: ProgramStatusFacet | null
+  /** Each change in the program's OSC 7501 activity, in byte order with `cleanData` offsets.
+   *  Title trackers classify by it ahead of title glyphs while it is non-null. */
+  programActivity?: readonly ProgramActivityChange[]
 }
+
+/** The program's OSC 7501 activity from `offset` on; `null` once it stops reporting. */
+export type ProgramActivityChange = { offset: number; activity: AgentStatus | null }
 
 function findAgentStatusTerminator(
   data: string,
@@ -85,6 +101,7 @@ export function createAgentStatusOscProcessor(): (data: string) => ProcessedAgen
 
     const payloads: ParsedAgentStatusPayload[] = []
     let lastPayloadCleanOffset: number | null = null
+    const payloadCleanOffsets: number[] = []
     let cleanData = ''
     let cursor = 0
     const nextTerminator = { belIndex: 0, stIndex: 0 }
@@ -122,10 +139,16 @@ export function createAgentStatusOscProcessor(): (data: string) => ProcessedAgen
       if (parsed) {
         payloads.push(parsed)
         lastPayloadCleanOffset = cleanData.length
+        payloadCleanOffsets.push(lastPayloadCleanOffset)
       }
       cursor = terminator.index + terminator.length
     }
 
-    return { cleanData, payloads, lastPayloadCleanOffset }
+    return {
+      cleanData,
+      payloads,
+      lastPayloadCleanOffset,
+      ...(payloads.length > 0 ? { payloadCleanOffsets } : {})
+    }
   }
 }

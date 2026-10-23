@@ -5,18 +5,12 @@ import type {
 } from '../../shared/workspace-session-state-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { TerminalSurfaceCloseTarget } from '../../shared/terminal-surface-close-target'
-import type {
-  RemoteWorkspaceChangedEvent,
-  RemoteWorkspaceConnectedClient,
-  RemoteWorkspaceObservedPatchResult,
-  RemoteWorkspaceObservedSnapshot
-} from '../../shared/remote-workspace-types'
 
 export type WorkspaceSessionApi = {
   session: {
-    // hostId defaults to the 'local' partition on main, so omitting it stays backward-compatible.
+    // Omitted hostId selects the local persistence partition.
     get: (hostId?: ExecutionHostId) => Promise<WorkspaceSessionState>
-    /** Partitions persistence holds, so boot reads them all instead of guessing from the catalog. */
+    /** Read persisted partitions at boot; the host catalog may omit some. */
     listHostIds: () => Promise<ExecutionHostId[]>
     set: (args: WorkspaceSessionState, hostId?: ExecutionHostId) => Promise<void>
     patch: (args: WorkspaceSessionPatch, hostId?: ExecutionHostId) => Promise<void>
@@ -28,7 +22,6 @@ export type WorkspaceSessionApi = {
     }) => Promise<void>
     flush: () => Promise<void>
     readTerminalScrollback: (args: { ref: string }) => string | null
-    setSync: (args: WorkspaceSessionState, hostId?: ExecutionHostId) => void
   }
   cache: {
     getGitHub: () => Promise<{
@@ -41,20 +34,5 @@ export type WorkspaceSessionApi = {
         issue: Record<string, { data: IssueInfo | null; fetchedAt: number }>
       }
     }) => Promise<void>
-  }
-  remoteWorkspace: {
-    get: (args: { targetId: string }) => Promise<RemoteWorkspaceObservedSnapshot | null>
-    setForConnectedTargets: (args: {
-      session?: WorkspaceSessionState
-      hydratedTargetIds?: string[]
-      expectedRevisionsByTargetId: Record<string, number>
-      expectedHostObservationTokensByTargetId: Record<string, string>
-    }) => Promise<{ targetId: string; result: RemoteWorkspaceObservedPatchResult }[]>
-    listEnabledConnectedTargets: () => Promise<string[]>
-    listConnectedClients: (args?: {
-      targetIds?: string[]
-    }) => Promise<{ targetId: string; clients: RemoteWorkspaceConnectedClient[] }[]>
-    clientId: () => Promise<string>
-    onChanged: (callback: (event: RemoteWorkspaceChangedEvent) => void) => () => void
   }
 }

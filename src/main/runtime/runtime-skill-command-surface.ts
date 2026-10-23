@@ -4,6 +4,7 @@ import {
   isAgentSkillSharingEnabled
 } from '../../shared/agent-skill-sharing-gate'
 import {
+  AGENT_SKILL_BUNDLE_NAME_TAKEN_CODE,
   AGENT_SKILL_NOT_SHAREABLE_CODE,
   AGENT_SKILL_SHARING_BUSY_CODE,
   AgentSkillSharingError,
@@ -11,6 +12,7 @@ import {
   type AgentSkillShareRequest
 } from '../../shared/agent-skill-sharing-contract'
 import type { DiscoveredSkill } from '../../shared/skills'
+import { SKILL_SHARE_NAME_TAKEN_ERROR } from '../../shared/skill-sharing-contract'
 import { selectDiscoveredSkills } from '../skills/agent-skill-selection'
 import { SkillSharePreparationService } from '../skills/skill-share-preparation-service'
 import { RuntimeSkillInstallQueries } from './runtime-skill-install-queries'
@@ -18,16 +20,8 @@ import type {
   RuntimeSkillCommandSurface,
   RuntimeSkillCommandHost
 } from './runtime-skill-command-contract'
-import type {
-  SkillCloudOptions,
-  SkillCloudPublishRequest,
-  SkillCloudService
-} from './runtime-skill-types'
-export type {
-  RuntimeSkillCommandSurface,
-  RuntimeSkillCommandHost
-} from './runtime-skill-command-contract'
-export { installRuntimeSkillCommandSurface } from './runtime-skill-command-contract'
+import type { SkillCloudOptions, SkillCloudPublishRequest } from '../../shared/skill-cloud-contract'
+import type { SkillCloudService } from '../skills/skill-cloud-service'
 
 export class RuntimeSkillCommands
   extends RuntimeSkillInstallQueries
@@ -48,7 +42,7 @@ export class RuntimeSkillCommands
   }
   private requireCloud(): SkillCloudService {
     if (!this.skillCloudService) {
-      throw new Error('Skill Cloud service is unavailable.')
+      throw new Error("Skill sharing isn't available on this Orca server.")
     }
     return this.skillCloudService
   }
@@ -71,6 +65,7 @@ export class RuntimeSkillCommands
       const preparations = new SkillSharePreparationService(
         join(this.userDataPath(), 'agent-skill-share-operations'),
         {
+          findOwnedPackageId: (name, input) => cloud.findOwnedPackageId(name, input),
           publishVersion: (input) => cloud.publishVersion(input),
           createShare: (packageId, input) => cloud.createShare(packageId, input)
         },
@@ -135,6 +130,14 @@ export class RuntimeSkillCommands
               }
             }
           : published
+      } catch (error) {
+        if (error instanceof Error && error.message === SKILL_SHARE_NAME_TAKEN_ERROR) {
+          throw new AgentSkillSharingError(
+            AGENT_SKILL_BUNDLE_NAME_TAKEN_CODE,
+            `The skill bundle name "${request.bundleName}" is already in use. Choose a different --bundle-name.`
+          )
+        }
+        throw error
       } finally {
         signal?.removeEventListener('abort', cancel)
         await preparations.dispose()
@@ -150,6 +153,9 @@ export class RuntimeSkillCommands
 
   publishSkillPackageVersion(request: SkillCloudPublishRequest) {
     return this.requireCloud().publishVersion(request)
+  }
+  findOwnedSkillPackageId(name: string, options: SkillCloudOptions) {
+    return this.requireCloud().findOwnedPackageId(name, options)
   }
   createSkillPackageShare(
     packageId: string,

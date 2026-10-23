@@ -168,6 +168,37 @@ describe('extractPendingAsk', () => {
 })
 
 describe('parseAskFromStatus', () => {
+  it('preserves OMP checkbox questions from live status and transcript history', () => {
+    const input = {
+      questions: [
+        { id: 'q1', question: 'Pick', multi: true, options: [{ label: 'A' }, { label: 'B' }] }
+      ]
+    }
+    const prompt = parseAskFromStatus(JSON.stringify(input), 'ask')
+    expect(prompt?.questions[0]?.multiSelect).toBe(true)
+    expect(extractPendingAsk([message('m1', [call('ask', input)])])).toEqual(prompt)
+  })
+
+  it('preserves OpenCode question envelope multiple selection on live status and replay', () => {
+    const input = {
+      id: 'question',
+      sessionID: 'session',
+      questions: [
+        {
+          header: 'Choice',
+          question: 'Pick both?',
+          multiple: true,
+          options: [
+            { label: 'One', description: 'first' },
+            { label: 'Two', description: 'second' }
+          ]
+        }
+      ]
+    }
+    const prompt = parseAskFromStatus(JSON.stringify(input), 'AskUserQuestion')
+    expect(prompt?.questions[0]).toMatchObject({ multiSelect: true, header: 'Choice' })
+    expect(extractPendingAsk([message('m1', [call('question', input)])])).toEqual(prompt)
+  })
   it('accepts the canonical shape from any tool name and rejects broken JSON', () => {
     expect(
       parseAskFromStatus(JSON.stringify(QUESTIONS_INPUT), 'SomeNewTool')?.questions
@@ -201,5 +232,37 @@ describe('resolveNativeChatAsk', () => {
     expect(resolveNativeChatAsk({ liveAsk, messages: transcript, transcriptSettled: false })).toBe(
       liveAsk
     )
+  })
+})
+
+describe('async questions', () => {
+  const asyncCall = (callId: string, title: string): NativeChatBlock => ({
+    type: 'tool-call',
+    name: 'request_user_input_async',
+    callId,
+    input: JSON.stringify({ questions: [{ title }] })
+  })
+  const userRow = (id: string, flags: Partial<NativeChatMessage> = {}): NativeChatMessage => ({
+    ...message(id, [{ type: 'text', text: 'hi' }]),
+    role: 'user',
+    ...flags
+  })
+  const titles = (messages: NativeChatMessage[]): string[] | undefined =>
+    extractPendingAsk(messages)?.questions.map((question) => question.question)
+
+  it('keeps every unanswered async question, once per call', () => {
+    const first = message('a', [asyncCall('call-a', 'A?'), result()])
+    expect(titles([first, first, message('b', [asyncCall('call-b', 'B?'), result()])])).toEqual([
+      'A?',
+      'B?'
+    ])
+  })
+
+  it('stays open until a user message reaches the agent', () => {
+    const asked = message('a', [asyncCall('call-a', 'A?'), result()])
+    expect(titles([asked, userRow('q', { queued: true }), userRow('u', { unsent: true })])).toEqual(
+      ['A?']
+    )
+    expect(extractPendingAsk([asked, userRow('sent')])).toBeNull()
   })
 })

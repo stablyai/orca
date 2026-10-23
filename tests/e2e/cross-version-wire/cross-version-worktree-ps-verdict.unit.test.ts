@@ -71,6 +71,21 @@ const SNAPSHOTS: HookSnapshot[] = [
     state: 'done',
     interrupted: true,
     mainAgent: { state: 'done', outcome: 'cancellation', stateStartedAt: NOW - 600_000 }
+  }),
+  // The host-observed ends: a crash that cut the turn off, and an end the host cannot prove. Neither
+  // sets the flag, so a reader without the arm reads the done it always did.
+  snapshot('crash-cut', {
+    state: 'done',
+    mainAgent: { state: 'done', outcome: 'interruption', stateStartedAt: NOW - 600_000 }
+  }),
+  snapshot('unproven', {
+    state: 'done',
+    mainAgent: { state: 'done', outcome: 'unconfirmed', stateStartedAt: NOW - 600_000 }
+  }),
+  // A turn a newer request replaced: recorded, not a user's stop, so it sets no flag either.
+  snapshot('replaced', {
+    state: 'done',
+    mainAgent: { state: 'done', outcome: 'superseded', stateStartedAt: NOW - 600_000 }
   })
 ]
 
@@ -82,8 +97,9 @@ function publishRows(host: HostRowModules): Record<string, AgentRow> {
     hasHostSidebarActivity: false,
     agents: []
   }
+  const summaries = new Map([[WORKTREE_ID, summary]])
   host.attachRuntimeWorktreeAgentRows({
-    summaries: new Map([[WORKTREE_ID, summary]]),
+    summaries,
     pathIndex: { byPath: new Map(), byRealPath: new Map() },
     missingWorktreeIds: new Set(),
     workingTerminalEvidenceByWorktreeId: new Map(),
@@ -97,8 +113,8 @@ function publishRows(host: HostRowModules): Record<string, AgentRow> {
       }
     }),
     orchestrationByPaneKey: null,
-    getSummary: (map: Map<string, unknown>, _paths: unknown, _missing: unknown, id: string) =>
-      map.get(id) ?? null
+    // Old builds pass (summaries, pathIndex, missingIds, id); newer ones pass (id). The id is last in both.
+    getSummary: (...args: unknown[]) => summaries.get(String(args.at(-1))) ?? null
   })
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: JSON.parse of the rows the host just attached, which are plain objects keyed by paneKey.
   const rows = JSON.parse(JSON.stringify(summary.agents)) as AgentRow[]
@@ -166,8 +182,14 @@ describe('cross-version worktree ps verdict', () => {
     expect(dotStates(oldBuild, rows)).toEqual({
       'failed-done': 'done',
       'failed-working': 'working',
-      stopped: 'interrupted'
+      stopped: 'interrupted',
+      'crash-cut': 'done',
+      unproven: 'done',
+      replaced: 'done'
     })
+    expect(rows['crash-cut']).toMatchObject({ interrupted: false })
+    expect(rows.unproven).toMatchObject({ interrupted: false })
+    expect(rows.replaced).toMatchObject({ interrupted: false })
   })
 
   it('a NEW phone reads an old host row, which has no mainAgent, by the same flag', () => {
@@ -175,7 +197,11 @@ describe('cross-version worktree ps verdict', () => {
     expect(dotStates(newBuild, rows)).toEqual({
       'failed-done': 'done',
       'failed-working': 'working',
-      stopped: 'interrupted'
+      // Both phones draw a user's Stop interrupted; only the new one draws it muted.
+      stopped: 'interrupted',
+      'crash-cut': 'done',
+      unproven: 'done',
+      replaced: 'done'
     })
     // Without the main agent's clock the row dates itself, as it always did.
     expect(agentRowTimeAt(rows['failed-working'])).toBe(NOW - 600_000)
@@ -186,7 +212,10 @@ describe('cross-version worktree ps verdict', () => {
     expect(dotStates(newBuild, rows)).toEqual({
       'failed-done': 'failed',
       'failed-working': 'failed',
-      stopped: 'interrupted'
+      stopped: 'interrupted',
+      'crash-cut': 'failed',
+      unproven: 'unconfirmed',
+      replaced: 'interrupted'
     })
     expect(rows['failed-working']).toMatchObject({
       state: 'working',

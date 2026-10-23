@@ -1,7 +1,7 @@
 import type { GlobalSettings } from './global-settings-types'
 
 type CodexTerminalServerIsolationSettings =
-  | Partial<Pick<GlobalSettings, 'codexTerminalServerIsolation'>>
+  | Partial<Pick<GlobalSettings, 'codexTerminalServerIsolation' | 'codexSharedServerWarning'>>
   | null
   | undefined
 
@@ -12,6 +12,15 @@ export function isCodexTerminalServerIsolationEnabled(
   settings: CodexTerminalServerIsolationSettings
 ): boolean {
   return settings?.codexTerminalServerIsolation !== false
+}
+
+/** The warning belongs to isolation: with it off, sharing the server is what the user chose. */
+export function isCodexSharedServerWarningEnabled(
+  settings: CodexTerminalServerIsolationSettings
+): boolean {
+  return (
+    isCodexTerminalServerIsolationEnabled(settings) && settings?.codexSharedServerWarning !== false
+  )
 }
 
 /** Opt-out only: with isolation on nothing is injected, so behaviour matches the pre-setting default. */

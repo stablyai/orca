@@ -1,3 +1,4 @@
+import { DESKTOP_READ_WINDOW } from '../native-chat/transcript-watch-contract'
 import { ipcMain, type IpcMainEvent, type WebContents } from 'electron'
 import type {
   AgentType,
@@ -13,6 +14,9 @@ import {
   type SubscribeNativeChatTranscriptArgs
 } from '../native-chat/transcript-watch'
 import { abortWhenRendererGone } from './renderer-lifetime-abort'
+import { agentHookServer } from '../agent-hooks/server'
+import { nativeChatTranscriptPathOnExecutionHost } from '../native-chat/ssh-transcript-path'
+import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 
 // Re-export so existing test imports of `clearNativeChatTranscriptCache` from
 // this module keep working after the cache moved to transcript-read-cache.ts.
@@ -31,7 +35,6 @@ export type NativeChatReadSessionArgs = {
 
 // Why: render and parse only the recent window so long transcripts do not stall
 // either the main process or the message list. Pagination raises this limit.
-const DESKTOP_READ_WINDOW = 300
 
 async function readSession(args: NativeChatReadSessionArgs): Promise<ReadTranscriptResult> {
   const { agent, sessionId } = args
@@ -40,7 +43,11 @@ async function readSession(args: NativeChatReadSessionArgs): Promise<ReadTranscr
   return readNativeChatTranscriptTail({
     agent,
     sessionId,
-    transcriptPath: args.transcriptPath,
+    transcriptPath: nativeChatTranscriptPathOnExecutionHost(
+      agentHookServer.getStatusSnapshot(),
+      sessionId,
+      args.transcriptPath
+    ),
     limit
   })
 }
@@ -193,7 +200,11 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
   const subscribeArgs: SubscribeNativeChatTranscriptArgs = {
     agent,
     sessionId,
-    transcriptPath,
+    transcriptPath: nativeChatTranscriptPathOnExecutionHost(
+      agentHookServer.getStatusSnapshot(),
+      sessionId,
+      transcriptPath
+    ),
     initialLimit: limit,
     onTranscriptPending: () => {
       if (!canPublish()) {
@@ -325,5 +336,10 @@ export function registerNativeChatHandlers(): void {
   })
   ipcMain.on('nativeChat:unsubscribe', (event, args: { subscriptionId: string }) => {
     teardownSubscription(event.sender.id, args.subscriptionId)
+  })
+  // Local chats only: a paired host never sends its agent output, so its chats show the message.
+  ipcMain.handle('nativeChat:conversationNameFailureOutput', (_event, sessionId: unknown) => {
+    const naming = getStructuredAgentSessionHost()?.deps.conversationNaming
+    return typeof sessionId === 'string' ? (naming?.failureOutput(sessionId) ?? null) : null
   })
 }

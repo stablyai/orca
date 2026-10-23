@@ -61,7 +61,9 @@ function approval(itemId: string, resolved: boolean, revision = 1): AgentJournal
 
 function installJournal(items: AgentJournalRenderItem[]): void {
   hostRef.current = {
-    deps: { store: { getRecord: () => null } },
+    deps: {
+      store: { getRecord: () => ({ location: { executionHostId: 'local', wslDistro: null } }) }
+    },
     hasSession: () => true,
     history: () => ({ page: { items, hasOlder: false } })
   }

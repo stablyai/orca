@@ -22,8 +22,7 @@ vi.mock('../../native-chat/agent-session-wire/structured-agent-session-registry'
   getStructuredAgentSessionHost: () => hostRef.current
 }))
 
-const { OrcaRuntimeWithGetPtyRecordForPaneKey } =
-  await import('../orca-runtime-get-pty-record-for-pane-key')
+const { OrcaRuntimeWithGetPtyRecordForPaneKey } = await import('./terminal-pane-mail-routing')
 const { OrchestrationDb } = await import('./db')
 const { resolveOrcaSessionParty } = await import('./orchestration-party')
 const {
@@ -37,7 +36,7 @@ const CHAT = testOrcaSessionId('4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37')
 const CHAT_ADDRESS = formatOrcaSessionAddress(CHAT)
 
 /** The real methods through the real prototype chain; a re-declared copy would pin nothing. */
-class MailTargetProbe extends OrcaRuntimeWithGetPtyRecordForPaneKey {
+abstract class MailTargetProbe extends OrcaRuntimeWithGetPtyRecordForPaneKey {
   target(mailboxHandle: string): unknown {
     return this.resolveStructuredMailboxTarget(mailboxHandle)
   }
@@ -171,14 +170,14 @@ describe('a Run whose coordinator is a chat (an Orca session id, no handle)', ()
 })
 
 describe('a session addressed directly', () => {
-  it('owns its `session:<id>` mailbox', () => {
+  it('owns its `orca_session_id:<id>` mailbox', () => {
     installStore(chatRecord())
     expect(probe().target(CHAT_ADDRESS)).toEqual({ sessionId: CHAT, dispatchId: null })
   })
 
   it('claims nothing for a malformed session address', () => {
     installStore(chatRecord())
-    expect(probe().target('session:term_abc')).toBeNull()
+    expect(probe().target('orca_session_id:term_abc')).toBeNull()
   })
 })
 
@@ -438,7 +437,7 @@ describe('a coordinator chat continued by /clear', () => {
         orcaSessionId: CHAT,
         address: CHAT_ADDRESS
       })
-      expect(probe().target(`session:${member}`)).toEqual({
+      expect(probe().target(`orca_session_id:${member}`)).toEqual({
         sessionId: SUCCESSOR,
         dispatchId: null
       })

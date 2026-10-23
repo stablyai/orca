@@ -1,44 +1,34 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { structuredAgentSessionTabId } from '../../../shared/structured-agent-session-projection'
 import type { PtyListedSession } from '../../../shared/pty-listed-session'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
-import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
-import type { TerminalSlice } from '@/store/slices/terminals'
 import { runWorktreeAgentActivationGate } from './worktree-agent-activation-gate'
 import {
-  indexLiveTerminalSurfaceOwners,
-  type LiveTerminalSurfaceOwnerIndex
-} from './worktree-live-terminal-surface-owners'
+  DEAD_LEAF_ID,
+  type GateTestStore,
+  listed,
+  LIVE_LEAF_ID,
+  seedExistingSurface,
+  SIBLING_LEAF_ID,
+  sleepingRecord,
+  testDeps,
+  UNOWNED,
+  WORKTREE_ID
+} from './worktree-agent-activation-gate.test-fixture'
+import { indexLiveTerminalSurfaceOwners } from './worktree-live-terminal-surface-owners'
 
-const WORKTREE_ID = 'repo::/worktree'
+// Main places live terminals in a layout-owner build; those tests' twins are in
+// worktree-agent-activation-gate-layout-owner.test.ts, under the same name unless noted.
+const windowOwnedIt = it.skipIf(ORCA_LAYOUT_OWNER_IS_MAIN)
+
+/** Layout-owner build: the sweep only reads main's listing; it binds no pane of its own. */
+function expectNoBindingWrite(store: GateTestStore): void {
+  expect(store.setTabLayout).not.toHaveBeenCalled()
+  expect(store.updateTabPtyId).not.toHaveBeenCalled()
+  expect(store.replaceTerminalLayoutPanePtyId).not.toHaveBeenCalled()
+}
 const STALE_STRUCTURED_SESSION_ID = 'structured-session-stale'
-const LIVE_LEAF_ID = '11111111-1111-4111-8111-111111111111'
-const DEAD_LEAF_ID = '22222222-2222-4222-8222-222222222222'
-const SIBLING_LEAF_ID = '33333333-3333-4333-8333-333333333333'
-
-function listed(id: string): PtyListedSession {
-  return { id, cwd: '/worktree', title: 'Codex', agentOwnership: 'present' }
-}
-
-function sleepingRecord(
-  tabId: string,
-  leafId: string,
-  providerSessionId: string
-): SleepingAgentSessionRecord {
-  return {
-    paneKey: `${tabId}:${leafId}`,
-    tabId,
-    worktreeId: WORKTREE_ID,
-    agent: 'codex',
-    providerSession: { key: 'session_id', id: providerSessionId },
-    prompt: 'resume',
-    state: 'working',
-    capturedAt: 1,
-    updatedAt: 1
-  }
-}
 
 function runtimeSnapshot(
   tabId: string,
@@ -76,148 +66,12 @@ function runtimeSnapshot(
   }
 }
 
-/** The gate's own fixtures index panes by leaf, so keep that map materialized. */
-type SeededLayout = TerminalLayoutSnapshot & { ptyIdsByLeafId: Record<string, string> }
-
-function testDeps(args: {
-  sessions?: PtyListedSession[]
-  sleeping?: SleepingAgentSessionRecord[]
-  structured?: boolean
-  resumeCount?: number
-  /** Host census of PTY→surface ownership; null models a host that could not answer. */
-  surfaceOwners?: LiveTerminalSurfaceOwnerIndex | null
-}) {
-  const resume = vi.fn(() => args.resumeCount ?? 1)
-  const sleeping = args.sleeping ?? []
-  const ptyIdsByTabId: Record<string, string[]> = {}
-  const tabsByWorktree: Record<string, TerminalTab[]> = { [WORKTREE_ID]: [] }
-  const terminalLayoutsByTabId: Record<string, SeededLayout> = Object.fromEntries(
-    sleeping.map((record) => {
-      const leafId = record.paneKey.slice(record.paneKey.indexOf(':') + 1)
-      return [
-        record.tabId!,
-        {
-          root: { type: 'leaf' as const, leafId },
-          activeLeafId: leafId,
-          expandedLeafId: null,
-          ptyIdsByLeafId: {}
-        }
-      ]
-    })
-  )
-  const setTabLayout: TerminalSlice['setTabLayout'] = vi.fn((tabId, layout) => {
-    if (!layout) {
-      delete terminalLayoutsByTabId[tabId]
-      return
-    }
-    terminalLayoutsByTabId[tabId] = { ...layout, ptyIdsByLeafId: { ...layout.ptyIdsByLeafId } }
-  })
-  const replaceTerminalLayoutPanePtyId = vi.fn((tabId: string, leafId: string, ptyId: string) => {
-    const layout = terminalLayoutsByTabId[tabId]
-    if (layout) {
-      layout.ptyIdsByLeafId[leafId] = ptyId
-    }
-  })
-  let createdCount = 0
-  const createTab: TerminalSlice['createTab'] = vi.fn((worktreeId, _group, _shell, options) => {
-    createdCount += 1
-    const id = options?.id ?? `created-${createdCount}`
-    const tab: TerminalTab = {
-      id,
-      ptyId: options?.initialPtyId ?? null,
-      worktreeId,
-      title: 'Terminal',
-      customTitle: null,
-      color: null,
-      sortOrder: tabsByWorktree[worktreeId]?.length ?? 0,
-      createdAt: 1
-    }
-    tabsByWorktree[worktreeId] ??= []
-    tabsByWorktree[worktreeId].push(tab)
-    ptyIdsByTabId[tab.id] = tab.ptyId ? [tab.ptyId] : []
-    if (options?.initialLeafId) {
-      setTabLayout(id, singlePaneLayoutSnapshot(options.initialLeafId, options.initialPtyId))
-    }
-    return tab
-  })
-  const updateTabPtyId = vi.fn((tabId: string, ptyId: string) => {
-    ptyIdsByTabId[tabId] = [...new Set([...(ptyIdsByTabId[tabId] ?? []), ptyId])]
-  })
-  const store = {
-    createTab,
-    ptyIdsByTabId,
-    setTabLayout,
-    tabsByWorktree,
-    sleepingAgentSessionsByPaneKey: Object.fromEntries(
-      sleeping.map((record) => [record.paneKey, record])
-    ),
-    updateTabPtyId,
-    replaceTerminalLayoutPanePtyId,
-    terminalLayoutsByTabId,
-    unifiedTabsByWorktree: {
-      [WORKTREE_ID]: args.structured
-        ? [
-            {
-              id: 'structured-1',
-              entityId: 'session-1',
-              groupId: 'group-1',
-              worktreeId: WORKTREE_ID,
-              contentType: 'agent-session' as const,
-              label: 'Codex',
-              customLabel: null,
-              color: null,
-              sortOrder: 0,
-              createdAt: 1
-            }
-          ]
-        : []
-    }
-  }
-  return {
-    createTab,
-    resume,
-    deps: {
-      getState: () => store,
-      listSessions: vi.fn(async () => args.sessions ?? []),
-      listSurfaceOwners: vi.fn(async () =>
-        args.surfaceOwners === undefined ? new Map() : args.surfaceOwners
-      ),
-      resume
-    }
-  }
-}
-
-function seedExistingSurface(
-  store: ReturnType<ReturnType<typeof testDeps>['deps']['getState']>,
-  args: { tabId: string; leafId: string; boundPtyId?: string }
-): void {
-  store.tabsByWorktree[WORKTREE_ID] = [
-    ...(store.tabsByWorktree[WORKTREE_ID] ?? []),
-    {
-      id: args.tabId,
-      ptyId: null,
-      worktreeId: WORKTREE_ID,
-      title: 'Terminal',
-      customTitle: null,
-      color: null,
-      sortOrder: 0,
-      createdAt: 1
-    }
-  ]
-  store.terminalLayoutsByTabId[args.tabId] = {
-    root: { type: 'leaf' as const, leafId: args.leafId },
-    activeLeafId: args.leafId,
-    expandedLeafId: null,
-    ptyIdsByLeafId: args.boundPtyId ? { [args.leafId]: args.boundPtyId } : {}
-  }
-}
-
 describe('worktree agent activation gate', () => {
-  it('uses immediately ready development restore inventory', async () => {
+  windowOwnedIt('uses immediately ready development restore inventory', async () => {
     const ptyId = `${WORKTREE_ID}@@live-pty`
     const { deps, createTab, resume } = testDeps({
       sessions: [listed(ptyId)],
-      surfaceOwners: new Map([[ptyId, 'unowned']])
+      surfaceOwners: new Map([[ptyId, UNOWNED]])
     })
     const awaitReady = vi.fn(async () => true)
 
@@ -230,25 +84,28 @@ describe('worktree agent activation gate', () => {
     expect(resume).not.toHaveBeenCalled()
   })
 
-  it('waits for packaged restore hydration before reading daemon inventory', async () => {
-    const ptyId = `${WORKTREE_ID}@@live-pty`
-    const { deps, createTab, resume } = testDeps({
-      sessions: [listed(ptyId)],
-      surfaceOwners: new Map([[ptyId, 'unowned']])
-    })
-    let releaseReady!: (ready: boolean) => void
-    const awaitReady = vi.fn(() => new Promise<boolean>((resolve) => (releaseReady = resolve)))
+  windowOwnedIt(
+    'waits for packaged restore hydration before reading daemon inventory',
+    async () => {
+      const ptyId = `${WORKTREE_ID}@@live-pty`
+      const { deps, createTab, resume } = testDeps({
+        sessions: [listed(ptyId)],
+        surfaceOwners: new Map([[ptyId, UNOWNED]])
+      })
+      let releaseReady!: (ready: boolean) => void
+      const awaitReady = vi.fn(() => new Promise<boolean>((resolve) => (releaseReady = resolve)))
 
-    const activation = runWorktreeAgentActivationGate(WORKTREE_ID, { ...deps, awaitReady })
-    await vi.waitFor(() => expect(awaitReady).toHaveBeenCalledOnce())
-    expect(deps.listSessions).not.toHaveBeenCalled()
+      const activation = runWorktreeAgentActivationGate(WORKTREE_ID, { ...deps, awaitReady })
+      await vi.waitFor(() => expect(awaitReady).toHaveBeenCalledOnce())
+      expect(deps.listSessions).not.toHaveBeenCalled()
 
-    releaseReady(true)
-    await expect(activation).resolves.toBe('adopted')
-    expect(deps.listSessions).toHaveBeenCalledOnce()
-    expect(createTab).toHaveBeenCalledOnce()
-    expect(resume).not.toHaveBeenCalled()
-  })
+      releaseReady(true)
+      await expect(activation).resolves.toBe('adopted')
+      expect(deps.listSessions).toHaveBeenCalledOnce()
+      expect(createTab).toHaveBeenCalledOnce()
+      expect(resume).not.toHaveBeenCalled()
+    }
+  )
 
   it('reads structured ownership before adopting daemon PTYs', async () => {
     const ptyId = `${WORKTREE_ID}@@live-pty`
@@ -260,6 +117,23 @@ describe('worktree agent activation gate', () => {
     expect(hasStructuredSession.mock.invocationCallOrder[0]).toBeLessThan(
       deps.listSessions.mock.invocationCallOrder[0] ?? Infinity
     )
+  })
+
+  it('blocks seeding while the queried snapshot names a live launch', async () => {
+    const { deps, resume } = testDeps({})
+    const snapshot = {
+      ...runtimeSnapshot('tab', LIVE_LEAF_ID, []),
+      tabs: [],
+      initialSurfaceLaunch: { launchId: 'launch-1', agent: 'claude' as const }
+    }
+    await expect(
+      runWorktreeAgentActivationGate(WORKTREE_ID, {
+        ...deps,
+        hasStructuredSession: async () => ({ snapshot, ownerBySessionId: new Map() })
+      })
+    ).resolves.toBe('blocked')
+    expect(deps.listSessions).not.toHaveBeenCalled()
+    expect(resume).not.toHaveBeenCalled()
   })
 
   it('blocks automatic resume when packaged restore never becomes ready', async () => {
@@ -277,11 +151,12 @@ describe('worktree agent activation gate', () => {
     expect(resume).not.toHaveBeenCalled()
   })
 
-  it('adopts a live daemon PTY before activation can resume another agent', async () => {
+  // Layout-owner build: 'adopts the live daemon PTY main placed before activation can resume another agent'.
+  windowOwnedIt('adopts a live daemon PTY before activation can resume another agent', async () => {
     const ptyId = `${WORKTREE_ID}@@live-pty`
     const { deps, createTab, resume } = testDeps({
       sessions: [listed(ptyId)],
-      surfaceOwners: new Map([[ptyId, 'unowned']])
+      surfaceOwners: new Map([[ptyId, UNOWNED]])
     })
 
     await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('adopted')
@@ -294,12 +169,111 @@ describe('worktree agent activation gate', () => {
     expect(resume).not.toHaveBeenCalled()
   })
 
-  it('adopts a daemon PTY minted for a folder workspace', async () => {
+  // Layout-owner build: 'never surfaces a PTY its host is killing'.
+  windowOwnedIt('never gives a surface to a PTY its host is killing', async () => {
+    // A pane closed just before quit is still dying when the relaunched app lists it.
+    const closingPtyId = `${WORKTREE_ID}@@closed-pane`
+    const livePtyId = `${WORKTREE_ID}@@kept-pane`
+    const { deps, createTab } = testDeps({
+      sessions: [
+        { ...listed(closingPtyId), title: 'zsh', agentOwnership: 'absent', exiting: true },
+        { ...listed(livePtyId), title: 'zsh', agentOwnership: 'absent' }
+      ],
+      surfaceOwners: new Map([
+        [closingPtyId, UNOWNED],
+        [livePtyId, UNOWNED]
+      ])
+    })
+
+    await runWorktreeAgentActivationGate(WORKTREE_ID, deps)
+
+    expect(createTab).toHaveBeenCalledOnce()
+    expect(createTab).toHaveBeenCalledWith(WORKTREE_ID, undefined, undefined, {
+      initialPtyId: livePtyId,
+      activate: false,
+      recordInteraction: false
+    })
+  })
+
+  // Layout-owner build: 'leaves an unowned PTY to the recorded pane this renderer still holds, bound by main'.
+  windowOwnedIt(
+    'rebinds an unowned PTY to the recorded pane this renderer still holds',
+    async () => {
+      const ptyId = `${WORKTREE_ID}@@live-pty`
+      const recorded = { paneKey: `tab-live:${LIVE_LEAF_ID}`, ptyId, tabId: 'tab-live' }
+      const { deps, createTab, resume } = testDeps({
+        sessions: [listed(ptyId)],
+        surfaceOwners: new Map([[ptyId, { unowned: true, recorded }]])
+      })
+      seedExistingSurface(deps.getState(), { tabId: 'tab-live', leafId: LIVE_LEAF_ID })
+
+      await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('adopted')
+
+      // The host's graph omits unmounted panes; minting here forked the agent onto a second tab.
+      expect(createTab).not.toHaveBeenCalled()
+      expect(deps.getState().terminalLayoutsByTabId['tab-live']?.ptyIdsByLeafId).toEqual({
+        [LIVE_LEAF_ID]: ptyId
+      })
+      expect(deps.getState().ptyIdsByTabId['tab-live']).toEqual([ptyId])
+      expect(resume).not.toHaveBeenCalled()
+    }
+  )
+
+  // Layout-owner build: 'shows main’s new tab for an unowned PTY when %s'.
+  windowOwnedIt.each<[string, (store: GateTestStore) => void]>([
+    [
+      'the recorded pane now holds another PTY',
+      (store) =>
+        seedExistingSurface(store, {
+          tabId: 'tab-live',
+          leafId: LIVE_LEAF_ID,
+          boundPtyId: `${WORKTREE_ID}@@other-pty`
+        })
+    ],
+    ['the recorded tab is gone', () => {}],
+    // A closed split or a replaced layout leaves the record naming a leaf the tab no longer has.
+    [
+      'the recorded leaf is no longer in the tab layout',
+      (store) => seedExistingSurface(store, { tabId: 'tab-live', leafId: SIBLING_LEAF_ID })
+    ],
+    [
+      'the recorded tab belongs to another worktree',
+      (store) =>
+        seedExistingSurface(store, {
+          tabId: 'tab-live',
+          leafId: LIVE_LEAF_ID,
+          worktreeId: 'repo::/other-worktree'
+        })
+    ]
+  ])('mints a tab for an unowned PTY when %s', async (_case, seed) => {
+    const ptyId = `${WORKTREE_ID}@@live-pty`
+    const recorded = { paneKey: `tab-live:${LIVE_LEAF_ID}`, ptyId, tabId: 'tab-live' }
+    const { deps, createTab } = testDeps({
+      sessions: [listed(ptyId)],
+      surfaceOwners: new Map([[ptyId, { unowned: true, recorded }]])
+    })
+    seed(deps.getState())
+    const recordedLayoutBefore = structuredClone(deps.getState().terminalLayoutsByTabId['tab-live'])
+
+    await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('adopted')
+
+    expect(createTab).toHaveBeenCalledWith(WORKTREE_ID, undefined, undefined, {
+      initialPtyId: ptyId,
+      activate: false,
+      recordInteraction: false
+    })
+    // Nothing may be bound to the recorded surface the gate refused.
+    expect(deps.getState().terminalLayoutsByTabId['tab-live']).toEqual(recordedLayoutBefore)
+    expect(deps.getState().ptyIdsByTabId['tab-live']).toBeUndefined()
+  })
+
+  // Layout-owner build: 'adopts a daemon PTY main placed for a folder workspace'.
+  windowOwnedIt('adopts a daemon PTY minted for a folder workspace', async () => {
     const folderWorkspaceId = 'folder:plain-workspace'
     const ptyId = `${folderWorkspaceId}@@live-pty`
     const { deps, createTab, resume } = testDeps({
       sessions: [listed(ptyId)],
-      surfaceOwners: new Map([[ptyId, 'unowned']])
+      surfaceOwners: new Map([[ptyId, UNOWNED]])
     })
 
     await expect(runWorktreeAgentActivationGate(folderWorkspaceId, deps)).resolves.toBe('adopted')
@@ -515,6 +489,11 @@ describe('worktree agent activation gate', () => {
     await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('adopted')
 
     expect(createTab).not.toHaveBeenCalled()
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      // Main's listing names the pane it holds and its frames rebind it; the window writes nothing.
+      expectNoBindingWrite(store)
+      return
+    }
     expect(store.updateTabPtyId).toHaveBeenCalledWith('tab-live', livePtyId)
     expect(store.replaceTerminalLayoutPanePtyId).toHaveBeenCalledWith(
       'tab-live',
@@ -523,34 +502,38 @@ describe('worktree agent activation gate', () => {
     )
   })
 
-  it('materializes the host tab id for a surface this renderer never mounted', async () => {
-    const livePtyId = `${WORKTREE_ID}@@live-agent`
-    const hostTabId = '3359f7c8-9bd8-4931-8104-52b6bdbd108d'
-    const { deps, createTab } = testDeps({
-      sessions: [listed(livePtyId)],
-      surfaceOwners: new Map([
-        [
-          livePtyId,
-          {
-            paneKey: `${hostTabId}:${LIVE_LEAF_ID}`,
-            ptyId: livePtyId,
-            tabId: hostTabId
-          }
-        ]
-      ])
-    })
+  // Layout-owner build: 'reads the host tab of a surface this renderer never mounted from main’s frames'.
+  windowOwnedIt(
+    'materializes the host tab id for a surface this renderer never mounted',
+    async () => {
+      const livePtyId = `${WORKTREE_ID}@@live-agent`
+      const hostTabId = '3359f7c8-9bd8-4931-8104-52b6bdbd108d'
+      const { deps, createTab } = testDeps({
+        sessions: [listed(livePtyId)],
+        surfaceOwners: new Map([
+          [
+            livePtyId,
+            {
+              paneKey: `${hostTabId}:${LIVE_LEAF_ID}`,
+              ptyId: livePtyId,
+              tabId: hostTabId
+            }
+          ]
+        ])
+      })
 
-    await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('adopted')
+      await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('adopted')
 
-    expect(createTab).toHaveBeenCalledOnce()
-    expect(createTab).toHaveBeenCalledWith(WORKTREE_ID, undefined, undefined, {
-      id: hostTabId,
-      initialLeafId: LIVE_LEAF_ID,
-      initialPtyId: livePtyId,
-      activate: false,
-      recordInteraction: false
-    })
-  })
+      expect(createTab).toHaveBeenCalledOnce()
+      expect(createTab).toHaveBeenCalledWith(WORKTREE_ID, undefined, undefined, {
+        id: hostTabId,
+        initialLeafId: LIVE_LEAF_ID,
+        initialPtyId: livePtyId,
+        activate: false,
+        recordInteraction: false
+      })
+    }
+  )
 
   // Failing closed must not also fail silent: an unreadable census leaves the workspace with
   // no surface, so the gate has to hand the caller its seed instead of claiming 'adopted'.
@@ -592,6 +575,15 @@ describe('worktree agent activation gate', () => {
     })
     seedExistingSurface(deps.getState(), { tabId: 'tab-live', leafId: LIVE_LEAF_ID })
 
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      // Main holds the layout: the leaf it names is shown by its frames, so nothing is declined.
+      await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('adopted')
+      expect(createTab).not.toHaveBeenCalled()
+      expectNoBindingWrite(deps.getState())
+      expect(warn).not.toHaveBeenCalled()
+      warn.mockRestore()
+      return
+    }
     // The seam re-checks its own guard, so an existing tab is not re-seeded by 'empty'.
     await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('empty')
 
@@ -603,13 +595,13 @@ describe('worktree agent activation gate', () => {
     warn.mockRestore()
   })
 
-  it('reports adopted only for the PTYs that actually landed on a surface', async () => {
+  windowOwnedIt('reports adopted only for the PTYs that actually landed on a surface', async () => {
     const adoptedPtyId = `${WORKTREE_ID}@@orphan-agent`
     const unverifiablePtyId = `${WORKTREE_ID}@@ambiguous-agent`
     const { deps } = testDeps({
       sessions: [listed(adoptedPtyId), listed(unverifiablePtyId)],
       surfaceOwners: new Map([
-        [adoptedPtyId, 'unowned'],
+        [adoptedPtyId, UNOWNED],
         [unverifiablePtyId, null]
       ]),
       resumeCount: 0
@@ -639,9 +631,10 @@ describe('worktree agent activation gate', () => {
       await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('adopted')
       expect(createTab).not.toHaveBeenCalled()
       expect(resume).not.toHaveBeenCalled()
-      expect(store.terminalLayoutsByTabId['tab-live']?.ptyIdsByLeafId).toEqual({
-        [LIVE_LEAF_ID]: livePtyId
-      })
+      expect(store.terminalLayoutsByTabId['tab-live']?.ptyIdsByLeafId).toEqual(
+        // Layout-owner build: main's frames bind the pane, not the window.
+        ORCA_LAYOUT_OWNER_IS_MAIN ? {} : { [LIVE_LEAF_ID]: livePtyId }
+      )
     }
   )
 
@@ -662,23 +655,24 @@ describe('worktree agent activation gate', () => {
     await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('adopted')
 
     expect(createTab).not.toHaveBeenCalled()
-    expect(store.terminalLayoutsByTabId['tab-live']?.ptyIdsByLeafId).toEqual({
-      [LIVE_LEAF_ID]: livePtyId
-    })
+    expect(store.terminalLayoutsByTabId['tab-live']?.ptyIdsByLeafId).toEqual(
+      // Layout-owner build: main's frames bind the pane, not the window.
+      ORCA_LAYOUT_OWNER_IS_MAIN ? {} : { [LIVE_LEAF_ID]: livePtyId }
+    )
   })
 
   it('re-reads local ownership after the census before minting', async () => {
     const livePtyId = `${WORKTREE_ID}@@live-agent`
     const { deps, createTab } = testDeps({
       sessions: [listed(livePtyId)],
-      surfaceOwners: new Map([[livePtyId, 'unowned']])
+      surfaceOwners: new Map([[livePtyId, UNOWNED]])
     })
     const store = deps.getState()
     seedExistingSurface(store, { tabId: 'tab-live', leafId: LIVE_LEAF_ID })
     // The pane mounts while the census is in flight, binding the PTY behind the sweep.
     deps.listSurfaceOwners.mockImplementation(async () => {
       store.ptyIdsByTabId['tab-live'] = [livePtyId]
-      return new Map([[livePtyId, 'unowned']])
+      return new Map([[livePtyId, UNOWNED]])
     })
 
     await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('adopted')
@@ -718,7 +712,8 @@ describe('worktree agent activation gate', () => {
     expect(store.terminalLayoutsByTabId['tab-live']?.ptyIdsByLeafId[LIVE_LEAF_ID]).toBe(replacement)
   })
 
-  it('gives every host pane of an unmounted tab its own leaf', async () => {
+  // Layout-owner build: 'leaves every host pane of an unmounted tab to main’s frames'.
+  windowOwnedIt('gives every host pane of an unmounted tab its own leaf', async () => {
     const firstPtyId = `${WORKTREE_ID}@@live-agent`
     const secondPtyId = `${WORKTREE_ID}@@live-sibling`
     const hostTabId = '3359f7c8-9bd8-4931-8104-52b6bdbd108d'
@@ -752,11 +747,12 @@ describe('worktree agent activation gate', () => {
     })
   })
 
-  it('still adopts a live PTY the host reports as owned by no surface', async () => {
+  // Layout-owner build: 'makes no surface for a live PTY main has not placed yet, and resumes no agent over it'.
+  windowOwnedIt('still adopts a live PTY the host reports as owned by no surface', async () => {
     const livePtyId = `${WORKTREE_ID}@@orphan-agent`
     const { deps, createTab } = testDeps({
       sessions: [listed(livePtyId)],
-      surfaceOwners: new Map([[livePtyId, 'unowned']])
+      surfaceOwners: new Map([[livePtyId, UNOWNED]])
     })
 
     await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('adopted')

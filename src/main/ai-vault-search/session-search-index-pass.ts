@@ -81,7 +81,13 @@ export async function runSessionSearchIndexPass(
     throwIfAiVaultScanCancelled(options.signal)
     read += 1
     try {
-      await parseAgentSessionFileCached(candidate, process.platform, stats, decision)
+      await parseAgentSessionFileCached(
+        candidate,
+        process.platform,
+        stats,
+        decision,
+        options.signal
+      )
     } catch (error) {
       throwIfAiVaultScanCancelled(options.signal)
       // The reader reports a read it could not finish to the consumer, which is

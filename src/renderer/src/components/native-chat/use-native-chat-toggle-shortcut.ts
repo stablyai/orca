@@ -7,10 +7,12 @@ import { canToggleNativeChat } from './native-chat-availability'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { isMacPlatform, matchesNativeChatToggleShortcut } from './native-chat-shortcut'
 import { getConnectionIdFromState } from '@/lib/connection-context'
+import { resolveKeyboardWorkspaceId } from '@/lib/floating-workspace-terminal-actions'
 import {
   isNativeChatTabWideFallbackSafe,
   resolveNativeChatActiveLayoutLeafId
 } from './native-chat-leaf-routing'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
 export function resolveNativeChatToggleShortcutDetectedAgent({
   terminalTabId,
@@ -35,10 +37,10 @@ export function resolveNativeChatToggleShortcutDetectedAgent({
   )
 }
 
-/** Toggles the active worktree's focused agent-terminal tab between the terminal
- *  and native chat views via the keyboard. Gated to the active worktree so only
- *  one listener acts at a time, and to agent terminals so the chord is inert on
- *  plain shells / non-terminal surfaces. */
+/** Toggles a workspace's focused agent-terminal tab between the terminal and native
+ *  chat views via the keyboard. Gated to the surface the key press came from (main
+ *  window or floating panel) so only one listener acts, and to agent terminals so
+ *  the chord is inert on plain shells / non-terminal surfaces. */
 export function useNativeChatToggleShortcut(worktreeId: string, isWorktreeActive: boolean): void {
   useEffect(() => {
     if (!isWorktreeActive) {
@@ -50,6 +52,11 @@ export function useNativeChatToggleShortcut(worktreeId: string, isWorktreeActive
         return
       }
       const state = useAppStore.getState()
+      // Why: the floating panel and the main window can both be on screen; only the one the key
+      // press came from toggles.
+      if (resolveKeyboardWorkspaceId(e.target, state.activeWorktreeId) !== worktreeId) {
+        return
+      }
       const activeGroupId = state.activeGroupIdByWorktree[worktreeId]
       const group = (state.groupsByWorktree[worktreeId] ?? []).find((g) => g.id === activeGroupId)
       if (!group?.activeTabId) {
@@ -82,7 +89,6 @@ export function useNativeChatToggleShortcut(worktreeId: string, isWorktreeActive
           : null
       if (
         !canToggleNativeChat({
-          experimentalNativeChatEnabled: state.settings?.experimentalNativeChat === true,
           contentType: 'terminal',
           launchAgent: detectedAgent || !tabWideFallbackSafe ? null : terminalTab?.launchAgent,
           detectedAgent,
@@ -99,9 +105,9 @@ export function useNativeChatToggleShortcut(worktreeId: string, isWorktreeActive
       e.stopPropagation()
       state.toggleTabViewMode(tab.id)
     }
-    window.addEventListener('keydown', onKeyDown, { capture: true })
+    addAppKeyListener('keydown', onKeyDown)
     return () => {
-      window.removeEventListener('keydown', onKeyDown, { capture: true })
+      removeAppKeyListener('keydown', onKeyDown)
     }
   }, [worktreeId, isWorktreeActive])
 }

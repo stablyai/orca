@@ -1,3 +1,6 @@
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -38,11 +41,22 @@ vi.mock('./browser-manager', () => ({
     notifyPermissionDenied: vi.fn(),
     handleGuestWillDownload: vi.fn(),
     installCertificateRequestGuard: vi.fn(),
-    removeCertificateRequestGuard: removeCertificateRequestGuardMock
+    removeCertificateRequestGuard: removeCertificateRequestGuardMock,
+    resolvePagePromptTarget: vi.fn(() => null)
   }
 }))
 
 import { browserSessionRegistry } from './browser-session-registry'
+import { isValidPersistedBrowserSessionProfile } from './browser-session-persisted-profile-validation'
+import {
+  deleteManagedBrowserProfile,
+  ensureManagedBrowserProfile
+} from './browser-managed-session-profiles'
+import {
+  configureBrowserSitePermissionStore,
+  listBrowserSitePermissions,
+  setBrowserSitePermissionDecisions
+} from './browser-site-permission-store'
 import { googleAuthUserAgent } from './browser-google-auth-ua'
 import { installBrowserSessionUserAgentPolicy } from './browser-session-ua'
 import { setBrowserNetworkProxySettingsResolver } from './browser-session-proxy'
@@ -276,14 +290,17 @@ describe('BrowserSessionRegistry', () => {
     expect(updated!.source?.browserFamily).toBe('comet')
   })
 
-  it('deletes a non-default profile', async () => {
+  it('deletes a non-default profile and its remembered site answers', async () => {
+    configureBrowserSitePermissionStore(mkdtempSync(join(tmpdir(), 'orca-site-permissions-')))
     const profile = await browserSessionRegistry.createProfile('isolated', 'Delete Test')
     expect(profile).not.toBeNull()
     expect(browserSessionRegistry.isAllowedPartition(profile!.partition)).toBe(true)
+    setBrowserSitePermissionDecisions(profile!.id, 'https://example.com', ['camera'], 'allow')
     const deleted = await browserSessionRegistry.deleteProfile(profile!.id)
     expect(deleted).toBe(true)
     expect(browserSessionRegistry.isAllowedPartition(profile!.partition)).toBe(false)
     expect(browserSessionRegistry.getProfile(profile!.id)).toBeNull()
+    expect(listBrowserSitePermissions(profile!.id)).toEqual([])
   })
 
   it('retains session security policies when deleting a profile', async () => {
@@ -334,6 +351,29 @@ describe('BrowserSessionRegistry', () => {
     finishClose?.()
     await expect(deletion).resolves.toBe(true)
     expect(removeCertificateRequestGuardMock).not.toHaveBeenCalled()
+  })
+
+  it('creates one managed profile per owner and a fresh one after its owner is removed', async () => {
+    const owner = { kind: 'worktree' as const, id: 'repo-1::/work/feature' }
+    const [first, concurrent] = await Promise.all([
+      ensureManagedBrowserProfile(owner, 'Workspace: feature'),
+      ensureManagedBrowserProfile(owner, 'Workspace: feature')
+    ])
+    const repoProfile = await ensureManagedBrowserProfile({ kind: 'repo', id: 'repo-1' }, 'Repo')
+    if (!first || !repoProfile) {
+      throw new Error('Expected managed profiles')
+    }
+
+    expect(concurrent).toBe(first)
+    expect(repoProfile.partition).not.toBe(first.partition)
+    expect(isValidPersistedBrowserSessionProfile(first, DEFAULT_LOCAL_ORCA_PROFILE_ID)).toBe(true)
+
+    expect(await deleteManagedBrowserProfile(owner)).toBe(true)
+    expect(browserSessionRegistry.isAllowedPartition(first.partition)).toBe(false)
+    expect(browserSessionRegistry.getProfile(repoProfile.id)).not.toBeNull()
+    // A workspace recreated at the same path must not land on the deleted, retired session.
+    const recreated = await ensureManagedBrowserProfile(owner, 'Workspace: feature')
+    expect(recreated?.partition).not.toBe(first.partition)
   })
 
   it('refuses to delete the default profile', async () => {
@@ -445,25 +485,34 @@ describe('BrowserSessionRegistry', () => {
     expect(checkHandler(null, 'top-level-storage-access', '', {})).toBe(false)
   })
 
-  it('routes media permission requests through macOS TCC for isolated partitions', async () => {
-    // Why: verify the parallel fix to the default partition — isolated/imported
-    // profiles must also defer media permission checks to macOS instead of
-    // denying outright, otherwise pages inside them still hit NotAllowedError
-    // after the user grants Camera/Microphone to Orca.
-    await browserSessionRegistry.createProfile('isolated', 'Media Test')
+  it('asks macOS for the camera only after the user allowed the site', async () => {
+    // Why: isolated/imported profiles must also defer to macOS, otherwise pages inside them still
+    // hit NotAllowedError after the user grants Camera to Orca.
+    configureBrowserSitePermissionStore(mkdtempSync(join(tmpdir(), 'orca-site-permissions-')))
+    const profile = await browserSessionRegistry.createProfile('isolated', 'Media Test')
+    if (!profile) {
+      throw new Error('Expected the profile')
+    }
+    setBrowserSitePermissionDecisions(profile.id, 'https://example.com', ['camera'], 'allow')
     const mockSession = sessionFromPartitionMock.mock.results[0]?.value
     const requestHandler = mockSession.setPermissionRequestHandler.mock.calls[0][0]
     const checkHandler = mockSession.setPermissionCheckHandler.mock.calls[0][0]
 
-    const cb = vi.fn()
-    const guestWc = { id: 7, getURL: vi.fn(() => 'https://example.com/') }
-    requestHandler(guestWc, 'media', cb, { mediaTypes: ['video'] })
-    await vi.waitFor(() => expect(cb).toHaveBeenCalledWith(true))
+    const allowedSite = vi.fn()
+    const otherSite = vi.fn()
+    const allowedGuest = { id: 7, getURL: vi.fn(() => 'https://example.com/') }
+    const otherGuest = { id: 8, getURL: vi.fn(() => 'https://other.test/') }
+    requestHandler(allowedGuest, 'media', allowedSite, { mediaTypes: ['video'] })
+    requestHandler(otherGuest, 'media', otherSite, { mediaTypes: ['video'] })
+    await vi.waitFor(() => expect(allowedSite).toHaveBeenCalledWith(true))
+    // No window to ask in, so a site nobody answered gets nothing.
+    await vi.waitFor(() => expect(otherSite).toHaveBeenCalledWith(false))
 
-    expect(checkHandler(null, 'media', '', { mediaType: 'video' })).toBe(true)
-    expect(checkHandler(null, 'notifications', '', {})).toBe(true)
+    expect(checkHandler(allowedGuest, 'media', '', { mediaType: 'video' })).toBe(true)
+    expect(checkHandler(otherGuest, 'media', '', { mediaType: 'video' })).toBe(false)
+    expect(checkHandler(null, 'notifications', 'https://example.com', {})).toBe(false)
     expect(checkHandler(null, 'persistent-storage', '', {})).toBe(true)
-    expect(checkHandler(null, 'geolocation', '', {})).toBe(false)
+    expect(checkHandler(null, 'geolocation', 'https://example.com', {})).toBe(false)
   })
 
   it('wires WebAuthn device selection for isolated partitions', async () => {

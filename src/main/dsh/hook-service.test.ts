@@ -9,7 +9,8 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { wrapWindowsBatchHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
 import { DshHookService } from './hook-service'
 import { DSH_HOOK_EVENTS } from './hook-settings'
 
@@ -101,6 +102,22 @@ describe('DshHookService', () => {
     expect(restoreAt).toBeGreaterThan(-1)
     expect(script).toContain('ORCA_AGENT_LAUNCH')
     expect(restoreAt).toBeLessThan(guardAt)
+  })
+
+  // Why: runs on every OS; windows-hook-payload-delivery.test.ts runs each form under DSH's shell.
+  it('registers the Windows batch hook command for every event', () => {
+    const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    try {
+      expect(new DshHookService().install().state).toBe('installed')
+      const command = wrapWindowsBatchHookCommand(scriptPath())
+      for (const event of DSH_HOOK_EVENTS) {
+        expect(readManagedHooks().hooks[event]).toEqual([
+          { hooks: [expect.objectContaining({ command })] }
+        ])
+      }
+    } finally {
+      platform.mockRestore()
+    }
   })
 
   it('is idempotent', () => {

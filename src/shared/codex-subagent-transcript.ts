@@ -8,6 +8,10 @@ import {
   type JsonRecord
 } from './codex-rollout-jsonl-cursor'
 
+import { reconcileCodexTranscriptTurn, type CodexTranscriptTurn } from './codex-turn-transcript'
+
+import { isCodexStatusTranscriptLine } from './codex-status-transcript-line'
+
 import { readApprovalsReviewer } from './codex-subagent-reviewer'
 import type { CodexApprovalsReviewer } from './codex-subagent-reviewer'
 
@@ -20,6 +24,7 @@ import {
 
 // Why: retire a child whose rollout stays unreadable this long, else a deleted/never-written file pins a phantom row forever.
 const CHILD_UNREADABLE_GRACE_MS = 60_000
+const MAX_TRACKED_TURN_ENDS = 16
 const SAFE_THREAD_ID = /^[A-Za-z0-9-]{1,64}$/
 
 type TrackedTranscriptSubagent = JsonlCursor & {
@@ -34,6 +39,8 @@ type TrackedTranscriptSubagent = JsonlCursor & {
 
 export type CodexSubagentTranscriptState = {
   parent: JsonlCursor
+  rootTurn: CodexTranscriptTurn
+  turnEnds: Map<string, 'completed' | 'failed'>
   subagents: Map<string, TrackedTranscriptSubagent>
   /** Incremental reviewer cursors for child rollouts, which must not replace the parent cursor. */
   reviewerCursorsByPath: Map<string, JsonlCursor>
@@ -156,6 +163,20 @@ function normalizedTranscriptPath(transcriptPath: string | undefined): string | 
     : undefined
 }
 
+function readTurnEnd(
+  recordValue: JsonRecord
+): { turnId: string; end: 'completed' | 'failed' } | undefined {
+  if (recordValue.type !== 'event_msg') {
+    return undefined
+  }
+  const payload = record(recordValue.payload)
+  const turnId = typeof payload?.turn_id === 'string' ? payload.turn_id.trim() : ''
+  if ((payload?.type !== 'task_complete' && payload?.type !== 'turn_complete') || !turnId) {
+    return undefined
+  }
+  return { turnId, end: payload.error == null ? 'completed' : 'failed' }
+}
+
 function childIsComplete(records: JsonRecord[]): boolean {
   let complete = false
   for (const recordValue of records) {
@@ -175,10 +196,19 @@ function childIsComplete(records: JsonRecord[]): boolean {
 export function createCodexSubagentTranscriptState(): CodexSubagentTranscriptState {
   return {
     parent: { offset: 0, carry: '' },
+    rootTurn: { interrupted: false },
+    turnEnds: new Map(),
     subagents: new Map(),
     reviewerCursorsByPath: new Map(),
     reviewersByPath: new Map()
   }
+}
+
+export function codexTranscriptTurnEnd(
+  state: CodexSubagentTranscriptState | undefined,
+  turnId: string
+): 'completed' | 'failed' | undefined {
+  return state?.turnEnds.get(turnId)
 }
 
 export function hasTrackedCodexTranscriptSubagents(
@@ -191,29 +221,47 @@ export function reconcileCodexSubagentTranscript(
   state: CodexSubagentTranscriptState,
   roster: CodexSubagentRoster,
   transcriptPath: string | undefined
-): void {
+): boolean {
   const normalizedPath = normalizedTranscriptPath(transcriptPath)
   if (!normalizedPath) {
-    return
+    return false
   }
+  let changed = false
   if (state.parent.filePath !== normalizedPath) {
     for (const id of state.subagents.keys()) {
       finishCodexSubagent(roster, id)
     }
+    changed = true
     state.parent = { filePath: normalizedPath, offset: 0, carry: '' }
+    state.rootTurn = { interrupted: false }
+    state.turnEnds.clear()
     state.subagents.clear()
     state.reviewerCursorsByPath.clear()
     state.reviewersByPath.clear()
     // Why: a different rollout is a different session, so its predecessor's reviewer is void.
     state.approvalsReviewer = undefined
   }
-  const parentRecords = readJsonlCursor(state.parent)
+  const parentRecords = readJsonlCursor(state.parent, isCodexStatusTranscriptLine)
+  changed ||=
+    Boolean(parentRecords?.length) ||
+    (parentRecords === undefined && state.approvalsReviewer !== undefined)
+  reconcileCodexTranscriptTurn(state.rootTurn, parentRecords ?? [])
   // A stale reviewer must never turn an unreadable rollout into a hidden prompt.
   state.approvalsReviewer =
     parentRecords === undefined
       ? undefined
       : (readApprovalsReviewer(parentRecords) ?? state.approvalsReviewer)
   for (const recordValue of parentRecords ?? []) {
+    const turnEnd = readTurnEnd(recordValue)
+    if (turnEnd) {
+      state.turnEnds.delete(turnEnd.turnId)
+      state.turnEnds.set(turnEnd.turnId, turnEnd.end)
+      const oldest = state.turnEnds.keys().next()
+      if (state.turnEnds.size > MAX_TRACKED_TURN_ENDS && !oldest.done) {
+        state.turnEnds.delete(oldest.value)
+      }
+      continue
+    }
     const activity = readActivity(recordValue)
     if (!activity) {
       continue
@@ -248,7 +296,8 @@ export function reconcileCodexSubagentTranscript(
         entriesByDirectory
       )
     }
-    const records = readJsonlCursor(tracked)
+    const records = readJsonlCursor(tracked, isCodexStatusTranscriptLine)
+    changed ||= Boolean(records?.length)
     if (!records) {
       // Why: a rollout that never appears (or is deleted) has no completion event, so time-box it instead of leaking a working row.
       tracked.filePath = undefined
@@ -267,7 +316,9 @@ export function reconcileCodexSubagentTranscript(
         continue
       }
     }
+    changed = true
     finishCodexSubagent(roster, id)
     state.subagents.delete(id)
   }
+  return changed
 }

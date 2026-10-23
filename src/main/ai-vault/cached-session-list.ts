@@ -1,4 +1,5 @@
 import { join } from 'node:path'
+import { claudeProfileHistoryDirs } from '../claude-accounts/claude-profile-installed-router'
 import {
   clearAiVaultBackgroundRestartCircuit,
   resetAiVaultScannerBackgroundForTests,
@@ -6,13 +7,26 @@ import {
 } from './session-scanner-background'
 import { getCachedWslDistros, hasCachedWslDistros, listRunningWslHomeDirsAsync } from '../wsl'
 import { filterPathsToRunningWslDistrosAsync } from '../wsl-running-path-filter'
-import type { AiVaultListArgs, AiVaultListResult } from '../../shared/ai-vault-types'
+import {
+  isAiVaultScanCancelledError,
+  type AiVaultListArgs,
+  type AiVaultListResult
+} from '../../shared/ai-vault-types'
+import { aiVaultLocalScanKey, aiVaultLocalScanScopeKey } from '../../shared/ai-vault-local-scan-key'
 import type { AiVaultScanOptions } from './session-scanner-types'
 import { prepareOpenCodeWslReaders } from './opencode-wsl-runtime-preparation'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { AiVaultScanCoordinator } from './ai-vault-scan-coordinator'
 import {
-  aiVaultSessionDepthCovers,
+  attachAiVaultScopeCwdAliases,
+  resolveAiVaultScopeRealPaths
+} from './session-scope-real-paths'
+import {
+  startLocalAiVaultScanProgress,
+  type LocalAiVaultScanProgressHandle
+} from './ai-vault-local-scan-progress'
+import {
+  aiVaultCachedDepthServes,
   requestedAiVaultSessionDepth,
   truncateAiVaultListResult,
   type AiVaultSessionDepth
@@ -22,6 +36,15 @@ import {
 // RPC method share a single cache instance — opening the desktop panel and the
 // mobile screen for the same scope must not double-scan hundreds of transcripts.
 const AI_VAULT_CACHE_TTL_MS = 60_000
+
+export class AiVaultLocalScanError extends Error {
+  constructor(
+    readonly scanId: string,
+    readonly original: unknown
+  ) {
+    super(original instanceof Error ? original.message : String(original))
+  }
+}
 
 // Why: codex-home + WSL home dirs must be sourced from a serve-mode-reachable
 // seam (the OrcaRuntimeService deps), NOT the window-only registerCoreHandlers
@@ -58,7 +81,7 @@ export function configureAiVaultSessionSources(next: AiVaultSessionSources): voi
  */
 export async function localAiVaultScanRoots(): Promise<
   Required<Pick<AiVaultScanOptions, 'additionalCodexSessionsDirs' | 'wslHomeDirs'>> &
-    Pick<AiVaultScanOptions, 'executionHostId' | 'wslOpenCodeReaders'>
+    Pick<AiVaultScanOptions, 'executionHostId' | 'wslOpenCodeReaders' | 'claudeProfileProjectsDirs'>
 > {
   const [additionalCodexHomes, wslHomeDirs] = await Promise.all([
     filterPathsToRunningWslDistrosAsync(configuredAdditionalCodexHomePaths()),
@@ -67,6 +90,8 @@ export async function localAiVaultScanRoots(): Promise<
   return {
     additionalCodexSessionsDirs: additionalCodexHomes.map((homePath) => join(homePath, 'sessions')),
     wslHomeDirs,
+    // Why: the scan runs in a worker or child process, which has no account router.
+    claudeProfileProjectsDirs: claudeProfileHistoryDirs('projects'),
     wslOpenCodeReaders: await prepareOpenCodeWslReaders(wslHomeDirs),
     // Why: this scan is always host-local; callers addressing this host by a
     // runtime id get the result restamped at the RPC edge, never rescanned.
@@ -85,9 +110,9 @@ export async function listAiVaultSessions(
   options: { signal?: AbortSignal } = {}
 ): Promise<AiVaultListResult> {
   // Scope paths change the result set, so they must be part of the cache key.
-  const key = JSON.stringify({ scopePaths: [...new Set(args?.scopePaths ?? [])].sort() })
+  const key = aiVaultLocalScanScopeKey(args)
   const depth = requestedAiVaultSessionDepth(args)
-  const scanKey = JSON.stringify({ key, depth })
+  const scanKey = aiVaultLocalScanKey(args)
   const now = Date.now()
   if (args?.force === true) {
     clearAiVaultBackgroundRestartCircuit()
@@ -98,7 +123,7 @@ export async function listAiVaultSessions(
     args?.force !== true &&
     cachedList?.key === key &&
     cachedList.expiresAt > now &&
-    aiVaultSessionDepthCovers(cachedList.depth, depth)
+    aiVaultCachedDepthServes(cachedList.depth, depth, args?.scopePaths)
   ) {
     return truncateAiVaultListResult(cachedList.result, depth, args?.scopePaths)
   }
@@ -106,20 +131,35 @@ export async function listAiVaultSessions(
   // microtask, so an invalidation landing in that gap would otherwise be read
   // as having happened before this scan and leave the stale result cacheable.
   const startGeneration = cacheGeneration
+  let progress: LocalAiVaultScanProgressHandle | null = null
   return scanCoordinator.run({
     key: scanKey,
     force: args?.force,
     signal: options.signal,
-    start: async (scanSignal) => {
-      const result = await scanAiVaultSessionsInBackground(
+    onCreate: (scanId) => {
+      progress = startLocalAiVaultScanProgress(scanKey, scanId)
+    },
+    onError: () => progress?.fail(),
+    onReject: (error, scanId) =>
+      isAiVaultScanCancelledError(error) ? error : new AiVaultLocalScanError(scanId, error),
+    start: async (scanSignal, scanId) => {
+      const scanProgress = progress
+      if (!scanProgress) {
+        throw new Error('Local scan progress was not created.')
+      }
+      const scope = await resolveAiVaultScopeRealPaths(args?.scopePaths ?? [])
+      const scanned = await scanAiVaultSessionsInBackground(
         {
+          includeAntigravityIdeSessions: args?.includeAntigravityIdeSessions,
           limit: args?.limit,
           unlimited: args?.unlimited,
-          scopePaths: args?.scopePaths,
+          scopePaths: args?.scopePaths ? scope.scanScopePaths : undefined,
           ...(await localAiVaultScanRoots())
         },
-        scanSignal
+        scanSignal,
+        scanProgress
       )
+      const result = { ...attachAiVaultScopeCwdAliases(scanned, scope), scanId }
       // A delete (or other invalidation) landed while this scan was running:
       // its result predates the delete, so caching it would resurrect the
       // deleted session for the TTL. Return it to this caller but don't cache.
@@ -129,7 +169,7 @@ export async function listAiVaultSessions(
           args?.force === true ||
           current?.key !== key ||
           current.expiresAt <= Date.now() ||
-          !aiVaultSessionDepthCovers(current.depth, depth)
+          !aiVaultCachedDepthServes(current.depth, depth, args?.scopePaths)
         ) {
           cachedList = {
             key,

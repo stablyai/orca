@@ -30,6 +30,26 @@ class LineageError extends Error {
 }
 
 describe('mapRuntimeError', () => {
+  it('names a deferred fork with its own code and reason', () => {
+    expect(
+      mapRuntimeError(
+        'req_1',
+        { runtimeId: 'runtime-1' },
+        new Error('terminal_spawn_deferred:paused')
+      )
+    ).toMatchObject({
+      ok: false,
+      error: {
+        code: 'terminal_spawn_deferred',
+        message: 'terminal_spawn_deferred:paused',
+        data: { reason: 'paused' }
+      }
+    })
+    expect(
+      mapRuntimeError('req_1', { runtimeId: 'runtime-1' }, new Error('terminal_spawn_deferred:x'))
+    ).toMatchObject({ error: { code: 'runtime_error' } })
+  })
+
   it('preserves the stable skill failure category and retryability across RPC', () => {
     expect(
       mapRuntimeError(

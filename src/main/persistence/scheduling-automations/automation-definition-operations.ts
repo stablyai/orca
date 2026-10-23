@@ -7,7 +7,12 @@ import type {
   AutomationUpdateInput
 } from '../../../shared/automations-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { WorkspaceRunContext } from '../../../shared/task-source-context'
 import { normalizeAutomationPrecheck } from '../../../shared/automation-precheck'
+import {
+  assertAutomationExtraAgentArgs,
+  storedExtraAgentArgs
+} from '../../../shared/automation-extra-agent-args-record'
 import { nextAutomationOccurrenceAfter } from '../../../shared/automation-schedule-occurrences'
 import {
   applyAutomationExecutionTarget,
@@ -81,6 +86,7 @@ export function createAutomation(
   }
   const schedulerOwner = getAutomationSchedulerOwner(repo)
   const contexts = getAutomationContextsForRepo(repo, operations.state.projectHostSetups ?? [])
+  const extraAgentArgs = storedExtraAgentArgs(input.extraAgentArgs)
   const automation: Automation = {
     id: randomUUID(),
     ...(input.creationKey ? { creationKey: input.creationKey } : {}),
@@ -88,6 +94,7 @@ export function createAutomation(
     prompt: input.prompt,
     precheck: normalizeAutomationPrecheck(input.precheck),
     agentId: input.agentId,
+    ...(extraAgentArgs !== undefined ? { extraAgentArgs } : {}),
     // Why own contexts win: a wire context speaks the client's perspective —
     // 'runtime:<id>' is a client-assigned name this store cannot interpret, and
     // persisting it makes the projection orphan a record this authority owns.
@@ -114,6 +121,7 @@ export function createAutomation(
     createdAt: now,
     updatedAt: now
   }
+  assertAutomationExtraAgentArgs(automation)
   operations.state.automations = [...(operations.state.automations ?? []), automation]
   operations.recordCreated()
   operations.flush()
@@ -161,6 +169,10 @@ export function updateAutomation(
   const dtstart = updates.dtstart ?? current.dtstart
   const scheduleChanged = updates.rrule !== undefined || updates.dtstart !== undefined
   const workspaceMode = updates.workspaceMode ?? current.workspaceMode
+  // Omitted preserves; empty or whitespace clears.
+  const extraAgentArgs = Object.hasOwn(definedUpdates, 'extraAgentArgs')
+    ? storedExtraAgentArgs(definedUpdates.extraAgentArgs)
+    : storedExtraAgentArgs(current.extraAgentArgs)
   const merged: Automation = {
     ...current,
     ...definedUpdates,
@@ -218,6 +230,12 @@ export function updateAutomation(
       : current.nextRunAt,
     updatedAt: Date.now()
   }
+  if (extraAgentArgs === undefined) {
+    delete merged.extraAgentArgs
+  } else {
+    merged.extraAgentArgs = extraAgentArgs
+  }
+  assertAutomationExtraAgentArgs(merged)
   const previousPin = automationWorkspaceSshPin(operations.state, current.workspaceId)
   const workspaceSshPin = automationWorkspaceSshPin(operations.state, merged.workspaceId)
   const workspaceSshPinMoved = previousPin?.targetId !== workspaceSshPin?.targetId
@@ -243,6 +261,27 @@ export function updateAutomation(
   )
   operations.flush()
   return updated
+}
+
+/**
+ * Writes the run target a legacy record resolved to, once: a record that already has one keeps it,
+ * so a stamp can never retarget an automation the user or a migration placed.
+ */
+export function stampLegacyAutomationRunContext(
+  operations: AutomationDefinitionOperations,
+  id: string,
+  runContext: WorkspaceRunContext
+): boolean {
+  const current = (operations.state.automations ?? []).find((entry) => entry.id === id)
+  if (!current || current.runContext) {
+    return false
+  }
+  // Replaced, not patched in place: the list projection caches on array identity.
+  operations.state.automations = operations.state.automations.map((entry) =>
+    entry.id === id ? { ...entry, runContext } : entry
+  )
+  operations.flush()
+  return true
 }
 
 export function deleteAutomation(

@@ -1,14 +1,22 @@
-export type { TerminalCreateOptions } from './runtime-terminal-contracts'
+import type { TerminalCreateOptions } from './runtime-terminal-contracts'
+import { ownerSurfacing } from './orca-runtime-core'
+import type { SpawnIntent } from '../../shared/host-spawn-admission'
+
+export type { TerminalCreateOptions }
+export type { Worktree } from '../../shared/worktree/types'
 export type { RuntimeTerminalCreate } from '../../shared/runtime-types'
 export {
   createTerminalRevealWarning,
   ownerSurfacing,
   resolveTerminalPresentation
 } from './orca-runtime-core'
-export { isValidHostTerminalTabId } from '../../shared/terminal-tab-id'
-export { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
+export { makePaneKey } from '../../shared/stable-pane-id'
 export { randomUUID } from 'node:crypto'
-export { admitStablePaneAdoption } from './runtime-terminal-pane-identity'
+export {
+  admitStablePaneAdoption,
+  materializedStablePaneReply,
+  allocateTerminalPaneIdentity
+} from './runtime-terminal-pane-identity'
 export {
   copySleepingAgentLaunchConfig,
   inferCapturedClaudeAgentTeamsMode,
@@ -24,6 +32,11 @@ export { getTerminalViewerColors, setPairedViewerColors } from './terminal-view-
 export { normalizeColorQueryReplyColors } from '../../shared/pty-owner-color-query-colors'
 export type { RuntimePtyController } from './runtime-pty-controller-contract'
 export { getRuntimeDesktopSurface } from './runtime-desktop-surface'
+export { newTabIn } from './runtime-terminal-spawn-placement'
+import type { PaneStartArgs } from './runtime-pane-admission'
+export { spawnInAdmittedPane } from './runtime-pane-admission'
+/** Layout-owner build: what a create's spawn reports its start status to. */
+export type PaneStartArgsOf = (opts: TerminalCreateOptions) => PaneStartArgs
 export type { IpcMainEvent } from 'electron'
 
 // Why initiallyHidden: no renderer pane exists yet, so main must answer startup queries — Muse
@@ -32,3 +45,33 @@ export const BACKGROUND_TERMINAL_SPAWN_FLAGS = {
   initiallyHidden: true,
   persistHostSessionBinding: true
 } as const
+
+/** The PTY's shell inputs: a requested shell, and an agent launch's runtime fact. */
+export const spawnShellInputs = ({
+  shellOverride,
+  launchRuntime
+}: Pick<TerminalCreateOptions, 'shellOverride' | 'launchRuntime'>) => ({
+  ...(shellOverride ? { shellOverride } : {}),
+  ...(launchRuntime ? { launchRuntime } : {})
+})
+
+/** Caller-scoped spawn fields: abort when the caller disconnects; never wake a slept worktree;
+ *  the caller's declared fork intent, which the host's gate validates. */
+export function callerSpawnScope(
+  opts: Pick<TerminalCreateOptions, 'signal' | 'refuseSleptWorktree' | 'spawnIntent'>
+): { signal?: AbortSignal; refuseSleptWorktree?: true; spawnIntent?: SpawnIntent } {
+  return {
+    ...(opts.signal ? { signal: opts.signal } : {}),
+    ...(opts.refuseSleptWorktree ? { refuseSleptWorktree: true } : {}),
+    ...(opts.spawnIntent ? { spawnIntent: opts.spawnIntent } : {})
+  }
+}
+
+export function terminalRevealViewerOptions(
+  opts: Pick<TerminalCreateOptions, 'surfaceOwner' | 'agentLaunchViewer'>
+) {
+  return {
+    ...ownerSurfacing(opts.surfaceOwner !== false),
+    ...(opts.agentLaunchViewer ? { agentLaunchViewer: opts.agentLaunchViewer() } : {})
+  }
+}

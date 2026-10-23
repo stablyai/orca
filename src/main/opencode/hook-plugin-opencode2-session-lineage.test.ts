@@ -244,18 +244,3 @@ describe.each(['opencode', 'opencode2'] as const)('%s plugin OpenCode 2 lineage'
     await cleanup?.()
   })
 })
-
-describe('OpenCode 2 session client shim', () => {
-  it('keeps the enveloped SDK result untouched for the OpenCode 1 server path', () => {
-    const source = _internals.getOpenCodePluginSource()
-
-    // The shim only wraps a bare session record; server() still hands the raw SDK client through.
-    expect(source).toContain(
-      'return result && typeof result.id === "string" ? { data: result } : result;'
-    )
-    expect(source).toContain(
-      'handleLifecycleEvent(client, normalizeNextLifecycleEvent(event), factoryID)'
-    )
-    expect(source).toContain('const client = _ctx?.client;')
-  })
-})

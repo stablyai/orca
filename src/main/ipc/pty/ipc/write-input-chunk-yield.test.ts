@@ -42,7 +42,7 @@ function createWriteInput(): ReturnType<typeof createPtyWriteInput>['writePtyInp
 }
 
 beforeEach(() => {
-  ptyOwnership.set(PTY_ID, null)
+  ptyOwnership.set(PTY_ID, 'local')
   provider.write.mockReset()
   mainWindow.webContents.send.mockReset()
   // Why: only setTimeout is faked. A setTimeout(0) yield would stall the write forever here,

@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { getProjectHostSetupProjectionFromState } from '../project-host-setup-selector'
-import { fetchProjectHostSetupCompatibility, setupWithFetchedOwner } from './project-host-routing'
+import { fetchProjectHostSetupCompatibility } from './project-host-routing'
+import { adoptFromEndpoint } from '../adopt-from-endpoint'
 
 // Crash 3bcc5be3 (v1.4.188, Linux, page.settings boundary): a setup row whose repoId arrived
 // null reached Settings' projectByRepoId useMemo and threw "Cannot read properties of null
@@ -88,10 +89,10 @@ describe('project catalog ingest with non-string row fields', () => {
   // Why: a remote host on a different Orca version is a first-class source of these rows, and
   // decoders hand them over verbatim — the client cannot assume the host already repaired them.
   it('coerces on the remote adoption boundary too', () => {
-    const adopted = setupWithFetchedOwner(badSetups()[1]!, {
-      kind: 'environment',
-      environmentId: 'env-1'
-    })
+    const adopted = adoptFromEndpoint(
+      { kind: 'environment', environmentId: 'env-1' },
+      { kind: 'projectHostSetup', row: badSetups()[1]! }
+    )
     expect(adopted.repoId).toBe('')
     expect(adopted.path).toBe('')
     expect(adopted.hostId).toBe('runtime:env-1')

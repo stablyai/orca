@@ -24,6 +24,8 @@ function hostSkipReason(outcome: AiVaultSearchHostOutcome['outcome']): string | 
       return 'unreachable'
     case 'scope-unknown':
       return 'scope not found there'
+    case 'unsupported-agent':
+      return 'agent not supported'
   }
 }
 
@@ -96,6 +98,11 @@ export function AiVaultPanelSearch({
       'auto.components.right.sidebar.AiVaultPanel.noAgentsSelected',
       'No agents selected'
     )
+  } else if (search.titleOnly) {
+    message = translate(
+      'sessionSearch.panel.titleOnly',
+      'Full-text search is off on this computer, so only session titles are matched.'
+    )
   } else if (unavailable === 'disabled') {
     message = translate(
       'sessionSearch.panel.remoteDisabled',
@@ -110,6 +117,11 @@ export function AiVaultPanelSearch({
     message = translate(
       'sessionSearch.panel.noService',
       'Search is unavailable on this computer. It may need an Orca update or a runtime with search support.'
+    )
+  } else if (unavailable === 'unsupported-agent') {
+    message = translate(
+      'sessionSearch.panel.unsupportedAgent',
+      'This computer does not support history search for the selected agent. Update Orca on that computer or select another agent.'
     )
   } else if (unavailable === 'scope-unknown') {
     message = translate(

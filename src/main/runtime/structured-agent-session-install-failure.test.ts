@@ -1,5 +1,6 @@
-// An install that fails after it opened the chat journal closes that connection, so the next
-// install does not leave a second one open in the same process.
+// An install that fails after it opened the chat journal leaves that one connection to the record
+// store slot, which launch admission may already be using, and the next install builds on it: the
+// process never holds a second connection.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -11,6 +12,7 @@ import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
+import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 
 const mocks = vi.hoisted(() => ({ failWiring: vi.fn(() => false) }))
 
@@ -32,12 +34,14 @@ let root: string
 
 function install(): ReturnType<typeof ensureStructuredAgentSessionHost> {
   return ensureStructuredAgentSessionHost({
+    logger: createStructuredAgentSessionLogger(),
     stateDirectory: root,
     hostId: 'local',
     claimKeyId: 'key-1',
     resolveWorkspacePath: async () => root,
     resolveEnvironment: async () => ({}),
-    resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true })
+    resolveLaunchArgs: () => [],
+    resolveClaudeAuthPolicy: () => ({ account: 'managed' })
   })
 }
 
@@ -52,17 +56,20 @@ afterEach(async () => {
 })
 
 describe('an install that fails after opening the chat journal', () => {
-  it('closes the journal connection it opened, and the next install opens its own', async () => {
+  it('keeps the one connection it opened, and the next install builds on it', async () => {
     const open = vi.spyOn(JournalHostDatabase, 'open')
     mocks.failWiring.mockReturnValueOnce(true)
 
     await expect(install()).rejects.toThrow('model catalog wiring failed')
-    const failed = open.mock.results[0]?.value
-    expect(failed).toBeInstanceOf(JournalHostDatabase)
-    expect(failed.isClosed).toBe(true)
+    const opened = await open.mock.results[0]?.value
+    expect(opened).toBeInstanceOf(JournalHostDatabase)
+    expect(opened.isClosed).toBe(false)
 
     await expect(install()).resolves.toBeDefined()
-    expect(open).toHaveBeenCalledTimes(2)
-    expect(open.mock.results[1]?.value.isClosed).toBe(false)
+    expect(open).toHaveBeenCalledOnce()
+    expect(opened.isClosed).toBe(false)
+
+    await stopStructuredAgentSessionRuntime()
+    expect(opened.isClosed).toBe(true)
   })
 })

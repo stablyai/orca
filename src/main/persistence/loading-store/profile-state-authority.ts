@@ -49,12 +49,6 @@ export type ProfileStateAuthority = {
   /** Optionally publish a durable JSON export for rollback or a compatibility runtime. */
   writeJsonExport?: (targetPath: string) => number
 
-  /** Publish canonical JSON for an older build and advance its SQLite acceptance marker. */
-  writeJsonCompatibilityExport?: (targetPath: string) => number | undefined
-
-  /** Refresh compatibility JSON after the final flush with asynchronous JSON file writes. */
-  writeJsonCompatibilityExportAsync?: (targetPath: string) => Promise<number | undefined>
-
   /** Optionally preserve the database family before an explicit recovery decision. */
   quarantineDatabase?: (quarantineRoot?: string, reason?: string) => ProfileStateDatabaseQuarantine
 
@@ -74,7 +68,6 @@ export type AsyncProfileStateAuthority = Omit<
   | 'writeSerializedState'
   | 'writeCompleteSerializedDomains'
   | 'writeJsonExport'
-  | 'writeJsonCompatibilityExport'
   | 'quarantineDatabase'
   | 'close'
 > & {
@@ -93,7 +86,6 @@ export type AsyncProfileStateAuthority = Omit<
   ): Promise<void>
   writeJsonExport(targetPath: string): Promise<number>
   writeLatestJsonExport(dataFile: string): Promise<number | undefined>
-  writeJsonCompatibilityExport(targetPath: string): Promise<number | undefined>
   quarantineDatabase(
     quarantineRoot?: string,
     reason?: string

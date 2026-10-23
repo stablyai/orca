@@ -14,6 +14,8 @@ import { createTrackedJournalOpener } from '../native-chat/agent-session-journal
 import { readAgentSessionHistory } from '../native-chat/agent-session-wire/agent-session-history-page'
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { CodexJournalGoals } from './codex-structured-journal-goals'
+import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const THREAD = '01a08cc2-f96e-76d0-bb74-88b9bc0b03fc'
 const IDENTITY: AgentSessionJournalIdentity = {
@@ -21,7 +23,7 @@ const IDENTITY: AgentSessionJournalIdentity = {
   workspaceId: 'workspace-1',
   hostId: 'host-1',
   agent: 'codex',
-  providerHandle: { kind: 'codex', threadId: THREAD }
+  providerHandle: codexProviderHandle(THREAD)
 }
 
 let root: string | null = null
@@ -56,7 +58,7 @@ function goalFrame(goal: Record<string, unknown> = {}) {
 /** The host's own sink bound to a real journal. Its publish is what a subscriber
  *  receives: the page after the cursor it had caught up to. */
 function journalSink(journal: AgentSessionJournal) {
-  const deferred = createDeferredStructuredAgentSessionEventSink()
+  const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
   const published: AgentSessionHistoryPage[] = []
   let subscriberCursor: AgentJournalCursor | null = null
   deferred.bind({

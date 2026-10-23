@@ -1,7 +1,10 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import { focusRuntimeTerminalSurface, registerRuntimeTerminalTab } from './sync-runtime-graph'
+import {
+  focusRuntimeTerminalSurface,
+  registerRuntimeTerminalTab
+} from './mounted-terminal-tab-registry'
 
 let unregister: (() => void) | undefined
 

@@ -1,4 +1,5 @@
 import type {
+  GitBranchLineTotal,
   GitStatusEntry,
   GitStatusResult,
   GitUpstreamStatus
@@ -6,7 +7,6 @@ import type {
 import { StatusPorcelainParser } from '../../../shared/git-status-porcelain-parser'
 import { resolveGitStatusLimit } from '../../../shared/git-status-limit'
 import { stableInFlightKey } from '../../../shared/in-flight-promise-dedupe'
-import type { GitBranchLineTotal } from '../../../shared/git-branch-line-total'
 import {
   beginGitStatusLineStatsCacheWrite,
   clearGitStatusLineStatsCacheKey,
@@ -33,6 +33,7 @@ import {
   createBranchLineTotalInput,
   getStatusLineStatsCacheKey
 } from './status-branch-line-total-input'
+import { reconcileDriveCheckoutSuspects } from './drive-checkout-suspect-status'
 
 /**
  * Parse `git status --porcelain=v2` output into structured entries.
@@ -184,7 +185,7 @@ async function runGetStatus(
     // Not a git repo or git not available
   }
 
-  const entries: GitStatusEntry[] = []
+  let entries: GitStatusEntry[] = []
   const { head, branch, upstreamName, upstreamAheadBehind } = parser.branch
   // Why: git runs in the distro and answers in its namespace; the working-tree probes below run here.
   const hostWorktreePath = resolveWorktreeHostPath(worktreePath, options) ?? worktreePath
@@ -205,6 +206,9 @@ async function runGetStatus(
     }
   }
 
+  if (statusSucceeded && !didHitLimit) {
+    entries = await reconcileDriveCheckoutSuspects(worktreePath, entries, options)
+  }
   await dropSharedSymlinkUntrackedEntries(worktreePath, entries, options)
 
   if (statusSucceeded && !didHitLimit && shouldProbeEffectiveUpstreamStatus(branch, upstreamName)) {
@@ -234,6 +238,7 @@ async function runGetStatus(
 
   // Why: line counts run only for areas with entries (clean tree = 0 calls); skip past the limit to avoid numstat over a huge set.
   let branchLineTotal: GitBranchLineTotal | undefined
+  let branchLineTotalUnavailable: string | undefined
   if (!didHitLimit && lineStatsWriteToken !== null) {
     const branchLineTotalInput = createBranchLineTotalInput(
       worktreePath,
@@ -252,6 +257,7 @@ async function runGetStatus(
       ...(branchLineTotalInput ? { branchLineTotal: branchLineTotalInput } : {})
     })
     branchLineTotal = lineStats.branchLineTotal
+    branchLineTotalUnavailable = lineStats.branchLineTotalUnavailable
   } else if (lineStatsWriteToken !== null) {
     clearGitStatusLineStatsCacheKey(lineStatsCacheKey, lineStatsWriteToken)
   }
@@ -270,6 +276,7 @@ async function runGetStatus(
     branch,
     ...(options.includeIgnored ? { ignoredPaths: parser.ignoredPaths } : {}),
     ...(branchLineTotal ? { branchLineTotal } : {}),
+    ...(branchLineTotalUnavailable ? { branchLineTotalUnavailable } : {}),
     ...(didHitLimit ? { didHitLimit: true, statusLength: parser.statusLength } : {}),
     ...(statusSucceeded
       ? {

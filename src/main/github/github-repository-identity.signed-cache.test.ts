@@ -13,12 +13,6 @@ vi.mock('../git/runner', async (importOriginal) => ({
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
-vi.mock('../providers/ssh-git-dispatch', () => ({
-  getSshGitProvider: () => null,
-  getSshGitProviderGeneration: () => 0,
-  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE: 'ssh git provider unavailable'
-}))
-
 vi.mock('./local-git-config-signature', () => ({
   readLocalGitConfigSignature: readLocalGitConfigSignatureMock
 }))

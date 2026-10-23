@@ -1,27 +1,39 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as CodexHookHashLookup from './codex-hook-hash-lookup'
+import type * as CodexHookLocalInstall from './codex-hook-local-install'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import type * as Os from 'node:os'
 import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
+import type { CodexHookAnswer, CodexHookHashes } from './codex-hook-trust-derivation'
 
-const { getPathMock, homedirMock, installExclusivelyMock, refreshExclusivelyMock } = vi.hoisted(
-  () => ({
+const { getPathMock, homedirMock, installExclusivelyMock, refreshExclusivelyMock, answerMock } =
+  vi.hoisted(() => ({
     getPathMock: vi.fn<(name: string) => string>(),
     homedirMock: vi.fn<() => string>(),
-    installExclusivelyMock: vi.fn<(runtimeHomePath: string) => Promise<AgentHookInstallStatus>>(),
-    refreshExclusivelyMock: vi.fn<(runtimeHomePath: string) => Promise<AgentHookInstallStatus>>()
-  })
-)
+    installExclusivelyMock:
+      vi.fn<
+        (runtimeHomePath: string, hashes: CodexHookHashes) => Promise<AgentHookInstallStatus>
+      >(),
+    refreshExclusivelyMock: vi.fn<(runtimeHomePath: string) => Promise<AgentHookInstallStatus>>(),
+    answerMock: vi.fn<(waitMs: number) => Promise<CodexHookAnswer | null>>()
+  }))
 
 vi.mock('electron', () => ({ app: { getPath: getPathMock } }))
 vi.mock('os', async (importOriginal) => {
   const actual = await importOriginal<typeof Os>()
   return { ...actual, homedir: homedirMock }
 })
-vi.mock('./codex-hook-local-install', () => ({
+vi.mock('./codex-hook-local-install', async (importOriginal) => ({
+  ...(await importOriginal<typeof CodexHookLocalInstall>()),
   installCodexHooksExclusively: installExclusivelyMock
+}))
+// Why: stands in for asking a real Codex for its hook hashes.
+vi.mock('./codex-hook-hash-lookup', async (importOriginal) => ({
+  ...(await importOriginal<typeof CodexHookHashLookup>()),
+  resolveCodexHookAnswerForLaunch: answerMock
 }))
 vi.mock('./codex-hook-local-maintenance', () => ({
   refreshCodexRuntimeUserHooksExclusively: refreshExclusivelyMock,
@@ -29,12 +41,13 @@ vi.mock('./codex-hook-local-maintenance', () => ({
 }))
 
 import { CodexHookService } from './codex-hook-service-implementation'
+import { codexHookAnswerForTests } from './hook-service-test-harness'
 
 let tmpHome: string
 let userDataDir: string
 let previousUserDataPath: string | undefined
 
-/** Stands in for a real `codex app-server` grant session, measured at ~380ms locally. */
+/** Stands in for a managed-home install's file writes. */
 const INSTALL_MS = 60
 
 function installedStatus(configPath: string): AgentHookInstallStatus {
@@ -59,6 +72,7 @@ beforeEach(() => {
     }
     throw new Error(`unexpected app.getPath(${name})`)
   })
+  answerMock.mockImplementation(async () => codexHookAnswerForTests())
   installExclusivelyMock.mockImplementation(async (runtimeHomePath: string) => {
     await delay(INSTALL_MS)
     return installedStatus(join(runtimeHomePath, 'hooks.json'))
@@ -86,19 +100,44 @@ describe('launch-prep Codex hook install sharing', () => {
     const home = join(userDataDir, 'managed')
 
     const statuses = await Promise.all(
-      Array.from({ length: 7 }, () => service.installForLaunchPrep(home))
+      Array.from({ length: 7 }, () => service.installForLaunchPrep(home, false, () => true))
     )
 
     expect(statuses.every((status) => status.state === 'installed')).toBe(true)
     expect(installExclusivelyMock).toHaveBeenCalledTimes(1)
   })
 
+  it("never joins a Codex launch to a plain terminal's run that went ahead without the answer", async () => {
+    const service = new CodexHookService()
+    const home = join(userDataDir, 'managed')
+    // Why: Codex answers 20 ms in; a plain terminal waits 0 ms, a Codex launch up to 3 s.
+    const codexHashes = { stop: 'sha256:from-codex' }
+    answerMock.mockImplementation(async (waitMs) => {
+      await delay(Math.min(waitMs, 20))
+      return waitMs > 0
+        ? { kind: 'hashes', codexVersion: 'codex-cli 0.160.1', hashes: codexHashes }
+        : null
+    })
+
+    await Promise.all([
+      service.installForLaunchPrep(home, false, () => true),
+      service.installForLaunchPrep(home, true, () => true)
+    ])
+
+    // Why: the plain terminal goes ahead on Orca's own hash; the Codex launch still gets Codex's.
+    expect(installExclusivelyMock.mock.calls.map(([, hashes]) => hashes)).toContainEqual(
+      codexHashes
+    )
+  })
+
   it('re-installs for a launch that starts after the shared run settled', async () => {
     const service = new CodexHookService()
     const home = join(userDataDir, 'managed')
 
-    await Promise.all(Array.from({ length: 3 }, () => service.installForLaunchPrep(home)))
-    await service.installForLaunchPrep(home)
+    await Promise.all(
+      Array.from({ length: 3 }, () => service.installForLaunchPrep(home, false, () => true))
+    )
+    await service.installForLaunchPrep(home, false, () => true)
 
     expect(installExclusivelyMock).toHaveBeenCalledTimes(2)
   })
@@ -108,8 +147,10 @@ describe('launch-prep Codex hook install sharing', () => {
     const home = join(userDataDir, 'managed')
     installExclusivelyMock.mockRejectedValueOnce(new Error('hooks.json unreadable'))
 
-    await expect(service.installForLaunchPrep(home)).rejects.toThrow('hooks.json unreadable')
-    await expect(service.installForLaunchPrep(home)).resolves.toMatchObject({
+    await expect(service.installForLaunchPrep(home, false, () => true)).rejects.toThrow(
+      'hooks.json unreadable'
+    )
+    await expect(service.installForLaunchPrep(home, false, () => true)).resolves.toMatchObject({
       state: 'installed'
     })
     expect(installExclusivelyMock).toHaveBeenCalledTimes(2)
@@ -119,8 +160,8 @@ describe('launch-prep Codex hook install sharing', () => {
     const service = new CodexHookService()
 
     await Promise.all([
-      service.installForLaunchPrep(join(userDataDir, 'managed')),
-      service.installForLaunchPrep(join(userDataDir, 'per-account'))
+      service.installForLaunchPrep(join(userDataDir, 'managed'), false, () => true),
+      service.installForLaunchPrep(join(userDataDir, 'per-account'), false, () => true)
     ])
 
     expect(installExclusivelyMock).toHaveBeenCalledTimes(2)
@@ -135,7 +176,7 @@ describe('launch-prep Codex hook install sharing', () => {
     const home = join(userDataDir, 'managed')
 
     await Promise.all([
-      service.installForLaunchPrep(home),
+      service.installForLaunchPrep(home, false, () => true),
       service.refreshRuntimeUserHooksForLaunchPrep(home)
     ])
 

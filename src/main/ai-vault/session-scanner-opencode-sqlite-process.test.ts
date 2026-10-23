@@ -1,12 +1,10 @@
 import { build } from 'esbuild'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
-import * as processRunner from '../../shared/child-process/run-process'
-import { runProcess, spawnProcess } from '../../shared/child-process/run-process'
-import { ORCAD_BUN_VERSION } from '../../shared/orcad-bun-runtime'
-import { orcadBunRuntimeFilename } from '../../shared/orcad-artifacts'
+import * as processRunner from '@orca/process-host'
+import { runProcess, spawnProcess } from '@orca/process-host'
 import SyncDatabase from '../sqlite/sync-database'
 import { appendTurns, writeOpenCodeSqliteDatabase } from './session-scanner-opencode-sqlite-fixture'
 import { createOpenCodeSqliteProcessClient } from './session-scanner-opencode-sqlite-process-client'
@@ -16,8 +14,7 @@ import {
 } from './session-scanner-opencode-sqlite-process-framing'
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
 
-const bun =
-  process.env.BUN_EXECUTABLE ?? resolve('out/orcad', orcadBunRuntimeFilename(process.platform))
+const executable = process.execPath
 const directory = mkdtempSync(join(tmpdir(), 'orca-opencode-process-'))
 const entry = join(directory, 'reader.cjs')
 const dbPath = join(directory, 'opencode.db')
@@ -32,7 +29,6 @@ beforeAll(async () => {
     platform: 'node',
     format: 'cjs',
     target: 'node22',
-    external: ['bun:sqlite'],
     outfile: entry,
     logLevel: 'silent'
   })
@@ -57,129 +53,119 @@ afterAll(() => {
   rmSync(directory, { recursive: true, force: true })
 })
 
-for (const [runtime, executable] of [
-  ['Node', process.execPath],
-  ['Bun', bun]
-]) {
-  describe.skipIf(!existsSync(executable))(`OpenCode SQLite process under ${runtime}`, () => {
-    it('uses the deployed runtime and reads live WAL, full prompts and captures in one persistent child', async () => {
-      if (runtime === 'Bun') {
-        expect((await runProcess({ program: executable, args: ['--version'] })).stdout.trim()).toBe(
-          ORCAD_BUN_VERSION
-        )
-      }
-      expect(existsSync(`${dbPath}-wal`)).toBe(true)
-      const spawn = vi.spyOn(processRunner, 'spawnProcess')
-      const client = createOpenCodeSqliteProcessClient({
-        executable,
+describe('OpenCode SQLite process under Node', () => {
+  it('uses the deployed runtime and reads live WAL, full prompts and captures in one persistent child', async () => {
+    expect(existsSync(`${dbPath}-wal`)).toBe(true)
+    const spawn = vi.spyOn(processRunner, 'spawnProcess')
+    const client = createOpenCodeSqliteProcessClient({
+      executable,
+      args: [entry],
+      cwd: directory,
+      beforeSpawn: async () => {}
+    })
+    try {
+      const issues: AiVaultScanIssue[] = []
+      const listed = await client.list({ dbPaths: [dbPath], limit: 5, issues })
+      expect(issues).toEqual([])
+      expect(listed).toHaveLength(1)
+      expect(await client.list({ dbPaths: [dbPath], limit: Infinity, issues })).toHaveLength(1)
+      const args = { dbPath, sessionId: 'wal-session', platform: process.platform }
+      expect((await client.parse(args))?.firstUserPrompt).toBeUndefined()
+      expect((await client.parse({ ...args, fullFirstUserPrompt: true }))?.firstUserPrompt).toBe(
+        prompt.trim()
+      )
+      expect((await client.capture(args)).messages).toEqual([
+        expect.objectContaining({ role: 'user', text: prompt })
+      ])
+      expect(spawn).toHaveBeenCalledOnce()
+    } finally {
+      client.dispose()
+      spawn.mockRestore()
+    }
+  })
+
+  it('fails oversized query responses without truncating a transcript and remains usable', async () => {
+    const client = createOpenCodeSqliteProcessClient({ executable, args: [entry] })
+    try {
+      await expect(
+        client.capture({
+          dbPath: oversizedPath,
+          sessionId: 'oversized',
+          platform: process.platform
+        })
+      ).rejects.toThrow('response exceeds its byte limit')
+      expect(
+        await client.parse({ dbPath, sessionId: 'wal-session', platform: process.platform })
+      ).not.toBeNull()
+    } finally {
+      client.dispose()
+    }
+  })
+
+  it('exits on parent EOF even while SQLite is busy, and enforces its own hard deadline', async () => {
+    const lockedPath = join(directory, 'locked.db')
+    writeOpenCodeSqliteDatabase(lockedPath, [{ id: 'locked', turns: [] }])
+    const lock = new SyncDatabase(lockedPath)
+    lock.exec('BEGIN EXCLUSIVE')
+    try {
+      const request = `${JSON.stringify({
+        id: 1,
+        kind: 'parse',
+        dbPath: lockedPath,
+        sessionId: 'locked',
+        platform: process.platform,
+        timeoutMs: 100
+      })}\n`
+      const child = spawnProcess({ program: executable, args: [entry] })
+      child.stderr.resume()
+      child.stdout.resume()
+      const exit = new Promise<number | null>((resolveExit) => child.once('exit', resolveExit))
+      child.stdin.on('error', () => {})
+      child.stdin.write(request)
+      expect(await exit).toBe(124)
+
+      const eof = await runProcess({
+        program: executable,
         args: [entry],
-        cwd: directory,
-        beforeSpawn: async () => {}
+        input: request,
+        timeoutMs: 2_000
       })
-      try {
-        const issues: AiVaultScanIssue[] = []
-        const listed = await client.list({ dbPaths: [dbPath], limit: 5, issues })
-        expect(issues).toEqual([])
-        expect(listed).toHaveLength(1)
-        expect(await client.list({ dbPaths: [dbPath], limit: Infinity, issues })).toHaveLength(1)
-        const args = { dbPath, sessionId: 'wal-session', platform: process.platform }
-        expect((await client.parse(args))?.firstUserPrompt).toBeUndefined()
-        expect((await client.parse({ ...args, fullFirstUserPrompt: true }))?.firstUserPrompt).toBe(
-          prompt.trim()
-        )
-        expect((await client.capture(args)).messages).toEqual([
-          expect.objectContaining({ role: 'user', text: prompt })
-        ])
-        expect(spawn).toHaveBeenCalledOnce()
-      } finally {
-        client.dispose()
-        spawn.mockRestore()
-      }
-    })
+      expect(eof.timedOut).toBe(false)
+      expect(eof.code).toBe(0)
 
-    it('fails oversized query responses without truncating a transcript and remains usable', async () => {
       const client = createOpenCodeSqliteProcessClient({ executable, args: [entry] })
+      const cancellation = new AbortController()
       try {
-        await expect(
-          client.capture({
-            dbPath: oversizedPath,
-            sessionId: 'oversized',
-            platform: process.platform
-          })
-        ).rejects.toThrow('response exceeds its byte limit')
-        expect(
-          await client.parse({ dbPath, sessionId: 'wal-session', platform: process.platform })
-        ).not.toBeNull()
-      } finally {
-        client.dispose()
-      }
-    })
-
-    it('exits on parent EOF even while SQLite is busy, and enforces its own hard deadline', async () => {
-      const lockedPath = join(directory, `locked-${runtime}.db`)
-      writeOpenCodeSqliteDatabase(lockedPath, [{ id: 'locked', turns: [] }])
-      const lock = new SyncDatabase(lockedPath)
-      lock.exec('BEGIN EXCLUSIVE')
-      try {
-        const request = `${JSON.stringify({
-          id: 1,
-          kind: 'parse',
+        const pending = client.parse({
           dbPath: lockedPath,
           sessionId: 'locked',
           platform: process.platform,
-          timeoutMs: 100
-        })}\n`
-        const child = spawnProcess({ program: executable, args: [entry] })
-        child.stderr.resume()
-        child.stdout.resume()
-        const exit = new Promise<number | null>((resolveExit) => child.once('exit', resolveExit))
-        child.stdin.on('error', () => {})
-        child.stdin.write(request)
-        expect(await exit).toBe(124)
-
-        const eof = await runProcess({
-          program: executable,
-          args: [entry],
-          input: request,
-          timeoutMs: 2_000
+          signal: cancellation.signal
         })
-        expect(eof.timedOut).toBe(false)
-        expect(eof.code).toBe(0)
-
-        const client = createOpenCodeSqliteProcessClient({ executable, args: [entry] })
-        const cancellation = new AbortController()
-        try {
-          const pending = client.parse({
-            dbPath: lockedPath,
-            sessionId: 'locked',
-            platform: process.platform,
-            signal: cancellation.signal
-          })
-          const rejected = expect(pending).rejects.toThrow('SQL read cancelled')
-          await new Promise((resolveDelay) => setTimeout(resolveDelay, 100))
-          cancellation.abort(new Error('SQL read cancelled'))
-          await rejected
-        } finally {
-          client.dispose()
-        }
+        const rejected = expect(pending).rejects.toThrow('SQL read cancelled')
+        await new Promise((resolveDelay) => setTimeout(resolveDelay, 100))
+        cancellation.abort(new Error('SQL read cancelled'))
+        await rejected
       } finally {
-        lock.exec('ROLLBACK')
-        lock.close()
+        client.dispose()
       }
-    })
-
-    it('rejects oversized request frames before running a query', async () => {
-      const result = await runProcess({
-        program: executable,
-        args: [entry],
-        input: 'x'.repeat(OPENCODE_SQLITE_REQUEST_MAX_BYTES + 1),
-        timeoutMs: 2_000
-      })
-      expect(result.code).toBe(1)
-      expect(result.stdout).toBe('')
-    })
+    } finally {
+      lock.exec('ROLLBACK')
+      lock.close()
+    }
   })
-}
+
+  it('rejects oversized request frames before running a query', async () => {
+    const result = await runProcess({
+      program: executable,
+      args: [entry],
+      input: 'x'.repeat(OPENCODE_SQLITE_REQUEST_MAX_BYTES + 1),
+      timeoutMs: 2_000
+    })
+    expect(result.code).toBe(1)
+    expect(result.stdout).toBe('')
+  })
+})
 
 describe('OpenCode SQLite process retirement', () => {
   const args = { dbPath, sessionId: 'wal-session', platform: process.platform }

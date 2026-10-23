@@ -1,7 +1,12 @@
 import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session-wire'
+import type { JournalOperationReceipt } from '../agent-session-journal/journal-row-writer'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { MutationPlan } from './structured-agent-session-mutation-plans'
-import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
+import type {
+  AgentSessionOperationReceipt,
+  AgentSessionTurnContext,
+  TurnOutcome
+} from './structured-agent-session-turns'
 
 /** Only thrown while the provider dispatch is still unreachable. */
 export class AgentSessionPreDispatchError extends Error {
@@ -15,23 +20,40 @@ export async function runSettledAgentSessionMutation<TValue>(input: {
   store: AgentSessionRecordStore
   operationCallerKey: string
   envelope: AgentSessionMutationEnvelope
-  plan: MutationPlan<TValue>
+  plan: Exclude<MutationPlan<TValue>, { commandReceipt: object }>
   context: AgentSessionTurnContext
 }): Promise<TurnOutcome<TValue>> {
+  const operation = {
+    callerKey: input.operationCallerKey,
+    operationId: input.envelope.clientOperationId
+  }
   const settle = (
     outcome: Parameters<AgentSessionRecordStore['recordOperationOutcome']>[0]['outcome']
-  ) =>
-    input.store.recordOperationOutcome({
-      callerKey: input.operationCallerKey,
-      operationId: input.envelope.clientOperationId,
-      outcome
-    })
+  ) => input.store.recordOperationOutcome({ ...operation, outcome })
+  const receipt = input.plan.settlesWithWrite
+    ? observedReceipt(
+        input.store,
+        input.plan.successReceipt?.() ??
+          input.store.operationOutcomeReceipt({
+            ...operation,
+            outcome: { status: 'succeeded', sessionId: input.envelope.sessionId }
+          })
+      )
+    : undefined
+  const context = receipt ? { ...input.context, operationReceipt: receipt } : input.context
   let outcome: TurnOutcome<TValue> | undefined
   try {
-    if (input.plan.markUnknownBeforeRun) {
-      await settle({ status: 'unknown' })
+    const ran = await input.plan.run(context)
+    if (receipt?.isCommitted() && !ran.ok) {
+      // The row says accepted, so a refusal past it (a fold that failed after COMMIT) is a fault.
+      throw new Error(
+        `operation ${operation.operationId} was accepted, then refused: ${ran.refusal.code}`
+      )
     }
-    outcome = await input.plan.run(input.context)
+    if (receipt?.isCommitted()) {
+      return ran
+    }
+    outcome = ran
     await settle(
       outcome.ok
         ? (input.plan.settledOutcome?.(outcome.value) ?? {
@@ -41,6 +63,7 @@ export async function runSettledAgentSessionMutation<TValue>(input: {
         : {
             status: 'failed',
             code: outcome.refusal.code,
+            message: outcome.refusal.message,
             ...(outcome.refusal.details ? { details: outcome.refusal.details } : {}),
             // The row's own field, which builds before details read; copied from the legacy mirror.
             ...(outcome.refusal.rewindReason ? { rewindReason: outcome.refusal.rewindReason } : {})
@@ -48,20 +71,50 @@ export async function runSettledAgentSessionMutation<TValue>(input: {
     )
     return outcome
   } catch (error) {
-    // The pre-run uncertainty is already durable; refusing before dispatch adds no new uncertainty.
-    if (input.plan.markUnknownBeforeRun && error instanceof AgentSessionPreDispatchError) {
-      throw error
-    }
-    try {
-      await settle({ status: 'unknown' })
-    } catch {
-      // Bookkeeping must not replace the operation's proof of whether dispatch began.
-      console.warn('[structured-agent-session] operation uncertainty persistence failed')
+    const { logger, sessionId } = input.context
+    // Its success commits with its write, so a throw leaves the row pending: nothing was written.
+    if (!input.plan.settlesWithWrite) {
+      try {
+        await settle({ status: 'unknown' })
+      } catch {
+        // Bookkeeping must not replace the operation's proof of whether dispatch began.
+        logger.warn('recording an operation as unknown failed', {
+          scope: 'operation-unknown-settlement',
+          sessionId,
+          operationId: operation.operationId
+        })
+      }
     }
     if (outcome && !outcome.ok) {
-      console.warn('[structured-agent-session] refused operation settlement failed')
+      logger.warn('recording a refused operation failed', {
+        scope: 'operation-refused-settlement',
+        sessionId,
+        operationId: operation.operationId
+      })
       return outcome
     }
     throw error
   }
+}
+
+/** Tracks whether a receipt committed, so a Stop can commit it alone before it acts. */
+export function observedReceipt(
+  store: Pick<AgentSessionRecordStore, 'commitOperationReceipt'>,
+  receipt: JournalOperationReceipt
+): AgentSessionOperationReceipt {
+  let committed = false
+  const observed: AgentSessionOperationReceipt = {
+    write: receipt.write,
+    committed: () => {
+      receipt.committed()
+      committed = true
+    },
+    isCommitted: () => committed,
+    commitAlone: async () => {
+      if (!committed) {
+        await store.commitOperationReceipt(observed)
+      }
+    }
+  }
+  return observed
 }

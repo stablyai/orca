@@ -4,6 +4,7 @@
 // `mcp__server__tool`), so a structured Codex child running a shell reads exactly as a Codex
 // CLI agent running one does.
 
+import { ownRetainedString } from '../../shared/own-retained-string'
 import type { AgentChildWorkOutcome } from '../../shared/agent-status-child-work'
 import type { NativeChatSubagentState } from '../../shared/native-chat-types'
 import {
@@ -19,7 +20,12 @@ export const CODEX_CHILD_WORK_TEXT_MAX_CHARS = 2_048
 export type CodexChildToolCall = { toolName: string; input?: string }
 
 function bounded(text: string | null | undefined): string | undefined {
-  return text ? text.slice(0, CODEX_CHILD_WORK_TEXT_MAX_CHARS) : undefined
+  if (!text) {
+    return undefined
+  }
+  return text.length > CODEX_CHILD_WORK_TEXT_MAX_CHARS
+    ? ownRetainedString(text.slice(0, CODEX_CHILD_WORK_TEXT_MAX_CHARS))
+    : text
 }
 
 function withInput(toolName: string, input: string | undefined): CodexChildToolCall {

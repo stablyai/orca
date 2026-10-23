@@ -11,7 +11,12 @@ export function optimisticFieldValueFromMutation(
   fieldId: string,
   value: GitHubProjectFieldMutationValue
 ): GitHubProjectTable['rows'][number]['fieldValuesByFieldId'][string] | null {
-  const field = table.selectedView.fields.find((f) => f.id === fieldId)
+  // Board column fields can be hidden from the view's visible fields.
+  const field = [
+    ...table.selectedView.fields,
+    ...(table.selectedView.verticalGroupByFields ?? []),
+    ...table.selectedView.groupByFields
+  ].find((f) => f.id === fieldId)
   switch (value.kind) {
     case 'single-select': {
       if (field?.kind === 'single-select') {

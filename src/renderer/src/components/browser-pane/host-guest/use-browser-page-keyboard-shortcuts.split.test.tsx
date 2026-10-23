@@ -17,8 +17,6 @@ const MAC_USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'
 type FakeWebview = {
   goBack: ReturnType<typeof vi.fn>
   goForward: ReturnType<typeof vi.fn>
-  getZoomLevel: () => number
-  setZoomLevel: ReturnType<typeof vi.fn>
 }
 
 type PaneSpies = {
@@ -31,14 +29,14 @@ let historyNavigate = paneChannel<BrowserHistoryNavigateCommand>()
 let reloadRequests = paneChannel<BrowserPageCommandTarget>()
 let hardReloadRequests = paneChannel<BrowserPageCommandTarget>()
 let zoomRequests = paneChannel<BrowserPageZoomCommand>()
+let zoomPage = vi.fn(() => Promise.resolve(null))
+let grabModeToggleListeners: ((browserPageId: string, intent: GrabIntent) => void)[] = []
 
 function createSpies(): PaneSpies {
   return {
     webview: {
       goBack: vi.fn(),
-      goForward: vi.fn(),
-      getZoomLevel: () => 0,
-      setZoomLevel: vi.fn()
+      goForward: vi.fn()
     },
     reload: vi.fn(),
     startGrabIntent: vi.fn()
@@ -48,26 +46,25 @@ function createSpies(): PaneSpies {
 function PaneHarness({
   id,
   scope,
-  spies
+  spies,
+  markupIsActive = false
 }: {
   id: 'a' | 'b' | 'floating'
   scope: BrowserChromeShortcutScope
   spies: PaneSpies
+  markupIsActive?: boolean
 }): React.JSX.Element {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook only calls the history and zoom members the fake provides.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook only calls the history members the fake provides.
   const webviewRef = useRef(spies.webview as unknown as Electron.WebviewTag)
   const isActiveRef = useRef(true)
-  const paneZoomLevelRef = useRef(0)
   useBrowserPageKeyboardShortcuts({
     browserTabId: `page-${id}`,
     workspaceId: `workspace-${id}`,
     isActive: true,
     chromeShortcutScope: scope,
     isActiveRef,
-    markupIsActive: false,
+    markupIsActive,
     webviewRef,
-    paneZoomLevelRef,
-    setBrowserDefaultZoomLevel: vi.fn(),
     showBrowserZoomFeedback: vi.fn(),
     reloadWebviewOrRecoverGuest: spies.reload,
     startGrabIntent: spies.startGrabIntent,
@@ -140,11 +137,20 @@ beforeEach(() => {
   reloadRequests = paneChannel()
   hardReloadRequests = paneChannel()
   zoomRequests = paneChannel()
+  zoomPage = vi.fn(() => Promise.resolve(null))
+  grabModeToggleListeners = []
   const inert = (): (() => void) => () => {}
   Object.defineProperty(window, 'api', {
     configurable: true,
     value: {
-      browser: { onGrabModeToggle: inert, onGrabActionShortcut: inert },
+      browser: {
+        onGrabModeToggle: (callback: (browserPageId: string, intent: GrabIntent) => void) => {
+          grabModeToggleListeners.push(callback)
+          return () => {}
+        },
+        onGrabActionShortcut: inert,
+        zoomPage
+      },
       ui: {
         onBrowserHistoryNavigate: historyNavigate.subscribe,
         onReloadBrowserPage: reloadRequests.subscribe,
@@ -173,11 +179,10 @@ describe('useBrowserPageKeyboardShortcuts in a split of two active browser panes
     expect(b.webview.goBack).toHaveBeenCalledTimes(1)
     expect(b.webview.goForward).toHaveBeenCalledTimes(1)
     expect(b.reload.mock.calls).toEqual([[false], [true]])
-    expect(b.webview.setZoomLevel).toHaveBeenCalledTimes(1)
+    expect(zoomPage.mock.calls).toEqual([[{ browserPageId: 'page-b', direction: 'in' }]])
     expect(a.webview.goBack).not.toHaveBeenCalled()
     expect(a.webview.goForward).not.toHaveBeenCalled()
     expect(a.reload).not.toHaveBeenCalled()
-    expect(a.webview.setZoomLevel).not.toHaveBeenCalled()
   })
 
   it('answers a chrome chord only in the focused split', () => {
@@ -221,6 +226,36 @@ describe('useBrowserPageKeyboardShortcuts in a split of two active browser panes
 
     expect(a.startGrabIntent).not.toHaveBeenCalled()
     expect(b.startGrabIntent).not.toHaveBeenCalled()
+  })
+
+  it('arms annotate from the focused pane only, even while text is selected', () => {
+    const { a, b } = renderSplit('focused', 'inactive')
+    selectText('transcript')
+
+    press(document.body, { key: 'C', code: 'KeyC', shiftKey: true })
+    press(document.body, { key: 'C', code: 'KeyC', shiftKey: true, repeat: true })
+
+    expect(a.startGrabIntent.mock.calls).toEqual([['annotate']])
+    expect(b.startGrabIntent).not.toHaveBeenCalled()
+  })
+
+  it('arms the intent a focused guest forwarded, only in that pane', () => {
+    const { a, b } = renderSplit('focused', 'inactive')
+
+    act(() => grabModeToggleListeners.forEach((listener) => listener('page-b', 'annotate')))
+    act(() => grabModeToggleListeners.forEach((listener) => listener('page-b', 'copy')))
+
+    expect(b.startGrabIntent.mock.calls).toEqual([['annotate'], ['copy']])
+    expect(a.startGrabIntent).not.toHaveBeenCalled()
+  })
+
+  it('ignores a forwarded chord while markup is open, like the disabled toolbar buttons', () => {
+    const spies = createSpies()
+    render(<PaneHarness id="a" scope="focused" spies={spies} markupIsActive />)
+
+    act(() => grabModeToggleListeners.forEach((listener) => listener('page-a', 'annotate')))
+
+    expect(spies.startGrabIntent).not.toHaveBeenCalled()
   })
 
   it('answers a floating browser chord only in the floating panel', () => {

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
-  ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
   NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES
 } from '../../../../shared/protocol-version'
+import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/electron-remote-runtime-client-capabilities'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import {
   assertProjectedSessionTabVisible,

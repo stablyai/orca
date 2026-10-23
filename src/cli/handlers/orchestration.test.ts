@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const callMock = vi.fn()
+// Reuse one mutation identity when retrying worker_done after runtime_unavailable.
+const WORKER_DONE_REQUEST = { orchestrationRequestId: expect.any(String) }
 const getTerminalHandleMock = vi.hoisted(() => vi.fn())
 const originalTerminalHandle = process.env.ORCA_TERMINAL_HANDLE
 const originalPaneKey = process.env.ORCA_PANE_KEY
-// Why: a structured-session marker inherited from the runner diverts these cases to the
-// structured refusal, so which branch they exercise would depend on who ran them.
+// Isolate inherited session markers so the runner cannot change the refusal branch.
 const originalStructuredSession = process.env.ORCA_STRUCTURED_SESSION
 const originalCliCommand = process.env.ORCA_CLI_COMMAND
 const originalExitCode = process.exitCode
@@ -13,7 +14,6 @@ function lifecycleGroupRecipientError(type: 'worker_done' | 'heartbeat'): string
   return `${type} messages belong to one exact Dispatch and cannot target a group address.`
 }
 
-// Why: isolate the handler's flag-to-param mapping; printResult only writes output.
 vi.mock('../format', () => ({ printResult: vi.fn() }))
 vi.mock('../selectors', () => ({ getTerminalHandle: getTerminalHandleMock }))
 
@@ -74,29 +74,35 @@ describe('orchestration send structured payload flags', () => {
         ['task-id', 'task_1'],
         ['dispatch-id', 'ctx_1'],
         ['outcome', 'succeeded'],
-        ['files-modified', 'src/a.ts, src/b.ts'],
+        ['files-modified', ' src/a.ts, ,src/b.ts, '],
+        ['phase', 'verification'],
         ['report-path', 'reports/done.md']
       ])
     )
 
-    expect(callMock).toHaveBeenCalledWith('orchestration.send', {
-      from: 'term_worker',
-      to: 'term_coord',
-      subject: 'done',
-      body: undefined,
-      type: 'worker_done',
-      priority: undefined,
-      threadId: undefined,
-      payload: JSON.stringify({
-        taskId: 'task_1',
-        dispatchId: 'ctx_1',
-        outcome: 'succeeded',
-        filesModified: ['src/a.ts', 'src/b.ts'],
-        reportPath: 'reports/done.md'
-      }),
-      waitForLifecycleSettlement: true,
-      devMode: false
-    })
+    expect(callMock).toHaveBeenCalledWith(
+      'orchestration.send',
+      {
+        from: 'term_worker',
+        to: 'term_coord',
+        subject: 'done',
+        body: undefined,
+        type: 'worker_done',
+        priority: undefined,
+        threadId: undefined,
+        payload: JSON.stringify({
+          taskId: 'task_1',
+          dispatchId: 'ctx_1',
+          outcome: 'succeeded',
+          filesModified: ['src/a.ts', 'src/b.ts'],
+          reportPath: 'reports/done.md',
+          phase: 'verification'
+        }),
+        waitForLifecycleSettlement: true,
+        devMode: false
+      },
+      WORKER_DONE_REQUEST
+    )
   })
 
   it('forwards multiline message bodies without normalization', async () => {
@@ -202,18 +208,22 @@ describe('orchestration send structured payload flags', () => {
       ])
     )
 
-    expect(callMock).toHaveBeenCalledWith('orchestration.send', {
-      from: 'term_worker',
-      to: 'term_coord',
-      subject: 'done',
-      body: undefined,
-      type: 'worker_done',
-      priority: undefined,
-      threadId: undefined,
-      payload: JSON.stringify({ outcome: 'succeeded' }),
-      waitForLifecycleSettlement: true,
-      devMode: false
-    })
+    expect(callMock).toHaveBeenCalledWith(
+      'orchestration.send',
+      {
+        from: 'term_worker',
+        to: 'term_coord',
+        subject: 'done',
+        body: undefined,
+        type: 'worker_done',
+        priority: undefined,
+        threadId: undefined,
+        payload: JSON.stringify({ outcome: 'succeeded' }),
+        waitForLifecycleSettlement: true,
+        devMode: false
+      },
+      WORKER_DONE_REQUEST
+    )
   })
 
   it('sends lifecycle messages from ORCA_TERMINAL_HANDLE without a liveness probe', async () => {
@@ -229,18 +239,22 @@ describe('orchestration send structured payload flags', () => {
     )
 
     expect(callMock).toHaveBeenCalledTimes(1)
-    expect(callMock).toHaveBeenCalledWith('orchestration.send', {
-      from: 'term_worker_env',
-      to: 'term_coord',
-      subject: 'done',
-      body: undefined,
-      type: 'worker_done',
-      priority: undefined,
-      threadId: undefined,
-      payload: JSON.stringify({ outcome: 'succeeded' }),
-      waitForLifecycleSettlement: true,
-      devMode: false
-    })
+    expect(callMock).toHaveBeenCalledWith(
+      'orchestration.send',
+      {
+        from: 'term_worker_env',
+        to: 'term_coord',
+        subject: 'done',
+        body: undefined,
+        type: 'worker_done',
+        priority: undefined,
+        threadId: undefined,
+        payload: JSON.stringify({ outcome: 'succeeded' }),
+        waitForLifecycleSettlement: true,
+        devMode: false
+      },
+      WORKER_DONE_REQUEST
+    )
   })
 
   it.each(['worker_done', 'heartbeat'] as const)(
@@ -258,14 +272,12 @@ describe('orchestration send structured payload flags', () => {
         ])
       )
 
-      // Why: pre-payload-authority runtimes only complete a worker_done whose
-      // sender equals the recorded (equally stale) assignee handle, and
-      // coordinator replies route to the sender row the worker's env-handle
-      // `check` actually reads — so lifecycle sends must stay env-verbatim.
+      // Older hosts match lifecycle senders to stale assignee handles, so preserve the env spelling.
       expect(callMock).toHaveBeenCalledTimes(1)
       expect(callMock).toHaveBeenCalledWith(
         'orchestration.send',
-        expect.objectContaining({ from: 'term_worker_env' })
+        expect.objectContaining({ from: 'term_worker_env' }),
+        ...(type === 'worker_done' ? [WORKER_DONE_REQUEST] : [])
       )
     }
   )
@@ -285,7 +297,8 @@ describe('orchestration send structured payload flags', () => {
 
     expect(callMock).toHaveBeenCalledWith(
       'orchestration.send',
-      expect.objectContaining({ senderPaneKey: 'tab_worker:leaf_worker' })
+      expect.objectContaining({ senderPaneKey: 'tab_worker:leaf_worker' }),
+      WORKER_DONE_REQUEST
     )
   })
 
@@ -314,8 +327,7 @@ describe('orchestration send structured payload flags', () => {
     process.env.ORCA_STRUCTURED_SESSION = '1'
     getTerminalHandleMock.mockResolvedValue('term_sibling_pane')
 
-    // The refusal must not recommend --from: the explicit-flag branch returns before this guard,
-    // so the advice would succeed against a handle that necessarily belongs to another pane.
+    // --from bypasses this guard and could select another pane; never recommend it as recovery.
     await expect(
       invokeSend(
         new Map<string, string | boolean>([
@@ -422,8 +434,7 @@ describe('orchestration timeout flag validation', () => {
       ])
     )
 
-    // Why: --peek rides with unread:false so pre-peek runtimes fall back to
-    // the non-consuming all mode instead of the destructive mark-read default.
+    // unread:false keeps --peek non-consuming when older runtimes ignore the peek field.
     expect(callMock).toHaveBeenCalledWith('orchestration.check', {
       terminal: 'term_worker',
       terminalPaneKey: undefined,
@@ -461,8 +472,7 @@ describe('orchestration timeout flag validation', () => {
     }
     expect(response.result.messages.map((m) => m.id)).toEqual(['msg_new'])
     expect(response.result.count).toBe(1)
-    // Why: the pre-peek runtime built `formatted` from all rows, including
-    // the read one the filter just removed.
+    // Older formatted output includes read rows removed by the client filter.
     expect(response.result.formatted).toBeUndefined()
   })
 
@@ -532,8 +542,8 @@ describe('orchestration timeout flag validation', () => {
     expect(getTerminalHandleMock).not.toHaveBeenCalled()
   })
 
-  it.each([String(Number.MAX_SAFE_INTEGER)])(
-    'clamps a safe ask timeout %s before adding transport headroom',
+  it.each(['1', '1800000'])(
+    'accepts an ask timeout %s within the supported range with transport headroom',
     async (rawTimeout) => {
       process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
       callMock.mockResolvedValue({
@@ -551,9 +561,32 @@ describe('orchestration timeout flag validation', () => {
 
       expect(callMock).toHaveBeenCalledWith(
         'orchestration.ask',
-        expect.objectContaining({ timeoutMs: 1_800_000 }),
-        { timeoutMs: 1_805_000 }
+        expect.objectContaining({ timeoutMs: Number(rawTimeout) }),
+        { timeoutMs: Number(rawTimeout) + 5_000 }
       )
+    }
+  )
+
+  it.each(['1800001', String(Number.MAX_SAFE_INTEGER)])(
+    'rejects an oversized ask timeout %s before resolving identity or creating a question',
+    async (timeoutMs) => {
+      process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
+      callMock.mockResolvedValue({
+        result: { answer: 'yes', messageId: 'msg_1', threadId: 'thread_1', timedOut: false }
+      })
+      await expect(
+        invokeAsk(
+          new Map<string, string | boolean>([
+            ['question', 'Proceed?'],
+            ['timeout-ms', timeoutMs]
+          ])
+        )
+      ).rejects.toMatchObject({
+        code: 'invalid_argument',
+        message: expect.stringMatching(/--timeout-ms.*1800000.*30 minutes/)
+      })
+      expect(callMock).not.toHaveBeenCalled()
+      expect(getTerminalHandleMock).not.toHaveBeenCalled()
     }
   )
 

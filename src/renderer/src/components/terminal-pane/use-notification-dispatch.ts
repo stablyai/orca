@@ -1,3 +1,11 @@
+import {
+  resolveTerminalNotificationOwner,
+  type TerminalNotificationBinding
+} from '@/attention/notification-subject-owner'
+import {
+  notificationExecutionHostForOwner,
+  notificationSourceForOwner
+} from '../../../../shared/notification-source'
 import { useCallback } from 'react'
 import { useAppStore } from '@/store'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
@@ -13,6 +21,7 @@ import type {
   AgentCompletionDispatchMeta,
   AgentCompletionStatusSnapshot
 } from './agent-completion-coordinator-types'
+import type { NotificationDispatchResult } from '../../../../shared/notification-settings-types'
 import { getNotificationWorkspaceLabels } from './terminal-notification-state'
 import { createTerminalAttentionSurface } from './terminal-attention-surface'
 import {
@@ -48,12 +57,13 @@ function hasFreshActiveHookStatus(
   return Boolean(isFreshNonDoneAgentStatus(snapshot) && !titleNamesDifferentKnownAgent)
 }
 
-export type TerminalNotificationEvent = {
+export type TerminalNotificationEvent = TerminalNotificationBinding & {
   source: 'terminal-bell' | 'agent-task-complete'
   terminalTitle?: string
-  paneKey?: string
   agentStatusSnapshot?: AgentCompletionStatusSnapshot
   agentCompletionSource?: AgentCompletionDispatchMeta['source']
+  /** Main's answer to the delivery request this event sends (null: no answer). */
+  onDispatchResult?: (result: NotificationDispatchResult | null) => void
 }
 
 /**
@@ -66,7 +76,7 @@ export type TerminalNotificationEvent = {
 export function dispatchTerminalNotification(
   worktreeId: string,
   event: TerminalNotificationEvent
-): void {
+): boolean {
   const state = useAppStore.getState()
   // Why: the completion title is the live identity. If it explicitly names an
   // agent, any snapshot from another agent is stale pane-reuse residue and must
@@ -98,7 +108,7 @@ export function dispatchTerminalNotification(
   ) {
     // Why: a title-only idle signal can race behind active hook state; a
     // confirmed process exit is independent authority that the turn ended.
-    return
+    return false
   }
   // Why: a process can die before its hook emits done; do not label the
   // resulting completion notification with that stale active state or prompt.
@@ -113,7 +123,7 @@ export function dispatchTerminalNotification(
     event.source === 'agent-task-complete' &&
     isSupersededAgentCompletionSnapshot(storedAgentStatus, eventAgentStatusSnapshot)
   ) {
-    return
+    return false
   }
   const agentNotificationStateStartedAt =
     eventAgentStatusSnapshot?.stateStartedAt ?? freshStoredAgentStatus?.stateStartedAt
@@ -125,13 +135,12 @@ export function dispatchTerminalNotification(
       // Why: main-process hook IPC can update inactive worktrees before the renderer's live-PTY
       // map catches up. An accepted fresh hook snapshot is authority that the turn ended;
       // title/BEL-only paths still need surface liveness.
-      hasFreshActivityEvidence: Boolean(agentStatus),
-      groupAttentionEnabled: state.settings?.experimentalTerminalAttention === true
+      hasFreshActivityEvidence: Boolean(agentStatus)
     },
     createTerminalAttentionSurface(state)
   )
   if (!attentionDecision.admitted) {
-    return
+    return false
   }
 
   // Desktop settings are applied in main after independent mobile delivery.
@@ -162,38 +171,43 @@ export function dispatchTerminalNotification(
         })
       : null
 
+  let requested = false
   const requestDelivery = (request: AgentAttentionDeliveryRequest): void => {
+    requested = true
+    const owner = resolveTerminalNotificationOwner(state, worktreeId, event)
+    const executionHost = notificationExecutionHostForOwner(owner)
     deliverAgentAttentionNotification(
       {
         source: event.source,
         ...(notificationId ? { notificationId } : {}),
         worktreeId: request.workspaceId,
+        ...(executionHost ? { executionHost } : {}),
         paneKey: request.subjectKey ?? undefined,
         ...getNotificationWorkspaceLabels(state, request.workspaceId, event.terminalTitle),
+        notificationSourceId: notificationSourceForOwner(owner, state),
         terminalTitle: event.terminalTitle,
         isActiveWorktree: request.workspaceIsActive,
         ...agentSnapshot
       },
-      sound
+      sound,
+      event.onDispatchResult
     )
   }
 
   applyAgentAttention(attentionDecision, {
-    unread: {
-      markWorkspaceUnread: state.markWorktreeUnread,
-      markSubjectUnread: state.markAgentCompletionPaneUnread,
-      markGroupUnread: state.markTerminalTabUnread,
-      markSurfaceUnread: state.markTerminalPaneUnread
-    },
+    unread: state.markAgentAttentionUnread,
     requestDelivery
   })
+  return requested
 }
 
 export function useNotificationDispatch(
   worktreeId: string
 ): (event: TerminalNotificationEvent) => void {
   return useCallback(
-    (event: TerminalNotificationEvent) => dispatchTerminalNotification(worktreeId, event),
+    (event: TerminalNotificationEvent) => {
+      dispatchTerminalNotification(worktreeId, event)
+    },
     [worktreeId]
   )
 }

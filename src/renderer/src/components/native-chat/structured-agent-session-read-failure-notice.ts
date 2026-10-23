@@ -13,7 +13,7 @@ export type StructuredAgentSessionReadFailureNotice = {
   text: string
   /** The host named the situation, so the words say more than that the history did not load. */
   named: boolean
-  /** Nothing the read retries gets past it, so the pane no longer says it keeps trying. */
+  /** Nothing the read retries gets past it. */
   final: boolean
 }
 

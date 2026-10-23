@@ -199,10 +199,3 @@ describe.runIf(RUN_LIVE)('live foreground recovery (issue #5049)', () => {
     }
   )
 })
-
-// Why: vitest fails a file with zero tests; keep a sentinel for default runs.
-describe.runIf(!RUN_LIVE)('live foreground recovery (skipped)', () => {
-  it('is opt-in via ORCA_MOBILE_LIVE_REPRO=1', () => {
-    expect(true).toBe(true)
-  })
-})

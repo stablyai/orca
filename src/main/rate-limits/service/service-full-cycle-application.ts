@@ -1,5 +1,5 @@
 import { RateLimitServiceFullCyclePreparation } from './service-full-cycle-preparation'
-import { deriveAntigravityRateLimits } from '../antigravity-usage-mirror'
+import { isZcodeUsageCredentialCurrent } from '../zcode-usage-credentials'
 import { settleSiblingProviderResult } from './service-sibling-provider-result'
 import type { ProviderRateLimits } from './service-types'
 
@@ -26,6 +26,8 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       opencodeGeneration,
       miniMaxConfigChanged,
       miniMaxGeneration,
+      zcodeConfigChanged,
+      zcodeGeneration,
       claudeFetchGated,
       results: [
         claudeResult,
@@ -37,7 +39,8 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       ],
       grokResultPromise,
       cursorResultPromise,
-      zcodeResultPromise
+      zcodeResultPromise,
+      antigravityResultPromise
     } = prepared
     if (signal.aborted) {
       return
@@ -82,9 +85,6 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
             status: 'error'
           } satisfies ProviderRateLimits)
 
-    // Why: Antigravity can only borrow a *successful* Gemini read; a Gemini failure is not an Antigravity failure.
-    const antigravity = deriveAntigravityRateLimits(gemini)
-
     const opencodeGo =
       opencodeGoResult.status === 'fulfilled'
         ? opencodeGoResult.value
@@ -128,7 +128,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
             status: 'error'
           } satisfies ProviderRateLimits)
 
-    const latestCodexHome = this.resolveCodexHome(codexTarget)
+    const latestCodexHome = await this.resolveCodexHome(codexTarget)
     const latestClaudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
     if (signal.aborted) {
       return
@@ -159,7 +159,6 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       this.trackActiveFailureStreak('codex', codex)
     }
     this.trackActiveFailureStreak('gemini', gemini)
-    this.trackActiveFailureStreak('antigravity', antigravity)
     if (shouldApplyOpencode) {
       this.trackActiveFailureStreak('opencode-go', opencodeGo)
     }
@@ -186,7 +185,6 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
           : this.applyStalePolicy(opencodeGo, previousState.opencodeGo)
         : this.state.opencodeGo,
       kimi: this.applyStalePolicy(kimi, previousState.kimi),
-      antigravity: this.applyStalePolicy(antigravity, previousState.antigravity),
       minimax: shouldApplyMiniMax
         ? miniMaxConfigChanged
           ? miniMax
@@ -194,17 +192,30 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         : this.state.minimax
     })
 
-    const [grokSettled, cursorSettled, zcodeSettled] = await Promise.all([
+    const [grokSettled, cursorSettled, zcodeSettled, antigravitySettled] = await Promise.all([
       grokResultPromise,
       cursorResultPromise,
-      zcodeResultPromise
+      zcodeResultPromise,
+      antigravityResultPromise
     ])
     if (signal.aborted) {
       return
     }
     const grok = settleSiblingProviderResult('grok', grokSettled)
     const cursor = settleSiblingProviderResult('cursor', cursorSettled)
-    const zcode = settleSiblingProviderResult('zcode', zcodeSettled)
+    const settledZcode = settleSiblingProviderResult('zcode', zcodeSettled)
+    const zcode = isZcodeUsageCredentialCurrent(settledZcode)
+      ? settledZcode
+      : {
+          ...settledZcode,
+          status: 'unavailable' as const,
+          session: null,
+          weekly: null,
+          monthly: null,
+          error: 'ZCode Coding Plan account changed during refresh'
+        }
+    const shouldApplyZcode = zcodeGeneration === this.zcodeFetchGeneration
+    const antigravity = settleSiblingProviderResult('antigravity', antigravitySettled)
     // Why: the stale policy keeps a recent snapshot through a failed refresh, but
     // a snapshot belonging to a different Cursor account must not survive the
     // switch — the Accounts pane would name the new account beside the old
@@ -224,15 +235,22 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       previousZcodeAccount === zcodeAccount
     this.trackActiveFailureStreak('grok', grok)
     this.trackActiveFailureStreak('cursor', cursor)
-    this.trackActiveFailureStreak('zcode', zcode)
+    if (shouldApplyZcode) {
+      this.trackActiveFailureStreak('zcode', zcode)
+    }
+    this.trackActiveFailureStreak('antigravity', antigravity)
     this.updateState({
       ...this.state,
       grok: this.applyStalePolicy(grok, previousState.grok),
       cursor: cursorAccountChanged ? cursor : this.applyStalePolicy(cursor, previousState.cursor),
-      zcode:
-        zcode.status === 'error' && !sameZcodeAccount
+      zcode: !shouldApplyZcode
+        ? this.state.zcode
+        : zcodeConfigChanged
           ? zcode
-          : this.applyStalePolicy(zcode, previousState.zcode)
+          : zcode.status === 'error' && !sameZcodeAccount
+            ? zcode
+            : this.applyStalePolicy(zcode, previousState.zcode),
+      antigravity: this.applyStalePolicy(antigravity, previousState.antigravity)
     })
   }
 }

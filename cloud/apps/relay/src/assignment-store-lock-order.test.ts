@@ -16,6 +16,8 @@ class LockOrderDatabase implements RelayDatabase {
   ) {}
 
   async query(sql: string): Promise<SqlRow[]> {
+    // No cell is in reserve mode.
+    if (sql.includes('FROM relay_cell_admit_modes')) return []
     if (sql.includes('SELECT user_id, relay_host_id, activity_id')) {
       return this.cleanupCandidate
         ? [
@@ -79,6 +81,9 @@ class ReassignmentLockOrderDatabase implements RelayDatabase {
   readonly locks: string[] = []
 
   async query(sql: string): Promise<SqlRow[]> {
+    if (sql.includes('SELECT cell_id FROM relay_assignments')) {
+      return [{ cell_id: 'cell-b' }]
+    }
     if (sql.includes('SELECT cell_id, region FROM relay_cell_regions')) {
       return ['cell-a', 'cell-b'].map((cell_id) => ({ cell_id, region: 'us-central1' }))
     }
@@ -146,7 +151,8 @@ class ReassignmentLockOrderDatabase implements RelayDatabase {
 class AggregateCleanupDatabase implements RelayDatabase {
   failIfUnavailable: boolean | null = null
 
-  async query(): Promise<SqlRow[]> {
+  async query(sql: string): Promise<SqlRow[]> {
+    if (sql.includes('FROM relay_cell_admit_modes')) return []
     return [{ changes: 1 }]
   }
 
@@ -239,6 +245,12 @@ class NewAssignmentLockDatabase implements RelayDatabase {
   ) {}
 
   async query(sql: string, params: unknown[] = []): Promise<SqlRow[]> {
+    // The sticky lane's unlocked pin read sees what the locked read would.
+    if (sql.includes('SELECT cell_id FROM relay_assignments')) {
+      return this.assignmentAppearsAfterFailure && this.generalLockFailed
+        ? [{ cell_id: 'cell-existing' }]
+        : []
+    }
     if (sql.includes('SELECT cell_id, region FROM relay_cell_regions')) {
       return [
         { cell_id: 'cell-existing', region: 'us-central1' },
@@ -480,7 +492,7 @@ describe('RelayAssignmentStore activity lock order', () => {
       'cell-b',
       'assignment',
       'cell-inventory',
-      'cell-b',
+      // No 'cell-b' write: the host holds no units, so there is nothing to release.
       'cell-a'
     ])
   })

@@ -105,6 +105,10 @@ export type BridgePortPairOptions<TRpc extends RpcClient> = {
   serveNativeVerb?: (verb: BridgeNativeVerb, params: unknown) => Promise<unknown>
   safeAreaInsets?: BridgeSafeAreaInsets
   keyboardInset?: number
+  /** Stands for the wide host-area session, the one shell mount that tells the page it owns it. */
+  ownsHostArea?: boolean
+  /** Applies each storage write the host takes, as the screen does; recorded either way. */
+  onStorageWrite?: (key: string, value: string | null) => void
 }
 
 type Lane = {
@@ -185,6 +189,8 @@ function defaultVerbAnswer(verb: BridgeNativeVerb): unknown {
       return { base64: '', eof: true }
     case 'native.media.release':
       return { released: false }
+    case 'native.media.name':
+      return { name: null }
     case 'native.audio.start':
       return { started: true, sampleRate: 16_000, permission: 'granted' }
     case 'native.audio.read':
@@ -233,6 +239,7 @@ export function createBridgePortPair<TRpc extends RpcClient>(
       options.clientIdentity === undefined ? PORT_PAIR_CLIENT_IDENTITY : options.clientIdentity,
     pageRoutes: options.pageRoutes ?? ['/h/[hostId]'],
     routeGrants: options.routeGrants ?? MOBILE_WEB_SHELL_GRANTS,
+    ...(options.ownsHostArea === undefined ? {} : { ownsHostArea: options.ownsHostArea }),
     sessionEstablished: options.sessionEstablished ?? false,
     onNavigate: (href) => navigations.push(href),
     onExternalLink: (url) => externalLinks.push(url),
@@ -252,7 +259,10 @@ export function createBridgePortPair<TRpc extends RpcClient>(
       storage: options.storage ?? {},
       storageOversize: options.storageOversize ?? []
     }),
-    onStorageWrite: (key, value) => storageWrites.push({ key, value }),
+    onStorageWrite: (key, value) => {
+      storageWrites.push({ key, value })
+      options.onStorageWrite?.(key, value)
+    },
     onPageFault: (error) => pageFaults.push(error),
     onPageReady: () => {
       pageReadies += 1

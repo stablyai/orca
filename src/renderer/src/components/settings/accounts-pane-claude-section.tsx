@@ -3,15 +3,29 @@ import { translate } from '@/i18n/i18n'
 import { selectClaudeProviderAccount } from '@/runtime/runtime-provider-accounts-client'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
+import { ButtonGroup } from '../ui/button-group'
 import { Label } from '../ui/label'
 import { ClaudeIcon } from '../status-bar/icons'
 import { SearchableSetting } from './SearchableSetting'
+import { ClaudeRunningSessionSwitchSetting } from './claude-running-session-switch-setting'
 import {
   getProviderAccountRuntime,
   providerAccountIsActiveInView
 } from './provider-account-visibility'
 import { formatAccountTimestamp, getClaudeAccountRuntimeLabel } from './accounts-pane-runtime'
 import type { AccountsPaneSectionModel } from './accounts-pane-types'
+import {
+  canOfferClaudeSignInLink,
+  ClaudeSignInLinkMenu,
+  withCopiedClaudeLink
+} from './claude-sign-in-link-menu'
+import { addClaudeAccountOnHost } from '@/runtime/runtime-host-account-sign-in-client'
+import { HostAccountSignInPrompt } from './HostAccountSignInPrompt'
+import {
+  accountAdditionShownInPrompt,
+  cancelAccountAddition,
+  trackAccountAddition
+} from './account-add-cancel-target'
 
 export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): React.JSX.Element {
   const {
@@ -26,10 +40,40 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
     runClaudeAccountAction,
     setRemoveClaudeTarget,
     settings,
+    accountOwner,
     systemClaudeActive,
+    updateSettings,
     visibleClaudeAccounts,
     wslCapabilitiesLoading
   } = model
+  // Why host only: the host reads its own System default, never a WSL distro's.
+  const systemDefaultEmail =
+    accountRuntime.runtime === 'host' ? claudeAccounts.systemDefaultEmail : undefined
+  // Why the copy evidence: saving your own login as an account too is normal and needs no warning.
+  const systemDefaultIsSaved =
+    !!systemDefaultEmail &&
+    claudeAccounts.systemDefaultMayBeCopied === true &&
+    !settings.claudeCopiedSystemDefaultNoticeDismissed &&
+    claudeAccounts.accounts.some(
+      (account) => account.email.toLowerCase() === systemDefaultEmail.toLowerCase()
+    )
+  const addDisabled = claudeAction !== 'idle' || wslCapabilitiesLoading || accountRuntimeUnavailable
+  // Why the server's own login for a remote owner: one here would sign in this device, not it.
+  const addClaudeAccount = (copyLink: boolean): Promise<void> =>
+    runClaudeAccountAction('adding', () =>
+      trackAccountAddition('claude', accountOwner, () =>
+        accountOwner.kind === 'environment'
+          ? addClaudeAccountOnHost(accountOwner)
+          : withCopiedClaudeLink(
+              copyLink,
+              window.api.claudeAccounts.add({
+                runtime: accountRuntime.runtime,
+                wslDistro: accountRuntime.wslDistro,
+                copyLink
+              })
+            )
+      )
+    )
   return (
     <section key="claude-accounts" id="accounts-claude" className="space-y-4 scroll-mt-6">
       <div className="space-y-1">
@@ -48,8 +92,8 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
       <SearchableSetting
         title={translate('auto.components.settings.AccountsPane.8bbfd74556', 'Claude Accounts')}
         description={translate(
-          'auto.components.settings.AccountsPane.79e484c3b2',
-          'Optional account switcher for the shared Claude auth files.'
+          'accounts.claude.profileSwitching',
+          'Switching applies to the next Claude you start in any tab.'
         )}
         keywords={['claude', 'account', 'rate limit', 'status bar', 'quota']}
         className="space-y-3 py-2"
@@ -62,8 +106,8 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
             <p className="text-xs text-muted-foreground">
               {isRemoteAccountScope
                 ? translate(
-                    'auto.components.settings.AccountsPane.remoteScopeAccounts',
-                    'Showing accounts managed by {{value0}}. Add or re-authenticate accounts on that server.',
+                    'accounts.remoteScopeAccountsAddHere',
+                    'Showing accounts managed by {{value0}}. New accounts sign in there; you finish in this device’s browser.',
                     { value0: accountRuntimeSentenceLabel }
                   )
                 : translate(
@@ -74,39 +118,39 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
-            <Button
-              variant="outline"
-              size="xs"
-              onClick={() =>
-                void runClaudeAccountAction('adding', () =>
-                  window.api.claudeAccounts.add({
-                    runtime: accountRuntime.runtime,
-                    wslDistro: accountRuntime.wslDistro
-                  })
-                )
-              }
-              disabled={
-                // Why: interactive `claude login` needs a desktop browser and
-                // would authenticate against this device, not the server.
-                isRemoteAccountScope ||
-                claudeAction !== 'idle' ||
-                wslCapabilitiesLoading ||
-                accountRuntimeUnavailable
-              }
-              className="gap-1.5"
-            >
-              {claudeAction === 'adding' ? (
-                <Loader2 className="size-3 animate-spin" />
-              ) : (
-                <Plus className="size-3" />
-              )}
-              {translate('auto.components.settings.AccountsPane.b0e948a4f9', 'Add Account')}
-            </Button>
-            {claudeAction === 'adding' ? (
+            <ButtonGroup>
+              <Button
+                variant="outline"
+                size="xs"
+                onClick={() => void addClaudeAccount(false)}
+                disabled={addDisabled}
+                className="gap-1.5"
+              >
+                {claudeAction === 'adding' ? (
+                  <Loader2 className="size-3 animate-spin" />
+                ) : (
+                  <Plus className="size-3" />
+                )}
+                {translate('auto.components.settings.AccountsPane.b0e948a4f9', 'Add Account')}
+              </Button>
+              {!isRemoteAccountScope && canOfferClaudeSignInLink(accountRuntime.runtime) ? (
+                <ClaudeSignInLinkMenu
+                  variant="outline"
+                  disabled={addDisabled}
+                  onCopyLink={() => void addClaudeAccount(true)}
+                />
+              ) : null}
+            </ButtonGroup>
+            {/* Why: follows the running addition; hidden only where its server's prompt has Cancel. */}
+            {claudeAction === 'adding' && !accountAdditionShownInPrompt('claude', accountOwner) ? (
               <Button
                 variant="ghost"
                 size="xs"
-                onClick={() => void window.api.claudeAccounts.cancelPendingLogin()}
+                onClick={() =>
+                  void cancelAccountAddition('claude', () =>
+                    window.api.claudeAccounts.cancelPendingLogin()
+                  )
+                }
                 className="gap-1.5 text-muted-foreground hover:text-foreground"
               >
                 <X className="size-3" />
@@ -116,13 +160,20 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
           </div>
         </div>
         {remoteAccountScopeNotice}
+        {isRemoteAccountScope ? (
+          <HostAccountSignInPrompt
+            owner={accountOwner}
+            provider="claude"
+            hostLabel={accountRuntimeSentenceLabel}
+          />
+        ) : null}
 
         <div className="space-y-2">
           <button
             type="button"
             onClick={() =>
               void runClaudeAccountAction('select:system', () =>
-                selectClaudeProviderAccount(settings, {
+                selectClaudeProviderAccount(accountOwner, {
                   accountId: null,
                   runtime: accountRuntime.runtime,
                   wslDistro: accountRuntime.wslDistro
@@ -139,7 +190,18 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
             <div className="flex min-w-0 flex-1 flex-col gap-0.5">
               <div className="flex min-w-0 items-center gap-2">
                 <span className="truncate text-sm font-medium">
-                  {translate('auto.components.settings.AccountsPane.f2a265f8c7', 'System default')}
+                  {systemDefaultEmail
+                    ? translate(
+                        'accounts.claude.systemDefaultNamed',
+                        'System default: {{value0}}',
+                        {
+                          value0: systemDefaultEmail
+                        }
+                      )
+                    : translate(
+                        'auto.components.settings.AccountsPane.f2a265f8c7',
+                        'System default'
+                      )}
                 </span>
                 {systemClaudeActive ? (
                   <Badge
@@ -159,6 +221,24 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
               </span>
             </div>
           </button>
+          {systemDefaultIsSaved ? (
+            <div className="flex items-start justify-between gap-2">
+              <p className="text-xs text-muted-foreground">
+                {translate(
+                  'accounts.claude.systemDefaultIsSaved',
+                  'System default is signed in as {{value0}}, which is also a saved account. An earlier Orca version may have copied that login there. If it is not your own login, select System default and run claude /login.',
+                  { value0: systemDefaultEmail }
+                )}
+              </p>
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={() => updateSettings({ claudeCopiedSystemDefaultNoticeDismissed: true })}
+              >
+                {translate('accounts.claude.systemDefaultIsSavedDismiss', 'Dismiss')}
+              </Button>
+            </div>
+          ) : null}
           {visibleClaudeAccounts.length === 0 ? (
             <div className="rounded-md border border-dashed border-border/70 px-3 py-4 text-xs text-muted-foreground">
               {isRemoteAccountScope
@@ -183,6 +263,17 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
               )
               const isReauthing = claudeAction === `reauth:${account.id}`
               const isBusy = claudeAction !== 'idle' || accountRuntimeUnavailable
+              const accountRuntimeView = getProviderAccountRuntime(account)
+              const reauthenticate = (copyLink: boolean): Promise<void> =>
+                runClaudeAccountAction(
+                  `reauth:${account.id}`,
+                  () =>
+                    withCopiedClaudeLink(
+                      copyLink,
+                      window.api.claudeAccounts.reauthenticate({ accountId: account.id, copyLink })
+                    ),
+                  accountRuntimeView
+                )
 
               return (
                 <div
@@ -197,18 +288,17 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
                     <button
                       type="button"
                       onClick={() => {
-                        const accountRuntimeView = getProviderAccountRuntime(account)
                         void runClaudeAccountAction(
                           `select:${account.id}`,
                           () =>
-                            selectClaudeProviderAccount(settings, {
+                            selectClaudeProviderAccount(accountOwner, {
                               accountId: account.id,
                               ...accountRuntimeView
                             }),
                           accountRuntimeView
                         )
                       }}
-                      disabled={isBusy}
+                      disabled={isBusy || account.needsSignIn}
                       className="flex min-w-0 flex-1 flex-col gap-0.5 text-left disabled:cursor-default"
                     >
                       <div className="flex min-w-0 items-center gap-2">
@@ -232,39 +322,43 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
                         ) : null}
                       </div>
                       <span className="truncate text-[11px] text-muted-foreground">
-                        {account.organizationName
-                          ? `${account.organizationName} · ${formatAccountTimestamp(account.lastAuthenticatedAt)}`
-                          : formatAccountTimestamp(account.lastAuthenticatedAt)}
+                        {account.needsSignIn
+                          ? translate(
+                              'accounts.claude.signInRequired',
+                              'Sign in again to use this account'
+                            )
+                          : account.organizationName
+                            ? `${account.organizationName} · ${formatAccountTimestamp(account.lastAuthenticatedAt)}`
+                            : formatAccountTimestamp(account.lastAuthenticatedAt)}
                       </span>
                     </button>
                     <div className="flex shrink-0 items-center justify-end gap-1 max-md:w-full max-md:flex-wrap">
-                      <Button
-                        variant="ghost"
-                        size="xs"
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          void runClaudeAccountAction(
-                            `reauth:${account.id}`,
-                            () =>
-                              window.api.claudeAccounts.reauthenticate({
-                                accountId: account.id
-                              }),
-                            getProviderAccountRuntime(account)
-                          )
-                        }}
-                        disabled={isRemoteAccountScope || isBusy}
-                        className="h-6 px-2 text-muted-foreground hover:text-foreground"
-                      >
-                        {isReauthing ? (
-                          <Loader2 className="size-3 animate-spin" />
-                        ) : (
-                          <RefreshCw className="size-3" />
-                        )}
-                        {translate(
-                          'auto.components.settings.AccountsPane.8a0f870153',
-                          'Re-authenticate'
-                        )}
-                      </Button>
+                      <ButtonGroup>
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            void reauthenticate(false)
+                          }}
+                          disabled={isRemoteAccountScope || isBusy}
+                          className="h-6 px-2 text-muted-foreground hover:text-foreground"
+                        >
+                          {isReauthing ? (
+                            <Loader2 className="size-3 animate-spin" />
+                          ) : (
+                            <RefreshCw className="size-3" />
+                          )}
+                          {translate('accounts.claude.signInAgain', 'Sign in again')}
+                        </Button>
+                        {canOfferClaudeSignInLink(accountRuntimeView.runtime) ? (
+                          <ClaudeSignInLinkMenu
+                            variant="ghost"
+                            disabled={isRemoteAccountScope || isBusy}
+                            onCopyLink={() => void reauthenticate(true)}
+                          />
+                        ) : null}
+                      </ButtonGroup>
                       <Button
                         variant="ghost"
                         size="xs"
@@ -289,6 +383,9 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
           )}
         </div>
       </SearchableSetting>
+      {isRemoteAccountScope ? null : (
+        <ClaudeRunningSessionSwitchSetting settings={settings} updateSettings={updateSettings} />
+      )}
     </section>
   )
 }

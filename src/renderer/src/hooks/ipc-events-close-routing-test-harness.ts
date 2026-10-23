@@ -178,6 +178,9 @@ export async function useIpcEventsForCloseRouting({
         onActivateWorktree: () => () => {},
         onCreateTerminal: () => () => {},
         onRequestTerminalCreate: () => () => {},
+        onPublishAgentLaunchTab: () => () => {},
+        onRevealTerminalPane: () => () => {},
+        onAgentLaunchPaneVerdict: () => () => {},
         onRequestTerminalTabMount: () => () => {},
         replyTerminalCreate: () => {},
         onSplitTerminal: () => () => {},
@@ -213,11 +216,12 @@ export async function useIpcEventsForCloseRouting({
           return () => {}
         },
         respondTerminalTabClose,
-        onSleepWorktree: () => () => {},
+        onWorkspaceSleep: () => () => {},
         onResumeSleepingAgents: () => () => {},
         onNewBrowserTab: () => () => {},
         onNewMarkdownTab: () => () => {},
         onRequestTabCreate: () => () => {},
+        onRequestRemoteCliBrowserScope: () => () => {},
         replyTabCreate: () => {},
         onRequestTabClose: (listener: RequestTabCloseListener) => {
           if (requestTabCloseListenerRef) {

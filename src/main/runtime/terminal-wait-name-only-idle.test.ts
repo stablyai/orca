@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { RuntimeTerminalIdlePolls } from './runtime-terminal-idle-polls'
-import { RuntimeTerminalWait } from './runtime-terminal-wait'
-import { RuntimeTerminalWaiterRegistry } from './runtime-terminal-waiter-registry'
+import { RuntimeTerminalIdlePolls } from './terminal/wait/terminal-idle-polls'
+import { RuntimeTerminalWait } from './terminal/wait/terminal-wait'
+import { RuntimeTerminalWaiterRegistry } from './terminal/wait/terminal-waiter-registry'
 import {
   errorMessage,
   makeTuiIdleLeaf,
@@ -13,6 +13,7 @@ import type { AgentStatus } from '../../shared/agent-detection'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import type { FirstPartyAgentStatus } from './tui-idle-evidence'
+import { registerBoundPty } from './bind-first-pane.test-fixture'
 
 // #6011: `terminal wait --for tui-idle` returned satisfied in ~0s against a working agent,
 // because a Codex/Devin OSC title that carries only the agent NAME is stored as `idle` and
@@ -68,6 +69,7 @@ function createWait(options: {
       ...shared,
       defaultTimeoutMs: 60_000,
       getLivePty: () => (options.pty ? { pty: options.pty } : null),
+      exitUnsettled: () => false,
       getLiveLeaf: () => ({ leaf: options.leaf ?? makeTuiIdleLeaf() }),
       startVisibleReadProbe
     },
@@ -282,7 +284,7 @@ async function makeRuntime(launchAgent?: TuiAgent) {
   runtime.attachWindow(1)
   runtime.syncWindowGraph(1, E2E_GRAPH)
   if (launchAgent) {
-    runtime.registerPty(E2E_PTY_ID, E2E_WORKTREE_ID, null, {
+    registerBoundPty(runtime, E2E_PTY_ID, E2E_WORKTREE_ID, null, {
       tabId: 'tab-1',
       leafId: E2E_LEAF_ID,
       incarnationId: 'name-only-incarnation',
@@ -298,6 +300,15 @@ function oscTitle(title: string): string {
 }
 
 describe('tui-idle over the live OSC title pipeline', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({
+      toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval']
+    })
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('does not settle on a name-only title arriving mid-stream', async () => {
     const { runtime, handle } = await makeRuntime('codex')
     runtime.onPtyData(E2E_PTY_ID, `${oscTitle(WORKING_TITLE)}building\n`, Date.now())
@@ -306,7 +317,9 @@ describe('tui-idle over the live OSC title pipeline', () => {
     // The agent is mid-turn and repaints its title to the bare product name.
     runtime.onPtyData(E2E_PTY_ID, `${oscTitle(NAME_ONLY_TITLE)}more output\n`, Date.now())
 
-    await expect(waiting).rejects.toThrow('timeout')
+    const assertion = expect(waiting).rejects.toThrow('timeout')
+    await vi.advanceTimersByTimeAsync(250)
+    await assertion
   })
 
   it('settles when the agent reports idle explicitly', async () => {
@@ -324,9 +337,11 @@ describe('tui-idle over the live OSC title pipeline', () => {
     const { runtime, handle } = await makeRuntime('codex')
     runtime.onPtyData(E2E_PTY_ID, `${oscTitle(NAME_ONLY_TITLE)}output\n`, Date.now())
 
-    await expect(
+    const assertion = expect(
       runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 250 })
     ).rejects.toThrow('timeout')
+    await vi.advanceTimersByTimeAsync(250)
+    await assertion
   })
 
   it('still settles for an agent whose only rest signal is its name', async () => {
@@ -342,8 +357,10 @@ describe('tui-idle over the live OSC title pipeline', () => {
     const { runtime, handle } = await makeRuntime('muse')
     runtime.onPtyData(E2E_PTY_ID, `${oscTitle('tmp')}${MUSE_READY_TAIL.join('\n')}\n`, Date.now())
 
-    await expect(
+    const assertion = expect(
       runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 15_000 })
     ).resolves.toMatchObject({ condition: 'tui-idle', satisfied: true })
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 2)
+    await assertion
   }, 20_000)
 })

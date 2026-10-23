@@ -22,6 +22,7 @@ import {
   seedPairedWorktree,
   wrapperForRemotePage
 } from './web-runtime-browser-creation-placement-test-rig'
+import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
 
 vi.mock('./web-runtime-session-snapshot', async (importOriginal) => ({
   ...(await importOriginal<typeof SnapshotModule>()),
@@ -262,11 +263,7 @@ describe('paired browser creation placement', () => {
           answerPreparation = resolve
         })
     )
-    vi.stubGlobal('window', {
-      api: {
-        runtimeEnvironments: { call: runtimeCall, prepareBrowserClientHostPlacement: prepare }
-      }
-    })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall, prepareBrowserClientHostPlacement: prepare })
     const create = openLinkFromSource({ placementPreference: 'auto' })
     const stagedRows = groupOrder(G1)
     expect(stagedRows).toHaveLength(3)

@@ -3,7 +3,10 @@ import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
+import type {
+  AgentSessionStatusEvent,
+  AgentSessionSubscribeEvent
+} from '../../../shared/agent-session-wire'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -28,6 +31,10 @@ import {
   hostTestMessage
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 let root: string
 let store: AgentSessionRecordStore
@@ -54,6 +61,27 @@ beforeEach(() => {
 })
 
 describe('attach', () => {
+  it('founds a client-location floating chat with the host folder and keeps it on replay', async () => {
+    const resolveWorkspacePath = vi.fn(async () => '/host/original-folder')
+    host.deps.resolveWorkspacePath = resolveWorkspacePath
+    const params = attachParams({
+      location: {
+        executionHostId: 'local',
+        wslDistro: null,
+        workspaceId: FLOATING_TERMINAL_WORKTREE_ID,
+        workspaceKind: 'folder'
+      }
+    })
+
+    expect(await host.attach(CALLER, params)).toMatchObject({ ok: true })
+    expect(store.getRecord(SESSION)?.launchDirectory).toBe('/host/original-folder')
+    resolveWorkspacePath.mockResolvedValue('/host/changed-folder')
+
+    expect(await host.attach(CALLER, params)).toMatchObject({ ok: true, replayed: true })
+    expect(store.getRecord(SESSION)?.launchDirectory).toBe('/host/original-folder')
+    expect(resolveWorkspacePath).toHaveBeenCalledTimes(1)
+  })
+
   it('reserves the lease, spawns through the adapter, and opens the journal', async () => {
     const result = await host.attach(CALLER, attachParams())
     expect(result).toMatchObject({ ok: true, replayed: false })
@@ -110,11 +138,12 @@ describe('attach', () => {
         },
         link: {
           linkId: 'stale-link',
-          handle: { provider: 'codex', threadId: THREAD },
+          handle: codexProviderHandle(THREAD),
           origin: 'created',
           mintedAtFence: fence + 1,
           observedAt: NOW
-        }
+        },
+        acquisitionGeneration: 'generation-stale'
       }))
       .mockImplementation(async ({ fence, spawnToken }) => ({
         process: {
@@ -125,13 +154,16 @@ describe('attach', () => {
         },
         link: {
           linkId: `link-${fence}`,
-          handle: { provider: 'codex', threadId: THREAD },
+          handle: codexProviderHandle(THREAD),
           origin: 'created',
           mintedAtFence: fence,
           observedAt: NOW
-        }
+        },
+        acquisitionGeneration: `generation-${fence}`
       }))
     host = new StructuredAgentSessionHost({
+      agents: NO_STRUCTURED_AGENTS,
+      logger: createStructuredAgentSessionLogger(),
       store,
       adapter: { ...adapter(), acquire },
       journalDatabase: openTestJournalHostDatabase(root),
@@ -210,33 +242,47 @@ describe('attach', () => {
 })
 
 describe('cancel', () => {
-  it('records the request acknowledgement as a status item keyed by the operation id', async () => {
+  /** The provider's turn row: a Stop naming a turn the journal never showed is late, a no-op. */
+  async function runningTurn(): Promise<void> {
     await attach()
+    acquire.mock.calls
+      .at(-1)![0]
+      .events!.appendItem(
+        { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 900 },
+        { kind: 'turn', turnId: 'turn-1', state: 'running' },
+        { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+      )
+    await host.flushStreamedEvents(SESSION)
+  }
+
+  it('records the request acknowledgement as a status item keyed by the operation id', async () => {
+    await runningTurn()
     const result = await host.cancel(CALLER, {
       envelope: envelope('agentSession.cancel', { turnId: 'turn-1' }),
       turnId: 'turn-1'
     })
     expect(result).toMatchObject({ ok: true, value: { cancelled: true } })
     const page = await host.history({ sessionId: SESSION, direction: 'tail' })
-    expect(page.ok && page.page.items[0]?.body).toMatchObject({
+    const note = page.ok ? page.page.items.find((item) => item.body.kind === 'status') : undefined
+    expect(note?.body).toMatchObject({
       kind: 'status',
       text: 'Cancellation requested.'
     })
-    expect(JSON.stringify(page.ok && page.page.items[0]?.body)).not.toContain('turn-1')
+    expect(JSON.stringify(note?.body)).not.toContain('turn-1')
   })
 
-  it('reports an unconfirmed cancellation rather than failing the call', async () => {
-    await attach()
+  it('ends the child when the turn runs on after an unanswered interrupt', async () => {
+    await runningTurn()
     cancelTurn.mockRejectedValueOnce(new Error('no answer'))
     const result = await host.cancel(CALLER, {
       envelope: envelope('agentSession.cancel', { turnId: 'turn-1' }),
       turnId: 'turn-1'
     })
-    expect(result).toMatchObject({ ok: true, value: { cancelled: false } })
+    expect(result).toMatchObject({ ok: true, value: { cancelled: true } })
   })
 
   it('never interrupts twice on a replay', async () => {
-    await attach()
+    await runningTurn()
     const params = {
       envelope: envelope('agentSession.cancel', { turnId: 'turn-1' }),
       turnId: 'turn-1'
@@ -301,28 +347,7 @@ describe('cancel', () => {
     expect(cancelTurn).not.toHaveBeenCalled()
   })
 
-  it('records an unknown outcome when lifecycle draining fails and never interrupts on replay', async () => {
-    await attach()
-    const prompt = await seedApproval()
-    vi.spyOn(host, 'flushStreamedEvents').mockRejectedValueOnce(new Error('journal drain failed'))
-    const fields = {
-      turnId: 'turn-1',
-      prompt: { itemId: prompt.itemId, expectedRevision: prompt.revision }
-    }
-    const params = {
-      envelope: envelope('agentSession.cancel', fields),
-      ...fields
-    }
-
-    await expect(host.cancel(CALLER, params)).rejects.toThrow('journal drain failed')
-    expect(await host.cancel(CALLER, params)).toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_operation_unknown' }
-    })
-    expect(cancelTurn).toHaveBeenCalledTimes(1)
-  })
-
-  it('records an unknown outcome when strict prompt interruption throws and never retries it', async () => {
+  it('answers a strict prompt interruption that throws once saved from its receipt, the same on a retry, and never retries it', async () => {
     await attach()
     const prompt = await seedApproval()
     cancelTurn.mockRejectedValueOnce(new Error('interrupt receipt lost'))
@@ -335,24 +360,20 @@ describe('cancel', () => {
       ...fields
     }
 
-    await expect(host.cancel(CALLER, params)).rejects.toThrow('interrupt receipt lost')
-    expect(await host.cancel(CALLER, params)).toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_operation_unknown' }
-    })
+    // Saved before the interrupt, which then threw: the answer is its receipt, never rewritten, and
+    // the retry is answered from it without reaching the provider again. The card stays pending,
+    // and its turn says the cancellation was not confirmed.
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const answered = await host.cancel(CALLER, params)
+    expect(answered).toMatchObject({ ok: true })
+    expect(await host.cancel(CALLER, params)).toEqual({ ...answered, replayed: true })
     expect(cancelTurn).toHaveBeenCalledTimes(1)
-    expect(await host.history({ sessionId: SESSION, direction: 'tail' })).toMatchObject({
-      ok: true,
-      page: {
-        items: [
-          expect.objectContaining({
-            body: expect.objectContaining({
-              resolution: expect.objectContaining({ state: 'pending' })
-            })
-          })
-        ]
-      }
-    })
+    const page = await host.history({ sessionId: SESSION, direction: 'tail' })
+    const bodies = page.ok ? page.page.items.map((item) => item.body) : []
+    expect(bodies).toEqual([
+      expect.objectContaining({ resolution: expect.objectContaining({ state: 'pending' }) }),
+      expect.objectContaining({ kind: 'status', text: 'Cancellation was not confirmed.' })
+    ])
   })
 })
 
@@ -413,16 +434,17 @@ describe('respondToPrompt', () => {
     })
   })
 
-  it('refuses a second answer to one prompt and says which answer won', async () => {
+  it('tells a second answer with the same choice that it holds, and asks the provider once', async () => {
     await attach()
     const prompt = await seedApproval()
     const fields = { itemId: prompt.itemId, expectedRevision: prompt.revision, optionId: 'allow' }
-    await host.respondToPrompt(CALLER, {
+    const first = await host.respondToPrompt(CALLER, {
       envelope: envelope('agentSession.respondTo:approval', fields),
       kind: 'approval',
       ...fields
     })
-    const loser = await host.respondToPrompt(
+    // Another device, or a re-click after a lost reply: a new operation making the same choice.
+    const second = await host.respondToPrompt(
       { callerKey: 'client-2' },
       {
         envelope: envelope('agentSession.respondTo:approval', fields),
@@ -430,12 +452,11 @@ describe('respondToPrompt', () => {
         ...fields
       }
     )
-    expect(loser).toMatchObject({
-      ok: false,
-      refusal: {
-        code: 'agent_session_item_revision_stale',
-        resolution: { selectedOptionId: 'allow' }
-      }
+    expect(first.ok).toBe(true)
+    expect(second).toEqual({ ...first, replayed: false })
+    expect(second).toMatchObject({
+      ok: true,
+      value: { resolution: { selectedOptionId: 'allow', resolvedBy: 'client-1' } }
     })
     expect(answerPrompt).toHaveBeenCalledTimes(1)
   })
@@ -454,7 +475,7 @@ describe('respondToPrompt', () => {
     expect(answerPrompt).not.toHaveBeenCalled()
   })
 
-  it("does not turn a recorded refusal into another client's successful answer", async () => {
+  it("does not turn a refused answer into another client's successful answer", async () => {
     await attach()
     const prompt = await seedApproval()
     const rejectedFields = {
@@ -479,10 +500,12 @@ describe('respondToPrompt', () => {
       }
     )
 
+    // A refusal records nothing, so the retry is judged afresh: the prompt has moved on.
     expect(await host.respondToPrompt(CALLER, rejected)).toMatchObject({
       ok: false,
-      refusal: { code: 'agent_session_operation_invalid' }
+      refusal: { code: 'agent_session_item_revision_stale' }
     })
+    expect(answerPrompt).toHaveBeenCalledOnce()
   })
 
   it('keeps the answer and reports it undelivered when the provider callback throws', async () => {
@@ -509,7 +532,7 @@ describe('respondToPrompt', () => {
 })
 
 describe('setOption', () => {
-  it('goes to the provider and writes nothing to the journal', async () => {
+  it('saves a next-message pick without changing the provider', async () => {
     await attach()
     setOption.mockResolvedValueOnce({ model: 'gpt-5', effort: 'high' })
     const fields = { key: 'model', value: 'gpt-5' }
@@ -520,20 +543,20 @@ describe('setOption', () => {
     const result = await host.setOption(CALLER, params)
     expect(result).toMatchObject({
       ok: true,
-      value: { ...fields, options: { model: 'gpt-5', effort: 'high' } }
+      value: { ...fields, options: { model: 'gpt-5' } }
     })
     expect(await host.setOption(CALLER, params)).toMatchObject({
       ok: true,
       replayed: true,
-      value: { ...fields, options: { model: 'gpt-5', effort: 'high' } }
+      value: { ...fields, options: { model: 'gpt-5' } }
     })
-    expect(setOption).toHaveBeenCalledTimes(1)
-    expect(store.getRecord(SESSION)?.options).toEqual({ model: 'gpt-5', effort: 'high' })
+    expect(setOption).not.toHaveBeenCalled()
+    expect(store.getRecord(SESSION)?.options).toEqual({ model: 'gpt-5' })
     const page = await host.history({ sessionId: SESSION, direction: 'tail' })
     expect(page.ok && page.page.items).toHaveLength(0)
   })
 
-  it('does not turn an unknown provider outcome into a successful replay', async () => {
+  it('replays the accepted pick without contacting the provider', async () => {
     await attach()
     setOption.mockRejectedValueOnce(new Error('reply lost'))
     const fields = { key: 'model', value: 'gpt-5' }
@@ -542,12 +565,12 @@ describe('setOption', () => {
       ...fields
     }
 
-    await expect(host.setOption(CALLER, params)).rejects.toThrow('reply lost')
+    expect(await host.setOption(CALLER, params)).toMatchObject({ ok: true })
     expect(await host.setOption(CALLER, params)).toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_operation_unknown' }
+      ok: true,
+      replayed: true
     })
-    expect(setOption).toHaveBeenCalledTimes(1)
+    expect(setOption).not.toHaveBeenCalled()
   })
 })
 
@@ -562,6 +585,8 @@ describe('restart', () => {
   ) {
     store = await openTestAgentSessionRecordStore(root)
     host = new StructuredAgentSessionHost({
+      agents: NO_STRUCTURED_AGENTS,
+      logger: createStructuredAgentSessionLogger(),
       store,
       adapter: { ...adapter(), ...adapterOverrides },
       journalDatabase: openTestJournalHostDatabase(root),
@@ -605,8 +630,15 @@ describe('restart', () => {
     await reboot(async () => ({ outcome: 'indeterminate', reason: 'read does not need ownership' }))
     acquire.mockClear()
     const listRecords = vi.spyOn(store, 'listRecords')
+    // A list already on the stream hears of a chat restored without a child only from the restore.
+    const listed: AgentSessionStatusEvent[] = []
+    host.subscribeStatus({ id: 'session-list', emit: (event) => listed.push(event) })
 
     await host.restoreReadableSessions()
+    expect(listed.at(-1)).toEqual({
+      type: 'status',
+      session: expect.objectContaining({ sessionId: SESSION, status: 'idle' })
+    })
     const restoreReads = listRecords.mock.calls.length
     await host.restoreReadableSessions()
 
@@ -684,11 +716,11 @@ describe('restart', () => {
     expect(status).toMatchObject({ owner: 'native' })
   })
 
-  it('vouches for no owner of a chat this host cannot run', async () => {
+  it('reads stored ownership even when this host cannot start the provider', async () => {
     await attach()
 
     await reboot(async () => ({ outcome: 'pid-absent' }), { supportsCreate: () => false })
-    expect(() => host.handoffStatus(SESSION)).toThrow('structured_agent_session_unsupported')
+    expect(host.handoffStatus(SESSION)).toMatchObject({ owner: 'native' })
   })
 
   it('releases a session whose owner can never be probed, signalling nothing, and starts over', async () => {
@@ -846,6 +878,7 @@ describe('subscribe', () => {
     if (!replacement.ok) {
       throw new Error(`expected replacement owner, got ${replacement.refusal.code}`)
     }
-    expect(events.at(-1)).toMatchObject({ type: 'snapshot', fence: replacement.fence })
+    expect(events.findLast((event) => event.type === 'snapshot')?.fence).toBe(replacement.fence)
+    expect(events.at(-1)).toMatchObject({ fence: replacement.fence })
   })
 })

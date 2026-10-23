@@ -34,6 +34,7 @@ vi.mock('@/runtime/runtime-jira-client', () => ({
   jiraListCreateFields: vi.fn(),
   jiraListIssueTypes: vi.fn(),
   jiraListIssues: (...args: unknown[]) => jiraListIssues(...args),
+  jiraListIssuesForTarget: (...args: unknown[]) => jiraListIssues(...args),
   jiraReadStatus: (...args: unknown[]) => jiraReadStatus(...args),
   jiraListPriorities: vi.fn(),
   jiraListProjects: vi.fn(),
@@ -208,7 +209,13 @@ describe('createJiraSlice runtime context', () => {
 
     sourceResult.resolve([{ ...issue('ALP-1'), title: 'Source issue' }])
     await expect(request).resolves.toMatchObject([{ key: 'ALP-1', title: 'Source issue' }])
-    expect(jiraListIssues).toHaveBeenCalledWith(sourceContext, 'assigned', 30, 'site-1')
+    expect(jiraListIssues).toHaveBeenCalledWith(
+      { kind: 'environment', environmentId: 'source-runtime' },
+      'assigned',
+      30,
+      'site-1',
+      undefined
+    )
     expect(Object.values(store.getState().jiraSearchCache)).toHaveLength(1)
     expect(store.getState().jiraSearchCache['site-1::list::assigned::30']).toBeUndefined()
   })
@@ -530,6 +537,10 @@ describe('createJiraSlice runtime context', () => {
         [`${remoteScope}::site-1::ALP-1`]: {
           data: { ...issue('ALP-1'), title: 'Remote title' },
           fetchedAt: Date.now()
+        },
+        [`${localScope}::site-2::ALP-1`]: {
+          data: { ...issue('ALP-1'), siteId: 'site-2', title: 'Other site title' },
+          fetchedAt: Date.now()
         }
       },
       jiraSearchCache: {
@@ -540,6 +551,13 @@ describe('createJiraSlice runtime context', () => {
         [`${remoteScope}::site-1::list::assigned::30`]: {
           data: [{ ...issue('ALP-1'), title: 'Remote title' }],
           fetchedAt: Date.now()
+        },
+        [`${localScope}::all::list::assigned::30`]: {
+          data: [
+            { ...issue('ALP-1'), siteId: 'site-2', title: 'Other site title' },
+            { ...issue('ALP-1'), title: 'Local title' }
+          ],
+          fetchedAt: Date.now()
         }
       }
     })
@@ -548,7 +566,8 @@ describe('createJiraSlice runtime context', () => {
       'ALP-1',
       { title: 'Patched local title' },
       {
-        sourceContext: localSource
+        sourceContext: localSource,
+        siteId: 'site-1'
       }
     )
 
@@ -566,6 +585,14 @@ describe('createJiraSlice runtime context', () => {
       store.getState().jiraSearchCache[`${remoteScope}::site-1::list::assigned::30`]?.data?.[0]
         ?.title
     ).toBe('Remote title')
+    expect(store.getState().jiraIssueCache[`${localScope}::site-2::ALP-1`]?.data?.title).toBe(
+      'Other site title'
+    )
+    expect(
+      store
+        .getState()
+        .jiraSearchCache[`${localScope}::all::list::assigned::30`]?.data?.map((item) => item.title)
+    ).toEqual(['Other site title', 'Patched local title'])
   })
 
   it('returns a failed Jira connect result when the active runtime changes before completion', async () => {
@@ -683,6 +710,20 @@ describe('createJiraSlice credential errors', () => {
     const revisionKey = getProviderRuntimeContextKey(getTaskSourceRuntimeSettings(source))
     expect(store.getState().jiraConnectionRevisions[revisionKey]).toBe(1)
     expect(store.getState().jiraStatus).toEqual(focusedStatus)
+  })
+
+  it('does not read a rejected query that mentions 401 as a lost connection', async () => {
+    const store = createTestStore()
+    const source = jiraSourceContext('remote-runtime')
+    const error = new Error("Error 400: An issue with key 'ALP-1401' does not exist.")
+    jiraSearchIssues.mockRejectedValueOnce(error)
+
+    await expect(
+      store
+        .getState()
+        .searchJiraIssues('key = "ALP-1401"', 12, { sourceContext: source, siteId: 'site-1' })
+    ).rejects.toBe(error)
+    expect(store.getState().jiraConnectionRevisions).toEqual({})
   })
 
   it('does not borrow the global site when a workspace source has no selected site', async () => {

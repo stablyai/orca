@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import type { NativeChatBlock, NativeChatMessage } from '../../../shared/native-chat-types'
 import { boundSubagentEntryId } from '../../native-chat/subagent-entry-id-bounds'
 import { boundWorkerTranscriptActivityBlock } from './worker-transcript-activity-block-bounds'
+import { replaceDispatchCapabilities } from './worker-terminal-redaction'
 
 export const DEFAULT_WORKER_TRANSCRIPT_MESSAGE_LIMIT = 40
 export const MAX_WORKER_TRANSCRIPT_MESSAGE_LIMIT = 50
@@ -15,8 +16,6 @@ const MAX_WORKER_TRANSCRIPT_INPUT_NODES = 100
 const MAX_WORKER_TRANSCRIPT_METADATA_CHARS = 512
 const MAX_WORKER_TRANSCRIPT_RESPONSE_BYTES = 512 * 1024
 const TRUNCATION_MARKER = '\n… (truncated)'
-const DISPATCH_CAPABILITY_PATTERN = /\bdcap_[A-Za-z0-9_-]{20,}\b/g
-const DISPATCH_CAPABILITY_REDACTION = '[dispatch capability redacted]'
 
 type TranscriptBoundState = {
   warnings: Set<string>
@@ -28,22 +27,6 @@ export function clampWorkerTranscriptLimit(limit: number | undefined): number {
     return DEFAULT_WORKER_TRANSCRIPT_MESSAGE_LIMIT
   }
   return Math.min(Math.floor(limit!), MAX_WORKER_TRANSCRIPT_MESSAGE_LIMIT)
-}
-
-export function redactWorkerTerminalLines(lines: readonly string[]): {
-  lines: string[]
-  warnings: string[]
-} {
-  let redacted = false
-  const bounded = lines.map((line) => {
-    const result = replaceDispatchCapabilities(line)
-    redacted ||= result.redacted
-    return result.value
-  })
-  return {
-    lines: bounded,
-    warnings: redacted ? ['Dispatch capability tokens were redacted from terminal output.'] : []
-  }
 }
 
 export function boundWorkerTranscriptMessages(
@@ -114,6 +97,9 @@ function boundMessage(
     ...served,
     id: boundIdentifier(message.id, transcriptPath, state),
     ...(message.turnId ? { turnId: boundIdentifier(message.turnId, transcriptPath, state) } : {}),
+    ...(message.parentId
+      ? { parentId: boundIdentifier(message.parentId, transcriptPath, state) }
+      : {}),
     blocks: blocks.map((block) => boundBlock(block, state))
   }
 }
@@ -136,7 +122,11 @@ function boundBlock(block: NativeChatBlock, state: TranscriptBoundState): Native
       input: boundToolInput(block.input, budget, 0, state)
     }
   }
-  if (block.type === 'subagent-group' || block.type === 'background-task') {
+  if (
+    block.type === 'subagent-group' ||
+    block.type === 'subagent' ||
+    block.type === 'background-task'
+  ) {
     return boundWorkerTranscriptActivityBlock(block, {
       clipMetadata: (value) => clipMetadata(value, state),
       clipText: (value) => clipText(value, state),
@@ -279,16 +269,4 @@ function redactSensitiveText(value: string, warnings: Set<string>): string {
   }
   warnings.add('Dispatch capability tokens were redacted from transcript output.')
   return result.value
-}
-
-function replaceDispatchCapabilities(value: string): { value: string; redacted: boolean } {
-  DISPATCH_CAPABILITY_PATTERN.lastIndex = 0
-  const redacted = DISPATCH_CAPABILITY_PATTERN.test(value)
-  DISPATCH_CAPABILITY_PATTERN.lastIndex = 0
-  return {
-    value: redacted
-      ? value.replace(DISPATCH_CAPABILITY_PATTERN, DISPATCH_CAPABILITY_REDACTION)
-      : value,
-    redacted
-  }
 }

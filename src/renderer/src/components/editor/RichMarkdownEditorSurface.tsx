@@ -20,6 +20,7 @@ import type { MarkdownReviewNote } from '@/lib/markdown-review-notes'
 import type { RichMarkdownAnnotationTarget } from './rich-markdown-review-annotations'
 import type { RichMarkdownReviewNotePosition } from './rich-markdown-review-note-layout'
 import type { DiffComment } from '../../../../shared/diff-comment-types'
+import { focusRichMarkdownEditorFromSearch } from './rich-markdown-search-focus'
 
 function shouldFocusEmptyEditorFromSurfaceClick(
   event: React.MouseEvent<HTMLDivElement>,
@@ -35,19 +36,12 @@ function shouldFocusEmptyEditorFromSurfaceClick(
   return !target.closest('.rich-markdown-editor-shell button, .rich-markdown-editor-shell input')
 }
 
-function shouldReturnFocusToEditor(event: React.MouseEvent<HTMLDivElement>): boolean {
-  if (event.button !== 0) {
-    return false
-  }
-  const target = event.target
-  return target instanceof Element && Boolean(target.closest('.ProseMirror'))
-}
-
 type RichMarkdownEditorSurfaceProps = {
   editor: Editor | null
   editorFontZoomLevel: number
   rootElement: HTMLDivElement | null
   rootRef: (node: HTMLDivElement | null) => void
+  onFocusLeave: (event: React.FocusEvent<HTMLDivElement>) => void
   scrollContainerRef: React.RefObject<HTMLDivElement | null>
   headerSlot?: React.ReactNode
   reviewRailExpanded: boolean
@@ -136,6 +130,7 @@ export function RichMarkdownEditorSurface({
   editorFontZoomLevel,
   rootElement,
   rootRef,
+  onFocusLeave,
   scrollContainerRef,
   headerSlot,
   reviewRailExpanded,
@@ -200,6 +195,7 @@ export function RichMarkdownEditorSurface({
       ) : null}
       <div
         ref={rootRef}
+        onBlur={onFocusLeave}
         className={`rich-markdown-editor-shell ${
           reviewRailExpanded ? 'has-rich-markdown-review-notes' : ''
         }`.trim()}
@@ -217,11 +213,7 @@ export function RichMarkdownEditorSurface({
             // Image layout must not anchor-scroll over the restored tab position.
             className="relative h-full overflow-auto scrollbar-editor [overflow-anchor:none]"
             onMouseDown={(event) => {
-              if (shouldReturnFocusToEditor(event)) {
-                // Keep the find bar open while handing keyboard focus back to the document.
-                searchState.searchInputRef.current?.blur()
-                editor?.commands.focus()
-              }
+              focusRichMarkdownEditorFromSearch(event.nativeEvent, editor?.view ?? null)
               if (!shouldFocusEmptyEditorFromSurfaceClick(event, editor)) {
                 return
               }

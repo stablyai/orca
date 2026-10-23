@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { spawnMock } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
-import { registerPtyHandlers, getPtyRendererDeliveryDebugSnapshot } from './pty'
+import { registerPtyHandlers } from './pty/register-handlers'
+import { getPtyRendererDeliveryDebugSnapshot } from './pty/delivery/debug'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -194,7 +195,15 @@ describe('registerPtyHandlers', () => {
 
       expect(mainWindow.webContents.send.mock.calls).toEqual([
         ['pty:data', { id: finalSpawn.id, data: 'final-tail' }],
-        ['pty:exit', { id: finalSpawn.id, code: 0, incarnationId: finalSpawn.incarnationId }]
+        [
+          'pty:exit',
+          {
+            id: finalSpawn.id,
+            code: 0,
+            incarnationId: finalSpawn.incarnationId,
+            hostId: 'local'
+          }
+        ]
       ])
       expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
         rendererInFlightChars: 8 * 1024 * 1024,

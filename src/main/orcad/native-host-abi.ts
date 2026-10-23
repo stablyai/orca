@@ -13,7 +13,7 @@
  */
 import process from 'node:process'
 
-export type LibcFlavor = 'glibc' | 'musl' | 'none'
+type LibcFlavor = 'glibc' | 'musl' | 'none'
 
 export type NativeHostAbi = {
   platform: NodeJS.Platform
@@ -25,7 +25,7 @@ export type NativeHostAbi = {
   nodeAbi: string
 }
 
-/** Stock Ubuntu 20.04. See docs/reference/linux-glibc-compatibility.md. */
+/** Stock Ubuntu 20.04. */
 export const GLIBC_FLOOR = '2.31'
 
 type ReportHeader = { glibcVersionRuntime?: unknown }
@@ -76,6 +76,14 @@ export function detectNativeHostAbi(): NativeHostAbi {
     glibcVersion,
     nodeAbi: process.versions.modules
   }
+}
+
+/** Highest Node-API version this runtime supports, or null when it reports none. */
+export function hostNodeApiVersion(
+  versions: NodeJS.ProcessVersions = process.versions
+): number | null {
+  const napi = Number.parseInt(versions.napi ?? '', 10)
+  return Number.isInteger(napi) && napi > 0 ? napi : null
 }
 
 /** `linux-x64-glibc`, `linux-arm64-musl`, `darwin-arm64`, `win32-x64`. */
@@ -154,6 +162,11 @@ export function parseMissingSharedLibrary(loaderError: string): string | null {
   const elf = loaderError.match(/([\w.+-]+\.so[\w.]*): cannot open shared object file/)
   if (elf) {
     return elf[1]
+  }
+  // musl's loader (Alpine) words it differently.
+  const musl = loaderError.match(/Error loading shared library ([\w.+-]+\.so[\w.]*)/)
+  if (musl) {
+    return musl[1]
   }
   const machO = loaderError.match(/Library not loaded:\s*(\S+)/)
   return machO ? machO[1] : null

@@ -1,9 +1,5 @@
 import { useEffect, useState } from 'react'
-import {
-  ORCA_CLI_SKILL_INSTALL_COMMAND,
-  ORCA_CLI_SKILL_NAME,
-  ORCA_CLI_SKILL_UPDATE_COMMAND
-} from '@/lib/agent-feature-install-commands'
+import { ORCA_CLI_SKILL_NAME } from '@/lib/agent-feature-skill-names'
 import { BROWSER_USE_ENABLED_STORAGE_KEY } from '@/lib/browser-use-setup-state'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
@@ -21,7 +17,6 @@ import { BrowserUseComputerUseNotice } from './BrowserUseComputerUseNotice'
 import { BrowserUseEnableSwitch } from './BrowserUseEnableSwitch'
 import { BrowserUseSkillStep } from './BrowserUseSkillStep'
 import { BrowserUseCookieImportStep } from './BrowserUseCookieImportStep'
-import { buildSkillCommandForRuntime } from './CliSkillRuntimeSetup'
 import { translate } from '@/i18n/i18n'
 
 type BrowserUseSetupProps = {
@@ -39,12 +34,6 @@ export function BrowserUseSetup({
   const browserSessionImportState = useAppStore((s) => s.browserSessionImportState)
 
   const activeSkillRuntime = useActiveProjectSkillRuntime()
-  const browserUseInstallCommand = !activeSkillRuntime.installDisabledReason
-    ? buildSkillCommandForRuntime(ORCA_CLI_SKILL_INSTALL_COMMAND, activeSkillRuntime.agentRuntime)
-    : ORCA_CLI_SKILL_INSTALL_COMMAND
-  const browserUseUpdateCommand = !activeSkillRuntime.installDisabledReason
-    ? buildSkillCommandForRuntime(ORCA_CLI_SKILL_UPDATE_COMMAND, activeSkillRuntime.agentRuntime)
-    : ORCA_CLI_SKILL_UPDATE_COMMAND
 
   const [browserUseEnabled, setBrowserUseEnabled] = useState<boolean>(() => {
     return localStorage.getItem(BROWSER_USE_ENABLED_STORAGE_KEY) === '1'
@@ -170,15 +159,11 @@ export function BrowserUseSetup({
           )}
         >
           <BrowserUseSkillStep
-            command={browserUseInstallCommand}
-            installedCommand={browserUseUpdateCommand}
             skillDetected={skillDetected}
             skillLoading={skillLoading}
             skillError={activeSkillRuntime.installDisabledReason ?? skillError}
             disabled={skillDisabled}
-            terminalShellOverride={activeSkillRuntime.terminalShellOverride}
-            terminalRuntime={activeSkillRuntime.agentRuntime}
-            onBeforeOpenTerminal={() => {
+            onBeforeInstall={() => {
               useAppStore.getState().recordFeatureInteraction('agent-browser-setup')
             }}
             onRecheck={refreshSkill}

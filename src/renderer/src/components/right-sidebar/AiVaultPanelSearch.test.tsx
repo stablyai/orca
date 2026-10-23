@@ -34,6 +34,7 @@ function panelSearch(overrides: Partial<PanelSearch> = {}): PanelSearch {
     searching: true,
     hasQuery: true,
     needsLocalConsent: false,
+    titleOnly: false,
     host: null,
     resetKey: 'all',
     ...overrides
@@ -49,6 +50,17 @@ function renderPanel(search: PanelSearch) {
 }
 
 describe('AiVaultPanelSearch', () => {
+  it('says only titles are matched when the host has full-text search off', () => {
+    renderPanel(panelSearch({ searching: false, titleOnly: true }))
+    expect(screen.getByRole('status').textContent).toContain('only session titles are matched')
+    expect(screen.getByText('results')).toBeTruthy()
+  })
+  it('explains an unsupported agent without reporting zero matches or a missing host service', () => {
+    renderPanel(panelSearch({ response: { kind: 'unavailable', reason: 'unsupported-agent' } }))
+    expect(screen.getByRole('status').textContent).toContain(
+      'does not support history search for the selected agent'
+    )
+  })
   it('names every computer the merge could not search, with its reason', () => {
     const response = searchResults()
     renderPanel(

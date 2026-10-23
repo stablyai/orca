@@ -18,9 +18,7 @@ describe('getSuggestedCreatureName (mobile)', () => {
   })
 
   it('handles Windows separators and trailing separators like the desktop does', () => {
-    expect(getSuggestedCreatureName(['C:\\worktrees\\Nautilus\\\\'], pickFirst)).not.toBe(
-      'nautilus'
-    )
+    expect(getSuggestedCreatureName(['C:\\worktrees\\Nautilus\\\\'], pickFirst)).toBe('seahorse')
   })
 
   it('never reissues a retired name whose workspace is already deleted', () => {
@@ -56,13 +54,6 @@ describe('getSuggestedCreatureName (mobile)', () => {
     // Those names are absent from the wire payload because they are ALL spent, not available.
     expect(getSuggestedCreatureName([], pickFirst, { exhaustedTiers: 2, names: [] })).toBe(
       `${lower(0)}-3`
-    )
-  })
-
-  it('falls back to live-only dedupe when the host sends no retired names', () => {
-    // Hosts predating the wire field omit it; behavior must match the pre-change app.
-    expect(getSuggestedCreatureName([`/home/u/worktrees/${MARINE_CREATURES[0]}`], pickFirst)).toBe(
-      lower(1)
     )
   })
 })

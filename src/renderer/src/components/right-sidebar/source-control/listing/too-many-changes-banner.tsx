@@ -8,10 +8,15 @@ const CAPPED_STATUS_RETRY_TIMEOUT_MS = 15_000
 
 export function TooManyChangesBanner({
   limit,
-  onRetry
+  onRetry,
+  onStageAll,
+  isStageAllDisabled = false
 }: {
   limit: number
   onRetry: (signal: AbortSignal) => Promise<void>
+  /** Stages every change on the host, including rows past the cap that no section can name. */
+  onStageAll?: () => Promise<void>
+  isStageAllDisabled?: boolean
 }): React.JSX.Element {
   const [isRetrying, setIsRetrying] = useState(false)
   const [showSpinner, setShowSpinner] = useState(false)
@@ -82,17 +87,32 @@ export function TooManyChangesBanner({
           )}
         </span>
       </div>
-      <Button
-        type="button"
-        variant="outline"
-        size="xs"
-        className="self-end text-xs"
-        disabled={isRetrying}
-        onClick={() => void handleRetry()}
-      >
-        {showSpinner ? <Loader2 className="size-3 animate-spin" /> : null}
-        {translate('auto.components.right.sidebar.SourceControl.286dbda4d6', 'Retry')}
-      </Button>
+      <div className="flex items-center justify-end gap-2">
+        {onStageAll ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="xs"
+            disabled={isStageAllDisabled}
+            onClick={() => void onStageAll()}
+          >
+            {translate(
+              'auto.components.right.sidebar.source.control.primary.action.18a0fca877',
+              'Stage All'
+            )}
+          </Button>
+        ) : null}
+        <Button
+          type="button"
+          variant="outline"
+          size="xs"
+          disabled={isRetrying}
+          onClick={() => void handleRetry()}
+        >
+          {showSpinner ? <Loader2 className="size-3 animate-spin" /> : null}
+          {translate('auto.components.right.sidebar.SourceControl.286dbda4d6', 'Retry')}
+        </Button>
+      </div>
     </div>
   )
 }

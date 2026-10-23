@@ -12,6 +12,7 @@ import type { LinuxPackageInstallRecovery, UpdateStatus } from '../../shared/upd
 import { compareVersions } from '../updater-fallback'
 import { PRE_QUIT_CLEANUP_TIMEOUT_MS, REQUIRED_PRE_QUIT_CLEANUP_TIMEOUT_MS } from './updater-state'
 import { UpdaterCheckState } from './updater-check-state'
+import { releaseServeSupervisorPark } from './serve-supervisor-install-park'
 
 export abstract class UpdaterInstallSupport extends UpdaterCheckState {
   protected getKnownReleaseUrl(): string | undefined {
@@ -76,8 +77,17 @@ export abstract class UpdaterInstallSupport extends UpdaterCheckState {
     this.quittingForUpdate = false
     this.updateInstallCommitted = false
     this.quitAndInstallNativeInvoked = false
+    this.clearMacDeferredStagingTimer()
     disarmUpdateInstallExitWatchdog()
     resetMacInstallState()
+    void releaseServeSupervisorPark()
+  }
+
+  protected clearMacDeferredStagingTimer(): void {
+    if (this.macDeferredStagingTimer) {
+      clearTimeout(this.macDeferredStagingTimer)
+      this.macDeferredStagingTimer = null
+    }
   }
 
   /**

@@ -1,0 +1,73 @@
+{
+  "batch": "root-0055",
+  "reviewer": "root",
+  "source_commit": "8f6283b32bcdefa746613e4c28d04bb1fe954eb9",
+  "implementation_base": "89b3d382847f10b31a731ebd7e18aad022a4b15a",
+  "reviewed_files": 5,
+  "original_declarations": 87,
+  "parameter_controls": 18,
+  "case_records": 105,
+  "decisions": {
+    "keep": 100,
+    "fix": 5
+  },
+  "production_changes": false,
+  "test_source_changes": ["src/cli/format.test.ts"],
+  "review_scope": "All 87 original declarations plus all 18 concrete parameter inputs read and recorded; multiple calls within a case retain their distinct expectations in its reason. Parameter records are controls, not additional test declarations.",
+  "checks": [
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/cli/computer-format.test.ts src/cli/emulator-logcat-format.test.ts src/cli/execution-host-flag.test.ts src/cli/format-recovery.test.ts src/cli/format.test.ts",
+      "result": "baseline and reviewed run: 5 suites / 102 tests passed",
+      "logs": ["/tmp/orca-root-0055-original-tests.log", "/tmp/orca-root-0055-final-tests.log"]
+    },
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm run check:code-quality:changed -- origin/main",
+      "result": "passed; zero new findings including React Doctor",
+      "log": "/tmp/orca-root-0055-quality.log"
+    },
+    {
+      "command": "pnpm exec oxfmt --write src/cli/format.test.ts docs/audits/test-value/reviews/root-0055-validation.json",
+      "result": "formatting applied after passing runtime checks; formatting-only changes do not require repeated execution"
+    }
+  ],
+  "mutation_controls": [
+    {
+      "mutation": "unquoted-app",
+      "path": "src/cli/shell-command-quote.ts",
+      "needle": "  return quotePosixShell(value)",
+      "replacement": "  return value",
+      "original": {
+        "exit": 0,
+        "log": "/tmp/orca-root-0055-unquoted-app-original.log"
+      },
+      "reviewed": {
+        "exit": 1,
+        "log": "/tmp/orca-root-0055-unquoted-app-reviewed.log"
+      }
+    },
+    {
+      "mutation": "corrupt-screenshot",
+      "path": "src/cli/computer-format.ts",
+      "needle": "Buffer.from(screenshot.data, 'base64')",
+      "replacement": "Buffer.from('corrupt')",
+      "original": {
+        "exit": 0,
+        "log": "/tmp/orca-root-0055-corrupt-screenshot-original.log"
+      },
+      "reviewed": {
+        "exit": 1,
+        "log": "/tmp/orca-root-0055-corrupt-screenshot-reviewed.log"
+      }
+    }
+  ],
+  "integrity": {
+    "original_and_final_hashes_verified": true,
+    "records_sha256": "f5e1f994f88a7046ecb047e2ebff9235dda84aeefff5b7460a5ed39d702a4b85",
+    "production_sources_restored": true
+  },
+  "limitations": [
+    "Local Linux formatter and mocked resolver/RPC behavior; no native window, focus, SSH connection or live paired server launched.",
+    "Windows quoting expectations are platform-aware but native Windows execution remains a CI requirement.",
+    "Actual temporary exported screenshot bytes are verified; these are fixture bytes, not a native screenshot capture."
+  ]
+}

@@ -8,6 +8,7 @@ import type {
 import type {
   AgentChildWorkOperation,
   AgentChildWorkOutcome,
+  AgentChildWorkOutcomeBasis,
   AgentChildWorkRecord
 } from './agent-status-child-work'
 import type { AgentChildWorkLiveObservation } from './agent-status-child-work-evidence'
@@ -15,15 +16,12 @@ import {
   agentChildWorkHandleAliases,
   currentAgentChildWorkAliases,
   isPreviousAgentChildWorkRun,
-  ownedStructuredChildWork,
   resolveAgentChildWorkHandle,
   resolveAgentChildWorkOwner,
   STRUCTURED_CHILD_WORK_PROVENANCE,
   type AgentChildWorkEvidenceScope
 } from './agent-status-child-work-evidence-resolution'
 
-/** Live children admitted per session, sized to the provider trackers' own retention. */
-export const STRUCTURED_CHILD_WORK_MAX_LIVE = 256
 /** A child's first run, matching the provider roster's first attempt. */
 const FIRST_GENERATION = 1
 
@@ -133,11 +131,6 @@ export function applyAgentChildWorkLive(
   const request = { parent: ctx.parent, provider: ctx.provider }
   const aliases = agentChildWorkHandleAliases(handle)
   if (!existing) {
-    const live = ownedStructuredChildWork(ctx).filter((record) => record.membership === 'live')
-    if (live.length >= STRUCTURED_CHILD_WORK_MAX_LIVE) {
-      ctx.outcome.rejected.push({ handleId: handle.id, reason: 'ingestion-limit' })
-      return
-    }
     // Bindings with no record left are retired lifetimes: a forgotten session took its children
     // with it. The id is free again, under a generation past the retired one.
     const retired = resolution.highestGeneration
@@ -198,7 +191,11 @@ export function settleAgentChildWork(
   existing: AgentChildWorkRecord,
   outcome: AgentChildWorkOutcome,
   observedAt: number,
-  reported: { lastMessage?: string; totalTokens?: number } = {}
+  reported: {
+    lastMessage?: string
+    totalTokens?: number
+    basis?: AgentChildWorkOutcomeBasis
+  } = {}
 ): void {
   const current = currentAgentChildWorkAliases(ctx, existing)
   const handleId = current.stableId ?? existing.childWorkId
@@ -212,6 +209,7 @@ export function settleAgentChildWork(
     state: 'done',
     membership: 'settled',
     outcome,
+    ...(reported.basis !== undefined ? { outcomeBasis: reported.basis } : {}),
     ...(reported.totalTokens !== undefined ? { totalTokens: reported.totalTokens } : {}),
     ...(reported.lastMessage !== undefined ? { lastMessage: reported.lastMessage } : {}),
     observedAt: Math.max(observedAt, existing.observedAt),

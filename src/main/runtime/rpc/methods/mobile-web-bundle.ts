@@ -1,7 +1,7 @@
 /**
  * Serves this install's mobile web bundle to the paired client over the already-authenticated RPC
  * connection: one call for the manifest, then one call per 48 KiB chunk of each asset, or one per
- * gzipped 384 KiB range for a client that read `rangeBytes` off the manifest reply.
+ * optionally gzipped range on the grid named by `rangeBytes` in the manifest reply.
  *
  * No SSH or relay proxying, ever. The bundle is an artifact of the desktop the phone paired with,
  * not something a remote execution host owns, so a runtime answers only out of its own install and
@@ -14,7 +14,6 @@ import {
   MOBILE_WEB_BUNDLE_CHUNK_BYTES,
   MOBILE_WEB_BUNDLE_CHUNK_METHOD,
   MOBILE_WEB_BUNDLE_MANIFEST_METHOD,
-  MOBILE_WEB_BUNDLE_RANGE_BYTES,
   MOBILE_WEB_BUNDLE_RANGE_METHOD,
   MobileWebBundleChunkParamsSchema,
   MobileWebBundleRangeParamsSchema,
@@ -161,15 +160,18 @@ async function readVerifiedWindow<T>(
 export const MOBILE_WEB_BUNDLE_METHODS = [
   defineMethod({
     name: MOBILE_WEB_BUNDLE_MANIFEST_METHOD,
+    permission: 'workspace',
     params: null,
     handler: async (): Promise<MobileWebBundleManifestResult> => ({
       manifest: requireBundle().manifest,
       chunkBytes: MOBILE_WEB_BUNDLE_CHUNK_BYTES,
-      rangeBytes: MOBILE_WEB_BUNDLE_RANGE_BYTES
+      // Complete replies must arrive within the phone's stall budget even on slow relays.
+      rangeBytes: MOBILE_WEB_BUNDLE_CHUNK_BYTES
     })
   }),
   defineMethod({
     name: MOBILE_WEB_BUNDLE_CHUNK_METHOD,
+    permission: 'workspace',
     params: MobileWebBundleChunkParamsSchema,
     handler: (params, ctx): Promise<MobileWebBundleChunkResult> =>
       readVerifiedWindow(ctx, params, MOBILE_WEB_BUNDLE_CHUNK_BYTES, async (window) => ({
@@ -179,9 +181,10 @@ export const MOBILE_WEB_BUNDLE_METHODS = [
   }),
   defineMethod({
     name: MOBILE_WEB_BUNDLE_RANGE_METHOD,
+    permission: 'workspace',
     params: MobileWebBundleRangeParamsSchema,
     handler: (params, ctx): Promise<MobileWebBundleRangeResult> =>
-      readVerifiedWindow(ctx, params, MOBILE_WEB_BUNDLE_RANGE_BYTES, async (window) => {
+      readVerifiedWindow(ctx, params, MOBILE_WEB_BUNDLE_CHUNK_BYTES, async (window) => {
         const encoded = await encodeMobileWebBundleRange(window.data)
         return {
           ...window.header,

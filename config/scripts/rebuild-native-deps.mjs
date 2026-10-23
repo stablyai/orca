@@ -19,6 +19,10 @@
  */
 
 import { rebuild } from '@electron/rebuild'
+import {
+  hasAdoptedSharedElectronDist,
+  resolveSharedElectronDistEntry
+} from './shared-electron-dist-cache.mjs'
 import { execFileSync, spawnSync } from 'node:child_process'
 import {
   ensureWindowsProcessTreeCommandLinePatch,
@@ -26,6 +30,13 @@ import {
   stageWindowsProcessTreeNodeAddonApiHeaders,
   windowsProcessTreeAddonPath
 } from './windows-process-tree-gyp-rebuild.mjs'
+import { disableMsbuildFileTrackingOnWindows } from './msbuild-file-tracking.mjs'
+import { warnAboutNodeModulesAboveSharedStore } from './store-ancestor-node-modules.mjs'
+import {
+  isSharedNativePackage,
+  nodePtyBuildArtifactPaths,
+  resolveNativePackageDir
+} from './native-build-entry.cjs'
 import {
   copyFileSync,
   existsSync,
@@ -79,15 +90,23 @@ if (ignoreModules.length > 0) {
 const NATIVE_MODULES = [
   'node-pty',
   'cpu-features',
-  ...(rebuildPlatform === 'win32' ? ['@orca/windows-registry', '@vscode/windows-process-tree'] : [])
+  ...(rebuildPlatform === 'win32'
+    ? ['@orca/windows-registry', '@orca/windows-security', '@vscode/windows-process-tree']
+    : [])
 ]
 const onlyModules = NATIVE_MODULES.filter((m) => !ignoreModules.includes(m))
+// Why: these package dirs are shared with other worktrees (pnpm's global virtual store), so they
+// get a published per-ABI build beside build/Release instead of an in-place rebuild.
+const sharedModules = new Set(onlyModules.filter((m) => isSharedNativePackage(m, projectDir)))
+// Loaded only when needed, so a normal install runs exactly the code it always did.
+const sharedNativeBuild = sharedModules.size > 0 ? await import('./shared-native-build.mjs') : null
 /** Whether this rebuild targets something other than the machine running it. */
 const isCrossHostRebuild = rebuildPlatform !== osPlatform() || rebuildArch !== process.arch
 const forceRebuild =
   process.env.ORCA_FORCE_NATIVE_REBUILD === '1' || cliOptions.force || isCrossHostRebuild
 let modulesToRebuild = onlyModules
 
+warnAboutNodeModulesAboveSharedStore(projectDir)
 ensureElectronPackageInstalled()
 restoreNodePtyWindowsConptyRuntime()
 
@@ -152,6 +171,10 @@ try {
   // the catch below is written for. Outside, it aborted `pnpm install` with a
   // raw stack instead of the "close running Orca/Electron processes" message.
   assertNodePtyConptySourceDeniesMsysBreakaway()
+  for (const moduleName of modulesToRebuild.filter((m) => sharedModules.has(m))) {
+    buildSharedElectronModule(moduleName)
+  }
+  modulesToRebuild = modulesToRebuild.filter((m) => !sharedModules.has(m))
   if (
     rebuildPlatform === 'win32' &&
     modulesToRebuild.includes('@vscode/windows-process-tree') &&
@@ -162,20 +185,23 @@ try {
       console.warn('[rebuild] Repaired the un-applied windows-process-tree command-line patch.')
     }
   }
-  await rebuild({
-    buildPath: projectDir,
-    electronVersion,
-    platform: rebuildPlatform,
-    arch: rebuildArch,
-    ignoreModules,
-    onlyModules: modulesToRebuild,
-    // Why: without force, @electron/rebuild skips modules it considers
-    // "already built" — even when they were compiled for the wrong ABI
-    // (e.g., system Node instead of Electron's embedded Node). This is
-    // common after pnpm install, which compiles native modules for system
-    // Node before postinstall runs this script.
-    force: true
-  })
+  disableMsbuildFileTrackingOnWindows()
+  if (modulesToRebuild.length > 0) {
+    await rebuild({
+      buildPath: projectDir,
+      electronVersion,
+      platform: rebuildPlatform,
+      arch: rebuildArch,
+      ignoreModules,
+      onlyModules: modulesToRebuild,
+      // Why: without force, @electron/rebuild skips modules it considers
+      // "already built" — even when they were compiled for the wrong ABI
+      // (e.g., system Node instead of Electron's embedded Node). This is
+      // common after pnpm install, which compiles native modules for system
+      // Node before postinstall runs this script.
+      force: true
+    })
+  }
   restoreNodePtyWindowsConptyRuntime()
   assertWindowsProcessTreeAddonIsPatched()
   assertNodePtyConptyDeniesMsysBreakaway()
@@ -274,8 +300,29 @@ function assertNodePtyConptySourceDeniesMsysBreakaway() {
   })
 }
 
+function buildSharedElectronModule(moduleName) {
+  const target = { platform: rebuildPlatform, arch: rebuildArch }
+  // An N-API build serves Electron and Node alike, so either can vouch for it on this host.
+  const executable = electronPackageIsUsable() ? getElectronExecutablePath() : process.execPath
+  sharedNativeBuild.ensureSharedNativeBuild({
+    moduleName,
+    packageDir: resolveNativePackageDir(moduleName, projectDir),
+    ...target,
+    checkBuildDir: (dir) =>
+      isCrossHostRebuild
+        ? sharedNativeBuild.checkNativeBuildDirArtifacts(moduleName, dir, target)
+        : sharedNativeBuild.checkNativeBuildDirLoads(moduleName, dir, { executable }),
+    log: (message) => console.log(`[rebuild] ${message}`)
+  })
+}
+
 function restoreNodePtyWindowsConptyRuntime() {
-  if (rebuildPlatform !== 'win32' || !onlyModules.includes('node-pty')) {
+  // A shared node-pty's published build carries its own ConPTY runtime.
+  if (
+    rebuildPlatform !== 'win32' ||
+    !onlyModules.includes('node-pty') ||
+    sharedModules.has('node-pty')
+  ) {
     return
   }
 
@@ -308,6 +355,16 @@ function restoreNodePtyWindowsConptyRuntime() {
 function ensureElectronPackageInstalled() {
   repairElectronPathFile()
   if (electronPackageIsUsable()) {
+    const shared = resolveSharedElectronDistEntry({
+      repoRoot: projectDir,
+      electronPackageDir,
+      version: electronVersion,
+      targetPlatform: electronInstallPlatform,
+      targetArch: electronInstallArch
+    })
+    if (shared && !hasAdoptedSharedElectronDist(shared)) {
+      runElectronPackageBinaryInstall()
+    }
     return
   }
 
@@ -516,21 +573,10 @@ function getPatchedNodePtyRebuildReason() {
 
   // Why: Orca patches node-pty's native Unix spawn path and Windows job-object
   // exports; upstream prebuilds can load while missing those patches.
-  const nodePtyDir = resolve(projectDir, 'node_modules', 'node-pty')
-  const artifactPaths =
-    rebuildPlatform === 'win32'
-      ? [
-          resolve(nodePtyDir, 'build', 'Release', 'conpty.node'),
-          ...NODE_PTY_CONPTY_RUNTIME_FILES.map((filename) =>
-            resolve(nodePtyDir, 'build', 'Release', 'conpty', filename)
-          )
-        ]
-      : [
-          resolve(nodePtyDir, 'build', 'Release', 'pty.node'),
-          ...(osPlatform() === 'darwin'
-            ? [resolve(nodePtyDir, 'build', 'Release', 'spawn-helper')]
-            : [])
-        ]
+  const artifactPaths = nodePtyBuildArtifactPaths(
+    resolve(projectDir, 'node_modules', 'node-pty'),
+    rebuildPlatform
+  )
   const missingArtifact = artifactPaths.find((artifactPath) => !existsSync(artifactPath))
 
   if (!missingArtifact) {
@@ -565,9 +611,11 @@ function probeElectronNativeModules(moduleNames) {
   const probeSource = `
 const { createRequire } = require('node:module')
 const { existsSync } = require('node:fs')
-const { release } = require('node:os')
 const { resolve } = require('node:path')
 const projectRequire = createRequire(resolve(process.cwd(), 'package.json'))
+const { isSourceBuildDir, nodePtyNativeModuleName: getNodePtyNativeModuleName } = projectRequire(
+  './config/scripts/native-build-entry.cjs'
+)
 const moduleNames = ${JSON.stringify(moduleNames)}
 const requirePatchedNodePtySourceBuild = ${JSON.stringify(requiresPatchedNodePtySourceBuild())}
 const failures = []
@@ -592,6 +640,11 @@ function loadNativeModule(moduleName) {
     registry.getRegistryKey(registry.HK.CU, 'Environment')
     return
   }
+  if (moduleName === '@orca/windows-security') {
+    // Why: the package defers loading its .node addon until the first call.
+    projectRequire(moduleName).currentUserSid()
+    return
+  }
   if (moduleName === 'node-pty') {
     projectRequire('node-pty')
     const { assertNodePtyJobOwnership, nodePtyAddonPath } = projectRequire(
@@ -600,17 +653,14 @@ function loadNativeModule(moduleName) {
     const { loadNativeModule } = projectRequire('node-pty/lib/utils')
     const nativeName = getNodePtyNativeModuleName()
     const native = loadNativeModule(nativeName)
-    assertNodePtyWindowsConptyRuntime(native.dir)
-    assertNodePtyJobOwnership({
-      nativeName,
+    const addonPath = nodePtyAddonPath(
+      projectRequire.resolve('node-pty/lib/utils'),
       native,
-      addonPath: nodePtyAddonPath(
-        projectRequire.resolve('node-pty/lib/utils'),
-        native,
-        nativeName
-      )
-    })
-    if (requirePatchedNodePtySourceBuild && !isNodePtyReleaseBuildDir(native.dir)) {
+      nativeName
+    )
+    assertNodePtyWindowsConptyRuntime(native.dir, require('node:path').dirname(addonPath))
+    assertNodePtyJobOwnership({ nativeName, native, addonPath })
+    if (requirePatchedNodePtySourceBuild && !isSourceBuildDir(native.dir)) {
       throw new Error(
         'node-pty resolved to ' +
           native.dir +
@@ -631,18 +681,11 @@ function loadNativeModule(moduleName) {
   projectRequire(moduleName)
 }
 
-function assertNodePtyWindowsConptyRuntime(nativeDir) {
-  if (process.platform !== 'win32' || !isNodePtyReleaseBuildDir(nativeDir)) {
+function assertNodePtyWindowsConptyRuntime(nativeDir, loadedDir) {
+  if (process.platform !== 'win32' || !isSourceBuildDir(nativeDir)) {
     return
   }
-  const runtimeDir = resolve(
-    process.cwd(),
-    'node_modules',
-    'node-pty',
-    'build',
-    'Release',
-    'conpty'
-  )
+  const runtimeDir = resolve(loadedDir, 'conpty')
   for (const filename of ${JSON.stringify(NODE_PTY_CONPTY_RUNTIME_FILES)}) {
     const runtimeFile = resolve(runtimeDir, filename)
     if (!existsSync(runtimeFile)) {
@@ -651,18 +694,6 @@ function assertNodePtyWindowsConptyRuntime(nativeDir) {
   }
 }
 
-function isNodePtyReleaseBuildDir(nativeDir) {
-  return typeof nativeDir === 'string' && nativeDir.replace(/\\\\/g, '/').includes('build/Release/')
-}
-
-function getNodePtyNativeModuleName() {
-  if (process.platform !== 'win32') {
-    return 'pty'
-  }
-  const match = /(\\d+)\\.(\\d+)\\.(\\d+)/g.exec(release())
-  const buildNumber = match && match.length === 4 ? Number.parseInt(match[3], 10) : 0
-  return buildNumber >= 18309 ? 'conpty' : 'pty'
-}
 
 function formatError(error) {
   return error instanceof Error ? error.message : String(error)

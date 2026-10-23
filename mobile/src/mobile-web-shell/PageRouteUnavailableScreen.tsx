@@ -6,9 +6,9 @@ import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 /**
  * What a host-scoped pathname nothing can paint lands on.
  *
- * The catch-all route is the one switch with no native screen behind it, so its `fallback` cannot
- * be a panel: a pathname the bundle does not list, or lists needing a grant this app lacks, has no
- * renderer on either side. This replaces expo-router's Unmatched there, which says "Unmatched
+ * The catch-all route has no screen of its own, so its refusal cannot be
+ * a panel: a pathname the bundle does not serve has no renderer on either side. The shell shows it
+ * too when it cannot say which app is behind (`route-unavailable`). This replaces expo-router's Unmatched there, which says "Unmatched
  * Route" and offers a sitemap link that means nothing to someone holding a stale app.
  *
  * `replace` and not `push`: this screen is a dead end, so leaving it must not leave it behind to
@@ -26,13 +26,19 @@ import { colors, radii, spacing, typography } from '../theme/mobile-theme'
  * `.web.tsx` sibling, and there a bare replace navigates inside the WebView to a route the page
  * does not carry instead of leaving it. The seam posts the target to the shell.
  */
-export function PageRouteUnavailableScreen({ hostId }: { hostId: string }) {
+export function PageRouteUnavailableScreen({
+  hostId,
+  message = 'This workspace screen is not available on this host.'
+}: {
+  hostId: string
+  message?: string
+}) {
   const router = useRouteHandoff()
   const target = hostId === '' ? '/' : hostStackHostRoute(hostId)
   const label = hostId === '' ? 'Back to hosts' : 'Back to workspaces'
   return (
     <View style={styles.root} testID="mobile-web-page-route-unavailable">
-      <Text style={styles.message}>This workspace screen is not available on this host.</Text>
+      <Text style={styles.message}>{message}</Text>
       <Pressable
         style={({ pressed }) => [styles.button, pressed && styles.pressed]}
         accessibilityRole="button"

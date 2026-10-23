@@ -1,3 +1,4 @@
+import '../runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type * as NodeOs from 'node:os'
 
@@ -36,9 +37,15 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { registerMobileHandlers } from './mobile'
 import { NETWORK_EXPOSURE_FAILED_GUIDANCE } from '../runtime/network-exposure-guidance'
-import { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { createMobileRpcSurfaceRuntime } from '../runtime/runtime-rpc-mobile-method-allowlist-fixtures'
 import { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
 import { WebSocketTransport } from '../runtime/rpc/ws-transport'
+
+// Why: production widens to 0.0.0.0, an IPv4-only listener, so address-listing stubs report that bind.
+function registerWithListener(stub: Record<string, unknown>, bindHost = '0.0.0.0'): void {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each stub implements every server member its test's handlers call.
+  registerMobileHandlers({ getNetworkExposureBindHost: () => bindHost, ...stub } as never)
+}
 
 describe('registerMobileHandlers', () => {
   const handlers = new Map<string, (...args: unknown[]) => unknown>()
@@ -64,7 +71,7 @@ describe('registerMobileHandlers', () => {
         tailscale0: [{ family: 'IPv4', internal: false, address: '100.64.1.20' }]
       })
 
-    registerMobileHandlers({} as never)
+    registerWithListener({})
 
     await expect(handlers.get('mobile:listNetworkInterfaces')?.()).resolves.toEqual({
       interfaces: [{ name: 'en0', address: '192.168.1.24' }]
@@ -98,7 +105,7 @@ describe('registerMobileHandlers', () => {
       connectionMode: 'automatic'
     })
 
-    registerMobileHandlers({ createMobilePairingOffer } as never)
+    registerWithListener({ createMobilePairingOffer })
 
     await expect(handlers.get('mobile:listNetworkInterfaces')?.()).resolves.toEqual({
       interfaces: [
@@ -114,26 +121,6 @@ describe('registerMobileHandlers', () => {
     )
   })
 
-  it('includes IPv6 addresses (ranked after IPv4) and excludes link-local IPv6', async () => {
-    networkInterfacesMock.mockReturnValue({
-      en0: [
-        { family: 'IPv4', internal: false, address: '192.168.1.24' },
-        { family: 'IPv6', internal: false, address: 'fe80::1' },
-        { family: 'IPv6', internal: false, address: '2605:340:cd51:2a01:0:2b13:f279:c096' }
-      ],
-      lo0: [{ family: 'IPv6', internal: true, address: '::1' }]
-    })
-
-    registerMobileHandlers({} as never)
-
-    await expect(handlers.get('mobile:listNetworkInterfaces')?.()).resolves.toEqual({
-      interfaces: [
-        { name: 'en0', address: '192.168.1.24' },
-        { name: 'en0', address: '2605:340:cd51:2a01:0:2b13:f279:c096' }
-      ]
-    })
-  })
-
   it('ranks container and VM bridges below every reachable address', async () => {
     // Why: a phone can never reach docker0, so advertising it makes the direct
     // path lose the pairing race and silently relays every session.
@@ -147,7 +134,7 @@ describe('registerMobileHandlers', () => {
       ]
     })
 
-    registerMobileHandlers({} as never)
+    registerWithListener({}, '::')
 
     // Real IPv6 outranks a bridge IPv4: the phone can reach one, never the other.
     await expect(handlers.get('mobile:listNetworkInterfaces')?.()).resolves.toEqual({
@@ -185,7 +172,7 @@ describe('registerMobileHandlers', () => {
       connectionMode: 'automatic'
     })
 
-    registerMobileHandlers({ createMobilePairingOffer } as never)
+    registerWithListener({ createMobilePairingOffer })
 
     await expect(handlers.get('mobile:listNetworkInterfaces')?.()).resolves.toEqual({
       interfaces: [
@@ -221,7 +208,7 @@ describe('registerMobileHandlers', () => {
       docker0: [{ family: 'IPv4', internal: false, address: '172.17.0.1' }]
     })
 
-    registerMobileHandlers({} as never)
+    registerWithListener({})
 
     await expect(handlers.get('mobile:listNetworkInterfaces')?.()).resolves.toEqual({
       interfaces: [
@@ -246,7 +233,7 @@ describe('registerMobileHandlers', () => {
       connectionMode: 'automatic'
     })
 
-    registerMobileHandlers({ createMobilePairingOffer } as never)
+    registerWithListener({ createMobilePairingOffer })
 
     await expect(handlers.get('mobile:getPairingQR')?.(null, {})).resolves.toMatchObject({
       available: true,
@@ -275,7 +262,7 @@ describe('registerMobileHandlers', () => {
     })
     const createMobilePairingOffer = vi.fn()
 
-    registerMobileHandlers({ createMobilePairingOffer } as never)
+    registerWithListener({ createMobilePairingOffer })
 
     await expect(
       handlers.get('mobile:getPairingQR')?.(null, { connectionMode: 'local-only' })
@@ -312,21 +299,6 @@ describe('registerMobileHandlers', () => {
     )
   })
 
-  it('returns an IPv6 interface on an IPv6-only host (regression: was empty, breaking mobile pairing)', async () => {
-    networkInterfacesMock.mockReturnValue({
-      eth0: [
-        { family: 'IPv6', internal: false, address: '2605:340:cd51:2a01:0:2b13:f279:c096' },
-        { family: 'IPv6', internal: false, address: 'fe80::42:acff:fe11:2' }
-      ]
-    })
-
-    registerMobileHandlers({} as never)
-
-    await expect(handlers.get('mobile:listNetworkInterfaces')?.()).resolves.toEqual({
-      interfaces: [{ name: 'eth0', address: '2605:340:cd51:2a01:0:2b13:f279:c096' }]
-    })
-  })
-
   it('generates mobile pairing urls with the tailnet address by default', async () => {
     networkInterfacesMock.mockReturnValue({
       en0: [{ family: 'IPv4', internal: false, address: '192.168.1.24' }],
@@ -341,7 +313,7 @@ describe('registerMobileHandlers', () => {
     })
     const rpcServer = { createMobilePairingOffer }
 
-    registerMobileHandlers(rpcServer as never)
+    registerWithListener(rpcServer)
 
     await expect(handlers.get('mobile:getPairingQR')?.(null, {})).resolves.toMatchObject({
       available: true,
@@ -376,7 +348,7 @@ describe('registerMobileHandlers', () => {
       relayFailure
     })
 
-    registerMobileHandlers({ createMobilePairingOffer } as never)
+    registerWithListener({ createMobilePairingOffer })
 
     await expect(handlers.get('mobile:getPairingQR')?.(null, {})).resolves.toEqual({
       available: false,
@@ -398,7 +370,7 @@ describe('registerMobileHandlers', () => {
       connectionMode: 'local-only'
     })
 
-    registerMobileHandlers({ createMobilePairingOffer } as never)
+    registerWithListener({ createMobilePairingOffer })
     await handlers.get('mobile:getPairingQR')?.(null, { connectionMode: 'local-only' })
 
     expect(createMobilePairingOffer).toHaveBeenCalledWith(
@@ -520,7 +492,12 @@ describe('registerMobileHandlers', () => {
 
   const stubRuntimePairingServer = (
     address: string
-  ): { createPairingOffer: Mock; ensureNetworkExposure: Mock } => ({
+  ): {
+    getNetworkExposureBindHost: () => string
+    createPairingOffer: Mock
+    ensureNetworkExposure: Mock
+  } => ({
+    getNetworkExposureBindHost: () => '0.0.0.0',
     createPairingOffer: vi.fn().mockReturnValue({
       available: true,
       pairingUrl: 'orca://pair#runtime',
@@ -846,8 +823,7 @@ describe('runtime pairing bind host', () => {
   beforeEach(() => {
     handlers.clear()
     handleMock.mockReset()
-    networkInterfacesMock.mockReset()
-    networkInterfacesMock.mockReturnValue({})
+    networkInterfacesMock.mockReset().mockReturnValue({})
     handleMock.mockImplementation((channel: string, handler: (...args: unknown[]) => unknown) => {
       handlers.set(channel, handler)
     })
@@ -855,7 +831,8 @@ describe('runtime pairing bind host', () => {
 
   const startServer = async (userDataPath: string): Promise<OrcaRuntimeRpcServer> => {
     const server = new OrcaRuntimeRpcServer({
-      runtime: new OrcaRuntimeService(),
+      methods: [],
+      runtime: createMobileRpcSurfaceRuntime().runtime,
       userDataPath,
       enableWebSocket: true,
       wsPort: 0

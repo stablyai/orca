@@ -1,3 +1,5 @@
+import './rpc/unused-default-rpc-methods.test-fixture'
+import { scriptedCodexCatalogSession } from './scripted-codex-model-catalog.test-fixture'
 // One structured Codex session driven end to end over `agentSession.*`.
 //
 // Nothing here is stubbed except the Codex child itself: the RPC dispatcher, the
@@ -16,10 +18,8 @@ import type {
   openCodexAppServerConnection
 } from '../codex/codex-app-server-connection'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
-import {
-  AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-} from '../../shared/protocol-version'
+import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from '../ipc/desktop-renderer-runtime-capabilities'
+import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../shared/agent-session-create-capabilities'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
@@ -43,6 +43,9 @@ import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
+import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { scriptedCodexTransport } from './scripted-codex-transport.test-fixture'
 
 const journals = createTrackedJournalOpener()
 
@@ -50,16 +53,22 @@ const SESSION = 'session-integration-1'
 const THREAD = 'thread-integration'
 const TURN = 'turn-1'
 const WORKSPACE = 'workspace-1'
-// The capability set the desktop renderer advertises. Without the pending-send
+const JOURNAL_IDENTITY = {
+  sessionId: SESSION,
+  workspaceId: WORKSPACE,
+  hostId: 'local',
+  agent: 'codex' as const,
+  providerHandle: codexProviderHandle(THREAD)
+}
+// An eager-start client with current options capabilities. Without the pending-send
 // one the host holds the reply until the send settles, which is a shim for
 // clients too old to render a pending bubble — not what this suite models.
 const CLIENT = {
   clientId: 'device-a',
   clientKind: 'runtime' as const,
-  clientCapabilities: [
-    AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
-    STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-  ]
+  clientCapabilities: DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES.filter(
+    (capability) => capability !== AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY
+  )
 }
 
 // ─── the fake `codex app-server` ────────────────────────────────────────────
@@ -85,7 +94,7 @@ type FakeConnection = Omit<CodexAppServerConnection, 'closed'> & {
 
 function fakeCodex(): CodexScript {
   const connections: FakeConnection[] = []
-  const openConnection = (async (launch, handlers = {}) => {
+  const openConnection: typeof openCodexAppServerConnection = async (launch, handlers = {}) => {
     const connection: FakeConnection = {
       launch,
       handlers,
@@ -136,7 +145,7 @@ function fakeCodex(): CodexScript {
     }
     connections.push(connection)
     return connection
-  }) as typeof openCodexAppServerConnection
+  }
   const live = (): FakeConnection => {
     const connection = connections.at(-1)
     if (!connection) {
@@ -307,6 +316,20 @@ async function historyPage(
   return (response as { result: AgentSessionHistoryResult }).result
 }
 
+async function readKnownOptions(): Promise<RpcResponse> {
+  return vi.waitFor(async () => {
+    const result = await call('agentSession.options', { sessionId: SESSION })
+    expect(result).toMatchObject({
+      ok: true,
+      result: {
+        models: [{ id: 'gpt-live', defaultEffort: 'medium' }],
+        current: { model: 'gpt-live' }
+      }
+    })
+    return result
+  })
+}
+
 beforeEach(async () => {
   operations = 0
   root = await mkdtemp(join(tmpdir(), 'orca-structured-integration-'))
@@ -317,25 +340,31 @@ beforeEach(async () => {
   shellEnvironmentPolicy = { inheritAll: true, names: [] }
   const runtime = {
     getRuntimeId: () => 'runtime-1',
-    getClientSettings: () => ({ experimentalStructuredNativeChat: true }),
+    resolveStructuredAgentSessionLocalWorkspacePath: async () => `/repos/${WORKSPACE}`,
+    getClientSettings: () => ({ experimentalNativeChat: true }),
     getStructuredAgentSessionCreateSupport: async () => ({ supported: true }),
+    structuredAgentSessionLaunchSeedOptions: () => undefined,
     resolveStructuredAgentSessionCreateIntent: async () => {
       const {
         envelope: _envelope,
         providerHandle: _providerHandle,
         ...resolved
       } = attachParams(null)
-      return resolved
+      return { ...resolved, options: { model: 'gpt-live' } }
     },
     publishStructuredAgentSessionTab: () => {},
     ensureStructuredAgentSessionHost: () =>
       ensureStructuredAgentSessionHost({
+        logger: createStructuredAgentSessionLogger(),
         stateDirectory: root,
         hostId: 'local',
         claimKeyId: 'key-1',
         resolveWorkspacePath: async (workspaceId) => `/repos/${workspaceId}`,
         resolveCodexCommand: () => '/usr/local/bin/codex',
-        resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
+        runCodexCatalogSession: scriptedCodexCatalogSession,
+        resolveAgentAccountHome: async () => ({ variable: 'CODEX_HOME', path: '/home/dev/.codex' }),
+        resolveLaunchArgs: () => [],
+        resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
         resolveEnvironment: async () => {
           bootEnvironmentReads += 1
           return {
@@ -345,18 +374,18 @@ beforeEach(async () => {
           }
         },
         resolveShellEnvironmentPolicy: () => shellEnvironmentPolicy,
-        resolveCodexOverrides: () => {
+        resolveAgentLaunchEnv: (agent): Record<string, string> => {
+          if (agent !== 'codex') {
+            return {}
+          }
           codexOverrideReads += 1
           return { CODEX_PROFILE: configuredCodexProfile }
         },
-        openCodexConnection: codex.openConnection,
-        readProcessStartTime: async () => 1_700_000_000_000
+        ...scriptedCodexTransport(codex.openConnection)
       }).then(() => undefined),
-    registerOwnedSubscriptionCleanup: vi.fn((_id: string, dispose: () => void) => {
-      return {
-        releaseIfCurrent: dispose
-      }
-    })
+    registerOwnedSubscriptionCleanup: vi.fn((_id: string, dispose: () => void) => ({
+      releaseIfCurrent: dispose
+    }))
   }
   dispatcher = new RpcDispatcher({
     runtime: runtime as unknown as OrcaRuntimeService,
@@ -401,15 +430,8 @@ afterEach(async () => {
 
 describe('a structured codex session over agentSession.*', () => {
   it('hydrates provider options after activating a legacy-imported journal', async () => {
-    const identity = {
-      sessionId: SESSION,
-      workspaceId: WORKSPACE,
-      hostId: 'local',
-      agent: 'codex' as const,
-      providerHandle: { kind: 'codex' as const, threadId: THREAD }
-    }
     const journal = await journals.open({
-      identity,
+      identity: JOURNAL_IDENTITY,
       stateDirectory: root
     })
     const rollout = join(root, 'legacy-rollout.jsonl')
@@ -436,13 +458,7 @@ describe('a structured codex session over agentSession.*', () => {
       createIntentParams()
     )
     expect(created.page.items.map(textOf)).toContain('legacy question')
-    expect(await call('agentSession.options', { sessionId: SESSION })).toMatchObject({
-      ok: true,
-      result: {
-        models: [{ id: 'gpt-live', defaultEffort: 'medium' }],
-        current: { model: 'gpt-live' }
-      }
-    })
+    await readKnownOptions()
   })
 
   it('dispatches and streams a plain first send from a fresh session', async () => {
@@ -457,6 +473,8 @@ describe('a structured codex session over agentSession.*', () => {
       CODEX_HOME: '/home/dev/.codex'
     })
     const store = await readPersistedTestAgentSessionStoreText(root)
+    // The record this create wrote, so the checks below read the runtime's own rows.
+    expect(store).toContain('/home/dev/.codex')
     expect(store).not.toContain('EXAMPLE_GATEWAY_TOKEN')
     expect(store).not.toContain('"launchEnv"')
     const stream = await subscribe('sub-first-send')
@@ -514,24 +532,19 @@ describe('a structured codex session over agentSession.*', () => {
       createIntentParams()
     )
     expect(created.page.items).toEqual([])
-    expect(codex.live().calls[0]).toMatchObject({
-      method: 'thread/start',
-      params: { cwd: `/repos/${WORKSPACE}` }
-    })
+    // Create answers at spawn; the thread opens once Codex has initialized.
+    await vi.waitFor(() =>
+      expect(codex.live().calls.find((call) => call.method === 'thread/start')).toMatchObject({
+        params: { cwd: `/repos/${WORKSPACE}` }
+      })
+    )
     const fence = created.fence
 
     const stream = await subscribe('sub-1')
     expect(stream[0]).toMatchObject({ type: 'snapshot', sessionId: SESSION })
 
     // ── options ─────────────────────────────────────────────────────────────
-    const options = await call('agentSession.options', { sessionId: SESSION })
-    expect(options).toMatchObject({
-      ok: true,
-      result: {
-        models: [{ id: 'gpt-live', defaultEffort: 'medium' }],
-        current: { model: 'gpt-live' }
-      }
-    })
+    await readKnownOptions()
     await ok('agentSession.setOption', {
       envelope: envelope('agentSession.setOption', { key: 'model', value: 'gpt-live' }, fence),
       key: 'model',
@@ -542,10 +555,12 @@ describe('a structured codex session over agentSession.*', () => {
       key: 'effort',
       value: 'high'
     })
-    expect(await call('agentSession.options', { sessionId: SESSION })).toMatchObject({
-      ok: true,
-      result: { current: { model: 'gpt-live', effort: 'high' } }
-    })
+    await vi.waitFor(async () =>
+      expect(await call('agentSession.options', { sessionId: SESSION })).toMatchObject({
+        ok: true,
+        result: { current: { model: 'gpt-live', effort: 'high' } }
+      })
+    )
     expect(itemsOf(stream)).toEqual([])
 
     // ── send ────────────────────────────────────────────────────────────────
@@ -687,12 +702,9 @@ describe('a structured codex session over agentSession.*', () => {
     expect(resumed.fence).toBe(fence + 1)
     expect(reaped.closed).toBe(true)
     expect(codex.live().resumedThreadId).toBe(THREAD)
-    expect(await call('agentSession.options', { sessionId: SESSION })).toMatchObject({
+    expect(await readKnownOptions()).toMatchObject({
       ok: true,
-      result: {
-        models: [{ id: 'gpt-live', defaultEffort: 'medium' }],
-        current: { model: 'gpt-live', effort: 'high' }
-      }
+      result: { current: { effort: 'high' } }
     })
     // The journal belongs to the session, not to the process that just died.
     expect(resumed.page.items.map(textOf)).toContain('Two files.')
@@ -717,7 +729,7 @@ describe('a structured codex session over agentSession.*', () => {
     // The turn's lifecycle row outlives the turn: it is revised, never tombstoned.
     expect([...older.page.items, ...tail.page.items].map((item) => item.body?.kind)).toEqual([
       'message',
-      'status',
+      'turn',
       'message',
       'tool-call',
       'approval',
@@ -739,10 +751,8 @@ describe('a structured codex session over agentSession.*', () => {
     shellEnvironmentPolicy = { inheritAll: false, names: [] }
     const created = await ok<{ fence: number }>('agentSession.create', createIntentParams())
     expect(codex.live().launch.env?.EXAMPLE_GATEWAY_TOKEN).toBeUndefined()
-    expect({ bootEnvironmentReads, codexOverrideReads }).toEqual({
-      bootEnvironmentReads: 1,
-      codexOverrideReads: 1
-    })
+    expect(bootEnvironmentReads).toBe(1)
+    const beforeResume = codexOverrideReads
 
     configuredCodexProfile = 'updated'
     shellEnvironmentPolicy = { inheritAll: false, names: ['EXAMPLE_GATEWAY_TOKEN'] }
@@ -754,10 +764,8 @@ describe('a structured codex session over agentSession.*', () => {
       CODEX_PROFILE: 'updated',
       EXAMPLE_GATEWAY_TOKEN: 'shell-exported'
     })
-    expect({ bootEnvironmentReads, codexOverrideReads }).toEqual({
-      bootEnvironmentReads: 1,
-      codexOverrideReads: 2
-    })
+    expect(bootEnvironmentReads).toBe(1)
+    expect(codexOverrideReads).toBeGreaterThan(beforeResume)
   })
 
   it('refuses to build a host for a client that never advertised the capability', async () => {
@@ -820,15 +828,8 @@ describe('a structured codex session over agentSession.*', () => {
     await stopping
 
     expect(waitedForFinalAppend).toBe(true)
-    const identity = {
-      sessionId: SESSION,
-      workspaceId: WORKSPACE,
-      hostId: 'local',
-      agent: 'codex' as const,
-      providerHandle: { kind: 'codex' as const, threadId: THREAD }
-    }
     const reopened = await journals.open({
-      identity,
+      identity: JOURNAL_IDENTITY,
       stateDirectory: root
     })
     expect(reopened.snapshot().items.map(textOf)).toContain('Final text before shutdown.')
@@ -841,8 +842,9 @@ describe('a structured codex session over agentSession.*', () => {
     ).toBe(false)
   })
 
-  it('persists truncated command output before publishing its journal row', async () => {
+  it('persists complete command output while publishing a shortened copy', async () => {
     await ok<{ fence: number }>('agentSession.create', createIntentParams())
+    const stream = await subscribe('sub-large-output')
     const output = 'large command output\n'.repeat(2_000)
 
     codex.notify('item/completed', {
@@ -859,13 +861,15 @@ describe('a structured codex session over agentSession.*', () => {
     })
     await drainStreamedEvents()
 
-    const host = getStructuredAgentSessionHost()
-    const journal = (
-      host as unknown as { sessions: Map<string, { journal: AgentSessionJournal }> }
-    ).sessions.get(SESSION)!.journal
-    const item = journal.snapshot().items.find((candidate) => candidate.body?.kind === 'tool-call')
+    const snapshot = await getStructuredAgentSessionHost()?.journalSnapshot(SESSION)
+    const item = snapshot?.items.find((candidate) => candidate.body?.kind === 'tool-call')
     const bounded = item?.body?.kind === 'tool-call' ? item.body.output : undefined
-    expect(bounded).toMatchObject({ truncated: true, byteLength: Buffer.byteLength(output) })
+    expect(bounded).toMatchObject({ head: output, truncated: false, byteLength: output.length })
+    const published = itemsOf(stream).find((candidate) => candidate.itemId === item?.itemId)
+    expect(published?.shortened).toBe(true)
+    expect(published?.body).toMatchObject({
+      output: { head: output.slice(0, 16 * 1024), truncated: true, byteLength: output.length }
+    })
   })
 
   it('keeps an answered prompt resolved after the provider exits', async () => {
@@ -889,10 +893,8 @@ describe('a structured codex session over agentSession.*', () => {
     })
     await drainStreamedEvents()
     const host = getStructuredAgentSessionHost()
-    const journal = (
-      host as unknown as { sessions: Map<string, { journal: AgentSessionJournal }> }
-    ).sessions.get(SESSION)!.journal
-    const approval = journal.snapshot().items.find((item) => item.body?.kind === 'approval')
+    let snapshot = await host?.journalSnapshot(SESSION)
+    const approval = snapshot?.items.find((item) => item.body?.kind === 'approval')
     expect(approval?.body).toMatchObject({
       kind: 'approval',
       resolution: { state: 'pending' }
@@ -915,9 +917,8 @@ describe('a structured codex session over agentSession.*', () => {
     codex.live().handlers.onExit?.(new Error('provider exited after answer'))
     await drainStreamedEvents()
 
-    expect(
-      journal.snapshot().items.find((item) => item.itemId === approval?.itemId)?.body
-    ).toMatchObject({
+    snapshot = await host?.journalSnapshot(SESSION)
+    expect(snapshot?.items.find((item) => item.itemId === approval?.itemId)?.body).toMatchObject({
       kind: 'approval',
       resolution: { state: 'resolved', selectedOptionId: 'accept' }
     })

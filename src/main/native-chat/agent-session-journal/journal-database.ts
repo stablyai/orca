@@ -6,15 +6,22 @@
 
 import Database from '../../sqlite/sync-database'
 import { hardenSqliteDatabaseFiles } from '../../sqlite/harden-database-files'
-import { createJournalTablesSql, JOURNAL_DB_SCHEMA_VERSION } from './journal-database-schema'
+import {
+  createAgentSessionRecordTablesSql,
+  createJournalTablesSql,
+  JOURNAL_DB_OLDEST_RELEASED_VERSION,
+  JOURNAL_DB_SCHEMA_VERSION
+} from './journal-database-schema'
 import { JournalUnreleasedSchemaError } from './journal-open-failure'
 import { ensureQueuedMessagesTable } from './queued-message-schema'
+import { ensureCommandReceiptsTable } from './command-receipt-schema'
+import { ensureAgentSessionAttachmentClaimTables } from '../agent-session-attachments/agent-session-attachment-claims'
 
 export const JOURNAL_BUSY_TIMEOUT_MS = 5000
 /** Bounds the WAL a checkpoint leaves behind; SQLite truncates it back to this after a reset. */
 export const JOURNAL_SIZE_LIMIT_BYTES = 32 * 1024 * 1024
-/** Every commit but a first-use copy's batches, which no reader follows until a synced commit. */
-export const JOURNAL_SYNCHRONOUS = 'FULL'
+/** Every commit is fsynced before its caller continues. */
+const JOURNAL_SYNCHRONOUS = 'FULL'
 
 export type OpenJournalDatabase = {
   db: Database.Database
@@ -24,6 +31,25 @@ export type OpenJournalDatabase = {
 
 export function journalPragmaNumber(db: Database.Database, name: string): number {
   return Number(db.pragma(name, { simple: true }) ?? 0)
+}
+
+/** Whether the database holds any chat record or tab, read-only. */
+export function journalDatabaseHoldsAgentSessions(dbPath: string): boolean {
+  const db = new Database(dbPath, { readonly: true, fileMustExist: true })
+  try {
+    const tables = new Set(
+      db
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
+        .all()
+        .map(({ name }) => name)
+    )
+    return ['agent_session_records', 'agent_session_tabs'].some(
+      (table) =>
+        tables.has(table) && db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get() !== undefined
+    )
+  } finally {
+    db.close()
+  }
 }
 
 export function openJournalDatabase(dbPath: string): OpenJournalDatabase {
@@ -37,22 +63,27 @@ export function openJournalDatabase(dbPath: string): OpenJournalDatabase {
   }
   if (stored > JOURNAL_DB_SCHEMA_VERSION) {
     probe.close()
-    return { db: new Database(dbPath, { readonly: true, fileMustExist: true }), readOnly: true }
+    return {
+      db: new Database(dbPath, { readonly: true, fileMustExist: true }),
+      readOnly: true
+    }
   }
   let transferred = false
   try {
-    if (stored !== 0 && stored < JOURNAL_DB_SCHEMA_VERSION) {
+    if (stored !== 0 && stored < JOURNAL_DB_OLDEST_RELEASED_VERSION) {
       // No retry reads past it, so every chat says it can't load; the log says what to do.
       throw new JournalUnreleasedSchemaError(
-        `chat journal ${dbPath} uses unreleased schema ${stored}, written by an unreleased development build of Orca; move the file aside and Orca starts a new one`
+        `chat journal ${dbPath} uses unreleased schema ${stored}, written by an unreleased development build of Orca. Orca can't load its chats. Moving the file aside lets Orca start a new one, but that loses every chat's history, tabs and ownership records stored in it.`
       )
     }
     configureJournalPragmas(probe, stored)
-    createJournalSchema(probe, stored)
-    // Outside `createJournalSchema` on purpose: its early return skips a db
+    migrateJournalSchema(probe, stored)
+    // Outside `migrateJournalSchema` on purpose: its early return skips a db
     // already at the current version, and this table must exist at EVERY
     // writable open with no `user_version` bump (see `ensureQueuedMessagesTable`).
     ensureQueuedMessagesTable(probe)
+    ensureCommandReceiptsTable(probe)
+    ensureAgentSessionAttachmentClaimTables(probe)
     hardenSqliteDatabaseFiles(dbPath)
     transferred = true
     return { db: probe, readOnly: false }
@@ -82,15 +113,18 @@ function configureJournalPragmas(db: Database.Database, stored: number): void {
 }
 
 /**
- * Table creation and the `user_version` bump are ONE transaction. Creating the tables first left
- * a shaped database still reporting version 0, which an older build does not latch read-only.
+ * Table creation and the `user_version` bump are ONE transaction: creating the tables first left a
+ * shaped database still reporting version 0, which an older build does not latch read-only.
  */
-function createJournalSchema(db: Database.Database, stored: number): void {
+function migrateJournalSchema(db: Database.Database, stored: number): void {
   if (stored >= JOURNAL_DB_SCHEMA_VERSION) {
     return
   }
   runJournalTransaction(db, () => {
-    db.exec(createJournalTablesSql())
+    if (stored === 0) {
+      db.exec(createJournalTablesSql())
+    }
+    db.exec(createAgentSessionRecordTablesSql())
     db.pragma(`user_version = ${JOURNAL_DB_SCHEMA_VERSION}`)
   })
 }

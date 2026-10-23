@@ -1,9 +1,9 @@
-import { app } from 'electron'
 import { join } from 'node:path'
+import { getAppEnvironment } from '../../shared/app-environment'
 import type { StatsSummary } from '../../shared/process-stats-types'
 import type { StatsEvent, StatsAggregates } from './types'
 import { loadStatsFile, STATS_SCHEMA_VERSION } from './stats-file-loader'
-import { StatsSnapshotWriter } from './stats-snapshot-writer'
+import { AtomicSnapshotWriter } from '../persistence/atomic-snapshot-writer'
 
 const MAX_EVENTS = 10_000
 // Why: countedPRs is a deduplication registry that grows with every PR created
@@ -20,16 +20,15 @@ const DEBOUNCE_MS = 5_000
 // comment block in persistence.ts:20-28 for the full explanation.
 let _statsFile: string | null = null
 
-export function initStatsPath(): void {
-  _statsFile = join(app.getPath('userData'), 'orca-stats.json')
+/** Why the app environment, not Electron's `app`: orcad (plain Node) records stats too (#31112). */
+export function initStatsPath(userDataPath = getAppEnvironment().getPath('userData')): string {
+  _statsFile = join(userDataPath, 'orca-stats.json')
+  return _statsFile
 }
 
 function getStatsFile(): string {
-  if (!_statsFile) {
-    // Safety fallback — should not be hit in normal startup.
-    _statsFile = join(app.getPath('userData'), 'orca-stats.json')
-  }
-  return _statsFile
+  // Safety fallback — should not be hit in normal startup.
+  return _statsFile ?? initStatsPath()
 }
 
 export class StatsCollector {
@@ -37,7 +36,7 @@ export class StatsCollector {
   private aggregates: StatsAggregates
   private liveAgents = new Map<string, number>() // sessionKey → startTimestamp
   private writeTimer: ReturnType<typeof setTimeout> | null = null
-  private readonly snapshotWriter = new StatsSnapshotWriter(getStatsFile)
+  private readonly snapshotWriter = new AtomicSnapshotWriter(getStatsFile)
   /** Set by flushAsync so the quit flush is the final write; see scheduleSave. */
   private quitFlushStarted = false
   private quitFlushPromise: Promise<void> | null = null

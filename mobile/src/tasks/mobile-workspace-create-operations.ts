@@ -101,3 +101,17 @@ export const worktreeCreateCapabilityRead = bindDeferredRpcOperation(
     read: rpcResultVariant('runtime-status', taskRuntimeStatusSchema)
   })
 )
+
+/**
+ * Warms the host for an imminent create: fetches the base and prepares a checkout the create can
+ * claim. Best effort — a refusal (or an older host without the method) only costs the speed-up.
+ */
+export const worktreeCreateBasePrefetch = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'worktree.prefetch-create-base-or-skip',
+    method: 'worktree.prefetchCreateBase',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('create-base-prefetched', z.unknown())
+  })
+)

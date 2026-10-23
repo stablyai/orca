@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-30T12:00:00.000Z",
+  "platform": "darwin",
+  "command": ["/bin/zsh", "-f", "-i"],
+  "cols": 80,
+  "rows": 24,
+  "note": "zsh 5.9, macOS arm64, clean environment, PS1='%# '. The prompt turns bracketed paste on (ESC[?2004h), `sleep 1` is typed and run, which turns it off (ESC[?2004l), and the next prompt turns it on again: the bytes a launch sees from the shell before its agent starts, and after an agent exits",
+  "exitCode": null
+}

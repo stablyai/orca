@@ -18,7 +18,7 @@ import {
 } from '../../src/renderer/src/runtime/host-session-mirror-hydration'
 import { clearHostLiveTerminalProbesForTests } from '../../src/renderer/src/runtime/host-live-terminal-probe'
 import { replaceRuntimeEnvironmentRevisions } from '../../src/renderer/src/runtime/runtime-environment-revision'
-import { applyWebSessionTabsStorePatch } from '../../src/renderer/src/runtime/web-session-tabs-sync'
+import { applyWebSessionTabsStorePatch } from '../../src/renderer/src/runtime/web-session-tabs-sync/store-patch'
 
 const ENVIRONMENT_ID = 'env-live-unpublished'
 const WORKTREE = 'repo1::/path/wt1'

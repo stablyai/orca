@@ -22,6 +22,25 @@ function assistantText(message: NativeChatMessage | undefined): string {
     .trim()
 }
 
+/** The newest assistant words after row `after`: read back past the tool calls and thoughts that
+ *  landed after them, but never past the user's message, which starts a different reply. */
+export function latestNativeChatReplyText(
+  messages: readonly NativeChatMessage[],
+  after = -1
+): string {
+  for (let index = messages.length - 1; index > after; index -= 1) {
+    const message = messages[index]!
+    if (message.role === 'user') {
+      return ''
+    }
+    const text = assistantText(message)
+    if (text) {
+      return text
+    }
+  }
+  return ''
+}
+
 /**
  * Decide the streaming text to show, or null to show nothing. Returns the
  * preview only while it leads the transcript — i.e. it's longer than (and not
@@ -52,6 +71,11 @@ export function deriveNativeChatStreamingText(args: {
   }
   const lastText = assistantText(messages.at(-1))
   if (lastText.includes(text) || text.length <= lastText.length) {
+    return null
+  }
+  // A tool call or thought after the sentence leaves the last row wordless. Hide only that same
+  // sentence: a new, shorter reply after the tool is not the earlier, longer commentary.
+  if (!lastText && latestNativeChatReplyText(messages).includes(text)) {
     return null
   }
   return text

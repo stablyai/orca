@@ -13,6 +13,7 @@ import type {
   AgentSessionOwnerRuntimeKind,
   AgentSessionRecord
 } from './agent-session-record'
+import type { PersistedAgentSessionProviderHandleLink } from './agent-session-provider-handle'
 
 type LegacyHandoffRuntimeKind = 'tui'
 type LegacyHandoffStage = 'preparing' | 'old-owner-stopped' | 'manual-recovery'
@@ -28,8 +29,13 @@ export type PersistedAgentSessionLease = Omit<AgentSessionLease, 'runtimeKind' |
   handoffStage: PersistedAgentSessionHandoffStage | null
 }
 
-export type PersistedAgentSessionRecord = Omit<AgentSessionRecord, 'lease'> & {
+/** A record as a row stores it. Decode through `decodePersistedAgentSessionRecord`. */
+export type PersistedAgentSessionRecord = Omit<
+  AgentSessionRecord,
+  'lease' | 'providerHandleChain'
+> & {
   lease: PersistedAgentSessionLease
+  providerHandleChain: PersistedAgentSessionProviderHandleLink[]
 }
 
 export function isPersistedAgentSessionRuntimeKind(
@@ -84,15 +90,4 @@ export function terminalOwnerRefusalMessage(lease: AgentSessionLease): string {
   const owner = lease.ownerProcess
   const process = owner?.processStartTimeMs != null ? ` (process ${owner.pid})` : ''
   return `This chat is still open in a terminal agent${process}. Quit that agent to continue the chat here.`
-}
-
-/** The in-memory record, plus whether decode changed anything the store must write back. */
-export function normalizeLegacyHandoffRecord(record: PersistedAgentSessionRecord): {
-  record: AgentSessionRecord
-  normalized: boolean
-} {
-  return {
-    record: { ...record, lease: normalizeLegacyHandoffLease(record.lease) },
-    normalized: leaseCarriesLegacyHandoffValues(record.lease)
-  }
 }

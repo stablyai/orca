@@ -2,7 +2,7 @@ import React, { useCallback } from 'react'
 import { ExternalLink, MonitorUp, Pencil, StickyNote } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
-import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
+import { HoverCard, HoverCardContent } from '@/components/ui/hover-card'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { SelectedTextCopyMenu } from '@/components/SelectedTextCopyMenu'
@@ -28,15 +28,19 @@ import { useWorktreeCardLifecycleEffects } from '../sidebar/use-worktree-card-li
 import { useWorktreeCardSecondaryDetails } from '../sidebar/use-worktree-card-secondary-details'
 import { getReviewLabel } from '../sidebar/worktree-review-helpers'
 import { ActivityThreadHoverCardSummary } from './activity-thread-hover-card-summary'
+import { ActivityThreadHoverCardTrigger } from './activity-thread-hover-card-trigger'
 import type { AgentPaneThread } from './activity-thread-types'
 
 export type ActivityThreadHoverCardProps = {
   thread: AgentPaneThread
   children: React.ReactElement
+  // Keyboard focus only; pointer hover opens on rest (see activity-thread-hover-card-intent).
   openDelay?: number
   closeDelay?: number
   onJumpToWorkspace?: (thread: AgentPaneThread) => void
   canJumpToWorkspace?: boolean
+  /** Keeps the preview closed, e.g. while the row's right-click menu covers it. */
+  suppressed?: boolean
 }
 
 export function ActivityThreadHoverCard({
@@ -45,19 +49,26 @@ export function ActivityThreadHoverCard({
   openDelay = 200,
   closeDelay = 120,
   onJumpToWorkspace,
-  canJumpToWorkspace
+  canJumpToWorkspace,
+  suppressed = false
 }: ActivityThreadHoverCardProps): React.JSX.Element {
   const detailsHoverControl = useWorktreeCardDetailsHoverControl()
+  const open = detailsHoverControl.hoverOpen && !suppressed
 
   return (
     <HoverCard
-      open={detailsHoverControl.hoverOpen}
+      open={open}
       onOpenChange={detailsHoverControl.handleHoverOpenChange}
       openDelay={openDelay}
       closeDelay={closeDelay}
     >
-      <HoverCardTrigger asChild>{children}</HoverCardTrigger>
-      {detailsHoverControl.hoverOpen ? (
+      <ActivityThreadHoverCardTrigger
+        open={open}
+        onOpenChange={detailsHoverControl.handleHoverOpenChange}
+      >
+        {children}
+      </ActivityThreadHoverCardTrigger>
+      {open ? (
         <ActivityThreadHoverCardContent
           thread={thread}
           detailsHoverControl={detailsHoverControl}
@@ -101,8 +112,6 @@ function ActivityThreadHoverCardContent({
     prDisplay: review.prDisplay
   })
 
-  const hoverDetailsOpen = detailsHoverControl.hoverOpen
-
   useWorktreeCardLifecycleEffects({
     worktree,
     repo: repo ?? undefined,
@@ -117,12 +126,14 @@ function ActivityThreadHoverCardContent({
     fetchHostedReviewForBranch: foundation.fetchHostedReviewForBranch,
     shouldRefreshHostedReview: false,
     newCardStyle: true,
-    hoverDetailsOpen,
+    hoverDetailsOpen: detailsHoverControl.hoverOpen,
     showIssue: true,
     issueCacheKey: review.issueCacheKey,
     fetchIssue: foundation.fetchIssue,
     showLinearIssue: true,
-    fetchLinearIssue: foundation.fetchLinearIssue
+    fetchLinearIssue: foundation.fetchLinearIssue,
+    linearSourceContext: review.linearSourceContext,
+    linearWorkspaceId: review.linearWorkspaceId
   })
 
   const secondary = useWorktreeCardSecondaryDetails({
@@ -147,9 +158,9 @@ function ActivityThreadHoverCardContent({
     linkedBitbucketPR: review.linkedBitbucketPR,
     linkedAzureDevOpsPR: review.linkedAzureDevOpsPR,
     linkedGiteaPR: review.linkedGiteaPR,
-    cardProps: foundation.cardProps,
     newCardStyle: foundation.newCardStyle,
     compactCards: foundation.compactCards,
+    cardDetails: foundation.cardDetails,
     agentActivityDisplayMode: foundation.agentActivityDisplayMode,
     workspacePorts: foundation.workspacePorts,
     openTaskPage: foundation.openTaskPage,

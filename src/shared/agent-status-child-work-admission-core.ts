@@ -1,4 +1,8 @@
 import {
+  agentChildWorkEndingConflicts,
+  mergedAgentChildWorkEnding
+} from './agent-status-child-work-ending'
+import {
   serializeAgentChildWorkAliasKey,
   type AgentChildWorkAliasInput,
   type AgentChildWorkAliasRecord
@@ -167,6 +171,10 @@ function parseObservationFacts(
       : parseAgentChildWorkProviderTiming(request.providerTiming)
   return {
     outcome: request.outcome,
+    outcomeBasis:
+      request.membership === 'settled' && request.outcomeBasis === 'stop-acknowledged'
+        ? request.outcomeBasis
+        : undefined,
     name: normalizeChildWorkText(request.name, AGENT_CHILD_WORK_LABEL_MAX_LENGTH),
     description: normalizeChildWorkText(
       request.description,
@@ -196,11 +204,7 @@ function mergeObservationFacts(
   run: AgentChildWorkRecord | undefined
 ): AgentChildWorkFacts {
   return {
-    // Refine-only: an `unknown` ending claims nothing, so a definite one stands.
-    outcome:
-      said.outcome === undefined || said.outcome === 'unknown'
-        ? (run?.outcome ?? said.outcome)
-        : said.outcome,
+    ...mergedAgentChildWorkEnding(said, run),
     name: said.name ?? prior?.name,
     description: said.description ?? prior?.description,
     agentType: said.agentType ?? prior?.agentType,
@@ -270,21 +274,6 @@ export function commitAgentChildWork(
     : rejectAgentChildWorkAdmission('store-rejected')
 }
 
-/** Settled history only gains precision: an `unknown` ending may become a definite one (a roster
- *  omission can land a tick before the frame naming the outcome), and a definite ending never
- *  changes to another. An omitted outcome counts as `unknown`. */
-function conflictsWithSettled(
-  child: AgentChildWorkRecord,
-  request: AgentChildWorkAnnounceRequest | AgentChildWorkAdoptRequest
-): boolean {
-  const requested = request.outcome ?? 'unknown'
-  return (
-    request.membership !== 'settled' ||
-    request.state !== child.state ||
-    (requested !== 'unknown' && child.outcome !== 'unknown' && requested !== child.outcome)
-  )
-}
-
 export function updateExistingAgentChildWork(
   store: AgentStatusStore,
   request: AgentChildWorkAnnounceRequest | AgentChildWorkAdoptRequest,
@@ -292,7 +281,7 @@ export function updateExistingAgentChildWork(
   aliases: AgentChildWorkAliasInput[],
   removeAliases: string[] = []
 ): AgentChildWorkAdmissionResult {
-  if (child.membership === 'settled' && conflictsWithSettled(child, request)) {
+  if (child.membership === 'settled' && agentChildWorkEndingConflicts(child, request)) {
     return rejectAgentChildWorkAdmission('stale-invocation')
   }
   const updated = buildAgentChildWork(

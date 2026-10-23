@@ -1,10 +1,12 @@
+import type { AgentProcessPresence } from './agent-process-presence'
+import type { ClaudeSettledRequest } from './agent-hook-listener/claude-settled-permission-requests'
 // Why: defines the wire shape carried by the JSON-RPC `agent.hook` notification
-// the relay sends to Orca. Consumed by `src/relay/agent-hook-server.ts` (which
+// the relay sends to Orca. Consumed by `src/wsl-guest/agent-hook-server.ts` (which
 // produces it after the shared listener parses an HTTP POST) and by
 // `src/main/agent-hooks/server.ts` (which ingests it via `ingestRemote`).
 //
 // Lives in `shared/` because the relay deliberately has no Electron dependency
-// (cf. `src/relay/protocol.ts` header). `agent-hook-types.ts` is reserved for
+// (cf. `src/wsl-guest/protocol.ts` header). `agent-hook-types.ts` is reserved for
 // the renderer-bound IPC + installer contract; this module is the wire envelope
 // between Orca's main process and the remote relay.
 //
@@ -24,9 +26,12 @@
 
 import { createHash } from 'node:crypto'
 
-import type { AgentSubagentSnapshot, ParsedAgentStatusPayload } from './agent-status-types'
+import type {
+  AgentSubagentSnapshot,
+  ParsedAgentStatusPayload,
+  TurnEndDisposition
+} from './agent-status-types'
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
-import type { AgentHookTarget } from './agent-hook-types'
 
 // Why: the local hook server knows the discriminator from URL pathname routing
 // (`/hook/<source>`); the relay equally must tag each forwarded notification
@@ -38,6 +43,8 @@ const AGENT_HOOK_SOURCES = [
   'claude',
   'codex',
   'qoder',
+  'qoder-cn',
+  'qwen-code',
   'codebuddy',
   'gemini',
   'antigravity',
@@ -58,7 +65,9 @@ const AGENT_HOOK_SOURCES = [
   'kimi',
   'muse',
   'zcode',
-  'dsh'
+  'dsh',
+  'jcode',
+  'kiro'
 ] as const
 
 export type AgentHookSource = (typeof AGENT_HOOK_SOURCES)[number]
@@ -77,8 +86,11 @@ export const REMOTE_AGENT_HOOK_ENV = 'remote' as const
 export type AgentHookRelayEnvelope = {
   source: AgentHookSource
   paneKey: string
+  agentPresence?: AgentProcessPresence
   /** Ephemeral Orca launch identity stamped into the PTY env for this process. */
   launchToken?: string
+  /** Optional support proof and exact host turn fence for explicit interrupt reconciliation. */
+  hostTurnRevision?: string
   tabId?: string
   worktreeId?: string
   /** Always `null` on the wire — relay does not know Orca's local connectionId. */
@@ -99,6 +111,8 @@ export type AgentHookRelayEnvelope = {
   compactTrigger?: 'manual' | 'auto'
   /** Claude tool execution id, when the source hook provides one. */
   toolUseId?: string
+  /** Optional, replay only: Claude requests the relay saw end while this receiver may have been away. */
+  claudeSettledRequests?: readonly ClaudeSettledRequest[]
   /** Claude subagent identity, when the source hook provides one. */
   toolAgentId?: string
   /** Claude teammate name carried by TeammateIdle. */
@@ -111,7 +125,11 @@ export type AgentHookRelayEnvelope = {
   providerSessionOnly?: boolean
   /** True when the relay is replaying its cache after Orca reconnects. */
   isReplay?: boolean
-  /** Claude background-work evidence for input-interrupt inference on the receiving host. */
+  /** The relay's turn-end stamp (see AgentHookEventPayload.turnEndedAt); older relays omit it. */
+  turnEndedAt?: number
+  /** How the relay identified that end; older relays omit it (legacy). */
+  turnEndDisposition?: TurnEndDisposition
+  /** Claude live work the child list does not show (a shell, a cron, an owed task notification), for input-interrupt inference on the receiving host. */
   claudeRunningNonAgentTask?: boolean
   /** Forwarded from the agent CLI POST body. The relay default is `remote`,
    *  which marks transport location rather than dev/prod build env. */
@@ -121,14 +139,27 @@ export type AgentHookRelayEnvelope = {
   version?: string
   /** Pre-normalized status payload from the relay's `normalizeHookPayload`.
    *  Orca's `ingestRemote` validates it again at the SSH trust boundary. */
+  evidenceAgeMs?: number
   payload: ParsedAgentStatusPayload
+}
+
+/** Older clients ignore the null payload; newer clients clear only the selected projection. */
+export type AgentHookUnavailableEnvelope = {
+  source: 'opencode' | 'opencode2'
+  paneKey: string
+  tabId?: string
+  worktreeId?: string
+  launchToken?: string
+  connectionId: null
+  statusUnavailable: true
+  payload: null
 }
 
 /** JSON-RPC notification method name carried over the relay control channel. */
 export const AGENT_HOOK_NOTIFICATION_METHOD = 'agent.hook' as const
 
 /** Identifies optional payload fields the relay dropped to fit an oversized frame
- *  (see `src/relay/agent-hook-envelope-publication.ts`), so `ingestRemote` can tell
+ *  (see `src/wsl-guest/agent-hook-envelope-publication.ts`), so `ingestRemote` can tell
  *  "shed in transit" from "the agent cleared it"; rosters include their digest. */
 export const AGENT_HOOK_SHED_FIELDS_KEY = 'shedFields' as const
 const AGENT_HOOK_SHED_SUBAGENTS_DIGEST_PREFIX = 'subagents:sha256:'
@@ -214,31 +245,11 @@ export const AGENT_HOOK_REQUEST_REPLAY_METHOD = 'agent_hook.requestReplay' as co
  *  overlay dirs on the remote. */
 export const AGENT_HOOK_INSTALL_PLUGINS_METHOD = 'agent_hook.installPlugins' as const
 
-/** JSON-RPC request method that asks the remote relay to install every
- *  managed hook using its local filesystem instead of WAN-bound SFTP. */
-export const AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD = 'agent_hook.installManagedHooks' as const
-
-export type AgentHookInstallManagedHooksParams = {
-  /** SHA-256 fingerprint of the server key negotiated by Orca's SSH transport. */
-  hostKeyFingerprint?: string
-  /** Positively detected and enabled agents allowed to mutate remote config. */
-  agents: readonly AgentHookTarget[]
-  /** Execution-host Claude version; absent means retain the legacy hook set. */
-  claudeVersion?: string
-}
-
-/** Feature-flag env var. Read once at process start by Orca and the relay.
- *  Remote agent hooks ship as the default SSH behavior; set "0" to opt out. */
+/** Opt-out env var for the Windows WSL agent-hook relay, read on each relay start; set "0" to
+ *  disable. */
 export const ORCA_FEATURE_REMOTE_AGENT_HOOKS_ENV = 'ORCA_FEATURE_REMOTE_AGENT_HOOKS' as const
 
-export function isRemoteAgentHooksEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+export function isWslAgentHookRelayEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
   const raw = env[ORCA_FEATURE_REMOTE_AGENT_HOOKS_ENV]
-  if (raw === undefined) {
-    return true
-  }
-  const trimmed = raw.trim()
-  if (trimmed.length === 0 || trimmed === '0') {
-    return false
-  }
-  return true
+  return raw === undefined || !['', '0'].includes(raw.trim())
 }

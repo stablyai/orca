@@ -8,8 +8,8 @@ describe('classifyInputSourceId', () => {
     expect(classifyInputSourceId('')).toBe('unknown')
   })
 
-  it('allowlists plain US Standard as meta', () => {
-    expect(classifyInputSourceId('com.apple.keylayout.US')).toBe('meta')
+  it.each(['US', 'ABC'])('allowlists standard %s as meta', (name) => {
+    expect(classifyInputSourceId(`com.apple.keylayout.${name}`)).toBe('meta')
   })
 
   it('classifies US International PC as compose (Option+C → ç repro)', () => {
@@ -19,13 +19,8 @@ describe('classifyInputSourceId', () => {
   it('is case-insensitive on the allowlist (defaults differ between macOS versions)', () => {
     expect(classifyInputSourceId('COM.APPLE.KEYLAYOUT.US')).toBe('meta')
     expect(classifyInputSourceId('com.apple.keylayout.us')).toBe('meta')
-  })
-
-  it('classifies ABC as compose (the user-reported Option+A → å repro)', () => {
-    // ABC looks US on the base layer but composes Option+A → å. Pre-fix,
-    // the fingerprint alone drove the decision and flipped
-    // macOptionIsMeta=true, silently swallowing the composition.
-    expect(classifyInputSourceId('com.apple.keylayout.ABC')).toBe('compose')
+    expect(classifyInputSourceId('COM.APPLE.KEYLAYOUT.ABC')).toBe('meta')
+    expect(classifyInputSourceId('com.apple.keylayout.abc')).toBe('meta')
   })
 
   it('classifies Polish Pro as compose (#1205)', () => {
@@ -38,9 +33,7 @@ describe('classifyInputSourceId', () => {
   })
 
   it('classifies every other Apple-shipped layout as compose (default-deny)', () => {
-    // Only plain US is allowlisted; everything else (Dvorak, Colemak,
-    // German, French, Turkish, Spanish, Swedish, every CJK Roman IME)
-    // falls back to compose.
+    // Only standard ABC/US are allowlisted; other layouts retain composition.
     expect(classifyInputSourceId('com.apple.keylayout.Dvorak')).toBe('compose')
     expect(classifyInputSourceId('com.apple.keylayout.Colemak')).toBe('compose')
     expect(classifyInputSourceId('com.apple.keylayout.German')).toBe('compose')
@@ -51,10 +44,13 @@ describe('classifyInputSourceId', () => {
     expect(classifyInputSourceId('com.apple.inputmethod.Korean.2SetKorean')).toBe('compose')
   })
 
-  it('does not prefix-leak the US allowlist into extended variants', () => {
-    // `com.apple.keylayout.US` must not silently allowlist `USExtended`.
-    // The matcher is full-ID equality (case-insensitive), not prefix.
+  it('does not prefix-leak the standard allowlist into extended or custom variants', () => {
     expect(classifyInputSourceId('com.apple.keylayout.USExtended')).toBe('compose')
     expect(classifyInputSourceId('com.apple.keylayout.US.variant')).toBe('compose')
+    expect(classifyInputSourceId('com.apple.keylayout.ABCExtended')).toBe('compose')
+    expect(classifyInputSourceId('com.apple.keylayout.ABC.variant')).toBe('compose')
+    expect(classifyInputSourceId('com.apple.keylayout.ABCInternational')).toBe('compose')
+    expect(classifyInputSourceId('org.custom.keylayout.ABC')).toBe('compose')
+    expect(classifyInputSourceId('unknown')).toBe('compose')
   })
 })

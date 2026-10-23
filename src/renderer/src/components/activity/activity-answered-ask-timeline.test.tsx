@@ -40,8 +40,8 @@ vi.mock('@/store', async () => {
 })
 
 vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: (state: { testRuntimeOwner?: string | null }) =>
-    state.testRuntimeOwner ?? null
+  getExecutionHostIdForWorktree: (state: { testRuntimeOwner?: string | null }) =>
+    state.testRuntimeOwner ? `runtime:${state.testRuntimeOwner}` : 'local'
 }))
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({

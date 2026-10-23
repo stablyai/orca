@@ -13,16 +13,20 @@ async function exerciseTable() {
   assert.equal(process.platform, 'win32', 'This probe requires real Windows ConPTY')
   const rounds = Number(process.env.ORCA_PTY_TABLE_STRESS_ROUNDS ?? 8)
   assert.ok(Number.isInteger(rounds) && rounds > 0 && rounds <= 2000)
+  const { createStressObserver, loadedStressInputHashes, sanitizeStressText } =
+    await import('./windows-pty-table-stress-observer.mjs')
+  const observer = createStressObserver(report)
   const pty = require('node-pty')
   const nativePath = require.resolve('node-pty/lib/utils')
   const loaded = require(nativePath).loadNativeModule('conpty')
   const native = loaded.module
   const addonPath = resolve(dirname(nativePath), loaded.dir, 'conpty.node')
   report('native', {
-    addonPath,
+    addonPath: sanitizeStressText(addonPath),
     sha256: createHash('sha256').update(readFileSync(addonPath)).digest('hex'),
     node: process.version,
-    rounds
+    rounds,
+    inputs: loadedStressInputHashes(addonPath, require.resolve)
   })
   // Unlike production's fallback, this crash probe requires a host that permits nested jobs.
   const hostJobAssigned = native.assignCurrentProcessToJob()
@@ -57,6 +61,7 @@ async function exerciseTable() {
         resolveReady(true)
       }
     })
+    observer.watch(record, { round, slot })
     spawned.push(record)
     // Escaping one letter keeps echoed input from satisfying the output marker.
     proc.write(`echo ${marker.replace('READY', 'REA^DY')}\r`)
@@ -74,7 +79,11 @@ async function exerciseTable() {
         ),
         new Promise((_, reject) => {
           timer = setTimeout(() => {
-            const transcripts = records.map(({ proc, output }) => ({ pid: proc.pid, output }))
+            observer.pending('readiness-timeout-state')
+            const transcripts = records.map(({ proc, output }) => ({
+              pid: proc.pid,
+              output: sanitizeStressText(output)
+            }))
             reject(new Error(`PTY readiness timed out: ${JSON.stringify(transcripts)}`))
           }, 15_000)
         })
@@ -93,6 +102,7 @@ async function exerciseTable() {
     report('kill', { round, slot, shellPid: record.proc.pid })
     record.proc.kill()
     record.closed = true
+    observer.checkpoint('kill-returned-state', record)
   }
 
   let failure
@@ -131,12 +141,15 @@ async function exerciseTable() {
       await Promise.race([
         Promise.all(spawned.map((record) => record.exit)),
         new Promise((_, reject) => {
-          timer = setTimeout(() => reject(new Error('PTY exit callbacks did not drain')), 15_000)
+          timer = setTimeout(() => {
+            observer.pending('exit-drain-timeout-state')
+            reject(new Error('PTY exit callbacks did not drain'))
+          }, 15_000)
         })
       ])
     } catch (error) {
       if (failure) {
-        report('drain-error', { message: error.stack })
+        report('drain-error', { message: sanitizeStressText(error.stack) })
       } else {
         failure = { error }
       }
@@ -147,10 +160,12 @@ async function exerciseTable() {
   if (failure) {
     throw failure.error
   }
+  observer.pending('complete-state')
   report('complete', { terminals: spawned.length })
 }
 
-exerciseTable().catch((error) => {
-  report('error', { message: error.stack })
+exerciseTable().catch(async (error) => {
+  const { sanitizeStressText } = await import('./windows-pty-table-stress-observer.mjs')
+  report('error', { message: sanitizeStressText(error.stack) })
   process.exitCode = 1
 })

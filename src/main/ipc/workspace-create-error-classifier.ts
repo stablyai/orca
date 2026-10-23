@@ -1,4 +1,4 @@
-// Bucket errors thrown by `createLocalWorktree` / `createRemoteWorktree` into
+// Bucket errors thrown by a worktree create into
 // the `workspace_create_failed` event's `error_class` enum.
 //
 // Why: the throw sites are bare `throw new Error('...')` calls in

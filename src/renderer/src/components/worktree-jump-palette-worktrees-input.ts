@@ -6,7 +6,12 @@ import type { WorktreeJumpPaletteStoreState } from './use-worktree-jump-palette-
 export type WorktreeJumpPaletteWorktreesInput = WorktreeJumpPaletteStoreState &
   Pick<
     WorktreeJumpPaletteFilter,
-    'filterPredicate' | 'repoMap' | 'repoByHostIdentity' | 'hostOptions' | 'hostFilterActive'
+    | 'filterPredicate'
+    | 'repoMap'
+    | 'repoByHostIdentity'
+    | 'hostOptions'
+    | 'hostFilterActive'
+    | 'defaultHostId'
   > &
   Pick<WorktreeJumpPaletteLocalState, 'paletteSearchQuery'> & {
     paletteSearchContext: PaletteSearchContext

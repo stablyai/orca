@@ -9,7 +9,7 @@ const { runProcessMock, lstatMock, readFileMock, rmMock } = vi.hoisted(() => ({
 
 // Why mock the chokepoint: encoding, timeout and the hidden console are its
 // contract now, so this suite asserts what the distro is asked to run.
-vi.mock('../shared/child-process/run-process', () => ({
+vi.mock('@orca/process-host', () => ({
   runProcess: runProcessMock
 }))
 

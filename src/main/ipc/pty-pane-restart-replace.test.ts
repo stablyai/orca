@@ -1,9 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
-import { setupPtyIpcSuite, type PtyIpcSuiteFixtures } from './pty-ipc-test-harness'
-import { SessionNotFoundError } from '../daemon/daemon-errors'
-import { makePaneKey } from '../../shared/stable-pane-id'
-import { registerPtyHandlers, setLocalPtyProvider } from './pty'
-import { TerminalIntentionalStops } from '../runtime/terminal-intentional-stops'
+import { setupPtyIpcSuite } from './pty-ipc-test-harness'
+import {
+  installRestartHarness,
+  leafId,
+  paneKey,
+  registerWithFakes,
+  restartSpawnArgs,
+  tabId,
+  worktreeId
+} from './pty-pane-owner-swap.test-fixture'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -48,140 +53,6 @@ vi.mock('../codex/codex-pane-account-registry', () =>
 vi.mock('../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
-
-const worktreeId = 'repo-1::/tmp/restart'
-const cwd = '/tmp/restart'
-const tabId = 'tab-restart'
-const leafId = '12121212-1212-4212-8212-121212121212'
-const paneKey = makePaneKey(tabId, leafId)
-
-type RestartHarness = ReturnType<typeof installRestartHarness>
-
-function registerWithFakes(
-  mainWindow: PtyIpcSuiteFixtures['mainWindow'],
-  runtime: RestartHarness['runtime'],
-  store: RestartHarness['store']
-): void {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: spawn and kill read only the window, runtime and store members these fakes define.
-  const args = [
-    mainWindow,
-    runtime,
-    undefined,
-    undefined,
-    undefined,
-    store
-  ] as unknown as Parameters<typeof registerPtyHandlers>
-  registerPtyHandlers(...args)
-}
-
-function installRestartHarness(
-  options: { shutdownFails?: boolean; shutdownGate?: Promise<void> } = {}
-) {
-  let oldSessionAlive = true
-  const control = { shutdownFails: options.shutdownFails ?? false }
-  const providerSpawn = vi.fn(async (spawnOptions: { attachOnly?: boolean }) => {
-    if (!spawnOptions.attachOnly) {
-      return { id: 'pty-new', incarnationId: 'inc-new' }
-    }
-    if (!oldSessionAlive) {
-      throw new SessionNotFoundError('pty-old')
-    }
-    return { id: 'pty-old', incarnationId: 'inc-old', isReattach: true }
-  })
-  const shutdown = vi.fn(async () => {
-    await options.shutdownGate
-    if (control.shutdownFails) {
-      throw new Error('daemon unreachable')
-    }
-    oldSessionAlive = false
-  })
-  const provider = {
-    spawn: providerSpawn,
-    write: vi.fn(),
-    resize: vi.fn(),
-    kill: vi.fn(),
-    shutdown,
-    sendSignal: vi.fn(),
-    getCwd: vi.fn(),
-    getInitialCwd: vi.fn(),
-    clearBuffer: vi.fn(),
-    acknowledgeDataEvent: vi.fn(),
-    hasChildProcesses: vi.fn(),
-    getForegroundProcess: vi.fn(),
-    serialize: vi.fn(),
-    revive: vi.fn(),
-    onData: vi.fn(() => () => {}),
-    onReplay: vi.fn(() => () => {}),
-    onExit: vi.fn(() => () => {}),
-    listProcesses: vi.fn(async () => []),
-    attach: vi.fn(),
-    getDefaultShell: vi.fn(),
-    getProfiles: vi.fn()
-  }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the restart path calls only the provider members this fake defines.
-  setLocalPtyProvider(provider as unknown as Parameters<typeof setLocalPtyProvider>[0])
-  let session = {
-    tabsByWorktree: { [worktreeId]: [{ id: tabId, worktreeId, ptyId: 'pty-old' }] },
-    terminalLayoutsByTabId: {
-      [tabId]: {
-        root: { type: 'leaf' as const, leafId },
-        activeLeafId: leafId,
-        expandedLeafId: null,
-        ptyIdsByLeafId: { [leafId]: 'pty-old' }
-      }
-    },
-    terminalPtyIncarnationsByPaneKey: { [paneKey]: 'inc-old' }
-  }
-  const store = {
-    getWorkspaceSession: vi.fn(() => session),
-    setWorkspaceSession: vi.fn((next) => {
-      session = next
-    }),
-    flushOrThrow: vi.fn(),
-    runDurableMutation: vi.fn(async <T>(mutate: () => { value: T }) => mutate().value),
-    persistPtyBinding: vi.fn(),
-    getFolderWorkspace: vi.fn(() => undefined),
-    getFolderWorkspaces: vi.fn(() => []),
-    getProjectGroups: vi.fn(() => []),
-    getRepos: vi.fn(() => [])
-  }
-  const runtime = {
-    setPtyController: vi.fn(),
-    resolveTerminalPane: vi.fn(() => {
-      throw new Error('terminal_not_found')
-    }),
-    markPtyStopRequested: vi.fn(),
-    createPreAllocatedTerminalHandle: vi.fn(() => 'term-restart'),
-    preAllocateHandleForPty: vi.fn(() => 'term-restart'),
-    registerPreAllocatedHandleForPty: vi.fn(),
-    beginPtyRegistration: vi.fn(),
-    cancelPendingPtyRegistration: vi.fn(),
-    assertPtyRegistrationAllowed: vi.fn(),
-    registerPty: vi.fn(),
-    noteTerminalSpawnCommand: vi.fn(),
-    seedHeadlessTerminal: vi.fn(),
-    onPtySpawned: vi.fn(),
-    onPtyExit: vi.fn(),
-    onPtyData: vi.fn(),
-    intentionalPtyStops: new TerminalIntentionalStops()
-  }
-  return { providerSpawn, shutdown, store, runtime, control }
-}
-
-function restartSpawnArgs(extra: { replacesPtyId?: string } = {}) {
-  return {
-    cols: 80,
-    rows: 24,
-    cwd,
-    command: 'codex',
-    launchAgent: 'codex',
-    worktreeId,
-    tabId,
-    leafId,
-    env: { ORCA_PANE_KEY: paneKey, ORCA_TAB_ID: tabId, ORCA_WORKTREE_ID: worktreeId },
-    ...extra
-  }
-}
 
 describe('pty:spawn replacing a pane owner', () => {
   const { handlers, mainWindow } = setupPtyIpcSuite()
@@ -282,5 +153,126 @@ describe('pty:spawn replacing a pane owner', () => {
     await handlers.get('pty:kill')!(null, { id: 'pty-old' })
     expect(exitPayloads('pty-old')).toHaveLength(1)
     expect(exitPayloads('pty-old')[0]).not.toHaveProperty('replacedByRestart')
+  })
+  it('swaps the stopped binding for the replacement in one write, never unbinding the pane', async () => {
+    const { providerSpawn, store, runtime, durableBindings, boundAtFreshLaunch } =
+      installRestartHarness()
+    const session = store.getWorkspaceSession()
+    const layout = structuredClone(session.terminalLayoutsByTabId[tabId])
+    registerWithFakes(mainWindow, runtime, store)
+    await handlers.get('pty:spawn')!(null, restartSpawnArgs({ replacesPtyId: 'pty-old' }))
+    const swapped = store.getWorkspaceSession()
+    expect(boundAtFreshLaunch).toEqual(['pty-old'])
+    expect(durableBindings).toEqual(['pty-new'])
+    expect(swapped.tabsByWorktree[worktreeId]).toEqual([
+      { ...session.tabsByWorktree[worktreeId][0], ptyId: 'pty-new' }
+    ])
+    expect(swapped.terminalLayoutsByTabId[tabId]).toEqual({
+      ...layout,
+      ptyIdsByLeafId: { [leafId]: 'pty-new' }
+    })
+    expect(swapped.terminalPtyIncarnationsByPaneKey).toEqual({ [paneKey]: 'inc-new' })
+    expect(providerSpawn.mock.calls.every(([options]) => !options.attachOnly)).toBe(true)
+  })
+
+  it('launches fresh when a stale snapshot re-publishes the stopped binding mid-spawn', async () => {
+    const { providerSpawn, store, runtime, leafBinding } = installRestartHarness()
+    runtime.createPreAllocatedTerminalHandle.mockImplementationOnce(() => {
+      // A debounced renderer layout patch still carrying the old id lands after the stop.
+      const current = store.getWorkspaceSession()
+      current.terminalLayoutsByTabId[tabId] = {
+        ...current.terminalLayoutsByTabId[tabId],
+        ptyIdsByLeafId: { [leafId]: 'pty-old' }
+      }
+      return 'term-restart'
+    })
+    registerWithFakes(mainWindow, runtime, store)
+    await expect(
+      handlers.get('pty:spawn')!(null, restartSpawnArgs({ replacesPtyId: 'pty-old' }))
+    ).resolves.toMatchObject({ id: 'pty-new' })
+    expect(runtime.createPreAllocatedTerminalHandle).toHaveBeenCalled()
+    expect(providerSpawn.mock.calls.every(([options]) => !options.attachOnly)).toBe(true)
+    expect(leafBinding()).toBe('pty-new')
+  })
+
+  it('swaps a binding the renderer withdrew before connecting the replacement', async () => {
+    const { providerSpawn, store, runtime, leafBinding } = installRestartHarness()
+    runtime.createPreAllocatedTerminalHandle.mockImplementationOnce(() => {
+      // A split tab's partial layout map, or an SSH terminated lease, lets the renderer clear land.
+      delete store.getWorkspaceSession().terminalLayoutsByTabId[tabId].ptyIdsByLeafId[leafId]
+      return 'term-restart'
+    })
+    registerWithFakes(mainWindow, runtime, store)
+    await expect(
+      handlers.get('pty:spawn')!(null, restartSpawnArgs({ replacesPtyId: 'pty-old' }))
+    ).resolves.toMatchObject({ id: 'pty-new' })
+    expect(providerSpawn.mock.calls.every(([options]) => !options.attachOnly)).toBe(true)
+    expect(leafBinding()).toBe('pty-new')
+  })
+
+  it('clears the stopped binding when the replacement fails, so the remount starts fresh', async () => {
+    const { providerSpawn, store, runtime, leafBinding } = installRestartHarness()
+    providerSpawn.mockRejectedValueOnce(new Error('spawn failed'))
+    registerWithFakes(mainWindow, runtime, store)
+    await expect(
+      handlers.get('pty:spawn')!(null, restartSpawnArgs({ replacesPtyId: 'pty-old' }))
+    ).rejects.toThrow('spawn failed')
+    const boundAfterFailure = leafBinding()
+    // The renderer's recovery remount sends no replacesPtyId.
+    await expect(handlers.get('pty:spawn')!(null, restartSpawnArgs())).resolves.toMatchObject({
+      id: 'pty-new'
+    })
+    expect(boundAfterFailure).toBeUndefined()
+    expect(providerSpawn.mock.calls.every(([options]) => !options.attachOnly)).toBe(true)
+  })
+
+  it('reaps the replacement when its binding save fails, and the remount starts fresh', async () => {
+    const { provider, providerSpawn, store, runtime, control, leafBinding } =
+      installRestartHarness()
+    control.failNextWrite = true
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    registerWithFakes(mainWindow, runtime, store)
+    await expect(
+      handlers.get('pty:spawn')!(null, restartSpawnArgs({ replacesPtyId: 'pty-old' }))
+    ).rejects.toThrow('ORCA_TERMINAL_SESSION_STATE_SAVE_FAILED')
+    expect(provider.shutdown).toHaveBeenCalledWith(
+      'pty-new',
+      expect.objectContaining({ immediate: true })
+    )
+    const boundAfterFailure = leafBinding()
+    await expect(handlers.get('pty:spawn')!(null, restartSpawnArgs())).resolves.toMatchObject({
+      id: 'pty-new'
+    })
+    expect(boundAfterFailure).toBeUndefined()
+    expect(providerSpawn.mock.calls.every(([options]) => !options.attachOnly)).toBe(true)
+  })
+
+  it('refuses an old restart after another owner has already claimed the pane', async () => {
+    const { shutdown, providerSpawn, store, runtime } = installRestartHarness()
+    store.getWorkspaceSession().terminalLayoutsByTabId[tabId].ptyIdsByLeafId[leafId] = 'successor'
+    registerWithFakes(mainWindow, runtime, store)
+    await expect(
+      handlers.get('pty:spawn')!(null, restartSpawnArgs({ replacesPtyId: 'pty-old' }))
+    ).rejects.toThrow('terminal_pane_owner_changed')
+    expect(shutdown).not.toHaveBeenCalled()
+    expect(providerSpawn).not.toHaveBeenCalled()
+    expect(store.setWorkspaceSession).not.toHaveBeenCalled()
+  })
+
+  it('reaps the replacement when a successor binds the pane during its spawn', async () => {
+    const { provider, providerSpawn, store, runtime, leafBinding } = installRestartHarness()
+    providerSpawn.mockImplementationOnce(async () => {
+      store.getWorkspaceSession().terminalLayoutsByTabId[tabId].ptyIdsByLeafId[leafId] = 'successor'
+      return { id: 'pty-new', incarnationId: 'inc-new' }
+    })
+    registerWithFakes(mainWindow, runtime, store)
+    await expect(
+      handlers.get('pty:spawn')!(null, restartSpawnArgs({ replacesPtyId: 'pty-old' }))
+    ).rejects.toThrow('terminal_pane_owner_changed')
+    expect(provider.shutdown).toHaveBeenCalledWith(
+      'pty-new',
+      expect.objectContaining({ immediate: true })
+    )
+    expect(leafBinding()).toBe('successor')
   })
 })

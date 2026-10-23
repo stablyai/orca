@@ -2,6 +2,7 @@ import type {
   AgentJournalMessageItem,
   AgentSessionJournalIdentity
 } from '../../shared/agent-session-journal-types'
+import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../shared/agent-session-caller-env'
 import type {
   ClaudeStreamJsonConnection,
   ClaudeStreamJsonConnectionHandlers,
@@ -15,6 +16,12 @@ import {
   type ClaudeStructuredSessionEvent
 } from './claude-structured-session-adapter'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { claudeStartupSettled } from './claude-structured-startup-settled-test-support'
+export {
+  claudeStartupSettled,
+  claudeOpened
+} from './claude-structured-startup-settled-test-support'
 
 export const PROVIDER_SESSION_ID = '819cf9f8-e43c-4ad7-b50f-54aa158a726a'
 
@@ -30,7 +37,7 @@ export function identityFor(sessionId = 'session-1'): AgentSessionJournalIdentit
     workspaceId: 'workspace-1',
     hostId: 'host-1',
     agent: 'claude',
-    providerHandle: { kind: 'claude', sessionId: PROVIDER_SESSION_ID, leafUuid: null }
+    providerHandle: claudeProviderHandle(PROVIDER_SESSION_ID, null)
   }
 }
 
@@ -51,8 +58,9 @@ export function fakeClaude(
     initSessionId?: string
     initUuid?: string
     initModel?: string
-    /** 'session-start' (default) mirrors live: a SessionStart hook frame proves the
-     *  session and system/init arrives only when the first command starts a cycle.
+    /** 'session-start' (default) mirrors live with a SessionStart hook installed: its
+     *  frame proves the session and system/init arrives only when the first command starts a
+     *  cycle; 'none' mirrors live without one.
      *  'init' emits init at startup — an UNMEASURED shape, opt-in only. */
     initProof?: 'init' | 'session-start' | 'none'
     initAccount?: unknown
@@ -79,10 +87,8 @@ export function fakeClaude(
   const connections: FakeConnection[] = []
   const routes = options.routes ?? {}
   let replayIndex = 0
-  const routed = (subtype: string, params?: Record<string, unknown>): unknown => {
-    const route = routes[subtype]
-    return route ? route(params) : undefined
-  }
+  const routed = (subtype: string, params?: Record<string, unknown>): unknown =>
+    routes[subtype]?.(params)
   const openConnection: typeof openClaudeStreamJsonConnection = async (launch, handlers = {}) => {
     let cycleInitEmitted = false
     // Keys mirror the real system/init frame, which carries `model` but no
@@ -126,8 +132,9 @@ export function fakeClaude(
           // sessions prove startup with a SessionStart hook frame instead.
           emitCycleInit()
         } else if (options.initProof !== 'none') {
-          // The live proof order (measured through Orca's adapter): SessionStart
-          // hook frames arrive first; system/init only when a cycle starts.
+          // The live order with a SessionStart hook installed (Orca's status hooks):
+          // its frames arrive first; system/init only when a cycle starts. Without
+          // one, nothing arrives before the first turn ('none').
           handlers.onMessage?.({
             type: 'system',
             subtype: 'hook_started',
@@ -158,12 +165,13 @@ export function fakeClaude(
       },
       getSettings: async () => {
         connection.calls.push({ subtype: 'get_settings' })
-        // Shape measured from Claude Code 2.1.258: {applied, effective, sources},
-        // and the only place the session's current effort is reported.
+        // Shape measured from Claude Code 2.1.258: {applied, effective, sources}. A launch
+        // `--effort` shows only in `applied`, with no `effective.effortLevel` (2.1.280).
+        const launched = launch.options.effort
         return (
           options.settings ?? {
-            applied: { model: 'claude-sonnet-5', effort: 'high', advisor: null, ultracode: false },
-            effective: { model: 'claude-sonnet-5', effortLevel: 'high', env: {} },
+            applied: { model: 'claude-sonnet-5', effort: launched ?? 'high', ultracode: false },
+            effective: { model: 'claude-sonnet-5', ...(launched ? {} : { effortLevel: 'high' }) },
             sources: {}
           }
         )
@@ -174,7 +182,7 @@ export function fakeClaude(
       },
       setModel: async (model) => {
         connection.calls.push({ subtype: 'set_model', params: { model } })
-        routed('set_model', { model })
+        await routed('set_model', { model })
       },
       setPermissionMode: async (mode) => {
         connection.calls.push({ subtype: 'set_permission_mode', params: { mode } })
@@ -182,7 +190,7 @@ export function fakeClaude(
       },
       applyFlagSettings: async (settings) => {
         connection.calls.push({ subtype: 'apply_flag_settings', params: { settings } })
-        routed('apply_flag_settings', { settings })
+        await routed('apply_flag_settings', { settings })
       },
       interrupt: async (interruptOptions) => {
         connection.calls.push({
@@ -218,10 +226,7 @@ export function fakeClaude(
           const replayUuid =
             configuredReplayUuid === undefined ? `user-uuid-${replayIndex}` : configuredReplayUuid
           if (replayUuid !== null) {
-            handlers.onMessage?.({
-              ...message,
-              uuid: replayUuid
-            })
+            handlers.onMessage?.({ ...message, uuid: replayUuid })
           }
         }
       },
@@ -238,8 +243,7 @@ export function fakeClaude(
   return { connections, openConnection, routes }
 }
 
-/** Acquisition resolves only once startup has landed, as suites written before
- *  publish-first expect; `adapterAtPublishFor` observes the published window itself. */
+/** Direct adapter fixtures await the host-owned open after process publication. */
 export function adapterFor(
   ...args: Parameters<typeof adapterAtPublishFor>
 ): ClaudeStructuredSessionAdapter {
@@ -247,7 +251,7 @@ export function adapterFor(
   const acquire = adapter.acquire
   adapter.acquire = async (input) => {
     const acquisition = await acquire(input)
-    await adapter.awaitStarted(input.identity.sessionId)
+    await claudeStartupSettled(adapter, input.identity.sessionId)
     return acquisition
   }
   return adapter
@@ -260,11 +264,11 @@ export function adapterAtPublishFor(
   persistedHandles: unknown[] = [],
   requestTimeoutMs?: number,
   persistHandle?: ClaudeStructuredSessionAdapterDeps['persistHandle'],
-  onBackgroundTasksChanged?: ClaudeStructuredSessionAdapterDeps['onBackgroundTasksChanged'],
+  onChildWorkEvidence?: ClaudeStructuredSessionAdapterDeps['onChildWorkEvidence'],
   onDispatchSettledLate?: ClaudeStructuredSessionAdapterDeps['onDispatchSettledLate']
 ): ClaudeStructuredSessionAdapter {
   return new ClaudeStructuredSessionAdapter({
-    resolveLaunch: async () => ({
+    resolveLaunch: async ({ spawnToken }) => ({
       pathToClaudeCodeExecutable: 'claude',
       options: {},
       cwd: '/work/repo',
@@ -273,7 +277,9 @@ export function adapterAtPublishFor(
       resumeLeafUuid: null,
       resumesTranscript: false,
       continuesChain: false,
-      ...launch
+      ...launch,
+      // As the composed launch seals it: the reservation's token is the child's, whatever came before.
+      env: { ...launch.env, [ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV]: spawnToken }
     }),
     onEvent: (event) => events.push(event),
     openConnection: claude.openConnection,
@@ -285,7 +291,7 @@ export function adapterAtPublishFor(
       (async (handle) => {
         persistedHandles.push(handle)
       }),
-    ...(onBackgroundTasksChanged ? { onBackgroundTasksChanged } : {}),
+    ...(onChildWorkEvidence ? { onChildWorkEvidence } : {}),
     ...(onDispatchSettledLate ? { onDispatchSettledLate } : {})
   })
 }
@@ -321,6 +327,14 @@ export function recordingJournalSink(): StructuredAgentSessionEventSink {
   return { appendItem: () => {}, appendTombstone: () => {}, publish: () => {} }
 }
 
-export function tick(): Promise<void> {
-  return new Promise((resolve) => setImmediate(resolve))
+export const tick = (): Promise<void> => new Promise((resolve) => setImmediate(resolve))
+
+/** Delivers one frame from Claude on `connection`, under the provider session it runs. */
+export function claudeFrame(connection: FakeConnection, message: Record<string, unknown>): void {
+  connection.handlers.onMessage?.({ session_id: PROVIDER_SESSION_ID, ...message })
+}
+
+/** Whether anything sent to Claude on `connection` carries `text`. */
+export function claudeWasSent(connection: FakeConnection, text: string): boolean {
+  return connection.sent.some((message) => JSON.stringify(message).includes(text))
 }

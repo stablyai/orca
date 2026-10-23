@@ -21,6 +21,21 @@ export type BrowserClientHostCompositionTeardown = {
   reportCleanupError(error: Error): void
 }
 
+/** Fences a closing composition's routes and navigation before its asynchronous teardown. */
+export function fenceBrowserClientHostComposition(
+  routeSets: { fence(error: Error): void },
+  executor: { fenceNavigation(): void },
+  error: Error,
+  reportCleanupError: (error: Error) => void
+): void {
+  routeSets.fence(error)
+  try {
+    executor.fenceNavigation()
+  } catch (navigationError) {
+    reportCleanupError(asCompositionError(navigationError))
+  }
+}
+
 /**
  * Tears a composition's host, executor, and routes down, reporting every failure rather than the
  * first.

@@ -3,6 +3,7 @@ import type { OnMount } from '@monaco-editor/react'
 import { useAppStore } from '@/store'
 import { registerFileSearchSelectedTextProvider } from '@/lib/file-search-selection'
 import { syncContentOnMount } from './monaco-content-sync'
+import { toEditorModelUri } from './editor-model-uri'
 import {
   beginProgrammaticContentSync,
   endProgrammaticContentSync
@@ -18,14 +19,24 @@ import {
   installMonacoViewStateTracking,
   restoreMonacoViewState
 } from './monaco-view-state-persistence'
+import {
+  isStaleCachedEditorText,
+  mayPushTabTextIntoModel,
+  requestStaleCacheReload,
+  settleStaleCacheReload
+} from './editor-stale-mount-guard'
+
+function ignoreCursorLine(): void {}
 
 // Why: binds a freshly created Monaco instance to the app; reads everything through refs so the callback identity stays stable across renders.
 export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
   const {
     fileId,
     filePath,
+    modelOwnerKey,
     viewStateKey,
     viewStateId,
+    passiveMirror = false,
     worktreeId,
     autoHeight,
     autoHeightLineHeight,
@@ -103,20 +114,32 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
       updateMarkdownCompletionDocuments()
 
       // Why: see contentRef — reconcile the retained model to the current prop before user interaction (surfaces edits made while unmounted).
-      beginProgrammaticContentSync(filePath)
-      isApplyingProgrammaticContentRef.current = true
-      try {
-        const didSyncOnMount = syncContentOnMount(
-          editorInstance,
-          contentRef.current,
-          contentSyncModeRef.current
-        )
-        if (didSyncOnMount) {
-          lastSyncedContentRef.current = contentRef.current
+      const modelKey = toEditorModelUri(filePath, modelOwnerKey)
+      const staleCache = isStaleCachedEditorText(fileIdRef.current, contentRef.current)
+      if (!staleCache) {
+        settleStaleCacheReload(fileIdRef.current)
+      }
+      const liveTextDiffers = editorInstance.getModel()?.getValue() !== contentRef.current
+      if (
+        (staleCache && liveTextDiffers) ||
+        (liveTextDiffers && !mayPushTabTextIntoModel(fileIdRef.current))
+      ) {
+        // Why: the live model's text is the truth; stale or disk text must never replace it.
+        lastSyncedContentRef.current = contentRef.current
+      } else if (staleCache) {
+        // Why: no live model holds the truth, so drop the stale cache once to reload from disk.
+        requestStaleCacheReload(fileIdRef.current, contentRef.current)
+      } else {
+        beginProgrammaticContentSync(modelKey)
+        isApplyingProgrammaticContentRef.current = true
+        try {
+          if (syncContentOnMount(editorInstance, contentRef.current, contentSyncModeRef.current)) {
+            lastSyncedContentRef.current = contentRef.current
+          }
+        } finally {
+          isApplyingProgrammaticContentRef.current = false
+          endProgrammaticContentSync(modelKey)
         }
-      } finally {
-        isApplyingProgrammaticContentRef.current = false
-        endProgrammaticContentSync(filePath)
       }
 
       setupCopy(editorInstance, monaco, filePath, propsRef)
@@ -153,7 +176,7 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
         fileIdRef,
         viewStateKey,
         scrollThrottleTimerRef,
-        setEditorCursorLine
+        setEditorCursorLine: passiveMirror ? ignoreCursorLine : setEditorCursorLine
       })
 
       // Why: custom Radix gutter menu instead of Monaco's built-in right-click menu (VSCode approach).
@@ -191,17 +214,43 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
       })
 
       // If there's a pending reveal at mount time, execute it now
-      const reveal = useAppStore.getState().pendingEditorReveal
+      const reveal = passiveMirror ? null : useAppStore.getState().pendingEditorReveal
       // Why: scope reveal consumption to the destination file, or the previously mounted editor clears it before openFile switches tabs.
       const revealMatchesEditor = reveal?.fileId
         ? reveal.fileId === fileId
         : reveal?.filePath === filePath
-      if (reveal && revealMatchesEditor) {
-        queueReveal(editorInstance, reveal.line, reveal.column, reveal.matchLength, () => {
-          useAppStore.getState().setPendingEditorReveal(null)
-        })
+      if (
+        reveal &&
+        revealMatchesEditor &&
+        (!reveal.viewStateId || reveal.viewStateId === viewStateId)
+      ) {
+        if (reveal.canApply?.() === false) {
+          restoreMonacoViewState(editorInstance, viewStateKey, () => false)
+          return
+        }
+        queueReveal(
+          editorInstance,
+          reveal.line,
+          reveal.column,
+          reveal.matchLength,
+          () => {
+            reveal.onApplied?.()
+            if (useAppStore.getState().pendingEditorReveal === reveal) {
+              useAppStore.getState().setPendingEditorReveal(null)
+            }
+          },
+          reveal.canApply
+            ? () =>
+                useAppStore.getState().pendingEditorReveal === reveal &&
+                reveal.canApply?.() !== false
+            : undefined
+        )
       } else {
-        restoreMonacoViewState(editorInstance, viewStateKey)
+        restoreMonacoViewState(
+          editorInstance,
+          viewStateKey,
+          reveal?.viewStateId && revealMatchesEditor ? () => false : undefined
+        )
       }
 
       // Why: every mount path above focuses, so an explicit open handoff is already satisfied here.
@@ -219,10 +268,12 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
       setupCopy,
       fileId,
       filePath,
+      modelOwnerKey,
       setEditorCursorLine,
       updateMarkdownCompletionDocuments,
       viewStateKey,
       viewStateId,
+      passiveMirror,
       autoHeight,
       autoHeightLineHeight,
       worktreeId,

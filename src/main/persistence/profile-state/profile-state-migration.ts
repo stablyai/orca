@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { publishProfileStateDatabase } from './profile-state-database-publication'
+import { ensureProfileStateAuthorityMarker } from './profile-state-authority-marker'
 import { openProfileStateDatabase } from './profile-state-database'
 import { hashProfileStateJson, importProfileStateJson } from './profile-state-documents'
 import { writeVersionedProfileStateExport } from './legacy-json/profile-state-versioned-export'
@@ -53,6 +54,7 @@ export function migrateProfileStateToSqlite(options: ProfileStateMigrationOption
     published = true
     const authority = new ProfileStateSqliteAuthority(options.databaseFile, options.profileId)
     try {
+      ensureProfileStateAuthorityMarker(options.databaseFile)
       writeVersionedProfileStateExport(options.dataFile, (path) => authority.writeJsonExport(path))
       const initialState = authority.readInitialState()
       return { authority, initialState }

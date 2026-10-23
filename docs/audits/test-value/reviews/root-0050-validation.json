@@ -1,0 +1,27 @@
+{
+  "batch": "root-0050",
+  "reviewer": "root",
+  "source_commit": "8f6283b32bcdefa746613e4c28d04bb1fe954eb9",
+  "reviewed_files": 4,
+  "case_records": 71,
+  "production_changes": false,
+  "test_source_changes": false,
+  "review_scope": "Read every proof/fixture/config body and parameter loop. Record all expanded manual controls and actual source fences; supporting permanent suites are evidence only unless independently reviewed.",
+  "checks": [
+    {
+      "command": "node -e 'require(\"./docs/audits/working-directory-wait-retention/sources.cjs\").loadSources()'",
+      "working_directory": "/home/neil/orca/workspaces/orca/comprehensive-test-audit-5",
+      "result": "reverse patch applies but exact baseline SHA rejects: actual f0f5832e..., expected 197bcb7a.... No lifecycle/parity scenario ran and archive reports unchanged.",
+      "log": "/tmp/orca-root-0050-source.log"
+    }
+  ],
+  "limitations": [
+    "All canceled objects are small; no fabricated large payload or user-incident RSS measurement.",
+    "Native stat is a bounded deferred fixture; native ownership stays until raw operation settles, including shared UNC lanes.",
+    "Ordering matrix compares baseline/fixed parity, while lifetime/listener/native-call oracles independently assert selected correctness properties."
+  ],
+  "integrity": {
+    "records_sha256": "8f77d2dc4b11798cd88390dc4fa0f51860d25821aa67ea0f28d0392727b654fd",
+    "original_and_final_hashes_verified": true
+  }
+}

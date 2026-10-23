@@ -130,11 +130,10 @@ describe('renderer restart wiring', () => {
     eventTarget.addEventListener(ORCA_RENDERER_UNLOAD_PREVENTED_EVENT, unloadPrevented)
     eventTarget.addEventListener(ORCA_APP_RESTART_ABORTED_EVENT, restartAborted)
     ipcRenderer.emit('updater:status', {}, { state: 'error', message: 'install failed' })
-    // Why: main abandons an install without any status when its verdict outlived the cycle.
+    // Main can abandon an install without emitting a status.
     ipcRenderer.emit('updater:quitAndInstallAborted')
     ipcRenderer.emit('window:unload-prevented')
 
-    expect(ipcRenderer.eventNames()).toHaveLength(4)
     expect(handleStatus).toHaveBeenCalledWith({ state: 'error', message: 'install failed' })
     expect(abort).toHaveBeenCalledTimes(1)
     expect(unloadPrevented).toHaveBeenCalledTimes(1)

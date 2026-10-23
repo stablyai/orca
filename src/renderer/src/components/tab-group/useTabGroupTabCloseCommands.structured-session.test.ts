@@ -56,23 +56,18 @@ vi.mock('../terminal/terminal-tab-actions', () => ({
   closeTerminalTab: mocks.closeTerminalTab
 }))
 
-vi.mock('../../runtime/web-runtime-session', () => ({
-  closeWebRuntimeSessionTab: vi.fn(),
-  isWebRuntimeSessionActive: vi.fn(() => false)
+vi.mock('../../runtime/web-runtime-session-tab-lifecycle', () => ({
+  closeWebRuntimeSessionTab: vi.fn()
 }))
-
-vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: () => null
+vi.mock('../../runtime/web-runtime-session-environment', () => ({
+  isWebRuntimeSessionActive: vi.fn(() => false)
 }))
 
 vi.mock('@/runtime/remote-browser-tab-ownership', () => ({
   browserWorkspaceHasRemoteOwner: () => false
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: mocks.callRuntimeRpc,
-  getActiveRuntimeTarget: () => ({ kind: 'local' })
-}))
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
 
 vi.mock('@/runtime/structured-agent-session-close', () => ({
   closeStructuredAgentSession: mocks.closeStructuredAgentSession
@@ -118,30 +113,14 @@ beforeEach(() => {
 
 describe('structured agent-session close ordering', () => {
   it('removes the local tab synchronously while host retirement runs independently', async () => {
-    const { closeItem } = useTabGroupTabCloseCommands({
-      worktreeId: 'wt-1',
-      groupTabs: [AGENT_TAB]
-    })
-    closeItem(AGENT_TAB.id)
-
-    expect(mocks.closeUnifiedTab).toHaveBeenCalledWith(AGENT_TAB.id)
-  })
-
-  it('returns immediately for an unadopted launch tab', async () => {
-    const { closeItem } = useTabGroupTabCloseCommands({
-      worktreeId: 'wt-1',
-      groupTabs: [AGENT_TAB]
-    })
+    const { closeItem } = useTabGroupTabCloseCommands({ worktreeId: 'wt-1' })
     closeItem(AGENT_TAB.id)
 
     expect(mocks.closeUnifiedTab).toHaveBeenCalledWith(AGENT_TAB.id)
   })
 
   it('closes reconciling launches through the same synchronous path during bulk close', async () => {
-    const { closeMany } = useTabGroupTabCloseCommands({
-      worktreeId: 'wt-1',
-      groupTabs: [AGENT_TAB]
-    })
+    const { closeMany } = useTabGroupTabCloseCommands({ worktreeId: 'wt-1' })
 
     closeMany([AGENT_TAB.id])
 

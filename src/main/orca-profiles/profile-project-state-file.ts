@@ -27,6 +27,7 @@ import {
 import { parseProfileStateRoot } from '../persistence/profile-state/profile-state-document-validation'
 import { assertProfileStateCanInitialize } from '../persistence/profile-state/profile-state-recovery-required'
 import { hasProfileStateDatabaseFiles } from '../persistence/profile-state/profile-state-storage-classification'
+import { ensureProfileStateAuthorityMarker } from '../persistence/profile-state/profile-state-authority-marker'
 
 export type TransferProfileState = PersistedState
 
@@ -123,6 +124,8 @@ export function normalizeProfileProjectState(
   parsed: Partial<PersistedState>
 ): TransferProfileState {
   const defaults = getDefaultPersistedState(homedir())
+  const { uiLanguagePortugueseMigrationApplied: _migrationApplied, ...settingsDefaults } =
+    defaults.settings
   return rebuildRepoBackedProjectState({
     ...defaults,
     ...parsed,
@@ -146,8 +149,8 @@ export function normalizeProfileProjectState(
     worktreeLineageById: recordOrEmpty(parsed.worktreeLineageById),
     workspaceLineageByChildKey: recordOrEmpty(parsed.workspaceLineageByChildKey),
     settings: isRecord(parsed.settings)
-      ? { ...defaults.settings, ...parsed.settings }
-      : defaults.settings,
+      ? { ...settingsDefaults, ...parsed.settings }
+      : settingsDefaults,
     ui: isRecord(parsed.ui) ? { ...defaults.ui, ...parsed.ui } : defaults.ui,
     githubCache: isRecord(parsed.githubCache)
       ? {
@@ -214,6 +217,7 @@ export function writeSerializedProfileState(
   const databaseFile = getOrcaProfileStateDatabaseFile(profileId, userDataPath)
   const opened = openProfileStateDatabase(databaseFile, profileId)
   try {
+    ensureProfileStateAuthorityMarker(databaseFile)
     importProfileStateJson(opened.db, serialized, {
       expectedRevision: options.expectedRevision ?? readProfileStateRevision(opened.db)
     })

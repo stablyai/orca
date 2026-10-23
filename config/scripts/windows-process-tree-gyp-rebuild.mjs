@@ -13,6 +13,7 @@ import { execFileSync } from 'node:child_process'
 import { copyFileSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
+import { loadedNativeBuildDir } from './native-build-entry.cjs'
 
 const ROOT = resolve(import.meta.dirname, '..', '..')
 
@@ -54,20 +55,33 @@ export const WINDOWS_PROCESS_TREE_NODE_ADDON_API_HEADERS = [
   'napi-inl.deprecated.h'
 ]
 
-export function nodeGypRebuildInvocation(arch, packageDir = WINDOWS_PROCESS_TREE_PACKAGE_DIR) {
+export function nodeGypRebuildInvocation(
+  arch,
+  packageDir = WINDOWS_PROCESS_TREE_PACKAGE_DIR,
+  nodeGypEntry = join(ROOT, 'node_modules', 'node-gyp', 'bin', 'node-gyp.js')
+) {
   return {
-    args: [
-      join(ROOT, 'node_modules', 'node-gyp', 'bin', 'node-gyp.js'),
-      'rebuild',
-      `--arch=${arch}`
-    ],
+    args: [nodeGypEntry, 'rebuild', `--arch=${arch}`],
     cwd: realpathSync(packageDir)
   }
 }
 
-/** The binary the addon actually loads. */
+export function nodeGypRebuildTimeoutMs(
+  moduleName,
+  { platform = process.platform, arch = process.arch, ci = process.env.CI } = {}
+) {
+  // Cold headers and toolchain discovery consumed over four minutes on Windows ARM CI.
+  return moduleName === 'node-pty' && platform === 'win32' && arch === 'arm64' && ci === 'true'
+    ? 600_000
+    : 300_000
+}
+
+/** The binary the addon actually loads: the patched lib/index.js prefers a published entry. */
 export function windowsProcessTreeAddonPath(packageDir = WINDOWS_PROCESS_TREE_PACKAGE_DIR) {
-  return join(packageDir, 'build', 'Release', 'windows_process_tree.node')
+  return join(
+    loadedNativeBuildDir(packageDir, '@vscode/windows-process-tree', { platform: 'win32' }),
+    'windows_process_tree.node'
+  )
 }
 
 /** The import whose absence tells the patched binary from the published prebuilt. */
@@ -96,6 +110,49 @@ export function inspectWindowsProcessTreeAddon(addonPath) {
     return 'missing'
   }
   return readFileSync(addonPath).includes(FLAGGED_IMPORT) ? 'unpatched' : 'clean'
+}
+
+/** Only an addon built with the relay launcher patch registers this export. */
+const RELAY_LAUNCHER_EXPORT = 'spawnOutsideJob'
+
+/**
+ * Does this compiled addon carry the relay launcher?
+ *
+ * A byte search like the import check: the export name is a string literal in
+ * the image. A pre-launcher build is otherwise clean and loadable, so a stale
+ * `.build` dir or cached artifact would ship and the relay would fall back to
+ * WMI, which refuses a standard user.
+ */
+export function windowsProcessTreeAddonHasBreakawayLauncher(addonPath) {
+  return readFileSync(addonPath).includes(RELAY_LAUNCHER_EXPORT)
+}
+
+/**
+ * Why this binary cannot ship as the `arch` relay addon, or null when it can.
+ *
+ * @param {string} addonPath
+ * @param {'x64' | 'arm64'} arch
+ * @returns {string | null}
+ */
+export function windowsProcessTreeAddonDefect(addonPath, arch) {
+  const state = inspectWindowsProcessTreeAddon(addonPath)
+  if (state === 'missing') {
+    return 'it is missing'
+  }
+  if (state === 'unpatched') {
+    return `it imports ${FLAGGED_IMPORT}, so it was built from the unpatched command-line reader`
+  }
+  const { PE_MACHINE, describePeMachine, readPeMachine } = createRequire(import.meta.url)(
+    './windows-pe-machine.cjs'
+  )
+  const machine = readPeMachine(addonPath)
+  if (machine !== PE_MACHINE[arch]) {
+    return `it is ${describePeMachine(machine)}, not ${arch} (0x${PE_MACHINE[arch].toString(16)})`
+  }
+  if (!windowsProcessTreeAddonHasBreakawayLauncher(addonPath)) {
+    return `it does not export ${RELAY_LAUNCHER_EXPORT}, so it predates the relay launcher patch`
+  }
+  return null
 }
 
 export function assertWindowsProcessTreeCreationTimePatch(
@@ -210,11 +267,13 @@ export function ensureWindowsProcessTreeCommandLinePatch(
 }
 
 // Patched binding.gyp includes deps/node-addon-api; the tarball does not ship those headers.
+// `resolveFromDir` is the installed package when `packageDir` is a scratch copy outside the tree.
 export function stageWindowsProcessTreeNodeAddonApiHeaders(
-  packageDir = WINDOWS_PROCESS_TREE_PACKAGE_DIR
+  packageDir = WINDOWS_PROCESS_TREE_PACKAGE_DIR,
+  resolveFromDir = packageDir
 ) {
   const nodeAddonApiDir = dirname(
-    createRequire(join(packageDir, 'package.json')).resolve('node-addon-api/package.json')
+    createRequire(join(resolveFromDir, 'package.json')).resolve('node-addon-api/package.json')
   )
   const stagedHeaderDir = join(packageDir, 'deps', 'node-addon-api')
   mkdirSync(stagedHeaderDir, { recursive: true })

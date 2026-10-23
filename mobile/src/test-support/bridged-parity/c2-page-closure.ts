@@ -10,8 +10,8 @@ import type { PageClosurePins } from './page-closure'
  * C2 moves the tasks screen to the web: `app/h/_layout.tsx` and `app/h/[hostId]/tasks.web.tsx` and
  * everything they import, 3767 modules of which 428 are this repository's own. 68 families and 257
  * goldens are recorded at a site inside it, and each is pinned by id to the verdict it gives — the
- * same instrument C1 and C5 use, for the same reason: `BRIDGED_PARITY_BASELINE` is counts over 787
- * goldens, and a count lets one of the other 530 pay for a closure golden that stopped replaying.
+ * same instrument C1 and C5 use, for the same reason: `BRIDGED_PARITY_BASELINE` is counts over 793
+ * goldens, and a count lets one of the other 536 pay for a closure golden that stopped replaying.
  *
  * The entry is the `.web.tsx` file, not the route switch beside it. Measured from
  * `app/h/[hostId]/tasks.tsx`, the closure is 3852 modules and 479 local and names
@@ -29,11 +29,10 @@ import type { PageClosurePins } from './page-closure'
  * domain adds. C5's closure pins those same 20 and no family C2 reaches beyond them, so a golden
  * pinned twice is pinned once here.
  *
- * **What 257 certified does not say.** Six of the 68 families have no byte-identical golden at all
- * — `tasks.item-checks-files`, `tasks.project-row-files-merge`, `tasks.provider-load`,
- * `tasks.item-metadata-gitlab-mr`, `tasks.task-list-gitlab-items`, and C1's own
- * `host-worktree-refresh` — so for their 27 goldens the pin proves that the divergence kept its
- * name, and nothing more.
+ * **What 257 certified does not say.** Five of the 68 families have no byte-identical golden at all
+ * — `tasks.item-checks-files`, `tasks.project-row-files-merge`, `tasks.item-metadata-gitlab-mr`,
+ * `tasks.task-list-gitlab-items`, and C1's own `host-worktree-refresh` — so for their 21 goldens
+ * the pin proves that the divergence kept its name, and nothing more.
  */
 export const C2_PAGE_CLOSURE: PageClosurePins = {
   ...C1_PAGE_CLOSURE,

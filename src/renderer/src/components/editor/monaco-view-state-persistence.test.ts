@@ -58,6 +58,16 @@ describe('Monaco view state persistence', () => {
     expect(focus).toHaveBeenCalledOnce()
   })
 
+  it('restores a sibling pane without claiming focus during a scoped reveal', () => {
+    scrollTopCache.set('file.ts::sibling', 320)
+    const pane = { setSelections: vi.fn(), setScrollTop: vi.fn(), focus: vi.fn() }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: restoreMonacoViewState accesses only these three stubbed editor methods.
+    const instance = pane as unknown as editor.IStandaloneCodeEditor
+    restoreMonacoViewState(instance, 'file.ts::sibling', () => false)
+    expect(pane.setScrollTop).toHaveBeenCalledWith(320)
+    expect(pane.focus).not.toHaveBeenCalled()
+  })
+
   it('defers selection caching until the lifecycle snapshot', () => {
     let emitCursorPosition:
       | ((event: { position: { lineNumber: number; column: number } }) => void)

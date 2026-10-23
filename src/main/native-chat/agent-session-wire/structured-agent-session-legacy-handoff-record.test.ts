@@ -24,6 +24,10 @@ import {
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
+import { startsWhenPublished } from './structured-agent-session-instant-start.test-support'
 
 const CALLER = { callerKey: 'client-1' }
 
@@ -42,16 +46,24 @@ let dispatch: Mock<StructuredAgentSessionAdapter['dispatch']>
 
 function openHost(): void {
   host = new StructuredAgentSessionHost({
+    agents: NO_STRUCTURED_AGENTS,
+    logger: createStructuredAgentSessionLogger(),
     store,
-    adapter: {
-      acquire,
-      closeSession: vi.fn(async () => true),
-      releaseAcquisition: vi.fn(async () => true),
-      dispatch,
-      cancelTurn: vi.fn(async () => ({ cancelled: false })),
-      answerPrompt: vi.fn(async () => undefined),
-      setOption: vi.fn(async () => undefined)
-    },
+    adapter: startsWhenPublished(
+      {
+        open: async () => ({
+          reportedOptions: { model: '' }
+        }),
+        acquire,
+        closeSession: vi.fn(async () => true),
+        releaseAcquisition: vi.fn(async () => true),
+        dispatch,
+        cancelTurn: vi.fn(async () => ({ cancelled: false })),
+        answerPrompt: vi.fn(async () => undefined),
+        setOption: vi.fn(async () => undefined)
+      },
+      () => host
+    ),
     journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => `spawn-${acquire.mock.calls.length}`,
@@ -120,10 +132,11 @@ beforeEach(async () => {
   stopOwnerProcess = vi.fn()
   dispatch = vi.fn(async () => ({ state: 'admitted' as const }))
   acquire = vi.fn(async ({ fence, spawnToken }) => ({
+    acquisitionGeneration: globalThis.crypto.randomUUID(),
     process: { hostId: 'local', pid: 4242, processStartTimeMs: NOW - 1_000, spawnToken },
     link: {
       linkId: `link-${fence}`,
-      handle: { provider: 'codex' as const, threadId: THREAD },
+      handle: codexProviderHandle(THREAD),
       origin: store.getRecord(SESSION)?.providerHandleChain.length
         ? ('resumed' as const)
         : ('created' as const),

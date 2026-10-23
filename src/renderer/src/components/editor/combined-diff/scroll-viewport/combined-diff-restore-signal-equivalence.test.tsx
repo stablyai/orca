@@ -99,7 +99,7 @@ function renderSignals(steps: readonly Step[]): (string | undefined)[] {
         sideBySide: step.sideBySide,
         structureRevision: rowKeys.structureRevision,
         totalSize: 0,
-        viewStateKey: 'equivalence-test',
+        memoryLeaseRef: { current: null },
         virtualizer: {
           getVirtualItems: () => [],
           isScrolling: false,

@@ -124,7 +124,7 @@ describe('Codex child-work evidence', () => {
         residency: 'background',
         description: 'audit_build',
         invocation: { invocationId: 'c1', generation: 1 },
-        stoppable: false
+        stoppable: true
       })
     ])
     const aliases = store.getAliasesForChild(records()[0]!.childWorkId)
@@ -134,6 +134,19 @@ describe('Codex child-work evidence', () => {
     ])
     // The host hears the child once.
     expect(log.flat().filter((edge) => edge.type === 'live')).toHaveLength(1)
+  })
+
+  it('keeps usage that arrives before the child is announced, and never credits the parent its own', () => {
+    const { send, byKind } = harness()
+    const usage = (threadId: string, totalTokens: number): CodexBackgroundTaskEvent => ({
+      method: 'thread/tokenUsage/updated',
+      threadId,
+      params: { threadId, tokenUsage: { total: { totalTokens } } }
+    })
+    send(turn('turn/started', PRIMARY, PARENT_TURN), usage(PRIMARY, 9_000), usage(CHILD, 1_500))
+    expect(byKind('agent')).toEqual([])
+    send(spawned(), turn('turn/started', CHILD, 'c1'))
+    expect(byKind('agent')).toEqual([expect.objectContaining({ totalTokens: 1_500 })])
   })
 
   it('makes no record for a child whose turn began before its announcement, until it lands', () => {
@@ -190,9 +203,11 @@ describe('Codex child-work evidence', () => {
       expect.objectContaining({ membership: 'settled', state: 'done', outcome: 'unknown' })
     ])
     expect(tracker.state).toBeNull()
-    // The first ending a turn gets stands.
+    // Lost contact is no verdict: the turn's own ending still says how it went.
     send(turn('turn/completed', CHILD, 'c1', 'completed'))
-    expect(records()).toEqual([expect.objectContaining({ outcome: 'unknown' })])
+    expect(records()).toEqual([expect.objectContaining({ outcome: 'succeeded' })])
+    send(turn('turn/completed', CHILD, 'c1', 'failed'))
+    expect(records()).toEqual([expect.objectContaining({ outcome: 'succeeded' })])
   })
 
   it('keeps a child working through a retried error and a systemError status: its turn runs on', () => {
@@ -411,14 +426,20 @@ describe('Codex child-work evidence', () => {
       expect.objectContaining({
         membership: 'live',
         description: 'npm run dev',
-        residency: 'background',
+        residency: 'foreground',
         parentChildWorkId: agent!.childWorkId,
         firstObservedAt: 1_040
       })
     ])
     send(turn('turn/completed', CHILD, 'c1'))
     expect(byKind('agent')[0]).toMatchObject({ membership: 'settled', outcome: 'succeeded' })
-    expect(byKind('command')).toEqual([expect.objectContaining({ membership: 'live' })])
+    expect(byKind('command')).toEqual([
+      expect.objectContaining({
+        membership: 'live',
+        residency: 'background',
+        firstObservedAt: 1_040
+      })
+    ])
     expect(display(agent!.childWorkId)).toBe('monitoring')
     send(
       item('item/completed', CHILD, 'c1', {
@@ -527,7 +548,7 @@ describe('Codex child-work evidence', () => {
     expect(byKind('command')).toEqual([expect.objectContaining({ membership: 'live' })])
   })
 
-  it('leaves no record behind a finished shell, so none displaces a finished child', () => {
+  it('leaves no record behind a finished shell', () => {
     const { send, byKind, records, log } = runningChild()
     send(turn('turn/completed', CHILD, 'c1'))
     const before = log.length
@@ -553,7 +574,7 @@ describe('Codex child-work evidence', () => {
     expect(records()).toEqual([
       expect.objectContaining({ kind: 'agent', membership: 'settled', outcome: 'succeeded' })
     ])
-    // One edge when each shell starts and one when it exits, as the strip republishes today.
+    // Raw status evidence keeps every start and exit, including foreground processes.
     expect(
       log
         .slice(before)

@@ -1,3 +1,9 @@
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Badge } from '@/components/ui/badge'
+import { Activity, Terminal } from 'lucide-react'
+import { translate } from '@/i18n/i18n'
+import { ResourcePtyPanel } from './ResourcePtyPanel'
+import { ResourcePtyEndDialog } from './ResourcePtyEndDialog'
 import React from 'react'
 import { Popover, PopoverContent } from '@/components/ui/popover'
 import { DaemonActionDialog } from '../shared/useDaemonActions'
@@ -44,6 +50,7 @@ export function ResourceUsageStatusSegment({
     setPopoverBodyNode,
     daemonActions,
     resourceSnapshot,
+    runtimeHostNotices,
     spaceScanReady,
     recordFeatureInteraction,
     unifiedRepos,
@@ -103,47 +110,98 @@ export function ResourceUsageStatusSegment({
         onOpenAutoFocus={(event) => event.preventDefault()}
         // Why: activating a tab focuses xterm's DOM node; Radix would read that as focus-outside and close. Outside-click and Escape still close.
         onFocusOutside={(event) => event.preventDefault()}
+        onInteractOutside={(event) => {
+          if (controller.ptyActions.confirmation || killConfirm) {
+            event.preventDefault()
+          }
+        }}
       >
-        {renderResourceUsagePopoverHeader({ daemonActions })}
-        {daemonUnreachable && renderDaemonUnreachableBanner({ daemonActions })}
-        {!daemonUnreachable && sessionsOnlyError && renderSessionsOnlyErrorBanner()}
-        {resourceSnapshot &&
-          renderResourceUsageSummary({
-            totalCpu,
-            totalMemory,
-            memoryMetricCopy,
-            commitBadgeLabel,
-            commitMetricCopy,
-            commitToneClass,
-            orphanCount
-          })}
-        {/* Why: fixed 420px height so the popover doesn't jump as worktrees expand/collapse or sessions change; inner tree owns its scroll. */}
-        {renderResourceUsagePopoverBody({
-          setPopoverBodyNode,
-          unifiedRepos,
-          resourceSnapshot,
-          sortOption,
-          setSortOption,
-          memoryMetricCopy,
-          collapsedRepos,
-          toggleRepo,
-          collapsedWorktrees,
-          activeWorktreeId,
-          toggleWorktree,
-          navigateToWorktree,
-          navigateToTab,
-          deleteWorktree,
-          handleKillSession,
-          appCollapsed,
-          setAppCollapsed,
-          daemonUnreachable
+        {renderResourceUsagePopoverHeader({
+          daemonActions,
+          onRefresh:
+            controller.selectedTab === 'ptys'
+              ? () => void controller.localPtyInventory.refreshSessions()
+              : controller.refreshResources
         })}
-        {renderResourceUsagePopoverFooter({
-          handleOpenWorkspaceCleanup,
-          orphanCount,
-          handleKillOrphans
-        })}
-        <WorkspaceSpaceCompactPanel onOpenFullPage={openSpaceResults} />
+        <Tabs value={controller.selectedTab} onValueChange={controller.setSelectedTab}>
+          <div className="px-3 pt-1 pb-1">
+            <TabsList variant="line" size="sm">
+              <TabsTrigger value="resources">
+                <Activity aria-hidden="true" className="size-3" />
+                {translate('resourceManager.resources', 'Resources')}
+              </TabsTrigger>
+              <TabsTrigger value="ptys">
+                <Terminal aria-hidden="true" className="size-3" />
+                {translate('resourceManager.ptys', 'PTYs')}
+                {controller.localPtyInventory.observedAt !== null && (
+                  <Badge variant="secondary">
+                    {controller.localPtyInventory.sessionInventory.count}
+                  </Badge>
+                )}
+              </TabsTrigger>
+            </TabsList>
+          </div>
+          <TabsContent value="resources">
+            {controller.actionError && (
+              <p role="alert" className="px-3 py-2 text-xs text-destructive">
+                {controller.actionError}
+              </p>
+            )}
+            {daemonUnreachable && renderDaemonUnreachableBanner({ daemonActions })}
+            {!daemonUnreachable && sessionsOnlyError && renderSessionsOnlyErrorBanner()}
+            {resourceSnapshot &&
+              renderResourceUsageSummary({
+                totalCpu,
+                totalMemory,
+                memoryMetricCopy,
+                commitBadgeLabel,
+                commitMetricCopy,
+                commitToneClass,
+                orphanCount
+              })}
+            {/* Why: fixed 420px height so the popover doesn't jump as worktrees expand/collapse or sessions change; inner tree owns its scroll. */}
+            {renderResourceUsagePopoverBody({
+              setPopoverBodyNode,
+              unifiedRepos,
+              resourceSnapshot,
+              sortOption,
+              setSortOption,
+              memoryMetricCopy,
+              collapsedRepos,
+              toggleRepo,
+              collapsedWorktrees,
+              activeWorktreeId,
+              toggleWorktree,
+              navigateToWorktree,
+              navigateToTab,
+              deleteWorktree,
+              handleKillSession,
+              appCollapsed,
+              setAppCollapsed,
+              daemonUnreachable,
+              runtimeHostNotices
+            })}
+            {renderResourceUsagePopoverFooter({
+              handleOpenWorkspaceCleanup,
+              orphanCount,
+              handleKillOrphans
+            })}
+            <WorkspaceSpaceCompactPanel onOpenFullPage={openSpaceResults} />
+          </TabsContent>
+          <TabsContent value="ptys">
+            <ResourcePtyPanel
+              active={controller.ptyViewActive}
+              inventory={controller.localPtyInventory}
+              actions={controller.ptyActions}
+              bindings={controller.resourceSessionBindings}
+              worktrees={controller.allWorktrees}
+              repos={controller.repos}
+              projectGroups={controller.projectGroups}
+              runtimePaneTitlesByTabId={controller.runtimePaneTitlesByTabId}
+              onNavigate={navigateToTab}
+            />
+          </TabsContent>
+        </Tabs>
       </PopoverContent>
       {/* Why: hoisted to a sibling of PopoverContent — nested, the Dialog unmounts with the popover mid-interaction and the kill-confirm flow disappears. */}
       {renderResourceUsageKillDialog({
@@ -152,7 +210,14 @@ export function ResourceUsageStatusSegment({
         killing,
         runKillConfirmed
       })}
-      <DaemonActionDialog api={daemonActions} />
+      <ResourcePtyEndDialog actions={controller.ptyActions} />
+      <DaemonActionDialog
+        api={daemonActions}
+        extraDescription={translate(
+          'resourceManager.localDaemonScope',
+          'This affects terminals on this computer.'
+        )}
+      />
     </Popover>
   )
 }

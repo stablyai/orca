@@ -1,9 +1,7 @@
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
-  buildManagedCommandHook,
   createManagedCommandMatcher,
-  MANAGED_HOOK_TIMEOUT_SECONDS,
   removeManagedCommands,
   wrapPosixHookCommand,
   type HookDefinition
@@ -15,10 +13,15 @@ import {
   writeManagedScriptRemote,
   writeTextFileRemoteAtomic
 } from '../agent-hooks/installer-utils-remote'
-import { upsertHookTrustEntriesInContent, type CodexTrustEntry } from './config-toml-trust'
+import {
+  assertLoadableHookTrustConfig,
+  upsertHookTrustEntriesInContent,
+  type CodexTrustEntry
+} from './config-toml-trust'
 import {
   CODEX_EVENTS,
   CODEX_EVENT_LABEL,
+  buildCodexManagedHook,
   wrapReadablePosixHookCommand
 } from './codex-hook-definition'
 import { getManagedScript } from './codex-hook-script'
@@ -74,9 +77,8 @@ export async function installCodexHooksRemote(
     for (const eventName of CODEX_EVENTS) {
       const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []
       const cleaned = removeManagedCommands(current, isManagedCommand)
-      const definition: HookDefinition = {
-        hooks: [buildManagedCommandHook(command)]
-      }
+      const hook = buildCodexManagedHook(command, eventName)
+      const definition: HookDefinition = { hooks: [hook] }
       nextHooks[eventName] = redirectedCodexHome
         ? [definition, ...cleaned]
         : [...cleaned, definition]
@@ -86,7 +88,7 @@ export async function installCodexHooksRemote(
         groupIndex: redirectedCodexHome ? 0 : cleaned.length,
         handlerIndex: 0,
         command,
-        timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
+        timeoutSec: hook.timeout
       })
     }
 
@@ -110,6 +112,7 @@ export async function installCodexHooksRemote(
       const existingToml = existingTomlRaw ?? ''
       const updatedToml = upsertHookTrustEntriesInContent(existingToml, trustEntries)
       if (updatedToml !== existingToml) {
+        assertLoadableHookTrustConfig(remoteTomlPath, existingToml, updatedToml)
         await writeTextFileRemoteAtomic(sftp, remoteTomlPath, updatedToml)
       }
     } catch (error) {

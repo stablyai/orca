@@ -10,7 +10,8 @@ import {
   statSync,
   symlinkSync
 } from 'node:fs'
-import { join } from 'node:path'
+import { join, relative } from 'node:path'
+import * as filesystem from 'node:fs/promises'
 
 // -c asks for clonefile(2). -P keeps Electron.framework's relative symlinks as symlinks; resolving
 // them breaks Chromium's bundle lookup.
@@ -172,4 +173,84 @@ function copyTreeVerbatim(sourcePath, destinationPath) {
     dereference: false,
     verbatimSymlinks: true
   })
+}
+
+export async function shareTreeAsync(sourcePath, destinationPath, options = {}) {
+  const platform = options.platform ?? process.platform
+  const errors = []
+  for (const mechanism of getShareMechanisms(platform)) {
+    try {
+      await (options[mechanism] ?? asyncShareMechanisms[mechanism])(sourcePath, destinationPath)
+      return mechanism
+    } catch (error) {
+      errors.push(error)
+      await filesystem.rm(destinationPath, { recursive: true, force: true })
+    }
+  }
+  throw new AggregateError(errors, `Could not share storage for ${destinationPath}`)
+}
+
+async function runSharingCopy(program, args) {
+  const { runProcess } = await import('@orca/process-host')
+  const result = await runProcess({ program, args, timeoutMs: 45_000, terminationBarrier: true })
+  if (result.code !== 0 || result.timedOut) {
+    throw new Error(`${program} could not share source storage`)
+  }
+}
+
+const asyncShareMechanisms = {
+  clone: (source, destination) =>
+    runSharingCopy('/bin/cp', [...MACOS_CLONE_ARGS, source, destination]),
+  reflink: (source, destination) =>
+    runSharingCopy('cp', [...LINUX_REFLINK_ARGS, source, destination]),
+  hardlink: async (source, destination) => {
+    await walkTreeAsync(source, async (directory, entries) => {
+      const target = join(destination, relative(source, directory))
+      await filesystem.mkdir(target, { recursive: true })
+      return entries.map((entry) => async () => {
+        const from = join(directory, entry.name)
+        const to = join(target, entry.name)
+        if (entry.isSymbolicLink()) {
+          await filesystem.symlink(await filesystem.readlink(from), to)
+        } else if (!entry.isDirectory()) {
+          await filesystem.link(from, to)
+        }
+      })
+    })
+  }
+}
+
+async function walkTreeAsync(root, visitDirectory) {
+  const directories = [root]
+  while (directories.length > 0) {
+    const directory = directories.pop()
+    const entries = await filesystem.readdir(directory, { withFileTypes: true })
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        directories.push(join(directory, entry.name))
+      }
+    }
+    const operations = await visitDirectory(directory, entries)
+    for (let offset = 0; offset < operations.length; offset += 32) {
+      const settled = await Promise.allSettled(
+        operations.slice(offset, offset + 32).map((run) => run())
+      )
+      for (const result of settled) {
+        if (result.status === 'rejected') {
+          throw result.reason
+        }
+      }
+    }
+  }
+}
+
+export async function makeTreeReadOnlyAsync(root) {
+  await walkTreeAsync(root, (directory, entries) =>
+    entries
+      .filter((entry) => !entry.isDirectory() && !entry.isSymbolicLink())
+      .map((entry) => async () => {
+        const file = join(directory, entry.name)
+        await filesystem.chmod(file, (await filesystem.stat(file)).mode & ~0o222)
+      })
+  )
 }

@@ -4,6 +4,7 @@ import {
   lstatSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   realpathSync,
   rmSync,
@@ -178,6 +179,8 @@ describe('grantClaudeFolderTrust', () => {
     )
     expect(readConfig(file)).toEqual({})
     expect(existsSync(lockDir)).toBe(true)
+    // Why: the replacement file is created before the lock, so a skipped write must remove it.
+    expect(readdirSync(root).sort()).toEqual(['.claude.json', '.claude.json.lock'])
   })
 
   it('updates a symlinked config through its target and keeps the link', async () => {
@@ -271,7 +274,6 @@ describe('resolveLocalClaudeTrustConfig', () => {
     wslDistro: 'Ubuntu',
     wslLinuxConfigDir: '/home/u/.claude',
     envPatch: {},
-    stripAuthEnv: true,
     provenance: 'wsl:Ubuntu:system'
   }
 

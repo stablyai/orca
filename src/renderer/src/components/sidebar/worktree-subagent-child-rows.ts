@@ -1,17 +1,15 @@
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
-import type { AgentRowState } from '@/lib/agent-row-decay-state'
+import type { AgentRowState } from '../../../../shared/agent-row-decay-state'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import {
   agentChildRowContextForParent,
-  buildAgentChildRowModels,
-  buildLegacyAgentChildRowModels,
-  flattenAgentChildRowModels,
   type AgentChildRowModel
 } from '../../../../shared/agent-child-row-model'
 import {
   agentChildRunStateFor,
   type AgentChildDisplayState
 } from '../../../../shared/agent-status-child-work-display'
+import { buildRunningAgentChildRowModels } from '../../../../shared/running-agent-child-rows'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 
 /** Row-identity key for an in-process subagent child row. The NUL separator
@@ -97,12 +95,7 @@ export function buildSubagentChildRows(args: {
 }): DashboardAgentRow[] {
   const { parentEntry } = args
   const context = agentChildRowContextForParent(parentEntry, args.parentIsFresh)
-  const rows =
-    parentEntry.children !== undefined
-      ? buildAgentChildRowModels(parentEntry.children, context)
-      : buildLegacyAgentChildRowModels(parentEntry.subagents ?? [], context)
-  // Shells and monitors show through their owner's dot; the sidebar lists agents.
-  return flattenAgentChildRowModels(rows)
-    .filter((row) => row.kind === 'agent')
-    .map((row) => childDashboardRow(row, parentEntry, args.tab))
+  return buildRunningAgentChildRowModels(parentEntry, context).map((row) =>
+    childDashboardRow(row, parentEntry, args.tab)
+  )
 }

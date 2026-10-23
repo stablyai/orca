@@ -3,9 +3,8 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 type RouteDependencies = {
-  storage: Map<string, string>
   routes: { pathname: string; params?: Record<string, string> }[]
-  natives: number
+  refusals: number
   /** `mount:<pathname>` / `unmount:<pathname>`, which is the only thing that tells a remount from
    *  a prop update — and a remount is what drops the old session's bridge and its grants. */
   lifecycle: string[]
@@ -15,29 +14,29 @@ type RouteDependencies = {
 }
 
 const dependencies = vi.hoisted((): RouteDependencies => ({
-  storage: new Map(),
   routes: [],
-  natives: 0,
+  refusals: 0,
   lifecycle: [],
   clears: [],
   params: {}
 }))
 
 vi.mock('@react-native-async-storage/async-storage', () => ({
-  default: {
-    getItem: async (key: string) => dependencies.storage.get(key) ?? null,
-    setItem: async (key: string, value: string) => {
-      dependencies.storage.set(key, value)
-    }
-  }
+  default: { getItem: async () => null, setItem: async () => {} }
 }))
 
 vi.mock('react-native', () => ({
-  ActivityIndicator: 'ActivityIndicator',
   StyleSheet: { create: (styles: unknown) => styles },
   View: 'View'
 }))
 
+// The workspace route reads the desktop's connection to decide whether a server is reachable.
+vi.mock('../transport/host-client-hooks', () => ({
+  useHostClient: () => ({ client: null, state: 'disconnected' })
+}))
+vi.mock('../transport/workspace-server', () => ({
+  useWorkspaceServer: () => ({ routeHost: undefined, server: null })
+}))
 vi.mock('expo-router', () => ({
   useLocalSearchParams: () => dependencies.params,
   useRouter: () => ({
@@ -47,9 +46,9 @@ vi.mock('expo-router', () => ({
   })
 }))
 
-vi.mock('../session/MobileSessionRouteScreen', () => ({
-  MobileSessionRouteScreen: () => {
-    dependencies.natives += 1
+vi.mock('./PageRouteUnavailableScreen', () => ({
+  PageRouteUnavailableScreen: () => {
+    dependencies.refusals += 1
     return null
   }
 }))
@@ -107,31 +106,19 @@ function paneKeysSeen(): string[] {
 }
 
 beforeEach(() => {
-  dependencies.storage.clear()
   dependencies.routes.length = 0
   dependencies.lifecycle.length = 0
   dependencies.clears.length = 0
-  dependencies.natives = 0
+  dependencies.refusals = 0
   dependencies.params = { hostId: 'host-1', worktreeId: 'wt-1', name: 'my worktree' }
-  Object.assign(globalThis, { __DEV__: true })
-  dependencies.storage.set('orca:mobileWebShellEnabled', 'true')
 })
 
-describe('the native session route that hands off to the shell', () => {
+describe('the session route that hands off to the shell', () => {
   it('opens the shell on this screen, with the name as the search half', async () => {
     await renderSession()
     expect(dependencies.routes).toEqual([
       { pathname: '/h/host-1/session/wt-1', params: { name: 'my worktree' } }
     ])
-  })
-
-  it('renders the native screen while the flag read is still settling', async () => {
-    // The element is built on every render and mounted only by `fallback`, so the count below is
-    // what a settling read costs: one native screen, before the switch has an answer.
-    dependencies.storage.delete('orca:mobileWebShellEnabled')
-    await renderSession()
-    expect(dependencies.routes).toEqual([])
-    expect(dependencies.natives).toBeGreaterThan(0)
   })
 
   /**
@@ -157,12 +144,14 @@ describe('the native session route that hands off to the shell', () => {
     expect(BRIDGE_ROUTE_PATHNAME_PATTERN.test(pathname)).toBe(true)
   })
 
-  it('stays native for a dot-segment id the bridge would refuse', async () => {
+  it('refuses a dot-segment id the bridge would refuse', async () => {
     for (const hostId of ['.', '..']) {
       dependencies.params = { hostId, worktreeId: 'wt-1' }
       dependencies.routes.length = 0
+      dependencies.refusals = 0
       await renderSession()
       expect(dependencies.routes, hostId).toEqual([])
+      expect(dependencies.refusals, hostId).toBeGreaterThan(0)
     }
   })
 
@@ -177,13 +166,6 @@ describe('the native session route that hands off to the shell', () => {
       )
       expect(BRIDGE_ROUTE_PATHNAME_PATTERN.test(pathname), hostId).toBe(true)
     }
-  })
-
-  it('renders the native screen with the flag off, which is every store build', async () => {
-    dependencies.storage.set('orca:mobileWebShellEnabled', 'false')
-    await renderSession()
-    expect(dependencies.routes).toEqual([])
-    expect(dependencies.natives).toBeGreaterThan(0)
   })
 
   /**

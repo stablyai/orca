@@ -1,30 +1,20 @@
-/**
- * How the orchestration CLI decides WHO is speaking.
- *
- * Split out of `orchestration.test.ts`, which sat exactly on the test-file line ceiling: these two
- * suites are one subject — the coordinator and task-creator identity a command carries — and both
- * exercise the env-handle validation and pane-remint chain rather than flag-to-param mapping.
- */
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const callMock = vi.fn()
 const getTerminalHandleMock = vi.hoisted(() => vi.fn())
 const originalTerminalHandle = process.env.ORCA_TERMINAL_HANDLE
 const originalPaneKey = process.env.ORCA_PANE_KEY
-// Why: isolate the handler's flag-to-param mapping; printResult only writes output.
 vi.mock('../format', () => ({ printResult: vi.fn() }))
 vi.mock('../selectors', () => ({ getTerminalHandle: getTerminalHandleMock }))
 
 import { ORCHESTRATION_HANDLERS } from './orchestration'
 import { RuntimeClientError } from '../runtime-client'
+import { printResult } from '../format'
 
 function staleHandleError(): RuntimeClientError {
   return new RuntimeClientError('terminal_handle_stale', 'terminal_handle_stale')
 }
 
-// Queues the stale-handle remint chain shared by coordinator commands:
-// `terminal.resolveIdentity` answers not-live → resolvePane returns liveHandle → downstream RPC.
 function stubStaleHandleRemint(liveHandle: string, downstream: unknown): void {
   callMock
     .mockResolvedValueOnce(notLiveIdentity())
@@ -32,12 +22,10 @@ function stubStaleHandleRemint(liveHandle: string, downstream: unknown): void {
     .mockResolvedValueOnce(downstream)
 }
 
-// Queues a not-live identity followed by a resolvePane remint that fails with `error`.
 function stubStaleHandleRemintFailure(error: RuntimeClientError): void {
   callMock.mockResolvedValueOnce(notLiveIdentity()).mockRejectedValueOnce(error)
 }
 
-/** What the runtime answers for a handle whose leaf check reports `terminal_handle_stale`. */
 function notLiveIdentity(): { result: { identity: { live: false } } } {
   return { result: { identity: { live: false } } }
 }
@@ -63,25 +51,28 @@ afterEach(() => {
 describe('orchestration dispatch coordinator handle', () => {
   beforeEach(() => {
     callMock.mockReset()
+    vi.mocked(printResult).mockReset()
     getTerminalHandleMock.mockReset()
     delete process.env.ORCA_TERMINAL_HANDLE
     delete process.env.ORCA_PANE_KEY
   })
 
-  const invokeDispatch = (flags: Map<string, string | boolean>) =>
+  const invokeDispatch = (flags: Map<string, string | boolean>, json = true) =>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This handler uses only client.call, supplied by the fixture; no RuntimeClient lifecycle methods are accessed.
     ORCHESTRATION_HANDLERS['orchestration dispatch']({
       flags,
       client: { call: callMock },
       cwd: '/tmp/repo',
-      json: true
+      json
     } as never)
 
-  const invokeDispatchShow = (flags: Map<string, string | boolean>) =>
+  const invokeDispatchShow = (flags: Map<string, string | boolean>, json = true) =>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This handler uses only client.call, supplied by the fixture; no RuntimeClient lifecycle methods are accessed.
     ORCHESTRATION_HANDLERS['orchestration dispatch-show']({
       flags,
       client: { call: callMock },
       cwd: '/tmp/repo',
-      json: true
+      json
     } as never)
 
   const invokeRun = (flags: Map<string, string | boolean>) =>
@@ -91,6 +82,51 @@ describe('orchestration dispatch coordinator handle', () => {
       cwd: '/tmp/repo',
       json: true
     } as never)
+
+  it('allows a dry run without a recipient and returns only its preamble', async () => {
+    callMock.mockResolvedValue({
+      result: { dispatch: null, dryRun: true, preamble: 'preview preamble' }
+    })
+
+    await invokeDispatch(
+      new Map<string, string | boolean>([
+        ['task', 'task_1'],
+        ['from', 'terminal_coordinator'],
+        ['dry-run', true],
+        ['return-preamble', true]
+      ]),
+      false
+    )
+
+    expect(callMock).toHaveBeenCalledWith('orchestration.dispatch', {
+      task: 'task_1',
+      run: undefined,
+      to: undefined,
+      from: 'terminal_coordinator',
+      inject: undefined,
+      dryRun: true,
+      returnPreamble: true,
+      devMode: false
+    })
+    expect(renderedValue({ dispatch: null, dryRun: true, preamble: 'preview preamble' })).toBe(
+      'preview preamble'
+    )
+  })
+
+  it('does not resolve coordinator identity for a non-preamble dispatch lookup', async () => {
+    callMock.mockResolvedValue({ result: { dispatch: null } })
+
+    await invokeDispatchShow(new Map([['task', 'task_1']]), false)
+
+    expect(callMock).toHaveBeenCalledWith('orchestration.dispatchShow', {
+      task: 'task_1',
+      preamble: undefined,
+      from: undefined,
+      devMode: false
+    })
+    expect(getTerminalHandleMock).not.toHaveBeenCalled()
+    expect(renderedValue({ dispatch: null })).toBe('No dispatch context found.')
+  })
 
   it('remints a stale coordinator env handle from the caller pane key', async () => {
     process.env.ORCA_TERMINAL_HANDLE = 'term_stale_coord'
@@ -301,3 +337,11 @@ describe('orchestration task-create caller handle', () => {
     })
   })
 })
+
+function renderedValue(value: unknown): string {
+  const formatter = vi.mocked(printResult).mock.calls[0]?.[2]
+  if (!formatter) {
+    throw new Error('Expected a plain output formatter')
+  }
+  return formatter(value)
+}

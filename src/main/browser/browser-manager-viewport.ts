@@ -14,7 +14,7 @@ const TOUCH_EMULATION_DISABLED = { enabled: false } as const
 
 export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifecycle {
   // Why: guests are isolated from Orca's preload bridge, so main owns the devtools escape hatch after a tab→guest lookup.
-  async openDevTools(browserTabId: string): Promise<boolean> {
+  async openDevTools(browserTabId: string, inspectAt?: { x: number; y: number }): Promise<boolean> {
     const webContentsId = this.webContentsIdByTabId.get(browserTabId)
     if (!webContentsId) {
       return false
@@ -31,6 +31,10 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
       return false
     }
     guest.openDevTools({ mode: 'detach' })
+    if (inspectAt) {
+      // Why after openDevTools: alone it opens in the saved dock state, and guests can't dock (#7399).
+      guest.inspectElement(inspectAt.x, inspectAt.y)
+    }
     return true
   }
 
@@ -77,7 +81,13 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
     const prev = this.annotationViewportBridgeOpsByTabId.get(browserTabId) ?? Promise.resolve()
     const next = prev
       .catch(() => {})
-      .then(() => this.doSetAnnotationViewportBridgeImpl(options, resolveGuest))
+      .then(() => {
+        // A newer document invalidation retires geometry still waiting in the queue.
+        if (this.annotationViewportBridgeOpsByTabId.get(browserTabId) !== next) {
+          return false
+        }
+        return this.doSetAnnotationViewportBridgeImpl(options, resolveGuest)
+      })
     this.annotationViewportBridgeOpsByTabId.set(browserTabId, next)
     try {
       return await next

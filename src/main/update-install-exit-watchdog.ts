@@ -1,5 +1,6 @@
 import { app } from 'electron'
 import { recordUpdaterLifecycle } from './updater-lifecycle-diagnostics'
+import { recordAgentSessionRuntimeEnd } from './runtime/agent-session-runtime-end-record'
 
 // Why 20s: comfortably above a healthy shutdown (renderer buffer capture,
 // daemon final checkpoints, bounded 2s telemetry flush) but bounded — a wedged
@@ -35,6 +36,7 @@ export function armUpdateInstallExitWatchdog(timeoutMs = UPDATE_INSTALL_EXIT_TIM
     )
     // Why exit(0): the quit is already committed and cleanup is wedged, not
     // failed — a clean code keeps ShipIt/launchd on the normal relaunch path.
+    recordAgentSessionRuntimeEnd('update')
     app.exit(0)
   }, timeoutMs)
   // Why unref: the watchdog must never be the thing keeping the process alive.

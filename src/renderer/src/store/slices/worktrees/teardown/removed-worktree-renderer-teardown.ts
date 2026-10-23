@@ -11,6 +11,13 @@ import { disposeRemovedWorktreeParkedTerminalWatchers } from '../../../../compon
 import { detachedHeadAutoDerivedDisplayNames } from '../metadata/detached-head-display-name'
 import { applyRemoveWorktreeSuccessState } from './remove-worktree-store-cleanup'
 import { purgeOrphanedRuntimeSshProjects } from './orphaned-runtime-ssh-project-purge'
+import { deleteWorkspaceChatDrafts } from './removed-worktree-chat-drafts'
+import {
+  flushPurgedWorkspaceEdits,
+  type ConfirmedUnsavedDiscards
+} from './removed-workspace-unsaved-files'
+import { forgetDesktopCreatedServerTabsOf } from '@/lib/desktop-created-server-tabs'
+import type { WorktreeStateBeforeRemoval } from './worktree-state-before-removal'
 
 /**
  * Renderer-side teardown after the backend removal succeeded.
@@ -25,12 +32,12 @@ export async function tearDownRemovedWorktreeRendererState(args: {
   worktreeId: string
   hostId: ExecutionHostId | undefined
   requiredExecutionHostId: ExecutionHostId | null
-  terminalPtyIdsBeforeRemoval: readonly string[]
+  beforeRemoval: WorktreeStateBeforeRemoval
   /** The catalog the host's removal produced, when the host stamps it. */
   catalogVersion?: WorktreeCatalogVersion
+  confirmedDiscards?: ConfirmedUnsavedDiscards
 }): Promise<void> {
-  const { set, get, worktreeId, hostId, requiredExecutionHostId, terminalPtyIdsBeforeRemoval } =
-    args
+  const { set, get, worktreeId, hostId, requiredExecutionHostId, beforeRemoval } = args
   // Why first: a listing scanned before this removal must not be applied after it and bring
   // the row back, so the version is on record before any await below yields.
   if (hostId && args.catalogVersion) {
@@ -44,6 +51,10 @@ export async function tearDownRemovedWorktreeRendererState(args: {
       )
     )
   }
+  // Why the captured keys: closing a structured chat keeps its conversation's draft, and a listing
+  // refresh may already have dropped these tabs.
+  deleteWorkspaceChatDrafts(beforeRemoval.chatDraftKeys)
+  forgetDesktopCreatedServerTabsOf(worktreeId)
   for (const tab of get().unifiedTabsByWorktree[worktreeId] ?? []) {
     if (tab.contentType === 'agent-session') {
       get().closeUnifiedTab(tab.id, {
@@ -54,7 +65,12 @@ export async function tearDownRemovedWorktreeRendererState(args: {
   }
   // Why: renderer state follows the successful backend result, so blocked dirty deletes keep their terminals intact.
   // Why browsers first: unregister Chromium guests before other teardown can intercept them (avoids a browser-state race).
-  await get().shutdownWorktreeBrowsers(worktreeId)
+  // Selection clears only with the row (applyRemoveWorktreeSuccessState), where the successor is picked.
+  await Promise.resolve(
+    get().shutdownWorktreeBrowsers(worktreeId, { preserveWorktreeSelection: true })
+  )
+  // Why here too: an SSH or paired workspace's pages use this desktop's profile, which that host's removal never reaches.
+  void get().deleteManagedBrowserSessionProfile({ kind: 'worktree', id: worktreeId })
   await get().shutdownWorktreeTerminals(worktreeId, {
     shutdownReason: 'remove-worktree',
     // The backend removal above already killed the workspace's PTYs.
@@ -70,8 +86,6 @@ export async function tearDownRemovedWorktreeRendererState(args: {
         }
       : { workspaceIds: [worktreeId] }
   )
-  // Remove the orphaned project for the destroyed SSH target so it can't surface as a dead project in the composer.
-  await purgeOrphanedRuntimeSshProjects(get, runtimeCleanup.destroyedSshTargetIds)
   const tabs = get().tabsByWorktree[worktreeId] ?? []
   const tabIds = new Set(tabs.map((t) => t.id))
 
@@ -84,8 +98,19 @@ export async function tearDownRemovedWorktreeRendererState(args: {
   requestVirtualizedScrollAnchorRecord('[data-worktree-sidebar]')
 
   // Why: dispose parked terminal watchers only on explicit deletion; identity migration/remounts must keep buffered PTY state.
-  disposeRemovedWorktreeParkedTerminalWatchers(worktreeId, terminalPtyIdsBeforeRemoval)
-  applyRemoveWorktreeSuccessState(set, worktreeId, tabIds, requiredExecutionHostId ?? hostId)
+  disposeRemovedWorktreeParkedTerminalWatchers(worktreeId, beforeRemoval.terminalPtyIds)
+  // Why: delayed views must commit text the teardown may offer back.
+  flushPurgedWorkspaceEdits(get(), [{ id: worktreeId }])
+  applyRemoveWorktreeSuccessState(
+    set,
+    worktreeId,
+    tabIds,
+    requiredExecutionHostId ?? hostId,
+    args.confirmedDiscards
+  )
+  // Remove the orphaned project for the destroyed SSH target so it can't surface as a dead project in the composer.
+  // Why after the row drops: the project purge clears the selection, which must clear with the row.
+  await purgeOrphanedRuntimeSshProjects(get, runtimeCleanup.destroyedSshTargetIds)
   get().removeWorkspaceSpaceWorktrees?.(
     hostId ? [{ id: worktreeId, executionHostId: hostId }] : [worktreeId]
   )

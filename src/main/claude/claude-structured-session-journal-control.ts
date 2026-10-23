@@ -2,14 +2,39 @@ import {
   bindClaudeContextUsageCapture,
   type ClaudeContextUsageCaptureOptions
 } from './claude-context-usage'
-import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type {
+  StructuredAgentSessionEventSink,
+  StructuredAgentSessionSinkAdmission
+} from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { ClaudeStreamJsonConnection } from './claude-stream-json-connection'
 import type { ClaudeJournalTranslator } from './claude-journal-translator-contract'
-import type { ClaudeInitProof } from './claude-structured-session-startup'
+import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
+import type { ClaudeGoalBackgroundWork } from './claude-background-task-tracker'
+import type { ClaudeInitProof } from './claude-structured-init-proof'
 import type {
   ClaudeAcquisitionAttempt,
   ClaudeAcquireCallbacks
 } from './claude-structured-session-state'
+
+export function createClaudeSessionJournalTranslator(
+  sink: StructuredAgentSessionEventSink | undefined,
+  fallbackIdPrefix: string,
+  failure: Parameters<typeof createClaudeJournalFailureHandler>[0],
+  goalBackgroundWork: () => ClaudeGoalBackgroundWork
+): ClaudeJournalTranslator | null {
+  const { attempt } = failure
+  return sink
+    ? createClaudeJournalTranslator({
+        sink,
+        account: () => attempt.account,
+        fallbackIdPrefix,
+        goalBackgroundWork,
+        onBackgroundTaskJournalFailure: createClaudeJournalFailureHandler(failure),
+        bindPromptItemId: (itemId, promptKey) =>
+          attempt.prompts.bindJournalItemId(itemId, promptKey)
+      })
+    : null
+}
 
 export function createClaudeJournalFailureHandler(input: {
   attempt: ClaudeAcquisitionAttempt
@@ -32,9 +57,20 @@ export function createClaudeJournalFailureHandler(input: {
   }
 }
 
+// A write refused under backpressure may have no later provider event to retry it, so the drain does.
+function retryOwedWritesOnDrain(
+  translator: ClaudeJournalTranslator | null
+): StructuredAgentSessionSinkAdmission {
+  const tasks = translator?.retryPendingTaskRows?.() ?? { accepted: true }
+  if (!tasks.accepted && tasks.reason === 'backpressure') {
+    return tasks
+  }
+  return translator?.retryPendingCancellations?.() ?? { accepted: true }
+}
+
 export function bindClaudeJournalReadingControl(
   sink: StructuredAgentSessionEventSink | undefined,
-  connection: ClaudeStreamJsonConnection,
+  connection: Pick<ClaudeStreamJsonConnection, 'pauseReading' | 'resumeReading'>,
   translator: ClaudeJournalTranslator | null
 ): (() => void) | undefined {
   if (!connection.pauseReading || !connection.resumeReading) {
@@ -48,7 +84,7 @@ export function bindClaudeJournalReadingControl(
     },
     resumeReading: () => {
       sinkPaused = false
-      const retried = translator?.retryPendingTaskRows?.() ?? { accepted: true }
+      const retried = retryOwedWritesOnDrain(translator)
       if (!sinkPaused && (retried.accepted || retried.reason !== 'backpressure')) {
         connection.resumeReading?.()
       }

@@ -14,6 +14,12 @@ import {
   resetRateLimitProviderMocks
 } from './rate-limit-service-test-harness'
 
+const profileRouter = vi.hoisted((): { userConfigDir?: string } => ({}))
+vi.mock('../claude-accounts/claude-profile-installed-router', () => ({
+  getClaudeProfileRouter: () =>
+    profileRouter.userConfigDir ? { userConfigDir: () => profileRouter.userConfigDir } : undefined
+}))
+
 vi.mock('./claude-fetcher', () => ({
   fetchClaudeRateLimits: vi.fn(),
   fetchManagedAccountUsage: vi.fn()
@@ -38,6 +44,10 @@ vi.mock('./opencode-go-usage-source-selection', () => ({
 
 vi.mock('./zcode-usage-fetcher', () => ({
   fetchZcodeRateLimits: vi.fn()
+}))
+
+vi.mock('./antigravity-usage-fetcher', () => ({
+  fetchAntigravityRateLimits: vi.fn()
 }))
 
 vi.mock('./minimax/minimax-fetcher', () => ({
@@ -276,6 +286,58 @@ describe('RateLimitService', () => {
     }
   })
 
+  it('attributes statusline posts to System Default when it inherits CLAUDE_CONFIG_DIR', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 18))
+      mockFreshBackgroundProviderFetches()
+      vi.stubEnv('CLAUDE_CONFIG_DIR', '/own/claude-config')
+      const service = new RateLimitService()
+      service.setClaudeAuthPreparationResolver(async () => ({
+        configDir: '/own/claude-config',
+        envPatch: {},
+        provenance: 'system'
+      }))
+      await service.refresh()
+      service.ingestLiveClaudeRateLimits({
+        configDir: '/own/claude-config',
+        fiveHour: { used_percentage: 44 },
+        sevenDay: null
+      })
+      expect(service.getState().claude?.session?.usedPercent).toBe(44)
+    } finally {
+      vi.unstubAllEnvs()
+      vi.useRealTimers()
+    }
+  })
+
+  it("attributes System Default posts to the login shell's CLAUDE_CONFIG_DIR a Dock launch lacks", async () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 18))
+      mockFreshBackgroundProviderFetches()
+      vi.stubEnv('CLAUDE_CONFIG_DIR', '')
+      profileRouter.userConfigDir = '/shell/claude-config'
+      const service = new RateLimitService()
+      service.setClaudeAuthPreparationResolver(async () => ({
+        configDir: '/shell/claude-config',
+        envPatch: {},
+        provenance: 'system'
+      }))
+      await service.refresh()
+      service.ingestLiveClaudeRateLimits({
+        configDir: '/shell/claude-config',
+        fiveHour: { used_percentage: 44 },
+        sevenDay: null
+      })
+      expect(service.getState().claude?.session?.usedPercent).toBe(44)
+    } finally {
+      profileRouter.userConfigDir = undefined
+      vi.unstubAllEnvs()
+      vi.useRealTimers()
+    }
+  })
+
   it('keeps the other window when a statusline post carries only one', async () => {
     vi.useFakeTimers()
     try {
@@ -436,7 +498,6 @@ describe('RateLimitService', () => {
           envPatch: {
             CLAUDE_CONFIG_DIR: outgoing ? '/outgoing/.claude' : '/incoming/.claude'
           },
-          stripAuthEnv: false,
           provenance: outgoing ? 'managed:outgoing' : 'managed:incoming'
         }
       })
@@ -472,52 +533,5 @@ describe('RateLimitService', () => {
     } finally {
       vi.useRealTimers()
     }
-  })
-
-  describe('refreshAfterClaudeLivePtysDrained', () => {
-    function deferredClaudeResult(): ProviderRateLimits {
-      return {
-        ...errorProvider('claude', 'Waiting for Claude session'),
-        usageMetadata: {
-          failureKind: 'deferred-by-live-session',
-          deferredByLiveClaudeSession: true
-        }
-      }
-    }
-
-    it('refetches Claude usage when the current result was deferred by a live session', async () => {
-      const service = new RateLimitService()
-      vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(deferredClaudeResult())
-      await service.refresh()
-      expect(service.getState().claude?.usageMetadata?.deferredByLiveClaudeSession).toBe(true)
-      vi.mocked(fetchClaudeRateLimits).mockClear()
-      vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
-
-      await service.refreshAfterClaudeLivePtysDrained()
-
-      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
-      expect(service.getState().claude?.status).toBe('ok')
-    })
-
-    it('does not refetch when the current Claude result was not deferred', async () => {
-      const service = new RateLimitService()
-      vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(
-        errorProvider('claude', 'Token expired')
-      )
-      await service.refresh()
-      vi.mocked(fetchClaudeRateLimits).mockClear()
-
-      await service.refreshAfterClaudeLivePtysDrained()
-
-      expect(fetchClaudeRateLimits).not.toHaveBeenCalled()
-    })
-
-    it('does not refetch when there is no Claude state yet', async () => {
-      const service = new RateLimitService()
-
-      await service.refreshAfterClaudeLivePtysDrained()
-
-      expect(fetchClaudeRateLimits).not.toHaveBeenCalled()
-    })
   })
 })

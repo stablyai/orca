@@ -11,7 +11,11 @@ import {
   normalizedSkillPath,
   type SkillPathSemantics
 } from '../../../shared/skill-path-containment'
-import { enumerateSkillPlacementCandidates, requireEnumerableFilesystem } from './enumeration'
+import {
+  enumerateSkillPlacementCandidates,
+  requireEnumerableFilesystem,
+  type SkillPlacementCandidate
+} from './enumeration'
 import {
   blockedCanonicalReason,
   classifySkillPlacement,
@@ -25,6 +29,8 @@ import type { ResolvedSkillDiscoveryTarget } from '../skill-discovery-target'
 import type { SkillInstallFilesystem } from '../skill-install-filesystem'
 import type { SkillProviderRootOverrides } from '../skill-provider-destinations'
 import type { SkillScanRoot } from '../skill-discovery-sources'
+
+type IndexedSkillPlacement = { candidate: SkillPlacementCandidate; ordinal: number }
 
 /** Overlapping roots can reach one directory twice. Staging the same path twice
  *  would fail the second rename and roll the whole skill back. */
@@ -122,6 +128,21 @@ export async function buildSkillDeletePlan(
     toFilesystemPath
   })
 
+  const candidatesByFile = new Map<string, IndexedSkillPlacement[]>()
+  const candidatesByDirectory = new Map<string, IndexedSkillPlacement[]>()
+  for (const [ordinal, candidate] of candidates.entries()) {
+    const isDirectoryAlias = candidate.entryKind === 'symlink'
+    const identity = isDirectoryAlias ? candidate.directoryRealpath : candidate.skillFileRealpath
+    if (!identity) {
+      continue
+    }
+    const index = isDirectoryAlias ? candidatesByDirectory : candidatesByFile
+    const key = normalizedSkillPath(identity, semantics)
+    const bucket = index.get(key) ?? []
+    bucket.push({ candidate, ordinal })
+    index.set(key, bucket)
+  }
+
   const placementRoots = new Map<string, ClassifiedPlacement[]>()
   const skills = requested.map((skill): SkillDeletePlanEntry => {
     const inspection = inspections.get(skill.skillFilePath)
@@ -140,8 +161,13 @@ export async function buildSkillDeletePlan(
       return blockedEntry(skill, canonicalPath, blocked)
     }
     const placements = dedupePlacements(
-      candidates
-        .map((candidate) => classifySkillPlacement(candidate, canonicalPath, context))
+      [
+        ...(candidatesByFile.get(normalizedSkillPath(canonicalPath, semantics)) ?? []),
+        ...(candidatesByDirectory.get(normalizedSkillPath(api.dirname(canonicalPath), semantics)) ??
+          [])
+      ]
+        .sort((left, right) => left.ordinal - right.ordinal)
+        .map(({ candidate }) => classifySkillPlacement(candidate, canonicalPath, context))
         .filter((placement): placement is ClassifiedPlacement => placement !== null),
       semantics
     )

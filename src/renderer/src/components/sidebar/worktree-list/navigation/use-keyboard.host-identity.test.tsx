@@ -4,7 +4,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import type { HostSectionRow } from '../../host-section-rows'
+import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 import type { RenderRow } from '../listing/render-row'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 
@@ -35,7 +35,6 @@ function localRow(id: string): HostSectionRow & { type: 'item' } {
     repo: repo as never,
     depth: 0,
     groupDepth: 0,
-    lineageTrail: [],
     isLastLineageChild: false,
     lineageChildCount: 0
   }
@@ -101,7 +100,10 @@ describe('worktree keyboard cycling with a resolved active host', () => {
 
     press('down')
 
-    expect(activateAndRevealWorktree).toHaveBeenCalledWith('c', { navigationIntent: 'user-open' })
+    expect(activateAndRevealWorktree).toHaveBeenCalledWith('c', {
+      navigationIntent: 'user-open',
+      revealInSidebar: false
+    })
   })
 
   it('steps to the previous row when the active host resolved to local', () => {
@@ -109,7 +111,10 @@ describe('worktree keyboard cycling with a resolved active host', () => {
 
     press('up')
 
-    expect(activateAndRevealWorktree).toHaveBeenCalledWith('a', { navigationIntent: 'user-open' })
+    expect(activateAndRevealWorktree).toHaveBeenCalledWith('a', {
+      navigationIntent: 'user-open',
+      revealInSidebar: false
+    })
   })
 
   it('still steps normally when the active host is unqualified', () => {
@@ -117,6 +122,9 @@ describe('worktree keyboard cycling with a resolved active host', () => {
 
     press('down')
 
-    expect(activateAndRevealWorktree).toHaveBeenCalledWith('c', { navigationIntent: 'user-open' })
+    expect(activateAndRevealWorktree).toHaveBeenCalledWith('c', {
+      navigationIntent: 'user-open',
+      revealInSidebar: false
+    })
   })
 })

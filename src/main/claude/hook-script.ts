@@ -1,9 +1,14 @@
+import { buildHookProcessCapture } from '../agent-hooks/hook-process-capture'
 /** The managed Claude-compatible hook script, built for local, POSIX-remote and Windows targets.
  *  Split from hook-service.ts so the service owns install/status and this owns script text,
  *  mirroring the same split under src/main/cursor/. */
 import type { AgentHookSource } from '../../shared/agent-hook-relay'
 import { buildWindowsAgentHookCurlPostCommand } from '../agent-hooks/installer-utils'
 import { buildPosixAgentHookPostCommand } from '../agent-hooks/hook-post-command'
+import {
+  buildPosixCursorReplayGuardLines,
+  buildWindowsCursorReplayGuardLines
+} from '../agent-hooks/cursor-replay-guard'
 import {
   buildPosixGrokReplayGuardLines,
   buildWindowsGrokReplayGuardLines
@@ -28,6 +33,7 @@ export function getManagedScript(
     source?: AgentHookSource
     skipWhenDevinImportsClaude?: boolean
     skipWhenGrokImportsClaude?: boolean
+    skipWhenCursorImportsClaude?: boolean
   } = {}
 ): string {
   const source = options.source ?? 'claude'
@@ -44,6 +50,7 @@ export function getManagedScript(
       ...buildWindowsHookEnvironmentGuardLines(),
       WINDOWS_CLAUDE_BACKGROUND_JOB_GUARD,
       ...(options.skipWhenGrokImportsClaude ? buildWindowsGrokReplayGuardLines() : []),
+      ...(options.skipWhenCursorImportsClaude ? buildWindowsCursorReplayGuardLines() : []),
       ...(options.skipWhenDevinImportsClaude
         ? [
             // Why: Devin imports .claude hooks by default; skip Orca's managed hook there so status posts stay attributed to Devin.
@@ -64,6 +71,7 @@ export function getManagedScript(
     'printf "{}\\n"',
     ...buildPosixHookPayloadCapture(),
     ...(options.skipWhenGrokImportsClaude ? buildPosixGrokReplayGuardLines() : []),
+    ...(options.skipWhenCursorImportsClaude ? buildPosixCursorReplayGuardLines() : []),
     ...buildPosixHookSpoolLines(source),
     ...(options.skipWhenDevinImportsClaude
       ? [
@@ -78,6 +86,7 @@ export function getManagedScript(
     'if [ -n "$CLAUDE_JOB_DIR" ]; then',
     '  exit 0',
     'fi',
+    ...(source === 'claude' ? buildHookProcessCapture() : []),
     // Why: refresh endpoint coordinates for PTYs surviving an Orca restart.
     // Why: suppress parse errors so they neither leak nor trip outer set -e.
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',

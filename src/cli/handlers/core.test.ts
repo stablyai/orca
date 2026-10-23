@@ -2,12 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }))
 
-// The claude-teams handler spawns `claude` via node:child_process; mock it so we
-// can inspect the child env without launching a real process.
 vi.mock('node:child_process', () => ({ spawn: spawnMock }))
 
-// Keep the socket runtime client out of the import graph; only the error type
-// and serveOrcaApp binding are referenced by the module under test.
+// Exclude the socket runtime graph; this handler needs only errors and serveOrcaApp.
 vi.mock('../runtime-client', () => ({
   RuntimeClientError: class RuntimeClientError extends Error {
     readonly code: string
@@ -25,8 +22,7 @@ import type { RuntimeClient } from '../runtime-client'
 
 type SpawnEnv = Record<string, string | undefined>
 
-// Minimal child stub: the handler only awaits `exit`, so resolve it on the next
-// microtask to complete the spawned-process promise deterministically.
+// Emit exit on the next microtask so the spawned-process promise settles deterministically.
 function mockClaudeChild(): { once: (event: string, cb: (...args: unknown[]) => void) => unknown } {
   const child = {
     once(event: string, cb: (...args: unknown[]) => void) {
@@ -71,8 +67,7 @@ describe('orca claude-teams CLI handler', () => {
     previousRunAsNode = process.env.ELECTRON_RUN_AS_NODE
     previousPaneKey = process.env.ORCA_PANE_KEY
     previousExitCode = process.exitCode
-    // The `orca` launcher runs Orca's Electron binary as Node, so the CLI process
-    // itself carries ELECTRON_RUN_AS_NODE=1. Reproduce that inherited flag here.
+    // Reproduce the Electron-as-Node flag inherited from the orca launcher.
     process.env.ELECTRON_RUN_AS_NODE = '1'
     process.env.ORCA_PANE_KEY = 'tab-1:leaf-1'
   })
@@ -91,8 +86,7 @@ describe('orca claude-teams CLI handler', () => {
     process.exitCode = previousExitCode
   })
 
-  // Guarded to non-Windows: the handler early-returns unsupported_platform on
-  // win32, so the leak path never runs there.
+  // Windows refuses the command before reaching child-process creation.
   it.skipIf(isWindows)(
     'does not leak ELECTRON_RUN_AS_NODE into the spawned claude child',
     async () => {
@@ -102,8 +96,6 @@ describe('orca claude-teams CLI handler', () => {
       const spawnEnv = spawnMock.mock.calls.at(-1)?.[2].env as SpawnEnv
       expect(spawnEnv.ELECTRON_RUN_AS_NODE).toBeUndefined()
 
-      // The prepareLaunch request env is built from the same helper, so it must
-      // be sanitized too.
       const prepareLaunchEnv = (callMock.mock.calls[0][1] as { env: SpawnEnv }).env
       expect(prepareLaunchEnv.ELECTRON_RUN_AS_NODE).toBeUndefined()
     }

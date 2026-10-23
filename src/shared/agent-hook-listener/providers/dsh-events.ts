@@ -79,6 +79,9 @@ export function normalizeDshEvent(
     toolInput: snapshot.toolInput,
     interactivePrompt: snapshot.interactivePrompt,
     lastAssistantMessage: snapshot.lastAssistantMessage,
-    lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput
+    lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput,
+    // Why: SessionStart marks a created, resumed, cleared or compacted session, not a turn end,
+    // and tui-idle's hook lane must not settle a booting composer on it.
+    sessionBoundary: eventName === 'SessionStart' ? true : undefined
   })
 }

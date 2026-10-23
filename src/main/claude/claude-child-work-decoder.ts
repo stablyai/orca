@@ -3,13 +3,15 @@
 // A child is live from its `task_started` until its own terminal `task_updated` or
 // `task_notification`; nothing else ends it. A roster (`background_tasks_changed`), a turn ending
 // or a spawn call returning is the parent's view of the child, not the child's, and the CLI sends
-// every child its own terminal frame, so none of them settles one. When the session ends, the
-// host settles whatever is still live. Edges wait here until the frame is journaled, then take
-// the host clock.
+// every child its own terminal frame, so none of them settles one. When the session ends, however
+// it ends, the host settles what is still live as unknown. A live child blocked on a permission
+// request reads waiting; no task frame says so, so the caller hands over which children a request
+// blocks. Edges wait here until the frame is journaled, then take the host clock.
 
 import type {
   AgentChildWorkKind,
-  AgentChildWorkOperation
+  AgentChildWorkOperation,
+  AgentChildWorkOutcome
 } from '../../shared/agent-status-child-work'
 import type {
   AgentChildWorkEvidence,
@@ -27,15 +29,12 @@ import {
   taskUsageTotalTokens,
   terminalClaudeTaskRunState
 } from './claude-background-task-frames'
+import { isClaudeSubagentTask } from './claude-subagent-task-frames'
 import {
   claudeChildWorkOutcome,
   claudeTaskProgressFacts,
   type ClaudeTaskFacts
 } from './claude-child-work-evidence'
-
-/** Live children one session tracks, and the ended ids it remembers to recognise a restart. */
-const MAX_LIVE_TASKS = 256
-const MAX_ENDED_TASKS = 256
 
 type DecodedClaudeTask = {
   kind: AgentChildWorkKind
@@ -54,7 +53,8 @@ function observation(
   id: string,
   task: DecodedClaudeTask,
   facts: ClaudeTaskFacts,
-  observedAt: number
+  observedAt: number,
+  waiting: boolean
 ): AgentChildWorkLiveObservation {
   const operation: AgentChildWorkOperation | undefined = facts.toolName
     ? { toolName: facts.toolName, basis: 'reported', observedAt }
@@ -67,7 +67,7 @@ function observation(
     },
     kind: task.kind,
     residency: task.backgrounded ? 'background' : 'foreground',
-    state: task.running || task.kind !== 'monitor' ? 'working' : 'monitoring',
+    state: waiting ? 'waiting' : task.running || task.kind !== 'monitor' ? 'working' : 'monitoring',
     // The published row names a task's type as both its name and its agent type.
     ...(task.name ? { name: task.name, agentType: task.name } : {}),
     ...(task.description ? { description: task.description } : {}),
@@ -81,8 +81,14 @@ function observation(
 
 export class ClaudeChildWorkDecoder {
   private readonly live = new Map<string, DecodedClaudeTask>()
-  /** Ended task ids, with the spawn call each ended under. */
-  private readonly ended = new Map<string, string | undefined>()
+  /** Ended task ids, with the spawn call each ended under and how. Kept for the session: a
+   *  forgotten id would read a wake under the same spawn call as a settled child. */
+  private readonly ended = new Map<
+    string,
+    { run: string | undefined; outcome: AgentChildWorkOutcome }
+  >()
+  /** The children a pending permission request blocks, as the caller last derived them. */
+  private waiting: ReadonlySet<string> = new Set()
   private pending: PendingEdge[] = []
 
   observe(message: Record<string, unknown>): void {
@@ -113,10 +119,24 @@ export class ClaudeChildWorkDecoder {
     }
   }
 
+  /** Which children a pending request blocks, re-derived by the caller before every drain. A
+   *  live child that starts or stops waiting is a live edge of its own. */
+  observeWaiting(waiting: ReadonlySet<string>): void {
+    const previous = this.waiting
+    this.waiting = waiting
+    for (const id of new Set([...previous, ...waiting])) {
+      const task = this.live.get(id)
+      if (task && previous.has(id) !== waiting.has(id)) {
+        this.report(id, task, {})
+      }
+    }
+  }
+
   /** The provider session is gone: the host settles what it still holds live. */
   clear(): void {
     this.live.clear()
     this.ended.clear()
+    this.waiting = new Set()
     this.pending.push((observedAt) => ({ type: 'session-ended', observedAt }))
   }
 
@@ -133,12 +153,15 @@ export class ClaudeChildWorkDecoder {
     }
     const toolUseId = taskAliasId(message.tool_use_id)
     const existing = this.live.get(id)
-    const restart = !existing && this.ended.has(id)
-    // A start under the spawn call a run ended with is that run's late start, not a new run.
-    if (restart && toolUseId !== undefined && this.ended.get(id) === toolUseId) {
+    const ended = existing ? undefined : this.ended.get(id)
+    const restart = ended !== undefined
+    // Under the spawn call a run ended with, a start after it completed is that run waking (the
+    // CLI ends a helper's turn while work it started runs, then resumes it when that work ends);
+    // after any other ending it is the ended run's late start.
+    if (ended?.run !== undefined && ended.run === toolUseId && ended.outcome !== 'succeeded') {
       return
     }
-    const kind = classifyClaudeBackgroundTaskKind(message.task_type)
+    const kind = startedTaskKind(message)
     this.upsert(
       id,
       {
@@ -213,15 +236,17 @@ export class ClaudeChildWorkDecoder {
     facts: ClaudeTaskFacts,
     restart = false
   ): void {
-    if (!this.live.has(id) && this.live.size >= MAX_LIVE_TASKS) {
-      return
-    }
     this.ended.delete(id)
     this.live.set(id, task)
+    this.report(id, task, facts, restart)
+  }
+
+  /** Whether the child waits is read at drain, so every live edge a drain carries agrees. */
+  private report(id: string, task: DecodedClaudeTask, facts: ClaudeTaskFacts, restart = false) {
     this.pending.push((observedAt) => ({
       type: 'live',
       observedAt,
-      child: observation(id, task, facts, observedAt),
+      child: observation(id, task, facts, observedAt, this.waiting.has(id)),
       ...(restart ? { restart: true } : {})
     }))
   }
@@ -229,19 +254,16 @@ export class ClaudeChildWorkDecoder {
   private end(
     id: string,
     status: unknown,
-    reported: { runId?: string; lastMessage?: string; totalTokens?: number }
+    reported: {
+      runId?: string
+      lastMessage?: string
+      totalTokens?: number
+    }
   ): void {
     const task = this.live.get(id)
     this.live.delete(id)
-    this.ended.delete(id)
-    this.ended.set(id, reported.runId ?? task?.toolUseId)
-    if (this.ended.size > MAX_ENDED_TASKS) {
-      const [oldest] = this.ended.keys()
-      if (oldest !== undefined) {
-        this.ended.delete(oldest)
-      }
-    }
     const outcome = claudeChildWorkOutcome(status)
+    this.ended.set(id, { run: reported.runId ?? task?.toolUseId, outcome })
     this.pending.push((observedAt) => ({
       type: 'ended',
       observedAt,
@@ -255,4 +277,11 @@ export class ClaudeChildWorkDecoder {
       ...(reported.totalTokens !== undefined ? { totalTokens: reported.totalTokens } : {})
     }))
   }
+}
+
+/** Releases predating `task_type` still name an agent in `subagent_type`. */
+function startedTaskKind(message: Record<string, unknown>): AgentChildWorkKind {
+  return isClaudeSubagentTask(message)
+    ? 'agent'
+    : classifyClaudeBackgroundTaskKind(message.task_type)
 }

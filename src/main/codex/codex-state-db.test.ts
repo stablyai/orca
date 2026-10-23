@@ -6,6 +6,7 @@ import SyncDatabase from '../sqlite/sync-database'
 import {
   findNewestCodexStateDbPath,
   isCodexStateDbBackfillPending,
+  readCodexStateDbBackfillPendingState,
   readCodexStateDbBackfillStatus,
   readIndexedCodexThreadIds
 } from './codex-state-db'
@@ -86,6 +87,29 @@ describe('Codex state DB backfill status', () => {
     createBackfillDb(home, 5, 'complete')
 
     expect(isCodexStateDbBackfillPending(home)).toBe(false)
+  })
+})
+
+describe('readCodexStateDbBackfillPendingState', () => {
+  it('reports an unreadable index separately while the boolean stays not-pending', async () => {
+    const home = await createHome()
+    await writeFile(join(home, 'state_5.sqlite'), 'not a sqlite database')
+
+    expect(readCodexStateDbBackfillStatus(home).kind).toBe('unreadable')
+    expect(readCodexStateDbBackfillPendingState(home)).toBe('unreadable')
+    expect(isCodexStateDbBackfillPending(home)).toBe(false)
+  })
+
+  it('maps incomplete, complete and small unindexed homes', async () => {
+    const running = await createHome()
+    createBackfillDb(running, 5, 'running')
+    const complete = await createHome()
+    createBackfillDb(complete, 5, 'complete')
+    const empty = await createHome()
+
+    expect(readCodexStateDbBackfillPendingState(running)).toBe('pending')
+    expect(readCodexStateDbBackfillPendingState(complete)).toBe('not-pending')
+    expect(readCodexStateDbBackfillPendingState(empty)).toBe('not-pending')
   })
 })
 

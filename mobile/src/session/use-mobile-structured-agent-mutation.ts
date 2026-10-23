@@ -1,49 +1,44 @@
 // The one mutation seam the structured session hook hands its features: builds
-// the envelope, retains replayable operation ids per intent, and folds refusals
-// into the session's error channel.
+// the envelope, with a fresh operation id per call, and folds refusals into the
+// session's error channel.
 
 import { useCallback } from 'react'
 import type { StructuredAgentSessionState } from '../../../src/shared/structured-agent-session-reducer'
 import type { RpcClient } from '../transport/rpc-client'
 import {
   requestStructuredAgentSessionMutation,
-  retainStructuredSessionOperationId,
   type StructuredAgentSessionMutationResult
 } from './mobile-structured-agent-session-rpc'
 
 export type MobileStructuredAgentMutate = <TValue>(
   method: string,
   fingerprintMethod: string,
-  fields: Record<string, unknown>
+  fields: Record<string, unknown>,
+  shouldReportError?: () => boolean
 ) => Promise<StructuredAgentSessionMutationResult<TValue>>
 
 export function useMobileStructuredAgentMutate(args: {
   client: RpcClient | null
   sessionId: string | null
-  sessionKey: string
   enabled: boolean
   stateRef: { readonly current: StructuredAgentSessionState }
-  operationIds: Map<string, string>
   onSendError: (message: string) => void
+  /** The chat's agent, which a refusal about it names. */
+  agentName?: string
 }): MobileStructuredAgentMutate {
-  const { client, enabled, onSendError, operationIds, sessionId, sessionKey, stateRef } = args
+  const { agentName, client, enabled, onSendError, sessionId, stateRef } = args
   return useCallback(
     async <TValue>(
       method: string,
       fingerprintMethod: string,
-      fields: Record<string, unknown>
+      fields: Record<string, unknown>,
+      shouldReportError?: () => boolean
     ): Promise<StructuredAgentSessionMutationResult<TValue>> => {
       const current = stateRef.current
       if (!client || !sessionId || !enabled || current.fence === null) {
         return { status: 'rejected' }
       }
       const targetFence = current.fence
-      const key = `${sessionKey}:${fingerprintMethod}:${JSON.stringify(fields)}`
-      const clientOperationId = retainStructuredSessionOperationId(
-        operationIds,
-        key,
-        operationIds.get(key)
-      )
       const result = await requestStructuredAgentSessionMutation<TValue>({
         client,
         method,
@@ -51,10 +46,9 @@ export function useMobileStructuredAgentMutate(args: {
         sessionId,
         expectedRuntimeFence: targetFence,
         fields,
-        clientOperationId
+        ...(agentName ? { agentName } : {})
       })
       if (result.status === 'accepted') {
-        operationIds.delete(key)
         return {
           status: 'accepted',
           value: result.value,
@@ -62,13 +56,13 @@ export function useMobileStructuredAgentMutate(args: {
         }
       }
       if (result.status === 'unknown') {
-        operationIds.delete(key)
         return result
       }
-      operationIds.delete(key)
-      onSendError(result.message)
+      if (shouldReportError?.() !== false) {
+        onSendError(result.message)
+      }
       return { status: 'rejected' }
     },
-    [client, enabled, onSendError, operationIds, sessionId, sessionKey, stateRef]
+    [agentName, client, enabled, onSendError, sessionId, stateRef]
   )
 }

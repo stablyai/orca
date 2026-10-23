@@ -51,27 +51,40 @@ export function hasCodexTranscriptSubagents(state: HookListenerState, paneKey: s
 export function setCodexMainAgentTurnState(
   state: HookListenerState,
   paneKey: string,
-  next: Omit<CodexLeadTurnState, 'stateStartedAt'> & { stateStartedAt?: number },
+  next: Omit<CodexLeadTurnState, 'stateStartedAt' | 'turnId'> & {
+    stateStartedAt?: number
+    /** Omitted keeps the current turn; null starts a turn Codex sent no id for. */
+    turnId?: string | null
+  },
   now = Date.now()
 ): CodexLeadTurnState {
   const previous = state.codexLeadStateByPaneKey.get(paneKey)
   const continued = continueMainAgentStatus(previous, next, now)
+  const turnId = next.turnId === null ? undefined : (next.turnId ?? previous?.turnId)
+  const sessionId = next.sessionId ?? previous?.sessionId
   const record: CodexLeadTurnState = {
     state: next.state,
     ...(continued.outcome ? { outcome: continued.outcome } : {}),
     stateStartedAt: continued.stateStartedAt,
-    model: next.model
+    model: next.model,
+    ...(sessionId ? { sessionId } : {}),
+    ...(turnId ? { turnId } : {})
   }
   state.codexLeadStateByPaneKey.set(paneKey, record)
   return record
 }
 
-/** A root Stop that lands on an already finished turn (late, after an inferred cancel) restates
- *  that turn, so it keeps the recorded verdict; only a new turn clears it. */
-export function codexOutcomeRestatedByStop(
+/** Interrupt is Codex's own cancel verdict. A root Stop that lands on an already finished turn
+ *  (late, after an inferred cancel) restates that turn, so it keeps the recorded verdict; only a
+ *  new turn clears it. */
+export function codexLeadOutcomeForEvent(
+  eventName: unknown,
   previous: CodexLeadTurnState | undefined,
   nextState: CodexLeadTurnState['state']
 ): Pick<CodexLeadTurnState, 'outcome'> {
+  if (eventName === 'Interrupt') {
+    return { outcome: 'cancellation' }
+  }
   return nextState === 'done' && previous?.state === 'done' && previous.outcome
     ? { outcome: previous.outcome }
     : {}
@@ -153,7 +166,7 @@ export function codexLeadStateForHookEvent(
   eventName: string | undefined,
   normalizedState?: ParsedAgentStatusPayload['state']
 ): CodexLeadTurnState['state'] | undefined {
-  if (eventName === 'Stop') {
+  if (eventName === 'Stop' || eventName === 'Interrupt') {
     return 'done'
   }
   if (eventName === 'PermissionRequest') {
@@ -209,12 +222,23 @@ export function reconcileRemoteCodexState(
       const previousLead = state.codexLeadStateByPaneKey.get(paneKey)
       setCodexMainAgentTurnState(state, paneKey, {
         state: leadState,
-        ...codexOutcomeRestatedByStop(previousLead, leadState),
+        ...codexLeadOutcomeForEvent(eventName, previousLead, leadState),
         model: payload.model ?? previousLead?.model
       })
     }
   }
 
+  if (!eventName && !agentId && payload.mainAgent && payload.mainAgent.state !== 'blocked') {
+    if (payload.mainAgent.state === 'done' && !payload.subagents) {
+      // Why: an unlabelled host turn end (failed or cancelled) reporting no children has none left.
+      roster.clear()
+    }
+    setCodexMainAgentTurnState(state, paneKey, {
+      ...payload.mainAgent,
+      state: payload.mainAgent.state,
+      model: payload.model ?? state.codexLeadStateByPaneKey.get(paneKey)?.model
+    })
+  }
   const lead = state.codexLeadStateByPaneKey.get(paneKey)
   if (!lead) {
     return payload

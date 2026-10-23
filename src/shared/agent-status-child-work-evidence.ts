@@ -7,6 +7,8 @@
 
 import type { AgentChildWorkAliasKind } from './agent-status-child-work-alias'
 import type {
+  AgentChildWorkId,
+  AgentChildWorkInvocationFence,
   AgentChildWorkKind,
   AgentChildWorkOperation,
   AgentChildWorkOutcome,
@@ -71,8 +73,27 @@ export type AgentChildWorkEndedEvidence = {
   totalTokens?: number
 }
 
+/** The provider accepted a Stop of the run the host captured when it sent it. Settles that run
+ *  provisionally (`cancelled`, basis `stop-acknowledged`) unless it already ended; never a later
+ *  run. `outcome` is the run's own ending when the provider's answer named one. */
+export type AgentChildWorkStopAcknowledgedEvidence = {
+  type: 'stop-acknowledged'
+  observedAt: number
+  childWorkId: AgentChildWorkId
+  /** The provider handle the Stop named, for the host's open-work set, which keys by handle. */
+  handleId: string
+  invocation: AgentChildWorkInvocationFence
+  outcome?: AgentChildWorkOutcome
+}
+
+/** The user's next turn began: the provider accepted their next send. A turn the provider opens
+ *  on its own is not one. Settled children are kept, with their outcome, until then; a settled
+ *  child that still owns live work, at any depth, stays so that work keeps its owners. */
+export type AgentChildWorkTurnStartedEvidence = { type: 'turn-started'; observedAt: number }
+
 /** The provider session is gone: a child still live can no longer end on its own, so it settles
- *  with an outcome nobody reported. Settled children stay; the parent's removal drops them. */
+ *  with an outcome nobody reported. Settled children stay until the user's next turn or the
+ *  parent's removal. */
 export type AgentChildWorkSessionEndedEvidence = { type: 'session-ended'; observedAt: number }
 
 /** Work that leaves nothing to report once it stops, such as a command whose process exited: its
@@ -88,4 +109,6 @@ export type AgentChildWorkEvidence =
   | AgentChildWorkOperationEvidence
   | AgentChildWorkEndedEvidence
   | AgentChildWorkRemovedEvidence
+  | AgentChildWorkStopAcknowledgedEvidence
+  | AgentChildWorkTurnStartedEvidence
   | AgentChildWorkSessionEndedEvidence

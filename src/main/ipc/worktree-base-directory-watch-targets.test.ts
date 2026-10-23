@@ -3,8 +3,7 @@ import { join, sep } from 'node:path'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { Repo } from '../../shared/repo-types'
 
-const { getSshFilesystemProviderMock, readFileMock, realpathMock, statMock } = vi.hoisted(() => ({
-  getSshFilesystemProviderMock: vi.fn(),
+const { readFileMock, realpathMock, statMock } = vi.hoisted(() => ({
   readFileMock: vi.fn(),
   realpathMock: vi.fn(),
   statMock: vi.fn()
@@ -14,10 +13,6 @@ vi.mock('node:fs/promises', () => ({
   readFile: readFileMock,
   realpath: realpathMock,
   stat: statMock
-}))
-
-vi.mock('../providers/ssh-filesystem-dispatch', () => ({
-  getSshFilesystemProvider: getSshFilesystemProviderMock
 }))
 
 import {
@@ -30,7 +25,6 @@ const absolutePath = (...parts: string[]): string => join(sep, ...parts)
 const WORKTREE_ROOT = absolutePath('workspace', 'worktrees')
 const PROJECT_ROOT = absolutePath('workspace', 'projects')
 const localDirectoryStat = { isDirectory: () => true }
-const remoteDirectoryStat = { type: 'directory', size: 0, mtime: 0 }
 const settings = {
   workspaceDir: WORKTREE_ROOT,
   nestWorkspaces: true
@@ -54,14 +48,6 @@ function makeStore(repos: Repo[]) {
   }
 }
 
-function makeRemoteProvider() {
-  return {
-    stat: vi.fn(async () => remoteDirectoryStat),
-    realpath: vi.fn(async (path: string) => path),
-    readFile: vi.fn(async () => ({ content: '', isBinary: false }))
-  }
-}
-
 describe('worktree base directory watch target resolution', () => {
   let warnSpy: ReturnType<typeof vi.spyOn>
 
@@ -69,7 +55,6 @@ describe('worktree base directory watch target resolution', () => {
     statMock.mockReset().mockResolvedValue(localDirectoryStat)
     realpathMock.mockReset().mockImplementation(async (path: string) => path)
     readFileMock.mockReset().mockResolvedValue('')
-    getSshFilesystemProviderMock.mockReset().mockReturnValue(undefined)
     warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
   })
 
@@ -173,46 +158,18 @@ describe('worktree base directory watch target resolution', () => {
     expect(repoIds).toContain(goodAfter.id)
   })
 
-  it('keeps identical SSH paths isolated by connection and provider', async () => {
-    const providerA = makeRemoteProvider()
-    const providerB = makeRemoteProvider()
-    getSshFilesystemProviderMock.mockImplementation((connectionId: string) =>
-      connectionId === 'ssh-a' ? providerA : connectionId === 'ssh-b' ? providerB : undefined
-    )
-    const sharedPath = '/srv/project'
-    const repos = [
-      makeRepo(0, { path: sharedPath, connectionId: 'ssh-a' }),
-      makeRepo(1, { path: sharedPath, connectionId: 'ssh-b' })
-    ]
-
-    const targets = await buildWorktreeBaseDirectoryWatchTargets(makeStore(repos) as never)
-
-    expect(providerA.stat).toHaveBeenCalledTimes(2)
-    expect(providerA.realpath).toHaveBeenCalledTimes(2)
-    expect(providerB.stat).toHaveBeenCalledTimes(2)
-    expect(providerB.realpath).toHaveBeenCalledTimes(2)
-    expect([...targets.values()].map((target) => target.connectionId)).toEqual([
-      'ssh-a',
-      'ssh-a',
-      'ssh-b',
-      'ssh-b'
-    ])
-    expect(new Set(targets.keys()).size).toBe(4)
-  })
-
-  it('skips folder workspaces, unavailable SSH providers, and WSL UNC roots', async () => {
+  it('skips folder workspaces, SSH repos, and WSL UNC roots', async () => {
     const folder = makeRepo(0, { kind: 'folder' })
-    const unavailableSsh = makeRepo(1, { connectionId: 'missing', path: '/srv/missing' })
+    const ssh = makeRepo(1, { connectionId: 'ssh-a', path: '/srv/ssh' })
     const wslPath = '\\\\wsl.localhost\\Ubuntu\\home\\alice\\project'
     const wsl = makeRepo(2, { path: wslPath, worktreeBasePath: wslPath })
 
-    const targets = await buildWorktreeBaseDirectoryWatchTargets(
-      makeStore([folder, unavailableSsh, wsl]) as never
-    )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: target resolution reads only settings and repos.
+    const store = makeStore([folder, ssh, wsl]) as never
+    const targets = await buildWorktreeBaseDirectoryWatchTargets(store)
 
     expect(targets.size).toBe(0)
     expect(statMock).not.toHaveBeenCalled()
-    expect(getSshFilesystemProviderMock).toHaveBeenCalledWith('missing')
   })
 
   // A mirrored layout puts the working trees inside the distro while the gitdir

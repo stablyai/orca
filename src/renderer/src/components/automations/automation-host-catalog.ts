@@ -4,7 +4,7 @@ import type {
   StableAutomationAuthorityRef,
   StableAutomationCatalogRef
 } from '../../../../shared/automation-owner-ref'
-import { isRuntimeOwnedSshTargetId } from '../../../../shared/execution-host'
+import { isOwnedSshTargetId } from '../../../../shared/execution-host'
 import {
   automationAuthorityCatalogKey,
   type AutomationCatalogSshMirrorInput,
@@ -164,7 +164,7 @@ function resolveSshScopeGap(
 function projectSshEntries(ctx: AuthorityProjectionContext): AutomationHostCatalogEntry[] {
   const liveTargets = new Map(
     ctx.ssh.targets
-      .filter((target) => !isRuntimeOwnedSshTargetId(target.targetId))
+      .filter((target) => !isOwnedSshTargetId(target.targetId))
       .map((target) => [target.targetId, target])
   )
   const candidateIds = new Set<string>(liveTargets.keys())
@@ -176,7 +176,7 @@ function projectSshEntries(ctx: AuthorityProjectionContext): AutomationHostCatal
   }
   const entries: AutomationHostCatalogEntry[] = []
   for (const targetId of candidateIds) {
-    if (isRuntimeOwnedSshTargetId(targetId)) {
+    if (isOwnedSshTargetId(targetId)) {
       continue
     }
     const live = liveTargets.get(targetId)

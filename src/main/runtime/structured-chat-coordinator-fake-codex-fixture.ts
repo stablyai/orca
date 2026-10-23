@@ -16,7 +16,11 @@ export type FakeConnection = Omit<CodexAppServerConnection, 'closed'> & {
   closed: boolean
   handlers: CodexAppServerConnectionHandlers
   threadId: string | null
+  /** Every JSON-RPC method the adapter called, in order. */
+  methods: string[]
   turns: { clientUserMessageId: string; text: string }[]
+  /** Messages steered into a running turn, as Codex takes them. */
+  steers: { expectedTurnId: string; clientUserMessageId: string; text: string }[]
 }
 
 /** How the fake provider misbehaves; reset before each test. */
@@ -56,10 +60,13 @@ export function fakeCodex() {
     const connection: FakeConnection = {
       handlers,
       threadId: null,
+      methods: [],
       turns: [],
+      steers: [],
       pid: 4321,
       closed: false,
       request: async (method, params) => {
+        connection.methods.push(method)
         const input = isRecord(params) ? params : {}
         if (method === 'thread/start') {
           connection.threadId = `thread-${connections.length}`
@@ -107,6 +114,14 @@ export function fakeCodex() {
             ],
             nextCursor: null
           }
+        }
+        if (method === 'turn/steer') {
+          connection.steers.push({
+            expectedTurnId: String(input.expectedTurnId),
+            clientUserMessageId: String(input.clientUserMessageId),
+            text: JSON.stringify(input.input)
+          })
+          return { turnId: input.expectedTurnId }
         }
         return {}
       },

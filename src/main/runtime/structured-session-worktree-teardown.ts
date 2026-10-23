@@ -10,7 +10,7 @@
  *
  * Membership is `location.workspaceId` PLUS the host fence below, and every structured session
  * carries both — so this covers a plain chat session in the worktree as well as a dispatched
- * worker. Liveness is `observeStructuredWorker`, the same `live` / `unverifiable` / `exited`
+ * worker. Liveness is `observeStructuredSession`, the same `live` / `unverifiable` / `exited`
  * vocabulary the rest of the structured surface uses.
  *
  * `live` here is lease state — a provider child is attached — not work in flight, so it says
@@ -28,17 +28,19 @@ import {
 import { STILL_LIVE_DETAIL_PREFIX } from '../../shared/worktree/removal'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import {
-  observeStructuredWorker,
+  observeStructuredSession,
   structuredSessionCloseSettled
 } from './structured-worker-authority'
 import { closeStructuredAgentSessionChild } from './structured-agent-session-close'
 import { retireSettledStructuredWorkerTab } from './structured-agent-session-tab-retirement'
 import type { WorktreePtyHostFence } from './worktree-pty-host-fence'
+import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import type { OrcaRuntimeService } from './orca-runtime'
+import type { StructuredAgentId } from '../../shared/agent-session-provider-handle'
 
 export type StructuredSessionInWorkspace = {
   sessionId: string
-  agent: 'claude' | 'codex'
+  agent: StructuredAgentId
 }
 
 export type UnclosedStructuredSession = StructuredSessionInWorkspace & {
@@ -115,6 +117,24 @@ export function listStructuredSessionsForWorktree(
   worktreeId: string,
   fence: StructuredSessionHostFence
 ): StructuredSessionsForWorktree {
+  return listFencedStructuredSessions((workspaceId) => workspaceId === worktreeId, fence)
+}
+
+/** Structured sessions in every workspace of a project, on the fenced host only. */
+export function listStructuredSessionsForProject(
+  repoId: string,
+  fence: StructuredSessionHostFence
+): StructuredSessionsForWorktree {
+  return listFencedStructuredSessions(
+    (workspaceId) => getRepoIdFromWorktreeId(workspaceId) === repoId,
+    fence
+  )
+}
+
+function listFencedStructuredSessions(
+  inScope: (workspaceId: string) => boolean,
+  fence: StructuredSessionHostFence
+): StructuredSessionsForWorktree {
   const host = getStructuredAgentSessionHost()
   if (!host) {
     return { members: [], live: [] }
@@ -128,15 +148,12 @@ export function listStructuredSessionsForWorktree(
   const hostId = structuredSessionTeardownHostId(fence)
   const members = records
     .filter(
-      (record) =>
-        record.location.workspaceId === worktreeId && record.location.executionHostId === hostId
+      (record) => inScope(record.location.workspaceId) && record.location.executionHostId === hostId
     )
     .map((record) => ({ sessionId: record.sessionId, agent: record.provider }))
   return {
     members,
-    live: members.filter(
-      (session) => observeStructuredWorker({ sessionId: session.sessionId }).status === 'live'
-    )
+    live: members.filter((session) => observeStructuredSession(session.sessionId).status === 'live')
   }
 }
 
@@ -277,7 +294,7 @@ export async function closeStructuredSessionsForWorktree(
     } else {
       // Re-observed rather than reusing the close's own reason string: what the user is asked to
       // waive is the state AFTER the attempt, and a close that threw never reached an observation.
-      const status = observeStructuredWorker({ sessionId: session.sessionId }).status
+      const status = observeStructuredSession(session.sessionId).status
       if (status === 'exited' || structuredSessionCloseSettled(session.sessionId)) {
         // The re-read can PROVE the exit a failed close could not — it threw past its own
         // observation, or the record's death evidence landed after it read. Refusing on a child
@@ -336,12 +353,14 @@ export async function retireStructuredSessionTabsForWorktree(
  * proved after that close had already rolled the hide back.
  */
 async function dropDurableChatTabReference(sessionId: string): Promise<void> {
+  const host = getStructuredAgentSessionHost()
   try {
-    await getStructuredAgentSessionHost()?.setSessionTabVisibility?.(sessionId, false)
+    await host?.setSessionTabVisibility?.(sessionId, false)
   } catch (error) {
-    console.warn(
-      `[worktree-teardown] could not drop the chat tab reference for ${sessionId}`,
+    host?.deps.logger.warn('dropping a removed workspace chat tab reference failed', {
+      scope: 'teardown-tab-drop',
+      sessionId,
       error
-    )
+    })
   }
 }

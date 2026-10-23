@@ -1,12 +1,41 @@
+import {
+  agentChildWorkViewOffersStop,
+  type AgentSessionBackgroundTaskStops
+} from '../../../shared/agent-child-work-stop-targets'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
-import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-projection'
-import type { AgentSessionTurnContext } from './structured-agent-session-turns'
+import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
+import { agentSessionCurrentContextRows } from '../../../shared/agent-session-context-clear'
+import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import {
+  contextStructuredAgentSessionCurrentWork,
+  type StructuredAgentSessionCurrentWork,
+  type StructuredAgentSessionCurrentWorkJournal
+} from './structured-agent-session-current-work'
+import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import {
   refuse,
   type AgentSessionRefusalReason,
   type AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire-refusals'
+
+/** The session's child work: `open` decides (the provider's own account), `views` word it. */
+export type ConversationCommandChildWork = {
+  views: readonly AgentChildWorkView[] | undefined
+  open: boolean
+}
+
+/** What admission reads of a turn: the journal, its fence, and only the provider's stop capability. */
+export type ConversationCommandAdmissionContext = {
+  sessionId: string
+  fence: number
+  journal: StructuredAgentSessionCurrentWorkJournal & {
+    snapshot(): Pick<ReturnType<AgentSessionJournal['snapshot']>, 'items'>
+  }
+  /** The host's projection of current work; without one, the generation at `fence` is live. */
+  currentWork?: () => StructuredAgentSessionCurrentWork | null
+  adapter: Pick<StructuredAgentSessionAdapter, 'backgroundTaskStops'>
+}
 
 function blocked(
   reason: AgentSessionRefusalReason<'agent_session_operation_invalid'>,
@@ -22,40 +51,40 @@ export function conversationCommandInFlight(): AgentSessionWireRefusal {
 /**
  * Why a conversation command may not run now; null when it may.
  *
+ * `childWork` is the session's child records as the chat strip reads them: a refusal may only
+ * cite work the strip lists, and ask for a stop only when the strip offers one.
  * `at-rest`: a command accepted with no child running. A running turn on record then belongs to a
  * dead generation, which the start before handover sweeps, so it refuses nothing yet.
  * `handover`: the command is the oldest queued message, and those queued behind it wait for it.
  */
 export function conversationCommandBlocked(
-  ctx: Pick<AgentSessionTurnContext, 'journal' | 'adapter' | 'sessionId' | 'fence'>,
+  ctx: ConversationCommandAdmissionContext,
   record: AgentSessionRecord,
+  childWork: ConversationCommandChildWork,
   admission?: 'at-rest' | 'handover'
 ): AgentSessionWireRefusal | null {
-  const items = ctx.journal.snapshot().items
+  const { items, submissions } = agentSessionCurrentContextRows(
+    ctx.journal.snapshot().items,
+    ctx.journal.submissions()
+  )
   if (record.rewind?.phase === 'prepared' || record.rewind?.phase === 'provider-succeeded') {
     return blocked('rewindUnconfirmed', 'agent_session_rewind:outcome-unknown')
-  }
-  if (
-    record.conversationCommand?.command === 'clear' &&
-    record.conversationCommand.phase === 'committed' &&
-    record.conversationCommand.replacementSessionId
-  ) {
-    return blocked(
-      'conversationCleared',
-      'This conversation has been cleared. Open the current conversation to continue.'
-    )
   }
   if (record.lease.handoffStage || record.lease.handoffOperationId) {
     return blocked('handoffInFlight', 'Wait for the session handoff to finish.')
   }
-  if (admission !== 'at-rest' && activeStructuredAgentSessionTurnId(items)) {
+  // What is current is the host projection's to say: an ended generation's turn, prompt or send
+  // refuses nothing.
+  const work = contextStructuredAgentSessionCurrentWork(ctx)
+  if (admission !== 'at-rest' && work.activeTurnId()) {
     return blocked('turnActive', 'Wait for the current turn to finish before using this command.')
   }
   if (
     items.some(
       (item) =>
         (item.body.kind === 'approval' || item.body.kind === 'question') &&
-        item.body.resolution.state === 'pending'
+        item.body.resolution.state === 'pending' &&
+        work.isCurrentItem(item.itemId)
     )
   ) {
     return blocked(
@@ -63,25 +92,22 @@ export function conversationCommandBlocked(
       'Resolve the pending question or approval before using this command.'
     )
   }
-  const backgroundTasks = ctx.adapter.backgroundTaskState?.(ctx.sessionId)
-  if (backgroundTasks?.state === 'monitoring') {
-    // Only ask for a stop the host can actually perform. A provider that
-    // exposes neither a targeted nor an untargeted stop would otherwise leave
-    // the command refused behind an instruction nobody can follow.
+  // Open work is the live generation's: its adapter ends it on every close, so with no generation
+  // live, any still open is an ended one's leftover and holds nothing.
+  if (work.liveFence !== null && childWork.open) {
     return blocked(
       'backgroundTasksRunning',
-      backgroundTasks.supportsTaskStop || backgroundTasks.supportsStopAll !== false
+      stripOffersStop(childWork.views ?? [], ctx.adapter.backgroundTaskStops?.(ctx.sessionId))
         ? 'Stop background tasks before using this command.'
         : 'Wait for background tasks to finish before using this command.'
     )
   }
+  // The Working indicator's own rule, so "unsettled" is exactly what the chat shows as working.
+  // At handover the queued messages are those behind this command, waiting for it.
   if (
-    ctx.journal.submissions().some(
+    submissions.some(
       (entry) =>
-        (entry.dispatchState === 'pending' &&
-          !(admission === 'handover' && isQueuedAgentJournalSubmission(entry))) ||
-        // Doubt left by an earlier child is not this one's work in flight.
-        (entry.dispatchState === 'unknown' && entry.recovered !== true && entry.fence === ctx.fence)
+        !(admission === 'handover' && isQueuedAgentJournalSubmission(entry)) && work.owesSend(entry)
     )
   ) {
     return blocked(
@@ -90,4 +116,18 @@ export function conversationCommandBlocked(
     )
   }
   return null
+}
+
+/** The strip's own stop controls: a per-row stop where the provider can target one, else its
+ *  single untargeted stop. Asking for a stop it does not render names a control nobody can use. */
+function stripOffersStop(
+  childWork: readonly AgentChildWorkView[],
+  stops: AgentSessionBackgroundTaskStops | undefined
+): boolean {
+  if (!stops) {
+    return false
+  }
+  return stops.supportsTaskStop
+    ? childWork.some(agentChildWorkViewOffersStop)
+    : stops.supportsStopAll
 }

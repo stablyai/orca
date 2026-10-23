@@ -1,0 +1,26 @@
+{
+  "original_declaration_sites": 3,
+  "expanded_fixture_cases": 3,
+  "review_scope": "Complete fixture/driver plus actual socket harness, renderer callbacks and daemon close/restore supporting evidence; no supporting current suite counted.",
+  "checks": [
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 node docs/audits/pending-split-close/reproduce.mjs",
+      "exit_code": 1,
+      "result": "Source changed guard rejects ipc-pty-connect.ts before either suite; no current pass.",
+      "log": "/tmp/orca-root-0029-pending-split.log"
+    }
+  ],
+  "limitations": [
+    "Synthetic saved history and controlled subprocess; actual temporary daemon socket but no native shell.",
+    "Post-decision executeClosePane bypasses public confirmation; README explicitly separates later confirmation regressions.",
+    "Driver exact counts describe historical controls and record exits without asserting them.",
+    "No incident shell count or retained heap slope is established."
+  ],
+  "batch": "root-0029",
+  "reviewer": "root",
+  "source_commit": "92dfb4fda69e746e96786ea7af417813ac441394",
+  "reviewed_files": 2,
+  "case_records": 6,
+  "production_changes": false,
+  "test_source_changes": false
+}

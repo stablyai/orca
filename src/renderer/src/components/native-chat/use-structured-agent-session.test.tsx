@@ -17,7 +17,8 @@ let items: AgentJournalRenderItem[] = []
 let submissions: AgentJournalSubmission[] = []
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: mocks.call
+  callStructuredAgentSession: mocks.call,
+  supportsStructuredAgentSessionQuietRepeatedStop: vi.fn(async () => false)
 }))
 
 vi.mock('./native-chat-session-option-settings-write', () => ({
@@ -41,14 +42,15 @@ vi.mock('./use-structured-agent-session-read', () => ({
   })
 }))
 
-vi.mock('./use-structured-agent-session-outbox', () => ({
-  structuredSessionOperationId: mocks.operationId,
-  useStructuredAgentSessionOutbox: () => ({
-    outbox: [],
-    blockedClientMessageId: null,
+vi.mock('./structured-agent-session-operation-id', () => ({
+  structuredSessionOperationId: mocks.operationId
+}))
+vi.mock('./use-structured-agent-session-sends', () => ({
+  useStructuredAgentSessionSends: () => ({
+    pending: [],
     error: null,
     send: vi.fn(),
-    retry: vi.fn()
+    stopSends: vi.fn()
   })
 }))
 
@@ -109,14 +111,6 @@ const FAST_OPTIONS = {
   models: OPTIONS.models.map((model) => ({ ...model, supportsFastMode: true })),
   fastModeSupport: { supported: true },
   current: { ...OPTIONS.current, fastMode: false, confirmed: ['fastMode'] }
-}
-
-function deferred<T>() {
-  let resolve!: (value: T) => void
-  const promise = new Promise<T>((accept) => {
-    resolve = accept
-  })
-  return { promise, resolve }
 }
 
 describe('useStructuredAgentSession working state', () => {
@@ -322,9 +316,13 @@ describe('useStructuredAgentSession options', () => {
     ).toEqual(['operation-1', 'operation-2'])
   })
 
-  it('reuses an option operation after a pending admission refusal', async () => {
+  it('sends the pick again as a new operation after a pending admission refusal', async () => {
+    const refreshedOptions = Promise.withResolvers<typeof OPTIONS>()
     let attempts = 0
     mocks.call.mockImplementation((_target, method) => {
+      if (method === 'agentSession.options' && fence === 4) {
+        return refreshedOptions.promise
+      }
       if (method !== 'agentSession.setOption') {
         // The hook also holds the session while it is mounted; only option writes are attempts.
         return Promise.resolve(method === 'agentSession.options' ? OPTIONS : null)
@@ -366,7 +364,8 @@ describe('useStructuredAgentSession options', () => {
     })
     fence = 4
     rerender()
-    await waitFor(() => expect(result.current.optionSnapshot).toHaveLength(2))
+    expect(result.current.optionSnapshot.every((entry) => !entry.settable)).toBe(true)
+    await act(async () => refreshedOptions.resolve(OPTIONS))
     await act(async () => {
       expect(await result.current.setStructuredOption('model', 'gpt-fast')).toBe(true)
     })
@@ -379,14 +378,13 @@ describe('useStructuredAgentSession options', () => {
         ([, , params]) =>
           (params as { envelope: { clientOperationId: string } }).envelope.clientOperationId
       )
-    ).toEqual(['operation-1', 'operation-1'])
+    ).toEqual(['operation-1', 'operation-2'])
     expect(
       mutations.map(
         ([, , params]) =>
           (params as { envelope: { expectedRuntimeFence: number } }).envelope.expectedRuntimeFence
       )
     ).toEqual([3, 4])
-    expect(mocks.operationId).toHaveBeenCalledTimes(1)
   })
 
   it('ignores an option failure from a superseded fence', async () => {
@@ -394,8 +392,11 @@ describe('useStructuredAgentSession options', () => {
     const pending = new Promise<never>((_resolve, rejectPromise) => {
       reject = rejectPromise
     })
+    // Only the option write fails; a refused hold would surface on `error` for its own reason.
     mocks.call.mockImplementation((_target, method) =>
-      method === 'agentSession.options' ? Promise.resolve(OPTIONS) : pending
+      method === 'agentSession.options' || method === 'agentSession.hold'
+        ? Promise.resolve(method === 'agentSession.options' ? OPTIONS : null)
+        : pending
     )
     const { result, rerender } = renderHook(() =>
       useStructuredAgentSession({
@@ -667,9 +668,12 @@ describe('useStructuredAgentSession options', () => {
   })
 
   it('discards an option read that began before a Fast mutation', async () => {
-    const staleRead = deferred<typeof FAST_OPTIONS>()
+    const staleRead = Promise.withResolvers<typeof FAST_OPTIONS>()
     let optionReads = 0
     mocks.call.mockImplementation((_target, method) => {
+      if (method === 'agentSession.modelCatalog') {
+        return Promise.resolve({ origin: 'unknown' })
+      }
       if (method === 'agentSession.options') {
         optionReads += 1
         if (optionReads === 1) {

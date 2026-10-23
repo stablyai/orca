@@ -6,14 +6,16 @@ import {
 } from '../shared/updater-renderer-events'
 import { KEYBOARD_LAYOUT_CHANGED_CHANNEL } from '../shared/keyboard-layout-events'
 
-const { exposeInMainWorld, invoke, on, removeListener, send, sendSync } = vi.hoisted(() => ({
-  exposeInMainWorld: vi.fn(),
-  invoke: vi.fn(),
-  on: vi.fn(),
-  removeListener: vi.fn(),
-  send: vi.fn(),
-  sendSync: vi.fn()
-}))
+const { exposeInMainWorld, invoke, on, removeListener, send, sendSync, getPathForFile } =
+  vi.hoisted(() => ({
+    exposeInMainWorld: vi.fn(),
+    invoke: vi.fn(),
+    on: vi.fn(),
+    removeListener: vi.fn(),
+    send: vi.fn(),
+    sendSync: vi.fn(),
+    getPathForFile: vi.fn(() => '/files/notes.txt')
+  }))
 
 vi.mock('electron', () => ({
   contextBridge: { exposeInMainWorld },
@@ -23,7 +25,7 @@ vi.mock('electron', () => ({
     setZoomFactor: vi.fn(),
     setVisualZoomLevelLimits: vi.fn()
   },
-  webUtils: { getPathForFile: vi.fn(() => '') }
+  webUtils: { getPathForFile }
 }))
 
 describe('native preload destructive app actions', () => {
@@ -57,6 +59,21 @@ describe('native preload destructive app actions', () => {
     await import('./index')
     return exposeInMainWorld.mock.calls.find(([name]) => name === 'api')?.[1] as PreloadApi
   }
+
+  it('exposes synchronous file path resolution and a window-local preparation invoke', async () => {
+    const api = await loadApi()
+    const file = new File(['x'], 'notes.txt')
+    expect(api).not.toHaveProperty('getPathForFile')
+    expect(api.fs.getPathForFile?.(file)).toBe('/files/notes.txt')
+    expect(getPathForFile).toHaveBeenCalledWith(file)
+    const request = { paths: ['/files/notes.txt'], consumer: 'agent' as const }
+    invoke.mockResolvedValue({ paths: request.paths, failures: [] })
+    await expect(api.fs.prepareDroppedPaths(request)).resolves.toEqual({
+      paths: request.paths,
+      failures: []
+    })
+    expect(invoke).toHaveBeenCalledExactlyOnceWith('fs:prepareDroppedPaths', request)
+  })
 
   for (const action of ['reload', 'relaunch'] as const) {
     it(`prepares and awaits durability before ${action}`, async () => {

@@ -3,6 +3,7 @@ import { MOBILE_WEB_SHELL_GRANTS } from '../page-route-policy'
 import {
   BRIDGE_FAULT_GRANT,
   BRIDGE_PROTOCOL_VERSION,
+  BRIDGE_RPC_ENVELOPE_GRANT,
   type BridgeConnectionSnapshot,
   type BridgeHostMessage,
   type BridgeInitHost,
@@ -27,6 +28,7 @@ import {
  */
 export const BRIDGE_NATIVE_GRANTS: readonly string[] = [
   BRIDGE_FAULT_GRANT,
+  BRIDGE_RPC_ENVELOPE_GRANT,
   ...MOBILE_WEB_SHELL_GRANTS
 ]
 
@@ -56,6 +58,8 @@ export function createBridgeInitFrame(args: {
    *  (ruling 33.6). The page refuses its own writes to these rather than replacing the device's.
    *  Absent and empty are the same answer: nothing of the app's was left out. */
   storageOversize?: readonly string[]
+  /** The page draws the host sidebar: this session owns the whole host area on a wide layout. */
+  ownsHostArea?: boolean
 }): Extract<BridgeHostMessage, { type: 'init' }> {
   return {
     v: BRIDGE_PROTOCOL_VERSION,
@@ -100,6 +104,8 @@ export function createBridgeInitFrame(args: {
     // the same answer, and every golden in the corpus was recorded without it.
     ...(args.storageOversize === undefined || args.storageOversize.length === 0
       ? {}
-      : { storageOversize: [...args.storageOversize] })
+      : { storageOversize: [...args.storageOversize] }),
+    // Omitted when false, so every recorded golden stays byte-identical.
+    ...(args.ownsHostArea === true ? { ownsHostArea: true } : {})
   }
 }

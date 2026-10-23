@@ -41,13 +41,14 @@ export const wslAwareSpawnMock: Mock<
 export const watchMock: Mock<
   (rootPath: string, options: unknown, callback: WatchCallback) => unknown
 > = vi.fn()
-export const getSshFilesystemProviderMock: Mock<(...args: unknown[]) => unknown> = vi.fn()
 
 export function enoent(): Error {
   return Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
 }
 
-export async function fsModuleMock() {
+export async function fsModuleMock(): Promise<
+  Omit<typeof Fs, 'watch'> & { watch: typeof watchMock }
+> {
   const actual = await vi.importActual<typeof Fs>('fs')
   return {
     ...actual,
@@ -103,22 +104,6 @@ export const localWorktreeRuntimeOptionsMock = {
   getLocalGitOptionsForRegisteredWorktree: getLocalGitOptionsForRegisteredWorktreeMock
 }
 
-const SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE =
-  'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
-
-export const sshFilesystemDispatchMock = {
-  getSshFilesystemProvider: getSshFilesystemProviderMock,
-  requireSshFilesystemProvider: (connectionId: string) => {
-    const provider = getSshFilesystemProviderMock(connectionId)
-    if (!provider) {
-      throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
-    }
-    return provider
-  },
-  onSshFilesystemProviderRegistered: () => () => undefined,
-  SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE
-}
-
 export function resetRuntimeFileMocks(): void {
   lstatMock.mockReset()
   openMock.mockReset()
@@ -130,7 +115,6 @@ export function resetRuntimeFileMocks(): void {
   closeWatcherInWatcherProcessMock.mockReset()
   watchMock.mockReset()
   bundledRipgrepCommandMock.mockReset()
-  getSshFilesystemProviderMock.mockReset()
   getLocalGitOptionsForRegisteredWorktreeMock.mockReset()
   wslAwareSpawnMock.mockReset()
   getLocalGitOptionsForRegisteredWorktreeMock.mockReturnValue({})

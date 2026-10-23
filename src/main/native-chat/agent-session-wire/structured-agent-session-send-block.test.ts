@@ -5,6 +5,7 @@ import {
   openConversationForWrite,
   structuredAgentSessionSendBlock
 } from './structured-agent-session-send-preparation'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 function withCommand(command: AgentSessionConversationCommandRecord) {
   return { ...agentSessionRecordFixture(), conversationCommand: command }
@@ -28,7 +29,7 @@ describe('a send refused by the conversation command it follows', () => {
     ).toBeNull()
   })
 
-  it('says a committed /clear cleared the conversation', () => {
+  it('allows a send to an independently retained old-build clear source', () => {
     const blocked = structuredAgentSessionSendBlock(
       withCommand({
         ...COMMAND,
@@ -39,10 +40,7 @@ describe('a send refused by the conversation command it follows', () => {
       })
     )
 
-    expect(blocked?.refusal).toMatchObject({
-      code: 'agent_session_operation_invalid',
-      details: { reason: 'conversationCleared' }
-    })
+    expect(blocked).toBeNull()
   })
 
   it("lets a send follow an older build's unconfirmed /compact, whose child this host no longer runs", () => {
@@ -76,9 +74,13 @@ describe('a write whose conversation the host could not open', () => {
 
   function refusedBy(error: unknown) {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
-    return openConversationForWrite(async () => {
-      throw error
-    }, ENVELOPE)
+    return openConversationForWrite(
+      async () => {
+        throw error
+      },
+      ENVELOPE,
+      createStructuredAgentSessionLogger()
+    )
   }
 
   it('says a corrupt history is final, in words and not the error', async () => {

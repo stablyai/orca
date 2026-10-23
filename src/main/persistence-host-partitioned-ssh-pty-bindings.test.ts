@@ -1,4 +1,9 @@
-import { closeTestStores, testState, createStore } from './persistence-test-harness'
+import {
+  closeTestStores,
+  testState,
+  createStore,
+  createStoreWithSshRemotePtyLeases
+} from './persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 import { rmSync, mkdtempSync } from 'node:fs'
@@ -9,6 +14,7 @@ import type { WorkspaceSessionState } from '../shared/workspace-session-state-ty
 import { getDefaultWorkspaceSession } from '../shared/constants'
 
 import { TEST_LEAF_1 } from './persistence-session-fixtures'
+import { PtyExitProof } from './pty-exit-proof'
 
 const { trackMock, getCohortAtEmitMock } = vi.hoisted(() => ({
   trackMock: vi.fn(),
@@ -135,52 +141,26 @@ describe('Store SSH remote PTY bindings across host partitions', () => {
   })
 
   it('clears terminated SSH PTY bindings from the SSH partition and legacy local copy', async () => {
-    const store = await createStore()
+    const store = createStoreWithSshRemotePtyLeases([
+      {
+        targetId: 'ssh-1',
+        ptyId: 'remote-pty',
+        worktreeId: 'repo-1::/worktree',
+        tabId: 'tab-1',
+        leafId: TEST_LEAF_1,
+        state: 'attached'
+      }
+    ])
     const ptyId = 'ssh:ssh-1@@remote-pty'
     store.setWorkspaceSession(makeBoundHostSession(ptyId), 'local')
     store.setWorkspaceSession(makeBoundHostSession(ptyId), 'ssh:ssh-1')
-    store.upsertSshRemotePtyLease({
-      targetId: 'ssh-1',
-      ptyId: 'remote-pty',
-      worktreeId: 'repo-1::/worktree',
-      tabId: 'tab-1',
-      leafId: TEST_LEAF_1,
-      state: 'attached'
-    })
 
-    store.markSshRemotePtyLease('ssh-1', ptyId, 'terminated')
+    store.markSshRemotePtyLease('ssh-1', ptyId, PtyExitProof.from('exit-observed', undefined))
 
     for (const hostId of ['local', 'ssh:ssh-1']) {
       const session = store.getWorkspaceSession(hostId)
       expect(session.tabsByWorktree['repo-1::/worktree'][0]?.ptyId).toBeNull()
       expect(session.terminalLayoutsByTabId['tab-1']?.ptyIdsByLeafId).toEqual({})
-    }
-  })
-
-  // `expired` only records that the client lost its route, so both partitions keep the binding the
-  // pane needs to reattach to a remote shell nothing has attested is dead.
-  it('keeps expired SSH PTY bindings in the SSH partition and legacy local copy', async () => {
-    const store = await createStore()
-    const ptyId = 'ssh:ssh-1@@remote-pty'
-    store.setWorkspaceSession(makeBoundHostSession(ptyId), 'local')
-    store.setWorkspaceSession(makeBoundHostSession(ptyId), 'ssh:ssh-1')
-    store.upsertSshRemotePtyLease({
-      targetId: 'ssh-1',
-      ptyId: 'remote-pty',
-      worktreeId: 'repo-1::/worktree',
-      tabId: 'tab-1',
-      leafId: TEST_LEAF_1,
-      state: 'attached'
-    })
-
-    store.markSshRemotePtyLease('ssh-1', ptyId, 'expired')
-
-    for (const hostId of ['local', 'ssh:ssh-1']) {
-      const session = store.getWorkspaceSession(hostId)
-      expect(session.tabsByWorktree['repo-1::/worktree'][0]?.ptyId).toBe(ptyId)
-      expect(session.terminalLayoutsByTabId['tab-1']?.ptyIdsByLeafId).toEqual({
-        [TEST_LEAF_1]: ptyId
-      })
     }
   })
 })

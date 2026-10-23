@@ -54,6 +54,48 @@ export type DaemonHostSources = {
   windowsProcessTreeDir: string
 }
 
+export function daemonHostProcessPackageDir(sources: DaemonHostSources): string {
+  return join(sources.resourcesPath, 'node_modules', '@orca', 'process-host')
+}
+
+function daemonHostNodePtyDir(sources: DaemonHostSources): string {
+  return join(sources.resourcesPath, 'node_modules', 'node-pty')
+}
+
+/**
+ * node-pty LoadLibraryW()s conpty.dll by plain path; on Windows 11 with LongPathsEnabled=1 that
+ * failed with error 206 (every terminal) once the path passed 250 chars, so the host must fit under it.
+ */
+export const DAEMON_HOST_NATIVE_PATH_BUDGET = 250
+
+/** Length of the longest conpty file a host rooted at `hostRoot` loads or launches. */
+export function deepestDaemonHostNativePathLength(
+  sources: DaemonHostSources,
+  hostRoot: string
+): number {
+  const nodePtyRel = toPosixRelative(sources.appDir, daemonHostNodePtyDir(sources))
+  // OpenConsole.exe sits beside conpty.dll and is longer, so it bounds both.
+  return Math.max(
+    ...['build/Release', `prebuilds/win32-${process.arch}`].map(
+      (binDir) => destPath(hostRoot, `${nodePtyRel}/${binDir}/conpty/OpenConsole.exe`).length
+    )
+  )
+}
+
+// Over budget every terminal fails; the install-dir host only loses update survival.
+export function daemonHostFitsPathBudget(sources: DaemonHostSources, hostRoot: string): boolean {
+  return deepestDaemonHostNativePathLength(sources, hostRoot) <= DAEMON_HOST_NATIVE_PATH_BUDGET
+}
+
+function isRuntimeProcessHostPath(packageRel: string): boolean {
+  return (
+    packageRel === '' ||
+    packageRel === 'package.json' ||
+    packageRel === 'dist' ||
+    packageRel.startsWith('dist/')
+  )
+}
+
 /** A required file, a directory on the way to one, or anything in lib/ (index.js requires its siblings). */
 function isRuntimeProcessTreePath(packageRel: string): boolean {
   return (
@@ -118,6 +160,15 @@ export function buildDaemonHostManifest(sources: DaemonHostSources): CopyOp[] {
     optional: true
   })
 
+  // Keep the external package complete so every public subpath shares the same process policy state.
+  const processHostDir = daemonHostProcessPackageDir(sources)
+  ops.push({
+    sourcePath: processHostDir,
+    destRel: toPosixRelative(appDir, processHostDir),
+    kind: 'dir',
+    filter: (sourcePath) => isRuntimeProcessHostPath(toPosixRelative(processHostDir, sourcePath))
+  })
+
   // @vscode/windows-process-tree, mirrored so the daemon's require() resolves it; without it every snapshot forks a powershell.exe (#16905).
   // Filtered to the runtime files: the installed package is ~25MB of gyp intermediates (.obj/.pdb) around a ~150KB addon.
   const { windowsProcessTreeDir } = sources
@@ -129,7 +180,7 @@ export function buildDaemonHostManifest(sources: DaemonHostSources): CopyOp[] {
       isRuntimeProcessTreePath(toPosixRelative(windowsProcessTreeDir, sourcePath))
   })
   // node-pty tree, mirrored so require('node-pty') resolves it; filtered to drop unused .pdb/other-arch prebuilds.
-  const nodePtyDir = join(resourcesPath, 'node_modules', 'node-pty')
+  const nodePtyDir = daemonHostNodePtyDir(sources)
   ops.push({
     sourcePath: nodePtyDir,
     destRel: toPosixRelative(appDir, nodePtyDir),

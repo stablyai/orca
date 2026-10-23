@@ -211,3 +211,20 @@ export function shouldReplaceMarker(
   // regress a newer witness from another host.
   return incoming.teardownId === current.teardownId
 }
+
+/** Records "dismiss all" leaves as they were: this host does not list them (a newer Orca's chats). */
+export type KeepRecord = (marker: AgentSessionResumeMarker) => boolean
+
+/** What a "dismiss all" keeps, and how many pending offers it ends. */
+export function splitDismissedAll(
+  state: Pick<RecoveryCapsuleState, 'entries' | 'failed'>,
+  keep: KeepRecord
+): { kept: Pick<RecoveryCapsuleState, 'entries' | 'failed'>; dismissedPending: number } {
+  const entries = state.entries.filter((entry) => keep(entry.marker))
+  return {
+    kept: { entries, failed: state.failed.filter((failure) => keep(failure.marker)) },
+    dismissedPending: state.entries.filter(
+      (entry) => entry.state === 'pending' && !keep(entry.marker)
+    ).length
+  }
+}

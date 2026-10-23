@@ -44,7 +44,8 @@ const PR_REFRESH_EXPORTS = [
   'enqueuePRRefresh',
   'refreshPRNow',
   'reportVisiblePRRefreshCandidates',
-  'setPRRefreshOutcomeObserver'
+  'setPRRefreshOutcomeObserver',
+  'setPRRefreshRegistrationCheck'
 ] as const
 
 type MockedModule<Names extends readonly string[]> = Record<Names[number], Mock>

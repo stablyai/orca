@@ -128,11 +128,11 @@ export function buildPosixHookSpoolLines(source: string, eventNameVar?: string):
   const eventArg = eventNameVar ? ` "$(spool_json_escape "\${${eventNameVar}:-}")"` : ''
   const spoolRecordLine = "  { printf '\\n{".concat(
     eventFormat,
-    '"paneKey":"%s","tabId":"%s","worktreeId":"%s","env":"%s","version":"%s","launchToken":"%s","source":"%s","receivedAt":%s,"payload":%s}\\n\'',
+    '"paneKey":"%s","tabId":"%s","worktreeId":"%s","env":"%s","version":"%s","launchToken":"%s","source":"%s","receivedAt":%s,"agentProcess":"%s","payload":%s}\\n\'',
     eventArg,
     ' "$(spool_json_escape "${ORCA_PANE_KEY:-}")" "$(spool_json_escape "${ORCA_TAB_ID:-}")" "$(spool_json_escape "${ORCA_WORKTREE_ID:-}")" "$(spool_json_escape "${ORCA_AGENT_HOOK_ENV:-}")" "$(spool_json_escape "${ORCA_AGENT_HOOK_VERSION:-}")" "$(spool_json_escape "${ORCA_AGENT_LAUNCH_TOKEN:-}")" "$(spool_json_escape "',
     source,
-    '")" "$spool_now" "$payload"; } >> "$spool_file" 2>/dev/null || :'
+    '")" "$spool_now" "$(spool_json_escape "${orca_agent_process:-}")" "$payload"; } >> "$spool_file" 2>/dev/null || :'
   )
   return [
     'spool_hook_event() {',
@@ -181,8 +181,8 @@ const WINDOWS_HOOK_ENVIRONMENT_VARS = [
 // may abandon stdin rather than close it — a read-to-EOF then blocks forever and strands a
 // visible window per hook event. The Windows rule: a hook must check the Orca env before it
 // owns stdin, and exit without reading when the env is missing — the payload is discarded on
-// that path anyway. This applies to .cmd, the copilot .ps1, and the Git Bash kimi .sh alike,
-// and to the launchers that own stdin themselves when the managed script is missing.
+// that path anyway. This applies to .cmd and Git Bash hooks alike, and to the
+// PowerShell launchers that own stdin themselves when the managed script is missing.
 // POSIX hooks keep capture-first: their callers close stdin, and exiting mid-write there
 // surfaces as EPIPE the agent can see (#8110).
 export function buildWindowsHookEnvironmentGuardLines(): string[] {

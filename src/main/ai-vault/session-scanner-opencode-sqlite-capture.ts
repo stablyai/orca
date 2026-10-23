@@ -9,8 +9,9 @@ import { extractPartText, readOpenCodeSqliteSession } from './session-scanner-op
 import { readOpenCodeDatabase } from './session-scanner-opencode-sqlite-open'
 import { canReadOpenCodeMessageParts } from './session-scanner-opencode-sqlite-schema'
 import type { TranscriptMessage, TranscriptMessageRole } from './session-transcript-consumers'
-import { boundedText, toolCallText } from './session-transcript-message-content'
+import { toolCallContent, transcriptMessageFromText } from './session-transcript-message-content'
 import { zcodeVisibleMessageFilter } from './session-scanner-zcode-visibility'
+import { zcodeTranscriptOrder } from './session-scanner-zcode-order'
 import type SyncDatabase from '../sqlite/sync-database'
 
 // Why: the session list needs the newest few messages, and the search index
@@ -68,15 +69,16 @@ function toCaptureRow(value: unknown): CaptureRow | null {
  * those are two. The wording of each half is the shared one on purpose: a
  * search for a command should find it whichever agent ran it.
  */
-function toolPartText(partData: string): string | null {
+function toolPartText(partData: string): { text: string; textTruncated: boolean } | null {
   const part = asRecord(parseJson(partData))
   if (!part) {
     return null
   }
   const state = asRecord(part.state)
-  const lines = [toolCallText(part.tool, sharedToolInputSpelling(state?.input)), toolOutcome(state)]
+  const call = toolCallContent(part.tool, sharedToolInputSpelling(state?.input))
+  const lines = [call.text, toolOutcome(state)]
   const text = lines.filter((line) => line !== null).join('\n')
-  return text.trim() ? text : null
+  return text.trim() ? { text, textTruncated: call.textTruncated } : null
 }
 
 // `state.error` is set on a failed or cancelled call and `state.output` on a
@@ -120,7 +122,7 @@ function captureRole(role: string | null): TranscriptMessageRole | null {
   return role === 'user' || role === 'assistant' ? role : null
 }
 
-function buildCaptureQuery(agent: 'opencode' | 'zcode'): string {
+function buildCaptureQuery(db: SyncDatabase, agent: 'opencode' | 'zcode'): string {
   // Message order, then part order within a message: the same key the preview
   // read uses, run forwards and without the newest-N window.
   return `SELECT m.id AS message_id,
@@ -134,7 +136,8 @@ function buildCaptureQuery(agent: 'opencode' | 'zcode'): string {
             ${zcodeVisibleMessageFilter(agent)}
             AND json_extract(m.data, '$.role') IN ('user','assistant')
             AND json_extract(p.data, '$.type') IN ${OPENCODE_CAPTURE_PART_TYPES}
-          ORDER BY m.time_created ASC, m.id ASC, p.time_created ASC, p.rowid ASC
+          ORDER BY ${zcodeTranscriptOrder(db, agent, 'message', 'm', 'ASC')},
+                   ${zcodeTranscriptOrder(db, agent, 'part', 'p', 'ASC')}
           LIMIT ?`
 }
 
@@ -164,7 +167,7 @@ export function readOpenCodeSessionMessages(
     )
   }
   const rows = db
-    .prepare(buildCaptureQuery(agent))
+    .prepare(buildCaptureQuery(db, agent))
     .all(sessionId, OPENCODE_CAPTURE_RECORD_LIMIT + 1)
   if (rows.length > OPENCODE_CAPTURE_RECORD_LIMIT) {
     throw new Error(
@@ -193,9 +196,12 @@ export function readOpenCodeSessionMessages(
   // The turn's own words lead, its tool calls follow: the order
   // `transcriptMessagesFromContent` produces for a file provider's blocks.
   const flush = (): void => {
-    const text = openRole && openWords.length > 0 ? boundedText(openWords.join('\n')) : null
-    if (openRole && text) {
-      keep({ role: openRole, text, timestamp: openTimestamp })
+    const message =
+      openRole && openWords.length > 0
+        ? transcriptMessageFromText(openRole, openWords.join('\n'), openTimestamp)
+        : null
+    if (message) {
+      keep(message)
     }
     for (const tool of openTools) {
       keep(tool)
@@ -216,9 +222,12 @@ export function readOpenCodeSessionMessages(
       openTimestamp = timestampIso(row.messageTimeMs)
     }
     if (row.partType === 'tool') {
-      const text = boundedText(toolPartText(row.partData) ?? '')
-      if (text) {
-        openTools.push({ role: 'tool', text, timestamp: openTimestamp })
+      const content = toolPartText(row.partData)
+      const message = content
+        ? transcriptMessageFromText('tool', content.text, openTimestamp, content.textTruncated)
+        : null
+      if (message) {
+        openTools.push(message)
       }
       continue
     }

@@ -18,13 +18,12 @@ import type { TranscriptMessageSink } from './session-transcript-consumers'
 import {
   accumulatorSessionIdentity,
   cloneSessionAccumulator,
-  addPreviewContent,
-  addPreviewMessage,
   createAccumulator,
   finalizeSession,
   sessionIdFromFileName,
   updateTimeline
 } from './session-scanner-accumulator'
+import { addSessionContent } from './session-scanner-messages'
 import {
   arrayValue,
   asRecord,
@@ -40,6 +39,20 @@ import {
 type ParserSessionOptions = {
   executionHostId?: ExecutionHostId
   executionHostPlatform?: NodeJS.Platform | null
+}
+
+/** The session's cwd; a scope walk reads it from metadata.json without the context file. */
+export function rovoSessionCwd(metadata: Record<string, unknown>): string | null {
+  return firstString(metadata, [
+    'workspace_path',
+    'workspacePath',
+    'workspace',
+    'cwd',
+    'working_directory',
+    'workingDirectory',
+    'project_path',
+    'projectPath'
+  ])
 }
 
 export async function parseRovoSessionFile(
@@ -60,16 +73,7 @@ export async function parseRovoSessionFile(
     messages
   })
   accumulator.title = firstString(metadata, ['title', 'name', 'summary'])
-  accumulator.cwd = firstString(metadata, [
-    'workspace_path',
-    'workspacePath',
-    'workspace',
-    'cwd',
-    'working_directory',
-    'workingDirectory',
-    'project_path',
-    'projectPath'
-  ])
+  accumulator.cwd = rovoSessionCwd(metadata)
   updateTimeline(
     accumulator,
     extractString(metadata.created_at) ?? extractString(metadata.createdAt)
@@ -101,7 +105,7 @@ export function consumeRovoSessionContext(
       if (role === 'user') {
         accumulator.title ??= extractContentText(record?.content)
       }
-      addPreviewContent(accumulator, role, record?.content, record?.timestamp)
+      addSessionContent(accumulator, role, record?.content, record?.timestamp)
     }
   }
 
@@ -122,19 +126,15 @@ export function consumeRovoHistoryEntry(
   if (role !== 'user' && role !== 'assistant') {
     return
   }
-  const text = rovoPartsText(arrayValue(record.parts), role)
-  if (!text) {
+  const content = rovoTextParts(arrayValue(record.parts), role)
+  if (content.length === 0) {
     return
   }
   accumulator.messageCount++
   if (role === 'user') {
-    accumulator.title ??= text
+    accumulator.title ??= extractContentText(content)
   }
-  addPreviewMessage(accumulator, {
-    role,
-    text,
-    timestamp: record.timestamp
-  })
+  addSessionContent(accumulator, role, content, record.timestamp)
 }
 
 export function rovoRoleFromKind(value: unknown): 'user' | 'assistant' | null {
@@ -147,7 +147,7 @@ export function rovoRoleFromKind(value: unknown): 'user' | 'assistant' | null {
   return null
 }
 
-export function rovoPartsText(parts: unknown[], role: 'user' | 'assistant'): string | null {
+function rovoTextParts(parts: unknown[], role: 'user' | 'assistant'): string[] {
   const textParts: string[] = []
   for (const part of parts) {
     const record = asRecord(part)
@@ -171,7 +171,7 @@ export function rovoPartsText(parts: unknown[], role: 'user' | 'assistant'): str
       textParts.push(text)
     }
   }
-  return extractContentText(textParts)
+  return textParts
 }
 
 // Agents whose transcripts are append-only message-graph JSONL (session +
@@ -264,7 +264,7 @@ function consumeMessageGraphRecordLine(state: MessageGraphParseState, line: stri
       accumulator.model = extractString(message?.model) ?? accumulator.model
       accumulator.totalTokens += tokenTotal(message?.usage)
     }
-    addPreviewContent(accumulator, role, message?.content, record.timestamp)
+    addSessionContent(accumulator, role, message?.content, record.timestamp)
   }
 }
 

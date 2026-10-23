@@ -9,6 +9,12 @@ import {
 } from './session-parse-cache-store'
 import { TranscriptMessageChannel } from './session-transcript-channel'
 import { mergeSkippedTranscriptRecords } from './session-transcript-record-budget'
+import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
+
+type TranscriptSessionEnrichment = {
+  /** Complete consumer metadata before committing; the returned fold stays unmodified. */
+  sessionForConsumers?: (session: AiVaultSession | null) => Promise<AiVaultSession | null>
+}
 
 const NEWLINE_BYTE = 0x0a
 
@@ -56,13 +62,16 @@ export function requestWholeTranscriptRead(path: string): void {
  * grew and the recorded offset still sits on a line boundary. Anything else
  * (a rewrite, a truncation, a platform change) re-reads the whole file.
  */
-export async function readResumableTranscript(args: {
-  candidate: SessionFileCandidate
-  platform: NodeJS.Platform
-  resume: SessionParseResumePoint | null
-  stateFactory: (messages: TranscriptMessageChannel) => ResumableSessionParseState
-  stats?: TranscriptReadStats
-}): Promise<ResumableTranscriptRead> {
+export async function readResumableTranscript(
+  args: TranscriptSessionEnrichment & {
+    candidate: SessionFileCandidate
+    platform: NodeJS.Platform
+    resume: SessionParseResumePoint | null
+    stateFactory: (messages: TranscriptMessageChannel) => ResumableSessionParseState
+    stats?: TranscriptReadStats
+    signal?: AbortSignal
+  }
+): Promise<ResumableTranscriptRead> {
   const { file } = args.candidate
   const resume = args.resume
   const canResume =
@@ -72,7 +81,8 @@ export async function readResumableTranscript(args: {
     file.mtimeMs >= resume.mtimeMs &&
     // A changed timestamp without growth signals a rewrite, even at a valid line boundary.
     (file.mtimeMs === resume.mtimeMs || file.sizeBytes > (resume.sizeBytes ?? resume.byteOffset)) &&
-    (resume.byteOffset === 0 || (await endsWithNewlineAt(file.path, resume.byteOffset)))
+    (resume.byteOffset === 0 ||
+      (await endsWithNewlineAt(file.path, resume.byteOffset, args.signal)))
 
   // Clone before consuming: a failed read must not corrupt the cached state,
   // or the next resume would double-count the lines applied before the error.
@@ -108,7 +118,8 @@ export async function readResumableTranscript(args: {
       // Bound: the optional hooks are declared as methods, so a parser written
       // with method syntax must not lose `this` on the way into the reader.
       onLineBytes: state.consumeLineBytes?.bind(state),
-      shouldStop: state.shouldStop?.bind(state)
+      shouldStop: state.shouldStop?.bind(state),
+      signal: args.signal
     })
     if (args.stats) {
       args.stats.bytesRead += readResult.bytesRead
@@ -128,7 +139,15 @@ export async function readResumableTranscript(args: {
     }
 
     const session = await displayState.finalize(args.platform)
-    channel.finishRead({ session, byteOffset: readResult.consumedThrough, incomplete: false })
+    const consumerSession = args.sessionForConsumers
+      ? await args.sessionForConsumers(session)
+      : session
+    throwIfAiVaultScanCancelled(args.signal)
+    channel.finishRead({
+      session: consumerSession,
+      byteOffset: readResult.consumedThrough,
+      incomplete: false
+    })
     return {
       session,
       resume: {
@@ -146,7 +165,12 @@ export async function readResumableTranscript(args: {
       }
     }
   } catch (error) {
-    channel.finishRead({ session: null, byteOffset: startOffset, incomplete: true })
+    channel.finishRead({
+      session: null,
+      byteOffset: startOffset,
+      incomplete: true,
+      cancelled: args.signal?.aborted === true
+    })
     throw error
   }
 }
@@ -156,12 +180,14 @@ export async function readResumableTranscript(args: {
  * (whole-JSON documents, Kimi's state doc, OpenCode). There is no cursor to
  * keep, so every read is a whole-file `replace`.
  */
-export async function readWholeTranscript(args: {
-  candidate: SessionFileCandidate
-  platform: NodeJS.Platform
-  stats?: TranscriptReadStats
-  signal?: AbortSignal
-}): Promise<AiVaultSession | null> {
+export async function readWholeTranscript(
+  args: TranscriptSessionEnrichment & {
+    candidate: SessionFileCandidate
+    platform: NodeJS.Platform
+    stats?: TranscriptReadStats
+    signal?: AbortSignal
+  }
+): Promise<AiVaultSession | null> {
   const { file } = args.candidate
   if (args.stats) {
     args.stats.fullParses++
@@ -171,10 +197,23 @@ export async function readWholeTranscript(args: {
   channel.beginRead({ candidate: args.candidate, mode: 'replace', previousByteOffset: 0 })
   try {
     const session = await parseAgentSessionFile(args.candidate, args.platform, channel, args.signal)
-    channel.finishRead({ session, byteOffset: file.sizeBytes ?? 0, incomplete: false })
+    const consumerSession = args.sessionForConsumers
+      ? await args.sessionForConsumers(session)
+      : session
+    throwIfAiVaultScanCancelled(args.signal)
+    channel.finishRead({
+      session: consumerSession,
+      byteOffset: file.sizeBytes ?? 0,
+      incomplete: false
+    })
     return session
   } catch (error) {
-    channel.finishRead({ session: null, byteOffset: 0, incomplete: true })
+    channel.finishRead({
+      session: null,
+      byteOffset: 0,
+      incomplete: true,
+      cancelled: args.signal?.aborted === true
+    })
     throw error
   }
 }
@@ -184,7 +223,11 @@ export async function readWholeTranscript(args: {
 // grown rewrite keeping '\n' at exactly this byte would slip through, but
 // agent transcripts are append-only so that trade is accepted (worst case is
 // a stale vault row until the file is next truncated or the app restarts).
-async function endsWithNewlineAt(path: string, offset: number): Promise<boolean> {
-  const slice = await readTranscriptSlice(path, offset - 1, 1, 'scan')
+async function endsWithNewlineAt(
+  path: string,
+  offset: number,
+  signal?: AbortSignal
+): Promise<boolean> {
+  const slice = await readTranscriptSlice(path, offset - 1, 1, 'scan', signal)
   return slice.length === 1 && slice[0] === NEWLINE_BYTE
 }

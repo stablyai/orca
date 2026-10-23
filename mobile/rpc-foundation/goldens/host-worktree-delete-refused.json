@@ -45,6 +45,19 @@
       "ordinal": 4,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.rm\",\"params\":{\"worktree\":\"id:wt-1\",\"force\":true}}"
     },
+    "1991d3406586": {
+      "confirmRemoveHost": false,
+      "lastKnownWorktrees": [],
+      "optimisticActiveWorktreeIdentity": {
+        "$rpc": "null"
+      },
+      "pinnedIds": [],
+      "serverWorkspaces": {
+        "hosts": [],
+        "worktrees": []
+      },
+      "worktrees": []
+    },
     "4da755eea670": {
       "name": "worktree.rm#1",
       "ordinal": 3,
@@ -94,6 +107,53 @@
         }
       ]
     },
+    "55adbae71b7b": {
+      "confirmRemoveHost": false,
+      "lastKnownWorktrees": [
+        {
+          "branch": "feature/pin",
+          "displayName": "marlin",
+          "hasAttachedPty": false,
+          "isPinned": false,
+          "linkedPR": {
+            "$rpc": "null"
+          },
+          "liveTerminalCount": 0,
+          "path": "/repos/marlin/wt-1",
+          "preview": "",
+          "repo": "marlin",
+          "repoId": "repo-1",
+          "unread": false,
+          "worktreeId": "wt-1"
+        }
+      ],
+      "optimisticActiveWorktreeIdentity": {
+        "$rpc": "null"
+      },
+      "pinnedIds": [],
+      "serverWorkspaces": {
+        "hosts": [],
+        "worktrees": []
+      },
+      "worktrees": [
+        {
+          "branch": "feature/pin",
+          "displayName": "marlin",
+          "hasAttachedPty": false,
+          "isPinned": false,
+          "linkedPR": {
+            "$rpc": "null"
+          },
+          "liveTerminalCount": 0,
+          "path": "/repos/marlin/wt-1",
+          "preview": "",
+          "repo": "marlin",
+          "repoId": "repo-1",
+          "unread": false,
+          "worktreeId": "wt-1"
+        }
+      ]
+    },
     "753a3ae9bdd7": {
       "name": "lastKnownWorktrees",
       "ordinal": 6,
@@ -121,16 +181,6 @@
       "ordinal": 2,
       "value": []
     },
-    "8056533b940f": {
-      "confirmRemoveHost": false,
-      "lastKnownWorktrees": [],
-      "optimisticActiveWorktreeIdentity": {
-        "$rpc": "null"
-      },
-      "pinnedIds": [],
-      "routeActionState": {},
-      "worktrees": []
-    },
     "8f27c443230b": {
       "name": "worktrees",
       "ordinal": 1,
@@ -139,50 +189,6 @@
     "9270aeb7d9c6": {
       "status": "pending",
       "startedAt": 0
-    },
-    "bcb66b345fcd": {
-      "confirmRemoveHost": false,
-      "lastKnownWorktrees": [
-        {
-          "branch": "feature/pin",
-          "displayName": "marlin",
-          "hasAttachedPty": false,
-          "isPinned": false,
-          "linkedPR": {
-            "$rpc": "null"
-          },
-          "liveTerminalCount": 0,
-          "path": "/repos/marlin/wt-1",
-          "preview": "",
-          "repo": "marlin",
-          "repoId": "repo-1",
-          "unread": false,
-          "worktreeId": "wt-1"
-        }
-      ],
-      "optimisticActiveWorktreeIdentity": {
-        "$rpc": "null"
-      },
-      "pinnedIds": [],
-      "routeActionState": {},
-      "worktrees": [
-        {
-          "branch": "feature/pin",
-          "displayName": "marlin",
-          "hasAttachedPty": false,
-          "isPinned": false,
-          "linkedPR": {
-            "$rpc": "null"
-          },
-          "liveTerminalCount": 0,
-          "path": "/repos/marlin/wt-1",
-          "preview": "",
-          "repo": "marlin",
-          "repoId": "repo-1",
-          "unread": false,
-          "worktreeId": "wt-1"
-        }
-      ]
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -205,7 +211,7 @@
             "mount": "eb79a9b3682a",
             "delete": "9270aeb7d9c6"
           },
-          "state": "8056533b940f",
+          "state": "1991d3406586",
           "effects": ["8f27c443230b", "7a68c6ea2c44"]
         }
       },
@@ -218,7 +224,7 @@
             "mount": "eb79a9b3682a",
             "delete": "eb79a9b3682a"
           },
-          "state": "bcb66b345fcd",
+          "state": "55adbae71b7b",
           "effects": ["8f27c443230b", "7a68c6ea2c44", "50378a292ce7", "753a3ae9bdd7"]
         }
       }

@@ -1,6 +1,6 @@
 import { useAppStore } from '../../store'
 import { getConnectionId } from '@/lib/connection-context'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { resolveTerminalPasteRuntimeEnvironmentId } from './terminal-paste-runtime'
 import { keybindingMatchesAction } from '../../../../shared/keybindings'
 import {
   firesNativePasteEvent,
@@ -40,6 +40,7 @@ export function registerTerminalPanePasteListeners({
     forceBracketedMultilineTextPaste,
     keybindings,
     managerRef,
+    paneTransportsRef,
     setTerminalError,
     worktreeId
   } = controller
@@ -178,9 +179,10 @@ export function registerTerminalPanePasteListeners({
       return
     }
     const connectionId = getConnectionId(worktreeId) ?? null
-    const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(
+    const runtimeEnvironmentId = resolveTerminalPasteRuntimeEnvironmentId(
       useAppStore.getState(),
-      worktreeId
+      worktreeId,
+      paneTransportsRef.current.get(pane.id)
     )
     void pasteTerminalClipboard({
       readClipboardText: window.api.ui.readClipboardText,

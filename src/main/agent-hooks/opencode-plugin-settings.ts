@@ -1,4 +1,4 @@
-import type { PluginSources } from '../../relay/plugin-overlay'
+import type { PluginSources } from '../../wsl-guest/plugin-overlay'
 import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-status-hooks-setting'
 import type { ManagedHookDetectionSettings } from './managed-hook-detection-commands'
 

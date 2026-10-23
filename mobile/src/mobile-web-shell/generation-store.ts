@@ -1,16 +1,16 @@
 import { z } from 'zod'
-import type { MobileWebBundleManifestRead } from '../transport/mobile-web-bundle-reply-schemas'
-import type { MobileWebBundleFetchResult } from '../transport/mobile-web-bundle-fetch'
-import { joinUri } from './generation-cache-uri'
-import type { GenerationDirectoryEntry, GenerationFileSystem } from './generation-store-file-system'
 import {
-  MANIFEST_FILE_NAME,
-  NEXT_MANIFEST_FILE_NAME,
-  parseGenerationManifest,
-  settleManifestSwap,
-  swapInFreshManifest
-} from './generation-manifest-swap'
-import { refuseManifestPersist, type ManifestPersistOutcome } from './manifest-persist-refusal'
+  MobileWebBundleManifestReadSchema,
+  type MobileWebBundleManifestRead
+} from '../transport/mobile-web-bundle-reply-schemas'
+import type {
+  MobileWebBundleFetchResult,
+  MobileWebBundleReusableAssets
+} from '../transport/mobile-web-bundle-fetch'
+import { joinUri } from './generation-cache-uri'
+import { MANIFEST_FILE_NAME, requireStorablePath } from './generation-asset-path'
+import { copyCachedAsset, reusableAssetsOf } from './generation-reuse'
+import type { GenerationDirectoryEntry, GenerationFileSystem } from './generation-store-file-system'
 import { isHostCacheKey } from './host-cache-key'
 import type { MobileWebShellUpdateFailure } from './mobile-web-shell-update-failure'
 import {
@@ -42,23 +42,14 @@ export type StagedGeneration = {
 
 export type GenerationStore = {
   readActiveGeneration(hostKey: string): Promise<ActiveGeneration | null>
+  /** The host's active generation, by content, for a download to leave unchanged assets to the
+   *  stage, which copies them from it. */
+  openReusableAssets(hostKey: string): Promise<MobileWebBundleReusableAssets>
   stageGeneration(hostKey: string, result: MobileWebBundleFetchResult): Promise<StagedGeneration>
   commitGeneration(staged: StagedGeneration): Promise<ActiveGeneration>
   abortStagedGeneration(staged: StagedGeneration): Promise<void>
   sweepStagedGenerations(): Promise<void>
   deleteHostCache(hostKey: string): Promise<void>
-  /**
-   * Rewrites the manifest stored beside a host's active generation, and nothing else.
-   *
-   * For the one edit that changes a manifest without changing a byte of the bundle: route grants
-   * are published under the build id of the assets they describe, so a same-build cache hit holds
-   * the right bytes under a manifest an edit behind. The stored manifest is what an unreachable
-   * host is judged by, so until it is rewritten every offline verdict lags.
-   */
-  persistActiveManifest(
-    hostKey: string,
-    manifest: MobileWebBundleManifestRead
-  ): Promise<ManifestPersistOutcome>
   /** Why an update read failed, kept for Troubleshoot. Never rejects: it is only evidence. */
   recordUpdateFailure(failure: MobileWebShellUpdateFailure): Promise<void>
   /** Oldest first; empty when nothing was recorded or the log cannot be read. */
@@ -162,12 +153,7 @@ export function createGenerationStore(options: {
     const only = directories.length === 1 ? directories[0] : null
     if (only !== null) {
       const directory = joinUri(generations, only.name)
-      // A persist interrupted anywhere leaves a pending manifest; finishing or discarding it here
-      // is what makes the swap crash-safe. Unsettleable is not a bad generation — the pending file
-      // may be the only manifest left — so nothing is deleted and the next read tries again.
-      if ((await settleManifestSwap(fs, directory, only.name)) === 'unsettled') {
-        return null
-      }
+      // Older builds' manifest-next.json is never read; alone it reads as no manifest.
       let text: string | null
       try {
         text = await fs.readText(joinUri(directory, MANIFEST_FILE_NAME))
@@ -176,7 +162,7 @@ export function createGenerationStore(options: {
         // redownloads, and a transient I/O blip must not cost a cache that verified.
         return null
       }
-      const manifest = parseGenerationManifest(text)
+      const manifest = text === null ? null : parseManifest(text)
       if (manifest !== null && manifest.buildId === only.name) {
         return { buildId: manifest.buildId, directory, manifest }
       }
@@ -191,16 +177,21 @@ export function createGenerationStore(options: {
   ): Promise<StagedGeneration> {
     const manifest = result.manifest
     const directory = joinUri(stagingRoot(hostKey), manifest.buildId)
+    const reused = new Set(result.reused)
     const assets = manifest.assets.map((asset) => ({
+      asset,
       uri: joinUri(directory, requireStorablePath(asset.path)),
-      bytes: requireExactBytes(result.assets.get(asset.path), asset)
+      bytes: reused.has(asset.path) ? null : requireExactBytes(result.assets.get(asset.path), asset)
     }))
+    // Here rather than during the download, so a sweep or a second download of this build never
+    // takes a copy out from under it: the stage runs on the queue they do.
+    const active = reused.size > 0 ? await readActive(hostKey) : null
     // Residue from an earlier attempt is dropped rather than written over: a half-written tree
     // plus a fresh write is not a generation either side verified.
     await fs.delete(directory)
     try {
-      for (const asset of assets) {
-        await fs.writeBytes(asset.uri, asset.bytes)
+      for (const { asset, uri, bytes } of assets) {
+        await (bytes === null ? copyCachedAsset(fs, active, asset, uri) : fs.writeBytes(uri, bytes))
       }
       // Last, always: a tree without it never reads back as an activation, which is what makes an
       // interrupted write recoverable rather than ambiguous.
@@ -280,20 +271,8 @@ export function createGenerationStore(options: {
     return active
   }
 
-  async function persistManifest(
-    hostKey: string,
-    manifest: MobileWebBundleManifestRead
-  ): Promise<ManifestPersistOutcome> {
-    const active = await readActive(hostKey)
-    if (active === null) {
-      return 'refused-no-active-generation'
-    }
-    const refusal = refuseManifestPersist(active.manifest, manifest)
-    if (refusal !== null) {
-      return refusal
-    }
-    await swapInFreshManifest(fs, active.directory, manifest)
-    return 'persisted'
+  async function openReusable(hostKey: string): Promise<MobileWebBundleReusableAssets> {
+    return reusableAssetsOf(fs, await readActive(hostKey))
   }
 
   async function sweep(): Promise<void> {
@@ -325,14 +304,13 @@ export function createGenerationStore(options: {
 
   return {
     readActiveGeneration: (hostKey) => serialize(() => openActive(hostKey)),
+    openReusableAssets: (hostKey) => serialize(() => openReusable(hostKey)),
     stageGeneration: (hostKey, result) => serialize(() => stage(hostKey, result)),
     commitGeneration: (staged) => serialize(() => commit(staged)),
     abortStagedGeneration: (staged) =>
       serialize(() => fs.delete(requireIssuedHandle(staged).directory)),
     sweepStagedGenerations: () => serialize(sweep),
     deleteHostCache: (hostKey) => serialize(() => deleteHost(hostKey)),
-    persistActiveManifest: (hostKey, manifest) =>
-      serialize(() => persistManifest(hostKey, manifest)),
     recordUpdateFailure: (failure) =>
       serialize(() => recordUpdateFailureIn(fs, failure)).catch(() => undefined),
     readUpdateFailures: () => serialize(() => readUpdateFailureLog(fs)),
@@ -343,6 +321,13 @@ export function createGenerationStore(options: {
 
 function withHostLast(order: readonly string[], hostKey: string): string[] {
   return [...order.filter((key) => key !== hostKey), hostKey]
+}
+
+/** Read back as loosely as it was accepted: reading a cached manifest strictly would make a field a
+ *  newer desktop added a forced redownload on every launch. */
+function parseManifest(text: string): MobileWebBundleManifestRead | null {
+  const parsed = MobileWebBundleManifestReadSchema.safeParse(parseJson(text))
+  return parsed.success ? parsed.data : null
 }
 
 function parseJson(text: string): unknown {
@@ -358,25 +343,6 @@ function requireHostKey(hostKey: string): string {
     throw new Error('generation store was handed something that is not a host cache key')
   }
   return hostKey
-}
-
-/** The manifest schema bans traversal already, but this is the last code between a manifest and a
- *  write, and both manifest names are the store's own rather than an asset's to take: the pending
- *  one would be read back as an activation. Folded, because APFS and NTFS are case-insensitive and
- *  `Manifest.JSON` would land on the same file. */
-function requireStorablePath(path: string): string {
-  const segments = path.split('/')
-  const folded = path.toLowerCase()
-  const storable =
-    path.length > 0 &&
-    folded !== MANIFEST_FILE_NAME &&
-    folded !== NEXT_MANIFEST_FILE_NAME &&
-    !path.includes('\\') &&
-    segments.every((segment) => segment !== '' && segment !== '.' && segment !== '..')
-  if (!storable) {
-    throw new Error(`generation store refuses to stage the asset path ${path}`)
-  }
-  return path
 }
 
 function requireExactBytes(

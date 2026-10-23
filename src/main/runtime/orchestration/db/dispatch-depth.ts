@@ -10,6 +10,10 @@ import type { OrchestrationDb } from './orchestration-db'
 import type { OrcaSessionId } from '../../../../shared/orca-session-address'
 import type { DispatchContextRow, RemoteDispatchAttachmentRow } from '../types'
 import { potentiallyLiveRemoteAttachmentSql } from './federation/remote-attachment-liveness'
+import {
+  DISPATCH_CONTEXT_COLUMN_LIST,
+  REMOTE_DISPATCH_ATTACHMENT_COLUMN_LIST
+} from './row-column-lists'
 
 /**
  * Who is creating a dispatch row, for nesting-depth purposes.
@@ -147,12 +151,12 @@ function findActiveDispatchForCreator(
   }
   const row = this.db
     .prepare(
-      `SELECT * FROM dispatch_contexts
+      `SELECT ${DISPATCH_CONTEXT_COLUMN_LIST} FROM dispatch_contexts
        WHERE assignee_orca_session_id = ? AND status IN ('pending', 'dispatched')
        ORDER BY rowid DESC LIMIT 1`
     )
     .get(creator.orcaSessionId)
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table returns the row shape its schema and row type define, like every row cast in db/.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The schema-pinned complete Dispatch projection returns one Dispatch row or undefined; the adapter exposes unknown.
   return row as DispatchContextRow | undefined
 }
 
@@ -171,9 +175,10 @@ function findPotentiallyLiveAttachmentsForCreator(
   if (!creator.paneKey || !creator.processIncarnation) {
     return []
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The schema-pinned attachment projection returns RemoteDispatchAttachmentRow rows; the adapter exposes unknown.
   const rows = this.db
     .prepare(
-      `SELECT * FROM remote_dispatch_attachments
+      `SELECT ${REMOTE_DISPATCH_ATTACHMENT_COLUMN_LIST} FROM remote_dispatch_attachments
        WHERE process_incarnation = ?
          AND pane_key IS NOT NULL
          AND ${potentiallyLiveRemoteAttachmentSql()}`

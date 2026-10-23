@@ -93,7 +93,13 @@ function sessionHoldingTurn(turnId: string | null): ReturnType<typeof sessionFor
   session.translator = {
     handle: vi.fn(),
     openTurnInLiveProviderCycle: false,
-    journalPrompts: { cancel: vi.fn(), resolve: vi.fn() },
+    journalPrompts: {
+      resolve: vi.fn(),
+      handOver: () => () => {},
+      cancel: () => ({ accepted: true }),
+      openCards: () => [][Symbol.iterator](),
+      whenWritten: () => undefined
+    },
     currentTurnId: turnId,
     commandTurnId: null,
     beginCommand: vi.fn(),
@@ -131,8 +137,7 @@ function cancellationOf(
 ): Promise<{ cancelled: boolean }> {
   return cancelClaudeStructuredTurn({
     request,
-    sessions: new Map([['session-1', session]]),
-    admitPromptCancellation: () => true
+    sessions: new Map([['session-1', session]])
   })
 }
 
@@ -193,11 +198,12 @@ describe('Claude turn ownership', () => {
     })
     expect(runningTurnId(bodies)).toBe('echo-turn')
     const sendFirst = connection.send
-    connection.send = async (message) => {
+    connection.send = async (message, beforeDispatch) => {
       if (connection.sent.length > 0) {
+        await beforeDispatch?.()
         throw new Error('input pump stopped')
       }
-      await sendFirst(message)
+      await sendFirst(message, beforeDispatch)
     }
 
     await expect(

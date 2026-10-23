@@ -8,8 +8,19 @@ const { childSpawnMock, readFileMock, resolveCodexCommandMock, ptySpawnMock } = 
   ptySpawnMock: vi.fn()
 }))
 
+// The probe's child runs in-process here; the worker transport has its own suite.
+vi.mock(
+  '../worker-thread-child-process/worker-thread-child-process',
+  () =>
+    import('../worker-thread-child-process/worker-thread-child-process-in-process.test-fixtures')
+)
 vi.mock('node:child_process', () => ({
   spawn: childSpawnMock
+}))
+
+// The recovery's supervised stop imports the process-table reader, which needs the real execFile.
+vi.mock('../codex/codex-state-db-backfill-recovery', () => ({
+  startCodexStateDbBackfillRecoveryInBackground: vi.fn()
 }))
 
 vi.mock('node:fs/promises', () => ({

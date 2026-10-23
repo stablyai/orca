@@ -8,6 +8,8 @@ import { Popover, PopoverAnchor, PopoverArrow, PopoverContent } from '@/componen
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Sparkles, Bell } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { AgentQuestionIcon } from '@/components/AgentQuestionIcon'
+import { useAgentBucketCounts } from '@/components/dashboard/useAgentBucketCounts'
 
 type SidebarHeaderProps = {
   onWorkspaceBoardMenuOpenChange: (open: boolean) => void
@@ -25,6 +27,14 @@ const SidebarHeader = React.memo(function SidebarHeader({
   const setSidebarBody = useAppStore((s) => s.setSidebarBody)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const agentsViewActive = sidebarBody === 'agents'
+  const counts = useAgentBucketCounts()
+  const activityBadgeId = useId()
+  const activityCount = counts.attention || counts.working
+  const activityStatusLabel = counts.attention
+    ? translate('dashboardPopout.bucket.attention', 'Needs You')
+    : counts.working
+      ? translate('dashboardPopout.bucket.working', 'Working')
+      : translate('dashboardPopout.bucket.idle', 'Idle')
   const agentsSidebarIntroShown = useAppStore((s) => s.settings?.agentsSidebarIntroShown === true)
   const migratedFromExperimental = useAppStore(
     (s) => s.settings?.agentsSidebarMigratedFromExperimental === true
@@ -80,9 +90,41 @@ const SidebarHeader = React.memo(function SidebarHeader({
                     )}
                     aria-label={activityLabel}
                     aria-pressed={agentsViewActive}
+                    aria-describedby={activityBadgeId}
                     onClick={() => setSidebarBody?.(agentsViewActive ? 'workspaces' : 'agents')}
                   >
-                    <Bell className="size-3.5" strokeWidth={2.25} />
+                    <span className="relative size-6 shrink-0">
+                      <Bell className="absolute left-0 top-1.5 size-3" />
+                      <span
+                        className="pointer-events-none absolute inset-0"
+                        id={activityBadgeId}
+                        aria-label={`${activityStatusLabel}: ${activityCount}`}
+                      >
+                        <span className="absolute right-0 top-px flex h-2 w-3 items-center justify-center">
+                          {counts.attention > 0 ? (
+                            <AgentQuestionIcon className="size-2" />
+                          ) : (
+                            <span
+                              className={cn(
+                                'size-1 rounded-full',
+                                counts.working > 0 ? 'bg-(--status-warning)' : 'bg-muted-foreground'
+                              )}
+                            />
+                          )}
+                        </span>
+                        <span className="absolute right-0 top-3 flex h-2.5 w-3 items-center justify-center">
+                          <span
+                            className={cn(
+                              'icon-superscript-count',
+                              activityCount > 99 && 'origin-center scale-x-65'
+                            )}
+                            data-multiple-digits={activityCount > 9}
+                          >
+                            {activityCount > 99 ? '99+' : activityCount}
+                          </span>
+                        </span>
+                      </span>
+                    </span>
                   </Button>
                 </PopoverAnchor>
               </span>

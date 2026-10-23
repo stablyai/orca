@@ -3,9 +3,10 @@ import type { MobileRelayCredentialBundle } from './mobile-relay-credential-bund
 import { createMobileRelayPairingJournal } from './mobile-relay-pairing-journal'
 import {
   recoverMobileRelayPairing,
-  resetMobileRelayPairingRecoveryForTests
+  resetMobileRelayPairingRecoveryForTests,
+  settleMobileRelayPairingRecovery
 } from './mobile-relay-pairing-recovery'
-import type { PairingCandidateClient } from './mobile-relay-physical-client'
+import { RelayOuterError, type PairingCandidateClient } from './mobile-relay-physical-client'
 import type { HostProfile, PairingOffer, RpcResponse } from './types'
 
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
@@ -100,6 +101,7 @@ function dependencies(args: {
       Object.assign(args.journal.metadata, update(args.journal.metadata))
     }),
     clearJournal: vi.fn(async () => {}),
+    claimJournal: vi.fn(async () => () => {}),
     readCredentialBundle: vi.fn(async () => args.bundle ?? null),
     writeCredentialBundle: vi.fn(async () => {}),
     loadHosts: vi.fn(async (): Promise<HostProfile[]> => args.hosts ?? []),
@@ -254,6 +256,78 @@ describe('mobile relay pairing recovery', () => {
 
     await expect(recoverMobileRelayPairing(deps)).resolves.toBe('abandoned')
     expect(deps.clearJournal).toHaveBeenCalledWith(saved.metadata.journalId)
+  })
+
+  // Why: a desktop that rotated its QR revokes the pending device; the relay then
+  // rejects every credential, and waiting out the invite only locked the phone out.
+  it('abandons at once when the relay rejects every credential', async () => {
+    const saved = journal()
+    const rejected = client(async () => {
+      throw new RelayOuterError(4401, true)
+    })
+    const deps = dependencies({ journal: saved, connectRelay: vi.fn(() => rejected) })
+
+    await expect(recoverMobileRelayPairing(deps)).resolves.toBe('abandoned')
+    expect(deps.clearJournal).toHaveBeenCalledWith(saved.metadata.journalId)
+  })
+
+  // Why: the relay also closes 4401 on a first-frame timeout, with no relay-hello.
+  it('keeps a journal whose 4401 closes carried no relay-hello refusal', async () => {
+    const saved = journal()
+    const timedOut = client(async () => {
+      throw new RelayOuterError(4401)
+    })
+    const deps = dependencies({ journal: saved, connectRelay: vi.fn(() => timedOut) })
+
+    await expect(recoverMobileRelayPairing(deps)).resolves.toBe('deferred')
+    expect(deps.clearJournal).not.toHaveBeenCalled()
+  })
+
+  it('never publishes a committed install once a newer scan replaced its journal', async () => {
+    const saved = journal()
+    const committed = installed(saved, 'relay-basis')
+    const pending = client(async () =>
+      response(endpoints(saved, { state: 'committed', result: committed }))
+    )
+    const deps = {
+      ...dependencies({ journal: saved, connectRelay: vi.fn(() => pending) }),
+      claimJournal: vi.fn(async () => {
+        throw new Error('stale mobile relay pairing journal')
+      })
+    }
+
+    await expect(recoverMobileRelayPairing(deps)).resolves.not.toBe('recovered')
+    expect(deps.writeCredentialBundle).not.toHaveBeenCalled()
+    expect(deps.savePairedHost).not.toHaveBeenCalled()
+  })
+
+  it('bounds how long a new scan waits for recovery', async () => {
+    vi.useFakeTimers()
+    try {
+      const saved = journal()
+      const hung = client(() => new Promise(() => {}))
+      const deps = dependencies({ journal: saved, connectRelay: vi.fn(() => hung) })
+      let done = false
+      void settleMobileRelayPairingRecovery(8_000, deps).then(() => (done = true))
+      await vi.advanceTimersByTimeAsync(7_999)
+      expect(done).toBe(false)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(done).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('defers while any credential failed for a transport reason', async () => {
+    const saved = journal()
+    let calls = 0
+    const mixed = client(async () => {
+      throw calls++ === 0 ? new RelayOuterError(4401, true) : new RelayOuterError(1006)
+    })
+    const deps = dependencies({ journal: saved, connectRelay: vi.fn(() => mixed) })
+
+    await expect(recoverMobileRelayPairing(deps)).resolves.toBe('deferred')
+    expect(deps.clearJournal).not.toHaveBeenCalled()
   })
 
   it('keeps a just-expired journal so a brief outage cannot discard it', async () => {

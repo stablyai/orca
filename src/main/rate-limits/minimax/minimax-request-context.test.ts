@@ -1,23 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { Session } from 'electron'
+import { setMainHttpClient } from '../../network/http-client'
 
-const { clearStorageDataMock, cookiesSetMock, netFetchMock, sessionFromPartitionMock } = vi.hoisted(
+const { clearStorageDataMock, cookiesSetMock, fetchMock, sessionFromPartitionMock } = vi.hoisted(
   () => {
-    const netFetchMock = vi.fn()
+    const fetchMock = vi.fn()
     const cookiesSetMock = vi.fn(() => Promise.resolve())
     const clearStorageDataMock = vi.fn(() => Promise.resolve())
     const sessionFromPartitionMock = vi.fn(() => ({
       clearStorageData: clearStorageDataMock,
       cookies: { set: cookiesSetMock },
-      fetch: netFetchMock
+      fetch: fetchMock
     }))
-    return { clearStorageDataMock, cookiesSetMock, netFetchMock, sessionFromPartitionMock }
+    return { clearStorageDataMock, cookiesSetMock, fetchMock, sessionFromPartitionMock }
   }
 )
-
-vi.mock('electron', () => ({
-  net: { fetch: netFetchMock },
-  session: { fromPartition: sessionFromPartitionMock }
-}))
 
 import {
   clearMiniMaxSessionCookieJar,
@@ -33,6 +30,13 @@ import {
   normalizeMiniMaxCookieHeader,
   redactMiniMaxSecret
 } from './minimax-request-context'
+
+setMainHttpClient({
+  fetch: fetchMock,
+  proxySession: () => null,
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the code under test only calls clearStorageData, cookies.set and fetch, which the fake provides.
+  partitionSession: sessionFromPartitionMock as unknown as (partition: string) => Session
+})
 
 const FULL_COOKIE =
   '_token=eyJh.eyJ.payload; _twpid=tw.123; minimax_group_id_v2=12345; platform_cookie_consent=3'
@@ -172,12 +176,12 @@ describe('fetchMiniMaxWithSessionCookieJar', () => {
   beforeEach(() => {
     clearStorageDataMock.mockClear()
     cookiesSetMock.mockClear()
-    netFetchMock.mockReset()
+    fetchMock.mockReset()
     sessionFromPartitionMock.mockClear()
     sessionFromPartitionMock.mockImplementation(() => ({
       clearStorageData: clearStorageDataMock,
       cookies: { set: cookiesSetMock },
-      fetch: netFetchMock
+      fetch: fetchMock
     }))
   })
 
@@ -186,7 +190,7 @@ describe('fetchMiniMaxWithSessionCookieJar', () => {
   })
 
   it('uses a dedicated MiniMax partition and clears cookies before and after fetching', async () => {
-    netFetchMock.mockResolvedValueOnce({
+    fetchMock.mockResolvedValueOnce({
       ok: true,
       status: 200,
       json: async () => ({ base_resp: { status_code: 0 }, model_remains: [] })
@@ -238,7 +242,7 @@ describe('fetchMiniMaxWithSessionCookieJar', () => {
       storages: ['cookies']
     })
     expect(cookiesSetMock).not.toHaveBeenCalled()
-    expect(netFetchMock).not.toHaveBeenCalled()
+    expect(fetchMock).not.toHaveBeenCalled()
     expect(warn).not.toHaveBeenCalled()
   })
 
@@ -264,7 +268,7 @@ describe('fetchMiniMaxWithSessionCookieJar', () => {
   })
 
   it('sets every cookie pair onto the session jar with secure + path /', async () => {
-    netFetchMock.mockResolvedValueOnce({
+    fetchMock.mockResolvedValueOnce({
       ok: true,
       status: 200,
       json: async () => ({ base_resp: { status_code: 0 }, model_remains: [] })
@@ -299,7 +303,7 @@ describe('fetchMiniMaxWithSessionCookieJar', () => {
   })
 
   it('reports the transport name as session-cookie-jar on success', async () => {
-    netFetchMock.mockResolvedValueOnce({
+    fetchMock.mockResolvedValueOnce({
       ok: true,
       status: 200,
       json: async () => ({ base_resp: { status_code: 0 }, model_remains: [] })
@@ -327,12 +331,12 @@ describe('fetchMiniMaxWithManualCookieHeader', () => {
   beforeEach(() => {
     clearStorageDataMock.mockClear()
     cookiesSetMock.mockClear()
-    netFetchMock.mockReset()
+    fetchMock.mockReset()
     sessionFromPartitionMock.mockClear()
     sessionFromPartitionMock.mockImplementation(() => ({
       clearStorageData: clearStorageDataMock,
       cookies: { set: cookiesSetMock },
-      fetch: netFetchMock
+      fetch: fetchMock
     }))
   })
 
@@ -341,7 +345,7 @@ describe('fetchMiniMaxWithManualCookieHeader', () => {
   })
 
   it('attaches the full Cookie header and X-Group-Id via the dedicated partition fetch', async () => {
-    netFetchMock.mockResolvedValueOnce({
+    fetchMock.mockResolvedValueOnce({
       ok: true,
       status: 200,
       json: async () => ({ base_resp: { status_code: 0 }, model_remains: [] })
@@ -358,8 +362,8 @@ describe('fetchMiniMaxWithManualCookieHeader', () => {
     expect(sessionFromPartitionMock).toHaveBeenCalledWith('orca-minimax-rate-limit-fetch')
     expect(clearStorageDataMock).toHaveBeenCalledTimes(2)
     expect(cookiesSetMock).not.toHaveBeenCalled()
-    expect(netFetchMock).toHaveBeenCalledTimes(1)
-    const [url, init] = netFetchMock.mock.calls[0]
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [url, init] = fetchMock.mock.calls[0]
     expect(url).toBe(MINIMAX_USAGE_ENDPOINT)
     expect(init.method).toBe('GET')
     expect(init.headers.Cookie).toBe(FULL_COOKIE)
@@ -367,7 +371,7 @@ describe('fetchMiniMaxWithManualCookieHeader', () => {
   })
 
   it('omits X-Group-Id when groupId is null', async () => {
-    netFetchMock.mockResolvedValueOnce({
+    fetchMock.mockResolvedValueOnce({
       ok: true,
       status: 200,
       json: async () => ({ base_resp: { status_code: 0 }, model_remains: [] })
@@ -380,12 +384,12 @@ describe('fetchMiniMaxWithManualCookieHeader', () => {
       signal: controller.signal,
       endpointMode: 'overseas'
     })
-    const [, init] = netFetchMock.mock.calls[0]
+    const [, init] = fetchMock.mock.calls[0]
     expect(init.headers['X-Group-Id']).toBeUndefined()
   })
 
   it('normalizes copied Cookie prefix and quoted syntax before sending manual header', async () => {
-    netFetchMock.mockResolvedValueOnce({
+    fetchMock.mockResolvedValueOnce({
       ok: true,
       status: 200,
       json: async () => ({ base_resp: { status_code: 0 }, model_remains: [] })
@@ -398,7 +402,7 @@ describe('fetchMiniMaxWithManualCookieHeader', () => {
       signal: controller.signal,
       endpointMode: 'overseas'
     })
-    const [, init] = netFetchMock.mock.calls[0]
+    const [, init] = fetchMock.mock.calls[0]
     expect(init.headers.Cookie).toBe('_token=tok; minimax_group_id_v2=42; _twpid=tw')
   })
 
@@ -420,7 +424,7 @@ describe('fetchMiniMaxWithManualCookieHeader', () => {
     ).rejects.toThrow('manual pre-clear boom')
 
     expect(clearStorageDataMock).toHaveBeenCalledTimes(2)
-    expect(netFetchMock).not.toHaveBeenCalled()
+    expect(fetchMock).not.toHaveBeenCalled()
     expect(warn).not.toHaveBeenCalled()
   })
 })
@@ -450,7 +454,7 @@ describe('fetchMiniMaxWithApiKey', () => {
   beforeEach(() => {
     clearStorageDataMock.mockClear()
     cookiesSetMock.mockClear()
-    netFetchMock.mockReset()
+    fetchMock.mockReset()
     sessionFromPartitionMock.mockClear()
   })
 
@@ -459,7 +463,7 @@ describe('fetchMiniMaxWithApiKey', () => {
   })
 
   it('sends only the Authorization Bearer header and accepts JSON', async () => {
-    netFetchMock.mockResolvedValueOnce({
+    fetchMock.mockResolvedValueOnce({
       ok: true,
       status: 200,
       json: async () => ({ base_resp: { status_code: 0 }, model_remains: [] })
@@ -473,8 +477,8 @@ describe('fetchMiniMaxWithApiKey', () => {
     expect(result.transport).toBe('api-key')
     expect(result.cookieNames).toEqual([])
     expect(result.requestHeaderNames).toEqual(['Authorization', 'Accept'])
-    expect(netFetchMock).toHaveBeenCalledTimes(1)
-    const [url, init] = netFetchMock.mock.calls[0]
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [url, init] = fetchMock.mock.calls[0]
     expect(url).toBe('https://www.minimaxi.com/v1/api/openplatform/coding_plan/remains')
     expect(init.method).toBe('GET')
     expect(init.headers.Authorization).toBe('Bearer sk-test-1234567890')
@@ -485,7 +489,7 @@ describe('fetchMiniMaxWithApiKey', () => {
   })
 
   it('does not touch the session cookie jar', async () => {
-    netFetchMock.mockResolvedValueOnce({
+    fetchMock.mockResolvedValueOnce({
       ok: true,
       status: 200,
       json: async () => ({ base_resp: { status_code: 0 }, model_remains: [] })
@@ -560,7 +564,7 @@ describe('logMiniMaxFetchFailure', () => {
     // users' cookies to be sent against the wrong host, so Electron's
     // session never attached them. Cookies must be stored under
     // www.minimaxi.com for a CN fetch to actually carry the auth.
-    netFetchMock.mockResolvedValueOnce({
+    fetchMock.mockResolvedValueOnce({
       ok: true,
       status: 200,
       json: async () => ({ base_resp: { status_code: 0 }, model_remains: [] })

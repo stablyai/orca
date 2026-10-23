@@ -312,8 +312,7 @@ describe('AiVaultScannerServiceClient', () => {
     await Promise.resolve()
     vi.advanceTimersByTime(AI_VAULT_SERVICE_READY_TIMEOUT_MS)
 
-    // The scan owns liveness through its own 130s deadline; killing the child
-    // here would abort it and burn a slot toward the restart circuit.
+    // Killing the child here would abort the running scan and burn a slot toward the restart circuit.
     await expect(invalidation).resolves.toBeUndefined()
     expect(child.killed).toBe(false)
 

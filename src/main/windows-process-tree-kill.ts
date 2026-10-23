@@ -9,7 +9,8 @@ export const WINDOWS_PROCESS_TREE_KILL_TIMEOUT_MS = 5_000
 /**
  * Force-kill a Windows process and every descendant (`taskkill /T /F`).
  * Best-effort: missing/already-dead roots still resolve so callers can finish
- * their own handle cleanup via killRoot.
+ * their own handle cleanup via killRoot. Resolves true only when taskkill exited 0,
+ * the one outcome that reports every process in the tree terminated.
  *
  * Most main-process taskkills run through here; the families that keep their own
  * spawn (account-login teardowns, codex app-server deadline, git-command abort,
@@ -19,13 +20,13 @@ export const WINDOWS_PROCESS_TREE_KILL_TIMEOUT_MS = 5_000
 export function terminateWindowsProcessTree(
   rootPid: number,
   deps: { execFileImpl?: typeof execFile; site?: string } = {}
-): Promise<void> {
+): Promise<boolean> {
   if (!Number.isInteger(rootPid) || rootPid <= 0) {
-    return Promise.resolve()
+    return Promise.resolve(false)
   }
   const site = deps.site ?? 'windows-process-tree-kill'
   if (!admitSelfInitiatedTreeKill({ pid: rootPid, site, scope: 'win-taskkill-tree' })) {
-    return Promise.resolve()
+    return Promise.resolve(false)
   }
   const run = deps.execFileImpl ?? execFile
   return new Promise((resolve) => {
@@ -37,8 +38,8 @@ export function terminateWindowsProcessTree(
         timeout: WINDOWS_PROCESS_TREE_KILL_TIMEOUT_MS,
         windowsHide: true
       },
-      () => {
-        resolve()
+      (error) => {
+        resolve(error === null)
       }
     )
   })

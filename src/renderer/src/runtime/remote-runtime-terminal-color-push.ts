@@ -1,7 +1,8 @@
 import type { RuntimeHostStatusSnapshot } from '../../../shared/runtime-host-status'
 import type { TerminalOscColorQueryReplyColors } from '../../../shared/terminal-osc-color-reply'
 import { colorQueryReplyColorsEqual } from '../../../shared/pty-owner-color-query-colors'
-import { callRuntimeRpc, RuntimeRpcCallError } from './runtime-rpc-client'
+import { callRuntimeRpc } from './runtime-rpc-client'
+import { RuntimeRpcCallError } from './runtime-rpc-result'
 
 type PushCall = (
   environmentId: string,

@@ -45,6 +45,10 @@ vi.mock('./zcode-usage-fetcher', () => ({
   fetchZcodeRateLimits: vi.fn()
 }))
 
+vi.mock('./antigravity-usage-fetcher', () => ({
+  fetchAntigravityRateLimits: vi.fn()
+}))
+
 vi.mock('./minimax/minimax-fetcher', () => ({
   fetchMiniMaxRateLimits: vi.fn()
 }))
@@ -143,8 +147,9 @@ describe('RateLimitService', () => {
     expect(fetchCodexRateLimits).not.toHaveBeenCalled()
 
     window.emit('focus')
-    await Promise.resolve()
-    await Promise.resolve()
+    for (let tick = 0; tick < 3; tick += 1) {
+      await Promise.resolve()
+    }
 
     expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
     expect(fetchCodexRateLimits).toHaveBeenCalledTimes(1)

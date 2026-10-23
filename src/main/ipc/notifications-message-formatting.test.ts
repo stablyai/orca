@@ -181,6 +181,40 @@ describe('registerNotificationHandlers', () => {
     )
   })
 
+  it.each([
+    { agentType: 'opencode2', label: 'OpenCode 2' },
+    { agentType: 'copilot', label: 'GitHub Copilot' }
+  ])('names $agentType the way the app does', async ({ agentType, label }) => {
+    registerNotificationHandlers({
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: true,
+          terminalBell: false,
+          suppressWhenFocused: true
+        }
+      })
+    } as never)
+
+    await getDispatchHandler()(
+      {},
+      {
+        source: 'agent-task-complete',
+        worktreeId: 'repo::wt1',
+        worktreeLabel: 'feat/notis',
+        agentType,
+        agentState: 'done'
+      }
+    )
+
+    expect(notificationCtorMock).toHaveBeenCalledWith(
+      expectedNativeNotificationOptions({
+        title: `feat/notis - ${label} finished`,
+        body: `${label} finished.`
+      })
+    )
+  })
+
   it('formats blocked and interrupted agent snapshots distinctly', async () => {
     registerNotificationHandlers({
       getSettings: () => ({
@@ -319,6 +353,10 @@ describe('registerNotificationHandlers', () => {
   it.each([
     { agentTurnOutcome: 'cancellation', word: 'stopped' },
     { agentTurnOutcome: 'failure', word: 'failed' },
+    // A turn cut short by anything but the user is a fault, worded as one.
+    { agentTurnOutcome: 'interruption', word: 'failed' },
+    { agentTurnOutcome: 'unconfirmed', word: 'stopped' },
+    { agentTurnOutcome: 'superseded', word: 'stopped' },
     { agentTurnOutcome: 'success', word: 'finished' },
     { agentTurnOutcome: undefined, word: 'finished' }
   ] as const)('words a $agentTurnOutcome finish as $word', async ({ agentTurnOutcome, word }) => {

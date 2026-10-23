@@ -9,12 +9,40 @@ import {
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import { agentJournalTurnBody } from '../../shared/agent-session-turn-record'
 import { CODEX_USER_MESSAGE_ORDINAL } from './codex-turn-ordinals'
+import { resolveAgentJournalTurnRowWrite } from '../native-chat/agent-session-timeline/agent-journal-turn-row-revision'
 import type {
   StructuredAgentSessionEventSink,
+  StructuredAgentSessionRevisionJournal,
   StructuredAgentSessionSinkAdmission
 } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import { estimateStructuredAgentSessionItemBytes } from '../native-chat/agent-session-wire/structured-agent-session-event-sink-estimate'
 
 const ADMITTED: StructuredAgentSessionSinkAdmission = { accepted: true }
+
+/** Room for what a Codex turn row holds beyond its lifecycle: a context report with no breakdown.
+ *  The shared bound allows a full breakdown, which a history restore writing every turn would overrun. */
+const CODEX_TURN_ROW_KEPT_BYTES = 1_024
+
+function codexTurnRowReservedBytes(
+  identity: AgentJournalItemIdentity,
+  lifecycle: AgentJournalTurnItem
+): number {
+  return estimateStructuredAgentSessionItemBytes(identity, lifecycle) + CODEX_TURN_ROW_KEPT_BYTES
+}
+
+/** A turn's lifecycle over its row as the journal holds it, so the row keeps every field this
+ *  writer does not own, such as its context facts. */
+export function reviseCodexTurnRow(
+  journal: StructuredAgentSessionRevisionJournal,
+  identity: AgentJournalItemIdentity,
+  lifecycle: AgentJournalTurnItem
+): AgentJournalTurnItem {
+  const reservedBytes = codexTurnRowReservedBytes(identity, lifecycle)
+  return (
+    resolveAgentJournalTurnRowWrite(journal, { identity }, { lifecycle }, reservedBytes)?.body ??
+    lifecycle
+  )
+}
 
 export function codexTurnLifecycleIdentity(
   sessionId: string,
@@ -115,15 +143,22 @@ export function publishCodexTurnLifecycle(input: {
       ? { observedAt: input.startedAt }
       : {})
   }
-  if (input.sink.tryAppendItem) {
-    const admission = input.sink.tryAppendItem(identity, body, appendOptions)
-    if (!admission.accepted) {
-      return admission
-    }
+  let admission = ADMITTED
+  if (input.sink.tryReviseResolvedItem) {
+    admission = input.sink.tryReviseResolvedItem(
+      codexTurnRowReservedBytes(identity, body),
+      (journal) => ({ identity, body: reviseCodexTurnRow(journal, identity, body) }),
+      appendOptions
+    )
+  } else if (input.sink.tryAppendItem) {
+    admission = input.sink.tryAppendItem(identity, body, appendOptions)
   } else {
     input.sink.appendItem(identity, body, appendOptions)
   }
-  // Preserve first-work evidence when completion arrives before the journal drains.
+  if (!admission.accepted) {
+    return admission
+  }
+  // Keyed apart, so a completion's publication never replaces a start one still waiting to run.
   const publishOptions = {
     lifecycle: true,
     ...(input.state === 'running'

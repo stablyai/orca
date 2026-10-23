@@ -1,4 +1,4 @@
-import type { PtySpawnResult } from '../../../providers/types'
+import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
 import { ptySizes } from './visibility-state'
 
 export type PtyGrid = { cols: number; rows: number }
@@ -63,8 +63,8 @@ export function reflowHeadlessTerminalToCommittedGrid(args: {
   )
 }
 
-/** Record the settled grid, then reflow the model onto it. Callers that seed the model between the
- *  two steps (ipc spawn commit) call the halves separately. */
+/** Record the settled grid, then reflow the model onto it. Spawn commits call it only after
+ *  registration admits the incarnation; the model was seeded before their first await. */
 export function commitAttachedPtySize(args: {
   result: Pick<
     PtySpawnResult,

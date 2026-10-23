@@ -1,17 +1,18 @@
 import { defineMethod } from '../../core'
-import { TerminalHandle } from './unary-schemas'
+import { TerminalHandle } from '../../../../../shared/rpc-contract/terminal-unary-params'
 import {
   TerminalSetAutoRestoreFit,
   TerminalSetDisplayMode,
   TerminalUnsubscribe,
   TerminalUpdateViewport
-} from './viewport-schemas'
+} from '../../../../../shared/rpc-contract/terminal-viewport-schemas-params'
 import { updateViewportForClient } from './terminal-viewport-update'
 import { TerminalGetAutoRestoreFitParams } from '../../../../../shared/rpc-contract/terminal-viewport-methods-params'
 
 export const TERMINAL_VIEWPORT_METHODS_BEFORE_STREAMS = [
   defineMethod({
     name: 'terminal.setDisplayMode',
+    permission: 'workspace',
     params: TerminalSetDisplayMode,
     handler: async (params, { runtime }) => {
       // Why: a stale handle must fail with terminal_handle_stale, not mutate the wrong PTY's display mode/viewport (#7718).
@@ -33,6 +34,7 @@ export const TERMINAL_VIEWPORT_METHODS_BEFORE_STREAMS = [
   }),
   defineMethod({
     name: 'terminal.restoreFit',
+    permission: 'workspace',
     params: TerminalHandle,
     handler: async (params, { runtime }) => {
       // Why: a stale handle must fail with terminal_handle_stale, not reclaim the wrong PTY to desktop dims (#7718).
@@ -45,6 +47,7 @@ export const TERMINAL_VIEWPORT_METHODS_BEFORE_STREAMS = [
   }),
   defineMethod({
     name: 'terminal.getDisplayMode',
+    permission: 'workspace',
     params: TerminalHandle,
     handler: async (params, { runtime }) => {
       const leaf = runtime.resolveLeafForHandle(params.terminal)
@@ -55,6 +58,7 @@ export const TERMINAL_VIEWPORT_METHODS_BEFORE_STREAMS = [
   }),
   defineMethod({
     name: 'terminal.updateViewport',
+    permission: 'workspace',
     params: TerminalUpdateViewport,
     handler: async (params, { runtime }) => {
       // Why: a stale handle must fail with terminal_handle_stale, not write viewport state to the wrong PTY (#7718).
@@ -81,6 +85,7 @@ export const TERMINAL_VIEWPORT_METHODS_BEFORE_STREAMS = [
 export const TERMINAL_VIEWPORT_METHODS_AFTER_STREAMS = [
   defineMethod({
     name: 'terminal.unsubscribe',
+    permission: 'workspace',
     params: TerminalUnsubscribe,
     handler: async (params, { runtime, connectionId, subscriptionRegistrationVersion }) => {
       if (params.requestId !== undefined) {
@@ -112,6 +117,7 @@ export const TERMINAL_VIEWPORT_METHODS_AFTER_STREAMS = [
   }),
   defineMethod({
     name: 'terminal.getAutoRestoreFit',
+    permission: 'workspace',
     params: TerminalGetAutoRestoreFitParams,
     handler: async (_params, { runtime }) => ({
       ms: runtime.getMobileAutoRestoreFitMs()
@@ -119,6 +125,7 @@ export const TERMINAL_VIEWPORT_METHODS_AFTER_STREAMS = [
   }),
   defineMethod({
     name: 'terminal.setAutoRestoreFit',
+    permission: 'workspace',
     params: TerminalSetAutoRestoreFit,
     handler: async (params, { runtime }) => ({
       ms: runtime.setMobileAutoRestoreFitMs(params.ms)

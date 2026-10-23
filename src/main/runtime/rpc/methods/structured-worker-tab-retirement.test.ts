@@ -323,7 +323,7 @@ describe('structured worker discard retires the chat tab', () => {
       })
     ).rejects.toThrow(/was refused/)
 
-    expect(close).toHaveBeenCalledWith(createdSessionId)
+    expect(close).toHaveBeenCalledWith(createdSessionId, 'evict')
     expect(await structuredTabIds(runtime)).toEqual([])
   })
 })

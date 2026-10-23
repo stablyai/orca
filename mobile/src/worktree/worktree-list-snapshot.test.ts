@@ -40,7 +40,6 @@ function worktree(overrides: Partial<Worktree> = {}): Worktree {
     path: worktreePath,
     liveTerminalCount: 1,
     hasAttachedPty: true,
-    preview: '$ codex',
     unread: false,
     lastOutputAt: 1234,
     isPinned: false,
@@ -192,6 +191,23 @@ describe('areWorktreeListsEqual', () => {
     expect(areWorktreeListsEqual(at(1), at(1))).toBe(true)
   })
 
+  // The host drops Stopping on letting go of a session without moving any clock the row carries.
+  it("detects the host's Stopping coming and going with nothing else moved", () => {
+    const stopping = (value: boolean) => [
+      worktree({
+        agents: [
+          agent({
+            mainAgent: { state: 'working', stateStartedAt: 1, ...(value ? { stopping: true } : {}) }
+          })
+        ]
+      })
+    ]
+
+    expect(areWorktreeListsEqual(stopping(false), stopping(true))).toBe(false)
+    expect(areWorktreeListsEqual(stopping(true), stopping(false))).toBe(false)
+    expect(areWorktreeListsEqual(stopping(true), stopping(true))).toBe(true)
+  })
+
   it('detects monitoring mode changes within working', () => {
     const first = [worktree({ agents: [agent({ state: 'working' })] })]
     const second = [worktree({ agents: [agent({ state: 'working', workingMode: 'monitoring' })] })]
@@ -204,12 +220,5 @@ describe('areWorktreeListsEqual', () => {
     const second = [worktree({ status: 'working', workingMode: 'monitoring' })]
 
     expect(areWorktreeListsEqual(first, second)).toBe(false)
-  })
-
-  it('treats missing and empty agent arrays as equivalent for rendering', () => {
-    const first = [worktree({ agents: undefined })]
-    const second = [worktree({ agents: [] })]
-
-    expect(areWorktreeListsEqual(first, second)).toBe(true)
   })
 })

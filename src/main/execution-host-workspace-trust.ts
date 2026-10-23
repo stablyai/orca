@@ -52,6 +52,7 @@ export const AGENT_TRUST_INHERITS_FROM_A_HOME: Record<AgentTrustPreset, boolean>
   cursor: false,
   copilot: true,
   qoder: true,
+  'qoder-cn': true,
   antigravity: false
 }
 
@@ -66,6 +67,7 @@ export const AGENT_TRUST_KEYED_BY_START_FOLDER: Record<AgentTrustPreset, boolean
   cursor: false,
   copilot: false,
   qoder: false,
+  'qoder-cn': false,
   antigravity: false
 }
 
@@ -106,6 +108,8 @@ async function writePreset(
       return markCursorWorkspaceTrusted(storedPath, host.agentHome)
     case 'copilot':
       return markCopilotFolderTrusted(storedPath, host.agentHome)
+    case 'qoder-cn':
+      return markQoderWorkspaceTrusted(storedPath, host.agentHome, '.qoder-cn')
     case 'qoder':
       return markQoderWorkspaceTrusted(storedPath, host.agentHome)
     case 'antigravity':

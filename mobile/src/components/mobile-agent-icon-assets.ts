@@ -14,12 +14,14 @@ export const MOBILE_AGENT_ICON_ASSETS: Partial<Record<TuiAgent, ImageSourcePropT
   grok: require('../../../src/shared/agent-icons/grok.png'),
   copilot: require('../../../src/shared/agent-icons/copilot.png'),
   opencode: require('../../../src/shared/agent-icons/opencode.png'),
+  opencode2: require('../../../src/shared/agent-icons/opencode.png'),
   'mimo-code': require('../../../src/shared/agent-icons/mimo-code.png'),
   ante: require('../../../src/shared/agent-icons/ante.png'),
   trae: require('../../../src/shared/agent-icons/trae.png'),
   'prime-agent': require('../../../src/shared/agent-icons/prime-agent.png'),
   codebuddy: require('../../../src/shared/agent-icons/codebuddy.png'),
   qoder: require('../../../src/shared/agent-icons/qoder.png'),
+  'qoder-cn': require('../../../src/shared/agent-icons/qoder-cn.png'),
   gemini: require('../../../src/shared/agent-icons/gemini.png'),
   antigravity: require('../../../src/shared/agent-icons/antigravity.png'),
   goose: require('../../../src/shared/agent-icons/goose.png'),
@@ -45,5 +47,6 @@ export const MOBILE_AGENT_ICON_ASSETS: Partial<Record<TuiAgent, ImageSourcePropT
   muse: require('../../../src/shared/agent-icons/muse.png'),
   dsh: require('../../../src/shared/agent-icons/dsh.png'),
   zcode: require('../../../src/shared/agent-icons/zcode.png'),
-  openclaw: require('../../../src/shared/agent-icons/openclaw.png')
+  openclaw: require('../../../src/shared/agent-icons/openclaw.png'),
+  jcode: require('../../../src/shared/agent-icons/jcode.png')
 }

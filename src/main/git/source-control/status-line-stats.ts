@@ -21,6 +21,8 @@ async function runNumstat(
       [
         '-c',
         'core.quotePath=false',
+        '-c',
+        'diff.autoRefreshIndex=false',
         'diff',
         '-z',
         ...(cached ? ['--cached'] : []),

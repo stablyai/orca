@@ -1,4 +1,4 @@
-import path from 'node:path'
+import { createRequire } from 'node:module'
 import { describe, expect, it } from 'vitest'
 import { checkoutRunProcessPath, formatProbeFailure, packagedProbeInvocation } from './run.mjs'
 
@@ -7,7 +7,9 @@ describe('packaged Windows native smoke runner boundary', () => {
     const current = packagedProbeInvocation('/ci/current/dist/win-unpacked/Orca.exe')
     const affected = packagedProbeInvocation('/ci/1.4.158/dist/win-unpacked/Orca.exe')
 
-    expect(checkoutRunProcessPath()).toBe(path.resolve('out/shared/child-process/run-process.js'))
+    expect(checkoutRunProcessPath()).toBe(
+      createRequire(import.meta.url).resolve('@orca/process-host')
+    )
     expect(current.program).not.toBe(affected.program)
     expect(current.args[0]).toBe(affected.args[0])
     expect(current.args[1]).toBe('--exercise')

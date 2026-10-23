@@ -35,6 +35,7 @@ describe('OpenCode status plugin module contract', () => {
   // env. Pin every input here so the run does not depend on the developer's Orca session
   // (an inherited ORCA_AGENT_HOOK_ENDPOINT would otherwise redirect the post to a live app).
   const ENV_KEYS = [
+    'ORCA_OPENCODE_PLUGIN_API',
     'ORCA_PANE_KEY',
     'ORCA_AGENT_HOOK_ENDPOINT',
     'ORCA_AGENT_HOOK_PORT',
@@ -55,6 +56,7 @@ describe('OpenCode status plugin module contract', () => {
     // Why: the generated plugin self-disables when this names a different major,
     // so an inherited value from the developer's own Orca pane would leave
     // `hooks.event` undefined and fail the contract for the wrong reason.
+    delete process.env.ORCA_OPENCODE_PLUGIN_API
     delete process.env.ORCA_OPENCODE_AGENT
     delete process.env.ORCA_AGENT_HOOK_ENDPOINT
     process.env.ORCA_AGENT_HOOK_PORT = '59999'
@@ -86,6 +88,13 @@ describe('OpenCode status plugin module contract', () => {
     return (await import(pathToFileURL(pluginPath).href)) as PluginModule
   }
 
+  it('selects the same factory for a v1 execution host', async () => {
+    process.env.ORCA_OPENCODE_PLUGIN_API = 'v1'
+    const module = await loadPluginModule()
+    expect(module.default).toBeTypeOf('function')
+    expect(module.default).toBe(module.OrcaOpenCodeStatusPlugin)
+  })
+
   it('exposes a default export carrying a string id and a callable server()', async () => {
     const module = await loadPluginModule()
 
@@ -93,15 +102,6 @@ describe('OpenCode status plugin module contract', () => {
     expect(typeof module.default?.id).toBe('string')
     expect(module.default?.id).toBe('orca-opencode-status')
     expect(module.default?.server).toBeTypeOf('function')
-  })
-
-  it('rejects the shape OpenCode refuses: a default export without server()', async () => {
-    const module = await loadPluginModule()
-
-    // Why: pins the specific reason the loader fails a module — `setup` alone is not
-    // accepted, so a default export must never regress to it.
-    expect(module.default).not.toBeUndefined()
-    expect(Object.hasOwn(module.default ?? {}, 'server')).toBe(true)
   })
 
   it('keeps the named factory export so the factory-based loader still resolves', async () => {

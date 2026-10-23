@@ -13,6 +13,7 @@ vi.mock('react-native', async () => {
       React.useImperativeHandle(ref, () => ({ scrollToEnd: vi.fn(), scrollToOffset: vi.fn() }), [])
       return React.createElement('FlatList', props)
     }),
+    Platform: { OS: 'ios' },
     Pressable: 'Pressable',
     StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
     Text: 'Text',
@@ -37,16 +38,13 @@ vi.mock('lucide-react-native', () => ({
   Square: 'Square'
 }))
 vi.mock('./MobileNativeChatMessage', () => ({ MobileNativeChatMessage: 'ChatMessage' }))
-vi.mock('./MobileNativeChatTurnStatus', () => ({ MobileNativeChatTurnActivity: 'LiveStatus' }))
+vi.mock('./MobileNativeChatLiveLine', () => ({ MobileNativeChatLiveLine: 'LiveStatus' }))
 vi.mock('./MobileNativeChatComposer', () => ({ MobileNativeChatComposer: 'Composer' }))
 // The queue's action sheet pulls in the animation runtime, which this react-native mock can't host.
 vi.mock('../components/ActionSheetModal', () => ({ ActionSheetModal: 'ActionSheetModal' }))
 vi.mock('./MobileNativeChatAsk', () => ({ MobileNativeChatAsk: 'ChatAsk' }))
 vi.mock('./MobileNativeChatPermission', () => ({ MobileNativeChatPermission: 'ChatPermission' }))
 vi.mock('./MobileNativeChatQuestion', () => ({ MobileNativeChatQuestion: 'ChatQuestion' }))
-vi.mock('./MobileAgentWorkingIndicator', () => ({
-  MobileAgentWorkingIndicator: 'WorkingIndicator'
-}))
 
 let renderer: ReactTestRenderer | null = null
 afterEach(() => {

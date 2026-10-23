@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import {
   chmodSync,
   existsSync,
@@ -19,7 +20,7 @@ import {
   getRuntimeCodexHomePath,
   getSharedRuntimeAuthProvenancePath,
   getSystemCodexAuthPath,
-  setShellStartupEnvProbeSupportedForTest,
+  setRealHomeRoutableForTest,
   setupRuntimeHomeTest,
   teardownRuntimeHomeTest,
   testState
@@ -30,6 +31,7 @@ vi.mock('electron', () => ({
     getPath: () => testState.userDataDir
   }
 }))
+beforeEach(() => installFakeAppEnvironment({ getPath: () => testState.userDataDir }))
 
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
@@ -494,8 +496,7 @@ describe('CodexRuntimeHomeService', () => {
     service.syncForCurrentSelection()
     expect(existsSync(getRuntimeCodexAuthPath())).toBe(false)
 
-    setShellStartupEnvProbeSupportedForTest(true)
-    service.setRealHomeLaneGate(() => true)
+    setRealHomeRoutableForTest(true)
     writeFileSync(getSystemCodexAuthPath(), reloginAuth, 'utf-8')
     service.reconcileLegacySharedHomeForRetainedPanes()
 

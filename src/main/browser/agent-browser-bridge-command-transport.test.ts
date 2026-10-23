@@ -53,6 +53,7 @@ vi.mock('./cdp-bridge', () => ({
 import { AgentBrowserBridge } from './agent-browser-bridge'
 import { AGENT_BROWSER_IDLE_TIMEOUT_MS } from './agent-browser-process-environment'
 import {
+  createFakeAgentBrowserChild,
   createSucceedWith,
   mockBrowserManager,
   mockWebContents,
@@ -168,7 +169,7 @@ describe('AgentBrowserBridge', () => {
 
   it('maps in-flight CDP discovery failures to tab not found after the session disappears', async () => {
     let releaseSnapshot: (() => void) | null = null
-    const activeChild = { kill: vi.fn() }
+    const activeChild = createFakeAgentBrowserChild({ kill: vi.fn() })
     execFileMock.mockImplementation(
       (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
         if (args.includes('snapshot')) {
@@ -178,7 +179,7 @@ describe('AgentBrowserBridge', () => {
           return activeChild
         }
         cb(null, JSON.stringify({ success: true, data: null }), '')
-        return { kill: vi.fn() }
+        return createFakeAgentBrowserChild({ kill: vi.fn() })
       }
     )
 

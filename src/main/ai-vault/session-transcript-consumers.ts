@@ -10,8 +10,10 @@ export type TranscriptMessageRole = 'user' | 'assistant' | 'tool'
 
 export type TranscriptMessage = {
   role: TranscriptMessageRole
-  /** Untruncated decoded text; caps and redaction are consumer policy. */
+  /** Decoded text, subject to the reader's safety limits. */
   text: string
+  /** A size limit omitted some decoded text. */
+  textTruncated?: true
   timestamp: string | null
 }
 
@@ -20,6 +22,8 @@ export type TranscriptMessageSink = {
   /** False when nobody is listening: parsers skip the extraction entirely. */
   readonly active: boolean
   push(message: TranscriptMessage): void
+  /** A later duplicate JSON array replaces every message emitted from the earlier array. */
+  reset?: () => void
 }
 
 export const NO_TRANSCRIPT_MESSAGES: TranscriptMessageSink = {
@@ -68,6 +72,8 @@ export type TranscriptReadOutcome = {
    * not record a cursor for an incomplete read.
    */
   incomplete: boolean
+  /** The caller cancelled the read: not a failure, so the file stays owed as before. */
+  cancelled?: boolean
 }
 
 /** One consumer's view of one file read. */

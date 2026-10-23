@@ -1,8 +1,4 @@
 import { createInterface } from 'node:readline'
-import {
-  remoteSessionContentLines,
-  type RemoteSessionContent
-} from './remote-session-content-lines'
 import { openTranscriptReadStream } from '../native-chat/wsl-transcript-fs-access'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
@@ -10,7 +6,6 @@ import { isKnownHarnessInjectedUserTurnText } from '../../shared/harness-injecte
 import type { FileWithMtime, ResumableSessionParseState } from './session-scanner-types'
 import type { TranscriptMessageSink } from './session-transcript-consumers'
 import {
-  addPreviewMessage,
   accumulatorSessionIdentity,
   createAccumulator,
   finalizeSession,
@@ -18,6 +13,7 @@ import {
   updateLatestLocation,
   updateTimeline
 } from './session-scanner-accumulator'
+import { addSessionText } from './session-scanner-messages'
 import {
   asRecord,
   extractString,
@@ -133,7 +129,7 @@ export function consumeCodebuddySessionLine(state: CodebuddySessionParseState, l
     const isMetaUserTurn =
       asRecord(record.providerData)?.skipRun === true ||
       (text != null && isKnownHarnessInjectedUserTurnText(text))
-    addPreviewMessage(accumulator, {
+    addSessionText(accumulator, {
       role: 'user',
       text,
       timestamp: record.timestamp,
@@ -145,7 +141,7 @@ export function consumeCodebuddySessionLine(state: CodebuddySessionParseState, l
     return
   }
   if (role === 'assistant') {
-    addPreviewMessage(accumulator, { role: 'assistant', text, timestamp: record.timestamp })
+    addSessionText(accumulator, { role: 'assistant', text, timestamp: record.timestamp })
     const model = extractString(asRecord(record.providerData)?.model)
     if (model) {
       accumulator.model = model
@@ -198,21 +194,6 @@ export async function parseCodebuddySessionFile(
     crlfDelay: Infinity
   })
   return parseCodebuddySessionLines({ file, lines, platform, messages })
-}
-
-export async function parseCodebuddySessionContent(
-  file: FileWithMtime,
-  content: RemoteSessionContent,
-  platform: NodeJS.Platform = process.platform,
-  options: ParserSessionOptions = {},
-  signal?: AbortSignal
-): Promise<AiVaultSession | null> {
-  return parseCodebuddySessionLines({
-    file,
-    lines: remoteSessionContentLines(content, signal),
-    platform,
-    options
-  })
 }
 
 async function parseCodebuddySessionLines(args: {

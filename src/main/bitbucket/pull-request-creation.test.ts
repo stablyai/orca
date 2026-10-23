@@ -5,18 +5,12 @@ import {
 } from './pull-request-creation'
 import { _resetBitbucketRepoRefCache } from './repository-ref'
 
-const { gitExecFileAsyncMock, getSshGitProviderMock } = vi.hoisted(() => ({
-  gitExecFileAsyncMock: vi.fn(),
-  getSshGitProviderMock: vi.fn()
+const { gitExecFileAsyncMock } = vi.hoisted(() => ({
+  gitExecFileAsyncMock: vi.fn()
 }))
 
 vi.mock('../git/runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock
-}))
-
-vi.mock('../providers/ssh-git-dispatch', () => ({
-  getSshGitProvider: getSshGitProviderMock,
-  getSshGitProviderGeneration: () => 0
 }))
 
 vi.mock('../source-control/pull-request-template', () => ({
@@ -49,7 +43,6 @@ describe('Bitbucket pull request creation', () => {
   beforeEach(() => {
     process.env = { ...OLD_ENV, ORCA_BITBUCKET_ACCESS_TOKEN: 'bb-token' }
     gitExecFileAsyncMock.mockReset()
-    getSshGitProviderMock.mockReset()
     gitExecFileAsyncMock.mockResolvedValue({
       stdout: 'https://bitbucket.org/team/repo.git\n',
       stderr: ''

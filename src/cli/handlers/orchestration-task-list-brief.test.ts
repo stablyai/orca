@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest'
 
 const callMock = vi.fn()
 
-// Why: isolate the handler's flag-to-param mapping; printResult only writes output.
 vi.mock('../format', () => ({ printResult: vi.fn() }))
 
 import { ORCHESTRATION_HANDLERS } from './orchestration'
@@ -26,7 +25,7 @@ describe('orchestration task-list brief output', () => {
   it('requests server-side brief and falls back client-side for older runtimes', async () => {
     callMock.mockReset().mockResolvedValue({
       result: {
-        // No spec_truncated field — the pre-brief-runtime signature.
+        // Older runtimes omit spec_truncated.
         tasks: [{ id: 'task_1', spec: `First line\n${'detail '.repeat(40)}`, status: 'ready' }],
         count: 1
       }
@@ -50,8 +49,7 @@ describe('orchestration task-list brief output', () => {
 
     const response = await runTaskListBrief()
 
-    // Why: re-abbreviating a server-truncated spec would flip spec_truncated
-    // back to false (the truncated text fits the cap).
+    // Re-abbreviating would reset spec_truncated because the already-truncated text fits the cap.
     expect(response.result.tasks).toBe(serverTasks)
   })
 })

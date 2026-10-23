@@ -12,7 +12,7 @@ import { Store } from '../persistence/loading-store/store'
 import { OrcaRuntimeService } from './orca-runtime'
 import { buildHeadlessMobileSessionTerminalTabs } from './mobile-session-terminal-projection'
 import { setRuntimeDesktopSurface } from './runtime-desktop-surface'
-import { advanceTerminalTopologyRevision } from './workspace-session-terminal-membership-authority'
+import { advanceTerminalTopologyRevision } from '../persistence/terminal-topology/terminal-topology-membership'
 
 export const ACK_WORKTREE = 'repo1::/tmp/worktree'
 export const ACK_TAB = '11111111-1111-4111-8111-111111111111'
@@ -88,8 +88,11 @@ export function createAcknowledgedTabRetirementFixture(bound = false) {
   setRuntimeDesktopSurface({
     showNotification: () => false,
     findWindowById: () => {
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the exercised close path only checks window and WebContents destruction.
-      return { isDestroyed: () => false, webContents: { isDestroyed: () => false } } as never
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the exercised close path only checks destruction and, for a paired client's close, throttling.
+      return {
+        isDestroyed: () => false,
+        webContents: { isDestroyed: () => false, setBackgroundThrottling: () => {} }
+      } as never
     },
     onIpc: () => {},
     removeIpcListener: () => {}
@@ -175,7 +178,6 @@ export function createAcknowledgedTabRetirementFixture(bound = false) {
     splitTerminal: () => {},
     renameTerminal: () => {},
     focusTerminal: () => {},
-    sleepWorktree: () => {},
     terminalFitOverrideChanged: () => {},
     terminalDriverChanged: () => {}
   })

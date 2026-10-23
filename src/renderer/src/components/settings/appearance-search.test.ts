@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { i18n } from '@/i18n/i18n'
-import { getLanguageEntries } from './appearance-search'
+import { getFollowSymlinkedDirectoriesEntry, getLanguageEntries } from './appearance-search'
 import { matchesSettingsSearch } from './settings-search'
 
 // Native word for "language" in each supported UI language. These must be
@@ -14,7 +14,7 @@ describe('getLanguageEntries', () => {
     await i18n.changeLanguage('en')
   })
 
-  it.each(['en', 'zh', 'ko', 'ja', 'es', 'fr'])(
+  it.each(['en', 'zh', 'ko', 'ja', 'es', 'fr', 'pt'])(
     'indexes every native word for "language" under the %s UI locale',
     async (locale) => {
       await i18n.changeLanguage(locale)
@@ -25,6 +25,15 @@ describe('getLanguageEntries', () => {
     }
   )
 
+  it.each(['en', 'ko'])('keeps every symlink search alias in the %s UI locale', async (locale) => {
+    await i18n.changeLanguage(locale)
+    const entry = getFollowSymlinkedDirectoriesEntry()
+    for (const keyword of ['symlink', 'linked folder', 'quick open', 'file explorer']) {
+      expect(entry.keywords).toContain(keyword)
+      expect(matchesSettingsSearch(keyword, entry)).toBe(true)
+    }
+  })
+
   it('matches the Spanish native language name in English UI', async () => {
     await i18n.changeLanguage('en')
     expect(matchesSettingsSearch('Español', getLanguageEntries()[0])).toBe(true)
@@ -33,5 +42,10 @@ describe('getLanguageEntries', () => {
   it('matches the French native language name in English UI', async () => {
     await i18n.changeLanguage('en')
     expect(matchesSettingsSearch('Français', getLanguageEntries()[0])).toBe(true)
+  })
+
+  it('matches the Portuguese native language name in English UI', async () => {
+    await i18n.changeLanguage('en')
+    expect(matchesSettingsSearch('Português (Brasil)', getLanguageEntries()[0])).toBe(true)
   })
 })

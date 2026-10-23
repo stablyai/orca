@@ -187,8 +187,8 @@ export function createBrowserPageStateActions(
         // and a document's url is blank by construction. A grant committed here would reach
         // persistence, the publish boundary and the address bar, exactly as at the other two doors.
         const nextPageUrl = page.docLocation ? ORCA_BROWSER_BLANK_URL : nextUrl
-        // Why: annotations point at DOM coords of the loaded document; a real URL change invalidates those markers.
-        const shouldClearAnnotations = normalizeUrl(page.url) !== nextPageUrl
+        // Saved feedback survives navigation; its old document coordinates do not.
+        const shouldInvalidateGeometry = normalizeUrl(page.url) !== nextPageUrl
         const nextPages = (s.browserPagesByWorkspace[workspace.id] ?? []).map((entry) =>
           entry.id === pageId
             ? {
@@ -203,11 +203,11 @@ export function createBrowserPageStateActions(
             : entry
         )
         const nextWorkspace = mirrorWorkspaceFromActivePage(workspace, nextPages)
-        const nextBrowserAnnotationsByPageId = shouldClearAnnotations
-          ? { ...s.browserAnnotationsByPageId }
-          : s.browserAnnotationsByPageId
-        if (shouldClearAnnotations) {
-          delete nextBrowserAnnotationsByPageId[pageId]
+        const nextBrowserAnnotationMarkerIdsByPageId = shouldInvalidateGeometry
+          ? { ...s.browserAnnotationMarkerIdsByPageId }
+          : s.browserAnnotationMarkerIdsByPageId
+        if (shouldInvalidateGeometry) {
+          delete nextBrowserAnnotationMarkerIdsByPageId[pageId]
         }
         return {
           browserPagesByWorkspace: {
@@ -220,8 +220,8 @@ export function createBrowserPageStateActions(
               (tab) => (tab.id === workspace.id ? nextWorkspace : tab)
             )
           },
-          ...(shouldClearAnnotations
-            ? { browserAnnotationsByPageId: nextBrowserAnnotationsByPageId }
+          ...(shouldInvalidateGeometry
+            ? { browserAnnotationMarkerIdsByPageId: nextBrowserAnnotationMarkerIdsByPageId }
             : {})
         }
       })

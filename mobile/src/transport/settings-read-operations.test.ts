@@ -9,7 +9,8 @@ import {
   optionalSettingsRead,
   botOverridesRead,
   newTabSettingsRead,
-  terminalCopyTrimsGutterRead
+  terminalCopyTrimsGutterRead,
+  hostListSettingsRead
 } from './settings-read-operations'
 import type { RpcResponse } from './types'
 
@@ -108,6 +109,38 @@ describe('settings historical acceptance', () => {
     expect(terminalCopyTrimsGutterRead.interpret(empty)).toEqual({ accepted: true, value: true })
     const refused = await terminalCopyTrimsGutterRead.request(replyWith(refusal()))
     expect(terminalCopyTrimsGutterRead.interpret(refused)).toEqual({ accepted: false })
+  })
+
+  it('reads the list settings, treating an absent or malformed key as the desktop default (off)', async () => {
+    const readFor = async (settings: unknown) =>
+      hostListSettingsRead.interpret(
+        await hostListSettingsRead.request(replyWith(success(settings)))
+      )
+    const off = {
+      showPinnedWorktreesInGroups: false,
+      compactWorktreeCards: false,
+      newCardStyle: false
+    }
+    expect(
+      await readFor({
+        settings: {
+          showPinnedWorktreesInGroups: true,
+          compactWorktreeCards: true,
+          experimentalNewWorktreeCardStyle: true
+        }
+      })
+    ).toEqual({
+      accepted: true,
+      value: { showPinnedWorktreesInGroups: true, compactWorktreeCards: true, newCardStyle: true }
+    })
+    // A host predating the settings sends no keys.
+    expect(await readFor({ settings: {} })).toEqual({ accepted: true, value: off })
+    expect(
+      await readFor({ settings: { showPinnedWorktreesInGroups: 'true', compactWorktreeCards: 1 } })
+    ).toEqual({ accepted: true, value: off })
+    expect(await readFor(null)).toEqual({ accepted: true, value: off })
+    const refused = await hostListSettingsRead.request(replyWith(refusal()))
+    expect(hostListSettingsRead.interpret(refused)).toEqual({ accepted: false })
   })
 
   it('does not read a stale payload until its caller permits interpretation', async () => {

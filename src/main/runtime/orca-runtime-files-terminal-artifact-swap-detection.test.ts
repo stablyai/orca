@@ -30,10 +30,6 @@ vi.mock(
   '../ipc/local-worktree-runtime-options',
   async () => (await import('./orca-runtime-files-mock-registry')).localWorktreeRuntimeOptionsMock
 )
-vi.mock(
-  '../providers/ssh-filesystem-dispatch',
-  async () => (await import('./orca-runtime-files-mock-registry')).sshFilesystemDispatchMock
-)
 
 /**
  * Replays the first stat seen for a path on every later open of it. That is what Linux hands the

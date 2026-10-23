@@ -180,66 +180,77 @@ describe('importCookiesFromBrowser — undecryptable cookies', () => {
     expect(cookiesSetMock).not.toHaveBeenCalled()
   })
 
-  it('preserves a populated family when its unreadable partition row cannot decrypt', async () => {
-    const sourceCookiesPath = join(tmpDir, 'Chrome', 'Default', 'Network', 'Cookies')
-    const sourceDb = createChromiumCookieTestDatabase(sourceCookiesPath, [
-      {
+  it.each([0, 1])(
+    'preserves an unreadable family with %i unrelated cookies imported',
+    async (unrelatedCount) => {
+      const sourceCookiesPath = join(tmpDir, 'Chrome', 'Default', 'Network', 'Cookies')
+      const sourceDb = createChromiumCookieTestDatabase(sourceCookiesPath, [
+        {
+          domain: '.preserved.example',
+          name: 'undecryptable',
+          value: '',
+          encryptedValue: encryptLinuxChromiumCookie('wrong-key-garbage', 'peanuts', 'v11'),
+          topFrameSiteKey: 'https://top.example'
+        },
+        { domain: 'sub.preserved.example', name: 'readable-sibling', value: 'do-not-write' },
+        ...(unrelatedCount
+          ? [{ domain: '.replace.test', name: 'plain', value: 'plain-value' }]
+          : [])
+      ])
+      sourceDb.exec("UPDATE cookies SET has_cross_site_ancestor = 2 WHERE name = 'undecryptable'")
+      sourceDb.close()
+      createChromiumCookieTestDatabase(
+        join(tmpDir, 'userData', 'Partitions', 'test', 'Network', 'Cookies'),
+        []
+      ).close()
+      targetJar.push({
+        name: 'live-session',
+        value: 'must-survive',
         domain: '.preserved.example',
-        name: 'undecryptable',
-        value: '',
-        encryptedValue: encryptLinuxChromiumCookie('wrong-key-garbage', 'peanuts', 'v11'),
-        topFrameSiteKey: 'https://top.example'
-      },
-      { domain: 'sub.preserved.example', name: 'readable-sibling', value: 'do-not-write' },
-      { domain: '.replace.test', name: 'plain', value: 'plain-value' }
-    ])
-    sourceDb.exec("UPDATE cookies SET has_cross_site_ancestor = 2 WHERE name = 'undecryptable'")
-    sourceDb.close()
-    createChromiumCookieTestDatabase(
-      join(tmpDir, 'userData', 'Partitions', 'test', 'Network', 'Cookies'),
-      []
-    ).close()
-    targetJar.push({
-      name: 'live-session',
-      value: 'must-survive',
-      domain: '.preserved.example',
-      path: '/',
-      secure: true,
-      httpOnly: true,
-      sameSite: 'no_restriction'
-    })
+        path: '/',
+        secure: true,
+        httpOnly: true,
+        sameSite: 'no_restriction'
+      })
 
-    const result = await importCookiesFromBrowser(chromeBrowser(sourceCookiesPath), 'persist:test')
+      const result = await importCookiesFromBrowser(
+        chromeBrowser(sourceCookiesPath),
+        'persist:test'
+      )
 
-    expect(result.ok).toBe(true)
-    if (!result.ok) {
-      return
-    }
-    expect(clearDataMock).not.toHaveBeenCalled()
-    expect(cookiesRemoveMock).not.toHaveBeenCalledWith(expect.any(String), 'live-session')
-    expect(targetJar).toEqual([expect.objectContaining({ name: 'live-session' })])
-    expect(writeCookieIdentityMock).toHaveBeenCalledTimes(1)
-    expect(writeCookieIdentityMock).toHaveBeenCalledWith(
-      expect.objectContaining({ name: 'plain', value: 'plain-value' })
-    )
-    expect(writeCookieIdentityMock).not.toHaveBeenCalledWith(
-      expect.objectContaining({ name: 'readable-sibling' })
-    )
-    expect(result.summary).toMatchObject({
-      totalCookies: 3,
-      importedCookies: 1,
-      skippedCookies: 2,
-      partitionSkippedCookies: 2,
-      warning: {
-        code: 'cookies-undecryptable',
-        failedCookies: 1,
-        reason: 'linux-keyring-unavailable'
+      expect(result.ok).toBe(true)
+      if (!result.ok) {
+        return
       }
-    })
-    expect(result.summary.totalCookies).toBe(
-      result.summary.importedCookies + result.summary.skippedCookies
-    )
-  })
+      expect(clearDataMock).not.toHaveBeenCalled()
+      expect(cookiesRemoveMock).not.toHaveBeenCalledWith(expect.any(String), 'live-session')
+      expect(targetJar).toEqual([expect.objectContaining({ name: 'live-session' })])
+      expect(writeCookieIdentityMock).toHaveBeenCalledTimes(unrelatedCount)
+      if (unrelatedCount) {
+        expect(writeCookieIdentityMock).toHaveBeenCalledWith(
+          expect.objectContaining({ name: 'plain', value: 'plain-value' })
+        )
+      }
+      expect(writeCookieIdentityMock).not.toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'readable-sibling' })
+      )
+      expect(result.summary).toMatchObject({
+        totalCookies: 2 + unrelatedCount,
+        importedCookies: unrelatedCount,
+        skippedCookies: 2,
+        partitionSkippedCookies: 2,
+        partitionSkipBreakdown: { unreadableCookies: 1, preservedRelatedCookies: 1 },
+        warning: {
+          code: 'cookies-undecryptable',
+          failedCookies: 1,
+          reason: 'linux-keyring-unavailable'
+        }
+      })
+      expect(result.summary.totalCookies).toBe(
+        result.summary.importedCookies + result.summary.skippedCookies
+      )
+    }
+  )
 
   it.each(['v10', 'v99'])(
     'rejects a prefix-only %s CBC row before importing it',

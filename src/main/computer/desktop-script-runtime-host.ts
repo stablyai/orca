@@ -1,5 +1,5 @@
-import { spawnProcess } from '../../shared/child-process/run-process'
-import { windowsPowerShellPath } from '../../shared/child-process/windows-system-binary'
+import { spawnProcess } from '@orca/process-host'
+import { windowsPowerShellPath } from '@orca/process-host/windows-system-binary'
 import { reportComputerDiagnostic } from './computer-sidecar-diagnostics'
 import { isReplayableTool } from './desktop-script-action'
 import type { BridgeRequest, BridgeResponse } from './desktop-script-provider-types'

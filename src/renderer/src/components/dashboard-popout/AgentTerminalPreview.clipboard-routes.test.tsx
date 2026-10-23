@@ -148,6 +148,11 @@ vi.mock('@/store', () => {
   return { useAppStore }
 })
 
+// Paste encoding is under test here; owner routing is covered by AgentTerminalPreview.test.tsx.
+vi.mock('./terminal-preview-api', () => ({
+  terminalPreviewApiFor: () => window.api.terminalPreview
+}))
+
 import { AgentTerminalPreview } from './AgentTerminalPreview'
 
 describe('AgentTerminalPreview clipboard routes', () => {

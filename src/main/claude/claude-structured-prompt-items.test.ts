@@ -53,8 +53,7 @@ describe('Claude structured approval presentation', () => {
       options: [
         { id: 'allow', label: 'Allow' },
         { id: 'allowForSession', label: 'Allow for this session' },
-        { id: 'deny', label: 'Deny' },
-        { id: 'cancel', label: 'Stop' }
+        { id: 'deny', label: 'Deny' }
       ]
     })
   })
@@ -75,10 +74,31 @@ describe('Claude structured approval presentation', () => {
       detail: '# Release\n\n- Run tests',
       options: [
         { id: 'allow', label: 'Approve plan' },
-        { id: 'deny', label: 'Keep planning' },
-        { id: 'cancel', label: 'Stop' }
+        { id: 'deny', label: 'Keep planning' }
       ]
     })
+  })
+
+  it('answers a dismissal as a plain deny, and a dismissed plan by asking Claude to wait', () => {
+    const tool = buildClaudePromptReply(approvalPrompt({ command: 'ls' }), {
+      kind: 'option',
+      optionId: 'cancel'
+    })
+    const plan = buildClaudePromptReply(
+      approvalPrompt({ plan: '# Release' }, { subject: { kind: 'plan', text: '# Release' } }),
+      { kind: 'option', optionId: 'cancel' }
+    )
+
+    expect(tool).toEqual({
+      behavior: 'deny',
+      message: 'User denied this action.',
+      toolUseID: expect.any(String)
+    })
+    expect(plan).toMatchObject({
+      behavior: 'deny',
+      message: expect.stringMatching(/wait for them/)
+    })
+    expect(plan).not.toHaveProperty('interrupt')
   })
 
   it('uses a plan-specific fallback title when the harness omits one', () => {

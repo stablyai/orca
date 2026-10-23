@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { getAgentCatalog } from '@/lib/agent-catalog'
 import {
   pickSourceControlLaunchAgent,
   resolveSourceControlLaunchAgentScope
 } from '../../../../shared/source-control-launch-agent-selection'
 import { useAppStore } from '@/store'
 import { useRepoById } from '@/store/selectors'
+import { ensureDetectedAgentsForWorktree } from '@/lib/agent-detection-target-inventory'
 import { renderSourceControlActionCommandTemplate } from '../../../../shared/source-control-ai-actions'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
-import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { SourceControlAgentActionDialogProps } from './SourceControlAgentActionDialog'
 import type { UseSourceControlAgentActionDialogResult } from './source-control-agent-action-dialog-result'
@@ -19,7 +18,7 @@ import {
   buildSourceControlAgentSaveTargets,
   buildSourceControlAgentScopeNote,
   buildSourceControlAgentStatusCopy,
-  isSourceControlAgentDetectedAndEnabled
+  buildSourceControlAgentAvailability
 } from './source-control-agent-action-dialog-support'
 import { useSourceControlAgentActionStart } from './useSourceControlAgentActionStart'
 
@@ -39,6 +38,7 @@ export function useSourceControlAgentActionDialog({
   promptDelivery = 'submit-after-ready',
   launchPlatform,
   launchSource,
+  recoveryContext,
   savedAgentId,
   onSaveAgentDefault,
   onLaunchAccepted,
@@ -57,8 +57,6 @@ export function useSourceControlAgentActionDialog({
   // place instead of writing a global default the override would still shadow.
   const defaultSaveTargetValue =
     launchAgentScope.overridesGlobalAgent && repoId ? 'repo' : DEFAULT_SAVE_TARGET_VALUE
-  const ensureDetectedAgents = useAppStore((state) => state.ensureDetectedAgents)
-  const ensureRemoteDetectedAgents = useAppStore((state) => state.ensureRemoteDetectedAgents)
   const [commandTemplate, setCommandTemplate] = useState(
     savedCommandInputTemplate ?? '{basePrompt}'
   )
@@ -85,16 +83,19 @@ export function useSourceControlAgentActionDialog({
     }
     setDetecting(true)
     try {
-      const nextAgents =
-        typeof connectionId === 'string'
-          ? await ensureRemoteDetectedAgents(connectionId)
-          : await ensureDetectedAgents()
+      const state = useAppStore.getState()
+      // Why: the workspace's own host answers, including a paired server's SSH workspace.
+      const nextAgents = await (worktreeId
+        ? ensureDetectedAgentsForWorktree(state, worktreeId)
+        : typeof connectionId === 'string'
+          ? state.ensureRemoteDetectedAgents(connectionId)
+          : state.ensureDetectedAgents())
       setDetectedAgents(nextAgents)
       return nextAgents
     } finally {
       setDetecting(false)
     }
-  }, [connectionId, connectionUnavailable, ensureDetectedAgents, ensureRemoteDetectedAgents])
+  }, [connectionId, connectionUnavailable, worktreeId])
 
   useEffect(() => {
     if (!open) {
@@ -152,22 +153,10 @@ export function useSourceControlAgentActionDialog({
 
   const closeDialog = useCallback(() => onOpenChange(false), [onOpenChange])
 
-  const enabledDetectedAgents = useMemo(
-    () => detectedAgents.filter((agent) => isTuiAgentEnabled(agent, disabledAgents)),
-    [detectedAgents, disabledAgents]
+  const { agentOptions, selectedAgentUnavailable, hasEnabledAgents } = useMemo(
+    () => buildSourceControlAgentAvailability({ detectedAgents, disabledAgents, selectedAgent }),
+    [detectedAgents, disabledAgents, selectedAgent]
   )
-  const agentOptions = useMemo(
-    () =>
-      getAgentCatalog().filter(
-        (entry) => enabledDetectedAgents.includes(entry.id) || entry.id === selectedAgent
-      ),
-    [enabledDetectedAgents, selectedAgent]
-  )
-  const selectedAgentUnavailable = Boolean(
-    selectedAgent &&
-    !isSourceControlAgentDetectedAndEnabled(selectedAgent, detectedAgents, disabledAgents)
-  )
-  const hasEnabledAgents = enabledDetectedAgents.length > 0
   const commandInput = renderSourceControlActionCommandTemplate(commandTemplate, {
     basePrompt: baseCommandInput
   })
@@ -183,41 +172,49 @@ export function useSourceControlAgentActionDialog({
     ...(repo ? { executionHostId: getRepoExecutionHostId(repo) } : {})
   })
 
-  const { deliveryPlan, resetDeliveryPlan, isStarting, handleStart, startWithDetectedAgents } =
-    useSourceControlAgentActionStart({
-      selectedAgent,
-      commandInput,
-      trimmedCommandInput,
-      agentArgs,
-      agentArgsApply,
-      commandTemplate,
-      saveLaunchRecipe,
-      saveTargetValue,
-      actionId,
-      repoId,
-      settings,
-      repo,
-      worktreeId,
-      groupId,
-      promptDelivery,
-      launchPlatform,
-      // Why: an SSH host runs the plain `orca` shim; keep the previewed command
-      // label aligned with the real remote launch (no `orca-ide` rename).
-      isRemote: typeof connectionId === 'string',
-      launchSource,
-      connectionUnavailable,
-      refreshDetectedAgents,
-      onStart,
-      onSaveAgentDefault,
-      onLaunchAccepted,
-      onLaunchAborted,
-      onLaunched,
-      onClose: closeDialog
-    })
+  const {
+    deliveryPlan,
+    resetDeliveryPlan,
+    cancelStart,
+    isStarting,
+    handleStart,
+    startWithDetectedAgents
+  } = useSourceControlAgentActionStart({
+    open,
+    connectionId,
+    selectedAgent,
+    commandInput,
+    trimmedCommandInput,
+    agentArgs,
+    agentArgsApply,
+    commandTemplate,
+    saveLaunchRecipe,
+    saveTargetValue,
+    actionId,
+    repoId,
+    settings,
+    repo,
+    worktreeId,
+    groupId,
+    promptDelivery,
+    launchPlatform,
+    // Why: an SSH host runs the plain `orca` shim; keep the previewed command
+    // label aligned with the real remote launch (no `orca-ide` rename).
+    isRemote: typeof connectionId === 'string',
+    launchSource,
+    recoveryContext,
+    connectionUnavailable,
+    refreshDetectedAgents,
+    onStart,
+    onSaveAgentDefault,
+    onLaunchAccepted,
+    onLaunchAborted,
+    onLaunched,
+    onClose: closeDialog
+  })
 
   const canStart =
-    Boolean(trimmedCommandInput) &&
-    Boolean(selectedAgent) &&
+    Boolean(trimmedCommandInput && selectedAgent) &&
     !selectedAgentUnavailable &&
     !connectionUnavailable &&
     !detecting &&
@@ -226,13 +223,14 @@ export function useSourceControlAgentActionDialog({
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
       if (!nextOpen) {
+        cancelStart()
         resetDeliveryPlan()
         setSaveLaunchRecipe(true)
         setSaveTargetValue(defaultSaveTargetValue)
       }
       onOpenChange(nextOpen)
     },
-    [defaultSaveTargetValue, onOpenChange, resetDeliveryPlan]
+    [cancelStart, defaultSaveTargetValue, onOpenChange, resetDeliveryPlan]
   )
 
   const { autoLaunchPending } = useSavedSourceControlAgentActionAutoStart({

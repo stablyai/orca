@@ -29,7 +29,6 @@ vi.mock('os', async (importOriginal) => {
 import { AntigravityHookService } from './hook-service'
 import { ANTIGRAVITY_EVENTS, ANTIGRAVITY_PRE_TOOL_USE_DECISION } from './hook-events'
 import { getManagedScript, getWindowsWrapperScript } from './hook-script'
-import { WINDOWS_HOOK_STDIN_DRAIN_COMMAND } from '../agent-hooks/hook-stdin-contract'
 
 // Why (#9358/#9941): `!` is legal in a Windows path and in a pane key. Under inherited
 // delayed expansion cmd eats it out of a percent-expanded curl argument, so bake one into
@@ -105,7 +104,8 @@ function runWrapper(
   // Why: `null` abandons stdin instead of closing it — the shape a caller outside an Orca
   // pane produces, and the only way to prove the env guard exits before reading (#11549).
   stdinPayload: string | null = PAYLOAD,
-  delayedExpansion: DelayedExpansion = 'off'
+  delayedExpansion: DelayedExpansion = 'off',
+  keepStdinOpen = false
 ): Promise<HookRun> {
   return new Promise((resolve, reject) => {
     const child = spawn('cmd.exe', [`/v:${delayedExpansion}`, '/d', '/c', wrapperPath], {
@@ -140,7 +140,11 @@ function runWrapper(
     // resolves on the child's own terms.
     child.stdin.on('error', () => {})
     if (stdinPayload !== null) {
-      child.stdin.end(Buffer.from(stdinPayload, 'utf8'))
+      if (keepStdinOpen) {
+        child.stdin.write(Buffer.from(stdinPayload, 'utf8'))
+      } else {
+        child.stdin.end(Buffer.from(stdinPayload, 'utf8'))
+      }
     }
   })
 }
@@ -164,14 +168,8 @@ function expectedStdout(eventName: string): string {
 describe('Antigravity Windows hook post command', () => {
   it.each(ANTIGRAVITY_EVENTS)('guards missing-core stdin for $eventName', ({ eventName }) => {
     const script = getWindowsWrapperScript(eventName)
-    const drain = script.indexOf(WINDOWS_HOOK_STDIN_DRAIN_COMMAND)
-    const answer = script.lastIndexOf('echo {}')
-    expect(drain).toBeGreaterThan(answer)
-    for (const key of ['ORCA_AGENT_HOOK_PORT', 'ORCA_AGENT_HOOK_TOKEN', 'ORCA_PANE_KEY']) {
-      const guard = script.indexOf(`if "%${key}%"=="" exit /b 0`)
-      expect(guard, key).toBeGreaterThan(answer)
-      expect(guard, key).toBeLessThan(drain)
-    }
+    expect(script).not.toContain('findstr')
+    expect(script).toContain('exit /b 0')
   })
 
   // Why (#9358/#9941): `%~dp0` carries the hooks path, so an inherited delayed expansion eats
@@ -180,17 +178,13 @@ describe('Antigravity Windows hook post command', () => {
     expect(getWindowsWrapperScript(eventName)).toContain('setlocal DisableDelayedExpansion')
   })
 
-  it('posts through curl.exe rather than a PowerShell interpreter', () => {
+  it('posts with the owned runtime and keeps payloads off the command line', () => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
-    const script = getManagedScript('local')
-
-    expect(script).not.toMatch(/powershell/i)
-    expect(script).toContain('"%SystemRoot%\\System32\\curl.exe" -sS -X POST')
-    expect(script).toContain('http://127.0.0.1:%ORCA_AGENT_HOOK_PORT%/hook/antigravity')
-    expect(script).toContain('--data-urlencode "hook_event_name=%ORCA_ANTIGRAVITY_EVENT%"')
-    // Why: keep the payload off the command line so multi-KB tool output cannot trip an
-    // EDR oversized-command-line rule.
-    expect(script).toContain('--data-urlencode "payload@-"')
+    const script = getManagedScript('local', 'C:\\Orca!100%\\Orca.exe')
+    expect(script).not.toMatch(/powershell|curl|payload@-/i)
+    expect(script).toContain('ORCA_AGENT_HOOK_NODE=C:\\Orca!100%%\\Orca.exe')
+    expect(script).toContain('"%ORCA_AGENT_HOOK_NODE%" "%~dp0antigravity-hook-post.cjs"')
+    expect(script).toContain('ELECTRON_RUN_AS_NODE=1')
     expect(script).toContain('setlocal DisableDelayedExpansion')
     vi.restoreAllMocks()
   })
@@ -270,6 +264,34 @@ describe.skipIf(process.platform !== 'win32')('Antigravity Windows hook payload 
     // Why: ten wrapper launches plus a real install can overrun the default under load.
   }, 90_000)
 
+  it.each([PAYLOAD, ''])(
+    'returns and posts when stdin remains open (%#)',
+    async (input) => {
+      home = mkdtempSync(join(tmpdir(), 'orca-antigravity-open-'))
+      homedirMock.mockReturnValue(home)
+      expect(new AntigravityHookService().install().state).toBe('installed')
+      const listener = await startHookListener()
+      server = listener.server
+      const result = await runWrapper(
+        join(home, '.orca', 'agent-hooks', 'antigravity-pre-invocation.cmd'),
+        hookEnvironment({
+          ORCA_AGENT_HOOK_PORT: String(listener.port),
+          ORCA_AGENT_HOOK_TOKEN: HOOK_TOKEN,
+          ORCA_PANE_KEY: PANE_KEY
+        }),
+        input,
+        'on',
+        true
+      )
+      expect(result.timedOut).toBe(false)
+      expect(result.exitCode).toBe(0)
+      expect(result.stdout.trim()).toBe('{}')
+      expect(listener.posts).toHaveLength(1)
+      expect(listener.posts[0].payload).toBe(input || '{}')
+    },
+    15_000
+  )
+
   // Why (#15117): Antigravity fires some events with no stdin at all. PowerShell substituted
   // `{}` before posting; curl forwards the empty body, so prove the post still happens — the
   // listener's matching allowance is covered in agent-hook-listener-antigravity.test.ts.
@@ -295,9 +317,7 @@ describe.skipIf(process.platform !== 'win32')('Antigravity Windows hook payload 
     expect(result.timedOut).toBe(false)
     expect(result.exitCode).toBe(0)
     expect(listener.posts).toHaveLength(1)
-    // Why: curl drops a `--data-urlencode name@-` field entirely when stdin is empty, so the
-    // event reaches the listener with no `payload` key — not an empty one.
-    expect(listener.posts[0].payload).toBeNull()
+    expect(listener.posts[0].payload).toBe('{}')
     expect(listener.posts[0].hookEventName).toBe('PreInvocation')
   }, 30_000)
 
@@ -338,9 +358,7 @@ describe.skipIf(process.platform !== 'win32')('Antigravity Windows hook payload 
     90_000
   )
 
-  // Why: the guard must not cost the valid path its drain — with the Orca env present the
-  // fallback still owns stdin, so the agent's payload write completes instead of breaking.
-  it('still drains a closed payload for every missing-core event inside a pane', async () => {
+  it('answers every missing-core event inside a pane without waiting for EOF', async () => {
     const hooksDir = await installWithoutCore()
     const listener = await startHookListener()
     server = listener.server
@@ -352,7 +370,13 @@ describe.skipIf(process.platform !== 'win32')('Antigravity Windows hook payload 
       ORCA_PANE_KEY: PANE_KEY
     })
     for (const event of ANTIGRAVITY_EVENTS) {
-      const result = await runWrapper(join(hooksDir, event.windowsWrapperFileName), env)
+      const result = await runWrapper(
+        join(hooksDir, event.windowsWrapperFileName),
+        env,
+        PAYLOAD,
+        'on',
+        true
+      )
       expect(result.timedOut, event.eventName).toBe(false)
       expect(result.exitCode, event.eventName).toBe(0)
       expect(result.stdout.trim(), event.eventName).toBe(expectedStdout(event.eventName))

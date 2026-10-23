@@ -17,10 +17,12 @@ export class SystemSshSocksClientSocket extends EventEmitter implements BrowserN
   private handshake: Uint8Array<ArrayBufferLike> = new Uint8Array()
   private phase: 'method' | 'connect' | 'ready' = 'method'
 
-  constructor(localPort: number, target: BrowserNetworkTunnelOpen) {
+  /** `proxy` is a loopback port (the system-SSH forward) or any no-auth SOCKS5 endpoint. */
+  constructor(proxy: number | { host: string; port: number }, target: BrowserNetworkTunnelOpen) {
     super()
     this.connectRequest = encodeConnectRequest(target)
-    this.socket = connect({ host: '127.0.0.1', port: localPort, allowHalfOpen: true })
+    const endpoint = typeof proxy === 'number' ? { host: '127.0.0.1', port: proxy } : proxy
+    this.socket = connect({ ...endpoint, allowHalfOpen: true })
     this.socket.once('connect', () => {
       this.socket.write(new Uint8Array([SOCKS_VERSION, 1, SOCKS_NO_AUTH]))
     })

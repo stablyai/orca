@@ -1,22 +1,20 @@
 import { useAppStore } from '@/store'
-import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
+import { persistAgentLaunchTabOrder } from '@/lib/launch-agent-tab-order'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
-import {
-  createWebRuntimeSessionTerminal,
-  isWebRuntimeSessionActive
-} from '@/runtime/web-runtime-session'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { createWebRuntimeSessionTerminal } from '@/runtime/web-runtime-terminal-creation'
+import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
 import type { AiVaultAgent } from '../../../shared/ai-vault-types'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
 } from '../../../shared/agent-session-resume'
 import type { TabSplitDirection } from '@/store/slices/tabs'
-import type { WebRuntimeTerminalCreateOutcome } from '@/runtime/web-runtime-session'
+import type { WebRuntimeTerminalCreateOutcome } from '@/runtime/web-runtime-session-types'
 
 export type LaunchAiVaultSessionInNewTabResult =
-  | { tabId: string; groupId?: string }
-  | { tabId: null; groupId?: string; runtimeLaunch: Promise<WebRuntimeTerminalCreateOutcome> }
+  | { tabId: string }
+  | { tabId: null; runtimeLaunch: Promise<WebRuntimeTerminalCreateOutcome> }
 
 export function launchAiVaultSessionInNewTab(args: {
   agent: AiVaultAgent
@@ -31,73 +29,67 @@ export function launchAiVaultSessionInNewTab(args: {
   splitDirection?: TabSplitDirection
 }): LaunchAiVaultSessionInNewTabResult {
   const store = useAppStore.getState()
-  let targetGroupId = args.targetGroupId
-  const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(store, args.worktreeId)
+  // Why both paths split: the runtime path used to return first and drop the split (#22791).
+  const split =
+    args.splitDirection && args.targetGroupId
+      ? { sourceGroupId: args.targetGroupId, splitDirection: args.splitDirection }
+      : undefined
+  const runtimeEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(store, args.worktreeId)
   if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
-    const runtimeLaunch = createWebRuntimeSessionTerminal({
-      worktreeId: args.worktreeId,
-      environmentId: runtimeEnvironmentId,
-      ...(targetGroupId ? { targetGroupId } : {}),
-      agentSessionKind: 'resume',
-      launchAgent: args.agent,
-      command: args.command,
-      ...(args.cwd ? { cwd: args.cwd } : {}),
-      ...(args.env ? { env: args.env } : {}),
-      ...(args.envToDelete ? { envToDelete: args.envToDelete } : {}),
-      ...(args.launchConfig ? { launchConfig: args.launchConfig } : {}),
-      ...(args.providerSession ? { providerSession: args.providerSession } : {}),
-      ...(args.launchConfig ? { agentArgs: args.launchConfig.agentArgs } : {}),
-      activate: true
-    })
+    // Why an empty group first: the paired host creates the tab after a round trip.
+    const splitGroupId = split
+      ? store.createEmptySplitGroup(args.worktreeId, split.sourceGroupId, split.splitDirection)
+      : null
+    const targetGroupId = splitGroupId ?? args.targetGroupId
+    const runtimeLaunch = createWebRuntimeSessionTerminal(
+      {
+        worktreeId: args.worktreeId,
+        environmentId: runtimeEnvironmentId,
+        ...(targetGroupId ? { targetGroupId } : {}),
+        agentSessionKind: 'resume',
+        launchAgent: args.agent,
+        command: args.command,
+        ...(args.cwd ? { cwd: args.cwd } : {}),
+        ...(args.env ? { env: args.env } : {}),
+        ...(args.envToDelete ? { envToDelete: args.envToDelete } : {}),
+        ...(args.launchConfig ? { launchConfig: args.launchConfig } : {}),
+        ...(args.providerSession ? { providerSession: args.providerSession } : {}),
+        ...(args.launchConfig ? { agentArgs: args.launchConfig.agentArgs } : {}),
+        activate: true
+      },
+      { notifyFailure: false }
+    )
     const observedRuntimeLaunch = runtimeLaunch.then((outcome) => {
       if (outcome.status === 'created') {
         useAppStore.getState().setActiveTabType('terminal', args.worktreeId)
+      } else if (splitGroupId) {
+        // A refused or failed drop must not leave a blank pane behind.
+        useAppStore.getState().closeEmptyGroup(args.worktreeId, splitGroupId)
       }
       return outcome
     })
-    return {
-      tabId: null,
-      ...(targetGroupId ? { groupId: targetGroupId } : {}),
-      runtimeLaunch: observedRuntimeLaunch
-    }
+    return { tabId: null, runtimeLaunch: observedRuntimeLaunch }
   }
 
-  if (args.splitDirection && targetGroupId) {
-    targetGroupId =
-      store.createEmptySplitGroup(args.worktreeId, targetGroupId, args.splitDirection) ??
-      targetGroupId
-  }
-
-  const tab = args.cwd
-    ? store.createTab(args.worktreeId, targetGroupId, undefined, { startupCwd: args.cwd })
-    : store.createTab(args.worktreeId, targetGroupId)
-  store.queueTabStartupCommand(tab.id, {
-    command: args.command,
-    ...(args.env ? { env: args.env } : {}),
-    ...(args.envToDelete ? { envToDelete: args.envToDelete } : {}),
-    ...(args.launchConfig ? { launchConfig: args.launchConfig, launchAgent: args.agent } : {}),
-    ...(args.providerSession ? { resumeProviderSession: args.providerSession } : {}),
-    telemetry: {
-      agent_kind: tuiAgentToAgentKind(args.agent),
-      launch_source: 'sidebar',
-      request_kind: 'resume'
+  const tab = store.createTab(args.worktreeId, args.targetGroupId, undefined, {
+    ...(split ? { split } : {}),
+    ...(args.cwd ? { startupCwd: args.cwd } : {}),
+    pendingStartup: {
+      command: args.command,
+      ...(args.env ? { env: args.env } : {}),
+      ...(args.envToDelete ? { envToDelete: args.envToDelete } : {}),
+      ...(args.launchConfig ? { launchConfig: args.launchConfig, launchAgent: args.agent } : {}),
+      ...(args.providerSession ? { resumeProviderSession: args.providerSession } : {}),
+      telemetry: {
+        agent_kind: tuiAgentToAgentKind(args.agent),
+        launch_source: 'sidebar',
+        request_kind: 'resume'
+      }
     }
   })
   store.setActiveTabType('terminal', args.worktreeId)
 
-  const fresh = useAppStore.getState()
-  const termIds = (fresh.tabsByWorktree[args.worktreeId] ?? []).map((t) => t.id)
-  const editorIds = fresh.openFiles.filter((f) => f.worktreeId === args.worktreeId).map((f) => f.id)
-  const browserIds = (fresh.browserTabsByWorktree?.[args.worktreeId] ?? []).map((t) => t.id)
-  const base = reconcileTabOrder(
-    fresh.tabBarOrderByWorktree[args.worktreeId],
-    termIds,
-    editorIds,
-    browserIds
-  )
-  const order = base.filter((id) => id !== tab.id)
-  order.push(tab.id)
-  fresh.setTabBarOrder(args.worktreeId, order)
+  persistAgentLaunchTabOrder(args.worktreeId, tab.id)
 
-  return { tabId: tab.id, groupId: targetGroupId }
+  return { tabId: tab.id }
 }

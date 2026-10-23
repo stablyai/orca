@@ -25,6 +25,8 @@ import {
   waitForTerminalOutput as waitForTerminalOutputImpl
 } from './terminal-pane-operations'
 
+export { requestTerminalPaneClose } from './terminal-pane-operations'
+
 export {
   expectTerminalAccessibilityText,
   readTerminalAccessibilityText

@@ -5,6 +5,8 @@ import { test, expect } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 
 test('sparse preset editor visual proof', async ({ orcaPage }, testInfo) => {
+  // Why: ~60 UI steps at 2-4 s each on CI runners overrun the 120 s default.
+  test.setTimeout(240_000)
   await waitForSessionReady(orcaPage)
   await waitForActiveWorktree(orcaPage)
   await orcaPage.setViewportSize({ width: 1200, height: 800 })

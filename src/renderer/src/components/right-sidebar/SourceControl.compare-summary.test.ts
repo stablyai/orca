@@ -2,14 +2,16 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   CompareSummary,
   CompareSummaryToolbarButton,
-  resolveSourceControlBaseRef,
-  resolveSourceControlCompareBaseRef,
-  resolveSourceControlPickerBaseRef,
-  shouldClearBranchCompareForMissingBase,
   shouldRefreshBranchCompareForRemoteStatus,
   shouldRefreshBranchCompareForStatusHead,
   shouldShowCompareSummary
-} from './SourceControl'
+} from './source-control/sync/compare-summary'
+import {
+  resolveSourceControlBaseRef,
+  resolveSourceControlCompareBaseRef,
+  resolveSourceControlPickerBaseRef,
+  shouldClearBranchCompareForMissingBase
+} from './source-control/sync/base-ref-resolution'
 import type { GitBranchCompareSummary } from '../../../../shared/git-diff-compare-types'
 import type { GitUpstreamStatus } from '../../../../shared/git-status-types'
 

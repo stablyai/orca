@@ -72,20 +72,15 @@ export function findSequenceGap(
   return null
 }
 
-/** Rows appended after `cursor`, or the reset a client must take instead. A
- *  read-only journal always resets: this build cannot vouch for what it holds. */
+/** Rows appended after `cursor`, or the reset a client must take instead. */
 export function readJournalSince(
   source: {
     state: { epoch: string; lastSequence: number; oldestSequence: number }
     rowsAfter: (afterSequence: number) => JournalRow[]
-    readOnly: boolean
   },
   cursor: AgentJournalCursor,
   currentCursor: () => AgentJournalCursor
 ): JournalReadSince {
-  if (source.readOnly) {
-    return { ok: false, reset: 'schema_unreadable' }
-  }
   const resume = resolveJournalResume(source.state, cursor)
   if (!resume.ok) {
     return { ok: false, reset: resume.reset }

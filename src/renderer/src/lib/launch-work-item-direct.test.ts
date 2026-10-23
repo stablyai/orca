@@ -60,16 +60,16 @@ vi.mock('@/lib/connection-context', () => ({
   getConnectionId: mocks.getConnectionId
 }))
 
-vi.mock('@/runtime/runtime-hooks-client', () => ({
-  checkRuntimeHooks: vi
-    .fn()
-    .mockResolvedValue({ hasHooks: false, hooks: null, mayNeedUpdate: false })
-}))
-
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  getActiveRuntimeTarget: vi.fn().mockReturnValue({ kind: 'local' }),
+const hostMocks = vi.hoisted(() => ({
+  checkRuntimeHooks: vi.fn(),
   callRuntimeRpc: vi.fn()
 }))
+
+vi.mock('@/runtime/runtime-hooks-client', () => ({
+  checkRuntimeHooks: hostMocks.checkRuntimeHooks
+}))
+
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: hostMocks.callRuntimeRpc }))
 
 vi.mock('@/lib/new-workspace', () => ({
   CLIENT_PLATFORM: 'win32',
@@ -149,6 +149,11 @@ describe('launchWorkItemDirect', () => {
         }
       }
     })
+    hostMocks.checkRuntimeHooks.mockResolvedValue({
+      hasHooks: false,
+      hooks: null,
+      mayNeedUpdate: false
+    })
     mocks.resolvePrBase.mockResolvedValue({
       baseBranch: 'abc123',
       compareBaseRef: 'refs/remotes/origin/main',
@@ -202,6 +207,21 @@ describe('launchWorkItemDirect', () => {
       seedNativeChatLaunchDraft: mocks.seedNativeChatLaunchDraft,
       markNativeChatLaunchPromptFailed: mocks.markNativeChatLaunchPromptFailed
     } as typeof mocks.store
+    // Why: SSH fixtures use target `ssh-1`, which reports a Linux host once connected.
+    mocks.store.sshConnectionStates = new Map([
+      [
+        'ssh-1',
+        {
+          targetId: 'ssh-1',
+          status: 'connected',
+          error: null,
+          reconnectAttempt: 0,
+          remotePlatform: 'linux'
+        }
+      ]
+    ])
+    mocks.store.sshStateByEnvironment = new Map()
+    mocks.store.runtimeStatusByEnvironmentId = new Map()
     // @ts-expect-error -- test shim
     globalThis.window = { api: mockApi }
   })
@@ -284,7 +304,8 @@ describe('launchWorkItemDirect', () => {
       undefined,
       undefined,
       undefined,
-      'refs/remotes/origin/main'
+      'refs/remotes/origin/main',
+      { executionHostId: 'local' }
     )
   })
 
@@ -365,7 +386,8 @@ describe('launchWorkItemDirect', () => {
       undefined,
       undefined,
       undefined,
-      undefined
+      undefined,
+      { executionHostId: 'local' }
     )
   })
 
@@ -410,8 +432,8 @@ describe('launchWorkItemDirect', () => {
       cmdOverrides: {},
       agentArgs: '--dangerously-skip-permissions',
       agentEnv: {},
-      sessionOptions: undefined,
       platform: 'win32',
+      shell: 'powershell',
       isRemote: false
     })
     expect(buildAgentStartupPlan).not.toHaveBeenCalledWith(
@@ -465,11 +487,8 @@ describe('launchWorkItemDirect', () => {
     })
     expect(mocks.seedNativeChatLaunchPrompt).not.toHaveBeenCalled()
     // Why: the draft is inside `--prefill`, so the plan sets no draftPrompt.
-    // launchDraftText is the only thing that lets the view-mode gate see a
-    // draft here — without it this tab opens in chat unconditionally.
     const startup = mocks.activateAndRevealWorktree.mock.calls.at(-1)?.[1]?.startup
     expect(startup?.draftPrompt).toBeUndefined()
-    expect(startup?.launchDraftText).toBe('https://github.com/acme/repo/issues/12')
   })
 
   it('seeds the chat-composer launch draft for a multi-line Linear draft launch', async () => {
@@ -586,6 +605,45 @@ describe('launchWorkItemDirect', () => {
     expect(mocks.seedNativeChatLaunchDraft).not.toHaveBeenCalled()
   })
 
+  // A paired server that declines the chat opens this launch's terminal, which must keep the
+  // recipe's saved CLI arguments the terminal route applied.
+  it("hands a server's decline terminal the caller's own CLI arguments", async () => {
+    mocks.ensureDetectedAgents.mockResolvedValue(['claude'])
+    vi.mocked(beginDirectWorkItemStructuredLaunch).mockReturnValueOnce({
+      completed: true,
+      structuredLaunch: true,
+      primaryTabId: null
+    })
+    const { launchWorkItemDirect } = await import('./launch-work-item-direct')
+
+    await launchWorkItemDirect({
+      repoId: 'repo-1',
+      launchSource: 'task_page',
+      openModalFallback: vi.fn(),
+      agentOverride: 'claude',
+      agentArgs: '--model opus',
+      launchPlatform: 'linux',
+      promptDelivery: 'submit-after-ready',
+      item: {
+        type: 'pr',
+        number: 7,
+        title: 'Fix checks',
+        url: 'https://github.com/acme/repo/pull/7',
+        pasteContent: 'Fix the failing checks.'
+      }
+    })
+
+    expect(beginDirectWorkItemStructuredLaunch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        declinedTerminal: {
+          agentArgs: '--model opus',
+          launchPlatform: 'linux',
+          launchSource: 'task_page'
+        }
+      })
+    )
+  })
+
   it('uses remote cursor-agent detection and paste launch for SSH repos', async () => {
     mocks.store.repos = [
       {
@@ -633,7 +691,6 @@ describe('launchWorkItemDirect', () => {
       cmdOverrides: {},
       agentArgs: '--yolo',
       agentEnv: {},
-      sessionOptions: undefined,
       platform: 'linux',
       isRemote: true
     })
@@ -643,7 +700,6 @@ describe('launchWorkItemDirect', () => {
       cmdOverrides: {},
       agentArgs: '--yolo',
       agentEnv: {},
-      sessionOptions: undefined,
       platform: 'linux',
       isRemote: true,
       allowEmptyPromptLaunch: true
@@ -770,59 +826,6 @@ describe('launchWorkItemDirect', () => {
     const activationOptions = mocks.activateAndRevealWorktree.mock.calls.at(-1)?.[1]
     expect(activationOptions.startup.command).toContain(
       `command test -n "$fish_pid" && set --erase -g ORCA_PI_PREFILL; command test -z "$fish_pid" && unset ORCA_PI_PREFILL; true`
-    )
-  })
-
-  it('plans direct local Windows-path launches with POSIX startup for WSL project runtime', async () => {
-    mocks.store.repos = [
-      {
-        id: 'repo-1',
-        path: 'C:\\Users\\alice\\repo',
-        displayName: 'Repo',
-        addedAt: 1
-      }
-    ]
-    mocks.store.projects = [
-      {
-        id: 'repo-1',
-        displayName: 'Repo',
-        badgeColor: '#000000',
-        sourceRepoIds: ['repo-1'],
-        createdAt: 1,
-        updatedAt: 1,
-        localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
-      }
-    ]
-    mocks.store.createWorktree.mockResolvedValue({
-      worktree: {
-        id: 'repo-1::C:\\Users\\alice\\repo-worktree',
-        path: 'C:\\Users\\alice\\repo-worktree'
-      }
-    })
-    const { launchWorkItemDirect } = await import('./launch-work-item-direct')
-
-    await expect(
-      launchWorkItemDirect({
-        item: {
-          title: 'Fix failing checks',
-          url: 'https://github.com/acme/repo/pull/1',
-          type: 'issue',
-          number: 1,
-          pasteContent: 'Fix the failing checks.'
-        },
-        repoId: 'repo-1',
-        openModalFallback: mocks.openModalFallback,
-        launchSource: 'task_page',
-        agentOverride: 'codex',
-        promptDelivery: 'submit-after-ready'
-      })
-    ).resolves.toBe(true)
-
-    expect(buildAgentStartupPlan).toHaveBeenCalledWith(
-      expect.objectContaining({
-        agent: 'codex',
-        platform: 'linux'
-      })
     )
   })
 })

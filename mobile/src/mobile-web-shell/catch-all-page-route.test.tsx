@@ -11,30 +11,22 @@ import { act, create } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 type RouteDependencies = {
-  storage: Map<string, string>
   routes: { pathname: string; params?: Record<string, string> }[]
   refusals: (string | undefined)[]
   params: Record<string, string | string[] | undefined>
 }
 
 const dependencies = vi.hoisted((): RouteDependencies => ({
-  storage: new Map(),
   routes: [],
   refusals: [],
   params: {}
 }))
 
 vi.mock('@react-native-async-storage/async-storage', () => ({
-  default: {
-    getItem: async (key: string) => dependencies.storage.get(key) ?? null,
-    setItem: async (key: string, value: string) => {
-      dependencies.storage.set(key, value)
-    }
-  }
+  default: { getItem: async () => null, setItem: async () => {} }
 }))
 
 vi.mock('react-native', () => ({
-  ActivityIndicator: 'ActivityIndicator',
   StyleSheet: { create: (styles: unknown) => styles },
   View: 'View'
 }))
@@ -58,9 +50,16 @@ vi.mock('./MobileWebShellScreen', () => ({
 }))
 
 import { BRIDGE_MAX_ROUTE_PARAMS, BRIDGE_ROUTE_PATHNAME_PATTERN } from './bridge/bridge-caps'
-import { grantsForRoute, pageRendersRoute, routeViewOf } from './page-route-policy'
+import { grantsForRoute, matchesRoutePattern, routeViewOf } from './page-route-policy'
 import { shellScreenRouteKey } from './shell-screen-route'
 import MobileWebPageCatchAllScreen from './catch-all-page-route'
+
+/** Whether a narrow session on `pathname` would be served the page under `routes`. */
+function servesRoute(routes: Parameters<typeof routeViewOf>[0], pathname: string): boolean {
+  return routeViewOf(routes, pathname).pageRoutes.some((pattern) =>
+    matchesRoutePattern(pathname, pattern)
+  )
+}
 
 async function render(): Promise<void> {
   await act(async () => {
@@ -69,12 +68,9 @@ async function render(): Promise<void> {
 }
 
 beforeEach(() => {
-  dependencies.storage.clear()
   dependencies.routes.length = 0
   dependencies.refusals.length = 0
   dependencies.params = { hostId: 'host-1', page: ['settings'] }
-  Object.assign(globalThis, { __DEV__: true })
-  dependencies.storage.set('orca:mobileWebShellEnabled', 'true')
 })
 
 describe('the catch-all switch', () => {
@@ -105,19 +101,11 @@ describe('the catch-all switch', () => {
     expect(dependencies.routes[0]?.pathname).toBe('/h/host-a/settings')
   })
 
-  it('refuses rather than falling back to a native screen it does not have', async () => {
+  it('refuses a pathname with no segment past the host', async () => {
     dependencies.params = { hostId: 'host-1', page: [] }
     await render()
     expect(dependencies.routes).toEqual([])
-    // Twice: once before the flag read settles and once after, both on the refusal.
     expect([...new Set(dependencies.refusals)]).toEqual(['host-1'])
-  })
-
-  it('refuses while the flag read is still settling', async () => {
-    dependencies.storage.clear()
-    await render()
-    expect(dependencies.routes).toEqual([])
-    expect(dependencies.refusals.length).toBeGreaterThan(0)
   })
 
   it("carries the deep link's query through to the route it mounts the shell on", async () => {
@@ -216,8 +204,8 @@ const FUTURE_MANIFEST = [
 
 describe('the gate a catch-all pathname meets', () => {
   it('renders a manifest route this app has no route file for', () => {
-    expect(pageRendersRoute(FUTURE_MANIFEST, '/h/H1/insights')).toBe(true)
-    expect(pageRendersRoute(FUTURE_MANIFEST, '/h/H1/insights/W1')).toBe(true)
+    expect(servesRoute(FUTURE_MANIFEST, '/h/H1/insights')).toBe(true)
+    expect(servesRoute(FUTURE_MANIFEST, '/h/H1/insights/W1')).toBe(true)
     expect(grantsForRoute(FUTURE_MANIFEST, '/h/H1/insights/W1')).toEqual([
       'navigate',
       'storage',
@@ -227,12 +215,12 @@ describe('the gate a catch-all pathname meets', () => {
   })
 
   it('refuses a pathname the manifest does not list', () => {
-    expect(pageRendersRoute(FUTURE_MANIFEST, '/h/H1/settings')).toBe(false)
+    expect(servesRoute(FUTURE_MANIFEST, '/h/H1/settings')).toBe(false)
     expect(grantsForRoute(FUTURE_MANIFEST, '/h/H1/settings')).toEqual([])
   })
 
   it('refuses a listed route needing a grant this app does not implement', () => {
-    expect(pageRendersRoute(FUTURE_MANIFEST, '/h/H1/future')).toBe(false)
+    expect(servesRoute(FUTURE_MANIFEST, '/h/H1/future')).toBe(false)
     expect(routeViewOf(FUTURE_MANIFEST, '/h/H1/future').pageRoutes).toEqual([
       '/h/[hostId]/insights',
       '/h/[hostId]/insights/[worktreeId]'

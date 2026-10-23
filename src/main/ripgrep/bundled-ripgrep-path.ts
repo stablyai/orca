@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import { join } from 'node:path'
 import { getAppEnvironment, hasAppEnvironment } from '../../shared/app-environment'
-import { quotePosixShell } from '../../shared/wsl-login-shell-command'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import {
   BUNDLED_RIPGREP_PACKAGE_BIN_DIR,
   BUNDLED_RIPGREP_RESOURCE_DIR,

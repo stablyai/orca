@@ -4,8 +4,8 @@ import type { Page } from '@stablyai/playwright-test'
  * Pins the renderer's IME ownership policy to one platform, from any runner.
  *
  * Every platform-dependent IME decision in the terminal reads `navigator.userAgent` and nothing
- * else — the forwarder that owns printable keydowns installs only when the UA reports macOS, the
- * candidate-key guards only when it reports desktop Linux, and the standalone `keyCode 229`
+ * else — the forwarder that owns printable keydowns installs when the UA reports macOS or desktop
+ * Linux, the candidate-key guards only on desktop Linux, and the standalone `keyCode 229`
  * keydown reaches xterm on macOS and Linux but not on Windows. Overriding the UA is therefore the
  * whole platform decision, which is what lets the Windows and Linux shapes run headless on the
  * Linux CI shards instead of needing three runners.

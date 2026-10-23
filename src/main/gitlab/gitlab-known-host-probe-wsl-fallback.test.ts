@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { fakeSpawnDispatch } from '../../shared/child-process/__fixtures__/fake-spawned-child'
+import { fakeSpawnDispatch } from '../../shared/__fixtures__/fake-spawned-child'
 import type * as WslModule from '../wsl'
 
 const { execFileSyncMock, spawnMock, getDefaultWslDistroMock } = vi.hoisted(() => ({

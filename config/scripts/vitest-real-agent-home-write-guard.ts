@@ -93,9 +93,20 @@ function targetPath(target: unknown): string | null {
   return null
 }
 
+function realClaudeTranscriptWriteOptedIn(path: string): boolean {
+  if (process.env.ORCA_REAL_CLAUDE_CLI_TEST !== '1') {
+    return false
+  }
+  const homes = [
+    ...realHomes().map((home) => join(home, '.claude')),
+    process.env.CLAUDE_CONFIG_DIR
+  ].filter((home): home is string => Boolean(home))
+  return homes.some((home) => normalize(path).startsWith(normalize(join(home, 'projects')) + sep))
+}
+
 function assertOutsideRealHome(state: GuardState, operation: string, target: unknown): void {
   const path = targetPath(target)
-  if (path === null || realAgentSuiteOptedIn()) {
+  if (path === null || realAgentSuiteOptedIn() || realClaudeTranscriptWriteOptedIn(path)) {
     return
   }
   const normalized = normalize(path) + sep
@@ -188,12 +199,18 @@ declare global {
 }
 const state = (globalThis.orcaRealAgentHomeWriteGuard ??= install())
 // Why after install: the guard keeps the inherited paths as roots; tests that need one set their own.
-const inheritedEnvToUnset = realAgentSuiteOptedIn()
-  ? []
-  : [...INHERITED_STATE_ENV, ...INHERITED_LIVE_CLI_ENV]
-for (const name of inheritedEnvToUnset) {
-  delete process.env[name]
+export function clearInheritedAgentStateEnv(): void {
+  const inheritedEnvToUnset = realAgentSuiteOptedIn()
+    ? []
+    : [...INHERITED_STATE_ENV, ...INHERITED_LIVE_CLI_ENV]
+  for (const name of inheritedEnvToUnset) {
+    if (name === 'CLAUDE_CONFIG_DIR' && process.env.ORCA_REAL_CLAUDE_CLI_TEST === '1') {
+      continue
+    }
+    delete process.env[name]
+  }
 }
+clearInheritedAgentStateEnv()
 
 /** Drains recorded violations; only the guard's own self-test should need this. */
 export function takeRealAgentHomeWriteViolations(): string[] {

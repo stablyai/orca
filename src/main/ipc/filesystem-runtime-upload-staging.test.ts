@@ -6,7 +6,6 @@ import type * as RuntimeImportLimits from './runtime-import-limits'
 
 type RuntimeImportLimitsModule = typeof RuntimeImportLimits
 
-vi.mock('./filesystem-auth', () => ({ authorizeExternalPath: () => {} }))
 // Why: real ceilings are gigabytes, and truncate() is not sparse on NTFS, so a
 // literal over-limit fixture would allocate that much on Windows CI.
 vi.mock('./runtime-import-limits', async (importOriginal) => ({
@@ -152,5 +151,63 @@ describe('stageOneSourceForRuntimeUpload', () => {
         expect.objectContaining({ relativePath: 'nested/b.txt', kind: 'file', byteLength: 3 })
       ])
     )
+  })
+
+  describe('a dropped file with no extension', () => {
+    const PNG_HEADER = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0x0d])
+
+    const stage = (path: string) =>
+      stageOneSourceForRuntimeUpload(path, 0, { nameExtensionlessImages: true })
+
+    it('gets the extension its image bytes declare', async () => {
+      const filePath = join(workDir, 'noname')
+      await writeFile(filePath, PNG_HEADER)
+
+      await expect(stage(filePath)).resolves.toMatchObject({
+        status: 'staged',
+        name: 'noname.png',
+        entries: [{ relativePath: '', kind: 'file', byteLength: PNG_HEADER.length }]
+      })
+    })
+
+    it('keeps its name when the caller did not opt in', async () => {
+      const filePath = join(workDir, 'noname')
+      await writeFile(filePath, PNG_HEADER)
+
+      await expect(stageOneSourceForRuntimeUpload(filePath)).resolves.toMatchObject({
+        name: 'noname'
+      })
+    })
+
+    it('keeps its name when the bytes are not an image', async () => {
+      const filePath = join(workDir, 'Makefile')
+      await writeFile(filePath, 'all:\n\ttrue\n')
+
+      await expect(stage(filePath)).resolves.toMatchObject({
+        status: 'staged',
+        name: 'Makefile'
+      })
+    })
+
+    it('keeps a name that already has an extension, even if it is wrong', async () => {
+      const filePath = join(workDir, 'capture.dat')
+      await writeFile(filePath, PNG_HEADER)
+
+      await expect(stage(filePath)).resolves.toMatchObject({
+        name: 'capture.dat'
+      })
+    })
+
+    it('leaves files inside a dropped directory as named', async () => {
+      const rootPath = join(workDir, 'shots')
+      await mkdir(rootPath)
+      await writeFile(join(rootPath, 'noname'), PNG_HEADER)
+
+      const staged = await stage(rootPath)
+
+      expect(staged).toMatchObject({ name: 'shots', kind: 'directory' })
+      const entries = staged.status === 'staged' ? staged.entries : []
+      expect(entries).toContainEqual(expect.objectContaining({ relativePath: 'noname' }))
+    })
   })
 })

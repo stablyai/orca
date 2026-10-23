@@ -1,10 +1,9 @@
 import { createHash } from 'node:crypto'
-import { closeSync, openSync, readSync, statSync } from 'node:fs'
 
 import { parseAgentHookJson } from './request-body'
+import { scanFileRegionsBackward } from './reverse-file-region-scan'
 import { extractAssistantContentText } from './transcript-entry-text'
 import {
-  EMPTY_TRANSCRIPT_REGION,
   readLastTextFromTranscriptOnce,
   TRANSCRIPT_CHUNK_BYTES,
   TRANSCRIPT_MAX_SCAN_BYTES
@@ -59,91 +58,24 @@ export function readLastCommandCodeUserPromptEntryFromTranscript(
   if (typeof transcriptPath !== 'string' || transcriptPath.length === 0) {
     return undefined
   }
-  try {
-    const stats = statSync(transcriptPath)
-    const size = stats.size
-    if (size <= 0) {
-      return undefined
-    }
-    const fd = openSync(transcriptPath, 'r')
-    try {
-      // Why scan backward: the answer is the LAST user line, so walking up from
-      // EOF returns on the first hit instead of parsing every line of a
-      // multi-megabyte transcript on every hook event.
-      // Why a chunk list: carry holds a partial line, and re-concatenating it per
-      // block made one oversized line (a big tool result) cost O(line^2).
-      let carryChunks: Buffer[] = []
-      let bytesRead = 0
-      let scanEnd = size
-      while (scanEnd > 0 && bytesRead < TRANSCRIPT_MAX_SCAN_BYTES) {
-        const chunkSize = Math.min(
-          scanEnd,
-          TRANSCRIPT_CHUNK_BYTES,
-          TRANSCRIPT_MAX_SCAN_BYTES - bytesRead
-        )
-        const position = scanEnd - chunkSize
-        const buffer = Buffer.alloc(chunkSize)
-        let filled = 0
-        while (filled < chunkSize) {
-          const n = readSync(fd, buffer, filled, chunkSize - filled, position + filled)
-          if (n === 0) {
-            break
+  return scanFileRegionsBackward(
+    transcriptPath,
+    { chunkBytes: TRANSCRIPT_CHUNK_BYTES, maxScanBytes: TRANSCRIPT_MAX_SCAN_BYTES },
+    (region, regionPosition) => {
+      const found = findLastCommandCodePromptInRegion(region)
+      return found
+        ? {
+            text: found.prompt,
+            interactionKey: [
+              'command-code-transcript',
+              hashInteractionKeyPart(transcriptPath),
+              String(regionPosition + found.byteOffset),
+              hashInteractionKeyPart(found.prompt)
+            ].join('-')
           }
-          filled += n
-        }
-        // Why bail on a short read: the file shrank under us, so the bytes above
-        // this block no longer line up and any stitched offset would be wrong.
-        if (filled < chunkSize) {
-          break
-        }
-        bytesRead += filled
-        scanEnd = position
-        // Why search only the new block: carry is always the run before a newline,
-        // so it holds none of its own.
-        const firstNewline = buffer.indexOf(0x0a)
-        // Why only at a true file start: a scan that stops on the size cap must
-        // discard its leading partial line, exactly as the capped read did.
-        const atStart = position === 0
-        let completeRegion: Buffer
-        let regionPosition: number
-        if (atStart) {
-          completeRegion =
-            carryChunks.length === 0 ? buffer : Buffer.concat([buffer, ...carryChunks])
-          regionPosition = position
-          carryChunks = []
-        } else if (firstNewline === -1) {
-          completeRegion = EMPTY_TRANSCRIPT_REGION
-          regionPosition = position
-          carryChunks.unshift(buffer)
-        } else {
-          const afterNewline = buffer.subarray(firstNewline + 1)
-          completeRegion =
-            carryChunks.length === 0 ? afterNewline : Buffer.concat([afterNewline, ...carryChunks])
-          regionPosition = position + firstNewline + 1
-          carryChunks = [buffer.subarray(0, firstNewline)]
-        }
-        if (completeRegion.length > 0) {
-          const found = findLastCommandCodePromptInRegion(completeRegion)
-          if (found) {
-            return {
-              text: found.prompt,
-              interactionKey: [
-                'command-code-transcript',
-                hashInteractionKeyPart(transcriptPath),
-                String(regionPosition + found.byteOffset),
-                hashInteractionKeyPart(found.prompt)
-              ].join('-')
-            }
-          }
-        }
-      }
-      return undefined
-    } finally {
-      closeSync(fd)
+        : undefined
     }
-  } catch {
-    return undefined
-  }
+  )
 }
 
 export function extractCommandCodeAssistantTextFromLine(line: string): string | undefined {

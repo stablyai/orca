@@ -54,7 +54,7 @@ describe('isTransientSqliteContention', () => {
       }
     }
 
-    expect(thrown).toMatchObject({ [process.versions.bun ? 'errno' : 'errcode']: 5 })
+    expect(thrown).toMatchObject({ errcode: 5 })
     expect(isTransientSqliteContention(thrown)).toBe(true)
   })
 

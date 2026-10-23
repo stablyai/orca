@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { handleTerminalWorkspaceKeyDown } from './terminal-workspace-keydown'
 import type { TerminalActivationController } from './use-terminal-activation-actions'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
 export function useTerminalKeyboardShortcuts(controller: TerminalActivationController): void {
   const {
@@ -28,8 +29,8 @@ export function useTerminalKeyboardShortcuts(controller: TerminalActivationContr
     const onKeyDown = (event: KeyboardEvent): void => {
       handleTerminalWorkspaceKeyDown(event, controller, shortcutPlatform)
     }
-    window.addEventListener('keydown', onKeyDown, { capture: true })
-    return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
+    addAppKeyListener('keydown', onKeyDown)
+    return () => removeAppKeyListener('keydown', onKeyDown)
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- preserve the original listener refresh contract across extraction.
   }, [
     activeWorktreeId,

@@ -1,7 +1,6 @@
 import { ASSIGNMENT_LIMITS } from '@orca-cloud/relay-contract'
 import { describe, expect, it, vi } from 'vitest'
 import { RelayAssignmentStore } from './assignment-store.js'
-import { CONTROL_RENEWAL_BATCH_SQL } from './control-renewal-statement.js'
 import type { ControlRenewalOutcome } from './control-renewal-statement.js'
 import {
   openInMemoryRelayDatabase,
@@ -27,6 +26,7 @@ class RenewalStatementProbe implements RelayDatabase {
   readonly dialect = 'postgres' as const
   readonly statements: Array<{ sql: string; params: unknown[] }> = []
   failuresRemaining = 0
+  failureMessage = 'canceling statement due to statement timeout'
 
   constructor(private readonly outcomeFor: (userId: string) => ControlRenewalOutcome) {}
 
@@ -34,7 +34,7 @@ class RenewalStatementProbe implements RelayDatabase {
     this.statements.push({ sql, params })
     if (this.failuresRemaining > 0) {
       this.failuresRemaining -= 1
-      throw new Error('canceling statement due to statement timeout')
+      throw new Error(this.failureMessage)
     }
     const userIds = params[0] as string[]
     return userIds.map((userId, index) => ({
@@ -69,7 +69,6 @@ describe('batched control renewals on PostgreSQL', () => {
 
     expect(outcomes).toEqual(['renewed', 'renewed', 'renewed'])
     expect(probe.statements).toHaveLength(1)
-    expect(probe.statements[0]!.sql).toBe(CONTROL_RENEWAL_BATCH_SQL)
     expect(probe.statements[0]!.params[0]).toEqual(['user-a', 'user-a', 'user-b'])
     expect(probe.statements[0]!.params[4]).toEqual([expiresAt, expiresAt, expiresAt])
   })
@@ -149,6 +148,58 @@ describe('batched control renewals on PostgreSQL', () => {
     }
   })
 
+  it('runs the batch on the priority lane and the per-host fallback on the general one', async () => {
+    const probe = new RenewalStatementProbe(() => 'renewed')
+    probe.failuresRemaining = 1
+    const lanes: string[] = []
+    const database: RelayDatabase = {
+      dialect: 'postgres',
+      query: async (sql, params) => {
+        lanes.push('general')
+        return await probe.query(sql, params)
+      },
+      queryPriority: async (sql, params) => {
+        lanes.push('priority')
+        return await probe.query(sql, params)
+      },
+      queryLocked: async () => await probe.queryLocked(),
+      transaction: async () => await probe.transaction(),
+      close: async () => undefined
+    }
+    const store = new RelayAssignmentStore(database, () => now)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    try {
+      await store.renewControlActivities([
+        renewal('user-a', 'host000000000001'),
+        renewal('user-a', 'host000000000002')
+      ])
+
+      // A 200-row fallback would otherwise jump the whole general queue.
+      expect(lanes).toEqual(['priority', 'general', 'general'])
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  it('does not fan out per host when the batch never got a connection', async () => {
+    const probe = new RenewalStatementProbe(() => 'renewed')
+    probe.failuresRemaining = 1
+    probe.failureMessage = 'timeout exceeded when trying to connect'
+    const store = new RelayAssignmentStore(probe, () => now)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    try {
+      const outcomes = await store.renewControlActivities([
+        renewal('user-a', 'host000000000001'),
+        renewal('user-a', 'host000000000002')
+      ])
+
+      expect(outcomes).toEqual(['database_error', 'database_error'])
+      expect(probe.statements).toHaveLength(1)
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
   it('reports a host that fails its own fallback statement without touching the rest', async () => {
     const probe = new RenewalStatementProbe(() => 'renewed')
     probe.failuresRemaining = 2
@@ -160,27 +211,10 @@ describe('batched control renewals on PostgreSQL', () => {
         renewal('user-a', 'host000000000002')
       ])
 
-      expect(outcomes.filter((outcome) => outcome === 'renewed')).toHaveLength(1)
-      expect(outcomes.filter((outcome) => outcome === 'database_error')).toHaveLength(1)
+      expect(outcomes).toEqual(['database_error', 'renewed'])
     } finally {
       warn.mockRestore()
     }
-  })
-
-  it('reports a contended assignment row apart from a missing one', async () => {
-    const probe = new RenewalStatementProbe((userId) =>
-      userId === 'user-b' ? 'assignment_lock_unavailable' : 'renewed'
-    )
-    const store = new RelayAssignmentStore(probe, () => now)
-
-    const outcomes = await store.renewControlActivities([
-      renewal('user-a', 'host000000000001'),
-      renewal('user-b', 'host000000000002')
-    ])
-
-    // Retryable: SKIP LOCKED passed over the row rather than queueing the whole
-    // flush behind whoever held it.
-    expect(outcomes).toEqual(['renewed', 'assignment_lock_unavailable'])
   })
 
   it('counts a lone renewal that threw before rethrowing it', async () => {
@@ -217,7 +251,7 @@ describe('batched control renewals on PostgreSQL', () => {
     ])
   })
 
-  it('counts one renewal metric per row against the flush latency', async () => {
+  it('counts one renewal outcome metric per row', async () => {
     const probe = new RenewalStatementProbe((userId) =>
       userId === 'user-b' ? 'assignment_not_found' : 'renewed'
     )

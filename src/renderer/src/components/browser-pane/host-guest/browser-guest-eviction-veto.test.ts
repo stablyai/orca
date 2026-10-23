@@ -1,9 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
-import {
-  browserTabsVetoGuestEviction,
-  selectBrowserGuestEvictionWorktreeIds
-} from './browser-guest-worktree-retention'
+import { browserTabsVetoGuestEviction } from './browser-guest-eviction-veto'
+import { selectBrowserGuestEvictionWorktreeIds } from './browser-guest-worktree-retention'
 import { hydrateBrowserDrivers } from '../../../lib/pane-manager/browser-mobile-driver-state'
 import { hydrateBrowserRemoteViewerPages } from '../../../lib/pane-manager/browser-remote-viewer-state'
 import {

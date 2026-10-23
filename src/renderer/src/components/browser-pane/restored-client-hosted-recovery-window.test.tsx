@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({ attach: vi.fn(), createBrowserTab: vi.fn(async
 vi.mock('./browser-client-page-renderer-installation', () => ({
   attachBrowserClientPageToViewport: mocks.attach
 }))
-vi.mock('@/runtime/web-runtime-session', () => ({
+vi.mock('@/runtime/web-runtime-browser-creation', () => ({
   createWebRuntimeSessionBrowserTab: mocks.createBrowserTab
 }))
 vi.mock('sonner', () => ({
@@ -108,12 +108,10 @@ function renderPane(): ReturnType<typeof render> {
   return render(paneElement())
 }
 
-// Scoped to the navigation row: the unavailable notice's reopen button keeps its own pending
-// spinner in the DOM at all times, hidden by class, so an unscoped query is always true.
-function spinnerShown(): boolean {
+function loadingShown(): boolean {
   return (
     document.querySelector(
-      '[data-contextual-tour-target="client-hosted-browser-controls"] .animate-spin'
+      '[data-contextual-tour-target="client-hosted-browser-controls"] [data-browser-load-progress="loading"]'
     ) !== null
   )
 }
@@ -143,7 +141,7 @@ describe('restored client-hosted recovery window', () => {
 
     act(() => vi.advanceTimersByTime(RESTORED_CLIENT_HOSTED_RECOVERY_WINDOW_MS - 1))
 
-    expect(spinnerShown()).toBe(true)
+    expect(loadingShown()).toBe(true)
     expect(noticeShown()).toBe(false)
   })
 
@@ -154,7 +152,7 @@ describe('restored client-hosted recovery window', () => {
     act(() => vi.advanceTimersByTime(RESTORED_CLIENT_HOSTED_RECOVERY_WINDOW_MS))
 
     expect(noticeShown()).toBe(true)
-    expect(spinnerShown()).toBe(false)
+    expect(loadingShown()).toBe(false)
     expect(screen.getByRole('button', { name: 'Reopen on server' })).not.toBeNull()
   })
 
@@ -175,7 +173,7 @@ describe('restored client-hosted recovery window', () => {
 
     act(() => vi.advanceTimersByTime(RESTORED_CLIENT_HOSTED_RECOVERY_WINDOW_MS * 10))
 
-    expect(spinnerShown()).toBe(true)
+    expect(loadingShown()).toBe(true)
     expect(noticeShown()).toBe(false)
   })
 
@@ -208,7 +206,7 @@ describe('restored client-hosted recovery window', () => {
 
     act(() => vi.advanceTimersByTime(RESTORED_CLIENT_HOSTED_RECOVERY_WINDOW_MS * 10))
 
-    expect(spinnerShown()).toBe(true)
+    expect(loadingShown()).toBe(true)
     expect(noticeShown()).toBe(false)
   })
 

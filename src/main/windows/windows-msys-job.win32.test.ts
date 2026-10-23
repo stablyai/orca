@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 import { resolveGitBashPath } from '../git-bash'
-import { quotePosixShell } from '../../shared/wsl-login-shell-command'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { listPtyJobProcessIds, terminatePtyJob } from './windows-pty-job'
 
 const describeOnWindows = process.platform === 'win32' ? describe : describe.skip
@@ -49,11 +49,21 @@ describeOnWindows('MSYS terminal job ownership', () => {
       }
     })
     try {
-      proc.write(
-        `${quotePosixShell(process.execPath.replace(/\\/g, '/'))} ${quotePosixShell(script.replace(/\\/g, '/'))}\r`
-      )
+      const startupDeadline = Date.now() + 15_000
       try {
-        await vi.waitFor(() => expect(childPid).toBeDefined(), { timeout: 15_000 })
+        await vi.waitFor(() => expect(output).toMatch(/bash-\d+\.\d+[$#] $/), {
+          timeout: 15_000
+        })
+        expect(
+          startupDeadline - Date.now(),
+          'Bash readiness consumed the startup budget'
+        ).toBeGreaterThan(0)
+        proc.write(
+          `${quotePosixShell(process.execPath.replace(/\\/g, '/'))} ${quotePosixShell(script.replace(/\\/g, '/'))}\r`
+        )
+        const remainingStartupMs = startupDeadline - Date.now()
+        expect(remainingStartupMs, 'PTY write consumed the startup budget').toBeGreaterThan(0)
+        await vi.waitFor(() => expect(childPid).toBeDefined(), { timeout: remainingStartupMs })
       } catch (cause) {
         throw new Error(
           JSON.stringify({ shellPid: proc.pid, exit, jobPids: listPtyJobProcessIds(proc), output }),

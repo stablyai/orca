@@ -22,11 +22,10 @@ describe('the keys a page may read and write', () => {
     expect(isPageStorageKey('orca:nativeChatTabs:host-1:wt-1')).toBe(true)
   })
 
-  it('refuses the rest of the namespace, including the flag that turns this on', () => {
+  it('refuses the rest of the namespace', () => {
     // Everything the app stores lives under `orca:`, so a page that could write any of it could
-    // turn the hybrid shell on for a build that never offered it.
+    // rewrite the app's pairings and push registrations.
     for (const key of [
-      'orca:mobileWebShellEnabled',
       'orca:remotePushHostRegistrations',
       'orca:pushServiceNotificationsEnabled',
       'orca:home-snapshot:v1',
@@ -58,11 +57,15 @@ describe('the keys a page may read and write', () => {
     }
   })
 
-  it("adds the session route's two workspace-scoped keys, and only for it", () => {
+  it("adds the session route's workspace-scoped keys, and only for it", () => {
     const session = pageStorageKeysForRoute('host-1', SESSION_ROUTE)
     expect(
       session.filter((key) => !pageStorageKeysForRoute('host-1', HOST_ROUTE).includes(key))
-    ).toEqual(['orca:nativeChatTabs:host-1:wt-1', 'orca:terminalLiveInputDisabled:host-1:wt-1'])
+    ).toEqual([
+      'orca:nativeChatTabs:host-1:wt-1',
+      'orca:terminalLiveInputDisabled:host-1:wt-1',
+      'orca:terminalDrafts:host-1:wt-1'
+    ])
     // A route that carries a worktree segment and declares no key of its own gets none.
     expect(pageStorageKeysForRoute('host-1', '/h/host-1/files/wt-1')).toEqual(
       pageStorageKeysForRoute('host-1', HOST_ROUTE)

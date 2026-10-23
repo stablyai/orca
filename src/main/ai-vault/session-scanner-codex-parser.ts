@@ -34,7 +34,6 @@ import {
   parseJsonObject,
   subtractCodexUsage
 } from './session-scanner-values'
-import { remoteSessionContentLines } from './remote-session-content-lines'
 import { readCodexTimelineOnlyRecord } from './session-scanner-codex-record-fast-path'
 import { extractCodexSessionMetadataTitle } from './session-scanner-codex-session-meta'
 import {
@@ -62,27 +61,6 @@ export async function parseCodexSessionFile(
     executionHostId,
     messages,
     titleReader: (sessionId) => readCodexSessionIndexTitle(file.path, codexHome, sessionId)
-  })
-}
-
-export async function parseCodexSessionContent(args: {
-  file: FileWithMtime
-  content: string | AsyncIterable<string>
-  platform?: NodeJS.Platform
-  codexHome?: string | null
-  executionHostId?: ExecutionHostId
-  executionHostPlatform?: NodeJS.Platform | null
-  readIndexedTitle?: (sessionId: string) => Promise<string | null>
-  signal?: AbortSignal
-}): Promise<AiVaultSession | null> {
-  return parseCodexSessionLines({
-    file: args.file,
-    lines: remoteSessionContentLines(args.content, args.signal),
-    platform: args.platform ?? process.platform,
-    codexHome: args.codexHome ?? null,
-    executionHostId: args.executionHostId,
-    executionHostPlatform: args.executionHostPlatform,
-    titleReader: args.readIndexedTitle
   })
 }
 
@@ -142,7 +120,9 @@ function consumeCodexRecordLine(state: CodexSessionParseState, line: string): vo
   updateTimeline(accumulator, extractString(record.timestamp))
 
   const payload = asRecord(record.payload)
-  if (record.type === 'session_meta' && payload) {
+  // Codex keeps the first session_meta canonical; a fork copies its parent's in after it, and
+  // such a later one is ignored below like any other record type this parser does not read.
+  if (record.type === 'session_meta' && payload && !state.sawSessionMeta) {
     state.nonUserOrigin = readCodexNonUserOrigin(payload)
     if (state.nonUserOrigin) {
       return

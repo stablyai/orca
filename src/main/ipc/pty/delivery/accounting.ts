@@ -12,7 +12,7 @@ import {
   PTY_RENDERER_TOTAL_IN_FLIGHT_HIGH_WATER_CHARS
 } from './constants'
 import type { PtyIpcSession } from '../session'
-import type { PendingPtyData } from '../../pty-pending-data-drain-queue'
+import type { PendingPtyData } from '../../pty-pending-data-drain-contract'
 
 export function getRendererInFlightCharsForPty(session: PtyIpcSession, id: string): number {
   const accounting = session.rendererDeliveryAccountingByPty.get(id)
@@ -52,16 +52,7 @@ export function deletePendingPtyData(session: PtyIpcSession, id: string): void {
 }
 
 export function clearPendingPtyData(session: PtyIpcSession): void {
-  for (const pending of session.pendingData.values()) {
-    if (pending.projectionAdmissionIds) {
-      session.sshOutputIntake?.transferProjections(
-        pending.projectionAdmissionIds,
-        'renderer-lifecycle-reset'
-      )
-    }
-  }
   session.pendingData.clear()
-  session.sourceCreditPendingPtys.clear()
 }
 
 export function canSendPtyDataToRenderer(
@@ -105,9 +96,6 @@ export function applyCumulativeAck(
     0,
     session.rendererInFlightTotalChars - acknowledged
   )
-  if (acknowledged > 0) {
-    session.sshOutputIntake?.settleProjectionPrefix(id, acknowledged)
-  }
   return acknowledged
 }
 
@@ -186,12 +174,6 @@ export function writeOffLostRendererDelivery(
     // Why drop pending: everything at/before markerSeq comes from the snapshot, so flushing pre-marker bytes would double-paint the restore.
     const pending = session.pendingData.get(id)
     if (pending) {
-      if (pending.projectionAdmissionIds) {
-        session.sshOutputIntake?.transferProjections(
-          pending.projectionAdmissionIds,
-          'renderer-delivery-writeoff'
-        )
-      }
       session.pendingDroppedChars += pending.data.length
       deletePendingPtyData(session, id)
       session.pendingOverflowMarkedPtys.delete(id)

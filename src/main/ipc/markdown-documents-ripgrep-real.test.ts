@@ -43,6 +43,8 @@ describe('Markdown listing with bundled ripgrep', () => {
     ]
     const excluded = [
       'plain.txt',
+      'data.csv',
+      'data.tsv',
       '.md',
       'docs/.MDX',
       '.git/hidden.md',

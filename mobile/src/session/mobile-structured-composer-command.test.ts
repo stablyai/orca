@@ -24,9 +24,7 @@ function setup() {
     client: { sendRequest } as unknown as RpcClient,
     sessionId: 'session',
     fence: 1,
-    sessionKey: 'session:1',
     pending: { current: false },
-    operationIds: new Map(),
     controller: {
       agent: 'codex',
       snapshot: [],
@@ -34,7 +32,8 @@ function setup() {
       setOption: vi.fn(async () => true),
       conversationCommands: ['clear', 'compact']
     },
-    canRun: () => true,
+    busy: () => null,
+    waitsInLine: () => false,
     onError: vi.fn(),
     timeoutMs: 15000
   }
@@ -61,41 +60,34 @@ describe('mobile structured conversation commands', () => {
         expect.objectContaining({ command: text.slice(1) }),
         expect.anything()
       )
-      expect(input.operationIds.size).toBe(0)
     }
   )
-  it('retains the exact operation ID after an unknown response', async () => {
-    const { input, sendRequest } = setup()
-    sendRequest.mockResolvedValueOnce({
-      ok: true,
-      result: { ok: true, value: { command: 'compact', state: 'unknown' } }
-    })
-    expect(await dispatchMobileStructuredCommand(input)).toBe('unknown')
-    expect(await dispatchMobileStructuredCommand(input)).toBe('accepted')
-    expect(sendRequest.mock.calls[0]?.[1]).toEqual(sendRequest.mock.calls[1]?.[1])
-  })
-  it('retains operation identity when the host explicitly reports an unknown ledger outcome', async () => {
-    const { input, sendRequest } = setup()
-    sendRequest.mockResolvedValueOnce({
-      ok: true,
-      result: {
-        ok: false,
-        refusal: { code: 'agent_session_operation_unknown', message: 'unconfirmed' }
+  it.each([
+    [
+      'the host reports the command unconfirmed',
+      { ok: true, result: { ok: true, value: { command: 'compact', state: 'unknown' } } }
+    ],
+    [
+      'the host cannot say what became of it',
+      {
+        ok: true,
+        result: {
+          ok: false,
+          refusal: { code: 'agent_session_operation_unknown', message: 'unconfirmed' }
+        }
       }
-    } as never)
-    expect(await dispatchMobileStructuredCommand(input)).toBe('unknown')
-    expect(await dispatchMobileStructuredCommand(input)).toBe('accepted')
-    expect(sendRequest.mock.calls[0]?.[1]).toEqual(sendRequest.mock.calls[1]?.[1])
-  })
-  it('retains operation identity when the host fails after starting the command', async () => {
+    ],
+    [
+      'the host fails after starting it',
+      { ok: false, error: { code: 'runtime_error', message: 'settlement failed' } }
+    ]
+  ])('sends the next press as a new command after %s', async (_case, answer) => {
     const { input, sendRequest } = setup()
-    sendRequest.mockResolvedValueOnce({
-      ok: false,
-      error: { code: 'runtime_error', message: 'settlement failed' }
-    } as never)
+    sendRequest.mockResolvedValueOnce(answer)
     expect(await dispatchMobileStructuredCommand(input)).toBe('unknown')
     expect(await dispatchMobileStructuredCommand(input)).toBe('accepted')
-    expect(sendRequest.mock.calls[0]?.[1]).toEqual(sendRequest.mock.calls[1]?.[1])
+    // Only the operation id differs between the two requests.
+    expect(sendRequest.mock.calls[1]?.[1]).not.toEqual(sendRequest.mock.calls[0]?.[1])
   })
   it.each(['attachments', 'old host', 'arguments', 'pending work'])(
     'guards %s without provider dispatch',
@@ -111,7 +103,7 @@ describe('mobile structured conversation commands', () => {
         input.text = '/compact instructions'
       }
       if (reason === 'pending work') {
-        input.canRun = () => false
+        input.busy = () => 'working'
       }
       expect(await dispatchMobileStructuredCommand(input)).toBe('rejected')
       expect(sendRequest).not.toHaveBeenCalled()
@@ -127,6 +119,84 @@ describe('mobile structured conversation commands', () => {
     expect(Object.keys(fields).sort()).toEqual(['command', 'envelope'])
     expect(fields.command).toBe('clear')
     expect(asyncStorage.setItem).not.toHaveBeenCalled()
+  })
+  it('a /compact the host holds in line skips the busy check, asks to wait, and shows nothing', async () => {
+    const { input, sendRequest } = setup()
+    sendRequest.mockResolvedValueOnce({
+      ok: true,
+      result: {
+        ok: true,
+        value: {
+          command: 'compact',
+          state: 'completed',
+          queued: { messageId: 'op', position: 1, state: 'waiting' }
+        }
+      }
+    })
+    input.busy = () => 'working'
+    input.waitsInLine = (command) => command === 'compact'
+    expect(await dispatchMobileStructuredCommand(input)).toBe('accepted')
+    const fields = requestFields(sendRequest.mock.calls[0])
+    expect(fields).toMatchObject({ command: 'compact', delivery: 'queue-if-active' })
+    expect(input.onError).not.toHaveBeenCalled()
+    // A /clear never waits: the busy check still answers it.
+    expect(await dispatchMobileStructuredCommand({ ...input, text: '/clear' })).toBe('rejected')
+    expect(sendRequest).toHaveBeenCalledOnce()
+  })
+  it('a /clear while the agent works says so in plain words', async () => {
+    const { input, sendRequest } = setup()
+    input.busy = () => 'working'
+    expect(await dispatchMobileStructuredCommand({ ...input, text: '/clear' })).toBe('rejected')
+    expect(input.onError).toHaveBeenLastCalledWith(
+      "The agent is still working. Run /clear when it's done.",
+      { refusedWhile: 'working' }
+    )
+    input.busy = () => 'prompt'
+    expect(await dispatchMobileStructuredCommand({ ...input, text: '/clear' })).toBe('rejected')
+    expect(input.onError).toHaveBeenLastCalledWith(
+      "Answer the agent's question or approval, then run /clear.",
+      { refusedWhile: 'prompt' }
+    )
+    input.busy = () => 'working'
+    expect(await dispatchMobileStructuredCommand(input)).toBe('rejected')
+    expect(input.onError).toHaveBeenLastCalledWith(
+      "The agent is still working. Run /compact when it's done.",
+      { refusedWhile: 'working' }
+    )
+    expect(sendRequest).not.toHaveBeenCalled()
+  })
+  it("a host's refusal names its cause only when the phone showed it at the press", async () => {
+    const { input, sendRequest } = setup()
+    const refused = {
+      ok: true,
+      result: {
+        ok: true,
+        value: {
+          command: 'compact',
+          state: 'completed',
+          error: "The agent is still working. Run /compact when it's done.",
+          failure: {
+            kind: 'commandRefused',
+            refusal: { code: 'agent_session_operation_invalid', details: { reason: 'turnActive' } }
+          }
+        }
+      }
+    }
+    sendRequest.mockResolvedValue(refused)
+    input.waitsInLine = () => true
+    input.busy = () => 'working'
+    expect(await dispatchMobileStructuredCommand(input)).toBe('rejected')
+    expect(input.onError).toHaveBeenLastCalledWith(
+      "The agent is still working. Run /compact when it's done.",
+      { refusedWhile: 'working' }
+    )
+    // Ahead of the phone: said as any failure, so it can't go before it is read.
+    input.busy = () => null
+    expect(await dispatchMobileStructuredCommand(input)).toBe('rejected')
+    expect(input.onError).toHaveBeenLastCalledWith(
+      "The agent is still working. Run /compact when it's done.",
+      undefined
+    )
   })
   it('keeps ordinary messages on the existing send path', async () => {
     const { input, sendRequest } = setup()

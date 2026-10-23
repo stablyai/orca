@@ -8,9 +8,10 @@ import type { LaunchAgentInNewTabArgs } from '@/lib/launch-agent-in-new-tab'
  * module graphs: a migration rewrites the funnel's internals, not what a caller hands it, so the
  * observable outcome of each caller's argument shape is the thing that must survive.
  */
+/** Each call site mints its own request id, so a profile carries none. */
 export type CallerLaunchArgs = Omit<
   LaunchAgentInNewTabArgs,
-  'beforeSurfaceOpen' | 'agentSessionLaunchPlan' | 'onPromptDelivered'
+  'beforeSurfaceOpen' | 'agentSessionLaunchPlan' | 'onPromptDelivered' | 'requestId'
 >
 
 export type AgentLaunchCallerProfile = {

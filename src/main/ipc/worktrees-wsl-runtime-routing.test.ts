@@ -24,6 +24,7 @@ import {
   mockKnownFeatureWorktree,
   mockSelectedWslProjectRuntime
 } from './worktrees-test-fixtures'
+import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
@@ -48,18 +49,8 @@ vi.mock('../github/client', async () =>
 vi.mock('../source-control/hosted-review', async () =>
   (await import('./worktrees-test-module-mocks')).hostedReviewModuleMock()
 )
-vi.mock('../providers/ssh-git-dispatch', async () =>
-  (await import('./worktrees-test-module-mocks')).sshGitDispatchModuleMock()
-)
-vi.mock('../providers/ssh-filesystem-dispatch', async () =>
-  (await import('./worktrees-test-module-mocks')).sshFilesystemDispatchModuleMock()
-)
 vi.mock('./worktree-symlinks', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeSymlinksModuleMock()
-)
-vi.mock('./ssh', async () => (await import('./worktrees-test-module-mocks')).sshModuleMock())
-vi.mock('../ssh/ssh-target-registry', async () =>
-  (await import('./worktrees-test-module-mocks')).sshTargetRegistryModuleMock()
 )
 vi.mock('../hooks', async () => (await import('./worktrees-test-module-mocks')).hooksModuleMock())
 vi.mock('../setup-runner-script-text', async (importOriginal) =>
@@ -105,7 +96,12 @@ vi.mock('../workspace-cleanup-removal-snapshot-prune', async () =>
 vi.mock('../runtime/worktree-teardown', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeTeardownModuleMock()
 )
-vi.mock('./pty', async () => (await import('./worktrees-test-module-mocks')).ptyModuleMock())
+vi.mock('./pty/provider/registry', async () =>
+  (await import('./worktrees-test-module-mocks')).ptyRegistryModuleMock()
+)
+vi.mock('./pty/provider/state-cleanup', async () =>
+  (await import('./worktrees-test-module-mocks')).ptyStateCleanupModuleMock()
+)
 
 /** Every create-path git call, including the base-ref probe now shared with the
  *  speculative prefetch, must read the distro's ref store rather than host git's. */
@@ -211,9 +207,10 @@ describe('registerWorktreeHandlers', () => {
       'origin/main',
       { wslDistro: 'Ubuntu' }
     )
-    expect(listWorktreesMock).toHaveBeenCalledWith('/workspace/repo', {
-      wslDistro: 'Ubuntu'
-    })
+    expect(listWorktreesMock).toHaveBeenCalledWith(
+      '/workspace/repo',
+      expect.objectContaining({ wslDistro: 'Ubuntu' })
+    )
     expectEveryGitCallRoutedTo('Ubuntu')
   })
 
@@ -261,7 +258,7 @@ describe('registerWorktreeHandlers', () => {
         isMainWorktree: false
       }
     ])
-    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+    store.setWorktreeMeta.mockImplementation((_target: HostWorktreeTarget, meta) => meta)
 
     await handlers['worktrees:create'](null, {
       repoId: 'repo-1',
@@ -278,7 +275,7 @@ describe('registerWorktreeHandlers', () => {
     expect(calls.some((args) => args[0] === 'remote' && args[1] === 'add')).toBe(false)
     expect(calls.some((args) => args[0] === 'fetch')).toBe(false)
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      expect.any(String),
+      expect.objectContaining({ id: expect.any(String) }),
       expect.objectContaining({
         pushTarget: {
           remoteName: 'pr-contributor-orca',
@@ -461,7 +458,11 @@ describe('registerWorktreeHandlers', () => {
       ['rev-parse', '--verify', 'origin/feature/add-feature'],
       { cwd: '/workspace/repo', wslDistro: 'Ubuntu' }
     )
-    expect(getDefaultRemoteMock).toHaveBeenCalledWith('/workspace/repo', { wslDistro: 'Ubuntu' })
+    expect(getDefaultRemoteMock).toHaveBeenCalledWith(
+      '/workspace/repo',
+      { wslDistro: 'Ubuntu' },
+      []
+    )
     expect(result).toMatchObject({
       baseBranch: 'def456',
       headSha: 'def456',

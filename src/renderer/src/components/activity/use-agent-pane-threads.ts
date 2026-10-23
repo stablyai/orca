@@ -11,14 +11,23 @@ import { buildActivityEvents, createActivityEventBuildCache } from './activity-e
 import { projectActivityTabs, type ActivityTabProjection } from './activity-tab-projection'
 import { buildAgentPaneThreads, createAgentPaneThreadReuseCache } from './activity-thread-builder'
 import { collectChildAgentPaneKeys } from './activity-thread-child-agent'
+import {
+  EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
+  getPairedDeviceIdsByEnvironment
+} from '../../../../shared/workspace-creator-visibility'
 
 const EMPTY_PANE_KEYS: ReadonlySet<string> = new Set()
 import { filterThreadsByActivityScope, resolveActivityScopeRepoIds } from './activity-scope-filter'
 import {
-  activityThreadMatchesSearchQuery,
+  createActivityThreadSearchMatcher,
   buildActivityThreadGroups,
   isActivitySearchQueryTooLarge
 } from './activity-thread-grouping'
+import {
+  selectDetectedWorktreesByRepo,
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspace-record-selectors'
 import type {
   ActivityGroupBy,
   ActivityThreadGroup,
@@ -36,6 +45,7 @@ export type AgentPaneThreadsStoreData = Pick<
   | 'repos'
   | 'worktreesByRepo'
   | 'folderWorkspaces'
+  | 'floatingWorkspacePath'
   | 'detectedWorktreesByRepo'
   | 'getKnownWorktreeById'
   | 'acknowledgedAgentsByPaneKey'
@@ -77,6 +87,25 @@ export function useAgentPaneThreads(args: {
   const { query, readFilter, groupBy, selectedPaneKey, showChildAgents = false } = args
   const agentsVisibleHostIds = useAppStore((s) => s.agentsVisibleHostIds)
   const agentsFilterRepoIds = useAppStore((s) => s.agentsFilterRepoIds)
+  const hideWorkspacesFromOtherDevices = useAppStore((s) => s.agentsHideWorkspacesFromOtherDevices)
+  const hideAutomationGeneratedWorkspaces = useAppStore(
+    (s) => s.agentsHideAutomationGeneratedWorkspaces
+  )
+  const hideCliCreatedWorkspaces = useAppStore((s) => s.agentsHideCliCreatedWorkspaces)
+  // Why gated selectors: runtime status churns, and only the other-device filter reads it.
+  const runtimeEnvironments = useAppStore((s) =>
+    s.agentsHideWorkspacesFromOtherDevices ? s.runtimeEnvironments : null
+  )
+  const runtimeStatusByEnvironmentId = useAppStore((s) =>
+    s.agentsHideWorkspacesFromOtherDevices ? s.runtimeStatusByEnvironmentId : null
+  )
+  const pairedDeviceIdsByEnvironment = useMemo(
+    () =>
+      runtimeEnvironments && runtimeStatusByEnvironmentId
+        ? getPairedDeviceIdsByEnvironment(runtimeEnvironments, runtimeStatusByEnvironmentId)
+        : EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
+    [runtimeEnvironments, runtimeStatusByEnvironmentId]
+  )
   // Why project: the unified tab map is rewritten on every tab focus; the projection keeps
   // its identity (and each tab's) unless a field this pipeline reads actually changed.
   const tabProjectionRef = useRef<{
@@ -100,9 +129,10 @@ export function useAgentPaneThreads(args: {
         return projected
       })(),
       repos: s.repos,
-      worktreesByRepo: s.worktreesByRepo,
-      folderWorkspaces: s.folderWorkspaces,
-      detectedWorktreesByRepo: s.detectedWorktreesByRepo,
+      worktreesByRepo: selectWorktreesByRepo(s),
+      folderWorkspaces: selectFolderWorkspaces(s),
+      floatingWorkspacePath: s.floatingWorkspacePath,
+      detectedWorktreesByRepo: selectDetectedWorktreesByRepo(s),
       getKnownWorktreeById: s.getKnownWorktreeById,
       worktreeMap: getWorktreeMapFromState(s),
       repoMap: getRepoMapFromState(s),
@@ -173,7 +203,7 @@ export function useAgentPaneThreads(args: {
     selectedPaneKey === null || allThreads.some((thread) => thread.paneKey === selectedPaneKey)
   const effectiveSelectedPaneKey = selectedPaneKeyIsLive ? selectedPaneKey : null
 
-  // Why scope runs before the per-view filters: host/project scope must stay separate
+  // Why scope runs before the per-view filters: host/project/origin scope must stay separate
   // from unread/search narrowing.
   const { threads: scopeVisibleThreads } = useMemo(
     () =>
@@ -182,7 +212,11 @@ export function useAgentPaneThreads(args: {
         scope: {
           visibleHostIds: agentsVisibleHostIds,
           filterRepoIds: resolveActivityScopeRepoIds(agentsFilterRepoIds, storeData.repoMap),
-          defaultHostId: storeData.defaultHostId
+          defaultHostId: storeData.defaultHostId,
+          hideWorkspacesFromOtherDevices,
+          pairedDeviceIdsByEnvironment,
+          hideAutomationGeneratedWorkspaces,
+          hideCliCreatedWorkspaces
         },
         exemptPaneKey: effectiveSelectedPaneKey
       }),
@@ -192,6 +226,10 @@ export function useAgentPaneThreads(args: {
       agentsFilterRepoIds,
       storeData.repoMap,
       storeData.defaultHostId,
+      hideWorkspacesFromOtherDevices,
+      pairedDeviceIdsByEnvironment,
+      hideAutomationGeneratedWorkspaces,
+      hideCliCreatedWorkspaces,
       effectiveSelectedPaneKey
     ]
   )
@@ -212,6 +250,7 @@ export function useAgentPaneThreads(args: {
     const normalizedQuery = isActivitySearchQueryTooLarge(deferredQuery)
       ? null
       : deferredQuery.trim().toLowerCase()
+    let matchesSearchQuery: ReturnType<typeof createActivityThreadSearchMatcher> | undefined
     return scopeVisibleThreads.filter((thread) => {
       // Why: keep the just-selected thread visible after auto-mark-read flips it to read, else unread-only mode makes the clicked row vanish from the list.
       if (
@@ -232,7 +271,8 @@ export function useAgentPaneThreads(args: {
       if (normalizedQuery === null) {
         return false
       }
-      return activityThreadMatchesSearchQuery({ thread, searchQuery: normalizedQuery })
+      matchesSearchQuery ??= createActivityThreadSearchMatcher(normalizedQuery)
+      return matchesSearchQuery(thread)
     })
   }, [
     scopeVisibleThreads,

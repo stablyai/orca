@@ -18,14 +18,6 @@ on:
         required: false
         default: true
         type: boolean
-      shell:
-        description: 'Which shell the binary mounts: native screens, or the web page delivered over the air. Default native; `ota` is the only value that changes it.'
-        required: false
-        default: native
-        type: choice
-        options:
-          - native
-          - ota
 
 jobs:
   android-build:
@@ -37,6 +29,10 @@ jobs:
     # "HTTP 403: Resource not accessible by integration".
     permissions:
       contents: write
+
+    outputs:
+      publish_release: ${{ steps.release.outputs.publish_release }}
+      version: ${{ steps.release.outputs.version }}
 
     defaults:
       run:
@@ -50,6 +46,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: 24
+          check-latest: true
 
       - name: Setup pnpm
         uses: pnpm/setup@v2
@@ -76,20 +73,46 @@ jobs:
         run: npx expo prebuild --platform android --no-install
 
       - name: Build Android release APK
-        env:
-          # The one build-time constant that decides whether this binary mounts the web page or
-          # the native screens. A tag push and a schedule carry no inputs, so both read native.
-          EXPO_PUBLIC_MOBILE_SHELL: ${{ inputs.shell || 'native' }}
+        run: cd android && ./gradlew assembleRelease
+
+      # Why: an install that fails with a missing certificate or a package-parse error is
+      # usually a download that died near the end, and the signature block sits in the last
+      # ~100 KB. Publishing the size and digest is what lets a reporter tell a truncated
+      # download apart from a bad build without anyone re-deriving them from the asset.
+      - name: Checksum the APK
+        id: apk
         run: |
           set -euo pipefail
-          echo "Mobile shell: $EXPO_PUBLIC_MOBILE_SHELL"
-          cd android && ./gradlew assembleRelease
+          shopt -s nullglob
+          apks=(android/app/build/outputs/apk/release/*.apk)
+          if [ "${#apks[@]}" -ne 1 ]; then
+            echo "Expected exactly one release APK, found ${#apks[@]}" >&2
+            exit 1
+          fi
+
+          apk="${apks[0]}"
+          bytes="$(wc -c < "$apk" | tr -d ' ')"
+          sha256="$(sha256sum "$apk" | cut -d ' ' -f 1)"
+          # A sibling file in `sha256sum -c` format, so verifying a download is one command
+          # and no retyped digest. The asset globs below match *.apk and skip it. The ` *`
+          # marker is binary mode: Git Bash's sha256sum reads text mode as a licence to
+          # translate line endings while hashing, which would fail on a valid APK.
+          printf '%s *%s\n' "$sha256" "$(basename "$apk")" > "$apk.sha256"
+
+          {
+            echo "checksum=$apk.sha256"
+            echo "bytes=$bytes"
+            echo "sha256=$sha256"
+          } >> "$GITHUB_OUTPUT"
+          echo "APK is $bytes bytes, sha256 $sha256"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v7
         with:
           name: orca-mobile-apk
-          path: mobile/android/app/build/outputs/apk/release/*.apk
+          path: |
+            mobile/android/app/build/outputs/apk/release/*.apk
+            mobile/android/app/build/outputs/apk/release/*.apk.sha256
 
       - name: Ensure GitHub release tag
         if: steps.release.outputs.publish_release == 'true' && !startsWith(github.ref, 'refs/tags/mobile-android-v')
@@ -112,18 +135,62 @@ jobs:
         run: |
           set -euo pipefail
           tag="${{ steps.release.outputs.tag }}"
+          notes_file="$RUNNER_TEMP/android-release-notes.md"
+
+          # printf rather than a heredoc: YAML block indentation would leak into the Markdown.
+          # Both platforms' commands are named because a reader on macOS has no sha256sum.
+          verification_section() {
+            printf '\n### Verify your download\n\n- Size: `%s` bytes\n- SHA-256: `%s`\n\nA "no certificate" or "problem parsing the package" install failure is usually a truncated download — check the size first, then `sha256sum -c app-release.apk.sha256` (`shasum -a 256 -c` on macOS).\n' \
+              '${{ steps.apk.outputs.bytes }}' '${{ steps.apk.outputs.sha256 }}'
+          }
+
+          # The section is always last, so dropping from its heading to EOF leaves the
+          # generated notes intact. \r* because a body round-tripped through the API has CRLFs.
+          drop_verification_section() {
+            sed '/^### Verify your download\r*$/,$d'
+          }
+
+          # Why: reuse the desktop release path's character-safe truncation so a multi-byte
+          # character cannot be split at the cap. The section's own length is reserved out of
+          # that cap, because appending after truncating would push a near-limit body past
+          # GitHub's API limit and fail the call — on the upload path, after --clobber has
+          # already replaced the assets. `wc -c` counts bytes, so the section's multi-byte
+          # characters over-reserve, which errs toward a shorter body.
+          write_notes_with_verification() {
+            NOTES_FILE="$notes_file" \
+            NOTES_RESERVE="$(verification_section | wc -c | tr -d ' ')" \
+            NOTES_MODULE="$GITHUB_WORKSPACE/config/scripts/create-draft-release.mjs" \
+            node --input-type=module -e '
+              const { readFileSync, writeFileSync } = await import("node:fs")
+              const { pathToFileURL } = await import("node:url")
+              const { MAX_RELEASE_BODY_LENGTH, truncateReleaseBody } = await import(
+                pathToFileURL(process.env.NOTES_MODULE).href
+              )
+              const file = process.env.NOTES_FILE
+              const max = MAX_RELEASE_BODY_LENGTH - Number(process.env.NOTES_RESERVE)
+              writeFileSync(file, truncateReleaseBody(readFileSync(file, "utf8"), max))
+            '
+            verification_section >> "$notes_file"
+          }
 
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$tag" \
               --repo "$GITHUB_REPOSITORY" \
               --clobber \
-              android/app/build/outputs/apk/release/*.apk
+              android/app/build/outputs/apk/release/*.apk \
+              "${{ steps.apk.outputs.checksum }}"
+            # Why the body is rewritten too: --clobber replaced the APK, so a digest left
+            # over from the previous build now describes a file nobody can download, and a
+            # reader comparing against it would reject a good APK.
+            gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json body --jq .body \
+              | drop_verification_section > "$notes_file"
+            write_notes_with_verification
+            gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --notes-file "$notes_file"
           else
             # Why: release tags live on side branches, so GitHub's automatic
             # previous-tag detection reaches back several releases; that body
             # already exceeds the 125000-character API limit and grows each
             # release. Pin the comparison base and cap the size.
-            notes_file="$RUNNER_TEMP/android-release-notes.md"
             previous_tag="$(
               gh release list --repo "$GITHUB_REPOSITORY" --limit 200 --json tagName --jq '.[].tagName' \
                 | grep '^mobile-android-v' | grep -Fxv "$tag" | sort -V | tail -1 || true
@@ -143,17 +210,7 @@ jobs:
             if [ ! -s "$notes_file" ]; then
               printf 'Orca Mobile Android %s\n' "$tag" > "$notes_file"
             fi
-            # Why: reuse the desktop release path's character-safe truncation so a
-            # multi-byte character cannot be split at the cap.
-            NOTES_FILE="$notes_file" \
-            NOTES_MODULE="$GITHUB_WORKSPACE/config/scripts/create-draft-release.mjs" \
-            node --input-type=module -e '
-              const { readFileSync, writeFileSync } = await import("node:fs")
-              const { pathToFileURL } = await import("node:url")
-              const { truncateReleaseBody } = await import(pathToFileURL(process.env.NOTES_MODULE).href)
-              const file = process.env.NOTES_FILE
-              writeFileSync(file, truncateReleaseBody(readFileSync(file, "utf8")))
-            '
+            write_notes_with_verification
 
             gh release create "$tag" \
               --repo "$GITHUB_REPOSITORY" \
@@ -161,5 +218,99 @@ jobs:
               --prerelease \
               --latest=false \
               --notes-file "$notes_file" \
-              android/app/build/outputs/apk/release/*.apk
+              android/app/build/outputs/apk/release/*.apk \
+              "${{ steps.apk.outputs.checksum }}"
           fi
+
+  # Why a separate job: the release is already published here, so a failed bump only leaves
+  # the site's APK download on the previous release and must not fail the release run.
+  bump-apk-download:
+    needs: android-build
+    if: needs.android-build.outputs.publish_release == 'true'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.android-build.outputs.version }}
+      SITE_REPO: stablyai/orca-marketing-website
+      BRANCH: bump/android-apk-${{ needs.android-build.outputs.version }}
+    steps:
+      - name: Checkout orca
+        uses: actions/checkout@v6
+        with:
+          sparse-checkout: config/scripts
+
+      # Why the buf0-bot app, as in homebrew-bump.yml: GITHUB_TOKEN cannot push to another
+      # repo, and a PR it opened would not run the site's checks.
+      - name: Generate buf0-bot token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: 2590194
+          private-key: ${{ secrets.BUFO_BOT_PRIVATE_KEY }}
+          owner: stablyai
+          repositories: orca-marketing-website
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Checkout marketing site
+        uses: actions/checkout@v6
+        with:
+          repository: stablyai/orca-marketing-website
+          path: site
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Open and merge the version bump PR
+        working-directory: site
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          node ../config/scripts/bump-android-apk-download-version.mjs src/lib/downloadTargets.ts "$VERSION"
+          if git diff --quiet; then
+            echo "The site's main branch already has Android APK $VERSION or newer." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          title="Point the Android APK download at $VERSION"
+          git config user.name "buf0-bot[bot]"
+          git config user.email "252831055+buf0-bot[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git commit -am "$title"
+          # Why --force: a rerun rebuilds the branch on the site's current main.
+          git push --force origin "$BRANCH"
+
+          # Why: a rerun of the same release reuses its open PR instead of opening another.
+          pr="$(gh pr list --repo "$SITE_REPO" --head "$BRANCH" --state open --json url --jq '.[].url')"
+          if [ -z "$pr" ]; then
+            pr="$(gh pr create --repo "$SITE_REPO" --base main --head "$BRANCH" --title "$title" \
+              --body "Opened by the [Android release run]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID) for mobile-android-v$VERSION. Merging points /download/android and every APK link on the site at the new APK.")"
+          fi
+          echo "Android APK download bump: $pr" >> "$GITHUB_STEP_SUMMARY"
+
+          # Why wait for checks: they push a deploy commit onto the branch (merging first fails with
+          # "Head branch was modified"), and a failed site build must not merge. Main's push deploys.
+          sleep 20
+          gh pr checks "$pr" --repo "$SITE_REPO" --watch --interval 15 || true
+          failed="$(gh pr checks "$pr" --repo "$SITE_REPO" --json bucket --jq 'map(select(.bucket == "fail")) | length' 2>/dev/null || true)"
+          # The deploy commit is [skip ci], so the final head may report no checks at all.
+          if [ "${failed:-0}" != "0" ]; then
+            echo "::warning::The site's checks failed on $pr; not merging. Fix and merge it by hand."
+            exit 1
+          fi
+          for _ in 1 2 3; do
+            if gh pr merge "$pr" --repo "$SITE_REPO" --squash --delete-branch; then
+              echo "Merged; the site deploys from main." >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            sleep 30
+          done
+          echo "::warning::Could not merge $pr; merge it by hand to update /download/android."
+          exit 1
+
+      - name: Report a failed bump
+        if: failure()
+        run: |
+          echo "::warning::The release is published, but the site's Android APK download was not bumped to $VERSION."
+          printf '### Android APK download not bumped\n\nThe release is published, but /download/android still serves the previous APK. Rerun this job, or set `ANDROID_RELEASE_VERSION` in `src/lib/downloadTargets.ts` of %s to `%s` by hand.\n' "$SITE_REPO" "$VERSION" >> "$GITHUB_STEP_SUMMARY"

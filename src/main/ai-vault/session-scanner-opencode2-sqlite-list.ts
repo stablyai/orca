@@ -7,6 +7,7 @@ import type { SessionFileCandidate } from './session-scanner-types'
 import { errorMessage } from './session-scanner-values'
 import SyncDatabase from '../sqlite/sync-database'
 import { columnExists, tableExists } from '../opencode-usage/schema-helpers'
+import { scopedSessionRows } from './session-scanner-sqlite-scope-rows'
 
 // Why: the opencode2 beta stores sessions in a channel-scoped SQLite DB
 // (opencode-next.db / opencode-local.db) with its own schema — `session_v2`
@@ -20,6 +21,7 @@ type SessionRow = {
   id: string
   time_created: number
   time_updated: number
+  directory?: unknown
 }
 
 function openReadonlyDatabase(dbPath: string): SyncDatabase {
@@ -36,7 +38,7 @@ function canReadOpenCode2Sessions(db: SyncDatabase): boolean {
   )
 }
 
-function buildSessionListQuery(db: SyncDatabase, limited: boolean): string {
+function buildSessionListQuery(db: SyncDatabase, limited: boolean, scoped: boolean): string {
   // Why: v2 tracks parent/fork relations and archived sessions; only list
   // top-level, non-archived rows, mirroring the v1 list predicate.
   const parentIdPredicate = columnExists(db, OPENCODE2_SESSION_TABLE, 'parent_id')
@@ -46,7 +48,9 @@ function buildSessionListQuery(db: SyncDatabase, limited: boolean): string {
     ? 'AND time_archived IS NULL'
     : ''
 
-  return `SELECT id, time_created, time_updated
+  const directory =
+    scoped && columnExists(db, OPENCODE2_SESSION_TABLE, 'directory') ? ', directory' : ''
+  return `SELECT id, time_created, time_updated${directory}
           FROM ${OPENCODE2_SESSION_TABLE}
           WHERE 1=1 ${parentIdPredicate} ${archivedPredicate}
           ORDER BY CASE WHEN time_updated > 0 THEN time_updated ELSE time_created END DESC
@@ -97,8 +101,11 @@ export async function listOpenCode2SqliteSessions(args: {
   dbPaths: readonly string[]
   limit: number
   issues: AiVaultScanIssue[]
+  /** Lists only sessions whose directory is in scope, newest `limit` of them. */
+  scopePaths?: readonly string[]
 }): Promise<SessionFileCandidate[]> {
   const candidates: SessionFileCandidate[] = []
+  const scoped = args.scopePaths !== undefined && args.scopePaths.length > 0
   for (const dbPath of args.dbPaths) {
     let db: SyncDatabase | null = null
     try {
@@ -106,10 +113,16 @@ export async function listOpenCode2SqliteSessions(args: {
       if (!canReadOpenCode2Sessions(db)) {
         continue
       }
-      const limited = Number.isFinite(args.limit)
-      const statement = db.prepare(buildSessionListQuery(db, limited))
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Runtime validation or the local test fixture establishes the asserted shape.
-      const rows = (limited ? statement.all(args.limit) : statement.all()) as SessionRow[]
+      const limited = Number.isFinite(args.limit) && !scoped
+      const statement = db.prepare(buildSessionListQuery(db, limited, scoped))
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the query above selects exactly these metadata columns.
+      const listed = (
+        limited ? statement.all(args.limit) : scoped ? statement.iterate() : statement.all()
+      ) as Iterable<SessionRow>
+      const rows =
+        scoped && args.scopePaths
+          ? scopedSessionRows(listed, args.scopePaths, args.limit, dbPath)
+          : listed
       for (const row of rows) {
         candidates.push(rowToCandidate(row, dbPath))
       }

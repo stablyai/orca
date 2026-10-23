@@ -58,6 +58,21 @@ describe('windows PowerShell hook launcher', () => {
     )
   })
 
+  it('can set the same process policy without loading the cmdlet', () => {
+    const command = '& $scriptPath'
+    const options = { useProcessPolicyEnvironment: true }
+    expect(decodePayload(wrapWindowsPowerShellEncodedCommand(command, options))).toBe(
+      "$ProgressPreference='SilentlyContinue'; $env:PSExecutionPolicyPreference='Bypass'; & $scriptPath"
+    )
+    expect(
+      Buffer.from(encodeWindowsPowerShellHookCommand(command, options), 'base64').toString(
+        'utf16le'
+      )
+    ).toBe(
+      "$ProgressPreference='SilentlyContinue'; $env:PSExecutionPolicyPreference='Bypass'; & $scriptPath"
+    )
+  })
+
   it('swallows a terminating execution-policy failure, not just a non-terminating one', () => {
     // A GPO MachinePolicy/UserPolicy scope makes the cmdlet complain that the
     // process scope did not take. -ErrorAction covers only the non-terminating

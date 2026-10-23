@@ -75,11 +75,17 @@ vi.mock('./BrowserTerminalLinkActionsSetting', () => ({
 vi.mock('./BrowserLocalhostWorktreeLabelsSetting', () => ({
   BrowserLocalhostWorktreeLabelsSetting: () => <span>Localhost row</span>
 }))
+vi.mock('./BrowserSitePermissionsSetting', () => ({
+  BrowserSitePermissionsSetting: () => <span>Site permissions row</span>
+}))
 vi.mock('./BrowserClientHostedRemoteSetting', () => ({
   BrowserClientHostedRemoteSetting: () => <span>Remote row</span>
 }))
 vi.mock('./BrowserSshWorkspaceRoutingSetting', () => ({
   BrowserSshWorkspaceRoutingSetting: () => <span>SSH row</span>
+}))
+vi.mock('./BrowserProfileScopeSetting', () => ({
+  BrowserProfileScopeSetting: () => <span>Profile scope row</span>
 }))
 vi.mock('./BrowserUserAgentSetting', () => ({
   BrowserUserAgentSetting: () => <span>Identity row</span>

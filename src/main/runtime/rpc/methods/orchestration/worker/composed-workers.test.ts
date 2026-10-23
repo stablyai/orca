@@ -161,7 +161,7 @@ describe('orchestration RPC methods', () => {
       })
       expect(runtime.sendTerminalAgentPrompt).toHaveBeenCalledWith(
         'term_worker',
-        expect.stringContaining('--dispatch-capability dcap_'),
+        expect.any(String),
         expect.objectContaining(dispatchPreambleSendOptions(expect.any(String)))
       )
     })

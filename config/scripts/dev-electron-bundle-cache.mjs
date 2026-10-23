@@ -58,10 +58,19 @@ export function isDevBundleInUse(dir, processTable) {
   return processTable.includes(`${dir}/`) || processTable.includes(`${alternate}/`)
 }
 
-export function selectStaleDevBundleDirs({ bundles, currentDir, processTable, nowMs }) {
+export function selectStaleDevBundleDirs({
+  bundles,
+  currentDir,
+  processTable,
+  nowMs,
+  minAgeMs = 0
+}) {
   return bundles
     .filter(({ dir, hasMarker, mtimeMs }) => {
       if (dir === currentDir || isDevBundleInUse(dir, processTable)) {
+        return false
+      }
+      if (minAgeMs > 0 && nowMs - mtimeMs < minAgeMs) {
         return false
       }
       const buildInFlight = !hasMarker && nowMs - mtimeMs < IN_PROGRESS_WINDOW_MS

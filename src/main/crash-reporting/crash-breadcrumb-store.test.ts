@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   clearCrashBreadcrumbsForTest,
   getCrashBreadcrumbSnapshot,
+  RENDERER_HEAP_ALLOCATION_PROFILE_BREADCRUMB,
   recordCoalescedCrashBreadcrumb,
   recordCrashBreadcrumb
 } from './crash-breadcrumb-store'
@@ -329,7 +330,7 @@ describe('crash breadcrumb store', () => {
   })
 
   it('caps retained high-water profiles', () => {
-    for (let index = 0; index < 9; index += 1) {
+    for (let index = 0; index < 11; index += 1) {
       recordCrashBreadcrumb('renderer_memory_highwater', {
         rendererSurface: `surface-${index}`,
         thresholdPct: 80
@@ -346,11 +347,13 @@ describe('crash breadcrumb store', () => {
       'surface-5',
       'surface-6',
       'surface-7',
-      'surface-8'
+      'surface-8',
+      'surface-9',
+      'surface-10'
     ])
   })
 
-  it('retains both threshold ladders for both renderer surfaces', () => {
+  it('retains both threshold ladders and the allocation profile for both renderer surfaces', () => {
     for (const rendererSurface of ['main', 'dashboard-popout']) {
       for (const thresholdPct of [60, 80]) {
         recordCrashBreadcrumb('renderer_memory_highwater', { rendererSurface, thresholdPct })
@@ -361,22 +364,25 @@ describe('crash breadcrumb store', () => {
           thresholdPrivateMB
         })
       }
+      recordCrashBreadcrumb(RENDERER_HEAP_ALLOCATION_PROFILE_BREADCRUMB, { rendererSurface })
     }
 
     expect(
       getCrashBreadcrumbSnapshot().map((breadcrumb) => [
         breadcrumb.data?.rendererSurface,
-        breadcrumb.data?.thresholdPct ?? breadcrumb.data?.thresholdPrivateMB
+        breadcrumb.data?.thresholdPct ?? breadcrumb.data?.thresholdPrivateMB ?? breadcrumb.name
       ])
     ).toEqual([
       ['main', 60],
       ['main', 80],
       ['main', 600],
       ['main', 1000],
+      ['main', RENDERER_HEAP_ALLOCATION_PROFILE_BREADCRUMB],
       ['dashboard-popout', 60],
       ['dashboard-popout', 80],
       ['dashboard-popout', 600],
-      ['dashboard-popout', 1000]
+      ['dashboard-popout', 1000],
+      ['dashboard-popout', RENDERER_HEAP_ALLOCATION_PROFILE_BREADCRUMB]
     ])
   })
 

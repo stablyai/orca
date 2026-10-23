@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import {
+  agentSessionReadFailureRefusal,
   agentSessionReadFailureText,
   callAgentSession,
   requestStructuredAgentSessionMutation
@@ -43,6 +44,18 @@ describe('a refusal the host threw', () => {
     expect(agentSessionReadFailureText({ type: 'error', message: 'Connection interrupted' })).toBe(
       'Connection interrupted'
     )
+    // The refusal itself rides beside the words, so the view can tell a failure no retry gets past.
+    expect(
+      agentSessionReadFailureRefusal({
+        type: 'error',
+        message: THROWN_JOURNAL_REFUSAL.message,
+        error: THROWN_JOURNAL_REFUSAL
+      })
+    ).toEqual(THROWN_JOURNAL_REFUSAL.data.refusal)
+    expect(agentSessionReadFailureRefusal(thrown)).toEqual(THROWN_JOURNAL_REFUSAL.data.refusal)
+    expect(
+      agentSessionReadFailureRefusal({ type: 'error', message: 'Connection interrupted' })
+    ).toBeUndefined()
   })
 
   it("fails a write with the refusal's words, not as unconfirmed", async () => {

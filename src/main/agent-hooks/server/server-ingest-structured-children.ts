@@ -1,12 +1,20 @@
 import { randomUUID } from 'node:crypto'
 
 import { createAgentChildWorkAdmission } from '../../../shared/agent-status-child-work-admission'
-import type { AgentChildWorkRecord } from '../../../shared/agent-status-child-work'
+import {
+  agentChildWorkFencesEqual,
+  type AgentChildWorkRecord
+} from '../../../shared/agent-status-child-work'
+import { isLiveChildWork } from '../../../shared/agent-status-child-work-liveness'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
 import {
   reconcileAgentChildWorkEvidence,
   type AgentChildWorkReconcileOutcome
 } from '../../../shared/agent-status-child-work-reconciliation'
+import {
+  projectAgentChildWorkViews,
+  type AgentChildWorkView
+} from '../../../shared/agent-status-child-work-view'
 import {
   parseAgentStatusSubject,
   type AgentStatusStructuredSessionSubject
@@ -56,5 +64,27 @@ export abstract class AgentHookServerIngestStructuredChildren extends AgentHookS
   getStructuredChildWork(subject: AgentStatusStructuredSessionSubject): AgentChildWorkRecord[] {
     const parent = parseAgentStatusSubject(subject)
     return parent ? this.canonicalStatusStore.getChildren(parent) : []
+  }
+
+  /** A record covers its current handles only while it answers to running work. */
+  getStructuredChildWorkHandles(subject: AgentStatusStructuredSessionSubject): Set<string> {
+    return new Set(
+      this.getStructuredChildWork(subject).flatMap((child) =>
+        child.membership === 'live' && isLiveChildWork(child)
+          ? this.canonicalStatusStore
+              .getAliasesForChild(child.childWorkId)
+              .filter(({ fence }) => agentChildWorkFencesEqual(fence, child.invocation))
+              .map(({ alias }) => alias)
+          : []
+      )
+    )
+  }
+
+  getStructuredChildWorkViews(subject: AgentStatusStructuredSessionSubject): AgentChildWorkView[] {
+    const children = this.getStructuredChildWork(subject)
+    return projectAgentChildWorkViews(
+      children,
+      children.flatMap((child) => this.canonicalStatusStore.getAliasesForChild(child.childWorkId))
+    )
   }
 }

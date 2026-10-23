@@ -3,7 +3,7 @@
  * stacks, and the unified dispatcher pops the most recently closed tab of any
  * kind (terminal/browser/editor) in true cross-type MRU order.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, onTestFinished } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { getDefaultSettings } from '../../../../shared/constants'
 
@@ -47,6 +47,25 @@ import {
   remapClosedTerminalTabSnapshotCwds,
   restoreRecentlyClosedTabPosition
 } from './recently-closed-tabs'
+import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+import { drawTabsFromMain } from './tabs-drawn-from-main.test-fixture'
+import { loadMainLayoutModel } from '@/runtime/main-loaded-layout-frames.test-fixture'
+import { openWorkspaceLayoutFrameSync } from '@/runtime/workspace-layout-frame-sync'
+import { endLayoutFramePositions } from '@/runtime/layout-frame-position'
+import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await importOriginal())
+)
 
 const WT = 'repo1::/path/wt1'
 
@@ -65,16 +84,53 @@ beforeEach(() => {
   vi.clearAllMocks()
 })
 
+/** A layout-owner build's main, applying the window's commands, with its frames drawn into
+ *  `store`; nothing to open otherwise. */
+async function mainWithFrames(store: ReturnType<typeof createTestStore>): Promise<() => void> {
+  if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
+    return () => {}
+  }
+  layoutApplyTestTransport.reset()
+  layoutApplyTestTransport.useMainModel(
+    loadMainLayoutModel('local', buildWorkspaceSessionPayload(store.getState()))
+  )
+  layoutApplyTestTransport.answerWith('apply')
+  const sync = openWorkspaceLayoutFrameSync(store)
+  sync.start()
+  await layoutApplyTestTransport.settle()
+  return () => {
+    sync.close()
+    endLayoutFramePositions()
+  }
+}
+
+/** The user names and colors the tab; a layout-owner build's main frame draws both. */
+async function titleAndColor(store: ReturnType<typeof createTestStore>, tabId: string) {
+  store.getState().setTabCustomTitle(tabId, 'build shell')
+  store.getState().setTabColor(tabId, '#ff0000')
+  await framesDrawn()
+}
+
+/** Main's answers, and the frames they wait on, drawn. */
+async function framesDrawn(): Promise<void> {
+  await layoutApplyTestTransport.settle()
+  for (let turn = 0; turn < 3; turn += 1) {
+    await new Promise<void>((resolve) => setTimeout(resolve, 0))
+  }
+}
+
 describe('terminal recently-closed capture', () => {
-  it('captures a snapshot and kind entry on user close', () => {
+  it('captures a snapshot and kind entry on user close', async () => {
     const store = makeSeededStore()
+    const closeMain = await mainWithFrames(store)
+    onTestFinished(closeMain)
     const tab = store
       .getState()
       .createTab(WT, undefined, undefined, { startupCwd: '/path/wt1/packages/app' })
-    store.getState().setTabCustomTitle(tab.id, 'build shell')
-    store.getState().setTabColor(tab.id, '#ff0000')
+    await titleAndColor(store, tab.id)
 
     store.getState().closeTab(tab.id)
+    await framesDrawn()
 
     expect(store.getState().recentlyClosedTerminalTabsByWorktree[WT]).toEqual([
       expect.objectContaining({
@@ -97,23 +153,25 @@ describe('terminal recently-closed capture', () => {
     expect(store.getState().recentlyClosedTabKindsByWorktree[WT]).toBeUndefined()
   })
 
-  it('skips capture for a confirmed parked PTY exit', () => {
+  it('skips capture for a confirmed parked PTY exit', async () => {
     const store = makeSeededStore()
     const tab = store.getState().createTab(WT)
 
     store.getState().closeTab(tab.id, { captureRecentlyClosed: false })
+    await layoutApplyTestTransport.settle()
 
     expect(store.getState().recentlyClosedTerminalTabsByWorktree[WT]).toBeUndefined()
     expect(store.getState().recentlyClosedTabKindsByWorktree[WT]).toBeUndefined()
   })
 
-  it('caps the terminal stack at 10 snapshots, newest first', () => {
+  it('caps the terminal stack at 10 snapshots, newest first', async () => {
     const store = makeSeededStore()
     for (let i = 0; i < 12; i++) {
       const tab = store
         .getState()
         .createTab(WT, undefined, undefined, { startupCwd: `/path/wt1/dir-${i}` })
       store.getState().closeTab(tab.id)
+      await layoutApplyTestTransport.settle()
     }
 
     const stack = store.getState().recentlyClosedTerminalTabsByWorktree[WT]
@@ -153,7 +211,7 @@ describe('terminal snapshot cwd remapping', () => {
 })
 
 describe('reopenClosedTerminalTab', () => {
-  it('restores the tab bar and group position of a closed middle tab', () => {
+  it('restores the tab bar and group position of a closed middle tab', async () => {
     const store = makeSeededStore()
     const first = store.getState().createTab(WT)
     const middle = store.getState().createTab(WT)
@@ -161,7 +219,9 @@ describe('reopenClosedTerminalTab', () => {
     store.getState().setTabBarOrder(WT, [first.id, middle.id, last.id])
 
     store.getState().closeTab(middle.id)
+    await layoutApplyTestTransport.settle()
     expect(store.getState().reopenClosedTerminalTab(WT)).toBe(true)
+    await layoutApplyTestTransport.settle()
 
     const restored = store
       .getState()
@@ -177,43 +237,48 @@ describe('reopenClosedTerminalTab', () => {
     ).toEqual([first.id, restored!.id, last.id])
   })
 
-  it('recreates a fresh terminal with the snapshot cwd, shell, title, and color', () => {
+  it('recreates a fresh terminal with the snapshot cwd, shell, title, and color', async () => {
     const store = makeSeededStore()
+    const closeMain = await mainWithFrames(store)
+    onTestFinished(closeMain)
     const tab = store
       .getState()
       .createTab(WT, undefined, 'zsh', { startupCwd: '/path/wt1/packages/app' })
-    store.getState().setTabCustomTitle(tab.id, 'build shell')
-    store.getState().setTabColor(tab.id, '#ff0000')
+    await titleAndColor(store, tab.id)
     store.getState().closeTab(tab.id)
+    await framesDrawn()
     expect(store.getState().tabsByWorktree[WT]).toHaveLength(0)
 
     expect(store.getState().reopenClosedTerminalTab(WT)).toBe(true)
+    await framesDrawn()
 
     const restored = store.getState().tabsByWorktree[WT]
     expect(restored).toHaveLength(1)
     expect(restored[0]).toMatchObject({
       startupCwd: '/path/wt1/packages/app',
-      shellOverride: 'zsh',
-      customTitle: 'build shell',
-      color: '#ff0000'
+      shellOverride: 'zsh'
     })
+    expect(restored[0]).toMatchObject({ customTitle: 'build shell', color: '#ff0000' })
     // Why: a reopened tab is a fresh surface — never the old PTY.
     expect(restored[0].id).not.toBe(tab.id)
     expect(restored[0].ptyId).toBeNull()
     expect(store.getState().recentlyClosedTerminalTabsByWorktree[WT]).toHaveLength(0)
   })
 
-  it('returns false when the stack is empty (no double-restore)', () => {
+  it('returns false when the stack is empty (no double-restore)', async () => {
     const store = makeSeededStore()
     const tab = store.getState().createTab(WT)
     store.getState().closeTab(tab.id)
+    await layoutApplyTestTransport.settle()
 
     expect(store.getState().reopenClosedTerminalTab(WT)).toBe(true)
+    await layoutApplyTestTransport.settle()
     expect(store.getState().reopenClosedTerminalTab(WT)).toBe(false)
+    await layoutApplyTestTransport.settle()
     expect(store.getState().tabsByWorktree[WT]).toHaveLength(1)
   })
 
-  it('skips local reopen on a remote-runtime worktree (host owns the terminal)', () => {
+  it('skips local reopen on a remote-runtime worktree (host owns the terminal)', async () => {
     // Why: a `runtime:` host id makes the worktree host-owned; a local createTab
     // would leave an unbacked phantom tab, so reopen must bail and let the
     // cross-type dispatcher fall through to browser/editor.
@@ -232,24 +297,27 @@ describe('reopenClosedTerminalTab', () => {
     })
 
     expect(store.getState().reopenClosedTerminalTab(WT)).toBe(false)
+    await layoutApplyTestTransport.settle()
     // No local tab spawned, and the snapshot is left intact (not consumed).
     expect(store.getState().tabsByWorktree[WT] ?? []).toHaveLength(0)
     expect(store.getState().recentlyClosedTerminalTabsByWorktree[WT]).toHaveLength(1)
   })
 
-  it('reopens a legacy local worktree while another runtime is merely focused', () => {
+  it('reopens a legacy local worktree while another runtime is merely focused', async () => {
     const store = makeSeededStore()
     store.setState({
       settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'env-1' }
     })
     const tab = store.getState().createTab(WT)
     store.getState().closeTab(tab.id)
+    await layoutApplyTestTransport.settle()
 
     expect(store.getState().reopenClosedTerminalTab(WT)).toBe(true)
+    await layoutApplyTestTransport.settle()
     expect(store.getState().tabsByWorktree[WT]).toHaveLength(1)
   })
 
-  it('reopens SSH terminals through the renderer-owned create path', () => {
+  it('reopens SSH terminals through the renderer-owned create path', async () => {
     const store = createTestStore()
     seedStore(store, {
       worktreesByRepo: {
@@ -263,8 +331,10 @@ describe('reopenClosedTerminalTab', () => {
       .getState()
       .createTab(WT, undefined, undefined, { startupCwd: '/remote/wt1/packages/app' })
     store.getState().closeTab(tab.id)
+    await layoutApplyTestTransport.settle()
 
     expect(store.getState().reopenClosedTerminalTab(WT)).toBe(true)
+    await layoutApplyTestTransport.settle()
     expect(store.getState().tabsByWorktree[WT]?.[0]?.startupCwd).toBe('/remote/wt1/packages/app')
   })
 })
@@ -325,12 +395,17 @@ describe('restoreRecentlyClosedTabPosition', () => {
       { groupId: 'captured-group', groupIndex: 0 }
     )
 
-    expect(reordered).toHaveBeenCalledWith('captured-group', ['captured-tab', 'captured-sibling'], {
-      recordInteraction: false
-    })
+    // A switch-on build also marks the reorder as one main already made.
+    expect(reordered).toHaveBeenCalledWith(
+      'captured-group',
+      ['captured-tab', 'captured-sibling'],
+      ORCA_LAYOUT_OWNER_IS_MAIN
+        ? { recordInteraction: false, layoutOwnerHandled: true }
+        : { recordInteraction: false }
+    )
   })
 
-  it('does not reuse a stale flat index after group drag reordering', () => {
+  it('does not reuse a stale flat index after group drag reordering', async () => {
     const store = makeSeededStore()
     const first = store.getState().createTab(WT)
     const middle = store.getState().createTab(WT)
@@ -343,12 +418,14 @@ describe('restoreRecentlyClosedTabPosition', () => {
     store.getState().reorderUnifiedTabs(groupId, [first.id, last.id, middle.id])
 
     store.getState().closeTab(middle.id)
+    await layoutApplyTestTransport.settle()
     expect(store.getState().recentlyClosedTerminalTabsByWorktree[WT]?.[0]?.position).toEqual({
       groupId,
       groupIndex: 2
     })
 
     expect(store.getState().reopenClosedTerminalTab(WT)).toBe(true)
+    await layoutApplyTestTransport.settle()
     const restored = store
       .getState()
       .tabsByWorktree[WT]?.find((tab) => tab.id !== first.id && tab.id !== last.id)
@@ -362,8 +439,10 @@ describe('restoreRecentlyClosedTabPosition', () => {
 })
 
 describe('reopenClosedTab cross-type MRU', () => {
-  it('reopens closed tabs of mixed kinds in most-recent-first order', () => {
+  it('reopens closed tabs of mixed kinds in most-recent-first order', async () => {
     const store = makeSeededStore()
+    // A layout-owner build draws the browser tab from main's frames.
+    const main = await drawTabsFromMain(store)
 
     // Close order: editor → terminal → browser.
     store.setState({ openFiles: [makeOpenFile({ id: '/repo/a.ts', worktreeId: WT })] })
@@ -372,8 +451,11 @@ describe('reopenClosedTab cross-type MRU', () => {
       .getState()
       .createTab(WT, undefined, undefined, { startupCwd: '/path/wt1/api' })
     store.getState().closeTab(terminal.id)
+    await layoutApplyTestTransport.settle()
     const browser = store.getState().createBrowserTab(WT, 'https://example.com', { title: 'Ex' })
+    await main.settle()
     store.getState().closeBrowserTab(browser.id)
+    await main.settle()
 
     expect(store.getState().recentlyClosedTabKindsByWorktree[WT]).toEqual([
       'browser',
@@ -383,6 +465,7 @@ describe('reopenClosedTab cross-type MRU', () => {
 
     // First press: browser comes back.
     expect(store.getState().reopenClosedTab(WT)).toBe(true)
+    await main.settle()
     expect(store.getState().browserTabsByWorktree[WT]?.[0]?.url).toBe('https://example.com')
     expect(store.getState().tabsByWorktree[WT] ?? []).toHaveLength(0)
 
@@ -397,6 +480,7 @@ describe('reopenClosedTab cross-type MRU', () => {
 
     // Nothing left.
     expect(store.getState().reopenClosedTab(WT)).toBe(false)
+    main.close()
   })
 
   it('skips kind entries whose per-type snapshot has drained', () => {

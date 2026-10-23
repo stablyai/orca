@@ -2,6 +2,9 @@ import { statSync, watch, type FSWatcher } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { Event as ParcelWatcherEvent } from '@parcel/watcher'
+import { startShallowFileWatcher } from './parcel-watcher-shallow-file-subscription'
+import { closeFileSystemWatcher } from './rebinding-file-watch'
+import { watcherDirectoryIdentity } from './watcher-directory-identity'
 
 export type ShallowWatcherSubscription = {
   unsubscribe: () => Promise<void>
@@ -14,18 +17,20 @@ export type ShallowWatcherSubscription = {
 // bounded cadence. Two stats per interval is the whole steady-state cost.
 const REBIND_CHECK_INTERVAL_MS = 30_000
 
-function closeFileSystemWatcher(watcher: FSWatcher): Promise<void> {
-  const { promise, resolve } = Promise.withResolvers<void>()
-  watcher.once('close', resolve)
-  try {
-    watcher.close()
-  } catch {
-    resolve()
-  }
-  return promise
+export function startShallowWatcher(
+  rootPath: string,
+  relativePaths: readonly string[],
+  onEvents: (events: ParcelWatcherEvent[]) => void,
+  onError: (error: Error) => void
+): ShallowWatcherSubscription {
+  // Why: on macOS fs.watch(dir) is a recursive FSEvents stream, so a `.git`
+  // root would stream every object, ref and linked-worktree write to fseventsd.
+  return process.platform === 'darwin'
+    ? startShallowFileWatcher(rootPath, relativePaths, onEvents, onError)
+    : startShallowDirectoryWatcher(rootPath, relativePaths, onEvents, onError)
 }
 
-export function startShallowWatcher(
+export function startShallowDirectoryWatcher(
   rootPath: string,
   relativePaths: readonly string[],
   onEvents: (events: ParcelWatcherEvent[]) => void,
@@ -33,7 +38,9 @@ export function startShallowWatcher(
 ): ShallowWatcherSubscription {
   const pathsByDirectory = new Map<string, Set<string>>()
   for (const relativePath of relativePaths) {
-    const parts = relativePath.split(/[\\/]+/).filter(Boolean)
+    const parts = relativePath
+      .split(process.platform === 'win32' ? /[\\/]+/ : /\/+/)
+      .filter(Boolean)
     const fileName = parts.pop()
     if (!fileName) {
       continue
@@ -66,11 +73,11 @@ export function startShallowWatcher(
     )
   }
 
-  const watchDirectory = (parent: string, fileNames: Set<string>, rebind = false): void => {
+  const watchDirectory = (parent: string, fileNames: Set<string>, rebind = false): boolean => {
     const existing = watchers.get(parent)
     if (existing) {
       if (!rebind) {
-        return
+        return true
       }
       watchers.delete(parent)
       boundIdentities.delete(parent)
@@ -100,20 +107,29 @@ export function startShallowWatcher(
           emitUpdates(parent, [name])
         }
       })
-      watcher.on('error', reportError)
+      watcher.on('error', (error) => {
+        // The runtime already closed it; unsubscribe must not wait on its 'close'.
+        if (watchers.get(parent) === watcher) {
+          watchers.delete(parent)
+          boundIdentities.delete(parent)
+        }
+        reportError(error)
+      })
       watchers.set(parent, watcher)
+      return true
     } catch (error) {
       // Nested metadata directories may not exist until Git creates them.
       if (parent === '') {
         reportError(error)
       }
+      return false
     }
   }
 
   const directoryIdentitySync = (parent: string): string | null => {
     try {
-      const entry = statSync(join(rootPath, parent))
-      return entry.isDirectory() ? `${entry.dev}:${entry.ino}` : null
+      const entry = statSync(join(rootPath, parent), { bigint: true })
+      return watcherDirectoryIdentity(entry)
     } catch {
       return null
     }
@@ -121,8 +137,8 @@ export function startShallowWatcher(
 
   const directoryIdentity = async (parent: string): Promise<string | null> => {
     try {
-      const entry = await stat(join(rootPath, parent))
-      return entry.isDirectory() ? `${entry.dev}:${entry.ino}` : null
+      const entry = await stat(join(rootPath, parent), { bigint: true })
+      return watcherDirectoryIdentity(entry)
     } catch {
       return null
     }
@@ -139,11 +155,11 @@ export function startShallowWatcher(
     }
     // Either the directory appeared after we started, or it was replaced while
     // watched. Both leave the old binding deaf, so rebind and resync.
-    watchDirectory(parent, fileNames, true)
-    boundIdentities.set(parent, identity)
-    if (bound !== undefined) {
-      emitUpdates(parent, fileNames)
+    if (!watchDirectory(parent, fileNames, true)) {
+      return
     }
+    boundIdentities.set(parent, identity)
+    emitUpdates(parent, fileNames)
   }
 
   const rebindTimer = setInterval(() => {

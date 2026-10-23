@@ -9,10 +9,11 @@ import {
 } from './codex-trust-identity'
 import {
   ensureHooksStateParentTable,
+  findAllHookTrustBlocks,
   findHookTrustBlockRanges,
   type HookTrustBlockRange
 } from './config-toml-hook-trust-blocks'
-import { escapeTomlBasicString } from './config-toml-syntax'
+import { CODEX_HOOK_TRUST_KEY, escapeTomlBasicString } from './config-toml-syntax'
 import { repairOrcaDuplicateTrustTables } from './config-toml-project-duplicate-repair'
 
 export function upsertHookTrustContent(
@@ -51,6 +52,79 @@ export function removeHookTrustContent(content: string, keys: readonly string[])
   return updated + content.slice(cursor)
 }
 
+/**
+ * Moves each hook's trust block to the hook's new key, body bytes unchanged:
+ * only what Codex wrote moves, and no hash is ever computed. Codex hashes a
+ * hook's content, not its path or position, so the moved block stays exactly
+ * as valid as before; a hook with no block keeps none. If any stored key has
+ * an unknown shape, nothing moves and Codex asks the user to review instead.
+ */
+export function moveHookTrustContent(
+  existingContent: string,
+  moves: readonly { oldKey: string; newKey: string }[]
+): string {
+  const content = stripLeadingBom(existingContent)
+  if (findAllHookTrustBlocks(content).some(({ key }) => !CODEX_HOOK_TRUST_KEY.test(key))) {
+    return existingContent
+  }
+  const bodies = moves.flatMap(({ oldKey, newKey }) => {
+    const [range] = findHookTrustBlockRanges(
+      content,
+      new Set([normalizeCodexHookTrustLookupKey(oldKey)])
+    )
+    return range ? [{ newKey, body: content.slice(range.contentStart, range.end).trimEnd() }] : []
+  })
+  let updated = removeHookTrustContent(content, [
+    ...moves.map(({ oldKey }) => oldKey),
+    ...moves.map(({ newKey }) => newKey)
+  ])
+  if (
+    bodies.some(({ newKey }) =>
+      usesWindowsCodexPathSeparators(parseCodexTrustKey(newKey)?.sourcePath ?? '')
+    )
+  ) {
+    updated = ensureHooksStateParentTable(updated)
+  }
+  return appendHookTrustBlocks(
+    updated,
+    bodies.flatMap(({ newKey, body }) =>
+      getTrustKeyWriteVariants(newKey).map(
+        (key) => `[hooks.state.${formatHookStateTableKey(key)}]${body ? `\n${body}` : ''}`
+      )
+    )
+  )
+}
+
+/** Each key's trust tables as they are written, header included. */
+export function readHookTrustBlockTexts(content: string, key: string): string[] {
+  return findHookTrustBlockRanges(content, new Set([normalizeCodexHookTrustLookupKey(key)])).map(
+    (range) => content.slice(range.start, range.end).trimEnd()
+  )
+}
+
+/** Replaces each key's trust tables with the given texts, verbatim; no texts removes the key. */
+export function restoreHookTrustBlockContent(
+  content: string,
+  restores: readonly { key: string; blocks: readonly string[] }[]
+): string {
+  return appendHookTrustBlocks(
+    removeHookTrustContent(
+      content,
+      restores.map(({ key }) => key)
+    ),
+    restores.flatMap(({ blocks }) => blocks)
+  )
+}
+
+function appendHookTrustBlocks(content: string, blocks: readonly string[]): string {
+  if (blocks.length === 0) {
+    return content
+  }
+  const separator =
+    content.length === 0 || content.endsWith('\n\n') ? '' : content.endsWith('\n') ? '\n' : '\n\n'
+  return `${content}${separator}${blocks.join('\n\n')}\n`
+}
+
 function upsertTrustBlocks(
   content: string,
   keys: readonly string[],
@@ -62,7 +136,7 @@ function upsertTrustBlocks(
     new Set(keys.map(normalizeCodexHookTrustLookupKey))
   )
   if (ranges.length === 0) {
-    return appendTrustBlocks(content, keys, hash, explicitEnabled ?? true)
+    return appendHookTrustBlocks(content, [buildTrustBlocks(keys, hash, explicitEnabled ?? true)])
   }
   const enabled = explicitEnabled ?? !ranges.some((range) => isBlockDisabled(content, range))
   const block = buildTrustBlocks(keys, hash, enabled)
@@ -82,20 +156,6 @@ function isBlockDisabled(content: string, range: HookTrustBlockRange): boolean {
   const block = content.slice(range.headerLineEnd, range.end)
   const enabledMatch = /^[ \t]*enabled[ \t]*=[ \t]*(true|false)[ \t\r]*(?:#.*)?$/m.exec(block)
   return enabledMatch?.[1] === 'false'
-}
-
-function appendTrustBlocks(
-  content: string,
-  keys: readonly string[],
-  hash: string,
-  enabled: boolean
-): string {
-  const block = buildTrustBlocks(keys, hash, enabled)
-  if (content.length === 0) {
-    return `${block}\n`
-  }
-  const separator = content.endsWith('\n\n') ? '' : content.endsWith('\n') ? '\n' : '\n\n'
-  return `${content}${separator}${block}\n`
 }
 
 function buildTrustBlocks(keys: readonly string[], hash: string, enabled: boolean): string {
@@ -118,7 +178,8 @@ function formatHookStateTableKey(key: string): string {
   return `"${escapeTomlBasicString(key)}"`
 }
 
-function getTrustKeyWriteVariants(key: string): string[] {
+/** Every spelling Orca writes `key` under: both separators for a Windows path, else the key itself. */
+export function getTrustKeyWriteVariants(key: string): string[] {
   const parsed = parseCodexTrustKey(key)
   if (!parsed || !usesWindowsCodexPathSeparators(parsed.sourcePath)) {
     return [key]

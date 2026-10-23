@@ -56,6 +56,13 @@ describe('native chat tool icons', () => {
     expect(nativeChatToolCategory('web search')).toBe('webSearch')
   })
 
+  it('counts no Codex helper call as running an agent, since a spawn ends once its helper starts', () => {
+    expect(nativeChatToolCategory('task')).toBe('subAgentActivity')
+    expect(nativeChatToolCategory('spawn_agent')).toBeNull()
+    expect(nativeChatToolCategory('wait_agent')).toBeNull()
+    expect(nativeChatToolCategory('close_agent')).toBeNull()
+  })
+
   it('maps the tool names the Claude lane renders verbatim', () => {
     expect(nativeChatToolIconName('Read')).toBe('eye')
     expect(nativeChatToolIconName('Bash')).toBe('square-terminal')

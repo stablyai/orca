@@ -2,18 +2,18 @@ import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { AgentSessionClaimedSpawnResult } from '../../shared/agent-session-host-authority'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
-import type { PtySourceReceivingActivation } from '../../shared/pty-source-receiving-activation'
 import type { TerminalOwner } from '../../shared/terminal-owner'
+import type { OpenCodeCliCapabilities } from '../../shared/opencode-cli-version'
 
 export type PtySpawnResult = {
+  /** Execution-host probe; absent on older hosts and reattachments. */
+  openCodeCapabilities?: OpenCodeCliCapabilities
   agentSessionEnsure?: AgentSessionClaimedSpawnResult
   /** App-facing PTY id. Remote providers must return globally routable ids,
    *  not relay-local handles, because renderer/runtime IPC routes by this key. */
   id: string
   /** Opaque provider-owned identity for this process behind a reusable PTY id. */
   incarnationId?: PtyIncarnationId
-  /** Relay source identity installed before adjacent source frames are decoded. */
-  sourceActivation?: PtySourceReceivingActivation
   /** The provider observed this exact spawn exit before returning its spawn result. */
   exitedBeforeSpawnReply?: true
   /** Whether the execution host armed the shell-ready marker for a renderer-delivered startup
@@ -60,6 +60,9 @@ export type PtySpawnResult = {
   snapshotSeq?: number
   /** Ordered ownership evidence proven by the provider snapshot. */
   snapshotTerminalOwner?: TerminalOwner
+  /** Set only when this call started a process: whether it started in the request's cwd or the
+   *  folder recovered from crash history. In-process only; never crosses a wire. */
+  startupCwdSource?: 'request' | 'recovered-history'
   /** True when the spawn reattached to an existing daemon session. */
   isReattach?: boolean
   /** Grid the PTY is proven to be at once this spawn settled. Only providers whose attach

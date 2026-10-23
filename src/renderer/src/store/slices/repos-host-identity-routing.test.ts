@@ -301,7 +301,7 @@ describe('repo slice host identity routing', () => {
     ])
   })
 
-  it('removes only the focused host row and worktrees for duplicate repo ids', async () => {
+  it('removes only the named host row and worktrees for duplicate repo ids', async () => {
     const localWorktree = makeWorktree({
       id: 'same-repo::/local/wt',
       repoId: 'same-repo'
@@ -345,7 +345,7 @@ describe('repo slice host identity routing', () => {
       }
     })
 
-    await store.getState().removeProject('same-repo')
+    await store.getState().removeProject('same-repo', { hostId: 'local' })
 
     expect(store.getState().repos).toEqual([remoteDuplicate])
     // Current contract: bare-ID UI selections clear even though the sibling host row survives.
@@ -371,7 +371,7 @@ describe('repo slice host identity routing', () => {
     expect(ptyKill).toHaveBeenCalledWith('local-pty')
     expect(ptyKill).not.toHaveBeenCalledWith('remote-pty')
   })
-  it('purges hostless worktree state when two hosts collide on repoId and path', async () => {
+  it('keeps a tab with no host evidence when two hosts collide on repoId and path', async () => {
     const sharedWorktreeId = 'same-repo::/shared'
     const localWorktree = makeWorktree({
       id: sharedWorktreeId,
@@ -395,22 +395,23 @@ describe('repo slice host identity routing', () => {
     await store.getState().removeProject('same-repo', { hostId: 'local' })
 
     expect(store.getState().worktreesByRepo['same-repo']).toEqual([remoteWorktree])
-    // Terminal/editor maps are keyed by hostless worktree ID and are purged, but the
-    // host-scoped purge deliberately leaves the sibling's legacy bare recency key intact.
-    expect(store.getState().tabsByWorktree[sharedWorktreeId]).toBeUndefined()
+    // Why kept: nothing says which host this tab is on, so it may be the surviving twin's.
+    expect(store.getState().tabsByWorktree[sharedWorktreeId]?.map((tab) => tab.id)).toEqual([
+      'shared-tab'
+    ])
     expect(store.getState().lastVisitedAtByWorktreeId[sharedWorktreeId]).toBe(10)
   })
 
   it('allows two removals of the same owner row to overlap', async () => {
     const { promise: firstRemoval, resolve: resolveFirstRemoval } = Promise.withResolvers<void>()
     const { promise: secondRemoval, resolve: resolveSecondRemoval } = Promise.withResolvers<void>()
-    reposRemove.mockReturnValueOnce(firstRemoval).mockReturnValueOnce(secondRemoval)
+    reposRemoveForHost.mockReturnValueOnce(firstRemoval).mockReturnValueOnce(secondRemoval)
     const store = createTestStore()
     store.setState({ repos: [localDuplicate] })
 
-    const first = store.getState().removeProject(localDuplicate.id)
-    const second = store.getState().removeProject(localDuplicate.id)
-    expect(reposRemove).toHaveBeenCalledTimes(2)
+    const first = store.getState().removeProject(localDuplicate.id, { hostId: 'local' })
+    const second = store.getState().removeProject(localDuplicate.id, { hostId: 'local' })
+    expect(reposRemoveForHost).toHaveBeenCalledTimes(2)
 
     resolveSecondRemoval()
     resolveFirstRemoval()
@@ -476,7 +477,11 @@ describe('repo slice host identity routing', () => {
       params: { repo: 'same-repo' },
       timeoutMs: 15_000
     })
-    expect(reposRemoveForHost).not.toHaveBeenCalled()
+    // Host-scoped residue cleanup for the runtime row only; the local row is never addressed.
+    expect(reposRemoveForHost).toHaveBeenCalledWith({
+      repoId: 'same-repo',
+      hostId: 'runtime:env-1'
+    })
     expect(reposRemove).not.toHaveBeenCalled()
     expect(store.getState().repos).toEqual([localDuplicate])
     expect(store.getState().worktreesByRepo['same-repo']).toEqual([localWorktree])
@@ -484,7 +489,7 @@ describe('repo slice host identity routing', () => {
 
   it('removeProject of an SSH host row routes local even when a runtime is focused', async () => {
     // Regression: removing an SSH host's repo (explicit ssh hostId) must NOT route
-    // repo.rm to the focused runtime env. settingsForRepoOwner clears the focused
+    // repo.rm to the focused runtime env. Owner routing clears the focused
     // runtime for SSH owners, so removal stays on the host-scoped local path.
     const sshDuplicate: Repo = {
       id: 'same-repo',
@@ -553,7 +558,7 @@ describe('repo slice host identity routing', () => {
       }
     })
 
-    await store.getState().removeProject('same-repo')
+    await store.getState().removeProject('same-repo', { hostId: 'runtime:env-1' })
 
     expect(store.getState().repos).toEqual([localDuplicate])
     expect(store.getState().worktreesByRepo['same-repo']).toEqual([localWorktree])

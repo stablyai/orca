@@ -35,6 +35,17 @@ describe('resumeFailureGuidance', () => {
     }
   )
 
+  // Says what the user can do, never which process holds the chat.
+  it.each([
+    'agent_session_conflict',
+    'agent_session_ownership_unknown',
+    'execution_owner_reconciling'
+  ])('words %s without Orca internals', (reason) => {
+    expect(resumeFailureGuidance({ outcome: 'refused', reason }).text).not.toMatch(
+      /owns|process|session/
+    )
+  })
+
   it('never offers a retry for a delivery nobody could confirm', () => {
     expect(
       resumeFailureGuidance({ outcome: 'unconfirmed', reason: 'agent_session_conflict' })

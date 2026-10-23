@@ -86,3 +86,24 @@ export class BridgeClientNotNativeVerbError extends Error {
     this.name = 'BridgeClientNotNativeVerbError'
   }
 }
+
+/** Extra wire fields for a shell that granted no `rpcEnvelope`. Refused rather than dropped, because
+ *  the call would otherwise run on the desktop without what its caller said it needs. */
+export class BridgeRpcEnvelopeUngrantedError extends Error {
+  readonly code = 'bridge_rpc_envelope_ungranted'
+
+  constructor() {
+    super('this app version cannot send extra request fields; update the Orca app')
+    this.name = 'BridgeRpcEnvelopeUngrantedError'
+  }
+}
+
+/** Extra wire fields that are not a plain JSON object, which the shell's reader would drop. */
+export class BridgeRpcEnvelopeInvalidError extends Error {
+  readonly code = 'bridge_rpc_envelope_invalid'
+
+  constructor() {
+    super('extra request fields must be a plain JSON object')
+    this.name = 'BridgeRpcEnvelopeInvalidError'
+  }
+}

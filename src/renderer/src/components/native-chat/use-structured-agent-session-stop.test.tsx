@@ -4,47 +4,54 @@
 // a Stop naming no turn. Against any other host, one that accepts sends first included, it stays
 // exactly what it was: a running turn only, named.
 
-import { act, renderHook } from '@testing-library/react'
+import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../../shared/agent-session-journal-types'
-import type { StructuredAgentSessionOutboxEntry } from '../../../../shared/structured-agent-session-outbox'
+import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
+import type { AgentSessionLatestTurn } from '../../../../shared/agent-session-wire'
 
 const mocks = vi.hoisted(() => ({
   call: vi.fn(),
-  withdrawUnsent: vi.fn(),
+  stopSends: vi.fn(),
   operations: 0
 }))
 let items: AgentJournalRenderItem[] = []
 let submissions: AgentJournalSubmission[] = []
-let outbox: StructuredAgentSessionOutboxEntry[] = []
-let blockedClientMessageId: string | null = null
+let outbox: StructuredAgentSessionPendingSend[] = []
 let fence = 3
+let latestTurn: AgentSessionLatestTurn | null | undefined
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: mocks.call,
+  supportsStructuredAgentSessionQuietRepeatedStop: vi.fn(async () => false),
   supportsStructuredAgentSessionPromptCancel: vi.fn(async () => false)
 }))
 
 vi.mock('./use-structured-agent-session-read', () => ({
   useStructuredAgentSessionRead: () => ({
-    state: { fence, items, submissions, status: 'ready', error: null, hasOlder: false },
+    state: {
+      fence,
+      items,
+      submissions,
+      status: 'ready',
+      error: null,
+      hasOlder: false,
+      ...(latestTurn !== undefined ? { latestTurn } : {})
+    },
     loadingOlder: false,
     loadOlder: vi.fn()
   })
 }))
 
-vi.mock('./use-structured-agent-session-outbox', () => ({
-  structuredSessionOperationId: () => `operation-${++mocks.operations}`,
-  useStructuredAgentSessionOutbox: () => ({
-    outbox,
-    blockedClientMessageId,
+vi.mock('./use-structured-agent-session-sends', () => ({
+  useStructuredAgentSessionSends: () => ({
+    pending: outbox,
     error: null,
     send: vi.fn(),
-    retry: vi.fn(),
-    withdrawUnsent: mocks.withdrawUnsent
+    stopSends: mocks.stopSends
   })
 }))
 
@@ -58,17 +65,16 @@ import { structuredAgentSessionAgentStatus } from '../../../../shared/structured
 import { useStructuredAgentSession } from './use-structured-agent-session'
 
 function entry(
-  state: StructuredAgentSessionOutboxEntry['state']
-): StructuredAgentSessionOutboxEntry {
+  phase: StructuredAgentSessionPendingSend['phase']
+): StructuredAgentSessionPendingSend {
   return {
     clientMessageId: 'client-1',
     sessionId: 'session-1',
     body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hi' }] },
     previewUris: [],
-    state,
+    phase,
     queuedAt: 1,
-    lastAttemptAt: null,
-    retryAfterUnknownSubmittedAt: null
+    issued: true
   }
 }
 
@@ -97,7 +103,7 @@ const RUNNING_TURN: AgentJournalRenderItem = {
 // Every way work can be in flight after a send, in the order a message passes through them.
 const IN_FLIGHT = {
   'the send is on its way to the host': () => {
-    outbox = [entry('dispatching')]
+    outbox = [entry('sending')]
   },
   'the host has queued it': () => {
     submissions = [submission({ handoverRecorded: true })]
@@ -128,6 +134,7 @@ function cancels(): unknown[] {
 }
 
 afterEach(() => {
+  cleanup()
   setLocalRuntimeCapabilitiesForTests(null)
 })
 
@@ -139,8 +146,8 @@ beforeEach(() => {
   items = []
   submissions = []
   outbox = []
-  blockedClientMessageId = null
   fence = 3
+  latestTurn = undefined
 })
 
 describe('Stop against a host that stops the conversation', () => {
@@ -162,12 +169,12 @@ describe('Stop against a host that stops the conversation', () => {
         await result.current.stop()
       })
 
-      expect(mocks.withdrawUnsent).toHaveBeenCalledOnce()
+      expect(mocks.stopSends).toHaveBeenCalledOnce()
       // Withdrawn first, so the drain has nothing left to send after the Stop.
       const cancelCall = mocks.call.mock.calls.findIndex(
         ([, method]) => method === 'agentSession.cancel'
       )
-      expect(mocks.withdrawUnsent.mock.invocationCallOrder[0]).toBeLessThan(
+      expect(mocks.stopSends.mock.invocationCallOrder[0]).toBeLessThan(
         mocks.call.mock.invocationCallOrder[cancelCall] ?? 0
       )
       expect(cancels()).toEqual([expect.not.objectContaining({ turnId: expect.anything() })])
@@ -291,7 +298,7 @@ describe('Stop against a host that stops the conversation', () => {
       first = result.current.stop()
     })
     // The next message goes out, and reaches the host ahead of the second Stop.
-    outbox = [entry('dispatching')]
+    outbox = [entry('sending')]
     rerender()
     act(() => {
       second = result.current.stop()
@@ -330,28 +337,35 @@ describe('Stop against a host that stops the conversation', () => {
     expect(ids[1]).not.toBe(ids[0])
   })
 
-  it('replays a lost stop of one background task, which names what it stops', async () => {
-    const answers: (() => unknown)[] = [
-      () => {
+  it('stops one background task on a second press after the first lost its answer', async () => {
+    const ran = new Set<string>()
+    let lostAnswers = 1
+    mocks.call.mockImplementation(async (_target, method, params) => {
+      if (method !== 'agentSession.cancel') {
+        return null
+      }
+      // As the host's ledger does: an id it already ran replays as handled and stops nothing.
+      const operationId: string = params.envelope.clientOperationId
+      const value = { cancelled: !ran.has(operationId) }
+      ran.add(operationId)
+      if (lostAnswers > 0) {
+        lostAnswers -= 1
         throw new Error('the connection dropped before the host answered')
       }
-    ]
-    mocks.call.mockImplementation(async (_target, method) =>
-      method === 'agentSession.cancel'
-        ? (answers.shift()?.() ?? { ok: true, value: { cancelled: true } })
-        : null
-    )
+      return { ok: true, value }
+    })
     const { result } = render()
 
-    for (let press = 0; press < 2; press += 1) {
-      await act(async () => {
-        await result.current.stopBackgroundTask('task-1')
-      })
-    }
+    let second: unknown
+    await act(async () => {
+      await result.current.stopBackgroundTask('task-1')
+      second = await result.current.stopBackgroundTask('task-1')
+    })
 
     const ids = cancelOperationIds()
     expect(ids).toHaveLength(2)
-    expect(ids[1]).toBe(ids[0])
+    expect(ids[1]).not.toBe(ids[0])
+    expect(second).toEqual({ cancelled: true })
   })
 
   it('sends a new cancel of a named turn after the host could not settle the last one', async () => {
@@ -380,22 +394,14 @@ describe('Stop against a host that stops the conversation', () => {
     expect(ids[1]).not.toBe(ids[0])
   })
 
-  it('is hidden at rest, and with only a message that will not run', () => {
+  it('is hidden at rest, and with only a message the host settled', () => {
     expect(render().result.current.canStop).toBe(false)
-    outbox = [entry('rejected')]
+    outbox = [entry('recorded')]
     submissions = [submission({ dispatchState: 'accepted', resolvedAt: 2 })]
     expect(render().result.current.canStop).toBe(false)
   })
 
-  it('is hidden with only a message that waits on its Retry', () => {
-    // A send that failed holds the queue until the user retries it.
-    outbox = [entry('queued')]
-    blockedClientMessageId = 'client-1'
-    expect(render().result.current.canStop).toBe(false)
-
-    // A send the host restarted under is parked for the user, and the chat reads idle.
-    outbox = [{ ...entry('unconfirmed'), retryAfterUnknownSubmittedAt: -1 }]
-    blockedClientMessageId = null
+  it('is hidden once the host reads idle after a restart', () => {
     submissions = [
       submission({
         dispatchState: 'unknown',
@@ -523,7 +529,7 @@ describe.each([
         await result.current.stop()
       })
       expect(cancels()).toEqual([])
-      expect(mocks.withdrawUnsent).not.toHaveBeenCalled()
+      expect(mocks.stopSends).not.toHaveBeenCalled()
     }
   )
 
@@ -536,6 +542,46 @@ describe.each([
       await result.current.stop()
     })
     expect(cancels()).toEqual([expect.objectContaining({ turnId: 'provider-turn' })])
-    expect(mocks.withdrawUnsent).not.toHaveBeenCalled()
+    // Every Stop takes back what has not gone out and keeps what has from being sent again.
+    expect(mocks.stopSends).toHaveBeenCalledOnce()
+  })
+})
+
+// A long turn's record sits above the loaded page; the host's record is what says it runs.
+describe('a running turn whose record is not loaded', () => {
+  beforeEach(() => {
+    items = []
+    latestTurn = {
+      itemId: 'turn-1',
+      observedAt: 1,
+      turn: { turnId: 'provider-turn', state: 'running', startedAt: 1 }
+    }
+  })
+
+  it('shows Working and Stop, and an older host gets the turn by name', async () => {
+    setLocalRuntimeCapabilitiesForTests([])
+    const { result } = render()
+
+    expect(result.current.isWorking).toBe(true)
+    expect(result.current.turnId).toBe('provider-turn')
+    expect(result.current.canStop).toBe(true)
+    await act(async () => {
+      await result.current.stop()
+    })
+    expect(cancels()).toEqual([expect.objectContaining({ turnId: 'provider-turn' })])
+  })
+
+  it('reads idle once the host ends it, though a running record is still loaded', () => {
+    items = [RUNNING_TURN]
+    latestTurn = {
+      itemId: 'turn-1',
+      observedAt: 2,
+      turn: { turnId: 'provider-turn', state: 'completed', startedAt: 1, completedAt: 2 }
+    }
+    setLocalRuntimeCapabilitiesForTests([])
+    const { result } = render()
+
+    expect(result.current.isWorking).toBe(false)
+    expect(result.current.canStop).toBe(false)
   })
 })

@@ -2,9 +2,9 @@ import {
   type getLinearIssueByUuidForAgent,
   type LinearIssueUpdate,
   type LinearCreateFieldIntent,
-  linearError,
   sameStringSet
 } from './runtime-linear-command-dependencies'
+import { linearError } from '../linear/issue-context/errors'
 import { RuntimeLinearTaskFieldCommands } from './runtime-linear-task-fields-commands'
 
 export class RuntimeLinearSaveFieldCommands extends RuntimeLinearTaskFieldCommands {

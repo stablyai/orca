@@ -10,27 +10,28 @@ import type { StructuredAgentSessionCaller } from './structured-agent-session-ho
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
 
 export class StructuredConversationCommandController {
-  /** Held only by a clear, which replaces the conversation a send would land in. A compaction is
+  /** Held only while a clear resets the context a send would land in. A compaction is
    *  a queued message, and sends accepted behind it wait for it in the queue. */
   readonly pending = new Map<string, { key: string; count: number }>()
   constructor(
     private readonly context: () => StructuredAgentSessionMutationContext,
-    private readonly host: Pick<
-      StructuredAgentSessionHost,
-      'attach' | 'flushStreamedEvents' | 'waitForSendSettlement'
-    >
+    private readonly host: Pick<StructuredAgentSessionHost, 'waitForSendSettlement'>
   ) {}
+  /** Whether a clear is in flight is read as the send arrives; it refuses only a first run, so an
+   *  id with a recorded answer by the send's turn gets that answer, behind the clear. */
   send = (
     caller: StructuredAgentSessionCaller,
     params: Parameters<typeof sendStructuredAgentSessionTurn>[2]
   ): ReturnType<typeof sendStructuredAgentSessionTurn> =>
-    this.pending.has(params.envelope.sessionId)
-      ? Promise.resolve({ ok: false, refusal: conversationCommandInFlight() })
-      : sendStructuredAgentSessionTurn(this.context(), caller, params)
+    sendStructuredAgentSessionTurn(this.context(), caller, params, {
+      clearInFlight: this.pending.has(params.envelope.sessionId)
+    })
 
   run = (caller: StructuredAgentSessionCaller, params: ConversationCommandParams) => {
     if (params.command === 'compact') {
-      return runStructuredCompaction(this.context(), this.host, caller, params)
+      return runStructuredCompaction(this.context(), this.host, caller, params, {
+        clearInFlight: this.pending.has(params.envelope.sessionId)
+      })
     }
     const key = JSON.stringify([caller.callerKey, params.envelope.clientOperationId])
     const pending = this.pending.get(params.envelope.sessionId)
@@ -40,60 +41,13 @@ export class StructuredConversationCommandController {
     const entry = pending ?? { key, count: 0 }
     entry.count++
     this.pending.set(params.envelope.sessionId, entry)
-    return runStructuredConversationCommand(this.context(), this.host, caller, params).finally(
-      () => {
-        if (--entry.count === 0 && this.pending.get(params.envelope.sessionId) === entry) {
-          this.pending.delete(params.envelope.sessionId)
-        }
-        // A clear can settle with no journal commit (a failed attach), and drafts held behind
-        // its prepared phase would otherwise wait for an unrelated commit.
-        this.context().wakeQueuedDrain?.(params.envelope.sessionId)
+    return runStructuredConversationCommand(this.context(), caller, params).finally(() => {
+      if (--entry.count === 0 && this.pending.get(params.envelope.sessionId) === entry) {
+        this.pending.delete(params.envelope.sessionId)
       }
-    )
-  }
-
-  replacements = () => {
-    const store = this.context().deps.store
-    const records = store.listRecords()
-    const visible = new Set(store.listVisibleSessionIds())
-    const byId = new Map(records.map((record) => [record.sessionId, record]))
-    const destinations = new Map<string, string | null>()
-    const destination = (source: string): string | null => {
-      const path = new Set<string>()
-      let current = source
-      while (!destinations.has(current) && !path.has(current)) {
-        path.add(current)
-        const command = byId.get(current)?.conversationCommand
-        if (
-          command?.command !== 'clear' ||
-          command.phase !== 'committed' ||
-          !command.replacementSessionId
-        ) {
-          destinations.set(current, current)
-          break
-        }
-        current = command.replacementSessionId
-      }
-      const target = destinations.get(current) ?? null
-      for (const id of path) {
-        destinations.set(id, target)
-      }
-      return target
-    }
-    return records.flatMap((record) => {
-      const target = destination(record.sessionId)
-      const sessionId = target !== record.sessionId ? target : null
-      // Explicit history reveals remain readable; closed replacements stay closed.
-      return sessionId && visible.has(sessionId) && !visible.has(record.sessionId)
-        ? [
-            {
-              sourceSessionId: record.sessionId,
-              sessionId,
-              workspaceId: record.location.workspaceId,
-              agent: record.provider
-            }
-          ]
-        : []
+      // A clear can settle with no journal commit (a refusal), and drafts held behind it
+      // would otherwise wait for an unrelated commit.
+      this.context().wakeQueuedDrain?.(params.envelope.sessionId)
     })
   }
 }

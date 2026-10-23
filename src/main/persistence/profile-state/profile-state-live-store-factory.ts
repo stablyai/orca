@@ -13,6 +13,7 @@ export async function createLiveProfileStateStore(
     workerPath?: string
     backupWorkerPath?: string
     onFailure?: (error: Error) => void
+    onSaveDelayChanged?: (delayed: boolean) => void
   } = {}
 ): Promise<ProfileStateStoreFactoryResult> {
   const { initialState: initial, ...prepared } = prepareProfileStateStore(options)

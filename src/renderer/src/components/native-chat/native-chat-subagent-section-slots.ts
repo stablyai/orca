@@ -10,11 +10,12 @@ import {
 } from '../../../../shared/native-chat-subagent-summary'
 import { nativeChatRowRendersContent } from '../../../../shared/native-chat-row-content'
 import {
+  type NativeChatRowTypography,
   estimateNativeChatRowHeight,
   nativeChatRowContentMetrics,
   NATIVE_CHAT_SUBAGENT_SECTION_HEAD_PX
 } from './native-chat-row-height-estimate'
-import type { NativeChatResolvedPrompt } from './native-chat-resolution-receipt'
+import type { NativeChatResolvedPrompt } from '../../../../shared/native-chat-resolution-receipt'
 import { compareMessages } from './native-chat-session-assembler'
 import {
   nativeChatSubagentEntryRuns,
@@ -22,7 +23,10 @@ import {
   type NativeChatSubagentRosterState,
   type NativeChatSubagentSections
 } from './native-chat-subagent-sections'
-import { nativeChatRowRendersProse, nativeChatRowSpeaksOrActs } from './native-chat-trailing-run'
+import {
+  nativeChatRowRendersProse,
+  nativeChatRowSpeaksOrActs
+} from '../../../../shared/native-chat-trailing-run'
 import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
 
 /** The head of a section no loaded roster row holds: it names whose rows follow it. */
@@ -61,13 +65,15 @@ export function nativeChatSubagentSectionSlots({
   choices,
   live,
   receipts,
-  slots
+  slots,
+  typography
 }: {
   sections: NativeChatSubagentSections
   choices: NativeChatSubagentChoices
   live: ReadonlySet<string>
   receipts: ReadonlyMap<string, NativeChatResolvedPrompt>
   slots: NativeChatTranscriptSlot[]
+  typography?: NativeChatRowTypography
 }) {
   const isOpen = (agentId: string): boolean => choices.sections.get(agentId) ?? live.has(agentId)
   const pushHead = (agentId: string, depth: number, turnKey: string | undefined): void => {
@@ -107,16 +113,21 @@ export function nativeChatSubagentSectionSlots({
         receipt,
         status: undefined,
         folded: false,
+        drawsMessage: true,
         turnFolds: false,
         turnDiff: undefined,
         subagentRoster: undefined,
         depth,
-        estimatedHeight: estimateNativeChatRowHeight(nativeChatRowContentMetrics(message), {
-          hasReceipt: receipt !== undefined,
-          hasStatus: false,
-          hasTurnDiff: false,
-          inSubagentSection: true
-        })
+        estimatedHeight: estimateNativeChatRowHeight(
+          nativeChatRowContentMetrics(message, typography),
+          {
+            hasReceipt: receipt !== undefined,
+            hasStatus: false,
+            hasTurnDiff: false,
+            inSubagentSection: true
+          },
+          typography
+        )
       })
     }
     openBefore(pending, undefined, depth, { turnKey })

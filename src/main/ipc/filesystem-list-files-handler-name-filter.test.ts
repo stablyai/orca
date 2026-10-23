@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { handlers, store, resetFilesystemIpcMocks } from './filesystem-test-harness'
 
@@ -14,10 +15,6 @@ vi.mock(
   async () => (await import('./filesystem-test-harness')).crashBreadcrumbMock
 )
 vi.mock(
-  '../local-downloaded-folder-promotion',
-  async () => (await import('./filesystem-test-harness')).folderPromotionMock
-)
-vi.mock(
   '../git/status',
   async () => (await import('./filesystem-test-harness')).gitStatusModuleMock
 )
@@ -26,14 +23,6 @@ vi.mock(
   async () => (await import('./filesystem-test-harness')).gitIgnoredPathsMock
 )
 vi.mock('../git/worktree', async () => (await import('./filesystem-test-harness')).gitWorktreeMock)
-vi.mock(
-  '../providers/ssh-filesystem-dispatch',
-  async () => (await import('./filesystem-test-harness')).sshFilesystemDispatchMock
-)
-vi.mock(
-  '../providers/ssh-git-dispatch',
-  async () => (await import('./filesystem-test-harness')).sshGitDispatchMock
-)
 vi.mock(
   '../text-generation/commit-message-text-generation',
   async () => (await import('./filesystem-test-harness')).textGenerationModuleMock
@@ -96,4 +85,53 @@ describe('fs:listFiles local name filter', () => {
     ).resolves.toEqual([])
     expect(listQuickOpenFilesMock).not.toHaveBeenCalled()
   })
+
+  it('returns no files for an SSH target and never lists locally', async () => {
+    registerHandlers()
+
+    await expect(
+      handlers.get('fs:listFiles')!(null, { rootPath: '/home/user/repo', connectionId: 'conn-1' })
+    ).resolves.toEqual([])
+    expect(listQuickOpenFilesMock).not.toHaveBeenCalled()
+  })
+
+  // Why #7721: a workspace switch must stop the previous workspace's full-tree scan.
+  it.each(['cancel', 'did-navigate', 'render-process-gone', 'destroyed'])(
+    'aborts an in-flight file listing on %s (#7721)',
+    async (eventName) => {
+      let capturedSignal: AbortSignal | undefined
+      listQuickOpenFilesMock.mockImplementation(
+        (_rootPath: string, _store: unknown, _exclude: unknown, signal?: AbortSignal) =>
+          new Promise<string[]>((_resolve, reject) => {
+            capturedSignal = signal
+            signal?.addEventListener('abort', () => reject(new Error('listing cancelled')), {
+              once: true
+            })
+          })
+      )
+      registerHandlers()
+
+      // Why: cancellation keys are scoped to the issuing webContents.
+      const senderEvent = { sender: Object.assign(new EventEmitter(), { id: 7 }) }
+      const pending = Promise.resolve(
+        handlers.get('fs:listFiles')!(senderEvent, { rootPath: '/repo', requestToken: 'token-1' })
+      )
+
+      await Promise.resolve()
+      expect(capturedSignal?.aborted).toBe(false)
+      if (eventName === 'cancel') {
+        await handlers.get('fs:cancelListFiles')!(senderEvent, { requestToken: 'token-1' })
+      } else {
+        senderEvent.sender.emit(eventName)
+      }
+      expect(capturedSignal?.aborted).toBe(true)
+      await expect(pending).rejects.toThrow('listing cancelled')
+      expect(senderEvent.sender.eventNames()).toEqual([])
+
+      // Unknown or already-settled tokens are a no-op, not an error.
+      expect(() =>
+        handlers.get('fs:cancelListFiles')!(senderEvent, { requestToken: 'unknown' })
+      ).not.toThrow()
+    }
+  )
 })

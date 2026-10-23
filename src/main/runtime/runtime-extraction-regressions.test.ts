@@ -50,20 +50,12 @@ describe('runtime extraction regressions', () => {
     }
   })
 
-  it('publishes the answering runtime machine name in status', () => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this test exercises status with only the store surface the runtime reads during construction.
-    const runtime = new OrcaRuntimeService({
-      getSettings: () => ({ machineName: 'Build server' })
-    } as RuntimeStore)
-    expect(runtime.getStatus().machineName).toBe('Build server')
-    expect(runtime.getStatus().hostPlatform).toBe(process.platform)
-  })
-
   it('reads a machine rename the same way status publishes it', () => {
     const settings = { machineName: 'Build server' }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this test exercises status with only the store surface the runtime reads during construction.
     const runtime = new OrcaRuntimeService({ getSettings: () => settings } as RuntimeStore)
     expect(runtime.readMachineName()).toBe('Build server')
+    expect(runtime.getStatus().hostPlatform).toBe(process.platform)
     settings.machineName = 'Renamed desk'
     expect(runtime.getStatus().machineName).toBe('Renamed desk')
     // The remote-workspace client identity reads this same accessor at send time.

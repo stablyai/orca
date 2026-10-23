@@ -1,1 +1,1 @@
-export { getZipExtractorCommand } from '../../src/shared/zip-extractor-command.ts'
+export { getTarProgram, getZipExtractorCommand } from '../../src/shared/zip-extractor-command.ts'

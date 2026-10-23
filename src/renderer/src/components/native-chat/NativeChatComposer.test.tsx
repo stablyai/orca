@@ -8,6 +8,7 @@ import type {
 } from '../../../../shared/native-chat-session-options'
 import { clearNativeChatSessionOptionCacheForTests } from './native-chat-session-option-cache'
 import { clearNativeChatModelEnrichmentForTests } from './native-chat-session-option-enrichment'
+import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime-pty-id'
 
 const mocks = vi.hoisted(() => ({
   cancelPendingSends: vi.fn(),
@@ -69,11 +70,11 @@ vi.mock('../../store', () => {
 })
 
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
-  isRemoteRuntimePtyId: () => false,
   sendRuntimePtyInput: vi.fn()
 }))
-vi.mock('@/lib/agent-paste-draft', () => ({
-  getSettingsForAgentTabRuntimeOwner: () => ({})
+vi.mock('../../../../shared/remote-runtime-pty-id', async (importOriginal) => ({
+  ...(await importOriginal<typeof RemoteRuntimePtyIdModule>()),
+  isRemoteRuntimePtyId: () => false
 }))
 vi.mock('./native-chat-runtime-send', () => ({
   sendNativeChatMessage: (...args: unknown[]) => mocks.sendNativeChatMessage(...args),
@@ -123,7 +124,8 @@ vi.mock('./use-native-chat-composer-attachments', () => ({
       attachResolvedPaths: vi.fn(),
       clearImageAttachments: vi.fn(),
       flushPendingAttachments: mocks.flushPendingAttachments,
-      removeImageAttachment: vi.fn()
+      removeImageAttachment: vi.fn(),
+      pendingChips: { begin: vi.fn(), resolve: vi.fn(), drop: vi.fn(), attachReferences: vi.fn() }
     }
   }
 }))
@@ -156,6 +158,7 @@ vi.mock('./use-native-chat-send-lifecycle', () => ({
 }))
 
 import { NativeChatComposer } from './NativeChatComposer'
+import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 
 describe('NativeChatComposer', () => {
   beforeEach(() => {
@@ -215,8 +218,7 @@ describe('NativeChatComposer', () => {
       configurable: true,
       value: {
         git: { discoverCommitMessageModels: mocks.discoverCommitMessageModels },
-        pty: { getMainBufferSnapshot: mocks.getMainBufferSnapshot },
-        ui: { onFileDrop: () => vi.fn() }
+        pty: { getMainBufferSnapshot: mocks.getMainBufferSnapshot }
       }
     })
   })
@@ -243,6 +245,22 @@ describe('NativeChatComposer', () => {
     expect(mocks.cancelPendingSends.mock.invocationCallOrder[0]).toBeLessThan(
       onStop.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY
     )
+  })
+
+  it('writes nothing from a composer hidden under a prompt card that still holds focus', () => {
+    render(
+      <NativeChatComposer
+        terminalTabId="tab-1"
+        paneKey="tab-1:leaf-1"
+        targetPtyId="pty-1"
+        agent="claude"
+        inputOwnedByCard
+      />
+    )
+    act(() => mocks.fieldProps?.onSend?.())
+    act(() => mocks.fieldProps?.onStop?.())
+    expect(mocks.sendNativeChatMessage).not.toHaveBeenCalled()
+    expect(sendRuntimePtyInput).not.toHaveBeenCalled()
   })
 
   it('associates a delayed submit with its optimistic cache entry', () => {
@@ -277,7 +295,7 @@ describe('NativeChatComposer', () => {
       subscribe: () => () => {}
     } satisfies SessionOptionsSurface
     const optionSnapshot = [{ id: 'model' }] as SessionOptionDescriptor[]
-    render(
+    const composer = (sessionPending = false) => (
       <NativeChatComposer
         terminalTabId="tab-1"
         paneKey="tab-1:structured"
@@ -289,15 +307,21 @@ describe('NativeChatComposer', () => {
           optionsSurface,
           optionSnapshot,
           onError: vi.fn(),
-          runtime: 'local',
+          runtime: 'remote',
           sessionId: 'session-test',
-          runtimeEnvironmentId: null
+          runtimeEnvironmentId: 'paired-host',
+          sessionPending
         }}
       />
     )
+    const { rerender } = render(composer())
 
     expect(mocks.fieldProps?.sessionOptionsSurface).toBe(optionsSurface)
     expect(mocks.fieldProps?.sessionOptionsSnapshot).toBe(optionSnapshot)
+    expect(mocks.fieldProps?.attachDisabled).toBe(false)
+    rerender(composer(true))
+    expect(mocks.fieldProps?.attachDisabled).toBe(true)
+    rerender(composer())
     expect(mocks.fieldProps?.attachDisabled).toBe(false)
     await act(async () => mocks.fieldProps?.onSend?.())
 
@@ -312,8 +336,8 @@ describe('NativeChatComposer', () => {
   // Listing the agent's whole TUI catalog here answered every pick with
   // "not available in chat sessions".
   it.each([
-    ['claude', 'compact', ['model', 'effort']],
-    ['codex', 'vim', ['model', 'effort', 'goal']]
+    ['claude', 'compact', ['model', 'effort', 'resume']],
+    ['codex', 'vim', ['model', 'effort', 'goal', 'resume']]
   ] as const)('offers %s only actionable structured slash commands', (agent, withheld, offered) => {
     mocks.draft = '/'
     render(
@@ -433,7 +457,6 @@ describe('NativeChatComposer', () => {
 
     expect(mocks.sendNativeChatMessageWithImageAttachments).toHaveBeenCalledWith(
       'codex',
-      {},
       'pty-1',
       'hello',
       ['/tmp/pasted.png'],
@@ -454,7 +477,7 @@ describe('NativeChatComposer', () => {
 
     act(() => mocks.fieldProps?.onSend?.())
 
-    expect(mocks.sendNativeChatTypedCommand).toHaveBeenCalledWith({}, 'pty-1', '/status')
+    expect(mocks.sendNativeChatTypedCommand).toHaveBeenCalledWith('pty-1', '/status')
     expect(mocks.sendNativeChatMessage).not.toHaveBeenCalled()
   })
 
@@ -471,7 +494,7 @@ describe('NativeChatComposer', () => {
 
     act(() => mocks.fieldProps?.onSend?.())
 
-    expect(mocks.sendNativeChatMessage).toHaveBeenCalledWith({}, 'pty-1', '$ref-oss', undefined)
+    expect(mocks.sendNativeChatMessage).toHaveBeenCalledWith('pty-1', '$ref-oss', undefined)
     expect(mocks.sendNativeChatTypedCommand).not.toHaveBeenCalled()
   })
 
@@ -488,7 +511,7 @@ describe('NativeChatComposer', () => {
 
     act(() => mocks.fieldProps?.onSend?.())
 
-    expect(mocks.sendNativeChatMessage).toHaveBeenCalledWith({}, 'pty-1', '/clear', undefined)
+    expect(mocks.sendNativeChatMessage).toHaveBeenCalledWith('pty-1', '/clear', undefined)
     expect(mocks.sendNativeChatTypedCommand).not.toHaveBeenCalled()
   })
 
@@ -776,7 +799,6 @@ describe('NativeChatComposer', () => {
     })
 
     expect(mocks.sendNativeChatMessageVerified).toHaveBeenCalledWith(
-      {},
       'pty-1',
       '/model opus',
       expect.any(AbortSignal)
@@ -785,7 +807,6 @@ describe('NativeChatComposer', () => {
     expect(onOptimisticSend).not.toHaveBeenCalled()
     expect(mocks.createClaudeModelSwitchConfirmationObserver).toHaveBeenCalledWith({
       ptyId: 'pty-1',
-      settings: {},
       expectedModelLabel: 'Opus'
     })
     expect(onSwitchToTerminal).not.toHaveBeenCalled()
@@ -809,14 +830,12 @@ describe('NativeChatComposer', () => {
     })
 
     expect(mocks.sendNativeChatMessageVerified).toHaveBeenCalledWith(
-      {},
       'pty-1',
       '/model fable',
       expect.any(AbortSignal)
     )
     expect(mocks.createClaudeModelSwitchConfirmationObserver).toHaveBeenCalledWith({
       ptyId: 'pty-1',
-      settings: {},
       expectedModelLabel: 'Fable'
     })
     expect(mocks.confirmationObserver?.arm).toHaveBeenCalledOnce()
@@ -849,7 +868,6 @@ describe('NativeChatComposer', () => {
     })
 
     expect(mocks.typeNativeChatCommand).toHaveBeenCalledWith(
-      {},
       'pty-1',
       '/model',
       expect.any(AbortSignal)

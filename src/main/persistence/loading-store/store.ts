@@ -7,6 +7,7 @@ import { agentHookServer } from '../../agent-hooks/server'
 import { ActiveViewPreference } from '../../active-view-preference'
 import { registerPersistedPaneKeyAlias } from '../restoring-sessions/pane-alias-normalization'
 import { normalizePersistedPaneIdentityState } from '../restoring-sessions/workspace-pane-normalization'
+import { nameEmptyPersistedTerminalLayoutRoots } from '../restoring-sessions/empty-terminal-layout-root-repair'
 import { StoreRuntimeState, type StoreRuntimeOptions } from './store-runtime-state'
 import {
   createStoreDomains,
@@ -16,7 +17,17 @@ import {
   type StoreDomainOperations
 } from './store-domain-composition'
 import type { PersistedState } from '../../../shared/persisted-state-types'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { dropInvalidWorkspaceLayoutsAtLoad } from '../restoring-sessions/invalid-workspace-layout-purge'
+import {
+  bindPersistedTabTerminalPanes,
+  sweepPersistedUnattachedTerminalRows
+} from '../restoring-sessions/tab-terminal-pane-binding-repair'
 import { scheduleSave } from './write-scheduling'
+import {
+  migrateLegacyOpenCodeGoApiKey,
+  type OpenCodeGoApiKeyTarget
+} from './legacy-opencode-go-api-key-migration'
 import { enqueuePrimaryStateOperation, writeToDiskAsync } from './primary-state-writes'
 import type { ProfileStateDatabaseQuarantine } from '../profile-state/profile-state-database-quarantine'
 import { writeVersionedProfileStateExport } from '../profile-state/legacy-json/profile-state-versioned-export'
@@ -101,10 +112,13 @@ export class Store {
     } else {
       throw new Error('Store requires an authority or a frozen serialized import')
     }
-    const normalized = normalizePersistedPaneIdentityState(loaded, {
-      registerAliases: !imported,
-      collectUnboundPaneAlias: options.collectUnboundPaneAlias
-    })
+    const normalized = normalizePersistedPaneIdentityState(
+      nameEmptyPersistedTerminalLayoutRoots(loaded),
+      {
+        registerAliases: !imported,
+        collectUnboundPaneAlias: options.collectUnboundPaneAlias
+      }
+    )
     this.state = normalized.state
     this.runtime.state = this.state
     this.runtime.activeViewPreference = new ActiveViewPreference(
@@ -116,8 +130,16 @@ export class Store {
     // Load is the only place an orphaned repo id can be swept: every removal path needs the repo to
     // still be registered, so rows outlive their owner without one (#17776).
     const sweptRepoIds = this.domains.repos.sweepDeregisteredRepoResidue()
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      dropInvalidWorkspaceLayoutsAtLoad(this, this.state)
+      this.state = bindPersistedTabTerminalPanes(sweepPersistedUnattachedTerminalRows(this.state))
+      this.runtime.state = this.state
+    }
     // Imported snapshots cannot own the live hook server or write their source file.
     if (!imported) {
+      // A committed migration whose blob install failed or was cut short is finished here; shell
+      // history waits for the runtime's post-attach pass, which can see live shells.
+      this.domains.orcadMigrationBlobInstalls.installPendingOrcadMigrationReceivedBlobs()
       for (const entry of initial?.unboundPaneAliases ?? []) {
         agentHookServer.registerPaneKeyAlias(
           entry.legacyPaneKey,
@@ -134,11 +156,11 @@ export class Store {
       }
       setMigrationUnsupportedPtyPersistenceListener((entries) => {
         this.state.migrationUnsupportedPtyEntries = entries
-        scheduleSave(this.domains.scheduling)
+        scheduleSave(this.domains.scheduling, ['migrationUnsupportedPtyEntries'])
       })
       agentHookServer.setPaneKeyAliasPersistenceListener((entries) => {
         this.state.legacyPaneKeyAliasEntries = entries
-        scheduleSave(this.domains.scheduling)
+        scheduleSave(this.domains.scheduling, ['legacyPaneKeyAliasEntries'])
       })
       if (
         normalized.changed ||
@@ -148,6 +170,13 @@ export class Store {
       ) {
         scheduleSave(this.domains.scheduling)
       }
+    }
+  }
+
+  /** Moves the #22551 settings-slot OpenCode Go key into `target`; it stays on disk until that succeeds. */
+  migrateLegacyOpenCodeGoApiKey(target: OpenCodeGoApiKeyTarget): void {
+    if (migrateLegacyOpenCodeGoApiKey(this.runtime.protectedSecrets, target)) {
+      scheduleSave(this.domains.scheduling)
     }
   }
 
@@ -208,35 +237,12 @@ export class Store {
     return writeVersionedProfileStateExport(this.runtime.dataFile, writeExport)
   }
 
-  /** Publish recovery and canonical JSON checkpoints for older builds. */
-  writeLatestProfileStateJsonCompatibilityExport(): number | undefined {
-    const authority = this.runtime.profileStateAuthority
-    if (authority?.asynchronous) {
-      throw new Error('Live profile exports require an awaited export')
-    }
-    if (!authority?.writeJsonCompatibilityExport) {
-      return undefined
-    }
-    this.runtime.dirtyProfileStateDomains = null
-    this.flushOrThrow()
-    return authority.writeJsonCompatibilityExport(this.runtime.dataFile)
-  }
-
   writeLatestProfileStateJsonExportAsync(): Promise<number | undefined> {
     if (!this.runtime.profileStateAuthority?.asynchronous) {
       return Promise.resolve(this.writeLatestProfileStateJsonExport())
     }
     return this.enqueueProfileExport((authority) =>
       authority.writeLatestJsonExport(this.runtime.dataFile)
-    )
-  }
-
-  writeLatestProfileStateJsonCompatibilityExportAsync(): Promise<number | undefined> {
-    if (!this.runtime.profileStateAuthority?.asynchronous) {
-      return Promise.resolve(this.writeLatestProfileStateJsonCompatibilityExport())
-    }
-    return this.enqueueProfileExport((authority) =>
-      authority.writeJsonCompatibilityExport(this.runtime.dataFile)
     )
   }
 

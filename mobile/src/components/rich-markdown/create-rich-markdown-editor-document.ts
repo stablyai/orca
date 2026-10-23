@@ -12,18 +12,17 @@ import type { RichMarkdownEditorDocument, RichMarkdownEditorHost } from './docum
 /**
  * One rich Markdown editor document, started.
  *
- * The program both hosts run: the WebView loads it as a bundled script that calls this once with
- * no host, and the page imports it and calls it per mount with its own hooks. A call owns
+ * The page calls it per mount with its own hooks. A call owns
  * everything it touches — the scope below is local to it — so two editors on one page are two
  * editors, and a listener left over from a mount that has gone reads the scope it closed over
  * rather than the live one.
  *
  * The sequence is here rather than derived from a list, because it *is* the document's shape: the
  * surface is read, the listeners that need it are installed, the keyboard measurement starts, and
- * only then is the host told the document is ready.
+ * only then is the page told the document is ready.
  */
 export function createRichMarkdownEditorDocument(
-  host: RichMarkdownEditorHost = {}
+  host: RichMarkdownEditorHost
 ): RichMarkdownEditorDocument {
   const scope = createRichMarkdownEditorScope(host)
   startRichMarkdownEditorDocument(scope)

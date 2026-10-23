@@ -11,7 +11,6 @@ import { COMMAND_SPECS } from './specs'
 
 const COMMAND_PATHS = COMMAND_SPECS.flatMap((spec) => specPaths(spec))
 
-/** The real registry pipeline, so these assertions cover the shipped spec too. */
 function parseCli(argv: string[]): ParsedArgs {
   const parsed = normalizeCommandPositionals(
     COMMAND_SPECS,
@@ -126,8 +125,14 @@ describe('orca search argument parsing', () => {
 
   it('rejects an unknown --agent and names the known ones', () => {
     expect(() => parseSearch(['search', 'q', '--agent', 'claude', '--agent', 'bogus'])).toThrow(
-      /Unknown --agent "bogus"\. Known agents: claude, codebuddy, codex, /
+      /Unknown --agent "bogus"\. Known agents: claude, codebuddy, qoder, codex, /
     )
+  })
+
+  it('accepts Qoder without changing another agent filter', () => {
+    expect(
+      request(['search', 'q', '--agent', 'qoder', '--agent', 'codex']).filters?.agents
+    ).toEqual(['qoder', 'codex'])
   })
 
   it('rejects more --path values than the contract accepts', () => {

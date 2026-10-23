@@ -23,6 +23,38 @@ const VERSION_FLOORS = Object.freeze([
 ])
 const FLOOR_LABEL = 'Ubuntu 20.04 (glibc 2.31 / libstdc++ GLIBCXX_3.4.28)'
 
+function glibcFloorProfile(label, glibc, glibcxx, cxxabi) {
+  return Object.freeze({
+    label,
+    families: Object.freeze([
+      Object.freeze({ prefix: 'GLIBC_', floor: Object.freeze(glibc) }),
+      Object.freeze({ prefix: 'GLIBCXX_', floor: Object.freeze(glibcxx) }),
+      Object.freeze({ prefix: 'CXXABI_', floor: Object.freeze(cxxabi) })
+    ])
+  })
+}
+
+/** The packaged desktop app's floor; the default for every check here. */
+const DESKTOP_GLIBC_FLOOR = Object.freeze({ label: FLOOR_LABEL, families: VERSION_FLOORS })
+
+// Why lower than the desktop: orcad's glibc slots ship to SSH hosts the pinned Node 24 already
+// runs on (glibc 2.28), and a 2.31 slot left 2.28-2.30 hosts with a runtime but no terminal
+// (design D6). RHEL 8 / Debian 10 ship GCC 8's libstdc++.
+const SERVER_SLOT_GLIBC_FLOOR = glibcFloorProfile(
+  'glibc 2.28 (RHEL 8 / Debian 10, libstdc++ GLIBCXX_3.4.25)',
+  [2, 28],
+  [3, 4, 25],
+  [1, 3, 11]
+)
+
+// The linux-x64-glibc217 compat slot beside the unofficial glibc-217 Node (design D6 rung B).
+const COMPAT_SLOT_GLIBC_FLOOR = glibcFloorProfile(
+  'glibc 2.17 (CentOS 7, libstdc++ GLIBCXX_3.4.19)',
+  [2, 17],
+  [3, 4, 19],
+  [1, 3, 7]
+)
+
 // Why: the sherpa-onnx speech prebuilt is a third-party manylinux binary that
 // already requires GLIBCXX_3.4.29 (GCC 11 / Ubuntu 21.10+, 22.04 LTS). It loads
 // lazily in the speech worker (src/main/speech/stt-worker.ts), never at app
@@ -102,8 +134,8 @@ function parseVersionNeeds(objdumpOutput) {
  * Named libstdc++ nodes (`CXXABI_TM_1`, `GLIBCXX_LDBL_*`) ship on 20.04.
  * Families we do not gate (`GCC_`, `NSS_`) return false.
  */
-function isVersionNodeAboveFloor(name) {
-  for (const { prefix, floor } of VERSION_FLOORS) {
+function isVersionNodeAboveFloor(name, glibcFloor = DESKTOP_GLIBC_FLOOR) {
+  for (const { prefix, floor } of glibcFloor.families) {
     if (!name.startsWith(prefix)) {
       continue
     }
@@ -126,12 +158,12 @@ function isLibstdcxxNode(name) {
  * `sherpa-onnx` is exempt from the libstdc++ floor (see LIBSTDCXX_FLOOR_EXEMPT)
  * but its glibc needs are still checked.
  */
-function findFloorViolations(needs, filePath = '') {
+function findFloorViolations(needs, filePath = '', glibcFloor = DESKTOP_GLIBC_FLOOR) {
   const exemptLibstdcxx = LIBSTDCXX_FLOOR_EXEMPT.test(filePath)
   return needs.filter(
     (need) =>
       !need.weak &&
-      isVersionNodeAboveFloor(need.name) &&
+      isVersionNodeAboveFloor(need.name, glibcFloor) &&
       !(exemptLibstdcxx && isLibstdcxxNode(need.name))
   )
 }
@@ -404,11 +436,13 @@ function readImportedSymbols(filePath, objdumpPath) {
  * Fail Linux packaging if any bundled native binary under `rootDir` requires a
  * glibc/libstdc++ symbol version newer than the floor OS. No-op is not allowed
  * on Linux: a missing objdump throws, because a silent skip would defeat the
- * regression gate on exactly the host where it matters.
+ * regression gate on exactly the host where it matters. `options.glibcFloor`
+ * selects a floor profile; the default is the desktop's.
  */
 function verifyLinuxGlibcFloor(rootDir, options = {}) {
   const binaries = collectNativeBinaries(rootDir)
   const targetArch = options.targetArch
+  const glibcFloor = options.glibcFloor ?? DESKTOP_GLIBC_FLOOR
   if (binaries.length === 0) {
     console.log(`[verify-linux-glibc-floor] OK — no bundled native binaries under ${rootDir}`)
     return
@@ -451,7 +485,7 @@ function verifyLinuxGlibcFloor(rootDir, options = {}) {
     const { versionNeeds, neededLibraries, isStatic } = readDynamicInfo(filePath, objdumpPath)
     const isMuslTarget = isMuslTemplatePayload(filePath, neededLibraries, versionNeeds)
     // Remote musl payloads use their host's C++ runtime, not Ubuntu's libstdc++ or libutil.
-    const floorViolations = findFloorViolations(versionNeeds, filePath).filter(
+    const floorViolations = findFloorViolations(versionNeeds, filePath, glibcFloor).filter(
       (need) => !isMuslTarget || !isLibstdcxxNode(need.name)
     )
     // Only pay for `objdump -T` when a relocated-symbol provider is not already
@@ -486,14 +520,14 @@ function verifyLinuxGlibcFloor(rootDir, options = {}) {
       .join('\n')
     throw new Error(
       `[verify-linux-glibc-floor] ${offenders.length} bundled native binar${offenders.length === 1 ? 'y' : 'ies'} ` +
-        `will not load on ${FLOOR_LABEL}, so the app will crash on startup there:\n${detail}\n` +
+        `will not load on ${glibcFloor.label}, so the app will crash on startup there:\n${detail}\n` +
         'See docs/reference/linux-glibc-compatibility.md — rebuild the offending module against an older ' +
         'toolchain or pin the relocated symbols (as config/patches/node-pty@1.1.0.patch does).'
     )
   }
 
   console.log(
-    `[verify-linux-glibc-floor] OK — ${binaries.length} bundled native binaries meet applicable ${FLOOR_LABEL} requirements`
+    `[verify-linux-glibc-floor] OK — ${binaries.length} bundled native binaries meet applicable ${glibcFloor.label} requirements`
   )
 }
 
@@ -505,6 +539,9 @@ module.exports = {
   findArchViolation,
   VERSION_FLOORS,
   FLOOR_LABEL,
+  DESKTOP_GLIBC_FLOOR,
+  SERVER_SLOT_GLIBC_FLOOR,
+  COMPAT_SLOT_GLIBC_FLOOR,
   RELOCATED_SYMBOL_PROVIDERS,
   parseGlibcVersion,
   compareGlibcVersions,

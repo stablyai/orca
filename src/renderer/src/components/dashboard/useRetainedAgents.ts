@@ -15,12 +15,14 @@ import {
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
-import { agentTurnStoppedByUser } from '../../../../shared/agent-main-agent-verdict'
+import { agentTurnEndedOnPurpose } from '../../../../shared/agent-main-agent-verdict'
 
 import {
   createWorktreeTabBucketProjection,
   type WorktreeTabBucketProjection
 } from '@/lib/worktree-tab-bucket-projection'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+
 // Why: when an agent finishes or its terminal closes, the store cleans up the
 // explicit status entry and the agent vanishes from the live status set.
 // Retaining the last-known "done" snapshot in the store lets the inline
@@ -150,8 +152,8 @@ export function useRetainedAgentsSync(): void {
       (s) =>
         [
           s.repos,
-          s.worktreesByRepo,
-          s.folderWorkspaces,
+          selectWorktreesByRepo(s),
+          selectFolderWorkspaces(s),
           tabTopologyProjectionRef.current!.project(s.tabsByWorktree),
           s.agentStatusEpoch
         ] as const
@@ -163,8 +165,8 @@ export function useRetainedAgentsSync(): void {
     const state = useAppStore.getState()
     const { currentAgents, existingWorktreeIds, tabIndex } = buildRetainedAgentsSyncSnapshot({
       repos: state.repos,
-      worktreesByRepo: state.worktreesByRepo,
-      folderWorkspaces: state.folderWorkspaces,
+      worktreesByRepo: selectWorktreesByRepo(state),
+      folderWorkspaces: selectFolderWorkspaces(state),
       tabsByWorktree: state.tabsByWorktree,
       agentStatusByPaneKey: state.agentStatusByPaneKey,
       now: Date.now()
@@ -305,7 +307,7 @@ export function collectRetainedAgentsOnDisappear(args: {
     // pane keys as suppression candidates, so a close/quit/crash cannot
     // resurrect a stale `done` row on the next sync.
     const lastState = prev.row.state
-    if (lastState !== 'done' || agentTurnStoppedByUser(prev.row.entry)) {
+    if (lastState !== 'done' || agentTurnEndedOnPurpose(prev.row.entry)) {
       continue
     }
     toRetain.push({

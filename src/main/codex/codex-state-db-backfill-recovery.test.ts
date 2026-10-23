@@ -72,6 +72,22 @@ describe('Codex state DB backfill recovery', () => {
     expect(run).toHaveBeenCalledTimes(1)
   })
 
+  it('does not start a supervisor for an unreadable index', async () => {
+    const home = await createTemporaryRoot()
+    await writeFile(join(home, 'state_5.sqlite'), 'not a sqlite database')
+    const run = vi.fn()
+    const withLock = vi.fn()
+
+    await expect(
+      startCodexStateDbBackfillRecoveryInBackground(home, {
+        run,
+        withLock: withLock as never
+      })
+    ).resolves.toBeNull()
+    expect(withLock).not.toHaveBeenCalled()
+    expect(run).not.toHaveBeenCalled()
+  })
+
   it('releases a completed supervisor entry', async () => {
     vi.spyOn(console, 'info').mockImplementation(() => {})
     const run = vi.fn(async () => ({ outcome: 'completed' as const, spawnCount: 1 }))
@@ -341,7 +357,7 @@ describe('Codex state DB backfill recovery', () => {
     expect(spawnProcess).toHaveBeenCalledTimes(2)
     expect(timerDurations).toEqual([5_000, 2_000, 5_000])
     expect(terminate).toHaveBeenCalledTimes(1)
-    expect(terminate).toHaveBeenCalledWith(children[1])
+    expect(terminate).toHaveBeenCalledWith(children[1], process.platform !== 'win32')
   })
 
   it('keeps the successful app-server claimant alive until Codex marks its DB complete', async () => {
@@ -361,7 +377,7 @@ describe('Codex state DB backfill recovery', () => {
         now: vi.fn(() => 1_000)
       })
     ).resolves.toEqual({ outcome: 'completed', spawnCount: 1 })
-    expect(terminate).toHaveBeenCalledWith(child)
+    expect(terminate).toHaveBeenCalledWith(child, process.platform !== 'win32')
   })
 
   it('hands the Codex shim itself to the spawn chokepoint for native Windows recovery', async () => {
@@ -373,6 +389,7 @@ describe('Codex state DB backfill recovery', () => {
       .fn()
       .mockReturnValueOnce({ kind: 'incomplete', stateDbPath: 'state.sqlite', status: 'running' })
       .mockReturnValue({ kind: 'complete', stateDbPath: 'state.sqlite' })
+    const terminate = vi.fn(async () => {})
 
     await runCodexStateDbBackfillRecovery(
       'C:\\Users\\alice\\.codex',
@@ -381,7 +398,7 @@ describe('Codex state DB backfill recovery', () => {
         spawnProcess: spawnProcess as never,
         resolveCommand: () => codexCommand,
         readStatus,
-        terminate: vi.fn(async () => {}),
+        terminate,
         sleep: vi.fn(async () => {}),
         now: vi.fn(() => 1_000)
       }
@@ -405,6 +422,9 @@ describe('Codex state DB backfill recovery', () => {
     ])
     expect(spawnOptions.cwd).toBe('C:\\Users\\alice\\.codex')
     expect(spawnOptions.env?.CODEX_HOME).toBe('C:\\Users\\alice\\.codex')
+    // Windows has no supervisor: the drain-first probe termination stays its stop.
+    expect(spawnOptions).not.toHaveProperty('detached')
+    expect(terminate).toHaveBeenCalledWith(child, false)
   })
 
   it('retries a live foreign lease until one durable claimant can recover it', async () => {

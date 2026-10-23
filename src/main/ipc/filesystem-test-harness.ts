@@ -37,6 +37,7 @@ export const getBranchDiffMock: IpcMock = vi.fn()
 export const getStagedCommitContextMock: IpcMock = vi.fn()
 export const stageFileMock: IpcMock = vi.fn()
 export const bulkStageFilesMock: IpcMock = vi.fn()
+export const stageWorktreeChangesMock: IpcMock = vi.fn()
 export const unstageFileMock: IpcMock = vi.fn()
 export const bulkUnstageFilesMock: IpcMock = vi.fn()
 export const bulkDiscardChangesMock: IpcMock = vi.fn()
@@ -47,19 +48,16 @@ export const resolveCommitMessageSettingsMock: IpcMock = vi.fn()
 export const generateCommitMessageFromContextMock: IpcMock = vi.fn()
 export const generatePullRequestFieldsFromContextMock: IpcMock = vi.fn()
 export const discoverCommitMessageModelsLocalMock: IpcMock = vi.fn()
-export const discoverCommitMessageModelsRemoteMock: IpcMock = vi.fn()
 export const cancelGenerateCommitMessageLocalMock: IpcMock = vi.fn()
 export const cancelGeneratePullRequestFieldsLocalMock: IpcMock = vi.fn()
 export const getPullRequestDraftContextMock: IpcMock = vi.fn()
 export const resolveHostedReviewBodyForGenerationMock: IpcMock = vi.fn()
 export const loadPullRequestLinkedIssueMock: IpcMock = vi.fn()
-export const getSshFilesystemProviderMock: IpcMock = vi.fn()
-export const getSshGitProviderMock: IpcMock = vi.fn()
 export const tryDeleteWslUncPathMock: IpcMock = vi.fn()
 export const recordCrashBreadcrumbMock: IpcMock = vi.fn()
-export const promoteLocalDownloadedFolderMock: IpcMock = vi.fn()
 
 export const electronMock = {
+  app: { getPath: () => '/orca-test-user-data' },
   BrowserWindow: { fromWebContents: fromWebContentsMock },
   dialog: { showSaveDialog: showSaveDialogMock, showOpenDialog: showOpenDialogMock },
   ipcMain: { handle: handleMock },
@@ -82,10 +80,6 @@ export const wslUncDeleteMock = { tryDeleteWslUncPath: tryDeleteWslUncPathMock }
 
 export const crashBreadcrumbMock = { recordCrashBreadcrumb: recordCrashBreadcrumbMock }
 
-export const folderPromotionMock = {
-  promoteLocalDownloadedFolder: promoteLocalDownloadedFolderMock
-}
-
 export const gitStatusModuleMock = {
   commitChanges: commitChangesMock,
   getStatus: getStatusMock,
@@ -98,6 +92,7 @@ export const gitStatusModuleMock = {
   getStagedCommitContext: getStagedCommitContextMock,
   stageFile: stageFileMock,
   bulkStageFiles: bulkStageFilesMock,
+  stageWorktreeChanges: stageWorktreeChangesMock,
   unstageFile: unstageFileMock,
   bulkUnstageFiles: bulkUnstageFilesMock,
   bulkDiscardChanges: bulkDiscardChangesMock,
@@ -112,32 +107,11 @@ export const gitWorktreeMock = {
   listWorktreesStrict: listWorktreesMock
 }
 
-const PROVIDER_UNAVAILABLE_MESSAGE =
-  'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
-
-export const sshFilesystemDispatchMock = {
-  getSshFilesystemProvider: getSshFilesystemProviderMock,
-  SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE: PROVIDER_UNAVAILABLE_MESSAGE,
-  requireSshFilesystemProvider: (connectionId: string) => {
-    const provider = getSshFilesystemProviderMock(connectionId)
-    if (!provider) {
-      throw new Error(PROVIDER_UNAVAILABLE_MESSAGE)
-    }
-    return provider
-  }
-}
-
-export const sshGitDispatchMock = {
-  getSshGitProvider: getSshGitProviderMock,
-  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE: PROVIDER_UNAVAILABLE_MESSAGE
-}
-
 export const textGenerationModuleMock = {
   resolveCommitMessageSettings: resolveCommitMessageSettingsMock,
   generateCommitMessageFromContext: generateCommitMessageFromContextMock,
   generatePullRequestFieldsFromContext: generatePullRequestFieldsFromContextMock,
   discoverCommitMessageModelsLocal: discoverCommitMessageModelsLocalMock,
-  discoverCommitMessageModelsRemote: discoverCommitMessageModelsRemoteMock,
   cancelGenerateCommitMessageLocal: cancelGenerateCommitMessageLocalMock,
   cancelGeneratePullRequestFieldsLocal: cancelGeneratePullRequestFieldsLocalMock
 }
@@ -225,17 +199,44 @@ const ALL_MOCKS = [
   fsPromisesMock,
   wslUncDeleteMock,
   crashBreadcrumbMock,
-  folderPromotionMock,
   gitStatusModuleMock,
   gitIgnoredPathsMock,
   gitWorktreeMock,
-  sshFilesystemDispatchMock,
-  sshGitDispatchMock,
   textGenerationModuleMock,
   pullRequestContextMock,
   pullRequestTemplateMock,
   pullRequestLinkedIssueMock
 ].flatMap(collectMocks)
+
+/** A FileHandle double over `content`: positional reads copy from it, and stat reports its size. */
+export function localFileHandleMock(
+  content: Buffer,
+  { isFile = true, size = content.byteLength }: { isFile?: boolean; size?: number } = {}
+): Record<string, unknown> {
+  return {
+    stat: vi.fn(async () => ({
+      size,
+      isFile: () => isFile,
+      isDirectory: () => false,
+      mtimeMs: 123,
+      dev: 1,
+      ino: 2,
+      birthtimeMs: 3
+    })),
+    read: vi.fn(async (buffer: Buffer, offset: number, length: number, position: number) => {
+      const bytesRead = content.copy(
+        buffer,
+        offset,
+        position,
+        Math.min(position + length, content.length)
+      )
+      return { bytesRead, buffer }
+    }),
+    write: vi.fn().mockResolvedValue(undefined),
+    writeFile: vi.fn().mockResolvedValue(undefined),
+    close: vi.fn()
+  }
+}
 
 /** Resets every filesystem IPC mock and reinstalls the defaults every suite starts from. */
 export function resetFilesystemIpcMocks(): void {
@@ -264,22 +265,16 @@ export function resetFilesystemIpcMocks(): void {
   trashItemMock.mockResolvedValue(undefined)
   // Default: not a WSL UNC path, so deletePath falls through to shell.trashItem.
   tryDeleteWslUncPathMock.mockResolvedValue(false)
-  promoteLocalDownloadedFolderMock.mockResolvedValue(undefined)
   showSaveDialogMock.mockResolvedValue({ canceled: true })
   showOpenDialogMock.mockResolvedValue({ canceled: true, filePaths: [] })
   fromWebContentsMock.mockReturnValue(null)
-  getSshGitProviderMock.mockReturnValue(null)
-  statMock.mockResolvedValue({ size: 10, isDirectory: () => false, mtimeMs: 123 })
+  statMock.mockResolvedValue({
+    size: 10,
+    isDirectory: () => false,
+    mtimeMs: 123
+  })
   renameMock.mockResolvedValue(undefined)
   rmMock.mockResolvedValue(undefined)
-  openMock.mockResolvedValue({
-    read: vi.fn(async (buffer: Buffer) => {
-      buffer.fill(0x61)
-      return { bytesRead: buffer.length, buffer }
-    }),
-    write: vi.fn().mockResolvedValue(undefined),
-    writeFile: vi.fn().mockResolvedValue(undefined),
-    close: vi.fn()
-  })
+  openMock.mockResolvedValue(localFileHandleMock(Buffer.from('a'.repeat(10))))
   lstatMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
 }

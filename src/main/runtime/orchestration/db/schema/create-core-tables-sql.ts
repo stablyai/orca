@@ -61,8 +61,8 @@ CREATE TABLE IF NOT EXISTS run_coordinator_handles (
 CREATE INDEX IF NOT EXISTS idx_run_coordinator_handles_handle
   ON run_coordinator_handles(terminal_handle, run_id);
 
--- Handle-only on purpose; migrate-v42 replaces both triggers with a form that also remembers the
--- coordinator's session address. This SQL runs before migrate on every open, so it
+-- Handle-only on purpose; createRunCoordinatorAddressTriggers replaces both on every open with a
+-- form that also remembers the coordinator's session address. This SQL runs before migrate, so it
 -- must compile against a pre-v42 runs table: a trigger naming coordinator_orca_session_id there makes
 -- the next INSERT INTO runs fail to prepare mid-migration.
 CREATE TRIGGER IF NOT EXISTS trg_runs_remember_coordinator_insert
@@ -160,6 +160,10 @@ CREATE TABLE IF NOT EXISTS worker_dispatches (
   created_at             TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at             TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE INDEX IF NOT EXISTS idx_worker_dispatches_recoverable
+  ON worker_dispatches(dispatch_id)
+  WHERE state IN ('starting', 'ready', 'start_unknown', 'stopping', 'stop_unknown');
 
 CREATE TABLE IF NOT EXISTS worker_terminal_resources (
   id                       TEXT PRIMARY KEY,

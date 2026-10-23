@@ -40,7 +40,7 @@ describe('a reopened Claude chat whose CLI dies before initialize', () => {
       ok: true
     })
     await waitForStructuredAgentSessionRecovery()
-    await host.close(SESSION)
+    await host.close(SESSION, 'evict')
 
     // The user reopens it and sends; this time the CLI never answers, then dies, and its tree is
     // unprovable. Opening starts nothing: the send does.

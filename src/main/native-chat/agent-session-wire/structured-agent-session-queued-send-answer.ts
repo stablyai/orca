@@ -19,24 +19,24 @@ export function queuedSendAnswer(
         ? journal.submission(draft.consumedAs)
         : undefined
     return consumed
-      ? { clientMessageId, submission: consumed }
+      ? { clientMessageId, submission: { ...consumed } }
       : {
           clientMessageId,
           queued: { messageId: draft.messageId, position: draft.position, state: draft.state }
         }
   }
-  // The draft row was pruned; its last hand-off still names it. Only a withdrawn row is pruned
-  // while its last hand-off stands rejected — a card the user deleted — so it answers withdrawn,
-  // never as a refused send.
+  // The card is gone (an earlier build pruned it, or a new epoch did not keep it); its last
+  // hand-off still names it. Only a withdrawn card goes while its last hand-off stands rejected —
+  // a card the user deleted — so it answers withdrawn, never as a refused send.
   const handoff = journal
     .submissions()
     .findLast((entry) => entry.queuedMessageId === clientMessageId)
   if (handoff?.dispatchState === 'rejected') {
-    // The pruned row's position went with it; a withdrawn receipt names no place in the queue.
+    // The gone card's position went with it; a withdrawn receipt names no place in the queue.
     return {
       clientMessageId,
       queued: { messageId: clientMessageId, position: 0, state: 'withdrawn' }
     }
   }
-  return handoff ? { clientMessageId, submission: handoff } : null
+  return handoff ? { clientMessageId, submission: { ...handoff } } : null
 }

@@ -1,12 +1,10 @@
 import {
-  IDLE,
   collectTabPaneInputs,
   resolveAttention,
   type SmartClass,
-  type TabPaneInputSources,
-  type WorktreeAttention
-} from '@/components/sidebar/smart-attention'
-import { tabHasLivePty } from './tab-has-live-pty'
+  type TabPaneInputSources
+} from '../../../shared/sidebar-list/smart-attention'
+import { tabHasLivePty } from '../../../shared/tab-has-live-pty'
 import { agentVerdictDisplayMark } from '../../../shared/agent-main-agent-verdict'
 import { isExplicitAgentStatusFresh } from './pane-agent-evidence'
 import type { WorktreeStatus } from './worktree-status'
@@ -49,20 +47,6 @@ const STATUS_BY_ATTENTION_CLASS: Record<SmartClass, WorktreeStatus | null> = {
   5: null
 }
 
-export function resolveRecentWorkspaceTabAttention(
-  row: RecentWorkspaceTabRow,
-  paneSources: TabPaneInputSources,
-  now: number
-): WorktreeAttention {
-  if (!row.terminalTab) {
-    return IDLE
-  }
-  return resolveAttention(
-    collectTabPaneInputs(row.terminalTab, row.worktreeLastActivityAt, paneSources, now),
-    now
-  )
-}
-
 /** Live status dot for a hero row — re-read on agent churn, unlike the frozen ordering. */
 export function resolveRecentWorkspaceTabStatus(
   row: RecentWorkspaceTabRow,
@@ -98,6 +82,10 @@ export function resolveRecentWorkspaceTabStatus(
     )
     return hasForegroundWork ? 'working' : 'monitoring'
   }
+  if (verdicts.has('unconfirmed')) {
+    return 'unconfirmed'
+  }
+  // Why: attention demotes a user's Stop, but its tab still says it was interrupted.
   if (verdicts.has('interrupted')) {
     return 'interrupted'
   }

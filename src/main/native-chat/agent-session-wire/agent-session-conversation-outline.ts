@@ -2,8 +2,9 @@
 // request rather than stored, so it can never disagree with the journal it lists.
 //
 // One reply must fit the same budget a history page does. Past it the reply
-// degrades in order of what the rail can best spare: shorter previews, then no
-// previews (a tick still marks the message), and only then the oldest entries.
+// degrades in order of what the rail can best spare: the agent's replies, then
+// shorter previews, then no previews (a tick still marks the message), and only
+// then the oldest entries.
 
 import {
   AGENT_SESSION_OUTLINE_PREVIEW_MAX_CHARS,
@@ -32,6 +33,12 @@ function withPreviewCap(
   })
 }
 
+function withoutReplies(
+  entries: readonly AgentSessionConversationOutlineEntry[]
+): AgentSessionConversationOutlineEntry[] {
+  return entries.map(({ reply: _reply, ...entry }) => entry)
+}
+
 function totalBytes(entries: readonly AgentSessionConversationOutlineEntry[]): number {
   return entries.reduce((total, entry) => total + entryBytes(entry), 0)
 }
@@ -42,6 +49,9 @@ export function readAgentSessionConversationOutline(
 ): AgentSessionConversationOutline {
   const projected = projectAgentSessionConversationOutline(snapshot.items, snapshot.submissions)
   let entries = withPreviewCap(projected, AGENT_SESSION_OUTLINE_PREVIEW_MAX_CHARS)
+  if (totalBytes(entries) > budgetBytes) {
+    entries = withoutReplies(entries)
+  }
   for (const maxChars of [DEGRADED_PREVIEW_MAX_CHARS, 0]) {
     if (totalBytes(entries) <= budgetBytes) {
       break

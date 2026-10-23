@@ -1,19 +1,18 @@
 /* eslint-disable max-lines -- Why: the SSH relay protocol state machine keeps
    request, notification, keepalive, and cancellation semantics paired. */
+import { FrameDecoder, type DecodedFrame } from '../../shared/relay-frame-decoder'
 import {
-  FrameDecoder,
   MessageType,
   encodeJsonRpcFrame,
   encodeKeepAliveFrame,
   parseJsonRpcMessage,
   KEEPALIVE_SEND_MS,
   TIMEOUT_MS,
-  type DecodedFrame,
   type JsonRpcMessage,
   type JsonRpcRequest,
   type JsonRpcResponse,
   type JsonRpcNotification
-} from './relay-protocol'
+} from './remote-exec/remote-frame-protocol'
 import {
   SshMultiplexerTransportWriter,
   type MultiplexerTransport,
@@ -31,17 +30,17 @@ type PendingRequest = {
   cleanup: () => void
 }
 
-export type SshMultiplexerRequestOptions = {
+type SshMultiplexerRequestOptions = {
   signal?: AbortSignal
   timeoutMs?: number
   beforeResolve?: (result: unknown) => void
 }
 
 export type NotificationHandler = (method: string, params: Record<string, unknown>) => void
-export type MethodNotificationHandler = (params: Record<string, unknown>) => void
-export type RequestHandler = (params: Record<string, unknown>) => unknown
+type MethodNotificationHandler = (params: Record<string, unknown>) => void
+type RequestHandler = (params: Record<string, unknown>) => unknown
 
-export type MultiplexerDisposeReason = 'shutdown' | 'connection_lost'
+type MultiplexerDisposeReason = 'shutdown' | 'connection_lost'
 
 // Why: the renderer uses the message/code to distinguish temporary disconnects
 // (show reconnection overlay) from permanent shutdown (show error toast), so

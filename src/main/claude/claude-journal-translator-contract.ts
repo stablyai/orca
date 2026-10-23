@@ -10,7 +10,10 @@ import type { ClaudeCommandStart } from './claude-command-turn'
 
 export type ClaudeJournalTranslator = {
   handle: (event: ClaudeStructuredSessionEvent) => void
-  journalPrompts: Pick<ClaudeJournalPrompts, 'cancel' | 'resolve'>
+  journalPrompts: Pick<
+    ClaudeJournalPrompts,
+    'resolve' | 'handOver' | 'cancel' | 'openCards' | 'whenWritten'
+  >
   /** The open turn's provider id — the same id its journal row carries, and the one
    *  a client's Stop names. Sole owner: no reader keeps a copy to disagree with. */
   readonly currentTurnId: string | null
@@ -30,6 +33,7 @@ export type ClaudeJournalTranslator = {
   childToolOwner?: ClaudeChildToolQueries['childToolOwner']
   childActivity?: ClaudeChildToolQueries['childActivity']
   retryPendingTaskRows?: () => StructuredAgentSessionSinkAdmission
+  retryPendingCancellations?: () => StructuredAgentSessionSinkAdmission
   /** Streamed blocks still awaiting a final frame. A settled turn leaves none. */
   readonly pendingStreamedBlocks: number
   /** Moves with the main conversation and each accepted send; a context report

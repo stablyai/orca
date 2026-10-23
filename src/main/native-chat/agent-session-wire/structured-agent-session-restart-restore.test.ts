@@ -18,6 +18,7 @@ vi.mock('./structured-agent-session-read-restore', () => ({
 }))
 
 import { restoreStructuredAgentSessionsOnRestart } from './structured-agent-session-restart-restore'
+import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
 
 // The restore under test is mocked; the host database only fills the deps' shape.
 const stateDirectory = mkdtempSync(join(tmpdir(), 'orca-restart-restore-'))
@@ -27,9 +28,9 @@ afterAll(() => {
 })
 
 const NO_OPEN_DEPS = {
-  store: { getRecord: () => null, listRecords: () => [] },
+  store: { getRecord: () => null, listRecords: () => [], replacedRuntime: () => undefined },
   journalDatabase: openTestJournalHostDatabase(stateDirectory),
-  adapter: {}
+  logger: recordingStructuredAgentSessionLogger().logger
 }
 
 describe('restart journal restoration', () => {
@@ -50,8 +51,7 @@ describe('restart journal restoration', () => {
           params: { location: { workspaceId: 'workspace-1' }, provider: 'codex' },
           child: null,
           sessionId
-        },
-        reset: null
+        }
       }
     })
     const records = Array.from(
@@ -62,8 +62,9 @@ describe('restart journal restoration', () => {
     const restoration = restoreStructuredAgentSessionsOnRestart({
       openDeps: NO_OPEN_DEPS,
       records,
-      reconcile: async () => null,
-      resolveRecovery: async () => undefined,
+      reconcileAll: async () => true,
+      reconcile: async () => true,
+      resolveRecovery: async () => true,
       serialize: async (_sessionId, task) => task(),
       hasSession: () => false,
       onReadable: () => undefined
@@ -103,8 +104,9 @@ describe('restart journal restoration', () => {
     await restoreStructuredAgentSessionsOnRestart({
       openDeps: NO_OPEN_DEPS,
       records,
-      reconcile: async () => null,
-      resolveRecovery: async () => undefined,
+      reconcileAll: async () => true,
+      reconcile: async () => true,
+      resolveRecovery: async () => true,
       serialize: async (_sessionId, task) => task(),
       hasSession: () => false,
       onReadable: () => undefined
@@ -137,8 +139,7 @@ describe('restart journal restoration', () => {
       runtimeKind: 'native'
     }
     const restored = {
-      session: { journal: {}, params, child: null },
-      reset: null
+      session: { journal: {}, params, child: null }
     }
     // The open is what settles: it runs after recovery resolution and before the publish.
     restoreRead.mockImplementation(async () => {
@@ -150,9 +151,11 @@ describe('restart journal restoration', () => {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the restore reads only the record's session id here.
       records: [{ sessionId: 'session-1' } as AgentSessionRecord],
       openDeps: NO_OPEN_DEPS,
-      reconcile: async () => null,
+      reconcileAll: async () => true,
+      reconcile: async () => true,
       resolveRecovery: async () => {
         calls.push('resolveRecovery')
+        return true
       },
       serialize: async (_sessionId, task) => task(),
       hasSession: () => false,
@@ -164,18 +167,127 @@ describe('restart journal restoration', () => {
     expect(calls).toEqual(['resolveRecovery', 'open', 'onReadable:restored'])
   })
 
+  // Each failed bookkeeping call stands for one refused store write.
+  describe('once lease bookkeeping fails in a pass', () => {
+    const records = Array.from(
+      { length: 8 },
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the restore reads only the record's session id here.
+      (_, index) => ({ sessionId: `session-${index}` }) as AgentSessionRecord
+    )
+    const restore = (
+      bookkeeping: Pick<
+        Parameters<typeof restoreStructuredAgentSessionsOnRestart>[0],
+        'reconcileAll' | 'reconcile' | 'resolveRecovery'
+      >
+    ) =>
+      restoreStructuredAgentSessionsOnRestart({
+        openDeps: NO_OPEN_DEPS,
+        records,
+        ...bookkeeping,
+        serialize: async (_sessionId, task) => task(),
+        hasSession: () => false,
+        onReadable: () => undefined
+      })
+
+    /** A failure that takes a while, as a lock wait does, so the chats open at once overlap it. */
+    const slowFailure = async (): Promise<boolean> => {
+      await new Promise((resolve) => setTimeout(resolve, 5))
+      return false
+    }
+
+    beforeEach(() => restoreRead.mockResolvedValue(null))
+
+    it('opens with one whole-host check, then checks each chat while it holds', async () => {
+      const reconcileAll = vi.fn(async () => true)
+      const reconcile = vi.fn(async (_sessionId: string) => true)
+
+      await restore({ reconcileAll, reconcile, resolveRecovery: async () => true })
+
+      expect(reconcileAll).toHaveBeenCalledOnce()
+      expect(reconcileAll).toHaveBeenCalledWith()
+      expect(reconcile.mock.calls.map(([sessionId]) => sessionId).sort()).toEqual(
+        records.map((record) => record.sessionId).sort()
+      )
+    })
+
+    it('skips it for every chat when the pass check fails, and still opens them all', async () => {
+      const reconcileAll = vi.fn(slowFailure)
+      const reconcile = vi.fn(async () => true)
+      const resolveRecovery = vi.fn(async () => true)
+
+      await restore({ reconcileAll, reconcile, resolveRecovery })
+
+      expect(reconcileAll).toHaveBeenCalledOnce()
+      expect(reconcile).not.toHaveBeenCalled()
+      expect(resolveRecovery).not.toHaveBeenCalled()
+      expect(restoreRead).toHaveBeenCalledTimes(records.length)
+    })
+
+    it('starts no more after the first failed recovery, and still opens every chat', async () => {
+      const resolveRecovery = vi.fn(slowFailure)
+
+      await restore({
+        reconcileAll: async () => true,
+        reconcile: async () => true,
+        resolveRecovery
+      })
+
+      // Only those already started when the first failed: at most one per chat open at once.
+      expect(resolveRecovery.mock.calls.length).toBeLessThanOrEqual(4)
+      expect(restoreRead).toHaveBeenCalledTimes(records.length)
+    })
+  })
+
+  it('opens every other chat when one chat cannot be opened, and the pass still settles', async () => {
+    restoreRead.mockImplementation(async (_deps, sessionId: string) => {
+      if (sessionId === 'session-0') {
+        throw new Error('this chat cannot be opened')
+      }
+      return { session: { journal: {}, params: {}, child: null, sessionId } }
+    })
+    const readable: string[] = []
+    const log = recordingStructuredAgentSessionLogger()
+    const records = Array.from(
+      { length: 12 },
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the restore reads only the record's session id here.
+      (_, index) => ({ sessionId: `session-${index}` }) as AgentSessionRecord
+    )
+
+    await expect(
+      restoreStructuredAgentSessionsOnRestart({
+        openDeps: { ...NO_OPEN_DEPS, logger: log.logger },
+        records,
+        reconcileAll: async () => true,
+        reconcile: async () => true,
+        resolveRecovery: async () => true,
+        serialize: async (_sessionId, task) => task(),
+        hasSession: () => false,
+        onReadable: (sessionId) => {
+          readable.push(sessionId)
+        }
+      })
+    ).resolves.toBeUndefined()
+
+    expect(readable).toEqual(records.slice(1).map((record) => record.sessionId))
+    expect(log.entries).toEqual([
+      expect.objectContaining({
+        fields: expect.objectContaining({ scope: 'restart-restore', sessionId: 'session-0' })
+      })
+    ])
+  })
+
   it('does not settle again when a second restore finds the session already open', async () => {
     restoreRead.mockResolvedValue({
-      session: { journal: {}, params: {}, child: null },
-      reset: null
+      session: { journal: {}, params: {}, child: null }
     })
 
     await restoreStructuredAgentSessionsOnRestart({
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the restore reads only the record's session id here.
       records: [{ sessionId: 'session-1' } as AgentSessionRecord],
       openDeps: NO_OPEN_DEPS,
-      reconcile: async () => null,
-      resolveRecovery: async () => undefined,
+      reconcileAll: async () => true,
+      reconcile: async () => true,
+      resolveRecovery: async () => true,
       serialize: async (_sessionId, task) => task(),
       hasSession: () => true,
       onReadable: () => undefined

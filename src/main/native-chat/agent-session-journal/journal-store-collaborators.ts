@@ -8,16 +8,26 @@ import type {
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
 import type { JournalHostDatabase } from './journal-host-database'
+import { JournalContextController } from './journal-context-controller'
 import { JournalEpochController } from './journal-epoch-controller'
 import { JournalItemAppender } from './journal-item-appender'
 import { JournalLifecycleBatchAppender } from './journal-lifecycle-batch-appender'
 import type { JournalLoad } from './journal-open'
 import { JournalQueuedMessages } from './journal-queued-messages'
+import { JournalStopMarks } from './journal-stop-marks'
+import { JournalStopAcceptor } from './journal-stop-acceptance'
+import { journalQueuePauseRestatement } from './queued-message-pause'
 import type { JournalReducerState } from './journal-reducer'
-import { JournalRowWriter } from './journal-row-writer'
+import { JournalRowWriter, type JournalOperationReceipt } from './journal-row-writer'
+import { JournalStepWriter } from './journal-step-writer'
 import { restoreJournalStore } from './journal-store-restore'
+import { JournalSubmissionWriter } from './journal-submission-writer'
 import type { JournalRow } from './journal-row-schema'
 import type { AgentSessionJournal } from './journal-store'
+import type { JournalWriteBody } from './journal-write-queue'
+import type { JournalAttachmentClaim } from './journal-submission-hook'
+import { claimAgentSessionAttachmentsInTransaction } from '../agent-session-attachments/agent-session-attachment-claims'
+import { isJournalStreamedTextRevision } from './journal-streamed-text-revision'
 
 export type JournalStoreHost = {
   /** Fires the journal's commit listener for a durable change that appended no
@@ -25,28 +35,20 @@ export type JournalStoreHost = {
    *  same way they learn of a row. */
   notifyCommitted: () => void
   identity: AgentSessionJournalIdentity
-  /** Where the chat's per-chat history lived, for the importer and the format-remnant notice. */
-  legacyDirectory: string
   now: () => number
   mintEpoch: () => string
-  serialize: <T>(run: () => Promise<T>) => Promise<T>
-  /** Leave a chat still in its per-chat file uncopied until its first use. */
-  deferPerSessionImport: boolean
-  /** Work the chat's next write waits for. */
-  owe: (work: () => Promise<void>) => void
+  serialize: <T>(run: JournalWriteBody<T>) => Promise<T>
   database: () => JournalHostDatabase
   state: () => JournalReducerState
   readOnly: () => boolean
-  setReadOnly: (readOnly: boolean) => void
   cursor: () => AgentJournalCursor
   adopt: (loaded: JournalLoad) => void
-  commit: (row: JournalRow) => void
-  /** Records whether the open's replay found an unusable prefix. */
-  setOpenedCorrupt: (corrupt: boolean) => void
-  malformedRows: () => number
-  setMalformedRows: (count: number) => void
+  commit: (rows: readonly JournalRow[], savedAt: number) => void
   journal: () => AgentSessionJournal
-  enqueue: (build: (seq: number, ts: number) => JournalRow) => Promise<JournalRow>
+  enqueue: (
+    build: (seq: number, ts: number) => JournalRow,
+    receipt?: JournalOperationReceipt
+  ) => Promise<JournalRow>
 }
 
 export type JournalStoreCollaborators = {
@@ -54,7 +56,12 @@ export type JournalStoreCollaborators = {
   epochController: JournalEpochController
   itemAppender: JournalItemAppender
   lifecycleBatchAppender: JournalLifecycleBatchAppender
+  submissionWriter: JournalSubmissionWriter
+  stepWriter: JournalStepWriter
   queuedMessages: JournalQueuedMessages
+  stopMarks: JournalStopMarks
+  context: JournalContextController
+  stops: JournalStopAcceptor
   /** Restores the store's state from disk. Owned here because it needs the same
    *  collaborators the constructor just built. */
   restore: () => Promise<void>
@@ -68,51 +75,86 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
     serialize: host.serialize,
     database: host.database,
     readOnly: host.readOnly,
-    setReadOnly: host.setReadOnly,
     highestFence: () => host.state().highestFence,
+    state: host.state,
+    queuePauseRestatement: () =>
+      journalQueuePauseRestatement(
+        host.state().queuePauseMarks,
+        host.state().latestAcceptedTurnSequence,
+        host.journal().queuedMessages.pauses()
+      ),
+    queueRestatement: () => host.journal().queuedMessages.restatement(),
     cursor: host.cursor,
     adopt: host.adopt
   })
-  const queuedMessages = new JournalQueuedMessages({
+  const claimAttachments: JournalAttachmentClaim = (db, body, required, previous) =>
+    claimAgentSessionAttachmentsInTransaction(db, {
+      // Uploaded attachments are stored beside the journal database.
+      stateDirectory: host.database().stateDirectory,
+      sessionId: host.identity.sessionId,
+      body,
+      required,
+      ...(previous ? { previous } : {}),
+      now: host.now()
+    })
+  const rowWriter = new JournalRowWriter({
     sessionId: host.identity.sessionId,
     now: host.now,
     serialize: host.serialize,
     database: host.database,
     readOnly: host.readOnly,
+    highestFence: () => host.state().highestFence,
+    nextSequence: () => host.state().lastSequence + 1,
+    commit: host.commit,
+    streamedTextRevision: (row) => isJournalStreamedTextRevision(host.state(), row)
+  })
+  const queuedMessages = new JournalQueuedMessages({
+    sessionId: host.identity.sessionId,
+    serialize: host.serialize,
+    database: host.database,
+    readOnly: host.readOnly,
     state: host.state,
-    committed: host.notifyCommitted
+    reopenFloor: () => host.journal().reopenFloor(),
+    writer: rowWriter,
+    committed: host.notifyCommitted,
+    claimAttachments
+  })
+  const lifecycleBatchAppender = new JournalLifecycleBatchAppender({
+    state: host.state,
+    cursor: host.cursor,
+    enqueueRows: (plan) => rowWriter.enqueueRows(plan)
   })
   return {
     epochController,
     queuedMessages,
-    // Behind the stored fact: settles drafts whose consumed submission the loaded journal shows
-    // refused (a downgrade wrote no hook), then prunes. Bookkeeping, never failing the open.
+    stopMarks: new JournalStopMarks({ state: host.state }),
+    context: new JournalContextController({
+      state: host.state,
+      writer: rowWriter,
+      cards: queuedMessages
+    }),
+    stops: new JournalStopAcceptor({ writer: rowWriter, state: host.state }),
+    // Moves the cards an earlier build wrote into the journal, once per open; never fails it.
     restore: () =>
-      restoreJournalStore(host, { epochController }).then(() =>
-        queuedMessages.repairAndPruneAtOpen()
-      ),
-    rowWriter: new JournalRowWriter({
-      sessionId: host.identity.sessionId,
-      now: host.now,
-      serialize: host.serialize,
-      database: host.database,
-      readOnly: host.readOnly,
-      highestFence: () => host.state().highestFence,
-      nextSequence: () => host.state().lastSequence + 1,
-      commit: host.commit,
-      // Every rejection is a dispatch row through this one writer; the draft
-      // returned-transition rides it so no path can bypass the hook.
-      inTransaction: (db, row) => queuedMessages.onRowInTransaction(db, row),
-      rolledBack: () => queuedMessages.invalidate()
+      restoreJournalStore(host, { epochController }).then(() => queuedMessages.importAtOpen()),
+    rowWriter,
+    submissionWriter: new JournalSubmissionWriter({
+      state: host.state,
+      identity: host.identity,
+      rowWriter,
+      queuedMessages,
+      claimAttachments
     }),
     itemAppender: new JournalItemAppender({
       state: host.state,
       enqueue: host.enqueue
     }),
-    lifecycleBatchAppender: new JournalLifecycleBatchAppender({
+    lifecycleBatchAppender,
+    stepWriter: new JournalStepWriter({
+      serialize: host.serialize,
       state: host.state,
-      cursor: host.cursor,
-      enqueue: host.enqueue
+      writeRows: (plan) => rowWriter.writeRows(plan),
+      planSettlement: (batch) => lifecycleBatchAppender.planResolved(batch)
     })
   }
 }

@@ -1,0 +1,26 @@
+{
+  "original_declaration_sites": 0,
+  "manual_driver_phases": 2,
+  "review_scope": "Complete historical driver, expected phase oracles and current supporting ownership path. Permanent suites remain pending their own case-level review.",
+  "checks": [
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 node docs/audits/local-log-tail-lifetime/reproduce.mjs",
+      "exit_code": 1,
+      "result": "Exact reverse-patch guard rejects current src/main/ipc/local-log-tail.ts before suites. No current proof pass.",
+      "log": "/tmp/orca-root-0024-log-tail.log"
+    }
+  ],
+  "limitations": [
+    "Combined oracle checks counts but does not assert subprocess exit code or timeout.",
+    "Base Vitest now uses child projects, so historical top-level includes cannot establish current suite selection.",
+    "Real file watcher resources are exercised by selected suites; this driver adds no native Electron window or user log access.",
+    "No current-head pass, native-handle count or OOM attribution claimed."
+  ],
+  "batch": "root-0024",
+  "reviewer": "root",
+  "source_commit": "92dfb4fda69e746e96786ea7af417813ac441394",
+  "reviewed_files": 1,
+  "case_records": 2,
+  "production_changes": false,
+  "test_source_changes": false
+}

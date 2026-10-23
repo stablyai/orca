@@ -244,10 +244,27 @@ export function retainReplacedWorkerTerminalResources(
   )
 }
 
+/** A detached pane keeps its process, so the resources it owns follow its new pane key. */
+export function rekeyWorkerTerminalResourcePaneKey(
+  this: OrchestrationDb,
+  params: { fromPaneKey: string; toPaneKey: string }
+): number {
+  return Number(
+    this.db
+      .prepare(
+        `UPDATE worker_terminal_resources
+            SET pane_key = ?, updated_at = datetime('now')
+          WHERE pane_key = ? AND release_state != 'released'`
+      )
+      .run(params.toPaneKey, params.fromPaneKey).changes
+  )
+}
+
 // Finds an owned, settled, exact-match resource for an explicitly reused terminal.
 
 export type WorkerTerminalResourceStoreMethods = {
   retainReplacedWorkerTerminalResources: typeof retainReplacedWorkerTerminalResources
+  rekeyWorkerTerminalResourcePaneKey: typeof rekeyWorkerTerminalResourcePaneKey
   backfillWorkerTerminalResources: typeof backfillWorkerTerminalResources
   createWorkerTerminalResourceStatement: typeof createWorkerTerminalResourceStatement
   getWorkerTerminalResource: typeof getWorkerTerminalResource
@@ -262,6 +279,7 @@ export type WorkerTerminalResourceStoreMethods = {
 export function attachWorkerTerminalResourceStore(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
     retainReplacedWorkerTerminalResources,
+    rekeyWorkerTerminalResourcePaneKey,
     backfillWorkerTerminalResources,
     createWorkerTerminalResourceStatement,
     getWorkerTerminalResource,

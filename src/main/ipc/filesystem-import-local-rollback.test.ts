@@ -12,7 +12,6 @@ const { lstatMock, mkdirMock, openMock, readdirMock, rmMock, unlinkMock } = vi.h
   unlinkMock: vi.fn()
 }))
 
-vi.mock('./filesystem-auth', () => ({ authorizeExternalPath: vi.fn() }))
 vi.mock('node:fs/promises', () => ({
   lstat: lstatMock,
   mkdir: mkdirMock,

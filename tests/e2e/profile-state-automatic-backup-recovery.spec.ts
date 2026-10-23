@@ -2,7 +2,7 @@ import { existsSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync
 import path from 'node:path'
 import type { ElectronApplication } from '@stablyai/playwright-test'
 import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
-import { runProcess } from '../../src/shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { openProfileStateDatabaseReadOnly } from '../../src/main/persistence/profile-state/profile-state-database'
 import { readProfileStateSnapshot } from '../../src/main/persistence/profile-state/profile-state-documents'
 import { profileStateDatabaseBackups } from '../../src/main/persistence/profile-state/profile-state-backup-path'

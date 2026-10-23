@@ -1,11 +1,11 @@
 import {
   AGENT_MODEL_MAX_LENGTH,
-  AGENT_STATUS_MAX_SUBAGENTS,
   AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,
   AGENT_TYPE_MAX_LENGTH,
   type AgentSubagentSnapshot
 } from './agent-status-types'
 import { normalizeOptionalField } from './agent-status-field-normalization'
+import { readCodexSubagentIdentity } from './codex-subagent-identity'
 import {
   agentChildWorkLiveness,
   type AgentChildWorkLiveness
@@ -21,6 +21,7 @@ type TrackedCodexSubagent = {
   model?: string
   state: 'working' | 'waiting'
   startedAt: number
+  identityTranscriptPath?: string
 }
 
 export function upsertCodexSubagent(
@@ -49,9 +50,6 @@ export function upsertCodexSubagent(
     existing.state = fields.state
     return
   }
-  if (roster.size >= AGENT_STATUS_MAX_SUBAGENTS) {
-    return
-  }
   roster.set(normalizedId, {
     agentType,
     description,
@@ -63,6 +61,25 @@ export function upsertCodexSubagent(
 
 export function finishCodexSubagent(roster: CodexSubagentRoster, id: string): void {
   roster.delete(id.trim())
+}
+
+export function enrichCodexSubagentIdentity(
+  roster: CodexSubagentRoster,
+  id: string,
+  transcriptPath: string | undefined
+): void {
+  const child = roster.get(id.trim())
+  if (!child || !transcriptPath || child.identityTranscriptPath === transcriptPath) {
+    return
+  }
+  const identity = readCodexSubagentIdentity(transcriptPath, id.trim())
+  if (!identity) {
+    return
+  }
+  child.identityTranscriptPath = transcriptPath
+  child.description =
+    normalizeOptionalField(identity.description, AGENT_STATUS_TOOL_INPUT_MAX_LENGTH) ??
+    child.description
 }
 
 /**

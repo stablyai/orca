@@ -198,7 +198,7 @@ function isToolInputRecord(value: unknown): value is Record<string, unknown> {
 
 /** Codex delivers tool arguments as a JSON string. Parse those into the object
  *  shape every helper below already understands; leave prose strings alone. */
-function normalizeToolInput(input: unknown): unknown {
+export function normalizeToolInput(input: unknown): unknown {
   if (typeof input !== 'string') {
     return input
   }

@@ -87,6 +87,7 @@ describe('BrowserClientPageCommandExecutor authority fencing', () => {
 
     executor.completeAuthorityTransition({
       authorityConnectionIdentity: 'authority-record-b',
+      pairingAuthorityConnectionIdentity: 'pairing-authority-record-b',
       legacyAuthorityConnectionIdentity: 'legacy-authority-record-b'
     })
     await expect(
@@ -146,6 +147,7 @@ describe('BrowserClientPageCommandExecutor authority fencing', () => {
     expect(order).toEqual(['release-route'])
     executor.completeAuthorityTransition({
       authorityConnectionIdentity: 'authority-record-b',
+      pairingAuthorityConnectionIdentity: 'pairing-authority-record-b',
       legacyAuthorityConnectionIdentity: 'legacy-authority-record-b'
     })
     await executor.close()

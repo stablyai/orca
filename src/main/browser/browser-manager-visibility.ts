@@ -1,5 +1,6 @@
 import { rendererPublicationThrottle } from '../window/renderer-publication-throttle'
 import { BrowserManagerState } from './browser-manager-state'
+import { focusGuardUnavailableError, guardPaneFocusForAgentInput } from './agent-input-focus-guard'
 
 export abstract class BrowserManagerVisibility extends BrowserManagerState {
   // Why: page id -> active capture count; the renderer hears only the first hold and the last release.
@@ -37,5 +38,15 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
         renderer.send('browser:capturePaintHold', { browserPageId, held: false })
       }
     }
+  }
+
+  // Why: an agent press moves Chromium focus into the guest; its pane puts the user's focus back.
+  guardUserFocusForAgentInput(guestWebContentsId: number): Promise<() => void> {
+    const browserPageId = this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId)
+    const renderer = browserPageId ? this.resolveRendererForBrowserTab(browserPageId) : null
+    if (!browserPageId || !renderer || renderer.isDestroyed()) {
+      return Promise.reject(focusGuardUnavailableError())
+    }
+    return guardPaneFocusForAgentInput(renderer, browserPageId)
   }
 }

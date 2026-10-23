@@ -1,8 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { makeDeferred } from './pty-ipc-test-constants'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
-import { registerPtyHandlers, registerSshPtyProvider } from './pty'
-import { ptyOwnership } from './pty/provider/ownership-state'
+import { registerPtyHandlers } from './pty/register-handlers'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -117,16 +116,6 @@ describe('registerPtyHandlers daemon-swap-window presence', () => {
     await expect(pending).resolves.toBe(true)
   })
 
-  it('pty:hasPty answers SSH-owned ids from their provider without waiting on the local swap', async () => {
-    const barrier = makeDeferred()
-    const sshHasPty = vi.fn((id: string) => id === 'ssh:ssh-1@@pty-2')
-    registerSshPtyProvider('ssh-1', { hasPty: sshHasPty } as never)
-    registerWithStartupBarrier(barrier.promise)
-
-    await expect(handlers.get('pty:hasPty')!(null, { id: 'ssh:ssh-1@@pty-2' })).resolves.toBe(true)
-    expect(sshHasPty).toHaveBeenCalledWith('ssh:ssh-1@@pty-2')
-  })
-
   it('runtime controller hasPty answers null, not false, while the local provider swap is in flight', async () => {
     const barrier = makeDeferred()
     const controller = installRuntimeControllerWithBarrier(barrier.promise)
@@ -167,21 +156,6 @@ describe('registerPtyHandlers daemon-swap-window presence', () => {
     expect(controller?.hasPty('remote:environment@@pty-1')).toBe(null)
   })
 
-  it('runtime controller hasPty answers SSH-owned ids without waiting on the local swap', () => {
-    const barrier = makeDeferred()
-    const sshHasPty = vi.fn((id: string) => id === 'ssh-live-pty')
-    registerSshPtyProvider('ssh-1', { hasPty: sshHasPty } as never)
-    ptyOwnership.set('ssh-live-pty', 'ssh-1')
-    try {
-      const controller = installRuntimeControllerWithBarrier(barrier.promise)
-
-      expect(controller.hasPty('ssh-live-pty')).toBe(true)
-      expect(sshHasPty).toHaveBeenCalledWith('ssh-live-pty')
-    } finally {
-      ptyOwnership.delete('ssh-live-pty')
-    }
-  })
-
   it('pty:inspectProcess defers a restored daemon id until the provider swap lands instead of answering from the non-owning provider', async () => {
     const barrier = makeDeferred()
     registerWithStartupBarrier(barrier.promise)
@@ -217,24 +191,6 @@ describe('registerPtyHandlers daemon-swap-window presence', () => {
       foregroundProcess: 'codex',
       hasChildProcesses: true
     })
-  })
-
-  it('pty:inspectProcess answers SSH-owned ids from their provider without waiting on the local swap', async () => {
-    const barrier = makeDeferred()
-    const sshInspect = vi.fn(async () => ({
-      foregroundProcess: 'ssh-codex',
-      hasChildProcesses: true
-    }))
-    registerSshPtyProvider('ssh-1', {
-      hasPty: (id: string) => id === 'ssh:ssh-1@@pty-2',
-      inspectProcess: sshInspect
-    } as never)
-    registerWithStartupBarrier(barrier.promise)
-
-    await expect(
-      handlers.get('pty:inspectProcess')!(null, { id: 'ssh:ssh-1@@pty-2' })
-    ).resolves.toEqual({ foregroundProcess: 'ssh-codex', hasChildProcesses: true })
-    expect(sshInspect).toHaveBeenCalledWith('ssh:ssh-1@@pty-2')
   })
 
   it('keeps the in-process provider authoritative when no startup barrier is configured', async () => {

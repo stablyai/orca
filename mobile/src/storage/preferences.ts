@@ -118,67 +118,6 @@ export async function saveTerminalAutocompleteEnabled(enabled: boolean): Promise
   await persistMirrored(AUTOCOMPLETE_KEY, value)
 }
 
-const MOBILE_WEB_SHELL_KEY = 'orca:mobileWebShellEnabled'
-
-export type MobileShellBuildKind = 'native' | 'ota'
-
-/**
- * Which shell this binary was built for, and the only place the build-time constant is spelled.
- *
- * `babel-preset-expo`'s inline-env-vars plugin replaces a literal `process.env.EXPO_PUBLIC_*`
- * member expression with the build machine's value, so in a release bundle this function has no
- * variable left in it. That rewrite only fires on a literal member expression: a destructure, a
- * computed key or a copy through another binding is not inlined and would read `undefined` on a
- * device, which is why every caller goes through this one and never through `process.env`.
- *
- * Anything but the exact string `ota` — unset, empty, a typo, a value from a stale shell — is
- * native. A release built without the variable is the native app, which is every default build.
- */
-export function mobileShellBuildKind(): MobileShellBuildKind {
-  return process.env.EXPO_PUBLIC_MOBILE_SHELL === 'ota' ? 'ota' : 'native'
-}
-
-// Why: the hybrid shell route is dark in every build but an OTA one. Default-off means a native
-// store build never fetches, writes or sweeps a bundle cache — anything but `'true'`, including an
-// unreadable store, is off there.
-/**
- * Whether this build can have the flag on at all.
- *
- * A native release build never reads the key: it shares its bundle id with the development build
- * and with an OTA build, and the iOS data container survives an install-over, so a flag either of
- * those left on would otherwise follow the native store build in and mount the shell on a deep
- * link. The ability comes from the build, never from storage, which is what makes that impossible.
- *
- * Named rather than spelled twice. The hook beside the reader starts its state on this answer so
- * a native store build is decided on its first render rather than after an effect, and two
- * spellings of one build-kind test would be two things to keep true.
- */
-export function mobileWebShellFlagCanBeOn(): boolean {
-  return (typeof __DEV__ !== 'undefined' && __DEV__) || mobileShellBuildKind() === 'ota'
-}
-
-export async function loadMobileWebShellEnabled(): Promise<boolean> {
-  if (!mobileWebShellFlagCanBeOn()) {
-    return false
-  }
-  try {
-    const raw = await AsyncStorage.getItem(MOBILE_WEB_SHELL_KEY)
-    // An untouched OTA install mounts the page on first launch; a development build keeps its
-    // opt-in. Either way a stored value decides, so the Troubleshoot toggle can switch an OTA
-    // build off and that choice survives the next launch.
-    if (raw === null) {
-      return mobileShellBuildKind() === 'ota'
-    }
-    return raw === 'true'
-  } catch {
-    return false
-  }
-}
-
-export async function saveMobileWebShellEnabled(enabled: boolean): Promise<void> {
-  await AsyncStorage.setItem(MOBILE_WEB_SHELL_KEY, String(enabled))
-}
-
 const TERMINAL_LIVE_INPUT_DISABLED_PREFIX = 'orca:terminalLiveInputDisabled:'
 
 export type DisabledTerminalLiveInputHandlesPreference = {
@@ -297,8 +236,10 @@ export type MobileTerminalLinkOpenMode = 'orca-browser' | 'phone-browser'
 
 const TERMINAL_LINK_OPEN_MODE_KEY = 'orca:terminalLinkOpenMode'
 export const DEFAULT_TERMINAL_LINK_OPEN_MODE: MobileTerminalLinkOpenMode = 'orca-browser'
+let terminalLinkWriteBarrier: Promise<void> | null = null
 
 export async function loadTerminalLinkOpenMode(): Promise<MobileTerminalLinkOpenMode> {
+  await terminalLinkWriteBarrier
   try {
     const raw = await AsyncStorage.getItem(TERMINAL_LINK_OPEN_MODE_KEY)
     return raw === 'phone-browser' || raw === 'orca-browser' ? raw : DEFAULT_TERMINAL_LINK_OPEN_MODE
@@ -307,8 +248,18 @@ export async function loadTerminalLinkOpenMode(): Promise<MobileTerminalLinkOpen
   }
 }
 
-export async function saveTerminalLinkOpenMode(mode: MobileTerminalLinkOpenMode): Promise<void> {
-  await persistMirrored(TERMINAL_LINK_OPEN_MODE_KEY, mode)
+export function saveTerminalLinkOpenMode(mode: MobileTerminalLinkOpenMode): Promise<void> {
+  const write = (terminalLinkWriteBarrier ?? Promise.resolve()).then(() =>
+    persistMirrored(TERMINAL_LINK_OPEN_MODE_KEY, mode)
+  )
+  const barrier = write.catch(() => undefined)
+  terminalLinkWriteBarrier = barrier
+  void barrier.then(() => {
+    if (terminalLinkWriteBarrier === barrier) {
+      terminalLinkWriteBarrier = null
+    }
+  })
+  return write
 }
 
 function stringArray(value: unknown): string[] {

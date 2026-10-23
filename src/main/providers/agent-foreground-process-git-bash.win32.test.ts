@@ -7,9 +7,8 @@ import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
 import { confirmPtyShellForeground } from '../daemon/pty-subprocess/pty-shell-foreground-confirmation'
 import { createPtyShellLaunchPlan } from '../daemon/pty-subprocess/shell-launch-plan'
 import { spawnNativeDaemonPty } from '../daemon/pty-subprocess/native-pty-spawn'
-import { canUseBunPty, spawnBunPty } from '../daemon/pty-subprocess/bun-pty-process'
-import { createWindowsBunPtyLaunch } from '../daemon/pty-subprocess/windows-bun-pty-launch'
 import { createDaemonPtyEnvironment } from '../daemon/pty-subprocess/spawn-environment'
+import { inspectSpawnFileWindowsChildProcesses } from '../daemon/pty-subprocess/spawn-file-child-processes'
 import type { PtyShellLaunchPlan } from '../daemon/pty-subprocess/shell-launch-plan'
 import type { PtySubprocessOptions } from '../daemon/pty-subprocess'
 import { isGitForWindowsBashLauncherPath, resolveGitBashPath } from '../git-bash'
@@ -22,20 +21,7 @@ async function spawnPlannedPane(
   env: Record<string, string>,
   opts: PtySubprocessOptions
 ): ReturnType<typeof spawnNativeDaemonPty> {
-  return spawnNativeDaemonPty(
-    { ...plan, env, cols: opts.cols, rows: opts.rows },
-    {
-      canUseBunPty,
-      spawnBunPty: (args) =>
-        spawnBunPty(args, {
-          // Source tests use the TS worker; packaged hosts resolve their adjacent JS worker.
-          createWindowsLaunch: (launch) =>
-            createWindowsBunPtyLaunch(launch, {
-              workerPath: join(__dirname, '../daemon/pty-subprocess/windows-bun-pty-gate-entry.ts')
-            })
-        })
-    }
-  )
+  return spawnNativeDaemonPty({ ...plan, env, cols: opts.cols, rows: opts.rows })
 }
 
 /** Drives a live pane through prompt -> foreground command -> interrupt -> background job. */
@@ -164,6 +150,51 @@ describeOnWindows("Git Bash launcher shell proof with Orca's real launch", () =>
       // rmdir, never a recursive remove: it detaches the junction and cannot reach the target.
       rmdirSync(stagedInstall)
       removeTreeSync(stagingRoot)
+    }
+  }, 60_000)
+
+  it('sets aside a detached ssh-agent for adoption, but not a background job', async () => {
+    const opts: PtySubprocessOptions = {
+      sessionId: 'git-bash-detached-daemon-proof',
+      cols: 120,
+      rows: 30,
+      cwd: tmpdir(),
+      shellOverride: WINDOWS_GIT_BASH_SHELL
+    }
+    const env = createDaemonPtyEnvironment(opts)
+    const spawned = await spawnPlannedPane(createPtyShellLaunchPlan(opts, env), env, opts)
+    const proc = spawned.process
+    let output = ''
+    proc.onData((chunk) => {
+      output += chunk
+    })
+    let agentPid = 0
+    const inspect = (ignoreDetached: boolean) =>
+      inspectSpawnFileWindowsChildProcesses(proc, spawned.shellPath, true, ignoreDetached)
+    try {
+      await vi.waitFor(() => expect(output).toContain('$'), { timeout: 20_000 })
+      // ssh-agent forks, setsids off the console, and its Win32 parent exits.
+      proc.write('eval "$(ssh-agent -s)"; echo ORCA_AGENT_$SSH_AGENT_PID\r')
+      await vi.waitFor(() => expect(output).toMatch(/ORCA_AGENT_\d+/), { timeout: 10_000 })
+      agentPid = Number(/ORCA_AGENT_(\d+)/.exec(output)?.[1])
+      await vi.waitFor(async () => expect(await inspect(true)).toBe('no-children'), {
+        timeout: 10_000
+      })
+      // Close checks keep the job census: the daemon still counts there.
+      expect(await inspect(false)).not.toBe('no-children')
+
+      // MSYS leaves the background sleep under an exited Win32 parent too, but on the console.
+      proc.write('sleep 60 &\r')
+      await vi.waitFor(async () => expect(await inspect(true)).toBe('children'), {
+        timeout: 10_000
+      })
+    } finally {
+      // From inside the pane: SSH_AGENT_PID is an MSYS pid, and it outlives the pane otherwise.
+      if (agentPid) {
+        proc.write(`kill %1; kill ${agentPid}\r`)
+        await new Promise((resolve) => setTimeout(resolve, 500))
+      }
+      proc.kill()
     }
   }, 60_000)
 })

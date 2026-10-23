@@ -10,8 +10,10 @@ import {
   PROMPTED_AGENT_LAUNCH_TIMEOUT_MS,
   launchAgentInExistingWorkspace,
   reserveMobileAgentLaunch,
-  supportsMobileExistingAgentLaunch
+  supportsMobileExistingAgentLaunch,
+  AGENT_LAUNCH_TAB_CLOSED_MESSAGE
 } from './mobile-existing-agent-launch'
+import { mobileCreatedStructuredSession } from './mobile-created-structured-sessions'
 
 // A connected client whose only behaviour is the scripted `sendRequest`.
 function requestPortRpcClient(sendRequest: RpcClient['sendRequest']): RpcClient {
@@ -112,6 +114,22 @@ describe('reserveMobileAgentLaunch', () => {
     expect(params).toMatchObject({
       paneKey: `${reservation.pane.tabId}:${reservation.pane.leafId}`,
       sessionId: reservation.sessionId
+    })
+    // The chat it reserved is one this phone created, so its picker names the listed default.
+    expect(mobileCreatedStructuredSession(reservation.sessionId!)).toMatchObject({
+      worktree: expect.stringMatching(/^id:/)
+    })
+  })
+
+  it('asks for the new tab after the one the user is on', async () => {
+    const { client, sendRequest } = scriptedClient(launched({}))
+    await launch(client, {
+      placement: { afterTabId: 'tab-current' },
+      mintOperationId: () => `1790000000000-${'b'.repeat(32)}`
+    })
+
+    expect(requestParam(sendRequest.mock.calls[0]![1], 'placement')).toEqual({
+      afterTabId: 'tab-current'
     })
   })
 
@@ -234,6 +252,14 @@ describe('launchAgentInExistingWorkspace', () => {
     await expect(launch(client)).resolves.toEqual({
       kind: 'failed',
       message: 'Workspace not found'
+    })
+  })
+
+  it('reads a closed tab as the user stopping the launch, not as the launch failing', async () => {
+    const { client } = scriptedClient(refused('agent_launch_tab_closed'))
+    await expect(launch(client)).resolves.toEqual({
+      kind: 'tab-closed',
+      message: AGENT_LAUNCH_TAB_CLOSED_MESSAGE
     })
   })
 

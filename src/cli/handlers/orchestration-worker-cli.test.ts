@@ -572,7 +572,6 @@ describe('orchestration worker-start CLI contract', () => {
       } as never)
     ).rejects.toMatchObject({ code: 'incompatible_runtime' })
 
-    // The extra call is the bound-Run lookup; the enumeration itself must not be retried.
     expect(
       callMock.mock.calls.filter(([method]) => method === 'orchestration.workerList')
     ).toHaveLength(1)

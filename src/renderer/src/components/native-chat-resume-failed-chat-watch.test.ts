@@ -23,7 +23,6 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: mocks.rpc,
   subscribeStructuredAgentSessionStatus: mocks.subscribeStatus
 }))
-vi.mock('sonner', () => ({ toast: vi.fn() }))
 
 // When the user sends in an offered or failed chat, its status bar entry must retire without the
 // user reopening anything, and nothing may run while nothing is offered or failed.
@@ -184,21 +183,25 @@ it('never lets a re-read that was already in flight bring back a dismissed failu
 it('waits for a resume in flight instead of re-reading under it', async () => {
   await listFailure({ failed: [failure] })
   const acting = Promise.withResolvers<unknown>()
+  let failed: unknown[] = [failure]
   mocks.rpc.mockImplementation((_target: unknown, method: string) =>
     method === 'agentSession.restartContinue'
       ? acting.promise
-      : Promise.resolve({ sessions: [], failed: [failure] })
+      : Promise.resolve({ sessions: [], failed })
   )
   const retry = continueNativeChatRestartOffer(['a'])
   hostEmit()({ type: 'status', session: summary('working', 'Carry on please', Date.now() + 1) })
   await vi.advanceTimersByTimeAsync(500)
   expect(offerReads()).toBe(1)
 
+  // The action reply carries the remaining list, so no extra read is needed.
+  failed = []
   acting.resolve({
     sessions: [],
     failed: [],
     continued: [{ sessionId: 'a', outcome: 'continued' }]
   })
   await retry
+  expect(offerReads()).toBe(1)
   expect(getNativeChatRestartOffer().failed).toEqual([])
 })

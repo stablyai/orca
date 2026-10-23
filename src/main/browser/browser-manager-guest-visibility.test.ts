@@ -66,6 +66,7 @@ describe('browserManager', () => {
   })
 
   it('holds capture paint one-way and keeps the renderer unthrottled until the last release', () => {
+    vi.useFakeTimers()
     const guest = {
       id: 1707,
       isDestroyed: vi.fn(() => false),
@@ -81,7 +82,8 @@ describe('browserManager', () => {
       isDestroyed: vi.fn(() => false),
       executeJavaScript: vi.fn(() => new Promise(() => {})),
       send: vi.fn(),
-      setBackgroundThrottling: vi.fn()
+      setBackgroundThrottling: vi.fn(),
+      capturePage: vi.fn(async () => null)
     }
     webContentsFromIdMock.mockImplementation((id: number) => {
       if (id === guest.id) {
@@ -121,6 +123,8 @@ describe('browserManager', () => {
       'browser:capturePaintHold',
       { browserPageId: 'page-capture', held: false }
     ])
+    expect(renderer.setBackgroundThrottling.mock.calls).toEqual([[false]])
+    vi.runAllTimers()
     expect(renderer.setBackgroundThrottling.mock.calls).toEqual([[false], [true]])
   })
 

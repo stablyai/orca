@@ -47,7 +47,7 @@
         }
       }
     },
-    "aa5c91b36a35": {
+    "d31fbfc2b21a": {
       "markdown": {
         "tab-md": {
           "baseVersion": "v1",
@@ -55,6 +55,7 @@
           "editable": true,
           "isDirty": true,
           "localContent": "# b",
+          "localRevision": 2,
           "saveError": "Document changed on disk",
           "saving": false,
           "status": "ready"
@@ -81,7 +82,7 @@
           "settlements": {
             "save": "eb79a9b3682a"
           },
-          "state": "aa5c91b36a35",
+          "state": "d31fbfc2b21a",
           "effects": []
         }
       }

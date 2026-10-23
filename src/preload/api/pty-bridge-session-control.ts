@@ -1,7 +1,18 @@
+import type { PaintedRestorePane } from '../../shared/painted-restore-ack'
+import type {
+  PtyFencedTerminationRequest,
+  PtyFencedTerminationOutcome
+} from '../../shared/pty-fenced-termination'
+import type { ResourceViewAdmission } from '../../shared/resource-view-admission'
+import type { SpawnIntent } from '../../shared/host-spawn-admission'
 import { ipcRenderer } from 'electron'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import type { TerminalInputKind } from '../../shared/terminal-input-kind'
+import type {
+  TerminalLeafMoveRequest,
+  TerminalLeafMoveResult
+} from '../../shared/terminal-leaf-move'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
@@ -16,13 +27,14 @@ import type { TerminalViewAttributes } from '../../shared/terminal-view-attribut
 import type { PtyMainDeliveryDiagnostics } from '../../shared/pty-delivery-diagnostics'
 import type { AgentKind, LaunchSource, RequestKind } from '../../shared/telemetry-events'
 import type { PreloadApi } from '../api-types'
+import type { TerminalPanePlacement } from '../../shared/terminal-pane-placement'
+import type { AgentPaneLaunchRequest } from '../../shared/agent-pane-launch-request'
 
 export const ptySessionControlApi = {
   spawn: (opts: {
     cols: number
     rows: number
     cwd?: string
-    cwdFallback?: 'worktree'
     env?: Record<string, string>
     envToDelete?: string[]
     command?: string
@@ -39,18 +51,16 @@ export const ptySessionControlApi = {
     projectRuntime?: ProjectExecutionRuntimeResolution
     terminalKittyKeyboardProtocol?: boolean
     terminalColorQueryReplies?: { foreground?: string; background?: string }
-    // Why: marks the PTY hidden before its first byte so the delivery gate + model responder own spawn-time queries (terminal-query-authority.md §races).
     initiallyHidden?: boolean
-    // Why: closes the SIGKILL race (INVESTIGATION.md) — main sync-flushes the (worktreeId, tabId, leafId → ptyId) binding before pty:spawn returns.
     tabId?: string
     leafId?: string
-    // Why: a pane with a live owner is otherwise reattached; a restart names the PTY main must stop first.
     replacesPtyId?: string
-    // Why: loose typing on purpose — renderer owns launch metadata, main owns whether the launch happened and validates (telemetry-plan.md §Agent launch semantics).
+    placement?: TerminalPanePlacement
+    spawnIntent?: SpawnIntent
+    agentLaunch?: AgentPaneLaunchRequest
     telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }
   }): Promise<{
     id: string
-    /** Which lifetime of `id` this reply named; absent when the execution host predates the field. */
     incarnationId?: string
     launchConfig?: SleepingAgentLaunchConfig
     snapshot?: string
@@ -69,14 +79,18 @@ export const ptySessionControlApi = {
     coldRestore?: { scrollback: string; cwd: string; cols?: number; rows?: number }
     startupCwdFallback?: { kind: 'worktree'; cwd: string }
     agentResumeUnavailable?: true
-    /** Host verdict on the shell-ready marker; absent when the execution host predates the field. */
     shellReadyArmed?: boolean
   }> => ipcRenderer.invoke('pty:spawn', opts),
   write: (id: string, data: string, inputKind: TerminalInputKind): void => {
     ipcRenderer.send('pty:write', { id, data, inputKind })
   },
-  writeAccepted: (id: string, data: string, inputKind: TerminalInputKind): Promise<boolean> =>
-    ipcRenderer.invoke('pty:writeAccepted', { id, data, inputKind }),
+  writeAccepted: (
+    id: string,
+    data: string,
+    inputKind: TerminalInputKind,
+    options?: { requireWriteSettlement?: true }
+  ): Promise<boolean> =>
+    ipcRenderer.invoke('pty:writeAccepted', { id, data, inputKind, ...options }),
   onWriteUnavailable: (callback: (payload: { id: string }) => void): (() => void) => {
     const handler = (_event: Electron.IpcRendererEvent, payload: { id: string }): void =>
       callback(payload)
@@ -101,8 +115,11 @@ export const ptySessionControlApi = {
   resetInputModes: (id: string): void => {
     ipcRenderer.send('pty:resetInputModes', { id })
   },
-  ackColdRestore: (id: string): void => {
-    ipcRenderer.send('pty:ackColdRestore', { id })
+  ackColdRestore: (id: string, pane?: PaintedRestorePane): void => {
+    ipcRenderer.send('pty:ackColdRestore', pane ? { id, pane } : { id })
+  },
+  ackHiddenOutputRestoreApplied: (id: string, hiddenDropEpisode?: number): void => {
+    ipcRenderer.send('pty:hiddenOutputRestoreApplied', { id, hiddenDropEpisode })
   },
   ackData: (id: string, charCount: number, processedChars?: number): void => {
     ipcRenderer.send('pty:ackData', {
@@ -146,15 +163,21 @@ export const ptySessionControlApi = {
   publishTerminalViewAttributes: (attributes: TerminalViewAttributes): void => {
     ipcRenderer.send('pty:terminalViewAttributes', attributes)
   },
+  killFenced: (request: PtyFencedTerminationRequest): Promise<PtyFencedTerminationOutcome> =>
+    ipcRenderer.invoke('pty:killFenced', request),
   kill: (id: string, opts?: { keepHistory?: boolean }): Promise<void> =>
     ipcRenderer.invoke('pty:kill', { id, keepHistory: opts?.keepHistory ?? false }),
-  listSessions: (scope?: PtySessionListScope): Promise<PtyListedSession[]> =>
-    ipcRenderer.invoke('pty:listSessions', scope),
+  listSessions: (
+    scope?: PtySessionListScope,
+    admission?: ResourceViewAdmission
+  ): Promise<PtyListedSession[]> => ipcRenderer.invoke('pty:listSessions', scope, admission),
   getAuthoritativeBufferSnapshotCapabilities: (
     ids: string[]
   ): Promise<{ id: string; authoritative: boolean | null }[]> =>
     ipcRenderer.invoke('pty:getAuthoritativeBufferSnapshotCapabilities', { ids }),
   hasPty: (id: string): Promise<boolean | null> => ipcRenderer.invoke('pty:hasPty', { id }),
+  moveLeafToNewTab: (request: TerminalLeafMoveRequest): Promise<TerminalLeafMoveResult> =>
+    ipcRenderer.invoke('pty:moveLeafToNewTab', request),
   getMainBufferSnapshot: (
     id: string,
     opts?: { scrollbackRows?: number }

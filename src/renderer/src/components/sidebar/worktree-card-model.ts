@@ -1,3 +1,4 @@
+import type { DraggedWorktreeCopies } from './worktree-list/drag/dragged-worktree-copies'
 import type React from 'react'
 
 import type { Repo } from '../../../../shared/repo-types'
@@ -24,12 +25,15 @@ export type WorktreeCardProps = {
   selectedWorktrees?: readonly Worktree[]
   hideRepoBadge?: boolean
   hostContextLabel?: string
+  /** Reuse the normal project badge for a nested child owned by another repo. */
+  showProjectName?: boolean
   inPinnedSection?: boolean
   activationRowKey?: string
   renameRowKey?: string
   contentIndent?: number
   flushSurface?: boolean
   lineageChildCount?: number
+  lineageChildWorktreeIds?: readonly string[]
   lineageCollapsed?: boolean
   lineageChildren?: React.ReactNode
   lineageChildrenStyle?: React.CSSProperties
@@ -47,7 +51,7 @@ export type WorktreeCardProps = {
   onCardDragStart?: (
     event: React.DragEvent<HTMLDivElement>,
     worktreeId: string,
-    draggedIds: readonly string[]
+    draggedCopies: DraggedWorktreeCopies
   ) => void
   onCardDragEnd?: (event: React.DragEvent<HTMLDivElement>) => void
   nativeDragEnabled?: boolean
@@ -89,7 +93,6 @@ export type ResolvedWorktreeCardProps = Omit<WorktreeCardProps, DefaultedWorktre
 }
 
 export const EMPTY_WORKSPACE_PORTS = []
-export const HOSTED_REVIEW_CARD_REFRESH_INTERVAL_MS = 60_000
 
 export function shouldBeginWorktreeRename(
   request: WorktreeRenameRequest | null,

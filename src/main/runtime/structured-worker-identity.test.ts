@@ -5,10 +5,9 @@ import {
   structuredAgentSessionTabId
 } from '../../shared/structured-agent-session-projection'
 import { selectExactWorkerProviderSession } from './orchestration/worker-provider-session'
-import { structuredSessionChildIdentityEnv } from './structured-session-child-identity-env'
+import { sealedChildEnv } from './structured-session-child-env.test-support'
 import {
   StructuredWorkerIdentityRegistry,
-  isStructuredWorkerHandle,
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,
   sessionIdFromStructuredWorkerIncarnation,
@@ -18,6 +17,7 @@ import {
   structuredWorkerProcessIncarnation,
   structuredWorkerRecordIsCurrent
 } from './structured-worker-identity'
+import { isStructuredWorkerHandle } from '../../shared/structured-worker-handle'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import type { ExecutionHostId } from '../../shared/execution-host'
 
@@ -52,7 +52,6 @@ function record(overrides: {
       leaseDeadlineAt: 0,
       lastRenewedAt: 0,
       handoffOperationId: null,
-      journalCheckpoint: null,
       claimKeyId: 'k',
       claimStatus: overrides.claimStatus ?? 'live',
       unreconciled: false,
@@ -300,7 +299,7 @@ describe('structured workers stay outside the PTY-only fail-closed paths', () =>
       hostScope: { kind: 'local', hostId: 'local' }
     })
     try {
-      const env = structuredSessionChildIdentityEnv(SESSION_ID, {})
+      const env = sealedChildEnv(SESSION_ID)
       // Registered, so the worker's handle is present; without it the pane-key assertion would pass
       // for the wrong reason.
       expect(env.ORCA_TERMINAL_HANDLE).toBe(handle)

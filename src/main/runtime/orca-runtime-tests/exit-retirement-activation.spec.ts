@@ -1,3 +1,4 @@
+import type { AdoptStablePaneArgs } from '../../ipc/pty/ipc/spawn-types'
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
 import {
@@ -38,7 +39,10 @@ async function startSplitHost() {
   const spawn = vi.fn(async (options: { sessionId?: string }) => ({
     id: options.sessionId ?? 'fresh-pty'
   }))
-  const adoptStablePane = vi.fn(async () => null)
+  const adoptStablePane = vi.fn(async (args: AdoptStablePaneArgs) => {
+    await args.spawnFresh?.({ mustExist: false })
+    return null
+  })
   const runtime = new OrcaRuntimeService(runtimeStore)
   runtime.setPtyController({
     spawn,

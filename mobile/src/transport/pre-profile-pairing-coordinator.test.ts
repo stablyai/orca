@@ -120,6 +120,8 @@ function dependencies(client: RpcClient, events: string[]) {
     clearJournal: vi.fn(async () => {
       events.push('clear-journal')
     }),
+    releaseJournal: vi.fn(),
+    recoverPendingJournal: vi.fn(async () => {}),
     writeCredentialBundle: vi.fn(async (_bundle: MobileRelayCredentialBundle) => {
       events.push('write-credential')
     }),
@@ -521,6 +523,31 @@ describe('pre-profile pairing coordinator', () => {
       'Pairing path selected'
     ])
     expect(entries[0]).toMatchObject({ level: 'warn', detail: '10.5.0.2:6768' })
+  })
+
+  it('lets a stale journal recover before the new scan journals, and releases it on failure', async () => {
+    const events: string[] = []
+    const client = fakeClient([])
+    vi.mocked(client.sendRequest).mockRejectedValue(new Error('offline'))
+    const deps = dependencies(client, events)
+    let finishRecovery!: () => void
+    deps.recoverPendingJournal.mockImplementation(
+      () => new Promise<void>((resolve) => (finishRecovery = resolve))
+    )
+    const attempt = startPreProfilePairing({
+      offer: relayOffer,
+      timeoutMs: 5_000,
+      dependencies: deps
+    })
+    const settled = attempt.result.catch(() => null)
+    await vi.waitFor(() => expect(deps.recoverPendingJournal).toHaveBeenCalled())
+    expect(events).toEqual([])
+    finishRecovery()
+    await settled
+    expect(events[0]).toBe('save-journal')
+    const journalId = deps.saveJournal.mock.calls[0]?.[0].metadata.journalId
+    expect(journalId).toEqual(expect.any(String))
+    expect(deps.releaseJournal).toHaveBeenCalledWith(journalId)
   })
 
   it('cancels the disposable physical client without publishing a host', async () => {

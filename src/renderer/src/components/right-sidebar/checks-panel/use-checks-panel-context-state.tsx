@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useAppStore } from '@/store'
 import { useNow } from '@/hooks/use-now'
 import { isFolderRepo } from '../../../../../shared/repo-kind'
-import { getGitHubPRCacheKey } from '@/store/slices/github-cache-key'
+import { getGitHubPRCacheKey } from '../../../../../shared/github/github-cache-key'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-identity'
 import { selectReviewCacheEntry } from '../review-cache-entry-selection'
 import { selectChecksPanelReview, type ChecksPanelReview } from '../checks-panel-review'
@@ -27,10 +27,8 @@ type ChecksPanelContextStateInput = Pick<
   | 'commentResolutionLaunchAcceptedRef'
   | 'conflictSummaryRefreshKeyRef'
   | 'createPrInFlightRef'
-  | 'isPanelVisible'
   | 'panelContextKey'
   | 'panelContextKeyRef'
-  | 'panelVisibleSinceRef'
   | 'pendingCommentResolutionRef'
   | 'pollIntervalRef'
   | 'prevChecksRef'
@@ -72,10 +70,8 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
     commentResolutionLaunchAcceptedRef,
     conflictSummaryRefreshKeyRef,
     createPrInFlightRef,
-    isPanelVisible,
     panelContextKey,
     panelContextKeyRef,
-    panelVisibleSinceRef,
     pendingCommentResolutionRef,
     pollIntervalRef,
     prevChecksRef,
@@ -291,14 +287,6 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
     rawPRRefreshState,
     repo?.id
   ])
-
-  useEffect(() => {
-    if (!isPanelVisible) {
-      panelVisibleSinceRef.current = null
-      return
-    }
-    panelVisibleSinceRef.current = Date.now()
-  }, [isPanelVisible, panelContextKey, panelVisibleSinceRef])
 
   // Why: drop unaccepted launch payloads when the panel switches context (refs stay pure in render).
   useEffect(() => {

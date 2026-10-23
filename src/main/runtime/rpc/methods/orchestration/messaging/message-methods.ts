@@ -8,11 +8,12 @@ import { orchestrationCallerIdentity, resolveRunScope } from '../runs/run-scope'
 import {
   readMutationReplayNudge,
   stripMutationReplayNudge
-} from '../../../orchestration-mutation-executor'
+} from '../../../orchestration-mutation-receipt'
 import { exposeMessage } from './mailbox-message-receipt'
 import { resolveOrchestrationParty } from '../../../../orchestration/orchestration-party'
 import { recordReceiptBeforeNudge, replayMutationNudge } from './mutation-replay-nudge'
 import { resolveReplyRecipient } from './recipient-routing'
+import { helperQuestionAnswerer } from './helper-question-answerer'
 import {
   ReplyParams,
   InboxParams,
@@ -24,6 +25,7 @@ import {
 export const ORCHESTRATION_MESSAGE_METHODS = [
   defineMethod({
     name: 'orchestration.reply',
+    permission: 'workspace',
     params: ReplyParams,
     handler: async (
       params,
@@ -70,6 +72,28 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
       }
 
       const question = db.getQuestion(params.id)
+      const creatorAnswerer =
+        question && (params.run === undefined || params.run === question.run_id)
+          ? helperQuestionAnswerer(runtime, {
+              question: original,
+              from: params.from,
+              session: orchestrationCaller,
+              evidence: orchestrationCompatibilityEvidence
+            })
+          : undefined
+      if (question && creatorAnswerer) {
+        const answered = db.answerQuestion({
+          messageId: question.message_id,
+          runId: question.run_id,
+          answeredBy: creatorAnswerer,
+          body: params.body
+        })
+        return recordReceiptBeforeNudge(
+          recordMutationReceipt,
+          { ...answered, message: exposeMessage(answered.message) },
+          () => runtime.notifyMessageArrived(`dispatch:${question.dispatch_id}`, 'status')
+        )
+      }
       if (question) {
         const run = resolveRunScope(runtime, {
           runId: params.run ?? question.run_id,
@@ -139,6 +163,7 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
 
   defineMethod({
     name: 'orchestration.inbox',
+    permission: 'workspace',
     params: InboxParams,
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
@@ -155,6 +180,7 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
 
   defineMethod({
     name: 'orchestration.taskCreate',
+    permission: 'workspace',
     params: TaskCreateParams,
     handler: (
       params,
@@ -203,6 +229,7 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
 
   defineMethod({
     name: 'orchestration.taskList',
+    permission: 'workspace',
     params: TaskListParams,
     handler: (
       params,
@@ -245,6 +272,7 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
 
   defineMethod({
     name: 'orchestration.taskUpdate',
+    permission: 'workspace',
     params: TaskUpdateParams,
     handler: (
       params,

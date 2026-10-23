@@ -5,7 +5,7 @@
  * C5 moves agent session history to the web: `app/h/_layout.tsx` and
  * `app/h/[hostId]/agent-history/[worktreeId].web.tsx` and everything they import. The suite next
  * door proves the whole corpus replays byte-identically or in a named class, but it proves it as
- * counts over 787 goldens, and a count cannot tell this domain's regression from another domain's
+ * counts over 793 goldens, and a count cannot tell this domain's regression from another domain's
  * improvement. These 125 are the ones whose divergence would be this domain's.
  *
  * C1's 20 families are a strict subset of these 25, and their verdicts are inherited from
@@ -102,6 +102,7 @@ export const C5_PAGE_CLOSURE: PageClosurePins = {
   },
   'host.view-settings': {
     'host-view-settings-sync': 'identical',
+    'matrix-host.view-settings-settings.get-1': 'result-absent-settlement',
     'matrix-host.view-settings-ui.get-1': 'result-absent-settlement',
     'matrix-host.view-settings-ui.set-1': 'result-absent-settlement'
   },
@@ -140,6 +141,7 @@ export const C5_PAGE_CLOSURE: PageClosurePins = {
   },
   'settings.workspace-context': {
     'lifecycle-settings-workspace-context-fulfilled': 'identical',
+    'matrix-settings.workspace-context-jira.status-1': 'result-absent-settlement',
     'matrix-settings.workspace-context-linear.status-1': 'result-absent-settlement',
     'matrix-settings.workspace-context-preflight.check-1': 'result-absent-settlement',
     'matrix-settings.workspace-context-settings.get-1': 'result-absent-settlement',

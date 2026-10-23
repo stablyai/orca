@@ -4,6 +4,7 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { worktreeRowMatchesMetaHost } from './worktrees/listing/worktree-meta-host-match'
 import { branchName } from '@/lib/git-utils'
+import { normalizeWorkspaceAttachmentUpdate } from '../../../../shared/workspace-attachments'
 
 type RequiredKey<T> = { [K in keyof T]-?: undefined extends T[K] ? never : K }[keyof T]
 
@@ -60,7 +61,7 @@ export function applyWorktreeUpdates(
     }
 
     changed = true
-    const next = { ...worktree, ...updates }
+    const next = { ...worktree, ...normalizeWorkspaceAttachmentUpdate(worktree, updates) }
     if (updates.displayNameIsPinned !== undefined) {
       next.displayNameMode = updates.displayNameIsPinned ? 'fixed' : 'automatic'
       if (updates.displayNameIsPinned === false && !updates.displayName?.trim()) {

@@ -1,9 +1,11 @@
+import '../unused-default-rpc-methods.test-fixture'
+import './linear-agent-project-access.spec'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { LinearWriteFailure } from '../../../linear/linear-issue-write-support'
-import { sanitizeLinearErrorMessage } from '../../../linear/issue-context-errors'
+import { sanitizeLinearErrorMessage } from '../../../linear/issue-context/errors'
 import { LINEAR_AGENT_ACCESS_METHODS } from './linear-agent-access'
 
 function makeRequest(method: string, params?: unknown): RpcRequest {

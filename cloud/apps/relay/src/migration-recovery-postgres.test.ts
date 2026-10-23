@@ -37,50 +37,57 @@ describePostgres('PostgreSQL migration recovery', () => {
   })
 
   afterAll(async () => {
-    await database.query(
-      `DELETE FROM relay_control_connection_reservations
+    try {
+      await database.query(
+        `DELETE FROM relay_control_connection_reservations
        WHERE user_id LIKE 'recovery-user-%'`
-    )
-    await database.query(
-      `DELETE FROM relay_post_drain_migration_pins WHERE user_id LIKE 'recovery-user-%'`
-    )
-    await database.query(
-      `DELETE FROM relay_assignment_migration_incarnations WHERE user_id LIKE 'recovery-user-%'`
-    )
-    await database.query(
-      `DELETE FROM relay_assignment_activity_leases WHERE user_id LIKE 'recovery-user-%'`
-    )
-    await database.query(
-      `DELETE FROM relay_assignment_migrations WHERE user_id LIKE 'recovery-user-%'`
-    )
-    await database.query(`DELETE FROM relay_assignments WHERE user_id LIKE 'recovery-user-%'`)
-    await database.query(
-      `DELETE FROM relay_cell_fence_apply_invocations WHERE attempt_id IN (
+      )
+      await database.query(
+        `DELETE FROM relay_post_drain_migration_pins WHERE user_id LIKE 'recovery-user-%'`
+      )
+      await database.query(
+        `DELETE FROM relay_assignment_migration_incarnations WHERE user_id LIKE 'recovery-user-%'`
+      )
+      await database.query(
+        `DELETE FROM relay_assignment_activity_leases WHERE user_id LIKE 'recovery-user-%'`
+      )
+      await database.query(
+        `DELETE FROM relay_assignment_migrations WHERE user_id LIKE 'recovery-user-%'`
+      )
+      await database.query(
+        `DELETE FROM relay_control_capabilities WHERE user_id LIKE 'recovery-user-%'`
+      )
+      await database.query(`DELETE FROM relay_assignments WHERE user_id LIKE 'recovery-user-%'`)
+      await database.query(
+        `DELETE FROM relay_cell_fence_apply_invocations WHERE attempt_id IN (
          SELECT attempt_id FROM relay_cell_fence_attempts
          WHERE cell_id LIKE 'recovery-cell-%'
        )`
-    )
-    await database.query(
-      `DELETE FROM relay_cell_committed_fences WHERE cell_id LIKE 'recovery-cell-%'`
-    )
-    await database.query(
-      `DELETE FROM relay_cell_legacy_fence_adoptions
+      )
+      await database.query(
+        `DELETE FROM relay_cell_committed_fences WHERE cell_id LIKE 'recovery-cell-%'`
+      )
+      await database.query(
+        `DELETE FROM relay_cell_legacy_fence_adoptions
        WHERE cell_id LIKE 'recovery-cell-%'`
-    )
-    await database.query(
-      `DELETE FROM relay_cell_fence_plan_bindings WHERE attempt_id IN (
+      )
+      await database.query(
+        `DELETE FROM relay_cell_fence_plan_bindings WHERE attempt_id IN (
          SELECT attempt_id FROM relay_cell_fence_attempts
          WHERE cell_id LIKE 'recovery-cell-%'
        )`
-    )
-    await database.query(
-      `DELETE FROM relay_cell_fence_attempts WHERE cell_id LIKE 'recovery-cell-%'`
-    )
-    await database.query(`DELETE FROM relay_cell_fences WHERE cell_id LIKE 'recovery-cell-%'`)
-    await database.query(`DELETE FROM relay_cell_runtime WHERE cell_id LIKE 'recovery-cell-%'`)
-    await database.query(`DELETE FROM relay_cell_admission WHERE cell_id LIKE 'recovery-cell-%'`)
-    await database.query(`DELETE FROM relay_cells WHERE cell_id LIKE 'recovery-cell-%'`)
-    await database.close()
+      )
+      await database.query(
+        `DELETE FROM relay_cell_fence_attempts WHERE cell_id LIKE 'recovery-cell-%'`
+      )
+      await database.query(`DELETE FROM relay_cell_fences WHERE cell_id LIKE 'recovery-cell-%'`)
+      await database.query(`DELETE FROM relay_cell_runtime WHERE cell_id LIKE 'recovery-cell-%'`)
+      await database.query(`DELETE FROM relay_cell_admission WHERE cell_id LIKE 'recovery-cell-%'`)
+      await database.query(`DELETE FROM relay_cell_regions WHERE cell_id LIKE 'recovery-cell-%'`)
+      await database.query(`DELETE FROM relay_cells WHERE cell_id LIKE 'recovery-cell-%'`)
+    } finally {
+      await database?.close()
+    }
   })
 
   async function fixture(replacementCapacity = 20): Promise<RecoveryFixture> {
@@ -452,7 +459,9 @@ describePostgres('PostgreSQL migration recovery', () => {
       input.heartbeat(input.cells.source)
     ])
     expect(heartbeatResult.status).toBe('fulfilled')
-    expect(['fulfilled', 'rejected']).toContain(commit.status)
+    if (commit.status === 'rejected') {
+      expect(commit.reason).toMatchObject({ message: 'legacy_cell_fence_not_active' })
+    }
     expect(
       await database.query(
         `SELECT cell_id FROM relay_cell_legacy_fence_adoptions WHERE cell_id = ?`,
@@ -673,7 +682,7 @@ describePostgres('PostgreSQL migration recovery', () => {
     expect(await reservations(input.cells)).toEqual({ source: 0, failed: 1, replacement: 0 })
   })
 
-  it('fails dead-source completion without a stale source heartbeat', async () => {
+  it('requires fence evidence for dead-source completion', async () => {
     const input = await fixture()
     await input.store.releaseActivity(input.identity, input.sourceControlId)
 

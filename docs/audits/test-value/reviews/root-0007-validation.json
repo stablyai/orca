@@ -1,0 +1,55 @@
+{
+  "batch": "root-0007",
+  "reviewer": "root",
+  "source_commit": "8d94ed06570adb2b7300cf16fe9f43b4680e3f2b",
+  "platform": "Linux",
+  "reviewed_files": 3,
+  "original_declaration_sites": 22,
+  "case_decisions": {
+    "keep": 8,
+    "remove": 8,
+    "fix": 6
+  },
+  "review_scope": "Read all original bodies and tables in the action contract and both docs suites, plus the action modules, docs build/routing/layout/media/formatting paths. Source-regex inventories were assessed separately from actual externally interpreted Actions metadata.",
+  "checks": [
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 node --test .github/actions/cloud-sql-rollout-lease/action-contract.test.mjs .github/actions/cloud-sql-rollout-lease/storage-lease.test.mjs docs/site/tests/docs-package.test.mjs docs/site/tests/search-excerpt.test.mjs",
+      "result": "28 tests passed; zero failures/skips. Includes the existing 14 storage lease tests retained in root-0006.",
+      "log": "/tmp/orca-root-0007-tests.log"
+    },
+    {
+      "command": "pnpm exec oxfmt --write .github/actions/cloud-sql-rollout-lease/action-contract.test.mjs .github/actions/cloud-sql-rollout-lease/README.md docs/site/tests/docs-package.test.mjs docs/site/tests/search-excerpt.test.mjs",
+      "result": "Passed for files included by repository formatter configuration. Explicitly removed trailing blank EOF lines from edited tests."
+    },
+    {
+      "command": "pnpm exec oxlint --no-ignore --format json .github/actions/cloud-sql-rollout-lease/action-contract.test.mjs docs/site/tests/docs-package.test.mjs docs/site/tests/search-excerpt.test.mjs",
+      "result": "Zero diagnostics across 2 files. The hidden .github action file is excluded by the linter even with this invocation; it is exercised by the actual node:test run."
+    },
+    {
+      "command": "git diff --check -- .github/actions/cloud-sql-rollout-lease docs/site/tests",
+      "result": "Passed."
+    }
+  ],
+  "mutations": [
+    {
+      "method": "Import each mutated formatter through a data URL in a temporary copy of the actual revised test module, then run the matching retained test under node --test. No repository production file was modified.",
+      "cases": [
+        "Replace linkedText.includes('>') with true: unclosed angle test fails with ERR_SCRIPT_EXECUTION_TIMEOUT.",
+        "Replace protectedCode.includes(']') with true: unclosed bracket test fails with ERR_SCRIPT_EXECUTION_TIMEOUT."
+      ],
+      "result": "Both independent guard-removal mutations caught; each child exits 1.",
+      "log": "/tmp/orca-root-0007-mutations.log"
+    }
+  ],
+  "important_retained_boundaries": [
+    "Shipped Actions node24/main/post/always metadata and caller inputs determine external runner behavior, so these metadata contract tests remain.",
+    "Docs media links are discovered from current content and checked against actual public assets. GIF helpers return independently expected URLs with matching files. Required fonts and licensing notices remain checked.",
+    "Formatter tables preserve escapes, malformed tags/brackets, highlighted matches and code. Long malformed inputs run the actual function under a VM deadline."
+  ],
+  "limitations": [
+    "No product runtime or wire behavior changes. macOS/Windows native paths are not involved in this batch; VM deadlines and path operations use Node cross-platform APIs.",
+    "Action source self-containment and one metadata-host literal scan were removed; README no longer claims the test enforces artifact independence.",
+    "Docs source-text, layout/style and historical filename blacklists were removed. Passing retained unit tests does not establish every deployed route or visual behavior. Real docs build is covered by CI; no new UI validation is claimed.",
+    "This is a completed three-file batch; archived proof files are separately reviewed and recorded in later batches. Supporting reads here do not establish their completion."
+  ]
+}

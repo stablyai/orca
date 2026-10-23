@@ -4,14 +4,12 @@ import type {
   GitStatusEntry,
   GitUpstreamStatus
 } from '../../../../../../shared/git-status-types'
+import type { BranchCompareLike, CommitCompareLike, OpenFile } from '../types/open-file'
 import type {
-  BranchCompareLike,
   BranchCompareSnapshot,
-  CommitCompareLike,
   CommitCompareSnapshot,
-  OpenConflictMetadata,
-  OpenFile
-} from '../types/open-file'
+  OpenConflictMetadata
+} from '../../../../../../shared/editor-tab-view-types'
 
 export function getCompareVersion(
   compare: Pick<BranchCompareLike, 'baseOid' | 'headOid' | 'mergeBase'>

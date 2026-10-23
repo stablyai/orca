@@ -1,4 +1,5 @@
 import { openTranscriptReadStream } from '../native-chat/wsl-transcript-fs-access'
+import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
 import {
   MAX_SESSION_TRANSCRIPT_RECORD_BYTES,
   type SkippedTranscriptRecord
@@ -28,7 +29,9 @@ export async function consumeCompleteJsonlLines(args: {
   onLine: (line: string) => void
   onLineBytes?: (line: Buffer) => void
   shouldStop?: () => boolean
+  signal?: AbortSignal
 }): Promise<JsonlReadResult> {
+  throwIfAiVaultScanCancelled(args.signal)
   if (args.shouldStop?.()) {
     return {
       consumedThrough: args.start,
@@ -48,9 +51,12 @@ export async function consumeCompleteJsonlLines(args: {
   let discarding = false
   const skippedRecords: SkippedTranscriptRecord[] = []
 
-  const stream = openTranscriptReadStream(args.path, { start: args.start }, 'scan')
+  const stream = openTranscriptReadStream(args.path, { start: args.start }, 'scan', args.signal)
   let chunkStart = args.start
   for await (const chunk of stream as AsyncIterable<Buffer>) {
+    // Per chunk, so a cancel stops a giant (or over-budget) record within one
+    // chunk; leaving the loop destroys the stream and releases its handle.
+    throwIfAiVaultScanCancelled(args.signal)
     bytesRead += chunk.length
     const chunkEnd = chunkStart + chunk.length
     let lineStart = 0
@@ -119,7 +125,12 @@ export async function consumeCompleteJsonlLines(args: {
   return {
     consumedThrough,
     trailingPartialLine:
-      remainderLength > 0 ? Buffer.concat(remainderParts, remainderLength).toString('utf-8') : null,
+      remainderLength > 0
+        ? (remainderParts.length === 1
+            ? remainderParts[0]
+            : Buffer.concat(remainderParts, remainderLength)
+          ).toString('utf-8')
+        : null,
     bytesRead,
     skippedRecords
   }

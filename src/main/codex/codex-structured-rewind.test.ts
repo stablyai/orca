@@ -2,39 +2,35 @@ import { describe, expect, it, vi } from 'vitest'
 import { CodexAppServerRequestError } from './codex-app-server-connection'
 import type { CodexSession } from './codex-structured-session-state'
 import { recoverCodexRewind, rewindCodexSession } from './codex-structured-rewind'
-import { AGENT_SESSION_HISTORY_MAX_PAGE_BYTES } from '../native-chat/agent-session-wire/agent-session-history-page-bounds'
 import { openCodexThread } from './codex-structured-thread-open'
 
-function fixture(reverted = true) {
-  const request = vi.fn(async (method: string): Promise<unknown> => {
-    if (method === 'thread/read') {
-      return { thread: { id: 'thread', historyMode: 'paginated', status: { type: 'idle' } } }
-    }
-    if (method === 'thread/revert') {
-      reverted = true
-      return {
-        thread: { id: 'thread', turns: [] },
-        turnsBackwardsCursor: 'turn-cursor',
-        itemsBackwardsCursor: 'item-cursor'
+/** A Codex thread whose turns are `turns`, newest last; revert drops `drop` and every later one. */
+function fixture(turns = ['kept', 'drop'], reverted = false) {
+  let history = reverted ? turns.slice(0, turns.indexOf('drop')) : turns
+  const request = vi.fn(
+    async (
+      method: string,
+      params?: { cursor?: string | null; limit?: number }
+    ): Promise<unknown> => {
+      if (method === 'thread/read') {
+        return { thread: { id: 'thread', historyMode: 'paginated', status: { type: 'idle' } } }
       }
-    }
-    if (method === 'thread/turns/list') {
-      return { data: [...(reverted ? [] : [{ id: 'drop' }]), { id: 'kept' }], nextCursor: null }
-    }
-    return {
-      data: [
-        {
-          turnId: 'kept',
-          item: {
-            id: 'item-1',
-            type: 'userMessage',
-            content: [{ type: 'text', text: 'kept prompt' }]
-          }
+      if (method === 'thread/revert') {
+        history = history.slice(0, history.indexOf('drop'))
+        return { thread: { id: 'thread', turns: [] }, turnsBackwardsCursor: 'turn-cursor' }
+      }
+      if (method === 'thread/turns/list') {
+        const newest = history.toReversed()
+        const start = Number(params?.cursor ?? 0)
+        const end = start + (params?.limit ?? newest.length)
+        return {
+          data: newest.slice(start, end).map((id) => ({ id })),
+          nextCursor: end < newest.length ? String(end) : null
         }
-      ],
-      nextCursor: null
+      }
+      throw new Error(`unexpected ${method}`)
     }
-  })
+  )
   const session = {
     connection: { request },
     threadId: 'thread',
@@ -46,135 +42,66 @@ function fixture(reverted = true) {
   return { request, session }
 }
 
+const methods = (request: ReturnType<typeof fixture>['request']) =>
+  request.mock.calls.map(([method]) => method)
+
 describe('Codex rewind', () => {
-  it('recovers verified history from fresh cursors without repeating revert', async () => {
-    const { session, request } = fixture()
-    expect(await recoverCodexRewind(session, { fence: 2, beforeTurnId: 'drop' })).toMatchObject({
-      ok: true,
-      items: [{ body: { kind: 'message', blocks: [{ type: 'text', text: 'kept prompt' }] } }]
-    })
-    expect(request.mock.calls.map(([method]) => method)).toEqual([
-      'thread/read',
-      'thread/turns/list',
-      'thread/items/list'
-    ])
-    for (const method of ['thread/turns/list', 'thread/items/list']) {
-      expect(request).toHaveBeenCalledWith(
-        method,
-        expect.objectContaining({ cursor: null, sortDirection: 'desc' }),
-        expect.anything()
-      )
-    }
-  })
-  it('recognizes an unapplied rewind from the still-present target', async () => {
-    const { session, request } = fixture()
-    const original = request.getMockImplementation()!
-    request.mockImplementation(async (method) =>
-      method === 'thread/turns/list'
-        ? { data: [{ id: 'drop' }, { id: 'kept' }], nextCursor: null }
-        : original(method)
-    )
-    expect(await recoverCodexRewind(session, { fence: 2, beforeTurnId: 'drop' })).toEqual({
-      ok: false,
-      reason: 'provider-refused'
-    })
-    expect(request.mock.calls.some(([method]) => method === 'thread/revert')).toBe(false)
-  })
-  it.each(['cycle', 'pages', 'entries', 'bytes'] as const)(
-    'bounds recovery by %s and never returns partial history',
-    async (limit) => {
-      const { session, request } = fixture()
-      const original = request.getMockImplementation()!
-      let pages = 0
-      request.mockImplementation(async (method) => {
-        if (method !== 'thread/turns/list') {
-          return original(method)
-        }
-        pages++
-        if (limit === 'entries') {
-          return {
-            data: Array.from({ length: 1025 }, (_, i) => ({ id: String(i) })),
-            nextCursor: null
-          }
-        }
-        if (limit === 'bytes') {
-          return {
-            data: [],
-            padding: 'x'.repeat(AGENT_SESSION_HISTORY_MAX_PAGE_BYTES),
-            nextCursor: null
-          }
-        }
-        return { data: [], nextCursor: limit === 'cycle' ? 'repeated' : String(pages) }
-      })
-      await expect(recoverCodexRewind(session, { fence: 2, beforeTurnId: 'drop' })).rejects.toThrow(
-        'history-limit'
-      )
-      expect(pages).toBeLessThanOrEqual(100)
-      expect(request.mock.calls.some(([method]) => method === 'thread/revert')).toBe(false)
-    }
-  )
-  it('keeps an interrupted recovery retryable with read-only requests', async () => {
-    const { session, request } = fixture()
-    const original = request.getMockImplementation()!
-    request.mockImplementation(async (method) => {
-      if (method === 'thread/items/list') {
-        throw new Error('offline')
-      }
-      return original(method)
-    })
-    await expect(recoverCodexRewind(session, { fence: 2, beforeTurnId: 'drop' })).rejects.toThrow(
-      'offline'
-    )
-    request.mockImplementation(original)
-    expect(await recoverCodexRewind(session, { fence: 2, beforeTurnId: 'drop' })).toMatchObject({
+  it('rewinds a long chat reading only the turns it undoes, and trusts the revert', async () => {
+    const turns = [...Array.from({ length: 5_000 }, (_, i) => `t${i}`), 'drop']
+    turns.push(...Array.from({ length: 250 }, (_, i) => `later${i}`))
+    const { session, request } = fixture(turns)
+    expect(await rewindCodexSession(session, { fence: 2, beforeTurnId: 'drop' })).toEqual({
       ok: true
     })
-    expect(request.mock.calls.some(([method]) => method === 'thread/revert')).toBe(false)
-  })
-  it('refuses activity arriving during recovery hydration', async () => {
-    const { session, request } = fixture()
-    const original = request.getMockImplementation()!
-    request.mockImplementation(async (method) => {
-      if (method === 'thread/items/list') {
-        session.activeTurnIds!.add('racing-turn')
-      }
-      return original(method)
-    })
-    expect(await recoverCodexRewind(session, { fence: 2, beforeTurnId: 'drop' })).toEqual({
-      ok: false,
-      reason: 'busy'
-    })
-  })
-  it('uses native revert and reads both retained indexes despite empty response turns', async () => {
-    const { session, request } = fixture(false)
-    const onPrepared = vi.fn<NonNullable<Parameters<typeof rewindCodexSession>[1]['onPrepared']>>(
-      async (items) => {
-        expect(items).toMatchObject([{ identity: { turnId: 'kept' } }])
-        expect(request.mock.calls.some(([method]) => method === 'thread/revert')).toBe(false)
-      }
-    )
-    expect(
-      await rewindCodexSession(session, { fence: 2, beforeTurnId: 'drop', onPrepared })
-    ).toMatchObject({
-      ok: true,
-      items: [{ body: { kind: 'message' } }]
-    })
-    expect(onPrepared).toHaveBeenCalledTimes(1)
+    expect(methods(request)).toEqual([
+      'thread/read',
+      'thread/turns/list',
+      'thread/turns/list',
+      'thread/read',
+      'thread/revert'
+    ])
     expect(request).toHaveBeenCalledWith(
       'thread/revert',
       { threadId: 'thread', beforeTurnId: 'drop' },
       { timeoutMs: undefined }
     )
-    expect(request).toHaveBeenCalledWith(
-      'thread/turns/list',
-      expect.objectContaining({ cursor: 'turn-cursor', sortDirection: 'desc' }),
-      expect.anything()
-    )
-    expect(request).toHaveBeenCalledWith(
-      'thread/items/list',
-      expect.objectContaining({ cursor: 'item-cursor', sortDirection: 'desc' }),
-      expect.anything()
-    )
+  })
+  it('recovers an applied revert from the newest turn alone', async () => {
+    const turns = [...Array.from({ length: 5_000 }, (_, i) => `t${i}`), 'drop', 'after']
+    const { session, request } = fixture(turns, true)
+    expect(
+      await recoverCodexRewind(session, { fence: 2, beforeTurnId: 'drop', keptTurnId: 't4999' })
+    ).toEqual({ ok: true })
+    expect(methods(request)).toEqual(['thread/read', 'thread/turns/list'])
+  })
+  it('recovers an unapplied revert from the still-present target, never repeating it', async () => {
+    const { session, request } = fixture(['kept', 'drop', 'after'])
+    expect(
+      await recoverCodexRewind(session, { fence: 2, beforeTurnId: 'drop', keptTurnId: 'kept' })
+    ).toEqual({ ok: false, reason: 'provider-refused' })
+    expect(methods(request)).not.toContain('thread/revert')
+  })
+  it('never calls a revert applied when the history does not end at the kept turn', async () => {
+    const { session } = fixture(['other', 'kept', 'foreign'])
+    await expect(
+      recoverCodexRewind(session, { fence: 2, beforeTurnId: 'drop', keptTurnId: 'kept' })
+    ).rejects.toThrow('outcome-unknown')
+  })
+  it('recovers a rewind to the first turn only from an emptied history', async () => {
+    expect(
+      await recoverCodexRewind(fixture(['drop'], true).session, {
+        fence: 2,
+        beforeTurnId: 'drop',
+        keptTurnId: null
+      })
+    ).toEqual({ ok: true })
+    await expect(
+      recoverCodexRewind(fixture(['foreign']).session, {
+        fence: 2,
+        beforeTurnId: 'drop',
+        keptTurnId: null
+      })
+    ).rejects.toThrow('outcome-unknown')
   })
   it('refuses a known legacy thread before making a request', async () => {
     const { session, request } = fixture()
@@ -185,31 +112,6 @@ describe('Codex rewind', () => {
     })
     expect(request).not.toHaveBeenCalled()
   })
-  it('refuses history exceeding hydration capacity before mutating the provider', async () => {
-    const { session, request } = fixture(false)
-    const original = request.getMockImplementation()!
-    const turns = Array.from({ length: 600 }, (_, i) => String(i))
-    request.mockImplementation(async (method) => {
-      if (method === 'thread/turns/list') {
-        return { data: [{ id: 'drop' }, ...turns.map((id) => ({ id }))], nextCursor: null }
-      }
-      if (method === 'thread/items/list') {
-        return {
-          data: turns.map((turnId) => ({
-            turnId,
-            item: { id: turnId, type: 'userMessage', content: [{ type: 'text', text: 'x' }] }
-          })),
-          nextCursor: null
-        }
-      }
-      return original(method)
-    })
-    expect(await rewindCodexSession(session, { fence: 2, beforeTurnId: 'drop' })).toEqual({
-      ok: false,
-      reason: 'history-limit'
-    })
-    expect(request.mock.calls.some(([method]) => method === 'thread/revert')).toBe(false)
-  })
   it('refuses a missing target before mutation', async () => {
     const { session, request } = fixture()
     expect(await rewindCodexSession(session, { fence: 2, beforeTurnId: 'missing' })).toEqual({
@@ -219,14 +121,14 @@ describe('Codex rewind', () => {
     expect(request.mock.calls.some(([method]) => method === 'thread/revert')).toBe(false)
   })
   it('rechecks provider idleness after preflight hydration', async () => {
-    const { session, request } = fixture(false)
+    const { session, request } = fixture()
     const original = request.getMockImplementation()!
     let reads = 0
-    request.mockImplementation(async (method) => {
+    request.mockImplementation(async (method, params) => {
       if (method === 'thread/read' && ++reads === 2) {
         return { thread: { id: 'thread', status: { type: 'active' } } }
       }
-      return original(method)
+      return original(method, params)
     })
     expect(await rewindCodexSession(session, { fence: 2, beforeTurnId: 'drop' })).toEqual({
       ok: false,
@@ -235,14 +137,14 @@ describe('Codex rewind', () => {
     expect(request.mock.calls.some(([method]) => method === 'thread/revert')).toBe(false)
   })
   it('maps native legacy refusal without exposing provider text or falling back', async () => {
-    const { session, request } = fixture(false)
+    const { session, request } = fixture()
     const original = request.getMockImplementation()!
-    request.mockImplementation(async (method) => {
+    request.mockImplementation(async (method, params) => {
       if (method === 'thread/read') {
         return { thread: { id: 'thread', status: { type: 'idle' } } }
       }
       if (method !== 'thread/revert') {
-        return original(method)
+        return original(method, params)
       }
       throw new CodexAppServerRequestError(
         'thread/revert',
@@ -257,7 +159,6 @@ describe('Codex rewind', () => {
     expect(request.mock.calls.map(([method]) => method)).toEqual([
       'thread/read',
       'thread/turns/list',
-      'thread/items/list',
       'thread/read',
       'thread/revert'
     ])
@@ -274,24 +175,6 @@ describe('Codex rewind', () => {
     })
     expect(request).toHaveBeenCalledTimes(1)
   })
-  it('treats hydration failure after revert as unknown and never retries revert', async () => {
-    const { session, request } = fixture(false)
-    const original = request.getMockImplementation()!
-    let reverted = false
-    request.mockImplementation(async (method) => {
-      if (method === 'thread/revert') {
-        reverted = true
-      }
-      if (method === 'thread/items/list' && reverted) {
-        throw new Error('offline')
-      }
-      return original(method)
-    })
-    await expect(rewindCodexSession(session, { fence: 2, beforeTurnId: 'drop' })).rejects.toThrow(
-      'offline'
-    )
-    expect(request.mock.calls.filter(([method]) => method === 'thread/revert')).toHaveLength(1)
-  })
   it('captures history mode at both start and resume without changing defaults', async () => {
     for (const resumeThreadId of [null, 'thread']) {
       const request = vi.fn(async (_method: string, _params?: unknown) => ({
@@ -302,32 +185,5 @@ describe('Codex rewind', () => {
       ).toMatchObject({ historyMode: 'legacy' })
       expect(request.mock.calls[0]?.[1]).not.toHaveProperty('historyMode')
     }
-  })
-  it('rejects post-revert history missing an item within a retained turn', async () => {
-    const { session, request } = fixture(false)
-    const original = request.getMockImplementation()!
-    let reverted = false
-    request.mockImplementation(async (method) => {
-      if (method === 'thread/revert') {
-        reverted = true
-      }
-      if (method === 'thread/items/list' && !reverted) {
-        return {
-          data: [2, 1].map((i) => ({
-            turnId: 'kept',
-            item: {
-              id: `item-${i}`,
-              type: 'userMessage',
-              content: [{ type: 'text', text: `prompt ${i}` }]
-            }
-          })),
-          nextCursor: null
-        }
-      }
-      return original(method)
-    })
-    await expect(rewindCodexSession(session, { fence: 2, beforeTurnId: 'drop' })).rejects.toThrow(
-      'proof-mismatch'
-    )
   })
 })

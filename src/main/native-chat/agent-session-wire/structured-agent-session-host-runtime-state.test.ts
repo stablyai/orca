@@ -13,6 +13,8 @@ import {
 } from '../agent-session-journal/journal-host-database-test-support'
 import { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host'
+import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 const NOW = 1_800_000_000_000
 
@@ -47,7 +49,6 @@ function reservedRecord(): AgentSessionRecord {
       leaseDeadlineAt: NOW + 30_000,
       lastRenewedAt: NOW,
       handoffOperationId: 'op-1',
-      journalCheckpoint: null,
       claimKeyId: 'key-1',
       claimStatus: 'reserved',
       unreconciled: false,
@@ -68,9 +69,10 @@ function runtimeState(
     adapter: {},
     journalDatabase: openTestJournalHostDatabase(stateDirectory),
     claimKeyId: 'key-1',
-    probeOwner
+    probeOwner,
+    logger: createStructuredAgentSessionLogger()
   } as StructuredAgentSessionHostDeps
-  return new StructuredAgentSessionHostRuntimeState(deps)
+  return new StructuredAgentSessionHostRuntimeState(deps, new Map())
 }
 
 function liveRecord(): AgentSessionRecord {
@@ -129,7 +131,7 @@ describe('host runtime-state owner probe', () => {
 
   it('does not force-close a provider for transient lease probe errors', async () => {
     const onEventSinkFailure = vi.fn()
-    const onEventSinkError = vi.fn()
+    const log = recordingStructuredAgentSessionLogger()
     const probeOwner = vi.fn(async () => {
       throw new Error('lease probe unavailable')
     })
@@ -144,18 +146,23 @@ describe('host runtime-state owner probe', () => {
       journalDatabase: openTestJournalHostDatabase(stateDirectory),
       claimKeyId: 'key-1',
       probeOwner,
-      onEventSinkError
+      logger: log.logger
     } as unknown as StructuredAgentSessionHostDeps
-    const state = new StructuredAgentSessionHostRuntimeState(deps, onEventSinkFailure)
+    const state = new StructuredAgentSessionHostRuntimeState(deps, new Map(), onEventSinkFailure)
 
     await (
       state as unknown as { leaseRenewer: { renewNow: () => Promise<void> } }
     ).leaseRenewer.renewNow()
 
-    expect(onEventSinkError).toHaveBeenCalledWith({
-      sessionId: record.sessionId,
-      error: expect.any(Error)
-    })
+    expect(log.entries).toContainEqual(
+      expect.objectContaining({
+        fields: expect.objectContaining({
+          scope: 'lease-renewal',
+          sessionId: record.sessionId,
+          error: expect.any(Error)
+        })
+      })
+    )
     expect(onEventSinkFailure).not.toHaveBeenCalled()
   })
 })

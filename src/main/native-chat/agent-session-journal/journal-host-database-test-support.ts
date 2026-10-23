@@ -15,7 +15,6 @@ import {
 import type Database from '../../sqlite/sync-database'
 import type { AgentSessionJournal } from './journal-store'
 import type { AgentSessionJournalOptions } from './journal-store-contracts'
-import { openAgentSessionJournal } from './journal-store-factory'
 
 const opened = new Map<string, JournalHostDatabase>()
 
@@ -28,6 +27,13 @@ export function openTestJournalHostDatabase(stateDirectory: string): JournalHost
   const database = JournalHostDatabase.open(directory)
   opened.set(directory, database)
   return database
+}
+
+/** Closes this directory's database, so the next open reads the file as a fresh process would. */
+export function closeTestJournalHostDatabase(stateDirectory: string): void {
+  const directory = resolve(stateDirectory)
+  opened.get(directory)?.close()
+  opened.delete(directory)
 }
 
 /** Closes every database this process opened for tests. */
@@ -54,6 +60,7 @@ export function createTrackedJournalOpener(): TrackedJournalOpener {
   const journals: AgentSessionJournal[] = []
   return {
     open: async ({ stateDirectory, ...options }) => {
+      const { openAgentSessionJournal } = await import('./journal-store-factory')
       const journal = await openAgentSessionJournal({
         ...options,
         database: openTestJournalHostDatabase(stateDirectory)
@@ -73,6 +80,14 @@ export function createTrackedJournalOpener(): TrackedJournalOpener {
 }
 
 /** What a fresh open of the chat would replay, read from the test state directory's database. */
+/** What an open of a chat a newer Orca saved is refused with. */
+export const SAVED_BY_NEWER_ORCA = {
+  refusal: {
+    code: 'agent_session_journal_unreadable',
+    details: { reason: 'journalWrittenByNewerOrca' }
+  }
+}
+
 export function loadTestJournal(stateDirectory: string, sessionId: string): JournalLoad | null {
   return replayJournal(openTestJournalHostDatabase(stateDirectory).db, sessionId)
 }

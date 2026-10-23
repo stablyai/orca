@@ -13,18 +13,18 @@ const mocks = vi.hoisted(() => ({
   readRuntimeFileContent: vi.fn()
 }))
 
-vi.mock('@/runtime/runtime-file-client', () => ({
-  getRuntimeFileReadScope: vi.fn(() => null),
-  readRuntimeFileContent: mocks.readRuntimeFileContent,
-  subscribeRuntimeFileChanges: vi.fn()
+vi.mock('@/runtime/runtime-file-routing', () => ({ getRuntimeFileReadScope: vi.fn(() => null) }))
+vi.mock('@/runtime/runtime-file-read-client', () => ({
+  readRuntimeFileContent: mocks.readRuntimeFileContent
 }))
+vi.mock('@/runtime/runtime-file-watch-client', () => ({ subscribeRuntimeFileChanges: vi.fn() }))
 
-vi.mock('@/runtime/runtime-git-client', () => ({
+vi.mock('@/runtime/runtime-git-diff-client', () => ({
   getRuntimeGitBranchDiff: vi.fn(),
   getRuntimeGitCommitDiff: vi.fn(),
-  getRuntimeGitDiff: mocks.getRuntimeGitDiff,
-  getRuntimeGitScope: vi.fn(() => null)
+  getRuntimeGitDiff: mocks.getRuntimeGitDiff
 }))
+vi.mock('@/runtime/runtime-git-client-context', () => ({ getRuntimeGitScope: vi.fn(() => null) }))
 
 vi.mock('@/lib/connection-context', () => ({
   getConnectionId: vi.fn(),
@@ -38,10 +38,16 @@ vi.mock('@/lib/runtime-workspace-file-route', () => ({
   findWorkspaceFileRoute: vi.fn(() => null)
 }))
 
-vi.mock('@/store', () => ({ useAppStore: { getState: mocks.getState } }))
+vi.mock('@/store', () => ({
+  useAppStore: Object.assign(
+    (select: (state: ReturnType<typeof mocks.getState>) => unknown) => select(mocks.getState()),
+    { getState: mocks.getState }
+  )
+}))
 
 import { ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT } from './editor-autosave'
 import { useEditorPanelContentState } from './useEditorPanelContentState'
+import { createTestStore } from '@/store/slices/store-test-helpers'
 
 type Deferred<T> = {
   promise: Promise<T>
@@ -161,6 +167,7 @@ describe('useEditorPanelContentState visibility', () => {
     mocks.readRuntimeFileContent.mockReset()
     mocks.getState.mockReset()
     mocks.getState.mockReturnValue({
+      ...createTestStore().getState(),
       settings: null,
       openFiles: [],
       setLastKnownDiskSignature: vi.fn()

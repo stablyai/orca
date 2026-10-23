@@ -1,15 +1,14 @@
-import type { AgentAttentionUnreadReason } from '@/attention/agent-attention-contract'
-import type { DirectSshLayoutEdit, TerminalState } from './terminal-state'
+import type { TerminalState } from './terminal-state'
 import type { Tab } from '../../../../shared/tab-types'
+import type { TabSplitTarget } from '../slices/tabs/tabs-slice-contract'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
-import type { SetupSplitDirection } from '../../../../shared/worktree/launch-types'
 import type {
   AgentProviderSessionMetadata,
-  SleepingAgentLaunchConfig
+  SleepingAgentLaunchConfig,
+  SleepingAgentSessionRecord
 } from '../../../../shared/agent-session-resume'
-import type { DirectSshAuthority } from '../../../../shared/ssh-types'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
 import type { SessionOptionValue } from '../../../../shared/native-chat-session-options'
 import type { AgentStartedTelemetry } from '../../lib/worktree-startup-payload'
@@ -18,10 +17,6 @@ import type {
   GeneratedTabTitleUpdate,
   TerminalTabTitleUpdate
 } from '../slices/terminal-tab-title-batch'
-import type {
-  DirectSshPaneRetryAttemptId,
-  DirectSshPaneRetryResult
-} from '../slices/direct-ssh-terminal-recovery'
 import type { NativeChatLaunchDraft, NativeChatLaunchPrompt } from '@/lib/native-chat-launch-prompt'
 import type { AgentStatusWorktreeShutdownReason } from '../slices/agent-status'
 import type {
@@ -29,11 +24,17 @@ import type {
   TerminalTabRetirementPlan
 } from '../slices/terminal-tab-retirement'
 import type {
+  AccountRestartAgent,
   AutomaticAgentResumeClaim,
   CodexRestartNotice,
-  HydrateWorkspaceSessionOptions,
-  ReconnectPersistedTerminalsOptions
+  HydrateWorkspaceSessionOptions
 } from './terminal-contracts'
+
+/** Main's answer for a sleep it ran: every PTY stopped, or only `stoppedPtyIds` before it failed. */
+/** Main's answer to a sleep it ran; on success, the wake records it keeps (null: another host's). */
+export type HostTerminalStop =
+  | { failed: false; records: readonly SleepingAgentSessionRecord[] | null }
+  | { failed: true; stoppedPtyIds: readonly string[] }
 
 export type TerminalActions = {
   setTerminalStartupRestorationReady: (value: boolean) => void
@@ -69,16 +70,20 @@ export type TerminalActions = {
     options?: {
       pendingActivationSpawn?: boolean
       initialPtyId?: string
-      /** Stable leaf identity for adopting an already-live pane without changing its pane key. */
+      /** Stable leaf identity: an already-live pane's, or a host launch's pane before its process. */
       initialLeafId?: string
       /** Published atomically with the tab so its first mount cannot spawn a bare shell. */
       pendingStartup?: TerminalState['pendingStartupByTabId'][string]
       /** Published atomically with pendingStartup for automatic resume ownership. */
       automaticResumeClaim?: AutomaticAgentResumeClaim
       activate?: boolean
+      /** Creates the tab in a new split group instead of targetGroupId. */
+      split?: TabSplitTarget
       recordInteraction?: boolean
       id?: string
       launchAgent?: TuiAgent
+      /** The pane a host `agent.launch` laid out before its agent existed, while its fate is open. */
+      agentLaunchPane?: TerminalTab['agentLaunchPane']
       quickCommandLabel?: string | null
       viewMode?: Tab['viewMode']
       startupCwd?: string
@@ -118,11 +123,6 @@ export type TerminalActions = {
   clearTabLaunchAgent: (tabId: string) => void
   setRuntimePaneTitle: (tabId: string, paneId: number, title: string) => void
   clearRuntimePaneTitle: (tabId: string, paneId: number) => void
-  markTerminalTabUnread: (tabId: string, reason: AgentAttentionUnreadReason) => void
-  markTerminalPaneUnread: (paneKey: string, reason: AgentAttentionUnreadReason) => void
-  markAgentCompletionPaneUnread: (paneKey: string, reason: AgentAttentionUnreadReason) => void
-  clearTerminalTabUnread: (tabId: string) => void
-  clearTerminalPaneUnread: (paneKey: string) => void
   setTabCustomTitle: (
     tabId: string,
     title: string | null,
@@ -130,24 +130,22 @@ export type TerminalActions = {
       recordInteraction?: boolean
     }
   ) => void
-  setTabColor: (tabId: string, color: string | null) => void
-  /** Binds only live tabs and migrates replacement identity state before publishing ownership. */
-  updateTabPtyId: (
+  setTabColor: (tabId: string, color: string | null, opts?: { recordInteraction?: boolean }) => void
+  /** What the tab keeps about the launch that laid out one of its panes; undefined clears it.
+   *  `remount` remounts the tab's panes, so one whose spawn was refused spawns again. */
+  setTabAgentLaunchPane: (
     tabId: string,
-    ptyId: string,
-    replacedPtyId?: string,
-    directSshRetryAttemptId?: DirectSshPaneRetryAttemptId
+    launchPane: TerminalTab['agentLaunchPane'],
+    options?: { remount?: boolean }
   ) => void
+  /** Binds only live tabs and migrates replacement identity state before publishing ownership. */
+  updateTabPtyId: (tabId: string, ptyId: string, replacedPtyId?: string) => void
   /** Reconciles exact exits; bulk clear intentionally retains relay-grace identity. */
   clearTabPtyId: (tabId: string, ptyId?: string) => void
   /** Protects a tab from orphan cleanup after an unverified PTY loss. */
   markUnverifiedPtyLoss: (tabId: string) => void
   /** Records the relay's own answer that a PTY id is gone; the one `exited` a respawn may act on. */
   markPtySourceDisowned: (ptyId: string) => void
-  clearDirectSshTargetPtyBindings: (targetId: string) => number
-  invalidateStaleDirectSshTargetPtyBindings: (authority: DirectSshAuthority) => number
-  retryDirectSshTargetPanes: (authority: DirectSshAuthority, now?: number) => number
-  settleDirectSshPaneRetry: (result: DirectSshPaneRetryResult, now?: number) => void
   /** Awaited verified shutdown; unlike closeTab, physical teardown gates the state commit. */
   shutdownWorktreeTerminals: (
     worktreeId: string,
@@ -157,6 +155,9 @@ export type TerminalActions = {
       sleepingPaneKeys?: string[]
       expectedRuntimePtyIds?: string[]
       backendOwnsPtyTeardown?: boolean
+      /** Main stops these terminals itself: the window only guards and then commits its panes. */
+      hostStop?: Promise<HostTerminalStop>
+      onAdmitted?: () => void
     }
   ) => Promise<void>
   /** Captures resumable pane evidence and publishes suppression before exact physical teardown. */
@@ -173,12 +174,12 @@ export type TerminalActions = {
   suppressPtyExit: (ptyId: string) => void
   consumeSuppressedPtyExit: (ptyId: string) => boolean
   isPtyShutdownPending: (ptyId: string) => boolean
-  queueCodexPaneRestarts: (ptyIds: string[]) => void
-  consumePendingCodexPaneRestart: (ptyId: string) => boolean
+  /** Codex also marks its restart notices answered. */
+  queuePaneAccountRestarts: (ptyIds: string[], agent: AccountRestartAgent) => void
+  consumePendingPaneAccountRestart: (ptyId: string) => AccountRestartAgent | null
   markCodexRestartNotices: (
     notices: (Pick<CodexRestartNotice, 'previousAccountLabel' | 'nextAccountLabel'> &
       Partial<Pick<CodexRestartNotice, 'previousAccountId' | 'nextAccountId'>> & {
-        homeRouteChanged?: boolean
         ptyId: string
       })[]
   ) => string[]
@@ -189,7 +190,6 @@ export type TerminalActions = {
   setTabPaneExpanded: (tabId: string, expanded: boolean) => void
   setTabCanExpandPane: (tabId: string, canExpand: boolean) => void
   setTabLayout: (tabId: string, layout: TerminalLayoutSnapshot | null) => void
-  acknowledgeDirectSshLayoutEdits: (uploaded: Readonly<Record<string, DirectSshLayoutEdit>>) => void
   /** Client-local park scrollback for a tab. Never uploaded; read via `resolveLeafScrollback`. */
   setTabLocalOnlyScrollback: (tabId: string, buffersByLeafId: Record<string, string> | null) => void
   syncPaneDetachPtyOwnership: (args: {
@@ -247,19 +247,6 @@ export type TerminalActions = {
     showSessionRestoredBanner?: boolean
     telemetry?: AgentStartedTelemetry
   } | null
-  queueTabSetupSplit: (
-    tabId: string,
-    startup: {
-      command: string
-      env?: Record<string, string>
-      direction: SetupSplitDirection
-    }
-  ) => void
-  consumeTabSetupSplit: (tabId: string) => {
-    command: string
-    env?: Record<string, string>
-    direction: SetupSplitDirection
-  } | null
   queueTabIssueCommandSplit: (
     tabId: string,
     issueCommand: {
@@ -283,8 +270,5 @@ export type TerminalActions = {
     options?: HydrateWorkspaceSessionOptions
   ) => void
   /** Publishes wake hints without spawning; global completion alone opens the readiness gate. */
-  reconnectPersistedTerminals: (
-    signal?: AbortSignal,
-    options?: ReconnectPersistedTerminalsOptions
-  ) => Promise<void>
+  reconnectPersistedTerminals: (signal?: AbortSignal) => Promise<void>
 }

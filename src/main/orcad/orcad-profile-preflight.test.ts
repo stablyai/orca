@@ -1,9 +1,11 @@
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ProcessResult, ProcessSpec } from '../../shared/child-process/run-process'
-import { ORCAD_BUN_VERSION } from '../../shared/orcad-bun-runtime'
+
+import type { ProcessResult, ProcessSpec } from '@orca/process-host/process-spec'
+import { NODE_RUNTIME_PIN } from '../../shared/node-runtime-pin'
 import { ORCAD_STARTUP_PREFLIGHT_FLAG } from '../../shared/orcad-profile-preflight'
 import { OrcadBundledRuntimeError } from './orcad-bundled-runtime'
+import type * as BundledRuntime from './orcad-bundled-runtime'
 import { resolveOrcadExitCode } from './orcad-exit-code'
 import { preflightBundledOrcadStartup, runOrcadProfilePreflight } from './orcad-profile-preflight'
 
@@ -12,18 +14,23 @@ const fixture = vi.hoisted(() => ({
   readVersion: vi.fn(),
   sql: vi.fn(),
   native: vi.fn(),
+  bundled: vi.fn<(directory: string) => boolean>(),
   run: vi.fn<(spec: ProcessSpec) => Promise<ProcessResult>>()
 }))
+vi.mock('./orcad-bundled-runtime', async (importOriginal) => ({
+  ...(await importOriginal<typeof BundledRuntime>()),
+  isRunningAsBundledOrcadRuntime: fixture.bundled,
+  resolveBundledOrcadSlot: () => '/slot'
+}))
 vi.mock('./orcad-artifact-identity', () => ({ readOrcadArtifactIdentity: fixture.identity }))
-vi.mock('./orcad-app-paths', () => ({ resolveOrcadInstallRoot: () => '/slot' }))
 vi.mock('node:fs/promises', () => ({ readFile: fixture.readVersion }))
 vi.mock('../persistence/profile-state/profile-state-runtime-preflight', () => ({
   preflightProfileStateRuntime: fixture.sql
 }))
-vi.mock('./orcad-bun-native-preflight', () => ({
-  preflightOrcadBunNativeRuntime: fixture.native
+vi.mock('./orcad-runtime-native-preflight', () => ({
+  preflightOrcadNativeRuntime: fixture.native
 }))
-vi.mock('../../shared/child-process/run-process', () => ({ runProcess: fixture.run }))
+vi.mock('@orca/process-host', () => ({ runProcess: fixture.run }))
 
 const identity = '0.1.0+aaaaaaaaaaaa'
 const nonce = '743bf9c8-2e58-4c79-a0ac-52c8d3e8e103'
@@ -37,8 +44,8 @@ function readyResult(challenge: string | undefined): ProcessResult {
     stdout: JSON.stringify({
       type: 'orca_profile_state_ready',
       nonce: challenge,
-      runtime: 'bun',
-      runtimeVersion: ORCAD_BUN_VERSION,
+      runtime: 'node',
+      runtimeVersion: NODE_RUNTIME_PIN.version,
       artifactVersion: identity,
       sqliteVersion: '3.53.2',
       revision: 1
@@ -49,8 +56,9 @@ function readyResult(challenge: string | undefined): ProcessResult {
 beforeEach(() => {
   vi.spyOn(process, 'versions', 'get').mockReturnValue({
     ...process.versions,
-    bun: ORCAD_BUN_VERSION
+    node: NODE_RUNTIME_PIN.version
   })
+  fixture.bundled.mockReturnValue(true)
   fixture.identity.mockResolvedValue(identity)
   fixture.readVersion.mockResolvedValue(`${identity}\n`)
   fixture.sql.mockResolvedValue({ sqliteVersion: '3.53.2', revision: 1 })
@@ -69,10 +77,11 @@ describe('bundled Orca startup readiness', () => {
     async (platform) => {
       vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
       await preflightBundledOrcadStartup()
+      expect(fixture.bundled).toHaveBeenCalledWith('/slot')
       expect(fixture.run).toHaveBeenCalledOnce()
       expect(fixture.run).toHaveBeenCalledWith({
-        program: join('/slot', platform === 'win32' ? 'bun-runtime.exe' : 'bun-runtime'),
-        args: [join('/slot', 'orcad.js'), ORCAD_STARTUP_PREFLIGHT_FLAG, expect.any(String)],
+        program: process.execPath,
+        args: [join('/slot', 'orcad-server.js'), ORCAD_STARTUP_PREFLIGHT_FLAG, expect.any(String)],
         env: expect.objectContaining({ ORCA_BACKGROUND_LAUNCH: '1' }),
         timeoutMs: 90_000,
         maxOutputBytes: 64 * 1024,
@@ -83,9 +92,8 @@ describe('bundled Orca startup readiness', () => {
     }
   )
 
-  it('leaves legacy Node startup on its existing readiness path', async () => {
-    const { bun: _bun, ...versions } = process.versions
-    vi.spyOn(process, 'versions', 'get').mockReturnValue(versions)
+  it('leaves an unpackaged or host-Node start on its existing readiness path', async () => {
+    fixture.bundled.mockReturnValue(false)
     await preflightBundledOrcadStartup()
     expect(fixture.identity).not.toHaveBeenCalled()
     expect(fixture.run).not.toHaveBeenCalled()

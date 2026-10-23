@@ -12,6 +12,8 @@ vi.mock('@/lib/client-environment-info', () => ({
   resolveClientEnvironmentFooter: environmentMocks.resolveFooter
 }))
 
+import { i18n } from '@/i18n/i18n'
+
 import {
   TerminalErrorToast,
   humanizeTerminalError,
@@ -240,6 +242,15 @@ describe('isExplainedTerminalError', () => {
     ).toBe(true)
   })
 
+  it('explains a pane whose saved session another host connection owns, without an issue link', () => {
+    const raw = "Error invoking remote method 'pty:spawn': Error: terminal_pane_owner_host_mismatch"
+    expect(isExplainedTerminalError(raw)).toBe(true)
+    const humanized = humanizeTerminalError(raw)
+    expect(humanized).toContain('belongs to another host connection')
+    expect(humanized).toContain('Open a new terminal')
+    expect(humanized).not.toContain('terminal_pane_owner_host_mismatch')
+  })
+
   it('keeps the issue link for errors Orca cannot explain', () => {
     expect(isExplainedTerminalError('Paste failed.')).toBe(false)
     expect(isExplainedTerminalError('node-pty: open_slave failed: EMFILE')).toBe(false)
@@ -342,6 +353,20 @@ describe('TerminalErrorToast environment footer', () => {
     await waitFor(() => expect(environmentMocks.resolveFooter).not.toHaveBeenCalled())
   })
 
+  it('omits client details for a remote pane whose session cannot be reattached', async () => {
+    const error = "Error invoking remote method 'pty:attach': Error: Session not found: pty-7"
+    const remote = render(
+      React.createElement(TerminalErrorToast, { error, paneOnClient: false, onDismiss: vi.fn() })
+    )
+    expect(remote.container.textContent).toContain("couldn't reattach")
+    await waitFor(() => expect(environmentMocks.resolveFooter).not.toHaveBeenCalled())
+    expect(remote.container.textContent).not.toContain('OS:')
+    cleanup()
+
+    const local = render(React.createElement(TerminalErrorToast, { error, onDismiss: vi.fn() }))
+    await waitFor(() => expect(local.container.textContent).toContain('OS: darwin'))
+  })
+
   it('shows the issue request once for a host error that already asks for one', () => {
     const view = render(
       React.createElement(TerminalErrorToast, {
@@ -409,4 +434,125 @@ describe('TerminalErrorToast environment footer', () => {
       expect(view.container.textContent).toContain('Retry could not reconnect yet')
     )
   })
+
+  // #30486: Retry was the only action, so a pane whose owner stays unverifiable looped on it.
+  it('offers a new terminal beside Retry and leaves this pane alone', () => {
+    const onRetry = vi.fn().mockResolvedValue(false)
+    const onOpenNewTerminal = vi.fn()
+    const onDismiss = vi.fn()
+    const view = render(
+      React.createElement(TerminalErrorToast, {
+        error: 'terminal_pane_owner_unverified',
+        onDismiss,
+        onRetry,
+        onOpenNewTerminal
+      })
+    )
+
+    fireEvent.click(view.getByRole('button', { name: 'Open new terminal' }))
+    expect(onOpenNewTerminal).toHaveBeenCalledOnce()
+    expect(onRetry).not.toHaveBeenCalled()
+    expect(onDismiss).not.toHaveBeenCalled()
+  })
+})
+
+// The shape a missing folder workspace reaches the toast in when its terminal spawn is rejected.
+const MISSING_FOLDER_ERROR =
+  "Error invoking remote method 'pty:spawn': Error: folder_workspace_path_missing:/Users/me/ara_company"
+
+describe('TerminalErrorToast folder workspace path errors', () => {
+  it('replaces the raw missing-folder code with actionable copy', () => {
+    const humanized = humanizeTerminalError(MISSING_FOLDER_ERROR)
+
+    expect(humanized).not.toContain('folder_workspace_path_missing')
+    expect(humanized).toBe(
+      "Error invoking remote method 'pty:spawn': Error: Orca cannot find /Users/me/ara_company. Remove and re-import the folder."
+    )
+  })
+
+  it('keeps unrelated lines when one line is a folder path error', () => {
+    const humanized = humanizeTerminalError(
+      ['folder_workspace_path_not_directory:/srv/app', 'Another error'].join('\n')
+    )
+
+    expect(humanized).toBe(['/srv/app exists, but it is not a folder.', 'Another error'].join('\n'))
+  })
+
+  it('humanizes the ambiguous-connection code thrown without a path', () => {
+    const view = render(
+      React.createElement(TerminalErrorToast, {
+        error: 'folder_workspace_connection_ambiguous',
+        onDismiss: vi.fn()
+      })
+    )
+
+    const toast = view.container.querySelector('[data-terminal-error-toast]')
+    expect(toast?.textContent).toContain(
+      'Orca cannot tell which SSH connection owns this folder scope.'
+    )
+    expect(toast?.textContent).not.toContain('folder_workspace_connection_ambiguous')
+    expect(toast?.querySelector('a')).toBeNull()
+  })
+
+  it('keeps the issue link when an unrelated error shares the toast', () => {
+    const view = render(
+      React.createElement(TerminalErrorToast, {
+        error: [MISSING_FOLDER_ERROR, 'Failed to spawn shell "/bin/zsh": boom'].join('\n'),
+        onDismiss: vi.fn()
+      })
+    )
+
+    const toast = view.container.querySelector('[data-terminal-error-toast]')
+    expect(toast?.textContent).toContain('Orca cannot find /Users/me/ara_company')
+    expect(toast?.querySelector('a')?.textContent).toBe('file an issue')
+  })
+
+  it('does not ask the user to file an issue for a folder they can fix', () => {
+    const view = render(
+      React.createElement(TerminalErrorToast, {
+        error: MISSING_FOLDER_ERROR,
+        onDismiss: vi.fn()
+      })
+    )
+
+    const toast = view.container.querySelector('[data-terminal-error-toast]')
+    expect(toast?.textContent).toContain('Orca cannot find /Users/me/ara_company')
+    expect(toast?.textContent).not.toContain('folder_workspace_path_missing')
+    expect(toast?.textContent).not.toContain('If this persists')
+    expect(toast?.querySelector('a')).toBeNull()
+  })
+})
+
+it('keeps an existing environment footer without asking to report an explained folder error', () => {
+  const footer =
+    '---\nOrca: 1.4.178-rc.2\nOS: win32 10.0 (x64)\nShell: C:\\Windows\\System32\\cmd.exe'
+  const error = `folder_workspace_path_not_directory:C:\\work\\folder:file\n\n${footer}`
+  const view = render(React.createElement(TerminalErrorToast, { error, onDismiss: vi.fn() }))
+  expect(view.container.textContent).toContain(
+    'C:\\work\\folder:file exists, but it is not a folder.'
+  )
+  expect(view.container.textContent).toContain(footer)
+  expect(view.container.querySelector('a')).toBeNull()
+  expect(environmentMocks.resolveFooter).not.toHaveBeenCalled()
+})
+
+it('uses existing Korean recovery copy and preserves the path', async () => {
+  await i18n.changeLanguage('ko')
+  try {
+    const path = '/tmp/project: folder'
+    const view = render(
+      React.createElement(TerminalErrorToast, {
+        error: `folder_workspace_path_missing:${path}`,
+        onDismiss: vi.fn()
+      })
+    )
+    expect(view.container.textContent).toContain(
+      i18n.t('auto.lib.folderWorkspacePathStatus.createError.description.missing', { path })
+    )
+    expect(view.container.textContent).toContain(path)
+    expect(view.container.textContent).not.toContain('folder_workspace_path_missing')
+    expect(view.container.querySelector('a')).toBeNull()
+  } finally {
+    await i18n.changeLanguage('en')
+  }
 })

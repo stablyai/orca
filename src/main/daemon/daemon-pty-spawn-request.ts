@@ -1,3 +1,4 @@
+import type { SpawnIntent } from '../../shared/host-spawn-admission'
 import type { ColdRestorePayload } from './cold-restore-payload-cache'
 import type { DaemonAuditObservation } from './daemon-audit-classifier'
 import {
@@ -16,7 +17,12 @@ import {
   TERMINAL_HISTORY_INLINE_SEED_CODE_UNITS
 } from './terminal-history-seed-chunks'
 import type { CreateOrAttachResult, GetSnapshotResult } from './types'
-import type { PtySpawnOptions, PtySpawnResult } from '../providers/types'
+import type { PtySpawnOptions, PtySpawnResult } from '../providers/pty-provider-contract'
+
+/** A daemon kept running across an update trusts `interactive` even for a claimed resume. */
+function forwardedSpawnIntent(intent: SpawnIntent, claim: unknown): SpawnIntent {
+  return intent === 'interactive' && claim !== undefined ? 'automatic-restore' : intent
+}
 
 export type DaemonPtySpawnContext = {
   opts: PtySpawnOptions
@@ -131,6 +137,9 @@ export abstract class DaemonPtySpawnRequest extends DaemonPtyRuntimeState {
         ...(historySeedTransferId ? { historySeedTransferId } : {}),
         ...(this.supportsStartupIngress && !context.attachOnly && opts.startupIngress
           ? { startupIngress: opts.startupIngress }
+          : {}),
+        ...(!context.attachOnly && opts.spawnIntent
+          ? { spawnIntent: forwardedSpawnIntent(opts.spawnIntent, opts.agentSessionEnsure) }
           : {}),
         ...(!context.attachOnly && opts.agentSessionEnsure
           ? { agentSessionEnsure: opts.agentSessionEnsure }

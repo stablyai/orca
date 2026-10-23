@@ -1,4 +1,10 @@
 import type { BrowserSetAnnotationViewportBridgeArgs } from '../../shared/browser-annotation-viewport-bridge'
+import type { ManagedBrowserProfileOwner } from '../../shared/browser-profile-scope'
+import type {
+  BrowserPageSiteDisplay,
+  BrowserSiteColorScheme
+} from '../../shared/browser-site-display'
+import type { BrowserPageZoomDirection } from '../../shared/browser-page-zoom'
 import type {
   BrowserIdentityModeSetResult,
   BrowserIdentityModeStatus,
@@ -13,6 +19,16 @@ import type {
   BrowserWebAuthnAccountResponse
 } from '../../shared/browser-webauthn-account'
 import type {
+  BrowserPagePromptRequest,
+  BrowserPagePromptResponse,
+  BrowserPagePromptResult
+} from '../../shared/browser-page-prompt'
+import type {
+  BrowserSitePermission,
+  BrowserSitePermissionDecision,
+  BrowserSitePermissionEntry
+} from '../../shared/browser-site-permission'
+import type {
   BrowserSetGrabModeArgs,
   BrowserSetGrabModeResult,
   BrowserAwaitGrabSelectionArgs,
@@ -21,7 +37,8 @@ import type {
   BrowserCaptureSelectionScreenshotArgs,
   BrowserCaptureSelectionScreenshotResult,
   BrowserExtractHoverArgs,
-  BrowserExtractHoverResult
+  BrowserExtractHoverResult,
+  GrabIntent
 } from '../../shared/browser-grab-types'
 import type {
   BrowserContextMenuDismissedEvent,
@@ -49,7 +66,7 @@ import type {
 } from '../../shared/browser-client-page-renderer-protocol'
 
 export type BrowserApi = {
-  /** Absent wherever this client hosts no guests of its own, which is how the web client reads. */
+  /** Absent on clients that host no browser guests, including web clients. */
   readClientHostId?: () => string | null
   onClientPageRendererRequest?: (
     callback: (
@@ -77,17 +94,40 @@ export type BrowserApi = {
   ) => () => void
   onWebAuthnAccountRequestClosed: (callback: (event: { requestId: string }) => void) => () => void
   respondWebAuthnAccount: (response: BrowserWebAuthnAccountResponse) => Promise<boolean>
-  openDevTools: (args: { browserPageId: string }) => Promise<boolean>
+  onPagePromptRequest: (callback: (request: BrowserPagePromptRequest) => void) => () => void
+  onPagePromptClosed: (callback: (event: { requestId: string }) => void) => () => void
+  respondPagePrompt: (response: BrowserPagePromptResponse) => Promise<BrowserPagePromptResult>
+  /** `inspectAt` (guest viewport coordinates) selects the element there. */
+  openDevTools: (args: {
+    browserPageId: string
+    inspectAt?: { x: number; y: number }
+  }) => Promise<boolean>
+  addWordToDictionary: (args: { browserPageId: string; word: string }) => Promise<boolean>
+  copyImageAt: (args: {
+    browserPageId: string
+    point: { x: number; y: number }
+  }) => Promise<boolean>
   setViewportOverride: (args: {
     browserPageId: string
     override: BrowserViewportOverride | null
   }) => Promise<boolean>
+  getPageSiteDisplay: (args: { browserPageId: string }) => Promise<BrowserPageSiteDisplay | null>
+  /** Site zoom is scoped to the browser profile. */
+  zoomPage: (args: {
+    browserPageId: string
+    direction: BrowserPageZoomDirection
+  }) => Promise<BrowserPageSiteDisplay | null>
+  /** Null makes the site match Orca's theme again. */
+  setPageSiteColorScheme: (args: {
+    browserPageId: string
+    colorScheme: BrowserSiteColorScheme | null
+  }) => Promise<BrowserPageSiteDisplay | null>
   reportViewportScrollState?: (args: {
     browserPageId: string
     state: BrowserViewportScrollState
   }) => void
   setAnnotationViewportBridge: (args: BrowserSetAnnotationViewportBridgeArgs) => Promise<boolean>
-  /** Publishes a client-hosted page's url/title to its runtime over that runtime's host lease. */
+  /** Uses the owning runtime's host lease. */
   publishClientPageMetadata: (args: {
     environmentId: string
     params: BrowserClientPageMetadataParams
@@ -122,6 +162,11 @@ export type BrowserApi = {
   onCapturePaintHold: (
     callback: (data: { browserPageId: string; held: boolean }) => void
   ) => () => void
+  /** Main asks the pane to keep the user's focus through an agent press; `ready` answers it. */
+  onAgentInputFocusGuard: (
+    callback: (data: { browserPageId: string; token: string; active: boolean }) => void
+  ) => () => void
+  agentInputFocusGuardReady: (token: string, composing: boolean) => void
   onPaneFocus: (
     callback: (data: { worktreeId: string | null; browserPageId: string }) => void
   ) => () => void
@@ -136,7 +181,7 @@ export type BrowserApi = {
     args: BrowserCaptureSelectionScreenshotArgs
   ) => Promise<BrowserCaptureSelectionScreenshotResult>
   extractHoverPayload: (args: BrowserExtractHoverArgs) => Promise<BrowserExtractHoverResult>
-  onGrabModeToggle: (callback: (browserPageId: string) => void) => () => void
+  onGrabModeToggle: (callback: (browserPageId: string, intent: GrabIntent) => void) => () => void
   onGrabActionShortcut: (
     callback: (args: { browserPageId: string; key: 'c' | 's' }) => void
   ) => () => void
@@ -144,6 +189,7 @@ export type BrowserApi = {
   /** Resolves once the SSH workspace's partition is bound and proxy-verified; the webview must wait for it. */
   prepareSshWorkspacePartition: (args: {
     targetId: string
+    expectedSshTargetGeneration?: number
     browserProfileId?: string
     skipProbe?: boolean
   }) => Promise<{ partition: string }>
@@ -151,6 +197,10 @@ export type BrowserApi = {
     scope: BrowserSessionProfileScope
     label: string
   }) => Promise<BrowserSessionProfile | null>
+  sessionEnsureManagedProfile: (args: {
+    owner: ManagedBrowserProfileOwner
+    label: string
+  }) => Promise<BrowserSessionProfile>
   identityGet: () => Promise<BrowserIdentityModeStatus | null>
   identitySet: (mode: BrowserUserAgentMode) => Promise<BrowserIdentityModeSetResult | null>
   sessionDeleteProfile: (args: { profileId: string }) => Promise<boolean>
@@ -173,11 +223,20 @@ export type BrowserApi = {
     browserFamily: string
     browserProfile?: string
   }) => Promise<BrowserCookieImportResult | null>
-  /** Import-source badges for one environment's client-hosted jars, keyed by profile id. */
+  /** Import sources keyed by browser profile ID. */
   sessionClientRouteImportSources: (args: {
     environmentId: string
   }) => Promise<Record<string, BrowserSessionProfileSource>>
   sessionClearDefaultCookies: () => Promise<boolean>
+  /** Site permissions are local to this computer and browser profile. */
+  sitePermissionsList: (args: { profileId: string }) => Promise<BrowserSitePermissionEntry[]>
+  /** Null forgets the answer so the site is asked again. */
+  sitePermissionsSet: (args: {
+    profileId: string
+    origin: string
+    permission: BrowserSitePermission
+    decision: BrowserSitePermissionDecision | null
+  }) => Promise<BrowserSitePermissionEntry[]>
   notifyActiveTabChanged: (args: { browserPageId: string }) => Promise<boolean>
 }
 

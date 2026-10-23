@@ -1,10 +1,14 @@
+import { createPaneBindingStore } from './pty-launch-race-test-fixture'
 import { withDurableRuntimeStore } from '../runtime/runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { statSyncMock } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { SessionNotFoundError, TerminalSessionOwnerUnverifiedError } from '../daemon/daemon-errors'
 import { makePaneKey } from '../../shared/stable-pane-id'
-import { registerPtyHandlers, clearProviderPtyState, setLocalPtyProvider } from './pty'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
+import { registerPtyHandlers } from './pty/register-handlers'
+import { clearProviderPtyState } from './pty/provider/state-cleanup'
+import { setLocalPtyProvider } from './pty/provider/registry'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -103,20 +107,15 @@ describe('registerPtyHandlers', () => {
       seedHeadlessTerminal: vi.fn(),
       onPtyExit: vi.fn()
     }
-    const store = {
-      getWorkspaceSession: vi.fn(() => ({
-        tabsByWorktree: {
-          [worktreeId]: [{ id: tabId, worktreeId, ptyId: 'pty-persisted-owner' }]
-        },
-        terminalLayoutsByTabId: {
-          [tabId]: { ptyIdsByLeafId: { [leafId]: 'pty-persisted-owner' } }
-        },
-        terminalPtyIncarnationsByPaneKey: {
-          [paneKey]: 'inc-stale-owner'
-        }
-      })),
-      persistPtyBinding: vi.fn(() => true)
-    }
+    const store = createPaneBindingStore()
+    await store.persistPtyBinding({
+      worktreeId,
+      tabId,
+      leafId,
+      ptyId: 'pty-persisted-owner',
+      incarnationId: 'inc-stale-owner'
+    })
+    store.persistPtyBinding.mockClear()
 
     registerPtyHandlers(
       mainWindow as never,
@@ -158,9 +157,15 @@ describe('registerPtyHandlers', () => {
         command: undefined
       })
     )
-    expect(runtime.registerPreAllocatedHandleForPty).toHaveBeenCalledWith(
+    expect(runtime.registerPty).toHaveBeenCalledWith(
       'pty-persisted-owner',
-      'term-rebuilt-owner'
+      worktreeId,
+      null,
+      expect.objectContaining({
+        tabId,
+        leafId,
+        incarnationId: 'inc-live-owner'
+      })
     )
     expect(runtime.noteTerminalSpawnCommand).not.toHaveBeenCalled()
     expect(store.persistPtyBinding).toHaveBeenCalledOnce()
@@ -374,8 +379,17 @@ describe('registerPtyHandlers', () => {
       expect(providerSpawn.mock.calls[1]?.[0]).toMatchObject({
         command: 'codex resume exact-dead-provider-session'
       })
-      expect(store.setWorkspaceSession).toHaveBeenCalledOnce()
-      expect(store.flushOrThrow).toHaveBeenCalledOnce()
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        // The dead binding stays until the fresh spawn's one bind swaps it.
+        expect(store.setWorkspaceSession).not.toHaveBeenCalled()
+        const [swap] = vi.mocked(store.persistPtyBinding).mock.calls[0] ?? []
+        expect(typeof swap === 'function' ? swap() : swap).toMatchObject({
+          ptyId: 'pty-fresh-recovery'
+        })
+      } else {
+        expect(store.setWorkspaceSession).toHaveBeenCalledOnce()
+        expect(store.flushOrThrow).toHaveBeenCalledOnce()
+      }
       expect(runtime.onPtyExit).toHaveBeenCalledWith(
         'pty-dead-persisted-owner',
         -1,

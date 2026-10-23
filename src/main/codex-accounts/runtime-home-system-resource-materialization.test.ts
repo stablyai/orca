@@ -71,7 +71,7 @@ describe('CodexRuntimeHomeService', () => {
       ''
     ].join('\n')
     writeFileSync(canonicalConfigPath, canonicalConfig, 'utf-8')
-    const store = createStore(createSettings({ shellStartupEnvProbeSupported: false }))
+    const store = createStore(createSettings({ realHomeRoutable: false }))
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
 

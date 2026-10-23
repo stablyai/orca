@@ -4,18 +4,20 @@ const mocks = vi.hoisted(() => ({
   supportsCapability: vi.fn()
 }))
 
-vi.mock('./runtime-rpc-client', () => ({
+vi.mock('./runtime-rpc-result', () => ({
   RuntimeRpcCallError: class RuntimeRpcCallError extends Error {
     code: string
     constructor(response: { error: { code: string; message: string } }) {
       super(response.error.message)
       this.code = response.error.code
     }
-  },
+  }
+}))
+vi.mock('./runtime-rpc-client', () => ({
   runtimeEnvironmentSupportsCapability: mocks.supportsCapability
 }))
 
-import { RuntimeRpcCallError } from './runtime-rpc-client'
+import { RuntimeRpcCallError } from './runtime-rpc-result'
 import { runRemoteAgentSessionLaunch } from './remote-agent-session-launch'
 import { agentResumeHostAuthorityCapability } from './agent-resume-host-authority-capability'
 
@@ -45,7 +47,7 @@ describe('remote agent-session launch routing', () => {
     expect(legacy).not.toHaveBeenCalled()
   })
 
-  it.each(['kimi', 'muse', 'codebuddy'] as const)(
+  it.each(['kimi', 'muse', 'codebuddy', 'qoder', 'qoder-cn', 'qwen-code', 'cursor'] as const)(
     'falls back to legacy when an older host lacks the %s resume capability',
     async (agent) => {
       const hostAuthority = vi.fn().mockResolvedValue('structured')
@@ -70,7 +72,7 @@ describe('remote agent-session launch routing', () => {
     }
   )
 
-  it.each(['muse', 'codebuddy'] as const)(
+  it.each(['muse', 'codebuddy', 'qoder', 'qoder-cn', 'qwen-code'] as const)(
     'uses host authority when the host supports %s resume',
     async (agent) => {
       const hostAuthority = vi.fn().mockResolvedValue('host')

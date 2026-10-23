@@ -268,6 +268,36 @@ describe('automation target availability', () => {
     ).toEqual({ canRunNow: true, reason: 'available', message: null })
   })
 
+  it('matches the managed server setup when a moved SSH host keeps a setup with the same id', () => {
+    // A legacy setup's id is its repo id, so the retained SSH source and its server share it.
+    expect(
+      getAutomationTargetAvailability({
+        automation: makeAutomation({
+          runContext: {
+            kind: 'workspace-run',
+            projectId: 'project-1',
+            hostId: 'local',
+            projectHostSetupId: 'repo-1',
+            repoId: 'repo-1',
+            path: '/repo'
+          }
+        }),
+        repo: makeRepo({ executionHostId: 'runtime:gpu' }),
+        workspace: makeWorkspace(),
+        projectHostSetups: [
+          makeProjectHostSetup({ id: 'repo-1', hostId: 'ssh:box', executionHostId: 'ssh:box' }),
+          makeProjectHostSetup({
+            id: 'repo-1',
+            hostId: 'runtime:gpu',
+            executionHostId: 'runtime:gpu'
+          })
+        ],
+        sshConnectionStates: new Map(),
+        automationHostTarget: { kind: 'environment', environmentId: 'gpu' }
+      })
+    ).toEqual({ canRunNow: true, reason: 'available', message: null })
+  })
+
   it('blocks saved run contexts whose project host setup is missing or not ready', () => {
     const automation = makeAutomation({
       runContext: {

@@ -2,93 +2,60 @@
 
 import '@testing-library/jest-dom/vitest'
 
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  NativeChatStructuredSessionStatus,
-  SLOW_STARTUP_NOTICE_DELAY_MS
-} from './NativeChatStructuredSessionStatus'
-import { STATUS_MIN_VISIBLE_MS } from '@/lib/delayed-status'
+import type { AgentSessionCancelResult } from '../../../../shared/agent-session-wire'
+import type { AgentChildWorkView } from '../../../../shared/agent-status-child-work-view'
+import { structuredSessionBackgroundTasksView } from '../../../../shared/structured-session-background-tasks-view'
+import { NativeChatStructuredSessionStatus } from './NativeChatStructuredSessionStatus'
 
-afterEach(() => {
-  cleanup()
-  vi.useRealTimers()
-})
+vi.mock('./use-structured-session-child-row-context', () => ({
+  useStructuredSessionChildRowContext: () => undefined
+}))
 
-const NO_TASKS = {
-  show: false,
-  isMonitoring: false,
-  tasks: [],
-  settledTasks: [],
-  supportsStop: false,
-  supportsStopAll: false
-}
+afterEach(cleanup)
 
-function statusElement(
-  startupPhase: 'starting' | 'ready' | null,
-  sessionId = 'session-1',
-  startupChildKey: string | null = null
-) {
-  return (
-    <NativeChatStructuredSessionStatus
-      sessionId={sessionId}
-      agentLabel="Claude"
-      startupPhase={startupPhase}
-      startupChildKey={startupChildKey}
-      error={null}
-      composerError={null}
-      isVisible
-      backgroundTasks={NO_TASKS}
-      stopBackgroundTask={vi.fn(async () => undefined)}
-    />
-  )
-}
-
-function renderStatus(startupPhase: 'starting' | 'ready' | null) {
-  return render(statusElement(startupPhase))
+function helper(invocation: AgentChildWorkView['invocation']): AgentChildWorkView {
+  return {
+    id: 'helper',
+    providerId: 'thread-helper',
+    kind: 'agent',
+    description: 'audit_build',
+    state: 'working',
+    membership: 'live',
+    firstObservedAt: Date.now() - 65_000,
+    observedAt: Date.now() - 1_000,
+    stoppable: true,
+    invocation
+  }
 }
 
 describe('NativeChatStructuredSessionStatus', () => {
-  it('says the agent is still starting once startup runs long', () => {
-    vi.useFakeTimers()
-    renderStatus('starting')
-    act(() => vi.advanceTimersByTime(SLOW_STARTUP_NOTICE_DELAY_MS))
-    expect(screen.getByText(/Claude is still starting/)).toBeInTheDocument()
-    expect(screen.getByText(/close this chat/)).toBeInTheDocument()
-  })
+  it("offers Stop again on a helper's next run, which reuses the stopped run's row id", async () => {
+    let finish: (result: AgentSessionCancelResult) => void = () => {}
+    const stopBackgroundTask = vi.fn(
+      () => new Promise<AgentSessionCancelResult>((resolve) => (finish = resolve))
+    )
+    const strip = (children: AgentChildWorkView[]) => (
+      <NativeChatStructuredSessionStatus
+        sessionId="session-1"
+        paneKey="pane-1"
+        isVisible
+        backgroundTasks={structuredSessionBackgroundTasksView(
+          { state: 'monitoring', supportsTaskStop: true, children },
+          null
+        )}
+        stopBackgroundTask={stopBackgroundTask}
+      />
+    )
+    const { rerender } = render(strip([helper({ invocationId: 'turn-1', generation: 1 })]))
+    fireEvent.click(screen.getByRole('button', { expanded: false }))
+    fireEvent.click(screen.getByLabelText('Stop audit_build'))
+    await act(async () => finish({ cancelled: true }))
+    expect(screen.getByLabelText('Stop audit_build')).toBeDisabled()
 
-  it('restarts the grace period for a relaunch or another session', () => {
-    vi.useFakeTimers()
-    const view = renderStatus('starting')
-    act(() => vi.advanceTimersByTime(SLOW_STARTUP_NOTICE_DELAY_MS))
-    view.rerender(statusElement('ready'))
-    act(() => vi.advanceTimersByTime(STATUS_MIN_VISIBLE_MS))
-    expect(screen.queryByText(/still starting/)).not.toBeInTheDocument()
-    view.rerender(statusElement('starting'))
-    expect(screen.queryByText(/still starting/)).not.toBeInTheDocument()
-    act(() => vi.advanceTimersByTime(SLOW_STARTUP_NOTICE_DELAY_MS))
-    expect(screen.getByText(/still starting/)).toBeInTheDocument()
-    view.rerender(statusElement('starting', 'session-2'))
-    expect(screen.queryByText(/still starting/)).not.toBeInTheDocument()
-  })
-
-  it('resets for a replacement child even when no intermediate phase reaches the view', () => {
-    vi.useFakeTimers()
-    const view = render(statusElement('starting', 'session-1', 'child-1'))
-    act(() => vi.advanceTimersByTime(SLOW_STARTUP_NOTICE_DELAY_MS))
-    view.rerender(statusElement('starting', 'session-1', 'child-2'))
-    expect(screen.queryByText(/still starting/)).not.toBeInTheDocument()
-    act(() => vi.advanceTimersByTime(SLOW_STARTUP_NOTICE_DELAY_MS - 1))
-    expect(screen.queryByText(/still starting/)).not.toBeInTheDocument()
-    act(() => vi.advanceTimersByTime(1))
-    expect(screen.getByText(/still starting/)).toBeInTheDocument()
-  })
-
-  it('shows nothing about startup once the child is ready or the host has no word', () => {
-    renderStatus('ready')
-    expect(screen.queryByText(/still starting/)).not.toBeInTheDocument()
-    cleanup()
-    renderStatus(null)
-    expect(screen.queryByText(/still starting/)).not.toBeInTheDocument()
+    // The helper's next run, with no render between: same provider id, a new invocation.
+    rerender(strip([helper({ invocationId: 'turn-2', generation: 2 })]))
+    expect(screen.getByLabelText('Stop audit_build')).toBeEnabled()
   })
 })

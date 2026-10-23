@@ -1,5 +1,6 @@
 import { codebuddyHookService } from '../codebuddy/hook-service'
-import { qoderHookService } from '../qoder/hook-service'
+import { qwenCodeHookService } from '../qwen-code/hook-service'
+import { qoderCnHookService, qoderHookService } from '../qoder/hook-service'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallStatus, AgentHookTarget } from '../../shared/agent-hook-types'
 import { ampHookService } from '../amp/hook-service'
@@ -14,7 +15,9 @@ import { devinHookService } from '../devin/hook-service'
 import { droidHookService } from '../droid/hook-service'
 import { grokHookService } from '../grok/hook-service'
 import { hermesHookService } from '../hermes/hook-service'
+import { jcodeHookService } from '../jcode/hook-service'
 import { kimiHookService } from '../kimi/hook-service'
+import { kiroHookService } from '../kiro/hook-service'
 import { dshHookService } from '../dsh/hook-service'
 import { museHookService } from '../muse/hook-service'
 import { zcodeHookService } from '../zcode/hook-service'
@@ -27,6 +30,8 @@ export type RemoteManagedHookInstallOptions = {
   deferTrustUntilConfigToml?: boolean
   /** Explicit GROK_HOME for remote runtimes that redirect Grok's config. */
   grokHomeDir?: string
+  /** Login-shell KIRO_HOME on the execution host; it replaces ~/.kiro outright. */
+  kiroHomeDir?: string
   /** Version reported by Claude on this execution host. */
   claudeVersion?: string
   /** Stops before starting the next installer when the owning relay request
@@ -65,6 +70,8 @@ const REMOTE_MANAGED_HOOK_INSTALLERS: readonly RemoteManagedHookInstaller[] = [
   ],
   ['gemini', (sftp, remoteHome) => geminiHookService.installRemote(sftp, remoteHome)],
   ['qoder', (sftp, remoteHome) => qoderHookService.installRemote(sftp, remoteHome)],
+  ['qoder-cn', (sftp, remoteHome) => qoderCnHookService.installRemote(sftp, remoteHome)],
+  ['qwen-code', (sftp, remoteHome) => qwenCodeHookService.installRemote(sftp, remoteHome)],
   ['codebuddy', (sftp, remoteHome) => codebuddyHookService.installRemote(sftp, remoteHome)],
   ['antigravity', (sftp, remoteHome) => antigravityHookService.installRemote(sftp, remoteHome)],
   ['amp', (sftp, remoteHome) => ampHookService.installRemote(sftp, remoteHome)],
@@ -82,7 +89,13 @@ const REMOTE_MANAGED_HOOK_INSTALLERS: readonly RemoteManagedHookInstaller[] = [
   ['kimi', (sftp, remoteHome) => kimiHookService.installRemote(sftp, remoteHome)],
   ['muse', (sftp, remoteHome) => museHookService.installRemote(sftp, remoteHome)],
   ['zcode', (sftp, remoteHome) => zcodeHookService.installRemote(sftp, remoteHome)],
-  ['dsh', (sftp, remoteHome) => dshHookService.installRemote(sftp, remoteHome)]
+  ['dsh', (sftp, remoteHome) => dshHookService.installRemote(sftp, remoteHome)],
+  ['jcode', (sftp, remoteHome) => jcodeHookService.installRemote(sftp, remoteHome)],
+  [
+    'kiro',
+    (sftp, remoteHome, options) =>
+      kiroHookService.installRemote(sftp, remoteHome, options?.kiroHomeDir)
+  ]
 ]
 
 /** Agents wired into the remote (SSH) hook installer. Exported so an invariant

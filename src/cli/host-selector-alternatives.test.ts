@@ -20,8 +20,6 @@ function clientReturning(targets: { id: string; label: string }[]): RuntimeClien
 }
 
 describe('findSshTargetByName', () => {
-  // Why: ids are machine-generated `ssh-<timestamp>-<random>`, so the label is the only name a
-  // person or agent ever has. Matching ids alone reports "not found" for a target that exists.
   it('matches the human label as well as the generated id', () => {
     expect(findSshTargetByName(SSH_TARGETS, 'openclaw')?.id).toBe('ssh-1755000000000-a1b2c3')
     expect(findSshTargetByName(SSH_TARGETS, 'ssh-1755000000000-a1b2c3')?.label).toBe('openclaw')
@@ -61,7 +59,6 @@ describe('crossKindNextSteps', () => {
     expect(crossKindNextSteps('nowhere', alternatives, 'ssh')).toEqual([])
   })
 
-  // Why: suggesting the axis the caller already used would be noise, not help.
   it('does not suggest the axis that was already requested', () => {
     expect(crossKindNextSteps('openclaw', alternatives, 'ssh')).toEqual([])
     expect(crossKindNextSteps('awin', alternatives, 'environment')).toEqual([])
@@ -75,8 +72,6 @@ describe('resolveSshHostTargetId', () => {
     ).resolves.toBe('ssh-1755000000000-a1b2c3')
   })
 
-  // Why: this used to answer ok:true with an empty list — the same silent wrong-machine result
-  // that unknown runtime ids gave before they were rejected.
   it('rejects an unknown target instead of letting it filter to nothing', async () => {
     await expect(
       resolveSshHostTargetId(clientReturning(SSH_TARGETS), 'nowhere', ENVIRONMENTS)
@@ -103,8 +98,6 @@ describe('resolveSshHostTargetId', () => {
 })
 
 describe('listSshTargets', () => {
-  // Why: an older host answers listTargets but not listTargetSummaries. Treating that as "no
-  // targets" would reject an ssh id that is valid on that host.
   it('falls back to the older listing when the newer method is absent', async () => {
     const { RuntimeClientError } = await import('./runtime/types.js')
     const call = vi.fn(async (method: string) => {
@@ -136,8 +129,6 @@ describe('listSshTargets', () => {
     expect(call).toHaveBeenCalledWith('ssh.getState', { targetId: SSH_TARGETS[0].id })
   })
 
-  // Why: this only ever runs to enrich an error we are already reporting; a failure here must
-  // not replace that error with a confusing one about SSH enumeration.
   it('returns nothing rather than masking the error it was enriching', async () => {
     const client = {
       call: vi.fn(async () => {
@@ -159,8 +150,6 @@ describe('ambiguous names never resolve silently', () => {
     { id: 'env-2', name: 'awin' }
   ]
 
-  // Why: picking the first would choose a machine on the caller's behalf — the exact failure the
-  // whole selector path exists to prevent.
   it('refuses to guess between two ssh targets sharing a label', () => {
     expect(findSshTargetByName(twoOpenclaw, 'openclaw')).toBeUndefined()
     expect(ambiguousSshTargets(twoOpenclaw, 'openclaw')).toHaveLength(2)
@@ -171,7 +160,6 @@ describe('ambiguous names never resolve silently', () => {
     expect(ambiguousEnvironments(twoAwin, 'awin')).toHaveLength(2)
   })
 
-  // An exact id is never ambiguous, even when labels collide.
   it('still resolves an exact id past a colliding label', () => {
     expect(findSshTargetByName(twoOpenclaw, 'ssh-2-b')?.id).toBe('ssh-2-b')
     expect(findEnvironmentByName(twoAwin, 'env-2')?.id).toBe('env-2')

@@ -1,10 +1,7 @@
 import { keybindingMatchesInput } from '../../../../shared/keybindings'
 import { isHangulJamoKeyText } from './hangul-jamo-key'
 import { getLayoutBaseCharacterForCode } from '../../lib/keyboard-layout/layout-base-character'
-import {
-  isTerminalImeCandidateDigitKeyEvent,
-  isTerminalImeCandidateSelectionKeyEvent
-} from './terminal-ime-candidate-key-release-guard'
+import { isTerminalImeCandidateSelectionKeyEvent } from './terminal-ime-candidate-key-release-guard'
 
 // Why: when a CLI activates kitty progressive enhancement (CSI > N u), xterm's
 // KittyKeyboard encoder turns every modifier chord — including plain Cmd+C —
@@ -52,18 +49,6 @@ export type XtermImeKeyboardOptions = {
   candidateKeyGuardActive: boolean
   /** True when the pending-release guard already matched this specific event. */
   pendingCandidateKeyReleaseActive: boolean
-  /** True for the narrow Linux path where the IME emits an orphaned letter
-   *  keyup but no composition/input events before its candidate digit. */
-  linuxOrphanCandidateDigitGuardActive?: boolean
-  /** True when the IME claimed the preceding letter keydowns for a preedit it
-   *  never opened a composition session for, so this Space or digit is picking
-   *  a candidate rather than typing (#22442). */
-  linuxImeOwnedPreeditGuardActive?: boolean
-  /** True when the most recent preedit was Hangul, where a digit ends the
-   *  syllable and is literal text. Only the orphan-keyup guard is barred from
-   *  claiming it (#15299): ibus-hangul's Hanja lookup table does index by digit,
-   *  but only over a live preedit the composition guards already own. */
-  hangulPreedit?: boolean
   // Required so no caller silently falls back to non-mac 229 suppression,
   // which re-swallows the first key after a macOS IME input-source switch.
   isMac: boolean
@@ -133,41 +118,6 @@ export function shouldBypassXtermForIosTextEdit(
   return isHangulJamoKeyText(event.key)
 }
 
-/** Returns whether the Linux orphan-keyup window may claim this digit. */
-function claimsOrphanCandidateDigit(
-  event: XtermBypassEvent,
-  options: XtermImeKeyboardOptions
-): boolean {
-  return (
-    options.linuxOrphanCandidateDigitGuardActive === true &&
-    isTerminalImeCandidateDigitKeyEvent(event) &&
-    // Why: the orphan window arms off a bare keyup and cannot see which engine
-    // produced it, so a Hangul syllable's terminating digit must opt out.
-    options.hangulPreedit !== true
-  )
-}
-
-/**
- * Returns whether the claimed-keydown window may claim this selector.
- *
- * Space is included where the orphan-keyup window deliberately excludes it: this
- * window arms from the IME marking the letter keydowns as its own, which is far
- * stronger evidence of an open preedit than a bare orphaned keyup, and Space is
- * the selector Sogou users reach for first.
- */
-function claimsImeOwnedPreeditSelector(
-  event: XtermBypassEvent,
-  options: XtermImeKeyboardOptions
-): boolean {
-  return (
-    options.linuxImeOwnedPreeditGuardActive === true &&
-    isTerminalImeCandidateSelectionKeyEvent(event) &&
-    // Why: 2-Set Hangul commits its syllable on Space and still owes the literal
-    // space, so the syllable-terminating selectors stay with the caller.
-    options.hangulPreedit !== true
-  )
-}
-
 /** Returns whether xterm must not process an IME-owned keyboard event. */
 export function shouldSuppressTerminalImeKeyboardEvent(
   event: XtermBypassEvent,
@@ -183,9 +133,7 @@ export function shouldSuppressTerminalImeKeyboardEvent(
   const suppressCandidateKey =
     isLinux &&
     (pendingCandidateKeyReleaseActive ||
-      (candidateKeyGuardActive && isTerminalImeCandidateSelectionKeyEvent(event)) ||
-      claimsOrphanCandidateDigit(event, options) ||
-      claimsImeOwnedPreeditSelector(event, options))
+      (candidateKeyGuardActive && isTerminalImeCandidateSelectionKeyEvent(event)))
   if (event.type === 'keypress') {
     // Why: a suppressed candidate keydown is not preventDefault-ed by xterm,
     // so its native keypress still fires and _keyPress would forward the
@@ -229,9 +177,8 @@ export function shouldPreventDefaultTerminalImeCandidateKey(
   return (
     event.type === 'keydown' &&
     options.isLinux &&
-    ((options.candidateKeyGuardActive && isTerminalImeCandidateSelectionKeyEvent(event)) ||
-      claimsOrphanCandidateDigit(event, options) ||
-      claimsImeOwnedPreeditSelector(event, options))
+    options.candidateKeyGuardActive &&
+    isTerminalImeCandidateSelectionKeyEvent(event)
   )
 }
 

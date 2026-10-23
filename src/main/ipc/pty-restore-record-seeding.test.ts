@@ -11,16 +11,15 @@ import {
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import { makePaneKey } from '../../shared/stable-pane-id'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { RuntimeResolvedWorktreeCache } from '../runtime/runtime-resolved-worktree-cache'
 import type { ResolvedWorktree } from '../runtime/runtime-worktree-path-identity'
 import { getWorktreeScanMutationRevision } from '../local-worktree-scan-generation'
-import {
-  registerPtyHandlers,
-  clearProviderPtyState,
-  getPtyIdForPaneKey,
-  setLocalPtyProvider
-} from './pty'
+import { registerPtyHandlers } from './pty/register-handlers'
+import { clearProviderPtyState } from './pty/provider/state-cleanup'
+import { getPtyIdForPaneKey } from './pty/pane/key-state'
+import { setLocalPtyProvider } from './pty/provider/registry'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -284,8 +283,18 @@ describe('registerPtyHandlers', () => {
     })
 
     // The renderer owns the emulator snapshot here — but the list/read records
-    // are main-side only, so the record seed must still run.
-    expect(runtime.seedHeadlessTerminal).not.toHaveBeenCalled()
+    // are main-side only, so the record seed must still run. Under main's layout, main's copy is
+    // the history every view repaints from, so it is seeded too.
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      expect(runtime.seedHeadlessTerminal).toHaveBeenCalledWith(
+        'pty-gated-reattach',
+        'gated snapshot\r\n',
+        { cols: 80, rows: 24 },
+        {}
+      )
+    } else {
+      expect(runtime.seedHeadlessTerminal).not.toHaveBeenCalled()
+    }
     expect(runtime.seedTerminalRestoreTail).toHaveBeenCalledWith('pty-gated-reattach', {
       text: 'gated snapshot\r\n',
       lastTitle: 'gated-title'
@@ -578,10 +587,32 @@ describe('registerPtyHandlers', () => {
     clearProviderPtyState(first.id)
 
     expect(getPtyIdForPaneKey(stablePaneKey)).toBe(second.id)
-    expect(clearAgentHookPaneStateMock).not.toHaveBeenCalledWith(stablePaneKey)
+    expect(clearAgentHookPaneStateMock).not.toHaveBeenCalled()
 
     clearProviderPtyState(second.id)
     expect(getPtyIdForPaneKey(stablePaneKey)).toBeUndefined()
+    expect(clearAgentHookPaneStateMock).toHaveBeenCalledWith(stablePaneKey, {
+      forgetAgentExit: true
+    })
+  })
+  // Why: a disconnect that can reconnect is no death, so the hook store keeps the agent's proven exit.
+  it('keeps the proven agent exit when a PTY is cleared for a disconnect', async () => {
+    registerPtyHandlers(mainWindow as never)
+    const stablePaneKey = makePaneKey('tab-1', '11111111-1111-4111-8111-111111111111')
+    await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: '11111111-1111-4111-8111-111111111111',
+      env: { ORCA_PANE_KEY: stablePaneKey }
+    })
+    const ptyId = getPtyIdForPaneKey(stablePaneKey)
+    expect(ptyId).toBeDefined()
+    clearAgentHookPaneStateMock.mockClear()
+
+    clearProviderPtyState(ptyId ?? '', { preserveAgentSessionOwners: true })
+
     expect(clearAgentHookPaneStateMock).toHaveBeenCalledWith(stablePaneKey)
   })
   it('does not let restart-era alias cleanup clear a newer pane-key owner', async () => {

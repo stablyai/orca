@@ -3,11 +3,13 @@
 
 import {
   agentSessionOperationKey,
+  agentSessionOperationExpiry,
   claimAgentSessionOperation,
   evaluateAgentSessionOperation,
   findAgentSessionGlobalOperationRow,
   pruneAgentSessionOperationRows,
   settleAgentSessionOperation,
+  pendingAgentSessionOperationRow,
   type AgentSessionOperationClaim,
   type AgentSessionOperationDecision,
   type AgentSessionOperationOutcome,
@@ -15,17 +17,59 @@ import {
 } from '../../shared/agent-session-operation-ledger'
 import {
   admitAgentSessionMutation,
+  agentSessionLedgerRefusal,
   type AgentSessionMutationAdmission
 } from '../../shared/agent-session-mutation-envelope'
 import type { AgentSessionMutationEnvelope } from '../../shared/agent-session-wire'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
-import type { AgentSessionStoreState } from './agent-session-record-store-file'
+import type { AgentSessionStoreState } from './agent-session-store-state'
+import { AgentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
 
 export type AgentSessionOperationAdmission = {
   callerKey: string
   operationId: string
   fingerprint: string
   now: number
+}
+
+export type AgentSessionOperationAcceptance = AgentSessionOperationAdmission & {
+  operationIdScope?: 'global'
+}
+
+// TEMPORARY: ledger co-write preserves cross-family identity until every mutation uses receipts.
+export function insertAcceptedAgentSessionOperationInto(
+  state: Pick<AgentSessionStoreState, 'operations'>,
+  args: AgentSessionOperationAcceptance & { outcome: AgentSessionOperationOutcome }
+): void {
+  const candidates = args.operationIdScope
+    ? state.operations.values()
+    : [state.operations.get(agentSessionOperationKey(args.callerKey, args.operationId))]
+  let exists = false
+  for (const row of candidates) {
+    if (!row || row.operationId !== args.operationId) {
+      continue
+    }
+    if (row.fingerprint !== args.fingerprint) {
+      throw new AgentSessionRefusalError(
+        agentSessionLedgerRefusal(
+          { clientOperationId: args.operationId },
+          {
+            decision: 'refused',
+            code: 'agent_session_operation_conflict',
+            details: { reason: 'operationIdReused' }
+          }
+        )
+      )
+    }
+    exists = true
+  }
+  if (!exists) {
+    state.operations.set(agentSessionOperationKey(args.callerKey, args.operationId), {
+      ...pendingAgentSessionOperationRow(args),
+      expiresAt: agentSessionOperationExpiry(args.now, args.now),
+      outcome: args.outcome
+    })
+  }
 }
 
 type OperationRows = Map<string, AgentSessionOperationRow>
@@ -191,6 +235,23 @@ export function claimAgentSessionOperationInto(
   const claimed = claimAgentSessionOperation(state.operations, args)
   state.operations = claimed.rows
   return claimed.claim
+}
+
+/** Whether an admission left the right to run open, so the same transaction should claim it. */
+export type ClaimAfterAdmission = (decision: AgentSessionOperationDecision) => boolean
+
+/** Admission and, when `claimAfter` says so, the claim, in one transaction: the same swap as
+ *  `claimAgentSessionOperationInto`, with one durable write instead of two. */
+export function admitAndClaimAgentSessionOperationInto(
+  state: { operations: Map<string, AgentSessionOperationRow> },
+  args: AgentSessionOperationAdmission,
+  claimAfter: ClaimAfterAdmission
+): { decision: AgentSessionOperationDecision; claim: AgentSessionOperationClaim | null } {
+  const decision = admitAgentSessionOperationInto(state, args)
+  return {
+    decision,
+    claim: claimAfter(decision) ? claimAgentSessionOperationInto(state, args) : null
+  }
 }
 
 export function settleAgentSessionOperationInto(

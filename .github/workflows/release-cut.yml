@@ -14,8 +14,8 @@ name: Cut Release
 #      semver within a channel, so a regressing "latest" is the one thing
 #      that breaks auto-update for fresh installs.
 #   5. Write package.json, commit (detached), tag, push tag.
-#   6. If ref was the tip of origin/main, fast-forward main to include the
-#      version-bump commit so developers see the right version locally.
+#   6. If ref was the tip of origin/main, try to fast-forward its version;
+#      a pull-request-only rule leaves main unchanged and still pushes the tag.
 #   7. Build and publish artifacts from the tag.
 
 on:
@@ -79,6 +79,7 @@ jobs:
       source_ref: ${{ steps.resolve.outputs.ref }}
       source_sha: ${{ steps.resolve.outputs.sha }}
       source_short_sha: ${{ steps.resolve.outputs.short_sha }}
+      ships_orcad_template: ${{ steps.orcad-template-support.outputs.ships }}
     steps:
       # Why inlined (not m-s-abeer/update-gha-summary-with-workflow-inputs):
       # this job runs with contents:write and secret scope, so avoid executing
@@ -107,15 +108,27 @@ jobs:
         with:
           ref: ${{ github.event_name == 'schedule' && 'main' || inputs.ref }}
           fetch-depth: 0
+          # Version recovery needs complete history and tags, but not historical file contents.
+          filter: blob:none
           # Why: version math recovers unpublished tags; checkout's default
           # fetch-tags:false hides them, so a patch cut recreates vX.Y.Z and
           # `git push` overwrites the existing tag.
           fetch-tags: true
 
+      # Why: a relay-era ref (before #27215) needs the Windows relay addon this build no longer compiles.
+      - name: Refuse a ref that still ships the SSH relay
+        shell: bash
+        run: |
+          if [[ -e config/tsconfig.relay.json ]]; then
+            echo "::error::This ref predates #27215 and still ships the SSH relay; build a commit at or after 2b4b60a87e."
+            exit 1
+          fi
+
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
 
       - name: Configure git author
         run: |
@@ -722,19 +735,13 @@ jobs:
           # message and tag name explicitly (avoids npm's `v1.2.3` prefix
           # assumptions and any lifecycle scripts that would run on bump).
           npm version "$VERSION" --no-git-tag-version --allow-same-version
-          # Why: the cut is the only point where committed skill bytes become a
-          # released revision. Without this row the ledger never advances, so the
-          # next skill change rebuilds the revision this tag ships over different
-          # bytes and every install of it stops matching a known snapshot.
-          # --release is provenance-only: it fails if the content-addressed
-          # artifacts do not already match this ref and writes just the mapping
-          # row, so the version commit stays skill-independent. Node built-ins
-          # only, so this needs no install.
-          if ! node config/scripts/generate-skill-bundle-manifest.mjs --release "$VERSION"; then
-            echo "::error::Refusing to record release provenance for v$VERSION: the committed skill artifacts do not match this ref. Land a regeneration on main, then re-run the cut." >&2
+          # Why: freshness compares installs against the bundled manifest, so a tag must
+          # never ship skill bytes it doesn't describe. Node built-ins only; no install.
+          if ! node config/scripts/generate-skill-bundle-manifest.mjs; then
+            echo "::error::Refusing to tag v$VERSION: the committed skill manifest does not match skills/. Land a regeneration on main, then re-run the cut." >&2
             exit 1
           fi
-          git add package.json resources/skills/release-mapping.json
+          git add package.json
           commit_message="release: v$VERSION"
           if [[ "$EVENT_NAME" == "schedule" ]]; then
             commit_message="$commit_message [rc-slot:$SLOT]"
@@ -751,16 +758,16 @@ jobs:
           # var, a composite action, or concatenation, and `git commit` has forms
           # (-a, -i, --only, a pathspec) that commit the working tree rather than
           # the index. Assert what the commit actually carries, so the tag can
-          # only ever ship the version bump and the provenance row, no matter
-          # which step staged what or how the commit was spelled.
+          # only ever ship the version bump, no matter which step staged what or
+          # how the commit was spelled.
           # -F because the allowlist is literal: unanchored, `.` would match any
           # character and quietly admit a path like `packageXjson`.
           # -m --first-parent: plain diff-tree prints NOTHING for a merge commit,
           # which would make this guard pass silently rather than fail closed.
           committed="$(git diff-tree --no-commit-id --name-only -r -m --first-parent HEAD |
-            grep -vxF -e 'package.json' -e 'resources/skills/release-mapping.json' || true)"
+            grep -vxF -e 'package.json' || true)"
           if [[ -n "$committed" ]]; then
-            echo "::error::Release commit carries unexpected paths: $(echo "$committed" | tr '\n' ' ')Only package.json and the skill release-mapping row may ship in a version commit." >&2
+            echo "::error::Release commit carries unexpected paths: $(echo "$committed" | tr '\n' ' ')Only package.json may ship in a version commit." >&2
             exit 1
           fi
           git tag -a "v$VERSION" -m "v$VERSION"
@@ -775,12 +782,32 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "$PUSH_MAIN" == "true" ]]; then
-            # Fast-forward main to include the version-bump commit.
-            git push origin "HEAD:refs/heads/main"
-            git push origin "$TAG"
+            push_log="$RUNNER_TEMP/release-push-main.log"
+            if git push origin "HEAD:refs/heads/main" >"$push_log" 2>&1; then
+              cat "$push_log"
+            elif grep -Fq 'GH013' "$push_log" && grep -Fq 'Changes must be made through a pull request.' "$push_log"; then
+              cat "$push_log"
+              echo "::notice::Main requires pull requests; leaving its version unchanged and publishing only $TAG."
+            else
+              cat "$push_log"
+              exit 1
+            fi
+          fi
+          git push origin "$TAG"
+
+      # Why: a patch cut from a base older than #24155 has no orcad template to build or ship.
+      - name: Detect whether the tag ships the orcad template
+        id: orcad-template-support
+        if: steps.tag.outputs.tag != '' || steps.version.outputs.recovered_tag != ''
+        env:
+          TAG: ${{ steps.tag.outputs.tag || steps.version.outputs.recovered_tag }}
+        run: |
+          set -euo pipefail
+          if git cat-file -e "refs/tags/${TAG}^{commit}:config/scripts/packaged-orcad-template.cjs" 2>/dev/null; then
+            echo "ships=true" >>"$GITHUB_OUTPUT"
           else
-            # Off-main release — only the tag is published; main is untouched.
-            git push origin "$TAG"
+            echo "ships=false" >>"$GITHUB_OUTPUT"
+            echo "::notice::$TAG predates the orcad template; skipping its build and download."
           fi
 
       - name: Release E2E signal summary
@@ -824,6 +851,13 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.cut.outputs.tag }}
         run: node config/scripts/create-draft-release.mjs "$TAG"
+
+  dependency-security:
+    needs: cut
+    if: needs.cut.outputs.should_release == 'true' && !contains(needs.cut.outputs.tag, '-')
+    uses: ./.github/workflows/dependency-security.yml
+    with:
+      ref: refs/tags/${{ needs.cut.outputs.tag }}
 
   terminal-rendering-golden:
     needs: cut
@@ -876,6 +910,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
           cache: pnpm
 
       # Why: Linux terminal golden E2E uses the same native install path as
@@ -982,7 +1017,6 @@ jobs:
           WORKFLOW_SHA: ${{ github.workflow_sha }}
         run: |
           git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
-          # Why not skill-freshness-inventory.test.ts: it holds behaviour tests, so main's copy fails a tag that predates the behaviour.
           git checkout "$WORKFLOW_SHA" -- \
             src/main/skills/skill-provider-runtime-roots.test.ts
 
@@ -1034,7 +1068,6 @@ jobs:
           WORKFLOW_SHA: ${{ github.workflow_sha }}
         run: |
           git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
-          # Why not skill-freshness-inventory.test.ts: it holds behaviour tests, so main's copy fails a tag that predates the behaviour.
           git checkout "$WORKFLOW_SHA" -- \
             src/main/skills/skill-provider-runtime-roots.test.ts
 
@@ -1102,6 +1135,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
           cache: pnpm
 
       # Why: keep the non-blocking evidence lane on the same Linux native
@@ -1149,6 +1183,19 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
+  # Design D2: every desktop build ships the orcad template (server JS plus every target's
+  # addons), merged from the node-server lanes that qualified each slot at this tag. It needs no
+  # signing quota, so it runs beside the release gates instead of behind them.
+  orcad-template:
+    needs: cut
+    if: needs.cut.outputs.should_release == 'true' && needs.cut.outputs.ships_orcad_template == 'true'
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/qualified-orcad-template.yml
+    with:
+      ref: refs/tags/${{ needs.cut.outputs.tag }}
+
   # Why: artifact jobs submit Windows binaries to SignPath. Keep every
   # quota-consuming build behind all blocking release gates so a late test
   # failure cannot create signing requests that can never be published.
@@ -1171,12 +1218,40 @@ jobs:
       - name: Confirm blocking release gates passed
         run: echo "All blocking release gates passed; artifact builds may start."
 
+  # Compilation can overlap the release gates; signing remains behind release-preflight.
+  release-javascript:
+    needs: cut
+    if: needs.cut.outputs.should_release == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/release-javascript.yml
+    with:
+      ref: refs/tags/${{ needs.cut.outputs.tag }}
+    secrets:
+      ORCA_POSTHOG_WRITE_KEY: ${{ secrets.ORCA_POSTHOG_WRITE_KEY }}
+
   build:
     needs:
       - cut
       - create-release
+      - orcad-template
       - release-preflight
-    if: needs.cut.outputs.should_release == 'true'
+      - release-javascript
+      - build-mac
+    # Why not the implicit success(): a tag without the orcad template skips that job on purpose.
+    if: >-
+      !cancelled() &&
+      needs.cut.result == 'success' &&
+      needs.cut.outputs.should_release == 'true' &&
+      needs.create-release.result == 'success' &&
+      needs.release-preflight.result == 'success' &&
+      needs.release-javascript.result == 'success' &&
+      needs.build-mac.result == 'success' &&
+      (needs.orcad-template.result == 'success' ||
+        (needs.orcad-template.result == 'skipped' && needs.cut.outputs.ships_orcad_template == 'false'))
+    env:
+      # beforePack and afterPack fail the package when the template is absent.
+      ORCA_REQUIRE_ORCAD_TEMPLATE: '1'
     strategy:
       fail-fast: false
       matrix:
@@ -1246,7 +1321,7 @@ jobs:
         run: |
           set -euo pipefail
           git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
-          git checkout "$WORKFLOW_SHA" -- config/scripts/assert-github-release-is-draft.mjs
+          git checkout "$WORKFLOW_SHA" -- config/scripts/assert-github-release-is-draft.mjs config/scripts/run-release-mac-build-workflow.mjs
 
       - name: Restore composite actions from the workflow ref
         shell: bash
@@ -1284,6 +1359,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
           cache: pnpm
           cache-dependency-path: |
             pnpm-lock.yaml
@@ -1381,20 +1457,6 @@ jobs:
           echo "identity=$identity" >>"$GITHUB_OUTPUT"
           echo "Classified $TAG as $identity"
 
-      # Why here and not in build:relay: only a Windows runner can compile it, and
-      # arm64 cross-compiles from this same x64 agent. Mirrors dev-channel-win-build.yml,
-      # which had it while release-cut did not — so every stable installer through
-      # v1.4.203 shipped Windows relays with no windows-process-tree.node, silently
-      # falling back to the PowerShell scan on every Windows SSH host.
-      # Why no run_attempt guard, unlike the artifact steps below: Build app is ungated,
-      # so a rerun would reach the required-addon check with nothing staged and fail.
-      - name: Build Windows process-table addon for the relay
-        if: matrix.platform == 'win'
-        shell: bash
-        run: |
-          node config/scripts/build-windows-process-tree-relay-addon.mjs --arch=x64
-          node config/scripts/build-windows-process-tree-relay-addon.mjs --arch=arm64
-
       # Why an explicit step rather than trusting the runner image: the packaged
       # CLI launcher is a native Rust binary, and a Windows host without cargo
       # fails deep inside electron-builder's native hook instead of here. Real
@@ -1409,31 +1471,40 @@ jobs:
           }
           cargo --version
 
-      # Why ORCA_POSTHOG_WRITE_KEY here: this is the only build that
-      # produces a published binary, so this is the only place the secret
-      # needs to be in scope. The key is a PostHog *project* API key, not
-      # a server secret — it ships in every official binary's app.asar
-      # and is therefore extractable from any release. We still keep it
-      # in GitHub Actions secrets so the literal stays out of the repo
-      # (and out of fork CI runs / log scrapers / casual greps).
-      # Why ORCA_BUILD_IDENTITY here (not in env at the job level): the
-      # value comes from the per-tag classification above and electron-vite
-      # reads it from `process.env` during `pnpm build:release` only.
-      # Why ORCA_DIAGNOSTICS_TOKEN_URL here: official builds pin crash
-      # diagnostic uploads to Orca's endpoint at compile time, matching the
-      # telemetry gate's "official binary only" behavior.
+      # Consumers verify the same official build configuration before restoring the bundle.
+      - name: Download release JavaScript
+        if: needs.release-javascript.outputs.supported == 'true'
+        uses: actions/download-artifact@v8
+        with:
+          name: release-javascript
+          path: .build/release-javascript
+
       - name: Build app
-        run: pnpm build:release
+        shell: bash
+        run: |
+          if [ "$SHARED_JAVASCRIPT" = true ]; then
+            node config/scripts/release-javascript-artifact.mjs restore
+            pnpm run build:release:host
+          else
+            pnpm run build:release
+          fi
         env:
           # Why: Vite's web build crossed Node's default old-space ceiling on
           # the macOS release runner, leaving v1.4.2-rc.8 as an incomplete draft.
           NODE_OPTIONS: --max-old-space-size=4096
           ORCA_BUILD_IDENTITY: ${{ steps.tag-classify.outputs.identity }}
+          SHARED_JAVASCRIPT: ${{ needs.release-javascript.outputs.supported }}
+          ORCA_RELEASE_JAVASCRIPT_SOURCE_SHA: ${{ needs.release-javascript.outputs.source_sha }}
           ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
           ORCA_POSTHOG_WRITE_KEY: ${{ secrets.ORCA_POSTHOG_WRITE_KEY }}
-          # Fail the release rather than ship a relay that silently falls back to
-          # the PowerShell scan on every Windows SSH host.
-          ORCA_REQUIRE_RELAY_NATIVE_ADDONS: ${{ matrix.platform == 'win' && 'x64,arm64' || '' }}
+
+      # After the app build so nothing that cleans out/ can drop it; electron-builder ships it.
+      - name: Download the orcad deployment template
+        if: needs.cut.outputs.ships_orcad_template == 'true'
+        uses: actions/download-artifact@v8
+        with:
+          name: orcad-template
+          path: out/orcad-template
 
       - name: Gate runtime file-watcher process isolation
         if: runner.os == 'Linux'
@@ -1442,12 +1513,6 @@ jobs:
           # host and the exact Electron runtime survive SIGSEGV before packaging.
           node config/scripts/runtime-file-watcher-fault-harness.mjs
           ELECTRON_RUN_AS_NODE=1 pnpm exec electron config/scripts/runtime-file-watcher-fault-harness.mjs
-
-      - name: Gate SSH relay watcher process isolation
-        run: |
-          # Why: the remote native watcher shares a daemon with live PTYs.
-          # Kill only its child and require both PTY and watch recovery before packaging.
-          node config/scripts/relay-watcher-fault-harness.mjs
 
       # Why: main ships minified with sourcemap:'hidden' and packaging drops
       # out/**/*.map from app.asar, so a crash trace from a released build is
@@ -1524,6 +1589,8 @@ jobs:
           command: ${{ matrix.release_command }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # The release command prepares and verifies this host's Electron native modules first.
+          ORCA_REUSE_PREPARED_NATIVE_RUNTIME: '1'
           # Why: the NSIS uninstaller only exists inside electron-builder's
           # uninstaller pass, which deletes it right after embedding it. The sign
           # hook in config/scripts/windows-uninstaller-signing.cjs copies it out
@@ -1584,6 +1651,11 @@ jobs:
             Where-Object { $_.Extension -in '.exe', '.dll', '.node' } |
             ForEach-Object {
               $relative = [System.IO.Path]::GetRelativePath($root, $_.FullName)
+              # The orcad template's Linux/macOS addons are data for SSH hosts, not PE files.
+              if ($relative -match '^resources[\\/]orcad-template[\\/]targets[\\/](?!win32-)') {
+                $skipped.Add("$relative  <non-Windows orcad template payload>")
+                return
+              }
               $signature = Get-AuthenticodeSignature -FilePath $_.FullName
               if ($signature.Status -eq 'Valid') {
                 $skipped.Add("$relative  <already signed: $($signature.SignerCertificate.Subject)>")
@@ -1632,9 +1704,26 @@ jobs:
           path: signing-stage/**
           if-no-files-found: error
 
+      # Unsigned packaging overlaps macOS; only successful macOS builds may consume signing quota.
+      - name: Require macOS success before Windows signing
+        id: mac-signing-gate
+        if: matrix.platform == 'win' && github.run_attempt == 1
+        shell: bash
+        run: node config/scripts/run-release-mac-build-workflow.mjs wait
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_MAC_BUILD_REF: ${{ github.ref_name }}
+          RELEASE_MAC_BUILD_RELEASE_RUN_ID: ${{ github.run_id }}
+          RELEASE_MAC_BUILD_RUN_ID: ${{ needs.build-mac.outputs.run_id }}
+          RELEASE_MAC_BUILD_WORKFLOW_SHA: ${{ needs.build-mac.outputs.workflow_sha }}
+          RELEASE_MAC_BUILD_RUN_ATTEMPT: ${{ needs.build-mac.outputs.run_attempt }}
+          RELEASE_MAC_BUILD_WAIT_DEADLINE_MS: ${{ needs.build-mac.outputs.wait_deadline_ms }}
+          RELEASE_MAC_BUILD_TAG: ${{ needs.cut.outputs.tag }}
+          RELEASE_MAC_BUILD_WORKFLOW: release-mac-build.yml
+
       - name: Submit inner binaries signing request
         id: submit-inner-signing
-        if: matrix.platform == 'win' && github.run_attempt == 1 && steps.upload-unsigned-inner.outcome == 'success'
+        if: matrix.platform == 'win' && github.run_attempt == 1 && steps.mac-signing-gate.outcome == 'success' && steps.upload-unsigned-inner.outcome == 'success'
         uses: signpath/github-action-submit-signing-request@v2
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
@@ -1764,6 +1853,13 @@ jobs:
             throw "Signed inner artifact did not round-trip cleanly ($($failures.Count) failures)."
           }
 
+      # Why: SignPath rewrote the template's Windows binaries, and the client materializer checks
+      # each file against the template manifest, so it must record the signed bytes.
+      - name: Reseal the orcad template over its signed binaries
+        id: reseal-orcad-template
+        if: matrix.platform == 'win' && github.run_attempt == 1 && steps.restore-signed-inner.outcome == 'success' && needs.cut.outputs.ships_orcad_template == 'true'
+        run: node config/scripts/packaged-orcad-template.cjs --reseal-signed dist/win-unpacked inner-signing-list.txt
+
       # The uninstaller must return signed before rebuilding the installer.
       - name: Restore signed uninstaller for the installer rebuild
         id: restore-signed-uninstaller
@@ -1863,7 +1959,7 @@ jobs:
       # so the release job waits while the signing request is approved in UI.
       - name: Submit Windows installer signing request
         id: submit-signing-request
-        if: matrix.platform == 'win' && github.run_attempt == 1
+        if: matrix.platform == 'win' && github.run_attempt == 1 && steps.mac-signing-gate.outcome == 'success' && steps.upload-unsigned-windows-installer.outcome == 'success'
         uses: signpath/github-action-submit-signing-request@v2
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
@@ -2086,7 +2182,7 @@ jobs:
             # in some runs, yet it is the file most at risk of losing its
             # signature in the NSIS rebuild. Verify it in every release.
             $targets = @(Get-Content 'inner-signing-list.txt')
-            foreach ($requiredTarget in @('Orca.exe', 'resources\bin\orca.exe')) {
+            foreach ($requiredTarget in @('Orca.exe', 'resources\bin\orca.exe', 'resources\bin\orca-agent-hook.exe')) {
               if ($targets -notcontains $requiredTarget) { $targets += $requiredTarget }
             }
             if ($targets -notcontains 'resources\elevate.exe') {
@@ -2257,14 +2353,67 @@ jobs:
     needs:
       - cut
       - create-release
+      - orcad-template
       - release-preflight
-    if: needs.cut.outputs.should_release == 'true'
+      - release-javascript
+    # Why not the implicit success(): a tag without the orcad template skips that job on purpose.
+    if: >-
+      !cancelled() &&
+      needs.cut.result == 'success' &&
+      needs.cut.outputs.should_release == 'true' &&
+      needs.create-release.result == 'success' &&
+      needs.release-preflight.result == 'success' &&
+      needs.release-javascript.result == 'success' &&
+      (needs.orcad-template.result == 'success' ||
+        (needs.orcad-template.result == 'skipped' && needs.cut.outputs.ships_orcad_template == 'false'))
     # Why: SignPath requires every job in this signing workflow to be
     # GitHub-hosted. The actual mac build runs in release-mac-build.yml so
     # Blacksmith stays outside Windows artifact provenance.
     runs-on: ubuntu-latest
     permissions:
       actions: write
+      contents: read
+    outputs:
+      run_id: ${{ steps.dispatch.outputs.run_id }}
+      workflow_sha: ${{ steps.dispatch.outputs.workflow_sha }}
+      run_attempt: ${{ steps.dispatch.outputs.run_attempt }}
+      wait_deadline_ms: ${{ steps.dispatch.outputs.wait_deadline_ms }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+          check-latest: true
+
+      - name: Run isolated macOS release build
+        id: dispatch
+        run: node config/scripts/run-release-mac-build-workflow.mjs dispatch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_MAC_BUILD_REF: ${{ github.ref_name }}
+          RELEASE_MAC_BUILD_RELEASE_RUN_ID: ${{ github.run_id }}
+          RELEASE_MAC_BUILD_JAVASCRIPT_SOURCE_SHA: ${{ needs.release-javascript.outputs.supported == 'true' && needs.release-javascript.outputs.source_sha || '' }}
+          RELEASE_MAC_BUILD_TAG: ${{ needs.cut.outputs.tag }}
+          RELEASE_MAC_BUILD_WORKFLOW: release-mac-build.yml
+
+  verify-mac-build:
+    needs:
+      - cut
+      - build-mac
+      - build
+    # Qualify macOS even when a sibling build fails; publication still requires every build.
+    if: >-
+      !cancelled() &&
+      needs.cut.result == 'success' &&
+      needs.cut.outputs.should_release == 'true' &&
+      needs.build-mac.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 95
+    permissions:
+      actions: read
       contents: read
     steps:
       - name: Checkout
@@ -2274,24 +2423,42 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
 
-      - name: Run isolated macOS release build
-        run: node config/scripts/run-release-mac-build-workflow.mjs
+      - name: Require the exact isolated macOS release build to succeed
+        run: node config/scripts/run-release-mac-build-workflow.mjs wait
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_MAC_BUILD_REF: ${{ github.ref_name }}
           RELEASE_MAC_BUILD_RELEASE_RUN_ID: ${{ github.run_id }}
+          RELEASE_MAC_BUILD_RUN_ID: ${{ needs.build-mac.outputs.run_id }}
+          RELEASE_MAC_BUILD_WORKFLOW_SHA: ${{ needs.build-mac.outputs.workflow_sha }}
+          RELEASE_MAC_BUILD_RUN_ATTEMPT: ${{ needs.build-mac.outputs.run_attempt }}
+          RELEASE_MAC_BUILD_WAIT_DEADLINE_MS: ${{ needs.build-mac.outputs.wait_deadline_ms }}
           RELEASE_MAC_BUILD_TAG: ${{ needs.cut.outputs.tag }}
           RELEASE_MAC_BUILD_WORKFLOW: release-mac-build.yml
 
   publish-release:
     needs:
       - cut
+      - dependency-security
       - build
       - build-mac
+      - verify-mac-build
       - skill-sharing-linux-floor-release-gate
       - skill-sharing-release-gate
       - terminal-rendering-golden
+    # Why explicit: a skipped orcad-template (tags that predate it) would skip every job after it.
+    if: >-
+      !cancelled() &&
+      needs.cut.result == 'success' &&
+      (needs.dependency-security.result == 'success' || contains(needs.cut.outputs.tag, '-')) &&
+      needs.build.result == 'success' &&
+      needs.build-mac.result == 'success' &&
+      needs.verify-mac-build.result == 'success' &&
+      needs.skill-sharing-linux-floor-release-gate.result == 'success' &&
+      needs.skill-sharing-release-gate.result == 'success' &&
+      needs.terminal-rendering-golden.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -2303,6 +2470,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
 
       - name: Verify release is still draft
         env:
@@ -2360,7 +2528,8 @@ jobs:
     needs:
       - cut
       - publish-release
-    if: ${{ needs.cut.outputs.tag != '' }}
+    # Why explicit: a skipped orcad-template (tags that predate it) would skip every job after it.
+    if: ${{ !cancelled() && needs.publish-release.result == 'success' && needs.cut.outputs.tag != '' }}
     runs-on: ubuntu-latest
     permissions:
       actions: write
@@ -2389,7 +2558,8 @@ jobs:
     # A release created with GITHUB_TOKEN does not reliably emit a release
     # event to other workflows. Dispatch the trusted default-branch workflow;
     # it validates and checks out the released tag before deploying.
-    if: ${{ needs.cut.outputs.tag != '' }}
+    # Why explicit: a skipped orcad-template (tags that predate it) would skip every job after it.
+    if: ${{ !cancelled() && needs.publish-release.result == 'success' && needs.cut.outputs.tag != '' }}
     runs-on: ubuntu-latest
     permissions:
       actions: write
@@ -2433,7 +2603,8 @@ jobs:
     needs:
       - cut
       - publish-release
-    if: ${{ needs.cut.outputs.tag != '' && startsWith(needs.cut.outputs.tag, 'v') }}
+    # Why explicit: a skipped orcad-template (tags that predate it) would skip every job after it.
+    if: ${{ !cancelled() && needs.publish-release.result == 'success' && needs.cut.outputs.tag != '' && startsWith(needs.cut.outputs.tag, 'v') }}
     uses: ./.github/workflows/homebrew-bump.yml
     with:
       tag: ${{ needs.cut.outputs.tag }}

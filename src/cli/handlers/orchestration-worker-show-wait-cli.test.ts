@@ -1,4 +1,3 @@
-// `worker-show` text output must keep "nobody is waiting" apart from "nobody looked".
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const callMock = vi.fn()
@@ -58,8 +57,6 @@ describe('orchestration worker-show interactive wait output', () => {
   })
 
   it('says unknown when the field is absent, not none', async () => {
-    // An older host, or a worker whose identity could not be verified. Printing the same
-    // thing as an evaluated `null` is the false negative this field exists to remove.
     const line = await showWorker({ status: 'identity_changed', exactWorker: false })
 
     expect(line).toContain('Interactive wait: unknown (not evaluated)')

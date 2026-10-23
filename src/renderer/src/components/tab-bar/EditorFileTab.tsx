@@ -2,8 +2,8 @@ import { createElement, useCallback, useEffect, useRef, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { GitCompareArrows, Eye, ShieldAlert, Pin, ListChecks } from 'lucide-react'
 import { Input } from '@/components/ui/input'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { basename, normalizeRelativePath } from '@/lib/path'
+import { TabHoverCard } from './TabHoverCard'
+import { basename } from '@/lib/path'
 import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
 import { renameFileOnDisk } from '@/lib/rename-file'
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
@@ -16,7 +16,7 @@ import type { GitFileStatus } from '../../../../shared/git-status-types'
 import type { OpenFile } from '../../store/slices/editor'
 import { getUntitledFileRoot } from '@/components/editor/untitled-file-rename-path'
 import { preventMiddleButtonDefault } from './middle-button-default-guard'
-import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from './SortableTab'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 import {
   ACTIVE_TAB_INDICATOR_CLASSES,
@@ -32,6 +32,7 @@ import { TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
 import { useTabStripSlotProps } from './use-tab-strip-slot-props'
 import { EditorFileTabCloseButton } from './EditorFileTabCloseButton'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
+import { editorTabDocumentFolderAccess } from '@/lib/local-file-access'
 
 export default function EditorFileTab({
   file,
@@ -40,12 +41,13 @@ export default function EditorFileTab({
   hasTabsToRight,
   hasTabsToLeft,
   tabCount,
-  statusByRelativePath,
+  gitStatus: tabStatus,
   onActivate,
   onClose,
   onCloseOthers,
   onCloseToRight,
   onCloseToLeft,
+  onCloseSplitPane,
   onCloseAll,
   onMakePermanent,
   onTogglePin,
@@ -59,12 +61,13 @@ export default function EditorFileTab({
   hasTabsToRight: boolean
   hasTabsToLeft: boolean
   tabCount: number
-  statusByRelativePath: Map<string, GitFileStatus>
+  gitStatus: GitFileStatus | null
   onActivate: () => void
   onClose: () => void
   onCloseOthers: () => void
   onCloseToRight: () => void
   onCloseToLeft: () => void
+  onCloseSplitPane?: () => void
   onCloseAll: () => void
   onMakePermanent?: () => void
   onTogglePin: () => void
@@ -89,6 +92,15 @@ export default function EditorFileTab({
   const isConflictReview = file.mode === 'conflict-review'
   const isCheckDetails = file.mode === 'check-details'
   const isMarkdownPreviewTab = file.mode === 'markdown-preview'
+  const HoverIcon = isConflictReview
+    ? ShieldAlert
+    : isCheckDetails
+      ? ListChecks
+      : isDiff
+        ? GitCompareArrows
+        : isMarkdownPreviewTab
+          ? Eye
+          : FileIcon
   // Why: only deleted/renamed mean the file is gone from its path, which is
   // what strikethrough conveys. 'changed' keeps a normal label — its surface
   // is the changed-on-disk banner inside the editor.
@@ -150,11 +162,8 @@ export default function EditorFileTab({
     // so one user action cannot start a second rename against the old path.
     renameCancelledRef.current = true
     setIsRenaming(false)
-    if (!newName) {
-      return
-    }
     const oldName = basename(file.filePath)
-    if (newName === oldName) {
+    if (!newName || newName === oldName) {
       return
     }
     const worktreePath = getUntitledFileRoot(file, worktree?.path ?? null)
@@ -162,7 +171,9 @@ export default function EditorFileTab({
       oldPath: file.filePath,
       newName,
       worktreeId: file.worktreeId,
-      worktreePath
+      worktreePath,
+      // Why: a file opened outside every project may be renamed to any path, wherever it lives.
+      documentScoped: editorTabDocumentFolderAccess(useAppStore.getState(), file) !== undefined
     })
   }
 
@@ -196,10 +207,6 @@ export default function EditorFileTab({
     [file.filePath]
   )
 
-  const tabStatus =
-    file.relativePath === 'All Changes'
-      ? null
-      : (statusByRelativePath.get(normalizeRelativePath(file.relativePath)) ?? null)
   const tabStatusColor = tabStatus ? STATUS_COLORS[tabStatus] : undefined
   const tabLabel = getEditorDisplayLabel(file)
 
@@ -274,20 +281,12 @@ export default function EditorFileTab({
         <ShieldAlert
           className={`w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-orange-400' : 'text-orange-400/70'}`}
         />
-      ) : isCheckDetails ? (
-        <ListChecks
-          className={`w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
-        />
-      ) : isDiff ? (
-        <GitCompareArrows
-          className={`w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
-        />
       ) : isMarkdownPreviewTab ? (
         <Eye
           className={`w-3.5 h-3.5 mr-1.5 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
         />
       ) : (
-        createElement(FileIcon, {
+        createElement(HoverIcon, {
           className: `w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`
         })
       )}
@@ -399,16 +398,14 @@ export default function EditorFileTab({
         {isRenaming || menuOpen ? (
           tabRoot
         ) : (
-          <Tooltip>
-            <TooltipTrigger asChild>{tabRoot}</TooltipTrigger>
-            <TooltipContent
-              side="bottom"
-              sideOffset={6}
-              className="max-w-80 whitespace-normal break-words text-left"
-            >
-              {tabLabel}
-            </TooltipContent>
-          </Tooltip>
+          <TabHoverCard
+            title={tabLabel}
+            programName={translate('tabHoverCard.editor', 'Editor')}
+            icon={createElement(HoverIcon, { className: 'size-4' })}
+            description={file.relativePath}
+          >
+            {tabRoot}
+          </TabHoverCard>
         )}
       </div>
 
@@ -437,6 +434,7 @@ export default function EditorFileTab({
         onCloseAll={onCloseAll}
         onCloseToRight={onCloseToRight}
         onCloseToLeft={onCloseToLeft}
+        onCloseSplitPane={onCloseSplitPane}
         onOpenMarkdownPreview={openMarkdownPreview}
       />
     </>

@@ -4,12 +4,7 @@ const execFileMock = vi.hoisted(() => vi.fn())
 
 vi.mock('node:child_process', () => ({ execFile: execFileMock }))
 
-import {
-  deleteKeychainPassword,
-  isKeychainNotFoundError,
-  readKeychainPassword,
-  writeKeychainPassword
-} from './generic-password'
+import { isKeychainNotFoundError, readKeychainPassword } from './generic-password'
 
 const originalPlatform = process.platform
 
@@ -71,24 +66,7 @@ describe('readKeychainPassword', () => {
   it('never shells out off macOS', async () => {
     setPlatform('win32')
     await expect(readKeychainPassword('svc', 'acct')).resolves.toBeNull()
-    await writeKeychainPassword('svc', 'acct', 'value')
-    await deleteKeychainPassword('svc', 'acct')
     expect(execFileMock).not.toHaveBeenCalled()
-  })
-})
-
-describe('deleteKeychainPassword', () => {
-  it('swallows a missing item', async () => {
-    fail(Object.assign(new Error('could not be found'), { code: 44 }))
-    await expect(deleteKeychainPassword('svc', 'acct')).resolves.toBeUndefined()
-  })
-
-  it('surfaces an access failure only when the caller asks for it', async () => {
-    fail(new Error('User interaction is not allowed'))
-    await expect(deleteKeychainPassword('svc', 'acct')).resolves.toBeUndefined()
-    await expect(
-      deleteKeychainPassword('svc', 'acct', { failOnAccessError: true })
-    ).rejects.toThrow('User interaction is not allowed')
   })
 })
 

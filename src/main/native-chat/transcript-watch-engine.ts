@@ -44,7 +44,6 @@ export async function installTranscriptWatcher(
 
   const state = createIncrementalTranscriptState()
   let watchedVersion: TranscriptFileVersion | null = null
-  let watchedBoundary = ''
   let initialDrain = true,
     initialErrorEmitted = false
   let closed = false
@@ -89,8 +88,22 @@ export async function installTranscriptWatcher(
     }
   }
 
+  async function readSnapshot(limit: number) {
+    return readNativeChatTranscriptTailFile(
+      filePath,
+      limit,
+      decode,
+      false,
+      undefined,
+      decodeLifecycle,
+      gateAbort.signal,
+      (boundary) => {
+        state.boundary = boundary
+      }
+    )
+  }
+
   async function finishSuccessfulDrain(startVersion: TranscriptFileVersion): Promise<void> {
-    watchedBoundary = await boundaryFingerprint(filePath, state.offset, gateAbort.signal)
     const completedVersion = await readTranscriptFileVersion(filePath, gateAbort.signal)
     if (transcriptFileVersionChanged(completedVersion, startVersion)) {
       // Why: a write racing this drain needs another pass even when the reader
@@ -100,6 +113,7 @@ export async function installTranscriptWatcher(
     } else {
       watchedVersion = completedVersion
     }
+    pendingReadRequested ||= completedVersion.size !== state.offset
     if (closed) {
       return
     }
@@ -128,7 +142,7 @@ export async function installTranscriptWatcher(
       identityChanged ||
       sameSizeVersionChanged ||
       current.size < state.offset ||
-      (state.offset > 0 && watchedBoundary !== currentBoundary)
+      (state.offset > 0 && state.boundary.toString('base64') !== currentBoundary)
     if (identityChanged) {
       nativeWatcher.invalidate()
     }
@@ -142,15 +156,7 @@ export async function installTranscriptWatcher(
       // Why: 0 is a valid window — an explicit undefined check keeps an empty
       // snapshot empty instead of falling back to an unbounded incremental read.
       contentReplaced && !initialDrain && onReplace && initialLimit !== undefined
-        ? await readNativeChatTranscriptTailFile(
-            filePath,
-            initialLimit,
-            decode,
-            false,
-            undefined,
-            decodeLifecycle,
-            gateAbort.signal
-          )
+        ? await readSnapshot(initialLimit)
         : null
     if (closed) {
       return
@@ -158,28 +164,20 @@ export async function installTranscriptWatcher(
     if (replacementSnapshot && onReplace) {
       state.offset = replacementSnapshot.consumedTo
       state.pendingStart = state.offset
+      state.latestTimestamp = replacementSnapshot.latestTimestamp ?? Number.NEGATIVE_INFINITY
       onReplace(
         replacementSnapshot.messages,
         replacementSnapshot.hasMore,
         replacementSnapshot.beforeOffset,
         replacementSnapshot.lifecycle
       )
-      await readAndEmitAppends()
       await finishSuccessfulDrain(current)
       return
     }
 
     const initialSnapshot =
       initialDrain && onInitialSnapshot && initialLimit !== undefined
-        ? await readNativeChatTranscriptTailFile(
-            filePath,
-            initialLimit,
-            decode,
-            false,
-            undefined,
-            decodeLifecycle,
-            gateAbort.signal
-          )
+        ? await readSnapshot(initialLimit)
         : null
     if (closed) {
       return
@@ -189,6 +187,7 @@ export async function installTranscriptWatcher(
       if (initialSnapshot) {
         state.offset = initialSnapshot.consumedTo
         state.pendingStart = state.offset
+        state.latestTimestamp = initialSnapshot.latestTimestamp ?? Number.NEGATIVE_INFINITY
         onInitialSnapshot(
           initialSnapshot.messages,
           initialSnapshot.hasMore,
@@ -196,7 +195,6 @@ export async function installTranscriptWatcher(
           undefined,
           initialSnapshot.lifecycle
         )
-        await readAndEmitAppends()
       } else {
         let lifecycle: NativeChatTurnLifecycle | undefined
         const messages = await readIncrementalTranscriptMessages(

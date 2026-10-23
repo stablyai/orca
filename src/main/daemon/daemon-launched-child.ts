@@ -1,4 +1,5 @@
 import type { ChildProcess } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import { isDurableDaemonScopeSupported } from './daemon-cgroup-scope'
 import { DAEMON_EXIT_ENDPOINT_OCCUPIED } from './daemon-endpoint-ownership'
 import type { DaemonEndpointIdentity } from './daemon-hello-protocol'
@@ -8,7 +9,10 @@ import {
 } from './daemon-launched-child-spawn'
 import { parseDaemonReadyIdentity } from './daemon-ready-identity'
 import { unlinkOwnedDaemonPidFile } from './daemon-spawner'
+import { childProcessHasExited } from '@orca/process-host/process-tree-termination'
 
+/** How long a forked daemon gets to report ready over IPC, unless the caller overrides it. */
+export const DAEMON_CHILD_STARTUP_TIMEOUT_MS = 10_000
 const DAEMON_CHILD_TERMINATION_GRACE_MS = 5_000
 const DAEMON_CHILD_FORCE_EXIT_WAIT_MS = 1_000
 const STARTUP_STDERR_MAX_BYTES = 8192
@@ -22,9 +26,54 @@ export class DaemonEndpointUnavailableError extends Error {
   }
 }
 
+/** The failed attempt may still be alive, so no retry may start beside it. */
+class DaemonStartupCleanupError extends AggregateError {}
+
 export type LaunchedDaemonChild = {
   child: ChildProcess
   identity: DaemonEndpointIdentity
+}
+
+export async function launchDaemonChild(
+  options: DaemonChildSpawnOptions
+): Promise<LaunchedDaemonChild> {
+  // Why once: the probe is a synchronous systemd-run spawn; the AppImage fallbacks must not repeat it.
+  const scopeSupported = isDurableDaemonScopeSupported()
+  const appImageRungs = [
+    ...(options.extractedGeneration
+      ? [{ from: 'the extracted AppImage copy', options: { ...options, appImage: undefined } }]
+      : []),
+    ...(options.appImage
+      ? [{ from: 'the AppImage', options: { ...options, extractedGeneration: undefined } }]
+      : [])
+  ]
+  for (const rung of appImageRungs) {
+    try {
+      // Why a fresh nonce: it names the scope unit, and a failed attempt's unit may still hold its
+      // FUSE server when the next rung registers the original name.
+      return await launchDaemonChildAttempt(
+        { ...rung.options, launchNonce: randomUUID() },
+        scopeSupported
+      )
+    } catch (error) {
+      if (
+        error instanceof DaemonEndpointUnavailableError ||
+        error instanceof DaemonStartupCleanupError
+      ) {
+        throw error
+      }
+      // Why: a pruned copy, a missing/replaced AppImage or a refused FUSE mount must not cost the
+      // daemon; the next rung, and finally the in-mount launch, still work while this window lives.
+      console.warn(
+        `[daemon] Launch from ${rung.from} failed, ${rung === appImageRungs.at(-1) ? 'retrying from the current mount' : 'falling back'}:`,
+        error instanceof Error ? error.message : String(error)
+      )
+    }
+  }
+  return launchDaemonChildInEitherScope(
+    { ...options, appImage: undefined, extractedGeneration: undefined },
+    scopeSupported
+  )
 }
 
 /**
@@ -35,10 +84,11 @@ export type LaunchedDaemonChild = {
  * for any reason but a lost endpoint race retries once, unscoped, so an environment that cannot
  * support isolation degrades to today's proven behavior instead of failing the launch outright.
  */
-export async function launchDaemonChild(
-  options: DaemonChildSpawnOptions
+async function launchDaemonChildInEitherScope(
+  options: DaemonChildSpawnOptions,
+  scopeSupported: boolean
 ): Promise<LaunchedDaemonChild> {
-  if (!isDurableDaemonScopeSupported()) {
+  if (!scopeSupported) {
     return launchDaemonChildAttempt(options, false)
   }
   try {
@@ -84,9 +134,8 @@ async function launchDaemonChildAttempt(
     child.stderr?.destroy()
   }
 
-  // Wait for the daemon to signal readiness via IPC
   let launchedIdentity: DaemonEndpointIdentity | null = null
-  let endpointUnavailableReason: string | null = null
+  let endpointOccupied = false
   const startupSignal = new Promise<void>((resolve, reject) => {
     let timer: ReturnType<typeof setTimeout> | undefined
     let settled = false
@@ -117,7 +166,7 @@ async function launchDaemonChildAttempt(
         await terminateLaunchedDaemonChild(child)
       } catch (cleanupError) {
         reject(
-          new AggregateError(
+          new DaemonStartupCleanupError(
             [startupError, cleanupError],
             'Daemon startup and child cleanup both failed'
           )
@@ -134,18 +183,19 @@ async function launchDaemonChildAttempt(
       reject(startupError)
     }
     function onReadyMessage(msg: unknown): void {
-      if (
-        msg &&
-        typeof msg === 'object' &&
-        (msg as { type?: string }).type === 'endpoint-unavailable'
-      ) {
-        // Why: the child lost the endpoint race rather than crashing. Record it so the
-        // launcher can adopt the winner instead of reporting a generic startup failure.
-        endpointUnavailableReason = (msg as { reason?: string }).reason ?? 'occupied'
-        void fail(new Error(`Daemon could not take the endpoint: ${endpointUnavailableReason}`))
+      if (!msg || typeof msg !== 'object') {
         return
       }
-      if (msg && typeof msg === 'object' && (msg as { type?: string }).type === 'ready') {
+      const type = 'type' in msg ? msg.type : undefined
+      if (type === 'endpoint-unavailable') {
+        // Why: the child lost the endpoint race rather than crashing. Record it so the
+        // launcher can adopt the winner instead of reporting a generic startup failure.
+        const reason = 'reason' in msg && typeof msg.reason === 'string' ? msg.reason : 'occupied'
+        endpointOccupied = reason === 'occupied'
+        void fail(new Error(`Daemon could not take the endpoint: ${reason}`))
+        return
+      }
+      if (type === 'ready') {
         if (settled) {
           return
         }
@@ -180,14 +230,14 @@ async function launchDaemonChildAttempt(
       if (code === DAEMON_EXIT_ENDPOINT_OCCUPIED) {
         // Why here and not only on the IPC message: the exit is the event this wait settles
         // on, so keying off it cannot lose to a notification still in the channel.
-        endpointUnavailableReason = 'occupied'
+        endpointOccupied = true
       }
       void fail(new Error(`Daemon exited during startup with code ${code}`))
     }
 
     timer = setTimeout(() => {
       void fail(new Error('Daemon startup timed out'))
-    }, 10000)
+    }, options.startupTimeoutMs ?? DAEMON_CHILD_STARTUP_TIMEOUT_MS)
 
     child.on('message', onReadyMessage)
     child.on('error', onStartupError)
@@ -197,7 +247,7 @@ async function launchDaemonChildAttempt(
   try {
     await startupSignal
   } catch (error) {
-    if (endpointUnavailableReason === 'occupied') {
+    if (endpointOccupied) {
       throw new DaemonEndpointUnavailableError('occupied', { cause: error })
     }
     throw error
@@ -218,10 +268,7 @@ async function launchDaemonChildAttempt(
  */
 export async function terminateLaunchedDaemonChild(child: ChildProcess): Promise<void> {
   try {
-    if (
-      (child.exitCode !== null && child.exitCode !== undefined) ||
-      (child.signalCode !== null && child.signalCode !== undefined)
-    ) {
+    if (childProcessHasExited(child)) {
       return
     }
     await new Promise<void>((resolve, reject) => {

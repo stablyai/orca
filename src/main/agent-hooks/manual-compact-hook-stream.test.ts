@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { RelayAgentHookServer } from '../../relay/agent-hook-server'
+import { RelayAgentHookServer } from '../../wsl-guest/agent-hook-server'
 import { seedLegacyAgentStatusForTests } from '../../shared/agent-hook-listener/listener-state'
 import { seedClaudeSubagentRosterFromSnapshots } from '../../shared/agent-hook-listener/providers/claude-roster-state'
 import type { AgentHookEventPayload } from '../../shared/agent-hook-listener/listener-event'

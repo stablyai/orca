@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import { realpathSync, writeFileSync } from 'node:fs'
 import type * as NodeFs from 'node:fs'
 import { join } from 'node:path'
@@ -70,6 +71,7 @@ vi.mock('electron', () => ({
     getPath: () => testState.userDataDir
   }
 }))
+beforeEach(() => installFakeAppEnvironment({ getPath: () => testState.userDataDir }))
 
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
@@ -152,7 +154,7 @@ async function createServiceWithSpies(settings: ReturnType<typeof createSettings
 
 function managedAccountSettings(managedHomePath: string) {
   return createSettings({
-    shellStartupEnvProbeSupported: true,
+    realHomeRoutable: true,
     codexManagedAccounts: [
       createCodexAccountRecord('account-1', 'user@example.com', 'acct-1', managedHomePath)
     ],
@@ -195,7 +197,7 @@ describe('resolveHostCodexHomePathForLaunchReadOnly', () => {
 
   it('system-default real home: answers null (real ~/.codex) with zero side effects, matching launch prep', async () => {
     const { service, store, sideEffects } = await createServiceWithSpies(
-      createSettings({ shellStartupEnvProbeSupported: true })
+      createSettings({ realHomeRoutable: true })
     )
 
     const readOnlyHome = service.resolveHostCodexHomePathForLaunchReadOnly()
@@ -207,7 +209,7 @@ describe('resolveHostCodexHomePathForLaunchReadOnly', () => {
 
   it('shared runtime home: answers the mirror with zero side effects, then matches launch prep', async () => {
     const { service, store, sideEffects } = await createServiceWithSpies(
-      createSettings({ shellStartupEnvProbeSupported: false })
+      createSettings({ realHomeRoutable: false })
     )
 
     const readOnlyHome = service.resolveHostCodexHomePathForLaunchReadOnly()
@@ -280,9 +282,7 @@ describe('resolveHostCodexHomePathForLaunchReadOnly', () => {
   })
 
   it('shares the create-path null-to-system-home mapping', async () => {
-    const { service } = await createServiceWithSpies(
-      createSettings({ shellStartupEnvProbeSupported: true })
-    )
+    const { service } = await createServiceWithSpies(createSettings({ realHomeRoutable: true }))
     const { resolveStructuredCodexAccountHomePath } =
       await import('../runtime/structured-agent-account-home')
     await expect(

@@ -46,6 +46,7 @@ const LANGUAGE_ALIASES: Record<string, string> = {
   tsx: 'typescript',
   sh: 'bash',
   shell: 'bash',
+  shellscript: 'bash',
   zsh: 'bash',
   fish: 'bash',
   yml: 'yaml'

@@ -10,13 +10,7 @@ import {
 } from './hosted-review-request-state'
 
 const runtimeRpc = vi.hoisted(() => ({ callRuntimeRpc: vi.fn() }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: runtimeRpc.callRuntimeRpc,
-  getActiveRuntimeTarget: (settings: AppState['settings']) => {
-    const environmentId = settings?.activeRuntimeEnvironmentId
-    return environmentId ? { kind: 'environment', environmentId } : { kind: 'local' }
-  }
-}))
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: runtimeRpc.callRuntimeRpc }))
 
 const forBranch = vi.fn()
 type TestState = Pick<

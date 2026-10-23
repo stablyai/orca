@@ -1,6 +1,11 @@
+import { ptyIncarnationById, ptyOwnership } from '../provider/ownership-state'
+import { attachOnlyViewOf } from '../pane/attach-only-view'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
+import { resolveAgentLaunchPaneVerdict } from '../../../agent-launch/agent-launch-pane-attachment'
+import { AGENT_LAUNCH_PANE_REFUSED_CODE } from '../../../../shared/agent-launch-pane-verdict'
+import { agentLaunchPaneLiveness } from '../pane/agent-launch-pane-evidence'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
-import type { PtySpawnResult } from '../../../providers/types'
+import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
 import type { CodexPaneHomeRoute } from '../../../codex/codex-pane-account-registry'
 import { createPtySpawnTiming } from '../../pty-spawn-timing'
 import { allocatePtyLifecycleSequence } from '../host-env/types'
@@ -8,16 +13,15 @@ import { snapshotCodexPaneHomeRoutes } from '../host-env/codex-home'
 import { getAppPtyId } from '../provider/registry'
 import {
   makePaneSpawnReservationKey,
-  reservePaneSpawn,
-  paneSpawnReservationsByOwnerKey,
   pendingRuntimePaneCreatesByOwnerKey
 } from '../pane/spawn-reservation'
 import { resolveStablePaneOwner } from '../pane/stable-owner'
+import { excludeReplacedPaneOwner } from '../pane/replaced-pane-owner'
 import type { PtyIpcSpawnState } from './spawn-state'
 import type { PtySpawnIpcArgs } from './spawn-types'
 
 /** The pane key a spawn names before preflight; null when it names no stable pane. */
-function resolveEarlyPaneKey(args: PtySpawnIpcArgs): string | null {
+export function resolveEarlyPaneKey(args: PtySpawnIpcArgs): string | null {
   const leafId =
     typeof args.leafId === 'string' && isTerminalLeafId(args.leafId) ? args.leafId : null
   return typeof args.worktreeId === 'string' &&
@@ -37,6 +41,32 @@ export async function beginPtyIpcSpawn(
   ctx: PtyIpcSpawnState
 ): Promise<PtySpawnResult | { isReattach: true } | null> {
   const args = ctx.args
+  // A pane an agent launch laid out attaches to its agent or says why it can't, never runs a shell.
+  // A replacing spawn already holds the pane: the user restarted it, and that is theirs to run.
+  const launchPaneKey = ctx.paneSpawnReservation ? null : resolveEarlyPaneKey(args)
+  const launchVerdict =
+    launchPaneKey && args.worktreeId && args.tabId && args.leafId
+      ? resolveAgentLaunchPaneVerdict(
+          { worktreeId: args.worktreeId, paneKey: launchPaneKey },
+          agentLaunchPaneLiveness(ctx.deps, {
+            worktreeId: args.worktreeId,
+            tabId: args.tabId,
+            leafId: args.leafId,
+            connectionId: args.connectionId
+          })
+        )
+      : null
+  if (launchVerdict && args.worktreeId && args.tabId && args.leafId) {
+    const verdict = await launchVerdict
+    // The window keeps a final verdict on the tab, clears a settled one, takes a withdrawn pane back.
+    ctx.deps.runtime?.reportAgentLaunchPaneVerdict?.(
+      { worktreeId: args.worktreeId, tabId: args.tabId, leafId: args.leafId },
+      verdict
+    )
+    if (verdict.kind !== 'proceed') {
+      throw new Error(AGENT_LAUNCH_PANE_REFUSED_CODE)
+    }
+  }
   ctx.codexHomeLaunchStartedAt = !args.connectionId ? new Date() : undefined
   ctx.codexHomeLaunchStartedSequence = !args.connectionId
     ? allocatePtyLifecycleSequence()
@@ -45,12 +75,15 @@ export async function beginPtyIpcSpawn(
   const initialStablePanePtyId = (() => {
     try {
       return !args.connectionId && initialPaneKey
-        ? resolveStablePaneOwner(
-            ctx.deps.runtime,
-            ctx.deps.store,
-            initialPaneKey,
-            args.worktreeId,
-            args.connectionId
+        ? excludeReplacedPaneOwner(
+            resolveStablePaneOwner(
+              ctx.deps.runtime,
+              ctx.deps.store,
+              initialPaneKey,
+              args.worktreeId,
+              args.connectionId
+            ),
+            ctx.replacedPaneOwner
           )?.ptyId
         : undefined
     } catch {
@@ -76,31 +109,40 @@ export async function beginPtyIpcSpawn(
       ? pendingRuntimePaneCreatesByOwnerKey.get(earlyReservationKey)
       : undefined
     if (pendingRuntimeCreate) {
-      await pendingRuntimeCreate.promise
-    }
-    const existingPaneSpawn = earlyReservationKey
-      ? paneSpawnReservationsByOwnerKey.get(earlyReservationKey)
-      : undefined
-    if (existingPaneSpawn) {
-      return { ...(await existingPaneSpawn.promise), isReattach: true }
+      const created = await pendingRuntimeCreate.promise
+      // Why: main's start of this pane carries the payload a view paints from; attaching to the
+      // provider again adds a round trip. A start that carries none, or no longer owns its
+      // terminal, leaves the view to attach as today.
+      if (
+        attachOnlyViewOf(args) &&
+        created &&
+        created.id === args.sessionId &&
+        (created.coldRestore || typeof created.snapshot === 'string') &&
+        ptyOwnership.has(created.id) &&
+        (created.incarnationId === undefined ||
+          ptyIncarnationById.get(created.id) === created.incarnationId)
+      ) {
+        return created
+      }
     }
   }
   ctx.earlyStablePaneOwner =
     initialPaneKey && args.worktreeId
-      ? resolveStablePaneOwner(
-          ctx.deps.runtime,
-          ctx.deps.store,
-          initialPaneKey,
-          args.worktreeId,
-          args.connectionId
+      ? excludeReplacedPaneOwner(
+          resolveStablePaneOwner(
+            ctx.deps.runtime,
+            ctx.deps.store,
+            initialPaneKey,
+            args.worktreeId,
+            args.connectionId
+          ),
+          ctx.replacedPaneOwner
         )
       : null
   ctx.earlyWorktreeId = args.worktreeId
   // Reserve early so renderer/runtime materialization cannot start duplicate provider spawns.
   ctx.paneSpawnReservationKey = earlyReservationKey
-  ctx.paneSpawnReservation =
-    heldReservation ??
-    (ctx.paneSpawnReservationKey ? reservePaneSpawn(ctx.paneSpawnReservationKey) : null)
+  ctx.paneSpawnReservation = heldReservation ?? null
   ctx.finishTerminalInstall = (): void => {}
   ctx.stablePaneOwner = null
   ctx.stablePaneBindingPersisted = false

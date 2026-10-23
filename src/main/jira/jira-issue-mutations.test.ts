@@ -78,6 +78,42 @@ describe('Jira issue mutations', () => {
     jiraRequestMock.mockReset()
   })
 
+  it.each([makeEntry(), makeServerEntry()])(
+    'changes only named labels atomically on $site.authType sites',
+    async (entry) => {
+      getClientsMock.mockReturnValue([entry])
+      jiraRequestMock.mockResolvedValue(undefined)
+      const { updateIssue } = await import('./issues')
+      await expect(
+        updateIssue(
+          'ENG-1',
+          { labelOperations: { add: ['new', 'new'], remove: ['obsolete'] } },
+          entry.site.id
+        )
+      ).resolves.toEqual({ ok: true })
+      expect(jiraRequestMock).toHaveBeenCalledWith(
+        entry,
+        `${entry.site.authType === 'server' ? '/rest/api/2' : '/rest/api/3'}/issue/ENG-1`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({
+            fields: {},
+            update: { labels: [{ add: 'new' }, { remove: 'obsolete' }] }
+          })
+        }
+      )
+      expect(jiraRequestMock).toHaveBeenCalledTimes(1)
+    }
+  )
+
+  it('rejects conflicting label replacement and atomic operations before writing', async () => {
+    const { updateIssue } = await import('./issues')
+    await expect(
+      updateIssue('ENG-1', { labels: ['replacement'], labelOperations: { add: ['new'] } }, 'site-1')
+    ).resolves.toMatchObject({ ok: false })
+    expect(jiraRequestMock).not.toHaveBeenCalled()
+  })
+
   it('sends plain-text bodies and v2 paths for self-hosted issue creation', async () => {
     getClientsMock.mockReturnValue([makeServerEntry()])
     jiraRequestMock.mockResolvedValueOnce({ id: '1', key: 'ALP-1', self: '' })

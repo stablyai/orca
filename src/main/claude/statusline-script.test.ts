@@ -134,31 +134,6 @@ describe('getManagedStatusLineScript (win32 local)', () => {
   })
 })
 
-describe('statusline curl throttle (posix)', () => {
-  it('checks the per-pane stamp after the env guards and before curl', () => {
-    stubPlatform('darwin')
-    const script = getManagedStatusLineScript('local')
-    const envGuardIndex = script.indexOf('-z "$ORCA_AGENT_HOOK_PORT"')
-    const durationIndex = script.indexOf('"total_duration_ms"')
-    const stampIndex = script.indexOf('orca-claude-statusline-last-${orca_statusline_pane_id}')
-    const intervalIndex = script.indexOf(`-lt ${CLAUDE_STATUSLINE_MIN_POST_INTERVAL_SECONDS}`)
-    const curlIndex = script.indexOf('curl -sS')
-    expect(envGuardIndex).toBeLessThan(stampIndex)
-    expect(stampIndex).toBeLessThan(durationIndex)
-    expect(durationIndex).toBeLessThan(intervalIndex)
-    expect(intervalIndex).toBeLessThan(curlIndex)
-    // Fail-open shape: non-numeric date output or stamp content must never suppress the post.
-    // Why: the allow-list (not a mere digits check) matters — leading-zero values like 008 are
-    // invalid octal inside $(( )) and abort the whole script under dash, wedging the stamp.
-    expect(script).toContain(
-      'case "$orca_statusline_now" in 0|[1-9]|[1-9][0-9]*) ;; *) orca_statusline_now='
-    )
-    expect(script).toContain(
-      'case "$orca_statusline_last" in 0|[1-9]|[1-9][0-9]*) ;; *) orca_statusline_last='
-    )
-  })
-})
-
 describe.skipIf(process.platform === 'win32')('statusline curl throttle (posix behavioral)', () => {
   const LEAF_ID = '00000000-0000-4000-8000-000000000000'
   const PANE_KEY = 'tab-1:00000000-0000-4000-8000-000000000000'

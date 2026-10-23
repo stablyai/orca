@@ -16,7 +16,6 @@ describe('agent completion coordinator', () => {
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
-      getSettings: () => null,
       inspectProcess: vi.fn(),
       dispatchCompletion,
       dispatchAttention,
@@ -71,7 +70,6 @@ describe('agent completion coordinator', () => {
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
-      getSettings: () => null,
       inspectProcess: vi.fn(),
       dispatchCompletion,
       dispatchAttention,
@@ -113,7 +111,6 @@ describe('agent completion coordinator', () => {
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
-      getSettings: () => null,
       inspectProcess: vi.fn(),
       dispatchCompletion,
       dispatchAttention,
@@ -160,7 +157,6 @@ describe('agent completion coordinator', () => {
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
-      getSettings: () => null,
       inspectProcess: vi.fn(),
       dispatchCompletion,
       dispatchAttention,
@@ -201,7 +197,6 @@ describe('agent completion coordinator', () => {
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
-      getSettings: () => null,
       inspectProcess: vi.fn(),
       dispatchCompletion: vi.fn(),
       dispatchAttention,
@@ -243,7 +238,6 @@ describe('agent completion coordinator', () => {
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
-      getSettings: () => null,
       inspectProcess: vi.fn(),
       dispatchCompletion,
       dispatchAttention,
@@ -272,7 +266,6 @@ describe('agent completion coordinator', () => {
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
-      getSettings: () => null,
       inspectProcess: vi.fn(async () => processResult(foreground)),
       dispatchCompletion,
       dispatchAttention,
@@ -321,7 +314,6 @@ describe('agent completion coordinator', () => {
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
-      getSettings: () => null,
       inspectProcess: vi.fn(),
       dispatchCompletion: vi.fn(),
       dispatchAttention,

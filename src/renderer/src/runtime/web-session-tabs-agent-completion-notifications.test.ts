@@ -22,12 +22,10 @@ import {
   registerRendererOwnedAgentStatusPane,
   resetRendererOwnedAgentStatusPanesForTests
 } from '@/components/terminal-pane/renderer-owned-agent-status-registry'
-import {
-  applyWebSessionTabsSnapshot,
-  applyWebSessionTabsStorePatch,
-  decideWebSessionTabsSnapshot,
-  resetWebSessionTabsSnapshotFreshnessForTests
-} from './web-session-tabs-sync'
+import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
+import { applyWebSessionTabsStorePatch } from './web-session-tabs-sync/store-patch'
+import { decideWebSessionTabsSnapshot } from './web-session-tabs-sync/tracking-decisions'
+import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
 
 const ENVIRONMENT_ID = 'web-env-1'
 const WORKTREE_ID = 'repo::/worktree'
@@ -40,7 +38,8 @@ function makeAgentSnapshot(
   snapshotVersion: number,
   updatedAt: number,
   turnCompletedAt?: number,
-  state: 'working' | 'done' = 'working'
+  state: 'working' | 'done' = 'working',
+  stateStartedAt = NOW
 ): RuntimeMobileSessionTabsResult {
   return {
     worktree: WORKTREE_ID,
@@ -64,7 +63,7 @@ function makeAgentSnapshot(
           state,
           prompt: 'review the PR',
           updatedAt,
-          stateStartedAt: NOW,
+          stateStartedAt,
           agentType: 'claude',
           paneKey: makePaneKey(HOST_TAB_ID, LEAF_ID),
           tabId: HOST_TAB_ID,
@@ -133,7 +132,6 @@ describe('paired session-tab agent completion notifications', () => {
     const coordinator = createAgentCompletionCoordinator({
       paneKey: makePaneKey(toWebTerminalSurfaceTabId(HOST_TAB_ID), LEAF_ID),
       getPtyId: () => 'pty-1',
-      getSettings: () => null,
       inspectProcess: vi.fn(),
       dispatchCompletion,
       isLive: () => true
@@ -171,7 +169,6 @@ describe('paired session-tab agent completion notifications', () => {
     const coordinator = createAgentCompletionCoordinator({
       paneKey,
       getPtyId: () => 'pty-1',
-      getSettings: () => null,
       inspectProcess: vi.fn(),
       dispatchCompletion,
       isLive: () => true
@@ -265,7 +262,6 @@ describe('paired session-tab agent completion notifications', () => {
     const coordinator = createAgentCompletionCoordinator({
       paneKey: makePaneKey(toWebTerminalSurfaceTabId(HOST_TAB_ID), LEAF_ID),
       getPtyId: () => 'pty-1',
-      getSettings: () => null,
       inspectProcess: vi.fn(),
       dispatchCompletion,
       isLive: () => true
@@ -287,7 +283,6 @@ describe('paired session-tab agent completion notifications', () => {
       paneKey: makePaneKey(toWebTerminalSurfaceTabId(HOST_TAB_ID), LEAF_ID),
       statusLane: 'hook',
       getPtyId: () => 'pty-1',
-      getSettings: () => null,
       inspectProcess: vi.fn(),
       dispatchCompletion,
       isLive: () => true
@@ -324,5 +319,75 @@ describe('paired session-tab agent completion notifications', () => {
     vi.advanceTimersByTime(1_500)
 
     expect(dispatchCompletion).toHaveBeenCalledTimes(2)
+  })
+
+  describe('reconnect hydration of a host-owned done', () => {
+    let dispatchCompletion = vi.fn()
+
+    beforeEach(() => {
+      dispatchCompletion = vi.fn()
+      const coordinator = createAgentCompletionCoordinator({
+        paneKey: makePaneKey(toWebTerminalSurfaceTabId(HOST_TAB_ID), LEAF_ID),
+        statusLane: 'hook',
+        getPtyId: () => 'pty-1',
+        inspectProcess: vi.fn(),
+        dispatchCompletion,
+        isLive: () => true
+      })
+      mocks.observeAgentHookCompletionForNotification.mockImplementation(({ payload, seedOnly }) =>
+        seedOnly ? coordinator.seedHookStatus(payload) : coordinator.observeHookStatus(payload)
+      )
+    })
+
+    it('announces a turn that finished while the host was unreachable', () => {
+      applySnapshot(makeAgentSnapshot(1, NOW), true)
+      applySnapshot(makeAgentSnapshot(2, NOW + 45_000, undefined, 'done', NOW + 15_000), false)
+      vi.advanceTimersByTime(1_500)
+
+      expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+      expect(dispatchCompletion).toHaveBeenCalledWith(
+        'claude',
+        expect.objectContaining({
+          source: 'hook',
+          agentStatus: expect.objectContaining({ state: 'done', stateStartedAt: NOW + 15_000 })
+        })
+      )
+    })
+
+    it('announces a background turn stamped while the host was unreachable, once', () => {
+      applySnapshot(makeAgentSnapshot(1, NOW), true)
+      applySnapshot(makeAgentSnapshot(2, NOW + 45_000, NOW + 15_000), false)
+      expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+
+      applySnapshot(makeAgentSnapshot(3, NOW + 46_000, NOW + 15_000), false)
+      expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+    })
+
+    it('seeds a stamped working row found on first load without announcing it', () => {
+      applySnapshot(makeAgentSnapshot(1, NOW, NOW + 15_000), false)
+      vi.advanceTimersByTime(1_500)
+
+      expect(dispatchCompletion).not.toHaveBeenCalled()
+    })
+
+    it('seeds a done found on first load without announcing it', () => {
+      applySnapshot(makeAgentSnapshot(1, NOW, undefined, 'done', NOW + 15_000), false)
+      vi.advanceTimersByTime(1_500)
+
+      expect(dispatchCompletion).not.toHaveBeenCalled()
+    })
+
+    it('does not re-announce a replayed done', () => {
+      applySnapshot(makeAgentSnapshot(1, NOW), true)
+      applySnapshot(makeAgentSnapshot(2, NOW + 1_000, undefined, 'done', NOW + 15_000), true)
+      vi.advanceTimersByTime(1_500)
+      expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+
+      applySnapshot(makeAgentSnapshot(3, NOW + 2_000, undefined, 'done', NOW + 15_000), false)
+      applySnapshot(makeAgentSnapshot(4, NOW + 3_000, undefined, 'done', NOW + 15_000), false)
+      vi.advanceTimersByTime(1_500)
+
+      expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+    })
   })
 })

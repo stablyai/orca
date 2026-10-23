@@ -15,9 +15,9 @@ vi.mock('node:fs', () => ({
   realpathSync: (value: string) => value,
   writeFileSync: fixture.write
 }))
-vi.mock('./helpers/docker-ssh-relay-image', () => ({ prepareDockerSshRelayImage: vi.fn() }))
+vi.mock('./helpers/docker-ssh-host-image', () => ({ prepareDockerSshHostImage: vi.fn() }))
 
-import globalSetup from './global-setup'
+import globalSetup, { workerTestRepositoryPathFile } from './global-setup'
 
 beforeEach(() => {
   vi.resetAllMocks()
@@ -25,9 +25,7 @@ beforeEach(() => {
   for (const name of [
     'SKIP_BUILD',
     'ORCA_E2E_WEB_CLIENT',
-    'ORCA_E2E_SSH_LOCALHOST',
     'ORCA_E2E_SSH_DOCKER',
-    'ORCA_E2E_NESTED_RUNTIME_SSH',
     'ORCA_E2E_SKILL_STAGING',
     'ORCA_E2E_TEST_REPO_PATH_FILE'
   ]) {
@@ -42,6 +40,18 @@ function commands(): string[] {
 }
 
 describe('E2E shared CLI artifact', () => {
+  it('keeps worker publications separate from the run seed and from other workers', () => {
+    const runPath = path.join('temporary', 'run.txt')
+    expect(workerTestRepositoryPathFile(runPath)).toBe(runPath)
+    expect(workerTestRepositoryPathFile(runPath, '0')).not.toBe(runPath)
+    expect(workerTestRepositoryPathFile(runPath, '0')).not.toBe(
+      workerTestRepositoryPathFile(runPath, '1')
+    )
+    expect(() => workerTestRepositoryPathFile(runPath, '../other')).toThrow(
+      'Invalid Playwright worker index'
+    )
+  })
+
   it('repairs downloaded permissions and installs the local launcher without recompiling', () => {
     vi.stubEnv('SKIP_BUILD', '1')
     globalSetup()

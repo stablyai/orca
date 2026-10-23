@@ -4,7 +4,8 @@ import {
   isTerminalSubagentState,
   normalizeSubagentState,
   subagentGroupFallbackText,
-  summarizeSubagentGroup
+  summarizeSubagentGroup,
+  withoutSubagentGroupTwins
 } from './native-chat-subagent-summary'
 import type { NativeChatSubagentEntry } from './native-chat-types'
 
@@ -291,5 +292,18 @@ describe('isSubagentGroupFallbackText', () => {
     ]) {
       expect(isSubagentGroupFallbackText(prose)).toBe(false)
     }
+  })
+})
+
+describe('withoutSubagentGroupTwins', () => {
+  const twin = { type: 'text' as const, text: 'Ran 1 subagent' }
+  const prose = { type: 'text' as const, text: 'Delegating the review.' }
+
+  it('drops the twin only beside a group that draws', () => {
+    const group = { type: 'subagent-group' as const, groupId: 'g', agents: [agent({})] }
+    expect(withoutSubagentGroupTwins([twin, prose, group])).toEqual([prose, group])
+    const childless = { type: 'subagent-group' as const, groupId: 'g', agents: [] }
+    expect(withoutSubagentGroupTwins([twin, childless])).toEqual([twin, childless])
+    expect(withoutSubagentGroupTwins([twin])).toEqual([twin])
   })
 })

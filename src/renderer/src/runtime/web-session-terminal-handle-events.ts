@@ -2,6 +2,7 @@ import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTerminalClientTab
 } from '../../../shared/runtime-types'
+import { hostSnapshotAffirmsWorktreeContents } from './host-session-snapshot-authority'
 
 export type WebSessionTerminalHandleUpdate = {
   surfacePresent: boolean
@@ -82,7 +83,8 @@ export function queueAcceptedWebSessionTerminalSnapshot(
   snapshot: RuntimeMobileSessionTabsResult,
   environmentId: string
 ): void {
-  if (subscribersBySession.size === 0) {
+  // Why: a frame the host synthesized before publishing says nothing about any surface.
+  if (subscribersBySession.size === 0 || !hostSnapshotAffirmsWorktreeContents(snapshot)) {
     return
   }
   const key = sessionKey(environmentId, snapshot.worktree)

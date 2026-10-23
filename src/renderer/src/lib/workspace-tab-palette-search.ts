@@ -3,7 +3,7 @@ import type { PaletteDocument } from './palette-match/palette-document'
 import type { Tab, TabGroup, WorkspaceVisibleTabType } from '../../../shared/tab-types'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TerminalAgent } from '../../../shared/terminal-agent'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { AgentMetadata, WorkspaceTabAgentMetadataState } from './workspace-tab-agent-metadata'
@@ -40,7 +40,7 @@ export type SearchableWorkspaceTab = {
   document: PaletteDocument
   agentMetadata: AgentMetadata[]
   /** Confident occupant for the row icon; null when the pane is a plain shell. */
-  occupantAgent: TuiAgent | null
+  occupantAgent: TerminalAgent | null
   isCurrentTab: boolean
   isCurrentWorktree: boolean
 }

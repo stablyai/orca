@@ -11,7 +11,7 @@ import {
 } from 'lucide-react'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
-import { FilePathCursorTooltip, splitTrailingSegment } from '@/components/file-path-cursor-tooltip'
+import { FilePathCursorTooltip, FilenameFirstPath } from '@/components/file-path-cursor-tooltip'
 import { translate } from '@/i18n/i18n'
 import { SEARCH_ENGINE_LABELS } from '../../../../shared/browser-url'
 import { formatBrowserHistoryUrl } from '@/lib/browser-history-match'
@@ -109,21 +109,6 @@ export function EntryActionRow({
   return <FilePathCursorTooltip path={presentation.detail}>{row}</FilePathCursorTooltip>
 }
 
-function FilenameFirstPath({ path }: { path: string }): React.JSX.Element {
-  const { directory, filename } = splitTrailingSegment(path)
-
-  return (
-    <span className="flex min-w-0 flex-1 items-center gap-1">
-      {/* shrink-0 + max-w-full: the directory gives up all of its width before
-          the filename loses a character. */}
-      <span className="min-w-0 max-w-full shrink-0 truncate">{filename}</span>
-      {directory ? (
-        <span className="min-w-0 truncate text-muted-foreground/70">{directory}</span>
-      ) : null}
-    </span>
-  )
-}
-
 function getOpenTabIcon(option: Extract<ActiveOption, { kind: 'tab' }>['option']): React.ReactNode {
   if (option.contentType === 'terminal' && option.source === 'workspace' && option.occupantAgent) {
     return (
@@ -206,7 +191,7 @@ function getActionPresentation(
   }
   if (option.kind === 'agent') {
     return {
-      detail: option.option.label,
+      detail: [option.option.label, option.option.reason].filter(Boolean).join(' · '),
       icon: <AgentIcon agent={option.option.agent} size={14} />,
       label:
         labelOverride ??
@@ -236,12 +221,16 @@ function getActionPresentation(
       showDetail: true
     }
   }
-  if (classification.kind === 'existing-file' || classification.kind === 'absolute-file') {
+  if (
+    classification.kind === 'existing-file' ||
+    classification.kind === 'absolute-file' ||
+    classification.kind === 'html-file-url'
+  ) {
     return {
       detail:
-        classification.kind === 'absolute-file'
-          ? classification.filePath
-          : classification.relativePath,
+        classification.kind === 'existing-file'
+          ? classification.relativePath
+          : classification.filePath,
       icon: <FileText className="size-3.5 shrink-0" aria-hidden="true" />,
       label: translate('auto.components.tab.bar.TabBarCreateEntry.25dc1cd653', 'Open file'),
       prioritizeFilename: true,

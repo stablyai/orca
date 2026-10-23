@@ -134,7 +134,8 @@ describe('bridge client handshake', () => {
       // And no host and no stored keys, which is what `host-store.web.ts` then answers with.
       host: null,
       storage: {},
-      storageOversize: []
+      storageOversize: [],
+      ownsHostArea: false
     })
   })
 

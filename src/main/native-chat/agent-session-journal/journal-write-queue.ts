@@ -6,12 +6,27 @@
 
 import { AgentSessionJournalError } from './journal-write-guards'
 
-/** Admission is checked at ENQUEUE and is permanent. */
+/** What a write body returns: never a promise, since an await inside one would let a later write
+ *  land first. */
+export type JournalWriteResult<T> = T extends PromiseLike<unknown> ? never : T
+export type JournalWriteBody<T> = () => JournalWriteResult<T>
+
+/**
+ * A write has landed in the fold when its call returns, unless it was issued from inside another
+ * write or behind one still waiting in line.
+ *
+ * A write finds the queue idle unless a write is running or writes wait in line; then it runs
+ * before `serialize` returns. Every write body is synchronous (`JournalWriteBody` refuses a
+ * promise), so it has committed by then. Otherwise it joins the line behind the writes ahead of
+ * it, never nested inside the running one. Admission is checked at ENQUEUE and is permanent.
+ */
 export class JournalWriteQueue {
+  /** Settles once every write admitted so far has, whatever its outcome. */
   private writes: Promise<unknown> = Promise.resolve()
+  /** Writes that joined the line and have not settled. */
+  private waiting = 0
+  private running = false
   private closed = false
-  /** Runs before the next write, and stays owed until it succeeds. */
-  private owed: (() => Promise<void>) | null = null
 
   constructor(private readonly sessionId: string) {}
 
@@ -19,32 +34,32 @@ export class JournalWriteQueue {
     this.closed = true
   }
 
-  serialize<T>(run: () => Promise<T>): Promise<T> {
+  serialize<T>(run: JournalWriteBody<T>): Promise<T> {
     if (this.closed) {
-      return Promise.reject(
-        new AgentSessionJournalError(
-          'journal_closed',
-          `agent-session journal for ${this.sessionId} is closed`
-        )
-      )
+      return Promise.reject(this.closedError())
     }
-    return this.serializePastGate(run)
+    return this.lineBusy ? this.join(run) : this.runNow(run)
   }
 
-  owe(work: () => Promise<void>): void {
-    this.owed = work
-  }
-
-  get owing(): boolean {
-    return this.owed !== null
-  }
-
-  private payOwed = async (): Promise<void> => {
-    const owed = this.owed
-    if (owed) {
-      await owed()
-      this.owed = null
+  /** Runs `read` after every write admitted before it, whatever each one's outcome, and ahead of any
+   *  admitted after: at once when none waits. A closed queue refuses it, as it refuses a write: its
+   *  fold may be replaced. */
+  readInOrder<T>(read: () => T): Promise<T> {
+    if (this.closed) {
+      return Promise.reject(this.closedError())
     }
+    return this.lineBusy ? this.join(read) : this.runNow(read)
+  }
+
+  private get lineBusy(): boolean {
+    return this.running || this.waiting > 0
+  }
+
+  private closedError(): AgentSessionJournalError {
+    return new AgentSessionJournalError(
+      'journal_closed',
+      `agent-session journal for ${this.sessionId} is closed`
+    )
   }
 
   /** Resolves once every write admitted so far has settled, whatever its outcome. */
@@ -52,10 +67,33 @@ export class JournalWriteQueue {
     return this.writes.then(() => undefined)
   }
 
-  private serializePastGate<T>(run: () => Promise<T>): Promise<T> {
-    // Only a write admitted while work is owed takes the extra step, so no other write's timing moves.
-    const started = this.owed ? this.writes.then(this.payOwed).then(run) : this.writes.then(run)
+  /** Runs before returning; a write issued from inside it joins the line behind it. */
+  private runNow<T>(run: () => T): Promise<T> {
+    let release: (settled: Promise<unknown>) => void = () => undefined
+    this.writes = new Promise<unknown>((resolve) => {
+      release = resolve
+    })
+    this.running = true
+    let result: Promise<T>
+    try {
+      result = Promise.resolve(run())
+    } catch (error) {
+      result = Promise.reject(error)
+    } finally {
+      this.running = false
+    }
+    release(result.catch(() => undefined))
+    return result
+  }
+
+  private join<T>(run: () => T): Promise<T> {
+    const started = this.writes.then(run)
     this.writes = started.catch(() => undefined)
+    this.waiting++
+    const settle = (): void => {
+      this.waiting--
+    }
+    started.then(settle, settle)
     return started
   }
 }

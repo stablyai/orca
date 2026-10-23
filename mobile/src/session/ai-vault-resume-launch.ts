@@ -6,7 +6,11 @@ import {
 } from '../../../src/shared/ai-vault-resume-command'
 import { RESUME_RPC_TIMEOUT_MS } from './ai-vault-resume-preparation'
 import { isResumableTuiAgent } from '../../../src/shared/agent-session-resume'
-import type { SleepingAgentLaunchConfig } from '../../../src/shared/agent-session-resume'
+import type {
+  AgentProviderSessionMetadata,
+  SleepingAgentLaunchConfig
+} from '../../../src/shared/agent-session-resume'
+import { getAiVaultAgentProviderSession } from '../../../src/shared/ai-vault-resume-startup'
 import { buildAgentResumeStartupPlan } from '../../../src/shared/tui-agent-startup'
 import {
   resolveTuiAgentLaunchArgs,
@@ -21,6 +25,17 @@ import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message
 import { reviewTerminalCreateRun, reviewTerminalSendRun } from './mobile-review-terminal-operations'
 import type { MobileReviewTerminalTab } from './review-terminal-reply-schema'
 import type { MobileAiVaultResumeTargetStatus } from '../agent-history/agent-history-resume-target'
+import { QODER_OWNED_TERMINAL_CREATE_CAPABILITY } from '../../../src/shared/qoder-terminal-create-capability'
+import { agentHistoryHostStatusSchema } from '../agent-history/agent-history-reply-schema'
+import { readMobileRuntimeHostPlatform } from '../transport/mobile-runtime-host-platform'
+
+export function readMobileAiVaultResumeHost(statusResult: unknown) {
+  const status = agentHistoryHostStatusSchema.safeParse(statusResult)
+  return {
+    platform: readMobileRuntimeHostPlatform(statusResult),
+    capabilities: status.success ? status.data.capabilities : undefined
+  }
+}
 
 export function buildMobileAiVaultResumeCommand(args: {
   session: Pick<AiVaultSession, 'agent' | 'sessionId' | 'cwd' | 'codexHome'> &
@@ -61,6 +76,8 @@ export type MobileAiVaultResumeLaunch = {
   envToDelete?: string[]
   launchConfig?: SleepingAgentLaunchConfig
   launchAgent?: TuiAgent
+  /** The conversation the typed command resumes, so the host can name it before the agent does. */
+  resumeProviderSession?: AgentProviderSessionMetadata
 }
 
 export function buildMobileAiVaultResumeLaunch(args: {
@@ -94,6 +111,10 @@ export function buildMobileAiVaultResumeLaunch(args: {
         : {})
     })
     if (startupPlan) {
+      const resumeProviderSession = getAiVaultAgentProviderSession({
+        ...args.session,
+        ...(resumeFilePath ? { filePath: resumeFilePath } : {})
+      })
       return {
         command:
           args.session.agent === 'omp'
@@ -118,7 +139,8 @@ export function buildMobileAiVaultResumeLaunch(args: {
         // real-home override must strip Codex homes at pane spawn like desktop.
         ...realHomeCodexResumeEnvDeletion(args.session),
         launchConfig: startupPlan.launchConfig,
-        launchAgent: startupPlan.agent
+        launchAgent: startupPlan.agent,
+        ...(resumeProviderSession ? { resumeProviderSession } : {})
       }
     }
   }
@@ -151,18 +173,33 @@ function normalizeMobileAiVaultResumeCommandOverrides(
 export async function resumeAiVaultSessionInTerminal(
   client: RpcOperationSender,
   worktreeId: string,
-  launch: MobileAiVaultResumeLaunch & { clientMutationId?: string }
+  launch: MobileAiVaultResumeLaunch & {
+    clientMutationId?: string
+    hostCapabilities?: readonly string[]
+  },
+  assertCurrentOwner?: () => void
 ): Promise<MobileReviewTerminalTab> {
+  assertCurrentOwner?.()
+  // Qoder's execution host must select its installed executable before the resume starts.
+  const launchAtCreate =
+    launch.launchAgent === 'qoder' &&
+    Boolean(launch.clientMutationId) &&
+    launch.hostCapabilities?.includes(QODER_OWNED_TERMINAL_CREATE_CAPABILITY) === true
   // Each request is awaited outside its catch so a transport drop propagates as the original error
   // object; only a refusal is rewritten into this step's own copy.
   const created = await reviewTerminalCreateRun.request(
     client,
     {
       worktree: `id:${worktreeId}`,
+      ...(launchAtCreate ? { command: launch.command } : {}),
       ...(launch.env ? { env: launch.env } : {}),
       ...(launch.envToDelete ? { envToDelete: launch.envToDelete } : {}),
       ...(launch.launchConfig ? { launchConfig: launch.launchConfig } : {}),
       ...(launch.launchAgent ? { launchAgent: launch.launchAgent } : {}),
+      // Older hosts strip it and learn the session from the agent's first report instead.
+      ...(launch.resumeProviderSession
+        ? { resumeProviderSession: launch.resumeProviderSession }
+        : {}),
       ...(launch.clientMutationId ? { clientMutationId: launch.clientMutationId } : {}),
       activate: false,
       select: true,
@@ -175,6 +212,10 @@ export async function resumeAiVaultSessionInTerminal(
     () => reviewTerminalCreateRun.interpret(created),
     'Failed to create terminal'
   )
+  if (launchAtCreate) {
+    return terminalTab
+  }
+  assertCurrentOwner?.()
   const sent = await reviewTerminalSendRun.request(
     client,
     {

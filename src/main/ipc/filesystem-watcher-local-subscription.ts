@@ -7,11 +7,14 @@ import {
 } from './filesystem-watcher-lifecycle-state'
 import { getLocalWatcherRoot } from './filesystem-watcher-paths'
 import {
+  addCancelledInstallWaiter,
   addInFlightLocalInstallListener,
   addLocalWatchListener,
   clearLocalCapacityRetry,
+  forgetCancelledInstallWaiter,
   rememberUnwatchableRoot,
   registerWatcherSenderCleanup,
+  takeCancelledInstallWaiter,
   takeLocalCapacityRetryListeners,
   trackDetachedLocalUnsubscribe
 } from './filesystem-watcher-listener-lifecycle'
@@ -21,6 +24,8 @@ import { installLocalWatcher } from './filesystem-watcher-local-install'
 import { isCurrentWatcherSender } from './filesystem-watcher-sender-lifetime'
 
 // ── Subscribe / Unsubscribe ──────────────────────────────────────────
+
+const cancelledInstallWaiters = watcherLifecycleState.cancelledLocalInstallWaiters
 
 export async function subscribeLocalWatcher(
   worktreePath: string,
@@ -99,11 +104,17 @@ async function subscribeWhileRemovalAllowed(
         addInFlightLocalInstallListener(inFlight, listener)
       }
     }
+    const waitToken = canJoinInstall
+      ? null
+      : addCancelledInstallWaiter(cancelledInstallWaiters, rootKey, sender)
     const result = await pendingInstall
+    const stillWanted =
+      waitToken === null ||
+      takeCancelledInstallWaiter(cancelledInstallWaiters, rootKey, sender.id, waitToken)
     const liveCapacityListeners = capacityRetryListeners.filter((listener) =>
       isCurrentWatcherSender(listener, retrySignals.get(listener.id)!)
     )
-    const senderIsCurrent = isCurrentWatcherSender(sender, senderSignal)
+    const senderIsCurrent = stillWanted && isCurrentWatcherSender(sender, senderSignal)
     if (
       result === 'cancelled' &&
       !canJoinInstall &&
@@ -188,6 +199,7 @@ async function subscribeWhileRemovalAllowed(
 
 export function unsubscribeLocalWatcher(worktreePath: string, senderId: number): void {
   const { key: rootKey } = getLocalWatcherRoot(worktreePath)
+  forgetCancelledInstallWaiter(cancelledInstallWaiters, rootKey, senderId)
   const suspended = watcherLifecycleState.suspendedLocalWatcherListeners.get(rootKey)
   suspended?.listeners.delete(senderId)
   if (suspended?.listeners.size === 0) {

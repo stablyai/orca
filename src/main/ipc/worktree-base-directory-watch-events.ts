@@ -1,6 +1,5 @@
 import {
   collectLocalWorktreeBaseChanges,
-  collectRemoteWorktreeBaseChanges,
   hasCollectedWorktreeBaseChanges
 } from './worktree-base-directory-change-collector'
 import {
@@ -50,9 +49,8 @@ export function handleLocalWatchEvents(
 
 // Why: after a dropped event batch nothing about the prior state can be
 // trusted — widen unconditionally (structural + status + head-identity),
-// same shape as the remote overflow branch below, bypassing the watcher-error
-// cooldown so a burst of overflows during one bulk op cannot suppress the
-// refresh the fleet actually needs.
+// bypassing the watcher-error cooldown so a burst of overflows during one
+// bulk op cannot suppress the refresh the fleet actually needs.
 export function handleWatchOverflow(
   watch: ActiveWatch,
   getActiveWatches: () => Iterable<ActiveWatch>
@@ -62,29 +60,4 @@ export function handleWatchOverflow(
   }
   invalidateActiveGitStatusRefResolution(watch, getActiveWatches)
   scheduleWorktreeBaseNotification(watch, { structureRepoIds: [...watch.repos.keys()] })
-}
-
-export function handleRemoteWatchEvents(
-  watch: ActiveWatch,
-  events: Parameters<typeof collectRemoteWorktreeBaseChanges>[1],
-  getActiveWatches: () => Iterable<ActiveWatch>
-): void {
-  if (watch.disposed || watch.mainWindow.isDestroyed()) {
-    return
-  }
-  invalidateGitStatusRefResolutionForPaths(
-    watch,
-    events.flatMap((event) =>
-      event.kind === 'overflow' ? [] : [event.absolutePath, event.oldAbsolutePath]
-    ),
-    getActiveWatches
-  )
-  const changes = collectRemoteWorktreeBaseChanges(watch, events)
-  if (changes.overflow) {
-    handleWatchOverflow(watch, getActiveWatches)
-    return
-  }
-  if (hasCollectedWorktreeBaseChanges(changes)) {
-    scheduleWorktreeBaseNotification(watch, changes)
-  }
 }

@@ -4,6 +4,7 @@
 // tree to one switch.
 
 import type { NativeChatSession } from '../../../../shared/native-chat-types'
+import type { StructuredAgentSessionLaunchLifecycle } from '@/lib/structured-agent-session-launch'
 
 /** The mutually-exclusive surfaces the chat view can show. `ready` and
  *  `working` both render the message list; `working` additionally shows the
@@ -19,8 +20,9 @@ export type NativeChatViewState =
  * Decide which surface to render. Any renderable message wins over loading/empty so optimistic
  * first sends never get replaced while transcript discovery catches up. Where the read retries on
  * its own (the structured chat), messages win over an error too: a read that fails after the
- * transcript loaded keeps it, and the error reaches the composer's error line. The terminal-backed
- * read does not retry, and its only messages on error are local echoes, so its error takes the pane.
+ * transcript loaded keeps it, and the error reaches the composer's error line. A read that does not
+ * retry takes the pane: the terminal-backed one, whose only messages on error are local echoes, and
+ * a structured read that failed for good.
  */
 export function selectNativeChatViewState(
   session: NativeChatSession,
@@ -53,4 +55,32 @@ export function selectNativeChatViewState(
   // Empty wins over a transient 'working' hook so a just-toggled, pre-session
   // pane shows a clear empty state instead of a spinner over nothing.
   return { kind: 'empty' }
+}
+
+/**
+ * A structured chat's history before its first read: `reading` while a read or a resuming launch
+ * can still deliver it, `unread` when nothing will (a failed or unconfirmed resume, whose Retry line
+ * says so), else `known`. A chat this pane started new has nothing to read; a cancelled launch reads
+ * nothing either.
+ */
+export function structuredChatHistoryPhase(
+  launch: {
+    launch?: { kind: 'new' | 'resume' }
+    lifecycle: StructuredAgentSessionLaunchLifecycle | null
+    transportEnabled: boolean
+  },
+  readStatus: 'idle' | 'loading' | 'ready' | 'error'
+): 'reading' | 'unread' | 'known' {
+  if (launch.launch?.kind === 'new') {
+    return 'known'
+  }
+  if (launch.transportEnabled) {
+    return readStatus === 'ready' ? 'known' : 'reading'
+  }
+  if (launch.lifecycle === 'pending') {
+    return 'reading'
+  }
+  return launch.lifecycle === 'failed' || launch.lifecycle === 'visibility-unknown'
+    ? 'unread'
+    : 'known'
 }

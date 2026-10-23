@@ -1,10 +1,16 @@
+import { retainOpenCodeWriterTopology } from './cli-writer-observation'
 import { buildSpoolHookBody, type SpoolRecord } from '../../../shared/agent-hook-spool'
+import { checkHookOwnerPresence } from '../../../shared/agent-hook-owner-presence'
 import { normalizeHookPayload } from '../../../shared/agent-hook-listener'
 import { isAgentHookSource, type AgentHookSource } from '../../../shared/agent-hook-relay'
+import {
+  bindOpenCodeTuiSession,
+  isOpenCodeSharedServerPost
+} from '../../../shared/agent-hook-listener/opencode-session-registry'
 import type { NormalizedLocalHook } from './server-types'
-import { AgentHookServerOpenCodeBinder } from './server-opencode-binder'
+import { AgentHookServerTmuxStatus } from './server-tmux-status'
 
-export abstract class AgentHookServerIngestNormalization extends AgentHookServerOpenCodeBinder {
+export abstract class AgentHookServerIngestNormalization extends AgentHookServerTmuxStatus {
   protected setClaudeBackgroundEvidence(
     paneKey: string,
     hasRunningTask: boolean,
@@ -22,18 +28,39 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     }
   }
 
-  protected normalizeLocalHookPayload(source: AgentHookSource, body: unknown): NormalizedLocalHook {
+  protected normalizeLocalHookPayload(
+    source: AgentHookSource,
+    body: unknown,
+    isReplay = false
+  ): NormalizedLocalHook {
     if (source !== 'claude' || typeof body !== 'object' || body === null) {
-      const event = normalizeHookPayload(this.state, source, body, this.env)
+      const event = normalizeHookPayload(this.state, source, body, this.env, {
+        admitOpenCodeTui: (identity) => {
+          const disposition = this.getAgentStatusDisposition(identity.paneKey, {
+            ...identity,
+            source,
+            isReplay
+          })
+          if (disposition === 'restart') {
+            this.observations.rebind(identity.paneKey)
+          }
+          return disposition !== 'suppress'
+        }
+      })
+      retainOpenCodeWriterTopology(event, source, body)
       if (
         event &&
-        (source === 'opencode' || source === 'mimo-code') &&
-        event.hookEventName === 'SessionStart'
+        event.hookEventName === 'SessionStart' &&
+        isOpenCodeSharedServerPost(source, body)
       ) {
         // Why: a birth just arrived; bind it now instead of waiting out the poll interval.
         this.kickOpenCodeBinder()
       }
-      return { event }
+      return {
+        event,
+        onAccepted: () =>
+          bindOpenCodeTuiSession(this.state, source, body, event?.providerSession?.id)
+      }
     }
     const rawPaneKey = (body as Record<string, unknown>).paneKey
     const paneKey = typeof rawPaneKey === 'string' ? rawPaneKey.trim() : ''
@@ -57,13 +84,41 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
   }
 
   // Spool records are durable replay evidence, not a live observation.
-  protected ingestSpoolRecord(record: SpoolRecord): void {
+  protected ingestSpoolRecord(record: SpoolRecord): Promise<void> | void {
     if (!isAgentHookSource(record.source)) {
       return
     }
+    const token = this.token
+    const statusHookGeneration = this.statusHookGeneration
+    const apply = () => {
+      if (
+        !this.statusHooksEnabled ||
+        this.token !== token ||
+        this.statusHookGeneration !== statusHookGeneration
+      ) {
+        throw new Error('Status hook spool replay interrupted')
+      }
+      this.applySpoolHook(record, body)
+    }
     const body = this.normalizeHookBodyPaneKeyAlias(buildSpoolHookBody(record))
-    const normalized = this.normalizeLocalHookPayload(record.source, body)
+    const pending = checkHookOwnerPresence(this.state, record.source, body, this.env, (paneKey) =>
+      this.checkAgentPresence(paneKey)
+    )
+    return pending ? pending.then(apply) : apply()
+  }
+
+  private applySpoolHook(record: SpoolRecord, body: unknown): void {
+    if (!isAgentHookSource(record.source)) {
+      return
+    }
+    const normalized = this.normalizeLocalHookPayload(record.source, body, true)
     if (!normalized.event) {
+      return
+    }
+    const exit = this.agentExitedAtByPaneKey.get(this.resolvePaneKeyAlias(normalized.event.paneKey))
+    // Why: a hook spooled a full second before a proven exit (stamps are whole seconds) describes
+    // the dead agent; replaying it would install an obsolete owner. A same-second one may not.
+    if (exit && record.receivedAt + 1000 <= exit.at) {
       return
     }
     const replay = { ...normalized.event, isReplay: true as const }

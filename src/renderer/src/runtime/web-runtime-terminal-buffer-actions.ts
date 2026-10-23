@@ -1,5 +1,5 @@
-import { unwrapRuntimeRpcResult } from './runtime-rpc-client'
-import { parseRemoteRuntimePtyId } from './runtime-terminal-stream'
+import { unwrapRuntimeRpcResult } from './runtime-rpc-result'
+import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
 import { isWebRuntimeSessionActive } from './web-runtime-session-environment'
 
 // Why: local pane.terminal.clear() is undone by the next host snapshot replay; clear the host buffer so it sticks.

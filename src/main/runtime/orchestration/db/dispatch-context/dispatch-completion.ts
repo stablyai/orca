@@ -3,6 +3,8 @@ import { OrchestrationError } from '../../orchestration-error'
 import { DISPATCH_CIRCUIT_BREAK_FAILURES } from './dispatch-circuit-breaker'
 import type { OrchestrationDb } from '../orchestration-db'
 import { getActiveDispatchForTask } from './task-dispatch-reconciliation'
+import { DISPATCH_CONTEXT_COLUMN_LIST } from '../row-column-lists'
+import { settleWorkerForCompletedDispatch } from '../worker-dispatch/worker-dispatch-settlement'
 import {
   beginLifecycleWriteTransaction,
   commitLifecycleWriteTransaction,
@@ -32,6 +34,7 @@ export function completeDispatch(this: OrchestrationDb, ctxId: string): void {
     // Why: a settled Dispatch can never be answered, and a pending thread on it kept the fleet row
     // demanding input after the work was done.
     this.closeQuestionsForDispatch(ctxId)
+    settleWorkerForCompletedDispatch(this.db, ctxId)
     this.db.exec('RELEASE complete_dispatch_transition')
   } catch (error) {
     this.db.exec('ROLLBACK TO complete_dispatch_transition')
@@ -46,27 +49,37 @@ export function settleActiveDispatchesForTask(
   status: 'completed' | 'failed',
   failure?: string
 ): void {
-  const rows = db.db
-    .prepare(
-      "SELECT * FROM dispatch_contexts WHERE task_id = ? AND status IN ('pending', 'dispatched')"
-    )
-    .all(taskId) as DispatchContextRow[]
-  for (const row of rows) {
-    transitionLifecycleWithDb(db.db, {
-      entity: 'dispatch',
-      id: row.id,
-      from: row.status,
-      to: status,
-      projection: {
-        completed_at: row.completed_at ?? new Date().toISOString(),
-        last_failure:
-          status === 'failed'
-            ? (failure ?? row.last_failure ?? 'Task marked failed')
-            : row.last_failure,
-        capability_revoked_at: row.capability_revoked_at ?? new Date().toISOString()
-      }
-    })
-    db.closeQuestionsForDispatch(row.id)
+  const transaction = beginLifecycleWriteTransaction(db.db, 'settle_task_dispatches')
+  try {
+    const rawRows = db.db
+      .prepare(
+        `SELECT ${DISPATCH_CONTEXT_COLUMN_LIST} FROM dispatch_contexts WHERE task_id = ? AND status IN ('pending', 'dispatched')`
+      )
+      .all(taskId)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The existing complete Dispatch projection is pinned to this table's schema by row-column-lists.test.ts.
+    const rows = rawRows as DispatchContextRow[]
+    for (const row of rows) {
+      transitionLifecycleWithDb(db.db, {
+        entity: 'dispatch',
+        id: row.id,
+        from: row.status,
+        to: status,
+        projection: {
+          completed_at: row.completed_at ?? new Date().toISOString(),
+          last_failure:
+            status === 'failed'
+              ? (failure ?? row.last_failure ?? 'Task marked failed')
+              : row.last_failure,
+          capability_revoked_at: row.capability_revoked_at ?? new Date().toISOString()
+        }
+      })
+      db.closeQuestionsForDispatch(row.id)
+      settleWorkerForCompletedDispatch(db.db, row.id)
+    }
+    commitLifecycleWriteTransaction(db.db, transaction)
+  } catch (error) {
+    rollbackLifecycleWriteTransaction(db.db, transaction)
+    throw error
   }
 }
 
@@ -97,15 +110,17 @@ export function getStaleDispatches(
   this: OrchestrationDb,
   thresholdIso: string
 ): DispatchContextRow[] {
-  return this.db
+  const rows = this.db
     .prepare(
-      `SELECT * FROM dispatch_contexts
+      `SELECT ${DISPATCH_CONTEXT_COLUMN_LIST} FROM dispatch_contexts
        WHERE status = 'dispatched'
          AND dispatched_at IS NOT NULL
          AND julianday(dispatched_at) < julianday(?)
          AND (last_heartbeat_at IS NULL OR julianday(last_heartbeat_at) < julianday(?))`
     )
-    .all(thresholdIso, thresholdIso) as DispatchContextRow[]
+    .all(thresholdIso, thresholdIso)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The existing complete Dispatch projection is pinned to this table's schema by row-column-lists.test.ts.
+  return rows as DispatchContextRow[]
 }
 
 export function failDispatch(
@@ -164,9 +179,11 @@ export function failDispatch(
         capability_revoked_at: before.capability_revoked_at ?? new Date().toISOString()
       }
     })
-    const ctx = this.db.prepare('SELECT * FROM dispatch_contexts WHERE id = ?').get(ctxId) as
-      | DispatchContextRow
-      | undefined
+    const rawContext = this.db
+      .prepare(`SELECT ${DISPATCH_CONTEXT_COLUMN_LIST} FROM dispatch_contexts WHERE id = ?`)
+      .get(ctxId)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The schema-pinned complete Dispatch projection returns one Dispatch row or undefined; the adapter exposes unknown.
+    const ctx = rawContext as DispatchContextRow | undefined
     if (!ctx) {
       commitLifecycleWriteTransaction(this.db, transaction)
       return undefined

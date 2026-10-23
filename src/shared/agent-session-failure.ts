@@ -6,6 +6,22 @@
 // value the provider wrote — never recovered from a string afterwards, since by then nothing can
 // tell a provider's sentence from Orca's.
 
+import type { AgentSessionAccountKind } from './agent-session-availability'
+import {
+  readAgentSessionArgumentProblem,
+  type AgentSessionArgumentProblem
+} from './agent-session-argument-problem'
+export type { AgentSessionArgumentProblem } from './agent-session-argument-problem'
+import {
+  readAgentSessionUsageLimit,
+  type AgentSessionUsageLimit
+} from './agent-session-usage-limit'
+
+import {
+  readAgentSessionRequestTimeout,
+  type AgentSessionRequestTimeout
+} from './agent-session-request-timeout'
+import { structuralValuesEqualIgnoringUndefined } from './structural-value-equality'
 import {
   readAgentSessionRefusalReference,
   type AgentSessionRefusalReference
@@ -18,16 +34,26 @@ export const AGENT_SESSION_FAILURE_KINDS = [
   /** A start that did not land, with no one to blame: Orca's fault, a failed spawn, a close. */
   'startFailed',
   'notSignedIn',
+  /** The agent's CLI is not installed where the chat runs: its spawn found no such file. */
+  'cliMissing',
   'historyTooLarge',
   'managedAccountEnvOverride',
   'accountSwitchInProgress',
   'managedAccountUnsupported',
+  'launchFolderMissing',
+  'historyInOtherAccount',
+  'claudeAccountFolderMissing',
+  'claudeAccountSetupFailed',
+  'agentCommandNotRunnable',
+  'runtimeNotInstalled',
   'providerExited',
   'restartFailed',
   'providerRejected',
   'attachmentInvalid',
   'attachmentUnreadable',
   'emptyMessage',
+  /** One of the agent's own commands that its chats do not run, sent as a whole message. */
+  'commandUnavailable',
   'queueFull',
   'writeFailed',
   'cancelled',
@@ -41,12 +67,22 @@ export const AGENT_SESSION_FAILURE_KINDS = [
   'cancelUnconfirmed',
   /** A Stop naming no turn reached the agent, which ended nothing while the chat read working. */
   'stopRefused',
+  /** A Stop Orca could not save: only a refusal says it. */
+  'stopFailed',
+  /** A background-task Stop the agent answered with the task still running. */
+  'backgroundTaskNotStopped',
   'answerUnconfirmed',
   'hostFault',
   /** Orca stopped an agent whose start never finished. */
   'hostStopped',
   /** The provider is retrying a request its API refused; not a failure yet. */
-  'providerRetrying'
+  'providerRetrying',
+  /** The account hit one of the agent's usage limits, which ended the turn until it resets. */
+  'usageLimitReached',
+  /** A child a Stop could not prove gone: its exit is unverifiable. Kept for rows hosts wrote. */
+  'previousExitUnverifiable',
+  /** The agent could not reopen the chat's saved session, so a fresh one without its memory continues it. */
+  'sessionNotRestored'
 ] as const
 export type AgentSessionFailureKind = (typeof AGENT_SESSION_FAILURE_KINDS)[number]
 
@@ -60,8 +96,13 @@ const STATUS_ROW_ONLY_FAILURE_KINDS = [
   'compactionUnconfirmed',
   'cancelUnconfirmed',
   'stopRefused',
+  'stopFailed',
+  'backgroundTaskNotStopped',
   'answerUnconfirmed',
-  'providerRetrying'
+  'providerRetrying',
+  'usageLimitReached',
+  'previousExitUnverifiable',
+  'sessionNotRestored'
 ] as const satisfies readonly AgentSessionFailureKind[]
 
 /** Why a message was not sent. A new failure kind is one of these until listed above. */
@@ -115,10 +156,17 @@ export type AgentSessionProviderRetry = {
   error?: string
   /** The HTTP status the request failed with. */
   status?: number
+  /** The provider's own account of what failed, written for a person: the row's second line. */
+  cause?: string
+  /** Which retry this is, counted from 1. */
+  attempt?: number
+  /** The most retries the provider makes before it gives up. */
+  maxRetries?: number
 }
 
 export type AgentSessionFailureFact = {
   kind: AgentSessionFailureKind
+  account?: AgentSessionAccountKind
   /** Provider-authored only; absent whenever Orca wrote the words. */
   detail?: ProviderDiagnostic
   /** On `restartFailed` and `startFailed`: the refusal that kept the agent from starting. On
@@ -128,7 +176,21 @@ export type AgentSessionFailureFact = {
   attachment?: AgentSessionAttachmentProblem
   /** On `providerRetrying`: why the provider is retrying. */
   retry?: AgentSessionProviderRetry
+  /** On `usageLimitReached`: which limit, and when it resets. */
+  usageLimit?: AgentSessionUsageLimit
+  /** A safe option name from Orca's saved Arguments parser, never an error message. */
+  argumentProblem?: AgentSessionArgumentProblem
+  /** Written only where Orca proves the agent never received the message: a Stop's withdrawal is
+   *  then owed as stopped history, and a refused carrier owes its history again. Absent means
+   *  unknown. Host-only; clients read the kind. */
+  neverReachedAgent?: true
+  /** On `backgroundTaskNotStopped`: one named task, or every task the Stop reached. */
+  backgroundStop?: AgentSessionBackgroundStop
+  /** On `startFailed`: the provider request that got no answer before Orca's deadline. */
+  requestTimeout?: AgentSessionRequestTimeout
 }
+
+export type AgentSessionBackgroundStop = 'task' | 'all'
 
 /** A fact as a row stores it: its kind may be one a newer host added, so only
  *  `readAgentSessionFailureFact` or the rejection classifier may place it. */
@@ -155,10 +217,16 @@ export function providerDiagnostic(
 export function agentSessionFailureFact<TKind extends AgentSessionFailureKind>(
   kind: TKind,
   extra: {
+    account?: AgentSessionAccountKind
     detail?: ProviderDiagnostic
     refusal?: AgentSessionRefusalReference
     attachment?: AgentSessionAttachmentProblem
     retry?: AgentSessionProviderRetry
+    usageLimit?: AgentSessionUsageLimit
+    argumentProblem?: AgentSessionArgumentProblem
+    neverReachedAgent?: true
+    backgroundStop?: AgentSessionBackgroundStop
+    requestTimeout?: AgentSessionRequestTimeout
   } = {}
 ): AgentSessionFailureFact & { kind: TKind } {
   // Re-bounded here, so no writer can store more than the cap however it built the detail.
@@ -167,10 +235,16 @@ export function agentSessionFailureFact<TKind extends AgentSessionFailureKind>(
     : undefined
   return {
     kind,
+    ...(extra.account ? { account: extra.account } : {}),
     ...(detail ? { detail } : {}),
     ...(extra.refusal ? { refusal: extra.refusal } : {}),
     ...(extra.attachment ? { attachment: extra.attachment } : {}),
-    ...(extra.retry ? { retry: extra.retry } : {})
+    ...(extra.retry ? { retry: extra.retry } : {}),
+    ...(extra.usageLimit ? { usageLimit: extra.usageLimit } : {}),
+    ...(extra.argumentProblem ? { argumentProblem: extra.argumentProblem } : {}),
+    ...(extra.neverReachedAgent ? { neverReachedAgent: true as const } : {}),
+    ...(extra.backgroundStop ? { backgroundStop: extra.backgroundStop } : {}),
+    ...(extra.requestTimeout ? { requestTimeout: extra.requestTimeout } : {})
   }
 }
 
@@ -200,20 +274,33 @@ function readAttachmentProblem(value: unknown): AgentSessionAttachmentProblem | 
     : { reason }
 }
 
-/** A retry as a reader meets it; undefined when it names neither field. */
+/** A retry as a reader meets it; undefined when it names no field. */
 export function readProviderRetry(value: unknown): AgentSessionProviderRetry | undefined {
   if (!isRecord(value)) {
     return undefined
   }
   const error =
     typeof value.error === 'string' && value.error.trim() ? value.error.trim() : undefined
-  const status =
-    typeof value.status === 'number' && Number.isInteger(value.status) && value.status > 0
-      ? value.status
-      : undefined
-  return error || status
-    ? { ...(error ? { error } : {}), ...(status ? { status } : {}) }
+  const status = positiveInteger(value.status)
+  const cause =
+    typeof value.cause === 'string' ? providerDiagnostic(value.cause, 'person')?.text : undefined
+  const attempt = positiveInteger(value.attempt)
+  // A maximum bounds a retry; alone, or below the retry it bounds, it says nothing.
+  const max = positiveInteger(value.maxRetries)
+  const maxRetries = attempt && max && max >= attempt ? max : undefined
+  return error || status || cause || attempt
+    ? {
+        ...(error ? { error } : {}),
+        ...(status ? { status } : {}),
+        ...(cause ? { cause } : {}),
+        ...(attempt ? { attempt } : {}),
+        ...(maxRetries ? { maxRetries } : {})
+      }
     : undefined
+}
+
+function positiveInteger(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : undefined
 }
 
 /** A fact as a reader meets it. Undefined for anything this build cannot place, including a kind a
@@ -225,12 +312,35 @@ export function readAgentSessionFailureFact(value: unknown): AgentSessionFailure
   const refusal = readAgentSessionRefusalReference(value.refusal)
   const attachment = readAttachmentProblem(value.attachment)
   const retry = readProviderRetry(value.retry)
+  const usageLimit = readAgentSessionUsageLimit(value.usageLimit)
+  const argumentProblem = readAgentSessionArgumentProblem(value.argumentProblem)
+  const requestTimeout = readAgentSessionRequestTimeout(value.requestTimeout)
   return agentSessionFailureFact(value.kind, {
+    ...(value.account === 'managed' || value.account === 'system'
+      ? { account: value.account }
+      : {}),
     ...(isProviderDiagnostic(value.detail) ? { detail: value.detail } : {}),
     ...(refusal ? { refusal } : {}),
     ...(attachment ? { attachment } : {}),
-    ...(retry ? { retry } : {})
+    ...(retry ? { retry } : {}),
+    ...(usageLimit ? { usageLimit } : {}),
+    ...(argumentProblem ? { argumentProblem } : {}),
+    ...(value.neverReachedAgent === true ? { neverReachedAgent: true as const } : {}),
+    ...(value.backgroundStop === 'task' || value.backgroundStop === 'all'
+      ? { backgroundStop: value.backgroundStop }
+      : {}),
+    ...(requestTimeout ? { requestTimeout } : {})
   })
+}
+
+/** The fact only when this build read all of it. Anything it dropped, such as a newer refusal code
+ *  or reason, may change the advice, so a surface that would re-word the fact shows the host's
+ *  sentence instead. */
+export function readWholeAgentSessionFailureFact(
+  value: unknown
+): AgentSessionFailureFact | undefined {
+  const fact = readAgentSessionFailureFact(value)
+  return fact && structuralValuesEqualIgnoringUndefined(fact, value) ? fact : undefined
 }
 
 /** The provider-authored diagnostic an error carries, set only where it was composed. Follows the

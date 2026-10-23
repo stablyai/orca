@@ -22,7 +22,8 @@ import {
   SHOW_MOBILE_PROJECT_METADATA_EDITORS,
   githubProjectOptionColor,
   canCreateWorkspaceFromProjectRow,
-  projectRowType
+  projectRowType,
+  TASK_SECONDARY_DRAWER_Z_INDEX
 } from './mobile-tasks-legacy-foundation'
 import { renderMobileTasksProjectFieldEditors } from './mobile-tasks-project-field-editors'
 import {
@@ -45,6 +46,8 @@ export function renderMobileTasksProjectMissingRepoDrawer(model: ConnectionPrese
       onClose={() => {
         setProjectRepoNotInOrca(null)
       }}
+      // Why: opens over the project detail, which renders after it in the shared host.
+      zIndex={TASK_SECONDARY_DRAWER_Z_INDEX}
     >
       {projectRepoNotInOrca ? (
         <View>
@@ -112,13 +115,13 @@ export function renderMobileTasksProjectDetailDrawer(model: ConnectionPresentati
     projectRowItem,
     setMergeMethodProjectRow,
     setPendingHostedStateChange,
-    setProjectRowItem,
+    projectRowHandoff,
     taskUiReady
   } = model
   return (
     <BottomDrawer
       visible={taskUiReady && projectRowItem != null}
-      onClose={() => setProjectRowItem(null)}
+      {...projectRowHandoff.drawerProps}
     >
       {projectRowItem ? (
         <View>
@@ -241,7 +244,11 @@ export function renderMobileTasksProjectDetailDrawer(model: ConnectionPresentati
               <Pressable
                 style={styles.actionRow}
                 disabled={creatingKey === `github-project:${projectRowItem.id}`}
-                onPress={() => void createWorkspaceFromProjectRow(projectRowItem)}
+                onPress={() =>
+                  projectRowHandoff.closeThen(
+                    () => void createWorkspaceFromProjectRow(projectRowItem)
+                  )
+                }
               >
                 <Plus size={16} color={colors.textPrimary} />
                 <Text style={styles.actionText}>Create Workspace</Text>

@@ -1,22 +1,22 @@
 import type { NativeChatSubagentState } from '../../shared/native-chat-types'
-import {
-  codexSubagentLabel,
-  isCodexRootAgentActivity,
-  readCodexSubagentActivity
-} from './codex-subagent-activity'
-import { codexChildTurnState } from './codex-subagent-executions'
+import { readCodexSubagentAnnouncements } from './codex-subagent-activity'
+import { codexChildTurnState, type CodexSubagentExecutions } from './codex-subagent-executions'
 import { readRecord } from './codex-item-field-readers'
 import { readCodexThreadItem } from './codex-structured-item-translation'
 import { readCodexTurnId } from './codex-structured-thread-facts'
 
+export type CodexAnnouncedChild = {
+  agentThreadId: string
+  label: string | null
+  /** The reporting thread, for a spawn: the agent that spawned the child. */
+  spawnerThreadId: string | undefined
+}
+
 export type CodexBackgroundTaskFrame =
   | {
-      kind: 'subagent'
-      agentThreadId: string
-      label: string | null
-      parentTurnId: string | null | undefined
-      /** The reporting thread, for a `started` activity: the agent that spawned the child. */
-      spawnerThreadId: string | undefined
+      /** An item naming children, several for a call on more than one helper. */
+      kind: 'subagents'
+      children: CodexAnnouncedChild[]
     }
   | {
       kind: 'turn'
@@ -78,23 +78,31 @@ export function readCodexBackgroundTaskFrame(
     return null
   }
   const item = readCodexThreadItem(readRecord(event.params).item)
-  const activity = item && readCodexSubagentActivity(item)
-  if (
-    !activity ||
-    activity.agentThreadId === primaryThreadId ||
-    isCodexRootAgentActivity(activity)
-  ) {
-    return null
-  }
-  return {
-    kind: 'subagent',
-    agentThreadId: activity.agentThreadId,
-    label: codexSubagentLabel(activity),
-    parentTurnId:
-      activity.kind === 'started' || activity.kind === 'interacted'
-        ? readCodexTurnId(event.params)
-        : undefined,
-    // Only `started` names the spawner: other kinds ride whichever agent acted.
-    spawnerThreadId: activity.kind === 'started' ? event.threadId : undefined
+  const children = (item ? readCodexSubagentAnnouncements(item, primaryThreadId) : []).map(
+    (announcement) => ({
+      agentThreadId: announcement.agentThreadId,
+      label: announcement.label,
+      // Only a spawn names the spawner: other announcements ride whichever agent acted.
+      spawnerThreadId: announcement.spawned ? event.threadId : undefined
+    })
+  )
+  return children.length > 0 ? { kind: 'subagents', children } : null
+}
+
+/** What one frame says about the child executions. Repeating it changes nothing, so the journal
+ *  reads it before it writes the frame's rows and the background tasks read it again after. */
+export function observeCodexExecutionFrame(
+  executions: CodexSubagentExecutions,
+  frame: CodexBackgroundTaskFrame | null,
+  primaryThreadId: string
+): void {
+  if (frame?.kind === 'subagents') {
+    for (const child of frame.children) {
+      executions.register(child.agentThreadId, child.label, child.spawnerThreadId)
+    }
+  } else if (frame?.kind === 'thread-closed') {
+    executions.closeThread(frame.threadId)
+  } else if (frame && frame.threadId !== primaryThreadId) {
+    executions.observeTurn(frame.threadId, frame.turnId, frame.state)
   }
 }

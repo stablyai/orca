@@ -299,8 +299,8 @@ describe('DashboardAgentRow', () => {
     expect(classes.every((className) => !/\bgroup-hover:/.test(className))).toBe(true)
   })
 
-  it('renders interrupted done rows with plain text on the secondary line', () => {
-    const markup = renderRow(
+  function renderEndedRow(ending: Partial<AgentStatusEntry>): string {
+    return renderRow(
       makeAgent(
         { state: 'done', startedAt: 1_000 },
         {
@@ -309,22 +309,53 @@ describe('DashboardAgentRow', () => {
           updatedAt: 2_000,
           stateStartedAt: 2_000,
           stateHistory: [{ state: 'working', prompt: 'Give me a quick update', startedAt: 1_000 }],
-          interrupted: true
+          ...ending
         }
       )
     )
-    const promptIndex = markup.indexOf('Give me a quick update')
-    const interruptedIndex = markup.indexOf('>interrupted<')
+  }
 
-    // Why: interrupted keeps the leading red dot, but the plain text belongs
-    // on the response line so it does not compete with the user's prompt.
-    expect(markup).toContain('data-slot="tooltip-trigger"')
-    expect(markup).toContain('aria-label="Interrupted by user"')
-    expect(markup).not.toContain('title="Interrupted"')
+  it('renders a crash-cut row as failed, with the red dot and no interrupted tag', () => {
+    const markup = renderEndedRow({
+      mainAgent: { state: 'done', outcome: 'interruption', stateStartedAt: 2_000 }
+    })
+
+    expect(markup).toContain('aria-label="Failed"')
     expect(markup).toContain('bg-red-500')
-    expect(markup).not.toContain('data-slot="badge"')
-    expect(interruptedIndex).toBeGreaterThan(promptIndex)
+    expect(markup).not.toContain('>interrupted<')
     expect(markup).not.toContain('lucide-circle-check')
+  })
+
+  it.each([
+    ['recorded', { mainAgent: { state: 'done', outcome: 'cancellation', stateStartedAt: 2_000 } }],
+    ["an old host's flag", { interrupted: true }]
+  ] as const)(
+    "renders a user's Stop (%s) as interrupted, with plain text on the secondary line",
+    (_, ending) => {
+      const markup = renderEndedRow(ending)
+      const promptIndex = markup.indexOf('Give me a quick update')
+      const interruptedIndex = markup.indexOf('>interrupted<')
+
+      // Why: the plain text belongs on the response line so it does not compete with the prompt.
+      expect(markup).toContain('data-slot="tooltip-trigger"')
+      expect(markup).toContain('aria-label="Interrupted by user"')
+      expect(markup).not.toContain('data-slot="badge"')
+      expect(interruptedIndex).toBeGreaterThan(promptIndex)
+      expect(markup).toContain('bg-muted-foreground')
+      expect(markup).not.toContain('bg-red-500')
+      expect(markup).not.toContain('lucide-circle-check')
+    }
+  )
+
+  it('renders a turn a newer request replaced as interrupted, naming no one', () => {
+    const markup = renderEndedRow({
+      mainAgent: { state: 'done', outcome: 'superseded', stateStartedAt: 2_000 }
+    })
+
+    expect(markup).toContain('aria-label="Interrupted"')
+    expect(markup).not.toContain('Interrupted by user')
+    expect(markup).toContain('>interrupted<')
+    expect(markup).toContain('bg-muted-foreground')
   })
 
   it('reserves a real working tool line before tool metadata arrives', () => {
@@ -349,6 +380,23 @@ describe('DashboardAgentRow', () => {
     expect(activeToolMarkup).toContain('ListDir')
   })
 
+  it("says Stopping in place of the tool line while a person's Stop ends the turn", () => {
+    const markup = renderRow(
+      makeAgent(
+        {},
+        {
+          toolName: 'Bash',
+          toolInput: 'pnpm test',
+          mainAgent: { state: 'working', stopping: true, stateStartedAt: 60_000 }
+        }
+      )
+    )
+
+    expect(markup).toContain('Stopping…')
+    expect(markup).not.toContain('lucide-wrench')
+    expect(markup).toContain('data-agent-spinner')
+  })
+
   it('renders monitoring without a spinner or active tool line', () => {
     const markup = renderRow(
       makeAgent(
@@ -364,7 +412,7 @@ describe('DashboardAgentRow', () => {
 
     expect(markup).toContain('Monitoring background tasks')
     expect(markup).toContain('lucide-activity')
-    expect(classTokens(markup)).toContain('text-yellow-500')
+    expect(classTokens(markup)).toContain('text-agent-working')
     expect(markup).not.toContain('data-agent-spinner')
     expect(markup).not.toContain('data-agent-row-tool-slot')
   })
@@ -477,5 +525,97 @@ describe('DashboardAgentRow', () => {
 
     expect(classTokens(markup)).toContain('worktree-agent-lineage-parent-row')
     expect(markup).toContain('aria-label="Show 2 child agents"')
+  })
+
+  describe('with an OSC 7501 program status', () => {
+    it('says a block the program reports in place of the tool step', () => {
+      const markup = renderRow(
+        makeAgent(
+          {},
+          {
+            toolName: 'Bash',
+            toolInput: 'pnpm test',
+            programStatus: {
+              state: 'blocked',
+              kind: 'auth',
+              message: 'Session expired',
+              observedAt: 1
+            }
+          }
+        )
+      )
+
+      expect(markup).toContain('Sign-in required: Session expired')
+      expect(markup).not.toContain('lucide-wrench')
+    })
+
+    it('says nothing for an approval the program reports after the turn finished', () => {
+      const markup = renderRow(
+        makeAgent(
+          {},
+          {
+            state: 'done',
+            programStatus: {
+              state: 'blocked',
+              kind: 'permission',
+              message: 'Approve plan',
+              observedAt: 1
+            }
+          }
+        )
+      )
+
+      expect(markup).not.toContain('Approve plan')
+      expect(markup).not.toContain('Needs approval')
+    })
+
+    it("falls back to the program's message when the row names no tool", () => {
+      const markup = renderRow(
+        makeAgent(
+          {},
+          { programStatus: { state: 'working', message: 'Running tests', observedAt: 1 } }
+        )
+      )
+
+      expect(markup).toContain('data-agent-row-tool-input="true"')
+      expect(markup).toContain('Running tests')
+    })
+
+    it("shows a blocked program row's message, which has no tool step to ride", () => {
+      const markup = renderRow(
+        makeAgent(
+          {},
+          {
+            state: 'blocked',
+            agentType: 'gh',
+            programStatus: {
+              state: 'blocked',
+              kind: 'auth',
+              message: 'Run gh auth login',
+              observedAt: 1
+            }
+          }
+        )
+      )
+
+      expect(markup).toContain('Sign-in required: Run gh auth login')
+    })
+
+    it("keeps a real agent's input without a tool name off the row", () => {
+      const markup = renderRow(makeAgent({}, { toolInput: 'src/app.ts' }))
+
+      expect(markup).not.toContain('src/app.ts')
+      expect(markup).toContain('data-agent-row-tool-placeholder="true"')
+    })
+
+    it('labels the progress ring with the same percentage the tooltip shows', () => {
+      const markup = renderRow(
+        makeAgent({}, { programStatus: { state: 'working', progress: 42, observedAt: 1 } })
+      )
+
+      expect(markup).toContain('role="progressbar"')
+      expect(markup).toContain('aria-label="Working · 42%"')
+      expect(markup).not.toContain('>42%<')
+    })
   })
 })

@@ -23,7 +23,8 @@ import type { ClaudeStructuredLaunch } from './claude-structured-launch-resoluti
 import {
   fakeClaude,
   identityFor,
-  PROVIDER_SESSION_ID
+  PROVIDER_SESSION_ID,
+  claudeStartupSettled
 } from './claude-structured-session-test-support'
 import {
   assistantText,
@@ -100,7 +101,7 @@ async function riggedAdapter(
   }
   const adapter = new ClaudeStructuredSessionAdapter(deps)
   await adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9', events: sink })
-  await adapter.awaitStarted('session-1')
+  await claudeStartupSettled(adapter, 'session-1')
   return {
     adapter,
     claude,
@@ -129,7 +130,7 @@ async function riggedAdapter(
         requestedAt: nowMs,
         fence: 7
       })
-      expect(outcome).toEqual({ state: 'admitted' })
+      expect(outcome).toMatchObject({ state: 'admitted' })
       const sentUuid = claude.connections[0]!.sent.at(-1)?.uuid
       if (typeof sentUuid !== 'string') {
         throw new Error('the fake connection recorded no sent uuid')

@@ -45,7 +45,7 @@ vi.mock('../../telemetry/client', () => ({ track: () => {} }))
 vi.mock('../../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: () => ({ nth_repo_added: 2 })
 }))
-vi.mock('../../ssh/ssh-config-parser', () => ({
+vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))
@@ -141,7 +141,7 @@ describe('profile state Store authority factory', () => {
   it('uses a capability probe that remains false on a Node 18-style host', () => {
     const original = process.getBuiltinModule
     vi.spyOn(process, 'getBuiltinModule').mockImplementation((id) => {
-      if (id === 'node:sqlite' || id === 'bun:sqlite') {
+      if (id === 'node:sqlite') {
         return undefined
       }
       return original(id)
@@ -224,20 +224,6 @@ describe('profile state Store authority factory', () => {
     expect(result.store.getSettings().theme).toBe('dark')
   })
 
-  it('reopens an established SQLite profile without the migration switch', () => {
-    const options = createOptions()
-    writeFileSync(options.dataFile, JSON.stringify({ settings: { theme: 'dark' } }))
-    createProfileStateStore({ ...options })
-    rmSync(options.dataFile)
-
-    const result = createProfileStateStore({ ...options })
-
-    expect(result.backend).toBe('sqlite')
-    expect(result.classification).toBe('sqlite-only')
-    expect(result.migrated).toBe(false)
-    expect(result.store.getSettings().theme).toBe('dark')
-  })
-
   it('fails closed instead of falling back to a stale JSON mirror when SQLite is missing', () => {
     const options = createOptions()
     writeFileSync(options.dataFile, JSON.stringify({ settings: { theme: 'dark' } }))
@@ -303,6 +289,49 @@ describe('profile state Store authority factory', () => {
     })
   })
 
+  it.each([
+    [
+      { experimentalNativeChat: true, openAgentTabsInChatByDefault: true },
+      false,
+      'standard',
+      'chat-ui-on'
+    ],
+    [
+      { experimentalNativeChat: true, openAgentTabsInChatByDefault: false },
+      true,
+      'keep-terminal',
+      'chat-ui-on-terminal-default'
+    ],
+    [
+      { experimentalNativeChat: false, openAgentTabsInChatByDefault: false },
+      true,
+      'none',
+      'chat-ui-off'
+    ]
+  ])(
+    'decides the native chat upgrade tip audience once from the startup snapshot (%o)',
+    (settings, laterChatUi, variant, basis) => {
+      const options = createOptions()
+      writeFileSync(options.dataFile, JSON.stringify({ settings }))
+      const first = createProfileStateStore({ ...options })
+      expect(first.store.getNativeChatUpgradeTipVariant()).toBe(variant)
+
+      // Why: a later Chat UI change must never move a profile into or out of the audience.
+      first.store.updateSettings({ experimentalNativeChat: laterChatUi })
+      first.store.flushOrThrow()
+      rmSync(options.dataFile)
+      const restarted = createProfileStateStore({ ...options })
+
+      expect(restarted.store.getNativeChatUpgradeTipVariant()).toBe(variant)
+      expect(JSON.parse(restarted.store.prepareProfileStateExport().json)).toMatchObject({
+        nativeChatUpgradeTipAudience: {
+          membership: variant === 'none' ? 'excluded' : 'eligible',
+          basis
+        }
+      })
+    }
+  )
+
   it('initializes a valid empty SQLite profile instead of falling back to legacy JSON', () => {
     const options = createOptions()
     const opened = openProfileStateDatabase(options.databaseFile, options.profileId)
@@ -358,7 +387,7 @@ describe('profile state Store authority factory', () => {
       }
       const original = process.getBuiltinModule
       vi.spyOn(process, 'getBuiltinModule').mockImplementation((id) =>
-        id === 'node:sqlite' || id === 'bun:sqlite' ? undefined : original(id)
+        id === 'node:sqlite' ? undefined : original(id)
       )
       expect(() => createProfileStateStore(options)).toThrow('Writable profiles require SQLite')
       expect(existsSync(options.databaseFile)).toBe(false)

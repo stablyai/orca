@@ -1,6 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { expandNode } from './tab-bar-dropdown-menu-item-probe'
-import { stubHeadlessReact, stubShallowSelector } from './tab-bar-windows-shell-launch-render-stubs'
+import {
+  stubHeadlessReact,
+  stubShallowSelector,
+  stubTooltip
+} from './tab-bar-windows-shell-launch-render-stubs'
+import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
 
 const appStoreSnapshot: {
   activeTabId: string | null
@@ -53,6 +66,11 @@ const useAppStoreMock = vi.fn(
 
 vi.mock('react', async () => await stubHeadlessReact())
 vi.mock('zustand/react/shallow', () => stubShallowSelector())
+// The headless React stub has no dispatcher for the hook each tab row subscribes to language changes with.
+vi.mock('react-i18next', async () => ({
+  ...(await vi.importActual<Record<string, unknown>>('react-i18next')),
+  useTranslation: () => ({})
+}))
 
 vi.mock('lucide-react', async () => (await import('./lucide-icon-stub-fixture')).stubEveryIcon())
 
@@ -111,6 +129,12 @@ vi.mock('./SortableTab', () => ({
   }
 }))
 
+vi.mock('./TerminalSortableTab', () => ({
+  default: function SortableTab(props: Record<string, unknown>) {
+    return { type: 'SortableTab', props }
+  }
+}))
+
 vi.mock('./EditorFileTab', () => ({
   default: function EditorFileTab(props: Record<string, unknown>) {
     return { type: 'EditorFileTab', props }
@@ -127,7 +151,11 @@ vi.mock('./BrowserTab', () => ({
 vi.mock('./QuickLaunchButton', () => ({
   QuickLaunchAgentMenuItems: function QuickLaunchAgentMenuItems() {
     return null
-  }
+  },
+  ProjectedAgentMenuItems: function ProjectedAgentMenuItems() {
+    return null
+  },
+  useTabAgentMenuLaunch: () => () => undefined
 }))
 
 vi.mock('./shell-icons', () => ({
@@ -176,11 +204,7 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   }
 }))
 
-vi.mock('@/components/ui/tooltip', () => ({
-  Tooltip: 'Tooltip',
-  TooltipContent: 'TooltipContent',
-  TooltipTrigger: 'TooltipTrigger'
-}))
+vi.mock('@/components/ui/tooltip', () => stubTooltip())
 
 type ReactElementLike = {
   type: unknown
@@ -437,8 +461,15 @@ describe('TabBar context menu wiring', () => {
     expect(sortable[0].props.isPinned).toBe(true)
 
     ;(sortable[0].props.onTogglePin as () => void)()
+    await layoutApplyTestTransport.settle()
 
-    expect(unpinTabMock).toHaveBeenCalledWith('unified-term-1')
+    // A layout-owner build has main unpin it (tab-bar-layout-owner-props.test.ts); main's frame
+    // draws the unpin, so the window does not unpin it itself.
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      expect(unpinTabMock).not.toHaveBeenCalled()
+    } else {
+      expect(unpinTabMock).toHaveBeenCalledWith('unified-term-1')
+    }
     expect(pinTabMock).not.toHaveBeenCalled()
   })
 

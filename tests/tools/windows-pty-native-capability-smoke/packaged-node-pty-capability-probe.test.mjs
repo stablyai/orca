@@ -1,9 +1,11 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { realpathSync } from 'node:fs'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { runProcess } from '../../../src/shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
+import { stagePackagedProcessHost } from '../../../config/scripts/packaged-process-host-fixture.mjs'
 
 const require = createRequire(import.meta.url)
 const probePath = require.resolve('./packaged-node-pty-capability-probe.cjs')
@@ -11,9 +13,19 @@ const {
   buildGrandchildLaunch,
   createFixtureServer,
   isOneShotMode,
+  packagedProcessHostPath,
   reportFixtureObservation
 } = require(probePath)
 const originalSystemRoot = process.env.SystemRoot
+
+// The private copy packaged main emitted before the public package existed.
+async function stageLegacyRunProcess(resourcesDir) {
+  const legacyDir = join(resourcesDir, 'app.asar.unpacked', 'out', 'shared', 'child-process')
+  await mkdir(legacyDir, { recursive: true })
+  const legacy = join(legacyDir, 'run-process.js')
+  await writeFile(legacy, "exports.spawnProcess = () => 'legacy spawnProcess'\n")
+  return legacy
+}
 
 afterEach(() => {
   if (originalSystemRoot === undefined) {
@@ -57,6 +69,54 @@ describe('packaged node-pty launcher-surviving grandchild', () => {
       'target-grandchild'
     ])
     expect(JSON.stringify(launch)).not.toMatch(/cmd\.exe|start "" \/b/i)
+  })
+
+  it('loads spawnProcess from the packaged public process-host output', async () => {
+    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-pty-capability-resources-'))
+    try {
+      const packageDir = await stagePackagedProcessHost(resourcesDir)
+      const entry = packagedProcessHostPath(resourcesDir)
+
+      expect(realpathSync(require.resolve(entry))).toBe(
+        realpathSync(join(packageDir, 'dist', 'run-process.js'))
+      )
+      expect(typeof require(entry).spawnProcess).toBe('function')
+    } finally {
+      await rm(resourcesDir, { recursive: true, force: true })
+    }
+  })
+
+  it('loads spawnProcess from the private out/ copy of a package that predates the public one', async () => {
+    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-pty-capability-legacy-'))
+    try {
+      const legacy = await stageLegacyRunProcess(resourcesDir)
+      const entry = packagedProcessHostPath(resourcesDir)
+
+      expect(realpathSync(require.resolve(entry))).toBe(realpathSync(legacy))
+      expect(require(entry).spawnProcess()).toBe('legacy spawnProcess')
+    } finally {
+      await rm(resourcesDir, { recursive: true, force: true })
+    }
+  })
+
+  it('fails on a broken public package rather than loading the legacy copy', async () => {
+    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-pty-capability-broken-'))
+    try {
+      const legacy = await stageLegacyRunProcess(resourcesDir)
+      const packageDir = await stagePackagedProcessHost(resourcesDir)
+      await rm(join(packageDir, 'dist', 'run-process.js'))
+
+      expect(packagedProcessHostPath(resourcesDir)).toBe(packageDir)
+      expect(require(legacy).spawnProcess()).toBe('legacy spawnProcess')
+      expect(() => require(packagedProcessHostPath(resourcesDir))).toThrow()
+
+      await rm(join(packageDir, 'package.json'))
+      expect(() => packagedProcessHostPath(resourcesDir)).toThrow(
+        /packaged @orca\/process-host has no package\.json/
+      )
+    } finally {
+      await rm(resourcesDir, { recursive: true, force: true })
+    }
   })
 
   it('closes one-shot fixture observations before server teardown', async () => {

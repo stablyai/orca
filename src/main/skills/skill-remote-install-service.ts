@@ -18,7 +18,7 @@ import {
   SKILL_INSTALL_PROVIDERS_CAPABILITY,
   SKILL_UPLOAD_CAPABILITY
 } from '../../shared/skill-install-capability'
-import { callRuntimeEnvironment } from '../ipc/runtime-environment-transport-routing'
+import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
 import { transferSkillPackageToRuntime } from './skill-client-mediated-transfer'
 import { SkillInstallFailureSchema } from '../../shared/skill-install-failure'
 import { SkillInstallOperationError } from './skill-install-operation-error'

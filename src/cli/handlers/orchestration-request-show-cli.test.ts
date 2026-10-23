@@ -1,5 +1,3 @@
-// `request-show` is the recovery path a lost mutation response sends you down, so it must
-// stay read-only, render the honest reading, and name a version gap instead of a raw RPC error.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const callMock = vi.fn()

@@ -1,4 +1,4 @@
-import { createSshOperationAbortError } from './ssh-connection-utils'
+import { createSshOperationAbortError } from './connection/ssh-exec-options'
 
 export function createLinkedSshFileTransferSignal(signals: readonly AbortSignal[]): {
   signal: AbortSignal
@@ -22,6 +22,21 @@ export function createLinkedSshFileTransferSignal(signals: readonly AbortSignal[
       }
     }
   }
+}
+
+/**
+ * A transfer whose SFTP session closed without being asked to: the SSH connection died under it.
+ * Contact was lost, so whether the host kept the bytes is unknown.
+ */
+export function sftpSessionClosedError(): Error {
+  return Object.assign(new Error('The SSH connection closed before the transfer finished'), {
+    name: 'SftpSessionClosedError',
+    sshChannelCloseConfirmed: false
+  })
+}
+
+export function isSftpSessionClosedError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'SftpSessionClosedError'
 }
 
 export function raceSftpFileTransferWithAbort<T>(

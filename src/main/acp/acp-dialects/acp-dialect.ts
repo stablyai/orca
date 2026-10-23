@@ -1,0 +1,132 @@
+import type { AgentSessionContextUsage } from '../../../shared/agent-session-context-usage'
+import type { AgentJournalToolCallItem } from '../../../shared/agent-session-journal-types'
+import type { AgentSessionPromptResponse } from '../../../shared/agent-session-question-answer'
+import type {
+  NativeChatBackgroundTaskBlock,
+  NativeChatSubagentState
+} from '../../../shared/native-chat-types'
+import type { ProviderTimelineRequestBody } from '../../native-chat/agent-session-timeline/provider-timeline-event'
+import type { AcpAgentError } from '../acp-errors'
+import type { AgentSessionOptionChoice } from '../../../shared/agent-session-wire'
+import type { ModelInfo, ToolCallUpdate } from '../generated/acp-protocol.generated'
+
+export type AcpRequestPresentation = {
+  body: ProviderTimelineRequestBody
+  reply(response: AgentSessionPromptResponse | null): unknown
+}
+
+/** A request the client answers at once, asking no one: the reply, and a plan it carried for the
+ *  chat's existing plan row. */
+export type AcpRequestSettlement = { reply: unknown; plan?: string }
+
+export type AcpBackgroundTaskUpdate = Pick<NativeChatBackgroundTaskBlock, 'taskId' | 'state'> &
+  Partial<Omit<NativeChatBackgroundTaskBlock, 'type' | 'taskId' | 'state'>> & {
+    /** Used only until a provider description is known. */
+    fallbackLabel?: string
+    /** Used only until a frame names the task's kind. */
+    fallbackKind?: NativeChatBackgroundTaskBlock['kind']
+  }
+
+/** What the provider said about one subagent; absent fields are unchanged. */
+export type AcpSubagentUpdate = {
+  /** The provider's subagent id: the roster key, and where its own rows are filed. */
+  id: string
+  state?: NativeChatSubagentState
+  label?: string
+  /** Latest total tokens the provider reported for this subagent. */
+  tokens?: number
+  /** The provider turn that spawned it. */
+  turn?: string
+  /** The subagent's final reply, once it completed. */
+  result?: string
+  /** For a report that cannot tell a subagent from a background task: applies only to a known one. */
+  knownOnly?: true
+}
+
+export type AcpDialectNotification =
+  | { disposition: 'ignore' }
+  | {
+      disposition: 'map'
+      turn?: string
+      replay?: boolean
+      at?: number
+      started?: boolean
+      end?: Omit<AcpTurnEnding, 'at' | 'notSignedIn'>
+      /** The provider's own words for why `turn` failed, sent apart from its end. */
+      failureDetail?: string
+      usage?: AgentSessionContextUsage
+      backgroundTasks?: AcpBackgroundTaskUpdate[]
+      subagents?: AcpSubagentUpdate[]
+    }
+
+/** A prompt hook refused the message: the turn ended, but the user did not stop it. */
+export type AcpHookBlock = { reason?: string }
+
+/** How a turn ended, as the agent reported it. */
+export type AcpTurnEnding = {
+  stopReason: string
+  at: number
+  durationMs?: number
+  failureDetail?: string
+  notSignedIn?: boolean
+  hookBlock?: AcpHookBlock
+}
+
+/** How a `/compact` the agent ended normally went, read from its reply; absent compacted. */
+export type AcpCompactionReply = { outcome: 'skipped' | 'failed'; detail: string }
+
+/** Hooks interpret extensions; lifecycle and row identity stay shared. */
+export type AcpDialect = {
+  subagentStop?: {
+    /** Missing required target: proves the route exists without addressing any child. */
+    probe: { method: string; params: unknown }
+    recognizesProbeError(error: AcpAgentError): boolean
+    request(sessionId: string, id: string): { method: string; params: unknown }
+    response(value: unknown, id: string): { cancelled: boolean; state?: NativeChatSubagentState }
+  }
+  backgroundTaskStop?: {
+    /** Missing required target: proves the route exists without addressing any task. */
+    probe: { method: string; params: unknown }
+    /** The agent refusing the route by name: the only answer that hides Stop. */
+    lacksRoute(error: AcpAgentError): boolean
+    request(sessionId: string, taskId: string): { method: string; params: unknown }
+    /** `gone`: the agent no longer runs a task by that id; its own ending may still follow. */
+    response(value: unknown, taskId: string): 'killed' | 'gone' | 'refused'
+  }
+  injectedPromptIdentity?: true
+  /** A tool update in the shared shape (`rawOutput.stdout`, `rawOutput.exitCode`), read first. */
+  normalizeToolUpdate?(update: ToolCallUpdate): ToolCallUpdate
+  toolName?(update: ToolCallUpdate): string | undefined
+  toolBackgroundTasks?(
+    update: ToolCallUpdate,
+    tool: AgentJournalToolCallItem
+  ): AcpBackgroundTaskUpdate[]
+  toolSubagents?(update: ToolCallUpdate, tool: AgentJournalToolCallItem): AcpSubagentUpdate[]
+  /** A child-session notice supplies only its outcome; the translator owns membership and replay. */
+  subagentSessionEnd?(method: string, params: unknown): 'completed' | 'stopped' | undefined
+  notification?(method: string, params: unknown, at: number): AcpDialectNotification | undefined
+  contextWindow?(models: unknown): number | undefined
+  /** A model's own effort menu and default, as the agent advertises them per model. */
+  modelEfforts?(model: ModelInfo): { efforts: AgentSessionOptionChoice[]; defaultEffort?: string }
+  /** A request shown to the person; a permission request it claims is never auto-answered. */
+  request?(method: string, params: unknown): AcpRequestPresentation | undefined
+  /** Requests answered at once instead of shown to the person. */
+  settleRequest?(method: string, params: unknown): AcpRequestSettlement | undefined
+  /** The provider's words in a `session/prompt` error answer, when its message is generic. */
+  promptErrorDetail?(error: AcpAgentError): string | undefined
+  authenticationRequired?(error: AcpAgentError): boolean
+  /** A hook's refusal, read from the `_meta` of the prompt's answer or of the turn's end. */
+  hookBlock?(meta: unknown): AcpHookBlock | undefined
+  /** The row for a failed turn the provider gave no words for. */
+  failedTurnText?(stopReason: string): string
+  /** An agent that ends a `/compact` it did not do as a normal turn says so in its reply. */
+  compactionReply?(text: string): AcpCompactionReply | undefined
+  /** The agent's own `/` commands a chat does not offer: hidden from its list, and a message
+   *  that is only one of them is refused before it reaches the agent. */
+  withheldCommands?: readonly string[]
+}
+
+/** Which of the dialect's stop routes this agent process proved it answers. */
+export type AcpChildStops = { subagents: boolean; backgroundTasks: boolean }
+
+export const GENERIC_ACP_DIALECT: AcpDialect = {}

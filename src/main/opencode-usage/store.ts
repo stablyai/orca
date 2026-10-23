@@ -30,6 +30,7 @@ import {
   buildOpenCodeUsageSummary
 } from './snapshot-rollups'
 import { UsageProviderStoreLifecycle } from '../usage/usage-provider-store-lifecycle'
+import { splitUsageCacheFileViaWorker } from '../usage/usage-scan-worker-spawn'
 
 let _openCodeUsageFile: string | null = null
 
@@ -61,8 +62,8 @@ export class OpenCodeUsageStore extends UsageProviderStoreLifecycle<
       normalizeState: normalizePersistedState,
       sourceKey: 'processedDatabases',
       dataPresenceKey: 'hasAnyOpenCodeData',
-      jsonIndent: 2,
-      scan: openCodeUsageProvider.scan
+      scan: openCodeUsageProvider.scan,
+      splitCacheFile: splitUsageCacheFileViaWorker
     })
   }
 

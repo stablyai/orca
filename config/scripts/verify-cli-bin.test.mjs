@@ -77,6 +77,18 @@ describe('verifyPackageCliBin', () => {
     })
   })
 
+  it('stamps the build commit the CLI pins official skill installs to', () => {
+    const { projectDir, outPackageJsonPath } = makeProjectWithCli(
+      '#!/usr/bin/env node\nconsole.log("orca")\n',
+      { writeOutPackageJson: false }
+    )
+
+    verifyPackageCliBin({ projectDir, fixPackageJson: true, sourceCommit: 'c'.repeat(40) })
+
+    expect(JSON.parse(readFileSync(outPackageJsonPath, 'utf8')).commit).toBe('c'.repeat(40))
+    rmSync(projectDir, { recursive: true, force: true })
+  })
+
   it('rejects a CLI package boundary that is not CommonJS', () => {
     const { projectDir, outPackageJsonPath } = makeProjectWithCli(
       '#!/usr/bin/env node\nconsole.log("orca")\n'

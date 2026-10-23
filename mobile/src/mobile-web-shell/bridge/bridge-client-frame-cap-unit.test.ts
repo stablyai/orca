@@ -1,6 +1,22 @@
-import { describe, expect, it } from 'vitest'
-import { BRIDGE_MAX_MESSAGE_BYTES, parseBridgeMessage, utf8ByteLength } from './bridge-caps'
-import { createFakeBridgePortPair } from './bridge-port-pair-test-harness'
+import { afterEach, describe, expect, it } from 'vitest'
+import { BRIDGE_MAX_MESSAGE_BYTES, parseBridgeMessage } from './bridge-caps'
+import { createFakeBridgePortPair as createPair } from './bridge-port-pair-test-harness'
+
+const resources = new Set<ReturnType<typeof createPair>>()
+function createFakeBridgePortPair(
+  ...args: Parameters<typeof createPair>
+): ReturnType<typeof createPair> {
+  const resource = createPair(...args)
+  resources.add(resource)
+  return resource
+}
+function closeResources(): void {
+  for (const resource of resources) {
+    resource.client.close()
+    resource.host.dispose()
+  }
+  resources.clear()
+}
 
 /**
  * The unit the frame cap is counted in, which is UTF-8 bytes on every side of this bridge.
@@ -31,7 +47,7 @@ describe('what the frame cap counts', () => {
     // The precondition, without which this is just another oversized frame: a sender reading
     // `json.length` sees room to spare here and posts it.
     expect(pad.length).toBeLessThan(BRIDGE_MAX_MESSAGE_BYTES)
-    expect(utf8ByteLength(pad)).toBeGreaterThan(BRIDGE_MAX_MESSAGE_BYTES)
+    expect(new TextEncoder().encode(pad).byteLength).toBeGreaterThan(BRIDGE_MAX_MESSAGE_BYTES)
 
     const pair = createFakeBridgePortPair()
     await pair.flush()
@@ -40,29 +56,25 @@ describe('what the frame cap counts', () => {
     void pair.client.sendRequest('git.diff', { pad }).catch((error: Error) => {
       rejection = error.name
     })
-    await new Promise((resolve) => setTimeout(resolve, 0))
+    await pair.flush()
 
     expect(rejection).toBe('BridgeRequestOversizedError')
     expect(pair.toShell.slice(before)).toEqual([])
     // And the reader agrees, so this is the shells' rule and not a stricter one the page invented.
-    const frame = JSON.stringify({ v: 1, type: 'request', id: '0'.repeat(22), method: 'x', pad })
+    const frame = JSON.stringify({
+      v: 1,
+      type: 'request',
+      id: '0'.repeat(22),
+      method: 'git.diff',
+      params: { pad }
+    })
+    expect(frame.length).toBeLessThan(BRIDGE_MAX_MESSAGE_BYTES)
+    expect(pair.diagnostics).toEqual([
+      { kind: 'send-oversized', bytes: new TextEncoder().encode(frame).byteLength }
+    ])
     const read = parseBridgeMessage(frame, 'page-to-shell')
     expect(read.ok ? null : read.refusal).toBe('oversized')
   })
-
-  it('reports the byte count on the diagnostic, not the code-unit count', async () => {
-    const pad = WIDE_CHARACTER.repeat(WIDE_CHARACTER_COUNT)
-    const pair = createFakeBridgePortPair()
-    await pair.flush()
-    void pair.client.sendRequest('git.diff', { pad }).catch(() => undefined)
-    await new Promise((resolve) => setTimeout(resolve, 0))
-
-    const [diagnostic] = pair.diagnostics
-    expect(diagnostic?.kind).toBe('send-oversized')
-    const reported = diagnostic?.kind === 'send-oversized' ? diagnostic.bytes : 0
-    // Roughly three times the code-unit count, and over the cap. A field named `bytes` holding
-    // units would read as a frame comfortably inside a cap it had just been refused by.
-    expect(reported).toBeGreaterThan(BRIDGE_MAX_MESSAGE_BYTES)
-    expect(reported).toBeGreaterThan(pad.length * 2)
-  })
 })
+
+afterEach(closeResources)

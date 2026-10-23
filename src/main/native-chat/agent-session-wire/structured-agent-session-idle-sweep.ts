@@ -8,12 +8,14 @@
 //
 // Owed work is derived on every tick, never stored, so there is nothing to disagree with it.
 
-import { agentChildWorkLiveness } from '../../../shared/agent-status-child-work-liveness'
-import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-projection'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
-import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionBackgroundTaskState } from '../../../shared/agent-session-wire'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
+import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
+import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
+import {
+  heldStructuredAgentSessionCurrentWork,
+  type StructuredAgentSessionCurrentWorkHost
+} from './structured-agent-session-host-current-work'
 
 export const STRUCTURED_AGENT_SESSION_IDLE_SWEEP_INTERVAL_MS = 5 * 60_000
 export const STRUCTURED_AGENT_SESSION_IDLE_MS = 30 * 60_000
@@ -27,26 +29,51 @@ export type StructuredAgentSessionIdleSweepDeps = {
   now: () => number
   isDisposed: () => boolean
   deliveryActive: (sessionId: string) => boolean
-  backgroundTaskState: (sessionId: string) => AgentSessionBackgroundTaskState | null | undefined
+  /** Child work the provider reported running and not over, recorded or not. */
+  childWorkOpen: (sessionId: string) => boolean
   /** An orchestration dispatch that still owns this session's worker; derived from its database. */
   hasOpenDispatch: (sessionId: string) => boolean
+  /** The provider holds a send it took and has not answered; see `holdsDispatch`. */
+  providerHoldsDispatch: (sessionId: string) => boolean
+  /** The lease store the current-work projection reads (`heldStructuredAgentSessionCurrentWork`). */
+  store: StructuredAgentSessionCurrentWorkHost['store']
   /** Each of these runs inside the session's serialize and never takes it again. */
   stopAgent: (sessionId: string) => Promise<void>
   stopStartingAgent: (sessionId: string) => Promise<void>
   closeConversation: (sessionId: string) => Promise<boolean>
-  onError: (sessionId: string, error: unknown) => void
+  logger: StructuredAgentSessionLogger
   intervalMs?: number
   idleMs?: number
 }
 
-/** A prompt the user has not answered. A subagent can raise one the lead turn cannot see. */
-export function hasPendingStructuredAgentSessionPrompt(
-  items: readonly AgentJournalRenderItem[]
+/** The host's reads of what a running child still serves. */
+export type StructuredAgentSessionChildWorkReads = {
+  /** The host's projection of current work: an ended generation's turn or prompt holds nothing.
+   *  Null when the host holds no conversation, which has none. */
+  currentWork: () => Pick<
+    StructuredAgentSessionCurrentWork,
+    'activeTurnId' | 'hasActionablePrompt'
+  > | null
+  /** The provider's own account, never the bounded store, which may have refused a record. */
+  childWorkOpen: () => boolean
+  hasOpenDispatch: () => boolean
+  providerHoldsDispatch: () => boolean
+}
+
+/** Work the running child owes apart from queued sends: a turn, a child agent, an open
+ *  orchestration dispatch, a send the provider holds, or a prompt nobody answered (a subagent's
+ *  too, which the lead turn cannot see). Whatever owes any of it keeps its child; it builds no
+ *  snapshot. */
+export function structuredAgentSessionChildHasOpenWork(
+  reads: StructuredAgentSessionChildWorkReads
 ): boolean {
-  return items.some(
-    (item) =>
-      (item.body.kind === 'approval' || item.body.kind === 'question') &&
-      item.body.resolution.state === 'pending'
+  const work = reads.currentWork()
+  return (
+    (work !== null && work.activeTurnId() !== null) ||
+    reads.childWorkOpen() ||
+    reads.hasOpenDispatch() ||
+    reads.providerHoldsDispatch() ||
+    (work !== null && work.hasActionablePrompt())
   )
 }
 
@@ -84,7 +111,13 @@ export class StructuredAgentSessionIdleSweep {
         [...this.deps.sessions.keys()].map((sessionId) =>
           this.deps
             .serialize(sessionId, () => this.tickUnderSerialize(sessionId))
-            .catch((error: unknown) => this.deps.onError(sessionId, error))
+            .catch((error: unknown) =>
+              this.deps.logger.warn('an idle sweep step failed', {
+                scope: 'idle-sweep',
+                sessionId,
+                error
+              })
+            )
         )
       )
     } finally {
@@ -96,16 +129,6 @@ export class StructuredAgentSessionIdleSweep {
   private async tickUnderSerialize(sessionId: string): Promise<void> {
     const session = this.deps.sessions.get(sessionId)
     if (!session || this.deps.isDisposed()) {
-      return
-    }
-    // A stop that failed after the child was proven gone: finish it now, before the idle test, so
-    // the rows its settlement wrote cannot push the retry out. A message accepted since goes first.
-    if (
-      session.owesProviderChildWindDown !== undefined &&
-      !session.child &&
-      !this.queuedOrDelivering(sessionId, session)
-    ) {
-      await this.deps.stopAgent(sessionId)
       return
     }
     // Owed work is activity, read every tick, so the agent gets a full window once it ends: a child
@@ -139,13 +162,20 @@ export class StructuredAgentSessionIdleSweep {
   /** Work the running child still owes. Scoped to the child: with none, nothing here can pin the
    *  handle, and a leftover prompt or turn row is only history. */
   private owesWork(sessionId: string, session: StructuredAgentSessionHostSession): boolean {
-    const items = session.journal.snapshot().items
     return (
-      activeStructuredAgentSessionTurnId(items) !== null ||
       this.queuedOrDelivering(sessionId, session) ||
-      agentChildWorkLiveness(this.deps.backgroundTaskState(sessionId)?.tasks) !== null ||
-      this.deps.hasOpenDispatch(sessionId) ||
-      hasPendingStructuredAgentSessionPrompt(items)
+      structuredAgentSessionChildHasOpenWork({
+        currentWork: () =>
+          heldStructuredAgentSessionCurrentWork(
+            this.deps.store,
+            sessionId,
+            session.journal,
+            session
+          ),
+        childWorkOpen: () => this.deps.childWorkOpen(sessionId),
+        hasOpenDispatch: () => this.deps.hasOpenDispatch(sessionId),
+        providerHoldsDispatch: () => this.deps.providerHoldsDispatch(sessionId)
+      })
     )
   }
 }

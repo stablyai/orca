@@ -1,6 +1,5 @@
-// Claude rewind is reported unsupported until it returns through a fork. These pin that a rewind
-// RPC leaves nothing behind, and that a pending rewind persisted by an older build never strands
-// the chat: the next attach resumes by session id and settles the rewind as refused.
+// A pending Claude rewind never strands the chat: one cut short still launches its fork, and an older
+// build's (it saved no fork) is settled refused while the chat resumes by session id.
 
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -9,8 +8,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionRewindFork } from '../../shared/agent-session-rewind'
 import { claudeSessionIdForOrcaSession } from '../claude/claude-structured-launch-resolution'
 import { fakeClaude } from '../claude/claude-structured-session-test-support'
+import { claudeAndCodexAgents } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
 import { StructuredAgentSessionAdapterRouter } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router'
 import { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import {
@@ -22,8 +23,10 @@ import {
 } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import { openTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
+import { createClaudeStructuredLaunchResolver } from './structured-agent-launch-composition.test-support'
 import { createStructuredClaudeRuntimeAdapter } from './structured-claude-runtime-adapter'
 import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 
 const caller = { callerKey: 'desktop' }
 const PROVIDER_SESSION_ID = claudeSessionIdForOrcaSession(HOST_TEST_SESSION)
@@ -37,6 +40,7 @@ let store: AgentSessionRecordStore
 let claude: ReturnType<typeof fakeClaude>
 let adapter: ReturnType<typeof createStructuredClaudeRuntimeAdapter>
 let host: StructuredAgentSessionHost
+let log: ReturnType<typeof recordingStructuredAgentSessionLogger>
 
 function attachParams(fence: number | null) {
   return hostTestAttachParams(fence, {
@@ -67,7 +71,10 @@ function rewindParams(fence: number) {
 const fence = (): number => store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence
 
 /** What an older build left behind: an admitted rewind whose outcome was never recorded. */
-async function seedPendingRewind(phase: 'prepared' | 'provider-succeeded') {
+async function seedPendingRewind(
+  phase: 'prepared' | 'provider-succeeded',
+  providerFork?: AgentSessionRewindFork
+) {
   const request = rewindParams(fence())
   // A rewind had a turn to target, so Claude had written the transcript a resume continues.
   const projects = join(directory, 'claude-home', 'projects', 'workspace')
@@ -93,14 +100,14 @@ async function seedPendingRewind(phase: 'prepared' | 'provider-succeeded') {
       providerItemId: TARGET,
       expectedEpoch: request.expectedEpoch,
       phase,
-      retained: []
+      ...(providerFork ? { providerFork } : { retained: [] })
     }
   }))
   return request
 }
 
 async function reattach() {
-  await host.close(HOST_TEST_SESSION)
+  await host.close(HOST_TEST_SESSION, 'evict')
   expect(await host.attach(caller, attachParams(fence()))).toMatchObject({ ok: true })
 }
 
@@ -112,18 +119,25 @@ beforeEach(async () => {
   adapter = createStructuredClaudeRuntimeAdapter({
     store,
     resolveWorkspacePath: async (id) => `/repos/${id}`,
-    resolveClaudeCommand: () => '/usr/local/bin/claude',
-    resolveClaudeAuthPolicy: () => ({ stripAuthEnv: false }),
+    resolveLaunch: createClaudeStructuredLaunchResolver({
+      store,
+      resolveCommand: () => '/usr/local/bin/claude',
+      resolveLaunchArgs: () => [],
+      resolveAuthPolicy: () => ({ account: 'system' })
+    }),
     openClaudeConnection: claude.openConnection,
     readProcessStartTime: async () => HOST_TEST_NOW,
-    onLifecycleEvent: () => {}
+    // A rewind runs only once the agent has proven its start, which the host learns from these.
+    onLifecycleEvent: (event) => void host.handleAdapterEvent(event)
   })
+  log = recordingStructuredAgentSessionLogger()
+  // Only Claude sessions are attached here; the router supplies the production create gate.
+  const agents = claudeAndCodexAgents({ claude: adapter, codex: adapter })
   host = new StructuredAgentSessionHost({
+    agents,
+    logger: log.logger,
     store,
-    // Only Claude sessions are attached here; the router supplies the production create gate.
-    adapter: new StructuredAgentSessionAdapterRouter({ claude: adapter, codex: adapter }, () =>
-      adapter.closeAll()
-    ),
+    adapter: new StructuredAgentSessionAdapterRouter(agents, () => adapter.closeAll()),
     journalDatabase: openTestJournalHostDatabase(directory),
     claimKeyId: 'key',
     now: () => HOST_TEST_NOW,
@@ -139,17 +153,23 @@ afterEach(async () => {
   await rm(directory, { recursive: true, force: true })
 })
 
-describe('Claude rewind is unsupported', () => {
-  it('refuses a rewind RPC before writing any rewind record', async () => {
-    expect(adapter.rewindSupport(HOST_TEST_SESSION)).toEqual({
-      supported: false,
-      reason: 'unsupported'
+describe('a pending Claude rewind', () => {
+  it('launches the fork a rewind saved, even when it was cut short before finishing', async () => {
+    const fork: AgentSessionRewindFork = {
+      sessionId: '33333333-3333-4333-8333-333333333333',
+      sourceSessionId: PROVIDER_SESSION_ID,
+      throughEntryId: 'answer-1',
+      replacesSessionId: PROVIDER_SESSION_ID
+    }
+    await seedPendingRewind('prepared', fork)
+    await host.close(HOST_TEST_SESSION, 'evict')
+    await host.attach(caller, attachParams(fence()))
+    expect(claude.connections.at(-1)?.launch.options).toMatchObject({
+      sessionId: fork.sessionId,
+      resume: PROVIDER_SESSION_ID,
+      resumeSessionAt: 'answer-1',
+      forkSession: true
     })
-    expect(await host.rewind(caller, rewindParams(fence()))).toMatchObject({
-      ok: false,
-      refusal: { rewindReason: 'unsupported' }
-    })
-    expect(store.getRecord(HOST_TEST_SESSION)?.rewind).toBeUndefined()
   })
 
   it.each(['prepared', 'provider-succeeded'] as const)(
@@ -173,7 +193,6 @@ describe('Claude rewind is unsupported', () => {
   )
 
   it('still attaches when settling the pending rewind fails, and logs it', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     await seedPendingRewind('prepared')
     const transition = store.transitionHandoff.bind(store)
     vi.spyOn(store, 'transitionHandoff').mockImplementation((sessionId, apply) =>
@@ -189,9 +208,14 @@ describe('Claude rewind is unsupported', () => {
     await reattach()
 
     expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.phase).toBe('prepared')
-    expect(warn).toHaveBeenCalledWith(
-      '[structured-rewind] pending Claude rewind was not settled:',
-      expect.objectContaining({ sessionId: HOST_TEST_SESSION, error: expect.any(Error) })
+    expect(log.entries).toContainEqual(
+      expect.objectContaining({
+        fields: expect.objectContaining({
+          scope: 'rewind-unsupported-settlement',
+          sessionId: HOST_TEST_SESSION,
+          error: expect.any(Error)
+        })
+      })
     )
   })
 })

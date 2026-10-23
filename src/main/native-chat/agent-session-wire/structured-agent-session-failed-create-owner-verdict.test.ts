@@ -23,6 +23,9 @@ import {
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const CALLER = { callerKey: 'client-1' }
 const EXIT_REASON = 'claude stream-json exited (code 1): stderr tail'
@@ -40,10 +43,11 @@ beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-failed-create-verdict-'))
   resetHostTestOperationIds()
   acquire = vi.fn(async ({ fence, spawnToken }) => ({
+    acquisitionGeneration: globalThis.crypto.randomUUID(),
     process: { hostId: 'local', pid: 4242, processStartTimeMs: 1_700_000_000_000, spawnToken },
     link: {
       linkId: `link-${fence}`,
-      handle: { provider: 'codex', threadId: THREAD },
+      handle: codexProviderHandle(THREAD),
       origin: 'created',
       mintedAtFence: fence,
       observedAt: NOW
@@ -51,8 +55,13 @@ beforeEach(async () => {
   }))
   store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({
+    agents: NO_STRUCTURED_AGENTS,
+    logger: createStructuredAgentSessionLogger(),
     store,
     adapter: {
+      open: async () => ({
+        reportedOptions: { model: '' }
+      }),
       acquire,
       releaseAcquisition: vi.fn(async () => true),
       dispatch: vi.fn(async () => ({ state: 'admitted' as const })),
@@ -173,5 +182,21 @@ describe('failed create owner verdict', () => {
       claimStatus: 'released',
       deathEvidence: null
     })
+  })
+
+  it('lets the sink a failed create wrote through go, so the next create and shutdown proceed', async () => {
+    acquire.mockImplementationOnce(async ({ events }) => {
+      // The child's exit reached the translator before any journal was attached.
+      events?.setActivity?.(null)
+      throw new Error(EXIT_REASON)
+    })
+
+    await expect(host.attach(CALLER, hostTestAttachParams(null))).resolves.toMatchObject({
+      ok: false
+    })
+    await expect(host.attach(CALLER, hostTestAttachParams(null))).resolves.toMatchObject({
+      ok: true
+    })
+    await expect(host.flushAllStreamedEvents()).resolves.toBeUndefined()
   })
 })

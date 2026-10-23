@@ -5,6 +5,9 @@ import {
 } from '../../shared/git-merge-tree-capability'
 import { gitExecFileAsync } from '../git/runner'
 import { gitOptionsForWorktree, type GitRuntimeOptions } from '../git/git-runtime-options'
+import { createLocalGitObjectQuarantine } from '../git/local-git-object-quarantine'
+import { _resetCanonicalRepoKeyCacheForTests } from '../git/canonical-repo-key'
+import { RuntimeRemoteFetchController } from '../runtime/runtime-remote-fetch-controller'
 import {
   clearGitCapabilityStateForTests,
   withLocalGitCapabilityCacheForExecution
@@ -23,10 +26,23 @@ import {
 } from './conflict-summary-cache'
 
 type LocalGitExecOptions = Pick<GitRuntimeOptions, 'wslDistro' | 'admissionTier'>
+type BaseRefreshController = Pick<
+  RuntimeRemoteFetchController,
+  'refreshRemoteTrackingBaseForPreview'
+>
+
+let remoteFetches: BaseRefreshController | null = null
+
+/** The runtime's controller, so a base refresh queues and dedupes with create and drift fetches. */
+export function setPRConflictSummaryRemoteFetches(controller: BaseRefreshController): void {
+  remoteFetches = controller
+}
 
 export function __resetPRConflictSummaryCachesForTests(): void {
   clearGitCapabilityStateForTests()
   __resetPRConflictSummaryDerivationCachesForTests()
+  _resetCanonicalRepoKeyCacheForTests()
+  remoteFetches = null
 }
 
 export async function getPRConflictSummary(
@@ -153,21 +169,23 @@ async function resolveLatestBaseOid(
   localGitOptions: LocalGitExecOptions
 ): Promise<string | null> {
   const remoteName = 'origin'
+  const trackingRef = `refs/remotes/${remoteName}/${baseRefName}`
+  remoteFetches ??= new RuntimeRemoteFetchController()
+  // Why: fetching the base ref keeps the conflict list aligned with GitHub's
+  // live mergeability view, but the card must still render offline. A failed
+  // or slow fetch falls back to the local ref, then to GitHub's base OID.
+  await remoteFetches.refreshRemoteTrackingBaseForPreview(
+    repoPath,
+    {
+      remote: remoteName,
+      branch: baseRefName,
+      ref: trackingRef,
+      base: `${remoteName}/${baseRefName}`
+    },
+    localGitOptions
+  )
 
-  try {
-    // Why: cap the fetch at 10 s so slow or unreachable remotes don't block
-    // the conflict-summary derivation indefinitely.
-    await gitExecFileAsync(['fetch', '--quiet', remoteName, baseRefName], {
-      ...gitOptionsForWorktree(repoPath, localGitOptions),
-      timeout: 10_000
-    })
-  } catch {
-    // Why: fetching the base ref keeps the conflict list aligned with GitHub's
-    // live mergeability view, but the card must still render offline. If fetch
-    // fails, fall back to the base OID GitHub already gave us.
-  }
-
-  for (const ref of [`refs/remotes/${remoteName}/${baseRefName}`, `${remoteName}/${baseRefName}`]) {
+  for (const ref of [trackingRef, `${remoteName}/${baseRefName}`]) {
     try {
       const { stdout } = await gitExecFileAsync(['rev-parse', '--verify', ref], {
         ...gitOptionsForWorktree(repoPath, localGitOptions)
@@ -234,20 +252,31 @@ async function loadConflictingFiles(
     headOid,
     baseOid
   ]
+  // Why: only the file list is read; the merged tree it writes would pile up as loose objects.
+  const quarantine = createLocalGitObjectQuarantine(repoPath, localGitOptions)
 
   return withLocalGitCapabilityCacheForExecution(
     { cwd: repoPath, wslDistro: localGitOptions.wslDistro },
-    (capabilities) =>
-      capabilities.runWithFallback(
+    (capabilities) => {
+      const runMergeTree = (args: string[]): Promise<{ stdout: string }> => {
+        const run = (env: NodeJS.ProcessEnv | undefined) =>
+          gitExecFileAsync(args, {
+            ...gitOptionsForWorktree(repoPath, localGitOptions),
+            ...(env ? { env } : {})
+          })
+        // Why only once supported: an old Git still gets the folder, and Git < 2.35 can't prune a leftover.
+        return capabilities.isKnownSupported('merge-tree-write-tree')
+          ? quarantine.run(run)
+          : run(undefined)
+      }
+      return capabilities.runWithFallback(
         'merge-tree-write-tree',
         () =>
           capabilities.runWithFallback(
             'merge-tree-merge-base',
             async () => {
               try {
-                const result = await gitExecFileAsync(modernArgs, {
-                  ...gitOptionsForWorktree(repoPath, localGitOptions)
-                })
+                const result = await runMergeTree(modernArgs)
                 return parseMergeTreeNameOnlyOutput(result.stdout)
               } catch (error) {
                 if (isUnsupportedMergeTreeWriteTreeError(error)) {
@@ -262,7 +291,7 @@ async function loadConflictingFiles(
                 throw error
               }
             },
-            () => loadConflictingFilesWithLegacyMergeTree(repoPath, legacyArgs, localGitOptions),
+            () => loadConflictingFilesWithLegacyMergeTree(runMergeTree, legacyArgs),
             isUnsupportedMergeTreeMergeBaseError
           ),
         async () => {
@@ -272,18 +301,16 @@ async function loadConflictingFiles(
         },
         isUnsupportedMergeTreeWriteTreeError
       )
+    }
   )
 }
 
 async function loadConflictingFilesWithLegacyMergeTree(
-  repoPath: string,
-  legacyArgs: string[],
-  localGitOptions: LocalGitExecOptions
+  runMergeTree: (args: string[]) => Promise<{ stdout: string }>,
+  legacyArgs: string[]
 ): Promise<string[]> {
   try {
-    const result = await gitExecFileAsync(legacyArgs, {
-      ...gitOptionsForWorktree(repoPath, localGitOptions)
-    })
+    const result = await runMergeTree(legacyArgs)
     return parseMergeTreeNameOnlyOutput(result.stdout)
   } catch (fallbackError) {
     const fallbackStdout = getGitErrorOutput(fallbackError, 'stdout')

@@ -8,7 +8,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { CODEX_SPAWN_TOKEN_ENV } from '../codex/codex-structured-owner-identity'
+import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../shared/agent-session-caller-env'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import { openTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
 import type { AgentSessionReserveRequest } from './agent-session-reservation-admission'
@@ -17,6 +17,8 @@ import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
+import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 /** pid -> the NUL-separated environment block `/proc/<pid>/environ` serves. */
 const fakeProc = vi.hoisted(() => ({ environs: new Map<number, string>() }))
@@ -48,7 +50,10 @@ const SESSION = 'session-alpha'
 const MINTED_TOKEN = 'spawn-minted-by-this-store'
 
 function environ(token: string | null): string {
-  return ['PATH=/usr/bin', ...(token ? [`${CODEX_SPAWN_TOKEN_ENV}=${token}`] : [])].join('\0')
+  return [
+    'PATH=/usr/bin',
+    ...(token ? [`${ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV}=${token}`] : [])
+  ].join('\0')
 }
 
 function reserveRequest(): AgentSessionReserveRequest {
@@ -112,7 +117,7 @@ describe('a process that inherited a spawn token', () => {
       fence,
       link: {
         linkId: 'link-1',
-        handle: { provider: 'codex', threadId: 'thread-1' },
+        handle: codexProviderHandle('thread-1'),
         origin: 'created',
         mintedAtFence: fence,
         observedAt: NOW
@@ -135,13 +140,17 @@ describe('a process that inherited a spawn token', () => {
     const kill = vi.spyOn(process, 'kill').mockImplementation(() => true)
 
     const host = await ensureStructuredAgentSessionHost({
+      logger: createStructuredAgentSessionLogger(),
       stateDirectory,
       hostId: HOST_ID,
       claimKeyId: 'key-1',
       resolveWorkspacePath: async () => stateDirectory,
-      resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
+      resolveLaunchArgs: () => [],
+      resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
       resolveEnvironment: async () => ({})
     })
+    // The installed host reads the record the seed wrote, so the check below has a lease to act on.
+    expect(host.deps.store.getRecord(SESSION)?.lease.claimStatus).toBe('released')
     await host.reconcileRestartLeases()
     // Install work that is not awaited would have run by now; nothing here waits on a timer.
     await new Promise((resolve) => setTimeout(resolve, 50))

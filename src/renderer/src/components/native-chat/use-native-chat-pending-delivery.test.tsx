@@ -15,14 +15,17 @@ const boundary: NativeChatMessage = {
   timestamp: null,
   source: 'transcript'
 }
-const args = { paneKey: 'pane', agent: 'claude' as const, messages: [boundary] }
+const args = { paneKey: 'pane', agent: 'claude' as const }
 function userRow(text: string): NativeChatMessage {
   return { ...boundary, id: `user:${text}`, role: 'user', blocks: [{ type: 'text', text }] }
 }
 function render() {
-  return renderHook(({ messages }) => useNativeChatPendingDelivery({ ...args, messages }), {
-    initialProps: { messages: [boundary] }
-  })
+  return renderHook(
+    ({ messages }) => useNativeChatPendingDelivery({ ...args, session: { messages } }),
+    {
+      initialProps: { messages: [boundary] }
+    }
+  )
 }
 async function tick(ms: number) {
   await act(async () => {
@@ -39,6 +42,51 @@ afterEach(() => {
 })
 
 describe('terminal Chat pending delivery', () => {
+  it('records a send into a read empty transcript as after every row of that session', () => {
+    const { result } = renderHook(() =>
+      useNativeChatPendingDelivery({
+        ...args,
+        session: { messages: [], readPhase: 'ready', sessionId: 'session-1' }
+      })
+    )
+    act(() => result.current.record('first'))
+    expect(result.current.pending[0]).toMatchObject({
+      afterMessageId: null,
+      afterEmptyTranscriptSessionId: 'session-1'
+    })
+  })
+  it.each([
+    ['still loading', { readPhase: 'loading' as const, sessionId: 'session-1' }],
+    ['no session yet', { readPhase: 'ready' as const, sessionId: null }]
+  ])('does not claim an empty transcript while %s', (_label, session) => {
+    const { result } = renderHook(() =>
+      useNativeChatPendingDelivery({ ...args, session: { messages: [], ...session } })
+    )
+    act(() => result.current.record('first'))
+    expect(result.current.pending[0]?.afterEmptyTranscriptSessionId).toBeUndefined()
+  })
+  // A resumed transcript can hold an older identical turn; the claim was about another one.
+  it('keeps a send, and its failure notice, when a different session with old history loads', () => {
+    const old: NativeChatMessage[] = [
+      { ...userRow('run tests'), id: 'old-user', timestamp: 10 },
+      { ...boundary, id: 'old-answer', timestamp: 20 }
+    ]
+    const initialSession: Parameters<typeof useNativeChatPendingDelivery>[0]['session'] = {
+      messages: [],
+      readPhase: 'ready',
+      sessionId: 'new-session'
+    }
+    const { result, rerender } = renderHook(
+      ({ session }) => useNativeChatPendingDelivery({ ...args, session }),
+      { initialProps: { session: initialSession } }
+    )
+    act(() => {
+      result.current.reject(result.current.record('run tests'))
+    })
+    rerender({ session: { messages: old, readPhase: 'ready', sessionId: 'resumed-session' } })
+    expect(result.current.pending.map((entry) => entry.text)).toEqual(['run tests'])
+    expect(result.current.notices.size).toBe(1)
+  })
   it('never flags an ordinary send, such as one Claude queues mid-turn', async () => {
     const { result } = render()
     act(() => result.current.record('queued follow up'))

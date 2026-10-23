@@ -49,9 +49,6 @@ export const ORCA_BROWSER_PARTITION = 'persist:orca-browser'
 // Why: inert blank-tab URL shared by main/renderer so the attach policy can allow just this one data URL and reject others.
 export const ORCA_BROWSER_BLANK_URL = 'data:text/html,'
 
-// Why: Electron's invoke error path preserves only message text, so signal reconnect via this stable token.
-export const SSH_TERMINATE_RECONNECT_REQUIRED = 'SSH_TERMINATE_RECONNECT_REQUIRED'
-
 export const BROWSER_FAMILY_LABELS: Record<string, string> = {
   chrome: 'Google Chrome',
   chromium: 'Chromium',
@@ -175,7 +172,6 @@ export function getDefaultPersistedState(homedir: string): PersistedState {
     deletedSshConfigAliases: [],
     sshRemotePtyLeases: [],
     sshPtyConsumerRecoveries: [],
-    claudeLivePtySessionIds: [],
     migrationUnsupportedPtyEntries: [],
     legacyPaneKeyAliasEntries: [],
     automations: [],
@@ -222,6 +218,9 @@ export function getDefaultUIState(): PersistedUIState {
     filterRepoIds: [],
     agentsVisibleHostIds: null,
     agentsFilterRepoIds: [],
+    agentsHideWorkspacesFromOtherDevices: false,
+    agentsHideAutomationGeneratedWorkspaces: false,
+    agentsHideCliCreatedWorkspaces: false,
     agentsShowChildAgents: false,
     agentsCompactMode: true,
     agentsShowSearch: true,
@@ -266,6 +265,7 @@ export function getDefaultUIState(): PersistedUIState {
     projectOrderManualDefaultNoticeDismissed: true,
     // Why: only upgraded profiles saw the old default, so only they get the one-time change notice.
     usagePercentageDisplayChangeNoticeDismissed: true,
+    statusBarCompactChangeNoticeDismissed: true,
     workspaceCleanup: { dismissals: {} },
     featureTipsSeenIds: [],
     featureInteractions: {},

@@ -1,11 +1,11 @@
 import type { BrowserClientHostedPageInventory } from '../../shared/browser-client-host-protocol'
-import type { BrowserHostLease } from './browser-host-lease-records'
-import type { BrowserHostLeaseRegistry } from './browser-host-lease-registry'
+import type { BrowserHostLease } from './browser-host/browser-host-lease-records'
+import type { BrowserHostLeaseRegistry } from './browser-host/browser-host-lease-registry'
 import {
   buildClientPageAdoptionIntents,
   selectAdoptableClientHostedPages,
   type AdoptableClientHostedPage
-} from './browser-host-client-page-adoption'
+} from './browser-host/browser-host-client-page-adoption'
 import { isRestoredClientHostedBrowserPlacement } from './client-hosted-browser-page-persistence'
 import type { RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 

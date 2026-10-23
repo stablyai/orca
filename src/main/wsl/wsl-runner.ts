@@ -1,6 +1,6 @@
 import { addWslEnvKeys } from '../../shared/wsl-env'
 import { commandLineLength, MAX_COMMAND_LINE_CHARS } from '../../shared/windows-command-line-budget'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
 import { buildWslExecArgs } from '../../shared/wsl-login-shell-command'
 import { getWslGuestEnvironment, type WslGuestEnvironment } from './wsl-guest-environment'
@@ -64,6 +64,8 @@ export type WslCommand =
 export type WslSpec = WslCommand & {
   /** Undefined selects the distro's default. */
   distro?: string
+  /** Guest user; undefined runs as the distro's default user. */
+  user?: 'root'
   /** Required, with no default: the wrong answer here is the defect this file exists to prevent. */
   loginPath: WslLoginPath
   /** Guest (POSIX) path. */
@@ -90,6 +92,8 @@ export type WslResult = {
   stdout: string
   stderr: string
   timedOut: boolean
+  /** True when stdout or stderr hit `maxOutputBytes` and was clipped. */
+  outputTruncated?: boolean
 }
 
 export const DEFAULT_WSL_TIMEOUT_MS = 30_000
@@ -224,7 +228,10 @@ export async function runWslProcess(spec: WslSpec): Promise<WslResult> {
   const argvForm = buildGuestArgv(environment, spec, 'argv')
   // Measure what is actually spawned: `wsl.exe` and `-d <distro> --exec` are
   // prepended after this point and are part of the same budget.
-  const fullLine = [resolveWslExecutablePath(), ...buildWslExecArgs(spec.distro, argvForm)]
+  const fullLine = [
+    resolveWslExecutablePath(),
+    ...buildWslExecArgs(spec.distro, argvForm, { user: spec.user })
+  ]
   // Argv is the default, but it has a hard ceiling that stdin does not. A user's
   // `orca.yaml` hook is the one unbounded script Orca runs, so past the cap the
   // choice is between failing to spawn at all and accepting the stdin caveat.
@@ -239,7 +246,7 @@ export async function runWslProcess(spec: WslSpec): Promise<WslResult> {
   const remainingMs = Math.max(1, deadline - Date.now())
   const result = await runProcess({
     program: resolveWslExecutablePath(),
-    args: buildWslExecArgs(spec.distro, argv),
+    args: buildWslExecArgs(spec.distro, argv, { user: spec.user }),
     // Name a Windows directory rather than inheriting one: an inherited cwd that
     // is later deleted (the worktree Orca launched from) fails every later spawn
     // (#16463). Never the guest cwd -- withGuestCwd still cds inside.
@@ -255,6 +262,7 @@ export async function runWslProcess(spec: WslSpec): Promise<WslResult> {
     code: result.code,
     stdout: result.stdout,
     stderr: result.stderr,
-    timedOut: result.timedOut
+    timedOut: result.timedOut,
+    outputTruncated: result.outputTruncated ?? false
   }
 }

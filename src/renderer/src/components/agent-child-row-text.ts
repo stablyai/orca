@@ -1,9 +1,16 @@
+import {
+  agentChildRowLeadTrail,
+  agentChildRowName as sharedAgentChildRowName
+} from '../../../shared/agent-child-row-lead-trail'
 import type { AgentChildRowModel } from '../../../shared/agent-child-row-model'
 import { formatAgentTypeLabel } from '../../../shared/agent-type-label'
 import { agentStateLabel } from '@/components/AgentStateDot'
-import { backgroundTaskStateReason } from '@/components/native-chat/background-task-roster'
+import {
+  backgroundTaskStateReason,
+  backgroundTaskStateWord
+} from '@/components/native-chat/background-task-roster'
 import { translate } from '@/i18n/i18n'
-import { agentNoUpdateLabel } from '@/lib/agent-row-decay-state'
+import { agentNoUpdateLabel } from '../../../shared/agent-row-decay-state'
 import { formatAgentToolPreview } from '@/lib/agent-row-tool-preview'
 
 export type AgentChildRowText = {
@@ -41,7 +48,7 @@ export function agentChildRowDetailText(row: AgentChildRowModel, now: number): s
     case 'role':
       return formatAgentTypeLabel(detail.agentType)
     case 'reason':
-      return backgroundTaskStateReason(detail.state) ?? ''
+      return backgroundTaskStateReason(detail.state) ?? backgroundTaskStateWord(detail.state)
   }
 }
 
@@ -55,15 +62,9 @@ export function agentChildRowMessageLine(row: AgentChildRowModel): string {
 
 /** The row's name, or its state when the child reported none. */
 export function agentChildRowName(row: AgentChildRowModel): string {
-  return row.name.trim() || agentStateLabel(row.displayState)
+  return sharedAgentChildRowName(row, agentStateLabel)
 }
 
 export function agentChildRowText(row: AgentChildRowModel, now: number): AgentChildRowText {
-  const name = agentChildRowName(row)
-  const detail = agentChildRowDetailText(row, now)
-  // Why: a monitoring row leads with its state so truncation keeps passive distinct from active.
-  if (row.displayState === 'monitoring' && detail) {
-    return { lead: detail, trail: detail === name ? '' : name }
-  }
-  return { lead: name, trail: detail }
+  return agentChildRowLeadTrail(row, agentChildRowName(row), agentChildRowDetailText(row, now))
 }

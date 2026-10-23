@@ -201,6 +201,7 @@ export type RemoteDispatchAttachmentRow = {
   home_peer_fingerprint: string
   protocol_version: number
   runtime_epoch: string
+  /** Written only by hosts that minted a per-Dispatch capability; never read for authority. */
   capability_hash: string | null
   pane_key: string | null
   process_incarnation: string | null
@@ -285,8 +286,10 @@ export type DispatchContextRow = {
   assignee_pane_key: string | null
   /** Bare Orca session id the assignee is addressed by, when it has one (today only structured sessions); a `/clear`ed chat's lineage root. */
   assignee_orca_session_id: OrcaSessionId | null
+  /** Written only by hosts that minted a per-Dispatch capability; never read for authority. */
   capability_hash: string | null
   process_incarnation: string | null
+  /** When the Dispatch's lifecycle closed (settled, stopping, abandoned); the name predates that. */
   capability_revoked_at: string | null
   /** Dispatch ID is the Attempt identity; retries point to the prior Attempt. */
   retry_of_dispatch_id: string | null

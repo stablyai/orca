@@ -12,6 +12,7 @@ import { projectStructuredAgentSessionStatusSummary } from '../../../shared/stru
 import { projectTurnItemHistory } from '../../runtime/rpc/methods/structured-agent-session-turn-item-capability'
 import { structuredAgentSessionWorkingAtStop } from './structured-agent-session-working-at-teardown'
 import {
+  childRecord,
   journal,
   NOW,
   record,
@@ -131,7 +132,7 @@ describe('the completion feed around /compact (B6)', () => {
       expect(latestStructuredAgentSessionRequest(items, submissions)).toMatchObject({
         kind: 'turn',
         id: 'turn-1',
-        running: false,
+        turnState: 'completed',
         outcome: 'success'
       })
     }
@@ -142,10 +143,11 @@ describe('restart resume around /compact (B14)', () => {
   function markerFor(items: AgentJournalRenderItem[], tasks: boolean) {
     return structuredAgentSessionWorkingAtStop({
       sessionId: SESSION,
-      session: { journal: journal(items), child: { fence: 1 } },
+      session: { journal: journal(items), child: { fence: 1, phase: 'ready' as const } },
       getRecord: () => record(),
-      backgroundTasks: () =>
-        tasks ? [{ id: 'task-a', kind: 'agent', description: 'Review', state: 'working' }] : [],
+      childWorkOpen: () => false,
+      childWork: () =>
+        tasks ? [childRecord({ id: 'task-a', kind: 'agent', description: 'Review' })] : [],
       trigger: 'quit',
       teardownId: TEARDOWN_CURRENT,
       now: NOW

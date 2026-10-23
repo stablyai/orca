@@ -32,6 +32,7 @@ import {
 import { resolveOpenCodeConfigDirectory } from '../../shared/opencode-config-directory'
 
 beforeEach(() => {
+  vi.stubEnv('ORCA_OPENCODE_PLUGIN_API', 'v2')
   setAppEnvironment({
     getPath: getPathMock,
     getAppPath: () => process.cwd(),
@@ -42,6 +43,8 @@ beforeEach(() => {
     getAppMetrics: () => []
   })
 })
+
+afterEach(() => vi.unstubAllEnvs())
 
 const { isUsableId, toSafeDirName } = _internals
 
@@ -127,8 +130,18 @@ describe('OpenCodeHookService buildPtyEnv / clearPty round-trip', () => {
     expect(existsSync(pluginPath)).toBe(true)
     // Sanity-check the file has plugin source, not a stray write.
     const pluginSource = readFileSync(pluginPath, 'utf8')
-    expect(pluginSource).toContain('OrcaOpenCodeStatusPlugin')
     expect(pluginSource).toContain('messageID: part.messageID')
+    // Legacy attach loads an object TUI entry; the server export stays callable.
+    const tuiEntry = join(
+      resolveOpenCodeConfigDirectory(),
+      'plugins',
+      'orca-opencode-status-tui',
+      'tui.js'
+    )
+    const past = new Date('2020-01-01T00:00:00Z')
+    utimesSync(tuiEntry, past, past)
+    service.buildPtyEnv(daemonSessionId)
+    expect(statSync(tuiEntry).mtimeMs).toBe(past.getTime())
   })
 
   // Why: OpenCode 2 reloads a plugin whose file mtime changed, which restarted status mid-turn.
@@ -175,6 +188,24 @@ describe('OpenCodeHookService buildPtyEnv / clearPty round-trip', () => {
       rmSync(targetPath, { force: true })
     }
   )
+
+  // Why: a service that reloads between the two writes must already find the TUI copy and stand down.
+  it('writes the TUI copy before the server plugin file', () => {
+    const pluginsDir = join(resolveOpenCodeConfigDirectory(), 'plugins')
+    const serverPath = join(pluginsDir, 'orca-opencode2-status.js')
+    const tuiDir = join(pluginsDir, 'orca-opencode2-status-tui')
+    rmSync(serverPath, { recursive: true, force: true })
+    rmSync(tuiDir, { recursive: true, force: true })
+    // A directory in the server file's place makes that write fail.
+    mkdirSync(serverPath, { recursive: true })
+    try {
+      openCode2HookService.buildPtyEnv(daemonSessionId)
+      expect(existsSync(join(tuiDir, 'tui.js'))).toBe(true)
+    } finally {
+      rmSync(serverPath, { recursive: true, force: true })
+      rmSync(tuiDir, { recursive: true, force: true })
+    }
+  })
 
   // Why: #22234 — OpenCode 2 installs under the plain `opencode` name, and its loader
   // rejects a default export that only has server(). Asserting the emitted *source* is
@@ -227,6 +258,10 @@ describe('OpenCodeHookService buildPtyEnv / clearPty round-trip', () => {
     expect(module.default?.id).toBe('orca-opencode-status')
     expect(module.default?.server).toBeTypeOf('function')
     expect(module.default?.setup).toBeTypeOf('function')
+    // A service loading this dir stands down only when the TUI copy sits beside it.
+    expect(
+      readFileSync(join(legacyPluginPath, '..', 'orca-opencode-status-tui', 'tui.js'), 'utf8')
+    ).toContain('tui: setupLegacyOpenCodeTui')
   })
 
   it('repairs late and overwritten legacy plugins atomically on the same service', () => {
@@ -241,7 +276,10 @@ describe('OpenCodeHookService buildPtyEnv / clearPty round-trip', () => {
         service.refreshLegacySharedPlugin()
         expect(readFileSync(path, 'utf8')).toBe(getOpenCodePluginSource())
         expect(readFileSync(reader, 'utf8')).toBe(stale)
-        expect(readdirSync(join(path, '..'))).toEqual(['orca-opencode-status.js'])
+        expect(readdirSync(join(path, '..')).sort()).toEqual([
+          'orca-opencode-status-tui',
+          'orca-opencode-status.js'
+        ])
       } finally {
         closeSync(reader)
       }
@@ -469,6 +507,24 @@ describe('OpenCodeHookService overlay mode (user OPENCODE_CONFIG_DIR set)', () =
     expect(overlayPlugin).toContain('OrcaOpenCodeStatusPlugin')
     expect(overlayPlugin).not.toBe(userOrcaSentinel)
     expectUserConfigIntact()
+  })
+
+  it('installs the TUI copy in the overlay without mirroring a user dir of the same name', () => {
+    const userTuiDir = join(userConfigDir, 'plugins', 'orca-opencode-status-tui')
+    mkdirSync(userTuiDir)
+    writeFileSync(join(userTuiDir, 'tui.js'), 'USER OWNED')
+
+    const env = new OpenCodeHookService().buildPtyEnv(ptyId, userConfigDir)
+
+    const overlayTui = join(env.OPENCODE_CONFIG_DIR!, 'plugins', 'orca-opencode-status-tui')
+    expect(lstatSync(overlayTui).isSymbolicLink()).toBe(false)
+    expect(readFileSync(join(overlayTui, 'tui.js'), 'utf8')).toContain(
+      'tui: setupLegacyOpenCodeTui'
+    )
+    expect(readFileSync(join(overlayTui, 'tui.js'), 'utf8')).toContain(
+      'setup: setupOpenCode2Status'
+    )
+    expect(readFileSync(join(userTuiDir, 'tui.js'), 'utf8')).toBe('USER OWNED')
   })
 
   it.skipIf(process.platform === 'win32')(

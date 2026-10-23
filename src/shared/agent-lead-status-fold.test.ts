@@ -67,8 +67,16 @@ describe('mainAgentTurnInterrupted', () => {
   it('reads only a cancellation verdict as an interrupt', () => {
     expect(mainAgentTurnInterrupted({ outcome: 'cancellation' })).toBe(true)
     expect(mainAgentTurnInterrupted({ outcome: 'failure' })).toBe(false)
+    // The legacy flag means the user stopped it; a newer request's replacement names no one.
+    expect(mainAgentTurnInterrupted({ outcome: 'superseded' })).toBe(false)
     expect(mainAgentTurnInterrupted({})).toBe(false)
     expect(mainAgentTurnInterrupted(undefined)).toBe(false)
+  })
+
+  // Older readers take the flag as "the user stopped it": a crash or an unproven end never sets it.
+  it('stays down for a turn cut off by a crash and for an end nobody can prove', () => {
+    expect(mainAgentTurnInterrupted({ outcome: 'interruption' })).toBe(false)
+    expect(mainAgentTurnInterrupted({ outcome: 'unconfirmed' })).toBe(false)
   })
 })
 

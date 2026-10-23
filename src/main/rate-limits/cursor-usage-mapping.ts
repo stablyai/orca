@@ -38,6 +38,12 @@ const cursorUsageSummarySchema = z
 type CursorPool = z.infer<typeof cursorPoolSchema>
 export type CursorUsageSummary = z.infer<typeof cursorUsageSummarySchema>
 
+const cursorCurrentPeriodSchema = z.object({
+  billingCycleStart: z.unknown(),
+  billingCycleEnd: z.unknown(),
+  planUsage: cursorPoolSchema
+})
+
 /** Accepts the raw dashboard body; an unrecognised shape maps to "nothing reported". */
 export function parseCursorUsageSummary(data: unknown): CursorUsageSummary {
   const parsed = cursorUsageSummarySchema.safeParse(data)
@@ -100,11 +106,7 @@ function windowMinutesFor(startMs: number | null, endMs: number | null): number 
   return Math.max(1, Math.round((endMs - startMs) / 60_000))
 }
 
-/**
- * Percent consumed for one pool. `used / limit` wins over the sibling percentage
- * fields: the raw pair is internally consistent, while the percentages are
- * pre-rounded for the dashboard's own copy and disagree with it on real accounts.
- */
+// On-demand's raw allowance avoids rounding in its reported percentage.
 function poolPercent(
   pool: CursorPool | null | undefined,
   percentField: keyof CursorPool
@@ -153,7 +155,10 @@ export function mapCursorUsageSummary(summary: CursorUsageSummary): CursorUsageM
     buckets.push({ name: CURSOR_ON_DEMAND_BUCKET_NAME, ...toWindow(onDemandPercent) })
   }
 
-  const planPercent = planEnabled ? poolPercent(plan, 'totalPercentUsed') : null
+  // The raw base allowance can report 100% while the actual plan still has capacity.
+  const planPercent = planEnabled
+    ? (finiteNumber(plan?.totalPercentUsed) ?? poolPercent(plan, 'totalPercentUsed'))
+    : null
   const membership = summary.membershipType
   return {
     monthly: planPercent === null ? null : toWindow(planPercent),
@@ -161,6 +166,34 @@ export function mapCursorUsageSummary(summary: CursorUsageSummary): CursorUsageM
     planType: typeof membership === 'string' && membership.trim() ? membership.trim() : null,
     isUnlimited: summary.isUnlimited === true
   }
+}
+
+export type CursorCurrentPeriodUsage = CursorUsageMapping & { periodMinutes: number }
+
+export function mapCursorCurrentPeriodUsage(payload: unknown): CursorCurrentPeriodUsage | null {
+  const parsed = cursorCurrentPeriodSchema.safeParse(payload)
+  if (!parsed.success) {
+    return null
+  }
+  const startMs = parseCursorTimestampMs(parsed.data.billingCycleStart)
+  const endMs = parseCursorTimestampMs(parsed.data.billingCycleEnd)
+  if (
+    startMs === null ||
+    endMs === null ||
+    endMs <= startMs ||
+    !Number.isFinite(new Date(startMs).getTime()) ||
+    !Number.isFinite(new Date(endMs).getTime())
+  ) {
+    return null
+  }
+  const mapped = mapCursorUsageSummary({
+    billingCycleStart: startMs,
+    billingCycleEnd: endMs,
+    individualUsage: { plan: parsed.data.planUsage }
+  })
+  return mapped.monthly || mapped.buckets.length > 0
+    ? { ...mapped, periodMinutes: windowMinutesFor(startMs, endMs) }
+    : null
 }
 
 /**

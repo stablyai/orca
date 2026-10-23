@@ -14,7 +14,7 @@ vi.mock('fs', () => ({
 
 import {
   __resetShellStartupEnvCache,
-  isShellStartupEnvProbeSupported,
+  readBashStartupEnvVar,
   readSessionShellStartupEnvVar,
   readShellStartupEnvVar,
   SHELL_STARTUP_ENV_CACHE_MAX_ENTRIES
@@ -105,22 +105,15 @@ describe('readShellStartupEnvVar', () => {
   it('returns undefined on Windows', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     mockStartupFiles({ '.zshrc': 'export OPENCODE_CONFIG_DIR=/win\n' })
-    expect(isShellStartupEnvProbeSupported()).toBe(false)
     expect(readShellStartupEnvVar('OPENCODE_CONFIG_DIR', '/home/alice')).toBeUndefined()
   })
 
-  it('reports startup-env probing as supported on macOS and Linux', () => {
-    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
-    try {
-      Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
-      expect(isShellStartupEnvProbeSupported()).toBe(true)
-      Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
-      expect(isShellStartupEnvProbeSupported()).toBe(true)
-    } finally {
-      if (originalPlatform) {
-        Object.defineProperty(process, 'platform', originalPlatform)
-      }
-    }
+  it('reads Git Bash login files on Windows only when asked for bash', () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    process.env.SHELL = '/usr/bin/bash'
+    mockStartupFiles({ '.bash_profile': 'export OPENCODE_CONFIG_DIR=/git-bash\n' })
+    expect(readShellStartupEnvVar('OPENCODE_CONFIG_DIR', '/home/alice')).toBeUndefined()
+    expect(readBashStartupEnvVar('OPENCODE_CONFIG_DIR', '/home/alice')).toBe('/git-bash')
   })
 
   it('returns undefined when no startup file matches', () => {

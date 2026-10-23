@@ -247,6 +247,20 @@ describe('terminal close CLI', () => {
     expect(help).toContain('durable persistence')
   })
 
+  it.each(['send', 'read', 'wait', 'create'])(
+    'describes the server-selection flags in terminal %s help',
+    (verb) => {
+      const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+      printHelp(COMMAND_SPECS, ['terminal', verb])
+
+      const help = String(log.mock.calls[0]?.[0])
+      expect(help).toMatch(/--environment <selector> .*paired Orca server/)
+      expect(help).toMatch(/--pairing-code <code> .*orca:\/\/pair/)
+      log.mockRestore()
+    }
+  )
+
   it('hides legacy stop from terminal command discovery', () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => {})
 
@@ -771,8 +785,7 @@ describe('terminal create --shell', () => {
     expect(call).not.toHaveBeenCalled()
   })
 
-  // An older host strips the unknown param and answers with its default shell, which reads as a
-  // successful create. Creating the wrong shell silently is worse than refusing.
+  // Older hosts ignore shell and report a successful create using their default shell.
   it('refuses rather than creating a default-shell terminal on a host without the capability', async () => {
     const call = vi.fn()
 
@@ -782,8 +795,7 @@ describe('terminal create --shell', () => {
     expect(call).not.toHaveBeenCalled()
   })
 
-  // A status probe that fails or times out reports no capabilities either; blaming the host
-  // version would send the caller to update a host that may already be current.
+  // Missing capabilities on an unreachable runtime do not establish a version gap.
   it('reports an unreachable host as unavailable rather than incompatible', async () => {
     const call = vi.fn()
 

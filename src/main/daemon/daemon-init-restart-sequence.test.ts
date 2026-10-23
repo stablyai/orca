@@ -1,5 +1,22 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PROTOCOL_VERSION } from './types'
+import type * as EndpointProbe from './daemon-endpoint-probe'
+const { recoverRetired } = vi.hoisted(() => ({ recoverRetired: vi.fn(async () => {}) }))
+vi.mock('./macos-retired-daemon-recovery', () => ({ recoverRetiredMacDaemonJobs: recoverRetired }))
+const { endpointProbe } = vi.hoisted(() => {
+  const state: { outcome: null | 'missing' | 'unknown' } = { outcome: null }
+  return { endpointProbe: state }
+})
+vi.mock('./daemon-endpoint-probe', async (importOriginal) => {
+  const actual = await importOriginal<typeof EndpointProbe>()
+  return {
+    ...actual,
+    probeSocketConnect: (socketPath: string) =>
+      endpointProbe.outcome
+        ? Promise.resolve(endpointProbe.outcome)
+        : actual.probeSocketConnect(socketPath)
+  }
+})
 
 const {
   probeSocketExistsMock,
@@ -7,6 +24,7 @@ const {
   killStaleDaemonMock,
   daemonClientMock,
   spawnerInstances,
+  isPackagedMock,
   ensureRunningOverrides,
   adoptionLeaseReleases,
   lifecycleLeaseErrors,
@@ -40,10 +58,13 @@ vi.mock('./client', () => moduleFactories.client())
 vi.mock('./daemon-lifecycle-event', () => moduleFactories.daemonLifecycleEvent())
 vi.mock('./daemon-spawner', () => moduleFactories.daemonSpawner())
 vi.mock('./daemon-pty-adapter', () => moduleFactories.daemonPtyAdapter())
-vi.mock('../ipc/pty', () => moduleFactories.ipcPty())
+vi.mock('../ipc/pty/provider/registry', () => moduleFactories.ptyProviderRegistry())
+vi.mock('../ipc/pty/provider/listener-lifecycle', () => moduleFactories.ptyListenerLifecycle())
 
 describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
   beforeEach(() => {
+    recoverRetired.mockReset().mockResolvedValue(undefined)
+    endpointProbe.outcome = null
     installDefaultNetConnectStub()
   })
 
@@ -73,10 +94,87 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
 
     // killedCount must be 3 — proves the count was taken *before* fanout cleared the set (a swapped-order bug reports 0).
     expect(result.killedCount).toBe(3)
-    expect(originalAdapter.fanoutSyntheticExits).toHaveBeenCalledWith(-1)
+    expect(originalAdapter.fanoutSyntheticExits).toHaveBeenCalledWith(-1, {
+      replacedByRestart: true
+    })
     // Ordering invariant: synthetic exits must reach the renderer *before* listeners are torn down (Step 1 before 2).
     expect(order).toEqual(['fanout', 'unbind'])
+    expect(recoverRetired).toHaveBeenCalledOnce()
+    expect(recoverRetired.mock.invocationCallOrder[0]).toBeLessThan(
+      originalAdapter.fanoutSyntheticExits.mock.invocationCallOrder[0]
+    )
   })
+
+  it('still restarts the current daemon when retired-daemon recovery cannot prove cleanup', async () => {
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    recoverRetired.mockRejectedValueOnce(new Error('retired descendants unverifiable'))
+    await expect(mod.restartDaemon()).resolves.toBeDefined()
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('retired descendants unverifiable'))
+    expect(adapterInstances[0].fanoutSyntheticExits).toHaveBeenCalled()
+    expect(spawnerInstances[0].resetHandle).toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  it('refuses a targeted restart before ending anything when another daemon owns the endpoint', async () => {
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+    const originalAdapter = adapterInstances[0]
+    daemonClientMock.mockImplementation(function MockDaemonClient() {
+      return {
+        ensureConnected: vi.fn(async () => {}),
+        ensureConnectedWithin: vi.fn(async () => {}),
+        getDaemonIdentity: vi.fn(() => ({ pid: 9000, startedAtMs: 1, launchNonce: 'other' })),
+        request: vi.fn(async () => ({ sessions: [] })),
+        disconnect: vi.fn()
+      }
+    })
+
+    await expect(mod.restartDaemon({ expectedDaemonPid: 4288 })).rejects.toThrow(
+      'owned by a different daemon'
+    )
+
+    expect(originalAdapter.fanoutSyntheticExits).not.toHaveBeenCalled()
+    expect(unbindLocalProviderListenersMock).not.toHaveBeenCalled()
+    expect(recoverRetired).not.toHaveBeenCalled()
+  })
+
+  it('replaces a retired daemon that already left its endpoint', async () => {
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+    const originalAdapter = adapterInstances[0]
+    endpointProbe.outcome = 'missing'
+
+    await mod.restartDaemon({ expectedDaemonPid: 4288, endpointMayBeGone: true })
+
+    expect(mod.getDaemonProvider()).not.toBe(originalAdapter)
+  })
+
+  it.each(['unknown', null] as const)(
+    'still refuses when another daemon may own the endpoint (probe %s)',
+    async (outcome) => {
+      const mod = await importFresh()
+      await mod.initDaemonPtyProvider()
+      const originalAdapter = adapterInstances[0]
+      // An unanswered probe proves nothing, so ownership is still checked.
+      endpointProbe.outcome = outcome
+      daemonClientMock.mockImplementation(function MockDaemonClient() {
+        return {
+          ensureConnected: vi.fn(async () => {}),
+          ensureConnectedWithin: vi.fn(async () => {}),
+          getDaemonIdentity: vi.fn(() => ({ pid: 9000, startedAtMs: 1, launchNonce: 'other' })),
+          request: vi.fn(async () => ({ sessions: [] })),
+          disconnect: vi.fn()
+        }
+      })
+
+      await expect(
+        mod.restartDaemon({ expectedDaemonPid: 4288, endpointMayBeGone: true })
+      ).rejects.toThrow('owned by a different daemon')
+      expect(originalAdapter.fanoutSyntheticExits).not.toHaveBeenCalled()
+    }
+  )
 
   it('uses daemon-owned idle retirement after a failed manual-restart adoption', async () => {
     const mod = await importFresh()
@@ -151,6 +249,24 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(spawnerInstances).toHaveLength(1)
     expect(originalSpawner.resetHandle).toHaveBeenCalledTimes(1)
     expect(originalSpawner.ensureRunning).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps the launch policy stale-daemon recycle across a restart', async () => {
+    const mod = await importFresh()
+    isPackagedMock.mockReturnValue(true)
+    await mod.initDaemonPtyProvider(undefined, { recycleStaleDaemonOnEveryPlatform: true })
+    // Why linux: darwin already recycles without the opt-in, which would hide a dropped policy.
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'linux' })
+    try {
+      await mod.restartDaemon()
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    expect(adapterInstances[1].options.packagedAppVersion).toBe('1.2.3')
   })
 
   it('builds a fresh adapter whose respawn callback closes over the same spawner', async () => {
@@ -306,6 +422,34 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
 
     // The replacement router re-runs discovery so spawns for a surviving legacy sessionId still route to the legacy adapter.
     expect(legacyAdapter.listProcesses).toHaveBeenCalled()
+  })
+
+  it('drops a legacy generation that retired for idle instead of routing to its dead endpoint', async () => {
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+
+    const { DaemonPtyRouter } = await import('./daemon-pty-router')
+    const { DaemonPtyAdapter } = await import('./daemon-pty-adapter')
+    const legacyAdapter = new DaemonPtyAdapter({
+      socketPath: '/fake/legacy.sock',
+      tokenPath: '/fake/legacy.token',
+      protocolVersion: 3
+    })
+    vi.mocked(legacyAdapter.hasRetiredForIdle).mockReturnValue(true)
+    const current = adapterInstances[0]
+    mod.replaceDaemonProvider(
+      new DaemonPtyRouter({
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked module's adapter class built this instance.
+        current: current as unknown as InstanceType<typeof DaemonPtyAdapter>,
+        legacy: [legacyAdapter]
+      })
+    )
+
+    await mod.restartDaemon()
+
+    expect(mod.getDaemonProvider()).toBeInstanceOf(DaemonPtyAdapter)
+    expect(mod.getDaemonProvider()).not.toBeInstanceOf(DaemonPtyRouter)
+    expect(legacyAdapter.listProcesses).not.toHaveBeenCalled()
   })
 
   it('routes affected v9 daemon sessions through a legacy adapter on launch', async () => {

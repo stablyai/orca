@@ -31,7 +31,7 @@ vi.mock('./browser-session-registry', () => ({
 
 // Why mock the chokepoint: command timeouts and hidden-console handling belong to
 // runProcessSync, while this suite only needs to control the credential output.
-vi.mock('../../shared/child-process/run-process', () => ({
+vi.mock('@orca/process-host', () => ({
   runProcessSync: runProcessSyncMock
 }))
 vi.mock('node:fs', async (importOriginal) => {

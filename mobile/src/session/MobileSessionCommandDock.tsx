@@ -17,6 +17,7 @@ import {
 } from '../terminal/terminal-keyboard-type'
 import { MobileTerminalLiveInputStatus } from './MobileTerminalLiveInputStatus'
 import { MobileTerminalInputActions } from './MobileTerminalInputActions'
+import { keepHeldPressThroughLongPress } from './held-press-long-press'
 import { isTerminalPhoneDisplayMode } from './mobile-session-route-helpers'
 import { colors } from '../theme/mobile-theme'
 import { styles } from './mobile-session-styles'
@@ -37,6 +38,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
     terminalModes,
     canPaste,
     dictationMode,
+    dictationEnabled,
     bindCommandField,
     handleLiveInputChange,
     handleLiveInputKeyPress,
@@ -210,6 +212,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
                   }
                   void handleAccessoryKey(createTerminalLiveAccessoryInput(key))
                 }}
+                onLongPress={key.repeatable ? keepHeldPressThroughLongPress : undefined}
                 accessibilityLabel={key.accessibilityLabel ?? `Send ${key.label}`}
               >
                 <Text
@@ -281,6 +284,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
               isAttaching={isAttaching}
               dictation={dictation}
               dictationMode={dictationMode}
+              dictationEnabled={dictationEnabled}
               buttonStyle={styles.dictationButton}
               activeButtonStyle={styles.dictationButtonActive}
               disabledButtonStyle={styles.sendButtonDisabled}
@@ -349,6 +353,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
               isAttaching={isAttaching}
               dictation={dictation}
               dictationMode={dictationMode}
+              dictationEnabled={dictationEnabled}
               buttonStyle={styles.dictationButton}
               activeButtonStyle={styles.dictationButtonActive}
               disabledButtonStyle={styles.sendButtonDisabled}

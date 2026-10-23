@@ -14,7 +14,7 @@ const { connect, tryReadMetadata } = vi.hoisted(() => ({
 vi.mock('node:net', () => ({ createConnection: connect }))
 vi.mock('./metadata', () => ({ tryReadMetadata, readMetadata: tryReadMetadata }))
 vi.mock('./launch', () => ({ launchOrcaApp: vi.fn() }))
-vi.mock('./runtime-remote-pairing', () => ({ resolveRemotePairing: () => null }))
+vi.mock('./runtime-remote-pairing', () => ({ resolveRemoteConnection: () => null }))
 
 const metadata: RuntimeMetadata = {
   runtimeId: 'runtime-test',

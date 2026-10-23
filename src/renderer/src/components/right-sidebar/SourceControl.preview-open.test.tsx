@@ -2,7 +2,7 @@
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type {
   GitBranchChangeEntry,
@@ -82,7 +82,7 @@ vi.mock('@/components/confirmation-dialog-context', () => ({
   useConfirmationDialog: () => vi.fn().mockResolvedValue(true)
 }))
 
-vi.mock('@/runtime/runtime-git-client', async (importOriginal) => {
+vi.mock('@/runtime/runtime-git-working-tree-client', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   return {
     ...actual,
@@ -151,6 +151,9 @@ function resetState(overrides: Partial<Record<string, unknown>> = {}): void {
     groupsByWorktree: { [mocks.activeWorktree.id]: [{ id: 'group-1', activeTabId: null }] },
     repos: [mocks.activeRepo],
     worktreesByRepo: { [mocks.activeRepo.id]: [mocks.activeWorktree] },
+    sshConnectionStates: new Map(),
+    sshStateByEnvironment: new Map(),
+    runtimeStatusByEnvironmentId: new Map(),
     rightSidebarOpen: false,
     rightSidebarTab: 'source-control',
     gitStatusByWorktree: { [mocks.activeWorktree.id]: [] },
@@ -276,33 +279,37 @@ function clickBranchRow(init: MouseEventInit = {}): void {
 }
 
 describe('SourceControl preview row opens', () => {
-  it('passes preview=true when plain uncommitted row clicks open diff tabs', () => {
+  it.each([
+    ['src/file.ts', 'src/staged.ts', 'typescript'],
+    ['report.html', 'staged.html', 'html'],
+    ['REPORT.HTM', 'STAGED.HTM', 'html']
+  ])('opens %s and %s as preview diff tabs on plain clicks', (path, stagedPath, language) => {
     resetState({
       gitStatusByWorktree: {
         [mocks.activeWorktree.id]: [
-          gitEntry({ path: 'src/file.ts' }),
-          gitEntry({ path: 'src/staged.ts', area: 'staged' })
+          gitEntry({ path }),
+          gitEntry({ path: stagedPath, area: 'staged' })
         ]
       }
     })
     renderSourceControl()
 
-    clickUncommitted('src/file.ts')
-    clickUncommitted('src/staged.ts')
+    clickUncommitted(path)
+    clickUncommitted(stagedPath)
 
     expect(mocks.calls.openDiff).toHaveBeenCalledWith(
       mocks.activeWorktree.id,
-      '/repo/wt/src/file.ts',
-      'src/file.ts',
-      'typescript',
+      `/repo/wt/${path}`,
+      path,
+      language,
       false,
       { targetGroupId: undefined, preview: true }
     )
     expect(mocks.calls.openDiff).toHaveBeenCalledWith(
       mocks.activeWorktree.id,
-      '/repo/wt/src/staged.ts',
-      'src/staged.ts',
-      'typescript',
+      `/repo/wt/${stagedPath}`,
+      stagedPath,
+      language,
       true,
       { targetGroupId: undefined, preview: true }
     )
@@ -349,11 +356,12 @@ describe('SourceControl preview row opens', () => {
     )
   })
 
-  it('passes preview through markdown edit-in-changes and conflict file opens', () => {
+  it('passes preview through new markdown rich editor and conflict file opens', () => {
     resetState({
       gitStatusByWorktree: {
         [mocks.activeWorktree.id]: [
-          gitEntry({ path: 'docs/readme.md' }),
+          gitEntry({ path: 'docs/readme.md', status: 'untracked', area: 'untracked' }),
+          gitEntry({ path: 'docs/existing.md' }),
           gitEntry({
             path: 'src/conflict.ts',
             conflictKind: 'both_modified',
@@ -365,6 +373,7 @@ describe('SourceControl preview row opens', () => {
     renderSourceControl()
 
     clickUncommitted('docs/readme.md')
+    clickUncommitted('docs/existing.md')
     clickUncommitted('src/conflict.ts')
 
     expect(mocks.calls.openFile).toHaveBeenCalledWith(
@@ -377,6 +386,14 @@ describe('SourceControl preview row opens', () => {
       },
       { targetGroupId: undefined, preview: true }
     )
+    expect(mocks.calls.openDiff).toHaveBeenCalledWith(
+      mocks.activeWorktree.id,
+      '/repo/wt/docs/existing.md',
+      'docs/existing.md',
+      'markdown',
+      false,
+      { targetGroupId: undefined, preview: true }
+    )
     expect(mocks.calls.openConflictFile).toHaveBeenCalledWith(
       mocks.activeWorktree.id,
       '/repo/wt',
@@ -386,12 +403,17 @@ describe('SourceControl preview row opens', () => {
     )
   })
 
-  it('scopes discard autosave quiesce and reload notifications to the active runtime', async () => {
+  it('scopes discard autosave quiesce and reload notifications to the repo owner runtime', async () => {
     resetState({
       gitStatusByWorktree: { [mocks.activeWorktree.id]: [gitEntry({ path: 'src/file.ts' })] }
     })
+    // Why: the owner stamp routes the discard; a different focused server must not.
+    Object.assign(mocks.activeRepo, { executionHostId: 'runtime:runtime-remote' })
+    onTestFinished(() => {
+      Reflect.deleteProperty(mocks.activeRepo, 'executionHostId')
+    })
     renderSourceControl()
-    mocks.state.settings = { activeRuntimeEnvironmentId: 'runtime-remote' }
+    mocks.state.settings = { activeRuntimeEnvironmentId: 'runtime-other' }
 
     const row = container.querySelector<HTMLDivElement>('[data-source-control-path="src/file.ts"]')
     const discardButton = row?.querySelector<HTMLButtonElement>(

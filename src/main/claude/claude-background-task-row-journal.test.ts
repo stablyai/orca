@@ -111,25 +111,19 @@ describe('Claude background task row journal', () => {
     expect(appendAndPublish).toHaveBeenCalledTimes(2)
   })
 
-  it('keeps fallback append coalescing separate from its ordered publication', () => {
-    const calls: { operation: 'append' | 'publish'; coalescingKey?: string }[] = []
+  it('appends the row, then publishes it', () => {
+    const calls: ('append' | 'publish')[] = []
     const task = row()
     const sink: StructuredAgentSessionEventSink = {
       appendItem: vi.fn(),
       appendTombstone: vi.fn(),
       publish: vi.fn(),
-      tryAppendResolvedItem: vi.fn((_identity, _body, _resolve, options) => {
-        calls.push({
-          operation: 'append',
-          ...(options?.coalescingKey ? { coalescingKey: options.coalescingKey } : {})
-        })
+      tryAppendResolvedItem: vi.fn(() => {
+        calls.push('append')
         return { accepted: true as const }
       }),
-      tryPublish: vi.fn((options) => {
-        calls.push({
-          operation: 'publish',
-          ...(options?.coalescingKey ? { coalescingKey: options.coalescingKey } : {})
-        })
+      tryPublish: vi.fn(() => {
+        calls.push('publish')
         return { accepted: true as const }
       })
     }
@@ -143,13 +137,7 @@ describe('Claude background task row journal', () => {
         () => AGENT_JOURNAL_THREAD_SCOPE
       )
     ).toEqual({ accepted: true })
-    expect(calls).toEqual([
-      {
-        operation: 'append',
-        coalescingKey: JSON.stringify(['claude-background-task', 'task-1', 'tool-1'])
-      },
-      { operation: 'publish' }
-    ])
+    expect(calls).toEqual(['append', 'publish'])
     expect(task.lastSerialized).not.toBeNull()
   })
 

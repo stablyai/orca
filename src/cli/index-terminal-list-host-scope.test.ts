@@ -89,9 +89,8 @@ describe('orca terminal list host scope', () => {
     expect(printed.result.hostScope).toEqual({
       hostIds: ['ssh:box-1'],
       omittedHostIds: ['local'],
-      // The CLI annotates each omitted host with the flag that reaches it; see
-      // index-omitted-host-scope-selectors.test.ts.
-      omittedHostSelectors: [{ hostId: 'local', selector: '--host local' }]
+      // These hosts are reached through the answering runtime; listing takes no --host flag.
+      omittedHostSelectors: [{ hostId: 'local', selector: null }]
     })
   })
 

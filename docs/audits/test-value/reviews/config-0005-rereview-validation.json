@@ -1,0 +1,61 @@
+{
+  "batch": "config-0005-rereview",
+  "source_commit": "89b3d382847f10b31a731ebd7e18aad022a4b15a",
+  "implementation_checkpoint": "eeb13aa33c4a6271a86c887e7d2ed2372362c683",
+  "reviewed_files": 1,
+  "original_declarations": 12,
+  "expanded_cases": 25,
+  "expanded_runtime_entrypoint_controls": 8,
+  "decisions": {
+    "keep": 12,
+    "fix": 0,
+    "remove": 0
+  },
+  "review_record_sha256": "a931a8e9a12d75caec4de45d8db304cceea1ee815d393d2ff534978d38984726",
+  "test_sha256": "f4b8299b419d02ab5a43449369d601f2574323fe9726efd39e1706def6d65bdf",
+  "checks": [
+    {
+      "check": "Exact source bytes at main89b3d equal saved original and current checkout test",
+      "result": "pass"
+    },
+    {
+      "check": "Actual refresh.mjs declaration parser extracted without inventory top-level side effects",
+      "result": "pass:12 declarations, exact original lines/titles"
+    },
+    {
+      "check": "Complete current test, every table and relevant production modules read",
+      "result": "pass"
+    },
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test config/scripts/ci-unit-selection.test.mjs",
+      "result": "passed: 1 suite / 25 expanded cases",
+      "log": "/tmp/orca-audit-5-unit-selection-rereview.log"
+    }
+  ],
+  "evidence_sha256": {
+    "config/scripts/ci-unit-selection.mjs": "0f6fe8d465bcf9250f5263d4006b0140e3215908deccc70f8bc02b150397293b",
+    "config/scripts/ci-unit-dependency-graph.mjs": "d41ca8f7bb6dcb8531bf21ffc21d91701644d82a395cdbcaf08519539dda8aff",
+    "config/scripts/ci-unit-files.mjs": "e88c791b647da3bb56038f6327051fcb89fb1e30afe00a2febf815031ae15087",
+    "config/scripts/ci-unit-indirect-inputs.mjs": "b112c9af7d2a8431fe97f6afa390dd9ad2136751f3e5d92768b514574c29538c",
+    "config/scripts/ci-shard-assignment.mjs": "c95ea6572621746cc610b3d868ff38980ce8ce86a739b8c706a986ba31260090"
+  },
+  "execution": {
+    "tests": "Root ran the current suite successfully after copying these read-only review artifacts.",
+    "checkout_mutations": "none",
+    "staging_or_commits": "none",
+    "inventory_or_tracker_edits": "none"
+  },
+  "validation_plan": {
+    "environment": {
+      "ORCA_BACKGROUND_LAUNCH": "1"
+    },
+    "command": [
+      "node",
+      "config/scripts/run-vitest.mjs",
+      "run",
+      "--config",
+      "config/vitest.config.ts",
+      "config/scripts/ci-unit-selection.test.mjs"
+    ]
+  }
+}

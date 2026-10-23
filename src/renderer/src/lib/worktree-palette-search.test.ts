@@ -543,3 +543,25 @@ describe('worktree-palette-search', () => {
     ).toHaveLength(1)
   })
 })
+
+describe('secondary workspace attachments in palette search', () => {
+  it('searches the number, identifier, and title of secondary links', () => {
+    const worktree = makeWorktree({
+      linkedPR: 1,
+      linkedItems: [
+        { provider: 'github', type: 'pr', number: 42, title: 'Secondary payment review' },
+        {
+          provider: 'linear',
+          type: 'issue',
+          number: 0,
+          identifier: 'STA-84',
+          title: 'Secondary payment task'
+        }
+      ]
+    })
+    const repoMap = new Map<string, Repo>()
+    expect(searchWorktrees([worktree], '#42', repoMap)).toHaveLength(1)
+    expect(searchWorktrees([worktree], 'STA-84', repoMap)).toHaveLength(1)
+    expect(searchWorktrees([worktree], 'payment', repoMap)).toHaveLength(1)
+  })
+})

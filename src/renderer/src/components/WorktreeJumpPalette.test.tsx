@@ -8,14 +8,24 @@ import type * as ReactI18Next from 'react-i18next'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { encodePaletteIdentity } from '@/lib/palette-match/palette-ranking'
+import type { activateAndRevealWorkspace as ActivateWorkspace } from '@/lib/worktree-activation'
+import type { WorkspaceTabPaletteActivationResult } from '@/lib/workspace-tab-palette-activation'
+import { toast } from 'sonner'
 import WorktreeJumpPalette from './WorktreeJumpPalette'
-import { makeRepo, makeWorktree } from './worktree-jump-palette-test-fixtures'
+import {
+  makeFolderWorkspace,
+  makeGroup,
+  makeRepo,
+  makeTerminalTab,
+  makeUnifiedTab,
+  makeWorktree
+} from './worktree-jump-palette-test-fixtures'
 
-const { activateAndRevealWorktree } = vi.hoisted(() => ({
-  activateAndRevealWorktree: vi.fn(() => false)
+const { activateAndRevealWorkspace } = vi.hoisted(() => ({
+  activateAndRevealWorkspace: vi.fn<typeof ActivateWorkspace>(() => ({ primaryTabId: null }))
 }))
 
-vi.mock('@/lib/worktree-activation', () => ({ activateAndRevealWorktree }))
+vi.mock('@/lib/worktree-activation', () => ({ activateAndRevealWorkspace }))
 
 vi.mock('react-i18next', async (importOriginal) => {
   const actual = await importOriginal<typeof ReactI18Next>()
@@ -49,14 +59,12 @@ vi.mock('@/components/repo/RepoBadgeLabel', () => ({
   RepoBadgeMark: () => <span data-repo-badge-mark="true" />
 }))
 
-vi.mock('@/components/cmd-j/palette-host-badge', () => ({
-  getPaletteHostBadge: () => null
-}))
-
 // Why: activation reaches into window.api and the whole worktree-reveal path; the palette's own
 // contract is which result it hands over, so stub the boundary and assert on that.
 const { activateWorkspaceTabPaletteResult } = vi.hoisted(() => ({
-  activateWorkspaceTabPaletteResult: vi.fn((_result: unknown) => ({ status: 'activated' }) as const)
+  activateWorkspaceTabPaletteResult: vi.fn(
+    (_result: unknown): WorkspaceTabPaletteActivationResult => ({ status: 'activated' })
+  )
 }))
 vi.mock('@/lib/workspace-tab-palette-activation', () => ({
   activateWorkspaceTabPaletteResult: (result: unknown) => activateWorkspaceTabPaletteResult(result)
@@ -193,7 +201,9 @@ describe('WorktreeJumpPalette', () => {
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
     setCommandQuery = null
-    activateAndRevealWorktree.mockClear()
+    activateAndRevealWorkspace.mockReset().mockReturnValue({ primaryTabId: null })
+    activateWorkspaceTabPaletteResult.mockReset().mockReturnValue({ status: 'activated' })
+    vi.mocked(toast.error).mockClear()
     useAppStore.setState(initialAppState, true)
     testContainer = document.createElement('div')
     document.body.appendChild(testContainer)
@@ -206,6 +216,231 @@ describe('WorktreeJumpPalette', () => {
     })
     document.body.replaceChildren()
     useAppStore.setState(initialAppState, true)
+  })
+
+  it('lists actual folder workspaces with no repositories or active terminals', async () => {
+    await renderPalette({
+      repos: [],
+      worktreesByRepo: {},
+      folderWorkspaces: [makeFolderWorkspace()],
+      showSleepingWorkspaces: false,
+      hideDefaultBranchWorkspace: true,
+      hideDetachedHeadWorkspaces: true
+    })
+
+    expect(getWorktreeRows()).toHaveLength(1)
+    expect(getWorktreeRows()[0]).toContain('Design workspace')
+    expect(testContainer.textContent).not.toContain('Loading')
+  })
+
+  it('orders folders and git worktrees together by visit recency', async () => {
+    await renderPalette({
+      worktreesByRepo: { 'repo-1': [makeWorktree('git', 'Git workspace')] },
+      folderWorkspaces: [makeFolderWorkspace()],
+      showSleepingWorkspaces: true,
+      lastVisitedAtByWorktreeId: { 'local|folder:folder-1': 20, git: 10 }
+    })
+
+    expect(getWorktreeRows()).toHaveLength(2)
+    expect(getWorktreeRows()[0]).toContain('Design workspace')
+    expect(getWorktreeRows()[1]).toContain('Git workspace')
+  })
+
+  it('searches folder names and comments but never returns archived folders', async () => {
+    await renderPalette({
+      worktreesByRepo: {},
+      folderWorkspaces: [
+        makeFolderWorkspace({ comment: 'Prototype checkout flow' }),
+        makeFolderWorkspace({ id: 'archived', name: 'Archived design', isArchived: true })
+      ]
+    })
+
+    await act(async () => setCommandQuery?.('design'))
+    await flushEffects()
+    expect(getWorktreeRows()).toHaveLength(1)
+    expect(getWorktreeRows()[0]).toContain('Design workspace')
+    await act(async () => setCommandQuery?.('checkout'))
+    await flushEffects()
+    expect(getWorktreeRows()[0]).toContain('Design workspace')
+    expect(getWorktreeRows()[0]).toContain('Prototype checkout flow')
+  })
+
+  it('excludes only the current host when folder ids collide', async () => {
+    await renderPalette({
+      worktreesByRepo: {},
+      folderWorkspaces: [
+        makeFolderWorkspace({ name: 'Local design', executionHostId: 'local' }),
+        makeFolderWorkspace({ name: 'Remote design', executionHostId: 'runtime:builder' })
+      ],
+      activeWorktreeId: 'folder:folder-1',
+      activeWorkspaceExecutionHostId: 'local'
+    })
+    expect(getWorktreeRows()).toHaveLength(1)
+    expect(getWorktreeRows()[0]).toContain('Remote design')
+
+    await act(async () => setCommandQuery?.('design'))
+    await flushEffects()
+    expect(getWorktreeRows()).toHaveLength(2)
+    expect(getWorktreeRows().find((row) => row.includes('Local design'))).toContain('Current')
+    const remote = testContainer.querySelector<HTMLButtonElement>(
+      `[data-command-item="${encodePaletteIdentity(['worktree', 'runtime:builder|folder:folder-1'])}"]`
+    )
+    await act(async () => fireEvent.click(remote!))
+    expect(activateAndRevealWorkspace).toHaveBeenCalledWith('folder:folder-1', {
+      navigationIntent: 'user-open',
+      executionHostId: 'runtime:builder'
+    })
+  })
+
+  it('filters remote folders by host and searches their visible host badge without a repo', async () => {
+    await renderPalette({
+      repos: [],
+      worktreesByRepo: {},
+      folderWorkspaces: [
+        makeFolderWorkspace(),
+        makeFolderWorkspace({ id: 'remote', name: 'Remote design', executionHostId: 'ssh:box' })
+      ],
+      sshTargetLabels: new Map([['box', 'Builder']]),
+      visibleWorkspaceHostIds: ['ssh:box']
+    })
+
+    expect(getWorktreeRows()).toHaveLength(1)
+    expect(getWorktreeRows()[0]).toContain('Remote design')
+    expect(getWorktreeRows()[0]).toContain('Builder')
+    await act(async () => setCommandQuery?.('Builder'))
+    await flushEffects()
+    expect(getWorktreeRows()).toHaveLength(1)
+    expect(getWorktreeRows()[0]).toContain('Remote design')
+    expect(getWorktreeRows()[0]).toContain('Builder')
+  })
+
+  it('excludes folders when a repository filter is selected', async () => {
+    await renderPalette({
+      worktreesByRepo: { 'repo-1': [makeWorktree('git', 'Git workspace')] },
+      folderWorkspaces: [makeFolderWorkspace()],
+      showSleepingWorkspaces: true,
+      filterRepoIds: ['repo-1']
+    })
+
+    expect(getWorktreeRows()).toHaveLength(1)
+    expect(getWorktreeRows()[0]).toContain('Git workspace')
+    await act(async () => setCommandQuery?.('Design'))
+    await flushEffects()
+    expect(getWorktreeRows()).toEqual([])
+  })
+
+  it('includes hosts owned only by folders in the host registry', async () => {
+    await renderPalette({
+      repos: [],
+      worktreesByRepo: {},
+      folderWorkspaces: [makeFolderWorkspace({ executionHostId: 'runtime:builder' })],
+      visibleWorkspaceHostIds: ['runtime:builder']
+    })
+
+    expect(getWorktreeRows()).toHaveLength(1)
+    expect(getWorktreeRows()[0]).toContain('builder')
+  })
+
+  it('refreshes the folder catalog while the palette is open', async () => {
+    await renderPalette({ repos: [], worktreesByRepo: {}, folderWorkspaces: [] })
+    await act(async () => {
+      useAppStore.setState({ folderWorkspaces: [makeFolderWorkspace()] })
+    })
+    expect(getWorktreeRows()).toHaveLength(1)
+    expect(getWorktreeRows()[0]).toContain('Design workspace')
+    await act(async () => useAppStore.setState({ folderWorkspaces: [] }))
+    expect(getWorktreeRows()).toEqual([])
+  })
+
+  it('keeps the palette open when folder activation is blocked', async () => {
+    await renderPalette({ worktreesByRepo: {}, folderWorkspaces: [makeFolderWorkspace()] })
+    activateAndRevealWorkspace.mockReturnValue(false)
+    const row = testContainer.querySelector<HTMLButtonElement>(
+      `[data-command-item="${encodePaletteIdentity(['worktree', 'local|folder:folder-1'])}"]`
+    )
+
+    await act(async () => fireEvent.click(row!))
+    expect(testContainer.querySelector('[data-command-dialog]')).not.toBeNull()
+    expect(useAppStore.getState().activeModal).toBe('worktree-palette')
+  })
+
+  it.each([true, false])(
+    'routes an attached folder from a GitHub number (activation %s)',
+    async (opens) => {
+      await renderPalette({
+        worktreesByRepo: {},
+        folderWorkspaces: [
+          makeFolderWorkspace({
+            linkedItems: [
+              {
+                provider: 'github',
+                type: 'issue',
+                number: 42,
+                title: 'Checkout',
+                repoId: 'repo-1',
+                url: 'https://github.com/acme/product/issues/42'
+              }
+            ]
+          })
+        ]
+      })
+      activateAndRevealWorkspace.mockReturnValue(opens ? { primaryTabId: null } : false)
+      await act(async () => setCommandQuery?.('#42'))
+      await flushEffects()
+      const create = testContainer.querySelector<HTMLButtonElement>(
+        '[data-command-item="__create_worktree__"]'
+      )
+      await act(async () => fireEvent.click(create!))
+
+      expect(activateAndRevealWorkspace).toHaveBeenCalledWith('folder:folder-1', {
+        executionHostId: 'local'
+      })
+      expect(useAppStore.getState().activeModal).toBe(opens ? 'none' : 'worktree-palette')
+    }
+  )
+
+  it('includes open terminal tabs from folder workspaces in search', async () => {
+    const workspaceId = 'folder:folder-1'
+    await renderPalette({
+      worktreesByRepo: {},
+      folderWorkspaces: [makeFolderWorkspace()],
+      tabsByWorktree: { [workspaceId]: [makeTerminalTab('term-1', workspaceId, 'Research chat')] },
+      unifiedTabsByWorktree: {
+        [workspaceId]: [makeUnifiedTab('tab-1', workspaceId, 'term-1', 'Research chat')]
+      },
+      groupsByWorktree: { [workspaceId]: [makeGroup(workspaceId, ['tab-1'])] },
+      activeGroupIdByWorktree: { [workspaceId]: `group-${workspaceId}` }
+    })
+
+    await act(async () => setCommandQuery?.('Research'))
+    await flushEffects()
+    expect(testContainer.textContent).toContain('Research chat')
+    expect(testContainer.textContent).toContain('Design workspace')
+  })
+
+  it('keeps a blocked folder tab jump open without a second error', async () => {
+    const workspaceId = 'folder:folder-1'
+    await renderPalette({
+      worktreesByRepo: {},
+      folderWorkspaces: [makeFolderWorkspace()],
+      tabsByWorktree: { [workspaceId]: [makeTerminalTab('term-1', workspaceId, 'Research chat')] },
+      unifiedTabsByWorktree: {
+        [workspaceId]: [makeUnifiedTab('tab-1', workspaceId, 'term-1', 'Research chat')]
+      },
+      groupsByWorktree: { [workspaceId]: [makeGroup(workspaceId, ['tab-1'])] }
+    })
+    activateWorkspaceTabPaletteResult.mockReturnValue({ status: 'blocked' })
+    await act(async () => setCommandQuery?.('Research'))
+    await flushEffects()
+    const row = testContainer.querySelector<HTMLButtonElement>(
+      `[data-command-item^="${encodePaletteIdentity(['workspace-tab'])}"]`
+    )
+    expect(row).not.toBeNull()
+    await act(async () => fireEvent.click(row!))
+
+    expect(activateWorkspaceTabPaletteResult).toHaveBeenCalled()
+    expect(testContainer.querySelector('[data-command-dialog]')).not.toBeNull()
+    expect(toast.error).not.toHaveBeenCalled()
   })
 
   it('keeps every inactive main workspace visible when sleeping workspaces are hidden', async () => {
@@ -420,7 +655,7 @@ describe('WorktreeJumpPalette', () => {
 
     // The first row names ITS OWN host — the wrong-host open is gone.
     await act(async () => fireEvent.click(rows[0]!))
-    expect(activateAndRevealWorktree).toHaveBeenLastCalledWith('shared', {
+    expect(activateAndRevealWorkspace).toHaveBeenLastCalledWith('shared', {
       navigationIntent: 'user-open',
       executionHostId: 'local'
     })
@@ -443,7 +678,7 @@ describe('WorktreeJumpPalette', () => {
     expect(rows).toHaveLength(2)
 
     await act(async () => fireEvent.click(rows[1]!))
-    expect(activateAndRevealWorktree).toHaveBeenLastCalledWith('shared', {
+    expect(activateAndRevealWorkspace).toHaveBeenLastCalledWith('shared', {
       navigationIntent: 'user-open',
       executionHostId: 'ssh:box'
     })
@@ -488,7 +723,7 @@ describe('WorktreeJumpPalette', () => {
     expect(hubBRow).not.toBeNull()
 
     await act(async () => fireEvent.click(hubARow!))
-    expect(activateAndRevealWorktree).toHaveBeenLastCalledWith('shared-runtime', {
+    expect(activateAndRevealWorkspace).toHaveBeenLastCalledWith('shared-runtime', {
       navigationIntent: 'user-open',
       executionHostId: 'runtime:hub-a'
     })

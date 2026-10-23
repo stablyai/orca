@@ -36,7 +36,12 @@ import {
 } from './media-picker-test-shell'
 import { NativeVerbError } from '../mobile-web-shell/bridge/use-native-verbs'
 import { useMediaPicker } from './media-picker.web'
-import type { MediaPicker, PickedMobileImage } from './media-picker-contract'
+import {
+  MobileFileTooLargeError,
+  type MediaPicker,
+  type PickedMobileFile,
+  type PickedMobileImage
+} from './media-picker-contract'
 
 /** Three chunks: two full ones and a short tail, so the `eof` boundary is not the cap boundary. */
 const THREE_CHUNKS = BRIDGE_MEDIA_READ_MAX_BYTES * 2 + 17
@@ -294,5 +299,70 @@ describe('picking media from inside the shell', () => {
     expect(String(await refused)).toMatch(/did not grant native\.media\.pick/)
     expect(pair.toShell).toHaveLength(before)
     expect(shell.calls).toEqual([])
+  })
+})
+
+describe('picking files from inside the shell', () => {
+  async function collectFiles(pair: BridgePortPair, picker: MediaPicker) {
+    const taken: PickedMobileFile[] = []
+    const iterator = picker.pickFiles()[Symbol.asyncIterator]()
+    for (;;) {
+      const next = await settle(pair, iterator.next())
+      if (next.done === true) {
+        return taken
+      }
+      taken.push(next.value)
+    }
+  }
+
+  it("names each file with the shell's own name when the shell serves it", async () => {
+    const shell = createMediaTestShell({
+      staged: {
+        files: [{ bytes: stagedTestBytes(12), mime: 'application/pdf', name: 'auth-spec.pdf' }]
+      }
+    })
+    const pair = pairFor(shell)
+    const picker = await mount(pair)
+
+    expect(await collectFiles(pair, picker)).toEqual([
+      {
+        name: 'auth-spec.pdf',
+        mime: 'application/pdf',
+        byteLength: 12,
+        base64: encodeTestBase64(stagedTestBytes(12))
+      }
+    ])
+    expect(shell.released).toEqual(['media-1'])
+  })
+
+  it('names the file from its type on a shell too old to name it', async () => {
+    const shell = createMediaTestShell({
+      staged: {
+        files: [
+          { bytes: stagedTestBytes(3), mime: 'application/pdf', name: 'ignored.pdf' },
+          { bytes: stagedTestBytes(3), mime: 'text/markdown' }
+        ]
+      }
+    })
+    const pair = pairFor(shell, ['native.media.pick', 'native.media.read', 'native.media.release'])
+    const picker = await mount(pair)
+
+    const files = await collectFiles(pair, picker)
+
+    expect(files.map((file) => file.name)).toEqual(['attachment-1.pdf', 'attachment-2.md'])
+    expect(shell.calls.filter((call) => call.startsWith('name'))).toEqual([])
+  })
+
+  it('reads the shell refusing a file over what it stages as the size error', async () => {
+    const shell = createMediaTestShell({
+      staged: {},
+      refusePick: new BridgeNativeVerbRefusedError('native_media_too_large', 'too large')
+    })
+    const pair = pairFor(shell)
+    const picker = await mount(pair)
+
+    const refused = await collectFiles(pair, picker).catch((error: unknown) => error)
+
+    expect(refused).toBeInstanceOf(MobileFileTooLargeError)
   })
 })

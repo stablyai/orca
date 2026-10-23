@@ -5,6 +5,13 @@ import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../shar
 import { createTestStore, makeWorktree, seedStore } from '../store/slices/store-test-helpers'
 import { createStoreCascadesMockApi } from '../store/slices/store-cascades-test-harness'
 
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+
 const storeBox = vi.hoisted(() => {
   const box: { store: unknown } = { store: null }
   return box
@@ -52,6 +59,7 @@ describe('launchAgentInNewTab main-window surface', () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     const result = launchAgentInNewTab({
+      requestId: 'request-1',
       agent: 'opencode',
       worktreeId: FLOATING_TERMINAL_WORKTREE_ID
     })
@@ -73,7 +81,11 @@ describe('launchAgentInNewTab main-window surface', () => {
     const store = seedMainWindowOnEditor()
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    const result = launchAgentInNewTab({ agent: 'opencode', worktreeId: MAIN_WORKTREE_ID })
+    const result = launchAgentInNewTab({
+      requestId: 'request-2',
+      agent: 'opencode',
+      worktreeId: MAIN_WORKTREE_ID
+    })
 
     const tabId = result?.surface.kind === 'local-terminal' ? result.surface.tabId : null
     expect(tabId).not.toBeNull()

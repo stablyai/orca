@@ -11,11 +11,7 @@ const getRuntimeEnvironmentStatus = vi.fn()
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   callRuntimeRpc: (...args: unknown[]) => callRuntimeRpc(...args),
-  getRuntimeEnvironmentStatus: (...args: unknown[]) => getRuntimeEnvironmentStatus(...args),
-  // Why: the real matcher is exercised in runtime-rpc-result's own tests; here it only needs to be honest about the tail token.
-  hasRuntimeRpcErrorCode: (error: unknown, code: string) =>
-    typeof (error as { message?: unknown })?.message === 'string' &&
-    (error as { message: string }).message.trimEnd().endsWith(`: ${code}`)
+  getRuntimeEnvironmentStatus: (...args: unknown[]) => getRuntimeEnvironmentStatus(...args)
 }))
 
 const DESKTOP = { kind: 'desktop' } as const

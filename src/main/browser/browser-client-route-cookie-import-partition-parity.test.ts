@@ -1,8 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import type {
-  BrowserHostLeaseAuthority,
-  BrowserNetworkExecutionHost
-} from '../../shared/browser-client-host-protocol'
+import type { BrowserHostLeaseAuthority } from '../../shared/browser-client-host-protocol'
+import type { BrowserNetworkExecutionHost } from '../../shared/browser-network-execution-host'
 
 const {
   bindingStore,
@@ -139,6 +137,7 @@ async function importPartition(): Promise<string> {
     // Why: mirrors startPairedRuntimeBrowserClientHost — settings-level operations target the
     // server's own machine, so the identity comes from the same helper the host uses.
     executionHostIdentity: browserAuthorityExecutionHostStorageIdentity(storageScope),
+    pairingAuthorityConnectionIdentity: 'paired-runtime:pairing-authority-a',
     legacyAuthorityConnectionIdentity: 'paired-runtime:legacy-authority-a',
     legacyExecutionHostIdentity:
       legacyBrowserNativeExecutionHostStorageIdentity(authorityRuntimeId),

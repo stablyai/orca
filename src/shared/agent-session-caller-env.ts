@@ -12,6 +12,10 @@ import { isStructuredWorkerHandle } from './structured-worker-handle'
 
 export const ORCA_AGENT_SESSION_ID_ENV = 'ORCA_AGENT_SESSION_ID'
 
+/** The spawn token a structured session's child echoes, so the owner probe can tell a live child
+ *  of that reservation from a same-pid stranger. */
+export const ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV = 'ORCA_AGENT_SESSION_SPAWN_TOKEN'
+
 export function readInjectedAgentSessionId(
   env: Readonly<Record<string, string | undefined>> = process.env
 ): string | undefined {
@@ -21,7 +25,7 @@ export function readInjectedAgentSessionId(
 
 /**
  * The address the host gives this session (`mailboxAddressOf` on its resolved party): a structured
- * worker keeps the handle it was minted, any other session is `session:<id>`. Only for text that
+ * worker keeps the handle it was minted, any other session is `orca_session_id:<id>`. Only for text that
  * must match what the host writes; the CLI spells it without the host resolver.
  */
 export function injectedSessionAddress(

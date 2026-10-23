@@ -1,5 +1,5 @@
 import React from 'react'
-import { Minus, Plus, Trash, Undo2 } from 'lucide-react'
+import { Minus, Plus, Undo2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
@@ -17,7 +17,7 @@ import {
   getSourceControlSectionViewAction,
   type SourceControlDisplaySection,
   type SourceControlDisplaySectionId,
-  type SourceControlSectionArea,
+  type SourceControlDisplaySectionArea,
   type SourceControlSectionViewAction
 } from './section-order'
 import type {
@@ -26,7 +26,7 @@ import type {
 } from './submodule-expansion'
 import type { SourceControlRowOpenEvent } from './split-open'
 
-const SECTION_LABELS: Record<SourceControlSectionArea, { key: string; fallback: string }> = {
+const SECTION_LABELS: Record<SourceControlDisplaySectionArea, { key: string; fallback: string }> = {
   staged: {
     key: 'auto.components.right.sidebar.SourceControl.48a003c1b1',
     fallback: 'Staged Changes'
@@ -34,10 +34,6 @@ const SECTION_LABELS: Record<SourceControlSectionArea, { key: string; fallback: 
   unstaged: {
     key: 'auto.components.right.sidebar.SourceControl.d4ef4bafc5',
     fallback: 'Changes'
-  },
-  untracked: {
-    key: 'auto.components.right.sidebar.SourceControl.522f44dce5',
-    fallback: 'Untracked Files'
   }
 }
 const CONFLICTS_SECTION_LABEL = {
@@ -58,6 +54,11 @@ export function SourceControlUncommittedSections(props: {
   isExecutingBulk: boolean
   requestDiscardAllInArea: (area: DiscardAllArea, paths?: readonly string[]) => void
   handleStageAllPaths: (paths: readonly string[]) => Promise<void>
+  /** Stages a section header's set; a capped listing defers "all" to the host. */
+  handleStageSectionPaths: (
+    sectionId: SourceControlDisplaySectionId,
+    paths: readonly string[]
+  ) => Promise<void>
   handleUnstagePaths: (paths: readonly string[]) => Promise<void>
   sourceControlViewMode: SourceControlViewMode
   visibleTreeRowsBySection: Partial<
@@ -82,7 +83,7 @@ export function SourceControlUncommittedSections(props: {
   activeConnectionId: string | null
   handleOpenDiff: (entry: GitStatusEntry, event?: SourceControlRowOpenEvent) => void
   handleStage: (path: string) => Promise<void>
-  handleUnstage: (path: string) => Promise<void>
+  handleUnstage: (path: string, oldPath?: string) => Promise<void>
   requestDiscardEntry: (entry: GitStatusEntry) => void
   diffCommentCountByPath: Map<string, number>
 }): React.JSX.Element {
@@ -115,18 +116,11 @@ export function SourceControlUncommittedSections(props: {
                 <div className="flex items-center">
                   {canRevertAll && (
                     <ActionButton
-                      icon={area === 'untracked' ? Trash : Undo2}
-                      title={
-                        area === 'untracked'
-                          ? translate(
-                              'auto.components.right.sidebar.SourceControl.2f609a2e7c',
-                              'Delete all untracked'
-                            )
-                          : translate(
-                              'auto.components.right.sidebar.SourceControl.ce41708855',
-                              'Discard all'
-                            )
-                      }
+                      icon={Undo2}
+                      title={translate(
+                        'auto.components.right.sidebar.SourceControl.ce41708855',
+                        'Discard all'
+                      )}
                       onClick={(event) => {
                         event.stopPropagation()
                         props.requestDiscardAllInArea(area, discardAllPaths)
@@ -143,7 +137,7 @@ export function SourceControlUncommittedSections(props: {
                       )}
                       onClick={(event) => {
                         event.stopPropagation()
-                        void props.handleStageAllPaths(stageAllPaths)
+                        void props.handleStageSectionPaths(id, stageAllPaths)
                       }}
                       disabled={props.isExecutingBulk}
                     />

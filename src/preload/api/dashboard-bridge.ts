@@ -8,10 +8,8 @@ import type {
 import type { PreloadApi } from '../api-types'
 
 export const dashboardApi = {
-  // Open the pop-out dashboard window, or focus it if already open.
   openPopout: (): Promise<void> => ipcRenderer.invoke('dashboardPopout:open'),
 
-  // ── Producer side (main window) ──────────────────────────────────────
   publishSnapshot: (snapshot: DashboardSnapshot): Promise<void> =>
     ipcRenderer.invoke('dashboard:publishSnapshot', snapshot),
   getPopoutOpen: (): Promise<boolean> => ipcRenderer.invoke('dashboard:getPopoutOpen'),
@@ -31,8 +29,11 @@ export const dashboardApi = {
     ipcRenderer.on('ui:revealDashboardAgent', listener)
     return () => ipcRenderer.removeListener('ui:revealDashboardAgent', listener)
   },
-  onAckAgent: (callback: (paneKey: string) => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, paneKey: string): void => callback(paneKey)
+  onAckAgent: (callback: (paneKey: string, intent: 'view' | 'explicit') => void): (() => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      ack: { paneKey: string; intent: 'view' | 'explicit' }
+    ): void => callback(ack.paneKey, ack.intent)
     ipcRenderer.on('ui:ackDashboardAgent', listener)
     return () => ipcRenderer.removeListener('ui:ackDashboardAgent', listener)
   },
@@ -49,7 +50,6 @@ export const dashboardApi = {
     return () => ipcRenderer.removeListener('ui:sleepDashboardWorkspace', listener)
   },
 
-  // ── Consumer side (pop-out window) ───────────────────────────────────
   requestSnapshot: (): Promise<void> => ipcRenderer.invoke('dashboard:requestSnapshot'),
   onSnapshot: (callback: (snapshot: DashboardSnapshot) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, snapshot: DashboardSnapshot): void =>
@@ -59,8 +59,8 @@ export const dashboardApi = {
   },
   revealAgent: (args: DashboardRevealAgentArgs): Promise<void> =>
     ipcRenderer.invoke('dashboardPopout:revealAgent', args),
-  ackAgent: (paneKey: string): Promise<void> =>
-    ipcRenderer.invoke('dashboardPopout:ackAgent', { paneKey }),
+  ackAgent: (paneKey: string, intent: 'view' | 'explicit'): Promise<void> =>
+    ipcRenderer.invoke('dashboardPopout:ackAgent', { paneKey, intent }),
   spawnAgent: (args: DashboardSpawnAgentArgs): Promise<void> =>
     ipcRenderer.invoke('dashboardPopout:spawnAgent', args),
   sleepWorkspace: (args: DashboardSleepWorkspaceArgs): Promise<void> =>

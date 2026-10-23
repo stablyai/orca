@@ -2,6 +2,10 @@
 // shared English as its fallback so desktop and mobile never say it differently.
 
 import { translate } from '@/i18n/i18n'
+import {
+  agentSessionFailureSentence,
+  type AgentSessionFailureWordsContext
+} from '../../../../shared/agent-session-failure-words'
 import { agentSessionWriteNoticeParts } from '../../../../shared/agent-session-refusal-notice'
 import {
   AGENT_SESSION_WRITE_NOTICE_COPY as COPY,
@@ -12,6 +16,8 @@ import type {
   AgentSessionWriteFailure,
   AgentSessionWriteKind
 } from '../../../../shared/agent-session-write-failure'
+import { joinSentences } from '../../../../shared/sentence-joining'
+import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
 
 const SENTENCES: Record<AgentSessionWriteNoticeSentence, () => string> = {
   notDoneReadHistory: () =>
@@ -19,6 +25,8 @@ const SENTENCES: Record<AgentSessionWriteNoticeSentence, () => string> = {
   notDoneSend: () => translate('components.native-chat.writeNotice.notDoneSend', COPY.notDoneSend),
   tryAgainComposerSend: () =>
     translate('components.native-chat.writeNotice.tryAgainComposerSend', COPY.tryAgainComposerSend),
+  messageNotSaved: () =>
+    translate('components.native-chat.writeNotice.messageNotSaved', COPY.messageNotSaved),
   notDoneStop: () => translate('components.native-chat.writeNotice.notDoneStop', COPY.notDoneStop),
   notDoneStopTask: () =>
     translate('components.native-chat.writeNotice.notDoneStopTask', COPY.notDoneStopTask),
@@ -31,13 +39,24 @@ const SENTENCES: Record<AgentSessionWriteNoticeSentence, () => string> = {
   notDoneCommand: () =>
     translate('components.native-chat.writeNotice.notDoneCommand', COPY.notDoneCommand),
   notDoneGoal: () => translate('components.native-chat.writeNotice.notDoneGoal', COPY.notDoneGoal),
+  notDoneQueuedEdit: () =>
+    translate('components.native-chat.writeNotice.notDoneQueuedEdit', COPY.notDoneQueuedEdit),
   restartFailed: () =>
     translate('components.native-chat.writeNotice.restartFailed', COPY.restartFailed),
   capacity: () => translate('components.native-chat.writeNotice.capacity', COPY.capacity),
   outcomeUnknown: () =>
     translate('components.native-chat.writeNotice.outcomeUnknown', COPY.outcomeUnknown),
+  sendOutcomeLost: () =>
+    translate('components.native-chat.writeNotice.sendOutcomeLost', COPY.sendOutcomeLost),
+  continuationSuperseded: () =>
+    translate(
+      'components.native-chat.writeNotice.continuationSuperseded',
+      COPY.continuationSuperseded
+    ),
   questionChanged: () =>
     translate('components.native-chat.writeNotice.questionChanged', COPY.questionChanged),
+  cancelNotSaved: () =>
+    translate('components.native-chat.writeNotice.cancelNotSaved', COPY.cancelNotSaved),
   historyUnreadable: () =>
     translate('components.native-chat.writeNotice.historyUnreadable', COPY.historyUnreadable),
   historyUnusable: () =>
@@ -51,10 +70,22 @@ const SENTENCES: Record<AgentSessionWriteNoticeSentence, () => string> = {
       'components.native-chat.writeNotice.updateOrcaToKeepUsing',
       COPY.updateOrcaToKeepUsing
     ),
+  chatSavedByNewerOrca: () =>
+    translate('components.native-chat.writeNotice.chatSavedByNewerOrca', COPY.chatSavedByNewerOrca),
+  updateOrcaToOpenChat: () =>
+    translate('components.native-chat.writeNotice.updateOrcaToOpenChat', COPY.updateOrcaToOpenChat),
   unsupported: () => translate('components.native-chat.writeNotice.unsupported', COPY.unsupported),
+  notAvailable: () =>
+    translate('components.native-chat.writeNotice.notAvailable', COPY.notAvailable),
+  cannotRunHere: () =>
+    translate('components.native-chat.writeNotice.cannotRunHere', COPY.cannotRunHere),
   unreachable: () => translate('components.native-chat.writeNotice.unreachable', COPY.unreachable),
   recordFailed: () =>
     translate('components.native-chat.writeNotice.recordFailed', COPY.recordFailed),
+  attachmentExpired: () =>
+    translate('components.native-chat.writeNotice.attachmentExpired', COPY.attachmentExpired),
+  reattachFile: () =>
+    translate('components.native-chat.writeNotice.reattachFile', COPY.reattachFile),
   conversationCleared: () =>
     translate('components.native-chat.writeNotice.conversationCleared', COPY.conversationCleared),
   openCurrentConversation: () =>
@@ -91,6 +122,31 @@ const SENTENCES: Record<AgentSessionWriteNoticeSentence, () => string> = {
     translate('components.native-chat.writeNotice.messagesUnsettled', COPY.messagesUnsettled),
   settleEarlierMessage: () =>
     translate('components.native-chat.writeNotice.settleEarlierMessage', COPY.settleEarlierMessage),
+  agentStillWorking: () =>
+    translate('components.native-chat.writeNotice.agentStillWorking', COPY.agentStillWorking),
+  runClearWhenDone: () =>
+    translate('components.native-chat.writeNotice.runClearWhenDone', COPY.runClearWhenDone),
+  clearAfterAnswer: () =>
+    translate('components.native-chat.writeNotice.clearAfterAnswer', COPY.clearAfterAnswer),
+  runCompactWhenDone: () =>
+    translate('components.native-chat.writeNotice.runCompactWhenDone', COPY.runCompactWhenDone),
+  compactAfterAnswer: () =>
+    translate('components.native-chat.writeNotice.compactAfterAnswer', COPY.compactAfterAnswer),
+  clearAfterRetry: () =>
+    translate('components.native-chat.writeNotice.clearAfterRetry', COPY.clearAfterRetry),
+  compactAfterRetry: () =>
+    translate('components.native-chat.writeNotice.compactAfterRetry', COPY.compactAfterRetry),
+  clearAfterSending: () =>
+    translate('components.native-chat.writeNotice.clearAfterSending', COPY.clearAfterSending),
+  compactAfterSending: () =>
+    translate('components.native-chat.writeNotice.compactAfterSending', COPY.compactAfterSending),
+  queueTooLarge: () =>
+    translate('components.native-chat.writeNotice.queueTooLarge', COPY.queueTooLarge),
+  shrinkQueue: () => translate('components.native-chat.writeNotice.shrinkQueue', COPY.shrinkQueue),
+  messageTooLarge: () =>
+    translate('components.native-chat.writeNotice.messageTooLarge', COPY.messageTooLarge),
+  shortenMessage: () =>
+    translate('components.native-chat.writeNotice.shortenMessage', COPY.shortenMessage),
   optionRejected: () =>
     translate('components.native-chat.writeNotice.optionRejected', COPY.optionRejected),
   goalsUnsupported: () =>
@@ -120,12 +176,26 @@ const SENTENCES: Record<AgentSessionWriteNoticeSentence, () => string> = {
 }
 
 export function agentSessionWriteNoticeText(parts: readonly AgentSessionWriteNoticePart[]): string {
-  return parts.map((part) => (typeof part === 'string' ? SENTENCES[part]() : part.text)).join(' ')
+  return joinSentences(
+    parts.map((part) =>
+      typeof part === 'string'
+        ? SENTENCES[part]()
+        : 'text' in part
+          ? part.text
+          : agentSessionFailureSentence(
+              part.failure,
+              part.surface,
+              part.context,
+              sayAgentSessionFailureTranslated
+            )
+    )
+  )
 }
 
 export function agentSessionWriteFailureText(
   failure: AgentSessionWriteFailure,
-  write: AgentSessionWriteKind
+  write: AgentSessionWriteKind,
+  context: AgentSessionFailureWordsContext = {}
 ): string {
-  return agentSessionWriteNoticeText(agentSessionWriteNoticeParts(failure, write))
+  return agentSessionWriteNoticeText(agentSessionWriteNoticeParts(failure, write, context))
 }

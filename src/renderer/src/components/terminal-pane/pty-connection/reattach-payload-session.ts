@@ -9,6 +9,7 @@ export type ReattachPayloadSession = Pick<
   | 'clearSleepingRecordAfterColdRestoreSpawn'
   | 'consumeRestoredViewportBlankingMarker'
   | 'createReattachGridPush'
+  | 'deps'
   | 'isPaneOnAlternateScreen'
   | 'kittyKeyboardModes'
   | 'markHiddenOutputRestoreNeeded'

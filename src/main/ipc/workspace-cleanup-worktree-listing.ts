@@ -31,20 +31,8 @@ export async function listCleanupGitWorktrees(
     return { route, gitWorktrees: [createFolderWorktree(repo)] }
   }
   if (route.kind === 'ssh') {
-    if (!route.provider) {
-      // Why: cleanup should reflect only workspaces Orca can currently inspect.
-      return { route, gitWorktrees: [] }
-    }
-    const provider = route.provider
-    return {
-      route,
-      gitWorktrees: await withWorkspaceCleanupTimeout(
-        (signal) => provider.listWorktrees(repo.path, { signal }),
-        WORKSPACE_CLEANUP_GIT_READ_TIMEOUT_MS,
-        'Timed out listing SSH worktrees.',
-        signal
-      )
-    }
+    // Why: cleanup should reflect only workspaces Orca can currently inspect.
+    return { route, gitWorktrees: [] }
   }
   const localGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
   return {

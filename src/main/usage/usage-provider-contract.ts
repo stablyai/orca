@@ -1,3 +1,5 @@
+import type { UsageSourceCacheRef } from './usage-source-cache-file'
+
 /**
  * Seam a usage source implements to be scanned by Orca, including plugin-contributed ones.
  *
@@ -23,25 +25,19 @@ export type UsageScanWorktreeRef = {
   displayName: string
 }
 
-/**
- * `TSourceKey` is the provider's own name for its per-source scan cache (`processedFiles`,
- * `processedDatabases`). It stays a type parameter because those names are persisted on disk.
- */
-export type UsageScanResult<TSourceKey extends string, TSource, TSession, TDaily> = Record<
-  TSourceKey,
-  readonly TSource[]
-> & {
+/** What a scan reports. The per-source scan cache stays wherever the scan ran, behind `sourceCache`. */
+export type UsageScanResult<TSession, TDaily> = {
   sessions: readonly TSession[]
   dailyAggregates: readonly TDaily[]
 }
 
-export type UsageProvider<TSourceKey extends string, TSource, TSession, TDaily> = {
+export type UsageProvider<TSession, TDaily> = {
   readonly id: UsageProviderId
   readonly label: string
   /** Bumped when the persisted projection changes shape; older caches are discarded. */
   readonly schemaVersion: number
   scan(
     worktrees: UsageScanWorktreeRef[],
-    previous: TSource[]
-  ): Promise<UsageScanResult<TSourceKey, TSource, TSession, TDaily>>
+    sourceCache: UsageSourceCacheRef
+  ): Promise<UsageScanResult<TSession, TDaily>>
 }

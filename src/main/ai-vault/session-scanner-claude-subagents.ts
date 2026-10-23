@@ -7,6 +7,10 @@ import type {
   AiVaultSubagentRunStatus
 } from '../../shared/ai-vault-types'
 import {
+  CLAUDE_TASK_NOTIFICATION_MARKER,
+  readClaudeTaskNotification
+} from '../../shared/claude-task-notification-text'
+import {
   openTranscriptReadStream,
   wslGatedReaddir,
   wslGatedReadFile,
@@ -40,15 +44,12 @@ const SUBAGENT_PARSE_CONCURRENCY = 8
 // stays reserved for live transcript probes.
 const SUBAGENT_FS_PRIORITY = 'scan'
 
-const TASK_NOTIFICATION_MARKER = '<task-notification>'
 const TOOL_USE_RESULT_MARKER = '"toolUseResult"'
 // A sync-Task toolUseResult sets a status only when it carries an agentId. Tool
 // output records (Read/Bash) also carry "toolUseResult" and are the largest lines
 // in a transcript, so gating on this second marker keeps the status pass from
 // JSON-parsing ~all of the file's bytes on every on-demand fetch.
 const TOOL_USE_RESULT_AGENT_ID_MARKER = '"agentId"'
-const TASK_ID_PATTERN = /<task-id>([^<]+)<\/task-id>/
-const TASK_STATUS_PATTERN = /<status>([a-z_]+)<\/status>/
 
 // Statuses reported by parent-transcript <task-notification> records
 // (background Tasks) and toolUseResult records (synchronous Tasks).
@@ -214,7 +215,7 @@ async function collectSubagentTaskStatuses(parentFilePath: string): Promise<Map<
   const lines = createInterface({ input, crlfDelay: Infinity })
   try {
     for await (const line of lines) {
-      const hasNotification = line.includes(TASK_NOTIFICATION_MARKER)
+      const hasNotification = line.includes(CLAUDE_TASK_NOTIFICATION_MARKER)
       const hasTaskResult =
         line.includes(TOOL_USE_RESULT_MARKER) && line.includes(TOOL_USE_RESULT_AGENT_ID_MARKER)
       if (!hasNotification && !hasTaskResult) {
@@ -235,11 +236,10 @@ async function collectSubagentTaskStatuses(parentFilePath: string): Promise<Map<
       // would risk dropping genuine harness-delivered statuses).
       if (hasNotification) {
         const text = taskNotificationText(record)
-        if (text.startsWith(TASK_NOTIFICATION_MARKER)) {
-          const taskId = TASK_ID_PATTERN.exec(text)?.[1]?.trim()
-          const status = TASK_STATUS_PATTERN.exec(text)?.[1]
-          if (taskId && status) {
-            statuses.set(taskId, status)
+        if (text.startsWith(CLAUDE_TASK_NOTIFICATION_MARKER)) {
+          const notification = readClaudeTaskNotification(text)
+          if (notification?.status) {
+            statuses.set(notification.taskId, notification.status)
           }
           continue
         }

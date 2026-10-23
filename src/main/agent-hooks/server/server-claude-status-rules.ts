@@ -5,6 +5,7 @@ import {
 } from '../../../shared/claude-subagent-roster'
 import { isAskUserQuestionTool } from '../../../shared/agent-question-answered-intent'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
+import { isClaudePermissionSettledByReplay } from '../../../shared/agent-hook-listener/claude-settled-permission-requests'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 
 /** The shell fact a Claude row stores beside its `mainAgent`; restart seeds a settled main agent only
@@ -36,7 +37,13 @@ export function withHeldChildWaitMainAgent(
   }
   const runningNonAgentTask = pairedClaudeNonAgentWork(previous, next)
   const mainAgentChanged = !mainAgentStatusEqual(previous.payload.mainAgent, mainAgent)
-  if (!mainAgentChanged && runningNonAgentTask === previous.claudeRunningNonAgentTask) {
+  const pendingWakeup = next.payload.claudeTaskWakeupPending
+  const wakeupChanged = pendingWakeup !== previous.payload.claudeTaskWakeupPending
+  if (
+    !mainAgentChanged &&
+    !wakeupChanged &&
+    runningNonAgentTask === previous.claudeRunningNonAgentTask
+  ) {
     return previous
   }
   const { claudeRunningNonAgentTask: _unpaired, ...unpaired } = previous
@@ -45,7 +52,10 @@ export function withHeldChildWaitMainAgent(
     ...(runningNonAgentTask !== undefined
       ? { claudeRunningNonAgentTask: runningNonAgentTask }
       : {}),
-    payload: mainAgentChanged ? { ...previous.payload, mainAgent } : previous.payload
+    payload:
+      mainAgentChanged || wakeupChanged
+        ? { ...previous.payload, mainAgent, claudeTaskWakeupPending: pendingWakeup }
+        : previous.payload
   }
 }
 
@@ -69,6 +79,9 @@ export function shouldKeepClaudePermissionVisible(
     return false
   }
   if (isClaudePermissionOwningChildEnding(previous, next)) {
+    return false
+  }
+  if (isClaudePermissionSettledByReplay(previous, next)) {
     return false
   }
   if (isClaudePermissionResumingApprovedTool(previous, next)) {
@@ -133,6 +146,13 @@ function isClaudePermissionResumingApprovedTool(
     hasMatchingToolUseId &&
     previous.payload.toolInput === undefined &&
     next.payload.toolInput === undefined
+
+  // Why: failure events arrive with tool name/input cleared, so only the exact request and owner settle the wait.
+  if (next.hookEventName === 'PostToolUseFailure') {
+    return (
+      hasMatchingToolUseId && previousAgentId === nextAgentId && previousAgentType === nextAgentType
+    )
+  }
 
   return (
     (next.hookEventName === 'PreToolUse' || next.hookEventName === 'PostToolUse') &&

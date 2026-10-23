@@ -4,6 +4,7 @@ import { AiVaultSearchResponseSchema } from '../../shared/ai-vault-search-contra
 import type { AiVaultSearchResponse, AiVaultSearchStatus } from '../../shared/ai-vault-search-types'
 import { REPEATED_FLAG_SEPARATOR } from '../args'
 import { RuntimeClientError } from '../runtime/types'
+import { AI_VAULT_AGENTS } from '../../shared/ai-vault-types'
 
 afterEach(() => vi.restoreAllMocks())
 
@@ -62,7 +63,17 @@ async function runSearch(
 ): Promise<{ call: ReturnType<typeof vi.fn>; output: string }> {
   const call = options.error
     ? vi.fn().mockRejectedValue(options.error)
-    : vi.fn().mockResolvedValue(envelope(options.result ?? resultsResponse))
+    : vi
+        .fn()
+        .mockImplementation((method: string) =>
+          Promise.resolve(
+            envelope(
+              method === 'aiVault.searchStatus'
+                ? statusResponse
+                : (options.result ?? resultsResponse)
+            )
+          )
+        )
   const lines: string[] = []
   vi.spyOn(console, 'log').mockImplementation((value: unknown) => {
     lines.push(String(value))
@@ -79,7 +90,6 @@ async function runSearch(
 
 type CliFlags = [string, string | boolean][]
 
-/** The printed envelope, narrowed by shape rather than asserted. */
 function printedEnvelope(output: string): { keys: string[]; result: unknown } {
   const parsed: unknown = JSON.parse(output)
   if (typeof parsed !== 'object' || parsed === null || !('result' in parsed)) {
@@ -88,7 +98,6 @@ function printedEnvelope(output: string): { keys: string[]; result: unknown } {
   return { keys: Object.keys(parsed), result: parsed.result }
 }
 
-/** Re-reads the printed result through the contract, so the shape is checked, not claimed. */
 function printedResults(output: string): Extract<AiVaultSearchResponse, { kind: 'results' }> {
   const parsed = AiVaultSearchResponseSchema.parse(printedEnvelope(output).result)
   if (parsed.kind !== 'results') {
@@ -102,7 +111,13 @@ describe('orca search over the runtime RPC', () => {
     const { call } = await runSearch([['query', 'resize race']])
 
     expect(call).toHaveBeenCalledTimes(1)
-    expect(call).toHaveBeenCalledWith('aiVault.searchSessions', { query: 'resize race', limit: 20 })
+    expect(call).toHaveBeenCalledWith('aiVault.searchSessions', {
+      query: 'resize race',
+      limit: 20,
+      supportedAgents: [...AI_VAULT_AGENTS],
+      supportsQoderHistory: true,
+      supportsJcodeHistory: true
+    })
   })
 
   const flagCases: [string, CliFlags, Record<string, unknown>][] = [
@@ -154,10 +169,19 @@ describe('orca search over the runtime RPC', () => {
     ]
   ]
 
-  it.each(flagCases)('sends %s', async (_name, flags, params) => {
+  it.each(flagCases)('sends %s', async (name, flags, params) => {
     const { call } = await runSearch(flags)
 
-    expect(call).toHaveBeenCalledWith('aiVault.searchSessions', params)
+    expect(call).toHaveBeenCalledTimes(name === 'filters' ? 2 : 1)
+    if (name === 'filters') {
+      expect(call).toHaveBeenNthCalledWith(1, 'aiVault.searchStatus', {})
+    }
+    expect(call).toHaveBeenCalledWith('aiVault.searchSessions', {
+      ...params,
+      supportedAgents: [...AI_VAULT_AGENTS],
+      supportsQoderHistory: true,
+      supportsJcodeHistory: true
+    })
   })
 
   it('calls the status RPC for --index-status', async () => {

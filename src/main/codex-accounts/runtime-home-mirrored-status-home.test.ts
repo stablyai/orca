@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -10,6 +11,7 @@ const testState = { userData: '', home: '' }
 const previousEnv: Record<string, string | undefined> = {}
 
 vi.mock('electron', () => ({ app: { getPath: () => testState.userData } }))
+beforeEach(() => installFakeAppEnvironment({ getPath: () => testState.userData }))
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof NodeOs>('node:os')
   return { ...actual, homedir: () => testState.home }

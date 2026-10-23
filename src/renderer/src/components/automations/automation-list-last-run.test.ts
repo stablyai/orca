@@ -69,7 +69,7 @@ function makeJob(overrides: Partial<ExternalAutomationJob> = {}): ExternalAutoma
   return {
     id: 'job-1',
     managerId: 'manager-1',
-    provider: 'hermes',
+    provider: 'openclaw',
     name: 'Digest',
     schedule: '0 9 * * 1-5',
     rawSchedule: null,

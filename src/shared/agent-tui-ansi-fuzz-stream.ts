@@ -15,7 +15,7 @@
 //   (headless-emulator.ts onQueryReply gating); replies are a separate
 //   authority problem with its own pinned tests (session.test.ts).
 
-/** Same seeded PRNG as retained-tail-redraw-window.equivalence.test.ts. */
+/** Seeded PRNG shared by the terminal fuzz and equivalence suites. */
 export function mulberry32(seed: number): () => number {
   let a = seed >>> 0
   return () => {

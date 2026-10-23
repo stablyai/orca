@@ -248,7 +248,6 @@ describe('regional host drain endpoint', () => {
       graceMs: 0
     }
 
-    expect(REGIONAL_REHOME_TRUST_PROBE_HOST_ID).toHaveLength(16)
     for (let call = 0; call < 2; call++) {
       const response = await post(app, 'rehome-token', probe)
       expect(response.status).toBe(200)
@@ -470,6 +469,7 @@ describe('regional rehome director controls', () => {
       (await postPath(app, '/v1/admin/regional-rehome-control', 'deploy-token', withoutCooldown))
         .status
     ).toBe(400)
+    expect(applyRegionalRehomeControl).toHaveBeenCalledExactlyOnceWith(apply)
   })
 
   it('probes dedicated trust twice and returns only aggregate proof', async () => {
@@ -734,7 +734,7 @@ describe('cell drain endpoint pacing', () => {
   })
 
   it('refuses a window that is negative, fractional, or past the cap', async () => {
-    for (const paceWindowMs of [-1, 1.5, 300_001]) {
+    for (const paceWindowMs of [-1, 1.5, 1_200_001]) {
       const { app, drain } = appWithDrain()
       const response = await postPath(app, '/v1/admin/drain', 'deploy-token', {
         v: 1,
@@ -751,10 +751,10 @@ describe('cell drain endpoint pacing', () => {
     const response = await postPath(app, '/v1/admin/drain', 'deploy-token', {
       v: 1,
       graceMs: 0,
-      paceWindowMs: 300_000
+      paceWindowMs: 1_200_000
     })
     expect(response.status).toBe(200)
-    expect(drain).toHaveBeenCalledWith(0, { paceWindowMs: 300_000 })
+    expect(drain).toHaveBeenCalledWith(0, { paceWindowMs: 1_200_000 })
   })
 
   it('still rejects an unauthenticated pacing request', async () => {

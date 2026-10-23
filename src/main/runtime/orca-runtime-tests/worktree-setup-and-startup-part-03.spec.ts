@@ -1,3 +1,4 @@
+import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import {
   OrcaRuntimeService,
@@ -5,7 +6,7 @@ import {
   computeWorktreePathMock,
   createSetupRunnerScript,
   detectInstalledAgentsWithShellPathHydrationMock,
-  detectRemoteAgentsMock,
+  electronMocks,
   ensurePathWithinWorkspaceMock,
   getDefaultTabsLaunch,
   getEffectiveHooks,
@@ -13,12 +14,20 @@ import {
   shouldRunSetupForCreate
 } from '../orca-runtime-test-mocks.spec'
 import type { WorktreeMeta } from '../orca-runtime-test-mocks.spec'
-import { TEST_REPO_ID, makeWorktreeMeta, store } from '../orca-runtime-test-fixtures.spec'
+import {
+  TEST_REPO_ID,
+  makeWorktreeMeta,
+  spawnedPtyEnv,
+  store,
+  makeRuntimeStoreWithWorkspaceSession
+} from '../orca-runtime-test-fixtures.spec'
+import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 
 describe('OrcaRuntimeService', () => {
-  it('does not surface the new workspace when a background create splits its setup pane', async () => {
+  it('does not surface the new workspace when a background create opens Setup', async () => {
     const runtimeStore = {
-      ...store,
+      ...makeRuntimeStoreWithWorkspaceSession(getDefaultWorkspaceSession()).runtimeStore,
       getSettings: () => ({
         ...store.getSettings(),
         setupScriptLaunchMode: 'split-horizontal' as const
@@ -47,7 +56,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -80,28 +88,26 @@ describe('OrcaRuntimeService', () => {
       setupDecision: 'run'
     })
 
-    // Split launch modes reach the renderer through splitTerminal, not
-    // createTerminal — that path must suppress owner surfacing too.
     expect(activateWorktree).not.toHaveBeenCalled()
     await vi.waitFor(() => expect(spawn).toHaveBeenCalledTimes(2))
-    const mainEnv = (spawn.mock.calls[0]![0] as { env?: Record<string, string> }).env ?? {}
+    const mainEnv = spawnedPtyEnv(spawn.mock.calls[0]![0])
     await vi.waitFor(() =>
       expect(revealTerminalSession).toHaveBeenLastCalledWith(
         result.worktree.id,
         expect.objectContaining({
           ptyId: 'pty-bg-split-setup',
-          tabId: mainEnv.ORCA_TAB_ID,
+          tabId: expect.not.stringMatching(`^${mainEnv.ORCA_TAB_ID}$`),
           activate: false,
           surfaceOwner: false,
-          splitDirection: 'horizontal'
+          title: 'Setup'
         })
       )
     )
   })
 
-  it('still surfaces the new workspace when an activating create splits its setup pane', async () => {
+  it('still surfaces the new workspace when an activating create opens Setup', async () => {
     const runtimeStore = {
-      ...store,
+      ...makeRuntimeStoreWithWorkspaceSession(getDefaultWorkspaceSession()).runtimeStore,
       getSettings: () => ({
         ...store.getSettings(),
         setupScriptLaunchMode: 'split-horizontal' as const
@@ -129,12 +135,13 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
     runtime.attachWindow(1)
 
+    runtime.markGraphReady(1)
+    electronMocks.BrowserWindow.fromId.mockReturnValue({ isDestroyed: () => false })
     computeWorktreePathMock.mockReturnValue('/tmp/workspaces/runtime-active-split-setup')
     ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/runtime-active-split-setup')
     vi.mocked(getEffectiveHooks).mockReturnValue({ scripts: { setup: 'pnpm install' } })
@@ -172,14 +179,12 @@ describe('OrcaRuntimeService', () => {
         result.worktree.id,
         expect.objectContaining({
           ptyId: 'pty-active-split-setup',
-          splitDirection: 'horizontal'
+          title: 'Setup'
         })
       )
     )
-    const splitRevealPayload = revealTerminalSession.mock.lastCall?.[1] as
-      | { surfaceOwner?: boolean }
-      | undefined
-    expect(splitRevealPayload).not.toHaveProperty('surfaceOwner')
+    const setupRevealPayload = revealTerminalSession.mock.lastCall?.[1]
+    expect(setupRevealPayload).not.toHaveProperty('surfaceOwner')
   })
 
   it('does not warn when setup is explicitly skipped for CLI-created worktrees', async () => {
@@ -188,7 +193,7 @@ describe('OrcaRuntimeService', () => {
       ...store,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
         return metaById[worktreeId]
       }
@@ -211,7 +216,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -245,13 +249,88 @@ describe('OrcaRuntimeService', () => {
     expect(spawn).toHaveBeenCalledTimes(1)
   })
 
-  it('materializes default tabs for inactive local managed worktree creates', async () => {
+  it('skips with a warning a setup hook only the new branch adds when an ask repo got no decision', async () => {
     const metaById: Record<string, WorktreeMeta> = {}
     const runtimeStore = {
       ...store,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
+        metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+        return metaById[worktreeId]
+      }
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const worktreesChanged = vi.fn()
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-branch-added-setup' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.setNotifier({
+      worktreesChanged,
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession: vi.fn().mockResolvedValue({ tabId: 'tab-branch-added-setup' }),
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    runtime.attachWindow(1)
+
+    computeWorktreePathMock.mockReturnValue('/tmp/workspaces/runtime-branch-added-setup')
+    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/runtime-branch-added-setup')
+    // The main checkout has no setup hook; only the new worktree's orca.yaml does.
+    vi.mocked(getEffectiveHooks).mockImplementation((_repo, worktreePath) =>
+      worktreePath ? { scripts: { setup: 'pnpm worktree:setup' } } : null
+    )
+    // An `ask` repo: an undecided create throws, as the real policy check does.
+    vi.mocked(shouldRunSetupForCreate).mockImplementation((_repo, decision) => {
+      if (decision === 'run' || decision === 'skip') {
+        return decision === 'run'
+      }
+      throw new Error('Setup decision required for this repository')
+    })
+    vi.mocked(listWorktrees).mockResolvedValue([
+      {
+        path: '/tmp/workspaces/runtime-branch-added-setup',
+        head: 'def',
+        branch: 'runtime-branch-added-setup',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    const result = await runtime.createManagedWorktree({
+      repoSelector: 'id:repo-1',
+      name: 'runtime-branch-added-setup',
+      setupDecision: 'inherit',
+      awaitTerminalProvisioning: true
+    })
+
+    expect(worktreesChanged).toHaveBeenCalledWith(TEST_REPO_ID)
+    expect(result.setupReceipt).toMatchObject({
+      requested: 'inherit',
+      hookFound: true,
+      state: 'skipped'
+    })
+    expect(result.warning).toContain('orca.yaml setup hook skipped')
+    expect(createSetupRunnerScript).not.toHaveBeenCalled()
+  })
+
+  it('materializes default tabs for inactive local managed worktree creates', async () => {
+    const metaById: Record<string, WorktreeMeta> = {}
+    const runtimeStore = {
+      // Main's own layout, which a layout-owner build writes the default tabs into.
+      ...makeRuntimeStoreWithWorkspaceSession(getDefaultWorkspaceSession()).runtimeStore,
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
         return metaById[worktreeId]
       }
@@ -281,7 +360,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -333,6 +411,101 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
+  it('puts the agent a create starts in the first default tab, as the window does', async () => {
+    const metaById: Record<string, WorktreeMeta> = {}
+    // Main's own layout, which a layout-owner build writes the default tabs into.
+    const mainLayout = makeRuntimeStoreWithWorkspaceSession(getDefaultWorkspaceSession())
+    const runtimeStore = {
+      ...mainLayout.runtimeStore,
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
+        metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+        return metaById[worktreeId]
+      }
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const spawn = vi
+      .fn<(options: { command?: string }) => Promise<{ id: string }>>()
+      .mockResolvedValueOnce({ id: 'pty-default-agent' })
+      .mockResolvedValueOnce({ id: 'pty-default-test' })
+    const revealTerminalSession = vi
+      .fn<(worktreeId: string, request: { tabId?: string }) => Promise<{ tabId: string }>>()
+      .mockResolvedValueOnce({ tabId: 'tab-default-agent' })
+      .mockResolvedValueOnce({ tabId: 'tab-default-test' })
+    const renameTerminal = vi.fn()
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession,
+      splitTerminal: vi.fn(),
+      renameTerminal,
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+
+    computeWorktreePathMock.mockReturnValue('/tmp/workspaces/runtime-default-agent')
+    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/runtime-default-agent')
+    vi.mocked(getDefaultTabsLaunch).mockReturnValue({
+      runCommands: true,
+      tabs: [
+        { title: 'Dev', command: 'pnpm dev' },
+        { title: 'Test', command: 'pnpm test' }
+      ]
+    })
+    vi.mocked(listWorktrees).mockResolvedValue([
+      {
+        path: '/tmp/workspaces/runtime-default-agent',
+        head: 'def',
+        branch: 'runtime-default-agent',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    const result = await runtime.createManagedWorktree({
+      repoSelector: 'id:repo-1',
+      name: 'runtime-default-agent',
+      setupDecision: 'run',
+      createdWithAgent: 'claude',
+      startup: { command: 'claude' }
+    })
+
+    await vi.waitFor(() => expect(revealTerminalSession).toHaveBeenCalledTimes(2))
+    const agentTabId = revealTerminalSession.mock.calls[0]?.[1].tabId
+    expect(agentTabId).toEqual(expect.any(String))
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      // The window draws the title from main's layout.
+      const agentRow = Object.values(mainLayout.getSession().tabsByWorktree)
+        .flat()
+        .find((tab) => tab.id === agentTabId)
+      expect(agentRow?.customTitle).toBe('Dev')
+    } else {
+      expect(renameTerminal).toHaveBeenCalledWith(agentTabId, 'Dev', { recordInteraction: false })
+    }
+    // The first template's command never runs beside the agent; only the rest are created.
+    expect(spawn).toHaveBeenCalledTimes(2)
+    expect(spawn.mock.calls.map(([options]) => options.command)).toEqual([
+      expect.stringContaining('claude'),
+      'pnpm test'
+    ])
+    expect(revealTerminalSession).toHaveBeenNthCalledWith(
+      2,
+      result.worktree.id,
+      expect.objectContaining({ title: 'Test', activate: false })
+    )
+  })
+
   it('uses desktop task agent selection and bracketed-pastes startup drafts for local worktrees', async () => {
     vi.useFakeTimers()
     onTestFinished(() => {
@@ -349,7 +522,7 @@ describe('OrcaRuntimeService', () => {
       }),
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
         return metaById[worktreeId]
       }
@@ -373,7 +546,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -400,7 +572,6 @@ describe('OrcaRuntimeService', () => {
     })
 
     expect(detectInstalledAgentsWithShellPathHydrationMock).not.toHaveBeenCalled()
-    expect(detectRemoteAgentsMock).not.toHaveBeenCalled()
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({
         cwd: '/tmp/workspaces/runtime-startup-draft',
@@ -457,7 +628,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -527,7 +697,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -605,7 +774,7 @@ describe('OrcaRuntimeService', () => {
       }),
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
         return metaById[worktreeId]
       }
@@ -628,7 +797,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })

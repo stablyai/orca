@@ -36,7 +36,8 @@ describe('matchingWorktreeBaseRepoIds (git-common)', () => {
       structureRepoIds: ['repo-1'],
       gitStatusRepoIds: [],
       headIdentityRepoIds: [],
-      headIdentityScope: headIdentityScopeForEntry('wt-a')
+      headIdentityScope: headIdentityScopeForEntry('wt-a'),
+      gitStatusScope: EMPTY_HEAD_IDENTITY_SCOPE
     })
     expect(
       classifyWorktreeBaseChange(target, {
@@ -52,7 +53,8 @@ describe('matchingWorktreeBaseRepoIds (git-common)', () => {
       headIdentityScope: {
         ...LISTING_HEAD_IDENTITY_SCOPE,
         entryNames: new Set(['wt-b'])
-      }
+      },
+      gitStatusScope: EMPTY_HEAD_IDENTITY_SCOPE
     })
     expect(
       matchingWorktreeBaseRepoIds(target, {
@@ -79,7 +81,8 @@ describe('matchingWorktreeBaseRepoIds (git-common)', () => {
         structureRepoIds: ['repo-1'],
         gitStatusRepoIds: [],
         headIdentityRepoIds: [],
-        headIdentityScope
+        headIdentityScope,
+        gitStatusScope: EMPTY_HEAD_IDENTITY_SCOPE
       })
     }
     expect(
@@ -91,7 +94,8 @@ describe('matchingWorktreeBaseRepoIds (git-common)', () => {
       structureRepoIds: [],
       gitStatusRepoIds: ['repo-1'],
       headIdentityRepoIds: [],
-      headIdentityScope: EMPTY_HEAD_IDENTITY_SCOPE
+      headIdentityScope: EMPTY_HEAD_IDENTITY_SCOPE,
+      gitStatusScope: PRIMARY_HEAD_IDENTITY_SCOPE
     })
   })
 
@@ -106,7 +110,8 @@ describe('matchingWorktreeBaseRepoIds (git-common)', () => {
       structureRepoIds: [],
       gitStatusRepoIds: ['repo-1'],
       headIdentityRepoIds: [],
-      headIdentityScope: EMPTY_HEAD_IDENTITY_SCOPE
+      headIdentityScope: EMPTY_HEAD_IDENTITY_SCOPE,
+      gitStatusScope: headIdentityScopeForEntry('wt-a')
     })
     expect(
       classifyWorktreeBaseChange(target, {
@@ -117,7 +122,8 @@ describe('matchingWorktreeBaseRepoIds (git-common)', () => {
       structureRepoIds: [],
       gitStatusRepoIds: [],
       headIdentityRepoIds: [],
-      headIdentityScope: EMPTY_HEAD_IDENTITY_SCOPE
+      headIdentityScope: EMPTY_HEAD_IDENTITY_SCOPE,
+      gitStatusScope: EMPTY_HEAD_IDENTITY_SCOPE
     })
   })
 
@@ -133,7 +139,9 @@ describe('matchingWorktreeBaseRepoIds (git-common)', () => {
       structureRepoIds: [],
       gitStatusRepoIds: [],
       headIdentityRepoIds: ['repo-1'],
-      headIdentityScope: headIdentityScopeForEntry('wt-a')
+      headIdentityScope: headIdentityScopeForEntry('wt-a'),
+      // The moved branch can be a sibling's local upstream, so status fans out.
+      gitStatusScope: FULL_HEAD_IDENTITY_SCOPE
     })
     expect(
       classifyWorktreeBaseChange(target, {
@@ -144,7 +152,8 @@ describe('matchingWorktreeBaseRepoIds (git-common)', () => {
       structureRepoIds: [],
       gitStatusRepoIds: [],
       headIdentityRepoIds: ['repo-1'],
-      headIdentityScope: PRIMARY_HEAD_IDENTITY_SCOPE
+      headIdentityScope: PRIMARY_HEAD_IDENTITY_SCOPE,
+      gitStatusScope: FULL_HEAD_IDENTITY_SCOPE
     })
     // Per-ref reflogs churn on fetches and stay ignored.
     expect(
@@ -156,7 +165,8 @@ describe('matchingWorktreeBaseRepoIds (git-common)', () => {
       structureRepoIds: [],
       gitStatusRepoIds: [],
       headIdentityRepoIds: [],
-      headIdentityScope: EMPTY_HEAD_IDENTITY_SCOPE
+      headIdentityScope: EMPTY_HEAD_IDENTITY_SCOPE,
+      gitStatusScope: EMPTY_HEAD_IDENTITY_SCOPE
     })
     expect(
       classifyWorktreeBaseChange(target, {
@@ -167,7 +177,8 @@ describe('matchingWorktreeBaseRepoIds (git-common)', () => {
       structureRepoIds: [],
       gitStatusRepoIds: [],
       headIdentityRepoIds: [],
-      headIdentityScope: EMPTY_HEAD_IDENTITY_SCOPE
+      headIdentityScope: EMPTY_HEAD_IDENTITY_SCOPE,
+      gitStatusScope: EMPTY_HEAD_IDENTITY_SCOPE
     })
   })
 
@@ -183,7 +194,8 @@ describe('matchingWorktreeBaseRepoIds (git-common)', () => {
       gitStatusRepoIds: [],
       headIdentityRepoIds: [],
       // Sparse-flag only: structural, but provably cannot move a head.
-      headIdentityScope: EMPTY_HEAD_IDENTITY_SCOPE
+      headIdentityScope: EMPTY_HEAD_IDENTITY_SCOPE,
+      gitStatusScope: EMPTY_HEAD_IDENTITY_SCOPE
     })
     expect(
       classifyWorktreeBaseChange(target, {
@@ -194,7 +206,8 @@ describe('matchingWorktreeBaseRepoIds (git-common)', () => {
       structureRepoIds: ['repo-1'],
       gitStatusRepoIds: [],
       headIdentityRepoIds: [],
-      headIdentityScope: EMPTY_HEAD_IDENTITY_SCOPE
+      headIdentityScope: EMPTY_HEAD_IDENTITY_SCOPE,
+      gitStatusScope: EMPTY_HEAD_IDENTITY_SCOPE
     })
   })
 
@@ -212,7 +225,8 @@ describe('matchingWorktreeBaseRepoIds (git-common)', () => {
       structureRepoIds: [],
       gitStatusRepoIds: ['repo-1'],
       headIdentityRepoIds: [],
-      headIdentityScope: EMPTY_HEAD_IDENTITY_SCOPE
+      headIdentityScope: EMPTY_HEAD_IDENTITY_SCOPE,
+      gitStatusScope: FULL_HEAD_IDENTITY_SCOPE
     })
     const boundPaths = [
       join(COMMON_DIR, 'refs', 'remotes', 'origin', 'main'),
@@ -227,7 +241,8 @@ describe('matchingWorktreeBaseRepoIds (git-common)', () => {
           structureRepoIds: [],
           gitStatusRepoIds: ['repo-1'],
           headIdentityRepoIds: [],
-          headIdentityScope: EMPTY_HEAD_IDENTITY_SCOPE
+          headIdentityScope: EMPTY_HEAD_IDENTITY_SCOPE,
+          gitStatusScope: FULL_HEAD_IDENTITY_SCOPE
         })
       }
     }
@@ -241,7 +256,8 @@ describe('matchingWorktreeBaseRepoIds (git-common)', () => {
       structureRepoIds: [],
       gitStatusRepoIds: [],
       headIdentityRepoIds: [],
-      headIdentityScope: EMPTY_HEAD_IDENTITY_SCOPE
+      headIdentityScope: EMPTY_HEAD_IDENTITY_SCOPE,
+      gitStatusScope: EMPTY_HEAD_IDENTITY_SCOPE
     })
     expect(
       classifyWorktreeBaseChange(target, {
@@ -252,7 +268,8 @@ describe('matchingWorktreeBaseRepoIds (git-common)', () => {
       structureRepoIds: [],
       gitStatusRepoIds: [],
       headIdentityRepoIds: [],
-      headIdentityScope: EMPTY_HEAD_IDENTITY_SCOPE
+      headIdentityScope: EMPTY_HEAD_IDENTITY_SCOPE,
+      gitStatusScope: EMPTY_HEAD_IDENTITY_SCOPE
     })
   })
 
@@ -273,7 +290,8 @@ describe('matchingWorktreeBaseRepoIds (git-common)', () => {
       structureRepoIds: ['repo-1'],
       gitStatusRepoIds: [],
       headIdentityRepoIds: [],
-      headIdentityScope: headIdentityScopeForEntry('wt a')
+      headIdentityScope: headIdentityScopeForEntry('wt a'),
+      gitStatusScope: EMPTY_HEAD_IDENTITY_SCOPE
     })
     expect(
       classifyWorktreeBaseChange(target, {
@@ -284,7 +302,8 @@ describe('matchingWorktreeBaseRepoIds (git-common)', () => {
       structureRepoIds: [],
       gitStatusRepoIds: ['repo-1'],
       headIdentityRepoIds: [],
-      headIdentityScope: EMPTY_HEAD_IDENTITY_SCOPE
+      headIdentityScope: EMPTY_HEAD_IDENTITY_SCOPE,
+      gitStatusScope: headIdentityScopeForEntry('wt a')
     })
     expect(
       classifyWorktreeBaseChange(target, {
@@ -295,7 +314,8 @@ describe('matchingWorktreeBaseRepoIds (git-common)', () => {
       structureRepoIds: [],
       gitStatusRepoIds: ['repo-1'],
       headIdentityRepoIds: [],
-      headIdentityScope: EMPTY_HEAD_IDENTITY_SCOPE
+      headIdentityScope: EMPTY_HEAD_IDENTITY_SCOPE,
+      gitStatusScope: FULL_HEAD_IDENTITY_SCOPE
     })
   })
 
@@ -316,7 +336,8 @@ describe('matchingWorktreeBaseRepoIds (git-common)', () => {
         structureRepoIds: [],
         gitStatusRepoIds: [],
         headIdentityRepoIds: [],
-        headIdentityScope: EMPTY_HEAD_IDENTITY_SCOPE
+        headIdentityScope: EMPTY_HEAD_IDENTITY_SCOPE,
+        gitStatusScope: EMPTY_HEAD_IDENTITY_SCOPE
       })
     }
   })
@@ -332,7 +353,8 @@ describe('matchingWorktreeBaseRepoIds (git-common)', () => {
         structureRepoIds: ['repo-1'],
         gitStatusRepoIds: [],
         headIdentityRepoIds: [],
-        headIdentityScope: FULL_HEAD_IDENTITY_SCOPE
+        headIdentityScope: FULL_HEAD_IDENTITY_SCOPE,
+        gitStatusScope: EMPTY_HEAD_IDENTITY_SCOPE
       })
     }
   })

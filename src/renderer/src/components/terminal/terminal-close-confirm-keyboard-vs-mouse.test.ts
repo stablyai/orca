@@ -28,17 +28,25 @@ vi.mock('@/store', () => ({
   useAppStore: { getState: getStateMock }
 }))
 
-vi.mock('@/runtime/web-runtime-session', () => ({
+vi.mock('@/runtime/web-runtime-session-tab-lifecycle', () => ({
   activateWebRuntimeSessionTab: vi.fn(),
-  closeWebRuntimeSessionTab: vi.fn(),
-  createWebRuntimeSessionTerminal: vi.fn(),
-  isWebRuntimeSessionActive: isWebRuntimeSessionActiveMock,
+  closeWebRuntimeSessionTab: vi.fn()
+}))
+vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
+  createWebRuntimeSessionTerminal: vi.fn()
+}))
+vi.mock('@/runtime/web-runtime-session-environment', () => ({
+  isWebRuntimeSessionActive: isWebRuntimeSessionActiveMock
+}))
+vi.mock('../../../../shared/terminal-surface-id', () => ({
   isWebTerminalSurfaceTabId: vi.fn(() => false),
   toHostSessionTabId: vi.fn((tabId: string) => tabId)
 }))
 
-vi.mock('@/runtime/web-session-tabs-sync', () => ({
-  getLatestWebSessionTabsPublicationEpoch: vi.fn(() => 'epoch-1'),
+vi.mock('@/runtime/web-session-tabs-sync/tracking-lifecycle', () => ({
+  getLatestWebSessionTabsPublicationEpoch: vi.fn(() => 'epoch-1')
+}))
+vi.mock('@/runtime/web-session-tabs-sync/tracking-mappings', () => ({
   resolveHostSessionTabIdForWebSessionTab: resolveHostSessionTabIdForWebSessionTabMock
 }))
 
@@ -47,11 +55,13 @@ vi.mock('@/runtime/runtime-terminal-inspection', () => ({
 }))
 
 import { closeTerminalTab } from './terminal-tab-actions'
+import { terminalOwnerRows } from './terminal-tab-owner-rows.test-fixture'
 
 // A non-pinned terminal tab whose PTY has a live child process (e.g. `sleep 300`).
 function stateWithBusyTerminalTab(closeTab: () => void): Record<string, unknown> {
   return {
     settings: { activeRuntimeEnvironmentId: null, confirmClosePinnedTab: true },
+    ...terminalOwnerRows(null),
     tabsByWorktree: { 'wt-1': [{ id: 'tab-busy' }, { id: 'tab-other' }] },
     unifiedTabsByWorktree: {
       'wt-1': [

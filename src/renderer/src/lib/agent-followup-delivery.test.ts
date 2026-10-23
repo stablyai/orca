@@ -1,13 +1,13 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { sendFollowupPromptWhenAgentReady } from './agent-followup-delivery'
-import {
-  inspectRuntimeTerminalProcess,
-  sendRuntimePtyInputVerified
-} from '@/runtime/runtime-terminal-inspection'
+import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
+import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-verified-input'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
-  inspectRuntimeTerminalProcess: vi.fn(),
+  inspectRuntimeTerminalProcess: vi.fn()
+}))
+vi.mock('@/runtime/runtime-terminal-verified-input', () => ({
   sendRuntimePtyInputVerified: vi.fn()
 }))
 
@@ -21,9 +21,15 @@ const INTERPRETER_WRAPPED_AGENTS = [
 describe('sendFollowupPromptWhenAgentReady — interpreter-wrapped agents', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     vi.stubGlobal('globalThis', globalThis)
     // Deliver the prompt write eagerly so the test does not depend on retries.
     vi.mocked(sendRuntimePtyInputVerified).mockResolvedValue(true)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
   })
 
   for (const { agent, expectedProcess } of INTERPRETER_WRAPPED_AGENTS) {
@@ -35,15 +41,17 @@ describe('sendFollowupPromptWhenAgentReady — interpreter-wrapped agents', () =
         hasChildProcesses: true
       })
 
-      const delivered = await sendFollowupPromptWhenAgentReady({
+      const delivery = sendFollowupPromptWhenAgentReady({
         ptyId: 'pty-1',
         expectedProcess,
-        prompt: 'ship it',
-        settings: null
+        prompt: 'ship it'
       })
 
+      await vi.advanceTimersByTimeAsync(4 * 150)
+      const delivered = await delivery
+
       expect(delivered).toBe(true)
-      expect(sendRuntimePtyInputVerified).toHaveBeenCalledWith(null, 'pty-1', 'ship it\r', 'launch')
+      expect(sendRuntimePtyInputVerified).toHaveBeenCalledWith('pty-1', 'ship it\r', 'launch')
     })
 
     it(`still refuses to type into a bare ${agent} shell foreground`, async () => {
@@ -54,12 +62,14 @@ describe('sendFollowupPromptWhenAgentReady — interpreter-wrapped agents', () =
         hasChildProcesses: false
       })
 
-      const delivered = await sendFollowupPromptWhenAgentReady({
+      const delivery = sendFollowupPromptWhenAgentReady({
         ptyId: 'pty-1',
         expectedProcess,
-        prompt: 'ship it',
-        settings: null
+        prompt: 'ship it'
       })
+
+      await vi.advanceTimersByTimeAsync(29 * 150)
+      const delivered = await delivery
 
       expect(delivered).toBe(false)
       expect(sendRuntimePtyInputVerified).not.toHaveBeenCalled()
@@ -71,12 +81,14 @@ describe('sendFollowupPromptWhenAgentReady — interpreter-wrapped agents', () =
         hasChildProcesses: false
       })
 
-      const delivered = await sendFollowupPromptWhenAgentReady({
+      const delivery = sendFollowupPromptWhenAgentReady({
         ptyId: 'pty-1',
         expectedProcess,
-        prompt: 'ship it',
-        settings: null
+        prompt: 'ship it'
       })
+
+      await vi.advanceTimersByTimeAsync(29 * 150)
+      const delivered = await delivery
 
       expect(delivered).toBe(false)
       expect(sendRuntimePtyInputVerified).not.toHaveBeenCalled()
@@ -94,11 +106,10 @@ describe('sendFollowupPromptWhenAgentReady — interpreter-wrapped agents', () =
     const delivered = await sendFollowupPromptWhenAgentReady({
       ptyId: 'pty-1',
       expectedProcess: 'aider',
-      prompt: 'ship it',
-      settings: null
+      prompt: 'ship it'
     })
 
     expect(delivered).toBe(true)
-    expect(sendRuntimePtyInputVerified).toHaveBeenCalledWith(null, 'pty-1', 'ship it\r', 'launch')
+    expect(sendRuntimePtyInputVerified).toHaveBeenCalledWith('pty-1', 'ship it\r', 'launch')
   })
 })

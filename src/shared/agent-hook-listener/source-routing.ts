@@ -6,6 +6,8 @@ export const HOOK_SOURCE_BY_PATHNAME: Readonly<Record<string, AgentHookSource>> 
   '/hook/claude': 'claude',
   '/hook/codex': 'codex',
   '/hook/qoder': 'qoder',
+  '/hook/qoder-cn': 'qoder-cn',
+  '/hook/qwen-code': 'qwen-code',
   '/hook/codebuddy': 'codebuddy',
   '/hook/gemini': 'gemini',
   '/hook/antigravity': 'antigravity',
@@ -26,7 +28,9 @@ export const HOOK_SOURCE_BY_PATHNAME: Readonly<Record<string, AgentHookSource>> 
   '/hook/kimi': 'kimi',
   '/hook/muse': 'muse',
   '/hook/zcode': 'zcode',
-  '/hook/dsh': 'dsh'
+  '/hook/dsh': 'dsh',
+  '/hook/jcode': 'jcode',
+  '/hook/kiro': 'kiro'
 })
 
 export function resolveHookSource(pathname: string): AgentHookSource | null {

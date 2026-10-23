@@ -1,3 +1,4 @@
+import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
@@ -35,7 +36,7 @@ function makeHost(options: { structuredChat?: boolean } = {}) {
   const runtime = {
     getRuntimeId: () => 'test-runtime',
     getClientSettings: () => ({
-      experimentalStructuredNativeChat: options.structuredChat === true
+      experimentalNativeChat: options.structuredChat === true
     }),
     restoreStructuredAgentSessionTabs: restore,
     listMobileSessionTabs,
@@ -267,9 +268,9 @@ describe('session.tabs.subscribe registers when the request arrives', () => {
     const listing = deferred<RuntimeMobileSessionTabsResult>()
     host.listMobileSessionTabs.mockReturnValueOnce(listing.promise)
 
-    // Old phones send no request id, so the host sweeps every stream for the worktree.
+    // Non-id selectors still await resolution; newer streams must survive that delay.
     const unsubscribing = host.dispatch(
-      request('unsub-1', 'session.tabs.unsubscribe', { worktree: 'id:wt-1' })
+      request('unsub-1', 'session.tabs.unsubscribe', { worktree: 'name:workspace' })
     )
     await settle()
     await host.dispatch(request('sub-2', 'session.tabs.subscribe', { worktree: 'id:wt-1' }), second)

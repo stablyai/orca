@@ -19,11 +19,10 @@ import {
  * The wait is bounded because mirror settlement has already happened and will
  * not replay a parked sweep again. Three exits, each replaying the sweep:
  *  - the pane's own handle lands (`ptyIdsByTabId[tabId]` non-empty);
- *  - the row is retracted (the host has spoken: the pane is gone);
+ *  - the row is retracted;
  *  - the deadline expires. A handle that has not landed within the RPC budget
- *    is not coming on this connection, so the pane is released to ordinary
- *    recovery: a resume after a bounded wait is defensible, an indefinite hold
- *    is the latch-that-never-releases defect. A reconnect bumps the connection
+ *    ends this wait without authorizing a client-side resume; the execution host owns recovery.
+ *    A reconnect bumps the connection
  *    generation and arms a fresh wait. A deadline that fires while contact is
  *    lost, or after contact was lost and regained mid-budget, releases WITHOUT a
  *    verdict: it measured the outage, not the host, and the re-park arms a
@@ -357,17 +356,19 @@ function startStoreSubscription(): void {
   if (unsubscribeStore) {
     return
   }
-  let previous: HandleGapStoreState = useAppStore.getState()
+  let { ptyIdsByTabId: previousPtyIdsByTabId, tabsByWorktree: previousTabsByWorktree } =
+    useAppStore.getState()
   unsubscribeStore = useAppStore.subscribe((state) => {
     // Why: only these two slices can release a waiter; title, status, and
     // usage ticks must not rescan every parked pane.
     if (
-      state.ptyIdsByTabId === previous.ptyIdsByTabId &&
-      state.tabsByWorktree === previous.tabsByWorktree
+      state.ptyIdsByTabId === previousPtyIdsByTabId &&
+      state.tabsByWorktree === previousTabsByWorktree
     ) {
       return
     }
-    previous = state
+    previousPtyIdsByTabId = state.ptyIdsByTabId
+    previousTabsByWorktree = state.tabsByWorktree
     retireVerdictsWithLandedHandles(state)
     releaseDueWaiters(state)
     stopStoreSubscriptionIfIdle()

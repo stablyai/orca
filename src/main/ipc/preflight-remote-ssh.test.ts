@@ -1,197 +1,41 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { SSH_HOST_NOT_SERVED_MESSAGE } from '../providers/ssh-host-not-served-error'
 
-const {
-  handleMock,
-  execFileMock,
-  execFileAsyncMock,
-  hydrateShellPathMock,
-  mergePathSegmentsMock,
-  getActiveMultiplexerMock,
-  getBitbucketAuthStatusMock,
-  getAzureDevOpsAuthStatusMock,
-  getGiteaAuthStatusMock,
-  resolveCliCommandsMock,
-  isCommandOnLocalPathMock,
-  mergePersistedWindowsPathAsyncMock,
-  mergePersistedWindowsPathMock
-} = vi.hoisted(() => ({
-  handleMock: vi.fn(),
-  execFileMock: vi.fn(),
-  execFileAsyncMock: vi.fn(),
-  hydrateShellPathMock: vi.fn(),
-  mergePathSegmentsMock: vi.fn(),
-  getActiveMultiplexerMock: vi.fn(),
-  getBitbucketAuthStatusMock: vi.fn(),
-  getAzureDevOpsAuthStatusMock: vi.fn(),
-  getGiteaAuthStatusMock: vi.fn(),
-  resolveCliCommandsMock: vi.fn(),
-  isCommandOnLocalPathMock: vi.fn(),
-  mergePersistedWindowsPathAsyncMock: vi.fn(),
-  mergePersistedWindowsPathMock: vi.fn()
+type Handler = (event: unknown, args: unknown) => Promise<unknown>
+const { handlers, isCommandOnPathMock } = vi.hoisted(() => ({
+  handlers: new Map<string, Handler>(),
+  isCommandOnPathMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
-  ipcMain: {
-    handle: handleMock
-  }
+  ipcMain: { handle: (channel: string, handler: Handler) => handlers.set(channel, handler) }
 }))
-
-vi.mock('child_process', () => {
-  const execFileWithPromisify = Object.assign(execFileMock, {
-    [Symbol.for('nodejs.util.promisify.custom')]: execFileAsyncMock
-  })
-  return {
-    execFile: execFileWithPromisify,
-    spawn: vi.fn()
-  }
-})
-
-vi.mock('../startup/hydrate-shell-path', () => ({
-  hydrateShellPath: hydrateShellPathMock,
-  mergePathSegments: mergePathSegmentsMock
-}))
-
-vi.mock('../../shared/node-cli-command-resolution', () => ({
-  resolveCliCommands: resolveCliCommandsMock
-}))
-
-// Why (#9297): local PATH resolution is now fs-based (no where/which spawn).
-// These tests express "which commands are on PATH" via the where/which mock,
-// so route the resolver through that same mock to preserve their intent.
-vi.mock('./command-path-resolver', () => ({
-  isCommandOnLocalPath: isCommandOnLocalPathMock
-}))
-
-vi.mock('../pty/windows-environment-path', () => ({
-  mergePersistedWindowsPathAsync: mergePersistedWindowsPathAsyncMock,
-  mergePersistedWindowsPath: mergePersistedWindowsPathMock
-}))
-
-vi.mock('./ssh', () => ({
-  getActiveMultiplexer: getActiveMultiplexerMock
-}))
-vi.mock('../ssh/ssh-target-registry', () => ({
-  getActiveMultiplexer: getActiveMultiplexerMock
-}))
-
-vi.mock('../bitbucket/client', () => ({
-  getBitbucketAuthStatus: getBitbucketAuthStatusMock
-}))
-
-vi.mock('../azure-devops/client', () => ({
-  getAzureDevOpsAuthStatus: getAzureDevOpsAuthStatusMock
-}))
-
-vi.mock('../gitea/client', () => ({
-  getGiteaAuthStatus: getGiteaAuthStatusMock
+vi.mock('./preflight-command-exec', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  isCommandOnPath: isCommandOnPathMock
 }))
 
 import { registerPreflightHandlers } from './preflight'
-import { resetPreflightMocks, type HandlerMap } from './preflight-test-harness'
+import { detectAgentCommandsOnHost } from '../preflight/agent-detection'
 
-describe('preflight', () => {
-  const originalPlatform = process.platform
-  const handlers: HandlerMap = {}
-
-  beforeEach(() => {
-    resetPreflightMocks(
-      {
-        handleMock,
-        execFileAsyncMock,
-        hydrateShellPathMock,
-        mergePathSegmentsMock,
-        getActiveMultiplexerMock,
-        getBitbucketAuthStatusMock,
-        getAzureDevOpsAuthStatusMock,
-        getGiteaAuthStatusMock,
-        resolveCliCommandsMock,
-        isCommandOnLocalPathMock,
-        mergePersistedWindowsPathAsyncMock,
-        mergePersistedWindowsPathMock
-      },
-      handlers
-    )
-  })
-
-  afterEach(() => {
-    Object.defineProperty(process, 'platform', {
-      configurable: true,
-      value: originalPlatform
-    })
-  })
-
-  it('sends aliased detection commands through the SSH remote preflight path', async () => {
-    const request = vi.fn().mockResolvedValue({ agents: ['openclaude'] })
-    getActiveMultiplexerMock.mockReturnValue({
-      isDisposed: () => false,
-      request
-    })
-
-    registerPreflightHandlers()
-
+// Why: this process serves no SSH target; each probe must reject, never answer for this computer.
+describe('preflight on an SSH target', () => {
+  it('refuses Qoder command selection without probing the local host', async () => {
     await expect(
-      handlers['preflight:detectRemoteAgents'](undefined, { connectionId: 'ssh-1' })
-    ).resolves.toEqual(['openclaude'])
-    expect(request).toHaveBeenCalledWith('preflight.detectAgents', {
-      commands: expect.arrayContaining([
-        { id: 'openclaude', cmd: 'openclaude' },
-        { id: 'mistral-vibe', cmd: 'vibe' },
-        { id: 'mistral-vibe', cmd: 'mistral-vibe' }
-      ])
-    })
+      detectAgentCommandsOnHost(['qodercli', 'qoder'], { connectionId: 'ssh-qoder' })
+    ).rejects.toThrow(SSH_HOST_NOT_SERVED_MESSAGE)
+    expect(isCommandOnPathMock).not.toHaveBeenCalled()
   })
 
-  it('returns no remote agents when the SSH connection is unavailable', async () => {
-    getActiveMultiplexerMock.mockReturnValue(null)
-
-    registerPreflightHandlers()
-
-    await expect(
-      handlers['preflight:detectRemoteAgents'](undefined, { connectionId: 'ssh-1' })
-    ).resolves.toEqual([])
-  })
-
-  it('returns no remote agents when the SSH connection is disposed', async () => {
-    const request = vi.fn()
-    getActiveMultiplexerMock.mockReturnValue({
-      isDisposed: () => true,
-      request
-    })
-
-    registerPreflightHandlers()
-
-    await expect(
-      handlers['preflight:detectRemoteAgents'](undefined, { connectionId: 'ssh-1' })
-    ).resolves.toEqual([])
-    expect(request).not.toHaveBeenCalled()
-  })
-
-  it('sends remote Windows shell capability probes through the SSH preflight path', async () => {
-    const request = vi.fn().mockResolvedValue({
-      wslAvailable: true,
-      wslDistros: ['Ubuntu'],
-      pwshAvailable: true,
-      gitBashAvailable: true,
-      hostPlatform: 'win32'
-    })
-    getActiveMultiplexerMock.mockReturnValue({
-      isDisposed: () => false,
-      request
-    })
-
-    registerPreflightHandlers()
-
-    await expect(
-      handlers['preflight:detectRemoteWindowsTerminalCapabilities'](undefined, {
-        connectionId: 'ssh-1'
-      })
-    ).resolves.toEqual({
-      wslAvailable: true,
-      wslDistros: ['Ubuntu'],
-      pwshAvailable: true,
-      gitBashAvailable: true,
-      hostPlatform: 'win32'
-    })
-    expect(request).toHaveBeenCalledWith('preflight.detectWindowsTerminalCapabilities', {})
-  })
+  // Why (#25523): an empty list would be cached as "no agents installed" on that host.
+  it.each(['preflight:detectRemoteAgents', 'preflight:detectRemoteWindowsTerminalCapabilities'])(
+    '%s rejects instead of answering',
+    async (channel) => {
+      registerPreflightHandlers()
+      await expect(handlers.get(channel)!(undefined, { connectionId: 'ssh-1' })).rejects.toThrow(
+        SSH_HOST_NOT_SERVED_MESSAGE
+      )
+      expect(isCommandOnPathMock).not.toHaveBeenCalled()
+    }
+  )
 })

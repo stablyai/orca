@@ -1,10 +1,8 @@
 import { glabExecFileAsync } from '../git/runner'
 import type { GitAdmissionTier } from '../git/command-runner/git-exec-options'
-import { shouldProbeGitRemote } from '../git/remote-name-listing'
+import { addWslEnvKeys } from '../wsl-env'
 import { isTransientGitProbeError, readRemoteUrl } from '../git/remote-url-probe'
 import { NEGATIVE_ENTRY_TTL_MS } from '../git/remote-ref-probe-cache'
-import { getSshGitProviderGeneration } from '../providers/ssh-git-dispatch'
-import type { IssueSourcePreference } from '../../shared/repo-types'
 import { clearProjectRefInFlight, runProjectRefProbeOnce } from './project-ref-inflight'
 import {
   _resetGlabUnauthenticatedHosts,
@@ -74,13 +72,9 @@ export async function getProjectRefForRemote(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<ProjectRef | null> {
-  // Why: a reconnect replaces the host an answer came from under the same id, so
-  // the generation is part of the signature; `knownHosts` carries the glab auth
-  // state, so logging into a self-hosted instance re-asks rather than reusing a
-  // ref resolved while that host was unknown.
-  const runtimeKey = connectionId
-    ? `${connectionId}:${getSshGitProviderGeneration(connectionId)}`
-    : `local:${localGitOptions.wslDistro ?? 'host'}`
+  // Why: `knownHosts` carries the glab auth state, so logging into a self-hosted
+  // instance re-asks rather than reusing a ref resolved while that host was unknown.
+  const runtimeKey = connectionId ?? `local:${localGitOptions.wslDistro ?? 'host'}`
   const cacheKey = `${runtimeKey}\0${repoPath}\0${remoteName}\0${knownHosts.join(',')}`
   const cached = projectRefCache.get(cacheKey)
   if (cached) {
@@ -175,85 +169,6 @@ export async function getProjectRef(
   return getProjectRefForRemote(repoPath, 'origin', knownHosts, connectionId, localGitOptions)
 }
 
-export async function getIssueProjectRef(
-  repoPath: string,
-  knownHosts?: readonly string[],
-  connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
-): Promise<ProjectRef | null> {
-  const originPromise = getProjectRefForRemote(
-    repoPath,
-    'origin',
-    knownHosts,
-    connectionId,
-    localGitOptions
-  )
-  if (await shouldProbeGitRemote(repoPath, 'upstream', connectionId, localGitOptions)) {
-    const upstream = await getProjectRefForRemote(
-      repoPath,
-      'upstream',
-      knownHosts,
-      connectionId,
-      localGitOptions
-    )
-    if (upstream) {
-      return upstream
-    }
-  }
-  return originPromise
-}
-
-export type ResolvedIssueSource = {
-  source: ProjectRef | null
-  /** True when explicit upstream is gone and resolver fell back to origin. */
-  fellBack: boolean
-}
-
-export async function resolveIssueSource(
-  repoPath: string,
-  preference: IssueSourcePreference | undefined,
-  knownHosts?: readonly string[],
-  connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
-): Promise<ResolvedIssueSource> {
-  if (preference === 'upstream') {
-    const upstream = await getProjectRefForRemote(
-      repoPath,
-      'upstream',
-      knownHosts,
-      connectionId,
-      localGitOptions
-    )
-    if (upstream) {
-      return { source: upstream, fellBack: false }
-    }
-    const origin = await getProjectRefForRemote(
-      repoPath,
-      'origin',
-      knownHosts,
-      connectionId,
-      localGitOptions
-    )
-    return { source: origin, fellBack: origin !== null }
-  }
-  if (preference === 'origin') {
-    return {
-      source: await getProjectRefForRemote(
-        repoPath,
-        'origin',
-        knownHosts,
-        connectionId,
-        localGitOptions
-      ),
-      fellBack: false
-    }
-  }
-  return {
-    source: await getIssueProjectRef(repoPath, knownHosts, connectionId, localGitOptions),
-    fellBack: false
-  }
-}
-
 export function glabRepoExecOptions(
   repoPath: string,
   connectionId?: string | null,
@@ -273,6 +188,22 @@ export function glabHostnameArgs(
   connectionId?: string | null
 ): string[] {
   return connectionId && projectRef?.host ? ['--hostname', projectRef.host] : []
+}
+
+/** Why: only `api`/`auth` define `--hostname`; `mr` and `issue` subcommands reject it (#12193). */
+export function glabHostEnvOptions(
+  projectRef: Pick<ProjectRef, 'host'> | null | undefined,
+  connectionId?: string | null
+): { env?: NodeJS.ProcessEnv } {
+  if (!connectionId || !projectRef?.host) {
+    return {}
+  }
+  const env: NodeJS.ProcessEnv = { ...process.env, GITLAB_HOST: projectRef.host }
+  if (process.platform === 'win32') {
+    // Why: spawn env stops at the wsl.exe boundary unless WSLENV names the var.
+    addWslEnvKeys(env, ['GITLAB_HOST'])
+  }
+  return { env }
 }
 
 async function isGlabConfiguredForRemoteHost(

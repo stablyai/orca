@@ -9,17 +9,22 @@ import {
 import type { ClaudeSubagentLinkageSource } from './claude-subagent-linkage'
 
 export type ClaudeStreamedTextCheckpointDeps = {
-  /** Rewrites the block's journal row with the text accumulated so far. */
+  /** Rewrites the block's journal row with the text accumulated so far. `ended` is set on the
+   *  block's last write, when it ends without the final frame that would otherwise replace it. */
   persist: (
     identity: AgentJournalItemIdentity,
     text: string,
-    options: StructuredAgentSessionAppendOptions
+    options: StructuredAgentSessionAppendOptions,
+    ended?: ClaudeStreamedBlockEnd
   ) => void
   /** Who produced a block, asked by the scope the block streamed under. */
   producer: ClaudeSubagentLinkageSource
   coalesceMs?: number
   schedule?: AgentSessionDeltaCoalescerDeps['schedule']
 }
+
+/** How a block ended: `completedAt` is when the host saw it end, or saw what cut it off. */
+export type ClaudeStreamedBlockEnd = { completedAt?: number }
 
 export type ClaudeStreamedTextCheckpoints = {
   /** Accumulate a delta; the row is rewritten on the coalescer's own cadence. */
@@ -36,6 +41,11 @@ export type ClaudeStreamedTextCheckpoints = {
   reattribute: () => void
   /** Drop one block's state, for a block whose final frame has now landed. */
   forget: (key: string) => void
+  /** The text received for a block so far, if it is still streaming. */
+  latest: (key: string) => string | undefined
+  /** Write each matching block's text one last time as ended, then drop it: its final frame is
+   *  never coming. A block with no text has no row and is only dropped. */
+  finish: (ended: ClaudeStreamedBlockEnd, only?: (key: string) => boolean) => void
   /**
    * Drop every block still awaiting its final frame, at turn settlement. Their
    * text is already journaled by the flush that precedes settlement; keeping it
@@ -156,6 +166,20 @@ export function createClaudeStreamedTextCheckpoints(
       }
     },
     forget: drop,
+    latest: (key) => coalescer.snapshot(key)?.text ?? latestText.get(key),
+    finish: (ended, only) => {
+      for (const [key, identity] of identities) {
+        if (only && !only(key)) {
+          continue
+        }
+        coalescer.flush(key)
+        const text = latestText.get(key)
+        if (text !== undefined) {
+          deps.persist(identity, text, producerOptions(key), ended)
+        }
+        drop(key)
+      }
+    },
     settle: () => {
       // Map iteration tolerates deletion of the entry just visited.
       for (const key of identities.keys()) {

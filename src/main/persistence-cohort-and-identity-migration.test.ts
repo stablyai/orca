@@ -17,6 +17,7 @@ import type { WorkspaceSessionState } from '../shared/workspace-session-state-ty
 import { getDefaultWorkspaceSession } from '../shared/constants'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../shared/workspace-scope'
 import { createProfileStateStore } from './persistence/profile-state/profile-state-store-factory'
+import { hostWorktreeTarget } from '../shared/worktree/host-qualified-identity'
 
 // Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
@@ -24,7 +25,7 @@ const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => 
   sshConfigHostsToTargetsMock: vi.fn()
 }))
 
-vi.mock('./ssh/ssh-config-parser', () => ({
+vi.mock('./ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: loadUserSshConfigMock,
   sshConfigHostsToTargets: sshConfigHostsToTargetsMock
 }))
@@ -216,8 +217,14 @@ describe('Store.migrateWorktreeIdentity', () => {
 
   it('moves meta, lineage, tabs, active pointers, and records the prior id', async () => {
     const store = await createStore()
-    store.setWorktreeMeta(OLD, { displayName: 'Cunner', linkedIssue: 42 })
-    store.setWorktreeLineage(OLD, makeWorktreeLineage({ worktreeId: OLD }))
+    store.setWorktreeMeta(hostWorktreeTarget({ id: OLD, hostId: 'local' }), {
+      displayName: 'Cunner',
+      linkedIssue: 42
+    })
+    store.setWorktreeLineage(
+      hostWorktreeTarget({ id: OLD, hostId: 'local' }),
+      makeWorktreeLineage({ worktreeId: OLD })
+    )
     store.setWorkspaceLineage(
       makeWorkspaceLineage({
         childWorkspaceKey: OLD_WORKSPACE_KEY,
@@ -322,7 +329,7 @@ describe('Store.migrateWorktreeIdentity', () => {
       'runtime:env-a'
     )
 
-    store.migrateWorktreeIdentity(OLD, NEW)
+    store.migrateWorktreeIdentity(hostWorktreeTarget({ id: OLD, hostId: 'local' }), NEW)
 
     expect(store.getWorktreeMeta(OLD)).toBeUndefined()
     const meta = store.getWorktreeMeta(NEW)
@@ -384,14 +391,16 @@ describe('Store.migrateWorktreeIdentity', () => {
 
   it('rewrites parentWorktreeId back-references in other lineage entries', async () => {
     const store = await createStore()
-    store.setWorktreeMeta(OLD, { displayName: 'Cunner' })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: OLD, hostId: 'local' }), {
+      displayName: 'Cunner'
+    })
     const CHILD = 'repo1::/ws/child'
     store.setWorktreeLineage(
-      CHILD,
+      hostWorktreeTarget({ id: CHILD, hostId: 'local' }),
       makeWorktreeLineage({ worktreeId: CHILD, parentWorktreeId: OLD })
     )
 
-    store.migrateWorktreeIdentity(OLD, NEW)
+    store.migrateWorktreeIdentity(hostWorktreeTarget({ id: OLD, hostId: 'local' }), NEW)
 
     expect(store.getWorktreeLineage(CHILD)?.parentWorktreeId).toBe(NEW)
   })
@@ -406,7 +415,7 @@ describe('Store.migrateWorktreeIdentity', () => {
       }
     })
 
-    store.migrateWorktreeIdentity(OLD, NEW)
+    store.migrateWorktreeIdentity(hostWorktreeTarget({ id: OLD, hostId: 'local' }), NEW)
     store.flush()
 
     expect(store.getMobileClientTabSelections()['device-a']?.[OLD]).toBeUndefined()
@@ -416,10 +425,12 @@ describe('Store.migrateWorktreeIdentity', () => {
 
   it('accumulates prior ids across chained renames', async () => {
     const store = await createStore()
-    store.setWorktreeMeta(OLD, { displayName: 'Cunner' })
-    store.migrateWorktreeIdentity(OLD, NEW)
+    store.setWorktreeMeta(hostWorktreeTarget({ id: OLD, hostId: 'local' }), {
+      displayName: 'Cunner'
+    })
+    store.migrateWorktreeIdentity(hostWorktreeTarget({ id: OLD, hostId: 'local' }), NEW)
     const NEWER = 'repo1::/ws/final-name'
-    store.migrateWorktreeIdentity(NEW, NEWER)
+    store.migrateWorktreeIdentity(hostWorktreeTarget({ id: NEW, hostId: 'local' }), NEWER)
     expect(store.getWorktreeMeta(NEWER)?.priorWorktreeIds).toEqual([OLD, NEW])
   })
 
@@ -430,7 +441,7 @@ describe('Store.migrateWorktreeIdentity', () => {
       lastVisitedAtByWorktreeId: { [OLD]: 100, [NEW]: 900 }
     })
 
-    store.migrateWorktreeIdentity(OLD, NEW)
+    store.migrateWorktreeIdentity(hostWorktreeTarget({ id: OLD, hostId: 'local' }), NEW)
 
     expect(store.getWorkspaceSession().lastVisitedAtByWorktreeId?.[OLD]).toBeUndefined()
     expect(store.getWorkspaceSession().lastVisitedAtByWorktreeId?.[NEW]).toBe(900)
@@ -438,8 +449,10 @@ describe('Store.migrateWorktreeIdentity', () => {
 
   it('is a no-op when the ids match', async () => {
     const store = await createStore()
-    store.setWorktreeMeta(OLD, { displayName: 'Cunner' })
-    store.migrateWorktreeIdentity(OLD, OLD)
+    store.setWorktreeMeta(hostWorktreeTarget({ id: OLD, hostId: 'local' }), {
+      displayName: 'Cunner'
+    })
+    store.migrateWorktreeIdentity(hostWorktreeTarget({ id: OLD, hostId: 'local' }), OLD)
     expect(store.getWorktreeMeta(OLD)?.priorWorktreeIds).toBeUndefined()
   })
 })

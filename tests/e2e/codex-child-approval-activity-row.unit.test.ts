@@ -58,11 +58,6 @@ vi.mock('@/store', async () => {
   return { useAppStore }
 })
 
-vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: (state: { testRuntimeOwner?: string | null }) =>
-    state.testRuntimeOwner ?? null
-}))
-
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: vi.fn(),
   subscribeStructuredAgentSession: vi.fn(),
@@ -71,6 +66,9 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 
 import { StructuredAgentSessionStatusBridge } from '../../src/renderer/src/components/native-chat/StructuredAgentSessionStatusBridge'
 import { resetStructuredAgentSessionStatusFeedsForTests } from '../../src/renderer/src/runtime/structured-agent-session-status-feed'
+import { createStructuredAgentSessionLogger } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-logger'
+import { testEventSinkLogging } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { codexProviderHandle } from '../../src/shared/agent-session-provider-handle-encoding'
 
 const SESSION = 'codex-child-approval'
 const CODEX_THREAD = 'thread-parent'
@@ -112,6 +110,7 @@ beforeEach(async () => {
     acknowledgedAgentsByPaneKey: {},
     activityClearedAtByPaneKey: {},
     retainedAgentsByPaneKey: {},
+    refreshGitHubForWorktreeIfStale: vi.fn(),
     testRuntimeOwner: null,
     repos: [makeRepo()],
     worktreesByRepo: { [worktree.repoId]: [worktree] },
@@ -137,22 +136,22 @@ async function openHost() {
       workspaceId: 'wt-1',
       hostId: 'local',
       agent: 'codex',
-      providerHandle: { kind: 'codex', threadId: CODEX_THREAD }
+      providerHandle: codexProviderHandle(CODEX_THREAD)
     },
     now: tick,
     stateDirectory: join(root, SESSION)
   })
   const feed = new StructuredAgentSessionStatusFeed({
+    logger: createStructuredAgentSessionLogger(),
     sessions: new Map([
       [SESSION, indexedStatusFeedSession({ journal, child: { phase: 'ready' } })]
     ]),
     getRecord: () => null,
-    now: () => 1,
-    readBackgroundTasks: () => ({ state: 'monitoring', tasks: [] })
+    now: () => 1
   })
   const events: AgentSessionStatusEvent[] = []
   feed.subscribe({ id: 'renderer', emit: (event) => events.push(event) })
-  const deferred = createDeferredStructuredAgentSessionEventSink()
+  const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
   const publish = (): void => feed.publish(SESSION, journal)
   deferred.bind({ journal, fence: 1, publish })
   const prompts: string[] = []

@@ -1,11 +1,11 @@
 import type { AppState } from '@/store'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
-import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
+import { migrationUnsupportedToAgentStatusEntry } from '../../../../shared/migration-unsupported-agent-entry'
 import {
   mergeAgentStatusOrchestration,
   parseAgentStatusPaneIdentity,
   resolveAgentStatusWorktreeId
-} from '@/lib/agent-status-worktree-attribution'
+} from '../../../../shared/agent-status-worktree-attribution'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusOrchestrationContext
@@ -21,6 +21,8 @@ export type WorktreeAgentActivitySummary = {
   hasFailed: boolean
   /** Fresh interrupted completion, kept separate from clean done outcomes. */
   hasInterrupted: boolean
+  /** A fresh end Orca cannot prove, likewise never a clean done. */
+  hasUnconfirmed: boolean
   hasLiveDone: boolean
   hasRetainedDone: boolean
   /** A departed agent's failure; unlike `hasFailed` it yields to live work. */
@@ -38,6 +40,7 @@ const EMPTY_SUMMARY: WorktreeAgentActivitySummary = {
   hasLiveMonitoring: false,
   hasFailed: false,
   hasInterrupted: false,
+  hasUnconfirmed: false,
   hasLiveDone: false,
   hasRetainedDone: false,
   hasRetainedFailed: false,
@@ -204,6 +207,7 @@ function summariesEqual(
     previous.hasLiveMonitoring === next.hasLiveMonitoring &&
     previous.hasFailed === next.hasFailed &&
     previous.hasInterrupted === next.hasInterrupted &&
+    previous.hasUnconfirmed === next.hasUnconfirmed &&
     previous.hasLiveDone === next.hasLiveDone &&
     previous.hasRetainedDone === next.hasRetainedDone &&
     previous.hasRetainedFailed === next.hasRetainedFailed &&

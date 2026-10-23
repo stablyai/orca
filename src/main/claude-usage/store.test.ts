@@ -15,7 +15,8 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('../usage/usage-scan-worker-spawn', () => ({
-  scanClaudeUsageFilesViaWorker: vi.fn()
+  scanClaudeUsageFilesViaWorker: vi.fn(),
+  splitUsageCacheFileViaWorker: vi.fn()
 }))
 
 import { ClaudeUsageStore, initClaudeUsagePath } from './store'
@@ -94,7 +95,6 @@ describe('ClaudeUsageStore', () => {
     initClaudeUsagePath()
     vi.mocked(scanClaudeUsageFilesViaWorker).mockReset()
     vi.mocked(scanClaudeUsageFilesViaWorker).mockResolvedValue({
-      processedFiles: [],
       sessions: [],
       dailyAggregates: []
     })
@@ -480,17 +480,24 @@ describe('ClaudeUsageStore', () => {
         outputTokens: 300_000,
         cacheReadTokens: 300_000,
         cacheWriteTokens: 300_000,
-        cacheWrite1hTokens: 0
+        cacheWrite1hTokens: 0,
+        longContext: {
+          inputTokens: 300_000,
+          outputTokens: 300_000,
+          cacheReadTokens: 300_000,
+          cacheWriteTokens: 300_000,
+          cacheWrite1hTokens: 0
+        }
       }))
     })
 
     const breakdown = await store.getBreakdown('orca', '30d', 'model')
 
-    // Why: the 4.5 tier premium only survives if `-4-5-` never matches the `-5`
-    // family regex, so this doubles as the digit-boundary proof for both families.
+    // Why: the 4.5 long-context premium only applies if `-4-5-` never matches the `-5`
+    // family pattern, so this doubles as the digit-boundary proof for both families.
     expect(
       breakdown.find((row) => row.key === 'claude-sonnet-4-5-20250929')?.estimatedCostUsd
-    ).toBeCloseTo(8.07)
+    ).toBeCloseTo(10.98)
     // Why: Opus 4.5 and Opus 5 share rates today, so this pins the rate rather
     // than the routing — it fails only if the two ever diverge.
     expect(
@@ -498,7 +505,7 @@ describe('ClaudeUsageStore', () => {
     ).toBeCloseTo(11.025)
   })
 
-  it('prices unknown newer Opus 4 point releases with current Opus rates', async () => {
+  it('leaves unknown Opus point releases unpriced instead of borrowing another model', async () => {
     const store = createStoreWithState({
       dailyAggregates: [
         {
@@ -536,7 +543,8 @@ describe('ClaudeUsageStore', () => {
 
     const summary = await store.getSummary('orca', '30d')
 
-    expect(summary.estimatedCostUsd).toBeCloseTo(73.5)
+    expect(summary.estimatedCostUsd).toBeNull()
+    expect(summary.hasUnpricedModels).toBe(true)
   })
 
   it('does not collapse older Opus 4.1 or base Opus 4 usage into current Opus pricing', async () => {
@@ -693,7 +701,7 @@ describe('ClaudeUsageStore', () => {
     expect(usage.unavailableReason).toBe('scan_failed')
   })
 
-  it('adapts Claude scans to pretty-printed cache persistence', async () => {
+  it('hands Claude scans the worker-owned source cache and persists a compact report', async () => {
     const store = createStoreWithState({
       schemaVersion: 5,
       scanState: {
@@ -705,9 +713,17 @@ describe('ClaudeUsageStore', () => {
     })
 
     await store.refresh(true)
+    await store.flush()
 
-    expect(scanClaudeUsageFilesViaWorker).toHaveBeenCalledWith([], [])
-    expect(readFileSync(join(tempUserData, 'orca-claude-usage.json'), 'utf-8')).toContain('\n')
+    expect(scanClaudeUsageFilesViaWorker).toHaveBeenCalledWith([], {
+      path: join(tempUserData, 'orca-claude-usage-sources.json'),
+      schemaVersion: 7,
+      worktreeFingerprint: '[]',
+      reuse: false
+    })
+    const persisted = readFileSync(join(tempUserData, 'orca-claude-usage.json'), 'utf-8')
+    expect(persisted).not.toContain('\n')
+    expect(JSON.parse(persisted)).not.toHaveProperty('processedFiles')
   })
 
   it('joins a scan that is already in flight when the run finished before it started', async () => {
@@ -722,7 +738,6 @@ describe('ClaudeUsageStore', () => {
     })
     // Prime the worktree fingerprint so an unforced refresh can return early.
     vi.mocked(scanClaudeUsageFilesViaWorker).mockResolvedValue({
-      processedFiles: [],
       sessions: [],
       dailyAggregates: []
     })
@@ -743,7 +758,6 @@ describe('ClaudeUsageStore', () => {
       startScan()
       await scanFinished
       return {
-        processedFiles: [],
         sessions: [createWorktreeUsageSession(worktreeId)],
         dailyAggregates: []
       }

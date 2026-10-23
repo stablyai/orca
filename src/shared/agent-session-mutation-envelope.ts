@@ -103,14 +103,7 @@ export function admitAgentSessionMutation(input: {
     return { decision: 'refused', refusal: mismatch }
   }
   if (ledger.decision === 'refused') {
-    return {
-      decision: 'refused',
-      refusal: refuse(
-        ledger.code,
-        ledger.details,
-        `Operation ${envelope.clientOperationId} was refused: ${ledger.code}.`
-      )
-    }
+    return { decision: 'refused', refusal: agentSessionLedgerRefusal(envelope, ledger) }
   }
   if (ledger.decision === 'replay') {
     return { decision: 'replay', row: ledger.row }
@@ -125,9 +118,23 @@ export function admitAgentSessionMutation(input: {
   return { decision: 'admit', row: ledger.row }
 }
 
+/** What the ledger's own refusal of an operation id answers. */
+export function agentSessionLedgerRefusal(
+  envelope: Pick<AgentSessionMutationEnvelope, 'clientOperationId'>,
+  ledger: Extract<AgentSessionOperationDecision, { decision: 'refused' }>
+): AgentSessionWireRefusal {
+  return refuse(
+    ledger.code,
+    ledger.details,
+    `Operation ${envelope.clientOperationId} was refused: ${ledger.code}.`
+  )
+}
+
 /** Why the single admission oracle said no, mapped to what the client can do
  *  about it. The predicate itself is never re-implemented here. */
-function refuseUnlessWriterAdmitted(lease: AgentSessionLease): AgentSessionWireRefusal | null {
+export function refuseUnlessWriterAdmitted(
+  lease: AgentSessionLease
+): AgentSessionWireRefusal | null {
   if (agentSessionLeaseAdmitsWriter(lease)) {
     return null
   }

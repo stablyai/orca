@@ -1,3 +1,4 @@
+import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
 import { useCallback, useMemo, useState } from 'react'
 import { AlertCircle, Save } from 'lucide-react'
 import { computeEditorFontSize } from '@/lib/editor-font-zoom'
@@ -16,7 +17,6 @@ import { translate } from '@/i18n/i18n'
 import { editorShortcutMatches } from './editor-shortcuts'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
-import { getConnectionId } from '@/lib/connection-context'
 import { IpynbCellToolbar, IpynbToolbarButton } from './IpynbCellToolbar'
 import { IpynbCellSource } from './IpynbCellEditor'
 import { IpynbCellRunOutputs, IpynbCellRunPrompt } from './IpynbCellRun'
@@ -28,7 +28,9 @@ import {
   useIpynbDocumentEditing
 } from './useIpynbDocumentEditing'
 import { useIpynbCellExecution } from './useIpynbCellExecution'
+import { resolveNotebookExecutionHost } from './ipynb-execution-host'
 import { useIpynbScrollRestoration } from './useIpynbScrollRestoration'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 type IpynbViewerProps = {
   content: string
@@ -52,7 +54,10 @@ export default function IpynbViewer({
   onSave
 }: IpynbViewerProps): React.JSX.Element {
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
-  const rootPath = useAppStore((s) => findWorktreeById(s.worktreesByRepo, worktreeId)?.path ?? null)
+  const rootPath = useAppStore(
+    (s) => findWorktreeById(selectWorktreesByRepo(s), worktreeId)?.path ?? null
+  )
+  const executionHost = useAppStore((s) => resolveNotebookExecutionHost(s, worktreeId))
   const [editingCellKey, setEditingCellKey] = useState<string | null>(null)
   const parsed = useMemo(() => {
     try {
@@ -68,6 +73,7 @@ export default function IpynbViewer({
   const {
     rootRef,
     setRootRef,
+    flushOnFocusLeave,
     sourceDrafts,
     flushSourceDrafts,
     applyContent,
@@ -119,7 +125,12 @@ export default function IpynbViewer({
   ): void => {
     const mod = getShortcutPlatform() === 'darwin' ? event.metaKey : event.ctrlKey
     // Exactly one of Shift or Cmd/Ctrl.
-    if (event.key !== 'Enter' || event.altKey || event.shiftKey === mod) {
+    if (
+      isImeOwnedKeyboardEvent(event) ||
+      event.key !== 'Enter' ||
+      event.altKey ||
+      event.shiftKey === mod
+    ) {
       return
     }
     event.preventDefault()
@@ -152,13 +163,14 @@ export default function IpynbViewer({
 
   const { notebook } = parsed
   // Kernels are local Python only; other notebooks still render and edit.
-  const canRun = notebook.language === 'python' && !getConnectionId(worktreeId)
+  const canRun = notebook.language === 'python' && executionHost === 'local'
   return (
     <div
       ref={setRootRef}
       className="h-full min-h-0 overflow-auto bg-editor-surface scrollbar-editor"
       style={{ fontSize }}
       onKeyDownCapture={handleNotebookKeyDownCapture}
+      onBlur={flushOnFocusLeave}
     >
       <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-border/60 bg-background/95 px-4 py-2 text-xs text-muted-foreground backdrop-blur">
         <span className="font-medium text-foreground">{filePath.split(/[/\\]/).pop()}</span>
@@ -248,7 +260,7 @@ export default function IpynbViewer({
           }
         }}
       >
-        <DialogContent className="max-w-md sm:max-w-md" showCloseButton={false}>
+        <DialogContent surface="security" className="max-w-md sm:max-w-md" showCloseButton={false}>
           <DialogHeader>
             <DialogTitle className="text-sm">
               {translate('auto.components.editor.IpynbViewer.9e06ae5d36', 'Run Notebook Code?')}

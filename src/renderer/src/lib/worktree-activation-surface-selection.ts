@@ -26,6 +26,8 @@ export type WorktreeActivationOptions = WorktreeActivationSurfaceSelection & {
   sidebarRevealBehavior?: PendingSidebarWorktreeReveal['behavior']
   notifyHostRuntime?: boolean
   revealInSidebar?: boolean
+  /** Explicit request to see the workspace in the list: leave the activity view once activation commits. */
+  showWorkspaceList?: boolean
   executionHostId?: ExecutionHostId
   backendStartupTerminalSpawned?: boolean
   /** Install a preserved fallback startup beside setup/default terminals already seeded. */

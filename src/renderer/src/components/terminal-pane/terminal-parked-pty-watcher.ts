@@ -1,6 +1,6 @@
 import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import { isProvenProcessExit } from '../../../../shared/terminal-exit-cause'
-import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import { useAppStore } from '@/store'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { startParkedTerminalByteWatcher } from './parked-terminal-byte-watcher'
@@ -61,13 +61,15 @@ export function startParkedPtyWatcher(args: {
     return
   }
   const handlePtyExit = (code: number, { hadPrimary }: { hadPrimary: boolean }): void => {
+    // Why first: a daemon restart's replacement starts only when the pane next connects, so the
+    // dead process's title (a 'working' agent pins worktree status) must not wait for it.
+    useAppStore.getState().clearRuntimePaneTitle(tab.id, pane.paneId)
     if (isPtyExitReplacedByRestart(ptyId)) {
       // Why: the pane lives on under its replacement PTY; only this watcher's subscription ends.
       entry.disposersByPtyId.get(ptyId)?.()
       entry.disposersByPtyId.delete(ptyId)
       return
     }
-    useAppStore.getState().clearRuntimePaneTitle(tab.id, pane.paneId)
     // A negative code is a synthetic loss sentinel, not a death certificate.
     // Preserve the tab so host shutdown/reconnect cannot be mistaken for an
     // explicit close by either this watcher or the orphan sweep.
@@ -143,6 +145,7 @@ export function startParkedPtyWatcher(args: {
   const initialTitle = state.runtimePaneTitlesByTabId[tab.id]?.[pane.paneId]
   const disposeWatcher = startParkedTerminalByteWatcher({
     ptyId,
+    workspaceOwner: pane.workspaceOwner,
     tabId: tab.id,
     worktreeId,
     leafId: pane.leafId,

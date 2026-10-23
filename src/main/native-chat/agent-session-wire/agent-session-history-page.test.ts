@@ -35,13 +35,14 @@ import type {
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { projectJournalBatch } from './agent-session-journal-batch'
 import { readAgentSessionHistory, resolveHistoryLimit } from './agent-session-history-page'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',
   workspaceId: 'ws-1',
   hostId: 'host-1',
   agent: 'codex',
-  providerHandle: { kind: 'codex', threadId: 'thread-1' }
+  providerHandle: codexProviderHandle('thread-1')
 }
 
 const journals = createTrackedJournalOpener()
@@ -309,7 +310,7 @@ describe('history page byte ceiling', () => {
     expect(new Set(seen).size).toBe(20)
   })
 
-  it('degrades a single over-budget item to a visible truncation marker instead of overflowing', async () => {
+  it('sends a single over-budget item shortened and marked, never replaced', async () => {
     await journal.appendItem(item(1), body(`1:${'y'.repeat(3 * 1024 * 1024)}`), {
       fence: 1,
       turnScope: AGENT_JOURNAL_THREAD_SCOPE
@@ -319,9 +320,14 @@ describe('history page byte ceiling', () => {
       readAgentSessionHistory(journal, { sessionId: 'session-1', direction: 'tail', limit: 40 })
     )
     expect(tail.items).toHaveLength(1)
-    const bodyOnPage = tail.items[0]?.body
-    expect(bodyOnPage?.kind).toBe('status')
-    expect(bodyOnPage?.kind === 'status' ? bodyOnPage.text : '').toContain('[Orca: item truncated')
+    const sent = tail.items[0]
+    const text =
+      sent?.body.kind === 'message' && sent.body.blocks[0]?.type === 'text'
+        ? sent.body.blocks[0].text
+        : ''
+    expect(sent?.shortened).toBe(true)
+    expect(text.startsWith('1:yyy')).toBe(true)
+    expect(text.length).toBeLessThan(3 * 1024 * 1024)
   })
 })
 

@@ -7,6 +7,10 @@ import {
   type AgentJournalTurnScope
 } from '../../../shared/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
+import {
+  journalLifecycleMutationItemId,
+  type JournalLifecycleMutationInput
+} from '../agent-session-journal/journal-row-builders'
 import type { StructuredAgentSessionTurnVerdict } from './structured-agent-session-stale-turn-verdict'
 
 /** The turn the exit ended: still running, or already ended at the exit's instant by the child's
@@ -26,11 +30,13 @@ export function exitedRootTurnScope(
   return ended ? { kind: 'turn', turnItemId: ended.itemId } : AGENT_JOURNAL_THREAD_SCOPE
 }
 
-export function runningRootTurnScope(
-  items: readonly AgentJournalRenderItem[]
+/** The newest root turn a settle ends: one still running, or one an earlier settle left
+ *  `unverifiable` that a proof now revises, whose row no longer reads running. */
+export function settledRootTurnScope(
+  items: readonly AgentJournalRenderItem[],
+  turnEnds: readonly JournalLifecycleMutationInput[]
 ): AgentJournalTurnScope {
-  const running = items.findLast(
-    (item) => isRootAgentJournalItem(item) && readAgentJournalTurn(item.body)?.state === 'running'
-  )
-  return running ? { kind: 'turn', turnItemId: running.itemId } : AGENT_JOURNAL_THREAD_SCOPE
+  const ended = new Set(turnEnds.map(journalLifecycleMutationItemId))
+  const settled = items.findLast((item) => isRootAgentJournalItem(item) && ended.has(item.itemId))
+  return settled ? { kind: 'turn', turnItemId: settled.itemId } : AGENT_JOURNAL_THREAD_SCOPE
 }

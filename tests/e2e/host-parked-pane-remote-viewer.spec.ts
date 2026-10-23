@@ -46,6 +46,7 @@ import {
 } from './helpers/paired-electron-client'
 import { focusActiveTerminalInput } from './helpers/terminal'
 import { parkHiddenTabBehindDecoy } from './helpers/terminal-hidden-parking'
+import { quotePosixShell } from '../../src/shared/shell-argument-quoting'
 
 const PARK_DELAY_MS = 30_000
 const PAINT_BUDGET_MS = 20_000
@@ -81,15 +82,11 @@ test.afterAll(() => {
 // Why: the HOST must park quickly too, so its launch env carries the override.
 test.use({ orcaAppExtraEnv: { ORCA_E2E_TERMINAL_PARKING_DELAY_MS: String(PARK_DELAY_MS) } })
 
-function shellQuote(value: string): string {
-  return `'${value.replaceAll("'", `'\\''`)}'`
-}
-
 function fixtureCommand(sinkPath: string): string {
   const command = [process.execPath, fixturePath, sinkPath]
   return process.platform === 'win32'
     ? command.map((value) => `"${value.replaceAll('"', '""')}"`).join(' ')
-    : command.map(shellQuote).join(' ')
+    : command.map(quotePosixShell).join(' ')
 }
 
 function readSink(sinkPath: string): string {

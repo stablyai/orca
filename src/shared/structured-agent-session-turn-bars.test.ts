@@ -109,10 +109,11 @@ const whileQueued = {
   submissions: [priorSubmission, accepted('A', turn1.userItemId), accepted('B', null)]
 }
 
-/** Claude ended turn 1 to pick up B (rows 62-65). */
+/** Claude ended turn 1 to pick up B (rows 62-65); the host records it replaced. */
 const turn1Ended = turn(57, A.ended + 1, {
   ...turn1,
   state: 'interrupted',
+  outcome: 'superseded',
   startedAt: A.started,
   requestedAt: A.sent,
   completedAt: A.ended
@@ -209,7 +210,11 @@ describe('a send queued behind a running Claude turn', () => {
     const bars = selectStructuredAgentTurnBars(whileB.items, whileB.submissions, whileB.turnId)
     const transcript = [message('orca:prior'), message('orca:A'), message('orca:B')]
     expect(barOf(transcript, whileB)).toBe('orca:B')
-    expect(bars.settledTurns.get('orca:A')).toEqual({ startedAt: A.started, workedSeconds: 17 })
+    expect(bars.settledTurns.get('orca:A')).toEqual({
+      startedAt: A.started,
+      workedSeconds: 17,
+      verdict: 'superseded'
+    })
     expect(bars.runningTiming && structuredAgentTurnOrigin(bars.runningTiming)).toBe(A.ended)
     // A client attaching 3 s into turn 2 counts 3 s, not the 13 s B waited behind turn 1.
     expect(structuredAgentTurnLocalStartedAt(bars.runningTiming!, 50_000, B.started + 3_000)).toBe(
@@ -219,7 +224,11 @@ describe('a send queued behind a running Claude turn', () => {
 
   it('settles from the same origin the live counter used, so the bars sum to wall time', () => {
     const settledTurns = selectStructuredAgentSettledTurns(settled.items, settled.submissions)
-    expect(settledTurns.get('orca:A')).toEqual({ startedAt: A.started, workedSeconds: 17 })
+    expect(settledTurns.get('orca:A')).toEqual({
+      startedAt: A.started,
+      workedSeconds: 17,
+      verdict: 'superseded'
+    })
     // Not 65 s from B's send, and not Claude's own 69.6 s, which counts from turn 1's start.
     expect(settledTurns.get('orca:B')).toEqual({ startedAt: B.started, workedSeconds: 51 })
     // The turn before A never overlapped a send; its duration is unchanged.

@@ -1,8 +1,8 @@
 import { isDshTerminalTitle } from './dsh-terminal-title'
 
 // Qoder 1.1.64: one space after the glyph, then a session title and a pipe-delimited status.
-const QODER_DYNAMIC_TITLE_RE = /^[✦◇▲] (?! ).*\s\|\s[^|]+$/
-const QODER_LABEL_RE = /^(?:[✦◇▲] )?Qoder CLI(?: CN)?(?: \(.*\))?$/
+const QODER_DYNAMIC_TITLE_RE = /^[\u2726\u25C7\u25B2] (?! ).*\s\|\s[^|]+$/
+const QODER_LABEL_RE = /^(?:[\u2726\u25C7\u25B2] )?Qoder CLI(?: CN)?(?: \(.*\))?$/
 
 export function isQoderTerminalTitle(title: string): boolean {
   if (isDshTerminalTitle(title)) {

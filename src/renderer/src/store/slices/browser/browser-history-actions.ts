@@ -17,10 +17,14 @@ import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
 
 export function createBrowserHistoryActions(
   set: BrowserSliceSet,
-  _get: BrowserSliceGet
+  get: BrowserSliceGet
 ): Pick<
   BrowserSlice,
-  'recordWorkspaceDocVisit' | 'addBrowserHistoryEntry' | 'clearBrowserHistory'
+  | 'recordWorkspaceDocVisit'
+  | 'addBrowserHistoryEntry'
+  | 'removeBrowserHistoryEntry'
+  | 'restoreBrowserHistoryEntry'
+  | 'clearBrowserHistory'
 > {
   return {
     recordWorkspaceDocVisit: (docLocation, title, options) => {
@@ -108,6 +112,26 @@ export function createBrowserHistoryActions(
         }
         return { browserUrlHistory: next }
       })
+    },
+
+    removeBrowserHistoryEntry: (normalizedUrl) => {
+      const removed =
+        get().browserUrlHistory.find((entry) => entry.normalizedUrl === normalizedUrl) ?? null
+      if (removed) {
+        set((s) => ({
+          browserUrlHistory: s.browserUrlHistory.filter((entry) => entry !== removed)
+        }))
+      }
+      return removed
+    },
+
+    restoreBrowserHistoryEntry: (entry) => {
+      set((s) =>
+        // A revisit between remove and Undo already re-created the row; keep the live one.
+        s.browserUrlHistory.some((existing) => existing.normalizedUrl === entry.normalizedUrl)
+          ? s
+          : { browserUrlHistory: [entry, ...s.browserUrlHistory] }
+      )
     },
 
     // One clear for both sources: the dropdown presents them as one history.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { readAssignmentInventorySnapshot } from './assignment-inventory-snapshot.js'
+import { readAssignmentInventorySnapshot } from './assignment/assignment-inventory-snapshot.js'
 import { REGIONAL_REHOME_ARRIVAL_WINDOW_MS } from './regional-rehome-abort-reason.js'
 import {
   RelayAssignmentStore as BaseRelayAssignmentStore,
@@ -16,7 +16,8 @@ import {
 } from './database.js'
 import {
   REGIONAL_REHOME_SQL_FAILURES_LIMIT,
-  REGIONAL_REHOME_SQL_FAILURES_PER_CELL_LIMIT
+  REGIONAL_REHOME_SQL_FAILURES_PER_CELL_LIMIT,
+  REGIONAL_REHOME_SQL_FAILURES_SUSTAIN_MS
 } from './regional-rehome-safety.js'
 import type { RegionalRehomeSafetySnapshot } from './relay-observability.js'
 
@@ -263,40 +264,14 @@ describe('regional rehome assignment state', () => {
     ).toEqual([{ completed_at: context.now(), aborted_at: null }])
     expect(
       await context.database.query(
-        `SELECT completed_at, aborted_at FROM relay_region_rehome_attempts`
+        `SELECT drain_receipt_at, completed_at, aborted_at FROM relay_region_rehome_attempts`
       )
-    ).toEqual([{ completed_at: context.now(), aborted_at: null }])
+    ).toEqual([{ drain_receipt_at: context.now(), completed_at: context.now(), aborted_at: null }])
     expect(targetControl).toMatch(/^control:/)
     await context.database.close()
   })
 
-  it('completes from durable activity with the source-owned receipt', async () => {
-    const context = await setup()
-    const identity = { userId: 'user-1', relayHostId: 'abcdefghijklmnop' }
-    const sourceControl = await activatePreferredSource(context, identity)
-    const attempt = await context.store.tryIdleRehome()
-    await context.store.activateControl(identity, {
-      cellId: target.id,
-      assignmentEpoch: attempt!.assignmentEpoch,
-      generation: 1
-    })
-    await context.store.markMigrationTargetRegistered(identity, {
-      cellId: target.id,
-      assignmentEpoch: attempt!.assignmentEpoch
-    })
-    await context.store.releaseActivity(identity, sourceControl)
-
-    expect(await context.store.completeReadyRegionalRehomes()).toBe(1)
-    expect(
-      await context.database.query(
-        `SELECT drain_receipt_at, completed_at, aborted_at
-       FROM relay_region_rehome_attempts`
-      )
-    ).toEqual([{ drain_receipt_at: context.now(), completed_at: context.now(), aborted_at: null }])
-    await context.database.close()
-  })
-
-  it('requires a fresh preference and an advertised source capability', async () => {
+  it('requires an advertised source capability', async () => {
     const context = await setup({ sourceProtocol: 0 })
     await activatePreferredSource(context, {
       userId: 'user-1',
@@ -760,7 +735,7 @@ describe('regional rehome assignment state', () => {
     await context.database.close()
   })
 
-  it('atomically latches durable control off when candidate safety changes', async () => {
+  it('pauses the claim without latching when a sql spike lands between selection and commit', async () => {
     const context = await setup()
     await activatePreferredSource(context, {
       userId: 'user-1',
@@ -787,10 +762,86 @@ describe('regional rehome assignment state', () => {
       reason: 'fleet-safety'
     })
     expect(await context.store.inspectRegionalRehomeControl()).toMatchObject({
+      generation: 1,
+      enabled: true
+    })
+    expect(
+      await context.database.query(`SELECT consecutive_failures FROM relay_region_rehome_worker_state`)
+    ).toEqual([{ consecutive_failures: 0 }])
+    expect(await context.database.query(`SELECT * FROM relay_assignment_migrations`)).toEqual([])
+    await context.database.close()
+  })
+
+  it('rides out a single-stall sql spike without latching the control off', async () => {
+    const context = await setup()
+    // 10-06 06:16Z: one stall put the fleet sum at 396 for about a minute.
+    for (let elapsed = 0; elapsed <= 90_000; elapsed += 6_000) {
+      await sqlFailuresHeartbeats(context, 396)
+      expect(await context.store.selectIdleRegionalRehomeCandidates(cleanSafety(context))).toEqual([])
+      context.advance(6_000)
+    }
+    await sqlFailuresHeartbeats(context, 0)
+    await activatePreferredSource(context, { userId: 'user-1', relayHostId: 'abcdefghijklmnop' })
+    expect(await context.store.selectIdleRegionalRehomeCandidates(cleanSafety(context))).toHaveLength(1)
+    // The next stall, ~610 s later, starts its own breach rather than extending the last one.
+    context.advance(500_000)
+    for (let elapsed = 0; elapsed <= 90_000; elapsed += 6_000) {
+      await sqlFailuresHeartbeats(context, 396)
+      await context.store.selectIdleRegionalRehomeCandidates(cleanSafety(context))
+      context.advance(6_000)
+    }
+    expect(await context.store.inspectRegionalRehomeControl()).toMatchObject({
+      generation: 1,
+      enabled: true
+    })
+    await context.database.close()
+  })
+
+  it('latches the control off when the sql breach outlasts a stall', async () => {
+    const context = await setup()
+    await activatePreferredSource(context, { userId: 'user-1', relayHostId: 'abcdefghijklmnop' })
+    const warnings = collectEventWarnings('orca_relay_regional_rehome_safety_disabled')
+    try {
+      for (let elapsed = 0; elapsed < REGIONAL_REHOME_SQL_FAILURES_SUSTAIN_MS; elapsed += 6_000) {
+        await sqlFailuresHeartbeats(context, REGIONAL_REHOME_SQL_FAILURES_LIMIT + 1)
+        await context.store.selectIdleRegionalRehomeCandidates(cleanSafety(context))
+        context.advance(6_000)
+      }
+      expect(await context.store.inspectRegionalRehomeControl()).toMatchObject({ enabled: true })
+      await sqlFailuresHeartbeats(context, REGIONAL_REHOME_SQL_FAILURES_LIMIT + 1)
+      expect(await context.store.selectIdleRegionalRehomeCandidates(cleanSafety(context))).toEqual([])
+    } finally {
+      warnings.restore()
+    }
+    expect(await context.store.inspectRegionalRehomeControl()).toMatchObject({
       generation: 2,
       enabled: false
     })
-    expect(await context.database.query(`SELECT * FROM relay_assignment_migrations`)).toEqual([])
+    expect(warnings.entries).toMatchObject([
+      { reason: 'sql_failures', controlGeneration: 2, sustainedMs: 150_000 }
+    ])
+    await context.database.close()
+  })
+
+  it('still latches on a non-sql reason that fails alongside a sql spike', async () => {
+    const context = await setup()
+    await activatePreferredSource(context, { userId: 'user-1', relayHostId: 'abcdefghijklmnop' })
+    const [candidate] = await context.store.selectIdleRegionalRehomeCandidates(cleanSafety(context))
+    expect(candidate).toBeDefined()
+    await context.database.query(
+      `UPDATE relay_cell_rehome_safety
+       SET sql_failures = ${REGIONAL_REHOME_SQL_FAILURES_LIMIT + 1}, control_activity_recovery_failures = 1
+       WHERE cell_id = ?`,
+      [target.id]
+    )
+    expect(await context.store.commitIdleRegionalRehome(candidate!, cleanSafety(context))).toEqual({
+      outcome: 'deferred',
+      reason: 'fleet-safety'
+    })
+    expect(await context.store.inspectRegionalRehomeControl()).toMatchObject({
+      generation: 2,
+      enabled: false
+    })
     await context.database.close()
   })
 
@@ -874,52 +925,6 @@ describe('regional rehome assignment state', () => {
   // rather than through candidate selection, so it needs its own coverage.
   // Why: one contended candidate must cost its own tick, not the whole page. The
   // sweeps are explicitly per-candidate isolated for exactly this reason.
-  it('completes the candidates behind a contended one', async () => {
-    const probe = new CellInventoryLockProbe()
-    const context = await setup({ wrap: (database) => probe.wrap(database) })
-    const identities = [
-      { userId: 'user-1', relayHostId: 'abcdefghijklmnop' },
-      { userId: 'user-2', relayHostId: 'ponmlkjihgfedcba' }
-    ]
-    for (const identity of identities) {
-      // Dispatch is rate limited, so each claim needs its own interval.
-      context.advance(60_000)
-      await freshHeartbeats(context)
-      const sourceControl = await activatePreferredSource(context, identity)
-      const attempt = await context.store.tryIdleRehome()
-      await context.store.activateControl(identity, {
-        cellId: target.id,
-        assignmentEpoch: 2,
-        generation: 1
-      })
-      await context.store.markMigrationTargetRegistered(identity, {
-        cellId: target.id,
-        assignmentEpoch: 2
-      })
-      await context.store.releaseActivity(identity, sourceControl)
-    }
-    probe.reset()
-    probe.failNoWaitTimes = 1
-    const busy = collectEventWarnings('orca_relay_sweep_cell_inventory_busy')
-
-    let completed: number
-    try {
-      completed = await context.store.completeReadyRegionalRehomes()
-    } finally {
-      busy.restore()
-    }
-
-    expect(completed).toBe(1)
-    expect(busy.entries).toEqual([
-      {
-        event: 'orca_relay_sweep_cell_inventory_busy',
-        sweep: 'complete-ready-regional-rehomes',
-        skipped: 1
-      }
-    ])
-    await context.database.close()
-  })
-
   // Why: with `continue` replaced by `break` a single contended candidate drops
   // the rest of the page. Two in a row prove the sweep resumes, not just that it
   // survived one, and that the summary counts both.
@@ -1213,8 +1218,11 @@ describe('regional rehome assignment state', () => {
     })
     await context.store.releaseActivity(identity, sourceControl)
     await context.store.releaseActivity(identity, targetControl)
-    context.advance(24 * 60 * 60_000)
-    await heartbeat(context.store, source, sourceIncarnation, 3, 2)
+    context.advance(24 * 60 * 60_000 - 1)
+    await freshHeartbeats(context)
+    expect(await context.store.abortExpiredRegionalRehomes()).toBe(0)
+    context.advance(1)
+    await heartbeat(context.store, source, sourceIncarnation, 3, context.now())
     expect(await context.store.abortExpiredRegionalRehomes()).toBe(1)
     expect(await context.store.resolve(identity)).toMatchObject({
       cellId: source.id,
@@ -1826,6 +1834,29 @@ async function freshHeartbeats(context: Context): Promise<void> {
   // The clock doubles as a strictly-increasing connection inclusion watermark.
   await heartbeat(context.store, source, sourceIncarnation, 3, context.now(), safety)
   await heartbeat(context.store, target, targetIncarnation, 3, context.now(), safety)
+}
+
+function cleanSafety(context: Context): RegionalRehomeSafetySnapshot {
+  return {
+    observedAt: context.now(),
+    sqlFailures: 0,
+    reconnects: 0,
+    controlActivityRecoveryFailures: 0,
+    databasePoolWaiting: 0,
+    databasePoolWaitersMax: 0,
+    databasePoolWaitMsMax: 0
+  }
+}
+
+// Splits the fleet sum across both cells, each under the per-cell bar's scale.
+async function sqlFailuresHeartbeats(context: Context, fleetSqlFailures: number): Promise<void> {
+  const half = Math.floor(fleetSqlFailures / 2)
+  const safety = cleanSafety(context)
+  await heartbeat(context.store, source, sourceIncarnation, 3, context.now(), { ...safety, sqlFailures: half })
+  await heartbeat(context.store, target, targetIncarnation, 3, context.now(), {
+    ...safety,
+    sqlFailures: fleetSqlFailures - half
+  })
 }
 
 async function activatePreferredSource(

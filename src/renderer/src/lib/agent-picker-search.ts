@@ -86,20 +86,25 @@ export function agentPickerBlankTerminalMatches(rawQuery: string): boolean {
 function scoreAgent(agent: AgentCatalogEntry, query: string): number {
   return Math.min(
     scoreCandidate(query, agent.label, 0),
-    scoreCandidate(query, agent.id, 600),
-    scoreCandidate(query, agent.cmd, 650),
-    ...(agent.searchAliases ?? []).map((alias) => scoreCandidate(query, alias, 650))
+    scoreCandidate(query, agent.id, 600, 1),
+    scoreCandidate(query, agent.cmd, 650, 2),
+    ...(agent.searchAliases ?? []).map((alias) => scoreCandidate(query, alias, 650, 2))
   )
 }
 
-function scoreCandidate(query: string, rawCandidate: string, baseScore: number): number {
+function scoreCandidate(
+  query: string,
+  rawCandidate: string,
+  baseScore: number,
+  exactScore = baseScore
+): number {
   const candidate = normalizeSearchText(rawCandidate)
   if (!candidate) {
     return NO_MATCH
   }
 
   if (candidate === query) {
-    return baseScore
+    return exactScore
   }
   if (candidate.startsWith(query)) {
     return baseScore + 10

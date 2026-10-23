@@ -2,7 +2,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { getConnectionIdFromState } from '@/lib/connection-context'
-import { getExplicitRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
 import {
   selectRuntimeAwareSshConnectionGeneration,
   selectRuntimeAwareSshStatus
@@ -78,13 +78,18 @@ function derivePhase(
 /** The shared signal for a caller that already resolved the worktree's connection id. */
 export function resolveWorktreeHostConnection(
   state: AppState,
-  worktreeId: string,
-  targetId: string | null | undefined
+  worktreeId: string | null,
+  targetId: string | null | undefined,
+  environmentIdOverride?: string | null
 ): WorktreeHostConnection {
   if (!targetId || isRuntimeOwnedSshTargetId(targetId)) {
     return LOCAL_HOST_CONNECTION
   }
-  const environmentId = getExplicitRuntimeEnvironmentIdForWorktree(state, worktreeId)
+  const environmentId =
+    environmentIdOverride === undefined
+      ? // Why: the phase only reads SSH state; a twin reads the direct connection.
+        runtimeEnvironmentIdUnlessTwin(state, worktreeId)
+      : environmentIdOverride
   const publishedStatus = selectRuntimeAwareSshStatus(state, environmentId, targetId)
   const generation = selectRuntimeAwareSshConnectionGeneration(state, environmentId, targetId)
   return {
@@ -114,6 +119,15 @@ export function selectWorktreeHostConnectionPhase(
   )
 }
 
-export function useWorktreeHostConnection(worktreeId: string | null): WorktreeHostConnection {
-  return useAppStore(useShallow((state) => selectWorktreeHostConnectionPhase(state, worktreeId)))
+export function useWorktreeHostConnection(
+  worktreeId: string | null,
+  localSshTargetId?: string | null
+): WorktreeHostConnection {
+  return useAppStore(
+    useShallow((state) =>
+      localSshTargetId === undefined
+        ? selectWorktreeHostConnectionPhase(state, worktreeId)
+        : resolveWorktreeHostConnection(state, worktreeId, localSshTargetId, null)
+    )
+  )
 }

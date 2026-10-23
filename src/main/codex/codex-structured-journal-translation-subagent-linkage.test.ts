@@ -109,14 +109,8 @@ describe('codex journal translation — subagent producer linkage', () => {
     expect(commandRows.map((write) => write.linkage)).toEqual(commandRows.map(() => CHILD_LINKAGE))
     expect(linkageOf('child prose')).toEqual(CHILD_LINKAGE)
     expect(linkageOf('own prose')).toEqual({})
-    // The spawn-group row is the parent's list of its children, though a child's
-    // frames also write it.
-    expect(
-      writes.filter((write) => write.key.includes('codex-subagents')).map((w) => w.linkage)
-    ).toEqual(expect.arrayContaining([{}]))
-    expect(
-      writes.filter((write) => write.key.includes('codex-subagents') && write.linkage.agentId)
-    ).toEqual([])
+    // The host writes each child's own row; the translator writes none.
+    expect(writes.filter((write) => write.key.includes('subagent'))).toEqual([])
   })
 
   it('stamps a child row that arrives before the spawn announcement names it', () => {

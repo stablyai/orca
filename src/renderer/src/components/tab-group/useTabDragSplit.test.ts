@@ -6,6 +6,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../../shared/tab-types'
 import { useAppStore } from '../../store'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { TabDragItemData } from './useTabDragSplit'
 import { shouldActivateTabDragFromDistanceSample } from './tab-drag-pointer-sensor'
 import {
@@ -22,12 +23,36 @@ vi.mock('../browser-pane/host-guest/webview-registry', () => ({
   acquireWebviewsDragPassthrough: vi.fn(() => vi.fn())
 }))
 
-vi.mock('../../runtime/web-runtime-session', () => ({
-  isWebRuntimeSessionActive: vi.fn(() => false),
-  moveWebRuntimeSessionTab: vi.fn()
+vi.mock('../../runtime/web-runtime-session-environment', () => ({
+  isWebRuntimeSessionActive: vi.fn(() => false)
+}))
+vi.mock('../../runtime/web-runtime-session-tab-move', () => ({ moveWebRuntimeSessionTab: vi.fn() }))
+// A layout-owner build sends the drop to main, whose frame draws it (tab-moves-drawn-from-frames).
+const layoutOwner = vi.hoisted(() => ({ drop: vi.fn(() => true) }))
+vi.mock('./tab-group-layout-owner-commands', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  dropTabThroughLayoutOwner: layoutOwner.drop
 }))
 
 const WT = 'wt-1'
+
+/** The drop split tab-1 off beside group-2: through main in a layout-owner build, else here. */
+function expectSplitBesideGroup2(dropUnifiedTab: ReturnType<typeof vi.fn>): void {
+  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+    expect(layoutOwner.drop).toHaveBeenCalledWith(WT, {
+      kind: 'split',
+      tabId: 'tab-1',
+      groupId: 'group-2',
+      direction: 'right'
+    })
+    expect(dropUnifiedTab).not.toHaveBeenCalled()
+    return
+  }
+  expect(dropUnifiedTab).toHaveBeenCalledWith('tab-1', {
+    groupId: 'group-2',
+    splitDirection: 'right'
+  })
+}
 const mounted: { container: HTMLDivElement; root: Root }[] = []
 
 function makeGroup(id: string, tabOrder: string[]): TabGroup {
@@ -118,6 +143,7 @@ function renderDragHook(
 }
 
 beforeEach(() => {
+  layoutOwner.drop.mockClear()
   useAppStore.setState({
     activeWorktreeId: WT,
     activeGroupIdByWorktree: { [WT]: 'group-1' },
@@ -271,6 +297,26 @@ describe('canDropTabIntoPaneBody', () => {
 })
 
 describe('useTabDragSplit', () => {
+  it('keeps the drag sensors across re-renders until enablement changes', () => {
+    const sensorsByRender: ReturnType<typeof useTabDragSplit>['sensors'][] = []
+    function Probe({ enabled }: { enabled: boolean }): null {
+      sensorsByRender.push(useTabDragSplit({ worktreeId: WT, enabled }).sensors)
+      return null
+    }
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    mounted.push({ container, root })
+
+    act(() => root.render(createElement(Probe, { enabled: true })))
+    act(() => root.render(createElement(Probe, { enabled: true })))
+    // Why: new sensors rebuild every tab's drag listeners, which re-renders every tab.
+    expect(sensorsByRender.at(-1)).toBe(sensorsByRender.at(-2))
+
+    act(() => root.render(createElement(Probe, { enabled: false })))
+    expect(sensorsByRender.at(-1)).not.toBe(sensorsByRender.at(-2))
+  })
+
   it.each(['split', 'insertion'])(
     'does not restore a %s preview after blur cleared the drag',
     async (preview) => {
@@ -389,10 +435,7 @@ describe('useTabDragSplit', () => {
     })
 
     expect(drag.isTabDragActiveRef.current).toBe(false)
-    expect(dropUnifiedTab).toHaveBeenCalledWith('tab-1', {
-      groupId: 'group-2',
-      splitDirection: 'right'
-    })
+    expectSplitBesideGroup2(dropUnifiedTab)
   })
 
   it('commits a geometry-only pane split when drag end has no over target', () => {
@@ -422,9 +465,6 @@ describe('useTabDragSplit', () => {
       )
     })
 
-    expect(dropUnifiedTab).toHaveBeenCalledWith('tab-1', {
-      groupId: 'group-2',
-      splitDirection: 'right'
-    })
+    expectSplitBesideGroup2(dropUnifiedTab)
   })
 })

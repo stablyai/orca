@@ -148,6 +148,16 @@ export async function listWorkItems(
   }
 }
 
+function issueSearchParam(query?: string): string {
+  const trimmed = query?.trim()
+  if (!trimmed) {
+    return ''
+  }
+  // Why: GitLab's search matches text only, so `#23` (its issue reference) needs the iid filter.
+  const iid = /^#(\d+)$/.exec(trimmed)?.[1]
+  return iid ? `&iids[]=${iid}` : `&search=${encodeURIComponent(trimmed)}`
+}
+
 export async function fetchIssuesAsWorkItems(
   repoPath: string,
   projectRef: ProjectRef,
@@ -161,7 +171,7 @@ export async function fetchIssuesAsWorkItems(
   await acquire()
   try {
     const stateParam = state === 'all' ? '' : `&state=${state}`
-    const searchParam = query?.trim() ? `&search=${encodeURIComponent(query.trim())}` : ''
+    const searchParam = issueSearchParam(query)
     const { stdout } = await glabExecFileAsync(
       [
         'api',

@@ -1,11 +1,7 @@
+import { invalidateReviewLookupsAfterPRMutation } from '../../pr-mutation-review-invalidation'
 import type { GitHubPRMergeMethod } from '../../../../shared/github/pull-request-types'
-import {
-  ghExecFileAsync,
-  acquire,
-  release,
-  classifyGhError,
-  type LocalGitExecOptions
-} from '../../gh-utils'
+import { ghExecFileAsync, acquire, release, type LocalGitExecOptions } from '../../gh-utils'
+import { classifyPullRequestUpdateError } from '../../gh-error-classification'
 import { resolveGitHubRepoExecution, type GitHubApiRepository } from '../../github-api-repository'
 import { githubPRStackExecutionScope, type GhExecOptions } from './../github-exec-scope'
 import { detectRepositoryMergeMetadata } from './../detect/repository-merge-metadata'
@@ -20,11 +16,14 @@ export const GITHUB_AUTO_MERGE_METHODS: Record<GitHubPRMergeMethod, 'MERGE' | 'S
   }
 
 // Why: GitHub rejects auto-merge on an already-mergeable PR ("clean status"); surface an actionable message instead of the raw error.
-export function classifySetAutoMergeError(message: string): string {
-  if (/in clean status/i.test(message)) {
+export function classifySetAutoMergeError(message: string, enabled = true): string {
+  if (enabled && /in clean status/i.test(message)) {
     return 'This pull request can already be merged. Use Merge instead of auto-merge.'
   }
-  return classifyGhError(message).message
+  return classifyPullRequestUpdateError(
+    message,
+    `${enabled ? 'enable' : 'disable'} auto-merge for pull request`
+  ).message
 }
 
 export type PRAutoMergeIdentity = {
@@ -165,13 +164,17 @@ export async function setPRAutoMerge(
   await acquire()
   try {
     if (enabled) {
-      return await enablePRAutoMerge(
+      const result = await enablePRAutoMerge(
         prNumber,
         method,
         ownerRepo,
         ghOptions,
         githubPRStackExecutionScope(connectionId, localGitOptions)
       )
+      if (result.ok) {
+        invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)
+      }
+      return result
     }
     const args = ['pr', 'merge', String(prNumber), '--disable-auto']
     if (ownerRepo) {
@@ -181,11 +184,12 @@ export async function setPRAutoMerge(
       ...ghOptions,
       env: { ...process.env, GH_PROMPT_DISABLED: '1' }
     })
+    invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)
     return { ok: true }
   } catch (err) {
     const message =
       err instanceof Error ? err.message : typeof err === 'string' ? err : 'Unknown error'
-    return { ok: false, error: classifySetAutoMergeError(message) }
+    return { ok: false, error: classifySetAutoMergeError(message, enabled) }
   } finally {
     release()
   }

@@ -1,3 +1,4 @@
+import '../unused-default-rpc-methods.test-fixture'
 /**
  * The runtime end of the list contract: an old client that sends no params must
  * keep receiving the authority's complete list through the legacy field while

@@ -1,10 +1,8 @@
-import { getStoredRepoSshConnectionId } from '../../repo-execution-host'
 import { ipcMain } from 'electron'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import { getRepoDialableSshTargetId, type ExecutionHostId } from '../../../shared/execution-host'
 import { isFolderRepo } from '../../../shared/repo-kind'
 import { inspectSetupScriptImportCandidates } from '../../../shared/setup-script-imports'
 import { joinWorktreeRelativePath } from '../../runtime/runtime-relative-paths'
-import { getSshFilesystemProvider } from '../../providers/ssh-filesystem-dispatch'
 import { readFile, stat } from 'node:fs/promises'
 import { isENOENT } from '../filesystem-path-containment'
 import { resolveRepoForExecutionHost } from '../worktrees/repo-host-ownership'
@@ -17,27 +15,14 @@ export function registerWorktreeHookInspectionHandler(context: WorktreeIpcContex
     'hooks:inspectSetupScriptImports',
     async (_event, args: { repoId: string; hostId?: ExecutionHostId }) => {
       const repo = resolveRepoForExecutionHost(store, args.repoId, args.hostId)
-      if (!repo || isFolderRepo(repo)) {
+      // Why: this process serves no SSH filesystem.
+      if (!repo || isFolderRepo(repo) || getRepoDialableSshTargetId(repo)) {
         return []
       }
 
       return inspectSetupScriptImportCandidates(
         async (relativePath) => {
           const filePath = joinWorktreeRelativePath(repo.path, relativePath)
-          const connectionId = getStoredRepoSshConnectionId(repo)
-          if (connectionId) {
-            const fsProvider = getSshFilesystemProvider(connectionId)
-            if (!fsProvider) {
-              return null
-            }
-            try {
-              const result = await fsProvider.readFile(filePath)
-              return result.isBinary ? null : result.content
-            } catch {
-              return null
-            }
-          }
-
           try {
             return await readFile(filePath, 'utf-8')
           } catch (error) {
@@ -50,20 +35,6 @@ export function registerWorktreeHookInspectionHandler(context: WorktreeIpcContex
         {
           fileExists: async (relativePath) => {
             const filePath = joinWorktreeRelativePath(repo.path, relativePath)
-            const connectionId = getStoredRepoSshConnectionId(repo)
-            if (connectionId) {
-              const fsProvider = getSshFilesystemProvider(connectionId)
-              if (!fsProvider) {
-                return false
-              }
-              try {
-                const fileStat = await fsProvider.stat(filePath)
-                return fileStat.type !== 'directory'
-              } catch {
-                return false
-              }
-            }
-
             try {
               const fileStat = await stat(filePath)
               return !fileStat.isDirectory()

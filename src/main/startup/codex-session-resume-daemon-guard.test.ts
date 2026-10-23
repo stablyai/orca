@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
   sharedHomePath: '',
   installForLaunchPrep: vi.fn(),
   refreshRuntimeUserHooksForLaunchPrep: vi.fn(),
-  ensureRealHomeCodexHookState: vi.fn(async () => {}),
+  reconcileCodexHooksForLaunch: vi.fn(async () => {}),
   prepareCodexSessionResume: vi.fn(),
   prepareLegacySharedCodexSessionResume: vi.fn()
 }))
@@ -26,8 +26,8 @@ vi.mock('../codex/hook-service', () => ({
     refreshRuntimeUserHooksForLaunchPrep: mocks.refreshRuntimeUserHooksForLaunchPrep
   }
 }))
-vi.mock('../codex/codex-real-home-hook-install', () => ({
-  ensureRealHomeCodexHookState: mocks.ensureRealHomeCodexHookState
+vi.mock('../codex/codex-hook-reconcile', () => ({
+  reconcileCodexHooksForLaunch: mocks.reconcileCodexHooksForLaunch
 }))
 vi.mock('../agent-hooks/managed-agent-hook-controls', () => ({
   isAgentStatusHooksEnabledForAgent: () => mocks.hooksEnabled
@@ -46,7 +46,7 @@ vi.mock('../codex/codex-legacy-session-resume', () => ({
 vi.mock('./main-process-state', () => ({
   mainProcessState: {
     codexRuntimeHome: {
-      isHostSystemDefaultRealHome: () => false,
+      isHostSystemDefaultRealHomeSelected: () => false,
       getHostCodexHomePathsForSessionDiscovery: () => [],
       resolveSelectedHostAccountCodexHomePathForResume: () => null
     },
@@ -133,11 +133,12 @@ describe('Codex session resume daemon socket guard', () => {
   it('never writes the guard into the real Codex home a migrated resume runs in', async () => {
     expect(codexDaemonSocketPathExceedsLimit(mocks.systemHomePath)).toBe(true)
     mocks.prepareLegacySharedCodexSessionResume.mockResolvedValue({ useRealCodexHome: true })
+    mocks.hooksEnabled = true
 
     const preparation = await resume()
 
     expect(preparation).toMatchObject({ codexHomePath: mocks.systemHomePath })
-    expect(mocks.ensureRealHomeCodexHookState).toHaveBeenCalledTimes(1)
+    expect(mocks.reconcileCodexHooksForLaunch).toHaveBeenCalledTimes(1)
     expect(existsSync(join(mocks.systemHomePath, 'config.toml'))).toBe(false)
   })
 })

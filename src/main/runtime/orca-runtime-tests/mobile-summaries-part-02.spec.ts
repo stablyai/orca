@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { bindPaneFirst } from '../bind-first-pane.test-fixture'
 import { makeAgentStatusStoreWiring } from '../agent-status-store-wiring.test-fixture'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
@@ -511,6 +512,12 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     })
+    bindPaneFirst(runtime, {
+      worktreeId: TEST_WORKTREE_ID,
+      tabId: 'daemon-tab',
+      leafId: '77777777-7777-4777-8777-777777777777',
+      ptyId: 'daemon-pty'
+    })
     // paneKey-only record: the tabId rescue must not be what keeps this row.
     runtime['recordPtyWorktree']('daemon-pty', TEST_WORKTREE_ID, {
       connected: true,
@@ -550,6 +557,12 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     })
+    bindPaneFirst(runtime, {
+      worktreeId: TEST_WORKTREE_ID,
+      tabId: 'daemon-tab',
+      leafId: '99999999-9999-4999-8999-999999999998',
+      ptyId: 'daemon-pty-2'
+    })
     runtime['recordPtyWorktree']('daemon-pty-2', TEST_WORKTREE_ID, {
       connected: true,
       tabId: 'daemon-tab',
@@ -578,6 +591,12 @@ describe('OrcaRuntimeService', () => {
       undefined,
       makeAgentStatusStoreWiring().deps
     )
+    bindPaneFirst(runtime, {
+      worktreeId: TEST_WORKTREE_ID,
+      tabId: 'osc-tab',
+      leafId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      ptyId: 'osc-pty'
+    })
     runtime['recordPtyWorktree']('osc-pty', TEST_WORKTREE_ID, {
       connected: true,
       tabId: 'osc-tab',
@@ -609,6 +628,12 @@ describe('OrcaRuntimeService', () => {
     })
     const statusWiring = makeAgentStatusStoreWiring()
     const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, statusWiring.deps)
+    bindPaneFirst(runtime, {
+      worktreeId: TEST_WORKTREE_ID,
+      tabId: 'race-tab',
+      leafId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+      ptyId: 'race-pty'
+    })
     runtime['recordPtyWorktree']('race-pty', TEST_WORKTREE_ID, {
       connected: true,
       tabId: 'race-tab',

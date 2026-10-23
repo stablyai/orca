@@ -11,6 +11,7 @@ import {
   mergeHeadIdentityScopes,
   type WorktreeHeadIdentityScope
 } from './worktree-head-identity-scope'
+import { cachedWorktreePathsForScope } from './worktree-head-identity-cached-paths'
 import { notifyWorktreeGitStatusMetadataChanged } from './worktree-remote'
 import { notifyWatchedWorktreeCatalogChanged } from './watched-worktree-catalog-notification'
 
@@ -21,6 +22,7 @@ export type WorktreeBaseNotificationWatch = WorktreeBaseWatchTarget & {
   pendingGitStatusRepoIds: Set<string>
   pendingHeadIdentityRepoIds: Set<string>
   pendingHeadIdentityScope: WorktreeHeadIdentityScope
+  pendingGitStatusScope: WorktreeHeadIdentityScope
   headIdentityRefresh: WorktreeHeadIdentityRefreshState
   disposed: boolean
 }
@@ -32,15 +34,16 @@ export function clearPendingWorktreeBaseNotifications(watch: WorktreeBaseNotific
   watch.pendingGitStatusRepoIds.clear()
   watch.pendingHeadIdentityRepoIds.clear()
   watch.pendingHeadIdentityScope = EMPTY_HEAD_IDENTITY_SCOPE
+  watch.pendingGitStatusScope = EMPTY_HEAD_IDENTITY_SCOPE
 }
 
 export function supportsWorktreeHeadIdentityRefresh(watch: WorktreeBaseNotificationWatch): boolean {
-  return watch.kind === 'git-common' && !watch.connectionId
+  return watch.kind === 'git-common'
 }
 
 export function scheduleWorktreeBaseNotification(
   watch: WorktreeBaseNotificationWatch,
-  changes: Partial<Omit<WorktreeBaseCollectedChanges, 'overflow'>>
+  changes: Partial<WorktreeBaseCollectedChanges>
 ): void {
   if (watch.disposed || watch.mainWindow.isDestroyed()) {
     clearPendingWorktreeBaseNotifications(watch)
@@ -62,7 +65,15 @@ export function scheduleWorktreeBaseNotification(
     watch.pendingHeadIdentityScope,
     changes.headIdentityScope ?? FULL_HEAD_IDENTITY_SCOPE
   )
-  clearTimeout(watch.notifyTimer ?? undefined)
+  watch.pendingGitStatusScope = mergeHeadIdentityScopes(
+    watch.pendingGitStatusScope,
+    changes.gitStatusScope ?? FULL_HEAD_IDENTITY_SCOPE
+  )
+  // Why: never push an armed notification back; sustained index writes would otherwise
+  // delay it indefinitely. Pending changes join the armed one.
+  if (watch.notifyTimer) {
+    return
+  }
   watch.notifyTimer = setTimeout(() => {
     watch.notifyTimer = null
     if (watch.disposed || watch.mainWindow.isDestroyed()) {
@@ -78,12 +89,17 @@ export function scheduleWorktreeBaseNotification(
     )
     const emitHeadIdentities = pendingStructure.length === 0
     const headIdentityScope = watch.pendingHeadIdentityScope
+    // Resolved before the head refresh below can rewrite the memo. Only git-common
+    // watches keep one; base watches stay unattributed so every checkout still refreshes.
+    const gitStatusWorktreePaths = supportsWorktreeHeadIdentityRefresh(watch)
+      ? cachedWorktreePathsForScope(watch.headIdentityRefresh.cache, watch.pendingGitStatusScope)
+      : null
     clearPendingWorktreeBaseNotifications(watch)
     for (const repoId of pendingStructure) {
-      notifyWatchedWorktreeCatalogChanged(watch.mainWindow, repoId, watch.connectionId)
+      notifyWatchedWorktreeCatalogChanged(watch.mainWindow, repoId)
     }
     for (const repoId of sourceControlRepoIds) {
-      notifyWorktreeGitStatusMetadataChanged(watch.mainWindow, repoId)
+      notifyWorktreeGitStatusMetadataChanged(watch.mainWindow, repoId, gitStatusWorktreePaths)
     }
     if (
       supportsWorktreeHeadIdentityRefresh(watch) &&

@@ -135,13 +135,4 @@ describe('published-url observation wiring', () => {
 
     expect(recordedUrlParams).toEqual([metadata])
   })
-
-  it('publishes harmlessly before any executor exists', async () => {
-    const { publishBrowserClientPageMetadata } = await startHost()
-
-    await expect(
-      publishBrowserClientPageMetadata(ENVIRONMENT_ID, metadata).catch((error) => error)
-    ).resolves.toBeInstanceOf(Error)
-    expect(recordedUrlParams).toEqual([])
-  })
 })

@@ -2,14 +2,18 @@ import type { GitHubWorkItem } from '../../../src/shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../src/shared/gitlab-types'
 import type { LinearIssue } from '../../../src/shared/linear/issue-types'
 import { getLinearIssueWorkspaceName } from '../../../src/shared/workspace-name'
+import type { JiraIssue } from '../../../src/shared/jira-types'
 import {
   buildGitHubWorkspaceSource,
   buildGitLabWorkspaceSource,
+  buildJiraWorkspaceSource,
   buildLinearWorkspaceSource,
   buildWorkspaceSourceSelection,
   getWorkspaceSourceName,
   shouldApplyWorkspaceSourceAutoName
 } from '../../../src/shared/new-workspace/workspace-source'
+
+type JiraIssueSource = Pick<JiraIssue, 'key' | 'title' | 'url'>
 import { resolveComposerBranchPick as resolveSharedComposerBranchPick } from '../../../src/shared/composer-branch-selection'
 import type {
   MobileComposerCreateSelection,
@@ -50,7 +54,11 @@ export function buildLinearLinkedWorkItem(issue: {
 // Faithful port of desktop applyLinkedWorkItem's name gate: the derived name
 // replaces the current field only when it's empty, still the last auto-name, or
 // a lookup query — never a name the user deliberately typed.
-export function shouldApplyAutoName(args: { currentName: string; lastAutoName: string }): boolean {
+export function shouldApplyAutoName(args: {
+  currentName: string
+  lastAutoName: string
+  lookupTextIsQuery?: boolean
+}): boolean {
   return shouldApplyWorkspaceSourceAutoName(args)
 }
 
@@ -66,6 +74,14 @@ export function resolveWorkItemAutoName(item: {
 
 export function resolveLinearAutoName(issue: { identifier: string; title: string }): string {
   return getLinearIssueWorkspaceName(issue)
+}
+
+export function buildJiraLinkedWorkItem(issue: JiraIssueSource): MobileLinkedWorkItem {
+  return buildJiraWorkspaceSource(issue)
+}
+
+export function resolveJiraAutoName(issue: JiraIssueSource): string {
+  return getWorkspaceSourceName(buildJiraWorkspaceSource(issue)).seedName
 }
 
 // Derives the pill descriptor from the linked item (or a plain branch base),

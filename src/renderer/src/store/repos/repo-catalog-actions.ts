@@ -2,14 +2,14 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { Repo } from '../../../../shared/repo-types'
 import { applyManualRepoOrder } from '../../../../shared/manual-repo-order'
-import { reconcileCatalogRows } from '../slices/repo-identity-reconcile'
+import { reconcileCatalogRows } from '../../../../shared/catalog-row-reconcile'
 import { retainValidFilterRepoIds } from '../slices/repo-filter-selection'
 import {
   mergeSshRepoReadoptions,
   reconcileReadoptedSshRepoRows
 } from '../slices/superseded-ssh-repo-rows'
 import { getRepoHostIdentity } from '../slices/repo-host-identity'
-import { getActiveRuntimeTarget, settingsForRuntimeOwner } from '../../runtime/runtime-rpc-client'
+import { runtimeTargetForOwnerEnvironment } from '../../runtime/runtime-client-target'
 import { filterSetupScriptPromptDismissalsToValidRepos } from '@/lib/setup-script-prompt'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { isRemovedRuntimeHostId } from '../slices/stale-runtime-host-rows'
@@ -18,15 +18,13 @@ import type { RepoSlice } from './repo-state'
 import { arrayElementsUnchanged } from '../catalog-identity'
 import {
   awaitLatestLocalRepoCatalogFetch,
-  claimRepoCatalogGeneration,
-  isLatestRepoCatalogGeneration,
   startLocalRepoCatalogFetch
 } from './repo-catalog-fencing'
+import { claimHostCatalogFence, isHostCatalogFenceCurrent } from '../host-catalog-fencing'
 import {
   fetchRepoCatalogForTarget,
   filterSetupsForPrunedRepoRows,
   mergeFetchedRepoCatalog,
-  projectCompatibilityForReconciledRepos,
   reconcileReadoptedSshWorktreeState,
   reconcileSupersededSshRepos
 } from './repo-catalog-merge'
@@ -34,9 +32,8 @@ import {
   getProjectHostSetupOwnerKey,
   mergeProjectHostSetupCompatibility,
   projectCompatibilityFromRepos
-} from '../projects/project-compatibility-core'
-import { getRuntimeTargetHostId } from '../runtime-target-host'
-import { mergeFetchedProjectCompatibilityForHost } from '../projects/project-compatibility-host-merge'
+} from '../../../../shared/project-compatibility-merge'
+import { mergeFetchedHostProjectCatalog } from '../../../../shared/project-compatibility-host-merge'
 import { scheduleSafeAutoForkSync } from './safe-auto-fork-sync'
 
 export function createRepoCatalogActions(
@@ -67,7 +64,7 @@ export function createRepoCatalogActions(
         )
         // Why: mergeProjectHostSetupCompatibility always allocates; a no-op readoption
         // must not churn catalog identity. This write is all-repos, not host-scoped,
-        // so it cannot go through mergeFetchedProjectCompatibilityForHost. Reconcile
+        // so it cannot go through mergeFetchedHostProjectCatalog. Reconcile
         // hands the store arrays straight back when nothing moved, so writing them
         // unconditionally still leaves identity-keyed selectors untouched.
         const projects = reconcileCatalogRows(
@@ -90,24 +87,17 @@ export function createRepoCatalogActions(
       }),
 
     fetchRepos: async (options) => {
-      const target = getActiveRuntimeTarget(
-        settingsForRuntimeOwner(get().settings, options?.runtimeEnvironmentId)
-      )
+      const target = runtimeTargetForOwnerEnvironment(options.runtimeEnvironmentId)
       const settleLocalCatalog: (outcome: LocalRepoCatalogFetchOutcome) => void =
         target.kind === 'local' ? startLocalRepoCatalogFetch(get) : () => undefined
       let localCatalogOutcome: LocalRepoCatalogFetchOutcome = { status: 'fulfilled' }
       // Why: overlapping repos:changed fetches can resolve out of order; a stale one must not overwrite a newer result and resurrect deleted projects (#7020).
-      let generation = 0
-      set((s) => {
-        generation = s.reposFetchGeneration + 1
-        return { reposFetchGeneration: generation }
-      })
-      const targetHostId = getRuntimeTargetHostId(target)
-      claimRepoCatalogGeneration(get, targetHostId, generation)
+      set((s) => ({ reposFetchGeneration: s.reposFetchGeneration + 1 }))
+      const fence = claimHostCatalogFence(get, 'repos', target)
       try {
         const catalog = await fetchRepoCatalogForTarget(target)
-        // A newer same-host fetch superseded us while we awaited — drop this stale result.
-        if (!isLatestRepoCatalogGeneration(get, targetHostId, generation)) {
+        // A newer same-host fetch or a replaced connection superseded us — drop this stale result.
+        if (!isHostCatalogFenceCurrent(get, fence)) {
           return
         }
         let finalizedHostRepos: Repo[] = []
@@ -122,11 +112,7 @@ export function createRepoCatalogActions(
           const prunedRepos = applyManualRepoOrder(reconciliation.repos, s.manualRepoOrder)
           const validRepoIds = new Set(prunedRepos.map((repo) => repo.id))
           const validRepoHostIdentities = new Set(prunedRepos.map(getRepoHostIdentity))
-          const projectCompatibility = projectCompatibilityForReconciledRepos(
-            prunedRepos,
-            catalog.projectHostSetupCompatibility
-          )
-          const mergedProjectCompatibility = mergeFetchedProjectCompatibilityForHost({
+          const mergedProjectCompatibility = mergeFetchedHostProjectCatalog({
             previous: {
               projects: s.projects,
               projectHostSetups: filterSetupsForPrunedRepoRows(
@@ -135,7 +121,7 @@ export function createRepoCatalogActions(
                 prunedRepos
               )
             },
-            fetched: projectCompatibility,
+            fetched: catalog.projectHostSetupCompatibility,
             repos: prunedRepos,
             hostId: result.hostId
           })
@@ -159,10 +145,13 @@ export function createRepoCatalogActions(
             )
           }
         })
-        scheduleSafeAutoForkSync(get, finalizedHostRepos)
+        scheduleSafeAutoForkSync(finalizedHostRepos)
       } catch (err) {
         localCatalogOutcome = { status: 'rejected', reason: err }
         console.error('Failed to fetch repos:', err)
+        if (options.throwOnError) {
+          throw err
+        }
       } finally {
         settleLocalCatalog(localCatalogOutcome)
       }

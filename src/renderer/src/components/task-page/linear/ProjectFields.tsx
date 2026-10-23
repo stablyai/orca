@@ -1,3 +1,4 @@
+import { ImeInput } from '@/lib/ime-text-field'
 import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
 import { translate } from '@/i18n/i18n'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
@@ -37,7 +38,7 @@ export function TaskPageLinearProjectFields({
   } = model
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 py-5 scrollbar-sleek">
-      <input
+      <ImeInput
         autoFocus
         value={newLinearProjectName}
         onChange={(event) => setNewLinearProjectName(event.target.value)}

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SkillDiscoveryResult, SkillDiscoveryTarget } from '../../../shared/skills'
-import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
 const discoverSkillsForRuntimeTarget = vi.hoisted(() =>
   vi.fn<
@@ -202,6 +202,26 @@ describe('installed agent skill discovery lifecycle', () => {
 
     await discoverInstalledAgentSkills(false, { projectRuntime: repairProjectRuntime })
     expect(discover).toHaveBeenLastCalledWith(LOCAL, { projectRuntime: repairProjectRuntime })
+  })
+
+  it('keeps host, WSL, project, and filtered results in separate cache entries', async () => {
+    const targets: (SkillDiscoveryTarget | undefined)[] = [
+      undefined,
+      { runtime: 'wsl', wslDistro: null },
+      { runtime: 'wsl', wslDistro: 'Ubuntu' },
+      { projectRuntime: resolvedHostProjectRuntime },
+      { projectRuntime: resolvedWslProjectRuntime },
+      { names: ['orchestration'], sourceKinds: ['home'] },
+      { names: ['computer-use'], sourceKinds: ['home'] }
+    ]
+    for (const [index, target] of targets.entries()) {
+      discoverSkillsForRuntimeTarget.mockResolvedValueOnce(result(index))
+      await expect(discoverInstalledAgentSkills(false, target)).resolves.toEqual(result(index))
+    }
+    for (const [index, target] of targets.entries()) {
+      await expect(discoverInstalledAgentSkills(false, target)).resolves.toEqual(result(index))
+    }
+    expect(discoverSkillsForRuntimeTarget).toHaveBeenCalledTimes(targets.length)
   })
 
   it('keys targets by runtime and project identity', () => {

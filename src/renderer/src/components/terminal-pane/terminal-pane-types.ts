@@ -12,7 +12,3 @@ export type TerminalPaneProps = {
   onPtyExit: (ptyId: string, exitCode?: number) => void
   onCloseTab: () => void
 }
-
-export type TerminalPaneHandle = {
-  closeActivePane: () => void
-}

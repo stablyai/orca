@@ -62,16 +62,6 @@ export function shouldInspectWindowsAgentForeground(fallbackProcess: string): bo
   )
 }
 
-export async function resolveWindowsAgentForegroundProcess(
-  shellPid: number,
-  fallbackProcess: string,
-  options: AgentForegroundResolutionOptions
-): Promise<string | null> {
-  return (
-    await resolveWindowsAgentForegroundProcessWithAvailability(shellPid, fallbackProcess, options)
-  ).processName
-}
-
 export async function resolveWindowsAgentForegroundProcessWithAvailability(
   shellPid: number,
   fallbackProcess: string,
@@ -143,7 +133,7 @@ function windowsCandidatesContainRecognizedAgent(
     )
 }
 
-function resolveWindowsForegroundIdentity(
+export function resolveWindowsForegroundIdentity(
   candidates: readonly WindowsProcessCandidate[],
   fallbackProcess: string,
   contextPaths: readonly string[] | undefined

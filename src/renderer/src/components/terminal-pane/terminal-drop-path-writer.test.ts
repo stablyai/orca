@@ -48,7 +48,9 @@ describe('terminal drop path writer', () => {
       failureReason: 'write-rejected'
     })
     expect(sendInputAccepted).toHaveBeenCalledTimes(1)
-    expect(sendInputAccepted).toHaveBeenCalledWith('/repo/a.ts ', 'driving')
+    expect(sendInputAccepted).toHaveBeenCalledWith('/repo/a.ts ', 'driving', {
+      signal: expect.any(AbortSignal)
+    })
     expect(sendInput).not.toHaveBeenCalled()
   })
 
@@ -71,7 +73,8 @@ describe('terminal drop path writer', () => {
     // of the literal path — no shell-escaping, no trailing space.
     expect(sendInputAccepted).toHaveBeenCalledWith(
       wrapTerminalBracketedPasteText('/tmp/orca-paste-1-abc.png'),
-      'driving'
+      'driving',
+      { signal: expect.any(AbortSignal) }
     )
   })
 
@@ -95,7 +98,8 @@ describe('terminal drop path writer', () => {
       wrapTerminalBracketedPasteText(
         '/tmp/drag/Screenshot\\ 2026-09-28\\ at\\ 4.03.11\u202fPM.png'
       ),
-      'driving'
+      'driving',
+      { signal: expect.any(AbortSignal) }
     )
   })
 
@@ -115,7 +119,8 @@ describe('terminal drop path writer', () => {
 
     expect(sendInputAccepted).toHaveBeenCalledWith(
       wrapTerminalBracketedPasteText('"C:\\Users\\me\\My Pictures\\shot.png"'),
-      'driving'
+      'driving',
+      { signal: expect.any(AbortSignal) }
     )
   })
 
@@ -136,14 +141,18 @@ describe('terminal drop path writer', () => {
     expect(sendInputAccepted).toHaveBeenNthCalledWith(
       1,
       `${wrapTerminalBracketedPasteText('/repo/Screenshot\\ 1.png')} `,
-      'driving'
+      'driving',
+      { signal: expect.any(AbortSignal) }
     )
     expect(sendInputAccepted).toHaveBeenNthCalledWith(
       2,
       `${wrapTerminalBracketedPasteText('/repo/Screenshot\\ 2.png')} `,
-      'driving'
+      'driving',
+      { signal: expect.any(AbortSignal) }
     )
-    expect(sendInputAccepted).toHaveBeenNthCalledWith(3, '/repo/a.ts ', 'driving')
+    expect(sendInputAccepted).toHaveBeenNthCalledWith(3, '/repo/a.ts ', 'driving', {
+      signal: expect.any(AbortSignal)
+    })
   })
 
   it('keeps shell-escaped input for mixed image and non-image drops', async () => {
@@ -160,11 +169,14 @@ describe('terminal drop path writer', () => {
       targetShell: 'posix'
     })
 
-    expect(sendInputAccepted).toHaveBeenNthCalledWith(1, '/repo/a.ts ', 'driving')
+    expect(sendInputAccepted).toHaveBeenNthCalledWith(1, '/repo/a.ts ', 'driving', {
+      signal: expect.any(AbortSignal)
+    })
     expect(sendInputAccepted).toHaveBeenNthCalledWith(
       2,
       wrapTerminalBracketedPasteText('/repo/shot.png'),
-      'driving'
+      'driving',
+      { signal: expect.any(AbortSignal) }
     )
   })
 
@@ -187,9 +199,12 @@ describe('terminal drop path writer', () => {
     expect(sendInputAccepted).toHaveBeenNthCalledWith(
       1,
       `${wrapTerminalBracketedPasteText('/repo/shot.png')} `,
-      'driving'
+      'driving',
+      { signal: expect.any(AbortSignal) }
     )
-    expect(sendInputAccepted).toHaveBeenNthCalledWith(2, '/repo/a.ts ', 'driving')
+    expect(sendInputAccepted).toHaveBeenNthCalledWith(2, '/repo/a.ts ', 'driving', {
+      signal: expect.any(AbortSignal)
+    })
   })
 
   it('does not insert a separator between back-to-back image pastes', async () => {
@@ -211,12 +226,14 @@ describe('terminal drop path writer', () => {
     expect(sendInputAccepted).toHaveBeenNthCalledWith(
       1,
       wrapTerminalBracketedPasteText('/repo/one.png'),
-      'driving'
+      'driving',
+      { signal: expect.any(AbortSignal) }
     )
     expect(sendInputAccepted).toHaveBeenNthCalledWith(
       2,
       wrapTerminalBracketedPasteText('/repo/two.png'),
-      'driving'
+      'driving',
+      { signal: expect.any(AbortSignal) }
     )
   })
 
@@ -239,7 +256,8 @@ describe('terminal drop path writer', () => {
     expect(sendInputAccepted).toHaveBeenCalledTimes(1)
     expect(sendInputAccepted).toHaveBeenCalledWith(
       wrapTerminalBracketedPasteText('/repo/a.png\\;\\ touch\\ /tmp/pwned\\ \\#.png'),
-      'driving'
+      'driving',
+      { signal: expect.any(AbortSignal) }
     )
   })
 
@@ -262,7 +280,8 @@ describe('terminal drop path writer', () => {
     expect(sendInputAccepted).toHaveBeenCalledTimes(1)
     expect(sendInputAccepted).toHaveBeenCalledWith(
       wrapTerminalBracketedPasteText('/repo/.orca/drops/download\\ \\(1\\).png'),
-      'driving'
+      'driving',
+      { signal: expect.any(AbortSignal) }
     )
   })
 
@@ -285,17 +304,20 @@ describe('terminal drop path writer', () => {
     expect(sendInputAccepted).toHaveBeenNthCalledWith(
       1,
       `${wrapTerminalBracketedPasteText('/repo/download\\ \\(1\\).png')} `,
-      'driving'
+      'driving',
+      { signal: expect.any(AbortSignal) }
     )
     expect(sendInputAccepted).toHaveBeenNthCalledWith(
       2,
       `${wrapTerminalBracketedPasteText("/repo/it\\'s.png")} `,
-      'driving'
+      'driving',
+      { signal: expect.any(AbortSignal) }
     )
     expect(sendInputAccepted).toHaveBeenNthCalledWith(
       3,
       wrapTerminalBracketedPasteText('/repo/shot.png'),
-      'driving'
+      'driving',
+      { signal: expect.any(AbortSignal) }
     )
   })
 
@@ -316,9 +338,12 @@ describe('terminal drop path writer', () => {
     expect(sendInputAccepted).toHaveBeenNthCalledWith(
       1,
       `${wrapTerminalBracketedPasteText('/repo/download\\ \\(1\\).png')} `,
-      'driving'
+      'driving',
+      { signal: expect.any(AbortSignal) }
     )
-    expect(sendInputAccepted).toHaveBeenNthCalledWith(2, '/repo/a.ts ', 'driving')
+    expect(sendInputAccepted).toHaveBeenNthCalledWith(2, '/repo/a.ts ', 'driving', {
+      signal: expect.any(AbortSignal)
+    })
   })
 
   it('pastes a quoted image path with Windows shell metacharacters', async () => {
@@ -337,7 +362,8 @@ describe('terminal drop path writer', () => {
 
     expect(sendInputAccepted).toHaveBeenCalledWith(
       wrapTerminalBracketedPasteText('"C:\\Users\\me\\Pictures\\a&b.png"'),
-      'driving'
+      'driving',
+      { signal: expect.any(AbortSignal) }
     )
   })
 
@@ -358,12 +384,14 @@ describe('terminal drop path writer', () => {
     expect(sendInputAccepted).toHaveBeenNthCalledWith(
       1,
       `${wrapTerminalBracketedPasteText('/repo/shot.png')} `,
-      'driving'
+      'driving',
+      { signal: expect.any(AbortSignal) }
     )
     expect(sendInputAccepted).toHaveBeenNthCalledWith(
       2,
       wrapTerminalBracketedPasteText('/repo/a.png\\;\\ touch\\ /tmp/pwned\\ \\#.png'),
-      'driving'
+      'driving',
+      { signal: expect.any(AbortSignal) }
     )
   })
 
@@ -382,7 +410,9 @@ describe('terminal drop path writer', () => {
     })
 
     // Why: the paste frame rewrites LF to CR and ESC to a symbol, changing the path.
-    expect(sendInputAccepted).toHaveBeenCalledWith("'/repo/a\nb.png' ", 'driving')
+    expect(sendInputAccepted).toHaveBeenCalledWith("'/repo/a\nb.png' ", 'driving', {
+      signal: expect.any(AbortSignal)
+    })
   })
 
   it('times out dropped path writes that never receive PTY acknowledgement', async () => {

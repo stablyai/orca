@@ -4,7 +4,6 @@ import {
 } from '../../../../shared/path-existence-batch'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import { runtimePathsExist } from '@/runtime/runtime-path-existence-batch'
-import { getActiveRuntimeTarget } from '@/runtime/runtime-client-target'
 import { captureRuntimeEnvironmentRequestRevision } from '@/runtime/runtime-environment-revision'
 
 type PendingPath = {
@@ -29,13 +28,13 @@ export function createTerminalPathExistenceBatch(): (
   const groups = new Map<string, PathGroup>()
   let queued = false
   return (context, path, remote) => {
-    const target = getActiveRuntimeTarget(context.settings)
+    const target = context.target
     const pairingRevision =
       target.kind === 'environment'
         ? captureRuntimeEnvironmentRequestRevision(target.environmentId)
         : undefined
     const key = JSON.stringify([
-      context.settings?.activeRuntimeEnvironmentId,
+      target.kind === 'environment' ? target.environmentId : null,
       context.worktreeId,
       context.worktreePath,
       context.connectionId,

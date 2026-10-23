@@ -134,14 +134,14 @@ function createDeps(overrides: Record<string, unknown> = {}) {
 // Why: activeRuntimeEnvironmentId exercises the remote-runtime path where the renderer still owns OSC 9999 status.
 
 describe('connectPanePty', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetModules()
     vi.clearAllMocks()
     transportFactoryQueue = []
     createdTransportOptions = []
     storeSubscribers = []
     mockStoreState = createInitialStoreState(() => mockStoreState)
-    installTerminalTestGlobals()
+    await installTerminalTestGlobals()
   })
 
   afterEach(async () => {
@@ -197,8 +197,7 @@ describe('connectPanePty', () => {
     vi.useFakeTimers()
     idleHandler('* Claude done')
 
-    expect(mockStoreState.markWorktreeUnread).not.toHaveBeenCalled()
-    expect(mockStoreState.markTerminalTabUnread).not.toHaveBeenCalled()
+    expect(mockStoreState.markAgentAttentionUnread).not.toHaveBeenCalled()
     expect(dispatchNotification).not.toHaveBeenCalled()
 
     vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS)
@@ -207,11 +206,15 @@ describe('connectPanePty', () => {
     expect(dispatchNotification).toHaveBeenCalledWith({
       source: 'agent-task-complete',
       terminalTitle: '* Claude done',
+      ptyId: 'tab-pty',
       paneKey
     })
-    expect(mockStoreState.markWorktreeUnread).toHaveBeenCalledWith('wt-1')
-    expect(mockStoreState.markTerminalTabUnread).toHaveBeenCalledWith('tab-1', 'agent-completion')
-    expect(mockStoreState.markTerminalPaneUnread).toHaveBeenCalledWith(paneKey, 'agent-completion')
+    expect(mockStoreState.markAgentAttentionUnread).toHaveBeenCalledWith({
+      workspaceId: 'wt-1',
+      subjectKey: paneKey,
+      groupId: 'tab-1',
+      reason: 'agent-completion'
+    })
     expect(window.api.notifications.dispatch).toHaveBeenCalledWith(
       expect.objectContaining({
         source: 'agent-task-complete',
@@ -303,6 +306,7 @@ describe('connectPanePty', () => {
     expect(deps.dispatchNotification).toHaveBeenCalledWith({
       source: 'agent-task-complete',
       terminalTitle: '* Claude cross-agent done',
+      ptyId: 'tab-pty',
       paneKey
     })
     expect(pane.terminal.write).toHaveBeenCalledWith(

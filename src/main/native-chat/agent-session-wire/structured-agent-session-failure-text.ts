@@ -4,6 +4,7 @@
 import {
   agentSessionFailureFact,
   providerDiagnosticOf,
+  type AgentSessionArgumentProblem,
   type SubmissionRejectionFact,
   type AgentSessionFailureKind,
   type ProviderDiagnostic
@@ -19,14 +20,27 @@ import {
   type AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire-refusals'
 import { AgentSessionAcquisitionRefusal } from './structured-agent-session-adapter'
+import { providerExecutableMissing } from '../../provider-process/provider-executable-missing'
+import { providerRequestTimeoutOf } from '../../provider-process/provider-request-timeout'
+import { findInErrorChain } from '../../provider-process/provider-error-chain'
+import { argumentProblemOf } from '../structured-agent-arguments-error'
+import { agentCliInstallationProblemOf } from '../agent-cli-installation-error'
+import { agentCliInstallationFacts } from '../../../shared/agent-cli-installation-problem'
 
 /** Start refusals whose situation is itself what the person reads, with its own next step. */
 const TYPED_START_REFUSALS = [
   'notSignedIn',
+  'cliMissing',
   'historyTooLarge',
   'managedAccountEnvOverride',
   'accountSwitchInProgress',
-  'managedAccountUnsupported'
+  'managedAccountUnsupported',
+  'launchFolderMissing',
+  'historyInOtherAccount',
+  'claudeAccountFolderMissing',
+  'claudeAccountSetupFailed',
+  'agentCommandNotRunnable',
+  'runtimeNotInstalled'
 ] as const satisfies readonly (AgentSessionFailureKind &
   AgentSessionRefusalReason<'agent_session_operation_invalid'>)[]
 
@@ -41,38 +55,46 @@ export function withObservedProviderExit<TError extends Error>(error: TError): T
   return Object.assign(error, { providerExitObserved: true })
 }
 
-/** Whether the adapter saw the child exit on its own. Follows `cause` and the errors a cleanup
- *  aggregated, since the acquisition errors wrap what the adapter threw. */
-export function providerExitObserved(error: unknown, depth = 0): boolean {
-  if (depth >= 6 || !(error instanceof Error)) {
-    return false
-  }
-  if ('providerExitObserved' in error && error.providerExitObserved === true) {
-    return true
-  }
-  if (
-    error instanceof AggregateError &&
-    error.errors.some((inner) => providerExitObserved(inner, depth + 1))
-  ) {
-    return true
-  }
-  return providerExitObserved(error.cause, depth + 1)
+/** Whether the error's chain marks an exit the adapter saw on its own. */
+export function providerExitObserved(error: unknown): boolean {
+  return (
+    findInErrorChain(error, (inner) =>
+      'providerExitObserved' in inner && inner.providerExitObserved === true ? true : undefined
+    ) ?? false
+  )
 }
 
 /** A start that did not land. A refusal the adapter typed keeps its situation, and an exit the
  *  adapter observed says the provider stopped; anything else blames no one — it may be Orca's, or
  *  a spawn that failed. Either keeps the provider's diagnostic when the error carried one. */
 export function providerStartupFailureFact(cause?: unknown): SubmissionRejectionFact {
+  const installation = agentCliInstallationProblemOf(cause)
+  if (installation) {
+    return agentSessionFailureFact('startFailed', {
+      refusal: {
+        code: 'agent_session_operation_invalid',
+        details: { reason: 'attachFailed', ...agentCliInstallationFacts(installation) }
+      }
+    })
+  }
   const typed = typedStartRefusal(
     cause instanceof AgentSessionAcquisitionRefusal ? cause.reason : undefined
   )
   if (typed) {
-    return agentSessionFailureFact(typed)
+    return agentSessionFailureFact(typed, {
+      ...(cause instanceof AgentSessionAcquisitionRefusal ? { account: cause.account } : {}),
+      detail: providerDiagnosticOf(cause)
+    })
   }
-  return agentSessionFailureFact(
-    providerExitObserved(cause) ? 'providerStartFailed' : 'startFailed',
-    { detail: providerDiagnosticOf(cause) }
-  )
+  if (providerExecutableMissing(cause)) {
+    return agentSessionFailureFact('cliMissing')
+  }
+  const exited = providerExitObserved(cause)
+  return agentSessionFailureFact(exited ? 'providerStartFailed' : 'startFailed', {
+    detail: providerDiagnosticOf(cause),
+    argumentProblem: argumentProblemOf(cause),
+    ...(exited ? {} : { requestTimeout: providerRequestTimeoutOf(cause) })
+  })
 }
 
 /** A child that ended before it proved its start: an exit is a start that failed, keeping the
@@ -92,17 +114,23 @@ function startupFailureFromExit(
 function refusedStartFailureFact(
   cause: Extract<StructuredAgentSessionStartFailureCause, { refusal: unknown }>
 ): SubmissionRejectionFact {
-  const { refusal, diagnostic } = cause
+  const { refusal, diagnostic, argumentProblem } = cause
   const reason = refusal.details?.reason
   const typed = typedStartRefusal(reason)
   if (typed) {
-    return agentSessionFailureFact(typed)
+    return agentSessionFailureFact(typed, {
+      ...(refusal.code === 'agent_session_operation_invalid'
+        ? { account: refusal.details?.account }
+        : {}),
+      detail: diagnostic
+    })
   }
   if (reason === 'providerStartFailed') {
     return agentSessionFailureFact('providerStartFailed', { detail: diagnostic })
   }
   return agentSessionFailureFact(cause.newSession ? 'startFailed' : 'restartFailed', {
     detail: diagnostic,
+    argumentProblem,
     refusal: agentSessionRefusalReference(refusal)
   })
 }
@@ -111,7 +139,12 @@ function refusedStartFailureFact(
 export type StructuredAgentSessionStartFailureCause =
   /** The session could not be made ready; the provider's words, if any, are kept host-side, off
    *  the refusal. `newSession`: one that never ran, so it failed to start rather than restart. */
-  | { refusal: AgentSessionWireRefusal; diagnostic?: ProviderDiagnostic; newSession?: true }
+  | {
+      refusal: AgentSessionWireRefusal
+      diagnostic?: ProviderDiagnostic
+      argumentProblem?: AgentSessionArgumentProblem
+      newSession?: true
+    }
   /** A start that threw, or an adapter's own startup failure; any diagnostic it carries. */
   | { error: unknown }
   /** The child ended before it proved its start, as its ended event told it. */
@@ -158,6 +191,7 @@ export function structuredAgentSessionStartFailure(
 ): StructuredAgentSessionStartFailureWords {
   return agentSessionFailureWords(structuredAgentSessionStartFailureFact(cause), {
     ...context,
+    ...('refusal' in cause && cause.newSession ? { messageSubmitted: false } : {}),
     surface: 'rejection'
   })
 }

@@ -1,0 +1,26 @@
+{
+  "original_declaration_sites": 0,
+  "expanded_manual_cases": 8,
+  "review_scope": "Complete archived driver with embedded actual harness tests. Supporting permanent fixture/suite remain pending separate audit records.",
+  "checks": [
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 node docs/audits/daemon-late-exit/reproduce.mjs /tmp/orca-root-0017-daemon-late-results.json",
+      "exit_code": 1,
+      "result": "Source-boundary assertion rejects the baseline transform before Vitest/sockets start; no current proof report.",
+      "log": "/tmp/orca-root-0017-daemon-late.log"
+    }
+  ],
+  "limitations": [
+    "Does not prove the ordering occurred on any reported host or explain all persistence/liveness behavior.",
+    "Readme exit-cause/liveness distinctions are measured by this driver; its assertions enforce cleanup/delivery/counts, not every reported field.",
+    "Original graph uses a mock native subprocess, real loopback daemon sockets and inert renderer admission; no app window/native shell is launched.",
+    "Exact source-boundary includes checks do not independently require uniqueness; retain historical graph without claiming generalized mutation robustness."
+  ],
+  "batch": "root-0017",
+  "reviewer": "root",
+  "source_commit": "92dfb4fda69e746e96786ea7af417813ac441394",
+  "reviewed_files": 1,
+  "case_records": 8,
+  "production_changes": false,
+  "test_source_changes": false
+}

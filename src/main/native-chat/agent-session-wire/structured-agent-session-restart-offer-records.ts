@@ -3,6 +3,7 @@
 
 import type { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
 import type { AgentSessionResumeMarker } from '../../../shared/agent-session-resume-marker'
+import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 export type StructuredAgentSessionRestartOfferRecords = {
   /** Every pending offer. Read-only; nothing is spent. */
@@ -13,6 +14,8 @@ export type StructuredAgentSessionRestartOfferRecords = {
     sessionIds: readonly string[] | undefined
   ) => Promise<AgentSessionResumeMarker[]>
   revealMarkers: (markers: readonly AgentSessionResumeMarker[]) => Promise<void>
+  /** Reveals the chat of every offer and every recorded failure. */
+  revealEvery: () => Promise<void>
   /** A user's newer message ended these offers; delete them rather than re-filter forever.
    *  Advisory: a failed prune must never fail the read that noticed it. */
   retireSuperseded: (superseded: readonly AgentSessionResumeMarker[]) => void
@@ -23,6 +26,7 @@ export function createStructuredAgentSessionRestartOfferRecords(deps: {
   readFailedMarkers: () => Promise<AgentSessionResumeMarker[]>
   hasSession: (sessionId: string) => boolean
   reveal: (sessionId: string) => Promise<void>
+  logger: StructuredAgentSessionLogger
   now: () => number
   /** The capsule's single mutation lane, shared with the offer's own operations. */
   enqueue: <T>(operation: () => Promise<T>) => Promise<T>
@@ -33,8 +37,17 @@ export function createStructuredAgentSessionRestartOfferRecords(deps: {
     } catch {
       // Recovery is advisory. A malformed capsule must not make ordinary chat actions unusable;
       // the durable bytes stay untouched so an explicit dismissal can remove them.
-      console.warn('[structured-agent-session] reading recovery capsule failed')
+      deps.logger.warn('reading restart offers from the recovery capsule failed', {
+        scope: 'recovery-capsule-read'
+      })
       return []
+    }
+  }
+  const revealMarkers = async (markers: readonly AgentSessionResumeMarker[]): Promise<void> => {
+    for (const marker of markers) {
+      if (!deps.hasSession(marker.sessionId)) {
+        await deps.reveal(marker.sessionId)
+      }
     }
   }
   return {
@@ -50,13 +63,9 @@ export function createStructuredAgentSessionRestartOfferRecords(deps: {
       )
       return [...pending, ...retried]
     },
-    revealMarkers: async (markers) => {
-      for (const marker of markers) {
-        if (!deps.hasSession(marker.sessionId)) {
-          await deps.reveal(marker.sessionId)
-        }
-      }
-    },
+    revealMarkers,
+    revealEvery: async () =>
+      revealMarkers([...(await readMarkers()), ...(await deps.readFailedMarkers())]),
     retireSuperseded: (superseded) => {
       const capsule = deps.capsule
       if (!capsule || superseded.length === 0) {
@@ -69,7 +78,9 @@ export function createStructuredAgentSessionRestartOfferRecords(deps: {
       void deps
         .enqueue(() => capsule.forgetSuperseded(gone, deps.now()))
         .catch(() => {
-          console.warn('[structured-agent-session] pruning superseded restart offers failed')
+          deps.logger.warn('pruning superseded restart offers failed', {
+            scope: 'restart-offer-prune'
+          })
         })
     }
   }

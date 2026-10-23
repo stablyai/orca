@@ -135,6 +135,21 @@ export async function readTextFileRemote(
   }
 }
 
+/** Entry names in a remote directory, or null when the directory does not exist. */
+export async function listRemoteDirectory(
+  sftp: SFTPWrapper,
+  remotePath: string
+): Promise<string[] | null> {
+  try {
+    return (await readdir(sftp, remotePath)).map((entry) => entry.filename)
+  } catch (err) {
+    if (isNoEntryError(err)) {
+      return null
+    }
+    throw err
+  }
+}
+
 export async function writeTextFileRemoteAtomic(
   sftp: SFTPWrapper,
   remotePath: string,

@@ -23,9 +23,6 @@ describe('requests', () => {
     const bridge = harness({ ready: true })
     bridge.host.receive(clientFrame({ type: 'request', id: ID, method: 'status.get' }))
     bridge.host.receive(
-      clientFrame({ type: 'request', id: OTHER, method: 'status.get', params: undefined })
-    )
-    bridge.host.receive(
       clientFrame({ type: 'request', id: bridgeId(3), method: 'status.get', params: { a: 1 } })
     )
     bridge.host.receive(
@@ -37,7 +34,6 @@ describe('requests', () => {
       })
     )
     expect(bridge.client.requests.map((request) => request.args)).toEqual([
-      ['status.get'],
       ['status.get'],
       ['status.get', { a: 1 }],
       ['status.get', undefined, { timeoutMs: 50 }]
@@ -116,11 +112,15 @@ describe('requests', () => {
   })
 
   it('refuses a subscription id as a request id, because one ledger answers for both', () => {
-    const bridge = harness()
+    const bridge = harness({ ready: true })
     bridge.host.receive(subscribeFrame(ID))
+    expect(bridge.client.streams).toHaveLength(1)
     bridge.host.receive(clientFrame({ type: 'request', id: ID, method: 'status.get' }))
     expect(bridge.client.requests).toHaveLength(0)
-    expect(bridge.last().type).toBe('error')
+    expect(bridge.last()).toMatchObject({
+      type: 'error',
+      error: { message: expect.stringContaining('already in flight') }
+    })
   })
 
   it('admits exactly the in-flight cap and refuses the next', () => {
@@ -156,7 +156,7 @@ describe('requests', () => {
   })
 
   it('holds the cap against a page that closes between batches', async () => {
-    const bridge = harness()
+    const bridge = harness({ ready: true })
     const fill = (offset: number): void => {
       for (let index = 0; index < BRIDGE_MAX_PENDING_REQUESTS; index += 1) {
         bridge.host.receive(
@@ -165,6 +165,8 @@ describe('requests', () => {
       }
     }
     fill(0)
+    expect(bridge.client.requests).toHaveLength(BRIDGE_MAX_PENDING_REQUESTS)
+    expect(bridge.frames().filter((frame) => frame.type !== 'init')).toEqual([])
     // `close` empties the page's ledger, but the desktop is still running all 64 and `sendRequest`
     // has no cancel: counting the ledger would hand the cap over again to the next document.
     bridge.host.receive(clientFrame({ type: 'close' }))
@@ -269,10 +271,13 @@ describe('subscriptions', () => {
 
   it('answers a client whose subscribe throws and holds no slot', () => {
     const client = createFakeRpcClient()
+    let attempts = 0
     const bridge = harness({
+      ready: true,
       client: {
         ...client,
         subscribe: () => {
+          attempts += 1
           throw new Error('no socket')
         }
       }
@@ -280,7 +285,15 @@ describe('subscriptions', () => {
     bridge.host.receive(subscribeFrame(ID))
     expect(bridge.last().type).toBe('error')
     bridge.host.receive(subscribeFrame(ID))
-    expect(bridge.frames()).toHaveLength(2)
+    expect(attempts).toBe(2)
+    expect(bridge.frames().filter((frame) => frame.type === 'error')).toEqual(
+      [1, 2].map(() =>
+        expect.objectContaining({
+          type: 'error',
+          error: expect.objectContaining({ message: 'no socket' })
+        })
+      )
+    )
   })
 
   it('unsubscribes a stream that overflowed inside subscribe, exactly once', () => {
@@ -369,14 +382,18 @@ describe('backpressure', () => {
     for (let index = 0; index < BRIDGE_MAX_UNACKED_FRAMES && !ended(); index += 1) {
       bridge.client.streams[0]?.emit(chunk)
     }
-    const events = bridge.posted.length - 1
-    expect(events).toBeLessThan(BRIDGE_MAX_UNACKED_FRAMES)
-    const eventBytes = bridge.posted
-      .slice(0, events)
-      .reduce((total, json) => total + json.length, 0)
-    // Brackets the window: everything sent fits under it, and one more frame would not have.
+    const events = bridge.posted.filter((json) => JSON.parse(json).type === 'event')
+    expect(events.length).toBeGreaterThan(0)
+    expect(events.length).toBeLessThan(BRIDGE_MAX_UNACKED_FRAMES)
+    const eventBytes = events.reduce(
+      (total, json) => total + new TextEncoder().encode(json).byteLength,
+      0
+    )
     expect(eventBytes).toBeLessThanOrEqual(BRIDGE_MAX_UNACKED_BYTES)
-    expect(eventBytes + chunk.length).toBeGreaterThan(BRIDGE_MAX_UNACKED_BYTES)
+    const nextBytes = new TextEncoder().encode(
+      JSON.stringify({ v: 1, type: 'event', id: ID, seq: events.length + 1, payload: chunk })
+    ).byteLength
+    expect(eventBytes + nextBytes).toBeGreaterThan(BRIDGE_MAX_UNACKED_BYTES)
     expect(bridge.last()).toEqual({ v: 1, type: 'end', id: ID, reason: 'overflow' })
   })
 
@@ -384,18 +401,25 @@ describe('backpressure', () => {
     const bridge = harness({ ready: true })
     bridge.host.receive(subscribeFrame(ID, WINDOWED))
     const chunk = 'z'.repeat(BRIDGE_MAX_MESSAGE_BYTES - 1024)
-    // What fits under the byte window, which leaves the next frame of this size to overflow it.
-    const fits = Math.floor(BRIDGE_MAX_UNACKED_BYTES / (chunk.length + 128))
+    bridge.client.streams[0]?.emit(chunk)
+    const first = bridge.posted.find((json) => JSON.parse(json).type === 'event')
+    expect(first).toBeDefined()
+    if (first === undefined) {
+      throw new Error('no event posted')
+    }
+    const frameBytes = new TextEncoder().encode(first).byteLength
+    const fits = Math.floor(BRIDGE_MAX_UNACKED_BYTES / frameBytes)
     const events = (): BridgeHostMessage[] => bridge.frames().filter((f) => f.type === 'event')
     const emit = (times: number): void => {
       for (let index = 0; index < times; index += 1) {
         bridge.client.streams[0]?.emit(chunk)
       }
     }
-    emit(fits)
+    emit(fits - 1)
     expect(events()).toHaveLength(fits)
     bridge.host.receive(clientFrame({ type: 'ack', id: ID, seq: fits }))
     emit(fits)
+    expect(frameBytes * fits * 2).toBeGreaterThan(BRIDGE_MAX_UNACKED_BYTES)
     // The frame window is nowhere near full, so releasing the acked bytes is the only thing that
     // can let the second batch through.
     expect(fits * 2).toBeLessThan(BRIDGE_MAX_UNACKED_FRAMES)

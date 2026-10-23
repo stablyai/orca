@@ -6,12 +6,22 @@
 //   * `agentPath` is a tree path (`/root`, `/root/list_directory`); the trailing
 //     segment is a semantic task name and the only label available. There is no
 //     `thread/started` for a child, so nickname/role/depth do not exist.
-//   * `agentsStates` on `collabAgentToolCall` arrived empty (`{}`) throughout the
-//     probe, so nothing here reads it; child turn events own execution state.
+//   * Codex's DEFAULT multi-agent mode sends no `subAgentActivity` at all; a
+//     helper appears only in the `collabAgentToolCall` items that spawn, message,
+//     wait on or close it (read in `codex-collab-agent-tool-call.ts`). Either item
+//     announces the same child, keyed by its thread id, and child turn events own
+//     its execution state.
 //   * `thread/tokenUsage/updated` reports a per-thread RUNNING TOTAL, so the
 //     latest frame replaces the previous one — it is never accumulated.
 
-import type { CodexThreadItem } from './codex-structured-item-translation'
+import {
+  codexCollabHelperLabel,
+  readCodexCollabAgentToolCall
+} from './codex-collab-agent-tool-call'
+import type { CodexThreadItem } from './codex-thread-item-identity'
+import { codexSubagentPathLabel, codexSubagentPathSegments } from '../../shared/codex-agent-path'
+
+export { codexSubagentPathSegments } from '../../shared/codex-agent-path'
 
 export const CODEX_SUBAGENT_ITEM_TYPE = 'subAgentActivity'
 export const CODEX_TOKEN_USAGE_METHOD = 'thread/tokenUsage/updated'
@@ -47,11 +57,6 @@ export function readCodexSubagentActivity(item: CodexThreadItem): CodexSubagentA
   }
 }
 
-/** Path segments, empty ones dropped: `/root/list_directory` → 2 segments. */
-export function codexSubagentPathSegments(agentPath: string | null): string[] {
-  return agentPath === null ? [] : agentPath.split('/').filter((part) => part.length > 0)
-}
-
 /** The one path segment that names the parent turn itself rather than a child.
  *  Compared after the same normalization the label uses, not against the raw
  *  string: `/root/` and `/root//` are the same node as `/root`, and a check that
@@ -81,8 +86,52 @@ export function isCodexRootAgentActivity(activity: CodexSubagentActivity): boole
  *  because the caller keys its collision ordinals on this string: ` read ` and
  *  `read` render identically and must therefore collide. */
 export function codexSubagentLabel(activity: CodexSubagentActivity): string | null {
-  const trailing = codexSubagentPathSegments(activity.agentPath).at(-1)?.trim()
-  return trailing !== undefined && trailing.length > 0 ? trailing : null
+  return codexSubagentPathLabel(activity.agentPath)
+}
+
+/** A child the item says exists, from either wire shape Codex announces one with. */
+export type CodexSubagentAnnouncement = {
+  agentThreadId: string
+  label: string | null
+  /** The item is the spawn itself, so the thread that carried it spawned the child. */
+  spawned: boolean
+}
+
+/** The children an item announces: a `subAgentActivity`'s, or every helper a collab call names,
+ *  keyed by thread id so repeats announce one child. Neither the tree root nor the session's own
+ *  thread is a child. Any call counts, since a helper whose spawn was never seen (compacted out of
+ *  history) is known only from the calls on it. A spawn counts whatever its status: Codex reports
+ *  `failed` for a helper that errored at birth, yet names the thread it created, and that thread
+ *  can still run. */
+export function readCodexSubagentAnnouncements(
+  item: CodexThreadItem,
+  primaryThreadId: string | null
+): CodexSubagentAnnouncement[] {
+  return readAnnouncements(item).filter(({ agentThreadId }) => agentThreadId !== primaryThreadId)
+}
+
+function readAnnouncements(item: CodexThreadItem): CodexSubagentAnnouncement[] {
+  const activity = readCodexSubagentActivity(item)
+  if (activity) {
+    return isCodexRootAgentActivity(activity)
+      ? []
+      : [
+          {
+            agentThreadId: activity.agentThreadId,
+            label: codexSubagentLabel(activity),
+            spawned: activity.kind === 'started'
+          }
+        ]
+  }
+  const call = readCodexCollabAgentToolCall(item)
+  if (!call) {
+    return []
+  }
+  const spawned = call.tool === 'spawnAgent'
+  // Only a spawn's prompt describes its helper; another call's prompt is a later message to it,
+  // so a helper no spawn named reads as any unnamed subagent does.
+  const label = spawned ? codexCollabHelperLabel(call.prompt) : null
+  return call.helperThreadIds.map((agentThreadId) => ({ agentThreadId, label, spawned }))
 }
 
 export type CodexThreadTokenTotal = { threadId: string; totalTokens: number }

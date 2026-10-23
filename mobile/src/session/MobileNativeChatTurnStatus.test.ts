@@ -19,10 +19,7 @@ vi.mock('react-native', async () => {
 })
 vi.mock('lucide-react-native', () => ({ ChevronRight: 'ChevronRight' }))
 
-import {
-  MobileNativeChatTurnActivity,
-  MobileNativeChatTurnStatus
-} from './MobileNativeChatTurnStatus'
+import { MobileNativeChatTurnStatus } from './MobileNativeChatTurnStatus'
 
 const labels = (node: ReactTestInstance): string[] =>
   node.findAllByType('Text' as never).map((text) => String(text.children.join('')))
@@ -47,6 +44,7 @@ describe('MobileNativeChatTurnStatus', () => {
   function render(props: {
     startedAt: number | null
     workedSeconds?: number | null
+    verdict?: 'interruption' | 'cancellation'
     expanded?: boolean
     onToggleExpanded?: () => void
   }): ReactTestRenderer {
@@ -77,6 +75,25 @@ describe('MobileNativeChatTurnStatus', () => {
     expect(onToggleExpanded).toHaveBeenCalledOnce()
   })
 
+  // The crash's notice row explains the cut; the turn bar reads like any finished turn.
+  it('heads a turn a crash cut off as worked, and a turn the user stopped as interrupted', () => {
+    const crashed = render({
+      startedAt: Date.now(),
+      workedSeconds: 12,
+      verdict: 'interruption',
+      onToggleExpanded: vi.fn()
+    })
+    expect(labels(crashed.root)).toEqual(['Worked for 12s'])
+    act(() => crashed.unmount())
+    const stopped = render({
+      startedAt: Date.now(),
+      workedSeconds: 12,
+      verdict: 'cancellation',
+      onToggleExpanded: vi.fn()
+    })
+    expect(labels(stopped.root)).toEqual(['Interrupted after 12s'])
+  })
+
   it('stays a plain row when the settled turn has nothing to disclose', () => {
     const tree = render({ startedAt: Date.now(), workedSeconds: 5 })
     expect(tree.root.findAllByType('Pressable' as never)).toHaveLength(0)
@@ -86,40 +103,5 @@ describe('MobileNativeChatTurnStatus', () => {
   it('holds no interval once the turn has settled', () => {
     render({ startedAt: Date.now(), workedSeconds: 5 })
     expect(vi.getTimerCount()).toBe(0)
-  })
-})
-
-describe('MobileNativeChatTurnActivity', () => {
-  function render(props: { thinking: boolean; activityText?: string | null }): ReactTestRenderer {
-    act(() => {
-      renderer = create(createElement(MobileNativeChatTurnActivity, props))
-    })
-    return renderer!
-  }
-
-  it('reads "Thinking" beside one spinner while the turn reasons', () => {
-    const tree = render({ thinking: true })
-    expect(labels(tree.root)).toEqual(['Thinking'])
-    expect(spinners(tree.root)).toHaveLength(1)
-  })
-
-  // The bar owns the clock; the tail line never repeats it.
-  it('reads plain "Working…" when the turn is not reasoning, and holds no timer', () => {
-    const tree = render({ thinking: false })
-    expect(labels(tree.root)).toEqual(['Working…'])
-    expect(vi.getTimerCount()).toBe(0)
-  })
-
-  it('lets provider activity text beat both fallbacks', () => {
-    const tree = render({ thinking: true, activityText: 'Running pnpm test' })
-    expect(labels(tree.root)).toEqual(['Running pnpm test'])
-    expect(spinners(tree.root)).toHaveLength(1)
-  })
-
-  it('announces the live line to assistive tech', () => {
-    const tree = render({ thinking: true })
-    const row = tree.root.findByType('View' as never)
-    expect(row.props.accessibilityLiveRegion).toBe('polite')
-    expect(row.props.accessibilityLabel).toBe('Agent is responding')
   })
 })

@@ -15,10 +15,12 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('../usage/usage-scan-worker-spawn', () => ({
-  scanCodexUsageFilesViaWorker: vi.fn()
+  scanCodexUsageFilesViaWorker: vi.fn(),
+  splitUsageCacheFileViaWorker: vi.fn()
 }))
 
 import { CodexUsageStore, normalizePersistedState } from './store'
+import { CODEX_USAGE_SCHEMA_VERSION } from './codex-usage-provider'
 import { scanCodexUsageFilesViaWorker } from '../usage/usage-scan-worker-spawn'
 
 describe('CodexUsageStore', () => {
@@ -41,7 +43,12 @@ describe('CodexUsageStore', () => {
       join(storeEnv.tempUserData, 'orca-codex-usage.json'),
       'utf-8'
     )
-    expect(scanCodexUsageFilesViaWorker).toHaveBeenCalledWith([], [])
+    expect(scanCodexUsageFilesViaWorker).toHaveBeenCalledWith([], {
+      path: join(storeEnv.tempUserData, 'orca-codex-usage-sources.json'),
+      schemaVersion: CODEX_USAGE_SCHEMA_VERSION,
+      worktreeFingerprint: '[]',
+      reuse: false
+    })
     expect(persistedJson).toBe(JSON.stringify(JSON.parse(persistedJson)))
   })
 
@@ -96,22 +103,8 @@ describe('CodexUsageStore', () => {
   })
 
   it('rescans from scratch when the cache predates per-request long-context counts', async () => {
-    const processedFile = {
-      path: '/codex/sessions/rollout-1.jsonl',
-      mtimeMs: 1,
-      size: 10,
-      sessions: [],
-      dailyAggregates: [],
-      ownedEventKeys: [],
-      hasDeferredClaims: false,
-      parseResumeState: null
-    }
     const scanMock = vi.mocked(scanCodexUsageFilesViaWorker)
-    scanMock.mockResolvedValue({
-      processedFiles: [processedFile],
-      sessions: [],
-      dailyAggregates: []
-    })
+    const sourceCachePath = join(storeEnv.tempUserData, 'orca-codex-usage-sources.json')
     const cacheFile = join(storeEnv.tempUserData, 'orca-codex-usage.json')
     const seeded = new CodexUsageStore({ getRepos: () => [], getAllWorktreeMeta: () => ({}) })
     await seeded.setEnabled(true)
@@ -121,12 +114,22 @@ describe('CodexUsageStore', () => {
 
     scanMock.mockClear()
     await new CodexUsageStore({ getRepos: () => [], getAllWorktreeMeta: () => ({}) }).refresh(true)
-    // Control: a current-schema cache hands its processed files back for reuse.
-    expect(scanMock).toHaveBeenLastCalledWith([], [processedFile])
+    // Control: a current-schema cache lets the worker reuse its processed files.
+    expect(scanMock).toHaveBeenLastCalledWith([], {
+      path: sourceCachePath,
+      schemaVersion: CODEX_USAGE_SCHEMA_VERSION,
+      worktreeFingerprint: '[]',
+      reuse: true
+    })
 
     writeFileSync(cacheFile, JSON.stringify({ ...JSON.parse(current), schemaVersion: 5 }))
     scanMock.mockClear()
     await new CodexUsageStore({ getRepos: () => [], getAllWorktreeMeta: () => ({}) }).refresh(false)
-    expect(scanMock).toHaveBeenLastCalledWith([], [])
+    expect(scanMock).toHaveBeenLastCalledWith([], {
+      path: sourceCachePath,
+      schemaVersion: CODEX_USAGE_SCHEMA_VERSION,
+      worktreeFingerprint: '[]',
+      reuse: false
+    })
   })
 })

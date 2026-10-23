@@ -5,7 +5,7 @@ import {
   WINDOWS_RM_MAX_RETRIES,
   WINDOWS_RM_RETRY_DELAY_MS
 } from '../../shared/windows-transient-lock-removal'
-import { quotePosixShell } from '../../shared/wsl-login-shell-command'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { toWindowsWslPath } from '../wsl'
 import { runWslProcess } from '../wsl/wsl-runner'

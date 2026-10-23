@@ -7,11 +7,12 @@ import { worktreePassesSidebarFilters } from '@/components/sidebar/worktree-filt
 import { sidebarHasActiveFilters } from '@/components/sidebar/sidebar-filter-actions'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { normalizeExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 function wasHiddenBySidebarFilters(worktreeId: string, executionHostId?: ExecutionHostId): boolean {
   const state = useAppStore.getState()
   // Some lightweight callers/tests provide only the activation slice of state.
-  if (!state.worktreesByRepo || !sidebarHasActiveFilters(state)) {
+  if (!selectWorktreesByRepo(state) || !sidebarHasActiveFilters(state)) {
     return false
   }
 
@@ -51,8 +52,6 @@ export function jumpToWorktreeFromSidebar(
   worktreeId: string,
   options?: { executionHostId?: ExecutionHostId }
 ): boolean {
-  const state = useAppStore.getState()
-
   // Folder workspaces aren't in the worktree filter pipeline; only git worktrees can be filter-hidden.
   const hiddenBeforeActivation =
     parseWorkspaceKey(worktreeId)?.type !== 'folder' &&
@@ -61,15 +60,13 @@ export function jumpToWorktreeFromSidebar(
   // Why the workspace dispatcher: it owns the folder-vs-worktree split and the folder path-status gate.
   const activated = activateAndRevealWorkspace(worktreeId, {
     navigationIntent: 'user-open',
+    showWorkspaceList: true,
     ...(hiddenBeforeActivation ? { revealInSidebar: false, clearSidebarFilters: false } : {}),
     ...(options?.executionHostId ? { executionHostId: options.executionHostId } : {})
   })
   if (activated === false) {
     return false
   }
-
-  // The worktree list is the Spaces/Projects sidebar body; jump actions should always expose it.
-  state.setSidebarBody?.('workspaces')
 
   const hiddenAfterActivation =
     hiddenBeforeActivation && wasHiddenBySidebarFilters(worktreeId, options?.executionHostId)

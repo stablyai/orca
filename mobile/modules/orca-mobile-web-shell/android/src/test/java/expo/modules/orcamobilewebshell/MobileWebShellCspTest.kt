@@ -15,7 +15,7 @@ class MobileWebShellCspTest {
     assertTrue(directives.contains("style-src 'self' 'unsafe-inline'"))
     // A file preview is a `data:` URI; `https:` is the favicon, project icon and avatar the
     // page already renders, and the sealed preview frame. See MobileWebShellCsp.
-    assertTrue(directives.contains("img-src 'self' data: https:"))
+    assertTrue(directives.contains("img-src 'self' data: blob: https:"))
     // The bootstrap page reads ./manifest.json from its own origin, which is one read-only
     // directory behind the manifest map, so 'self' reaches nothing it cannot already read.
     assertTrue(directives.contains("connect-src 'self'"))
@@ -23,7 +23,7 @@ class MobileWebShellCspTest {
     assertTrue(directives.contains("frame-src 'none'"))
     assertTrue(directives.contains("child-src 'none'"))
     assertTrue(directives.contains("object-src 'none'"))
-    assertTrue(directives.contains("base-uri 'none'"))
+    assertTrue(directives.contains("base-uri about:"))
     assertTrue(directives.contains("form-action 'none'"))
     assertTrue(directives.contains("frame-ancestors 'none'"))
   }
@@ -39,17 +39,19 @@ class MobileWebShellCspTest {
     )
     assertTrue(directives.contains("script-src 'self'"))
     assertFalse(MOBILE_WEB_SHELL_CSP.contains("unsafe-eval"))
-    // Narrowed rather than absent: `data:` is a fetch source for images and for nothing else, so a
-    // directive that grew one would fail here instead of passing a blanket absence check.
+    // Only images and bundled fonts can use embedded data URLs.
     assertEquals(
-      listOf("img-src 'self' data: https:"),
+      listOf("img-src 'self' data: blob: https:", "font-src 'self' data:"),
       directives.filter { it.contains("data:") }
     )
-    assertFalse(MOBILE_WEB_SHELL_CSP.contains("blob:"))
+    assertEquals(
+      listOf("img-src 'self' data: blob: https:", "media-src blob:"),
+      directives.filter { it.contains("blob:") }
+    )
     // Same shape for `https:`: images and nothing else. `http:` is not a substring of `https:`, so
     // this still refuses a cleartext source anywhere in the header.
     assertEquals(
-      listOf("img-src 'self' data: https:"),
+      listOf("img-src 'self' data: blob: https:"),
       directives.filter { it.contains("https:") }
     )
     assertFalse(MOBILE_WEB_SHELL_CSP.contains("http:"))

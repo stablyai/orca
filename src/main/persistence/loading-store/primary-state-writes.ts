@@ -13,6 +13,8 @@ import { writeToDiskSync } from './primary-state-write-sync'
 import { writeProfileStateInWorker } from './primary-state-write-worker'
 import type { DurableProfileStateMutation } from './store-runtime-state'
 import { profileStateWriterFailureOutcome } from '../profile-state/profile-state-writer-errors'
+import { notifyWorkspaceSessionOperationEnded } from './workspace-session-write-listeners'
+import type { ExecutionHostId } from '../../../shared/execution-host'
 
 const primaryStateWriteOperationsContext = Symbol('PrimaryStateWriteOperations')
 export class PrimaryStateWriteOperations {
@@ -62,7 +64,11 @@ export class PrimaryStateWriteOperations {
       }
       let mutation: DurableProfileStateMutation<T>
       try {
-        mutation = this.runAdmittedMutationCallback('mutate', mutate)
+        mutation = this.runAdmittedMutationCallback(
+          'mutate',
+          mutate,
+          (result) => result.writtenHostIds
+        )
       } catch (error) {
         await stopAfterFailedPrimaryStateMutation(runtime, error)
         throw error
@@ -102,14 +108,26 @@ export class PrimaryStateWriteOperations {
     })
   }
 
-  private runAdmittedMutationCallback<T>(phase: 'mutate' | 'rollback', callback: () => T): T {
+  private runAdmittedMutationCallback<T>(
+    phase: 'mutate' | 'rollback',
+    callback: () => T,
+    /** The partitions the callback declared it wrote; a rollback's are any. */
+    writtenHostIdsOf: (result: T) => readonly ExecutionHostId[] | undefined = () => undefined
+  ): T {
     const { runtime } = this[primaryStateWriteOperationsContext]
     // Finalization drains admitted mutations; the disk wait must not admit new snapshots.
     runtime.durableMutationPhase = phase
+    let result: T | undefined
     try {
-      return callback()
+      result = callback()
+      return result
     } finally {
       runtime.durableMutationPhase = null
+      // Durable writers may edit sessions without scheduling a save; a rollback republishes.
+      notifyWorkspaceSessionOperationEnded(
+        runtime,
+        result === undefined ? null : (writtenHostIdsOf(result) ?? null)
+      )
     }
   }
 
@@ -241,13 +259,4 @@ export async function writeToDiskAsync(owner: PrimaryStateWriteOperations): Prom
     )
   }
   return writeToDiskSync(owner[primaryStateWriteOperationsContext], { expectedGeneration: gen })
-}
-
-export function installPrimaryStateWriteOperationsContext(
-  target: PrimaryStateWriteOperations,
-  source: PrimaryStateWriteOperations
-): void {
-  Object.defineProperty(target, primaryStateWriteOperationsContext, {
-    value: source[primaryStateWriteOperationsContext]
-  })
 }

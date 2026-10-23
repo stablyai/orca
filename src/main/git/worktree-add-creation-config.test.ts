@@ -1,29 +1,18 @@
 // addWorktree: checkout creation, branch-base/push.autoSetupRemote config writes, ref qualification.
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 
-const {
-  gitExecFileAsyncMock,
-  gitExecFileSyncMock,
-  translateWslOutputPathsMock,
-  moveWorktreeDirectoryToTrashMock
-} = vi.hoisted(() => ({
-  gitExecFileAsyncMock: vi.fn(),
-  gitExecFileSyncMock: vi.fn(),
-  translateWslOutputPathsMock: vi.fn((output: string) => output),
-  moveWorktreeDirectoryToTrashMock: vi.fn()
-}))
+const { gitExecFileAsyncMock, gitExecFileSyncMock, translateWslOutputPathsMock } = vi.hoisted(
+  () => ({
+    gitExecFileAsyncMock: vi.fn(),
+    gitExecFileSyncMock: vi.fn(),
+    translateWslOutputPathsMock: vi.fn((output: string) => output)
+  })
+)
 
 vi.mock('./runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock,
   gitExecFileSync: gitExecFileSyncMock,
   translateWslOutputPaths: translateWslOutputPathsMock
-}))
-
-// Default: the checkout cannot be renamed aside, so removal deletes it in place.
-vi.mock('../worktree-trash', () => ({
-  moveWorktreeDirectoryToTrash: moveWorktreeDirectoryToTrashMock.mockResolvedValue(undefined),
-  restoreWorktreeDirectoryFromTrash: vi.fn().mockResolvedValue(true),
-  scheduleWorktreeTrashDeletion: vi.fn()
 }))
 
 import { addSparseWorktree, addWorktree, WORKTREE_ADD_TIMEOUT_MS } from './worktree'

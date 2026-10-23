@@ -20,6 +20,7 @@ import { resolveCodexAutomationRunUsage } from './codex-automation-run-attributi
 import { buildRecentSessions } from './codex-usage-session-rows'
 import { buildBreakdown, buildDaily, buildSummary } from './codex-usage-rollup-projections'
 import { UsageProviderStoreLifecycle } from '../usage/usage-provider-store-lifecycle'
+import { splitUsageCacheFileViaWorker } from '../usage/usage-scan-worker-spawn'
 
 const SCHEMA_VERSION = CODEX_USAGE_SCHEMA_VERSION
 
@@ -95,7 +96,8 @@ export class CodexUsageStore extends UsageProviderStoreLifecycle<
       normalizeState: normalizePersistedState,
       sourceKey: 'processedFiles',
       dataPresenceKey: 'hasAnyCodexData',
-      scan: codexUsageProvider.scan
+      scan: codexUsageProvider.scan,
+      splitCacheFile: splitUsageCacheFileViaWorker
     })
   }
 
@@ -143,6 +145,7 @@ export class CodexUsageStore extends UsageProviderStoreLifecycle<
   }
 
   async getAutomationRunUsage(input: AutomationUsageLookupInput): Promise<AutomationRunUsage> {
+    await this.whenLoaded()
     return resolveCodexAutomationRunUsage(input, {
       getState: () => this.state,
       refresh: (force) => this.refresh(force),

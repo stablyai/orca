@@ -194,10 +194,10 @@ describe('Claude provider history source budget', () => {
     expect(state.bytesRead).toBeGreaterThan(2 * LEGACY_LIMIT)
   })
 
-  it('keeps resident bytes bounded by the chunk size, not the file size', async () => {
+  it('reads a large history in chunks smaller than 1 MiB', async () => {
     await writeFile(state.path, padTo(LEGACY_LIMIT + 1))
     expect((await read()).boundaryConsistent).toBe(true)
-    // A whole-file read would show one chunk the size of the transcript.
+    // Bound chunks handed to the framer; this does not measure retained memory.
     expect(state.peakChunkBytes).toBeLessThan(1024 * 1024)
   })
 

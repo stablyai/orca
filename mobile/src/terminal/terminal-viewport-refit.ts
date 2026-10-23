@@ -28,7 +28,6 @@ type TerminalViewportRefitOptions = {
   nativeChatCoveredRef: RefObject<boolean>
   clientRef: RefObject<RpcClient | null>
   deviceTokenRef: RefObject<string | null>
-  initializedHandlesRef: RefObject<Set<string>>
   connState: ConnectionState
   tabStripVisible: boolean
   // Why: text size (font scale); changing it changes cell size, so the PTY must be re-fitted to a new column count.
@@ -48,7 +47,6 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions) 
     nativeChatCoveredRef,
     clientRef,
     deviceTokenRef,
-    initializedHandlesRef,
     connState,
     tabStripVisible,
     textScale,
@@ -161,7 +159,6 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions) 
             return
           }
           unsubscribeTerminal(handle)
-          initializedHandlesRef.current.delete(handle)
           subscribeToTerminal(handle)
         })()
       }, 150)
@@ -175,7 +172,6 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions) 
       nativeChatCoveredRef,
       clientRef,
       deviceTokenRef,
-      initializedHandlesRef,
       unsubscribeTerminal,
       subscribeToTerminal
     ]

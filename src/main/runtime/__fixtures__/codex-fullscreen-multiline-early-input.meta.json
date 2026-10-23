@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-10-06T05:13:09.417Z",
+  "platform": "darwin",
+  "command": ["codex", "--no-daemon", "-c", "check_for_update_on_startup=false"],
+  "cols": 120,
+  "rows": 40,
+  "note": "Codex CLI 0.160.1; bracketed multiline input followed by Up on first composer frame",
+  "exitCode": 0
+}

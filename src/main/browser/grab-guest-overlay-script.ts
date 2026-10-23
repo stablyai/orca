@@ -1,3 +1,5 @@
+import { BROWSER_GRAB_SELECTED_ATTRIBUTE } from '../../shared/browser-annotation-viewport-bridge'
+
 export const GRAB_GUEST_OVERLAY_SCRIPT = `  var host = document.createElement('div');
   host.id = '__orca-grab-host';
   host.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:2147483647;pointer-events:all;cursor:crosshair;';
@@ -75,6 +77,45 @@ export const GRAB_GUEST_OVERLAY_SCRIPT = `  var host = document.createElement('d
   // full-viewport click catcher that receives all pointer events.
   host.addEventListener('mousemove', onPointerMove);
 
+  var selectedAttribute = ${JSON.stringify(BROWSER_GRAB_SELECTED_ATTRIBUTE)};
+  var selectedEl = null;
+  var selectedValue = null;
+  var previousSelectedValue = null;
+  var frozenFrame = 0;
+  var frozenResizeObserver = null;
+
+  function refreshFrozenHighlight() {
+    frozenFrame = 0;
+    if (selectedEl && selectedEl.isConnected) {
+      updateHighlight(selectedEl);
+    } else {
+      highlightBox.style.display = 'none';
+      hoverLabel.style.display = 'none';
+    }
+  }
+
+  function scheduleFrozenHighlight() {
+    if (!frozenFrame) frozenFrame = requestAnimationFrame(refreshFrozenHighlight);
+  }
+
+  function stopTrackingSelection() {
+    window.removeEventListener('scroll', scheduleFrozenHighlight, true);
+    window.removeEventListener('resize', scheduleFrozenHighlight, true);
+    if (frozenResizeObserver) frozenResizeObserver.disconnect();
+    frozenResizeObserver = null;
+    if (frozenFrame) cancelAnimationFrame(frozenFrame);
+    frozenFrame = 0;
+    if (selectedEl && selectedEl.getAttribute(selectedAttribute) === selectedValue) {
+      try {
+        if (previousSelectedValue === null) selectedEl.removeAttribute(selectedAttribute);
+        else selectedEl.setAttribute(selectedAttribute, previousSelectedValue);
+      } catch(e) {}
+    }
+    selectedEl = null;
+    selectedValue = null;
+    previousSelectedValue = null;
+  }
+
   // Store state for awaitClick/finalize/teardown access
   window.__orcaGrab = {
     host: host,
@@ -84,13 +125,34 @@ export const GRAB_GUEST_OVERLAY_SCRIPT = `  var host = document.createElement('d
     // the renderer shows the copy menu. Disabling pointer-events on the host
     // lets the cursor return to normal and prevents the crosshair from showing
     // over the dropdown menu's area in the webview.
-    freezeHighlight: function() {
+    freezeHighlight: function(selectionId) {
       host.removeEventListener('mousemove', onPointerMove);
       host.style.pointerEvents = 'none';
       host.style.cursor = 'default';
+      // Why: the outline must follow the element after the click — page and inner-box
+      // scroll (capture), resize/zoom and the element's own size changes.
+      selectedEl = currentEl;
+      if (!selectedEl) return;
+      // Why: the isolated-world viewport bridge finds the selection by this marker; it
+      // cannot see this world's objects, and the page must not see the bridge's token.
+      previousSelectedValue = selectedEl.getAttribute(selectedAttribute);
+      selectedValue = selectionId;
+      selectedEl.setAttribute(selectedAttribute, selectionId);
+      highlightBox.style.transition = 'none';
+      window.addEventListener('scroll', scheduleFrozenHighlight, true);
+      window.addEventListener('resize', scheduleFrozenHighlight, true);
+      if (typeof ResizeObserver === 'function') {
+        frozenResizeObserver = new ResizeObserver(scheduleFrozenHighlight);
+        frozenResizeObserver.observe(selectedEl, { box: 'border-box' });
+        // A scrollbar appearing narrows the page without a window resize.
+        if (selectedEl !== document.documentElement) {
+          frozenResizeObserver.observe(document.documentElement);
+        }
+      }
     },
     cleanup: function() {
       host.removeEventListener('mousemove', onPointerMove);
+      stopTrackingSelection();
       try { host.remove(); } catch(e) {}
       delete window.__orcaGrab;
     }

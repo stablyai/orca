@@ -1,9 +1,13 @@
 import { useId, useState } from 'react'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
-import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import { parseAgentDefaultEnvDraft, stringifyAgentDefaultEnvDraft } from './agent-default-env-draft'
+import {
+  parseAgentDefaultEnvDraft,
+  stringifyAgentDefaultEnvDraft,
+  type AgentDefaultEnvDraftInvalidReason
+} from './agent-default-env-draft'
+import { useAgentLaunchFieldWrite } from './use-agent-launch-field-write'
 
 export function AgentCommandOverrideInput({
   defaultCmd,
@@ -12,17 +16,21 @@ export function AgentCommandOverrideInput({
 }: {
   defaultCmd: string
   cmdOverride: string | undefined
-  onSaveOverride: (value: string) => void
+  onSaveOverride: (value: string) => void | Promise<void>
 }): React.JSX.Element {
   const draftSeed = cmdOverride ?? defaultCmd
   const [cmdDraft, setCmdDraft] = useState(draftSeed)
+  const { pending, write } = useAgentLaunchFieldWrite()
   const commitCmd = (): void => {
     const trimmed = cmdDraft.trim()
     if (!trimmed || trimmed === defaultCmd) {
-      onSaveOverride('')
-      setCmdDraft(defaultCmd)
+      write(
+        '',
+        () => onSaveOverride(''),
+        () => setCmdDraft(defaultCmd)
+      )
     } else {
-      onSaveOverride(trimmed)
+      write(trimmed, () => onSaveOverride(trimmed))
     }
   }
 
@@ -34,6 +42,7 @@ export function AgentCommandOverrideInput({
       <div className="flex items-center gap-2">
         <Input
           value={cmdDraft}
+          readOnly={pending}
           onChange={(event) => setCmdDraft(event.target.value)}
           onBlur={commitCmd}
           onKeyDown={(event) => {
@@ -56,8 +65,11 @@ export function AgentCommandOverrideInput({
             variant="ghost"
             size="xs"
             onClick={() => {
-              onSaveOverride('')
-              setCmdDraft(defaultCmd)
+              write(
+                '',
+                () => onSaveOverride(''),
+                () => setCmdDraft(defaultCmd)
+              )
             }}
             className="h-7 shrink-0 text-xs text-muted-foreground hover:text-foreground"
           >
@@ -76,10 +88,14 @@ export function AgentDefaultArgsInput({
 }: {
   defaultArgs: string
   argsOverride: string
-  onSaveArgs: (value: string) => void
+  onSaveArgs: (value: string) => void | Promise<void>
 }): React.JSX.Element {
   const [argsDraft, setArgsDraft] = useState(argsOverride)
-  const commitArgs = (): void => onSaveArgs(argsDraft.trim())
+  const { pending, write } = useAgentLaunchFieldWrite()
+  const commitArgs = (): void => {
+    const value = argsDraft.trim()
+    write(value, () => onSaveArgs(value))
+  }
 
   return (
     <div className="flex flex-col gap-1">
@@ -89,6 +105,7 @@ export function AgentDefaultArgsInput({
       <div className="flex items-center gap-2">
         <Input
           value={argsDraft}
+          readOnly={pending}
           onChange={(event) => setArgsDraft(event.target.value)}
           onBlur={commitArgs}
           onKeyDown={(event) => {
@@ -114,8 +131,11 @@ export function AgentDefaultArgsInput({
             variant="ghost"
             size="xs"
             onClick={() => {
-              onSaveArgs(defaultArgs)
-              setArgsDraft(defaultArgs)
+              write(
+                defaultArgs,
+                () => onSaveArgs(defaultArgs),
+                () => setArgsDraft(defaultArgs)
+              )
             }}
             className="h-7 shrink-0 text-xs text-muted-foreground hover:text-foreground"
           >
@@ -139,12 +159,15 @@ export function AgentDefaultEnvInput({
   const defaultEnvText = stringifyAgentDefaultEnvDraft(defaultEnv)
   const draftSeed = stringifyAgentDefaultEnvDraft(envOverride)
   const [envDraft, setEnvDraft] = useState(draftSeed)
-  const [envDraftTooLarge, setEnvDraftTooLarge] = useState(false)
+  const [envDraftError, setEnvDraftError] = useState<AgentDefaultEnvDraftInvalidReason | null>(null)
   const envDraftErrorId = useId()
   const commitEnv = (): void => {
+    if (envDraft === draftSeed) {
+      return
+    }
     const parsedDraft = parseAgentDefaultEnvDraft(envDraft)
-    setEnvDraftTooLarge(parsedDraft.tooLarge)
-    if (!parsedDraft.tooLarge) {
+    setEnvDraftError(parsedDraft.invalidReason)
+    if (!parsedDraft.invalidReason) {
       onSaveEnv(parsedDraft.env)
     }
   }
@@ -159,8 +182,8 @@ export function AgentDefaultEnvInput({
           value={envDraft}
           onChange={(event) => {
             setEnvDraft(event.target.value)
-            if (envDraftTooLarge) {
-              setEnvDraftTooLarge(false)
+            if (envDraftError) {
+              setEnvDraftError(null)
             }
           }}
           onBlur={commitEnv}
@@ -171,7 +194,7 @@ export function AgentDefaultEnvInput({
             }
             if (event.key === 'Escape') {
               setEnvDraft(draftSeed)
-              setEnvDraftTooLarge(false)
+              setEnvDraftError(null)
               event.currentTarget.blur()
             }
           }}
@@ -180,12 +203,9 @@ export function AgentDefaultEnvInput({
             translate('auto.components.settings.AgentsPane.2d133152fa', 'No default environment')
           }
           spellCheck={false}
-          aria-invalid={envDraftTooLarge || undefined}
-          aria-describedby={envDraftTooLarge ? envDraftErrorId : undefined}
-          className={cn(
-            'h-7 flex-1 font-mono text-xs',
-            envDraftTooLarge && 'border-destructive/50 bg-destructive/5'
-          )}
+          aria-invalid={envDraftError ? true : undefined}
+          aria-describedby={envDraftError ? envDraftErrorId : undefined}
+          className="h-7 flex-1 font-mono text-xs"
         />
         {draftSeed !== defaultEnvText && (
           <Button
@@ -195,7 +215,7 @@ export function AgentDefaultEnvInput({
             onClick={() => {
               onSaveEnv(defaultEnv)
               setEnvDraft(defaultEnvText)
-              setEnvDraftTooLarge(false)
+              setEnvDraftError(null)
             }}
             className="h-7 shrink-0 text-xs text-muted-foreground hover:text-foreground"
           >
@@ -203,12 +223,17 @@ export function AgentDefaultEnvInput({
           </Button>
         )}
       </div>
-      {envDraftTooLarge && (
+      {envDraftError && (
         <p id={envDraftErrorId} className="mt-1 text-[11px] text-destructive">
-          {translate(
-            'auto.components.settings.AgentsPane.3f1bdf3cb4',
-            'Environment text is too large to parse safely.'
-          )}
+          {envDraftError === 'too-large'
+            ? translate(
+                'auto.components.settings.AgentsPane.3f1bdf3cb4',
+                'Environment text is too large to parse safely.'
+              )
+            : translate(
+                'settings.agents.environmentUnclosedQuote',
+                'Close the quote to save the environment.'
+              )}
         </p>
       )}
     </div>

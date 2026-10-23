@@ -2,6 +2,7 @@
 // runtime/browser error allowlists define the contract the CLI relies on to
 // format human-facing messages. Centralizing this mapping keeps the allowlist
 // auditable in one place instead of spread across per-method branches.
+import { AGENT_LAUNCH_SURFACE_UNAVAILABLE_CODE } from '../../../shared/agent-launch-surface'
 import {
   agentSessionRefusalReference,
   isAgentSessionRefusalError,
@@ -11,6 +12,7 @@ import type { RpcEnvelopeMeta, RpcFailure, RpcSuccess } from './core'
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES } from '../../../shared/orchestration-session-caller-codes'
 import { computerUseErrorRecoveryData } from '../../../shared/computer-use-error-recovery'
 import { COMPUTER_ERROR_CODES } from '../../../shared/runtime-types'
+import { TerminalSplitOutcomeError } from '../../../shared/terminal-split-outcome'
 import { LINEAR_ERROR_CODES } from '../../../shared/linear/agent-access'
 import { AGENT_SESSION_RPC_ERROR_CODES } from '../../../shared/agent-session-host-authority'
 import { ARTIFACT_SHARING_DISABLED_CODE } from '../../../shared/artifact-sharing-gate'
@@ -20,6 +22,7 @@ import {
   AGENT_SKILL_SELECTOR_AMBIGUOUS_CODE,
   AGENT_SKILL_SELECTOR_NOT_FOUND_CODE,
   AGENT_SKILL_SHARING_BUSY_CODE,
+  AGENT_SKILL_BUNDLE_NAME_TAKEN_CODE,
   AGENT_SKILL_SHARING_UNSUPPORTED_ENVIRONMENT_CODE
 } from '../../../shared/agent-skill-sharing-contract'
 import {
@@ -30,9 +33,16 @@ import { GIT_DIFF_TOO_LARGE_CODE } from '../../../shared/git-diff-transport-budg
 import { AUTOMATION_OWNER_CONFLICT_CODES } from '../../../shared/automation-owner-conflict'
 import { ARCHIVE_HOOK_FAILED_REMOVAL_CODE } from '../../../shared/worktree/archive-hook-removal-gate'
 import { NESTED_WORKER_DEPTH_EXCEEDED_CODE } from '../../../shared/nested-worker-depth'
+import { PROJECT_RUNTIME_REPAIR_REQUIRED_CODE } from '../../../shared/project-runtime-repair-message'
 import { WORKTREE_CREATE_COLLISION_CODE } from '../../../shared/new-workspace/worktree-create-collision'
 import { AGENT_LAUNCH_PANE_ALREADY_LIVE_CODE } from '../../../shared/agent-launch-pane-already-live'
 import { AGENT_LAUNCH_SESSION_ALREADY_EXISTS_CODE } from '../../../shared/agent-launch-session-already-exists'
+import { AGENT_LAUNCH_TAB_CLOSED_CODE } from '../../../shared/agent-launch-tab-closed'
+import { AGENT_LAUNCH_TARGET_FORBIDDEN_CODE } from '../../../shared/agent-launch-target-forbidden'
+import {
+  parseTerminalSpawnDeferral,
+  TERMINAL_SPAWN_DEFERRED_CODE
+} from '../../../shared/host-spawn-admission'
 
 export function successResponse(id: string, meta: RpcEnvelopeMeta, result: unknown): RpcSuccess {
   return {
@@ -66,8 +76,13 @@ const RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   WORKTREE_CREATE_COLLISION_CODE,
   AGENT_LAUNCH_PANE_ALREADY_LIVE_CODE,
   AGENT_LAUNCH_SESSION_ALREADY_EXISTS_CODE,
+  AGENT_LAUNCH_TAB_CLOSED_CODE,
+  AGENT_LAUNCH_TARGET_FORBIDDEN_CODE,
   'agent_launch_replay_unsupported',
   'runtime_unavailable',
+  'chat_fork_source_unavailable',
+  'chat_fork_runtime_incompatible',
+  'chat_fork_anchor_changed',
   'selector_not_found',
   'selector_ambiguous',
   'terminal_handle_stale',
@@ -87,6 +102,8 @@ const RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'remote_update_manual_required',
   'remote_update_not_available',
   'remote_update_not_downloaded',
+  'connectors_disabled',
+  'external_conversation_not_found',
   ...AGENT_SESSION_RPC_ERROR_CODES
 ])
 
@@ -94,6 +111,7 @@ const COMPUTER_PASSTHROUGH_CODES: ReadonlySet<string> = new Set(Object.values(CO
 const LINEAR_PASSTHROUGH_CODES: ReadonlySet<string> = new Set(LINEAR_ERROR_CODES)
 const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   WORKTREE_CREATE_COLLISION_CODE,
+  AGENT_LAUNCH_SURFACE_UNAVAILABLE_CODE,
   'worktree_id_requires_full_path',
   'run_not_found',
   'run_required',
@@ -104,6 +122,7 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'inject_rejected',
   'dispatch_not_found',
   'dispatch_run_mismatch',
+  'task_run_mismatch',
   'terminal_not_found',
   // A handle that names a live agent session with no terminal. Distinct from
   // `terminal_handle_stale`, which claims the handle went dead — nothing went stale here.
@@ -148,6 +167,7 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   // with the same code the mobile-allowlist check does, so a caller reads one answer either way.
   'forbidden',
   NESTED_WORKER_DEPTH_EXCEEDED_CODE,
+  PROJECT_RUNTIME_REPAIR_REQUIRED_CODE,
   GIT_DIFF_TOO_LARGE_CODE,
   ARTIFACT_SHARING_DISABLED_CODE,
   AGENT_SKILL_SHARING_DISABLED_CODE,
@@ -155,6 +175,7 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   AGENT_SKILL_SELECTOR_AMBIGUOUS_CODE,
   AGENT_SKILL_SELECTOR_NOT_FOUND_CODE,
   AGENT_SKILL_SHARING_BUSY_CODE,
+  AGENT_SKILL_BUNDLE_NAME_TAKEN_CODE,
   AGENT_SKILL_SHARING_UNSUPPORTED_ENVIRONMENT_CODE,
   SKILL_INSTALL_RPC_ERROR_CODE,
   // Why: an owner conflict is a distinct client decision (reload the host, re-adopt,
@@ -167,6 +188,10 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
   const message = error instanceof Error ? error.message : String(error)
   if (isAgentSessionRefusalError(error)) {
     return agentSessionRefusalErrorResponse(id, meta, error)
+  }
+  if (error instanceof TerminalSplitOutcomeError) {
+    // Keeps the code callers already match; the split's id rides in `data` for scripts.
+    return errorResponse(id, meta, 'runtime_error', message, error.data)
   }
   if (
     error instanceof Error &&
@@ -221,6 +246,11 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
   }
   if (RUNTIME_PASSTHROUGH_CODES.has(message)) {
     return errorResponse(id, meta, message, message)
+  }
+  const deferral = parseTerminalSpawnDeferral(message)
+  if (deferral) {
+    // Why: only a caller that sent spawnIntent can be deferred, so the code is new to no client.
+    return errorResponse(id, meta, TERMINAL_SPAWN_DEFERRED_CODE, message, { reason: deferral })
   }
   const skillInstallFailure = classifySkillInstallFailureCode(message)
   if (skillInstallFailure) {

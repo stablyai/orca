@@ -1,44 +1,49 @@
+import {
+  createPairedE2EEClientHandshake,
+  type PairedE2EEClientHandshake
+} from './paired-e2ee-client-handshake'
+import { NODE_PAIRED_E2EE_PRIMITIVES } from './paired-e2ee-node-primitives'
+import { serializeRemoteRuntimePayload } from './remote-runtime-memory-limits'
 import { parseRemoteRuntimeJsonText } from './remote-runtime-request-frames'
 
 export type RemoteRuntimeHandshakeState = 'awaiting_ready' | 'awaiting_authenticated' | 'ready'
 
-export type RemoteRuntimeAuthenticatedFrame =
-  | { kind: 'authenticated' }
-  | { kind: 'rejected'; unauthorized: boolean }
-  | { kind: 'invalid' }
-
-export function classifyRemoteRuntimeReadyFrame(frame: string): 'ready' | 'invalid' | 'unexpected' {
-  let ready: unknown
-  try {
-    ready = parseRemoteRuntimeJsonText(frame)
-  } catch {
-    return 'invalid'
-  }
-  return typeof ready === 'object' &&
-    ready !== null &&
-    (ready as { type?: unknown }).type === 'e2ee_ready'
-    ? 'ready'
-    : 'unexpected'
+// Desktop and CLI runtime clients: legacy framing, structure-limited parsing,
+// size-limited auth serialization. Throws on an invalid host public key.
+export function createRemoteRuntimeClientHandshake(
+  hostPublicKeyB64: string
+): PairedE2EEClientHandshake {
+  return createPairedE2EEClientHandshake({
+    primitives: NODE_PAIRED_E2EE_PRIMITIVES,
+    hostPublicKeyB64,
+    framing: 'legacy',
+    parseJson: parseRemoteRuntimeJsonText,
+    serializeJson: serializeRemoteRuntimePayload
+  })
 }
 
-export function parseRemoteRuntimeAuthenticatedFrame(
-  plaintext: string
-): RemoteRuntimeAuthenticatedFrame {
-  let authenticated: unknown
+// Why: the auth step is async, so the socket can close or be replaced before the frame is
+// sealed; `stillAwaiting` is re-checked then, and a seal failure goes to `fail`.
+export async function sendRemoteRuntimeTokenAuth(args: {
+  handshake: PairedE2EEClientHandshake
+  deviceToken: string
+  clientCapabilities: readonly string[]
+  stillAwaiting: () => boolean
+  send: (frame: string) => void
+  fail: (error: unknown) => void
+}): Promise<void> {
+  let frame: string
   try {
-    authenticated = parseRemoteRuntimeJsonText(plaintext)
-  } catch {
-    return { kind: 'invalid' }
+    frame = await args.handshake.sealAuth(
+      { kind: 'token', deviceToken: args.deviceToken },
+      { clientCapabilities: args.clientCapabilities }
+    )
+  } catch (error) {
+    args.fail(error)
+    return
   }
-  if ((authenticated as { type?: unknown }).type === 'e2ee_authenticated') {
-    return { kind: 'authenticated' }
-  }
-  return {
-    kind: 'rejected',
-    unauthorized:
-      typeof authenticated === 'object' &&
-      authenticated !== null &&
-      (authenticated as { error?: { code?: unknown } }).error?.code === 'unauthorized'
+  if (args.stillAwaiting()) {
+    args.send(frame)
   }
 }
 

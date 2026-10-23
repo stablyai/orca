@@ -1,3 +1,4 @@
+import { acquireReadyCodexForTest } from './codex-structured-session-adapter-fixture'
 import { createCodexDispatchEchoes } from './codex-structured-dispatch-echo'
 import { createCodexTurnOpenWaits } from './codex-structured-turn-open-wait'
 import { describe, expect, it, vi } from 'vitest'
@@ -16,7 +17,8 @@ import { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
 import { CodexPromptRegistry } from './codex-structured-prompt-replies'
 import type { CodexSession } from './codex-structured-session-state'
 import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import { StructuredAgentSessionAdapterRouter } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router'
+import { claudeAndCodexRouter } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const THREAD = 'thread-1'
 
@@ -26,7 +28,7 @@ function identity(sessionId: string): AgentSessionJournalIdentity {
     workspaceId: 'workspace-1',
     hostId: 'host-1',
     agent: 'codex',
-    providerHandle: { kind: 'codex', threadId: THREAD }
+    providerHandle: codexProviderHandle(THREAD)
   }
 }
 
@@ -69,6 +71,7 @@ function adapterFixture() {
 function claudeAdapterStub(): StructuredAgentSessionAdapter {
   return {
     acquire: vi.fn(async () => ({ process: { pid: 1 } }) as never),
+    open: vi.fn(async () => ({ reportedOptions: { model: '' } })),
     dispatch: vi.fn(),
     cancelTurn: vi.fn(),
     answerPrompt: vi.fn(),
@@ -96,15 +99,13 @@ describe('Codex structured session close lifecycle', () => {
       connection,
       backgroundTasks: new CodexBackgroundTaskTracker('thread-1'),
       ended: false,
-      requestedClose,
+      ...(requestedClose ? { orcaClose: { requested: true, reason: new Error('closed') } } : {}),
       fence: 7,
       acquisitionGeneration: 'generation-1',
       threadId: THREAD,
-      historyPath: null,
       prompts,
       options: new Map(),
       reportedOptions: {},
-      fastModeTierByModel: new Map(),
       dispatchEchoes: createCodexDispatchEchoes(),
       turnOpenWaits: createCodexTurnOpenWaits(),
       translator
@@ -135,7 +136,7 @@ describe('Codex structured session close lifecycle', () => {
     expect(translator.handle).toHaveBeenCalledOnce()
   })
 
-  it("ends a Stop's wait for its turn to open when a requested close cannot publish its end yet", async () => {
+  it("ends the session and a Stop's wait for its turn to open when a requested close cannot publish its end", async () => {
     const { connection, prompts, session, sessions } = backpressuredSession(true)
     let released = false
     void session.turnOpenWaits.wait('turn-1', 60_000).then(() => {
@@ -151,10 +152,10 @@ describe('Codex structured session close lifecycle', () => {
         closedByOrca: true,
         prompts
       })
-    ).toBe(false)
+    ).toBe(true)
     await Promise.resolve()
-    // Left for the retry, but the child is gone: nothing waits on a turn it would open.
-    expect(session.ended).toBe(false)
+    // The exit is observed: the refused row is the host's to settle, and nothing waits on a turn.
+    expect(session.ended).toBe(true)
     expect(released).toBe(true)
   })
 
@@ -162,8 +163,8 @@ describe('Codex structured session close lifecycle', () => {
     const { adapter } = adapterFixture()
     const input = { identity: identity('session-1'), fence: 7, spawnToken: 'spawn-1' }
 
-    const first = await adapter.acquire(input)
-    const second = await adapter.acquire(input)
+    const first = await acquireReadyCodexForTest(adapter, input)
+    const second = await acquireReadyCodexForTest(adapter, input)
 
     expect(first.acquisitionGeneration).toBe('generation-1')
     expect(second.acquisitionGeneration).toBe('generation-2')
@@ -171,9 +172,17 @@ describe('Codex structured session close lifecycle', () => {
 
   it('distinguishes an observed provider death from a requested close', async () => {
     const { adapter, connections, events } = adapterFixture()
-    await adapter.acquire({ identity: identity('session-1'), fence: 7, spawnToken: 'spawn-1' })
+    await acquireReadyCodexForTest(adapter, {
+      identity: identity('session-1'),
+      fence: 7,
+      spawnToken: 'spawn-1'
+    })
     connections[0]?.handlers.onExit?.(new Error('provider exited'))
-    await adapter.acquire({ identity: identity('session-2'), fence: 9, spawnToken: 'spawn-2' })
+    await acquireReadyCodexForTest(adapter, {
+      identity: identity('session-2'),
+      fence: 9,
+      spawnToken: 'spawn-2'
+    })
 
     await adapter.closeSession('session-2')
 
@@ -193,7 +202,11 @@ describe('Codex structured session close lifecycle', () => {
 
   it('force-close preserves unexpected-exit evidence when the adapter reports exit during close', async () => {
     const { adapter, connections, events } = adapterFixture()
-    await adapter.acquire({ identity: identity('session-1'), fence: 7, spawnToken: 'spawn-1' })
+    await acquireReadyCodexForTest(adapter, {
+      identity: identity('session-1'),
+      fence: 7,
+      spawnToken: 'spawn-1'
+    })
     const current = connections[0]
     if (!current) {
       throw new Error('missing connection')
@@ -211,7 +224,7 @@ describe('Codex structured session close lifecycle', () => {
 
   it('routes Codex sink-failure recovery through force-close and preserves unexpected-exit settlement', async () => {
     const { adapter, connections, events } = adapterFixture()
-    const router = new StructuredAgentSessionAdapterRouter(
+    const router = claudeAndCodexRouter(
       { claude: claudeAdapterStub(), codex: adapter },
       async () => {}
     )

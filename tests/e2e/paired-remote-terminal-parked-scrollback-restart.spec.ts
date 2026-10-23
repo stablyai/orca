@@ -55,6 +55,7 @@ import {
 import { focusActiveTerminalInput } from './helpers/terminal'
 import { waitForTabParked } from './helpers/terminal-hidden-parking'
 import { readPersistedProfileState } from './helpers/persisted-profile-state'
+import { quotePosixShell } from '../../src/shared/shell-argument-quoting'
 
 const PARK_DELAY_MS = 2_000
 const PAINT_BUDGET_MS = 30_000
@@ -88,7 +89,7 @@ function fixtureCommand(): string {
   const command = [process.execPath, fixturePath]
   return process.platform === 'win32'
     ? command.map((value) => `"${value.replaceAll('"', '""')}"`).join(' ')
-    : command.map((value) => `'${value.replaceAll("'", `'\\''`)}'`).join(' ')
+    : command.map(quotePosixShell).join(' ')
 }
 
 type OnDiskPartitionReading = {

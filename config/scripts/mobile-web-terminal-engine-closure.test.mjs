@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { mobileWebAppModuleClosure } from './build-mobile-web-app-bundle.mjs'
-import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
+import { mobileWebAppDependenciesPresent } from './mobile-web-app/mobile-web-app-bundle-dependencies.mjs'
 
 /**
  * The 612 KiB xterm engine string, and where the page must never meet it.
@@ -92,31 +92,42 @@ describeClosure(
       expect(local).toContain(ENGINE_CSS_MODULE)
     }, 180_000)
 
-    it('would be reported if a document module imported it', async () => {
-      // Planted in a scratch tree rather than under src/terminal/document, so nothing else in the
-      // repository ever walks the plant and no other census has to know it exists.
-      const scratch = await mkdtemp(join(tmpdir(), 'orca-c75-engine-closure-'))
-      try {
-        const planted = join(scratch, 'src', 'terminal', 'document')
-        await mkdir(planted, { recursive: true })
-        await writeFile(
-          join(planted, 'planted.ts'),
-          "import { XTERM_ENGINE_JS } from '../terminal-webview-engine.generated'\n" +
-            'export const planted = XTERM_ENGINE_JS.length\n'
-        )
-        await mkdir(join(scratch, 'src', 'terminal'), { recursive: true })
-        await writeFile(
-          join(scratch, 'src', 'terminal', 'terminal-webview-engine.generated.ts'),
-          "export const XTERM_ENGINE_JS = 'planted'\n"
-        )
-        const { local } = await mobileWebAppModuleClosure(['./src/terminal/document/planted'], {
-          absWorkingDir: scratch
-        })
-        expect(local).toContain(ENGINE_MODULE)
-      } finally {
-        await rm(scratch, { recursive: true, force: true })
-      }
-    }, 180_000)
+    it.each(['bare', 'relative', 'absolute'])(
+      'would be reported if a document module imported it (%s entry)',
+      async (entryKind) => {
+        // Planted in a scratch tree rather than under src/terminal/document, so nothing else in the
+        // repository ever walks the plant and no other census has to know it exists.
+        const scratch = await mkdtemp(join(tmpdir(), 'orca-c75-engine-closure-'))
+        try {
+          const planted = join(scratch, 'src', 'terminal', 'document')
+          await mkdir(planted, { recursive: true })
+          await writeFile(
+            join(planted, 'planted.ts'),
+            "import { XTERM_ENGINE_JS } from '../terminal-webview-engine.generated'\n" +
+              'export const planted = XTERM_ENGINE_JS.length\n'
+          )
+          await mkdir(join(scratch, 'src', 'terminal'), { recursive: true })
+          await writeFile(
+            join(scratch, 'src', 'terminal', 'terminal-webview-engine.generated.ts'),
+            "export const XTERM_ENGINE_JS = 'planted'\n"
+          )
+          const entry = 'src/terminal/document/planted'
+          const entryPoint =
+            entryKind === 'absolute'
+              ? join(scratch, 'src', 'terminal', 'document', 'planted')
+              : entryKind === 'relative'
+                ? `./${entry}`
+                : entry
+          const { local } = await mobileWebAppModuleClosure([entryPoint], {
+            absWorkingDir: scratch
+          })
+          expect(local).toContain(ENGINE_MODULE)
+        } finally {
+          await rm(scratch, { recursive: true, force: true })
+        }
+      },
+      180_000
+    )
   },
   600_000
 )

@@ -1,8 +1,9 @@
-import { mkdirSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
-import { dirname } from 'node:path'
-import SyncDatabase from '../sqlite/sync-database'
-import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
+import type SyncDatabase from '../sqlite/sync-database'
+import {
+  openVersionedCacheDatabase,
+  removeVersionedCacheDatabase
+} from '../sqlite/versioned-cache-database'
 
 // The index stores transcript content as written, with no redaction. A secret in
 // a transcript is already plaintext under the user's home directory and is
@@ -11,7 +12,7 @@ import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 // policy, decided where the wire is.
 
 // Bump to drop and rebuild: the index is a cache over the transcripts, never a source.
-export const SESSION_SEARCH_SCHEMA_VERSION = 6
+export const SESSION_SEARCH_SCHEMA_VERSION = 7
 
 // unicode61 keeps `_ . - /` inside tokens so paths and identifiers match exactly;
 // the `identifiers` column carries the split form (see session-search-identifier-split).
@@ -77,7 +78,8 @@ CREATE TABLE IF NOT EXISTS messages(
   id INTEGER PRIMARY KEY,
   session_row_id INTEGER NOT NULL,
   role TEXT NOT NULL,
-  ts TEXT
+  ts TEXT,
+  text_truncated INTEGER NOT NULL DEFAULT 0
 );
 -- Both the replace delete and the orphan drain walk a session's rows through this.
 CREATE INDEX IF NOT EXISTS messages_session ON messages(session_row_id);
@@ -91,124 +93,32 @@ CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
 `
 
 /**
- * Opens the index, rebuilding it whenever what is on disk cannot be trusted:
- * a different schema version, a version SQLite cannot report, or a file torn
- * badly enough that opening or recovery fails. The index is a cache over the
- * transcripts, so throwing away a bad one costs a re-scan and nothing else;
- * refusing to open would strand the feature until a human deleted the file.
+ * Opens the index, rebuilding it whenever what is on disk cannot be trusted
+ * (see openVersionedCacheDatabase): the index is a cache over the transcripts.
  */
 export function openSessionSearchDatabase(path: string): SyncDatabase {
-  // SQLite will not create the directory, and its failure is `unable to open
-  // database file`, which is correctly not corruption — so without this the
-  // feature strands on a profile that has never held an index.
-  if (path !== ':memory:') {
-    mkdirSync(dirname(path), { recursive: true })
-  }
-  try {
-    return openExisting(path)
-  } catch (error) {
-    if (!isUnusableDatabaseError(error)) {
-      throw error
+  return openVersionedCacheDatabase(path, {
+    version: SESSION_SEARCH_SCHEMA_VERSION,
+    sql: SCHEMA_SQL,
+    afterSchema: (db) => {
+      db.prepare('INSERT OR IGNORE INTO meta(key, value) VALUES (?, ?)').run(
+        'index_incarnation',
+        randomUUID()
+      )
+      // Older Cursor rows omitted the file-time fallback; repair metadata without rereading transcripts.
+      db.exec(`
+        UPDATE sessions SET updated_at = (
+          SELECT strftime('%Y-%m-%dT%H:%M:%fZ', CAST(files.mtime_ms AS INTEGER) / 1000.0, 'unixepoch')
+          FROM files WHERE files.path = sessions.file_path AND files.session_row_id = sessions.id
+        )
+        WHERE agent = 'cursor' AND updated_at IS NULL
+          AND EXISTS (SELECT 1 FROM files WHERE files.path = sessions.file_path
+            AND files.session_row_id = sessions.id)
+      `)
     }
-    // One retry only: a second failure on a file we just created is not corruption.
-    removeSessionSearchDatabase(path)
-    return openExisting(path)
-  }
-}
-
-function openExisting(path: string): SyncDatabase {
-  // Nulled while no handle is open, because closing an already-closed handle
-  // throws ERR_INVALID_STATE, which would replace whatever really failed —
-  // an unlink refused by a virus scanner or a second Orca holding the file —
-  // with an error nothing classifies as worth rebuilding for.
-  let db: SyncDatabase | null = openWithPragmas(path)
-  try {
-    if (isStaleSchema(db)) {
-      // Why: DROP TABLE on a multi-GB FTS index takes minutes and runs inside the
-      // scanner service's init, past its ready timeout; unlinking is instant.
-      db.close()
-      db = null
-      removeSessionSearchDatabase(path)
-      db = openWithPragmas(path)
-    }
-    db.exec(SCHEMA_SQL)
-    db.prepare('INSERT OR IGNORE INTO meta(key, value) VALUES (?, ?)').run(
-      'index_incarnation',
-      randomUUID()
-    )
-    db.prepare('INSERT OR REPLACE INTO meta(key, value) VALUES (?, ?)').run(
-      'schema_version',
-      String(SESSION_SEARCH_SCHEMA_VERSION)
-    )
-    return db
-  } catch (error) {
-    db?.close()
-    throw error
-  }
-}
-
-// SQLite reports a torn file at the first statement that has to read a page, so
-// this has to match on the message as well as the code.
-const UNUSABLE_DATABASE =
-  /SQLITE_CORRUPT|SQLITE_NOTADB|file is not a database|database disk image is malformed/i
-
-function isUnusableDatabaseError(error: unknown): boolean {
-  if (!(error instanceof Error)) {
-    return false
-  }
-  const code = (error as { code?: unknown }).code
-  return (
-    (typeof code === 'string' && UNUSABLE_DATABASE.test(code)) ||
-    UNUSABLE_DATABASE.test(error.message)
-  )
-}
-
-function openWithPragmas(path: string): SyncDatabase {
-  const db = new SyncDatabase(path)
-  try {
-    // Why: only takes effect on an empty file; it is what lets a purge hand pages
-    // back in bounded steps instead of a full VACUUM. Set before any table exists.
-    db.pragma('auto_vacuum = INCREMENTAL')
-    // The whole consistency model: a file's rows and its cursor land in one
-    // transaction, and a reader on another handle sees the last committed state
-    // of the index rather than a session half way through being rewritten.
-    db.pragma('journal_mode = WAL')
-    db.pragma('synchronous = NORMAL')
-    db.pragma('journal_size_limit = 8388608')
-    db.pragma('busy_timeout = 5000')
-    return db
-  } catch (error) {
-    db?.close()
-    throw error
-  }
+  })
 }
 
 export function removeSessionSearchDatabase(path: string): void {
-  if (path === ':memory:') {
-    return
-  }
-  for (const suffix of ['', '-wal', '-shm', '-journal']) {
-    removeTreeSync(`${path}${suffix}`)
-  }
-}
-
-/**
- * Whether what is on disk has to be thrown away. No `meta` table at all is a
- * file with nothing in it to throw away, and removing it would make the first
- * open of every new profile a create-remove-create. A meta table whose version
- * row is missing or unparseable is a damaged index rather than a new one:
- * seeding the current version over it would keep whatever rows the old schema
- * left.
- */
-function isStaleSchema(db: SyncDatabase): boolean {
-  const table = db
-    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'meta'")
-    .get()
-  if (!table) {
-    return false
-  }
-  const row = db.prepare("SELECT value FROM meta WHERE key = 'schema_version'").get() as
-    | { value: string }
-    | undefined
-  return (row ? Number(row.value) : Number.NaN) !== SESSION_SEARCH_SCHEMA_VERSION
+  removeVersionedCacheDatabase(path)
 }

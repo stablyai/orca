@@ -1,34 +1,23 @@
-// @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
+import { applyRemoteViewerLaunchEnv } from './remote-viewer-launch-env'
 import * as dependencies from './orca-runtime-create-terminal-dependencies'
-import type { OrcaRuntimeWithCreateTerminal } from './orca-runtime-create-terminal'
+import type { OrcaRuntimeWithCreateTerminal } from './terminal/launch/terminal-create'
 import type { RuntimeTerminalPresentation } from '../../shared/runtime-types'
 
+// A create with no workspace lands in whatever the window is showing, so only the window can make it.
 export async function createDesktopTerminal(
   runtime: OrcaRuntimeWithCreateTerminal,
-  worktreeSelector: string | undefined,
   opts: dependencies.TerminalCreateOptions,
-  presentation: RuntimeTerminalPresentation | undefined,
-  rendererWindow: Electron.BrowserWindow | null
+  presentation: RuntimeTerminalPresentation | undefined
 ): Promise<dependencies.RuntimeTerminalCreate> {
-  runtime.assertGraphReady()
-  const win = rendererWindow ?? runtime.getAuthoritativeWindow()
-  const workspace = worktreeSelector
-    ? await runtime.resolveTerminalWorkspaceLaunchScope(worktreeSelector)
-    : null
-  const launchOpts = workspace
-    ? await runtime.resolveAgentTerminalCreateOptions(workspace, opts)
-    : opts
-  // `resolveAgentTerminalCreateOptions` refuses an unapplicable shell, and it only runs with a
-  // workspace; a worktree-less create has no execution host to apply one to either.
-  if (!workspace && opts.shellOverride) {
+  // A worktree-less create has no execution host to resolve the shell on.
+  if (opts.shellOverride) {
     throw new Error(
       `--shell ${opts.shellOverride} needs a workspace, because the shell is resolved on the workspace's execution host. No terminal was created.`
     )
   }
-  const worktreeId = workspace?.id
-  const cwd = workspace
-    ? runtime.resolveWorkspaceTerminalStartupCwd(workspace, launchOpts.cwd)
-    : launchOpts.cwd
+  opts = applyRemoteViewerLaunchEnv(opts, opts.terminalImageViewerSupported)
+  runtime.assertGraphReady()
+  const win = runtime.getAuthoritativeWindow()
   const requestId = dependencies.randomUUID()
   const reply = await new Promise<{ tabId: string; title: string }>((resolve, reject) => {
     const timer = setTimeout(() => {
@@ -52,26 +41,22 @@ export async function createDesktopTerminal(
       if (response.error) {
         reject(new Error(response.error))
       } else {
-        resolve({ tabId: response.tabId!, title: response.title ?? launchOpts.title ?? '' })
+        resolve({ tabId: response.tabId!, title: response.title ?? opts.title ?? '' })
       }
     }
     dependencies.getRuntimeDesktopSurface().onIpc('terminal:tabCreateReply', handler)
     win.webContents.send('terminal:requestTabCreate', {
       requestId,
-      worktreeId,
-      command: launchOpts.command,
-      cwd,
-      ...(launchOpts.env ? { env: launchOpts.env } : {}),
-      ...(launchOpts.launchConfig ? { launchConfig: launchOpts.launchConfig } : {}),
-      ...(launchOpts.resumeProviderSession
-        ? { resumeProviderSession: launchOpts.resumeProviderSession }
-        : {}),
-      ...(launchOpts.launchToken ? { launchToken: launchOpts.launchToken } : {}),
-      ...(launchOpts.launchAgent ? { launchAgent: launchOpts.launchAgent } : {}),
-      ...(launchOpts.viewMode ? { viewMode: launchOpts.viewMode } : {}),
-      startupCommandDelivery: launchOpts.startupCommandDelivery,
-      ...(launchOpts.shellOverride ? { shellOverride: launchOpts.shellOverride } : {}),
-      title: launchOpts.title,
+      command: opts.command,
+      cwd: opts.cwd,
+      ...(opts.env ? { env: opts.env } : {}),
+      ...(opts.launchConfig ? { launchConfig: opts.launchConfig } : {}),
+      ...(opts.resumeProviderSession ? { resumeProviderSession: opts.resumeProviderSession } : {}),
+      ...(opts.launchToken ? { launchToken: opts.launchToken } : {}),
+      ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
+      ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
+      startupCommandDelivery: opts.startupCommandDelivery,
+      title: opts.title,
       activate: presentation === 'focused',
       ...(presentation ? { presentation } : {}),
       ...dependencies.ownerSurfacing(opts.surfaceOwner !== false)
@@ -81,7 +66,7 @@ export async function createDesktopTerminal(
   return {
     handle,
     tabId: reply.tabId,
-    worktreeId: worktreeId ?? '',
+    worktreeId: '',
     title: reply.title,
     ...runtime.getPtyExecutionHostMetadata(runtime.handles.get(handle)?.ptyId ?? null),
     surface: 'visible'

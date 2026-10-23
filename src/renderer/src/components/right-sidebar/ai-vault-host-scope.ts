@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getAiVaultResumeWorkspaceExecutionHostId } from '@/lib/ai-vault-resume-target'
+import { useAppStore } from '@/store'
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
   getExecutionHostLabel,
@@ -31,19 +32,10 @@ export function useAiVaultExecutionHostScope(args: {
     () => getAiVaultResumeWorkspaceExecutionHostId(args.resumeTargetState, args.activeWorktreeId),
     [args.activeWorktreeId, args.resumeTargetState]
   )
-  const activeExecutionHost = parseExecutionHostId(activeExecutionHostId)
-  const activeExecutionHostScope: ExecutionHostId | null =
-    activeExecutionHost?.kind === 'ssh' || activeExecutionHost?.kind === 'runtime'
-      ? activeExecutionHost.id
-      : null
-  // Why: a named workspace whose host the client store cannot place is `unverifiable`, not local.
-  // Defaulting it to local scanned the desktop's own history and reported "No agent sessions found"
-  // for a user whose sessions all live on an SSH host (#13713). Widen to every host instead of
-  // asserting one. A local workspace still resolves to `local` and is unaffected.
-  const workspaceHostUnresolved = args.activeWorktreeId !== null && activeExecutionHostId === null
-  const defaultExecutionHostScope: ExecutionHostScope =
-    activeExecutionHostScope ??
-    (workspaceHostUnresolved ? ALL_EXECUTION_HOSTS_SCOPE : LOCAL_EXECUTION_HOST_ID)
+  const { activeExecutionHostScope, defaultExecutionHostScope } = resolveAiVaultHostScopeDefaults(
+    activeExecutionHostId,
+    args.activeWorktreeId
+  )
   const [executionHostScope, setExecutionHostScope] =
     useState<ExecutionHostScope>(defaultExecutionHostScope)
 
@@ -87,6 +79,60 @@ export function useAiVaultExecutionHostScope(args: {
   }
 }
 
+/** The panel's host menu: every known host, defaulting to the workspace's own. */
+export function useAiVaultPanelHostScope(
+  workspaceId: string | null,
+  resumeTargetState: AiVaultSessionResumeTargetState
+): ReturnType<typeof useAiVaultExecutionHostScope> & {
+  hostScopeOptions: AiVaultHostScopeOption[]
+} {
+  const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
+  const runtimeHostOptions = useMemo(
+    () => buildRuntimeAiVaultHostScopeOptions(runtimeEnvironments),
+    [runtimeEnvironments]
+  )
+  const availableExecutionHostScopes = useMemo(
+    () => runtimeHostOptions.map((option) => option.id),
+    [runtimeHostOptions]
+  )
+  const hostScope = useAiVaultExecutionHostScope({
+    activeWorktreeId: workspaceId,
+    resumeTargetState,
+    availableExecutionHostScopes
+  })
+  const { activeExecutionHostScope } = hostScope
+  const hostScopeOptions = useMemo(
+    () => buildAiVaultHostScopeOptions({ activeExecutionHostScope, runtimeHostOptions }),
+    [activeExecutionHostScope, runtimeHostOptions]
+  )
+  return { ...hostScope, hostScopeOptions }
+}
+
+export function resolveAiVaultHostScopeDefaults(
+  activeExecutionHostId: ExecutionHostId | null,
+  activeWorktreeId: string | null
+): {
+  activeExecutionHostScope: ExecutionHostId | null
+  defaultExecutionHostScope: ExecutionHostScope
+} {
+  const activeExecutionHost = parseExecutionHostId(activeExecutionHostId)
+  const activeExecutionHostScope: ExecutionHostId | null =
+    activeExecutionHost?.kind === 'ssh' || activeExecutionHost?.kind === 'runtime'
+      ? activeExecutionHost.id
+      : null
+  // Why: a named workspace whose host the client store cannot place is `unverifiable`, not local.
+  // Defaulting it to local scanned the desktop's own history and reported "No agent sessions found"
+  // for a user whose sessions all live on an SSH host (#13713). Widen to every host instead of
+  // asserting one. A local workspace still resolves to `local` and is unaffected.
+  const workspaceHostUnresolved = activeWorktreeId !== null && activeExecutionHostId === null
+  return {
+    activeExecutionHostScope,
+    defaultExecutionHostScope:
+      activeExecutionHostScope ??
+      (workspaceHostUnresolved ? ALL_EXECUTION_HOSTS_SCOPE : LOCAL_EXECUTION_HOST_ID)
+  }
+}
+
 export function buildRuntimeAiVaultHostScopeOptions(
   runtimeEnvironments: readonly Pick<PublicKnownRuntimeEnvironment, 'id' | 'name'>[]
 ): AiVaultHostScopeOption[] {
@@ -127,4 +173,37 @@ export function buildAiVaultHostScopeOptions(args: {
   add({ id: ALL_EXECUTION_HOSTS_SCOPE, label: getExecutionHostLabel(ALL_EXECUTION_HOSTS_SCOPE) })
 
   return options
+}
+
+export function useAiVaultSessionHostRefreshEvents(
+  error: string | null,
+  refresh: (args: { background: boolean; force: boolean }) => Promise<void>
+): void {
+  const sshConnectedGeneration = useAppStore((s) => s.sshConnectedGeneration)
+  const sshGenerationRef = useRef(sshConnectedGeneration)
+  useEffect(() => {
+    if (sshConnectedGeneration <= sshGenerationRef.current) {
+      return
+    }
+    sshGenerationRef.current = sshConnectedGeneration
+    if (error !== null) {
+      void refresh({ background: true, force: false })
+    }
+  }, [sshConnectedGeneration, error, refresh])
+
+  // Refocus checks the shared host cache without forcing another transcript scan.
+  useEffect(() => {
+    const onRefocus = (): void => {
+      if (document.visibilityState !== 'visible') {
+        return
+      }
+      void refresh({ background: true, force: false })
+    }
+    const unsubscribeWindowFocus = window.api.aiVault.onWindowFocused?.(onRefocus)
+    document.addEventListener('visibilitychange', onRefocus)
+    return () => {
+      unsubscribeWindowFocus?.()
+      document.removeEventListener('visibilitychange', onRefocus)
+    }
+  }, [refresh])
 }

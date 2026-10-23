@@ -109,7 +109,7 @@ describe('Claude compact hook registration', () => {
   it('writes PostCompact, and no PreCompact, into the settings Claude actually reads', () => {
     const written = applyManagedHooks(
       { hooks: {} },
-      { type: 'command', command: 'orca-claude-hook' },
+      () => ({ type: 'command', command: 'orca-claude-hook' }),
       'claude-hook.sh',
       getClaudeManagedHookPlan(CLAUDE_HOOK_EVENT_FIRST_VERSIONS.PostCompact)
     )

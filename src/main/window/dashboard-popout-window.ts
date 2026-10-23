@@ -1,6 +1,5 @@
-import { app, BrowserWindow, nativeTheme, type WebContents } from 'electron'
+import { app, BrowserWindow, nativeTheme, type WebContents, type Event } from 'electron'
 import { join } from 'node:path'
-import { is } from '@electron-toolkit/utils'
 import type { Store } from '../persistence'
 import { isBackgroundLaunch, showWindowWithoutStealingFocus } from './foreground-activation-policy'
 import { rectHasVisibleAreaOnAnyDisplay } from './window-bounds-validation'
@@ -101,7 +100,7 @@ function broadcastPopoutOpenChanged(open: boolean): void {
 function loadDashboardPopout(window: BrowserWindow): void {
   // Why: mirror loadMainWindow's dev/prod branch — the dev server serves the
   // second HTML entry, prod loads the emitted file.
-  if (is.dev && process.env.ELECTRON_RENDERER_URL) {
+  if (!app.isPackaged && process.env.ELECTRON_RENDERER_URL) {
     void window.loadURL(`${process.env.ELECTRON_RENDERER_URL}/popout.html`)
   } else {
     void window.loadFile(join(__dirname, '../renderer/popout.html'))
@@ -264,7 +263,10 @@ export function createOrFocusDashboardPopout(
   window.on('resize', saveBounds)
   window.on('move', saveBounds)
 
-  const freezeBounds = (): void => {
+  const freezeBounds = (event?: Event): void => {
+    if (event?.defaultPrevented) {
+      return
+    }
     windowClosing = true
     if (boundsTimer) {
       clearTimeout(boundsTimer)

@@ -7,7 +7,7 @@ import {
 } from './auth-filesystem-operation'
 import type { CodexRateLimitFetchOptions } from './codex-rate-limit-fetch-options'
 
-const BACKEND_TIMEOUT_MS = 10_000
+export const CODEX_BACKEND_TIMEOUT_MS = 10_000
 
 export type CodexBackendRequest = (url: string, init: RequestInit) => Promise<Response>
 
@@ -26,14 +26,6 @@ const backendAuthReadByPath = new Map<
   string,
   SharedAuthFilesystemOperation<BackendAuthReadResult>
 >()
-
-export function createCodexBackendRequestSignal(
-  callerSignal?: AbortSignal,
-  timeoutMs = BACKEND_TIMEOUT_MS
-): AbortSignal {
-  const timeoutSignal = AbortSignal.timeout(timeoutMs)
-  return callerSignal ? AbortSignal.any([callerSignal, timeoutSignal]) : timeoutSignal
-}
 
 function getBackendAuthRead(
   authPath: string

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { EmulatorSessionInfo } from './emulator-types'
 import type { SimulatorDevice } from './simctl-simulator-devices'
 import type { ServeSimHelperProcess } from './serve-sim-helper-processes'
+import type * as ServeSimExecution from './serve-sim-execution'
 
 const {
   execServeSimCommandMock,
@@ -23,10 +24,11 @@ const {
 
 vi.mock('electron', () => ({ net: { fetch: netFetchMock } }))
 
-vi.mock('./serve-sim-execution', () => ({
+vi.mock('./serve-sim-execution', async (importOriginal) => ({
   execServeSimCommand: execServeSimCommandMock,
   parseServeSimCommandArgs: vi.fn(() => []),
   resolveServeSimExecutable: vi.fn(() => ({ command: '/serve-sim', env: {} })),
+  serveSimKillArgs: (await importOriginal<typeof ServeSimExecution>()).serveSimKillArgs,
   stripEmulatorTargetArgs: vi.fn((args: string[]) => args)
 }))
 
@@ -101,7 +103,7 @@ describe('EmulatorBridge helper ownership', () => {
     expect(stoppedUdid).toBe('device-old')
     expect(execServeSimCommandMock).toHaveBeenCalledWith(
       { command: '/serve-sim', env: {} },
-      ['--kill', '-q', 'device-old'],
+      ['--kill=device-old', '-q'],
       undefined
     )
     expect(killServeSimHelperProcessesForDeviceMock).toHaveBeenCalledWith('device-old', {
@@ -122,7 +124,7 @@ describe('EmulatorBridge helper ownership', () => {
     expect(stoppedUdid).toBe('device-old')
     expect(execServeSimCommandMock).toHaveBeenCalledWith(
       { command: '/serve-sim', env: {} },
-      ['--kill', '-q', 'device-old'],
+      ['--kill=device-old', '-q'],
       undefined
     )
     expect(killServeSimHelperProcessesForDeviceMock).toHaveBeenCalledWith('device-old', {
@@ -155,7 +157,7 @@ describe('EmulatorBridge helper ownership', () => {
     expect(stoppedUdid).toBe('device-external')
     expect(execServeSimCommandMock).toHaveBeenCalledWith(
       { command: '/serve-sim', env: {} },
-      ['--kill', '-q', 'device-external'],
+      ['--kill=device-external', '-q'],
       undefined
     )
     expect(killServeSimHelperProcessesForDeviceMock).toHaveBeenCalledWith('device-external', {
@@ -176,7 +178,7 @@ describe('EmulatorBridge helper ownership', () => {
     expect(execServeSimCommandMock).toHaveBeenCalledTimes(1)
     expect(execServeSimCommandMock).toHaveBeenCalledWith(
       { command: '/serve-sim', env: {} },
-      ['--kill', '-q', 'device-managed'],
+      ['--kill=device-managed', '-q'],
       undefined
     )
     expect(killServeSimHelperProcessesForDeviceMock).toHaveBeenCalledTimes(1)
@@ -205,7 +207,7 @@ describe('EmulatorBridge helper ownership', () => {
     expect(shutdownUdid).toBe('device-1')
     expect(execServeSimCommandMock).toHaveBeenCalledWith(
       { command: '/serve-sim', env: {} },
-      ['--kill', '-q', 'device-1'],
+      ['--kill=device-1', '-q'],
       undefined
     )
     expect(killServeSimHelperProcessesForDeviceMock).toHaveBeenCalledWith('device-1', {
@@ -369,7 +371,7 @@ describe('EmulatorBridge helper ownership', () => {
     expect(execServeSimCommandMock).toHaveBeenNthCalledWith(
       2,
       { command: '/serve-sim', env: {} },
-      ['--kill', '-q', 'device-1'],
+      ['--kill=device-1', '-q'],
       undefined
     )
     expect(killServeSimHelperProcessesForDeviceMock).toHaveBeenCalledWith('device-1', {
@@ -405,7 +407,7 @@ describe('EmulatorBridge helper ownership', () => {
     expect(waitForEndpointReady).toHaveBeenCalledTimes(2)
     expect(execServeSimCommandMock).toHaveBeenCalledWith(
       { command: '/serve-sim', env: {} },
-      ['--kill', '-q', 'device-1'],
+      ['--kill=device-1', '-q'],
       undefined
     )
     expect(killServeSimHelperProcessesForDeviceMock).toHaveBeenCalledTimes(2)

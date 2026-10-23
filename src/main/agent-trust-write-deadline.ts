@@ -3,8 +3,9 @@ import type { AgentTrustPreset } from './agent-trust-presets'
 /**
  * Why: callers hold launch admission on a trust write, but the write is not
  * self-bounding. The local Codex writer queues on the per-`config.toml` lane
- * shared with hook installs and app-server trust grants (up to 10s native /
- * 30s WSL each, with no cap on how many are already queued). Without a cap the
+ * shared with managed-home hook installs, which hold it across their inline
+ * trust grant (up to 10s native each, with no cap on how many are already
+ * queued); the real-home background approval holds none. Without a cap the
  * user clicks "start agent" and nothing happens, with no error.
  *
  * 20s covers a native grant session holding the lane with headroom. Past that

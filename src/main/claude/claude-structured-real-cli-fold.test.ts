@@ -27,6 +27,8 @@ import {
   realClaudeCommand,
   realClaudeLaunchHome
 } from './claude-real-cli-availability-test-support'
+import { claudeStartupSettled } from './claude-structured-session-test-support'
+import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const SESSION_ID = 'real-cli-fold'
 // Pins the live proof order (SessionStart hook frame before system/init) and lets the
@@ -42,7 +44,7 @@ function identity(providerSessionId: string): AgentSessionJournalIdentity {
     workspaceId: 'real-cli-fold-workspace',
     hostId: 'local',
     agent: 'claude',
-    providerHandle: { kind: 'claude', sessionId: providerSessionId, leafUuid: null }
+    providerHandle: claudeProviderHandle(providerSessionId, null)
   }
 }
 
@@ -107,8 +109,8 @@ describe.skipIf(!realClaudeAvailable)('Claude structured real CLI fold', () => {
           spawnToken: 'real-cli-fold',
           events: sink
         })
-        await adapter.awaitStarted(SESSION_ID)
-        // Startup proved from the SessionStart hook frame, with no init yet.
+        await claudeStartupSettled(adapter, SESSION_ID)
+        // Startup landed on the initialize answer, with no turn and so no init yet.
         expect(
           events.some(
             (event) =>
@@ -135,7 +137,7 @@ describe.skipIf(!realClaudeAvailable)('Claude structured real CLI fold', () => {
             requestedAt: Date.now(),
             fence: 1
           })
-        ).resolves.toEqual({ state: 'admitted' })
+        ).resolves.toMatchObject({ state: 'admitted' })
 
         // Wait for A's replay to open the turn, then send B mid-turn: the first
         // `sleep 8` guarantees the CLI is still inside A's request cycle.
@@ -158,7 +160,7 @@ describe.skipIf(!realClaudeAvailable)('Claude structured real CLI fold', () => {
             requestedAt: Date.now(),
             fence: 1
           })
-        ).resolves.toEqual({ state: 'admitted' })
+        ).resolves.toMatchObject({ state: 'admitted' })
 
         const results = () =>
           events.flatMap((event) =>

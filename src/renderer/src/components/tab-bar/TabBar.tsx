@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useCallback } from 'react'
 import { useTabStripOverflowNavigation } from './tab-strip-overflow-navigation'
 import { useTabStripDragScrollHandlers } from './tab-strip-drag-scroll'
 import type { TabBarProps } from './tab-bar-props'
@@ -7,7 +7,9 @@ import { useTabBarRuntimeModel } from './use-tab-bar-runtime-model'
 import { useTabBarCreateMenuController } from './use-tab-bar-create-menu-controller'
 import { useTabBarItemProjection } from './use-tab-bar-item-projection'
 import { renderTabBarSurface } from './tab-bar-surface'
+import { useTabBarItemActions } from './use-tab-bar-item-actions'
 import { useActiveClientHostedBrowserRowId } from '@/lib/pane-manager/client-hosted-browser-row-state'
+import { useEditorGroupFileDropOwner } from '../editor/use-editor-group-file-drop-owner'
 
 function TabBarInner(props: TabBarProps): React.JSX.Element {
   const {
@@ -26,6 +28,7 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
   const createMenu = useTabBarCreateMenuController({
     worktreeId,
     resolvedGroupId: runtime.resolvedGroupId,
+    showAgentLaunchItems: props.showAgentLaunchItems,
     terminalOnly,
     mobileEmulatorEnabled: runtime.mobileEmulatorEnabled,
     managedBrowserCreationEnabled: runtime.managedBrowserCreationEnabled,
@@ -35,8 +38,8 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     projectRuntimeShellMenuMode: runtime.projectRuntimeShellMenuMode,
     defaultWindowsShell: runtime.defaultWindowsShell,
     defaultWindowsPowerShellImplementation: runtime.defaultWindowsPowerShellImplementation,
+    agentDetectionTarget: runtime.agentDetectionTarget,
     windowsTerminalCapabilities: runtime.windowsTerminalCapabilities,
-    agentLaunchOptions: runtime.agentLaunchOptions,
     onNewTerminalTab,
     onNewTerminalWithShell,
     onNewBrowserTab,
@@ -64,6 +67,11 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     }
     runtime.pinTab(item.unifiedTabId)
   }
+  const itemActions = useTabBarItemActions({
+    props,
+    togglePinned,
+    toggleTabViewMode: runtime.toggleTabViewMode
+  })
   // Read here, not just where the rows render: the real tabs have to know when a row took over.
   const activeClientHostedBrowserRowId = useActiveClientHostedBrowserRowId({
     worktreeId,
@@ -79,6 +87,15 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     ].join('|'),
     worktreeId
   })
+  const attachFileDropOwner = useEditorGroupFileDropOwner({ worktreeId, groupId })
+  const { clearPendingNewTabMenuFocusOnUnmount } = createMenu
+  const surfaceRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      clearPendingNewTabMenuFocusOnUnmount(node)
+      attachFileDropOwner(node)
+    },
+    [attachFileDropOwner, clearPendingNewTabMenuFocusOnUnmount]
+  )
   const tabStripDragScroll = useTabStripDragScrollHandlers(tabStripNavigation.scrollTabStrip, {
     start: tabStripNavigation.tabStripOverflowState.canScrollStart,
     end: tabStripNavigation.tabStripOverflowState.canScrollEnd
@@ -92,7 +109,8 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     tabStripNavigation,
     tabStripDragScroll,
     activeClientHostedBrowserRowId,
-    togglePinned
+    itemActions,
+    surfaceRef
   })
 }
 

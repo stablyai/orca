@@ -102,5 +102,16 @@ describe('headless automation workspace create args', () => {
     })
 
     expect(args.setupDecision).toBe('skip')
+    expect(Object.hasOwn(args, 'startupExtraAgentArgs')).toBe(false)
+  })
+
+  it('carries saved extras into the startup agent launch', () => {
+    const args = buildHeadlessAutomationWorktreeCreateArgs({
+      automation: { ...automation, extraAgentArgs: '--model gpt-5.5' },
+      run: { id: 'run-1', title: 'Nightly review run', scheduledFor: 0 },
+      repo
+    })
+
+    expect(args.startupExtraAgentArgs).toBe('--model gpt-5.5')
   })
 })

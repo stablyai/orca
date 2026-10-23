@@ -26,6 +26,8 @@ import {
 import { createCodexStructuredNotificationRetry } from './codex-structured-notification-retry'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
 import type { CodexSession } from './codex-structured-session-state'
+import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const SESSION_ID = 'session-1'
 const THREAD_ID = 'thread-abc'
@@ -218,12 +220,12 @@ describe('codex turn lifecycle rows', () => {
         workspaceId: 'workspace-1',
         hostId: 'local',
         agent: 'codex',
-        providerHandle: { kind: 'codex', threadId: THREAD_ID }
+        providerHandle: codexProviderHandle(THREAD_ID)
       },
       now: () => 9_000,
       stateDirectory: join(root, SESSION_ID)
     })
-    const deferred = createDeferredStructuredAgentSessionEventSink()
+    const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
     const translator = createCodexJournalTranslator({
       sink: deferred.sink,
       sessionId: SESSION_ID,
@@ -239,7 +241,6 @@ describe('codex turn lifecycle rows', () => {
     expect(appended.ok && appended.rows).toEqual([
       expect.objectContaining({
         kind: 'item',
-        v: 3,
         ts: 1_000,
         body: {
           kind: 'turn',
@@ -465,7 +466,7 @@ describe('codex turn lifecycle rows', () => {
     ])
   })
 
-  it('replays a backpressured turn boundary with its original receipt time', async () => {
+  it('replays an oversized backpressured notification with its original receipt time', async () => {
     vi.useFakeTimers()
     const connection = {
       pauseReading: vi.fn(),
@@ -481,7 +482,13 @@ describe('codex turn lifecycle rows', () => {
     })
 
     expect(
-      retries.handle(SESSION_ID, 'turn/started', { turn: { id: TURN_ID } }, 1_000, -1)
+      retries.handle(
+        SESSION_ID,
+        'turn/started',
+        { turn: { id: TURN_ID }, output: 'x'.repeat(9 * 1024 * 1024) },
+        1_000,
+        -1
+      )
     ).toEqual({ accepted: false, reason: 'backpressure' })
     await vi.advanceTimersByTimeAsync(50)
 
@@ -490,7 +497,7 @@ describe('codex turn lifecycle rows', () => {
     expect(connection.resumeReading).not.toHaveBeenCalled()
   })
 
-  it('restores terminal rows for historical turns with both endpoints, in milliseconds', () => {
+  it('restores historical turn rows with optional endpoints in milliseconds', () => {
     const tap = recorder()
     const translator = translatorFor(tap)
 
@@ -585,6 +592,26 @@ describe('codex turn lifecycle rows', () => {
           userItemId: 'codex:thread-abc:turn-unplaced:0',
           startedAt: 1_700_000_170_000,
           completedAt: 1_700_000_171_000
+        }
+      },
+      {
+        key: 'legacy:codex:session-1:turn-lifecycle%3Aturn-open',
+        body: {
+          kind: 'turn',
+          turnId: 'turn-open',
+          state: 'completed',
+          userItemId: 'codex:thread-abc:turn-open:0',
+          startedAt: 1_700_000_200_000
+        }
+      },
+      {
+        key: 'legacy:codex:session-1:turn-lifecycle%3Aturn-untimed',
+        body: {
+          kind: 'turn',
+          turnId: 'turn-untimed',
+          state: 'completed',
+          outcome: 'success',
+          userItemId: 'codex:thread-abc:turn-untimed:0'
         }
       }
     ])

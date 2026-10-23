@@ -1,6 +1,4 @@
 import React from 'react'
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { AgentStateDot, agentStateLabel, type AgentDotState } from './AgentStateDot'
@@ -35,15 +33,6 @@ function renderDotClassNames(state: AgentDotState): string[] {
 }
 
 describe('AgentStateDot', () => {
-  it('keeps the question glyph above the light-theme non-text contrast floor', () => {
-    const css = readFileSync(join(__dirname, '../assets/main.css'), 'utf8')
-    const lightTheme = css.match(/:root\s*\{(?<body>[\s\S]*?)\n\}/)?.groups?.body
-    const darkTheme = css.match(/\.dark\s*\{(?<body>[\s\S]*?)\n\}/)?.groups?.body
-
-    expect(lightTheme).toContain('--agent-question: var(--color-orange-600)')
-    expect(darkTheme).toContain('--agent-question: var(--color-orange-500)')
-  })
-
   it('renders working as a yellow spinner', () => {
     const markup = renderMarkup('working')
 
@@ -57,7 +46,7 @@ describe('AgentStateDot', () => {
 
     expect(markup).toContain('aria-label="Monitoring background tasks"')
     expect(markup).toContain('lucide-activity')
-    expect(markup).toContain('text-yellow-500')
+    expect(markup).toContain('text-agent-working')
     expect(markup).not.toContain('data-agent-spinner')
   })
 
@@ -96,7 +85,7 @@ describe('AgentStateDot', () => {
     expect(markup).not.toContain('data-agent-spinner')
   })
 
-  it.each(['blocked', 'interrupted'] satisfies AgentDotState[])(
+  it.each(['blocked', 'failed'] satisfies AgentDotState[])(
     'renders %s as a red attention dot',
     (state) => {
       const classNames = renderDotClassNames(state)
@@ -105,6 +94,14 @@ describe('AgentStateDot', () => {
       expect(classNames).not.toContain('bg-amber-500')
     }
   )
+
+  it("renders a user's Stop as a muted dot, neither the fault red nor the idle grey", () => {
+    const classNames = renderDotClassNames('interrupted')
+
+    expect(classNames).toContain('bg-muted-foreground')
+    expect(classNames).not.toContain('bg-red-500')
+    expect(classNames).not.toContain('bg-neutral-500/40')
+  })
 
   const ALL_STATES = [
     'working',
@@ -116,6 +113,7 @@ describe('AgentStateDot', () => {
     'done',
     'idle',
     'unverifiable',
+    'unconfirmed',
     'permission'
   ] satisfies AgentDotState[]
 

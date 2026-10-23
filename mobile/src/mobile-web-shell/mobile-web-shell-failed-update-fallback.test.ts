@@ -51,8 +51,10 @@ vi.mock('expo-file-system', () => ({ Directory: class {}, File: class {}, Paths:
 vi.mock('../transport/mobile-endpoint-supervisor-support', () => ({
   encodeBase64Url: () => 'session-id'
 }))
-vi.mock('../components/HostProtocolGate', () => ({ useHostProtocolGates: () => doubles.gates }))
-vi.mock('../transport/client-context', () => ({ useHostClient: () => doubles.connection }))
+vi.mock('../components/host-protocol-gates-context', () => ({
+  useHostProtocolGates: () => doubles.gates
+}))
+vi.mock('../transport/host-client-hooks', () => ({ useHostClient: () => doubles.connection }))
 vi.mock('../transport/rpc-operation', () => ({
   defineRpcOperation: (definition: unknown) => definition,
   runRpcOperation: async () => {
@@ -142,6 +144,7 @@ function fetchResultFor(manifest: MobileWebBundleManifestRead): MobileWebBundleF
     assets: new Map(
       manifest.assets.map((asset) => [asset.path, new Uint8Array(asset.byteLength).fill(7)])
     ),
+    reused: [],
     totalBytes: TOTAL_BYTES,
     elapsedMs: 1
   }

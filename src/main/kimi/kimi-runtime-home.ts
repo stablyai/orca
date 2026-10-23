@@ -7,9 +7,10 @@ import {
 } from '../../shared/local-account-runtime'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { getWslHomeAsync, listWslDistrosAsync } from '../wsl'
+import { isWslDistroRunning } from '../wsl-background-distro-gate'
 
 export type KimiHomeResolution = LocalAccountRuntimeTarget & {
-  /** null when the WSL distro's home could not be probed (distro missing/stopped). */
+  /** null when the distro is missing or stopped, or its home could not be probed. */
   path: string | null
 }
 
@@ -49,6 +50,10 @@ export async function resolveKimiHome(
   const distro = target.wslDistro?.trim() || (await defaultWslDistro())
   if (!distro) {
     return { runtime: 'wsl', wslDistro: null, path: null }
+  }
+  // Why: a quota poll is background work and must not boot a stopped distro.
+  if (!(await isWslDistroRunning(distro))) {
+    return { runtime: 'wsl', wslDistro: distro, path: null }
   }
   const home = await getWslHomeAsync(distro)
   // KIMI_CODE_HOME describes the Windows host process, never the distro's home.

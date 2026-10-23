@@ -1,6 +1,4 @@
 import type { IPty } from 'node-pty'
-import { canUseBunPty } from '../daemon/pty-subprocess/bun-pty-process-capabilities'
-import { loadWindowsBunPtyJobNative } from '../daemon/pty-subprocess/windows-bun-pty-native'
 import { createRequire } from 'node:module'
 import { recordSelfInitiatedTreeKill } from '../crash-reporting/self-initiated-tree-kill-log'
 
@@ -33,6 +31,8 @@ type ConptyNative = {
   terminateJob: (id: number, shellPid: number) => boolean
   listJobProcessIds: (id: number, shellPid: number) => number[] | null
   assignCurrentProcessToJob: () => boolean
+  /** Absent on builds that predate the terminal process ceiling. */
+  setActiveProcessLimit?: (limit: number) => boolean
 }
 
 type SelfOwnedPty = IPty & {
@@ -231,9 +231,22 @@ function assignHostProcessOnce(): boolean {
   }
 }
 
+/** An ActiveProcessLimit for every later ConPTY's job; false when this build cannot set one. */
+export function setPtyActiveProcessLimit(limit: number): boolean {
+  const native = nativeLoader()
+  if (typeof native?.setActiveProcessLimit !== 'function') {
+    return false
+  }
+  try {
+    return native.setActiveProcessLimit(limit)
+  } catch {
+    return false
+  }
+}
+
 /** Whether this build can own PTY trees with job objects at all. */
 export function isPtyJobOwnershipAvailable(): boolean {
-  return canUseBunPty() ? loadWindowsBunPtyJobNative() !== null : nativeLoader() !== null
+  return nativeLoader() !== null
 }
 
 /** Test-only: substitute the native module (it is resolved via createRequire). */

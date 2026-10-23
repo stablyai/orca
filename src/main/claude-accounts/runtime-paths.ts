@@ -5,7 +5,6 @@ import type { ClaudeEnvPatch } from './environment'
 
 export type ClaudeRuntimePaths = {
   configDir: string
-  credentialsPath: string
   configPath: string
   envPatch: ClaudeEnvPatch
 }
@@ -18,7 +17,6 @@ export class ClaudeRuntimePathResolver {
 
     return {
       configDir,
-      credentialsPath: join(configDir, '.credentials.json'),
       configPath: this.resolveConfigPath(configDir, inheritedConfigDir),
       envPatch: inheritedConfigDir ? { CLAUDE_CONFIG_DIR: configDir } : {}
     }

@@ -1,4 +1,4 @@
-import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
+import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 import type {
   RuntimeTerminalListHostScope,
   RuntimeTerminalListResult,
@@ -6,6 +6,7 @@ import type {
 } from '../../../shared/runtime-types'
 import { worktreeIdsEqual } from '../../../shared/worktree/id'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 
 /** The exact surface the execution host records as owning a live PTY. */
 export type LiveTerminalSurfaceOwner = {
@@ -15,15 +16,21 @@ export type LiveTerminalSurfaceOwner = {
 }
 
 /**
+ * The host observed a live PTY with no surface. `recorded` is the pane its record last named: the
+ * host's graph only carries mounted or provably live panes, so this renderer may still hold it.
+ */
+export type UnownedLiveTerminal = { unowned: true; recorded: LiveTerminalSurfaceOwner | null }
+
+/**
  * ptyId → owning surface, as the execution host records it. The renderer's own
  * binding maps are a projection that hydration, a second window, or a
  * client-created tab can leave empty, so they cannot answer "is this PTY
  * unowned?" — only the host can.
  *
- * Only `unowned` proves the host observed a live PTY with no surface. Null and
+ * Only an `UnownedLiveTerminal` proves the host observed a live PTY with no surface. Null and
  * missing entries are unverifiable; an earlier inventory may name a retired PTY.
  */
-type LiveTerminalSurfaceOwnership = LiveTerminalSurfaceOwner | 'unowned' | null
+type LiveTerminalSurfaceOwnership = LiveTerminalSurfaceOwner | UnownedLiveTerminal | null
 export type LiveTerminalSurfaceOwnerIndex = ReadonlyMap<string, LiveTerminalSurfaceOwnership>
 
 const OWNER_LISTING_LIMIT = 200
@@ -61,6 +68,20 @@ function toSurfaceOwner(terminal: RuntimeTerminalSummary): LiveTerminalSurfaceOw
     : null
 }
 
+function toRecordedSurface(terminal: RuntimeTerminalSummary): LiveTerminalSurfaceOwner | null {
+  const pane = parsePaneKey(terminal.recordedPaneKey ?? '')
+  return terminal.ptyId && pane
+    ? { paneKey: makePaneKey(pane.tabId, pane.leafId), ptyId: terminal.ptyId, tabId: pane.tabId }
+    : null
+}
+
+function ownershipPaneKey(ownership: LiveTerminalSurfaceOwnership | undefined): string | null {
+  if (!ownership) {
+    return null
+  }
+  return 'unowned' in ownership ? 'unowned' : ownership.paneKey
+}
+
 export function indexLiveTerminalSurfaceOwners(
   terminals: readonly RuntimeTerminalSummary[],
   worktreeId: string
@@ -70,19 +91,19 @@ export function indexLiveTerminalSurfaceOwners(
     if (!worktreeIdsEqual(terminal.worktreeId, worktreeId) || !terminal.ptyId) {
       continue
     }
-    const owner =
+    const owner: LiveTerminalSurfaceOwnership =
       terminal.orphaned === true
         ? terminal.connected === true
-          ? 'unowned'
+          ? { unowned: true, recorded: toRecordedSurface(terminal) }
           : null
         : toSurfaceOwner(terminal)
-    const recorded = owners.get(terminal.ptyId)
-    const recordedPane = recorded && recorded !== 'unowned' ? recorded.paneKey : recorded
-    const ownerPane = owner && owner !== 'unowned' ? owner.paneKey : owner
     // Conflicting ownership claims cannot authorize adoption.
     owners.set(
       terminal.ptyId,
-      owners.has(terminal.ptyId) && recordedPane !== ownerPane ? null : owner
+      owners.has(terminal.ptyId) &&
+        ownershipPaneKey(owners.get(terminal.ptyId)) !== ownershipPaneKey(owner)
+        ? null
+        : owner
     )
   }
   return owners
@@ -104,7 +125,10 @@ export async function readWorktreeLiveTerminalSurfaceOwners(
       worktree: toRuntimeWorktreeSelector(worktreeId),
       limit: OWNER_LISTING_LIMIT,
       requireFreshPtyLiveness: true,
-      includeVisualLayouts: false
+      includeVisualLayouts: false,
+      // Switch point: main shows the workspace's unshown live terminals first, so the listing
+      // names main's panes for them and this sweep only reads it.
+      ...(ORCA_LAYOUT_OWNER_IS_MAIN ? { placeUnshownLiveTerminals: true } : {})
     }
   })
   if (!response.ok || !isScopedTerminalListResult(response.result)) {

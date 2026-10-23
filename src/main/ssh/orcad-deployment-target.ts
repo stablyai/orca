@@ -1,39 +1,47 @@
-import type { OrcadBunTarget } from '../../shared/orcad-bun-runtime'
-import type { SshConnection } from './ssh-connection'
-import { execCommand } from './ssh-relay-deploy-helpers'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import {
+  isNodeRuntimeTarget,
+  type NodeRuntimeTarget,
+  type ServerTarget
+} from '../../shared/node-runtime-pin'
+import { ORCAD_SERVER_TARGET_FILENAME } from '../../shared/orcad-artifacts'
+import type { RemoteInstallTransport } from '../managed-server/install/remote-install-transport'
+import { probeLinuxLibc, type GlibcVersion } from '../node-runtime/linux-libc-probe'
+import { execCommand } from './remote-exec/remote-exec-command'
 import type { RemoteHostPlatform } from './ssh-remote-platform'
 
-export function parseOrcadLinuxLibc(output: string): 'glibc' | 'musl' {
-  if (/\bmusl\b/i.test(output)) {
-    return 'musl'
-  }
-  if (/\b(?:glibc|GNU libc|GNU C Library)\b/i.test(output)) {
-    return 'glibc'
-  }
-  throw new Error('Could not identify the host C library for the bundled Orca runtime')
+type OrcadDeploymentTargetFacts = {
+  target: ServerTarget
+  /** The host's glibc, when the libc probe printed one; null on musl and non-Linux hosts. */
+  glibc: GlibcVersion | null
 }
 
-export async function resolveOrcadDeploymentTarget(options: {
-  conn: SshConnection
+export async function resolveOrcadDeploymentTargetFacts(options: {
+  conn: RemoteInstallTransport
   host: RemoteHostPlatform
   signal?: AbortSignal
   exec?: (command: string) => Promise<string>
-}): Promise<OrcadBunTarget> {
+}): Promise<OrcadDeploymentTargetFacts> {
   const { host } = options
   if (host.os !== 'linux') {
-    return `${host.os}-${host.arch}`
+    return { target: `${host.os}-${host.arch}`, glibc: null }
   }
   const exec =
     options.exec ??
     ((command: string) => execCommand(options.conn, command, { signal: options.signal }))
-  let output = await exec('ldd --version 2>&1 || true')
-  try {
-    return `linux-${host.arch}-${parseOrcadLinuxLibc(output)}`
-  } catch {
-    output = await exec(
-      'getconf GNU_LIBC_VERSION 2>/dev/null || ' +
-        'for loader in /lib/ld-musl-*.so.1; do [ ! -e "$loader" ] || { echo musl; break; }; done'
-    )
+  const { libc, glibc } = await probeLinuxLibc(exec)
+  return {
+    target: `linux-${host.arch}-${libc}`,
+    glibc
   }
-  return `linux-${host.arch}-${parseOrcadLinuxLibc(output)}`
+}
+
+/** The runtime target an assembled bundle was built for, a compat one included. */
+export function readOrcadBundleTarget(localOrcadDir: string): NodeRuntimeTarget {
+  const recorded = readFileSync(join(localOrcadDir, ORCAD_SERVER_TARGET_FILENAME), 'utf8').trim()
+  if (!isNodeRuntimeTarget(recorded)) {
+    throw new Error(`The orcad bundle names no known server target: ${recorded}`)
+  }
+  return recorded
 }

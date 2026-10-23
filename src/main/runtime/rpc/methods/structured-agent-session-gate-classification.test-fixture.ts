@@ -1,5 +1,5 @@
-// The method-to-gate classification from `structured-agent-session-gate.ts`, as a table the
-// suites iterate. Adding an `agentSession.*` method means adding it to exactly one of these.
+// Every `agentSession.*` method with valid params, as tables the suites iterate. Adding a method
+// means adding it to exactly one of these.
 
 import {
   attachParams,
@@ -9,12 +9,17 @@ import {
 } from './structured-agent-session-rpc.test-fixture'
 import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session-mutation-envelope'
 
-/** Stops or retires work the caller already owns, so admission may already have been revoked. */
+/** Stops or retires work the caller already owns; none of these builds a host. */
 export const CLEANUP_METHODS = [
   {
     method: 'agentSession.close',
     params: { sessionId: SESSION },
     hostCall: 'close'
+  },
+  {
+    method: 'agentSession.sleepWorkspace',
+    params: { workspaceId: 'workspace-1' },
+    hostCall: 'sleepWorkspace'
   },
   {
     method: 'agentSession.cancel',
@@ -36,8 +41,8 @@ export const CLEANUP_METHODS = [
   }
 ] as const
 
-/** Starts, extends, retains or reads work, so every one stays refused once the setting is off. */
-export const ADMISSION_METHODS = [
+/** Starts, extends, retains or reads work. */
+export const WORK_METHODS = [
   { method: 'agentSession.createSupport', params: { worktree: 'id:workspace-1', agent: 'codex' } },
   {
     method: 'agentSession.create',
@@ -90,8 +95,10 @@ export const ADMISSION_METHODS = [
   { method: 'agentSession.modelCatalog', params: { agent: 'codex', sessionId: SESSION } },
   { method: 'agentSession.history', params: { sessionId: SESSION, direction: 'tail' } },
   { method: 'agentSession.conversationOutline', params: { sessionId: SESSION } },
+  { method: 'agentSession.item', params: { sessionId: SESSION, itemId: 'item-1' } },
   { method: 'agentSession.subscribe', params: { sessionId: SESSION } },
   { method: 'agentSession.hold', params: { sessionId: SESSION, holderId: 'surface-1' } },
   { method: 'agentSession.reveal', params: { sessionId: SESSION } },
+  { method: 'agentSession.regenerateName', params: { sessionId: SESSION } },
   { method: 'agentSession.subscribeStatus', params: null }
 ] as const

@@ -3,7 +3,7 @@ import type {
   RuntimeMobileSessionTabsRemovedResult,
   RuntimeMobileSessionTabsResult
 } from '../../../shared/runtime-types'
-import { toRemoteRuntimePtyId } from './runtime-terminal-stream'
+import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
 import {
   ENVIRONMENT_ID,
   deferred,
@@ -88,8 +88,8 @@ describe('web session terminal orphan recovery regressions', () => {
       expect.objectContaining({
         parentTabId: tabId,
         leafId: 'leaf-hold',
-        status: 'ready',
-        terminal: 'term-hold'
+        status: 'pending-handle',
+        terminal: null
       })
     ])
     expect(call).toHaveBeenCalledOnce()
@@ -329,8 +329,8 @@ describe('web session terminal orphan recovery regressions', () => {
       expect.objectContaining({
         parentTabId: 'host-tab',
         leafId: 'leaf-1',
-        status: 'ready',
-        terminal: 'term-live'
+        status: 'pending-handle',
+        terminal: null
       }),
       editor
     ])
@@ -362,8 +362,8 @@ describe('web session terminal orphan recovery regressions', () => {
     expect(recovered?.tabs.slice(0, 2)).toEqual(snapshot.tabs.slice(0, 2))
     expect(recovered?.tabs[2]).toMatchObject({
       leafId: 'leaf-1',
-      status: 'ready',
-      terminal: 'term-live'
+      status: 'pending-handle',
+      terminal: null
     })
   })
 
@@ -569,7 +569,7 @@ describe('web session terminal orphan recovery regressions', () => {
     expect(recovered?.tabs).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ leafId: 'leaf-claim', terminal: 'term-claim', status: 'ready' }),
-        expect.objectContaining({ leafId: 'leaf-hold', terminal: 'term-hold', status: 'ready' })
+        expect.objectContaining({ leafId: 'leaf-hold', terminal: null, status: 'pending-handle' })
       ])
     )
     expect(call).toHaveBeenNthCalledWith(
@@ -669,7 +669,8 @@ describe('web session terminal orphan recovery regressions', () => {
         expect.objectContaining({
           parentTabId: 'hold-tab',
           leafId: 'leaf-hold',
-          terminal: 'term-hold'
+          status: 'pending-handle',
+          terminal: null
         })
       ])
     )

@@ -1,8 +1,8 @@
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { subscribeToPtyData } from '../terminal-pane/pty-data-sidecar-subscriptions'
-import { isRemoteRuntimePtyId, sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import { subscribeToRuntimeTerminalData } from '@/runtime/runtime-terminal-stream'
-import { NATIVE_CHAT_SUBMIT } from './native-chat-send'
+import { NATIVE_CHAT_SUBMIT } from '../../../../shared/native-chat-paste-bytes'
 import { stripScrollbackAnsi } from './native-chat-scrape-fallback'
 
 const DETECTION_TIMEOUT_MS = 5_000
@@ -64,7 +64,6 @@ function hasClaudeModelSwitchRejection(buffer: string): boolean {
 
 function subscribeToClaudeModelSwitchData(args: {
   ptyId: string
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
   subscribeToData?: SubscribeToData
   watcher: (data: string) => void
 }): Promise<() => void> | (() => void) {
@@ -73,7 +72,6 @@ function subscribeToClaudeModelSwitchData(args: {
   }
   if (isRemoteRuntimePtyId(args.ptyId)) {
     return subscribeToRuntimeTerminalData(
-      args.settings,
       args.ptyId,
       `desktop:native-chat-model-switch:${args.ptyId}`,
       args.watcher,
@@ -85,7 +83,6 @@ function subscribeToClaudeModelSwitchData(args: {
 
 export function createClaudeModelSwitchConfirmationObserver(args: {
   ptyId: string
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
   expectedModelLabel: string | null
   subscribeToData?: SubscribeToData
   submitConfirmation?: () => boolean | void
@@ -147,7 +144,7 @@ export function createClaudeModelSwitchConfirmationObserver(args: {
         // exact Claude warning defaults to “Yes” and needs only one Enter.
         const accepted = args.submitConfirmation
           ? args.submitConfirmation() !== false
-          : sendRuntimePtyInput(args.settings, args.ptyId, NATIVE_CHAT_SUBMIT, 'driving')
+          : sendRuntimePtyInput(args.ptyId, NATIVE_CHAT_SUBMIT, 'driving')
         if (!accepted) {
           finish('unknown')
           return
@@ -162,7 +159,6 @@ export function createClaudeModelSwitchConfirmationObserver(args: {
   try {
     const subscription = subscribeToClaudeModelSwitchData({
       ptyId: args.ptyId,
-      settings: args.settings,
       subscribeToData: args.subscribeToData,
       watcher: observeData
     })

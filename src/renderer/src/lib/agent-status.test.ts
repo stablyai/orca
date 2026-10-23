@@ -12,7 +12,7 @@ import {
   formatAgentTypeLabel,
   agentTypeToIconAgent
 } from './agent-status'
-import { extractLastOscTitle } from '../components/terminal-pane/pty-transport'
+import { extractLastOscTitle } from '../../../shared/agent-detection'
 
 describe('detectAgentStatusFromTitle', () => {
   it('returns null for empty string', () => {
@@ -781,6 +781,10 @@ describe('agentTypeToIconAgent', () => {
 
   it("returns null for 'unknown'", () => {
     expect(agentTypeToIconAgent('unknown')).toBeNull()
+  })
+
+  it('keeps an icon identity for recognition-only DeepSeek Build', () => {
+    expect(agentTypeToIconAgent('dsb')).toBe('dsb')
   })
 
   it('returns null for arbitrary non-iconable strings', () => {

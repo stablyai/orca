@@ -1,3 +1,4 @@
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
 import type { ManagedPaneInternal } from '@/lib/pane-manager/pane-manager-types'
 import { subscribeToTerminalInputData } from '../terminal-user-input-signal'
 import { installTerminalImeCompositionRoute } from '../terminal-ime-composition-route'
@@ -20,7 +21,6 @@ import {
 
 import { FOREGROUND_GRID_DRIFT_CHECK_MIN_MS } from './foreground-output-budgets'
 import { TERMINAL_FOCUS_IN_SEQUENCE, TERMINAL_FOCUS_OUT_SEQUENCE } from './foreground-output-scan'
-import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 import { isCodexPaneStale } from './codex-pane-stale'
 import { installTerminalSelectionFitGuard } from '../terminal-selection-fit-guard'
 import { initializePaneGeometry, readPaneSize } from './read-pane-size'
@@ -46,6 +46,11 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
       return
     }
     const currentPtyId = session.transport.getPtyId()
+    // Protocol replies keep the TUI responsive while an account notice blocks typing.
+    if (isTerminalQueryReply(data)) {
+      session.sendDesktopQueryReplyImmediate(data)
+      return
+    }
     // Why: after a Codex account switch, the runtime auth has already moved to
     // the newly selected account. Stale panes must not keep sending input until
     // they restart, or work can execute under the wrong account while the UI
@@ -78,19 +83,6 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
       // disabling the mode would permanently silence focus events on resume.
       return
     }
-    // Why: xterm answers CPR/DSR/DA queries natively through this same onData
-    // stream (mixed with keystrokes). Those replies are latency-critical — a
-    // querying program reads them in raw mode with a short timeout — so send
-    // them immediately, skipping the remote input debounce that would corrupt
-    // them (#7329). They are not user input, so they bypass intent inference and
-    // activity recording below. No pending-intent guard: the only intents are
-    // plain-escape (`\x1b`) and ctrl-c (`\x03`), neither of which can satisfy
-    // isTerminalQueryReply (it requires length >= 3 and a full reply grammar),
-    // so a real keystroke never reaches this branch.
-    if (isTerminalQueryReply(data)) {
-      session.sendDesktopQueryReplyImmediate(data)
-      return
-    }
     // Why after the query-reply branch: device replies are not user input and
     // must always reach the shell, or a program querying during reattach hangs.
     // Why at all: a replaced endpoint reattaches to a fresh shell, so the tail
@@ -102,7 +94,7 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
     }
     // Why xterm's provenance: its own focus reports reach onData too, and no person typed them.
     const inputKind = wasUserInput ? 'driving' : 'query-reply'
-    const intent = session.pendingTerminalInputIntent
+    const intent = session.pendingTerminalInputIntentFor(data)
     // Why: real xterm can deliver the terminal byte even when our DOM keydown
     // listener missed the press. Exact Ctrl+C/Escape bytes are still safe to
     // infer for local/remote acknowledged writes; SSH fire-and-forget remains
@@ -117,7 +109,7 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
         session.interruptStatusBaselineSequence += 1
       }
       const capturedBaselineSequence = session.interruptStatusBaselineSequence
-      session.claimViewportForUserActivity()
+      session.claimViewportForUserActivity(data)
       if (acknowledgedIntent === 'ctrl-c') {
         // Why: the accepted-write callback is async; let the next command be
         // inferred if the user cancelled an oversized line and immediately typed.
@@ -153,7 +145,7 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
       return
     }
     if (intent) {
-      session.claimViewportForUserActivity()
+      session.claimViewportForUserActivity(data)
       if (session.transport.sendInput(data, inputKind)) {
         session.markAcceptedTerminalInputSent()
         session.observeAcceptedShellCommandInput(data)
@@ -164,7 +156,7 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
       session.clearPendingTerminalInputIntent()
       return
     }
-    session.claimViewportForUserActivity()
+    session.claimViewportForUserActivity(data)
     if (session.transport.sendInput(data, inputKind)) {
       session.markAcceptedTerminalInputSent()
       session.observeAcceptedShellCommandInput(data)

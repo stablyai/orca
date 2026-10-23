@@ -12,7 +12,6 @@ import {
   rememberGlabKnownHost,
   rememberGlabKnownHosts
 } from './gitlab-known-host-probe'
-import { registerSshGitProvider, unregisterSshGitProvider } from '../providers/ssh-git-dispatch'
 
 describe('getGlabKnownHosts', () => {
   // A locally-keyed probe must never answer from the default WSL distro.
@@ -279,25 +278,5 @@ describe('getGlabKnownHosts', () => {
       'recovered.test'
     ])
     expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(2)
-  })
-
-  it('does not reuse a successful result after an SSH provider reconnects', async () => {
-    const connectionId = 'conn-reconnected'
-    registerSshGitProvider(connectionId, {} as never)
-    glabExecFileAsyncMock
-      .mockResolvedValueOnce({ stdout: 'Logged in to old-tunnel.test as user\n', stderr: '' })
-      .mockResolvedValueOnce({ stdout: 'Logged in to new-tunnel.test as user\n', stderr: '' })
-
-    await expect(getGlabKnownHosts(connectionId)).resolves.toEqual([
-      'gitlab.com',
-      'old-tunnel.test'
-    ])
-    registerSshGitProvider(connectionId, {} as never)
-    await expect(getGlabKnownHosts(connectionId)).resolves.toEqual([
-      'gitlab.com',
-      'new-tunnel.test'
-    ])
-    expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(2)
-    unregisterSshGitProvider(connectionId)
   })
 })

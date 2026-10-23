@@ -11,7 +11,7 @@ import {
   makePaneSpawnReservationKey,
   reservePaneSpawn
 } from './pty/pane/spawn-reservation'
-import { registerPtyHandlers, registerSshPtyProvider } from './pty'
+import { registerPtyHandlers } from './pty/register-handlers'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -60,57 +60,6 @@ vi.mock('../codex/codex-state-db-backfill-recovery', () =>
 describe('registerPtyHandlers', () => {
   const { handlers, mainWindow, mainWindowIpcEvent } = setupPtyIpcSuite()
 
-  it('injects ORCA_TERMINAL_HANDLE for non-local PTY providers', async () => {
-    const spawn = vi.fn(async () => ({ id: 'remote-pty' }))
-    registerSshPtyProvider('ssh-1', {
-      spawn,
-      write: vi.fn(),
-      resize: vi.fn(),
-      shutdown: vi.fn(),
-      sendSignal: vi.fn(),
-      getCwd: vi.fn(),
-      getInitialCwd: vi.fn(),
-      clearBuffer: vi.fn(),
-      onData: vi.fn(() => () => {}),
-      onReplay: vi.fn(() => () => {}),
-      onExit: vi.fn(() => () => {}),
-      listProcesses: vi.fn(),
-      hasChildProcesses: vi.fn(),
-      getForegroundProcess: vi.fn(),
-      serialize: vi.fn(),
-      revive: vi.fn(),
-      getDefaultShell: vi.fn(),
-      getProfiles: vi.fn(),
-      acknowledgeDataEvent: vi.fn()
-    } as never)
-    const runtime = {
-      setPtyController: vi.fn(),
-      noteTerminalSpawnCommand: vi.fn(),
-      createPreAllocatedTerminalHandle: vi.fn(() => 'term_remote'),
-      registerPreAllocatedHandleForPty: vi.fn()
-    }
-
-    registerPtyHandlers(mainWindow as never, runtime as never)
-    await handlers.get('pty:spawn')!(null, {
-      cols: 80,
-      rows: 24,
-      connectionId: 'ssh-1',
-      env: { EXISTING: '1' }
-    })
-
-    expect(spawn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        env: expect.objectContaining({
-          EXISTING: '1',
-          ORCA_TERMINAL_HANDLE: 'term_remote'
-        })
-      })
-    )
-    expect(runtime.registerPreAllocatedHandleForPty).toHaveBeenCalledWith(
-      'remote-pty',
-      'term_remote'
-    )
-  })
   it('refreshes captured native Agent Teams env for renderer PTY spawns', async () => {
     const leafId = '11111111-1111-4111-8111-111111111111'
     const runtime = {
@@ -416,81 +365,6 @@ describe('registerPtyHandlers', () => {
       baseEnv: expect.any(Object)
     })
   })
-  it('restores daemon launch identity without minting renderer authority on reattach', async () => {
-    const incarnationId = 'ssh-reattach-incarnation'
-    const spawn = vi.fn(async () => ({
-      id: 'ssh-reattach',
-      incarnationId,
-      isReattach: true as const,
-      launchAgent: 'codex' as const
-    }))
-    registerSshPtyProvider('ssh-reattach-1', {
-      spawn,
-      write: vi.fn(),
-      resize: vi.fn(),
-      shutdown: vi.fn(),
-      sendSignal: vi.fn(),
-      getCwd: vi.fn(),
-      getInitialCwd: vi.fn(),
-      clearBuffer: vi.fn(),
-      onData: vi.fn(() => () => {}),
-      onReplay: vi.fn(() => () => {}),
-      onExit: vi.fn(() => () => {}),
-      listProcesses: vi.fn(),
-      hasChildProcesses: vi.fn(),
-      getForegroundProcess: vi.fn(),
-      serialize: vi.fn(),
-      revive: vi.fn(),
-      getDefaultShell: vi.fn(),
-      getProfiles: vi.fn(),
-      acknowledgeDataEvent: vi.fn()
-    } as never)
-    const registerPty = vi.fn()
-    const runtime = {
-      setPtyController: vi.fn(),
-      createPreAllocatedTerminalHandle: vi.fn(() => 'term_remote'),
-      registerPreAllocatedHandleForPty: vi.fn(),
-      registerPty
-    }
-    const tabId = 'tab-reattach'
-    const leafId = '77777777-7777-4777-8777-777777777777'
-    const worktreeId = 'repo-1::/tmp/reattach'
-
-    registerPtyHandlers(mainWindow as never, runtime as never)
-    const result = (await handlers.get('pty:spawn')!(mainWindowIpcEvent, {
-      cols: 80,
-      rows: 24,
-      connectionId: 'ssh-reattach-1',
-      worktreeId,
-      tabId,
-      leafId,
-      env: {
-        ORCA_PANE_KEY: makePaneKey(tabId, leafId),
-        ORCA_TAB_ID: tabId,
-        ORCA_WORKTREE_ID: worktreeId
-      },
-      launchConfig: {
-        agentCommand: 'codex --model gpt-5',
-        agentArgs: '--model gpt-5',
-        agentEnv: { CODEX_PROFILE: 'captured' }
-      }
-    })) as { id: string; isReattach?: boolean; launchConfig?: unknown }
-
-    expect(result).toMatchObject({ id: 'ssh-reattach', isReattach: true })
-    expect(result.launchConfig).toBeUndefined()
-    expect(registerPty).toHaveBeenCalledWith(
-      'ssh-reattach',
-      worktreeId,
-      'ssh-reattach-1',
-      expect.objectContaining({
-        tabId,
-        leafId,
-        incarnationId,
-        providerReattachLaunchIdentity: { incarnationId, launchAgent: 'codex' }
-      }),
-      undefined
-    )
-  })
   it('reuses the runtime background handle in local PTY spawn env', async () => {
     type RuntimeSpawnController = {
       spawn(args: {
@@ -534,7 +408,9 @@ describe('registerPtyHandlers', () => {
       'term_expected'
     )
     expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:spawned', {
-      id: spawned.id
+      id: spawned.id,
+      incarnationId: expect.any(String),
+      hostId: 'local'
     })
   })
   it('releases the Agent Teams leader of a spawn that loses the pane mid-preflight', async () => {

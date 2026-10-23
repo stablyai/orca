@@ -1,3 +1,4 @@
+import { quotePosixShellDoubleQuotedApostrophe } from '../../shared/shell-argument-quoting'
 import { quotePowerShellLiteral } from '../../shared/powershell-native-argument'
 
 const MANAGED_MARKER = '# Orca managed WSL CLI launcher'
@@ -16,7 +17,11 @@ export function buildWslLauncher(
   windowsLauncherPath: string,
   bridgePath = '${XDG_DATA_HOME:-$HOME/.local/share}/orca/orca-wsl-bridge.ps1'
 ): string {
-  return buildLauncher(windowsLauncherPath, quoteShell(bridgePath), FIND_INTEROP_POWERSHELL)
+  return buildLauncher(
+    windowsLauncherPath,
+    quotePosixShellDoubleQuotedApostrophe(bridgePath),
+    FIND_INTEROP_POWERSHELL
+  )
 }
 
 /** Launcher that finds its bridge beside itself and PowerShell by Windows path, independent of guest PATH. */
@@ -27,7 +32,7 @@ export function buildColocatedWslLauncher(
   return buildLauncher(
     windowsLauncherPath,
     '"$(dirname -- "$0")/orca-wsl-bridge.ps1"',
-    `ORCA_POWERSHELL=$(wslpath -u ${quoteShell(windowsPowerShellPath)})
+    `ORCA_POWERSHELL=$(wslpath -u ${quotePosixShellDoubleQuotedApostrophe(windowsPowerShellPath)})
 if [ ! -x "$ORCA_POWERSHELL" ]; then
   echo "Orca WSL CLI requires Windows interop and access to $ORCA_POWERSHELL." >&2
   exit 1
@@ -45,7 +50,7 @@ function buildLauncher(
 set -euo pipefail
 ${MANAGED_MARKER}
 # ORCA_WIN_LAUNCHER_B64=${encodedTarget}
-ORCA_WIN_LAUNCHER=${quoteShell(windowsLauncherPath)}
+ORCA_WIN_LAUNCHER=${quotePosixShellDoubleQuotedApostrophe(windowsLauncherPath)}
 ORCA_BRIDGE_PS1=${bridgePathExpression}
 ${resolvePowerShell}
 # Why: a shell can outlive a deleted worktree; keep explicit CLI selectors and
@@ -200,8 +205,8 @@ export function getBridgePathFromCommandPath(commandPath: string): string {
 }
 
 export function buildSafeReplaceGuard(path: string, managedMarker: string): string {
-  const quotedPath = quoteShell(path)
-  const quotedMarker = quoteShell(managedMarker)
+  const quotedPath = quotePosixShellDoubleQuotedApostrophe(path)
+  const quotedMarker = quotePosixShellDoubleQuotedApostrophe(managedMarker)
   return [
     `if [ -L ${quotedPath} ]; then`,
     '  echo "__ORCA_CONFLICT__"',
@@ -218,8 +223,8 @@ export function buildRegistrationLockPrelude(commandPath: string): string {
   // Why: the per-distro queue only serializes one Orca process; flock covers
   // a second install (e.g. stable + nightly) mutating the same distro files.
   return [
-    `if command -v flock >/dev/null 2>&1 && mkdir -p ${quoteShell(lockDir)} 2>/dev/null; then`,
-    `  exec 9>${quoteShell(`${lockDir}/.orca-wsl-cli.lock`)}`,
+    `if command -v flock >/dev/null 2>&1 && mkdir -p ${quotePosixShellDoubleQuotedApostrophe(lockDir)} 2>/dev/null; then`,
+    `  exec 9>${quotePosixShellDoubleQuotedApostrophe(`${lockDir}/.orca-wsl-cli.lock`)}`,
     '  flock -x -w 30 9',
     'fi'
   ].join('\n')
@@ -228,7 +233,7 @@ export function buildRegistrationLockPrelude(commandPath: string): string {
 export function buildManagedLegacyRemoveCommand(quotedLegacyCommandPath: string): string {
   // Why: remove only the Orca-managed pre-rename wrapper; user-owned `orca`
   // commands and symlinks must survive.
-  return `if [ ! -L ${quotedLegacyCommandPath} ] && [ -f ${quotedLegacyCommandPath} ] && grep -Fq ${quoteShell(MANAGED_MARKER)} ${quotedLegacyCommandPath}; then rm -f ${quotedLegacyCommandPath}; fi`
+  return `if [ ! -L ${quotedLegacyCommandPath} ] && [ -f ${quotedLegacyCommandPath} ] && grep -Fq ${quotePosixShellDoubleQuotedApostrophe(MANAGED_MARKER)} ${quotedLegacyCommandPath}; then rm -f ${quotedLegacyCommandPath}; fi`
 }
 
 export function buildSafeRemoveCommand(commandPath: string, legacyCommandPath?: string): string {
@@ -240,10 +245,12 @@ export function buildSafeRemoveCommand(commandPath: string, legacyCommandPath?: 
     buildRegistrationLockPrelude(commandPath),
     buildSafeReplaceGuard(commandPath, MANAGED_MARKER),
     buildSafeReplaceGuard(bridgePath, BRIDGE_MANAGED_MARKER),
-    `rm -f ${quoteShell(commandPath)} ${quoteShell(bridgePath)}`,
+    `rm -f ${quotePosixShellDoubleQuotedApostrophe(commandPath)} ${quotePosixShellDoubleQuotedApostrophe(bridgePath)}`,
     // Why: leaving a managed legacy `orca` behind lets startup reconciliation
     // re-adopt it as opt-in proof and silently undo this removal.
-    ...(legacyCommandPath ? [buildManagedLegacyRemoveCommand(quoteShell(legacyCommandPath))] : [])
+    ...(legacyCommandPath
+      ? [buildManagedLegacyRemoveCommand(quotePosixShellDoubleQuotedApostrophe(legacyCommandPath))]
+      : [])
   ].join('\n')
 }
 
@@ -271,8 +278,4 @@ export function getWslLauncherMarker(): string {
 
 export function getWslBridgeMarker(): string {
   return BRIDGE_MANAGED_MARKER
-}
-
-export function quoteShell(value: string): string {
-  return `'${value.replaceAll("'", `'"'"'`)}'`
 }

@@ -2,6 +2,7 @@ import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { SYNC_FIT_PANES_EVENT } from '@/constants/terminal'
 import { tabGroupBodyAnchorName } from './tab-group-body-anchor'
 import { subscribeTabGroupBodyRect, type TabGroupBodyRect } from './tab-group-body-geometry'
+import { UNFOCUSED_SPLIT_GROUP_OPACITY } from './split-group-dim'
 
 const HAS_CSS_ANCHOR_POSITIONING =
   typeof CSS !== 'undefined' &&
@@ -23,6 +24,8 @@ type RetainedPaneHostProps = {
   isVisible: boolean
   measureWhileHidden?: boolean
   fitTerminal?: boolean
+  /** Unfocused side of a split: overlays sit outside the group's DOM, so they take its dim here. */
+  dimmed?: boolean
   onFocusOwningGroup?: (groupId: string) => void
   children: React.ReactNode
   'data-terminal-overlay-tab-id'?: string
@@ -34,6 +37,7 @@ export function RetainedPaneHost({
   isVisible,
   measureWhileHidden = false,
   fitTerminal = false,
+  dimmed = false,
   onFocusOwningGroup,
   children,
   ...identity
@@ -44,12 +48,19 @@ export function RetainedPaneHost({
   // Why: a hidden host renders display:none, so it has no use for group geometry until shown.
   const measuresFallbackRect =
     groupId !== undefined && !shouldUseCssAnchorPositioning() && (isVisible || measureWhileHidden)
+  // Why: a child pane creates and fits xterm in its own layout effect, which runs before this
+  // host's; mounting it before the first read would fit at the placeholder box, then refit.
+  const [awaitsFirstFallbackRect, setAwaitsFirstFallbackRect] = useState(measuresFallbackRect)
   useLayoutEffect(() => {
     const container = overlayRef.current?.parentElement
     if (!measuresFallbackRect || groupId === undefined || !container) {
+      setAwaitsFirstFallbackRect(false)
       return
     }
-    return subscribeTabGroupBodyRect(groupId, container, setMeasuredFallbackRect)
+    return subscribeTabGroupBodyRect(groupId, container, (rect) => {
+      setMeasuredFallbackRect(rect)
+      setAwaitsFirstFallbackRect(false)
+    })
   }, [groupId, measuresFallbackRect])
 
   useLayoutEffect(() => {
@@ -87,6 +98,7 @@ export function RetainedPaneHost({
     }
   }, [anchorName, fitTerminal, isVisible, measuredFallbackRect])
 
+  const visibleOpacity = dimmed ? UNFOCUSED_SPLIT_GROUP_OPACITY : 1
   const style: React.CSSProperties = useMemo(
     () =>
       anchorName && shouldUseCssAnchorPositioning()
@@ -98,7 +110,7 @@ export function RetainedPaneHost({
             width: `anchor-size(${anchorName} width)`,
             height: `anchor-size(${anchorName} height)`,
             display: isVisible || measureWhileHidden ? 'flex' : 'none',
-            opacity: isVisible ? 1 : 0,
+            opacity: isVisible ? visibleOpacity : 0,
             pointerEvents: isVisible ? 'auto' : 'none'
           }
         : anchorName
@@ -112,7 +124,7 @@ export function RetainedPaneHost({
               width: measuredFallbackRect?.width ?? '100%',
               height: measuredFallbackRect?.height ?? 'calc(100% - 32px)',
               display: isVisible || measureWhileHidden ? 'flex' : 'none',
-              opacity: isVisible ? 1 : 0,
+              opacity: isVisible ? visibleOpacity : 0,
               pointerEvents: isVisible ? 'auto' : 'none'
             }
           : {
@@ -124,7 +136,7 @@ export function RetainedPaneHost({
               display: 'none',
               pointerEvents: 'none'
             },
-    [anchorName, isVisible, measuredFallbackRect, measureWhileHidden]
+    [anchorName, isVisible, measuredFallbackRect, measureWhileHidden, visibleOpacity]
   )
   const focusGroup = useCallback(() => {
     if (groupId !== undefined && onFocusOwningGroup) {
@@ -145,7 +157,7 @@ export function RetainedPaneHost({
       onPointerDown={focusGroup}
       onFocusCapture={focusGroup}
     >
-      {children}
+      {awaitsFirstFallbackRect ? null : children}
     </div>
   )
 }

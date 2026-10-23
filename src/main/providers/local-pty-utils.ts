@@ -1,7 +1,10 @@
 import { basename, isAbsolute, join } from 'node:path'
 import { existsSync, accessSync, statSync, chmodSync, constants as fsConstants } from 'node:fs'
 import type * as pty from 'node-pty'
-import { usesNodePtySpawnHelper } from '../../shared/node-pty-spawn-helper'
+import {
+  nodePtyNativeBuildEntryDir,
+  usesNodePtySpawnHelper
+} from '../../shared/node-pty-spawn-helper'
 import { TERMINAL_SPAWN_ISSUE_REQUEST } from '../../shared/terminal-spawn-error-copy'
 import {
   hostReportsChildExitStatus,
@@ -34,6 +37,7 @@ export function getNodePtySpawnHelperCandidates(): string[] {
       : unixTerminalPath
 
   return [
+    join(packageRoot, nodePtyNativeBuildEntryDir(process.platform, process.arch), 'spawn-helper'),
     join(packageRoot, 'build', 'Release', 'spawn-helper'),
     join(packageRoot, 'build', 'Debug', 'spawn-helper'),
     join(packageRoot, 'prebuilds', `${process.platform}-${process.arch}`, 'spawn-helper')
@@ -134,10 +138,10 @@ export type ShellSpawnParams = {
   getShellReadyConfig?: (
     shell: string
   ) => { args: string[] | null; env: Record<string, string> } | null
-  /** Env keys the primary shell's launch config wrote into `env`. Passed in
-   *  rather than re-derived: asking for the config again re-runs wrapper
-   *  generation just to read back its key names. */
-  launchEnvKeys?: readonly string[]
+  /** Pre-launch values (undefined = unset) of the env keys the primary shell's
+   *  launch config wrote. Passed in rather than re-derived: asking for the config
+   *  again re-runs wrapper generation just to read back its key names. */
+  preLaunchEnv?: Readonly<Record<string, string | undefined>>
   /** Called before each fallback shell spawn so callers can update env vars
    *  (e.g. HISTFILE) that depend on which shell is about to run. */
   onBeforeFallbackSpawn?: (env: Record<string, string>, fallbackShell: string) => void
@@ -208,6 +212,24 @@ function spawnWindowsFallbackChain(
   return null
 }
 
+export type PtyExecutableSpawnParams = Pick<
+  ShellSpawnParams,
+  'termName' | 'cols' | 'rows' | 'cwd' | 'env' | 'ptySpawn'
+> & { file: string; args: string[] }
+
+/** One executable with an argv array, no shell and no fallback; throws when it can't start. */
+export function spawnPtyExecutable(params: PtyExecutableSpawnParams): pty.IPty {
+  const { file, args, termName = 'xterm-256color', cols, rows, cwd, env, ptySpawn } = params
+  return ptySpawn(file, args, {
+    name: termName,
+    cols,
+    rows,
+    cwd,
+    env,
+    ...windowsConptyDllOptions()
+  })
+}
+
 /**
  * Attempt to spawn a PTY shell. If the primary shell fails, try fallback shells
  * (Unix: zsh/bash/sh; Windows: the PowerShell -> cmd.exe chain) before giving up.
@@ -235,13 +257,15 @@ export function spawnShellWithFallback(params: ShellSpawnParams): ShellSpawnResu
     try {
       const wrapped = wrapShellSpawnForMacosTccAttribution(shellPath, shellArgs, env)
       return {
-        process: ptySpawn(wrapped.file, wrapped.args, {
-          name: termName,
+        process: spawnPtyExecutable({
+          file: wrapped.file,
+          args: wrapped.args,
+          termName,
           cols,
           rows,
           cwd,
           env,
-          ...windowsConptyDllOptions()
+          ptySpawn
         }),
         shellPath,
         reportsChildExitStatus: hostReportsChildExitStatus(wrapped.file)
@@ -264,9 +288,9 @@ export function spawnShellWithFallback(params: ShellSpawnParams): ShellSpawnResu
     // Why: the previous shell's launch keys (its wrapper ZDOTDIR and the feature
     // channel) mean nothing to a different shell. An unwrapped fallback writes
     // none of them back, so they would stay exported to the pane and to every
-    // child — including a nested zsh that would then load Orca's wrapper. Tracked
+    // child — including a nested zsh that would then load Orca's wrapper. Restored
     // per attempt, not once: the second fallback must not inherit the first's.
-    let staleLaunchEnvKeys: readonly string[] = params.launchEnvKeys ?? []
+    let preLaunchEnv = params.preLaunchEnv ?? {}
     for (const fallback of fallbackShells) {
       if (getShellValidationError(fallback)) {
         continue
@@ -275,11 +299,16 @@ export function spawnShellWithFallback(params: ShellSpawnParams): ShellSpawnResu
         const fallbackReady = getShellReadyConfig?.(fallback)
         env.SHELL = fallback
         onBeforeFallbackSpawn?.(env, fallback)
-        for (const key of staleLaunchEnvKeys) {
-          delete env[key]
+        for (const [key, value] of Object.entries(preLaunchEnv)) {
+          if (value === undefined) {
+            delete env[key]
+          } else {
+            env[key] = value
+          }
         }
-        Object.assign(env, fallbackReady?.env ?? {})
-        staleLaunchEnvKeys = Object.keys(fallbackReady?.env ?? {})
+        const fallbackEnv = fallbackReady?.env ?? {}
+        preLaunchEnv = Object.fromEntries(Object.keys(fallbackEnv).map((key) => [key, env[key]]))
+        Object.assign(env, fallbackEnv)
         const wrapped = wrapShellSpawnForMacosTccAttribution(
           fallback,
           fallbackReady?.args ?? ['-l'],

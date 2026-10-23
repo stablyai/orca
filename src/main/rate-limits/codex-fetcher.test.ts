@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as RunProcess from '../../shared/child-process/run-process'
+import type * as RunProcess from '@orca/process-host'
 
 const {
   childSpawnMock,
@@ -19,12 +19,18 @@ const {
   startBackfillRecoveryMock: vi.fn(() => Promise.resolve(null))
 }))
 
+// The probe's child runs in-process here; the worker transport has its own suite.
+vi.mock(
+  '../worker-thread-child-process/worker-thread-child-process',
+  () =>
+    import('../worker-thread-child-process/worker-thread-child-process-in-process.test-fixtures')
+)
 vi.mock('node:child_process', () => ({
   spawn: childSpawnMock
 }))
 
 // The chokepoint is the seam: assertions see what the fetcher asked for, before shim resolution.
-vi.mock('../../shared/child-process/run-process', async (importOriginal) => ({
+vi.mock('@orca/process-host', async (importOriginal) => ({
   ...(await importOriginal<typeof RunProcess>()),
   spawnProcess: (spec: { program: string; args?: readonly string[] }) =>
     childSpawnMock(spec.program, spec.args ?? [], spec)
@@ -38,6 +44,9 @@ vi.mock('../codex-cli/command', () => ({
   resolveCodexCommand: resolveCodexCommandMock
 }))
 
+vi.mock('../wsl-interop-spawn-directory', () => ({
+  resolveWslInteropSpawnCwd: () => 'C:\\Windows'
+}))
 vi.mock('node-pty', () => ({
   spawn: ptySpawnMock
 }))
@@ -672,7 +681,7 @@ describe('fetchCodexRateLimits', () => {
       expect(shellCommand).not.toContain('wsl-codex-path')
       expect(spawnOptions).toEqual(
         expect.objectContaining({
-          cwd: expect.stringContaining('rate-limit-pty-cwd'),
+          cwd: 'C:\\Windows',
           env: expect.not.objectContaining({ CODEX_HOME: expect.anything() })
         })
       )

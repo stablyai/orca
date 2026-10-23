@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SimulatorDevice } from '../simctl-simulator-devices'
 import type { ServeSimHelperProcess } from '../serve-sim-helper-processes'
+import type * as ServeSimExecution from '../serve-sim-execution'
 
 const {
   ensureSimulatorBootedMock,
@@ -28,10 +29,11 @@ const {
 
 vi.mock('electron', () => ({ net: { fetch: netFetchMock } }))
 
-vi.mock('../serve-sim-execution', () => ({
+vi.mock('../serve-sim-execution', async (importOriginal) => ({
   execServeSimCommand: execServeSimCommandMock,
   parseServeSimCommandArgs: vi.fn((input: string) => input.split(' ').filter(Boolean)),
   resolveServeSimExecutable: vi.fn(() => ({ command: '/serve-sim', env: {} })),
+  serveSimKillArgs: (await importOriginal<typeof ServeSimExecution>()).serveSimKillArgs,
   stripEmulatorTargetArgs: vi.fn((args: string[]) => args)
 }))
 
@@ -373,7 +375,7 @@ describe('IosEmulatorBackend', () => {
     await backend.stopHelperForDevice('device-1', { helperPid: 1234, includeOrphaned: true })
     expect(execServeSimCommandMock).toHaveBeenCalledWith(
       EXECUTABLE,
-      ['--kill', '-q', 'device-1'],
+      ['--kill=device-1', '-q'],
       undefined
     )
     expect(killServeSimHelperProcessesForDeviceMock).toHaveBeenCalledWith('device-1', {

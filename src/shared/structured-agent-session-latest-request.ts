@@ -11,12 +11,14 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission,
   AgentJournalTurnLifecycle,
+  AgentJournalTurnLifecycleState,
   AgentJournalTurnOutcome
 } from './agent-session-journal-types'
 import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
 import { isRootAgentJournalItem } from './agent-session-journal-producer'
 import { readAgentJournalTurn, readAgentJournalTurnOutcome } from './agent-session-turn-record'
 import { classifyDispatchRejection } from './structured-agent-session-dispatch-rejection'
+import { withoutNativeChatVisualDirectiveLines } from './native-chat-visual-directive'
 import { isUnansweredStructuredAgentSessionDispatch } from './structured-agent-session-unanswered-dispatch'
 import {
   isStructuredAgentSessionCommandEntry,
@@ -29,11 +31,25 @@ export type StructuredAgentSessionLatestRequest = {
   kind: 'turn' | 'refused-send'
   /** The turn's id, or the refused send's journal item key. Unique only within its kind. */
   id: string
-  running: boolean
-  /** Null while the turn runs, and for a turn whose end carried no verdict. */
+  /** The turn's lifecycle state: what the host observed of it. Null for a refused send. */
+  turnState: AgentJournalTurnLifecycleState | null
+  /** The provider's verdict. Null while the turn runs, and for a turn whose end carried none. */
   outcome: AgentJournalTurnOutcome | null
   /** When it settled: the turn's end, or the refusal. Undefined while it runs. */
   settledAt: number | undefined
+}
+
+/** A root row that is no request of its own: a conversation command or a row its turn produced, or
+ *  a send its handover placed inside a running turn (a steer), which that turn answers for. */
+export function isStructuredAgentSessionNonRequestRow(
+  item: Pick<AgentJournalRenderItem, 'itemId' | 'body' | 'turnScope'>,
+  commandTurnItemIds: ReadonlySet<string>
+): boolean {
+  return (
+    commandTurnItemIds.has(item.itemId) ||
+    isStructuredAgentSessionCommandRow(item, commandTurnItemIds) ||
+    (item.body.kind === 'message' && item.body.role === 'user' && item.turnScope?.kind === 'turn')
+  )
 }
 
 /** Null when the journal holds no request with a verdict to give. Accepted and unanswered sends
@@ -51,33 +67,31 @@ export function latestStructuredAgentSessionRequest(
     if (
       !item ||
       !isRootAgentJournalItem(item) ||
-      commandTurns.has(item.itemId) ||
-      isStructuredAgentSessionCommandEntry(item.body)
+      isStructuredAgentSessionNonRequestRow(item, commandTurns)
     ) {
       continue
     }
     const turn = readAgentJournalTurn(item.body)
     if (turn) {
-      const running = turn.state === 'running'
       return {
         kind: 'turn',
         id: turn.turnId,
-        running,
+        turnState: turn.state,
         outcome: readAgentJournalTurnOutcome(turn),
-        settledAt: running ? undefined : turnEndedAt(item, turn)
+        settledAt: turn.state === 'running' ? undefined : turnEndedAt(item, turn)
       }
     }
     const submission = rejected.get(item.itemId)
+    // Rejection relocates a refused steer to the thread, but its turn remains the request.
     if (
       submission &&
-      classifyDispatchRejection(submission).verdict === 'failure' &&
-      // Handed into a running turn (a steer): that turn answers for it.
-      item.turnScope?.kind !== 'turn'
+      submission.answeredInTurn?.via !== 'steer' &&
+      classifyDispatchRejection(submission).verdict === 'failure'
     ) {
       return {
         kind: 'refused-send',
         id: item.itemId,
-        running: false,
+        turnState: null,
         outcome: 'failure',
         settledAt: submission.resolvedAt ?? undefined
       }
@@ -186,7 +200,8 @@ export function latestStructuredAgentSessionAssistantMessage(
       return ''
     }
     if (body?.kind === 'message' && body.role === 'assistant') {
-      const prose = messageProse(body.blocks)
+      // A visual line shows only in the transcript; every plain-text reader of this line drops it.
+      const prose = withoutNativeChatVisualDirectiveLines(messageProse(body.blocks))
       if (prose.trim()) {
         return prose
       }

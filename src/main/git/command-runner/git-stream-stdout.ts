@@ -2,12 +2,9 @@ import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process'
 import { StringDecoder } from 'node:string_decoder'
 import { withGitSpan } from '../../observability/instrumentation'
 import { recordSubprocessSpawn } from '../../diagnostics/main-thread-churn-probe'
-import {
-  isWslLinkedWorktreeGitRoutingCandidate,
-  prepareWslLinkedWorktreeGitRouting
-} from '../wsl-linked-worktree-git-routing'
 import { createAbortError } from './abort-error'
 import { killSpawnedCommandTree } from './spawned-command-tree-kill'
+import { pendingWslDriveCheckoutGitRouting } from '../wsl-drive-checkout-git-routing'
 import type { ResolvedCommand } from './wsl-command-resolution'
 import {
   DEFAULT_GIT_MAX_BUFFER,
@@ -65,10 +62,9 @@ export async function gitStreamStdout(
   const maxBuffer = options.maxBuffer ?? DEFAULT_GIT_MAX_BUFFER
   const timeoutMs = gitCommandTimeoutMs(args, options.timeoutMs, options.timeoutMsForTest)
   return withGitSpan({ args, cwd: options.cwd }, async (span) => {
-    if (isWslLinkedWorktreeGitRoutingCandidate(options.cwd, options.wslDistro)) {
-      await prepareWslLinkedWorktreeGitRouting(options.cwd, options.wslDistro, {
-        signal: options.signal
-      })
+    const checkoutRoutingReady = pendingWslDriveCheckoutGitRouting(args, options)
+    if (checkoutRoutingReady) {
+      await checkoutRoutingReady
     }
     const gitOptions: GitExecOptions = {
       cwd: options.cwd,

@@ -3,8 +3,9 @@
 // user turn lands in the transcript. Kept separate from the view so the prune
 // rule (match on normalized user-message content) is unit-testable without React.
 
+import { nativeChatContinuationSendText } from '../../../../shared/native-chat-continuation-send'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import { setBoundedScopeCacheEntry } from './native-chat-composer-scope-cache'
+import { setBoundedScopeCacheEntry } from '../../../../shared/native-chat-scope-cache'
 import type { NativeChatLaunchPrompt } from '@/lib/native-chat-launch-prompt'
 import {
   advancedNativeChatUserContentCounts,
@@ -40,6 +41,9 @@ export type NativeChatPendingSend = {
   afterMessageId?: string | null
   /** Timestamp of that boundary in the transcript host's clock domain. */
   afterMessageTimestamp?: number | null
+  /** The provider session whose transcript had been read empty when this was sent, so every
+   *  row of that session is after it. Unset for a read still loading or no session yet. */
+  afterEmptyTranscriptSessionId?: string
   /** 1-based occurrence among identical sends sharing the same boundary. */
   matchingOccurrence?: number
   /** Shared time boundary when that message boundary is unavailable. */
@@ -106,7 +110,10 @@ function messagesAfterPendingBoundary(
     return messages
   }
   if (pending.afterMessageId === null) {
-    return messages.filter((message) => messageIsAfterPendingTimestamp(message, pending))
+    // Why: the send time is this client's clock and row timestamps are the host's (#11519).
+    return pending.afterEmptyTranscriptSessionId
+      ? messages
+      : messages.filter((message) => messageIsAfterPendingTimestamp(message, pending))
   }
   const boundaryIndex = messages.findIndex((message) => message.id === pending.afterMessageId)
   if (boundaryIndex !== -1) {
@@ -115,6 +122,35 @@ function messagesAfterPendingBoundary(
   // A bounded authoritative read can page the boundary out. Fall back to the
   // send time instead of matching an arbitrary older identical prompt.
   return messages.filter((message) => messageIsAfterPendingTimestamp(message, pending))
+}
+
+/**
+ * Drop the empty-transcript claim from sends made in another provider session: that claim
+ * describes one transcript, and a resumed one can hold an older identical turn.
+ */
+export function releaseEmptyTranscriptClaims(
+  pending: NativeChatPendingSend[],
+  sessionId: string | null
+): NativeChatPendingSend[] {
+  if (
+    !pending.some(
+      (entry) =>
+        entry.afterEmptyTranscriptSessionId !== undefined &&
+        entry.afterEmptyTranscriptSessionId !== sessionId
+    )
+  ) {
+    return pending
+  }
+  return pending.map((entry) => {
+    if (
+      entry.afterEmptyTranscriptSessionId === undefined ||
+      entry.afterEmptyTranscriptSessionId === sessionId
+    ) {
+      return entry
+    }
+    const { afterEmptyTranscriptSessionId: _released, ...rest } = entry
+    return rest
+  })
 }
 
 function messageIsAfterPendingTimestamp(
@@ -152,9 +188,8 @@ function gluedCandidateRows(
   const [oldest, ...newer] = open.map((entry) =>
     entry.afterMessageId === undefined ? { ...entry, afterMessageId: null } : entry
   )
-  // Glue needs a run of 2+ sends, so a lone queued echo — by far the common
-  // case while an agent streams — skips the per-send boundary scans entirely.
-  if (!oldest || newer.length === 0) {
+  // Ordinary lone sends need no glue scan; continuations may finish outside this queue.
+  if (!oldest || (newer.length === 0 && nativeChatContinuationSendText(oldest.text) === null)) {
     return []
   }
   const newerRowIds = newer.map(
@@ -191,9 +226,10 @@ export function prunePendingSends(
     const contentKey = nativeChatPendingContentKey(entry)
     const key = nativeChatPendingMatchKey(entry)
     const available =
-      advancedNativeChatUserContentCounts(messagesAfterPendingBoundary(messages, entry)).get(
-        contentKey
-      ) ?? 0
+      advancedNativeChatUserContentCounts(
+        messagesAfterPendingBoundary(messages, entry),
+        entry.imagePaths
+      ).get(contentKey) ?? 0
     const used = consumed.get(key) ?? 0
     const occurrence = nativeChatPendingOccurrence(entry, used)
     consumed.set(key, Math.max(used, occurrence))
@@ -236,7 +272,8 @@ export function pendingSendsAsMessages(
     const key = nativeChatPendingMatchKey(entry)
     const represented =
       matchingNativeChatUserContentCounts(
-        messagesAfterPendingBoundary(existingMessages, entry)
+        messagesAfterPendingBoundary(existingMessages, entry),
+        entry.imagePaths
       ).get(contentKey) ?? 0
     const used = consumed.get(key) ?? 0
     const occurrence = nativeChatPendingOccurrence(entry, used)

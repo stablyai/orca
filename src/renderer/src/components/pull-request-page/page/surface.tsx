@@ -65,7 +65,12 @@ export default function PullRequestPage({
   const attachedWorkspace = useMemo(
     () =>
       workItem?.type === 'pr'
-        ? findGithubPrWorkspaceAttachment(allWorktrees, effectiveRepoId, workItem.number)
+        ? findGithubPrWorkspaceAttachment(
+            allWorktrees,
+            effectiveRepoId,
+            workItem.number,
+            workItem.url
+          )
         : null,
     [allWorktrees, effectiveRepoId, workItem]
   )
@@ -125,7 +130,8 @@ export default function PullRequestPage({
     const currentAttached = findGithubPrWorkspaceAttachment(
       useAppStore.getState().allWorktrees(),
       targetRepoId,
-      workItem.number
+      workItem.number,
+      workItem.url
     )
     if (!currentAttached) {
       handleUseWorkItem()

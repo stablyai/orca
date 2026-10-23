@@ -1,9 +1,10 @@
 import React from 'react'
-import { CornerDownLeft, LoaderCircle } from 'lucide-react'
+import { LoaderCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { SwitchIndicator } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import { ButtonKeyHint } from '@/components/ButtonKeyHint'
 import type { NewWorkspaceComposerCardProps } from './new-workspace-composer-card-props'
 
 type NewWorkspaceComposerFooterProps = Pick<
@@ -78,10 +79,7 @@ export function NewWorkspaceComposerFooter({
         >
           {creating ? <LoaderCircle className="size-4 animate-spin" /> : null}
           {primaryActionLabel}
-          <span className="ml-1 inline-flex items-center gap-0.5 rounded border border-white/20 px-1.5 py-0.5 text-[10px] font-medium leading-none text-current/80">
-            <span>{submitShortcutModifierLabel}</span>
-            <CornerDownLeft className="size-3" />
-          </span>
+          <ButtonKeyHint modifierLabel={submitShortcutModifierLabel} />
         </Button>
       </div>
     </>

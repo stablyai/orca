@@ -8,11 +8,8 @@ import {
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
 
-/**
- * The structured host's Claude auth policy has exactly one production wiring. Deleting it
- * used to leave ~1000 tests green while every `ANTHROPIC_*` variable in the shell reached
- * the child, because `stripAuthEnv` silently fell back to `false`.
- */
+/** The structured host's Claude auth policy has exactly one production wiring; without it a
+ *  failed sign-in would silently name the wrong login. */
 describe('structured Claude auth policy wiring', () => {
   describe('installing without one', () => {
     let stateDirectory: string | null = null

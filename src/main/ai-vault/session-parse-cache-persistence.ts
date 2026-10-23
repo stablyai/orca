@@ -1,41 +1,72 @@
-// Persists the reusable portion of the AI Vault session parse cache to one
-// JSON file under userData so a fresh launch reuses prior parse work instead
-// of re-reading the whole transcript corpus (issue #9210: 6.7 GB / 109 s cold
-// scans). Disabled unless the composition root calls init; every failure mode
-// degrades to today's cold-scan behavior.
-import { mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+// Persists the reusable portion of the AI Vault session parse cache, one SQLite
+// row per transcript, so a fresh launch reuses prior parse work instead of
+// re-reading the whole transcript corpus (issue #9210: 6.7 GB / 109 s cold
+// scans). The in-memory map is the hot tier; the database is read on a miss and
+// written only with what changed. Only the scanner child opens it, and every
+// failure degrades to a re-parse.
+import { stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
+import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
+import { splitOpenCodeSqliteCandidate } from '../../shared/opencode-sqlite-session-path'
+import { SessionParseCacheDatabase } from './session-parse-cache-database'
+import { importLegacySessionParseCacheJson } from './session-parse-cache-legacy-json'
 import {
-  seedSessionParseCache,
-  snapshotSessionParseCacheForPersistence,
+  scopeCwdStampOf,
+  sessionParseCacheTranscriptPath,
+  setSessionParseCacheColdTier,
   type PersistedSessionParseCacheEntry,
-  type SessionParseStats
-} from './session-scanner-parse-cache'
-import type { SessionSidecarObservation } from './session-sidecar-stat'
+  type SessionScopeCwdRead,
+  type SessionScopeCwdStamp
+} from './session-parse-cache-store'
 
-// Bump when the persisted entry layout or cached session semantics change; a
-// mismatched file is discarded whole.
-const SCHEMA_VERSION = 3
-// Debounce so back-to-back scans (desktop IPC + runtime RPC) collapse into one write.
-const SAVE_DEBOUNCE_MS = 1_500
-// The payload contains transcript-derived preview text; keep it user-only
-// (mode bits are inert on Windows — the userData ACL grant is the boundary there).
-const PRIVATE_DIRECTORY_MODE = 0o700
-const PRIVATE_FILE_MODE = 0o600
+const WRITE_DEBOUNCE_MS = 1_500
+const WRITE_MAX_WAIT_MS = 15_000
+const WRITE_CHUNK_ROWS = 500
+// How long a row goes unparsed before its transcript is checked for on disk.
+// Only a missing transcript ends a row, so time away never empties the cache.
+const RECHECK_AFTER_MS = 30 * 24 * 60 * 60_000
+// Per helper start; it restarts often enough to work through a large backlog.
+const RECHECK_BATCH_ROWS = 1_000
+// WSL transcripts (`\\wsl.localhost\…`, `\\wsl$\…`) are never stat-checked here:
+// that could boot a stopped distro or hang on a stuck one outside the scanner's
+// running-distro filter. Their rows age out instead, after half a year unparsed.
+const WSL_PATH_GLOB = '[\\/][\\/][wW][sS][lL][.$]*'
+const WSL_EXPIRE_AFTER_MS = 180 * 24 * 60 * 60_000
+const SQLITE_SESSION_AGENTS = ['opencode', 'opencode2', 'zcode'] as const
 
 export type SessionParseCachePersistenceOptions = {
+  // The legacy JSON file; the database sits beside it.
   filePath: string
   appVersion: string
 }
 
 let options: SessionParseCachePersistenceOptions | null = null
-let loadPromise: Promise<void> | null = null
-let saveTimer: NodeJS.Timeout | null = null
-let lastSave: Promise<void> = Promise.resolve()
+let owner = false
+// undefined: not opened yet; null: unavailable for this process's life.
+let database: SessionParseCacheDatabase | null | undefined
+const pendingWrites = new Map<string, PersistedSessionParseCacheEntry>()
+const pendingScopeCwds = new Map<string, SessionScopeCwdStamp>()
+let writeTimer: NodeJS.Timeout | null = null
+let pendingSince: number | null = null
 
-/** Enable persistence. Called only from the composition root; every export is a no-op until then. */
+/** Electron main records where the cache lives for the scanner child it spawns; it never opens it. */
+export function configureSessionParseCachePersistence(
+  next: SessionParseCachePersistenceOptions
+): void {
+  options = { ...next }
+}
+
+/** The scanner child's half: lookups read through to the database and changes are written back. */
 export function initSessionParseCachePersistence(next: SessionParseCachePersistenceOptions): void {
-  options = next
+  configureSessionParseCachePersistence(next)
+  owner = true
+  setSessionParseCacheColdTier({
+    read: readRow,
+    stored: queueWrite,
+    deleted: deleteRow,
+    readScopeCwds,
+    storedScopeCwd: queueScopeCwdWrite
+  })
 }
 
 export function getSessionParseCachePersistenceOptions(): SessionParseCachePersistenceOptions | null {
@@ -43,194 +74,164 @@ export function getSessionParseCachePersistenceOptions(): SessionParseCachePersi
 }
 
 export function resetSessionParseCachePersistenceForTests(): void {
+  clearWriteTimer()
+  pendingWrites.clear()
+  pendingScopeCwds.clear()
+  database?.close()
+  database = undefined
   options = null
-  loadPromise = null
-  if (saveTimer) {
-    clearTimeout(saveTimer)
-    saveTimer = null
-  }
-  lastSave = Promise.resolve()
+  owner = false
+  setSessionParseCacheColdTier(null)
 }
 
-/**
- * Seed the in-memory parse cache from disk. Memoized: concurrent scans at
- * startup all await the same load. Resolves immediately when uninitialized.
- */
-export function ensureSessionParseCacheLoaded(): Promise<void> {
-  if (options === null) {
-    return Promise.resolve()
-  }
-  loadPromise ??= loadPersistedEntries(options)
-  return loadPromise
-}
-
-/**
- * Schedule a debounced snapshot write after a scan that parsed something. An
- * early-stopped transcript counts: its stat key moved, so the entry must be
- * re-persisted or the next launch re-reads it. Reused-only scans schedule no
- * write (the file already reflects the cache).
- */
-export function scheduleSessionParseCachePersist(stats: SessionParseStats): void {
-  if (options === null || stats.incremental + stats.fullParses + stats.earlyStopped <= 0) {
-    return
-  }
-  const current = options
-  if (saveTimer) {
-    clearTimeout(saveTimer)
-  }
-  saveTimer = setTimeout(() => {
-    saveTimer = null
-    // Chained so a slow write and a rescheduled save can't rename out of order
-    // (an older snapshot landing last); persistSnapshot never rejects.
-    lastSave = lastSave.then(() => persistSnapshot(current))
-  }, SAVE_DEBOUNCE_MS)
-  // Why: a pending cache save must not keep a quitting process alive.
-  if (typeof saveTimer.unref === 'function') {
-    saveTimer.unref()
-  }
-}
-
-/** Run any pending debounced save immediately and wait for it before process exit. */
+/** Write every queued row now, before process exit. Each committed chunk survives a kill. */
 export async function flushSessionParseCachePersist(): Promise<void> {
-  if (saveTimer) {
-    clearTimeout(saveTimer)
-    saveTimer = null
-    if (options !== null) {
-      const current = options
-      lastSave = lastSave.then(() => persistSnapshot(current))
+  clearWriteTimer()
+  while (pendingWrites.size > 0) {
+    const chunk = takeWriteChunk(pendingWrites)
+    openedDatabase()?.write(chunk, Date.now())
+    if (pendingWrites.size > 0) {
+      await yieldToEventLoop()
     }
   }
-  await lastSave
-}
-
-export const flushSessionParseCachePersistForTests = flushSessionParseCachePersist
-
-async function loadPersistedEntries(current: SessionParseCachePersistenceOptions): Promise<void> {
-  await sweepOrphanedTempFiles(current.filePath)
-  try {
-    const raw = await readFile(current.filePath, 'utf-8')
-    const entries = parsePersistedFile(JSON.parse(raw))
-    if (entries) {
-      seedSessionParseCache(entries)
+  while (pendingScopeCwds.size > 0) {
+    const chunk = takeWriteChunk(pendingScopeCwds)
+    openedDatabase()?.writeScopeCwds(chunk, Date.now())
+    if (pendingScopeCwds.size > 0) {
+      await yieldToEventLoop()
     }
-  } catch {
-    // Why: a missing/corrupt/foreign cache file must never fail the scan;
-    // worst case is exactly today's cold scan.
   }
 }
 
-// A death between temp-write and rename orphans a uniquely named .tmp forever;
-// sweep once per launch so they can't accumulate. Racing another instance's
-// in-flight save at worst loses that save — the already-accepted rename trade.
-async function sweepOrphanedTempFiles(filePath: string): Promise<void> {
-  const directory = dirname(filePath)
+function takeWriteChunk<T>(pending: Map<string, T>): [string, T][] {
+  const chunk: [string, T][] = []
+  for (const row of pending) {
+    chunk.push(row)
+    pending.delete(row[0])
+    if (chunk.length === WRITE_CHUNK_ROWS) {
+      break
+    }
+  }
+  return chunk
+}
+
+// Opened on first need, so Electron main (which never looks rows up) never opens it.
+function openedDatabase(): SessionParseCacheDatabase | null {
+  if (database !== undefined || !owner || options === null) {
+    return database ?? null
+  }
   try {
-    const names = await readdir(directory)
-    await Promise.all(
-      names
-        .filter((name) => name.startsWith('session-parse-cache-') && name.endsWith('.tmp'))
-        .map((name) => rm(join(directory, name), { force: true }).catch(() => {}))
+    database = new SessionParseCacheDatabase(
+      join(dirname(options.filePath), 'session-parse-cache.sqlite')
     )
-  } catch {
-    // Directory missing or unreadable — nothing to sweep.
+    importLegacySessionParseCacheJson(options.filePath, database, Date.now())
+    void dropRowsForMissingTranscripts(database)
+  } catch (error) {
+    console.debug('[ai-vault] session parse cache database unavailable', error)
+    database = null
   }
+  return database
 }
 
-function parsePersistedFile(parsed: unknown): [string, PersistedSessionParseCacheEntry][] | null {
-  if (typeof parsed !== 'object' || parsed === null) {
-    return null
-  }
-  const file = parsed as Record<string, unknown>
-  // Why: application releases that keep this schema promise compatible cached
-  // session semantics, so an update does not force a multi-gigabyte cold scan.
-  if (file.schemaVersion !== SCHEMA_VERSION || typeof file.appVersion !== 'string') {
-    return null
-  }
-  if (!Array.isArray(file.entries)) {
-    return null
-  }
-  const entries: [string, PersistedSessionParseCacheEntry][] = []
-  for (const item of file.entries) {
-    const entry = parsePersistedEntry(item)
-    if (entry === null) {
-      // One malformed entry means the file can't be trusted; discard it whole.
-      return null
+// A row for a transcript deleted outside Orca is never looked up again, so the
+// file system, not a timer, decides when it ends.
+async function dropRowsForMissingTranscripts(db: SessionParseCacheDatabase): Promise<void> {
+  let dropped = db.deleteSeenBefore(Date.now() - WSL_EXPIRE_AFTER_MS, WSL_PATH_GLOB)
+  const stale = db.pathsSeenBefore(Date.now() - RECHECK_AFTER_MS, RECHECK_BATCH_ROWS, WSL_PATH_GLOB)
+  for (const path of stale) {
+    if (await transcriptMissing(sessionParseCacheTranscriptPath(path))) {
+      db.delete(path)
+      dropped = true
+    } else {
+      db.markSeen(path, Date.now())
     }
-    entries.push(entry)
   }
-  return entries
+  if (dropped) {
+    db.reclaimSpace()
+  }
 }
 
-function parsePersistedEntry(item: unknown): [string, PersistedSessionParseCacheEntry] | null {
-  if (!Array.isArray(item) || item.length !== 2) {
-    return null
-  }
-  const [path, value] = item as [unknown, unknown]
-  if (typeof path !== 'string' || typeof value !== 'object' || value === null) {
-    return null
-  }
-  const entry = value as Record<string, unknown>
-  if (typeof entry.mtimeMs !== 'number') {
-    return null
-  }
-  if (entry.sizeBytes !== null && typeof entry.sizeBytes !== 'number') {
-    return null
-  }
-  if (typeof entry.platform !== 'string') {
-    return null
-  }
-  if (entry.session !== null && typeof entry.session !== 'object') {
-    return null
-  }
-  const sidecar = parsePersistedSidecar(entry.sidecar)
-  return [
-    path,
-    {
-      mtimeMs: entry.mtimeMs,
-      sizeBytes: entry.sizeBytes,
-      platform: entry.platform as NodeJS.Platform,
-      session: entry.session as PersistedSessionParseCacheEntry['session'],
-      ...(sidecar === undefined ? {} : { sidecar })
-    }
-  ]
+// SQLite-backed sessions (OpenCode and its forks) are keyed `<db>#<id>`, so for
+// those the database file stands in for the transcript.
+async function transcriptMissing(path: string): Promise<boolean> {
+  const sqliteSession = SQLITE_SESSION_AGENTS.map((agent) =>
+    splitOpenCodeSqliteCandidate(path, agent)
+  ).find((split) => split !== null)
+  return (await pathMissing(path)) && (!sqliteSession || (await pathMissing(sqliteSession.dbPath)))
 }
 
-// Why: added after SCHEMA_VERSION 2 shipped, so a file an older build wrote has
-// no such field. Absent (or unreadable) means unknown, which costs one re-parse
-// of the rows that have a sibling and nothing at all for the rest.
-function parsePersistedSidecar(value: unknown): SessionSidecarObservation | undefined {
-  if (value === 'none' || value === 'unknown') {
-    return value
-  }
-  if (typeof value !== 'object' || value === null) {
-    return undefined
-  }
-  const record = value as Record<string, unknown>
-  return typeof record.path === 'string' &&
-    typeof record.mtimeMs === 'number' &&
-    typeof record.sizeBytes === 'number'
-    ? { path: record.path, mtimeMs: record.mtimeMs, sizeBytes: record.sizeBytes }
-    : undefined
-}
-
-async function persistSnapshot(current: SessionParseCachePersistenceOptions): Promise<void> {
-  const directory = dirname(current.filePath)
-  const tempPath = join(directory, `session-parse-cache-${process.pid}-${Date.now()}.tmp`)
+// Unreachable (a permission error, a slow mount) is not missing.
+async function pathMissing(path: string): Promise<boolean> {
   try {
-    const payload = JSON.stringify({
-      schemaVersion: SCHEMA_VERSION,
-      appVersion: current.appVersion,
-      entries: snapshotSessionParseCacheForPersistence()
-    })
-    await mkdir(directory, { recursive: true, mode: PRIVATE_DIRECTORY_MODE })
-    await writeFile(tempPath, payload, { mode: PRIVATE_FILE_MODE })
-    // Atomic on POSIX; on Windows a rename racing an open handle fails and is
-    // caught below (save lost, never a torn file).
-    await rename(tempPath, current.filePath)
-  } catch (err) {
-    // Why: the save runs from a timer — every error must be swallowed here or
-    // it becomes an unhandled rejection. Worst case is the no-file case.
-    await rm(tempPath, { force: true }).catch(() => {})
-    console.debug('[ai-vault] session parse cache save failed', err)
+    await stat(path)
+    return false
+  } catch (error) {
+    const code = error instanceof Error && 'code' in error ? error.code : undefined
+    return code === 'ENOENT' || code === 'ENOTDIR'
   }
+}
+
+function readRow(path: string): PersistedSessionParseCacheEntry | undefined {
+  return pendingWrites.get(path) ?? openedDatabase()?.read(path)
+}
+
+function readScopeCwds(paths: readonly string[]): SessionScopeCwdRead {
+  const result: SessionScopeCwdRead = openedDatabase()?.readScopeCwds(paths) ?? {
+    found: new Map(),
+    parsed: false,
+    read: false
+  }
+  const found = result.found
+  for (const path of paths) {
+    const row = pendingWrites.get(path)
+    const read = pendingScopeCwds.get(path)
+    if (row !== undefined || read !== undefined) {
+      found.set(path, {
+        ...found.get(path),
+        ...(row === undefined ? {} : { parsed: scopeCwdStampOf(row) }),
+        ...(read === undefined ? {} : { read })
+      })
+    }
+  }
+  return result
+}
+
+function queueScopeCwdWrite(path: string, stamp: SessionScopeCwdStamp): void {
+  pendingScopeCwds.delete(path)
+  pendingScopeCwds.set(path, stamp)
+  scheduleFlush()
+}
+
+function queueWrite(path: string, entry: PersistedSessionParseCacheEntry): void {
+  pendingWrites.delete(path)
+  pendingWrites.set(path, entry)
+  scheduleFlush()
+}
+
+function scheduleFlush(): void {
+  const now = Date.now()
+  pendingSince ??= now
+  if (writeTimer) {
+    clearTimeout(writeTimer)
+  }
+  writeTimer = setTimeout(
+    () => void flushSessionParseCachePersist(),
+    Math.max(0, Math.min(WRITE_DEBOUNCE_MS, pendingSince + WRITE_MAX_WAIT_MS - now))
+  )
+  writeTimer.unref?.()
+}
+
+// Immediate, so a queued write or a later lookup can't bring the row back.
+function deleteRow(path: string): void {
+  pendingWrites.delete(path)
+  pendingScopeCwds.delete(path)
+  openedDatabase()?.delete(path)
+}
+
+function clearWriteTimer(): void {
+  if (writeTimer) {
+    clearTimeout(writeTimer)
+    writeTimer = null
+  }
+  pendingSince = null
 }

@@ -1,5 +1,7 @@
 // @vitest-environment happy-dom
+import { runInNewContext } from 'node:vm'
 import { describe, expect, it } from 'vitest'
+import { quietRichMarkdownEditorHost } from './rich-markdown-editor-host.test-support'
 import { createRichMarkdownEditorScope } from './document-scope'
 import { listMarkdown } from './html-list-markdown'
 import { markdownToHtml } from './markdown-to-html'
@@ -21,7 +23,7 @@ import { startEditorSurface } from './editor-surface'
  */
 function surface(markdown: string, options: { editable?: boolean } = {}) {
   document.body.innerHTML = RICH_MARKDOWN_EDITOR_MARKUP
-  const scope = createRichMarkdownEditorScope()
+  const scope = createRichMarkdownEditorScope(quietRichMarkdownEditorHost())
   scope.editable = options.editable ?? true
   startEditorSurface(scope)
   const editor = document.getElementById('editor')!
@@ -38,7 +40,7 @@ function surface(markdown: string, options: { editable?: boolean } = {}) {
  */
 function nestedListSurface(paragraphMarkup: string) {
   document.body.innerHTML = RICH_MARKDOWN_EDITOR_MARKUP
-  const scope = createRichMarkdownEditorScope()
+  const scope = createRichMarkdownEditorScope(quietRichMarkdownEditorHost())
   scope.editable = true
   startEditorSurface(scope)
   const editor = document.getElementById('editor')!
@@ -177,14 +179,22 @@ describe('the editor document, from markdown and back', () => {
     // after the hashes and `parseListLine` needs text after the marker, so neither consumed the
     // line and the index never moved: `markdownToHtml` looped forever on a one-line source the
     // host could hand it from any file. Bare markers are text.
-    expect(markdownToHtml(createRichMarkdownEditorScope(), '# ')).toBe('<p># </p>')
-    expect(markdownToHtml(createRichMarkdownEditorScope(), '- ')).toBe('<p>- </p>')
-    expect(markdownToHtml(createRichMarkdownEditorScope(), '1. ')).toBe('<p>1. </p>')
+    const render = (markdown: string) =>
+      runInNewContext(
+        'markdownToHtml(scope, markdown)',
+        {
+          markdownToHtml,
+          scope: createRichMarkdownEditorScope(quietRichMarkdownEditorHost()),
+          markdown
+        },
+        { timeout: 250 }
+      )
+    expect(render('# ')).toBe('<p># </p>')
+    expect(render('- ')).toBe('<p>- </p>')
+    expect(render('1. ')).toBe('<p>1. </p>')
     // The control, so the guard is not swallowing the readers it falls back from.
-    expect(markdownToHtml(createRichMarkdownEditorScope(), '# ok')).toBe('<h1>ok</h1>')
-    expect(markdownToHtml(createRichMarkdownEditorScope(), '- ok')).toBe(
-      '<ul><li><p>ok</p></li></ul>'
-    )
+    expect(render('# ok')).toBe('<h1>ok</h1>')
+    expect(render('- ok')).toBe('<ul><li><p>ok</p></li></ul>')
   })
 
   it('renders no link for a javascript: URL, which is the one scheme it filters', () => {

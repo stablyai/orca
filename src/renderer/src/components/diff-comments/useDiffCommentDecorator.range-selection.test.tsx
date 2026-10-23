@@ -3,6 +3,18 @@ import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Selection } from 'monaco-editor'
 import type * as DiffCommentZoneCardModule from './diff-comment-zone-card'
+import type { NotesSendMenu } from '../editor/NotesSendMenu'
+
+vi.mock('monaco-editor', () => import('monaco-editor/esm/vs/editor/editor.api.js'))
+
+const notesMenuFixture = vi.hoisted(() => ({
+  NotesSendMenu: vi.fn<typeof NotesSendMenu>(() => {
+    throw new Error('Range selection must not render the agent notes menu')
+  })
+}))
+
+// Saved-note delivery is outside the selection and inline-draft paths exercised here.
+vi.mock('../editor/NotesSendMenu', () => ({ NotesSendMenu: notesMenuFixture.NotesSendMenu }))
 
 const storeFixture = vi.hoisted(() => ({
   activeGroupIdByWorktree: {},
@@ -146,7 +158,11 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals()
   document.body.replaceChildren()
-  vi.clearAllMocks()
+  try {
+    expect(notesMenuFixture.NotesSendMenu).not.toHaveBeenCalled()
+  } finally {
+    vi.clearAllMocks()
+  }
 })
 
 describe('useDiffCommentDecorator range highlight', () => {

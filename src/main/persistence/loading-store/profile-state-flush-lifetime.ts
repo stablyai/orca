@@ -32,3 +32,8 @@ export async function runProfileStateFlush(
     finish()
   }
 }
+export type PendingProfileStateFlushOptions = {
+  signal?: AbortSignal
+  drainToStableGeneration?: boolean
+  fullCheckpoint?: boolean
+}

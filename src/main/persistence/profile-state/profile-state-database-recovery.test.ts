@@ -27,6 +27,11 @@ import { restoreProfileStateDatabaseBackup } from './profile-state-database-reco
 import { restoreProfileStateJsonExport } from './legacy-json/profile-state-recovery'
 import { acquireProfileStateMaintenance } from './profile-state-access'
 import { profileStateJsonExportPath } from './legacy-json/profile-state-export-path'
+import {
+  ensureProfileStateAuthorityMarker,
+  hasProfileStateAuthorityMarker,
+  profileStateAuthorityMarkerPath
+} from './profile-state-authority-marker'
 
 const directories: string[] = []
 const profileId = 'profile-recovery-test'
@@ -73,6 +78,7 @@ async function fixture(options: { profileId?: string; empty?: boolean; json?: st
   for (const suffix of ['', '-wal', '-shm', '-journal']) {
     writeFileSync(`${databasePath}${suffix}`, `damaged ${suffix || 'primary'}`)
   }
+  ensureProfileStateAuthorityMarker(databasePath)
   return { databasePath, dataFile, backupPath, exportPath, profileId, maintenance }
 }
 
@@ -131,6 +137,16 @@ describe('profile state database backup recovery', () => {
       const result = restoreProfileStateDatabaseBackup({ ...options, beforeRestore })
 
       expect(result.revision).toBe(1)
+      expect(hasProfileStateAuthorityMarker(options.databasePath)).toBe(true)
+      expect(
+        readFileSync(
+          join(
+            result.quarantine.directory,
+            basename(profileStateAuthorityMarkerPath(options.databasePath))
+          ),
+          'utf8'
+        )
+      ).toBe('sqlite\n')
       expect(beforeRestore).toHaveBeenCalledOnce()
       expect(readRestored(options.databasePath)).toBe(savedJson)
       expect(existsSync(options.dataFile)).toBe(false)
@@ -261,6 +277,7 @@ describe('profile state database backup recovery', () => {
       'injected snapshot publication failure'
     )
     expect(existsSync(options.databasePath)).toBe(false)
+    expect(hasProfileStateAuthorityMarker(options.databasePath)).toBe(true)
     expect(existsSync(options.backupPath)).toBe(true)
     const archives = readdirSync(dirname(options.databasePath)).filter((name) =>
       name.startsWith('profile-state-corrupt-')
@@ -282,6 +299,16 @@ describe('profile state database backup recovery', () => {
     const options = await fixture()
     writeFileSync(`${options.backupPath}-journal`, 'backup recovery evidence')
     const recovered = restoreProfileStateJsonExport(options)
+    expect(hasProfileStateAuthorityMarker(options.databasePath)).toBe(false)
+    expect(
+      readFileSync(
+        join(
+          recovered.quarantine.directory,
+          basename(profileStateAuthorityMarkerPath(options.databasePath))
+        ),
+        'utf8'
+      )
+    ).toBe('sqlite\n')
     expect(existsSync(options.databasePath)).toBe(false)
     expect(existsSync(options.backupPath)).toBe(false)
     expect(existsSync(`${options.backupPath}-journal`)).toBe(false)

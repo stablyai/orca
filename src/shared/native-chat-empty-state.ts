@@ -15,14 +15,15 @@ export const NATIVE_CHAT_EMPTY_STATE_COPY = {
     title: 'Start a chat with {{value0}}',
     subtitle: 'Ask {{value0}} to inspect code, explain output, or make a change.'
   },
+  /** A chat whose conversation the host has not found: new, or not reported by the agent. */
+  notFound: {
+    title: "Can't find this conversation yet",
+    subtitle:
+      'Send a message to start one, or open the terminal view to see what {{value0}} is doing.'
+  },
   error: {
     title: 'Could not load conversation',
     subtitle: 'The transcript could not be read. Toggle back to the terminal to keep working.'
-  },
-  // The structured chat's read reconnects on its own; the terminal-backed read does not.
-  retryingError: {
-    title: 'Could not load conversation',
-    subtitle: 'The transcript could not be read. Orca keeps trying to load it.'
   },
   notAgent: {
     title: 'No conversation here',
