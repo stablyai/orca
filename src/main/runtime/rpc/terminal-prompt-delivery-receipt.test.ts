@@ -5,6 +5,7 @@ import { createAgentPromptSubmissionRuntime } from '../agent-prompt-submission-r
 import { OrchestrationDb } from '../orchestration/db'
 import type { RpcRequest, RpcResponse } from './core'
 import { RpcDispatcher } from './dispatcher'
+import { OrchestrationMutationExecutor } from './orchestration-mutation-executor'
 import { TERMINAL_METHODS } from './methods/terminal'
 
 vi.mock('../../git/worktree', () => ({
@@ -219,6 +220,57 @@ describe('durable terminal prompt delivery receipts', () => {
     expect(retry).toMatchObject({ ok: true, result: { mutation: { replayed: false } } })
     expect(harness.writes.filter((data) => data === '\r')).toHaveLength(1)
     harness.db.close()
+  })
+
+  it('never replays a pasted prompt after human takeover cancels its Enter', async () => {
+    vi.useFakeTimers()
+    const harness = await createHarness('codex')
+    try {
+      harness.runtime.setPtyController({
+        write: (ptyId, data, inputKind) => {
+          harness.runtime.terminalRunFacts.recordInput(ptyId, inputKind, data)
+          harness.writes.push(data)
+          if (data.includes('automated task')) {
+            setTimeout(() => {
+              void harness.runtime.sendTerminal(
+                harness.handle,
+                { text: ' human addition' },
+                { inputKind: 'driving' }
+              )
+            }, 1)
+          }
+          return true
+        },
+        kill: () => true,
+        getForegroundProcess: async () => 'codex'
+      })
+      const input = request(harness.handle, 'human-takeover', 'automated task')
+      const pending = harness.dispatcher.dispatch(input)
+      await vi.runAllTimersAsync()
+      expect(await pending).toMatchObject({
+        ok: false,
+        error: { message: 'terminal_input_changed' }
+      })
+      expect(harness.writes).toHaveLength(2)
+      expect(harness.writes[0]).toContain('automated task')
+      expect(harness.writes[1]).toBe(' human addition')
+      expect(harness.writes).not.toContain('\r')
+
+      const replacement = new RpcDispatcher({ runtime: harness.runtime, methods: TERMINAL_METHODS })
+      expect(await replacement.dispatch(input)).toMatchObject({
+        ok: false,
+        error: { code: 'operation_unknown' }
+      })
+      const restartedExecutor = new OrchestrationMutationExecutor(harness.runtime)
+      const replayWrite = vi.fn()
+      await expect(restartedExecutor.run(input, input.params, replayWrite)).rejects.toMatchObject({
+        code: 'operation_unknown'
+      })
+      expect(replayWrite).not.toHaveBeenCalled()
+      expect(harness.writes).toHaveLength(2)
+    } finally {
+      harness.db.close()
+    }
   })
 
   it('waits on a replay only for observation and never resends', async () => {

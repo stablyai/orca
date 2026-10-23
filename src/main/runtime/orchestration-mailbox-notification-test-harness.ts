@@ -64,7 +64,7 @@ export function insertDirectRunMessage(db: OrchestrationDb, runId: string, subje
 
 export type MailboxNotificationHarness = {
   runtime: OrcaRuntimeService
-  write: ReturnType<typeof vi.fn>
+  write: ReturnType<typeof vi.fn<(ptyId: string, data: string) => boolean>>
 }
 
 export type MailboxCheckResult = {
@@ -129,7 +129,7 @@ export function createRuntime(
           : null
     }
   )
-  const write = vi.fn(() => true)
+  const write = vi.fn((_ptyId: string, _data: string) => true)
   runtime.setOrchestrationDb(db)
   runtime.setPtyController({
     write,
@@ -231,12 +231,18 @@ export function registerSecondPane(
   })
 }
 
-export async function driveToLiveIdle(runtime: OrcaRuntimeService): Promise<void> {
+export async function driveToLiveIdle(
+  runtime: OrcaRuntimeService,
+  options: { flushPointerWrites?: boolean } = {}
+): Promise<void> {
   await runtime.listTerminals()
   runtime.onPtyData(PTY_ID, '\x1b]0;Codex working\x07', 1)
   runtime.onPtyData(PTY_ID, '\x1b]0;Codex done\x07', 2)
   // Why: the snapshot awaits the headless model's write chain, so both chunks are parsed.
   await runtime.serializeMainTerminalBuffer(PTY_ID)
+  if (vi.isFakeTimers() && options.flushPointerWrites !== false) {
+    await vi.advanceTimersByTimeAsync(0)
+  }
 }
 
 export function pointerCount(write: ReturnType<typeof vi.fn>): number {

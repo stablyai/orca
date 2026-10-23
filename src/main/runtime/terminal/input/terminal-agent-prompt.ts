@@ -1,6 +1,7 @@
 import { OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission } from '../wait/terminal-wait-permission'
 import type {
   AgentPromptExpectedBinding,
+  RuntimeAgentPromptRetryContext,
   RuntimeAgentPromptWriteOptions
 } from '../../runtime-terminal-contracts'
 import type {
@@ -20,11 +21,8 @@ import {
   getTerminalPasteIngestMs,
   resolveAgentPromptSubmitDelayForAgent
 } from '../../../../shared/agent-prompt-injection'
-import type {
-  AgentPromptActivity,
-  AgentPromptWaitTextCache
-} from '../../agent-prompt-submission-verification'
 import {
+  type AgentPromptWaitTextCache,
   isTerminalSendSettlementAgent,
   resolveAgentPromptEffectTimeoutMs,
   verifyAgentPromptSubmission
@@ -54,16 +52,6 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
     }
   }
 
-  /** Under `wait`, a pre-paste refusal is the hold's to resume rather than the caller's to see. */
-  private throwIfAgentPromptPermissionReturned(
-    baseline: AgentPromptActivity,
-    current: AgentPromptActivity
-  ): void {
-    if (this.isAgentPromptPermissionBlocked(baseline, current)) {
-      throw new AgentPromptPermissionReturnedError()
-    }
-  }
-
   protected async writeTerminalAgentPrompt(
     handle: string,
     ptyId: string,
@@ -73,9 +61,13 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
   ): Promise<{ submits: number; prompt?: RuntimeTerminalPromptDelivery }> {
     assertAgentPromptRequestActive(options.signal)
     this.assertAgentPromptGeneration(ptyId, generation)
+    const inputGuard = this.captureTerminalAutomatedInputGuard(ptyId)
     const permissionBaseline = this.getAgentPromptActivity(handle, ptyId)
-    if (options.onPermission === 'wait') {
-      this.throwIfAgentPromptPermissionReturned(permissionBaseline, permissionBaseline)
+    if (
+      options.onPermission === 'wait' &&
+      this.isAgentPromptPermissionBlocked(permissionBaseline, permissionBaseline)
+    ) {
+      throw new AgentPromptPermissionReturnedError()
     }
     this.assertAgentPromptPermissionSafe(permissionBaseline, permissionBaseline)
     const writeHostPlatform = this.getPtyWriteHostPlatform(ptyId)
@@ -101,14 +93,19 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
       assertAgentPromptRequestActive(options.signal)
       this.assertAgentPromptGeneration(ptyId, generation)
       await options.beforeWrite?.(ptyId)
+      await this.admitTerminalAutomatedInput(ptyId, inputGuard)
       assertAgentPromptRequestActive(options.signal)
       this.assertAgentPromptGeneration(ptyId, generation)
+      this.assertLiveTerminalHandleTargetsPty(handle, ptyId)
       this.assertAgentPromptExpectedBinding(handle, options.expectedBinding)
-      if (options.onPermission === 'wait') {
-        this.throwIfAgentPromptPermissionReturned(
+      if (
+        options.onPermission === 'wait' &&
+        this.isAgentPromptPermissionBlocked(
           permissionBaseline,
           this.getAgentPromptActivity(handle, ptyId)
         )
+      ) {
+        throw new AgentPromptPermissionReturnedError()
       }
       this.assertAgentPromptPermissionSafe(
         permissionBaseline,
@@ -116,11 +113,13 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
       )
       // Keep the bracketed paste frame in one PTY write; Claude's composer can drop the
       // beginning when a large frame is split into independently processed chunks.
+      inputGuard.assertCurrent()
       renderGate?.arm()
       const initialWrite = submitWithPaste ? pastePayload + AGENT_PROMPT_SUBMIT : pastePayload
       if (!this.ptyController?.write(ptyId, initialWrite, options.inputKind)) {
         throw new Error('terminal_not_writable')
       }
+      inputGuard.recordOwnWrite()
       if (submitWithPaste) {
         options.onSubmitWritten?.()
       }
@@ -167,14 +166,24 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
     const baseline = preSubmitBaseline ?? this.getAgentPromptActivity(handle, ptyId, waitTextCache)
     this.assertAgentPromptPermissionSafe(permissionBaseline, baseline)
     if (!submitWithPaste) {
+      assertAgentPromptRequestActive(options.signal)
+      this.assertLiveTerminalHandleTargetsPty(handle, ptyId)
+      this.assertAgentPromptExpectedBinding(handle, options.expectedBinding)
+      inputGuard.assertCurrent()
       if (!this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT, options.inputKind)) {
         throw new Error(options.suffixFailureError ?? 'terminal_not_writable')
       }
+      inputGuard.recordOwnWrite()
       options.onSubmitWritten?.()
     }
     const submits =
       options.composerReady && !submitWithPaste
-        ? 1 + (await this.resubmitAgentPromptAfterRetryDelay(ptyId, generation, options))
+        ? 1 +
+          (await this.resubmitAgentPromptAfterRetryDelay(ptyId, generation, options, {
+            handle,
+            inputGuard,
+            baseline
+          }))
         : 1
     const effectTimeoutMs = resolveAgentPromptEffectTimeoutMs(this.getPtyAgent(ptyId))
     if (!options.acceptQueued || !options.requestId) {
@@ -272,17 +281,37 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
   private async resubmitAgentPromptAfterRetryDelay(
     ptyId: string,
     generation: number,
-    options: RuntimeAgentPromptWriteOptions
+    options: RuntimeAgentPromptWriteOptions,
+    context: RuntimeAgentPromptRetryContext
   ): Promise<number> {
     const agent = this.getPtyAgent(ptyId)
     const retryDelayMs = agent ? TUI_AGENT_CONFIG[agent]?.submitRetryDelayMs : undefined
     if (retryDelayMs === undefined) {
       return 0
     }
+    const { handle, inputGuard, baseline } = context
     try {
       await waitForAgentPromptDelay(retryDelayMs, options.signal)
       this.assertAgentPromptGeneration(ptyId, generation)
       await options.beforeWrite?.(ptyId)
+      const screen = await this.readVisibleTerminalState(ptyId)
+      assertAgentPromptRequestActive(options.signal)
+      this.assertAgentPromptGeneration(ptyId, generation)
+      this.assertLiveTerminalHandleTargetsPty(handle, ptyId)
+      this.assertAgentPromptExpectedBinding(handle, options.expectedBinding)
+      inputGuard.assertCurrent()
+      const activity = this.getAgentPromptActivity(handle, ptyId)
+      this.assertAgentPromptPermissionSafe(baseline, activity)
+      if (
+        !options.promptForSchedule ||
+        screen?.draft !== options.promptForSchedule ||
+        screen.generation !== generation ||
+        screen.sequence < this.getPtyOutputSequence(ptyId) ||
+        activity.workingSequence !== baseline.workingSequence ||
+        activity.explicitWorkingStartedAt !== baseline.explicitWorkingStartedAt
+      ) {
+        return 0
+      }
       return this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT, options.inputKind) ? 1 : 0
     } catch {
       return 0

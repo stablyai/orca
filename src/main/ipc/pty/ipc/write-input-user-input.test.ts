@@ -132,6 +132,29 @@ describe('renderer PTY writes: input kind', () => {
     }
   )
 
+  it('advances the renderer input revision before a delayed settled handoff and preserves later input', async () => {
+    const facts = new TerminalRunFactsRegister()
+    const before = facts.readInputRevision(PTY_ID)
+    const settled = Promise.withResolvers<WriteSettlement>()
+    let atHandoff = 0
+    provider.writeWithSettlement.mockImplementation(() => {
+      atHandoff = facts.readInputRevision(PTY_ID)
+      return settled.promise
+    })
+    const input = createWriteInput(facts)
+    const pending = input.writePtyInputAccepted({
+      id: PTY_ID,
+      data: 'first',
+      inputKind: 'driving',
+      requireWriteSettlement: true
+    })
+    expect(atHandoff).toBe(before + 1)
+    await input.writePtyInput({ id: PTY_ID, data: 'takeover', inputKind: 'driving' })
+    settled.resolve(WRITE_ACCEPTED)
+    expect(await pending).toBe(true)
+    expect(facts.readInputRevision(PTY_ID)).toBe(before + 2)
+  })
+
   it.each([
     ['a launch write', 'launch', 'echo startup\r'],
     ['a query reply', 'query-reply', '\x1b[3;4R'],

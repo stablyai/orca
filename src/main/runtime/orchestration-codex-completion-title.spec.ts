@@ -5,7 +5,6 @@ import {
   type AgentStatusIpcPayload
 } from '../../shared/agent-status-types'
 import { settledWriteStub } from '../providers/settled-pty-write-stub'
-import { MAILBOX_POINTER_WRITE_ATTEMPTED } from './orchestration/db/messages/mailbox-pointer-enter-state'
 import {
   createBoundRun,
   createDatabase,
@@ -143,17 +142,20 @@ describe('Codex completion title mailbox delivery', () => {
     vi.useFakeTimers()
     const { db, runtime, write, run, completeWithNativeTitles } = completionFixture(750)
     await runtime.listTerminals()
-    insertDirectRunMessage(db, run.id, 'Worker progress')
+    const message = insertDirectRunMessage(db, run.id, 'Worker progress')
     completeWithNativeTitles()
     runtime.onPtyData(PTY_ID, '\x1b]0;Codex waiting for permission\x07', 3)
     await vi.advanceTimersByTimeAsync(1500)
-    expect(write.mock.calls.map(([, data]) => data)).toEqual([
-      expect.stringContaining('You have 1 orchestration message')
-    ])
+    expect(write).not.toHaveBeenCalled()
+    expect(db.getMessageById(message.id)).toMatchObject({
+      read: 0,
+      delivered_at: null,
+      pointer_enter_pending: 0
+    })
     db.close()
   })
 
-  it('keeps an unverified staged pointer pending and submits it once readiness returns', async () => {
+  it('keeps mail unwritten while readiness is unverified and delivers once it returns', async () => {
     vi.useFakeTimers()
     const { db, runtime, write, run, getForegroundProcess, completeWithNativeTitles } =
       completionFixture()
@@ -162,13 +164,11 @@ describe('Codex completion title mailbox delivery', () => {
     const message = insertDirectRunMessage(db, run.id, 'Worker progress')
     completeWithNativeTitles()
     await vi.advanceTimersByTimeAsync(10 * 60_000)
-    expect(write.mock.calls.map(([, data]) => data)).toEqual([
-      expect.stringContaining('You have 1 orchestration message')
-    ])
+    expect(write).not.toHaveBeenCalled()
     expect(db.getMessageById(message.id)).toMatchObject({
       read: 0,
       delivered_at: null,
-      pointer_enter_pending: MAILBOX_POINTER_WRITE_ATTEMPTED
+      pointer_enter_pending: 0
     })
 
     runtime.ingestSyntheticTitleFrame(PTY_ID, '\x1b]0;Codex ready\x07')
@@ -177,7 +177,11 @@ describe('Codex completion title mailbox delivery', () => {
       expect.stringContaining('You have 1 orchestration message'),
       '\r'
     ])
-    expect(db.getMessageById(message.id)).toMatchObject({ pointer_enter_pending: 0 })
+    expect(db.getMessageById(message.id)).toMatchObject({
+      read: 0,
+      pointer_enter_pending: 0,
+      delivered_at: expect.any(String)
+    })
     db.close()
   })
 

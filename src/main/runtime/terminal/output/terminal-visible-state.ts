@@ -1,3 +1,4 @@
+import type { TerminalAutomatedInputGuard } from '../../terminal-automated-input-guard'
 import { OrcaRuntimeWithCaptureProviderTerminalBuffer } from './provider-buffer-capture'
 import {
   TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS,
@@ -19,6 +20,70 @@ import { HeadlessEmulator } from '../../../daemon/headless-emulator'
 import { withTimeout } from '../../runtime-async-boundaries'
 
 export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptureProviderTerminalBuffer {
+  protected captureTerminalAutomatedInputGuard(ptyId: string): TerminalAutomatedInputGuard {
+    const pty = this.ptysById.get(ptyId)
+    const generation = this.getPtyLifecycleGeneration(ptyId)
+    const incarnation = pty?.incarnationId
+    let revision = this.terminalRunFacts.readInputRevision(ptyId)
+    let observedSequence: number | undefined
+    const assertBinding = (): void => {
+      if (
+        this.ptysById.get(ptyId) !== pty ||
+        pty?.incarnationId !== incarnation ||
+        this.getPtyLifecycleGeneration(ptyId) !== generation
+      ) {
+        throw new Error('terminal_handle_stale')
+      }
+    }
+    const guard: TerminalAutomatedInputGuard = {
+      assertCurrent: () => {
+        assertBinding()
+        if (
+          this.terminalRunFacts.readInputRevision(ptyId) !== revision ||
+          (observedSequence !== undefined && this.getPtyOutputSequence(ptyId) !== observedSequence)
+        ) {
+          throw new Error('terminal_input_changed')
+        }
+      },
+      recordOwnWrite: () => {
+        assertBinding()
+        const current = this.terminalRunFacts.readInputRevision(ptyId)
+        if (current !== revision && current !== revision + 1) {
+          throw new Error('terminal_input_changed')
+        }
+        revision = current
+        observedSequence = undefined
+      },
+      recordObservation: (sequence) => {
+        observedSequence = sequence
+      }
+    }
+    return guard
+  }
+
+  protected async admitTerminalAutomatedInput(
+    ptyId: string,
+    guard = this.captureTerminalAutomatedInputGuard(ptyId)
+  ): Promise<TerminalAutomatedInputGuard> {
+    const sequence = this.getPtyOutputSequence(ptyId)
+    const screen = await this.readVisibleTerminalState(ptyId)
+    guard.assertCurrent()
+    if (
+      screen
+        ? screen.generation !== this.getPtyLifecycleGeneration(ptyId) ||
+          screen.sequence < this.getPtyOutputSequence(ptyId)
+        : sequence !== this.getPtyOutputSequence(ptyId)
+    ) {
+      throw new Error('terminal_input_changed')
+    }
+    // No recognized draft is unknown, not proof that an unsupported composer is empty.
+    if (screen?.draft) {
+      throw new Error('terminal_composer_occupied')
+    }
+    guard.recordObservation(this.getPtyOutputSequence(ptyId))
+    return guard
+  }
+
   protected async visibleSnapshotPreview(ptyId: string, preview: string): Promise<string> {
     const knownAlternateScreen = this.isTerminalAlternateScreen(ptyId)
     const providerModeUnknown =

@@ -31,6 +31,8 @@ type TerminalRunRecord = {
 export class TerminalRunFactsRegister {
   private readonly runsByPtyId = new Map<string, TerminalRunRecord>()
   // Why apart from the run record: input must count on a PTY main adopted without a commit.
+  private inputRevision = 0
+  private readonly inputRevisionsByPtyId = new Map<string, number>()
   private readonly lastInputAtByPtyId = new Map<string, number>()
   private readonly pendingByPtyId = new Map<
     string,
@@ -79,6 +81,7 @@ export class TerminalRunFactsRegister {
       origin === 'reattach' && (incarnationId === null || !previous?.incarnationId)
     if (!sameProcess) {
       this.lastInputAtByPtyId.delete(commit.id)
+      this.inputRevisionsByPtyId.set(commit.id, ++this.inputRevision)
     }
     this.runsByPtyId.set(commit.id, {
       incarnationId,
@@ -98,6 +101,9 @@ export class TerminalRunFactsRegister {
     if (inputKind === 'query-reply' || isUntypedTerminalInput(data)) {
       return
     }
+    const revision = this.readInputRevision(ptyId) + 1
+    this.inputRevisionsByPtyId.set(ptyId, revision)
+    this.inputRevision = Math.max(this.inputRevision, revision)
     this.lastInputAtByPtyId.set(ptyId, now)
     const run = this.runsByPtyId.get(ptyId)
     if (inputKind === 'driving') {
@@ -122,6 +128,17 @@ export class TerminalRunFactsRegister {
     return this.lastInputAtByPtyId.get(ptyId) ?? null
   }
 
+  /** Monotonic input/lifecycle fence; driving input includes both people and automation. */
+  readInputRevision(ptyId: string): number {
+    const existing = this.inputRevisionsByPtyId.get(ptyId)
+    if (existing !== undefined) {
+      return existing
+    }
+    const revision = ++this.inputRevision
+    this.inputRevisionsByPtyId.set(ptyId, revision)
+    return revision
+  }
+
   /** A run main never saw committed reads as not fresh, which keeps today's close-on-exit. */
   read(ptyId: string, incarnationId: string | null | undefined): TerminalRunFacts {
     const run = this.runsByPtyId.get(ptyId)
@@ -135,6 +152,8 @@ export class TerminalRunFactsRegister {
   }
 
   delete(ptyId: string): void {
+    this.inputRevision += 1
+    this.inputRevisionsByPtyId.delete(ptyId)
     this.runsByPtyId.delete(ptyId)
     this.lastInputAtByPtyId.delete(ptyId)
     this.pendingByPtyId.delete(ptyId)

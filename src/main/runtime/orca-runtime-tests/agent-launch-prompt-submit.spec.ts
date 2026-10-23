@@ -85,7 +85,7 @@ describe('a launch prompt into a composer the caller saw ready', () => {
   })
 
   it.each(['codex', 'qwen-code'] as const)(
-    'sends %s its second Enter after its retry delay, as the desktop paste did',
+    'suppresses the %s retry Enter after the first Enter starts a turn',
     async (agent) => {
       vi.useFakeTimers()
       try {
@@ -99,7 +99,7 @@ describe('a launch prompt into a composer the caller saw ready', () => {
         expect(writes.filter((write) => write.data === '\r')).toHaveLength(1)
         await vi.advanceTimersByTimeAsync(1_200)
         await send
-        expect(writes.filter((write) => write.data === '\r')).toHaveLength(2)
+        expect(writes.filter((write) => write.data === '\r')).toHaveLength(1)
       } finally {
         vi.useRealTimers()
       }

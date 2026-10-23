@@ -43,6 +43,7 @@ describe('OrcaRuntimeService', () => {
 
       // The push is deferred one microtask so it lands behind any resolved check.
       await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(0)
       expect(write).toHaveBeenCalledWith(
         'pty-1',
         expect.stringContaining('You have 1 orchestration message')
@@ -92,6 +93,7 @@ describe('OrcaRuntimeService', () => {
       expect(write).not.toHaveBeenCalled()
 
       runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
+      await vi.advanceTimersByTimeAsync(0)
       expect(write).toHaveBeenCalledWith(
         'pty-1',
         '\nYou have 1 orchestration message. Run `orca-dev orchestration check --run run_mailbox`.\n'
@@ -271,6 +273,7 @@ describe('OrcaRuntimeService', () => {
 
       runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
       expect(pendingReads).toHaveBeenCalledTimes(1)
+      await vi.advanceTimersByTimeAsync(0)
       expect(write).toHaveBeenCalledWith(
         'pty-1',
         expect.stringContaining('You have 1 orchestration message')
@@ -312,6 +315,7 @@ describe('OrcaRuntimeService', () => {
       expect(write).not.toHaveBeenCalled()
 
       syncSinglePty(runtime)
+      await vi.advanceTimersByTimeAsync(0)
       expect(write).toHaveBeenCalledWith(
         'pty-1',
         expect.stringContaining('You have 1 orchestration message')
@@ -543,6 +547,7 @@ describe('OrcaRuntimeService', () => {
       // is no transition — only the liveness edge can release the row (#12536).
       runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 100)
 
+      await vi.advanceTimersByTimeAsync(0)
       expect(write).toHaveBeenCalledWith(
         'pty-1',
         expect.stringContaining('You have 1 orchestration message')
@@ -592,6 +597,7 @@ describe('OrcaRuntimeService', () => {
       // The first live idle frame authorizes it and the row still delivers.
       runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
       runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
+      await vi.advanceTimersByTimeAsync(0)
       expect(write).toHaveBeenCalledWith(
         'pty-1',
         expect.stringContaining('You have 1 orchestration message')

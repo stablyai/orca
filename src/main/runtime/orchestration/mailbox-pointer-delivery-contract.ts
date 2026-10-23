@@ -1,3 +1,4 @@
+import type { OrchestrationPointerWriteOptions } from './mailbox-pointer-pty-write'
 import type { OrchestrationDb } from './db'
 import type { OrchestrationMailboxDeliveryTarget } from './mailbox-delivery-target'
 import type { OrchestrationMessageWaiter } from './mailbox-pointer-eligibility'
@@ -34,5 +35,9 @@ export type PointerDeliveryDependencies<TWaiter extends OrchestrationMessageWait
   ) => OrchestrationMailboxPointerSubmitTarget | null
   isLeafPtyProvenAbsent: (ptyId: string) => Promise<boolean>
   redriveMailbox: (mailboxHandle: string, reservedTypes?: ReadonlySet<string>) => void
-  writePty: (ptyId: string, data: string) => WriteSettlement | Promise<WriteSettlement>
+  writePty: (
+    ptyId: string,
+    data: string,
+    options?: OrchestrationPointerWriteOptions
+  ) => WriteSettlement | Promise<WriteSettlement>
 }

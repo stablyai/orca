@@ -45,7 +45,9 @@ type FreshRun = {
 }
 
 /** A fresh shell whose controller writes go through main's real write funnel to a fake provider. */
-async function createFreshRun(): Promise<FreshRun> {
+async function createFreshRun(
+  onWrite?: (runtime: OrcaRuntimeService, data: string) => void
+): Promise<FreshRun> {
   const runtime = new OrcaRuntimeService(makeStore() as never)
   const firstUserInputAt = (): number | null =>
     runtime.terminalRunFacts.read(PTY_ID, null).firstUserInputAt
@@ -53,6 +55,7 @@ async function createFreshRun(): Promise<FreshRun> {
   const kinds: TerminalInputKind[] = []
   const write = (_id: string, data: string): boolean => {
     writes.push({ data, inputRecorded: firstUserInputAt() !== null })
+    onWrite?.(runtime, data)
     if (data.endsWith('\r')) {
       runtime.onPtyData(PTY_ID, '\x1b]0;Codex working\x07', Date.now())
     }
@@ -137,6 +140,39 @@ describe('run facts: the controller write funnel', () => {
 
     expect(run.firstUserInputAt()).not.toBeNull()
     expect(run.writes[0]?.inputRecorded).toBe(true)
+  })
+
+  it('fences stream takeover between automated paste and Enter through the real controller funnel', async () => {
+    vi.useFakeTimers()
+    let handle = ''
+    const takeover = Promise.withResolvers<void>()
+    const run = await createFreshRun((runtime, data) => {
+      if (data.includes('\x1b[200~')) {
+        setTimeout(() => {
+          void sendTerminalStreamInput(runtime, {
+            terminal: handle,
+            text: 'human takeover',
+            client: undefined,
+            isMobile: false
+          }).then(() => takeover.resolve(), takeover.reject)
+        }, 1)
+      }
+    })
+    handle = run.handle
+    const before = run.runtime.terminalRunFacts.readInputRevision(PTY_ID)
+    const sent = run.runtime
+      .sendTerminalAgentPrompt(run.handle, 'automated task', {
+        inputKind: 'driving'
+      })
+      .catch((error: unknown) => error)
+    await vi.runAllTimersAsync()
+    await takeover.promise
+    expect(await sent).toMatchObject({ message: 'terminal_input_changed' })
+    expect(run.writes.map(({ data }) => data)).toEqual([
+      expect.stringContaining('automated task'),
+      'human takeover'
+    ])
+    expect(run.runtime.terminalRunFacts.readInputRevision(PTY_ID)).toBe(before + 2)
   })
 
   it('reads a run launched with a prompt as untyped until someone drives it', async () => {

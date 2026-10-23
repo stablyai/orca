@@ -178,7 +178,11 @@ describe('orchestration mailbox pointer submit', () => {
 
     await vi.waitFor(() => expect(settle).toHaveBeenCalledOnce())
     expect(writePty).toHaveBeenCalledOnce()
-    expect(writePty).toHaveBeenCalledWith(ptyId, '\r')
+    expect(writePty).toHaveBeenCalledWith(
+      ptyId,
+      '\r',
+      expect.objectContaining({ isCurrent: expect.any(Function) })
+    )
     expect(resolveMailbox).toHaveBeenCalledWith(leaf, undefined, {
       terminalHandle: 'term-parked'
     })
@@ -256,7 +260,11 @@ describe('orchestration mailbox pointer submit', () => {
         ptyId,
         processIncarnation: expectedTarget.processIncarnation
       })
-      expect(writePty).toHaveBeenCalledWith(ptyId, '\r')
+      expect(writePty).toHaveBeenCalledWith(
+        ptyId,
+        '\r',
+        expect.objectContaining({ isCurrent: expect.any(Function) })
+      )
       expect(releaseMailboxPointerEnter).not.toHaveBeenCalled()
     } else {
       expect(writePty).not.toHaveBeenCalled()

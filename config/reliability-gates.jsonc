@@ -11,6 +11,169 @@
   },
   "gates": [
     {
+      "id": "terminal-input.automated-draft-admission",
+      "title": "Automated prompt and mailbox writes preserve positively recognized drafts",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-runtime",
+      "layer": "runtime-real-emulator-and-sqlite-contract",
+      "surfaces": [
+        "automated agent prompts",
+        "PTY mailbox pointers",
+        "delayed and retry Enter",
+        "runtime and renderer input revisions"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local"],
+      "coverageNotes": "Production runtime and real HeadlessEmulator parse attributed Codex composer screens; mailbox cases use real SQLite. Production IPC and runtime controller funnels exercise synchronous revisions with harmless fake providers; remote-style settlement is delayed deterministically. Actual durable terminal.send RPC replay is checked against SQLite. This is host-side admission shared by desktop/mobile/remote callers, with no protocol change. Native provider and physical platform journeys remain unproved.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/11242",
+        "https://github.com/stablyai/orca/issues/18478"
+      ],
+      "invariant": "A positively recognized occupied composer admits zero automated prompt or mailbox pointer bytes, irrespective of draft age or focus. Every automated paste and suffix fences the exact PTY object, incarnation, generation and monotonic competing-input revision. Admitted output sequence remains current through the synchronous initial handoff. Own-write revision capture is synchronous before settlement awaits. Delayed Enter must not submit a takeover; retry Enter additionally needs the unchanged owned prompt and no observed turn. Refusal before pointer text retains unread mail without immediate self-retry, while possible writes keep durable attempted phases and cannot be replayed as zero-write.",
+      "oracle": "Drive attributed composer ANSI through the actual runtime and real emulator, independently verify the exposed draft, age it 60 seconds, then invoke automated prompt and actual mailbox delivery and require an empty write ledger plus intact draft and unread SQLite row. Inject same-millisecond input during beforeWrite, paint a draft during that await, take over after paste and during delayed remote settlement, and require no later Enter. Positive controls render the owned pointer and still submit once, preserve ordinary raw human writes and unknown-screen compatibility, and permit retry only for the unchanged own prompt without a turn. Existing generation, cancellation, permission, ambiguous settlement and restart suites remain part of this gate. Queue real draft output after admission resolves but before the actual write and require zero bytes. A provider snapshot ahead of local output remains admissible. Clear a blocked draft and drive a fresh idle event to verify pointer plus exactly one Enter with unread mail retained. Actual renderer/runtime input funnels fence takeover; a fresh durable RPC executor refuses same-key replay after partial paste.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/terminal-human-draft-admission.test.ts src/main/runtime/terminal-run-facts.test.ts src/main/runtime/agent-prompt-submission-runtime.test.ts src/main/runtime/agent-prompt-submission-runtime-hook-and-generation.test.ts src/main/runtime/orchestration/mailbox-pointer-stage.test.ts src/main/runtime/orchestration/mailbox-pointer-submit.test.ts src/main/runtime/orchestration-mailbox-delivery.test.ts src/main/runtime/orchestration-mailbox-notification-consistency.test.ts src/shared/terminal-composer-draft.test.ts src/main/daemon/terminal-cursor-line-context.test.ts src/main/runtime/agent-prompt-submission-windows-submit-delay.test.ts src/main/runtime/agent-prompt-permission-wait.test.ts src/main/runtime/agent-prompt-line-settle.test.ts src/main/runtime/rpc/methods/orchestration/worker/worker-start-prompt-contract.test.ts src/main/runtime/terminal-run-facts-input.test.ts src/main/ipc/pty/ipc/write-input-user-input.test.ts src/main/runtime/rpc/terminal-prompt-delivery-receipt.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/terminal-send-stale-leaf-liveness.test.ts src/main/runtime/orchestration-mailbox-titles.test.ts src/main/runtime/orchestration-mailbox-routing.test.ts"
+      ],
+      "testFiles": [
+        "src/main/runtime/terminal-human-draft-admission.test.ts",
+        "src/main/runtime/terminal-run-facts.test.ts",
+        "src/main/runtime/agent-prompt-submission-runtime.test.ts",
+        "src/main/runtime/agent-prompt-submission-runtime-hook-and-generation.test.ts",
+        "src/main/runtime/orchestration/mailbox-pointer-stage.test.ts",
+        "src/main/runtime/orchestration/mailbox-pointer-submit.test.ts",
+        "src/main/runtime/orchestration-mailbox-delivery.test.ts",
+        "src/main/runtime/orchestration-mailbox-notification-consistency.test.ts",
+        "src/shared/terminal-composer-draft.test.ts",
+        "src/main/daemon/terminal-cursor-line-context.test.ts",
+        "src/main/runtime/agent-prompt-submission-windows-submit-delay.test.ts",
+        "src/main/runtime/agent-prompt-permission-wait.test.ts",
+        "src/main/runtime/agent-prompt-line-settle.test.ts",
+        "src/main/runtime/rpc/methods/orchestration/worker/worker-start-prompt-contract.test.ts",
+        "src/main/runtime/terminal-run-facts-input.test.ts",
+        "src/main/ipc/pty/ipc/write-input-user-input.test.ts",
+        "src/main/runtime/rpc/terminal-prompt-delivery-receipt.test.ts",
+        "src/main/runtime/orca-runtime.test.ts",
+        "src/main/runtime/terminal-send-stale-leaf-liveness.test.ts",
+        "src/main/runtime/orchestration-mailbox-titles.test.ts",
+        "src/main/runtime/orchestration-mailbox-routing.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/runtime/terminal-human-draft-admission.test.ts",
+          "assertions": [
+            "refuses an automated prompt before writing into an old recognized human draft",
+            "keeps real SQLite mail unread without writing a pointer into an old recognized draft",
+            "rejects same-millisecond takeover during beforeWrite without pasting",
+            "rechecks a newly rendered draft after an awaited beforeWrite",
+            "does not send delayed Enter after another driving input takes over its pasted prompt",
+            "submits its own mailbox pointer once even when the pointer renders as a recognized draft",
+            "retains unread attempted mail and never submits after takeover during remote pointer settlement",
+            "retries Codex Enter only for the unchanged owned prompt",
+            "refuses draft output arriving after admission resolves but before paste",
+            "allows an unoccupied provider snapshot ahead of the local output stream",
+            "resumes parked unread mail on fresh idle after the recognized draft is cleared"
+          ]
+        },
+        {
+          "file": "src/main/runtime/terminal-run-facts.test.ts",
+          "assertions": [
+            "counts same-millisecond driving and launch writes, but not replies or focus reports",
+            "never reuses an old revision after deletion or process replacement and isolates other PTYs"
+          ]
+        },
+        {
+          "file": "src/main/runtime/terminal-run-facts-input.test.ts",
+          "assertions": [
+            "fences stream takeover between automated paste and Enter through the real controller funnel"
+          ]
+        },
+        {
+          "file": "src/main/ipc/pty/ipc/write-input-user-input.test.ts",
+          "assertions": [
+            "advances the renderer input revision before a delayed settled handoff and preserves later input"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/terminal-prompt-delivery-receipt.test.ts",
+          "assertions": ["never replays a pasted prompt after human takeover cancels its Enter"]
+        },
+        {
+          "file": "src/main/runtime/orca-runtime.test.ts",
+          "assertions": [
+            "delivers pending orchestration messages to an already-idle agent",
+            "does not reuse the dead process live idle authority after a same-id respawn",
+            "suppresses the %s retry Enter after the first Enter starts a turn"
+          ]
+        },
+        {
+          "file": "src/main/runtime/terminal-send-stale-leaf-liveness.test.ts",
+          "assertions": [
+            "retires an armed Enter when the pty exits and respawns under the same id inside the window",
+            "does not fire a stale Enter through an orphaned leaf snapshot after resync and exit"
+          ]
+        },
+        {
+          "file": "src/main/runtime/orchestration-mailbox-titles.test.ts",
+          "assertions": [
+            "does not restore idle over a permission title received during the host probe",
+            "keeps mail unwritten while readiness is unverified and delivers once it returns"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-10-23",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/terminal-human-draft-admission.test.ts src/main/runtime/terminal-run-facts.test.ts src/main/runtime/agent-prompt-submission-runtime.test.ts src/main/runtime/agent-prompt-submission-runtime-hook-and-generation.test.ts src/main/runtime/orchestration/mailbox-pointer-stage.test.ts src/main/runtime/orchestration/mailbox-pointer-submit.test.ts src/main/runtime/orchestration-mailbox-delivery.test.ts src/main/runtime/orchestration-mailbox-notification-consistency.test.ts src/shared/terminal-composer-draft.test.ts src/main/daemon/terminal-cursor-line-context.test.ts src/main/runtime/agent-prompt-submission-windows-submit-delay.test.ts src/main/runtime/agent-prompt-permission-wait.test.ts src/main/runtime/agent-prompt-line-settle.test.ts src/main/runtime/rpc/methods/orchestration/worker/worker-start-prompt-contract.test.ts src/main/runtime/terminal-run-facts-input.test.ts src/main/ipc/pty/ipc/write-input-user-input.test.ts src/main/runtime/rpc/terminal-prompt-delivery-receipt.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/terminal-send-stale-leaf-liveness.test.ts src/main/runtime/orchestration-mailbox-titles.test.ts src/main/runtime/orchestration-mailbox-routing.test.ts",
+          "result": "passed",
+          "durationSeconds": 160.99,
+          "summary": "Expanded compatibility gate: 1,816 passed, 3 skipped across 21 files. Includes original draft/input/RPC contracts and full runtime, stale-leaf, mailbox-title/routing entrypoints. Canonical TMPDIR avoids unrelated macOS /var versus /private/var fixture equality failures. Independent affected-entrypoint review passed 1,538 tests / 3 skips. Initial 23 CI assertions corrected in tests only; no production guard changes. No native providers or visible windows launched."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 240,
+        "scope": "Expanded 21-file deterministic runtime, real emulator and SQLite contracts; local 160.99s observation, budget only, not measured p95."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Local contract evidence only; no CI soak or native provider matrix yet. Initial CI bb778766 exposed 23 deterministic compatibility-test expectations that assumed synchronous pointer writes or unconditional retry Enter. Corrected tests await actual admission, retain post-paste lifecycle guards, and require zero bytes on prewrite authority loss. Fresh correction must pass CI; no old-SHA retry used."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "The two occupied-composer runtime regressions fail on the base: automated prompt pastes and submits into the draft, and mailbox delivery writes pointer plus Enter. Both pass under the shared guard; takeover and owned-pointer positive controls pass. Independent adversarial review also reproduced paste plus Enter when real draft output arrived after admission returned; retaining the admitted local output sequence through the actual handoff makes that case refuse with zero writes."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "O(1) per-PTY revision updates at the two existing input record funnels and one existing visible-screen acquisition per automated initial write, plus a fresh screen only for configured retry Enter. Reuses serialized provider snapshot/cache and bounded acquisition. No inventory scan, process spawn, polling, focus read, added timer, or duplicate parser. Guards live only for the existing prompt/flight lifetime and maps clean up with run facts."
+      },
+      "diagnostics": [
+        "Agent prompts reject with terminal_composer_occupied or terminal_input_changed; mailbox refusal uses those explicit settlement reasons. No draft contents are added to diagnostics. Existing durable pointer phase distinguishes never-written refusal from attempted/ambiguous delivery. terminal_input_changed after a paste can mean partial delivery; durable same-key replay stays operation_unknown. Positive prewrite refusal may conservatively keep an already keyed RPC receipt pending."
+      ],
+      "failureModes": [
+        "Old or unfocused recognized draft receives automated text or Enter.",
+        "Input during any awaited boundary is rebased into ownership.",
+        "Remote settlement arrival replaces the pre-await revision snapshot.",
+        "Takeover or target replacement receives delayed/retry Enter.",
+        "Occupied refusal loops or drops unread mail; uncertain pointer delivery is replayed."
+      ],
+      "promotionCriteria": [
+        "Collect CI soak evidence without unexplained flakes.",
+        "Exercise native Claude/Codex and daemon/SSH/remote-runtime on macOS/Linux/Windows, including mobile callers."
+      ],
+      "knownGaps": [
+        "Positive recognition is the bounded contract. Missing, unsupported, hidden, whitespace-only or otherwise unrecognized composers retain legacy admission; absence of a detected draft is not proof of emptiness.",
+        "Input recorded before admission whose echo has not reached the captured screen can remain unrecognized; this is not a general editing model or trusted human provenance.",
+        "No live native agent, Electron UI, SSH or physical Windows/Linux input was exercised. Delayed remote settlement is a deterministic controller contract.",
+        "No external-input authorization, sender attribution, browser focus confinement or structured native-chat draft policy is implemented; issue19546 remains separate.",
+        "Occupied mailbox delivery parks until another existing notification/idle edge or explicit check; no new polling resumes it immediately when the user clears a draft."
+      ],
+      "demotionRule": "Keep partial/experimental if positive occupied input leaks, a competing input receives Enter, attempted rows replay, or admitted empty/unknown compatibility regresses."
+    },
+    {
       "id": "agent-session.detached-account-restart-progress",
       "title": "Independent hidden account restarts progress within a shared spawn limit",
       "maturity": "experimental",

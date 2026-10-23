@@ -157,6 +157,7 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
       state: this.state,
       leaf,
       mailboxHandle,
+      reservedTypes: options.reservedTypes,
       messages: unread,
       newestSequence,
       enterDelayMs: pointerEnterDelayMs(),

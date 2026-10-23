@@ -170,7 +170,7 @@ describe('orchestration notification mailbox consistency', () => {
           .get(TERMINAL_HANDLE) as { count: number }
       ).count
 
-    await driveToLiveIdle(harness.runtime)
+    await driveToLiveIdle(harness.runtime, { flushPointerWrites: false })
     expect(directRemaining()).toBe(101)
     expect(notify).toHaveBeenCalledTimes(1)
 

@@ -1,3 +1,4 @@
+import type { OrchestrationPointerWriteOptions } from './mailbox-pointer-pty-write'
 import type { OrchestrationDb } from './db'
 import {
   MAILBOX_POINTER_ENTER_ATTEMPTED,
@@ -24,7 +25,11 @@ type PointerSubmitDependencies<TWaiter extends OrchestrationMessageWaiter> = {
   ) => OrchestrationMailboxPointerSubmitTarget | null
   getMessageWaiters: (mailboxHandle: string) => ReadonlySet<TWaiter> | undefined
   isLeafPtyProvenAbsent: (ptyId: string) => Promise<boolean>
-  writePty: (ptyId: string, data: string) => WriteSettlement | Promise<WriteSettlement>
+  writePty: (
+    ptyId: string,
+    data: string,
+    options?: OrchestrationPointerWriteOptions
+  ) => WriteSettlement | Promise<WriteSettlement>
   settle: (ptyId: string, flight: OrchestrationMailboxDeliveryFlight) => void
   redrive: (mailboxHandle: string, force?: boolean) => void
 }
@@ -110,12 +115,30 @@ export function submitOrchestrationMailboxPointer<TWaiter extends OrchestrationM
           releaseWithoutRedrive = true
         } else {
           preserveAmbiguousDelivery = true
+          input.flight.inputGuard?.assertCurrent()
           const db = deps.getDb()
           if (!db?.markMailboxPointerEnterAttempted(messageIds, reservationTarget)) {
             return
           }
           expectedPhase = MAILBOX_POINTER_ENTER_ATTEMPTED
-          const enterSettlement = await deps.writePty(input.ptyId, '\r')
+          const enterSettlement = await deps.writePty(input.ptyId, '\r', {
+            guard: input.flight.inputGuard,
+            isCurrent: () => {
+              const current = deps.resolveSubmitTarget(input.leaf, input.ptyId)
+              return (
+                deps.state.isCurrentFlight(input.ptyId, input.flight) &&
+                current?.terminalHandle === input.expectedTarget.terminalHandle &&
+                current.processIncarnation === input.expectedTarget.processIncarnation &&
+                current.leaf.writable &&
+                current.leaf.lastAgentStatusObservedLive &&
+                (current.leaf.lastAgentStatus === 'idle' ||
+                  current.leaf.lastAgentStatus === 'working') &&
+                deps.mailboxOwner.resolve(current.leaf, undefined, {
+                  terminalHandle: current.terminalHandle
+                }) === input.mailboxHandle
+              )
+            }
+          })
           submitted = enterSettlement.outcome === 'accepted'
           if (!deps.state.isCurrentFlight(input.ptyId, input.flight)) {
             finalizeReservation = false
@@ -123,7 +146,10 @@ export function submitOrchestrationMailboxPointer<TWaiter extends OrchestrationM
           }
           // An unverifiable Enter stays at ENTER_ATTEMPTED: neither settling it as delivered
           // nor rolling it back to a state that would send a second Enter is provable here.
-          if (enterSettlement.outcome === 'refused') {
+          if (
+            enterSettlement.outcome === 'refused' &&
+            enterSettlement.reason !== 'terminal_input_changed'
+          ) {
             releaseWithoutRedrive = true
           }
         }

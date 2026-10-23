@@ -1,9 +1,16 @@
+import type { TerminalAutomatedInputGuard } from '../terminal-automated-input-guard'
 import type { RuntimePtyController } from '../runtime-pty-controller-contract'
 import {
   writeRefused,
   writeUnverifiable,
   type WriteSettlement
 } from '../../../shared/pty-write-settlement'
+
+export type OrchestrationPointerWriteOptions = {
+  guard?: TerminalAutomatedInputGuard
+  onWritten?: (guard: TerminalAutomatedInputGuard) => void
+  isCurrent?: () => boolean
+}
 
 export type OrchestrationPointerWriteArgs = {
   ptyId: string

@@ -719,7 +719,7 @@ describe('push-on-idle orchestration delivery absence gate', () => {
       const probe = vi.fn(async () => null)
       const { runtime, handle, write, stub } = await makeIdleLeafWithoutPtyRecord({
         probePtyLiveness: probe,
-        // Provider knows the id: delivery takes the pure synchronous path.
+        // Provider knows the id: delivery skips the liveness probe.
         hasPty: (ptyId) => ptyId === STALE_PTY_ID
       })
       stub.insert('first')
@@ -728,6 +728,7 @@ describe('push-on-idle orchestration delivery absence gate', () => {
       stub.insert('second')
       runtime.deliverPendingMessagesForHandle(handle)
 
+      await vi.advanceTimersByTimeAsync(0)
       const pointerWrites = () =>
         write.mock.calls.filter(
           ([, data]) => typeof data === 'string' && data.includes('orchestration check')
@@ -764,6 +765,7 @@ describe('push-on-idle orchestration delivery absence gate', () => {
       stub.insert('for the old session')
 
       runtime.deliverPendingMessagesForHandle(handle)
+      await vi.advanceTimersByTimeAsync(0)
       expect(write).toHaveBeenCalledTimes(1)
 
       runtime.onPtyExit(STALE_PTY_ID, 0)
@@ -786,6 +788,7 @@ describe('push-on-idle orchestration delivery absence gate', () => {
       ).toHaveLength(1)
       runtime.onPtyData(STALE_PTY_ID, '\x1b]0;Codex working\x07', 200)
       runtime.onPtyData(STALE_PTY_ID, '\x1b]0;Codex done\x07', 201)
+      await vi.advanceTimersByTimeAsync(0)
       const payloadWrites = write.mock.calls.filter(
         ([, data]) => typeof data === 'string' && data.includes('orchestration check')
       )
@@ -810,7 +813,7 @@ describe('push-on-idle orchestration delivery absence gate', () => {
       runtime.deliverPendingMessagesForHandle(handle)
       stub.insert('second')
       runtime.deliverPendingMessagesForHandle(handle)
-      await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(0)
 
       runtime.onPtyExit(STALE_PTY_ID, 0)
 
@@ -839,6 +842,7 @@ describe('push-on-idle orchestration delivery absence gate', () => {
       stub.insert('orphaned snapshot')
 
       runtime.deliverPendingMessagesForHandle(handle)
+      await vi.advanceTimersByTimeAsync(0)
       expect(write).toHaveBeenCalledTimes(1)
 
       // Replace the leaf object the armed callback closed over, then exit.

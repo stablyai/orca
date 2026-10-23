@@ -513,6 +513,7 @@ describe('OrcaRuntimeService', () => {
       db.insertMessage({ from: 'term_sender', to: terminal.handle, subject: 'hello' })
 
       runtime.deliverPendingMessagesForHandle(terminal.handle)
+      await vi.advanceTimersByTimeAsync(0)
 
       expect(write).toHaveBeenCalledWith(
         'pty-1',
@@ -558,6 +559,7 @@ describe('OrcaRuntimeService', () => {
       })
 
       runtime.deliverPendingMessagesForHandle(terminal.handle)
+      await vi.advanceTimersByTimeAsync(0)
 
       expect(write).toHaveBeenCalledWith(
         'pty-1',
@@ -601,6 +603,7 @@ describe('OrcaRuntimeService', () => {
       db.insertMessage({ from: 'term_sender', to: terminal.handle, subject: 'hello cursor' })
 
       runtime.deliverPendingMessagesForHandle(terminal.handle)
+      await vi.advanceTimersByTimeAsync(0)
 
       expect(write).toHaveBeenCalledWith(
         'pty-1',

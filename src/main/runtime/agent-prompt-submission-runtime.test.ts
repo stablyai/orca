@@ -659,6 +659,11 @@ describe('input original queue, callback and private method contracts', () => {
 
   it('keeps the private retry lookup on the Root receiver before any delay', async () => {
     const target = inputDispatchRuntime()
+    const context = {
+      handle: HANDLE,
+      inputGuard: target['captureTerminalAutomatedInputGuard'](PTY),
+      baseline: target['getAgentPromptActivity'](HANDLE, PTY)
+    }
     const read = vi.fn(function (this: OrcaRuntimeService, ...args: unknown[]) {
       expect(this).toBe(target)
       expect(args).toEqual([PTY])
@@ -666,7 +671,7 @@ describe('input original queue, callback and private method contracts', () => {
     })
     Object.defineProperty(target, 'getPtyAgent', { value: read })
     await expect(
-      target['resubmitAgentPromptAfterRetryDelay'](PTY, 1, { inputKind: 'driving' })
+      target['resubmitAgentPromptAfterRetryDelay'](PTY, 1, { inputKind: 'driving' }, context)
     ).resolves.toBe(0)
     expect(read).toHaveBeenCalledOnce()
   })

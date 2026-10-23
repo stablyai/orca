@@ -250,7 +250,7 @@ describe('OrcaRuntimeService', () => {
       })
 
       runtime.notifyMessageArrived(republished.handle, 'status')
-      await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(0)
 
       expect(write).toHaveBeenCalledWith(
         'pty-1',
@@ -298,7 +298,7 @@ describe('OrcaRuntimeService', () => {
       })
 
       runtime.notifyMessageArrived(terminal.handle, 'status')
-      await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(0)
 
       expect(write).not.toHaveBeenCalled()
       await vi.advanceTimersByTimeAsync(600)
@@ -308,6 +308,7 @@ describe('OrcaRuntimeService', () => {
       // working frame, since exit keeps lastAgentStatus 'idle' for `ps` and the
       // replacement can come up straight at an idle prompt (no transition).
       runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 200)
+      await vi.advanceTimersByTimeAsync(0)
       expect(write).toHaveBeenCalledWith(
         'pty-1',
         expect.stringContaining('You have 1 orchestration message')
@@ -358,7 +359,7 @@ describe('OrcaRuntimeService', () => {
 
       runtime.notifyMessageArrived(terminal.handle, 'status')
 
-      await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(0)
       expect(write).toHaveBeenCalledWith(
         'pty-1',
         expect.stringContaining('You have 1 orchestration message')
@@ -439,9 +440,9 @@ describe('OrcaRuntimeService', () => {
       db.insertMessage({ from: 'sender', to: terminal.handle, subject: 'once only' })
 
       runtime.notifyMessageArrived(terminal.handle, 'status')
-      await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(0)
       runtime.notifyMessageArrived(terminal.handle, 'status')
-      await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(0)
 
       const pointerWrites = write.mock.calls.filter(
         ([, payload]) => typeof payload === 'string' && payload.includes('orchestration check')
@@ -488,13 +489,13 @@ describe('OrcaRuntimeService', () => {
       runtime.notifyMessageArrived(terminal.handle, 'status')
       // Why the flush: the deferred push must actually arm its flight before the
       // second message arrives, or this exercises a plain batch instead.
-      await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(0)
 
       // Why: mid-flight notify parks the leaf; flight settle re-runs delivery
       // so the second row is not lost and is not double-injected with the first.
       const second = db.insertMessage({ from: 'sender', to: terminal.handle, subject: 'second' })
       runtime.notifyMessageArrived(terminal.handle, 'status')
-      await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(0)
       expect(
         write.mock.calls.filter(
           ([, payload]) => typeof payload === 'string' && payload.includes('orchestration check')
@@ -545,11 +546,12 @@ describe('OrcaRuntimeService', () => {
     db.insertMessage({ from: 'sender', to: terminal.handle, subject: 'after wait' })
 
     runtime.deliverPendingMessagesForHandle(terminal.handle)
-
-    expect(write).toHaveBeenCalledWith(
-      'pty-1',
-      expect.stringContaining('You have 1 orchestration message')
-    )
+    await vi.waitFor(() => {
+      expect(write).toHaveBeenCalledWith(
+        'pty-1',
+        expect.stringContaining('You have 1 orchestration message')
+      )
+    })
     db.close()
   })
 

@@ -18,6 +18,8 @@ export type WriteRefusalReason =
   | 'provider_unavailable'
   | 'provider_refused_write'
   | 'provider_cannot_settle'
+  | 'terminal_composer_occupied'
+  | 'terminal_input_changed'
 
 /** Delivery could not be proven either way. There is no catch-all member by design. */
 export type WriteAmbiguityReason =

@@ -22,6 +22,7 @@ type StagePointerArgs<TWaiter extends OrchestrationMessageWaiter> = {
   state: OrchestrationMailboxPointerState
   leaf: OrchestrationMailboxLeaf
   mailboxHandle: string
+  reservedTypes?: ReadonlySet<string>
   messages: readonly OrchestrationMailboxPointerMessage[]
   newestSequence: number
   enterDelayMs: number
@@ -100,7 +101,26 @@ export function stageOrchestrationMailboxPointer<TWaiter extends OrchestrationMe
         args.messages.length,
         args.mailboxHandle,
         args.deps.getCliCommand(expectedTarget.terminalHandle)
-      )
+      ),
+      {
+        onWritten: (guard) => {
+          flight.inputGuard = guard
+        },
+        isCurrent: () => {
+          const target = args.deps.resolveSubmitTarget(args.leaf, ptyId)
+          return (
+            args.state.isCurrentFlight(ptyId, flight) &&
+            target?.terminalHandle === expectedTarget.terminalHandle &&
+            target.processIncarnation === expectedTarget.processIncarnation &&
+            target.leaf.writable &&
+            target.leaf.lastAgentStatusObservedLive &&
+            target.leaf.lastAgentStatus === 'idle' &&
+            args.deps.mailboxOwner.resolve(target.leaf, undefined, {
+              terminalHandle: target.terminalHandle
+            }) === args.mailboxHandle
+          )
+        }
+      }
     )
     if (isSettledWrite(writeResult)) {
       settlePointerWrite(writeResult)
@@ -127,7 +147,16 @@ function finishPointerWriteAndStageEnter<TWaiter extends OrchestrationMessageWai
     const db = args.deps.getDb()
     if (settlement.outcome === 'refused') {
       db?.markAsUndelivered(flight.stagedMessageIds)
-      if (args.state.clearWatermark(args.mailboxHandle, args.newestSequence, ptyId)) {
+      const blockedByInput =
+        settlement.reason === 'terminal_composer_occupied' ||
+        settlement.reason === 'terminal_input_changed'
+      if (blockedByInput) {
+        args.state.parkRedelivery(args.mailboxHandle, args.reservedTypes)
+      }
+      if (
+        args.state.clearWatermark(args.mailboxHandle, args.newestSequence, ptyId) &&
+        !blockedByInput
+      ) {
         // A delivery parked behind this watermark has to drain now that it is gone.
         args.redrive(args.mailboxHandle)
       }

@@ -1,7 +1,14 @@
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import { OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness } from '../../terminal/lifecycle/floating-session-liveness'
-import { writeOrchestrationPointerWithSettlement } from '../mailbox-pointer-pty-write'
-import type { WriteSettlement } from '../../../../shared/pty-write-settlement'
+import {
+  writeOrchestrationPointerWithSettlement,
+  type OrchestrationPointerWriteOptions
+} from '../mailbox-pointer-pty-write'
+import {
+  writeRefused,
+  writeUnverifiable,
+  type WriteSettlement
+} from '../../../../shared/pty-write-settlement'
 import type { RuntimeLeafRecord } from '../../runtime-terminal-state-records'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { getPtyExecutionHost } from '../../../../shared/terminal-execution-host'
@@ -24,15 +31,38 @@ import { mainPaneVerdict } from '../../terminal/surface/main-pane-verdict'
 export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness {
   protected abstract issueHandle(leaf: RuntimeLeafRecord): string
 
-  protected writeOrchestrationPointerPty(
+  protected async writeOrchestrationPointerPty(
     ptyId: string,
-    data: string
-  ): WriteSettlement | Promise<WriteSettlement> {
-    return writeOrchestrationPointerWithSettlement({
+    data: string,
+    options?: OrchestrationPointerWriteOptions
+  ): Promise<WriteSettlement> {
+    let guard
+    try {
+      guard = options?.guard ?? (await this.admitTerminalAutomatedInput(ptyId))
+      guard.assertCurrent()
+      if (options?.isCurrent?.() === false) {
+        return writeRefused('terminal_input_changed')
+      }
+    } catch (error) {
+      return writeRefused(
+        error instanceof Error && error.message === 'terminal_composer_occupied'
+          ? 'terminal_composer_occupied'
+          : 'terminal_input_changed'
+      )
+    }
+    const result = writeOrchestrationPointerWithSettlement({
       ptyId,
       data,
       controller: this.ptyController
     })
+    try {
+      // Capture our own synchronous record before a remote settlement can yield to new input.
+      guard.recordOwnWrite()
+      options?.onWritten?.(guard)
+    } catch {
+      return writeUnverifiable('partial_write', true)
+    }
+    return result
   }
 
   // A parked leaf has left the renderer graph but its PTY is still addressable, so the pointer

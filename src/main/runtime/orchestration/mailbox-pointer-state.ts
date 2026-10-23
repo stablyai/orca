@@ -1,3 +1,4 @@
+import type { TerminalAutomatedInputGuard } from '../terminal-automated-input-guard'
 import type { OrchestrationMailboxLeaf } from './mailbox-owner'
 
 export type OrchestrationMailboxDeliveryFlight = {
@@ -8,6 +9,7 @@ export type OrchestrationMailboxDeliveryFlight = {
   idleObservedWhileDeferred: boolean
   /** The incarnation that staged this flight, so retirement can name the rows it owns. */
   processIncarnation?: string
+  inputGuard?: TerminalAutomatedInputGuard
 }
 
 export type ParkedOrchestrationMailboxDelivery = {

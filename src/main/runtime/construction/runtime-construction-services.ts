@@ -1,3 +1,4 @@
+import type { OrchestrationPointerWriteOptions } from '../orchestration/mailbox-pointer-pty-write'
 import type * as Calls from './runtime-host-service-calls'
 import type { IPtyProvider } from '../../providers/pty-provider-contract'
 import type {
@@ -242,7 +243,8 @@ export abstract class RuntimeConstructionServices {
   ): void
   protected abstract writeOrchestrationPointerPty(
     ptyId: string,
-    data: string
+    data: string,
+    options?: OrchestrationPointerWriteOptions
   ): WriteSettlement | Promise<WriteSettlement>
   protected abstract resolveStructuredMailboxTarget(
     mailboxHandle: string

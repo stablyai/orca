@@ -1,3 +1,5 @@
+import type { AgentPromptActivity } from './agent-prompt-submission-verification'
+import type { TerminalAutomatedInputGuard } from './terminal-automated-input-guard'
 import type { ProgramStatusFacet } from '../../shared/program-status/facet'
 import type { AgentLaunchRuntime } from '../../shared/agent-launch-runtime'
 import type { AgentLaunchTabViewerRule } from '../../shared/agent-launch-tab-publication'
@@ -313,6 +315,12 @@ export type RuntimeAgentPromptWriteOptions = Omit<RuntimeTerminalWriteOptions, '
   /** Runs as soon as the write carrying Enter is accepted (OMP's paste frame included), before any
    *  later abort check can throw: the text is submitted whatever the call then answers. */
   onSubmitWritten?: () => void
+}
+
+export type RuntimeAgentPromptRetryContext = {
+  handle: string
+  inputGuard: TerminalAutomatedInputGuard
+  baseline: AgentPromptActivity
 }
 
 export type AgentPromptExpectedBinding = { ptyId: string; processIncarnation: string }
