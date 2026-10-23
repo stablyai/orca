@@ -110,7 +110,11 @@ export function useMobileNativeChatSessionOptions(args: {
     }
     // OMP reports exact selectors, including models absent from cached discovery.
     const matched =
-      agent === 'omp' ? reportedModel.trim() : matchNativeChatCatalogModelId(catalog, reportedModel)
+      agent === 'omp'
+        ? reportedModel.trim()
+        : matchNativeChatCatalogModelId(catalog, reportedModel, {
+            allowUnlisted: agent === 'codex'
+          })
     if (!matched) {
       return
     }

@@ -30,12 +30,13 @@ import nacl from 'tweetnacl'
 import type WebSocket from 'ws'
 import type { RawData } from 'ws'
 import type { RelayConfig } from './config.js'
-import type { AssignmentLeaseClass } from './assignment-lease.js'
-import type { AssignmentLeaseShadow } from './assignment-lease-shadow.js'
+import type { AssignmentLeaseClass } from './assignment/assignment-lease.js'
+import type { AssignmentLeaseShadow } from './assignment/assignment-lease-shadow.js'
 import type { RelayAssignmentStore } from './assignment-store.js'
 import type { CellAdmitMode, CellReserveBook } from './cell-reserve-book.js'
 import type { DemoteRequest, ReserveOutcome, ReserveRequest } from './cell-reserve-contract.js'
-import { CellSeatLog, type CellSeatChange, type CellSeatFeedPage } from './cell-seat-log.js'
+import { SeatDriftConfirmation, unbackedSeatReason, type UnbackedSeatReason } from './cell-seat-drift.js'
+import { CellSeatLog, type CellSeat, type CellSeatChange, type CellSeatFeedPage } from './cell-seat-log.js'
 import { isRelayDatabaseTransientError } from './database.js'
 import { printableCloseReason } from './control-close-reason-text.js'
 import { ControlRenewalBatch } from './control-renewal-batch.js'
@@ -296,6 +297,9 @@ const NO_REJOIN_CLOSE_CODES: ReadonlySet<number> = new Set([
 ])
 // A demoted duplicate keeps its splices this long, then closes so the desktop re-assigns.
 export const DEMOTION_CLOSE_MS = 60_000
+// Hosts whose highest generation is remembered; insertion order is age order. A host evicted
+// here is long gone, so its successor restarting low meets no late leave.
+const GENERATION_FLOOR_MAX_HOSTS = 100_000
 // A flip back registers memory-admitted controls with at most this share of the pool in
 // flight (US 10 -> 3, Asia 16 -> 5), so DB-path hellos and renewals keep the rest.
 export const REREGISTER_POOL_SHARE = 1 / 3
@@ -334,6 +338,9 @@ export class HostSessionRegistry {
   // Seat key -> the demoted control socket. Its own set, not drainSentHosts: it ends with
   // that socket (close, rebind or a new join), so a later booking here is a fresh seat.
   private readonly demotedSeats = new Map<string, WebSocket>()
+  private readonly seatDrift = new SeatDriftConfirmation()
+  // The highest generation each host has had on this cell, kept after its session leaves the map.
+  private readonly generationFloors = new Map<string, number>()
   private reregistration: {
     queue: ReregistrationEntry[]
     // Sessions already queued, given up on, or done in this pass: the rescan skips them.
@@ -776,6 +783,13 @@ export class HostSessionRegistry {
       session.assignmentEpoch !== request.epoch ||
       seat?.joinedAt !== request.joinedAt
     ) {
+      // The director named exactly the seat this feed lists: if no live session backs it, the
+      // feed is what is wrong, and every director mirrors it, so correct the feed now.
+      const unbacked =
+        seat?.epoch === request.epoch && seat.joinedAt === request.joinedAt
+          ? unbackedSeatReason(seat, session)
+          : null
+      if (seat && unbacked) this.repairSeatDrift(seat, session, unbacked, 'demote')
       return 'not-seated'
     }
     // A drain already told this host to go: its own grace stands, never cut to the demotion's.
@@ -1682,7 +1696,11 @@ export class HostSessionRegistry {
       (existing.state === 'orphaned' || existing.state === 'active') &&
       sameHostIdentity(existing.identity, identity)
     )
-    const generation = rebind ? existing!.generation : (existing?.generation ?? 0) + 1
+    // Above every generation this host has had here, not only the one in the map: a session
+    // dropped from the map while its socket is still closing (drain, regional deadline, idle
+    // rehome) leaves later, and a successor reusing its generation had its seat removed by that leave.
+    const floor = this.generationFloors.get(key) ?? 0
+    const generation = rebind ? existing!.generation : Math.max(existing?.generation ?? 0, floor) + 1
     const ephemeral = nacl.box.keyPair()
     const challengeNonce = randomBytes(nacl.box.nonceLength)
     const challengeSecret = randomBytes(32)
@@ -1912,6 +1930,24 @@ export class HostSessionRegistry {
       }
       return
     }
+    // The awaits above can outlive what this hello was proven against: an orphan grace expiring
+    // or a drain removes `existing` from the map, and another activation may take this generation.
+    // Rebinding a removed session revived it outside the map: connected, still in the feed, and
+    // unreachable by phones or demotion for as long as the host stayed up. Redial instead.
+    const key = this.key(identity.sub, identity.relayHostId)
+    if (
+      (this.sessions.get(key) ?? null) !== existing ||
+      (!rebind && generation <= (this.generationFloors.get(key) ?? 0))
+    ) {
+      if (controlActivityId) {
+        this.releaseActivityBestEffort(
+          { userId: identity.sub, relayHostId: identity.relayHostId },
+          controlActivityId
+        )
+      }
+      this.refuseProvenControl(socket, refused, RELAY_CLOSE_CODE.PEER_DROPPED, 'control activation superseded')
+      return
+    }
     if (existing) this.observer.recordReconnect()
     if (rebind && existing) {
       const previousSocket = existing.socket
@@ -2005,6 +2041,7 @@ export class HostSessionRegistry {
     // A host that proved itself again is not signed out, whatever it said last.
     this.hostCloseReasons.forget(sessionKey)
     this.sessions.set(sessionKey, session)
+    this.recordGenerationFloor(sessionKey, generation)
     this.demotedSeats.delete(sessionKey)
     this.wireActiveControl(session)
     this.sendHelloAck(session)
@@ -2028,7 +2065,85 @@ export class HostSessionRegistry {
   }
 
   seatFeed(sinceSeq: number | null): CellSeatFeedPage {
+    this.sweepSeatDrift()
     return { ...this.seatLog.read(sinceSeq), seats: this.seatLog.seatCount() }
+  }
+
+  // Every director mirrors this feed, so it must list exactly the live sessions. Swept on a
+  // director's poll, since only directors read it; drift seen twice in a row is repaired.
+  private sweepSeatDrift(): void {
+    if (!this.seatDrift.due(this.now())) return
+    const found = new Map<string, () => void>()
+    for (const seat of this.seatLog.seatList()) {
+      const session = this.get(seat)
+      const reason = unbackedSeatReason(seat, session)
+      if (!reason) continue
+      const id = JSON.stringify(['seat', seat.userId, seat.relayHostId, seat.epoch, seat.generation, seat.joinedAt])
+      found.set(id, () => this.repairSeatDrift(seat, session, reason, 'sweep'))
+    }
+    for (const session of this.sessions.values()) {
+      if (!liveSeatSession(session) || this.seatLog.seatOf(session.identity.sub, session.relayHostId)) continue
+      const id = JSON.stringify(['session', session.identity.sub, session.relayHostId, session.generation])
+      found.set(id, () => {
+        this.appendSeatChange(session, 'join')
+        this.logSeatDrift(session.relayHostId, { kind: 'unlisted-session', via: 'sweep', sessionEpoch: session.assignmentEpoch })
+      })
+    }
+    for (const id of this.seatDrift.confirm([...found.keys()])) found.get(id)!()
+  }
+
+  // Leaves the stale seat as moved (no rejoin from memory at its epoch), then lists the live
+  // session, if any, as it really is. The leave carries the stale seat's own generation, so the
+  // generation rule cannot drop it.
+  private repairSeatDrift(
+    seat: CellSeat,
+    session: HostSession | null,
+    reason: UnbackedSeatReason,
+    via: 'sweep' | 'demote'
+  ): void {
+    this.seatLog.append({
+      kind: 'leave',
+      userId: seat.userId,
+      relayHostId: seat.relayHostId,
+      epoch: seat.epoch,
+      generation: seat.generation,
+      closeCode: RELAY_CLOSE_CODE.WRONG_CELL,
+      at: this.now()
+    })
+    const relisted = session !== null && liveSeatSession(session)
+    if (relisted) this.appendSeatChange(session, 'join')
+    this.logSeatDrift(seat.relayHostId, {
+      kind: 'unbacked-seat',
+      via,
+      reason,
+      seatEpoch: seat.epoch,
+      seatGeneration: seat.generation,
+      seatAgeMs: this.now() - seat.joinedAt,
+      ...(session
+        ? { sessionEpoch: session.assignmentEpoch, sessionGeneration: session.generation, sessionState: session.state }
+        : {}),
+      relisted
+    })
+  }
+
+  private recordGenerationFloor(key: string, generation: number): void {
+    this.generationFloors.delete(key)
+    this.generationFloors.set(key, generation)
+    if (this.generationFloors.size > GENERATION_FLOOR_MAX_HOSTS) {
+      const oldest = this.generationFloors.keys().next().value
+      if (oldest !== undefined) this.generationFloors.delete(oldest)
+    }
+  }
+
+  private logSeatDrift(relayHostId: string, detail: Record<string, unknown>): void {
+    console.warn(
+      JSON.stringify({
+        event: 'orca_relay_cell_seat_log_drift',
+        ...this.logIdentity(),
+        relayHostIdDigest: relayHostLogDigest(relayHostId),
+        ...detail
+      })
+    )
   }
 
   private appendSeatChange(
@@ -2718,4 +2833,9 @@ function controlErrorCode(type: string, error: unknown): string {
 
 function databaseCause(error: unknown): PhoneDatabaseCause {
   return isRelayDatabaseTransientError(error) ? 'database_transient' : 'error'
+}
+
+// A session the feed must list: it holds its socket and is seated, active or draining.
+function liveSeatSession(session: HostSession): boolean {
+  return session.socket !== null && (session.state === 'active' || session.state === 'drain-only')
 }

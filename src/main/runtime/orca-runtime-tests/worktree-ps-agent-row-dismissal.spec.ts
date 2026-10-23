@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { registerLivePty } from '../bind-first-pane.test-fixture'
 import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
 import { TEST_WORKTREE_ID, store } from '../orca-runtime-test-fixtures.spec'
 import { makeAgentStatusStoreWiring } from '../agent-status-store-wiring.test-fixture'
@@ -248,6 +250,11 @@ describe('worktree ps follows a dismissal out of the agent-status store', () => 
   it('keeps runtime-owned legacy OSC rows in worktree.ps and mobile projections', async () => {
     const statusWiring = makeAgentStatusStoreWiring()
     const runtime = new OrcaRuntimeService(store, undefined, statusWiring.deps)
+    // Switch-on a saved legacy pane id is reminted to a UUID at load (store.ts:115, then
+    // terminal-layout-normalization.ts:149-160), so main's layout never holds `pane:7` (L80 E5).
+    const leafId = ORCA_LAYOUT_OWNER_IS_MAIN ? '77777777-7777-4777-8777-777777777777' : 'pane:7'
+    const paneKey = ORCA_LAYOUT_OWNER_IS_MAIN ? `legacy-tab:${leafId}` : 'legacy-tab:7'
+    registerLivePty(runtime, 'legacy-pty', TEST_WORKTREE_ID, null, { tabId: 'legacy-tab', leafId })
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, {
       tabs: [
@@ -255,7 +262,7 @@ describe('worktree ps follows a dismissal out of the agent-status store', () => 
           tabId: 'legacy-tab',
           worktreeId: TEST_WORKTREE_ID,
           title: 'Codex',
-          activeLeafId: 'pane:7',
+          activeLeafId: leafId,
           layout: null
         }
       ],
@@ -263,7 +270,7 @@ describe('worktree ps follows a dismissal out of the agent-status store', () => 
         {
           tabId: 'legacy-tab',
           worktreeId: TEST_WORKTREE_ID,
-          leafId: 'pane:7',
+          leafId,
           paneRuntimeId: 7,
           ptyId: 'legacy-pty'
         }
@@ -274,14 +281,14 @@ describe('worktree ps follows a dismissal out of the agent-status store', () => 
           publicationEpoch: 'legacy-epoch',
           snapshotVersion: 1,
           activeGroupId: null,
-          activeTabId: 'legacy-tab::pane:7',
+          activeTabId: `legacy-tab::${leafId}`,
           activeTabType: 'terminal',
           tabs: [
             {
               type: 'terminal',
-              id: 'legacy-tab::pane:7',
+              id: `legacy-tab::${leafId}`,
               parentTabId: 'legacy-tab',
-              leafId: 'pane:7',
+              leafId,
               ptyId: 'legacy-pty',
               title: 'Codex',
               isActive: true
@@ -301,10 +308,10 @@ describe('worktree ps follows a dismissal out of the agent-status store', () => 
 
     expect(
       listed.worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)?.agents
-    ).toEqual([expect.objectContaining({ paneKey: 'legacy-tab:7', prompt: 'legacy task' })])
+    ).toEqual([expect.objectContaining({ paneKey, prompt: 'legacy task' })])
     expect(mobile.tabs[0]).toMatchObject({
       type: 'terminal',
-      agentStatus: { paneKey: 'legacy-tab:7', prompt: 'legacy task' }
+      agentStatus: { paneKey, prompt: 'legacy task' }
     })
     runtime.onPtyExit('legacy-pty', 0)
     expect(statusWiring.statusStore.getStatusSnapshot()).toEqual([])

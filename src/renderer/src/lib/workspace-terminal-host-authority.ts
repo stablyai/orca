@@ -1,5 +1,5 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
-import { parseExecutionHostId } from '../../../shared/execution-host'
+import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { HostLiveTerminalProbeVerdict } from '@/runtime/host-live-terminal-probe'
 import type { SshConnectionState } from '../../../shared/ssh-types'
@@ -66,13 +66,16 @@ function resolveDirectSshAuthority(
  */
 export function resolveWorkspaceTerminalHostAuthority(
   state: WorkspaceTerminalHostAuthorityState,
-  worktreeId: string | null | undefined
+  worktreeId: string | null | undefined,
+  /** The host the caller knows owns the workspace (a create's target), over the active selection. */
+  executionHostId?: ExecutionHostId
 ): WorkspaceTerminalHostAuthority {
   if (!worktreeId || worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
     return 'none'
   }
-  const selectedHost =
-    state.activeWorktreeId === worktreeId
+  const selectedHost = executionHostId
+    ? parseExecutionHostId(executionHostId)
+    : state.activeWorktreeId === worktreeId
       ? parseExecutionHostId(state.activeWorkspaceExecutionHostId)
       : null
   const scope = parseWorkspaceKey(worktreeId)

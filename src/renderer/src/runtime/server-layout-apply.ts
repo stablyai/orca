@@ -3,6 +3,8 @@
 // path, as does every intent for a server that does not advertise `layout.intents.v1`. Closes,
 // starts and terminal names keep their RPCs (session.tabs.close, terminal.close, terminal.split,
 // session.tabs.createTerminal, terminal.rename), which that server's main applies to its own layout.
+// Editor opens go too (H5d): a new tab keeps the id the window proposed, which the server's frame
+// draws.
 
 import { isWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 
@@ -13,14 +15,15 @@ import type {
 import type { AppState } from '@/store/types'
 import type { LayoutApplyHandlers, WindowLayoutCommand } from './layout-apply-send'
 import { serverLayoutApplyRoute, type ServerLayoutApplyRoute } from './server-layout-apply-routes'
+import { serverEditorFileId } from './server-layout-frame-ids'
 
 /**
  * The intents a server's main applies from a paired desktop exactly as from its own window: tab and
  * group placement, pane sizes and moves (into a new tab too), a tab's props and non-terminal names,
- * a tab's chat pane, and the workspace's default-tabs mark. Never a close (closeTabs, closePane):
- * main takes a window's close as already stopped and stops nothing, while this desktop cannot stop
- * a server's terminals; nor a start (createTerminalTab, splitPane), sleep or wake, which need main's
- * terminal side. Their RPCs reach that main instead.
+ * a tab's chat pane, the workspace's default-tabs mark, and editor opens. Never a close (closeTabs,
+ * closePane): main takes a window's close as already stopped and stops nothing, while this desktop
+ * cannot stop a server's terminals; nor a start (createTerminalTab, splitPane), sleep or wake, which
+ * need main's terminal side. Their RPCs reach that main instead.
  */
 export const SERVER_ROUTED_LAYOUT_COMMANDS = [
   'moveTab',
@@ -33,7 +36,8 @@ export const SERVER_ROUTED_LAYOUT_COMMANDS = [
   'setChatPane',
   'renameTab',
   'movePaneToNewTab',
-  'setDefaultTabsApplied'
+  'setDefaultTabsApplied',
+  'openEditorTab'
 ] as const satisfies readonly WindowLayoutCommand['type'][]
 
 type ServerRoutedCommand = Extract<
@@ -85,6 +89,10 @@ export function serverLayoutApplyFor(
     // Group ids are the server's own: frames carry them unchanged; the mark names no tab.
     return { route, command }
   }
+  if (command.type === 'openEditorTab') {
+    // A new tab has no server id yet: editor tab ids are kept, so the proposed one is the server's.
+    return { route, command: serverEditorOpen(worktreeId, command) }
+  }
   const tabId = route.serverTabId(command.tabId)
   if (!tabId) {
     return null
@@ -103,6 +111,19 @@ export function serverLayoutApplyFor(
         command: { ...command, tabId, windowDetach: { ...command.windowDetach, ptyId: null } }
       }
     : { route, command: { ...command, tabId } }
+}
+
+type EditorOpen = Extract<WindowLayoutCommand, { type: 'openEditorTab' }>
+
+/** An editor open under the server's ids: its own file id, and a record owned by no environment. */
+export function serverEditorOpen(worktreeId: string, command: EditorOpen): EditorOpen {
+  const { file, ...rest } = command
+  const fileId = serverEditorFileId(command.fileId, worktreeId, file ? [file] : [])
+  if (!file) {
+    return { ...rest, fileId }
+  }
+  const { runtimeEnvironmentId: _desktopOwner, ...serverFile } = file
+  return { ...rest, fileId, file: serverFile }
 }
 
 type MoveTab = Extract<WindowLayoutCommand, { type: 'moveTab' }>

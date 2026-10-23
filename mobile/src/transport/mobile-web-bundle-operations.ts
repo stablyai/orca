@@ -39,7 +39,7 @@ export const mobileWebBundleChunkRead = defineRpcOperation({
   read: rpcResultVariant('mobile-web-bundle-chunk', MobileWebBundleChunkReplySchema)
 })
 
-/** One 384 KiB window of an asset, gzipped when that shrinks it. Only sent to a host whose manifest
+/** One host-sized window of an asset, gzipped when that shrinks it. Only sent to a host whose manifest
  *  reply named `rangeBytes`. */
 export const mobileWebBundleRangeRead = defineRpcOperation({
   name: 'mobileWeb.bundle-range',

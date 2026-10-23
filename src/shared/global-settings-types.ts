@@ -525,8 +525,7 @@ export type GlobalSettings = GlobalSettingsBase & {
   sourceControlAi?: SourceControlAiSettings
   /** GitLab project preferences (pinned + recent paths). Optional for pre-GitLab profiles; persistence merge fills the default. */
   gitlabProjects?: GitLabProjectSettings
-  /** Anonymous product-telemetry state; optional until the one-shot Store.load() migration populates it.
-   *  Holds consent, identity, and frozen experiments, not volatile counters — those would amplify the debounced settings write. */
+  /** Anonymous telemetry consent, identity, frozen experiments, and daily usage limits; optional before migration. */
   telemetry?: TelemetrySettings
   /** One-shot cohort marker for the tab-switch keybinding swap. 'pending' =
    *  pre-existing install (seed pins old chords, then flips to 'done'); 'done' = fresh install. */

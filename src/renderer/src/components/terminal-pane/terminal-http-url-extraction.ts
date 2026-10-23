@@ -1,4 +1,5 @@
 import { TERMINAL_HTTP_URL_MAX_LENGTH } from './terminal-http-link-limits'
+import { isProseUrlTerminator, PROSE_HTTP_URL_SOURCE } from '../../../../shared/prose-url-boundary'
 
 type ParsedTerminalHttpLink = {
   url: string
@@ -90,7 +91,7 @@ function trimHttpUrlTrailingPunctuation(
 
 function isHttpUrlBodyTerminator(code: number): boolean {
   return (
-    isNonAsciiUrlTerminator(code) ||
+    (code > 0x7f && isProseUrlTerminator(String.fromCharCode(code))) ||
     isAsciiWhitespace(code) ||
     code === 0x22 ||
     code === 0x27 ||
@@ -135,13 +136,7 @@ function isHttpUrlTrailingPunctuation(code: number): boolean {
   )
 }
 
-// Why not all non-ascii: a url path may legitimately carry unencoded CJK (see the wrapped-url
-// tests), so only punctuation and spaces end it - full-width brackets, an ideographic space, `\u30fb`.
-const NON_ASCII_URL_TERMINATOR = /[\p{P}\p{S}\p{Z}]/u
-
-function isNonAsciiUrlTerminator(code: number): boolean {
-  return code > 0x7e && NON_ASCII_URL_TERMINATOR.test(String.fromCharCode(code))
-}
+export const TERMINAL_HTTP_URL_REGEX = new RegExp(PROSE_HTTP_URL_SOURCE, 'iu')
 
 function isAsciiWhitespace(code: number): boolean {
   return code === 9 || code === 10 || code === 11 || code === 12 || code === 13 || code === 32

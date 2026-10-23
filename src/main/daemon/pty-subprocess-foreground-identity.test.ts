@@ -101,6 +101,29 @@ describe('createPtySubprocess', () => {
     expect(handle.getForegroundProcess()).toBe('codex')
   })
 
+  it('reads only fresh cached names for inventory without inspecting the process', async () => {
+    const proc = mockPtyProcess()
+    proc.process = 'codex'
+    spawnMock.mockReturnValue(proc)
+    const handle = await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+    expect(handle.getForegroundProcess({ cachedOnly: true })).toBeNull()
+    expect(resolveAgentForegroundProcessMock).not.toHaveBeenCalled()
+    expect(handle.getForegroundProcess()).toBe('codex')
+    const readProcess = vi.fn(() => {
+      throw new Error('inventory must not inspect')
+    })
+    Object.defineProperty(proc, 'process', { get: readProcess })
+    expect(handle.getForegroundProcess({ cachedOnly: true })).toBe('codex')
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 10_000)
+    try {
+      expect(handle.getForegroundProcess({ cachedOnly: true })).toBeNull()
+      expect(readProcess).not.toHaveBeenCalled()
+      expect(resolveAgentForegroundProcessMock).not.toHaveBeenCalled()
+    } finally {
+      clock.mockRestore()
+    }
+  })
+
   it('serves daemon wrapper agent foreground from an async cache without blocking', async () => {
     const proc = mockPtyProcess()
     proc.process = 'node'

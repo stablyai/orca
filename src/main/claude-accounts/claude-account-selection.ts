@@ -10,6 +10,7 @@ import { savedWslClaudeAccountHome } from './claude-profile-wsl-paths'
 import type { ClaudeRuntimeAuthService } from './runtime-auth-service'
 import {
   getClaudeSelectionTargetForAccount,
+  getClaudeWslSelectionKey,
   getSelectedClaudeAccountIdForTarget,
   normalizeClaudeAccountSelectionTarget,
   normalizeClaudeRuntimeSelection,
@@ -179,7 +180,9 @@ export class ClaudeAccountSelection {
       const owned = normalizeClaudeAccountSelectionTarget(accountTarget)
       if (
         requested.runtime !== owned.runtime ||
-        (requested.wslDistro !== null && requested.wslDistro !== owned.wslDistro)
+        (requested.wslDistro !== null &&
+          getClaudeWslSelectionKey(requested.wslDistro) !==
+            getClaudeWslSelectionKey(owned.wslDistro))
       ) {
         throw new Error('That Claude account belongs to a different runtime.')
       }

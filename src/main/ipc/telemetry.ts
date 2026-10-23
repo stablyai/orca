@@ -9,9 +9,14 @@
 // too), and `via` derived from main-owned state — never passed over the wire, so a
 // compromised renderer can't misreport it.
 
-import { ipcMain } from 'electron'
+import { BrowserWindow, ipcMain } from 'electron'
 import { consumeConsentMutationToken } from '../telemetry/burst-cap'
-import { persistBannerAcknowledgeWithoutEmitting, setOptIn, track } from '../telemetry/client'
+import {
+  hasTrackedAgentDashboardActiveToday,
+  persistBannerAcknowledgeWithoutEmitting,
+  setOptIn,
+  track
+} from '../telemetry/client'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 import { getOnboardingCohortAtEmit } from '../telemetry/onboarding-cohort-classifier'
 import { resolveConsent, type ConsentState } from '../telemetry/consent'
@@ -23,6 +28,7 @@ import type { EventName, EventProps, OptInVia } from '../../shared/telemetry-eve
 let storeRef: Store | null = null
 
 const MAIN_OWNED_TELEMETRY_EVENTS = new Set<EventName>([
+  'agent_dashboard_enabled',
   'agent_token_usage',
   'app_starred_orca',
   'daemon_adopted',
@@ -63,19 +69,25 @@ function deriveOptInVia(store: Store, incomingOptedIn: boolean): OptInVia {
 export function registerTelemetryHandlers(store: Store): void {
   storeRef = store
 
-  ipcMain.handle('telemetry:track', (_event, name: unknown, props: unknown): void => {
+  ipcMain.handle('telemetry:track', (event, name: unknown, props: unknown): boolean => {
     // Drop non-string names at the boundary so a flood of bogus payloads never reaches the Zod validator.
     if (typeof name !== 'string') {
-      return
+      return false
     }
     // `props` is optional (undefined/null → {} below); reject any other non-object at the boundary.
     if (props !== null && props !== undefined && typeof props !== 'object') {
-      return
+      return false
     }
     const eventName = name as EventName
     // Why: these events are main-owned; renderer IPC emitting them would let compromised content spoof product outcomes.
     if (MAIN_OWNED_TELEMETRY_EVENTS.has(eventName)) {
-      return
+      return false
+    }
+    if (eventName === 'agent_dashboard_active') {
+      const window = BrowserWindow.fromWebContents(event.sender)
+      if (!window || window.isDestroyed() || !window.isVisible() || window.isMinimized()) {
+        return false
+      }
     }
     // Inject cohort props only for schemas that declare them: schemas are `.strict()`, so an extra prop on any other event fails Zod and drops it.
     const baseProps = (props ?? {}) as Record<string, unknown>
@@ -86,7 +98,11 @@ export function registerTelemetryHandlers(store: Store): void {
       ? { ...withRepoCohort, ...getOnboardingCohortAtEmit() }
       : withRepoCohort
     // Casts are pass-through only; `track()`'s validator is the single runtime enforcement point, not these casts.
-    track(eventName, finalProps as EventProps<EventName>)
+    return (
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: track validates this IPC payload against its event schema before capture.
+      track(eventName, finalProps as EventProps<EventName>) ||
+      (eventName === 'agent_dashboard_active' && hasTrackedAgentDashboardActiveToday(finalProps))
+    )
   })
 
   ipcMain.handle('telemetry:setOptIn', (_event, optedIn: unknown): Promise<void> | void => {

@@ -1,5 +1,6 @@
 import { settledWriteStub } from '../../providers/settled-pty-write-stub'
 import { describe, expect, it, vi } from 'vitest'
+import { registerLivePty } from '../bind-first-pane.test-fixture'
 import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
 import {
   InMemoryOrchestrationMessages,
@@ -138,6 +139,7 @@ describe('OrcaRuntimeService', () => {
       // parsePaneKey(pty.paneKey).leafId to the republished leafId, and a non-UUID
       // id falls back to `tabId:paneRuntimeId`, so it is always fenced after exit.
       const leafId = '11111111-1111-1111-8111-111111111111'
+      registerLivePty(runtime, 'pty-1', TEST_WORKTREE_ID, null, { tabId: 'tab-1', leafId })
       const syncUuidLeaf = (): void => {
         runtime.attachWindow(1)
         runtime.syncWindowGraph(1, {
@@ -172,6 +174,8 @@ describe('OrcaRuntimeService', () => {
 
       runtime.onPtyExit('pty-1', 0)
       runtime.onPtySpawned('pty-1', undefined, { awaitsRegistration: false })
+      // Main's exit cleanup dropped the pane; the respawn's commit binds it again.
+      registerLivePty(runtime, 'pty-1', TEST_WORKTREE_ID, null, { tabId: 'tab-1', leafId })
       // Drop the leaf, then republish it: the rebuilt record's tailSource is the
       // PTY record rather than the previous leaf, which is what pins the clear
       // onPtyExit applies at the pty level.

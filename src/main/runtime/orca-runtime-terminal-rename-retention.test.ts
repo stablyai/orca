@@ -12,6 +12,8 @@ import {
   makeWorkspaceSessionWithHeadlessTerminal
 } from './orca-runtime-test-fixtures.spec'
 import type { RuntimeNotifier } from './runtime-notifier-contract'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
+import { bindPaneFirst, committingSpawn } from './bind-first-pane.test-fixture'
 
 describe('terminal rename before renderer graph hydration', () => {
   it.each(['Media Engine Orch', null])(
@@ -25,7 +27,7 @@ describe('terminal rename before renderer graph hydration', () => {
       const runtime = new OrcaRuntimeService(checkedStore)
       const renameTerminal = vi.fn()
       runtime.setPtyController({
-        spawn: vi.fn(async () => ({ id: 'omp-initial-pty' })),
+        spawn: vi.fn(committingSpawn(runtime, async () => ({ id: 'omp-initial-pty' }))),
         write: () => true,
         kill: () => true,
         getForegroundProcess: async () => null
@@ -39,7 +41,6 @@ describe('terminal rename before renderer graph hydration', () => {
         renameTerminal,
         focusTerminal: vi.fn(),
         closeTerminal: vi.fn(),
-        sleepWorktree: vi.fn(),
         terminalFitOverrideChanged: vi.fn(),
         terminalDriverChanged: vi.fn()
       })
@@ -52,10 +53,14 @@ describe('terminal rename before renderer graph hydration', () => {
 
       expect(getSession().tabsByWorktree[TEST_WORKTREE_ID][0].customTitle).toBe(title)
       expect(renameTerminal).toHaveBeenCalledWith('host-tab', title)
-      runtime.onPtyExit('omp-initial-pty', 0)
+      // Switch-on, main closes a tab whose last terminal exits, so there the PTY is replaced by a
+      // restart: a new runtime over the same saved session.
+      if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
+        runtime.onPtyExit('omp-initial-pty', 0)
+      }
       const restored = new OrcaRuntimeService(checkedStore)
       restored.setPtyController({
-        spawn: vi.fn(async () => ({ id: 'omp-replacement-pty' })),
+        spawn: vi.fn(committingSpawn(restored, async () => ({ id: 'omp-replacement-pty' }))),
         write: () => true,
         kill: () => true,
         getForegroundProcess: async () => null
@@ -75,7 +80,7 @@ describe('terminal rename before renderer graph hydration', () => {
     const notifier = createMobileCreateTestNotifier(vi.fn())
     runtime.setNotifier(notifier)
     runtime.setPtyController({
-      spawn: vi.fn(async () => ({ id: 'surviving-pty' })),
+      spawn: vi.fn(committingSpawn(runtime, async () => ({ id: 'surviving-pty' }))),
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null
@@ -203,13 +208,20 @@ describe('terminal view rename characterization', () => {
       renameTerminal,
       focusTerminal() {},
       closeTerminal() {},
-      sleepWorktree() {},
       terminalFitOverrideChanged() {},
       terminalDriverChanged() {}
     }
   }
   it('keeps rename persistence before the current notifier with its own receiver', async () => {
-    const runtime = new OrcaRuntimeService()
+    // Switch-on, main's layout says which tab holds the terminal; that layout lives in a store.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the rename path reads only the session bindPaneFirst adds to this store.
+    const runtime = new OrcaRuntimeService(ORCA_LAYOUT_OWNER_IS_MAIN ? ({} as never) : undefined)
+    bindPaneFirst(runtime, {
+      worktreeId: 'folder-workspace',
+      tabId: 'host-tab',
+      leafId: '00000000-0000-4000-8000-000000000002',
+      ptyId: 'rename-pty'
+    })
     const pty = runtime['recordPtyWorktree']('rename-pty', 'folder-workspace', {
       tabId: 'host-tab'
     })
@@ -246,7 +258,9 @@ describe('terminal view rename characterization', () => {
 })
 
 describe('terminal query erased boundary regressions', () => {
-  it('keeps the cached-null pane failure when a later binding read is valid', () => {
+  // paneOfPty reads the record's pane once, so a value that changes between reads cannot split one
+  // summary (L80); a plain record never does that.
+  it('summarizes from one read of the pane, though a later read would differ', () => {
     class SummaryRuntime extends OrcaRuntimeService {
       summarize() {
         const pty = this.recordPtyWorktree('changing-binding', 'missing', { connected: false })
@@ -258,8 +272,11 @@ describe('terminal query erased boundary regressions', () => {
         })
         const issueHandle = vi.fn(() => 'handle')
         Object.defineProperty(this, 'issuePtyHandle', { value: issueHandle })
-        expect(() => this.buildPtyTerminalSummary(pty, new Map())).toThrow(TypeError)
-        expect(reads).toBeGreaterThanOrEqual(2)
+        expect(this.buildPtyTerminalSummary(pty, new Map())).toMatchObject({
+          orphaned: true,
+          tabId: 'pty:changing-binding'
+        })
+        expect(reads).toBe(ORCA_LAYOUT_OWNER_IS_MAIN ? 0 : 1)
         expect(issueHandle).toHaveBeenCalledExactlyOnceWith(pty)
       }
     }

@@ -11,7 +11,6 @@ import type {
   AgentSessionSlashCommand
 } from '../../shared/agent-session-wire'
 import type { AcpStructuredConnection } from './acp-structured-connection'
-import type { AcpLaunchSpec } from './acp-launch-specs'
 import type { AcpDialect } from './acp-dialects/acp-dialect'
 import {
   unpickedSessionConfiguredChoice,
@@ -66,6 +65,8 @@ export class AcpStructuredOptions {
   // A loaded session keeps the model it ran; only a new one resolves the agent's own config.
   private resolvesConfig = false
   readonly picked = new Set<string>()
+  /** Each key's value from Orca's last successful write; never the agent's report. */
+  readonly applied = new Map<string, string>()
   private initialChoice: Readonly<Record<string, string>> = {}
   currentProof = new Set<string>()
   writeRevision = 0
@@ -228,13 +229,11 @@ export class AcpStructuredOptions {
   }
 }
 
-/** Images go only where the agent's row offers them and its start advertised them. */
+/** Images go only to an agent whose start advertised them. */
 export async function acpSessionAcceptsImages(session: {
-  spec: Pick<AcpLaunchSpec, 'imagePrompts'>
   connection: Pick<AcpStructuredConnection, 'initialize'>
 }): Promise<boolean> {
   return (
-    session.spec.imagePrompts === true &&
     (await session.connection.initialize()).agentCapabilities?.promptCapabilities?.image === true
   )
 }
@@ -253,7 +252,7 @@ export function writeAcpSessionOption(
   connection: Pick<AcpStructuredConnection, 'setConfigOption' | 'setModel'>,
   options: AcpStructuredOptions,
   write: AcpOptionWrite,
-  bound: { agent: string; timeoutMs: number; signal?: AbortSignal; key: string }
+  bound: { agent: string; timeoutMs: number; signal?: AbortSignal; key: string; value: string }
 ): Promise<void> {
   const { agent, timeoutMs, signal } = bound
   if (signal?.aborted) {
@@ -270,6 +269,7 @@ export function writeAcpSessionOption(
     }
     apply()
     options.currentProof.add(bound.key)
+    options.applied.set(bound.key, bound.value)
   }
   const applied =
     write.method === 'config'

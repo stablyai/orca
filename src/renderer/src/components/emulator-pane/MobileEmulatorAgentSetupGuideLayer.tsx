@@ -7,13 +7,11 @@ import { useMobileEmulatorAgentSetupState } from './use-mobile-emulator-agent-se
 type MobileEmulatorAgentSetupGuideLayerProps = {
   children: ReactNode
   isActive: boolean
-  worktreeId: string
 }
 
 export function MobileEmulatorAgentSetupGuideLayer({
   children,
-  isActive,
-  worktreeId
+  isActive
 }: MobileEmulatorAgentSetupGuideLayerProps): React.JSX.Element {
   const mobileEmulatorAgentSetupDismissed = useAppStore((s) => s.mobileEmulatorAgentSetupDismissed)
   const setup = useMobileEmulatorAgentSetupState(isActive)
@@ -42,7 +40,7 @@ export function MobileEmulatorAgentSetupGuideLayer({
             className="mobile-emulator-agent-setup-guide-scrim absolute inset-x-0 bottom-0 h-40"
           />
           <div className="pointer-events-auto relative">
-            <MobileEmulatorAgentSetupGuide setup={setup} worktreeId={worktreeId} />
+            <MobileEmulatorAgentSetupGuide setup={setup} />
           </div>
         </div>
       ) : null}

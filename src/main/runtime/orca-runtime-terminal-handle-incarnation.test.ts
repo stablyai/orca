@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { makePaneKey } from '../../shared/stable-pane-id'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
+import { registerBoundPty } from './bind-first-pane.test-fixture'
 
 const PTY_ID = 'ssh:target@@relay-pty'
 const WORKTREE_ID = 'repo::/worktree'
@@ -8,9 +10,15 @@ const TAB_ID = 'tab-terminal'
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 
 /** A runtime whose pty controller captures every write for assertion. */
-function makeRuntime(): { runtime: OrcaRuntimeService; writes: string[] } {
+function makeRuntime(opts: { paneLayout?: boolean } = {}): {
+  runtime: OrcaRuntimeService
+  writes: string[]
+} {
   const writes: string[] = []
-  const runtime = new OrcaRuntimeService(null)
+  // Switch-on, main's layout answers which pane holds a terminal; that layout lives in a store.
+  const store = opts.paneLayout && ORCA_LAYOUT_OWNER_IS_MAIN ? {} : null
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolve path reads only the session bindPaneFirst adds to this store.
+  const runtime = new OrcaRuntimeService(store as never)
   runtime.setPtyController({
     write: (_ptyId, data) => {
       writes.push(data)
@@ -345,7 +353,7 @@ describe('resolveTerminalHandleByProcessIncarnation direct fencing', () => {
   })
 
   it('keeps scanning past a colon-ambiguous decoy in another host scope to the genuine match', () => {
-    const { runtime } = makeRuntime()
+    const { runtime } = makeRuntime({ paneLayout: true })
     // One process-incarnation string, two colon-ambiguous pty ids that both satisfy the exact
     // matcher: 'relay' + 'conn:incarnation-1' AND 'relay:conn' + 'incarnation-1' both stringify to
     // 'relay:conn:incarnation-1'. The decoy is registered FIRST and lives in a different host scope
@@ -355,12 +363,12 @@ describe('resolveTerminalHandleByProcessIncarnation direct fencing', () => {
     const DECOY_LEAF_ID = '22222222-2222-4222-8222-222222222222'
     const GENUINE_TAB_ID = 'tab-genuine'
     const GENUINE_LEAF_ID = '33333333-3333-4333-8333-333333333333'
-    runtime.registerPty('relay', WORKTREE_ID, 'decoy', {
+    registerBoundPty(runtime, 'relay', WORKTREE_ID, 'decoy', {
       tabId: DECOY_TAB_ID,
       leafId: DECOY_LEAF_ID,
       incarnationId: 'conn:incarnation-1'
     })
-    runtime.registerPty('relay:conn', WORKTREE_ID, null, {
+    registerBoundPty(runtime, 'relay:conn', WORKTREE_ID, null, {
       tabId: GENUINE_TAB_ID,
       leafId: GENUINE_LEAF_ID,
       incarnationId: 'incarnation-1'

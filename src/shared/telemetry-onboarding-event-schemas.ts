@@ -244,8 +244,14 @@ export const onboardingFeatureSetupRunSchema = z
   .object({
     ...onboardingFeatureSetupSelectionSchema,
     cli_touched: z.boolean(),
-    skill_commands_copied: z.boolean(),
-    skill_install_command_prepared: z.boolean(),
+    // How the one-click skill install ended; replaces the copy/paste command fields.
+    skill_install_result: z.enum([
+      'installed',
+      'needs_attention',
+      'update_server',
+      'connect_host',
+      'failed'
+    ]),
     computer_use_permissions_opened: z.boolean(),
     warning_count: z.number().int().nonnegative(),
     cohort: cohortSchema
@@ -257,10 +263,7 @@ export const onboardingFeatureSetupRunSchema = z
   )
   .strict()
 export const onboardingFeatureSetupTerminalOpenedSchema = z
-  .object({
-    ...onboardingFeatureSetupSelectionSchema,
-    cohort: cohortSchema
-  })
+  .object({ ...onboardingFeatureSetupSelectionSchema, cohort: cohortSchema })
   .refine(
     hasMatchingOnboardingFeatureSetupSelectedCount,
     onboardingFeatureSetupSelectedCountRefinement

@@ -1,7 +1,11 @@
 import { sha256 } from '@noble/hashes/sha256'
 import { describe, expect, it, vi } from 'vitest'
 import { computeMobileWebBundleId } from '../../../src/shared/mobile-web-bundle/manifest-contract'
-import { fetchMobileWebBundle } from './mobile-web-bundle-fetch'
+import {
+  fetchMobileWebBundle,
+  type MobileWebBundleFetchProgress,
+  type MobileWebBundleReusableAssets
+} from './mobile-web-bundle-fetch'
 import { MobileWebBundleFetchError } from './mobile-web-bundle-fetch-refusal'
 import { readMobileWebBundleErrorCode } from './mobile-web-bundle-operations'
 import type { RpcClient } from './rpc-client'
@@ -561,5 +565,84 @@ describe('fetchMobileWebBundle', () => {
 
     expect(readMobileWebBundleErrorCode(error)).toBe('mobile_web_bundle_unavailable')
     expect(error).not.toBeInstanceOf(MobileWebBundleFetchError)
+  })
+
+  describe('with a cached generation to reuse', () => {
+    /** A cache holding these files by content, each still whole on disk unless `whole` says not. */
+    function cacheOf(files: Record<string, string>, checked: string[], whole = true) {
+      const hashes = new Map(
+        Object.values(files).map((text) => {
+          const content = bytesOf(text)
+          return [toHex(sha256(content)), content.byteLength] as const
+        })
+      )
+      const reusable: MobileWebBundleReusableAssets = {
+        has: (asset) => hashes.get(asset.sha256) === asset.byteLength,
+        check: async (asset) => {
+          checked.push(asset.path)
+          return whole
+        }
+      }
+      return reusable
+    }
+
+    function chunkPaths(calls: readonly HostCall[]): Set<unknown> {
+      return new Set(
+        calls
+          .filter((call) => call.method === 'mobileWeb.bundle.chunk')
+          .map((call) => paramField(call.params, 'path'))
+      )
+    }
+
+    it('reads only the changed assets over the wire, and counts only those', async () => {
+      const host = bundleHost({ 'index.html': '<h1>orca</h1>', 'assets/app.js': 'x=1' })
+      const progress: MobileWebBundleFetchProgress[] = []
+      const checked: string[] = []
+
+      const fetched = await fetchMobileWebBundle({
+        client: host.client,
+        onProgress: (update) => progress.push(update),
+        reusable: cacheOf({ 'assets/app.js': 'x=1' }, checked)
+      })
+
+      expect(chunkPaths(host.calls)).toEqual(new Set(['index.html']))
+      expect(checked).toEqual(['assets/app.js'])
+      expect(fetched.reused).toEqual(['assets/app.js'])
+      expect([...fetched.assets.keys()]).toEqual(['index.html'])
+      expect(fetched.totalBytes).toBe(13)
+      expect(progress[0]).toEqual({
+        completedAssets: 0,
+        totalAssets: 1,
+        receivedBytes: 0,
+        totalBytes: 13
+      })
+      expect(progress.at(-1)).toEqual({
+        completedAssets: 1,
+        totalAssets: 1,
+        receivedBytes: 13,
+        totalBytes: 13
+      })
+    })
+
+    it('downloads a cached asset that is no longer whole on disk', async () => {
+      const host = bundleHost({ 'index.html': '<h1>orca</h1>', 'assets/app.js': 'x=1' })
+      const progress: MobileWebBundleFetchProgress[] = []
+
+      const fetched = await fetchMobileWebBundle({
+        client: host.client,
+        onProgress: (update) => progress.push(update),
+        reusable: cacheOf({ 'assets/app.js': 'x=1' }, [], false)
+      })
+
+      expect(chunkPaths(host.calls)).toEqual(new Set(['index.html', 'assets/app.js']))
+      expect(fetched.reused).toEqual([])
+      expect(new TextDecoder().decode(fetched.assets.get('assets/app.js'))).toBe('x=1')
+      expect(progress.at(-1)).toEqual({
+        completedAssets: 2,
+        totalAssets: 2,
+        receivedBytes: 16,
+        totalBytes: 16
+      })
+    })
   })
 })

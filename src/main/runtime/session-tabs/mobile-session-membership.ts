@@ -98,11 +98,12 @@ export abstract class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends O
       return false
     }
     const pty = this.ptysById.get(candidatePtyId)
-    const pane = parsePaneKey(pty?.paneKey ?? '')
+    const recorded = this.paneOfPty(pty)
+    const pane = parsePaneKey(recorded.paneKey ?? '')
     return Boolean(
       pty?.connected &&
       pty.worktreeId === worktreeId &&
-      pty.tabId === parentTabId &&
+      recorded.tabId === parentTabId &&
       pane?.leafId === leafId
     )
   }

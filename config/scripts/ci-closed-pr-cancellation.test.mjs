@@ -100,7 +100,6 @@ it('looks up exact PR groups without branch or head-SHA inference', async () => 
     'ci-cache-warmup-platforms-123',
     'pi-owner-runtime-123',
     'git-command-termination-123',
-    'skill-roundtrip-pull_request-123',
     'ci-cache-warmup-123'
   ])
   expect(

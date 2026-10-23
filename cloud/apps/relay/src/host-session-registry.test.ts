@@ -584,6 +584,63 @@ describe('host session cleanup races', () => {
     )
   })
 
+  // The root of a seat c34's feed listed for hours: a rebind whose database activation outlived
+  // the orphan grace revived the removed session outside the map, still listed and unreachable.
+  it('refuses a rebind whose session left the map while its activation was in flight', async () => {
+    const blocked = deferred<string>()
+    const activateControl = vi
+      .fn<RelayAssignmentStore['activateControl']>()
+      .mockResolvedValueOnce('control:production-gce-c3:1')
+      .mockReturnValueOnce(blocked.promise)
+    const { registry, activate, releaseActivity } = createRegistry(activateControl)
+    const key = { userId: identity.sub, relayHostId: identity.relayHostId }
+    const originalSocket = new FakeSocket()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: FakeSocket implements the registry's WebSocket event and lifecycle surface.
+    await activate(originalSocket as unknown as WebSocket, identity, null, 1, false, 1)
+    const original = registry.get(key)
+    originalSocket.close(1006, 'network reset')
+    expect(original?.state).toBe('orphaned')
+
+    const rebindSocket = new FakeSocket()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: FakeSocket implements the registry's WebSocket event and lifecycle surface.
+    const rebinding = activate(rebindSocket as unknown as WebSocket, identity, original, 1, true, 1)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(activateControl).toHaveBeenCalledTimes(2)
+    // The grace runs out while the database answers slowly.
+    await vi.advanceTimersByTimeAsync(CONTROL_CONTINUITY_LIMITS.orphanGraceMs)
+    expect(registry.get(key)).toBeNull()
+    blocked.resolve('control:production-gce-c3:1')
+    await rebinding
+
+    expect(rebindSocket.close).toHaveBeenCalledWith(RELAY_CLOSE_CODE.PEER_DROPPED, 'control activation superseded')
+    expect(registry.get(key)).toBeNull()
+    expect(original?.state).toBe('closed')
+    const page = registry.seatFeed(null)
+    expect('full' in page && page.full).toEqual([])
+    expect(releaseActivity).toHaveBeenCalledWith(key, 'control:production-gce-c3:1')
+  })
+
+  // Two hellos proven against the same empty map could take the same generation; an activation at
+  // a generation this host already had here is refused, so a late leave cannot share it.
+  it('refuses a fresh activation at a generation this host already had here', async () => {
+    const activateControl = vi
+      .fn<RelayAssignmentStore['activateControl']>()
+      .mockResolvedValue('control:production-gce-c3:2')
+    const { registry, activate } = createRegistry(activateControl)
+    const key = { userId: identity.sub, relayHostId: identity.relayHostId }
+    const first = new FakeSocket()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: FakeSocket implements the registry's WebSocket event and lifecycle surface.
+    await activate(first as unknown as WebSocket, identity, null, 2, false, 1)
+    first.close(1006, 'network reset')
+    await vi.advanceTimersByTimeAsync(CONTROL_CONTINUITY_LIMITS.orphanGraceMs)
+    expect(registry.get(key)).toBeNull()
+    const reused = new FakeSocket()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: FakeSocket implements the registry's WebSocket event and lifecycle surface.
+    await activate(reused as unknown as WebSocket, identity, null, 2, false, 1)
+    expect(reused.close).toHaveBeenCalledWith(RELAY_CLOSE_CODE.PEER_DROPPED, 'control activation superseded')
+    expect(registry.get(key)).toBeNull()
+  })
+
   it('skips a closed queued control so its live retry avoids abandoned database work', async () => {
     const stalled = deferred<string>()
     const activateControl = vi

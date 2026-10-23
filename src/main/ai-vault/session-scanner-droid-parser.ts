@@ -10,15 +10,14 @@ import type {
 import type { TranscriptMessageSink } from './session-transcript-consumers'
 import {
   accumulatorFoldResumeState,
-  addPreviewMessage,
   createAccumulator,
   sessionIdFromFileName,
   updateTimeline
 } from './session-scanner-accumulator'
+import { addSessionContent, addSessionText } from './session-scanner-messages'
 import {
   asRecord,
   extractMessageText,
-  extractPreviewContentText,
   extractString,
   normalizeTitleText,
   parseJsonObject,
@@ -72,7 +71,7 @@ function consumeDroidRecordLine(accumulator: SessionAccumulator, line: string): 
   } else if (record.type === 'completion') {
     accumulator.messageCount++
     accumulator.totalTokens += tokenTotal(record.usage)
-    addPreviewMessage(accumulator, {
+    addSessionText(accumulator, {
       role: 'assistant',
       text: extractString(record.finalText),
       timestamp: record.timestamp
@@ -123,10 +122,10 @@ function consumeDroidMessage(
       normalizeTitleText(extractString(record.text) ?? '') ||
       extractMessageText(asRecord(record.message))
   }
-  addPreviewMessage(accumulator, {
+  addSessionContent(
+    accumulator,
     role,
-    text:
-      extractString(record.text) ?? extractPreviewContentText(asRecord(record.message)?.content),
-    timestamp: record.timestamp
-  })
+    extractString(record.text) ?? asRecord(record.message)?.content,
+    record.timestamp
+  )
 }

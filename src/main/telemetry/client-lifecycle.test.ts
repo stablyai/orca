@@ -62,6 +62,10 @@ describe('setOptIn()', () => {
     })
     await setOptIn('settings', true)
     expect(order).toEqual(['optIn', 'capture:app_opened', 'capture:telemetry_opted_in'])
+    expect(state.store.updateSettings).toHaveBeenCalledWith(
+      { telemetry: expect.objectContaining({ optedIn: true }) },
+      { notifyListeners: true }
+    )
   })
 
   it('drops telemetry_opted_in silently in non-official builds', async () => {
@@ -121,6 +125,10 @@ describe('persistBannerAcknowledgeWithoutEmitting()', () => {
 
     expect(order).toEqual(['optIn', 'capture:app_opened'])
     expect(state.settings.telemetry?.optedIn).toBe(true)
+    expect(state.store.updateSettings).toHaveBeenCalledWith(
+      { telemetry: expect.objectContaining({ optedIn: true }) },
+      { notifyListeners: true }
+    )
   })
 })
 

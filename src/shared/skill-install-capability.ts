@@ -20,6 +20,13 @@ export const SKILL_DELETE_CAPABILITY = 'skills.delete.v1' as const
 export const SKILL_DELETE_UPDATE_REQUIRED_MESSAGE =
   'Update Orca on the selected machine to delete skills.'
 
+/** `skills.planBundledOrca` / `skills.executeBundledOrca`; their op and reason enums are frozen
+ *  for v1, and a client renders a value it does not know as "Needs attention". */
+export const BUNDLED_ORCA_SKILL_CAPABILITY = 'skills.bundled-orca.v1' as const
+
+export const BUNDLED_ORCA_SKILL_UPDATE_REQUIRED_MESSAGE =
+  'Update Orca on the server to update its Orca skills.'
+
 export const SKILL_RUNTIME_CAPABILITIES = [
   SKILL_INSTALL_CAPABILITY,
   SKILL_BUNDLE_INSTALL_CAPABILITY,
@@ -29,5 +36,6 @@ export const SKILL_RUNTIME_CAPABILITIES = [
   SKILL_UPLOAD_CAPABILITY,
   SKILL_MANAGEMENT_CAPABILITY,
   SKILL_INSTALL_PROVIDERS_CAPABILITY,
-  SKILL_DELETE_CAPABILITY
+  SKILL_DELETE_CAPABILITY,
+  BUNDLED_ORCA_SKILL_CAPABILITY
 ] as const

@@ -14,6 +14,7 @@ const {
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
 } = await import('./orca-runtime-test-fixtures.spec')
+const { committingSpawn } = await import('./bind-first-pane.test-fixture')
 
 const PANE = { worktreeId: TEST_WORKTREE_ID, tabId: 'host-tab', leafId: HEADLESS_LEAF_ID }
 
@@ -24,9 +25,11 @@ function windowlessRuntime() {
   )
   const runtime = new OrcaRuntimeService(runtimeStore)
   const started = deferred<{ id: string }>()
-  const spawn = vi.fn(() => started.promise)
+  const spawn = vi.fn(
+    (_args: { worktreeId?: string; tabId?: string; leafId?: string }) => started.promise
+  )
   runtime.setPtyController({
-    spawn,
+    spawn: committingSpawn(runtime, spawn),
     write: () => true,
     kill: () => false,
     stopAndWait: async () => true,

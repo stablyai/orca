@@ -116,6 +116,9 @@ export function isExecKilledError(error: unknown): boolean {
 
 export type GitRemoteOperation = 'push' | 'pull' | 'fetch' | 'upstream'
 
+export const GIT_AUTHENTICATION_FAILED_MESSAGE =
+  'Authentication failed. Check your remote credentials.'
+
 export function normalizeGitErrorMessage(error: unknown, operation?: GitRemoteOperation): string {
   if (!(error instanceof Error)) {
     return 'Git remote operation failed.'
@@ -142,8 +145,13 @@ export function normalizeGitErrorMessage(error: unknown, operation?: GitRemoteOp
     return raw.trim()
   }
 
-  if (raw.includes('could not read Username') || raw.includes('Authentication failed')) {
-    return 'Authentication failed. Check your remote credentials.'
+  if (
+    raw.includes('could not read Username') ||
+    raw.includes('could not read Password') ||
+    raw.includes('Authentication failed') ||
+    raw.includes('fatal: unable to get password from user')
+  ) {
+    return GIT_AUTHENTICATION_FAILED_MESSAGE
   }
 
   if (raw.includes('Could not resolve host') || raw.includes('Network is unreachable')) {

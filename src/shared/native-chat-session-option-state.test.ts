@@ -48,6 +48,35 @@ describe('applyNativeChatReportedSessionOptions', () => {
 })
 
 describe('matchNativeChatCatalogModelId', () => {
+  it.each(['gpt-6.1-sol', 'gpt-5.5-custom', 'custom/Model-v2'])(
+    'keeps the exact unlisted selector %s only when requested',
+    (reported) => {
+      expect(matchNativeChatCatalogModelId(CODEX_SESSION_OPTION_CATALOG, reported)).not.toBe(
+        reported
+      )
+      expect(
+        matchNativeChatCatalogModelId(CODEX_SESSION_OPTION_CATALOG, reported, {
+          allowUnlisted: true
+        })
+      ).toBe(reported)
+    }
+  )
+
+  it('retains known labels and rejects blank or free text as unlisted selectors', () => {
+    expect(
+      matchNativeChatCatalogModelId(CODEX_SESSION_OPTION_CATALOG, ' GPT-5.5 ', {
+        allowUnlisted: true
+      })
+    ).toBe('gpt-5.5')
+    for (const reported of ['', '  ', 'unknown model', 'unknown\nmodel']) {
+      expect(
+        matchNativeChatCatalogModelId(CODEX_SESSION_OPTION_CATALOG, reported, {
+          allowUnlisted: true
+        })
+      ).toBeNull()
+    }
+  })
+
   it('prefers the longest contained id and keeps catalog order for ties', () => {
     const catalog = {
       ...CLAUDE_SESSION_OPTION_CATALOG,

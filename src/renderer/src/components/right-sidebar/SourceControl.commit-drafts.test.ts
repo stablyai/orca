@@ -101,6 +101,34 @@ describe('SourceControl conflict resolution state', () => {
     expect(prompt).toContain('For merge conflicts, there is no skip step')
   })
 
+  it('tells the agent to stop when Git is still running before it changes anything', () => {
+    const prompt = buildResolveConflictsPrompt({
+      conflictOperation: 'merge',
+      worktreePath: '/repo/worktree',
+      entries: [{ path: 'src/render.ts', conflictKind: 'both_modified' }]
+    })
+
+    expect(prompt).toContain('git rev-parse --git-path index.lock')
+    expect(prompt.indexOf('index.lock')).toBeLessThan(prompt.indexOf('Start with git status'))
+  })
+
+  it('asks the agent to find why Git paused when nothing is unmerged', () => {
+    const prompt = buildResolveConflictsPrompt({
+      conflictOperation: 'cherry-pick',
+      worktreePath: '/repo/worktree',
+      entries: []
+    })
+
+    expect(prompt).toContain('Finish the paused cherry-pick in this worktree')
+    expect(prompt).toContain('- Continue command: git cherry-pick --continue')
+    expect(prompt).toContain('use git cherry-pick --skip')
+    expect(prompt).toContain('git rev-parse --git-path index.lock')
+    expect(prompt).toContain('learn why Git stopped')
+    expect(prompt).toContain('ask before continuing')
+    expect(prompt).not.toContain('Conflicted files')
+    expect(prompt).not.toContain('Edit the listed files only')
+  })
+
   it('uses the configured default agent when detected and otherwise falls back to catalog order', () => {
     expect(pickDefaultSourceControlAgent('codex', ['claude', 'codex'])).toBe('codex')
     expect(pickDefaultSourceControlAgent('blank', ['codex'])).toBe('codex')

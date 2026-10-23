@@ -456,6 +456,19 @@ describe('native skill and command picker', () => {
     expect(items[1]).toMatchObject({ kind: 'skill', description: null, sources: [] })
   })
 
+  it('keeps the first reported description for duplicate unlocated skill names', () => {
+    const items = buildNativeChatPickerItems([], [], '', '/', [
+      { name: 'missing' },
+      { name: 'missing', description: 'Later description' },
+      { name: 'present', description: 'First description' },
+      { name: 'present', description: 'Later description' }
+    ])
+    expect(items).toMatchObject([
+      { name: 'missing', description: null },
+      { name: 'present', description: 'First description' }
+    ])
+  })
+
   it('keeps the disk scan only when a session report is absent', () => {
     const items = buildNativeChatPickerItems(
       [],

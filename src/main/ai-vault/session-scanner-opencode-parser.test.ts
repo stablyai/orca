@@ -2,8 +2,13 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { parseOpenCodeSessionFile } from './session-scanner-opencode-parser'
+import {
+  consumeOpenCodeMessages,
+  parseOpenCodeSessionFile
+} from './session-scanner-opencode-parser'
+import { createAccumulator } from './session-scanner-accumulator'
 import { withFullFirstUserPromptCapture } from './session-scanner-first-user-prompt-capture'
+import type { TranscriptMessage } from './session-transcript-consumers'
 
 let tempDirs: string[] = []
 
@@ -22,6 +27,79 @@ function userMessage(text: string, createdAt: number): string {
 }
 
 describe('parseOpenCodeSessionFile', () => {
+  it.each(
+    [undefined, null, [], '', '   ', [{ type: 'image', source: {} }]].map((content) => ({
+      content
+    }))
+  )(
+    'shows a summary for empty content $content without publishing or copying it',
+    async ({ content }) => {
+      const storageRoot = await mkdtemp(join(tmpdir(), 'orca-opencode-summary-'))
+      tempDirs.push(storageRoot)
+      const messageDir = join(storageRoot, 'message', 'ses_summary')
+      await mkdir(messageDir, { recursive: true })
+      await writeFile(
+        join(messageDir, 'msg_1.json'),
+        JSON.stringify({
+          role: 'user',
+          content,
+          summary: { title: 'Generated title', body: 'Generated summary' },
+          time: { created: 1_777_634_000_000 }
+        })
+      )
+      const messages: TranscriptMessage[] = []
+      const accumulator = createAccumulator({
+        agent: 'opencode',
+        sessionId: 'ses_summary',
+        file: {
+          path: join(storageRoot, 'session.json'),
+          mtimeMs: 1,
+          modifiedAt: '2026-05-01T00:00:00.000Z'
+        },
+        messages: { active: true, push: (message) => messages.push(message) }
+      })
+      await withFullFirstUserPromptCapture(() =>
+        consumeOpenCodeMessages(accumulator, storageRoot, 'ses_summary')
+      )
+      expect(accumulator.previewMessages.map((message) => message.text)).toEqual([
+        'Generated summary'
+      ])
+      expect(messages).toEqual([])
+      expect(accumulator.firstUserPrompt).toBeNull()
+    }
+  )
+
+  it.each([5000, 256 * 1024 + 1])(
+    'publishes %i-character legacy OpenCode content before preview limits',
+    async (length) => {
+      const storageRoot = await mkdtemp(join(tmpdir(), 'orca-opencode-transcript-'))
+      tempDirs.push(storageRoot)
+      const sessionDir = join(storageRoot, 'session', 'project')
+      const messageDir = join(storageRoot, 'message', 'ses_transcript')
+      await mkdir(sessionDir, { recursive: true })
+      await mkdir(messageDir, { recursive: true })
+      const path = join(sessionDir, 'ses_transcript.json')
+      await writeFile(path, JSON.stringify({ id: 'ses_transcript' }))
+      const text = 'x'.repeat(length)
+      await writeFile(join(messageDir, 'msg_1.json'), userMessage(text, 1_777_634_000_000))
+      const messages: TranscriptMessage[] = []
+      const session = await parseOpenCodeSessionFile(
+        { path, mtimeMs: 1, modifiedAt: '2026-05-01T00:00:00.000Z' },
+        'linux',
+        { active: true, push: (message) => messages.push(message) }
+      )
+      expect(messages).toEqual([
+        {
+          role: 'user',
+          text: text.slice(0, 256 * 1024),
+          timestamp: '2026-05-01T11:13:20.000Z',
+          ...(length > 256 * 1024 ? { textTruncated: true } : {})
+        }
+      ])
+      expect(session?.previewMessages[0]?.text).toHaveLength(220)
+    }
+  )
+
   it('skips a corrupt message file instead of discarding the whole session', async () => {
     const storageRoot = await mkdtemp(join(tmpdir(), 'orca-opencode-parser-'))
     tempDirs.push(storageRoot)

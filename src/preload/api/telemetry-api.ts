@@ -1,3 +1,4 @@
+import type { ResourceViewAdmission } from '../../shared/resource-view-admission'
 import type { TelemetryConsentState } from '../../shared/telemetry-consent-types'
 import type { MemorySnapshot, StatsSummary } from '../../shared/process-stats-types'
 
@@ -31,7 +32,9 @@ export type DiagnosticsUploadPayload =
     }
 
 export type MemoryApi = {
-  getSnapshot: () => Promise<MemorySnapshot>
+  getSnapshot: (admission?: ResourceViewAdmission) => Promise<MemorySnapshot>
+  resourceWindowVisible: () => Promise<boolean>
+  onResourceWindowVisibility: (callback: (visible: boolean) => void) => () => void
 }
 
 export type DiagnosticsApi = {
@@ -44,9 +47,9 @@ export type DiagnosticsApi = {
 }
 
 export type TelemetryApi = {
-  /** Fire-and-forget track. Loose IPC typing on purpose — the main-side validator enforces;
-   *  renderer sites should import `track<N>()` from lib/telemetry.ts, not reach here. */
-  telemetryTrack: (name: string, props: Record<string, unknown>) => Promise<void>
+  /** True means captured or already recorded today; older bridges return void.
+   *  Use lib/telemetry.ts wrappers; main validates the deliberately loose IPC payload. */
+  telemetryTrack: (name: string, props: Record<string, unknown>) => Promise<boolean | void>
   /** Flip the persisted opt-in preference. Subject to a per-session
    *  consent-mutation rate limit on the main side (≤5/session). */
   telemetrySetOptIn: (optedIn: boolean) => Promise<void>

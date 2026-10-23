@@ -18,6 +18,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
+import { basename } from '@/lib/path'
 import { isBotPRComment } from '../../../../../shared/pr-comment-audience'
 import { setPRBotAuthorOverride } from '@/lib/pr-bot-author-overrides'
 import { normalizePRCommentAuthorLogin } from '../../../../../shared/pr-bot-author-overrides'
@@ -154,6 +155,46 @@ export function formatLineRange(comment: PRComment): string | null {
     return `L${comment.startLine}-L${comment.line}`
   }
   return `L${comment.line}`
+}
+
+export function CommentLocationLabel({
+  comment,
+  className,
+  onOpenLocation
+}: {
+  comment: PRComment
+  className: string
+  onOpenLocation?: (path: string, line: number) => void
+}): React.JSX.Element | null {
+  const { path, line } = comment
+  if (!path) {
+    return null
+  }
+  const lineRange = formatLineRange(comment)
+  const label = `${basename(path)}${lineRange ? `:${lineRange}` : ''}`
+  if (!onOpenLocation || !line) {
+    return (
+      <span className={className} title={path}>
+        {label}
+      </span>
+    )
+  }
+  return (
+    <button
+      type="button"
+      className={cn(
+        className,
+        'cursor-pointer rounded text-left hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50'
+      )}
+      title={path}
+      onClick={(event) => {
+        event.stopPropagation()
+        onOpenLocation(path, comment.startLine ?? line)
+      }}
+    >
+      {label}
+    </button>
+  )
 }
 
 /** True for top-level PR conversation comments the viewer can edit or delete. */

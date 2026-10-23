@@ -4,12 +4,8 @@ import { unwrapMuseLogRecords } from '../../shared/muse-session-log'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { FileWithMtime, SessionAccumulator } from './session-scanner-types'
 import type { TranscriptMessageSink } from './session-transcript-consumers'
-import {
-  addPreviewContent,
-  createAccumulator,
-  finalizeSession,
-  updateTimeline
-} from './session-scanner-accumulator'
+import { createAccumulator, finalizeSession, updateTimeline } from './session-scanner-accumulator'
+import { addSessionContent } from './session-scanner-messages'
 import { museSessionIdFromFilePath } from './session-scanner-muse-paths'
 import {
   arrayValue,
@@ -117,7 +113,7 @@ function foldUserTurn(
   if (titleCandidate) {
     accumulator.title ??= titleCandidate
   }
-  addPreviewContent(accumulator, 'user', text, timestampMs ?? undefined)
+  addSessionContent(accumulator, 'user', text, timestampMs ?? undefined)
 }
 
 function foldMuseRecord(
@@ -187,7 +183,7 @@ function foldSessionEvent(
       const text = extractString(event.text)
       if (text) {
         accumulator.messageCount++
-        addPreviewContent(accumulator, 'assistant', text, timestampMs ?? undefined)
+        addSessionContent(accumulator, 'assistant', text, timestampMs ?? undefined)
       }
       break
     }

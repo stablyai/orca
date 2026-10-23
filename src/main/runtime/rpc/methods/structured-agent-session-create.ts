@@ -34,6 +34,7 @@ import {
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { structuredAgentSessionClosedBeforeCreate } from './structured-agent-session-close-before-create'
 import { structuredLaunchSeedOnSavedListing } from '../../session-tabs/structured-launch-seed-listing'
+import type { ChatTabPlacement } from '../../agent-session-tab-layout'
 
 export type PreparedStructuredAgentSessionCreate = {
   host: StructuredAgentSessionHost
@@ -197,10 +198,15 @@ export async function commitStructuredAgentSessionCreate(args: {
   activate: boolean
   /** This machine's window made the create and opens the chat's tab where it reserved it. */
   placedByWindow?: boolean
+  /** Where the creating client opens the chat, in this host's ids. */
+  tabPlacement?: ChatTabPlacement
 }): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
   const { prepared } = args
   const tab = prepared.tab
-  const placedByWindow = args.placedByWindow ? { placedByWindow: true } : {}
+  const tabPlace = {
+    ...(args.placedByWindow ? { placedByWindow: true } : {}),
+    ...(args.tabPlacement ? { placement: args.tabPlacement } : {})
+  }
   if (prepared.atRest) {
     return prepared.host.create(args.caller, prepared.attachParams, {
       ...prepared.atRest,
@@ -220,7 +226,7 @@ export async function commitStructuredAgentSessionCreate(args: {
                     sessionId: prepared.attachParams.envelope.sessionId,
                     agent: tab.agent,
                     activate: args.activate,
-                    ...placedByWindow,
+                    ...tabPlace,
                     ...(prepared.attachParams.surfaceTabId
                       ? { tabId: prepared.attachParams.surfaceTabId }
                       : {})
@@ -250,7 +256,7 @@ export async function commitStructuredAgentSessionCreate(args: {
       sessionId: result.value.sessionId,
       agent: prepared.tab.agent,
       activate: args.activate,
-      ...placedByWindow,
+      ...tabPlace,
       ...(surfaceTabId ? { tabId: surfaceTabId } : {})
     })
   } catch (error) {

@@ -228,8 +228,7 @@ export const getGeneralCliSearchEntries = createLocalizedCatalog(() => [
     ),
     keywords: [
       ...translateSearchKeyword('auto.components.settings.general.search.bda108e66c', 'skill'),
-      ...translateSearchKeyword('auto.components.settings.general.search.baa263d6d8', 'agents'),
-      ...translateSearchKeyword('auto.components.settings.general.search.6382fe9724', 'npx')
+      ...translateSearchKeyword('auto.components.settings.general.search.baa263d6d8', 'agents')
     ]
   }
 ])

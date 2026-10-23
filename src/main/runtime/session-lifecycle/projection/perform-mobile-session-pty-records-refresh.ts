@@ -1,5 +1,6 @@
 import type { RuntimeWorkspaceSelectors as WorkspaceSelectors } from '../../workspaces/workspace-selectors'
 import type { OrcaRuntimeWithApplyMobileSessionTabNavigation as MobileSessionNavigation } from './apply-mobile-session-tab-navigation'
+import type { OrcaRuntimeWithAgentSessionResumeOwnership as AgentSessionResume } from './agent-session-resume-ownership'
 import type { OrcaRuntimeWithStopTerminalsForWorktree as WorktreeTerminalStop } from '../../terminal/stop/worktree-terminal-stop'
 import { OrcaRuntimeWithRestoredPaneStart } from './restored-pane-materialize'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
@@ -18,13 +19,14 @@ import { navigationTargetsHost } from '../../../../shared/runtime-navigation'
 import { isAutomaticTabActivation } from '../../../../shared/tab-activation-intent'
 import { isWorktreeTerminalsSleepingError } from '../../worktree-terminals-sleeping-error'
 
+import { paneHoldsSession } from '../../terminal/surface/main-terminal-surfaces'
 export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRuntimeWithRestoredPaneStart {
   protected abstract buildResolvedWorktreeFromId(
     ...args: Parameters<WorkspaceSelectors['buildResolvedWorktreeFromId']>
   ): ReturnType<WorkspaceSelectors['buildResolvedWorktreeFromId']>
   protected abstract isDeliberatelyParkedPane(
-    ...args: Parameters<MobileSessionNavigation['isDeliberatelyParkedPane']>
-  ): ReturnType<MobileSessionNavigation['isDeliberatelyParkedPane']>
+    ...args: Parameters<AgentSessionResume['isDeliberatelyParkedPane']>
+  ): ReturnType<AgentSessionResume['isDeliberatelyParkedPane']>
   protected abstract isWorktreeTerminalSleepHeld(
     ...args: Parameters<WorktreeTerminalStop['isWorktreeTerminalSleepHeld']>
   ): ReturnType<WorktreeTerminalStop['isWorktreeTerminalSleepHeld']>
@@ -283,5 +285,13 @@ export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh exten
       navigation,
       opts.clientNavigationId
     )
+  }
+
+  /** Whether a pane may still hold an agent session: a terminal of it not proven exited, or none. */
+  protected paneHoldsSession(paneKey: string): boolean {
+    const panePtyIds = [...this.ptysById.values()].flatMap((pty) =>
+      this.paneOfPty(pty).paneKey === paneKey ? [pty.ptyId] : []
+    )
+    return paneHoldsSession(this, paneKey, panePtyIds, (ptyId) => this.isPtyKnownExited(ptyId))
   }
 }

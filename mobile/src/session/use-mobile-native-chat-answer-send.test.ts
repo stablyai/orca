@@ -295,7 +295,7 @@ describe('useMobileNativeChatAnswerSend', () => {
 
     await expect(answerSend?.answerAsk(prompt, [{ indices: [0] }])).resolves.toBe(true)
     expect(sendRequest.mock.calls.map((call) => call[1])).toEqual([
-      expect.objectContaining({ text: '> Which color?\n\nRed', enter: true })
+      expect.objectContaining({ text: '\x1b[200~> Which color?\r\rRed\x1b[201~', enter: true })
     ])
   })
 

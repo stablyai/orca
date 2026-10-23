@@ -120,6 +120,8 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
             }
           : undefined,
       incoming: terminalOwnedPayload.payload.agentType,
+      // Why local only: a relayed row carries its execution host's owner verdict, not a sender.
+      incomingProcess: payload.connectionId ? undefined : incoming.agentPresence?.process,
       now
     })
     if (

@@ -6,37 +6,14 @@ import type {
   BrowserSitePermission,
   BrowserSitePermissionDecision
 } from '../../shared/browser-site-permission'
+import type { BrowserContextMenuRequestedEvent } from '../../shared/browser-guest-events'
 
 export const browserPageInteractionAndSessionsApi = {
   onContextMenuRequested: (
-    callback: (event: {
-      browserPageId: string
-      x: number
-      y: number
-      screenX: number
-      screenY: number
-      pageUrl: string
-      linkUrl: string | null
-      selectionText: string
-      canGoBack: boolean
-      canGoForward: boolean
-    }) => void
+    callback: (event: BrowserContextMenuRequestedEvent) => void
   ): (() => void) => {
-    const listener = (
-      _event: Electron.IpcRendererEvent,
-      data: {
-        browserPageId: string
-        x: number
-        y: number
-        screenX: number
-        screenY: number
-        pageUrl: string
-        linkUrl: string | null
-        selectionText: string
-        canGoBack: boolean
-        canGoForward: boolean
-      }
-    ) => callback(data)
+    const listener = (_event: Electron.IpcRendererEvent, data: BrowserContextMenuRequestedEvent) =>
+      callback(data)
     ipcRenderer.on('browser:context-menu-requested', listener)
     return () => ipcRenderer.removeListener('browser:context-menu-requested', listener)
   },

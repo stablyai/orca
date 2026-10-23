@@ -4,12 +4,15 @@ import {
   setupLayoutOwnerRuntime as setup,
   WORKTREE_ID
 } from './orca-runtime-layout-owner-start-fixture'
+import { committingSpawn } from './bind-first-pane.test-fixture'
 
 vi.mock('../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
 describe('layout-owner build: a worktree’s default tabs start in main', () => {
   it('writes the tabs with their titles and colours in main, then starts each in its pane', async () => {
     const { runtime, spawn, renameTerminal, session } = setup()
+    let spawned = 0
+    spawn.mockImplementation(committingSpawn(runtime, async () => ({ id: `pty-${++spawned}` })))
 
     const handles = await createWorktreeDefaultTabTerminals(
       runtime.provisioningHost(),

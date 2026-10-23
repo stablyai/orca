@@ -14,10 +14,6 @@ export function connectedHostCountLabel(count: number): string {
       )
 }
 
-export function connectingHostsLabel(): string {
-  return translate('auto.components.status.bar.SshStatusSegment.connecting', 'Connecting…')
-}
-
 export function moreSshHostsLabel(count: number): string {
   return count === 1
     ? translate(

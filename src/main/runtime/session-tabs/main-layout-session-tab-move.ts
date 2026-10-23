@@ -11,6 +11,7 @@ import { translateSessionTabMove } from '../../../shared/workspace-layout/old-cl
 import { resolveSessionTabRow } from '../../../shared/workspace-layout/old-client/old-client-session-tab-rows'
 import { startedMainTerminalSurfaces } from '../terminal/surface/main-terminal-surfaces'
 import { OrcaRuntimeWithMainLayoutRenames } from './main-layout-renames'
+import { liveTerminalsOfTab } from '../session-lifecycle/close/closed-tab-terminal'
 import type { WorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-model'
 import type { CommandOf } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import { isPaneColumnSplitDropNoOp } from '../../../shared/workspace-layout/pane-column-split-drop-no-op'
@@ -21,6 +22,17 @@ export abstract class OrcaRuntimeWithMainLayoutTabMoves extends OrcaRuntimeWithM
       OrcaRuntimeWithPruneMobileSessionTabGroupLayout['toMobileSessionTabsResult']
     >
   ): ReturnType<OrcaRuntimeWithPruneMobileSessionTabGroupLayout['toMobileSessionTabsResult']>
+
+  /** A closed tab's rows' live terminals, read before main's close drops their panes. */
+  protected liveTerminalsOfClosedTab(
+    worktreeId: string,
+    snapshot: RuntimeMobileSessionTabsSnapshot,
+    tabId: string
+  ): ReturnType<typeof liveTerminalsOfTab> {
+    return liveTerminalsOfTab(snapshot, tabId, (row) =>
+      this.findPtyForMobileTerminalTab(worktreeId, row)
+    )
+  }
 
   /** Main's layout of a workspace, from its routed partition; undefined when main holds none. */
   protected mainLayoutWorkspace(worktreeId: string): WorkspaceLayout | undefined {

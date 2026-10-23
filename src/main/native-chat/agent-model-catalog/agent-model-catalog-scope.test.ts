@@ -1,10 +1,20 @@
-import { describe, expect, it } from 'vitest'
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { describe, expect, it, vi } from 'vitest'
+import { resolveCliCommand } from '../../../shared/node-cli-command-resolution'
 import { createClaudeModelCatalogProbe } from '../../claude/claude-model-catalog-probe'
 import { createCodexModelCatalogProbe } from '../../codex/codex-model-catalog-probe'
 import {
   agentModelCatalogFingerprint,
   agentModelCatalogScopeFingerprint
 } from './agent-model-catalog-fingerprint'
+import { AgentModelCatalogProbeError } from './agent-model-catalog-probe-runner'
+import { createAgentModelCatalogService } from './agent-model-catalog-service'
+import {
+  AGENT_MODEL_CATALOG_FAILURE_TTL_MS,
+  AgentModelCatalogStore
+} from './agent-model-catalog-store'
 
 describe('installed catalog invocation identity', () => {
   it.each(['claude', 'codex'] as const)(
@@ -61,4 +71,68 @@ describe('installed catalog invocation identity', () => {
       expect(await key()).not.toBe(first)
     }
   )
+})
+
+describe('a picker read with the CLI missing', () => {
+  it('waits on at most one shell rerun per hold window, and finds a CLI installed after it', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-catalog-missing-cli-'))
+    try {
+      const name = `claude-missing-${process.pid}`
+      const profileBin = join(root, 'profile-bin')
+      mkdirSync(profileBin)
+      const program = join(profileBin, process.platform === 'win32' ? `${name}.cmd` : name)
+      writeFileSync(program, '#!/bin/sh\nexit 0\n')
+      chmodSync(program, 0o755)
+      let served = '/usr/bin'
+      const reruns = vi.fn(async (_askedAt: number) => {})
+      const runListing = vi.fn(async (launch: { command: string }) => {
+        if (launch.command !== program) {
+          throw new AgentModelCatalogProbeError('spawn ENOENT', 'spawn', true)
+        }
+        return `${JSON.stringify({
+          type: 'control_response',
+          response: {
+            subtype: 'success',
+            request_id: 'orca-model-discovery',
+            response: { models: [{ value: 'sonnet', displayName: 'Sonnet' }] }
+          }
+        })}\n`
+      })
+      let now = 1_000
+      const service = createAgentModelCatalogService({
+        store: new AgentModelCatalogStore({ now: () => now }),
+        getRecord: () => undefined,
+        drivesRecord: () => true,
+        resolveAccountHome: async () => ({ variable: 'CLAUDE_CONFIG_DIR', path: root }),
+        probes: {
+          claude: createClaudeModelCatalogProbe({
+            resolveCommand: (options) => resolveCliCommand(name, options),
+            resolveInheritedEnv: async () => ({ PATH: served, HOME: root }),
+            refreshEnvironmentAfterMiss: reruns,
+            resolveAuthPolicy: () => ({ account: 'system' }),
+            runListing
+          })
+        }
+      })
+      const read = () =>
+        service.read({ agent: 'claude', workspacePath: root, waitForListing: true })
+
+      expect(await read()).toMatchObject({ unavailable: { reason: 'cliMissing' } })
+      for (let i = 0; i < 3; i++) {
+        expect(await read()).toMatchObject({ unavailable: { reason: 'cliMissing' } })
+      }
+      expect(reruns).toHaveBeenCalledOnce()
+
+      reruns.mockImplementation(async () => {
+        served = profileBin
+      })
+      now += AGENT_MODEL_CATALOG_FAILURE_TTL_MS
+      const found = await read()
+      expect(found).toMatchObject({ models: [{ id: 'sonnet' }] })
+      expect(found).not.toHaveProperty('unavailable')
+      expect(reruns).toHaveBeenCalledTimes(2)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
 })

@@ -1,5 +1,7 @@
 allowBuilds:
   esbuild: true
+  # Its postinstall unpacks the prebuilt libsodium the native builds link.
+  react-native-libsodium: true
 
 minimumReleaseAge: 4320
 # Latest requested releases are still within the three-day delay; exempt only these versions.

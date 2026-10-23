@@ -69,7 +69,7 @@ export class PiRpcTurns {
         this.deps.lane.apply([{ type: 'input.accepted', clientMessageId: id, requestedAt: at }])
       },
       commandOnly: () => {
-        this.skipInitialUserEcho = false
+        this.awaitingRunTrigger = false
         this.settling = true
         this.probe()
       },
@@ -120,33 +120,35 @@ export class PiRpcTurns {
           this.delivery.reply(frame)
         }
         return
-      case 'agent_start':
-        if (!this.active && !this.delivery.holdsDispatch) {
-          throw new Error('Pi started an unsolicited agent run')
-        }
+      case 'agent_start': {
+        // A run Pi starts while idle (an extension wake) opens with its own prompt.
+        const idle = !this.active
         this.touch()
         this.open(at)
-        this.skipInitialUserEcho = this.delivery.consumeNext()
+        this.awaitingRunTrigger = this.delivery.consumeNext() || idle
         return
+      }
       case 'message_start':
       case 'message_update':
       case 'message_end': {
         this.touch()
         const message = piRpcMessageSchema.safeParse(frame.message)
-        if (message.success && message.data.role === 'user' && frame.type === 'message_end') {
-          // agent_start already accepted the first prompt; user echoes consume queued inputs.
-          if (this.skipInitialUserEcho) {
-            this.skipInitialUserEcho = false
-          } else {
-            this.delivery.consumeNext()
+        if (message.success && frame.type === 'message_end') {
+          const { role } = message.data
+          if (role !== 'system') {
+            // A run's first message is the prompt that started it; later user echoes consume queued inputs.
+            if (role === 'user' && !this.awaitingRunTrigger) {
+              this.delivery.consumeNext()
+            }
+            this.awaitingRunTrigger = false
           }
-        }
-        if (message.success && message.data.role === 'assistant' && frame.type === 'message_end') {
-          this.lastStopReason = message.data.stopReason
-          this.failure =
-            message.data.stopReason === 'error'
-              ? (message.data.errorMessage ?? 'Pi request failed')
-              : undefined
+          if (role === 'assistant') {
+            this.lastStopReason = message.data.stopReason
+            this.failure =
+              message.data.stopReason === 'error'
+                ? (message.data.errorMessage ?? 'Pi request failed')
+                : undefined
+          }
         }
         this.deps.lane.apply(this.messages.message(frame, at))
         return
@@ -240,7 +242,7 @@ export class PiRpcTurns {
     this.delivery.end()
   }
 
-  private skipInitialUserEcho = false
+  private awaitingRunTrigger = false
   private open(at: number): void {
     if (this.active) {
       return
@@ -249,7 +251,6 @@ export class PiRpcTurns {
     this.failure = undefined
     this.lastStopReason = undefined
     this.stopped = false
-    this.skipInitialUserEcho = true
     this.deps.lane.apply([{ type: 'turn.open', turn: this.active, at }])
   }
 

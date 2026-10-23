@@ -26,7 +26,8 @@ import { sidecarUnchanged } from './session-sidecar-stat'
 import {
   enrichSessionFromSidecar,
   reuseUnchangedSidecarSession,
-  sidecarEnrichesWithoutReparse
+  sidecarEnrichesWithoutReparse,
+  type SidecarEnrichment
 } from './session-scanner-sidecar-enrichment'
 import {
   readResumableTranscript,
@@ -227,6 +228,13 @@ async function parseCachedInLane(
     }
   }
 
+  let enriched: SidecarEnrichment = { session: null, refused: false }
+  const sessionForConsumers = async (
+    session: AiVaultSession | null
+  ): Promise<AiVaultSession | null> => {
+    enriched = await enrichSessionFromSidecar(candidate, session, platform, signal)
+    return enriched.session
+  }
   const stateFactory = resumableStateFactoryFor(candidate)
   if (stateFactory) {
     const read = await readResumableTranscript({
@@ -235,9 +243,9 @@ async function parseCachedInLane(
       resume: entry?.platform === platform ? entry.resume : null,
       stateFactory,
       stats,
-      signal
+      signal,
+      sessionForConsumers
     })
-    const enriched = await enrichSessionFromSidecar(candidate, read.session, platform, signal)
     storeSessionParseCacheEntry(key, {
       agent: candidate.agent,
       mtimeMs: file.mtimeMs,
@@ -254,11 +262,13 @@ async function parseCachedInLane(
     return enriched.session
   }
 
-  const session = await readWholeTranscript({ candidate, platform, stats, signal })
-  // Whole-file agents merge the sibling here just like the resumable branch
-  // does post-read; the raw fold stays in foldSession so a sibling-only change
-  // re-merges without re-reading the transcript.
-  const enriched = await enrichSessionFromSidecar(candidate, session, platform, signal)
+  const session = await readWholeTranscript({
+    candidate,
+    platform,
+    stats,
+    signal,
+    sessionForConsumers
+  })
   storeSessionParseCacheEntry(key, {
     agent: candidate.agent,
     mtimeMs: file.mtimeMs,

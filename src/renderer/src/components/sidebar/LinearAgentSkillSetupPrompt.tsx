@@ -6,14 +6,10 @@ import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkillNames
 } from '@/hooks/useInstalledAgentSkills'
-import {
-  LINEAR_AGENT_SKILL_NAMES,
-  ORCA_LINEAR_SKILL_INSTALL_COMMAND
-} from '@/lib/agent-feature-install-commands'
-import { getLinearAgentSkillUpdateCommand } from '@/lib/linear-agent-skill-update-command'
+import { LINEAR_AGENT_SKILL_NAMES } from '@/lib/agent-feature-skill-names'
+import { getLinearAgentSkillUpdateTarget } from '@/lib/linear-agent-skill-update-target'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
 import { cn } from '@/lib/utils'
-import { buildSkillCommandForRuntime } from '../settings/CliSkillRuntimeSetup'
 import {
   getLinearAgentSkillSetupInlineRuntimeCopy,
   getLinearAgentSkillSetupMissingLabel,
@@ -32,7 +28,6 @@ import {
   getLinearPromptAgentRuntime,
   getLinearPromptSetupCheckIdentity,
   getLinearPromptSkillDiscoveryTarget,
-  getLinearPromptTerminalShellOverride,
   getLocalDismissStorageKey,
   readLocalDismissed,
   type LinearAgentSkillPromptSettings
@@ -107,22 +102,9 @@ export function LinearAgentSkillSetupPrompt({
     discoveryTarget: skillDiscoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
-  const command = useMemo(
-    () => buildSkillCommandForRuntime(ORCA_LINEAR_SKILL_INSTALL_COMMAND, agentRuntime),
-    [agentRuntime]
-  )
-  const installedCommand = useMemo(
-    () =>
-      buildSkillCommandForRuntime(
-        getLinearAgentSkillUpdateCommand(skill.skills, skill.installed),
-        agentRuntime
-      ),
-    [agentRuntime, skill.installed, skill.skills]
-  )
-  const terminalShellOverride = getLinearPromptTerminalShellOverride(
-    currentPlatform,
-    settings,
-    agentRuntime
+  const updateSkillName = useMemo(
+    () => getLinearAgentSkillUpdateTarget(skill.skills, skill.installed).skillName,
+    [skill.installed, skill.skills]
   )
   const setupReady = linked && !skill.loading && skill.installed
   const missingSetup = linked && !localDismissed && !skill.loading && !setupReady
@@ -220,9 +202,7 @@ export function LinearAgentSkillSetupPrompt({
         showSuccess={showSuccessModal}
         successDescription={successDescription}
         missingLabel={missingLabel}
-        command={command}
-        installedCommand={installedCommand}
-        terminalShellOverride={terminalShellOverride}
+        updateSkillName={updateSkillName}
         terminalRuntime={agentRuntime}
         installed={skill.installed}
         loading={showCheckingModal || skill.loading}

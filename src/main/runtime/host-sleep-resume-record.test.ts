@@ -11,6 +11,7 @@ const {
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
 } = await import('./orca-runtime-test-fixtures.spec')
+const { bindPaneFirst, committingSpawn } = await import('./bind-first-pane.test-fixture')
 const { applyWorktreeSleepResumeRecords, captureWorktreeSleepResumeRecords } =
   await import('./terminal/stop/worktree-sleep-resume-records')
 
@@ -27,7 +28,7 @@ function makeRuntime(initialVerdict: Verdict, holderVerdict: Verdict = null) {
   )
   const live = new Set<string>()
   let spawned = 0
-  const spawn = vi.fn(async (_args: unknown) => {
+  const spawn = vi.fn(async (_args: { worktreeId?: string; tabId?: string; leafId?: string }) => {
     const id = `host-pty-${++spawned}`
     live.add(id)
     return { id }
@@ -51,13 +52,15 @@ function makeRuntime(initialVerdict: Verdict, holderVerdict: Verdict = null) {
       paneKey === HOLDER_PANE_KEY ? holderVerdict : verdict
   })
   runtime.setPtyController({
-    spawn,
+    spawn: committingSpawn(runtime, spawn),
     write: () => true,
     kill: () => true,
     stopAndWait: async (ptyId: string) => {
       live.delete(ptyId)
       // A PTY's exit clears its hook row, as the host's teardown does.
       rows = []
+      // Why: stopAndWait resolves after the provider's exit; main's layout keeps the pane bound.
+      runtime.onPtyExit(ptyId, 0)
       return true
     },
     getForegroundProcess: async () => null,
@@ -68,8 +71,10 @@ function makeRuntime(initialVerdict: Verdict, holderVerdict: Verdict = null) {
   const reportAgent = (): void => {
     rows = [row]
   }
-  // The session resumed by hand in another pane whose shell outlived it.
+  // The session resumed by hand in another pane whose shell outlived it; main's layout holds it.
   const reportHolder = (): void => {
+    const [tabId = '', leafId = ''] = HOLDER_PANE_KEY.split(':')
+    bindPaneFirst(runtime, { worktreeId: TEST_WORKTREE_ID, tabId, leafId, ptyId: 'holder-pty' })
     rows = [{ ...row, paneKey: HOLDER_PANE_KEY, tabId: 'holder-tab' }]
   }
   const setVerdict = (next: Verdict): void => {

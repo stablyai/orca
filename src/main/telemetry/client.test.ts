@@ -35,6 +35,7 @@ describe('track()', () => {
     expect(call.distinctId).toBe(BASE_COMMON.install_id)
     expect(call.properties).toEqual({
       ...BASE_COMMON,
+      agent_dashboard_enabled: false,
       $process_person_profile: false
     })
   })

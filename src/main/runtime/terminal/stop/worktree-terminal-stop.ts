@@ -22,6 +22,7 @@ import type { WorktreePtyHostFence } from '../../worktree-pty-host-fence'
 import { collectWorktreePtyIds } from './worktree-pty-collection'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { withMainBoundLeaves } from '../surface/main-terminal-surfaces'
+import { mainHoldsTerminal } from '../surface/main-pane-verdict'
 import { summarizeWorktreePtyStopVerdict } from '../../worktree-pty-stop-verdict'
 import { describeMobileSessionTabCloseRefusal } from '../../mobile-session-tab-close-refusal-message'
 import { clearClosedWorktreeResumeRecords } from './worktree-sleep-resume-records'
@@ -68,6 +69,13 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
         hostFence,
         true
       )
+      // Switch point: a terminal main binds as the close begins may run through a host's listing
+      // gap, as the window kept it connected; only its certified exit counts as stopped.
+      const mainBound = new Set(
+        [...targetPtyIds].filter(
+          (ptyId) => ORCA_LAYOUT_OWNER_IS_MAIN && mainHoldsTerminal(this, ptyId)
+        )
+      )
       const parentTabIds = [
         ...new Set(
           snapshot.tabs.flatMap((tab) => (tab.type === 'terminal' ? [tab.parentTabId] : []))
@@ -95,6 +103,7 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
         (ptyId) => this.getPtyLivenessVerdict(ptyId),
         (ptyId) =>
           this.ptysById.get(ptyId)?.connected === true ||
+          mainBound.has(ptyId) ||
           (this.isSshOwnedPtyId(ptyId) && this.ptysById.has(ptyId))
       )
       return {

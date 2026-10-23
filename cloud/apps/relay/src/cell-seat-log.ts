@@ -101,6 +101,10 @@ export class CellSeatLog {
     return { seq: lastSeq, changes, more: lastSeq < this.headSeq }
   }
 
+  seatList(): CellSeat[] {
+    return [...this.seats.values()]
+  }
+
   seatOf(userId: string, relayHostId: string): CellSeat | undefined {
     return this.seats.get(JSON.stringify([userId, relayHostId]))
   }

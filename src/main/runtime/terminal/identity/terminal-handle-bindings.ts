@@ -5,6 +5,7 @@ import type {
   RuntimePtyWorktreeRecord
 } from '../../runtime-terminal-state-records'
 import { randomUUID } from 'node:crypto'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
 export abstract class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntimeWithBuildPtyTerminalSummary {
   protected abstract getLeafKey(tabId: string, leafId: string): string
@@ -99,6 +100,18 @@ export abstract class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntim
   }
 
   protected issuePtyHandle(pty: RuntimePtyWorktreeRecord): string {
+    const handle = this.issuePtyHandleRecord(pty)
+    // Switch point: a terminal's record names no pane, so recovery reads the pane it was issued in;
+    // a terminal its replacement unbound keeps that stamp.
+    const record = ORCA_LAYOUT_OWNER_IS_MAIN ? this.handles.get(handle) : undefined
+    const issuedForPaneKey = record && this.paneOfPty(pty).paneKey
+    if (record && issuedForPaneKey && record.issuedForPaneKey !== issuedForPaneKey) {
+      this.handles.set(handle, { ...record, issuedForPaneKey })
+    }
+    return handle
+  }
+
+  private issuePtyHandleRecord(pty: RuntimePtyWorktreeRecord): string {
     const retained = this.handleByPtyIncarnation.get(pty.ptyId)
     if (retained?.incarnationId === pty.incarnationId) {
       return retained.handle

@@ -73,12 +73,28 @@ export function getClientCreationActionPolicy(
   state: AppState,
   worktreeId: string | null
 ): ClientCreationActionPolicy {
+  if (worktreeId) {
+    return getWorkspaceClientCreationActionPolicy(state, worktreeId)
+  }
+  return creationPolicyForRuntime(state, state.settings?.activeRuntimeEnvironmentId?.trim() ?? null)
+}
+
+export function getWorkspaceClientCreationActionPolicy(
+  state: AppState,
+  worktreeId: string
+): ClientCreationActionPolicy {
   const floatingWorkspace = worktreeId === FLOATING_TERMINAL_WORKTREE_ID
   const runtimeEnvironmentId = floatingWorkspace
     ? null
-    : worktreeId
-      ? runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
-      : (state.settings?.activeRuntimeEnvironmentId?.trim() ?? null)
+    : runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
+  return creationPolicyForRuntime(state, runtimeEnvironmentId, floatingWorkspace)
+}
+
+function creationPolicyForRuntime(
+  state: AppState,
+  runtimeEnvironmentId: string | null,
+  floatingWorkspace = false
+): ClientCreationActionPolicy {
   const runtimeStatus = runtimeEnvironmentId
     ? (state.runtimeStatusByEnvironmentId?.get(runtimeEnvironmentId)?.status ?? null)
     : null

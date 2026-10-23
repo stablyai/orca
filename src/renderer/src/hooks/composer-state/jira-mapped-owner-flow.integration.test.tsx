@@ -11,7 +11,7 @@ import {
 } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { RepositoryJiraProjectSection } from '@/components/settings/RepositoryJiraProjectSection'
+import { RepositoryJiraProjectSection } from '@/components/settings/repository/RepositoryJiraProjectSection'
 import { useWorkItemSourceSearch } from '@/components/new-workspace/use-work-item-source-search'
 import { useJiraProjectInventory } from '@/components/use-jira-project-inventory'
 import { getRepoWorkspaceCreationTargetHint } from '@/lib/project-host-workspace-target'

@@ -61,6 +61,7 @@ export type RestPullRequest = {
   merged_at?: string | null
   mergeable?: boolean | null
   mergeable_state?: string | null
+  auto_merge?: unknown
   base?: { ref?: string; sha?: string }
   head?: {
     ref?: string
@@ -130,6 +131,10 @@ export function mapRestPullRequest(pr: RestPullRequest): PullRequestLookupData {
     updatedAt: pr.updated_at ?? '',
     isDraft: pr.draft,
     mergeable: mapRestPRMergeable(pr),
+    ...(pr.mergeable_state !== undefined
+      ? { mergeStateStatus: pr.mergeable_state?.toUpperCase() ?? null }
+      : {}),
+    ...('auto_merge' in pr ? { autoMergeRequest: pr.auto_merge } : {}),
     baseRefName: pr.base?.ref,
     headRefName: pr.head?.ref,
     baseRefOid: pr.base?.sha,

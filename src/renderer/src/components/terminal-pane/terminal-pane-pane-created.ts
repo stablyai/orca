@@ -2,7 +2,7 @@ import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import type { PaneSpawnHints } from '@/lib/pane-manager/pane-manager-types'
 import { useAppStore } from '@/store'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
-import { createOsc52OscHandler } from './osc52-clipboard'
+import { createOsc52OscHandler } from '../../../../shared/osc52-clipboard'
 import {
   showOsc52ClipboardBlockedToast,
   showOsc52ClipboardFailedToast

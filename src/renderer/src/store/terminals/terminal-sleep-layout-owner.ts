@@ -1,5 +1,6 @@
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { isWorkspaceSleepRecord } from '../../../../shared/workspace-sleep'
 import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
 import { recordLayoutApply } from '@/runtime/layout-apply-send'
 import type { AppState } from '../types'
@@ -45,7 +46,8 @@ type HeldRecordsState = Pick<AppState, 'tabsByWorktree'>
 /**
  * The resume records `next` sets or replaces since `previous`, and the ones it drops, of panes in
  * tabs the window holds: a closed tab's or removed workspace's records went with it in main, and a
- * capture from a stale agent status names a tab main no longer has.
+ * capture from a stale agent status names a tab main no longer has. A workspace sleep's records
+ * are main's own, which the window only mirrors.
  */
 export function changedSleepingRecords(
   state: HeldRecordsState,
@@ -53,9 +55,11 @@ export function changedSleepingRecords(
   next: SleepingRecords
 ): { recorded: SleepingAgentSessionRecord[]; dropped: [string, SleepingAgentSessionRecord][] } {
   const held = ([paneKey, record]: [string, SleepingAgentSessionRecord]): boolean =>
-    state.tabsByWorktree[record.worktreeId]?.some(
+    !isWorkspaceSleepRecord(record) &&
+    (state.tabsByWorktree[record.worktreeId]?.some(
       (tab) => tab.id === parsePaneKey(paneKey)?.tabId
-    ) ?? false
+    ) ??
+      false)
   return {
     recorded: Object.entries(next)
       .filter((entry) => previous[entry[0]] !== entry[1] && held(entry))

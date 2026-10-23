@@ -3,6 +3,8 @@ import { OrcaRuntimeService } from './orca-runtime'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { makePaneKey } from '../../shared/stable-pane-id'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
+import { bindPaneFirst } from './bind-first-pane.test-fixture'
 import type {
   RuntimePtyTabCloseAuthority,
   HeadlessSeedMetadata,
@@ -253,6 +255,16 @@ describe('terminal query dispatch characterization', () => {
       }
       pty.tabId = 'tab'
       pty.paneKey = makePaneKey('tab', '00000000-0000-4000-8000-000000000001')
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        // Main's layout is the only answer to which pane holds the terminal; it needs a session.
+        Reflect.set(this, 'store', {})
+        bindPaneFirst(this, {
+          worktreeId: 'workspace',
+          tabId: 'tab',
+          leafId: '00000000-0000-4000-8000-000000000001',
+          ptyId: 'pty-query'
+        })
+      }
       this.pendingMobileTerminalCreatesByKey.set('workspace::tab', {
         activate: false,
         paired: false,

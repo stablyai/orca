@@ -202,7 +202,7 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
               () => {
                 const paneKey =
                   this.getLeavesForPty(ptyId).map((leaf) => this.makeRuntimePaneKey(leaf))[0] ??
-                  pty.paneKey
+                  this.paneOfPty(pty).paneKey
                 return paneKey ? this.getAgentStatusSnapshotForPaneFn?.(paneKey)[0] : undefined
               },
               outputObservedAt

@@ -3,7 +3,7 @@ import { useEffect } from 'react'
 import {
   readLinkedLinearIssuesWithLimit,
   filterLinearIssuesForInOrcaWorkspace
-} from '@/components/task-page-linear-in-orca-issues'
+} from '@/components/task-page/linear/task-page-linear-in-orca-issues'
 import type { LinearIssue } from '../../../shared/linear/issue-types'
 import { translate } from '@/i18n/i18n'
 

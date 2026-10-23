@@ -101,6 +101,8 @@ const RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'remote_update_manual_required',
   'remote_update_not_available',
   'remote_update_not_downloaded',
+  'connectors_disabled',
+  'external_conversation_not_found',
   ...AGENT_SESSION_RPC_ERROR_CODES
 ])
 
@@ -119,6 +121,7 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'inject_rejected',
   'dispatch_not_found',
   'dispatch_run_mismatch',
+  'task_run_mismatch',
   'terminal_not_found',
   // A handle that names a live agent session with no terminal. Distinct from
   // `terminal_handle_stale`, which claims the handle went dead — nothing went stale here.

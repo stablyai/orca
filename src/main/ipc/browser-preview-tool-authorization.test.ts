@@ -129,6 +129,8 @@ const BROWSER_PAGE_CHANNELS = [
   'browser:proceedCertificate',
   'browser:activeTabChanged',
   'browser:openDevTools',
+  'browser:addWordToDictionary',
+  'browser:copyImageAt',
   'browser:setViewportOverride',
   'browser:getPageSiteDisplay',
   'browser:zoomPage',

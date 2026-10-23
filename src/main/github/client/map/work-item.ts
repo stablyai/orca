@@ -122,12 +122,17 @@ export function mapPullRequestWorkItem(
       ? { checksSummary: deriveWorkItemCheckSummary(item.statusCheckRollup) }
       : {}),
     ...(mergeable ? { mergeable } : {}),
-    ...('autoMergeRequest' in item
-      ? { autoMergeEnabled: isAutoMergeEnabled(item.autoMergeRequest) }
+    ...('autoMergeRequest' in item || 'auto_merge' in item
+      ? { autoMergeEnabled: isAutoMergeEnabled(item.autoMergeRequest ?? item.auto_merge) }
       : {}),
-    ...('mergeStateStatus' in item
+    ...('mergeStateStatus' in item || 'mergeable_state' in item
       ? {
-          mergeStateStatus: typeof item.mergeStateStatus === 'string' ? item.mergeStateStatus : null
+          mergeStateStatus:
+            typeof item.mergeStateStatus === 'string'
+              ? item.mergeStateStatus
+              : typeof item.mergeable_state === 'string'
+                ? item.mergeable_state.toUpperCase()
+                : null
         }
       : {}),
     ...(typeof item.maintainerCanModify === 'boolean'

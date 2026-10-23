@@ -1,14 +1,31 @@
 import { describe, expect, it } from 'vitest'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import {
-  ptyHoldsRecordedSurface,
+  ptyHoldsRecordedSurface as holdsPane,
   recordPtySurface,
-  type PtySurfaceTopology
+  type PtySurfaceTopology,
+  type RecordedPtySurface
 } from './pty-recorded-surface-topology'
 
 const TAB = 'tab-1'
 const LEAF = '11111111-1111-4111-8111-111111111111'
 
-function pty(overrides: Partial<Parameters<typeof ptyHoldsRecordedSurface>[0]> = {}) {
+type Recorded = RecordedPtySurface & { tabId: string | null; paneKey: string | null }
+
+/** The pane the record names, as the window-owned query reads it. */
+function ptyHoldsRecordedSurface(record: Recorded, graph: PtySurfaceTopology): boolean {
+  return holdsPane(
+    record.ptyId,
+    {
+      tabId: record.tabId,
+      paneKey: record.paneKey,
+      recordedAtGraphSequence: record.surfaceRecordedAtGraphSequence ?? 0
+    },
+    graph
+  )
+}
+
+function pty(overrides: Partial<Recorded> = {}): Recorded {
   return {
     ptyId: 'pty-1',
     tabId: TAB,
@@ -93,6 +110,11 @@ describe('ptyHoldsRecordedSurface', () => {
     expect(ptyHoldsRecordedSurface(record, graph)).toBe(false)
 
     recordPtySurface(record, TAB, `${TAB}:${LEAF}`, graph.graphSequence)
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      // Layout-owner builds keep no copy: main's layout is the one answer (L80).
+      expect(record.surfaceRecordedAtGraphSequence).toBe(1)
+      return
+    }
     expect(ptyHoldsRecordedSurface(record, graph)).toBe(true)
     expect(ptyHoldsRecordedSurface(record, { ...graph, graphSequence: 4 })).toBe(false)
   })

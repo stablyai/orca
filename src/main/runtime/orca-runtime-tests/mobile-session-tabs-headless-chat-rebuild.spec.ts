@@ -9,6 +9,7 @@ import {
   makeWorkspaceSessionWithHeadlessTerminal
 } from '../orca-runtime-test-fixtures.spec'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import type { LayoutCommand } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import { applyCommandToSession } from '../../persistence/terminal-topology/terminal-pane-admission'
@@ -121,7 +122,8 @@ function headlessRuntimeWithChat({ asProfileStore = false } = {}) {
 
 async function openChat(runtime: OrcaRuntimeService): Promise<void> {
   await runtime.listMobileSessionTabs(WORKTREE)
-  runtime.projectStructuredAgentSessionTab({
+  // As every product path opens one: main's layout records the tab first.
+  await runtime.publishStructuredAgentSessionTab({
     workspaceId: TEST_WORKTREE_ID,
     sessionId: 'claude_29968',
     agent: 'claude',
@@ -223,7 +225,8 @@ describe('a chat tab on a host with no window', () => {
       leaves: [],
       unchangedMobileSessionWorktrees: [TEST_WORKTREE_ID]
     })
-    runtime.projectStructuredAgentSessionTab({
+    // As every product path opens one: main's layout records the tab first.
+    await runtime.publishStructuredAgentSessionTab({
       workspaceId: TEST_WORKTREE_ID,
       sessionId: 'claude_29968',
       agent: 'claude',
@@ -231,15 +234,14 @@ describe('a chat tab on a host with no window', () => {
     })
 
     const listed = await runtime.listMobileSessionTabs(WORKTREE)
-    expect(listed.tabGroups?.flatMap((group) => group.tabOrder)).toEqual([
-      CHAT_TAB_ID,
-      'win-term',
-      'serve-tab'
-    ])
-    expect(listed.tabs.map((tab) => (tab.type === 'terminal' ? tab.parentTabId : tab.id))).toEqual([
-      CHAT_TAB_ID,
-      'win-term',
-      'serve-tab'
-    ])
+    // Switch point: main's layout owns the workspace's tabs and their order; a window draws them and
+    // cannot add a tab or an order main lacks, so the chat takes its place in main's order.
+    const expectedOrder = ORCA_LAYOUT_OWNER_IS_MAIN
+      ? ['serve-tab', 'tab-readme', CHAT_TAB_ID]
+      : [CHAT_TAB_ID, 'win-term', 'serve-tab']
+    expect(listed.tabGroups?.flatMap((group) => group.tabOrder)).toEqual(expectedOrder)
+    expect(listed.tabs.map((tab) => (tab.type === 'terminal' ? tab.parentTabId : tab.id))).toEqual(
+      expectedOrder
+    )
   })
 })

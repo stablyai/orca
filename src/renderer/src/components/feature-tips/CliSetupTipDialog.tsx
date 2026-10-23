@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/dialog'
 import { translate } from '@/i18n/i18n'
 import { CliFeatureTipVisual } from './CliFeatureTipVisual'
-import { CliSkillSetupTerminal } from './CliSkillSetupTerminal'
+import { CliSkillSetupPanel } from './CliSkillSetupPanel'
 import { FeatureTipActions } from './FeatureTipActions'
 
 function WorktreePromptTerm({ children }: { children: string }): JSX.Element {
@@ -111,7 +111,7 @@ export function CliSetupTipDialog({
                 </p>
               </div>
             </div>
-            {skillTerminalOpen ? <CliSkillSetupTerminal /> : null}
+            {skillTerminalOpen ? <CliSkillSetupPanel /> : null}
           </DialogHeader>
 
           <DialogFooter className="mt-8 flex sm:justify-stretch">

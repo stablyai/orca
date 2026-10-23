@@ -40,6 +40,7 @@ export function BrowserPageViewportOverlays({
   isBlankTab,
   containerRef,
   markupPortalContainer,
+  markupControlsContainer,
   browserOverlayViewport,
   worktreeId,
   grab,
@@ -65,6 +66,7 @@ export function BrowserPageViewportOverlays({
   isBlankTab: boolean
   containerRef: RefObject<HTMLDivElement | null>
   markupPortalContainer: HTMLDivElement | null
+  markupControlsContainer: HTMLDivElement | null
   browserOverlayViewport: BrowserOverlayViewport
   worktreeId: string
   grab: GrabModeHook
@@ -80,6 +82,7 @@ export function BrowserPageViewportOverlays({
         annotationSend={annotationSend}
         grabAnnotations={grabAnnotations}
         markupPortalContainer={markupPortalContainer}
+        markupControlsContainer={markupControlsContainer}
         containerRef={containerRef}
         webviewRef={webviewRef}
         browserOverlayViewport={browserOverlayViewport}

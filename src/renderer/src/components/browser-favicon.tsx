@@ -51,10 +51,7 @@ export function BrowserFavicon({
         decoding="async"
         loading="lazy"
         fetchPriority="low"
-        className={cn(
-          'shrink-0 rounded-sm object-contain drop-shadow-[0_0_1px_var(--foreground)]',
-          className
-        )}
+        className={cn('shrink-0 rounded-sm object-contain', className)}
         onError={() => setFailedUrl(displayUrl)}
       />
     )

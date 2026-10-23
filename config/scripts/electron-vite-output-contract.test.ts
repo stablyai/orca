@@ -202,6 +202,7 @@ describe('Electron Vite output contract', () => {
       'persistence/profile-state/legacy-json/profile-state-recovery',
       'persistence/profile-state/profile-state-recovery-command',
       'persistence/profile-state/profile-state-storage-classification',
+      'skills/bundled-skill-install/cli-entry',
       'startup/http1-compatibility-marker'
     ]) {
       expect(input).toHaveProperty(name)
@@ -215,6 +216,9 @@ describe('Electron Vite output contract', () => {
     )
     expect(electronBuilderConfig.asarUnpack).toContain(
       'out/main/startup/http1-compatibility-marker.js'
+    )
+    expect(electronBuilderConfig.asarUnpack).toContain(
+      'out/main/skills/bundled-skill-install/cli-entry.js'
     )
   })
 

@@ -1,6 +1,6 @@
 /**
- * Cursor bills individual plans from two pools that both reset with the monthly
- * billing cycle, plus optional on-demand spend once the pools run out.
+ * Cursor bills individual plans from two pools that reset with the reported
+ * plan period, plus optional on-demand spend once the pools run out.
  * https://cursor.com/docs/account/pricing
  */
 export const CURSOR_MODELS_BUCKET_NAME = 'Cursor Models'

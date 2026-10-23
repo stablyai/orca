@@ -153,10 +153,11 @@ export function applyNativeChatReportedSessionOptions(
 
 /** Resolves a hook-reported model string to a catalog id: exact id, then label,
  *  then the longest id the report contains. A catalog that seeds no models keeps
- *  the report itself. Null when nothing matches. */
+ *  the report itself. Callers may retain unlisted selectors without fuzzy id matching. */
 export function matchNativeChatCatalogModelId(
   catalog: AgentSessionOptionCatalog,
-  reported: string
+  reported: string,
+  options?: { allowUnlisted?: boolean }
 ): string | null {
   const normalized = reported.trim().toLowerCase()
   if (!normalized) {
@@ -174,6 +175,9 @@ export function matchNativeChatCatalogModelId(
   const byLabel = catalog.models.find((model) => model.label.toLowerCase() === normalized)
   if (byLabel) {
     return byLabel.id
+  }
+  if (options?.allowUnlisted && !/\s/.test(normalized)) {
+    return reported.trim()
   }
   let containingId: string | null = null
   for (const model of catalog.models) {

@@ -15,7 +15,7 @@ import { registerTerminalUiRoutingIpcBridge } from '../../src/renderer/src/hooks
 import type { RuntimeClientTarget } from '../../src/shared/runtime-client-target'
 import { applyWebSessionTabsSnapshot } from '../../src/renderer/src/runtime/web-session-tabs-sync/snapshot-api'
 import {
-  acceptPairedHostStructuredSessions,
+  suppressCancelledStructuredSessionTabs,
   retireStructuredAgentSessionTab
 } from '../../src/renderer/src/runtime/structured-agent-session-tab-retirement'
 import { isLocalSessionTabCloseOwned } from '../../src/renderer/src/runtime/local-session-tab-close-owner'
@@ -522,7 +522,10 @@ describe('in-flight structured session close', () => {
         useAppStore.setState((state) =>
           applyWebSessionTabsSnapshot(
             state,
-            acceptPairedHostStructuredSessions(snapshot, SERVER),
+            suppressCancelledStructuredSessionTabs(snapshot, {
+              kind: 'environment',
+              environmentId: SERVER
+            }),
             SERVER
           )
         )

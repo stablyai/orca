@@ -12,7 +12,9 @@ const {
   persistBannerAcknowledgeMock,
   consumeConsentMutationTokenMock,
   getCohortAtEmitMock,
-  getOnboardingCohortAtEmitMock
+  getOnboardingCohortAtEmitMock,
+  hasTrackedAgentDashboardActiveTodayMock,
+  fromWebContentsMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   trackMock: vi.fn(),
@@ -20,12 +22,18 @@ const {
   persistBannerAcknowledgeMock: vi.fn(),
   consumeConsentMutationTokenMock: vi.fn(),
   getCohortAtEmitMock: vi.fn(),
-  getOnboardingCohortAtEmitMock: vi.fn()
+  getOnboardingCohortAtEmitMock: vi.fn(),
+  hasTrackedAgentDashboardActiveTodayMock: vi.fn(),
+  fromWebContentsMock: vi.fn()
 }))
 
-vi.mock('electron', () => ({ ipcMain: { handle: handleMock } }))
+vi.mock('electron', () => ({
+  ipcMain: { handle: handleMock },
+  BrowserWindow: { fromWebContents: fromWebContentsMock }
+}))
 vi.mock('../telemetry/client', () => ({
   track: trackMock,
+  hasTrackedAgentDashboardActiveToday: hasTrackedAgentDashboardActiveTodayMock,
   setOptIn: setOptInMock,
   persistBannerAcknowledgeWithoutEmitting: persistBannerAcknowledgeMock
 }))
@@ -88,6 +96,12 @@ describe('telemetry IPC handlers', () => {
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 0 })
     getOnboardingCohortAtEmitMock.mockReset()
     getOnboardingCohortAtEmitMock.mockReturnValue({ cohort: undefined })
+    hasTrackedAgentDashboardActiveTodayMock.mockReset().mockReturnValue(false)
+    fromWebContentsMock.mockReset().mockReturnValue({
+      isDestroyed: () => false,
+      isVisible: () => true,
+      isMinimized: () => false
+    })
     _resetStoreForTests()
   })
   afterEach(() => {
@@ -130,6 +144,40 @@ describe('telemetry IPC handlers', () => {
     expect(getCohortAtEmitMock).not.toHaveBeenCalled()
   })
 
+  it.each(['missing', 'destroyed', 'hidden', 'minimized'])(
+    'drops dashboard observations from a %s native window before spending the event budget',
+    (state) => {
+      registerWith({ installId: 'x', existedBeforeTelemetryRelease: false, optedIn: true })
+      fromWebContentsMock.mockReturnValue(
+        state === 'missing'
+          ? null
+          : {
+              isDestroyed: () => state === 'destroyed',
+              isVisible: () => state !== 'hidden',
+              isMinimized: () => state === 'minimized'
+            }
+      )
+
+      const handler = handlers.get('telemetry:track')!
+      expect(handler({ sender: {} }, 'agent_dashboard_active', { surface: 'popout' })).toBe(false)
+      expect(trackMock).not.toHaveBeenCalled()
+    }
+  )
+
+  it('confirms dashboard observations that were captured or already recorded that day', () => {
+    registerWith({ installId: 'x', existedBeforeTelemetryRelease: false, optedIn: true })
+    const handler = handlers.get('telemetry:track')!
+    trackMock.mockReturnValue(true)
+    expect(handler({ sender: {} }, 'agent_dashboard_active', { surface: 'popout' })).toBe(true)
+
+    trackMock.mockReturnValue(false)
+    hasTrackedAgentDashboardActiveTodayMock.mockReturnValue(true)
+    expect(handler({ sender: {} }, 'agent_dashboard_active', { surface: 'popout' })).toBe(true)
+
+    hasTrackedAgentDashboardActiveTodayMock.mockReturnValue(false)
+    expect(handler({ sender: {} }, 'agent_dashboard_active', { surface: 'popout' })).toBe(false)
+  })
+
   // Renderer-only Setup-step events depend on the handler injecting cohort so call sites stay synchronous.
   it('injects cohort for add_repo_setup_step_action (renderer-only event)', () => {
     registerWith({ installId: 'x', existedBeforeTelemetryRelease: false, optedIn: true })
@@ -145,6 +193,7 @@ describe('telemetry IPC handlers', () => {
   it('drops main-owned events from renderer telemetry IPC', () => {
     registerWith({ installId: 'x', existedBeforeTelemetryRelease: false, optedIn: true })
     const handler = handlers.get('telemetry:track')!
+    handler({}, 'agent_dashboard_enabled', { enabled: true })
     handler({}, 'app_starred_orca', { source: 'settings' })
     handler({}, 'star_nag_outcome', {
       outcome: 'shown',

@@ -8,7 +8,7 @@ import { getJiraIssueSearchQuery } from '../../../src/shared/new-workspace/smart
 import {
   buildJiraIssueKeyJql,
   buildJiraTextMatchJql
-} from '../../../src/shared/jira-search-input-jql'
+} from '../../../src/shared/jira/jira-search-input-jql'
 import { jiraIssueSearchRead } from './mobile-jira-operations'
 import { repoBaseRefSearchRead } from './mobile-workspace-source-operations'
 import {

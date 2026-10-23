@@ -4,6 +4,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OnboardingInlineCommandTerminal } from './OnboardingInlineCommandTerminal'
+import { FeatureSetupInlineTerminal } from './FeatureSetupInlineTerminal'
 import {
   ORCA_TERMINAL_COMMAND_FINISHED_EVENT,
   type TerminalCommandFinishedEventDetail
@@ -14,7 +15,17 @@ const mocks = vi.hoisted(() => ({
   createTab: vi.fn(() => ({ id: 'tab-1', shellOverride: 'wsl.exe' })),
   closeTab: vi.fn(),
   setActiveTabForWorktree: vi.fn(),
-  setTabCustomTitle: vi.fn()
+  setTabCustomTitle: vi.fn(),
+  track: vi.fn()
+}))
+
+vi.mock('@/lib/telemetry', () => ({ track: mocks.track }))
+vi.mock('@/hooks/useActiveProjectSkillRuntime', () => ({
+  useActiveProjectSkillRuntime: () => ({
+    agentRuntime: { runtime: 'wsl', wslDistro: 'Ubuntu', label: 'WSL Ubuntu' },
+    installDisabledReason: null,
+    terminalShellOverride: 'powershell.exe'
+  })
 }))
 
 vi.mock('@/store', () => ({
@@ -55,6 +66,7 @@ describe('OnboardingInlineCommandTerminal command-finished forwarding', () => {
   beforeEach(() => {
     mocks.createTab.mockClear()
     mocks.closeTab.mockClear()
+    mocks.track.mockClear()
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: {
@@ -76,16 +88,95 @@ describe('OnboardingInlineCommandTerminal command-finished forwarding', () => {
     container = null
     Reflect.deleteProperty(window, 'api')
     vi.useRealTimers()
+    vi.restoreAllMocks()
   })
 
-  it('prepares auto-paste again when the resolved tab shell changes', async () => {
-    vi.useFakeTimers()
-    mocks.createTab
-      .mockReturnValueOnce({ id: 'tab-1', shellOverride: 'wsl.exe' })
-      .mockReturnValueOnce({ id: 'tab-2', shellOverride: 'powershell.exe' })
-    const prepareCommandForShell = vi.fn(
-      (command: string, shellOverride: string | undefined) => `${shellOverride}:${command}`
+  it.each(['Mac', 'Windows'])(
+    'restores WSL feature terminal telemetry and ignores the %s continue shortcut',
+    async (platform) => {
+      vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(platform)
+      container = document.createElement('div')
+      document.body.appendChild(container)
+      root = createRoot(container)
+      const selection = {
+        browserUse: true,
+        computerUse: false,
+        linearTickets: true,
+        orchestration: true
+      }
+      await act(async () => {
+        root?.render(
+          <FeatureSetupInlineTerminal command="npx skills add orca-cli" selection={selection} />
+        )
+      })
+      const telemetry = {
+        browser_use: true,
+        computer_use: false,
+        linear_tickets: true,
+        orchestration: true,
+        selected_count: 2
+      }
+      expect(mocks.track).toHaveBeenCalledExactlyOnceWith(
+        'onboarding_feature_setup_terminal_opened',
+        telemetry
+      )
+      const terminal = container.querySelector('[data-testid="terminal-pane"]')
+      expect(terminal).not.toBeNull()
+      await act(async () => {
+        terminal?.dispatchEvent(
+          new KeyboardEvent('keydown', {
+            key: 'Enter',
+            metaKey: platform === 'Mac',
+            ctrlKey: platform !== 'Mac',
+            bubbles: true
+          })
+        )
+      })
+      expect(mocks.track).toHaveBeenCalledTimes(1)
+      await act(async () => {
+        terminal?.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }))
+        terminal?.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+      })
+      expect(mocks.track).toHaveBeenCalledTimes(2)
+      expect(mocks.track).toHaveBeenLastCalledWith('onboarding_feature_setup_terminal_interacted', {
+        ...telemetry,
+        method: 'keyboard'
+      })
+    }
+  )
+
+  it('tracks a direct pointer interaction in the WSL feature terminal once', async () => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+    await act(async () => {
+      root?.render(
+        <FeatureSetupInlineTerminal
+          command="npx skills add orca-cli"
+          selection={{
+            browserUse: true,
+            computerUse: false,
+            linearTickets: false,
+            orchestration: false
+          }}
+        />
+      )
+    })
+    await act(async () => {
+      const terminal = container?.querySelector('[data-testid="terminal-pane"]')
+      terminal?.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+      terminal?.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+    })
+    expect(mocks.track).toHaveBeenCalledTimes(2)
+    expect(mocks.track).toHaveBeenLastCalledWith(
+      'onboarding_feature_setup_terminal_interacted',
+      expect.objectContaining({ method: 'pointer', selected_count: 1 })
     )
+  })
+
+  it('auto-pastes the command into the tab it created', async () => {
+    vi.useFakeTimers()
+    mocks.createTab.mockReturnValueOnce({ id: 'tab-1', shellOverride: 'zsh' })
     const pasted: PasteTerminalTextDetail[] = []
     const handlePaste = (event: Event): void => {
       pasted.push((event as CustomEvent<PasteTerminalTextDetail>).detail)
@@ -100,24 +191,6 @@ describe('OnboardingInlineCommandTerminal command-finished forwarding', () => {
         root?.render(
           <OnboardingInlineCommandTerminal
             command="npx skills add orchestration"
-            prepareCommandForShell={prepareCommandForShell}
-            shellOverride="powershell.exe"
-            title="Skill setup"
-            ariaLabel="Skill setup terminal"
-          />
-        )
-      })
-      await act(async () => {})
-      await act(async () => {
-        vi.advanceTimersByTime(250)
-      })
-      await act(async () => {
-        root?.render(
-          <OnboardingInlineCommandTerminal
-            command="npx skills add orchestration"
-            forceHostRuntime
-            prepareCommandForShell={prepareCommandForShell}
-            shellOverride="powershell.exe"
             title="Skill setup"
             ariaLabel="Skill setup terminal"
           />
@@ -128,25 +201,13 @@ describe('OnboardingInlineCommandTerminal command-finished forwarding', () => {
         vi.advanceTimersByTime(250)
       })
 
-      expect(prepareCommandForShell).toHaveBeenCalledWith('npx skills add orchestration', 'wsl.exe')
-      expect(prepareCommandForShell).toHaveBeenCalledWith(
-        'npx skills add orchestration',
-        'powershell.exe'
-      )
       expect(mocks.createTab).toHaveBeenCalledWith(
         'ephemeral-setup-terminal:onboarding-inline-terminal',
         undefined,
-        'powershell.exe',
-        expect.objectContaining({ forceHostRuntime: true })
+        undefined,
+        expect.objectContaining({ activate: false })
       )
-      expect(pasted).toContainEqual({
-        tabId: 'tab-1',
-        text: 'wsl.exe:npx skills add orchestration'
-      })
-      expect(pasted).toContainEqual({
-        tabId: 'tab-2',
-        text: 'powershell.exe:npx skills add orchestration'
-      })
+      expect(pasted).toContainEqual({ tabId: 'tab-1', text: 'npx skills add orchestration' })
     } finally {
       window.removeEventListener(PASTE_TERMINAL_TEXT_EVENT, handlePaste)
     }

@@ -4,6 +4,7 @@ import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { resolveWorktreeOperationRouteResult } from '@/lib/worktree-operation-route'
 import { isWebClientLocation } from '@/lib/web-client-location'
+import { findGroupAndWorktree } from '../slices/tab-group-state'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 
 export function createActiveWorkspaceTerminalActions(
@@ -13,7 +14,8 @@ export function createActiveWorkspaceTerminalActions(
   return {
     openNewTerminalTabInActiveWorkspace: async (groupId) => {
       const state = get()
-      const worktreeId = state.activeWorktreeId
+      const worktreeId =
+        findGroupAndWorktree(state.groupsByWorktree, groupId)?.worktreeId ?? state.activeWorktreeId
       if (!worktreeId) {
         return
       }

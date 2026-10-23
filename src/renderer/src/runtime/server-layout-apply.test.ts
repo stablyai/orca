@@ -7,6 +7,7 @@ import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import type { PublishedWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-published'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import { ownedEditorFileId } from '../../../shared/workspace-session-pane-ownership'
 import { createStoreSessionMockApi } from '../store/slices/store-session-test-harness'
 import {
   _resetLayoutFramePositionForTests,
@@ -210,6 +211,52 @@ describe('a layout intent for a workspace a server’s frames draw', () => {
       { ...move, tabId: 'bar-1' }
     )
   })
+
+  it('sends a new editor open under the proposed tab id and group, the server’s file id, no desktop owner', async () => {
+    const { store } = await drawnByServer()
+    const filePath = '/worktree/src/a.ts'
+    hoisted.reply = async () => ({ ok: true, result: { tabId: 'proposed-tab' } })
+
+    const { taken, handlers } = send(store, {
+      type: 'openEditorTab',
+      tabId: 'proposed-tab',
+      fileId: ownedEditorFileId(filePath, WT, ENV),
+      contentType: 'editor',
+      file: {
+        filePath,
+        relativePath: 'src/a.ts',
+        language: 'typescript',
+        runtimeEnvironmentId: ENV
+      },
+      groupId: HOST_GROUP,
+      preview: true
+    })
+    await settle()
+
+    expect(taken).toBe(true)
+    expect(hoisted.sent).toEqual([
+      {
+        target: { kind: 'environment', environmentId: ENV },
+        params: {
+          command: {
+            type: 'openEditorTab',
+            tabId: 'proposed-tab',
+            fileId: ownedEditorFileId(filePath, WT, undefined),
+            contentType: 'editor',
+            file: { filePath, relativePath: 'src/a.ts', language: 'typescript' },
+            groupId: HOST_GROUP,
+            preview: true,
+            workspace: WT
+          }
+        }
+      }
+    ])
+    expect(handlers.apply).toHaveBeenCalledWith(
+      { tabId: 'proposed-tab' },
+      { framesKey: ENV, routed: true }
+    )
+  })
+
   // A window's close tells main the window already stopped its terminals, which this desktop cannot
   // do for a server's; closes, starts, sleeps and terminal names keep the RPCs that main applies.
   it('keeps today’s path for closes, starts, sleeps and a terminal’s own name', async () => {

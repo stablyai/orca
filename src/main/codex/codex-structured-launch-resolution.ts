@@ -119,7 +119,8 @@ export function codexStructuredLaunchPart(
       inheritedEnvToDelete: [
         ...(visuals ? [] : [NATIVE_CHAT_SCRATCH_DIR_ENV]),
         LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV
-      ]
+      ],
+      cliRuntimeCommand: command
     }
   }
 }

@@ -3,7 +3,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   activateAndRevealWorktree: vi.fn(),
   state: {
-    worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo/wt' }] },
+    getKnownWorktreeById: vi.fn((id: string) =>
+      id === 'wt-1' ? { id: 'wt-1', repoId: 'repo-1', path: '/repo/wt' } : undefined
+    ),
     openFile: vi.fn(),
     setPendingEditorReveal: vi.fn()
   }
@@ -23,22 +25,24 @@ afterEach(() => {
 })
 
 describe('openAnnotationLocation', () => {
-  it('activates as a surface-providing caller before opening the editor', () => {
+  it('activates the given host as a surface-providing caller before opening the editor', () => {
     vi.stubGlobal('requestAnimationFrame', vi.fn().mockReturnValue(1))
     vi.stubGlobal('cancelAnimationFrame', vi.fn())
 
     openAnnotationLocation({
       worktreeId: 'wt-1',
+      executionHostId: 'ssh:devbox',
       path: 'src/a.ts',
-      line: 3,
-      revealRafRef: { current: null },
-      revealInnerRafRef: { current: null }
+      line: 3
     })
 
     // Why: the annotation's editor file is the surface — the jump must not re-seed
-    // a shell into a workspace whose last terminal the user closed.
+    // a shell into a workspace whose last terminal the user closed. The host keeps a
+    // remote workspace from switching to its local twin with the same id.
+    expect(mocks.state.getKnownWorktreeById).toHaveBeenCalledWith('wt-1', 'ssh:devbox')
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-1', {
-      providesInitialSurface: true
+      providesInitialSurface: true,
+      executionHostId: 'ssh:devbox'
     })
     expect(mocks.state.openFile).toHaveBeenCalledWith(
       expect.objectContaining({ worktreeId: 'wt-1', relativePath: 'src/a.ts' }),
@@ -50,9 +54,7 @@ describe('openAnnotationLocation', () => {
     openAnnotationLocation({
       worktreeId: 'missing',
       path: 'src/a.ts',
-      line: 3,
-      revealRafRef: { current: null },
-      revealInnerRafRef: { current: null }
+      line: 3
     })
 
     expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()

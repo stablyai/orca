@@ -1,4 +1,9 @@
 import type { PaintedRestorePane } from '../../shared/painted-restore-ack'
+import type {
+  PtyFencedTerminationRequest,
+  PtyFencedTerminationOutcome
+} from '../../shared/pty-fenced-termination'
+import type { ResourceViewAdmission } from '../../shared/resource-view-admission'
 import type { SpawnIntent } from '../../shared/host-spawn-admission'
 import { ipcRenderer } from 'electron'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
@@ -167,10 +172,14 @@ export const ptySessionControlApi = {
   publishTerminalViewAttributes: (attributes: TerminalViewAttributes): void => {
     ipcRenderer.send('pty:terminalViewAttributes', attributes)
   },
+  killFenced: (request: PtyFencedTerminationRequest): Promise<PtyFencedTerminationOutcome> =>
+    ipcRenderer.invoke('pty:killFenced', request),
   kill: (id: string, opts?: { keepHistory?: boolean }): Promise<void> =>
     ipcRenderer.invoke('pty:kill', { id, keepHistory: opts?.keepHistory ?? false }),
-  listSessions: (scope?: PtySessionListScope): Promise<PtyListedSession[]> =>
-    ipcRenderer.invoke('pty:listSessions', scope),
+  listSessions: (
+    scope?: PtySessionListScope,
+    admission?: ResourceViewAdmission
+  ): Promise<PtyListedSession[]> => ipcRenderer.invoke('pty:listSessions', scope, admission),
   getAuthoritativeBufferSnapshotCapabilities: (
     ids: string[]
   ): Promise<{ id: string; authoritative: boolean | null }[]> =>

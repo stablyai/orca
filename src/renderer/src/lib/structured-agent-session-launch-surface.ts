@@ -22,7 +22,11 @@ import {
   getStructuredAgentSessionLaunchOwner,
   getStructuredLaunchStateBySessionId
 } from './structured-agent-session-launch-registry'
-import { structuredAgentSessionFocusOwner } from '@/runtime/structured-agent-session-owner'
+import {
+  structuredAgentSessionFocusOwner,
+  structuredAgentSessionTargetForHost
+} from '@/runtime/structured-agent-session-owner'
+import { holdFrameDrawnProvisionalChatTab } from './frame-drawn-chat-tab-placement'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import {
   openAgentSessionTabThroughLayoutOwner,
@@ -182,6 +186,8 @@ export function openStructuredAgentSessionProvisionalTab(args: {
       ...(args.afterTabId ? { afterTabId: args.afterTabId } : {}),
       activate: args.activate !== false
     })
+    const target = structuredAgentSessionTargetForHost(args.executionHostId)
+    holdFrameDrawnProvisionalChatTab(target, args.worktreeId, tab.id)
     if (args.activate !== false) {
       state.setActiveTabType('agent-session', args.worktreeId)
     }

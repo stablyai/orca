@@ -119,6 +119,7 @@ function fetchedBundle(): MobileWebBundleFetchResult {
       ]
     },
     assets: new Map([['index.html', new Uint8Array([1, 2, 3])]]),
+    reused: [],
     totalBytes: 3,
     elapsedMs: 12
   }
