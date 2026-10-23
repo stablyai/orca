@@ -17,13 +17,14 @@ import {
   Quote,
   Strikethrough
 } from 'lucide-react-native'
-import { colors, radii, spacing } from '../theme/mobile-theme'
+import { colors, MIN_TOUCH_TARGET, motion, radii, spacing } from '../theme/mobile-theme'
+import { pressTransition } from './ui/transition-styles'
 import type { MobileRichMarkdownCommand } from './mobile-rich-markdown-editor-contract'
 
 type ToolbarItem = {
   command: MobileRichMarkdownCommand
   label: string
-  icon: ComponentType<{ size?: number; color?: string }>
+  icon: ComponentType<{ size?: number; color?: string; strokeWidth?: number }>
 }
 
 /**
@@ -78,13 +79,23 @@ export const MobileRichMarkdownToolbar = memo(function MobileRichMarkdownToolbar
               accessibilityRole="button"
               accessibilityLabel={item.label}
               onPress={() => onCommand(item.command)}
-              style={({ pressed }) => [
-                styles.toolbarButton,
-                pressed && editable ? styles.toolbarButtonPressed : null,
-                !editable ? styles.toolbarButtonDisabled : null
-              ]}
+              style={[styles.toolbarTouch, !editable ? styles.toolbarButtonDisabled : null]}
             >
-              <Icon size={15} color={editable ? colors.textPrimary : colors.textMuted} />
+              {({ pressed }) => (
+                <View
+                  style={[
+                    styles.toolbarButton,
+                    pressed && editable ? styles.toolbarButtonPressed : null,
+                    pressed ? pressTransition.pressed : pressTransition.rest
+                  ]}
+                >
+                  <Icon
+                    size={17}
+                    color={editable ? colors.textPrimary : colors.textMuted}
+                    strokeWidth={2.2}
+                  />
+                </View>
+              )}
             </Pressable>
           )
         })}
@@ -95,29 +106,35 @@ export const MobileRichMarkdownToolbar = memo(function MobileRichMarkdownToolbar
 
 const styles = StyleSheet.create({
   toolbar: {
-    minHeight: 42,
+    minHeight: 52,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel
+    borderBottomColor: colors.separator,
+    backgroundColor: colors.bgBase
   },
   toolbarContent: {
     alignItems: 'center',
-    gap: 6,
+    gap: 2,
     paddingHorizontal: spacing.sm,
-    paddingVertical: 6
+    paddingVertical: spacing.xs
+  },
+  // 44 pt to tap, 36 pt to see: the circle is what reads as a button.
+  toolbarTouch: {
+    width: MIN_TOUCH_TARGET,
+    height: MIN_TOUCH_TARGET,
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   toolbarButton: {
-    minWidth: 30,
-    height: 30,
+    width: 36,
+    height: 36,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radii.button,
-    paddingHorizontal: spacing.xs
+    borderRadius: radii.pill
   },
   toolbarButtonPressed: {
-    backgroundColor: colors.bgRaised
+    backgroundColor: colors.fillPressed
   },
   toolbarButtonDisabled: {
-    opacity: 0.55
+    opacity: motion.disabledOpacity
   }
 })

@@ -1,10 +1,18 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ActivityIndicator, Pressable, StyleSheet, Switch, Text, View } from 'react-native'
-import { Check, Download } from 'lucide-react-native'
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
+import { Download } from 'lucide-react-native'
 import { BottomDrawer } from './BottomDrawer'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { MobileSwitch } from './MobileSwitch'
+import { Banner } from './ui/Banner'
+import { Button } from './ui/Button'
+import { ListGroup } from './ui/ListGroup'
+import { ListRow } from './ui/ListRow'
+import { SectionHeader } from './ui/SectionHeader'
+import { SheetHeader } from './ui/SheetHeader'
+import { StateView } from './ui/StateView'
+import { colors, spacing, textStyles } from '../theme/mobile-theme'
 import type { RpcClient } from '../transport/rpc-client'
-import { triggerError, triggerSuccess } from '../platform/haptics'
+import { triggerError, triggerSelection, triggerSuccess } from '../platform/haptics'
 import { useDictationSetupPoller } from '../dictation/use-dictation-setup-poller'
 import {
   CLOUD_MODEL_NEEDS_KEY,
@@ -32,6 +40,20 @@ function formatSize(bytes: number | null | undefined): string {
     return ''
   }
   return `${Math.round(bytes / 1_000_000)} MB`
+}
+
+/** The row's grey line: where the model runs or its size, then download progress. */
+function modelMeta(model: MobileSpeechModel): string {
+  const parts = [
+    model.recommended ? 'Recommended' : null,
+    model.provider === 'openai' ? 'OpenAI API' : formatSize(model.sizeBytes) || null,
+    isModelInFlight(model) && model.progress != null
+      ? `${Math.round(model.progress * 100)}%`
+      : model.status === 'extracting'
+        ? 'Extracting…'
+        : null
+  ]
+  return parts.filter((part) => part !== null).join(' · ')
 }
 
 // Lets the user enable dictation and download or pick a speech model on the paired
@@ -117,9 +139,11 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
         return
       }
       setError(null)
+      triggerSelection()
       try {
         setSetup(await setDictationConfig(client, { enabled }))
       } catch (err) {
+        triggerError()
         setError(err instanceof Error ? err.message : 'Could not update')
       }
     },
@@ -130,153 +154,99 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
     <BottomDrawer visible={visible} onClose={onClose}>
       {/* Why: BottomDrawer already scrolls its children in a keyboard-aware container;
           a nested capped ScrollView cut off the lower controls. */}
-      <View>
-        <Text style={styles.heading}>Set up voice dictation</Text>
+      <View style={styles.sheet}>
+        <SheetHeader title="Voice dictation" trailing={{ label: 'Done', onPress: onClose }} />
         <Text style={styles.subtitle}>
-          Download or pick a model and enable dictation on the paired computer — all from here.
+          Pick or download a speech model and turn dictation on for the paired desktop, all from
+          here.
         </Text>
 
         {setup === null ? (
-          <View style={styles.loading}>
-            <ActivityIndicator color={colors.textSecondary} />
-          </View>
+          error ? null : (
+            <StateView loading title="Loading dictation settings…" />
+          )
         ) : (
           <>
-            <View style={styles.enableRow}>
-              <Text style={styles.enableLabel}>Dictation enabled</Text>
-              <Switch value={setup.enabled} onValueChange={(v) => void handleToggleEnabled(v)} />
-            </View>
+            <ListGroup>
+              <ListRow
+                title="Dictation"
+                accessory={
+                  <MobileSwitch
+                    accessibilityLabel="Dictation enabled"
+                    value={setup.enabled === true}
+                    onValueChange={(v) => void handleToggleEnabled(v)}
+                  />
+                }
+              />
+            </ListGroup>
 
-            {setup.models.map((model) => {
-              const inFlight = isModelInFlight(model)
-              const action = dictationModelRowAction(model, setup.selectedModelId)
-              const rowBusy = busy === model.id
-              return (
-                <View key={model.id} style={styles.modelRow}>
-                  <View style={styles.modelInfo}>
-                    <View style={styles.modelTitleRow}>
-                      <Text style={styles.modelLabel}>{model.label}</Text>
-                      {model.recommended ? (
-                        <Text style={styles.recommended}>Recommended</Text>
-                      ) : null}
-                    </View>
-                    <Text style={styles.modelMeta}>
-                      {model.provider === 'openai' ? 'OpenAI API' : formatSize(model.sizeBytes)}
-                      {inFlight && model.progress != null
-                        ? ` · ${Math.round(model.progress * 100)}%`
-                        : model.status === 'extracting'
-                          ? ' · extracting…'
-                          : ''}
-                    </Text>
-                  </View>
-                  {action === 'needs-api-key' ? (
-                    <Text style={styles.modelStateText}>{CLOUD_MODEL_NEEDS_KEY}</Text>
-                  ) : action === 'in-use' ? (
-                    <View style={styles.selectedTag}>
-                      <Check size={14} color={colors.statusGreen} strokeWidth={2.4} />
-                      <Text style={styles.selectedText}>In use</Text>
-                    </View>
-                  ) : action === 'use' ? (
-                    <Pressable
-                      style={({ pressed }) => [
-                        styles.actionButton,
-                        pressed && styles.actionPressed
-                      ]}
-                      disabled={rowBusy}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Use ${model.label}`}
-                      accessibilityState={{ disabled: rowBusy }}
-                      onPress={() => void handleUseModel(model)}
-                    >
-                      <Text style={styles.actionText}>Use</Text>
-                    </Pressable>
-                  ) : action === 'downloading' ? (
-                    <ActivityIndicator size="small" color={colors.textSecondary} />
-                  ) : (
-                    <Pressable
-                      style={({ pressed }) => [
-                        styles.actionButton,
-                        pressed && styles.actionPressed
-                      ]}
-                      disabled={rowBusy}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Download ${model.label}`}
-                      accessibilityState={{ disabled: rowBusy }}
-                      onPress={() => void handleDownload(model)}
-                    >
-                      {rowBusy ? (
+            <SectionHeader title="Models" />
+            <ListGroup>
+              {setup.models.map((model) => {
+                const action = dictationModelRowAction(model, setup.selectedModelId)
+                const rowBusy = busy === model.id
+                const meta = modelMeta(model)
+                return (
+                  <ListRow
+                    key={model.id}
+                    title={model.label ?? model.id}
+                    subtitle={meta || undefined}
+                    selected={action === 'in-use' ? true : undefined}
+                    value={action === 'needs-api-key' ? CLOUD_MODEL_NEEDS_KEY : undefined}
+                    accessibilityLabel={action === 'in-use' ? `${model.label}, in use` : undefined}
+                    accessory={
+                      action === 'use' ? (
+                        <Button
+                          label="Use"
+                          size="compact"
+                          accessibilityLabel={`Use ${model.label}`}
+                          busy={rowBusy}
+                          onPress={() => void handleUseModel(model)}
+                        />
+                      ) : action === 'downloading' ? (
                         <ActivityIndicator size="small" color={colors.textSecondary} />
-                      ) : (
-                        <>
-                          <Download size={13} color={colors.textSecondary} strokeWidth={2.2} />
-                          <Text style={styles.actionText}>Download</Text>
-                        </>
-                      )}
-                    </Pressable>
-                  )}
-                </View>
-              )
-            })}
+                      ) : action === 'download' ? (
+                        <Button
+                          label="Download"
+                          icon={Download}
+                          size="compact"
+                          accessibilityLabel={`Download ${model.label}`}
+                          busy={rowBusy}
+                          onPress={() => void handleDownload(model)}
+                        />
+                      ) : undefined
+                    }
+                  />
+                )
+              })}
+            </ListGroup>
           </>
         )}
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {error ? (
+          <View style={styles.error}>
+            <Banner tone="error" title="Couldn't update dictation" message={error} />
+          </View>
+        ) : null}
       </View>
     </BottomDrawer>
   )
 }
 
 const styles = StyleSheet.create({
-  heading: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    fontWeight: '700'
+  // The drawer pads its content; the sheet's groups and text keep their own 16 and 20 pt edges.
+  sheet: {
+    marginHorizontal: -spacing.md,
+    paddingBottom: spacing.lg
   },
   subtitle: {
+    ...textStyles.subhead,
     color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    marginTop: spacing.xs,
-    marginBottom: spacing.md
+    textAlign: 'center',
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.lg
   },
-  loading: { paddingVertical: spacing.xl, alignItems: 'center' },
-  enableRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle,
-    marginBottom: spacing.sm
-  },
-  enableLabel: { color: colors.textPrimary, fontSize: typography.bodySize },
-  modelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-    paddingVertical: spacing.sm
-  },
-  modelInfo: { flex: 1, minWidth: 0 },
-  modelTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  modelLabel: { color: colors.textPrimary, fontSize: typography.bodySize },
-  recommended: {
-    color: colors.statusGreen,
-    fontSize: 10,
-    fontWeight: '700'
-  },
-  modelMeta: { color: colors.textMuted, fontSize: typography.metaSize, marginTop: 2 },
-  modelStateText: { color: colors.textMuted, fontSize: typography.metaSize, flexShrink: 1 },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 6,
-    borderRadius: radii.button,
-    backgroundColor: colors.bgRaised
-  },
-  actionPressed: { opacity: 0.7 },
-  actionText: { color: colors.textSecondary, fontSize: typography.metaSize, fontWeight: '600' },
-  selectedTag: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  selectedText: { color: colors.statusGreen, fontSize: typography.metaSize, fontWeight: '600' },
-  error: { color: colors.statusRed, fontSize: typography.metaSize, marginTop: spacing.md }
+  error: {
+    marginTop: spacing.lg
+  }
 })

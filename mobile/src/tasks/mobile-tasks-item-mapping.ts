@@ -33,6 +33,9 @@ export function formatUpdatedAt(value: string): string {
     return ''
   }
   const minutes = Math.max(0, Math.floor((Date.now() - time) / 60_000))
+  if (minutes < 1) {
+    return 'now'
+  }
   if (minutes < 60) {
     return `${minutes}m`
   }
@@ -155,7 +158,11 @@ export function createGitHubTask(
   repo: RepoSummary,
   item: Omit<GitHubWorkItem, 'repoId' | 'repoName'>
 ) {
-  const source: GitHubWorkItem = { ...item, repoId: repo.id, repoName: repo.displayName }
+  const source: GitHubWorkItem = {
+    ...item,
+    repoId: repo.id,
+    repoName: repo.displayName
+  }
   return {
     key: `github:${repo.id}:${item.type}:${item.number}`,
     provider: 'github' as const,
@@ -184,7 +191,11 @@ export function createGitLabTask(
   repo: RepoSummary,
   item: Omit<GitLabWorkItem, 'repoId' | 'repoName'>
 ) {
-  const source: GitLabWorkItem = { ...item, repoId: repo.id, repoName: repo.displayName }
+  const source: GitLabWorkItem = {
+    ...item,
+    repoId: repo.id,
+    repoName: repo.displayName
+  }
   return {
     key: `gitlab:${repo.id}:${item.type}:${item.number}`,
     provider: 'gitlab' as const,
@@ -265,7 +276,7 @@ export function createJiraTask(issue: JiraIssue): Extract<TaskItem, { provider: 
   }
 }
 
-export function createLinearTask(issue: LinearIssue): TaskItem {
+export function createLinearTask(issue: LinearIssue): Extract<TaskItem, { provider: 'linear' }> {
   return {
     key: `linear:${issue.workspaceId ?? 'workspace'}:${issue.id}`,
     provider: 'linear',

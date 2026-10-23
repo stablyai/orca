@@ -1,9 +1,10 @@
-import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { X } from 'lucide-react-native'
-import { colors } from '../theme/mobile-theme'
+import { Text, View } from 'react-native'
+import { FileWarning } from 'lucide-react-native'
 import { BottomDrawer } from '../components/BottomDrawer'
-import { MobileSyntaxSegments } from '../components/MobileSyntaxSegments'
-import { mobileDiffLineNumber, mobileDiffLinePrefix } from './mobile-diff-format'
+import { MobileDiffCodeLine } from '../components/MobileDiffCodeLine'
+import { SheetHeader } from '../components/ui/SheetHeader'
+import { StateView } from '../components/ui/StateView'
+import { splitMobileFilePath } from './mobile-file-path-parts'
 import type { MobileBranchDiffPreviewState } from './mobile-source-control-screen-state'
 import { styles } from './mobile-source-control-styles'
 
@@ -17,6 +18,11 @@ export function MobileBranchDiffPreviewDrawer({ branchDiffPreview, onClose }: Pr
     return null
   }
   const entry = branchDiffPreview.entry
+  const { name, directory } = splitMobileFilePath(entry.path)
+  const range =
+    branchDiffPreview.kind === 'ready'
+      ? `${branchDiffPreview.summary.baseRef}..HEAD`
+      : 'Committed on branch'
   return (
     <BottomDrawer
       visible={branchDiffPreview !== null}
@@ -24,56 +30,37 @@ export function MobileBranchDiffPreviewDrawer({ branchDiffPreview, onClose }: Pr
       dragContentToDismiss={false}
       zIndex={1100}
     >
-      <View style={styles.diffDrawerHeader}>
-        <View style={styles.diffDrawerTitleBlock}>
-          <Text style={styles.diffDrawerTitle} numberOfLines={1}>
-            {entry.path}
-          </Text>
-          <Text style={styles.diffDrawerMeta} numberOfLines={1}>
-            {branchDiffPreview.kind === 'ready'
-              ? `${branchDiffPreview.summary.baseRef}..HEAD`
-              : 'Committed on branch'}
-          </Text>
-        </View>
-        <Pressable
-          style={({ pressed }) => [styles.diffCloseButton, pressed && styles.iconButtonPressed]}
-          onPress={onClose}
-          hitSlop={8}
-          accessibilityLabel="Close committed diff preview"
-        >
-          <X size={18} color={colors.textSecondary} strokeWidth={2.1} />
-        </Pressable>
-      </View>
+      <SheetHeader
+        title={name}
+        subtitle={directory ? `${directory} · ${range}` : range}
+        onClose={onClose}
+      />
       {branchDiffPreview.kind === 'loading' ? (
         <View style={styles.diffState}>
-          <ActivityIndicator size="small" color={colors.textSecondary} />
+          <StateView loading title="Loading diff…" />
         </View>
       ) : branchDiffPreview.kind === 'error' ? (
         <View style={styles.diffState}>
-          <Text style={styles.stateTitle}>Unable to Load Diff</Text>
-          <Text style={styles.stateText}>{branchDiffPreview.message}</Text>
+          <StateView
+            icon={FileWarning}
+            title="Couldn’t load the diff"
+            message={branchDiffPreview.message}
+          />
         </View>
       ) : (
         <View style={styles.diffLines}>
-          {branchDiffPreview.truncated ? (
-            <Text style={styles.diffTruncatedText}>Diff truncated for mobile preview.</Text>
-          ) : null}
           {branchDiffPreview.lines.map((line, index) => (
-            <View
+            <MobileDiffCodeLine
               key={`${index}:${line.kind}:${line.oldLineNumber ?? ''}:${line.newLineNumber ?? ''}`}
-              style={[
-                styles.diffLine,
-                line.kind === 'add' && styles.diffLineAdd,
-                line.kind === 'delete' && styles.diffLineDelete
-              ]}
-            >
-              <Text style={styles.diffLineNumber}>{mobileDiffLineNumber(line)}</Text>
-              <Text style={styles.diffLinePrefix}>{mobileDiffLinePrefix(line.kind)}</Text>
-              <Text style={styles.diffLineText}>
-                {line.text ? <MobileSyntaxSegments segments={line.segments} /> : ' '}
-              </Text>
-            </View>
+              line={line}
+              selectable
+            />
           ))}
+          {branchDiffPreview.truncated ? (
+            <Text style={styles.diffTruncatedText}>
+              The diff is cut short on mobile. Open it on desktop to see the rest.
+            </Text>
+          ) : null}
         </View>
       )}
     </BottomDrawer>

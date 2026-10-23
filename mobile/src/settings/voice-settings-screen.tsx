@@ -1,11 +1,13 @@
 import { useCallback, useRef, useState } from 'react'
-import { ActivityIndicator, Pressable, ScrollView, Switch, Text, View } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { StyleSheet, Text, View } from 'react-native'
+import { Mic, MonitorOff, TriangleAlert } from 'lucide-react-native'
 import type { VoiceSettingsOperations } from './voice-settings-operations'
-import { voiceSettingsStyles as styles } from './voice-settings-styles'
-import { ChevronLeft, ChevronRight } from 'lucide-react-native'
-import { colors, spacing } from '../theme/mobile-theme'
+import { colors, spacing, textStyles } from '../theme/mobile-theme'
 import { BottomDrawer } from '../components/BottomDrawer'
+import { PickerSheetTitle } from '../components/PickerModal'
+import { ListRow } from '../components/ui/ListRow'
+import { Banner } from '../components/ui/Banner'
+import { StateView } from '../components/ui/StateView'
 import { MobileSegmentedControl } from '../components/MobileSegmentedControl'
 import { VoiceModelList } from '../components/VoiceModelList'
 import { useDictationSetupPoller } from '../dictation/use-dictation-setup-poller'
@@ -14,6 +16,7 @@ import {
   type MobileSpeechModel,
   type MobileSpeechSetup
 } from '../dictation/mobile-dictation-setup'
+import { SettingsScreen, SettingsSection, SettingsSwitchRow } from './settings-screen-frame'
 
 const POLL_INTERVAL_MS = 1500
 
@@ -22,18 +25,33 @@ const DICTATION_MODES = [
   { value: 'hold', label: 'Hold' }
 ] as const
 
+const MODE_HINT = {
+  toggle: 'Press once to start, again to stop.',
+  hold: 'Dictate only while held.'
+} as const
+
+const NO_DESKTOP: VoiceSettingsConnection = { kind: 'no-desktop' }
+
 type ModelBusyAction = { modelId: string; type: 'download' | 'select' | 'delete' }
+
+/** Why there is no desktop to talk to yet, named so the screen can say which and offer a way on. */
+export type VoiceSettingsConnection =
+  | { kind: 'no-desktop' }
+  | { kind: 'connecting'; desktopName?: string }
+  | { kind: 'offline'; desktopName?: string; onRetry?: () => void }
 
 export default function VoiceSettingsScreen({
   operations,
   focused,
-  onBack
+  onBack,
+  connection = NO_DESKTOP
 }: {
   operations: VoiceSettingsOperations | null
   focused: boolean
   onBack: () => void
+  /** Read only while `operations` is null. */
+  connection?: VoiceSettingsConnection
 }): React.JSX.Element {
-  const insets = useSafeAreaInsets()
   const [setup, setSetup] = useState<MobileSpeechSetup | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -169,104 +187,71 @@ export default function VoiceSettingsScreen({
   const selectedModelLabel = selectedModel?.label ?? 'None selected'
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
-      <View style={styles.topRow}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-          style={styles.backButton}
-          onPress={onBack}
-        >
-          <ChevronLeft size={22} color={colors.textSecondary} />
-        </Pressable>
-        <Text style={styles.heading}>Voice</Text>
-      </View>
-
+    <SettingsScreen title="Voice" onBack={onBack}>
       {!operations ? (
-        <View style={[styles.section, styles.sectionTopGap]}>
-          <Text style={styles.emptyText}>Connect to a desktop to manage voice settings.</Text>
-        </View>
+        <VoiceConnectionState connection={connection} />
       ) : loading && setup === null ? (
-        <View style={styles.loading}>
-          <ActivityIndicator color={colors.textSecondary} />
+        <View style={styles.state}>
+          <StateView loading title="Loading voice settings…" />
         </View>
       ) : setup === null ? (
-        <View style={[styles.section, styles.sectionTopGap]}>
-          <Text style={styles.errorText}>{error ?? 'Failed to load voice settings.'}</Text>
+        <View style={styles.state}>
+          <StateView
+            icon={TriangleAlert}
+            title="Couldn't load voice settings"
+            message={error ?? 'Failed to load voice settings.'}
+            primary={{ label: 'Retry', onPress: () => void refreshSetup() }}
+          />
         </View>
       ) : (
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          <Text style={styles.groupHeading}>DICTATION</Text>
-          <View style={[styles.section, styles.sectionTopGap]}>
-            <View style={styles.row}>
-              <View style={styles.rowContent}>
-                <Text style={styles.rowLabel}>Enable Voice Dictation</Text>
-                <Text style={styles.rowSublabel}>
-                  Dictate text into any focused pane on your desktop.
-                </Text>
-              </View>
-              <Switch
-                testID="voice-enabled"
-                accessibilityLabel="Enable Voice Dictation"
-                value={enabled}
-                onValueChange={(enabled) => void configure({ enabled })}
-                trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}
-                thumbColor={colors.textPrimary}
-              />
-            </View>
-
-            <View style={styles.separator} />
-
-            <View
-              style={[styles.row, !enabled && styles.disabled]}
-              pointerEvents={enabled ? 'auto' : 'none'}
-            >
-              <View style={styles.rowContent}>
-                <Text style={styles.rowLabel}>Dictation Mode</Text>
-                <Text style={styles.rowSublabel}>
-                  Toggle: press once to start, again to stop. Hold: dictate while held.
-                </Text>
-              </View>
+        <>
+          <SettingsSection title="Dictation" first>
+            <SettingsSwitchRow
+              testID="voice-enabled"
+              title="Voice dictation"
+              subtitle="Dictate into the focused pane on your desktop."
+              accessibilityLabel="Enable voice dictation"
+              value={enabled}
+              onValueChange={(next) => void configure({ enabled: next })}
+            />
+            <View style={styles.modeRow}>
+              <Text style={[styles.modeLabel, !enabled && styles.dimmed]}>Mode</Text>
               <MobileSegmentedControl
                 segments={DICTATION_MODES}
                 selected={setup.dictationMode}
                 onSelect={(dictationMode) => void configure({ dictationMode })}
                 testIDPrefix="voice-mode-"
+                disabled={!enabled}
+                fill
               />
+              <Text style={[styles.modeHint, !enabled && styles.dimmed]}>
+                {setup.dictationMode === 'hold' ? MODE_HINT.hold : MODE_HINT.toggle}
+              </Text>
             </View>
-          </View>
+          </SettingsSection>
 
-          <Text style={[styles.groupHeading, styles.inputGroupGap]}>SPEECH MODEL</Text>
-          <View style={[styles.section, styles.sectionTopGap]}>
-            <Pressable
-              style={({ pressed }) => [
-                styles.row,
-                !enabled && styles.disabled,
-                pressed && styles.rowPressed
-              ]}
+          <SettingsSection title="Speech model">
+            <ListRow
+              title="Model"
+              value={selectedModelLabel}
+              navigates
               disabled={!enabled}
               testID="voice-model-picker"
+              accessibilityLabel={`Speech model, ${selectedModelLabel}`}
               onPress={() => setModelDrawerOpen(true)}
-            >
-              <View style={styles.rowContent}>
-                <Text style={styles.rowLabel}>Speech Model</Text>
-                <Text style={styles.rowSublabel} numberOfLines={1}>
-                  {selectedModelLabel}
-                </Text>
-              </View>
-              <ChevronRight size={18} color={colors.textMuted} />
-            </Pressable>
-          </View>
+            />
+          </SettingsSection>
 
-          {error ? <Text style={styles.error}>{error}</Text> : null}
-        </ScrollView>
+          {error ? (
+            <View style={styles.banner}>
+              <Banner tone="error" message={error} onDismiss={() => setError(null)} />
+            </View>
+          ) : null}
+        </>
       )}
 
       <BottomDrawer visible={modelDrawerOpen} onClose={() => setModelDrawerOpen(false)}>
-        <Text style={styles.drawerTitle}>Speech Model</Text>
+        <PickerSheetTitle title="Speech model" />
         {setup ? (
           <VoiceModelList
             setup={setup}
@@ -278,6 +263,60 @@ export default function VoiceSettingsScreen({
           />
         ) : null}
       </BottomDrawer>
+    </SettingsScreen>
+  )
+}
+
+function VoiceConnectionState({ connection }: { connection: VoiceSettingsConnection }) {
+  if (connection.kind === 'connecting') {
+    return (
+      <View style={styles.state}>
+        <StateView
+          loading
+          title={
+            connection.desktopName
+              ? `Connecting to ${connection.desktopName}…`
+              : 'Connecting to your desktop…'
+          }
+        />
+      </View>
+    )
+  }
+  if (connection.kind === 'offline') {
+    return (
+      <View style={styles.state}>
+        <StateView
+          icon={MonitorOff}
+          title={
+            connection.desktopName ? `${connection.desktopName} is offline` : 'Desktop is offline'
+          }
+          message="Voice settings live on your desktop. Open Orca there, then retry."
+          primary={connection.onRetry ? { label: 'Retry', onPress: connection.onRetry } : undefined}
+        />
+      </View>
+    )
+  }
+  return (
+    <View style={styles.state}>
+      <StateView
+        icon={Mic}
+        title="No desktop paired"
+        message="Pair a desktop to manage voice dictation."
+      />
     </View>
   )
 }
+
+const styles = StyleSheet.create({
+  state: { minHeight: 360 },
+  modeRow: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.md + 2,
+    gap: spacing.sm
+  },
+  dimmed: { opacity: 0.5 },
+  modeLabel: { ...textStyles.body, fontWeight: '500', color: colors.textPrimary },
+  modeHint: { ...textStyles.subhead, color: colors.textSecondary },
+  banner: { marginTop: spacing.lg }
+})

@@ -1,7 +1,15 @@
 import { memo, useState } from 'react'
-import { Image, Platform, Pressable, Text, View } from 'react-native'
+import { ActivityIndicator, Text, View } from 'react-native'
 import { openExternalLink } from '../../platform/external-link'
-import { Check, CornerDownRight, ExternalLink, Pencil, Trash2, Undo2 } from 'lucide-react-native'
+import {
+  Check,
+  CornerDownRight,
+  ExternalLink,
+  MoreHorizontal,
+  Pencil,
+  Trash2,
+  Undo2
+} from 'lucide-react-native'
 import type {
   GitHubReaction,
   GitHubReactionContent,
@@ -9,7 +17,12 @@ import type {
 } from '../../../../src/shared/github/comment-types'
 import { colors } from '../../theme/mobile-theme'
 import { canEditComment, isResolvableComment } from '../../session/pr-comment-actions'
+import { ActionSheetModal, type ActionSheetAction } from '../ActionSheetModal'
 import { ConfirmModal } from '../ConfirmModal'
+import { Badge } from '../ui/Badge'
+import { Button } from '../ui/Button'
+import { IconButton } from '../ui/IconButton'
+import { PRAvatar } from './PRAvatar'
 import { CommentMarkdown } from './CommentMarkdown'
 import { PRCommentComposer } from './PRCommentComposer'
 import { formatPrCommentRelativeTime } from '../../../../src/shared/pr-comment-time'
@@ -52,7 +65,7 @@ function Reactions({ reactions }: { reactions?: GitHubReaction[] }) {
     <View style={styles.reactionsRow}>
       {visible.map((r) => (
         <View key={r.content} style={styles.reactionChip}>
-          <Text>{REACTION_EMOJI[r.content]}</Text>
+          <Text style={styles.reactionEmoji}>{REACTION_EMOJI[r.content]}</Text>
           <Text style={styles.reactionText}>{r.count}</Text>
         </View>
       ))}
@@ -60,10 +73,9 @@ function Reactions({ reactions }: { reactions?: GitHubReaction[] }) {
   )
 }
 
-// One PR comment (or review-thread reply), mirroring the desktop comment card:
-// avatar + author + relative time + inline file:line + resolved chip + open-on-
-// GitHub, then the markdown body and reactions. When `actions` is provided the
-// card grows a Reply composer and (for review threads) a Resolve/Unresolve toggle.
+// One PR comment (or review-thread reply), read like a thread: avatar, author and time on one
+// line, the file:line it sits on, the markdown body and reactions. Reply is the one visible
+// action; Edit, Delete, Resolve and Open on GitHub sit in the trailing menu.
 export const PRCommentCard = memo(function PRCommentCard({
   comment,
   isReply = false,
@@ -78,6 +90,7 @@ export const PRCommentCard = memo(function PRCommentCard({
   const [replyOpen, setReplyOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
   const fileLabel = comment.path
     ? `${comment.path.split('/').pop()}${comment.line ? `:L${comment.line}` : ''}`
     : null
@@ -113,139 +126,139 @@ export const PRCommentCard = memo(function PRCommentCard({
     return ok
   }
 
+  const menuActions: ActionSheetAction[] = []
+  if (actions && canMutate) {
+    menuActions.push({
+      label: 'Edit comment',
+      icon: Pencil,
+      disabled: editBusy,
+      closeBeforePress: true,
+      // Only one composer open at a time: entering Edit closes any open Reply.
+      onPress: () => {
+        setReplyOpen(false)
+        setEditOpen(true)
+      }
+    })
+  }
+  if (actions && canResolve) {
+    menuActions.push({
+      label: comment.isResolved ? 'Unresolve thread' : 'Resolve thread',
+      icon: comment.isResolved ? Undo2 : Check,
+      disabled: resolveBusy,
+      onPress: () => void actions.toggleResolve(comment)
+    })
+  }
+  if (comment.url) {
+    menuActions.push({
+      label: 'Open on GitHub',
+      icon: ExternalLink,
+      onPress: () => openExternalLink(comment.url)
+    })
+  }
+  if (actions && canMutate) {
+    menuActions.push({
+      label: 'Delete comment',
+      icon: Trash2,
+      destructive: true,
+      disabled: deleteBusy,
+      closeBeforePress: true,
+      onPress: () => setConfirmDelete(true)
+    })
+  }
+  const menuBusy = deleteBusy || resolveBusy
+
   return (
-    <View style={[styles.card, isReply && styles.reply, comment.isResolved && styles.cardResolved]}>
-      <View style={styles.header}>
-        {/* Skipped inside the shell's page. The reason it was added for has gone: img-src now
-            admits https:, so a provider avatar would load rather than be refused. The skip is now
-            a capability the page is missing, tracked with the other ruling-26 items. */}
-        {comment.authorAvatarUrl && Platform.OS !== 'web' ? (
-          <Image source={{ uri: comment.authorAvatarUrl }} style={styles.avatar} />
+    <View style={[styles.card, isReply && styles.reply]}>
+      <PRAvatar login={comment.author} url={comment.authorAvatarUrl} />
+      <View style={styles.main}>
+        <View style={styles.header}>
+          <View style={styles.headerText}>
+            <View style={styles.authorLine}>
+              <Text
+                style={[styles.author, comment.isResolved && styles.authorResolved]}
+                numberOfLines={1}
+              >
+                {comment.author}
+              </Text>
+              <Text style={styles.time} numberOfLines={1}>
+                {formatPrCommentRelativeTime(comment.createdAt, now)}
+              </Text>
+              {comment.isResolved ? <Badge label="Resolved" /> : null}
+            </View>
+            {fileLabel ? (
+              <Text style={styles.path} numberOfLines={1}>
+                {fileLabel}
+              </Text>
+            ) : null}
+          </View>
+          {menuBusy ? (
+            <View style={styles.menuSlot}>
+              <ActivityIndicator color={colors.textSecondary} />
+            </View>
+          ) : menuActions.length > 0 ? (
+            <IconButton
+              icon={MoreHorizontal}
+              variant="bare"
+              iconSize={18}
+              iconColor={colors.textSecondary}
+              onPress={() => setMenuOpen(true)}
+              accessibilityLabel={`Comment actions for ${comment.author}`}
+            />
+          ) : null}
+        </View>
+        {editOpen && actions ? (
+          <View style={styles.composer}>
+            <PRCommentComposer
+              placeholder="Edit comment…"
+              submitLabel="Save"
+              submitting={editBusy}
+              initialBody={comment.body}
+              onSubmit={submitEdit}
+              onCancel={() => setEditOpen(false)}
+              autoFocus
+            />
+          </View>
         ) : (
-          <View style={styles.avatar} />
+          <View style={[styles.body, comment.isResolved && styles.bodyResolved]}>
+            <CommentMarkdown content={comment.body} />
+            <Reactions reactions={comment.reactions} />
+          </View>
         )}
-        <Text
-          style={[styles.author, comment.isResolved && styles.authorResolved]}
-          numberOfLines={1}
-        >
-          {comment.author}
-        </Text>
-        <Text style={styles.time}>· {formatPrCommentRelativeTime(comment.createdAt, now)}</Text>
-        {fileLabel ? (
-          <Text style={styles.path} numberOfLines={1}>
-            {fileLabel}
-          </Text>
-        ) : null}
-        {comment.isResolved ? (
-          <View style={styles.resolvedChip}>
-            <Text style={styles.resolvedChipText}>resolved</Text>
+        {/* Replying to a reply lands in the same thread, so only the thread's first card offers it. */}
+        {actions && !editOpen && !isReply && !replyOpen ? (
+          <View style={styles.actionsRow}>
+            <Button
+              label="Reply"
+              icon={CornerDownRight}
+              variant="plain"
+              size="compact"
+              busy={replyBusy}
+              onPress={() => setReplyOpen(true)}
+              accessibilityLabel="Reply to comment"
+            />
           </View>
         ) : null}
-        {comment.url ? (
-          <Pressable
-            style={styles.openButton}
-            onPress={() => openExternalLink(comment.url)}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel="Open comment on GitHub"
-          >
-            <ExternalLink size={14} color={colors.textSecondary} strokeWidth={2.2} />
-          </Pressable>
+        {replyOpen && !editOpen && actions ? (
+          <View style={styles.composer}>
+            <PRCommentComposer
+              placeholder="Write a reply…"
+              submitLabel="Reply"
+              submitting={replyBusy}
+              onSubmit={submitReply}
+              onCancel={() => setReplyOpen(false)}
+              autoFocus
+            />
+          </View>
         ) : null}
       </View>
-      {editOpen && actions ? (
-        <View style={styles.composer}>
-          <PRCommentComposer
-            placeholder="Edit comment…"
-            submitLabel="Save"
-            submitting={editBusy}
-            initialBody={comment.body}
-            onSubmit={submitEdit}
-            onCancel={() => setEditOpen(false)}
-            autoFocus
-          />
-        </View>
-      ) : (
-        <View style={styles.body}>
-          <CommentMarkdown content={comment.body} />
-          <Reactions reactions={comment.reactions} />
-        </View>
-      )}
-      {actions && !editOpen ? (
-        <View style={styles.actionsRow}>
-          <Pressable
-            style={({ pressed }) => [styles.actionButton, pressed && styles.actionButtonPressed]}
-            onPress={() => setReplyOpen((v) => !v)}
-            disabled={replyBusy}
-            hitSlop={6}
-            accessibilityRole="button"
-            accessibilityLabel="Reply to comment"
-          >
-            <CornerDownRight size={13} color={colors.textSecondary} strokeWidth={2.2} />
-            <Text style={styles.actionButtonText}>Reply</Text>
-          </Pressable>
-          {canMutate ? (
-            <Pressable
-              style={({ pressed }) => [styles.actionButton, pressed && styles.actionButtonPressed]}
-              onPress={() => {
-                // Only one composer open at a time: entering Edit closes any open Reply.
-                setReplyOpen(false)
-                setEditOpen(true)
-              }}
-              disabled={editBusy}
-              hitSlop={6}
-              accessibilityRole="button"
-              accessibilityLabel="Edit comment"
-            >
-              <Pencil size={13} color={colors.textSecondary} strokeWidth={2.2} />
-              <Text style={styles.actionButtonText}>Edit</Text>
-            </Pressable>
-          ) : null}
-          {canMutate ? (
-            <Pressable
-              style={({ pressed }) => [styles.actionButton, pressed && styles.actionButtonPressed]}
-              onPress={() => setConfirmDelete(true)}
-              disabled={deleteBusy}
-              hitSlop={6}
-              accessibilityRole="button"
-              accessibilityLabel="Delete comment"
-            >
-              <Trash2 size={13} color={colors.textSecondary} strokeWidth={2.2} />
-              <Text style={styles.actionButtonText}>{deleteBusy ? '…' : 'Delete'}</Text>
-            </Pressable>
-          ) : null}
-          {canResolve ? (
-            <Pressable
-              style={({ pressed }) => [styles.actionButton, pressed && styles.actionButtonPressed]}
-              onPress={() => void actions.toggleResolve(comment)}
-              disabled={resolveBusy}
-              hitSlop={6}
-              accessibilityRole="button"
-              accessibilityLabel={comment.isResolved ? 'Unresolve thread' : 'Resolve thread'}
-            >
-              {comment.isResolved ? (
-                <Undo2 size={13} color={colors.textSecondary} strokeWidth={2.2} />
-              ) : (
-                <Check size={13} color={colors.textSecondary} strokeWidth={2.2} />
-              )}
-              <Text style={styles.actionButtonText}>
-                {resolveBusy ? '…' : comment.isResolved ? 'Unresolve' : 'Resolve'}
-              </Text>
-            </Pressable>
-          ) : null}
-        </View>
-      ) : null}
-      {replyOpen && !editOpen && actions ? (
-        <View style={styles.composer}>
-          <PRCommentComposer
-            placeholder="Write a reply…"
-            submitLabel="Reply"
-            submitting={replyBusy}
-            onSubmit={submitReply}
-            onCancel={() => setReplyOpen(false)}
-            autoFocus
-          />
-        </View>
+      {menuActions.length > 0 ? (
+        <ActionSheetModal
+          visible={menuOpen}
+          title="Comment"
+          message={`${comment.author} · ${formatPrCommentRelativeTime(comment.createdAt, now)}`}
+          actions={menuActions}
+          onClose={() => setMenuOpen(false)}
+        />
       ) : null}
       {actions ? (
         <ConfirmModal

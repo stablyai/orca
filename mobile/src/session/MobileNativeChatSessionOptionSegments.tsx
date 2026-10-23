@@ -1,6 +1,7 @@
-import { StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
 import { MobileSegmentedControl } from '../components/MobileSegmentedControl'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { SectionHeader } from '../components/ui/SectionHeader'
+import { spacing } from '../theme/mobile-theme'
 import {
   sessionOptionDispatchUnconfirmed,
   type SessionOptionDescriptor,
@@ -22,6 +23,7 @@ export function showsSessionOptionAsSegments(descriptor: SessionOptionDescriptor
   )
 }
 
+/** Its own section: the option's name as the header, the 36 pt control on the sheet's edge. */
 export function SessionOptionSegments({
   descriptor,
   disabled,
@@ -36,31 +38,27 @@ export function SessionOptionSegments({
   }
   const { choices, currentValue } = descriptor.kind
   return (
-    <View style={styles.block}>
-      <Text style={styles.label}>{descriptor.label}</Text>
-      <MobileSegmentedControl
-        segments={choices}
-        // An unknown value marks nothing, rather than reading as a confirmed choice.
-        selected={descriptor.valueSource === 'unknown' ? undefined : currentValue}
-        onSelect={onSetOption}
-        fill
-        disabled={disabled || !descriptor.settable}
-      />
+    <View>
+      <SectionHeader title={descriptor.label} />
+      <View style={styles.control}>
+        <MobileSegmentedControl
+          segments={choices}
+          // An unknown value marks nothing, rather than reading as a confirmed choice.
+          selected={descriptor.valueSource === 'unknown' ? undefined : currentValue}
+          onSelect={onSetOption}
+          fill
+          disabled={disabled || !descriptor.settable}
+        />
+      </View>
       {sessionOptionDispatchUnconfirmed(descriptor) ? (
-        <SessionOptionCaption>Sent to the agent — not confirmed</SessionOptionCaption>
+        <SessionOptionCaption>Sent to the agent, not confirmed yet.</SessionOptionCaption>
       ) : null}
     </View>
   )
 }
 
 const styles = StyleSheet.create({
-  block: {
-    marginTop: spacing.md
-  },
-  label: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize,
-    paddingHorizontal: spacing.xs,
-    paddingBottom: 6
+  control: {
+    marginHorizontal: spacing.lg
   }
 })

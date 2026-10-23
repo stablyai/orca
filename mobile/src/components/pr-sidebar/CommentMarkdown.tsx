@@ -1,8 +1,11 @@
 import { useMemo, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { openExternalLink } from '../../platform/external-link'
-import { ChevronDown, ChevronRight } from 'lucide-react-native'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { ChevronRight } from 'lucide-react-native'
+import { colors, radii, spacing, textStyles, typography } from '../../theme/mobile-theme'
+import { fontFamilies } from '../../theme/font-families'
+import { Collapsible } from '../ui/Collapsible'
+import { slideTransition } from '../ui/transition-styles'
 import { MermaidDiagram } from './MermaidDiagram'
 import { isAllowedMarkdownLinkUrl } from './markdown-link-scheme'
 import {
@@ -24,7 +27,7 @@ type Props = {
 // on mount; this renders a small block model and falls back to plain text on any
 // parse error, so it can never crash the comment list.
 export function CommentMarkdown({ content, variant = 'comment' }: Props) {
-  const base = variant === 'document' ? typography.bodySize : 13
+  const base = variant === 'document' ? textStyles.body.fontSize : textStyles.callout.fontSize
   const blocks = useMemo<MarkdownBlock[] | null>(() => {
     try {
       return parseMarkdownBlocks(content)
@@ -58,24 +61,26 @@ function DetailsBlock({
   base: number
 }) {
   const [open, setOpen] = useState(false)
-  const Chevron = open ? ChevronDown : ChevronRight
   return (
     <View style={styles.details}>
       <Pressable
-        style={styles.detailsSummary}
+        style={({ pressed }) => [styles.detailsSummary, pressed && styles.detailsSummaryPressed]}
         onPress={() => setOpen((v) => !v)}
         accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
       >
-        <Chevron size={14} color={colors.textSecondary} strokeWidth={2.2} />
+        <View style={[open ? styles.detailsChevronOpen : null, slideTransition]}>
+          <ChevronRight size={14} color={colors.textSecondary} strokeWidth={2.2} />
+        </View>
         <Text style={[styles.detailsSummaryText, { fontSize: base }]}>{summary}</Text>
       </Pressable>
-      {open ? (
+      <Collapsible open={open}>
         <View style={styles.detailsBody}>
           {body.map((b, i) => (
             <BlockView key={i} block={b} base={base} />
           ))}
         </View>
-      ) : null}
+      </Collapsible>
     </View>
   )
 }
@@ -249,41 +254,47 @@ function Inline({ text, base }: { text: string; base: number }) {
 }
 
 const styles = StyleSheet.create({
-  paragraph: { color: colors.textPrimary, marginBottom: spacing.sm },
-  heading: { color: colors.textPrimary, fontWeight: '700', marginBottom: spacing.xs },
-  bold: { fontWeight: '700' },
+  paragraph: { ...fontFamilies.sans, color: colors.textPrimary, marginBottom: spacing.sm },
+  heading: {
+    ...fontFamilies.sans,
+    color: colors.textPrimary,
+    fontWeight: '600',
+    marginBottom: spacing.xs
+  },
+  bold: { fontWeight: '600' },
   italic: { fontStyle: 'italic' },
   link: { color: colors.textPrimary, textDecorationLine: 'underline' },
   codeInline: {
     color: colors.textPrimary,
     fontFamily: typography.monoFamily,
-    backgroundColor: colors.bgRaised
+    backgroundColor: colors.fill
   },
   codeBlock: {
-    backgroundColor: colors.bgRaised,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.row,
-    padding: spacing.sm,
+    backgroundColor: colors.fieldFill,
+    borderRadius: radii.composerItem,
+    padding: spacing.md,
     marginBottom: spacing.sm
   },
   codeText: { color: colors.textPrimary, fontFamily: typography.monoFamily },
   quote: {
     borderLeftWidth: 3,
-    borderLeftColor: colors.borderSubtle,
-    backgroundColor: colors.bgRaised,
+    borderLeftColor: colors.fieldBorderFocused,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
     marginBottom: spacing.sm
   },
-  hr: { height: 1, backgroundColor: colors.borderSubtle, marginVertical: spacing.sm },
+  hr: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.separator,
+    marginVertical: spacing.sm
+  },
   list: { marginBottom: spacing.sm },
   listItem: { flexDirection: 'row', gap: spacing.xs },
   listItemText: { flex: 1, marginBottom: 2 },
   bullet: { color: colors.textSecondary },
   details: {
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
+    borderColor: colors.separator,
     borderRadius: radii.row,
     marginBottom: spacing.sm,
     overflow: 'hidden'
@@ -293,31 +304,38 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xs,
     paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    backgroundColor: colors.bgRaised
+    minHeight: 44,
+    backgroundColor: colors.fill
   },
-  detailsSummaryText: { color: colors.textPrimary, fontWeight: '600', flexShrink: 1 },
+  detailsSummaryPressed: { backgroundColor: colors.fillPressed },
+  detailsChevronOpen: { transform: [{ rotate: '90deg' }] },
+  detailsSummaryText: {
+    ...fontFamilies.sans,
+    color: colors.textPrimary,
+    fontWeight: '500',
+    flexShrink: 1
+  },
   detailsBody: { paddingHorizontal: spacing.sm, paddingTop: spacing.xs },
   tableScroll: { marginBottom: spacing.sm },
   table: {
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
+    borderColor: colors.separator,
     borderRadius: radii.row,
     overflow: 'hidden'
   },
   tableRow: {
     flexDirection: 'row',
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderSubtle
+    borderTopColor: colors.separator
   },
-  tableHeaderRow: { borderTopWidth: 0, backgroundColor: colors.bgRaised },
+  tableHeaderRow: { borderTopWidth: 0, backgroundColor: colors.fill },
   tableCell: {
     minWidth: 96,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
     borderLeftWidth: StyleSheet.hairlineWidth,
-    borderLeftColor: colors.borderSubtle
+    borderLeftColor: colors.separator
   },
-  tableHeaderText: { color: colors.textPrimary, fontWeight: '700' },
-  tableCellText: { color: colors.textPrimary }
+  tableHeaderText: { ...fontFamilies.sans, color: colors.textPrimary, fontWeight: '600' },
+  tableCellText: { ...fontFamilies.sans, color: colors.textPrimary }
 })

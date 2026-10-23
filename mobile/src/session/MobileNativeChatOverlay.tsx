@@ -5,7 +5,10 @@ import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
 import { useMobileNativeChatFoldReuse } from './mobile-native-chat-fold-reuse'
 import type { MobileNativeChatImageAttachments } from './use-mobile-native-chat-image-attachments'
 import type { MobileNativeChatController } from './use-mobile-native-chat-controller'
-import type { MobileNativeChatStructuredComposer } from './MobileNativeChatComposer'
+import type {
+  MobileNativeChatMicStatus,
+  MobileNativeChatStructuredComposer
+} from './MobileNativeChatComposer'
 import { useMobileNativeChatStreamingBubble } from './use-mobile-native-chat-streaming-bubble'
 import { useMobileNativeChatComposerTray } from './use-mobile-native-chat-composer-tray'
 import { useMobileNativeChatVisualRenderer } from './MobileNativeChatVisual'
@@ -32,6 +35,7 @@ type Props = {
   structuredComposer?: MobileNativeChatStructuredComposer | null
   onMicPress: (() => void) | undefined
   micActive: boolean
+  micStatus?: MobileNativeChatMicStatus
   dictationMode: string | undefined
   onMicPressIn: () => void
   onMicPressOut: () => void
@@ -61,6 +65,7 @@ export function MobileNativeChatOverlay({
   structuredComposer = null,
   onMicPress,
   micActive,
+  micStatus,
   dictationMode,
   onMicPressIn,
   onMicPressOut,
@@ -189,6 +194,7 @@ export function MobileNativeChatOverlay({
                 isAttaching={images.isAttaching}
                 onMicPress={onMicPress}
                 micActive={micActive}
+                micStatus={micStatus}
                 dictationMode={dictationMode}
                 onMicPressIn={onMicPressIn}
                 onMicPressOut={onMicPressOut}

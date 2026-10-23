@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native'
 import { OrcaLogo } from '../components/OrcaLogo'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { colors, radii, spacing, textStyles } from '../theme/mobile-theme'
 import { useReducedMotionEnabled } from '../platform/use-reduced-motion'
 
 const SAMPLE_NOTIFICATIONS = [
@@ -89,7 +89,7 @@ function SampleBanner({ notification }: { notification: (typeof SAMPLE_NOTIFICAT
   return (
     <View style={styles.card}>
       <View style={styles.appIcon}>
-        <OrcaLogo size={14} />
+        <OrcaLogo size={16} />
       </View>
       <View style={styles.cardCopy}>
         <View style={styles.cardMeta}>
@@ -124,25 +124,26 @@ function bannerMotion(progress: Animated.Value) {
 const styles = StyleSheet.create({
   stack: {
     width: '100%',
-    maxWidth: 320,
+    maxWidth: 340,
     gap: spacing.sm,
     marginBottom: spacing.xl + spacing.lg
   },
+  // A system banner's shape: a lifted group with a faint edge, so it reads as a notification.
   card: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
     backgroundColor: colors.bgPanel,
-    borderColor: colors.borderSubtle,
-    borderWidth: 1,
-    borderRadius: radii.card,
-    paddingHorizontal: spacing.md,
+    borderColor: colors.separator,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radii.group + 4,
+    paddingHorizontal: spacing.md + 2,
     paddingVertical: spacing.md
   },
   appIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: radii.camera,
+    width: 34,
+    height: 34,
+    borderRadius: 9,
     backgroundColor: colors.bgRaised,
     alignItems: 'center',
     justifyContent: 'center'
@@ -154,26 +155,24 @@ const styles = StyleSheet.create({
   cardMeta: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 2
+    justifyContent: 'space-between'
   },
   appName: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize,
-    fontWeight: '600'
+    ...textStyles.caption,
+    fontWeight: '500',
+    color: colors.textMuted
   },
   now: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize
+    ...textStyles.caption,
+    color: colors.textMuted
   },
   cardTitle: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
+    ...textStyles.subhead,
+    fontWeight: '600',
+    color: colors.textPrimary
   },
   cardBody: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    marginTop: 1
+    ...textStyles.subhead,
+    color: colors.textSecondary
   }
 })

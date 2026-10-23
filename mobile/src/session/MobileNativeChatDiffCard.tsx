@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
-import { Pressable, Text, View } from 'react-native'
+import { Text, View } from 'react-native'
 import { MobileNativeChatOwnedScrollView } from './MobileNativeChatOwnedScrollView'
-import { ChevronRight, FileMinus2, FilePen, FilePlus2 } from 'lucide-react-native'
+import { FileMinus2, FilePen, FilePlus2 } from 'lucide-react-native'
 import {
   NATIVE_CHAT_DIFF_CARD_COPY,
   nativeChatEditFilePatchText
@@ -13,10 +13,12 @@ import {
 } from '../../../src/shared/native-chat-edit-model'
 import { NATIVE_CHAT_TOOL_ROW_VERB_COPY } from '../../../src/shared/native-chat-tool-line-label'
 import { MobileSourceCopyButton } from '../components/MobileSourceCopyButton'
+import { Collapsible } from '../components/ui/Collapsible'
 import { colors } from '../theme/mobile-theme'
 import { useMobileNativeChatOpenedDetail } from './mobile-native-chat-opened-detail'
 import { useMobileNativeChatDisclosure } from './mobile-native-chat-disclosure-store'
-import { toolStyles as styles, toolType } from './mobile-native-chat-tool-styles'
+import { TOOL_ICON_SIZE, toolStyles as styles, toolType } from './mobile-native-chat-tool-styles'
+import { MobileNativeChatDisclosureRow } from './MobileNativeChatDisclosureRow'
 
 function baseName(path: string): string {
   return path.split(/[\\/]/).at(-1) || path
@@ -151,18 +153,18 @@ export function MobileNativeChatDiffCard({
   const hasBody = file.lines.length > 0
   const copyText = useMemo(() => nativeChatEditFilePatchText(file.lines), [file.lines])
   const type = toolType(fontScale)
-  const iconSize = 15 * fontScale
+  const iconSize = TOOL_ICON_SIZE * fontScale
   // A deleted file has nothing left to open.
   const openFile = file.changeKind === 'deleted' ? undefined : onOpenFile
   return (
     <View>
       <View style={styles.cardHeader}>
-        <Pressable
-          style={[styles.line, styles.cardToggle]}
+        <MobileNativeChatDisclosureRow
           onPress={() => hasBody && setExpanded(!expanded)}
           disabled={!hasBody}
-          accessibilityRole="button"
-          accessibilityState={hasBody ? { expanded } : undefined}
+          expanded={hasBody ? expanded : undefined}
+          fontScale={fontScale}
+          style={styles.cardToggle}
         >
           <View style={[styles.iconSlot, { width: iconSize }]}>
             <VerbIcon kind={file.changeKind} size={iconSize} />
@@ -182,6 +184,7 @@ export function MobileNativeChatDiffCard({
               <Text style={[styles.lineWord, type.row]}>→</Text>
             </>
           ) : null}
+          {/* The file name is the row's one link; a tap anywhere else opens the change. */}
           <Text
             style={[styles.lineTarget, type.row, openFile && styles.lineLink]}
             numberOfLines={1}
@@ -191,37 +194,34 @@ export function MobileNativeChatDiffCard({
           >
             {baseName(file.path)}
           </Text>
-          <Text style={[styles.lineMeta, type.meta]}>
-            {file.added > 0 ? <Text style={styles.countAdded}>{`+${file.added}`}</Text> : null}
-            {file.added > 0 && file.removed > 0 ? ' ' : null}
-            {file.removed > 0 ? (
-              <Text style={styles.countRemoved}>{`-${file.removed}`}</Text>
-            ) : null}
-          </Text>
-          {file.truncated ? (
+          <View style={styles.lineTrailing}>
             <Text style={[styles.lineMeta, type.meta]}>
-              {NATIVE_CHAT_DIFF_CARD_COPY.diffTruncated}
+              {file.added > 0 ? <Text style={styles.countAdded}>{`+${file.added}`}</Text> : null}
+              {file.added > 0 && file.removed > 0 ? ' ' : null}
+              {file.removed > 0 ? (
+                <Text style={styles.countRemoved}>{`-${file.removed}`}</Text>
+              ) : null}
             </Text>
-          ) : null}
-          {hasBody ? (
-            <View style={expanded ? styles.caretOpen : undefined}>
-              <ChevronRight size={14 * fontScale} color={colors.textMuted} strokeWidth={2} />
-            </View>
-          ) : null}
-        </Pressable>
+            {file.truncated ? (
+              <Text style={[styles.lineMeta, type.meta]}>
+                {NATIVE_CHAT_DIFF_CARD_COPY.diffTruncated}
+              </Text>
+            ) : null}
+          </View>
+        </MobileNativeChatDisclosureRow>
         <MobileSourceCopyButton
           text={copyText}
           accessibilityLabel={NATIVE_CHAT_DIFF_CARD_COPY.copyDiff}
         />
       </View>
-      {hasBody && expanded ? (
+      <Collapsible open={hasBody && expanded}>
         <DiffCardRows
           file={file}
           fontScale={fontScale}
           disclosureKey={disclosureKey}
           rootIdentity={rootIdentity}
         />
-      ) : null}
+      </Collapsible>
     </View>
   )
 }

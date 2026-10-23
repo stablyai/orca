@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
-import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { GitPullRequestArrow, Link2, RefreshCw } from 'lucide-react-native'
+import { Text, View } from 'react-native'
+import { GitPullRequestArrow, Link2 } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
+import { triggerError, triggerSuccess } from '../../platform/haptics'
+import { Banner } from '../ui/Banner'
+import { Button } from '../ui/Button'
 import type { RpcClient } from '../../transport/rpc-client'
 import type { ConnectionState } from '../../transport/types'
 import type { MobileGitStatusResult } from '../../source-control/mobile-git-status'
@@ -128,13 +131,16 @@ export function PrSidebarCreateEmptyState({
                 : getMobileCommitFailureStagedEntries(gitStatus?.entries)
           })
         }
+        triggerError()
         setCreateWarning(outcome.error)
         return
       }
+      triggerSuccess()
       setCreateWarning(outcome.warning ?? null)
       openMobilePrUrl(outcome.url)
       onCreated()
     } catch (err) {
+      triggerError()
       setCreateWarning(err instanceof Error ? err.message : 'Failed to create pull request.')
     } finally {
       setLoading(false)
@@ -160,78 +166,51 @@ export function PrSidebarCreateEmptyState({
   }
 
   return (
-    <View style={styles.section}>
-      <View style={styles.header}>
-        <View style={styles.headerTitle}>
-          <GitPullRequestArrow size={14} color={colors.textSecondary} strokeWidth={2.2} />
-          <Text style={styles.headerLabel}>Pull request</Text>
-        </View>
-        <View style={styles.headerActions}>
-          <Pressable
-            style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}
-            onPress={refreshPrState}
-            accessibilityRole="button"
-            accessibilityLabel="Refresh pull request"
-            hitSlop={6}
-          >
-            <RefreshCw size={16} color={colors.textSecondary} strokeWidth={2.2} />
-          </Pressable>
-          <Pressable
-            style={[styles.createButton, (!canCreate || loading) && styles.createButtonDisabled]}
-            onPress={() => void openComposer()}
-            disabled={!canCreate || loading}
-            accessibilityRole="button"
-            accessibilityLabel="Create pull request"
-          >
-            {loading ? (
-              <ActivityIndicator color={colors.bgBase} />
-            ) : (
-              <GitPullRequestArrow size={14} color={colors.bgBase} strokeWidth={2.2} />
-            )}
-            <Text style={styles.createButtonText}>Create PR</Text>
-          </Pressable>
-        </View>
-      </View>
+    <View style={styles.root}>
       <View style={styles.body}>
-        <Text style={styles.bodyTitle}>
+        <GitPullRequestArrow size={32} color={colors.textMuted} strokeWidth={1.75} />
+        <Text style={styles.title}>
           {orphanLinkedPR ? `Linked PR #${orphanLinkedPR} unavailable` : 'No open pull request'}
         </Text>
-        <Text style={styles.bodyText}>
+        <Text style={styles.message}>
           {orphanLinkedPR
-            ? 'Refresh to check again, or create a new PR for this branch.'
+            ? 'Refresh to check again, or create a new pull request for this branch.'
             : gitBranch
-              ? `${gitBranch} is not linked to an open PR.`
-              : 'The current branch is not linked to an open PR.'}
+              ? `${gitBranch} isn't linked to an open pull request.`
+              : "The current branch isn't linked to an open pull request."}
         </Text>
-        {commitFailureRecovery ? (
+        <View style={styles.actions}>
+          <Button
+            label="Create pull request"
+            variant="primary"
+            icon={GitPullRequestArrow}
+            busy={loading}
+            disabled={!canCreate}
+            onPress={() => void openComposer()}
+          />
+          <Button
+            label="Link existing pull request"
+            icon={Link2}
+            variant="plain"
+            size="compact"
+            disabled={!client}
+            onPress={() => setMode('link')}
+          />
+        </View>
+      </View>
+      {createWarning && !commitFailureRecovery ? (
+        <View style={styles.notice}>
+          <Banner tone={loading ? 'info' : 'warning'} message={createWarning} />
+        </View>
+      ) : null}
+      {commitFailureRecovery ? (
+        <View style={styles.failure}>
           <MobileCommitFailurePanel
             failure={commitFailureRecovery}
             action={commitFailureRecoveryAction}
           />
-        ) : createWarning ? (
-          <Text style={styles.bodyText}>{createWarning}</Text>
-        ) : null}
-        <Pressable
-          style={({ pressed }) => [
-            styles.linkButton,
-            !client && styles.linkButtonDisabled,
-            pressed && styles.linkButtonPressed
-          ]}
-          onPress={() => setMode('link')}
-          disabled={!client}
-          accessibilityRole="button"
-          accessibilityLabel="Link an existing pull request"
-          accessibilityState={{ disabled: !client }}
-          hitSlop={6}
-        >
-          <Link2
-            size={14}
-            color={client ? colors.textSecondary : colors.textMuted}
-            strokeWidth={2.2}
-          />
-          <Text style={styles.linkButtonText}>Link an existing PR</Text>
-        </Pressable>
-      </View>
+        </View>
+      ) : null}
     </View>
   )
 }

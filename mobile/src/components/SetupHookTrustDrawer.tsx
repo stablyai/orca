@@ -1,7 +1,9 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { Check } from 'lucide-react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { useState } from 'react'
+import { ScrollView, StyleSheet, Text, View } from 'react-native'
+import { colors, radii, spacing, textStyles, typography } from '../theme/mobile-theme'
 import { BottomDrawer } from './BottomDrawer'
+import { Button } from './ui/Button'
+import { SheetHeader } from './ui/SheetHeader'
 
 export type SetupTrustPrompt = {
   repoId: string
@@ -21,6 +23,8 @@ type Props = {
   onClose: () => void
 }
 
+type TrustChoice = 'once' | 'always' | 'skip'
+
 // The repo-owned orca.yaml setup-hook trust prompt, shown before a workspace
 // create that would run an untrusted setup script. Extracted from NewWorktreeModal
 // to keep that file focused; the async persist/create logic stays with the caller.
@@ -33,43 +37,66 @@ export function SetupHookTrustDrawer({
   onDontRun,
   onClose
 }: Props) {
+  // Which button was pressed, so its spinner shows while the caller's create runs.
+  const [choice, setChoice] = useState<TrustChoice | null>(null)
+  const pending = busy ? choice : null
+
+  function choose(next: TrustChoice, action: () => void): void {
+    setChoice(next)
+    action()
+  }
+
   return (
     <BottomDrawer visible={visible && prompt != null} onClose={onClose}>
       {prompt ? (
         <View>
-          <View style={styles.trustHeader}>
-            <Text style={styles.title}>
-              {prompt.previouslyApproved
-                ? `${prompt.repoName}'s setup script changed`
-                : `Run setup from ${prompt.repoName}?`}
-            </Text>
-            <Text style={styles.subtitle}>
-              This repository's orca.yaml runs before the workspace starts. Only run it if you trust
-              this repository.
-            </Text>
+          <View style={styles.header}>
+            <SheetHeader
+              title={prompt.previouslyApproved ? 'Setup script changed' : 'Run setup script?'}
+              subtitle={prompt.repoName}
+            />
           </View>
+          <Text style={styles.message}>
+            {prompt.previouslyApproved
+              ? `${prompt.repoName}'s orca.yaml has a new setup script since you last approved it. It runs before the workspace starts.`
+              : `${prompt.repoName}'s orca.yaml runs this before the workspace starts. Only run it if you trust this repository.`}
+          </Text>
 
-          <View style={styles.trustScriptBox}>
-            <Text style={styles.trustScriptLabel}>
-              {prompt.previouslyApproved ? 'New setup script' : 'Setup script'}
+          <ScrollView
+            style={styles.code}
+            contentContainerStyle={styles.codeContent}
+            nestedScrollEnabled
+            accessibilityLabel={prompt.previouslyApproved ? 'New setup script' : 'Setup script'}
+          >
+            <Text style={styles.codeText} selectable>
+              {prompt.scriptContent}
             </Text>
-            <Text style={styles.trustScriptText}>{prompt.scriptContent}</Text>
-          </View>
+          </ScrollView>
 
-          <View style={styles.trustActionGroup}>
-            <Pressable style={styles.trustActionRow} disabled={busy} onPress={onRunOnce}>
-              <Check size={16} color={colors.textPrimary} />
-              <Text style={styles.trustActionText}>Run hooks</Text>
-            </Pressable>
-            <View style={styles.trustActionSeparator} />
-            <Pressable style={styles.trustActionRow} disabled={busy} onPress={onAlwaysTrust}>
-              <Check size={16} color={colors.textPrimary} />
-              <Text style={styles.trustActionText}>Always trust and run</Text>
-            </Pressable>
-            <View style={styles.trustActionSeparator} />
-            <Pressable style={styles.trustActionRow} disabled={busy} onPress={onDontRun}>
-              <Text style={styles.trustActionText}>Don't run</Text>
-            </Pressable>
+          <View style={styles.actions}>
+            <Button
+              label="Run once"
+              variant="primary"
+              block
+              busy={pending === 'once'}
+              disabled={busy && pending !== 'once'}
+              onPress={() => choose('once', onRunOnce)}
+            />
+            <Button
+              label="Always trust and run"
+              block
+              busy={pending === 'always'}
+              disabled={busy && pending !== 'always'}
+              onPress={() => choose('always', onAlwaysTrust)}
+            />
+            <Button
+              label="Don't run"
+              variant="plain"
+              block
+              busy={pending === 'skip'}
+              disabled={busy && pending !== 'skip'}
+              onPress={() => choose('skip', onDontRun)}
+            />
           </View>
         </View>
       ) : null}
@@ -78,60 +105,29 @@ export function SetupHookTrustDrawer({
 }
 
 const styles = StyleSheet.create({
-  title: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  subtitle: {
-    fontSize: 13,
-    color: colors.textMuted,
-    marginTop: 2
-  },
-  trustHeader: {
-    paddingHorizontal: spacing.xs,
-    marginBottom: spacing.md
-  },
-  trustScriptBox: {
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    padding: spacing.md,
-    marginBottom: spacing.md
-  },
-  trustScriptLabel: {
-    fontSize: 12,
-    fontWeight: '600',
+  header: { marginHorizontal: -spacing.sm, marginTop: -spacing.xs },
+  message: {
+    ...textStyles.callout,
     color: colors.textSecondary,
-    marginBottom: spacing.sm
+    textAlign: 'center',
+    paddingHorizontal: spacing.lg,
+    marginTop: spacing.xs,
+    marginBottom: spacing.lg
   },
-  trustScriptText: {
-    fontSize: 13,
+  code: {
+    maxHeight: 200,
+    marginHorizontal: spacing.xs,
+    borderRadius: radii.field,
+    backgroundColor: colors.groupFill,
+    borderWidth: 1,
+    borderColor: colors.separator
+  },
+  codeContent: { padding: spacing.md },
+  codeText: {
     fontFamily: typography.monoFamily,
+    fontSize: 13,
+    lineHeight: 19,
     color: colors.textPrimary
   },
-  trustActionGroup: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: radii.input,
-    overflow: 'hidden'
-  },
-  trustActionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md
-  },
-  trustActionText: {
-    flex: 1,
-    fontSize: typography.bodySize,
-    color: colors.textPrimary,
-    fontWeight: '500'
-  },
-  trustActionSeparator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
-  }
+  actions: { gap: spacing.sm, marginTop: spacing.xl, marginHorizontal: spacing.xs }
 })

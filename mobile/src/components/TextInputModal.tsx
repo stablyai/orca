@@ -1,16 +1,9 @@
 import { useState } from 'react'
-import {
-  View,
-  Text,
-  TextInput,
-  Pressable,
-  StyleSheet,
-  Platform,
-  type KeyboardTypeOptions
-} from 'react-native'
-import { colors, spacing, radii, typography } from '../theme/mobile-theme'
-import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
+import { View, StyleSheet, type KeyboardTypeOptions } from 'react-native'
+import { spacing } from '../theme/mobile-theme'
 import { BottomDrawer } from './BottomDrawer'
+import { SheetHeader } from './ui/SheetHeader'
+import { TextField } from './ui/TextField'
 
 type Props = {
   visible: boolean
@@ -69,109 +62,34 @@ export function TextInputModal({
   return (
     <BottomDrawer visible={visible} onClose={onCancel} onAfterClose={onAfterClose}>
       <View style={styles.header}>
-        <Text style={styles.title}>{title}</Text>
-        {message ? <Text style={styles.message}>{message}</Text> : null}
+        <SheetHeader
+          title={title}
+          leading={{ label: 'Cancel', onPress: onCancel }}
+          trailing={{ label: submitLabel, onPress: handleSubmit, disabled: !canSubmit }}
+        />
       </View>
-
-      <TextInput
-        style={styles.input}
-        value={value}
-        onChangeText={setValue}
-        placeholder={placeholder}
-        placeholderTextColor={colors.textMuted}
-        autoFocus
-        autoCapitalize="none"
-        autoCorrect={false}
-        selectTextOnFocus={selectTextOnFocus}
-        keyboardType={keyboardType}
-        returnKeyType="done"
-        onSubmitEditing={handleSubmit}
-        selectionColor={colors.accentBlue}
-      />
-
-      <View style={styles.actions}>
-        <Pressable
-          style={({ pressed }) => [styles.cancelButton, pressed && styles.buttonPressed]}
-          onPress={onCancel}
-        >
-          <Text style={styles.cancelText}>Cancel</Text>
-        </Pressable>
-        <Pressable
-          style={({ pressed }) => [
-            styles.submitButton,
-            pressed && styles.buttonPressed,
-            !canSubmit && styles.submitButtonDisabled
-          ]}
-          disabled={!canSubmit}
-          onPress={handleSubmit}
-        >
-          <Text style={styles.submitText}>{submitLabel}</Text>
-        </Pressable>
+      <View style={styles.field}>
+        <TextField
+          value={value}
+          onChangeText={setValue}
+          placeholder={placeholder}
+          accessibilityLabel={title}
+          footnote={message}
+          autoFocus
+          autoCapitalize="none"
+          autoCorrect={false}
+          selectTextOnFocus={selectTextOnFocus}
+          keyboardType={keyboardType}
+          returnKeyType="done"
+          onSubmitEditing={handleSubmit}
+        />
       </View>
     </BottomDrawer>
   )
 }
 
 const styles = StyleSheet.create({
-  header: {
-    paddingHorizontal: spacing.xs,
-    paddingBottom: spacing.sm
-  },
-  title: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  message: {
-    fontSize: 13,
-    color: colors.textMuted,
-    marginTop: 2
-  },
-  // Why: matches NewWorktreeModal's input — bgRaised on the modal
-  // background reads as a tappable surface (brighter than the wrapper)
-  // rather than a recessed pit (darker than the wrapper, which is what
-  // bgBase looked like inside a bgPanel group).
-  input: {
-    backgroundColor: colors.bgRaised,
-    color: colors.textPrimary,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: Platform.OS === 'ios' ? spacing.sm + 2 : spacing.sm,
-    fontSize: TEXT_INPUT_FONT_SIZE,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
-  actions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: spacing.sm,
-    marginTop: spacing.md
-  },
-  cancelButton: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.button
-  },
-  submitButton: {
-    backgroundColor: colors.textPrimary,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.button
-  },
-  buttonPressed: {
-    opacity: 0.7
-  },
-  submitButtonDisabled: {
-    opacity: 0.4
-  },
-  cancelText: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize,
-    fontWeight: '500'
-  },
-  submitText: {
-    color: colors.bgBase,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
-  }
+  // Why: pulls the header's text actions out to the sheet edge, as the shared sheet spec lays them.
+  header: { marginHorizontal: -spacing.sm, marginTop: -spacing.xs },
+  field: { paddingHorizontal: spacing.xs, paddingTop: spacing.xs, paddingBottom: spacing.sm }
 })

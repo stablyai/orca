@@ -76,17 +76,33 @@ export const PROVIDER_OPTIONS: PickerOption<TaskProvider>[] = [
 ]
 
 export const GITLAB_FILTER_OPTIONS: PickerOption<GitLabFilter>[] = [
-  { value: 'opened', label: 'Open', subtitle: 'Open issues and merge requests' },
+  {
+    value: 'opened',
+    label: 'Open',
+    subtitle: 'Open issues and merge requests'
+  },
   { value: 'merged', label: 'Merged', subtitle: 'Merged merge requests' },
-  { value: 'closed', label: 'Closed', subtitle: 'Closed issues and merge requests' },
+  {
+    value: 'closed',
+    label: 'Closed',
+    subtitle: 'Closed issues and merge requests'
+  },
   { value: 'all', label: 'All', subtitle: 'Any GitLab state' }
 ]
 
 export const LINEAR_FILTER_OPTIONS: PickerOption<LinearFilter>[] = [
-  { value: 'all', label: 'All', subtitle: 'Open issues across connected workspaces' },
+  {
+    value: 'all',
+    label: 'All',
+    subtitle: 'Open issues across connected workspaces'
+  },
   { value: 'assigned', label: 'My Issues', subtitle: 'Issues assigned to you' },
   { value: 'created', label: 'Created', subtitle: 'Issues created by you' },
-  { value: 'completed', label: 'Completed', subtitle: 'Recently completed issues' }
+  {
+    value: 'completed',
+    label: 'Completed',
+    subtitle: 'Recently completed issues'
+  }
 ]
 
 export const LINEAR_VIEW_OPTIONS: PickerOption<LinearViewMode>[] = [
@@ -109,20 +125,20 @@ export function taskWorkspaceSuggestedName(item: ActionableTaskItem): string {
 }
 
 /**
- * Keyed by a vocabulary no provider sends: GitHub's reactions arrive as `'+1'` / `'-1'` and
- * GitLab's carry no content at all, so every real reaction misses this map and the chip renders
- * without a glyph. Left as it is on purpose — the reply reader forwards `content` untouched, so
- * fixing the map is a visible change to what the sheet draws and belongs to its own PR.
+ * Reaction glyphs by the names providers send: GitHub's `+1` / `-1` / `laugh`…, plus the older
+ * spelled-out keys. GitLab reactions carry no content, so they show only a count.
  */
 export const COMMENT_REACTION_EMOJI: Record<string, string> = {
-  thumbs_up: '+1',
-  thumbs_down: '-1',
-  laugh: 'laugh',
-  confused: 'confused',
-  heart: 'heart',
-  hooray: 'hooray',
-  rocket: 'rocket',
-  eyes: 'eyes'
+  '+1': '👍',
+  '-1': '👎',
+  thumbs_up: '👍',
+  thumbs_down: '👎',
+  laugh: '😄',
+  confused: '😕',
+  heart: '❤️',
+  hooray: '🎉',
+  rocket: '🚀',
+  eyes: '👀'
 }
 
 export const LINEAR_GROUP_OPTIONS: PickerOption<LinearGroupBy>[] = [
@@ -165,17 +181,29 @@ export const GITHUB_KIND_OPTIONS: PickerOption<GitHubMode>[] = [
 
 export const ISSUE_PRESETS: PickerOption<GitHubPreset>[] = [
   { value: 'issues', label: 'Open', subtitle: 'Open GitHub issues' },
-  { value: 'my-issues', label: 'Assigned to me', subtitle: 'Open issues assigned to you' }
+  {
+    value: 'my-issues',
+    label: 'Assigned to me',
+    subtitle: 'Open issues assigned to you'
+  }
 ]
 
 export const PR_PRESETS: PickerOption<GitHubPreset>[] = [
   { value: 'prs', label: 'Open', subtitle: 'Open pull requests' },
   { value: 'my-prs', label: 'Mine', subtitle: 'Pull requests authored by you' },
-  { value: 'review', label: 'Needs review', subtitle: 'Review requests assigned to you' }
+  {
+    value: 'review',
+    label: 'Needs review',
+    subtitle: 'Review requests assigned to you'
+  }
 ]
 
 export const GITLAB_VIEW_OPTIONS: PickerOption<GitLabView>[] = [
-  { value: 'project', label: 'Project MRs', subtitle: 'Merge requests and issues by repository' },
+  {
+    value: 'project',
+    label: 'Project MRs',
+    subtitle: 'Merge requests and issues by repository'
+  },
   { value: 'todos', label: 'My Todos', subtitle: 'Pending GitLab todos' }
 ]
 
@@ -188,7 +216,10 @@ export const SORT_OPTIONS: PickerOption<TaskSort>[] = [
   }
 ]
 
-export type ProjectSortOverride = { fieldId: string; direction: GitHubProjectSortDirection }
+export type ProjectSortOverride = {
+  fieldId: string
+  direction: GitHubProjectSortDirection
+}
 
 export type ProjectListEntry =
   | { type: 'group'; group: ProjectGroup; collapsed: boolean }

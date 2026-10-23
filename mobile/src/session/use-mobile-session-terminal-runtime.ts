@@ -1,7 +1,7 @@
 import type { PendingSessionSelection } from './pending-session-selection'
 import { useState, useRef, useCallback } from 'react'
 import type { TerminalFrame } from '../terminal/terminal-webview-messages'
-import { Alert, type Keyboard, type TextInput } from 'react-native'
+import type { Keyboard, TextInput } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
@@ -82,6 +82,7 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
   const webReadyHandlesRef = useRef<Set<string>>(new Set())
   const activeHandleRef = useRef<string | null>(null)
   const executionHost = useWorkspaceExecutionHost()
+  const [draftStorageFailed, setDraftStorageFailed] = useState(false)
   const bufferedTerminalDraftState = useBufferedTerminalDrafts({
     activeHandle,
     activeHandleRef,
@@ -90,11 +91,8 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
         ? `orca:terminalDrafts:${encodeURIComponent(hostId)}:${encodeURIComponent(worktreeId)}`
         : undefined,
     storageScope: executionHost,
-    onStorageError: () =>
-      Alert.alert(
-        'Draft could not be saved',
-        'Keep this screen open to avoid losing the command draft.'
-      )
+    // Why: shown in the screen, not an Alert, which does nothing on the page.
+    onStorageError: () => setDraftStorageFailed(true)
   })
   const reconcileBufferedDraftsRef = useRef(bufferedTerminalDraftState.reconcileTerminalTabs)
   const activeSessionTabTypeRef = useRef<MobileSessionTabType | null>(null)
@@ -230,6 +228,8 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     registerTerminalInventoryRecoveryAction,
     signalTerminalInventoryRecovery,
     bufferedTerminalDraftState,
+    draftStorageFailed,
+    dismissDraftStorageFailure: () => setDraftStorageFailed(false),
     reconcileBufferedDraftsRef,
     input: bufferedTerminalDraftState.input,
     setInput: bufferedTerminalDraftState.setInput,

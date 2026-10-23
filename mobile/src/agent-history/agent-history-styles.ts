@@ -1,5 +1,8 @@
 import { StyleSheet } from 'react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { LIST_LEADING_INSET } from '../components/ui/ListGroup'
+import { colors, radii, spacing, textStyles } from '../theme/mobile-theme'
+
+const LEADING_SLOT = 28
 
 export const styles = StyleSheet.create({
   container: {
@@ -9,234 +12,123 @@ export const styles = StyleSheet.create({
   header: {
     backgroundColor: colors.bgBase
   },
-  topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle
+  controls: {
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.sm
   },
-  backButton: {
-    padding: spacing.xs,
-    borderRadius: radii.button
+  notice: {
+    // The Banner insets itself for full-width screens; here the controls already do.
+    marginHorizontal: -spacing.lg,
+    gap: spacing.sm
   },
-  backButtonPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  titleBlock: {
-    flex: 1,
-    marginHorizontal: spacing.sm
-  },
-  title: {
-    color: colors.textPrimary,
-    fontSize: typography.titleSize,
-    fontWeight: '600'
-  },
-  meta: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize
-  },
-  refreshButton: {
-    padding: spacing.xs,
-    borderRadius: radii.button
-  },
-  refreshButtonPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  scopeTabs: {
-    flexDirection: 'row',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    gap: spacing.xs
-  },
-  scopeTab: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: spacing.sm,
-    borderRadius: radii.button,
+  issueFrame: { marginTop: -spacing.sm },
+  issueGap: { paddingTop: spacing.sm },
+  issueList: {
+    marginHorizontal: spacing.lg,
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: radii.group,
     backgroundColor: colors.bgPanel
   },
-  scopeTabActive: {
-    backgroundColor: colors.bgRaised
+  issueRow: { gap: 2 },
+  issuePath: {
+    ...textStyles.footnote,
+    color: colors.textPrimary
   },
-  scopeTabText: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize
-  },
-  scopeTabTextActive: {
-    color: colors.textPrimary,
-    fontWeight: '600'
-  },
-  searchRow: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm
-  },
-  searchInput: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    color: colors.textPrimary,
-    fontSize: typography.bodySize
+  issueMessage: {
+    ...textStyles.footnote,
+    color: colors.textSecondary
   },
   list: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.xl
+    paddingBottom: spacing.xl + spacing.lg
   },
-  groupHeader: {
+  separator: {
+    height: StyleSheet.hairlineWidth,
+    marginLeft: LIST_LEADING_INSET,
+    backgroundColor: colors.separator
+  },
+  row: {
     flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: spacing.sm,
-    gap: spacing.sm
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md
   },
-  groupHeaderText: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    fontWeight: '600',
-    textTransform: 'uppercase'
+  rowPressed: {
+    backgroundColor: colors.fill
   },
-  groupHeaderCount: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize
-  },
-  card: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: radii.card,
-    padding: spacing.md,
-    marginBottom: spacing.sm
-  },
-  cardPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  cardTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm
-  },
-  cardTitle: {
-    flex: 1,
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
-  },
-  cardTimeAgo: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize
-  },
-  cardLastMessage: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    marginTop: spacing.xs
-  },
-  cardMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    marginTop: spacing.xs
-  },
-  cardMetaText: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize
-  },
-  currentBadge: {
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.button,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2
-  },
-  currentBadgeText: {
-    color: colors.accentBlue,
-    fontSize: typography.metaSize,
-    fontWeight: '600'
-  },
-  resumeButton: {
-    minHeight: 28,
-    minWidth: 28,
+  leading: {
+    width: LEADING_SLOT,
+    height: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 'auto',
-    paddingHorizontal: spacing.xs,
-    paddingVertical: spacing.xs,
-    borderRadius: radii.button
+    flexShrink: 0
   },
-  resumeButtonPressed: {
-    opacity: 0.78
+  main: {
+    flex: 1,
+    minWidth: 0,
+    gap: 3
   },
-  resumeButtonDisabled: {
-    opacity: 0.45
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm
+  },
+  title: {
+    ...textStyles.body,
+    fontWeight: '500',
+    flex: 1,
+    minWidth: 0,
+    color: colors.textPrimary
+  },
+  timeAgo: {
+    ...textStyles.footnote,
+    flexShrink: 0,
+    color: colors.textMuted,
+    fontVariant: ['tabular-nums']
+  },
+  chevronCollapsed: { transform: [{ rotate: '0deg' }] },
+  chevronExpanded: { transform: [{ rotate: '180deg' }] },
+  lastMessage: {
+    ...textStyles.callout,
+    color: colors.textSecondary
+  },
+  badgeLine: { flexDirection: 'row', marginTop: 6 },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: 1
+  },
+  metaText: {
+    ...textStyles.footnote,
+    flexShrink: 1,
+    minWidth: 0,
+    color: colors.textMuted,
+    fontVariant: ['tabular-nums']
+  },
+  metaSpacer: { flex: 1 },
+  resume: {
+    // The compact button's 44 pt touch box overhangs its 36 pt pill; keep the row's rhythm.
+    marginVertical: -4
   },
   preview: {
     marginTop: spacing.sm,
-    paddingTop: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderSubtle,
-    gap: spacing.sm
+    paddingTop: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.separator,
+    gap: spacing.md
   },
-  previewTurn: {
-    gap: 2
-  },
+  previewTurn: { gap: 2 },
   previewRole: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize,
-    fontWeight: '600',
-    textTransform: 'uppercase'
+    ...textStyles.footnote,
+    fontWeight: '500',
+    color: colors.textMuted
   },
   previewText: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize
-  },
-  noticeBanner: {
-    marginHorizontal: spacing.md,
-    marginTop: spacing.sm,
-    padding: spacing.sm,
-    borderRadius: radii.input,
-    backgroundColor: colors.bgPanel
-  },
-  noticeText: {
-    color: colors.statusAmber,
-    fontSize: typography.metaSize
-  },
-  resumeBanner: {
-    marginHorizontal: spacing.md,
-    marginTop: spacing.sm,
-    padding: spacing.sm,
-    borderRadius: radii.input,
-    backgroundColor: colors.bgPanel
-  },
-  resumeBannerText: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize
-  },
-  state: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.xl,
-    gap: spacing.sm
-  },
-  stateTitle: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
-  },
-  stateText: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    textAlign: 'center'
-  },
-  retryButton: {
-    marginTop: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.button,
-    backgroundColor: colors.bgRaised
-  },
-  retryText: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
+    ...textStyles.callout,
+    color: colors.textSecondary
   }
 })

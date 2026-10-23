@@ -20,7 +20,7 @@ import {
 } from '../mobile-web-shell/DownloadProgressBar'
 import type { ShellOverlayDownload } from '../mobile-web-shell/shell-overlay-load'
 import { SHELL_PAGE_COVER_FADE_MS } from '../mobile-web-shell/ShellWaitingFrame'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { colors, spacing, textStyles } from '../theme/mobile-theme'
 
 const CANCEL_DRAG_DISTANCE = 40
 
@@ -116,7 +116,10 @@ export function NewWorkspaceLoadingDrawer({
           </View>
           <View style={styles.body}>
             {download === null ? (
-              <ActivityIndicator color={colors.textSecondary} accessibilityLabel="Loading" />
+              <View style={styles.stage} accessibilityRole="progressbar">
+                <ActivityIndicator size="small" color={colors.textSecondary} />
+                <Text style={styles.caption}>Loading the form…</Text>
+              </View>
             ) : (
               <DownloadProgress download={download} />
             )}
@@ -143,15 +146,17 @@ function DownloadProgress({ download }: { download: ShellOverlayDownload }) {
   )
 }
 
+// The page's form opens on a 52 pt header over a 220 pt loading state; matching it keeps the hand-off still.
 const styles = StyleSheet.create({
   body: {
-    height: 96,
+    height: 272,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.sm
+    gap: spacing.md
   },
+  stage: { alignItems: 'center', gap: 10 },
   caption: {
-    fontSize: typography.metaSize,
+    ...textStyles.callout,
     color: colors.textSecondary,
     fontVariant: ['tabular-nums']
   }

@@ -1,6 +1,6 @@
 import { Platform, StyleSheet } from 'react-native'
 
-import { colors, spacing, radii, typography } from '../theme/mobile-theme'
+import { colors, spacing, textStyles, typography } from '../theme/mobile-theme'
 
 export const mobileSessionReaderStyles = StyleSheet.create({
   markdownTextInput: {
@@ -55,44 +55,28 @@ export const mobileSessionReaderStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
+    paddingLeft: spacing.lg,
+    paddingRight: spacing.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel
+    borderBottomColor: colors.separator,
+    backgroundColor: colors.bgBase
   },
   diffNotesTitleRow: {
     minWidth: 0,
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs
+    gap: spacing.sm
   },
   diffNotesTitle: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    fontWeight: '600'
+    ...textStyles.subhead,
+    fontWeight: '500',
+    color: colors.textSecondary
   },
   diffNotesActions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs
-  },
-  diffNotesActionButton: {
-    minHeight: 30,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.button,
-    paddingHorizontal: spacing.sm,
-    backgroundColor: colors.bgRaised
-  },
-  diffNotesActionText: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    fontWeight: '600'
   },
   diffLineBlock: {
     marginBottom: spacing.xs

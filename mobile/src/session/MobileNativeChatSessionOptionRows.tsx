@@ -1,22 +1,27 @@
-// The pill and choice-row primitives the session-option card is built from, kept
-// beside it so the card file stays about layout and apply wiring.
+// The pill and the rows the session-option sheet is built from, kept beside it so the sheet file
+// stays about layout and apply wiring.
 
-import { Pressable, StyleSheet, Switch, Text, View } from 'react-native'
-import { Check, ChevronRight, ShieldAlert, type LucideIcon } from 'lucide-react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import type { ReactElement, ReactNode } from 'react'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { ChevronDown, ShieldAlert, type LucideIcon } from 'lucide-react-native'
+import { colors, MIN_TOUCH_TARGET, motion, spacing, textStyles } from '../theme/mobile-theme'
+import { ListRow } from '../components/ui/ListRow'
+import { MobileSwitch } from '../components/MobileSwitch'
+import { pressTransition } from '../components/ui/transition-styles'
+import { triggerSelection } from '../platform/haptics'
 import {
   sessionOptionValueMarker,
   type SessionOptionDescriptor,
-  type SessionOptionValueMarker,
   type SessionOptionValue
 } from '../../../src/shared/native-chat-session-options'
 
-/** Muted one-liner above a group — dispatch state, or why a row is locked. */
+/** A footnote under a section header: dispatch state, or why a row is locked. */
 export function SessionOptionCaption({ children }: { children: string }): React.JSX.Element {
   return <Text style={styles.caption}>{children}</Text>
 }
 
-/** The composer's model pill: the model, then its options muted, with a shield for full access. */
+/** The composer's model pill: the model, then its options muted, a chevron, a shield for full
+ *  access. A 36 pt capsule inside the row's 44 pt touch height. */
 export function ModelPill({
   primary,
   secondary,
@@ -40,140 +45,45 @@ export function ModelPill({
       accessibilityLabel={accessibleName}
       accessibilityRole="button"
       accessibilityState={{ disabled }}
-      style={({ pressed }) => [styles.pill, pressed && !disabled && styles.pressed]}
-      onPress={onPress}
-      disabled={disabled}
-      hitSlop={6}
-    >
-      {PillIcon ? (
-        <PillIcon
-          size={15}
-          color={warning ? colors.statusAmber : disabled ? colors.textMuted : colors.textSecondary}
-          strokeWidth={2.2}
-        />
-      ) : null}
-      {!Icon ? (
-        <Text style={styles.pillText} numberOfLines={1} ellipsizeMode="tail">
-          <Text style={[styles.pillPrimary, disabled && styles.pillTextDisabled]}>{primary}</Text>
-          {secondary ? <Text style={styles.pillSecondary}>{`  ${secondary}`}</Text> : null}
-        </Text>
-      ) : null}
-    </Pressable>
-  )
-}
-
-function ChoiceRow({
-  label,
-  description,
-  selected,
-  disabled,
-  grouped,
-  divided,
-  onPress,
-  labelColor
-}: {
-  label: string
-  description?: string
-  selected: boolean
-  disabled: boolean
-  grouped: boolean
-  divided: boolean
-  onPress: () => void
-  labelColor?: string
-}): React.JSX.Element {
-  return (
-    <Pressable
-      accessibilityRole="radio"
-      accessibilityState={{ checked: selected, disabled }}
-      style={[
-        styles.row,
-        grouped && styles.rowGrouped,
-        selected && styles.rowSelected,
-        divided && styles.rowDivided
-      ]}
+      style={[styles.pillTouch, disabled && styles.pillDisabled]}
       onPress={onPress}
       disabled={disabled}
     >
-      <View style={styles.rowBody}>
-        <Text
+      {({ pressed }) => (
+        <View
           style={[
-            styles.rowLabel,
-            disabled && !selected && styles.labelDisabled,
-            labelColor ? { color: labelColor } : null
+            styles.pill,
+            Icon ? styles.pillIconOnly : null,
+            pressed && !disabled && styles.pillPressed,
+            pressed ? pressTransition.pressed : pressTransition.rest
           ]}
         >
-          {label}
-        </Text>
-        {description ? (
-          <Text style={styles.rowDescription} numberOfLines={2}>
-            {description}
-          </Text>
-        ) : null}
-      </View>
-      {selected ? <Check size={18} color={colors.textPrimary} strokeWidth={2.4} /> : null}
+          {PillIcon ? (
+            <PillIcon
+              size={15}
+              color={warning ? colors.statusAmber : colors.textSecondary}
+              strokeWidth={2.2}
+            />
+          ) : null}
+          {!Icon ? (
+            <Text style={styles.pillText} numberOfLines={1} ellipsizeMode="tail">
+              <Text style={styles.pillPrimary}>{primary}</Text>
+              {secondary ? <Text style={styles.pillSecondary}>{` ${secondary}`}</Text> : null}
+            </Text>
+          ) : null}
+          <ChevronDown size={14} color={colors.textMuted} strokeWidth={2.2} />
+        </View>
+      )}
     </Pressable>
   )
 }
 
-function ToggleRow({
-  label,
-  checked,
-  marker,
-  disabled,
-  grouped,
-  onToggle
-}: {
-  label: string
-  checked: boolean
-  /** Where the rendered value came from, or null once something picked it. */
-  marker: SessionOptionValueMarker | null
-  disabled: boolean
-  grouped: boolean
-  onToggle: (next: boolean) => void
-}): React.JSX.Element {
+/** A trailing value in a colour of its own, as Full access reads in amber. */
+function TintedValue({ value, color }: { value: string; color: string }): React.JSX.Element {
   return (
-    <View style={[styles.row, grouped && styles.rowGrouped]}>
-      <View style={styles.rowBody}>
-        <Text style={[styles.rowLabel, disabled && styles.labelDisabled]}>{label}</Text>
-      </View>
-      {marker ? (
-        <Text style={styles.rowMarker}>{marker === 'default' ? 'Default' : 'Not reported'}</Text>
-      ) : null}
-      <Switch
-        accessibilityLabel={label}
-        value={checked}
-        onValueChange={onToggle}
-        disabled={disabled}
-        trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}
-        thumbColor={colors.textPrimary}
-      />
-    </View>
-  )
-}
-
-function ActionRow({
-  label,
-  disabled,
-  grouped,
-  onPress
-}: {
-  label: string
-  disabled: boolean
-  grouped: boolean
-  onPress: () => void
-}): React.JSX.Element {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ disabled }}
-      style={[styles.row, grouped && styles.rowGrouped]}
-      onPress={onPress}
-      disabled={disabled}
-    >
-      <View style={styles.rowBody}>
-        <Text style={[styles.rowLabel, disabled && styles.labelDisabled]}>{label}</Text>
-      </View>
-    </Pressable>
+    <Text style={[styles.value, { color }]} numberOfLines={1}>
+      {value}
+    </Text>
   )
 }
 
@@ -182,143 +92,154 @@ export function SessionOptionSummaryRow({
   value,
   valueColor,
   disabled,
-  divided,
   onPress
 }: {
   label: string
   value: string
   valueColor?: string
   disabled: boolean
-  divided: boolean
   /** Absent for a value with no choice to make: the row reads as text, with no page behind it. */
   onPress?: () => void
 }): React.JSX.Element {
-  if (!onPress) {
-    return (
-      <View
-        accessible
-        accessibilityLabel={`${label}, ${value}`}
-        style={[styles.summaryRow, divided && styles.rowDivided]}
-      >
-        <Text style={styles.summaryLabel}>{label}</Text>
-        <Text style={styles.summaryValue} numberOfLines={1}>
-          {value}
-        </Text>
-      </View>
-    )
-  }
+  const tinted = valueColor ? <TintedValue value={value} color={valueColor} /> : undefined
   return (
-    <Pressable
-      accessibilityLabel={`${label}, ${value}`}
-      accessibilityRole="button"
-      accessibilityState={{ disabled }}
-      style={({ pressed }) => [
-        styles.summaryRow,
-        divided && styles.rowDivided,
-        pressed && !disabled && styles.pressed
-      ]}
+    <ListRow
+      title={label}
+      value={tinted ? undefined : value}
+      accessory={tinted}
+      navigates={onPress !== undefined}
       onPress={onPress}
-      disabled={disabled}
-    >
-      <Text style={[styles.summaryLabel, disabled && styles.labelDisabled]}>{label}</Text>
-      <Text
-        style={[styles.summaryValue, valueColor ? { color: valueColor } : null]}
-        numberOfLines={1}
-      >
-        {value}
-      </Text>
-      <ChevronRight size={16} color={colors.textMuted} strokeWidth={2.2} />
-    </Pressable>
+      disabled={onPress !== undefined && disabled}
+      accessibilityLabel={`${label}, ${value}`}
+    />
   )
 }
 
-export function DescriptorRows({
-  descriptor,
-  disabled,
-  grouped = false,
-  onSetOption,
-  onInvokeAction,
-  choiceLabelColor
-}: {
+type DescriptorRowsProps = {
   descriptor: SessionOptionDescriptor
   disabled: boolean
-  grouped?: boolean
   onSetOption: (value: SessionOptionValue) => void
   onInvokeAction: () => void
-  /** A choice whose name reads in a colour of its own, as Full access does. */
-  choiceLabelColor?: (value: string) => string | undefined
-}): React.JSX.Element {
+  /** A choice drawn with a leading mark of its own, as each permission mode has its icon. */
+  choiceLeading?: (value: string) => ReactNode
+}
+
+/**
+ * The rows one descriptor draws, as an array so a `ListGroup` can separate them: a switch where
+ * one value flips, one row per choice with a check on the picked one, or a row for an action.
+ */
+export function descriptorRowElements({
+  descriptor,
+  disabled,
+  onSetOption,
+  onInvokeAction,
+  choiceLeading
+}: DescriptorRowsProps): ReactElement[] {
   const locked = disabled || !descriptor.settable
   // Why: flip-only without a baseline is an action — never claim On/Off.
   if (descriptor.action?.type === 'toggle-command') {
-    return (
-      <ActionRow
-        label={`Toggle ${descriptor.label.toLowerCase()}`}
+    return [
+      <ListRow
+        key={descriptor.id}
+        title={`Toggle ${descriptor.label.toLowerCase()}`}
         disabled={locked}
-        grouped={grouped}
         onPress={onInvokeAction}
       />
-    )
+    ]
   }
   // Why: agent-picker opens the TUI; it is not a set of radio choices.
   if (descriptor.action?.type === 'agent-picker') {
-    return (
-      <ActionRow
-        label="Choose in agent picker…"
+    return [
+      <ListRow
+        key={descriptor.id}
+        title="Choose in agent picker…"
+        navigates
         disabled={locked}
-        grouped={grouped}
         onPress={onInvokeAction}
       />
-    )
+    ]
   }
-  // One switch, not an On/Off pair: the option is binary. The value always
-  // renders; the marker is what keeps an unpicked one from reading as confirmed,
-  // since the switch itself cannot say "nobody said".
+  // One switch, not an On/Off pair: the option is binary. The value always renders; the marker is
+  // what keeps an unpicked one from reading as confirmed, since the switch cannot say "nobody said".
   if (descriptor.kind.type === 'boolean') {
-    return (
-      <ToggleRow
-        label={descriptor.label}
-        checked={descriptor.kind.currentValue}
-        marker={sessionOptionValueMarker(descriptor)}
-        disabled={locked}
-        grouped={grouped}
-        onToggle={(next) => onSetOption(next)}
+    const marker = sessionOptionValueMarker(descriptor)
+    return [
+      <ListRow
+        key={descriptor.id}
+        title={descriptor.label}
+        value={marker ? (marker === 'default' ? 'Default' : 'Not reported') : undefined}
+        accessory={
+          <MobileSwitch
+            accessibilityLabel={descriptor.label}
+            value={descriptor.kind.currentValue}
+            disabled={locked}
+            onValueChange={(next) => {
+              triggerSelection()
+              onSetOption(next)
+            }}
+          />
+        }
       />
-    )
+    ]
   }
   const { currentValue, choices } = descriptor.kind
-  return (
-    <>
-      {choices.map((choice, index) => (
-        <ChoiceRow
-          key={choice.value}
-          label={choice.label}
-          description={choice.description}
-          selected={choice.value === currentValue}
-          disabled={locked}
-          grouped={grouped}
-          divided={grouped && index < choices.length - 1}
-          onPress={() => onSetOption(choice.value)}
-          labelColor={choiceLabelColor?.(choice.value)}
-        />
-      ))}
-    </>
-  )
+  return choices.map((choice) => {
+    const selected = choice.value === currentValue
+    const leading = choiceLeading?.(choice.value)
+    return (
+      <ListRow
+        key={choice.value}
+        title={choice.label}
+        subtitle={choice.description}
+        subtitleNumberOfLines={2}
+        leading={leading ?? undefined}
+        selected={selected}
+        accessibilityRole="radio"
+        disabled={locked}
+        onPress={() => {
+          if (!selected) {
+            triggerSelection()
+          }
+          onSetOption(choice.value)
+        }}
+      />
+    )
+  })
 }
 
+/** The same rows as a component, for a caller that does not need them separated. */
+export function DescriptorRows(props: DescriptorRowsProps): React.JSX.Element {
+  return <>{descriptorRowElements(props)}</>
+}
+
+const PILL_HEIGHT = 36
+
 const styles = StyleSheet.create({
+  pillTouch: {
+    minHeight: MIN_TOUCH_TARGET,
+    justifyContent: 'center',
+    flexShrink: 1,
+    minWidth: 0
+  },
+  pillDisabled: { opacity: motion.disabledOpacity },
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    height: 38,
-    paddingHorizontal: 14,
-    borderRadius: 19,
-    backgroundColor: colors.composerControl
+    height: PILL_HEIGHT,
+    paddingLeft: 14,
+    paddingRight: 10,
+    borderRadius: PILL_HEIGHT / 2,
+    backgroundColor: colors.fill
+  },
+  pillIconOnly: { paddingLeft: 11 },
+  pillPressed: {
+    backgroundColor: colors.fillPressed,
+    transform: [{ scale: motion.pressedScale }]
   },
   pillText: {
-    flexShrink: 1,
-    fontSize: typography.bodySize
+    ...textStyles.subhead,
+    flexShrink: 1
   },
   pillPrimary: {
     color: colors.textPrimary,
@@ -327,82 +248,15 @@ const styles = StyleSheet.create({
   pillSecondary: {
     color: colors.textMuted
   },
-  pillTextDisabled: {
-    color: colors.textMuted
-  },
-  pressed: {
-    opacity: 0.7
-  },
   caption: {
+    ...textStyles.footnote,
     color: colors.textMuted,
-    fontSize: typography.metaSize,
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.xs
+    paddingHorizontal: spacing.lg + 4,
+    paddingTop: spacing.sm
   },
-  rowMarker: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize
-  },
-  row: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    paddingHorizontal: 14,
-    paddingVertical: spacing.sm,
-    minHeight: 50,
-    alignItems: 'center',
-    borderRadius: radii.card,
-    backgroundColor: colors.bgRaised,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    marginBottom: spacing.xs
-  },
-  rowSelected: {
-    borderColor: colors.textSecondary,
-    backgroundColor: colors.composerControl
-  },
-  rowGrouped: {
-    marginBottom: 0,
-    borderWidth: 0,
-    borderRadius: 0,
-    backgroundColor: 'transparent'
-  },
-  rowDivided: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.composerBorder
-  },
-  labelDisabled: {
-    color: colors.textSecondary
-  },
-  rowBody: {
-    flex: 1,
-    gap: 2
-  },
-  rowLabel: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
-  },
-  rowDescription: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize
-  },
-  summaryRow: {
-    minHeight: 50,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: 14,
-    paddingVertical: spacing.sm
-  },
-  summaryLabel: {
-    flex: 1,
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
-  },
-  summaryValue: {
-    maxWidth: 160,
-    color: colors.textSecondary,
-    fontSize: typography.bodySize
+  value: {
+    ...textStyles.callout,
+    flexShrink: 1,
+    maxWidth: 180
   }
 })

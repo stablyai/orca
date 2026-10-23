@@ -99,7 +99,7 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
           itemLabelsLoading ? (
             <View style={styles.detailLoadingInline}>
               <ActivityIndicator size="small" color={colors.textSecondary} />
-              <Text style={styles.detailMuted}>Loading labels...</Text>
+              <Text style={styles.detailMuted}>Loading labels…</Text>
             </View>
           ) : itemLabelsError ? (
             <Text style={styles.detailError}>{itemLabelsError}</Text>
@@ -177,7 +177,7 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
           itemAssignableUsersLoading ? (
             <View style={styles.detailLoadingInline}>
               <ActivityIndicator size="small" color={colors.textSecondary} />
-              <Text style={styles.detailMuted}>Loading assignees...</Text>
+              <Text style={styles.detailMuted}>Loading assignees…</Text>
             </View>
           ) : itemAssignableUsersError ? (
             <Text style={styles.detailError}>{itemAssignableUsersError}</Text>

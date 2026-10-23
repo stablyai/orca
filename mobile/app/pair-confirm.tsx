@@ -1,8 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, BackHandler } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { BackHandler, StyleSheet, type View } from 'react-native'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
-import { ChevronLeft } from 'lucide-react-native'
+import { AlertCircle, Monitor } from 'lucide-react-native'
 import { resolvePairConfirmRouteState } from '../src/transport/pair-confirm-state'
 import {
   startPreProfilePairing,
@@ -10,8 +9,19 @@ import {
 } from '../src/transport/pre-profile-pairing-coordinator'
 import type { ConnectionLogEntry } from '../src/transport/types'
 import { useRefreshHostClient } from '../src/transport/host-client-hooks'
-import { colors, spacing, radii, typography } from '../src/theme/mobile-theme'
-import { ConnectionLog } from '../src/components/ConnectionLog'
+import { hostEndpointLabel } from '../src/transport/host-endpoint-label'
+import { colors, spacing } from '../src/theme/mobile-theme'
+import { Button } from '../src/components/ui/Button'
+import { ListGroup } from '../src/components/ui/ListGroup'
+import { ListRow } from '../src/components/ui/ListRow'
+import { triggerError, triggerSuccess } from '../src/platform/haptics'
+import {
+  INVALID_PAIRING_CODE_MESSAGE,
+  PairingDetails,
+  PairingMessage,
+  PairingScreenFrame,
+  pairingFailure
+} from '../src/pairing-screen-frame'
 import {
   loadMobileOnboardingSteps,
   mobileOnboardingDestination
@@ -29,10 +39,10 @@ const PAIRING_OVERALL_TIMEOUT_MS = 25_000
 export default function PairConfirmScreen() {
   const router = useRouter()
   const refreshHostClient = useRefreshHostClient()
-  const insets = useSafeAreaInsets()
   const params = useLocalSearchParams<{ code?: string }>()
   const [status, setStatus] = useState<Status>('awaiting-confirm')
   const [errorMessage, setErrorMessage] = useState('')
+  const [errorDetail, setErrorDetail] = useState('')
   const [logs, setLogs] = useState<ConnectionLogEntry[]>([])
   // Why: collect logs in a ref so the rpc-client callback (which closures
   // over the initial state setter) always sees the freshest list and we
@@ -45,10 +55,6 @@ export default function PairConfirmScreen() {
   const offer = routeState.offer
   const resolvedStatus =
     status === 'awaiting-confirm' && routeState.kind === 'error' ? 'error' : status
-  const resolvedErrorMessage =
-    status === 'awaiting-confirm' && routeState.kind === 'error'
-      ? routeState.errorMessage
-      : errorMessage
 
   const cancel = useCallback(() => {
     router.replace('/')
@@ -118,6 +124,7 @@ export default function PairConfirmScreen() {
       if (!mountedRef.current) {
         return
       }
+      triggerSuccess()
       router.replace(mobileOnboardingDestination(onboardingSteps, hostId))
     } catch (err) {
       const timedOut = attempt.timedOut
@@ -130,163 +137,86 @@ export default function PairConfirmScreen() {
         return
       }
       console.warn('[pair-confirm] connect failed', err)
+      const failure = pairingFailure(err, timedOut, PAIRING_OVERALL_TIMEOUT_MS)
+      triggerError()
       setStatus('error')
-      setErrorMessage(
-        timedOut
-          ? `Couldn't connect within ${PAIRING_OVERALL_TIMEOUT_MS / 1000}s — see log below for where it stalled`
-          : `Pairing failed: ${err instanceof Error ? err.message : String(err)}`
-      )
+      setErrorMessage(failure.message)
+      setErrorDetail(failure.detail)
     }
   }
 
-  const containerPadding = { paddingTop: insets.top + spacing.sm }
+  const address = offer ? hostEndpointLabel(offer.endpoint) : null
+  const routeErrorMessage = params.code
+    ? INVALID_PAIRING_CODE_MESSAGE
+    : "This link didn't include a pairing code. Scan the QR code from Orca on your computer instead."
 
   return (
-    <View ref={setPairConfirmRootRef} style={[styles.container, containerPadding]}>
-      <Pressable
-        style={styles.backButton}
-        onPress={cancel}
-        hitSlop={8}
-        accessibilityRole="button"
-        accessibilityLabel="Back"
-      >
-        <ChevronLeft size={22} color={colors.textSecondary} />
-      </Pressable>
-
-      <View style={styles.content}>
-        {offer && resolvedStatus === 'awaiting-confirm' && (
+    <PairingScreenFrame
+      title="Pair a desktop"
+      onCancel={cancel}
+      rootRef={setPairConfirmRootRef}
+      actions={
+        resolvedStatus === 'awaiting-confirm' && offer ? (
           <>
-            <Text style={styles.title}>Pair with this desktop?</Text>
-            <Text style={styles.subtitle}>
-              You opened a pairing link from your desktop. Confirm to add it to your hosts.
-            </Text>
-            <View style={styles.actionStack}>
-              <Pressable style={styles.primaryButton} onPress={() => void confirm()}>
-                <Text style={styles.primaryButtonText}>Pair</Text>
-              </Pressable>
-              <Pressable style={styles.secondaryButton} onPress={cancel}>
-                <Text style={styles.secondaryButtonText}>Cancel</Text>
-              </Pressable>
-            </View>
+            <Button label="Pair" variant="primary" block onPress={() => void confirm()} />
+            <Button label="Cancel" variant="plain" block onPress={cancel} />
           </>
-        )}
+        ) : resolvedStatus === 'error' ? (
+          offer ? (
+            <>
+              <Button label="Try again" variant="primary" block onPress={() => void confirm()} />
+              <Button label="Back to home" variant="plain" block onPress={cancel} />
+            </>
+          ) : (
+            <Button label="Back to home" variant="primary" block onPress={cancel} />
+          )
+        ) : undefined
+      }
+    >
+      {offer && resolvedStatus === 'awaiting-confirm' && (
+        <PairingMessage
+          icon={Monitor}
+          title="Pair with this desktop?"
+          message="You opened a pairing link from Orca on your computer. Pairing lets this phone open its workspaces."
+        >
+          {address ? (
+            <ListGroup style={styles.offer}>
+              <ListRow
+                title={address}
+                subtitle="Desktop address"
+                titleNumberOfLines={2}
+                testID="pair-confirm-address"
+              />
+            </ListGroup>
+          ) : null}
+        </PairingMessage>
+      )}
 
-        {resolvedStatus === 'connecting' && (
-          <>
-            <ActivityIndicator size="large" color={colors.textSecondary} />
-            <Text style={styles.connectingText}>Connecting…</Text>
-            <View style={styles.logSlot}>
-              <ConnectionLog entries={logs} title="Pairing log" />
-            </View>
-          </>
-        )}
+      {resolvedStatus === 'connecting' && (
+        <PairingMessage
+          loading
+          title={address ? `Connecting to ${address}…` : 'Connecting…'}
+          message="This usually takes a few seconds."
+        >
+          <PairingDetails logs={logs} />
+        </PairingMessage>
+      )}
 
-        {resolvedStatus === 'error' && (
-          <>
-            <Text style={styles.errorText}>{resolvedErrorMessage}</Text>
-            {logs.length > 0 && (
-              <View style={styles.logSlot}>
-                <ConnectionLog entries={logs} title="Pairing log" />
-              </View>
-            )}
-            <View style={styles.actionStack}>
-              <Pressable style={styles.primaryButton} onPress={cancel}>
-                <Text style={styles.primaryButtonText}>Back to home</Text>
-              </Pressable>
-            </View>
-          </>
-        )}
-      </View>
-    </View>
+      {resolvedStatus === 'error' && (
+        <PairingMessage
+          icon={AlertCircle}
+          iconColor={colors.danger}
+          title="Couldn't pair"
+          message={status === 'error' ? errorMessage : routeErrorMessage}
+        >
+          <PairingDetails detail={status === 'error' ? errorDetail : undefined} logs={logs} />
+        </PairingMessage>
+      )}
+    </PairingScreenFrame>
   )
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bgBase,
-    padding: spacing.lg
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.sm
-  },
-  content: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.sm,
-    // Why: nudges the centered group slightly above the geometric
-    // middle so the eye reads it as visually centered above the home
-    // indicator / nav bar.
-    paddingBottom: spacing.xl * 2
-  },
-  title: {
-    fontSize: typography.titleSize,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    marginBottom: spacing.sm,
-    textAlign: 'center'
-  },
-  subtitle: {
-    fontSize: typography.bodySize,
-    color: colors.textSecondary,
-    lineHeight: 20,
-    marginBottom: spacing.xl,
-    textAlign: 'center',
-    maxWidth: 520,
-    alignSelf: 'center'
-  },
-  actionStack: {
-    width: '100%',
-    maxWidth: 360,
-    alignSelf: 'center'
-  },
-  primaryButton: {
-    width: '100%',
-    backgroundColor: colors.textPrimary,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: radii.button,
-    alignItems: 'center',
-    marginBottom: spacing.sm
-  },
-  primaryButtonText: {
-    color: colors.bgBase,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
-  },
-  secondaryButton: {
-    width: '100%',
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: radii.button,
-    alignItems: 'center'
-  },
-  secondaryButtonText: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize,
-    fontWeight: '500'
-  },
-  connectingText: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize,
-    marginTop: spacing.lg,
-    textAlign: 'center'
-  },
-  logSlot: {
-    width: '100%',
-    marginTop: spacing.lg,
-    marginBottom: spacing.md
-  },
-  errorText: {
-    color: colors.statusRed,
-    fontSize: typography.bodySize,
-    textAlign: 'center',
-    marginBottom: spacing.xl,
-    lineHeight: 20
-  }
+  // Why: the shared group insets itself from the screen edge; the pairing column already does.
+  offer: { alignSelf: 'stretch', marginHorizontal: 0, marginTop: spacing.md }
 })

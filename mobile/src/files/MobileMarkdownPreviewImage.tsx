@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { colors, radii, spacing, textStyles } from '../theme/mobile-theme'
 import { MobileLoadErrorState } from '../components/MobileLoadErrorState'
 import { MobileNativeChatImageViewer } from '../session/MobileNativeChatImageViewer'
 import type { MobileFilePreviewRpcSender } from './mobile-file-preview-operations'
@@ -67,12 +67,14 @@ export function MobileMarkdownPreviewImage({ client, worktreeId, documentPath, h
             source={{ uri: load.uri }}
             accessibilityLabel={alt || 'Markdown image'}
             resizeMode="contain"
-            style={{ width: '100%', aspectRatio }}
+            style={[styles.image, { aspectRatio }]}
             onError={() => setLoad({ error: 'Unable to load image' })}
           />
         </Pressable>
       ) : (
-        <ActivityIndicator color={colors.textSecondary} />
+        <View style={styles.loading}>
+          <ActivityIndicator size="small" color={colors.textSecondary} />
+        </View>
       )}
       {alt ? <Text style={styles.caption}>{alt}</Text> : null}
       {expanded && load.uri ? (
@@ -87,6 +89,14 @@ export function MobileMarkdownPreviewImage({ client, worktreeId, documentPath, h
 }
 
 const styles = StyleSheet.create({
-  frame: { gap: spacing.xs },
-  caption: { color: colors.textSecondary, fontSize: typography.metaSize }
+  frame: { gap: spacing.sm },
+  image: { width: '100%', borderRadius: radii.field },
+  loading: {
+    minHeight: 120,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radii.field,
+    backgroundColor: colors.fill
+  },
+  caption: { ...textStyles.footnote, color: colors.textSecondary }
 })

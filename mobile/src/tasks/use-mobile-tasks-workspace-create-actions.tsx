@@ -14,6 +14,7 @@ import {
   useCallback,
   wasSetupHookPreviouslyApproved
 } from './mobile-tasks-dependencies'
+import { triggerSuccess } from '../platform/haptics'
 import type {
   ActionableTaskItem,
   GitPushTarget,
@@ -189,7 +190,10 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
               throw new Error(result.error)
             }
             // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolved arm requires `baseBranch` and passes the rest of the start point through, because the create params spread the record and the host reads what it recognises.
-            prStartPoint = result as { baseBranch: string; pushTarget?: GitPushTarget }
+            prStartPoint = result as {
+              baseBranch: string
+              pushTarget?: GitPushTarget
+            }
           }
           params = buildTaskWorkspaceCreateParams({
             item,
@@ -230,7 +234,10 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
               throw new Error(result.error)
             }
             // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: as the PR arm above.
-            mrStartPoint = result as { baseBranch: string; pushTarget?: GitPushTarget }
+            mrStartPoint = result as {
+              baseBranch: string
+              pushTarget?: GitPushTarget
+            }
           }
           params = buildTaskWorkspaceCreateParams({
             item,
@@ -263,6 +270,7 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
           timeoutMs: WORKTREE_CREATE_TIMEOUT_MS
         })
         const result = worktreeCreateRun.interpret(createReply)
+        triggerSuccess()
         setActionItem(null)
         setWorkspaceCreateDraft(null)
         setSetupPrompt(null)

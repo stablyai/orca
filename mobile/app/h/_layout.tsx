@@ -129,7 +129,13 @@ export default function HostGroupLayout() {
               onHideSidebar={canCollapseSidebar ? hideSidebar : undefined}
             />
             {/* Dedicated drag handle straddling the right border — see resizer note. */}
-            <View style={styles.resizeHandle} {...resizer.panHandlers} />
+            <View
+              style={styles.resizeHandle}
+              accessibilityLabel="Resize sidebar"
+              {...resizer.panHandlers}
+            >
+              <View style={styles.resizeGrip} pointerEvents="none" />
+            </View>
           </View>
         ) : null}
         <View style={styles.detail}>
@@ -156,8 +162,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent'
   },
   sidebar: {
-    borderRightWidth: 1,
-    borderRightColor: colors.borderSubtle
+    borderRightWidth: StyleSheet.hairlineWidth,
+    borderRightColor: colors.separator
   },
   // Invisible grab strip over the sidebar's right edge. Absolute + elevated so it
   // sits above the worktree list and reliably owns the drag on Android.
@@ -168,7 +174,17 @@ const styles = StyleSheet.create({
     right: 0,
     width: RESIZE_EDGE_WIDTH,
     zIndex: 20,
-    elevation: 20
+    elevation: 20,
+    alignItems: 'flex-end',
+    justifyContent: 'center'
+  },
+  // A faint grip on the border, so the edge reads as draggable.
+  resizeGrip: {
+    width: 4,
+    height: 36,
+    marginRight: -2,
+    borderRadius: 2,
+    backgroundColor: colors.fieldBorder
   },
   detail: {
     flex: 1,

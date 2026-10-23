@@ -34,7 +34,11 @@ import {
 } from '../../../src/shared/background-task-roster'
 import { AGENT_WORKING_COLOR, AgentStateDot } from '../components/AgentStateDot'
 import { useNow } from '../hooks/use-now'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { colors, MIN_TOUCH_TARGET, spacing, textStyles, typography } from '../theme/mobile-theme'
+import { Button } from '../components/ui/Button'
+import { Collapsible } from '../components/ui/Collapsible'
+import { pressTransition, slideTransition } from '../components/ui/transition-styles'
+import { composerTrayStyles } from './mobile-native-chat-composer-styles'
 import type { MobileStructuredBackgroundTasks } from './use-mobile-structured-background-tasks'
 import {
   useMobileBackgroundTaskStops,
@@ -91,7 +95,7 @@ function TaskRow({
   return (
     <>
       <View testID="background-task-row" style={styles.row}>
-        <KindIcon kind={row.kind} size={14} />
+        <KindIcon kind={row.kind} size={16} />
         <AgentStateDot state={row.displayState} />
         <Text style={styles.rowText} numberOfLines={1} ellipsizeMode="tail">
           <Text style={styles.lead}>{lead}</Text>
@@ -104,21 +108,13 @@ function TaskRow({
           </Text>
         ) : null}
         {stopId !== null ? (
-          <Pressable
-            accessibilityRole="button"
+          <Button
+            label={say('stop')}
+            size="compact"
             accessibilityLabel={say('stopTask', { value0: mobileAgentChildRowName(row) })}
-            accessibilityState={{ disabled: busy }}
-            disabled={busy}
-            hitSlop={6}
-            style={({ pressed }) => [
-              styles.textAction,
-              pressed && styles.pressed,
-              busy && styles.disabled
-            ]}
+            busy={busy}
             onPress={() => onStop(stopId)}
-          >
-            <Text style={styles.actionLabel}>{say('stop')}</Text>
-          </Pressable>
+          />
         ) : null}
       </View>
       {row.owned.length > 0 ? (
@@ -177,14 +173,17 @@ function MobileNativeChatBackgroundTasksImpl({
   }
 
   return (
-    <View style={styles.list} onLayout={onLayout} testID="background-tasks-strip">
-      <View style={styles.box}>
+    <View style={composerTrayStyles.layer} onLayout={onLayout} testID="background-tasks-strip">
+      <View style={composerTrayStyles.panel}>
         <Pressable
           accessibilityRole="button"
           accessibilityState={{ expanded }}
           accessibilityLabel={backgroundTasksHeaderText(header)}
-          hitSlop={spacing.xs}
-          style={({ pressed }) => [styles.header, pressed && styles.pressed]}
+          style={({ pressed }) => [
+            styles.header,
+            pressed && styles.pressed,
+            pressed ? pressTransition.pressed : pressTransition.rest
+          ]}
           onPress={() => setExpanded(!expanded)}
         >
           <View style={styles.headerText}>
@@ -195,7 +194,7 @@ function MobileNativeChatBackgroundTasksImpl({
                   {segment.kind ? (
                     // The turn owns the voice: same icons, dimmed until it ends.
                     <View style={view.isMonitoring ? undefined : styles.dimmed}>
-                      <KindIcon kind={segment.kind} size={12} />
+                      <KindIcon kind={segment.kind} size={14} />
                     </View>
                   ) : null}
                   <Text style={styles.segmentText} numberOfLines={1} ellipsizeMode="tail">
@@ -210,11 +209,11 @@ function MobileNativeChatBackgroundTasksImpl({
               </Text>
             ) : null}
           </View>
-          <View style={expanded ? styles.caretOpen : undefined}>
-            <ChevronDown size={14} color={colors.textMuted} strokeWidth={2} />
+          <View style={[expanded ? styles.caretOpen : styles.caretClosed, slideTransition]}>
+            <ChevronDown size={16} color={colors.textMuted} strokeWidth={2.2} />
           </View>
         </Pressable>
-        {expanded ? (
+        <Collapsible open={expanded}>
           <ScrollView style={styles.body} nestedScrollEnabled>
             {groups.length > 0 ? (
               groups.map((group) => (
@@ -240,25 +239,18 @@ function MobileNativeChatBackgroundTasksImpl({
               <Text style={styles.unavailable}>{say('detailsUnavailable')}</Text>
             ) : null}
             {view.offersStopAll ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={say('stopAll')}
-                accessibilityState={{ disabled: stopping.all }}
-                disabled={stopping.all}
-                hitSlop={6}
-                style={({ pressed }) => [
-                  styles.textAction,
-                  styles.stopAll,
-                  pressed && styles.pressed,
-                  stopping.all && styles.disabled
-                ]}
-                onPress={() => onStop()}
-              >
-                <Text style={styles.actionLabel}>{say('stop')}</Text>
-              </Pressable>
+              <View style={styles.stopAll}>
+                <Button
+                  label={say('stop')}
+                  size="compact"
+                  accessibilityLabel={say('stopAll')}
+                  busy={stopping.all}
+                  onPress={() => onStop()}
+                />
+              </View>
             ) : null}
           </ScrollView>
-        ) : null}
+        </Collapsible>
       </View>
     </View>
   )
@@ -266,27 +258,13 @@ function MobileNativeChatBackgroundTasksImpl({
 
 export const MobileNativeChatBackgroundTasks = memo(MobileNativeChatBackgroundTasksImpl)
 
-// hitSlop requests 44pt hit rects; compact native parent bounds still limit their reach.
-const MIN_TOUCH_TARGET = 44
-
 const styles = StyleSheet.create({
-  list: {
-    marginHorizontal: spacing.lg,
-    marginVertical: spacing.xs
-  },
-  box: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: radii.row,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    overflow: 'hidden'
-  },
   header: {
-    minHeight: 36,
+    minHeight: MIN_TOUCH_TARGET,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    paddingHorizontal: spacing.md
+    paddingHorizontal: spacing.lg
   },
   headerText: {
     flex: 1,
@@ -305,19 +283,19 @@ const styles = StyleSheet.create({
     minWidth: 0
   },
   separator: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize
+    ...textStyles.footnote,
+    color: colors.textMuted
   },
   segmentText: {
+    ...textStyles.footnote,
+    fontWeight: '500',
     flexShrink: 1,
-    color: colors.textPrimary,
-    fontSize: typography.metaSize,
-    fontWeight: '500'
+    color: colors.textPrimary
   },
   detail: {
+    ...textStyles.footnote,
     flexShrink: 1,
-    color: colors.textMuted,
-    fontSize: typography.metaSize
+    color: colors.textMuted
   },
   dimmed: {
     opacity: 0.4
@@ -325,26 +303,27 @@ const styles = StyleSheet.create({
   caretOpen: {
     transform: [{ rotate: '180deg' }]
   },
+  caretClosed: {
+    transform: [{ rotate: '0deg' }]
+  },
   body: {
-    maxHeight: 220,
+    maxHeight: 260,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderSubtle
+    borderTopColor: colors.separator
   },
   group: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.xs,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
     paddingBottom: spacing.xs
   },
   groupLabel: {
+    ...textStyles.footnote,
+    fontWeight: '500',
     color: colors.textMuted,
-    fontSize: 10,
-    fontFamily: typography.monoFamily,
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-    paddingBottom: spacing.xs / 2
+    paddingBottom: spacing.xs
   },
   row: {
-    minHeight: 32,
+    minHeight: MIN_TOUCH_TARGET,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm
@@ -353,9 +332,9 @@ const styles = StyleSheet.create({
     marginLeft: spacing.lg
   },
   rowText: {
+    ...textStyles.subhead,
     flex: 1,
-    minWidth: 0,
-    fontSize: typography.metaSize
+    minWidth: 0
   },
   lead: {
     color: colors.textPrimary,
@@ -366,35 +345,22 @@ const styles = StyleSheet.create({
   },
   meta: {
     color: colors.textMuted,
-    fontSize: 10,
-    fontFamily: typography.monoFamily
+    fontSize: 13,
+    fontFamily: typography.monoFamily,
+    fontVariant: ['tabular-nums']
   },
   unavailable: {
+    ...textStyles.subhead,
     color: colors.textMuted,
-    fontSize: typography.metaSize,
-    padding: spacing.md
-  },
-  textAction: {
-    minHeight: 32,
-    minWidth: MIN_TOUCH_TARGET,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.sm,
-    borderRadius: radii.button
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md
   },
   stopAll: {
     alignSelf: 'flex-start',
-    marginHorizontal: spacing.sm
-  },
-  actionLabel: {
-    color: colors.textPrimary,
-    fontSize: typography.metaSize,
-    fontWeight: '500'
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.xs
   },
   pressed: {
-    backgroundColor: colors.bgRaised
-  },
-  disabled: {
-    opacity: 0.5
+    backgroundColor: colors.fill
   }
 })

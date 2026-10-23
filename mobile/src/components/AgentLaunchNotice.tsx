@@ -1,12 +1,15 @@
 import { useState } from 'react'
-import { Pressable, StyleSheet, Text, View, type StyleProp, type TextStyle } from 'react-native'
+import { StyleSheet, Text, View, type StyleProp, type TextStyle } from 'react-native'
+import { Copy } from 'lucide-react-native'
 import { useClipboardWriter } from '../platform/clipboard'
+import { triggerError, triggerSuccess } from '../platform/haptics'
+import { Button } from './ui/Button'
 import {
   AGENT_LAUNCH_STATUS_UNREADABLE_MESSAGE,
   AGENT_LAUNCH_UPDATE_REQUIRED_MESSAGE
 } from '../session/mobile-existing-agent-launch'
 import type { MobileAgentLaunchAvailability } from '../session/mobile-agent-launch-availability'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { colors, spacing, textStyles } from '../theme/mobile-theme'
 
 type Props = {
   availability: MobileAgentLaunchAvailability
@@ -51,19 +54,24 @@ export function AgentLaunchNotice({
       {message ? <Text style={errorStyle}>{message}</Text> : null}
       {note ? <Text style={styles.warningText}>{note}</Text> : null}
       {undeliveredPrompt ? (
-        <Pressable
+        <Button
+          label={copyLabel}
+          icon={Copy}
+          size="compact"
+          accessibilityLabel="Copy prompt"
           onPress={() => {
             clipboard.writeText(undeliveredPrompt).then(
-              () => setCopyState({ prompt: undeliveredPrompt, label: 'Copied' }),
-              () => setCopyState({ prompt: undeliveredPrompt, label: "Couldn't copy" })
+              () => {
+                triggerSuccess()
+                setCopyState({ prompt: undeliveredPrompt, label: 'Copied' })
+              },
+              () => {
+                triggerError()
+                setCopyState({ prompt: undeliveredPrompt, label: "Couldn't copy" })
+              }
             )
           }}
-          accessibilityRole="button"
-          accessibilityLabel="Copy prompt"
-          hitSlop={spacing.sm}
-        >
-          <Text style={styles.copyText}>{copyLabel}</Text>
-        </Pressable>
+        />
       ) : null}
     </View>
   )
@@ -74,16 +82,11 @@ const styles = StyleSheet.create({
     gap: spacing.xs
   },
   successText: {
-    color: colors.statusGreen,
-    fontSize: typography.metaSize
+    ...textStyles.footnote,
+    color: colors.statusGreen
   },
   warningText: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize
-  },
-  copyText: {
-    color: colors.accentBlue,
-    fontSize: typography.metaSize,
-    fontWeight: '600'
+    ...textStyles.footnote,
+    color: colors.textSecondary
   }
 })

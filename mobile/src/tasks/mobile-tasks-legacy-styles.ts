@@ -16,19 +16,6 @@ export const styles = {
   ...mobileTasksComposerActionStyles
 }
 
-export function getPrSignalToneStyle(tone: 'neutral' | 'success' | 'warning' | 'danger') {
-  if (tone === 'success') {
-    return styles.prSignalSuccess
-  }
-  if (tone === 'warning') {
-    return styles.prSignalWarning
-  }
-  if (tone === 'danger') {
-    return styles.prSignalDanger
-  }
-  return null
-}
-
 export function getGitLabPipelineStatusStyle(status: string) {
   switch (status) {
     case 'success':

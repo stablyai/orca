@@ -1,5 +1,6 @@
 import { StyleSheet } from 'react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { colors, radii, spacing, textStyles, typography } from '../theme/mobile-theme'
+import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 
 export const filePreviewStyles = StyleSheet.create({
   container: {
@@ -7,123 +8,47 @@ export const filePreviewStyles = StyleSheet.create({
     backgroundColor: colors.bgBase
   },
   header: {
-    backgroundColor: colors.bgPanel,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle
-  },
-  topBar: {
-    minHeight: 58,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingHorizontal: spacing.md
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.button
-  },
-  backButtonPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  titleBlock: {
-    flex: 1,
-    minWidth: 0
-  },
-  title: {
-    color: colors.textPrimary,
-    fontSize: typography.titleSize,
-    fontWeight: '600'
-  },
-  meta: {
-    marginTop: 2,
-    color: colors.textSecondary,
-    fontSize: typography.metaSize
-  },
-  state: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.md,
-    padding: spacing.xl
-  },
-  stateText: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize,
-    textAlign: 'center'
-  },
-  errorText: {
-    color: colors.statusRed,
-    fontSize: typography.bodySize,
-    textAlign: 'center'
-  },
-  saveButton: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.button,
-    backgroundColor: colors.bgRaised
-  },
-  saveButtonDisabled: {
-    opacity: 0.42
+    backgroundColor: colors.bgBase
   },
   scroll: {
     flex: 1,
-    backgroundColor: colors.editorSurface
+    backgroundColor: colors.bgBase
   },
   textContent: {
-    padding: spacing.md,
-    paddingBottom: spacing.xl
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xl + spacing.lg
   },
   textPreview: {
     color: colors.textPrimary,
     fontFamily: typography.monoFamily,
     fontSize: 13,
+    // Jump-to-line scrolls by this height (mobile-file-preview-line-column.ts).
     lineHeight: 19
   },
   markdownContent: {
-    padding: spacing.md,
-    paddingBottom: spacing.xl
+    paddingHorizontal: spacing.lg + 4,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xl + spacing.lg
   },
   modeContainer: {
     flex: 1,
-    backgroundColor: colors.editorSurface
-  },
-  modeToolbar: {
-    flexDirection: 'row',
-    alignSelf: 'flex-start',
-    marginHorizontal: spacing.md,
-    marginVertical: spacing.sm,
-    padding: 1,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.button,
-    backgroundColor: colors.bgPanel
-  },
-  modeToggle: {
-    width: 34,
-    height: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.row,
-    backgroundColor: 'transparent',
-    opacity: 0.72
-  },
-  modeToggleActive: {
-    backgroundColor: colors.bgRaised,
-    opacity: 1
+    backgroundColor: colors.bgBase
   },
   truncatedNote: {
+    ...textStyles.footnote,
+    alignSelf: 'flex-start',
     marginBottom: spacing.md,
-    color: colors.textSecondary,
-    fontSize: typography.metaSize
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: radii.pill,
+    overflow: 'hidden',
+    backgroundColor: colors.fill,
+    color: colors.textSecondary
   },
   imageContainer: {
     flex: 1,
-    backgroundColor: colors.editorSurface
+    backgroundColor: colors.bgBase
   },
   imageScrollContent: {
     flexGrow: 1,
@@ -132,24 +57,24 @@ export const filePreviewStyles = StyleSheet.create({
     padding: spacing.md
   },
   image: {
-    backgroundColor: colors.editorSurface
+    backgroundColor: colors.bgBase
   },
   editContainer: {
     flex: 1,
-    backgroundColor: colors.editorSurface,
-    padding: spacing.md
+    backgroundColor: colors.bgBase,
+    paddingTop: spacing.sm
   },
-  saveErrorText: {
-    marginBottom: spacing.sm,
-    color: colors.statusRed,
-    fontSize: typography.metaSize
+  saveError: {
+    marginBottom: spacing.sm
   },
   editInput: {
     flex: 1,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xl,
     color: colors.textPrimary,
     fontFamily: typography.monoFamily,
-    fontSize: 13,
-    lineHeight: 19,
-    padding: 0
+    fontSize: TEXT_INPUT_FONT_SIZE,
+    lineHeight: 24
   }
 })

@@ -1,18 +1,16 @@
 import { useMemo, useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
 import {
   NATIVE_CHAT_USER_MESSAGE_MAX_UNFOLDED_LINES,
   nativeChatUserMessageFolds
 } from '../../../src/shared/native-chat-user-message-fold'
 import { styles as markdownStyles } from '../components/mobile-markdown-styles'
-import { onBrightColors, spacing, typography } from '../theme/mobile-theme'
-import { CHAT_PROSE_SCALE } from './mobile-native-chat-message-styles'
+import { spacing } from '../theme/mobile-theme'
+import { MobileNativeChatTextAction } from './MobileNativeChatTextAction'
 import type { useMobileNativeChatFullMessage } from './MobileNativeChatFullContent'
 
 const FOLDED_HEIGHT =
-  NATIVE_CHAT_USER_MESSAGE_MAX_UNFOLDED_LINES *
-  markdownStyles.paragraph.lineHeight *
-  CHAT_PROSE_SCALE
+  NATIVE_CHAT_USER_MESSAGE_MAX_UNFOLDED_LINES * markdownStyles.paragraph.lineHeight
 
 /** A long message of yours, folded to its first lines until opened. Desktop parity:
  *  `NativeChatUserMessageFold`, with the same text rule. */
@@ -51,40 +49,33 @@ export function MobileNativeChatUserMessageFold({
         children
       )}
       {(!longText || height !== null) && (folds || recovery) ? (
-        <Pressable
+        <MobileNativeChatTextAction
+          align="end"
           style={styles.toggle}
+          expanded={open}
           onPress={() => {
             onToggle()
             if (!open && recovery && recovery.load !== 'loading') {
               recovery.onPress()
             }
           }}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityState={{ expanded: open }}
-        >
-          <Text style={styles.toggleText}>
-            {open
+          label={
+            open
               ? 'Show less'
               : recovery?.load === 'failed'
                 ? "Show full message — couldn't load, tap to retry"
-                : 'Show full message'}
-          </Text>
-        </Pressable>
+                : 'Show full message'
+          }
+        />
       ) : null}
       {!recovery || (open && recovery.load === 'failed') ? status : null}
     </>
   )
 }
 
+// The bubble's bottom padding is part of the toggle's 44 pt target.
 const styles = StyleSheet.create({
   toggle: {
-    alignSelf: 'flex-end',
-    paddingTop: spacing.xs
-  },
-  toggleText: {
-    color: onBrightColors.secondary,
-    fontSize: typography.metaSize,
-    fontWeight: '600'
+    marginBottom: -spacing.sm
   }
 })

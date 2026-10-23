@@ -1,8 +1,10 @@
-import { Pressable, Text, View } from 'react-native'
+import { View } from 'react-native'
 import type { WorkspaceSshGate } from '../tasks/workspace-ssh-gate'
 import { workspaceSshStatusLabel } from '../tasks/workspace-ssh-gate'
 import { newWorktreeFormStyles as styles } from './new-worktree-form-styles'
+import { Banner } from './ui/Banner'
 
+/** A disconnected SSH target blocks Create; this says so beside Run on, with the Connect that clears it. */
 export function NewWorkspaceSshConnectionField({
   repoName,
   sshGate,
@@ -12,41 +14,30 @@ export function NewWorkspaceSshConnectionField({
   sshGate: WorkspaceSshGate
   onConnect: () => void
 }) {
+  if (sshGate.status === 'connected' && !sshGate.error) {
+    return null
+  }
+  const failed = sshGate.error !== null && !sshGate.connectInProgress
   return (
-    <View style={styles.field}>
-      <Text style={styles.label}>SSH Connection</Text>
-      <View style={styles.sshBox}>
-        <View style={styles.sshRow}>
-          <View
-            style={[
-              styles.sshDot,
-              sshGate.status === 'connected'
-                ? styles.sshDotConnected
-                : sshGate.connectInProgress
-                  ? styles.sshDotProgress
-                  : styles.sshDotDisconnected
-            ]}
-          />
-          <View style={styles.sshCopy}>
-            <Text style={styles.sshTitle} numberOfLines={1}>
-              {repoName}
-            </Text>
-            <Text style={styles.sshSubtitle}>{workspaceSshStatusLabel(sshGate.status)}</Text>
-          </View>
-          {sshGate.status === 'connected' ? null : (
-            <Pressable
-              style={[styles.sshConnectButton, sshGate.connectInProgress && styles.disabled]}
-              disabled={sshGate.connectInProgress}
-              onPress={onConnect}
-            >
-              <Text style={styles.sshConnectText}>
-                {sshGate.connectInProgress ? 'Connecting...' : 'Connect'}
-              </Text>
-            </Pressable>
-          )}
-        </View>
-        {sshGate.error ? <Text style={styles.errorInline}>{sshGate.error}</Text> : null}
-      </View>
+    <View style={[styles.bleed, styles.bannerGap]}>
+      <Banner
+        tone={failed ? 'error' : 'warning'}
+        title={workspaceSshStatusLabel(sshGate.status)}
+        message={
+          failed && sshGate.error
+            ? sshGate.error
+            : `Connect to ${repoName} over SSH to search sources and create a workspace there.`
+        }
+        action={
+          sshGate.status === 'connected'
+            ? undefined
+            : {
+                label: sshGate.connectInProgress ? 'Connecting…' : 'Connect',
+                onPress: onConnect,
+                busy: sshGate.connectInProgress
+              }
+        }
+      />
     </View>
   )
 }

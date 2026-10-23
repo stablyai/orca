@@ -1,7 +1,7 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Compass } from 'lucide-react-native'
 import { hostStackHostRoute } from '../navigation/host-stack-navigation'
 import { useRouteHandoff } from '../navigation/route-handoff'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { ShellStateFrame, ShellStateMessage } from './ShellStateFrame'
 
 /**
  * What a host-scoped pathname nothing can paint lands on.
@@ -28,55 +28,31 @@ import { colors, radii, spacing, typography } from '../theme/mobile-theme'
  */
 export function PageRouteUnavailableScreen({
   hostId,
-  message = 'This workspace screen is not available on this host.'
+  hostName,
+  message = 'This desktop does not offer this workspace screen yet.'
 }: {
   hostId: string
+  /** The desktop's name for the bar, when the caller has it. */
+  hostName?: string
   message?: string
 }) {
   const router = useRouteHandoff()
   const target = hostId === '' ? '/' : hostStackHostRoute(hostId)
-  const label = hostId === '' ? 'Back to hosts' : 'Back to workspaces'
+  const label = hostId === '' ? 'Back to desktops' : 'Back to workspaces'
+  const leave = () => router.replace(target)
   return (
-    <View style={styles.root} testID="mobile-web-page-route-unavailable">
-      <Text style={styles.message}>{message}</Text>
-      <Pressable
-        style={({ pressed }) => [styles.button, pressed && styles.pressed]}
-        accessibilityRole="button"
-        accessibilityLabel={label}
-        onPress={() => router.replace(target)}
-      >
-        <Text style={styles.buttonLabel}>{label}</Text>
-      </Pressable>
-    </View>
+    <ShellStateFrame
+      title={hostName}
+      onBack={leave}
+      backAccessibilityLabel={label}
+      testID="mobile-web-page-route-unavailable"
+    >
+      <ShellStateMessage
+        icon={Compass}
+        title="Not available here"
+        message={message}
+        primary={{ label, onPress: leave }}
+      />
+    </ShellStateFrame>
   )
 }
-
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bgBase,
-    paddingHorizontal: spacing.lg
-  },
-  message: {
-    fontSize: typography.bodySize,
-    color: colors.textPrimary,
-    textAlign: 'center',
-    marginBottom: spacing.lg
-  },
-  button: {
-    backgroundColor: colors.bgRaised,
-    paddingVertical: spacing.sm + 2,
-    paddingHorizontal: spacing.lg,
-    borderRadius: radii.button
-  },
-  buttonLabel: {
-    fontSize: typography.bodySize,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  pressed: {
-    opacity: 0.7
-  }
-})

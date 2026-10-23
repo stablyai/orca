@@ -4,7 +4,8 @@ import {
   colors,
   radii,
   spacing,
-  typography
+  textStyles,
+  TEXT_INPUT_FONT_SIZE
 } from './mobile-tasks-dependencies'
 
 export const mobileTasksComposerActionStyles = StyleSheet.create({
@@ -12,142 +13,126 @@ export const mobileTasksComposerActionStyles = StyleSheet.create({
     gap: spacing.sm
   },
   fieldLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.textSecondary
+    ...textStyles.footnote,
+    fontWeight: '500',
+    color: colors.textSecondary,
+    paddingLeft: 4
   },
   inlineTextLink: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
     alignSelf: 'flex-start',
-    paddingVertical: spacing.xs
+    minHeight: 44
   },
   inlineTextLinkText: {
+    ...textStyles.footnote,
     color: colors.textSecondary,
-    fontSize: 12,
     textDecorationLine: 'underline'
   },
   securityHintRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: spacing.xs
+    gap: spacing.sm
   },
   securityHintText: {
+    ...textStyles.footnote,
     flex: 1,
-    color: colors.textMuted,
-    fontSize: 11,
-    lineHeight: 16
+    color: colors.textMuted
   },
   targetButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
+    minHeight: 48,
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2
+    borderColor: colors.fieldBorder,
+    backgroundColor: colors.fieldFill,
+    borderRadius: radii.field,
+    paddingHorizontal: 14
   },
   targetButtonText: {
+    ...textStyles.body,
     flex: 1,
-    color: colors.textPrimary,
-    fontSize: typography.bodySize
+    color: colors.textPrimary
   },
   issueSourceBox: {
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.card,
-    backgroundColor: colors.bgPanel,
-    padding: spacing.sm,
-    gap: spacing.xs
+    gap: spacing.sm
   },
   issueSourceHint: {
-    fontSize: 12,
-    color: colors.textSecondary
+    ...textStyles.footnote,
+    color: colors.textSecondary,
+    paddingLeft: 4
   },
   issueSourceSegment: {
     flexDirection: 'row',
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.input,
-    backgroundColor: colors.bgBase,
-    padding: 2,
+    borderRadius: radii.pill,
+    backgroundColor: colors.fill,
+    padding: 3,
     gap: 2
   },
   issueSourceSegmentButton: {
     flex: 1,
-    borderRadius: radii.input - 2,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs
+    minHeight: 38,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: radii.pill,
+    paddingHorizontal: spacing.sm
   },
   issueSourceSegmentButtonActive: {
-    backgroundColor: colors.bgRaised
+    backgroundColor: colors.fillPressed
   },
   issueSourceSegmentText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.textMuted
+    ...textStyles.subhead,
+    fontWeight: '500',
+    color: colors.textSecondary
   },
   issueSourceSegmentTextActive: {
     color: colors.textPrimary
   },
   issueSourceSlug: {
-    marginTop: 1,
-    fontSize: 10,
+    ...textStyles.caption,
     color: colors.textMuted
   },
   drawerLoadingRow: {
-    paddingVertical: spacing.lg,
-    alignItems: 'center'
+    minHeight: 88,
+    alignItems: 'center',
+    justifyContent: 'center'
   },
+  // Every Tasks field: 16 pt so the page's WebView never zooms on focus.
   input: {
+    ...textStyles.body,
+    fontSize: TEXT_INPUT_FONT_SIZE,
+    minHeight: 48,
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    color: colors.textPrimary,
-    fontSize: typography.bodySize
+    borderColor: colors.fieldBorder,
+    backgroundColor: colors.fieldFill,
+    borderRadius: radii.field,
+    paddingHorizontal: 14,
+    paddingVertical: spacing.md,
+    color: colors.textPrimary
   },
   bodyInput: {
-    minHeight: 88
+    minHeight: 120
   },
   monoInput: {
-    fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' })
+    fontFamily: Platform.select({
+      ios: 'Menlo',
+      android: 'monospace',
+      default: 'monospace'
+    })
   },
   commentInput: {
     minHeight: 72,
     marginTop: spacing.sm
   },
   commentComposer: {
-    position: 'relative',
-    marginTop: spacing.sm
+    marginTop: spacing.xs
   },
   commentComposerInput: {
-    minHeight: 40,
-    maxHeight: 120,
-    marginTop: 0,
-    paddingRight: 44
-  },
-  commentComposerSend: {
-    position: 'absolute',
-    right: spacing.xs,
-    bottom: spacing.xs,
-    width: 32,
-    height: 32,
-    borderRadius: radii.button,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bgRaised
-  },
-  commentComposerSendPressed: {
-    opacity: 0.75
-  },
-  commentComposerSendDisabled: {
-    opacity: 0.5
+    minHeight: 48,
+    maxHeight: 160,
+    marginTop: 0
   },
   replyInput: {
     minHeight: 48,
@@ -158,31 +143,31 @@ export const mobileTasksComposerActionStyles = StyleSheet.create({
   },
   inlineSaveButton: {
     alignSelf: 'flex-start',
+    justifyContent: 'center',
+    minHeight: 36,
     marginTop: spacing.sm,
-    borderRadius: radii.button,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs
+    borderRadius: radii.pill,
+    backgroundColor: colors.fill,
+    paddingHorizontal: spacing.lg
   },
   inlineSaveButtonCompact: {
     alignSelf: 'flex-start',
-    borderRadius: radii.button,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs
+    justifyContent: 'center',
+    minHeight: 36,
+    borderRadius: radii.pill,
+    backgroundColor: colors.fill,
+    paddingHorizontal: 14
   },
   inlineSaveText: {
-    color: colors.textPrimary,
-    fontSize: 12,
-    fontWeight: '600'
+    ...textStyles.subhead,
+    fontWeight: '500',
+    color: colors.textPrimary
   },
   inlineButtonRow: {
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
-    gap: spacing.xs,
+    gap: spacing.sm,
     marginTop: spacing.xs
   },
   drawerActionRow: {
@@ -192,51 +177,51 @@ export const mobileTasksComposerActionStyles = StyleSheet.create({
   },
   secondaryActionButton: {
     flex: 1,
+    minHeight: 50,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radii.button,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    paddingVertical: spacing.sm
+    borderRadius: radii.pill,
+    backgroundColor: colors.fill
   },
   secondaryActionText: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
+    ...textStyles.body,
+    fontWeight: '600',
+    color: colors.textPrimary
   },
   primaryActionButton: {
     flex: 1,
+    minHeight: 50,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.xs,
-    borderRadius: radii.button,
-    backgroundColor: colors.textPrimary,
-    paddingVertical: spacing.sm
+    borderRadius: radii.pill,
+    backgroundColor: colors.primary
   },
   primaryActionText: {
-    color: colors.bgBase,
-    fontSize: typography.bodySize,
-    fontWeight: '700'
+    ...textStyles.body,
+    fontWeight: '600',
+    color: colors.onPrimary
   },
   inlineDeleteText: {
-    color: colors.statusRed,
-    fontSize: 12,
-    fontWeight: '600'
+    ...textStyles.subhead,
+    fontWeight: '500',
+    color: colors.danger
   },
   createButton: {
+    minHeight: 50,
     marginTop: spacing.sm,
-    backgroundColor: colors.textPrimary,
-    borderRadius: radii.button,
-    paddingVertical: spacing.sm + 2,
-    alignItems: 'center'
+    backgroundColor: colors.primary,
+    borderRadius: radii.pill,
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   createButtonDisabled: {
-    opacity: 0.5
+    opacity: 0.4
   },
   createButtonText: {
-    color: colors.bgBase,
-    fontSize: typography.bodySize,
-    fontWeight: '700'
+    ...textStyles.body,
+    fontWeight: '600',
+    color: colors.onPrimary
   }
 })

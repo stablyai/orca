@@ -1,8 +1,10 @@
 import { useRef, type ReactNode } from 'react'
 import { ActivityIndicator, View, Text, Pressable, StyleSheet } from 'react-native'
-import { Edit3, Trash2, type LucideIcon } from 'lucide-react-native'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { Copy, Ellipsis, Pencil, RefreshCw, Trash2, X, type LucideIcon } from 'lucide-react-native'
+import { colors, motion, spacing, textStyles } from '../theme/mobile-theme'
 import { BottomDrawer } from './BottomDrawer'
+import { ListGroup, LIST_LEADING_INSET, LIST_ROW_PADDING } from './ui/ListGroup'
+import { pressTransition } from './ui/transition-styles'
 
 export type ActionSheetAction = {
   label: string
@@ -25,14 +27,24 @@ type Props = {
   onClose: () => void
 }
 
+// Why: callers that pass no icon still get one that names the verb; closing a tab is an X, not a bin.
+const FALLBACK_ICONS: [RegExp, LucideIcon][] = [
+  [/^close/i, X],
+  [/delete|remove|discard/i, Trash2],
+  [/rename|edit/i, Pencil],
+  [/copy/i, Copy],
+  [/refresh|reload/i, RefreshCw]
+]
+
 function iconForAction(label: string, destructive?: boolean, icon?: LucideIcon): LucideIcon {
   if (icon) {
     return icon
   }
-  if (destructive || /delete|remove/i.test(label)) {
-    return Trash2
+  const match = FALLBACK_ICONS.find(([pattern]) => pattern.test(label))
+  if (match) {
+    return match[1]
   }
-  return Edit3
+  return destructive ? Trash2 : Ellipsis
 }
 
 type ContentProps = {
@@ -44,13 +56,14 @@ type ContentProps = {
   onClose?: () => void
 }
 
+/** An iOS action sheet: grey title and message, one inset group of actions, and Cancel on its own. */
 export function ActionSheetContent({ title, message, children, actions, onClose }: ContentProps) {
   return (
-    <>
+    <View style={styles.root}>
       {(title || message) && (
         <View style={styles.header}>
           {title ? (
-            <Text style={styles.title} numberOfLines={1}>
+            <Text style={styles.title} numberOfLines={2} accessibilityRole="header">
               {title}
             </Text>
           ) : null}
@@ -60,54 +73,84 @@ export function ActionSheetContent({ title, message, children, actions, onClose 
 
       {children}
 
-      <View style={styles.actionGroup}>
-        {actions.map((action, i) => {
-          const Icon = iconForAction(action.label, action.destructive, action.icon)
-          const customIcon = action.renderIcon?.()
-          return (
-            <View key={action.label}>
-              {i > 0 && <View style={styles.separator} />}
-              <Pressable
-                style={({ pressed }) => [
-                  styles.action,
-                  action.disabled && styles.actionDisabled,
-                  pressed && !action.disabled && !action.loading && styles.actionPressed
+      {actions.length > 0 ? (
+        <ListGroup separatorInset={LIST_LEADING_INSET} style={styles.group}>
+          {actions.map((action) => (
+            <ActionRow key={action.label} action={action} onClose={onClose} />
+          ))}
+        </ListGroup>
+      ) : null}
+
+      {onClose ? (
+        <ListGroup style={[styles.group, styles.cancelGroup]}>
+          <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Cancel">
+            {({ pressed }) => (
+              <View
+                style={[
+                  styles.cancel,
+                  pressed && styles.pressed,
+                  pressed ? pressTransition.pressed : pressTransition.rest
                 ]}
-                disabled={action.disabled || action.loading}
-                onPress={() => {
-                  action.onPress()
-                  if (!action.skipAutoClose && onClose) {
-                    onClose()
-                  }
-                }}
               >
-                {customIcon ?? (
-                  <Icon
-                    size={16}
-                    color={action.destructive ? colors.statusRed : colors.textSecondary}
-                  />
-                )}
-                <View style={styles.actionTextBlock}>
-                  <Text
-                    style={[
-                      styles.actionText,
-                      action.destructive && styles.actionTextDestructive,
-                      action.disabled && styles.actionTextDisabled
-                    ]}
-                  >
-                    {action.label}
-                  </Text>
-                  {action.hint ? <Text style={styles.actionHint}>{action.hint}</Text> : null}
-                </View>
-                {action.loading ? (
-                  <ActivityIndicator size="small" color={colors.textSecondary} />
-                ) : null}
-              </Pressable>
-            </View>
-          )
-        })}
-      </View>
-    </>
+                <Text style={styles.cancelLabel}>Cancel</Text>
+              </View>
+            )}
+          </Pressable>
+        </ListGroup>
+      ) : null}
+    </View>
+  )
+}
+
+function ActionRow({ action, onClose }: { action: ActionSheetAction; onClose?: () => void }) {
+  const Icon = iconForAction(action.label, action.destructive, action.icon)
+  const customIcon = action.renderIcon?.()
+  const inert = action.disabled === true || action.loading === true
+  const tint = action.destructive ? colors.danger : colors.textSecondary
+  return (
+    <Pressable
+      disabled={inert}
+      accessibilityRole="button"
+      accessibilityLabel={action.label}
+      accessibilityHint={action.hint}
+      accessibilityState={{ disabled: inert, busy: action.loading === true }}
+      onPress={() => {
+        action.onPress()
+        if (!action.skipAutoClose && onClose) {
+          onClose()
+        }
+      }}
+    >
+      {({ pressed }) => (
+        <View
+          style={[
+            styles.row,
+            action.hint ? styles.rowTwoLine : null,
+            pressed && !inert && styles.pressed,
+            action.disabled && styles.disabled,
+            pressed ? pressTransition.pressed : pressTransition.rest
+          ]}
+        >
+          <View style={styles.leading}>
+            {customIcon ?? <Icon size={20} color={tint} strokeWidth={2} />}
+          </View>
+          <View style={styles.main}>
+            <Text
+              style={[styles.label, action.destructive && styles.labelDestructive]}
+              numberOfLines={1}
+            >
+              {action.label}
+            </Text>
+            {action.hint ? (
+              <Text style={styles.hint} numberOfLines={2}>
+                {action.hint}
+              </Text>
+            ) : null}
+          </View>
+          {action.loading ? <ActivityIndicator size="small" color={colors.textSecondary} /> : null}
+        </View>
+      )}
+    </Pressable>
   )
 }
 
@@ -148,61 +191,45 @@ export function ActionSheetModal({ visible, title, message, actions, onClose }: 
 }
 
 const styles = StyleSheet.create({
+  root: { gap: spacing.sm },
   header: {
-    paddingHorizontal: spacing.xs,
+    alignItems: 'center',
+    gap: 2,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.xs,
     paddingBottom: spacing.sm
   },
   title: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: colors.textMuted
+    ...textStyles.footnote,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    textAlign: 'center'
   },
-  message: {
-    fontSize: 12,
-    color: colors.textMuted,
-    marginTop: 2
-  },
-  actionGroup: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: 12,
-    overflow: 'hidden'
-  },
-  separator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
-  },
-  action: {
+  message: { ...textStyles.footnote, color: colors.textMuted, textAlign: 'center' },
+  // Why: the sheet already pads 12; the group adds 4 so rows sit 16 from the sheet edge.
+  group: { marginHorizontal: spacing.xs },
+  cancelGroup: { marginTop: spacing.xs },
+  row: {
+    minHeight: 52,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm + 2,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2
+    gap: spacing.md,
+    paddingHorizontal: LIST_ROW_PADDING,
+    paddingVertical: 10
   },
-  actionDisabled: {
-    opacity: 0.58
+  rowTwoLine: { minHeight: 64 },
+  pressed: { backgroundColor: colors.fill },
+  disabled: { opacity: motion.disabledOpacity },
+  leading: { width: 28, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  main: { flex: 1, minWidth: 0, gap: 2 },
+  label: { ...textStyles.body, color: colors.textPrimary },
+  labelDestructive: { color: colors.danger },
+  hint: { ...textStyles.subhead, color: colors.textSecondary },
+  cancel: {
+    minHeight: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: LIST_ROW_PADDING
   },
-  actionPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  actionTextBlock: {
-    flex: 1,
-    minWidth: 0
-  },
-  actionText: {
-    fontSize: typography.bodySize,
-    fontWeight: '500',
-    color: colors.textPrimary
-  },
-  actionTextDisabled: {
-    color: colors.textSecondary
-  },
-  actionTextDestructive: {
-    color: colors.statusRed
-  },
-  actionHint: {
-    marginTop: 2,
-    fontSize: typography.metaSize,
-    color: colors.textMuted
-  }
+  cancelLabel: { ...textStyles.body, fontWeight: '600', color: colors.textPrimary }
 })

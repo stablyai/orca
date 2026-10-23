@@ -2,6 +2,7 @@ import { setCachedWorktrees } from '../cache/worktree-cache'
 import type { RpcClient } from '../transport/rpc-client'
 import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import {
+  homeWorktreeActivity,
   markHomeWorktreeCatalogUnavailable,
   type HomeWorktreeSummary,
   type HostWorktreeInfo
@@ -60,6 +61,7 @@ export function fetchHomeHostWorktreeInfo(
             totalWorktrees: worktrees.length,
             activeCount: active.length,
             lastActiveWorktree: lastActive,
+            ...homeWorktreeActivity(worktrees),
             countsProvenAt: Date.now()
           }
         }))

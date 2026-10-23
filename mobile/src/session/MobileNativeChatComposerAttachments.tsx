@@ -8,7 +8,8 @@ import {
   View
 } from 'react-native'
 import { FileText, X } from 'lucide-react-native'
-import { colors, radii, spacing } from '../theme/mobile-theme'
+import { colors, motion, spacing, textStyles } from '../theme/mobile-theme'
+import { pressTransition } from '../components/ui/transition-styles'
 import { formatPreviewByteLength } from '../files/mobile-file-preview-response'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
 import type { PendingNativeChatFile } from './mobile-native-chat-file-attachment'
@@ -56,9 +57,7 @@ export function MobileNativeChatComposerAttachments({
       ))}
       {files.map((file) => (
         <View key={file.id} style={styles.fileCard}>
-          <View style={styles.fileIcon}>
-            <FileText size={17} color={colors.textSecondary} strokeWidth={2} />
-          </View>
+          <FileText size={20} color={colors.textSecondary} strokeWidth={2} />
           <View style={styles.fileText}>
             <Text style={styles.fileName} numberOfLines={1}>
               {file.name}
@@ -81,36 +80,59 @@ export function MobileNativeChatComposerAttachments({
   )
 }
 
+/** A 22 pt badge on the item's corner, in a 36 pt touch box: the page ignores hitSlop. */
 function RemoveBadge({ label, onPress }: { label: string; onPress: () => void }) {
   return (
-    <Pressable accessibilityLabel={label} style={styles.remove} onPress={onPress} hitSlop={8}>
-      <X size={11} color={colors.textPrimary} strokeWidth={3} />
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={styles.removeTouch}
+      onPress={onPress}
+    >
+      {({ pressed }) => (
+        <View
+          style={[
+            styles.remove,
+            pressed && styles.removePressed,
+            pressed ? pressTransition.pressed : pressTransition.rest
+          ]}
+        >
+          <X size={12} color={colors.textPrimary} strokeWidth={3} />
+        </View>
+      )}
     </Pressable>
   )
 }
 
+// Concentric with the composer box: its 28 pt corner less the 10 pt it is padded in.
+const ITEM_RADIUS = 18
+const REMOVE_TOUCH = 36
+const REMOVE_BADGE = 22
+// How far the touch box overhangs the item's top-right corner.
+const REMOVE_OVERHANG = 10
+
 const styles = StyleSheet.create({
   strip: {
     flexGrow: 0,
-    marginBottom: 10
+    marginBottom: spacing.md
   },
   stripContent: {
     gap: spacing.sm,
     // Room for the remove badges, which overhang their item's top-right corner.
-    paddingTop: 5,
+    paddingTop: REMOVE_OVERHANG,
     paddingLeft: 2,
-    paddingRight: 5
+    paddingRight: REMOVE_OVERHANG
   },
   thumb: {
     width: THUMB_SIZE,
     height: THUMB_SIZE,
-    borderRadius: radii.composerItem,
-    backgroundColor: colors.composerControl
+    borderRadius: ITEM_RADIUS,
+    backgroundColor: colors.fill
   },
   thumbImage: {
     width: '100%',
     height: '100%',
-    borderRadius: radii.composerItem
+    borderRadius: ITEM_RADIUS
   },
   fileCard: {
     height: THUMB_SIZE,
@@ -118,54 +140,56 @@ const styles = StyleSheet.create({
     maxWidth: 220,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 9,
-    paddingLeft: 10,
-    paddingRight: spacing.md,
-    borderRadius: radii.composerItem,
-    backgroundColor: colors.composerControl
-  },
-  fileIcon: {
-    width: 32,
-    height: 36,
-    borderRadius: 7,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bgRaised
+    gap: 10,
+    paddingLeft: spacing.md,
+    paddingRight: spacing.lg,
+    borderRadius: ITEM_RADIUS,
+    backgroundColor: colors.fill
   },
   fileText: {
     flexShrink: 1,
     minWidth: 0
   },
   fileName: {
-    color: colors.textPrimary,
-    fontSize: 13,
-    fontWeight: '500'
+    ...textStyles.footnote,
+    fontWeight: '500',
+    color: colors.textPrimary
   },
   fileMeta: {
+    ...textStyles.caption,
     color: colors.textMuted,
-    fontSize: 11.5,
-    marginTop: 1
+    fontVariant: ['tabular-nums']
   },
   uploading: {
     ...StyleSheet.absoluteFillObject,
-    borderRadius: radii.composerItem,
+    borderRadius: ITEM_RADIUS,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.45)'
   },
-  // Most of the badge sits inside its item, which Android needs to deliver the tap; the strip's
-  // padding keeps the 5pt overhang from being clipped.
-  remove: {
+  // Most of the touch box sits inside its item, which Android needs to deliver the tap; the strip's
+  // padding keeps the overhang from being clipped.
+  removeTouch: {
     position: 'absolute',
-    top: -5,
-    right: -5,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    top: -REMOVE_OVERHANG,
+    right: -REMOVE_OVERHANG,
+    width: REMOVE_TOUCH,
+    height: REMOVE_TOUCH,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  remove: {
+    width: REMOVE_BADGE,
+    height: REMOVE_BADGE,
+    borderRadius: REMOVE_BADGE / 2,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.bgRaised,
     borderWidth: 2,
     borderColor: colors.composerSurface
+  },
+  removePressed: {
+    backgroundColor: colors.borderSubtle,
+    transform: [{ scale: motion.pressedIconScale }]
   }
 })

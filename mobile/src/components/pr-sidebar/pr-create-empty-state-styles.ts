@@ -1,107 +1,48 @@
 import { StyleSheet } from 'react-native'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { colors, spacing, textStyles } from '../../theme/mobile-theme'
+import { PR_PAGE_INSET } from './mobile-pr-sidebar-styles'
 
+// The no-PR state: the StateView layout, with room for a progress line and a commit failure.
 export const prCreateEmptyStateStyles = StyleSheet.create({
-  section: {
-    backgroundColor: colors.bgPanel,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle,
-    overflow: 'hidden'
-  },
-  header: {
-    minHeight: 40,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle
-  },
-  headerTitle: {
+  root: {
     flex: 1,
-    minWidth: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs
-  },
-  headerLabel: {
-    color: colors.textPrimary,
-    fontSize: 13,
-    fontWeight: '600'
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs
-  },
-  createButton: {
-    minHeight: 32,
-    flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    borderRadius: radii.button,
-    backgroundColor: colors.textPrimary
-  },
-  createButtonDisabled: {
-    opacity: 0.5
-  },
-  createButtonText: {
-    color: colors.bgBase,
-    fontSize: typography.metaSize,
-    fontWeight: '700'
-  },
-  iconButton: {
-    minWidth: 32,
-    minHeight: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.button
-  },
-  iconButtonPressed: {
-    backgroundColor: colors.bgRaised
+    paddingVertical: spacing.xl + 16
   },
   body: {
-    padding: spacing.md,
-    gap: spacing.sm
+    alignSelf: 'center',
+    maxWidth: 320,
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: spacing.xl
   },
-  bodyTitle: {
+  title: {
+    ...textStyles.title,
+    fontSize: 20,
+    lineHeight: 25,
     color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    fontWeight: '700'
+    textAlign: 'center',
+    marginTop: 6
   },
-  bodyText: {
+  message: {
+    ...textStyles.callout,
     color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    lineHeight: 18
+    textAlign: 'center'
+  },
+  actions: {
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.sm
+  },
+  notice: {
+    paddingTop: spacing.lg
+  },
+  failure: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg
   },
   composerArea: {
-    backgroundColor: colors.bgPanel,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle,
-    padding: spacing.md
-  },
-  // Secondary link-an-existing-PR affordance, set apart from the body copy.
-  linkButton: {
-    marginTop: spacing.xs,
-    minHeight: 32,
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs
-  },
-  linkButtonDisabled: {
-    opacity: 0.5
-  },
-  linkButtonPressed: {
-    opacity: 0.6
-  },
-  linkButtonText: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    fontWeight: '600'
+    paddingHorizontal: PR_PAGE_INSET,
+    paddingTop: spacing.lg
   }
 })

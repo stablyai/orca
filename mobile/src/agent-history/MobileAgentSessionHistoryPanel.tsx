@@ -1,9 +1,15 @@
 import { loadMobileResumeMetadata } from './mobile-agent-history-resume-metadata'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
+import { Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { ChevronLeft, RefreshCw } from 'lucide-react-native'
-import { colors } from '../theme/mobile-theme'
+import { CircleAlert, CloudOff, History, SearchX } from 'lucide-react-native'
+import { MobileSegmentedControl, type MobileSegment } from '../components/MobileSegmentedControl'
+import { MobileSearchField } from '../components/MobileSearchField'
+import { MobileNavRefreshButton } from '../components/MobileNavRefreshButton'
+import { NavBar } from '../components/ui/NavBar'
+import { Banner } from '../components/ui/Banner'
+import { Collapsible } from '../components/ui/Collapsible'
+import { StateView } from '../components/ui/StateView'
 import { useWorkspaceClient } from '../transport/use-workspace-client'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
 import { worktreeCatalogRead } from '../worktree/worktree-catalog-operations'
@@ -36,11 +42,13 @@ export type MobileAgentSessionHistoryPanelProps = {
   name?: string
 }
 
-const SCOPE_TABS: { scope: AiVaultScope; label: string }[] = [
-  { scope: 'workspace', label: 'Workspace' },
-  { scope: 'project', label: 'Project' },
-  { scope: 'all', label: 'All' }
+const SCOPE_SEGMENTS: readonly MobileSegment<AiVaultScope>[] = [
+  { value: 'workspace', label: 'Workspace' },
+  { value: 'project', label: 'Project' },
+  { value: 'all', label: 'All' }
 ]
+
+type ResumeNotice = { tone: 'info' | 'error'; text: string }
 
 export function MobileAgentSessionHistoryPanel(props: MobileAgentSessionHistoryPanelProps) {
   return <MobileAgentSessionHistoryPanelContent key={props.hostId} {...props} />
@@ -65,7 +73,9 @@ function MobileAgentSessionHistoryPanelContent({
   const [worktreesLoaded, setWorktreesLoaded] = useState(false)
   const [query, setQuery] = useState('')
   const [resumingSessionId, setResumingSessionId] = useState<string | null>(null)
-  const [resumeMessage, setResumeMessage] = useState<string | null>(null)
+  const [resumeNotice, setResumeNotice] = useState<ResumeNotice | null>(null)
+  const [issuesShown, setIssuesShown] = useState(false)
+  const [scrolled, setScrolled] = useState(false)
   const now = useNow(30_000)
   const resumeLaunchInFlightRef = useRef(false)
   const resumeMutationRegistryRef = useRef(
@@ -159,12 +169,15 @@ function MobileAgentSessionHistoryPanelContent({
         return
       }
       if (!client || connState !== 'connected') {
-        setResumeMessage('Waiting for host...')
+        setResumeNotice({ tone: 'error', text: 'Waiting for your desktop to reconnect.' })
         triggerError()
         return
       }
       if (!session.sessionId) {
-        setResumeMessage('This session is missing a resume id.')
+        setResumeNotice({
+          tone: 'error',
+          text: 'This session can’t be resumed: it has no resume id.'
+        })
         triggerError()
         return
       }
@@ -172,7 +185,7 @@ function MobileAgentSessionHistoryPanelContent({
       const assertCurrentOwner = claimResumeOwnership()
       resumeLaunchInFlightRef.current = true
       setResumingSessionId(session.id)
-      setResumeMessage(null)
+      setResumeNotice(null)
       try {
         const {
           repos,
@@ -194,7 +207,7 @@ function MobileAgentSessionHistoryPanelContent({
           projectGroups
         })
         if (target.status !== 'ready') {
-          setResumeMessage(target.message)
+          setResumeNotice({ tone: 'error', text: target.message })
           triggerError()
           return
         }
@@ -206,7 +219,10 @@ function MobileAgentSessionHistoryPanelContent({
           target.terminalPlatform
         )
         if (!platform) {
-          setResumeMessage('Unable to determine host platform.')
+          setResumeNotice({
+            tone: 'error',
+            text: 'Couldn’t tell which platform your desktop runs.'
+          })
           triggerError()
           return
         }
@@ -237,7 +253,7 @@ function MobileAgentSessionHistoryPanelContent({
         } catch {
           return
         }
-        setResumeMessage('Agent session queued.')
+        setResumeNotice({ tone: 'info', text: 'Agent session queued.' })
         router.push(
           `/h/${encodeURIComponent(hostId)}/session/${encodeURIComponent(target.worktreeId)}` as Parameters<
             typeof router.push
@@ -245,7 +261,10 @@ function MobileAgentSessionHistoryPanelContent({
         )
       } catch (err) {
         triggerError()
-        setResumeMessage(err instanceof Error ? err.message : 'Failed to resume session.')
+        setResumeNotice({
+          tone: 'error',
+          text: err instanceof Error ? err.message : 'Failed to resume session.'
+        })
       } finally {
         resumeLaunchInFlightRef.current = false
         setResumingSessionId(null)
@@ -264,107 +283,123 @@ function MobileAgentSessionHistoryPanelContent({
     ]
   )
 
+  const waitingForDesktop = screenState.kind === 'error' && connState !== 'connected'
+  const header = (
+    <View style={styles.controls}>
+      <MobileSegmentedControl
+        segments={SCOPE_SEGMENTS}
+        selected={scope}
+        onSelect={onSelectScope}
+        fill
+        testIDPrefix="agent-history-scope-"
+      />
+      <MobileSearchField
+        value={query}
+        onChangeText={setQuery}
+        placeholder="Search sessions, repo:, path:"
+        accessibilityLabel="Search agent sessions"
+      />
+      {issues.length > 0 ? (
+        <View style={styles.notice}>
+          <Banner
+            tone="warning"
+            message={`${issues.length} ${issues.length === 1 ? 'transcript' : 'transcripts'} couldn’t be read and ${issues.length === 1 ? 'isn’t' : 'aren’t'} listed.`}
+            action={{
+              label: issuesShown ? 'Hide details' : 'Show details',
+              onPress: () => setIssuesShown((shown) => !shown)
+            }}
+          />
+          {/* Cancels the notice's gap while shut and carries it inside, so it eases in too. */}
+          <View style={styles.issueFrame}>
+            <Collapsible open={issuesShown}>
+              <View style={styles.issueGap}>
+                <View style={styles.issueList}>
+                  {issues.map((issue) => (
+                    <View key={`${issue.path}\n${issue.message}`} style={styles.issueRow}>
+                      <Text style={styles.issuePath} numberOfLines={2}>
+                        {issue.path}
+                      </Text>
+                      <Text style={styles.issueMessage}>{issue.message}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            </Collapsible>
+          </View>
+        </View>
+      ) : null}
+      {resumeNotice ? (
+        <View style={styles.notice}>
+          <Banner
+            tone={resumeNotice.tone}
+            message={resumeNotice.text}
+            onDismiss={() => setResumeNotice(null)}
+          />
+        </View>
+      ) : null}
+    </View>
+  )
+
   return (
     <View style={styles.container}>
       <SafeAreaView style={styles.header} edges={['top']}>
-        <View style={styles.topBar}>
-          <Pressable
-            style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
-            onPress={() => router.back()}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel="Back"
-          >
-            <ChevronLeft size={22} color={colors.textSecondary} strokeWidth={2.2} />
-          </Pressable>
-          <View style={styles.titleBlock}>
-            <Text style={styles.title} numberOfLines={1}>
-              Agent Session History
-            </Text>
-            <Text style={styles.meta} numberOfLines={1}>
-              {worktreeLabel}
-            </Text>
-          </View>
-          <Pressable
-            style={({ pressed }) => [styles.refreshButton, pressed && styles.refreshButtonPressed]}
-            onPress={() => void onRefresh()}
-            hitSlop={8}
-            accessibilityLabel="Refresh agent sessions"
-          >
-            <RefreshCw size={18} color={colors.textSecondary} strokeWidth={2.1} />
-          </Pressable>
-        </View>
+        <NavBar
+          title="Agent session history"
+          subtitle={worktreeLabel}
+          onBack={() => router.back()}
+          scrolled={scrolled}
+          trailing={
+            screenState.kind === 'ready' ? (
+              <MobileNavRefreshButton
+                busy={refreshing}
+                onPress={() => void onRefresh()}
+                accessibilityLabel="Refresh agent sessions"
+              />
+            ) : undefined
+          }
+        />
       </SafeAreaView>
 
       {screenState.kind === 'loading' ? (
-        <View style={styles.state}>
-          <ActivityIndicator size="small" color={colors.textSecondary} />
-        </View>
+        <StateView loading title="Loading agent sessions…" />
       ) : screenState.kind === 'unsupported' ? (
-        <View style={styles.state}>
-          <Text style={styles.stateTitle}>Agent Session History Unavailable</Text>
-          <Text style={styles.stateText}>
-            Update Orca on this host to browse agent session history.
-          </Text>
-        </View>
+        <StateView
+          icon={History}
+          title="History isn’t available yet"
+          message="Update Orca on your desktop to browse agent session history."
+        />
+      ) : waitingForDesktop ? (
+        <StateView
+          icon={CloudOff}
+          title="Waiting for desktop"
+          message="Agent sessions load once your desktop is back online."
+          primary={retry ? { label: 'Retry', onPress: retry } : undefined}
+        />
       ) : screenState.kind === 'error' ? (
-        <View style={styles.state}>
-          <Text style={styles.stateTitle}>Unable to Load</Text>
-          <Text style={styles.stateText}>{screenState.message}</Text>
-          {retry ? (
-            <Pressable style={styles.retryButton} onPress={retry}>
-              <Text style={styles.retryText}>Retry</Text>
-            </Pressable>
-          ) : null}
-        </View>
+        <StateView
+          icon={CircleAlert}
+          title="Couldn’t load agent sessions"
+          message={screenState.message}
+          primary={retry ? { label: 'Retry', onPress: retry } : undefined}
+        />
       ) : (
         <>
-          <View style={styles.scopeTabs}>
-            {SCOPE_TABS.map((tab) => {
-              const active = scope === tab.scope
-              return (
-                <Pressable
-                  key={tab.scope}
-                  style={[styles.scopeTab, active && styles.scopeTabActive]}
-                  onPress={() => onSelectScope(tab.scope)}
-                >
-                  <Text style={[styles.scopeTabText, active && styles.scopeTabTextActive]}>
-                    {tab.label}
-                  </Text>
-                </Pressable>
-              )
-            })}
-          </View>
-          <View style={styles.searchRow}>
-            <TextInput
-              style={styles.searchInput}
-              value={query}
-              onChangeText={setQuery}
-              placeholder="Search sessions, repo:, path:"
-              placeholderTextColor={colors.textMuted}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-          </View>
-          {issues.length > 0 ? (
-            <View style={styles.noticeBanner}>
-              <Text style={styles.noticeText}>
-                {issues.length} {issues.length === 1 ? 'transcript' : 'transcripts'} skipped
-              </Text>
-            </View>
-          ) : null}
-          {resumeMessage ? (
-            <View style={styles.resumeBanner}>
-              <Text style={styles.resumeBannerText}>{resumeMessage}</Text>
-            </View>
-          ) : null}
+          {header}
           {sections.length === 0 ? (
-            <View style={styles.state}>
-              <Text style={styles.stateTitle}>No agent sessions</Text>
-              <Text style={styles.stateText}>
-                {query ? 'No sessions match your search.' : 'No past agent sessions in this scope.'}
-              </Text>
-            </View>
+            query ? (
+              <StateView
+                icon={SearchX}
+                title="No matches"
+                message="No sessions match your search."
+                secondary={{ label: 'Clear search', onPress: () => setQuery('') }}
+              />
+            ) : (
+              <StateView
+                icon={History}
+                title="No agent sessions"
+                message="Past agent sessions in this scope show up here."
+              />
+            )
           ) : (
             <MobileAgentSessionHistoryList
               sections={sections}
@@ -374,6 +409,7 @@ function MobileAgentSessionHistoryPanelContent({
               resumeActionStateBySessionId={resumeActionStateBySessionId}
               onResume={onResumeSession}
               onRefresh={() => void onRefresh()}
+              onScrolledChange={setScrolled}
             />
           )}
         </>

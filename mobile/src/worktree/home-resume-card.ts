@@ -1,6 +1,11 @@
 import { isSyntheticWorkspaceRoute } from '../session/synthetic-workspace-route'
 import type { ConnectionState } from '../transport/types'
-import type { HomeWorktreeSummary, HostWorktreeInfo } from './home-worktree-info'
+import {
+  HOME_RECENT_WORKTREE_LIMIT,
+  homeWorktreeRecency,
+  type HomeWorktreeSummary,
+  type HostWorktreeInfo
+} from './home-worktree-info'
 
 // Picks what the home screen's Resume card shows, and whether tapping it can do anything.
 // Why the two are separate: gating the card itself on 'connected' made it appear above Tasks
@@ -86,4 +91,64 @@ export function selectHomeResumeCard(input: HomeResumeCardInput): HomeResumeCard
   }
   // Nothing live to resume yet: hold the slot with whatever the snapshot remembers.
   return visited ?? hostHistoryCard(input, false)
+}
+
+/** Every workspace waiting for permission or an answer, on desktops connected right now. */
+export function selectHomeNeedsYou({
+  hosts,
+  hostStates,
+  worktreeInfo
+}: HomeResumeCardInput): HomeResumeCard[] {
+  return hosts.flatMap((host) => {
+    const info = worktreeInfo[host.id]
+    // A failed refresh leaves statuses that are no longer live, so they claim nothing.
+    if (hostStates[host.id] !== 'connected' || !info || info.catalogUnavailable) {
+      return []
+    }
+    return (info.permissionWorktrees ?? []).map((worktree) => ({
+      hostId: host.id,
+      worktree,
+      actionable: true
+    }))
+  })
+}
+
+function cardKey(card: HomeResumeCard): string {
+  return JSON.stringify([card.hostId, card.worktree.worktreeId])
+}
+
+/** Up to three workspaces to go back to: the Resume pick first, then the latest across desktops. */
+export function selectHomeJumpBackIn(
+  input: HomeResumeCardInput,
+  exclude: readonly HomeResumeCard[]
+): HomeResumeCard[] {
+  const taken = new Set(exclude.map(cardKey))
+  const picked: HomeResumeCard[] = []
+  const add = (card: HomeResumeCard): void => {
+    const key = cardKey(card)
+    if (picked.length < HOME_RECENT_WORKTREE_LIMIT && !taken.has(key)) {
+      taken.add(key)
+      picked.push(card)
+    }
+  }
+  const resume = selectHomeResumeCard(input)
+  if (resume) {
+    add(resume)
+  }
+  const recent = input.hosts.flatMap((host) =>
+    (input.worktreeInfo[host.id]?.recentWorktrees ?? []).map((worktree) => ({
+      hostId: host.id,
+      worktree,
+      actionable: input.hostStates[host.id] === 'connected'
+    }))
+  )
+  recent.sort(
+    (a, b) =>
+      Number(b.actionable) - Number(a.actionable) ||
+      homeWorktreeRecency(b.worktree) - homeWorktreeRecency(a.worktree)
+  )
+  for (const card of recent) {
+    add(card)
+  }
+  return picked
 }

@@ -1,5 +1,5 @@
 import { useState, type ComponentType } from 'react'
-import { Text, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
 import { MobileSearchField } from '../components/MobileSearchField'
 import { MobileSegmentedControl } from '../components/MobileSegmentedControl'
 import {
@@ -22,13 +22,14 @@ import {
 } from '../../../src/shared/workspace-view/workspace-host-visibility'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import type { WorktreeCardProperty } from '../../../src/shared/ui-chrome-types'
-import { hostScreenStyles as styles } from './host-screen-styles'
+import { SectionHeader } from '../components/ui/SectionHeader'
+import { spacing } from '../theme/mobile-theme'
 import {
   phoneCardPropertyChoices,
   withoutPhoneHiddenProperties
 } from './phone-card-property-choices'
 import type { HostScreenController } from './use-host-screen-controller'
-import { CheckRow, ChoiceRows, OptionRowList, SwitchRow } from './workspace-option-rows'
+import { CheckRow, ChoiceRows, OptionGroup, SwitchRow } from './workspace-option-rows'
 import { choiceLabel, summarizeChecklist } from './workspace-option-values'
 
 export type WorkspaceOptionHost = { id: ExecutionHostId; label: string }
@@ -45,7 +46,11 @@ export type WorkspaceOptionProps = {
  * ones inside the section's card); the rest show their value on the main sheet and open a page.
  */
 export type WorkspaceOptionControl =
-  | { kind: 'inline'; framed: boolean; Row: ComponentType<WorkspaceOptionProps> }
+  | {
+      kind: 'inline'
+      framed: boolean
+      Row: ComponentType<WorkspaceOptionProps>
+    }
   | {
       kind: 'page'
       value: (props: WorkspaceOptionProps) => string
@@ -89,31 +94,29 @@ function HostsPage({ controller, hosts }: WorkspaceOptionProps) {
     }
   }
   return (
-    <View style={styles.filterGroup}>
-      <OptionRowList>
-        {[
-          <CheckRow
-            key="all"
-            label="All hosts"
-            checked={!visible}
-            onPress={() => write(toggleAllVisibleHosts(hosts, visible))}
-          />,
-          ...hosts.map((host) => {
-            const next = toggleVisibleHostRow(hosts, visible, host)
-            return (
-              <CheckRow
-                key={host.id}
-                label={host.label}
-                checked={checked.has(host.id)}
-                // The last shown host cannot be turned off.
-                disabled={next === undefined}
-                onPress={() => write(next)}
-              />
-            )
-          })
-        ]}
-      </OptionRowList>
-    </View>
+    <OptionGroup>
+      {[
+        <CheckRow
+          key="all"
+          label="All hosts"
+          checked={!visible}
+          onPress={() => write(toggleAllVisibleHosts(hosts, visible))}
+        />,
+        ...hosts.map((host) => {
+          const next = toggleVisibleHostRow(hosts, visible, host)
+          return (
+            <CheckRow
+              key={host.id}
+              label={host.label}
+              checked={checked.has(host.id)}
+              // The last shown host cannot be turned off.
+              disabled={next === undefined}
+              onPress={() => write(next)}
+            />
+          )
+        })
+      ]}
+    </OptionGroup>
   )
 }
 
@@ -138,16 +141,16 @@ function ProjectsPage({ controller }: WorkspaceOptionProps) {
     (repo) => !needle || repo.name.toLowerCase().includes(needle)
   )
   return (
-    <View style={styles.filterGroup}>
+    <>
       <View style={styles.optionSearch}>
         <MobileSearchField
           value={query}
           onChangeText={setQuery}
-          placeholder="Search projects…"
+          placeholder="Search projects"
           accessibilityLabel="Search projects"
         />
       </View>
-      <OptionRowList>
+      <OptionGroup>
         {[
           <CheckRow
             key="all"
@@ -161,12 +164,12 @@ function ProjectsPage({ controller }: WorkspaceOptionProps) {
               label={repo.name}
               checked={selected.includes(repo.id)}
               onPress={() => settings.toggleRepoFilter(repo.id)}
-              leading={<View style={[styles.filterRepoDot, { backgroundColor: repo.color }]} />}
+              leading={<View style={[styles.repoDot, { backgroundColor: repo.color }]} />}
             />
           ))
         ]}
-      </OptionRowList>
-    </View>
+      </OptionGroup>
+    </>
   )
 }
 
@@ -180,13 +183,13 @@ function choicePage<Id extends string>(
     value: ({ controller }) => choiceLabel(choices, selected(controller)),
     // Picking keeps the page open, as the desktop keeps its submenu open.
     Page: ({ controller }) => (
-      <View style={styles.filterGroup}>
+      <OptionGroup>
         <ChoiceRows
           choices={choices}
           selected={selected(controller)}
           onSelect={onSelect(controller)}
         />
-      </View>
+      </OptionGroup>
     )
   }
 }
@@ -197,18 +200,16 @@ function CardPropertyRows(props: {
 }) {
   const { settings, state } = props.controller
   return (
-    <View style={styles.filterGroup}>
-      <OptionRowList>
-        {props.choices.map((choice) => (
-          <CheckRow
-            key={choice.id}
-            label={choice.label}
-            checked={state.view.worktreeCardProperties.includes(choice.id)}
-            onPress={() => settings.toggleCardProperty(choice.id)}
-          />
-        ))}
-      </OptionRowList>
-    </View>
+    <OptionGroup>
+      {props.choices.map((choice) => (
+        <CheckRow
+          key={choice.id}
+          label={choice.label}
+          checked={state.view.worktreeCardProperties.includes(choice.id)}
+          onPress={() => settings.toggleCardProperty(choice.id)}
+        />
+      ))}
+    </OptionGroup>
   )
 }
 
@@ -225,7 +226,10 @@ function propertiesPage(
   choices: (
     controller: HostScreenController
   ) => readonly WorkspaceViewChoice<WorktreeCardProperty>[],
-  options: { value: (props: WorkspaceOptionProps) => string; withAgentLayout: boolean }
+  options: {
+    value: (props: WorkspaceOptionProps) => string
+    withAgentLayout: boolean
+  }
 ): Extract<WorkspaceOptionControl, { kind: 'page' }> {
   const { withAgentLayout } = options
   return {
@@ -236,7 +240,7 @@ function propertiesPage(
         <CardPropertyRows controller={controller} choices={choices(controller)} />
         {withAgentLayout && (
           <>
-            <Text style={styles.filterSectionLabel}>Agent activity layout</Text>
+            <SectionHeader title="Agent activity layout" />
             <MobileSegmentedControl
               segments={WORKSPACE_AGENT_ACTIVITY_LAYOUT_CHOICES.map(({ id, label }) => ({
                 value: id,
@@ -245,7 +249,7 @@ function propertiesPage(
               selected={controller.state.view.agentActivityDisplayMode}
               onSelect={controller.settings.setAgentActivityDisplayMode}
               fill
-              style={styles.optionSegmented}
+              style={styles.segmented}
             />
           </>
         )}
@@ -286,11 +290,14 @@ export const WORKSPACE_OPTION_CONTROLS: Record<WorkspaceViewOptionKey, Workspace
     framed: false,
     Row: ({ controller }) => (
       <MobileSegmentedControl
-        segments={WORKSPACE_GROUP_BY_CHOICES.map(({ id, label }) => ({ value: id, label }))}
+        segments={WORKSPACE_GROUP_BY_CHOICES.map(({ id, label }) => ({
+          value: id,
+          label
+        }))}
         selected={controller.state.view.groupBy}
         onSelect={controller.settings.handleGroupChange}
         fill
-        style={styles.optionSegmented}
+        style={styles.segmented}
       />
     )
   },
@@ -314,7 +321,10 @@ export const WORKSPACE_OPTION_CONTROLS: Record<WorkspaceViewOptionKey, Workspace
     withAgentLayout: true
   }),
   // As the desktop, Card display shows no value.
-  cardDisplay: propertiesPage(cardDisplayChoices, { value: () => '', withAgentLayout: false }),
+  cardDisplay: propertiesPage(cardDisplayChoices, {
+    value: () => '',
+    withAgentLayout: false
+  }),
   hideSleepingWorkspaces: filterSwitch('hideSleepingWorkspaces'),
   alwaysShowDefaultBranchWorkspace: filterSwitch('alwaysShowDefaultBranchWorkspace'),
   hideDefaultBranchWorkspace: filterSwitch('hideDefaultBranchWorkspace'),
@@ -323,3 +333,9 @@ export const WORKSPACE_OPTION_CONTROLS: Record<WorkspaceViewOptionKey, Workspace
   hideWorkspacesFromOtherDevices: filterSwitch('hideWorkspacesFromOtherDevices'),
   hideDetachedHeadWorkspaces: filterSwitch('hideDetachedHeadWorkspaces')
 }
+
+const styles = StyleSheet.create({
+  optionSearch: { marginHorizontal: spacing.xs, marginBottom: spacing.md },
+  repoDot: { width: 10, height: 10, borderRadius: 5 },
+  segmented: { marginHorizontal: spacing.xs }
+})

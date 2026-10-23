@@ -1,69 +1,57 @@
 import { StyleSheet } from 'react-native'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
-import { TEXT_INPUT_FONT_SIZE } from '../../platform/text-input-font-size'
+import { colors, radii, spacing, textStyles, typography } from '../../theme/mobile-theme'
 
 // Fixed inline-dock width (KTD2/U4): leaves the diff >= ~380px within the 700px
 // breakpoint where docking engages.
 export const PR_SIDEBAR_DOCK_WIDTH = 320
 
+/** Horizontal inset of the PR tab's own text blocks, matching the inset groups' text edge. */
+export const PR_PAGE_INSET = spacing.lg + 4
+
 export const mobilePrSidebarStyles = StyleSheet.create({
   // The inline-docked column lives in the screen's flex row beside the diff.
   dockColumn: {
     width: PR_SIDEBAR_DOCK_WIDTH,
-    backgroundColor: colors.bgPanel,
+    backgroundColor: colors.bgBase,
     borderLeftWidth: StyleSheet.hairlineWidth,
-    borderLeftColor: colors.borderSubtle
+    borderLeftColor: colors.separator
   },
-  // Inner scroll area; the diff and the sidebar scroll independently. Flat layout
-  // (desktop ChecksPanel): sections butt against each other with border-b
-  // dividers, so no outer padding or inter-section gap.
   scrollContent: {
-    paddingBottom: spacing.lg
+    flexGrow: 1,
+    paddingBottom: spacing.xl
   },
-  // Flat section band (desktop ChecksPanel sidebar): a full-bleed bgPanel block
-  // divided from the next by a bottom hairline, rather than a stacked rounded
-  // card. The header row keeps its own border-b for the title/body divide.
+  // A section: sentence-case header over an inset group.
   section: {
-    backgroundColor: colors.bgPanel,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle
+    paddingTop: spacing.xs
   },
-  // Section header row: title + optional trailing control, divided from the body
-  // by a hairline border (desktop `h-10 border-b px-3`).
-  sectionHeader: {
-    minHeight: 40,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle
+  sectionFooter: {
+    paddingHorizontal: PR_PAGE_INSET,
+    paddingTop: spacing.sm
   },
-  sectionHeaderTrailing: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm
+  group: {
+    marginHorizontal: spacing.lg,
+    borderRadius: radii.group,
+    backgroundColor: colors.groupFill,
+    overflow: 'hidden'
   },
-  sectionBody: {
-    padding: spacing.md,
-    gap: spacing.sm
+  groupPadded: {
+    padding: spacing.lg,
+    gap: spacing.md
   },
-  sectionLabel: {
-    color: colors.textPrimary,
-    fontSize: 13,
-    fontWeight: '600'
+  bare: {
+    marginHorizontal: spacing.lg,
+    gap: spacing.md
   },
-  // Identity + actions share one section card (hub redesign): no per-block chrome.
+  // Identity: badge + number, title, head → base.
   identityBlock: {
+    paddingHorizontal: PR_PAGE_INSET,
+    paddingTop: spacing.lg,
     gap: spacing.sm
   },
-  // State badge + #number + author on one row; open-on-web flush right when shown.
   metaRow: {
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     gap: spacing.sm
   },
   metaLeft: {
@@ -71,73 +59,68 @@ export const mobilePrSidebarStyles = StyleSheet.create({
     minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: spacing.xs
-  },
-  badge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: radii.button,
-    borderWidth: StyleSheet.hairlineWidth,
-    backgroundColor: colors.bgRaised
-  },
-  badgeText: {
-    fontSize: typography.metaSize,
-    fontWeight: '700'
-  },
-  prTitle: {
-    flex: 1,
-    color: colors.textPrimary,
-    fontSize: typography.titleSize,
-    fontWeight: '700',
-    lineHeight: 24
+    gap: spacing.sm
   },
   prMeta: {
+    ...textStyles.subhead,
     color: colors.textSecondary,
-    fontSize: typography.metaSize
+    flexShrink: 1
   },
-  // #number in the meta row — stronger than author so the identity scans first.
   prMetaStrong: {
+    ...textStyles.subhead,
+    fontWeight: '500',
     color: colors.textPrimary,
-    fontSize: typography.metaSize,
-    fontWeight: '600'
+    fontVariant: ['tabular-nums']
   },
-  // Title row: tappable area pairing the title with a trailing edit affordance.
   titleRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacing.xs
   },
-  titleEditButton: {
-    minWidth: 28,
-    minHeight: 28,
-    alignItems: 'center',
-    justifyContent: 'center'
+  prTitle: {
+    ...textStyles.title,
+    flex: 1,
+    minWidth: 0,
+    color: colors.textPrimary,
+    paddingTop: spacing.sm
+  },
+  titleEdit: {
+    gap: spacing.md
+  },
+  titleEditActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: spacing.sm
   },
   branchRow: {
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
-    gap: spacing.xs
+    gap: 6
   },
   branchPill: {
     flexShrink: 1,
-    color: colors.textPrimary,
-    fontSize: typography.metaSize,
+    color: colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 18,
     fontFamily: typography.monoFamily,
-    backgroundColor: colors.bgRaised,
-    paddingHorizontal: spacing.xs,
-    paddingVertical: 2,
-    borderRadius: radii.button
+    backgroundColor: colors.fill,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderRadius: radii.pill,
+    overflow: 'hidden'
   },
-  // Generic list row, mirroring the diff-review row rhythm (44dp min target).
+  // A row inside an inset group that ListRow can't draw (coloured status, nested controls).
   row: {
-    minHeight: 44,
+    minHeight: 52,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.xs
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm
+  },
+  rowPressed: {
+    backgroundColor: colors.fill
   },
   rowMain: {
     flex: 1,
@@ -145,180 +128,143 @@ export const mobilePrSidebarStyles = StyleSheet.create({
     gap: 2
   },
   rowTitle: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize
+    ...textStyles.body,
+    color: colors.textPrimary
   },
+  rowTitleStrong: {
+    fontWeight: '500'
+  },
+  // Checks rows are tighter on the right: the open-on-web button brings its own 44 pt box.
+  checkRow: {
+    paddingRight: spacing.xs,
+    gap: spacing.sm + 2
+  },
+  chevronOpen: { transform: [{ rotate: '90deg' }] },
+  chevronClosed: { transform: [{ rotate: '0deg' }] },
   rowSubtitle: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize
+    ...textStyles.subhead,
+    color: colors.textSecondary
   },
   rowStatus: {
-    fontSize: typography.metaSize,
-    fontWeight: '700'
+    ...textStyles.subhead,
+    fontWeight: '500',
+    flexShrink: 0
   },
   statusDot: {
     width: 8,
     height: 8,
     borderRadius: 4
   },
-  emptyText: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize
+  // Quiet text inside a group: empty, loading and failed rows.
+  groupNote: {
+    ...textStyles.callout,
+    color: colors.textSecondary
   },
-  // Loading / empty status row inside Reviewers (and similar) section bodies.
-  reviewersStatus: {
-    minHeight: 44,
+  rowSpinner: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  noteRow: {
+    minHeight: 52,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm
   },
-  summaryLabel: {
-    fontSize: typography.bodySize,
-    fontWeight: '700'
+  noteRowText: {
+    ...textStyles.callout,
+    color: colors.textSecondary,
+    flex: 1,
+    minWidth: 0
+  },
+  actionError: {
+    marginTop: spacing.sm
   },
   checkDetailArea: {
-    paddingLeft: spacing.lg,
-    paddingBottom: spacing.xs,
-    gap: spacing.xs
+    paddingLeft: spacing.lg + 28,
+    paddingRight: spacing.lg,
+    paddingBottom: spacing.md,
+    gap: spacing.sm
   },
   checkDetailText: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    lineHeight: 18
+    ...textStyles.subhead,
+    color: colors.textSecondary
   },
-  // Annotations / jobs sub-section, divided from the summary by a hairline border
-  // (desktop `border-t pt-2`). Muted/monochrome so the detail stays subdued.
   checkDetailGroup: {
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderSubtle,
+    borderTopColor: colors.separator,
     paddingTop: spacing.sm,
     gap: spacing.xs
   },
   checkDetailGroupLabel: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5
+    ...textStyles.footnote,
+    fontWeight: '500',
+    color: colors.textMuted
   },
   checkDetailLocator: {
     color: colors.textSecondary,
-    fontSize: typography.metaSize,
+    fontSize: 13,
+    lineHeight: 18,
     fontFamily: typography.monoFamily
   },
   checkDetailEmphasis: {
+    ...textStyles.subhead,
+    fontWeight: '500',
     color: colors.textPrimary,
-    fontSize: typography.metaSize,
-    lineHeight: 18,
-    fontWeight: '600'
+    flexShrink: 1
   },
-  // Step rows are indented under their job to read as children.
   checkDetailStepRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: spacing.sm,
     paddingLeft: spacing.sm
   },
-  // Log tail is preformatted host output; mono + a raised surface, vertically
-  // scrollable so a long tail doesn't push the rest of the sidebar off-screen.
   checkDetailLogScroll: {
-    maxHeight: 160,
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.button,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs
+    maxHeight: 180,
+    marginTop: spacing.xs,
+    backgroundColor: colors.fieldFill,
+    borderRadius: radii.composerItem,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm
   },
   checkDetailLogText: {
     color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    fontFamily: typography.monoFamily,
-    lineHeight: 16
-  },
-  stateArea: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.xl,
-    gap: spacing.md
-  },
-  stateText: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize,
-    textAlign: 'center',
-    lineHeight: 20
-  },
-  // Blocked state is a permanent failure (R9) — explanatory, not retry-encouraged.
-  blockedText: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize,
-    textAlign: 'center',
-    lineHeight: 20
-  },
-  retryButton: {
-    minHeight: 44,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.md,
-    borderRadius: radii.button,
-    backgroundColor: colors.bgRaised
-  },
-  retryText: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    fontWeight: '700'
-  },
-  // Trailing control area in a reviewer row (add/remove button or spinner).
-  rowTrailing: {
-    minWidth: 32,
-    minHeight: 32,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  iconButton: {
-    minWidth: 32,
-    minHeight: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.button
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: typography.monoFamily
   },
   // ─── Reviewer picker (BottomDrawer) ───────────────────────────────────────
-  pickerTitle: {
-    color: colors.textPrimary,
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: spacing.sm
-  },
   pickerSearch: {
-    minHeight: 40,
-    borderRadius: radii.input,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel,
-    color: colors.textPrimary,
-    paddingHorizontal: spacing.md,
-    fontSize: TEXT_INPUT_FONT_SIZE,
-    marginBottom: spacing.sm
+    paddingHorizontal: spacing.xs,
+    paddingBottom: spacing.md
   },
-  // No maxHeight / FlatList: the parent BottomDrawer scrolls this block so we
-  // never nest a VirtualizedList inside the PR page ScrollView.
+  // No FlatList: the parent BottomDrawer scrolls this block so we never nest a
+  // VirtualizedList inside the PR page ScrollView.
   pickerList: {
-    gap: 0
+    marginHorizontal: 0,
+    marginBottom: spacing.md
   },
-  pickerRow: {
-    minHeight: 44,
-    flexDirection: 'row',
+  pickerState: {
+    minHeight: 200
+  },
+  avatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.fillPressed,
     alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.xs
+    justifyContent: 'center',
+    overflow: 'hidden'
   },
-  pickerRowMain: {
-    flex: 1,
-    minWidth: 0
+  avatarImage: {
+    ...StyleSheet.absoluteFillObject
   },
-  pickerStateArea: {
-    paddingVertical: spacing.lg,
-    alignItems: 'center',
-    gap: spacing.sm
+  avatarInitial: {
+    ...textStyles.footnote,
+    fontWeight: '600',
+    color: colors.textSecondary
   }
 })

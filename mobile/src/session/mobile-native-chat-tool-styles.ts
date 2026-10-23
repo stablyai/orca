@@ -1,33 +1,30 @@
-import { Platform, StyleSheet } from 'react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
-import { MONO_SIZE, scaledType } from './mobile-native-chat-message-styles'
+import { StyleSheet } from 'react-native'
+import { CODE_FONT_FAMILY } from '../components/mobile-markdown-styles'
+import { colors, radii, spacing, textStyles } from '../theme/mobile-theme'
+import { scaledText } from './mobile-native-chat-message-styles'
 
-/** Desktop's chat type scale: tool rows in the body size, code in the code size,
- *  annotations a step smaller. Pinch-zoom scales all three. */
+/** The chat's tool type: run sentences in the callout step, lines in subhead, code at the footnote
+ *  size in mono, annotations in footnote. Pinch-zoom scales all of them. */
 export function toolType(fontScale: number) {
   return {
-    row: scaledType(typography.bodySize, fontScale),
-    code: scaledType(MONO_SIZE, fontScale, 5),
-    meta: scaledType(typography.metaSize, fontScale)
+    sentence: scaledText(textStyles.callout, fontScale),
+    row: scaledText(textStyles.subhead, fontScale),
+    code: scaledText({ fontSize: 13, lineHeight: 18 }, fontScale),
+    meta: scaledText(textStyles.footnote, fontScale)
   }
 }
 
-// iOS has no font named `monospace`; it silently falls back to the proportional system face.
-const MONO_FAMILY = Platform.OS === 'ios' ? 'Menlo' : typography.monoFamily
+/** Tool glyphs, a step under the sentence they lead. */
+export const TOOL_ICON_SIZE = 16
 
 export const toolStyles = StyleSheet.create({
   run: {
-    marginTop: spacing.xs
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 3
+    marginTop: 2
   },
   headerSentence: {
+    ...textStyles.callout,
     flexShrink: 1,
-    color: colors.textMuted
+    color: colors.textSecondary
   },
   headerSentenceLive: {
     flexShrink: 0,
@@ -41,24 +38,20 @@ export const toolStyles = StyleSheet.create({
     flexShrink: 1,
     color: colors.textMuted
   },
+  // Hangs from the run's glyph: its rule runs under the icon's centre.
   members: {
-    marginLeft: 7,
+    marginLeft: TOOL_ICON_SIZE / 2,
     marginTop: 2,
-    paddingLeft: 13,
+    paddingLeft: spacing.md,
     borderLeftWidth: StyleSheet.hairlineWidth,
-    borderLeftColor: colors.borderSubtle
-  },
-  line: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    minHeight: 26
+    borderLeftColor: colors.fieldBorder
   },
   iconSlot: {
     alignItems: 'center',
     justifyContent: 'center'
   },
   lineWord: {
+    ...textStyles.subhead,
     flexShrink: 0,
     color: colors.textMuted
   },
@@ -68,6 +61,7 @@ export const toolStyles = StyleSheet.create({
     maxWidth: '60%'
   },
   lineTarget: {
+    ...textStyles.subhead,
     flexShrink: 1,
     color: colors.textPrimary
   },
@@ -79,26 +73,26 @@ export const toolStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingLeft: spacing.sm
+    paddingLeft: spacing.xs
   },
   lineMeta: {
+    ...textStyles.footnote,
     color: colors.textMuted,
     fontVariant: ['tabular-nums']
   },
-  caretOpen: {
-    transform: [{ rotate: '90deg' }]
-  },
   detail: {
-    marginLeft: 24,
-    paddingVertical: spacing.xs,
-    gap: 6
+    marginLeft: TOOL_ICON_SIZE + spacing.sm,
+    paddingTop: 2,
+    paddingBottom: spacing.sm,
+    gap: spacing.sm
   },
   codeBox: {
-    borderRadius: radii.button,
+    borderRadius: radii.field - 4,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
+    borderColor: colors.separator,
     backgroundColor: colors.bgPanel,
-    padding: spacing.sm
+    paddingHorizontal: 10,
+    paddingVertical: spacing.sm
   },
   /** Desktop's `max-h-64`: one long output scrolls in place instead of filling the screen. */
   codeScroll: {
@@ -107,10 +101,10 @@ export const toolStyles = StyleSheet.create({
   },
   codeText: {
     color: colors.textPrimary,
-    fontFamily: MONO_FAMILY
+    fontFamily: CODE_FONT_FAMILY
   },
   searchResults: {
-    gap: 2
+    gap: spacing.xs
   },
   searchHit: {
     textDecorationLine: 'underline'
@@ -120,16 +114,17 @@ export const toolStyles = StyleSheet.create({
     textDecorationLine: 'none'
   },
   taskCard: {
-    gap: spacing.xs,
-    paddingVertical: spacing.xs
+    gap: spacing.sm,
+    paddingVertical: spacing.sm
   },
   taskHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6
+    gap: spacing.sm
   },
   taskTitle: {
-    fontWeight: '500'
+    fontWeight: '500',
+    color: colors.textSecondary
   },
   taskList: {
     gap: spacing.xs,
@@ -138,27 +133,22 @@ export const toolStyles = StyleSheet.create({
   taskRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 6
+    gap: spacing.sm
   },
   taskIcon: {
     justifyContent: 'center'
   },
   taskText: {
+    ...textStyles.subhead,
     flexShrink: 1,
-    color: colors.textMuted
+    color: colors.textSecondary
   },
   taskActive: {
     color: colors.textPrimary,
     fontWeight: '500'
   },
-  taskDisclosure: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingVertical: 2
-  },
   errorText: {
-    color: colors.statusRed
+    color: colors.danger
   },
   // Desktop's `NativeChatDiffView`: diff text on a tinted row in the chat's own diff colours.
   diffAdd: {
@@ -175,12 +165,12 @@ export const toolStyles = StyleSheet.create({
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    marginVertical: 2
+    gap: spacing.xs
   },
   cardToggle: {
     flex: 1,
-    minWidth: 0
+    minWidth: 0,
+    marginRight: 0
   },
   shrinkable: {
     flexShrink: 1
@@ -196,9 +186,9 @@ export const toolStyles = StyleSheet.create({
   },
   /** Desktop's `max-h-72`: a long change scrolls in place. */
   diffBody: {
-    marginLeft: 24,
-    marginTop: spacing.xs,
-    marginBottom: spacing.xs,
+    marginLeft: TOOL_ICON_SIZE + spacing.sm,
+    marginTop: 2,
+    marginBottom: spacing.sm,
     maxHeight: 288,
     flexGrow: 0,
     paddingHorizontal: 0
@@ -244,6 +234,6 @@ export const toolStyles = StyleSheet.create({
     color: colors.textMuted,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle
+    borderColor: colors.separator
   }
 })

@@ -1,8 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, Pressable, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import { openExternalLink } from '../../platform/external-link'
-import { ChevronDown, ChevronRight, ExternalLink, RotateCw, Sparkles } from 'lucide-react-native'
+import {
+  AlertCircle,
+  CheckCircle2,
+  ChevronRight,
+  CircleDot,
+  ExternalLink,
+  RotateCw,
+  Sparkles
+} from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
+import { Button } from '../ui/Button'
+import { Collapsible } from '../ui/Collapsible'
+import { IconButton } from '../ui/IconButton'
+import { slideTransition } from '../ui/transition-styles'
 import type { PRCheckDetail } from '../../../../src/shared/github/check-types'
 import type { RpcClient } from '../../transport/rpc-client'
 import { fetchPRCheckDetails, type GitHubPrRepoSlug } from '../../session/github-pr-rpc'
@@ -149,116 +161,120 @@ export function PRChecksSection({
     ensureDetail(failing, key)
   }, [ensureDetail, sorted, sortedSignature])
 
+  const summaryToken = checkOutcomeToken(summary.outcome)
+  const SummaryIcon =
+    summary.failed > 0 ? AlertCircle : summary.outcome === 'success' ? CheckCircle2 : CircleDot
+  const failing = triage !== undefined && summary.failed > 0
+
   return (
     <PRSection
       title="Checks"
+      layout="rows"
       trailing={
-        <>
-          <Text
-            style={[
-              styles.summaryLabel,
-              { color: statusColor(checkOutcomeToken(summary.outcome)) }
-            ]}
-          >
-            {prChecksSummaryLabel(summary, checksError)}
-          </Text>
-          {/* Rerun is offered only when something failed; spinner-in-place while in-flight. */}
-          {actions && summary.failed > 0 ? (
-            <Pressable
-              style={styles.iconButton}
-              onPress={() => actions.rerunFailingChecks()}
-              disabled={rerunBusy}
-              accessibilityRole="button"
-              accessibilityLabel="Rerun failing checks"
-            >
-              {rerunBusy ? (
-                <ActivityIndicator color={colors.textSecondary} />
-              ) : (
-                <RotateCw size={14} color={colors.textSecondary} strokeWidth={2.2} />
-              )}
-            </Pressable>
-          ) : null}
-        </>
+        // Rerun is offered only when something failed; spinner-in-place while in flight.
+        actions && summary.failed > 0 ? (
+          <Button
+            label="Rerun failed"
+            icon={RotateCw}
+            variant="plain"
+            size="compact"
+            busy={rerunBusy}
+            onPress={() => actions.rerunFailingChecks()}
+            accessibilityLabel="Rerun failing checks"
+          />
+        ) : undefined
+      }
+      footer={
+        triage ? (
+          <AgentLaunchNotice
+            availability={summary.failed > 0 ? triage.availability : 'available'}
+            success={triage.success}
+            error={triage.error}
+            warning={triage.warning}
+            undeliveredPrompt={triage.undeliveredPrompt}
+            errorStyle={triageStyles.triageError}
+          />
+        ) : undefined
       }
     >
-      {/* Triage strip at the top of the section (desktop PRTriageStrip): a failing
-          summary + a Fix action, so the most actionable state leads the list. */}
-      {triage && summary.failed > 0 ? (
-        <View style={triageStyles.triageStrip}>
-          <View style={triageStyles.triageStripText}>
-            <Text style={triageStyles.triageStripTitle} numberOfLines={1}>
-              {summary.failed} failing check{summary.failed === 1 ? '' : 's'}
-            </Text>
-            <Text style={triageStyles.triageStripSubtitle} numberOfLines={1}>
+      {/* The summary leads; when checks fail it carries the AI fix action (desktop PRTriageStrip). */}
+      <View style={styles.row}>
+        <SummaryIcon size={20} color={statusColor(summaryToken)} strokeWidth={2.2} />
+        <View style={styles.rowMain}>
+          <Text style={[styles.rowTitle, failing && styles.rowTitleStrong]} numberOfLines={1}>
+            {failing
+              ? `${summary.failed} failing check${summary.failed === 1 ? '' : 's'}`
+              : prChecksSummaryLabel(summary, checksError)}
+          </Text>
+          {failing ? (
+            <Text style={styles.rowSubtitle} numberOfLines={2}>
               Inspect details or start an AI fix pass.
             </Text>
-          </View>
-          <Pressable
-            style={({ pressed }) => [triageStyles.triageStripButton, pressed && { opacity: 0.7 }]}
+          ) : null}
+        </View>
+        {failing ? (
+          <Button
+            label="Fix"
+            icon={Sparkles}
+            size="compact"
+            busy={triage.isBusy}
+            disabled={triage.availability !== 'available'}
             onPress={triage.fixChecks}
-            disabled={triage.isBusy || triage.availability !== 'available'}
-            accessibilityRole="button"
             accessibilityLabel="Fix failing checks with AI"
-          >
-            {triage.isBusy ? (
-              <ActivityIndicator color={colors.textSecondary} />
-            ) : (
-              <Sparkles size={13} color={colors.textSecondary} strokeWidth={2.2} />
-            )}
-            <Text style={triageStyles.triageStripButtonText}>Fix</Text>
-          </Pressable>
+          />
+        ) : null}
+      </View>
+      {checksError ? (
+        <View style={styles.noteRow}>
+          <Text style={[styles.noteRowText, { color: colors.danger }]}>{checksError}</Text>
         </View>
       ) : null}
-      {triage ? (
-        <AgentLaunchNotice
-          availability={summary.failed > 0 ? triage.availability : 'available'}
-          success={triage.success}
-          error={triage.error}
-          warning={triage.warning}
-          undeliveredPrompt={triage.undeliveredPrompt}
-          errorStyle={triageStyles.triageError}
-        />
-      ) : null}
-      {checksError ? <Text style={triageStyles.triageError}>{checksError}</Text> : null}
       {sorted.map((check) => {
         const key = prCheckKey(check)
         const isOpen = expanded.has(key)
         const token = checkOutcomeToken(checkOutcome(check))
-        const Chevron = isOpen ? ChevronDown : ChevronRight
         const url = check.url
         return (
           <View key={key}>
             <Pressable
-              style={styles.row}
               onPress={() => toggle(check)}
               accessibilityRole="button"
+              accessibilityState={{ expanded: isOpen }}
               accessibilityLabel={`${check.name} check details`}
             >
-              <Chevron size={14} color={colors.textSecondary} strokeWidth={2.2} />
-              <View style={[styles.statusDot, { backgroundColor: statusColor(token) }]} />
-              <View style={styles.rowMain}>
-                <Text style={styles.rowTitle} numberOfLines={1}>
-                  {check.name}
-                </Text>
-              </View>
-              {/* Status word + open-on-host icon (desktop ChecksList row), so the
-                  outcome reads without expanding. */}
-              <Text style={[styles.rowStatus, { color: statusColor(token) }]} numberOfLines={1}>
-                {checkStatusLabel(check)}
-              </Text>
-              {url ? (
-                <Pressable
-                  style={styles.rowTrailing}
-                  onPress={() => openExternalLink(url)}
-                  hitSlop={6}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Open ${check.name} on the web`}
-                >
-                  <ExternalLink size={13} color={colors.textSecondary} strokeWidth={2.2} />
-                </Pressable>
-              ) : null}
+              {({ pressed }) => (
+                <View style={[styles.row, styles.checkRow, pressed && styles.rowPressed]}>
+                  <View
+                    style={[isOpen ? styles.chevronOpen : styles.chevronClosed, slideTransition]}
+                  >
+                    <ChevronRight size={16} color={colors.textMuted} strokeWidth={2.2} />
+                  </View>
+                  <View style={[styles.statusDot, { backgroundColor: statusColor(token) }]} />
+                  <View style={styles.rowMain}>
+                    <Text style={styles.rowTitle} numberOfLines={1}>
+                      {check.name}
+                    </Text>
+                  </View>
+                  {/* Status word + open-on-host (desktop ChecksList row), so the outcome reads without expanding. */}
+                  <Text style={[styles.rowStatus, { color: statusColor(token) }]} numberOfLines={1}>
+                    {checkStatusLabel(check)}
+                  </Text>
+                  {url ? (
+                    <IconButton
+                      icon={ExternalLink}
+                      variant="bare"
+                      iconSize={16}
+                      iconColor={colors.textSecondary}
+                      onPress={() => openExternalLink(url)}
+                      accessibilityLabel={`Open ${check.name} on the web`}
+                    />
+                  ) : null}
+                </View>
+              )}
             </Pressable>
-            {isOpen ? <PRCheckDetailView entry={detailCache[key]} /> : null}
+            <Collapsible open={isOpen}>
+              <PRCheckDetailView entry={detailCache[key]} />
+            </Collapsible>
           </View>
         )
       })}

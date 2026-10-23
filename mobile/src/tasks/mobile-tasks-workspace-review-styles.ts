@@ -1,4 +1,4 @@
-import { StyleSheet, colors, radii, spacing, typography } from './mobile-tasks-dependencies'
+import { StyleSheet, colors, radii, spacing, textStyles } from './mobile-tasks-dependencies'
 
 export const mobileTasksWorkspaceReviewStyles = StyleSheet.create({
   workspaceCreateForm: {
@@ -8,10 +8,11 @@ export const mobileTasksWorkspaceReviewStyles = StyleSheet.create({
     marginBottom: spacing.md
   },
   workspaceCreateLabel: {
-    fontSize: 13,
+    ...textStyles.footnote,
     fontWeight: '500',
     color: colors.textSecondary,
-    marginBottom: spacing.xs
+    paddingLeft: 4,
+    marginBottom: spacing.sm
   },
   workspaceCreateLabelHint: {
     fontWeight: '400',
@@ -25,7 +26,7 @@ export const mobileTasksWorkspaceReviewStyles = StyleSheet.create({
     marginBottom: spacing.xs
   },
   workspaceAdvancedText: {
-    fontSize: typography.bodySize,
+    ...textStyles.subhead,
     fontWeight: '500',
     color: colors.textSecondary
   },
@@ -39,11 +40,9 @@ export const mobileTasksWorkspaceReviewStyles = StyleSheet.create({
     paddingHorizontal: spacing.lg
   },
   sshConnectCard: {
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    paddingHorizontal: spacing.md,
+    backgroundColor: colors.bgPanel,
+    borderRadius: radii.group,
+    paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
     gap: spacing.xs
   },
@@ -71,16 +70,16 @@ export const mobileTasksWorkspaceReviewStyles = StyleSheet.create({
     minWidth: 0
   },
   sshStatusTitle: {
-    fontSize: typography.bodySize,
-    color: colors.textPrimary,
-    fontWeight: '600'
+    ...textStyles.body,
+    fontWeight: '500',
+    color: colors.textPrimary
   },
   reviewerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
+    borderColor: colors.separator,
     borderRadius: radii.card,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs
@@ -94,7 +93,7 @@ export const mobileTasksWorkspaceReviewStyles = StyleSheet.create({
     backgroundColor: colors.bgRaised
   },
   reviewerAvatarText: {
-    fontSize: 11,
+    ...textStyles.caption,
     fontWeight: '700',
     color: colors.textSecondary
   },
@@ -103,22 +102,22 @@ export const mobileTasksWorkspaceReviewStyles = StyleSheet.create({
     minWidth: 0
   },
   reviewerName: {
-    fontSize: 12,
+    ...textStyles.footnote,
     fontWeight: '600',
     color: colors.textPrimary
   },
   reviewerMeta: {
-    fontSize: 11,
+    ...textStyles.caption,
     color: colors.textMuted
   },
   reviewerState: {
     flexShrink: 0,
-    fontSize: 11,
+    ...textStyles.caption,
     color: colors.textSecondary
   },
   projectFieldCard: {
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
+    borderColor: colors.separator,
     borderRadius: radii.card,
     padding: spacing.sm,
     gap: spacing.xs
@@ -126,13 +125,13 @@ export const mobileTasksWorkspaceReviewStyles = StyleSheet.create({
   projectFieldName: {
     flex: 1,
     minWidth: 0,
-    fontSize: 12,
+    ...textStyles.footnote,
     fontWeight: '600',
     color: colors.textPrimary
   },
   projectFieldValue: {
     maxWidth: 140,
-    fontSize: 12,
+    ...textStyles.footnote,
     color: colors.textMuted
   },
   projectIterationList: {
@@ -144,8 +143,7 @@ export const mobileTasksWorkspaceReviewStyles = StyleSheet.create({
     gap: 2
   },
   detailLine: {
-    fontSize: 12,
-    lineHeight: 17,
+    ...textStyles.subhead,
     color: colors.textSecondary
   },
   fileActionRow: {
@@ -157,7 +155,7 @@ export const mobileTasksWorkspaceReviewStyles = StyleSheet.create({
   },
   fileCard: {
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
+    borderColor: colors.separator,
     borderRadius: radii.card,
     padding: spacing.sm,
     gap: spacing.xs
@@ -165,7 +163,7 @@ export const mobileTasksWorkspaceReviewStyles = StyleSheet.create({
   pipelineStatusChip: {
     flexShrink: 0,
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
+    borderColor: colors.separator,
     borderRadius: 999,
     backgroundColor: colors.bgRaised,
     paddingHorizontal: spacing.sm,
@@ -184,9 +182,8 @@ export const mobileTasksWorkspaceReviewStyles = StyleSheet.create({
     borderColor: colors.accentBlue
   },
   pipelineStatusText: {
-    fontSize: 10,
-    color: colors.textSecondary,
-    fontWeight: '600',
-    textTransform: 'uppercase'
+    ...textStyles.caption,
+    fontWeight: '500',
+    color: colors.textSecondary
   }
 })

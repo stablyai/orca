@@ -1,4 +1,11 @@
-import { StyleSheet, colors, radii, spacing, typography } from './mobile-tasks-dependencies'
+import {
+  StyleSheet,
+  colors,
+  radii,
+  spacing,
+  textStyles,
+  typography
+} from './mobile-tasks-dependencies'
 
 export const mobileTasksDiffCommentStyles = StyleSheet.create({
   filePreview: {
@@ -7,24 +14,26 @@ export const mobileTasksDiffCommentStyles = StyleSheet.create({
   },
   fileDiff: {
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
+    borderColor: colors.separator,
     borderRadius: radii.row,
     overflow: 'hidden'
   },
   diffLineBlock: {
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderSubtle,
+    borderTopColor: colors.separator,
     borderLeftWidth: 2,
-    borderLeftColor: colors.borderSubtle,
+    borderLeftColor: colors.separator,
     paddingHorizontal: spacing.xs,
     paddingVertical: spacing.xs,
     gap: spacing.xs
   },
   diffLineAdded: {
-    borderLeftColor: colors.statusGreen
+    borderLeftColor: colors.diffAddedGutter,
+    backgroundColor: colors.diffAddedBg
   },
   diffLineRemoved: {
-    borderLeftColor: colors.statusRed
+    borderLeftColor: colors.diffDeletedGutter,
+    backgroundColor: colors.diffDeletedBg
   },
   diffCodeRow: {
     flexDirection: 'row',
@@ -35,40 +44,42 @@ export const mobileTasksDiffCommentStyles = StyleSheet.create({
     width: 76,
     flexShrink: 0,
     fontFamily: typography.monoFamily,
-    fontSize: 10,
-    lineHeight: 16,
+    fontSize: 12,
+    lineHeight: 19,
     color: colors.textMuted
   },
   codeLine: {
     flex: 1,
     fontFamily: typography.monoFamily,
-    fontSize: 11,
-    lineHeight: 16,
+    fontSize: 13,
+    lineHeight: 19,
     color: colors.textSecondary
   },
   diffCodeAdded: {
-    color: colors.statusGreen
+    color: colors.chatDiffAdded
   },
   diffCodeRemoved: {
-    color: colors.statusRed
+    color: colors.chatDiffRemoved
   },
   detailMuted: {
-    fontSize: 12,
+    ...textStyles.footnote,
     color: colors.textSecondary
   },
   commentBlock: {
-    borderTopWidth: 1,
-    borderTopColor: colors.borderSubtle,
-    paddingTop: spacing.sm
+    gap: 2,
+    paddingTop: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.separator
   },
   commentThreadGroup: {
-    gap: spacing.xs
+    gap: spacing.sm
   },
   commentReplyBlock: {
     marginLeft: spacing.md,
-    paddingLeft: spacing.sm,
-    borderLeftWidth: 1,
-    borderLeftColor: colors.borderSubtle
+    paddingLeft: spacing.md,
+    borderTopWidth: 0,
+    borderLeftWidth: 2,
+    borderLeftColor: colors.separator
   },
   commentResolvedBlock: {
     opacity: 0.6
@@ -77,28 +88,33 @@ export const mobileTasksDiffCommentStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.card,
-    backgroundColor: colors.bgPanel,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm
+    minHeight: 44,
+    borderRadius: radii.field,
+    backgroundColor: colors.fill,
+    paddingHorizontal: spacing.md
+  },
+  resolvedCommentSummaryPressed: {
+    backgroundColor: colors.fillPressed
   },
   resolvedCommentTitle: {
+    ...textStyles.footnote,
     flex: 1,
     minWidth: 0,
-    fontSize: 12,
     color: colors.textSecondary
   },
+  resolvedCommentAction: {
+    ...textStyles.footnote,
+    fontWeight: '500',
+    color: colors.textPrimary
+  },
   commentSource: {
-    fontSize: 11,
-    lineHeight: 15,
-    color: colors.textSecondary,
-    marginBottom: 2
+    ...textStyles.caption,
+    color: colors.textMuted
   },
   commentMeta: {
-    fontSize: 11,
-    color: colors.textMuted,
+    ...textStyles.footnote,
+    fontWeight: '500',
+    color: colors.textSecondary,
     marginBottom: 2
   },
   commentControls: {
@@ -108,20 +124,20 @@ export const mobileTasksDiffCommentStyles = StyleSheet.create({
   reactionRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.xs,
+    gap: 6,
     marginTop: spacing.xs
   },
   reactionChip: {
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgRaised,
-    borderRadius: 999,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2
+    height: 26,
+    justifyContent: 'center',
+    backgroundColor: colors.fill,
+    borderRadius: radii.pill,
+    paddingHorizontal: 10
   },
   reactionText: {
-    fontSize: 11,
-    color: colors.textSecondary
+    ...textStyles.footnote,
+    color: colors.textSecondary,
+    fontVariant: ['tabular-nums']
   },
   inlineActionRow: {
     flexDirection: 'row',
@@ -132,51 +148,49 @@ export const mobileTasksDiffCommentStyles = StyleSheet.create({
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md + 2,
-    paddingVertical: spacing.md
+    gap: spacing.md,
+    minHeight: 52,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm
   },
   actionText: {
+    ...textStyles.body,
     flex: 1,
-    fontSize: typography.bodySize,
     color: colors.textPrimary
   },
   actionSeparator: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
+    backgroundColor: colors.separator,
+    marginLeft: spacing.lg
   },
   setupPromptBox: {
     backgroundColor: colors.bgPanel,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    gap: spacing.xs
+    borderRadius: radii.group,
+    padding: spacing.lg,
+    marginHorizontal: spacing.xs,
+    marginBottom: spacing.lg,
+    gap: spacing.sm
   },
   setupPromptCommand: {
     fontFamily: typography.monoFamily,
-    fontSize: 12,
-    lineHeight: 17,
+    fontSize: 13,
+    lineHeight: 19,
     color: colors.textPrimary
   },
   linearStatesBlock: {
     paddingTop: spacing.sm
   },
   linearStatesTitle: {
-    fontSize: 11,
-    fontWeight: '600',
+    ...textStyles.footnote,
+    fontWeight: '500',
     color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    paddingHorizontal: spacing.md + 2,
+    paddingHorizontal: spacing.lg,
     paddingBottom: spacing.xs
   },
   emptyInlineText: {
+    ...textStyles.callout,
     color: colors.textSecondary,
-    fontSize: 13,
-    paddingHorizontal: spacing.md + 2,
+    paddingHorizontal: spacing.lg,
     paddingBottom: spacing.md
   }
 })

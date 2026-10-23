@@ -33,11 +33,10 @@ export function mobileNativeChatEmptyState(
 ): NativeChatEmptyStateCopy | null {
   const agentLabel = agent ? formatAgentTypeLabel(agent) : 'the agent'
   switch (status) {
-    // No conversation found yet: the agent has not reported one, or its file is unwritten. That is
-    // a new chat or one whose history the host cannot see, so it promises neither.
+    // No conversation reported yet, or its file is unwritten: almost always a chat that just
+    // started, so it greets as desktop's empty pane does rather than reading as a failure.
     case 'waiting-session':
     case 'awaiting-transcript':
-      return formatNativeChatEmptyStateCopy('notFound', agentLabel)
     case 'ready':
       return formatNativeChatEmptyStateCopy('empty', agentLabel)
     case 'error': {

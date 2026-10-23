@@ -1,6 +1,7 @@
-import { Pressable, Text, View } from 'react-native'
-import { GitBranch } from 'lucide-react-native'
+import { Text, View } from 'react-native'
+import { AlertTriangle, GitBranch } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
+import { Button } from '../components/ui/Button'
 import { styles } from './mobile-source-control-styles'
 import { MobileSourceControlPrChip } from './MobileSourceControlPrChip'
 import type { MobilePrChipSummary } from './mobile-pr-chip-summary'
@@ -23,9 +24,12 @@ type Props = {
   onOpenPr: () => void
 }
 
-// Persistent card at the top of every hub segment: branch identity, sync/counts,
-// conflict state, and the PR chip. Shared so PR/History see the same status the
-// Changes lens does without re-deriving it.
+function capitalize(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1)
+}
+
+// Quiet header above every hub segment but the PR one: branch identity, sync and counts,
+// conflict state, and the PR row. Shared so History sees the same status Changes does.
 export function MobileSourceControlBranchCard({
   branchLabel,
   syncLabel,
@@ -40,40 +44,40 @@ export function MobileSourceControlBranchCard({
   onOpenPr
 }: Props) {
   const showConflict = conflictOperation !== null && conflictOperation !== 'unknown'
+  const counts = [
+    syncLabel,
+    `${unstagedCount} changed`,
+    `${stagedCount} staged`,
+    branchCount > 0 ? `${branchCount} on branch` : null
+  ]
+    .filter(Boolean)
+    .join(' · ')
   return (
-    <View style={styles.summaryCard}>
-      <View style={styles.summaryHeader}>
+    <View style={styles.branchHeader}>
+      <View style={styles.branchHeaderText}>
         <View style={styles.branchLine}>
-          <GitBranch size={15} color={colors.textSecondary} strokeWidth={2.1} />
-          <Text style={styles.branchText} numberOfLines={1}>
+          <GitBranch size={16} color={colors.textMuted} strokeWidth={2.1} />
+          <Text style={styles.branchText} numberOfLines={1} ellipsizeMode="middle">
             {branchLabel}
           </Text>
         </View>
-        {syncLabel ? <Text style={styles.syncText}>{syncLabel}</Text> : null}
+        <Text style={styles.countText} numberOfLines={2}>
+          {counts}
+        </Text>
       </View>
-      <View style={styles.countRow}>
-        <Text style={styles.countText}>{unstagedCount} changed</Text>
-        <Text style={styles.countText}>{stagedCount} staged</Text>
-        {branchCount > 0 ? <Text style={styles.countText}>{branchCount} on branch</Text> : null}
-      </View>
-      {/* Own row so Abort never overflows past the card when counts are long. */}
       {showConflict ? (
-        <View style={styles.conflictRow}>
-          <Text style={styles.conflictText}>{conflictOperation}</Text>
+        <View style={styles.conflictBlock} accessibilityRole="alert">
+          <AlertTriangle size={18} color={colors.statusAmber} strokeWidth={2.2} />
+          <Text style={styles.conflictText}>{capitalize(conflictOperation)} in progress</Text>
           {conflictOperation === 'merge' || conflictOperation === 'rebase' ? (
-            <Pressable
-              style={({ pressed }) => [
-                styles.abortButton,
-                conflictBusy && styles.abortButtonDisabled,
-                pressed && !conflictBusy && styles.abortPressed
-              ]}
+            <Button
+              label={capitalize(mobileConflictAbortLabel(conflictOperation, conflictAborting))}
+              size="compact"
+              variant="secondary"
+              busy={conflictAborting}
               disabled={conflictBusy}
               onPress={() => onAbortConflict(conflictOperation)}
-            >
-              <Text style={styles.abortText}>
-                {mobileConflictAbortLabel(conflictOperation, conflictAborting)}
-              </Text>
-            </Pressable>
+            />
           ) : null}
         </View>
       ) : null}

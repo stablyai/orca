@@ -1,10 +1,18 @@
-import { Children, type ReactNode } from 'react'
-import { Pressable, Text, View } from 'react-native'
-import { Check, ChevronRight } from 'lucide-react-native'
-import { colors } from '../theme/mobile-theme'
+import type { ReactNode } from 'react'
+import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native'
+import { Check } from 'lucide-react-native'
+import { colors, motion, spacing, textStyles } from '../theme/mobile-theme'
 import { MobileSwitch } from '../components/MobileSwitch'
+import { ListGroup, LIST_ROW_PADDING } from '../components/ui/ListGroup'
+import { ListRow } from '../components/ui/ListRow'
+import { pressTransition } from '../components/ui/transition-styles'
+import { triggerSelection } from '../platform/haptics'
 import type { WorkspaceViewChoice } from '../../../src/shared/workspace-view/workspace-view-options'
-import { hostScreenStyles as styles } from './host-screen-styles'
+
+// A sub-option sits under its parent, past where the parent's label starts.
+const INDENT = 28
+
+/** A pick: a check on the right, as an iOS settings list. Keeps checkbox semantics for multi-picks. */
 export function CheckRow(props: {
   label: string
   checked: boolean
@@ -18,46 +26,62 @@ export function CheckRow(props: {
 }) {
   return (
     <Pressable
-      style={[
-        styles.filterRow,
-        props.indent && styles.optionRowIndented,
-        props.disabled && styles.optionRowDisabled
-      ]}
-      onPress={props.onPress}
+      onPress={() => {
+        triggerSelection()
+        props.onPress()
+      }}
       disabled={props.disabled}
       accessibilityRole={props.radio ? 'radio' : 'checkbox'}
       accessibilityState={{ checked: props.checked, disabled: props.disabled }}
       accessibilityLabel={props.label}
     >
-      {props.leading}
-      <View style={styles.optionRowLabel}>
-        <Text style={styles.filterRowText} numberOfLines={1}>
-          {props.label}
-        </Text>
-        {props.detail ? (
-          <Text style={styles.optionRowDetail} numberOfLines={2}>
-            {props.detail}
-          </Text>
-        ) : null}
-      </View>
-      {props.checked && <Check size={14} color={colors.textPrimary} />}
+      {({ pressed }) => (
+        <View
+          style={[
+            styles.row,
+            props.detail ? styles.rowTwoLine : null,
+            props.indent && styles.indented,
+            pressed && styles.pressed,
+            props.disabled && styles.disabled,
+            pressed ? pressTransition.pressed : pressTransition.rest
+          ]}
+        >
+          {props.leading}
+          <View style={styles.main}>
+            <Text style={styles.label} numberOfLines={1}>
+              {props.label}
+            </Text>
+            {props.detail ? (
+              <Text style={styles.detail} numberOfLines={2}>
+                {props.detail}
+              </Text>
+            ) : null}
+          </View>
+          {props.checked ? (
+            <Check size={18} color={colors.textPrimary} strokeWidth={2.4} />
+          ) : (
+            <View style={styles.checkSpace} />
+          )}
+        </View>
+      )}
     </Pressable>
   )
 }
 
-/** Rows inside one option's card, a hairline between each. */
+/** One option's inset group, hairlines between rows; sized for the sheet's padding. */
+export function OptionGroup({
+  children,
+  style
+}: {
+  children: ReactNode
+  style?: StyleProp<ViewStyle>
+}) {
+  return <ListGroup style={[styles.group, style]}>{children}</ListGroup>
+}
+
+/** Rows with a hairline between each, inside a group the caller frames. */
 export function OptionRowList({ children }: { children: ReactNode }) {
-  // Children.map keys each result by its child's own key.
-  return (
-    <>
-      {Children.map(children, (child, i) => (
-        <>
-          {i > 0 && <View style={styles.filterSeparator} />}
-          {child}
-        </>
-      ))}
-    </>
-  )
+  return <ListGroup appearance="plain">{children}</ListGroup>
 }
 
 export function ChoiceRows<Id extends string>(props: {
@@ -89,13 +113,16 @@ export function SwitchRow(props: {
   indent?: boolean
 }) {
   return (
-    <View style={[styles.filterRow, props.indent && styles.optionRowIndented]}>
-      <Text style={styles.filterRowText} numberOfLines={1}>
+    <View style={[styles.row, props.indent && styles.indented]}>
+      <Text style={[styles.label, styles.main]} numberOfLines={2}>
         {props.label}
       </Text>
       <MobileSwitch
         value={props.value}
-        onValueChange={props.onChange}
+        onValueChange={(next) => {
+          triggerSelection()
+          props.onChange(next)
+        }}
         accessibilityLabel={props.label}
       />
     </View>
@@ -105,19 +132,32 @@ export function SwitchRow(props: {
 /** An option with its current value; tapping it opens the option's own page. */
 export function DrillRow(props: { label: string; value: string; onPress: () => void }) {
   return (
-    <Pressable
-      style={styles.filterRow}
+    <ListRow
+      title={props.label}
+      value={props.value || undefined}
+      navigates
       onPress={props.onPress}
-      accessibilityRole="button"
       accessibilityLabel={props.value ? `${props.label}, ${props.value}` : props.label}
-    >
-      <Text style={styles.filterRowText} numberOfLines={1}>
-        {props.label}
-      </Text>
-      <Text style={styles.optionRowValue} numberOfLines={1}>
-        {props.value}
-      </Text>
-      <ChevronRight size={16} color={colors.textMuted} />
-    </Pressable>
+    />
   )
 }
+
+const styles = StyleSheet.create({
+  group: { marginHorizontal: spacing.xs },
+  row: {
+    minHeight: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingHorizontal: LIST_ROW_PADDING,
+    paddingVertical: 10
+  },
+  rowTwoLine: { minHeight: 64 },
+  indented: { paddingLeft: LIST_ROW_PADDING + INDENT },
+  pressed: { backgroundColor: colors.fill },
+  disabled: { opacity: motion.disabledOpacity },
+  main: { flex: 1, minWidth: 0, gap: 2 },
+  label: { ...textStyles.body, color: colors.textPrimary },
+  detail: { ...textStyles.subhead, color: colors.textSecondary },
+  checkSpace: { width: 18 }
+})

@@ -92,7 +92,7 @@ export function buildMobileSourceControlActions(
       onPress: handlers.commit
     },
     {
-      label: 'Commit & Push',
+      label: 'Commit and push',
       iconKey: 'push',
       disabled: busy || !!commitHint || !upstreamKnown || !hasUpstream,
       hint: commitHint ?? remoteHint,
@@ -101,7 +101,7 @@ export function buildMobileSourceControlActions(
       onPress: handlers.commitPush
     },
     {
-      label: 'Commit & Sync',
+      label: 'Commit and sync',
       iconKey: 'sync',
       disabled: busy || !!commitHint || !upstreamKnown || !hasUpstream || behind === 0,
       hint:
@@ -134,7 +134,7 @@ export function buildMobileSourceControlActions(
       onPress: handlers.createPr
     },
     {
-      label: 'Push & Create PR',
+      label: 'Push and create PR',
       iconKey: 'pr',
       disabled: busy || !upstreamKnown || !hasUpstream || ahead === 0 || !args.prAvailable,
       hint: prHint ?? (!hasUpstream ? remoteHint : undefined),
@@ -174,7 +174,7 @@ export function buildMobileSourceControlActions(
       onPress: handlers.fetch
     },
     {
-      label: 'Publish Branch',
+      label: 'Publish branch',
       iconKey: 'publish',
       disabled: busy || !upstreamKnown || hasUpstream,
       hint: !upstreamKnown

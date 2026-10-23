@@ -1,12 +1,14 @@
 import { useRef, useState } from 'react'
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { Copy, TextSelect, X } from 'lucide-react-native'
+import { Alert, Modal, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Copy, TextSelect } from 'lucide-react-native'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { ActionSheetContent } from '../components/ActionSheetModal'
 import { BottomDrawer } from '../components/BottomDrawer'
 import { useClipboardWriter } from '../platform/clipboard'
 import { useWindowSafeAreaInsets } from '../layout/side-safe-area'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { SheetHeader } from '../components/ui/SheetHeader'
+import { triggerError, triggerSuccess } from '../platform/haptics'
+import { colors, spacing, textStyles } from '../theme/mobile-theme'
 import { nativeChatMessagePlainText } from './mobile-native-chat-message-plain-text'
 
 type Props = {
@@ -44,11 +46,9 @@ export function MobileNativeChatMessageActionsSheet({
               icon: Copy,
               disabled: text.length === 0,
               onPress: () => {
-                void clipboard.writeText(text).catch((error: unknown) => {
-                  Alert.alert(
-                    'Copy failed',
-                    error instanceof Error ? error.message : 'The clipboard rejected the text.'
-                  )
+                void clipboard.writeText(text).then(triggerSuccess, () => {
+                  triggerError()
+                  Alert.alert("Couldn't copy the message", 'Use Select text to copy part of it.')
                 })
               }
             },
@@ -90,16 +90,7 @@ function SelectTextScreen({
         ]}
       >
         <View style={styles.header}>
-          <Text style={styles.title}>Select text</Text>
-          <Pressable
-            onPress={onClose}
-            hitSlop={12}
-            accessibilityLabel="Close"
-            accessibilityRole="button"
-            style={styles.close}
-          >
-            <X size={20} color={colors.textSecondary} />
-          </Pressable>
+          <SheetHeader title="Select text" trailing={{ label: 'Done', onPress: onClose }} />
         </View>
         <ScrollView contentContainerStyle={styles.body}>
           <Text selectable style={styles.text}>
@@ -114,16 +105,9 @@ function SelectTextScreen({
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bgBase },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle
+    borderBottomColor: colors.separator
   },
-  title: { color: colors.textPrimary, fontSize: typography.titleSize, fontWeight: '600' },
-  close: { padding: spacing.xs },
   body: { padding: spacing.lg },
-  text: { color: colors.textPrimary, fontSize: typography.bodySize, lineHeight: 22 }
+  text: { ...textStyles.body, color: colors.textPrimary }
 })

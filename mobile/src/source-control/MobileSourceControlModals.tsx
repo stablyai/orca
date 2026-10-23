@@ -39,7 +39,7 @@ export function MobileSourceControlModals({ state, actionSheetActions }: Props) 
 
       <ActionSheetModal
         visible={showActionSheet}
-        title="Source Control"
+        title="Source control"
         message={branchLabel}
         actions={actionSheetActions}
         onClose={() => setShowActionSheet(false)}
@@ -47,10 +47,10 @@ export function MobileSourceControlModals({ state, actionSheetActions }: Props) 
 
       <ConfirmModal
         visible={discardTarget !== null}
-        title="Discard Change"
+        title="Discard changes?"
         message={
           discardTarget
-            ? `Discard changes to "${discardTarget.path}"? This cannot be undone.`
+            ? `Your changes to ${discardTarget.path} will be lost. This can’t be undone.`
             : undefined
         }
         confirmLabel="Discard"
@@ -69,11 +69,11 @@ export function MobileSourceControlModals({ state, actionSheetActions }: Props) 
 
       <PickerModal
         visible={showBranchPicker}
-        title="Switch Branch"
+        title="Switch branch"
         options={(localBranches?.branches ?? []).map((b) => ({
           value: b,
           label: b,
-          subtitle: b === localBranches?.current ? 'current' : undefined
+          subtitle: b === localBranches?.current ? 'Current branch' : undefined
         }))}
         selected={localBranches?.current ?? ''}
         onSelect={(branch) => {
@@ -88,13 +88,14 @@ export function MobileSourceControlModals({ state, actionSheetActions }: Props) 
 
       <ConfirmModal
         visible={createdPrUrl !== null}
-        title="Pull Request Created"
+        title="Pull request created"
         message={
           createdPrWarning
             ? `Open it in your browser?\n\n${createdPrWarning}`
             : 'Open it in your browser?'
         }
-        confirmLabel="Open"
+        confirmLabel="Open in browser"
+        cancelLabel="Not now"
         onConfirm={() => {
           if (createdPrUrl) {
             openMobilePrUrl(createdPrUrl)

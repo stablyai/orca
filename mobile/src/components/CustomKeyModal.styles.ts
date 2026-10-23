@@ -1,20 +1,64 @@
 import { StyleSheet } from 'react-native'
-import { colors, spacing, radii, typography } from '../theme/mobile-theme'
-import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
+import { colors, radii, spacing, textStyles, typography } from '../theme/mobile-theme'
 
 export const customKeyModalStyles = StyleSheet.create({
-  header: {
+  // Why: pulls the header's text actions out to the sheet edge, as the shared sheet spec lays them.
+  header: { marginHorizontal: -spacing.sm, marginTop: -spacing.xs },
+  // Why: the sheet already pads 12; these add 4 so content sits 16 from the sheet edge.
+  group: { marginHorizontal: spacing.xs, marginBottom: spacing.sm },
+  groupFlush: { marginHorizontal: 0 },
+  form: { gap: spacing.lg, paddingHorizontal: spacing.xs, paddingBottom: spacing.sm },
+  field: { gap: spacing.sm },
+  fieldLabel: {
+    ...textStyles.footnote,
+    fontWeight: '500',
+    color: colors.textSecondary,
+    paddingLeft: 4
+  },
+  preview: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingBottom: spacing.sm
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    paddingVertical: spacing.lg
   },
+  previewKeycapRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  previewPlus: { ...textStyles.body, color: colors.textMuted },
+  keycap: {
+    minWidth: 52,
+    height: 52,
+    paddingHorizontal: spacing.md,
+    borderRadius: radii.field,
+    backgroundColor: colors.fill,
+    borderWidth: 1,
+    borderColor: colors.fieldBorder,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  keycapModifier: { minWidth: 0 },
+  keycapWarn: { borderColor: colors.statusAmber },
+  keycapText: {
+    color: colors.textPrimary,
+    fontFamily: typography.monoFamily,
+    fontSize: 20,
+    fontWeight: '600'
+  },
+  keycapTextWarn: { color: colors.statusAmber },
+  keycapModifierText: {
+    color: colors.textSecondary,
+    fontFamily: typography.monoFamily,
+    fontSize: 15,
+    fontWeight: '600'
+  },
+  mods: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   keyInput: {
     width: '100%',
     height: 56,
-    borderRadius: 10,
-    backgroundColor: colors.bgPanel,
+    borderRadius: radii.field,
+    backgroundColor: colors.fieldFill,
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
+    borderColor: colors.fieldBorder,
     color: colors.textPrimary,
     fontFamily: typography.monoFamily,
     // 22 on both platforms, and no binding to the seam: the floor is the rule and this clears it,
@@ -24,257 +68,34 @@ export const customKeyModalStyles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center'
   },
-  backButton: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  backButtonPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  backSpacer: {
-    width: 30
-  },
-  title: {
-    flex: 1,
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    textAlign: 'center'
-  },
-  group: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: 12,
-    overflow: 'hidden'
-  },
-  separator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
-  },
-  row: {
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2
-  },
-  rowPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  rowLabel: {
-    fontSize: typography.bodySize,
-    fontWeight: '500',
-    color: colors.textPrimary,
-    marginBottom: 1
-  },
-  rowHint: {
-    fontSize: 12,
-    color: colors.textMuted
-  },
-  shortcutForm: {
-    paddingTop: spacing.sm
-  },
-  preview: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.lg + spacing.xs,
-    flexWrap: 'wrap'
-  },
-  previewKeycapRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm
-  },
-  previewPlus: {
-    color: colors.textMuted,
-    fontSize: 16
-  },
-  keycap: {
-    minWidth: 48,
-    height: 48,
-    paddingHorizontal: spacing.md,
-    borderRadius: 10,
-    backgroundColor: colors.bgPanel,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  keycapModifier: {
-    minWidth: 0
-  },
-  keycapWarn: {
-    borderColor: colors.statusAmber
-  },
-  keycapText: {
-    color: colors.textPrimary,
-    fontFamily: typography.monoFamily,
-    fontSize: 17,
-    fontWeight: '600'
-  },
-  keycapTextWarn: {
-    color: colors.statusAmber
-  },
-  keycapModifierText: {
-    color: colors.textSecondary,
-    fontFamily: typography.monoFamily,
-    fontSize: 14,
-    fontWeight: '600'
-  },
-  section: {
-    marginTop: spacing.md
-  },
-  sectionLabel: {
-    fontSize: 11,
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    marginBottom: spacing.sm,
-    paddingLeft: 2
-  },
-  mods: {
-    flexDirection: 'row',
-    gap: spacing.sm
-  },
-  chip: {
-    flex: 1,
-    height: 40,
-    borderRadius: 8,
-    backgroundColor: colors.bgPanel,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4
-  },
-  chipSelected: {
-    backgroundColor: colors.textPrimary
-  },
-  chipPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  chipText: {
-    color: colors.textSecondary,
-    fontSize: 14,
-    fontWeight: '500'
-  },
-  chipTextSelected: {
-    color: colors.bgBase
-  },
-  chipGlyph: {
-    color: colors.textMuted,
-    fontSize: 13,
-    fontFamily: typography.monoFamily
-  },
-  chipGlyphSelected: {
-    color: 'rgba(10,10,10,0.5)'
-  },
-  moreLink: {
-    paddingVertical: spacing.sm,
-    alignItems: 'center'
-  },
-  moreLinkPressed: {
-    opacity: 0.6
-  },
-  moreLinkText: {
-    color: colors.textSecondary,
-    fontSize: 13,
-    textDecorationLine: 'underline'
-  },
+  keyInputFocused: { borderColor: colors.fieldBorderFocused },
   specialKeysForm: {
-    paddingTop: spacing.xs,
-    paddingBottom: spacing.md,
-    gap: spacing.md
-  },
-  specialGroup: {
-    gap: spacing.xs
-  },
-  specialGroupTitle: {
-    fontSize: 11,
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    paddingLeft: 2,
-    marginBottom: spacing.xs
+    // The section headers pad for a full-width screen; the sheet already pads 12.
+    marginHorizontal: -spacing.md,
+    paddingBottom: spacing.md
   },
   keyGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginHorizontal: -spacing.xs / 2
+    paddingHorizontal: spacing.lg - spacing.xs / 2
   },
-  keyCellWrap: {
-    paddingHorizontal: spacing.xs / 2,
-    paddingVertical: spacing.xs / 2
-  },
+  keyCellWrap: { padding: spacing.xs / 2 },
   keyCell: {
-    height: 40,
-    borderRadius: 8,
-    backgroundColor: colors.bgPanel,
+    height: 44,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: 'transparent',
+    backgroundColor: colors.fill,
     alignItems: 'center',
     justifyContent: 'center'
   },
-  keyCellPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  keyCellSelected: {
-    backgroundColor: colors.textPrimary
-  },
+  keyCellPressed: { backgroundColor: colors.fillPressed },
+  keyCellSelected: { backgroundColor: colors.fillPressed, borderColor: colors.fieldBorderFocused },
   keyCellText: {
-    fontSize: 13,
+    fontSize: 14,
+    lineHeight: 18,
     fontWeight: '600',
     color: colors.textPrimary,
     fontFamily: typography.monoFamily
-  },
-  keyCellTextSelected: {
-    color: colors.bgBase
-  },
-  macroForm: {
-    padding: spacing.md,
-    gap: spacing.sm
-  },
-  fieldLabel: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: colors.textSecondary
-  },
-  fieldInput: {
-    backgroundColor: colors.bgBase,
-    color: colors.textPrimary,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    fontSize: TEXT_INPUT_FONT_SIZE,
-    fontFamily: typography.monoFamily,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
-  switchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.xs
-  },
-  switchLabel: {
-    fontSize: typography.bodySize,
-    color: colors.textPrimary
-  },
-  saveButton: {
-    marginTop: spacing.md,
-    backgroundColor: colors.textPrimary,
-    paddingVertical: spacing.md,
-    borderRadius: 10,
-    alignItems: 'center'
-  },
-  saveButtonDisabled: {
-    backgroundColor: colors.bgRaised
-  },
-  saveButtonText: {
-    color: colors.bgBase,
-    fontSize: 15,
-    fontWeight: '600'
-  },
-  saveButtonTextDisabled: {
-    color: colors.textMuted
   }
 })

@@ -2,26 +2,21 @@ import type { Dispatch, RefObject, SetStateAction } from 'react'
 import {
   ActivityIndicator,
   Image,
-  Pressable,
   Text,
-  TextInput,
   View,
   type PanResponderInstance,
   type StyleProp,
   type ViewStyle
 } from 'react-native'
-import { ArrowUp, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react-native'
+import { ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
+import { Button } from '../components/ui/Button'
+import { IconButton } from '../components/ui/IconButton'
 import { MobileBrowserAddressField } from './MobileBrowserAddressField'
-import { MobileBrowserKeyRow } from './MobileBrowserKeyRow'
 import { MobileBrowserLoadFailure } from './MobileBrowserLoadFailure'
-import {
-  MobileBrowserPointerModifiers,
-  type BrowserPointerModifier
-} from './MobileBrowserPointerModifiers'
-import { MobileBrowserToolbarIconButton } from './MobileBrowserToolbarIconButton'
+import type { BrowserPointerModifier } from './MobileBrowserPointerModifiers'
+import { MobileBrowserTypingDock } from './MobileBrowserTypingDock'
 import { MobileBrowserViewModeSwitch } from './MobileBrowserViewModeSwitch'
-import { buttonColor } from './mobile-browser-frame-state'
 import { mobileBrowserPaneStyles as styles } from './mobile-browser-pane-styles'
 import type { BrowserFrameLayerBinding } from './browser-frame-pacer'
 import type {
@@ -122,27 +117,22 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
   return (
     <View ref={setRootViewRef} style={styles.root}>
       <View style={styles.toolbar}>
-        <MobileBrowserToolbarIconButton
+        <IconButton
+          icon={ChevronLeft}
+          variant="bare"
+          iconSize={22}
           disabled={controlsDisabled || !tab.canGoBack}
-          label="Back"
           onPress={goBack}
-        >
-          <ChevronLeft size={15} color={buttonColor(!controlsDisabled && tab.canGoBack)} />
-        </MobileBrowserToolbarIconButton>
-        <MobileBrowserToolbarIconButton
+          accessibilityLabel="Back"
+        />
+        <IconButton
+          icon={ChevronRight}
+          variant="bare"
+          iconSize={22}
           disabled={controlsDisabled || !tab.canGoForward}
-          label="Forward"
           onPress={goForward}
-        >
-          <ChevronRight size={15} color={buttonColor(!controlsDisabled && tab.canGoForward)} />
-        </MobileBrowserToolbarIconButton>
-        <MobileBrowserToolbarIconButton
-          disabled={controlsDisabled}
-          label="Reload"
-          onPress={reloadPage}
-        >
-          <RefreshCw size={15} color={buttonColor(!controlsDisabled)} />
-        </MobileBrowserToolbarIconButton>
+          accessibilityLabel="Forward"
+        />
         <MobileBrowserAddressField
           value={addressValue}
           onChangeText={setAddressValue}
@@ -153,6 +143,18 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
           disabled={controlsDisabled}
           loading={tab.loading}
           loadFailed={tab.loadError != null}
+          trailing={
+            <IconButton
+              icon={RefreshCw}
+              variant="bare"
+              iconSize={16}
+              iconColor={colors.textSecondary}
+              disabled={controlsDisabled}
+              onPress={reloadPage}
+              accessibilityLabel="Reload"
+              style={styles.reload}
+            />
+          }
         />
         <MobileBrowserViewModeSwitch
           disabled={controlsDisabled}
@@ -251,91 +253,68 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
         ) : null}
         {tab.loadError ? <MobileBrowserLoadFailure loadError={tab.loadError} /> : null}
         {!renderedFrameSource || busy || error ? (
-          <View pointerEvents="none" style={styles.overlay}>
+          <View pointerEvents="box-none" style={styles.overlay}>
             {/* Why: a stream can report ready and then deliver no frames, so key the
                 indicator off actually having pixels or it clears into a blank pane. */}
-            {busy || (!renderedFrameSource && !error) ? (
-              <ActivityIndicator size="small" color={colors.textSecondary} />
+            {error ? (
+              <View style={styles.errorCard}>
+                <Text style={styles.errorTitle}>Can't show this page</Text>
+                <Text style={styles.errorText}>{error}</Text>
+                {!controlsDisabled ? (
+                  <Button label="Try again" size="compact" onPress={reloadPage} />
+                ) : null}
+              </View>
+            ) : busy || !renderedFrameSource ? (
+              <View pointerEvents="none" style={styles.loading}>
+                <ActivityIndicator size="small" color={colors.textSecondary} />
+                {!renderedFrameSource ? (
+                  <Text style={styles.loadingText}>Loading page…</Text>
+                ) : null}
+              </View>
             ) : null}
-            {error ? <Text style={styles.errorText}>{error}</Text> : null}
           </View>
         ) : null}
         {dialog ? (
           <View style={styles.dialogOverlay}>
-            <View style={styles.dialogCard}>
-              <Text style={styles.dialogTitle}>Browser Dialog</Text>
+            <View style={styles.dialogCard} accessibilityRole="alert">
+              <Text style={styles.dialogTitle}>This page says</Text>
               <Text style={styles.dialogMessage}>{dialog.message}</Text>
               {/* The page is still blocked, so the buttons stay live and the card says why. */}
               {dialog.error ? <Text style={styles.dialogError}>{dialog.error}</Text> : null}
               <View style={styles.dialogActions}>
                 {dialog.dialogType !== 'alert' ? (
-                  <Pressable
+                  <Button
+                    label="Cancel"
+                    size="compact"
+                    variant="plain"
                     disabled={dialog.pending !== undefined}
-                    style={({ pressed }) => [
-                      styles.dialogButton,
-                      pressed && styles.dialogButtonPressed,
-                      dialog.pending !== undefined && styles.dialogButtonDisabled
-                    ]}
                     onPress={() => void sendDialogCommand('browser.dialogDismiss')}
-                  >
-                    <Text style={styles.dialogButtonText}>Cancel</Text>
-                  </Pressable>
+                  />
                 ) : null}
-                <Pressable
+                <Button
+                  label="OK"
+                  size="compact"
+                  variant="primary"
                   disabled={dialog.pending !== undefined}
-                  style={({ pressed }) => [
-                    styles.dialogButton,
-                    styles.dialogButtonPrimary,
-                    pressed && styles.dialogButtonPressed,
-                    dialog.pending !== undefined && styles.dialogButtonDisabled
-                  ]}
                   onPress={() => void sendDialogCommand('browser.dialogAccept')}
-                >
-                  <Text style={[styles.dialogButtonText, styles.dialogButtonPrimaryText]}>OK</Text>
-                </Pressable>
+                />
               </View>
             </View>
           </View>
         ) : null}
       </View>
 
-      <View
-        style={[
-          styles.keyboardDock,
-          { paddingBottom: bottomInset, transform: [{ translateY: -keyboardLift }] }
-        ]}
-      >
-        <MobileBrowserPointerModifiers
-          disabled={controlsDisabled}
-          selectedModifiers={pointerModifiers}
-          onToggle={togglePointerModifier}
-        />
-        <MobileBrowserKeyRow
-          disabled={controlsDisabled}
-          onKeypress={(key) => void sendKeypress(key)}
-        />
-        <View style={styles.inputRow}>
-          <TextInput
-            style={styles.keyboardInput}
-            value={keyboardValue}
-            onChangeText={setKeyboardValue}
-            placeholder="Type on page…"
-            placeholderTextColor={colors.textMuted}
-            autoCapitalize="none"
-            autoCorrect={false}
-            editable={!controlsDisabled}
-            onSubmitEditing={() => void sendKeyboardText()}
-          />
-          <Pressable
-            style={[styles.sendButton, (controlsDisabled || !keyboardValue) && styles.disabled]}
-            disabled={controlsDisabled || !keyboardValue}
-            onPress={() => void sendKeyboardText()}
-            accessibilityLabel="Send text to browser"
-          >
-            <ArrowUp size={18} color={buttonColor(!controlsDisabled && !!keyboardValue)} />
-          </Pressable>
-        </View>
-      </View>
+      <MobileBrowserTypingDock
+        bottomInset={bottomInset}
+        keyboardLift={keyboardLift}
+        controlsDisabled={controlsDisabled}
+        pointerModifiers={pointerModifiers}
+        togglePointerModifier={togglePointerModifier}
+        sendKeypress={sendKeypress}
+        keyboardValue={keyboardValue}
+        setKeyboardValue={setKeyboardValue}
+        sendKeyboardText={sendKeyboardText}
+      />
     </View>
   )
 }

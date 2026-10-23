@@ -141,7 +141,7 @@ export function renderMobileTasksItemReviewPanel(model: ConnectionPresentationMo
       {itemAssignableUsersLoading ? (
         <View style={styles.detailLoadingInline}>
           <ActivityIndicator size="small" color={colors.textSecondary} />
-          <Text style={styles.detailMuted}>Loading reviewers...</Text>
+          <Text style={styles.detailMuted}>Loading reviewers…</Text>
         </View>
       ) : itemAssignableUsersError ? (
         <Text style={styles.detailError}>{itemAssignableUsersError}</Text>

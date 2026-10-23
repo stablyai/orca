@@ -1,7 +1,12 @@
 import { memo, useCallback, useEffect, useState } from 'react'
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native'
-import { ChevronDown, ChevronRight } from 'lucide-react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { ChevronRight, CloudOff, GitCommitHorizontal, History } from 'lucide-react-native'
+import { colors, spacing, textStyles, typography } from '../theme/mobile-theme'
+import { Button } from '../components/ui/Button'
+import { Collapsible } from '../components/ui/Collapsible'
+import { StateView } from '../components/ui/StateView'
+import { slideTransition } from '../components/ui/transition-styles'
+import { splitMobileFilePath } from './mobile-file-path-parts'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import { useForceReconnect } from '../transport/host-client-hooks'
@@ -150,33 +155,40 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
       const files = filesState?.files
       const isOpen = expanded === item.id
       return (
-        <View style={styles.commit}>
+        <View>
           <Pressable
-            style={({ pressed }) => [styles.commitHeader, pressed && styles.commitHeaderPressed]}
             onPress={() => toggleCommit(item)}
+            accessibilityRole="button"
+            accessibilityLabel={`${item.subject}, ${item.shortId} by ${item.author}, ${item.relativeTime}`}
+            accessibilityState={{ expanded: isOpen }}
           >
-            {isOpen ? (
-              <ChevronDown size={14} color={colors.textMuted} />
-            ) : (
-              <ChevronRight size={14} color={colors.textMuted} />
+            {({ pressed }) => (
+              <View style={[styles.commitHeader, pressed && styles.commitHeaderPressed]}>
+                <View style={styles.commitMain}>
+                  <Text style={styles.commitSubject} numberOfLines={2}>
+                    {item.subject}
+                  </Text>
+                  <Text style={styles.commitMeta} numberOfLines={1}>
+                    <Text style={styles.commitId}>{item.shortId}</Text> · {item.author} ·{' '}
+                    {item.relativeTime}
+                  </Text>
+                </View>
+                <View style={[isOpen ? styles.chevronOpen : styles.chevronClosed, slideTransition]}>
+                  <ChevronRight size={16} color={colors.textMuted} strokeWidth={2.2} />
+                </View>
+              </View>
             )}
-            <View style={styles.commitMain}>
-              <Text style={styles.commitSubject} numberOfLines={1}>
-                {item.subject}
-              </Text>
-              <Text style={styles.commitMeta} numberOfLines={1}>
-                {item.shortId} · {item.author} · {item.relativeTime}
-              </Text>
-            </View>
           </Pressable>
-          {isOpen ? (
+          <Collapsible open={isOpen}>
             <View style={styles.files}>
               {filesState?.error ? (
-                <View>
+                <View style={styles.filesNotice}>
                   <Text style={styles.empty}>{filesState.error}</Text>
                   {connected || retryAction ? (
-                    <Pressable
-                      style={styles.retryButton}
+                    <Button
+                      label="Retry"
+                      size="compact"
+                      variant="secondary"
                       accessibilityLabel="Retry commit files"
                       onPress={() => {
                         if (connState !== 'connected') {
@@ -185,38 +197,53 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
                           setFilesReloadNonce((value) => value + 1)
                         }
                       }}
-                    >
-                      <Text style={styles.retryText}>Retry</Text>
-                    </Pressable>
+                    />
                   ) : null}
                 </View>
               ) : null}
               {files === undefined && !filesState?.error ? (
                 connected ? (
-                  <ActivityIndicator size="small" color={colors.textSecondary} />
+                  <View style={styles.filesNotice}>
+                    <ActivityIndicator size="small" color={colors.textSecondary} />
+                  </View>
                 ) : (
-                  <Text style={styles.empty}>Waiting for desktop...</Text>
+                  <Text style={styles.empty}>Waiting for desktop…</Text>
                 )
               ) : null}
               {files !== undefined ? (
                 files.length === 0 ? (
-                  <Text style={styles.empty}>No file changes</Text>
+                  <Text style={styles.empty}>No file changes.</Text>
                 ) : (
-                  files.map((file) => (
-                    <View key={file.path} style={styles.fileRow}>
-                      <Text style={styles.filePath} numberOfLines={1}>
-                        {file.path}
-                      </Text>
-                      <Text style={styles.fileStat}>
-                        {file.added ? <Text style={styles.add}>+{file.added} </Text> : null}
-                        {file.removed ? <Text style={styles.del}>-{file.removed}</Text> : null}
-                      </Text>
-                    </View>
-                  ))
+                  files.map((file) => {
+                    const { name, directory } = splitMobileFilePath(file.path)
+                    return (
+                      <View
+                        key={file.path}
+                        style={styles.fileRow}
+                        accessible
+                        accessibilityLabel={`${file.path}, ${file.added ?? 0} added, ${file.removed ?? 0} removed`}
+                      >
+                        <View style={styles.fileText}>
+                          <Text style={styles.fileName} numberOfLines={1} ellipsizeMode="middle">
+                            {name}
+                          </Text>
+                          {directory ? (
+                            <Text style={styles.fileDir} numberOfLines={1} ellipsizeMode="head">
+                              {directory}
+                            </Text>
+                          ) : null}
+                        </View>
+                        <Text style={styles.fileStat}>
+                          {file.added ? <Text style={styles.add}>+{file.added} </Text> : null}
+                          {file.removed ? <Text style={styles.del}>−{file.removed}</Text> : null}
+                        </Text>
+                      </View>
+                    )
+                  })
                 )
               ) : null}
             </View>
-          ) : null}
+          </Collapsible>
         </View>
       )
     },
@@ -227,30 +254,24 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
 
   if (view.kind === 'error' || view.kind === 'waiting') {
     return (
-      <View style={styles.state}>
-        <Text style={styles.stateText}>
-          {view.kind === 'waiting' ? 'Waiting for desktop...' : view.message}
-        </Text>
-        {retry ? (
-          <Pressable style={styles.retryButton} onPress={retry} accessibilityLabel="Retry">
-            <Text style={styles.retryText}>Retry</Text>
-          </Pressable>
-        ) : null}
-      </View>
+      <StateView
+        icon={view.kind === 'waiting' ? CloudOff : History}
+        title={view.kind === 'waiting' ? 'Waiting for desktop…' : 'Couldn’t load commits'}
+        message={view.kind === 'waiting' ? undefined : view.message}
+        primary={retry ? { label: 'Retry', onPress: retry } : undefined}
+      />
     )
   }
   if (view.kind === 'loading') {
-    return (
-      <View style={styles.state}>
-        <ActivityIndicator color={colors.textSecondary} />
-      </View>
-    )
+    return <StateView loading title="Loading commits…" />
   }
   if (view.kind === 'empty') {
     return (
-      <View style={styles.state}>
-        <Text style={styles.stateText}>No commits.</Text>
-      </View>
+      <StateView
+        icon={GitCommitHorizontal}
+        title="No commits"
+        message="This branch has no commits yet."
+      />
     )
   }
   return (
@@ -258,49 +279,60 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
       data={view.rows}
       renderItem={renderCommit}
       keyExtractor={(row) => row.id}
+      ItemSeparatorComponent={CommitSeparator}
       contentContainerStyle={{ paddingBottom: spacing.lg + bottomInset }}
     />
   )
 })
 
+function CommitSeparator() {
+  return <View style={styles.separator} />
+}
+
 const styles = StyleSheet.create({
-  state: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.lg },
-  stateText: { color: colors.textMuted, fontSize: typography.bodySize },
-  retryButton: {
-    marginTop: spacing.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.button,
-    backgroundColor: colors.bgRaised
+  separator: {
+    height: StyleSheet.hairlineWidth,
+    marginLeft: spacing.lg,
+    backgroundColor: colors.separator
   },
-  retryText: { color: colors.textPrimary, fontSize: typography.bodySize, fontWeight: '600' },
-  commit: { borderBottomWidth: 1, borderBottomColor: colors.borderSubtle },
   commitHeader: {
+    minHeight: 64,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 10
   },
-  commitHeaderPressed: { backgroundColor: colors.bgRaised },
-  commitMain: { flex: 1, minWidth: 0 },
-  commitSubject: { color: colors.textPrimary, fontSize: typography.bodySize },
-  commitMeta: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize,
+  commitHeaderPressed: { backgroundColor: colors.fill },
+  commitMain: { flex: 1, minWidth: 0, gap: 2 },
+  commitSubject: { ...textStyles.body, color: colors.textPrimary },
+  commitMeta: { ...textStyles.footnote, color: colors.textMuted },
+  commitId: { fontFamily: typography.monoFamily, fontVariant: ['tabular-nums'] },
+  chevronClosed: { transform: [{ rotate: '0deg' }] },
+  chevronOpen: { transform: [{ rotate: '90deg' }] },
+  files: { paddingLeft: spacing.lg + spacing.md, paddingRight: spacing.lg, paddingBottom: 10 },
+  filesNotice: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md
+  },
+  fileRow: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: 4
+  },
+  fileText: { flex: 1, minWidth: 0 },
+  fileName: { ...textStyles.callout, color: colors.textPrimary },
+  fileDir: { ...textStyles.caption, color: colors.textMuted },
+  fileStat: {
+    ...textStyles.footnote,
     fontFamily: typography.monoFamily,
-    marginTop: 2
+    fontVariant: ['tabular-nums']
   },
-  files: { paddingHorizontal: spacing.lg, paddingBottom: spacing.sm, gap: 4 },
-  fileRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  filePath: {
-    flex: 1,
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    fontFamily: typography.monoFamily
-  },
-  fileStat: { fontSize: typography.metaSize, fontFamily: typography.monoFamily },
   add: { color: colors.gitDecorationAdded },
   del: { color: colors.gitDecorationDeleted },
-  empty: { color: colors.textMuted, fontSize: typography.metaSize }
+  empty: { ...textStyles.callout, flexShrink: 1, color: colors.textSecondary, paddingVertical: 10 }
 })

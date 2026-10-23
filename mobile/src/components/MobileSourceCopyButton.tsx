@@ -1,8 +1,10 @@
 import { useLayoutEffect, useRef, useState } from 'react'
-import { Alert, Platform, Pressable, StyleSheet, Text } from 'react-native'
+import { Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import { Check, Copy } from 'lucide-react-native'
 import { useClipboardWriter } from '../platform/clipboard'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { triggerError, triggerSuccess } from '../platform/haptics'
+import { colors, MIN_TOUCH_TARGET, motion, radii, spacing, textStyles } from '../theme/mobile-theme'
+import { pressTransition } from './ui/transition-styles'
 
 type CopyFeedback = { status: 'copied'; text: string } | { status: 'failed' }
 
@@ -65,23 +67,22 @@ export function MobileSourceCopyButton({
     setFeedback(null)
     try {
       await clipboard.writeText(text)
-    } catch (error) {
+    } catch {
       if (latestAttempt.current !== attempt) {
         return
       }
+      triggerError()
       if (Platform.OS === 'web') {
         showFeedback({ status: 'failed' }, attempt)
       } else {
-        Alert.alert(
-          'Copy failed',
-          error instanceof Error ? error.message : 'The clipboard rejected the text.'
-        )
+        Alert.alert("Couldn't copy", 'The clipboard rejected the text. Try again.')
       }
       return
     }
     if (latestAttempt.current !== attempt || sourceVersion.current !== attempt.sourceVersion) {
       return
     }
+    triggerSuccess()
     showFeedback({ status: 'copied', text }, attempt)
   }
   const copied = feedback?.status === 'copied' && feedback.text === text
@@ -96,11 +97,10 @@ export function MobileSourceCopyButton({
         ? 'Copy loaded'
         : 'Copy'
   const Icon = copied ? Check : Copy
-  const iconColor = failed ? colors.statusRed : copied ? colors.statusGreen : colors.textMuted
+  const iconColor = failed ? colors.danger : copied ? colors.statusGreen : colors.textMuted
   return (
     <Pressable
-      style={({ pressed }) => [styles.button, partial && styles.partial, pressed && styles.pressed]}
-      hitSlop={10}
+      style={[styles.touch, partial && styles.touchPartial]}
       accessibilityRole="button"
       accessibilityLabel={failed ? "Couldn't copy" : accessibilityLabel}
       accessibilityLiveRegion={failed ? 'polite' : undefined}
@@ -110,23 +110,42 @@ export function MobileSourceCopyButton({
       disabled={text.length === 0}
       onPress={() => void copy()}
     >
-      <Icon size={14} color={iconColor} />
-      {partial ? <Text style={styles.label}>{label}</Text> : null}
+      {({ pressed }) => (
+        <View
+          style={[
+            styles.button,
+            partial && styles.partial,
+            pressed && styles.pressed,
+            pressed ? pressTransition.pressed : pressTransition.rest
+          ]}
+        >
+          <Icon size={16} color={iconColor} strokeWidth={2.2} />
+          {partial ? <Text style={styles.label}>{label}</Text> : null}
+        </View>
+      )}
     </Pressable>
   )
 }
 
+// A 44 pt touch box around a 32 pt circle (a capsule when it names what it copies).
 const styles = StyleSheet.create({
+  touch: {
+    width: MIN_TOUCH_TARGET,
+    height: MIN_TOUCH_TARGET,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  touchPartial: { width: 'auto', alignItems: 'flex-start' },
   button: {
-    width: 24,
-    height: 24,
+    width: 32,
+    height: 32,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.xs,
-    borderRadius: radii.button
+    gap: spacing.xs + 2,
+    borderRadius: radii.pill
   },
-  partial: { width: 128, height: 32, paddingHorizontal: spacing.sm },
-  pressed: { backgroundColor: colors.bgRaised },
-  label: { color: colors.textMuted, fontSize: typography.metaSize }
+  partial: { width: 'auto', minWidth: 128, paddingHorizontal: spacing.md },
+  pressed: { backgroundColor: colors.fill, transform: [{ scale: motion.pressedIconScale }] },
+  label: { ...textStyles.footnote, fontWeight: '500', color: colors.textSecondary }
 })

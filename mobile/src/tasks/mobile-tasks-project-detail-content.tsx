@@ -1,6 +1,8 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
-import { View, ActivityIndicator, colors, Text } from './mobile-tasks-dependencies'
-import { styles } from './mobile-tasks-legacy-styles'
+import { View } from './mobile-tasks-dependencies'
+import { Banner } from '../components/ui/Banner'
+import { StateView } from '../components/ui/StateView'
+import { detailContentStyles } from './mobile-tasks-item-detail-content'
 import { renderMobileTasksProjectIssueMetadata } from './mobile-tasks-project-metadata-editors'
 import { renderMobileTasksProjectReviewPanels } from './mobile-tasks-project-review-panels'
 import { renderMobileTasksProjectComments } from './mobile-tasks-project-comments'
@@ -8,11 +10,13 @@ import { renderMobileTasksProjectComments } from './mobile-tasks-project-comment
 export function renderMobileTasksProjectLoadedDetail(model: ConnectionPresentationModel) {
   const { projectRowDetailError, projectRowDetailLoading } = model
   return projectRowDetailLoading ? (
-    <View style={styles.detailLoading}>
-      <ActivityIndicator size="small" color={colors.textSecondary} />
+    <View style={detailContentStyles.loading}>
+      <StateView loading title="Loading details…" />
     </View>
   ) : projectRowDetailError ? (
-    <Text style={styles.detailError}>{projectRowDetailError}</Text>
+    <View style={detailContentStyles.errorBanner}>
+      <Banner tone="error" title="Couldn't load details" message={projectRowDetailError} />
+    </View>
   ) : (
     <>
       {renderMobileTasksProjectIssueMetadata(model)}

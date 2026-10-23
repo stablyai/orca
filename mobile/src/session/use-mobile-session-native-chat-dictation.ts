@@ -186,7 +186,11 @@ export function useMobileSessionNativeChatDictation(
   // Toggle mode: one tap starts, the next stops; long-press cancels mid-record.
   const handleDictationToggle = useCallback(() => {
     if (dictation.isProcessing) {
-      cancelDictation()
+      // The chat's mic shows "Transcribing…" and has no cancel: a tap there would throw away what
+      // was just said. The terminal's mic labels this tap as Cancel, so it still cancels.
+      if (!showNativeChatRef.current) {
+        cancelDictation()
+      }
     } else if (dictation.isStarting) {
       // The start request is still settling; a second toggle is intentionally ignored.
     } else if (dictation.isRecording) {
@@ -194,7 +198,7 @@ export function useMobileSessionNativeChatDictation(
     } else {
       startDictation()
     }
-  }, [cancelDictation, dictation, startDictation])
+  }, [cancelDictation, dictation, showNativeChatRef, startDictation])
 
   // Hold mode: press starts, release stops — like a walkie-talkie.
   const handleDictationPressIn = useCallback(() => {

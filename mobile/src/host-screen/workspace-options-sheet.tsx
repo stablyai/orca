@@ -1,7 +1,10 @@
 import { useMemo, type ReactNode } from 'react'
-import { ActivityIndicator, Pressable, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import { ChevronLeft } from 'lucide-react-native'
-import { colors } from '../theme/mobile-theme'
+import { colors, MIN_TOUCH_TARGET, radii, spacing, textStyles } from '../theme/mobile-theme'
+import { IconButton } from '../components/ui/IconButton'
+import { SectionHeader } from '../components/ui/SectionHeader'
+import { SheetHeader } from '../components/ui/SheetHeader'
 import { useBackClaim } from '../navigation/use-back-claim'
 import { BottomDrawer } from '../components/BottomDrawer'
 import {
@@ -21,9 +24,8 @@ import {
 } from '../worktree/workspace-options-copy'
 import { resolveWorktreeHostId } from '../worktree/worktree-host-context-labels'
 import { withServerHosts } from '../worktree/server-workspaces'
-import { hostScreenStyles as styles } from './host-screen-styles'
 import type { HostScreenController } from './use-host-screen-controller'
-import { DrillRow, OptionRowList } from './workspace-option-rows'
+import { DrillRow, OptionGroup } from './workspace-option-rows'
 import { OptionPager, useOptionPager, type OptionPagerControls } from './workspace-options-pager'
 import {
   WORKSPACE_OPTION_CONTROLS,
@@ -46,7 +48,10 @@ function useWorkspaceOptionHosts(controller: HostScreenController): WorkspaceOpt
     )
     return [...ids].map((id) => ({
       id,
-      label: getHostContextLabel(id, { hostLabelById, hostPlatform: state.hostPlatform })
+      label: getHostContextLabel(id, {
+        hostLabelById,
+        hostPlatform: state.hostPlatform
+      })
     }))
   }, [
     displayWorktrees,
@@ -70,7 +75,11 @@ export function WorkspaceOptionsSheet({ controller }: { controller: HostScreenCo
       // A page opens at the top even when the main sheet was scrolled down to its row.
       scrollResetKey={pager.page}
     >
-      <WorkspaceOptionsContent controller={controller} pager={pager} />
+      <WorkspaceOptionsContent
+        controller={controller}
+        pager={pager}
+        onDone={() => state.setShowWorkspaceOptions(false)}
+      />
     </BottomDrawer>
   )
 }
@@ -84,8 +93,8 @@ function WorkspaceOptionsPending({ settings }: Pick<HostScreenController, 'setti
   return (
     <View style={styles.optionPending} accessibilityLiveRegion="polite">
       <ActivityIndicator size="small" color={colors.textMuted} />
-      <Text style={styles.filterModalSubtitle}>
-        {stale ? 'Still waiting for the desktop' : 'Saving to the desktop'}
+      <Text style={styles.pendingText}>
+        {stale ? 'Still waiting for the desktop…' : 'Saving to the desktop…'}
       </Text>
     </View>
   )
@@ -94,10 +103,12 @@ function WorkspaceOptionsPending({ settings }: Pick<HostScreenController, 'setti
 // Its own component so the host list is built only while the sheet is open.
 function WorkspaceOptionsContent({
   controller,
-  pager
+  pager,
+  onDone
 }: {
   controller: HostScreenController
   pager: OptionPagerControls<WorkspaceViewOptionKey>
+  onDone: () => void
 }) {
   const { settings, state } = controller
   const hosts = useWorkspaceOptionHosts(controller)
@@ -130,34 +141,40 @@ function WorkspaceOptionsContent({
   const page =
     pageOption && pageControl?.kind === 'page' ? (
       <>
-        <Pressable
-          style={styles.optionBack}
-          onPress={pager.close}
-          accessibilityRole="button"
-          accessibilityLabel={`Back to ${WORKSPACE_OPTIONS_TITLE}`}
-        >
-          <ChevronLeft size={16} color={colors.textSecondary} />
-          <Text style={styles.optionBackText}>{WORKSPACE_OPTIONS_TITLE}</Text>
-        </Pressable>
-        <Text style={[styles.filterModalTitle, styles.optionPageTitle]}>{pageOption.label}</Text>
+        <View style={styles.pageHeader}>
+          <View style={styles.pageHeaderSide}>
+            <IconButton
+              icon={ChevronLeft}
+              iconSize={22}
+              variant="bare"
+              accessibilityLabel={`Back to ${WORKSPACE_OPTIONS_TITLE}`}
+              onPress={pager.close}
+            />
+          </View>
+          <Text style={styles.pageTitle} numberOfLines={1} accessibilityRole="header">
+            {pageOption.label}
+          </Text>
+          <View style={[styles.pageHeaderSide, styles.pageHeaderTrailing]}>
+            <SheetDoneAction onDone={onDone} />
+          </View>
+        </View>
         <pageControl.Page controller={controller} hosts={hosts} label={pageOption.label} />
       </>
     ) : null
 
   const main = (
     <>
-      <View style={styles.filterModalHeader}>
-        <View style={styles.filterModalHeading}>
-          <Text style={styles.filterModalTitle}>{WORKSPACE_OPTIONS_TITLE}</Text>
-          <Text style={styles.filterModalSubtitle}>{WORKSPACE_VIEW_SHARED_NOTE}</Text>
-          <WorkspaceOptionsPending settings={settings} />
-        </View>
-        {controller.activeFilterCount > 0 && (
-          <Pressable onPress={settings.clearFilters}>
-            <Text style={styles.clearFiltersText}>Clear filters</Text>
-          </Pressable>
-        )}
-      </View>
+      <SheetHeader
+        title={WORKSPACE_OPTIONS_TITLE}
+        subtitle={WORKSPACE_VIEW_SHARED_NOTE}
+        leading={{
+          label: 'Reset',
+          onPress: settings.clearFilters,
+          disabled: controller.activeFilterCount === 0
+        }}
+        trailing={{ label: 'Done', onPress: onDone }}
+      />
+      <WorkspaceOptionsPending settings={settings} />
 
       {sections.map(({ section, options }) => {
         const sectionLabel = WORKSPACE_VIEW_SECTION_LABELS[section]
@@ -166,7 +183,11 @@ function WorkspaceOptionsContent({
         const framedRows: ReactNode[] = []
         for (const option of options) {
           const control = WORKSPACE_OPTION_CONTROLS[option.key]
-          const props: WorkspaceOptionProps = { controller, hosts, label: option.label }
+          const props: WorkspaceOptionProps = {
+            controller,
+            hosts,
+            label: option.label
+          }
           if (control.kind === 'page') {
             framedRows.push(
               <DrillRow
@@ -183,13 +204,9 @@ function WorkspaceOptionsContent({
         }
         return (
           <View key={section} testID={`workspace-option-section-${section}`}>
-            {sectionLabel && <Text style={styles.filterSectionLabel}>{sectionLabel}</Text>}
+            {sectionLabel ? <SectionHeader title={sectionLabel} /> : <View style={styles.gap} />}
             {bareRows}
-            {framedRows.length > 0 && (
-              <View style={styles.filterGroup}>
-                <OptionRowList>{framedRows}</OptionRowList>
-              </View>
-            )}
+            {framedRows.length > 0 && <OptionGroup>{framedRows}</OptionGroup>}
           </View>
         )
       })}
@@ -198,3 +215,52 @@ function WorkspaceOptionsContent({
 
   return <OptionPager pager={pager} main={main} page={page} />
 }
+
+/** `SheetHeader`'s Done, for a sub-page whose leading side is a back button it has no slot for. */
+function SheetDoneAction({ onDone }: { onDone: () => void }) {
+  return (
+    <Pressable
+      onPress={onDone}
+      accessibilityRole="button"
+      accessibilityLabel="Done"
+      style={({ pressed }) => [styles.done, pressed && styles.donePressed]}
+    >
+      <Text style={styles.doneLabel}>Done</Text>
+    </Pressable>
+  )
+}
+
+const styles = StyleSheet.create({
+  optionPending: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingBottom: spacing.xs
+  },
+  pendingText: { ...textStyles.footnote, color: colors.textMuted },
+  gap: { height: spacing.lg },
+  pageHeader: {
+    height: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.xs,
+    marginBottom: spacing.sm
+  },
+  pageHeaderSide: { width: 84, flexDirection: 'row', alignItems: 'center' },
+  pageHeaderTrailing: { justifyContent: 'flex-end' },
+  pageTitle: {
+    ...textStyles.headline,
+    flex: 1,
+    color: colors.textPrimary,
+    textAlign: 'center'
+  },
+  done: {
+    minHeight: MIN_TOUCH_TARGET,
+    paddingHorizontal: spacing.md,
+    borderRadius: radii.pill,
+    justifyContent: 'center'
+  },
+  donePressed: { backgroundColor: colors.fill },
+  doneLabel: { ...textStyles.headline, color: colors.textPrimary }
+})

@@ -134,13 +134,12 @@ export function statusColor(status: MobileGitFileStatus): string {
   switch (status) {
     case 'added':
     case 'copied':
-      return colors.statusGreen
+    case 'untracked':
+      return colors.gitDecorationAdded
     case 'deleted':
-      return colors.statusRed
+      return colors.gitDecorationDeleted
     case 'renamed':
       return colors.accentBlue
-    case 'untracked':
-      return colors.statusAmber
     case 'modified':
     default:
       return colors.textSecondary

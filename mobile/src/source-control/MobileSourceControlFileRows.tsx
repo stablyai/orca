@@ -1,14 +1,20 @@
+import type { ReactNode } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { ChevronRight, FileText, Minus, Plus, Trash2 } from 'lucide-react-native'
+import { ChevronRight, Minus, Plus, Trash2 } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
+import { IconButton } from '../components/ui/IconButton'
+import { Button } from '../components/ui/Button'
+import { SectionHeader } from '../components/ui/SectionHeader'
 import { MOBILE_GIT_STATUS_LABELS } from './mobile-git-status'
 import { formatMobileBranchEntryMeta } from './mobile-branch-entry-format'
+import { splitMobileFilePath } from './mobile-file-path-parts'
 import {
   statusColor,
   type MobileBranchEntryView,
   type MobileGitStatusEntryView
 } from './mobile-source-control-screen-state'
 import type { MobileSourceControlState } from './use-mobile-source-control-state'
+import type { MobileGitFileStatus } from './mobile-git-status'
 import { styles } from './mobile-source-control-styles'
 
 type RowState = Pick<
@@ -21,6 +27,82 @@ type RowState = Pick<
   | 'setDiscardTarget'
 >
 
+type FileRowShellProps = {
+  path: string
+  status: MobileGitFileStatus
+  meta: string | null
+  metaWarning?: boolean
+  canOpen: boolean
+  disabled: boolean
+  busy: boolean
+  actions?: ReactNode
+  onPress: () => void
+  accessibilityLabel: string
+}
+
+function FileRowShell({
+  path,
+  status,
+  meta,
+  metaWarning = false,
+  canOpen,
+  disabled,
+  busy,
+  actions,
+  onPress,
+  accessibilityLabel
+}: FileRowShellProps) {
+  const { name, directory } = splitMobileFilePath(path)
+  const detail = [directory, meta].filter(Boolean).join(' · ')
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityState={{ disabled, busy }}
+    >
+      {({ pressed }) => (
+        <View style={[styles.fileRow, pressed && canOpen && styles.fileRowPressed]}>
+          <View style={styles.statusSlot}>
+            <Text style={[styles.statusLetter, { color: statusColor(status) }]}>
+              {MOBILE_GIT_STATUS_LABELS[status]}
+            </Text>
+          </View>
+          <View style={styles.fileTextBlock}>
+            <Text
+              style={[styles.fileName, !canOpen && styles.fileNameUnavailable]}
+              numberOfLines={1}
+              ellipsizeMode="middle"
+            >
+              {name}
+            </Text>
+            {detail ? (
+              <Text
+                style={[styles.fileDetail, metaWarning && styles.fileDetailWarning]}
+                numberOfLines={1}
+                ellipsizeMode="head"
+              >
+                {detail}
+              </Text>
+            ) : null}
+          </View>
+          {busy ? (
+            <View style={styles.rowSpinner}>
+              <ActivityIndicator size="small" color={colors.textSecondary} />
+            </View>
+          ) : (
+            actions
+          )}
+          {!busy && canOpen ? (
+            <ChevronRight size={16} color={colors.textMuted} strokeWidth={2.2} />
+          ) : null}
+        </View>
+      )}
+    </Pressable>
+  )
+}
+
 export function makeRenderFileRow(state: RowState) {
   const { busyAction, openingPath, openingBranchPath, openFile, runGitAction, setDiscardTarget } =
     state
@@ -30,108 +112,126 @@ export function makeRenderFileRow(state: RowState) {
       busyAction === item.unstageActionId ||
       busyAction === item.discardActionId ||
       openingPath === item.path
-    const rowDisabled =
-      !item.canOpen || busyAction !== null || openingPath !== null || openingBranchPath !== null
     const ioBusy = busyAction !== null || openingPath !== null || openingBranchPath !== null
-    return (
-      <Pressable
-        style={({ pressed }) => [
-          styles.fileRow,
-          pressed && item.canOpen && styles.fileRowPressed,
-          rowDisabled && styles.fileRowDisabled,
-          !item.canOpen && styles.fileRowUnavailable
-        ]}
-        onPress={() => void openFile(item)}
-        disabled={rowDisabled}
-        accessibilityLabel={`Open changed file ${item.path}`}
-      >
-        <View style={styles.statusBadge}>
-          <Text style={[styles.statusBadgeText, { color: statusColor(item.status) }]}>
-            {MOBILE_GIT_STATUS_LABELS[item.status]}
-          </Text>
-        </View>
-        <FileText
-          size={16}
-          color={item.canOpen ? colors.textSecondary : colors.textMuted}
-          strokeWidth={2.1}
+    const rowDisabled = !item.canOpen || ioBusy
+    const actions =
+      item.area === 'staged' ? (
+        <IconButton
+          icon={Minus}
+          variant="bare"
+          iconSize={18}
+          iconColor={colors.textSecondary}
+          disabled={ioBusy}
+          onPress={() =>
+            void runGitAction(item.unstageActionId, 'git.unstage', { filePath: item.path })
+          }
+          accessibilityLabel={`Unstage ${item.path}`}
         />
-        <View style={styles.fileTextBlock}>
-          <Text
-            style={[styles.filePath, !item.canOpen && styles.filePathDisabled]}
-            numberOfLines={1}
-          >
-            {item.path}
-          </Text>
-          {item.oldPath ? (
-            <Text style={styles.fileMeta} numberOfLines={1}>
-              from {item.oldPath}
-            </Text>
-          ) : item.conflictStatus === 'unresolved' ? (
-            <Text style={styles.fileMeta} numberOfLines={1}>
-              Unresolved conflict
-            </Text>
+      ) : item.canStage || item.canDiscard ? (
+        <View style={styles.rowActions}>
+          {item.canDiscard ? (
+            <IconButton
+              icon={Trash2}
+              variant="bare"
+              iconSize={17}
+              iconColor={colors.textSecondary}
+              disabled={ioBusy}
+              onPress={() => setDiscardTarget(item)}
+              accessibilityLabel={`Discard ${item.path}`}
+            />
+          ) : null}
+          {item.canStage ? (
+            <IconButton
+              icon={Plus}
+              variant="bare"
+              iconSize={18}
+              iconColor={colors.textSecondary}
+              disabled={ioBusy}
+              onPress={() =>
+                void runGitAction(item.stageActionId, 'git.stage', { filePath: item.path })
+              }
+              accessibilityLabel={`Stage ${item.path}`}
+            />
           ) : null}
         </View>
-        {rowBusy ? (
-          <ActivityIndicator size="small" color={colors.textSecondary} />
-        ) : item.area === 'staged' ? (
-          <Pressable
-            style={({ pressed }) => [
-              styles.iconButton,
-              ioBusy && styles.iconButtonDisabled,
-              pressed && styles.iconButtonPressed
-            ]}
-            disabled={ioBusy}
-            onPress={() =>
-              void runGitAction(item.unstageActionId, 'git.unstage', { filePath: item.path })
-            }
-            hitSlop={8}
-            accessibilityLabel={`Unstage ${item.path}`}
-          >
-            <Minus size={16} color={colors.textSecondary} strokeWidth={2.2} />
-          </Pressable>
-        ) : item.canStage || item.canDiscard ? (
-          <View style={styles.rowActions}>
-            {item.canStage ? (
-              <Pressable
-                style={({ pressed }) => [
-                  styles.iconButton,
-                  ioBusy && styles.iconButtonDisabled,
-                  pressed && styles.iconButtonPressed
-                ]}
-                disabled={ioBusy}
-                onPress={() =>
-                  void runGitAction(item.stageActionId, 'git.stage', { filePath: item.path })
-                }
-                hitSlop={8}
-                accessibilityLabel={`Stage ${item.path}`}
-              >
-                <Plus size={16} color={colors.textSecondary} strokeWidth={2.2} />
-              </Pressable>
-            ) : null}
-            {item.canDiscard ? (
-              <Pressable
-                style={({ pressed }) => [
-                  styles.iconButton,
-                  ioBusy && styles.iconButtonDisabled,
-                  pressed && styles.iconButtonPressed
-                ]}
-                disabled={ioBusy}
-                onPress={() => setDiscardTarget(item)}
-                hitSlop={8}
-                accessibilityLabel={`Discard ${item.path}`}
-              >
-                <Trash2 size={16} color={colors.statusRed} strokeWidth={2.1} />
-              </Pressable>
-            ) : null}
-          </View>
-        ) : null}
-        {!rowBusy && item.canOpen ? (
-          <ChevronRight size={16} color={colors.textMuted} strokeWidth={2.1} />
-        ) : null}
-      </Pressable>
+      ) : null
+    return (
+      <FileRowShell
+        path={item.path}
+        status={item.status}
+        meta={
+          item.oldPath
+            ? `from ${item.oldPath}`
+            : item.conflictStatus === 'unresolved'
+              ? 'Unresolved conflict'
+              : null
+        }
+        metaWarning={!item.oldPath && item.conflictStatus === 'unresolved'}
+        canOpen={item.canOpen}
+        disabled={rowDisabled}
+        busy={rowBusy}
+        actions={actions}
+        onPress={() => void openFile(item)}
+        accessibilityLabel={`Open changed file ${item.path}`}
+      />
     )
   }
+}
+
+type SectionActionState = Pick<
+  MobileSourceControlState,
+  'busyAction' | 'openingPath' | 'openingBranchPath' | 'stageAll' | 'unstageAll'
+> & { canStageAll: boolean; canUnstageAll: boolean }
+
+/** A working-tree section's header, carrying Stage all or Unstage all where they apply. */
+export function ChangesSectionHeader({
+  title,
+  count,
+  showStageAll,
+  showUnstageAll,
+  first,
+  state
+}: {
+  title: string
+  count: number
+  showStageAll: boolean
+  showUnstageAll: boolean
+  first: boolean
+  state: SectionActionState
+}) {
+  const ioBusy =
+    state.busyAction !== null || state.openingPath !== null || state.openingBranchPath !== null
+  return (
+    <SectionHeader
+      title={title}
+      count={count}
+      first={first}
+      action={
+        <View style={styles.sectionActions}>
+          {showUnstageAll ? (
+            <Button
+              label="Unstage all"
+              variant="plain"
+              size="compact"
+              busy={state.busyAction === 'unstage-all'}
+              disabled={ioBusy || !state.canUnstageAll}
+              onPress={() => void state.unstageAll()}
+            />
+          ) : null}
+          {showStageAll ? (
+            <Button
+              label="Stage all"
+              variant="plain"
+              size="compact"
+              busy={state.busyAction === 'stage-all'}
+              disabled={ioBusy || !state.canStageAll}
+              onPress={() => void state.stageAll()}
+            />
+          ) : null}
+        </View>
+      }
+    />
+  )
 }
 
 type BranchState = Pick<
@@ -147,7 +247,13 @@ type BranchState = Pick<
   | 'openingPath'
 >
 
-export function BranchCompareHeader({ state }: { state: BranchState }) {
+export function BranchCompareHeader({
+  state,
+  first = false
+}: {
+  state: BranchState
+  first?: boolean
+}) {
   const {
     shouldShowBranchCompareSection,
     branchCompareSummaryText,
@@ -158,34 +264,29 @@ export function BranchCompareHeader({ state }: { state: BranchState }) {
   if (!shouldShowBranchCompareSection) {
     return null
   }
+  const notice =
+    branchCompareState.kind === 'error'
+      ? branchCompareState.message
+      : branchCompareResult && branchCompareResult.summary.status !== 'ready'
+        ? (branchCompareResult.summary.errorMessage ?? 'Committed changes are unavailable.')
+        : null
 
   return (
-    <View style={styles.branchCompareBlock}>
-      <View style={styles.sectionHeader}>
-        <View style={styles.branchSectionTitleBlock}>
-          <Text style={styles.sectionTitle}>Committed on Branch</Text>
-          {branchCompareSummaryText ? (
-            <Text style={styles.branchSectionSubtitle} numberOfLines={1}>
-              {branchCompareSummaryText}
-            </Text>
-          ) : null}
-        </View>
-        <Text style={styles.sectionCount}>{branchEntries.length}</Text>
-      </View>
+    <View>
+      <SectionHeader title="Committed on branch" count={branchEntries.length} first={first} />
+      {branchCompareSummaryText ? (
+        <Text style={styles.sectionSubtitle} numberOfLines={1}>
+          {branchCompareSummaryText}
+        </Text>
+      ) : null}
       {branchCompareState.kind === 'loading' ? (
         <View style={styles.branchStateRow}>
           <ActivityIndicator size="small" color={colors.textSecondary} />
-          <Text style={styles.branchStateText}>Loading committed changes...</Text>
+          <Text style={styles.branchStateText}>Loading committed changes…</Text>
         </View>
-      ) : branchCompareState.kind === 'error' ? (
+      ) : notice ? (
         <View style={styles.branchStateRow}>
-          <Text style={styles.branchStateText}>{branchCompareState.message}</Text>
-        </View>
-      ) : branchCompareResult && branchCompareResult.summary.status !== 'ready' ? (
-        <View style={styles.branchStateRow}>
-          <Text style={styles.branchStateText}>
-            {branchCompareResult.summary.errorMessage ?? 'Committed changes unavailable.'}
-          </Text>
+          <Text style={styles.branchStateText}>{notice}</Text>
         </View>
       ) : null}
     </View>
@@ -200,50 +301,18 @@ export function BranchFileRow({
   state: BranchState
 }) {
   const { busyAction, openBranchDiff, openingBranchPath, openingPath } = state
-  const rowBusy = openingBranchPath === entry.path
   const rowDisabled =
     !entry.canOpen || busyAction !== null || openingPath !== null || openingBranchPath !== null
-  const meta = formatMobileBranchEntryMeta(entry)
   return (
-    <Pressable
-      style={({ pressed }) => [
-        styles.fileRow,
-        pressed && entry.canOpen && styles.fileRowPressed,
-        rowDisabled && styles.fileRowDisabled,
-        !entry.canOpen && styles.fileRowUnavailable
-      ]}
-      onPress={() => void openBranchDiff(entry)}
+    <FileRowShell
+      path={entry.path}
+      status={entry.status}
+      meta={formatMobileBranchEntryMeta(entry)}
+      canOpen={entry.canOpen}
       disabled={rowDisabled}
+      busy={openingBranchPath === entry.path}
+      onPress={() => void openBranchDiff(entry)}
       accessibilityLabel={`Open committed change ${entry.path}`}
-    >
-      <View style={styles.statusBadge}>
-        <Text style={[styles.statusBadgeText, { color: statusColor(entry.status) }]}>
-          {MOBILE_GIT_STATUS_LABELS[entry.status]}
-        </Text>
-      </View>
-      <FileText
-        size={16}
-        color={entry.canOpen ? colors.textSecondary : colors.textMuted}
-        strokeWidth={2.1}
-      />
-      <View style={styles.fileTextBlock}>
-        <Text
-          style={[styles.filePath, !entry.canOpen && styles.filePathDisabled]}
-          numberOfLines={1}
-        >
-          {entry.path}
-        </Text>
-        {meta ? (
-          <Text style={styles.fileMeta} numberOfLines={1}>
-            {meta}
-          </Text>
-        ) : null}
-      </View>
-      {rowBusy ? (
-        <ActivityIndicator size="small" color={colors.textSecondary} />
-      ) : entry.canOpen ? (
-        <ChevronRight size={16} color={colors.textMuted} strokeWidth={2.1} />
-      ) : null}
-    </Pressable>
+    />
   )
 }

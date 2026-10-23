@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react'
-import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
-import { colors } from '../../theme/mobile-theme'
+import { View } from 'react-native'
 import { isSubmittableCommentBody } from '../../session/pr-comment-actions'
+import { Button } from '../ui/Button'
+import { ReplyBox } from '../ui/ReplyBox'
 import { prCommentComposerStyles as styles } from './pr-comment-composer-styles'
 
 type Props = {
@@ -18,6 +19,7 @@ type Props = {
   autoFocus?: boolean
 }
 
+/** The chat composer's family at reply size, with an optional plain Cancel under it. */
 export function PRCommentComposer({
   placeholder,
   submitLabel,
@@ -50,46 +52,26 @@ export function PRCommentComposer({
 
   return (
     <View style={styles.container}>
-      <TextInput
-        style={styles.input}
+      <ReplyBox
         value={body}
         onChangeText={setBody}
+        onSend={() => void submit()}
         placeholder={placeholder}
-        placeholderTextColor={colors.textMuted}
-        multiline
-        editable={!submitting}
+        sendAccessibilityLabel={submitLabel}
+        sending={submitting}
         autoFocus={autoFocus}
       />
-      <View style={styles.actions}>
-        {onCancel ? (
-          <Pressable
-            style={({ pressed }) => [styles.cancel, pressed && styles.pressed]}
+      {onCancel ? (
+        <View style={styles.actions}>
+          <Button
+            label="Cancel"
+            variant="plain"
+            size="compact"
             onPress={onCancel}
             disabled={submitting}
-            accessibilityRole="button"
-            accessibilityLabel="Cancel"
-          >
-            <Text style={styles.cancelText}>Cancel</Text>
-          </Pressable>
-        ) : null}
-        <Pressable
-          style={({ pressed }) => [
-            styles.submit,
-            !canSubmit && styles.submitDisabled,
-            pressed && styles.pressed
-          ]}
-          onPress={() => void submit()}
-          disabled={!canSubmit}
-          accessibilityRole="button"
-          accessibilityLabel={submitLabel}
-        >
-          {submitting ? (
-            <ActivityIndicator size="small" color={colors.bgBase} />
-          ) : (
-            <Text style={styles.submitText}>{submitLabel}</Text>
-          )}
-        </Pressable>
-      </View>
+          />
+        </View>
+      ) : null}
     </View>
   )
 }

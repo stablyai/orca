@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { colors, radii, spacing, textStyles } from '../theme/mobile-theme'
 import type { MobileWebShellSessionState } from './mobile-web-shell-session-contract'
 import { formatMobileWebShellDevFacts, isDevelopmentBuild } from './mobile-web-shell-dev-facts'
 
@@ -35,11 +35,12 @@ const styles = StyleSheet.create({
     bottom: spacing.sm,
     paddingHorizontal: spacing.sm,
     paddingVertical: 2,
-    borderRadius: radii.button,
+    borderRadius: radii.pill,
     backgroundColor: colors.bgPanel
   },
   devFactsText: {
-    fontSize: typography.metaSize,
-    color: colors.textMuted
+    ...textStyles.caption,
+    color: colors.textMuted,
+    fontVariant: ['tabular-nums']
   }
 })

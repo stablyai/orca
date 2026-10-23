@@ -1,5 +1,5 @@
 import { useContext, useEffect, useState } from 'react'
-import { Pressable, Text, View, type TextStyle } from 'react-native'
+import { Text, View, type TextStyle } from 'react-native'
 import {
   truncateToolDetail,
   MAX_TOOL_DETAIL_LENGTH
@@ -16,6 +16,7 @@ import { INLINE_TEXT_SELECTION } from '../components/inline-text-selection'
 import { styles } from './mobile-native-chat-message-styles'
 import { toolStyles } from './mobile-native-chat-tool-styles'
 import { MobileNativeChatOwnedScrollView } from './MobileNativeChatOwnedScrollView'
+import { MobileNativeChatTextAction } from './MobileNativeChatTextAction'
 import {
   MobileNativeChatItemSourceContext,
   readMobileNativeChatItem
@@ -36,17 +37,11 @@ function ShowFull({
   onPress: () => void
 }): React.JSX.Element {
   return (
-    <Pressable
-      style={styles.showFull}
+    <MobileNativeChatTextAction
       onPress={onPress}
       disabled={load === 'loading'}
-      hitSlop={8}
-      accessibilityRole="button"
-    >
-      <Text style={styles.showFullText}>
-        {load === 'failed' ? `${label} — couldn't load, tap to retry` : label}
-      </Text>
-    </Pressable>
+      label={load === 'failed' ? `${label} — couldn't load, tap to retry` : label}
+    />
   )
 }
 

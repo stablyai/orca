@@ -1,4 +1,5 @@
-import { View, Text, ScrollView, TextInput, Pressable } from 'react-native'
+import { useState } from 'react'
+import { View, ScrollView, TextInput, Pressable } from 'react-native'
 import { hostOs } from '../platform/host-os'
 import {
   ArrowUp,
@@ -9,14 +10,18 @@ import {
   Plus,
   Smartphone
 } from 'lucide-react-native'
-import { triggerMediumImpact } from '../platform/haptics'
+import { triggerMediumImpact, triggerSelection } from '../platform/haptics'
 import { createTerminalLiveAccessoryInput } from '../terminal/terminal-live-accessory-input'
 import {
   getTerminalCommandKeyboardType,
   getTerminalLiveInputKeyboardType
 } from '../terminal/terminal-keyboard-type'
 import { MobileTerminalLiveInputStatus } from './MobileTerminalLiveInputStatus'
-import { MobileTerminalInputActions } from './MobileTerminalInputActions'
+import {
+  MobileTerminalInputActions,
+  MobileTerminalInputRoundButton
+} from './MobileTerminalInputActions'
+import { MobileTerminalAccessoryKey } from './MobileTerminalAccessoryKey'
 import { keepHeldPressThroughLongPress } from './held-press-long-press'
 import { isTerminalPhoneDisplayMode } from './mobile-session-route-helpers'
 import { colors } from '../theme/mobile-theme'
@@ -70,6 +75,9 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
     keyboardLift
   } = controller
   const accessoryBarKeepsKeyboard = useKeyboardPersistingTaps('always')
+  const [commandFocused, setCommandFocused] = useState(false)
+  const phoneMode = isTerminalPhoneDisplayMode(activeHandle, terminalModes)
+  const hasCommandText = bufferedTerminalDraftState.input.trim().length > 0
   return (
     !activeMarkdownTab &&
     !activeFileTab &&
@@ -85,27 +93,24 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
         <View ref={accessoryBarKeepsKeyboard} style={styles.accessoryBar}>
           {/* Why: fixed keyboard escape hatch; outside ScrollView + shortcut path so it can't scroll away or be hidden (#5106). */}
           {keyboardLift > 0 && (
-            <Pressable
-              style={({ pressed }) => [
-                styles.keyboardDismissKey,
-                pressed && styles.accessoryKeyPressed
-              ]}
-              onPress={dismissSoftwareKeyboard}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel="Dismiss keyboard"
-              accessibilityHint="Hides the software keyboard and keeps the current terminal session open."
-            >
-              <View style={styles.keyboardDismissGlyph}>
-                <KeyboardIcon size={15} color={colors.textSecondary} strokeWidth={2} />
-                <ChevronDown
-                  size={10}
-                  color={colors.textSecondary}
-                  strokeWidth={2.5}
-                  style={styles.keyboardDismissChevron}
-                />
-              </View>
-            </Pressable>
+            <View style={styles.keyboardDismissSlot}>
+              <MobileTerminalAccessoryKey
+                onPress={dismissSoftwareKeyboard}
+                accessibilityLabel="Dismiss keyboard"
+                accessibilityHint="Hides the software keyboard and keeps the current terminal session open."
+                glyph={
+                  <View style={styles.keyboardDismissGlyph}>
+                    <KeyboardIcon size={16} color={colors.textPrimary} strokeWidth={2} />
+                    <ChevronDown
+                      size={10}
+                      color={colors.textPrimary}
+                      strokeWidth={2.5}
+                      style={styles.keyboardDismissChevron}
+                    />
+                  </View>
+                }
+              />
+            </View>
           )}
           {/* Why: default tap handling makes the first accessory-key tap dismiss the keyboard and get swallowed (#5106). */}
           <ScrollView
@@ -115,37 +120,24 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
             contentContainerStyle={styles.accessoryContent}
             keyboardShouldPersistTaps="always"
           >
-            <Pressable
-              style={({ pressed }) => [
-                styles.accessoryKey,
-                pressed && styles.accessoryKeyPressed,
-                !canSend && styles.accessoryKeyDisabled
-              ]}
+            {/* The mode chips name the current state; the label says which. */}
+            <MobileTerminalAccessoryKey
+              icon={phoneMode ? Smartphone : Monitor}
+              label={phoneMode ? 'Phone' : 'Desktop'}
+              sans
               disabled={!canSend}
               onPress={() => {
                 if (activeHandle) {
                   void toggleDisplayMode(activeHandle)
                 }
               }}
-              accessibilityLabel={
-                isTerminalPhoneDisplayMode(activeHandle, terminalModes)
-                  ? 'Switch to desktop mode'
-                  : 'Switch to phone mode'
-              }
-            >
-              {isTerminalPhoneDisplayMode(activeHandle, terminalModes) ? (
-                <Monitor size={14} color={canSend ? colors.textSecondary : colors.textMuted} />
-              ) : (
-                <Smartphone size={14} color={canSend ? colors.textSecondary : colors.textMuted} />
-              )}
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [
-                styles.accessoryKey,
-                liveInputEnabled && styles.accessoryKeyActive,
-                pressed && styles.accessoryKeyPressed,
-                !canCompose && styles.accessoryKeyDisabled
-              ]}
+              accessibilityLabel={phoneMode ? 'Switch to desktop mode' : 'Switch to phone mode'}
+            />
+            <MobileTerminalAccessoryKey
+              icon={ChevronsRight}
+              label="Live"
+              sans
+              active={liveInputEnabled}
               // Why: offline, live mode is dead but the buffered box still composes — keep the escape hatch tappable (#6713).
               disabled={!canCompose}
               onPress={toggleLiveInput}
@@ -154,44 +146,21 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
                   ? 'Switch to buffered command input'
                   : 'Switch to live terminal input'
               }
-            >
-              <ChevronsRight
-                size={14}
-                color={
-                  liveInputEnabled
-                    ? colors.bgBase
-                    : canCompose
-                      ? colors.textSecondary
-                      : colors.textMuted
-                }
-              />
-            </Pressable>
+            />
+            <View style={styles.accessoryDivider} />
             {canPaste && (
-              <Pressable
-                style={({ pressed }) => [
-                  styles.accessoryKey,
-                  pressed && styles.accessoryKeyPressed,
-                  !canSend && styles.accessoryKeyDisabled
-                ]}
+              <MobileTerminalAccessoryKey
+                label="Paste"
+                sans
                 disabled={!canSend}
                 onPress={() => void handlePaste()}
                 accessibilityLabel="Paste from clipboard"
-              >
-                <Text
-                  style={[styles.accessoryKeyText, !canSend && styles.accessoryKeyTextDisabled]}
-                >
-                  Paste
-                </Text>
-              </Pressable>
+              />
             )}
             {visibleBuiltInAccessoryKeys.map((key) => (
-              <Pressable
+              <MobileTerminalAccessoryKey
                 key={key.id}
-                style={({ pressed }) => [
-                  styles.accessoryKey,
-                  pressed && styles.accessoryKeyPressed,
-                  !canSend && styles.accessoryKeyDisabled
-                ]}
+                label={key.label}
                 disabled={!canSend}
                 onPressIn={() => {
                   if (!key.repeatable) {
@@ -214,23 +183,13 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
                 }}
                 onLongPress={key.repeatable ? keepHeldPressThroughLongPress : undefined}
                 accessibilityLabel={key.accessibilityLabel ?? `Send ${key.label}`}
-              >
-                <Text
-                  style={[styles.accessoryKeyText, !canSend && styles.accessoryKeyTextDisabled]}
-                >
-                  {key.label}
-                </Text>
-              </Pressable>
+              />
             ))}
             {customKeys.map((key) => (
-              <Pressable
+              <MobileTerminalAccessoryKey
                 key={key.id}
-                style={({ pressed }) => [
-                  styles.accessoryKey,
-                  styles.customAccessoryKey,
-                  pressed && styles.accessoryKeyPressed,
-                  !canSend && styles.accessoryKeyDisabled
-                ]}
+                label={key.label}
+                custom
                 disabled={!canSend}
                 onPress={() => void handleAccessoryKey({ bytes: key.bytes })}
                 onLongPress={() => {
@@ -239,62 +198,54 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
                 }}
                 delayLongPress={400}
                 accessibilityLabel={`Send ${key.label}`}
-              >
-                <Text
-                  style={[styles.accessoryKeyText, !canSend && styles.accessoryKeyTextDisabled]}
-                >
-                  {key.label}
-                </Text>
-              </Pressable>
+                accessibilityHint="Long press to remove this shortcut"
+              />
             ))}
-            <Pressable
-              style={({ pressed }) => [styles.accessoryKey, pressed && styles.accessoryKeyPressed]}
+            <MobileTerminalAccessoryKey
+              icon={Plus}
               onPress={() => setShowCustomKeyModal(true)}
               accessibilityLabel="Add custom shortcut"
-            >
-              <Plus size={14} color={colors.textSecondary} strokeWidth={2.2} />
-            </Pressable>
+            />
           </ScrollView>
         </View>
 
         {/* Input bar */}
         {liveInputEnabled ? (
-          <View style={[styles.inputBar, styles.liveInputBar]}>
-            <Pressable
-              style={({ pressed }) => [
-                styles.liveInputFocusTarget,
-                pressed && styles.liveInputFocusTargetPressed,
-                !canSend && styles.liveInputFocusTargetDisabled
-              ]}
-              disabled={!canSend}
-              onPress={focusLiveInput}
-              accessibilityRole="button"
-              accessibilityLabel="Show keyboard for live terminal input"
-              accessibilityHint="Typed text is sent directly to the active terminal"
-            >
-              <KeyboardIcon size={16} color={colors.textSecondary} strokeWidth={2} />
-              <MobileTerminalLiveInputStatus
-                dictation={dictation}
+          <View style={styles.inputBar}>
+            <View style={[styles.inputBox, !canSend && styles.inputBoxDisabled]}>
+              <Pressable
+                style={styles.liveInputFocusTarget}
+                disabled={!canSend}
+                onPress={focusLiveInput}
+                accessibilityRole="button"
+                accessibilityLabel="Show keyboard for live terminal input"
+                accessibilityHint="Typed text is sent directly to the active terminal"
+              >
+                {({ pressed }) => (
+                  <View style={[styles.liveInputFocusRow, pressed && styles.liveInputFocusPressed]}>
+                    <KeyboardIcon size={18} color={colors.textSecondary} strokeWidth={2} />
+                    <MobileTerminalLiveInputStatus
+                      dictation={dictation}
+                      isAttaching={isAttaching}
+                      liveInputText={liveInputCapture}
+                    />
+                  </View>
+                )}
+              </Pressable>
+              <MobileTerminalInputActions
+                canSend={canSend}
                 isAttaching={isAttaching}
-                liveInputText={liveInputCapture}
+                dictation={dictation}
+                dictationMode={dictationMode}
+                dictationEnabled={dictationEnabled}
+                onAttachImage={() => void attachImage('library')}
+                onAttachFile={() => void attachImage('files')}
+                onDictationToggle={handleDictationToggle}
+                onDictationPressIn={handleDictationPressIn}
+                onDictationPressOut={handleDictationPressOut}
+                onDictationCancel={cancelDictation}
               />
-            </Pressable>
-            <MobileTerminalInputActions
-              canSend={canSend}
-              isAttaching={isAttaching}
-              dictation={dictation}
-              dictationMode={dictationMode}
-              dictationEnabled={dictationEnabled}
-              buttonStyle={styles.dictationButton}
-              activeButtonStyle={styles.dictationButtonActive}
-              disabledButtonStyle={styles.sendButtonDisabled}
-              onAttachImage={() => void attachImage('library')}
-              onAttachFile={() => void attachImage('files')}
-              onDictationToggle={handleDictationToggle}
-              onDictationPressIn={handleDictationPressIn}
-              onDictationPressOut={handleDictationPressOut}
-              onDictationCancel={cancelDictation}
-            />
+            </View>
             <TextInput
               ref={bindLiveInputField}
               style={styles.liveInputCapture}
@@ -319,59 +270,76 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
           </View>
         ) : (
           <View style={styles.inputBar}>
-            <TextInput
-              ref={bindCommandField}
-              // Why: Android caches IME inputType at mount, so toggling autocomplete must remount there; iOS updates in place.
-              key={
-                hostOs() === 'android'
-                  ? autocompleteEnabled
-                    ? 'cmd-input-ac-on'
-                    : 'cmd-input-ac-off'
-                  : 'cmd-input'
-              }
-              style={styles.textInput}
-              value={bufferedTerminalDraftState.input}
-              // Why: iOS kills active dictation/IME if JS writes a value differing from native text; store raw, normalize at send.
-              onChangeText={bufferedTerminalDraftState.setInput}
-              placeholder="Type a command…"
-              placeholderTextColor={colors.textMuted}
-              autoCapitalize="none"
-              autoCorrect={autocompleteEnabled}
-              spellCheck={autocompleteEnabled}
-              smartInsertDelete={false}
-              // Why: not autofill content, but keyboard must stay default so non-Latin IMEs remain selectable.
-              autoComplete="off"
-              keyboardType={getTerminalCommandKeyboardType(hostOs(), autocompleteEnabled)}
-              returnKeyType="send"
-              blurOnSubmit={false}
-              // Why: composing is local — an outage must not lock the field or discard typed text (#6713).
-              editable={canCompose}
-              onSubmitEditing={() => void handleSend()}
-            />
-            <MobileTerminalInputActions
-              canSend={canSend}
-              isAttaching={isAttaching}
-              dictation={dictation}
-              dictationMode={dictationMode}
-              dictationEnabled={dictationEnabled}
-              buttonStyle={styles.dictationButton}
-              activeButtonStyle={styles.dictationButtonActive}
-              disabledButtonStyle={styles.sendButtonDisabled}
-              onAttachImage={() => void attachImage('library')}
-              onAttachFile={() => void attachImage('files')}
-              onDictationToggle={handleDictationToggle}
-              onDictationPressIn={handleDictationPressIn}
-              onDictationPressOut={handleDictationPressOut}
-              onDictationCancel={cancelDictation}
-            />
-            <Pressable
-              style={[styles.sendButton, !canSend && styles.sendButtonDisabled]}
-              disabled={!canSend}
-              onPress={() => void handleSend()}
-              accessibilityLabel="Send command"
+            <View
+              style={[
+                styles.inputBox,
+                commandFocused && styles.inputBoxFocused,
+                !canCompose && styles.inputBoxDisabled
+              ]}
             >
-              <ArrowUp size={18} color={colors.textSecondary} strokeWidth={2.5} />
-            </Pressable>
+              <TextInput
+                ref={bindCommandField}
+                // Why: Android caches IME inputType at mount, so toggling autocomplete must remount there; iOS updates in place.
+                key={
+                  hostOs() === 'android'
+                    ? autocompleteEnabled
+                      ? 'cmd-input-ac-on'
+                      : 'cmd-input-ac-off'
+                    : 'cmd-input'
+                }
+                style={styles.textInput}
+                value={bufferedTerminalDraftState.input}
+                // Why: iOS kills active dictation/IME if JS writes a value differing from native text; store raw, normalize at send.
+                onChangeText={bufferedTerminalDraftState.setInput}
+                onFocus={() => setCommandFocused(true)}
+                onBlur={() => setCommandFocused(false)}
+                placeholder="Type a command…"
+                placeholderTextColor={colors.textMuted}
+                selectionColor={colors.accentBlue}
+                autoCapitalize="none"
+                autoCorrect={autocompleteEnabled}
+                spellCheck={autocompleteEnabled}
+                smartInsertDelete={false}
+                // Why: not autofill content, but keyboard must stay default so non-Latin IMEs remain selectable.
+                autoComplete="off"
+                keyboardType={getTerminalCommandKeyboardType(hostOs(), autocompleteEnabled)}
+                returnKeyType="send"
+                blurOnSubmit={false}
+                // Why: composing is local — an outage must not lock the field or discard typed text (#6713).
+                editable={canCompose}
+                onSubmitEditing={() => void handleSend()}
+              />
+              <MobileTerminalInputActions
+                canSend={canSend}
+                isAttaching={isAttaching}
+                dictation={dictation}
+                dictationMode={dictationMode}
+                dictationEnabled={dictationEnabled}
+                onAttachImage={() => void attachImage('library')}
+                onAttachFile={() => void attachImage('files')}
+                onDictationToggle={handleDictationToggle}
+                onDictationPressIn={handleDictationPressIn}
+                onDictationPressOut={handleDictationPressOut}
+                onDictationCancel={cancelDictation}
+              />
+              {/* An empty send still submits Enter, so it stays live; it lights up once there is text. */}
+              <MobileTerminalInputRoundButton
+                ready={canSend && hasCommandText}
+                soft={!hasCommandText}
+                disabled={!canSend}
+                onPress={() => {
+                  triggerSelection()
+                  void handleSend()
+                }}
+                accessibilityLabel="Send command"
+              >
+                <ArrowUp
+                  size={17}
+                  color={canSend && hasCommandText ? colors.onPrimary : colors.textSecondary}
+                  strokeWidth={2.4}
+                />
+              </MobileTerminalInputRoundButton>
+            </View>
           </View>
         )}
       </View>

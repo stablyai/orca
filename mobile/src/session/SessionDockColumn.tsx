@@ -1,5 +1,6 @@
 import { memo } from 'react'
 import { View, StyleSheet } from 'react-native'
+import { colors } from '../theme/mobile-theme'
 import { MobileSourceControlPanel } from '../source-control/MobileSourceControlPanel'
 import { MobileFileExplorerPanel } from '../files/MobileFileExplorerPanel'
 import { mobilePrSidebarStyles } from '../components/pr-sidebar/mobile-pr-sidebar-styles'
@@ -39,7 +40,14 @@ export function SessionDockColumn({
     <View style={[mobilePrSidebarStyles.dockColumn, { width: dockWidth }]}>
       {/* Dedicated drag handle over the dock's left border — a leaf overlay so the
           inner ScrollView can't intercept the gesture on Android. */}
-      <View style={styles.resizeHandle} {...panHandlers} />
+      <View
+        style={styles.resizeHandle}
+        {...panHandlers}
+        accessibilityLabel="Resize panel"
+        accessibilityHint="Drag sideways to change the panel width"
+      >
+        <View style={styles.grabber} pointerEvents="none" />
+      </View>
       <DockPanelContent
         activePanel={activePanel}
         hostId={hostId}
@@ -105,6 +113,15 @@ const styles = StyleSheet.create({
     left: 0,
     width: RESIZE_EDGE_WIDTH,
     zIndex: 20,
-    elevation: 20
+    elevation: 20,
+    justifyContent: 'center',
+    paddingLeft: 4
+  },
+  // Says the edge moves; the strip around it is what takes the drag.
+  grabber: {
+    width: 4,
+    height: 36,
+    borderRadius: 2,
+    backgroundColor: colors.fieldBorderFocused
   }
 })

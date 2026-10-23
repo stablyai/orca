@@ -1,10 +1,13 @@
-import { View, Text, Pressable, StyleSheet, Platform } from 'react-native'
-import { ChevronDown } from 'lucide-react-native'
+import { View } from 'react-native'
 import { HostKindIcon } from './HostKindIcon'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { newWorktreeFormStyles as styles } from './new-worktree-form-styles'
+import { LIST_LEADING_INSET, ListGroup } from './ui/ListGroup'
+import { ListRow } from './ui/ListRow'
+import { SectionHeader } from './ui/SectionHeader'
 
 type Selection = { label: string; detail?: string }
 
+/** The form's "Where" group: which project, and which host it runs on. */
 export function NewWorktreeProjectTargetFields({
   project,
   runTarget,
@@ -20,93 +23,33 @@ export function NewWorktreeProjectTargetFields({
 }) {
   return (
     <>
-      <View style={styles.field}>
-        <Text style={styles.label}>Project</Text>
-        <Pressable style={styles.fieldButton} onPress={onOpenProject}>
-          {projectBadgeColor ? (
-            <View style={[styles.projectDot, { backgroundColor: projectBadgeColor }]} />
-          ) : null}
-          <SelectionCopy selection={project} placeholder="Select a project" />
-          <ChevronDown size={14} color={colors.textMuted} />
-        </Pressable>
+      <View style={styles.bleed}>
+        <SectionHeader title="Where" first />
       </View>
-
-      <View style={styles.field}>
-        <Text style={styles.label}>Run on</Text>
-        <Pressable style={styles.fieldButton} onPress={onOpenRunTarget}>
-          <HostKindIcon hostId={runTarget?.hostId} size={14} />
-          <SelectionCopy selection={runTarget} placeholder="Select a run target" />
-          <ChevronDown size={14} color={colors.textMuted} />
-        </Pressable>
-      </View>
+      <ListGroup separatorInset={LIST_LEADING_INSET} style={styles.group}>
+        <ListRow
+          title="Project"
+          leading={
+            projectBadgeColor ? (
+              <View style={[styles.repoDot, { backgroundColor: projectBadgeColor }]} />
+            ) : null
+          }
+          value={project?.label ?? 'Choose'}
+          navigates
+          onPress={onOpenProject}
+          accessibilityLabel={project ? `Project, ${project.label}` : 'Choose a project'}
+        />
+        <ListRow
+          title="Run on"
+          leading={<HostKindIcon hostId={runTarget?.hostId} size={18} />}
+          value={runTarget?.label ?? 'Choose'}
+          navigates
+          // A run target belongs to a project; until one is picked there is nothing to choose.
+          disabled={project === null}
+          onPress={onOpenRunTarget}
+          accessibilityLabel={runTarget ? `Run on, ${runTarget.label}` : 'Choose where it runs'}
+        />
+      </ListGroup>
     </>
   )
 }
-
-function SelectionCopy({
-  selection,
-  placeholder
-}: {
-  selection: Selection | null
-  placeholder: string
-}) {
-  return (
-    <View style={styles.fieldButtonCopy}>
-      <Text
-        style={[styles.fieldButtonText, !selection && styles.fieldButtonPlaceholder]}
-        numberOfLines={1}
-      >
-        {selection?.label ?? placeholder}
-      </Text>
-      {selection?.detail ? (
-        <Text style={styles.fieldButtonDetail} numberOfLines={1}>
-          {selection.detail}
-        </Text>
-      ) : null}
-    </View>
-  )
-}
-
-const styles = StyleSheet.create({
-  field: {
-    marginBottom: spacing.md
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: colors.textSecondary,
-    marginBottom: spacing.xs
-  },
-  fieldButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    paddingHorizontal: spacing.md,
-    paddingVertical: Platform.OS === 'ios' ? spacing.sm + 2 : spacing.sm
-  },
-  projectDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 999
-  },
-  fieldButtonCopy: {
-    flex: 1,
-    minWidth: 0
-  },
-  fieldButtonText: {
-    fontSize: typography.bodySize,
-    color: colors.textPrimary
-  },
-  fieldButtonDetail: {
-    fontSize: typography.metaSize,
-    color: colors.textMuted,
-    marginTop: 1
-  },
-  fieldButtonPlaceholder: {
-    color: colors.textMuted
-  }
-})

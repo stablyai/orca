@@ -1,16 +1,22 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
 import { ClaudeIcon, OpenAIIcon } from '../components/AgentIcons'
 import {
   getActiveProviderRateLimits,
   getUsageBarState,
   hasActiveProviderUsage,
-  UsageBar,
   type AccountsSnapshot,
   type ProviderKey
 } from '../components/AccountUsage'
-import { colors, radii, spacing } from '../theme/mobile-theme'
+import { ListGroup, LIST_LEADING_INSET } from '../components/ui/ListGroup'
+import { ListRow } from '../components/ui/ListRow'
+import { SectionHeader } from '../components/ui/SectionHeader'
+import { colors } from '../theme/mobile-theme'
 import type { HostProfile } from '../transport/types'
 
+const PROVIDERS: readonly ProviderKey[] = ['claude', 'codex']
+const PROVIDER_LABELS: Record<ProviderKey, string> = { claude: 'Claude', codex: 'Codex' }
+
+/** Home's "Usage": one compact row per account; each opens that desktop's Accounts screen. */
 export function MobileHomeAccountUsageCards(props: {
   items: { host: HostProfile; snapshot: AccountsSnapshot }[]
   onOpen: (hostId: string) => void
@@ -18,116 +24,106 @@ export function MobileHomeAccountUsageCards(props: {
   if (props.items.length === 0) {
     return null
   }
+  const showHost = props.items.length > 1
+  const rows = props.items.flatMap(({ host, snapshot }) =>
+    PROVIDERS.flatMap((provider) => {
+      const providerSnapshot = provider === 'claude' ? snapshot.claude : snapshot.codex
+      const limits = getActiveProviderRateLimits(snapshot, provider)
+      if (providerSnapshot.accounts.length === 0 && !hasActiveProviderUsage(limits)) {
+        return []
+      }
+      const active =
+        providerSnapshot.accounts.find(
+          (account) => account.id === providerSnapshot.activeAccountId
+        ) ?? null
+      return [
+        <UsageRow
+          key={`${host.id}:${provider}`}
+          provider={provider}
+          email={active?.email ?? 'System default'}
+          hostName={showHost ? host.name : null}
+          session={getUsageBarState(limits, 'session')}
+          onPress={() => props.onOpen(host.id)}
+        />
+      ]
+    })
+  )
+  if (rows.length === 0) {
+    return null
+  }
   return (
     <>
-      <Text style={styles.sectionHeading}>Account usage</Text>
-      {props.items.map(({ host, snapshot }) => {
-        const claudeActive =
-          snapshot.claude.accounts.find(
-            (account) => account.id === snapshot.claude.activeAccountId
-          ) ?? null
-        const codexActive =
-          snapshot.codex.accounts.find(
-            (account) => account.id === snapshot.codex.activeAccountId
-          ) ?? null
-        return (
-          <Pressable
-            key={host.id}
-            style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-            onPress={() => props.onOpen(host.id)}
-          >
-            {props.items.length > 1 ? (
-              <Text style={styles.hostLabel} numberOfLines={1}>
-                {host.name}
-              </Text>
-            ) : null}
-            {(['claude', 'codex'] as ProviderKey[]).map((provider) => {
-              const active = provider === 'claude' ? claudeActive : codexActive
-              const accounts =
-                provider === 'claude' ? snapshot.claude.accounts : snapshot.codex.accounts
-              const limits = getActiveProviderRateLimits(snapshot, provider)
-              if (accounts.length === 0 && !hasActiveProviderUsage(limits)) {
-                return null
-              }
-              const sessionBar = getUsageBarState(limits, 'session')
-              const weeklyBar = getUsageBarState(limits, 'weekly')
-              return (
-                <View key={provider} style={styles.row}>
-                  <View style={styles.icon}>
-                    {provider === 'claude' ? (
-                      <ClaudeIcon size={18} />
-                    ) : (
-                      <OpenAIIcon size={18} color={colors.textPrimary} />
-                    )}
-                  </View>
-                  <View style={styles.info}>
-                    <Text style={styles.email} numberOfLines={1}>
-                      {active?.email ?? 'System default'}
-                    </Text>
-                    <View style={styles.bars}>
-                      <UsageBar
-                        label="5h"
-                        usedPercent={sessionBar.usedPercent}
-                        unavailable={sessionBar.unavailable}
-                        loading={sessionBar.loading}
-                      />
-                      <UsageBar
-                        label="7d"
-                        usedPercent={weeklyBar.usedPercent}
-                        unavailable={weeklyBar.unavailable}
-                        loading={weeklyBar.loading}
-                      />
-                    </View>
-                  </View>
-                </View>
-              )
-            })}
-          </Pressable>
-        )
-      })}
+      <SectionHeader title="Usage" />
+      <ListGroup separatorInset={LIST_LEADING_INSET}>{rows}</ListGroup>
     </>
   )
 }
 
+type BarState = ReturnType<typeof getUsageBarState>
+
+// Same consumption bands as UsageBar: green under 60, amber under 80, red from 80.
+function meterColor(used: number): string {
+  return used >= 80 ? colors.statusRed : used >= 60 ? colors.statusAmber : colors.statusGreen
+}
+
+/** One line per account: logo, provider, the 5-hour percent and a small meter, then a chevron. */
+function UsageRow(props: {
+  provider: ProviderKey
+  email: string
+  hostName: string | null
+  session: BarState
+  onPress: () => void
+}) {
+  const { session } = props
+  const used =
+    session.usedPercent == null || session.unavailable
+      ? null
+      : Math.max(0, Math.min(100, Math.round(session.usedPercent)))
+  const value = session.loading ? '…' : used == null ? '—' : `${used}%`
+  const label = [
+    `${PROVIDER_LABELS[props.provider]} usage`,
+    props.email,
+    props.hostName ? `on ${props.hostName}` : null,
+    used == null ? null : `${used}% of the 5-hour limit used`
+  ]
+    .filter(Boolean)
+    .join(', ')
+  return (
+    <ListRow
+      title={PROVIDER_LABELS[props.provider]}
+      subtitle={props.hostName ?? undefined}
+      leading={
+        props.provider === 'claude' ? (
+          <ClaudeIcon size={20} />
+        ) : (
+          <OpenAIIcon size={20} color={colors.textPrimary} />
+        )
+      }
+      value={value}
+      accessory={
+        <View style={styles.meter}>
+          {used == null ? null : (
+            <View
+              style={[styles.meterFill, { width: `${used}%`, backgroundColor: meterColor(used) }]}
+            />
+          )}
+        </View>
+      }
+      navigates
+      onPress={props.onPress}
+      accessibilityLabel={label}
+    />
+  )
+}
+
 const styles = StyleSheet.create({
-  sectionHeading: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    marginTop: spacing.xl,
-    marginBottom: spacing.sm,
-    paddingHorizontal: spacing.xs
+  meter: {
+    width: 56,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: colors.fill,
+    overflow: 'hidden',
+    flexShrink: 0
   },
-  card: {
-    backgroundColor: colors.bgPanel,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.card,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
-    gap: spacing.sm,
-    marginBottom: spacing.sm
-  },
-  cardPressed: { backgroundColor: colors.bgRaised },
-  hostLabel: {
-    fontSize: 11,
-    color: colors.textMuted,
-    fontWeight: '500',
-    textTransform: 'uppercase',
-    letterSpacing: 0.4
-  },
-  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm + 2 },
-  icon: {
-    width: 32,
-    height: 32,
-    borderRadius: 9,
-    backgroundColor: colors.bgRaised,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  info: { flex: 1, minWidth: 0, gap: 2 },
-  email: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
-  bars: { flexDirection: 'row', gap: spacing.md, marginTop: 4 }
+  meterFill: { height: '100%', borderRadius: 3 }
 })

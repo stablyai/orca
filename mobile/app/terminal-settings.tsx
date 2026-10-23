@@ -1,15 +1,26 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { View, Text, Pressable, Switch } from 'react-native'
+import { StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import Animated, {
+  runOnJS,
   useAnimatedRef,
   useAnimatedScrollHandler,
   useSharedValue
 } from 'react-native-reanimated'
 import { useRouter } from 'expo-router'
-import { ChevronLeft, ChevronRight, Smartphone, Type } from 'lucide-react-native'
+import { Monitor, Type } from 'lucide-react-native'
 import { colors, spacing } from '../src/theme/mobile-theme'
+import { NavBar } from '../src/components/ui/NavBar'
+import { ListGroup, LIST_LEADING_INSET } from '../src/components/ui/ListGroup'
+import { ListRow } from '../src/components/ui/ListRow'
+import { SectionHeader } from '../src/components/ui/SectionHeader'
+import {
+  SETTINGS_CONTENT_MAX_WIDTH,
+  SettingsFooter,
+  SettingsRowIcon,
+  SettingsSwitchRow
+} from '../src/settings/settings-screen-frame'
 import { loadHosts } from '../src/transport/host-store'
 import type { HostProfile } from '../src/transport/types'
 import { useFocusedSettingsHostClients } from '../src/transport/settings-host-client-connections'
@@ -21,7 +32,6 @@ import {
   saveTerminalAutoRestoreFitMs,
   setTerminalAutoRestoreFitMsForHost
 } from '../src/terminal/terminal-auto-restore-fit-state'
-import { terminalSettingsScreenStyles as styles } from '../src/terminal/terminal-settings-screen-styles'
 import { setTerminalSettingsScrollEnabled } from '../src/terminal/terminal-settings-scroll-lock'
 import {
   loadTerminalAutocompleteEnabled,
@@ -110,18 +120,17 @@ function HostFitRow({
   onPress: () => void
 }): React.JSX.Element {
   return (
-    <Pressable
-      style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-      onPress={onPress}
+    <ListRow
+      title={hostName}
+      subtitle={client ? autoRestoreSummary(ms) : 'Offline'}
+      leading={<SettingsRowIcon icon={Monitor} />}
+      navigates={client !== null}
       disabled={!client}
-    >
-      <Smartphone size={16} color={colors.textSecondary} />
-      <View style={styles.rowContent}>
-        <Text style={styles.rowLabel}>{hostName}</Text>
-        <Text style={styles.rowSublabel}>{autoRestoreSummary(ms)}</Text>
-      </View>
-      <ChevronRight size={16} color={colors.textMuted} />
-    </Pressable>
+      onPress={onPress}
+      accessibilityLabel={
+        client ? `${hostName}, ${autoRestoreSummary(ms)}` : `${hostName}, offline`
+      }
+    />
   )
 }
 
@@ -232,8 +241,15 @@ export default function TerminalSettingsScreen() {
   const scrollRef = useAnimatedRef<Animated.ScrollView>()
   const scrollOffsetY = useSharedValue(0)
   const scrollContentHeight = useSharedValue(0)
+  const [scrolled, setScrolled] = useState(false)
+  const scrolledFlag = useSharedValue(false)
   const scrollHandler = useAnimatedScrollHandler((event) => {
     scrollOffsetY.value = event.contentOffset.y
+    const next = event.contentOffset.y > 0
+    if (next !== scrolledFlag.value) {
+      scrolledFlag.value = next
+      runOnJS(setScrolled)(next)
+    }
   })
   // Why: imperative toggle instead of state — a re-render while a drag gesture
   // is active would rebuild the row gestures and could cancel the drag.
@@ -249,23 +265,15 @@ export default function TerminalSettingsScreen() {
   )
 
   return (
-    <GestureHandlerRootView style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
-      <View style={styles.topRow}>
-        <Pressable
-          style={styles.backButton}
-          onPress={() => router.back()}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-        >
-          <ChevronLeft size={22} color={colors.textSecondary} />
-        </Pressable>
-        <Text style={styles.heading}>Terminal</Text>
-      </View>
+    <GestureHandlerRootView style={[styles.container, { paddingTop: insets.top }]}>
+      <NavBar title="Terminal" onBack={() => router.back()} scrolled={scrolled} />
 
       <Animated.ScrollView
         ref={scrollRef}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: insets.bottom + spacing.xl }
+        ]}
         showsVerticalScrollIndicator={false}
         onScroll={scrollHandler}
         scrollEventThrottle={16}
@@ -273,87 +281,65 @@ export default function TerminalSettingsScreen() {
           scrollContentHeight.value = height
         }}
       >
-        <Text style={styles.groupHeading}>WHEN YOU LEAVE THE APP</Text>
-        <Text style={styles.groupDescription}>
-          While you&apos;re using a terminal on your phone, Orca shrinks it to fit your screen. When
-          you close the app or switch away, this controls whether it stays at phone size (so
-          interactive CLI tools don&apos;t reflow) or resizes back to your desktop. You can always
-          use Restore on the desktop banner to resize manually.
-        </Text>
+        <View style={styles.column}>
+          <SectionHeader title="When you leave the app" first />
+          <ListGroup separatorInset={LIST_LEADING_INSET}>
+            {hosts.length === 0 ? (
+              <ListRow
+                title="No paired desktops yet"
+                subtitle="Pair a desktop to choose how its terminals resize."
+                leading={<SettingsRowIcon icon={Monitor} color={colors.textMuted} />}
+              />
+            ) : (
+              hosts.map((host) => (
+                <HostFitRow
+                  key={host.id}
+                  client={hostClientsById.get(host.id) ?? null}
+                  hostName={host.name}
+                  ms={hostMs[host.id]}
+                  onPress={() => setPickerHostId(host.id)}
+                />
+              ))
+            )}
+          </ListGroup>
+          <SettingsFooter>
+            Keep terminals at phone size so CLI tools don&apos;t reflow, or resize them back to the
+            desktop.
+          </SettingsFooter>
 
-        {hosts.length === 0 ? (
-          <View style={[styles.section, styles.sectionTopGap]}>
-            <Text style={styles.emptyText}>
-              No paired desktops yet. Pair one to control terminal behavior.
-            </Text>
-          </View>
-        ) : (
-          <View style={[styles.section, styles.sectionTopGap]}>
-            {hosts.map((host, idx) => {
-              const client = hostClientsById.get(host.id) ?? null
-              return (
-                <View key={host.id}>
-                  {idx > 0 && <View style={styles.separator} />}
-                  <HostFitRow
-                    client={client}
-                    hostName={host.name}
-                    ms={hostMs[host.id]}
-                    onPress={() => setPickerHostId(host.id)}
-                  />
-                </View>
-              )
-            })}
-          </View>
-        )}
+          <SectionHeader title="Text size" />
+          <ListGroup separatorInset={LIST_LEADING_INSET}>
+            <ListRow
+              title="Text size"
+              value={textSizeSummary(textScale)}
+              leading={<SettingsRowIcon icon={Type} />}
+              navigates
+              onPress={() => setTextSizePickerOpen(true)}
+            />
+          </ListGroup>
+          <SettingsFooter>
+            Pinch a terminal to change it there. Only this phone changes.
+          </SettingsFooter>
 
-        <Text style={[styles.groupHeading, styles.inputGroupGap]}>TEXT SIZE</Text>
-        <Text style={styles.groupDescription}>
-          Scale the terminal text. Smaller sizes fit more columns with side margins; larger sizes
-          show fewer columns — drag sideways to pan. You can also pinch to zoom in the terminal
-          itself, which updates this setting. Per-device display only; doesn&apos;t change the
-          desktop terminal.
-        </Text>
-        <View style={[styles.section, styles.sectionTopGap]}>
-          <Pressable
-            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-            onPress={() => setTextSizePickerOpen(true)}
-          >
-            <Type size={16} color={colors.textSecondary} />
-            <View style={styles.rowContent}>
-              <Text style={styles.rowLabel}>Text size</Text>
-              <Text style={styles.rowSublabel}>{textSizeSummary(textScale)}</Text>
-            </View>
-            <ChevronRight size={16} color={colors.textMuted} />
-          </Pressable>
-        </View>
-
-        <Text style={[styles.groupHeading, styles.inputGroupGap]}>KEYBOARD INPUT</Text>
-        <Text style={styles.groupDescription}>
-          Autocomplete, autocorrect, and spelling suggestions apply only to buffered command input.
-          Use the double-chevron button above the keyboard to switch from live input, then edit your
-          command before tapping Send. Off by default to avoid rewriting commands, flags, or paths.
-        </Text>
-        <View style={[styles.section, styles.sectionTopGap]}>
-          <View style={styles.row}>
-            <View style={styles.rowContent}>
-              <Text style={styles.rowLabel}>Autocomplete &amp; autocorrect</Text>
-              <Text style={styles.rowSublabel}>{autocompleteEnabled ? 'On' : 'Off'}</Text>
-            </View>
-            <Switch
+          <SectionHeader title="Keyboard input" />
+          <ListGroup>
+            <SettingsSwitchRow
+              title="Autocomplete and autocorrect"
               value={autocompleteEnabled}
               onValueChange={toggleAutocomplete}
-              trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}
-              thumbColor={colors.textPrimary}
             />
-          </View>
-        </View>
+          </ListGroup>
+          <SettingsFooter>
+            Applies to buffered command input only, so commands, flags and paths stay as typed.
+          </SettingsFooter>
 
-        <TerminalShortcutSettings
-          scrollRef={scrollRef}
-          scrollOffsetY={scrollOffsetY}
-          scrollContentHeight={scrollContentHeight}
-          onDragActiveChange={handleDragActiveChange}
-        />
+          <TerminalShortcutSettings
+            scrollRef={scrollRef}
+            scrollOffsetY={scrollOffsetY}
+            scrollContentHeight={scrollContentHeight}
+            onDragActiveChange={handleDragActiveChange}
+          />
+        </View>
       </Animated.ScrollView>
 
       <PickerModal<RestoreValue>
@@ -380,3 +366,9 @@ export default function TerminalSettingsScreen() {
     </GestureHandlerRootView>
   )
 }
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.bgBase },
+  scrollContent: { paddingTop: spacing.xs },
+  column: { width: '100%', maxWidth: SETTINGS_CONTENT_MAX_WIDTH, alignSelf: 'center' }
+})

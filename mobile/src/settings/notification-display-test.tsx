@@ -1,21 +1,30 @@
 import { useEffect, useRef, useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
+import { Send, Wrench } from 'lucide-react-native'
 import { useAllHostClients } from '../transport/use-all-host-clients'
 import { loadHostCatalog } from '../transport/host-store'
 import { pushDeliveryTest } from '../notifications/mobile-push-delivery-test-operations'
 import type { RpcFailure } from '../transport/types'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { spacing } from '../theme/mobile-theme'
+import { triggerError, triggerSuccess } from '../platform/haptics'
+import { Button } from '../components/ui/Button'
+import { ListGroup, LIST_LEADING_INSET } from '../components/ui/ListGroup'
+import { ListRow } from '../components/ui/ListRow'
+import { SectionHeader } from '../components/ui/SectionHeader'
+import { SettingsFooter, SettingsRowIcon, type SettingsTone } from './settings-screen-frame'
+
+type TestResult = { tone: SettingsTone; text: string }
 
 export function NotificationDisplayTest({ onTroubleshoot }: { onTroubleshoot: () => void }) {
   const busy = useRef(false)
   const [hostIds, setHostIds] = useState<string[]>([])
   const [sending, setSending] = useState(false)
-  const [message, setMessage] = useState<string | null>(null)
+  const [message, setMessage] = useState<TestResult | null>(null)
   const clients = useAllHostClients(hostIds)
   useEffect(() => {
     void loadHostCatalog()
       .then((hosts) => setHostIds(hosts.map((host) => host.id)))
-      .catch(() => setMessage('Could not load paired desktops.'))
+      .catch(() => setMessage({ tone: 'error', text: 'Could not load paired desktops.' }))
   }, [])
   const run = async () => {
     if (busy.current) {
@@ -49,7 +58,11 @@ export function NotificationDisplayTest({ onTroubleshoot }: { onTroubleshoot: ()
         }
         const result = delivered.value
         if (result?.accepted) {
-          setMessage('Accepted by Orca’s push service. Check for the notification.')
+          triggerSuccess()
+          setMessage({
+            tone: 'success',
+            text: 'Accepted by Orca’s push service. Check for the notification.'
+          })
           return
         }
         if (result?.reason === 'not_registered') {
@@ -64,65 +77,52 @@ export function NotificationDisplayTest({ onTroubleshoot }: { onTroubleshoot: ()
       }
       throw new Error(unavailable)
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Could not send push test.')
+      triggerError()
+      setMessage({
+        tone: 'error',
+        text: error instanceof Error ? error.message : 'Could not send push test.'
+      })
     } finally {
       busy.current = false
       setSending(false)
     }
   }
   return (
-    <View style={styles.container}>
-      <Text style={styles.label}>Having trouble receiving alerts?</Text>
-      <Text style={styles.detail}>Send a test through Orca’s push service.</Text>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={sending ? 'Sending…' : 'Send test notification'}
-        disabled={sending}
-        accessibilityState={{ disabled: sending }}
-        style={({ pressed }) => [styles.button, pressed && styles.pressed]}
-        onPress={() => void run()}
-      >
-        <View>
-          <Text accessible={false} style={[styles.buttonText, styles.sizingLabel]}>
-            Send test notification
-          </Text>
-          <View pointerEvents="none" style={styles.buttonLabel}>
-            <Text accessible={false} style={styles.buttonText}>
-              {sending ? 'Sending…' : 'Send test notification'}
-            </Text>
-          </View>
+    <>
+      <SectionHeader title="Test delivery" />
+      <View style={styles.action}>
+        <Button
+          label="Send test notification"
+          icon={Send}
+          variant="secondary"
+          block
+          busy={sending}
+          accessibilityLabel={sending ? 'Sending…' : 'Send test notification'}
+          onPress={() => void run()}
+        />
+      </View>
+      {message ? (
+        <View accessibilityRole="alert">
+          <SettingsFooter tone={message.tone}>{message.text}</SettingsFooter>
         </View>
-      </Pressable>
-      <Pressable accessibilityRole="link" onPress={onTroubleshoot} style={styles.troubleshootLink}>
-        <Text style={styles.linkText}>Troubleshooting</Text>
-      </Pressable>
-      {message && (
-        <Text accessibilityRole="alert" style={styles.detail}>
-          {message}
-        </Text>
+      ) : (
+        <SettingsFooter>Sends a test through Orca’s push service.</SettingsFooter>
       )}
-    </View>
+      <View style={styles.troubleshoot}>
+        <ListGroup separatorInset={LIST_LEADING_INSET}>
+          <ListRow
+            title="Troubleshooting"
+            leading={<SettingsRowIcon icon={Wrench} />}
+            navigates
+            onPress={onTroubleshoot}
+          />
+        </ListGroup>
+      </View>
+    </>
   )
 }
+
 const styles = StyleSheet.create({
-  container: { marginTop: spacing.xl, gap: spacing.sm },
-  label: { color: colors.textPrimary, fontSize: typography.bodySize, fontWeight: '600' },
-  detail: { color: colors.textMuted, fontSize: typography.metaSize, lineHeight: 18 },
-  button: {
-    alignSelf: 'flex-start',
-    backgroundColor: colors.bgRaised,
-    borderRadius: 8,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md
-  },
-  sizingLabel: { opacity: 0 },
-  buttonLabel: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
-  troubleshootLink: { alignSelf: 'flex-start', paddingVertical: spacing.sm },
-  linkText: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    textDecorationLine: 'underline'
-  },
-  pressed: { opacity: 0.6 },
-  buttonText: { color: colors.textPrimary, fontSize: typography.metaSize, fontWeight: '600' }
+  action: { paddingHorizontal: spacing.lg },
+  troubleshoot: { marginTop: spacing.xl }
 })

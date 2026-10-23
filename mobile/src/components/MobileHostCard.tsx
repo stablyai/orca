@@ -1,15 +1,25 @@
-import { Monitor, MoreVertical } from 'lucide-react-native'
+import { ChevronRight, Ellipsis } from 'lucide-react-native'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import type { ConnectionVerdict } from '../transport/connection-health'
-import { verdictDisplayLabel } from '../transport/connection-health'
 import { mobileConnectionPathLabel } from '../transport/mobile-connection-path-label'
+import type { CompatVerdict } from '../transport/protocol-compat'
 import { useHostDisplay } from '../transport/use-host-display'
 import type { MobileConnectionPath } from '../transport/stable-logical-rpc-client'
 import type { ConnectionState, HostCatalogEntry, HostProfile } from '../transport/types'
-import { colors, radii, spacing } from '../theme/mobile-theme'
+import { colors, spacing, textStyles } from '../theme/mobile-theme'
 import { homeHostWorktreeSummary, type HostWorktreeInfo } from '../worktree/home-worktree-info'
-import { StatusDot } from './StatusDot'
+import { IconButton } from './ui/IconButton'
+import { LIST_ROW_PADDING } from './ui/ListGroup'
+import { pressTransition } from './ui/transition-styles'
+import { StatusDot, statusDotColor } from './StatusDot'
 
+function sentence(text: string): string {
+  const trimmed = text.trim()
+  const capitalised = trimmed.charAt(0).toUpperCase() + trimmed.slice(1)
+  return /[.!?…]$/.test(capitalised) ? capitalised : `${capitalised}.`
+}
+
+/** A desktop's row in Home's "Desktops" group: dot, name, one status line, the remedy, "…" and a chevron. */
 export function MobileHostCard(props: {
   host: HostProfile | HostCatalogEntry
   credentialStatus?: HostCatalogEntry['credentialStatus']
@@ -19,6 +29,8 @@ export function MobileHostCard(props: {
   // Why: the card owns the fresh/stale/unavailable wording so no caller can re-gate the counts
   // away (STA-3123 shipped that bug once already).
   worktreeInfo?: HostWorktreeInfo
+  /** The desktop's protocol verdict once it has answered status.get; blocked reads "Update needed". */
+  compatVerdict?: CompatVerdict
   onPress: () => void
   onLongPress: () => void
   onOpenActions: () => void
@@ -26,176 +38,152 @@ export function MobileHostCard(props: {
   const credentialUnavailable = props.credentialStatus === 'temporarily-unavailable'
   const credentialMissing = props.credentialStatus === 'missing'
   const connected = props.state === 'connected' && !credentialUnavailable && !credentialMissing
-  const isError =
-    credentialMissing || ['warning', 'unreachable', 'auth-failed'].includes(props.verdict.kind)
-  const statusLabel = credentialMissing
-    ? 'Pairing invalid'
-    : credentialUnavailable
-      ? 'Pairing temporarily unavailable'
-      : verdictDisplayLabel(props.verdict)
+  const compat = props.compatVerdict
+  const updateNeeded = connected && compat?.kind === 'blocked'
+  // Why: one verdict feeds both the dot and the text, so a warning stays amber in both.
   const statusVerdict: ConnectionVerdict = credentialMissing
-    ? { kind: 'auth-failed', label: statusLabel }
+    ? { kind: 'auth-failed', label: 'Pairing invalid' }
     : credentialUnavailable
-      ? { kind: 'warning', label: statusLabel }
-      : props.verdict
-  const worktreeSummary = homeHostWorktreeSummary(props.worktreeInfo)
-  const display = useHostDisplay(props.host)
-  const descriptorText = display.descriptorLine
+      ? { kind: 'warning', label: 'Pairing temporarily unavailable' }
+      : updateNeeded
+        ? { kind: 'warning', label: 'Update needed' }
+        : props.verdict
+  // The short label; the remedy goes on its own wrapping line so it is never the part cut off.
+  const statusLabel = statusVerdict.kind === 'auth-failed' ? 'Pairing invalid' : statusVerdict.label
+  const statusColor =
+    connected && statusVerdict.kind === 'normal'
+      ? colors.textSecondary
+      : statusDotColor(props.state, statusVerdict)
+  const worktreeSummary =
+    connected && !updateNeeded ? homeHostWorktreeSummary(props.worktreeInfo) : null
   const connectionPathLabel =
-    !credentialMissing && !credentialUnavailable && connected
-      ? mobileConnectionPathLabel(props.path)
-      : null
-  const discoveryHint =
-    props.verdict.kind === 'unreachable' && !props.host.relay
-      ? 'Update desktop Orca and sign in to connect from anywhere'
-      : null
-  const credentialHint = credentialMissing
-    ? 'Tap to re-pair with your desktop'
-    : credentialUnavailable
-      ? 'Unlock your phone, then tap to retry'
-      : null
-  // The verdict's own second line (what to check on the desktop); credential copy wins.
-  const verdictDetail =
-    credentialHint === null && 'detail' in props.verdict ? (props.verdict.detail ?? null) : null
+    connected && !updateNeeded ? mobileConnectionPathLabel(props.path) : null
+  const display = useHostDisplay(props.host)
+  const remedy = hostRowRemedy({
+    credentialMissing,
+    credentialUnavailable,
+    compat: updateNeeded ? compat : undefined,
+    verdict: props.verdict,
+    hasRelay: Boolean(props.host.relay)
+  })
+  const details = [worktreeSummary, connectionPathLabel].filter((part): part is string =>
+    Boolean(part)
+  )
   const accessibilityLabel = [
     `Open ${display.title}`,
-    descriptorText,
+    display.descriptorLine,
     statusLabel,
     connectionPathLabel?.replace(' · ', ' via '),
-    connected ? worktreeSummary?.replace(' · ', ', ') : null,
-    discoveryHint,
-    credentialHint,
-    verdictDetail
+    worktreeSummary?.replace(' · ', ', '),
+    remedy
   ]
     .filter(Boolean)
     .join(', ')
+
   return (
-    <View style={styles.card}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={accessibilityLabel}
-        style={({ pressed }) => [styles.cardMain, pressed && styles.cardPressed]}
-        onPress={props.onPress}
-        onLongPress={props.onLongPress}
-        delayLongPress={400}
-      >
-        <View style={styles.icon}>
-          <Monitor size={20} color={connected ? colors.textPrimary : colors.textSecondary} />
-        </View>
-        <View style={styles.main}>
-          <Text
-            style={[styles.name, !connected && { color: colors.textSecondary }]}
-            numberOfLines={1}
-          >
-            {display.title}
-          </Text>
-          {descriptorText ? (
-            <Text style={styles.platformText} numberOfLines={1}>
-              {descriptorText}
-            </Text>
-          ) : null}
-          <View style={styles.meta}>
-            <StatusDot state={props.state} verdict={statusVerdict} />
-            <Text
-              style={[
-                styles.metaText,
-                isError && { color: colors.statusRed },
-                credentialUnavailable && { color: colors.statusAmber }
-              ]}
-              numberOfLines={1}
-            >
-              {statusLabel}
-              {connectionPathLabel ? ` · ${connectionPathLabel}` : ''}
-            </Text>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityHint="Touch and hold for actions"
+      onPress={props.onPress}
+      onLongPress={props.onLongPress}
+      delayLongPress={400}
+    >
+      {({ pressed }) => (
+        <View
+          style={[
+            styles.row,
+            pressed && styles.pressed,
+            pressed ? pressTransition.pressed : pressTransition.rest
+          ]}
+        >
+          <View style={styles.leading}>
+            <StatusDot state={props.state} verdict={statusVerdict} size={10} />
           </View>
-          {connected && worktreeSummary ? (
-            <Text style={styles.worktreeMetaText} numberOfLines={1}>
-              {worktreeSummary}
+          <View style={styles.main}>
+            <Text style={styles.name} numberOfLines={1}>
+              {display.title}
             </Text>
-          ) : null}
-          {discoveryHint ? (
-            <Text style={styles.discoveryHint} numberOfLines={2}>
-              {discoveryHint}
+            <Text style={styles.status} numberOfLines={2}>
+              <Text style={{ color: statusColor }}>{statusLabel}</Text>
+              {details.length > 0 ? ` · ${details.join(' · ')}` : ''}
             </Text>
-          ) : null}
-          {credentialHint ? (
-            <Text style={styles.discoveryHint} numberOfLines={2}>
-              {credentialHint}
-            </Text>
-          ) : null}
-          {verdictDetail ? (
-            <Text style={styles.discoveryHint} numberOfLines={2}>
-              {verdictDetail}
-            </Text>
-          ) : null}
+            {remedy ? <Text style={styles.remedy}>{remedy}</Text> : null}
+          </View>
+          <IconButton
+            icon={Ellipsis}
+            iconSize={18}
+            iconColor={colors.textSecondary}
+            accessibilityLabel={`Actions for ${display.title}`}
+            onPress={props.onOpenActions}
+          />
+          <ChevronRight size={16} color={colors.textMuted} strokeWidth={2.2} />
         </View>
-      </Pressable>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`Actions for ${display.title}`}
-        hitSlop={8}
-        style={({ pressed }) => [styles.actionButton, pressed && styles.actionButtonPressed]}
-        onPress={props.onOpenActions}
-      >
-        <MoreVertical size={18} color={colors.textSecondary} />
-      </Pressable>
-    </View>
+      )}
+    </Pressable>
   )
 }
 
+/** What to do about the row's state, in full sentences; null when nothing is wrong. */
+function hostRowRemedy(args: {
+  credentialMissing: boolean
+  credentialUnavailable: boolean
+  compat: CompatVerdict | undefined
+  verdict: ConnectionVerdict
+  hasRelay: boolean
+}): string | null {
+  if (args.credentialMissing) {
+    return 'Tap to re-pair with your desktop.'
+  }
+  if (args.credentialUnavailable) {
+    return 'Unlock your phone, then tap to retry.'
+  }
+  if (args.compat?.kind === 'blocked') {
+    return args.compat.reason === 'mobile-too-old'
+      ? 'Update Orca Mobile to use this desktop.'
+      : 'Update Orca on this desktop to connect.'
+  }
+  const { verdict } = args
+  if (verdict.kind === 'auth-failed') {
+    return 'Re-pair with your desktop.'
+  }
+  if (verdict.kind !== 'warning' && verdict.kind !== 'unreachable') {
+    return null
+  }
+  const parts = [verdict.hint, verdict.detail].filter((part): part is string => Boolean(part))
+  if (verdict.kind === 'unreachable' && !args.hasRelay) {
+    parts.push('Update desktop Orca and sign in to connect from anywhere')
+  }
+  return parts.length > 0 ? parts.map(sentence).join(' ') : null
+}
+
+// The title line's height, so the dot centres on the name.
+const TITLE_LINE = textStyles.body.lineHeight
+
 const styles = StyleSheet.create({
-  card: {
+  row: {
+    minHeight: 64,
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: radii.card,
-    backgroundColor: colors.bgPanel,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    overflow: 'hidden'
+    gap: spacing.md,
+    paddingLeft: LIST_ROW_PADDING,
+    paddingRight: LIST_ROW_PADDING - 4,
+    paddingVertical: spacing.md
   },
-  cardMain: {
-    flex: 1,
-    minWidth: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingLeft: spacing.md,
-    paddingVertical: 12
-  },
-  cardPressed: { backgroundColor: colors.bgRaised },
-  icon: {
-    width: 46,
-    height: 46,
-    borderRadius: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bgRaised,
-    marginRight: 14
-  },
-  main: { flex: 1, minWidth: 0, marginRight: spacing.sm },
-  name: { color: colors.textPrimary, fontSize: 15, fontWeight: '600', lineHeight: 20 },
-  platformText: { color: colors.textSecondary, fontSize: 12, lineHeight: 16 },
-  meta: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3, minWidth: 0 },
-  metaText: { flex: 1, fontSize: 12, color: colors.textSecondary },
-  worktreeMetaText: {
-    marginTop: 2,
-    fontSize: 12,
-    color: colors.textMuted
-  },
-  discoveryHint: {
-    marginTop: spacing.xs,
-    fontSize: 11,
-    lineHeight: 15,
-    color: colors.textMuted
-  },
-  actionButton: {
-    width: 40,
-    height: 40,
-    marginHorizontal: spacing.xs,
-    borderRadius: radii.row,
+  pressed: { backgroundColor: colors.fill },
+  leading: {
+    width: 28,
+    height: TITLE_LINE,
+    alignSelf: 'flex-start',
     alignItems: 'center',
     justifyContent: 'center'
   },
-  actionButtonPressed: {
-    backgroundColor: colors.bgRaised
-  }
+  main: { flex: 1, minWidth: 0, gap: 2 },
+  name: { ...textStyles.body, fontWeight: '500', color: colors.textPrimary },
+  status: {
+    ...textStyles.subhead,
+    color: colors.textSecondary,
+    fontVariant: ['tabular-nums']
+  },
+  remedy: { ...textStyles.footnote, color: colors.textMuted, marginTop: 2 }
 })

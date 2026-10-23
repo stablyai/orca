@@ -7,9 +7,7 @@ import {
   View,
   Text,
   ScrollView,
-  Pressable,
   Platform,
-  ActivityIndicator,
   type ListRenderItem
 } from 'react-native'
 import { Copy, MessageSquare, Send } from 'lucide-react-native'
@@ -34,6 +32,8 @@ import type {
 import { DiffLineRow } from './MobileSessionDiffLineRow'
 import { sendableMobileDiffComments } from './mobile-diff-comments'
 import { MobileLoadErrorState } from '../components/MobileLoadErrorState'
+import { Button } from '../components/ui/Button'
+import { StateView } from '../components/ui/StateView'
 
 type FileReaderProps = {
   doc: FileDocState | undefined
@@ -184,11 +184,7 @@ function FileReaderDocument({
   }, [doc, syntaxLanguage])
 
   if (!doc || doc.status === 'loading') {
-    return (
-      <View style={styles.markdownState}>
-        <ActivityIndicator size="small" color={colors.textSecondary} />
-      </View>
-    )
+    return <StateView loading title="Loading file…" />
   }
   if (doc.status === 'error') {
     return <MobileLoadErrorState message={doc.message} />
@@ -212,7 +208,7 @@ function FileReaderDocument({
         {diffCommentActions ? (
           <View style={styles.diffNotesToolbar}>
             <View style={styles.diffNotesTitleRow}>
-              <MessageSquare size={14} color={colors.textSecondary} strokeWidth={2.2} />
+              <MessageSquare size={16} color={colors.textSecondary} strokeWidth={2.1} />
               <Text style={styles.diffNotesTitle}>
                 {commentCount === 0
                   ? 'No review notes'
@@ -220,30 +216,23 @@ function FileReaderDocument({
               </Text>
             </View>
             <View style={styles.diffNotesActions}>
-              <Pressable
-                style={[
-                  styles.diffNotesActionButton,
-                  !canCopyNotes && styles.diffCommentButtonDisabled
-                ]}
+              <Button
+                label="Copy"
+                icon={Copy}
+                size="compact"
+                variant="plain"
                 disabled={!canCopyNotes}
                 onPress={() => void diffCommentActions.onCopyAll()}
                 accessibilityLabel="Copy review notes"
-              >
-                <Copy size={13} color={colors.textSecondary} strokeWidth={2.2} />
-                <Text style={styles.diffNotesActionText}>Copy</Text>
-              </Pressable>
-              <Pressable
-                style={[
-                  styles.diffNotesActionButton,
-                  !canSendNotes && styles.diffCommentButtonDisabled
-                ]}
+              />
+              <Button
+                label="Send"
+                icon={Send}
+                size="compact"
                 disabled={!canSendNotes}
                 onPress={diffCommentActions.onSendAll}
                 accessibilityLabel="Send review notes to AI"
-              >
-                <Send size={13} color={colors.textSecondary} strokeWidth={2.2} />
-                <Text style={styles.diffNotesActionText}>Send</Text>
-              </Pressable>
+              />
             </View>
           </View>
         ) : null}

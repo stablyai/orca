@@ -2,7 +2,8 @@ import { memo } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import { withoutNativeChatVisualDirectiveLines } from '../../../src/shared/native-chat-visual-directive'
-import { colors, spacing } from '../theme/mobile-theme'
+import { colors, MIN_TOUCH_TARGET, radii, spacing, textStyles } from '../theme/mobile-theme'
+import { pressTransition } from './ui/transition-styles'
 import {
   agentDisplayLabel,
   agentDotState,
@@ -14,7 +15,7 @@ import { MobileAgentIcon } from './MobileAgentIcon'
 import type { AgentChildRowModel } from '../../../src/shared/agent-child-row-model'
 import { mobileAgentChildRowText } from '../session/mobile-agent-child-row-text'
 
-const INDENT_PER_DEPTH = 14
+const INDENT_PER_DEPTH = 16
 
 type Props = {
   agent: RuntimeWorktreeAgentRow
@@ -45,7 +46,10 @@ function WorktreeAgentRowComponent({
   const reply = agent.lastAssistantMessage
   const label = agentDisplayLabel(
     reply
-      ? { ...agent, lastAssistantMessage: withoutNativeChatVisualDirectiveLines(reply) }
+      ? {
+          ...agent,
+          lastAssistantMessage: withoutNativeChatVisualDirectiveLines(reply)
+        }
       : agent,
     now
   )
@@ -53,15 +57,19 @@ function WorktreeAgentRowComponent({
   const timeAt = childRow ? childRow.firstObservedAt : agentRowTimeAt(agent)
   const ts = childRow && timeAt <= 0 ? '' : formatTimeAgo(timeAt, now)
 
+  const needsYou = dotState === 'blocked' || dotState === 'waiting'
   const content = (
-    <View style={[styles.row, { paddingLeft: depth * INDENT_PER_DEPTH }]}>
-      <AgentStateDot state={dotState} />
+    <View style={[styles.row, childRow && styles.rowPressable]}>
+      <AgentStateDot state={dotState} size="regular" />
       {/* Agent identity logo (Claude/Codex/…), matching the desktop sidebar's
           agent icons instead of a two-letter text code. */}
       {!childRow && agent.agentType ? (
-        <MobileAgentIcon agentId={agent.agentType} size={13} />
+        <MobileAgentIcon agentId={agent.agentType} size={14} />
       ) : null}
-      <Text style={[styles.label, unvisited && styles.labelUnvisited]} numberOfLines={1}>
+      <Text
+        style={[styles.label, unvisited && styles.labelUnvisited, needsYou && styles.labelNeedsYou]}
+        numberOfLines={1}
+      >
         {childText ? (
           <>
             {childText.lead}
@@ -71,22 +79,31 @@ function WorktreeAgentRowComponent({
           label
         )}
       </Text>
-      <Text style={styles.time}>{ts}</Text>
+      {ts ? <Text style={styles.time}>{ts}</Text> : null}
     </View>
   )
+  const indent = { paddingLeft: depth * INDENT_PER_DEPTH }
   return childRow ? (
-    <Pressable
-      disabled={isReadOnly || !onPress}
-      accessibilityRole="button"
-      onPress={(event) => {
-        event.stopPropagation()
-        onPress?.(agent.paneKey)
-      }}
-    >
-      {content}
-    </Pressable>
+    <View style={indent}>
+      <Pressable
+        disabled={isReadOnly || !onPress}
+        accessibilityRole="button"
+        accessibilityLabel={childText ? childText.lead : label}
+        onPress={(event) => {
+          event.stopPropagation()
+          onPress?.(agent.paneKey)
+        }}
+        style={({ pressed }) => [
+          styles.pressable,
+          pressed && styles.pressed,
+          pressed ? pressTransition.pressed : pressTransition.rest
+        ]}
+      >
+        {content}
+      </Pressable>
+    </View>
   ) : (
-    content
+    <View style={indent}>{content}</View>
   )
 }
 
@@ -96,20 +113,31 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
-    marginTop: 3
+    gap: 6,
+    minHeight: 20
   },
+  // A child row opens its pane, so it gets a full touch box and a pressed fill.
+  rowPressable: { minHeight: MIN_TOUCH_TARGET },
+  pressable: {
+    marginHorizontal: -spacing.sm,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radii.field
+  },
+  pressed: { backgroundColor: colors.fill },
   label: {
+    ...textStyles.subhead,
     flex: 1,
-    fontSize: 11,
-    color: colors.textMuted
+    minWidth: 0,
+    color: colors.textSecondary
   },
   labelUnvisited: {
     color: colors.textPrimary,
-    fontWeight: '600'
+    fontWeight: '500'
   },
+  labelNeedsYou: { color: colors.statusAmber },
   time: {
-    fontSize: 10,
-    color: colors.textMuted
+    ...textStyles.footnote,
+    color: colors.textMuted,
+    fontVariant: ['tabular-nums']
   }
 })

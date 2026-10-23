@@ -1,10 +1,16 @@
 import { memo, useRef, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { ShieldQuestion } from 'lucide-react-native'
 import { approvalBlockedPathToShow } from '../../../src/shared/agent-session-approval-blocked-path'
 import { MobileNativeChatCardHeaderAction } from './MobileNativeChatCardHeaderAction'
 import { MobileMarkdown } from '../components/MobileMarkdown'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { colors, spacing, typography } from '../theme/mobile-theme'
+import { Button } from '../components/ui/Button'
+import { triggerSuccess } from '../platform/haptics'
+import {
+  MobileNativeChatPromptCardFrame,
+  promptCardStyles
+} from './MobileNativeChatPromptCardFrame'
 import {
   isNewerApprovalSubject,
   isPlanApprovalSubject
@@ -12,8 +18,8 @@ import {
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 
 // Renders a detected agent permission ask as a card with tappable options.
-// The first option is treated as the primary (allow) action and gets a filled
-// accent button so the affirmative choice reads as distinct from the rest.
+// The first option is treated as the primary (allow) action and gets the card's one filled
+// button so the affirmative choice reads as distinct from the rest.
 function MobileNativeChatPermissionImpl({
   permission,
   onRespond,
@@ -26,7 +32,7 @@ function MobileNativeChatPermissionImpl({
   /** Fold the card to a strip and free Send, writing nothing. */
   onCollapse?: () => void
 }): React.JSX.Element {
-  const [submitting, setSubmitting] = useState(false)
+  const [submitting, setSubmitting] = useState<string | null>(null)
   const submittingRef = useRef(false)
   // A newer Orca's subject: its detail is shown, and only the card's cancel answers.
   const newerSubject = isNewerApprovalSubject(permission.subject)
@@ -35,57 +41,45 @@ function MobileNativeChatPermissionImpl({
       return
     }
     submittingRef.current = true
-    setSubmitting(true)
+    setSubmitting(send)
     const accepted = await onRespond(send)
-    if (!accepted) {
+    if (accepted) {
+      triggerSuccess()
+    } else {
       submittingRef.current = false
-      setSubmitting(false)
+      setSubmitting(null)
     }
   }
   return (
-    <View testID="native-chat-approval-card" style={styles.card}>
-      <View style={styles.header}>
-        <ShieldQuestion size={16} color={colors.accentBlue} strokeWidth={2} />
-        <Text
-          testID="native-chat-approval-title"
-          style={styles.title}
-          numberOfLines={2}
-          ellipsizeMode="tail"
-        >
-          {permission.title}
-        </Text>
+    <MobileNativeChatPromptCardFrame
+      testID="native-chat-approval-card"
+      icon={ShieldQuestion}
+      title={permission.title}
+      titleTestID="native-chat-approval-title"
+      headerAction={
         <MobileNativeChatCardHeaderAction
           prompt={permission.prompt}
           onCancel={onCancel}
           onCollapse={onCollapse}
-          disabled={submitting}
+          disabled={submitting !== null}
         />
-      </View>
+      }
+    >
       <MobileNativeChatPermissionContext permission={permission} newerSubject={newerSubject} />
       <View testID="native-chat-approval-actions" style={styles.options}>
-        {permission.options.map((option, index) => {
-          const isPrimary = index === 0
-          return (
-            <Pressable
-              key={`${option.send}:${option.label}`}
-              style={({ pressed }) => [
-                styles.option,
-                isPrimary ? styles.optionPrimary : styles.optionSecondary,
-                pressed && !submitting && styles.optionPressed,
-                newerSubject && styles.disabled
-              ]}
-              hitSlop={6}
-              onPress={() => respond(option.send)}
-              disabled={submitting || newerSubject}
-            >
-              <Text style={[styles.optionText, isPrimary && styles.optionTextPrimary]}>
-                {option.label}
-              </Text>
-            </Pressable>
-          )
-        })}
+        {permission.options.map((option, index) => (
+          <Button
+            key={`${option.send}:${option.label}`}
+            label={option.label}
+            variant={index === 0 ? 'primary' : 'secondary'}
+            size="compact"
+            busy={submitting === option.send}
+            disabled={(submitting !== null && submitting !== option.send) || newerSubject}
+            onPress={() => void respond(option.send)}
+          />
+        ))}
       </View>
-    </View>
+    </MobileNativeChatPromptCardFrame>
   )
 }
 
@@ -148,45 +142,14 @@ function MobileNativeChatPermissionContext({
 }
 
 const styles = StyleSheet.create({
-  card: {
-    marginHorizontal: spacing.lg,
-    marginVertical: spacing.sm,
-    padding: spacing.md,
-    gap: spacing.sm,
-    borderRadius: radii.card,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel,
-    flexShrink: 1,
-    minHeight: 0
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    flexShrink: 0
-  },
-  title: {
-    flex: 1,
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
-  },
-  detail: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    lineHeight: typography.metaSize + 5
-  },
+  detail: promptCardStyles.detail,
+  contextLabel: promptCardStyles.detailLabel,
   planFile: {
     marginTop: spacing.sm,
     color: colors.textSecondary,
     fontFamily: typography.monoFamily,
-    fontSize: typography.metaSize,
-    lineHeight: typography.metaSize + 5
-  },
-  contextLabel: {
-    color: colors.textPrimary,
-    fontWeight: '600'
+    fontSize: 13,
+    lineHeight: 18
   },
   contentScroll: {
     maxHeight: 240,
@@ -199,36 +162,7 @@ const styles = StyleSheet.create({
   options: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.sm,
+    columnGap: spacing.sm,
     flexShrink: 0
-  },
-  option: {
-    minHeight: 44,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.button
-  },
-  optionPrimary: {
-    backgroundColor: colors.accentBlue
-  },
-  optionSecondary: {
-    backgroundColor: colors.bgRaised,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle
-  },
-  optionPressed: {
-    opacity: 0.7
-  },
-  disabled: {
-    opacity: 0.5
-  },
-  optionText: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
-  },
-  optionTextPrimary: {
-    color: colors.onAccent
   }
 })

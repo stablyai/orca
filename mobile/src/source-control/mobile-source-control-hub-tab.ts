@@ -12,7 +12,7 @@ export const SOURCE_CONTROL_HUB_TABS: readonly SourceControlHubTab[] = [
 
 export const SOURCE_CONTROL_HUB_TAB_LABELS: Record<SourceControlHubTab, string> = {
   changes: 'Changes',
-  pr: 'Pull Request',
+  pr: 'Pull request',
   history: 'Commits'
 }
 

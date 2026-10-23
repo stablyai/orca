@@ -9,8 +9,6 @@ import {
   loadMobileOnboardingSteps,
   mobileOnboardingDestination
 } from '../onboarding/mobile-onboarding-plan'
-import { totalHomeStats, type HomeStatsRow } from '../stats/home-stats-total'
-import type { TaskProvider } from '../../../src/shared/task-providers'
 import {
   selectConnectableHostProfiles,
   sortHostsByLastConnected
@@ -23,22 +21,35 @@ import {
   LAST_VISITED_WORKTREE_STORAGE_KEY,
   readLastVisitedWorktreeRecord
 } from '../worktree/last-visited-worktree-repo'
-import { selectHomeResumeCard } from '../worktree/home-resume-card'
 import {
-  fetchMobileHomeAccounts,
-  fetchMobileHomeStats,
-  fetchMobileHomeTaskProviders
-} from './mobile-home-host-requests'
+  selectHomeJumpBackIn,
+  selectHomeNeedsYou,
+  type HomeResumeCardInput
+} from '../worktree/home-resume-card'
+import { fetchMobileHomeAccounts } from './mobile-home-host-requests'
 import { projectHomeHostConnections } from './home-host-connection-projection'
 import { useMobileHomeHostConnections } from './use-mobile-home-host-connections'
+
+// Why: who is waiting and who is working are live claims; only this session's fetch may make them.
+function withoutLiveActivity(
+  byHost: Record<string, HostWorktreeInfo>
+): Record<string, HostWorktreeInfo> {
+  return Object.fromEntries(
+    Object.entries(byHost).map(([hostId, info]) => [
+      hostId,
+      { ...info, permissionWorktrees: undefined, workingAgentCount: undefined }
+    ])
+  )
+}
 
 export function useMobileHomeData() {
   const router = useRouter()
   const [hostCatalog, setHostCatalog] = useState<HostCatalogEntry[]>([])
-  const [statsByHost, setStatsByHost] = useState<Record<string, HomeStatsRow>>({})
+  // Why: the catalog starts empty, so without this a paired user sees the first-run screen until
+  // the secure-store read lands.
+  const [hostCatalogLoaded, setHostCatalogLoaded] = useState(false)
   const [worktreeInfo, setWorktreeInfo] = useState<Record<string, HostWorktreeInfo>>({})
   const [accountsByHost, setAccountsByHost] = useState<Record<string, AccountsSnapshot>>({})
-  const [taskProvidersByHost, setTaskProvidersByHost] = useState<Record<string, TaskProvider[]>>({})
   const [lastVisited, setLastVisited] = useState<{ hostId: string; worktreeId: string } | null>(
     null
   )
@@ -46,10 +57,8 @@ export function useMobileHomeData() {
   const hydratedRef = useRef(false)
   const hosts = useMemo(() => selectConnectableHostProfiles(hostCatalog), [hostCatalog])
   const connections = useMobileHomeHostConnections(hosts, hostCatalog, {
-    setStats: setStatsByHost,
     setWorktreeInfo,
-    setAccounts: setAccountsByHost,
-    setTaskProviders: setTaskProvidersByHost
+    setAccounts: setAccountsByHost
   })
   const allClientsRef = useRef(connections.allClients)
 
@@ -64,14 +73,20 @@ export function useMobileHomeData() {
         return
       }
       setWorktreeInfo((previous) =>
-        Object.keys(previous).length > 0 ? previous : snapshot.worktreeInfo
+        Object.keys(previous).length > 0 ? previous : withoutLiveActivity(snapshot.worktreeInfo)
       )
       setAccountsByHost((previous) =>
         Object.keys(previous).length > 0 ? previous : snapshot.accountsByHost
       )
       for (const [hostId, info] of Object.entries(snapshot.worktreeInfo)) {
-        if (info.lastActiveWorktree) {
-          setCachedWorktrees(hostId, [info.lastActiveWorktree])
+        const remembered = [
+          ...(info.lastActiveWorktree ? [info.lastActiveWorktree] : []),
+          ...(info.recentWorktrees ?? []).filter(
+            (worktree) => worktree.worktreeId !== info.lastActiveWorktree?.worktreeId
+          )
+        ]
+        if (remembered.length > 0) {
+          setCachedWorktrees(hostId, remembered)
         }
       }
     })
@@ -93,20 +108,28 @@ export function useMobileHomeData() {
   useFocusEffect(
     useCallback(() => {
       let stale = false
-      void loadHostCatalog().then(async (catalog) => {
-        if (stale) {
-          return
-        }
-        setHostCatalog(catalog)
-        if (catalog.length === 0 || onboardingCheckedRef.current) {
-          return
-        }
-        onboardingCheckedRef.current = true
-        const steps = await loadMobileOnboardingSteps()
-        if (!stale && steps.length > 0) {
-          router.replace(mobileOnboardingDestination(steps))
-        }
-      })
+      void loadHostCatalog()
+        .then(async (catalog) => {
+          if (stale) {
+            return
+          }
+          setHostCatalog(catalog)
+          setHostCatalogLoaded(true)
+          if (catalog.length === 0 || onboardingCheckedRef.current) {
+            return
+          }
+          onboardingCheckedRef.current = true
+          const steps = await loadMobileOnboardingSteps()
+          if (!stale && steps.length > 0) {
+            router.replace(mobileOnboardingDestination(steps))
+          }
+        })
+        .catch(() => {
+          // An unreadable catalog shows what it always did, the first-run screen, not a spinner.
+          if (!stale) {
+            setHostCatalogLoaded(true)
+          }
+        })
       void AsyncStorage.getItem(LAST_VISITED_WORKTREE_STORAGE_KEY).then((raw) => {
         if (!stale) {
           setLastVisited(readLastVisitedWorktreeRecord(raw))
@@ -114,15 +137,8 @@ export function useMobileHomeData() {
       })
       for (const entry of allClientsRef.current) {
         if (entry.client.getState() === 'connected') {
-          fetchMobileHomeStats(entry.client, entry.hostId, setStatsByHost, () => stale)
           void fetchHomeHostWorktreeInfo(entry.client, entry.hostId, setWorktreeInfo, () => stale)
           fetchMobileHomeAccounts(entry.client, entry.hostId, setAccountsByHost, () => stale)
-          fetchMobileHomeTaskProviders(
-            entry.client,
-            entry.hostId,
-            setTaskProvidersByHost,
-            () => stale
-          )
         }
       }
       return () => {
@@ -133,19 +149,28 @@ export function useMobileHomeData() {
 
   const sortedHosts = useMemo(() => sortHostsByLastConnected(hosts), [hosts])
   const sortedHostCatalog = useMemo(() => sortHostsByLastConnected(hostCatalog), [hostCatalog])
-  const hostIds = useMemo(() => hosts.map((host) => host.id), [hosts])
-  const stats = useMemo(() => totalHomeStats(statsByHost, hostIds), [statsByHost, hostIds])
-  const resumeCard = useMemo(
-    () =>
-      selectHomeResumeCard({
-        hosts: sortedHosts,
-        hostStates: connections.hostStates,
-        worktreeInfo,
-        lastVisited,
-        cachedWorktrees: (hostId) => getCachedWorktrees(hostId) as HomeWorktreeSummary[] | null
-      }),
-    [sortedHosts, connections.hostStates, worktreeInfo, lastVisited]
-  )
+  const { needsYou, jumpBackIn, workingAgentCount } = useMemo(() => {
+    const input: HomeResumeCardInput = {
+      hosts: sortedHosts,
+      hostStates: connections.hostStates,
+      worktreeInfo,
+      lastVisited,
+      cachedWorktrees: (hostId) => getCachedWorktrees(hostId) as HomeWorktreeSummary[] | null
+    }
+    const waiting = selectHomeNeedsYou(input)
+    let working = 0
+    for (const host of sortedHosts) {
+      const info = worktreeInfo[host.id]
+      if (connections.hostStates[host.id] === 'connected' && info && !info.catalogUnavailable) {
+        working += info.workingAgentCount ?? 0
+      }
+    }
+    return {
+      needsYou: waiting,
+      jumpBackIn: selectHomeJumpBackIn(input, waiting),
+      workingAgentCount: working
+    }
+  }, [sortedHosts, connections.hostStates, worktreeInfo, lastVisited])
   const accountsHosts = useMemo(() => {
     const items: { host: HostProfile; snapshot: AccountsSnapshot }[] = []
     for (const host of sortedHosts) {
@@ -174,13 +199,14 @@ export function useMobileHomeData() {
     accountsHosts,
     connectedHosts,
     hostCatalog,
+    hostCatalogLoaded,
     hostConnections,
-    resumeCard,
+    jumpBackIn,
+    needsYou,
     router,
     setHostCatalog,
     sortedHostCatalog,
-    stats,
-    taskProvidersByHost,
+    workingAgentCount,
     worktreeInfo
   }
 }

@@ -1,5 +1,4 @@
-import { StyleSheet, Text, View } from 'react-native'
-import { colors } from '../theme/mobile-theme'
+import { ListRow } from './ui/ListRow'
 
 type Props = {
   assignee?: string
@@ -7,40 +6,23 @@ type Props = {
   projectName: string
 }
 
-// The detail sheet owns the surrounding metadata grid.
-export function JiraDetailMeta({ assignee, priorityName, projectName }: Props) {
+/** Jira's label/value pairs for the detail sheet's Details group, skipping empty ones. */
+export function jiraDetailMetaRows({ assignee, priorityName, projectName }: Props) {
   const rows: [string, string | undefined][] = [
     ['Assignee', assignee],
     ['Priority', priorityName],
     ['Project', projectName]
   ]
+  return rows.flatMap(([label, value]) => (value ? [{ label, value }] : []))
+}
+
+// The detail sheet owns the surrounding group, which draws the separators between rows.
+export function JiraDetailMeta(props: Props) {
   return (
     <>
-      {rows.map(([label, value]) =>
-        value ? (
-          <View key={label} style={styles.item}>
-            <Text style={styles.label}>{label}</Text>
-            <Text style={styles.value}>{value}</Text>
-          </View>
-        ) : null
-      )}
+      {jiraDetailMetaRows(props).map((row) => (
+        <ListRow key={row.label} title={row.label} value={row.value} />
+      ))}
     </>
   )
 }
-
-const styles = StyleSheet.create({
-  item: {
-    minWidth: 96,
-    flexGrow: 1
-  },
-  label: {
-    fontSize: 11,
-    color: colors.textMuted,
-    marginBottom: 2
-  },
-  value: {
-    fontSize: 13,
-    color: colors.textPrimary,
-    fontWeight: '600'
-  }
-})

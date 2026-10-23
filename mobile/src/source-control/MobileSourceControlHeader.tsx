@@ -1,6 +1,7 @@
-import { Pressable, Text, View } from 'react-native'
-import { ChevronLeft, ExternalLink, RefreshCw, X } from 'lucide-react-native'
-import { colors } from '../theme/mobile-theme'
+import { View } from 'react-native'
+import { ExternalLink, MoreHorizontal, RefreshCw, X } from 'lucide-react-native'
+import { IconButton } from '../components/ui/IconButton'
+import { NavBar } from '../components/ui/NavBar'
 import { styles } from './mobile-source-control-styles'
 
 type Props = {
@@ -12,10 +13,12 @@ type Props = {
   /** Dismisses the dock beside the terminal, which is a close and must not be called Back. */
   onClose: () => void
   onRefresh: () => void
-  // When set (PR segment ready with a host URL), show open-on-web flush-right of
-  // the title so the control stays visible while the PR body scrolls.
+  // When set (PR segment ready with a host URL), show open-on-web in the bar so the
+  // control stays visible while the PR body scrolls.
   onOpenPrWeb?: () => void
   prNumber?: number | null
+  /** Opens the source control action sheet; the bar's second slot when open-on-web is absent. */
+  onOpenActions?: () => void
 }
 
 export function MobileSourceControlHeader({
@@ -26,70 +29,62 @@ export function MobileSourceControlHeader({
   onClose,
   onRefresh,
   onOpenPrWeb,
-  prNumber = null
+  prNumber = null,
+  onOpenActions
 }: Props) {
   return (
-    <View style={styles.topBar}>
-      {/* Two controls, not one with a conditional label: the dock's dismiss is a close, and a
-          single control serving both modes has to be named Back in a mode where it closes. */}
+    <View>
+      <NavBar
+        title="Source control"
+        subtitle={worktreeLabel}
+        onBack={embedded ? undefined : onBack}
+        backAccessibilityLabel="Back to session"
+        trailing={
+          <>
+            {onOpenPrWeb ? (
+              <IconButton
+                icon={ExternalLink}
+                variant="bare"
+                iconSize={20}
+                onPress={onOpenPrWeb}
+                accessibilityLabel={
+                  prNumber != null
+                    ? `Open pull request #${prNumber} on the web`
+                    : 'Open pull request on the web'
+                }
+              />
+            ) : onOpenActions ? (
+              <IconButton
+                icon={MoreHorizontal}
+                variant="bare"
+                iconSize={20}
+                onPress={onOpenActions}
+                disabled={ioBusy}
+                accessibilityLabel="Open source control actions"
+              />
+            ) : null}
+            <IconButton
+              icon={RefreshCw}
+              variant="bare"
+              iconSize={19}
+              onPress={onRefresh}
+              disabled={ioBusy}
+              accessibilityLabel="Refresh source control"
+            />
+          </>
+        }
+      />
+      {/* The dock's dismiss is a close, not a back, so it gets its own glyph and name. */}
       {embedded ? (
-        <Pressable
-          style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
-          onPress={onClose}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel="Close source control"
-        >
-          <X size={22} color={colors.textSecondary} strokeWidth={2.2} />
-        </Pressable>
-      ) : (
-        <Pressable
-          style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
-          onPress={onBack}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel="Back to session"
-        >
-          <ChevronLeft size={22} color={colors.textSecondary} strokeWidth={2.2} />
-        </Pressable>
-      )}
-      <View style={styles.titleBlock}>
-        <Text style={styles.title} numberOfLines={1}>
-          Source Control
-        </Text>
-        <Text style={styles.meta} numberOfLines={1}>
-          {worktreeLabel}
-        </Text>
-      </View>
-      {onOpenPrWeb ? (
-        <Pressable
-          style={({ pressed }) => [styles.refreshButton, pressed && styles.refreshButtonPressed]}
-          onPress={onOpenPrWeb}
-          hitSlop={8}
-          accessibilityRole="link"
-          accessibilityLabel={
-            prNumber != null
-              ? `Open pull request #${prNumber} on the web`
-              : 'Open pull request on the web'
-          }
-        >
-          <ExternalLink size={18} color={colors.textSecondary} strokeWidth={2.1} />
-        </Pressable>
+        <View style={styles.embeddedClose}>
+          <IconButton
+            icon={X}
+            iconSize={20}
+            onPress={onClose}
+            accessibilityLabel="Close source control"
+          />
+        </View>
       ) : null}
-      <Pressable
-        style={({ pressed }) => [
-          styles.refreshButton,
-          ioBusy && styles.refreshButtonDisabled,
-          pressed && styles.refreshButtonPressed
-        ]}
-        onPress={onRefresh}
-        disabled={ioBusy}
-        hitSlop={8}
-        accessibilityRole="button"
-        accessibilityLabel="Refresh source control"
-      >
-        <RefreshCw size={18} color={colors.textSecondary} strokeWidth={2.1} />
-      </Pressable>
     </View>
   )
 }

@@ -1,10 +1,12 @@
 import { useState } from 'react'
-import { View, Text, Pressable, ActivityIndicator } from 'react-native'
-import { RefreshCw } from 'lucide-react-native'
+import { StyleSheet, View, Text } from 'react-native'
+import { Copy, RefreshCw } from 'lucide-react-native'
+import { Button } from '../components/ui/Button'
+import { StateView } from '../components/ui/StateView'
 import { MobileRichMarkdownEditor } from '../components/MobileRichMarkdownEditor'
 import { resolveMarkdownFloatingActionsBottom } from './markdown-floating-actions-layout'
 import { markdownReaderStatusText } from './mobile-markdown-reader-status'
-import { colors, spacing } from '../theme/mobile-theme'
+import { colors, radii, spacing, textStyles } from '../theme/mobile-theme'
 import { styles } from './mobile-session-styles'
 import type { MarkdownDocState } from './mobile-session-route-types'
 import { MobileLoadErrorState } from '../components/MobileLoadErrorState'
@@ -32,11 +34,7 @@ export function MarkdownReader({
   const [webviewKeyboardInset, setWebviewKeyboardInset] = useState(0)
   const effectiveKeyboardLift = Math.max(keyboardLift, webviewKeyboardInset)
   if (!doc || doc.status === 'loading') {
-    return (
-      <View style={styles.markdownState}>
-        <ActivityIndicator size="small" color={colors.textSecondary} />
-      </View>
-    )
+    return <StateView loading title="Loading note…" />
   }
   if (doc.status === 'error') {
     return <MobileLoadErrorState message={doc.message} onRetry={onRefresh} />
@@ -71,55 +69,76 @@ export function MarkdownReader({
       >
         {statusText ? (
           <Text
-            style={[styles.markdownFloatingStatus, doc.saveError ? styles.markdownError : null]}
+            style={[localStyles.status, doc.saveError ? localStyles.statusError : null]}
             numberOfLines={2}
           >
             {statusText}
           </Text>
         ) : null}
-        <View style={styles.markdownFloatingActions}>
-          <Pressable
-            style={styles.markdownFloatingButton}
+        {/* Opaque, so the buttons read over the note's text. */}
+        <View style={localStyles.actions}>
+          <Button
+            label={doc.truncated ? 'Copy loaded' : 'Copy'}
+            icon={Copy}
+            size="compact"
+            variant="plain"
             onPress={onCopy}
-            accessibilityRole="button"
             accessibilityLabel={
               doc.truncated ? 'Copy loaded Markdown source' : 'Copy Markdown source'
             }
-          >
-            <Text style={styles.markdownFloatingButtonText}>
-              {doc.truncated ? 'Copy loaded' : 'Copy'}
-            </Text>
-          </Pressable>
+          />
           {showRefresh ? (
-            <Pressable style={styles.markdownFloatingButton} onPress={onRefresh}>
-              <RefreshCw size={13} color={colors.textPrimary} />
-              <Text style={styles.markdownFloatingButtonText}>Refresh</Text>
-            </Pressable>
+            <Button
+              label="Refresh"
+              icon={RefreshCw}
+              size="compact"
+              variant="plain"
+              onPress={onRefresh}
+            />
           ) : null}
           {doc.isDirty ? (
-            <Pressable style={styles.markdownFloatingButton} onPress={onDiscard}>
-              <Text style={styles.markdownFloatingButtonText}>Discard</Text>
-            </Pressable>
+            <Button label="Discard" size="compact" variant="plain" onPress={onDiscard} />
           ) : null}
           {showSave ? (
-            <Pressable
-              style={[
-                styles.markdownFloatingButton,
-                styles.markdownSaveButton,
-                (!doc.editable || !doc.isDirty || doc.saving) && styles.markdownButtonDisabled
-              ]}
-              disabled={!doc.editable || !doc.isDirty || doc.saving}
+            <Button
+              label="Save"
+              size="compact"
+              variant="primary"
+              busy={doc.saving}
+              disabled={!doc.editable || !doc.isDirty}
               onPress={onSave}
-            >
-              {doc.saving ? (
-                <ActivityIndicator size="small" color={colors.textPrimary} />
-              ) : (
-                <Text style={styles.markdownFloatingButtonText}>Save</Text>
-              )}
-            </Pressable>
+            />
           ) : null}
         </View>
       </View>
     </View>
   )
 }
+
+const localStyles = StyleSheet.create({
+  status: {
+    ...textStyles.footnote,
+    maxWidth: '100%',
+    alignSelf: 'flex-end',
+    overflow: 'hidden',
+    color: colors.textSecondary,
+    backgroundColor: colors.bgPanel,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.fieldBorder,
+    borderRadius: radii.group,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6
+  },
+  statusError: { color: colors.danger },
+  actions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    paddingHorizontal: spacing.xs,
+    borderRadius: radii.pill,
+    backgroundColor: colors.bgPanel,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.fieldBorder
+  }
+})

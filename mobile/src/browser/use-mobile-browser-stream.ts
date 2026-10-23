@@ -171,14 +171,12 @@ export function useMobileBrowserStream(args: MobileBrowserStreamArgs) {
       if (!binaryScreencastGranted) {
         // Before the desktop's answer, because this one is about the app in the user's hand and no
         // desktop update can change it.
-        setError('Update the Orca app to stream browser tabs here.')
+        setError('Update the Orca app to see browser tabs here.')
       } else if (screencastSupported === false) {
-        setError('Update desktop Orca to stream browser tabs on mobile.')
-      } else if (screencastSupported === null) {
-        setError('Checking desktop browser streaming support.')
-      } else if (!tab.browserPageId) {
-        setError('Browser page is not available yet.')
+        setError('Update Orca on your desktop to see browser tabs here.')
       }
+      // Still checking support, or the page has no id yet: both pass on their own, so the pane
+      // shows its loading state rather than an error.
       return
     }
     busyRef.current = true
@@ -189,7 +187,7 @@ export function useMobileBrowserStream(args: MobileBrowserStreamArgs) {
       }
       busyRef.current = false
       setBusy(false)
-      setError('Browser stream timed out.')
+      setError('The page stopped responding.')
     }, 15_000)
     const clearStartupTimer = (): void => {
       if (startupTimer) {

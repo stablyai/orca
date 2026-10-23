@@ -1,137 +1,93 @@
 import { StyleSheet } from 'react-native'
-import { colors, spacing, typography, radii } from '../theme/mobile-theme'
+import { colors, motion, spacing, textStyles } from '../theme/mobile-theme'
 
 export const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase
   },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.sm,
-    gap: spacing.sm
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  iconButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  titleWrap: {
-    flex: 1
-  },
-  heading: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.textPrimary
-  },
-  subheading: {
-    fontSize: typography.metaSize,
-    color: colors.textSecondary,
-    marginTop: 1
-  },
   scroll: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm
+    flexGrow: 1,
+    paddingTop: spacing.xs
   },
-  section: {
-    marginBottom: spacing.xl
+  banner: {
+    marginBottom: spacing.sm
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    marginBottom: spacing.sm
+    paddingHorizontal: spacing.lg + 4,
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.sm
+  },
+  sectionHeaderFirst: {
+    paddingTop: spacing.sm
   },
   sectionHeading: {
-    fontSize: typography.metaSize,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5
-  },
-  card: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: radii.card,
-    overflow: 'hidden'
+    ...textStyles.footnote,
+    fontWeight: '500',
+    color: colors.textMuted
   },
   row: {
+    minHeight: 52,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md
   },
   rowPressed: {
-    backgroundColor: colors.bgRaised
+    backgroundColor: colors.fill
+  },
+  rowDisabled: {
+    opacity: motion.disabledOpacity
   },
   rowMain: {
     flex: 1,
-    gap: 4
-  },
-  // Why: fixed-width trailing slot so the usage bars in `rowMain` keep the
-  // same width whether or not the row is currently selected (otherwise the
-  // checkmark on the active account squeezes the bars narrower than the
-  // inactive rows above/below it).
-  rowTrailing: {
-    width: 24,
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-    marginLeft: spacing.sm
+    minWidth: 0,
+    gap: 2
   },
   rowTitle: {
-    fontSize: typography.bodySize,
+    ...textStyles.body,
     fontWeight: '500',
     color: colors.textPrimary
   },
   rowSubtitle: {
-    fontSize: typography.metaSize,
+    ...textStyles.subhead,
     color: colors.textSecondary
   },
-  separator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
-  },
-  usageRow: {
-    flexDirection: 'row',
+  usageStack: {
     gap: spacing.md,
-    marginTop: 4
+    marginTop: spacing.md
+  },
+  // Pinned to the title line, so the check names the account rather than its usage.
+  rowTrailing: {
+    width: 24,
+    height: 23,
+    alignSelf: 'flex-start',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0
   },
   errorText: {
-    fontSize: typography.metaSize,
-    color: colors.statusRed
-  },
-  placeholder: {
-    paddingVertical: spacing.xl * 2,
-    alignItems: 'center',
-    gap: spacing.sm
-  },
-  placeholderText: {
-    fontSize: typography.bodySize,
-    color: colors.textSecondary
+    ...textStyles.footnote,
+    marginTop: spacing.sm,
+    color: colors.danger
   },
   footerHint: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacing.sm,
-    paddingHorizontal: spacing.sm,
-    paddingTop: spacing.sm
+    paddingHorizontal: spacing.lg + 4,
+    paddingTop: spacing.lg
+  },
+  footerIcon: {
+    marginTop: 2
   },
   footerHintText: {
+    ...textStyles.footnote,
     flex: 1,
-    fontSize: typography.metaSize,
-    color: colors.textMuted,
-    lineHeight: 18
+    color: colors.textMuted
   }
 })

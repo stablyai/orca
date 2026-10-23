@@ -1,9 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { View, Text, Pressable, StyleSheet } from 'react-native'
+import { Button } from '../components/ui/Button'
+import { Collapsible } from '../components/ui/Collapsible'
+import { IconButton } from '../components/ui/IconButton'
+import { LIST_LEADING_INSET, LIST_ROW_PADDING } from '../components/ui/ListGroup'
+import { pressTransition } from '../components/ui/transition-styles'
 import { useClipboardWriter } from '../platform/clipboard'
-import { triggerError } from '../platform/haptics'
-import { Check, Copy, Pencil, Play, Trash2 } from 'lucide-react-native'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { triggerError, triggerMediumImpact } from '../platform/haptics'
+import { Check, Copy, MoreHorizontal, Pencil, Play, Trash2 } from 'lucide-react-native'
+import { colors, motion, spacing, textStyles, typography } from '../theme/mobile-theme'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
 import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
 import {
@@ -14,7 +19,6 @@ import {
 
 type QuickCommandRowProps = {
   command: TerminalQuickCommand
-  first: boolean
   onLaunch: (command: TerminalQuickCommand) => void
   onEdit: (command: TerminalQuickCommand) => void
   onDelete: (command: TerminalQuickCommand) => void
@@ -28,7 +32,6 @@ type CopyFeedback = {
 
 export function QuickCommandRow({
   command,
-  first,
   onLaunch,
   onEdit,
   onDelete,
@@ -109,98 +112,131 @@ export function QuickCommandRow({
     copyStatus === 'copied'
       ? colors.statusGreen
       : copyStatus === 'failed'
-        ? colors.statusRed
+        ? colors.danger
         : colors.textSecondary
+  const [expanded, setExpanded] = useState(false)
 
   return (
-    <View style={[styles.row, !first && styles.rowBorder, disabled && styles.disabled]}>
-      <Pressable
-        style={({ pressed }) => [styles.rowMain, pressed && !disabled && styles.pressed]}
-        disabled={disabled}
-        onPress={() => onLaunch(command)}
-        accessibilityRole="button"
-        accessibilityLabel={`Run ${command.label}`}
-      >
-        <View style={styles.rowIcon}>
-          {isAgent ? (
-            <MobileAgentIcon agentId={command.agent} size={16} />
-          ) : (
-            <Play size={14} color={colors.textPrimary} fill={colors.textPrimary} />
+    <View style={disabled && styles.disabled}>
+      <View style={styles.row}>
+        <Pressable
+          style={styles.rowMainTouch}
+          disabled={disabled}
+          onPress={() => onLaunch(command)}
+          onLongPress={() => {
+            triggerMediumImpact()
+            setExpanded((open) => !open)
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={`Run ${command.label}`}
+          accessibilityHint="Long press for edit and delete"
+        >
+          {({ pressed }) => (
+            <View
+              style={[
+                styles.rowMain,
+                pressed && !disabled && styles.pressed,
+                pressed ? pressTransition.pressed : pressTransition.rest
+              ]}
+            >
+              <View style={styles.rowIcon}>
+                {isAgent ? (
+                  <MobileAgentIcon agentId={command.agent} size={20} />
+                ) : (
+                  <Play size={17} color={colors.textPrimary} fill={colors.textPrimary} />
+                )}
+              </View>
+              <View style={styles.rowText}>
+                <Text style={styles.rowLabel} numberOfLines={1}>
+                  {command.label}
+                </Text>
+                <Text style={[styles.rowPreview, !isAgent && styles.mono]} numberOfLines={1}>
+                  {getQuickCommandDisplayPreview(command)}
+                </Text>
+              </View>
+            </View>
           )}
+        </Pressable>
+        <View style={styles.trailing}>
+          <IconButton
+            icon={copyStatus === 'copied' ? Check : Copy}
+            variant="bare"
+            iconSize={18}
+            iconColor={copyIconColor}
+            disabled={copyDisabled}
+            onPress={() => void handleCopy()}
+            accessibilityLabel={copyLabel}
+          />
+          <IconButton
+            icon={MoreHorizontal}
+            variant="bare"
+            iconSize={18}
+            iconColor={colors.textSecondary}
+            selected={expanded}
+            disabled={disabled}
+            onPress={() => setExpanded((open) => !open)}
+            accessibilityLabel={
+              expanded ? `Hide actions for ${command.label}` : `More actions for ${command.label}`
+            }
+          />
         </View>
-        <View style={styles.rowText}>
-          <Text style={styles.rowLabel} numberOfLines={1}>
-            {command.label}
-          </Text>
-          <Text style={[styles.rowPreview, !isAgent && styles.mono]} numberOfLines={1}>
-            {getQuickCommandDisplayPreview(command)}
-          </Text>
+      </View>
+      <Collapsible open={expanded}>
+        <View style={styles.actions}>
+          <Button
+            label="Edit"
+            icon={Pencil}
+            size="compact"
+            disabled={disabled}
+            onPress={() => {
+              setExpanded(false)
+              onEdit(command)
+            }}
+            accessibilityLabel={`Edit ${command.label}`}
+          />
+          <Button
+            label="Delete"
+            icon={Trash2}
+            size="compact"
+            variant="destructive"
+            disabled={disabled}
+            onPress={() => {
+              setExpanded(false)
+              onDelete(command)
+            }}
+            accessibilityLabel={`Delete ${command.label}`}
+          />
         </View>
-      </Pressable>
-      <Pressable
-        style={({ pressed }) => [
-          styles.rowAction,
-          // Why: row already dims when `disabled`; only dim again for empty body.
-          !canCopy && styles.disabled,
-          pressed && !copyDisabled && styles.pressed
-        ]}
-        disabled={copyDisabled}
-        onPress={() => void handleCopy()}
-        accessibilityRole="button"
-        accessibilityLabel={copyLabel}
-        accessibilityState={{ disabled: copyDisabled }}
-      >
-        {copyStatus === 'copied' ? (
-          <Check size={15} color={copyIconColor} />
-        ) : (
-          <Copy size={15} color={copyIconColor} />
-        )}
-      </Pressable>
-      <Pressable
-        style={({ pressed }) => [styles.rowAction, pressed && !disabled && styles.pressed]}
-        disabled={disabled}
-        onPress={() => onEdit(command)}
-        accessibilityLabel={`Edit ${command.label}`}
-      >
-        <Pencil size={15} color={colors.textSecondary} />
-      </Pressable>
-      <Pressable
-        style={({ pressed }) => [styles.rowAction, pressed && !disabled && styles.pressed]}
-        disabled={disabled}
-        onPress={() => onDelete(command)}
-        accessibilityLabel={`Delete ${command.label}`}
-      >
-        <Trash2 size={15} color={colors.statusRed} />
-      </Pressable>
+      </Collapsible>
     </View>
   )
 }
 
 const styles = StyleSheet.create({
-  pressed: { backgroundColor: colors.bgRaised },
-  disabled: { opacity: 0.45 },
+  pressed: { backgroundColor: colors.fill },
+  disabled: { opacity: motion.disabledOpacity },
   row: { flexDirection: 'row', alignItems: 'center' },
-  rowBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderSubtle },
+  rowMainTouch: { flex: 1, minWidth: 0 },
   rowMain: {
-    flex: 1,
+    minHeight: 64,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    paddingVertical: spacing.md,
-    paddingLeft: spacing.md,
-    minWidth: 0
+    paddingVertical: 10,
+    paddingLeft: LIST_ROW_PADDING,
+    paddingRight: spacing.xs
   },
-  rowIcon: {
-    width: 26,
-    height: 26,
-    borderRadius: 6,
-    backgroundColor: colors.bgRaised,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  rowText: { flex: 1, minWidth: 0 },
-  rowLabel: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
-  rowPreview: { fontSize: 12, color: colors.textSecondary, marginTop: 1 },
-  mono: { fontFamily: typography.monoFamily },
-  rowAction: { width: 40, height: 44, alignItems: 'center', justifyContent: 'center' }
+  rowIcon: { width: 28, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  rowText: { flex: 1, minWidth: 0, gap: 2 },
+  rowLabel: { ...textStyles.body, fontWeight: '500', color: colors.textPrimary },
+  rowPreview: { ...textStyles.subhead, color: colors.textSecondary },
+  mono: { fontFamily: typography.monoFamily, fontSize: 13 },
+  trailing: { flexDirection: 'row', alignItems: 'center', paddingRight: spacing.xs },
+  actions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    paddingLeft: LIST_LEADING_INSET,
+    paddingRight: LIST_ROW_PADDING,
+    paddingBottom: spacing.sm
+  }
 })

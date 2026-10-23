@@ -119,7 +119,7 @@ export function MobileBrowserLoadProgress({
 const styles = StyleSheet.create({
   clip: {
     ...StyleSheet.absoluteFillObject,
-    borderRadius: radii.input,
+    borderRadius: radii.pill,
     overflow: 'hidden'
   },
   line: {

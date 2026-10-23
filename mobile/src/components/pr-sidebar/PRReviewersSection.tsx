@@ -1,7 +1,11 @@
 import { useMemo, useState } from 'react'
-import { ActivityIndicator, Pressable, Text, View } from 'react-native'
+import { ActivityIndicator, Text, View } from 'react-native'
 import { UserPlus, X } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
+import { Button } from '../ui/Button'
+import { IconButton } from '../ui/IconButton'
+import { ListRow } from '../ui/ListRow'
+import { PRAvatar } from './PRAvatar'
 import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-item-types'
 import type { RpcClient } from '../../transport/rpc-client'
 import type { MobilePrActions } from '../../session/use-mobile-pr-actions'
@@ -16,11 +20,13 @@ type Props = {
   actions: MobilePrActions
   client: RpcClient | null
   worktreeId: string
+  // Re-fetches the PR when its details failed to load.
+  onRetry?: () => void
 }
 
 // Requested reviewers + their latest review status, with a picker to request /
 // remove (optimistic add/remove via the actions hook).
-export function PRReviewersSection({ details, actions, client, worktreeId }: Props) {
+export function PRReviewersSection({ details, actions, client, worktreeId, onRetry }: Props) {
   // details === null means phase 2 (work-item payload) is still in flight — same
   // signal Comments uses. Do not treat that as "no reviewers" or the section goes
   // blank while checks (phase 1) already paint. A synthetic placeholder means
@@ -57,59 +63,69 @@ export function PRReviewersSection({ details, actions, client, worktreeId }: Pro
   }, [authoritativeRows, details])
 
   const addButton = (
-    <Pressable
-      style={styles.iconButton}
+    <Button
+      label="Add"
+      icon={UserPlus}
+      variant="plain"
+      size="compact"
       onPress={() => setPickerOpen(true)}
-      accessibilityRole="button"
       accessibilityLabel="Add or remove reviewers"
-    >
-      <UserPlus size={16} color={colors.textSecondary} strokeWidth={2.2} />
-    </Pressable>
+    />
   )
 
   return (
-    <PRSection title="Reviewers" trailing={addButton}>
-      {loadingDetails ? (
-        <View style={styles.reviewersStatus}>
-          <ActivityIndicator color={colors.textSecondary} />
-          <Text style={styles.emptyText}>Loading reviewers…</Text>
-        </View>
-      ) : detailsFailed ? (
-        <Text style={styles.emptyText}>Could not load reviewers. Tap refresh to try again.</Text>
-      ) : rows.length === 0 ? (
-        <Text style={styles.emptyText}>No reviewers requested</Text>
-      ) : (
-        rows.map((row) => {
-          const busy = actions.isBusy({ kind: 'reviewer', login: row.login })
-          return (
-            <View key={row.login} style={styles.row}>
-              <View style={styles.rowMain}>
-                <Text style={styles.rowTitle} numberOfLines={1}>
-                  {row.name ? `${row.name} (${row.login})` : row.login}
-                </Text>
-              </View>
-              {/* Neutral gray like the desktop PR page (the label text carries the
-                  state); keeps the sidebar mostly monochrome. */}
-              <Text style={[styles.rowStatus, { color: colors.textSecondary }]}>
-                {row.stateLabel}
-              </Text>
-              <Pressable
-                style={styles.rowTrailing}
-                onPress={() => actions.removeReviewer(row.login)}
-                disabled={busy}
-                accessibilityRole="button"
-                accessibilityLabel={`Remove ${row.login}`}
-              >
-                {busy ? (
-                  <ActivityIndicator color={colors.textSecondary} />
-                ) : (
-                  <X size={14} color={colors.textSecondary} strokeWidth={2.2} />
-                )}
-              </Pressable>
-            </View>
-          )
-        })
-      )}
+    <>
+      <PRSection
+        title="Reviewers"
+        count={rows.length > 0 ? rows.length : undefined}
+        trailing={addButton}
+        layout="rows"
+      >
+        {loadingDetails ? (
+          <View style={styles.noteRow}>
+            <ActivityIndicator color={colors.textSecondary} />
+            <Text style={styles.noteRowText}>Loading reviewers…</Text>
+          </View>
+        ) : detailsFailed ? (
+          <View style={styles.noteRow}>
+            <Text style={styles.noteRowText}>Couldn't load reviewers.</Text>
+            {onRetry ? <Button label="Retry" size="compact" onPress={onRetry} /> : null}
+          </View>
+        ) : rows.length === 0 ? (
+          <View style={styles.noteRow}>
+            <Text style={styles.noteRowText}>No reviewers requested.</Text>
+          </View>
+        ) : (
+          rows.map((row) => {
+            const busy = actions.isBusy({ kind: 'reviewer', login: row.login })
+            return (
+              <ListRow
+                key={row.login}
+                title={row.name ?? row.login}
+                // The state rides the second line so a long name keeps the full row width.
+                subtitle={row.name ? `${row.login} · ${row.stateLabel}` : row.stateLabel}
+                leading={<PRAvatar login={row.login} url={row.avatarUrl} />}
+                accessory={
+                  busy ? (
+                    <View style={styles.rowSpinner}>
+                      <ActivityIndicator color={colors.textSecondary} />
+                    </View>
+                  ) : (
+                    <IconButton
+                      icon={X}
+                      variant="bare"
+                      iconSize={16}
+                      iconColor={colors.textMuted}
+                      onPress={() => actions.removeReviewer(row.login)}
+                      accessibilityLabel={`Remove ${row.login}`}
+                    />
+                  )
+                }
+              />
+            )
+          })
+        )}
+      </PRSection>
       <ReviewerPickerDrawer
         visible={pickerOpen}
         onClose={() => setPickerOpen(false)}
@@ -125,6 +141,6 @@ export function PRReviewersSection({ details, actions, client, worktreeId }: Pro
           }
         }}
       />
-    </PRSection>
+    </>
   )
 }

@@ -1,8 +1,11 @@
 import type { ReactNode } from 'react'
-import { View, Text, Pressable, StyleSheet } from 'react-native'
-import { Check } from 'lucide-react-native'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { View, Text, StyleSheet } from 'react-native'
+import { colors, spacing, textStyles } from '../theme/mobile-theme'
+import { triggerSelection } from '../platform/haptics'
 import { BottomDrawer } from './BottomDrawer'
+import { ListGroup, LIST_LEADING_INSET } from './ui/ListGroup'
+import { ListRow } from './ui/ListRow'
+import { SheetHeader } from './ui/SheetHeader'
 
 export type PickerOption<T extends string = string> = {
   value: T
@@ -23,11 +26,13 @@ type Props<T extends string = string> = {
   onClose: () => void
   onAfterClose?: () => void
   zIndex?: number
+  /** Shown in place of the rows when there is nothing to pick. */
+  emptyMessage?: string
 }
 
 type PickerModalContentProps<T extends string = string> = Pick<
   Props<T>,
-  'options' | 'selected' | 'onSelect' | 'onLongSelect' | 'onClose'
+  'options' | 'selected' | 'onSelect' | 'onLongSelect' | 'onClose' | 'emptyMessage'
 >
 
 export function PickerModal<T extends string = string>({
@@ -40,23 +45,38 @@ export function PickerModal<T extends string = string>({
   onLongSelect,
   onClose,
   onAfterClose,
-  zIndex
+  zIndex,
+  emptyMessage
 }: Props<T>) {
   return (
     <BottomDrawer visible={visible} onClose={onClose} onAfterClose={onAfterClose} zIndex={zIndex}>
-      <View style={styles.header}>
-        <Text style={styles.title}>{title}</Text>
-        {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
-      </View>
-
+      <PickerSheetTitle title={title} subtitle={subtitle} />
       <PickerModalContent
         options={options}
         selected={selected}
         onSelect={onSelect}
         onLongSelect={onLongSelect}
         onClose={onClose}
+        emptyMessage={emptyMessage}
       />
     </BottomDrawer>
+  )
+}
+
+/** The picker's question as the sheet's title; a pure list sheet, so no Cancel or Done. */
+export function PickerSheetTitle({ title, subtitle }: { title: string; subtitle?: string }) {
+  return (
+    <View style={styles.header}>
+      <SheetHeader title={title} subtitle={subtitle} />
+    </View>
+  )
+}
+
+export function PickerEmptyState({ message }: { message?: string }) {
+  return (
+    <View style={styles.empty}>
+      <Text style={styles.emptyText}>{message ?? 'Nothing to choose from yet.'}</Text>
+    </View>
   )
 }
 
@@ -65,120 +85,65 @@ function PickerModalContent<T extends string = string>({
   selected,
   onSelect,
   onLongSelect,
-  onClose
+  onClose,
+  emptyMessage
 }: PickerModalContentProps<T>) {
   // Why: closed BottomDrawer instances return null, so keeping option rows in
   // this child avoids rebuilding hidden picker contents on every parent render.
+  if (options.length === 0) {
+    return <PickerEmptyState message={emptyMessage} />
+  }
+  // One icon column for the whole list, so labels line up even where an option has no icon.
+  const hasIcons = options.some((opt) => opt.renderIcon !== undefined)
   return (
-    <View style={styles.group}>
-      {options.map((opt, i) => {
+    <ListGroup separatorInset={hasIcons ? LIST_LEADING_INSET : undefined} style={styles.group}>
+      {options.map((opt) => {
         const isSelected = opt.value === selected
         return (
-          <View key={opt.value}>
-            {i > 0 && <View style={styles.separator} />}
-            <Pressable
-              accessible
-              accessibilityRole="button"
-              accessibilityState={{ disabled: Boolean(opt.disabled), selected: isSelected }}
-              disabled={opt.disabled}
-              style={({ pressed }) => [
-                styles.row,
-                pressed && !opt.disabled && styles.rowPressed,
-                opt.disabled && styles.rowDisabled
-              ]}
-              onPress={() => {
-                if (opt.disabled) {
-                  return
-                }
-                onSelect(opt.value)
-                onClose()
-              }}
-              onLongPress={
-                onLongSelect
-                  ? () => {
-                      if (opt.disabled) {
-                        return
-                      }
-                      onLongSelect(opt.value)
-                      onClose()
-                    }
-                  : undefined
+          <ListRow
+            key={opt.value}
+            title={opt.label}
+            subtitle={opt.subtitle}
+            subtitleNumberOfLines={2}
+            leading={hasIcons ? (opt.renderIcon?.(isSelected) ?? null) : undefined}
+            selected={isSelected}
+            disabled={opt.disabled}
+            onPress={() => {
+              if (opt.disabled) {
+                return
               }
-            >
-              {opt.renderIcon ? (
-                <View style={styles.rowIcon}>{opt.renderIcon(isSelected)}</View>
-              ) : null}
-              <View style={styles.rowContent}>
-                <Text style={[styles.rowLabel, isSelected && styles.rowLabelSelected]}>
-                  {opt.label}
-                </Text>
-                {opt.subtitle ? <Text style={styles.rowSubtitle}>{opt.subtitle}</Text> : null}
-              </View>
-              {isSelected && <Check size={16} color={colors.textPrimary} />}
-            </Pressable>
-          </View>
+              triggerSelection()
+              onSelect(opt.value)
+              onClose()
+            }}
+            onLongPress={
+              onLongSelect
+                ? () => {
+                    if (opt.disabled) {
+                      return
+                    }
+                    onLongSelect(opt.value)
+                    onClose()
+                  }
+                : undefined
+            }
+          />
         )
       })}
-    </View>
+    </ListGroup>
   )
 }
 
 const styles = StyleSheet.create({
-  header: {
-    paddingHorizontal: spacing.xs,
-    paddingBottom: spacing.sm
-  },
-  title: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: colors.textMuted
-  },
-  subtitle: {
-    fontSize: 11,
-    color: colors.textMuted,
-    marginTop: 2
-  },
-  group: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: 12,
-    overflow: 'hidden'
-  },
-  separator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
-  },
-  row: {
-    flexDirection: 'row',
+  header: { marginHorizontal: -spacing.sm, marginTop: -spacing.xs, marginBottom: spacing.xs },
+  // Why: the sheet already pads 12; the group adds 4 so rows sit 16 from the sheet edge.
+  group: { marginHorizontal: spacing.xs },
+  empty: {
+    marginHorizontal: spacing.xs,
+    minHeight: 88,
     alignItems: 'center',
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xl
   },
-  rowPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  rowDisabled: {
-    opacity: 0.45
-  },
-  rowContent: {
-    flex: 1,
-    minWidth: 0
-  },
-  rowIcon: {
-    width: 22,
-    alignItems: 'center',
-    marginRight: spacing.sm
-  },
-  rowLabel: {
-    fontSize: typography.bodySize,
-    color: colors.textPrimary
-  },
-  rowLabelSelected: {
-    fontWeight: '600'
-  },
-  rowSubtitle: {
-    fontSize: 11,
-    color: colors.textMuted,
-    marginTop: 1
-  }
+  emptyText: { ...textStyles.callout, color: colors.textSecondary, textAlign: 'center' }
 })

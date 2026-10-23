@@ -44,6 +44,18 @@ export function resolveTabStripScrollOffset({
 type TabLayouts = ReadonlyMap<string, { x: number; width: number }>
 
 /** Reveal the neighbor on the tapped edge without waiting for host activation. */
+/** Where to scroll so a tab sits in the middle of the strip, as far as the strip's ends allow. */
+export function resolveTabStripCenteredOffset(args: {
+  tabX: number
+  tabWidth: number
+  viewportWidth: number
+  contentWidth: number
+}): number {
+  const maxOffset = Math.max(0, args.contentWidth - args.viewportWidth)
+  const centred = args.tabX - (args.viewportWidth - args.tabWidth) / 2
+  return Math.round(Math.min(maxOffset, Math.max(0, centred)))
+}
+
 export function resolveTabStripTapOffset(args: {
   tabId: string
   tabs: readonly { id: string }[]

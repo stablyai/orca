@@ -1,5 +1,5 @@
-import { Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native'
-import { Bot, ChevronRight } from 'lucide-react-native'
+import { StyleSheet, Text, View, type ViewStyle } from 'react-native'
+import { Bot } from 'lucide-react-native'
 import {
   formatSubagentTokens,
   nativeChatSubagentGroupHeader,
@@ -12,8 +12,10 @@ import type {
   NativeChatSubagentGroupBlock,
   NativeChatSubagentState
 } from '../../../src/shared/native-chat-types'
+import { Collapsible } from '../components/ui/Collapsible'
 import { useNow } from '../hooks/use-now'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { colors, spacing, textStyles } from '../theme/mobile-theme'
+import { MobileNativeChatDisclosureRow } from './MobileNativeChatDisclosureRow'
 
 // Desktop's StatusDot tones: the working and failed states speak; every settled one stays muted.
 function stateDotStyle(state: NativeChatSubagentState): ViewStyle {
@@ -83,16 +85,13 @@ export function MobileNativeChatSubagentGroup({
     .join(' · ')
   return (
     <View testID="subagent-group" style={styles.group}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityState={{ expanded: open }}
+      <MobileNativeChatDisclosureRow
+        expanded={open}
         accessibilityLabel={accessibilityLabel}
         accessibilityLiveRegion="polite"
-        hitSlop={6}
-        style={({ pressed }) => [styles.header, pressed && styles.pressed]}
         onPress={() => onToggle?.(block.groupId)}
       >
-        <Bot size={14} color={colors.textMuted} strokeWidth={2} />
+        <Bot size={16} color={colors.textMuted} strokeWidth={2} />
         <View style={[styles.dot, stateDotStyle(alertState ?? verdictState)]} />
         <Text style={[styles.headline, working && styles.headlineWorking]} numberOfLines={1}>
           {headline}
@@ -109,48 +108,36 @@ export function MobileNativeChatSubagentGroup({
           ) : null}
           {header.tokens !== null ? ` · ${header.tokens}` : null}
         </Text>
-        <View style={open ? styles.caretOpen : undefined}>
-          <ChevronRight size={14} color={colors.textMuted} strokeWidth={2} />
-        </View>
-      </Pressable>
-      {open
-        ? block.agents.map((agent) => {
-            const state = normalizeSubagentState(agent.state)
-            return (
-              <View key={agent.id} testID="subagent-group-entry" style={styles.entry}>
-                <View style={[styles.dot, stateDotStyle(state)]} />
-                <Text
-                  style={[styles.entryLabel, state === 'idle' && styles.entryLabelIdle]}
-                  numberOfLines={1}
-                >
-                  {agent.label}
-                </Text>
-                <Text style={styles.entryState} numberOfLines={1}>
-                  {subagentStateLabel(state, 1, 1, say)}
-                  {typeof agent.tokens === 'number'
-                    ? ` · ${formatSubagentTokens(agent.tokens)}`
-                    : null}
-                </Text>
-              </View>
-            )
-          })
-        : null}
+      </MobileNativeChatDisclosureRow>
+      <Collapsible open={open}>
+        {block.agents.map((agent) => {
+          const state = normalizeSubagentState(agent.state)
+          return (
+            <View key={agent.id} testID="subagent-group-entry" style={styles.entry}>
+              <View style={[styles.dot, stateDotStyle(state)]} />
+              <Text
+                style={[styles.entryLabel, state === 'idle' && styles.entryLabelIdle]}
+                numberOfLines={1}
+              >
+                {agent.label}
+              </Text>
+              <Text style={styles.entryState} numberOfLines={1}>
+                {subagentStateLabel(state, 1, 1, say)}
+                {typeof agent.tokens === 'number'
+                  ? ` · ${formatSubagentTokens(agent.tokens)}`
+                  : null}
+              </Text>
+            </View>
+          )
+        })}
+      </Collapsible>
     </View>
   )
 }
 
 const styles = StyleSheet.create({
   group: {
-    paddingVertical: spacing.xs
-  },
-  header: {
-    minHeight: 28,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm
-  },
-  pressed: {
-    opacity: 0.6
+    paddingVertical: 2
   },
   dot: {
     width: 6,
@@ -158,41 +145,41 @@ const styles = StyleSheet.create({
     borderRadius: 3
   },
   headline: {
+    ...textStyles.callout,
     flexShrink: 0,
     maxWidth: '60%',
-    color: colors.textMuted,
-    fontSize: typography.bodySize
+    color: colors.textMuted
   },
   headlineWorking: {
     color: colors.textPrimary
   },
   verdict: {
+    ...textStyles.footnote,
     flex: 1,
     minWidth: 0,
     textAlign: 'right',
     color: colors.textMuted,
-    fontSize: typography.metaSize
+    fontVariant: ['tabular-nums']
   },
   entryState: {
+    ...textStyles.footnote,
     marginLeft: 'auto',
     flexShrink: 0,
-    color: colors.textMuted,
-    fontSize: typography.metaSize
+    color: colors.textMuted
   },
-  caretOpen: {
-    transform: [{ rotate: '90deg' }]
-  },
+  // Under the headline: past the bot glyph and its gap.
   entry: {
-    minHeight: 24,
+    minHeight: 32,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    paddingLeft: spacing.lg + spacing.xs
+    paddingLeft: 16 + spacing.sm,
+    paddingRight: 16 + spacing.sm
   },
   entryLabel: {
+    ...textStyles.subhead,
     flexShrink: 1,
-    color: colors.textPrimary,
-    fontSize: typography.metaSize
+    color: colors.textPrimary
   },
   entryLabelIdle: {
     color: colors.textMuted

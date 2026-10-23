@@ -4,7 +4,7 @@ import { useTerminalViewportRefit } from '../terminal/terminal-viewport-refit'
 import { removeCustomKey, type CustomKey } from '../terminal/terminal-custom-keys'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
 import { writeLastVisitedWorktree } from '../worktree/last-visited-worktree-by-host'
-import { resolveTabStripScrollOffset } from './tab-strip-scroll'
+import { resolveTabStripCenteredOffset } from './tab-strip-scroll'
 import type { MobileSessionLifecycleModel } from './use-mobile-session-lifecycle'
 
 /**
@@ -130,15 +130,15 @@ export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope)
       return
     }
     const layout = tabLayoutsRef.current.get(tabId)
-    if (!layout) {
+    if (!layout || tabStripViewportWidthRef.current <= 0) {
       return
     }
-    const nextOffset = resolveTabStripScrollOffset({
+    // Why: the strip's equal-width tabs read best with the active one centred, as Ghostty's do.
+    const nextOffset = resolveTabStripCenteredOffset({
       tabX: layout.x,
       tabWidth: layout.width,
       viewportWidth: tabStripViewportWidthRef.current,
-      contentWidth: tabStripContentWidthRef.current,
-      currentOffset: tabStripOffsetRef.current
+      contentWidth: tabStripContentWidthRef.current
     })
     if (nextOffset !== tabStripOffsetRef.current) {
       tabStripOffsetRef.current = nextOffset

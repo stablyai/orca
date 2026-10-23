@@ -1,8 +1,9 @@
 import { useWallAppUpdate } from '../app-update/use-wall-app-update'
 import { openExternalLink } from '../platform/external-link'
 import { useRouteHandoff } from '../navigation/route-handoff'
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { Platform } from 'react-native'
+import { ArrowUpCircle } from 'lucide-react-native'
+import { ShellStateFrame, ShellStateMessage } from '../mobile-web-shell/ShellStateFrame'
 import type { CompatVerdict } from '../transport/protocol-compat'
 import type { MobileWebBundleCompatVerdict } from '../transport/mobile-web-bundle-compat'
 import type { PageRouteRefusalVerdict } from '../mobile-web-shell/page-route-policy'
@@ -20,10 +21,12 @@ export type BlockedVerdict =
 
 type Props = {
   verdict: BlockedVerdict
+  /** The desktop's name for the bar, when the caller has it. */
+  hostName?: string
 }
 
 const DESKTOP_TOO_OLD_BODY =
-  'This paired desktop app is too old for your current Orca Mobile app. Update Orca on your computer, then try this host again.'
+  'This paired desktop app is too old for your current Orca Mobile app. Update Orca on your computer, then open this desktop again.'
 
 /** What clears the wall. `refresh-bundle` is the one that no store can: the cached workspace is
  *  older than this host's client floor, so a download fixes it and an app update does not. */
@@ -57,18 +60,18 @@ function blockTitle(remedy: BlockRemedy): string {
 
 function blockBody(verdict: BlockedVerdict, remedy: BlockRemedy, storeName: string): string {
   if (remedy === 'refresh-bundle') {
-    return 'The workspace cached for this host is older than the desktop expects. Reconnect to this host to download the current one.'
+    return 'The workspace saved on this phone is older than the desktop expects. Reconnect to this desktop to download the current one.'
   }
   if (verdict.reason === 'mobile-too-old') {
-    return `This desktop needs a newer Orca Mobile app. Update Orca Mobile from ${storeName}, then try this host again.`
+    return `This desktop needs a newer Orca Mobile app. Update Orca Mobile from ${storeName}, then open this desktop again.`
   }
   if (remedy === 'update-mobile') {
-    return `This desktop's mobile workspace needs a newer Orca Mobile app. Update Orca Mobile from ${storeName}, then try this host again.`
+    return `This desktop's mobile workspace needs a newer Orca Mobile app. Update Orca Mobile from ${storeName}, then open this desktop again.`
   }
   return DESKTOP_TOO_OLD_BODY
 }
 
-export function ProtocolBlockScreen({ verdict }: Props) {
+export function ProtocolBlockScreen({ verdict, hostName }: Props) {
   const router = useRouteHandoff()
   const mobileUpdate = useWallAppUpdate()
   const remedy = blockRemedy(verdict)
@@ -92,99 +95,34 @@ export function ProtocolBlockScreen({ verdict }: Props) {
   const body = blockBody(verdict, remedy, mobileUpdateTarget.storeName)
   const recoveryNote =
     remedy === 'refresh-bundle'
-      ? 'If this message stays, remove this host and pair it again.'
-      : 'Already updated? Go back to Hosts and refresh the connection. If this message stays, remove this host and pair it again.'
+      ? 'If this keeps showing, remove this desktop and pair it again.'
+      : 'Already updated? Go back and reconnect. If this keeps showing, remove this desktop and pair it again.'
+
+  // The handoff, not expo-router's singleton: `/` is the phone's home screen and the page does not
+  // carry it, so inside the shell a singleton replace renders the root route in the WebView rather
+  // than leaving it. This posts the target to the shell.
+  const leave = () => router.replace('/')
+  const back = { label: 'Back to desktops', onPress: leave }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.card}>
-        <Text style={styles.title}>{title}</Text>
-        <Text style={styles.body}>{body}</Text>
-        {primaryAction ? (
-          <Pressable
-            style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}
-            onPress={() => {
-              // The seam: this screen is in the tasks page closure, where react-native's `openURL`
-              // calls a `window.open` both shells refuse and resolves anyway.
-              openExternalLink(primaryAction.url)
-            }}
-          >
-            <Text style={styles.primaryButtonText}>{primaryAction.label}</Text>
-          </Pressable>
-        ) : null}
-        <Pressable
-          style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}
-          onPress={() => {
-            // The handoff, not expo-router's singleton: `/` is the phone's home screen and the
-            // page does not carry it, so inside the shell a singleton replace renders the root
-            // route in the WebView rather than leaving it. This posts the target to the shell.
-            router.replace('/')
-          }}
-        >
-          <Text style={styles.secondaryButtonText}>Back to hosts</Text>
-        </Pressable>
-        <Text style={styles.recoveryNote}>{recoveryNote}</Text>
-      </View>
-    </View>
+    <ShellStateFrame title={hostName} onBack={leave} backAccessibilityLabel="Back to desktops">
+      <ShellStateMessage
+        icon={ArrowUpCircle}
+        title={title}
+        message={body}
+        note={recoveryNote}
+        primary={
+          primaryAction
+            ? {
+                label: primaryAction.label,
+                // The seam: this screen is in the tasks page closure, where react-native's `openURL`
+                // calls a `window.open` both shells refuse and resolves anyway.
+                onPress: () => openExternalLink(primaryAction.url)
+              }
+            : back
+        }
+        secondary={primaryAction ? back : undefined}
+      />
+    </ShellStateFrame>
   )
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bgBase,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.lg
-  },
-  card: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: radii.card,
-    padding: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
-  title: {
-    fontSize: typography.titleSize,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    marginBottom: spacing.sm
-  },
-  body: {
-    fontSize: typography.bodySize,
-    color: colors.textSecondary,
-    lineHeight: 20,
-    marginBottom: spacing.lg
-  },
-  primaryButton: {
-    backgroundColor: colors.textPrimary,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: radii.button,
-    alignItems: 'center',
-    marginBottom: spacing.sm
-  },
-  primaryButtonText: {
-    fontSize: typography.bodySize,
-    fontWeight: '600',
-    color: colors.bgBase
-  },
-  secondaryButton: {
-    backgroundColor: colors.bgRaised,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: radii.button,
-    alignItems: 'center'
-  },
-  secondaryButtonText: {
-    fontSize: typography.bodySize,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  recoveryNote: {
-    fontSize: typography.metaSize,
-    color: colors.textMuted,
-    lineHeight: 17,
-    marginTop: spacing.md
-  },
-  pressed: {
-    opacity: 0.7
-  }
-})

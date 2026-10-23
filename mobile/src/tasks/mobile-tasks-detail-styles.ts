@@ -1,33 +1,33 @@
-import { StyleSheet, colors, radii, spacing, typography } from './mobile-tasks-dependencies'
+import { StyleSheet, colors, radii, spacing, textStyles } from './mobile-tasks-dependencies'
 
 export const mobileTasksDetailStyles = StyleSheet.create({
   groupSeparator: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
+    backgroundColor: colors.separator,
+    marginLeft: spacing.lg
   },
   repoPickerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md + 2,
-    paddingVertical: spacing.md
+    gap: spacing.md,
+    minHeight: 52,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm
   },
   repoPickerTextWrap: {
     flex: 1,
     minWidth: 0
   },
   repoPickerTitle: {
-    fontSize: typography.bodySize,
+    ...textStyles.body,
     color: colors.textPrimary
   },
   repoPickerSubtitle: {
-    fontSize: 11,
-    color: colors.textMuted,
-    marginTop: 1
+    ...textStyles.subhead,
+    color: colors.textSecondary
   },
   sheetHeader: {
-    paddingHorizontal: spacing.xs,
+    paddingHorizontal: spacing.sm,
     marginBottom: spacing.md
   },
   sheetTitleRow: {
@@ -36,81 +36,80 @@ export const mobileTasksDetailStyles = StyleSheet.create({
     gap: spacing.sm
   },
   sheetTitle: {
+    ...textStyles.headline,
     flex: 1,
     minWidth: 0,
-    fontSize: 15,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    lineHeight: 20
+    color: colors.textPrimary
   },
   sheetSubtitle: {
-    fontSize: 12,
-    color: colors.textMuted,
+    ...textStyles.footnote,
+    color: colors.textSecondary,
     marginTop: 2
   },
   actionGroup: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: 12,
+    marginHorizontal: spacing.xs,
+    backgroundColor: colors.groupFill,
+    borderRadius: radii.group,
     overflow: 'hidden'
   },
   detailGroup: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: 12,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    gap: spacing.md
+    gap: spacing.lg,
+    marginBottom: spacing.md
   },
   detailLoading: {
-    paddingVertical: spacing.lg,
-    alignItems: 'center'
+    minHeight: 120,
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   detailLoadingInline: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm
+    gap: spacing.sm,
+    padding: spacing.lg
   },
   detailError: {
-    color: colors.statusRed,
-    fontSize: 13
+    ...textStyles.footnote,
+    color: colors.danger
   },
   detailMetaGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.sm
+    gap: spacing.md
   },
   detailMetaItem: {
     minWidth: 96,
     flexGrow: 1
   },
   detailMetaLabel: {
-    fontSize: 11,
-    color: colors.textMuted,
+    ...textStyles.footnote,
+    fontWeight: '500',
+    color: colors.textSecondary,
     marginBottom: 2
   },
   detailMetaValue: {
-    fontSize: 13,
-    color: colors.textPrimary,
-    fontWeight: '600'
+    ...textStyles.callout,
+    color: colors.textPrimary
   },
   chipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.xs
+    gap: 6
   },
   detailChip: {
+    minHeight: 28,
+    justifyContent: 'center',
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgRaised,
-    borderRadius: 999,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2
+    borderColor: 'transparent',
+    backgroundColor: colors.fill,
+    borderRadius: radii.pill,
+    paddingHorizontal: 10
   },
   detailChipSelected: {
-    borderColor: colors.accentBlue,
-    backgroundColor: colors.bgRaised
+    borderColor: colors.fieldBorderFocused,
+    backgroundColor: colors.fillPressed
   },
   detailChipText: {
-    fontSize: 11,
+    ...textStyles.footnote,
     color: colors.textSecondary
   },
   issueTypeChipContent: {
@@ -119,12 +118,12 @@ export const mobileTasksDetailStyles = StyleSheet.create({
     gap: spacing.xs
   },
   issueTypeDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 999
+    width: 8,
+    height: 8,
+    borderRadius: 4
   },
   detailSection: {
-    gap: spacing.xs
+    gap: spacing.sm
   },
   detailSectionHeader: {
     flexDirection: 'row',
@@ -133,37 +132,35 @@ export const mobileTasksDetailStyles = StyleSheet.create({
     gap: spacing.sm
   },
   detailSectionTitle: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5
+    ...textStyles.footnote,
+    fontWeight: '500',
+    color: colors.textMuted
   },
   detailSectionMeta: {
+    ...textStyles.footnote,
     flexShrink: 0,
-    fontSize: 11,
     color: colors.textMuted
   },
   fieldButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    minHeight: 48,
+    backgroundColor: colors.fieldFill,
+    borderRadius: radii.field,
+    paddingHorizontal: 14,
     borderWidth: 1,
-    borderColor: colors.borderSubtle
+    borderColor: colors.fieldBorder
   },
   fieldButtonDisabled: {
-    opacity: 0.55
+    opacity: 0.4
   },
   fieldButtonPlaceholder: {
     color: colors.textMuted
   },
   fieldButtonText: {
+    ...textStyles.body,
     flex: 1,
-    fontSize: typography.bodySize,
     color: colors.textPrimary
   }
 })

@@ -1,5 +1,8 @@
 import { StyleSheet } from 'react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { colors, radii, spacing, textStyles } from '../theme/mobile-theme'
+import { slideTransition } from '../components/ui/transition-styles'
+
+const CONTENT_MAX_WIDTH = 420
 
 export const mobileOnboardingStyles = StyleSheet.create({
   container: {
@@ -14,23 +17,23 @@ export const mobileOnboardingStyles = StyleSheet.create({
     paddingHorizontal: spacing.xl
   },
   brandName: {
-    color: colors.textPrimary,
-    fontSize: 17,
-    fontWeight: '700'
+    ...textStyles.headline,
+    color: colors.textPrimary
   },
   progress: {
     position: 'absolute',
     left: '50%',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 7,
-    transform: [{ translateX: -18 }]
+    gap: 6,
+    transform: [{ translateX: -17 }]
   },
   progressDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 999,
-    backgroundColor: colors.borderSubtle
+    width: 6,
+    height: 6,
+    borderRadius: radii.pill,
+    backgroundColor: colors.fillPressed,
+    ...slideTransition
   },
   progressDotActive: {
     width: 22,
@@ -64,81 +67,38 @@ export const mobileOnboardingStyles = StyleSheet.create({
     justifyContent: 'flex-start',
     paddingTop: spacing.xl
   },
-  iconSurface: {
-    width: 64,
-    height: 64,
-    borderRadius: radii.card,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bgRaised,
-    marginBottom: spacing.xl
-  },
   title: {
-    maxWidth: 420,
+    ...textStyles.largeTitle,
+    maxWidth: CONTENT_MAX_WIDTH,
     color: colors.textPrimary,
-    fontSize: 26,
-    fontWeight: '700',
-    letterSpacing: -0.3,
     textAlign: 'center'
   },
   body: {
-    maxWidth: 420,
+    ...textStyles.body,
+    maxWidth: CONTENT_MAX_WIDTH,
     color: colors.textSecondary,
-    fontSize: typography.bodySize,
-    lineHeight: 21,
     textAlign: 'center',
     marginTop: spacing.md
   },
   footer: {
     width: '100%',
-    maxWidth: 420,
+    maxWidth: CONTENT_MAX_WIDTH,
     alignSelf: 'center',
     paddingBottom: spacing.lg
   },
   disclosure: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    lineHeight: 18,
+    ...textStyles.footnote,
+    color: colors.textMuted,
     textAlign: 'center',
     marginBottom: spacing.lg
   },
-  primaryButton: {
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.button,
-    backgroundColor: colors.surfaceBright,
-    paddingVertical: spacing.sm
-  },
-  primaryButtonText: {
-    color: colors.bgBase,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
-  },
-  secondaryButton: {
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.button,
-    marginTop: spacing.xs,
-    paddingVertical: spacing.sm
-  },
-  secondaryButtonText: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize,
-    fontWeight: '500'
-  },
-  buttonPressed: {
-    opacity: 0.72
-  },
-  buttonDisabled: {
-    opacity: 0.58
+  choices: {
+    gap: spacing.xs
   },
   error: {
-    color: colors.statusRed,
-    fontSize: typography.metaSize,
-    lineHeight: 18,
+    ...textStyles.footnote,
+    color: colors.danger,
     textAlign: 'center',
-    marginBottom: spacing.sm
+    marginBottom: spacing.md
   }
 })

@@ -1,9 +1,12 @@
 import { memo, useCallback, useMemo, useState } from 'react'
-import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'react-native'
-import { Maximize2, X } from 'lucide-react-native'
+import { ActivityIndicator, Modal, StyleSheet, View } from 'react-native'
+import { Maximize2 } from 'lucide-react-native'
 import type { NativeChatVisualDirective } from '../../../src/shared/native-chat-visual-directive'
 import { useWindowSafeAreaInsets } from '../layout/side-safe-area'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { Banner } from '../components/ui/Banner'
+import { IconButton } from '../components/ui/IconButton'
+import { SheetHeader } from '../components/ui/SheetHeader'
+import { colors, radii, spacing } from '../theme/mobile-theme'
 import type { MobileNativeChatVisualSource } from './mobile-native-chat-visual-read'
 import { MOBILE_NATIVE_CHAT_VISUAL_INITIAL_HEIGHT } from './mobile-native-chat-visual-host-document'
 import { MobileNativeChatVisualFrame } from './MobileNativeChatVisualFrame'
@@ -62,15 +65,12 @@ export const MobileNativeChatVisual = memo(function MobileNativeChatVisual({
   }
   if (state.kind === 'unavailable' || frameFailed) {
     return (
-      <Pressable
-        onPress={onRetry}
-        accessibilityRole="button"
-        accessibilityLabel="Visualization unavailable"
-        accessibilityHint="Tries to load it again"
-        style={styles.unavailable}
-      >
-        <Text style={styles.unavailableText}>Visualization unavailable</Text>
-      </Pressable>
+      <View style={styles.unavailable}>
+        <Banner
+          message="This visualization couldn't load."
+          action={{ label: 'Try again', onPress: onRetry }}
+        />
+      </View>
     )
   }
   return (
@@ -81,15 +81,13 @@ export const MobileNativeChatVisual = memo(function MobileNativeChatVisual({
         mode="inline"
         onFailed={onFrameFailed}
       />
-      <Pressable
-        onPress={() => setFullscreen(true)}
-        accessibilityRole="button"
+      <IconButton
+        icon={Maximize2}
         accessibilityLabel={`Open ${title} full screen`}
-        hitSlop={8}
+        onPress={() => setFullscreen(true)}
+        iconSize={16}
         style={styles.openButton}
-      >
-        <Maximize2 size={14} color={colors.textSecondary} strokeWidth={2.2} />
-      </Pressable>
+      />
       {fullscreen ? (
         <MobileNativeChatVisualFullscreen
           html={state.html}
@@ -128,18 +126,7 @@ function MobileNativeChatVisualFullscreen({
         ]}
       >
         <View style={styles.sheetHeader}>
-          <Text style={styles.sheetTitle} numberOfLines={1}>
-            {title}
-          </Text>
-          <Pressable
-            onPress={onClose}
-            accessibilityRole="button"
-            accessibilityLabel="Close"
-            hitSlop={8}
-            style={styles.closeButton}
-          >
-            <X size={18} color={colors.textSecondary} strokeWidth={2.2} />
-          </Pressable>
+          <SheetHeader title={title} trailing={{ label: 'Done', onPress: onClose }} />
         </View>
         <MobileNativeChatVisualFrame
           html={html}
@@ -155,45 +142,27 @@ function MobileNativeChatVisualFullscreen({
 const styles = StyleSheet.create({
   frame: {
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.row,
+    borderColor: colors.separator,
+    borderRadius: radii.card,
     marginBottom: spacing.sm,
     overflow: 'hidden'
   },
   placeholder: {
     height: MOBILE_NATIVE_CHAT_VISUAL_INITIAL_HEIGHT,
     alignItems: 'center',
-    justifyContent: 'center'
+    justifyContent: 'center',
+    backgroundColor: colors.bgPanel
   },
-  unavailable: { marginBottom: spacing.sm, paddingVertical: spacing.xs },
-  unavailableText: { color: colors.textMuted, fontSize: typography.metaSize },
+  // The banner insets itself for a screen edge; in a message it takes the prose column.
+  unavailable: { marginHorizontal: -spacing.lg, marginBottom: spacing.sm },
   openButton: {
     position: 'absolute',
-    top: spacing.xs,
-    right: spacing.xs,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bgPanel,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle
+    top: 0,
+    right: 0
   },
   sheet: { flex: 1, backgroundColor: colors.bgBase },
   sheetHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle
-  },
-  sheetTitle: {
-    flex: 1,
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
-  },
-  closeButton: { padding: spacing.xs }
+    borderBottomColor: colors.separator
+  }
 })

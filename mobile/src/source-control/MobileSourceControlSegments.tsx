@@ -1,4 +1,5 @@
-import { Pressable, Text, View } from 'react-native'
+import { View } from 'react-native'
+import { MobileSegmentedControl } from '../components/MobileSegmentedControl'
 import {
   SOURCE_CONTROL_HUB_TABS,
   SOURCE_CONTROL_HUB_TAB_LABELS,
@@ -11,35 +12,23 @@ type Props = {
   onSelect: (tab: SourceControlHubTab) => void
 }
 
+const SEGMENTS = SOURCE_CONTROL_HUB_TABS.map((tab) => ({
+  value: tab,
+  label: SOURCE_CONTROL_HUB_TAB_LABELS[tab]
+}))
+
 // The hub's top-level lens switcher. Switching is local state (no route push) so
-// scroll position and the shared branch card persist across Changes/PR/History.
+// scroll position and the shared branch header persist across Changes/PR/History.
 export function MobileSourceControlSegments({ active, onSelect }: Props) {
   return (
-    <View style={hubStyles.segments} accessibilityRole="tablist">
-      {SOURCE_CONTROL_HUB_TABS.map((tab) => {
-        const isActive = tab === active
-        return (
-          <Pressable
-            key={tab}
-            style={({ pressed }) => [
-              hubStyles.segment,
-              isActive && hubStyles.segmentActive,
-              pressed && !isActive && hubStyles.segmentPressed
-            ]}
-            onPress={() => onSelect(tab)}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: isActive }}
-            accessibilityLabel={SOURCE_CONTROL_HUB_TAB_LABELS[tab]}
-          >
-            <Text
-              style={[hubStyles.segmentText, isActive && hubStyles.segmentTextActive]}
-              numberOfLines={1}
-            >
-              {SOURCE_CONTROL_HUB_TAB_LABELS[tab]}
-            </Text>
-          </Pressable>
-        )
-      })}
+    <View style={hubStyles.segments}>
+      <MobileSegmentedControl
+        segments={SEGMENTS}
+        selected={active}
+        onSelect={onSelect}
+        testIDPrefix="source-control-tab-"
+        fill
+      />
     </View>
   )
 }

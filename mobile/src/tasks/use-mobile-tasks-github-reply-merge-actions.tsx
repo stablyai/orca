@@ -1,5 +1,6 @@
 import type { GithubCheckFileActionsModel } from './use-mobile-tasks-github-check-file-actions'
 import { useCallback } from './mobile-tasks-dependencies'
+import { triggerSuccess } from '../platform/haptics'
 import {
   githubIssueCommentWrite,
   githubReviewCommentReplyWrite
@@ -168,6 +169,7 @@ export function useMobileTasksGithubReplyMergeActions(model: GithubCheckFileActi
         if (merged.ok === false) {
           throw new Error(merged.error ?? 'Failed to merge')
         }
+        triggerSuccess()
         setActionItem(null)
         await loadTasks({ silent: true })
       } catch (err) {
@@ -230,7 +232,11 @@ export function useMobileTasksGithubReplyMergeActions(model: GithubCheckFileActi
     },
     [client, loadTasks, mutatingStatus, taskUiReady]
   )
-  return Object.assign(model, { replyToGitHubComment, mergeHostedReview, setLinearStatus })
+  return Object.assign(model, {
+    replyToGitHubComment,
+    mergeHostedReview,
+    setLinearStatus
+  })
 }
 
 export type GithubReplyMergeActionsModel = ReturnType<typeof useMobileTasksGithubReplyMergeActions>

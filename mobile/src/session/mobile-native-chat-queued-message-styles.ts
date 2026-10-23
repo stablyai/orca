@@ -1,39 +1,23 @@
 import { StyleSheet } from 'react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
-import { COMPOSER_INSET_TOP } from './mobile-native-chat-composer-styles'
+import { colors, MIN_TOUCH_TARGET, motion, spacing, textStyles } from '../theme/mobile-theme'
+import { composerTrayStyles } from './mobile-native-chat-composer-styles'
 
-// A card's actions touch as 44pt targets (platform floor) inside its row: Android drops touches
-// outside the parent, so the row is at least that tall and nothing overhangs it.
-const MIN_TOUCH_TARGET = 44
-const HEADER_HEIGHT = spacing.xl + spacing.sm
-const META_LINE_HEIGHT = typography.metaSize + spacing.xs
-
-// How far the box runs under the composer's top edge, so the two read as one piece.
-const COMPOSER_TUCK = 12
+// A card's actions touch as 44pt targets inside its row: Android drops touches outside the parent,
+// so the row is at least that tall and nothing overhangs it.
+export const QUEUED_ICON_SIZE = 16
+const ICON_SIZE = QUEUED_ICON_SIZE
 
 export const queuedMessageStyles = StyleSheet.create({
-  // Inset from the composer's sides, and pulled down behind it: the composer draws after it.
-  list: {
-    marginHorizontal: spacing.lg,
-    marginTop: spacing.xs,
-    marginBottom: -(COMPOSER_INSET_TOP + COMPOSER_TUCK)
-  },
-  box: {
-    paddingBottom: COMPOSER_TUCK,
-    backgroundColor: colors.bgPanel,
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderBottomWidth: 0,
-    borderColor: colors.composerBorder,
-    overflow: 'hidden'
-  },
+  // A tray layer: inset from the composer's sides and tucked under its top edge.
+  list: composerTrayStyles.layer,
+  box: composerTrayStyles.panel,
   header: {
-    minHeight: HEADER_HEIGHT,
+    minHeight: MIN_TOUCH_TARGET,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    paddingLeft: spacing.md
+    paddingLeft: spacing.lg,
+    paddingRight: spacing.xs
   },
   // Large text: Clear all and Resume on a line of their own, under the label; at the largest sizes
   // one button is all a small phone's line holds, so they wrap.
@@ -42,7 +26,7 @@ export const queuedMessageStyles = StyleSheet.create({
     flexWrap: 'wrap',
     justifyContent: 'flex-end',
     gap: spacing.xs,
-    paddingHorizontal: spacing.xs
+    paddingHorizontal: spacing.sm
   },
   headerToggle: {
     position: 'absolute',
@@ -58,65 +42,49 @@ export const queuedMessageStyles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xs
   },
-  headerPaused: {
-    backgroundColor: colors.bgRaised
-  },
+  headerPaused: { backgroundColor: colors.fill },
   headerLabel: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize,
-    lineHeight: META_LINE_HEIGHT,
-    paddingVertical: spacing.sm
+    ...textStyles.footnote,
+    fontWeight: '500',
+    color: colors.textSecondary
   },
   headerLabelPaused: {
-    color: colors.textPrimary,
-    fontWeight: '500'
+    color: colors.textPrimary
   },
   headerCount: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize,
-    lineHeight: META_LINE_HEIGHT,
-    paddingVertical: spacing.sm,
+    ...textStyles.footnote,
+    fontWeight: '500',
+    color: colors.textSecondary,
     fontVariant: ['tabular-nums']
   },
   // A long reason truncates in the space left; the count beside it never does.
   headerCaption: {
+    ...textStyles.footnote,
     flex: 1,
     minWidth: 0,
-    color: colors.statusRed,
-    fontSize: typography.metaSize,
-    lineHeight: META_LINE_HEIGHT,
-    paddingVertical: spacing.sm
-  },
-  // minHeight, not height: rows grow with the system text size instead of clipping.
-  headerAction: {
-    minHeight: HEADER_HEIGHT,
-    minWidth: MIN_TOUCH_TARGET,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    borderRadius: radii.button
+    color: colors.danger
   },
   chevron: {
     width: 36,
-    minHeight: HEADER_HEIGHT,
+    minHeight: MIN_TOUCH_TARGET,
     alignItems: 'center',
     justifyContent: 'center'
   },
+  chevronOpen: { transform: [{ rotate: '0deg' }] },
+  chevronClosed: { transform: [{ rotate: '-90deg' }] },
   card: {
     minHeight: MIN_TOUCH_TARGET
   },
   row: {
-    minHeight: MIN_TOUCH_TARGET,
+    minHeight: MIN_TOUCH_TARGET + 8,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    paddingLeft: spacing.md
+    gap: spacing.md,
+    paddingLeft: spacing.lg
   },
   divided: {
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.composerBorder
+    borderTopColor: colors.separator
   },
   textColumn: {
     flex: 1,
@@ -125,55 +93,30 @@ export const queuedMessageStyles = StyleSheet.create({
     gap: 2
   },
   bodyText: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    lineHeight: typography.bodySize + 6
+    ...textStyles.callout,
+    color: colors.textPrimary
   },
   expandedBody: {
-    paddingLeft: spacing.md + 14 + spacing.sm,
-    paddingRight: spacing.md,
+    paddingLeft: spacing.lg + ICON_SIZE + spacing.md,
+    paddingRight: spacing.lg,
     paddingBottom: spacing.sm
   },
   caption: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize
+    ...textStyles.footnote,
+    color: colors.textMuted
   },
   captionReturned: {
-    color: colors.statusRed
+    color: colors.danger
   },
   actions: {
-    flexDirection: 'row'
-  },
-  textAction: {
-    minHeight: MIN_TOUCH_TARGET,
-    minWidth: MIN_TOUCH_TARGET,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    borderRadius: radii.button
-  },
-  // The composer's 40pt button width; the row's last action keeps the full 44.
-  iconAction: {
-    minHeight: MIN_TOUCH_TARGET,
-    width: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.button
-  },
-  lastIconAction: {
-    width: MIN_TOUCH_TARGET
-  },
-  actionLabel: {
-    color: colors.textPrimary,
-    fontSize: typography.metaSize,
-    fontWeight: '500'
+    paddingRight: spacing.xs
   },
   pressed: {
-    backgroundColor: colors.bgRaised
+    backgroundColor: colors.fill
   },
   disabled: {
-    opacity: 0.5
+    opacity: motion.disabledOpacity
   }
 })

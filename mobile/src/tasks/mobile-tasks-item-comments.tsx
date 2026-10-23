@@ -157,7 +157,9 @@ export function renderCommentReactions(comment: DetailComment): ReactNode {
       {reactions.map((reaction) => (
         <View key={reaction.content} style={styles.reactionChip}>
           <Text style={styles.reactionText}>
-            {COMMENT_REACTION_EMOJI[reaction.content ?? '']} {reaction.count}
+            {[COMMENT_REACTION_EMOJI[reaction.content ?? ''], reaction.count]
+              .filter(Boolean)
+              .join(' ')}
           </Text>
         </View>
       ))}

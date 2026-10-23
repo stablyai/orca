@@ -1,5 +1,6 @@
 import type { GithubReplyMergeActionsModel } from './use-mobile-tasks-github-reply-merge-actions'
 import { useCallback } from './mobile-tasks-dependencies'
+import { triggerSuccess } from '../platform/haptics'
 import {
   type DetailComment,
   type LinearIssueChild,
@@ -54,6 +55,7 @@ export function useMobileTasksLinearItemActions(model: GithubReplyMergeActionsMo
           createdAt: new Date().toISOString(),
           user: { displayName: 'You' }
         }
+        triggerSuccess()
         setLinearCommentDraft('')
         setDetailPayload((current) =>
           current?.provider === 'linear'
@@ -148,7 +150,11 @@ export function useMobileTasksLinearItemActions(model: GithubReplyMergeActionsMo
     },
     [client, linearSubIssueTitle, mutatingStatus]
   )
-  return Object.assign(model, { addLinearComment, openLinearSubIssue, createLinearSubIssue })
+  return Object.assign(model, {
+    addLinearComment,
+    openLinearSubIssue,
+    createLinearSubIssue
+  })
 }
 
 export type LinearItemActionsModel = ReturnType<typeof useMobileTasksLinearItemActions>

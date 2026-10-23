@@ -1,5 +1,6 @@
-import { Image, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { Image, Modal, ScrollView, StyleSheet, View } from 'react-native'
 import { X } from 'lucide-react-native'
+import { IconButton } from '../components/ui/IconButton'
 import { useWindowSafeAreaInsets } from '../layout/side-safe-area'
 import { colors, spacing } from '../theme/mobile-theme'
 
@@ -31,15 +32,13 @@ export function MobileNativeChatImageViewer({
             accessibilityLabel={label}
           />
         </ScrollView>
-        <Pressable
-          style={[styles.close, { top: insets.top + spacing.sm }]}
-          onPress={onClose}
-          hitSlop={12}
-          accessibilityRole="button"
+        <IconButton
+          icon={X}
           accessibilityLabel="Close image"
-        >
-          <X size={22} color={colors.textPrimary} strokeWidth={2} />
-        </Pressable>
+          onPress={onClose}
+          iconSize={18}
+          style={[styles.close, { top: insets.top + spacing.xs }]}
+        />
       </View>
     </Modal>
   )
@@ -59,9 +58,6 @@ const styles = StyleSheet.create({
   },
   close: {
     position: 'absolute',
-    right: spacing.lg,
-    padding: spacing.sm,
-    borderRadius: 999,
-    backgroundColor: colors.bgRaised
+    right: spacing.sm
   }
 })

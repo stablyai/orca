@@ -14,6 +14,8 @@ import {
   MobileMarkdown
 } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
+import { SectionHeader } from '../components/ui/SectionHeader'
+import { detailContentStyles } from './mobile-tasks-item-detail-content'
 
 export function renderMobileTasksProjectLabelsEditor(model: ConnectionPresentationModel) {
   const {
@@ -42,7 +44,7 @@ export function renderMobileTasksProjectLabelsEditor(model: ConnectionPresentati
       {projectLabelsLoading ? (
         <View style={styles.detailLoadingInline}>
           <ActivityIndicator size="small" color={colors.textSecondary} />
-          <Text style={styles.detailMuted}>Loading labels...</Text>
+          <Text style={styles.detailMuted}>Loading labels…</Text>
         </View>
       ) : projectLabelsError ? (
         <Text style={styles.detailError}>{projectLabelsError}</Text>
@@ -115,7 +117,7 @@ export function renderMobileTasksProjectAssigneesEditor(model: ConnectionPresent
       {projectAssignableUsersLoading ? (
         <View style={styles.detailLoadingInline}>
           <ActivityIndicator size="small" color={colors.textSecondary} />
-          <Text style={styles.detailMuted}>Loading assignees...</Text>
+          <Text style={styles.detailMuted}>Loading assignees…</Text>
         </View>
       ) : projectAssignableUsersError ? (
         <Text style={styles.detailError}>{projectAssignableUsersError}</Text>
@@ -238,12 +240,8 @@ export function renderMobileTasksProjectIssueMetadata(model: ConnectionPresentat
     </>
   ) : (
     <>
-      <View style={styles.detailSection}>
-        <Text style={styles.detailSectionTitle}>Title</Text>
-        <Text style={styles.detailLine}>{projectRowItem.content.title}</Text>
-      </View>
-      <View style={styles.detailSection}>
-        <Text style={styles.detailSectionTitle}>Description</Text>
+      <SectionHeader title="Description" />
+      <View style={detailContentStyles.body}>
         <MobileMarkdown content={projectBodyDraft} fallback="No description." />
       </View>
     </>

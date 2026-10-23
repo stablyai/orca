@@ -1,4 +1,4 @@
-import { typography } from '../theme/mobile-theme'
+import { textStyles } from '../theme/mobile-theme'
 
 /**
  * Below this, iOS Safari and every iOS WebView zoom the page when an input takes focus.
@@ -11,7 +11,7 @@ import { typography } from '../theme/mobile-theme'
 export const TEXT_INPUT_FONT_SIZE_FLOOR = 16
 
 /**
- * Web sibling: the app's body size, raised to the size that stops the page being zoomed.
+ * Web sibling: the ramp's body size, raised to the size that stops the page being zoomed.
  *
  * iOS zooms on focus of any input under 16px and does not zoom back out, so the document the
  * keyboard seam is measuring ends up at a scale other than 1 for the whole of a typing session.
@@ -25,4 +25,4 @@ export const TEXT_INPUT_FONT_SIZE_FLOOR = 16
  *
  * `Math.max` rather than the constant, so a theme that raises the body size past 16 keeps it.
  */
-export const TEXT_INPUT_FONT_SIZE = Math.max(typography.bodySize, TEXT_INPUT_FONT_SIZE_FLOOR)
+export const TEXT_INPUT_FONT_SIZE = Math.max(textStyles.body.fontSize, TEXT_INPUT_FONT_SIZE_FLOOR)

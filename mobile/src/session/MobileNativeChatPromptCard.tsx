@@ -1,5 +1,11 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { Text } from 'react-native'
+import { SquareTerminal } from 'lucide-react-native'
+import { Button } from '../components/ui/Button'
+import { Collapsible } from '../components/ui/Collapsible'
+import {
+  MobileNativeChatPromptCardFrame,
+  promptCardStyles
+} from './MobileNativeChatPromptCardFrame'
 import type { AskAnswerSelection, AskPrompt } from '../../../src/shared/native-chat-ask'
 import { MobileNativeChatAsk } from './MobileNativeChatAsk'
 import { MobileNativeChatPermission } from './MobileNativeChatPermission'
@@ -49,19 +55,16 @@ export function MobileNativeChatPromptCard({
 }): React.JSX.Element | null {
   const card =
     ask && requiresTerminal ? (
-      <View style={styles.terminalCard}>
-        <Text style={styles.explanation}>Answer this OMP question in the terminal.</Text>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Answer in terminal"
-          accessibilityState={{ disabled: !onAnswerInTerminal }}
+      <MobileNativeChatPromptCardFrame icon={SquareTerminal} title="OMP is asking a question">
+        <Text style={promptCardStyles.detail}>Answer this OMP question in the terminal.</Text>
+        <Button
+          label="Answer in terminal"
+          variant="primary"
+          size="compact"
           disabled={!onAnswerInTerminal}
-          onPress={onAnswerInTerminal}
-          style={styles.terminalButton}
-        >
-          <Text style={styles.terminalButtonText}>Answer in terminal</Text>
-        </Pressable>
-      </View>
+          onPress={() => onAnswerInTerminal?.()}
+        />
+      </MobileNativeChatPromptCardFrame>
     ) : ask ? (
       <MobileNativeChatAsk
         key={askKey ?? 'ask'}
@@ -104,38 +107,17 @@ export function MobileNativeChatPromptCard({
   // card keeps its selections.
   return (
     <>
-      <View style={collapsedPrompt ? styles.collapsed : undefined}>{card}</View>
-      {collapsedPrompt ? (
-        <MobileNativeChatPromptStrip
-          title={collapsedPrompt.title}
-          onExpand={collapsedPrompt.expand}
-        />
-      ) : null}
+      <Collapsible open={!collapsedPrompt} keepMounted>
+        {card}
+      </Collapsible>
+      <Collapsible open={Boolean(collapsedPrompt)}>
+        {collapsedPrompt ? (
+          <MobileNativeChatPromptStrip
+            title={collapsedPrompt.title}
+            onExpand={collapsedPrompt.expand}
+          />
+        ) : null}
+      </Collapsible>
     </>
   )
 }
-
-const styles = StyleSheet.create({
-  collapsed: { display: 'none' },
-  terminalCard: {
-    backgroundColor: colors.bgPanel,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderSubtle,
-    padding: spacing.md,
-    gap: spacing.sm
-  },
-  explanation: { color: colors.textPrimary, fontSize: typography.bodySize },
-  terminalButton: {
-    alignSelf: 'flex-start',
-    minHeight: 44,
-    justifyContent: 'center',
-    backgroundColor: colors.surfaceBright,
-    borderRadius: radii.button,
-    paddingHorizontal: spacing.md
-  },
-  terminalButtonText: {
-    color: colors.bgBase,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
-  }
-})

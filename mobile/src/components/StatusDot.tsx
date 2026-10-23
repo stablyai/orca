@@ -29,19 +29,24 @@ export function statusDotColor(state: ConnectionState, verdict?: ConnectionVerdi
 // has escalated to error (red).
 export function StatusDot({
   state,
-  verdict
+  verdict,
+  size = 8
 }: {
   state: ConnectionState
   verdict?: ConnectionVerdict
+  size?: number
 }) {
   const color = statusDotColor(state, verdict)
-  return <View style={[styles.dot, { backgroundColor: color }]} />
+  return (
+    <View
+      style={[
+        styles.dot,
+        { width: size, height: size, borderRadius: size / 2, backgroundColor: color }
+      ]}
+    />
+  )
 }
 
 const styles = StyleSheet.create({
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4
-  }
+  dot: { flexShrink: 0 }
 })

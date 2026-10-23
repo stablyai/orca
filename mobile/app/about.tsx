@@ -13,7 +13,7 @@ function getVersionLabel(): string {
     Platform.OS === 'ios'
       ? Constants.expoConfig?.ios?.buildNumber
       : String(Constants.expoConfig?.android?.versionCode ?? '')
-  return build ? `v${version} (${build})` : `v${version}`
+  return build ? `Version ${version} (${build})` : `Version ${version}`
 }
 
 export default function NativeAboutRoute() {

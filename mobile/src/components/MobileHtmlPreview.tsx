@@ -1,7 +1,6 @@
-import { useMemo, useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { Code, Eye } from 'lucide-react-native'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { useMemo, useState, type ReactNode } from 'react'
+import { StyleSheet, View } from 'react-native'
+import { MobilePreviewModeToolbar, type MobilePreviewMode } from './MobilePreviewModeToolbar'
 import { htmlPreviewWithInertLinks } from './html-preview-inert-links'
 import { useHtmlPreviewLinkGrant } from './use-html-preview-link-grant'
 
@@ -9,6 +8,8 @@ export type MobileHtmlPreviewProps = {
   html: string
   // Rendered when the user flips to "Source" (the existing syntax view).
   renderSource: () => React.ReactNode
+  /** The toolbar's trailing action, e.g. Copy. */
+  trailing?: ReactNode
 }
 
 /**
@@ -67,8 +68,8 @@ export const MOBILE_HTML_PREVIEW_SEALED_SANDBOX = ''
  * `referrerPolicy` below: measured in the render rig, WebKit sends the embedder's URL from a srcdoc
  * frame's image despite the attribute, where Chromium sends none.
  */
-export function MobileHtmlPreview({ html, renderSource }: MobileHtmlPreviewProps) {
-  const [mode, setMode] = useState<'preview' | 'source'>('preview')
+export function MobileHtmlPreview({ html, renderSource, trailing }: MobileHtmlPreviewProps) {
+  const [mode, setMode] = useState<MobilePreviewMode>('preview')
   // The shell's answer for this session, asked once: the page mounts after `init` and a session's
   // grants do not change for the life of the document.
   const linksOpen = useHtmlPreviewLinkGrant()
@@ -80,35 +81,12 @@ export function MobileHtmlPreview({ html, renderSource }: MobileHtmlPreviewProps
 
   return (
     <View style={styles.container}>
-      {/* A tab pair, not two buttons: which side is showing is carried by the active style, and a
-          style is announced to nobody. */}
-      <View style={styles.toolbar} accessibilityRole="tablist">
-        <Pressable
-          style={[styles.toggle, mode === 'preview' && styles.toggleActive]}
-          onPress={() => setMode('preview')}
-          accessibilityRole="tab"
-          // Both, because they reach different readers: `accessibilityState` is what the phone's
-          // screen reader takes, and react-native-web drops it entirely -- measured, the DOM carries
-          // no `aria-selected` without the line below.
-          accessibilityState={{ selected: mode === 'preview' }}
-          aria-selected={mode === 'preview'}
-          accessibilityLabel="Preview rendered HTML"
-        >
-          <Eye size={13} color={colors.textSecondary} strokeWidth={2.2} />
-          <Text style={styles.toggleText}>Preview</Text>
-        </Pressable>
-        <Pressable
-          style={[styles.toggle, mode === 'source' && styles.toggleActive]}
-          onPress={() => setMode('source')}
-          accessibilityRole="tab"
-          accessibilityState={{ selected: mode === 'source' }}
-          aria-selected={mode === 'source'}
-          accessibilityLabel="View HTML source"
-        >
-          <Code size={13} color={colors.textSecondary} strokeWidth={2.2} />
-          <Text style={styles.toggleText}>Source</Text>
-        </Pressable>
-      </View>
+      <MobilePreviewModeToolbar
+        mode={mode}
+        onModeChange={setMode}
+        trailing={trailing}
+        testIDPrefix="html-preview-mode-"
+      />
       {/* The Source tab shows what the author wrote, never the rewrite: the rewrite is a rendering
           decision about this shell, and a reader who flipped to Source to read the markup would
           otherwise be shown markup that was never in the artifact. */}
@@ -153,28 +131,5 @@ const IFRAME_STYLE = {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  toolbar: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle
-  },
-  toggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    borderRadius: 6,
-    backgroundColor: colors.bgRaised
-  },
-  toggleActive: {
-    backgroundColor: colors.bgPanel,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
-  toggleText: { color: colors.textSecondary, fontSize: typography.metaSize },
   frame: { flex: 1, backgroundColor: '#ffffff' }
 })

@@ -1,26 +1,12 @@
 import { useEffect, useRef } from 'react'
-import {
-  AccessibilityInfo,
-  ActivityIndicator,
-  Keyboard,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  View
-} from 'react-native'
-import {
-  ChevronLeft,
-  FilePenLine,
-  Hand,
-  LockKeyhole,
-  ShieldAlert,
-  ShieldCheck,
-  X,
-  type LucideIcon
-} from 'lucide-react-native'
+import { AccessibilityInfo, Keyboard, Platform, StyleSheet, View } from 'react-native'
+import { FilePenLine, Hand, ShieldAlert, ShieldCheck, type LucideIcon } from 'lucide-react-native'
 import { BottomDrawer } from '../components/BottomDrawer'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { SheetHeader } from '../components/ui/SheetHeader'
+import { SectionHeader } from '../components/ui/SectionHeader'
+import { ListGroup, LIST_LEADING_INSET } from '../components/ui/ListGroup'
+import { Banner } from '../components/ui/Banner'
+import { colors, spacing } from '../theme/mobile-theme'
 import {
   isReadOnlySessionOptionValue,
   sessionOptionDispatchUnconfirmed,
@@ -34,7 +20,7 @@ import {
   mobileSessionOptionDisabledReason
 } from './mobile-native-chat-session-option-labels'
 import {
-  DescriptorRows,
+  descriptorRowElements,
   ModelPill,
   SessionOptionCaption,
   SessionOptionSummaryRow
@@ -192,6 +178,26 @@ export function MobileNativeChatSessionOptionPickers({
     })
   }
 
+  const permissionLeading = (value: string) => {
+    const Icon = permissionModeIcon(value)
+    return Icon ? (
+      <Icon
+        size={18}
+        color={permissionChoiceColor(value) ?? colors.textSecondary}
+        strokeWidth={2.2}
+      />
+    ) : null
+  }
+  const pageRows = activeDescriptor
+    ? descriptorRowElements({
+        descriptor: activeDescriptor,
+        disabled: permissionView ? busy : locked,
+        onSetOption: (value) => applyOption(activeDescriptor, value),
+        onInvokeAction: () => invokeAction(activeDescriptor),
+        ...(permissionView ? { choiceLeading: permissionLeading } : {})
+      })
+    : []
+
   return (
     <View style={styles.pillSlot}>
       <ModelPill
@@ -217,52 +223,32 @@ export function MobileNativeChatSessionOptionPickers({
       >
         {activeDescriptor ? (
           <View style={styles.sheet}>
-            <View style={styles.sheetHeader}>
-              <Pressable
-                accessibilityLabel={homeView ? 'Close picker' : 'Back to models'}
-                accessibilityRole="button"
-                style={({ pressed }) => [styles.sheetNav, pressed && styles.pressed]}
-                onPress={homeView ? closePicker : () => onNavigate(home.id)}
-                hitSlop={8}
-              >
-                {homeView ? (
-                  <X size={18} color={colors.textSecondary} strokeWidth={2.2} />
-                ) : (
-                  <ChevronLeft size={18} color={colors.textSecondary} strokeWidth={2.2} />
-                )}
-              </Pressable>
-              <Text style={styles.sheetTitle}>{activeDescriptor.label}</Text>
-              <View style={styles.sheetHeaderSide}>
-                {pendingId !== null ? (
-                  <ActivityIndicator size="small" color={colors.textSecondary} />
-                ) : null}
-              </View>
-            </View>
+            <SheetHeader
+              title={activeDescriptor.label}
+              subtitle={pendingId !== null ? 'Applying…' : undefined}
+              leading={homeView ? undefined : { label: 'Back', onPress: () => onNavigate(home.id) }}
+              trailing={{ label: 'Done', onPress: closePicker }}
+            />
             {showWorkingNotice ? (
-              <View style={styles.lockNotice} accessibilityLiveRegion="polite">
-                <LockKeyhole size={16} color={colors.textSecondary} />
-                <View style={styles.lockNoticeBody}>
-                  <Text style={styles.lockNoticeTitle}>Agent is working</Text>
-                  <Text style={styles.lockNoticeDescription}>
-                    Model settings unlock when this turn finishes.
-                  </Text>
-                </View>
+              <View style={styles.notice} accessibilityLiveRegion="polite">
+                <Banner
+                  title="Agent is working"
+                  message="Model settings unlock when this turn finishes."
+                />
               </View>
             ) : null}
+            {homeView && model ? (
+              <SectionHeader title="Model" first />
+            ) : (
+              <View style={styles.pageTop} />
+            )}
+            <ListGroup separatorInset={permissionView ? LIST_LEADING_INSET : undefined}>
+              {pageRows}
+            </ListGroup>
             {sessionOptionDispatchUnconfirmed(activeDescriptor) ? (
-              <SessionOptionCaption>Sent to the agent — not confirmed</SessionOptionCaption>
+              <SessionOptionCaption>Sent to the agent, not confirmed yet.</SessionOptionCaption>
             ) : null}
             {reason ? <SessionOptionCaption>{reason}</SessionOptionCaption> : null}
-            <View style={styles.group}>
-              <DescriptorRows
-                descriptor={activeDescriptor}
-                disabled={permissionView ? busy : locked}
-                grouped
-                onSetOption={(value) => applyOption(activeDescriptor, value)}
-                onInvokeAction={() => invokeAction(activeDescriptor)}
-                {...(permissionView ? { choiceLabelColor: permissionChoiceColor } : {})}
-              />
-            </View>
             {homeView && model ? (
               <>
                 {segmentOptions.map((descriptor) => (
@@ -313,39 +299,37 @@ function OptionRows({
     return null
   }
   return (
-    <View style={[styles.group, styles.groupSpaced]}>
-      {descriptors.map((descriptor, index) => {
-        const isPermission = descriptor === permission
-        const disabled = isPermission ? busy : locked
-        if (descriptor.kind.type === 'boolean' && !descriptor.action) {
-          return (
-            <View key={descriptor.id} style={index < descriptors.length - 1 && styles.divided}>
-              <DescriptorRows
-                descriptor={descriptor}
-                disabled={disabled}
-                grouped
-                onSetOption={(value) => onSetOption(descriptor, value)}
-                onInvokeAction={() => onNavigate(descriptor.id)}
-              />
-            </View>
-          )
-        }
-        const value = mobileSessionOptionSummaryValue(descriptor)
-        return (
-          <SessionOptionSummaryRow
-            key={descriptor.id}
-            label={isPermission ? 'Permissions' : descriptor.label}
-            value={value}
-            valueColor={isPermission ? permissionColor : undefined}
-            disabled={disabled}
-            divided={index < descriptors.length - 1}
-            onPress={
-              isReadOnlySessionOptionValue(descriptor) ? undefined : () => onNavigate(descriptor.id)
-            }
-          />
-        )
-      })}
-    </View>
+    <>
+      <SectionHeader title="Options" />
+      <ListGroup>
+        {descriptors.flatMap((descriptor) => {
+          const isPermission = descriptor === permission
+          const disabled = isPermission ? busy : locked
+          if (descriptor.kind.type === 'boolean' && !descriptor.action) {
+            return descriptorRowElements({
+              descriptor,
+              disabled,
+              onSetOption: (value) => onSetOption(descriptor, value),
+              onInvokeAction: () => onNavigate(descriptor.id)
+            })
+          }
+          return [
+            <SessionOptionSummaryRow
+              key={descriptor.id}
+              label={isPermission ? 'Permissions' : descriptor.label}
+              value={mobileSessionOptionSummaryValue(descriptor)}
+              valueColor={isPermission ? permissionColor : undefined}
+              disabled={disabled}
+              onPress={
+                isReadOnlySessionOptionValue(descriptor)
+                  ? undefined
+                  : () => onNavigate(descriptor.id)
+              }
+            />
+          ]
+        })}
+      </ListGroup>
+    </>
   )
 }
 
@@ -355,70 +339,15 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     minWidth: 0
   },
+  // The drawer pads its content; the sheet's groups and headers keep their own 16 and 20 pt edges.
   sheet: {
-    paddingBottom: spacing.xs
-  },
-  sheetHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    marginHorizontal: -spacing.md,
     paddingBottom: spacing.lg
   },
-  sheetTitle: {
-    flex: 1,
-    color: colors.textPrimary,
-    fontSize: typography.titleSize,
-    fontWeight: '700',
-    textAlign: 'center'
+  notice: {
+    paddingTop: spacing.xs
   },
-  sheetNav: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bgRaised,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle
-  },
-  sheetHeaderSide: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  lockNotice: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.lg
-  },
-  lockNoticeBody: {
-    flex: 1,
-    gap: spacing.xs
-  },
-  lockNoticeTitle: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
-  },
-  lockNoticeDescription: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize
-  },
-  group: {
-    overflow: 'hidden',
-    borderRadius: radii.card,
-    backgroundColor: colors.bgRaised
-  },
-  groupSpaced: {
-    marginTop: spacing.md
-  },
-  divided: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.composerBorder
-  },
-  pressed: {
-    opacity: 0.7
+  pageTop: {
+    height: spacing.sm
   }
 })

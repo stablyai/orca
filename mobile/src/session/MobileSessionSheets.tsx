@@ -1,7 +1,6 @@
 import { Platform } from 'react-native'
 import { useClipboardWriter } from '../platform/clipboard'
 import { Copy, FileText, Globe, RefreshCw, SquareTerminal } from 'lucide-react-native'
-import { MobileSessionHeaderMoreActionsSheet } from './MobileSessionHeaderMoreActionsSheet'
 import { QuickCommandsSheet } from './QuickCommandsSheet'
 import { triggerSuccess, triggerError } from '../platform/haptics'
 import { ActionSheetModal } from '../components/ActionSheetModal'
@@ -35,8 +34,6 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     setShowQuickCommands,
     setShowCreateBrowserModal,
     showCreateBrowserModal,
-    showHeaderMoreActions,
-    setShowHeaderMoreActions,
     actionTarget,
     setActionTarget,
     markdownActionTarget,
@@ -87,24 +84,12 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     bulkCloseActions,
     closeWithBulkActions,
     createTabAgentActions,
-    sendDiffNotesAgentActions,
-    handlePanelTap,
-    openAgentSessionHistory,
-    showAgentSessionHistoryAction,
-    showChecksAction
+    sendDiffNotesAgentActions
   } = controller
   const clipboard = useClipboardWriter()
   const onPairedHost = useWorkspaceOnPairedHost()
   return (
     <>
-      <MobileSessionHeaderMoreActionsSheet
-        visible={showHeaderMoreActions}
-        showAgentSessionHistory={showAgentSessionHistoryAction}
-        showChecks={showChecksAction}
-        onOpenAgentSessionHistory={openAgentSessionHistory}
-        onOpenChecks={() => handlePanelTap('pr')}
-        onClose={() => setShowHeaderMoreActions(false)}
-      />
       <QuickCommandsSheet
         visible={showQuickCommands && quickCommandsSupported === true}
         onClose={() => setShowQuickCommands(false)}
@@ -120,7 +105,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
       />
       <ActionSheetModal
         visible={showCreateTabDrawer}
-        title="New Tab"
+        title="New tab"
         actions={[
           ...createTabAgentActions,
           {
@@ -143,7 +128,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
                   closeBeforePress: true,
                   onPress: () => {
                     if (browserScreencastSupported !== true) {
-                      showToast('Desktop update required for mobile browser streaming', 1600)
+                      showToast('Update Orca on your desktop to open browser tabs here.', 2400)
                       return
                     }
                     setShowCreateBrowserModal(true)
@@ -152,7 +137,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
                 ...(onPairedHost
                   ? [
                       {
-                        label: 'Markdown Note',
+                        label: 'Markdown note',
                         icon: FileText,
                         onPress: () => {
                           setShowCreateTabDrawer(false)
@@ -167,12 +152,12 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
       />
       <ActionSheetModal
         visible={pendingDiffNotesDelivery !== null}
-        title="Send Review Notes"
+        title="Send review notes"
         message="Choose an agent session for the current notes."
         actions={[
           ...sendDiffNotesAgentActions,
           {
-            label: 'Copy Notes',
+            label: 'Copy notes',
             icon: Copy,
             onPress: () => {
               const delivery = pendingDiffNotesDelivery
@@ -233,8 +218,8 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
             }
           },
           {
-            label: 'Copy Path',
-            icon: FileText,
+            label: 'Copy path',
+            icon: Copy,
             onPress: () => {
               const target = markdownActionTarget
               setMarkdownActionTarget(null)
@@ -296,11 +281,11 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
       <ActionSheetModal
         visible={leaveDrafts != null}
         title="Unsaved markdown changes"
-        message="Copy or discard phone drafts before leaving."
+        message="Copy or discard the drafts on this phone before you leave."
         actions={[
           {
-            label: 'Copy All & Leave',
-            icon: FileText,
+            label: 'Copy all and leave',
+            icon: Copy,
             onPress: () => {
               const drafts = leaveDrafts ?? []
               const combined = drafts
@@ -319,7 +304,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
             }
           },
           {
-            label: 'Discard & Leave',
+            label: 'Discard and leave',
             destructive: true,
             onPress: () => {
               setLeaveDrafts(null)
@@ -331,8 +316,8 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
       />
       <ConfirmModal
         visible={discardMarkdownTarget != null}
-        title="Discard Changes"
-        message="Replace the phone draft with the latest desktop file?"
+        title="Discard phone changes?"
+        message="The draft on this phone is replaced with the latest file from your desktop."
         confirmLabel="Discard"
         destructive
         onConfirm={confirmDiscardMarkdown}
@@ -340,7 +325,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
       />
       <TextInputModal
         visible={renameTarget != null}
-        title="Rename Terminal"
+        title="Rename terminal"
         defaultValue={renameTarget?.title || 'Terminal'}
         placeholder="Terminal name"
         onSubmit={(value) => void handleRenameTerminal(value)}
@@ -348,8 +333,8 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
       />
       <TextInputModal
         visible={showCreateBrowserModal}
-        title="New Browser"
-        message="Enter a URL, or leave blank for a new tab."
+        title="New browser tab"
+        message="Enter an address, or leave it empty for a blank tab."
         defaultValue=""
         placeholder="https://example.com"
         submitLabel="Open"
@@ -380,10 +365,10 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
       <ActionSheetModal
         visible={deleteKeyTarget != null}
         title={deleteKeyTarget?.label ?? 'Shortcut'}
-        message="Remove this custom shortcut?"
+        message="It comes off the key bar on this phone."
         actions={[
           {
-            label: 'Remove',
+            label: 'Remove shortcut',
             destructive: true,
             onPress: () => {
               if (deleteKeyTarget) {

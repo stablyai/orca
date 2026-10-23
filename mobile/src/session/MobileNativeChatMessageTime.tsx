@@ -4,8 +4,8 @@ import {
   NATIVE_CHAT_MESSAGE_FULL_TIME_FORMAT,
   NATIVE_CHAT_MESSAGE_TIME_FORMAT
 } from '../../../src/shared/native-chat-message-time'
-import { colors, typography } from '../theme/mobile-theme'
-import { scaledType } from './mobile-native-chat-message-styles'
+import { colors, textStyles } from '../theme/mobile-theme'
+import { scaledText } from './mobile-native-chat-message-styles'
 
 let formatters: { time: Intl.DateTimeFormat; full: Intl.DateTimeFormat } | null = null
 
@@ -27,7 +27,7 @@ export const MobileNativeChatMessageTime = memo(function MobileNativeChatMessage
   }
   return (
     <Text
-      style={[styles.time, scaledType(typography.metaSize, fontScale, 5)]}
+      style={[styles.time, scaledText(textStyles.caption, fontScale)]}
       accessibilityLabel={formatters.full.format(date)}
     >
       {formatters.time.format(date)}
@@ -37,6 +37,7 @@ export const MobileNativeChatMessageTime = memo(function MobileNativeChatMessage
 
 const styles = StyleSheet.create({
   time: {
+    ...textStyles.caption,
     color: colors.textMuted,
     fontVariant: ['tabular-nums']
   }

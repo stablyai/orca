@@ -1,6 +1,10 @@
 import { StyleSheet } from 'react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
-import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
+import { colors, radii, spacing, textStyles } from '../theme/mobile-theme'
+import { LIST_LEADING_INSET } from './ui/ListGroup'
+
+// The sheet pads 12 pt; the list sits 4 further in (16 from the edge) as the form's groups do, and
+// banners bleed back out to keep their own 16 pt inset.
+const GROUP_INSET = spacing.xs
 
 export const smartWorkspaceSourceDrawerStyles = StyleSheet.create({
   root: {
@@ -8,173 +12,62 @@ export const smartWorkspaceSourceDrawerStyles = StyleSheet.create({
     minHeight: 0
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.xs,
-    paddingBottom: spacing.sm,
+    marginHorizontal: -spacing.sm,
+    marginTop: -spacing.xs,
     flexShrink: 0
-  },
-  title: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  done: {
-    fontSize: typography.bodySize,
-    fontWeight: '600',
-    color: colors.accentBlue
   },
   results: {
     flex: 1,
     minHeight: 0
   },
+  banner: {
+    marginHorizontal: -spacing.md,
+    marginBottom: spacing.md
+  },
+  filterScroll: { flexGrow: 0, flexShrink: 0, marginBottom: spacing.xs },
+  filterRow: { gap: spacing.sm, paddingHorizontal: GROUP_INSET },
   list: {
     flex: 1,
-    backgroundColor: colors.bgPanel,
-    borderTopLeftRadius: radii.card,
-    borderTopRightRadius: radii.card,
+    marginHorizontal: GROUP_INSET,
+    marginBottom: spacing.sm,
+    backgroundColor: colors.groupFill,
+    borderRadius: radii.group,
     overflow: 'hidden'
   },
+  // With no rows the footer's message stands alone on the sheet, not in an empty card.
+  listEmpty: { backgroundColor: 'transparent' },
   listContent: {
-    flexGrow: 1,
-    paddingBottom: spacing.sm
+    flexGrow: 1
   },
+  separator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.separator,
+    marginLeft: LIST_LEADING_INSET
+  },
+  footerState: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    minHeight: 64,
+    paddingHorizontal: spacing.xl
+  },
+  footerText: { ...textStyles.callout, color: colors.textSecondary, textAlign: 'center' },
   // Why: pin the dock to the sheet bottom so a flex-greedy FlatList cannot
   // push the TextInput out of the fill frame (and under the keyboard).
   dock: {
     flexShrink: 0,
+    marginHorizontal: -spacing.md,
+    paddingHorizontal: spacing.lg,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderSubtle,
-    backgroundColor: colors.bgBase,
-    paddingTop: spacing.sm,
+    borderTopColor: colors.separator,
+    backgroundColor: colors.sheet,
+    paddingTop: spacing.md,
     paddingBottom: spacing.sm,
-    gap: spacing.sm,
+    gap: spacing.md,
     zIndex: 2
   },
-  search: {
-    backgroundColor: colors.bgRaised,
-    color: colors.textPrimary,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
-    fontSize: TEXT_INPUT_FONT_SIZE,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
-  tabRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs
-  },
-  tab: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.sm + 2,
-    paddingVertical: spacing.xs + 2,
-    borderRadius: radii.button,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
-  tabSelected: {
-    backgroundColor: colors.bgPanel,
-    borderColor: colors.textSecondary
-  },
-  tabText: {
-    fontSize: 13,
-    color: colors.textSecondary
-  },
-  tabTextSelected: {
-    color: colors.textPrimary,
-    fontWeight: '600'
-  },
-  chipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs
-  },
-  chip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: radii.button,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
-  chipSelected: {
-    backgroundColor: colors.bgPanel,
-    borderColor: colors.textSecondary
-  },
-  chipText: {
-    fontSize: 12,
-    color: colors.textSecondary
-  },
-  chipTextSelected: {
-    color: colors.textPrimary,
-    fontWeight: '600'
-  },
-  crossRepo: {
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-    gap: spacing.sm
-  },
-  crossRepoText: {
-    fontSize: 13,
-    color: colors.textSecondary
-  },
-  crossRepoActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: spacing.sm
-  },
-  crossRepoDismiss: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs + 2,
-    borderRadius: radii.button,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
-  crossRepoDismissText: {
-    fontSize: 13,
-    color: colors.textSecondary
-  },
-  crossRepoSwitch: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs + 2,
-    borderRadius: radii.button,
-    backgroundColor: colors.bgPanel,
-    borderWidth: 1,
-    borderColor: colors.textSecondary
-  },
-  crossRepoSwitchText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  notice: {
-    fontSize: 12,
-    color: colors.textMuted,
-    paddingHorizontal: spacing.xs,
-    paddingBottom: spacing.sm
-  },
-  errorNotice: {
-    fontSize: 12,
-    color: colors.statusRed,
-    paddingHorizontal: spacing.xs,
-    paddingBottom: spacing.sm
-  },
-  loading: {
-    paddingVertical: spacing.lg,
-    alignItems: 'center'
-  },
-  empty: {
-    paddingVertical: spacing.lg,
-    textAlign: 'center',
-    color: colors.textMuted,
-    fontSize: 13
-  }
+  // Bleeds to the sheet edges so the segments scroll under them, not under a margin.
+  modeRow: { paddingHorizontal: spacing.lg },
+  modeScroll: { marginHorizontal: -spacing.lg, flexGrow: 0 }
 })

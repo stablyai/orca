@@ -1,4 +1,6 @@
 import { View, Text } from 'react-native'
+import { AlertCircle } from 'lucide-react-native'
+import { colors } from '../theme/mobile-theme'
 import { AuthFailedBannerActions } from './AuthFailedBannerActions'
 import { authFailedBannerStyles as styles } from './auth-failed-banner-styles'
 
@@ -18,17 +20,23 @@ export function AuthFailedBanner({
   onRemove: () => void
 }) {
   return (
-    <View style={styles.banner}>
-      <Text style={styles.text}>
-        Authentication failed — try reconnecting first; if it keeps failing, re-pair from desktop.
-      </Text>
-      <View style={styles.actions}>
-        <AuthFailedBannerActions
-          canRetry={canRetry}
-          onRetry={onRetry}
-          onRepair={onRepair}
-          onRemove={onRemove}
-        />
+    <View style={styles.frame}>
+      <View style={styles.banner} accessibilityRole="alert">
+        <AlertCircle size={18} color={colors.danger} strokeWidth={2.2} style={styles.icon} />
+        <View style={styles.main}>
+          <Text style={styles.title}>Authentication failed</Text>
+          <Text style={styles.text}>
+            Try reconnecting first. If it keeps failing, re-pair from the desktop.
+          </Text>
+          <View style={styles.actions}>
+            <AuthFailedBannerActions
+              canRetry={canRetry}
+              onRetry={onRetry}
+              onRepair={onRepair}
+              onRemove={onRemove}
+            />
+          </View>
+        </View>
       </View>
     </View>
   )

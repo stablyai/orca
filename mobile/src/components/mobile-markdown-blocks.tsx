@@ -24,6 +24,8 @@ import { MermaidDiagram } from './pr-sidebar/MermaidDiagram'
 
 /** Prose base size — passed to MermaidDiagram fallback mono text. */
 const MERMAID_BASE = 13
+/** Column widths are measured at a 12 pt cell font; cells draw at the footnote size. */
+const TABLE_WIDTH_SCALE = styles.tableCell.fontSize / 12
 /** Containers nested deeper than this draw as plain text, so a pathological nesting cannot
  *  exhaust native layout. */
 const MAX_NESTING = 8
@@ -69,15 +71,16 @@ function renderCode(node: Code, key: number, ctx: MarkdownBlockContext): ReactNo
 
 function renderList(node: List, key: number, ctx: MarkdownBlockContext, depth: number): ReactNode {
   const itemText: ParagraphText = { style: ctx.listText, selectable: true }
+  const markerScale = scaledMarkdownText(styles.listMarker, ctx.textScale)
   return (
     <View key={key} style={styles.list}>
       {node.children.map((item, itemIndex) => (
         <View key={itemIndex} style={styles.listItem}>
-          <NativeText style={[styles.listMarker, ctx.tone.secondary]}>
+          <NativeText style={[styles.listMarker, markerScale, ctx.tone.secondary]}>
             {item.checked == null
               ? node.ordered
                 ? `${(node.start ?? 1) + itemIndex}.`
-                : '-'
+                : '•'
               : item.checked
                 ? '[x]'
                 : '[ ]'}
@@ -112,7 +115,10 @@ function renderTable(node: Table, key: number, ctx: MarkdownBlockContext): React
                   styles.tableCell,
                   rowIndex === 0 ? styles.tableHeader : null,
                   scaledMarkdownText(styles.tableCell, ctx.textScale),
-                  { width: width * ctx.textScale, textAlign: node.align?.[cellIndex] ?? 'left' }
+                  {
+                    width: width * TABLE_WIDTH_SCALE * ctx.textScale,
+                    textAlign: node.align?.[cellIndex] ?? 'left'
+                  }
                 ]}
               >
                 {renderInline(cells[cellIndex]?.children ?? [], cellCtx)}
@@ -178,24 +184,24 @@ function renderBlock(
         </MarkdownText>
       )
     }
-    case 'heading':
+    case 'heading': {
+      // On the ramp: h1 the title step, h2 the headline, the rest body weight 600.
+      const step =
+        node.depth === 1
+          ? styles.headingLarge
+          : node.depth === 2
+            ? styles.headingMedium
+            : styles.heading
       return (
         <MarkdownText
           key={key}
           selectable
-          style={[
-            styles.heading,
-            node.depth <= 2 ? styles.headingLarge : null,
-            scaledMarkdownText(
-              node.depth <= 2 ? styles.headingLarge : styles.heading,
-              ctx.textScale
-            ),
-            ctx.tone.text
-          ]}
+          style={[styles.heading, step, scaledMarkdownText(step, ctx.textScale), ctx.tone.text]}
         >
           {renderInline(node.children, ctx)}
         </MarkdownText>
       )
+    }
     case 'blockquote':
       return (
         <View key={key} style={styles.quote}>
@@ -225,7 +231,13 @@ function renderBlock(
     case 'footnoteDefinition':
       return (
         <View key={key} style={styles.listItem}>
-          <NativeText style={[styles.listMarker, ctx.tone.secondary]}>
+          <NativeText
+            style={[
+              styles.listMarker,
+              scaledMarkdownText(styles.listMarker, ctx.textScale),
+              ctx.tone.secondary
+            ]}
+          >
             {`[${node.label ?? node.identifier}]`}
           </NativeText>
           <View style={styles.listItemBody}>

@@ -1,5 +1,5 @@
 import { Platform, StyleSheet } from 'react-native'
-import { colors, spacing } from '../theme/mobile-theme'
+import { colors, radii, spacing } from '../theme/mobile-theme'
 
 export const bottomDrawerStyles = StyleSheet.create({
   overlay: {
@@ -11,7 +11,7 @@ export const bottomDrawerStyles = StyleSheet.create({
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.5)'
+    backgroundColor: 'rgba(0,0,0,0.55)'
   },
   backdropPressable: {
     ...StyleSheet.absoluteFillObject
@@ -24,9 +24,9 @@ export const bottomDrawerStyles = StyleSheet.create({
     alignItems: 'center'
   },
   drawer: {
-    backgroundColor: colors.bgBase,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
+    backgroundColor: colors.sheet,
+    borderTopLeftRadius: radii.sheet,
+    borderTopRightRadius: radii.sheet,
     paddingHorizontal: spacing.md,
     ...Platform.select({
       ios: {
@@ -47,10 +47,9 @@ export const bottomDrawerStyles = StyleSheet.create({
   handle: {
     alignSelf: 'center',
     width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: colors.textMuted,
-    opacity: 0.4
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: 'rgba(255, 255, 255, 0.26)'
   },
   handleHitArea: {
     alignItems: 'center',
@@ -74,6 +73,6 @@ export const bottomDrawerStyles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 500,
-    backgroundColor: colors.bgBase
+    backgroundColor: colors.sheet
   }
 })

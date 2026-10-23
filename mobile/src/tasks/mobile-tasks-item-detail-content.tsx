@@ -1,13 +1,15 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
 import {
   View,
-  ActivityIndicator,
   colors,
   Text,
   Pressable,
   Linking,
   ExternalLink,
-  TextInput
+  TextInput,
+  StyleSheet,
+  spacing,
+  textStyles
 } from './mobile-tasks-dependencies'
 import { styles, getGitLabPipelineStatusStyle } from './mobile-tasks-legacy-styles'
 import {
@@ -16,8 +18,7 @@ import {
   SHOW_MOBILE_DETAIL_REVIEW_PANELS,
   isFailedGitHubCheck,
   formatDurationSeconds,
-  SHOW_MOBILE_LINEAR_DETAIL_TOOLS,
-  discussionSummary
+  SHOW_MOBILE_LINEAR_DETAIL_TOOLS
 } from './mobile-tasks-legacy-foundation'
 import {
   renderMobileTasksItemBodyEditor,
@@ -25,7 +26,13 @@ import {
   renderMobileTasksItemFiles
 } from './mobile-tasks-item-review-sections'
 import { renderMobileTasksItemFieldEditors } from './mobile-tasks-item-field-editors'
-import { JiraDetailMeta } from '../components/JiraDetailMeta'
+import { jiraDetailMetaRows } from '../components/JiraDetailMeta'
+import { Banner } from '../components/ui/Banner'
+import { ListGroup } from '../components/ui/ListGroup'
+import { ListRow } from '../components/ui/ListRow'
+import { SectionHeader } from '../components/ui/SectionHeader'
+import { StateView } from '../components/ui/StateView'
+import { sheetStyles } from './mobile-tasks-sheet-chrome'
 
 export function renderMobileTasksItemDetailContent(model: ConnectionPresentationModel) {
   const {
@@ -47,56 +54,68 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
     renderDetailCommentGroup,
     rerunGitHubChecks,
     setItemCommentDraft,
+    setDetailRefreshSeq,
     setLinearCommentDraft,
     setLinearSubIssueTitle
   } = model
   if (!actionItem) {
     return null
   }
+  const metaRows: { label: string; value: string }[] = []
+  if (detailPayload) {
+    metaRows.push({ label: 'Type', value: taskKindLabel(actionItem) })
+    metaRows.push({ label: 'Status', value: actionItem.status })
+    if (detailPayload.provider === 'linear') {
+      if (detailPayload.assignee) {
+        metaRows.push({ label: 'Assignee', value: detailPayload.assignee })
+      }
+      if (detailPayload.project) {
+        metaRows.push({ label: 'Project', value: detailPayload.project.name })
+      }
+    }
+    if (detailPayload.provider === 'jira') {
+      metaRows.push(
+        ...jiraDetailMetaRows({
+          assignee: detailPayload.assignee,
+          priorityName: detailPayload.priorityName,
+          projectName: detailPayload.projectName
+        })
+      )
+    }
+    if (
+      (detailPayload.provider === 'github' || detailPayload.provider === 'gitlab') &&
+      detailPayload.assignees.length > 0
+    ) {
+      metaRows.push({
+        label: 'Assignees',
+        value: detailPayload.assignees.join(', ')
+      })
+    }
+  }
   return detailLoading ? (
-    <View style={styles.detailLoading}>
-      <ActivityIndicator size="small" color={colors.textSecondary} />
+    <View style={detailContentStyles.loading}>
+      <StateView loading title="Loading details…" />
     </View>
   ) : detailError ? (
-    <Text style={styles.detailError}>{detailError}</Text>
+    <View style={detailContentStyles.errorBanner}>
+      <Banner
+        tone="error"
+        title="Couldn't load details"
+        message={detailError}
+        action={{
+          label: 'Try again',
+          onPress: () => setDetailRefreshSeq((current) => current + 1)
+        }}
+      />
+    </View>
   ) : detailPayload ? (
     <>
-      <View style={styles.detailMetaGrid}>
-        <View style={styles.detailMetaItem}>
-          <Text style={styles.detailMetaLabel}>Type</Text>
-          <Text style={styles.detailMetaValue}>{taskKindLabel(actionItem)}</Text>
-        </View>
-        <View style={styles.detailMetaItem}>
-          <Text style={styles.detailMetaLabel}>Status</Text>
-          <Text style={styles.detailMetaValue}>{actionItem.status}</Text>
-        </View>
-        {detailPayload.provider === 'linear' && detailPayload.assignee ? (
-          <View style={styles.detailMetaItem}>
-            <Text style={styles.detailMetaLabel}>Assignee</Text>
-            <Text style={styles.detailMetaValue}>{detailPayload.assignee}</Text>
-          </View>
-        ) : null}
-        {detailPayload.provider === 'linear' && detailPayload.project ? (
-          <View style={styles.detailMetaItem}>
-            <Text style={styles.detailMetaLabel}>Project</Text>
-            <Text style={styles.detailMetaValue}>{detailPayload.project.name}</Text>
-          </View>
-        ) : null}
-        {detailPayload.provider === 'jira' ? (
-          <JiraDetailMeta
-            assignee={detailPayload.assignee}
-            priorityName={detailPayload.priorityName}
-            projectName={detailPayload.projectName}
-          />
-        ) : null}
-        {(detailPayload.provider === 'github' || detailPayload.provider === 'gitlab') &&
-        detailPayload.assignees.length > 0 ? (
-          <View style={styles.detailMetaItem}>
-            <Text style={styles.detailMetaLabel}>Assignees</Text>
-            <Text style={styles.detailMetaValue}>{detailPayload.assignees.join(', ')}</Text>
-          </View>
-        ) : null}
-      </View>
+      <SectionHeader title="Details" first />
+      <ListGroup style={sheetStyles.group}>
+        {metaRows.map((row) => (
+          <ListRow key={row.label} title={row.label} value={row.value} />
+        ))}
+      </ListGroup>
 
       {SHOW_MOBILE_DETAIL_LABEL_CHIPS && detailPayload.labels.length > 0 ? (
         <View style={styles.chipRow}>
@@ -108,10 +127,8 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
         </View>
       ) : null}
 
-      <View style={styles.detailSection}>
-        <Text style={styles.detailSectionTitle}>Description</Text>
-        {renderMobileTasksItemBodyEditor(model)}
-      </View>
+      <SectionHeader title="Description" />
+      <View style={detailContentStyles.body}>{renderMobileTasksItemBodyEditor(model)}</View>
 
       {renderMobileTasksItemFieldEditors(model)}
 
@@ -265,15 +282,10 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
         </View>
       ) : null}
 
-      <View style={styles.detailSection}>
-        <View style={styles.detailSectionHeader}>
-          <Text style={styles.detailSectionTitle}>Discussion</Text>
-          <Text style={styles.detailSectionMeta}>
-            {discussionSummary(detailPayload.comments.length)}
-          </Text>
-        </View>
+      <SectionHeader title="Discussion" count={detailPayload.comments.length} />
+      <View style={detailContentStyles.body}>
         {detailPayload.comments.length === 0 ? (
-          <Text style={styles.detailMuted}>No comments.</Text>
+          <Text style={detailContentStyles.empty}>No comments yet.</Text>
         ) : (
           detailCommentGroups.map(renderDetailCommentGroup)
         )}
@@ -298,3 +310,11 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
     </>
   ) : null
 }
+
+export const detailContentStyles = StyleSheet.create({
+  loading: { minHeight: 160 },
+  errorBanner: { marginHorizontal: -spacing.sm },
+  // The sheet pads 12, so 20 more lines body text up with the section headers above it.
+  body: { paddingHorizontal: spacing.lg + 4, gap: spacing.md },
+  empty: { ...textStyles.callout, color: colors.textSecondary }
+})

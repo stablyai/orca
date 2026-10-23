@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { AppState, Text } from 'react-native'
+import { AppState, StyleSheet, View } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import { NotificationDeliverySection } from '../notifications/NotificationDeliverySection'
 import {
@@ -9,13 +9,16 @@ import {
 } from '../notifications/notification-delivery-preferences'
 import { setNotificationDeliveryPreferences } from '../notifications/push-registration'
 import { useRemotePushCapableHosts } from '../notifications/use-remote-push-capable-hosts'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { spacing } from '../theme/mobile-theme'
+import { Banner } from '../components/ui/Banner'
+
+type DeliveryError = { message: string; retry: boolean }
 
 export function NativeNotificationDeliverySettings({ enabled }: { enabled: boolean }) {
   const [delivery, setDelivery] = useState(DEFAULT_NOTIFICATION_DELIVERY)
   const [loaded, setLoaded] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<DeliveryError | null>(null)
   const refreshRevision = useRef(0)
   const saveInProgress = useRef(false)
   const support = useRemotePushCapableHosts()
@@ -36,7 +39,7 @@ export function NativeNotificationDeliverySettings({ enabled }: { enabled: boole
       if (revision !== refreshRevision.current) {
         return
       }
-      setError('Could not load delivery settings. Reopen this screen to retry.')
+      setError({ message: 'Could not load delivery settings.', retry: true })
     }
   }, [])
   useFocusEffect(
@@ -64,16 +67,11 @@ export function NativeNotificationDeliverySettings({ enabled }: { enabled: boole
       await setNotificationDeliveryPreferences(value)
       setDelivery(value)
     } catch {
-      setError('Could not save delivery settings. Try again.')
+      setError({ message: 'Could not save delivery settings. Try again.', retry: false })
     } finally {
       saveInProgress.current = false
       setSaving(false)
     }
-  }
-  const hintStyle = {
-    color: colors.textMuted,
-    fontSize: typography.metaSize,
-    marginTop: spacing.md
   }
   return (
     <>
@@ -82,16 +80,24 @@ export function NativeNotificationDeliverySettings({ enabled }: { enabled: boole
         disabled={!enabled || !loaded || saving}
         onChange={(value) => void change(value)}
       />
-      {error && (
-        <Text accessibilityRole="alert" style={hintStyle}>
-          {error}
-        </Text>
-      )}
-      {support.resolved && !support.supported && (
-        <Text style={hintStyle}>
-          Pair an updated desktop to receive notifications on this phone.
-        </Text>
-      )}
+      {error ? (
+        <View style={styles.notice}>
+          <Banner
+            tone="error"
+            message={error.message}
+            action={error.retry ? { label: 'Retry', onPress: () => void refresh() } : undefined}
+          />
+        </View>
+      ) : null}
+      {support.resolved && !support.supported ? (
+        <View style={styles.notice}>
+          <Banner message="Pair an updated desktop to receive notifications on this phone." />
+        </View>
+      ) : null}
     </>
   )
 }
+
+const styles = StyleSheet.create({
+  notice: { marginTop: spacing.md }
+})

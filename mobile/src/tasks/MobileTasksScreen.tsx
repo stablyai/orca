@@ -34,6 +34,7 @@ import { useMobileTasksDetailCommentRenderers } from './use-mobile-tasks-detail-
 import { useMobileTasksPickerProjection } from './use-mobile-tasks-picker-projection'
 import { useMobileTasksProviderViewProjection } from './use-mobile-tasks-provider-view-projection'
 import { useMobileTasksConnectionPresentation } from './use-mobile-tasks-connection-presentation'
+import { useMobileTasksPageChrome } from './use-mobile-tasks-page-chrome'
 import { MobileTasksLegacySurface } from './MobileTasksLegacySurface'
 
 export function MobileTasksScreen() {
@@ -73,5 +74,6 @@ export function MobileTasksScreen() {
   const stage34 = useMobileTasksPickerProjection(stage33)
   const stage35 = useMobileTasksProviderViewProjection(stage34)
   const stage36 = useMobileTasksConnectionPresentation(stage35)
-  return MobileTasksLegacySurface({ model: stage36 })
+  const stage37 = useMobileTasksPageChrome(stage36)
+  return MobileTasksLegacySurface({ model: stage37 })
 }

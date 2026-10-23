@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Text, TextInput, View } from 'react-native'
+import { TextInput, View } from 'react-native'
+import { colors } from '../theme/mobile-theme'
+import { Banner } from '../components/ui/Banner'
 import type { MobileFilePreviewLineColumn } from './mobile-file-preview-line-column'
 import { textOffsetForLineColumn } from './mobile-file-preview-line-column'
 import { filePreviewStyles as styles } from './mobile-file-preview-styles'
@@ -38,7 +40,11 @@ export function MobileFilePreviewEditableSource({
 
   return (
     <View style={styles.editContainer}>
-      {saveError ? <Text style={styles.saveErrorText}>{saveError}</Text> : null}
+      {saveError ? (
+        <View style={styles.saveError}>
+          <Banner tone="error" message={saveError} />
+        </View>
+      ) : null}
       <TextInput
         style={styles.editInput}
         value={draftContent}
@@ -50,6 +56,7 @@ export function MobileFilePreviewEditableSource({
         selection={selection ?? undefined}
         onSelectionChange={() => setSelection(null)}
         accessibilityLabel={`${title} editor`}
+        selectionColor={colors.accentBlue}
       />
     </View>
   )

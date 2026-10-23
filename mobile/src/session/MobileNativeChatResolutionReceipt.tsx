@@ -7,7 +7,7 @@ import {
   type NativeChatResolvedPrompt
 } from '../../../src/shared/native-chat-resolution-receipt'
 import { INLINE_TEXT_SELECTION } from '../components/inline-text-selection'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { colors, spacing, textStyles } from '../theme/mobile-theme'
 import { MobileNativeChatAwaitingInputRow } from './MobileNativeChatAwaitingInputRow'
 import { scaledType } from './mobile-native-chat-message-styles'
 import { MobileNativeChatMessageTime } from './MobileNativeChatMessageTime'
@@ -47,7 +47,7 @@ export function MobileNativeChatResolutionReceipt({
         ).replace('{{device}}', resolution.resolvedBy)
       : null
   ]
-  const text = [styles.text, scaledType(typography.metaSize, fontScale, 5)]
+  const text = [styles.text, scaledType(textStyles.footnote.fontSize, fontScale, 5)]
   return (
     <View style={styles.receipt}>
       {body.kind === 'question' ? (
@@ -95,14 +95,16 @@ const styles = StyleSheet.create({
   receipt: {
     gap: spacing.xs,
     paddingLeft: spacing.md,
-    borderLeftWidth: StyleSheet.hairlineWidth,
-    borderLeftColor: colors.borderSubtle
+    borderLeftWidth: 2,
+    borderLeftColor: colors.separator
   },
   text: {
+    fontFamily: textStyles.footnote.fontFamily,
     color: colors.textMuted
   },
   title: {
-    fontWeight: '600'
+    fontWeight: '500',
+    color: colors.textSecondary
   },
   outcome: {
     flexDirection: 'row',

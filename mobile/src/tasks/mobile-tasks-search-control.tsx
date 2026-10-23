@@ -10,7 +10,6 @@ export function renderMobileTasksSearchControl(model: ConnectionPresentationMode
     githubKind,
     githubPreset,
     githubProjectSearch,
-    githubProjectTable,
     gitlabView,
     isGithubProjectSearch,
     linearConnected,
@@ -19,7 +18,6 @@ export function renderMobileTasksSearchControl(model: ConnectionPresentationMode
     provider,
     providerLabel,
     query,
-    setAppliedGithubProjectSearch,
     setAppliedQuery,
     setGithubProjectSearch,
     setQuery,
@@ -33,11 +31,14 @@ export function renderMobileTasksSearchControl(model: ConnectionPresentationMode
         onChangeText={isGithubProjectSearch ? setGithubProjectSearch : setQuery}
         placeholder={
           isGithubProjectSearch
-            ? 'Search project view...'
+            ? 'Search this view'
             : provider === 'jira'
               ? // Matches desktop: the Jira box takes raw JQL, not free text.
-                'Jira JQL, e.g. project = ABC AND statusCategory != Done'
-              : `Search ${providerLabel} tasks...`
+                'JQL, e.g. project = ABC'
+              : `Search ${providerLabel}`
+        }
+        accessibilityLabel={
+          provider === 'jira' && !isGithubProjectSearch ? 'Search Jira with JQL' : undefined
         }
         // Why: GitHub items seed the field with a preset query, so a bare
         // value.length check would always show clear. Project mode shows clear
@@ -79,34 +80,49 @@ export function renderMobileTasksSearchControl(model: ConnectionPresentationMode
             applyGitHubProjectSearch()
           }
         }}
-        // Why: Project clear means unfiltered results ('' override when the view
-        // has a default filter), not restore view default. GitHub items clear
-        // restores the preset query. Linear clears and persists empty resume.
-        onClear={() => {
-          if (isGithubProjectSearch) {
-            const viewFilter = githubProjectTable?.selectedView.filter ?? ''
-            setGithubProjectSearch('')
-            // Why: undefined = use view default; '' = explicit unfiltered override.
-            setAppliedGithubProjectSearch(viewFilter ? '' : undefined)
-            return
-          }
-          if (provider === 'github') {
-            const nextQuery = getTaskPresetQuery(githubPreset)
-            setQuery(nextQuery)
-            setAppliedQuery(nextQuery)
-            persistTaskResumeState({
-              githubItemsPreset: githubPreset,
-              githubItemsQuery: nextQuery
-            })
-            return
-          }
-          setQuery('')
-          setAppliedQuery('')
-          if (provider === 'linear') {
-            persistTaskResumeState({ linearQuery: '' })
-          }
-        }}
+        onClear={() => clearMobileTasksSearch(model)}
       />
     </View>
   )
+}
+
+/**
+ * Clears the field the way each source reads "nothing searched": Project mode means unfiltered (a ''
+ * override when the view has its own filter), GitHub items restore the preset's query, and the
+ * others clear and persist an empty resume.
+ */
+export function clearMobileTasksSearch(model: ConnectionPresentationModel) {
+  const {
+    githubPreset,
+    githubProjectTable,
+    isGithubProjectSearch,
+    persistTaskResumeState,
+    provider,
+    setAppliedGithubProjectSearch,
+    setAppliedQuery,
+    setGithubProjectSearch,
+    setQuery
+  } = model
+  if (isGithubProjectSearch) {
+    const viewFilter = githubProjectTable?.selectedView.filter ?? ''
+    setGithubProjectSearch('')
+    // Why: undefined = use view default; '' = explicit unfiltered override.
+    setAppliedGithubProjectSearch(viewFilter ? '' : undefined)
+    return
+  }
+  if (provider === 'github') {
+    const nextQuery = getTaskPresetQuery(githubPreset)
+    setQuery(nextQuery)
+    setAppliedQuery(nextQuery)
+    persistTaskResumeState({
+      githubItemsPreset: githubPreset,
+      githubItemsQuery: nextQuery
+    })
+    return
+  }
+  setQuery('')
+  setAppliedQuery('')
+  if (provider === 'linear') {
+    persistTaskResumeState({ linearQuery: '' })
+  }
 }

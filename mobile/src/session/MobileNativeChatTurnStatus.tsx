@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { ChevronRight } from 'lucide-react-native'
+import { StyleSheet, Text, View } from 'react-native'
 import {
   formatNativeChatTurnStatusLabel,
   NATIVE_CHAT_TURN_STATUS_COPY,
   nativeChatElapsedSeconds
 } from '../../../src/shared/native-chat-turn-status'
 import type { AgentTurnOutcome } from '../../../src/shared/agent-turn-outcome'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { colors, spacing, textStyles } from '../theme/mobile-theme'
+import { MobileNativeChatDisclosureRow } from './MobileNativeChatDisclosureRow'
 
 /** Seconds tick only while a turn is actually counting, so a settled transcript
  *  holds no timers. */
@@ -50,52 +50,42 @@ export function MobileNativeChatTurnStatus({
 
   if (settled && onToggleExpanded) {
     return (
-      <Pressable
-        style={({ pressed }) => [styles.row, styles.bar, pressed && styles.pressed]}
-        onPress={onToggleExpanded}
-        hitSlop={6}
-        accessibilityRole="button"
-        accessibilityState={{ expanded }}
-        accessibilityLabel={NATIVE_CHAT_TURN_STATUS_COPY.toggleDetails}
-      >
-        <Text style={styles.label}>{label}</Text>
-        <View style={expanded ? styles.caretOpen : undefined}>
-          <ChevronRight size={14} color={colors.textMuted} strokeWidth={2} />
-        </View>
-      </Pressable>
+      <View style={styles.bar}>
+        <MobileNativeChatDisclosureRow
+          onPress={onToggleExpanded}
+          expanded={expanded}
+          accessibilityLabel={NATIVE_CHAT_TURN_STATUS_COPY.toggleDetails}
+        >
+          <Text style={styles.label}>{label}</Text>
+        </MobileNativeChatDisclosureRow>
+      </View>
     )
   }
 
   return (
-    <View style={[styles.row, styles.bar]}>
-      <Text style={styles.label} numberOfLines={1}>
-        {label}
-      </Text>
+    <View style={styles.bar}>
+      <MobileNativeChatDisclosureRow>
+        <Text style={[styles.label, !settled && styles.labelLive]} numberOfLines={1}>
+          {label}
+        </Text>
+      </MobileNativeChatDisclosureRow>
     </View>
   )
 }
 
+// Inset like the message rows, so "Worked for 3m" sits on the transcript's text edge. No rule or
+// box: the clock is a quiet line between your message and the agent's work.
 const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    minHeight: 28,
-    paddingHorizontal: spacing.md
-  },
   bar: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle
+    paddingHorizontal: spacing.lg
   },
-  pressed: {
-    opacity: 0.6
+  labelLive: {
+    color: colors.textSecondary
   },
   label: {
+    ...textStyles.callout,
+    flexShrink: 1,
     color: colors.textMuted,
-    fontSize: typography.bodySize,
-    flexShrink: 1
-  },
-  caretOpen: {
-    transform: [{ rotate: '90deg' }]
+    fontVariant: ['tabular-nums']
   }
 })

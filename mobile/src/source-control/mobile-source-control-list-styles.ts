@@ -1,268 +1,163 @@
 import { StyleSheet } from 'react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
-import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
+import { colors, radii, spacing, textStyles, typography } from '../theme/mobile-theme'
+import { LIST_LEADING_INSET, LIST_ROW_PADDING } from '../components/ui/ListGroup'
 
-// Changed-files list, section headers, file rows, and the commit bar. Split
-// from the main source-control stylesheet to stay under the line limit.
+// The plain changed-files list, its section headers, the commit bar and the commit failure notice.
 export const listStyles = StyleSheet.create({
-  listContent: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: 136
+  emptyState: {
+    flex: 1
   },
-  sectionHeader: {
+  sectionActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: spacing.md,
-    paddingBottom: spacing.xs
+    marginVertical: -spacing.md,
+    marginRight: -spacing.md
   },
-  sectionTitle: {
-    color: colors.textSecondary,
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase'
-  },
-  sectionCount: {
+  sectionSubtitle: {
+    ...textStyles.footnote,
     color: colors.textMuted,
-    fontSize: typography.metaSize,
-    fontWeight: '600'
-  },
-  branchCompareBlock: {
+    paddingHorizontal: spacing.lg + 4,
+    marginTop: -spacing.xs,
     paddingBottom: spacing.sm
   },
-  branchSectionTitleBlock: {
-    flex: 1,
-    minWidth: 0
-  },
-  branchSectionSubtitle: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize,
-    marginTop: 2
-  },
   branchStateRow: {
-    minHeight: 44,
+    minHeight: 52,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle
+    gap: spacing.md,
+    paddingHorizontal: LIST_ROW_PADDING
   },
   branchStateText: {
+    ...textStyles.callout,
     flex: 1,
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    lineHeight: 18
+    color: colors.textSecondary
+  },
+  rowSeparator: {
+    height: StyleSheet.hairlineWidth,
+    marginLeft: LIST_LEADING_INSET,
+    backgroundColor: colors.separator
   },
   fileRow: {
-    minHeight: 50,
+    minHeight: 60,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle
+    gap: spacing.md,
+    paddingLeft: LIST_ROW_PADDING,
+    paddingRight: spacing.md,
+    paddingVertical: spacing.sm
   },
   fileRowPressed: {
-    backgroundColor: colors.bgPanel
+    backgroundColor: colors.fill
   },
-  fileRowDisabled: {
-    opacity: 0.78
-  },
-  fileRowUnavailable: {
-    opacity: 0.72
-  },
-  statusBadge: {
-    width: 24,
+  statusSlot: {
+    width: 28,
     alignItems: 'center'
   },
-  statusBadgeText: {
+  statusLetter: {
     fontFamily: typography.monoFamily,
-    fontSize: typography.metaSize,
-    fontWeight: '700'
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '600'
   },
   fileTextBlock: {
     flex: 1,
-    minWidth: 0
+    minWidth: 0,
+    gap: 1
   },
-  filePath: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize
+  fileName: {
+    ...textStyles.body,
+    color: colors.textPrimary
   },
-  filePathDisabled: {
+  fileNameUnavailable: {
     color: colors.textSecondary
   },
-  fileMeta: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize,
-    marginTop: 2
+  fileDetail: {
+    ...textStyles.footnote,
+    color: colors.textMuted
+  },
+  fileDetailWarning: {
+    color: colors.statusAmber
+  },
+  rowSpinner: {
+    width: 44,
+    alignItems: 'center'
   },
   rowActions: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs
-  },
-  iconButton: {
-    width: 32,
-    height: 32,
-    borderRadius: radii.button,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  iconButtonPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  iconButtonDisabled: {
-    opacity: 0.45
+    alignItems: 'center'
   },
   commitBar: {
     position: 'absolute',
     left: 0,
     right: 0,
-    gap: spacing.xs,
-    padding: spacing.lg,
-    paddingTop: spacing.md,
-    backgroundColor: colors.bgPanel,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderSubtle
-  },
-  commitRow: {
-    flexDirection: 'row',
-    gap: spacing.sm
-  },
-  commitInput: {
-    flex: 1,
-    minHeight: 42,
-    borderRadius: radii.input,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgBase,
-    color: colors.textPrimary,
     paddingHorizontal: spacing.md,
-    // Through the seam: on the web this must clear the size at which iOS zooms the page on focus.
-    fontSize: TEXT_INPUT_FONT_SIZE
+    paddingTop: spacing.sm + 2,
+    backgroundColor: colors.bgBase,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.separator
   },
-  commitInputDisabled: {
-    backgroundColor: colors.bgPanel,
-    borderColor: colors.borderSubtle,
-    borderStyle: 'dashed',
+  commitIdleRow: {
+    minHeight: 48,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center'
+    gap: spacing.md,
+    paddingLeft: spacing.sm
   },
-  commitInputDisabledText: {
-    color: colors.textMuted,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
+  commitIdleText: {
+    ...textStyles.callout,
+    flex: 1,
+    color: colors.textMuted
   },
-  commitButton: {
-    minWidth: 88,
-    minHeight: 42,
-    borderRadius: radii.button,
-    backgroundColor: colors.textPrimary,
+  // The 44 pt touch boxes overhang the reply box's own padding, as its round send does.
+  commitTrailing: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.md
-  },
-  commitButtonSecondary: {
-    backgroundColor: 'transparent',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle
-  },
-  generateButton: {
-    width: 42,
-    minHeight: 42,
-    borderRadius: radii.button,
-    backgroundColor: colors.bgRaised,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  commitButtonDisabled: {
-    opacity: 0.45
-  },
-  commitButtonPressed: {
-    opacity: 0.75
-  },
-  commitButtonText: {
-    color: colors.bgBase,
-    fontSize: typography.bodySize,
-    fontWeight: '700'
-  },
-  commitButtonSecondaryText: {
-    color: colors.textPrimary
+    gap: 6,
+    marginVertical: -4
   },
   commitFailurePanel: {
-    marginTop: spacing.sm,
-    padding: spacing.sm,
-    borderRadius: radii.button,
-    backgroundColor: colors.bgRaised,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.statusRed,
-    gap: spacing.sm
+    marginHorizontal: spacing.lg,
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radii.group,
+    backgroundColor: 'rgba(255, 107, 107, 0.1)'
   },
   commitFailureHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm
+    alignItems: 'flex-start',
+    gap: spacing.md
   },
   commitFailureTextBlock: {
     flex: 1,
-    minWidth: 0
+    minWidth: 0,
+    gap: 2
   },
   commitFailureTitle: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    fontWeight: '700'
+    ...textStyles.callout,
+    fontWeight: '600',
+    color: colors.textPrimary
   },
   commitFailureSummary: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    lineHeight: 16,
-    marginTop: 2
+    ...textStyles.callout,
+    color: colors.textSecondary
   },
-  commitFailureFixButton: {
-    minHeight: 36,
-    paddingHorizontal: spacing.md,
-    borderRadius: radii.button,
-    backgroundColor: colors.textPrimary,
+  commitFailureActions: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs
-  },
-  commitFailureFixButtonDisabled: {
-    opacity: 0.45
-  },
-  commitFailureFixButtonPressed: {
-    opacity: 0.75
-  },
-  commitFailureFixButtonText: {
-    color: colors.bgBase,
-    fontSize: typography.metaSize,
-    fontWeight: '700'
-  },
-  commitFailureDetailsButton: {
-    minHeight: 32,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs
-  },
-  commitFailureDetailsButtonPressed: {
-    opacity: 0.75
-  },
-  commitFailureDetailsButtonText: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    fontWeight: '600'
+    gap: spacing.sm,
+    paddingLeft: 30
   },
   commitFailureDetailsText: {
-    color: colors.textSecondary,
     fontFamily: typography.monoFamily,
-    fontSize: typography.metaSize,
-    lineHeight: 17
+    fontSize: 13,
+    lineHeight: 19,
+    color: colors.textSecondary,
+    paddingLeft: 30
   },
   commitFailureLaunchError: {
-    color: colors.statusRed,
-    fontSize: typography.metaSize,
-    lineHeight: 16
+    ...textStyles.footnote,
+    color: colors.danger
   }
 })

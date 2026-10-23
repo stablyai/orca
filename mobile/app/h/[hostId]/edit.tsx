@@ -1,19 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  View,
-  Text,
-  TextInput,
-  StyleSheet,
-  Pressable,
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView
-} from 'react-native'
+import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { ChevronLeft } from 'lucide-react-native'
-import { colors, radii, spacing, typography } from '../../../src/theme/mobile-theme'
+import { AlertCircle } from 'lucide-react-native'
+import { colors, spacing, textStyles, typography } from '../../../src/theme/mobile-theme'
+import { NavBar } from '../../../src/components/ui/NavBar'
+import { Button } from '../../../src/components/ui/Button'
+import { TextField } from '../../../src/components/ui/TextField'
+import { StateView } from '../../../src/components/ui/StateView'
+import { Banner } from '../../../src/components/ui/Banner'
+import { SETTINGS_CONTENT_MAX_WIDTH } from '../../../src/settings/settings-screen-frame'
 import { loadHosts, updateHostNameAndEndpoint } from '../../../src/transport/host-store'
 import { displayHostEndpoint } from '../../../src/transport/host-endpoint'
 import { resolveHostEndpointEdit } from '../../../src/transport/host-endpoint-edit'
@@ -46,7 +42,7 @@ export default function EditHostScreen() {
   const load = useCallback(
     async (revision: number) => {
       if (!hostId) {
-        setLoadError('Missing host.')
+        setLoadError('This link does not name a desktop.')
         return
       }
       try {
@@ -56,7 +52,7 @@ export default function EditHostScreen() {
         }
         const found = hosts.find((h) => h.id === hostId) ?? null
         if (!found) {
-          setLoadError('This host was removed from this phone.')
+          setLoadError('This desktop was removed from this phone.')
           setHost(null)
           return
         }
@@ -65,11 +61,11 @@ export default function EditHostScreen() {
         setName(found.personalName ?? '')
         setAddress(displayHostEndpoint(found.endpoint))
         setLoadError(null)
-      } catch (err) {
+      } catch {
         if (revision !== routeRevision.current) {
           return
         }
-        setLoadError(err instanceof Error ? err.message : 'Failed to load host.')
+        setLoadError('Its details could not be read from this phone.')
         setHost(null)
       }
     },
@@ -134,7 +130,7 @@ export default function EditHostScreen() {
       })
     } catch (err) {
       if (revision === routeRevision.current) {
-        setSaveError(err instanceof Error ? err.message : 'Failed to save host.')
+        setSaveError(err instanceof Error ? err.message : 'The changes could not be saved.')
         savingRef.current = false
         setSaving(false)
       }
@@ -163,47 +159,38 @@ export default function EditHostScreen() {
     }
   }
 
+  const addressInvalid =
+    endpointEdit?.kind === 'invalid' && address.trim().length > 0 ? endpointEdit.error : null
+
   return (
-    <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
-      <View style={styles.topRow}>
-        <Pressable
-          style={styles.backButton}
-          onPress={leave}
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-        >
-          <ChevronLeft size={22} color={colors.textSecondary} />
-        </Pressable>
-        <Text style={styles.heading}>Edit host</Text>
-        <Pressable
-          style={({ pressed }) => [
-            styles.saveButton,
-            (!canSave || pressed) && styles.saveButtonDisabled
-          ]}
-          onPress={() => void handleSave()}
-          disabled={!canSave}
-          accessibilityRole="button"
-          accessibilityLabel="Save host"
-        >
-          {saving ? (
-            <ActivityIndicator size="small" color={colors.bgBase} />
-          ) : (
-            <Text style={styles.saveButtonText}>Save</Text>
-          )}
-        </Pressable>
-      </View>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      <NavBar
+        title="Edit desktop"
+        onBack={leave}
+        trailing={
+          host ? (
+            <Button
+              label="Save"
+              variant="primary"
+              size="compact"
+              busy={saving}
+              disabled={!canSave}
+              accessibilityLabel="Save host"
+              onPress={() => void handleSave()}
+            />
+          ) : null
+        }
+      />
 
       {loadError ? (
-        <View style={styles.errorState}>
-          <Text style={styles.errorText}>{loadError}</Text>
-          <Pressable style={styles.secondaryButton} onPress={leave}>
-            <Text style={styles.secondaryButtonText}>Go back</Text>
-          </Pressable>
-        </View>
+        <StateView
+          icon={AlertCircle}
+          title="Couldn't open this desktop"
+          message={loadError}
+          primary={{ label: 'Go back', onPress: leave }}
+        />
       ) : !host ? (
-        <View style={styles.loadingState}>
-          <ActivityIndicator color={colors.textSecondary} />
-        </View>
+        <StateView loading title="Loading desktop…" />
       ) : (
         <KeyboardAvoidingView
           style={styles.flex}
@@ -213,65 +200,59 @@ export default function EditHostScreen() {
             contentContainerStyle={[styles.form, { paddingBottom: insets.bottom + spacing.xl }]}
             keyboardShouldPersistTaps="handled"
           >
-            <Text style={styles.help}>
-              Change the display name or connection address. Leave the name empty to use the name
-              the desktop reports. Address edits only switch where this phone connects — they do not
-              re-pair. Use this when the same desktop is reachable at a different IP (for example
-              home LAN vs Tailscale).
-            </Text>
-
-            <Text style={styles.label}>Name</Text>
-            <TextInput
-              style={styles.input}
+            <TextField
+              label="Name"
               accessibilityLabel="Name"
               value={name}
               onChangeText={(value) => {
                 setName(value)
                 setSaveError(null)
               }}
-              placeholder={host.lastKnownMachineName ?? 'Host name'}
-              placeholderTextColor={colors.textMuted}
+              placeholder={host.lastKnownMachineName ?? 'Desktop name'}
               autoCapitalize="words"
               autoCorrect={false}
               returnKeyType="next"
+              footnote="Leave empty to use the name the desktop reports."
             />
 
-            <Text style={styles.label}>Address</Text>
-            <TextInput
-              style={styles.input}
-              accessibilityLabel="Address"
-              value={address}
-              onChangeText={(value) => {
-                setAddress(value)
-                setSaveError(null)
-              }}
-              placeholder="192.168.1.10:6768"
-              placeholderTextColor={colors.textMuted}
-              autoCapitalize="none"
-              autoCorrect={false}
-              autoComplete="off"
-              keyboardType="url"
-              returnKeyType="done"
-              onSubmitEditing={() => {
-                if (canSave) {
-                  void handleSave()
-                }
-              }}
-            />
-            <Text style={styles.hint}>
-              Accepts IP, host:port, or ws:// / wss://. A wss:// URL without a port uses 443. Bare
-              addresses keep the current port (or 6768).
-            </Text>
-
-            {endpointEdit == null ? null : endpointEdit.kind !== 'invalid' ? (
-              <Text style={styles.preview} numberOfLines={2}>
-                Connects to {endpointEdit.endpoint}
+            <View style={styles.addressBlock}>
+              <TextField
+                label="Address"
+                accessibilityLabel="Address"
+                value={address}
+                onChangeText={(value) => {
+                  setAddress(value)
+                  setSaveError(null)
+                }}
+                placeholder="192.168.1.10:6768"
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="off"
+                keyboardType="url"
+                returnKeyType="done"
+                onSubmitEditing={() => {
+                  if (canSave) {
+                    void handleSave()
+                  }
+                }}
+                error={addressInvalid !== null}
+                footnote={addressInvalid ?? 'An IP, host:port, or a ws:// or wss:// URL.'}
+              />
+              {endpointEdit != null && endpointEdit.kind !== 'invalid' ? (
+                <Text style={styles.preview} numberOfLines={2}>
+                  Connects to {endpointEdit.endpoint}
+                </Text>
+              ) : null}
+              <Text style={styles.hint}>
+                Changing the address switches where this phone connects. It does not re-pair.
               </Text>
-            ) : address.trim().length > 0 ? (
-              <Text style={styles.previewError}>{endpointEdit.error}</Text>
-            ) : null}
+            </View>
 
-            {saveError ? <Text style={styles.errorText}>{saveError}</Text> : null}
+            {saveError ? (
+              <View style={styles.bannerBleed}>
+                <Banner tone="error" title="Couldn't save" message={saveError} />
+              </View>
+            ) : null}
           </ScrollView>
         </KeyboardAvoidingView>
       )}
@@ -287,112 +268,30 @@ const styles = StyleSheet.create({
   flex: {
     flex: 1
   },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.md,
-    gap: spacing.sm
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  heading: {
-    flex: 1,
-    color: colors.textPrimary,
-    fontSize: 20,
-    fontWeight: '700'
-  },
-  saveButton: {
-    minWidth: 64,
-    height: 34,
-    paddingHorizontal: spacing.md,
-    borderRadius: radii.button,
-    backgroundColor: colors.surfaceBright,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  saveButtonDisabled: {
-    opacity: 0.4
-  },
-  saveButtonText: {
-    color: colors.bgBase,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
-  },
   form: {
+    width: '100%',
+    maxWidth: SETTINGS_CONTENT_MAX_WIDTH,
+    alignSelf: 'center',
     paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    gap: spacing.xl
+  },
+  // The banner insets itself for the canvas; the form already has.
+  bannerBleed: {
+    marginHorizontal: -spacing.lg
+  },
+  addressBlock: {
     gap: spacing.sm
-  },
-  help: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize,
-    lineHeight: 20,
-    marginBottom: spacing.sm
-  },
-  label: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    fontWeight: '500',
-    marginTop: spacing.sm,
-    textTransform: 'uppercase',
-    letterSpacing: 0.4
-  },
-  input: {
-    backgroundColor: colors.bgPanel,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.row,
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    paddingHorizontal: spacing.md,
-    paddingVertical: Platform.OS === 'ios' ? 12 : 10
-  },
-  hint: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize,
-    lineHeight: 16
   },
   preview: {
-    marginTop: spacing.sm,
+    ...textStyles.footnote,
+    paddingLeft: 4,
     color: colors.textSecondary,
-    fontSize: typography.metaSize,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : typography.monoFamily
   },
-  previewError: {
-    marginTop: spacing.sm,
-    color: colors.statusRed,
-    fontSize: typography.bodySize
-  },
-  errorText: {
-    color: colors.statusRed,
-    fontSize: typography.bodySize,
-    marginTop: spacing.md
-  },
-  errorState: {
-    flex: 1,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xl,
-    gap: spacing.md
-  },
-  loadingState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  secondaryButton: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.button,
-    backgroundColor: colors.bgRaised
-  },
-  secondaryButtonText: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    fontWeight: '500'
+  hint: {
+    ...textStyles.footnote,
+    paddingLeft: 4,
+    color: colors.textMuted
   }
 })

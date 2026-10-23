@@ -1,9 +1,15 @@
 import { useMemo, useRef, useState } from 'react'
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
-import { ArrowUp, Check, CircleHelp } from 'lucide-react-native'
+import { View } from 'react-native'
+import { CircleHelp } from 'lucide-react-native'
 import { MobileNativeChatCardHeaderAction } from './MobileNativeChatCardHeaderAction'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
-import { mobileNativeChatInputStyles } from './mobile-native-chat-input-styles'
+import { Button } from '../components/ui/Button'
+import { ReplyBox } from '../components/ui/ReplyBox'
+import { triggerSuccess } from '../platform/haptics'
+import {
+  MobileNativeChatPromptCardFrame,
+  MobileNativeChatPromptOption,
+  promptCardStyles
+} from './MobileNativeChatPromptCardFrame'
 import {
   formatQuestionAnswerByIndexes,
   formatQuestionAnswerWithOtherByIndexes,
@@ -32,6 +38,8 @@ export function MobileNativeChatQuestion({
   const [selectedOptionIndexes, setSelectedOptionIndexes] = useState<number[]>([])
   const [freeText, setFreeText] = useState(() => question.freeTextInput?.initialValue ?? '')
   const [sending, setSending] = useState(false)
+  // The single-select row whose answer is on its way, so the tap shows where it went.
+  const [answeringIndex, setAnsweringIndex] = useState<number | null>(null)
   const sendingRef = useRef(false)
   const allowOther = question.allowOther !== false
 
@@ -53,7 +61,11 @@ export function MobileNativeChatQuestion({
     sendingRef.current = true
     setSending(true)
     try {
-      return await onAnswer(text)
+      const accepted = await onAnswer(text)
+      if (accepted) {
+        triggerSuccess()
+      }
+      return accepted
     } finally {
       sendingRef.current = false
       setSending(false)
@@ -61,10 +73,18 @@ export function MobileNativeChatQuestion({
   }
 
   const answerSingle = async (optionIndex: number): Promise<void> => {
+    if (sendingRef.current) {
+      return
+    }
     const token = question.optionTokens[optionIndex]
-    await sendAnswer(
-      token && token.length > 0 ? token : formatQuestionAnswerByIndexes(question, [optionIndex])
-    )
+    setAnsweringIndex(optionIndex)
+    try {
+      await sendAnswer(
+        token && token.length > 0 ? token : formatQuestionAnswerByIndexes(question, [optionIndex])
+      )
+    } finally {
+      setAnsweringIndex(null)
+    }
   }
 
   const submitMulti = async (): Promise<void> => {
@@ -80,22 +100,35 @@ export function MobileNativeChatQuestion({
     }
   }
 
-  const submitFreeText = async (): Promise<void> => {
-    if (!allowOther || (answerText.length === 0 && !question.freeTextInput?.allowEmpty)) {
+  const submitFreeText = async (text = answerText): Promise<void> => {
+    if (!allowOther || (text.length === 0 && !question.freeTextInput?.allowEmpty)) {
       return
     }
     const answer =
       question.multiSelect && question.freeTextToken && selectedOptionIndexes.length > 0
-        ? formatQuestionAnswerWithOtherByIndexes(question, selectedOptionIndexes, answerText)
-        : formatQuestionFreeTextAnswer(question, answerText)
+        ? formatQuestionAnswerWithOtherByIndexes(question, selectedOptionIndexes, text)
+        : formatQuestionFreeTextAnswer(question, text)
     if (await sendAnswer(answer)) {
       setFreeText('')
     }
   }
 
+  // A declared one-line input (Pi's `input`) sends on Return, as its single-line field did; a
+  // pasted block keeps its words on one line.
+  const singleLine = question.freeTextInput ? question.freeTextInput.multiline !== true : false
+  const changeFreeText = (next: string): void => {
+    if (!singleLine || !next.includes('\n')) {
+      setFreeText(next)
+      return
+    }
+    if (next === `${freeText}\n`) {
+      void submitFreeText(question.freeTextInput?.allowEmpty ? freeText : freeText.trim())
+      return
+    }
+    setFreeText(next.replace(/\s*\n\s*/g, ' '))
+  }
+
   const canSubmitMulti = selectedOptionIndexes.length > 0 && !sending
-  const canSendFreeText =
-    allowOther && (answerText.length > 0 || question.freeTextInput?.allowEmpty === true) && !sending
 
   // Stable keys for option rows even if an agent repeats a label.
   const optionRows = useMemo(
@@ -109,211 +142,69 @@ export function MobileNativeChatQuestion({
   )
 
   return (
-    <View style={styles.card}>
-      <View style={styles.header}>
-        <CircleHelp size={15} color={colors.accentBlue} strokeWidth={2.2} />
-        <Text style={styles.question}>{question.question}</Text>
+    <MobileNativeChatPromptCardFrame
+      icon={CircleHelp}
+      title={question.question}
+      headerAction={
         <MobileNativeChatCardHeaderAction
           prompt={question.prompt}
           onCancel={onCancel}
           onCollapse={onCollapse}
           disabled={sending}
         />
-      </View>
-
+      }
+    >
       {hasOptions ? (
-        <View style={styles.options}>
+        <View style={promptCardStyles.options}>
           {optionRows.map(({ label, description, key }, optIndex) => {
             const isSelected = selectedOptionIndexes.includes(optIndex)
             return (
-              <Pressable
+              <MobileNativeChatPromptOption
                 key={key}
+                label={label}
+                description={description}
+                mark={question.multiSelect ? 'checkbox' : null}
+                selected={question.multiSelect ? isSelected : false}
+                busy={answeringIndex === optIndex}
+                disabled={sending}
                 accessibilityRole={question.multiSelect ? 'checkbox' : 'button'}
                 accessibilityState={question.multiSelect ? { checked: isSelected } : undefined}
-                style={({ pressed }) => [
-                  styles.option,
-                  isSelected && styles.optionSelected,
-                  pressed && styles.pressed
-                ]}
                 onPress={() => (question.multiSelect ? toggle(optIndex) : answerSingle(optIndex))}
-              >
-                {question.multiSelect ? (
-                  <View style={[styles.checkbox, isSelected && styles.checkboxOn]}>
-                    {isSelected ? <Check size={13} color={colors.bgBase} strokeWidth={3} /> : null}
-                  </View>
-                ) : null}
-                <View style={styles.optionBody}>
-                  <Text style={styles.optionText}>{label}</Text>
-                  {description ? (
-                    <Text style={styles.optionDescription} numberOfLines={2}>
-                      {description}
-                    </Text>
-                  ) : null}
-                </View>
-              </Pressable>
+              />
             )
           })}
         </View>
       ) : null}
 
       {question.multiSelect && hasOptions ? (
-        <Pressable
+        <Button
+          label={`Submit${selectedOptionIndexes.length > 0 ? ` (${selectedOptionIndexes.length})` : ''}`}
           accessibilityLabel="Submit selected options"
-          style={({ pressed }) => [
-            styles.submit,
-            !canSubmitMulti && styles.submitDisabled,
-            pressed && canSubmitMulti && styles.pressed
-          ]}
-          onPress={submitMulti}
+          variant="primary"
+          size="compact"
+          block
+          busy={sending && answeringIndex === null && selectedOptionIndexes.length > 0}
           disabled={!canSubmitMulti}
-        >
-          <Text style={[styles.submitText, !canSubmitMulti && styles.submitTextDisabled]}>
-            Submit{selectedOptionIndexes.length > 0 ? ` (${selectedOptionIndexes.length})` : ''}
-          </Text>
-        </Pressable>
+          onPress={() => void submitMulti()}
+        />
       ) : null}
 
       {allowOther ? (
-        <View style={styles.freeTextRow}>
-          <TextInput
-            style={mobileNativeChatInputStyles.freeInput}
-            value={freeText}
-            onChangeText={setFreeText}
-            placeholder={
-              question.freeTextInput?.placeholder ??
-              (hasOptions ? 'Or type a reply…' : 'Type your reply…')
-            }
-            placeholderTextColor={colors.textMuted}
-            selectionColor={colors.accentBlue}
-            onSubmitEditing={submitFreeText}
-            returnKeyType="send"
-            // A declared input (Pi's `input`) is one line unless it asks for more, as on desktop.
-            multiline={question.freeTextInput ? question.freeTextInput.multiline === true : true}
-          />
-          <Pressable
-            accessibilityLabel="Send reply"
-            style={({ pressed }) => [
-              styles.freeSend,
-              !canSendFreeText && styles.freeSendDisabled,
-              pressed && canSendFreeText && styles.pressed
-            ]}
-            onPress={submitFreeText}
-            disabled={!canSendFreeText}
-          >
-            <ArrowUp
-              size={18}
-              color={canSendFreeText ? colors.bgBase : colors.textMuted}
-              strokeWidth={2.6}
-            />
-          </Pressable>
-        </View>
+        <ReplyBox
+          value={freeText}
+          onChangeText={changeFreeText}
+          onSend={() => void submitFreeText()}
+          placeholder={
+            question.freeTextInput?.placeholder ??
+            (hasOptions ? 'Or type a reply…' : 'Type your reply…')
+          }
+          sendAccessibilityLabel="Send reply"
+          sending={sending && answeringIndex === null && !question.multiSelect}
+          allowEmpty={question.freeTextInput?.allowEmpty === true}
+          maxLines={singleLine ? 1 : 5}
+          returnKeyType={singleLine ? 'send' : undefined}
+        />
       ) : null}
-    </View>
+    </MobileNativeChatPromptCardFrame>
   )
 }
-
-const styles = StyleSheet.create({
-  card: {
-    marginHorizontal: spacing.lg,
-    marginVertical: spacing.sm,
-    padding: spacing.md,
-    gap: spacing.sm,
-    backgroundColor: colors.bgPanel,
-    borderRadius: radii.card,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm
-  },
-  question: {
-    flex: 1,
-    color: colors.textPrimary,
-    fontSize: typography.bodySize + 1,
-    fontWeight: '600',
-    lineHeight: typography.bodySize + 7
-  },
-  options: {
-    gap: spacing.xs
-  },
-  option: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    minHeight: 44,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.button,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle
-  },
-  optionSelected: {
-    borderColor: colors.accentBlue
-  },
-  optionBody: {
-    flex: 1,
-    gap: 2
-  },
-  optionText: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize + 1
-  },
-  optionDescription: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize,
-    lineHeight: typography.metaSize + 5
-  },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: radii.button,
-    borderWidth: 1.5,
-    borderColor: colors.textMuted,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  checkboxOn: {
-    backgroundColor: colors.accentBlue,
-    borderColor: colors.accentBlue
-  },
-  submit: {
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.button,
-    backgroundColor: colors.accentBlue
-  },
-  submitDisabled: {
-    backgroundColor: colors.bgRaised
-  },
-  submitText: {
-    color: colors.onMergeGreen,
-    fontSize: typography.bodySize + 1,
-    fontWeight: '600'
-  },
-  submitTextDisabled: {
-    color: colors.textMuted
-  },
-  freeTextRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: spacing.sm
-  },
-  freeSend: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.textPrimary
-  },
-  freeSendDisabled: {
-    backgroundColor: colors.bgRaised
-  },
-  pressed: {
-    opacity: 0.7
-  }
-})

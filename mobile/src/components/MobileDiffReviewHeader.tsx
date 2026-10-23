@@ -1,10 +1,13 @@
-import { FlatList, Pressable, Text, View } from 'react-native'
-import { ChevronLeft, ListChecks, MoreHorizontal } from 'lucide-react-native'
-import { colors } from '../theme/mobile-theme'
+import { ScrollView, View } from 'react-native'
+import { GitPullRequest, MoreHorizontal } from 'lucide-react-native'
 import type { MobileDiffReviewQueueFilter } from '../session/mobile-diff-review-queue'
-import { REVIEW_FILTERS, mobileReviewCountLabel } from '../session/mobile-diff-review-screen-model'
+import { REVIEW_FILTERS } from '../session/mobile-diff-review-screen-model'
+import { triggerSelection } from '../platform/haptics'
 import { shouldShowTrigger } from './mobile-pr-sidebar-presentation'
 import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
+import { FilterChip } from './ui/FilterChip'
+import { IconButton } from './ui/IconButton'
+import { NavBar } from './ui/NavBar'
 
 type Props = {
   filter: MobileDiffReviewQueueFilter
@@ -15,10 +18,21 @@ type Props = {
   reviewedCount: number
   unsentCount: number
   worktreeLabel: string
+  /** The file under review; the bar falls back to "Review" when there is none. */
+  fileName?: string
   onBack: () => void
   onOpenActions: () => void
   onOpenPRSidebar: () => void
   onSelectFilter: (filter: MobileDiffReviewQueueFilter) => void
+}
+
+const FILTER_LABELS: Record<MobileDiffReviewQueueFilter, string> = {
+  all: 'All',
+  unreviewed: 'Unreviewed',
+  notes: 'Notes',
+  unstaged: 'Unstaged',
+  staged: 'Staged',
+  branch: 'Branch'
 }
 
 export function MobileDiffReviewHeader({
@@ -28,8 +42,8 @@ export function MobileDiffReviewHeader({
   prSidebarCanDock,
   queueLength,
   reviewedCount,
-  unsentCount,
   worktreeLabel,
+  fileName,
   onBack,
   onOpenActions,
   onOpenPRSidebar,
@@ -42,76 +56,52 @@ export function MobileDiffReviewHeader({
     isWideLayout,
     canDock: prSidebarCanDock
   })
+  const progress =
+    queueLength > 0 ? `${reviewedCount} of ${queueLength} reviewed` : worktreeLabel || undefined
   return (
-    <View style={styles.header}>
-      <View style={styles.topBar}>
-        <Pressable
-          style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}
-          onPress={onBack}
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-        >
-          <ChevronLeft size={19} color={colors.textPrimary} strokeWidth={2.2} />
-        </Pressable>
-        <View style={styles.titleBlock}>
-          <Text style={styles.title} numberOfLines={1}>
-            Changes
-          </Text>
-          <Text style={styles.subtitle} numberOfLines={1}>
-            {worktreeLabel}
-          </Text>
-        </View>
-        {showPRTrigger ? (
-          <Pressable
-            style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}
-            onPress={onOpenPRSidebar}
-            accessibilityRole="button"
-            accessibilityLabel="Open pull request sidebar"
-          >
-            <ListChecks size={19} color={colors.textPrimary} strokeWidth={2.2} />
-          </Pressable>
-        ) : null}
-        <Pressable
-          style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}
-          onPress={onOpenActions}
-          accessibilityRole="button"
-          accessibilityLabel="Open review actions"
-        >
-          <MoreHorizontal size={19} color={colors.textPrimary} strokeWidth={2.2} />
-        </Pressable>
-      </View>
-      <View style={styles.progressRow}>
-        <Text style={styles.progressText}>
-          {reviewedCount}/{queueLength} reviewed
-        </Text>
-        <Text style={styles.progressText}>
-          {mobileReviewCountLabel(unsentCount, 'unsent note', 'unsent notes')}
-        </Text>
-      </View>
-      <FlatList
-        data={REVIEW_FILTERS}
+    <View>
+      <NavBar
+        title={fileName ?? 'Review'}
+        subtitle={progress}
+        onBack={onBack}
+        trailing={
+          <>
+            {showPRTrigger ? (
+              <IconButton
+                icon={GitPullRequest}
+                accessibilityLabel="Open pull request sidebar"
+                onPress={onOpenPRSidebar}
+                variant="bare"
+              />
+            ) : null}
+            <IconButton
+              icon={MoreHorizontal}
+              accessibilityLabel="Open review actions"
+              onPress={onOpenActions}
+            />
+          </>
+        }
+      />
+      <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        keyExtractor={(item) => item}
         contentContainerStyle={styles.filterRow}
-        renderItem={({ item }) => (
-          <Pressable
-            style={({ pressed }) => [
-              styles.filterChip,
-              filter === item && styles.filterChipActive,
-              pressed && styles.filterChipPressed
-            ]}
-            onPress={() => onSelectFilter(item)}
-            accessibilityRole="button"
-            accessibilityState={{ selected: filter === item }}
+      >
+        {REVIEW_FILTERS.map((item) => (
+          <FilterChip
+            key={item}
+            label={FILTER_LABELS[item]}
+            active={filter === item}
+            onPress={() => {
+              if (filter !== item) {
+                triggerSelection()
+              }
+              onSelectFilter(item)
+            }}
             accessibilityLabel={`Show ${item} review files`}
-          >
-            <Text style={[styles.filterText, filter === item && styles.filterTextActive]}>
-              {item === 'all' ? 'All' : item[0]?.toUpperCase() + item.slice(1)}
-            </Text>
-          </Pressable>
-        )}
-      />
+          />
+        ))}
+      </ScrollView>
     </View>
   )
 }

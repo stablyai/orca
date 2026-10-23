@@ -1,10 +1,12 @@
-import { Animated, View, Text, Pressable, ActivityIndicator } from 'react-native'
+import { Animated, View, Text } from 'react-native'
+import { Hourglass, Layers } from 'lucide-react-native'
+import { StateView } from '../components/ui/StateView'
+import { MobileSessionOfflineState } from './MobileSessionOfflineState'
 import { saveTerminalTextScale } from '../storage/preferences'
 import { MobileBrowserPane } from '../browser/MobileBrowserPane'
 import { TerminalPaneView } from './TerminalPaneView'
 import { MobileNativeChatOverlay } from './MobileNativeChatOverlay'
 import { resolveMobileNativeChatSessionId } from './mobile-native-chat-eligibility'
-import { colors } from '../theme/mobile-theme'
 import { styles } from './mobile-session-styles'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
@@ -84,37 +86,33 @@ export function MobileSessionActiveContent({
     retryPendingTerminalRecovery,
     showLoadingState,
     showEmptyState,
+    visibleTabs,
     keyboardLift,
     activeTerminalKeyboardLift,
     toastAnimatedStyle,
     createTabBusy
   } = controller
+  // Why: loading and empty both need a live connection; without one an empty session explains itself here.
+  const showOfflineState = connState !== 'connected' && visibleTabs.length === 0 && !activeHandle
   const content = showLoadingState ? (
-    <View style={styles.emptyState}>
-      <ActivityIndicator size="small" color={colors.textSecondary} />
-    </View>
+    <StateView loading title="Loading tabs…" />
   ) : showEmptyState ? (
-    <View style={styles.emptyState}>
-      <Text style={styles.emptyText}>No tabs in this session</Text>
-      {createError ? <Text style={styles.createError}>{createError}</Text> : null}
-      <View style={styles.emptyActions}>
-        <Pressable
-          style={[
-            styles.createButton,
-            (createTabBusy || connState !== 'connected') && styles.createButtonDisabled
-          ]}
-          disabled={createTabBusy || connState !== 'connected'}
-          onPress={() => {
-            setCreateError('')
-            setShowCreateTabDrawer(true)
-          }}
-        >
-          <Text style={styles.createButtonText}>
-            {createTabBusy ? 'Creating...' : 'Create Tab'}
-          </Text>
-        </Pressable>
-      </View>
-    </View>
+    <StateView
+      icon={Layers}
+      title="No tabs open"
+      message={createError || 'Start an agent, a terminal or a browser in this workspace.'}
+      primary={{
+        label: 'New tab',
+        busy: createTabBusy,
+        onPress: () => {
+          setCreateError('')
+          setShowCreateTabDrawer(true)
+        }
+      }}
+      testID="session-empty-state"
+    />
+  ) : showOfflineState ? (
+    <MobileSessionOfflineState controller={controller} />
   ) : activeMarkdownTab ? (
     <View style={styles.markdownFrame}>
       <MarkdownReader
@@ -182,26 +180,16 @@ export function MobileSessionActiveContent({
       )}
     </View>
   ) : activePendingTerminalTab ? (
-    <View style={styles.emptyState}>
-      {!isPendingTerminalRecoveryParked && (
-        <ActivityIndicator size="small" color={colors.textSecondary} />
-      )}
-      <Text style={styles.emptyText}>
-        {isPendingTerminalRecoveryParked
-          ? 'Terminal is taking longer than expected'
-          : activePendingTerminalTab.title || 'Loading terminal'}
-      </Text>
-      {isPendingTerminalRecoveryParked && (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Retry loading terminal"
-          style={({ pressed }) => [styles.createButton, pressed && styles.newTerminalButtonPressed]}
-          onPress={() => void retryPendingTerminalRecovery()}
-        >
-          <Text style={styles.createButtonText}>Retry</Text>
-        </Pressable>
-      )}
-    </View>
+    isPendingTerminalRecoveryParked ? (
+      <StateView
+        icon={Hourglass}
+        title="Terminal is taking longer than expected"
+        message="Your desktop has not attached it yet."
+        primary={{ label: 'Retry', onPress: () => void retryPendingTerminalRecovery() }}
+      />
+    ) : (
+      <StateView loading title={activePendingTerminalTab.title || 'Starting terminal…'} />
+    )
   ) : (
     <View style={styles.terminalFrame}>
       {terminals.map((terminal) => (
@@ -243,6 +231,15 @@ export function MobileSessionActiveContent({
         structuredComposer={nativeChatStructuredComposer}
         onMicPress={dictationEnabled ? handleDictationToggle : undefined}
         micActive={dictation.isRecording}
+        micStatus={
+          dictation.isProcessing
+            ? 'processing'
+            : dictation.isRecording
+              ? 'recording'
+              : dictation.isStarting
+                ? 'starting'
+                : 'idle'
+        }
         dictationMode={dictationMode}
         onMicPressIn={handleDictationPressIn}
         onMicPressOut={handleDictationPressOut}

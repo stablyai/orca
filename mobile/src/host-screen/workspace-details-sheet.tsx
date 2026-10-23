@@ -11,10 +11,11 @@ import {
   SquareTerminal,
   StickyNote
 } from 'lucide-react-native'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { colors, spacing, textStyles, typography } from '../theme/mobile-theme'
+import { pressTransition } from '../components/ui/transition-styles'
+import { LIST_ROW_PADDING } from '../components/ui/ListGroup'
 import { prStateColor } from '../components/WorktreeMetaGlyphs'
-import { hostScreenStyles } from './host-screen-styles'
-import { OptionRowList } from './workspace-option-rows'
+import { OptionGroup } from './workspace-option-rows'
 import { TaskProviderLogo } from '../components/TaskProviderLogo'
 import { getWorktreeGitIdentityDisplay } from '../../../src/shared/worktree/git-identity-display'
 import {
@@ -26,8 +27,8 @@ import {
 } from '../worktree/workspace-details-model'
 import type { Worktree } from '../worktree/workspace-list-types'
 
-// The action rows' icon and gap, so both groups share one text column.
-const ICON_SIZE = 16
+// The action rows' icon size and 28 pt slot, so both groups share one text column.
+const ICON_SIZE = 20
 
 const PROVIDER_LABELS: Record<WorkspaceDetailLink['provider'], string> = {
   github: 'GitHub',
@@ -77,7 +78,7 @@ export function WorkspaceDetailsSheet(props: { row: Worktree; onOpenLink: (url: 
   return (
     <>
       <View style={styles.header}>
-        <Text style={styles.heading} numberOfLines={1}>
+        <Text style={styles.heading} numberOfLines={2}>
           {row.displayName || row.repo}
         </Text>
         {identity?.kind === 'branch' ? (
@@ -87,7 +88,7 @@ export function WorkspaceDetailsSheet(props: { row: Worktree; onOpenLink: (url: 
         ) : null}
         {origin ? (
           <View style={styles.origin} testID="workspace-origin">
-            <OriginIcon size={12} color={colors.textMuted} style={styles.originIcon} />
+            <OriginIcon size={14} color={colors.textMuted} style={styles.originIcon} />
             <Text style={styles.originText} numberOfLines={2}>
               {originLabel(origin)}
             </Text>
@@ -95,8 +96,8 @@ export function WorkspaceDetailsSheet(props: { row: Worktree; onOpenLink: (url: 
         ) : null}
       </View>
       {rows.length > 0 && (
-        <View testID="workspace-details" style={hostScreenStyles.filterGroup}>
-          <OptionRowList>{rows}</OptionRowList>
+        <View testID="workspace-details">
+          <OptionGroup>{rows}</OptionGroup>
         </View>
       )}
     </>
@@ -129,7 +130,11 @@ function DetailRow(props: {
   }
   return (
     <Pressable
-      style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+      style={({ pressed }) => [
+        styles.row,
+        pressed && styles.rowPressed,
+        pressed ? pressTransition.pressed : pressTransition.rest
+      ]}
       onPress={props.onPress}
       accessibilityRole="link"
       accessibilityLabel={props.accessibilityLabel}
@@ -188,7 +193,7 @@ function LinkRow({ item, onOpen }: { item: WorkspaceDetailLink; onOpen: (url: st
       icon={<LinkIcon item={item} />}
       onPress={url ? () => onOpen(url) : undefined}
       accessibilityLabel={`Open ${item.label}${item.title ? `, ${item.title}` : ''}`}
-      trailing={url ? <ExternalLink size={14} color={colors.textMuted} /> : undefined}
+      trailing={url ? <ExternalLink size={16} color={colors.textMuted} /> : undefined}
     >
       <Text style={styles.title} numberOfLines={1}>
         {item.title ?? item.label}
@@ -204,69 +209,70 @@ function LinkRow({ item, onOpen }: { item: WorkspaceDetailLink; onOpen: (url: st
 
 const styles = StyleSheet.create({
   header: {
-    paddingHorizontal: spacing.xs,
-    paddingBottom: spacing.md - 2
+    alignItems: 'center',
+    gap: 2,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.sm
   },
   heading: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.textPrimary
+    ...textStyles.title,
+    fontSize: 20,
+    lineHeight: 25,
+    color: colors.textPrimary,
+    textAlign: 'center'
   },
   branch: {
-    marginTop: 1,
-    fontSize: 11.5,
+    ...textStyles.callout,
     fontFamily: typography.monoFamily,
-    color: colors.textMuted
+    color: colors.textSecondary,
+    textAlign: 'center'
   },
   origin: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 5,
-    marginTop: 3
+    gap: 6,
+    marginTop: 2
   },
-  // Sits on the first line of the 12/16 text beside it.
+  // Sits on the first line of the 13/18 text beside it.
   originIcon: {
     marginTop: 2
   },
   originText: {
-    flex: 1,
-    fontSize: typography.metaSize,
-    lineHeight: 16,
+    ...textStyles.footnote,
+    flexShrink: 1,
     color: colors.textMuted
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm + 2,
-    minHeight: 46,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md + 2
+    gap: spacing.md,
+    minHeight: 52,
+    paddingVertical: 10,
+    paddingHorizontal: LIST_ROW_PADDING
   },
   rowPressed: {
-    backgroundColor: colors.bgRaised
+    backgroundColor: colors.fill
   },
   icon: {
-    width: ICON_SIZE,
+    width: 28,
     alignItems: 'center'
   },
   text: {
     flex: 1,
-    minWidth: 0
+    minWidth: 0,
+    gap: 2
   },
   title: {
-    fontSize: typography.bodySize,
-    lineHeight: 19,
-    fontWeight: '500',
+    ...textStyles.body,
     color: colors.textPrimary
   },
   meta: {
-    marginTop: 2,
-    fontSize: typography.metaSize,
-    color: colors.textMuted
+    ...textStyles.subhead,
+    color: colors.textSecondary
   },
   notes: {
-    fontSize: 13,
-    lineHeight: 18,
+    ...textStyles.callout,
     color: colors.textSecondary
   }
 })

@@ -1,6 +1,5 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
-import { Pressable, Text } from './mobile-tasks-dependencies'
-import { styles } from './mobile-tasks-legacy-styles'
+import { FilterChip } from '../components/ui/FilterChip'
 
 // Multiple connected sites add a scope picker beside the issue filter.
 export function renderMobileTasksJiraViewControls(model: ConnectionPresentationModel) {
@@ -17,40 +16,32 @@ export function renderMobileTasksJiraViewControls(model: ConnectionPresentationM
   if (provider !== 'jira' || !jiraConnection.connected) {
     return null
   }
+  // A JQL search replaces the preset, so the preset chip is shown but locked until it is cleared.
   const queryOverridesPreset = appliedQuery.trim().length > 0
   return (
     <>
       {jiraConnection.sites.length > 1 ? (
-        <Pressable
-          style={styles.segmentButton}
+        <FilterChip
+          label={jiraSiteChipLabel}
+          menu
+          active={jiraSiteChipLabel !== 'All sites'}
           disabled={!taskUiReady}
-          onPress={() => {
-            if (taskUiReady) {
-              setShowJiraSitePicker(true)
-            }
-          }}
-        >
-          <Text style={styles.segmentSecondaryText}>{jiraSiteChipLabel}</Text>
-        </Pressable>
+          accessibilityLabel={`Site: ${jiraSiteChipLabel}`}
+          onPress={() => setShowJiraSitePicker(true)}
+        />
       ) : null}
-      <Pressable
-        style={styles.segmentButton}
+      <FilterChip
+        label={queryOverridesPreset ? 'JQL search' : jiraFilterLabel}
+        menu={!queryOverridesPreset}
+        active={queryOverridesPreset}
         disabled={!taskUiReady || queryOverridesPreset}
-        onPress={() => {
-          if (taskUiReady) {
-            setShowJiraFilterPicker(true)
-          }
-        }}
-      >
-        <Text
-          style={[
-            styles.segmentSecondaryText,
-            queryOverridesPreset ? styles.segmentDisabledText : null
-          ]}
-        >
-          {jiraFilterLabel}
-        </Text>
-      </Pressable>
+        accessibilityLabel={
+          queryOverridesPreset
+            ? 'Show: your JQL search. Clear the search to pick a preset.'
+            : `Show: ${jiraFilterLabel}`
+        }
+        onPress={() => setShowJiraFilterPicker(true)}
+      />
     </>
   )
 }

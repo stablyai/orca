@@ -5,6 +5,7 @@ import {
   scheduleMobileTaskCopyFeedbackReset,
   useCallback
 } from './mobile-tasks-dependencies'
+import { triggerSuccess } from '../platform/haptics'
 import {
   type DetailComment,
   type GitHubAssignableUser,
@@ -106,6 +107,7 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
           createdAt: new Date().toISOString(),
           author: 'You'
         }
+        triggerSuccess()
         setItemCommentDraft('')
         setDetailPayload((current) =>
           current &&
@@ -200,7 +202,10 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
           current?.provider === 'github' && current.source.id === item.source.id
             ? {
                 ...current,
-                source: { ...current.source, reviewRequests: nextReviewRequests }
+                source: {
+                  ...current.source,
+                  reviewRequests: nextReviewRequests
+                }
               }
             : current
         )
@@ -209,7 +214,10 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
             candidate.provider === 'github' && candidate.source.id === item.source.id
               ? {
                   ...candidate,
-                  source: { ...candidate.source, reviewRequests: nextReviewRequests }
+                  source: {
+                    ...candidate.source,
+                    reviewRequests: nextReviewRequests
+                  }
                 }
               : candidate
           )

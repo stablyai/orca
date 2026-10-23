@@ -1,7 +1,6 @@
 import { useMemo } from 'react'
-import { Pressable, Text, View } from 'react-native'
+import { Text, View } from 'react-native'
 import { MobileNativeChatOwnedScrollView } from './MobileNativeChatOwnedScrollView'
-import { ChevronRight } from 'lucide-react-native'
 import { agentJournalToolCallLifecycle } from '../../../src/shared/agent-journal-tool-call-lifecycle'
 import { diffFromText, diffFromToolCall } from '../../../src/shared/native-chat-diff'
 import type { NativeChatDiffLine } from '../../../src/shared/native-chat-diff'
@@ -24,13 +23,15 @@ import {
 import { MobileSyntaxSegments } from '../components/MobileSyntaxSegments'
 import { INLINE_TEXT_SELECTION } from '../components/inline-text-selection'
 import { openExternalLink } from '../platform/external-link'
+import { Collapsible } from '../components/ui/Collapsible'
 import { colors } from '../theme/mobile-theme'
 import { highlightMobileCode } from './mobile-file-syntax'
 import { MobileNativeChatToolGlyph } from './MobileNativeChatToolIcon'
 import { MobileNativeChatToolOutput } from './MobileNativeChatFullContent'
 import { useMobileNativeChatOpenedDetail } from './mobile-native-chat-opened-detail'
 import { useMobileNativeChatDisclosure } from './mobile-native-chat-disclosure-store'
-import { toolStyles as styles, toolType } from './mobile-native-chat-tool-styles'
+import { TOOL_ICON_SIZE, toolStyles as styles, toolType } from './mobile-native-chat-tool-styles'
+import { MobileNativeChatDisclosureRow } from './MobileNativeChatDisclosureRow'
 
 const RESULT_LABEL = 'Result'
 const NO_SEARCH_RESULTS: NativeChatWebSearchResult[] = []
@@ -195,25 +196,25 @@ export function MobileNativeChatToolLine({
     (call !== undefined && diffFromToolCall(call.name, call.input) !== null)
   const filePath = label?.filePath ?? null
   const type = toolType(fontScale)
-  const iconSize = 15 * fontScale
+  const iconSize = TOOL_ICON_SIZE * fontScale
   const exitCode = call && Number.isSafeInteger(call.exitCode) ? call.exitCode : undefined
   const duration = call ? formatToolDuration(call.durationMs) : null
+  const opensFile = filePath !== null && onOpenFile !== undefined
 
   return (
     <View testID={memberId}>
-      <Pressable
-        style={styles.line}
+      <MobileNativeChatDisclosureRow
         onPress={() => hasDetail && setExpanded(!expanded)}
         disabled={!hasDetail}
-        accessibilityRole="button"
-        accessibilityState={hasDetail ? { expanded } : undefined}
+        expanded={hasDetail ? expanded : undefined}
+        fontScale={fontScale}
       >
         <View style={[styles.iconSlot, { width: iconSize }]}>
           {call ? (
             <MobileNativeChatToolGlyph
               name={nativeChatToolIconName(call.name, call.mcpIdentity)}
               size={iconSize}
-              color={failed ? colors.statusRed : colors.textMuted}
+              color={failed ? colors.danger : colors.textMuted}
             />
           ) : null}
         </View>
@@ -223,32 +224,30 @@ export function MobileNativeChatToolLine({
           </Text>
         )}
         {target ? (
+          // The file name is the row's one link; a tap anywhere else opens the detail.
           <Text
-            style={[styles.lineTarget, type.row, filePath && onOpenFile && styles.lineLink]}
+            style={[styles.lineTarget, type.row, opensFile && styles.lineLink]}
             numberOfLines={1}
             onPress={filePath && onOpenFile ? () => onOpenFile(filePath) : undefined}
-            suppressHighlighting={!(filePath && onOpenFile)}
-            accessibilityRole={filePath && onOpenFile ? 'link' : undefined}
+            suppressHighlighting={!opensFile}
+            accessibilityRole={opensFile ? 'link' : undefined}
           >
             {target}
           </Text>
         ) : null}
-        {/* Held at the row's right edge, so the carets of a run line up in one column. */}
-        <View style={styles.lineTrailing}>
-          {exitCode !== undefined ? (
-            <Text style={[styles.lineMeta, type.meta, exitCode !== 0 && styles.errorText]}>
-              {`exit ${exitCode}`}
-            </Text>
-          ) : null}
-          {duration ? <Text style={[styles.lineMeta, type.meta]}>{duration}</Text> : null}
-          {hasDetail ? (
-            <View style={expanded ? styles.caretOpen : undefined}>
-              <ChevronRight size={14 * fontScale} color={colors.textMuted} strokeWidth={2} />
-            </View>
-          ) : null}
-        </View>
-      </Pressable>
-      {hasDetail && expanded ? (
+        {/* Held at the row's right edge, beside the chevron, so a run's meta lines up. */}
+        {exitCode !== undefined || duration ? (
+          <View style={styles.lineTrailing}>
+            {exitCode !== undefined ? (
+              <Text style={[styles.lineMeta, type.meta, exitCode !== 0 && styles.errorText]}>
+                {`exit ${exitCode}`}
+              </Text>
+            ) : null}
+            {duration ? <Text style={[styles.lineMeta, type.meta]}>{duration}</Text> : null}
+          </View>
+        ) : null}
+      </MobileNativeChatDisclosureRow>
+      <Collapsible open={hasDetail && expanded}>
         <ToolLineDetail
           memberId={memberId}
           disclosureKey={disclosureKey}
@@ -259,7 +258,7 @@ export function MobileNativeChatToolLine({
           results={results}
           fontScale={fontScale}
         />
-      ) : null}
+      </Collapsible>
     </View>
   )
 }

@@ -1,6 +1,6 @@
 import { StyleSheet } from 'react-native'
 import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { colors, motion, radii, spacing, textStyles, typography } from '../theme/mobile-theme'
 
 export const mobileBrowserPaneStyles = StyleSheet.create({
   root: {
@@ -9,16 +9,17 @@ export const mobileBrowserPaneStyles = StyleSheet.create({
     backgroundColor: colors.bgBase
   },
   toolbar: {
-    minHeight: 32,
+    minHeight: 52,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel
+    paddingHorizontal: spacing.xs,
+    paddingBottom: spacing.xs,
+    backgroundColor: colors.bgBase,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.separator
   },
+  // The 44 pt box overhangs the 40 pt field's right end.
+  reload: { marginVertical: -2, marginLeft: -6 },
   viewport: {
     flex: 1,
     minHeight: 0,
@@ -60,125 +61,103 @@ export const mobileBrowserPaneStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: spacing.xl,
-    gap: spacing.sm,
+    // A faint veil over a stale frame while a new one loads; not a token, it dims the page itself.
     backgroundColor: 'rgba(13, 15, 24, 0.2)'
   },
-  errorText: {
-    color: colors.textPrimary,
+  loading: { alignItems: 'center', gap: spacing.md },
+  loadingText: { ...textStyles.callout, color: colors.textSecondary },
+  errorCard: {
+    maxWidth: 320,
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.lg + 4,
+    borderRadius: radii.group,
     backgroundColor: colors.bgPanel,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.button,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    fontSize: 13,
-    textAlign: 'center',
-    overflow: 'hidden'
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.fieldBorder
   },
+  errorTitle: { ...textStyles.headline, color: colors.textPrimary, textAlign: 'center' },
+  errorText: { ...textStyles.callout, color: colors.textSecondary, textAlign: 'center' },
   dialogOverlay: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 30,
     alignItems: 'center',
     justifyContent: 'center',
     padding: spacing.xl,
-    backgroundColor: 'rgba(13, 15, 24, 0.5)'
+    backgroundColor: 'rgba(0, 0, 0, 0.5)'
   },
   dialogCard: {
     width: '100%',
-    maxWidth: 360,
-    borderRadius: radii.card,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
+    maxWidth: 340,
+    gap: spacing.sm,
+    borderRadius: radii.replyBox,
     backgroundColor: colors.bgPanel,
-    padding: spacing.lg
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.fieldBorder,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.lg
   },
-  dialogTitle: {
-    color: colors.textPrimary,
-    fontSize: 16,
-    fontWeight: '600'
-  },
-  dialogMessage: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize,
-    lineHeight: 20,
-    marginTop: spacing.sm
-  },
-  dialogButtonDisabled: {
-    opacity: 0.5
-  },
-  dialogError: {
-    color: colors.statusRed,
-    fontSize: typography.metaSize,
-    lineHeight: 18,
-    marginTop: spacing.sm
-  },
+  dialogTitle: { ...textStyles.headline, color: colors.textPrimary },
+  dialogMessage: { ...textStyles.body, color: colors.textSecondary },
+  dialogError: { ...textStyles.footnote, color: colors.danger },
   dialogActions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
     gap: spacing.sm,
-    marginTop: spacing.lg
-  },
-  dialogButton: {
-    minHeight: 34,
-    borderRadius: radii.button,
-    backgroundColor: colors.bgRaised,
-    paddingHorizontal: spacing.md,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  dialogButtonPrimary: {
-    backgroundColor: colors.textPrimary
-  },
-  dialogButtonPressed: {
-    opacity: 0.75
-  },
-  dialogButtonText: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
-  },
-  dialogButtonPrimaryText: {
-    color: colors.bgBase
+    marginTop: spacing.sm
   },
   keyboardDock: {
     zIndex: 20,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.separator,
+    backgroundColor: colors.bgBase
   },
+  dockKeys: { paddingHorizontal: spacing.md, paddingTop: spacing.xs },
+  dockKeysRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   inputRow: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.sm
+  },
+  inputBox: {
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.xs,
-    paddingBottom: spacing.xs + 2
+    gap: 2,
+    paddingLeft: spacing.xs,
+    paddingRight: 6,
+    paddingVertical: 6,
+    borderRadius: radii.replyBox,
+    borderWidth: 1,
+    borderColor: colors.fieldBorder,
+    backgroundColor: colors.fieldFill
   },
+  inputBoxFocused: { borderColor: colors.fieldBorderFocused },
   keyboardInput: {
     flex: 1,
-    height: 34,
-    backgroundColor: colors.bgRaised,
+    minWidth: 0,
+    height: 32,
     color: colors.textPrimary,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    // The seam, not the 14 it was: on the web an input under 16px zooms the page on focus and the
-    // keyboard seam reads that zoom as "no keyboard". Natively the seam is the theme's body size,
-    // which is what this already rendered at.
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 0,
+    // The seam: on the web an input under 16px zooms the page on focus and the keyboard seam reads
+    // that zoom as "no keyboard".
     fontSize: TEXT_INPUT_FONT_SIZE,
-    fontFamily: typography.monoFamily,
-    marginRight: spacing.sm
+    fontFamily: typography.monoFamily
   },
-  sendButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+  typeTrigger: {
+    height: 44,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bgRaised
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radii.pill,
+    backgroundColor: colors.fill
   },
-  disabled: {
-    opacity: 0.35
-  },
-  disabledText: {
-    color: colors.textMuted
-  }
+  typeTriggerPressed: { backgroundColor: colors.fillPressed },
+  typeTriggerText: { ...textStyles.callout, color: colors.textSecondary, flex: 1 },
+  typeTriggerHint: { ...textStyles.footnote, color: colors.textPrimary },
+  disabled: { opacity: motion.disabledOpacity }
 })

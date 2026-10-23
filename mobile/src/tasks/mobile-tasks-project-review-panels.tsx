@@ -85,7 +85,7 @@ export function renderMobileTasksProjectReviewPanels(model: ConnectionPresentati
         {projectAssignableUsersLoading ? (
           <View style={styles.detailLoadingInline}>
             <ActivityIndicator size="small" color={colors.textSecondary} />
-            <Text style={styles.detailMuted}>Loading reviewers...</Text>
+            <Text style={styles.detailMuted}>Loading reviewers…</Text>
           </View>
         ) : projectAssignableUsersError ? (
           <Text style={styles.detailError}>{projectAssignableUsersError}</Text>

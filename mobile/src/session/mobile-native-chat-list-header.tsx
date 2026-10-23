@@ -1,13 +1,15 @@
 import { useEffect, useState, type ReactElement, type ReactNode } from 'react'
-import { ActivityIndicator, Animated, Platform, Pressable, Text, View } from 'react-native'
+import { Animated, Platform, Text, View } from 'react-native'
+import { LoadingSpinner } from '../components/LoadingSpinner'
+import { Banner } from '../components/ui/Banner'
 import { colors } from '../theme/mobile-theme'
 import { styles } from './mobile-native-chat-view-styles'
 import type { OlderPagePhase } from './use-mobile-older-page-loader'
 
-const LOAD_EARLIER_FAILED = "Couldn't load earlier messages"
-const LOAD_EARLIER_RETRY = 'Try Again'
+const LOAD_EARLIER_FAILED = "Couldn't load earlier messages."
+const LOAD_EARLIER_RETRY = 'Try again'
 const EARLIER_UNAVAILABLE = "Earlier messages can't be loaded."
-const LOADING_EARLIER = 'Loading earlier messages'
+const LOADING_EARLIER = 'Loading earlier messages…'
 /** A page that lands this fast never shows its spinner. */
 const SPINNER_DELAY_MS = 200
 const FADE_MS = 180
@@ -48,35 +50,20 @@ export function mobileNativeChatListHeader(
   }
   if (olderPages === 'failed') {
     return (
-      <View style={styles.loadEarlier}>
+      <View style={styles.loadEarlierFailed}>
         <FadeIn delay={0}>
-          <View style={styles.loadEarlierFailed}>
-            <Text style={styles.loadEarlierFailedText} numberOfLines={1}>
-              {LOAD_EARLIER_FAILED}
-            </Text>
-            <Pressable
-              accessibilityRole="button"
-              onPress={loadEarlier}
-              style={({ pressed }) => [
-                styles.loadEarlierRetry,
-                pressed && styles.loadEarlierRetryPressed
-              ]}
-            >
-              <Text style={styles.loadEarlierRetryLabel}>{LOAD_EARLIER_RETRY}</Text>
-            </Pressable>
-          </View>
+          <Banner
+            message={LOAD_EARLIER_FAILED}
+            action={{ label: LOAD_EARLIER_RETRY, onPress: loadEarlier }}
+          />
         </FadeIn>
       </View>
     )
   }
   return (
-    <View style={styles.loadEarlier}>
+    <View style={styles.loadEarlier} accessibilityLabel={LOADING_EARLIER}>
       <FadeIn key="loading" delay={SPINNER_DELAY_MS}>
-        <ActivityIndicator
-          size="small"
-          color={colors.textMuted}
-          accessibilityLabel={LOADING_EARLIER}
-        />
+        <LoadingSpinner size={16} color={colors.textMuted} label={LOADING_EARLIER} />
       </FadeIn>
     </View>
   )

@@ -1,7 +1,18 @@
 import { useState } from 'react'
-import { View, Text, Pressable, TextInput, StyleSheet, Switch } from 'react-native'
-import { ChevronDown, ChevronRight } from 'lucide-react-native'
-import { colors, spacing, radii, typography } from '../theme/mobile-theme'
+import { View, Text, Pressable, TextInput, StyleSheet } from 'react-native'
+import { ChevronRight } from 'lucide-react-native'
+import { colors, spacing, radii, textStyles, typography } from '../theme/mobile-theme'
+import { Banner } from '../components/ui/Banner'
+import { Button } from '../components/ui/Button'
+import { Collapsible } from '../components/ui/Collapsible'
+import { ListGroup } from '../components/ui/ListGroup'
+import { ListRow } from '../components/ui/ListRow'
+import { SectionHeader } from '../components/ui/SectionHeader'
+import { TextField } from '../components/ui/TextField'
+import { pressTransition } from '../components/ui/transition-styles'
+import { MobileSegmentedControl } from '../components/MobileSegmentedControl'
+import { MobileSwitch } from '../components/MobileSwitch'
+import { triggerSelection } from '../platform/haptics'
 import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
 import {
@@ -27,42 +38,18 @@ type Props = {
   agentPromptMaxLength: number | null
   onChange: (patch: Partial<QuickCommandDraft>) => void
   onOpenAgentPicker: () => void
-  onCancel: () => void
   onSave: () => void
 }
 
-function ActionToggle({
-  value,
-  onChange
-}: {
-  value: QuickCommandDraft['action']
-  onChange: (action: QuickCommandDraft['action']) => void
-}) {
-  return (
-    <View style={styles.toggleGroup}>
-      {(['terminal-command', 'agent-prompt'] as const).map((action) => {
-        const selected = value === action
-        return (
-          <Pressable
-            key={action}
-            style={({ pressed }) => [
-              styles.toggleItem,
-              selected && styles.toggleItemSelected,
-              pressed && !selected && styles.pressed
-            ]}
-            onPress={() => onChange(action)}
-            accessibilityRole="button"
-            accessibilityState={{ selected }}
-          >
-            <Text style={[styles.toggleText, selected && styles.toggleTextSelected]}>
-              {action === 'terminal-command' ? 'Terminal Command' : 'Agent Prompt'}
-            </Text>
-          </Pressable>
-        )
-      })}
-    </View>
-  )
-}
+const ACTION_SEGMENTS = [
+  { value: 'terminal-command', label: 'Terminal command' },
+  { value: 'agent-prompt', label: 'Agent prompt' }
+] as const
+
+const SCOPE_SEGMENTS = [
+  { value: 'global', label: 'Global' },
+  { value: 'repo', label: 'This project' }
+] as const
 
 export function QuickCommandEditorForm({
   draft,
@@ -74,11 +61,11 @@ export function QuickCommandEditorForm({
   agentPromptMaxLength,
   onChange,
   onOpenAgentPicker,
-  onCancel,
   onSave
 }: Props) {
   const hasRepoScope = repoId !== null
   const [advancedOpen, setAdvancedOpen] = useState(draft.scope.type === 'repo')
+  const [bodyFocused, setBodyFocused] = useState(false)
   const isAgent = draft.action === 'agent-prompt'
   const canSave = isQuickCommandDraftValid(draft, agentPromptMaxLength) && !saving
   const promptTooLong = isQuickCommandDraftPromptTooLong(draft, agentPromptMaxLength)
@@ -90,66 +77,91 @@ export function QuickCommandEditorForm({
 
   return (
     <View style={styles.form}>
-      <View style={styles.field}>
-        <Text style={styles.label}>Label</Text>
-        <TextInput
-          style={styles.input}
-          value={draft.label}
-          onChangeText={(label) => onChange({ label })}
-          placeholder="Start dev server"
-          placeholderTextColor={colors.textMuted}
-          autoCapitalize="none"
-          autoCorrect={false}
-          maxLength={MAX_QUICK_COMMAND_LABEL_LENGTH}
-        />
-      </View>
+      <TextField
+        label="Name"
+        value={draft.label}
+        onChangeText={(label) => onChange({ label })}
+        placeholder="Start dev server"
+        autoCapitalize="none"
+        autoCorrect={false}
+        maxLength={MAX_QUICK_COMMAND_LABEL_LENGTH}
+      />
 
       <View style={styles.field}>
-        <Text style={styles.label}>Action</Text>
-        <ActionToggle value={draft.action} onChange={(action) => onChange({ action })} />
+        <Text style={styles.label}>Runs</Text>
+        <MobileSegmentedControl
+          segments={ACTION_SEGMENTS}
+          selected={draft.action}
+          onSelect={(action) => onChange({ action })}
+          fill
+        />
       </View>
 
       {isAgent ? (
         <View style={styles.field}>
           <Text style={styles.label}>Agent</Text>
           <Pressable
-            style={({ pressed }) => [styles.select, pressed && styles.pressed]}
             onPress={onOpenAgentPicker}
             accessibilityRole="button"
+            accessibilityLabel={
+              draft.agent ? `Agent, ${getQuickCommandAgentLabel(draft.agent)}` : 'Choose agent'
+            }
           >
-            {draft.agent ? (
-              <View style={styles.selectValue}>
-                <MobileAgentIcon agentId={draft.agent} size={16} />
-                <Text style={styles.selectValueText}>{getQuickCommandAgentLabel(draft.agent)}</Text>
+            {({ pressed }) => (
+              <View
+                style={[
+                  styles.select,
+                  pressed && styles.selectPressed,
+                  pressed ? pressTransition.pressed : pressTransition.rest
+                ]}
+              >
+                {draft.agent ? (
+                  <View style={styles.selectValue}>
+                    <MobileAgentIcon agentId={draft.agent} size={20} />
+                    <Text style={styles.selectValueText} numberOfLines={1}>
+                      {getQuickCommandAgentLabel(draft.agent)}
+                    </Text>
+                  </View>
+                ) : (
+                  <Text style={styles.selectPlaceholder}>Choose agent</Text>
+                )}
+                <ChevronRight size={16} color={colors.textMuted} strokeWidth={2.2} />
               </View>
-            ) : (
-              <Text style={styles.selectPlaceholder}>Choose agent</Text>
             )}
-            <ChevronDown size={16} color={colors.textMuted} />
           </Pressable>
         </View>
       ) : null}
 
       <View style={styles.field}>
-        <Text style={styles.label}>{isAgent ? 'Prompt' : 'Command Text'}</Text>
+        <Text style={styles.label}>{isAgent ? 'Prompt' : 'Command'}</Text>
         <TextInput
-          style={[styles.input, styles.textarea, !isAgent && styles.mono]}
+          style={[
+            styles.textarea,
+            !isAgent && styles.mono,
+            bodyFocused && styles.textareaFocused,
+            promptTooLong && styles.textareaError
+          ]}
           value={isAgent ? draft.prompt : draft.command}
           onChangeText={(text) => onChange(isAgent ? { prompt: text } : { command: text })}
+          onFocus={() => setBodyFocused(true)}
+          onBlur={() => setBodyFocused(false)}
           placeholder={isAgent ? 'Ask the agent to investigate this workspace' : 'npm run dev'}
           placeholderTextColor={colors.textMuted}
+          selectionColor={colors.accentBlue}
+          accessibilityLabel={isAgent ? 'Prompt' : 'Command'}
           autoCapitalize="none"
           autoCorrect={false}
           multiline
+          textAlignVertical="top"
           // Why: maxLength drops the tail of a paste silently, so prompts show a refusal instead.
           maxLength={isAgent ? undefined : MAX_QUICK_COMMAND_TERMINAL_TEXT_LENGTH}
         />
         {promptTooLong ? (
-          <View>
+          <View style={styles.footnoteBlock}>
             {/* Why static text in the alert: a live count would re-announce on every keystroke. */}
             <Text style={styles.error} accessibilityRole="alert" accessibilityLiveRegion="polite">
               {promptSize.olderHostCap
-                ? 'Too long for this host. Update Orca on the host to save longer prompts.'
+                ? 'Too long for this desktop. Update Orca on the desktop to save longer prompts.'
                 : 'Too long to save.'}
             </Text>
             <Text style={styles.hint}>
@@ -159,183 +171,132 @@ export function QuickCommandEditorForm({
             </Text>
           </View>
         ) : isAgent ? (
-          <Text style={styles.hint}>Supports skills, file paths, and built-in commands.</Text>
+          <Text style={styles.hint}>Supports skills, file paths and built-in commands.</Text>
         ) : null}
       </View>
 
-      <View style={styles.field}>
-        <Pressable
-          style={({ pressed }) => [styles.advancedToggle, pressed && styles.pressed]}
-          onPress={() => setAdvancedOpen((open) => !open)}
-          accessibilityRole="button"
-          accessibilityState={{ expanded: advancedOpen }}
-        >
-          {advancedOpen ? (
-            <ChevronDown size={16} color={colors.textSecondary} />
-          ) : (
-            <ChevronRight size={16} color={colors.textSecondary} />
-          )}
-          <Text style={styles.advancedText}>Advanced</Text>
-        </Pressable>
-
-        {advancedOpen ? (
+      <View style={styles.advanced}>
+        <SectionHeader
+          title="Advanced"
+          expanded={advancedOpen}
+          onToggle={() => setAdvancedOpen((open) => !open)}
+        />
+        <Collapsible open={advancedOpen}>
           <View style={styles.advancedBody}>
             {!isAgent ? (
-              <View style={styles.switchRow}>
-                <View style={styles.switchText}>
-                  <Text style={styles.switchTitle}>Append Enter</Text>
-                  <Text style={styles.switchDesc}>
-                    Submit immediately instead of only inserting text.
-                  </Text>
-                </View>
-                <Switch
-                  value={draft.appendEnter}
-                  onValueChange={(appendEnter) => onChange({ appendEnter })}
-                  trackColor={{ false: colors.bgRaised, true: colors.accentBlue }}
-                  thumbColor={colors.surfaceBright}
+              <ListGroup style={styles.group}>
+                <ListRow
+                  title="Press Enter"
+                  subtitle="Run it straight away instead of only typing it."
+                  subtitleNumberOfLines={2}
+                  accessory={
+                    <MobileSwitch
+                      value={draft.appendEnter}
+                      onValueChange={(appendEnter) => {
+                        triggerSelection()
+                        onChange({ appendEnter })
+                      }}
+                      accessibilityLabel="Press Enter after the command"
+                    />
+                  }
                 />
-              </View>
+              </ListGroup>
             ) : null}
-
             <View style={styles.field}>
-              <Text style={styles.label}>Scope</Text>
-              <View style={styles.toggleGroup}>
-                {(['global', 'repo'] as const).map((scopeType) => {
-                  const selected = draft.scope.type === scopeType
-                  const disabled = scopeType === 'repo' && !hasRepoScope
-                  return (
-                    <Pressable
-                      key={scopeType}
-                      disabled={disabled}
-                      style={({ pressed }) => [
-                        styles.toggleItem,
-                        selected && styles.toggleItemSelected,
-                        disabled && styles.toggleItemDisabled,
-                        pressed && !selected && !disabled && styles.pressed
-                      ]}
-                      onPress={() =>
-                        onChange({
-                          scope:
-                            scopeType === 'repo' && repoId
-                              ? { type: 'repo', repoId }
-                              : { type: 'global' }
-                        })
-                      }
-                      accessibilityRole="button"
-                      accessibilityState={{ selected, disabled }}
-                    >
-                      <Text style={[styles.toggleText, selected && styles.toggleTextSelected]}>
-                        {scopeType === 'global' ? 'Global' : 'Project'}
-                      </Text>
-                    </Pressable>
-                  )
-                })}
-              </View>
-              {draft.scope.type === 'repo' && repoName ? (
-                <Text style={styles.scopeRepoName}>{repoName}</Text>
+              <Text style={styles.label}>Available in</Text>
+              {hasRepoScope ? (
+                <MobileSegmentedControl
+                  segments={SCOPE_SEGMENTS}
+                  selected={draft.scope.type}
+                  onSelect={(scopeType) =>
+                    onChange({
+                      scope:
+                        scopeType === 'repo' && repoId
+                          ? { type: 'repo', repoId }
+                          : { type: 'global' }
+                    })
+                  }
+                  fill
+                />
               ) : null}
+              <Text style={styles.hint}>
+                {draft.scope.type === 'repo' && repoName
+                  ? `Only in ${repoName}.`
+                  : 'Every workspace on this desktop.'}
+              </Text>
             </View>
           </View>
-        ) : null}
+        </Collapsible>
       </View>
 
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {error ? <Banner tone="error" message={error} /> : null}
 
       <View style={styles.footer}>
-        <Pressable
-          style={({ pressed }) => [styles.button, styles.cancelButton, pressed && styles.pressed]}
-          onPress={onCancel}
-          accessibilityRole="button"
-        >
-          <Text style={styles.cancelText}>Cancel</Text>
-        </Pressable>
-        <Pressable
-          style={[styles.button, styles.saveButton, !canSave && styles.saveButtonDisabled]}
+        <Button
+          label={mode === 'edit' ? 'Save' : 'Add quick command'}
+          variant="primary"
+          block
           disabled={!canSave}
           onPress={onSave}
-          accessibilityRole="button"
-        >
-          <Text style={[styles.saveText, !canSave && styles.saveTextDisabled]}>
-            {mode === 'edit' ? 'Save' : 'Add Quick Command'}
-          </Text>
-        </Pressable>
+        />
       </View>
     </View>
   )
 }
 
 const styles = StyleSheet.create({
-  form: { gap: spacing.md, paddingTop: spacing.xs, paddingBottom: spacing.sm },
+  form: { gap: spacing.lg, paddingHorizontal: spacing.xs, paddingTop: spacing.xs },
   field: { gap: spacing.sm },
-  label: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },
-  input: {
-    backgroundColor: colors.bgPanel,
-    color: colors.textPrimary,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
+  label: { ...textStyles.footnote, fontWeight: '500', color: colors.textSecondary, paddingLeft: 4 },
+  textarea: {
+    ...textStyles.body,
     fontSize: TEXT_INPUT_FONT_SIZE,
+    minHeight: 96,
+    maxHeight: 200,
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    paddingBottom: 12,
+    borderRadius: radii.field,
     borderWidth: 1,
-    borderColor: colors.borderSubtle
+    borderColor: colors.fieldBorder,
+    backgroundColor: colors.fieldFill,
+    color: colors.textPrimary
   },
-  textarea: { minHeight: 92, textAlignVertical: 'top' },
+  textareaFocused: { borderColor: colors.fieldBorderFocused },
+  textareaError: { borderColor: colors.danger },
   mono: { fontFamily: typography.monoFamily },
-  hint: { fontSize: 12, color: colors.textMuted },
-  error: { fontSize: 13, color: colors.statusRed, marginTop: spacing.xs },
-  pressed: { backgroundColor: colors.bgRaised },
-  toggleGroup: { flexDirection: 'row', gap: spacing.sm },
-  toggleItem: {
-    flex: 1,
-    height: 40,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  toggleItemSelected: { backgroundColor: colors.bgRaised, borderColor: colors.textMuted },
-  toggleItemDisabled: { opacity: 0.4 },
-  toggleText: { fontSize: 13, fontWeight: '500', color: colors.textSecondary },
-  toggleTextSelected: { color: colors.textPrimary },
+  footnoteBlock: { gap: 2 },
+  hint: { ...textStyles.footnote, color: colors.textMuted, paddingLeft: 4 },
+  error: { ...textStyles.footnote, color: colors.danger, paddingLeft: 4 },
   select: {
+    height: 48,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: colors.bgPanel,
-    borderRadius: radii.input,
+    gap: spacing.sm,
+    paddingHorizontal: 14,
+    borderRadius: radii.field,
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2
+    borderColor: colors.fieldBorder,
+    backgroundColor: colors.fieldFill
   },
-  selectValue: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  selectValueText: { fontSize: 14, color: colors.textPrimary },
-  selectPlaceholder: { fontSize: 14, color: colors.textMuted },
-  scopeRepoName: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    fontFamily: typography.monoFamily,
-    paddingHorizontal: spacing.xs
-  },
-  advancedToggle: {
+  selectPressed: { backgroundColor: colors.fill },
+  selectValue: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
-    paddingVertical: spacing.xs
+    gap: spacing.sm
   },
-  advancedText: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
-  advancedBody: { gap: spacing.md, paddingTop: spacing.xs },
-  switchRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  switchText: { flex: 1 },
-  switchTitle: { fontSize: 14, color: colors.textPrimary },
-  switchDesc: { fontSize: 12, color: colors.textMuted, marginTop: 1 },
-  footer: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
-  button: { flex: 1, borderRadius: 8, paddingVertical: spacing.md, alignItems: 'center' },
-  cancelButton: { borderWidth: 1, borderColor: colors.borderSubtle },
-  cancelText: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
-  saveButton: { backgroundColor: colors.textPrimary },
-  saveButtonDisabled: { backgroundColor: colors.bgRaised },
-  saveText: { fontSize: 14, fontWeight: '700', color: colors.bgBase },
-  saveTextDisabled: { color: colors.textMuted }
+  selectValueText: { ...textStyles.body, color: colors.textPrimary, flexShrink: 1 },
+  selectPlaceholder: { ...textStyles.body, color: colors.textMuted },
+  // The section header pads for a full-width screen; inside the form it starts at the field edge.
+  advanced: { marginHorizontal: -(spacing.lg + 4) + spacing.xs },
+  advancedBody: {
+    gap: spacing.lg,
+    paddingHorizontal: spacing.lg + 4 - spacing.xs,
+    paddingTop: spacing.sm
+  },
+  group: { marginHorizontal: 0 },
+  footer: { paddingTop: spacing.xs, paddingBottom: spacing.sm }
 })

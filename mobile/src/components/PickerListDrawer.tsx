@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native'
-import { Check } from 'lucide-react-native'
+import { FlatList, StyleSheet, View } from 'react-native'
 
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { colors, radii, spacing } from '../theme/mobile-theme'
+import { triggerSelection } from '../platform/haptics'
 import { BottomDrawer } from './BottomDrawer'
+import { PickerEmptyState, PickerSheetTitle } from './PickerModal'
+import { LIST_LEADING_INSET, LIST_ROW_PADDING } from './ui/ListGroup'
+import { ListRow } from './ui/ListRow'
 import { BOTTOM_DRAWER_HIDE_DURATION_MS } from './bottom-drawer-constants'
 
 type PickerListItem = { id: string; label: string; detail?: string }
@@ -16,6 +19,8 @@ type Props<T extends PickerListItem> = {
   onSelect: (item: T) => void
   onClose: () => void
   renderIcon?: (item: T) => ReactNode
+  /** Shown in place of the rows when there is nothing to pick. */
+  emptyMessage?: string
 }
 
 export function PickerListDrawer<T extends PickerListItem>({
@@ -25,7 +30,8 @@ export function PickerListDrawer<T extends PickerListItem>({
   selectedId,
   onSelect,
   onClose,
-  renderIcon
+  renderIcon,
+  emptyMessage
 }: Props<T>) {
   const [closing, setClosing] = useState(false)
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -70,43 +76,31 @@ export function PickerListDrawer<T extends PickerListItem>({
       dragContentToDismiss={false}
       contentScrollable={false}
     >
-      <View style={styles.header}>
-        <Text style={styles.title}>{title}</Text>
-      </View>
-      <FlatList
-        data={items}
-        keyExtractor={(item) => item.id}
-        style={styles.group}
-        contentContainerStyle={items.length === 0 ? styles.emptyContent : undefined}
-        keyboardShouldPersistTaps="handled"
-        nestedScrollEnabled
-        ItemSeparatorComponent={PickerSeparator}
-        renderItem={({ item }) => {
-          const selected = item.id === selectedId
-          return (
-            <Pressable
-              style={({ pressed }) => [styles.item, pressed && styles.itemPressed]}
-              onPress={() => closeThenSelect(item)}
-            >
-              {renderIcon?.(item)}
-              <View style={styles.itemCopy}>
-                <Text
-                  style={[styles.itemText, selected && styles.itemTextSelected]}
-                  numberOfLines={1}
-                >
-                  {item.label}
-                </Text>
-                {item.detail ? (
-                  <Text style={styles.itemDetail} numberOfLines={1}>
-                    {item.detail}
-                  </Text>
-                ) : null}
-              </View>
-              {selected && <Check size={14} color={colors.textPrimary} />}
-            </Pressable>
-          )
-        }}
-      />
+      <PickerSheetTitle title={title} />
+      {items.length === 0 ? (
+        <PickerEmptyState message={emptyMessage} />
+      ) : (
+        <FlatList
+          data={items}
+          keyExtractor={(item) => item.id}
+          style={styles.group}
+          keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled
+          ItemSeparatorComponent={renderIcon ? PickerIconSeparator : PickerSeparator}
+          renderItem={({ item }) => (
+            <ListRow
+              title={item.label}
+              subtitle={item.detail}
+              leading={renderIcon ? (renderIcon(item) ?? null) : undefined}
+              selected={item.id === selectedId}
+              onPress={() => {
+                triggerSelection()
+                closeThenSelect(item)
+              }}
+            />
+          )}
+        />
+      )}
     </BottomDrawer>
   )
 }
@@ -115,55 +109,24 @@ function PickerSeparator() {
   return <View style={styles.separator} />
 }
 
+function PickerIconSeparator() {
+  return <View style={[styles.separator, styles.separatorIcon]} />
+}
+
 const styles = StyleSheet.create({
-  header: {
-    paddingHorizontal: spacing.xs,
-    paddingBottom: spacing.sm
-  },
-  title: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: colors.textMuted
-  },
+  // Why: the sheet already pads 12; the group adds 4 so rows sit 16 from the sheet edge.
   group: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: 12,
+    marginHorizontal: spacing.xs,
+    backgroundColor: colors.groupFill,
+    borderRadius: radii.group,
     overflow: 'hidden',
-    maxHeight: 420,
+    maxHeight: 460,
     flexGrow: 0
-  },
-  emptyContent: {
-    minHeight: spacing.xl
   },
   separator: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
+    backgroundColor: colors.separator,
+    marginLeft: LIST_ROW_PADDING
   },
-  item: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2
-  },
-  itemPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  itemText: {
-    fontSize: typography.bodySize,
-    color: colors.textPrimary
-  },
-  itemCopy: {
-    flex: 1,
-    minWidth: 0
-  },
-  itemDetail: {
-    fontSize: typography.metaSize,
-    color: colors.textMuted,
-    marginTop: 1
-  },
-  itemTextSelected: {
-    fontWeight: '600'
-  }
+  separatorIcon: { marginLeft: LIST_LEADING_INSET }
 })

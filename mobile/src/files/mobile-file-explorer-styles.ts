@@ -1,5 +1,9 @@
 import { StyleSheet } from 'react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { colors, MIN_TOUCH_TARGET, spacing, textStyles } from '../theme/mobile-theme'
+
+/** Indent per tree level: deep folders keep room for their names on a phone. */
+export const FILE_TREE_INDENT = 12
+export const FILE_TREE_ROW_PADDING = spacing.lg
 
 export const fileExplorerStyles = StyleSheet.create({
   container: {
@@ -7,117 +11,73 @@ export const fileExplorerStyles = StyleSheet.create({
     backgroundColor: colors.bgBase
   },
   header: {
-    backgroundColor: colors.bgPanel,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle
+    backgroundColor: colors.bgBase
   },
-  topBar: {
-    minHeight: 58,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingHorizontal: spacing.md
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.button
-  },
-  backButtonPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  titleBlock: {
-    flex: 1,
-    minWidth: 0
-  },
-  title: {
-    color: colors.textPrimary,
-    fontSize: typography.titleSize,
-    fontWeight: '600'
-  },
-  meta: {
-    marginTop: 2,
-    color: colors.textSecondary,
-    fontSize: typography.metaSize
+  filter: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.sm
   },
   list: { flex: 1 },
   listContent: {
-    paddingVertical: spacing.sm
+    paddingBottom: spacing.xl
+  },
+  separator: {
+    height: StyleSheet.hairlineWidth,
+    marginLeft: FILE_TREE_ROW_PADDING,
+    backgroundColor: colors.separator
   },
   row: {
-    minHeight: 44,
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    paddingRight: spacing.md
+    paddingRight: FILE_TREE_ROW_PADDING
   },
   rowPressed: {
-    backgroundColor: colors.bgRaised
+    backgroundColor: colors.fill
   },
   rowDisabled: {
-    opacity: 0.58
+    opacity: 0.55
   },
-  chevronSpacer: {
-    width: 16
+  chevronBox: {
+    width: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0
   },
-  rowTextBlock: {
-    flex: 1,
-    minWidth: 0
-  },
+  chevronCollapsed: { transform: [{ rotate: '0deg' }] },
+  chevronExpanded: { transform: [{ rotate: '90deg' }] },
+  icon: { flexShrink: 0 },
   rowTitle: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize
+    ...textStyles.body,
+    flex: 1,
+    minWidth: 0,
+    color: colors.textPrimary
   },
   rowTitleDisabled: {
     color: colors.textMuted
   },
-  rowMeta: {
-    marginTop: 1,
-    color: colors.textMuted,
-    fontSize: 11
+  rowTrailing: {
+    ...textStyles.footnote,
+    flexShrink: 0,
+    color: colors.textMuted
   },
   inlineStatusRow: {
-    minHeight: 36,
+    minHeight: MIN_TOUCH_TARGET,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    paddingRight: spacing.md
+    paddingRight: spacing.sm
   },
   inlineStatusText: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize
+    ...textStyles.footnote,
+    color: colors.textSecondary
   },
   inlineErrorText: {
+    ...textStyles.footnote,
     flex: 1,
     minWidth: 0,
-    color: colors.statusRed,
-    fontSize: typography.metaSize
-  },
-  inlineRetryButton: {
-    minHeight: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.button,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    paddingHorizontal: spacing.md
-  },
-  inlineRetryText: {
-    color: colors.textPrimary,
-    fontSize: typography.metaSize,
-    fontWeight: '600'
-  },
-  state: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.md,
-    padding: spacing.xl
-  },
-  emptyText: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize
+    color: colors.danger
   }
 })

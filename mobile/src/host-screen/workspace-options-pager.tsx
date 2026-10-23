@@ -1,6 +1,7 @@
 import { useCallback, useState, type ReactNode } from 'react'
 import { StyleSheet, View } from 'react-native'
 import Animated, {
+  Easing,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
@@ -10,7 +11,9 @@ import Animated, {
 import { useReducedMotionEnabled } from '../platform/use-reduced-motion'
 import { colors } from '../theme/mobile-theme'
 
-const PAGE_SLIDE_MS = 200
+const PAGE_SLIDE_MS = 350
+// iOS's push curve: fast out, long settle, no overshoot.
+const PAGE_EASING = Easing.bezier(0.32, 0.72, 0, 1)
 
 /** Which page is open, and the slide that brings it in from the right and takes it back out. */
 export function useOptionPager<Key extends string>() {
@@ -24,7 +27,7 @@ export function useOptionPager<Key extends string>() {
     (key: Key) => {
       slide.value = 1
       setPage(key)
-      slide.value = withTiming(0, { duration })
+      slide.value = withTiming(0, { duration, easing: PAGE_EASING })
     },
     [duration, slide]
   )
@@ -33,7 +36,7 @@ export function useOptionPager<Key extends string>() {
       setPage(null)
       return
     }
-    slide.value = withTiming(1, { duration }, (finished) => {
+    slide.value = withTiming(1, { duration, easing: PAGE_EASING }, (finished) => {
       if (finished) {
         runOnJS(setPage)(null)
       }
@@ -89,5 +92,5 @@ const styles = StyleSheet.create({
   pager: { overflow: 'hidden' },
   underlay: { position: 'absolute', top: 0, left: 0, right: 0 },
   // Opaque and as tall as the pager, so no part of the main sheet shows around the page.
-  page: { flexGrow: 1, backgroundColor: colors.bgBase }
+  page: { flexGrow: 1, backgroundColor: colors.sheet }
 })

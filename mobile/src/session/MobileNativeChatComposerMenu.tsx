@@ -1,7 +1,8 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { FileText, Package, Terminal } from 'lucide-react-native'
 import type { NativeChatPickerItem } from '../../../src/shared/native-chat-picker-items'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { colors, MIN_TOUCH_TARGET, spacing, textStyles, typography } from '../theme/mobile-theme'
+import { pressTransition } from '../components/ui/transition-styles'
 
 /** One row of the composer menu: a `/` command or skill, or a worktree file for `@`. */
 export type ComposerMenuRow = NativeChatPickerItem | { kind: 'file'; id: string; path: string }
@@ -13,17 +14,32 @@ export function composerMenuInsertText(row: ComposerMenuRow): string {
 
 const HEADINGS = { command: 'Commands', skill: 'Skills', file: 'Files' } as const
 
+/** What the menu says when it has no rows: `@` paths still loading, or none matching. */
+export type ComposerMenuStatus = 'loading-files' | 'no-files'
+
 /** The floating card above the composer, grouped and labelled as desktop's `/` menu is. */
 export function MobileNativeChatComposerMenu({
   rows,
+  status = null,
   onPick
 }: {
   rows: readonly ComposerMenuRow[]
+  status?: ComposerMenuStatus | null
   onPick: (row: ComposerMenuRow) => void
 }): React.JSX.Element {
   return (
     <View style={styles.card}>
       <ScrollView keyboardShouldPersistTaps="always" style={styles.scroll}>
+        {rows.length === 0 && status ? (
+          <View style={styles.statusRow} accessibilityLiveRegion="polite">
+            {status === 'loading-files' ? (
+              <ActivityIndicator size="small" color={colors.textSecondary} />
+            ) : null}
+            <Text style={styles.statusText}>
+              {status === 'loading-files' ? 'Searching files…' : 'No matching files.'}
+            </Text>
+          </View>
+        ) : null}
         {rows.map((row, index) => (
           <View key={row.id}>
             {rows[index - 1]?.kind !== row.kind ? (
@@ -54,10 +70,14 @@ function MenuRow({
           ? `${row.token}, ${row.location}`
           : composerMenuInsertText(row)
       }
-      style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+      style={({ pressed }) => [
+        styles.row,
+        pressed && styles.rowPressed,
+        pressed ? pressTransition.pressed : pressTransition.rest
+      ]}
       onPress={() => onPick(row)}
     >
-      <Icon size={16} color={colors.textSecondary} strokeWidth={2} style={styles.icon} />
+      <Icon size={17} color={colors.textSecondary} strokeWidth={2} style={styles.icon} />
       <View style={styles.body}>
         <View style={styles.nameLine}>
           <Text style={styles.name} numberOfLines={1}>
@@ -86,10 +106,10 @@ const styles = StyleSheet.create({
   card: {
     marginHorizontal: 10,
     marginBottom: spacing.sm,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.composerBorder,
+    paddingVertical: spacing.xs,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: colors.separator,
     backgroundColor: colors.bgPanel,
     overflow: 'hidden'
   },
@@ -97,24 +117,22 @@ const styles = StyleSheet.create({
     maxHeight: 300
   },
   heading: {
+    ...textStyles.footnote,
+    fontWeight: '500',
     color: colors.textMuted,
-    fontSize: 11,
-    fontWeight: '600',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
+    paddingHorizontal: spacing.lg + 4,
+    paddingTop: spacing.md,
     paddingBottom: spacing.xs
   },
   row: {
     flexDirection: 'row',
-    gap: 10,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    minHeight: 44
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg + 4,
+    paddingVertical: 10,
+    minHeight: MIN_TOUCH_TARGET + 4
   },
   rowPressed: {
-    backgroundColor: colors.bgRaised
+    backgroundColor: colors.fill
   },
   icon: {
     marginTop: 2
@@ -133,17 +151,28 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     color: colors.textPrimary,
     fontFamily: typography.monoFamily,
-    fontSize: 13.5
+    fontSize: 14,
+    lineHeight: 20
   },
   hint: {
     flexShrink: 1,
     color: colors.textMuted,
     fontFamily: typography.monoFamily,
-    fontSize: typography.metaSize
+    fontSize: 13
   },
   description: {
-    color: colors.textMuted,
-    fontSize: 12.5,
-    lineHeight: 17
+    ...textStyles.footnote,
+    color: colors.textMuted
+  },
+  statusRow: {
+    minHeight: MIN_TOUCH_TARGET + 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg + 4
+  },
+  statusText: {
+    ...textStyles.subhead,
+    color: colors.textSecondary
   }
 })

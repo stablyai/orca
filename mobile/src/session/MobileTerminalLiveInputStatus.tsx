@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native'
-import { colors, typography } from '../theme/mobile-theme'
+import { colors, textStyles, typography } from '../theme/mobile-theme'
 
 type DictationStatus = {
   readonly isStarting: boolean
@@ -32,15 +32,25 @@ export function MobileTerminalLiveInputStatus({
       : dictation.isStarting
         ? 'Preparing microphone'
         : isAttaching
-          ? 'Uploading image to host'
+          ? 'Uploading image to desktop'
           : liveInputText || 'Tap to show keyboard'
+  const showsTypedText =
+    !dictation.isRecording &&
+    !dictation.isProcessing &&
+    !dictation.isStarting &&
+    !isAttaching &&
+    liveInputText.length > 0
 
   return (
     <View style={styles.status}>
       <Text style={styles.title} numberOfLines={1}>
         {title}
       </Text>
-      <Text style={styles.detail} numberOfLines={1} ellipsizeMode="head">
+      <Text
+        style={[styles.detail, showsTypedText && styles.typed]}
+        numberOfLines={1}
+        ellipsizeMode="head"
+      >
         {detail}
       </Text>
     </View>
@@ -50,16 +60,16 @@ export function MobileTerminalLiveInputStatus({
 const styles = StyleSheet.create({
   status: {
     flex: 1,
-    gap: 1
+    minWidth: 0
   },
   title: {
-    color: colors.textPrimary,
-    fontSize: typography.metaSize,
-    fontWeight: '600'
+    ...textStyles.subhead,
+    fontWeight: '500',
+    color: colors.textPrimary
   },
   detail: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    fontFamily: typography.monoFamily
-  }
+    ...textStyles.footnote,
+    color: colors.textSecondary
+  },
+  typed: { fontFamily: typography.monoFamily }
 })

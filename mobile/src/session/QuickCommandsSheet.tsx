@@ -1,7 +1,10 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Alert, View, Text, Pressable, StyleSheet } from 'react-native'
-import { ChevronLeft } from 'lucide-react-native'
-import { colors, spacing } from '../theme/mobile-theme'
+import { View, Text, StyleSheet } from 'react-native'
+import { colors, spacing, textStyles } from '../theme/mobile-theme'
+import { Banner } from '../components/ui/Banner'
+import { Button } from '../components/ui/Button'
+import { SheetHeader } from '../components/ui/SheetHeader'
+import { triggerError, triggerSuccess } from '../platform/haptics'
 import { BottomDrawer } from '../components/BottomDrawer'
 import type { RpcClient } from '../transport/rpc-client'
 import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
@@ -31,7 +34,7 @@ type Props = {
   onLaunch: (command: TerminalQuickCommand) => boolean
 }
 
-type SheetView = 'list' | 'editor' | 'agent'
+type SheetView = 'list' | 'editor' | 'agent' | 'confirm-delete'
 
 export function QuickCommandsSheet({
   visible,
@@ -50,6 +53,8 @@ export function QuickCommandsSheet({
   const [query, setQuery] = useState('')
   const [draft, setDraft] = useState<QuickCommandDraft | null>(null)
   const [saving, setSaving] = useState(false)
+  const [pendingDelete, setPendingDelete] = useState<TerminalQuickCommand | null>(null)
+  const [deleting, setDeleting] = useState(false)
   const saveOwnerRef = useRef<symbol | null>(null)
   const draftRevisionRef = useRef(0)
   const editorGenerationRef = useRef(0)
@@ -70,6 +75,7 @@ export function QuickCommandsSheet({
         setView('list')
         setQuery('')
         setDraft(null)
+        setPendingDelete(null)
       }
     }
   }, [visible, client, repoId])
@@ -117,23 +123,31 @@ export function QuickCommandsSheet({
     }
   }
 
+  // Why: quick commands sync with desktop, so a delete removes shared data; it confirms in the sheet
+  // (React Native's Alert does nothing on the page).
   const handleDelete = (command: TerminalQuickCommand) => {
-    // Why: quick commands sync with desktop, so an accidental one-tap delete
-    // removes shared data rather than only dismissing a local row.
-    Alert.alert(
-      `Delete "${command.label || 'Untitled'}"?`,
-      'This quick command will be removed from your saved list.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            void persist({ type: 'delete', id: command.id })
-          }
-        }
-      ]
-    )
+    setPendingDelete(command)
+    setView('confirm-delete')
+  }
+
+  const confirmDelete = async () => {
+    const command = pendingDelete
+    if (!command || deleting) {
+      return
+    }
+    setDeleting(true)
+    try {
+      const ok = await persist({ type: 'delete', id: command.id })
+      if (ok) {
+        triggerSuccess()
+        setPendingDelete(null)
+        setView('list')
+      } else {
+        triggerError()
+      }
+    } finally {
+      setDeleting(false)
+    }
   }
 
   const handleSave = async () => {
@@ -153,6 +167,7 @@ export function QuickCommandsSheet({
     try {
       const ok = await persist({ type: 'upsert', command: built })
       if (ok && draftRevisionRef.current === savedRevision) {
+        triggerSuccess()
         setView('list')
         setDraft(null)
       } else if (ok && editorGenerationRef.current === savedEditor) {
@@ -166,44 +181,42 @@ export function QuickCommandsSheet({
     }
   }
 
-  const title =
-    view === 'editor'
-      ? draft?.id
-        ? 'Edit Quick Command'
-        : 'Add Quick Command'
-      : view === 'agent'
-        ? 'Choose Agent'
-        : 'Quick Commands'
+  const backToList = () => {
+    draftRevisionRef.current += 1
+    setView('list')
+    setDraft(null)
+    setPendingDelete(null)
+  }
+
+  const header =
+    view === 'editor' ? (
+      <SheetHeader
+        title={draft?.id ? 'Edit quick command' : 'New quick command'}
+        leading={{ label: 'Cancel', onPress: backToList }}
+      />
+    ) : view === 'agent' ? (
+      <SheetHeader
+        title="Choose agent"
+        leading={{
+          label: 'Back',
+          onPress: () => {
+            draftRevisionRef.current += 1
+            setView('editor')
+          }
+        }}
+      />
+    ) : view === 'confirm-delete' ? (
+      <SheetHeader
+        title="Delete quick command?"
+        leading={{ label: 'Cancel', onPress: backToList }}
+      />
+    ) : (
+      <SheetHeader title="Quick commands" onClose={onClose} />
+    )
 
   return (
     <BottomDrawer visible={visible} onClose={onClose}>
-      <View style={styles.header}>
-        {view === 'list' ? (
-          <View style={styles.backSpacer} />
-        ) : (
-          <Pressable
-            style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
-            onPress={() => {
-              draftRevisionRef.current += 1
-              setView(view === 'agent' ? 'editor' : 'list')
-            }}
-            accessibilityRole="button"
-            accessibilityLabel="Back"
-          >
-            <ChevronLeft size={18} color={colors.textSecondary} />
-          </Pressable>
-        )}
-        <Text style={styles.title}>{title}</Text>
-        <View style={styles.backSpacer} />
-      </View>
-
-      {view === 'editor' && draft ? (
-        <View style={styles.editorDesc}>
-          <Text style={styles.descText}>
-            Save terminal commands or agent prompts for quick access.
-          </Text>
-        </View>
-      ) : null}
+      <View style={styles.header}>{header}</View>
 
       {view === 'list' ? (
         <QuickCommandsList
@@ -240,11 +253,6 @@ export function QuickCommandsSheet({
             draftRevisionRef.current += 1
             setView('agent')
           }}
-          onCancel={() => {
-            draftRevisionRef.current += 1
-            setView('list')
-            setDraft(null)
-          }}
           onSave={() => void handleSave()}
         />
       ) : null}
@@ -259,28 +267,38 @@ export function QuickCommandsSheet({
           }}
         />
       ) : null}
+
+      {view === 'confirm-delete' && pendingDelete ? (
+        <View style={styles.confirm}>
+          <Text style={styles.confirmMessage}>
+            {`“${pendingDelete.label || 'Untitled'}” will be removed from your saved list on every device.`}
+          </Text>
+          {error ? <Banner tone="error" message={error} /> : null}
+          <View style={styles.confirmActions}>
+            <Button
+              label="Delete"
+              variant="destructive"
+              block
+              busy={deleting}
+              disabled={!ready}
+              onPress={() => void confirmDelete()}
+            />
+          </View>
+        </View>
+      ) : null}
     </BottomDrawer>
   )
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: 'row', alignItems: 'center', paddingBottom: spacing.sm },
-  backButton: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    alignItems: 'center',
-    justifyContent: 'center'
+  // Why: pulls the header's text actions out to the sheet edge, as the shared sheet spec lays them.
+  header: { marginHorizontal: -spacing.sm, marginTop: -spacing.xs },
+  confirm: { gap: spacing.lg, paddingTop: spacing.xs, paddingBottom: spacing.sm },
+  confirmMessage: {
+    ...textStyles.callout,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    paddingHorizontal: spacing.lg
   },
-  backSpacer: { width: 30 },
-  title: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    textAlign: 'center'
-  },
-  pressed: { backgroundColor: colors.bgRaised },
-  editorDesc: { paddingHorizontal: spacing.xs, paddingBottom: spacing.sm },
-  descText: { fontSize: 12, color: colors.textMuted }
+  confirmActions: { paddingHorizontal: spacing.xs }
 })

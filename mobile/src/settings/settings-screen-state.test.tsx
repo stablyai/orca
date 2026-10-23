@@ -21,6 +21,7 @@ vi.mock('react-native-safe-area-context', () => ({
 vi.mock('expo-router', () => ({
   useFocusEffect: (callback: () => void) => useEffect(callback, [callback])
 }))
+vi.mock('../platform/haptics', () => ({ triggerSelection: () => {} }))
 vi.mock('lucide-react-native', () => ({ ChevronLeft: 'Icon', ChevronRight: 'Icon' }))
 vi.mock('../components/BottomDrawer', () => ({ BottomDrawer: () => null }))
 vi.mock('../components/VoiceModelList', () => ({ VoiceModelList: () => null }))

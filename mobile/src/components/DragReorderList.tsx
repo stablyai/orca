@@ -14,7 +14,8 @@ import Animated, {
   type AnimatedRef,
   type SharedValue
 } from 'react-native-reanimated'
-import { colors, spacing } from '../theme/mobile-theme'
+import { colors, MIN_TOUCH_TARGET } from '../theme/mobile-theme'
+import { LIST_ROW_PADDING } from './ui/ListGroup'
 import { triggerMediumImpact, triggerSelection } from '../platform/haptics'
 import {
   clampDragReorderIndex,
@@ -351,7 +352,6 @@ function DragReorderRow({
               onAccessibilityMove(rowKey, 1)
             }
           }}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
           <GripVertical size={18} color={colors.textMuted} />
         </Animated.View>
@@ -377,15 +377,16 @@ const styles = StyleSheet.create({
   },
   handle: {
     alignSelf: 'stretch',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.md
+    width: MIN_TOUCH_TARGET + 4,
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   rowSeparator: {
     position: 'absolute',
     bottom: 0,
-    left: spacing.md,
-    right: spacing.md,
+    left: LIST_ROW_PADDING,
+    right: 0,
     height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle
+    backgroundColor: colors.separator
   }
 })

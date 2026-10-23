@@ -5,10 +5,10 @@ import {
   type NativeChatAskRowSubject
 } from '../../../src/shared/native-chat-ask-row'
 import { INLINE_TEXT_SELECTION } from '../components/inline-text-selection'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { colors, spacing, textStyles } from '../theme/mobile-theme'
 import { scaledType } from './mobile-native-chat-message-styles'
 
-const ICON_SIZE = 15
+const ICON_SIZE = 16
 
 /** Desktop parity: `NativeChatAwaitingInputRow`. */
 export function MobileNativeChatAwaitingInputRow({
@@ -38,7 +38,8 @@ export function MobileNativeChatAwaitingInputRow({
             '{{value0}}',
             String(subject.questions.length)
           )
-  const type = scaledType(typography.bodySize, fontScale)
+  // The chat's secondary step: below the agent's prose, above its meta lines.
+  const type = scaledType(textStyles.callout.fontSize, fontScale)
   const questions = subject?.kind === 'questions' && listsQuestions ? subject.questions : null
   return (
     <>
@@ -77,10 +78,12 @@ const styles = StyleSheet.create({
     paddingVertical: 3
   },
   label: {
+    fontFamily: textStyles.callout.fontFamily,
     flex: 1,
     color: colors.textMuted
   },
   question: {
+    fontFamily: textStyles.callout.fontFamily,
     color: colors.textPrimary
   }
 })

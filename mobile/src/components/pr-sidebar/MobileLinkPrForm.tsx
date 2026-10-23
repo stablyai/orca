@@ -1,11 +1,12 @@
 import { useCallback, useState } from 'react'
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { StyleSheet, Text, View } from 'react-native'
+import { colors, spacing, textStyles } from '../../theme/mobile-theme'
 import type { RpcClient } from '../../transport/rpc-client'
 import { triggerError, triggerSuccess } from '../../platform/haptics'
 import { parseGitHubPrReference } from '../../source-control/github-pr-link-parse'
 import { linkMobilePr } from '../../source-control/mobile-pr-link'
-import { TEXT_INPUT_FONT_SIZE } from '../../platform/text-input-font-size'
+import { Button } from '../ui/Button'
+import { TextField } from '../ui/TextField'
 
 type Props = {
   client: RpcClient | null
@@ -45,91 +46,58 @@ export function MobileLinkPrForm({ client, worktreeId, onCancel, onLinked }: Pro
   }, [client, onLinked, parsed, submitting, worktreeId])
 
   return (
-    <View>
+    <View style={styles.root}>
       <View style={styles.headingRow}>
-        <Text style={styles.heading}>Link existing pull request</Text>
-        <Pressable
+        <Text style={styles.heading} accessibilityRole="header">
+          Link existing pull request
+        </Text>
+        <Button
+          label="Cancel"
+          variant="plain"
+          size="compact"
           onPress={onCancel}
           disabled={submitting}
-          accessibilityRole="button"
-          accessibilityLabel="Cancel"
-          hitSlop={8}
-        >
-          <Text style={styles.cancelText}>Cancel</Text>
-        </Pressable>
+        />
       </View>
-      <Text style={styles.label}>PR number or GitHub URL</Text>
-      <TextInput
-        style={styles.input}
+      <TextField
+        label="PR number or GitHub URL"
         value={input}
         onChangeText={setInput}
-        placeholder="#123 or https://github.com/owner/repo/pull/123"
-        placeholderTextColor={colors.textMuted}
+        placeholder="#123 or github.com/owner/repo/pull/123"
         autoCapitalize="none"
         autoCorrect={false}
+        returnKeyType="go"
+        onSubmitEditing={() => void submit()}
         editable={!submitting}
+        footnote={error ?? undefined}
+        error={error !== null}
+        autoFocus
       />
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-      <Pressable
-        style={({ pressed }) => [
-          styles.submit,
-          (submitting || parsed === null) && styles.submitDisabled,
-          pressed && styles.submitPressed
-        ]}
-        disabled={submitting || parsed === null}
+      <Button
+        label={parsed ? `Link #${parsed}` : 'Link pull request'}
+        variant="primary"
+        block
+        busy={submitting}
+        disabled={parsed === null}
         onPress={() => void submit()}
-      >
-        {submitting ? (
-          <ActivityIndicator size="small" color={colors.bgBase} />
-        ) : (
-          <Text style={styles.submitText}>{parsed ? `Link #${parsed}` : 'Link pull request'}</Text>
-        )}
-      </Pressable>
+      />
     </View>
   )
 }
 
 const styles = StyleSheet.create({
+  root: {
+    gap: spacing.lg
+  },
   headingRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: spacing.sm
+    gap: spacing.sm
   },
   heading: {
+    ...textStyles.headline,
     color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    fontWeight: '700'
-  },
-  cancelText: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    fontWeight: '600'
-  },
-  label: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    marginTop: spacing.sm,
-    marginBottom: spacing.xs
-  },
-  input: {
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    color: colors.textPrimary,
-    fontSize: TEXT_INPUT_FONT_SIZE
-  },
-  error: { color: colors.statusRed, fontSize: typography.metaSize, marginTop: spacing.md },
-  submit: {
-    marginTop: spacing.lg,
-    minHeight: 46,
-    borderRadius: radii.button,
-    backgroundColor: colors.textPrimary,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  submitDisabled: { opacity: 0.45 },
-  submitPressed: { opacity: 0.8 },
-  submitText: { color: colors.bgBase, fontSize: typography.bodySize, fontWeight: '600' }
+    flexShrink: 1
+  }
 })

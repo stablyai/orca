@@ -1,9 +1,13 @@
 import type { ReactNode } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useRouter } from 'expo-router'
-import { ChevronLeft, ChevronRight, type LucideIcon } from 'lucide-react-native'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import type { LucideIcon } from 'lucide-react-native'
+import { LIST_LEADING_INSET } from '../components/ui/ListGroup'
+import { ListRow } from '../components/ui/ListRow'
+import {
+  ExternalLinkAccessory,
+  SettingsRowIcon,
+  SettingsScreen,
+  SettingsSection
+} from './settings-screen-frame'
 
 export function MobileSettingsFrame({
   children,
@@ -12,28 +16,10 @@ export function MobileSettingsFrame({
   children: ReactNode
   onBack?: () => void
 }) {
-  const router = useRouter()
-  const insets = useSafeAreaInsets()
   return (
-    <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
-      <View style={styles.topRow}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-          style={styles.backButton}
-          onPress={onBack ?? (() => router.back())}
-        >
-          <ChevronLeft size={22} color={colors.textSecondary} />
-        </Pressable>
-        <Text style={styles.heading}>Settings</Text>
-      </View>
-      <ScrollView
-        contentContainerStyle={{ paddingBottom: insets.bottom + spacing.lg }}
-        showsVerticalScrollIndicator={false}
-      >
-        {children}
-      </ScrollView>
-    </View>
+    <SettingsScreen title="Settings" onBack={onBack}>
+      {children}
+    </SettingsScreen>
   )
 }
 
@@ -45,67 +31,35 @@ export type MobileSettingsMenuItem = {
   disabled?: boolean
 }
 
+/** One headed group of the Settings root: icon rows that open a page or leave the app. */
 export function MobileSettingsSection({
+  title,
   items,
-  spaced = false
+  first = false,
+  footer
 }: {
+  title: string
   items: MobileSettingsMenuItem[]
-  spaced?: boolean
+  first?: boolean
+  footer?: ReactNode
 }) {
   return (
-    <View style={[styles.section, spaced && styles.sectionSpacer]}>
-      {items.map(({ label, icon: Icon, onPress, external, disabled }, index) => (
-        <View key={label}>
-          {index > 0 && <View style={styles.separator} />}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={label}
-            accessibilityState={{ disabled: Boolean(disabled) }}
+    <>
+      <SettingsSection title={title} first={first} separatorInset={LIST_LEADING_INSET}>
+        {items.map(({ label, icon, onPress, external, disabled }) => (
+          <ListRow
+            key={label}
+            title={label}
+            leading={<SettingsRowIcon icon={icon} />}
+            navigates={!external}
+            accessory={external ? <ExternalLinkAccessory /> : undefined}
+            accessibilityRole={external ? 'link' : 'button'}
             disabled={disabled}
-            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
             onPress={onPress}
-          >
-            <Icon size={16} color={colors.textSecondary} />
-            <Text style={styles.rowLabel}>{label}</Text>
-            {!external && <ChevronRight size={16} color={colors.textMuted} />}
-          </Pressable>
-        </View>
-      ))}
-    </View>
+          />
+        ))}
+      </SettingsSection>
+      {footer}
+    </>
   )
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bgBase, paddingHorizontal: spacing.lg },
-  topRow: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.xl },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.sm
-  },
-  heading: { fontSize: 20, fontWeight: '700', color: colors.textPrimary },
-  section: { backgroundColor: colors.bgPanel, borderRadius: 12, overflow: 'hidden' },
-  sectionSpacer: { marginTop: spacing.md },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm + 2,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2
-  },
-  rowPressed: { backgroundColor: colors.bgRaised },
-  rowLabel: {
-    flex: 1,
-    fontSize: typography.bodySize,
-    fontWeight: '500',
-    color: colors.textPrimary
-  },
-  separator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
-  }
-})

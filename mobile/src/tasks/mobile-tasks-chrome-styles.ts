@@ -1,226 +1,100 @@
-import { StyleSheet, colors, radii, spacing, typography } from './mobile-tasks-dependencies'
+import { StyleSheet, colors, spacing, textStyles } from './mobile-tasks-dependencies'
 
 export const mobileTasksChromeStyles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase
   },
-  topChrome: {
-    backgroundColor: colors.bgPanel,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle
+  page: {
+    flex: 1
   },
-  statusBar: {
-    minHeight: 38,
+  pageHeader: {
     paddingTop: spacing.xs,
-    paddingHorizontal: spacing.lg,
-    flexDirection: 'row',
-    alignItems: 'center'
+    paddingBottom: spacing.xs
   },
-  backButton: {
-    width: 32,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.xs
-  },
-  titleWrap: {
-    flex: 1,
-    minWidth: 0
-  },
-  titleLine: {
+  largeTitleSubtitle: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    minWidth: 0
+    gap: 7,
+    minHeight: textStyles.footnote.lineHeight
   },
-  title: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.textPrimary
+  largeTitleSubtitleText: {
+    ...textStyles.footnote,
+    flexShrink: 1,
+    color: colors.textSecondary
   },
-  iconButton: {
-    width: 32,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center'
+  providerSwitch: {
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md
   },
   toolbar: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs + 2
+    paddingHorizontal: spacing.lg
   },
   toolbarScroll: {
-    borderTopWidth: 1,
-    borderTopColor: colors.borderSubtle
-  },
-  segmentButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.button,
-    paddingHorizontal: spacing.sm + 2,
-    paddingVertical: spacing.xs
-  },
-  segmentIconButton: {
-    width: 32,
-    height: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.button
-  },
-  segmentCountPill: {
-    minWidth: 32,
-    height: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.button,
-    paddingHorizontal: spacing.sm
+    marginTop: spacing.xs,
+    flexGrow: 0
   },
   segmentRepoDot: {
     width: 8,
     height: 8,
     borderRadius: 4
   },
-  segmentButtonText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  segmentSecondaryText: {
-    fontSize: 12,
-    color: colors.textSecondary
-  },
-  segmentDisabledText: {
-    color: colors.textMuted
-  },
   searchBar: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderSubtle
-  },
-  errorBanner: {
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.bgPanel,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle
+    paddingTop: spacing.md
   },
-  errorText: {
-    color: colors.statusRed,
-    fontSize: 13
+  bannerStack: {
+    gap: spacing.sm,
+    paddingTop: spacing.sm
   },
-  sourceErrorBanner: {
+  refreshingRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.bgPanel,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle
+    paddingTop: spacing.md
   },
-  sourceErrorCopy: {
-    flex: 1,
-    minWidth: 0
-  },
-  sourceErrorText: {
-    color: colors.statusAmber,
-    fontSize: 13,
-    fontWeight: '600'
-  },
-  sourceErrorSlug: {
-    fontFamily: typography.monoFamily,
-    color: colors.textPrimary
-  },
-  sourceErrorMessage: {
-    marginTop: 2,
-    color: colors.textSecondary,
-    fontSize: 12
-  },
-  sourceErrorRetry: {
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.button,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs
-  },
-  sourceErrorRetryText: {
-    color: colors.textPrimary,
-    fontSize: 12,
-    fontWeight: '600'
-  },
-  sourceNoticeBanner: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.bgPanel,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle
-  },
-  sourceNoticeText: {
-    color: colors.statusAmber,
-    fontSize: 13
+  refreshingText: {
+    ...textStyles.footnote,
+    color: colors.textSecondary
   },
   centered: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center'
   },
+  statePage: {
+    flexGrow: 1
+  },
+  stateBody: {
+    flex: 1,
+    minHeight: 320
+  },
   emptyText: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize
+    ...textStyles.callout,
+    color: colors.textSecondary
   },
   centeredHint: {
+    ...textStyles.footnote,
     color: colors.textMuted,
-    fontSize: 12,
-    lineHeight: 17,
     marginTop: spacing.sm,
     maxWidth: 280,
     textAlign: 'center'
   },
-  centerActionButton: {
-    marginTop: spacing.md,
-    minWidth: 160
-  },
   list: {
-    paddingTop: spacing.xs
-  },
-  repoSectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.xs,
-    backgroundColor: colors.bgBase
+    paddingTop: 0
   },
   repoSectionDot: {
     width: 8,
     height: 8,
     borderRadius: 4
   },
-  repoSectionTitle: {
-    flex: 1,
-    minWidth: 0,
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5
-  },
   separator: {
-    height: 1,
-    backgroundColor: colors.borderSubtle,
-    marginLeft: spacing.lg + 26,
-    marginRight: spacing.lg
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.separator,
+    marginLeft: spacing.lg
   }
 })

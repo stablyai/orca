@@ -1,8 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { ActivityIndicator, Keyboard, Pressable, type TextInput, View } from 'react-native'
+import { ActivityIndicator, Keyboard, type TextInput, View } from 'react-native'
 import { ArrowUp, Mic, Plus, Square } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
+import { triggerSuccess } from '../platform/haptics'
+import { Banner } from '../components/ui/Banner'
 import { NATIVE_CHAT_COMPOSER_PLACEHOLDER } from '../../../src/shared/native-chat-turn-status'
+import { formatAgentTypeLabel } from '../../../src/shared/agent-type-label'
 import { MobileNativeChatComposerMenu } from './MobileNativeChatComposerMenu'
 import { MobileNativeChatComposerField } from './MobileNativeChatComposerField'
 import { MobileNativeChatComposerAttachments } from './MobileNativeChatComposerAttachments'
@@ -21,6 +24,16 @@ import { keepHeldPressThroughLongPress } from './held-press-long-press'
 import { mobileNativeChatComposerShowsStop } from './mobile-native-chat-composer-layout'
 import { MobileNativeChatStopButton } from './MobileNativeChatStopButton'
 import { mobileNativeChatComposerStyles as styles } from './mobile-native-chat-composer-styles'
+import { MobileNativeChatComposerControl } from './MobileNativeChatComposerControl'
+
+/** Where dictation is: `starting` until the mic opens, `processing` while the desktop transcribes. */
+export type MobileNativeChatMicStatus = 'idle' | 'starting' | 'recording' | 'processing'
+
+/** The default prompt, short enough for one line: `@` and `/` are taught by the + sheet. */
+function composerPlaceholder(agent: string | null): string {
+  const name = agent ? formatAgentTypeLabel(agent) : null
+  return name && name !== 'Agent' ? `Message ${name}…` : 'Message…'
+}
 
 const NO_FILE_PATHS: string[] = []
 const NO_ATTACHMENTS: PendingNativeChatImage[] = []
@@ -66,6 +79,8 @@ type Props = {
   isAttaching?: boolean
   onMicPress?: () => void
   micActive?: boolean
+  /** The mic's full state; without it the mic knows only `micActive`. */
+  micStatus?: MobileNativeChatMicStatus
   /** Dictation trigger style — 'hold' uses press-in/out, 'toggle' uses tap. */
   dictationMode?: string
   onMicPressIn?: () => void
@@ -78,6 +93,8 @@ type Props = {
   onNeedFiles?: (query: string) => void
   /** Set while the agent can be stopped; Stop takes Send's slot when Send can't deliver. */
   stop?: { onStop?: () => void; held: boolean } | null
+  /** The newest send, answer or stop failure, shown as a banner above the box. */
+  sendError?: string | null
 }
 
 export function MobileNativeChatComposer({
@@ -97,6 +114,7 @@ export function MobileNativeChatComposer({
   isAttaching = false,
   onMicPress,
   micActive = false,
+  micStatus,
   dictationMode = 'toggle',
   onMicPressIn,
   onMicPressOut,
@@ -105,8 +123,12 @@ export function MobileNativeChatComposer({
   placeholder = NATIVE_CHAT_COMPOSER_PLACEHOLDER,
   filePaths = NO_FILE_PATHS,
   onNeedFiles,
-  stop = null
+  stop = null,
+  sendError = null
 }: Props): React.JSX.Element {
+  const mic: MobileNativeChatMicStatus = micStatus ?? (micActive ? 'recording' : 'idle')
+  const micLive = mic === 'recording'
+  const micBusy = mic === 'starting' || mic === 'processing'
   const fallbackInputRef = useRef<TextInput>(null)
   const fieldRef = inputRef ?? fallbackInputRef
   const [focused, setFocused] = useState(false)
@@ -156,7 +178,7 @@ export function MobileNativeChatComposer({
     canStop: stop !== null,
     sendBlocked: sendDisabled,
     canSend,
-    editing: isAttaching || filesUploading || micActive,
+    editing: isAttaching || filesUploading || mic !== 'idle',
     draft: value,
     attachmentCount
   })
@@ -182,6 +204,9 @@ export function MobileNativeChatComposer({
       // Raw, not trimmed: the send seam owns the wire trim, and a rejection has
       // to hand the user back exactly what they typed (#14819).
       const accepted = await onSend(value)
+      if (accepted) {
+        triggerSuccess()
+      }
       if (
         accepted &&
         mountedRef.current &&
@@ -203,14 +228,42 @@ export function MobileNativeChatComposer({
   // A terminal-backed chat has only photos to add, so its + opens the library at once.
   const attachPress = structured ? () => setAttachOpen(true) : onAttachImage
   const attachLabel = structured ? 'Add to message' : 'Attach image'
+  const shownPlaceholder =
+    !disabled && mic === 'recording'
+      ? 'Listening…'
+      : !disabled && mic === 'processing'
+        ? 'Transcribing…'
+        : placeholder === NATIVE_CHAT_COMPOSER_PLACEHOLDER
+          ? composerPlaceholder(agent)
+          : placeholder
+  const micLabel =
+    mic === 'recording'
+      ? 'Stop dictation'
+      : mic === 'processing'
+        ? 'Transcribing dictation'
+        : mic === 'starting'
+          ? 'Starting dictation'
+          : 'Dictate'
+  // A tap while the desktop transcribes would cancel what was said; the mic waits it out instead.
+  const micPress = mic === 'processing' ? undefined : onMicPress
 
   return (
     <View>
-      {menu.rows.length > 0 ? (
-        <MobileNativeChatComposerMenu rows={menu.rows} onPick={menu.pick} />
+      {sendError ? (
+        // Opaque, so a tray layer tucked above ends cleanly at it.
+        <View style={styles.sendError} accessibilityLiveRegion="assertive">
+          <Banner tone="error" message={sendError} testID="native-chat-send-error" />
+        </View>
+      ) : null}
+      {menu.rows.length > 0 || menu.status ? (
+        <MobileNativeChatComposerMenu rows={menu.rows} status={menu.status} onPick={menu.pick} />
       ) : null}
       <View style={styles.composerInset} testID="native-chat-composer-inset">
-        <View style={styles.bar} testID="native-chat-composer">
+        <View
+          // Locked, the whole box reads at 40%; its controls do not dim a second time.
+          style={[styles.bar, focused && styles.barFocused, disabled && styles.barLocked]}
+          testID="native-chat-composer"
+        >
           <MobileNativeChatComposerAttachments
             images={attachments}
             files={files}
@@ -227,7 +280,7 @@ export function MobileNativeChatComposer({
             // Controlled only transiently right after an autocomplete insert.
             selection={menu.pendingSelection ?? undefined}
             onSelectionChange={(e) => menu.onSelectionChange(e.nativeEvent.selection)}
-            placeholder={placeholder}
+            placeholder={shownPlaceholder}
             placeholderTextColor={colors.textMuted}
             selectionColor={colors.accentBlue}
             multiline
@@ -238,18 +291,18 @@ export function MobileNativeChatComposer({
           />
           <View style={styles.actionRow} testID="native-chat-composer-actions">
             {attachPress ? (
-              <Pressable
+              <MobileNativeChatComposerControl
                 accessibilityLabel={attachLabel}
-                style={({ pressed }) => [styles.controlButton, pressed && styles.pressed]}
+                accessibilityState={{ disabled: isAttaching || disabled, busy: isAttaching }}
                 onPress={attachPress}
                 disabled={isAttaching || disabled}
               >
                 {isAttaching ? (
                   <ActivityIndicator size="small" color={colors.textSecondary} />
                 ) : (
-                  <Plus size={19} color={colors.textPrimary} strokeWidth={2} />
+                  <Plus size={18} color={colors.textPrimary} strokeWidth={2.2} />
                 )}
-              </Pressable>
+              </MobileNativeChatComposerControl>
             ) : null}
             {sessionOptions ? (
               <MobileNativeChatSessionOptionPickers
@@ -268,56 +321,45 @@ export function MobileNativeChatComposer({
             ) : null}
             <View style={styles.actionSpacer} />
             {onMicPress ? (
-              <Pressable
-                accessibilityLabel={micActive ? 'Stop dictation' : 'Dictate'}
-                style={({ pressed }) => [styles.ghostButton, pressed && styles.pressed]}
+              <MobileNativeChatComposerControl
+                tone={micLive ? 'alert' : 'filled'}
+                accessibilityLabel={micLabel}
+                accessibilityState={{ disabled: disabled && !micLive, busy: micBusy }}
                 // Hold mode is walkie-talkie (press-in/out); toggle mode taps.
-                onPress={dictationMode === 'hold' ? undefined : onMicPress}
+                onPress={dictationMode === 'hold' ? undefined : micPress}
                 onPressIn={dictationMode === 'hold' ? onMicPressIn : undefined}
                 onPressOut={dictationMode === 'hold' ? onMicPressOut : undefined}
                 onLongPress={dictationMode === 'hold' ? keepHeldPressThroughLongPress : undefined}
-                disabled={disabled && !micActive}
+                disabled={disabled && !micLive}
               >
-                {/* The icon swaps on press; as the page's touch target, its removal would send
-                    touchend to a detached node and lose the release. */}
-                {micActive ? (
-                  <Square
-                    pointerEvents="none"
-                    size={16}
-                    color={colors.statusRed}
-                    strokeWidth={2.4}
-                    fill={colors.statusRed}
-                  />
+                {/* The icon swaps on press; the circle takes no touches, so the release still
+                    lands on the Pressable that saw the press. */}
+                {micBusy ? (
+                  <ActivityIndicator size="small" color={colors.textPrimary} />
+                ) : micLive ? (
+                  <Square size={14} color={colors.danger} strokeWidth={2.4} fill={colors.danger} />
                 ) : (
-                  <Mic
-                    pointerEvents="none"
-                    size={19}
-                    color={colors.textSecondary}
-                    strokeWidth={2}
-                  />
+                  <Mic size={18} color={colors.textPrimary} strokeWidth={2.2} />
                 )}
-              </Pressable>
+              </MobileNativeChatComposerControl>
             ) : null}
             {showsStop && stop ? (
               // Only this phone's own request holds Stop: a repeat is how a stuck stop escalates.
               <MobileNativeChatStopButton onStop={stop.onStop} held={stop.held} />
             ) : (
-              <Pressable
+              <MobileNativeChatComposerControl
+                tone={canSend ? 'primary' : 'idle'}
                 accessibilityLabel="Send message"
-                style={({ pressed }) => [
-                  styles.sendButton,
-                  !canSend && styles.sendButtonDisabled,
-                  pressed && canSend && styles.pressed
-                ]}
+                accessibilityState={{ disabled: !canSend, busy: sending }}
                 onPress={handleSend}
                 disabled={!canSend}
               >
                 <ArrowUp
-                  size={19}
-                  color={canSend ? colors.bgBase : colors.textMuted}
+                  size={18}
+                  color={canSend ? colors.onPrimary : colors.textMuted}
                   strokeWidth={2.4}
                 />
-              </Pressable>
+              </MobileNativeChatComposerControl>
             )}
           </View>
         </View>

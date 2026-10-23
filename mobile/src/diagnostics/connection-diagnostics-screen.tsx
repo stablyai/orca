@@ -9,6 +9,7 @@ import {
   updateDiagnosticsSubmissionState,
   type DiagnosticsSubmissionStates
 } from './connection-diagnostics-screen-data'
+import { triggerError, triggerSuccess } from '../platform/haptics'
 import type { DiagnosticsDeviceOperations } from './diagnostics-device-operations'
 import type {
   ConnectionLogEntry,
@@ -59,6 +60,7 @@ export function ConnectionDiagnosticsScreen({
     }
     const { report } = await device.report()
     await writeClipboard(report)
+    triggerSuccess()
     setCopiedHostId(hostId)
     setTimeout(() => setCopiedHostId((current) => (current === hostId ? null : current)), 2000)
   }, [device, hostId, writeClipboard])
@@ -79,6 +81,11 @@ export function ConnectionDiagnosticsScreen({
       appVersion: fresh.appVersion,
       platform: fresh.platform
     })
+    if (result.ok) {
+      triggerSuccess()
+    } else {
+      triggerError()
+    }
     setSubmissionStates((states) =>
       updateDiagnosticsSubmissionState(states, startedKey, result.ok ? 'sent' : 'failed')
     )

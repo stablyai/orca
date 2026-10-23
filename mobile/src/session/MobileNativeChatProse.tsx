@@ -1,5 +1,6 @@
 import { useContext } from 'react'
-import { Image, Pressable, Text } from 'react-native'
+import { Image, Pressable, Text, View } from 'react-native'
+import { ImageOff } from 'lucide-react-native'
 import { INLINE_TEXT_SELECTION } from '../components/inline-text-selection'
 import { MobileMarkdown } from '../components/MobileMarkdown'
 import { isImageRefBlock, isTextBlock } from '../../../src/shared/native-chat-types'
@@ -14,12 +15,8 @@ import {
 import { withoutPendingNativeChatVisualDirectiveTail } from '../../../src/shared/native-chat-visual-directive'
 import { MobileNativeChatRowOverlaysContext } from './mobile-native-chat-row-overlays'
 import { isRenderableImageUri } from './mobile-native-chat-image-preview'
-import {
-  CHAT_PROSE_SCALE,
-  scaledType,
-  styles,
-  TEXT_SIZE
-} from './mobile-native-chat-message-styles'
+import { colors, textStyles } from '../theme/mobile-theme'
+import { scaledText, styles } from './mobile-native-chat-message-styles'
 import type { MobileNativeChatVisualRender } from './mobile-native-chat-visual-context'
 
 export function Prose({
@@ -52,19 +49,19 @@ export function Prose({
       return (
         <Text
           selectable={INLINE_TEXT_SELECTION}
-          style={[styles.hostNotice, scaledType(TEXT_SIZE, fontScale)]}
+          style={[styles.hostNotice, scaledText(textStyles.body, fontScale)]}
         >
           {AGENT_SESSION_HOST_STATUS_COPY[block.presentation]}
         </Text>
       )
     }
     if (invert) {
+      // Your own message sits on a faint tint, so it reads in the transcript's own colours.
       return (
         <MobileMarkdown
           content={text}
-          tone="onBright"
           rangeSelectable
-          textScale={CHAT_PROSE_SCALE * fontScale}
+          textScale={fontScale}
           onOpenFile={onOpenFile}
           onLongPress={onLongPress}
         />
@@ -80,7 +77,7 @@ export function Prose({
         growing={revealing}
         renderVisual={renderVisual}
         rangeSelectable
-        textScale={CHAT_PROSE_SCALE * fontScale}
+        textScale={fontScale}
         onOpenFile={onOpenFile}
         onLongPress={onLongPress}
       />
@@ -108,9 +105,12 @@ function ImageAttachment({
   const label = block.alt ?? 'Attached image'
   if (!isRenderableImageUri(uri)) {
     return (
-      <Text style={[styles.imageRef, { fontSize: TEXT_SIZE * fontScale }]}>
-        🖼 {block.alt ?? block.path ?? block.url ?? 'image'}
-      </Text>
+      <View style={styles.imageRef} accessibilityLabel={label}>
+        <ImageOff size={16 * fontScale} color={colors.textMuted} strokeWidth={2} />
+        <Text style={[styles.imageRefText, scaledText(textStyles.callout, fontScale)]}>
+          {block.alt ?? block.path ?? block.url ?? 'Image'}
+        </Text>
+      </View>
     )
   }
   return (

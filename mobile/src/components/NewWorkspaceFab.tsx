@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Plus } from 'lucide-react-native'
-import { colors, spacing } from '../theme/mobile-theme'
+import { colors, motion, spacing } from '../theme/mobile-theme'
 
 // Diameter of the phone "new workspace" floating action button. Exported so the
 // worktree list can reserve matching bottom padding and keep the last row tappable.
@@ -12,8 +12,8 @@ type NewWorkspaceFabProps = {
   disabled?: boolean
 }
 
-// Phone-only floating "+" for creating a workspace. Absolutely positioned so it
-// never intercepts list row taps, and lifted above the home indicator.
+// A floating "+" for creating a workspace. The worktree list no longer draws it (its "+" lives in
+// the nav bar); kept for callers that want a floating create.
 export function NewWorkspaceFab({ onPress, disabled }: NewWorkspaceFabProps): React.JSX.Element {
   const insets = useSafeAreaInsets()
   return (
@@ -30,7 +30,7 @@ export function NewWorkspaceFab({ onPress, disabled }: NewWorkspaceFabProps): Re
       accessibilityLabel="New workspace"
       hitSlop={8}
     >
-      <Plus size={24} color={colors.bgBase} strokeWidth={2.75} />
+      <Plus size={24} color={colors.onPrimary} strokeWidth={2.5} />
     </Pressable>
   )
 }
@@ -44,20 +44,13 @@ const styles = StyleSheet.create({
     borderRadius: FAB_SIZE / 2,
     alignItems: 'center',
     justifyContent: 'center',
-    // Crisp near-white surface + dark icon: high contrast against the dark canvas
-    // reads as the primary action while staying monochrome (STYLEGUIDE: color is
-    // for state). Tight shadow avoids the muddy halo that made it look disabled.
-    backgroundColor: colors.surfaceBright,
-    shadowColor: '#000',
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 4
+    backgroundColor: colors.primary
   },
   fabPressed: {
-    backgroundColor: colors.textPrimary
+    backgroundColor: colors.primaryPressed,
+    transform: [{ scale: motion.pressedIconScale }]
   },
   fabDisabled: {
-    opacity: 0.5
+    opacity: motion.disabledOpacity
   }
 })

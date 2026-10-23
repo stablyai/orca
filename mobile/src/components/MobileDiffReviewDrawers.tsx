@@ -1,8 +1,7 @@
 import { useMemo } from 'react'
-import { KeyboardAvoidingView, Pressable, Text, TextInput, View } from 'react-native'
-import { Check, Copy, FileText, Plus, Send, Trash2, X } from 'lucide-react-native'
+import { KeyboardAvoidingView, View } from 'react-native'
+import { Check, Copy, FileText, Minus, Plus, Send, Trash2, X } from 'lucide-react-native'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
-import { colors } from '../theme/mobile-theme'
 import type { ActionSheetAction } from './ActionSheetModal'
 import { ActionSheetContent } from './ActionSheetModal'
 import { ConfirmContent } from './ConfirmModal'
@@ -18,6 +17,9 @@ import type { useMobileDiffReviewController } from '../session/use-mobile-diff-r
 import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
 import { hostOs } from '../platform/host-os'
 import { useWorkspaceOnPairedHost } from '../navigation/workspace-execution-host'
+import { Button } from './ui/Button'
+import { ReplyBox } from './ui/ReplyBox'
+import { SheetHeader } from './ui/SheetHeader'
 
 type Props = {
   controller: ReturnType<typeof useMobileDiffReviewController>
@@ -45,7 +47,7 @@ function ReviewSheetContent({ controller, sheet }: Props & { sheet: ReviewSheet 
     case 'discard':
       return (
         <ConfirmContent
-          title="Discard File"
+          title="Discard changes?"
           message={`Discard changes to "${sheet.target.filePath}"? This cannot be undone.`}
           confirmLabel="Discard"
           destructive
@@ -67,10 +69,10 @@ function ReviewActionsContent({ controller }: Props) {
   const overflowActions = useOverflowActions(controller)
   return (
     <ActionSheetContent
-      title="Review Actions"
+      title="Review actions"
       message={
         controller.reviewedUnstagedCount > 0
-          ? `${controller.reviewedUnstagedCount} reviewed unstaged files can be staged`
+          ? `${mobileReviewCountLabel(controller.reviewedUnstagedCount, 'reviewed file is', 'reviewed files are')} ready to stage.`
           : undefined
       }
       actions={overflowActions}
@@ -83,7 +85,7 @@ function SendNotesContent({ controller, load }: Props & { load: SendSheetState }
   const sendActions = useSendActions(controller, load)
   return (
     <ActionSheetContent
-      title="Send Notes"
+      title="Send notes"
       message={sendSheetMessage(controller, load)}
       actions={sendActions}
       onClose={() => controller.closeSheet('send')}
@@ -110,7 +112,7 @@ function useSendActions(
     return [
       ...terminalActions,
       {
-        label: 'New Agent Session',
+        label: 'New agent session',
         icon: Plus,
         disabled: comments.length === 0 || controller.agentLaunchAvailability !== 'available',
         ...(controller.agentLaunchAvailability === 'update-required'
@@ -122,7 +124,7 @@ function useSendActions(
         onPress: () => void controller.createTerminalAndSend(comments)
       },
       {
-        label: 'Copy Notes',
+        label: 'Copy notes',
         icon: Copy,
         disabled:
           controller.screenState.kind !== 'ready' || controller.screenState.comments.length === 0,
@@ -136,21 +138,22 @@ function useOverflowActions(controller: ReturnType<typeof useMobileDiffReviewCon
   const sessionTabsAvailable = useWorkspaceOnPairedHost()
   return useMemo<ActionSheetAction[]>(
     () => [
+      ...fileGitActions(controller),
       {
-        label: 'Copy Notes',
+        label: 'Copy notes',
         icon: Copy,
         disabled:
           controller.screenState.kind !== 'ready' || controller.screenState.comments.length === 0,
         onPress: () => void controller.copyNotes()
       },
       {
-        label: 'Send Unsent Notes',
+        label: 'Send unsent notes',
         icon: Send,
         disabled: controller.unsentComments.length === 0,
         onPress: () => void controller.openSendSheet()
       },
       {
-        label: 'Clear Sent Notes',
+        label: 'Clear sent notes',
         icon: Trash2,
         disabled:
           controller.screenState.kind !== 'ready' ||
@@ -159,14 +162,14 @@ function useOverflowActions(controller: ReturnType<typeof useMobileDiffReviewCon
         onPress: () => void controller.clearSentNotes()
       },
       {
-        label: 'Stage Reviewed Files',
+        label: 'Stage reviewed files',
         icon: Check,
         disabled: controller.reviewedUnstagedCount === 0 || controller.busyAction !== null,
         skipAutoClose: true,
         onPress: () => void controller.stageReviewedFiles()
       },
       {
-        label: 'Mark Unreviewed',
+        label: 'Mark unreviewed',
         icon: X,
         disabled:
           controller.screenState.kind !== 'ready' ||
@@ -178,7 +181,7 @@ function useOverflowActions(controller: ReturnType<typeof useMobileDiffReviewCon
       ...(sessionTabsAvailable
         ? [
             {
-              label: 'Open in Session',
+              label: 'Open in session',
               icon: FileText,
               disabled: !controller.currentItem || controller.currentItem.scope === 'branch',
               onPress: () => void controller.openInSession()
@@ -190,53 +193,96 @@ function useOverflowActions(controller: ReturnType<typeof useMobileDiffReviewCon
   )
 }
 
+// Per-file stage, unstage and discard: kept off the footer so the diff keeps the screen.
+function fileGitActions(
+  controller: ReturnType<typeof useMobileDiffReviewController>
+): ActionSheetAction[] {
+  const item = controller.currentItem
+  if (!item) {
+    return []
+  }
+  const busy = controller.busyAction !== null
+  return [
+    ...(item.canStage
+      ? [
+          {
+            label: 'Stage file',
+            icon: Plus,
+            disabled: busy,
+            onPress: () => void controller.runGitMutation('git.stage', item)
+          }
+        ]
+      : []),
+    ...(item.canUnstage
+      ? [
+          {
+            label: 'Unstage file',
+            icon: Minus,
+            disabled: busy,
+            onPress: () => void controller.runGitMutation('git.unstage', item)
+          }
+        ]
+      : []),
+    ...(item.canDiscard
+      ? [
+          {
+            label: 'Discard file',
+            icon: Trash2,
+            destructive: true,
+            disabled: busy,
+            onPress: () => controller.openSheet({ kind: 'discard', target: item })
+          }
+        ]
+      : [])
+  ]
+}
+
 function sendSheetMessage(
   controller: ReturnType<typeof useMobileDiffReviewController>,
   load: SendSheetState
 ): string | undefined {
   return load.kind === 'loading'
-    ? 'Loading agent sessions...'
+    ? 'Loading agent sessions…'
     : load.kind === 'error'
       ? load.message
-      : `${controller.unsentComments.length} unsent notes`
+      : `${mobileReviewCountLabel(controller.unsentComments.length, 'unsent note', 'unsent notes')}. Pick where to send them.`
 }
 
 function NoteComposerContent({ controller, composer }: Props & { composer: ComposerState }) {
   return (
     <KeyboardAvoidingView behavior={hostOs() === 'ios' ? 'padding' : undefined}>
-      <View style={styles.composerHeader}>
-        <View>
-          <Text style={styles.drawerTitle}>
-            {composer.mode === 'edit' ? 'Edit Note' : 'Add Note'}
-          </Text>
-          <Text style={styles.drawerSubtitle}>
-            {composer.mode === 'create' && composer.lineNumber > 0
-              ? `Line ${composer.lineNumber}`
-              : 'File note'}
-          </Text>
-        </View>
-        <Pressable
-          style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}
-          onPress={controller.closeComposer}
-          accessibilityRole="button"
-          accessibilityLabel="Cancel note"
-        >
-          <X size={18} color={colors.textPrimary} strokeWidth={2.2} />
-        </Pressable>
-      </View>
-      <TextInput
-        style={styles.composerInput}
-        value={controller.composerBody}
-        onChangeText={controller.setComposerBody}
-        multiline
-        autoFocus
-        placeholder="Review note"
-        placeholderTextColor={colors.textMuted}
-        accessibilityLabel={composerLabel(composer)}
+      <SheetHeader
+        title={composer.mode === 'edit' ? 'Edit note' : 'Add note'}
+        subtitle={
+          composer.mode === 'create' && composer.lineNumber > 0
+            ? `Line ${composer.lineNumber}`
+            : composer.mode === 'edit' && composer.comment.lineNumber > 0
+              ? `Line ${composer.comment.lineNumber}`
+              : 'File note'
+        }
+        leading={{ label: 'Cancel', onPress: controller.closeComposer }}
       />
-      <View style={styles.drawerButtonRow}>
-        {composer.mode === 'edit' ? <DeleteNoteButton onPress={controller.deleteComment} /> : null}
-        <SaveNoteButton controller={controller} composer={composer} />
+      <View style={styles.sheetBody}>
+        <ReplyBox
+          value={controller.composerBody}
+          onChangeText={controller.setComposerBody}
+          onSend={() => void controller.saveComposer()}
+          placeholder="Write a note for the agent…"
+          sendAccessibilityLabel={composerLabel(composer)}
+          autoFocus
+          maxLines={8}
+        />
+        {composer.mode === 'edit' ? (
+          <View style={styles.composerActions}>
+            <Button
+              label="Delete note"
+              icon={Trash2}
+              variant="destructive"
+              size="compact"
+              onPress={() => void controller.deleteComment()}
+            />
+          </View>
+        ) : null}
       </View>
     </KeyboardAvoidingView>
   )
@@ -247,80 +293,41 @@ function composerLabel(
 ): string {
   return composer?.mode === 'create' && composer.lineNumber > 0
     ? `Save note on line ${composer.lineNumber}`
-    : 'Review note'
-}
-
-function DeleteNoteButton({ onPress }: { onPress: () => Promise<void> }) {
-  return (
-    <Pressable
-      style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]}
-      onPress={() => void onPress()}
-      accessibilityRole="button"
-      accessibilityLabel="Delete note"
-    >
-      <Trash2 size={14} color={colors.statusRed} strokeWidth={2.2} />
-      <Text style={styles.destructiveText}>Delete</Text>
-    </Pressable>
-  )
-}
-
-function SaveNoteButton({
-  controller,
-  composer
-}: {
-  controller: ReturnType<typeof useMobileDiffReviewController>
-  composer: ReturnType<typeof useMobileDiffReviewController>['composer']
-}) {
-  const disabled = controller.composerBody.trim().length === 0
-  return (
-    <Pressable
-      style={({ pressed }) => [
-        styles.primaryButton,
-        disabled && styles.buttonDisabled,
-        pressed && styles.buttonPressed
-      ]}
-      disabled={disabled}
-      onPress={() => void controller.saveComposer()}
-      accessibilityRole="button"
-      accessibilityLabel={composerLabel(composer)}
-    >
-      <Check size={14} color={colors.bgBase} strokeWidth={2.2} />
-      <Text style={styles.primaryButtonText}>Save</Text>
-    </Pressable>
-  )
+    : 'Save note'
 }
 
 function CompletionContent({ controller }: Props) {
   const noteCount =
     controller.screenState.kind === 'ready' ? controller.screenState.comments.length : 0
+  const canSend = controller.unsentComments.length > 0
+  const canStage = controller.reviewedUnstagedCount > 0
   return (
     <>
-      <Text style={styles.drawerTitle}>Review Complete</Text>
-      <Text style={styles.drawerSubtitle}>
-        {mobileReviewCountLabel(controller.queue.length, 'file', 'files')} reviewed,{' '}
-        {mobileReviewCountLabel(noteCount, 'note', 'notes')}
-      </Text>
-      <View style={styles.drawerButtonRow}>
-        <Pressable
-          style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]}
-          disabled={controller.reviewedUnstagedCount === 0}
-          onPress={() => void controller.stageReviewedFiles()}
-          accessibilityRole="button"
-          accessibilityLabel="Stage reviewed files"
-        >
-          <Check size={14} color={colors.textSecondary} strokeWidth={2.2} />
-          <Text style={styles.secondaryButtonText}>Stage Reviewed</Text>
-        </Pressable>
-        <Pressable
-          style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}
-          disabled={controller.unsentComments.length === 0}
+      <SheetHeader
+        title="Review complete"
+        subtitle={`${mobileReviewCountLabel(controller.queue.length, 'file', 'files')} reviewed, ${mobileReviewCountLabel(noteCount, 'note', 'notes')}`}
+        trailing={{ label: 'Done', onPress: () => controller.closeSheet('completion') }}
+      />
+      <View style={styles.sheetActions}>
+        {/* One primary: sending notes when there are any, otherwise staging what was reviewed. */}
+        <Button
+          label="Send notes"
+          icon={Send}
+          variant={canSend ? 'primary' : 'secondary'}
+          block
+          disabled={!canSend}
           onPress={() => void controller.openSendSheet()}
-          accessibilityRole="button"
           accessibilityLabel="Send notes to agent"
-        >
-          <Send size={14} color={colors.bgBase} strokeWidth={2.2} />
-          <Text style={styles.primaryButtonText}>Send Notes</Text>
-        </Pressable>
+        />
+        <Button
+          label="Stage reviewed files"
+          icon={Check}
+          variant={canSend ? 'secondary' : 'primary'}
+          block
+          disabled={!canStage}
+          onPress={() => void controller.stageReviewedFiles()}
+          accessibilityLabel="Stage reviewed files"
+        />
       </View>
     </>
   )

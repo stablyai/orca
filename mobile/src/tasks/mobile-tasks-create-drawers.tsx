@@ -2,19 +2,29 @@ import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-
 import {
   BottomDrawer,
   View,
-  TaskProviderLogo,
   colors,
   Text,
-  Pressable,
-  ChevronDown,
   TextInput,
-  ActivityIndicator,
+  StyleSheet,
   PickerModal,
   Linking,
   ExternalLink,
-  Lock
+  Lock,
+  spacing,
+  textStyles
 } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
+import { Button } from '../components/ui/Button'
+import { ListGroup } from '../components/ui/ListGroup'
+import { ListRow } from '../components/ui/ListRow'
+import { TextField } from '../components/ui/TextField'
+import { MobileSegmentedControl } from '../components/MobileSegmentedControl'
+import { ISSUE_SOURCE_SEGMENTS } from './mobile-tasks-provider-pickers'
+import {
+  MobileTasksSheetError,
+  MobileTasksSheetHeader,
+  sheetStyles
+} from './mobile-tasks-sheet-chrome'
 import {
   getRepoBadgeColor,
   type RepoSummary,
@@ -30,6 +40,7 @@ export function renderMobileTasksCreateDrawer(model: ConnectionPresentationModel
     createTask,
     createTitle,
     creatingTask,
+    error,
     provider,
     providerLabel,
     selectedCreateGitHubSources,
@@ -39,12 +50,14 @@ export function renderMobileTasksCreateDrawer(model: ConnectionPresentationModel
     selectedCreateTargetLabel,
     setCreateBody,
     setCreateTitle,
+    setError,
     setGitHubIssueSourcePreference,
     setShowCreateTargetPicker,
     setShowCreateTask,
     showCreateTask,
     taskUiReady
   } = model
+  const repoScoped = provider === 'github' || provider === 'gitlab'
   return (
     <BottomDrawer
       visible={taskUiReady && showCreateTask}
@@ -53,137 +66,103 @@ export function renderMobileTasksCreateDrawer(model: ConnectionPresentationModel
         setShowCreateTask(false)
       }}
     >
-      <View style={styles.sheetHeader}>
-        <View style={styles.sheetTitleRow}>
-          <TaskProviderLogo provider={provider} size={16} color={colors.textPrimary} />
-          <Text style={styles.sheetTitle}>New {providerLabel} Issue</Text>
-        </View>
-        <Text style={styles.sheetSubtitle}>
-          {provider === 'github' || provider === 'gitlab'
-            ? 'Create an issue in the selected repository.'
-            : 'Create an issue in the selected Linear team.'}
-        </Text>
-      </View>
+      <MobileTasksSheetHeader
+        title={`New ${providerLabel} issue`}
+        leading={{
+          label: 'Cancel',
+          onPress: () => {
+            setShowCreateTargetPicker(false)
+            setShowCreateTask(false)
+          }
+        }}
+      />
+      <MobileTasksSheetError error={error} onDismiss={() => setError('')} />
 
-      <View style={styles.createForm}>
-        <Text style={styles.fieldLabel}>
-          {provider === 'github' || provider === 'gitlab' ? 'Repository' : 'Team'}
-        </Text>
-        <Pressable
-          style={styles.targetButton}
-          disabled={!taskUiReady}
-          onPress={() => {
-            if (!taskUiReady) {
-              return
+      <View style={sheetStyles.form}>
+        <ListGroup style={createStyles.flushGroup}>
+          <ListRow
+            title={repoScoped ? 'Repository' : 'Team'}
+            value={selectedCreateTargetLabel}
+            navigates
+            disabled={!taskUiReady}
+            leading={
+              repoScoped ? (
+                <View
+                  style={[
+                    sheetStyles.dot,
+                    selectedCreateTarget
+                      ? {
+                          backgroundColor: getRepoBadgeColor(
+                            selectedCreateTarget as RepoSummary,
+                            (selectedCreateTarget as RepoSummary).displayName
+                          )
+                        }
+                      : undefined
+                  ]}
+                />
+              ) : undefined
             }
-            setShowCreateTargetPicker(true)
-          }}
-        >
-          {provider === 'github' || provider === 'gitlab' ? (
-            <View
-              style={[
-                styles.pickerRepoDot,
-                selectedCreateTarget
-                  ? {
-                      backgroundColor: getRepoBadgeColor(
-                        selectedCreateTarget as RepoSummary,
-                        (selectedCreateTarget as RepoSummary).displayName
-                      )
-                    }
-                  : undefined
-              ]}
-            />
-          ) : null}
-          <Text style={styles.targetButtonText} numberOfLines={1}>
-            {selectedCreateTargetLabel}
-          </Text>
-          <ChevronDown size={14} color={colors.textMuted} />
-        </Pressable>
+            onPress={() => setShowCreateTargetPicker(true)}
+          />
+        </ListGroup>
 
         {provider === 'github' &&
         selectedCreateRepo &&
         hasGitHubIssueSourceChoice(selectedCreateGitHubSources) ? (
           <View style={styles.issueSourceBox}>
             <Text style={styles.fieldLabel}>Issue source</Text>
+            <MobileSegmentedControl
+              segments={ISSUE_SOURCE_SEGMENTS}
+              selected={selectedCreateIssuePreference}
+              onSelect={(preference) =>
+                void setGitHubIssueSourcePreference(selectedCreateRepo, preference)
+              }
+              fill
+              testIDPrefix="mobile-tasks-create-issue-source-"
+            />
             <Text style={styles.issueSourceHint} numberOfLines={2}>
-              File in{' '}
+              Files in{' '}
               {selectedCreateIssuePreference === 'origin'
                 ? issueSourceSlug(selectedCreateGitHubSources?.prs)
                 : issueSourceSlug(selectedCreateGitHubSources?.upstreamCandidate)}
             </Text>
-            <View style={styles.issueSourceSegment}>
-              {(['upstream', 'origin'] as const).map((preference) => {
-                const selected = selectedCreateIssuePreference === preference
-                const slug =
-                  preference === 'upstream'
-                    ? issueSourceSlug(selectedCreateGitHubSources?.upstreamCandidate)
-                    : issueSourceSlug(selectedCreateGitHubSources?.prs)
-                return (
-                  <Pressable
-                    key={preference}
-                    style={[
-                      styles.issueSourceSegmentButton,
-                      selected && styles.issueSourceSegmentButtonActive
-                    ]}
-                    accessibilityState={{ selected }}
-                    onPress={() =>
-                      void setGitHubIssueSourcePreference(selectedCreateRepo, preference)
-                    }
-                  >
-                    <Text
-                      style={[
-                        styles.issueSourceSegmentText,
-                        selected && styles.issueSourceSegmentTextActive
-                      ]}
-                    >
-                      {preference === 'upstream' ? 'Upstream' : 'Origin'}
-                    </Text>
-                    <Text style={styles.issueSourceSlug} numberOfLines={1}>
-                      {slug}
-                    </Text>
-                  </Pressable>
-                )
-              })}
-            </View>
           </View>
         ) : null}
 
-        <Text style={styles.fieldLabel}>Title</Text>
-        <TextInput
-          style={styles.input}
+        <TextField
+          label="Title"
           value={createTitle}
           onChangeText={setCreateTitle}
-          placeholder="Task title"
-          placeholderTextColor={colors.textMuted}
+          placeholder="What needs doing?"
           autoCapitalize="sentences"
           returnKeyType="next"
         />
 
-        <Text style={styles.fieldLabel}>Description</Text>
-        <TextInput
-          style={[styles.input, styles.bodyInput]}
-          value={createBody}
-          onChangeText={setCreateBody}
-          placeholder="Add context"
-          placeholderTextColor={colors.textMuted}
-          multiline
-          textAlignVertical="top"
-        />
+        <View style={createStyles.field}>
+          <Text style={styles.fieldLabel}>Description</Text>
+          <TextInput
+            style={[styles.input, styles.bodyInput]}
+            value={createBody}
+            onChangeText={setCreateBody}
+            placeholder="Add context (optional)"
+            placeholderTextColor={colors.textMuted}
+            selectionColor={colors.accentBlue}
+            accessibilityLabel="Description"
+            multiline
+            textAlignVertical="top"
+          />
+        </View>
+      </View>
 
-        <Pressable
-          style={[
-            styles.createButton,
-            (!taskUiReady || !createTitle.trim() || creatingTask) && styles.createButtonDisabled
-          ]}
-          disabled={!taskUiReady || !createTitle.trim() || creatingTask}
+      <View style={sheetStyles.actions}>
+        <Button
+          label="Create issue"
+          variant="primary"
+          block
+          busy={creatingTask}
+          disabled={!taskUiReady || !createTitle.trim()}
           onPress={() => void createTask()}
-        >
-          {creatingTask ? (
-            <ActivityIndicator size="small" color={colors.bgBase} />
-          ) : (
-            <Text style={styles.createButtonText}>Create Issue</Text>
-          )}
-        </Pressable>
+        />
       </View>
     </BottomDrawer>
   )
@@ -204,7 +183,7 @@ export function renderMobileTasksCreateTargetPicker(model: ConnectionPresentatio
   return (
     <PickerModal
       visible={taskUiReady && showCreateTask && showCreateTargetPicker}
-      title={provider === 'linear' ? 'Linear Team' : 'Repository'}
+      title={provider === 'linear' ? 'Team' : 'Repository'}
       options={createTargetOptions}
       selected={
         provider === 'github' || provider === 'gitlab'
@@ -236,28 +215,30 @@ export function renderMobileTasksLinearConnectDrawer(model: ConnectionPresentati
     showLinearConnect,
     taskUiReady
   } = model
+  const connecting = linearConnectState === 'connecting'
   return (
     <BottomDrawer
       visible={taskUiReady && showLinearConnect}
       onClose={() => {
-        if (linearConnectState !== 'connecting') {
+        if (!connecting) {
           setShowLinearConnect(false)
         }
       }}
     >
-      <View style={styles.sheetHeader}>
-        <View style={styles.sheetTitleRow}>
-          <TaskProviderLogo provider="linear" size={16} color={colors.textPrimary} />
-          <Text style={styles.sheetTitle}>Connect Linear workspace</Text>
-        </View>
-        <Text style={styles.sheetSubtitle}>
-          Paste a Personal API key to browse issues from that workspace.
-        </Text>
-      </View>
-      <View style={styles.createForm}>
-        <Text style={styles.fieldLabel}>Personal API key</Text>
-        <TextInput
-          style={styles.input}
+      <MobileTasksSheetHeader
+        title="Connect Linear"
+        leading={{
+          label: 'Cancel',
+          disabled: connecting,
+          onPress: () => setShowLinearConnect(false)
+        }}
+      />
+      <Text style={createStyles.intro}>
+        Paste a personal API key to browse issues from that workspace.
+      </Text>
+      <View style={sheetStyles.form}>
+        <TextField
+          label="Personal API key"
           value={linearApiKeyDraft}
           onChangeText={(next) => {
             setLinearApiKeyDraft(next)
@@ -266,45 +247,41 @@ export function renderMobileTasksLinearConnectDrawer(model: ConnectionPresentati
               setLinearConnectError('')
             }
           }}
-          placeholder="lin_api_..."
-          placeholderTextColor={colors.textMuted}
+          placeholder="lin_api_…"
           autoCapitalize="none"
           autoCorrect={false}
           secureTextEntry
-          editable={linearConnectState !== 'connecting'}
+          editable={!connecting}
           onSubmitEditing={() => void connectLinearAccount()}
+          error={linearConnectState === 'error' && Boolean(linearConnectError)}
+          footnote={
+            linearConnectState === 'error' && linearConnectError ? linearConnectError : undefined
+          }
         />
-        {linearConnectState === 'error' && linearConnectError ? (
-          <Text style={styles.detailError}>{linearConnectError}</Text>
-        ) : null}
-        <Pressable
-          style={styles.inlineTextLink}
-          onPress={() => void Linking.openURL('https://linear.app/settings/account/security')}
-        >
-          <ExternalLink size={13} color={colors.textSecondary} />
-          <Text style={styles.inlineTextLinkText}>Linear Settings / Security / New API key</Text>
-        </Pressable>
+        <Button
+          label="Create a key in Linear settings"
+          icon={ExternalLink}
+          variant="plain"
+          size="compact"
+          accessibilityHint="Opens Linear's security settings"
+          onPress={() => Linking.openURL('https://linear.app/settings/account/security')}
+        />
         <View style={styles.securityHintRow}>
-          <Lock size={13} color={colors.textMuted} />
+          <Lock size={14} color={colors.textMuted} strokeWidth={2.2} />
           <Text style={styles.securityHintText}>
-            Your key is encrypted via the host OS keychain and stored locally.
+            Your key is encrypted with your desktop's keychain and stays on your desktop.
           </Text>
         </View>
-        <Pressable
-          style={[
-            styles.createButton,
-            (!linearApiKeyDraft.trim() || linearConnectState === 'connecting') &&
-              styles.createButtonDisabled
-          ]}
-          disabled={!linearApiKeyDraft.trim() || linearConnectState === 'connecting'}
+      </View>
+      <View style={sheetStyles.actions}>
+        <Button
+          label="Connect"
+          variant="primary"
+          block
+          busy={connecting}
+          disabled={!linearApiKeyDraft.trim()}
           onPress={() => void connectLinearAccount()}
-        >
-          {linearConnectState === 'connecting' ? (
-            <ActivityIndicator size="small" color={colors.bgBase} />
-          ) : (
-            <Text style={styles.createButtonText}>Connect</Text>
-          )}
-        </Pressable>
+        />
       </View>
     </BottomDrawer>
   )
@@ -322,7 +299,7 @@ export function renderMobileTasksWorkspaceCreateTargetPicker(model: ConnectionPr
   return (
     <PickerModal
       visible={taskUiReady && workspaceRepoPickerItem != null}
-      title="Create Workspace In"
+      title="Start workspace in"
       options={workspaceRepoOptions}
       selected={workspaceRepos[0]?.id ?? ''}
       onSelect={(repoId) => {
@@ -336,3 +313,15 @@ export function renderMobileTasksWorkspaceCreateTargetPicker(model: ConnectionPr
     />
   )
 }
+
+const createStyles = StyleSheet.create({
+  // The form already insets 4; the group sits on the form's edge.
+  flushGroup: { marginHorizontal: 0 },
+  field: { gap: spacing.sm },
+  intro: {
+    ...textStyles.callout,
+    color: colors.textSecondary,
+    paddingHorizontal: spacing.lg - 4,
+    marginBottom: spacing.lg
+  }
+})

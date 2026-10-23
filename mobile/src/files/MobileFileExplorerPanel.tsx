@@ -1,14 +1,6 @@
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
-import {
-  ActivityIndicator,
-  FlatList,
-  Pressable,
-  Text,
-  View,
-  type ListRenderItem
-} from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
-import { ChevronLeft, X } from 'lucide-react-native'
+import { FlatList, View, type ListRenderItem } from 'react-native'
+import { FolderOpen, SearchX } from 'lucide-react-native'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
 import { useForceReconnect } from '../transport/host-client-hooks'
@@ -16,13 +8,14 @@ import { useWorkspaceClient } from '../transport/use-workspace-client'
 import { connectionRetryAction } from '../transport/connection-retry-action'
 import { getWorktreeLabel } from '../session/worktree-label'
 import {
+  filterDirectoryCache,
   flattenDirectoryCache,
   getDirectoryCacheState,
   type DirectoryCache,
   type FileExplorerRow
 } from './file-tree'
 import type { RpcFailure } from '../transport/types'
-import { colors, spacing } from '../theme/mobile-theme'
+import { spacing } from '../theme/mobile-theme'
 import {
   beginDirectoryLoad,
   createDirectoryLoadRevisions,
@@ -34,9 +27,12 @@ import { isMobileMethodUnavailableError } from '../transport/mobile-method-unava
 import { directoryCacheFromFileList } from './file-list-fallback'
 import { fileDirectoryRead, legacyFileListRead } from './mobile-file-explorer-operations'
 import { fileExplorerStyles as styles } from './mobile-file-explorer-styles'
+import { MobileFileExplorerHeader } from './mobile-file-explorer-header'
 import { MobileFileExplorerRow } from './mobile-file-explorer-row'
 import { navigateToMobileFilePreview } from './mobile-file-preview-navigation'
 import { MobileLoadErrorState } from '../components/MobileLoadErrorState'
+import { MobileSearchField } from '../components/MobileSearchField'
+import { StateView } from '../components/ui/StateView'
 
 export function MobileFileExplorerPanel(props: {
   hostId: string
@@ -62,6 +58,11 @@ export function MobileFileExplorerPanel(props: {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [legacyListTruncated, setLegacyListTruncated] = useState(false)
+  // Held with the scope it was typed in, so a new worktree starts unfiltered without an effect.
+  const [scopedFilter, setScopedFilter] = useState({ scope, text: '' })
+  const filter = scopedFilter.scope === scope ? scopedFilter.text : ''
+  const setFilter = useCallback((text: string) => setScopedFilter({ scope, text }), [scope])
+  const [scrolled, setScrolled] = useState(false)
   const worktreeLabel = getWorktreeLabel(name, worktreeId)
 
   const loadDirectory = useCallback(
@@ -72,7 +73,7 @@ export function MobileFileExplorerPanel(props: {
 
       if (!client || connState !== 'connected') {
         const message =
-          connState === 'connected' ? 'Connecting to desktop...' : 'Waiting for desktop...'
+          connState === 'connected' ? 'Connecting to desktop…' : 'Waiting for desktop…'
         if (rootLoad) {
           const hasLoadedRoot =
             (getDirectoryCacheState(directoryCacheRef.current, '')?.entries.length ?? 0) > 0
@@ -260,10 +261,28 @@ export function MobileFileExplorerPanel(props: {
     }
   }, [connState, loadDirectory])
 
-  const rows = useMemo(
-    () => flattenDirectoryCache(directoryCache, expanded),
-    [directoryCache, expanded]
+  const filtering = filter.trim() !== ''
+  const rows = useMemo<FileExplorerRow[]>(
+    () =>
+      filtering
+        ? filterDirectoryCache(directoryCache, filter)
+        : flattenDirectoryCache(directoryCache, expanded),
+    [directoryCache, expanded, filter, filtering]
   )
+  // While filtering, a folder reads as open when its matches are listed under it.
+  const shownExpanded = useMemo<ReadonlySet<string>>(() => {
+    if (!filtering) {
+      return expanded
+    }
+    const open = new Set<string>()
+    rows.forEach((row, index) => {
+      const next = rows[index + 1]
+      if (row.kind === 'directory' && next !== undefined && next.depth > row.depth) {
+        open.add(row.relativePath)
+      }
+    })
+    return open
+  }, [expanded, filtering, rows])
 
   const toggleDirectory = useCallback(
     (relativePath: string) => {
@@ -282,6 +301,25 @@ export function MobileFileExplorerPanel(props: {
       }
     },
     [directoryCache, expanded, loadDirectory]
+  )
+
+  // A folder tapped in the filter results opens in the tree, with its parents expanded.
+  const revealDirectory = useCallback(
+    (relativePath: string) => {
+      setFilter('')
+      const segments = relativePath.split('/')
+      setExpanded((prev) => {
+        const next = new Set(prev)
+        for (let index = 1; index < segments.length; index += 1) {
+          next.add(segments.slice(0, index).join('/'))
+        }
+        return next
+      })
+      if (!expanded.has(relativePath)) {
+        toggleDirectory(relativePath)
+      }
+    },
+    [expanded, toggleDirectory]
   )
 
   const retryDirectory = useCallback(
@@ -320,48 +358,15 @@ export function MobileFileExplorerPanel(props: {
       <MobileFileExplorerRow
         item={item}
         maximumIndentation={Math.max(0, panelWidth / 3 - spacing.lg)}
-        expanded={expanded}
+        expanded={shownExpanded}
         onPreviewFile={previewFile}
         onRetryDirectory={retryDirectory}
-        onToggleDirectory={toggleDirectory}
+        onToggleDirectory={filtering ? revealDirectory : toggleDirectory}
       />
     )
   }
 
-  const headerBar = (
-    <View style={styles.topBar}>
-      {embedded ? (
-        <Pressable
-          style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
-          onPress={() => onRequestClose?.()}
-          hitSlop={8}
-          accessibilityLabel="Close files"
-        >
-          <X size={20} color={colors.textSecondary} strokeWidth={2.2} />
-        </Pressable>
-      ) : (
-        <Pressable
-          style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
-          onPress={() => router.back()}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel="Back to session"
-        >
-          <ChevronLeft size={22} color={colors.textSecondary} strokeWidth={2.2} />
-        </Pressable>
-      )}
-      <View style={styles.titleBlock}>
-        <Text style={styles.title} numberOfLines={1}>
-          Files
-        </Text>
-        <Text style={styles.meta} numberOfLines={1}>
-          {worktreeLabel}
-          {legacyListTruncated ? ' - Showing first 5000' : ''}
-        </Text>
-      </View>
-    </View>
-  )
-
+  const subtitle = legacyListTruncated ? `${worktreeLabel} · first 5,000 files` : worktreeLabel
   // Why: while disconnected, re-sending the request is useless — revive the parked transport
   // instead (issue #5049); loadDirectory re-runs via its effect once the new client connects.
   const rootRetry = connectionRetryAction({
@@ -370,41 +375,64 @@ export function MobileFileExplorerPanel(props: {
     forceReconnect,
     reload: () => void loadDirectory('')
   })
+  const treeReady = !loading && !error && (rows.length > 0 || filtering)
   const body = loading ? (
-    <View style={styles.state}>
-      <ActivityIndicator size="small" color={colors.textSecondary} />
-    </View>
+    <StateView loading title="Loading files…" />
   ) : error ? (
     <MobileLoadErrorState message={error} onRetry={rootRetry} />
+  ) : rows.length === 0 && filtering ? (
+    <StateView
+      icon={SearchX}
+      title="No matches"
+      message="Only folders you have opened are searched."
+      secondary={{ label: 'Clear filter', onPress: () => setFilter('') }}
+    />
   ) : rows.length === 0 ? (
-    <View style={styles.state}>
-      <Text style={styles.emptyText}>No files found</Text>
-    </View>
+    <StateView icon={FolderOpen} title="No files" message="This workspace has no files yet." />
   ) : (
     <FlatList
       data={rows}
       renderItem={renderItem}
       keyExtractor={(item) => item.id}
+      ItemSeparatorComponent={RowSeparator}
       contentContainerStyle={styles.listContent}
       style={styles.list}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
+      onScroll={(event) => setScrolled(event.nativeEvent.contentOffset.y > 0)}
+      scrollEventThrottle={32}
     />
   )
+  const filterField = treeReady ? (
+    <View style={styles.filter}>
+      <MobileSearchField
+        value={filter}
+        onChangeText={setFilter}
+        placeholder="Filter files"
+        clearAccessibilityLabel="Clear filter"
+        returnKeyType="done"
+      />
+    </View>
+  ) : null
 
-  // Embedded: the dock column owns safe-area/layout, so render a plain View and
-  // a non-inset header. Full-screen: keep the SafeAreaView top inset + chrome.
   return (
     <View
       style={styles.container}
       onLayout={({ nativeEvent }) => setPanelWidth(nativeEvent.layout.width)}
     >
-      {embedded ? (
-        <View style={styles.header}>{headerBar}</View>
-      ) : (
-        <SafeAreaView style={styles.header} edges={['top']}>
-          {headerBar}
-        </SafeAreaView>
-      )}
+      <MobileFileExplorerHeader
+        subtitle={subtitle}
+        embedded={embedded === true}
+        scrolled={scrolled}
+        onClose={() => onRequestClose?.()}
+        onBack={() => router.back()}
+      />
+      {filterField}
       {body}
     </View>
   )
+}
+
+function RowSeparator() {
+  return <View style={styles.separator} />
 }

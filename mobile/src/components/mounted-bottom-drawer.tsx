@@ -9,7 +9,8 @@ import Animated, {
   withTiming,
   runOnJS,
   interpolate,
-  Extrapolation
+  Extrapolation,
+  Easing
 } from 'react-native-reanimated'
 import { spacing } from '../theme/mobile-theme'
 import { resolveBottomDrawerFillHeight } from './bottom-drawer-fill-height'
@@ -19,6 +20,7 @@ import {
   BOTTOM_DRAWER_SHOW_DURATION_MS
 } from './bottom-drawer-constants'
 import { bottomDrawerStyles as styles } from './bottom-drawer-styles'
+import { AutoHeight } from './ui/AutoHeight'
 import {
   useBottomDrawerModalHost,
   useBottomDrawerModalHostBackClaim
@@ -31,11 +33,19 @@ import { hostOs } from '../platform/host-os'
 
 const DISMISS_THRESHOLD = 80
 const SPRING_CONFIG = { damping: 28, stiffness: 400 }
+// iOS's sheet curve: a quick start and a long, soft settle with no overshoot.
+const SHEET_EASING = Easing.bezier(0.32, 0.72, 0, 1)
+const SHOW_TIMING = { duration: BOTTOM_DRAWER_SHOW_DURATION_MS, easing: SHEET_EASING }
+const HIDE_TIMING = { duration: BOTTOM_DRAWER_HIDE_DURATION_MS, easing: SHEET_EASING }
+// Travel past the sheet's own height, so its shadow and corners clear the screen edge.
+const OFFSCREEN_MARGIN = 48
 // Why: negative translateY (pulling up) is damped with a rubber-band factor
 // so the drawer resists upward dragging — a subtle polish touch that signals
 // the drawer cannot expand further.
 const RUBBER_BAND_FACTOR = 0.25
 const TOP_SCROLL_EPSILON = 1
+// The grabber's hit area: 8 above, a 5 pt bar, 12 below.
+const HANDLE_AREA_HEIGHT = spacing.sm + 5 + spacing.md
 
 export type MountedBottomDrawerProps = {
   visible: boolean
@@ -83,6 +93,8 @@ export function MountedBottomDrawer({
   // edge stays under the status bar.
   const [keyboardInset, setKeyboardInset] = useState(0)
   const { height: screenHeight } = useWindowDimensions()
+  // Until the first layout the sheet travels a full screen, which only ever errs on hidden.
+  const sheetHeight = useSharedValue(screenHeight)
   const insets = useWindowSafeAreaInsets()
   // Why: on wide/tablet canvases a full-width sheet looks stretched; cap it and
   // center it horizontally. Vertical bottom-anchoring (and all the drag/keyboard
@@ -116,7 +128,7 @@ export function MountedBottomDrawer({
       return
     }
     translateY.value = 0
-    progress.value = withTiming(1, { duration: BOTTOM_DRAWER_SHOW_DURATION_MS })
+    progress.value = withTiming(1, SHOW_TIMING)
     setWindowEpoch((epoch) => epoch + 1)
   }, [interactive, visible])
 
@@ -124,11 +136,11 @@ export function MountedBottomDrawer({
     if (visible) {
       translateY.value = 0
       scrollOffsetY.value = 0
-      progress.value = withTiming(1, { duration: BOTTOM_DRAWER_SHOW_DURATION_MS })
+      progress.value = withTiming(1, SHOW_TIMING)
     } else {
       Keyboard.dismiss()
       setKeyboardInset(0)
-      progress.value = withTiming(0, { duration: BOTTOM_DRAWER_HIDE_DURATION_MS }, (finished) => {
+      progress.value = withTiming(0, HIDE_TIMING, (finished) => {
         if (finished) {
           runOnJS(onHidden)()
         }
@@ -198,7 +210,7 @@ export function MountedBottomDrawer({
       return
     }
     Keyboard.dismiss()
-    progress.value = withTiming(0, { duration: BOTTOM_DRAWER_HIDE_DURATION_MS }, (finished) => {
+    progress.value = withTiming(0, HIDE_TIMING, (finished) => {
       if (finished) {
         runOnJS(onClose)()
       }
@@ -306,13 +318,18 @@ export function MountedBottomDrawer({
       transform: [
         {
           translateY:
-            interpolate(progress.value, [0, 1], [screenHeight, 0], Extrapolation.CLAMP) +
+            interpolate(
+              progress.value,
+              [0, 1],
+              [Math.min(sheetHeight.value + OFFSCREEN_MARGIN, screenHeight), 0],
+              Extrapolation.CLAMP
+            ) +
             translateY.value -
             keyboardShift
         }
       ]
     }
-  }, [progress, translateY, keyboardOffset, screenHeight, fillAvailable])
+  }, [progress, translateY, keyboardOffset, screenHeight, fillAvailable, sheetHeight])
 
   const backdropStyle = useAnimatedStyle(() => {
     const dragFade = interpolate(translateY.value, [0, 300], [1, 0], Extrapolation.CLAMP)
@@ -337,44 +354,46 @@ export function MountedBottomDrawer({
     </GestureDetector>
   )
 
-  const body = !contentScrollable ? (
-    <>
-      {handle}
-      <View style={[styles.staticContent, fillAvailable && styles.staticContentFill]}>
-        {children}
-      </View>
-    </>
+  const content = !contentScrollable ? (
+    <View style={[styles.staticContent, fillAvailable && styles.staticContentFill]}>
+      {children}
+    </View>
   ) : dragContentToDismiss ? (
-    <>
-      {handle}
-      <GestureDetector gesture={contentPanGesture}>
-        <Animated.View collapsable={false} style={styles.scrollFrame}>
-          <GestureDetector gesture={scrollGesture}>
-            <Animated.ScrollView
-              ref={scrollRef}
-              bounces={false}
-              keyboardShouldPersistTaps="handled"
-              onScroll={scrollHandler}
-              scrollEventThrottle={16}
-              showsVerticalScrollIndicator={false}
-            >
-              {children}
-            </Animated.ScrollView>
-          </GestureDetector>
-        </Animated.View>
-      </GestureDetector>
-    </>
+    <GestureDetector gesture={contentPanGesture}>
+      <Animated.View collapsable={false} style={styles.scrollFrame}>
+        <GestureDetector gesture={scrollGesture}>
+          <Animated.ScrollView
+            ref={scrollRef}
+            bounces={false}
+            keyboardShouldPersistTaps="handled"
+            onScroll={scrollHandler}
+            scrollEventThrottle={16}
+            showsVerticalScrollIndicator={false}
+          >
+            {children}
+          </Animated.ScrollView>
+        </GestureDetector>
+      </Animated.View>
+    </GestureDetector>
   ) : (
+    <ScrollView
+      ref={scrollRef}
+      bounces={false}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
+    >
+      {children}
+    </ScrollView>
+  )
+
+  // Content-sized sheets ease to their new height when what they show changes; fill sheets have
+  // a fixed height already.
+  const contentCap =
+    screenHeight - insets.top - spacing.lg - (insets.bottom + spacing.lg) - HANDLE_AREA_HEIGHT
+  const body = (
     <>
       {handle}
-      <ScrollView
-        ref={scrollRef}
-        bounces={false}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        {children}
-      </ScrollView>
+      {fillAvailable ? content : <AutoHeight maxHeight={contentCap}>{content}</AutoHeight>}
     </>
   )
 
@@ -425,6 +444,9 @@ export function MountedBottomDrawer({
               },
               drawerStyle
             ]}
+            onLayout={(event) => {
+              sheetHeight.value = event.nativeEvent.layout.height
+            }}
           >
             {body}
             <View style={styles.bottomExtension} />

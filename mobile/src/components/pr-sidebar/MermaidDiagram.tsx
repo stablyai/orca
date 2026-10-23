@@ -107,8 +107,8 @@ function MermaidFrame({ children }: { children: ReactNode }) {
 const styles = StyleSheet.create({
   frame: {
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.row,
+    borderColor: colors.separator,
+    borderRadius: radii.composerItem,
     marginBottom: spacing.sm,
     overflow: 'hidden',
     backgroundColor: colors.bgRaised
@@ -117,12 +117,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: 2,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle,
+    borderBottomColor: colors.separator,
     backgroundColor: colors.bgPanel
   },
   labelText: {
     color: colors.textSecondary,
-    fontSize: 11,
+    fontSize: 12,
+    lineHeight: 16,
     fontFamily: typography.monoFamily
   },
   host: { padding: spacing.sm },

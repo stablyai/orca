@@ -1,45 +1,30 @@
-import type { ComponentType } from 'react'
-import { Pressable } from 'react-native'
-import { colors } from '../theme/mobile-theme'
-import { styles } from './mobile-session-styles'
-
-type HeaderIconProps = {
-  size?: number
-  color?: string
-  strokeWidth?: number
-}
+import type { LucideIcon } from 'lucide-react-native'
+import { IconButton } from '../components/ui/IconButton'
 
 type MobileSessionHeaderIconButtonProps = {
   active?: boolean
   disabled?: boolean
   accessibilityLabel: string
-  icon: ComponentType<HeaderIconProps>
+  icon: LucideIcon
   onPress: () => void
 }
 
-// Why: every header and tab-strip button shares this one look and a 44pt touch area (36pt + 4pt slop each side).
+/** A session bar action: the shared 44 pt icon button, marked selected while its panel is docked. */
 export function MobileSessionHeaderIconButton({
   active = false,
   disabled = false,
   accessibilityLabel,
-  icon: Icon,
+  icon,
   onPress
 }: MobileSessionHeaderIconButtonProps) {
   return (
-    <Pressable
-      style={({ pressed }) => [
-        styles.headerButton,
-        pressed && styles.headerButtonPressed,
-        active && styles.headerButtonActive,
-        disabled && styles.headerButtonDisabled
-      ]}
-      disabled={disabled}
-      onPress={onPress}
-      hitSlop={4}
-      accessibilityRole="button"
+    <IconButton
+      icon={icon}
       accessibilityLabel={accessibilityLabel}
-    >
-      <Icon size={18} color={colors.textSecondary} strokeWidth={2.1} />
-    </Pressable>
+      onPress={onPress}
+      disabled={disabled}
+      selected={active}
+      iconSize={20}
+    />
   )
 }

@@ -2,6 +2,7 @@ import { useCallback } from 'react'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../src/shared/sidebar-inputs-switch'
 import type { useRouter } from 'expo-router'
 import { floatingWorkspaceSessionPath } from '../session/floating-workspace'
+import { triggerError } from '../platform/haptics'
 import { savePinnedIds } from '../storage/preferences'
 import type { useForgetHostClient } from '../transport/host-client-hooks'
 import { removeHostAndCloseClient } from '../transport/host-removal-lifecycle'
@@ -163,10 +164,22 @@ export function useHostWorktreeActions(args: {
       if (!client) {
         return
       }
-      setSleptIds((prev) => new Set(prev).add(getWorktreeRowIdentity(item)))
-      void worktreeSleep.request(client, { worktree: `id:${item.worktreeId}` }).catch(() => null)
+      const identity = getWorktreeRowIdentity(item)
+      setSleptIds((prev) => new Set(prev).add(identity))
+      void worktreeSleep.request(client, { worktree: `id:${item.worktreeId}` }).catch(() => {
+        // The row comes back, and the banner says why, rather than a sleep that silently never was.
+        setSleptIds((prev) => {
+          const next = new Set(prev)
+          next.delete(identity)
+          return next
+        })
+        setActionError(
+          `Couldn\u2019t put \u201c${item.displayName || item.repo}\u201d to sleep. Try again.`
+        )
+        triggerError()
+      })
     },
-    [client, setSleptIds]
+    [client, setActionError, setSleptIds]
   )
 
   const handleDeleteWorktree = useCallback(
@@ -179,6 +192,14 @@ export function useHostWorktreeActions(args: {
       const removeFromList = (list: Worktree[]) => removeWorktreeRow(list, item)
       setWorktrees(removeFromList)
       setLastKnownWorktrees(removeFromList)
+      const restore = () => {
+        setWorktrees((prev) => [...prev, item])
+        setLastKnownWorktrees((prev) => [...prev, item])
+        setActionError(
+          `Couldn\u2019t delete \u201c${item.displayName || item.repo}\u201d. Try again.`
+        )
+        triggerError()
+      }
 
       try {
         const reply = await worktreeRemove.request(rowClient, {
@@ -186,16 +207,14 @@ export function useHostWorktreeActions(args: {
           force: true
         })
         if (!worktreeRemove.interpret(reply).accepted) {
-          setWorktrees((prev) => [...prev, item])
-          setLastKnownWorktrees((prev) => [...prev, item])
+          restore()
         }
         void fetchWorktrees()
       } catch {
-        setWorktrees((prev) => [...prev, item])
-        setLastKnownWorktrees((prev) => [...prev, item])
+        restore()
       }
     },
-    [clientForRow, fetchWorktrees]
+    [clientForRow, fetchWorktrees, setActionError]
   )
 
   const handleRemoveHost = useCallback(async () => {
@@ -256,7 +275,11 @@ export function useHostWorktreeActions(args: {
       if (!ORCA_SIDEBAR_INPUTS_IS_MAIN) {
         setOptimisticActiveWorktreeIdentity(getWorktreeRowIdentity(item))
       } else if (hostId) {
-        noteLastVisitedWorktree({ hostId, worktreeId: item.worktreeId, executionHost: routeHost })
+        noteLastVisitedWorktree({
+          hostId,
+          worktreeId: item.worktreeId,
+          executionHost: routeHost
+        })
       }
       const rowClient = clientForRow(item)
       if (rowClient && connState === 'connected') {

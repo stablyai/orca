@@ -1,7 +1,8 @@
-import { SectionList, Text, View } from 'react-native'
+import { SectionList, View } from 'react-native'
 import {
   BranchCompareHeader,
   BranchFileRow,
+  ChangesSectionHeader,
   makeRenderFileRow
 } from './MobileSourceControlFileRows'
 import type {
@@ -34,7 +35,14 @@ export type FileListState = Pick<
   | 'openBranchDiff'
   | 'runGitAction'
   | 'setDiscardTarget'
->
+  | 'stageAll'
+  | 'unstageAll'
+> & {
+  canStageAll: boolean
+  canUnstageAll: boolean
+  /** Room under the last row for the commit bar floating over the list. */
+  bottomInset: number
+}
 
 export function MobileSourceControlFileList({ state }: { state: FileListState }) {
   const sections: FileSection[] = state.sections.map((section) => ({
@@ -44,7 +52,7 @@ export function MobileSourceControlFileList({ state }: { state: FileListState })
   if (state.shouldShowBranchCompareSection) {
     sections.push({
       key: 'committed',
-      title: 'Committed on Branch',
+      title: 'Committed on branch',
       data:
         state.branchCompareState.kind === 'ready' &&
         state.branchCompareResult?.summary.status === 'ready'
@@ -52,6 +60,10 @@ export function MobileSourceControlFileList({ state }: { state: FileListState })
           : []
     })
   }
+  // Stage all sits on the first unstaged section; a capped listing may hide those, so fall back.
+  const stageAllKey =
+    sections.find((section) => section.key !== 'staged' && section.key !== 'committed')?.key ??
+    (state.canStageAll ? 'staged' : null)
   const renderFileRow = makeRenderFileRow(state)
   return (
     <SectionList<FileEntry, FileSection>
@@ -67,18 +79,29 @@ export function MobileSourceControlFileList({ state }: { state: FileListState })
       keyExtractor={(item) =>
         `${isWorkingTreeEntry(item) ? item.area : 'committed'}:${item.path}:${item.oldPath ?? ''}`
       }
-      renderSectionHeader={({ section }) =>
-        section.key === 'committed' ? (
-          <BranchCompareHeader state={state} />
+      ItemSeparatorComponent={RowSeparator}
+      renderSectionHeader={({ section }) => {
+        // The branch block sits above the list, so even the first section keeps its full top space.
+        const first = false
+        return section.key === 'committed' ? (
+          <BranchCompareHeader state={state} first={first} />
         ) : (
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>{section.title}</Text>
-            <Text style={styles.sectionCount}>{section.data.length}</Text>
-          </View>
+          <ChangesSectionHeader
+            title={section.title}
+            count={section.data.length}
+            showStageAll={section.key === stageAllKey}
+            showUnstageAll={section.key === 'staged'}
+            first={first}
+            state={state}
+          />
         )
-      }
+      }}
       stickySectionHeadersEnabled={false}
-      contentContainerStyle={styles.listContent}
+      contentContainerStyle={{ paddingBottom: state.bottomInset }}
     />
   )
+}
+
+function RowSeparator() {
+  return <View style={styles.rowSeparator} />
 }

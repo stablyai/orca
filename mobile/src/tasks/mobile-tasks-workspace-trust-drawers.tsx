@@ -7,11 +7,15 @@ import {
   colors,
   Pressable,
   ActivityIndicator,
-  Check,
-  X
+  StyleSheet,
+  spacing,
+  textStyles
 } from './mobile-tasks-dependencies'
 import { TASK_SECONDARY_DRAWER_Z_INDEX, setupSourceLabel } from './mobile-tasks-legacy-foundation'
 import { styles } from './mobile-tasks-legacy-styles'
+import { Button } from '../components/ui/Button'
+import { PickerSheetTitle } from '../components/PickerModal'
+import { sheetStyles } from './mobile-tasks-sheet-chrome'
 
 export function renderMobileTasksWorkspaceSparseDrawer(model: ConnectionPresentationModel) {
   const {
@@ -62,7 +66,10 @@ export function renderMobileTasksWorkspaceSparseDrawer(model: ConnectionPresenta
                 style={[styles.input, styles.bodyInput, styles.monoInput]}
                 value={workspaceSparseDraft.directoriesText}
                 onChangeText={(directoriesText) =>
-                  setWorkspaceSparseDraft({ ...workspaceSparseDraft, directoriesText })
+                  setWorkspaceSparseDraft({
+                    ...workspaceSparseDraft,
+                    directoriesText
+                  })
                 }
                 placeholder={'src/renderer\npackages/ui'}
                 placeholderTextColor={colors.textMuted}
@@ -107,8 +114,37 @@ export function renderMobileTasksWorkspaceSparseDrawer(model: ConnectionPresenta
   )
 }
 
+/** The script the prompt is about, in a quiet panel with its source above it. */
+function SetupScriptPanel({ label, script }: { label: string; script: string }) {
+  return (
+    <View style={styles.setupPromptBox}>
+      <Text style={styles.detailSectionTitle}>{label}</Text>
+      <Text style={styles.setupPromptCommand} selectable>
+        {script}
+      </Text>
+    </View>
+  )
+}
+
 export function renderMobileTasksSetupTrustDrawer(model: ConnectionPresentationModel) {
   const { createWorkspace, creatingKey, setSetupPrompt, setupPrompt, taskUiReady } = model
+  const create = (decision: 'run' | 'skip') => {
+    if (!setupPrompt) {
+      return
+    }
+    void createWorkspace(
+      setupPrompt.item,
+      setupPrompt.repoIdOverride,
+      decision,
+      setupPrompt.agentOverride,
+      setupPrompt.workspaceNameOverride,
+      setupPrompt.noteOverride,
+      setupPrompt.baseBranchOverride,
+      setupPrompt.branchNameOverride,
+      setupPrompt.sparseCheckoutOverride
+    )
+  }
+  const creating = setupPrompt != null && creatingKey === setupPrompt.item.key
   return (
     <BottomDrawer
       visible={taskUiReady && setupPrompt != null}
@@ -117,64 +153,29 @@ export function renderMobileTasksSetupTrustDrawer(model: ConnectionPresentationM
     >
       {setupPrompt ? (
         <View>
-          <View style={styles.sheetHeader}>
-            <Text style={styles.sheetTitle}>Run Setup Script?</Text>
-            <Text style={styles.sheetSubtitle}>
-              {setupPrompt.repoName} requires a setup choice before creating this workspace.
-            </Text>
-          </View>
-
-          <View style={styles.setupPromptBox}>
-            <View style={styles.detailSectionHeader}>
-              <Text style={styles.detailSectionTitle}>{setupSourceLabel(setupPrompt.source)}</Text>
-            </View>
-            <Text style={styles.setupPromptCommand}>{setupPrompt.command}</Text>
-          </View>
-
-          <View style={styles.actionGroup}>
-            <Pressable
-              style={styles.actionRow}
-              disabled={creatingKey === setupPrompt.item.key}
-              onPress={() =>
-                void createWorkspace(
-                  setupPrompt.item,
-                  setupPrompt.repoIdOverride,
-                  'run',
-                  setupPrompt.agentOverride,
-                  setupPrompt.workspaceNameOverride,
-                  setupPrompt.noteOverride,
-                  setupPrompt.baseBranchOverride,
-                  setupPrompt.branchNameOverride,
-                  setupPrompt.sparseCheckoutOverride
-                )
-              }
-            >
-              <Check size={16} color={colors.textPrimary} />
-              <Text style={styles.actionText}>
-                {creatingKey === setupPrompt.item.key ? 'Creating...' : 'Run setup and create'}
-              </Text>
-            </Pressable>
-            <View style={styles.actionSeparator} />
-            <Pressable
-              style={styles.actionRow}
-              disabled={creatingKey === setupPrompt.item.key}
-              onPress={() =>
-                void createWorkspace(
-                  setupPrompt.item,
-                  setupPrompt.repoIdOverride,
-                  'skip',
-                  setupPrompt.agentOverride,
-                  setupPrompt.workspaceNameOverride,
-                  setupPrompt.noteOverride,
-                  setupPrompt.baseBranchOverride,
-                  setupPrompt.branchNameOverride,
-                  setupPrompt.sparseCheckoutOverride
-                )
-              }
-            >
-              <X size={16} color={colors.textPrimary} />
-              <Text style={styles.actionText}>Skip setup and create</Text>
-            </Pressable>
+          <PickerSheetTitle
+            title="Run the setup script?"
+            subtitle={`${setupPrompt.repoName} asks before it creates a workspace.`}
+          />
+          <SetupScriptPanel
+            label={setupSourceLabel(setupPrompt.source)}
+            script={setupPrompt.command}
+          />
+          <View style={sheetStyles.actions}>
+            <Button
+              label="Run setup and create"
+              variant="primary"
+              block
+              busy={creating}
+              onPress={() => create('run')}
+            />
+            <Button
+              label="Skip setup and create"
+              variant="plain"
+              block
+              disabled={creating}
+              onPress={() => create('skip')}
+            />
           </View>
         </View>
       ) : null}
@@ -192,6 +193,36 @@ export function renderMobileTasksOrcaYamlTrustDrawer(model: ConnectionPresentati
     setOrcaYamlTrustPrompt,
     taskUiReady
   } = model
+  const trustAndRun = (always: boolean) => {
+    if (!orcaYamlTrustPrompt) {
+      return
+    }
+    void (async () => {
+      try {
+        await persistSetupHookTrust(
+          orcaYamlTrustPrompt.repoId,
+          orcaYamlTrustPrompt.contentHash,
+          always
+        )
+        setOrcaYamlTrustPrompt(null)
+        await createWorkspace(
+          orcaYamlTrustPrompt.item,
+          orcaYamlTrustPrompt.repoIdOverride,
+          'run',
+          orcaYamlTrustPrompt.agentOverride,
+          orcaYamlTrustPrompt.workspaceNameOverride,
+          orcaYamlTrustPrompt.noteOverride,
+          orcaYamlTrustPrompt.baseBranchOverride,
+          orcaYamlTrustPrompt.branchNameOverride,
+          orcaYamlTrustPrompt.sparseCheckoutOverride,
+          orcaYamlTrustPrompt.contentHash
+        )
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to trust setup script.')
+      }
+    })()
+  }
+  const creating = orcaYamlTrustPrompt != null && creatingKey === orcaYamlTrustPrompt.item.key
   return (
     <BottomDrawer
       visible={taskUiReady && orcaYamlTrustPrompt != null}
@@ -200,99 +231,41 @@ export function renderMobileTasksOrcaYamlTrustDrawer(model: ConnectionPresentati
     >
       {orcaYamlTrustPrompt ? (
         <View>
-          <View style={styles.sheetHeader}>
-            <Text style={styles.sheetTitle}>
-              {orcaYamlTrustPrompt.previouslyApproved
+          <PickerSheetTitle
+            title={
+              orcaYamlTrustPrompt.previouslyApproved
                 ? `${orcaYamlTrustPrompt.repoName}'s setup script changed`
-                : `Run setup from ${orcaYamlTrustPrompt.repoName}?`}
-            </Text>
-            <Text style={styles.sheetSubtitle}>
-              This repository's orca.yaml runs on your machine before the workspace starts. Only run
-              it if you trust this repository.
-            </Text>
-          </View>
-
-          <View style={styles.setupPromptBox}>
-            <View style={styles.detailSectionHeader}>
-              <Text style={styles.detailSectionTitle}>
-                {orcaYamlTrustPrompt.previouslyApproved ? 'New setup script' : 'Setup script'}
-              </Text>
-            </View>
-            <Text style={styles.setupPromptCommand}>{orcaYamlTrustPrompt.scriptContent}</Text>
-          </View>
-
-          <View style={styles.actionGroup}>
-            <Pressable
-              style={styles.actionRow}
-              disabled={creatingKey === orcaYamlTrustPrompt.item.key}
-              onPress={() =>
-                void (async () => {
-                  try {
-                    await persistSetupHookTrust(
-                      orcaYamlTrustPrompt.repoId,
-                      orcaYamlTrustPrompt.contentHash,
-                      false
-                    )
-                    setOrcaYamlTrustPrompt(null)
-                    await createWorkspace(
-                      orcaYamlTrustPrompt.item,
-                      orcaYamlTrustPrompt.repoIdOverride,
-                      'run',
-                      orcaYamlTrustPrompt.agentOverride,
-                      orcaYamlTrustPrompt.workspaceNameOverride,
-                      orcaYamlTrustPrompt.noteOverride,
-                      orcaYamlTrustPrompt.baseBranchOverride,
-                      orcaYamlTrustPrompt.branchNameOverride,
-                      orcaYamlTrustPrompt.sparseCheckoutOverride,
-                      orcaYamlTrustPrompt.contentHash
-                    )
-                  } catch (err) {
-                    setError(err instanceof Error ? err.message : 'Failed to trust setup script.')
-                  }
-                })()
-              }
-            >
-              <Check size={16} color={colors.textPrimary} />
-              <Text style={styles.actionText}>Run hooks</Text>
-            </Pressable>
-            <View style={styles.actionSeparator} />
-            <Pressable
-              style={styles.actionRow}
-              disabled={creatingKey === orcaYamlTrustPrompt.item.key}
-              onPress={() =>
-                void (async () => {
-                  try {
-                    await persistSetupHookTrust(
-                      orcaYamlTrustPrompt.repoId,
-                      orcaYamlTrustPrompt.contentHash,
-                      true
-                    )
-                    setOrcaYamlTrustPrompt(null)
-                    await createWorkspace(
-                      orcaYamlTrustPrompt.item,
-                      orcaYamlTrustPrompt.repoIdOverride,
-                      'run',
-                      orcaYamlTrustPrompt.agentOverride,
-                      orcaYamlTrustPrompt.workspaceNameOverride,
-                      orcaYamlTrustPrompt.noteOverride,
-                      orcaYamlTrustPrompt.baseBranchOverride,
-                      orcaYamlTrustPrompt.branchNameOverride,
-                      orcaYamlTrustPrompt.sparseCheckoutOverride,
-                      orcaYamlTrustPrompt.contentHash
-                    )
-                  } catch (err) {
-                    setError(err instanceof Error ? err.message : 'Failed to trust setup script.')
-                  }
-                })()
-              }
-            >
-              <Check size={16} color={colors.textPrimary} />
-              <Text style={styles.actionText}>Always trust and run</Text>
-            </Pressable>
-            <View style={styles.actionSeparator} />
-            <Pressable
-              style={styles.actionRow}
-              disabled={creatingKey === orcaYamlTrustPrompt.item.key}
+                : `Run setup from ${orcaYamlTrustPrompt.repoName}?`
+            }
+          />
+          <Text style={trustStyles.message}>
+            This repository's orca.yaml runs on your desktop before the workspace starts. Only run
+            it if you trust this repository.
+          </Text>
+          <SetupScriptPanel
+            label={orcaYamlTrustPrompt.previouslyApproved ? 'New setup script' : 'Setup script'}
+            script={orcaYamlTrustPrompt.scriptContent}
+          />
+          <View style={sheetStyles.actions}>
+            <Button
+              label="Run once"
+              variant="primary"
+              block
+              busy={creating}
+              accessibilityLabel="Run hooks once"
+              onPress={() => trustAndRun(false)}
+            />
+            <Button
+              label="Always trust and run"
+              block
+              disabled={creating}
+              onPress={() => trustAndRun(true)}
+            />
+            <Button
+              label="Don't run"
+              variant="plain"
+              block
+              disabled={creating}
               onPress={() => {
                 const prompt = orcaYamlTrustPrompt
                 setOrcaYamlTrustPrompt(null)
@@ -308,13 +281,19 @@ export function renderMobileTasksOrcaYamlTrustDrawer(model: ConnectionPresentati
                   prompt.sparseCheckoutOverride
                 )
               }}
-            >
-              <X size={16} color={colors.textPrimary} />
-              <Text style={styles.actionText}>Don't run</Text>
-            </Pressable>
+            />
           </View>
         </View>
       ) : null}
     </BottomDrawer>
   )
 }
+
+const trustStyles = StyleSheet.create({
+  message: {
+    ...textStyles.callout,
+    color: colors.textSecondary,
+    paddingHorizontal: spacing.lg - 4,
+    marginBottom: spacing.lg
+  }
+})

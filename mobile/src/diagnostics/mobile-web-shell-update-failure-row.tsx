@@ -55,7 +55,7 @@ export function MobileWebShellUpdateFailureRow() {
     <View testID="mobile-web-shell-update-failures">
       <Text style={styles.sectionHeading}>Workspace updates</Text>
       <View style={styles.section}>
-        <View style={styles.accordionBody}>
+        <View style={styles.noteBody}>
           {lines.map((line) => (
             <Text
               key={line.hostId}

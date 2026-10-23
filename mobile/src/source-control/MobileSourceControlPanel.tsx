@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, Pressable, Text, View } from 'react-native'
+import { View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { colors } from '../theme/mobile-theme'
+import { GitBranch } from 'lucide-react-native'
+import { StateView } from '../components/ui/StateView'
 import { connectionRetryAction } from '../transport/connection-retry-action'
 import { useMobileSourceControlState } from './use-mobile-source-control-state'
 import { useMobileSourceControlActionSheet } from './use-mobile-source-control-action-sheet'
@@ -239,6 +240,7 @@ export function MobileSourceControlPanel({
       onRefresh={onRefresh}
       onOpenPrWeb={prWebUrl ? () => openMobilePrUrl(prWebUrl) : undefined}
       prNumber={prWebNumber}
+      onOpenActions={activeTab === 'pr' ? undefined : () => state.setShowActionSheet(true)}
     />
   )
 
@@ -251,21 +253,22 @@ export function MobileSourceControlPanel({
   })
   const statusGate =
     screenState.kind === 'loading' ? (
-      <View style={styles.state}>
-        <ActivityIndicator size="small" color={colors.textSecondary} />
-      </View>
+      <StateView loading title="Loading source control…" />
     ) : screenState.kind === 'error' || screenState.kind === 'unavailable' ? (
-      <View style={styles.state}>
-        <Text style={styles.stateTitle}>
-          {screenState.kind === 'unavailable' ? 'Source Control Unavailable' : 'Unable to Load'}
-        </Text>
-        <Text style={styles.stateText}>{screenState.message}</Text>
-        {screenState.kind === 'error' && statusRetry ? (
-          <Pressable style={styles.retryButton} onPress={statusRetry}>
-            <Text style={styles.retryText}>Retry</Text>
-          </Pressable>
-        ) : null}
-      </View>
+      <StateView
+        icon={GitBranch}
+        title={
+          screenState.kind === 'unavailable'
+            ? 'Source control unavailable'
+            : 'Couldn’t load source control'
+        }
+        message={screenState.message}
+        primary={
+          screenState.kind === 'error' && statusRetry
+            ? { label: 'Retry', onPress: statusRetry }
+            : undefined
+        }
+      />
     ) : null
 
   // History only needs the RPC client, so it isn't gated on git.status; Changes/PR need status (branch, files, head).

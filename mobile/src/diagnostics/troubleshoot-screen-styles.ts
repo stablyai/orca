@@ -1,134 +1,77 @@
 import { StyleSheet } from 'react-native'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { colors, radii, spacing, textStyles } from '../theme/mobile-theme'
+import { LIST_ROW_PADDING } from '../components/ui/ListGroup'
 
 export const troubleshootScreenStyles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bgBase,
-    padding: spacing.lg
-  },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.lg
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.sm
-  },
-  heading: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.textPrimary
-  },
-  scroll: {
-    flex: 1
-  },
-  scrollContent: {
-    paddingBottom: spacing.xl
-  },
-  diagnosticButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.bgRaised,
-    borderRadius: 10,
-    paddingVertical: spacing.md,
+  actions: {
     paddingHorizontal: spacing.lg,
-    marginBottom: spacing.lg
+    paddingTop: spacing.sm
   },
-  diagnosticButtonPressed: {
-    opacity: 0.7
-  },
-  diagnosticButtonDisabled: {
-    opacity: 0.5
-  },
-  diagnosticButtonLabel: {
-    fontSize: typography.bodySize,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  checkRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.sm + 2,
-    paddingHorizontal: spacing.md + 2
-  },
-  checkLabel: {
-    fontSize: typography.bodySize,
-    fontWeight: '500',
-    color: colors.textPrimary
-  },
-  checkDetail: {
-    flex: 1,
-    textAlign: 'right',
-    fontSize: typography.metaSize,
-    color: colors.textMuted
-  },
-  checkDetailFail: {
-    color: colors.statusRed
-  },
-  sectionHeading: {
-    fontSize: typography.metaSize,
-    fontWeight: '600',
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: spacing.sm,
-    marginTop: spacing.sm,
-    paddingHorizontal: spacing.xs
-  },
+  results: { marginTop: spacing.md },
+  developer: { marginTop: spacing.sm },
+  // The same inset group ListGroup draws, for rows the diagnostics build by hand.
   section: {
+    marginHorizontal: spacing.lg,
+    borderRadius: radii.group,
     backgroundColor: colors.bgPanel,
-    borderRadius: 12,
-    overflow: 'hidden',
-    marginBottom: spacing.lg
+    overflow: 'hidden'
   },
   separator: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
+    backgroundColor: colors.separator,
+    marginLeft: LIST_ROW_PADDING
   },
-  rowPressed: {
-    backgroundColor: colors.bgRaised
+  iconSeparator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.separator,
+    marginLeft: LIST_ROW_PADDING + 28 + spacing.md
   },
-  accordionHeader: {
+  sectionHeading: {
+    ...textStyles.footnote,
+    fontWeight: '500',
+    color: colors.textMuted,
+    paddingHorizontal: spacing.lg + 4,
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.sm
+  },
+  checkRow: {
+    minHeight: 52,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+    paddingHorizontal: LIST_ROW_PADDING,
+    paddingVertical: 14
+  },
+  checkIcon: { width: 28, alignItems: 'center', paddingTop: 2 },
+  checkMain: { flex: 1, minWidth: 0, gap: 2 },
+  checkLabel: { ...textStyles.body, fontWeight: '500', color: colors.textPrimary },
+  checkDetail: { ...textStyles.subhead, color: colors.textSecondary },
+  checkDetailFail: { color: colors.danger },
+  disclosureRow: {
+    minHeight: 52,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm + 2,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2
+    gap: spacing.md,
+    paddingHorizontal: LIST_ROW_PADDING,
+    paddingVertical: 10
   },
-  accordionTitle: {
-    flex: 1,
-    fontSize: typography.bodySize,
-    fontWeight: '500',
-    color: colors.textPrimary
-  },
-  accordionBody: {
-    paddingHorizontal: spacing.md + 2,
-    paddingBottom: spacing.md,
-    gap: spacing.xs + 2
-  },
-  stepRow: {
-    flexDirection: 'row',
+  rowPressed: { backgroundColor: colors.fill },
+  disclosureIcon: { width: 28, alignItems: 'center' },
+  disclosureTitle: { ...textStyles.body, flex: 1, minWidth: 0, color: colors.textPrimary },
+  chevronCollapsed: { transform: [{ rotate: '0deg' }] },
+  chevronExpanded: { transform: [{ rotate: '180deg' }] },
+  disclosureBody: {
+    paddingLeft: LIST_ROW_PADDING + 28 + spacing.md,
+    paddingRight: LIST_ROW_PADDING,
+    paddingBottom: spacing.lg,
     gap: spacing.sm
   },
-  bullet: {
-    fontSize: typography.metaSize,
-    color: colors.textMuted,
-    lineHeight: 18
-  },
-  stepText: {
-    flex: 1,
-    fontSize: typography.metaSize,
-    color: colors.textMuted,
-    lineHeight: 18
+  stepRow: { flexDirection: 'row', gap: spacing.sm },
+  bullet: { ...textStyles.subhead, color: colors.textMuted },
+  stepText: { ...textStyles.subhead, flex: 1, color: colors.textSecondary },
+  noteBody: {
+    paddingHorizontal: LIST_ROW_PADDING,
+    paddingVertical: 14,
+    gap: spacing.sm
   }
 })

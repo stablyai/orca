@@ -160,20 +160,22 @@ export function useMobileTasksWorkspaceCreateProjection(model: ProjectMetadataLo
       ...agents.map((agent) => ({
         value: agent,
         label: workspaceAgentLabel(agent),
-        subtitle: agent,
         renderIcon: () => <MobileAgentIcon agentId={workspaceAgentIconId(agent)} size={18} />
       })),
       {
         value: 'blank' as const,
         label: workspaceAgentLabel('blank'),
-        subtitle: 'Open a shell',
+        subtitle: 'Opens a terminal with no agent',
         renderIcon: () => <MobileAgentIcon agentId="__blank__" size={18} />
       }
     ]
   }, [runtimeTaskSettings.disabledTuiAgents, workspaceAgent, workspaceDetectedAgentIds])
   const openWorkspaceCreate = useCallback((item: ActionableTaskItem, repoIdOverride?: string) => {
     const suggestedName = taskWorkspaceSuggestedName(item)
-    setWorkspaceCreateDraft({ item, ...(repoIdOverride ? { repoIdOverride } : {}) })
+    setWorkspaceCreateDraft({
+      item,
+      ...(repoIdOverride ? { repoIdOverride } : {})
+    })
     setWorkspaceNameDraft(suggestedName)
     setWorkspaceLastAutoName(suggestedName)
     setWorkspaceBranchAutoName('')

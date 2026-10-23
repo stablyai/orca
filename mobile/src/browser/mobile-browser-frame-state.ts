@@ -1,6 +1,5 @@
 import type { GestureResponderEvent } from 'react-native'
 import type { BrowserScreencastFrameMetadata } from '../transport/browser-screencast-protocol'
-import { colors } from '../theme/mobile-theme'
 import {
   clampBrowserZoomState,
   readLocalTouchPoint,
@@ -25,10 +24,6 @@ export const MIN_ZOOM = 1
 export const MAX_ZOOM = 3.5
 const BROWSER_FRAME_CACHE_LIMIT = 4
 const browserFrameCache = new Map<string, BrowserFrameCacheEntry>()
-
-export function buttonColor(enabled: boolean): string {
-  return enabled ? colors.textSecondary : colors.textMuted
-}
 
 export function makeBrowserFrameCacheKey(
   worktreeId: string,

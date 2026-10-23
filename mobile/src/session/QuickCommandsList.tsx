@@ -1,7 +1,13 @@
-import { View, Text, Pressable, TextInput, StyleSheet, ActivityIndicator } from 'react-native'
-import { Check, Plus, Search } from 'lucide-react-native'
+import { View, StyleSheet } from 'react-native'
+import { Plus, Search, SquareChevronRight } from 'lucide-react-native'
 import { colors, spacing } from '../theme/mobile-theme'
-import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
+import { triggerSelection } from '../platform/haptics'
+import { MobileSearchField } from '../components/MobileSearchField'
+import { Banner } from '../components/ui/Banner'
+import { ListGroup, LIST_LEADING_INSET } from '../components/ui/ListGroup'
+import { ListRow } from '../components/ui/ListRow'
+import { SectionHeader } from '../components/ui/SectionHeader'
+import { StateView } from '../components/ui/StateView'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
 import { MOBILE_AGENT_CATALOG } from '../tasks/mobile-agent-catalog'
 import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
@@ -55,34 +61,37 @@ export function QuickCommandsList({
     <View style={styles.listBody}>
       {showSearch ? (
         <View style={styles.search}>
-          <Search size={16} color={colors.textMuted} />
-          <TextInput
-            style={styles.searchInput}
+          <MobileSearchField
             value={query}
-            onChangeText={onQueryChange}
-            placeholder="Search quick commands..."
-            placeholderTextColor={colors.textMuted}
-            autoCapitalize="none"
-            autoCorrect={false}
             // Why: bound pasted text before it reaches the per-keystroke JS
             // search path; useful queries are far smaller than this budget.
-            maxLength={QUICK_COMMAND_SEARCH_QUERY_MAX_LENGTH}
+            onChangeText={(text) =>
+              onQueryChange(text.slice(0, QUICK_COMMAND_SEARCH_QUERY_MAX_LENGTH))
+            }
+            onClear={() => onQueryChange('')}
+            placeholder="Search quick commands"
           />
         </View>
       ) : null}
 
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-
-      {loading && !hasVisible ? (
-        <ActivityIndicator style={styles.loading} color={colors.textSecondary} />
+      {error ? (
+        <View style={styles.notice}>
+          <Banner tone="error" message={error} />
+        </View>
       ) : null}
 
+      {loading && !hasVisible ? <StateView loading title="Loading quick commands…" /> : null}
+
       {!loading && totalCount === 0 ? (
-        <Text style={styles.empty}>No quick commands yet.</Text>
+        <StateView
+          icon={SquareChevronRight}
+          title="No quick commands yet"
+          message="Save a terminal command or an agent prompt to run it in one tap."
+        />
       ) : null}
 
       {!loading && totalCount > 0 && !hasVisible ? (
-        <Text style={styles.empty}>No matching quick commands.</Text>
+        <StateView icon={Search} title="No matches" message="Try a different search." />
       ) : null}
 
       {repoCommands.length > 0 ? (
@@ -93,6 +102,7 @@ export function QuickCommandsList({
           onEdit={onEdit}
           onDelete={onDelete}
           disabled={disabled}
+          first
         />
       ) : null}
 
@@ -104,24 +114,18 @@ export function QuickCommandsList({
           onEdit={onEdit}
           onDelete={onDelete}
           disabled={disabled}
+          first={repoCommands.length === 0}
         />
       ) : null}
 
-      <Pressable
-        style={({ pressed }) => [
-          styles.addRow,
-          addDisabled && styles.disabled,
-          pressed && !addDisabled && styles.pressed
-        ]}
-        disabled={addDisabled}
-        onPress={onAdd}
-        accessibilityRole="button"
-      >
-        <Plus size={18} color={colors.textSecondary} />
-        <Text style={styles.addText}>
-          {canAdd ? 'New quick command' : 'Quick command limit reached'}
-        </Text>
-      </Pressable>
+      <ListGroup style={[styles.group, styles.addGroup]}>
+        <ListRow
+          title={canAdd ? 'New quick command' : 'Quick command limit reached'}
+          leading={<Plus size={20} color={colors.textPrimary} strokeWidth={2.2} />}
+          disabled={addDisabled}
+          onPress={onAdd}
+        />
+      </ListGroup>
     </View>
   )
 }
@@ -132,7 +136,8 @@ function QuickCommandGroup({
   onLaunch,
   onEdit,
   onDelete,
-  disabled
+  disabled,
+  first
 }: {
   label: string
   commands: TerminalQuickCommand[]
@@ -140,23 +145,23 @@ function QuickCommandGroup({
   onEdit: (command: TerminalQuickCommand) => void
   onDelete: (command: TerminalQuickCommand) => void
   disabled: boolean
+  first: boolean
 }) {
   return (
     <View>
-      <Text style={styles.groupLabel}>{label}</Text>
-      <View style={styles.group}>
-        {commands.map((command, index) => (
+      <SectionHeader title={label} count={commands.length} first={first} />
+      <ListGroup separatorInset={LIST_LEADING_INSET} style={styles.group}>
+        {commands.map((command) => (
           <QuickCommandRow
             key={command.id}
             command={command}
-            first={index === 0}
             onLaunch={onLaunch}
             onEdit={onEdit}
             onDelete={onDelete}
             disabled={disabled}
           />
         ))}
-      </View>
+      </ListGroup>
     </View>
   )
 }
@@ -169,88 +174,29 @@ export function QuickCommandAgentPicker({
   onSelect: (agent: TuiAgent) => void
 }) {
   return (
-    <View style={styles.group}>
-      {QUICK_COMMAND_SUPPORTED_AGENTS.map((agent, index) => (
-        <Pressable
+    <ListGroup separatorInset={LIST_LEADING_INSET} style={[styles.group, styles.pickerGroup]}>
+      {QUICK_COMMAND_SUPPORTED_AGENTS.map((agent) => (
+        <ListRow
           key={agent.id}
-          style={({ pressed }) => [
-            styles.row,
-            index > 0 && styles.rowBorder,
-            pressed && styles.pressed
-          ]}
-          onPress={() => onSelect(agent.id)}
-          accessibilityRole="button"
-          accessibilityState={{ selected: selected === agent.id }}
-        >
-          <View style={styles.rowIcon}>
-            <MobileAgentIcon agentId={agent.id} size={16} />
-          </View>
-          <Text style={styles.agentLabel}>{agent.label}</Text>
-          {selected === agent.id ? <Check size={16} color={colors.textPrimary} /> : null}
-        </Pressable>
+          title={agent.label}
+          leading={<MobileAgentIcon agentId={agent.id} size={20} />}
+          selected={selected === agent.id}
+          onPress={() => {
+            triggerSelection()
+            onSelect(agent.id)
+          }}
+        />
       ))}
-    </View>
+    </ListGroup>
   )
 }
 
 const styles = StyleSheet.create({
-  pressed: { backgroundColor: colors.bgRaised },
-  disabled: { opacity: 0.45 },
-  listBody: { gap: spacing.sm, paddingBottom: spacing.sm },
-  search: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.bgPanel,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm
-  },
-  searchInput: { flex: 1, color: colors.textPrimary, fontSize: TEXT_INPUT_FONT_SIZE, padding: 0 },
-  error: { color: colors.statusRed, fontSize: 13, paddingHorizontal: spacing.xs },
-  loading: { paddingVertical: spacing.lg },
-  empty: {
-    color: colors.textMuted,
-    fontSize: 14,
-    textAlign: 'center',
-    paddingVertical: spacing.lg
-  },
-  groupLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    paddingHorizontal: spacing.xs,
-    paddingTop: spacing.xs,
-    paddingBottom: spacing.xs
-  },
-  group: { backgroundColor: colors.bgPanel, borderRadius: 12, overflow: 'hidden' },
-  row: { flexDirection: 'row', alignItems: 'center' },
-  rowBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderSubtle },
-  rowIcon: {
-    width: 26,
-    height: 26,
-    borderRadius: 6,
-    backgroundColor: colors.bgRaised,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  agentLabel: { flex: 1, fontSize: 14, color: colors.textPrimary },
-  addRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.bgPanel,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: colors.borderSubtle,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
-    marginTop: spacing.xs
-  },
-  addText: { fontSize: 14, fontWeight: '600', color: colors.textPrimary }
+  listBody: { paddingBottom: spacing.sm },
+  // Why: the sheet already pads 12; these add 4 so rows sit 16 from the sheet edge.
+  search: { paddingHorizontal: spacing.xs, paddingBottom: spacing.xs },
+  notice: { marginHorizontal: -spacing.md, paddingVertical: spacing.xs },
+  group: { marginHorizontal: spacing.xs },
+  addGroup: { marginTop: spacing.lg },
+  pickerGroup: { marginTop: spacing.xs, marginBottom: spacing.sm }
 })

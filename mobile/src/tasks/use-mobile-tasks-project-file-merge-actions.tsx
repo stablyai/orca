@@ -1,5 +1,6 @@
 import type { ProjectReviewCheckActionsModel } from './use-mobile-tasks-project-review-check-actions'
 import { useCallback } from './mobile-tasks-dependencies'
+import { triggerSuccess } from '../platform/haptics'
 import {
   type DetailComment,
   type GitHubDetailFile,
@@ -210,6 +211,7 @@ export function useMobileTasksProjectFileMergeActions(model: ProjectReviewCheckA
         if (result.ok === false) {
           throw new Error(result.error ?? 'Failed to merge pull request')
         }
+        triggerSuccess()
         setProjectRowItem((current) =>
           current?.id === row.id
             ? { ...current, content: { ...current.content, state: 'MERGED' } }
@@ -221,7 +223,10 @@ export function useMobileTasksProjectFileMergeActions(model: ProjectReviewCheckA
                 ...table,
                 rows: table.rows.map((candidate) =>
                   candidate.id === row.id
-                    ? { ...candidate, content: { ...candidate.content, state: 'MERGED' } }
+                    ? {
+                        ...candidate,
+                        content: { ...candidate.content, state: 'MERGED' }
+                      }
                     : candidate
                 )
               }

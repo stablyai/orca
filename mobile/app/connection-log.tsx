@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
-import { View, Text, Pressable } from 'react-native'
+import { ScrollView } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import * as Clipboard from 'expo-clipboard'
 import { loadHosts } from '../src/transport/host-store'
@@ -18,6 +18,8 @@ import {
   resolveDiagnosticsHostId,
   type DiagnosticsHostSelection
 } from '../src/diagnostics/connection-diagnostics-screen-data'
+import { FilterChip } from '../src/components/ui/FilterChip'
+import { triggerSelection } from '../src/platform/haptics'
 import { connectionDiagnosticsScreenStyles as styles } from '../src/diagnostics/connection-diagnostics-screen-styles'
 import type { ConnectionLogEntry, HostProfile } from '../src/transport/types'
 
@@ -100,24 +102,27 @@ export default function NativeConnectionLogRoute() {
       onBack={() => router.back()}
       hostPicker={
         hosts.length > 1 ? (
-          <View style={styles.hostPicker}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.hostPicker}
+            contentContainerStyle={styles.hostPickerContent}
+          >
             {hosts.map((host) => (
-              <Pressable
+              <FilterChip
                 key={host.id}
-                style={[styles.hostChip, host.id === selectedId && styles.hostChipActive]}
-                onPress={() =>
+                label={host.name}
+                active={host.id === selectedId}
+                accessibilityLabel={`Show ${host.name}`}
+                onPress={() => {
+                  if (host.id !== selectedId) {
+                    triggerSelection()
+                  }
                   setManualSelection({ hostId: host.id, requestedHostId: params.hostId, routeKey })
-                }
-              >
-                <Text
-                  style={[styles.hostChipText, host.id === selectedId && styles.hostChipTextActive]}
-                  numberOfLines={1}
-                >
-                  {host.name}
-                </Text>
-              </Pressable>
+                }}
+              />
             ))}
-          </View>
+          </ScrollView>
         ) : null
       }
     />

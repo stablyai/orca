@@ -371,7 +371,7 @@ describeBundling('the app bundle', () => {
 })
 
 describe('the Phase C budget', () => {
-  it('reserves the font allowance only for the exact licensed symbol asset', async () => {
+  it('reserves the font allowance only for the exact licensed font assets', async () => {
     const font = hashedAsset(
       await readFile(join(projectDir, 'mobile/assets/fonts/SymbolsNerdFontMono-Regular.woff2')),
       'woff2'
@@ -393,11 +393,21 @@ describe('the Phase C budget', () => {
     ]) {
       expect(() =>
         mobileWebAppBundleBudgetBytes({ ...manifest, assets: [{ ...font, ...change }] })
-      ).toThrow(/approved hash, path, MIME type and bounded byte length/)
+      ).toThrow(/an approved hash, path, MIME type and bounded byte length/)
     }
     expect(() => mobileWebAppBundleBudgetBytes({ ...manifest, assets: [font, font] })).toThrow(
-      /only one licensed terminal font/
+      /only the licensed terminal and UI fonts/
     )
+    const uiFont = hashedAsset(
+      await readFile(join(projectDir, 'mobile/assets/fonts/Geist-Variable.woff2')),
+      'woff2'
+    )
+    expect(
+      mobileWebAppBundleBudgetBytes({
+        totalBytes: font.byteLength + uiFont.byteLength + 123,
+        assets: [font, uiFont]
+      })
+    ).toBe(123)
     expect(
       mobileWebAppBundleBudgetBytes({
         totalBytes: font.byteLength,
@@ -458,10 +468,10 @@ describe('the Phase C budget', () => {
         key
       ).toBeGreaterThanOrEqual(measured)
     }
-    // 1 to 14 per route, which is why four per route was a bound rather than a fit and why the
+    // 1 to 13 per route, which is why four per route was a bound rather than a fit and why the
     // envelope cannot be a line through the measurement either.
     expect(Math.min(...MOBILE_WEB_APP_BUNDLE_ROUTE_SCRIPT_SPREAD)).toBe(1)
-    expect(Math.max(...MOBILE_WEB_APP_BUNDLE_ROUTE_SCRIPT_SPREAD)).toBe(14)
+    expect(Math.max(...MOBILE_WEB_APP_BUNDLE_ROUTE_SCRIPT_SPREAD)).toBe(13)
   })
 
   it('sits exactly one margin over the swept tree and grants the worst route beyond it', () => {
@@ -528,13 +538,14 @@ describe('the Phase C budget', () => {
   it('fails the build when the derived ceiling passes what the phone will accept', async () => {
     // The shell hands back null for a manifest over its own ceiling, so a derived ceiling above
     // that ships a green build no device can open. At the 42 images the tree carries, the envelope
-    // plus 42 plus the document crosses 256 at 25 routes, which Phase C reaches. The crossing came
-    // in from 50 with the envelope: it grants the worst swept route to each one past the sweep,
-    // where `4r + 16` granted four, so re-measuring a tree whose routes share more moves it out.
+    // plus 42 plus the document crosses 256 at 24 routes. The crossing came in from 50 with the
+    // envelope: it grants the worst swept route to each one past the sweep, where `4r + 16` granted
+    // four, and the design-system re-measure moved it from 25 to 24; re-measuring a tree whose
+    // routes share more moves it out.
     expect(await readMobileWebBundleMaxAssets()).toBe(MOBILE_WEB_BUNDLE_MAX_ASSETS)
-    expect(assertAssetCeilingFitsShell(24, 42, MOBILE_WEB_BUNDLE_MAX_ASSETS)).toBe(250)
-    expect(() => assertAssetCeilingFitsShell(25, 42, MOBILE_WEB_BUNDLE_MAX_ASSETS)).toThrow(
-      /264 .*256/
+    expect(assertAssetCeilingFitsShell(23, 42, MOBILE_WEB_BUNDLE_MAX_ASSETS)).toBe(245)
+    expect(() => assertAssetCeilingFitsShell(24, 42, MOBILE_WEB_BUNDLE_MAX_ASSETS)).toThrow(
+      /258 .*256/
     )
   })
 })

@@ -1,4 +1,5 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
+import type { PageChromeModel } from './use-mobile-tasks-page-chrome'
 import {
   BottomDrawer,
   View,
@@ -6,14 +7,12 @@ import {
   Pressable,
   Linking,
   ExternalLink,
+  StyleSheet,
   colors,
   Copy,
-  TaskProviderLogo,
   ActivityIndicator,
-  Plus,
-  RefreshCw,
-  X,
-  GitBranch
+  spacing,
+  textStyles
 } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
 import {
@@ -22,7 +21,6 @@ import {
   SHOW_MOBILE_PROJECT_METADATA_EDITORS,
   githubProjectOptionColor,
   canCreateWorkspaceFromProjectRow,
-  projectRowType,
   TASK_SECONDARY_DRAWER_Z_INDEX
 } from './mobile-tasks-legacy-foundation'
 import { renderMobileTasksProjectFieldEditors } from './mobile-tasks-project-field-editors'
@@ -31,6 +29,17 @@ import {
   renderMobileTasksProjectAssigneesEditor
 } from './mobile-tasks-project-metadata-editors'
 import { renderMobileTasksProjectLoadedDetail } from './mobile-tasks-project-detail-content'
+import { MobileTasksDetailHeader } from './mobile-tasks-item-detail-drawer'
+import {
+  MobileTasksDetailActionBar,
+  mobileTasksProjectMenuActions
+} from './mobile-tasks-item-actions'
+import { MobileTasksSheetError, sheetStyles } from './mobile-tasks-sheet-chrome'
+import { PickerSheetTitle } from '../components/PickerModal'
+import { Button } from '../components/ui/Button'
+import { ListGroup } from '../components/ui/ListGroup'
+import { ListRow } from '../components/ui/ListRow'
+import { SectionHeader } from '../components/ui/SectionHeader'
 
 export function renderMobileTasksProjectMissingRepoDrawer(model: ConnectionPresentationModel) {
   const {
@@ -51,46 +60,41 @@ export function renderMobileTasksProjectMissingRepoDrawer(model: ConnectionPrese
     >
       {projectRepoNotInOrca ? (
         <View>
-          <View style={styles.sheetHeader}>
-            <Text style={styles.sheetTitle}>Repository not in Orca</Text>
-            <Text style={styles.sheetSubtitle}>
-              {projectRepoNotInOrca.owner}/{projectRepoNotInOrca.repo} is not added to Orca. Add
-              this repository from the desktop app, then refresh mobile Tasks.
-            </Text>
-          </View>
-
-          <View style={styles.actionGroup}>
+          <PickerSheetTitle title="Repository not in Orca" />
+          <Text style={missingRepoStyles.message}>
+            {projectRepoNotInOrca.owner}/{projectRepoNotInOrca.repo} isn't added to Orca. Add it
+            from Orca on your desktop, then refresh Tasks.
+          </Text>
+          <View style={sheetStyles.actions}>
             {projectRepoNotInOrca.url ? (
-              <Pressable
-                style={styles.actionRow}
+              <Button
+                label="Open in GitHub"
+                icon={ExternalLink}
+                block
                 onPress={() => {
                   if (projectRepoNotInOrca.url) {
-                    void Linking.openURL(projectRepoNotInOrca.url)
+                    Linking.openURL(projectRepoNotInOrca.url)
                   }
                 }}
-              >
-                <ExternalLink size={16} color={colors.textPrimary} />
-                <Text style={styles.actionText}>Open in GitHub</Text>
-              </Pressable>
+              />
             ) : null}
-            {projectRepoNotInOrca.url ? <View style={styles.actionSeparator} /> : null}
-            <Pressable
-              style={styles.actionRow}
+            <Button
+              label={
+                copiedLinkKey ===
+                `project-repo:${projectRepoNotInOrca.owner}/${projectRepoNotInOrca.repo}`
+                  ? 'Copied'
+                  : 'Copy repository name'
+              }
+              icon={Copy}
+              variant="plain"
+              block
               onPress={() =>
                 void copyTextToClipboard(
                   `project-repo:${projectRepoNotInOrca.owner}/${projectRepoNotInOrca.repo}`,
                   `${projectRepoNotInOrca.owner}/${projectRepoNotInOrca.repo}`
                 )
               }
-            >
-              <Copy size={16} color={colors.textPrimary} />
-              <Text style={styles.actionText}>
-                {copiedLinkKey ===
-                `project-repo:${projectRepoNotInOrca.owner}/${projectRepoNotInOrca.repo}`
-                  ? 'Copied'
-                  : 'Copy repository'}
-              </Text>
-            </Pressable>
+            />
           </View>
         </View>
       ) : null}
@@ -98,10 +102,13 @@ export function renderMobileTasksProjectMissingRepoDrawer(model: ConnectionPrese
   )
 }
 
-export function renderMobileTasksProjectDetailDrawer(model: ConnectionPresentationModel) {
+export function renderMobileTasksProjectDetailDrawer(model: PageChromeModel) {
   const {
     activeProjectLabel,
     copiedLinkKey,
+    error,
+    setDetailMenu,
+    setError,
     copyTaskLink,
     createWorkspaceFromProjectRow,
     creatingKey,
@@ -111,10 +118,7 @@ export function renderMobileTasksProjectDetailDrawer(model: ConnectionPresentati
     projectIssueTypesLoading,
     projectMutating,
     projectRowDetail,
-    projectRowHostedRepo,
     projectRowItem,
-    setMergeMethodProjectRow,
-    setPendingHostedStateChange,
     projectRowHandoff,
     taskUiReady
   } = model
@@ -125,37 +129,73 @@ export function renderMobileTasksProjectDetailDrawer(model: ConnectionPresentati
     >
       {projectRowItem ? (
         <View>
-          <View style={styles.sheetHeader}>
-            <View style={styles.sheetTitleRow}>
-              <TaskProviderLogo provider="github" size={16} color={colors.textPrimary} />
-              <Text style={styles.sheetTitle} numberOfLines={2}>
-                {projectRowItem.content.title}
-              </Text>
-            </View>
-            <Text style={styles.sheetSubtitle}>
-              GitHub Project · {projectRowItem.content.repository ?? activeProjectLabel}
-              {projectRowItem.content.number ? ` #${projectRowItem.content.number}` : ''}
-            </Text>
-          </View>
+          <MobileTasksDetailHeader
+            provider="github"
+            kind={`GitHub project · ${activeProjectLabel}`}
+            title={projectRowItem.content.title}
+            meta={`${projectRowItem.content.repository ?? activeProjectLabel}${
+              projectRowItem.content.number ? ` #${projectRowItem.content.number}` : ''
+            } · ${projectRowStatusLabel(projectRowItem)}`}
+          />
+          <MobileTasksSheetError error={error} onDismiss={() => setError('')} />
+          <MobileTasksDetailActionBar
+            startLabel="Start workspace"
+            starting={creatingKey === `github-project:${projectRowItem.id}`}
+            onStart={
+              canCreateWorkspaceFromProjectRow(projectRowItem)
+                ? () =>
+                    projectRowHandoff.closeThen(
+                      () => void createWorkspaceFromProjectRow(projectRowItem)
+                    )
+                : null
+            }
+            startUnavailableReason={
+              canCreateWorkspaceFromProjectRow(projectRowItem)
+                ? undefined
+                : 'Workspaces start from GitHub issues and pull requests, not drafts.'
+            }
+            url={projectRowItem.content.url}
+            openLabel="Open in GitHub"
+            copied={copiedLinkKey === `github-project:${projectRowItem.id}`}
+            onCopy={
+              projectRowItem.content.url
+                ? () => {
+                    if (projectRowItem.content.url) {
+                      void copyTaskLink(
+                        `github-project:${projectRowItem.id}`,
+                        projectRowItem.content.url
+                      )
+                    }
+                  }
+                : null
+            }
+            menuCount={mobileTasksProjectMenuActions(model).length}
+            onMenu={() => setDetailMenu('project')}
+          />
 
           <View style={styles.detailGroup}>
-            <View style={styles.detailMetaGrid}>
-              <View style={styles.detailMetaItem}>
-                <Text style={styles.detailMetaLabel}>Type</Text>
-                <Text style={styles.detailMetaValue}>
-                  {projectRowItem.itemType === 'PULL_REQUEST'
-                    ? 'Pull request'
-                    : projectRowItem.itemType === 'ISSUE'
-                      ? 'Issue'
-                      : projectRowItem.itemType === 'DRAFT_ISSUE'
-                        ? 'Draft issue'
-                        : 'Project item'}
-                </Text>
-              </View>
-              <View style={styles.detailMetaItem}>
-                <Text style={styles.detailMetaLabel}>Status</Text>
-                <Text style={styles.detailMetaValue}>{projectRowStatusLabel(projectRowItem)}</Text>
-              </View>
+            <View>
+              <SectionHeader title="Details" first />
+              <ListGroup style={sheetStyles.group}>
+                <ListRow
+                  key="type"
+                  title="Type"
+                  value={
+                    projectRowItem.itemType === 'PULL_REQUEST'
+                      ? 'Pull request'
+                      : projectRowItem.itemType === 'ISSUE'
+                        ? 'Issue'
+                        : projectRowItem.itemType === 'DRAFT_ISSUE'
+                          ? 'Draft issue'
+                          : 'Project item'
+                  }
+                />
+                <ListRow
+                  key="status"
+                  title="Status"
+                  value={projectRowStatusLabel(projectRowItem)}
+                />
+              </ListGroup>
             </View>
             {SHOW_MOBILE_DETAIL_LABEL_CHIPS &&
             (projectRowDetail?.provider === 'github'
@@ -186,7 +226,7 @@ export function renderMobileTasksProjectDetailDrawer(model: ConnectionPresentati
                 {projectIssueTypesLoading ? (
                   <View style={styles.detailLoadingInline}>
                     <ActivityIndicator size="small" color={colors.textSecondary} />
-                    <Text style={styles.detailMuted}>Loading issue types...</Text>
+                    <Text style={styles.detailMuted}>Loading issue types…</Text>
                   </View>
                 ) : projectIssueTypesError ? (
                   <Text style={styles.detailError}>{projectIssueTypesError}</Text>
@@ -212,7 +252,9 @@ export function renderMobileTasksProjectDetailDrawer(model: ConnectionPresentati
                             <View
                               style={[
                                 styles.issueTypeDot,
-                                { backgroundColor: githubProjectOptionColor(issueType.color) }
+                                {
+                                  backgroundColor: githubProjectOptionColor(issueType.color)
+                                }
                               ]}
                             />
                             <Text style={styles.detailChipText}>{issueType.name}</Text>
@@ -238,123 +280,17 @@ export function renderMobileTasksProjectDetailDrawer(model: ConnectionPresentati
             {renderMobileTasksProjectAssigneesEditor(model)}
             {renderMobileTasksProjectLoadedDetail(model)}
           </View>
-
-          <View style={styles.actionGroup}>
-            {canCreateWorkspaceFromProjectRow(projectRowItem) ? (
-              <Pressable
-                style={styles.actionRow}
-                disabled={creatingKey === `github-project:${projectRowItem.id}`}
-                onPress={() =>
-                  projectRowHandoff.closeThen(
-                    () => void createWorkspaceFromProjectRow(projectRowItem)
-                  )
-                }
-              >
-                <Plus size={16} color={colors.textPrimary} />
-                <Text style={styles.actionText}>Create Workspace</Text>
-              </Pressable>
-            ) : (
-              <Text style={styles.emptyInlineText}>
-                Workspaces can only be created from GitHub issues and pull requests.
-              </Text>
-            )}
-
-            {projectRowItem.content.url ? (
-              <>
-                {canCreateWorkspaceFromProjectRow(projectRowItem) ? (
-                  <View style={styles.actionSeparator} />
-                ) : null}
-                <Pressable
-                  style={styles.actionRow}
-                  onPress={() => {
-                    if (projectRowItem.content.url) {
-                      void Linking.openURL(projectRowItem.content.url)
-                    }
-                  }}
-                >
-                  <ExternalLink size={16} color={colors.textPrimary} />
-                  <Text style={styles.actionText}>Open in GitHub</Text>
-                </Pressable>
-                <View style={styles.actionSeparator} />
-                <Pressable
-                  style={styles.actionRow}
-                  onPress={() =>
-                    projectRowItem.content.url
-                      ? void copyTaskLink(
-                          `github-project:${projectRowItem.id}`,
-                          projectRowItem.content.url
-                        )
-                      : undefined
-                  }
-                >
-                  <Copy size={16} color={colors.textPrimary} />
-                  <Text style={styles.actionText}>
-                    {copiedLinkKey === `github-project:${projectRowItem.id}`
-                      ? 'Copied'
-                      : 'Copy GitHub link'}
-                  </Text>
-                </Pressable>
-              </>
-            ) : null}
-            {projectRowType(projectRowItem) &&
-            projectRowItem.content.state !== 'MERGED' &&
-            projectRowItem.itemType !== 'DRAFT_ISSUE' ? (
-              <>
-                <View style={styles.actionSeparator} />
-                <Pressable
-                  style={styles.actionRow}
-                  disabled={projectMutating}
-                  onPress={() => {
-                    const nextState = projectRowItem.content.state === 'CLOSED' ? 'open' : 'closed'
-                    if (projectRowItem.itemType === 'PULL_REQUEST') {
-                      setPendingHostedStateChange({
-                        source: 'project',
-                        row: projectRowItem,
-                        nextState
-                      })
-                      return
-                    }
-                    setPendingHostedStateChange({
-                      source: 'project',
-                      row: projectRowItem,
-                      nextState
-                    })
-                  }}
-                >
-                  {projectRowItem.content.state === 'CLOSED' ? (
-                    <RefreshCw size={16} color={colors.textPrimary} />
-                  ) : (
-                    <X size={16} color={colors.textPrimary} />
-                  )}
-                  <Text style={styles.actionText}>
-                    {projectRowItem.content.state === 'CLOSED' ? 'Reopen item' : 'Close item'}
-                  </Text>
-                </Pressable>
-              </>
-            ) : null}
-            {projectRowItem.itemType === 'PULL_REQUEST' &&
-            projectRowItem.content.state !== 'CLOSED' &&
-            projectRowItem.content.state !== 'MERGED' ? (
-              <>
-                <View style={styles.actionSeparator} />
-                <Pressable
-                  style={styles.actionRow}
-                  disabled={projectMutating || !projectRowHostedRepo}
-                  onPress={() => setMergeMethodProjectRow(projectRowItem)}
-                >
-                  <GitBranch size={16} color={colors.textPrimary} />
-                  <Text style={styles.actionText}>Merge pull request</Text>
-                </Pressable>
-                {!projectRowHostedRepo ? (
-                  <Text style={styles.emptyInlineText}>
-                    Merge requires this repository in Orca.
-                  </Text>
-                ) : null}
-              </>
-            ) : null}
-          </View>
         </View>
       ) : null}
     </BottomDrawer>
   )
 }
+
+const missingRepoStyles = StyleSheet.create({
+  message: {
+    ...textStyles.callout,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    paddingHorizontal: spacing.xl
+  }
+})

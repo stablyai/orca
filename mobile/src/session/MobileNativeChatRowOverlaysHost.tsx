@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { triggerMediumImpact } from '../platform/haptics'
 import { MobileNativeChatImageViewer } from './MobileNativeChatImageViewer'
 import { MobileNativeChatMessageActionsSheet } from './MobileNativeChatMessageActionsSheet'
 import {
@@ -28,7 +29,10 @@ export function MobileNativeChatRowOverlaysHost({
   const overlays = useMemo(
     () => ({
       openImage: (image: MobileNativeChatViewedImage) => setShown({ image }),
-      openActions: (actionsFor: NativeChatMessage) => setShown({ actionsFor })
+      openActions: (actionsFor: NativeChatMessage) => {
+        triggerMediumImpact()
+        setShown({ actionsFor })
+      }
     }),
     [setShown]
   )

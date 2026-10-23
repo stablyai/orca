@@ -31,7 +31,7 @@ const BUSY_ACTIONS = new Set(['create-pr', 'push-create-pr'])
 function hiddenAction(onPress: () => void): MobileCreatePrAction {
   return {
     visible: false,
-    label: 'Create Pull Request',
+    label: 'Create pull request',
     disabled: true,
     loading: false,
     pushFirst: false,
@@ -84,7 +84,7 @@ export function buildMobileCreatePrAction({
     }
   }
   const copy = hostedReviewCopy(eligibility.provider)
-  const label = `Create ${copy.titleLabel}`
+  const label = `Create ${copy.titleLabel.toLowerCase()}`
   // Any in-flight git work blocks the action: runGitWorkflow no-ops while
   // busyActionRef is set, so an enabled-looking button would silently do nothing.
   const busy = busyAction !== null

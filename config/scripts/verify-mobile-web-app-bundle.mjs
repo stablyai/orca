@@ -44,34 +44,43 @@ export function mobileWebAppBundleMaxAssets(routeCount, imageCount) {
  */
 export const MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES = 9 * 1024 * 1024
 
-// Only this licensed desktop-identical asset has its own allowance; code retains the 9 MiB fence.
+// Only these licensed desktop-identical fonts have their own allowance; code retains the 9 MiB fence.
 export const MOBILE_WEB_APP_TERMINAL_FONT_MAX_BYTES = 1200 * 1024
 const TERMINAL_FONT_SHA256 = '8efa6ba89f0a1f3eefde028f36aa64a13e36282e15ea0ca6929c664501037467'
 const TERMINAL_FONT_BYTES = 1_177_916
+// Geist, the UI face desktop ships, so the page reads in the same type as the app.
+const UI_FONT_SHA256 = 'e24cec106619c03f0b3519e31b9bc55e0d5e926b6a95b8d798cd8cef215b1505'
+const UI_FONT_BYTES = 69_436
+const APPROVED_FONT_BYTES = new Map([
+  [TERMINAL_FONT_SHA256, TERMINAL_FONT_BYTES],
+  [UI_FONT_SHA256, UI_FONT_BYTES]
+])
 
 export function mobileWebAppBundleBudgetBytes(manifest) {
   const fonts = manifest.assets.filter(
     (asset) => asset.path.endsWith('.woff2') || asset.contentType.startsWith('font/')
   )
-  if (fonts.length > 1) {
-    fail('only one licensed terminal font may use the independent font allowance')
-  }
-  const font = fonts[0]
-  if (!font) {
-    return manifest.totalBytes
-  }
   if (
-    font.path !== `assets/${TERMINAL_FONT_SHA256}.woff2` ||
-    font.sha256 !== TERMINAL_FONT_SHA256 ||
-    font.contentType !== 'font/woff2' ||
-    font.byteLength !== TERMINAL_FONT_BYTES ||
-    font.byteLength > MOBILE_WEB_APP_TERMINAL_FONT_MAX_BYTES
+    fonts.length > APPROVED_FONT_BYTES.size ||
+    new Set(fonts.map((font) => font.sha256)).size !== fonts.length
   ) {
-    fail(
-      'terminal font allowance requires the approved hash, path, MIME type and bounded byte length'
-    )
+    fail('only the licensed terminal and UI fonts may use the independent font allowance')
   }
-  return manifest.totalBytes - font.byteLength
+  let fontBytes = 0
+  for (const font of fonts) {
+    const approvedBytes = APPROVED_FONT_BYTES.get(font.sha256)
+    if (
+      approvedBytes === undefined ||
+      font.path !== `assets/${font.sha256}.woff2` ||
+      font.contentType !== 'font/woff2' ||
+      font.byteLength !== approvedBytes ||
+      font.byteLength > MOBILE_WEB_APP_TERMINAL_FONT_MAX_BYTES
+    ) {
+      fail('font allowance requires an approved hash, path, MIME type and bounded byte length')
+    }
+    fontBytes += font.byteLength
+  }
+  return manifest.totalBytes - fontBytes
 }
 
 /**
@@ -80,9 +89,10 @@ export function mobileWebAppBundleBudgetBytes(manifest) {
  * A chunk is emitted per distinct set of importers, not per route, so a route's marginal cost is
  * what it fails to share rather than what it weighs. Re-measured on this head by building
  * `routes.slice(0, n)` for every n, which is what the fence below is derived from rather than
- * fitted to. The spread it shows is 1 to 14: `pr` adds one script, `tasks` adds fourteen.
+ * fitted to. The spread it shows is 1 to 13: `pr` adds one script, `tasks` adds thirteen.
  * The root `./_layout.tsx` (the page's web sibling of the native root) sorts first; with it the
- * swept tree reads 91 scripts at 16 routes, with theme tokens in the entry.
+ * swept tree reads 107 scripts at 16 routes. Re-measured after the design-system rebuild, whose
+ * shared components are imported across routes and split into more chunks.
  *
  * This table is the fence's only input, so a route added to the tree stales it and the pins beside
  * the fence fail until it is re-measured. That is the point: the bound is re-derived, never bumped.
@@ -92,18 +102,18 @@ export const MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP = [
   ['./h/[hostId]/[...page].tsx', 6],
   ['./h/[hostId]/accounts.tsx', 10],
   ['./h/[hostId]/agent-history/[worktreeId].tsx', 15],
-  ['./h/[hostId]/edit.tsx', 20],
-  ['./h/[hostId]/files/[worktreeId].tsx', 24],
-  ['./h/[hostId]/files/preview/[worktreeId].tsx', 31],
-  ['./h/[hostId]/history/[worktreeId].tsx', 34],
-  ['./h/[hostId]/index.tsx', 42],
-  ['./h/[hostId]/new-workspace.tsx', 49],
-  ['./h/[hostId]/pr/[worktreeId].tsx', 50],
-  ['./h/[hostId]/review/[worktreeId].tsx', 57],
-  ['./h/[hostId]/session/[worktreeId].tsx', 69],
-  ['./h/[hostId]/source-control/[worktreeId].tsx', 73],
-  ['./h/[hostId]/tasks.tsx', 87],
-  ['./h/_layout.tsx', 91]
+  ['./h/[hostId]/edit.tsx', 22],
+  ['./h/[hostId]/files/[worktreeId].tsx', 27],
+  ['./h/[hostId]/files/preview/[worktreeId].tsx', 36],
+  ['./h/[hostId]/history/[worktreeId].tsx', 39],
+  ['./h/[hostId]/index.tsx', 50],
+  ['./h/[hostId]/new-workspace.tsx', 62],
+  ['./h/[hostId]/pr/[worktreeId].tsx', 63],
+  ['./h/[hostId]/review/[worktreeId].tsx', 70],
+  ['./h/[hostId]/session/[worktreeId].tsx', 82],
+  ['./h/[hostId]/source-control/[worktreeId].tsx', 89],
+  ['./h/[hostId]/tasks.tsx', 102],
+  ['./h/_layout.tsx', 107]
 ]
 
 const sweptScripts = MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP.map(([, scripts]) => scripts)
@@ -308,7 +318,7 @@ if (isDirectInvocation(import.meta.url, process.argv[1])) {
     console.log(
       `[verify-mobile-web-app-bundle] OK — ${String(manifest.assets.length)} asset(s), ` +
         `${String(manifest.totalBytes)} total bytes, ` +
-        `${String(mobileWebAppBundleBudgetBytes(manifest))}/${String(MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES)} bytes excluding the approved font, ` +
+        `${String(mobileWebAppBundleBudgetBytes(manifest))}/${String(MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES)} bytes excluding the approved fonts, ` +
         `reproducible buildId ${manifest.buildId}`
     )
   } catch (error) {

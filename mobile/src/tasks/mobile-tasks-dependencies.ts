@@ -24,7 +24,9 @@ export {
  * Typed `void` on purpose: the seam names its own failures and never rejects, so a `.catch` here
  * would be a handler for a rejection that cannot arrive, and this makes that a compile error.
  */
-export const Linking: { openURL: (url: string) => void } = { openURL: openExternalLink }
+export const Linking: { openURL: (url: string) => void } = {
+  openURL: openExternalLink
+}
 export { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 export { useLocalSearchParams } from 'expo-router'
 /**
@@ -38,7 +40,28 @@ export { useLocalSearchParams } from 'expo-router'
 export { useRouteHandoff as useRouter } from '../navigation/route-handoff'
 export {
   AlertTriangle,
+  ArrowUpDown,
   Check,
+  Circle,
+  CircleCheck,
+  CircleDashed,
+  CircleDot,
+  CircleSlash,
+  CircleX,
+  Combine,
+  Ellipsis,
+  GitMerge,
+  GitPullRequest,
+  GitPullRequestClosed,
+  GitPullRequestDraft,
+  Inbox,
+  Layers,
+  ListOrdered,
+  Plug,
+  SearchX,
+  SlidersHorizontal,
+  WifiOff,
+  Download,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -133,8 +156,16 @@ export {
   trustedOrcaHooksWithSetupApproval,
   wasSetupHookPreviouslyApproved
 } from './setup-hook-trust'
-export { colors, radii, spacing, typography } from '../theme/mobile-theme'
-export { triggerMediumImpact } from '../platform/haptics'
+export {
+  colors,
+  MIN_TOUCH_TARGET,
+  radii,
+  spacing,
+  textStyles,
+  typography
+} from '../theme/mobile-theme'
+export { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
+export { triggerMediumImpact, triggerSelection, triggerSuccess } from '../platform/haptics'
 export {
   CROSS_REPO_DISPLAY_LIMIT,
   getTaskPagePerRepoLimit,

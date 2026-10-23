@@ -1,6 +1,7 @@
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
-import { RotateCw } from 'lucide-react-native'
-import { colors } from '../theme/mobile-theme'
+import { ScrollView } from 'react-native'
+import { AlertCircle, GitPullRequest } from 'lucide-react-native'
+import { StateView } from './ui/StateView'
+import { spacing } from '../theme/mobile-theme'
 import type { PrSidebarState } from '../session/mobile-pr-sidebar-state'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
@@ -115,7 +116,7 @@ export function MobilePRSidebar({
   return (
     <ScrollView
       style={{ flex: 1 }}
-      contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomInset }]}
+      contentContainerStyle={[styles.scrollContent, { paddingBottom: spacing.xl + bottomInset }]}
       keyboardShouldPersistTaps="handled"
       // Why: root-comment / reply composers sit at the bottom of this scroll
       // area; without keyboard insets the focused field stays under the keyboard.
@@ -180,43 +181,28 @@ function PrSidebarContent({
   botAuthorOverrides: ReadonlySet<string>
 }) {
   if (branch === 'loading') {
-    return (
-      <View style={styles.stateArea}>
-        <ActivityIndicator color={colors.textSecondary} />
-        <Text style={styles.stateText}>Loading pull request…</Text>
-      </View>
-    )
+    return <StateView loading title="Loading pull request…" />
   }
   if (branch === 'error') {
     const message = state.kind === 'error' ? state.message : 'Something went wrong.'
     return (
-      <View style={styles.stateArea}>
-        <Text style={styles.stateText}>{message}</Text>
-        <Pressable
-          style={styles.retryButton}
-          onPress={onRetry}
-          accessibilityRole="button"
-          accessibilityLabel="Retry loading pull request"
-        >
-          <RotateCw size={14} color={colors.textPrimary} strokeWidth={2.2} />
-          <Text style={styles.retryText}>Retry</Text>
-        </Pressable>
-      </View>
+      <StateView
+        icon={AlertCircle}
+        title="Couldn't load the pull request"
+        message={message}
+        primary={{ label: 'Retry', onPress: onRetry }}
+      />
     )
   }
   if (branch === 'blocked' || actions.blocked) {
-    // Permanent failure (R9): explanatory, no retry-encouragement styling. A
-    // mutation-time block (actions.blocked) routes here even from a ready state.
+    // Permanent failure (R9): explanatory, no retry. A mutation-time block
+    // (actions.blocked) routes here even from a ready state.
     const message =
       actions.blocked ??
       (state.kind === 'blocked'
         ? state.message
         : 'Not permitted — your GitHub account is not connected.')
-    return (
-      <View style={styles.stateArea}>
-        <Text style={styles.blockedText}>{message}</Text>
-      </View>
-    )
+    return <StateView icon={GitPullRequest} title="Pull request unavailable" message={message} />
   }
   if (branch === 'none') {
     // GitHub repo, but the current branch has no open PR — offer to create one
@@ -305,28 +291,23 @@ function PrSidebarSections({
     availability: triage.availability,
     ...triage.noticeFor('resolve-conflicts')
   }
-  // One card for identity + actions so the ready PR isn't a stack of thin
-  // duplicate blocks (badge row, title, branches, then another action band).
+  // Identity first, then the one primary for the PR's state, then the detail sections.
   return (
     <>
-      <View style={styles.section}>
-        <View style={styles.sectionBody}>
-          <PRSidebarHeader
-            pr={data.pr}
-            details={data.details}
-            titleAction={titleAction}
-            showOpenOnWeb={showOpenOnWeb}
-            bare
-          />
-          <PRActionsSection
-            pr={data.pr}
-            actions={actions}
-            client={client}
-            worktreeId={worktreeId}
-            onUnlinked={refetch}
-          />
-        </View>
-      </View>
+      <PRSidebarHeader
+        pr={data.pr}
+        details={data.details}
+        titleAction={titleAction}
+        showOpenOnWeb={showOpenOnWeb}
+        bare
+      />
+      <PRActionsSection
+        pr={data.pr}
+        actions={actions}
+        client={client}
+        worktreeId={worktreeId}
+        onUnlinked={refetch}
+      />
       {/* Own titled section when present; null otherwise (no empty chrome). */}
       <PRConflictingFilesSection pr={data.pr} triage={conflictsTriage} />
       <PRReviewersSection
@@ -334,6 +315,7 @@ function PrSidebarSections({
         actions={actions}
         client={client}
         worktreeId={worktreeId}
+        onRetry={refetch}
       />
       <PRChecksSection
         checks={data.checks}
@@ -350,6 +332,7 @@ function PrSidebarSections({
         prRepo={data.pr.prRepo ?? null}
         actions={commentActions}
         botAuthorOverrides={botAuthorOverrides}
+        onRetry={refetch}
       />
     </>
   )

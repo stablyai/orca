@@ -44,7 +44,7 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
     handleCreateTerminal
   } = scope
   const otherRuntimeAgentRow = {
-    label: 'Agents on Another Server',
+    label: 'Agents on another server',
     hint: 'Pair that server directly',
     icon: Bot,
     disabled: true,
@@ -54,7 +54,7 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
     createTabAgentLoadState === 'loading'
       ? [
           {
-            label: 'Detecting Agents',
+            label: 'Detecting agents…',
             icon: Bot,
             disabled: true,
             loading: true,
@@ -64,7 +64,7 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
       : createTabAgentOptions.length > 0
         ? createTabAgentOptions.map((option) => ({
             label: option.label,
-            renderIcon: () => <MobileAgentIcon agentId={option.agent} size={16} />,
+            renderIcon: () => <MobileAgentIcon agentId={option.agent} size={20} />,
             onPress: () => {
               setShowCreateTabDrawer(false)
               void handleCreateTerminal(option.agent)
@@ -73,7 +73,7 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
         : createTabAgentLoadState === 'loaded'
           ? [
               {
-                label: 'No Enabled Agents',
+                label: 'No agents enabled',
                 icon: Bot,
                 disabled: true,
                 onPress: () => {}
@@ -84,8 +84,8 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
             : createTabAgentLoadState === 'error'
               ? [
                   {
-                    label: 'Agent Presets Unavailable',
-                    hint: 'Check the host connection',
+                    label: 'Agents unavailable',
+                    hint: 'Check the desktop connection',
                     icon: Bot,
                     disabled: true,
                     onPress: () => {}
@@ -98,7 +98,7 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
       : createTabAgentLoadState === 'loading'
         ? [
             {
-              label: 'Detecting Agents',
+              label: 'Detecting agents…',
               icon: Bot,
               disabled: true,
               loading: true,
@@ -109,7 +109,7 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
           ? createTabAgentOptions.map((option) => ({
               label: option.label,
               hint: 'New agent session',
-              icon: Bot,
+              renderIcon: () => <MobileAgentIcon agentId={option.agent} size={20} />,
               onPress: () => {
                 const delivery = pendingDiffNotesDelivery
                 setPendingDiffNotesDelivery(null)
@@ -127,7 +127,7 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
           : createTabAgentLoadState === 'loaded'
             ? [
                 {
-                  label: 'No Enabled Agents',
+                  label: 'No agents enabled',
                   icon: Bot,
                   disabled: true,
                   onPress: () => {}
@@ -138,7 +138,7 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
               : createTabAgentLoadState === 'error'
                 ? [
                     {
-                      label: 'Agent Presets Unavailable',
+                      label: 'Agents unavailable',
                       hint: 'Copy notes instead',
                       icon: Bot,
                       disabled: true,

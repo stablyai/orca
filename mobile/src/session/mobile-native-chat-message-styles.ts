@@ -1,15 +1,23 @@
 import { StyleSheet } from 'react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
-
-export const TEXT_SIZE = 17
-/** Chat prose reads larger than the Markdown renderer's compact base. */
-export const CHAT_PROSE_SCALE = 1.25
+import { colors, radii, spacing, textStyles } from '../theme/mobile-theme'
 
 /** Pinch-zoomed type keeps its leading, so zoomed lines never overlap. */
 export function scaledType(size: number, fontScale: number, leading = 6) {
   return { fontSize: size * fontScale, lineHeight: (size + leading) * fontScale }
 }
-export const MONO_SIZE = 12
+
+/** A ramp step under the reader's pinch zoom. */
+export function scaledText(
+  step: { fontSize: number; lineHeight: number },
+  fontScale: number
+): { fontSize: number; lineHeight: number } {
+  return { fontSize: step.fontSize * fontScale, lineHeight: step.lineHeight * fontScale }
+}
+
+/** Code and tool output: the footnote size, the floor for mono content. */
+export const MONO_SIZE = 13
+/** Your message: a faint raised tint like desktop's, so Send stays the one bright object. */
+const BUBBLE_RADIUS = 20
 
 export const styles = StyleSheet.create({
   row: {
@@ -24,37 +32,22 @@ export const styles = StyleSheet.create({
     gap: spacing.sm
   },
   userBubble: {
-    maxWidth: '88%',
-    backgroundColor: colors.textPrimary,
-    borderRadius: radii.card,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm
+    maxWidth: '86%',
+    backgroundColor: colors.fill,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.fieldBorder,
+    borderRadius: BUBBLE_RADIUS,
+    paddingHorizontal: 14,
+    paddingVertical: 10
   },
   hostNotice: {
+    ...textStyles.body,
     color: colors.textMuted
   },
   reasoning: {
-    opacity: 0.7,
-    // Starts under the headline, past the 15 pt brain and its gap.
-    paddingLeft: 15 + spacing.sm
-  },
-  reasoningToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    // With the toggle's 6 pt hitSlop above and below, a 44 pt touch target.
-    minHeight: 32
-  },
-  reasoningPressed: {
-    opacity: 0.6
-  },
-  reasoningHeadline: {
-    color: colors.textMuted,
-    fontSize: typography.bodySize,
-    flexShrink: 1
-  },
-  reasoningCaretOpen: {
-    transform: [{ rotate: '90deg' }]
+    opacity: 0.75,
+    // Starts under the headline, past the 16 pt brain and its gap.
+    paddingLeft: 16 + spacing.sm
   },
   reasoningBody: {
     // The common cap for an open reasoning block (about ten lines).
@@ -63,42 +56,45 @@ export const styles = StyleSheet.create({
   agentMessage: {
     paddingLeft: spacing.md,
     borderLeftWidth: 2,
-    borderLeftColor: colors.borderSubtle
+    borderLeftColor: colors.fieldBorder
   },
   agentAttribution: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize
+    ...textStyles.footnote,
+    color: colors.textMuted
   },
+  // The copy button's 44 pt touch box overhangs its 32 pt circle; the row pulls it back in.
   meta: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs
+    gap: 2,
+    marginVertical: -spacing.xs
   },
   unsentNotice: {
-    maxWidth: '88%',
+    ...textStyles.footnote,
+    maxWidth: '86%',
     marginTop: spacing.xs,
-    color: colors.statusRed,
-    fontSize: typography.metaSize
-  },
-  showFull: {
-    alignSelf: 'flex-start',
-    paddingTop: spacing.xs
+    color: colors.danger
   },
   showFullText: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize,
-    fontWeight: '600'
+    ...textStyles.footnote,
+    color: colors.textMuted
   },
   imageRef: {
-    color: colors.textSecondary,
-    fontSize: TEXT_SIZE
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm
+  },
+  imageRefText: {
+    ...textStyles.callout,
+    flexShrink: 1,
+    color: colors.textSecondary
   },
   imageThumb: {
     width: 200,
     height: 150,
     borderRadius: radii.card,
-    backgroundColor: colors.bgRaised,
+    backgroundColor: colors.fill,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle
+    borderColor: colors.separator
   }
 })

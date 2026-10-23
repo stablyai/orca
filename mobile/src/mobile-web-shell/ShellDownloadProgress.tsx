@@ -4,9 +4,9 @@ import { DownloadProgressBar, downloadedMegabytesCaption } from './DownloadProgr
 import type { MobileWebShellSessionState } from './mobile-web-shell-session-contract'
 import { ShellWaitingFrame } from './ShellWaitingFrame'
 
-const DOWNLOADING_LABEL = 'Downloading the latest app'
+const DOWNLOADING_LABEL = 'Updating workspace'
 
-/** The page bundle coming down from the host, as a bar over the bytes received. */
+/** The page bundle coming down from the desktop, as a bar over the bytes received. */
 export function ShellDownloadProgress({
   state,
   feed,

@@ -1,7 +1,7 @@
 import { useRef } from 'react'
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import type { ConnectionLogEntry } from '../transport/types'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { colors, radii, spacing, textStyles, typography } from '../theme/mobile-theme'
 
 type Props = {
   entries: ConnectionLogEntry[]
@@ -15,7 +15,7 @@ const LEVEL_COLOR: Record<ConnectionLogEntry['level'], string> = {
   info: colors.textSecondary,
   success: colors.statusGreen,
   warn: colors.statusAmber,
-  error: colors.statusRed
+  error: colors.danger
 }
 
 const LEVEL_GLYPH: Record<ConnectionLogEntry['level'], string> = {
@@ -54,7 +54,11 @@ export function ConnectionLog({ entries, title, fillAvailableHeight = false }: P
         fillAvailableHeight ? styles.fillContainer : styles.boundedContainer
       ]}
     >
-      {title && <Text style={styles.title}>{title}</Text>}
+      {title ? (
+        <Text style={styles.title} numberOfLines={1}>
+          {title}
+        </Text>
+      ) : null}
       <ScrollView
         ref={scrollRef}
         style={fillAvailableHeight ? styles.fillScroll : styles.boundedScroll}
@@ -94,11 +98,9 @@ const styles = StyleSheet.create({
   container: {
     width: '100%',
     backgroundColor: colors.bgPanel,
-    borderRadius: radii.card,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md
+    borderRadius: radii.group,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg
   },
   boundedContainer: {
     maxHeight: 240
@@ -107,21 +109,19 @@ const styles = StyleSheet.create({
     flex: 1
   },
   title: {
-    fontSize: typography.metaSize,
-    fontFamily: typography.monoFamily,
+    ...textStyles.footnote,
+    fontWeight: '500',
     color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: spacing.xs
+    marginBottom: spacing.sm
   },
   boundedScroll: {
-    maxHeight: 200
+    maxHeight: 196
   },
   fillScroll: {
     flex: 1
   },
   scrollContent: {
-    gap: 6
+    gap: spacing.sm
   },
   row: {
     flexDirection: 'row',
@@ -130,31 +130,33 @@ const styles = StyleSheet.create({
   },
   timestamp: {
     fontFamily: typography.monoFamily,
-    fontSize: typography.metaSize,
+    fontSize: 12,
+    lineHeight: 18,
     color: colors.textMuted,
-    width: 52,
-    paddingTop: 1
+    width: 56,
+    fontVariant: ['tabular-nums']
   },
   glyph: {
     fontFamily: typography.monoFamily,
-    fontSize: typography.metaSize,
+    fontSize: 13,
+    lineHeight: 18,
     width: 12,
-    textAlign: 'center',
-    paddingTop: 1
+    textAlign: 'center'
   },
   rowText: {
-    flex: 1
+    flex: 1,
+    minWidth: 0
   },
   message: {
     fontFamily: typography.monoFamily,
-    fontSize: typography.metaSize,
-    lineHeight: 16
+    fontSize: 13,
+    lineHeight: 18
   },
   detail: {
     fontFamily: typography.monoFamily,
-    fontSize: 11,
+    fontSize: 12,
+    lineHeight: 16,
     color: colors.textMuted,
-    lineHeight: 14,
-    marginTop: 1
+    marginTop: 2
   }
 })

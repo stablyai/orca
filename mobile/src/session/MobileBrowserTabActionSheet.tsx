@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react-native'
+import { ChevronLeft, ChevronRight, RefreshCw, X } from 'lucide-react-native'
 import type { MobileSessionTab } from './mobile-session-route-types'
 import { ActionSheetModal, type ActionSheetAction } from '../components/ActionSheetModal'
 import { getMobileSessionTabTitle } from './mobile-terminal-tab-agent'
@@ -66,7 +66,7 @@ export function MobileBrowserTabActionSheet(props: {
         },
         {
           label: 'Close',
-          destructive: true,
+          icon: X,
           onPress: () => {
             const current = target
             onClose()

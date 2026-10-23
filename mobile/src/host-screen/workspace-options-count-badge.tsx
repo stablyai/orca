@@ -1,8 +1,8 @@
 import { StyleSheet, Text, View } from 'react-native'
-import { colors } from '../theme/mobile-theme'
+import { colors, radii, textStyles } from '../theme/mobile-theme'
 import { workspaceOptionsBadgeText } from '../worktree/workspace-options-copy'
 
-/** The active-filter count in the chip's corner, as on the desktop trigger (the chip must not clip). */
+/** The active-filter count on the options button's corner, as on the desktop trigger. */
 export function WorkspaceOptionsCountBadge({ count }: { count: number }) {
   const text = workspaceOptionsBadgeText(count)
   if (text === null) {
@@ -18,19 +18,23 @@ export function WorkspaceOptionsCountBadge({ count }: { count: number }) {
 const styles = StyleSheet.create({
   badge: {
     position: 'absolute',
-    top: -5,
-    right: -5,
-    minWidth: 14,
-    height: 14,
-    paddingHorizontal: 3,
-    borderRadius: 7,
+    top: 0,
+    right: 0,
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: 5,
+    borderRadius: radii.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.textPrimary
+    backgroundColor: colors.primary,
+    // Why: a ring in the canvas colour keeps the badge off the button's circle.
+    borderWidth: 2,
+    borderColor: colors.bgBase
   },
   badgeText: {
-    fontSize: 9,
+    ...textStyles.caption,
     fontWeight: '600',
-    color: colors.bgBase
+    color: colors.onPrimary,
+    fontVariant: ['tabular-nums']
   }
 })

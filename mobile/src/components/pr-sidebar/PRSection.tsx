@@ -1,31 +1,38 @@
 import type { ReactNode } from 'react'
-import { Text, View } from 'react-native'
+import { View } from 'react-native'
+import { ListGroup } from '../ui/ListGroup'
+import { SectionHeader } from '../ui/SectionHeader'
 import { mobilePrSidebarStyles as styles } from './mobile-pr-sidebar-styles'
 
 type Props = {
-  // Optional: omit for self-explanatory sections (e.g. action buttons) so the
-  // header row doesn't waste vertical space on mobile.
+  // Optional: omit for self-explanatory sections (e.g. action buttons).
   title?: string
-  // Optional trailing control(s) in the header row (e.g. add-reviewer, checks
-  // summary + rerun). Rendered right-aligned opposite the title.
+  count?: number
+  // A compact action at the header's end, e.g. "Add" reviewers or "Rerun failed".
   trailing?: ReactNode
+  /**
+   * `rows`: an inset group whose children are rows with hairlines between them.
+   * `padded`: an inset group holding free content. `bare`: no group, e.g. a list of threads.
+   */
+  layout?: 'rows' | 'padded' | 'bare'
   children: ReactNode
+  /** Drawn under the group, e.g. an agent launch notice. */
+  footer?: ReactNode
 }
 
-// Shared card shell for PR sections (Actions/Reviewers/Checks). Mirrors the
-// desktop PR page's card-with-header-divider so the sections read consistently.
-// Header is omitted when neither title nor trailing is provided.
-export function PRSection({ title, trailing, children }: Props) {
-  const showHeader = Boolean(title) || trailing != null
+/** One PR tab section: a sentence-case header over an inset group. */
+export function PRSection({ title, count, trailing, layout = 'padded', children, footer }: Props) {
   return (
     <View style={styles.section}>
-      {showHeader ? (
-        <View style={styles.sectionHeader}>
-          {title ? <Text style={styles.sectionLabel}>{title}</Text> : null}
-          {trailing ? <View style={styles.sectionHeaderTrailing}>{trailing}</View> : null}
-        </View>
-      ) : null}
-      <View style={styles.sectionBody}>{children}</View>
+      {title ? <SectionHeader title={title} count={count} action={trailing} /> : null}
+      {layout === 'rows' ? (
+        <ListGroup>{children}</ListGroup>
+      ) : layout === 'bare' ? (
+        <View style={styles.bare}>{children}</View>
+      ) : (
+        <View style={[styles.group, styles.groupPadded]}>{children}</View>
+      )}
+      {footer ? <View style={styles.sectionFooter}>{footer}</View> : null}
     </View>
   )
 }

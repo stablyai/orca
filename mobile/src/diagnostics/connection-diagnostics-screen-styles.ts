@@ -1,95 +1,35 @@
 import { StyleSheet } from 'react-native'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { colors, radii, spacing, textStyles } from '../theme/mobile-theme'
 
 export const connectionDiagnosticsScreenStyles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bgBase, padding: spacing.lg },
-  topRow: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.lg },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.sm
-  },
-  heading: { fontSize: 20, fontWeight: '700', color: colors.textPrimary },
-  hostPicker: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    marginBottom: spacing.md
-  },
-  hostChip: {
-    paddingVertical: spacing.xs + 2,
-    paddingHorizontal: spacing.md,
-    borderRadius: 16,
-    backgroundColor: colors.bgRaised
-  },
-  hostChipActive: {
-    backgroundColor: colors.bgPanel,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
-  hostChipText: { fontSize: typography.metaSize, color: colors.textSecondary, maxWidth: 160 },
-  hostChipTextActive: { color: colors.textPrimary, fontWeight: '600' },
+  body: { flex: 1, paddingHorizontal: spacing.lg, gap: spacing.md },
+  hostPicker: { flexGrow: 0, marginHorizontal: -spacing.lg },
+  hostPickerContent: { paddingHorizontal: spacing.lg - 4, gap: spacing.xs },
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.sm
+    gap: spacing.sm,
+    paddingLeft: 4
   },
-  statusText: { fontSize: typography.metaSize, color: colors.textSecondary },
+  statusText: {
+    ...textStyles.callout,
+    fontWeight: '500',
+    color: colors.textPrimary,
+    flex: 1,
+    minWidth: 0
+  },
   diagnosisCard: {
     backgroundColor: colors.bgPanel,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    borderRadius: 10,
-    padding: spacing.md,
-    marginBottom: spacing.md
+    borderRadius: radii.group,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 14,
+    gap: spacing.xs
   },
-  diagnosisHeading: {
-    fontSize: typography.metaSize,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    marginBottom: spacing.xs
-  },
-  diagnosisText: { fontSize: typography.metaSize, color: colors.textPrimary, lineHeight: 18 },
-  diagnosisNext: {
-    fontSize: typography.metaSize,
-    color: colors.textSecondary,
-    lineHeight: 18,
-    marginTop: spacing.xs
-  },
-  privacyHint: { marginTop: spacing.sm, fontSize: 11, lineHeight: 15, color: colors.textMuted },
-  sendButton: {
-    marginTop: spacing.md,
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: 8,
-    backgroundColor: colors.bgRaised
-  },
-  sendButtonText: {
-    fontSize: typography.metaSize,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  copyButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs + 2,
-    paddingVertical: spacing.xs + 2,
-    paddingHorizontal: spacing.md,
-    borderRadius: 8,
-    backgroundColor: colors.bgRaised
-  },
-  copyButtonText: {
-    fontSize: typography.metaSize,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  emptyText: { fontSize: typography.metaSize, color: colors.textMuted, lineHeight: 18 }
+  diagnosisHeading: { ...textStyles.footnote, fontWeight: '500', color: colors.textMuted },
+  diagnosisText: { ...textStyles.callout, color: colors.textPrimary },
+  diagnosisNext: { ...textStyles.subhead, color: colors.textSecondary },
+  privacyHint: { ...textStyles.footnote, color: colors.textMuted, marginTop: spacing.sm },
+  sendResult: { ...textStyles.footnote, marginTop: spacing.xs },
+  sendAction: { marginTop: spacing.sm },
+  empty: { flex: 1 }
 })

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { colors, typography } from '../theme/mobile-theme'
+import { colors, textStyles } from '../theme/mobile-theme'
 import { queuedMessageStyles } from './mobile-native-chat-queued-message-styles'
 
 /** Two lines, opening on tap when it clips: a card can hold another agent's message the person
@@ -70,7 +70,8 @@ const styles = StyleSheet.create({
     opacity: 0
   },
   caption: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize
+    ...textStyles.footnote,
+    fontWeight: '500',
+    color: colors.textSecondary
   }
 })

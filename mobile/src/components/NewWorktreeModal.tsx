@@ -15,6 +15,7 @@ import {
   buildRetiredWorktreeNamesRefreshKey,
   useRetiredWorktreeNames
 } from '../worktree/use-retired-worktree-names'
+import { triggerSuccess } from '../platform/haptics'
 import { BottomDrawerModalHost } from './bottom-drawer-modal-host'
 import {
   getMobileWorkspaceRepoBadgeColor,
@@ -160,7 +161,10 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     getAgentLaunchSupport,
     transitionDrawer: navigation.transitionDrawer,
     setError,
-    onCreated: (worktreeId, name, warning) => onCreated(worktreeId, name, warning, repoServer),
+    onCreated: (worktreeId, name, warning) => {
+      triggerSuccess()
+      onCreated(worktreeId, name, warning, repoServer)
+    },
     onClose
   })
 
@@ -238,6 +242,7 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
         visible={navigation.formSheetVisible}
         interactive={navigation.formSheetInteractive}
         loading={loading}
+        connecting={desktopClient == null}
         hasRepos={repos.length > 0}
         project={selectedProject}
         runTarget={selectedRunTarget}

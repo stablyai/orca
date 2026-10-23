@@ -23,6 +23,7 @@ import { publishExternalLinkOpener } from '../src/platform/external-link.web'
 import { publishHapticsNotifier } from '../src/platform/haptics.web'
 import { startBlurringOnKeyboardClose } from '../src/platform/keyboard-close-blur.web'
 import { publishShellKeyboardSource } from '../src/platform/keyboard-occlusion.web'
+import { installPageFonts } from '../src/theme/page-fonts'
 // Named with its extension: this entry is the web build's and the provider it needs is the web
 // sibling's, which takes the page's client. The screens below still import `./client-context`
 // and reach the same module, because the builder resolves both specifiers to the same file.
@@ -98,6 +99,7 @@ if (!container) {
 const target = document.documentElement
 target.style.setProperty('--muted-foreground', colors.textMuted)
 target.style.setProperty('--foreground', colors.textPrimary)
+installPageFonts(document)
 stampPageMountState(target, 'started')
 
 bootstrapShellPage({

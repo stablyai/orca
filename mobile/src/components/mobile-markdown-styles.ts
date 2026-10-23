@@ -1,27 +1,41 @@
-import { StyleSheet, type TextStyle } from 'react-native'
-import { colors, onBrightColors, radii, spacing, typography } from '../theme/mobile-theme'
+import { Platform, StyleSheet, type TextStyle } from 'react-native'
+import { colors, onBrightColors, radii, spacing, textStyles } from '../theme/mobile-theme'
+
+/** Desktop's `--font-mono` stack on the page; iOS has no font named `monospace`, so it names Menlo. */
+export const CODE_FONT_FAMILY =
+  Platform.OS === 'web'
+    ? "ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace"
+    : Platform.OS === 'ios'
+      ? 'Menlo'
+      : 'monospace'
+
+// Reading prose: the body step with a little more leading, as long replies need.
+const PROSE = { ...textStyles.body, lineHeight: 24 }
 
 export const styles = StyleSheet.create({
   root: {
-    gap: spacing.sm
+    gap: spacing.md
   },
   paragraph: {
-    fontSize: 13,
-    lineHeight: 19,
+    ...PROSE,
     color: colors.textPrimary
   },
+  /** h3 and below: body size, set apart by weight alone. */
   heading: {
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: '700',
+    ...textStyles.body,
+    lineHeight: 24,
+    fontWeight: '600',
     color: colors.textPrimary
+  },
+  headingMedium: {
+    ...textStyles.headline,
+    lineHeight: 24
   },
   headingLarge: {
-    fontSize: 15,
-    lineHeight: 21
+    ...textStyles.title
   },
   bold: {
-    fontWeight: '700',
+    fontWeight: '600',
     color: colors.textPrimary
   },
   italic: {
@@ -35,10 +49,10 @@ export const styles = StyleSheet.create({
     textDecorationLine: 'underline'
   },
   inlineCode: {
-    fontFamily: typography.monoFamily,
-    fontSize: 12,
+    fontFamily: CODE_FONT_FAMILY,
+    fontSize: 14,
     color: colors.textPrimary,
-    backgroundColor: colors.bgRaised,
+    backgroundColor: colors.fill,
     borderRadius: radii.row,
     paddingHorizontal: 4
   },
@@ -48,53 +62,51 @@ export const styles = StyleSheet.create({
   },
   quote: {
     borderLeftWidth: 2,
-    borderLeftColor: colors.borderSubtle,
-    paddingLeft: spacing.sm,
-    gap: spacing.xs
+    borderLeftColor: colors.fieldBorder,
+    paddingLeft: spacing.md,
+    gap: spacing.sm
   },
   quoteText: {
-    fontSize: 13,
-    lineHeight: 19,
+    ...PROSE,
     color: colors.textSecondary
   },
   codeBlock: {
-    backgroundColor: colors.bgRaised,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.input,
-    padding: spacing.sm
+    backgroundColor: colors.bgPanel,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.separator,
+    borderRadius: radii.field,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10
   },
   codeLanguage: {
-    fontSize: 10,
+    ...textStyles.footnote,
     color: colors.textMuted,
-    marginBottom: spacing.xs,
-    textTransform: 'uppercase'
+    marginBottom: spacing.xs
   },
   codeText: {
-    fontFamily: typography.monoFamily,
-    fontSize: 12,
-    lineHeight: 17,
+    fontFamily: CODE_FONT_FAMILY,
+    fontSize: 13,
+    lineHeight: 19,
     color: colors.textPrimary
   },
   imageFrame: {
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.input,
-    backgroundColor: colors.bgRaised,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.separator,
+    borderRadius: radii.field,
+    backgroundColor: colors.bgPanel,
     overflow: 'hidden',
-    padding: spacing.sm
+    padding: spacing.md,
+    gap: 2
   },
   imageCaption: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    fontSize: 11,
+    ...textStyles.footnote,
     color: colors.textSecondary
   },
   table: {
-    borderTopWidth: 1,
-    borderLeftWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.input,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.fieldBorder,
+    borderRadius: radii.field - 4,
     overflow: 'hidden',
     backgroundColor: colors.bgPanel
   },
@@ -102,17 +114,16 @@ export const styles = StyleSheet.create({
     flexDirection: 'row'
   },
   tableCell: {
-    borderRightWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: colors.borderSubtle,
+    ...textStyles.footnote,
+    borderRightWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.fieldBorder,
     paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    fontSize: 12,
-    lineHeight: 17,
+    paddingVertical: 6,
     color: colors.textPrimary
   },
   tableHeader: {
-    fontWeight: '700',
+    fontWeight: '600',
     backgroundColor: colors.bgRaised
   },
   list: {
@@ -123,22 +134,22 @@ export const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: spacing.sm
   },
+  /** The list's own size and leading, so a marker sits on its item's first line. */
   listMarker: {
-    // A floor, not a width: "10." would wrap inside a fixed 22.
-    minWidth: 22,
-    fontSize: 13,
-    lineHeight: 19,
+    ...PROSE,
+    // A floor, not a width: "10." would wrap inside a fixed one.
+    minWidth: 18,
     color: colors.textSecondary,
-    fontFamily: typography.monoFamily
+    fontVariant: ['tabular-nums']
   },
   listItemBody: {
     flex: 1,
     minWidth: 0,
     gap: spacing.xs
   },
+  /** Lists read at the paragraph's size. */
   listText: {
-    fontSize: 13,
-    lineHeight: 19,
+    ...PROSE,
     color: colors.textPrimary
   },
   footnoteReference: {
@@ -146,7 +157,7 @@ export const styles = StyleSheet.create({
   },
   rule: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle
+    backgroundColor: colors.separator
   }
 })
 

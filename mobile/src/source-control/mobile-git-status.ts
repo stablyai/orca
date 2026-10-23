@@ -25,7 +25,7 @@ const AREA_ORDER = ['unstaged', 'staged'] as const
 
 const AREA_TITLES: Record<MobileSourceControlSection['area'], string> = {
   unstaged: 'Changes',
-  staged: 'Staged Changes'
+  staged: 'Staged changes'
 }
 
 export const MOBILE_GIT_STATUS_LABELS: Record<MobileGitFileStatus, string> = {

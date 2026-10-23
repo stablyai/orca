@@ -1,14 +1,13 @@
 import { useEffect, useState } from 'react'
-import { ActivityIndicator, Text, View } from 'react-native'
-import { colors } from '../theme/mobile-theme'
+import { WifiOff } from 'lucide-react-native'
 import type { MobileFilePreviewRpcSender } from './mobile-file-preview-operations'
 import type { MobileFileMedia } from './mobile-file-media'
 import { downloadMobileFileMedia, type MobileMediaSink } from './mobile-file-media-download'
 import { createMobileMediaSink } from './mobile-media-preview-cache'
 import { MobileMediaPlayback } from './MobileMediaPlayback'
-import { filePreviewStyles as styles } from './mobile-file-preview-styles'
 import { formatPreviewByteLength } from './mobile-file-preview-response'
 import { MobileLoadErrorState } from '../components/MobileLoadErrorState'
+import { StateView } from '../components/ui/StateView'
 
 type State = { uri: string } | { error: string } | { bytes: number; total: number }
 type Props = { media: MobileFileMedia; client: MobileFilePreviewRpcSender | null; title: string }
@@ -54,9 +53,11 @@ function MediaDownload({ media, client, title }: Props) {
   }, [client, worktreeId, relativePath, mimeType, attempt])
   if (!client) {
     return (
-      <View style={styles.state}>
-        <Text style={styles.stateText}>Waiting for desktop...</Text>
-      </View>
+      <StateView
+        icon={WifiOff}
+        title="Waiting for desktop"
+        message="The file opens once your desktop is back online."
+      />
     )
   }
   if ('uri' in state) {
@@ -66,13 +67,13 @@ function MediaDownload({ media, client, title }: Props) {
     return <MobileLoadErrorState message={state.error} onRetry={() => setAttempt(attempt + 1)} />
   }
   return (
-    <View style={styles.state}>
-      <ActivityIndicator color={colors.textSecondary} />
-      <Text style={styles.stateText}>
-        {state.total
+    <StateView
+      loading
+      title={
+        state.total
           ? `Downloading ${formatPreviewByteLength(state.bytes)} of ${formatPreviewByteLength(state.total)}`
-          : 'Loading media...'}
-      </Text>
-    </View>
+          : 'Loading media…'
+      }
+    />
   )
 }

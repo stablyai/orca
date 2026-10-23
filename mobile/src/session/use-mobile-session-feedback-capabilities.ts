@@ -4,6 +4,9 @@ import { reconcileMobileSessionCreateWarningState } from './mobile-session-creat
 import type { MobileSessionTerminalRuntimeModel } from './use-mobile-session-terminal-runtime'
 import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
 
+// Why: shorter than this, a sentence fades before it can be read.
+const TOAST_MIN_DWELL_MS = 2000
+
 export function useMobileSessionFeedbackCapabilities(scope: MobileSessionTerminalRuntimeModel) {
   const {
     client,
@@ -112,18 +115,21 @@ export function useMobileSessionFeedbackCapabilities(scope: MobileSessionTermina
         if (!finished || toastSeqRef.current !== seq) {
           return
         }
-        toastHideTimerRef.current = setTimeout(() => {
-          toastHideTimerRef.current = null
-          Animated.timing(toastOpacityRef.current, {
-            toValue: 0,
-            duration: 200,
-            useNativeDriver: true
-          }).start((result) => {
-            if (result.finished && toastSeqRef.current === seq) {
-              setToastMessage(null)
-            }
-          })
-        }, durationMs)
+        toastHideTimerRef.current = setTimeout(
+          () => {
+            toastHideTimerRef.current = null
+            Animated.timing(toastOpacityRef.current, {
+              toValue: 0,
+              duration: 200,
+              useNativeDriver: true
+            }).start((result) => {
+              if (result.finished && toastSeqRef.current === seq) {
+                setToastMessage(null)
+              }
+            })
+          },
+          Math.max(durationMs, TOAST_MIN_DWELL_MS)
+        )
       })
     },
     [clearToastHideTimer]

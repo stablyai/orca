@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'react-native'
+import { Linking } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { colors, radii, spacing, typography } from '../src/theme/mobile-theme'
+import { QrCode } from 'lucide-react-native'
 import { extractPairingCodeFromUrl } from '../src/transport/pairing'
+import { Button } from '../src/components/ui/Button'
+import { PairingMessage, PairingScreenFrame } from '../src/pairing-screen-frame'
 
 export default function PairRedirectScreen() {
   const router = useRouter()
@@ -42,46 +44,24 @@ export default function PairRedirectScreen() {
   }, [params.code, router])
 
   return (
-    <View style={styles.container}>
+    <PairingScreenFrame
+      title="Pair a desktop"
+      onCancel={goHome}
+      actions={
+        missingCode ? (
+          <Button label="Back to home" variant="primary" block onPress={goHome} />
+        ) : undefined
+      }
+    >
       {missingCode ? (
-        <>
-          <Text style={styles.errorText}>Missing pairing code</Text>
-          <Pressable style={styles.primaryButton} onPress={goHome}>
-            <Text style={styles.primaryButtonText}>Back to home</Text>
-          </Pressable>
-        </>
+        <PairingMessage
+          icon={QrCode}
+          title="No pairing code"
+          message="This link didn't include a pairing code. Scan the QR code from Orca on your computer instead."
+        />
       ) : (
-        <ActivityIndicator size="large" color={colors.textSecondary} />
+        <PairingMessage loading title="Opening pairing link…" />
       )}
-    </View>
+    </PairingScreenFrame>
   )
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bgBase,
-    padding: spacing.lg
-  },
-  errorText: {
-    color: colors.statusRed,
-    fontSize: typography.bodySize,
-    lineHeight: 20,
-    marginBottom: spacing.xl,
-    textAlign: 'center'
-  },
-  primaryButton: {
-    alignItems: 'center',
-    backgroundColor: colors.textPrimary,
-    borderRadius: radii.button,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.sm + 2
-  },
-  primaryButtonText: {
-    color: colors.bgBase,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
-  }
-})

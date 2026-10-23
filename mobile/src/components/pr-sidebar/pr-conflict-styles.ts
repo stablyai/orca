@@ -1,69 +1,60 @@
 import { StyleSheet } from 'react-native'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { colors, radii, spacing, textStyles, typography } from '../../theme/mobile-theme'
 
-// Styles for the conflicting-files section (file list + fallback notice). Muted/
-// monochrome to match the rest of the PR sidebar; split out so the section file and
-// the shared sidebar styles each stay focused. Ports the LOOK of the desktop
-// ConflictingFilesSection / MergeConflictNotice.
+// The conflicts section: notice, conflicting files and the mergeability refresh commands.
 export const prConflictStyles = StyleSheet.create({
+  notice: {
+    gap: spacing.xs
+  },
+  noticeTitle: {
+    ...textStyles.body,
+    fontWeight: '500',
+    color: colors.textPrimary,
+    flexShrink: 1
+  },
+  noticeBody: {
+    ...textStyles.callout,
+    color: colors.textSecondary
+  },
   meta: {
-    color: colors.textSecondary,
-    fontSize: 11
+    ...textStyles.subhead,
+    color: colors.textSecondary
   },
   metaMono: {
     fontFamily: typography.monoFamily,
-    color: colors.textSecondary,
-    fontSize: 11
+    fontSize: 13,
+    color: colors.textSecondary
   },
   filesHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.sm
+    gap: spacing.sm
   },
-  filesHeaderText: {
-    color: colors.textSecondary,
-    fontSize: 11
-  },
-  // The file list is capped + scrollable so a long conflict set doesn't push the
-  // rest of the sidebar off-screen (it lives inside the outer ScrollView).
+  // Capped and scrollable so a long conflict set doesn't push the rest of the page off-screen.
   fileList: {
-    maxHeight: 180,
-    marginTop: spacing.sm
+    maxHeight: 264,
+    marginHorizontal: -spacing.lg
   },
   fileListContent: {
-    gap: spacing.xs
+    paddingHorizontal: spacing.lg
   },
   fileRow: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.button,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingVertical: spacing.xs,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.separator
   },
-  filePath: {
-    color: colors.textPrimary,
-    fontSize: 11,
-    fontFamily: typography.monoFamily
+  fileName: {
+    ...textStyles.callout,
+    color: colors.textPrimary
   },
-  noticeTitle: {
-    color: colors.textPrimary,
-    fontSize: 11,
-    fontWeight: '600'
+  fileDir: {
+    ...textStyles.footnote,
+    color: colors.textMuted
   },
-  noticeBody: {
-    color: colors.textSecondary,
-    fontSize: 11,
-    marginTop: spacing.xs
-  },
-  commandBox: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.button,
-    marginTop: spacing.sm,
-    padding: spacing.sm
+  commandBlock: {
+    gap: spacing.xs
   },
   commandHeader: {
     flexDirection: 'row',
@@ -72,33 +63,20 @@ export const prConflictStyles = StyleSheet.create({
     gap: spacing.sm
   },
   commandLabel: {
-    color: colors.textSecondary,
-    fontSize: 10,
-    fontWeight: '600'
+    ...textStyles.footnote,
+    fontWeight: '500',
+    color: colors.textMuted,
+    flexShrink: 1
   },
-  copyCommandButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.button,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs
-  },
-  copyCommandButtonPressed: {
-    backgroundColor: colors.borderSubtle
-  },
-  copyCommandText: {
-    color: colors.textPrimary,
-    fontSize: 11,
-    fontWeight: '600'
+  commandBox: {
+    backgroundColor: colors.fieldFill,
+    borderRadius: radii.composerItem,
+    padding: spacing.md
   },
   commandText: {
     color: colors.textPrimary,
     fontFamily: typography.monoFamily,
-    fontSize: 10,
-    lineHeight: 15,
-    marginTop: spacing.sm
+    fontSize: 13,
+    lineHeight: 19
   }
 })

@@ -1,5 +1,6 @@
-import { useEffect, useState, type ReactNode } from 'react'
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native'
+import { useEffect, useState } from 'react'
+import { Linking, StyleSheet, View } from 'react-native'
+import { AlertCircle, WifiOff } from 'lucide-react-native'
 import { useNavigation, useNavigationContainerRef, useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
@@ -8,7 +9,7 @@ import {
 } from '../../modules/orca-mobile-web-shell/src'
 import { HostRouteNoticeBanner } from '../components/HostRouteNoticeBanner'
 import { ProtocolBlockScreen } from '../components/ProtocolBlockScreen'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { colors } from '../theme/mobile-theme'
 import type { BridgeInitRoute } from './bridge/bridge-envelope'
 import type { BridgeClearableRouteParam } from './bridge/bridge-route-update'
 import type {
@@ -40,20 +41,40 @@ import { useReportedShellOverlayLoad, type ShellOverlayLoad } from './shell-over
 import { pageSafeAreaInsets, usePublishedSafeAreaInsets } from './page-safe-area-insets'
 import { hostProfileUnreadableLine, pageFaultLine } from './shell-lifecycle-log'
 import { recordShellLifecycleLine } from './shell-lifecycle-line-recorder'
+import { ShellStateFrame, ShellStateMessage } from './ShellStateFrame'
+import { useHostDisplay } from '../transport/use-host-display'
+import { useForceReconnect } from '../transport/host-client-hooks'
 
-function failureMessage(reason: MobileWebShellFailureCause): string {
+const SHELL_CHECKING_LABEL = 'Checking desktop'
+
+function failureCopy(reason: MobileWebShellFailureCause): { title: string; message: string } {
   switch (reason) {
     case 'isolation-unavailable':
-      return "This device's WebView is too old to open the workspace safely."
+      return {
+        title: "This workspace can't open here",
+        message: "This device's WebView is too old to open the workspace safely."
+      }
     case 'download-failed':
-      return 'The latest app could not be downloaded from this host.'
+      return {
+        title: "Couldn't load the workspace",
+        message: 'It could not be downloaded from this desktop.'
+      }
     case 'status-unreadable':
-      return "Could not read this host's status. Go back and reopen it."
+      return {
+        title: "Couldn't read this desktop's status",
+        message: 'Go back and open it again.'
+      }
     case 'render-process-gone':
-      return 'The workspace stopped responding.'
+      return {
+        title: 'The workspace stopped responding',
+        message: 'Open it again to pick up where you left off.'
+      }
     case 'generation-unreadable':
     case 'document-load-failed':
-      return 'The downloaded app could not be opened.'
+      return {
+        title: "Couldn't open the workspace",
+        message: 'The downloaded workspace could not be opened.'
+      }
   }
 }
 
@@ -62,47 +83,37 @@ function failureMessage(reason: MobileWebShellFailureCause): string {
 function updateNoticeMessage(notice: MobileWebShellUpdateNotice): string {
   switch (notice) {
     case 'update-failed':
-      return "Couldn't download the latest app from this host. Showing the last version that worked."
+      return "Couldn't update the workspace from this desktop. Showing the last version that worked."
   }
-}
-
-function Centered({ children }: { children: ReactNode }) {
-  return <View style={styles.centered}>{children}</View>
-}
-
-function Waiting({ label }: { label: string }) {
-  return (
-    <Centered>
-      <ShellWaitingFrame label={label} />
-    </Centered>
-  )
 }
 
 function Failed({
   state,
-  onRetry
+  onRetry,
+  onBack
 }: {
   state: Extract<MobileWebShellSessionState, { kind: 'failed' }>
   onRetry: () => void
+  onBack: () => void
 }) {
   // No retry for the fence, and none for an unread status: a device whose WebView cannot be
   // isolated will not grow one on a tap, and a retry re-reads the same settled gate it already has.
   const retryable = state.reason !== 'isolation-unavailable' && state.reason !== 'status-unreadable'
+  const { title, message } = failureCopy(state.reason)
+  const back = { label: 'Back', onPress: onBack }
   return (
-    <Centered>
-      <Text style={styles.failedMessage} testID="mobile-web-shell-failed">
-        {failureMessage(state.reason)}
-      </Text>
-      {retryable ? (
-        <Pressable
-          style={({ pressed }) => [styles.retryButton, pressed && styles.pressed]}
-          testID="mobile-web-shell-retry"
-          onPress={onRetry}
-        >
-          <Text style={styles.retryLabel}>Try again</Text>
-        </Pressable>
-      ) : null}
-    </Centered>
+    <ShellStateMessage
+      icon={AlertCircle}
+      title={title}
+      message={message}
+      testID="mobile-web-shell-failed"
+      primary={
+        retryable
+          ? { label: 'Try again', onPress: onRetry, testID: 'mobile-web-shell-retry' }
+          : back
+      }
+      secondary={retryable ? back : undefined}
+    />
   )
 }
 
@@ -186,6 +197,14 @@ export function MobileWebShellScreen({
   const pageInsets = pageSafeAreaInsets({ insets, topCovered: noticeShown })
   const { snapshot, unreadable, readStorage, refreshStorage, writeStorage, readWorkspaceKey } =
     usePageHostSnapshot(hostId, route.pathname, ownsHostArea)
+  const hostTitle = useHostDisplay(snapshot?.host ?? null).title || undefined
+  const forceReconnect = useForceReconnect()
+  // The frames' Back: this screen's place on the stack, or home from a cold deep link.
+  const leaveShell = () => {
+    if (popShellStack() === 'nothing-to-pop') {
+      router.replace('/')
+    }
+  }
   // Declared before the bridge so the handler it is handed already belongs to this session: the
   // media verbs hold staged files, and a registry born after the host would outlive the page.
   const serveDeviceVerb = useNativeDeviceVerbs(state.kind === 'ready' ? state.sessionId : null)
@@ -359,36 +378,46 @@ export function MobileWebShellScreen({
     return null
   }
   if (state.kind === 'route-unavailable') {
-    return <PageRouteUnavailableScreen hostId={hostId} />
+    return <PageRouteUnavailableScreen hostId={hostId} hostName={hostTitle} />
   }
   if (state.kind === 'wall') {
-    return <ProtocolBlockScreen verdict={state.verdict} />
-  }
-  if (state.kind === 'failed') {
-    return <Failed state={state} onRetry={retry} />
-  }
-  if (state.kind === 'offline') {
-    return (
-      <Centered>
-        <Text style={styles.waitingLabel} testID="mobile-web-shell-offline">
-          Connect to this host to download the latest app
-        </Text>
-      </Centered>
-    )
-  }
-  if (state.kind === 'fetching') {
-    return (
-      <Centered>
-        <ShellDownloadProgress
-          state={state}
-          feed={downloadProgress}
-          host={snapshot?.host ?? null}
-        />
-      </Centered>
-    )
+    return <ProtocolBlockScreen verdict={state.verdict} hostName={hostTitle} />
   }
   if (state.kind !== 'ready') {
-    return <Waiting label={state.kind === 'activating' ? SHELL_OPENING_LABEL : 'Checking host'} />
+    return (
+      <ShellStateFrame title={hostTitle} onBack={leaveShell}>
+        {state.kind === 'failed' ? (
+          <Failed state={state} onRetry={retry} onBack={leaveShell} />
+        ) : state.kind === 'offline' ? (
+          <ShellStateMessage
+            icon={WifiOff}
+            title={hostTitle ? `Can't reach ${hostTitle}` : "Can't reach this desktop"}
+            message="Connect to it to load this workspace."
+            testID="mobile-web-shell-offline"
+            primary={
+              forceReconnect
+                ? {
+                    label: 'Reconnect',
+                    // The connection state already reports a failed attempt; a rejection adds nothing.
+                    onPress: () => void forceReconnect(hostId).catch(() => {})
+                  }
+                : { label: 'Back', onPress: leaveShell }
+            }
+            secondary={forceReconnect ? { label: 'Back', onPress: leaveShell } : undefined}
+          />
+        ) : state.kind === 'fetching' ? (
+          <ShellDownloadProgress
+            state={state}
+            feed={downloadProgress}
+            host={snapshot?.host ?? null}
+          />
+        ) : (
+          <ShellWaitingFrame
+            label={state.kind === 'activating' ? SHELL_OPENING_LABEL : SHELL_CHECKING_LABEL}
+          />
+        )}
+      </ShellStateFrame>
+    )
   }
   return (
     <View
@@ -451,7 +480,12 @@ export function MobileWebShellScreen({
         }}
       />
       {overlay ? null : (
-        <ShellPageCover label={SHELL_OPENING_LABEL} visible={pageFrame === 'unpainted'} />
+        <ShellPageCover
+          label={SHELL_OPENING_LABEL}
+          visible={pageFrame === 'unpainted'}
+          title={hostTitle}
+          onBack={leaveShell}
+        />
       )}
       <ShellDevFacts state={state} droppedBinaryFrames={droppedBinaryFrames} />
     </View>
@@ -468,38 +502,5 @@ const styles = StyleSheet.create({
   },
   unpaintedOverlay: {
     opacity: 0
-  },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bgBase,
-    paddingHorizontal: spacing.lg
-  },
-  waitingLabel: {
-    fontSize: typography.bodySize,
-    color: colors.textSecondary,
-    marginTop: spacing.md,
-    textAlign: 'center'
-  },
-  failedMessage: {
-    fontSize: typography.bodySize,
-    color: colors.textPrimary,
-    textAlign: 'center',
-    marginBottom: spacing.lg
-  },
-  retryButton: {
-    backgroundColor: colors.bgRaised,
-    paddingVertical: spacing.sm + 2,
-    paddingHorizontal: spacing.lg,
-    borderRadius: radii.button
-  },
-  retryLabel: {
-    fontSize: typography.bodySize,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  pressed: {
-    opacity: 0.7
   }
 })

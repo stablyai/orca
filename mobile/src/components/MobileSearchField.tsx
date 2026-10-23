@@ -9,7 +9,7 @@ import {
   type TextInputProps
 } from 'react-native'
 import { Search, X } from 'lucide-react-native'
-import { colors, radii, spacing } from '../theme/mobile-theme'
+import { colors, floatingSurface, radii, spacing, textStyles } from '../theme/mobile-theme'
 import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 
 // Why: toolbar/list chrome paints and settles after the open tap; native
@@ -30,8 +30,11 @@ type MobileSearchFieldProps = {
   returnKeyType?: TextInputProps['returnKeyType']
   onSubmitEditing?: TextInputProps['onSubmitEditing']
   onBlur?: TextInputProps['onBlur']
+  onFocus?: TextInputProps['onFocus']
   editable?: boolean
   accessibilityLabel?: string
+  /** Opaque, with an edge and shadow, for a field floating over scrolling content. */
+  floating?: boolean
 }
 
 /**
@@ -50,8 +53,10 @@ export function MobileSearchField({
   returnKeyType = 'search',
   onSubmitEditing,
   onBlur,
+  onFocus,
   editable = true,
-  accessibilityLabel
+  accessibilityLabel,
+  floating = false
 }: MobileSearchFieldProps) {
   const inputRef = useRef<TextInput>(null)
   const [focused, setFocused] = useState(false)
@@ -93,10 +98,17 @@ export function MobileSearchField({
   }
 
   return (
-    <View style={[styles.shell, focused && styles.shellFocused, !editable && styles.shellDisabled]}>
+    <View
+      style={[
+        styles.shell,
+        floating && floatingSurface,
+        focused && styles.shellFocused,
+        !editable && styles.shellDisabled
+      ]}
+    >
       <Search
-        size={15}
-        color={focused ? colors.textPrimary : colors.textSecondary}
+        size={16}
+        color={focused ? colors.textSecondary : colors.textMuted}
         strokeWidth={2.2}
       />
       <TextInput
@@ -105,9 +117,7 @@ export function MobileSearchField({
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        // Why: textSecondary keeps the hint readable on bgRaised; textMuted
-        // disappears against the raised shell and makes the field look empty.
-        placeholderTextColor={colors.textSecondary}
+        placeholderTextColor={colors.textMuted}
         autoCapitalize="none"
         autoCorrect={false}
         // Still request native auto-focus; the delayed ref focus is the reliable path.
@@ -116,7 +126,10 @@ export function MobileSearchField({
         editable={editable}
         returnKeyType={returnKeyType}
         onSubmitEditing={onSubmitEditing}
-        onFocus={() => setFocused(true)}
+        onFocus={(event) => {
+          setFocused(true)
+          onFocus?.(event)
+        }}
         onBlur={(event) => {
           setFocused(false)
           onBlur?.(event)
@@ -136,7 +149,7 @@ export function MobileSearchField({
           {/* Why: chip + larger hit target — a bare 14px X was hard to tap and
               read as decoration rather than a clear control. */}
           <View style={styles.clearChip}>
-            <X size={12} color={colors.surfaceBright} strokeWidth={2.6} />
+            <X size={11} color={colors.bgBase} strokeWidth={3} />
           </View>
         </Pressable>
       ) : null}
@@ -146,28 +159,27 @@ export function MobileSearchField({
 
 const styles = StyleSheet.create({
   shell: {
-    minHeight: 42,
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    // Keep search visually distinct from surrounding panels.
-    backgroundColor: colors.bgRaised,
+    backgroundColor: colors.fill,
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.input,
-    paddingLeft: spacing.md,
-    paddingRight: spacing.xs,
+    borderColor: 'transparent',
+    borderRadius: radii.pill,
+    paddingLeft: 14,
+    paddingRight: 4,
     paddingVertical: Platform.OS === 'ios' ? spacing.sm : spacing.xs + 2
   },
   shellFocused: {
-    // Why: monochrome focus cue without burning the blue accent token
-    // (reserved for state/selection). textMuted reads clearly on bgRaised.
-    borderColor: colors.textMuted
+    // A brighter edge, not the blue accent: blue is kept for selection and links.
+    borderColor: colors.fieldBorderFocused
   },
   shellDisabled: {
-    opacity: 0.55
+    opacity: 0.4
   },
   input: {
+    ...textStyles.body,
     flex: 1,
     minWidth: 0,
     padding: 0,
@@ -186,16 +198,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center'
   },
   clearButtonPressed: {
-    opacity: 0.7
+    opacity: 0.6
   },
   clearChip: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    // Why: textMuted reads as a solid chip on bgRaised; borderSubtle was nearly
-    // invisible and made the clear control feel like decorative chrome.
     backgroundColor: colors.textMuted
   }
 })

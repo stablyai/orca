@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { ChevronDown, ChevronRight } from 'lucide-react-native'
+import { ChevronRight } from 'lucide-react-native'
 import type { PRState } from '../../../../src/shared/github/pull-request-types'
 import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-item-types'
 import type { GitHubPrRepoSlug } from '../../session/github-pr-rpc'
@@ -8,6 +8,10 @@ import { colors } from '../../theme/mobile-theme'
 import { canAddRootComment } from '../../session/pr-comment-actions'
 import { isPrSidebarDetailsPlaceholder } from '../../session/mobile-pr-sidebar-state'
 import type { MobilePrCommentActions } from '../../session/use-mobile-pr-comment-actions'
+import { MobileSegmentedControl } from '../MobileSegmentedControl'
+import { Button } from '../ui/Button'
+import { Collapsible } from '../ui/Collapsible'
+import { slideTransition } from '../ui/transition-styles'
 import { PRSection } from './PRSection'
 import { CommentMarkdown } from './CommentMarkdown'
 import { PRCommentCard, type PRCommentCardActions } from './PRCommentCard'
@@ -46,6 +50,8 @@ type Props = {
   // Author logins manually marked as bots on desktop; keeps the Humans/Bots
   // tabs classifying the same comments as the desktop panel.
   botAuthorOverrides?: ReadonlySet<string>
+  // Re-fetches the PR when its details failed to load.
+  onRetry?: () => void
 }
 
 // Render comments in bounded pages — the whole sidebar is one ScrollView (can't
@@ -61,7 +67,8 @@ export function PRCommentsSection({
   prState,
   prRepo,
   actions,
-  botAuthorOverrides
+  botAuthorOverrides,
+  onRetry
 }: Props) {
   // details is null while phase 2 (the heavy comments/body payload) is still loading.
   // A synthetic placeholder means phase 2 failed — do not paint that as empty success.
@@ -121,15 +128,22 @@ export function PRCommentsSection({
   const shownGroups = groups.slice(0, limit)
   const remaining = groups.length - shownGroups.length
 
+  const retry = onRetry ? <Button label="Retry" size="compact" onPress={onRetry} /> : null
+  const segments = PR_COMMENT_AUDIENCE_FILTERS.map((tab) => ({
+    value: tab.value,
+    label: `${tab.label} ${counts[tab.value]}`
+  }))
+
   return (
     <>
       <PRSection title="Description">
         {loadingDetails ? (
-          <ActivityIndicator color={colors.textSecondary} />
+          <ActivityIndicator color={colors.textSecondary} style={styles.spinner} />
         ) : detailsFailed ? (
-          <Text style={styles.noDescription}>
-            Could not load description. Tap refresh to try again.
-          </Text>
+          <View style={styles.failedRow}>
+            <Text style={styles.noDescription}>Couldn't load the description.</Text>
+            {retry}
+          </View>
         ) : body.trim() ? (
           <CommentMarkdown content={body} variant="document" />
         ) : (
@@ -139,53 +153,39 @@ export function PRCommentsSection({
 
       <PRSection
         title="Comments"
-        trailing={
-          comments.length > 0 ? (
-            <View style={styles.countChip}>
-              <Text style={styles.countChipText}>{comments.length}</Text>
-            </View>
-          ) : undefined
-        }
+        count={comments.length > 0 ? comments.length : undefined}
+        layout="bare"
       >
         {loadingDetails ? (
-          <ActivityIndicator color={colors.textSecondary} />
+          <View style={[styles.thread, shared.noteRow]}>
+            <ActivityIndicator color={colors.textSecondary} />
+            <Text style={shared.noteRowText}>Loading comments…</Text>
+          </View>
         ) : detailsFailed ? (
-          <Text style={styles.empty}>Could not load comments. Tap refresh to try again.</Text>
+          <View style={[styles.thread, shared.noteRow]}>
+            <Text style={shared.noteRowText}>Couldn't load comments.</Text>
+            {retry}
+          </View>
         ) : (
-          <View style={styles.list}>
+          <>
             {comments.length === 0 ? (
-              <Text style={styles.empty}>No comments yet.</Text>
+              <View style={[styles.thread, shared.noteRow]}>
+                <Text style={shared.noteRowText}>No comments yet.</Text>
+              </View>
             ) : (
               <>
                 {isPr ? (
-                  <View style={styles.audienceTabs}>
-                    {PR_COMMENT_AUDIENCE_FILTERS.map((tab) => {
-                      const active = tab.value === filter
-                      return (
-                        <Pressable
-                          key={tab.value}
-                          style={[styles.audienceTab, active && styles.audienceTabActive]}
-                          onPress={() => selectFilter(tab.value)}
-                          accessibilityRole="button"
-                          accessibilityState={{ selected: active }}
-                        >
-                          <Text
-                            style={[styles.audienceTabText, active && styles.audienceTabTextActive]}
-                          >
-                            {tab.label}
-                          </Text>
-                          <Text
-                            style={[styles.audienceTabText, active && styles.audienceTabTextActive]}
-                          >
-                            {counts[tab.value]}
-                          </Text>
-                        </Pressable>
-                      )
-                    })}
-                  </View>
+                  <MobileSegmentedControl
+                    segments={segments}
+                    selected={filter}
+                    onSelect={selectFilter}
+                    fill
+                  />
                 ) : null}
                 {visible.length === 0 ? (
-                  <Text style={styles.empty}>{getPRCommentAudienceEmptyLabel(filter)}</Text>
+                  <View style={[styles.thread, shared.noteRow]}>
+                    <Text style={shared.noteRowText}>{getPRCommentAudienceEmptyLabel(filter)}</Text>
+                  </View>
                 ) : (
                   <>
                     {shownGroups.map((group) => (
@@ -197,16 +197,14 @@ export function PRCommentsSection({
                       />
                     ))}
                     {remaining > 0 ? (
-                      <Pressable
-                        style={styles.showMore}
+                      <Button
+                        label={`Show ${Math.min(remaining, COMMENT_PAGE)} more${
+                          remaining > COMMENT_PAGE ? ` of ${remaining}` : ''
+                        }`}
+                        size="compact"
                         onPress={() => setLimit((l) => l + COMMENT_PAGE)}
-                        accessibilityRole="button"
-                      >
-                        <Text style={styles.showMoreText}>
-                          Show {Math.min(remaining, COMMENT_PAGE)} more
-                          {remaining > COMMENT_PAGE ? ` of ${remaining}` : ''}
-                        </Text>
-                      </Pressable>
+                        style={styles.showMore}
+                      />
                     ) : null}
                   </>
                 )}
@@ -214,16 +212,14 @@ export function PRCommentsSection({
             )}
             {actions?.error ? <Text style={styles.actionError}>{actions.error}</Text> : null}
             {canComment && actions ? (
-              <View style={styles.rootComposer}>
-                <PRCommentComposer
-                  placeholder="Add a comment…"
-                  submitLabel="Comment"
-                  submitting={actions.isRootBusy}
-                  onSubmit={actions.addRootComment}
-                />
-              </View>
+              <PRCommentComposer
+                placeholder="Add a comment…"
+                submitLabel="Comment"
+                submitting={actions.isRootBusy}
+                onSubmit={actions.addRootComment}
+              />
             ) : null}
-          </View>
+          </>
         )}
       </PRSection>
     </>
@@ -257,28 +253,43 @@ function CommentGroupView({
           />
         ]
 
+  const thread = cards.map((card, index) => (
+    <Fragment key={card.key}>
+      {index > 0 ? <View style={styles.separator} /> : null}
+      {card}
+    </Fragment>
+  ))
+
   if (!isResolvedPRCommentGroup(group)) {
-    return <View style={styles.group}>{cards}</View>
+    return <View style={styles.thread}>{thread}</View>
   }
 
   // Resolved threads collapse behind a summary row (desktop accordion parity).
   const root = getPRCommentGroupRoot(group)
   const count = getPRCommentGroupCount(group)
-  const Chevron = expanded ? ChevronDown : ChevronRight
   return (
-    <View style={styles.group}>
+    <View style={styles.thread}>
       <Pressable
-        style={styles.resolvedHeader}
         onPress={() => setExpanded((v) => !v)}
         accessibilityRole="button"
+        accessibilityState={{ expanded }}
       >
-        <Chevron size={14} color={colors.textSecondary} strokeWidth={2.2} />
-        <Text style={styles.resolvedHeaderText} numberOfLines={1}>
-          Resolved {group.kind === 'thread' ? 'thread' : 'comment'} by {root.author}
-          {count > 1 ? ` (${count})` : ''}
-        </Text>
+        {({ pressed }) => (
+          <View style={[shared.noteRow, pressed && shared.rowPressed]}>
+            <View style={[expanded ? shared.chevronOpen : shared.chevronClosed, slideTransition]}>
+              <ChevronRight size={16} color={colors.textMuted} strokeWidth={2.2} />
+            </View>
+            <Text style={shared.noteRowText} numberOfLines={1}>
+              Resolved {group.kind === 'thread' ? 'thread' : 'comment'} by {root.author}
+              {count > 1 ? ` (${count})` : ''}
+            </Text>
+          </View>
+        )}
       </Pressable>
-      {expanded ? <View style={shared.sectionBody}>{cards}</View> : null}
+      <Collapsible open={expanded}>
+        <View style={styles.separator} />
+        {thread}
+      </Collapsible>
     </View>
   )
 }

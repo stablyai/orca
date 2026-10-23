@@ -1,10 +1,11 @@
-import { ChevronDown, ChevronRight } from 'lucide-react-native'
+import { ChevronDown } from 'lucide-react-native'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
-import { colors, radii, spacing } from '../theme/mobile-theme'
+import { colors, MIN_TOUCH_TARGET, radii, spacing, textStyles } from '../theme/mobile-theme'
 import { agentDotState } from '../worktree/agent-row-display'
 import { AgentStateDot } from './AgentStateDot'
 import { MobileAgentIcon } from './MobileAgentIcon'
+import { pressTransition, slideTransition } from './ui/transition-styles'
 
 const MAX_VISIBLE_AGENTS = 3
 
@@ -15,6 +16,7 @@ type Props = {
   onToggle: () => void
 }
 
+/** "3 agents" with their states, a 44 pt disclosure inside the row that shows every agent. */
 export function WorktreeAgentSummary({ agents, expanded, now, onToggle }: Props) {
   const visibleAgents = agents.slice(0, MAX_VISIBLE_AGENTS)
   const hiddenCount = agents.length - visibleAgents.length
@@ -24,8 +26,8 @@ export function WorktreeAgentSummary({ agents, expanded, now, onToggle }: Props)
     <Pressable
       style={({ pressed }) => [
         styles.summary,
-        !expanded && styles.summaryCollapsed,
-        pressed && styles.summaryPressed
+        pressed && styles.summaryPressed,
+        pressed ? pressTransition.pressed : pressTransition.rest
       ]}
       accessibilityRole="button"
       accessibilityLabel={`${expanded ? 'Collapse' : 'Expand'} ${subject}`}
@@ -35,70 +37,64 @@ export function WorktreeAgentSummary({ agents, expanded, now, onToggle }: Props)
         onToggle()
       }}
     >
-      {expanded ? (
-        <Text style={styles.expandedLabel}>{subject}</Text>
-      ) : (
+      {expanded ? null : (
         <View style={styles.agentIcons}>
           {visibleAgents.map((agent) => (
             <View key={agent.paneKey} style={styles.agentStatus}>
-              <AgentStateDot state={agentDotState(agent, now)} />
-              {agent.agentType ? <MobileAgentIcon agentId={agent.agentType} size={13} /> : null}
+              <AgentStateDot state={agentDotState(agent, now)} size="regular" />
+              {agent.agentType ? <MobileAgentIcon agentId={agent.agentType} size={14} /> : null}
             </View>
           ))}
           {hiddenCount > 0 ? <Text style={styles.hiddenCount}>+{hiddenCount}</Text> : null}
         </View>
       )}
-      {expanded ? (
-        <ChevronDown size={12} color={colors.textMuted} />
-      ) : (
-        <ChevronRight size={12} color={colors.textMuted} />
-      )}
+      <Text style={styles.label}>{subject}</Text>
+      <View
+        style={[expanded ? styles.chevronOpen : styles.chevronClosed, slideTransition]}
+        pointerEvents="none"
+      >
+        <ChevronDown size={16} color={colors.textMuted} strokeWidth={2.2} />
+      </View>
     </Pressable>
   )
 }
 
 const styles = StyleSheet.create({
   summary: {
-    minHeight: 24,
+    alignSelf: 'flex-start',
+    minHeight: MIN_TOUCH_TARGET,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.xs,
-    borderRadius: radii.button
+    gap: spacing.sm,
+    marginHorizontal: -spacing.sm,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radii.field
   },
-  summaryCollapsed: {
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgRaised
-  },
-  summaryPressed: {
-    opacity: 0.72
-  },
-  expandedLabel: {
-    flex: 1,
-    paddingLeft: spacing.xs,
-    fontSize: 11,
-    fontWeight: '500',
-    color: colors.textMuted
-  },
+  summaryPressed: { backgroundColor: colors.fill },
   agentIcons: {
-    flex: 1,
-    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs
   },
   agentStatus: {
-    height: 19,
+    height: 24,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
-    paddingHorizontal: 3,
-    borderRadius: radii.button,
-    backgroundColor: colors.bgPanel
+    gap: 4,
+    paddingHorizontal: 6,
+    borderRadius: radii.pill,
+    backgroundColor: colors.fill
   },
   hiddenCount: {
-    fontSize: 10,
-    color: colors.textMuted
-  }
+    ...textStyles.footnote,
+    color: colors.textMuted,
+    fontVariant: ['tabular-nums']
+  },
+  label: {
+    ...textStyles.subhead,
+    fontWeight: '500',
+    color: colors.textSecondary
+  },
+  chevronOpen: { transform: [{ rotate: '0deg' }] },
+  chevronClosed: { transform: [{ rotate: '-90deg' }] }
 })

@@ -1,8 +1,9 @@
-import { View, Text, Pressable } from 'react-native'
-import { AlertTriangle, X } from 'lucide-react-native'
+import { StyleSheet, View } from 'react-native'
+import { Banner } from '../components/ui/Banner'
+import { verdictDisplayLabel } from '../transport/connection-health'
+import { spacing } from '../theme/mobile-theme'
 import { SessionDockColumn } from './SessionDockColumn'
 import { dismissMobileSessionCreateWarningState } from './mobile-session-create-warning-state'
-import { colors } from '../theme/mobile-theme'
 import { styles } from './mobile-session-styles'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { MobileSessionActiveContent } from './MobileSessionActiveContent'
@@ -21,23 +22,44 @@ export function MobileSessionContentRow({ controller }: { controller: MobileSess
     createWarning,
     handleFileOpenStart,
     handleOpenedFileDiff,
-    handleSessionContentRowLayout
+    handleSessionContentRowLayout,
+    showConnectionRetry,
+    forceReconnectHost,
+    connectionVerdict,
+    visibleTabs,
+    draftStorageFailed,
+    dismissDraftStorageFailure
   } = controller
   return (
     <View style={styles.sessionContentRow} onLayout={handleSessionContentRowLayout}>
       <View style={styles.sessionContentMain}>
         {createWarning ? (
-          <View style={styles.createWarningBanner}>
-            <AlertTriangle size={16} color={colors.statusAmber} strokeWidth={2.2} />
-            <Text style={styles.createWarningText}>{createWarning}</Text>
-            <Pressable
-              style={styles.createWarningDismiss}
-              onPress={() => setCreateWarningState(dismissMobileSessionCreateWarningState)}
-              accessibilityLabel="Dismiss workspace creation warning"
-              hitSlop={8}
-            >
-              <X size={16} color={colors.textMuted} strokeWidth={2.2} />
-            </Pressable>
+          <View style={bannerStyles.slot}>
+            <Banner
+              tone="warning"
+              message={createWarning}
+              onDismiss={() => setCreateWarningState(dismissMobileSessionCreateWarningState)}
+            />
+          </View>
+        ) : null}
+        {draftStorageFailed ? (
+          <View style={bannerStyles.slot}>
+            <Banner
+              tone="warning"
+              title="Command draft not saved"
+              message="This phone could not store it. Keep this screen open so you don't lose it."
+              onDismiss={dismissDraftStorageFailure}
+            />
+          </View>
+        ) : null}
+        {/* Native shells only: on the page the shell owns the connection, so a retry would do nothing. */}
+        {showConnectionRetry && hostId && forceReconnectHost && visibleTabs.length > 0 ? (
+          <View style={bannerStyles.slot}>
+            <Banner
+              tone="warning"
+              message={verdictDisplayLabel(connectionVerdict)}
+              action={{ label: 'Try again', onPress: () => void forceReconnectHost(hostId) }}
+            />
           </View>
         ) : null}
         <MobileSessionActiveContent controller={controller} />
@@ -59,3 +81,7 @@ export function MobileSessionContentRow({ controller }: { controller: MobileSess
     </View>
   )
 }
+
+const bannerStyles = StyleSheet.create({
+  slot: { paddingTop: spacing.sm, paddingBottom: spacing.xs }
+})

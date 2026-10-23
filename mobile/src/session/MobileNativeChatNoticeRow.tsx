@@ -11,12 +11,13 @@ import { isTextBlock, type NativeChatBlock } from '../../../src/shared/native-ch
 import { usageLimitLineText } from '../../../src/shared/agent-session-usage-limit-words'
 import { MobileMarkdown } from '../components/MobileMarkdown'
 import { INLINE_TEXT_SELECTION } from '../components/inline-text-selection'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
-import { MONO_SIZE, TEXT_SIZE, scaledType } from './mobile-native-chat-message-styles'
+import { CODE_FONT_FAMILY } from '../components/mobile-markdown-styles'
+import { colors, radii, spacing, textStyles } from '../theme/mobile-theme'
+import { MONO_SIZE, scaledText, scaledType } from './mobile-native-chat-message-styles'
 
 const TONE_COLOR: Record<NativeChatNoticeTone, string> = {
   warning: colors.statusAmber,
-  error: colors.statusRed,
+  error: colors.danger,
   notice: colors.textMuted
 }
 
@@ -36,7 +37,7 @@ export function MobileNativeChatNoticeRow({
 }): React.JSX.Element | null {
   const notice = nativeChatNoticeBlock(blocks)
   // A system row with no notice of its own is an aside, a size under the agent's prose.
-  const aside = [styles.faint, scaledType(typography.bodySize, fontScale)]
+  const aside = [styles.faint, scaledText(textStyles.callout, fontScale)]
   if (!notice) {
     const text = blocks
       .filter(isTextBlock)
@@ -55,7 +56,9 @@ export function MobileNativeChatNoticeRow({
       return (
         <View style={styles.divider} accessibilityRole="text" accessibilityLabel={label}>
           <View style={styles.rule} />
-          <Text style={styles.dividerLabel}>{label}</Text>
+          <Text style={[styles.dividerLabel, scaledText(textStyles.footnote, fontScale)]}>
+            {label}
+          </Text>
           <View style={styles.rule} />
         </View>
       )
@@ -73,7 +76,7 @@ export function MobileNativeChatNoticeRow({
       return (
         <Text
           selectable={INLINE_TEXT_SELECTION}
-          style={[styles.faint, scaledType(TEXT_SIZE, fontScale)]}
+          style={[styles.faint, scaledText(textStyles.body, fontScale)]}
         >
           {AGENT_SESSION_HOST_STATUS_COPY[look.presentation]}
         </Text>
@@ -81,7 +84,9 @@ export function MobileNativeChatNoticeRow({
     case 'plan':
       return (
         <View style={styles.card}>
-          <Text style={styles.planTitle}>{NATIVE_CHAT_NOTICE_COPY.plan}</Text>
+          <Text style={[styles.planTitle, scaledText(textStyles.callout, fontScale)]}>
+            {NATIVE_CHAT_NOTICE_COPY.plan}
+          </Text>
           <MobileMarkdown
             content={notice.text}
             rangeSelectable
@@ -101,7 +106,7 @@ export function MobileNativeChatNoticeRow({
       const lineText = usageLimitLineText(notice)
       const textStyle = [
         styles.line,
-        scaledType(TEXT_SIZE, fontScale),
+        scaledText(look.tone ? textStyles.callout : textStyles.body, fontScale),
         look.tone && { color: TONE_COLOR[look.tone] }
       ]
       if (!look.tone) {
@@ -116,7 +121,7 @@ export function MobileNativeChatNoticeRow({
       return (
         <View style={[styles.card, styles.toneCard]}>
           <Icon
-            size={16 * fontScale}
+            size={18 * fontScale}
             color={TONE_COLOR[look.tone]}
             strokeWidth={2}
             style={styles.toneIcon}
@@ -140,40 +145,44 @@ const styles = StyleSheet.create({
   rule: {
     flex: 1,
     height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle
+    backgroundColor: colors.separator
   },
   dividerLabel: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize
+    ...textStyles.footnote,
+    color: colors.textMuted
   },
   faint: {
+    ...textStyles.callout,
     color: colors.textMuted
   },
   commandOutput: {
     color: colors.textPrimary,
-    fontFamily: typography.monoFamily
+    fontFamily: CODE_FONT_FAMILY
   },
   card: {
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.row,
+    borderColor: colors.separator,
+    borderRadius: radii.card,
     backgroundColor: colors.bgPanel,
-    padding: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
     gap: spacing.sm
   },
   planTitle: {
+    ...textStyles.callout,
     color: colors.textPrimary,
-    fontSize: typography.bodySize,
     fontWeight: '600'
   },
   toneCard: {
     flexDirection: 'row',
-    alignItems: 'flex-start'
+    alignItems: 'flex-start',
+    gap: spacing.md
   },
   toneIcon: {
-    marginTop: 2
+    marginTop: 1
   },
   line: {
+    ...textStyles.body,
     color: colors.textPrimary
   },
   toneText: {

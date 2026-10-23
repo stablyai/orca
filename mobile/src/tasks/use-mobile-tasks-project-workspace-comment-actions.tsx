@@ -1,5 +1,6 @@
 import type { WorkspaceCreateActionsModel } from './use-mobile-tasks-workspace-create-actions'
 import { useCallback } from './mobile-tasks-dependencies'
+import { triggerSuccess } from '../platform/haptics'
 import {
   type DetailComment,
   type GitHubProjectRow,
@@ -171,7 +172,9 @@ export function useMobileTasksProjectWorkspaceCommentActions(model: WorkspaceCre
                           ...(updates.title !== undefined ? { title: updates.title } : {}),
                           ...(updates.body !== undefined ? { body: updates.body } : {}),
                           ...(updates.state !== undefined
-                            ? { state: updates.state === 'closed' ? 'CLOSED' : 'OPEN' }
+                            ? {
+                                state: updates.state === 'closed' ? 'CLOSED' : 'OPEN'
+                              }
                             : {})
                         }
                       }
@@ -221,12 +224,16 @@ export function useMobileTasksProjectWorkspaceCommentActions(model: WorkspaceCre
         if (!result.ok) {
           throw new Error(result.error?.message ?? 'Failed to add comment')
         }
+        triggerSuccess()
         setProjectCommentDraft('')
         if (result.comment) {
           setProjectRowDetail((current) =>
             current?.provider === 'github'
-              ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the schema requires the comment's `id` and types its body/author/createdAt; the thread renderer owns the rest of the record, and the recorded reply carries `id` as a NUMBER, which DetailComment permits and a narrower requirement would refuse.
-                { ...current, comments: [...current.comments, result.comment as DetailComment] }
+              ? {
+                  ...current,
+                  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the schema requires the comment's `id` and types its body/author/createdAt; the thread renderer owns the rest of the record, and the recorded reply carries `id` as a NUMBER, which DetailComment permits and a narrower requirement would refuse.
+                  comments: [...current.comments, result.comment as DetailComment]
+                }
               : current
           )
         }

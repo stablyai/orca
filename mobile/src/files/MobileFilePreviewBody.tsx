@@ -1,7 +1,7 @@
 import { MobileFileMediaPreview } from './MobileFileMediaPreview'
 import type { MobileFilePreviewRpcSender } from './mobile-file-preview-operations'
-import { ActivityIndicator, Image, ScrollView, Text, View } from 'react-native'
-import { colors } from '../theme/mobile-theme'
+import { Image, ScrollView, View } from 'react-native'
+import { FileX, WifiOff } from 'lucide-react-native'
 import type { MobileFilePreviewResult } from './mobile-file-preview-request'
 import { MobileFileMarkdownPreview } from './MobileFileMarkdownPreview'
 import { MobileFilePreviewEditableSource } from './MobileFilePreviewEditableSource'
@@ -9,6 +9,10 @@ import { MobileFilePreviewSourceText } from './MobileFilePreviewSourceText'
 import type { MobileFilePreviewLineColumn } from './mobile-file-preview-line-column'
 import { filePreviewStyles as styles } from './mobile-file-preview-styles'
 import { MobileLoadErrorState } from '../components/MobileLoadErrorState'
+import { MobileHtmlPreview } from '../components/MobileHtmlPreview'
+import { MobilePreviewModeToolbar } from '../components/MobilePreviewModeToolbar'
+import { MobileSourceCopyButton } from '../components/MobileSourceCopyButton'
+import { StateView } from '../components/ui/StateView'
 
 type Props = {
   preview: MobileFilePreviewResult
@@ -31,23 +35,26 @@ type Props = {
 
 export function MobileFilePreviewBody({ preview, ...options }: Props) {
   if (preview.status === 'loading') {
+    return <StateView loading title={preview.message} />
+  }
+  if (preview.status === 'waiting') {
     return (
-      <View style={styles.state}>
-        <ActivityIndicator size="small" color={colors.textSecondary} />
-        <Text style={styles.stateText}>{preview.message}</Text>
-      </View>
+      <StateView
+        icon={WifiOff}
+        title="Waiting for desktop"
+        message="The file opens once your desktop is back online."
+        primary={options.onRetry ? { label: 'Retry', onPress: options.onRetry } : undefined}
+      />
     )
   }
-  if (preview.status === 'error' || preview.status === 'waiting') {
+  if (preview.status === 'error') {
     return <MobileLoadErrorState message={preview.message} onRetry={options.onRetry} />
   }
   if (preview.status === 'empty') {
     return options.editable ? (
       <EditablePreviewSource {...options} />
     ) : (
-      <View style={styles.state}>
-        <Text style={styles.stateText}>Empty file</Text>
-      </View>
+      <StateView icon={FileX} title="Empty file" message="This file has no contents." />
     )
   }
   if (preview.kind === 'media') {
@@ -96,23 +103,10 @@ export function MobileFilePreviewBody({ preview, ...options }: Props) {
       />
     )
   }
-  if (preview.kind === 'html') {
-    return options.editable ? (
-      <EditablePreviewSource {...options} />
-    ) : (
-      <MobileFilePreviewSourceText
-        relativePath={options.relativePath}
-        content={preview.content}
-        truncated={preview.truncated}
-        byteLength={preview.byteLength}
-        initialLine={options.lineColumn?.line}
-      />
-    )
-  }
   if (options.editable) {
     return <EditablePreviewSource {...options} />
   }
-  return (
+  const source = (
     <MobileFilePreviewSourceText
       relativePath={options.relativePath}
       content={preview.content}
@@ -121,6 +115,40 @@ export function MobileFilePreviewBody({ preview, ...options }: Props) {
       initialLine={options.lineColumn?.line}
     />
   )
+  const copy = (
+    <MobileSourceCopyButton
+      key={options.relativePath}
+      text={preview.content}
+      partial={preview.truncated}
+      accessibilityLabel={preview.truncated ? 'Copy loaded source' : 'Copy source'}
+    />
+  )
+  if (preview.kind === 'html') {
+    return (
+      <View style={styles.modeContainer}>
+        <MobileHtmlPreview html={preview.content} renderSource={() => source} trailing={copy} />
+      </View>
+    )
+  }
+  return (
+    <View style={styles.modeContainer}>
+      <MobilePreviewModeToolbar caption={lineCountLabel(preview.content)} trailing={copy} />
+      {source}
+    </View>
+  )
+}
+
+function lineCountLabel(content: string): string {
+  let lines = 1
+  for (let index = 0; index < content.length; index += 1) {
+    if (content.charCodeAt(index) === 10) {
+      lines += 1
+    }
+  }
+  if (content.endsWith('\n')) {
+    lines -= 1
+  }
+  return lines === 1 ? '1 line' : `${lines.toLocaleString()} lines`
 }
 
 function EditablePreviewSource(options: {

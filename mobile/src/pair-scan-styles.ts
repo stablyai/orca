@@ -1,51 +1,46 @@
 import { StyleSheet } from 'react-native'
-import { colors, spacing, radii, typography } from '../src/theme/mobile-theme'
+import { colors, radii, spacing, textStyles } from './theme/mobile-theme'
+
+const CORNER_WIDTH = 3
+const CORNER_RADIUS = 8
 
 export const pairScanStyles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bgBase,
-    padding: spacing.lg
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.sm
-  },
   steps: {
-    gap: spacing.sm,
-    marginBottom: spacing.lg,
-    marginLeft: 7
+    gap: spacing.md,
+    paddingHorizontal: spacing.xs,
+    marginBottom: spacing.lg
   },
   step: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm
+    gap: spacing.md
   },
   stepBadge: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: colors.bgRaised,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: colors.fill,
     alignItems: 'center',
-    justifyContent: 'center'
+    justifyContent: 'center',
+    flexShrink: 0
   },
   stepNumber: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.textSecondary
+    ...textStyles.footnote,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    fontVariant: ['tabular-nums']
   },
   stepText: {
-    fontSize: typography.bodySize,
-    color: colors.textSecondary
+    ...textStyles.callout,
+    color: colors.textSecondary,
+    flex: 1,
+    minWidth: 0
   },
   cameraWrap: {
     flex: 1,
-    borderRadius: radii.camera,
-    overflow: 'hidden'
+    borderRadius: radii.group,
+    overflow: 'hidden',
+    backgroundColor: colors.bgPanel
   },
   // Why: holds the layout slot while the camera is unmounted during
   // paste, so the bottom action button doesn't snap up to fill the
@@ -53,7 +48,7 @@ export const pairScanStyles = StyleSheet.create({
   cameraPlaceholder: {
     flex: 1,
     backgroundColor: colors.bgPanel,
-    borderRadius: radii.camera
+    borderRadius: radii.group
   },
   camera: {
     ...StyleSheet.absoluteFillObject
@@ -68,118 +63,36 @@ export const pairScanStyles = StyleSheet.create({
   },
   corner: {
     position: 'absolute',
-    width: 28,
-    height: 28,
-    borderColor: 'rgba(255,255,255,0.7)'
+    width: 32,
+    height: 32,
+    borderColor: 'rgba(255, 255, 255, 0.85)'
   },
   cornerTL: {
     top: 0,
     left: 0,
-    borderTopWidth: 2.5,
-    borderLeftWidth: 2.5,
-    borderTopLeftRadius: 6
+    borderTopWidth: CORNER_WIDTH,
+    borderLeftWidth: CORNER_WIDTH,
+    borderTopLeftRadius: CORNER_RADIUS
   },
   cornerTR: {
     top: 0,
     right: 0,
-    borderTopWidth: 2.5,
-    borderRightWidth: 2.5,
-    borderTopRightRadius: 6
+    borderTopWidth: CORNER_WIDTH,
+    borderRightWidth: CORNER_WIDTH,
+    borderTopRightRadius: CORNER_RADIUS
   },
   cornerBL: {
     bottom: 0,
     left: 0,
-    borderBottomWidth: 2.5,
-    borderLeftWidth: 2.5,
-    borderBottomLeftRadius: 6
+    borderBottomWidth: CORNER_WIDTH,
+    borderLeftWidth: CORNER_WIDTH,
+    borderBottomLeftRadius: CORNER_RADIUS
   },
   cornerBR: {
     bottom: 0,
     right: 0,
-    borderBottomWidth: 2.5,
-    borderRightWidth: 2.5,
-    borderBottomRightRadius: 6
-  },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  title: {
-    fontSize: typography.titleSize,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    marginBottom: spacing.sm
-  },
-  subtitle: {
-    maxWidth: 310,
-    fontSize: typography.bodySize,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    marginBottom: spacing.xl,
-    lineHeight: 20
-  },
-  connectingText: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize,
-    marginTop: spacing.lg
-  },
-  logSlot: {
-    width: '100%',
-    marginTop: spacing.lg,
-    paddingHorizontal: spacing.sm
-  },
-  errorText: {
-    color: colors.statusRed,
-    fontSize: typography.bodySize,
-    textAlign: 'center',
-    marginBottom: spacing.xl,
-    lineHeight: 20
-  },
-  primaryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    backgroundColor: colors.textPrimary,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: radii.button
-  },
-  primaryButtonText: {
-    color: colors.bgBase,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
-  },
-  pasteButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    marginTop: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.button
-  },
-  pasteButtonPressed: {
-    opacity: 0.6
-  },
-  pasteButtonText: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize,
-    fontWeight: '500'
-  },
-  errorActions: {
-    alignItems: 'center',
-    gap: spacing.sm
-  },
-  secondaryButton: {
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.button
-  },
-  secondaryButtonText: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize,
-    fontWeight: '500'
+    borderBottomWidth: CORNER_WIDTH,
+    borderRightWidth: CORNER_WIDTH,
+    borderBottomRightRadius: CORNER_RADIUS
   }
 })

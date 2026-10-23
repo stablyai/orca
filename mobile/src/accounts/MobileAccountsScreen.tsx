@@ -1,12 +1,19 @@
 import { useEffect, useState, useCallback } from 'react'
-import { View, Text, Pressable, ScrollView, ActivityIndicator } from 'react-native'
+import { View, Text, ScrollView } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams } from 'expo-router'
-import { ChevronLeft, Check, RefreshCw, User } from 'lucide-react-native'
+import { CircleAlert, CloudOff, KeyRound, User } from 'lucide-react-native'
 import { loadHosts } from '../transport/host-store'
-import { useHostClient } from '../transport/host-client-hooks'
+import { useForceReconnect, useHostClient } from '../transport/host-client-hooks'
+import { connectionRetryAction } from '../transport/connection-retry-action'
 import { colors, spacing } from '../theme/mobile-theme'
+import { NavBar } from '../components/ui/NavBar'
+import { ListGroup } from '../components/ui/ListGroup'
+import { StateView } from '../components/ui/StateView'
+import { Banner } from '../components/ui/Banner'
+import { MobileNavRefreshButton } from '../components/MobileNavRefreshButton'
 import { styles } from './mobile-accounts-screen-styles'
+import { AccountRow, readableAccountsError } from './mobile-account-row'
 import { useNow } from '../hooks/use-now'
 import { ClaudeIcon, OpenAIIcon } from '../components/AgentIcons'
 import {
@@ -42,6 +49,8 @@ export function MobileAccountsScreen() {
 
   // Why: shared client per host. See docs/mobile-shared-client-per-host.md.
   const { client, state: connState } = useHostClient(hostId)
+  const forceReconnect = useForceReconnect()
+  const [scrolled, setScrolled] = useState(false)
   const [hostName, setHostName] = useState<string>('')
   const [snapshot, setSnapshot] = useState<AccountsSnapshot | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -98,7 +107,7 @@ export function MobileAccountsScreen() {
       }
       const host = hosts.find((h) => h.id === hostId)
       if (!host) {
-        setError('Host not found')
+        setError('This desktop is no longer paired.')
         return
       }
       setHostName(host.name)
@@ -197,7 +206,35 @@ export function MobileAccountsScreen() {
     [client, refresh, snapshot]
   )
 
-  const renderProviderSection = (provider: ProviderKey, title: string) => {
+  const connected = connState === 'connected'
+  const interactionBlocked = busyAccountId !== null || resettingCodex || !connected
+
+  const renderUsage = (
+    usage: Parameters<typeof getWindowResetLabel>[0],
+    sessionBar: ReturnType<typeof getUsageBarState>,
+    weeklyBar: ReturnType<typeof getUsageBarState>
+  ) => (
+    <View style={styles.usageStack}>
+      <UsageBar
+        layout="stacked"
+        label="5h"
+        usedPercent={sessionBar.usedPercent}
+        unavailable={sessionBar.unavailable}
+        loading={sessionBar.loading}
+        resetText={getWindowResetLabel(usage, 'session', now)}
+      />
+      <UsageBar
+        layout="stacked"
+        label="7d"
+        usedPercent={weeklyBar.usedPercent}
+        unavailable={weeklyBar.unavailable}
+        loading={weeklyBar.loading}
+        resetText={getWindowResetLabel(usage, 'weekly', now)}
+      />
+    </View>
+  )
+
+  const renderProviderSection = (provider: ProviderKey, title: string, first: boolean) => {
     if (!snapshot) {
       return null
     }
@@ -211,53 +248,32 @@ export function MobileAccountsScreen() {
     const activeWeeklyBar = getUsageBarState(activeUsage, 'weekly')
     const resetCredit = provider === 'codex' ? getCodexResetCreditSummary(activeUsage, now) : null
     const Icon = provider === 'claude' ? ClaudeIcon : OpenAIIcon
+    const defaultActive = activeAccountId === null
     return (
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
+      <View>
+        <View style={[styles.sectionHeader, first && styles.sectionHeaderFirst]}>
           <Icon size={14} />
-          <Text style={styles.sectionHeading}>{title}</Text>
+          <Text style={styles.sectionHeading} accessibilityRole="header">
+            {title}
+          </Text>
         </View>
-        <View style={styles.card}>
-          {/* System default row */}
-          <Pressable
-            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+        <ListGroup>
+          <AccountRow
+            key="default"
+            title="System default"
+            subtitle="Uses the agent’s own sign-in."
+            active={defaultActive}
+            busy={busyAccountId === `${provider}:default`}
+            disabled={interactionBlocked}
             onPress={() => selectAccount(provider, null)}
-            disabled={busyAccountId !== null || resettingCodex || connState !== 'connected'}
           >
-            <View style={styles.rowMain}>
-              <Text style={styles.rowTitle}>System default</Text>
-              <Text style={styles.rowSubtitle}>Use the agent&apos;s own login</Text>
-              {/* Why: when system default is the active selection, activeUsage
-                  holds the system-default login's rate limits — surface them
-                  here so non-managed users still see their usage. */}
-              {activeAccountId === null && hasActiveProviderUsage(activeUsage) ? (
-                <View style={styles.usageRow}>
-                  <UsageBar
-                    label="5h"
-                    usedPercent={activeSessionBar.usedPercent}
-                    unavailable={activeSessionBar.unavailable}
-                    loading={activeSessionBar.loading}
-                    resetText={getWindowResetLabel(activeUsage, 'session', now)}
-                  />
-                  <UsageBar
-                    label="7d"
-                    usedPercent={activeWeeklyBar.usedPercent}
-                    unavailable={activeWeeklyBar.unavailable}
-                    loading={activeWeeklyBar.loading}
-                    resetText={getWindowResetLabel(activeUsage, 'weekly', now)}
-                  />
-                </View>
-              ) : null}
-            </View>
-            <View style={styles.rowTrailing}>
-              {activeAccountId === null ? (
-                <Check size={16} color={colors.accentBlue} />
-              ) : busyAccountId === `${provider}:default` ? (
-                <ActivityIndicator size="small" color={colors.textSecondary} />
-              ) : null}
-            </View>
-          </Pressable>
-
+            {/* Why: when system default is the active selection, activeUsage
+                holds the system-default login's rate limits — surface them
+                here so non-managed users still see their usage. */}
+            {defaultActive && hasActiveProviderUsage(activeUsage)
+              ? renderUsage(activeUsage, activeSessionBar, activeWeeklyBar)
+              : null}
+          </AccountRow>
           {state.accounts.map((account) => {
             const isActive = activeAccountId === account.id
             const inactiveEntry = !isActive
@@ -270,133 +286,123 @@ export function MobileAccountsScreen() {
             const sessionBar = getUsageBarState(usage, 'session', isFetching)
             const weeklyBar = getUsageBarState(usage, 'weekly', isFetching)
             return (
-              <View key={account.id}>
-                <View style={styles.separator} />
-                <Pressable
-                  style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-                  onPress={() => selectAccount(provider, account.id)}
-                  disabled={
-                    busyAccountId !== null ||
-                    resettingCodex ||
-                    connState !== 'connected' ||
-                    isActive
-                  }
-                >
-                  <View style={styles.rowMain}>
-                    <Text style={styles.rowTitle} numberOfLines={1}>
-                      {account.email}
-                    </Text>
-                    <View style={styles.usageRow}>
-                      <UsageBar
-                        label="5h"
-                        usedPercent={sessionBar.usedPercent}
-                        unavailable={sessionBar.unavailable}
-                        loading={sessionBar.loading}
-                        resetText={getWindowResetLabel(usage, 'session', now)}
-                      />
-                      <UsageBar
-                        label="7d"
-                        usedPercent={weeklyBar.usedPercent}
-                        unavailable={weeklyBar.unavailable}
-                        loading={weeklyBar.loading}
-                        resetText={getWindowResetLabel(usage, 'weekly', now)}
-                      />
-                    </View>
-                    {usage?.error ? (
-                      <Text style={styles.errorText} numberOfLines={1}>
-                        {usage.error}
-                      </Text>
-                    ) : null}
-                  </View>
-                  <View style={styles.rowTrailing}>
-                    {isActive ? (
-                      <Check size={16} color={colors.accentBlue} />
-                    ) : busyAccountId === account.id ? (
-                      <ActivityIndicator size="small" color={colors.textSecondary} />
-                    ) : null}
-                  </View>
-                </Pressable>
-              </View>
+              <AccountRow
+                key={account.id}
+                title={account.email}
+                active={isActive}
+                busy={busyAccountId === account.id}
+                disabled={interactionBlocked}
+                onPress={() => selectAccount(provider, account.id)}
+              >
+                {renderUsage(usage, sessionBar, weeklyBar)}
+                {usage?.error ? (
+                  <Text style={styles.errorText} numberOfLines={2}>
+                    {usage.error}
+                  </Text>
+                ) : null}
+              </AccountRow>
             )
           })}
-          {resetCredit && codexResetSupported && resetScope && connState === 'connected' ? (
+          {resetCredit && codexResetSupported && resetScope && connected ? (
             <CodexResetCreditAction
+              key="codex-reset"
               summary={resetCredit}
               scopeLabel={resetScopeLabel}
               busy={resettingCodex}
-              disabled={resettingCodex || busyAccountId !== null || connState !== 'connected'}
+              disabled={resettingCodex || busyAccountId !== null || !connected}
               onPress={confirmCodexReset}
             />
           ) : null}
-        </View>
+        </ListGroup>
       </View>
     )
   }
 
+  const desktopName = hostName || 'Your desktop'
+  const reconnect = connectionRetryAction({
+    hostId,
+    needsReconnect: true,
+    forceReconnect,
+    reload: () => void refresh()
+  })
+  const body = snapshot ? (
+    <>
+      {!connected ? (
+        <View style={styles.banner}>
+          <Banner
+            tone="warning"
+            message={`${desktopName} is offline. These are the last accounts it sent; switching waits until it’s back.`}
+          />
+        </View>
+      ) : error ? (
+        <View style={styles.banner}>
+          <Banner
+            tone="error"
+            title="Couldn’t refresh accounts"
+            message={readableAccountsError(error)}
+            onDismiss={() => setError(null)}
+          />
+        </View>
+      ) : null}
+      {renderProviderSection('claude', 'Claude', true)}
+      {renderProviderSection('codex', 'Codex', false)}
+      <View style={styles.footerHint}>
+        <User size={14} color={colors.textMuted} style={styles.footerIcon} />
+        <Text style={styles.footerHintText}>
+          Add or re-authenticate accounts from desktop Settings → Accounts.
+        </Text>
+      </View>
+    </>
+  ) : connState === 'auth-failed' ? (
+    <StateView
+      icon={KeyRound}
+      title="Couldn’t sign in to your desktop"
+      message="Try reconnecting. If it keeps failing, pair this phone again from desktop."
+      primary={reconnect ? { label: 'Retry', onPress: reconnect } : undefined}
+    />
+  ) : connState === 'disconnected' || connState === 'reconnecting' ? (
+    <StateView
+      icon={CloudOff}
+      title="Waiting for desktop"
+      message={`${desktopName} is offline. Accounts load once it reconnects.`}
+      primary={reconnect ? { label: 'Retry', onPress: reconnect } : undefined}
+    />
+  ) : !connected ? (
+    <StateView loading title={`Connecting to ${hostName || 'desktop'}…`} />
+  ) : error ? (
+    <StateView
+      icon={CircleAlert}
+      title="Couldn’t load accounts"
+      message={readableAccountsError(error)}
+      primary={{ label: 'Retry', onPress: () => void refresh(), busy: refreshing }}
+    />
+  ) : (
+    <StateView loading title="Loading accounts…" />
+  )
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.topRow}>
-        <Pressable
-          style={styles.backButton}
-          onPress={() => router.back()}
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-        >
-          <ChevronLeft size={22} color={colors.textPrimary} />
-        </Pressable>
-        <View style={styles.titleWrap}>
-          <Text style={styles.heading}>Accounts</Text>
-          {hostName ? (
-            <Text style={styles.subheading} numberOfLines={1}>
-              {hostName}
-            </Text>
-          ) : null}
-        </View>
-        <Pressable
-          style={styles.iconButton}
-          onPress={refresh}
-          disabled={!client || refreshing || connState !== 'connected'}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel="Refresh accounts"
-        >
-          {refreshing ? (
-            <ActivityIndicator size="small" color={colors.textSecondary} />
-          ) : (
-            <RefreshCw size={18} color={colors.textSecondary} />
-          )}
-        </Pressable>
-      </View>
+      <NavBar
+        title="Accounts"
+        subtitle={hostName || undefined}
+        onBack={() => router.back()}
+        scrolled={scrolled}
+        trailing={
+          <MobileNavRefreshButton
+            busy={refreshing}
+            onPress={() => void refresh()}
+            disabled={!client || !connected}
+            accessibilityLabel="Refresh accounts"
+          />
+        }
+      />
 
       <ScrollView
         contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + spacing.xl }]}
+        onScroll={(event) => setScrolled(event.nativeEvent.contentOffset.y > 0)}
+        scrollEventThrottle={32}
       >
-        {connState !== 'connected' && !snapshot ? (
-          <View style={styles.placeholder}>
-            <ActivityIndicator color={colors.textSecondary} />
-            <Text style={styles.placeholderText}>Connecting to {hostName || 'host'}…</Text>
-          </View>
-        ) : error && !snapshot ? (
-          <View style={styles.placeholder}>
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
-        ) : !snapshot ? (
-          <View style={styles.placeholder}>
-            <ActivityIndicator color={colors.textSecondary} />
-            <Text style={styles.placeholderText}>Loading accounts…</Text>
-          </View>
-        ) : (
-          <>
-            {renderProviderSection('claude', 'Claude')}
-            {renderProviderSection('codex', 'Codex')}
-            <View style={styles.footerHint}>
-              <User size={14} color={colors.textMuted} />
-              <Text style={styles.footerHintText}>
-                Add or re-authenticate accounts from desktop Settings → Accounts.
-              </Text>
-            </View>
-          </>
-        )}
+        {body}
       </ScrollView>
       <ConfirmModal
         visible={codexResetConfirmation !== null}

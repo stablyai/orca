@@ -99,7 +99,7 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
           // (connState flips re-run the load effect) instead of tearing it
           // down to a full-screen error, matching the host list screen.
           setScreenState((prev) =>
-            prev.kind === 'ready' ? prev : { kind: 'error', message: 'Waiting for host…' }
+            prev.kind === 'ready' ? prev : { kind: 'error', message: 'Waiting for desktop…' }
           )
         }
         return
@@ -115,7 +115,7 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
         }
         const status = interpretOrThrowRefusalMessage(
           () => agentHistoryHostStatusRead.interpret(statusReply),
-          'Unable to reach host'
+          'Unable to reach desktop'
         )
         setHostStatusProbe({ hostId, client, generation: clientGeneration, result: status })
         if (!status.capabilities?.includes(MOBILE_AI_VAULT_CAPABILITY)) {

@@ -3,7 +3,7 @@ import {
   ActivityIndicator,
   FlatList,
   InteractionManager,
-  Pressable,
+  ScrollView,
   Text,
   TextInput,
   View
@@ -29,9 +29,13 @@ import { useSmartWorkspaceSource } from '../tasks/use-smart-workspace-source'
 import type { MobileComposerSource } from '../tasks/use-mobile-composer-source'
 import { colors } from '../theme/mobile-theme'
 import { BottomDrawer } from './BottomDrawer'
+import { MobileSegmentedControl } from './MobileSegmentedControl'
 import { smartWorkspaceSourceDrawerStyles as styles } from './smart-workspace-source-drawer-styles'
-import { SmartSourceModeIcon } from './SmartSourceModeIcon'
 import { SmartWorkspaceSourceRow } from './SmartWorkspaceSourceRow'
+import { Banner } from './ui/Banner'
+import { FilterChip } from './ui/FilterChip'
+import { SheetHeader } from './ui/SheetHeader'
+import { TextField } from './ui/TextField'
 
 // Why: match MobileSearchField — native autoFocus alone often fails to raise
 // the soft keyboard when the drawer is mid-present animation.
@@ -195,9 +199,26 @@ export function SmartWorkspaceSourceDrawer({
   const showEmpty =
     !loading && !error && !needsGitHubRemote && effectiveMode !== 'text' && rows.length === 0
 
-  const modeTabs = SMART_MODE_OPTIONS.filter((option: SmartModeOption) =>
+  const modeSegments = SMART_MODE_OPTIONS.filter((option: SmartModeOption) =>
     availableModes.includes(option.id)
-  )
+  ).map((option) => ({ value: option.id, label: option.label }))
+
+  const repoSearchBlocked =
+    !sshReady &&
+    effectiveMode !== 'text' &&
+    effectiveMode !== 'linear' &&
+    effectiveMode !== 'jira' &&
+    !jiraUrlIntent
+  const notice = repoSearchBlocked
+    ? { tone: 'info' as const, message: 'Connect the repository to search sources.' }
+    : needsGitHubRemote
+      ? {
+          tone: 'info' as const,
+          message: 'This SSH repo needs a GitHub remote to list issues and PRs.'
+        }
+      : error
+        ? { tone: 'error' as const, message: error }
+        : null
 
   return (
     <BottomDrawer
@@ -215,66 +236,74 @@ export function SmartWorkspaceSourceDrawer({
           top; dock must stay a non-flex sibling so FlatList cannot clip it. */}
       <View style={styles.root}>
         <View style={styles.header}>
-          <Text style={styles.title}>Name or &apos;Create From&apos;</Text>
-          <Pressable onPress={onClose} hitSlop={8}>
-            <Text style={styles.done}>Done</Text>
-          </Pressable>
+          <SheetHeader
+            title={availability.textOnly ? 'Workspace name' : 'Start from'}
+            trailing={{ label: 'Done', onPress: onClose }}
+          />
         </View>
 
         <View style={styles.results}>
           {crossRepoPrompt ? (
-            <View style={styles.crossRepo}>
-              <Text style={styles.crossRepoText}>
-                This item lives in {crossRepoPrompt.link.slug.owner}/
-                {crossRepoPrompt.link.slug.repo}.
-              </Text>
-              <View style={styles.crossRepoActions}>
-                <Pressable style={styles.crossRepoDismiss} onPress={dismissCrossRepoPrompt}>
-                  <Text style={styles.crossRepoDismissText}>Cancel</Text>
-                </Pressable>
-                <Pressable
-                  style={styles.crossRepoSwitch}
-                  onPress={() => void handleAcceptCrossRepo()}
-                >
-                  <Text style={styles.crossRepoSwitchText}>
-                    Switch to {crossRepoPrompt.matchingRepo.displayName}
-                  </Text>
-                </Pressable>
-              </View>
+            <View style={styles.banner}>
+              <Banner
+                message={`This item lives in ${crossRepoPrompt.link.slug.owner}/${crossRepoPrompt.link.slug.repo}.`}
+                action={{
+                  label: `Switch to ${crossRepoPrompt.matchingRepo.displayName}`,
+                  onPress: () => void handleAcceptCrossRepo()
+                }}
+                onDismiss={dismissCrossRepoPrompt}
+              />
             </View>
           ) : null}
 
-          {!sshReady &&
-          effectiveMode !== 'text' &&
-          effectiveMode !== 'linear' &&
-          effectiveMode !== 'jira' &&
-          !jiraUrlIntent ? (
-            <Text style={styles.notice}>Connect the repository to search sources.</Text>
-          ) : needsGitHubRemote ? (
-            <Text style={styles.notice}>
-              This SSH repo needs a GitHub remote to list issues and PRs.
-            </Text>
-          ) : error ? (
-            <Text style={styles.errorNotice}>{error}</Text>
+          {notice ? (
+            <View style={styles.banner}>
+              <Banner tone={notice.tone} message={notice.message} />
+            </View>
+          ) : null}
+
+          {effectiveMode === 'gitlab' ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              style={styles.filterScroll}
+              contentContainerStyle={styles.filterRow}
+            >
+              {MR_STATE_FILTER_OPTIONS.map((option) => (
+                <FilterChip
+                  key={option.id}
+                  label={option.label}
+                  active={option.id === mrStateFilter}
+                  onPress={() => setMrStateFilter(option.id)}
+                />
+              ))}
+            </ScrollView>
           ) : null}
 
           <FlatList
             data={rows}
             keyExtractor={(row) => row.value}
-            style={styles.list}
+            style={[styles.list, rows.length === 0 && styles.listEmpty]}
             contentContainerStyle={styles.listContent}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="none"
             nestedScrollEnabled
+            ItemSeparatorComponent={SourceRowSeparator}
             ListFooterComponent={
               loading ? (
-                <View style={styles.loading}>
+                <View style={styles.footerState} accessibilityRole="progressbar">
                   <ActivityIndicator size="small" color={colors.textSecondary} />
+                  <Text style={styles.footerText}>Searching…</Text>
                 </View>
               ) : showEmpty ? (
-                <Text style={styles.empty}>{emptyHint || 'No results found.'}</Text>
+                <View style={styles.footerState}>
+                  <Text style={styles.footerText}>{emptyHint || 'No results found.'}</Text>
+                </View>
               ) : rows.length === 0 && effectiveMode === 'text' ? (
-                <Text style={styles.empty}>Type a workspace name in the field below.</Text>
+                <View style={styles.footerState}>
+                  <Text style={styles.footerText}>Type a workspace name below.</Text>
+                </View>
               ) : null
             }
             renderItem={({ item }) => (
@@ -284,51 +313,29 @@ export function SmartWorkspaceSourceDrawer({
         </View>
 
         <View style={styles.dock}>
-          {effectiveMode === 'gitlab' ? (
-            <View style={styles.chipRow}>
-              {MR_STATE_FILTER_OPTIONS.map((option) => {
-                const selected = option.id === mrStateFilter
-                return (
-                  <Pressable
-                    key={option.id}
-                    style={[styles.chip, selected && styles.chipSelected]}
-                    onPress={() => setMrStateFilter(option.id)}
-                  >
-                    <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
-                      {option.label}
-                    </Text>
-                  </Pressable>
-                )
-              })}
-            </View>
+          {modeSegments.length > 1 ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              style={styles.modeScroll}
+              contentContainerStyle={styles.modeRow}
+            >
+              <MobileSegmentedControl
+                segments={modeSegments}
+                selected={effectiveMode}
+                onSelect={setMode}
+                testIDPrefix="smart-source-mode-"
+              />
+            </ScrollView>
           ) : null}
 
-          <View style={styles.tabRow}>
-            {modeTabs.map((option) => {
-              const selected = option.id === effectiveMode
-              const tint = selected ? colors.textPrimary : colors.textSecondary
-              return (
-                <Pressable
-                  key={option.id}
-                  style={[styles.tab, selected && styles.tabSelected]}
-                  onPress={() => setMode(option.id)}
-                >
-                  <SmartSourceModeIcon icon={option.icon} color={tint} />
-                  <Text style={[styles.tabText, selected && styles.tabTextSelected]}>
-                    {option.label}
-                  </Text>
-                </Pressable>
-              )
-            })}
-          </View>
-
-          <TextInput
+          <TextField
             ref={inputRef}
-            style={styles.search}
             value={composer.name}
             onChangeText={composer.setName}
             placeholder="Type a name or search a source"
-            placeholderTextColor={colors.textMuted}
+            accessibilityLabel={availability.textOnly ? 'Workspace name' : 'Name or source'}
             autoCapitalize="none"
             autoCorrect={false}
             // Still request native auto-focus; the delayed ref focus is the reliable path.
@@ -341,4 +348,8 @@ export function SmartWorkspaceSourceDrawer({
       </View>
     </BottomDrawer>
   )
+}
+
+function SourceRowSeparator() {
+  return <View style={styles.separator} />
 }

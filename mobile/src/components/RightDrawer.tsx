@@ -12,7 +12,11 @@ import Animated, {
   Extrapolation
 } from 'react-native-reanimated'
 import { useBackClaim } from '../navigation/use-back-claim'
-import { colors, spacing } from '../theme/mobile-theme'
+import { colors, radii, spacing } from '../theme/mobile-theme'
+import {
+  BOTTOM_DRAWER_HIDE_DURATION_MS as HIDE_DURATION,
+  BOTTOM_DRAWER_SHOW_DURATION_MS as SHOW_DURATION
+} from './bottom-drawer-constants'
 // Why: mount-before-commit logic is anchor-agnostic, so the X-axis drawer reuses
 // the exact same gate as BottomDrawer rather than duplicating it.
 import { resolveBottomDrawerMounted } from './bottom-drawer-mount-state'
@@ -24,8 +28,6 @@ const SPRING_CONFIG = { damping: 28, stiffness: 400 }
 // Why: leftward drags (negative translateX) pull the panel past its docked edge;
 // damp them with a rubber-band factor so the drawer resists over-pulling inward.
 const RUBBER_BAND_FACTOR = 0.25
-const SHOW_DURATION = 180
-const HIDE_DURATION = 150
 
 type Props = {
   visible: boolean
@@ -220,12 +222,12 @@ const styles = StyleSheet.create({
   },
   drawer: {
     height: '100%',
-    backgroundColor: colors.bgBase,
-    borderTopLeftRadius: 16,
-    borderBottomLeftRadius: 16,
+    backgroundColor: colors.sheet,
+    borderTopLeftRadius: radii.group,
+    borderBottomLeftRadius: radii.group,
     paddingHorizontal: spacing.md,
     borderLeftWidth: StyleSheet.hairlineWidth,
-    borderLeftColor: colors.borderSubtle,
+    borderLeftColor: colors.separator,
     ...Platform.select({
       ios: {
         shadowColor: '#000',

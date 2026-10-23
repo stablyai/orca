@@ -1,6 +1,6 @@
-import { ActivityIndicator, Pressable, Text, View } from 'react-native'
+import { Text, View } from 'react-native'
 import { GitPullRequestArrow } from 'lucide-react-native'
-import { colors } from '../theme/mobile-theme'
+import { Button } from '../components/ui/Button'
 import type { MobileCreatePrAction } from './mobile-create-pr-action'
 import { styles } from './mobile-source-control-styles'
 
@@ -9,45 +9,26 @@ type Props = {
 }
 
 export function MobileSourceControlCreatePrEntry({ action }: Props) {
-  if (!action.visible) {
+  // Blocked, it says nothing here: the PR row above opens the tab that explains why.
+  if (!action.visible || action.disabled) {
     return null
   }
-  const enabled = !action.disabled
-  const copy = action.hint ?? action.label
+  // Ready to open a PR straight away, it is the screen's one primary; the commit bar steps back.
+  const hero = !action.disabled && !action.pushFirst
   return (
     <View style={styles.createPrBlock}>
-      <Pressable
-        style={({ pressed }) => [
-          styles.createPrButton,
-          !enabled && styles.createPrButtonDisabled,
-          pressed && enabled && styles.createPrButtonPressed
-        ]}
+      <Button
+        label={action.label}
+        icon={GitPullRequestArrow}
+        variant={hero ? 'primary' : 'secondary'}
+        size="large"
+        block
+        busy={action.loading}
         disabled={action.disabled}
         onPress={action.onPress}
-        accessibilityRole="button"
-        accessibilityLabel={action.label}
         accessibilityHint={action.hint}
-      >
-        {action.loading ? (
-          <ActivityIndicator size="small" color={enabled ? colors.bgBase : colors.textSecondary} />
-        ) : (
-          <GitPullRequestArrow
-            size={16}
-            color={enabled ? colors.bgBase : colors.textSecondary}
-            strokeWidth={2.2}
-          />
-        )}
-        <Text
-          style={[
-            styles.createPrButtonText,
-            !enabled && styles.createPrButtonTextDisabled,
-            action.hint && styles.createPrButtonHint
-          ]}
-          numberOfLines={2}
-        >
-          {copy}
-        </Text>
-      </Pressable>
+      />
+      {action.hint ? <Text style={styles.createPrHint}>{action.hint}</Text> : null}
     </View>
   )
 }

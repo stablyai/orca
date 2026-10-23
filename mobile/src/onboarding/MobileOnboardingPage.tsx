@@ -1,10 +1,9 @@
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
-import { MessageSquare } from 'lucide-react-native'
+import { ScrollView, Text, View } from 'react-native'
 import type { MobileOnboardingStep } from './mobile-onboarding-plan'
 import { mobileOnboardingStyles as styles } from './mobile-onboarding-styles'
 import { NotificationOnboardingPreview } from './NotificationOnboardingPreview'
 import type { MobileSessionView } from '../storage/session-view-preferences'
-import { colors } from '../theme/mobile-theme'
+import { Button } from '../components/ui/Button'
 
 export type NotificationOnboardingChoice = 'enable' | 'skip'
 export type MobileOnboardingBusyChoice = MobileSessionView | NotificationOnboardingChoice | null
@@ -40,13 +39,7 @@ export function MobileOnboardingPage({
       importantForAccessibility={active ? 'auto' : 'no-hide-descendants'}
     >
       <View style={[styles.content, !isSessionView && styles.notificationContent]}>
-        {isSessionView ? (
-          <View style={styles.iconSurface}>
-            <MessageSquare size={30} color={colors.textPrimary} />
-          </View>
-        ) : (
-          <NotificationOnboardingPreview active={active} />
-        )}
+        {isSessionView ? null : <NotificationOnboardingPreview active={active} />}
         <Text style={styles.title}>
           {isSessionView ? 'How should sessions open?' : 'Don’t miss when an agent needs you'}
         </Text>
@@ -69,15 +62,21 @@ export function MobileOnboardingPage({
             {error}
           </Text>
         ) : null}
-        {isSessionView ? (
-          <SessionViewChoices busyChoice={busyChoice} disabled={busy} onChoice={onSessionChoice} />
-        ) : (
-          <NotificationChoices
-            busyChoice={busyChoice}
-            disabled={busy}
-            onChoice={onNotificationChoice}
-          />
-        )}
+        <View style={styles.choices}>
+          {isSessionView ? (
+            <SessionViewChoices
+              busyChoice={busyChoice}
+              disabled={busy}
+              onChoice={onSessionChoice}
+            />
+          ) : (
+            <NotificationChoices
+              busyChoice={busyChoice}
+              disabled={busy}
+              onChoice={onNotificationChoice}
+            />
+          )}
+        </View>
       </View>
     </ScrollView>
   )
@@ -159,22 +158,15 @@ function ChoiceButton({
   onPress: () => void
 }) {
   return (
-    <Pressable
-      accessibilityRole="button"
+    <Button
+      label={label}
       accessibilityLabel={accessibilityLabel}
-      disabled={disabled}
-      style={({ pressed }) => [
-        primary ? styles.primaryButton : styles.secondaryButton,
-        pressed && styles.buttonPressed,
-        disabled && styles.buttonDisabled
-      ]}
+      variant={primary ? 'primary' : 'plain'}
+      busy={busy}
+      // The busy button keeps full strength; only the one that is waiting its turn dims.
+      disabled={disabled && !busy}
+      block
       onPress={onPress}
-    >
-      {busy ? (
-        <ActivityIndicator color={primary ? colors.bgBase : colors.textSecondary} />
-      ) : (
-        <Text style={primary ? styles.primaryButtonText : styles.secondaryButtonText}>{label}</Text>
-      )}
-    </Pressable>
+    />
   )
 }

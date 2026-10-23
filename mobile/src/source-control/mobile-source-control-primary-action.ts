@@ -129,13 +129,13 @@ function getMobileBranchCommitsAhead(
 
 function getMobilePrimaryActionLabel(decision: MobileSourceControlPrimaryActionDecision): string {
   if (decision.requiresForceWithLease) {
-    return 'Force Push'
+    return 'Force push'
   }
   switch (decision.kind) {
     case 'commit':
       return 'Commit'
     case 'stage':
-      return 'Stage All'
+      return 'Stage all'
     case 'push':
       return 'Push'
     case 'pull':
@@ -143,7 +143,7 @@ function getMobilePrimaryActionLabel(decision: MobileSourceControlPrimaryActionD
     case 'sync':
       return 'Sync'
     case 'publish':
-      return 'Publish Branch'
+      return 'Publish branch'
   }
 }
 

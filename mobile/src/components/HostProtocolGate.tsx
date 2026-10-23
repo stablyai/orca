@@ -60,7 +60,7 @@ export function HostProtocolGate({
       <View style={styles.pending}>
         <ActivityIndicator
           color={colors.textSecondary}
-          accessibilityLabel="Checking host compatibility"
+          accessibilityLabel="Checking desktop compatibility"
         />
       </View>
     )
@@ -94,7 +94,7 @@ export function HostProtocolGate({
           >
             <ActivityIndicator
               color={colors.textSecondary}
-              accessibilityLabel="Checking host compatibility"
+              accessibilityLabel="Checking desktop compatibility"
             />
           </View>
         ) : null}

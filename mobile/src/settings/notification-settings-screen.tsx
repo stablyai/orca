@@ -1,11 +1,14 @@
 import { useState, useCallback, useEffect, useRef, type ReactNode } from 'react'
-import { AppState, View, Text, StyleSheet, Pressable, Switch, ScrollView } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { ActivityIndicator, AppState, StyleSheet, View } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import type { NotificationSettingsOperations } from './notification-settings-operations'
-import { ChevronLeft } from 'lucide-react-native'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { colors, spacing } from '../theme/mobile-theme'
 import type { NotificationPermissionState } from '../notifications/notification-permissions'
+import { Banner } from '../components/ui/Banner'
+import { ListRow } from '../components/ui/ListRow'
+import { MobileSwitch } from '../components/MobileSwitch'
+import { triggerSelection } from '../platform/haptics'
+import { SettingsScreen, SettingsSection } from './settings-screen-frame'
 
 const DEFAULT_PERMISSION_STATE: NotificationPermissionState = {
   granted: false,
@@ -25,13 +28,14 @@ export default function NotificationsScreen({
   description?: string
   children?: (enabled: boolean) => ReactNode
 }) {
-  const insets = useSafeAreaInsets()
   const [saving, setSaving] = useState(false)
   const savingRef = useRef(false)
   const requestRevision = useRef(0)
   const [error, setError] = useState<string | null>(null)
   const [pushEnabled, setPushEnabled] = useState(false)
   const [permissionState, setPermissionState] = useState(DEFAULT_PERMISSION_STATE)
+  // The defaults above read as Off; until a read settles the switch is masked so it never flips by itself.
+  const [settled, setSettled] = useState(false)
 
   const refreshSettings = useCallback(async () => {
     if (savingRef.current) {
@@ -47,10 +51,12 @@ export default function NotificationsScreen({
         setPushEnabled(enabled.enabled)
         setPermissionState(permission)
         setError(null)
+        setSettled(true)
       }
     } catch {
       if (revision === requestRevision.current) {
         setError('Could not load notification settings. Try again.')
+        setSettled(true)
       }
     }
   }, [operations])
@@ -80,6 +86,7 @@ export default function NotificationsScreen({
     savingRef.current = true
     requestRevision.current += 1
     setError(null)
+    setSettled(true)
     setSaving(true)
     try {
       const permission = await operations.permission(value)
@@ -96,136 +103,64 @@ export default function NotificationsScreen({
 
   const switchEnabled = pushEnabled && permissionState.granted
   const notificationsBlocked = permissionState.status === 'denied'
-  const hint = notificationsBlocked
-    ? 'Notifications are disabled in system settings.'
-    : (description ??
-      'Get notified on this device when an agent needs your input or finishes a task.')
+  const footer =
+    description ?? 'Get notified on this device when an agent needs your input or finishes a task.'
+  const openSettings = () =>
+    void operations
+      .openSettings()
+      .catch(() => setError('Could not open system settings. Try again.'))
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={{
-        paddingTop: insets.top + spacing.sm,
-        paddingBottom: insets.bottom + spacing.xl
-      }}
-    >
-      <View style={styles.topRow}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-          style={styles.backButton}
-          onPress={onBack}
-        >
-          <ChevronLeft size={22} color={colors.textSecondary} />
-        </Pressable>
-        <Text style={styles.heading}>Notifications</Text>
-      </View>
-
-      {error && (
-        <Text accessibilityRole="alert" style={styles.hint}>
-          {error}
-        </Text>
-      )}
-      <View style={styles.section}>
-        <View style={styles.row}>
-          <Text style={styles.rowLabel}>Enable notifications</Text>
-          <Switch
-            value={switchEnabled}
-            testID="notification-enabled"
-            accessibilityLabel="Enable notifications"
-            disabled={notificationsBlocked || saving}
-            onValueChange={(v) => void togglePush(v)}
-            trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}
-            thumbColor={colors.textPrimary}
+    <SettingsScreen title="Notifications" onBack={onBack}>
+      {error ? (
+        <View style={styles.banner}>
+          <Banner tone="error" message={error} />
+        </View>
+      ) : null}
+      {notificationsBlocked ? (
+        <View style={styles.banner}>
+          <Banner
+            tone="warning"
+            title="Notifications are off"
+            message="Notifications are disabled in system settings. Turn them on for Orca to get alerts."
+            action={{ label: 'Open Settings', onPress: openSettings }}
+            testID="notification-system-settings"
           />
         </View>
-        <Text style={styles.hint}>{hint}</Text>
-        {notificationsBlocked && (
-          <Pressable
-            style={({ pressed }) => [
-              styles.settingsButton,
-              pressed && styles.settingsButtonPressed
-            ]}
-            testID="notification-system-settings"
-            onPress={() =>
-              void operations
-                .openSettings()
-                .catch(() => setError('Could not open system settings. Try again.'))
-            }
-          >
-            <Text style={styles.settingsButtonText}>Open Settings</Text>
-          </Pressable>
-        )}
-      </View>
+      ) : null}
+      <SettingsSection footer={footer}>
+        <ListRow
+          title="Enable notifications"
+          accessory={
+            <View>
+              <View style={settled ? undefined : styles.masked}>
+                <MobileSwitch
+                  value={switchEnabled}
+                  testID="notification-enabled"
+                  accessibilityLabel="Enable notifications"
+                  disabled={notificationsBlocked || saving}
+                  onValueChange={(v) => {
+                    triggerSelection()
+                    void togglePush(v)
+                  }}
+                />
+              </View>
+              {settled ? null : (
+                <View pointerEvents="none" style={styles.spinner}>
+                  <ActivityIndicator size="small" color={colors.textSecondary} />
+                </View>
+              )}
+            </View>
+          }
+        />
+      </SettingsSection>
       {children?.(switchEnabled && !saving)}
-    </ScrollView>
+    </SettingsScreen>
   )
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bgBase,
-    padding: spacing.lg
-  },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.xl
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.sm
-  },
-  heading: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.textPrimary
-  },
-  section: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: 12,
-    overflow: 'hidden'
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm + 2,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2
-  },
-  rowLabel: {
-    flex: 1,
-    fontSize: typography.bodySize,
-    fontWeight: '500',
-    color: colors.textPrimary
-  },
-  hint: {
-    fontSize: typography.metaSize,
-    color: colors.textMuted,
-    lineHeight: 18,
-    paddingHorizontal: spacing.md + 2,
-    paddingBottom: spacing.md
-  },
-  settingsButton: {
-    alignSelf: 'flex-start',
-    marginHorizontal: spacing.md + 2,
-    marginBottom: spacing.md,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    borderRadius: 8,
-    backgroundColor: colors.bgRaised
-  },
-  settingsButtonPressed: {
-    opacity: 0.6
-  },
-  settingsButtonText: {
-    color: colors.textPrimary,
-    fontSize: typography.metaSize,
-    fontWeight: '600'
-  }
+  banner: { marginTop: spacing.md },
+  masked: { opacity: 0 },
+  spinner: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' }
 })

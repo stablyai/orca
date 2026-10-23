@@ -1,7 +1,9 @@
+import { View } from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import { MobileSessionSurface } from './MobileSessionSurface'
 import { useMobileSessionController } from './use-mobile-session-controller'
-import { ActivityIndicator, Text, View } from 'react-native'
-import { colors } from '../theme/mobile-theme'
+import { NavBar } from '../components/ui/NavBar'
+import { StateView } from '../components/ui/StateView'
 import { styles } from './mobile-session-styles'
 
 /**
@@ -17,12 +19,17 @@ export function MobileSessionRouteScreen() {
     !controller.accessoryPreferencesReady ||
     !controller.nativeChatController.sessionViewReady
   ) {
+    // Why: a slow boot keeps its way out; the bar matches the one the session opens into.
     return (
       <View style={styles.container}>
-        <View style={styles.emptyState}>
-          <ActivityIndicator size="small" color={colors.textSecondary} />
-          <Text style={styles.emptyText}>Opening workspace</Text>
-        </View>
+        <SafeAreaView edges={['top']}>
+          <NavBar
+            title={controller.worktreeName || 'Workspace'}
+            onBack={controller.requestLeaveSession}
+            backAccessibilityLabel="Back to worktrees"
+          />
+        </SafeAreaView>
+        <StateView loading title="Opening workspace…" />
       </View>
     )
   }

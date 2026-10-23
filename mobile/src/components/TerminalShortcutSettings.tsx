@@ -1,22 +1,22 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import {
-  AppState,
-  View,
-  Text,
-  StyleSheet,
-  Pressable,
-  Switch,
-  type AppStateStatus
-} from 'react-native'
+import { AppState, View, Text, StyleSheet, type AppStateStatus } from 'react-native'
 import { useFocusEffect } from 'expo-router'
-import { ChevronRight, X } from 'lucide-react-native'
+import { Plus, RotateCcw, Trash2 } from 'lucide-react-native'
 import type Animated from 'react-native-reanimated'
 import type { AnimatedRef, SharedValue } from 'react-native-reanimated'
 import { CustomKeyModal } from './CustomKeyModal'
+import { ConfirmModal } from './ConfirmModal'
+import { MobileSwitch } from './MobileSwitch'
+import { IconButton } from './ui/IconButton'
+import { ListGroup, LIST_LEADING_INSET } from './ui/ListGroup'
+import { ListRow } from './ui/ListRow'
+import { SectionHeader } from './ui/SectionHeader'
 import { loadCustomKeys, saveCustomKeys, type CustomKey } from '../terminal/terminal-custom-keys'
 import { DragReorderList } from './DragReorderList'
 import { useSerializedStoredState } from '../storage/use-serialized-stored-state'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { colors, radii, spacing, textStyles, typography } from '../theme/mobile-theme'
+import { triggerSelection } from '../platform/haptics'
+import { SettingsFooter, SettingsRowIcon } from '../settings/settings-screen-frame'
 import {
   TERMINAL_ACCESSORY_KEYS,
   type TerminalAccessoryKey
@@ -34,6 +34,16 @@ import {
 // reorderable section must share one fixed height.
 const REORDER_ROW_HEIGHT = 56
 
+function Keycap({ label }: { label: string }): React.JSX.Element {
+  return (
+    <View style={styles.keycap}>
+      <Text style={styles.keycapText} numberOfLines={1}>
+        {label}
+      </Text>
+    </View>
+  )
+}
+
 function ShortcutBarRow({
   shortcutKey,
   visible,
@@ -43,19 +53,20 @@ function ShortcutBarRow({
   visible: boolean
   onToggle: (visible: boolean) => void
 }): React.JSX.Element {
+  const name = shortcutKey.accessibilityLabel ?? shortcutKey.label
   return (
     <View style={styles.reorderRowContent}>
-      <View style={styles.keycap}>
-        <Text style={styles.keycapText}>{shortcutKey.label}</Text>
-      </View>
-      <View style={styles.rowContent}>
-        <Text style={styles.rowLabel}>{shortcutKey.accessibilityLabel ?? shortcutKey.label}</Text>
-      </View>
-      <Switch
+      <Keycap label={shortcutKey.label} />
+      <Text style={styles.rowLabel} numberOfLines={1}>
+        {name}
+      </Text>
+      <MobileSwitch
         value={visible}
-        onValueChange={onToggle}
-        trackColor={{ false: colors.borderSubtle, true: colors.textSecondary }}
-        thumbColor={colors.textPrimary}
+        onValueChange={(next) => {
+          triggerSelection()
+          onToggle(next)
+        }}
+        accessibilityLabel={`Show ${name} in the shortcut bar`}
       />
     </View>
   )
@@ -87,6 +98,10 @@ export function TerminalShortcutSettings({
     adoptStored: adoptStoredCustomKeys
   } = useSerializedStoredState<CustomKey[]>([], loadCustomKeys, saveCustomKeys)
   const [showCustomKeyModal, setShowCustomKeyModal] = useState(false)
+  // The target outlives the sheet's close so its title doesn't blank while it slides away.
+  const [pendingDelete, setPendingDelete] = useState<CustomKey | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [confirmReset, setConfirmReset] = useState(false)
   const {
     value: shortcutLayout,
     setValue: setShortcutLayout,
@@ -186,12 +201,8 @@ export function TerminalShortcutSettings({
 
   return (
     <>
-      <Text style={[styles.groupHeading, styles.groupTopGap]}>SHORTCUT BAR</Text>
-      <Text style={styles.groupDescription}>
-        Toggle keys to show or hide them, and hold the grip to drag a key into the order you want on
-        the terminal shortcut bar.
-      </Text>
-      <View style={[styles.section, styles.sectionTopGap]}>
+      <SectionHeader title="Shortcut bar" />
+      <View style={styles.reorderGroup}>
         <DragReorderList
           items={orderedAccessoryKeys}
           itemKey={(shortcutKey) => shortcutKey.id}
@@ -209,29 +220,27 @@ export function TerminalShortcutSettings({
             />
           )}
         />
-        <Pressable
-          style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-          onPress={resetBuiltInKeys}
-        >
-          <View style={styles.rowContent}>
-            <Text style={styles.rowLabel}>Reset Defaults</Text>
-            <Text style={styles.rowSublabel}>
-              Show every built-in shortcut key in the original order
-            </Text>
-          </View>
-        </Pressable>
+        <ListRow
+          title="Reset defaults"
+          destructive
+          leading={<SettingsRowIcon icon={RotateCcw} color={colors.danger} />}
+          onPress={() => setConfirmReset(true)}
+        />
       </View>
+      <SettingsFooter>Hold the grip to reorder keys. Turn a key off to hide it.</SettingsFooter>
 
-      <Text style={[styles.groupHeading, styles.groupTopGap]}>CUSTOM SHORTCUTS</Text>
-      <View style={[styles.section, styles.sectionTopGap]}>
-        {customKeys.length === 0 ? (
-          <>
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No custom shortcuts defined yet.</Text>
-            </View>
-            <View style={styles.separator} />
-          </>
-        ) : (
+      <SectionHeader title="Custom shortcuts" />
+      {customKeys.length === 0 ? (
+        <ListGroup separatorInset={LIST_LEADING_INSET}>
+          <ListRow title="No custom shortcuts yet" />
+          <ListRow
+            title="Add custom shortcut…"
+            leading={<SettingsRowIcon icon={Plus} />}
+            onPress={() => setShowCustomKeyModal(true)}
+          />
+        </ListGroup>
+      ) : (
+        <View style={styles.reorderGroup}>
           <DragReorderList
             items={customKeys}
             itemKey={(key) => key.id}
@@ -243,87 +252,71 @@ export function TerminalShortcutSettings({
             onReorder={reorderCustomKeys}
             renderRow={(key) => (
               <View style={styles.reorderRowContent}>
-                <View style={styles.keycap}>
-                  <Text style={styles.keycapText}>{key.label}</Text>
-                </View>
-                <View style={styles.rowContent}>
-                  <Text style={styles.rowLabel}>{key.label}</Text>
-                  <Text style={styles.rowSublabel} numberOfLines={1} ellipsizeMode="tail">
-                    {key.bytes.replace(/\r/g, ' ↵')}
-                  </Text>
-                </View>
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.deleteButton,
-                    pressed && styles.deleteButtonPressed
-                  ]}
-                  onPress={() => handleDeleteCustomKey(key)}
-                  hitSlop={8}
-                  accessibilityRole="button"
+                <Keycap label={key.label} />
+                <Text style={styles.bytes} numberOfLines={1} ellipsizeMode="tail">
+                  {key.bytes.replace(/\r/g, ' ↵')}
+                </Text>
+                <IconButton
+                  icon={Trash2}
+                  variant="bare"
+                  iconSize={18}
+                  iconColor={colors.danger}
                   accessibilityLabel={`Remove ${key.label}`}
-                >
-                  <X size={16} color={colors.statusRed} />
-                </Pressable>
+                  onPress={() => {
+                    setPendingDelete(key)
+                    setConfirmDelete(true)
+                  }}
+                />
               </View>
             )}
           />
-        )}
-        <Pressable
-          style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-          onPress={() => setShowCustomKeyModal(true)}
-        >
-          <View style={styles.rowContent}>
-            <Text style={styles.rowLabel}>Add Custom Shortcut…</Text>
-            <Text style={styles.rowSublabel}>Create key combo or text macro</Text>
-          </View>
-          <ChevronRight size={16} color={colors.textMuted} />
-        </Pressable>
-      </View>
+          <ListRow
+            title="Add custom shortcut…"
+            leading={<SettingsRowIcon icon={Plus} />}
+            onPress={() => setShowCustomKeyModal(true)}
+          />
+        </View>
+      )}
+      <SettingsFooter>A key combo or a text macro, sent with one tap.</SettingsFooter>
 
       <CustomKeyModal
         visible={showCustomKeyModal}
         onClose={() => setShowCustomKeyModal(false)}
         onKeysChanged={adoptStoredCustomKeys}
       />
+      <ConfirmModal
+        visible={confirmDelete}
+        title={pendingDelete ? `Delete “${pendingDelete.label}”?` : ''}
+        message="It is removed from the shortcut bar on this phone."
+        confirmLabel="Delete"
+        destructive
+        onConfirm={() => {
+          if (pendingDelete) {
+            handleDeleteCustomKey(pendingDelete)
+          }
+        }}
+        onCancel={() => setConfirmDelete(false)}
+      />
+      <ConfirmModal
+        visible={confirmReset}
+        title="Reset the shortcut bar?"
+        message="Every built-in key comes back, in its original order."
+        confirmLabel="Reset"
+        destructive
+        onConfirm={resetBuiltInKeys}
+        onCancel={() => setConfirmReset(false)}
+      />
     </>
   )
 }
 
 const styles = StyleSheet.create({
-  groupHeading: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.textMuted,
-    letterSpacing: 0.5,
-    marginBottom: spacing.xs,
-    paddingHorizontal: spacing.xs
-  },
-  groupTopGap: {
-    marginTop: spacing.xl
-  },
-  groupDescription: {
-    fontSize: typography.bodySize - 1,
-    color: colors.textSecondary,
-    lineHeight: 20,
-    paddingHorizontal: spacing.xs
-  },
-  section: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: radii.card,
+  // ListGroup's inset look; DragReorderList draws its own row hairlines, so the group must not.
+  reorderGroup: {
+    marginHorizontal: spacing.lg,
+    borderRadius: radii.group,
+    backgroundColor: colors.groupFill,
     overflow: 'hidden'
-  },
-  sectionTopGap: {
-    marginTop: spacing.sm
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm + 2,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2
-  },
-  rowPressed: {
-    backgroundColor: colors.bgRaised
   },
   // Why: rows inside DragReorderList get a fixed height and a trailing grip
   // handle from the list itself, so content only pads on the left.
@@ -332,59 +325,32 @@ const styles = StyleSheet.create({
     height: '100%',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm + 2,
-    paddingLeft: spacing.md + 2
+    gap: spacing.md,
+    paddingLeft: spacing.lg
   },
-  rowContent: {
-    flex: 1
-  },
-  rowLabel: {
-    fontSize: typography.bodySize,
-    fontWeight: '500',
-    color: colors.textPrimary
-  },
-  rowSublabel: {
-    fontSize: typography.bodySize - 2,
-    color: colors.textSecondary,
-    marginTop: 2
+  rowLabel: { ...textStyles.body, flex: 1, minWidth: 0, color: colors.textPrimary },
+  bytes: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: typography.monoFamily,
+    color: colors.textSecondary
   },
   keycap: {
-    minWidth: 62,
-    alignItems: 'center',
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.button,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs
-  },
-  keycapText: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    fontFamily: typography.monoFamily
-  },
-  separator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
-  },
-  emptyContainer: {
-    padding: spacing.md,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  emptyText: {
-    fontSize: typography.bodySize,
-    color: colors.textSecondary,
-    padding: spacing.md
-  },
-  deleteButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    minWidth: 56,
+    maxWidth: 140,
+    height: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(239, 68, 68, 0.1)'
+    backgroundColor: colors.fill,
+    borderRadius: 8,
+    paddingHorizontal: spacing.sm,
+    flexShrink: 0
   },
-  deleteButtonPressed: {
-    backgroundColor: 'rgba(239, 68, 68, 0.2)'
+  keycapText: {
+    color: colors.textPrimary,
+    fontSize: 13,
+    fontFamily: typography.monoFamily
   }
 })

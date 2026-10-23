@@ -1,245 +1,55 @@
-import { Platform, StyleSheet } from 'react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { StyleSheet } from 'react-native'
+import { colors, radii, spacing, textStyles, typography } from '../theme/mobile-theme'
 import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 
+// The sheet pads its content 12 pt; these offsets put groups 16 from the edge, as the pickers do,
+// and let the shared section headers and banners keep their own 20 / 16 pt insets.
+const GROUP_INSET = spacing.xs
+const BLEED = -spacing.md
+
 export const newWorktreeFormStyles = StyleSheet.create({
-  header: {
-    paddingHorizontal: spacing.xs,
-    marginBottom: spacing.md
-  },
-  title: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  loadingContainer: {
-    paddingVertical: spacing.xl,
-    alignItems: 'center'
-  },
-  emptyText: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize
-  },
-  field: {
-    marginBottom: spacing.md
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: colors.textSecondary,
-    marginBottom: spacing.xs
-  },
-  labelHint: {
-    fontWeight: '400',
-    color: colors.textMuted
-  },
-  fieldButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: Platform.OS === 'ios' ? spacing.sm + 2 : spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
-  fieldButtonText: {
-    fontSize: typography.bodySize,
-    color: colors.textPrimary
-  },
-  fieldButtonPlaceholder: {
-    color: colors.textMuted
-  },
+  header: { marginHorizontal: -spacing.sm, marginTop: -spacing.xs },
+  bleed: { marginHorizontal: BLEED },
+  unbleed: { paddingHorizontal: -BLEED },
+  group: { marginHorizontal: GROUP_INSET },
+  flush: { marginHorizontal: 0 },
+  stack: { gap: spacing.lg, marginHorizontal: GROUP_INSET, marginTop: spacing.sm },
+  bannerGap: { marginTop: spacing.md },
+  bannerAfter: { marginBottom: spacing.md },
+  errorGap: { marginTop: spacing.lg },
+  state: { minHeight: 220 },
+  optional: { ...textStyles.footnote, color: colors.textMuted },
+  disabledRow: { opacity: 0.4 },
   repoDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 999
+    width: 10,
+    height: 10,
+    borderRadius: radii.pill
   },
-  disabled: {
-    opacity: 0.55
-  },
-  sshBox: {
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    gap: spacing.xs
-  },
-  sshRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm
-  },
-  sshDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 999
-  },
-  sshDotConnected: {
-    backgroundColor: colors.statusGreen
-  },
-  sshDotProgress: {
-    backgroundColor: colors.statusAmber
-  },
-  sshDotDisconnected: {
-    backgroundColor: colors.statusRed
-  },
-  sshCopy: {
-    flex: 1,
-    minWidth: 0
-  },
-  sshTitle: {
-    fontSize: typography.bodySize,
-    color: colors.textPrimary,
-    fontWeight: '600'
-  },
-  sshSubtitle: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginTop: 1
-  },
-  sshConnectButton: {
-    borderRadius: radii.button,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs
-  },
-  sshConnectText: {
-    color: colors.textPrimary,
-    fontSize: 12,
-    fontWeight: '600'
-  },
-  errorInline: {
-    color: colors.statusRed,
-    fontSize: 12
-  },
-  input: {
-    backgroundColor: colors.bgRaised,
-    color: colors.textPrimary,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: Platform.OS === 'ios' ? spacing.sm + 2 : spacing.sm,
+  // A text input laid out as a 52 pt list row, so the name reads as one of the form's rows.
+  inputRow: {
+    ...textStyles.body,
     fontSize: TEXT_INPUT_FONT_SIZE,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
-  error: {
-    color: colors.statusRed,
-    fontSize: 13,
-    marginBottom: spacing.md
-  },
-  sourceWarning: {
-    marginTop: -spacing.sm,
-    marginBottom: spacing.md,
-    fontSize: 12,
-    color: colors.statusAmber
-  },
-  advancedToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingVertical: spacing.sm,
-    marginBottom: spacing.xs
-  },
-  advancedText: {
-    fontSize: typography.bodySize,
-    fontWeight: '500',
-    color: colors.textSecondary
-  },
-  setupHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.xs
-  },
-  sourceBadge: {
-    backgroundColor: colors.bgRaised,
-    borderRadius: 4,
-    paddingHorizontal: spacing.xs + 2,
-    paddingVertical: 2
-  },
-  sourceBadgeText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: colors.textMuted,
-    letterSpacing: 0.5
-  },
-  setupBox: {
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    padding: spacing.md
-  },
-  setupToggleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.sm
-  },
-  setupToggleLabel: {
-    fontSize: 13,
-    color: colors.textSecondary
-  },
-  setupChoiceRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginBottom: spacing.sm
-  },
-  setupChoiceButton: {
-    flex: 1,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.button,
-    paddingVertical: spacing.sm
-  },
-  setupChoiceButtonSelected: {
-    backgroundColor: colors.bgPanel,
-    borderColor: colors.textSecondary
-  },
-  setupChoiceText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  setupSwitch: {
-    transform: [{ scaleX: 0.7 }, { scaleY: 0.7 }]
-  },
-  setupCommandBlock: {
-    backgroundColor: colors.bgBase,
-    borderRadius: 6,
-    paddingHorizontal: spacing.sm + 2,
-    paddingVertical: spacing.sm
-  },
-  setupCommand: {
-    fontSize: 13,
-    fontFamily: typography.monoFamily,
-    color: colors.textPrimary
-  },
-  actions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    marginTop: spacing.sm
-  },
-  createButton: {
-    backgroundColor: colors.textPrimary,
+    minHeight: 52,
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.button,
-    minWidth: 160,
-    alignItems: 'center'
+    paddingVertical: 0,
+    color: colors.textPrimary
   },
-  createButtonDisabled: {
-    opacity: 0.4
+  // The bare icon buttons' 44 pt boxes reach into the row's padding so their glyphs line up.
+  sourceActions: { flexDirection: 'row', alignItems: 'center', marginRight: -spacing.md },
+  setupBlock: { gap: spacing.md, marginHorizontal: GROUP_INSET },
+  codeBlock: {
+    maxHeight: 168,
+    borderRadius: radii.field,
+    backgroundColor: colors.bgPanel,
+    borderWidth: 1,
+    borderColor: colors.separator
   },
-  createText: {
-    color: colors.bgBase,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
-  }
+  codeContent: { padding: spacing.md },
+  code: {
+    fontFamily: typography.monoFamily,
+    fontSize: 13,
+    lineHeight: 19,
+    color: colors.textPrimary
+  },
+  footer: { marginTop: spacing.xl, marginHorizontal: GROUP_INSET }
 })

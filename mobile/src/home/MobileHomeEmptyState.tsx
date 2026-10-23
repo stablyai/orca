@@ -1,138 +1,99 @@
-import { QrCode } from 'lucide-react-native'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { colors, radii, spacing } from '../theme/mobile-theme'
+import { ScrollView, StyleSheet, Text, View } from 'react-native'
+import { OrcaLogo } from '../components/OrcaLogo'
+import { Button } from '../components/ui/Button'
+import { colors, spacing, textStyles } from '../theme/mobile-theme'
 
 const ONBOARDING_STEPS = [
-  {
-    title: 'Open Orca desktop',
-    desc: 'Go to Settings → Mobile and generate a pairing QR code.'
-  },
-  {
-    title: 'Scan the code',
-    desc: 'Tap the button above to open the scanner. Point at the QR code on your screen.'
-  },
-  {
-    title: "You're connected",
-    desc: 'Your desktop will appear here. Everything is encrypted end-to-end.'
-  }
+  'Open Orca on your computer, then Settings › Mobile.',
+  'Scan the code it shows.',
+  "That's it. Everything is encrypted end to end."
 ]
 
+const STEP_BADGE = 22
+
+/** First run: the logo, one line on what pairing gives you, three quiet steps, and "Pair a desktop". */
 export function MobileHomeEmptyState(props: {
   bottomInset: number
   contentMaxWidth: number
   isWideLayout: boolean
   onPairDesktop: () => void
 }) {
-  // Scrolls because a phone in landscape is shorter than the hero and the steps together.
+  const width = props.isWideLayout ? [styles.wide, { maxWidth: props.contentMaxWidth }] : null
   return (
-    <ScrollView
-      contentContainerStyle={[
-        styles.emptyContainer,
-        { paddingBottom: props.bottomInset },
-        props.isWideLayout && {
-          maxWidth: props.contentMaxWidth,
-          width: '100%',
-          alignSelf: 'center'
-        }
-      ]}
-    >
-      <View style={styles.emptyHero}>
-        <Text style={styles.emptyTitle}>Connect your desktop</Text>
-        <Text style={styles.emptyBody}>
-          Pair with Orca on your computer to check on your agents, jump into any terminal, and drive
-          work from your phone.
+    <View style={styles.screen}>
+      {/* Scrolls because a phone in landscape is shorter than the hero and the steps together. */}
+      <ScrollView contentContainerStyle={[styles.content, width]}>
+        <OrcaLogo size={40} color={colors.textPrimary} />
+        <Text style={styles.title} accessibilityRole="header">
+          Run Orca from your phone
         </Text>
-        <Pressable style={styles.primaryButton} onPress={props.onPairDesktop}>
-          <QrCode size={17} color={colors.bgBase} />
-          <Text style={styles.primaryButtonText}>Pair Desktop</Text>
-        </Pressable>
-      </View>
-      <View style={styles.stepsSection}>
-        <Text style={styles.sectionHeading}>How it works</Text>
-        {ONBOARDING_STEPS.map((step, index) => (
-          <View key={step.title} style={[styles.stepRow, index > 0 && styles.stepRowBorder]}>
-            <View style={styles.stepNum}>
-              <Text style={styles.stepNumText}>{index + 1}</Text>
+        <Text style={styles.body}>
+          Pair with Orca on your computer to follow agents, answer them and start new work from
+          anywhere.
+        </Text>
+        <View style={styles.steps}>
+          {ONBOARDING_STEPS.map((step, index) => (
+            <View
+              key={step}
+              style={styles.step}
+              accessible
+              accessibilityLabel={`Step ${index + 1}: ${step}`}
+            >
+              <View style={styles.stepBadge}>
+                <Text style={styles.stepNumber}>{index + 1}</Text>
+              </View>
+              <Text style={styles.stepText}>{step}</Text>
             </View>
-            <View style={styles.stepText}>
-              <Text style={styles.stepTitle}>{step.title}</Text>
-              <Text style={styles.stepDesc}>{step.desc}</Text>
-            </View>
-          </View>
-        ))}
+          ))}
+        </View>
+      </ScrollView>
+      <View
+        style={[styles.footer, { paddingBottom: Math.max(props.bottomInset, spacing.lg) }, width]}
+      >
+        <Button label="Pair a desktop" variant="primary" block onPress={props.onPairDesktop} />
       </View>
-    </ScrollView>
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
-  emptyContainer: { flexGrow: 1 },
-  emptyHero: {
+  screen: { flex: 1 },
+  wide: { width: '100%', alignSelf: 'center' },
+  content: {
     flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 32,
-    paddingBottom: 40
+    paddingHorizontal: 36,
+    paddingVertical: spacing.xl,
+    gap: spacing.md
   },
-  emptyTitle: {
-    fontSize: 22,
-    fontWeight: '700',
+  // Kelvin's call for the first-run hero: 26/32, between title and largeTitle.
+  title: {
+    ...textStyles.title,
+    fontSize: 26,
+    lineHeight: 32,
     color: colors.textPrimary,
     textAlign: 'center',
-    marginBottom: 10
+    marginTop: spacing.sm
   },
-  emptyBody: {
-    fontSize: 15,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 32
-  },
-  primaryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: colors.textPrimary,
-    paddingHorizontal: 28,
-    paddingVertical: 14,
-    borderRadius: radii.card
-  },
-  primaryButtonText: { color: colors.bgBase, fontSize: 15, fontWeight: '700' },
-  stepsSection: { paddingHorizontal: spacing.xl },
-  sectionHeading: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    marginBottom: spacing.sm,
-    paddingHorizontal: spacing.xs
-  },
-  stepRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 14,
-    paddingVertical: spacing.lg
-  },
-  stepRowBorder: { borderTopWidth: 1, borderTopColor: colors.borderSubtle },
-  stepNum: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
+  body: { ...textStyles.body, color: colors.textSecondary, textAlign: 'center', maxWidth: 340 },
+  steps: { alignSelf: 'stretch', gap: 14, marginTop: 26 },
+  step: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md },
+  stepBadge: {
+    width: STEP_BADGE,
+    height: STEP_BADGE,
+    borderRadius: STEP_BADGE / 2,
+    backgroundColor: colors.fill,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 1
+    flexShrink: 0
   },
-  stepNumText: { fontSize: 12, fontWeight: '700', color: colors.textSecondary },
-  stepText: { flex: 1 },
-  stepTitle: {
-    fontSize: 14,
-    fontWeight: '600',
+  stepNumber: {
+    ...textStyles.caption,
+    fontWeight: '500',
     color: colors.textPrimary,
-    marginBottom: 3
+    fontVariant: ['tabular-nums']
   },
-  stepDesc: { fontSize: 12, color: colors.textMuted, lineHeight: 17 }
+  stepText: { ...textStyles.callout, color: colors.textSecondary, flex: 1, minWidth: 0 },
+  footer: { paddingHorizontal: spacing.lg, paddingTop: spacing.md }
 })

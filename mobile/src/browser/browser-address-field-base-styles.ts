@@ -1,4 +1,5 @@
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { fontFamilies } from '../theme/font-families'
+import { colors } from '../theme/mobile-theme'
 
 /**
  * The address bar's input and its overlaid label, minus the one thing that is a platform answer.
@@ -11,17 +12,15 @@ export const browserAddressFieldBase = {
   input: {
     flex: 1,
     minWidth: 0,
-    borderRadius: radii.input,
-    backgroundColor: colors.bgRaised,
     color: colors.textPrimary,
-    paddingHorizontal: spacing.sm,
+    paddingHorizontal: 14,
     paddingVertical: 0,
     includeFontPadding: false,
     textAlignVertical: 'center',
-    fontFamily: typography.monoFamily
+    ...fontFamilies.sans
   },
   fileLabel: {
     color: colors.textPrimary,
-    fontFamily: typography.monoFamily
+    ...fontFamilies.sans
   }
 } as const

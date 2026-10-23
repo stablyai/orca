@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ActivityIndicator, Animated, Easing, StyleSheet, Text, View } from 'react-native'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { colors, spacing, textStyles } from '../theme/mobile-theme'
+import { ShellStateFrame } from './ShellStateFrame'
 
 /** What the shell calls the wait from the bytes being on disk to the page having a frame. */
 export const SHELL_OPENING_LABEL = 'Opening workspace'
@@ -27,7 +28,7 @@ export function ShellWaitingFrame({
   caption?: string
 }) {
   return (
-    <>
+    <View style={styles.frame}>
       <View style={styles.indicatorSlot}>
         {indicator ?? <ActivityIndicator color={colors.textSecondary} accessibilityLabel={label} />}
       </View>
@@ -35,7 +36,7 @@ export function ShellWaitingFrame({
         <Text style={styles.label}>{label}</Text>
         {caption !== undefined && <Text style={styles.caption}>{caption}</Text>}
       </View>
-    </>
+    </View>
   )
 }
 
@@ -45,7 +46,19 @@ export function ShellWaitingFrame({
  * else for the whole of the page's boot. Never interactive even while opaque, so a report that
  * never arrives strands a spinner over a usable page rather than a dead one.
  */
-export function ShellPageCover({ label, visible }: { label: string; visible: boolean }) {
+export function ShellPageCover({
+  label,
+  visible,
+  title,
+  onBack
+}: {
+  label: string
+  visible: boolean
+  /** The desktop's name, drawn where the page's own bar will paint it. */
+  title?: string
+  /** Drawn only, so the chevron does not blink between the waiting frame and the page. */
+  onBack?: () => void
+}) {
   const opacity = useRef(new Animated.Value(1)).current
   const [mounted, setMounted] = useState(visible)
 
@@ -82,7 +95,9 @@ export function ShellPageCover({ label, visible }: { label: string; visible: boo
       testID="mobile-web-shell-cover"
       pointerEvents="none"
     >
-      <ShellWaitingFrame label={label} />
+      <ShellStateFrame title={title} onBack={onBack}>
+        <ShellWaitingFrame label={label} />
+      </ShellStateFrame>
     </Animated.View>
   )
 }
@@ -90,10 +105,12 @@ export function ShellPageCover({ label, visible }: { label: string; visible: boo
 const styles = StyleSheet.create({
   cover: {
     ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bgBase,
-    paddingHorizontal: spacing.lg
+    backgroundColor: colors.bgBase
+  },
+  frame: {
+    width: '100%',
+    maxWidth: 320,
+    alignItems: 'center'
   },
   indicatorSlot: {
     height: 20,
@@ -103,20 +120,20 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch'
   },
   label: {
-    fontSize: typography.bodySize,
+    ...textStyles.callout,
     color: colors.textSecondary,
     marginTop: spacing.md,
     textAlign: 'center'
   },
   // Out of flow, so a frame with a caption centres at the same height as one without.
   caption: {
+    ...textStyles.footnote,
     position: 'absolute',
     top: '100%',
     left: 0,
     right: 0,
-    marginTop: spacing.sm,
+    marginTop: spacing.xs,
     textAlign: 'center',
-    fontSize: typography.metaSize,
     color: colors.textMuted,
     fontVariant: ['tabular-nums']
   }

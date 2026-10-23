@@ -1,11 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
-import { Check } from 'lucide-react-native'
-import { colors } from '../../theme/mobile-theme'
+import { View } from 'react-native'
+import { AlertCircle, Users } from 'lucide-react-native'
 import type { GitHubAssignableUser } from '../../../../src/shared/github/pull-request-types'
 import type { RpcClient } from '../../transport/rpc-client'
 import { fetchAssignableUsers } from '../../session/github-pr-rpc'
 import { BottomDrawer } from '../BottomDrawer'
+import { MobileSearchField } from '../MobileSearchField'
+import { ListGroup, LIST_LEADING_INSET } from '../ui/ListGroup'
+import { ListRow } from '../ui/ListRow'
+import { SheetHeader } from '../ui/SheetHeader'
+import { StateView } from '../ui/StateView'
+import { triggerSelection } from '../../platform/haptics'
+import { PRAvatar } from './PRAvatar'
 import { mobilePrSidebarStyles as styles } from './mobile-pr-sidebar-styles'
 
 type Props = {
@@ -41,6 +47,7 @@ export function ReviewerPickerDrawer({
 }: Props) {
   const [load, setLoad] = useState<LoadState>({ status: 'idle' })
   const [query, setQuery] = useState('')
+  const [reloadNonce, setReloadNonce] = useState(0)
 
   useEffect(() => {
     if (!visible || !client) {
@@ -67,7 +74,7 @@ export function ReviewerPickerDrawer({
     return () => {
       cancelled = true
     }
-  }, [visible, client, worktreeId])
+  }, [visible, client, worktreeId, reloadNonce])
 
   const ordered = useMemo(() => {
     if (load.status !== 'loaded') {
@@ -91,55 +98,52 @@ export function ReviewerPickerDrawer({
 
   return (
     <BottomDrawer visible={visible} onClose={onClose} dragContentToDismiss={false}>
-      <Text style={styles.pickerTitle}>Reviewers</Text>
-      <TextInput
-        style={styles.pickerSearch}
-        value={query}
-        onChangeText={setQuery}
-        placeholder="Search people"
-        placeholderTextColor={colors.textMuted}
-        autoCapitalize="none"
-        autoCorrect={false}
-      />
-      {load.status === 'loading' ? (
-        <View style={styles.pickerStateArea}>
-          <ActivityIndicator color={colors.textSecondary} />
+      <SheetHeader title="Reviewers" trailing={{ label: 'Done', onPress: onClose }} />
+      <View style={styles.pickerSearch}>
+        <MobileSearchField value={query} onChangeText={setQuery} placeholder="Search people" />
+      </View>
+      {load.status === 'loading' || load.status === 'idle' ? (
+        <View style={styles.pickerState}>
+          <StateView loading title="Loading people…" />
         </View>
       ) : load.status === 'error' ? (
-        <View style={styles.pickerStateArea}>
-          <Text style={styles.emptyText}>{load.message}</Text>
+        <View style={styles.pickerState}>
+          <StateView
+            icon={AlertCircle}
+            title="Couldn't load people"
+            message={load.message}
+            primary={{ label: 'Retry', onPress: () => setReloadNonce((n) => n + 1) }}
+          />
         </View>
       ) : ordered.length === 0 ? (
-        <View style={styles.pickerStateArea}>
-          <Text style={styles.emptyText}>No matching people</Text>
+        <View style={styles.pickerState}>
+          <StateView
+            icon={Users}
+            title="No matching people"
+            message={query.trim() ? 'Try a name or a GitHub login.' : undefined}
+          />
         </View>
       ) : (
-        <View style={styles.pickerList}>
+        <ListGroup style={styles.pickerList} separatorInset={LIST_LEADING_INSET}>
           {ordered.map((item) => {
             const requested = isRequested(item.login)
             return (
-              <Pressable
+              <ListRow
                 key={item.login}
-                style={styles.pickerRow}
-                onPress={() => onToggle(item.login)}
+                title={item.name ?? item.login}
+                subtitle={item.name ? item.login : undefined}
+                leading={<PRAvatar login={item.login} url={item.avatarUrl} />}
+                selected={requested}
+                onPress={() => {
+                  triggerSelection()
+                  onToggle(item.login)
+                }}
                 accessibilityRole="button"
-                accessibilityState={{ selected: requested }}
                 accessibilityLabel={`${requested ? 'Remove' : 'Request'} ${item.login}`}
-              >
-                <View style={styles.rowTrailing}>
-                  {requested ? (
-                    <Check size={16} color={colors.textPrimary} strokeWidth={2.4} />
-                  ) : null}
-                </View>
-                <View style={styles.pickerRowMain}>
-                  <Text style={styles.rowTitle} numberOfLines={1}>
-                    {item.name ? `${item.name} (${item.login})` : item.login}
-                  </Text>
-                </View>
-              </Pressable>
+              />
             )
           })}
-        </View>
+        </ListGroup>
       )}
     </BottomDrawer>
   )

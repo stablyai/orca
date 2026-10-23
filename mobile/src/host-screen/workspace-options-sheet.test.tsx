@@ -10,6 +10,7 @@ vi.mock('react-native', () => ({
   Text: 'Text',
   View: 'View'
 }))
+vi.mock('../platform/haptics', () => ({ triggerSelection: () => {} }))
 vi.mock('lucide-react-native', () => ({
   Check: 'Check',
   ChevronLeft: 'ChevronLeft',

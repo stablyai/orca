@@ -1,6 +1,6 @@
 import { StyleSheet } from 'react-native'
 
-import { colors, spacing, radii, typography } from '../theme/mobile-theme'
+import { colors, spacing, radii, textStyles, typography } from '../theme/mobile-theme'
 
 export const mobileSessionReviewCommentStyles = StyleSheet.create({
   diffCommentAddButton: {
@@ -164,14 +164,17 @@ export const mobileSessionReviewCommentStyles = StyleSheet.create({
     alignItems: 'center'
   },
   toastText: {
+    ...textStyles.subhead,
+    fontWeight: '500',
     backgroundColor: colors.bgRaised,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
+    borderColor: colors.fieldBorder,
     color: colors.textPrimary,
-    fontSize: 13,
+    maxWidth: 320,
+    textAlign: 'center',
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.button,
+    paddingVertical: 10,
+    borderRadius: radii.group,
     overflow: 'hidden'
   }
 })

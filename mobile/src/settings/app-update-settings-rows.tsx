@@ -1,7 +1,9 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
 import type { KnownAppUpdate } from '../storage/app-update-preferences'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { colors, spacing, textStyles } from '../theme/mobile-theme'
 import { formatTimeAgo } from '../worktree/agent-row-display'
+import { ListGroup } from '../components/ui/ListGroup'
+import { ListRow } from '../components/ui/ListRow'
 
 export type AppUpdateCheckRowStatus = 'idle' | 'checking' | 'up-to-date' | 'failed'
 
@@ -34,67 +36,40 @@ export function AppUpdateSettingsRows(props: {
 }) {
   const checkValue = checkRowValue(props.checkStatus, props.lastCheckedAt, props.now)
   const { available, installedVersion, onUpdate } = props
-  const versionRow = available ? (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`Update to Orca ${available.version}`}
-      style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-      onPress={() => onUpdate(available.url)}
-    >
-      <Text style={styles.rowLabel}>Update to Orca {available.version}</Text>
-      <Text style={styles.actionValue}>Update</Text>
-    </Pressable>
-  ) : installedVersion ? (
-    <View style={styles.row}>
-      <Text style={styles.rowLabel}>Version {installedVersion}</Text>
-    </View>
-  ) : null
+  const checking = props.checkStatus === 'checking'
   return (
-    <View style={styles.section}>
-      {versionRow}
-      {versionRow && <View style={styles.separator} />}
-      <Pressable
-        accessibilityRole="button"
+    <ListGroup style={styles.group}>
+      {available ? (
+        <ListRow
+          title={`Update to Orca ${available.version}`}
+          accessibilityLabel={`Update to Orca ${available.version}`}
+          accessibilityRole="link"
+          accessory={<Text style={styles.updateAction}>Update</Text>}
+          onPress={() => onUpdate(available.url)}
+        />
+      ) : installedVersion ? (
+        <ListRow title="Version" value={installedVersion} />
+      ) : null}
+      <ListRow
+        title="Check for updates"
+        value={checkValue}
         accessibilityLabel={`Check for updates, ${checkValue}`}
-        accessibilityState={{ busy: props.checkStatus === 'checking' }}
-        disabled={props.checkStatus === 'checking'}
-        style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-        onPress={props.onCheck}
-      >
-        <Text style={styles.rowLabel}>Check for updates</Text>
-        <Text style={styles.rowValue}>{checkValue}</Text>
-      </Pressable>
-    </View>
+        accessory={
+          checking ? (
+            <View style={styles.spinner}>
+              <ActivityIndicator size="small" color={colors.textSecondary} />
+            </View>
+          ) : undefined
+        }
+        // Why: no tap while a check runs; the spinner says so without dimming the row.
+        onPress={checking ? undefined : props.onCheck}
+      />
+    </ListGroup>
   )
 }
 
-// Same panel, rows and separator as MobileSettingsSection.
 const styles = StyleSheet.create({
-  section: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: 12,
-    overflow: 'hidden',
-    marginTop: spacing.md
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm + 2,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2
-  },
-  rowPressed: { backgroundColor: colors.bgRaised },
-  rowLabel: {
-    flex: 1,
-    fontSize: typography.bodySize,
-    fontWeight: '500',
-    color: colors.textPrimary
-  },
-  rowValue: { fontSize: typography.metaSize, color: colors.textSecondary },
-  actionValue: { fontSize: typography.bodySize, fontWeight: '600', color: colors.textPrimary },
-  separator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
-  }
+  group: { marginTop: spacing.md },
+  updateAction: { ...textStyles.callout, fontWeight: '600', color: colors.accentBlue },
+  spinner: { width: 20, alignItems: 'center' }
 })

@@ -1,3 +1,4 @@
+import { X, XSquare } from 'lucide-react-native'
 import type { MarkdownDocState, MobileSessionTab } from './mobile-session-route-types'
 import type { ActionSheetAction } from '../components/ActionSheetModal'
 import { selectBulkCloseTabs } from './mobile-tab-close-selection'
@@ -54,8 +55,8 @@ export function createBulkCloseSheetActions(deps: BulkCloseSheetDeps) {
     }
     return [
       {
-        label: 'Close Other Tabs',
-        destructive: true,
+        label: 'Close other tabs',
+        icon: XSquare,
         onPress: () => {
           dismiss()
           void bulkClose(anchor)
@@ -76,7 +77,7 @@ export function createCloseWithBulkActions(
   return (target: MobileSessionTab | null, dismiss: () => void): ActionSheetAction[] => [
     {
       label: 'Close',
-      destructive: true,
+      icon: X,
       onPress: () => {
         dismiss()
         if (target) {

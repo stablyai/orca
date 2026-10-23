@@ -10,9 +10,8 @@ export default function NativeSettingsRoute() {
     <SettingsMenuScreen
       push={(route) => router.push(route)}
       openExternal={(url) => Linking.openURL(url)}
-    >
-      <SettingsAppUpdateSection />
-      <PendingCredentialCleanupCard />
-    </SettingsMenuScreen>
+      notice={<PendingCredentialCleanupCard />}
+      appUpdate={<SettingsAppUpdateSection />}
+    />
   )
 }

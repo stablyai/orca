@@ -12,7 +12,11 @@ import {
   mobileComposerSlashItems,
   type MobileComposerStructuredCatalog
 } from './mobile-native-chat-composer-menu'
-import { composerMenuInsertText, type ComposerMenuRow } from './MobileNativeChatComposerMenu'
+import {
+  composerMenuInsertText,
+  type ComposerMenuRow,
+  type ComposerMenuStatus
+} from './MobileNativeChatComposerMenu'
 
 type Selection = { start: number; end: number }
 /** Opening the menu from the + sheet narrows it to what that row named. */
@@ -86,6 +90,15 @@ export function useMobileNativeChatComposerMenu(input: {
     return narrowedMenuItems(items, menuKind)
   }, [agent, filePaths, menuKind, menuMode, menuQuery, structuredCatalog])
 
+  // `@` with nothing to show yet: the worktree's paths are still on their way, or none match. A
+  // bare `/` that matches nothing stays silent, since typed paths start with one too.
+  const status: ComposerMenuStatus | null =
+    menuMode !== 'file' || rows.length > 0
+      ? null
+      : filePaths.length === 0
+        ? 'loading-files'
+        : 'no-files'
+
   const { onNeedFiles, onSlashMenuOpen } = input
   useEffect(() => {
     if (trigger?.kind === 'file') {
@@ -146,6 +159,7 @@ export function useMobileNativeChatComposerMenu(input: {
     skillToken,
     skillCount: skillTokens.size,
     rows,
+    status,
     pick,
     openSlashMenu,
     openFileMenu,

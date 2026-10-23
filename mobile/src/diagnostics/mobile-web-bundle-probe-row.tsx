@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react'
-import { View, Text, Pressable, ActivityIndicator } from 'react-native'
+import { View } from 'react-native'
 import { Package } from 'lucide-react-native'
 import { loadHosts } from '../transport/host-store'
 import { colors } from '../theme/mobile-theme'
+import { Button } from '../components/ui/Button'
+import { ListGroup } from '../components/ui/ListGroup'
+import { ListRow } from '../components/ui/ListRow'
 import { troubleshootScreenStyles as styles } from './troubleshoot-screen-styles'
 import {
   useMobileWebBundleProbe,
@@ -10,22 +13,12 @@ import {
 } from './use-mobile-web-bundle-probe'
 import type { HostProfile } from '../transport/types'
 
-/** Dialling the host is part of the tap, so the label says which half is still running. */
+/** Dialling the desktop is part of the tap, so the label says which half is still running. */
 function buttonLabel(state: MobileWebBundleProbeState, awaitingHost: boolean): string {
   if (state.status !== 'running') {
     return 'Fetch mobile web bundle'
   }
   return awaitingHost ? 'Connecting…' : 'Fetching bundle…'
-}
-
-/** One `label — detail` line in the same row shape the diagnostic checks use. */
-function ProbeLine({ label, detail, failed }: { label: string; detail: string; failed?: boolean }) {
-  return (
-    <View style={styles.checkRow}>
-      <Text style={styles.checkLabel}>{label}</Text>
-      <Text style={[styles.checkDetail, failed === true && styles.checkDetailFail]}>{detail}</Text>
-    </View>
-  )
 }
 
 function ProbeResult({ state, hostName }: { state: MobileWebBundleProbeState; hostName: string }) {
@@ -34,23 +27,24 @@ function ProbeResult({ state, hostName }: { state: MobileWebBundleProbeState; ho
   }
   if (state.status === 'failed') {
     return (
-      <View style={styles.section}>
-        <ProbeLine label="Bundle" detail={state.detail} failed />
-      </View>
+      <ListGroup style={styles.results}>
+        <ListRow
+          title="Bundle"
+          subtitle={state.detail}
+          subtitleColor={colors.danger}
+          subtitleNumberOfLines={4}
+        />
+      </ListGroup>
     )
   }
   return (
-    <View style={styles.section}>
-      <ProbeLine label="Host" detail={hostName} />
-      <View style={styles.separator} />
-      <ProbeLine label="Build" detail={state.buildId.slice(0, 12)} />
-      <View style={styles.separator} />
-      <ProbeLine label="Assets" detail={`${state.assetCount}`} />
-      <View style={styles.separator} />
-      <ProbeLine label="Bytes" detail={`${state.totalBytes}`} />
-      <View style={styles.separator} />
-      <ProbeLine label="Elapsed" detail={`${state.elapsedMs} ms`} />
-    </View>
+    <ListGroup style={styles.results}>
+      <ListRow title="Desktop" value={hostName} />
+      <ListRow title="Build" value={state.buildId.slice(0, 12)} />
+      <ListRow title="Assets" value={`${state.assetCount}`} />
+      <ListRow title="Bytes" value={`${state.totalBytes}`} />
+      <ListRow title="Elapsed" value={`${state.elapsedMs} ms`} />
+    </ListGroup>
   )
 }
 
@@ -83,24 +77,17 @@ export function MobileWebBundleProbeRow() {
 
   return (
     <View>
-      <Pressable
-        style={({ pressed }) => [
-          styles.diagnosticButton,
-          pressed && styles.diagnosticButtonPressed,
-          state.status === 'running' && styles.diagnosticButtonDisabled
-        ]}
-        testID="mobile-web-bundle-probe"
-        onPress={run}
-        disabled={state.status === 'running'}
-      >
-        {state.status === 'running' ? (
-          <ActivityIndicator size="small" color={colors.textPrimary} />
-        ) : (
-          <Package size={16} color={colors.textPrimary} />
-        )}
-        <Text style={styles.diagnosticButtonLabel}>{buttonLabel(state, awaitingHost)}</Text>
-      </Pressable>
-      <ProbeResult state={state} hostName={host?.name ?? 'unknown host'} />
+      <View style={styles.actions}>
+        <Button
+          label={buttonLabel(state, awaitingHost)}
+          onPress={run}
+          icon={Package}
+          busy={state.status === 'running'}
+          block
+          testID="mobile-web-bundle-probe"
+        />
+      </View>
+      <ProbeResult state={state} hostName={host?.name ?? 'Unknown desktop'} />
     </View>
   )
 }

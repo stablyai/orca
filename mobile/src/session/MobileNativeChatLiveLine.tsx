@@ -1,11 +1,14 @@
 import { useContext } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { ChevronRight } from 'lucide-react-native'
 import { nativeChatReasoningDisclosureKey } from '../../../src/shared/native-chat-reasoning-row'
 import { formatNativeChatActiveTurnLabel } from '../../../src/shared/native-chat-turn-status'
 import { INLINE_TEXT_SELECTION } from '../components/inline-text-selection'
 import { LoadingSpinner } from '../components/LoadingSpinner'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { Collapsible } from '../components/ui/Collapsible'
+import { pressTransition } from '../components/ui/transition-styles'
+import { colors, MIN_TOUCH_TARGET, spacing, textStyles } from '../theme/mobile-theme'
+import { DISCLOSURE_BLEED, MobileNativeChatChevron } from './MobileNativeChatDisclosureRow'
+import { scaledText } from './mobile-native-chat-message-styles'
 import { MobileNativeChatReasoningBody } from './MobileNativeChatReasoningRow'
 import { MobileNativeChatRowOverlaysContext } from './mobile-native-chat-row-overlays'
 import type { MobileNativeChatLiveLine as LiveLine } from './use-mobile-native-chat-turn-disclosure'
@@ -36,72 +39,72 @@ export function MobileNativeChatLiveLine({
       {/* One element for every state of the line, so TalkBack hears each new label; the body
           sits outside it. */}
       <Pressable
-        style={({ pressed }) => [styles.row, reasoning && pressed && styles.pressed]}
+        style={({ pressed }) => [
+          styles.row,
+          reasoning && pressed && styles.pressed,
+          reasoning ? (pressed ? pressTransition.pressed : pressTransition.rest) : null
+        ]}
         onPress={
           reasoning
             ? () => onToggleReasoning(nativeChatReasoningDisclosureKey(reasoning.message.id))
             : undefined
         }
-        // With the row's 32 pt height, the 44 pt target the reasoning row has.
-        hitSlop={6}
         accessibilityRole={reasoning ? 'button' : undefined}
         accessibilityState={reasoning ? { expanded: open } : undefined}
         accessibilityLabel={label}
         accessibilityLiveRegion="polite"
       >
-        <View style={styles.glyph}>
-          <LoadingSpinner size={15} color={colors.textMuted} />
+        <View style={[styles.glyph, { width: 16 * fontScale }]}>
+          <LoadingSpinner size={16 * fontScale} color={colors.textSecondary} />
         </View>
-        <Text style={styles.label} numberOfLines={1}>
+        <Text style={[styles.label, scaledText(textStyles.callout, fontScale)]} numberOfLines={1}>
           {label}
         </Text>
+        {reasoning ? <MobileNativeChatChevron open={open} fontScale={fontScale} /> : null}
+      </Pressable>
+      <Collapsible open={open}>
         {reasoning ? (
-          <View style={open ? styles.caretOpen : undefined}>
-            <ChevronRight size={14} color={colors.textMuted} strokeWidth={2} />
+          <View style={styles.body}>
+            <MobileNativeChatReasoningBody
+              positionKey={nativeChatReasoningDisclosureKey(reasoning.message.id)}
+              markdown={reasoning.markdown}
+              fontScale={fontScale}
+              onOpenFile={onOpenFile}
+              onLongPress={INLINE_TEXT_SELECTION ? undefined : () => openActions(reasoning.message)}
+            />
           </View>
         ) : null}
-      </Pressable>
-      {reasoning && open ? (
-        <View style={styles.body}>
-          <MobileNativeChatReasoningBody
-            positionKey={nativeChatReasoningDisclosureKey(reasoning.message.id)}
-            markdown={reasoning.markdown}
-            fontScale={fontScale}
-            onOpenFile={onOpenFile}
-            onLongPress={INLINE_TEXT_SELECTION ? undefined : () => openActions(reasoning.message)}
-          />
-        </View>
-      ) : null}
+      </Collapsible>
     </View>
   )
 }
 
-// The finished reasoning row's geometry (row gutter, 15 pt glyph slot, its gap, its 32 pt height),
-// so the label and the open text do not move when that row takes over.
+// The finished reasoning row's geometry (row gutter, 16 pt glyph slot, its gap, 44 pt height), so
+// the label and the open text do not move when that row takes over.
 const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    minHeight: 32,
-    paddingHorizontal: spacing.lg
+    minHeight: MIN_TOUCH_TARGET,
+    marginHorizontal: spacing.lg - DISCLOSURE_BLEED,
+    paddingHorizontal: DISCLOSURE_BLEED,
+    paddingVertical: 6,
+    borderRadius: 12
   },
   // The spinner is wider than the brain; centred in the brain's slot it keeps the text column.
   glyph: {
-    width: 15,
     alignItems: 'center',
     overflow: 'visible'
   },
   pressed: {
-    opacity: 0.6
+    backgroundColor: colors.fill
   },
   label: {
-    color: colors.textMuted,
-    fontSize: typography.bodySize,
-    flexShrink: 1
-  },
-  caretOpen: {
-    transform: [{ rotate: '90deg' }]
+    ...textStyles.callout,
+    flex: 1,
+    minWidth: 0,
+    color: colors.textSecondary
   },
   body: {
     paddingHorizontal: spacing.lg

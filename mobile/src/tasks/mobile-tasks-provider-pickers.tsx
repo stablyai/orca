@@ -4,10 +4,14 @@ import {
   BottomDrawer,
   View,
   Text,
-  Pressable,
-  Check,
+  ScrollView,
+  StyleSheet,
   colors,
-  ScrollView
+  spacing,
+  textStyles,
+  triggerMediumImpact,
+  triggerSelection,
+  type TaskProvider
 } from './mobile-tasks-dependencies'
 import {
   normalizeGitHubPreset,
@@ -19,17 +23,42 @@ import {
   getRepoBadgeColor,
   getTaskRepoDetail,
   issueSourceSlug,
-  GITHUB_KIND_OPTIONS
+  GITHUB_KIND_OPTIONS,
+  type GitHubMode,
+  type GitHubPreset
 } from './mobile-tasks-legacy-foundation'
-import { styles } from './mobile-tasks-legacy-styles'
 import { normalizeJiraFilter } from './mobile-jira-issue-filters'
+import { ListGroup, LIST_LEADING_INSET } from '../components/ui/ListGroup'
+import { ListRow } from '../components/ui/ListRow'
+import { MobileSegmentedControl } from '../components/MobileSegmentedControl'
+import { PickerEmptyState, PickerSheetTitle } from '../components/PickerModal'
+import {
+  MobileTasksSheetFootnote,
+  MobileTasksSheetHeader,
+  sheetStyles
+} from './mobile-tasks-sheet-chrome'
 
-export function renderMobileTasksProviderPicker(model: ConnectionPresentationModel) {
+type ProviderSelectModel = Pick<
+  ConnectionPresentationModel,
+  | 'githubPreset'
+  | 'persistTaskSource'
+  | 'setAppliedQuery'
+  | 'setGithubKind'
+  | 'setGithubMode'
+  | 'setGithubPreset'
+  | 'setItems'
+  | 'setLinearFilter'
+  | 'setJiraFilter'
+  | 'setProvider'
+  | 'setQuery'
+  | 'taskResumeRef'
+>
+
+/** Switches the task source and restores what the user last had open there. */
+export function selectMobileTasksProvider(model: ProviderSelectModel, next: TaskProvider) {
   const {
     githubPreset,
     persistTaskSource,
-    provider,
-    providerOptions,
     setAppliedQuery,
     setGithubKind,
     setGithubMode,
@@ -39,58 +68,59 @@ export function renderMobileTasksProviderPicker(model: ConnectionPresentationMod
     setJiraFilter,
     setProvider,
     setQuery,
-    setShowProviderPicker,
-    showProviderPicker,
-    taskResumeRef,
-    taskUiReady
+    taskResumeRef
   } = model
+  const resume = taskResumeRef.current
+  persistTaskSource(next)
+  setProvider(next)
+  setItems([])
+  if (next === 'github') {
+    const nextMode = resume.githubMode === 'project' ? 'project' : 'items'
+    setGithubMode(nextMode)
+    if (nextMode === 'project') {
+      setQuery('')
+      setAppliedQuery('')
+      return
+    }
+    const preset =
+      resume.githubItemsPreset === null
+        ? githubPreset
+        : normalizeGitHubPreset(resume.githubItemsPreset ?? githubPreset)
+    const nextQuery =
+      resume.githubItemsPreset === null
+        ? (resume.githubItemsQuery ?? '')
+        : getTaskPresetQuery(preset)
+    const nextKind = githubKindFromQuery(nextQuery, preset)
+    setGithubPreset(preset)
+    setGithubKind(nextKind)
+    setQuery(nextQuery)
+    setAppliedQuery(scopeGitHubTaskSearch(nextQuery, nextKind))
+  } else if (next === 'linear') {
+    const nextQuery = resume.linearQuery ?? ''
+    setLinearFilter(normalizeLinearFilter(resume.linearPreset))
+    setQuery(nextQuery)
+    setAppliedQuery(nextQuery.trim())
+  } else if (next === 'jira') {
+    const nextQuery = resume.jiraQuery ?? ''
+    setJiraFilter(normalizeJiraFilter(resume.jiraPreset))
+    setQuery(nextQuery)
+    setAppliedQuery(nextQuery.trim())
+  } else {
+    setQuery('')
+    setAppliedQuery('')
+  }
+}
+
+export function renderMobileTasksProviderPicker(model: ConnectionPresentationModel) {
+  const { provider, providerOptions, setShowProviderPicker, showProviderPicker, taskUiReady } =
+    model
   return (
     <PickerModal
       visible={taskUiReady && showProviderPicker}
-      title="Task Source"
+      title="Task source"
       options={providerOptions}
       selected={provider}
-      onSelect={(next) => {
-        const resume = taskResumeRef.current
-        persistTaskSource(next)
-        setProvider(next)
-        setItems([])
-        if (next === 'github') {
-          const nextMode = resume.githubMode === 'project' ? 'project' : 'items'
-          setGithubMode(nextMode)
-          if (nextMode === 'project') {
-            setQuery('')
-            setAppliedQuery('')
-            return
-          }
-          const preset =
-            resume.githubItemsPreset === null
-              ? githubPreset
-              : normalizeGitHubPreset(resume.githubItemsPreset ?? githubPreset)
-          const nextQuery =
-            resume.githubItemsPreset === null
-              ? (resume.githubItemsQuery ?? '')
-              : getTaskPresetQuery(preset)
-          const nextKind = githubKindFromQuery(nextQuery, preset)
-          setGithubPreset(preset)
-          setGithubKind(nextKind)
-          setQuery(nextQuery)
-          setAppliedQuery(scopeGitHubTaskSearch(nextQuery, nextKind))
-        } else if (next === 'linear') {
-          const nextQuery = resume.linearQuery ?? ''
-          setLinearFilter(normalizeLinearFilter(resume.linearPreset))
-          setQuery(nextQuery)
-          setAppliedQuery(nextQuery.trim())
-        } else if (next === 'jira') {
-          const nextQuery = resume.jiraQuery ?? ''
-          setJiraFilter(normalizeJiraFilter(resume.jiraPreset))
-          setQuery(nextQuery)
-          setAppliedQuery(nextQuery.trim())
-        } else {
-          setQuery('')
-          setAppliedQuery('')
-        }
-      }}
+      onSelect={(next) => selectMobileTasksProvider(model, next)}
       onClose={() => setShowProviderPicker(false)}
     />
   )
@@ -110,61 +140,94 @@ export function renderMobileTasksRepoPicker(model: ConnectionPresentationModel) 
   } = model
   return (
     <BottomDrawer visible={taskUiReady && showRepoPicker} onClose={() => setShowRepoPicker(false)}>
-      <View style={styles.sheetHeader}>
-        <Text style={styles.sheetTitle}>Repositories</Text>
-        <Text style={styles.sheetSubtitle}>Choose which repositories to query.</Text>
-      </View>
-
-      <View style={styles.repoPickerGroup}>
-        <Pressable
-          style={styles.repoPickerRow}
+      <MobileTasksSheetHeader
+        title="Repositories"
+        subtitle="Choose which repositories to query."
+        trailing={{ label: 'Done', onPress: () => setShowRepoPicker(false) }}
+      />
+      <ListGroup separatorInset={LIST_LEADING_INSET} style={sheetStyles.group}>
+        <ListRow
+          key="all"
+          title="All repositories"
+          subtitle={repositoryCount(hostedRepos.length)}
+          leading={null}
+          selected={effectiveRepoIds.size === 0}
+          accessibilityRole="button"
           onPress={() => {
+            triggerSelection()
             const allSelection = new Set<string>()
             setSelectedRepoIds(allSelection)
             persistRepoSelection(allSelection, hostedRepos)
           }}
-        >
-          <View style={styles.repoPickerTextWrap}>
-            <Text style={styles.repoPickerTitle}>All repositories</Text>
-            <Text style={styles.repoPickerSubtitle}>{repositoryCount(hostedRepos.length)}</Text>
-          </View>
-          {effectiveRepoIds.size === 0 ? <Check size={15} color={colors.textPrimary} /> : null}
-        </Pressable>
-
-        {hostedRepos.map((repo) => {
-          const selected = effectiveRepoIds.has(repo.id)
-          return (
-            <View key={repo.id}>
-              <View style={styles.actionSeparator} />
-              <Pressable style={styles.repoPickerRow} onPress={() => toggleRepoSelection(repo.id)}>
-                <View
-                  style={[
-                    styles.pickerRepoDot,
-                    { backgroundColor: getRepoBadgeColor(repo, repo.displayName) }
-                  ]}
-                />
-                <View style={styles.repoPickerTextWrap}>
-                  <Text style={styles.repoPickerTitle} numberOfLines={1}>
-                    {repo.displayName}
-                  </Text>
-                  <Text style={styles.repoPickerSubtitle} numberOfLines={1}>
-                    {getTaskRepoDetail(repo, repoHostLabels)}
-                  </Text>
-                </View>
-                {selected ? <Check size={15} color={colors.textPrimary} /> : null}
-              </Pressable>
-            </View>
-          )
-        })}
-      </View>
+        />
+        {hostedRepos.map((repo) => (
+          <ListRow
+            key={repo.id}
+            title={repo.displayName}
+            subtitle={getTaskRepoDetail(repo, repoHostLabels)}
+            leading={
+              <View
+                style={[
+                  sheetStyles.dot,
+                  {
+                    backgroundColor: getRepoBadgeColor(repo, repo.displayName)
+                  }
+                ]}
+              />
+            }
+            selected={effectiveRepoIds.has(repo.id)}
+            accessibilityRole="button"
+            onPress={() => {
+              triggerSelection()
+              toggleRepoSelection(repo.id)
+            }}
+          />
+        ))}
+      </ListGroup>
     </BottomDrawer>
   )
 }
 
+/** One repository's Upstream / Origin choice, as the Filter & display sheet and its own sheet show it. */
+export function renderMobileTasksIssueSourceRows(model: ConnectionPresentationModel) {
+  const { githubIssueSourceRows, setGitHubIssueSourcePreference } = model
+  return githubIssueSourceRows.map(({ repo, sources }) => {
+    const selectedPreference =
+      repo.issueSourcePreference === 'origin' || repo.issueSourcePreference === 'upstream'
+        ? repo.issueSourcePreference
+        : 'upstream'
+    return (
+      <View key={repo.id} style={issueSourceStyles.row}>
+        <View style={issueSourceStyles.copy}>
+          <Text style={issueSourceStyles.title} numberOfLines={1}>
+            {repo.displayName}
+          </Text>
+          <Text style={issueSourceStyles.hint} numberOfLines={1}>
+            Querying{' '}
+            {issueSourceSlug(
+              selectedPreference === 'origin' ? sources.prs : sources.upstreamCandidate
+            )}
+          </Text>
+        </View>
+        <MobileSegmentedControl
+          segments={ISSUE_SOURCE_SEGMENTS}
+          selected={selectedPreference}
+          onSelect={(preference) => void setGitHubIssueSourcePreference(repo, preference)}
+          testIDPrefix={`mobile-tasks-issue-source-${repo.id}-`}
+        />
+      </View>
+    )
+  })
+}
+
+export const ISSUE_SOURCE_SEGMENTS = [
+  { value: 'upstream', label: 'Upstream' },
+  { value: 'origin', label: 'Origin' }
+] as const
+
 export function renderMobileTasksGitHubIssueSourcePicker(model: ConnectionPresentationModel) {
   const {
     githubIssueSourceRows,
-    setGitHubIssueSourcePreference,
     setShowGitHubIssueSourcePicker,
     showGitHubIssueSourcePicker,
     taskUiReady
@@ -174,125 +237,95 @@ export function renderMobileTasksGitHubIssueSourcePicker(model: ConnectionPresen
       visible={taskUiReady && showGitHubIssueSourcePicker}
       onClose={() => setShowGitHubIssueSourcePicker(false)}
     >
-      <View style={styles.sheetHeader}>
-        <Text style={styles.sheetTitle}>GitHub Issue Sources</Text>
-        <Text style={styles.sheetSubtitle}>
-          Choose whether each repository queries and creates work from upstream or origin.
-        </Text>
-      </View>
-
-      <View style={styles.repoPickerGroup}>
-        {githubIssueSourceRows.length === 0 ? (
-          <View style={styles.drawerLoadingRow}>
-            <Text style={styles.detailMuted}>No alternate issue sources available.</Text>
-          </View>
-        ) : (
-          githubIssueSourceRows.map(({ repo, sources }, index) => {
-            const selectedPreference =
-              repo.issueSourcePreference === 'origin' || repo.issueSourcePreference === 'upstream'
-                ? repo.issueSourcePreference
-                : 'upstream'
-            return (
-              <View key={repo.id}>
-                {index > 0 ? <View style={styles.actionSeparator} /> : null}
-                <View style={styles.issueSourceBox}>
-                  <View style={styles.repoPickerTextWrap}>
-                    <Text style={styles.repoPickerTitle} numberOfLines={1}>
-                      {repo.displayName}
-                    </Text>
-                    <Text style={styles.issueSourceHint} numberOfLines={2}>
-                      Querying{' '}
-                      {issueSourceSlug(
-                        selectedPreference === 'origin' ? sources.prs : sources.upstreamCandidate
-                      )}
-                    </Text>
-                  </View>
-                  <View style={styles.issueSourceSegment}>
-                    {(['upstream', 'origin'] as const).map((preference) => {
-                      const selected = selectedPreference === preference
-                      const slug =
-                        preference === 'upstream'
-                          ? issueSourceSlug(sources.upstreamCandidate)
-                          : issueSourceSlug(sources.prs)
-                      return (
-                        <Pressable
-                          key={preference}
-                          style={[
-                            styles.issueSourceSegmentButton,
-                            selected && styles.issueSourceSegmentButtonActive
-                          ]}
-                          accessibilityState={{ selected }}
-                          onPress={() => void setGitHubIssueSourcePreference(repo, preference)}
-                        >
-                          <Text
-                            style={[
-                              styles.issueSourceSegmentText,
-                              selected && styles.issueSourceSegmentTextActive
-                            ]}
-                          >
-                            {preference === 'upstream' ? 'Upstream' : 'Origin'}
-                          </Text>
-                          <Text style={styles.issueSourceSlug} numberOfLines={1}>
-                            {slug}
-                          </Text>
-                        </Pressable>
-                      )
-                    })}
-                  </View>
-                </View>
-              </View>
-            )
-          })
-        )}
-      </View>
+      <MobileTasksSheetHeader
+        title="Issue sources"
+        trailing={{
+          label: 'Done',
+          onPress: () => setShowGitHubIssueSourcePicker(false)
+        }}
+      />
+      {githubIssueSourceRows.length === 0 ? (
+        <PickerEmptyState message="No alternate issue sources available." />
+      ) : (
+        <>
+          <ListGroup style={sheetStyles.group}>{renderMobileTasksIssueSourceRows(model)}</ListGroup>
+          <MobileTasksSheetFootnote>
+            Choose whether each repository queries and creates work from upstream or origin.
+          </MobileTasksSheetFootnote>
+        </>
+      )}
     </BottomDrawer>
   )
 }
 
-export function renderMobileTasksGitHubViewPicker(model: ConnectionPresentationModel) {
+/** Issues, PRs or Projects; each restores that view's default preset. */
+export function selectMobileTasksGitHubView(model: ConnectionPresentationModel, kind: GitHubMode) {
   const {
-    githubKind,
-    githubMode,
     persistTaskResumeState,
     setAppliedQuery,
     setGithubKind,
     setGithubMode,
     setGithubPreset,
     setItems,
-    setQuery,
-    setShowGitHubKindPicker,
-    showGitHubKindPicker,
-    taskUiReady
+    setQuery
   } = model
+  if (kind === 'project') {
+    setGithubMode('project')
+    setItems([])
+    persistTaskResumeState({ githubMode: 'project' })
+    return
+  }
+  const preset = kind === 'prs' ? 'prs' : 'issues'
+  const nextQuery = getTaskPresetQuery(preset)
+  setGithubMode('items')
+  setGithubKind(kind)
+  setGithubPreset(preset)
+  setQuery(nextQuery)
+  setAppliedQuery(nextQuery)
+  persistTaskResumeState({
+    githubMode: 'items',
+    githubItemsPreset: preset,
+    githubItemsQuery: nextQuery
+  })
+}
+
+export function renderMobileTasksGitHubViewPicker(model: ConnectionPresentationModel) {
+  const { githubKind, githubMode, setShowGitHubKindPicker, showGitHubKindPicker, taskUiReady } =
+    model
   return (
     <PickerModal
       visible={taskUiReady && showGitHubKindPicker}
-      title="GitHub View"
+      title="GitHub view"
       options={GITHUB_KIND_OPTIONS}
       selected={githubMode === 'project' ? 'project' : githubKind}
-      onSelect={(kind) => {
-        if (kind === 'project') {
-          setGithubMode('project')
-          setItems([])
-          persistTaskResumeState({ githubMode: 'project' })
-          return
-        }
-        const preset = kind === 'prs' ? 'prs' : 'issues'
-        const nextQuery = getTaskPresetQuery(preset)
-        setGithubMode('items')
-        setGithubKind(kind)
-        setGithubPreset(preset)
-        setQuery(nextQuery)
-        setAppliedQuery(nextQuery)
-        persistTaskResumeState({
-          githubMode: 'items',
-          githubItemsPreset: preset,
-          githubItemsQuery: nextQuery
-        })
-      }}
+      onSelect={(kind) => selectMobileTasksGitHubView(model, kind)}
       onClose={() => setShowGitHubKindPicker(false)}
     />
   )
+}
+
+export function selectMobileTasksGitHubPreset(
+  model: ConnectionPresentationModel,
+  preset: GitHubPreset
+) {
+  const {
+    persistTaskResumeState,
+    setAppliedQuery,
+    setGithubKind,
+    setGithubMode,
+    setGithubPreset,
+    setQuery
+  } = model
+  const nextQuery = getTaskPresetQuery(preset)
+  setGithubMode('items')
+  setGithubKind(preset === 'issues' || preset === 'my-issues' ? 'issues' : 'prs')
+  setGithubPreset(preset)
+  setQuery(nextQuery)
+  setAppliedQuery(nextQuery)
+  persistTaskResumeState({
+    githubItemsPreset: preset,
+    githubItemsQuery: nextQuery
+  })
 }
 
 export function renderMobileTasksGitHubPresetPicker(model: ConnectionPresentationModel) {
@@ -301,12 +334,6 @@ export function renderMobileTasksGitHubPresetPicker(model: ConnectionPresentatio
     githubPreset,
     githubPresetPickerOptions,
     persistDefaultGitHubPreset,
-    persistTaskResumeState,
-    setAppliedQuery,
-    setGithubKind,
-    setGithubMode,
-    setGithubPreset,
-    setQuery,
     setShowGitHubPresetPicker,
     showGitHubPresetPicker,
     taskUiReady
@@ -314,22 +341,15 @@ export function renderMobileTasksGitHubPresetPicker(model: ConnectionPresentatio
   return (
     <PickerModal
       visible={taskUiReady && showGitHubPresetPicker}
-      title={githubKind === 'prs' ? 'Pull Requests' : 'Issues'}
+      title={githubKind === 'prs' ? 'Pull requests' : 'Issues'}
+      subtitle="Press and hold to make one the default."
       options={githubPresetPickerOptions}
       selected={githubPreset}
-      onSelect={(preset) => {
-        const nextQuery = getTaskPresetQuery(preset)
-        setGithubMode('items')
-        setGithubKind(preset === 'issues' || preset === 'my-issues' ? 'issues' : 'prs')
-        setGithubPreset(preset)
-        setQuery(nextQuery)
-        setAppliedQuery(nextQuery)
-        persistTaskResumeState({
-          githubItemsPreset: preset,
-          githubItemsQuery: nextQuery
-        })
+      onSelect={(preset) => selectMobileTasksGitHubPreset(model, preset)}
+      onLongSelect={(preset) => {
+        triggerMediumImpact()
+        persistDefaultGitHubPreset(preset)
       }}
-      onLongSelect={persistDefaultGitHubPreset}
       onClose={() => setShowGitHubPresetPicker(false)}
     />
   )
@@ -351,35 +371,37 @@ export function renderMobileTasksPagePicker(model: ConnectionPresentationModel) 
       visible={taskUiReady && showGitHubPagePicker}
       onClose={() => setShowGitHubPagePicker(false)}
     >
-      <View style={styles.sheetHeader}>
-        <Text style={styles.sheetTitle}>GitHub Pages</Text>
-        <Text style={styles.sheetSubtitle}>Jump to a loaded or available result page.</Text>
-      </View>
-      <ScrollView style={styles.pagePickerList}>
-        {githubPagePickerPages.map((index) => {
-          const selected = index === githubCurrentPage
-          const loaded = index < githubPages.length
-          return (
-            <Pressable
+      <PickerSheetTitle title="Go to page" subtitle="Jump to a loaded or available page." />
+      <ScrollView style={issueSourceStyles.pageList}>
+        <ListGroup style={sheetStyles.group}>
+          {githubPagePickerPages.map((index) => (
+            <ListRow
               key={`github-page:${index}`}
-              style={[styles.pickerRow, selected && styles.pickerRowSelected]}
+              title={`Page ${index + 1}`}
+              subtitle={index < githubPages.length ? 'Loaded' : 'Loads older results'}
+              selected={index === githubCurrentPage}
               disabled={githubPaginationLoading}
               onPress={() => {
+                triggerSelection()
                 setShowGitHubPagePicker(false)
                 void handleGitHubPageChange(index)
               }}
-            >
-              <View style={styles.pickerRowContent}>
-                <Text style={styles.pickerRowLabel}>Page {index + 1}</Text>
-                <Text style={styles.pickerRowSubtitle}>
-                  {loaded ? 'Loaded' : 'Loads older results'}
-                </Text>
-              </View>
-              {selected ? <Check size={16} color={colors.textPrimary} /> : null}
-            </Pressable>
-          )
-        })}
+            />
+          ))}
+        </ListGroup>
       </ScrollView>
     </BottomDrawer>
   )
 }
+
+const issueSourceStyles = StyleSheet.create({
+  row: {
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md
+  },
+  copy: { minWidth: 0, gap: 2 },
+  title: { ...textStyles.body, fontWeight: '500', color: colors.textPrimary },
+  hint: { ...textStyles.footnote, color: colors.textSecondary },
+  pageList: { maxHeight: 440 }
+})

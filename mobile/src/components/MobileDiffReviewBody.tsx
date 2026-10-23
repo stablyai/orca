@@ -1,8 +1,7 @@
-import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native'
-import { RefreshCw } from 'lucide-react-native'
+import { FlatList, Text } from 'react-native'
+import { AlertCircle, FileX, ListFilter, type LucideIcon } from 'lucide-react-native'
 import type { RefObject } from 'react'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
-import { colors } from '../theme/mobile-theme'
 import { MobileDiffReviewLine } from './MobileDiffReviewLine'
 import type {
   ReviewDiffLine,
@@ -11,6 +10,7 @@ import type {
 } from '../session/mobile-diff-review-screen-model'
 import type { MobileDiffReviewQueueItem } from '../session/mobile-diff-review-queue'
 import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
+import { StateView } from './ui/StateView'
 
 type Props = {
   activeHunkIndex: number | null
@@ -40,22 +40,31 @@ export function MobileDiffReviewBody({
   onRetry
 }: Props) {
   if (screenState.kind === 'loading') {
-    return <CenteredState text="Loading review..." busy />
+    return <StateView loading title="Loading review…" />
   }
   if (screenState.kind === 'error' || screenState.kind === 'unavailable') {
     return (
       <CenteredState
-        title={screenState.kind === 'unavailable' ? 'Review Unavailable' : 'Unable to Load Review'}
+        icon={AlertCircle}
+        title={
+          screenState.kind === 'unavailable' ? 'Review unavailable' : 'Couldn’t load the review'
+        }
         text={screenState.message}
         onRetry={onRetry}
       />
     )
   }
   if (filteredCount === 0) {
-    return <CenteredState title="No Reviewable Changes" text="Try a different review filter." />
+    return (
+      <CenteredState
+        icon={ListFilter}
+        title="No files to review"
+        text="Nothing matches this filter. Try another one."
+      />
+    )
   }
   if (diffState.kind === 'loading') {
-    return <CenteredState text="Loading diff..." busy muted />
+    return <StateView loading title="Loading diff…" />
   }
   if (diffState.kind !== 'ready') {
     return <DiffUnavailableState diffState={diffState} onRetry={onRetry} />
@@ -89,6 +98,7 @@ export function MobileDiffReviewBody({
           animated: true
         })
       }}
+      ListHeaderComponent={<Text style={styles.diffHint}>Long-press a line to add a note.</Text>}
       ListFooterComponent={
         diffState.truncated ? (
           <Text style={styles.truncatedText}>Diff truncated for mobile preview.</Text>
@@ -107,15 +117,15 @@ function DiffUnavailableState({
 }) {
   const title =
     diffState.kind === 'binary'
-      ? 'Binary Diff'
+      ? 'Binary file'
       : diffState.kind === 'too-large'
-        ? 'Diff Too Large'
+        ? 'Diff too large'
         : diffState.kind === 'deleted'
-          ? 'Deleted File'
-          : 'Diff Unavailable'
+          ? 'File deleted'
+          : 'Diff unavailable'
   const text =
     diffState.kind === 'binary'
-      ? 'This file cannot be rendered as text on mobile.'
+      ? 'This file can’t be shown as text on mobile.'
       : diffState.kind === 'too-large'
         ? 'This diff is too large for the mobile preview.'
         : diffState.kind === 'deleted'
@@ -123,40 +133,33 @@ function DiffUnavailableState({
           : diffState.kind === 'error'
             ? diffState.message
             : 'Select a file to review.'
-  return <CenteredState title={title} text={text} onRetry={onRetry} />
+  return (
+    <CenteredState
+      icon={diffState.kind === 'error' ? AlertCircle : FileX}
+      title={title}
+      text={text}
+      onRetry={onRetry}
+    />
+  )
 }
 
 function CenteredState({
-  busy,
-  muted,
+  icon,
   title,
   text,
   onRetry
 }: {
-  busy?: boolean
-  muted?: boolean
-  title?: string
+  icon: LucideIcon
+  title: string
   text: string
   onRetry?: () => void
 }) {
   return (
-    <View style={styles.state}>
-      {busy ? (
-        <ActivityIndicator color={muted ? colors.textSecondary : colors.textPrimary} />
-      ) : null}
-      {title ? <Text style={styles.stateTitle}>{title}</Text> : null}
-      <Text style={styles.stateText}>{text}</Text>
-      {onRetry ? (
-        <Pressable
-          style={({ pressed }) => [styles.retryButton, pressed && styles.buttonPressed]}
-          onPress={onRetry}
-          accessibilityRole="button"
-          accessibilityLabel="Retry loading review"
-        >
-          <RefreshCw size={14} color={colors.textPrimary} strokeWidth={2.2} />
-          <Text style={styles.retryText}>Retry</Text>
-        </Pressable>
-      ) : null}
-    </View>
+    <StateView
+      icon={icon}
+      title={title}
+      message={text}
+      primary={onRetry ? { label: 'Retry', onPress: onRetry } : undefined}
+    />
   )
 }

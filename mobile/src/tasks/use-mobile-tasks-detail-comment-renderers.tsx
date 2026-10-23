@@ -3,12 +3,12 @@ import {
   MobileMarkdown,
   Pressable,
   type ReactNode,
-  Send,
   Text,
   TextInput,
   View,
   colors
 } from './mobile-tasks-dependencies'
+import { ReplyBox } from '../components/ui/ReplyBox'
 import {
   type DetailComment,
   type DetailCommentGroup,
@@ -42,35 +42,16 @@ export function useMobileTasksDetailCommentRenderers(model: TaskCreateActionsMod
     onSubmit: () => void
     disabled?: boolean
   }): ReactNode => {
-    const hasText = args.value.trim().length > 0
     return (
       <View style={styles.commentComposer}>
-        <TextInput
-          style={[styles.input, styles.commentInput, styles.commentComposerInput]}
+        <ReplyBox
           value={args.value}
           onChangeText={args.onChangeText}
+          onSend={args.onSubmit}
           placeholder="Add a comment"
-          placeholderTextColor={colors.textMuted}
-          editable={!args.disabled}
-          multiline
-          numberOfLines={1}
-          textAlignVertical="top"
+          sendAccessibilityLabel="Send comment"
+          sending={args.disabled}
         />
-        {hasText ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Send comment"
-            style={({ pressed }) => [
-              styles.commentComposerSend,
-              pressed && !args.disabled && styles.commentComposerSendPressed,
-              args.disabled && styles.commentComposerSendDisabled
-            ]}
-            disabled={args.disabled}
-            onPress={args.onSubmit}
-          >
-            <Send size={16} color={args.disabled ? colors.textMuted : colors.textPrimary} />
-          </Pressable>
-        ) : null}
       </View>
     )
   }
@@ -154,7 +135,11 @@ export function useMobileTasksDetailCommentRenderers(model: TaskCreateActionsMod
       return (
         <Pressable
           key={id}
-          style={styles.resolvedCommentSummary}
+          accessibilityRole="button"
+          style={({ pressed }) => [
+            styles.resolvedCommentSummary,
+            pressed && styles.resolvedCommentSummaryPressed
+          ]}
           onPress={() =>
             setExpandedResolvedCommentGroups((current) => {
               const next = new Set(current)
@@ -166,7 +151,9 @@ export function useMobileTasksDetailCommentRenderers(model: TaskCreateActionsMod
           <Text style={styles.resolvedCommentTitle} numberOfLines={1}>
             Resolved {group.kind === 'thread' ? 'thread' : 'comment'} by {commentAuthor(root)}
           </Text>
-          <Text style={styles.detailSectionMeta}>{count > 1 ? `${count} comments` : 'Show'}</Text>
+          <Text style={styles.resolvedCommentAction}>
+            {count > 1 ? `Show ${count} comments` : 'Show'}
+          </Text>
         </Pressable>
       )
     }

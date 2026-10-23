@@ -1,7 +1,9 @@
 import { useCallback, useState } from 'react'
-import { RefreshCw } from 'lucide-react-native'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { colors } from '../theme/mobile-theme'
+import { MonitorX, RefreshCw } from 'lucide-react-native'
+import { StyleSheet, Text, View } from 'react-native'
+import { Button } from '../components/ui/Button'
+import { Collapsible } from '../components/ui/Collapsible'
+import { colors, spacing, textStyles, typography } from '../theme/mobile-theme'
 
 export type NativeWebViewEngineEvent = {
   readonly nativeEvent?: object
@@ -78,53 +80,72 @@ export function TerminalWebViewEngineErrorOverlay({
   message,
   onReload
 }: TerminalWebViewEngineErrorOverlayProps) {
+  const [showDetails, setShowDetails] = useState(false)
   return (
     <View style={styles.errorOverlay}>
-      <Text style={styles.errorTitle}>Terminal failed to load</Text>
-      <Text style={styles.errorDetail} numberOfLines={4}>
-        {message}
-      </Text>
-      <Pressable accessibilityRole="button" style={styles.reloadButton} onPress={onReload}>
-        <RefreshCw size={16} color={colors.terminalBg} />
-        <Text style={styles.reloadButtonText}>Reload</Text>
-      </Pressable>
+      <View style={styles.body} accessibilityRole="alert">
+        <MonitorX size={32} color={colors.textMuted} strokeWidth={1.75} />
+        <Text style={styles.errorTitle}>Terminal failed to load</Text>
+        <Text style={styles.errorMessage}>
+          Reload to bring it back. The session keeps running on your desktop.
+        </Text>
+        {/* Stretched, as the centred column would give the clipping frame no width; it cancels the
+            column's gap while shut and carries it inside, so the gap eases in with the text. */}
+        <View style={styles.detailFrame}>
+          <Collapsible open={showDetails}>
+            <Text style={[styles.errorDetail, styles.detailGap]} numberOfLines={6} selectable>
+              {message}
+            </Text>
+          </Collapsible>
+        </View>
+        <View style={styles.actions}>
+          <Button
+            label="Reload"
+            icon={RefreshCw}
+            variant="primary"
+            size="compact"
+            onPress={onReload}
+          />
+          <Button
+            label={showDetails ? 'Hide details' : 'Details'}
+            variant="plain"
+            size="compact"
+            onPress={() => setShowDetails((shown) => !shown)}
+          />
+        </View>
+      </View>
     </View>
   )
 }
+
+const BODY_GAP = 10
 
 const styles = StyleSheet.create({
   errorOverlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 12,
-    padding: 24,
+    padding: spacing.xl + 16,
     backgroundColor: colors.terminalBg
   },
+  body: { maxWidth: 320, alignItems: 'center', gap: BODY_GAP },
   errorTitle: {
+    ...textStyles.title,
+    fontSize: 20,
+    lineHeight: 25,
     color: colors.textPrimary,
-    fontSize: 16,
-    fontWeight: '700',
-    textAlign: 'center'
+    textAlign: 'center',
+    marginTop: 6
   },
+  errorMessage: { ...textStyles.callout, color: colors.textSecondary, textAlign: 'center' },
+  detailFrame: { alignSelf: 'stretch', marginTop: -BODY_GAP },
+  detailGap: { paddingTop: BODY_GAP },
   errorDetail: {
-    color: colors.textSecondary,
+    fontFamily: typography.monoFamily,
     fontSize: 13,
     lineHeight: 18,
+    color: colors.textMuted,
     textAlign: 'center'
   },
-  reloadButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    minHeight: 36,
-    paddingHorizontal: 14,
-    borderRadius: 6,
-    backgroundColor: colors.surfaceBright
-  },
-  reloadButtonText: {
-    color: colors.terminalBg,
-    fontSize: 14,
-    fontWeight: '700'
-  }
+  actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm }
 })

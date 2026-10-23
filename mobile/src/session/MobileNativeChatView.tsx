@@ -1,16 +1,10 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 import { nativeChatTaskListPredecessors } from '../../../src/shared/native-chat-task-list-history'
 import {
   MobileNativeChatDisclosureContext,
   useMobileNativeChatDisclosures
 } from './mobile-native-chat-disclosure-store'
-import {
-  ActivityIndicator,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
-  Text,
-  View
-} from 'react-native'
+import { type NativeScrollEvent, type NativeSyntheticEvent, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import type { AskAnswerSelection, AskPrompt } from '../../../src/shared/native-chat-ask'
@@ -21,8 +15,12 @@ import type {
 } from '../../../src/shared/native-chat-turn-status'
 import type { NativeChatTurnJournal } from '../../../src/shared/native-chat-turn-membership'
 import type { NativeChatResolvedPrompt } from '../../../src/shared/native-chat-resolution-receipt'
-import { colors } from '../theme/mobile-theme'
+import { Banner } from '../components/ui/Banner'
+import { StateView } from '../components/ui/StateView'
+import { triggerError } from '../platform/haptics'
+import { NATIVE_CHAT_EMPTY_STATE_COPY } from '../../../src/shared/native-chat-empty-state'
 import { styles } from './mobile-native-chat-view-styles'
+import { MobileNativeChatEmptyState } from './MobileNativeChatEmptyState'
 import { mobileNativeChatListFooter } from './mobile-native-chat-list-footer'
 import { mobileNativeChatListHeader } from './mobile-native-chat-list-header'
 import {
@@ -43,6 +41,7 @@ import { MobileNativeChatFloatingControls } from './MobileNativeChatFloatingCont
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
 import {
   MobileNativeChatComposer,
+  type MobileNativeChatMicStatus,
   type MobileNativeChatStructuredComposer
 } from './MobileNativeChatComposer'
 import { MobileNativeChatPromptCard } from './MobileNativeChatPromptCard'
@@ -115,6 +114,7 @@ type Props = ComposerTrayProps & {
   isAttaching?: boolean
   onMicPress?: () => void
   micActive?: boolean
+  micStatus?: MobileNativeChatMicStatus
   dictationMode?: string
   onMicPressIn?: () => void
   onMicPressOut?: () => void
@@ -200,6 +200,7 @@ export function MobileNativeChatView({
   isAttaching,
   onMicPress,
   micActive,
+  micStatus,
   dictationMode,
   onMicPressIn,
   onMicPressOut,
@@ -347,11 +348,18 @@ export function MobileNativeChatView({
   const expandedPromptOwnsSend =
     !structuredActivityUi && !collapsedPrompt && (ask ?? permission ?? question) != null
   const emptyStateView = emptyState ? (
-    <View style={styles.center}>
-      <Text style={styles.emptyTitle}>{emptyState.title}</Text>
-      <Text style={styles.emptySubtitle}>{emptyState.subtitle}</Text>
-    </View>
+    <MobileNativeChatEmptyState
+      copy={emptyState}
+      agent={agent ?? null}
+      failed={status === 'error'}
+    />
   ) : null
+  // A failure the reader did not cause, felt once as it lands.
+  useEffect(() => {
+    if (sendErrorMessage) {
+      triggerError()
+    }
+  }, [sendErrorMessage])
 
   // Whatever was already on screen: nothing here can act on a chat that cannot load, and its words
   // say why once, as a fresh open's do.
@@ -362,9 +370,7 @@ export function MobileNativeChatView({
   return (
     <View style={[styles.root, { paddingBottom: bottomPad }]}>
       {status === 'loading' && messages.length === 0 ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.textSecondary} />
-        </View>
+        <StateView loading title={NATIVE_CHAT_EMPTY_STATE_COPY.loading.title} />
       ) : (
         <GestureHandlerRootView style={styles.listWrap}>
           <MobileNativeChatDisclosureContext.Provider value={disclosures}>
@@ -399,20 +405,16 @@ export function MobileNativeChatView({
         {...{ permission, onRespondPermission, question, onAnswerQuestion, onCollapsePrompt }}
         collapsedPrompt={collapsedPrompt}
       />
-      <Text
-        style={lockReason === 'waiting' ? styles.inputLockStatus : undefined}
-        accessibilityLiveRegion="polite"
-      >
-        {lockReason === 'waiting' ? composerPlaceholder : null}
-      </Text>
+      {/* "Waiting for terminal…" is the composer's placeholder alone, so it is said once. */}
+      {lockReason === 'disconnected' ? (
+        <View style={styles.banner}>
+          <Banner message="Reconnecting to your desktop…" />
+        </View>
+      ) : null}
       {sendErrorMessage ? (
-        // This banner is the only channel for a send failure — announce it.
-        <View
-          style={styles.sendError}
-          accessibilityRole="alert"
-          accessibilityLiveRegion="assertive"
-        >
-          <Text style={styles.sendErrorText}>{sendErrorMessage}</Text>
+        // This banner is the only channel for a send failure; Banner announces it as an alert.
+        <View style={styles.banner} accessibilityLiveRegion="assertive">
+          <Banner tone="error" message={sendErrorMessage} onDismiss={onClearSendError} />
         </View>
       ) : null}
       {/* Directly on the composer, which it tucks into. */}
@@ -432,6 +434,7 @@ export function MobileNativeChatView({
         isAttaching={isAttaching}
         onMicPress={onMicPress}
         micActive={micActive}
+        micStatus={micStatus}
         dictationMode={dictationMode}
         onMicPressIn={onMicPressIn}
         onMicPressOut={onMicPressOut}

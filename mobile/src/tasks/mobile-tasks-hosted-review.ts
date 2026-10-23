@@ -200,21 +200,21 @@ export function hostedStateChangeTarget(pending: PendingHostedStateChange): {
   if (pending.source === 'project') {
     const type = projectRowType(pending.row)
     return {
-      titleTarget: type === 'pr' ? 'Pull Request' : 'Issue',
-      labelTarget: type === 'pr' ? 'PR' : 'Issue',
+      titleTarget: type === 'pr' ? 'pull request' : 'issue',
+      labelTarget: type === 'pr' ? 'PR' : 'issue',
       number: pending.row.content.number
     }
   }
   if (pending.item.provider === 'gitlab') {
     return {
-      titleTarget: pending.item.source.type === 'mr' ? 'Merge Request' : 'Issue',
-      labelTarget: pending.item.source.type === 'mr' ? 'MR' : 'Issue',
+      titleTarget: pending.item.source.type === 'mr' ? 'merge request' : 'issue',
+      labelTarget: pending.item.source.type === 'mr' ? 'MR' : 'issue',
       number: pending.item.source.number
     }
   }
   return {
-    titleTarget: pending.item.source.type === 'pr' ? 'Pull Request' : 'Issue',
-    labelTarget: pending.item.source.type === 'pr' ? 'PR' : 'Issue',
+    titleTarget: pending.item.source.type === 'pr' ? 'pull request' : 'issue',
+    labelTarget: pending.item.source.type === 'pr' ? 'PR' : 'issue',
     number: pending.item.source.number
   }
 }

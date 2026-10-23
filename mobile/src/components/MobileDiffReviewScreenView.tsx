@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Text, View, type LayoutChangeEvent } from 'react-native'
+import { View, type LayoutChangeEvent } from 'react-native'
 import type { useMobileDiffReviewController } from '../session/use-mobile-diff-review-controller'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import { MobileDiffReviewBody } from './MobileDiffReviewBody'
@@ -13,6 +13,12 @@ import { RightDrawer } from './RightDrawer'
 import { mobilePrSidebarStyles, PR_SIDEBAR_DOCK_WIDTH } from './pr-sidebar/mobile-pr-sidebar-styles'
 import { canDockPrSidebar, resolvePresentationMode } from './mobile-pr-sidebar-presentation'
 import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
+import { Banner } from './ui/Banner'
+import { SheetHeader } from './ui/SheetHeader'
+
+function fileNameOf(filePath: string): string {
+  return filePath.slice(filePath.lastIndexOf('/') + 1)
+}
 
 type Props = {
   controller: ReturnType<typeof useMobileDiffReviewController>
@@ -60,15 +66,16 @@ export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
         reviewedCount={controller.reviewedCount}
         unsentCount={controller.unsentComments.length}
         worktreeLabel={controller.worktreeLabel}
+        fileName={controller.currentItem ? fileNameOf(controller.currentItem.filePath) : undefined}
         onBack={onBack}
         onOpenActions={() => controller.openSheet({ kind: 'actions' })}
         onOpenPRSidebar={controller.openPRSidebar}
         onSelectFilter={controller.selectFilter}
       />
-      <View style={{ flex: 1, flexDirection: 'row' }} onLayout={handleContentRowLayout}>
+      <View style={styles.contentRow} onLayout={handleContentRowLayout}>
         {/* Diff column keeps its full layout; in wide mode the docked sidebar sits
             beside it and each column scrolls independently. */}
-        <View style={{ flex: 1, minWidth: 0 }}>
+        <View style={styles.diffColumn}>
           {controller.currentItem ? (
             <MobileDiffReviewFileSummary
               currentIndex={controller.currentIndex}
@@ -83,7 +90,7 @@ export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
           ) : null}
           {controller.actionError ? (
             <View style={styles.actionError}>
-              <Text style={styles.actionErrorText}>{controller.actionError}</Text>
+              <Banner tone="warning" message={controller.actionError} />
             </View>
           ) : null}
           <MobileDiffReviewBody
@@ -103,6 +110,8 @@ export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
             <MobileDiffReviewFooter
               busyAction={controller.busyAction}
               item={controller.currentItem}
+              unsentCount={controller.unsentComments.length}
+              onSendNotes={() => void controller.openSendSheet()}
               onAddFileNote={() => controller.openComposer(0)}
               onDiscard={(target) => controller.openSheet({ kind: 'discard', target })}
               onGitMutation={(method, item) => void controller.runGitMutation(method, item)}
@@ -135,6 +144,7 @@ export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
           visible={controller.showPRSidebar}
           onClose={() => controller.setShowPRSidebar(false)}
         >
+          <SheetHeader title="Pull request" onClose={() => controller.setShowPRSidebar(false)} />
           <MobilePRSidebar
             state={controller.prSidebarState}
             onRetry={controller.retryPRSidebar}
