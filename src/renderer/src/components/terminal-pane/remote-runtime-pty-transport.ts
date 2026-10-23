@@ -12,6 +12,7 @@ import {
 } from './remote-runtime-input-journal'
 import type { AcceptedInputOptions } from './pty-preconnect-input-buffer'
 import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
+import { isSshConnectionPendingTerminalError } from './terminal-ssh-sign-in-error'
 /* eslint-disable max-lines -- Why: remote PTY transport keeps lifecycle, JSON fallback, and binary stream wiring together so reconnect/destroy ordering stays testable as one behavior surface. */
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
 import {
@@ -172,6 +173,7 @@ function isRemoteTerminalStaleMessage(message: string): boolean {
 function isRetryableUnboundAttachError(error: unknown): boolean {
   const clientError = toRemoteRuntimeClientErrorLike(error)
   return (
+    isSshConnectionPendingTerminalError(runtimeTerminalErrorMessage(error)) ||
     isRecoverableRemoteRuntimeConnectionError(clientError) ||
     isRuntimeRpcQueueOverloadError(clientError) ||
     isRemoteTerminalStaleMessage(runtimeTerminalErrorMessage(error))
