@@ -83,6 +83,20 @@ function note(key: string, value: string | null): void {
   }
 }
 
+function isSubscribableStorage(value: object): value is {
+  subscribe: (listener: (key: string, value: string | null) => void) => () => void
+} {
+  return 'subscribe' in value && typeof value.subscribe === 'function'
+}
+
+if (
+  typeof AsyncStorage === 'object' &&
+  AsyncStorage !== null &&
+  isSubscribableStorage(AsyncStorage)
+) {
+  AsyncStorage.subscribe(note)
+}
+
 /**
  * The one way a mirrored key is written, and the only thing that notes the map (ruling 35).
  *

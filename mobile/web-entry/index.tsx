@@ -12,7 +12,10 @@ import {
   type PageMountTarget
 } from '../src/mobile-web-shell/bridge/page-bootstrap'
 import { storageReadResultSchema } from '../src/mobile-web-shell/bridge/bridge-native-verbs'
-import { publishPageStorage } from '../src/mobile-web-shell/bridge/page-async-storage'
+import {
+  publishPageStorage,
+  replacePageStorage
+} from '../src/mobile-web-shell/bridge/page-async-storage'
 import {
   RouteScreenPaintProvider,
   createRouteScreenPaintReporter
@@ -137,6 +140,9 @@ bootstrapShellPage({
             ).value
         : null
     )
+    client.onStorageUpdate((storage, storageOversize) => {
+      replacePageStorage(storage, storageOversize)
+    })
     createRoot(container).render(
       // Above `ExpoRoot`, not inside its wrapper: a route this bundle cannot resolve or import
       // throws where the router renders it, and a boundary below the router never sees that.

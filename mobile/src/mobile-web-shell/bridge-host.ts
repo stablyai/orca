@@ -44,6 +44,8 @@ export type BridgeHost = {
   publishSafeAreaInsets: (next: BridgeSafeAreaInsets) => void
   /** Hands this session a moved keyboard height over the same re-sent `init`. */
   publishKeyboardInset: (next: number) => void
+  /** Hands this session updated storage entries over the same re-sent `init`. */
+  publishStorage: () => void
   /**
    * Hands the page one Back press. False when this document never said it takes one, which is
    * every page older than the frame; the caller then leaves the key to the navigator.
@@ -343,6 +345,11 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     },
     publishKeyboardInset: (next) => {
       routes.publishKeyboardInset(next, deliverable())
+    },
+    publishStorage: () => {
+      if (deliverable()) {
+        sendInit()
+      }
     },
     sendBack: back.send,
     readSessionBack: back.read,

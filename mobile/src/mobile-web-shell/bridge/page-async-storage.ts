@@ -58,6 +58,7 @@ export class PageStorageRefusedError extends Error {
 }
 
 const values = new Map<string, string>()
+const listeners = new Set<(key: string, value: string | null) => void>()
 let write: PageStorageWriter = () => false
 /**
  * The allowlisted keys `init` could not carry because the app's value was over the page's cap.
@@ -93,6 +94,34 @@ export function publishPageStorage(
   hostId = forHostId
   routePathname = forRoutePathname
   readWorkspaceKey = forWorkspaceKeyReader
+}
+
+export function replacePageStorage(
+  entries: Readonly<Record<string, string>>,
+  forOversizeKeys: readonly string[] = []
+): void {
+  const changed: [string, string | null][] = []
+  for (const [key, prev] of values) {
+    if (!Object.hasOwn(entries, key)) {
+      values.delete(key)
+      changed.push([key, null])
+    } else if (entries[key] !== prev) {
+      values.set(key, entries[key]!)
+      changed.push([key, entries[key]!])
+    }
+  }
+  for (const [key, value] of Object.entries(entries)) {
+    if (!values.has(key)) {
+      values.set(key, value)
+      changed.push([key, value])
+    }
+  }
+  oversizeKeys = new Set(forOversizeKeys)
+  for (const [key, value] of changed) {
+    for (const listener of listeners) {
+      listener(key, value)
+    }
+  }
 }
 
 function getItem(key: string): Promise<string | null> {
@@ -195,7 +224,13 @@ const pageAsyncStorage = {
     applyBatch(keys.map((key) => [key, null] as const)),
   getAllKeys: (): Promise<string[]> => Promise.resolve([...values.keys()]),
   // The app's store is not this document's to empty, and no screen in the page closure calls it.
-  clear: (): Promise<void> => Promise.resolve()
+  clear: (): Promise<void> => Promise.resolve(),
+  subscribe: (listener: (key: string, value: string | null) => void): (() => void) => {
+    listeners.add(listener)
+    return () => {
+      listeners.delete(listener)
+    }
+  }
 }
 
 export default pageAsyncStorage
