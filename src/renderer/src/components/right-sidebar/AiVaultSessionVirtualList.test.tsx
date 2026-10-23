@@ -85,7 +85,7 @@ function renderList(sessions: AiVaultSession[], loading = false) {
 }
 
 describe('AiVaultSessionVirtualList row measurement', () => {
-  it('keeps measured heights through zero resize reports and accepts new positive heights', () => {
+  it('replaces estimates with positive measurements and preserves them through zero reports', () => {
     const observers = new Map<
       ResizeObserver,
       {
@@ -115,7 +115,7 @@ describe('AiVaultSessionVirtualList row measurement', () => {
       if (this.classList.contains('overflow-y-auto')) {
         return 600
       }
-      return this.dataset.index === '0' ? 32 : 117
+      return 0
     })
     const { container, getByText } = renderList([makeSession(1), makeSession(2), makeSession(3)])
     const first = container.querySelector<HTMLElement>('[data-index="1"]')
@@ -145,6 +145,10 @@ describe('AiVaultSessionVirtualList row measurement', () => {
         }
       })
     }
+
+    expect(second.style.transform).toBe('translateY(130px)')
+    resize(first, 117)
+    expect(second.style.transform).toBe('translateY(149px)')
 
     fireEvent.click(getByText('Session 1'))
     resize(first, 669)
