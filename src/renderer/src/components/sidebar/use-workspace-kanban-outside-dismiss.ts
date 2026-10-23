@@ -32,7 +32,7 @@ export function isWorkspaceBoardKeepOpenTarget(target: EventTarget | null): bool
 
 // Why: these controls switch content the board can cover (e.g. right-sidebar
 // tabs in the titlebar), so they must close it or the change stays hidden.
-export function isWorkspaceBoardDismissTarget(target: EventTarget | null): boolean {
+function isWorkspaceBoardDismissTarget(target: EventTarget | null): boolean {
   return Boolean(eventTargetElement(target)?.closest('[data-workspace-board-dismiss]'))
 }
 

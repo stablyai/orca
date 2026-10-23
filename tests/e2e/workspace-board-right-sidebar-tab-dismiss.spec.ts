@@ -15,7 +15,7 @@ test.describe('Workspace board right-sidebar tab dismiss', () => {
   test('clicking a right-sidebar tab closes the board and shows that tab', async ({
     electronApp,
     orcaPage
-  }, testInfo) => {
+  }) => {
     await electronApp.evaluate(({ BrowserWindow }) => {
       BrowserWindow.getAllWindows()[0].setSize(1000, 800)
     })
@@ -33,14 +33,10 @@ test.describe('Workspace board right-sidebar tab dismiss', () => {
     const board = orcaPage.locator('[data-workspace-board-sheet]')
     await expect(board).toBeVisible()
     await board.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)))
-    await orcaPage.screenshot({ path: testInfo.outputPath('board-open.png') })
 
     await orcaPage.getByRole('button', { name: /^Source Control/ }).click()
 
     await expect(board).toBeHidden()
-    await expect
-      .poll(() => orcaPage.evaluate(() => window.__store?.getState().rightSidebarTab))
-      .toBe('source-control')
-    await orcaPage.screenshot({ path: testInfo.outputPath('after-tab-click.png') })
+    await expect(orcaPage.getByTestId('source-control-filter-toggle')).toBeVisible()
   })
 })
