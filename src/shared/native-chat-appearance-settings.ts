@@ -14,6 +14,8 @@ export type NativeChatAppearanceSettings = {
 }
 
 export type NativeChatGlobalSettings = {
+  /** Opt-in: continue supported chats after temporary provider failures, up to three times. */
+  nativeChatAutoContinueOnTransientError?: boolean
   nativeChatAppearance?: NativeChatAppearanceSettings
   /** Off keeps chats unnamed without running a naming agent. Absent means on. */
   nativeChatAutoName?: boolean

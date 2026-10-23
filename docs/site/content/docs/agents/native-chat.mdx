@@ -44,6 +44,14 @@ A terminal-backed chat is a view over a running terminal agent, so switching it 
 - Type `/` for slash commands and discovered **skills** (filtered per agent when possible). The slash catalog is agent-aware (Claude vs Codex command sets) and shared with mobile Chat UI.
 - Use the **model** and options pills (thought level, mode, agent-specific session options) when the agent exposes them. **Claude** model choices come from the **installed Claude CLI on that host** (not a hardcoded list), so new models show up after you update the CLI. **Codex** supports direct model selection from the pill (sends `/model <id>`), with bare `/model` still opening the agent picker. **Grok** exposes **model** (`-m` at launch, `/model` mid-session) and **reasoning effort** (`--reasoning-effort` at launch, `/effort` mid-session); the model list is probed from the signed-in Grok CLI (`grok models`) so retired ids drop out of the picker. Effort choices follow the selected model: Grok 4.6 includes **Extra high**, while Grok 4.5 stops at **High**. **Before the agent process starts**, the composer can show draft launch options that apply on first start; after the session is live, pills that only affect a running turn stay disabled or labeled until the session is ready. In a structured chat, live values go to the agent session; in a terminal-backed chat, they go to the CLI in that tab.
 
+## Automatically continue after temporary errors
+
+In **Settings → Chat**, enable **Automatically continue after temporary provider errors** to resume native Codex chats after a failed turn reports a recognized temporary capacity, overload, service availability, or connection error. This setting is off by default. Recovery uses Codex error codes, so a similar phrase in ordinary chat text does not trigger it.
+
+Orca sends a continuation using the same model and account after 10 seconds. Consecutive temporary failures get two more attempts after 30 and 60 seconds. A successful turn resets the limit. Recovery runs on the session host, so the chat view does not need to stay open.
+
+Sending a message, stopping, closing, clearing or rewinding the chat, changing session options or the thread goal, or turning the setting off cancels pending attempts. Authentication, billing, quota, and other permanent errors do not trigger automatic continuation. Existing provider retries finish before Orca considers continuing a failed turn. Chats owned by an active orchestration dispatch keep their existing recovery policy.
+
 ## Questions from the agent
 
 When Claude shows an **AskUserQuestion** (or similar structured permission/question card), Chat UI should render the question card in the transcript so you can answer from the composer path instead of treating it as a collapsed tool call. Confirm with **Submit** on the card. That includes agents running on a paired [Remote Orca Server](/docs/remote-servers) / headless host — not only local panes.

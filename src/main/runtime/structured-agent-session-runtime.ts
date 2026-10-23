@@ -50,7 +50,10 @@ import type { NativeChatShellEnvironmentPolicy } from '../../shared/native-chat-
 import { createStructuredAgentEnvironmentResolvers } from './structured-agent-shell-environment'
 import type { ClaudeStructuredAuthPolicy } from '../claude-accounts/claude-structured-auth-policy'
 import type { StructuredAgentAdapterContext } from './structured-agent-runtime-registration-types'
-import { createStructuredAgentSessionLifecycleDelivery } from './structured-agent-session-lifecycle-delivery'
+import {
+  createStructuredAgentSessionLifecycleDelivery,
+  installStructuredAgentSessionAttentionDelivery
+} from './structured-agent-session-lifecycle-delivery'
 import { createStructuredAgentSessionDispatchFollowUps } from './structured-agent-session-dispatch-followups'
 import { agentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import {
@@ -112,6 +115,7 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
   resolveAgentLaunchEnv?: (agent: string) => Record<string, string>
   /** The settings a per-agent Command override is read from, for the same agents. */
   resolveAgentCommandSettings?: () => StructuredAgentCommandSettings
+  transientRecovery?: StructuredAgentSessionHostDeps['transientRecovery']
   resolveEnvironment?: () => Promise<NodeJS.ProcessEnv>
   /** Which login-shell variables Codex and Claude children inherit; absent inherits all. */
   resolveShellEnvironmentPolicy?: () => NativeChatShellEnvironmentPolicy
@@ -303,6 +307,7 @@ async function installOnJournal(
   })
   host = new StructuredAgentSessionHost({
     store,
+    transientRecovery: deps.transientRecovery,
     adapter,
     agents,
     recoveryCapsule: new AgentSessionRecoveryCapsule(deps.stateDirectory),
@@ -326,24 +331,7 @@ async function installOnJournal(
       environment: envResolvers
     }))
   })
-  if (deps.attentionDelivery) {
-    const installed = host
-    const delivery = deps.attentionDelivery
-    // Lives exactly as long as the host: teardown drops the host and its subscribers together.
-    installed.subscribeTurnCompletions({
-      id: 'host-attention-delivery',
-      includePrompts: true,
-      emit: (event) => {
-        if (event.type === 'end') {
-          return
-        }
-        const sessionId =
-          event.type === 'prompt' ? event.prompt.sessionId : event.completion.sessionId
-        delivery.deliver(event, installed.readStatusSummary(sessionId))
-      },
-      onState: delivery.reconcile
-    })
-  }
+  installStructuredAgentSessionAttentionDelivery(host, deps.attentionDelivery)
   // The host starts with its runtime, local or remote, so this is the runtime-start listing.
   const modelCatalog = host.deps.modelCatalog
   void modelCatalog?.prewarm()

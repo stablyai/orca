@@ -3,6 +3,7 @@ import { getChatAppearanceSearchEntries } from '@/components/settings/chat-appea
 import { getChatBehaviorSearchEntries } from '@/components/settings/chat-behavior-search'
 import { getChatNamingSearchEntry } from '@/components/settings/chat-naming-search'
 import { getChatInlineVisualsSearchEntry } from '@/components/settings/chat-inline-visuals-search'
+import { getChatTransientErrorRecoverySearchEntry } from '@/components/settings/chat-transient-error-recovery-search'
 import { getChatPermissionSearchEntry } from '@/components/settings/chat-permission-search'
 import { getChatProvidersSearchEntry } from '@/components/settings/chat-providers-search'
 import { getInputPaneSearchEntries } from '@/components/settings/input-search'
@@ -60,7 +61,8 @@ export function buildInterfaceSettingsSections({
                 ? [
                     getChatProvidersSearchEntry(),
                     getChatNamingSearchEntry(),
-                    getChatInlineVisualsSearchEntry()
+                    getChatInlineVisualsSearchEntry(),
+                    getChatTransientErrorRecoverySearchEntry()
                   ]
                 : [])
             ],

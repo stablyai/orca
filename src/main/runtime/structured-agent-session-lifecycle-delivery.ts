@@ -9,6 +9,8 @@
 
 import type { StructuredAgentSessionLifecycleEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
+import type { StructuredAttentionMobileDelivery } from './structured-agent-session-mobile-attention'
 
 export function createStructuredAgentSessionLifecycleDelivery(input: {
   handle: (event: StructuredAgentSessionLifecycleEvent) => Promise<void> | undefined
@@ -61,4 +63,26 @@ export function createStructuredAgentSessionLifecycleDelivery(input: {
       }
     }
   }
+}
+
+export function installStructuredAgentSessionAttentionDelivery(
+  host: StructuredAgentSessionHost,
+  delivery: StructuredAttentionMobileDelivery | undefined
+): void {
+  if (!delivery) {
+    return
+  }
+  host.subscribeTurnCompletions({
+    id: 'host-attention-delivery',
+    includePrompts: true,
+    emit: (event) => {
+      if (event.type === 'end') {
+        return
+      }
+      const sessionId =
+        event.type === 'prompt' ? event.prompt.sessionId : event.completion.sessionId
+      delivery.deliver(event, host.readStatusSummary(sessionId))
+    },
+    onState: delivery.reconcile
+  })
 }

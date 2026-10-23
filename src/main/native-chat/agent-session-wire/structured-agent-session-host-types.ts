@@ -29,6 +29,7 @@ import type { StructuredAgentId } from '../../../shared/agent-session-provider-h
 import type { StructuredAgentRegistry } from './structured-agent-registry'
 import type { StructuredAgentSessionStartupLimits } from './structured-agent-session-startup-attempt-contract'
 import type { AgentChatPermissionMode } from '../../../shared/agent-chat-permission-mode'
+import type { TransientRecoveryPolicy } from './structured-agent-session-transient-recovery'
 
 export type StructuredAgentSessionCaller = { callerKey: string }
 
@@ -161,6 +162,8 @@ export type StructuredAgentSessionHostDeps = {
   startupLimits?: Partial<StructuredAgentSessionStartupLimits>
   /** Whether an orchestration dispatch still owns this session's worker; absent answers no. */
   hasOpenDispatch?: (record: AgentSessionRecord) => boolean
+  /** Host-local opt-in; absent never sends an automatic continuation. */
+  transientRecovery?: TransientRecoveryPolicy
   /** A chat tab left the screen: closed, or its workspace removed. Advisory; a throw is logged. */
   onSessionTabHidden?: (sessionId: string) => void
   /** Where every failure the host carries on past is reported. Required: a host without one would

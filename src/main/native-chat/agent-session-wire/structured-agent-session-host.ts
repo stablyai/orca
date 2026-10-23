@@ -1,5 +1,4 @@
-import type { AgentSessionRewindParams } from '../../../shared/agent-session-rewind'
-import { rewindStructuredAgentSession } from './structured-agent-session-rewind'
+import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
 import { StructuredConversationCommandController } from './structured-conversation-command-controller'
 // Structured agent-session host: where the lease, journal, and provider adapter meet.
 // Mutations share one durable admission path and serialize per session. A conversation is reached
@@ -21,10 +20,6 @@ import { createStructuredAgentSessionHostMutationContext } from './structured-ag
 import * as lifetime from './structured-agent-session-conversation-lifetime'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import { createStructuredAgentSessionTabSurface as createTabs } from './structured-agent-session-host-tabs'
-import {
-  structuredAgentSessionMutationDelegates,
-  type StructuredAgentSessionMutationContext
-} from './structured-agent-session-host-mutations'
 import { flushStructuredAgentSessionHost } from './structured-agent-session-host-teardown'
 import type * as HostTypes from './structured-agent-session-host-types'
 import { StructuredAgentSessionEventRecovery } from './structured-agent-session-event-recovery'
@@ -41,6 +36,7 @@ import { wireStructuredAgentSessionQueuedMessages } from './structured-agent-ses
 import * as sessionLogger from './structured-agent-session-logger'
 import { sleepStructuredAgentSessionWorkspace } from './structured-agent-session-workspace-sleep'
 export type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
+import * as transientRecovery from './structured-agent-session-transient-recovery-wiring'
 
 export class StructuredAgentSessionHost {
   private readonly conversationCommands = new StructuredConversationCommandController(
@@ -81,6 +77,7 @@ export class StructuredAgentSessionHost {
   private readonly backgroundTasks: StructuredAgentSessionBackgroundTaskChannel
   /** Public because the RPC surface addresses it directly; see the restart-resume collaborator. */
   readonly restartResume: StructuredAgentSessionRestartResume
+  private readonly transientRecovery: ReturnType<typeof transientRecovery.wireTransientRecovery>
 
   constructor(readonly deps: HostTypes.StructuredAgentSessionHostDeps) {
     // Every collaborator reads this copy, so a logger that throws cannot fail what it reports.
@@ -165,6 +162,7 @@ export class StructuredAgentSessionHost {
     })
     this.runtimeState.startLeaseRenewal()
     this.lifetime.idleSweep.start()
+    this.transientRecovery = transientRecovery.wireTransientRecovery(this, this.sessions)
   }
 
   private now = (): number => this.deps.now?.() ?? Date.now()
@@ -208,7 +206,7 @@ export class StructuredAgentSessionHost {
   /** Releases a session's resources without ending the conversation; see the lifetime's close.
    *  `user-close` makes a turn it cuts short the user's cancellation; an `evict` leaves it news. */
   close: lifetime.StructuredAgentSessionConversationLifetime['close'] = (sessionId, cause) =>
-    this.lifetime.close(sessionId, cause)
+    this.transientRecovery.beforeUserAction(sessionId, () => this.lifetime.close(sessionId, cause))
 
   /** One bounded host-owned snapshot; a tab need not be visible for its child to be stopped. */
   sleepWorkspace = (workspaceId: string, markAsleep?: boolean) =>
@@ -265,11 +263,12 @@ export class StructuredAgentSessionHost {
   /** Test barrier: every write has landed by its call's return, so no production path needs it. */
   flushStreamedEvents = (id: string): Promise<void> => this.runtimeState.flushEventSink(id)
 
-  // Trigger inlined rather than imported: `AgentSessionResumeTrigger` in shared is the canonical
-  // type, and this file has no line budget left for the import.
   /** Quit: no exit or recovery settled after this starts a child or hands a message over, and the
    *  queue hands no card over. */
-  stopDelivery = () => [this.conversationDelivery, this.queued.drain].forEach((d) => d.dispose())
+  stopDelivery = (): void =>
+    [this.conversationDelivery, this.queued.drain, this.transientRecovery].forEach((d) =>
+      d.dispose()
+    )
 
   async flushAllStreamedEvents(options?: { trigger?: 'quit' | 'update' }): Promise<void> {
     this.stopDelivery()
@@ -285,20 +284,23 @@ export class StructuredAgentSessionHost {
 
   private mutationContext = (): StructuredAgentSessionMutationContext =>
     createStructuredAgentSessionHostMutationContext({
-      deps: this.deps,
+      ...this.attachContext(),
       sessions: this.sessions,
       subscribers: this.subscribers,
       lifetime: this.lifetime,
       clientDelivery: this.clientDelivery,
       conversationDelivery: this.conversationDelivery,
       queued: this.queued,
-      runtimeState: this.runtimeState,
-      attachContext: () => this.attachContext(),
-      serialize: (sessionId, task) => this.serialize(sessionId, task),
-      now: () => this.now()
+      attachContext: () => this.attachContext()
     })
 
-  send = this.conversationCommands.send
+  private mutations = transientRecovery.createTransientRecoveryMutationDelegates(
+    () => this.transientRecovery,
+    () => this.mutationContext(),
+    () => this.attachContext(),
+    this.conversationCommands
+  )
+  send = this.mutations.send
 
   queuedMessageSend = this.queued.queuedMessageSend
   queuedMessageDelete = this.queued.queuedMessageDelete
@@ -308,17 +310,14 @@ export class StructuredAgentSessionHost {
 
   waitForSendSettlement = this.clientDelivery.waitForSendSettlement
 
-  private mutations = structuredAgentSessionMutationDelegates(() => this.mutationContext())
   cancel = this.mutations.cancel
   respondToPrompt = this.mutations.respondToPrompt
   setOption = this.mutations.setOption
   changeThreadGoal = this.mutations.changeThreadGoal
   readOptions = this.mutations.readOptions
 
-  rewind = (caller: HostTypes.StructuredAgentSessionCaller, params: AgentSessionRewindParams) =>
-    rewindStructuredAgentSession(this.mutationContext(), this.attachContext(), caller, params)
-
-  conversationCommand = this.conversationCommands.run
+  rewind = this.mutations.rewind
+  conversationCommand = this.mutations.conversationCommand
   /** Undefined means unavailable; an empty array is an authoritative catalog. */
   readCommands = async (sessionId: string) => ({
     commands: await this.clientDelivery.readCommandsSettled(sessionId)
