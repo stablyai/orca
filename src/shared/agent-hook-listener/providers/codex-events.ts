@@ -308,6 +308,10 @@ export function codexHookEventForEndedTurn(
   eventName: unknown,
   hookPayload: Record<string, unknown>
 ): unknown {
+  // Compaction continues the same session; it must not reopen a finished turn or erase a live one.
+  if (eventName === 'SessionStart' && readString(hookPayload, 'source') === 'compact') {
+    return undefined
+  }
   const turnId = readString(hookPayload, 'turn_id')
   if (
     !turnId ||
