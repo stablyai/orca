@@ -36,8 +36,19 @@ import {
   withInteractiveLoginCleanup
 } from './interactive-login-interruption'
 import { getWslAccountTarget } from './account-wsl-location'
-import { addDataAccount, listDataAccounts, mutateDataAccount } from './data-account-commands'
-import { formatAccountsBlock, formatDataAccounts } from './account-list-format'
+import { addDataAccount } from './data-account-commands'
+import {
+  formatAccountsBlock,
+  formatAntigravityAccounts,
+  formatDataAccounts
+} from './account-list-format'
+import {
+  listAgentAccounts,
+  readAntigravityAccountsForList,
+  removeAgentAccount,
+  selectAgentAccount
+} from './account-selection'
+import type { AntigravityAccountState } from '../../shared/antigravity-account-types'
 
 // Why: add returns just that provider's state; list returns the full snapshot.
 type AccountsListSnapshot = {
@@ -45,6 +56,7 @@ type AccountsListSnapshot = {
   devin?: ManagedDataAccountsState
   claude: ClaudeRateLimitAccountsState
   codex: CodexRateLimitAccountsState
+  antigravity?: AntigravityAccountState
 }
 
 function addAgentNodePaths(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
@@ -287,30 +299,35 @@ export const ACCOUNT_HANDLERS: Record<string, CommandHandler> = {
     rejectAccountRemoteSelectionFlags(ctx, 'orca account list')
     const provider = ctx.flags.get('agent')
     if (provider !== undefined) {
-      await listDataAccounts(ctx, provider)
+      await listAgentAccounts(ctx, provider)
       return
     }
     const { client, json } = ctx
     // Why: this command renders no usage numbers, so skip the forced provider
     // refresh — it is one serial network round-trip per managed account.
-    const result = await client.call<AccountsListSnapshot>('accounts.list', {
+    const response = await client.call<AccountsListSnapshot>('accounts.list', {
       refreshUsage: false
     })
-    printResult(result, json, (snapshot) =>
+    // Why separate: Antigravity accounts live in their own native vault, not in the
+    // accounts.list snapshot, and an older host simply has none to show.
+    const antigravity = await readAntigravityAccountsForList(ctx)
+    const result = antigravity ? { ...response.result, antigravity } : response.result
+    printResult({ ...response, result }, json, (snapshot) =>
       [
         formatAccountsBlock('Claude', snapshot.claude),
         formatAccountsBlock('Codex', snapshot.codex),
         ...(snapshot.opencode ? [formatDataAccounts('OpenCode', snapshot.opencode)] : []),
-        ...(snapshot.devin ? [formatDataAccounts('Devin', snapshot.devin)] : [])
+        ...(snapshot.devin ? [formatDataAccounts('Devin', snapshot.devin)] : []),
+        ...(snapshot.antigravity ? [formatAntigravityAccounts(snapshot.antigravity)] : [])
       ].join('\n\n')
     )
   },
   'account select': async (ctx) => {
     rejectAccountRemoteSelectionFlags(ctx, 'orca account select')
-    await mutateDataAccount(ctx, 'select')
+    await selectAgentAccount(ctx)
   },
   'account rm': async (ctx) => {
     rejectAccountRemoteSelectionFlags(ctx, 'orca account rm')
-    await mutateDataAccount(ctx, 'remove')
+    await removeAgentAccount(ctx)
   }
 }

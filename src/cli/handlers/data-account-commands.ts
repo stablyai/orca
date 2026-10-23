@@ -129,23 +129,3 @@ export async function listDataAccounts(ctx: HandlerContext, provider: unknown): 
     return formatDataAccounts(provider, state)
   })
 }
-
-export async function mutateDataAccount(
-  ctx: HandlerContext,
-  action: 'select' | 'remove'
-): Promise<void> {
-  const provider = ctx.flags.get('agent')
-  const id = ctx.flags.get('account')
-  if ((provider !== 'opencode' && provider !== 'devin') || typeof id !== 'string' || !id) {
-    throw new RuntimeClientError(
-      'invalid_argument',
-      'Use --agent opencode|devin and --account <id> (system for the default selection).'
-    )
-  }
-  await assertDataAccountsSupported(ctx)
-  const result = await ctx.client.call<ManagedDataAccountsState>(`accounts.${action}Data`, {
-    provider,
-    accountId: action === 'select' && id === 'system' ? null : id
-  })
-  printResult(result, ctx.json, (state) => formatDataAccounts(provider, state))
-}

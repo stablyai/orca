@@ -363,6 +363,18 @@ orca account add --agent codex
 
 `account add` runs `claude login` / `codex login` in **this** terminal on the host, then registers the captured credentials with the local runtime. Codex uses device authorization so the browser can finish on another machine. Run these on the machine that owns the accounts — not through a client-only remote session.
 
+Switch which saved account new agents launch with, for any provider with saved accounts (Claude, Codex, OpenCode, Devin, Antigravity):
+
+```bash
+orca account list                                               # ids, emails/labels, and the active one
+orca account select --agent claude --account you@example.com    # id, email or label
+orca worktree create --name task --agent claude --prompt "..."
+orca account select --agent claude --account system             # back to your own sign-in
+orca account rm --agent codex --account old@example.com         # forget a saved account
+```
+
+A selection applies to every agent of that provider launched on the host after it — the same switch as the status-bar account menu — not to a single workspace. An email shared by several accounts (one sign-in in two organizations) is refused; pass the id instead. Antigravity has no `system` default, and `account rm` never removes system credentials.
+
 ## Artifacts
 
 Publish HTML or Markdown through the signed-in Orca account. Viewing a public link does not require sign-in; create/list/update/delete do. **Publishing is off by default** — a human must enable **Settings → Artifacts → Allow publishing public artifact links** on the device. There is no CLI flag that grants the gate. `list`, `unshare`, and `delete` stay available so you can audit or revoke links after turning publishing off.

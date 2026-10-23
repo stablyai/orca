@@ -694,7 +694,7 @@ describe('account CLI handlers', () => {
 
     expect(logSpy).toHaveBeenCalledWith(
       expect.stringContaining(
-        '  old@example.com (active) (sign in again in Orca Settings > AI Provider Accounts)\n  ok@example.com\n'
+        '  old  old@example.com (active) (sign in again in Orca Settings > AI Provider Accounts)\n  ok  ok@example.com\n'
       )
     )
   })
