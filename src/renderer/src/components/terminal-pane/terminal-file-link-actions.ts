@@ -57,7 +57,10 @@ export function handleTerminalFileLink(
   const actions = buildFileLinkActions(filePath, line, column, deps, actionContext?.sourceOwner)
   return requestTerminalLinkAction(event, actionContext, {
     ...actions,
-    destination: actionDestination ?? actions.destination
+    // Why: file links may arrive from OSC 8 with a URI or relative target; copy the
+    // resolved path used for file actions while preserving workspace display text.
+    destination:
+      actions.kind === 'workspace' ? (actionDestination ?? actions.destination) : actions.destination
   })
 }
 
