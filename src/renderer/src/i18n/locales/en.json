@@ -1053,6 +1053,13 @@
         }
       },
       "resume": {
+        "claude": {
+          "checked": {
+            "host": {
+              "required": "Update the execution host before restoring this Claude session, or resume it manually with its original account. The recovery record has been kept."
+            }
+          }
+        },
         "sleeping": {
           "agent": {
             "session": {

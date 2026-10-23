@@ -1,7 +1,3 @@
-// Layout-owner build: the sidebar's resume of a sleeping agent opens a new tab whose start main's
-// create cannot carry yet (L252), so the window spawns it and its pane seeds the "session
-// restored" banner from the tab's startup, as with the switch off.
-
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import { startupNeedsWindowSpawn } from '@/store/terminals/window-tab-start-in-main'
@@ -76,7 +72,7 @@ describe("the sidebar's resume of a sleeping agent (layout-owner build)", () => 
     setLocalRuntimeCapabilitiesForTests([AGENT_SESSION_CLAUDE_CHECKED_RESUME_RUNTIME_CAPABILITY])
   })
 
-  it('keeps the window spawn, whose pane shows the session restored banner', async () => {
+  it('keeps the window spawn and defers its Claude restored banner until admission', async () => {
     const startup = await sidebarResumeStartup()
 
     expect(startup).toMatchObject({ resumeProviderSession: record.providerSession })
@@ -84,6 +80,6 @@ describe("the sidebar's resume of a sleeping agent (layout-owner build)", () => 
     expect(startupNeedsWindowSpawn(startup)).toBe(true)
     const onShow = vi.fn()
     seedStartupSessionRestoredBanner(startup, 7, onShow)
-    expect(onShow).toHaveBeenCalledExactlyOnceWith(7)
+    expect(onShow).not.toHaveBeenCalled()
   })
 })

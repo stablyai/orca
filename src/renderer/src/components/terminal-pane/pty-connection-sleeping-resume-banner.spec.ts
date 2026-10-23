@@ -298,6 +298,98 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
       }
     )
 
+    it.each(['spawn', 'reattach', 'refusal', 'exited-spawn', 'exited-reattach'] as const)(
+      'waits for checked Claude sidebar %s before announcing restoration',
+      async (outcome) => {
+        const { connectPanePty } = await import('./pty-connection')
+        const spawn = createDeferred<{
+          id: string
+          isReattach?: boolean
+          replay?: string
+          exitedBeforeAttach?: boolean
+        }>()
+        const transport = createMockTransport()
+        transport.connect.mockImplementation(() => spawn.promise)
+        transportFactoryQueue.push(transport)
+        mockStoreState.tabsByWorktree = { 'wt-1': [{ id: 'tab-1', ptyId: null }] }
+        mockStoreState.ptyIdsByTabId = { 'tab-1': [] }
+        mockStoreState.terminalLayoutsByTabId = {}
+        const recordPaneKey = 'original-tab:original-leaf'
+        const providerSession = { key: 'session_id', id: 'claude-session-1' } as const
+        const record = {
+          paneKey: recordPaneKey,
+          tabId: 'original-tab',
+          worktreeId: 'wt-1',
+          agent: 'claude',
+          providerSession,
+          state: 'working',
+          capturedAt: 1,
+          updatedAt: 1
+        } as const
+        mockStoreState.automaticAgentResumeClaimsByTabId = {
+          'tab-1': {
+            worktreeId: 'wt-1',
+            launchAgent: 'claude',
+            providerSession,
+            recoveryPaneKey: recordPaneKey
+          }
+        }
+        mockStoreState.sleepingAgentSessionsByPaneKey = { [recordPaneKey]: record }
+        const deps = createDeps({
+          startup: {
+            launchAgent: 'claude',
+            command: "claude '--resume' 'claude-session-1'",
+            resumeProviderSession: providerSession,
+            showSessionRestoredBanner: true
+          }
+        })
+        const pane = createPane(2)
+        pane.terminal.write.mockImplementation((_data, callback) => callback?.())
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the terminal harness supplies the production caller's required pane, manager, and dependency methods.
+        connectPanePty(pane as never, createManager(2) as never, deps as never)
+        await flushAsyncTicks(10)
+        expect(transport.connect).toHaveBeenCalledTimes(1)
+        expect(deps.onShowSessionRestoredBanner).not.toHaveBeenCalled()
+        expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalled()
+        expect(mockStoreState.sleepingAgentSessionsByPaneKey[recordPaneKey]).toEqual(record)
+
+        if (outcome === 'refusal') {
+          const message =
+            'Claude session could not be restored (missing-transcript). The recovery record is kept.'
+          const callbacks = transport.connect.mock.calls[0]?.[0]?.callbacks
+          callbacks.onError(message)
+          spawn.reject(new Error(message))
+          await flushAsyncTicks(20)
+          expect(deps.onPtyErrorRef.current).toHaveBeenCalledWith(2, message)
+          expect(deps.onShowSessionRestoredBanner).not.toHaveBeenCalled()
+          expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalled()
+          expect(mockStoreState.sleepingAgentSessionsByPaneKey[recordPaneKey]).toEqual(record)
+        } else {
+          const isReattach = outcome.endsWith('reattach')
+          const exitedBeforeAttach = outcome.startsWith('exited-')
+          transport.getPtyId.mockReturnValue('checked-claude-pty')
+          spawn.resolve({
+            id: 'checked-claude-pty',
+            isReattach,
+            replay: isReattach ? 'Claude session resumed\r\n' : undefined,
+            exitedBeforeAttach
+          })
+          await flushAsyncTicks(30)
+          expect(deps.onPtyErrorRef.current.mock.calls).toEqual([])
+          if (exitedBeforeAttach) {
+            expect(deps.onShowSessionRestoredBanner).not.toHaveBeenCalled()
+            expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalled()
+            expect(mockStoreState.sleepingAgentSessionsByPaneKey[recordPaneKey]).toEqual(record)
+            return
+          }
+          await vi.waitFor(() => {
+            expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledExactlyOnceWith(2, 'restored')
+          })
+          expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(recordPaneKey)
+        }
+      }
+    )
+
     it('lets a declined resume replace an already-shown restored banner', async () => {
       // Why: the banner latch is one-shot per pane. A pane that showed "session restored"
       // and then respawned into a session main declined must stop claiming the restore.
