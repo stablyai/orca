@@ -111,12 +111,14 @@ export async function writeFileDurableIfCurrent(
   tmpPath: string,
   finalPath: string,
   payload: string | Uint8Array,
-  isCurrent: () => boolean
+  isCurrent: () => boolean,
+  /** Creation mode for a new temp file, e.g. 0o600 for private state. */
+  mode?: number
 ): Promise<boolean> {
   let renamed = false
   try {
     // Why: fsync BEFORE rename. A rename that lands first can expose a zero-length file.
-    await writeTempFileDurable(tmpPath, payload)
+    await writeTempFileDurable(tmpPath, payload, mode)
     if (!(await renameFileWithWindowsRetryAsync(tmpPath, finalPath, isCurrent))) {
       return false
     }
