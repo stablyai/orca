@@ -32,7 +32,7 @@ import {
   SHUTDOWN_CHECKPOINT_FLUSH_DEADLINE_MS
 } from './renderer-shutdown-checkpoint'
 import {
-  dropUnusedWslMoveWindowWriteHold,
+  resetWslMoveWindowWriteHoldForTests,
   holdWslMoveWindowWrites,
   setWslMoveReloadableWindow
 } from '../persistence/moving-wsl-projects/wsl-move-window-write-hold'
@@ -123,7 +123,7 @@ describe('registerRendererShutdownCheckpointHandler', () => {
       expect(store.flushPendingOrThrowAsync).toHaveBeenCalledTimes(1)
       expect(event.returnValue).toEqual({ ok: true })
     } finally {
-      dropUnusedWslMoveWindowWriteHold()
+      resetWslMoveWindowWriteHoldForTests()
       setWslMoveReloadableWindow(() => null)
     }
   })

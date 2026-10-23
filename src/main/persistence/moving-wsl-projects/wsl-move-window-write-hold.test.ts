@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  dropUnusedWslMoveWindowWriteHold,
   holdWslMoveWindowWrites,
+  holdWslMoveWindowWritesForCommit,
+  resetWslMoveWindowWriteHoldForTests,
+  settleWslMoveWindowWriteHoldForCommit,
   isWslMoveWindowWriteHeld,
   reloadWslMoveWindowWithWritesHeld,
   setWslMoveReloadableWindow
@@ -30,8 +32,7 @@ function fakeWindow() {
 const nextTurn = () => new Promise((resolve) => setImmediate(resolve))
 
 afterEach(() => {
-  dropUnusedWslMoveWindowWriteHold()
-  setWslMoveReloadableWindow(() => null)
+  resetWslMoveWindowWriteHoldForTests()
 })
 
 describe('WSL move window write hold', () => {
@@ -66,23 +67,42 @@ describe('WSL move window write hold', () => {
     expect(window.reload).not.toHaveBeenCalled()
   })
 
-  it('lets the saves resume unreloaded when the move ended short of its rewrite', async () => {
+  it('lets the saves resume unreloaded when the commit request did not commit', async () => {
     const { window } = fakeWindow()
-    holdWslMoveWindowWrites()
-    dropUnusedWslMoveWindowWriteHold()
+    holdWslMoveWindowWritesForCommit()
+    expect(isWslMoveWindowWriteHeld()).toBe(true)
+    settleWslMoveWindowWriteHoldForCommit(false)
     expect(isWslMoveWindowWriteHeld()).toBe(false)
-    reloadWslMoveWindowWithWritesHeld()
     await nextTurn()
     expect(window.reload).not.toHaveBeenCalled()
   })
 
-  it('keeps a hold whose reload is already under way', async () => {
-    const { page } = fakeWindow()
+  it('reloads once the commit settles, not when a rewrite pass ends before it', async () => {
+    const { window, page } = fakeWindow()
+    holdWslMoveWindowWritesForCommit()
     holdWslMoveWindowWrites()
     reloadWslMoveWindowWithWritesHeld()
-    dropUnusedWslMoveWindowWriteHold()
-    expect(isWslMoveWindowWriteHeld()).toBe(true)
     await nextTurn()
+    expect(window.reload).not.toHaveBeenCalled()
+
+    settleWslMoveWindowWriteHoldForCommit(true)
+    await nextTurn()
+    expect(window.reload).toHaveBeenCalledOnce()
+    expect(isWslMoveWindowWriteHeld()).toBe(true)
     page.loaded()
+    expect(isWslMoveWindowWriteHeld()).toBe(false)
+    // Settled once; a second settle (the driver's own end) changes nothing.
+    settleWslMoveWindowWriteHoldForCommit(false)
+    expect(isWslMoveWindowWriteHeld()).toBe(false)
+  })
+
+  it('reloads after an uncommitted run when a rewrite pass held the window meanwhile', async () => {
+    const { window } = fakeWindow()
+    holdWslMoveWindowWritesForCommit()
+    holdWslMoveWindowWrites()
+    settleWslMoveWindowWriteHoldForCommit(false)
+    await nextTurn()
+    expect(window.reload).toHaveBeenCalledOnce()
+    expect(isWslMoveWindowWriteHeld()).toBe(true)
   })
 })

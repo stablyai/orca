@@ -30,7 +30,7 @@ import {
   resetWslMoveDesktopRewriteStoresForTests
 } from './wsl-move-desktop-rewrite-stores'
 import {
-  dropUnusedWslMoveWindowWriteHold,
+  resetWslMoveWindowWriteHoldForTests,
   isWslMoveWindowWriteHeld,
   setWslMoveReloadableWindow
 } from './wsl-move-window-write-hold'
@@ -198,7 +198,7 @@ afterEach(async () => {
   vi.unstubAllEnvs()
   vi.restoreAllMocks()
   resetWslMoveDesktopRewriteStoresForTests()
-  dropUnusedWslMoveWindowWriteHold()
+  resetWslMoveWindowWriteHoldForTests()
   pageLoaded?.()
   setWslMoveReloadableWindow(() => null)
   resetWslMoveFenceForTests()

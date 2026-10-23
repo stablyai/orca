@@ -16,6 +16,8 @@ export type WslMoveReloadableWindow = {
 
 let held = false
 let reloadOwed = false
+// A commit request is out: its outcome, not a rewrite pass that happens to end, decides the reload.
+let commitPending = false
 let getWindow: () => WslMoveReloadableWindow | null = () => null
 
 /** The app window's contents, or null when none is open. */
@@ -27,18 +29,48 @@ export function isWslMoveWindowWriteHeld(): boolean {
   return held
 }
 
+function hold(): boolean {
+  const window = getWindow()
+  if (!window || window.isDestroyed()) {
+    return false
+  }
+  held = true
+  return true
+}
+
 /** Before a rewrite of window-owned state: drops the open window's saves until it reloads. */
 export function holdWslMoveWindowWrites(): void {
-  const window = getWindow()
-  if (window && !window.isDestroyed()) {
-    held = true
+  if (hold()) {
     reloadOwed = true
+  }
+}
+
+/** Before a commit request: the host may publish the moved projects to the window from here on. */
+export function holdWslMoveWindowWritesForCommit(): void {
+  if (hold()) {
+    commitPending = true
+  }
+}
+
+/** The commit request settled: committed, the window reloads; otherwise its saves resume. */
+export function settleWslMoveWindowWriteHoldForCommit(committed: boolean): void {
+  if (!commitPending) {
+    return
+  }
+  commitPending = false
+  if (committed) {
+    reloadOwed = true
+  }
+  if (reloadOwed) {
+    reloadWslMoveWindowWithWritesHeld()
+  } else {
+    held = false
   }
 }
 
 /** After the rewrite is on disk: reloads the held window. A no-op when nothing was held. */
 export function reloadWslMoveWindowWithWritesHeld(): void {
-  if (!reloadOwed) {
+  if (!reloadOwed || commitPending) {
     return
   }
   reloadOwed = false
@@ -63,10 +95,9 @@ export function reloadWslMoveWindowWithWritesHeld(): void {
   })
 }
 
-/** A move that ended short of its commit rewrote nothing: the window's saves resume, unreloaded. */
-export function dropUnusedWslMoveWindowWriteHold(): void {
-  if (reloadOwed) {
-    reloadOwed = false
-    held = false
-  }
+export function resetWslMoveWindowWriteHoldForTests(): void {
+  held = false
+  reloadOwed = false
+  commitPending = false
+  getWindow = () => null
 }
