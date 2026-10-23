@@ -1,6 +1,8 @@
 export type ProcessGoneSource = 'renderer' | 'child'
 export type ExpectedTeardownScope = 'none' | 'renderer-reload' | 'app-shutdown'
 
+// These two also appear in shared/windows-crash-exit-code.ts, which describes them
+// for display; this set decides whether to record a crash at all. Keep both in step.
 const WINDOWS_CONTROL_TERMINATION_EXIT_CODES = new Set([0xc000013a, 0x40010004])
 // Chromium's PID-namespace SIGTERM handler exits 241; waitpid reports 241 << 8.
 const LINUX_NAMESPACE_SIGTERM_WAIT_STATUS = 0xf100
