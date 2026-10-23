@@ -73,7 +73,8 @@ export function installBrowserLinkMaterializationProbe() {
         customSoundPath: null,
         customSoundVolume: 0,
         mutedNotificationSourceIds: [],
-        notifyHiddenWorkspaces: false
+        notifyHiddenWorkspaces: false,
+        bringToFrontOnAgentTaskComplete: false
       },
       voice: {
         enabled: false,
