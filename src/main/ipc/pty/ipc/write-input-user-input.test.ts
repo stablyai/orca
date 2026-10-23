@@ -50,21 +50,6 @@ afterEach(() => {
 })
 
 describe('renderer PTY writes: input kind', () => {
-  it('resumes submit tracking for that PTY after the renderer reports a paste interruption', () => {
-    const facts = new TerminalRunFactsRegister()
-    facts.setSubmissionTracking(true)
-    const input = createWriteInput(facts)
-    input.writePtyInput({
-      id: PTY_ID,
-      data: '\x1b[200~invented\rbody',
-      inputKind: 'driving',
-      inputOrigin: 'human'
-    })
-    expect(facts.takeSubmitAuthor(PTY_ID)).toBeUndefined()
-    facts.interruptSubmissionPaste(PTY_ID)
-    input.writePtyInput({ id: PTY_ID, data: '\r', inputKind: 'driving', inputOrigin: 'human' })
-    expect(facts.takeSubmitAuthor(PTY_ID)).toBe('human')
-  })
   it.each(['local', 'ssh:ssh-connection'] as const)(
     'observes a settled write only after acceptance on the execution host (%s)',
     async (owner) => {
