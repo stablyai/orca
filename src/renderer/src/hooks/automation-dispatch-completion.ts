@@ -219,11 +219,14 @@ export function createAutomationDispatchCompletion(args: {
           historicalState.state === 'done' &&
           (!options?.requireWorkingAfterStart || sawWorkingAfterStart)
         ) {
+          if (historicalState.mainAgent?.outcome === 'unconfirmed') {
+            continue
+          }
           // Why: this `done` already rolled out of the live entry, so its output
           // survives only in the entry-level completed slot.
           latestAssistantMessage =
             entry.lastCompletedAssistantMessage?.trim() || latestAssistantMessage
-          handleAgentDone(entry.mainAgent?.outcome)
+          handleAgentDone(historicalState.mainAgent?.outcome)
           return
         }
       }

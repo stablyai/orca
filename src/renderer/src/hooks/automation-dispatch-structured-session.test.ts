@@ -84,6 +84,8 @@ vi.mock('@/lib/agent-message-send', () => ({
 }))
 
 import { handleAutomationDispatchRequest } from './automation-dispatch-handler'
+import { resolveAgentStatusLiveEntryStateHistory } from '../../../shared/agent-status-live-entry-state-history'
+import { structuredAgentSessionAgentStatus } from '../../../shared/structured-agent-session-agent-status'
 import { structuredAgentSessionPaneKey } from '../../../shared/structured-agent-session-projection'
 
 describe('automation dispatch structured chat session', () => {
@@ -453,6 +455,121 @@ describe('automation dispatch structured chat session', () => {
           })
         )
       )
+    }
+  )
+
+  it.each(['success', 'failure', 'cancellation', 'interruption', 'unconfirmed'] as const)(
+    'honors the historical done verdict (%s) when done and next working coalesce in stateHistory',
+    async (outcome) => {
+      const chatSessionId = `sess-coalesced-${outcome}`
+      const tabId = `structured-agent-session-${chatSessionId}`
+      const paneKey = structuredAgentSessionPaneKey(tabId, chatSessionId)
+
+      mockPlanAgentSessionLaunch.mockReturnValue({
+        route: 'structured-native-chat',
+        requestId: `run-coalesced-${outcome}`,
+        agent: 'claude'
+      })
+      mockBeginStructuredProvisionalLaunch.mockReturnValue({
+        tab: { id: tabId, entityId: chatSessionId },
+        settlement: Promise.resolve({
+          kind: 'structured',
+          sessionId: chatSessionId,
+          promptDeliveryResult: Promise.resolve({ delivered: true, failureNotified: false })
+        }),
+        cancel: vi.fn()
+      })
+
+      await handleAutomationDispatchRequest({
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only these automation fields are read by the dispatch handler.
+        automation: {
+          id: 'auto-1',
+          projectId: 'repo-1',
+          prompt: 'Check the build',
+          precheck: null,
+          agentId: 'claude',
+          workspaceMode: 'new_per_run',
+          workspaceId: null,
+          baseBranch: null,
+          setupDecision: 'skip',
+          reuseSession: false
+        } as never,
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only these run fields are read by the dispatch handler.
+        run: {
+          id: `run-coalesced-${outcome}`,
+          automationId: 'auto-1',
+          title: 'Nightly run',
+          scheduledFor: 1_000,
+          trigger: 'scheduled',
+          workspaceId: null,
+          workspaceDisplayName: null
+        } as never,
+        dispatchToken: `token-coalesced-${outcome}`
+      })
+
+      mockMarkDispatchResult.mockClear()
+      const baseTime = Date.now() + 10
+      const running = {
+        paneKey,
+        state: 'working' as const,
+        prompt: 'Check the build',
+        agentType: 'claude' as const,
+        updatedAt: baseTime,
+        stateStartedAt: baseTime,
+        stateHistory: [],
+        mainAgent: { state: 'working' as const, stateStartedAt: baseTime }
+      }
+      const finishedStatus = structuredAgentSessionAgentStatus({
+        status: 'idle',
+        turnOutcome: outcome
+      })
+      const doneEntry = {
+        ...running,
+        ...finishedStatus,
+        mainAgent: { ...finishedStatus.mainAgent, stateStartedAt: baseTime + 50 },
+        updatedAt: baseTime + 50,
+        stateStartedAt: baseTime + 50,
+        lastAssistantMessage: 'Automation turn output',
+        stateHistory: resolveAgentStatusLiveEntryStateHistory(
+          running,
+          { state: 'done' },
+          baseTime + 50
+        ).history
+      }
+      const next = resolveAgentStatusLiveEntryStateHistory(
+        doneEntry,
+        { state: 'working' },
+        baseTime + 100
+      )
+      state.agentStatusByPaneKey = {
+        [paneKey]: {
+          ...running,
+          updatedAt: baseTime + 100,
+          stateStartedAt: baseTime + 100,
+          prompt: 'next input',
+          mainAgent: { state: 'working', stateStartedAt: baseTime + 100 },
+          stateHistory: next.history,
+          lastCompletedAssistantMessage: next.lastCompletedAssistantMessage
+        }
+      }
+      latestStoreSubscriber?.()
+
+      if (outcome === 'unconfirmed') {
+        expect(mockMarkDispatchResult).not.toHaveBeenCalled()
+      } else {
+        const expectedStatus = outcome === 'success' ? 'completed' : 'dispatch_failed'
+        await vi.waitFor(() =>
+          expect(mockMarkDispatchResult).toHaveBeenCalledWith(
+            expect.objectContaining({
+              runId: `run-coalesced-${outcome}`,
+              status: expectedStatus,
+              outputSnapshot: expect.objectContaining({
+                content: 'Automation turn output'
+              })
+            })
+          )
+        )
+      }
     }
   )
 })
