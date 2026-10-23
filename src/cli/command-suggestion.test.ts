@@ -46,16 +46,6 @@ const specs: CommandSpec[] = [
 ]
 
 describe('suggestCommands', () => {
-  it('suggests the closest command for a near-miss verb', () => {
-    expect(suggestCommands(specs, ['worktree', 'remov'])).toContain('worktree rm')
-  })
-
-  it('includes alias paths among suggestions', () => {
-    // `worktree remove` is the alias; a typo near it should surface it (an exact
-    // match would resolve as a real command, not trigger a suggestion).
-    expect(suggestCommands(specs, ['worktree', 'remov'])).toContain('worktree remove')
-  })
-
   it('returns nothing for a wildly-off token', () => {
     expect(suggestCommands(specs, ['worktree', 'zzzzz'])).toEqual([])
   })

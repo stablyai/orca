@@ -9,7 +9,7 @@ on:
         type: string
 
       runner:
-        description: Hosted runner for the unit shards; relay integration keeps its x86 host.
+        description: Hosted runner for the unit shards.
         required: false
         default: ubuntu-latest
         type: string
@@ -213,7 +213,7 @@ jobs:
       fail-fast: false
       matrix:
         node: ${{ fromJSON(inputs.node_versions) }}
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 60
 
     steps:

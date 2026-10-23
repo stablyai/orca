@@ -22,12 +22,12 @@ Completion requires no unreviewed or stale test files, no unresolved support/scr
 
 ## Ownership
 
-| Area                                             | Reviewer       | Next batch                 |
-| ------------------------------------------------ | -------------- | -------------------------- |
-| `cloud/`                                         | `audit_cloud`  | `cloud-0005`               |
-| `config/`                                        | `audit_config` | `config-0005` (read-only)  |
-| `mobile/`                                        | `audit_mobile` | `mobile-0005`              |
-| `src/`, `native/`, `tests/`, `.github/`, `docs/` | root           | Continue after `root-0037` |
+| Area                                             | Reviewer       | Next batch                  |
+| ------------------------------------------------ | -------------- | --------------------------- |
+| `cloud/`                                         | `audit_cloud`  | `cloud-0006` reconciliation |
+| `config/`                                        | `audit_config` | `config-0006` (read-only)   |
+| `mobile/`                                        | `audit_mobile` | `mobile-0006` (read-only)   |
+| `src/`, `native/`, `tests/`, `.github/`, `docs/` | root           | Continue after `root-0054`  |
 
 Ownership is disjoint. Within an area, continue in tracked path order after the last batch; explicitly include nonstandard/inline cases and support candidates before closing the area.
 
@@ -45,59 +45,71 @@ Batch validation lives in `reviews/<area>-<batch>-validation.json`. Local log pa
 
 [PR #32353](https://github.com/stablyai/orca/pull/32353) merged another 180 original files and 1,188 case records, plus one re-review after upstream changes. Its 70 changed test files removed 318 net test lines. The full PR aggregate and all other checks passed; squash commit `8f6283b32bcdefa746613e4c28d04bb1fe954eb9`.
 
-The next batch adds 204 original files and 1,104 case records, plus one upstream re-review with nine records. Mobile also separately enumerates 83 auxiliary native/manual/support controls. Its 42 changed test/support files remove 153 net lines. Case records include static declarations and explicitly classified manual controls; they are not runtime test totals.
+[PR #32426](https://github.com/stablyai/orca/pull/32426) merged another 204 original files and 1,104 case records, plus one upstream re-review with nine records and 83 separately enumerated mobile auxiliary controls. Its 42 changed test/support files removed 153 net lines. Required-check discovery reported no configured checks; the full PR aggregate passed with no failed checks. Squash commit `89b3d382847f10b31a731ebd7e18aad022a4b15a`.
+
+The next batch adds 184 original files and 1,692 case records, plus four separately enumerated mobile fixture controls and two supplemental Cloud tooling-manifest reviews. Its 59 changed test/support files remove 60 net lines. Case records include static declarations and explicitly classified manual controls; they are not runtime test totals. One superseding review covers all 12 current unit-selection declarations (25 expanded cases) after an upstream change.
 
 Further completed review records:
 
-| Batch         |       Files | Case records | Main decisions                                                                                                    |
-| ------------- | ----------: | -----------: | ----------------------------------------------------------------------------------------------------------------- |
-| `root-0001`   |          14 |          101 | Repair observer reset/readiness; trim allocator and environment-only checks.                                      |
-| `root-0002`   |          20 |           87 | Exercise installed link callbacks; consolidate cache checks; remove a conditional no-op test.                     |
-| `root-0003`   |           6 |           40 | Classify Windows fixtures and standalone cases; retain native clipboard integration; trim exact traversal counts. |
-| `root-0004`   |          15 |          101 | Remove source-string and capability-only checks; observe pacing in actual mouse delivery.                         |
-| `root-0005`   |           4 |           32 | Retain real Windows argument, filesystem and delayed tree-termination boundaries.                                 |
-| `root-0006`   |           1 |           14 | Retain storage lease ownership, generation conflicts and clock-driven credential caching.                         |
-| `mobile-0002` |          50 |          283 | Consolidate repeated mounts and inventories; fix action routing and deferred SSH assertions.                      |
-| `config-0002` |          50 |          375 | Trim copied policies; fix vacuous assertions and nested Bash fixture isolation.                                   |
-| `cloud-0002`  |          50 |          449 | Use independent authorization inputs and durable phone state; observe scoped locks and clean migration fixtures.  |
-| `root-0007`   |           3 |           22 | Trim action/docs inventories; test actual hostile formatter inputs under a VM deadline.                           |
-| `root-0008`   |           5 |            5 | Classify filesystem, socket and task retention proofs; distinguish measurements from assertions.                  |
-| `root-0009`   |           5 |            6 | Preserve archived browser lifecycle and source-graph proofs with explicit drift limits.                           |
-| `root-0010`   |           4 |            6 | Preserve actual Monaco/store lifetime proof and its dependency/source fences.                                     |
-| `root-0011`   |           2 |           10 | Correct a chunk-size test's memory claim; classify the historical history-window driver.                          |
-| `root-0012`   |           8 |           96 | Preserve independent full-reader oracle and every manual parity/growth/allocation/verifier control.               |
-| `root-0013`   | 1 re-review |            7 | Recheck the upstream compiler-gate change; all seven actual build cases pass.                                     |
-| `mobile-0003` |          50 |          315 | Remove copied inventories; exercise real editor fallback, discard target and hardware-back delivery.              |
-| `config-0003` |          50 |          328 | Use actual file matching, generated versions and Git checkout bytes; require real GC/canvas paths.                |
-| `cloud-0003`  |          53 |          400 | Exercise batch renewal, actual replay/SQL, scoped locks, pagination and deterministic transaction errors.         |
+| Batch                  |       Files | Case records | Main decisions                                                                                                      |
+| ---------------------- | ----------: | -----------: | ------------------------------------------------------------------------------------------------------------------- |
+| `root-0001`            |          14 |          101 | Repair observer reset/readiness; trim allocator and environment-only checks.                                        |
+| `root-0002`            |          20 |           87 | Exercise installed link callbacks; consolidate cache checks; remove a conditional no-op test.                       |
+| `root-0003`            |           6 |           40 | Classify Windows fixtures and standalone cases; retain native clipboard integration; trim exact traversal counts.   |
+| `root-0004`            |          15 |          101 | Remove source-string and capability-only checks; observe pacing in actual mouse delivery.                           |
+| `root-0005`            |           4 |           32 | Retain real Windows argument, filesystem and delayed tree-termination boundaries.                                   |
+| `root-0006`            |           1 |           14 | Retain storage lease ownership, generation conflicts and clock-driven credential caching.                           |
+| `mobile-0002`          |          50 |          283 | Consolidate repeated mounts and inventories; fix action routing and deferred SSH assertions.                        |
+| `config-0002`          |          50 |          375 | Trim copied policies; fix vacuous assertions and nested Bash fixture isolation.                                     |
+| `cloud-0002`           |          50 |          449 | Use independent authorization inputs and durable phone state; observe scoped locks and clean migration fixtures.    |
+| `root-0007`            |           3 |           22 | Trim action/docs inventories; test actual hostile formatter inputs under a VM deadline.                             |
+| `root-0008`            |           5 |            5 | Classify filesystem, socket and task retention proofs; distinguish measurements from assertions.                    |
+| `root-0009`            |           5 |            6 | Preserve archived browser lifecycle and source-graph proofs with explicit drift limits.                             |
+| `root-0010`            |           4 |            6 | Preserve actual Monaco/store lifetime proof and its dependency/source fences.                                       |
+| `root-0011`            |           2 |           10 | Correct a chunk-size test's memory claim; classify the historical history-window driver.                            |
+| `root-0012`            |           8 |           96 | Preserve independent full-reader oracle and every manual parity/growth/allocation/verifier control.                 |
+| `root-0013`            | 1 re-review |            7 | Recheck the upstream compiler-gate change; all seven actual build cases pass.                                       |
+| `mobile-0003`          |          50 |          315 | Remove copied inventories; exercise real editor fallback, discard target and hardware-back delivery.                |
+| `config-0003`          |          50 |          328 | Use actual file matching, generated versions and Git checkout bytes; require real GC/canvas paths.                  |
+| `cloud-0003`           |          53 |          400 | Exercise batch renewal, actual replay/SQL, scoped locks, pagination and deterministic transaction errors.           |
+| `root-0014`            |           2 |           23 | Classify acknowledged retirement and distinguish memory rollback from disk-failure evidence.                        |
+| `root-0015`            |           3 |           11 | Preserve prompt-retention groups and historical source fences; count WeakRefs as objects.                           |
+| `root-0016`            |           2 |           50 | Review Crashpad parity cases and driver controls with explicit package/source drift limits.                         |
+| `root-0017`            |           1 |            8 | Classify daemon late-exit scenarios across both historical variants.                                                |
+| `root-0018`            |           4 |           40 | Review shared-owner lifecycle cycles and fixed-source guards.                                                       |
+| `root-0019`            |           1 |            3 | Reproduce current real loopback stream pause, drain and unpause behavior.                                           |
+| `root-0020`            |           4 |           23 | Classify empty-delta controls and archived dependency fences.                                                       |
+| `root-0021`            |           2 |           12 | Retain GitLab known-host behavior with explicit reversepatch drift limits.                                          |
+| `root-0022`            |           1 |            2 | Classify hydration phases against the retired source boundary.                                                      |
+| `root-0023`            |           1 |            2 | Classify legacy-import phases and baseline-transform rejection.                                                     |
+| `root-0024`            |           1 |            2 | Preserve log-tail proof phases and reversepatch guard evidence.                                                     |
+| `root-0025`            |           4 |           12 | Review native PTY environment fixtures without overwriting historical reports.                                      |
+| `root-0026`            |           1 |            6 | Classify nested-repository controls and the historical process-runner limit.                                        |
+| `root-0027`            |           4 |          149 | Enumerate OSC133 memory, parity and driver controls with scanner drift limits.                                      |
+| `root-0028`            |           2 |            5 | Review pending runtime-close incarnations through real host close with controlled ports.                            |
+| `root-0029`            |           2 |            6 | Review split-close daemon socket/history-lock scenarios and loader fences.                                          |
+| `root-0030`            |           5 |            9 | Review plugin-uninstall scenarios, loaders and measured WeakRef limits.                                             |
+| `root-0031`            |           3 |           47 | Enumerate plugin-worker output variants and parity/CRLF controls.                                                   |
+| `root-0032`            |           1 |           12 | Run all current PTY-detector behavior combinations; report heap measurements separately.                            |
+| `root-0033`            |           3 |           21 | Classify queued-graph generated cases, real socket/store fixture and retired module.                                |
+| `root-0034`            |           1 |           16 | Classify retained-text measurements without inventing parity/cap/heap assertions.                                   |
+| `root-0035`            |           5 |           22 | Review RPC queue lifetime/resolver controls while preserving historical reports.                                    |
+| `root-0036`            |           1 |            3 | Reproduce 1,000-request late-cancellation cleanup in the current VM proof.                                          |
+| `root-0037`            | 1 re-review |            9 | Recheck upstream conservative import resolution; all 22 expanded tests pass.                                        |
+| `cloud-0004`           |          50 |          347 | Exercise commit revalidation, refreshed leases, scoped locks and deterministic telemetry; trim copied SQL.          |
+| `config-0004`          |          50 |           33 | Keep the archive present for dependency protection; validate real benchmark routing and committed rows.             |
+| `mobile-0004`          |          50 |          240 | Await real delayed SSH/hydration and media replies; trim copied native/schema inventories.                          |
+| `root-0038–0050`       |          27 |          268 | Classify historical proofs, fixtures and source fences; run current session-search writer retention proof.          |
+| `root-0051`            |           4 |           53 | Trim copied aliases; retain discovery commands and sanitized host/transcript values.                                |
+| `root-0052`            |           4 |           63 | Verify automation hosts within identified rows and retain legacy output.                                            |
+| `root-0053`            |           6 |           96 | Keep browser dispatch/version boundaries; verify actual ordered paging identities.                                  |
+| `root-0054`            |           3 |          363 | Trim duplicate suggestions; independently enumerate registry aliases.                                               |
+| `cloud-0005`           |          40 |          346 | Observe automatic flush and actual blackbox timing; retain durable eviction identities and independent proof bytes. |
+| `config-0005`          |          50 |          201 | Execute actual watchdog and localization shell; trim copied inventories and optional no-op case.                    |
+| `config-0005-rereview` | 1 re-review |           12 | Retain full selection for shared runtime inputs and current conservative planning boundaries.                       |
+| `mobile-0005`          |          50 |          302 | Hold real stale callbacks, stage media bytes before disconnect and verify deferred action delivery.                 |
 
-| `root-0014` | 2 | 23 | Classify acknowledged retirement and distinguish memory rollback from disk-failure evidence. |
-| `root-0015` | 3 | 11 | Preserve prompt-retention groups and historical source fences; count WeakRefs as objects. |
-| `root-0016` | 2 | 50 | Review Crashpad parity cases and driver controls with explicit package/source drift limits. |
-| `root-0017` | 1 | 8 | Classify daemon late-exit scenarios across both historical variants. |
-| `root-0018` | 4 | 40 | Review shared-owner lifecycle cycles and fixed-source guards. |
-| `root-0019` | 1 | 3 | Reproduce current real loopback stream pause, drain and unpause behavior. |
-| `root-0020` | 4 | 23 | Classify empty-delta controls and archived dependency fences. |
-| `root-0021` | 2 | 12 | Retain GitLab known-host behavior with explicit reversepatch drift limits. |
-| `root-0022` | 1 | 2 | Classify hydration phases against the retired source boundary. |
-| `root-0023` | 1 | 2 | Classify legacy-import phases and baseline-transform rejection. |
-| `root-0024` | 1 | 2 | Preserve log-tail proof phases and reversepatch guard evidence. |
-| `root-0025` | 4 | 12 | Review native PTY environment fixtures without overwriting historical reports. |
-| `root-0026` | 1 | 6 | Classify nested-repository controls and the historical process-runner limit. |
-| `root-0027` | 4 | 149 | Enumerate OSC133 memory, parity and driver controls with scanner drift limits. |
-| `root-0028` | 2 | 5 | Review pending runtime-close incarnations through real host close with controlled ports. |
-| `root-0029` | 2 | 6 | Review split-close daemon socket/history-lock scenarios and loader fences. |
-| `root-0030` | 5 | 9 | Review plugin-uninstall scenarios, loaders and measured WeakRef limits. |
-| `root-0031` | 3 | 47 | Enumerate plugin-worker output variants and parity/CRLF controls. |
-| `root-0032` | 1 | 12 | Run all current PTY-detector behavior combinations; report heap measurements separately. |
-| `root-0033` | 3 | 21 | Classify queued-graph generated cases, real socket/store fixture and retired module. |
-| `root-0034` | 1 | 16 | Classify retained-text measurements without inventing parity/cap/heap assertions. |
-| `root-0035` | 5 | 22 | Review RPC queue lifetime/resolver controls while preserving historical reports. |
-| `root-0036` | 1 | 3 | Reproduce 1,000-request late-cancellation cleanup in the current VM proof. |
-| `root-0037` | 1 re-review | 9 | Recheck upstream conservative import resolution; all 22 expanded tests pass. |
-| `cloud-0004` | 50 | 347 | Exercise commit revalidation, refreshed leases, scoped locks and deterministic telemetry; trim copied SQL. |
-| `config-0004` | 50 | 33 | Keep the archive present for dependency protection; validate real benchmark routing and committed rows. |
-| `mobile-0004` | 50 | 240 | Await real delayed SSH/hydration and media replies; trim copied native/schema inventories. |
+Two production findings are recorded in `reviews/cloud-0005-validation.json`: audit rows added after `stop()` can still persist at the batch threshold, and queue overflow during an in-flight reserve-ledger insert can lose a queued identity. This batch reproduces and records them without changing production behavior. Cloud-only relay test/typecheck/lint now build the unchanged process-host package before resolving its compiled exports; this prerequisite was validated with generated outputs absent.
 
 Archived proofs retain historical source/dependency fences. A drift rejection is recorded as a limitation, never as a current-head test pass. Permanent suites read only as supporting evidence remain pending unless they have their own completed review.
 

@@ -87,23 +87,27 @@ describe('formatAutomationList reports each row host', () => {
       automations: [automation(), automation({ id: 'auto-2', name: 'Weekly' })],
       items: [
         {
-          automationId: 'auto-1',
-          selector: { kind: 'ssh', targetId: 'box-1', targetGeneration: 4 }
-        },
-        {
           automationId: 'auto-2',
           selector: { kind: 'orphan', issue: AUTOMATION_ORPHAN_ISSUES.targetMissing }
+        },
+        {
+          automationId: 'auto-1',
+          selector: { kind: 'ssh', targetId: 'box-1', targetGeneration: 4 }
         }
       ]
     })
 
-    expect(output).toContain('host: ssh:box-1 (generation 4)')
-    expect(output).toContain(`host: orphan — ${AUTOMATION_ORPHAN_ISSUES.targetMissing}`)
+    const [nightly, weekly] = output.split('\n\n')
+    expect(nightly).toContain('auto-1  Nightly')
+    expect(nightly).toContain('host: ssh:box-1 (generation 4)')
+    expect(weekly).toContain('auto-2  Weekly')
+    expect(weekly).toContain(`host: orphan — ${AUTOMATION_ORPHAN_ISSUES.targetMissing}`)
   })
 
   it('omits the host line for rows an older authority does not qualify', () => {
     const output = formatAutomationList({ automations: [automation()] })
 
+    expect(output).toContain('auto-1  Nightly')
     expect(output).not.toContain('host:')
   })
 })

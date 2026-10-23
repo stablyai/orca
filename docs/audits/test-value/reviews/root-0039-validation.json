@@ -1,0 +1,28 @@
+{
+  "batch": "root-0039",
+  "reviewer": "root",
+  "source_commit": "8f6283b32bcdefa746613e4c28d04bb1fe954eb9",
+  "reviewed_files": 5,
+  "case_records": 20,
+  "production_changes": false,
+  "test_source_changes": false,
+  "review_scope": "Read full proof, fixtures/config/source selectors and relevant real production or archived source boundary; explicitly enumerate generated/manual controls. Supporting permanent suites remain pending.",
+  "checks": [
+    {
+      "command": "node -e 'require(\"./docs/audits/ssh-file-metadata-retention/sources.cjs\").loadSources()'",
+      "working_directory": "/home/neil/orca/workspaces/orca/comprehensive-test-audit-4",
+      "result": "rejected before suite execution: ENOENT retired src/relay/dispatcher.ts; neither graph/variant nor CRLF test ran.",
+      "log": "/tmp/orca-root-0039-source-loader.log"
+    }
+  ],
+  "limitations": [
+    "All ten bodies read; historical 80-case report is not a fresh validation claim.",
+    "No real SSH process or network transport; metadata delay is a controlled fixture gate before producer invocation.",
+    "WeakRefs/unique params/base64 string lengths are not exact heap sizes or RSS.",
+    "Loader protects archived source identity; do not rewrite retired graphs merely to obtain a current pass."
+  ],
+  "integrity": {
+    "records_sha256": "74424033fd798bfd96a1225ace5115ad4e22f835b270ca78bf06f847bed4eada",
+    "original_and_final_hashes_verified": true
+  }
+}

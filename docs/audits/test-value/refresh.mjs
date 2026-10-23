@@ -154,7 +154,10 @@ for (const path of tracked) {
   if (path.startsWith('docs/audits/test-value/')) {
     continue
   }
-  if (!/\.(?:[cm]?[jt]sx?|rs|py|rb|swift|kt|go|ps1|sh|bash|zsh|fish|c|cc|cpp|h)$/.test(path)) {
+  if (
+    !/\.(?:[cm]?[jt]sx?|rs|py|rb|swift|kt|go|ps1|sh|bash|zsh|fish|c|cc|cpp|h)$/.test(path) &&
+    !reviews.has(path)
+  ) {
     continue
   }
   scanned++

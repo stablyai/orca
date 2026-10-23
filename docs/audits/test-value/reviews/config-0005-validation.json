@@ -1,0 +1,303 @@
+{
+  "batch": "config-0005",
+  "reviewer": "audit_config",
+  "platform": "Linux",
+  "source_commit": "92dfb4fda69e746e96786ea7af417813ac441394",
+  "implementation_base": "8f6283b32bcdefa746613e4c28d04bb1fe954eb9",
+  "upstream_reconciliation": "All 50 saved originals and inventory SHA-256 values match Git bytes at both the original read-only source commit and the fresh audit-5 checkout base. Source edits are confined to eight justified test files; the additional fixture-local Git setting was requested by root after validation exposed inherited user patch-prefix preferences.",
+  "reviewed_files": 50,
+  "standard_suite_files": 38,
+  "standalone_or_support_files": 12,
+  "original_declarations": 201,
+  "final_declarations": 197,
+  "case_decisions": {
+    "keep": 188,
+    "fix": 9,
+    "remove": 4
+  },
+  "changed_test_files": [
+    "config/scripts/idle-cpu-process-sampling.test.mjs",
+    "config/scripts/install-node-dependencies-action.test.mjs",
+    "config/scripts/live-remote-bulk-open-freeze-metrics.test.mjs",
+    "config/scripts/live-remote-status-watchdog.test.mjs",
+    "config/scripts/locale-generic-ui-terms.test.mjs",
+    "config/scripts/locale-ko-frozen-terminal-search-keywords.test.mjs",
+    "config/scripts/localization-extraction-change-scope.test.mjs",
+    "config/scripts/macos-tcc-prompt-localization.test.mjs"
+  ],
+  "test_diff": {
+    "added": 332,
+    "deleted": 142,
+    "net": 190
+  },
+  "checks": [
+    {
+      "command": [
+        "node",
+        "config/scripts/run-vitest.mjs",
+        "run",
+        "--config",
+        "config/vitest.config.ts",
+        "config/scripts/idle-cpu-process-sampling.test.mjs",
+        "config/scripts/ime-enter-guard-plugin.test.mjs",
+        "config/scripts/initialize-windows-native-toolchain.test.mjs",
+        "config/scripts/install-electron-package-binary.test.mjs",
+        "config/scripts/install-node-dependencies-action.test.mjs",
+        "config/scripts/lag-probe-failures.test.mjs",
+        "config/scripts/latest-stable-release.test.mjs",
+        "config/scripts/layout-save-divergence-summary.test.mjs",
+        "config/scripts/linear-sdk-runtime.test.mjs",
+        "config/scripts/lint-staged-worktree-backup.test.mjs",
+        "config/scripts/linux-package-fixture-cache.test.mjs",
+        "config/scripts/live-freeze-bounded-history.test.mjs",
+        "config/scripts/live-remote-bulk-open-freeze-metrics.test.mjs",
+        "config/scripts/live-remote-freeze-rpc.test.mjs",
+        "config/scripts/live-remote-status-watchdog.test.mjs",
+        "config/scripts/locale-brand-prefilter.test.mjs",
+        "config/scripts/locale-count-fragment-separator.test.mjs",
+        "config/scripts/locale-generic-ui-terms.test.mjs",
+        "config/scripts/locale-ko-frozen-terminal-search-keywords.test.mjs",
+        "config/scripts/locale-repair-catalog-missing-leaves.test.mjs",
+        "config/scripts/locale-translation-policy-ko-round5.test.mjs",
+        "config/scripts/locale-translation-policy.es-pr.test.mjs",
+        "config/scripts/locale-translation-policy.es-round5.test.mjs",
+        "config/scripts/locale-translation-policy.ja-relocalization.test.mjs",
+        "config/scripts/locale-translation-policy.ja-round5.test.mjs",
+        "config/scripts/locale-translation-policy.test.mjs",
+        "config/scripts/locale-translation-policy.zh-round5.test.mjs",
+        "config/scripts/locale-translation-policy.zh-status-bar-usage.test.mjs",
+        "config/scripts/localization-extraction-call-syntax.test.mjs",
+        "config/scripts/localization-extraction-change-scope.test.mjs",
+        "config/scripts/mac-build-compatibility.test.mjs",
+        "config/scripts/mac-notarization-builder-contract.test.mjs",
+        "config/scripts/macos-computer-helper-owner-loss-group-recovery.test.mjs",
+        "config/scripts/macos-computer-helper-owner-loss-processes.test.mjs",
+        "config/scripts/macos-folder-usage-descriptions.test.mjs",
+        "config/scripts/macos-shipit-scheduling.test.mjs",
+        "config/scripts/macos-tcc-prompt-localization.test.mjs",
+        "config/scripts/macos-terminal-host-bundle.test.mjs",
+        "--reporter=json",
+        "--outputFile=/tmp/orca-config-0005-suites-results.json"
+      ],
+      "environment": {
+        "ORCA_BACKGROUND_LAUNCH": "1"
+      },
+      "exit_code": 0,
+      "result": "All 38 conventional candidate files selected: 268 tests passed and 33 platform-specific cases skipped; no failures. Two native suite files contain only skipped cases. No per-process Git config override in this final run.",
+      "log": "/tmp/orca-config-0005-suites-final.log",
+      "json_report": "/tmp/orca-config-0005-suites-results.json"
+    },
+    {
+      "command": [
+        "pnpm",
+        "exec",
+        "oxlint",
+        "config/scripts/idle-cpu-process-sampling.test.mjs",
+        "config/scripts/install-node-dependencies-action.test.mjs",
+        "config/scripts/live-remote-bulk-open-freeze-metrics.test.mjs",
+        "config/scripts/live-remote-status-watchdog.test.mjs",
+        "config/scripts/locale-generic-ui-terms.test.mjs",
+        "config/scripts/locale-ko-frozen-terminal-search-keywords.test.mjs",
+        "config/scripts/localization-extraction-change-scope.test.mjs",
+        "config/scripts/macos-tcc-prompt-localization.test.mjs"
+      ],
+      "exit_code": 0,
+      "result": "passed for all 8 changed test files",
+      "log": "/tmp/orca-config-0005-lint-final.log"
+    },
+    {
+      "command": [
+        "pnpm",
+        "exec",
+        "oxfmt",
+        "--check",
+        "config/scripts/idle-cpu-process-sampling.test.mjs",
+        "config/scripts/install-node-dependencies-action.test.mjs",
+        "config/scripts/live-remote-bulk-open-freeze-metrics.test.mjs",
+        "config/scripts/live-remote-status-watchdog.test.mjs",
+        "config/scripts/locale-generic-ui-terms.test.mjs",
+        "config/scripts/locale-ko-frozen-terminal-search-keywords.test.mjs",
+        "config/scripts/localization-extraction-change-scope.test.mjs",
+        "config/scripts/macos-tcc-prompt-localization.test.mjs"
+      ],
+      "exit_code": 0,
+      "result": "All 8 changed test files use the correct format.",
+      "log": "/tmp/orca-config-0005-format-final.log"
+    },
+    {
+      "command": [
+        "git",
+        "diff",
+        "--check",
+        "--",
+        "config/scripts/idle-cpu-process-sampling.test.mjs",
+        "config/scripts/install-node-dependencies-action.test.mjs",
+        "config/scripts/live-remote-bulk-open-freeze-metrics.test.mjs",
+        "config/scripts/live-remote-status-watchdog.test.mjs",
+        "config/scripts/locale-generic-ui-terms.test.mjs",
+        "config/scripts/locale-ko-frozen-terminal-search-keywords.test.mjs",
+        "config/scripts/localization-extraction-change-scope.test.mjs",
+        "config/scripts/macos-tcc-prompt-localization.test.mjs"
+      ],
+      "exit_code": 0,
+      "result": "passed"
+    },
+    {
+      "command": [
+        "pnpm",
+        "run",
+        "check:code-quality:changed",
+        "--",
+        "8f6283b32bcdefa746613e4c28d04bb1fe954eb9"
+      ],
+      "environment": {
+        "ORCA_BACKGROUND_LAUNCH": "1"
+      },
+      "exit_code": 0,
+      "result": "0 findings in all seven gates across 26 changed files at the final snapshot, including concurrent mobile changes; root owns final global reconciliation.",
+      "log": "/tmp/orca-config-0005-quality-final.log"
+    },
+    {
+      "command": [
+        "pnpm",
+        "run",
+        "check:react-doctor:changed",
+        "--",
+        "8f6283b32bcdefa746613e4c28d04bb1fe954eb9"
+      ],
+      "environment": {
+        "ORCA_BACKGROUND_LAUNCH": "1"
+      },
+      "exit_code": 0,
+      "result": "Final whole-worktree changed-lines gate: 0 errors after cloud reviewer corrected the five initial cloud findings. No cloud files were edited by audit_config.",
+      "log": "/tmp/orca-config-0005-react-doctor-final.log"
+    },
+    {
+      "command": "node /tmp/orca-config-0005-records.mjs followed by python3 /tmp/orca-config-0005-validation.py",
+      "exit_code": 0,
+      "result": "50 exact candidate paths; original hashes match both original review source commit and fresh checkout base; actual refresh.mjs parser verifies all 201 original line/title declarations without running refresh. All 197 final destinations, all final filesystem hashes and all evidence paths match. Exactly eight test files changed within config/. No inventory/tracker writes.",
+      "artifacts": [
+        "/tmp/orca-config-0005-final-cases.json",
+        "docs/audits/test-value/reviews/config-0005.jsonl"
+      ]
+    }
+  ],
+  "intentional_skips": [
+    {
+      "path": "config/scripts/idle-cpu-process-sampling.test.mjs",
+      "count": 1,
+      "cases": [
+        "Windows process table read parses a command line whose characters the OEM code page maps to control bytes"
+      ]
+    },
+    {
+      "path": "config/scripts/macos-computer-helper-owner-loss-processes.test.mjs",
+      "count": 21,
+      "cases": [
+        "macOS helper owner-loss benchmark process cleanup enforces a hard timeout when the trial ignores SIGTERM",
+        "macOS helper owner-loss benchmark process cleanup runs every cleanup stage before aggregating errors",
+        "macOS helper owner-loss benchmark process cleanup preserves malformed-result and cleanup failures",
+        "macOS helper owner-loss benchmark process cleanup cleans up a status-zero trial whose result could not be parsed",
+        "macOS helper owner-loss benchmark process cleanup removes a launcher directory after partial trial setup",
+        "macOS helper owner-loss benchmark process cleanup kills a timed-out trial group only after validating its environment",
+        "macOS helper owner-loss benchmark process cleanup resumes the group after post-stop revalidation fails",
+        "macOS helper owner-loss benchmark process cleanup compensates a possible stop after group anchor replacement",
+        "macOS helper owner-loss benchmark process cleanup resumes a previously frozen group when final inspection fails",
+        "macOS helper owner-loss benchmark process cleanup resumes a previously frozen group when final anchor stop fails",
+        "macOS helper owner-loss benchmark process cleanup resumes a previously frozen group after final anchor replacement",
+        "macOS helper owner-loss benchmark process cleanup kills a recorded helper in a separate process group",
+        "macOS helper owner-loss benchmark process cleanup kills every unrecorded helper using its unique trial command",
+        "macOS helper owner-loss benchmark process cleanup continues exact-match cleanup after an earlier match fails",
+        "macOS helper owner-loss benchmark process cleanup does not treat an identity query failure as process exit",
+        "macOS helper owner-loss benchmark process cleanup resumes a helper when post-stop identity inspection fails",
+        "macOS helper owner-loss benchmark process cleanup compensates a possible stop after helper PID replacement",
+        "macOS helper owner-loss benchmark process cleanup preserves helper identity errors when compensation fails",
+        "macOS helper owner-loss benchmark process cleanup treats a missing PID as process exit after an identity query failure",
+        "macOS helper owner-loss benchmark process cleanup runs unique-command cleanup after an invalid process record",
+        "macOS helper owner-loss benchmark process cleanup rejects a record that is not a detached process-group identity"
+      ]
+    },
+    {
+      "path": "config/scripts/macos-shipit-scheduling.test.mjs",
+      "count": 1,
+      "cases": [
+        "native ShipIt scheduling changes only ProcessType in the real Electron job, retaining native install and retry settings"
+      ]
+    },
+    {
+      "path": "config/scripts/macos-terminal-host-bundle.test.mjs",
+      "count": 10,
+      "cases": [
+        "terminal host assembly lays out the pinned Node, daemon JS and runtime node-pty files only",
+        "terminal host assembly copies every package the daemon requires, with its dependencies",
+        "terminal host assembly fails when the app lacks a package the daemon requires",
+        "terminal host assembly flags a require that only resolves outside the helper",
+        "terminal host assembly follows directory and JSON loads and keeps nested dependencies with their parent",
+        "terminal host assembly copies a nested package's dependency from wherever Node resolves it",
+        "terminal host assembly fails when the daemon loads a module through a variable",
+        "terminal host assembly fails when the daemon loads a module through a concatenated literal",
+        "terminal host assembly fails when the daemon loads a module through a template with a substitution",
+        "terminal host assembly fails before writing anything when the daemon entry is missing"
+      ]
+    }
+  ],
+  "standalone_execution": "All 12 standalone/manual/support candidates were read and classified. Historical/differential benchmarks requiring before-source or external bundles, live remote freeze/terminal repros and macOS owner-loss driver were not launched. No timing, heap, rendered-freeze or native desktop-delivery result is claimed. There are no changed benchmark files requiring a separate benchmark invocation.",
+  "historical_measurement_limits": [
+    "Hydration lookup and legacy recovery/persistence arms are local models rather than current production behavior. Persistence model also lacks final persisted-content assertions.",
+    "Journal replay benchmark expects a stale one-line applyJournalRow signature; actual reducer is now multiline and accepts savedAt. Legacy recovery benchmark expects obsolete monolithic methods. Neither guard was bypassed.",
+    "Locale collator benchmark imports obsolete renderer lib/locale-text-collators.ts; current module is src/shared/locale-text-collators.ts. It was classified as historical and not run.",
+    "Actual parser/scanner/locale policy differential benchmarks retain independent output/content/count/report oracles, but require compatible historical sources/artifacts and do not establish present performance without execution.",
+    "Native owner-loss and ShipIt integration require macOS toolchains. Native terminal-host assembly and Windows CIM command-decoding cases remain unrun on Linux.",
+    "Live CLI scripts may create/switch terminals or restart the app and were not launched; threshold metrics are diagnostics rather than rendered/focus proof."
+  ],
+  "coverage_preserved": [
+    "Actual installer rollback/cache/link/filesystem behavior and real patched lint-staged rollback with independent index/content/stash oracles.",
+    "Actual SDK production build and lazy/cached CJS resolution under real Node and Electron-as-Node, offline and in background.",
+    "Independent virtual-clock CPU/RSS final sample and exact overrun guard; actual watchdog samples/counters/timeout/stop and retention behavior under controlled external events.",
+    "Actual multilingual repair outputs, brand/generic boundaries, command/CSS preservation, locale scoping and complete per-key regressions; copied output strings remain when they are the real transformation contract.",
+    "Actual ESM/CommonJS extraction with cross-file namespaces/location, fresh second pass and plugin transformation; actual workflow shell uses real Git deleted/renamed history and fallback boundaries.",
+    "Actual pinned builder dependency scheduling and explicit-architecture transformation, real helper filesystem metadata/path contracts, and reviewed native cleanup/ShipIt/assembly safety cases."
+  ],
+  "changes": [
+    "Require final slow-workload CPU/process/RSS output, with a narrow floating-point tolerance around independently expected 50 percent CPU.",
+    "Pin diff.mnemonicPrefix=false only inside temporary install-action Git fixtures; user global setting remains true and no process override is needed.",
+    "Remove optional local lab-artifact test and copied scenario membership; control random jitter endpoints exactly.",
+    "Evaluate the actual watchdog module source compiled by esbuild in a VM, keeping real bounded history and CLI resolver; replace ambient CLI/wall-clock assertions with full state outputs.",
+    "Replace generic-term production-set intersection with four independent actual-repair fixtures; remove copied Korean/TCC catalog literals while requiring present real catalog inputs before idempotence checks.",
+    "Replace localization workflow shell string matching and copied extractor arrays with real temporary Git routing execution, including deletion, detected rename, Git/classifier failure and relevant-diff preflight guards."
+  ],
+  "resolved_validation_issues": [
+    {
+      "initial_result": "Exact CPU equality rejected normal floating-point subtraction (50.000000000000014).",
+      "resolution": "Use expect.closeTo(50, 8) for CPU values only; complete process/RSS/time expectations remain exact. Final suite passes."
+    },
+    {
+      "initial_result": "Stringifying a Vite-transformed watchdog function retained __vite_ssr_import references, and the Bun error formatter masked part of the failure.",
+      "resolution": "Compile actual untouched module source to CommonJS via esbuild and evaluate it with only its real dependency objects plus controlled process/clock boundaries. All three deterministic tests pass.",
+      "log": "/tmp/orca-config-0005-watchdog-node.log"
+    },
+    {
+      "initial_result": "Three unchanged install-action table rows failed because global diff.mnemonicPrefix=true prints i/w headers rather than expected a/b. A per-process override confirmed the cause.",
+      "resolution": "Per root instruction, set diff.mnemonicPrefix=false only in each freshly initialized fixture repository. Final all-candidate run passes without an override; global preference remains true.",
+      "logs": [
+        "/tmp/orca-config-0005-suites.log",
+        "/tmp/orca-config-0005-install-action-isolated.log",
+        "/tmp/orca-config-0005-suites-final.log"
+      ]
+    },
+    {
+      "initial_result": "Standalone React Doctor saw five findings in concurrent cloud edits: reserve-assignment.test.ts (two braces), reserve-ledger-writer.test.ts, resume-confirmed-audit-buffer.test.ts, and push-host-proof-transcript.test.ts array syntax.",
+      "resolution": "Cloud reviewer corrected the findings; fresh whole-worktree React Doctor run passes with zero errors. No cloud files edited by audit_config.",
+      "logs": [
+        "/tmp/orca-config-0005-react-doctor.log",
+        "/tmp/orca-config-0005-react-doctor-final.log"
+      ]
+    }
+  ],
+  "review_record_sha256": "bb3c2e9b8ead80fcebb5f20fa3cbb7ecb271f6d4761b0e40daab7e760665ee74",
+  "production_changes": "none",
+  "temporary_production_mutations": "none",
+  "commits_or_branch_changes": "none by audit_config",
+  "inventory_or_readme_edits": "none by audit_config",
+  "log_note": "Commands, outcomes and limits are durable here; /tmp paths identify session evidence. Root owns force-add, tracker refresh, global reconciliation, commits and PRs."
+}

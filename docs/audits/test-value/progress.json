@@ -1,15 +1,15 @@
 {
-  "source_commit": "a85e7f72dda30dac342a97d624474e430321c8dc",
-  "scanned_source_files": 37079,
+  "source_commit": "c6dd181495e37e5ab1f14dd0516379e6b3010cb0",
+  "scanned_source_files": 37097,
   "counts": {
-    "files": 16928,
-    "declarations": 118993,
-    "reviewed": 691,
+    "files": 16955,
+    "declarations": 119010,
+    "reviewed": 876,
     "stale": 0,
-    "unreviewed": 16237,
-    "removed": 8
+    "unreviewed": 16079,
+    "removed": 9
   },
-  "reviewed_original_declarations": 4498,
+  "reviewed_original_declarations": 6192,
   "areas": {
     ".github": {
       "files": 2,
@@ -18,28 +18,28 @@
       "unreviewed": 0
     },
     "cloud": {
-      "files": 227,
-      "reviewed": 187,
+      "files": 229,
+      "reviewed": 229,
       "stale": 0,
-      "unreviewed": 40
+      "unreviewed": 0
     },
     "config": {
       "files": 608,
-      "reviewed": 185,
+      "reviewed": 235,
       "stale": 0,
-      "unreviewed": 423
+      "unreviewed": 373
     },
     "docs": {
-      "files": 92,
-      "reviewed": 79,
+      "files": 106,
+      "reviewed": 106,
       "stale": 0,
-      "unreviewed": 13
+      "unreviewed": 0
     },
     "mobile": {
-      "files": 1267,
-      "reviewed": 181,
+      "files": 1266,
+      "reviewed": 230,
       "stale": 0,
-      "unreviewed": 1086
+      "unreviewed": 1036
     },
     "native": {
       "files": 17,
@@ -49,15 +49,15 @@
     },
     "src/cli": {
       "files": 185,
-      "reviewed": 0,
+      "reviewed": 17,
       "stale": 0,
-      "unreviewed": 185
+      "unreviewed": 168
     },
     "src/main": {
-      "files": 6617,
+      "files": 6626,
       "reviewed": 1,
       "stale": 0,
-      "unreviewed": 6616
+      "unreviewed": 6625
     },
     "src/packages": {
       "files": 16,
@@ -72,10 +72,10 @@
       "unreviewed": 0
     },
     "src/renderer": {
-      "files": 5404,
+      "files": 5407,
       "reviewed": 0,
       "stale": 0,
-      "unreviewed": 5404
+      "unreviewed": 5407
     },
     "src/shared": {
       "files": 1300,

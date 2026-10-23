@@ -1,0 +1,24 @@
+{
+  "batch": "root-0047",
+  "reviewer": "root",
+  "source_commit": "8f6283b32bcdefa746613e4c28d04bb1fe954eb9",
+  "reviewed_files": 1,
+  "case_records": 7,
+  "production_changes": false,
+  "test_source_changes": false,
+  "review_scope": "Read every proof/fixture/config body and parameter loop. Record all expanded manual controls and actual source fences; supporting permanent suites are evidence only unless independently reviewed.",
+  "checks": [
+    {
+      "command": "Read current JSONL reader and count exact baseline assertSessionTranscriptRecordBytes transform matches",
+      "result": "expected3, actual0; archived baseline reconstruction would reject. Full64 MiB file/child experiment intentionally not run; no metric pass claimed."
+    }
+  ],
+  "limitations": [
+    "Current implementation skips over-budget records; original experiment removes older throwing assertions and cannot be read as a current two-version comparison.",
+    "The harness captures errors/metrics without checking them; successful child exit alone is not a record-budget regression pass."
+  ],
+  "integrity": {
+    "records_sha256": "7b25e58e68b85469a7017de6a141993cb86117740562b69a5db2f504bbfdf80e",
+    "original_and_final_hashes_verified": true
+  }
+}

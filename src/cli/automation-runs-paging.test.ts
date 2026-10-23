@@ -47,7 +47,7 @@ describe('readAllAutomationRuns', () => {
     const runs = Array.from({ length: 40 }, (_, index) => run(index, 400_000))
     const host = pairedHost(runs)
     const result = await readAllAutomationRuns(host, 'auto-1')
-    expect(result.result.runs).toHaveLength(40)
+    expect(result.result.runs.map((entry) => entry.id)).toEqual(runs.map((entry) => entry.id))
     expect(host.mock.calls[0][0]).toMatchObject({ automationId: 'auto-1', limit: 25 })
     expect(host.mock.calls.some(([params]) => params.limit === 6)).toBe(true)
   })
@@ -56,7 +56,7 @@ describe('readAllAutomationRuns', () => {
     const runs = Array.from({ length: 3 }, (_, index) => run(index))
     const host = pairedHost(runs, { pages: false })
     const result = await readAllAutomationRuns(host, undefined)
-    expect(result.result.runs).toHaveLength(3)
+    expect(result.result.runs).toEqual(runs)
     expect(host).toHaveBeenCalledTimes(1)
   })
 })
@@ -65,7 +65,7 @@ describe('readAutomationRunsPage', () => {
   it('returns one page and the cursor for the next', async () => {
     const runs = Array.from({ length: 30 }, (_, index) => run(index))
     const page = await readAutomationRunsPage(pairedHost(runs), { limit: 10 })
-    expect(page.result.runs).toHaveLength(10)
+    expect(page.result.runs).toEqual(runs.slice(0, 10))
     expect(page.result.nextCursor).toBe(`${runs[9].createdAt}:${runs[9].id}`)
   })
 
