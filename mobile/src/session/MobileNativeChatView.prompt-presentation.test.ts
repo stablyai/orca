@@ -4,6 +4,7 @@ import { Pressable } from 'react-native'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MobileNativeChatView } from './MobileNativeChatView'
 import { MobileNativeChatAsk } from './MobileNativeChatAsk'
+import { MobileNativeChatComposer } from './MobileNativeChatComposer'
 import { useMobileNativeChatPromptPresentation } from './use-mobile-native-chat-prompt-presentation'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 vi.mock('react-native', async () => {
@@ -12,6 +13,7 @@ vi.mock('react-native', async () => {
     ActivityIndicator: 'ActivityIndicator',
     Image: 'Image',
     Platform: { OS: 'ios' },
+    useWindowDimensions: () => ({ width: 402, height: 874, scale: 1, fontScale: 1 }),
     Keyboard: { dismiss: vi.fn() },
     FlatList: React.forwardRef((props, ref) => {
       React.useImperativeHandle(ref, () => ({ scrollToEnd: vi.fn(), scrollToOffset: vi.fn() }), [])
@@ -152,6 +154,20 @@ describe('terminal prompt presentation with the production view, card and compos
     expect(onAnswerAsk).not.toHaveBeenCalled()
     expect(onCancelAsk).not.toHaveBeenCalled()
     expect(tree!.root.findAllByType(MobileNativeChatAsk)).toHaveLength(0)
+  })
+
+  it('keeps active dictation controls available when a structured question arrives', async () => {
+    const onMicPress = vi.fn()
+    await render({
+      ask: { questions: [{ question: 'Pick', options: [{ label: 'A' }], multiSelect: false }] },
+      micActive: true,
+      onMicPress,
+      keyboardInset: 300
+    })
+    expect(tree!.root.findByType(MobileNativeChatComposer).props.hidden).toBe(false)
+    const stop = tree!.root.findByProps({ accessibilityLabel: 'Stop dictation' })
+    act(() => stop.props.onPress())
+    expect(onMicPress).toHaveBeenCalledOnce()
   })
 
   it('accepted Deny hides exactly that occurrence and restores Send across reconnect', async () => {

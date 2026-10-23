@@ -18,6 +18,7 @@ const boundary = vi.hoisted(() => {
 })
 vi.mock('react-native', () => ({
   View: 'View',
+  useWindowDimensions: () => ({ width: 402, height: 874, scale: 1, fontScale: 1 }),
   Platform: { OS: 'ios' },
   Keyboard: { dismiss: vi.fn() },
   Animated: {
@@ -129,7 +130,7 @@ function mounted(strict = false) {
     const accessory = useMobileSessionAccessorySelection(accessoryScope)
     const result = { ...feedback, ...accessory }
     read.value = result
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Actual surface reads only setMobileSessionRootRef; its child components are isolated presentation stubs.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Portrait surface uses the actual root ref; unrelated children are isolated presentation stubs.
     const controller = result as unknown as SurfaceController
     return visible ? createElement(MobileSessionSurface, { key: surfaceKey, controller }) : null
   }

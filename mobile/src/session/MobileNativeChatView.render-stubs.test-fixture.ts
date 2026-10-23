@@ -33,6 +33,7 @@ export async function reactNativeStub() {
       return React.createElement('FlatList', props)
     }),
     Platform: platform,
+    useWindowDimensions: () => ({ width: 402, height: 874, scale: 1, fontScale: 1 }),
     Pressable: 'Pressable',
     // The page's list scrolls through it.
     ScrollView: React.forwardRef((props, ref) => {

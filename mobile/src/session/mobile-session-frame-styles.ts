@@ -7,6 +7,7 @@ export const mobileSessionFrameStyles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.bgBase
   },
+  answeringHeaderHidden: { display: 'none' },
   kavInner: {
     flex: 1
   },

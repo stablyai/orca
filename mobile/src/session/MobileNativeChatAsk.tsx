@@ -1,10 +1,9 @@
 import { useMemo, useRef, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
-import { Check } from 'lucide-react-native'
+import { Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Check, ChevronDown } from 'lucide-react-native'
 import type { AskAnswerSelection, AskPrompt } from '../../../src/shared/native-chat-ask'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
-import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
-import { MobileNativeChatCardHeaderAction } from './MobileNativeChatCardHeaderAction'
+import { colors } from '../theme/mobile-theme'
+import { MIN_ASK_BODY_HEIGHT, styles } from './mobile-native-chat-ask-styles'
 import { useMobileNativeChatAskAutoAdvance } from './use-mobile-native-chat-ask-auto-advance'
 
 type Props = {
@@ -16,6 +15,8 @@ type Props = {
   onCancel?: () => Promise<boolean>
   /** Fold the card to a strip and free Send, writing nothing. */
   onCollapse?: () => void
+  expanded?: boolean
+  compact?: boolean
 }
 
 // Sentinel index for the free-text "Other…" row (never a real option index).
@@ -24,20 +25,57 @@ const OTHER = -1
 /** Native renderer for an agent's AskUserQuestion prompt as a wizard: one
  *  question per step with tabs across the top, a Next button that advances (Send
  *  on the last step), and a Cancel that dismisses the prompt. A single-select pick
- *  moves on by itself, as on desktop. Neutral styling
- *  with a subtle green accent on the active choice to match the rest of the app. */
+ *  moves on by itself, as on desktop. */
 export function MobileNativeChatAsk({
   prompt,
   onAnswer,
   onCancel,
-  onCollapse
+  onCollapse,
+  expanded = false,
+  compact = false
 }: Props): React.JSX.Element {
   const [index, setIndex] = useState(0)
   const [selections, setSelections] = useState<number[][]>(() => prompt.questions.map(() => []))
   const [otherText, setOtherText] = useState<string[]>(() => prompt.questions.map(() => ''))
   const [submitting, setSubmitting] = useState(false)
   const submittingRef = useRef(false)
+  const scrollRef = useRef<ScrollView>(null)
+  const editingOtherRef = useRef(false)
+  const cardWidthRef = useRef(0)
+  const revealAnswer = (): void => {
+    if (editingOtherRef.current) {
+      scrollRef.current?.scrollToEnd({ animated: false })
+    }
+  }
   const autoAdvance = useMobileNativeChatAskAutoAdvance()
+  const [layout, setLayout] = useState({ card: 0, header: 0, footer: 0 })
+  const recordHeight = (part: 'card' | 'header' | 'footer', height: number): void => {
+    setLayout((previous) =>
+      height > 0 && previous[part] !== height ? { ...previous, [part]: height } : previous
+    )
+  }
+  // Preserve a scrollable body even when the keyboard leaves less room than the chrome.
+  const scrollHeader =
+    layout.card > 0 &&
+    layout.header > 0 &&
+    layout.card - layout.header - StyleSheet.hairlineWidth < MIN_ASK_BODY_HEIGHT
+  const scrollFooter =
+    layout.card > 0 &&
+    layout.footer > 0 &&
+    layout.card - (scrollHeader ? 0 : layout.header) - layout.footer - StyleSheet.hairlineWidth <
+      MIN_ASK_BODY_HEIGHT
+
+  const selectQuestion = (nextIndex: number): void => {
+    autoAdvance.cancel()
+    if (nextIndex !== index) {
+      if (editingOtherRef.current) {
+        editingOtherRef.current = false
+        Keyboard.dismiss()
+      }
+      scrollRef.current?.scrollTo({ y: 0, animated: false })
+      setIndex(nextIndex)
+    }
+  }
 
   // A single-select option answers the question, so the card moves on after a beat that shows
   // it chosen; "Other…" still needs its text.
@@ -114,125 +152,201 @@ export function MobileNativeChatAsk({
     if (isLast) {
       await submit(sel)
     } else {
-      setIndex((i) => Math.min(i + 1, total - 1))
+      selectQuestion(Math.min(index + 1, total - 1))
     }
   }
 
   const q = prompt.questions[index]!
   const otherSelected = (selections[index] ?? []).includes(OTHER)
+  const inlineActions = compact && scrollFooter && !scrollHeader
+  const actions = (
+    <>
+      <Pressable
+        accessibilityRole="button"
+        style={styles.cancel}
+        onPress={async () => {
+          autoAdvance.cancel()
+          if (!submittingRef.current && onCancel) {
+            submittingRef.current = true
+            setSubmitting(true)
+            try {
+              await onCancel()
+            } finally {
+              submittingRef.current = false
+              setSubmitting(false)
+            }
+          }
+        }}
+        disabled={submitting}
+        hitSlop={8}
+      >
+        <Text style={styles.cancelText}>Cancel</Text>
+      </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        style={[styles.next, !canAdvance && styles.nextDisabled]}
+        onPress={() => void advance()}
+        disabled={!canAdvance}
+      >
+        <Text style={[styles.nextText, !canAdvance && styles.nextTextDisabled]}>
+          {isLast ? 'Submit' : 'Next'}
+        </Text>
+      </Pressable>
+    </>
+  )
+  const header = (
+    <View
+      testID="native-chat-ask-header"
+      style={styles.header}
+      onLayout={(event) => recordHeight('header', event.nativeEvent.layout.height)}
+    >
+      <Text style={styles.identity} numberOfLines={1}>
+        {q.header || 'Question'}
+      </Text>
+      {total > 1 ? (
+        <Text style={styles.progress}>
+          {index + 1}/{total}
+        </Text>
+      ) : null}
+      {onCollapse ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="View conversation"
+          accessibilityState={{ expanded: true, disabled: submitting }}
+          style={styles.contextAction}
+          disabled={submitting}
+          onPress={() => {
+            autoAdvance.cancel()
+            Keyboard.dismiss()
+            onCollapse()
+          }}
+        >
+          <Text style={styles.contextActionText}>View conversation</Text>
+          <ChevronDown size={16} color={colors.textSecondary} />
+        </Pressable>
+      ) : null}
+      {inlineActions ? <View style={styles.inlineActions}>{actions}</View> : null}
+    </View>
+  )
+
+  const footer = (
+    <View
+      style={styles.footer}
+      onLayout={(event) => recordHeight('footer', event.nativeEvent.layout.height)}
+    >
+      {actions}
+    </View>
+  )
 
   return (
-    <View style={styles.card}>
-      {total > 1 ? (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.tabs}
-          contentContainerStyle={styles.tabsContent}
-          keyboardShouldPersistTaps="always"
-        >
-          {prompt.questions.map((qq, i) => (
-            <Pressable
-              key={i}
-              style={[styles.tab, i === index && styles.tabActive]}
+    <View
+      style={[styles.card, expanded && styles.expanded]}
+      onLayout={(event) => {
+        const { width, height } = event.nativeEvent.layout
+        if (cardWidthRef.current > 0 && cardWidthRef.current !== width && editingOtherRef.current) {
+          Keyboard.dismiss()
+        }
+        cardWidthRef.current = width
+        recordHeight('card', height)
+      }}
+    >
+      {scrollHeader ? null : header}
+      <ScrollView
+        ref={scrollRef}
+        testID="native-chat-ask-body"
+        style={styles.scroll}
+        keyboardShouldPersistTaps="always"
+        onLayout={revealAnswer}
+        onContentSizeChange={revealAnswer}
+      >
+        {scrollHeader ? header : null}
+        {total > 1 ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.tabs}
+            contentContainerStyle={styles.tabsContent}
+            keyboardShouldPersistTaps="always"
+          >
+            {prompt.questions.map((qq, i) => (
+              <Pressable
+                key={i}
+                style={[styles.tab, i === index && styles.tabActive]}
+                disabled={submitting}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: i === index, disabled: submitting }}
+                aria-selected={i === index}
+                onPress={() => selectQuestion(i)}
+              >
+                <Text
+                  style={[styles.tabText, i === index && styles.tabTextActive]}
+                  numberOfLines={1}
+                >
+                  {qq.header || `Step ${i + 1}`}
+                </Text>
+                {isAnswered(i) ? (
+                  <Check size={11} color={colors.textPrimary} strokeWidth={3} />
+                ) : null}
+              </Pressable>
+            ))}
+          </ScrollView>
+        ) : null}
+
+        <View style={styles.body}>
+          <Text style={styles.questionText}>{q.question}</Text>
+          <View
+            accessibilityRole={q.multiSelect ? undefined : 'radiogroup'}
+            accessibilityLabel={q.question}
+          >
+            {q.options.map((opt, optIndex) => (
+              <OptionRow
+                key={`${optIndex}:${opt.label}`}
+                label={opt.label}
+                description={opt.description}
+                selected={(selections[index] ?? []).includes(optIndex)}
+                multi={q.multiSelect}
+                disabled={submitting}
+                onPress={() => {
+                  toggle(index, optIndex, q.multiSelect)
+                }}
+              />
+            ))}
+            <OptionRow
+              label="Other…"
+              selected={otherSelected}
+              multi={q.multiSelect}
               disabled={submitting}
               onPress={() => {
-                autoAdvance.cancel()
-                setIndex(i)
+                toggle(index, OTHER, q.multiSelect)
               }}
-            >
-              <Text style={[styles.tabText, i === index && styles.tabTextActive]} numberOfLines={1}>
-                {qq.header || `Step ${i + 1}`}
-              </Text>
-              {isAnswered(i) ? (
-                <Check size={11} color={colors.statusGreen} strokeWidth={3} />
-              ) : null}
-            </Pressable>
-          ))}
-        </ScrollView>
-      ) : null}
-
-      <ScrollView style={styles.scroll} keyboardShouldPersistTaps="always">
-        <View style={styles.questionRow}>
-          <Text style={styles.questionText}>{q.question}</Text>
-          <MobileNativeChatCardHeaderAction
-            onCollapse={
-              onCollapse &&
-              (() => {
-                autoAdvance.cancel()
-                onCollapse()
-              })
-            }
-            disabled={submitting}
-          />
+            />
+          </View>
+          {otherSelected ? (
+            <TextInput
+              accessibilityLabel={`Answer: ${q.question}`}
+              style={styles.input}
+              value={otherText[index]}
+              onChangeText={(v) => setOther(index, v)}
+              placeholder="Type your answer"
+              placeholderTextColor={colors.textMuted}
+              editable={!submitting}
+              multiline
+              numberOfLines={compact ? 1 : undefined}
+              onFocus={() => {
+                editingOtherRef.current = true
+                revealAnswer()
+              }}
+              onBlur={() => {
+                editingOtherRef.current = false
+              }}
+              autoFocus
+            />
+          ) : null}
         </View>
-        {q.options.map((opt, optIndex) => (
-          <OptionRow
-            key={`${optIndex}:${opt.label}`}
-            label={opt.label}
-            description={opt.description}
-            selected={(selections[index] ?? []).includes(optIndex)}
-            multi={q.multiSelect}
-            disabled={submitting}
-            onPress={() => toggle(index, optIndex, q.multiSelect)}
-          />
-        ))}
-        <OptionRow
-          label="Other…"
-          selected={otherSelected}
-          multi={q.multiSelect}
-          disabled={submitting}
-          onPress={() => toggle(index, OTHER, q.multiSelect)}
-        />
-        {otherSelected ? (
-          <TextInput
-            style={styles.input}
-            value={otherText[index]}
-            onChangeText={(v) => setOther(index, v)}
-            placeholder="Type your answer"
-            placeholderTextColor={colors.textMuted}
-            multiline
-            autoFocus
-          />
-        ) : null}
+        {scrollFooter && !inlineActions ? footer : null}
       </ScrollView>
 
-      <View style={styles.footer}>
-        <Pressable
-          style={styles.cancel}
-          onPress={async () => {
-            autoAdvance.cancel()
-            if (!submittingRef.current && onCancel) {
-              submittingRef.current = true
-              setSubmitting(true)
-              try {
-                await onCancel()
-              } finally {
-                submittingRef.current = false
-                setSubmitting(false)
-              }
-            }
-          }}
-          disabled={submitting}
-          hitSlop={8}
-        >
-          <Text style={styles.cancelText}>Cancel</Text>
-        </Pressable>
-        {total > 1 ? (
-          <Text style={styles.progress}>
-            {index + 1}/{total}
-          </Text>
-        ) : null}
-        <Pressable
-          style={[styles.next, !canAdvance && styles.nextDisabled]}
-          onPress={() => void advance()}
-          disabled={!canAdvance}
-        >
-          <Text style={[styles.nextText, !canAdvance && styles.nextTextDisabled]}>
-            {isLast ? 'Submit' : 'Next'}
-          </Text>
-        </Pressable>
-      </View>
+      {scrollFooter || inlineActions ? null : footer}
     </View>
   )
 }
@@ -254,6 +368,11 @@ function OptionRow({
 }): React.JSX.Element {
   return (
     <Pressable
+      accessibilityRole={multi ? 'checkbox' : 'radio'}
+      accessibilityLabel={label}
+      accessibilityHint={description}
+      accessibilityState={{ checked: selected, disabled }}
+      aria-checked={selected}
       style={[styles.option, selected && styles.optionSelected]}
       disabled={disabled}
       onPress={onPress}
@@ -270,159 +389,8 @@ function OptionRow({
       </View>
       <View style={styles.optionBody}>
         <Text style={styles.optionLabel}>{label}</Text>
-        {description ? (
-          <Text style={styles.optionDescription} numberOfLines={3}>
-            {description}
-          </Text>
-        ) : null}
+        {description ? <Text style={styles.optionDescription}>{description}</Text> : null}
       </View>
     </Pressable>
   )
 }
-
-const styles = StyleSheet.create({
-  card: {
-    maxHeight: 380,
-    backgroundColor: colors.bgPanel,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderSubtle
-  },
-  tabs: {
-    flexGrow: 0,
-    paddingTop: spacing.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle
-  },
-  tabsContent: {
-    paddingHorizontal: spacing.sm,
-    gap: spacing.xs,
-    alignItems: 'center'
-  },
-  tab: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    minHeight: 36,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent'
-  },
-  tabActive: {
-    borderBottomColor: colors.statusGreen
-  },
-  tabText: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    fontWeight: '600'
-  },
-  tabTextActive: {
-    color: colors.textPrimary
-  },
-  scroll: {
-    paddingHorizontal: spacing.md
-  },
-  questionRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
-  questionText: {
-    flex: 1,
-    color: colors.textPrimary,
-    fontSize: typography.bodySize + 1,
-    fontWeight: '600',
-    marginVertical: spacing.sm
-  },
-  option: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    padding: spacing.sm,
-    borderRadius: radii.card,
-    backgroundColor: colors.bgRaised,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    marginBottom: spacing.xs
-  },
-  optionSelected: {
-    borderColor: colors.statusGreen
-  },
-  check: {
-    width: 18,
-    height: 18,
-    borderWidth: 1.5,
-    borderColor: colors.textMuted,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  checkCircle: {
-    borderRadius: 9
-  },
-  checkSquare: {
-    borderRadius: 4
-  },
-  checkOn: {
-    backgroundColor: colors.statusGreen,
-    borderColor: colors.statusGreen
-  },
-  optionBody: {
-    flex: 1,
-    gap: 2
-  },
-  optionLabel: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
-  },
-  optionDescription: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize
-  },
-  input: {
-    backgroundColor: colors.bgRaised,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.card,
-    color: colors.textPrimary,
-    fontSize: TEXT_INPUT_FONT_SIZE,
-    padding: spacing.sm,
-    minHeight: 44,
-    marginBottom: spacing.xs
-  },
-  footer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: spacing.md,
-    gap: spacing.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderSubtle
-  },
-  cancel: {
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.sm
-  },
-  cancelText: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
-  },
-  progress: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize
-  },
-  next: {
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    borderRadius: radii.button,
-    backgroundColor: colors.textPrimary
-  },
-  nextDisabled: {
-    backgroundColor: colors.bgRaised
-  },
-  nextText: {
-    color: colors.bgBase,
-    fontSize: typography.bodySize,
-    fontWeight: '700'
-  },
-  nextTextDisabled: {
-    color: colors.textMuted
-  }
-})

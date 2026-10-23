@@ -17,6 +17,7 @@ vi.mock('react-native', async () => {
     ActivityIndicator: 'ActivityIndicator',
     Image: 'Image',
     Platform: { OS: 'ios' },
+    useWindowDimensions: () => ({ width: 402, height: 874, scale: 1, fontScale: 1 }),
     Keyboard: { dismiss: vi.fn() },
     FlatList: React.forwardRef((props, ref) => {
       React.useImperativeHandle(ref, () => ({ scrollToEnd: vi.fn(), scrollToOffset: vi.fn() }), [])

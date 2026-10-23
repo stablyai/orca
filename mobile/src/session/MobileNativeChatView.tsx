@@ -1,3 +1,4 @@
+import { askOwnsComposer } from './mobile-native-chat-answer-layout'
 import { useCallback, useMemo } from 'react'
 import { nativeChatTaskListPredecessors } from '../../../src/shared/native-chat-task-list-history'
 import {
@@ -22,6 +23,7 @@ import type {
 import type { NativeChatTurnJournal } from '../../../src/shared/native-chat-turn-membership'
 import type { NativeChatResolvedPrompt } from '../../../src/shared/native-chat-resolution-receipt'
 import { colors } from '../theme/mobile-theme'
+import { useResponsiveLayout } from '../layout/responsive-layout'
 import { styles } from './mobile-native-chat-view-styles'
 import { mobileNativeChatListFooter } from './mobile-native-chat-list-footer'
 import { mobileNativeChatListHeader } from './mobile-native-chat-list-header'
@@ -231,8 +233,9 @@ export function MobileNativeChatView({
   keyboardInset = 0
 }: Props): React.JSX.Element {
   const insets = useSafeAreaInsets()
-  // Lift the composer clear of the keyboard, plus the bottom safe-area so it
-  // never sits under the home indicator / nav bar (mirrors the terminal dock).
+  const { isLandscapePhone } = useResponsiveLayout()
+  const hideComposer = askOwnsComposer(ask, askRequiresTerminal, collapsedPrompt != null, micActive)
+  const expandedQuestion = hideComposer && (isLandscapePhone || keyboardInset > 0)
   const bottomPad = keyboardInset > 0 ? keyboardInset + insets.bottom : insets.bottom
   const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture()
 
@@ -338,10 +341,7 @@ export function MobileNativeChatView({
   const emptyState = mobileNativeChatEmptyState(status, agent ?? null, error)
 
   const lockReason = useSettledMobileNativeChatInputLock(inputLockReason)
-  const composerPlaceholder = mobileNativeChatComposerPlaceholder(
-    lockReason,
-    turnIndicator?.afterStop
-  )
+  const placeholder = mobileNativeChatComposerPlaceholder(lockReason, turnIndicator?.afterStop)
   // Why only Send, terminal-backed only: that send types into the agent's prompt and can answer it,
   // while drafting never does; the host queues a structured send behind it.
   const expandedPromptOwnsSend =
@@ -361,49 +361,74 @@ export function MobileNativeChatView({
 
   return (
     <View style={[styles.root, { paddingBottom: bottomPad }]}>
-      {status === 'loading' && messages.length === 0 ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.textSecondary} />
-        </View>
-      ) : (
-        <GestureHandlerRootView style={styles.listWrap}>
-          <MobileNativeChatDisclosureContext.Provider value={disclosures}>
-            <MobileNativeChatScrollRootsBoundary
-              {...{ rowKeys, layoutKey }}
-              roots={disclosures.roots}
-              runPlacements={rowKeys.runPlacements}
-            >
-              <GestureDetector gesture={pinchGesture}>
-                <MobileNativeChatRowList
-                  {...{ tail, rowKeys, renderItem, footer, emptyStateView, onScroll, layoutKey }}
-                  {...{ header, hasHeader: hasMore === true, onNearTop: loadEarlierNearTop }}
-                  rows={turns.listMessages}
-                  runs={turns.presentation.workRuns.heads}
+      <View style={styles.conversation}>
+        <View
+          testID="native-chat-conversation-context"
+          style={expandedQuestion ? styles.hidden : styles.listWrap}
+        >
+          {status === 'loading' && messages.length === 0 ? (
+            <View style={styles.center}>
+              <ActivityIndicator color={colors.textSecondary} />
+            </View>
+          ) : (
+            <GestureHandlerRootView style={styles.listWrap}>
+              <MobileNativeChatDisclosureContext.Provider value={disclosures}>
+                <MobileNativeChatScrollRootsBoundary
+                  {...{ rowKeys, layoutKey }}
                   roots={disclosures.roots}
-                  contentContainerStyle={styles.listContent}
-                />
-              </GestureDetector>
-            </MobileNativeChatScrollRootsBoundary>
-          </MobileNativeChatDisclosureContext.Provider>
-          <MobileNativeChatFloatingControls
-            showJumpToTail={tail.showJumpToTail}
-            onJumpToTail={jumpToTail}
-          />
-        </GestureHandlerRootView>
-      )}
-      <MobileNativeChatPromptCard
-        key={promptKey ?? undefined}
-        {...{ ask, askKey, onDismissAsk, onAnswerAsk, onCancelAsk, onCancelPrompt, onCollapseAsk }}
-        requiresTerminal={askRequiresTerminal}
-        onAnswerInTerminal={onAnswerInTerminal}
-        {...{ permission, onRespondPermission, question, onAnswerQuestion, onCollapsePrompt }}
-        collapsedPrompt={collapsedPrompt}
-      />
+                  runPlacements={rowKeys.runPlacements}
+                >
+                  <GestureDetector gesture={pinchGesture}>
+                    <MobileNativeChatRowList
+                      {...{
+                        tail,
+                        rowKeys,
+                        renderItem,
+                        footer,
+                        emptyStateView,
+                        onScroll,
+                        layoutKey
+                      }}
+                      {...{ header, hasHeader: hasMore === true, onNearTop: loadEarlierNearTop }}
+                      rows={turns.listMessages}
+                      runs={turns.presentation.workRuns.heads}
+                      roots={disclosures.roots}
+                      contentContainerStyle={styles.listContent}
+                    />
+                  </GestureDetector>
+                </MobileNativeChatScrollRootsBoundary>
+              </MobileNativeChatDisclosureContext.Provider>
+              <MobileNativeChatFloatingControls
+                showJumpToTail={tail.showJumpToTail}
+                onJumpToTail={jumpToTail}
+              />
+            </GestureHandlerRootView>
+          )}
+        </View>
+        <MobileNativeChatPromptCard
+          expanded={expandedQuestion}
+          compact={isLandscapePhone}
+          key={promptKey ?? undefined}
+          {...{
+            ask,
+            askKey,
+            onDismissAsk,
+            onAnswerAsk,
+            onCancelAsk,
+            onCancelPrompt,
+            onCollapseAsk
+          }}
+          requiresTerminal={askRequiresTerminal}
+          onAnswerInTerminal={onAnswerInTerminal}
+          {...{ permission, onRespondPermission, question, onAnswerQuestion, onCollapsePrompt }}
+          collapsedPrompt={collapsedPrompt}
+        />
+      </View>
       <Text
         style={lockReason === 'waiting' ? styles.inputLockStatus : undefined}
         accessibilityLiveRegion="polite"
       >
-        {lockReason === 'waiting' ? composerPlaceholder : null}
+        {lockReason === 'waiting' ? placeholder : null}
       </Text>
       {sendErrorMessage ? (
         // This banner is the only channel for a send failure — announce it.
@@ -416,30 +441,23 @@ export function MobileNativeChatView({
         </View>
       ) : null}
       {/* Directly on the composer, which it tucks into. */}
-      {trayContent}
+      <View style={hideComposer ? styles.hidden : undefined}>{trayContent}</View>
       <MobileNativeChatComposer
+        compact={isLandscapePhone && keyboardInset > 0 && ask != null}
+        hidden={hideComposer}
         structured={structuredActivityUi ? structuredComposer : null}
         value={composerText}
         onChangeText={onComposerTextChange}
         onSend={handleSend}
         sendSurfaceId={sendSurfaceId}
         {...{ getSendCompletionGeneration, getComposerEditGeneration, inputRef }}
-        agent={agent}
-        sessionOptions={sessionOptions}
-        onAttachImage={onAttachImage}
-        attachments={attachments}
-        onRemoveAttachment={onRemoveAttachment}
-        isAttaching={isAttaching}
-        onMicPress={onMicPress}
-        micActive={micActive}
-        dictationMode={dictationMode}
-        onMicPressIn={onMicPressIn}
-        onMicPressOut={onMicPressOut}
+        {...{ agent, sessionOptions }}
+        {...{ onAttachImage, attachments, onRemoveAttachment, isAttaching }}
+        {...{ onMicPress, micActive, dictationMode, onMicPressIn, onMicPressOut }}
         disabled={lockReason !== null}
         sendDisabled={expandedPromptOwnsSend}
-        placeholder={composerPlaceholder}
-        filePaths={filePaths}
-        onNeedFiles={onNeedFiles}
+        placeholder={placeholder}
+        {...{ filePaths, onNeedFiles }}
         stop={
           canStop
             ? {

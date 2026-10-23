@@ -6,9 +6,14 @@ const LOAD_EARLIER_HEIGHT = 44
 const LOAD_EARLIER_RETRY_HEIGHT = 28
 
 export const styles = StyleSheet.create({
+  hidden: { display: 'none' },
   root: {
     flex: 1,
     backgroundColor: colors.bgBase
+  },
+  conversation: {
+    flex: 1,
+    minHeight: 0
   },
   inputLockStatus: {
     color: colors.textSecondary,
@@ -16,6 +21,7 @@ export const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.xs
   },
+
   sendError: {
     alignItems: 'center',
     paddingHorizontal: spacing.md,
@@ -36,6 +42,7 @@ export const styles = StyleSheet.create({
   },
   listWrap: {
     flex: 1,
+    minHeight: 0,
     position: 'relative'
   },
   listContent: {

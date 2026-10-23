@@ -39,6 +39,7 @@ vi.mock('react-native', async () => {
       return React.createElement('FlatList', props)
     }),
     Platform: { OS: 'ios' },
+    useWindowDimensions: () => ({ width: 402, height: 874, scale: 1, fontScale: 1 }),
     Pressable: 'Pressable',
     StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1, absoluteFillObject: {} },
     Text: 'Text',

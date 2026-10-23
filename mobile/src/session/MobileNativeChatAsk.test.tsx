@@ -1,4 +1,5 @@
 import { createElement } from 'react'
+import { Keyboard } from 'react-native'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AskPrompt } from '../../../src/shared/native-chat-ask'
@@ -6,7 +7,7 @@ import { NATIVE_CHAT_QUESTION_AUTO_ADVANCE_MS } from '../../../src/shared/native
 import { MobileNativeChatAsk } from './MobileNativeChatAsk'
 
 vi.mock('react-native', () => ({
-  Keyboard: { dismiss: () => {} },
+  Keyboard: { dismiss: vi.fn() },
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
@@ -60,6 +61,7 @@ const shows = (text: string): boolean =>
 afterEach(() => {
   act(() => tree.unmount())
   vi.useRealTimers()
+  vi.clearAllMocks()
 })
 
 describe('MobileNativeChatAsk single-select auto-advance', () => {
@@ -83,6 +85,32 @@ describe('MobileNativeChatAsk single-select auto-advance', () => {
     press('Other…')
     await passAutoAdvanceBeat()
 
+    expect(onAnswer).not.toHaveBeenCalled()
+  })
+
+  it('dismisses a rotated editing keyboard while retaining the unsent answer', () => {
+    const onAnswer = render({ questions: [indent] })
+    press('Other…')
+    const input = () => tree.root.find((node) => isHost(node, 'TextInput'))
+    const layout = (width: number, height: number) => {
+      act(() =>
+        tree.root
+          .findAll((node) => isHost(node, 'View'))[0]!
+          .props.onLayout({
+            nativeEvent: { layout: { width, height } }
+          })
+      )
+    }
+    layout(360, 400)
+    act(() => {
+      input().props.onChangeText('Preserve this answer')
+      input().props.onFocus()
+    })
+    layout(360, 120)
+    expect(Keyboard.dismiss).not.toHaveBeenCalled()
+    layout(640, 90)
+    expect(Keyboard.dismiss).toHaveBeenCalledOnce()
+    expect(input().props.value).toBe('Preserve this answer')
     expect(onAnswer).not.toHaveBeenCalled()
   })
 
@@ -124,5 +152,37 @@ describe('MobileNativeChatAsk single-select auto-advance', () => {
     await passAutoAdvanceBeat()
 
     expect(onAnswer).not.toHaveBeenCalled()
+  })
+  it('retains a rejected typed answer and permits one deliberate retry after delivery settles', async () => {
+    let finish: (accepted: boolean) => void = () => {}
+    const onAnswer = render(
+      { questions: [indent] },
+      vi.fn(
+        () =>
+          new Promise<boolean>((resolve) => {
+            finish = resolve
+          })
+      )
+    )
+    press('Other…')
+    const input = () => tree.root.find((node) => isHost(node, 'TextInput'))
+    act(() => input().props.onChangeText('Use four spaces'))
+    const submit = () =>
+      tree.root.find(
+        (node) =>
+          isHost(node, 'Pressable') && node.findAll((n) => n.props.children === 'Submit').length > 0
+      )
+    act(() => {
+      submit().props.onPress()
+      submit().props.onPress()
+    })
+    expect(onAnswer).toHaveBeenCalledExactlyOnceWith([{ indices: [], other: 'Use four spaces' }])
+    expect(input().props.editable).toBe(false)
+    await act(async () => finish(false))
+    expect(input().props.value).toBe('Use four spaces')
+    expect(input().props.editable).toBe(true)
+    act(() => submit().props.onPress())
+    expect(onAnswer).toHaveBeenCalledTimes(2)
+    await act(async () => finish(true))
   })
 })

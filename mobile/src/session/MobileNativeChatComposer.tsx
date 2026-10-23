@@ -39,6 +39,9 @@ export type MobileNativeChatStructuredComposer = {
 }
 
 type Props = {
+  hidden?: boolean
+  onFocus?: () => void
+  compact?: boolean
   /** Lets the owner focus the field, e.g. after Edit moves a queued message into it. */
   inputRef?: React.RefObject<TextInput | null>
   /** Absent on a terminal-backed chat, whose + only adds photos and whose menu keeps its curated
@@ -82,6 +85,9 @@ type Props = {
 
 export function MobileNativeChatComposer({
   inputRef,
+  compact = false,
+  hidden = false,
+  onFocus,
   value,
   onChangeText,
   onSend,
@@ -205,38 +211,53 @@ export function MobileNativeChatComposer({
   const attachLabel = structured ? 'Add to message' : 'Attach image'
 
   return (
-    <View>
+    <View style={hidden ? styles.hidden : undefined}>
       {menu.rows.length > 0 ? (
         <MobileNativeChatComposerMenu rows={menu.rows} onPick={menu.pick} />
       ) : null}
       <View style={styles.composerInset} testID="native-chat-composer-inset">
-        <View style={styles.bar} testID="native-chat-composer">
-          <MobileNativeChatComposerAttachments
-            images={attachments}
-            files={files}
-            onRemoveImage={onRemoveAttachment}
-            onRemoveFile={structured?.onRemoveFile}
-          />
-          <MobileNativeChatComposerField
-            ref={fieldRef}
-            value={value}
-            skillToken={menu.skillToken}
-            onChangeText={menu.onFieldChange}
-            onFocus={() => setFocused(true)}
-            onBlur={() => setFocused(false)}
-            // Controlled only transiently right after an autocomplete insert.
-            selection={menu.pendingSelection ?? undefined}
-            onSelectionChange={(e) => menu.onSelectionChange(e.nativeEvent.selection)}
-            placeholder={placeholder}
-            placeholderTextColor={colors.textMuted}
-            selectionColor={colors.accentBlue}
-            multiline
-            // Why: never revoke `editable` — iOS resigns first responder on a focused
-            // field, so a transient lock would yank the keyboard mid-typing (#10681).
-            // The lock gates sending; the draft survives and rides the next send.
-            textAlignVertical="top"
-          />
-          <View style={styles.actionRow} testID="native-chat-composer-actions">
+        <View
+          style={compact ? [styles.bar, styles.compactBar] : styles.bar}
+          testID="native-chat-composer"
+        >
+          <View style={compact && attachmentCount > 0 ? styles.compactAttachments : undefined}>
+            <MobileNativeChatComposerAttachments
+              compact={compact}
+              images={attachments}
+              files={files}
+              onRemoveImage={onRemoveAttachment}
+              onRemoveFile={structured?.onRemoveFile}
+            />
+          </View>
+          <View style={compact ? styles.compactField : undefined}>
+            <MobileNativeChatComposerField
+              compact={compact}
+              ref={fieldRef}
+              value={value}
+              skillToken={menu.skillToken}
+              onChangeText={menu.onFieldChange}
+              onFocus={() => {
+                setFocused(true)
+                onFocus?.()
+              }}
+              onBlur={() => setFocused(false)}
+              // Controlled only transiently right after an autocomplete insert.
+              selection={menu.pendingSelection ?? undefined}
+              onSelectionChange={(e) => menu.onSelectionChange(e.nativeEvent.selection)}
+              placeholder={placeholder}
+              placeholderTextColor={colors.textMuted}
+              selectionColor={colors.accentBlue}
+              multiline
+              // Why: never revoke `editable` — iOS resigns first responder on a focused
+              // field, so a transient lock would yank the keyboard mid-typing (#10681).
+              // The lock gates sending; the draft survives and rides the next send.
+              textAlignVertical="top"
+            />
+          </View>
+          <View
+            style={compact ? [styles.actionRow, styles.compactActions] : styles.actionRow}
+            testID="native-chat-composer-actions"
+          >
             {attachPress ? (
               <Pressable
                 accessibilityLabel={attachLabel}
@@ -266,7 +287,7 @@ export function MobileNativeChatComposer({
                 }}
               />
             ) : null}
-            <View style={styles.actionSpacer} />
+            <View style={compact ? undefined : styles.actionSpacer} />
             {onMicPress ? (
               <Pressable
                 accessibilityLabel={micActive ? 'Stop dictation' : 'Dictate'}

@@ -25,7 +25,7 @@ vi.mock('lucide-react-native', () => ({
 vi.mock('../components/MobileMarkdown', () => ({ MobileMarkdown: 'Markdown' }))
 
 describe('rendered prompt card collapse controls', () => {
-  it('collapses an Ask from its header chevron without cancelling or answering it', async () => {
+  it('views the conversation from an Ask without cancelling or answering it', async () => {
     const onCollapse = vi.fn()
     const onCancel = vi.fn(async () => true)
     const onAnswer = vi.fn(async () => true)
@@ -42,7 +42,7 @@ describe('rendered prompt card collapse controls', () => {
         })
       )
     })
-    act(() => tree!.root.findByProps({ accessibilityLabel: 'Collapse' }).props.onPress())
+    act(() => tree!.root.findByProps({ accessibilityLabel: 'View conversation' }).props.onPress())
     expect(onCollapse).toHaveBeenCalledOnce()
     // The reply field the collapse hides must not keep the keyboard.
     expect(Keyboard.dismiss).toHaveBeenCalledOnce()

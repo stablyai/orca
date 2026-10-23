@@ -122,6 +122,51 @@ describe('MobileNativeChatComposer on a structured chat', () => {
     expect(onChangeText).toHaveBeenLastCalledWith('focus')
   })
 
+  it('preserves the field, skill and attachments while making room for a question', async () => {
+    let mounts = 0
+    const onRemoveImage = vi.fn()
+    const onRemoveFile = vi.fn()
+    const props = {
+      value: '/review-pr draft',
+      attachments: [{ id: 'image', path: '/tmp/image.png', previewUri: 'file:///tmp/image.png' }],
+      onRemoveAttachment: onRemoveImage,
+      structured: structured({
+        files: [
+          {
+            id: 'file',
+            name: 'spec.pdf',
+            mime: 'application/pdf',
+            byteLength: 10,
+            path: '/s/spec.pdf'
+          }
+        ],
+        onRemoveFile
+      })
+    }
+    await act(async () => {
+      renderer = create(draw(props), {
+        createNodeMock: (element) => {
+          if (element.type === 'TextInput') {
+            mounts += 1
+          }
+          return {}
+        }
+      })
+    })
+    for (const layout of [{ compact: true }, { compact: true, hidden: true }, {}]) {
+      await act(async () => renderer!.update(draw({ ...props, ...layout })))
+      expect(field().props.value).toBe('/review-pr draft')
+      expect(field().find((node) => node.props.children === '/review-pr')).toBeDefined()
+      expect(labelled('Remove image')).toHaveLength(1)
+      expect(labelled('Remove spec.pdf')).toHaveLength(1)
+    }
+    await act(async () => labelled('Remove image')[0]!.props.onPress())
+    await act(async () => labelled('Remove spec.pdf')[0]!.props.onPress())
+    expect(onRemoveImage).toHaveBeenCalledWith('image')
+    expect(onRemoveFile).toHaveBeenCalledWith('file')
+    expect(mounts).toBe(1)
+  })
+
   it('opens the + sheet on a structured chat, and the photo library at once otherwise', async () => {
     const onAttachImage = vi.fn()
     await act(async () => {

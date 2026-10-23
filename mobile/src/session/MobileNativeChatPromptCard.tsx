@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import type { AskAnswerSelection, AskPrompt } from '../../../src/shared/native-chat-ask'
 import { MobileNativeChatAsk } from './MobileNativeChatAsk'
@@ -14,6 +14,8 @@ import { MobileNativeChatPromptStrip } from './MobileNativeChatPromptStrip'
  *  view toggle); `ask` arrives already nulled once answered. */
 export function MobileNativeChatPromptCard({
   ask,
+  expanded = false,
+  compact = false,
   askKey,
   onDismissAsk,
   onAnswerAsk,
@@ -29,6 +31,8 @@ export function MobileNativeChatPromptCard({
   question,
   onAnswerQuestion
 }: {
+  expanded?: boolean
+  compact?: boolean
   ask?: AskPrompt | null
   askKey?: string | null
   onDismissAsk?: () => void
@@ -49,7 +53,11 @@ export function MobileNativeChatPromptCard({
 }): React.JSX.Element | null {
   const card =
     ask && requiresTerminal ? (
-      <View style={styles.terminalCard}>
+      <ScrollView
+        style={styles.terminalScroll}
+        contentContainerStyle={styles.terminalCard}
+        keyboardShouldPersistTaps="always"
+      >
         <Text style={styles.explanation}>Answer this OMP question in the terminal.</Text>
         <Pressable
           accessibilityRole="button"
@@ -61,11 +69,13 @@ export function MobileNativeChatPromptCard({
         >
           <Text style={styles.terminalButtonText}>Answer in terminal</Text>
         </Pressable>
-      </View>
+      </ScrollView>
     ) : ask ? (
       <MobileNativeChatAsk
         key={askKey ?? 'ask'}
         prompt={ask}
+        expanded={expanded}
+        compact={compact}
         onAnswer={async (selections) => {
           const accepted = (await onAnswerAsk?.(ask, selections)) ?? false
           if (accepted) {
@@ -104,7 +114,17 @@ export function MobileNativeChatPromptCard({
   // card keeps its selections.
   return (
     <>
-      <View style={collapsedPrompt ? styles.collapsed : undefined}>{card}</View>
+      <View
+        style={
+          collapsedPrompt
+            ? styles.collapsed
+            : ask
+              ? [styles.ask, expanded && styles.expanded]
+              : undefined
+        }
+      >
+        {card}
+      </View>
       {collapsedPrompt ? (
         <MobileNativeChatPromptStrip
           title={collapsedPrompt.title}
@@ -116,7 +136,10 @@ export function MobileNativeChatPromptCard({
 }
 
 const styles = StyleSheet.create({
+  ask: { maxHeight: '65%', flexShrink: 1, minHeight: 0 },
+  expanded: { flex: 1, maxHeight: '100%' },
   collapsed: { display: 'none' },
+  terminalScroll: { flexShrink: 1, minHeight: 0 },
   terminalCard: {
     backgroundColor: colors.bgPanel,
     borderTopWidth: StyleSheet.hairlineWidth,

@@ -6,6 +6,7 @@ export type MobileNativeChatComposerFieldProps = Omit<
   TextInputProps,
   'value' | 'children' | 'onScroll' | 'style'
 > & {
+  compact?: boolean
   value: string
   /** The skill the draft leads with, drawn highlighted in place. */
   skillToken: string | null

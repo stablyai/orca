@@ -25,11 +25,13 @@ function composerFileMeta(file: Pick<PendingNativeChatFile, 'name' | 'mime' | 'b
 
 /** Everything riding on the next send, inside the composer box above the text. */
 export function MobileNativeChatComposerAttachments({
+  compact = false,
   images,
   files,
   onRemoveImage,
   onRemoveFile
 }: {
+  compact?: boolean
   images: readonly PendingNativeChatImage[]
   files: readonly PendingNativeChatFile[]
   onRemoveImage?: (id: string) => void
@@ -43,11 +45,11 @@ export function MobileNativeChatComposerAttachments({
       horizontal
       keyboardShouldPersistTaps="always"
       showsHorizontalScrollIndicator={false}
-      style={styles.strip}
+      style={[styles.strip, compact && styles.compactStrip]}
       contentContainerStyle={styles.stripContent}
     >
       {images.map((image) => (
-        <View key={image.id} style={styles.thumb}>
+        <View key={image.id} style={[styles.thumb, compact && styles.compactThumb]}>
           <Image source={{ uri: image.previewUri }} style={styles.thumbImage} resizeMode="cover" />
           {onRemoveImage ? (
             <RemoveBadge label="Remove image" onPress={() => onRemoveImage(image.id)} />
@@ -55,7 +57,7 @@ export function MobileNativeChatComposerAttachments({
         </View>
       ))}
       {files.map((file) => (
-        <View key={file.id} style={styles.fileCard}>
+        <View key={file.id} style={[styles.fileCard, compact && styles.compactFile]}>
           <View style={styles.fileIcon}>
             <FileText size={17} color={colors.textSecondary} strokeWidth={2} />
           </View>
@@ -90,6 +92,9 @@ function RemoveBadge({ label, onPress }: { label: string; onPress: () => void })
 }
 
 const styles = StyleSheet.create({
+  compactStrip: { marginBottom: 0 },
+  compactThumb: { width: 38, height: 38 },
+  compactFile: { height: 38 },
   strip: {
     flexGrow: 0,
     marginBottom: 10

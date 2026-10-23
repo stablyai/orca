@@ -15,6 +15,7 @@ const roundControl = {
 } as const
 
 export const mobileNativeChatComposerStyles = StyleSheet.create({
+  hidden: { display: 'none' },
   composerInset: {
     paddingHorizontal: 10,
     paddingTop: COMPOSER_INSET_TOP,
@@ -34,6 +35,17 @@ export const mobileNativeChatComposerStyles = StyleSheet.create({
     shadowOffset: { width: 0, height: 10 },
     elevation: 8
   },
+  compactBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.xs
+  },
+  compactField: { flex: 1, minWidth: 0 },
+  compactInput: { maxHeight: COMPOSER_CONTROL_SIZE },
+  compactAttachments: { width: COMPOSER_CONTROL_SIZE * 2 },
+  compactActions: { marginTop: 0 },
   actionRow: {
     marginTop: 10,
     flexDirection: 'row',
