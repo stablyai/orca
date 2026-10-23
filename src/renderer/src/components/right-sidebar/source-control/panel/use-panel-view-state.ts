@@ -7,8 +7,14 @@ import type { SourceControlWorktreeContext } from '../listing/use-worktree-conte
 
 const DEFAULT_COLLAPSED_SECTIONS = ['history'] as const
 
-function createDefaultCollapsedSections(): Set<string> {
-  return new Set(DEFAULT_COLLAPSED_SECTIONS)
+// Why: unlike the other sections, "branch" collapse is a persisted per-user preference (see
+// sourceControlBranchSectionCollapsed), so the per-worktree reset must still honor it.
+function createDefaultCollapsedSections(isBranchSectionCollapsed: boolean): Set<string> {
+  const sections: string[] = [...DEFAULT_COLLAPSED_SECTIONS]
+  if (isBranchSectionCollapsed) {
+    sections.push('branch')
+  }
+  return new Set(sections)
 }
 
 /**
@@ -30,8 +36,9 @@ export function useSourceControlPanelViewState({
   const [fileListScrollElement, setFileListScrollElement] = useState<HTMLDivElement | null>(null)
   const isMac = useMemo(() => navigator.userAgent.includes('Mac'), [])
   const [filterExpanded, setFilterExpanded] = useState(false)
-  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
-    createDefaultCollapsedSections
+  const isBranchSectionCollapsed = settings?.sourceControlBranchSectionCollapsed ?? false
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(() =>
+    createDefaultCollapsedSections(isBranchSectionCollapsed)
   )
   const persistedSourceControlViewMode = normalizeSourceControlViewMode(
     settings?.sourceControlViewMode
@@ -57,7 +64,7 @@ export function useSourceControlPanelViewState({
   if (viewStateWorktreeId !== activeWorktreeId) {
     setViewStateWorktreeId(activeWorktreeId)
     setFilterExpanded(false)
-    setCollapsedSections(createDefaultCollapsedSections())
+    setCollapsedSections(createDefaultCollapsedSections(isBranchSectionCollapsed))
     setCollapsedTreeDirs(new Set())
     setBaseRefDialogOpen(false)
     // Why: don't reset defaultBaseRef here — it's repo-scoped (resolved on activeRepo change); resetting would clobber non-main defaults.
@@ -65,17 +72,24 @@ export function useSourceControlPanelViewState({
     // Why: don't reset commit-in-flight state — it's per-worktree; resetting would re-enable Commit for an incoming worktree mid-commit.
   }
 
-  const toggleSection = useCallback((section: string) => {
-    setCollapsedSections((prev) => {
-      const next = new Set(prev)
-      if (next.has(section)) {
-        next.delete(section)
-      } else {
-        next.add(section)
+  const toggleSection = useCallback(
+    (section: string) => {
+      if (section === 'branch') {
+        // Why: persist like sourceControlViewMode so this section's collapse state survives a workspace switch.
+        updateSettings({ sourceControlBranchSectionCollapsed: !collapsedSections.has('branch') })
       }
-      return next
-    })
-  }, [])
+      setCollapsedSections((prev) => {
+        const next = new Set(prev)
+        if (next.has(section)) {
+          next.delete(section)
+        } else {
+          next.add(section)
+        }
+        return next
+      })
+    },
+    [collapsedSections, updateSettings]
+  )
 
   const toggleTreeDir = useCallback((key: string) => {
     setCollapsedTreeDirs((prev) => {
