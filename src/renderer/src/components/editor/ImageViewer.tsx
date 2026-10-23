@@ -221,21 +221,22 @@ export default function ImageViewer({
   }, [isPopupOpen])
 
   useEffect(() => {
-    // Why: PdfViewer answers for PDFs, and a combined diff stacks intrinsic images in one pane,
-    // where Cmd/Ctrl +/- should keep zooming the editor font until one of them opens its popup.
+    // Why: PDFs own their zoom; combined diff images yield to editor text until a popup opens.
     if (!isCommandOwner || isPdf || (isIntrinsicLayout && !isPopupOpen)) {
       return
     }
     const applyZoomChange = isPopupOpen ? applyPopupZoomChange : applyInlineZoomChange
-    return listenForViewerZoomRequests((direction) =>
-      applyZoomChange((currentZoom) => {
-        if (direction === 'reset') {
-          return 1
-        }
-        return direction === 'in'
-          ? currentZoom * IMAGE_VIEWER_ZOOM_STEP
-          : currentZoom / IMAGE_VIEWER_ZOOM_STEP
-      })
+    return listenForViewerZoomRequests(
+      (direction) =>
+        applyZoomChange((currentZoom) => {
+          if (direction === 'reset') {
+            return 1
+          }
+          return direction === 'in'
+            ? currentZoom * IMAGE_VIEWER_ZOOM_STEP
+            : currentZoom / IMAGE_VIEWER_ZOOM_STEP
+        }),
+      isPopupOpen ? 'popup' : 'pane'
     )
   }, [
     applyInlineZoomChange,

@@ -2,6 +2,7 @@
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import ImageViewer from './ImageViewer'
+import ImageDiffViewer from './ImageDiffViewer'
 import { EditorCommandOwnerContext } from './editor-command-owner-context'
 import { requestViewerZoom } from './viewer-zoom-request'
 
@@ -53,6 +54,50 @@ describe('ImageViewer app zoom ownership', () => {
 
     expect(within(screen.getByRole('dialog')).getByText('125%')).toBeTruthy()
     expect(screen.getAllByText('100%')).toHaveLength(1)
+  })
+
+  it('releases zoom ownership when focus moves and removes its listener on unmount', () => {
+    const image = (ownsCommands: boolean) => (
+      <EditorCommandOwnerContext value={ownsCommands}>
+        <ImageViewer content={PNG} filePath="/repo/shot.png" mimeType="image/png" />
+      </EditorCommandOwnerContext>
+    )
+    const viewer = render(image(true))
+    expect(zoom('in')).toBe(true)
+
+    viewer.rerender(image(false))
+    expect(zoom('in')).toBe(false)
+    expect(screen.getByText('125%')).toBeTruthy()
+
+    viewer.rerender(image(true))
+    expect(zoom('in')).toBe(true)
+    expect(screen.getByText('156%')).toBeTruthy()
+
+    viewer.unmount()
+    expect(zoom('in')).toBe(false)
+  })
+
+  it('zooms a diff popup without changing the other image behind it', () => {
+    render(
+      <EditorCommandOwnerContext value={true}>
+        <ImageDiffViewer
+          originalContent={PNG}
+          modifiedContent={PNG}
+          filePath="/repo/shot.png"
+          mimeType="image/png"
+          sideBySide={true}
+        />
+      </EditorCommandOwnerContext>
+    )
+    fireEvent.click(screen.getAllByTitle('Open image in popup')[1])
+
+    expect(zoom('in')).toBe(true)
+    expect(within(screen.getByRole('dialog')).getByText('125%')).toBeTruthy()
+    expect(screen.getAllByText('100%')).toHaveLength(2)
+
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Close' }))
+    expect(zoom('in')).toBe(true)
+    expect(screen.getAllByText('125%')).toHaveLength(2)
   })
 
   it('leaves zoom to the focused pane when this image is in an unfocused split or hidden worktree', () => {
