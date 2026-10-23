@@ -5,15 +5,15 @@ import { WILL_QUIT_TEARDOWN_DEADLINE_MS } from '../quit-teardown-deadline'
 const settled = () => vi.fn(async () => {})
 const idle = () => vi.fn()
 const stopAgentHookServer = idle()
+const killAllPty = settled()
 const stopStructuredAgentSessionRuntime = settled()
 const beginSshShutdown = settled()
-const killAllPty = idle()
 /** Final-save calls seen by the first microtask after the SSH shutdown began. */
 let flushesByNextMicrotask = -1
 
-// Every teardown member settles except the profile store, so only the writer can hold quit.
+// Keep unrelated teardown members settled so each test isolates its pending resource.
 const dependencies: Record<string, Record<string, unknown>> = {
-  '../ipc/filesystem-watcher': { closeAllWatchers: settled() },
+  '../ipc/filesystem-watcher-shutdown': { closeAllWatchers: settled() },
   '../ipc/worktree-base-directory-watcher': { disposeWorktreeBaseDirectoryWatchers: settled() },
   '../ipc/folder-repo-git-upgrade': { stopFolderRepoGitUpgradeWatch: idle() },
   '../ipc/pty/kill-all': { killAllPty },
@@ -33,6 +33,8 @@ const dependencies: Record<string, Record<string, unknown>> = {
   '../browser/paired-runtime-browser-client-host-runtime': {
     shutdownPairedRuntimeBrowserClientHosts: settled()
   },
+  '../ipc/desktop-browser-bridge-wiring': { disposeDesktopBrowserBridge: idle() },
+  '../orca-profiles/profile-cloud-session-owner': { flushUnsavedCloudSessions: idle() },
   '../browser/browser-manager': { browserManager: { setBrowserGuestStateChangedListener: idle() } },
   '../browser/local-ssh-browser-route': { closeAllLocalSshBrowserRoutes: settled() },
   '../codex/codex-state-db-backfill-recovery': { stopCodexStateDbBackfillRecoveries: settled() },
@@ -65,13 +67,14 @@ afterEach(() => {
 
 async function startQuit(
   flushFinalOrThrowAsync: () => Promise<void>,
-  services: Record<string, unknown> = {}
+  services: Record<string, unknown> = {},
+  shutdownLocalPtys: () => Promise<void> = async () => {}
 ) {
   beginSshShutdown.mockClear()
-  killAllPty.mockClear()
   flushesByNextMicrotask = -1
   vi.resetModules()
   vi.useFakeTimers()
+  killAllPty.mockReset().mockImplementation(shutdownLocalPtys)
   const app = Object.assign(new EventEmitter(), { quit: vi.fn() })
   const admission = { release: vi.fn() }
   const store = {
@@ -129,32 +132,91 @@ it('releases admission only after the final flush and freeze complete', async ()
   expect(app.quit).toHaveBeenCalledOnce()
 })
 
-it('writes a pane grid still inside its write burst before the final flush', async () => {
-  const paneGrids = Promise.withResolvers<void>()
-  const { store } = await startQuit(async () => {}, {
-    runtime: {
-      getOffscreenBrowserBackend: () => null,
-      getAgentBrowserBridge: () => null,
-      getEmulatorBridge: () => null,
-      disposeSkillUploadSessions: settled(),
-      getRuntimeId: () => undefined,
-      closeNotificationDismissals: settled(),
-      flushPaneGrids: () => paneGrids.promise
-    }
+it('waits for local PTY cleanup before quitting', async () => {
+  const ptyShutdown = Promise.withResolvers<void>()
+  const { app } = await startQuit(
+    async () => {},
+    {},
+    () => ptyShutdown.promise
+  )
+
+  await vi.advanceTimersByTimeAsync(0)
+  expect(killAllPty).toHaveBeenCalledOnce()
+  expect(app.quit).not.toHaveBeenCalled()
+
+  ptyShutdown.resolve()
+  await vi.advanceTimersByTimeAsync(0)
+  expect(app.quit).toHaveBeenCalledOnce()
+  expect(console.warn).not.toHaveBeenCalled()
+})
+
+it('reports pending local PTY cleanup and quits at the teardown deadline', async () => {
+  const { app } = await startQuit(
+    async () => {},
+    {},
+    () => new Promise<void>(() => {})
+  )
+
+  await vi.advanceTimersByTimeAsync(WILL_QUIT_TEARDOWN_DEADLINE_MS - 1)
+  expect(app.quit).not.toHaveBeenCalled()
+  await vi.advanceTimersByTimeAsync(1)
+
+  expect(app.quit).toHaveBeenCalledOnce()
+  expect(console.warn).toHaveBeenCalledWith('[shutdown] Quit teardown deadline reached', {
+    pendingTeardowns: ['local-ptys']
   })
+})
+
+it('continues quitting when local PTY cleanup rejects', async () => {
+  const { app } = await startQuit(
+    async () => {},
+    {},
+    async () => {
+      throw new Error('PTY cleanup failed')
+    }
+  )
+
+  await vi.advanceTimersByTimeAsync(0)
+  expect(app.quit).toHaveBeenCalledOnce()
+})
+
+it('flushes pending pane grids before the final save and waits for local PTY cleanup', async () => {
+  const ptyShutdown = Promise.withResolvers<void>()
+  const paneGrids = Promise.withResolvers<void>()
+  const { app, store } = await startQuit(
+    async () => {},
+    {
+      runtime: {
+        getOffscreenBrowserBackend: () => null,
+        getAgentBrowserBridge: () => null,
+        getEmulatorBridge: () => null,
+        disposeSkillUploadSessions: settled(),
+        getRuntimeId: () => undefined,
+        closeNotificationDismissals: settled(),
+        flushPaneGrids: () => paneGrids.promise
+      }
+    },
+    () => ptyShutdown.promise
+  )
   await vi.advanceTimersByTimeAsync(0)
   // Before the SSH shutdown too: nothing is awaited between it and the final save.
   expect(beginSshShutdown).not.toHaveBeenCalled()
+  expect(killAllPty).not.toHaveBeenCalled()
   expect(store.flushFinalOrThrowAsync).not.toHaveBeenCalled()
   paneGrids.resolve()
   await vi.advanceTimersByTimeAsync(0)
   expect(beginSshShutdown).toHaveBeenCalledOnce()
+  expect(killAllPty).toHaveBeenCalledOnce()
+  expect(app.quit).not.toHaveBeenCalled()
   expect(store.flushFinalOrThrowAsync).toHaveBeenCalledOnce()
   expect(beginSshShutdown.mock.invocationCallOrder[0]).toBeLessThan(
     store.flushFinalOrThrowAsync.mock.invocationCallOrder[0]!
   )
   // Nothing awaited between them: the save started in the same turn as the SSH shutdown.
   expect(flushesByNextMicrotask).toBe(1)
+  ptyShutdown.resolve()
+  await vi.advanceTimersByTimeAsync(0)
+  expect(app.quit).toHaveBeenCalledOnce()
 })
 
 it('starts the SSH shutdown and the final save at once when no pane grid waits', async () => {

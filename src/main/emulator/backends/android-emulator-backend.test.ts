@@ -270,9 +270,14 @@ describe('AndroidEmulatorBackend', () => {
     })
     const info = await android.startSession('emulator-5554')
     expect(info).toMatchObject({ deviceUdid: 'emulator-5554', streamCodec: 'h264' })
-    await android.stopHelperForDevice('emulator-5554', { includeOrphaned: true })
+    runner.mockClear()
+    await android.stopHelperForDevice('emulator-5554', {
+      includeOrphaned: true,
+      ownedOnly: true
+    })
     await android.stopHelperForDevice('emulator-5554', { includeOrphaned: true })
     expect(close).toHaveBeenCalledTimes(1)
+    expect(runner).not.toHaveBeenCalled()
   })
 
   it('preserves all unowned forwards when stopping without a live session', async () => {

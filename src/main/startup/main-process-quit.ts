@@ -217,7 +217,7 @@ function installWillQuitHandler(): void {
       // Why immediately before the final store flush with no await in between: beginSshShutdown() marks every
       // active SSH lease detached in memory synchronously, and that flush is what persists it.
       const sshShutdown = beginSshShutdown()
-      killAllPty()
+      const ptyShutdown = killAllPty()
       const watcherShutdown = shutdownWatchersOnce()
       const storeFlush = (async () => {
         if (!finalStore) {
@@ -232,7 +232,7 @@ function installWillQuitHandler(): void {
           console.error('[persistence] Failed to finalize profile state:', error)
         }
       })()
-      return { sshShutdown, watcherShutdown, storeFlush }
+      return { sshShutdown, ptyShutdown, watcherShutdown, storeFlush }
     }
     // Layout-owner build: a pane grid still in its write burst lands first (bounded at 1 s); null
     // otherwise, so a quit with none starts the SSH shutdown and final save right here as before.
@@ -240,6 +240,7 @@ function installWillQuitHandler(): void {
       ? paneGridFlush.then(beginSshShutdownAndFinalSave)
       : beginSshShutdownAndFinalSave()
     const sshShutdown = Promise.resolve(finalSaves).then((saves) => saves.sshShutdown)
+    const ptyShutdown = Promise.resolve(finalSaves).then((saves) => saves.ptyShutdown)
     const storeFlush = Promise.resolve(finalSaves).then((saves) => saves.storeFlush)
     const watcherShutdown = Promise.resolve(finalSaves).then((saves) => saves.watcherShutdown)
     // Why: usage-cache writes are queued off the main thread, so a quit right after setEnabled or a
@@ -291,6 +292,7 @@ function installWillQuitHandler(): void {
       { name: 'browser-client-hosts', promise: browserClientHostShutdown },
       { name: 'local-ssh-browser-routes', promise: localSshRouteShutdown },
       { name: 'ssh', promise: sshShutdown },
+      { name: 'local-ptys', promise: ptyShutdown },
       { name: 'plugin-hosts', promise: pluginHostShutdown },
       { name: 'skill-uploads', promise: skillUploadShutdown },
       { name: 'grok-hooks', promise: grokHookCleanup },

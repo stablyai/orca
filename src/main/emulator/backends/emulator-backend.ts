@@ -43,6 +43,12 @@ export type EmulatorTargetOpts = {
   worktreeId?: string
 }
 
+export type EmulatorHelperStopOptions = {
+  helperPid?: number
+  includeOrphaned?: boolean
+  ownedOnly?: boolean
+}
+
 // One emulator platform (iOS serve-sim today, Android scrcpy next). The
 // EmulatorBridge router owns the session registry and per-worktree active
 // state; a backend owns only device/helper/input mechanics for its platform.
@@ -62,12 +68,9 @@ export type EmulatorBackend = {
   // Start (booting if needed) the helper/stream for a device and return its session.
   startSession(deviceId: string): Promise<EmulatorSessionInfo>
   // Stop the helper for a device without powering it off.
-  stopHelperForDevice(
-    deviceId: string,
-    options?: { helperPid?: number; includeOrphaned?: boolean }
-  ): Promise<void>
+  stopHelperForDevice(deviceId: string, options?: EmulatorHelperStopOptions): Promise<void>
   // Power off the underlying device/AVD.
-  shutdownDevice(deviceId: string): Promise<void>
+  shutdownDevice(deviceId: string, options?: { ownedOnly?: boolean }): Promise<void>
   // Whether an active session can be reused (stream reachable + helper alive).
   isSessionReusable(info: EmulatorSessionInfo): Promise<boolean>
 

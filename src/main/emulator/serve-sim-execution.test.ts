@@ -21,7 +21,8 @@ vi.mock('electron', () => ({
 }))
 vi.mock('./serve-sim-runtime-materializer', () => materializerMocks)
 
-import { resolveServeSimExecutable } from './serve-sim-execution'
+import { execServeSimCommand, resolveServeSimExecutable } from './serve-sim-execution'
+import { SERVE_SIM_OWNER_ENV } from './serve-sim-helper-processes'
 
 const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
 const originalResourcesPath = Object.getOwnPropertyDescriptor(process, 'resourcesPath')
@@ -122,4 +123,27 @@ describe('resolveServeSimExecutable', () => {
       usesElectronAsNode: true
     })
   })
+})
+
+it('passes ownership only to the requested helper invocation and its children', async () => {
+  const previousOwner = process.env[SERVE_SIM_OWNER_ENV]
+  const result = await execServeSimCommand(
+    {
+      command: process.execPath,
+      baseArgs: [
+        '-e',
+        `
+        const { execFileSync } = require('node:child_process')
+        const script = 'process.stdout.write(JSON.stringify(process.env.${SERVE_SIM_OWNER_ENV}))'
+        process.stdout.write(execFileSync(process.execPath, ['-e', script]))
+      `,
+        '--'
+      ],
+      usesElectronAsNode: false
+    },
+    [],
+    { json: true, helperOwner: 'owned-launch-test' }
+  )
+  expect(result).toBe('owned-launch-test')
+  expect(process.env[SERVE_SIM_OWNER_ENV]).toBe(previousOwner)
 })

@@ -172,7 +172,7 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
 
   async stopHelperForDevice(
     deviceId: string,
-    _options: { helperPid?: number; includeOrphaned?: boolean } = {}
+    _options: { helperPid?: number; includeOrphaned?: boolean; ownedOnly?: boolean } = {}
   ): Promise<void> {
     // Only live handles establish ownership; scrcpy socket names are shared with other tools.
     this.streams.stop(deviceId)
