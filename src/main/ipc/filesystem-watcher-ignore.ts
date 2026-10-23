@@ -11,7 +11,11 @@ export const WATCHER_IGNORE_DIRS: string[] = [
   '.cache',
   'target',
   '.venv',
-  '__pycache__'
+  '__pycache__',
+  '.dart_tool',
+  '.gradle',
+  '.turbo',
+  'Pods'
 ]
 
 // Why: macOS FSEventStreamSetExclusionPaths accepts at most 8 paths and fails
