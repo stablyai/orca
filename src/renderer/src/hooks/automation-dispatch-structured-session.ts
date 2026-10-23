@@ -52,7 +52,8 @@ export async function reuseStructuredAutomationSession(args: {
     target: { kind: 'structured-session', sessionId: args.chatSessionId },
     prompt: args.prompt
   })
-  return sent.status === 'sent'
+  // Why: an unconfirmed send may already be held by the host; falling back would submit the prompt twice.
+  return sent.status === 'sent' || sent.status === 'unconfirmed'
 }
 
 export async function launchStructuredAutomationSession(args: {
@@ -104,10 +105,22 @@ export async function launchStructuredAutomationSession(args: {
     return null
   }
   const settlement = await launch.settlement
-  if (settlement.kind !== 'structured') {
+  if (settlement.kind === 'terminal') {
     return null
   }
-  if (settlement.promptDeliveryResult) {
+  if (settlement.kind === 'cancelled') {
+    return settlement.sessionId === null
+      ? null
+      : (() => {
+          throw new Error('Automation structured chat launch was cancelled.')
+        })()
+  }
+  if (settlement.kind === 'failed') {
+    throw settlement.error instanceof Error
+      ? settlement.error
+      : new Error(String(settlement.error ?? 'Automation structured chat launch failed.'))
+  }
+  if (settlement.kind === 'structured' && settlement.promptDeliveryResult) {
     const delivery = await settlement.promptDeliveryResult
     if (!delivery.delivered && !delivery.unconfirmed) {
       throw new Error('Automation prompt could not be delivered to the structured chat session.')
@@ -132,6 +145,10 @@ export async function tryDispatchReusableAutomationSession(args: {
   markDispatchResult: (result: AutomationDispatchResult) => Promise<void>
 }): Promise<boolean> {
   const { automation, run, worktree, precheckResult, completion, markDispatchResult } = args
+  if (hasExtraAgentArgs(automation.extraAgentArgs)) {
+    return false
+  }
+  const storeState = useAppStore.getState()
   const reusableSession = findReusableAutomationSession({
     automationId: automation.id,
     agentId: automation.agentId,
@@ -140,9 +157,13 @@ export async function tryDispatchReusableAutomationSession(args: {
     // Why: the dispatch loop only ever executes for the desktop authority,
     // so its history read addresses the local runtime explicitly.
     runs: await listAutomationRunsForTarget({ kind: 'local' }, automation.id),
-    state: useAppStore.getState()
+    state: storeState
   })
-  if (!reusableSession) {
+  if (
+    !reusableSession ||
+    (reusableSession.kind === 'structured' &&
+      !isNativeChatDefaultFor(storeState.settings, automation.agentId))
+  ) {
     return false
   }
   const releaseTab = acquireReuseDispatchTab(reusableSession.tabId)

@@ -263,4 +263,196 @@ describe('automation dispatch structured chat session', () => {
       })
     )
   })
+
+  it('tracks a structured session with visibility-unknown create without falling back to a terminal', async () => {
+    const chatSessionId = 'sess-unknown-1'
+    const tabId = `structured-agent-session-${chatSessionId}`
+    const paneKey = structuredAgentSessionPaneKey(tabId, chatSessionId)
+
+    mockPlanAgentSessionLaunch.mockReturnValue({
+      route: 'structured-native-chat',
+      requestId: 'run-unknown',
+      agent: 'claude'
+    })
+    mockBeginStructuredProvisionalLaunch.mockReturnValue({
+      tab: { id: tabId, entityId: chatSessionId },
+      settlement: Promise.resolve({
+        kind: 'visibility-unknown',
+        sessionId: chatSessionId
+      }),
+      cancel: vi.fn()
+    })
+
+    await handleAutomationDispatchRequest({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only these automation fields are read by the dispatch handler.
+      automation: {
+        id: 'auto-1',
+        projectId: 'repo-1',
+        prompt: 'Do exactly one job',
+        precheck: null,
+        agentId: 'claude',
+        workspaceMode: 'new_per_run',
+        workspaceId: null,
+        baseBranch: null,
+        setupDecision: 'skip',
+        reuseSession: false
+      } as never,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only these run fields are read by the dispatch handler.
+      run: {
+        id: 'run-unknown',
+        automationId: 'auto-1',
+        title: 'Unknown run',
+        scheduledFor: 1_000,
+        trigger: 'scheduled',
+        workspaceId: null,
+        workspaceDisplayName: null
+      } as never,
+      dispatchToken: 'token-unknown'
+    })
+
+    expect(mockLaunchAgentBackgroundSession).not.toHaveBeenCalled()
+    expect(mockMarkDispatchResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        runId: 'run-unknown',
+        status: 'dispatched',
+        sessionKind: 'structured',
+        chatSessionId,
+        terminalSessionId: tabId,
+        terminalPaneKey: paneKey
+      })
+    )
+  })
+
+  it('does not fall back to a fresh session when a reused structured send is unconfirmed', async () => {
+    const chatSessionId = 'sess-unconfirmed'
+    const tabId = `structured-agent-session-${chatSessionId}`
+    const paneKey = structuredAgentSessionPaneKey(tabId, chatSessionId)
+    state.allWorktrees = vi.fn(() => [
+      { id: 'wt-existing', repoId: 'repo-1', displayName: 'Existing', path: '/repo/existing' }
+    ])
+    mockFindReusableAutomationSession.mockReturnValue({
+      kind: 'structured',
+      tabId,
+      chatSessionId,
+      paneKey
+    })
+    mockSendMessageToAgent.mockResolvedValue({
+      status: 'unconfirmed',
+      code: 'runtime-unverifiable'
+    })
+
+    await handleAutomationDispatchRequest({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only these automation fields are read by the dispatch handler.
+      automation: {
+        id: 'auto-1',
+        projectId: 'repo-1',
+        prompt: 'Do exactly one job',
+        precheck: null,
+        agentId: 'claude',
+        workspaceMode: 'existing',
+        workspaceId: 'wt-existing',
+        baseBranch: null,
+        reuseSession: true
+      } as never,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only these run fields are read by the dispatch handler.
+      run: {
+        id: 'run-unconfirmed',
+        automationId: 'auto-1',
+        title: 'Unconfirmed run',
+        scheduledFor: 2_000,
+        trigger: 'scheduled',
+        workspaceId: 'wt-existing',
+        workspaceDisplayName: 'Existing'
+      } as never,
+      dispatchToken: 'token-unconfirmed'
+    })
+
+    expect(mockLaunchAgentBackgroundSession).not.toHaveBeenCalled()
+    expect(mockBeginStructuredProvisionalLaunch).not.toHaveBeenCalled()
+    expect(mockMarkDispatchResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        runId: 'run-unconfirmed',
+        status: 'dispatched',
+        sessionKind: 'structured',
+        chatSessionId
+      })
+    )
+  })
+
+  it.each(['failure', 'cancellation'] as const)(
+    'marks a structured run as dispatch_failed when the turn outcome is %s',
+    async (outcome) => {
+      const chatSessionId = `sess-${outcome}`
+      const tabId = `structured-agent-session-${chatSessionId}`
+      const paneKey = structuredAgentSessionPaneKey(tabId, chatSessionId)
+
+      mockPlanAgentSessionLaunch.mockReturnValue({
+        route: 'structured-native-chat',
+        requestId: `run-${outcome}`,
+        agent: 'claude'
+      })
+      mockBeginStructuredProvisionalLaunch.mockReturnValue({
+        tab: { id: tabId, entityId: chatSessionId },
+        settlement: Promise.resolve({
+          kind: 'structured',
+          sessionId: chatSessionId,
+          promptDeliveryResult: Promise.resolve({ delivered: true, failureNotified: false })
+        }),
+        cancel: vi.fn()
+      })
+
+      await handleAutomationDispatchRequest({
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only these automation fields are read by the dispatch handler.
+        automation: {
+          id: 'auto-1',
+          projectId: 'repo-1',
+          prompt: 'Check the build',
+          precheck: null,
+          agentId: 'claude',
+          workspaceMode: 'new_per_run',
+          workspaceId: null,
+          baseBranch: null,
+          setupDecision: 'skip',
+          reuseSession: false
+        } as never,
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only these run fields are read by the dispatch handler.
+        run: {
+          id: `run-${outcome}`,
+          automationId: 'auto-1',
+          title: 'Nightly run',
+          scheduledFor: 1_000,
+          trigger: 'scheduled',
+          workspaceId: null,
+          workspaceDisplayName: null
+        } as never,
+        dispatchToken: `token-${outcome}`
+      })
+
+      const now = Date.now() + 10
+      state.agentStatusByPaneKey = {
+        [paneKey]: {
+          paneKey,
+          state: 'done',
+          mainAgent: { state: 'done', outcome, stateStartedAt: now },
+          prompt: 'Check the build',
+          agentType: 'claude',
+          updatedAt: now,
+          stateStartedAt: now,
+          lastAssistantMessage: 'Observed failure output.',
+          stateHistory: []
+        }
+      }
+      latestStoreSubscriber?.()
+
+      await vi.waitFor(() =>
+        expect(mockMarkDispatchResult).toHaveBeenCalledWith(
+          expect.objectContaining({
+            runId: `run-${outcome}`,
+            status: 'dispatch_failed',
+            error: `Automation structured session turn ended with ${outcome}.`
+          })
+        )
+      )
+    }
+  )
 })

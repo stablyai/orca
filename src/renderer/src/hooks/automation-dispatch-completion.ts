@@ -9,7 +9,9 @@ import type {
   AutomationRun
 } from '../../../shared/automations-types'
 import type { AgentStateHistoryEntry, AgentStatusEntry } from '../../../shared/agent-status-types'
+import type { AgentTurnOutcome } from '../../../shared/agent-turn-outcome'
 import {
+  getAgentStateHistoryOverlap,
   selectAutomationAgentStatusEntryChange,
   UNCHANGED_AUTOMATION_AGENT_STATUS_ENTRY
 } from './automation-agent-status-entry-change'
@@ -34,6 +36,7 @@ export function createAutomationDispatchCompletion(args: {
   let dispatchMarked = false
   let pendingExitCode: number | null = null
   let pendingDone = false
+  let pendingDoneOutcome: AgentTurnOutcome | undefined
   let completionMarked = false
   let contactLost = false
   let unsubscribeAgentStatus = (): void => {}
@@ -47,27 +50,35 @@ export function createAutomationDispatchCompletion(args: {
     unsubscribeSessionObserver = (): void => {}
     releaseReuseDispatchTab = (): void => {}
   }
-  const markCompletionResult = async (): Promise<void> => {
+  const markCompletionResult = async (outcome?: AgentTurnOutcome): Promise<void> => {
     if (completionMarked) {
       return
     }
     completionMarked = true
     cleanupRunObservers()
+    const failedOutcome =
+      outcome && outcome !== 'success' && outcome !== 'unconfirmed' ? outcome : null
     try {
       await args.markDispatchResult({
         runId: args.run.id,
-        status: 'completed',
+        status: failedOutcome ? 'dispatch_failed' : 'completed',
         workspaceId: args.worktree.id,
         workspaceDisplayName: args.worktree.displayName,
         outputSnapshot: getOutputSnapshot(),
         precheckResult: args.precheckResult,
-        error: null
+        error: failedOutcome
+          ? `Automation structured session turn ended with ${failedOutcome}.`
+          : null
       })
     } catch (error) {
       args.releaseTerminalOwnership()
       throw error
     }
-    await retireRunTerminal()
+    if (failedOutcome) {
+      args.releaseTerminalOwnership()
+    } else {
+      await retireRunTerminal()
+    }
   }
   const retireRunTerminal = async (): Promise<void> => {
     const retirement = await args.finalizeTerminalOwnership({
@@ -149,15 +160,16 @@ export function createAutomationDispatchCompletion(args: {
       console.error('[automations] Failed to persist late automation result:', error)
     })
   }
-  const handleAgentDone = (): void => {
+  const handleAgentDone = (outcome?: AgentTurnOutcome): void => {
     if (completionMarked) {
       return
     }
     if (!dispatchMarked) {
       pendingDone = true
+      pendingDoneOutcome = outcome
       return
     }
-    settleLateResult(markCompletionResult())
+    settleLateResult(markCompletionResult(outcome))
   }
   const handleExit = (code: number): void => {
     if (completionMarked) {
@@ -211,7 +223,7 @@ export function createAutomationDispatchCompletion(args: {
           // survives only in the entry-level completed slot.
           latestAssistantMessage =
             entry.lastCompletedAssistantMessage?.trim() || latestAssistantMessage
-          handleAgentDone()
+          handleAgentDone(entry.mainAgent?.outcome)
           return
         }
       }
@@ -227,8 +239,11 @@ export function createAutomationDispatchCompletion(args: {
         entry.sessionBoundary !== true &&
         (!options?.requireWorkingAfterStart || sawWorkingAfterStart)
       ) {
+        if (entry.mainAgent?.outcome === 'unconfirmed') {
+          return
+        }
         latestAssistantMessage = entry.lastAssistantMessage?.trim() || latestAssistantMessage
-        handleAgentDone()
+        handleAgentDone(entry.mainAgent?.outcome)
       }
     }
     // Why: Codex/Claude completion normally arrives through the global
@@ -255,41 +270,10 @@ export function createAutomationDispatchCompletion(args: {
     settlePendingAfterDispatch: async () => {
       dispatchMarked = true
       if (pendingDone) {
-        await markCompletionResult()
+        await markCompletionResult(pendingDoneOutcome)
       } else if (pendingExitCode !== null) {
         await markExitResult(pendingExitCode)
       }
     }
   }
-}
-
-function agentStateHistoryEntriesEqual(
-  left: AgentStateHistoryEntry,
-  right: AgentStateHistoryEntry
-): boolean {
-  return (
-    left.state === right.state &&
-    left.prompt === right.prompt &&
-    left.startedAt === right.startedAt &&
-    left.interrupted === right.interrupted
-  )
-}
-
-function getAgentStateHistoryOverlap(
-  previous: AgentStateHistoryEntry[],
-  current: AgentStateHistoryEntry[]
-): number {
-  for (let overlap = Math.min(previous.length, current.length); overlap > 0; overlap -= 1) {
-    const previousOffset = previous.length - overlap
-    if (
-      current
-        .slice(0, overlap)
-        .every((entry, index) =>
-          agentStateHistoryEntriesEqual(entry, previous[previousOffset + index])
-        )
-    ) {
-      return overlap
-    }
-  }
-  return 0
 }

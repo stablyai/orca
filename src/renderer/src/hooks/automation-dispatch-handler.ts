@@ -3,6 +3,7 @@ import { launchAgentBackgroundSession } from '@/lib/launch-agent-background-sess
 import type { AutomationTerminalOwnership } from '@/lib/automation-terminal-ownership'
 import { useAppStore } from '@/store'
 import { captureWorkspaceSelection, restoreWorkspaceSelection } from '@/lib/active-workspace-host'
+import { hasExtraAgentArgs } from '../../../shared/automation-extra-agent-args'
 import type {
   AutomationDispatchRequest,
   AutomationDispatchResult
@@ -84,7 +85,7 @@ export async function handleAutomationDispatchRequest({
       finalizeTerminalOwnership
     })
     const dispatchStartedAt = Date.now()
-    if (automation.reuseSession) {
+    if (automation.reuseSession && !hasExtraAgentArgs(automation.extraAgentArgs)) {
       const reused = await tryDispatchReusableAutomationSession({
         automation,
         run,

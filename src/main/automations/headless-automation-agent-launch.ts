@@ -10,6 +10,7 @@ import type {
 import { executeAgentLaunch } from '../agent-launch/agent-launch-executor'
 import type { Automation, AutomationRun } from '../../shared/automations-types'
 import { hasExtraAgentArgs } from '../../shared/automation-extra-agent-args'
+import { getRepoRoutingConnectionId } from '../../shared/execution-host'
 import { structuredAgentSessionPaneKey } from '../../shared/structured-agent-session-projection'
 import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
@@ -52,7 +53,12 @@ export async function launchHeadlessAutomationAgent(
   const { automation, run, target } = request
   const agent = automation.agentId
   const text = automation.prompt?.trim()
-  if (automation.reuseSession && automation.workspaceMode === 'existing' && text) {
+  if (
+    automation.reuseSession &&
+    !hasExtraAgentArgs(automation.extraAgentArgs) &&
+    automation.workspaceMode === 'existing' &&
+    text
+  ) {
     const reused = await sendToReusableHeadlessAutomationSession(runtime, {
       ...request,
       text,
@@ -118,7 +124,7 @@ export async function launchHeadlessAutomationAgent(
           return {
             worktreeId: created.worktree.id,
             workspacePath: created.worktree.path,
-            connectionId: target.repo.connectionId ?? null,
+            connectionId: getRepoRoutingConnectionId(target.repo),
             startupTerminalHandle: undefined
           }
         }

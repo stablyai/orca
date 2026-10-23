@@ -201,7 +201,7 @@ describe('opening a paired-server automation run', () => {
       expect(mocks.activateWebRuntimeSessionTab).toHaveBeenCalledWith(
         expect.objectContaining({
           worktreeId: WT,
-          tabId: 'agent-session:sess-1',
+          tabId: 'structured-agent-session-sess-1',
           environmentId: ENV
         })
       )

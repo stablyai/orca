@@ -2,6 +2,7 @@ import type { AutomationRun } from '../../../shared/automations-types'
 import { findReusableAutomationRun } from '../../../shared/automation-session-reuse'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { isNativeChatDefaultFor } from '../../../shared/structured-native-chat-launch-route'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
@@ -31,17 +32,22 @@ export function findReusableAutomationSession(args: {
   state: Pick<
     AppState,
     'agentStatusByPaneKey' | 'ptyIdsByTabId' | 'terminalLayoutsByTabId' | 'unifiedTabsByWorktree'
-  >
+  > &
+    Partial<Pick<AppState, 'settings'>>
 }): ReusableAutomationSession | null {
   const { state, ...selection } = args
   const unifiedTabs = state.unifiedTabsByWorktree[args.worktreeId] ?? []
   const terminalTabIds = new Set(
     unifiedTabs.filter((tab) => tab.contentType === 'terminal').map((tab) => tab.entityId)
   )
+  const allowStructuredReuse =
+    state.settings === undefined || isNativeChatDefaultFor(state.settings, args.agentId)
   const structuredTabsBySessionId = new Map(
-    unifiedTabs
-      .filter((tab) => tab.contentType === 'agent-session')
-      .map((tab) => [tab.entityId, tab] as const)
+    allowStructuredReuse
+      ? unifiedTabs
+          .filter((tab) => tab.contentType === 'agent-session')
+          .map((tab) => [tab.entityId, tab] as const)
+      : []
   )
   return findReusableAutomationRun<ReusableAutomationSession>({
     ...selection,

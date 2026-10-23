@@ -158,4 +158,40 @@ describe('runtime-structured-run-observer', () => {
       error: 'Automation structured session turn ended with failure.'
     })
   })
+
+  it('settles a confirmed interrupted turn without provider outcome as dispatch_failed', async () => {
+    const host = {
+      journalSnapshot: vi.fn(async () => ({
+        items: [
+          {
+            itemId: 'turn-crashed',
+            revision: 2,
+            body: {
+              kind: 'turn',
+              turnId: 'turn-crashed',
+              state: 'interrupted',
+              startedAt: 100,
+              completedAt: 200
+            }
+          }
+        ],
+        submissions: []
+      })),
+      subscribeTurnCompletions: vi.fn(() => () => {})
+    }
+
+    const observation = await observeStructuredAutomationRunCompletion({
+      sessionId: 'sess-crashed',
+      signal: new AbortController().signal,
+      since: 100,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test stub implements only the members read by the observer.
+      getHost: () => host as never
+    })
+
+    expect(observation).toEqual({
+      status: 'dispatch_failed',
+      outputSnapshot: null,
+      error: 'Automation structured session turn ended with interruption.'
+    })
+  })
 })

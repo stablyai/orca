@@ -2,7 +2,9 @@ import { randomUUID } from 'node:crypto'
 import { AgentLaunchStructuredSessionRefusedError } from '../agent-launch/agent-launch-surface-factories'
 import type { StructuredAgentId } from '../../shared/agent-session-provider-handle'
 import type { Automation, AutomationRun } from '../../shared/automations-types'
+import { hasExtraAgentArgs } from '../../shared/automation-extra-agent-args'
 import { findReusableAutomationRun } from '../../shared/automation-session-reuse'
+import { isNativeChatDefaultFor } from '../../shared/structured-native-chat-launch-route'
 import { createStructuredAgentSessionId } from '../../shared/structured-agent-session-create'
 import { createStructuredAgentSessionOperationId } from '../../shared/structured-agent-session-mutation'
 import {
@@ -117,6 +119,20 @@ export async function createHeadlessAutomationStructuredSession(args: {
   }
 }
 
+function isStructuredAutomationDefaultEnabled(
+  runtime: OrcaRuntimeService,
+  agent: Automation['agentId']
+): boolean {
+  if (typeof runtime.requireStore !== 'function') {
+    return true
+  }
+  try {
+    return isNativeChatDefaultFor(runtime.requireStore().getSettings(), agent)
+  } catch {
+    return false
+  }
+}
+
 function requireInstalledStructuredHost(): StructuredAgentSessionHost {
   const host = getStructuredAgentSessionHost()
   if (!host) {
@@ -140,7 +156,13 @@ export async function sendToReusableHeadlessAutomationSession(
   }
 ): Promise<HeadlessAutomationAgentLaunch | null> {
   const { automation, text, worktreeId } = request
-  const host = getStructuredAgentSessionHost()
+  if (hasExtraAgentArgs(automation.extraAgentArgs)) {
+    return null
+  }
+  const allowStructuredReuse =
+    supportsStructuredAutomationRuntime(runtime) &&
+    isStructuredAutomationDefaultEnabled(runtime, automation.agentId)
+  const host = allowStructuredReuse ? getStructuredAgentSessionHost() : null
   const session = findReusableAutomationRun<ReusableTarget>({
     automationId: automation.id,
     agentId: automation.agentId,

@@ -7,6 +7,7 @@ import { activateTerminalTabOnOwner } from '@/lib/terminal-tab-owner-activation'
 import { activateWebRuntimeSessionTab } from '@/runtime/web-runtime-session-tab-lifecycle'
 import { resolveWebSessionVisibleTabId } from '@/runtime/web-session-focus-intent'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { structuredAgentSessionTabId } from '../../../../shared/structured-agent-session-projection'
 import {
   buildAutomationRunOpenLayout,
   getAutomationRunOwnerEnvironmentId,
@@ -77,7 +78,7 @@ export function createAutomationRunWorkspaceAction({ store, list }: AutomationsP
       void openRunStructuredOnOwner(
         run.workspaceId,
         ownerEnvironmentId,
-        `agent-session:${run.chatSessionId}`
+        run.terminalSessionId ?? structuredAgentSessionTabId(run.chatSessionId)
       )
       return
     }

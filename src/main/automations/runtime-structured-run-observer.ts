@@ -56,18 +56,19 @@ async function readStructuredCompletionState(
     if (request.settledAt !== undefined && request.settledAt < since) {
       return null
     }
-    if (!request.outcome) {
+    const verdict = state.summary.turnOutcome ?? request.outcome
+    if (!verdict || verdict === 'unconfirmed') {
       return null
     }
     const assistantText = latestStructuredAgentSessionAssistantMessage(journal.items)
     const outputSnapshot = snapshotOfText(assistantText)
-    if (request.outcome === 'success') {
+    if (verdict === 'success') {
       return { status: 'completed', outputSnapshot, error: null }
     }
     return {
       status: 'dispatch_failed',
       outputSnapshot,
-      error: `Automation structured session turn ended with ${request.outcome}.`
+      error: `Automation structured session turn ended with ${verdict}.`
     }
   } catch {
     return null

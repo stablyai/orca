@@ -467,4 +467,36 @@ describe('headless automation agent launch', () => {
       terminalPtyId: null
     })
   })
+
+  it('bypasses structured session reuse and launches a fresh terminal when extraAgentArgs are configured', async () => {
+    const runtime = harness({ structuredHost: true })
+    getStructuredAgentSessionHost.mockReturnValue({
+      readStatusSummary: () => ({ status: 'idle', agent: 'claude' }),
+      deps: {
+        store: {
+          getRecord: () => ({ location: { workspaceId: 'wt-1' }, lease: { runtimeFence: 7 } })
+        }
+      }
+    })
+
+    const launched = await launch(runtime, { reuseSession: true, extraAgentArgs: '--model opus' }, [
+      previousRun({
+        sessionKind: 'structured',
+        chatSessionId: 'sess-prev',
+        terminalSessionId: 'structured-agent-session-sess-prev',
+        terminalPaneKey: null,
+        terminalPtyId: null
+      })
+    ])
+
+    expect(commitStructuredAgentSessionLaunchPrompt).not.toHaveBeenCalled()
+    expect(runtime.launchAgentTerminal).toHaveBeenCalledWith(
+      'id:wt-1',
+      expect.objectContaining({
+        agent: 'claude',
+        extraAgentArgs: '--model opus'
+      })
+    )
+    expect(launched.sessionKind ?? 'terminal').toBe('terminal')
+  })
 })
