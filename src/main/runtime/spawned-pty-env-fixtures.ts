@@ -3,7 +3,8 @@ import { buildJcodeRuntimeDirEnv, JCODE_RUNTIME_DIR_ENV_KEY } from '../../shared
 
 /** Reconstructs identity formulas from fake spawn args; wiring and directory readiness need real-path tests. */
 export function spawnedPtyEnv(call: unknown): Record<string, string> {
-  const values: Record<string, unknown> = typeof call === 'object' && call !== null ? { ...call } : {}
+  const values: Record<string, unknown> =
+    typeof call === 'object' && call !== null ? { ...call } : {}
   const env: Record<string, string> = {}
   if (typeof values.env === 'object' && values.env !== null) {
     for (const [key, value] of Object.entries(values.env)) {
@@ -21,11 +22,7 @@ export function spawnedPtyEnv(call: unknown): Record<string, string> {
     pane,
     jcodeRuntimeDir: pane
       ? buildJcodeRuntimeDirEnv(pane.paneKey)?.[JCODE_RUNTIME_DIR_ENV_KEY]
-      : undefined,
-    isDaemonHostSpawn: false,
-    launchAgent: undefined,
-    cwd: undefined,
-    prewarmsJcodeOnDaemonHost: false
+      : undefined
   })
   return env
 }

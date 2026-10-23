@@ -20,7 +20,7 @@ vi.mock('react-native-safe-area-context', mocks['react-native-safe-area-context'
 vi.mock('expo-router', mocks['expo-router'])
 vi.mock('../../modules/orca-mobile-web-shell/src', mocks['../../modules/orca-mobile-web-shell/src'])
 vi.mock('../app-update/use-wall-app-update', mocks['../app-update/use-wall-app-update'])
-vi.mock('../transport/client-context', mocks['../transport/client-context'])
+vi.mock('../transport/host-client-hooks', mocks['../transport/host-client-hooks'])
 vi.mock('./use-page-host-snapshot', mocks['./use-page-host-snapshot'])
 vi.mock('./use-mobile-web-shell-session', mocks['./use-mobile-web-shell-session'])
 
@@ -58,11 +58,17 @@ const fetching = (receivedBytes: number, totalBytes: number): MobileWebShellSess
   totalBytes
 })
 
-/** The width the bar's fill is given, which is its style's second entry. */
-function fillWidthOf(tree: ReactTestRenderer): unknown {
-  const bar = tree.root.find((node) => node.props.testID === 'mobile-web-shell-progress-bar')
-  const [fill] = bar.findAll((node) => node !== bar && String(node.type) === 'View')
-  return fill.props.style[1].width
+/** How far the bar's fill is scaled across the track, which is what the native driver moves. */
+function fillScaleOf(tree: ReactTestRenderer): unknown {
+  return fillOf(tree).value
+}
+
+function fillOf(tree: ReactTestRenderer): { readonly value: unknown } {
+  const bar = tree.root.find(
+    (node) => node.props.testID === 'mobile-web-shell-progress-bar' && String(node.type) === 'View'
+  )
+  const [fill] = bar.findAll((node) => String(node.type) === 'Animated.View')
+  return fill.props.style[1].transform[0].scaleX
 }
 
 const renderScreen = (state: MobileWebShellSessionState): Promise<ReactTestRenderer> =>
@@ -152,24 +158,61 @@ describe('the hybrid shell screen', () => {
     })
     expect(textOf(tree)).toContain('Downloading the latest app')
     expect(textOf(tree)).toContain('from Host One · 2.0 of 8.1 MB')
-    const bar = tree.root.findAll((node) => node.props.testID === 'mobile-web-shell-progress-bar')
+    const bar = tree.root.findAll(
+      (node) =>
+        node.props.testID === 'mobile-web-shell-progress-bar' && String(node.type) === 'View'
+    )
     expect(bar).toHaveLength(1)
     expect(bar[0].props.accessibilityRole).toBe('progressbar')
     expect(bar[0].props.accessibilityValue).toEqual({ min: 0, max: 100, now: 25 })
-    expect(fillWidthOf(tree)).toBe('25%')
+    expect(fillScaleOf(tree)).toBe(0.25)
     expect(byName(tree, 'ActivityIndicator')).toEqual([])
   })
 
-  it('fills the bar to exactly what the caption counts, with no easing behind it', async () => {
+  it('moves the fill with the download feed, without a render to carry it', async () => {
     const tree = await renderScreen(fetching(2_020_592, 8_082_368))
-    expect(fillWidthOf(tree)).toBe('25%')
-    await updateScreen(tree, fetching(8_000_000, 8_082_368))
-    expect(textOf(tree)).toContain('8.0 of 8.1 MB')
-    expect(fillWidthOf(tree)).toBe(`${(8_000_000 / 8_082_368) * 100}%`)
+    expect(fillScaleOf(tree)).toBe(0.25)
+    dependencies.downloadProgress.publish(0.5)
+    expect(fillScaleOf(tree)).toBe(0.5)
+    expect(textOf(tree)).toContain('2.0 of 8.1 MB')
   })
 
-  it('caps the fill at a full bar when more bytes arrive than the total named', async () => {
-    expect(fillWidthOf(await renderScreen(fetching(9_000_000, 8_082_368)))).toBe('100%')
+  it('starts one ease per window toward the latest value, and lands full at once', async () => {
+    const tree = await renderScreen(fetching(0, 8_082_368))
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    try {
+      dependencies.downloadProgress.publish(0.1)
+      dependencies.downloadProgress.publish(0.2)
+      dependencies.downloadProgress.publish(0.3)
+      expect(fillScaleOf(tree)).toBe(0.1)
+      vi.advanceTimersByTime(50)
+      expect(fillScaleOf(tree)).toBe(0.3)
+      dependencies.downloadProgress.publish(0.4)
+      dependencies.downloadProgress.publish(1)
+      expect(fillScaleOf(tree)).toBe(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('starts nothing after unmount for a value still waiting on its window', async () => {
+    const tree = await renderScreen(fetching(0, 8_082_368))
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    try {
+      dependencies.downloadProgress.publish(0.1)
+      dependencies.downloadProgress.publish(0.5)
+      const fill = fillOf(tree)
+      act(() => tree.unmount())
+      vi.advanceTimersByTime(50)
+      expect(fill.value).toBe(0.1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('caps the bar at full when more bytes arrive than the total named', async () => {
+    const tree = await renderScreen(fetching(9_000_000, 8_082_368))
+    expect(fillScaleOf(tree)).toBe(1)
   })
 
   it('reads an empty download as no progress rather than dividing by zero', async () => {
@@ -180,9 +223,12 @@ describe('the hybrid shell screen', () => {
       receivedBytes: 0,
       totalBytes: 0
     })
-    const bar = tree.root.findAll((node) => node.props.testID === 'mobile-web-shell-progress-bar')
+    const bar = tree.root.findAll(
+      (node) =>
+        node.props.testID === 'mobile-web-shell-progress-bar' && String(node.type) === 'View'
+    )
     expect(bar[0].props.accessibilityValue).toEqual({ min: 0, max: 100, now: 0 })
-    expect(fillWidthOf(tree)).toBe('0%')
+    expect(fillScaleOf(tree)).toBe(0)
     expect(textOf(tree)).toContain('0.0 of 0.0 MB')
   })
 

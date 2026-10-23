@@ -15,6 +15,7 @@ export function agentHookRuntimeDeps(
     // Why: main's OSC parse is the only producer for a PTY agent, and this store is the only
     // place `worktree.ps` and the mobile projection read from.
     onTerminalAgentStatus: (event) => server.ingestTerminalStatus(event),
+    onTerminalProgramStatusFacet: (event) => server.ingestProgramStatusFacet(event),
     onClaudeTerminalEvidence: (paneKey, evidence) =>
       server.observeClaudeTerminalEvidence(paneKey, evidence),
     getAgentStatusSnapshot: () =>
@@ -24,6 +25,8 @@ export function agentHookRuntimeDeps(
     // addresses transcripts by — Pi publishes identity that way and would otherwise be unreachable.
     getAgentProviderSessionSnapshot: () => server.getStatusSnapshot(),
     getAgentProviderSessionRowsForPane: (paneKey) => server.getStatusSnapshotForPane(paneKey),
+    subscribeAgentProviderSessionChanges: (listener) =>
+      server.subscribeProviderSessionChanges(listener),
     // Why captured rather than resolved at read: the fleet snapshot remints cached rows on every
     // read, so a row observed under one process otherwise acquires whatever owns the pane now.
     readObservedAgentStatusPaneIdentity: (paneKey) => observedPaneIdentities.read(paneKey),
@@ -37,6 +40,7 @@ export function agentHookRuntimeDeps(
       readChildWorkRecords: (subject) => server.getStructuredChildWork(subject),
       readChildWorkHandles: (subject) => server.getStructuredChildWorkHandles(subject)
     },
+    readHookCliWriterObservation: (row) => server.readCliWriterObservation(row),
     checkHookAgentPresence: (paneKey, exitedSince) =>
       exitedSince === undefined
         ? server.checkAgentPresence(paneKey)

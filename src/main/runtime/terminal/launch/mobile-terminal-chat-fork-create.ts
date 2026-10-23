@@ -10,7 +10,7 @@ import {
 import { buildMobileTerminalChatFork } from './mobile-terminal-chat-fork'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
-import { applyClaudeTerminalImageViewerEnv } from '../../terminal-image-viewer-env'
+import { applyRemoteViewerLaunchEnv } from '../../remote-viewer-launch-env'
 import { deterministicAgentSessionUuid } from '../../runtime-agent-launch-resolution'
 import { rendererPublicationThrottle } from '../../../window/renderer-publication-throttle'
 import { PROJECT_RUNTIME_REPAIR_REQUIRED_CODE } from '../../../../shared/project-runtime-repair-message'
@@ -19,7 +19,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import { loadWorkspaceLayoutWithoutReport } from '../../../../shared/workspace-layout/workspace-layout-load'
 import { nameBasedLoadContext } from '../../../../shared/workspace-layout/workspace-layout-minted-ids'
-import { resolveSessionTabRow } from '../../../../shared/workspace-layout/old-client'
+import { resolveSessionTabRow } from '../../../../shared/workspace-layout/old-client/old-client-session-tab-rows'
 
 function resolveSavedChatForkAnchor(
   session: WorkspaceSessionState | null,
@@ -95,7 +95,7 @@ export abstract class OrcaRuntimeWithMobileChatForkCreate extends OrcaRuntimeWit
         }
         const settings = store.getSettings()
         const launchRuntime = this.resolveAgentLaunchRuntime(workspace, sourceAgent)
-        const startup = applyClaudeTerminalImageViewerEnv(
+        const startup = applyRemoteViewerLaunchEnv(
           buildMobileTerminalChatFork({
             prepared,
             settings,

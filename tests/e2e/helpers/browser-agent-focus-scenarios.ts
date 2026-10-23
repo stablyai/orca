@@ -76,7 +76,7 @@ const FRAME_HTML = `<!doctype html>
   </body>
 </html>`
 
-async function startProbeServer(): Promise<{ url: string; close: () => Promise<void> }> {
+export async function startProbeServer(): Promise<{ url: string; close: () => Promise<void> }> {
   const server: Server = createServer((request, response) => {
     response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
     const address = server.address()
@@ -110,7 +110,11 @@ function readProperty(value: unknown, key: string): unknown {
     : undefined
 }
 
-async function rpc(page: Page, method: string, params: Record<string, unknown>): Promise<unknown> {
+export async function rpc(
+  page: Page,
+  method: string,
+  params: Record<string, unknown>
+): Promise<unknown> {
   const response: unknown = await page.evaluate(
     ({ targetMethod, targetParams }) =>
       window.api.runtime.call({ method: targetMethod, params: targetParams }),
@@ -165,7 +169,7 @@ export async function readHost(page: Page): Promise<{ log: string[]; terminalFoc
 }
 
 /** Opens the probe in a browser tab, then puts the terminal back in front of it. */
-async function openBackgroundProbeTab(page: Page, url: string): Promise<string> {
+export async function openBackgroundProbeTab(page: Page, url: string): Promise<string> {
   await waitForActiveWorktree(page)
   await ensureTerminalVisible(page)
   const worktreeId = await getActiveWorktreeId(page)

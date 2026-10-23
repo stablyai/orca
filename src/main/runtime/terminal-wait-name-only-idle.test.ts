@@ -13,6 +13,7 @@ import type { AgentStatus } from '../../shared/agent-detection'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import type { FirstPartyAgentStatus } from './tui-idle-evidence'
+import { registerBoundPty } from './bind-first-pane.test-fixture'
 
 // #6011: `terminal wait --for tui-idle` returned satisfied in ~0s against a working agent,
 // because a Codex/Devin OSC title that carries only the agent NAME is stored as `idle` and
@@ -68,6 +69,7 @@ function createWait(options: {
       ...shared,
       defaultTimeoutMs: 60_000,
       getLivePty: () => (options.pty ? { pty: options.pty } : null),
+      exitUnsettled: () => false,
       getLiveLeaf: () => ({ leaf: options.leaf ?? makeTuiIdleLeaf() }),
       startVisibleReadProbe
     },
@@ -282,7 +284,7 @@ async function makeRuntime(launchAgent?: TuiAgent) {
   runtime.attachWindow(1)
   runtime.syncWindowGraph(1, E2E_GRAPH)
   if (launchAgent) {
-    runtime.registerPty(E2E_PTY_ID, E2E_WORKTREE_ID, null, {
+    registerBoundPty(runtime, E2E_PTY_ID, E2E_WORKTREE_ID, null, {
       tabId: 'tab-1',
       leafId: E2E_LEAF_ID,
       incarnationId: 'name-only-incarnation',

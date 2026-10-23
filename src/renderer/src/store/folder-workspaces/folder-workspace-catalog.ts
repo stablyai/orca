@@ -10,6 +10,7 @@ import {
 } from '../../../../shared/execution-host'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
+import { getFolderWorkspaceHostId } from '../../../../shared/folder-workspace-execution-host'
 import { catalogOwnsHost, getProjectGroupHostId } from '../slices/project-group-owner-routing'
 import type { FolderWorkspaceUpdateTicket } from '../slices/folder-workspace-update-coordinator'
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
@@ -74,32 +75,6 @@ function createFolderWorkspaceHostResolver(
     hostByGroupId ??= createFolderWorkspaceHostIndex(projectGroups)
     return getFolderWorkspaceHostIdFromIndex(workspace, hostByGroupId)
   }
-}
-
-export function getFolderWorkspaceHostId(
-  workspace: FolderWorkspace,
-  projectGroups: readonly ProjectGroup[]
-): ExecutionHostId {
-  const explicitHostId = parseExecutionHostId(workspace.executionHostId)?.id
-  if (explicitHostId) {
-    return explicitHostId
-  }
-  if (workspace.connectionId) {
-    return toSshExecutionHostId(workspace.connectionId)
-  }
-  let matchingHostId: ExecutionHostId | undefined
-  for (const group of projectGroups) {
-    if (group.id !== workspace.projectGroupId) {
-      continue
-    }
-    const hostId = getProjectGroupHostId(group)
-    if (matchingHostId === undefined) {
-      matchingHostId = hostId
-    } else if (matchingHostId !== hostId) {
-      return LOCAL_EXECUTION_HOST_ID
-    }
-  }
-  return matchingHostId ?? LOCAL_EXECUTION_HOST_ID
 }
 
 function getFolderWorkspaceHostIdentity(

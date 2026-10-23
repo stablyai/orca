@@ -1,5 +1,5 @@
 import { prepareAdoptedTranscript } from '../native-chat/agent-session-wire/structured-agent-session-adopted-import'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -104,7 +104,7 @@ describe('structured Codex folder trust', () => {
 })
 
 describe('structured agent-session create intent', () => {
-  it('returns the recorded owner before CLI source lookup, new-launch support or account preparation', async () => {
+  it('returns the recorded owner, once no terminal still runs it, before launch support or account preparation', async () => {
     const record = agentSessionRecordFixture()
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: early ownership admission only reads the host's record list.
     setStructuredAgentSessionHost({
@@ -114,16 +114,15 @@ describe('structured agent-session create intent', () => {
     const support = vi
       .spyOn(runtime, 'getStructuredAgentSessionCreateSupport')
       .mockRejectedValue(new Error('fresh launch is unavailable'))
-    const sourceRows = vi.spyOn(runtime, 'getAgentProviderSessionRows').mockImplementation(() => {
-      throw new Error('source is unavailable')
-    })
+    const writers = vi
+      .spyOn(runtime, 'assertStructuredAdoptionTerminalWritersExited')
+      .mockResolvedValue()
     await expect(
       runtime.resolveStructuredAgentSessionCreateIntent({
         envelope: { sessionId: 'new-chat', clientOperationId: 'operation-1' },
         worktree: 'id:another-workspace',
         agent: 'claude',
-        resumeFrom: { providerSessionId: 'provider-session-alpha-1',
-          cliSource: { workspaceId: 'another-workspace', paneKey: 'missing-pane' } }
+        resumeFrom: { providerSessionId: 'provider-session-alpha-1' }
       })
     ).rejects.toMatchObject({
       refusal: {
@@ -135,7 +134,41 @@ describe('structured agent-session create intent', () => {
       }
     })
     expect(support).not.toHaveBeenCalled()
-    expect(sourceRows).not.toHaveBeenCalled()
+    expect(writers).toHaveBeenCalledWith('claude', 'provider-session-alpha-1', undefined)
+  })
+
+  it('refuses a switch out of a live terminal before naming the chat that owns the conversation', async () => {
+    const record = agentSessionRecordFixture()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: early ownership admission only reads the host's record list.
+    setStructuredAgentSessionHost({
+      deps: { store: { listRecords: () => [record] } }
+    } as unknown as StructuredAgentSessionHost)
+    const runtime = new OrcaRuntimeService()
+    const writers = vi.spyOn(runtime, 'assertStructuredAdoptionTerminalWritersExited')
+    const intent = () =>
+      runtime.resolveStructuredAgentSessionCreateIntent({
+        envelope: { sessionId: 'new-chat', clientOperationId: 'operation-1' },
+        worktree: 'id:another-workspace',
+        agent: 'claude',
+        resumeFrom: {
+          providerSessionId: 'provider-session-alpha-1',
+          cliSource: { workspaceId: 'another-workspace', paneKey: 'pane-1' }
+        }
+      })
+    const liveWriter = Object.assign(new Error('live'), {
+      refusal: { code: 'agent_session_conflict', details: { reason: 'conversationHeldElsewhere' } }
+    })
+    writers.mockRejectedValueOnce(liveWriter)
+    await expect(intent()).rejects.toBe(liveWriter)
+    // At rest, the switch opens the owning chat as before.
+    writers.mockResolvedValueOnce()
+    await expect(intent()).rejects.toMatchObject({
+      refusal: { details: { owner: { sessionId: record.sessionId } } }
+    })
+    expect(writers).toHaveBeenCalledWith('claude', 'provider-session-alpha-1', {
+      workspaceId: 'another-workspace',
+      paneKey: 'pane-1'
+    })
   })
 
   it('pins the selected Codex launch home after normal launch preparation', async () => {
@@ -350,7 +383,7 @@ describe('structured agent-session create intent', () => {
 
 describe('adopting a conversation recorded outside Orca', () => {
   it('resolves OMP history with the configured launch environment', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-omp-create-intent-'))
+    const root = await mkdtemp(join(await realpath(tmpdir()), 'orca-omp-create-intent-'))
     try {
       const accountHome = join(root, 'account', 'agent')
       const ambientData = join(root, 'ambient-data')
@@ -451,7 +484,7 @@ describe('adopting a conversation recorded outside Orca', () => {
   })
 
   it('adopts the original Pi file into a folder workspace and refuses another folder', async () => {
-    const accountHome = await mkdtemp(join(tmpdir(), 'orca-pi-adopt-intent-'))
+    const accountHome = await mkdtemp(join(await realpath(tmpdir()), 'orca-pi-adopt-intent-'))
     vi.stubEnv('PI_CODING_AGENT_DIR', accountHome)
     try {
       const file = join(
@@ -496,17 +529,23 @@ describe('adopting a conversation recorded outside Orca', () => {
       expect(intent.adopt).toEqual({
         providerHandle: { transport: 'jsonl-rpc', agent: 'pi', nativeId: file },
         transcriptPath: file,
-        source: { providerSessionId: '0198c2a4-7d1e-7c3a-9a4b-1f2e3d4c5b6a', workspaceCwd: '/repos/workspace-1' }
+        source: {
+          providerSessionId: '0198c2a4-7d1e-7c3a-9a4b-1f2e3d4c5b6a',
+          workspaceCwd: '/repos/workspace-1'
+        }
       })
 
       workspaceDirectory = '/different-folder'
       const refused = await runtime.resolveStructuredAgentSessionCreateIntent({
-          envelope: { sessionId: 'session-2', clientOperationId: 'operation-2' },
-          worktree: 'id:workspace-1',
-          agent: 'pi',
-          resumeFrom: { providerSessionId: '0198c2a4-7d1e-7c3a-9a4b-1f2e3d4c5b6a' }
-        })
-      expect(await prepareAdoptedTranscript(refused)).toMatchObject({ ok: false, refusal: { code: 'agent_session_identity_required' } })
+        envelope: { sessionId: 'session-2', clientOperationId: 'operation-2' },
+        worktree: 'id:workspace-1',
+        agent: 'pi',
+        resumeFrom: { providerSessionId: '0198c2a4-7d1e-7c3a-9a4b-1f2e3d4c5b6a' }
+      })
+      expect(await prepareAdoptedTranscript(refused)).toMatchObject({
+        ok: false,
+        refusal: { code: 'agent_session_identity_required' }
+      })
     } finally {
       vi.unstubAllEnvs()
       await rm(accountHome, { recursive: true, force: true })

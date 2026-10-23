@@ -166,8 +166,9 @@ function runLegacyAgentLaunch(
       presentation: params.presentation
     })
   if (params.target.kind === 'create-worktree' && params.target.create.clientMutationId) {
+    const { repo, repoHostId } = params.target.create
     return context.runtime.dedupeWorktreeCreate(
-      params.target.create.repo,
+      repoHostId ? { repo, repoHostId } : repo,
       `agent.launch:${params.target.create.clientMutationId}`,
       execute
     )

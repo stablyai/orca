@@ -22,12 +22,12 @@ vi.mock('fs', () => ({
   readFileSync: (...args: unknown[]) => mockReadFileSync(...args)
 }))
 
-import { buildConnectConfig } from './ssh-connection-utils'
+import { buildConnectConfig } from './connection/ssh-connect-config'
 import { getPassphrasePrivateKeyPath } from './ssh-private-key-authentication'
-import { buildSshArgs } from './system-ssh-args'
-import { walkInitialAuthLadder } from './ssh-connection-test-fixtures'
+import { buildSshArgs } from './system-transport/system-ssh-args'
+import { walkInitialAuthLadder } from './connection/ssh-connection-test-fixtures'
 import type { SshTarget } from '../../shared/ssh-types'
-import type { SshResolvedConfig } from './ssh-config-parser'
+import type { SshResolvedConfig } from './config/ssh-g-config-resolution'
 
 function makeTarget(overrides: Partial<SshTarget> = {}): SshTarget {
   return {

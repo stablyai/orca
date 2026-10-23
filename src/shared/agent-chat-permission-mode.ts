@@ -1,6 +1,9 @@
 import type { GlobalSettings } from './global-settings-types'
-import { resolvedTuiAgentArgsBypassPermissions } from './tui-agent-launch-defaults'
-import { YOLO_TUI_AGENT_ARGS } from './tui-agent-permissions'
+import {
+  resolvedTuiAgentArgsBypassPermissions,
+  resolveTuiAgentLaunchArgs
+} from './tui-agent-launch-defaults'
+import { AUTO_TUI_AGENT_ARGS, YOLO_TUI_AGENT_ARGS } from './tui-agent-permissions'
 import type { TuiAgent } from './tui-agent'
 
 /** A chat's own permission choice. Saved in chat records and settings: never rename a value. */
@@ -13,6 +16,17 @@ export const AGENT_CHAT_PERMISSION_MODES = [
   'auto',
   'full-access'
 ] as const satisfies readonly AgentChatPermissionMode[]
+
+/** The lucide glyph each mode shows; desktop and phone resolve the name in their own icon package. */
+export const AGENT_CHAT_PERMISSION_MODE_ICON_NAMES = {
+  ask: 'Hand',
+  'accept-edits': 'FilePenLine',
+  auto: 'ShieldCheck',
+  'full-access': 'ShieldAlert'
+} as const satisfies Record<AgentChatPermissionMode, string>
+
+export type AgentChatPermissionModeIconName =
+  (typeof AGENT_CHAT_PERMISSION_MODE_ICON_NAMES)[AgentChatPermissionMode]
 
 /** The chat option a mode is saved and written under. */
 export const AGENT_CHAT_PERMISSION_MODE_OPTION_ID = 'permissionMode'
@@ -52,6 +66,7 @@ const AGENT_CHAT_PERMISSION_MODES_BY_AGENT = new Map<string, AgentChatPermission
   ['codex', CODEX_CHAT_PERMISSION_MODES],
   ['grok', ACP_CHAT_PERMISSION_MODES],
   ['opencode', ACP_CHAT_PERMISSION_MODES],
+  ['opencode2', ACP_CHAT_PERMISSION_MODES],
   ['omp', ACP_CHAT_PERMISSION_MODES],
   ['antigravity', ANTIGRAVITY_CHAT_PERMISSION_MODES]
 ])
@@ -121,6 +136,32 @@ export function newChatPermissionMode(
   return support ? savedChatPermissionMode(support, setting) : null
 }
 
+/** A scoped agent choice takes precedence over the shared new-chat default. */
+export function newChatPermissionModeForSettings(
+  agent: string,
+  settings:
+    | Partial<Pick<GlobalSettings, 'nativeChatPermissionMode' | 'agentNativeChatPermissionModes'>>
+    | null
+    | undefined
+): AgentChatPermissionMode | null {
+  const overrides = settings?.agentNativeChatPermissionModes
+  const override = overrides && Object.getOwnPropertyDescriptor(overrides, agent)?.value
+  return newChatPermissionMode(agent, override ?? settings?.nativeChatPermissionMode)
+}
+
+export function normalizeAgentNativeChatPermissionModes(
+  value: unknown
+): NonNullable<GlobalSettings['agentNativeChatPermissionModes']> {
+  if (!value || typeof value !== 'object') {
+    return {}
+  }
+  return Object.fromEntries(
+    Object.entries(value).filter(([agent, mode]) =>
+      agentChatPermissionModes(agent)?.modes.some((offered) => offered === mode)
+    )
+  )
+}
+
 /** Seeded once when absent, then stored; an unknown value asks. */
 export function loadedChatPermissionSetting(
   saved: unknown,
@@ -130,8 +171,13 @@ export function loadedChatPermissionSetting(
   if (saved !== undefined) {
     return isAgentChatPermissionMode(saved) ? saved : 'ask'
   }
-  // What chats ran before they had modes: Claude's and Codex's own arguments, not the all-agent
-  // Yolo/Manual summary, which shows custom arguments on any agent as Yolo even after Manual.
+  const automatic = (agent: 'claude' | 'codex'): boolean =>
+    resolveTuiAgentLaunchArgs(agent, terminal.agentDefaultArgs).trim() ===
+    AUTO_TUI_AGENT_ARGS[agent]
+  if (automatic('claude') && automatic('codex')) {
+    return 'auto'
+  }
+  // Seed from each agent's arguments; the all-agent summary can reflect unrelated overrides.
   const bypasses = (agent: 'claude' | 'codex'): boolean =>
     resolvedTuiAgentArgsBypassPermissions(agent, terminal, platform)
   return bypasses('claude') && bypasses('codex') ? 'full-access' : 'ask'

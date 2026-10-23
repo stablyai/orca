@@ -1,4 +1,4 @@
-import { JIRA_IMAGE_CAPABILITY } from '../../../shared/jira-attachment-image'
+import { JIRA_IMAGE_CAPABILITY } from '../../../shared/jira/jira-attachment-image'
 import { migrateLegacyJiraImages } from './runtime-jira-image-cache'
 import type {
   JiraComment,

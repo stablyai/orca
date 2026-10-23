@@ -157,6 +157,34 @@ export function discardPendingMutationReceipt(
     .run(callerFingerprint, requestId)
 }
 
+export function countPendingMutationReceipts(
+  this: OrchestrationDb,
+  callerFingerprints: readonly string[]
+): number {
+  const count = this.db
+    .prepare(
+      `SELECT COUNT(*) AS count FROM mutation_receipts
+       WHERE caller_fingerprint IN (SELECT value FROM json_each(?)) AND state = 'pending'`
+    )
+    .get(JSON.stringify(callerFingerprints))?.count
+  return Number(count ?? 0)
+}
+
+/** Completes these callers' pending rows with `receipt`, for operations no running work owns. */
+export function settlePendingMutationReceipts(
+  this: OrchestrationDb,
+  callerFingerprints: readonly string[],
+  receipt: string
+): void {
+  this.db
+    .prepare(
+      `UPDATE mutation_receipts
+       SET state = 'completed', receipt = ?, updated_at = datetime('now')
+       WHERE caller_fingerprint IN (SELECT value FROM json_each(?)) AND state = 'pending'`
+    )
+    .run(receipt, JSON.stringify(callerFingerprints))
+}
+
 export function getMutationReceipt(
   this: OrchestrationDb,
   callerFingerprint: string,
@@ -176,6 +204,8 @@ export type MutationReceiptStoreMethods = {
   completeMutationReceipt: typeof completeMutationReceipt
   checkpointPendingMutationReceipt: typeof checkpointPendingMutationReceipt
   discardPendingMutationReceipt: typeof discardPendingMutationReceipt
+  countPendingMutationReceipts: typeof countPendingMutationReceipts
+  settlePendingMutationReceipts: typeof settlePendingMutationReceipts
   getMutationReceipt: typeof getMutationReceipt
 }
 
@@ -186,6 +216,8 @@ export function attachMutationReceiptStore(ctor: { prototype: object }): void {
     completeMutationReceipt,
     checkpointPendingMutationReceipt,
     discardPendingMutationReceipt,
+    countPendingMutationReceipts,
+    settlePendingMutationReceipts,
     getMutationReceipt
   })
 }

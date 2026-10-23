@@ -38,4 +38,19 @@ describe('definitive agent-session create refusals', () => {
     )
     expect(isDefinitiveAgentSessionCreateRefusal('structured_agent_session_unsupported')).toBe(true)
   })
+
+  // Pins the RPC half (round-2 S5): transport and client-minted codes never allow a fallback.
+  it.each([
+    'runtime_unavailable',
+    'remote_runtime_unavailable',
+    'runtime_timeout',
+    'runtime_manually_disconnected',
+    'runtime_rpc_queue_overloaded',
+    'method_not_supported',
+    'invalid_argument',
+    null,
+    undefined
+  ])('does not count %s as definitive', (code) => {
+    expect(isDefinitiveAgentSessionCreateRefusal(code)).toBe(false)
+  })
 })

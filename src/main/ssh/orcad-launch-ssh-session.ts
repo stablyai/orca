@@ -11,9 +11,9 @@
  * spawned by the daemon, which outlives orcad restarts and keeps the attribution it was spawned
  * with, so a launch that finds a live daemon carries the earlier session forward.
  */
-import { shellEscape } from './ssh-connection-utils'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { joinRemotePath, type RemoteHostPlatform } from './ssh-remote-platform'
-import { ORCAD_PID_FILENAME } from './orcad-remote-host-support'
+import { ORCAD_PID_FILENAME } from '../managed-server/install/orcad-remote-host-support'
 
 export const ORCAD_LAUNCH_SSH_SESSION_FILENAME = '.orcad-launch-ssh-session'
 
@@ -54,7 +54,7 @@ export function captureOrcadLaunchSshSessionCommand(): string {
 }
 
 function recordPath(host: RemoteHostPlatform, userDataDir: string): string {
-  return shellEscape(joinRemotePath(host, userDataDir, ORCAD_LAUNCH_SSH_SESSION_FILENAME))
+  return quotePosixShell(joinRemotePath(host, userDataDir, ORCAD_LAUNCH_SSH_SESSION_FILENAME))
 }
 
 /**
@@ -64,7 +64,7 @@ function recordPath(host: RemoteHostPlatform, userDataDir: string): string {
  * name an unrelated process.
  */
 function liveDaemonShellFunction(host: RemoteHostPlatform, userDataDir: string): string {
-  const daemonDir = shellEscape(joinRemotePath(host, userDataDir, 'daemon'))
+  const daemonDir = quotePosixShell(joinRemotePath(host, userDataDir, 'daemon'))
   return (
     `orcad_daemon_live() { orcad_ddir=${daemonDir}; for orcad_df in "$orcad_ddir"/daemon-v*.pid; do ` +
     '[ -f "$orcad_df" ] || continue; ' +
@@ -88,7 +88,7 @@ export function writeOrcadLaunchSshSessionCommand(
   const file = recordPath(host, userDataDir)
   return (
     // Why mkdir: on a first deploy the detached server may not have created its data root yet.
-    `{ orcad_bg=$!; ( umask 077; mkdir -p ${shellEscape(userDataDir)} ); ` +
+    `{ orcad_bg=$!; ( umask 077; mkdir -p ${quotePosixShell(userDataDir)} ); ` +
     `${liveDaemonShellFunction(host, userDataDir)} ` +
     'orcad_daemon_live; orcad_dl=$?; ' +
     'if [ "$orcad_dl" = 0 ]; then ' +
@@ -108,7 +108,7 @@ export function orcadLaunchSshSessionProbeCommand(
   userDataDir: string
 ): string {
   const file = recordPath(host, userDataDir)
-  const pidFile = shellEscape(joinRemotePath(host, remoteInstallDir, ORCAD_PID_FILENAME))
+  const pidFile = quotePosixShell(joinRemotePath(host, remoteInstallDir, ORCAD_PID_FILENAME))
   return [
     'orcad_mac=$(sw_vers -productVersion 2>/dev/null) || { echo NOT_APPLICABLE; exit 0; };',
     'orcad_major=${orcad_mac%%.*};',

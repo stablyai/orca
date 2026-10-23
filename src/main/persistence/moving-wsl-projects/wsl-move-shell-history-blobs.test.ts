@@ -14,7 +14,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   parseOrcadMigrationBlobDescriptor,
   type OrcadMigrationBlobDescriptor
-} from '../../../shared/orcad-migration-blob-transfer'
+} from '../../../shared/orcad-migration/orcad-migration-blob-transfer'
 import { rewriteOrcadMigrationWorktreeId } from '../../ssh/orcad-migration-path-rewrite'
 import { hashWorktreeId } from '../../terminal-history-id'
 import { parseOrcadMigrationShellHistoryHeader } from '../migrating-orcad-catalog/orcad-migration-shell-history-format'

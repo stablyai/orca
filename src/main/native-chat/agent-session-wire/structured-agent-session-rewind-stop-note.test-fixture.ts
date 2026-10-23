@@ -64,13 +64,7 @@ export async function expectRawStopNoteRewindRecovery({
     kind: 'status',
     text: 'Cancellation requested.'
   })
-  rewind.mockImplementation(async () => {
-    expect(
-      store.getRecord(HOST_TEST_SESSION)?.rewind?.retained.find((item) => item.itemId === noteId)
-        ?.body
-    ).toEqual(unconfirmed)
-    return { ok: true }
-  })
+  rewind.mockImplementation(async () => ({ ok: true }))
   const replace = journal.replaceEpochItems.bind(journal)
   const crash = vi.spyOn(journal, 'replaceEpochItems').mockImplementationOnce(async (...args) => {
     await replace(...args)

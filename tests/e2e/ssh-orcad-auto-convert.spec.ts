@@ -29,6 +29,7 @@ import {
   readHostOrcadActivation
 } from './helpers/orcad-template-variant'
 import { seedRelayEraProfile } from './helpers/orcad-upgrade-profile'
+import { findOrcadMigrationSourceCutoverForTarget } from '../../src/main/ssh/orcad-migration-cutover-journal'
 import { toSshExecutionHostId } from '../../src/shared/execution-host'
 import {
   decommissionConvertedHost,
@@ -103,7 +104,7 @@ test('a relay-era profile converts its SSH host on the first connect after upgra
       session.userDataDir,
       host.input,
       { repoPath: host.remoteRepoPath, folderPath: host.remoteFolderPath },
-      { terminalTab: true }
+      { terminalTab: true, parkedScrollback: true }
     )
     // No relay ever ran here, so the terminal gate must prove `exited` from an empty lease set.
     // This launch bypasses the fixture's log relay; keep the SSH lines a failed move explains itself by.
@@ -136,6 +137,24 @@ test('a relay-era profile converts its SSH host on the first connect after upgra
       .toMatchObject({ kind: 'managed' })
     await upgraded.page.screenshot({ path: testInfo.outputPath('relay-era-terminal-dialed.png') })
     await convertAndRetain(upgraded.page, session.userDataDir, seeded)
+    // #30126: the parked panes' history rode the snapshot channel; inlined, it overflowed the manifest.
+    const moved = findOrcadMigrationSourceCutoverForTarget(session.userDataDir, seeded.targetId)
+      ?.manifest.payload.dormantState
+    expect(moved?.workspaceSession?.localOnlyScrollbackByTabId).toBeUndefined()
+    expect(
+      Object.fromEntries(
+        (moved?.terminalScrollbackSnapshots ?? [])
+          .filter((snapshot) => snapshot.tabId === seeded.terminalTabId)
+          .map((snapshot) => [snapshot.leafId, snapshot.byteLength])
+      )
+    ).toEqual(
+      Object.fromEntries(
+        Object.entries(seeded.parkedScrollbackByLeafId).map(([leafId, buffer]) => [
+          leafId,
+          Buffer.byteLength(buffer)
+        ])
+      )
+    )
     const environment = (
       await upgraded.page.evaluate(() => window.api.runtimeEnvironments.list())
     ).find((entry) => entry.orcadDeployment?.sshTargetId === seeded.targetId)

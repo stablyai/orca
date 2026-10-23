@@ -45,7 +45,7 @@ vi.mock('../ipc/filesystem-auth', () => ({
   PATH_ACCESS_DENIED_MESSAGE: 'denied',
   resolveAuthorizedPath: vi.fn()
 }))
-vi.mock('../ipc/runtime-environment-transport-routing', () => ({
+vi.mock('../ipc/runtime-environments/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: callRuntimeEnvironmentMock
 }))
 vi.mock('./dashboard-popout-window', () => ({ isDashboardPopoutRenderer: () => false }))

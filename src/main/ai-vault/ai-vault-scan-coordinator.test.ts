@@ -17,7 +17,6 @@ describe('AiVaultScanCoordinator', () => {
     onLocalAiVaultScanProgress(({ progress }) => stages.push(progress?.stage ?? null))
     try {
       const earlier = startLocalAiVaultScanProgress('scope', 'earlier', () => 500)
-      earlier.sent()
       earlier.finish(null)
       let old: LocalAiVaultScanProgressHandle | null = null
       const first = coordinator.run({
@@ -45,8 +44,11 @@ describe('AiVaultScanCoordinator', () => {
           })
       })
       await Promise.resolve()
-      expect(localAiVaultScanProgress('scope')).toBeNull()
-      expect(stages.at(-1)).toBeNull()
+      expect(localAiVaultScanProgress('scope')).toMatchObject({
+        stage: 'finding',
+        startedAt: 2_000
+      })
+      expect(stages).not.toContain(null)
       finishPreparation?.(EMPTY_RESULT)
       await expect(Promise.all([first, replacement])).resolves.toEqual([EMPTY_RESULT, EMPTY_RESULT])
     } finally {

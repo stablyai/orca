@@ -1,3 +1,4 @@
+import { BROWSER_CLIENT_PROFILE_SWITCH_CAPABILITY } from '../../shared/browser-client-profile-switch-protocol'
 import { createHash } from 'node:crypto'
 import path from 'node:path'
 import { app } from 'electron'
@@ -35,29 +36,29 @@ import {
   type PairedRuntimeBrowserClientHostStart
 } from './paired-runtime-browser-client-host-registry'
 import { PairedRuntimeBrowserNetworkRoute } from './paired-runtime-browser-network-route'
+import { derivePairedRuntimeBrowserAuthorityIdentity } from './paired-runtime-browser-authority-identity'
+import type { BrowserClientPageAuthorityIdentity } from './browser-client-page-command-executor-dependencies'
 import {
   browserRouteSessionRegistry,
   browserRouteWebContentsRegistry
 } from './browser-route-session-runtime'
 
-export type ClientHostRouteIdentity = {
+export type ClientHostRouteIdentity = BrowserClientPageAuthorityIdentity & {
   orcaProfileId: string
-  authorityConnectionIdentity: string
+  /** Pairs with `authorityConnectionIdentity` and `pairingAuthorityConnectionIdentity`. */
   executionHostIdentity: string
-  /** Pre-migration pair, naming the partition an older build already populated. */
-  legacyAuthorityConnectionIdentity: string
+  /** Pairs with `legacyAuthorityConnectionIdentity`, naming the partition an older build populated. */
   legacyExecutionHostIdentity: string
   storageScope: string
 }
 
-type ProductionBrowserClientHostStart = PairedRuntimeBrowserClientHostStart & {
-  connection: PairedRuntimeConnection
-  orcaProfileId: string
-  authorityConnectionIdentity: string
-  legacyAuthorityConnectionIdentity: string
-  storageScope: string
-  environmentLabel: string
-}
+type ProductionBrowserClientHostStart = PairedRuntimeBrowserClientHostStart &
+  BrowserClientPageAuthorityIdentity & {
+    connection: PairedRuntimeConnection
+    orcaProfileId: string
+    storageScope: string
+    environmentLabel: string
+  }
 
 let activeOrcaProfileId: string | null = null
 /** Route identity of each live client host, for storage operations without a page. */
@@ -92,6 +93,7 @@ const browserClientHosts =
           executor = new BrowserClientPageCommandExecutor({
             orcaProfileId: next.orcaProfileId,
             authorityConnectionIdentity: next.authorityConnectionIdentity,
+            pairingAuthorityConnectionIdentity: next.pairingAuthorityConnectionIdentity,
             legacyAuthorityConnectionIdentity: next.legacyAuthorityConnectionIdentity,
             storageScope: next.storageScope,
             retainNetworkRoute,
@@ -117,6 +119,7 @@ const browserClientHosts =
             browserHostClientId: getBrowserClientHostId(),
             hostCapabilities: [
               'webview',
+              BROWSER_CLIENT_PROFILE_SWITCH_CAPABILITY,
               BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY,
               BROWSER_CLIENT_FILE_CHANNEL_HOST_CAPABILITY
             ],
@@ -161,24 +164,19 @@ export async function startPairedRuntimeBrowserClientHost(options: {
     orcaProfileId,
     environmentId: options.environment.id
   })
+  const authorityIdentity = derivePairedRuntimeBrowserAuthorityIdentity({
+    orcaProfileId,
+    environment: options.environment,
+    pairingRevision,
+    authorityRuntimeId: options.authorityRuntimeId,
+    connection
+  })
   const routeIdentity: ClientHostRouteIdentity = {
     orcaProfileId,
     storageScope,
-    authorityConnectionIdentity: authorityConnectionIdentity(
-      orcaProfileId,
-      options.environment.id,
-      pairingRevision,
-      connection
-    ),
+    ...authorityIdentity,
     // Why: settings-level operations target the server's own machine, not a nested SSH/WSL host.
     executionHostIdentity: browserAuthorityExecutionHostStorageIdentity(storageScope),
-    legacyAuthorityConnectionIdentity: legacyAuthorityConnectionIdentity(
-      orcaProfileId,
-      options.environment.id,
-      pairingRevision,
-      options.authorityRuntimeId,
-      connection
-    ),
     legacyExecutionHostIdentity: legacyBrowserNativeExecutionHostStorageIdentity(
       options.authorityRuntimeId
     )
@@ -191,8 +189,7 @@ export async function startPairedRuntimeBrowserClientHost(options: {
     orcaProfileId,
     storageScope: routeIdentity.storageScope,
     environmentLabel: options.environment.name,
-    authorityConnectionIdentity: routeIdentity.authorityConnectionIdentity,
-    legacyAuthorityConnectionIdentity: routeIdentity.legacyAuthorityConnectionIdentity
+    ...authorityIdentity
   })
   clientHostRouteIdentities.set(options.environment.id, routeIdentity)
   return authority
@@ -263,53 +260,6 @@ function createNetworkRoutes(
         onUnavailable: (error) => retireFailedEnvironmentHost(environmentId, error)
       })
   })
-}
-
-/**
- * Storage identity of the connection to a paired server.
- *
- * Every component is a durable client-side record: the environment, its pairing
- * revision, and the server's public key. The server's `authorityRuntimeId` is
- * deliberately absent -- it is a per-process UUID, and hashing it here minted a
- * fresh partition on every remote restart, dropping the user's cookies.
- */
-function authorityConnectionIdentity(
-  orcaProfileId: string,
-  environmentId: string,
-  pairingRevision: number,
-  connection: PairedRuntimeConnection
-): string {
-  return connectionIdentityDigest([
-    'paired-runtime-browser',
-    orcaProfileId,
-    environmentId,
-    pairingRevision,
-    connection.hostPublicKeyB64,
-    connection.pairedDeviceId ?? null
-  ])
-}
-
-/** Superseded per-process identity, kept only so its partition can be adopted. */
-function legacyAuthorityConnectionIdentity(
-  orcaProfileId: string,
-  environmentId: string,
-  pairingRevision: number,
-  authorityRuntimeId: string,
-  connection: PairedRuntimeConnection
-): string {
-  return connectionIdentityDigest([
-    'paired-runtime-browser',
-    orcaProfileId,
-    environmentId,
-    pairingRevision,
-    authorityRuntimeId,
-    connection.hostPublicKeyB64,
-    connection.pairedDeviceId ?? null
-  ])
-}
-
-function connectionIdentityDigest(components: readonly unknown[]): string {
-  return `paired-runtime:${createHash('sha256').update(JSON.stringify(components)).digest('hex')}`
 }
 
 // Why: staged remote bytes are main-owned scratch, never the user's visible Downloads folder.

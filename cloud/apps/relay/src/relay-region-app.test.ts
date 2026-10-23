@@ -140,6 +140,68 @@ describe('Relay region API', () => {
     })
   })
 
+  it('gives a window request the in-region reserve fallback, and never a report', async () => {
+    const assignment = {
+      userId: 'user-1',
+      relayHostId: 'abcdefghijklmnop',
+      cellId: 'asia-c1',
+      cellUrl: 'https://asia-c1.relay.example.test',
+      region: 'asia-east2',
+      assignmentEpoch: 7,
+      leaseExpiresAt: Date.now() + 300_000
+    }
+    const assign = vi.fn(async () => assignment)
+    const regionReserve = vi.fn(async () => null)
+    const plan = vi.fn(async () => ({ kind: 'database', regionReserve }))
+    const app = createRelayApp(config(), {
+      store: {} as never,
+      assignments: {
+        assign,
+        resolve: async () => assignment,
+        exchangeRegionCorrection: async () => ({ v: 1, reportStatus: 'accepted' })
+      } as never,
+      reservePlacement: { plan } as never,
+      drain: vi.fn(),
+      ready: async () => true
+    })
+    const response = await app.request(
+      '/v1/assign',
+      assignmentRequest('abcdefghijklmnop', {
+        reconnect: true,
+        preferredRegion: 'asia-east2',
+        regionCorrection: { v: 1, action: 'issue-window' }
+      })
+    )
+    expect(response.status).toBe(200)
+    expect(plan).toHaveBeenCalledWith(
+      { userId: 'user-1', relayHostId: 'abcdefghijklmnop' },
+      { reconnect: true, region: 'asia-east2', regionCorrection: true }
+    )
+    expect(assign).toHaveBeenCalledWith(
+      { userId: 'user-1', relayHostId: 'abcdefghijklmnop' },
+      'asia-east2',
+      'asia-east2',
+      undefined,
+      { regionReserve, hostRequested: true }
+    )
+    plan.mockClear()
+    await app.request(
+      '/v1/assign',
+      assignmentRequest('abcdefghijklmnop', {
+        regionCorrection: {
+          v: 1,
+          action: 'report',
+          generation: 2,
+          assignmentEpoch: 7,
+          policyVersion: 1,
+          outcome: 'inconclusive',
+          reason: 'timeout'
+        }
+      })
+    )
+    expect(plan).not.toHaveBeenCalled()
+  })
+
   it('returns successful placement when optional window storage is unavailable', async () => {
     const app = createRelayApp(config(), {
       store: {} as never,

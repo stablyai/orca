@@ -2,7 +2,7 @@ import { extname } from 'node:path'
 import type { RuntimeFilePreviewResult } from '../../shared/runtime-file-contracts'
 import type { DocPreviewFileFailureReason } from '../../shared/doc-preview-scheme'
 import { FONT_FILE_MIME_TYPES } from '../../shared/font-file-extensions'
-import { callRuntimeEnvironment } from '../ipc/runtime-environment-transport-routing'
+import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
 import { getCanonicalUserDataPath } from '../persistence'
 import { SSH_HOST_NOT_SERVED_MESSAGE } from '../providers/ssh-host-not-served-error'
 import {

@@ -1,6 +1,6 @@
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
-import { isStructuredWorkerHandle } from '../../../../structured-worker-identity'
+import { isStructuredWorkerHandle } from '../../../../../../shared/structured-worker-handle'
 import { completeWorkerTerminalRelease } from './worker-release-completion'
 
 /**

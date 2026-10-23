@@ -47,7 +47,10 @@ export type RuntimeGitCommandHost = {
    *  no store (avoids unrelated ownership-inheritance/refspec-migration side effects), so a
    *  lazily-minted remote still needs a way back into the store's `pushTarget.remoteCreated`
    *  for #17842's orphan sweep. Called only when materialize reports `remoteCreated: true`. */
-  persistMaterializedPushTarget?(worktreeId: string, pushTarget: GitPushTarget): void
+  persistMaterializedPushTarget?(
+    worktree: Pick<Worktree, 'id' | 'hostId'>,
+    pushTarget: GitPushTarget
+  ): void
 }
 
 /**

@@ -10,7 +10,11 @@
 // never be spliced into a sequence space that a structured session is also
 // writing; a later structured resume rolls the epoch again and rebuilds.
 
-import { adoptedTranscriptSourceObserver, validateAdoptedOpenCodeSource, type AdoptedTranscriptSource } from './adopted-transcript-source'
+import {
+  adoptedTranscriptSourceObserver,
+  validateAdoptedOpenCodeSource,
+  type AdoptedTranscriptSource
+} from './adopted-transcript-source'
 import { createReadStream } from 'node:fs'
 import type { AgentType } from '../../../shared/agent-status-types'
 import type {
@@ -37,10 +41,12 @@ import type { JournalReplacementItem } from './journal-epoch-replacement'
 import {
   boundInlineText,
   boundToolInput,
-  DEFAULT_JOURNAL_PAYLOAD_LIMITS,
   type JournalPayloadLimits
 } from './journal-payload-bounds'
 import type { AgentSessionJournal } from './journal-store'
+
+/** Import preserves the bounded history window; the transcript remains the complete source. */
+export const LEGACY_IMPORT_BLOCK_LIMITS: JournalPayloadLimits = { inlineHeadBytes: 16 * 1024 }
 
 export type LegacyImportOptions = ResolveSessionFileOptions & {
   /** Resolve directly to this file, skipping path discovery. */
@@ -99,7 +105,7 @@ export async function prepareLegacyTranscriptImport(input: {
   options?: LegacyImportOptions
 }): Promise<PreparedLegacyImport> {
   const options = input.options ?? {}
-  const limits = options.limits ?? DEFAULT_JOURNAL_PAYLOAD_LIMITS
+  const limits = options.limits ?? LEGACY_IMPORT_BLOCK_LIMITS
   // OMP is a Pi fork that kept Pi's session format, so OMP's decoder reads Pi's sessions too.
   const transcriptAgent =
     input.agent === 'pi' ? 'omp' : resolveNativeChatTranscriptAgent(input.agent)
@@ -215,10 +221,14 @@ async function decodeReplacementItems(input: {
   source?: AdoptedTranscriptSource
   limits: JournalPayloadLimits
 }): Promise<{ items: JournalReplacementItem[]; consumedBytes: number }> {
-  const source = input.source ? adoptedTranscriptSourceObserver({
-    agent: input.agent, filePath: input.filePath, source: input.source,
-    maxSourceBytes: MAX_LEGACY_IMPORT_RECORD_BYTES
-  }) : null
+  const source = input.source
+    ? adoptedTranscriptSourceObserver({
+        agent: input.agent,
+        filePath: input.filePath,
+        source: input.source,
+        maxSourceBytes: MAX_LEGACY_IMPORT_RECORD_BYTES
+      })
+    : null
   const tracker = createLegacyIdentityTracker({
     transcriptAgent: input.transcriptAgent,
     agent: input.agent,
@@ -282,21 +292,19 @@ async function decodeReplacementItems(input: {
 /**
  * A message whose only content is a tool invocation becomes a tool-call item so
  * the reducer renders it as one. Everything else stays a message item with its
- * blocks bounded in place.
+ * adoption limits applied only when supplied.
  */
-function legacyItemBody(
+export function legacyItemBody(
   message: NativeChatMessage,
-  limits: JournalPayloadLimits
+  limits?: JournalPayloadLimits
 ): AgentJournalItemBody {
   const only = message.blocks.length === 1 ? message.blocks[0] : undefined
   if (only?.type === 'tool-call') {
-    // Legacy transcripts are untrusted and can contain arbitrarily large tool
-    // arguments. Keep them on the same bounded path as live events before the
-    // replacement epoch is published.
+    // Adoption bounds bulk before publishing its replacement epoch; catch-up admits whole batches.
     return {
       kind: 'tool-call',
       name: only.name,
-      input: boundToolInput(only.input, limits),
+      input: limits ? boundToolInput(only.input, limits) : only.input,
       ...(only.callId !== undefined ? { callId: only.callId } : {}),
       state: 'completed'
     }
@@ -304,7 +312,7 @@ function legacyItemBody(
   return {
     kind: 'message',
     role: message.role,
-    blocks: message.blocks.map((block) => boundBlock(block, limits))
+    blocks: limits ? message.blocks.map((block) => boundBlock(block, limits)) : message.blocks
   }
 }
 

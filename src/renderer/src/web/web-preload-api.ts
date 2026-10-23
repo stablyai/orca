@@ -104,7 +104,10 @@ function createWebPreloadApi(): Partial<PreloadApi> {
         }))
     },
     memory: {
-      getSnapshot: () => Promise.resolve(createEmptyMemorySnapshot())
+      getSnapshot: () => Promise.resolve(createEmptyMemorySnapshot()),
+      // Browser pages have no native-window veto; document visibility owns admission.
+      resourceWindowVisible: () => Promise.resolve(true),
+      onResourceWindowVisibility: () => () => {}
     },
     aiVault: createWebAiVaultApi(),
     preflight: createPreflightApi(),

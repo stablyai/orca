@@ -7,14 +7,15 @@ import { toWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-i
 
 const mocks = vi.hoisted(() => ({
   revealTerminalPane: vi.fn(),
-  getExplicitRuntimeEnvironmentIdForWorktree: vi.fn()
+  ownerEnvironmentIdForWorkspace: vi.fn()
 }))
 
 vi.mock('@/lib/reveal-terminal-pane', () => ({
   revealTerminalPane: mocks.revealTerminalPane
 }))
-vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getExplicitRuntimeEnvironmentIdForWorktree: mocks.getExplicitRuntimeEnvironmentIdForWorktree
+vi.mock('@/lib/resolve-owner', () => ({
+  runtimeEnvironmentIdUnlessTwin: (state: unknown, workspaceId: string) =>
+    mocks.ownerEnvironmentIdForWorkspace(state, workspaceId)
 }))
 vi.mock('../../store', () => ({ useAppStore: { getState: () => ({}) } }))
 
@@ -54,7 +55,7 @@ describe('registerTerminalPaneRevealIpcBridge', () => {
     vi.resetAllMocks()
     vi.unstubAllGlobals()
     mocks.revealTerminalPane.mockReturnValue(true)
-    mocks.getExplicitRuntimeEnvironmentIdForWorktree.mockReturnValue(null)
+    mocks.ownerEnvironmentIdForWorkspace.mockReturnValue(null)
   })
 
   it("reveals a paired server's pane under the id this window mirrors its tab with", () => {
@@ -75,7 +76,7 @@ describe('registerTerminalPaneRevealIpcBridge', () => {
 
   it('finds the owning server from the workspace when the caller names no host', () => {
     const { deliver } = installBridge()
-    mocks.getExplicitRuntimeEnvironmentIdForWorktree.mockReturnValue('env-1')
+    mocks.ownerEnvironmentIdForWorkspace.mockReturnValue('env-1')
 
     deliver({ ...request, executionHostId: null })
 

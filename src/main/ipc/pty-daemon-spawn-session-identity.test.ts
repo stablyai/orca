@@ -5,7 +5,6 @@ import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { createDaemonActiveProviderFixtures } from './pty-ipc-daemon-provider-fixtures'
 import { registerPtyHandlers } from './pty/register-handlers'
 import { setLocalPtyProvider } from './pty/provider/registry'
-import { prewarmJcodeDaemon } from '../jcode/daemon-prewarm'
 import {
   buildJcodeRuntimeDir,
   JCODE_RUNTIME_DIR_ENV_KEY,
@@ -58,7 +57,6 @@ vi.mock('../codex/codex-state-db-backfill-recovery', () =>
 vi.mock('../agent-hooks/wsl-pi-omp-guest-readiness', () => ({
   awaitExplicitPiOmpGuestReadiness: vi.fn(async () => true)
 }))
-vi.mock('../jcode/daemon-prewarm', () => ({ prewarmJcodeDaemon: vi.fn() }))
 
 describe('registerPtyHandlers', () => {
   const { handlers, mainWindow, recoveredAgentClaim, recoveredAgentSurface } = setupPtyIpcSuite()
@@ -410,14 +408,13 @@ describe('registerPtyHandlers', () => {
       expect(vi.mocked(awaitExplicitPiOmpGuestReadiness)).toHaveBeenCalledTimes(2)
     })
 
-    it('both daemon lanes stamp the pane identity from the spawn ids; only the window pre-warms jcode', async () => {
+    it('both daemon lanes stamp the pane identity and jcode dir from the spawn ids', async () => {
       const lanes = startLanes()
       const leafId = '11111111-2222-4333-8444-555555555555'
       const paneKey = `tab-1:${leafId}`
       const jcodeDir = shouldInjectJcodeRuntimeDir(process.platform)
         ? buildJcodeRuntimeDir(paneKey)
         : undefined
-      vi.mocked(prewarmJcodeDaemon).mockClear()
       for (const lane of ['window', 'host'] as const) {
         await lanes.spawn(lane, {
           env: { ORCA_PANE_KEY: 'stale-tab:stale-leaf' },
@@ -430,8 +427,6 @@ describe('registerPtyHandlers', () => {
         expect(env.ORCA_TAB_ID).toBe('tab-1')
         expect(env[JCODE_RUNTIME_DIR_ENV_KEY]).toBe(jcodeDir)
       }
-      // TEMPORARY (its own PR removes it): host daemon spawns don't pre-warm jcode yet.
-      expect(vi.mocked(prewarmJcodeDaemon)).toHaveBeenCalledTimes(jcodeDir ? 1 : 0)
     })
   })
 })

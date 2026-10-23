@@ -129,7 +129,11 @@ export function registerSessionTabIpcBridge(unsubs: (() => void)[]): void {
       }
       const store = useAppStore.getState()
       if (move.kind === 'reorder') {
-        store.reorderUnifiedTabs(targetGroupId, move.tabOrder)
+        store.reorderUnifiedTabs(
+          targetGroupId,
+          move.tabOrder.map((id) => resolveWindowTabIdForHostTab(move.worktreeId, id)),
+          { projectedMoveTabId: resolveWindowTabIdForHostTab(move.worktreeId, tabId) }
+        )
         return
       }
       store.dropUnifiedTab(tabId, {

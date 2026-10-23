@@ -9,6 +9,10 @@ import type {
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-types'
 import type { RuntimeLeafRecord } from '../runtime-terminal-state-records'
 
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+
+type Graph = RuntimeSyncWindowGraph
+
 /** The runtime indexes graph tabs by bare id, so duplicate ids cannot be routed safely. */
 function assertUniqueRuntimeGraphTabIds(tabs: readonly RuntimeSyncedTab[]): void {
   const seen = new Set<string>()
@@ -21,6 +25,8 @@ function assertUniqueRuntimeGraphTabIds(tabs: readonly RuntimeSyncedTab[]): void
 }
 
 export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAttachWindow {
+  /** Layout-owner builds: main's panes in place of the window's (session-tabs-inventory.ts). */
+  protected abstract withMainSurfaces(windowId: number, graph: Graph): Graph
   declare protected terminalGroupGridSizes?: RuntimeSyncWindowGraph['terminalGroupGridSizes']
   declare protected singleGroupWorkspaceGridSize?: RuntimeSyncWindowGraph['singleGroupWorkspaceGridSize']
 
@@ -85,6 +91,8 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAtta
       this.servesHeadlessGraph = true
       this.rendererGeneration = null
     }
+    // Switch point: main's own panes stand in for the window's list of a workspace main owns.
+    graph = ORCA_LAYOUT_OWNER_IS_MAIN ? this.withMainSurfaces(windowId, graph) : graph
 
     if (graph.terminalGroupGridSizes) {
       // Merged, not replaced: a group in a worktree the window is not showing keeps its last size.
@@ -96,6 +104,7 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAtta
     if (graph.singleGroupWorkspaceGridSize) {
       this.singleGroupWorkspaceGridSize = graph.singleGroupWorkspaceGridSize
     }
+    this.activeGroupViewFacts.merge(graph.activeGroupByWorkspace)
     const graphWasReady = this.graphStatus === 'ready'
     const previousTabs = this.tabs
     const previousLeaves = this.leaves
@@ -147,8 +156,8 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAtta
           ? existing.ptyGeneration + 1
           : (existing?.ptyGeneration ?? 0)
       const existingPty = ptyId ? this.ptysById.get(ptyId) : undefined
-      // Retained history stays addressable, but a renderer graph cannot revoke a host-certified exit.
-      const connected = ptyId !== null && this.getPtyLivenessVerdict(ptyId)?.status !== 'exited'
+      // Retained history stays addressable; whether the terminal runs is graphLeafConnected's call.
+      const connected = this.graphLeafConnected(ptyId, leaf.worktreeId)
       const tailSource = existing?.ptyId === ptyId ? existing : existingPty
 
       nextLeaves.set(leafKey, {
@@ -180,7 +189,8 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAtta
             : graphSyncedAt
       })
 
-      if (leaf.ptyId && connected) {
+      // Switch point: main's own pane is no evidence to record the terminal connected.
+      if (leaf.ptyId && connected && !this.mainDecidesLiveness(leaf.worktreeId)) {
         this.recordPtyWorktree(leaf.ptyId, leaf.worktreeId, {
           connected: true,
           lastOutputAt: existing?.ptyId === leaf.ptyId ? existing.lastOutputAt : null,

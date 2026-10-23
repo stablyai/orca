@@ -114,6 +114,21 @@ describe('untracked line stats on a WSL worktree read by a Windows host', () => 
     expect(total?.added).toBe(3)
   })
 
+  it('invalidates an overlapping untracked branch total through the WSL filesystem spelling', async () => {
+    const target = path.join(UNC_WORKTREE, 'fresh.txt')
+    untrackedFiles.set(target, 'one\ntwo\n')
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: '0\t2\tfresh.txt\0', stderr: '' })
+    const input = createBranchLineTotalInput(
+      GUEST_WORKTREE,
+      [untrackedEntry('fresh.txt')],
+      { wslDistro: 'Ubuntu', branchLineTotalMergeBase: MERGE_BASE },
+      true
+    )
+
+    expect(await input?.compute()).toBeNull()
+    expect(lstatPaths).toEqual([target])
+  })
+
   it('maps a drvfs worktree onto its drive spelling', async () => {
     const target = path.join(String.raw`C:\repo`, 'fresh.txt')
     untrackedFiles.set(target, 'one\n')

@@ -1,12 +1,11 @@
 import { TERMINAL_HTTP_URL_MAX_LENGTH } from './terminal-http-link-limits'
+import { isProseUrlTerminator, PROSE_HTTP_URL_SOURCE } from '../../../../shared/prose-url-boundary'
 
 type ParsedTerminalHttpLink = {
   url: string
   startIndex: number
   endIndex: number
 }
-
-const HTTP_SCHEME_PREFIXES = ['https://', 'http://'] as const
 
 export function extractTerminalHttpLinks(lineText: string): ParsedTerminalHttpLink[] {
   const links: ParsedTerminalHttpLink[] = []
@@ -60,14 +59,8 @@ function* iterateTerminalHttpUrlCandidates(
 }
 
 function findNextHttpSchemeIndex(lineText: string, searchStart: number): number {
-  let nextIndex = -1
-  for (const prefix of HTTP_SCHEME_PREFIXES) {
-    const candidateIndex = lineText.indexOf(prefix, searchStart)
-    if (candidateIndex !== -1 && (nextIndex === -1 || candidateIndex < nextIndex)) {
-      nextIndex = candidateIndex
-    }
-  }
-  return nextIndex
+  const relativeIndex = lineText.slice(searchStart).search(/https?:\/\//i)
+  return relativeIndex === -1 ? -1 : searchStart + relativeIndex
 }
 
 function hasHttpUrlWordBoundary(lineText: string, startIndex: number): boolean {
@@ -98,7 +91,7 @@ function trimHttpUrlTrailingPunctuation(
 
 function isHttpUrlBodyTerminator(code: number): boolean {
   return (
-    isNonAsciiUrlTerminator(code) ||
+    (code > 0x7f && isProseUrlTerminator(String.fromCharCode(code))) ||
     isAsciiWhitespace(code) ||
     code === 0x22 ||
     code === 0x27 ||
@@ -143,13 +136,7 @@ function isHttpUrlTrailingPunctuation(code: number): boolean {
   )
 }
 
-// Why not all non-ascii: a url path may legitimately carry unencoded CJK (see the wrapped-url
-// tests), so only punctuation and spaces end it - full-width brackets, an ideographic space, `\u30fb`.
-const NON_ASCII_URL_TERMINATOR = /[\p{P}\p{S}\p{Z}]/u
-
-function isNonAsciiUrlTerminator(code: number): boolean {
-  return code > 0x7e && NON_ASCII_URL_TERMINATOR.test(String.fromCharCode(code))
-}
+export const TERMINAL_HTTP_URL_REGEX = new RegExp(PROSE_HTTP_URL_SOURCE, 'iu')
 
 function isAsciiWhitespace(code: number): boolean {
   return code === 9 || code === 10 || code === 11 || code === 12 || code === 13 || code === 32

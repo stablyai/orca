@@ -1,11 +1,12 @@
 // The pane identity a new PTY's env carries, stamped from the spawn's own ids, for both spawn lanes.
 
 import { mkdirSync } from 'node:fs'
-import { buildJcodeRuntimeDirEnv, JCODE_RUNTIME_DIR_ENV_KEY } from '../../../shared/jcode-runtime-dir'
+import {
+  buildJcodeRuntimeDirEnv,
+  JCODE_RUNTIME_DIR_ENV_KEY
+} from '../../../shared/jcode-runtime-dir'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
 import { isValidTerminalTabId } from '../../../shared/terminal-tab-id'
-import type { TuiAgent } from '../../../shared/tui-agent'
-import { prewarmJcodeDaemon } from '../../jcode/daemon-prewarm'
 
 export type PtySpawnPane = {
   paneKey: string
@@ -35,11 +36,6 @@ type PtySpawnPaneEnvArgs = {
   /** Null when the spawn's own tab+leaf ids don't name a valid pane. */
   pane: PtySpawnPane | null
   jcodeRuntimeDir: string | undefined
-  isDaemonHostSpawn: boolean
-  launchAgent: TuiAgent | undefined
-  cwd: string | undefined
-  /** TEMPORARY (its own stacked PR removes it): only window daemon spawns pre-warm jcode. */
-  prewarmsJcodeOnDaemonHost: boolean
 }
 
 export function stampPtySpawnPaneEnv(
@@ -70,20 +66,8 @@ export function stampPtySpawnPaneEnv(
     delete env.ORCA_WORKTREE_ID
   }
   // A failed managed-dir preparation must leave a working caller directory intact.
-  if (args.jcodeRuntimeDir === undefined) {
-    return
-  }
-  env[JCODE_RUNTIME_DIR_ENV_KEY] = args.jcodeRuntimeDir
-  // Why here too: daemon-host spawns never reach LocalPtyProvider.spawn, so
-  // without this the pre-warm — the whole point of which is to beat jcode's
-  // 5s socket budget on a cold runtime dir — would not fire for those panes.
-  if (args.isDaemonHostSpawn && args.prewarmsJcodeOnDaemonHost) {
-    prewarmJcodeDaemon({
-      launchAgent: args.launchAgent,
-      runtimeDir: args.jcodeRuntimeDir,
-      cwd: args.cwd,
-      env
-    })
+  if (args.jcodeRuntimeDir !== undefined) {
+    env[JCODE_RUNTIME_DIR_ENV_KEY] = args.jcodeRuntimeDir
   }
 }
 

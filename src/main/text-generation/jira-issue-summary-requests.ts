@@ -4,7 +4,7 @@ import type {
   JiraIssueSummaryGenerationRequest,
   JiraIssueSummaryGenerationCancellation,
   JiraIssueSummaryGenerationResult
-} from '../../shared/jira-issue-summary-generation'
+} from '../../shared/jira/jira-issue-summary-generation'
 import { getStatus } from '../jira/client'
 import {
   prepareLocalCommitMessageAgentEnv,

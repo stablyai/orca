@@ -82,6 +82,11 @@ import {
 } from './session-scanner-parse-cache'
 import {
   getSessionParseCacheEntry,
+  lookupSessionScopeCwds,
+  resolveSessionScopeCwd,
+  scopeCwdStampOf,
+  peekSessionParseCacheEntry,
+  type PersistedSessionParseCacheEntry,
   setSessionParseCacheColdTier
 } from './session-parse-cache-store'
 import { isolatedScanRoots } from './session-scanner-test-fixtures'
@@ -600,4 +605,83 @@ describe('cursor chat meta scan failures', () => {
     expect(stats.fullParses).toBe(0)
     expect(session?.cwd).toBe('/repo/resume')
   })
+})
+
+it('recovers a cold Cursor session when its sidecar appears without a transcript change', async () => {
+  const cursorHome = await createCursorHome()
+  const path = await writeTranscript(cursorHome, 'slug', 'chat-1', [
+    JSON.stringify({ role: 'user', message: { content: 'Find the bug' } })
+  ])
+  await utimes(path, 1, 1)
+  const file = await cursorCandidate(cursorHome)
+  const rows = new Map<string, PersistedSessionParseCacheEntry>()
+  const read = vi.fn((key: string) => rows.get(key))
+  const tier = {
+    read,
+    readScopeCwds: (paths: readonly string[]) => ({
+      found: new Map(
+        paths.flatMap((key) => {
+          const row = rows.get(key)
+          return row === undefined ? [] : [[key, { parsed: scopeCwdStampOf(row) }] as const]
+        })
+      ),
+      parsed: true,
+      read: true
+    }),
+    stored: (key: string, row: PersistedSessionParseCacheEntry) => rows.set(key, row),
+    deleted: (key: string) => rows.delete(key)
+  }
+  setSessionParseCacheColdTier(tier)
+  expect((await parseCursorCached(file)).session?.cwd).toBeNull()
+  expect(rows.get(path)?.sidecar).toBe('none')
+  resetSessionParseCacheForTests()
+  setSessionParseCacheColdTier(tier)
+  read.mockClear()
+  for (const chatId of ['busy-1', 'busy-2']) {
+    await writeTranscript(cursorHome, 'slug', chatId, [
+      JSON.stringify({ role: 'user', message: { content: chatId } })
+    ])
+  }
+  const scan = () =>
+    scanAiVaultSessions({
+      ...isolatedScanRoots(join(cursorHome, '..')),
+      cursorProjectsDir: join(cursorHome, 'projects'),
+      platform: 'darwin',
+      limit: 1,
+      scopePaths: ['/repo']
+    })
+  expect((await scan()).sessions.some((row) => row.filePath === path)).toBe(false)
+  expect(peekSessionParseCacheEntry(path)).not.toHaveProperty('resume')
+  expect(read).toHaveBeenCalledWith(path)
+  await writeChatMeta(cursorHome, 'workspace-hash', 'chat-1', { cwd: '/repo' })
+  const found = (await scan()).sessions.filter((row) => row.filePath === path)
+  expect(found.map((row) => row.cwd)).toEqual(['/repo'])
+  expect(await stat(path)).toMatchObject({ mtimeMs: file.mtimeMs, size: file.sizeBytes })
+})
+
+it('lists a Cursor session once meta.json names the scope after a scan stored it as cwd-less', async () => {
+  const cursorHome = await createCursorHome()
+  const path = await writeTranscript(cursorHome, 'slug', 'chat-1', [
+    JSON.stringify({ role: 'user', message: { content: 'Find the bug' } })
+  ])
+  await utimes(path, 1, 1)
+  for (const chatId of ['busy-1', 'busy-2']) {
+    await writeTranscript(cursorHome, 'slug', chatId, [
+      JSON.stringify({ role: 'user', message: { content: chatId } })
+    ])
+  }
+  const scan = () =>
+    scanAiVaultSessions({
+      ...isolatedScanRoots(join(cursorHome, '..')),
+      cursorProjectsDir: join(cursorHome, 'projects'),
+      platform: 'darwin',
+      limit: 1,
+      scopePaths: ['/repo']
+    })
+  expect((await scan()).sessions.some((row) => row.filePath === path)).toBe(false)
+  lookupSessionScopeCwds([path])
+  expect(resolveSessionScopeCwd(path, () => true)).toEqual({ cwd: null })
+  await writeChatMeta(cursorHome, 'workspace-hash', 'chat-1', { cwd: '/repo' })
+  const found = (await scan()).sessions.filter((row) => row.filePath === path)
+  expect(found.map((row) => row.cwd)).toEqual(['/repo'])
 })

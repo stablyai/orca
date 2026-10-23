@@ -3,7 +3,7 @@ import type {
   MobileWebShellBridgeMessagePayload,
   OrcaMobileWebShellViewHandle
 } from '../../modules/orca-mobile-web-shell/src'
-import { useHostClient } from '../transport/client-context'
+import { useHostClient } from '../transport/host-client-hooks'
 import { createBridgeDiagnosticReporter } from './bridge-diagnostic-log'
 import { bridgeDiagnosticLine, frameWithoutHostLine } from './shell-bridge-log-lines'
 import { recordShellLifecycleLine } from './shell-lifecycle-line-recorder'

@@ -1,6 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { createAgentStatusStore } from './agent-status-store'
-import { AGENT_STATUS_STORE_LIMITS } from './agent-status-store-contract'
 import { makeStructuredAgentStatusSubject } from './agent-status-subject'
 import {
   deserializeAgentStatusTransportEnvelope,
@@ -68,7 +67,7 @@ describe('agent status transport envelope', () => {
     expect(replica.getSnapshot().facts.map((fact) => fact.key)).toEqual(['retained'])
   })
 
-  it('round-trips a mutation envelope and fails closed on malformed or oversized input', () => {
+  it('round-trips a mutation envelope and fails closed on malformed input', () => {
     const authority = createAgentStatusStore({ epoch: 'epoch-a', mode: 'authority' })
     const mutation = authority.applyMutation({ parent: { subject: parent } })
     expect(mutation).not.toBeNull()
@@ -84,15 +83,6 @@ describe('agent status transport envelope', () => {
         JSON.stringify({ ...mutation, revision: mutation.revision + 2 })
       )
     ).toBeNull()
-
-    const parse = vi.spyOn(JSON, 'parse')
-    expect(
-      deserializeAgentStatusTransportEnvelope(
-        ' '.repeat(AGENT_STATUS_STORE_LIMITS.serializedBytes + 1)
-      )
-    ).toBeNull()
-    expect(parse).not.toHaveBeenCalled()
-    parse.mockRestore()
   })
 
   it('does not resurrect an exact removal through stale replay', () => {

@@ -1,9 +1,7 @@
 import { useAppStore } from '@/store'
 import { destroyWorkspaceWebviews } from '@/store/slices/browser-webview-cleanup'
-import {
-  runtimeEnvironmentIdForWorkspaceOwner,
-  warnAmbiguousOwnerRefusalOnce
-} from './resolve-owner'
+import { runtimeEnvironmentIdForWorkspaceOwner } from './resolve-owner'
+import { warnAmbiguousOwnerOnce } from './ambiguous-owner-warning'
 import { closeBrowserWorkspaceTabOnHosts } from '@/runtime/browser-workspace-tab-close'
 import type { BrowserWorkspaceTabClosePlan } from '@/runtime/browser-workspace-tab-close-plan'
 
@@ -22,7 +20,7 @@ export function closeWorkspaceBrowserTab(worktreeId: string, workspaceId: string
     owner.kind === 'ambiguous' &&
     (state.browserPagesByWorkspace[workspaceId] ?? []).length === 0
   ) {
-    warnAmbiguousOwnerRefusalOnce('browser-tab-close', worktreeId)
+    warnAmbiguousOwnerOnce(worktreeId, 'close a browser tab on its host')
     return REFUSED_CLOSE_PLAN
   }
   const plan = closeBrowserWorkspaceTabOnHosts({

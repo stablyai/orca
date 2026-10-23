@@ -10,7 +10,10 @@ vi.mock('@/components/editor/editor-autosave', async (importOriginal) => {
 
 import { useAppStore } from '@/store'
 import { notifyEditorExternalFileChange } from '@/components/editor/editor-autosave'
-import { buildEditorExternalWatchEventHandler as createExternalWatchEventHandler } from './editor-external-watch-event-reconciliation'
+import {
+  buildEditorExternalWatchEventHandler as createExternalWatchEventHandler,
+  EXTERNAL_MUTATION_DEBOUNCE_MS
+} from './editor-external-watch-event-reconciliation'
 
 const worktreePath = '\\\\wsl.localhost\\Ubuntu\\workspace\\repo'
 const restoredPath = '//wsl.localhost/Ubuntu/workspace/repo/file.ts'
@@ -175,7 +178,7 @@ describe('WSL watcher stale-refresh reproduction', () => {
       worktreePath: driveRoot,
       events: [{ kind: 'delete', absolutePath: 'C:\\workspace\\repo\\file.ts' }]
     })
-    vi.advanceTimersByTime(100)
+    vi.advanceTimersByTime(EXTERNAL_MUTATION_DEBOUNCE_MS)
     expect(setExternalMutation).toHaveBeenCalledWith(mountedPath, 'deleted')
 
     handleFsChanged({

@@ -96,6 +96,10 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeW
 
   protected readonly onTerminalAgentStatus!: HostBindings['onTerminalAgentStatus'] | null
 
+  protected readonly onTerminalProgramStatusFacet!:
+    | HostBindings['onTerminalProgramStatusFacet']
+    | null
+
   protected readonly onTerminalSideEffects!: HostBindings['onTerminalSideEffects'] | null
 
   protected readonly onClaudeTerminalEvidence!: HostBindings['onClaudeTerminalEvidence'] | null
@@ -292,18 +296,17 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeW
 
   protected readonly projectGroups = new RuntimeProjectGroupController({
     getStore: () => this.store,
-    resolveRepo: (selector) => this.resolveRepoSelector(selector),
+    resolveRepo: (...args) => this.managedWorktreeQueries.resolveRepoForConnection(...args),
     notifyReposChanged: () => this.notifyReposChanged(),
     resolveFolderConnectionId: (workspace) => this.resolveFolderWorkspaceConnectionId(workspace),
-    teardownFolderWorkspacePtys: (worktreeId, connectionId) =>
+    teardownFolderWorkspacePtys: (...target) =>
       teardownFolderWorkspacePtys(
         {
           runtime: this,
           getLocalProvider: () => this.getLocalProvider(),
           onPtyStopped: this.onPtyStopped
         },
-        worktreeId,
-        connectionId
+        ...target
       ),
     cleanupRemovedFolderWorkspaceState: (worktreeId) => {
       if (this.store) {
@@ -311,7 +314,8 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeW
       }
       // Why every host after the local-only hub: this store mints folder ids, so none is shared.
       this.dropAgentStatusForRemovedWorktreeFn?.(worktreeId, ALL_EXECUTION_HOSTS_SCOPE)
-    }
+    },
+    emitWorktreeLifecycle: (event) => this.worktreeLifecycleEvents.emit(event)
   })
 
   private readonly repositoryCatalogDeps = {
@@ -335,7 +339,7 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeW
     getStore: () => this.store,
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
     forgetTerminalTopology: (repoId) => this.terminalTopologyRevisionByRepoId.delete(repoId),
-    stopProjectTerminals: (repo, deadline) => this.stopTerminalsForProject(repo, { deadline }),
+    stopProjectTerminals: (repo, options) => this.stopTerminalsForProject(repo, options),
     invalidateResolvedWorktrees: () => this.invalidateResolvedWorktreeCache(),
     invalidateWorktreeScan: (repoId) => this.invalidateWorktreeScanCacheForRepo(repoId),
     notifyReposChanged: () => this.notifyReposChanged()
@@ -361,7 +365,8 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeW
     getStore: () => this.store,
     resolveFolderConnectionId: (workspace) => this.resolveFolderWorkspaceConnectionId(workspace),
     hasRuntimeOwnedPtyCandidate: (session, worktreeId, tabs) =>
-      this.workspaceSessionWorktreeHasRuntimeOwnedPtyCandidate(session, worktreeId, tabs)
+      this.workspaceSessionWorktreeHasRuntimeOwnedPtyCandidate(session, worktreeId, tabs),
+    getCachedWorktrees: () => this.resolvedWorktrees.peek()?.worktrees ?? null
   })
 
   protected readonly aiVault = new RuntimeAiVaultCommands(() => this.prepareAiVaultSessionResumeFn)

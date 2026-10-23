@@ -283,6 +283,23 @@ describe('the idle sweep', () => {
   })
 })
 
+describe('an idle stop that fails (P2-11 a)', () => {
+  it('is retried on the next tick until the agent is proven gone', async () => {
+    await foundRestTestChat(rig)
+    rig.host.collaboratorsForTests().lifetime.idleSweep.dispose()
+    rig.adapter.closeSession.mockClear()
+    rig.adapter.closeSession.mockResolvedValueOnce(false)
+    rig.clock.now += IDLE_MS + 1
+
+    await sweepOnce(rig.host)
+    expect(rig.store.getRecord(SESSION)?.lease.claimStatus).toBe('live')
+    await sweepOnce(rig.host)
+
+    expect(rig.adapter.closeSession).toHaveBeenCalledTimes(2)
+    expect(rig.store.getRecord(SESSION)?.lease.claimStatus).toBe('released')
+  })
+})
+
 describe('the idle sweep with no child running (P2-22 ii)', () => {
   it('closes a handle whose only leftover is a prompt nobody can answer', async () => {
     const journal = {

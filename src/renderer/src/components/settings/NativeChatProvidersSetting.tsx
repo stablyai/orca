@@ -1,49 +1,33 @@
-import { useSyncExternalStore } from 'react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import {
-  buildNativeChatProviderUpdate,
-  isNativeChatProviderDisplayedOn
-} from '../../../../shared/native-chat-providers'
+import { isNativeChatProviderDisplayedOn } from '../../../../shared/native-chat-providers'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import { translate } from '@/i18n/i18n'
 import { AgentIcon, getAgentCatalog, getAgentLabel } from '@/lib/agent-catalog'
-import {
-  hostStructuredAgentsVersion,
-  readHostStructuredAgents,
-  subscribeHostStructuredAgents
-} from '@/runtime/host-structured-agents'
+import { chatProviderAgents, useHostStructuredAgentsVersion } from '@/lib/chat-provider-agents'
 import { useManagedRuntimeInstall } from '@/runtime/use-managed-runtime-install'
 import { useAppStore } from '../../store'
 import { readNativeDetectedAgents } from '@/store/slices/local-detected-agent-store-state'
-import { createAgentSettingsUpdateQueue } from './agent-availability-settings'
+import { saveNativeChatProviderChoice } from './native-chat-provider-choice'
 import { Card, CardContent } from '../ui/card'
 import { ManagedRuntimeInstallRow } from '../managed-runtime/ManagedRuntimeInstallRow'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSubsectionHeader, SettingsSwitch } from './SettingsFormControls'
 import { getChatProvidersSearchEntry } from './chat-providers-search'
-
-const enqueueProviderUpdate = createAgentSettingsUpdateQueue()
+import { antigravityChatSignInRunning } from '@/runtime/antigravity-chat-sign-in-status'
+import { useAntigravityChatSignIn } from './AntigravityChatSignInRow'
+import {
+  AntigravityProviderSignInArea,
+  antigravityProviderSignInShown
+} from './AntigravityProviderSignInArea'
+import { getHostRuntimeLabel, getRuntimeSentenceLabel } from './accounts-pane-runtime'
 
 // The agents listed here are this computer's, so their downloaded programs are too.
 const CHAT_HOST: RuntimeClientTarget = { kind: 'local' }
 
 const BUILT_IN_CHAT_AGENTS: readonly TuiAgent[] = ['claude', 'codex']
-
-/** Claude and Codex, then the other agents this computer's host registered for chat. */
-function useLocalChatAgents(): TuiAgent[] {
-  useSyncExternalStore(subscribeHostStructuredAgents, hostStructuredAgentsVersion)
-  const registered = readHostStructuredAgents(LOCAL_EXECUTION_HOST_ID, undefined) ?? []
-  return [
-    ...new Set([
-      ...BUILT_IN_CHAT_AGENTS,
-      ...registered.map((row) => row.agent).filter((agent) => isTuiAgent(agent))
-    ])
-  ]
-}
 
 function ProviderStatus({
   agent,
@@ -88,25 +72,65 @@ function ProviderStatus({
   )
 }
 
-/** An agent whose chats run a program Orca downloads shows that program's install row, since its
- *  CLI's install state says nothing about whether its chats can start. */
+/** The agent's name and status line, plus any install button, which sits beside the switch.
+ *  An agent whose chats run a program Orca downloads shows that program's install state as its
+ *  status line, since its CLI's install state says nothing about whether its chats can start. */
 function ProviderDetail(props: {
   agent: TuiAgent
+  label: string
   installed: readonly TuiAgent[] | null
   enabledInAgents: boolean
-}): React.JSX.Element | null {
+}): React.JSX.Element {
   const runtime = useManagedRuntimeInstall(CHAT_HOST, props.agent, props.enabledInAgents)
+  // Install and Remove wait for a running sign-in, which runs the installed server.
+  const signIn = useAntigravityChatSignIn(
+    props.agent === 'antigravity' && props.enabledInAgents && runtime.kind === 'active'
+      ? CHAT_HOST
+      : null
+  )
+  const summary = (line: React.ReactNode): React.JSX.Element => (
+    <div className="min-w-0 flex-1">
+      <div className="text-sm font-medium leading-none">{props.label}</div>
+      <div className="mt-1 text-xs text-muted-foreground">{line}</div>
+    </div>
+  )
   if (!props.enabledInAgents || runtime.kind !== 'active') {
-    return <ProviderStatus {...props} />
+    return summary(
+      <ProviderStatus
+        agent={props.agent}
+        installed={props.installed}
+        enabledInAgents={props.enabledInAgents}
+      />
+    )
   }
   return (
-    <div className="mt-2">
-      <ManagedRuntimeInstallRow
-        observation={runtime}
-        agentLabel={getAgentLabel(props.agent)}
-        surface="settings"
-      />
-    </div>
+    <ManagedRuntimeInstallRow
+      observation={runtime}
+      agentLabel={props.label}
+      signInRunning={antigravityChatSignInRunning(signIn.flow)}
+    >
+      {(line, actions) => (
+        <>
+          {summary(line)}
+          {actions}
+        </>
+      )}
+    </ManagedRuntimeInstallRow>
+  )
+}
+
+/** Antigravity chats sign in on this computer, directly below the program they run. */
+function AntigravityChatProviderSignIn(): React.JSX.Element | null {
+  const runtime = useManagedRuntimeInstall(CHAT_HOST, 'antigravity', true)
+  if (runtime.kind !== 'active' || !antigravityProviderSignInShown(runtime)) {
+    return null
+  }
+  return (
+    <AntigravityProviderSignInArea
+      owner={CHAT_HOST}
+      label={getRuntimeSentenceLabel({ runtime: 'host', label: getHostRuntimeLabel() })}
+      install={runtime}
+    />
   )
 }
 
@@ -120,7 +144,8 @@ export function NativeChatProvidersSetting({
   forceVisible?: boolean
 }): React.JSX.Element | null {
   const entry = getChatProvidersSearchEntry()
-  const agents = useLocalChatAgents()
+  useHostStructuredAgentsVersion()
+  const agents = chatProviderAgents(LOCAL_EXECUTION_HOST_ID, undefined)
   const detectedIds = useAppStore(readNativeDetectedAgents)
   const visibleAgents = agents.filter(
     (agent) =>
@@ -144,38 +169,39 @@ export function NativeChatProvidersSetting({
               const enabledInAgents = isTuiAgentEnabled(agent, settings.disabledTuiAgents)
               const on = isNativeChatProviderDisplayedOn(settings, agent, detectedIds)
               return (
-                <div key={agent} className="flex items-center gap-3 py-3">
-                  <div className="flex size-7 shrink-0 items-center justify-center rounded-md border border-border/50 bg-background/50">
-                    <AgentIcon agent={agent} size={16} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm font-medium leading-none">{label}</div>
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      <ProviderDetail
-                        agent={agent}
-                        installed={detectedIds}
-                        enabledInAgents={enabledInAgents}
-                      />
+                <div key={agent} className="space-y-3 py-3">
+                  <div className="flex items-center gap-3">
+                    <div className="flex size-7 shrink-0 items-center justify-center rounded-md border border-border/50 bg-background/50">
+                      <AgentIcon agent={agent} size={16} />
                     </div>
+                    <ProviderDetail
+                      agent={agent}
+                      label={label}
+                      installed={detectedIds}
+                      enabledInAgents={enabledInAgents}
+                    />
+                    <SettingsSwitch
+                      checked={on}
+                      disabled={!enabledInAgents}
+                      ariaLabel={translate(
+                        'settings.chat.providers.toggleLabel',
+                        'Open {{value0}} as a chat',
+                        { value0: label }
+                      )}
+                      onChange={() =>
+                        saveNativeChatProviderChoice({
+                          agent,
+                          on: !on,
+                          fallbackSettings: settings,
+                          updateSettings
+                        })
+                      }
+                    />
                   </div>
-                  <SettingsSwitch
-                    checked={on}
-                    disabled={!enabledInAgents}
-                    ariaLabel={translate(
-                      'settings.chat.providers.toggleLabel',
-                      'Open {{value0}} as a chat',
-                      { value0: label }
-                    )}
-                    onChange={() => {
-                      const next = !on
-                      return enqueueProviderUpdate({
-                        getSettings: () => useAppStore.getState().settings,
-                        fallbackSettings: settings,
-                        updateSettings,
-                        buildUpdate: (latest) => buildNativeChatProviderUpdate(latest, agent, next)
-                      })
-                    }}
-                  />
+                  {/* Chats sign in on the host they run on, under the program that serves them. */}
+                  {agent === 'antigravity' && enabledInAgents ? (
+                    <AntigravityChatProviderSignIn />
+                  ) : null}
                 </div>
               )
             })}

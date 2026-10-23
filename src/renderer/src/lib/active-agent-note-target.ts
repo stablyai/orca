@@ -8,7 +8,7 @@ import {
 } from '../../../shared/agent-status-types'
 import type { AppState } from '@/store/types'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
@@ -122,7 +122,7 @@ export function getActiveAgentRuntimeProbeDescriptor(
   // Route by the worktree's owner host so the probe targets the host that runs
   // this worktree's agent terminal, not the focused runtime.
   const runtimeTarget = runtimeTargetForOwnerEnvironment(
-    getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+    runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
   )
   const runtimeKey =
     runtimeTarget.kind === 'environment' ? `env:${runtimeTarget.environmentId}` : 'local'

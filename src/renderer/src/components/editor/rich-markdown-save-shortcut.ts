@@ -16,7 +16,10 @@ export function handleRichMarkdownSaveShortcut(
   event.preventDefault()
   // Why: flush pending debounced serialization so the save captures the very
   // latest editor content, not a stale snapshot.
-  ctx.flushPendingSerialization()
+  if (ctx.flushPendingSerialization()) {
+    // Why: the view's text was just rejected as stale; saving it would overwrite the newer text.
+    return true
+  }
   // Why: the flush already reconciled + updated refs, so this re-serialize is
   // idempotent (edited === baseCanonical → returns the reconciled bytes). On a
   // torn-down editor it falls back to the last committed bytes without patching.

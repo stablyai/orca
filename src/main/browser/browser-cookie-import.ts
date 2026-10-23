@@ -10,7 +10,7 @@ import {
   importCookiesFromFile as importFile,
   type CookieImportOptions
 } from './browser-cookie-import-pipeline'
-import { importChromiumCookies } from './browser-cookie-chromium-import'
+import { importChromiumCookies } from './cookies/chromium/import-cookies'
 import { importCookiesFromFirefox } from './browser-cookie-firefox-import'
 import { importCookiesFromSafari } from './browser-cookie-safari-import'
 import {

@@ -52,11 +52,13 @@ function adapter(): StructuredAgentSessionAdapter {
     {
       supportsCreate: (_location, agent) => agent === 'codex',
       supportsLocation: () => true,
+      open: async () => ({
+        reportedOptions: { model: '' }
+      }),
       acquire: async (input) => {
         acquires += 1
         sink = input.events!
         return {
-          providerChildPhase: 'starting' as const,
           process: {
             hostId: 'local',
             pid: 4000 + acquires,
@@ -105,10 +107,7 @@ beforeEach(async () => {
   resetHostTestOperationIds()
   acquires = 0
   rewind.mockReset()
-  recoverRewind.mockReset().mockResolvedValue({
-    ok: true,
-    items: [{ identity: KEPT, body: hostTestMessage('verified history') }]
-  })
+  recoverRewind.mockReset().mockResolvedValue({ ok: true })
   rewindSupport.mockReset().mockReturnValue({ supported: true })
   dispatch.mockReset().mockImplementation(async (input): Promise<AgentSessionDispatchOutcome> => ({
     state: 'accepted',

@@ -59,6 +59,12 @@ export const MOBILE_WEB_PAGE_ROUTES = [
     pathname: '/h/[hostId]/accounts',
     grants: ['navigate', 'storage', 'externalLink', 'haptics']
   },
+  // Create Workspace, in Home's native overlay. `navigate` for its close (Back pops the overlay) and
+  // for the session it opens; the rest for the shared form and the host layout.
+  {
+    pathname: '/h/[hostId]/new-workspace',
+    grants: ['navigate', 'storage', 'externalLink', 'haptics']
+  },
   // The file explorer. `navigate` because its Back pops the native stack. `storage` for the shared
   // components the host layout renders above it.
   //
@@ -145,7 +151,7 @@ export const MOBILE_WEB_PAGE_ROUTES = [
   // is why the fourth verb this list carried is gone). Ruling 4's degradation is retired with them:
   // the page no longer falls back to the vendored module's denied microphone.
   //
-  // `externalNavigation` is the one optional grant in this list, and it is C8.1's. The HTML preview
+  // `externalNavigation` is the first optional grant in this list, and it is C8.1's. The HTML preview
   // renders an agent's artifact in a sealed frame, and a tap on a link inside it becomes a top-frame
   // navigation only the shell can cancel and open. Without the grant the preview renders the
   // artifact with its links as text: the document paints, the Preview/Source toggle works, and
@@ -170,6 +176,8 @@ export const MOBILE_WEB_PAGE_ROUTES = [
       'native.audio.read',
       'native.audio.stop'
     ],
-    optionalGrants: ['externalNavigation']
+    // `native.media.name` gives a file the composer attaches its real name; an older shell lacks it
+    // and the page names the file from its type, so the attach still works.
+    optionalGrants: ['externalNavigation', 'native.media.name']
   }
 ]

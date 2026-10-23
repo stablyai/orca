@@ -19,6 +19,7 @@ const BUILD_PREFIXES = [
 // A remote target's OS does not identify the client platform that builds its commands.
 const CROSS_HOST_PREFIXES = [
   'src/main/ssh/',
+  'src/main/managed-server/',
   'src/main/node-runtime/',
   'src/main/orcad/orcad-artifact-materializer.ts',
   'src/main/orcad/orcad-host-unavailable.ts',

@@ -2,7 +2,10 @@ import type { RuntimeDeviceGrant } from '../rpc/rpc-caller-scope'
 import type { DeviceRegistry, DeviceScope, TokenDeviceEntry } from '../device-registry'
 import type { E2EEKeypair } from '../e2ee-keypair'
 import type { MobileSocketWiring } from '../rpc/mobile-socket-wiring'
-import type { RelayDeviceBinding, RelayRevokeOutbox } from '../relay/relay-revoke-outbox'
+import type {
+  RelayDeviceBinding,
+  RelayRevokeOutbox
+} from '../mobile-cloud-relay/relay-revoke-outbox'
 import type { PushUnregisterOutbox } from '../push/push-unregister-outbox'
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../../shared/pairing'
 import type { RuntimePairingReach } from '../../../shared/runtime-pairing-reach'
@@ -28,10 +31,6 @@ import {
 export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
   getDeviceRegistry(): DeviceRegistry | null {
     return this.deviceRegistry
-  }
-
-  getTlsFingerprint(): string | null {
-    return this.tlsFingerprint
   }
 
   getE2EEPublicKey(): string | null {

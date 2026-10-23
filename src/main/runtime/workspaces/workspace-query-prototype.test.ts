@@ -460,6 +460,7 @@ describe('first-work rename lazy Store capabilities', () => {
         branchPrefixCustom: ''
       }),
       getRepo: () => undefined,
+      getRepos: () => [],
       getWorktreeMeta: () => undefined,
       setWorktreeMeta: vi.fn()
     }

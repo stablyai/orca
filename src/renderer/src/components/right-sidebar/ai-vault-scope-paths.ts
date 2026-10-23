@@ -4,6 +4,7 @@ import {
 } from '../../../../shared/cross-platform-path'
 import type { ProjectHostSetupProjection } from '../../../../shared/project-host-setup-projection'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
+import type { AiVaultScope } from '../../../../shared/ai-vault-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
 import { toAiVaultProjectKey } from '../../../../shared/ai-vault-project-key'
@@ -58,12 +59,16 @@ export function deriveAiVaultScopeSessionPaths(
   > | null,
   liveWorktrees: readonly Pick<Worktree, 'id' | 'path' | 'projectId' | 'repoId'>[] = [],
   options: {
+    scope?: AiVaultScope
     activeProjectKey?: string | null
     projectHostSetupProjection?: ProjectHostSetupProjection
   } = {}
 ): string[] {
   if (!activeWorktree) {
     return []
+  }
+  if (options.scope === 'workspace') {
+    return deriveAiVaultWorkspaceScopePaths(activeWorktree, liveWorktrees)
   }
   // Carries the workspace pass's dedupe keys forward, so the project pass does
   // not restart deduplication against a plain array.

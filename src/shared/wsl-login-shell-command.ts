@@ -1,9 +1,6 @@
 import { getFishClaudeShellFunction } from './claude-shell-function'
 import { buildPosixStdoutFence, type PosixStdoutFence } from './posix-stdout-fence'
-
-export function quotePosixShell(value: string): string {
-  return `'${value.replace(/'/g, "'\\''")}'`
-}
+import { quotePosixShell } from './shell-argument-quoting'
 
 /**
  * Build `wsl.exe` argv that hands a POSIX script to the guest byte-for-byte.

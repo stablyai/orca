@@ -111,11 +111,7 @@ export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<voi
     jcodeRuntimeDir:
       ctx.baseEnv && ctx.stablePaneKey
         ? selectWindowJcodeRuntimeDir(ctx.stablePaneKey, ctx.isDaemonHostSpawn)
-        : undefined,
-    isDaemonHostSpawn: ctx.isDaemonHostSpawn,
-    launchAgent: args.launchAgent,
-    cwd: args.cwd,
-    prewarmsJcodeOnDaemonHost: true
+        : undefined
   })
   ctx.validatedPaneKey = ctx.stablePaneKey
   // Why: IPC tab/leaf metadata names the pane even when ORCA_PANE_KEY was not proven.

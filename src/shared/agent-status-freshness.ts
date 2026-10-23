@@ -6,6 +6,10 @@ import type { AgentStatusEntry } from './agent-status-types'
  */
 export const AGENT_STATUS_STALE_AFTER_MS = 30 * 60 * 1000
 
+/** How long a persisted row survives hydration. A restored nonterminal row is unverifiable for
+ *  this whole window: no exit evidence arrived, so the live window above must not end it. */
+export const AGENT_STATUS_HYDRATE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
+
 /** When the AUTHORITY says it observed the evidence, on the authority's own clock.
  *  A relay reconnect replays a cached row and must restamp `updatedAt`, so measuring against it
  *  pushes the deadline out by another window on every reconnect. Only comparable against a
@@ -26,6 +30,38 @@ export function agentStatusEvidenceObservedAt(
   entry: Pick<AgentStatusEntry, 'updatedAt' | 'evidenceObservedAt' | 'mirroredEvidenceReceivedAt'>
 ): number {
   return entry.mirroredEvidenceReceivedAt ?? agentStatusAuthorityObservedAt(entry)
+}
+
+type MirroredEvidenceClocks = Pick<
+  AgentStatusEntry,
+  'updatedAt' | 'evidenceObservedAt' | 'mirroredEvidenceReceivedAt'
+>
+
+/**
+ * Stamp this replica's own receipt clock on a row mirrored from another host.
+ *
+ * The host's `updatedAt` / `evidenceObservedAt` are its wall clock, so decaying a mirrored row
+ * against `replicaNow - hostClock` is off by the two machines' skew: a host running fast keeps
+ * every remote row permanently fresh, a host running slow decays them on arrival. Both sides of
+ * the subtraction have to come from one machine, and the receipt is the only clock the replica
+ * owns. See THE DECAY RULE in shared/agent-status-observation.ts.
+ *
+ * A snapshot that repeats an observation already seen is a repaint, not new evidence, so the
+ * first receipt is carried forward — otherwise the window would restart on every publish and
+ * a quiet pane would never decay. Only a row this replica stamped itself is comparable, so
+ * the carry-forward requires a previous stamp rather than trusting a cross-machine timestamp.
+ */
+export function withMirroredEvidenceReceipt<T extends MirroredEvidenceClocks>(
+  entry: T,
+  existing: MirroredEvidenceClocks | undefined,
+  now: number
+): T {
+  const receivedAt =
+    existing?.mirroredEvidenceReceivedAt !== undefined &&
+    agentStatusAuthorityObservedAt(existing) === agentStatusAuthorityObservedAt(entry)
+      ? existing.mirroredEvidenceReceivedAt
+      : now
+  return { ...entry, mirroredEvidenceReceivedAt: receivedAt }
 }
 
 export function isFreshNonDoneAgentStatus(

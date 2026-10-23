@@ -1,22 +1,22 @@
 import { readStreamedSessionDocument } from './session-document-stream'
-import { wslGatedReadFile } from '../native-chat/wsl-transcript-fs-access'
+import { openTranscriptReadStream } from '../native-chat/wsl-transcript-fs-access'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { FileWithMtime, SessionAccumulator } from './session-scanner-types'
 import type { TranscriptMessageSink } from './session-transcript-consumers'
 import {
-  addPreviewContent,
   createAccumulator,
   finalizeSession,
   sessionIdFromFileName,
   updateTimeline
 } from './session-scanner-accumulator'
+import { addDecodedSessionMessage } from './session-scanner-messages'
+import { decodeSessionMessage, type DecodedSessionMessage } from './session-decoded-message'
 import {
   arrayValue,
   asRecord,
   extractContentText,
   extractString,
-  normalizeTitleText,
   numberValue
 } from './session-scanner-values'
 
@@ -28,13 +28,15 @@ type ParserSessionOptions = {
 export async function parseDevinSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform,
-  messages?: TranscriptMessageSink
+  messages?: TranscriptMessageSink,
+  signal?: AbortSignal
 ): Promise<AiVaultSession | null> {
-  return parseDevinSessionRecord(
+  return parseDevinSessionDocument(
     file,
-    await wslGatedReadFile(file.path, 'utf-8', 'scan'),
+    openTranscriptReadStream(file.path, {}, 'scan'),
     platform,
     {},
+    signal,
     messages
   )
 }
@@ -77,18 +79,19 @@ function parseDevinSessionRecord(
   return finalizeSession(accumulator, platform, options)
 }
 
-function extractDevinStepText(step: Record<string, unknown>): string | null {
-  // ATIF-v1.7 carries `message` as a plain string; older shapes wrap it as {content}.
-  const messageText = extractString(step.message)
-  if (messageText) {
-    return messageText
+function decodeDevinStepMessage(
+  step: Record<string, unknown>,
+  role: 'user' | 'assistant',
+  includeTools: boolean
+): DecodedSessionMessage | null {
+  const wrapped = asRecord(step.message)
+  for (const content of [wrapped ? wrapped.content : step.message, step.text, step.content]) {
+    const message = decodeSessionMessage(role, content, null, { includeTools })
+    if (message.blocks.some((block) => ('text' in block ? block.text.trim().length > 0 : true))) {
+      return message
+    }
   }
-  const message = asRecord(step.message)
-  if (message) {
-    return extractContentText(message.content) ?? extractString(message.content)
-  }
-  // ATIF also allows `message` as an array of content parts.
-  return extractContentText(step.message) ?? extractString(step.text)
+  return null
 }
 
 // Each bucket resolves from the first source that reports it. ATIF
@@ -150,28 +153,30 @@ export function consumeDevinSessionStep(accumulator: SessionAccumulator, step: u
   const source = extractString(stepRecord.source)
   const isSystem = source === 'system'
   const isUser = !isSystem && (source === 'user' || metadata?.is_user_input === true)
-  if (isUser) {
-    accumulator.messageCount++
-    const text =
-      extractDevinStepText(stepRecord) ??
-      extractContentText(stepRecord.content) ??
-      extractString(stepRecord.text)
-    const titleCandidate = normalizeTitleText(text ?? '')
-    if (titleCandidate) {
-      accumulator.title ??= titleCandidate
-    }
-    addPreviewContent(accumulator, 'user', text ?? stepRecord.content)
-  } else if (
-    !isSystem &&
-    (source === 'agent' || extractString(stepRecord.role) === 'assistant' || stepRecord.tool_calls)
+  if (
+    isSystem ||
+    (!isUser &&
+      source !== 'agent' &&
+      extractString(stepRecord.role) !== 'assistant' &&
+      !stepRecord.tool_calls)
   ) {
-    accumulator.messageCount++
-    addPreviewContent(
-      accumulator,
-      'assistant',
-      extractDevinStepText(stepRecord) ?? stepRecord.content
+    return
+  }
+  accumulator.messageCount++
+  const message = decodeDevinStepMessage(
+    stepRecord,
+    isUser ? 'user' : 'assistant',
+    accumulator.messages.active
+  )
+  if (!message) {
+    return
+  }
+  if (isUser) {
+    accumulator.title ??= extractContentText(
+      message.blocks.flatMap((block) => ('text' in block ? [block.text] : []))
     )
   }
+  addDecodedSessionMessage(accumulator, message)
 }
 
 export async function parseDevinSessionDocument(
@@ -179,15 +184,23 @@ export async function parseDevinSessionDocument(
   bytes: AsyncIterable<Buffer>,
   platform: NodeJS.Platform,
   options: ParserSessionOptions,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  messages?: TranscriptMessageSink
 ): Promise<AiVaultSession | null> {
   const parsed = await readStreamedSessionDocument({
     bytes,
     arrayKey: 'steps',
     fields: ['session_id', 'sessionId', 'generation_model', 'working_directory'],
     objectFields: { agent: ['model_name', 'model'] },
-    create: () =>
-      createAccumulator({ agent: 'devin', file, sessionId: sessionIdFromFileName(file.path) }),
+    create: () => {
+      messages?.reset?.()
+      return createAccumulator({
+        agent: 'devin',
+        file,
+        sessionId: sessionIdFromFileName(file.path),
+        messages
+      })
+    },
     consume: consumeDevinSessionStep,
     signal
   })

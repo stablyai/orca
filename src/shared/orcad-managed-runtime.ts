@@ -1,7 +1,7 @@
 import type { PublicKnownRuntimeEnvironment } from './runtime-environments'
 import type { OrcadTerminalCensus } from './orcad-terminal-census'
-import type { OrcadMigrationBlocker } from './orcad-migration-preflight'
-import type { OrcadMigrationSourceCutoverPhase } from './orcad-migration-source-cutover'
+import type { OrcadMigrationBlocker } from './orcad-migration/orcad-migration-preflight'
+import type { OrcadMigrationSourceCutoverPhase } from './orcad-migration/orcad-migration-source-cutover'
 import type { OrcadDaemonRetirementVerdict } from './orcad-stop-request'
 import type { SshManagedServerLinkedProject } from './ssh-types'
 

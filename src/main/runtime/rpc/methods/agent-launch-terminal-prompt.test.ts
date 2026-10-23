@@ -28,6 +28,8 @@ function runtimeStub(overrides: {
   composerSignal?: boolean
   /** What a fresh read finds in the terminal's foreground; default: the agent. */
   foreground?: 'agent' | 'shell' | 'unknown'
+  /** False on a host that cannot find the agent in front (Windows); default: it can. */
+  hostProvesAgent?: boolean
 }) {
   const queued = [...(overrides.waits ?? [])]
   const waitForTerminal = vi.fn(
@@ -42,6 +44,7 @@ function runtimeStub(overrides: {
   })
   const readLaunchedAgentForeground = vi.fn(async () => overrides.foreground ?? 'agent')
   const subscribeToTerminalData = vi.fn(() => () => {})
+  const launchedAgentHostProvesAgent = vi.fn(() => overrides.hostProvesAgent ?? true)
   const sendTerminalAgentPrompt = vi.fn<SendFn>(
     overrides.send ?? (async () => ({ handle: 'term_1', accepted: true, bytesWritten: 12 }))
   )
@@ -50,13 +53,14 @@ function runtimeStub(overrides: {
     waitForFreshWorkerComposer,
     sendTerminalAgentPrompt,
     readLaunchedAgentForeground,
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the deliverer reaches exactly these five runtime methods; anything else would throw rather than read a wrong value.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the deliverer reaches exactly these six runtime methods; anything else would throw rather than read a wrong value.
     runtime: {
       waitForTerminal,
       waitForFreshWorkerComposer,
       sendTerminalAgentPrompt,
       readLaunchedAgentForeground,
-      subscribeToTerminalData
+      subscribeToTerminalData,
+      launchedAgentHostProvesAgent
     } as unknown as Parameters<typeof deliverTerminalAgentLaunchPrompt>[0]['runtime']
   }
 }
@@ -402,6 +406,156 @@ describe('writing a launch prompt into a terminal agent', () => {
         text: 'do the thing'
       })
     ).resolves.toBe(false)
+  })
+
+  it.each([
+    ['writes into an agent a Windows host cannot see in front', 'unknown', true],
+    ['still refuses a shell proven in front', 'shell', false]
+  ] as const)('under write-unless-shell, %s', async (_label, foreground, expected) => {
+    const stub = runtimeStub({ foreground, hostProvesAgent: false })
+    stub.sendTerminalAgentPrompt.mockImplementation(async (handle, _text, options) => {
+      const { beforeWrite } = options
+      if (typeof beforeWrite === 'function') {
+        await beforeWrite('pty-1')
+      }
+      return { handle, accepted: true, bytesWritten: 12 }
+    })
+    const deliver = (unprovableHost?: 'write-unless-shell') =>
+      deliverTerminalAgentLaunchPrompt({
+        runtime: stub.runtime,
+        handle: 'term_existing',
+        agent: 'claude',
+        freshLaunch: false,
+        text: 'do the thing',
+        ...(unprovableHost ? { unprovableHost } : {})
+      })
+
+    await expect(deliver('write-unless-shell')).resolves.toBe(expected)
+    // The default refuses whatever it cannot prove.
+    await expect(deliver()).resolves.toBe(false)
+  })
+})
+
+describe('cancelling a launch prompt', () => {
+  it('pastes nothing when cancelled during the readiness wait, and forwards the signal', async () => {
+    const controller = new AbortController()
+    const stub = runtimeStub({})
+    stub.waitForTerminal.mockImplementation(async () => {
+      controller.abort()
+      throw new Error('request_aborted')
+    })
+
+    const delivered = await deliverTerminalAgentLaunchPrompt({
+      runtime: stub.runtime,
+      handle: 'term_1',
+      agent: 'claude',
+      freshLaunch: true,
+      text: 'do the thing',
+      signal: controller.signal
+    })
+
+    expect(delivered).toBe(false)
+    expect(stub.waitForFreshWorkerComposer).toHaveBeenCalledWith('term_1', 'claude', 8_000, {
+      requireComposerMarker: false,
+      stopOnDialog: true,
+      signal: controller.signal
+    })
+    expect(stub.waitForTerminal).toHaveBeenCalledWith(
+      'term_1',
+      expect.objectContaining({ signal: controller.signal })
+    )
+    expect(stub.sendTerminalAgentPrompt).not.toHaveBeenCalled()
+  })
+
+  it('stops waiting out a dialog once cancelled', async () => {
+    const controller = new AbortController()
+    const stub = runtimeStub({
+      wait: { satisfied: false, status: 'running', blockedReason: 'agent-approval-prompt' }
+    })
+    const clock = fakeClock()
+
+    const delivered = await deliverTerminalAgentLaunchPrompt({
+      runtime: stub.runtime,
+      handle: 'term_1',
+      agent: 'claude',
+      freshLaunch: false,
+      text: 'do the thing',
+      signal: controller.signal,
+      clock: {
+        now: clock.now,
+        sleep: async (ms) => {
+          await clock.sleep(ms)
+          controller.abort()
+        }
+      }
+    })
+
+    expect(delivered).toBe(false)
+    expect(stub.waitForTerminal).toHaveBeenCalledTimes(1)
+    expect(stub.sendTerminalAgentPrompt).not.toHaveBeenCalled()
+  })
+
+  it('reports text whose Enter was handed over before the cancel as delivered', async () => {
+    const controller = new AbortController()
+    const stub = runtimeStub({
+      send: async (_handle, _text, options) => {
+        const accepted = options.onSubmitWritten
+        if (typeof accepted === 'function') {
+          accepted()
+        }
+        controller.abort()
+        throw new Error('request_aborted')
+      }
+    })
+
+    await expect(
+      deliverTerminalAgentLaunchPrompt({
+        runtime: stub.runtime,
+        handle: 'term_1',
+        agent: 'claude',
+        freshLaunch: false,
+        text: 'do the thing',
+        signal: controller.signal
+      })
+    ).resolves.toBe(true)
+  })
+
+  it('reports text cancelled before its Enter as not delivered', async () => {
+    const controller = new AbortController()
+    const stub = runtimeStub({
+      send: async () => {
+        controller.abort()
+        throw new Error('request_aborted')
+      }
+    })
+
+    await expect(
+      deliverTerminalAgentLaunchPrompt({
+        runtime: stub.runtime,
+        handle: 'term_1',
+        agent: 'claude',
+        freshLaunch: false,
+        text: 'do the thing',
+        signal: controller.signal
+      })
+    ).resolves.toBe(false)
+  })
+
+  it('passes no signal or acceptance hook when the caller gave no signal', async () => {
+    const stub = runtimeStub({})
+
+    await deliverTerminalAgentLaunchPrompt({
+      runtime: stub.runtime,
+      handle: 'term_1',
+      agent: 'claude',
+      freshLaunch: false,
+      text: 'do the thing'
+    })
+
+    const options = stub.sendTerminalAgentPrompt.mock.calls[0]![2]
+    expect(options).not.toHaveProperty('signal')
+    expect(options).not.toHaveProperty('onSubmitWritten')
+    expect(stub.waitForTerminal.mock.calls[0]![1]).not.toHaveProperty('signal')
   })
 })
 

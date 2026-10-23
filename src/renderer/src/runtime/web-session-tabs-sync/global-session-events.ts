@@ -2,7 +2,7 @@ import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import { isRuntimeSubscriptionReplayResponse } from '../../../../shared/runtime-subscription-replay'
 import { useAppStore } from '../../store'
-import { recoverWebSessionTerminalOrphansBeforeApply } from '../web-session-terminal-orphan-recovery'
+import { recoverMirroredTerminalOrphansBeforeApply } from './mirror-terminal-orphan-recovery'
 import {
   recordReceivedWebSessionTabsSnapshot,
   sessionTabsFreshnessKey,
@@ -117,7 +117,7 @@ export function handleGlobalSessionEvent(args: GlobalSessionEventArgs): void {
     )
   }
   let settleHydration: HostSessionMirrorSettle | null = null
-  void recoverWebSessionTerminalOrphansBeforeApply(useAppStore.getState(), event, environmentId, {
+  void recoverMirroredTerminalOrphansBeforeApply(useAppStore.getState(), event, environmentId, {
     expectedEnvironmentPairingRevision,
     expectedRuntimeId: runtimeId,
     getCurrentState: () => useAppStore.getState()
@@ -148,6 +148,7 @@ export function handleGlobalSessionEvent(args: GlobalSessionEventArgs): void {
               {
                 environmentId,
                 worktreeId: recovered.worktree,
+                source: recovered,
                 decision,
                 expectedEnvironmentConnectionGeneration,
                 expectedEnvironmentPairingRevision,

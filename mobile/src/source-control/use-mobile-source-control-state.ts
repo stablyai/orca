@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useForceReconnect } from '../transport/client-context'
+import { useForceReconnect } from '../transport/host-client-hooks'
 import { useWorkspaceClient } from '../transport/use-workspace-client'
 import { getWorktreeLabel } from '../session/worktree-label'
 import { useMobileGitRequests } from './use-mobile-git-requests'

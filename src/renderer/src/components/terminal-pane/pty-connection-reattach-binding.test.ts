@@ -2,6 +2,13 @@ import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getEagerPtyBufferHandle } from './pty-dispatcher'
 import { flushAsyncTicks, createDeferred } from './pty-connection-test-async'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import {
+  bindsPaneInStore,
+  expectWindowStartAskedMain,
+  mainLayoutApplyTransport,
+  mainStartsPaneAs
+} from './pty-connection-test-main-pane-start-fixtures'
 import {
   LEAF_1,
   LEAF_2,
@@ -39,6 +46,13 @@ let mockStoreState: StoreState
 let transportFactoryQueue: MockTransport[] = []
 let createdTransportOptions: Record<string, unknown>[] = []
 let storeSubscribers: ((state: StoreState) => void)[] = []
+
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({
   scheduleRuntimeGraphSync
@@ -139,6 +153,7 @@ describe('connectPanePty', () => {
     storeSubscribers = []
     mockStoreState = createInitialStoreState(() => mockStoreState)
     await installTerminalTestGlobals()
+    ;(await mainLayoutApplyTransport()).reset()
   })
 
   afterEach(async () => {
@@ -696,6 +711,13 @@ describe('connectPanePty', () => {
       restoredLeafId: LEAF_2,
       restoredPtyIdByLeafId: { [LEAF_2]: 'stale-pty' }
     })
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      await mainStartsPaneAs({
+        ptyId: 'pty-main',
+        bind: bindsPaneInStore(() => mockStoreState, 'tab-1', LEAF_2),
+        transport
+      })
+    }
 
     connectPanePty(pane as never, manager as never, deps as never)
     await Promise.resolve()
@@ -705,6 +727,17 @@ describe('connectPanePty', () => {
       1,
       expect.objectContaining({ sessionId: 'stale-pty' })
     )
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      // Main starts the pane whose terminal is gone; the window attaches, and spawns no shell.
+      await flushAsyncTicks()
+      await expectWindowStartAskedMain(transport, `tab-1:${LEAF_2}`)
+      expect(transport.connect).toHaveBeenCalledTimes(2)
+      expect(transport.connect).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({ sessionId: 'pty-main', attachOnlyView: true })
+      )
+      return
+    }
     expect(transport.connect).toHaveBeenNthCalledWith(
       2,
       expect.not.objectContaining({ sessionId: expect.any(String) })

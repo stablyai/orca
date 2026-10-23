@@ -108,6 +108,8 @@ jobs:
         with:
           ref: ${{ github.event_name == 'schedule' && 'main' || inputs.ref }}
           fetch-depth: 0
+          # Version recovery needs complete history and tags, but not historical file contents.
+          filter: blob:none
           # Why: version math recovers unpublished tags; checkout's default
           # fetch-tags:false hides them, so a patch cut recreates vX.Y.Z and
           # `git push` overwrites the existing tag.
@@ -126,6 +128,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
 
       - name: Configure git author
         run: |
@@ -849,6 +852,13 @@ jobs:
           TAG: ${{ needs.cut.outputs.tag }}
         run: node config/scripts/create-draft-release.mjs "$TAG"
 
+  dependency-security:
+    needs: cut
+    if: needs.cut.outputs.should_release == 'true' && !contains(needs.cut.outputs.tag, '-')
+    uses: ./.github/workflows/dependency-security.yml
+    with:
+      ref: refs/tags/${{ needs.cut.outputs.tag }}
+
   terminal-rendering-golden:
     needs: cut
     if: needs.cut.outputs.should_release == 'true'
@@ -900,6 +910,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
           cache: pnpm
 
       # Why: Linux terminal golden E2E uses the same native install path as
@@ -1006,7 +1017,6 @@ jobs:
           WORKFLOW_SHA: ${{ github.workflow_sha }}
         run: |
           git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
-          # Why not skill-freshness-inventory.test.ts: it holds behaviour tests, so main's copy fails a tag that predates the behaviour.
           git checkout "$WORKFLOW_SHA" -- \
             src/main/skills/skill-provider-runtime-roots.test.ts
 
@@ -1058,7 +1068,6 @@ jobs:
           WORKFLOW_SHA: ${{ github.workflow_sha }}
         run: |
           git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
-          # Why not skill-freshness-inventory.test.ts: it holds behaviour tests, so main's copy fails a tag that predates the behaviour.
           git checkout "$WORKFLOW_SHA" -- \
             src/main/skills/skill-provider-runtime-roots.test.ts
 
@@ -1126,6 +1135,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
           cache: pnpm
 
       # Why: keep the non-blocking evidence lane on the same Linux native
@@ -1181,10 +1191,10 @@ jobs:
     if: needs.cut.outputs.should_release == 'true' && needs.cut.outputs.ships_orcad_template == 'true'
     permissions:
       contents: read
-    uses: ./.github/workflows/node-server-tests.yml
+      actions: read
+    uses: ./.github/workflows/qualified-orcad-template.yml
     with:
       ref: refs/tags/${{ needs.cut.outputs.tag }}
-      build_template: true
 
   # Why: artifact jobs submit Windows binaries to SignPath. Keep every
   # quota-consuming build behind all blocking release gates so a late test
@@ -1227,6 +1237,7 @@ jobs:
       - orcad-template
       - release-preflight
       - release-javascript
+      - build-mac
     # Why not the implicit success(): a tag without the orcad template skips that job on purpose.
     if: >-
       !cancelled() &&
@@ -1235,6 +1246,7 @@ jobs:
       needs.create-release.result == 'success' &&
       needs.release-preflight.result == 'success' &&
       needs.release-javascript.result == 'success' &&
+      needs.build-mac.result == 'success' &&
       (needs.orcad-template.result == 'success' ||
         (needs.orcad-template.result == 'skipped' && needs.cut.outputs.ships_orcad_template == 'false'))
     env:
@@ -1309,7 +1321,7 @@ jobs:
         run: |
           set -euo pipefail
           git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
-          git checkout "$WORKFLOW_SHA" -- config/scripts/assert-github-release-is-draft.mjs
+          git checkout "$WORKFLOW_SHA" -- config/scripts/assert-github-release-is-draft.mjs config/scripts/run-release-mac-build-workflow.mjs
 
       - name: Restore composite actions from the workflow ref
         shell: bash
@@ -1347,6 +1359,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
           cache: pnpm
           cache-dependency-path: |
             pnpm-lock.yaml
@@ -1576,6 +1589,8 @@ jobs:
           command: ${{ matrix.release_command }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # The release command prepares and verifies this host's Electron native modules first.
+          ORCA_REUSE_PREPARED_NATIVE_RUNTIME: '1'
           # Why: the NSIS uninstaller only exists inside electron-builder's
           # uninstaller pass, which deletes it right after embedding it. The sign
           # hook in config/scripts/windows-uninstaller-signing.cjs copies it out
@@ -1689,9 +1704,26 @@ jobs:
           path: signing-stage/**
           if-no-files-found: error
 
+      # Unsigned packaging overlaps macOS; only successful macOS builds may consume signing quota.
+      - name: Require macOS success before Windows signing
+        id: mac-signing-gate
+        if: matrix.platform == 'win' && github.run_attempt == 1
+        shell: bash
+        run: node config/scripts/run-release-mac-build-workflow.mjs wait
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_MAC_BUILD_REF: ${{ github.ref_name }}
+          RELEASE_MAC_BUILD_RELEASE_RUN_ID: ${{ github.run_id }}
+          RELEASE_MAC_BUILD_RUN_ID: ${{ needs.build-mac.outputs.run_id }}
+          RELEASE_MAC_BUILD_WORKFLOW_SHA: ${{ needs.build-mac.outputs.workflow_sha }}
+          RELEASE_MAC_BUILD_RUN_ATTEMPT: ${{ needs.build-mac.outputs.run_attempt }}
+          RELEASE_MAC_BUILD_WAIT_DEADLINE_MS: ${{ needs.build-mac.outputs.wait_deadline_ms }}
+          RELEASE_MAC_BUILD_TAG: ${{ needs.cut.outputs.tag }}
+          RELEASE_MAC_BUILD_WORKFLOW: release-mac-build.yml
+
       - name: Submit inner binaries signing request
         id: submit-inner-signing
-        if: matrix.platform == 'win' && github.run_attempt == 1 && steps.upload-unsigned-inner.outcome == 'success'
+        if: matrix.platform == 'win' && github.run_attempt == 1 && steps.mac-signing-gate.outcome == 'success' && steps.upload-unsigned-inner.outcome == 'success'
         uses: signpath/github-action-submit-signing-request@v2
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
@@ -1927,7 +1959,7 @@ jobs:
       # so the release job waits while the signing request is approved in UI.
       - name: Submit Windows installer signing request
         id: submit-signing-request
-        if: matrix.platform == 'win' && github.run_attempt == 1
+        if: matrix.platform == 'win' && github.run_attempt == 1 && steps.mac-signing-gate.outcome == 'success' && steps.upload-unsigned-windows-installer.outcome == 'success'
         uses: signpath/github-action-submit-signing-request@v2
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
@@ -2354,6 +2386,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
 
       - name: Run isolated macOS release build
         id: dispatch
@@ -2390,6 +2423,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
 
       - name: Require the exact isolated macOS release build to succeed
         run: node config/scripts/run-release-mac-build-workflow.mjs wait
@@ -2407,6 +2441,7 @@ jobs:
   publish-release:
     needs:
       - cut
+      - dependency-security
       - build
       - build-mac
       - verify-mac-build
@@ -2417,6 +2452,7 @@ jobs:
     if: >-
       !cancelled() &&
       needs.cut.result == 'success' &&
+      (needs.dependency-security.result == 'success' || contains(needs.cut.outputs.tag, '-')) &&
       needs.build.result == 'success' &&
       needs.build-mac.result == 'success' &&
       needs.verify-mac-build.result == 'success' &&
@@ -2434,6 +2470,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
 
       - name: Verify release is still draft
         env:

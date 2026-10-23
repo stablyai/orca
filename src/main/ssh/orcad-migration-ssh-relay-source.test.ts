@@ -8,7 +8,7 @@ import { Store } from '../persistence/loading-store/store'
 import { listOrcadMigrationSourceCutovers } from './orcad-migration-cutover-journal'
 import { createOrcadMigrationManifest } from './orcad-migration-manifest-export'
 import { createSshRelayMigrationSource } from './orcad-migration-ssh-relay-source'
-import { SshTargetOrcadClaims } from './ssh-target-orcad-claims'
+import { SshTargetOrcadClaims } from './targets/ssh-target-orcad-claims'
 
 const TARGET: SshTarget = {
   id: 'ssh-prod',

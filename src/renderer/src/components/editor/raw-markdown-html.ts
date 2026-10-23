@@ -49,6 +49,7 @@ export function encodeRawMarkdownHtmlForRichEditor(
   const lastCommentClose = normalizedContent.lastIndexOf('-->')
   const { transport } = codec
   let index = 0
+  let nextDocLinkClose = 0
   let activeFence: '`' | '~' | null = null
   let activeFenceLength = 0
   let result = ''
@@ -186,7 +187,10 @@ export function encodeRawMarkdownHtmlForRichEditor(
       normalizedContent[index + 1] === '[' &&
       !isEscaped(normalizedContent, index)
     ) {
-      const closingIndex = normalizedContent.indexOf(']]', index + 2)
+      if (nextDocLinkClose !== -1 && nextDocLinkClose < index + 2) {
+        nextDocLinkClose = normalizedContent.indexOf(']]', index + 2)
+      }
+      const closingIndex = nextDocLinkClose
       if (closingIndex !== -1) {
         const rawTarget = normalizedContent.slice(index + 2, closingIndex)
         const link = parseMarkdownDocLink(rawTarget)

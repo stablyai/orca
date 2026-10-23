@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { MobileWebShellFailureReason } from '../../modules/orca-mobile-web-shell/src/load-state'
 import { useHostProtocolGates } from '../components/host-protocol-gates-context'
-import { useHostClient } from '../transport/client-context'
+import { useHostClient } from '../transport/host-client-hooks'
+import {
+  createDownloadProgressFeed,
+  downloadFraction,
+  type DownloadProgressFeed
+} from './download-progress-feed'
 import type { GenerationStore } from './generation-store'
 import { deriveHostCacheKey } from './host-cache-key'
 import { download, openCache, readManifest } from './mobile-web-shell-session-effects'
@@ -35,6 +40,8 @@ import type {
 
 export type MobileWebShellSessionView = {
   readonly state: MobileWebShellSessionState
+  /** The download's progress as it is dispatched, ahead of the React commit that `state` waits on. */
+  readonly downloadProgress: DownloadProgressFeed
   /** The route patterns this shell would render from the page, for the page to be told about. */
   readonly pageRoutes: readonly string[]
   readonly pageRouteGrants: readonly { pathname: string; grants: readonly string[] }[]
@@ -105,6 +112,7 @@ export function useMobileWebShellSession(args: {
   const [pageReady, setPageReady] = useState(sessionRef.current.pageReady)
   const [pageFrame, setPageFrame] = useState(() => shellPageFrame(sessionRef.current))
   const [backClaimed, setBackClaimed] = useState(() => shellPageBackClaimed(sessionRef.current))
+  const [downloadProgress] = useState(createDownloadProgressFeed)
   const hostKey = useMemo(() => deriveHostCacheKey(hostId), [hostId])
   const startedAtRef = useRef(runtime.now())
   // Bumped by anything that invalidates work in flight; every dispatch out of an effect checks it.
@@ -121,27 +129,34 @@ export function useMobileWebShellSession(args: {
     ((epoch: number, flow: number, effect: MobileWebShellSessionEffect) => void) | null
   >(null)
 
-  const dispatch = useCallback((epoch: number, event: MobileWebShellSessionEvent): void => {
-    if (epoch !== epochRef.current) {
-      return
-    }
-    const stepped = reduceMobileWebShellSession(sessionRef.current, event)
-    const trace = traceShellStep(logTraceRef.current, sessionRef.current, event, stepped.session)
-    logTraceRef.current = trace
-    for (const line of shellSessionStepLines(sessionRef.current, event, stepped.session, trace)) {
-      recordShellLifecycleLine(hostIdRef.current, line)
-    }
-    sessionRef.current = stepped.session
-    setState(stepped.session.state)
-    setPageReady(stepped.session.pageReady)
-    setPageFrame(shellPageFrame(stepped.session))
-    setBackClaimed(shellPageBackClaimed(stepped.session))
-    for (const effect of stepped.effects) {
-      // Every effect of a step belongs to the flow that step produced, and its result carries that
-      // number back, so a flow the session has since restarted reports into nothing.
-      runEffectRef.current?.(epoch, stepped.session.flow, effect)
-    }
-  }, [])
+  const dispatch = useCallback(
+    (epoch: number, event: MobileWebShellSessionEvent): void => {
+      if (epoch !== epochRef.current) {
+        return
+      }
+      const stepped = reduceMobileWebShellSession(sessionRef.current, event)
+      const trace = traceShellStep(logTraceRef.current, sessionRef.current, event, stepped.session)
+      logTraceRef.current = trace
+      for (const line of shellSessionStepLines(sessionRef.current, event, stepped.session, trace)) {
+        recordShellLifecycleLine(hostIdRef.current, line)
+      }
+      sessionRef.current = stepped.session
+      const next = stepped.session.state
+      if (next.kind === 'fetching') {
+        downloadProgress.publish(downloadFraction(next.receivedBytes, next.totalBytes))
+      }
+      setState(next)
+      setPageReady(stepped.session.pageReady)
+      setPageFrame(shellPageFrame(stepped.session))
+      setBackClaimed(shellPageBackClaimed(stepped.session))
+      for (const effect of stepped.effects) {
+        // Every effect of a step belongs to the flow that step produced, and its result carries that
+        // number back, so a flow the session has since restarted reports into nothing.
+        runEffectRef.current?.(epoch, stepped.session.flow, effect)
+      }
+    },
+    [downloadProgress]
+  )
 
   const invalidate = useCallback((): void => {
     epochRef.current += 1
@@ -330,6 +345,7 @@ export function useMobileWebShellSession(args: {
 
   return {
     state,
+    downloadProgress,
     pageReady,
     pageFrame,
     pageRoutes: sessionRef.current.pageRoutes,

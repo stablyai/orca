@@ -95,7 +95,6 @@ vi.mock('./linux-update-package-type', () => ({
   getLinuxRootPackageType: () => null,
   isExternallyManagedLinuxInstall: () => false
 }))
-vi.mock('@electron-toolkit/utils', () => ({ is: { dev: false } }))
 vi.mock('./ipc/pty/kill-all', () => ({ killAllPty: killAllPtyMock }))
 vi.mock('./updater-changelog', () => ({ fetchChangelog: vi.fn().mockResolvedValue(null) }))
 vi.mock('./updater-nudge', () => ({

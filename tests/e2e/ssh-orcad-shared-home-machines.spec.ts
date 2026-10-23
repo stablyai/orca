@@ -28,12 +28,18 @@ const TEMPLATE_SOURCE = process.env.ORCA_E2E_ORCAD_CONVERT_TEMPLATE
 const LOGIN_HOME_SLOTS = '/root/.orca-remote/orcad-*/.orcad-pid'
 const MACHINE_HOME_SLOTS = '/root/.orca-remote/hosts/*/.orca-remote/orcad-*/.orcad-pid'
 
-/** PIDs recorded under `pattern` that are running in this container. */
+/**
+ * PIDs recorded under `pattern` whose process in this container runs from that slot. Why the
+ * command-line check: each container has its own PID namespace, so A's recorded PID can be
+ * some unrelated live process on B.
+ */
 function runningPids(target: DockerSshHostTarget, pattern: string): string[] {
   return execDockerSshHostTargetCommand(
     target,
     `for f in ${pattern}; do pid=$(cat "$f" 2>/dev/null) && ` +
-      'kill -0 "$pid" 2>/dev/null && echo "$pid"; done; true'
+      'kill -0 "$pid" 2>/dev/null && ' +
+      `tr '\\0' ' ' < "/proc/$pid/cmdline" | grep -qF "$(dirname "$f")/" && ` +
+      'echo "$pid"; done; true'
   )
     .split('\n')
     .map((line) => line.trim())

@@ -1,12 +1,11 @@
 import type { TerminalSplitOptions } from './terminal-split-surface'
+import type { SplitPaneInMainOptions, SplitPaneSource } from './terminal-split-in-main'
 import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
 import { OrcaRuntimeWithStopExplicitlyClosedTabPtys } from '../../session-tabs/explicit-terminal-close-stops'
 import type { TerminalPaneSplitSource } from '../../../../shared/feature-education-telemetry'
 import type { RuntimeTerminalSplit } from '../../../../shared/runtime-types'
 import { randomUUID } from 'node:crypto'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { admitRuntimePane } from '../../runtime-pane-admission'
 import type { Worktree } from '../../../../shared/worktree/types'
 
 export abstract class OrcaRuntimeWithSplitTerminal extends OrcaRuntimeWithStopExplicitlyClosedTabPtys {
@@ -14,6 +13,13 @@ export abstract class OrcaRuntimeWithSplitTerminal extends OrcaRuntimeWithStopEx
     pty: RuntimePtyWorktreeRecord,
     opts?: TerminalSplitOptions,
     createdWorktree?: Worktree
+  ): Promise<RuntimeTerminalSplit>
+
+  protected abstract ownsTabLayout(worktreeId: string, tabId: string): boolean
+
+  protected abstract splitPaneInMain(
+    source: SplitPaneSource,
+    opts: SplitPaneInMainOptions
   ): Promise<RuntimeTerminalSplit>
 
   protected abstract waitForLeafInTab(
@@ -45,44 +51,22 @@ export abstract class OrcaRuntimeWithSplitTerminal extends OrcaRuntimeWithStopEx
     this.assertGraphReady()
     const { leaf } = this.getLiveLeafForHandle(handle)
     const direction = opts.direction ?? 'horizontal'
-    // Switch point: main writes the split first; the window then mounts main's pane.
-    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      const [hostId] = this.getWorkspaceSessionHostIdsForTab(leaf.worktreeId, leaf.tabId)
-      if (hostId && parseExecutionHostId(hostId)?.kind !== 'runtime') {
-        const newLeafId = randomUUID()
-        // Main keeps the pane however its start goes: one whose terminal never starts is a dead
-        // pane, as any. No pane written, no split: nothing else would put it in main's copy.
-        const outcome = await admitRuntimePane(
-          this.store,
-          {
-            type: 'splitPane',
-            workspace: leaf.worktreeId,
-            tabId: leaf.tabId,
-            leafId: leaf.leafId,
-            direction,
-            newLeafId
-          },
-          hostId
-        )
-        if (outcome !== 'admitted' && outcome !== 'exists') {
-          throw new Error(`split_not_written: ${outcome ?? 'unknown'}`)
-        }
-        this.notifier?.splitTerminal(leaf.tabId, leaf.paneRuntimeId, {
+    // Switch point: main writes the split and starts its terminal; the window attaches to it.
+    if (ORCA_LAYOUT_OWNER_IS_MAIN && this.ownsTabLayout(leaf.worktreeId, leaf.tabId)) {
+      const cwd = leaf.ptyId
+        ? await this.ptyController?.getCwd?.(leaf.ptyId).catch(() => null)
+        : null
+      return this.splitPaneInMain(
+        { worktreeId: leaf.worktreeId, tabId: leaf.tabId, leafId: leaf.leafId },
+        {
           direction,
+          ...(cwd ? { cwd } : {}),
           command: opts.command,
-          worktreeId: leaf.worktreeId,
-          sourceLeafId: leaf.leafId,
-          telemetrySource: opts.telemetrySource,
-          newLeafId
-        })
-        const newHandle = await this.waitForLeafInTab(leaf.tabId, newLeafId)
-        return {
-          handle: newHandle,
-          tabId: leaf.tabId,
-          paneRuntimeId: leaf.paneRuntimeId,
-          leafId: newLeafId
+          env: opts.env,
+          envToDelete: opts.envToDelete,
+          activate: opts.activate
         }
-      }
+      )
     }
 
     const newLeafId = randomUUID()

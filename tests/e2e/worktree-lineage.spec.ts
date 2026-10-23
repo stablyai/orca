@@ -2,6 +2,8 @@ import type { Locator, Page } from '@stablyai/playwright-test'
 import { mkdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { test, expect } from './helpers/orca-app'
+import { addRepoWithWorkspaces, linkWorkspaces } from './helpers/repo-with-workspaces'
+import { SIDEBAR_INPUTS_BUILD } from './helpers/sidebar-inputs-build'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
   markWorkspaceTerminalSlept,
@@ -110,6 +112,10 @@ test.describe('Worktree Lineage', () => {
   test('renders legacy-only inline lineage when side-map hydration is absent', async ({
     orcaPage
   }) => {
+    test.skip(
+      SIDEBAR_INPUTS_BUILD,
+      "the window's legacy inline link is unused when rows come from main"
+    )
     const { parentId, childId } = await seedLineageScenario(orcaPage, { inlineOnly: true })
     const parentRow = worktreeOption(orcaPage, parentId)
     const childRow = worktreeOption(orcaPage, childId)
@@ -125,6 +131,10 @@ test.describe('Worktree Lineage', () => {
         return parentBox && childBox ? childBox.y > parentBox.y : false
       })
       .toBe(true)
+    // The link must come from the records alone, not a side map hydrated after the seed.
+    expect(
+      await orcaPage.evaluate((id) => window.__store!.getState().worktreeLineageById[id], childId)
+    ).toBeUndefined()
     await captureSidebarEvidence(orcaPage, 'legacy-inline-lineage-nested.png')
   })
 
@@ -211,24 +221,12 @@ test.describe('Worktree Lineage', () => {
 
   test('sleeps a workspace and every descendant from the parent context menu', async ({
     orcaPage
-  }) => {
-    const { parentId, childId } = await seedLineageScenario(orcaPage)
-    await orcaPage.evaluate((parentId) => {
-      const store = window.__store
-      if (!store) {
-        throw new Error('window.__store is not available')
-      }
-      store.setState((current) => ({
-        worktreesByRepo: Object.fromEntries(
-          Object.entries(current.worktreesByRepo).map(([repoId, worktrees]) => [
-            repoId,
-            worktrees.map((worktree) =>
-              worktree.id === parentId ? { ...worktree, isMainWorktree: false } : worktree
-            )
-          ])
-        )
-      }))
-    }, parentId)
+  }, testInfo) => {
+    // A repo's own checkout offers no delete, so the parent is one of its worktrees.
+    const repo = await addRepoWithWorkspaces(orcaPage, testInfo, 2)
+    const [parentId, childId] = [repo.ids[0]!, repo.ids[1]!]
+    await linkWorkspaces(orcaPage, [{ childId, parentId }])
+    await orcaPage.evaluate(() => window.__store!.getState().setShowSleepingWorkspaces(true))
     const parentTabId = await seedWorkspaceLiveTerminal(orcaPage, parentId)
     const childTabId = await seedWorkspaceLiveTerminal(orcaPage, childId)
 
@@ -253,7 +251,6 @@ test.describe('Worktree Lineage', () => {
           }))
         }
       })
-      window.api.ephemeralVm.suspendWorkspace = async () => null
     })
 
     await worktreeOption(orcaPage, parentId).click({ button: 'right' })

@@ -2,7 +2,16 @@ import { createHash } from 'node:crypto'
 import type { Dirent } from 'node:fs'
 import { lstat, open, opendir } from 'node:fs/promises'
 import { isAbsolute, join, relative, sep } from 'node:path'
-import type { SkillBundleFileIdentity } from '../../shared/skill-freshness'
+
+export type SkillBundleFileIdentity = {
+  path: string
+  size: number
+  executable: boolean
+  classification: 'text' | 'binary'
+  exactSha256: string
+  textNormalizedSha256: string | null
+  identitySha256: string
+}
 
 type ObservedSkillFile = SkillBundleFileIdentity
 

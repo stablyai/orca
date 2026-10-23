@@ -24,7 +24,8 @@ export function useAiVaultOriginalPaneActions(): {
   ) => ReturnType<typeof findOriginalAiVaultSessionPane>
   getSessionLiveState: (session: AiVaultSession) => AgentStatusState | null
   isStructuredSessionOpen: (session: AiVaultSession) => boolean
-  jumpToOriginalPane: (session: AiVaultSession) => void
+  /** Settles false when the pane is gone and nothing was switched. */
+  jumpToOriginalPane: (session: AiVaultSession) => Promise<boolean>
   jumpToWorktree: (worktreeId: string) => void
 } {
   const originalPaneLookupState = useAppStore(
@@ -72,10 +73,9 @@ export function useAiVaultOriginalPaneActions(): {
   )
 
   const jumpToOriginalPane = useCallback(
-    (session: AiVaultSession): void => {
+    async (session: AiVaultSession): Promise<boolean> => {
       if (session.structuredSession && isStructuredSessionOpen(session)) {
-        void activateAiVaultStructuredSession(session)
-        return
+        return activateAiVaultStructuredSession(session)
       }
       const target = findOriginalAiVaultSessionPane(useAppStore.getState(), session)
       if (!target) {
@@ -85,11 +85,11 @@ export function useAiVaultOriginalPaneActions(): {
             'Original pane is no longer available.'
           )
         )
-        return
+        return false
       }
 
       if (!revealSessionWorkspace(target.worktreeId)) {
-        return
+        return false
       }
       const state = useAppStore.getState()
       state.setActiveTabType('terminal', target.worktreeId)
@@ -97,6 +97,7 @@ export function useAiVaultOriginalPaneActions(): {
         flashFocusedPane: true,
         scrollToBottomIfOutputSinceLastView: true
       })
+      return true
     },
     [isStructuredSessionOpen]
   )

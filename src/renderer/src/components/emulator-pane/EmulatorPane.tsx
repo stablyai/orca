@@ -65,7 +65,7 @@ export default function EmulatorPane({ tab, worktreeId, isActive = true }: Emula
       ) : null}
 
       <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-muted px-3 py-6">
-        <MobileEmulatorAgentSetupGuideLayer isActive={isActive} worktreeId={worktreeId}>
+        <MobileEmulatorAgentSetupGuideLayer isActive={isActive}>
           {!isLive && !loading ? (
             <p className="mb-4 text-center text-xs text-muted-foreground">
               {translate(

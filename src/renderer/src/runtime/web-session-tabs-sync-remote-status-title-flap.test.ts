@@ -224,12 +224,18 @@ function seedPairedClientStore(): TestStore {
     },
     worktreesByRepo: {
       repo1: [
-        makeWorktree({ id: WT, repoId: 'repo1', path: '/path/wt1' }),
+        // The paired server owns this workspace, so its titles stay the window's to apply.
+        makeWorktree({
+          id: WT,
+          repoId: 'repo1',
+          path: '/path/wt1',
+          runtimeOwnerEnvironmentId: ENV
+        }),
         makeWorktree({ id: LOCAL_WT, repoId: 'repo1', path: '/path/local-wt' })
       ]
     },
     activeWorktreeId: WT
-  } as Partial<AppState>)
+  })
   return store
 }
 

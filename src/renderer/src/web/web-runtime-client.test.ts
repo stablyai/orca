@@ -1,3 +1,4 @@
+import { AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY } from '../../../shared/structured-agent-session-surface-capabilities'
 import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
 import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest'
 import type { PairedE2EEClientHandshake } from '../../../shared/paired-e2ee-client-handshake'
@@ -130,6 +131,7 @@ describe('WebRuntimeClient', () => {
       type: 'e2ee_auth',
       deviceToken: 'token',
       clientCapabilities: [
+        AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY,
         AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
         AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY,
         AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY,

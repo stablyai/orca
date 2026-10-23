@@ -26,7 +26,7 @@ function Host(): React.JSX.Element {
 }
 
 function sizeCanvas(): HTMLElement {
-  const canvas = screen.getByTestId('diagram-viewer-canvas')
+  const canvas = screen.getByTestId('pan-zoom-image-canvas')
   Object.defineProperty(canvas, 'clientWidth', { value: 1000 })
   Object.defineProperty(canvas, 'clientHeight', { value: 600 })
   act(() => resizeObservers.forEach((notify) => notify()))

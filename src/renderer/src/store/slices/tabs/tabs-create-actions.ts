@@ -1,3 +1,4 @@
+import { structuredLaunchSlotIds } from '@/lib/structured-agent-session-launch-persistence'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { getActiveExecutionHostIdForWorktree } from '@/lib/unified-tab-host-ownership'
 import type { Tab, TabGroup } from '../../../../../shared/tab-types'
@@ -20,6 +21,7 @@ import { resolveUnifiedTabCreatePlacement } from './tabs-create-placement'
 import { emptySplitGroup, insertSplitGroup } from './tabs-group-actions'
 import { folderWorkspaceToWorktree } from '../../../../../shared/folder-workspace-worktree'
 import { createdTabPreviewFlag } from './tab-preview-flag'
+import { selectFolderWorkspaces } from '../../workspace-record-selectors'
 
 export function createTabsCreateActions(
   set: TabsSliceSet,
@@ -54,7 +56,7 @@ export function createTabsCreateActions(
           lookupWorktrees: () =>
             [
               ...(state.allWorktrees?.() ?? []),
-              ...(state.folderWorkspaces ?? []).map(folderWorkspaceToWorktree)
+              ...(selectFolderWorkspaces(state) ?? []).map(folderWorkspaceToWorktree)
             ].filter((worktree) => worktree.id === worktreeId)
         })
         const { group, groupsByWorktree, activeGroupIdByWorktree } = ensureGroup(
@@ -85,13 +87,18 @@ export function createTabsCreateActions(
         const executionHostId =
           init?.executionHostId ?? getActiveExecutionHostIdForWorktree(state, worktreeId)
         // Why: preview replacement may have removed the anchor; the order then appends in-partition.
-        nextOrder = insertTabIdIntoOrder(
-          nextOrder,
-          nextTabs,
-          id,
-          init?.isPinned === true,
-          placement.anchorTabId
-        )
+        nextOrder =
+          contentType === 'agent-session' &&
+          nextOrder.includes(id) &&
+          structuredLaunchSlotIds(worktreeId, group.id).has(id)
+            ? nextOrder
+            : insertTabIdIntoOrder(
+                nextOrder,
+                nextTabs,
+                id,
+                init?.isPinned === true,
+                placement.anchorTabId
+              )
         const insertedIndex = nextOrder.indexOf(id)
         // Why always: preview replacement can leave a gap, so an append alone would reuse a sibling's sortOrder.
         nextTabs = applyTabOrderSortValues(nextTabs, nextOrder)

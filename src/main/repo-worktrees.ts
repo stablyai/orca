@@ -10,7 +10,7 @@ import {
 import { isFolderRepo } from '../shared/repo-kind'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host'
 import { resolveGitRouteForHost } from './providers/execution-host-provider-dispatch'
-import { areWorktreePathsEqual } from './ipc/worktree-logic'
+import { areWorktreePathsEqual } from './git/worktree-path-comparison'
 import { WorktreeCatalogUnavailableError } from '../shared/worktree/worktree-catalog-availability'
 
 type LocalRepoWorktreeListOptions = {

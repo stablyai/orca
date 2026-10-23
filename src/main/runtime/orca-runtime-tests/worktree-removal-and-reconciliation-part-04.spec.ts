@@ -27,6 +27,10 @@ import {
 } from '../orca-runtime-test-mocks.spec'
 import type { WorktreeMeta } from '../orca-runtime-test-mocks.spec'
 import {
+  hostWorktreeTarget,
+  type HostWorktreeTarget
+} from '../../../shared/worktree/host-qualified-identity'
+import {
   TEST_REPO_ID,
   TEST_REPO_PATH,
   TEST_WORKTREE_ID,
@@ -62,7 +66,7 @@ describe('OrcaRuntimeService', () => {
         orcaCreationSource: 'ssh'
       })
     }
-    const removeWorktreeMeta = vi.fn((id: string) => {
+    const removeWorktreeMeta = vi.fn(({ id }: HostWorktreeTarget) => {
       delete metaById[id]
     })
     const runtimeStore = {
@@ -71,7 +75,7 @@ describe('OrcaRuntimeService', () => {
       getRepo: (id: string) => (id === repo.id ? repo : undefined),
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (id: string) => metaById[id],
-      setWorktreeMeta: (id: string, meta: Partial<WorktreeMeta>) => {
+      setWorktreeMeta: ({ id }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
         metaById[id] = { ...(metaById[id] ?? makeWorktreeMeta()), ...meta }
         return metaById[id]
       },
@@ -405,7 +409,9 @@ describe('OrcaRuntimeService', () => {
       await rm(orphanPath, { recursive: true, force: true })
       vi.mocked(listWorktrees).mockResolvedValue([])
       await expect(runtime.removeManagedWorktree(worktreeId)).resolves.toEqual({})
-      expect(removeWorktreeMeta).toHaveBeenCalledWith(worktreeId, 'local')
+      expect(removeWorktreeMeta).toHaveBeenCalledWith(
+        hostWorktreeTarget({ id: worktreeId, hostId: 'local' })
+      )
     } finally {
       gitSpy.mockRestore()
       await rm(parentDir, { recursive: true, force: true })
@@ -560,7 +566,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -705,7 +710,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -747,7 +751,7 @@ describe('OrcaRuntimeService', () => {
       updateRepo: () => undefined as never,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
         const existingMeta = metaById[worktreeId]
         const nextMeta: WorktreeMeta = {
           displayName: meta.displayName ?? existingMeta?.displayName ?? '',

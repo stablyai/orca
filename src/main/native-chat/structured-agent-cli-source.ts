@@ -4,6 +4,7 @@ import type { StructuredAgentId } from '../../shared/agent-session-provider-hand
 import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
 import {
   adoptsCliConversations,
+  chatAgentsShareConversations,
   CLI_CONVERSATION_ADOPTING_AGENTS
 } from '../../shared/structured-agent-cli-conversation-adoption'
 import { isWslUncPath } from '../../shared/wsl-paths'
@@ -20,12 +21,14 @@ export function captureStructuredAgentCliSource(
   try {
     return Object.freeze({
       rows: Object.freeze(
-        readRows().map((row) => Object.freeze({
-          ...row,
-          ...(row.providerSession
-            ? { providerSession: Object.freeze({ ...row.providerSession }) }
-            : {})
-        }))
+        readRows().map((row) =>
+          Object.freeze({
+            ...row,
+            ...(row.providerSession
+              ? { providerSession: Object.freeze({ ...row.providerSession }) }
+              : {})
+          })
+        )
       )
     })
   } catch (error) {
@@ -69,7 +72,10 @@ export function structuredAgentCliSourcePath(input: {
       !candidate.connectionId &&
       !candidate.structuredHost &&
       adoptsCliConversations(candidate.agentType) &&
-      CLI_CONVERSATION_ADOPTING_AGENTS[candidate.agentType] === input.agent &&
+      // A 2.x pane started as `opencode` reports `opencode`; the OpenCode 2 chat opens its conversation.
+      CLI_CONVERSATION_ADOPTING_AGENTS[candidate.agentType].some((agent) =>
+        chatAgentsShareConversations(agent, input.agent)
+      ) &&
       candidate.providerSession?.id === input.resumeFrom.providerSessionId
   )
   if (!row) {

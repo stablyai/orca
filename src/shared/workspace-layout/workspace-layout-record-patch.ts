@@ -3,7 +3,9 @@
 // key order, carried leftovers); diffing the save before the command against the save after it
 // isolates the command, and only those records and fields are written.
 
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../layout-owner-switch'
 import type { WorkspaceSessionState } from '../workspace-session-state-types'
+import { editorFileKey } from './workspace-layout-editor-tab-file'
 import { adoptTouchedFoldedRows } from './workspace-layout-folded-rows'
 
 type Json = Record<string, unknown>
@@ -13,7 +15,15 @@ const LIST_FIELDS: Record<string, (record: Json) => unknown> = {
   tabsByWorktree: (record) => record.id,
   unifiedTabs: (record) => record.id,
   tabGroups: (record) => record.id,
-  openFilesByWorktree: (record) => record.filePath,
+  // Why the switch: a local and a runtime-environment file can share a path in a layout-owner build.
+  openFilesByWorktree: (record) =>
+    ORCA_LAYOUT_OWNER_IS_MAIN && typeof record.filePath === 'string'
+      ? editorFileKey({
+          filePath: record.filePath,
+          runtimeEnvironmentId:
+            typeof record.runtimeEnvironmentId === 'string' ? record.runtimeEnvironmentId : null
+        })
+      : record.filePath,
   browserTabsByWorktree: (record) => record.id
 }
 
@@ -93,8 +103,20 @@ function patchLists(
   return patched
 }
 
+function indexRecordsById(list: Json[], idOf: (record: Json) => unknown): Map<unknown, Json> {
+  const records = new Map<unknown, Json>()
+  for (const record of list) {
+    const id = idOf(record)
+    if (!records.has(id)) {
+      records.set(id, record)
+    }
+  }
+  return records
+}
+
 function patchList(stored: Json[], before: Json[], after: Json[], idOf: (record: Json) => unknown) {
-  const find = (list: Json[], id: unknown) => list.find((record) => idOf(record) === id)
+  const beforeById = indexRecordsById(before, idOf)
+  const afterById = indexRecordsById(after, idOf)
   const result = [...stored]
   const ids = new Set([...before.map(idOf), ...after.map(idOf)])
   const kept = (list: Json[], other: Json[]) => {
@@ -104,8 +126,8 @@ function patchList(stored: Json[], before: Json[], after: Json[], idOf: (record:
   // Records kept their relative order: sort orders changed only to close a removal's gap.
   const renumberedOnly = sameJson(kept(before, after), kept(after, before))
   for (const id of ids) {
-    const old = find(before, id)
-    const next = find(after, id)
+    const old = beforeById.get(id)
+    const next = afterById.get(id)
     if (sameJson(old, next)) {
       continue
     }
@@ -137,10 +159,14 @@ function patchList(stored: Json[], before: Json[], after: Json[], idOf: (record:
   }
   // The command reordered its own records: they take `after`'s order in the slots they hold.
   const placed = new Set(after.map(idOf))
+  const resultById = indexRecordsById(result, idOf)
   const queue = after
-    .map((record) => result.find((candidate) => idOf(candidate) === idOf(record)))
+    .map((record) => resultById.get(idOf(record)))
     .filter((record): record is Json => record !== undefined)
-  return result.map((record) => (placed.has(idOf(record)) ? (queue.shift() ?? record) : record))
+  let nextIndex = 0
+  return result.map((record) =>
+    placed.has(idOf(record)) ? (queue[nextIndex++] ?? record) : record
+  )
 }
 
 /** After the nearest record that precedes it in `after` and is already in the list. */

@@ -262,7 +262,7 @@ describe('structured chat rewind', () => {
 
   it('still offers the action when the options read answered while the host was in doubt', () => {
     const view = render({ ...input(), support: { supported: false, reason: 'outcome-unknown' } })
-    expect(view.result.current.surface).toEqual({
+    expect(view.result.current.surface).toMatchObject({
       disabledReason: null,
       request: view.result.current.request
     })

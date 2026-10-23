@@ -76,7 +76,9 @@ export const WorktreePsParams = z.object({
 })
 
 export const WorktreeSortOrder = z.object({
-  orderedIds: z.array(z.string())
+  orderedIds: z.array(z.string()),
+  // Parallel to orderedIds: the copy each id names, so a same-id twin keeps its own order.
+  hostIds: z.array(z.string()).optional()
 })
 
 export const WorktreeSelector = z.object({
@@ -84,6 +86,11 @@ export const WorktreeSelector = z.object({
     .unknown()
     .transform((v) => (typeof v === 'string' ? v : ''))
     .pipe(z.string().min(1, 'Missing worktree selector'))
+})
+
+// Why optional: an older host strips the unknown field and marks its chats asleep as before.
+export const WorktreeSleepParams = WorktreeSelector.extend({
+  markChatsAsleep: z.boolean().optional()
 })
 
 export const WorktreeActivate = WorktreeSelector.extend({

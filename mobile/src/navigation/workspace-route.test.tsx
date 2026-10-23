@@ -36,7 +36,7 @@ vi.mock('react-native', () => ({
   Text: 'Text',
   Pressable: 'Pressable'
 }))
-vi.mock('../transport/client-context', () => ({
+vi.mock('../transport/host-client-hooks', () => ({
   useHostClient: () => ({ client: route.client, state: 'connected' })
 }))
 // The server's status is read for real; only the desktop's persisted records are stubbed.

@@ -1,3 +1,6 @@
+import { shutdownRoutedDegradedSession } from './daemon-routed-session-shutdown'
+import { terminateResolvedDaemonSession } from './daemon-fenced-termination'
+import type { PtyFencedTerminationRequest } from '../../shared/pty-fenced-termination'
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { combineUnsubscribes } from './combine-unsubscribes'
 import { shutdownDegradedFallbackSessions } from './degraded-daemon-fallback-shutdown'
@@ -106,9 +109,15 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
 
   // Why: an unknown id cannot borrow listing authority from the fresh-spawn provider.
   providesAgentSessionOwnerListings = (ptyId: string): boolean =>
-    (
-      this.sessionProviders.get(ptyId) ?? this.findProviderForExistingSession(ptyId)
-    )?.providesAgentSessionOwnerListings?.(ptyId) === true
+    this.sessionProviders.get(ptyId)?.providesAgentSessionOwnerListings?.(ptyId) === true
+
+  supportsFencedTermination = (id: string): boolean =>
+    this.sessionProviders.get(id)?.supportsFencedTermination?.(id) === true
+
+  killFenced = (request: PtyFencedTerminationRequest) =>
+    terminateResolvedDaemonSession(request, () =>
+      this.ownerRecovery.resolveFencedOwner(request.id, request.expectedIncarnationId)
+    )
 
   write(id: string, data: string): boolean | void {
     return this.providerFor(id).write(id, data)
@@ -134,15 +143,8 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     this.providerFor(id).setPtyBackgrounded?.(id, background)
   }
 
-  async shutdown(
-    id: string,
-    opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
-  ): Promise<void> {
-    await this.providerFor(id).shutdown(id, opts)
-    if (!opts.keepHistory) {
-      this.sessionProviders.delete(id)
-    }
-  }
+  shutdown = (id: string, opts: Parameters<IPtyProvider['shutdown']>[1]) =>
+    shutdownRoutedDegradedSession(id, opts, this.providerFor(id), this.sessionProviders)
 
   async sendSignal(id: string, signal: string): Promise<void> {
     await this.providerFor(id).sendSignal(id, signal)
@@ -209,11 +211,10 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     await this.fallback.revive(state)
   }
 
-  async listProcesses(opts?: { deadlineMs?: number }): Promise<PtyProcessInfo[]> {
-    const results = await Promise.all(
-      this.allProviders().map((provider) => provider.listProcesses(opts))
-    )
-    return results.flat()
+  async listProcesses(
+    opts?: Parameters<IPtyProvider['listProcesses']>[0]
+  ): Promise<PtyProcessInfo[]> {
+    return this.ownerRecovery.listProcesses(opts)
   }
 
   async getDefaultShell(): Promise<string> {
@@ -361,7 +362,5 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     return [this.fallback, ...this.allDaemonAdapters()]
   }
 
-  private allDaemonAdapters(): DaemonPtyAdapter[] {
-    return [this.current, ...this.legacy]
-  }
+  private allDaemonAdapters = (): DaemonPtyAdapter[] => [this.current, ...this.legacy]
 }

@@ -25,7 +25,12 @@ import {
   type SessionParseStats
 } from './session-scanner-parse-cache'
 import type * as ParseCacheModule from './session-scanner-parse-cache'
-import { getSessionParseCacheEntry, storeSessionParseCacheEntry } from './session-parse-cache-store'
+import {
+  getSessionParseCacheEntry,
+  storeSessionParseCacheEntry,
+  storeSessionScopeCwd,
+  type SessionScopeCwdStamp
+} from './session-parse-cache-store'
 import type { SessionSidecarObservation } from './session-sidecar-stat'
 import { isolatedScanRoots } from './session-scanner-test-fixtures'
 import { parseClaudeSessionFile } from './session-scanner-primary-parsers'
@@ -161,6 +166,40 @@ describe('session parse cache persistence', () => {
 
     expect(snapshot).toEqual(configured)
     expect(snapshot).not.toBe(configured)
+  })
+
+  it('persists scope rows across chunks and keeps replacements queued during a yield', async () => {
+    const root = await makeTempDir()
+    const cacheFile = join(root, 'session-parse-cache.json')
+    initSessionParseCachePersistence({ filePath: cacheFile, appVersion: APP_VERSION })
+    const paths = Array.from({ length: 1_001 }, (_, index) => join(root, `session-${index}`))
+    const stamp: SessionScopeCwdStamp = {
+      mtimeMs: 1,
+      sizeBytes: 10,
+      platform: 'linux',
+      cwd: '/original'
+    }
+    for (const path of paths) {
+      storeSessionScopeCwd(path, stamp)
+    }
+    const flushing = flushSessionParseCachePersist()
+    const replacement = { ...stamp, mtimeMs: 2, cwd: '/updated' }
+    storeSessionScopeCwd(paths[0]!, replacement)
+    storeSessionScopeCwd(paths[750]!, replacement)
+    await flushing
+    resetSessionParseCachePersistenceForTests()
+    resetSessionParseCacheForTests()
+
+    const database = new SessionParseCacheDatabase(join(root, 'session-parse-cache.sqlite'))
+    try {
+      const stored = database.readScopeCwds(paths).found
+      expect(stored.size).toBe(paths.length)
+      for (const [index, path] of paths.entries()) {
+        expect(stored.get(path)?.read).toEqual(index === 0 || index === 750 ? replacement : stamp)
+      }
+    } finally {
+      database.close()
+    }
   })
 
   it('round-trips: a persisted entry is a reused hit after a restart, without reading the transcript', async () => {

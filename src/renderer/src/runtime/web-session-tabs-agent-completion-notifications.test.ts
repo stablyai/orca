@@ -354,6 +354,22 @@ describe('paired session-tab agent completion notifications', () => {
       )
     })
 
+    it('announces a background turn stamped while the host was unreachable, once', () => {
+      applySnapshot(makeAgentSnapshot(1, NOW), true)
+      applySnapshot(makeAgentSnapshot(2, NOW + 45_000, NOW + 15_000), false)
+      expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+
+      applySnapshot(makeAgentSnapshot(3, NOW + 46_000, NOW + 15_000), false)
+      expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+    })
+
+    it('seeds a stamped working row found on first load without announcing it', () => {
+      applySnapshot(makeAgentSnapshot(1, NOW, NOW + 15_000), false)
+      vi.advanceTimersByTime(1_500)
+
+      expect(dispatchCompletion).not.toHaveBeenCalled()
+    })
+
     it('seeds a done found on first load without announcing it', () => {
       applySnapshot(makeAgentSnapshot(1, NOW, undefined, 'done', NOW + 15_000), false)
       vi.advanceTimersByTime(1_500)

@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-environment'
-import { quotePosixShell } from '../../shared/wsl-login-shell-command'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import type { CodexManagedAccount } from '../../shared/managed-account-types'
 import { getSystemCodexHomePath } from '../codex/codex-home-paths'

@@ -2,8 +2,8 @@ import type {
   OrcadMigrationCatalogPayload,
   OrcadMigrationDormantStatePayload,
   OrcadMigrationManifestSource
-} from '../../../shared/orcad-migration-manifest'
-import type { OrcadMigrationDependencyKind } from '../../../shared/orcad-migration-preflight'
+} from '../../../shared/orcad-migration/orcad-migration-manifest'
+import type { OrcadMigrationDependencyKind } from '../../../shared/orcad-migration/orcad-migration-preflight'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { TerminalScrollbackSnapshotStorage } from '../../terminal-scrollback-snapshots'
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'

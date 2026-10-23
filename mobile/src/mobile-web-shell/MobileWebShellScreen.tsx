@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native'
-import { useNavigation, useRouter } from 'expo-router'
+import { useNavigation, useNavigationContainerRef, useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
   OrcaMobileWebShellView,
@@ -16,11 +16,8 @@ import type {
   MobileWebShellSessionState,
   MobileWebShellUpdateNotice
 } from './mobile-web-shell-session-contract'
-import {
-  formatMobileWebShellDevFacts,
-  isDevelopmentBuild,
-  useMobileWebShellDroppedFrames
-} from './mobile-web-shell-dev-facts'
+import { useMobileWebShellDroppedFrames } from './mobile-web-shell-dev-facts'
+import { ShellDevFacts } from './ShellDevFacts'
 import { cancelledShellNavigationTarget } from './cancelled-navigation-target'
 import { playPageHaptic } from './page-haptics'
 import { useMobileWebShellBridge } from './use-mobile-web-shell-bridge'
@@ -33,11 +30,13 @@ import { useMobileWebShellSession } from './use-mobile-web-shell-session'
 import { usePageHostSnapshot } from './use-page-host-snapshot'
 import { useReportedHostAreaServing } from './host-area-serving'
 import { isHostRouteOf } from './page-route-policy'
+import { nativeStackReturn } from './native-stack-return'
 import { PageRouteUnavailableScreen } from './PageRouteUnavailableScreen'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import { storageReadParamsSchema, type BridgeNativeVerb } from './bridge/bridge-native-verbs'
 import { SHELL_OPENING_LABEL, ShellPageCover, ShellWaitingFrame } from './ShellWaitingFrame'
 import { ShellDownloadProgress } from './ShellDownloadProgress'
+import { useReportedShellOverlayLoad, type ShellOverlayLoad } from './shell-overlay-load'
 import { pageSafeAreaInsets, usePublishedSafeAreaInsets } from './page-safe-area-insets'
 import { hostProfileUnreadableLine, pageFaultLine } from './shell-lifecycle-log'
 import { recordShellLifecycleLine } from './shell-lifecycle-line-recorder'
@@ -107,32 +106,11 @@ function Failed({
   )
 }
 
-function DevFacts({
-  state,
-  droppedBinaryFrames
-}: {
-  state: Extract<MobileWebShellSessionState, { kind: 'ready' }>
-  droppedBinaryFrames: number
-}) {
-  if (!isDevelopmentBuild()) {
-    return null
-  }
-  return (
-    <View style={styles.devFacts} pointerEvents="none">
-      <Text style={styles.devFactsText} testID="mobile-web-shell-dev-facts">
-        {formatMobileWebShellDevFacts({
-          buildId: state.buildId,
-          totalBytes: state.totalBytes,
-          elapsedMs: state.elapsedMs,
-          droppedBinaryFrames
-        })}
-      </Text>
-    </View>
-  )
-}
-
 export type MobileWebShellScreenProps = {
   hostId: string
+  /** Makes this an overlay: transparent over the screen that opened it, whose page draws a drawer.
+   *  The caller shows the wait and the exits; this shows nothing until the page has painted. */
+  onOverlayLoad?: (load: ShellOverlayLoad) => void
   /** The screen this shell stands in for, which the page cannot derive from a document served at `/`. */
   route: BridgeInitRoute
   /** False for the catch-all, whose pathnames have no screen in this app. */
@@ -158,16 +136,20 @@ export function MobileWebShellScreen({
   route,
   appNamesRoute,
   onRouteParamClear,
+  onOverlayLoad,
   runtime
 }: MobileWebShellScreenProps) {
   const insets = useSafeAreaInsets()
+  const overlay = onOverlayLoad !== undefined
   const router = useRouter()
   const navigation = useNavigation()
+  const navigationContainer = useNavigationContainerRef()
   const popShellStack = useShellStackPop()
   const { isWideLayout } = useResponsiveLayout()
   const { droppedBinaryFrames, reportDroppedBinaryFrames } = useMobileWebShellDroppedFrames()
   const {
     state,
+    downloadProgress,
     pageRoutes,
     pageRouteGrants,
     routeGrants,
@@ -272,11 +254,32 @@ export function MobileWebShellScreen({
       console.warn('[web-shell] refused to open this screen', issue)
       reportShellFailure('document-load-failed')
     },
-    // Pushed, never replaced: the page stays mounted underneath, so Back reveals it with no
-    // download and no second `init`.
+    // A new screen is pushed, never replaced: the page stays mounted underneath, so Back reveals it
+    // with no download and no second `init`.
     onNavigate: (href: string) => {
-      // Wide, this host's route is the area-owning session below: back to it, or in place of this
-      // one from a cold deep link, never a second on top. `dismissTo` takes the href's params.
+      // An overlay hands its place to where the page went: Back there returns to the screen beneath.
+      if (overlay) {
+        return void router.replace(href)
+      }
+      // A screen already on the stack is returned to, as system Back would: the page's own exits
+      // ask for the screen beneath it, and a push would stack a second copy over a live one.
+      const rootState = navigationContainer.getRootState()
+      const onStack = rootState ? nativeStackReturn(rootState, href) : null
+      if (onStack === 'current') {
+        return
+      }
+      if (onStack) {
+        navigation.dispatch({
+          type: 'POP',
+          payload: { count: onStack.count },
+          target: onStack.target,
+          source: onStack.source
+        })
+        return
+      }
+      // Wide, this host's route is the area-owning session even when it is not on the stack as
+      // asked: `dismissTo` pops to it by name with the href's params, or replaces this one after a
+      // cold deep link, so it is never a second on top.
       if (isWideLayout && isHostRouteOf(href, hostId)) {
         router.dismissTo(href)
         return
@@ -331,6 +334,7 @@ export function MobileWebShellScreen({
     sendBack: bridge.sendBack,
     setOptions: navigation.setOptions
   })
+  useReportedShellOverlayLoad(onOverlayLoad, state, pageFrame, downloadProgress)
 
   // A profile read that rejected never becomes a host, so the session would otherwise sit in
   // `ready` behind an un-hidden view with nothing serving it and the page asking forever.
@@ -350,6 +354,10 @@ export function MobileWebShellScreen({
     }
   }, [hostId, unreadable])
 
+  // The overlay's caller draws the wait and the exits.
+  if (overlay && state.kind !== 'ready') {
+    return null
+  }
   if (state.kind === 'route-unavailable') {
     return <PageRouteUnavailableScreen hostId={hostId} />
   }
@@ -371,7 +379,11 @@ export function MobileWebShellScreen({
   if (state.kind === 'fetching') {
     return (
       <Centered>
-        <ShellDownloadProgress state={state} host={snapshot?.host ?? null} />
+        <ShellDownloadProgress
+          state={state}
+          feed={downloadProgress}
+          host={snapshot?.host ?? null}
+        />
       </Centered>
     )
   }
@@ -384,7 +396,9 @@ export function MobileWebShellScreen({
         styles.shellRoot,
         // Edge-to-edge like a native screen: the page pads for the bars itself from the insets
         // `init` carries. The banner takes the status bar strip when it shows.
-        { paddingTop: noticeShown ? insets.top : 0 }
+        { paddingTop: noticeShown ? insets.top : 0 },
+        // An overlay's page draws over the screen beneath, which shows through.
+        overlay && { backgroundColor: 'transparent' }
       ]}
       testID="mobile-web-shell-ready"
     >
@@ -400,7 +414,8 @@ export function MobileWebShellScreen({
       <OrcaMobileWebShellView
         key={state.sessionId}
         ref={bridge.viewRef}
-        style={styles.shellView}
+        // An overlay has no cover over the screen beneath: a fresh WebView draws opaque until the page paints.
+        style={[styles.shellView, overlay && pageFrame !== 'painted' && styles.unpaintedOverlay]}
         generationDirectory={state.generationDirectory}
         sessionId={state.sessionId}
         bridgeEnabled={bridge.bridgeEnabled}
@@ -435,8 +450,10 @@ export function MobileWebShellScreen({
           }
         }}
       />
-      <ShellPageCover label={SHELL_OPENING_LABEL} visible={pageFrame === 'unpainted'} />
-      <DevFacts state={state} droppedBinaryFrames={droppedBinaryFrames} />
+      {overlay ? null : (
+        <ShellPageCover label={SHELL_OPENING_LABEL} visible={pageFrame === 'unpainted'} />
+      )}
+      <ShellDevFacts state={state} droppedBinaryFrames={droppedBinaryFrames} />
     </View>
   )
 }
@@ -448,6 +465,9 @@ const styles = StyleSheet.create({
   },
   shellView: {
     flex: 1
+  },
+  unpaintedOverlay: {
+    opacity: 0
   },
   centered: {
     flex: 1,
@@ -481,18 +501,5 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.7
-  },
-  devFacts: {
-    position: 'absolute',
-    left: spacing.sm,
-    bottom: spacing.sm,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: radii.button,
-    backgroundColor: colors.bgPanel
-  },
-  devFactsText: {
-    fontSize: typography.metaSize,
-    color: colors.textMuted
   }
 })

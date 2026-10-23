@@ -10,7 +10,7 @@ import {
   refreshRuntimeEnvironmentSshTargetMetadata
 } from '@/runtime/runtime-environment-ssh-state'
 import { subscribeRuntimeClientEvents } from '@/runtime/runtime-client-events'
-import { toRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
+import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import { getEnvironmentSshStateGeneration } from '@/store/slices/runtime-environment-ssh'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
@@ -161,6 +161,10 @@ export function registerRuntimeClientIpcBridge(
         .catch((error) => {
           console.error('Failed to refresh updated Linear issue:', error)
         })
+      return
+    }
+    // This window builds its sidebar from its own store, never from a host's phone feed.
+    if (event.type === 'sidebarInputsChanged') {
       return
     }
     // Older hosts broadcast local/CLI activation without an address; that is not this viewer's intent.

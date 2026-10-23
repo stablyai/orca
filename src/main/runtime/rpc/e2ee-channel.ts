@@ -1,6 +1,6 @@
 // Why: this channel keeps E2EE framing out of RPC handlers, which consume plaintext across transports.
 import type { WebSocket } from 'ws'
-import { deriveSharedKey, encrypt, decrypt, decryptBytes } from './e2ee-crypto'
+import { deriveSharedKey, encrypt, decrypt, decryptBytes } from '../../../shared/e2ee-crypto'
 import {
   DesktopMobileE2EEV2Session,
   type DesktopMobileE2EEV2Context

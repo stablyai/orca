@@ -1,6 +1,6 @@
-import { link, mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { link, mkdir, mkdtemp, rm, utimes } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AiVaultScanProgress, AiVaultScanWork } from '../../shared/ai-vault-scan-progress'
 import {
@@ -10,8 +10,11 @@ import {
   resetLocalAiVaultScanProgressForTests,
   startLocalAiVaultScanProgress
 } from './ai-vault-local-scan-progress'
+import * as parseCache from './session-scanner-parse-cache'
+import * as transcriptFs from '../native-chat/wsl-transcript-fs-access'
 import { AiVaultScanTally } from './ai-vault-scan-tally'
 import { aiVaultScanWork, trackAiVaultScanProgress } from './ai-vault-scan-progress'
+import { writeOpenCodeSqliteDatabase } from './session-scanner-opencode-sqlite-fixture'
 import { scanAiVaultSessions } from './session-scanner'
 import { resetSessionParseCacheForTests } from './session-scanner-parse-cache'
 import { AiVaultScannerServiceClient } from './session-scanner-service-client'
@@ -22,10 +25,25 @@ import {
 } from './session-scanner-service-test-child'
 import { isolatedScanRoots, writeJsonlFile } from './session-scanner-test-fixtures'
 
+// Source fixtures exercise the real SQLite readers without a packaged worker bundle.
+vi.mock('./session-scanner-opencode-sqlite-worker-spawn', async () => {
+  const { listOpenCodeSqliteSessions } = await import('./session-scanner-opencode-sqlite-list')
+  const { listOpenCode2SqliteSessions } = await import('./session-scanner-opencode2-sqlite-list')
+  const { parseOpenCodeSqliteSession } = await import('./session-scanner-opencode-sqlite')
+  return {
+    listOpenCode2SqliteSessionsViaWorker: listOpenCode2SqliteSessions,
+    listOpenCodeSqliteSessionsViaWorker: listOpenCodeSqliteSessions,
+    listZcodeSqliteSessionsViaWorker: (args: Parameters<typeof listOpenCodeSqliteSessions>[0]) =>
+      listOpenCodeSqliteSessions({ ...args, agent: 'zcode' }),
+    parseOpenCodeSqliteSessionViaWorker: parseOpenCodeSqliteSession
+  }
+})
+
 let tempRoot: string | null = null
 
 afterEach(async () => {
   vi.useRealTimers()
+  vi.restoreAllMocks()
   resetSessionParseCacheForTests()
   resetLocalAiVaultScanProgressForTests()
   if (tempRoot) {
@@ -35,11 +53,14 @@ afterEach(async () => {
 })
 
 /** Runs a real scan in this process the way the scanner child does, keeping every report. */
-async function scanInChild(): Promise<{ reports: AiVaultScanWork[]; final: AiVaultScanWork }> {
+async function scanInChild(
+  limit = 20
+): Promise<{ reports: AiVaultScanWork[]; final: AiVaultScanWork }> {
   tempRoot = await mkdtemp(join(tmpdir(), 'orca-scan-strip-'))
   const roots = isolatedScanRoots(tempRoot)
-  for (const name of ['a', 'b', 'c']) {
-    await writeJsonlFile(join(roots.claudeProjectsDir, 'project', `${name}.jsonl`), [
+  for (const [index, name] of ['a', 'b', 'c'].entries()) {
+    const path = join(roots.claudeProjectsDir, 'project', `${name}.jsonl`)
+    await writeJsonlFile(path, [
       {
         type: 'user',
         sessionId: name,
@@ -48,6 +69,7 @@ async function scanInChild(): Promise<{ reports: AiVaultScanWork[]; final: AiVau
         message: { role: 'user', content: `ask ${name}` }
       }
     ])
+    await utimes(path, 1_000 + index, 1_000 + index)
   }
   // A second path to one transcript, as Codex homes and linked profiles produce: still one file.
   await mkdir(join(roots.claudeProjectsDir, 'linked'))
@@ -63,7 +85,7 @@ async function scanInChild(): Promise<{ reports: AiVaultScanWork[]; final: AiVau
     (work) => reports.push(work),
     () => (now += 1_000)
   )
-  await scanAiVaultSessions({ ...roots, platform: 'darwin', limit: 20, signal })
+  await scanAiVaultSessions({ ...roots, platform: 'darwin', limit, signal })
   return { reports, final: aiVaultScanWork(signal)! }
 }
 
@@ -98,8 +120,16 @@ describe('Session History scan progress, scanner child to window', () => {
     expect(reports.some((work) => work.stage === 'finding')).toBe(true)
     expect(final).toEqual({
       stage: 'reading',
-      agents: [{ agent: 'claude', files: 3, databases: 0, walking: false }],
-      read: { done: 4, total: 4 }
+      agents: [
+        {
+          agent: 'claude',
+          files: 3,
+          databases: 0,
+          walking: false,
+          read: { done: 4, total: 4, skipped: 0 }
+        }
+      ],
+      read: { done: 4, total: 4, skipped: 0 }
     })
 
     const { child, scan, published } = startScan()
@@ -116,7 +146,6 @@ describe('Session History scan progress, scanner child to window', () => {
     await scan
 
     expect(published.map((progress) => progress?.stage ?? null)).toEqual([
-      null,
       'finding',
       reports[0]!.stage,
       'finished'
@@ -130,19 +159,32 @@ describe('Session History scan progress, scanner child to window', () => {
     })
   })
 
-  it('keeps a replacement entry when the scan it replaced fails late', () => {
-    const old = startLocalAiVaultScanProgress('scope', 'old', () => 1_000)
-    old.sent()
-    const replacement = startLocalAiVaultScanProgress('scope', 'replacement', () => 2_000)
-    old.fail()
-    replacement.sent()
-    expect(localAiVaultScanProgress('scope')).toMatchObject({ stage: 'finding', startedAt: 2_000 })
-
-    replacement.fail()
-    expect(localAiVaultScanProgress('scope')).toBeNull()
+  it('reaches its total when the first pass stops before reading every file it planned', async () => {
+    // The newest file fills a limit of 1, so the pass never reads the older ones it announced.
+    const { reports, final } = await scanInChild(1)
+    expect(final.read).toEqual({ done: 1, total: 2, skipped: 1 })
+    expect(
+      reports.filter((work) => work.stage === 'reading').every((work) => work.read.total === 2)
+    ).toBe(true)
   })
 
-  it('clears the entry when an interactive timeout retires the shared scanner', async () => {
+  it('keeps a replacement entry when the scan it replaced fails late', () => {
+    const earlier = startLocalAiVaultScanProgress('scope', 'earlier', () => 500)
+    earlier.finish(null)
+    const old = startLocalAiVaultScanProgress('scope', 'old', () => 1_000)
+    const replacement = startLocalAiVaultScanProgress('scope', 'replacement', () => 2_000)
+    old.fail()
+    expect(localAiVaultScanProgress('scope')).toMatchObject({ stage: 'finding', startedAt: 2_000 })
+
+    // A failed refresh puts back the last finished scan rather than leaving the key empty.
+    replacement.fail()
+    expect(localAiVaultScanProgress('scope')).toMatchObject({
+      scanId: 'earlier',
+      stage: 'finished'
+    })
+  })
+
+  it('settles unfinished work when an interactive timeout retires the shared scanner', async () => {
     vi.useFakeTimers()
     const { child, client, scan } = startScan()
     const rejectedScan = scan.catch((error: Error) => error)
@@ -163,7 +205,16 @@ describe('Session History scan progress, scanner child to window', () => {
 
     expect(await rejectedInteractive).toBeInstanceOf(Error)
     expect(await rejectedScan).toBeInstanceOf(Error)
-    expect(localAiVaultScanProgress('')).toBeNull()
+    expect(localAiVaultScanProgress('')).toMatchObject({ stage: 'finding', settledAt: 5_000 })
+    const retry = startLocalAiVaultScanProgress('', 'retry', () => 6_000)
+    retry.work({ stage: 'reading', agents: [], read: { done: 1, total: 2 } })
+    retry.fail()
+    expect(localAiVaultScanProgress('')).toMatchObject({
+      scanId: 'retry',
+      stage: 'reading',
+      settledAt: 6_000,
+      read: { done: 1, total: 2 }
+    })
     client.dispose()
   })
 
@@ -179,4 +230,205 @@ describe('Session History scan progress, scanner child to window', () => {
     }
     expect(tally.snapshot().agents).toMatchObject([{ agent: 'codex', files: 3 }])
   })
+})
+
+it.each(['cutoff', 'bucket', 'filtered'] as const)(
+  'freezes %s work without changing cold/warm execution',
+  async (flow) => {
+    tempRoot = await mkdtemp(join(tmpdir(), 'orca-scan-frozen-'))
+    const roots = isolatedScanRoots(tempRoot)
+    for (let index = 0; index < (flow === 'filtered' ? 27 : 6); index++) {
+      const timestamp = new Date(Date.UTC(2026, 9, 19) - index * 60_000).toISOString()
+      const cwd =
+        index >= 3 && (flow === 'bucket' || (index - 3) % 8 === 0) ? '/repo' : '/elsewhere'
+      const path =
+        flow === 'filtered'
+          ? join(roots.codexSessionsDir, `rollout-${index}.jsonl`)
+          : join(
+              roots.claudeProjectsDir,
+              cwd === '/repo' ? '-repo' : '-elsewhere',
+              `${index}.jsonl`
+            )
+      await writeJsonlFile(
+        path,
+        flow === 'filtered'
+          ? [
+              { timestamp, type: 'session_meta', payload: { id: `fixture-${index}`, cwd } },
+              {
+                timestamp,
+                type: 'event_msg',
+                payload: { type: 'user_message', message: `Generated ${index}` }
+              }
+            ]
+          : [
+              {
+                type: 'user',
+                sessionId: `fixture-${index}`,
+                timestamp,
+                cwd,
+                message: { role: 'user', content: `Generated ${index}` }
+              }
+            ]
+      )
+      await utimes(path, Date.parse(timestamp) / 1000, Date.parse(timestamp) / 1000)
+    }
+    const listed = vi.spyOn(parseCache, 'parseListedSessionFile')
+    const walked = vi.spyOn(parseCache, 'parseAgentSessionFileCached')
+    const stats = vi.spyOn(parseCache, 'createSessionParseStats')
+    const opened = vi.spyOn(transcriptFs, 'openTranscriptReadStream')
+    const ids =
+      flow === 'cutoff'
+        ? [0, 1, 2]
+        : flow === 'filtered'
+          ? [0, 1, 2, 3, 11, 19]
+          : [0, 1, 2, 3, 4, 5]
+    for (const warm of [false, true]) {
+      const reports: AiVaultScanWork[] = []
+      const signal = new AbortController().signal
+      let now = 0
+      const stop = trackAiVaultScanProgress(
+        signal,
+        (work) => reports.push(work),
+        () => (now += 1000)
+      )
+      try {
+        const result = await scanAiVaultSessions({
+          ...roots,
+          platform: 'darwin',
+          limit: 3,
+          limitPerAgent: 50,
+          signal,
+          ...(flow === 'cutoff' ? {} : { scopePaths: ['/repo'] })
+        })
+        expect(result.issues).toEqual([])
+        expect(result.sessions.map((row) => row.sessionId)).toEqual(
+          ids.map((id) => `fixture-${id}`)
+        )
+        const attempts = [...listed.mock.calls, ...walked.mock.calls].map(
+          ([candidate]) => candidate.file.path
+        )
+        expect(
+          attempts.map((path) =>
+            Number(basename(path).replace('rollout-', '').replace('.jsonl', ''))
+          )
+        ).toEqual(ids)
+        // Captured from the same generated corpus before the change; representatives move earlier.
+        expect(opened.mock.calls).toHaveLength(warm ? 0 : flow === 'bucket' ? 7 : ids.length)
+        expect(stats.mock.results.at(-1)?.value).toEqual({
+          reused: warm ? ids.length : 0,
+          incremental: 0,
+          fullParses: warm ? 0 : ids.length,
+          earlyStopped: 0,
+          bytesRead: warm ? 0 : flow === 'filtered' ? 1363 : flow === 'bucket' ? 873 : 444
+        })
+        const reading = reports.filter((work) => work.stage === 'reading')
+        const total = flow === 'filtered' ? 27 : 6
+        let settled = 0
+        for (const work of reading) {
+          expect(work.read.total).toBe(total)
+          expect(work.read.done + (work.read.skipped ?? 0)).toBeGreaterThanOrEqual(settled)
+          settled = work.read.done + (work.read.skipped ?? 0)
+          expect(work.agents.reduce((sum, agent) => sum + (agent.read?.total ?? 0), 0)).toBe(total)
+          expect(work.agents.reduce((sum, agent) => sum + (agent.read?.done ?? 0), 0)).toBe(
+            work.read.done
+          )
+          expect(work.agents.reduce((sum, agent) => sum + (agent.read?.skipped ?? 0), 0)).toBe(
+            work.read.skipped
+          )
+        }
+        expect(aiVaultScanWork(signal)?.read).toEqual({
+          done: ids.length,
+          total,
+          skipped: total - ids.length
+        })
+      } finally {
+        stop()
+      }
+      listed.mockClear()
+      walked.mockClear()
+      opened.mockClear()
+    }
+  }
+)
+
+it.each([false, true])(
+  'counts repeated global visits and database sessions once (scoped=%s)',
+  async (scoped) => {
+    tempRoot = await mkdtemp(join(tmpdir(), 'orca-scan-repeat-'))
+    const roots = isolatedScanRoots(tempRoot)
+    await writeJsonlFile(join(roots.droidSessionsDir, 'same.jsonl'), [
+      { type: 'session_start', id: 'same', cwd: '/repo', timestamp: '2026-10-19T00:00:00Z' },
+      { type: 'message', message: { role: 'user', content: 'Generated' } }
+    ])
+    const database = join(tempRoot, 'opencode.db')
+    writeOpenCodeSqliteDatabase(database, [
+      { id: 'db-session', directory: '/repo', turns: [{ role: 'user', parts: ['Generated'] }] }
+    ])
+    const listed = vi.spyOn(parseCache, 'parseListedSessionFile')
+    const signal = new AbortController().signal
+    const reports: AiVaultScanWork[] = []
+    let pendingAfterParses = false
+    let now = 0
+    const stop = trackAiVaultScanProgress(
+      signal,
+      (work) => {
+        reports.push(work)
+        if (listed.mock.calls.length === 3 && work.stage === 'reading' && work.read.done === 0) {
+          pendingAfterParses = true
+        }
+      },
+      () => (now += 1000)
+    )
+    try {
+      const result = await scanAiVaultSessions({
+        ...roots,
+        droidProjectsDir: roots.droidSessionsDir,
+        opencodeDbPaths: [database],
+        scopePaths: scoped ? ['/repo'] : [],
+        signal,
+        limit: 20,
+        platform: 'darwin'
+      })
+      expect(result.sessions.map((row) => row.sessionId).sort()).toEqual(
+        scoped ? ['db-session', 'same'] : ['db-session', 'same', 'same']
+      )
+      expect(listed.mock.calls.filter(([candidate]) => candidate.agent === 'droid')).toHaveLength(2)
+      expect(aiVaultScanWork(signal)?.read).toEqual({ done: 2, total: 2, skipped: 0 })
+      if (scoped) {
+        expect(pendingAfterParses).toBe(true)
+      }
+      expect(
+        reports.filter((work) => work.stage === 'reading').every((work) => work.read.total === 2)
+      ).toBe(true)
+      expect(
+        aiVaultScanWork(signal)?.agents.find((agent) => agent.agent === 'opencode')?.read
+      ).toEqual({ done: 1, total: 1, skipped: 0 })
+    } finally {
+      stop()
+    }
+  }
+)
+
+it('does not settle a batch interrupted during its real parser invocation', async () => {
+  tempRoot = await mkdtemp(join(tmpdir(), 'orca-scan-abort-'))
+  const roots = isolatedScanRoots(tempRoot)
+  await writeJsonlFile(join(roots.claudeProjectsDir, 'project', 'a.jsonl'), [
+    { type: 'user', sessionId: 'a', message: { role: 'user', content: 'Generated' } }
+  ])
+  const controller = new AbortController()
+  const original = parseCache.parseListedSessionFile
+  vi.spyOn(parseCache, 'parseListedSessionFile').mockImplementation(async (...args) => {
+    const result = await original(...args)
+    controller.abort()
+    return result
+  })
+  const stop = trackAiVaultScanProgress(controller.signal, () => undefined)
+  try {
+    await expect(
+      scanAiVaultSessions({ ...roots, signal: controller.signal })
+    ).rejects.toMatchObject({ name: 'AbortError' })
+    expect(aiVaultScanWork(controller.signal)?.read).toEqual({ done: 0, total: 1, skipped: 0 })
+  } finally {
+    stop()
+  }
 })

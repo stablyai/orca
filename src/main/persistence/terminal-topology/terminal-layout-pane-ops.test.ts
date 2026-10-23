@@ -1,3 +1,4 @@
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -19,7 +20,7 @@ import {
 } from './terminal-topology-profile-fixture'
 
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
-vi.mock('../../ssh/ssh-config-parser', () => ({
+vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))
@@ -57,6 +58,15 @@ function legacyOnly(change: ReturnType<typeof diffStoredSession>[number]): boole
  * Known gap, the same one the record-patch test pins: the load folds this legacy row into the
  * tab-bar tab whose terminal it repeats, so the stored row keeps its terminal id after the close.
  */
+/** Layout-owner builds also record the closed pane's terminal for its exit (L80); the legacy close cannot. */
+function layoutOwnerOnly(change: ReturnType<typeof diffStoredSession>[number]): boolean {
+  return (
+    ORCA_LAYOUT_OWNER_IS_MAIN &&
+    change.table === 'session' &&
+    change.field === 'closedTerminalPanesByPaneKey'
+  )
+}
+
 const FOLDED_LEGACY_ROW_CLOSES = new Map([
   [
     'tab-legacy',
@@ -94,7 +104,7 @@ describe('layout.apply closePane against the legacy pane close', () => {
             }
             expect(dark.value.ok, label).toBe(true)
             const differences = diffStoredSession(legacy.session, dark.session ?? stored)
-              .filter((change) => !legacyOnly(change))
+              .filter((change) => !legacyOnly(change) && !layoutOwnerOnly(change))
               .map(({ table, record, field }) => `${table}/${record}/${field}`)
             expect(differences, label).toEqual(FOLDED_LEGACY_ROW_CLOSES.get(tab.id) ?? [])
           }

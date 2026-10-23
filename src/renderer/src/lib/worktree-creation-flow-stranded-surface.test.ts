@@ -196,7 +196,7 @@ describe('a throw after createWorktree succeeds no longer strands the creation s
       undefined,
       undefined,
       undefined,
-      undefined
+      {}
     )
     // Contained: completion still tears the surface down.
     expect(store.removePendingWorktreeCreation).toHaveBeenCalledWith('creation-1', {

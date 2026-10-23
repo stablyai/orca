@@ -1,5 +1,5 @@
 import type { OrcadHostTransport } from './orcad-host-transport'
-import type { SshConnection } from './ssh-connection'
+import type { SshConnection } from './connection/ssh-connection'
 
 /**
  * An SSH host's orcad transport is its connection itself, not a wrapper: tunnel ownership, serving

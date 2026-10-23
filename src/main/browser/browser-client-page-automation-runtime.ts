@@ -16,7 +16,7 @@ type AutomationPageInput = {
 type AutomationPageRetirement = Pick<
   AutomationPageInput,
   'browserPageId' | 'pageHostGeneration' | 'registration'
->
+> & { keepGuestBinding?: boolean }
 
 type AutomationRuntimeDependencies = {
   browserManager: Pick<
@@ -68,8 +68,9 @@ export class BrowserClientPageAutomationRuntime {
       await bridge.onTabClosed(current.webContentsId)
     }
     if (
+      !input.keepGuestBinding &&
       this.dependencies.browserManager.getGuestWebContentsId(input.browserPageId) ===
-      current.webContentsId
+        current.webContentsId
     ) {
       this.dependencies.browserManager.unregisterGuest(input.browserPageId)
     }

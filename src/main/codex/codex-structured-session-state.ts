@@ -1,5 +1,6 @@
 import type { StructuredAgentSessionChildWorkProducer } from '../native-chat/agent-session-wire/structured-agent-session-subagent-rows'
 import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import type { StructuredAgentSessionAtRestCommands } from '../native-chat/agent-session-wire/structured-agent-session-at-rest-commands'
 import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
 import type {
   AgentJournalAnsweredTurnIdentity,
@@ -20,17 +21,23 @@ import {
 import type { CodexDispatchEchoes } from './codex-structured-dispatch-echo'
 import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
 import type { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
+import type { CodexSkillReport } from './codex-structured-skill-report'
 import type { CodexJournalTranslator } from './codex-structured-journal-translation'
-import type { StructuredAgentSessionEndedEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentSessionLifecycleEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { CodexStructuredPermissionPolicy } from './codex-structured-permission-policy'
 import type { StructuredLaunchRequest } from '../runtime/structured-agent-launch-composition'
 import type {
   AgentModelCatalogSessionAccess,
   AgentModelCatalogStore
 } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
+import type { StructuredAgentSessionProviderOpen } from '../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
 import type { NativeChatVisualsLaunch } from '../native-chat/native-chat-visuals-delivery'
+import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 
-export type CodexSessionCatalogAccess = AgentModelCatalogSessionAccess
+export type CodexSessionCatalogAccess = AgentModelCatalogSessionAccess & {
+  read?: (verifiedOnly?: boolean) => ReturnType<AgentModelCatalogStore['get']>
+  demand?: (legacy?: boolean) => Promise<unknown>
+}
 
 export type CodexStructuredLaunch = {
   command: string
@@ -38,7 +45,6 @@ export type CodexStructuredLaunch = {
   cwd: string
   codexHome: string | null
   resumeThreadId: string | null
-  resumePath?: string | null
   /** The resumed thread is this session's own creation: when Codex answers that it holds no
    *  rollout for it, start a new thread in its place. Never set for a thread a resume proved. */
   supersedeIfUnsaved?: boolean
@@ -48,6 +54,8 @@ export type CodexStructuredLaunch = {
   /** The child's sealed environment, and the inherited keys it must not keep. */
   env?: Record<string, string>
   envToDelete?: readonly string[]
+  /** The session values each command must see, whatever the user's shell environment policy. */
+  commandEnv?: Record<string, string>
   /** This chat's scratch folder and visuals skill; absent when the chat has no visuals. */
   visuals?: NativeChatVisualsLaunch
 }
@@ -85,12 +93,14 @@ export type CodexStructuredSessionEvent =
       codexItemId: string
       promptKey: string
     }
-  | StructuredAgentSessionEndedEvent
+  | StructuredAgentSessionLifecycleEvent
   /** Translator-only compatibility for callers that do not participate in host recovery. */
   | { type: 'ended'; sessionId: string; reason: string; observedAt?: number }
 
 export type CodexStructuredSessionAdapterDeps = {
   resolveAccountKind?: (home: string) => AgentSessionAccountKind | undefined
+  /** What a resting Codex chat's menu lists, as Codex itself would list it there. */
+  atRestCommands?: StructuredAgentSessionAtRestCommands
   resolveLaunch: (input: StructuredLaunchRequest) => Promise<CodexStructuredLaunch>
   onEvent?: (event: CodexStructuredSessionEvent) => void
   /** Where bookkeeping a close or exit does after the child is gone reports a failure. */
@@ -123,9 +133,15 @@ export type CodexStructuredSessionAdapterDeps = {
   requestTimeoutMs?: number
   /** Host model catalog; sessions write their listings through and read back. */
   modelCatalog?: AgentModelCatalogStore
+  readModelCatalog?: (
+    sessionId: string,
+    verifiedOnly?: boolean
+  ) => ReturnType<AgentModelCatalogStore['get']>
+  demandModelCatalog?: (sessionId: string, legacy?: boolean) => Promise<unknown>
 }
 
 export type CodexSession = {
+  events?: StructuredAgentSessionEventSink
   account?: AgentSessionAccountKind
   connection: CodexAppServerConnection
   ended: boolean
@@ -155,6 +171,10 @@ export type CodexSession = {
     serviceTier?: string | null
     serviceTierKnown?: true
   }
+  /** The configured personality and tier a reset returns to, read before the first override. */
+  nativeDefaults?: { personality?: string; serviceTier?: string }
+  /** Overrides actually attempted on this child, independently of future saved picks. */
+  appliedTurnOptions?: Readonly<Record<string, string>>
   /** Absent when the adapter runs without a host catalog store (tests). */
   catalogAccess?: CodexSessionCatalogAccess
   /** Sends whose identity is still to be settled by the provider echo. */
@@ -162,6 +182,8 @@ export type CodexSession = {
   translator: CodexJournalTranslator | null
   /** Ephemeral roster behind the background-tasks strip; never durable state. */
   backgroundTasks: CodexBackgroundTaskTracker
+  /** What this child's Codex lists as its skills; absent until the thread is open. */
+  skillReport?: CodexSkillReport
   unbindReadingControl?: () => void
   /** Terminates this exact child as an unexpected death and enters host recovery. */
   forceCloseUnexpected?: (reason: Error) => Promise<boolean>
@@ -206,8 +228,13 @@ export function requireLiveCodexSession(
 
 export type CodexAcquisitionAttempt = {
   window: CodexAcquisitionWindow
+  acquisitionGeneration?: string
+  open?: StructuredAgentSessionProviderOpen
+  dispose?: () => void
   cancelled: boolean
+  requestedClose?: boolean
   exitProven: boolean
+  exitError?: Error
   finished: Promise<void>
   finish: () => void
 }
@@ -292,17 +319,24 @@ export class CodexAcquisitionRegistry {
 }
 
 export async function cancelCodexAcquisitionAttempt(
-  attempt: CodexAcquisitionAttempt | undefined
+  attempt: CodexAcquisitionAttempt | undefined,
+  requestedClose = true
 ): Promise<boolean> {
   if (!attempt) {
     return true
   }
-  return cancelProcessAcquisition({
+  const closed = await cancelProcessAcquisition({
     cancel: () => {
       attempt.cancelled = true
+      attempt.requestedClose = requestedClose
     },
     connection: () => attempt.window.connection,
     exitProven: () => attempt.exitProven,
     finished: attempt.finished
   })
+  if (closed) {
+    attempt.exitProven = true
+    attempt.dispose?.()
+  }
+  return closed
 }

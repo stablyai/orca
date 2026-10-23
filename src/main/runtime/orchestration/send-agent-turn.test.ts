@@ -221,6 +221,27 @@ describe('sendAgentTurn to a terminal', () => {
     )
   })
 
+  it('forwards the opt-in hold, binding and signal only when given', async () => {
+    const runtime = { sendTerminalAgentPrompt: vi.fn(async () => 'receipt') }
+    const signal = new AbortController().signal
+    const expectedBinding = { ptyId: 'pty-1', processIncarnation: 'inc-1' }
+    await sendAgentTurn({
+      kind: 'terminal',
+      runtime,
+      handle: 'term_1',
+      turn: { purpose: 'dispatch-preamble', body: 'hello', operationId: 'req-1' },
+      onPermission: 'wait',
+      expectedBinding,
+      signal
+    })
+    expect(runtime.sendTerminalAgentPrompt).toHaveBeenCalledWith('term_1', 'hello', {
+      ...dispatchPreambleSendOptions('req-1'),
+      onPermission: 'wait',
+      expectedBinding,
+      signal
+    })
+  })
+
   it('propagates a failed write as the primitive threw it', async () => {
     const failure = new Error('terminal_not_writable')
     const runtime = {

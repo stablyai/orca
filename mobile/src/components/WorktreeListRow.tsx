@@ -9,6 +9,7 @@ import type { WorktreeCardDetails } from '../../../src/shared/worktree/card-prop
 import { isRemoteExecutionHostId } from '../../../src/shared/execution-host'
 import type { AgentActivityDisplayMode } from '../../../src/shared/ui-chrome-types'
 import { areStructurallyEqual } from '../worktree/structural-equality'
+import { projectGroupRowIndent } from '../worktree/project-group-indent'
 import { getWorktreeMetaGlyphPresence } from '../worktree/worktree-meta-glyph-presence'
 import { AgentSpinner } from './AgentSpinner'
 import { HostKindIcon } from './HostKindIcon'
@@ -64,6 +65,7 @@ function WorktreeListRowComponent({
   const folderMeta = item.comment?.trim() || item.path || 'Folder'
   const metaText = isFolderWorkspace ? folderMeta : displayBranch(item.branch)
   const lineageDepth = Math.max(0, item.lineageDepth ?? 0)
+  const indent = projectGroupRowIndent(item) + lineageDepth * 18
   const lineageChildCount = item.lineageChildCount ?? 0
   const shouldHideRepo = hideRepo && !item.showProjectName
   const showRepoChip = cardDetails.repoInTitle && !shouldHideRepo && !isFolderWorkspace
@@ -79,7 +81,7 @@ function WorktreeListRowComponent({
     <Pressable
       style={({ pressed }) => [
         styles.worktreeRow,
-        lineageDepth > 0 && { paddingLeft: spacing.lg + lineageDepth * 18 },
+        indent > 0 && { paddingLeft: spacing.lg + indent },
         item.isActive && styles.worktreeRowActive,
         pressed && styles.worktreeRowPressed
       ]}
@@ -152,19 +154,23 @@ function WorktreeListRowComponent({
                 <Text style={styles.childBadgeText}>Child</Text>
               </View>
             )}
-            {cardDetails.host && item.hostContextLabel ? (
+            {cardDetails.host && (item.hostContextLabel || item.hostContextHealthLabel) ? (
               <View
                 style={[styles.childBadge, styles.hostBadge]}
                 accessibilityLabel={hostAccessibilityLabel}
               >
                 <HostKindIcon hostId={hostId} size={10} />
-                <Text style={[styles.childBadgeText, styles.hostBadgeText]} numberOfLines={1}>
-                  {item.hostContextLabel}
-                </Text>
+                {item.hostContextLabel ? (
+                  <Text style={[styles.childBadgeText, styles.hostBadgeText]} numberOfLines={1}>
+                    {item.hostContextLabel}
+                  </Text>
+                ) : null}
                 {/* Why separate Text: the name truncates first so the health word stays readable. */}
                 {item.hostContextHealthLabel ? (
                   <Text style={[styles.childBadgeText, styles.hostHealthText]}>
-                    {`· ${item.hostContextHealthLabel}`}
+                    {item.hostContextLabel
+                      ? `· ${item.hostContextHealthLabel}`
+                      : item.hostContextHealthLabel}
                   </Text>
                 ) : null}
               </View>

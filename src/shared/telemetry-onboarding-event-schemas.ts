@@ -226,26 +226,6 @@ export const onboardingGhosttyDiscoveredSchema = z
   .strict()
 export const onboardingGhosttyImportClickedSchema = z.object({ cohort: cohortSchema }).strict()
 
-// Smart-sort telemetry: measures whether the redesign concentrates users in Class 1-3, and flags Smart→Recent abandonment as a regression.
-// Why class_5: splitting the old catch-all idle class into unverifiable (4) and idle (5) moved
-// what class_4 counts, so the previously-absent bucket is the one that keeps the total honest.
-export const smartSortClassDistributionSchema = z
-  .object({
-    class_1: z.number().int().nonnegative(),
-    class_2: z.number().int().nonnegative(),
-    class_3: z.number().int().nonnegative(),
-    class_4: z.number().int().nonnegative(),
-    class_5: z.number().int().nonnegative().optional(),
-    total_worktrees: z.number().int().nonnegative()
-  })
-  .strict()
-export const smartSortClass1PromotionSchema = z
-  .object({
-    cause: z.enum(['blocked', 'waiting', 'title-heuristic'])
-  })
-  .strict()
-// Why `_v` not `z.object({})`: empty zod object infers as TS `{}` ("anything"), breaking the `keyof EventMap[N]` roster probes.
-export const smartToRecentSwitchSchema = z.object({ _v: z.literal(1).optional() }).strict()
 export const onboardingGhosttyImportFailedSchema = z
   .object({
     // `'no_config'` is reserved for future use; call sites currently emit `'empty_diff'` or `'unknown'`.
@@ -264,8 +244,14 @@ export const onboardingFeatureSetupRunSchema = z
   .object({
     ...onboardingFeatureSetupSelectionSchema,
     cli_touched: z.boolean(),
-    skill_commands_copied: z.boolean(),
-    skill_install_command_prepared: z.boolean(),
+    // How the one-click skill install ended; replaces the copy/paste command fields.
+    skill_install_result: z.enum([
+      'installed',
+      'needs_attention',
+      'update_server',
+      'connect_host',
+      'failed'
+    ]),
     computer_use_permissions_opened: z.boolean(),
     warning_count: z.number().int().nonnegative(),
     cohort: cohortSchema
@@ -277,10 +263,7 @@ export const onboardingFeatureSetupRunSchema = z
   )
   .strict()
 export const onboardingFeatureSetupTerminalOpenedSchema = z
-  .object({
-    ...onboardingFeatureSetupSelectionSchema,
-    cohort: cohortSchema
-  })
+  .object({ ...onboardingFeatureSetupSelectionSchema, cohort: cohortSchema })
   .refine(
     hasMatchingOnboardingFeatureSetupSelectedCount,
     onboardingFeatureSetupSelectedCountRefinement

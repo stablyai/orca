@@ -7,7 +7,10 @@ import {
   type ListSessionsResult,
   type SessionInfo
 } from './types'
-import type { PtyProcessInspection } from '../providers/pty-process-inspection'
+import type {
+  PtyProcessInspection,
+  PtyProcessInspectionOptions
+} from '../providers/pty-process-inspection'
 import { clientOnlyUnverifiableInspection } from '../../shared/terminal-process-inspection'
 
 export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshots {
@@ -25,7 +28,7 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
 
   async inspectProcess(
     id: string,
-    options?: { expectedIncarnationId?: string; steadyState?: boolean }
+    options?: PtyProcessInspectionOptions
   ): Promise<PtyProcessInspection> {
     if (this.protocolVersion < GET_FOREGROUND_PROCESS_PROTOCOL_VERSION) {
       return clientOnlyUnverifiableInspection('old_host')
@@ -49,7 +52,8 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
         ? { expectedIncarnationId: options.expectedIncarnationId }
         : {}),
       // Additive: an older daemon ignores it and pays for the full capture.
-      ...(options?.steadyState === true ? { steadyState: true } : {})
+      ...(options?.steadyState === true ? { steadyState: true } : {}),
+      ...(options?.ignoreDetached === true ? { ignoreDetached: true } : {})
     })
   }
 

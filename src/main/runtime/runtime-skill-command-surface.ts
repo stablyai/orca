@@ -20,16 +20,8 @@ import type {
   RuntimeSkillCommandSurface,
   RuntimeSkillCommandHost
 } from './runtime-skill-command-contract'
-import type {
-  SkillCloudOptions,
-  SkillCloudPublishRequest,
-  SkillCloudService
-} from './runtime-skill-types'
-export type {
-  RuntimeSkillCommandSurface,
-  RuntimeSkillCommandHost
-} from './runtime-skill-command-contract'
-export { installRuntimeSkillCommandSurface } from './runtime-skill-command-contract'
+import type { SkillCloudOptions, SkillCloudPublishRequest } from '../../shared/skill-cloud-contract'
+import type { SkillCloudService } from '../skills/skill-cloud-service'
 
 export class RuntimeSkillCommands
   extends RuntimeSkillInstallQueries
@@ -50,7 +42,7 @@ export class RuntimeSkillCommands
   }
   private requireCloud(): SkillCloudService {
     if (!this.skillCloudService) {
-      throw new Error('Skill Cloud service is unavailable.')
+      throw new Error("Skill sharing isn't available on this Orca server.")
     }
     return this.skillCloudService
   }

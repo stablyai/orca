@@ -9,10 +9,7 @@ import {
 import { AgentSkillSetupPanel } from '@/components/settings/AgentSkillSetupPanel'
 import { IntegrationStatusPill } from '@/components/integration-status-pill'
 import { SkillFreshnessStatusPill } from '@/components/skills/SkillFreshnessStatusPill'
-import {
-  ORCHESTRATION_SKILL_INSTALL_COMMAND,
-  ORCHESTRATION_SKILL_NAME
-} from '@/lib/agent-feature-install-commands'
+import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-skill-names'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
@@ -20,7 +17,6 @@ import {
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { refreshSkillFreshness } from '@/hooks/useSkillFreshness'
 import { useAppStore } from '@/store'
-import { buildSkillCommandForRuntime } from '@/components/settings/CliSkillRuntimeSetup'
 import { translate } from '@/i18n/i18n'
 
 type FloatingTerminalOrchestrationDialogProps = {
@@ -35,12 +31,6 @@ export function FloatingTerminalOrchestrationDialog({
   onSetupStateChange
 }: FloatingTerminalOrchestrationDialogProps): React.JSX.Element {
   const activeSkillRuntime = useActiveProjectSkillRuntime()
-  const installCommand = !activeSkillRuntime.installDisabledReason
-    ? buildSkillCommandForRuntime(
-        ORCHESTRATION_SKILL_INSTALL_COMMAND,
-        activeSkillRuntime.agentRuntime
-      )
-    : ORCHESTRATION_SKILL_INSTALL_COMMAND
   const {
     installed: orchestrationSkillDetected,
     loading: orchestrationSkillLoading,
@@ -62,7 +52,7 @@ export function FloatingTerminalOrchestrationDialog({
 
   const recheckOrchestrationSkill = async (): Promise<boolean> => {
     const installed = await refreshOrchestrationSkill()
-    if (activeSkillRuntime.canUseLocalSkillFreshness) {
+    if (activeSkillRuntime.bundledSkillTarget) {
       await refreshSkillFreshness()
     }
     return installed
@@ -89,7 +79,7 @@ export function FloatingTerminalOrchestrationDialog({
                 )}
               </IntegrationStatusPill>
             ) : orchestrationSkillDetected ? (
-              activeSkillRuntime.canUseLocalSkillFreshness ? (
+              activeSkillRuntime.canUseSkillFreshness ? (
                 <SkillFreshnessStatusPill skillName={ORCHESTRATION_SKILL_NAME} />
               ) : (
                 <IntegrationStatusPill tone="connected">
@@ -125,12 +115,7 @@ export function FloatingTerminalOrchestrationDialog({
             'auto.components.floating.terminal.FloatingTerminalOrchestrationDialog.f726054620',
             'Enables agents to hand off context and coordinate work through Orca.'
           )}
-          command={installCommand}
-          terminalTitle="Orchestration setup"
-          terminalAriaLabel="Orchestration skill install terminal"
-          terminalWorktreeId="floating-terminal-orchestration-skill-terminal"
-          terminalShellOverride={activeSkillRuntime.terminalShellOverride}
-          terminalRuntime={activeSkillRuntime.agentRuntime}
+          skillNames={[ORCHESTRATION_SKILL_NAME]}
           installed={orchestrationSkillDetected}
           loading={orchestrationSkillLoading}
           error={activeSkillRuntime.installDisabledReason ?? orchestrationSkillError}
@@ -141,7 +126,7 @@ export function FloatingTerminalOrchestrationDialog({
             'auto.components.skills.SkillInstallDialog.39acb9e8f4',
             'Install skill'
           )}
-          onBeforeOpenTerminal={() => {
+          onBeforeInstall={() => {
             useAppStore.getState().recordFeatureInteraction('agent-orchestration-setup')
           }}
           onRecheck={recheckOrchestrationSkill}

@@ -297,10 +297,13 @@ export class AgentSessionSubscribers {
     emitCheckpoint = false,
     activity?: AgentSessionTurnActivity | null
   ): void {
-    deliverToSubscriber(
-      this.deliveryPort(),
-      { subscriber, journal, hostNow, emitCheckpoint, activity }
-    )
+    deliverToSubscriber(this.deliveryPort(), {
+      subscriber,
+      journal,
+      hostNow,
+      emitCheckpoint,
+      activity
+    })
   }
 
   private now = (): number => this.hooks.now?.() ?? Date.now()

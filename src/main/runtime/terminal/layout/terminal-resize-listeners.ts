@@ -17,12 +17,11 @@ import type {
   RuntimeTerminalOrphanAdoptionRequest,
   RuntimeTerminalOrphanAdoptionResult
 } from '../../../../shared/runtime-terminal-contracts'
-import {
-  classifyWorkerTerminalProcessIncarnation,
-  parseWorkerTerminalHostScope
-} from '../../orchestration/worker-terminal-process-liveness'
+import { classifyWorkerTerminalProcessIncarnation } from '../../orchestration/worker-terminal-process-liveness'
+import { parseWorkerTerminalHostScope } from '../../../../shared/worker-terminal-host-scope'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { buildOrchestrationTaskDisplayMetadata } from '../../../../shared/orchestration-task-display'
+import { dispatchReportMailbox } from '../../orchestration/dispatch-report-mailbox'
 import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../../../shared/execution-host'
 
 export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRuntimeWithApplyMobileDisplayMode {
@@ -100,7 +99,7 @@ export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRunti
       const active = this._orchestrationDb.getActiveCoordinatorRun?.()
       const recipient =
         owningRun && owningRun.legacy !== 1
-          ? { to: `run:${owningRun.id}`, runId: owningRun.id }
+          ? { to: dispatchReportMailbox(this._orchestrationDb, dispatch), runId: owningRun.id }
           : active
             ? { to: active.coordinator_handle, runId: undefined }
             : null

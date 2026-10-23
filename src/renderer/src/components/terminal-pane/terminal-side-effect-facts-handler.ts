@@ -12,6 +12,7 @@
  * where pre-mount output produces no attention side effects. The one exception
  * is a PTY whose consumer just unregistered: see the handoff buffer below.
  */
+import type { AgentIdleEdgeMeta } from '../../../../shared/terminal-output-side-effects'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
 import type { TerminalGitHubPRLink } from '../../../../shared/terminal-github-pr-link-detector'
@@ -74,7 +75,7 @@ export type TerminalSideEffectFactConsumerCallbacks = {
     meta?: { staleWorkingTitleClear?: boolean }
   ) => void
   onBell?: () => void
-  onAgentBecameIdle?: (title: string, meta?: { staleWorkingTitleClear?: boolean }) => void
+  onAgentBecameIdle?: (title: string, meta?: AgentIdleEdgeMeta) => void
   onAgentBecameWorking?: () => void
   onAgentExited?: () => void
   /** OSC 133;D — same policy hook the byte-mode commandLifecycle drove
@@ -124,10 +125,10 @@ function applyLiveFact(entry: ConsumerEntry, fact: TerminalSideEffectFact, seq: 
       entry.callbacks.onAgentBecameWorking?.()
       return
     case 'agent-idle':
-      entry.callbacks.onAgentBecameIdle?.(
-        fact.title,
-        fact.staleWorkingTitleClear ? { staleWorkingTitleClear: true } : undefined
-      )
+      entry.callbacks.onAgentBecameIdle?.(fact.title, {
+        ...(fact.status ? { status: fact.status } : {}),
+        ...(fact.staleWorkingTitleClear ? { staleWorkingTitleClear: true } : {})
+      })
       return
     case 'agent-exited':
       entry.callbacks.onAgentExited?.()

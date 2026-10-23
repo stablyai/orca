@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type { BrowserPage } from '../../../../shared/browser-workspace-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import {
   RemoteBrowserPageSession,
   type RemoteBrowserPageSessionDeps
@@ -68,6 +69,108 @@ describe('hydrateBrowserSession', () => {
     expect(s.browserTabsByWorktree[validWt]).toHaveLength(2)
     expect(s.activeBrowserTabIdByWorktree[validWt]).toBe('browser-1')
     expect(s.activeBrowserTabId).toBe('browser-1')
+  })
+
+  // L280: in a layout-owner build main's layout load gives a tabless record its tab, so the window
+  // mints none of its own (an id main could not resolve); a window-owned build repairs it here.
+  // A directly dialed SSH workspace is main's too (its layout loads under its `ssh:` host).
+  it.each([
+    ['local', {}, undefined],
+    [
+      'directly dialed SSH',
+      { connectionId: 'box', executionHostId: 'ssh:box' as const },
+      'ssh:box' as const
+    ]
+  ])(
+    'leaves a tabless browser record to main in a layout-owner build, else gives it a tab (%s)',
+    (_name, repoHost, hostId) => {
+      const store = createTestStore()
+      const validWt = 'repo1::/path/wt1'
+      store.setState({
+        repos: [
+          {
+            id: 'repo1',
+            path: '/repo1',
+            displayName: 'Repo 1',
+            badgeColor: '#000',
+            addedAt: 0,
+            ...repoHost
+          }
+        ],
+        worktreesByRepo: {
+          repo1: [makeWorktree({ id: validWt, repoId: 'repo1', path: '/path/wt1', hostId })]
+        },
+        activeWorktreeId: validWt
+      })
+
+      store.getState().hydrateBrowserSession({
+        activeRepoId: 'repo1',
+        activeWorktreeId: validWt,
+        activeTabId: null,
+        tabsByWorktree: {},
+        terminalLayoutsByTabId: {},
+        browserTabsByWorktree: {
+          [validWt]: [
+            makeBrowserTab({ id: 'browser-1', worktreeId: validWt, url: 'https://example.com' })
+          ]
+        }
+      })
+
+      const browserTabs = (store.getState().unifiedTabsByWorktree[validWt] ?? []).filter(
+        (tab) => tab.contentType === 'browser'
+      )
+      expect(browserTabs.map((tab) => tab.entityId)).toEqual(
+        ORCA_LAYOUT_OWNER_IS_MAIN ? [] : ['browser-1']
+      )
+    }
+  )
+
+  // Main repairs only the workspaces it is asked about (sendLayoutApply's owner test); a paired
+  // server's workspace keeps today's window repair in every build.
+  it.each([
+    ['workspace', {}],
+    ['SSH workspace', { connectionId: 'vm1' }]
+  ])("still gives a paired server's tabless browser record a tab (%s)", (_name, sshTarget) => {
+    const store = createTestStore()
+    const serverWt = 'repo1::/srv/wt1'
+    store.setState({
+      repos: [
+        {
+          id: 'repo1',
+          path: '/srv',
+          displayName: 'Server repo',
+          badgeColor: '#000',
+          addedAt: 0,
+          executionHostId: 'runtime:env-1',
+          ...sshTarget
+        }
+      ],
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({ id: serverWt, repoId: 'repo1', path: '/srv/wt1', hostId: 'runtime:env-1' })
+        ]
+      },
+      activeWorktreeId: serverWt
+    })
+
+    store.getState().hydrateBrowserSession({
+      activeRepoId: 'repo1',
+      activeWorktreeId: serverWt,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      browserTabsByWorktree: {
+        [serverWt]: [
+          makeBrowserTab({ id: 'browser-1', worktreeId: serverWt, url: 'https://example.com' })
+        ]
+      }
+    })
+
+    expect(
+      (store.getState().unifiedTabsByWorktree[serverWt] ?? [])
+        .filter((tab) => tab.contentType === 'browser')
+        .map((tab) => tab.entityId)
+    ).toEqual(['browser-1'])
   })
 
   it('synthesizes a page for a browser workspace whose persisted page list is empty', () => {
@@ -553,14 +656,18 @@ describe('hydrateBrowserSession remote page handle seeding', () => {
     })
 
     const resolved = await session.ensureRemotePage({
+      tabId: 'page-1',
       environmentId: 'env-1',
       generation: 1,
       remotePageId: null
-    } as never)
+    })
 
     expect(closeMissingRemotePage).not.toHaveBeenCalled()
-    expect(callRpc.mock.calls.map(([, method]) => method)).toEqual(['browser.tabCreate'])
-    expect(callRpc.mock.calls[0]?.[2]).toMatchObject({ url: 'https://example.com/saved' })
+    // Switch-on first probes the row id with tabShow; the restarted runtime has no such page.
+    expect(callRpc.mock.calls.map(([, method]) => method)).toEqual(
+      ORCA_LAYOUT_OWNER_IS_MAIN ? ['browser.tabShow', 'browser.tabCreate'] : ['browser.tabCreate']
+    )
+    expect(callRpc.mock.calls.at(-1)?.[2]).toMatchObject({ url: 'https://example.com/saved' })
     expect(resolved).toBe('remote-page-2')
   })
 })

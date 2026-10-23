@@ -7,7 +7,7 @@ import {
   buildNativeChatImagePasteBytes,
   buildNativeChatPasteBytes,
   NATIVE_CHAT_SUBMIT
-} from './native-chat-send'
+} from '../../../../shared/native-chat-paste-bytes'
 import { enqueueNativeChatPtySend } from './native-chat-pty-send-queue'
 import { formatImageDropPasteText } from '../terminal-pane/terminal-drop-image-path'
 import { isTerminalDropWindowsPathLike } from '../terminal-pane/terminal-drop-shell'

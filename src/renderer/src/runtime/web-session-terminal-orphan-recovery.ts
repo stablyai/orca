@@ -17,18 +17,20 @@ import {
 } from './web-session-terminal-orphan-recovery-adoption'
 import {
   buildTopologyCandidates,
-  isRemovedSnapshot,
-  isValidReadySurface,
   prepareTerminalOrphanRecovery,
   mergeRetainedTerminalSurfaces,
   captureTerminalRecoveryTopologyToken,
-  surfaceKey,
-  terminalRowsBySurface,
   type AnyRecoverySurface,
   type TerminalOrphanRecoveryState
 } from './web-session-terminal-orphan-recovery-surface'
+import {
+  isRemovedSnapshot,
+  isValidReadySurface,
+  surfaceKey,
+  terminalRowsBySurface
+} from './web-session-terminal-orphan-recovery-surface-index'
 import { resolveTerminalOrphanInventory } from './web-session-terminal-orphan-recovery-inventory'
-import { acceptPairedHostStructuredSessions } from './structured-agent-session-tab-retirement'
+import { suppressCancelledStructuredSessionTabs } from './structured-agent-session-tab-retirement'
 import { resolvePersistedTerminalSurfaces } from './web-session-terminal-orphan-recovery-pane'
 import {
   clearCachedSurfaceResolutions,
@@ -49,8 +51,6 @@ import {
   clearRetainedTerminalRetirementProofsForTests,
   mergeRetainedTerminalRetirementProofs
 } from './web-session-terminal-retirement-proof-ledger'
-
-export type { TerminalOrphanRecoveryState } from './web-session-terminal-orphan-recovery-surface'
 
 export type TerminalOrphanRecoveryOptions = {
   expectedEnvironmentPairingRevision?: number
@@ -252,11 +252,10 @@ export function recoverWebSessionTerminalOrphansBeforeApply(
 ): Promise<RuntimeMobileSessionTabsResult | null> {
   const options = normalizeOptions(optionsOrCall)
   // Why: every host frame enters recovery here, so this is where a delta frame regains the proofs
-  // the host already sent this client (see the ledger for the negotiated contract), and where its
-  // structured chats settle this client's launch bookkeeping.
-  const snapshot = acceptPairedHostStructuredSessions(
+  // the host already sent this client (see the ledger for the negotiated contract).
+  const snapshot = suppressCancelledStructuredSessionTabs(
     mergeRetainedTerminalRetirementProofs(environmentId, frame),
-    environmentId
+    { kind: 'environment', environmentId }
   )
   const key = recoveryKey(
     environmentId,

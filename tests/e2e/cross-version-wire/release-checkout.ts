@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { copyFile, mkdir, rename } from 'node:fs/promises'
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { selectLatestStableReleaseTag } from '../../../config/scripts/stable-release-tags.mjs'
 import {
@@ -129,20 +129,29 @@ export function importReleaseCheckoutModule(
 }
 
 /**
- * Import a copy of a self-contained working-tree module placed under the cache root.
+ * Import a copy of a working-tree module placed under the cache root.
  *
  * Why: vite transforms a file against its nearest tsconfig, and `mobile/tsconfig.json` extends
  * Expo's, which the root-only CI lane does not install. The copy gets the root tsconfig, as the
- * release checkout's copy does. A relative runtime import would not resolve from the copy.
+ * release checkout's copy does. Its relative imports are pinned to the working-tree files they name.
  */
 export async function importWorkingTreeModuleCopy(
   rootRelativePath: string,
   cacheRoot: string = DEFAULT_CACHE_ROOT
 ): Promise<Record<string, unknown>> {
   const copy = checkoutModulePath(join(cacheRoot, 'working-tree'), rootRelativePath)
+  const original = checkoutModulePath(REPO_ROOT, rootRelativePath)
   const staged = `${copy}.${process.pid}.tmp`
   await mkdir(dirname(copy), { recursive: true })
-  await copyFile(checkoutModulePath(REPO_ROOT, rootRelativePath), staged)
+  const source = await readFile(original, 'utf8')
+  await writeFile(
+    staged,
+    source.replace(
+      /(\bfrom\s*)(['"])(\.\.?\/[^'"]+)\2/g,
+      (_match, from: string, quote: string, specifier: string) =>
+        `${from}${quote}${resolve(dirname(original), specifier).split('\\').join('/')}${quote}`
+    )
+  )
   // Rename so a concurrent run never imports a half-written copy.
   await rename(staged, copy)
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a module namespace is a plain record of its exports; callers narrow each export they read.

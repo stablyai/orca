@@ -1,3 +1,4 @@
+import type { StructuredAgentSessionSendRequest } from './structured-agent-session-send-slot'
 import type { NativeChatComposerNotice } from './native-chat-composer-notice'
 import type { AgentSessionConversationCommand } from '../../../../shared/agent-session-conversation-command'
 import type { StructuredAgentContextUsage } from '../../../../shared/structured-agent-session-context-usage'
@@ -35,7 +36,8 @@ export type NativeChatStructuredComposerTransport = {
   conversationCommands?: readonly AgentSessionConversationCommand[]
   send: (
     text: string,
-    attachments: readonly NativeChatComposerImageAttachment[]
+    attachments: readonly NativeChatComposerImageAttachment[],
+    request?: StructuredAgentSessionSendRequest
   ) => boolean | 'queued'
   /** A send is out: Send stays disabled, and a send returns false, until it settles. */
   sendOut?: boolean
@@ -48,6 +50,9 @@ export type NativeChatStructuredComposerTransport = {
   /** The `/` surface the running session reports. Absent keeps the curated
    *  per-agent catalog, which is what an older host leaves the client with. */
   sessionCommands?: readonly AgentSessionSlashCommand[]
+  /** Asks the host to bring a resting chat's `/` surface up to date; the answer arrives as
+   *  `sessionCommands`. */
+  refreshCommands?: () => void
   /** False when the agent takes no image input, as its host registered it. */
   acceptsImages?: boolean
   /** The session's context usage; null until the journal can state it. */
@@ -63,6 +68,9 @@ export type NativeChatStructuredComposerTransport = {
   sessionId: string
   /** Owning runtime for that report; null is the local runtime. */
   runtimeEnvironmentId: string | null
+  /** The host has not confirmed this chat: session uploads wait for publication. */
+  sessionPending?: boolean
+  sessionPendingNotice?: string
 }
 
 export type NativeChatOptimisticSendOutcome = {
@@ -85,6 +93,9 @@ export type NativeChatComposerProps = {
   agent: AgentType
   /** Guard desktop sends while a mobile client owns the terminal input lease. */
   canSend?: boolean
+  /** The chat can't take input yet (a program it needs isn't installed): the composer is disabled
+   *  and this is its placeholder. */
+  unavailableHint?: string | undefined
   /** True while the hosted TUI reports an in-flight turn; swaps Send to Stop. */
   isWorking?: boolean
   /** This client's Stop request is in flight: the Stop control is disabled and says so. */

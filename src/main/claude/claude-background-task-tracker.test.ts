@@ -513,7 +513,7 @@ describe('ClaudeBackgroundTaskTracker', () => {
     }
   })
 
-  it('admits unknown background updates conservatively and bounds edge-only fallback ids', () => {
+  it('admits unknown background updates conservatively and tracks every edge-only start', () => {
     const tracker = trackerAt([100])
     tracker.observe(
       system('task_updated', { task_id: 'unknown', patch: { is_backgrounded: true } })
@@ -529,20 +529,19 @@ describe('ClaudeBackgroundTaskTracker', () => {
         })
       )
     }
-    expect(tracker.stoppableTaskIds.length).toBeLessThanOrEqual(256)
-    expect(tracker.goalBackgroundWork).toBe('live')
+    expect(tracker.stoppableTaskIds).toHaveLength(401)
     tracker.observe(system('task_notification', { task_id: 'unknown', status: 'completed' }))
-    for (let index = 0; index < 256; index += 1) {
+    for (let index = 0; index < 399; index += 1) {
       tracker.observe(
         system('task_notification', { task_id: `task-${index}`, status: 'completed' })
       )
     }
-    expect(tracker.goalBackgroundWork).toBe('unverifiable')
-    tracker.observe(aggregate([]))
+    expect(tracker.goalBackgroundWork).toBe('live')
+    tracker.observe(system('task_notification', { task_id: 'task-399', status: 'completed' }))
     expect(tracker.goalBackgroundWork).toBe('exited')
   })
 
-  it('bounds aggregate rosters and resets to the edge-only fallback on clear', () => {
+  it('lists every aggregate roster entry and resets to the edge-only fallback on clear', () => {
     const tracker = trackerAt([100])
     tracker.observe(
       aggregate(
@@ -553,7 +552,7 @@ describe('ClaudeBackgroundTaskTracker', () => {
         }))
       )
     )
-    expect(tracker.stoppableTaskIds).toHaveLength(256)
+    expect(tracker.stoppableTaskIds).toHaveLength(400)
 
     tracker.clear()
     tracker.observe(
@@ -649,7 +648,7 @@ describe('ClaudeBackgroundTaskTracker', () => {
     expect(rows(tracker)).toEqual([{ id: 'back-1' }])
   })
 
-  it('drops a backgrounded start the roster no longer lists but bounds what it retains', () => {
+  it('drops a stale backgrounded start and retains every live foreground row', () => {
     const tracker = new ClaudeBackgroundTaskTracker()
     tracker.observe({ type: 'user' }, true)
     for (let index = 0; index < 300; index += 1) {
@@ -660,12 +659,8 @@ describe('ClaudeBackgroundTaskTracker', () => {
     )
 
     const ids = rows(tracker).map((row) => row.id)
-    // 255 retained foreground rows plus the roster's own entry: retention is
-    // real and still counts against the cap.
-    expect(ids).toHaveLength(256)
-    // When the cap bites, the STALEST retained row goes, not the newest.
-    expect(ids).toContain('fore-299')
-    expect(ids).not.toContain('fore-44')
+    expect(ids).toHaveLength(301)
+    expect(ids).toContain('fore-0')
     expect(ids).toContain('back-1')
 
     // Aggregate authority over its OWN class is unchanged.

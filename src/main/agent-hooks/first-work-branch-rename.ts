@@ -11,7 +11,7 @@ import {
   stripConfiguredBranchPrefix
 } from '../../shared/branch-name-from-work'
 import { getCommitMessageModelDiscoveryHostKey } from '../../shared/commit-message-host-key'
-import { computeBranchName, getConfiguredBranchPrefix } from '../ipc/worktree-logic'
+import { computeBranchName, getConfiguredBranchPrefix } from '../ipc/worktree-branch-name'
 import { gitExecFileAsync } from '../git/runner'
 import { resolveLocalGitUsername } from '../git/git-username'
 import { resolveGitRouteForHost } from '../providers/execution-host-provider-dispatch'

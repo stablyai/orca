@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { bindPaneFirst } from '../bind-first-pane.test-fixture'
 import { makeAgentStatusStoreWiring } from '../agent-status-store-wiring.test-fixture'
 import {
   OrcaRuntimeService,
@@ -15,6 +16,7 @@ import {
   makeWorktreeMeta,
   store
 } from '../orca-runtime-test-fixtures.spec'
+import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 // Why: this process serves no SSH git, so an SSH repo lists its stored rows.
 function storedWorktreeMeta(
@@ -39,6 +41,13 @@ describe('OrcaRuntimeService', () => {
       undefined,
       makeAgentStatusStoreWiring().deps
     )
+    // In the workspace's own partition: this fixture's worktree is local.
+    bindPaneFirst(runtime, {
+      worktreeId: TEST_WORKTREE_ID,
+      tabId: 'ssh-tab',
+      leafId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+      ptyId: 'ssh-osc-pty'
+    })
     runtime['recordPtyWorktree']('ssh-osc-pty', TEST_WORKTREE_ID, {
       connected: true,
       connectionId: 'ssh-osc-1',
@@ -254,7 +263,7 @@ describe('OrcaRuntimeService', () => {
       getRepo,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
         return metaById[worktreeId]
       }

@@ -25,6 +25,9 @@ import { acquireGitAdmission } from './git-subprocess-admission'
 import { GitCommandTimeoutError, gitCommandTimeoutMs } from './git-command-timeout'
 import { classifyGitCommand } from '../../../shared/git-command-classification'
 import { createAbortError } from './abort-error'
+import { readCapturedGitBuffer, readCapturedGitString } from './captured-git-output'
+import { runUnlessGitCwdKnownMissing } from './missing-git-spawn-cwd'
+import { trackGitWorktreeMutation } from '../git-worktree-mutation-state'
 
 /**
  * Async git command execution. Drop-in replacement for
@@ -32,7 +35,8 @@ import { createAbortError } from './abort-error'
  */
 async function gitExecFileAsyncUnlocked(
   args: string[],
-  options: GitExecOptions
+  options: GitExecOptions,
+  terminationState: { current: Promise<void> | null }
 ): Promise<{ stdout: string; stderr: string }> {
   // Why: span the user-visible `git <subcommand>` form, not the resolved binary, so dashboards group by intent.
   return withGitSpan(
@@ -79,7 +83,6 @@ async function gitExecFileAsyncUnlocked(
           })
       span?.setAttribute('git.queue_wait_ms', grant.queueWaitMs)
       const timeoutMs = gitCommandTimeoutMs(args, options.timeout, options.timeoutMsForTest)
-      const terminationState: { current: Promise<void> | null } = { current: null }
       const capture = (
         command: ResolvedCommand
       ): Promise<{ stdout: string | Buffer; stderr: string | Buffer }> => {
@@ -176,22 +179,35 @@ export function gitExecFileAsync(
   args: string[],
   options: GitExecOptions
 ): Promise<{ stdout: string; stderr: string }> {
+  const releaseMutation = trackGitWorktreeMutation(args, options)
+  const terminationState: { current: Promise<void> | null } = { current: null }
   const command = resolveGitFetchHeadCommand(args, options.cwd)
-  return command.needsLock
-    ? runWithGitFetchHeadLock(
-        command.cwd,
-        options.signal,
-        () => gitExecFileAsyncUnlocked(args, options),
-        command.gitDir
-      )
-    : gitExecFileAsyncUnlocked(args, options)
+  // Why outside the lock and span: a known-missing folder starts no process, so it records no git.exec.
+  const result = runUnlessGitCwdKnownMissing(options, () =>
+    command.needsLock
+      ? runWithGitFetchHeadLock(
+          command.cwd,
+          options.signal,
+          () => gitExecFileAsyncUnlocked(args, options, terminationState),
+          command.gitDir
+        )
+      : gitExecFileAsyncUnlocked(args, options, terminationState)
+  )
+  return result.finally(() => {
+    // A timed-out caller can settle before its child exits.
+    if (terminationState.current) {
+      void terminationState.current.then(releaseMutation)
+    } else {
+      releaseMutation()
+    }
+  })
 }
 
 /**
  * Async git command execution that returns a Buffer.
  * Used for reading binary blobs (git show).
  */
-export async function gitExecFileAsyncBuffer(
+async function gitExecFileAsyncBufferInSpan(
   args: string[],
   options: {
     cwd: string
@@ -203,6 +219,7 @@ export async function gitExecFileAsyncBuffer(
     preferWslDirectGit?: boolean
     admissionTier?: GitAdmissionTier
     signal?: AbortSignal
+    stdin?: string
   }
 ): Promise<{ stdout: Buffer }> {
   return withGitSpan({ args, cwd: options.cwd }, async (span) => {
@@ -242,6 +259,7 @@ export async function gitExecFileAsyncBuffer(
         cwd: resolved.cwd,
         encoding: 'buffer',
         signal: options.signal,
+        stdin: options.stdin,
         maxBuffer: options.maxBuffer,
         timeout: timeoutMs,
         env: untranslatedGitOutputEnv(options.env),
@@ -265,43 +283,15 @@ export async function gitExecFileAsyncBuffer(
   })
 }
 
-/**
- * Slice a fenced payload out of raw bytes.
- *
- * Why bytes: blob content may be binary, so decoding to a string to find the
- * fence would corrupt it. Returns the buffer untouched when the command was not
- * fenced or the fence is absent.
- */
-function readCapturedGitBuffer(stdout: Buffer, resolved: ResolvedCommand): Buffer {
-  const captured = resolved.captured
-  if (!captured) {
-    return stdout
-  }
-  const beginIndex = stdout.lastIndexOf(captured.beginMarker, undefined, 'utf8')
-  if (beginIndex === -1) {
-    return stdout
-  }
-  const payloadStart = beginIndex + Buffer.byteLength(captured.beginMarker, 'utf8')
-  const endIndex = stdout.indexOf(captured.endMarker, payloadStart, 'utf8')
-  return endIndex === -1 ? stdout.subarray(payloadStart) : stdout.subarray(payloadStart, endIndex)
-}
-
-function readCapturedGitString(stdout: string, resolved: ResolvedCommand): string {
-  const captured = resolved.captured
-  if (!captured) {
-    return stdout
-  }
-  const beginIndex = stdout.lastIndexOf(captured.beginMarker)
-  if (beginIndex === -1) {
-    return stdout
-  }
-  const payloadStart = beginIndex + captured.beginMarker.length
-  const endIndex = stdout.indexOf(captured.endMarker, payloadStart)
-  return endIndex === -1 ? stdout.slice(payloadStart) : stdout.slice(payloadStart, endIndex)
-}
-
 // Why: sync git blocks the main thread; a dead network drive can hang git for minutes without a timeout (issue #7225's 127s freeze).
 const GIT_EXEC_SYNC_TIMEOUT_MS = 15_000
+
+export function gitExecFileAsyncBuffer(
+  args: string[],
+  options: Parameters<typeof gitExecFileAsyncBufferInSpan>[1]
+): Promise<{ stdout: Buffer }> {
+  return runUnlessGitCwdKnownMissing(options, () => gitExecFileAsyncBufferInSpan(args, options))
+}
 
 /**
  * Sync git command execution. Drop-in replacement for

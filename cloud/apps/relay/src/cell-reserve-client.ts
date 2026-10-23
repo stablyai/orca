@@ -2,6 +2,7 @@ import {
   CELL_DEMOTE_PATH,
   CELL_RESERVE_MAX_ITEMS,
   CELL_RESERVE_PATH,
+  DemoteResponseSchema,
   ReserveResponseSchema,
   type DemoteRequest,
   type ReserveItem
@@ -46,14 +47,18 @@ export class CellReserveClient {
     })
   }
 
-  // The cell treats repeats as one; a failure is only logged, and the next poll retries.
-  async demote(target: ReserveTarget, request: DemoteRequest): Promise<boolean> {
+  // The cell treats repeats as one. Null: no answer the director can read; the next poll retries.
+  async demote(target: ReserveTarget, request: DemoteRequest): Promise<string | null> {
     try {
       const response = await this.post(target, CELL_DEMOTE_PATH, request)
-      await response.body?.cancel().catch(() => undefined)
-      return response.ok
+      if (!response.ok) {
+        await response.body?.cancel().catch(() => undefined)
+        return null
+      }
+      const body = DemoteResponseSchema.safeParse(await response.json().catch(() => null))
+      return body.success ? body.data.outcome : null
     } catch {
-      return false
+      return null
     }
   }
 

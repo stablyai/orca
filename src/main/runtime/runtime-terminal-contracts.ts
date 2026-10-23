@@ -1,3 +1,4 @@
+import type { ProgramStatusFacet } from '../../shared/program-status/facet'
 import type { AgentLaunchRuntime } from '../../shared/agent-launch-runtime'
 import type { AgentLaunchTabViewerRule } from '../../shared/agent-launch-tab-publication'
 import type { SpawnIntent } from '../../shared/host-spawn-admission'
@@ -25,7 +26,7 @@ import type { RuntimeTerminalWriteOptions } from './runtime-terminal-writer'
 import type { TerminalInputKind } from '../../shared/terminal-input-kind'
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
 import type { RuntimeAgentRowSnapshot } from './runtime-worktree-agent-rows'
-import type { WorkerTerminalHostScope } from './orchestration/worker-terminal-process-liveness'
+import type { WorkerTerminalHostScope } from '../../shared/worker-terminal-host-scope'
 
 export type TerminalCreateOptions = {
   command?: string
@@ -40,6 +41,8 @@ export type TerminalCreateOptions = {
   shellOverride?: string
   claudeAgentTeamsSourceCommand?: string
   cwd?: string
+  /** The caller's own measured pane size; wins over the group's measured size and the 120x40 fallback. */
+  initialSize?: { cols: number; rows: number }
   env?: Record<string, string>
   envToDelete?: string[]
   launchConfig?: WorktreeStartupLaunch['launchConfig']
@@ -107,6 +110,13 @@ export type TerminalCreateOptions = {
   agentLaunchViewer?: () => AgentLaunchTabViewerRule
   tabId?: string
   leafId?: string
+  /** Layout-owner build: a pane this create writes stays when its start fails, showing why. */
+  keepPaneOnStartFailure?: true
+  /** With `keepPaneOnStartFailure`: a start already known to fail; only its pane is written. */
+  startFailure?: Error
+  /** Layout-owner build: main's start wakes the pane's sleeping record in place of the window's
+   *  own restore, so it publishes whether the agent came back. */
+  resumesSleepingRecord?: true
   /** Refuse, rather than attach, when `tabId`/`leafId` name a pane whose PTY is already live. */
   requireFreshPane?: boolean
   sessionId?: string
@@ -176,11 +186,31 @@ export type RuntimeTerminalAgentStatusEvent = {
   /** Set by the process-lifetime producer; see AgentHookServer.ingestTerminalStatus. */
   origin?: 'process'
   yieldsToHookSince?: number
+  /** Projected from OSC 7501; the store applies it only where hooks do not speak for the pane. */
+  fromProgramStatus?: true
+  /** The program left no records, so a row it owns is removed rather than written. */
+  removesProgramStatusRow?: true
+  /** A repeat of the program's live report that renews its row's freshness lease. */
+  renewsProgramStatusLease?: true
+}
+
+/** A pane's OSC 7501 facet changed. `facet: null` means the program's root record is gone. */
+export type RuntimeTerminalProgramStatusFacetEvent = {
+  ptyId: string
+  paneKey: string
+  facet: ProgramStatusFacet | null
 }
 
 export type HookLiveAgentRow = Pick<
   RuntimeAgentRowSnapshot,
-  'payload' | 'updatedAt' | 'evidenceObservedAt' | 'stateStartedAt' | 'worktreeId'
+  | 'payload'
+  | 'updatedAt'
+  | 'evidenceObservedAt'
+  | 'stateStartedAt'
+  | 'turnEndedAt'
+  | 'turnEndDisposition'
+  | 'worktreeId'
+  | 'programStatus'
 >
 
 export type TerminalHandleRecord = {
@@ -192,6 +222,8 @@ export type TerminalHandleRecord = {
   leafId: string
   ptyId: string | null
   ptyGeneration: number
+  /** Issue-time stamp of the pane main bound a terminal handle for; read only by recoverTerminalPane. */
+  issuedForPaneKey?: string
 }
 
 export type OrchestrationCompatibilityTerminalAuthority = {
@@ -272,4 +304,15 @@ export type RuntimeAgentPromptWriteOptions = Omit<RuntimeTerminalWriteOptions, '
   observationTimeoutMs?: number
   requestId?: string
   onInputAccepted?: (send: RuntimeTerminalSend) => void
+  /** `wait` holds the write while the agent asks for permission instead of refusing it with
+   *  `agent_prompt_blocked`; an answer, a process exit or binding change, or `signal` ends the hold. */
+  onPermission?: 'refuse' | 'wait'
+  /** The binding the caller admitted (`getTerminalPromptRequestBinding`); a different process is
+   *  refused with `terminal_handle_stale` instead of receiving the text. */
+  expectedBinding?: AgentPromptExpectedBinding
+  /** Runs as soon as the write carrying Enter is accepted (OMP's paste frame included), before any
+   *  later abort check can throw: the text is submitted whatever the call then answers. */
+  onSubmitWritten?: () => void
 }
+
+export type AgentPromptExpectedBinding = { ptyId: string; processIncarnation: string }

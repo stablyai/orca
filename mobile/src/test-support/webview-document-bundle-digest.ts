@@ -31,10 +31,11 @@ export function bundleDigestBuiltFrom(cwd: string, generator: string, member: st
  * Every line of a bundle that names a directory only the machine that built it has.
  *
  * Both shapes esbuild can emit when the working directory is not the one the sources live under: a
- * comment that is an absolute path, and one that climbs out with `../`.
+ * comment that is an absolute path, and one that climbs out of the repo with `../../`. A single
+ * `../` from the pinned `mobile/` root is the repo's own `src/shared`, which every machine has.
  */
 export function machinePathCommentsIn(script: string): string[] {
   return script
     .split('\n')
-    .filter((line) => /^\s*\/\/ (\/|\.\.\/)/.test(line) || line.includes('/Users/'))
+    .filter((line) => /^\s*\/\/ (\/|\.\.\/\.\.\/)/.test(line) || line.includes('/Users/'))
 }

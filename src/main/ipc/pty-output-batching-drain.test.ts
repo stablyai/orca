@@ -601,7 +601,15 @@ describe('PTY bounded output draining', () => {
       expect(mainWindow.webContents.send.mock.calls).toEqual([
         ['pty:data', { id: firstSpawn.id, data: firstChunk }],
         ['pty:data', { id: firstSpawn.id, data: 'tail' }],
-        ['pty:exit', { id: firstSpawn.id, code: 0, incarnationId: firstSpawn.incarnationId }],
+        [
+          'pty:exit',
+          {
+            id: firstSpawn.id,
+            code: 0,
+            incarnationId: firstSpawn.incarnationId,
+            hostId: 'local'
+          }
+        ],
         ['pty:data', { id: secondSpawn.id, data: 'next' }]
       ])
       expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({

@@ -5,10 +5,8 @@ import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-
 import { isWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import { hasHostSessionMirrorHydrated } from '@/runtime/host-session-mirror-hydration'
 import { hasHostMirrorHandleWaitExpired } from './host-mirror-handle-gap-wait'
-import {
-  runtimeEnvironmentIdForWorkspaceOwner,
-  warnAmbiguousOwnerRefusalOnce
-} from './resolve-owner'
+import { runtimeEnvironmentIdForWorkspaceOwner } from './resolve-owner'
+import { warnAmbiguousOwnerOnce } from './ambiguous-owner-warning'
 
 type AppStoreState = ReturnType<typeof useAppStore.getState>
 
@@ -73,7 +71,7 @@ export function findUnhydratedHostMirrorForPane(
   const owner = runtimeEnvironmentIdForWorkspaceOwner(state, { workspaceId: record.worktreeId })
   if (owner.kind === 'ambiguous') {
     // Why: no single host can answer for a twin's pane, so park without arming a wait on either.
-    warnAmbiguousOwnerRefusalOnce('agent-resume-mirror-wait', record.worktreeId)
+    warnAmbiguousOwnerOnce(record.worktreeId, 'wait on an agent resume mirror')
     return { kind: 'mirror', environmentId: null }
   }
   const environmentId = owner.environmentId

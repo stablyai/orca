@@ -1,5 +1,7 @@
-import { ipcMain } from 'electron'
+import { ipcMain, webContents, type IpcMainInvokeEvent } from 'electron'
 import { browserManager } from '../browser/browser-manager'
+import { browserSiteDisplayController } from '../browser/browser-site-display-controller'
+import { isBrowserPageZoomDirection } from '../../shared/browser-page-zoom'
 import { publishBrowserClientPageMetadata } from '../browser/browser-client-page-metadata-transport'
 import {
   BrowserClientPageMetadataParams,
@@ -9,26 +11,125 @@ import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-err
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 import type { BrowserViewportOverride } from '../../shared/browser-workspace-types'
 import {
+  isBrowserSiteColorScheme,
+  type BrowserPageSiteDisplay
+} from '../../shared/browser-site-display'
+import {
   isValidBrowserAnnotationViewportBridgeMarkers,
   isValidBrowserAnnotationViewportBridgeToken,
   type BrowserSetAnnotationViewportBridgeArgs
 } from '../../shared/browser-annotation-viewport-bridge'
 
+function isPagePoint(value: unknown): value is { x: number; y: number } {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'x' in value &&
+    'y' in value &&
+    Number.isFinite(value.x) &&
+    Number.isFinite(value.y)
+  )
+}
+
 export function registerBrowserGuestViewHandlers(): void {
   ipcMain.removeHandler('browser:openDevTools')
+  ipcMain.removeHandler('browser:addWordToDictionary')
+  ipcMain.removeHandler('browser:copyImageAt')
   ipcMain.removeHandler('browser:setViewportOverride')
   ipcMain.removeAllListeners?.('browser:reportViewportScrollState')
   ipcMain.removeHandler('browser:setAnnotationViewportBridge')
   ipcMain.removeHandler('browser:acceptDownload')
   ipcMain.removeHandler('browser:cancelDownload')
   ipcMain.removeHandler('browser:publishClientPageMetadata')
+  ipcMain.removeHandler('browser:getPageSiteDisplay')
+  ipcMain.removeHandler('browser:zoomPage')
+  ipcMain.removeHandler('browser:setPageSiteColorScheme')
 
-  ipcMain.handle('browser:openDevTools', (event, args: { browserPageId: string }) => {
-    if (!isTrustedBrowserRenderer(event.sender)) {
-      return false
+  // Why the page registry only: these act on a browser page, never on a document preview.
+  const pageGuestId = (event: IpcMainInvokeEvent, browserPageId: unknown): number | null =>
+    isTrustedBrowserRenderer(event.sender) && typeof browserPageId === 'string'
+      ? browserManager.getGuestWebContentsId(browserPageId)
+      : null
+
+  const pageGuest = (
+    event: IpcMainInvokeEvent,
+    browserPageId: unknown
+  ): Electron.WebContents | null => {
+    const guestId = pageGuestId(event, browserPageId)
+    const guest = guestId === null ? undefined : webContents.fromId(guestId)
+    return guest && !guest.isDestroyed() ? guest : null
+  }
+
+  ipcMain.handle(
+    'browser:getPageSiteDisplay',
+    (event, args: { browserPageId: string }): BrowserPageSiteDisplay | null => {
+      const guestId = pageGuestId(event, args?.browserPageId)
+      return guestId === null ? null : browserSiteDisplayController.getPageDisplay(guestId)
     }
-    return browserManager.openDevTools(args.browserPageId)
-  })
+  )
+
+  ipcMain.handle(
+    'browser:zoomPage',
+    (event, args: { browserPageId: string; direction: unknown }): BrowserPageSiteDisplay | null => {
+      const guestId = pageGuestId(event, args?.browserPageId)
+      const { direction } = args
+      if (guestId === null || !isBrowserPageZoomDirection(direction)) {
+        return null
+      }
+      return browserSiteDisplayController.zoomPage(guestId, direction)
+    }
+  )
+
+  ipcMain.handle(
+    'browser:setPageSiteColorScheme',
+    (
+      event,
+      args: { browserPageId: string; colorScheme: unknown }
+    ): BrowserPageSiteDisplay | null => {
+      const guestId = pageGuestId(event, args?.browserPageId)
+      const { colorScheme } = args
+      if (guestId === null || (colorScheme !== null && !isBrowserSiteColorScheme(colorScheme))) {
+        return null
+      }
+      return browserSiteDisplayController.setColorScheme(guestId, colorScheme)
+    }
+  )
+
+  ipcMain.handle(
+    'browser:openDevTools',
+    (event, args: { browserPageId: string; inspectAt?: unknown }) => {
+      if (!isTrustedBrowserRenderer(event.sender)) {
+        return false
+      }
+      return browserManager.openDevTools(
+        args.browserPageId,
+        isPagePoint(args.inspectAt) ? args.inspectAt : undefined
+      )
+    }
+  )
+
+  ipcMain.handle(
+    'browser:addWordToDictionary',
+    (event, args: { browserPageId: string; word: unknown }): boolean => {
+      const guest = pageGuest(event, args?.browserPageId)
+      if (!guest || typeof args.word !== 'string' || !args.word) {
+        return false
+      }
+      return guest.session.addWordToSpellCheckerDictionary(args.word)
+    }
+  )
+
+  ipcMain.handle(
+    'browser:copyImageAt',
+    (event, args: { browserPageId: string; point: unknown }): boolean => {
+      const guest = pageGuest(event, args?.browserPageId)
+      if (!guest || !isPagePoint(args.point)) {
+        return false
+      }
+      guest.copyImageAt(args.point.x, args.point.y)
+      return true
+    }
+  )
 
   ipcMain.handle(
     'browser:setViewportOverride',

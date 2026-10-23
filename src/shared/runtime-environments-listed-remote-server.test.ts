@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { isListedRemoteServer, isWslHostRuntimeEnvironment } from './runtime-environments'
+import {
+  isListedRemoteServer,
+  isWslHostRuntimeEnvironment,
+  runtimePairingRepairRoute
+} from './runtime-environments'
 
 const wslHost = {
   name: 'Remote box',
@@ -30,5 +34,23 @@ describe('the generic remote-server list', () => {
         }
       })
     ).toBe(true)
+  })
+})
+
+describe('who pairs a server that refused this desktop', () => {
+  it('is SSH only for a server Orca manages over SSH, never WSL or a cloud VM', () => {
+    expect(
+      runtimePairingRepairRoute({
+        orcadDeployment: {
+          sshTargetId: 'box',
+          sshTargetGeneration: 1,
+          localPort: 41000,
+          remotePort: 6768
+        }
+      })
+    ).toBe('ssh')
+    expect(runtimePairingRepairRoute(wslHost)).toBe('connect')
+    expect(runtimePairingRepairRoute({ source: 'ephemeral-vm' })).toBe('connect')
+    expect(runtimePairingRepairRoute({})).toBe('access-link')
   })
 })

@@ -59,6 +59,30 @@ describe('CommentMarkdown', () => {
     expect(markup).toContain('href="https://github.com/another-org/other-repo/issues/42"')
   })
 
+  it('ends bare urls at CJK sentence punctuation', () => {
+    const hrefsIn = (content: string): string[] =>
+      [
+        ...renderToStaticMarkup(<CommentMarkdown content={content} />).matchAll(/href="([^"]*)"/g)
+      ].map((match) => match[1]!)
+
+    expect(hrefsIn('投稿はお願いします (https://github.com/stablyai/orca/pull/1078)。')).toEqual([
+      'https://github.com/stablyai/orca/pull/1078'
+    ])
+    expect(hrefsIn('投稿（https://github.com/stablyai/orca/pull/1078）。')).toEqual([
+      'https://github.com/stablyai/orca/pull/1078'
+    ])
+    expect(hrefsIn('「https://example.com/a」、https://example.com/b。')).toEqual([
+      'https://example.com/a',
+      'https://example.com/b'
+    ])
+    expect(hrefsIn('https://ja.wikipedia.org/wiki/ジョン・スミス。')).toEqual([
+      'https://ja.wikipedia.org/wiki/%E3%82%B8%E3%83%A7%E3%83%B3%E3%83%BB%E3%82%B9%E3%83%9F%E3%82%B9'
+    ])
+    expect(hrefsIn('https://en.wikipedia.org/wiki/Foo_(bar)')).toEqual([
+      'https://en.wikipedia.org/wiki/Foo_(bar)'
+    ])
+  })
+
   it('does not autolink GitHub issue references inside existing links or code', () => {
     const markup = renderToStaticMarkup(
       <CommentMarkdown

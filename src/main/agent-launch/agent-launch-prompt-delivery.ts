@@ -74,7 +74,7 @@ async function deliverStructuredLaunchPrompt(
   structured: AgentLaunchStructuredSurface
 ): Promise<string | null> {
   const { intent, surfaces } = execution
-  if (!intent.prompt || intent.prompt.delivery !== 'submit') {
+  if (!intent.prompt || intent.prompt.delivery !== 'submit' || execution.signal?.aborted) {
     return null
   }
   return (
@@ -103,15 +103,16 @@ export async function deliverTerminalLaunchPrompt(
   handle: string,
   { freshLaunch }: { freshLaunch: boolean }
 ): Promise<AgentLaunchPromptDisposal> {
-  const { intent, surfaces } = execution
-  if (!intent.prompt || intent.prompt.delivery !== 'submit') {
+  const { intent, surfaces, signal } = execution
+  if (!intent.prompt || intent.prompt.delivery !== 'submit' || signal?.aborted) {
     return NOT_DELIVERED
   }
   const delivered = await surfaces.deliverTerminalPrompt?.({
     handle,
     agent: intent.agent,
     freshLaunch,
-    prompt: intent.prompt
+    prompt: intent.prompt,
+    ...(signal ? { signal } : {})
   })
   return delivered ? HANDED_TO_TERMINAL : NOT_DELIVERED
 }

@@ -1,9 +1,7 @@
 // Opening records the provider handle and recovers history before delivery; reports never replace picks.
 
-import type {
-  StructuredAgentSessionOptionsReportedEvent,
-  StructuredAgentSessionStartedEvent
-} from './structured-agent-session-adapter'
+import type { StructuredAgentSessionOptionsReportedEvent } from './structured-agent-session-adapter'
+import type { StructuredAgentSessionProviderOpenResult } from './structured-agent-session-provider-open-contract'
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession,
@@ -19,9 +17,15 @@ import {
   saveStructuredAgentSessionStartReadbackListing
 } from './structured-agent-session-start-listing'
 import type { StructuredAgentSessionStartupAttempts } from './structured-agent-session-startup-attempt'
+import { noteStructuredAgentSessionReportedOptions } from './structured-agent-session-ran-options'
 import type { StructuredAgentSessionAcquireAborts } from './structured-agent-session-acquire-aborts'
 import { recordAgentSessionProviderHandle } from '../../runtime/agent-session-provider-handle-transition'
-import { recoverStructuredRewind } from './structured-rewind-recovery'
+import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import {
+  applyStructuredRewindRecovery,
+  readStructuredRewindRecovery,
+  type StructuredRewindRecoveryEvidence
+} from './structured-rewind-recovery'
 
 export type StructuredAgentSessionProviderStartedContext = {
   deps: StructuredAgentSessionHostDeps
@@ -40,11 +44,19 @@ export type StructuredAgentSessionProviderStartedContext = {
   stopStartingChild: (sessionId: string, child: StructuredAgentSessionProviderChildIdentity) => void
 }
 
+type OpenedProvider = StructuredAgentSessionProviderOpenResult & {
+  sessionId: string
+  fence: number
+  acquisitionGeneration: string
+}
+
 export async function settleStructuredAgentSessionProviderStarted(
   context: StructuredAgentSessionProviderStartedContext,
-  event: StructuredAgentSessionStartedEvent,
+  event: OpenedProvider,
   signal?: AbortSignal
 ): Promise<void> {
+  // The provider read runs before the commit, so no send waits behind it.
+  const rewind = await readRewindAtStart(context, event, signal)
   // Serialized behind the attach that published this child, so the lease it proved is committed.
   await context.serialize(event.sessionId, async () => {
     signal?.throwIfAborted()
@@ -64,7 +76,7 @@ export async function settleStructuredAgentSessionProviderStarted(
       context.stopStartingChild(event.sessionId, child)
       return null
     }
-    if (!(await recoverRewindAtStart(context, event.sessionId, session, signal))) {
+    if (!(await applyRewindAtStart(context, event.sessionId, session, rewind))) {
       context.stopStartingChild(event.sessionId, child)
       return null
     }
@@ -76,6 +88,12 @@ export async function settleStructuredAgentSessionProviderStarted(
       return null
     }
     context.runtimeState.startupAttempts.ready(event.sessionId, child)
+    await noteStructuredAgentSessionReportedOptions(
+      context,
+      event.sessionId,
+      child.fence,
+      event.reportedOptions
+    )
     void context.wakeDelivery(event.sessionId)
     noteStructuredAgentSessionProviderStarted(context.deps, event.sessionId)
     if (event.catalogListing) {
@@ -89,47 +107,97 @@ export async function settleStructuredAgentSessionProviderStarted(
 /** A rewind left in doubt is settled by the first child that can read the provider's history:
  *  this one, now that its protocol session is open, before it is handed anything a recovered
  *  rewind would move. One that stays in doubt fails the start, as it would refuse every send. */
-async function recoverRewindAtStart(
+async function readRewindAtStart(
+  context: StructuredAgentSessionProviderStartedContext,
+  event: OpenedProvider,
+  signal?: AbortSignal
+): Promise<StructuredRewindRecoveryEvidence | 'failed'> {
+  const { sessionId } = event
+  const journal = context.sessions.get(sessionId)?.journal
+  if (!journal) {
+    return null
+  }
+  try {
+    return await readStructuredRewindRecovery(
+      context.deps,
+      sessionId,
+      journal,
+      structuredAgentSessionConversationFence(context.deps.store, sessionId),
+      context.deps.adapter,
+      signal,
+      recordWithStartedHandle(context, event)
+    )
+  } catch (error) {
+    return rewindRecoveryFailed(context, sessionId, error, signal)
+  }
+}
+
+/** The record as the commit leaves it once it records the handle this start answered with, which
+ *  is what the rewind's apply cuts against; a record that refuses it is read as it stands. */
+function recordWithStartedHandle(
+  context: StructuredAgentSessionProviderStartedContext,
+  { sessionId, fence, link }: OpenedProvider
+): AgentSessionRecord | null {
+  const record = context.deps.store.getRecord(sessionId)
+  try {
+    return record && link
+      ? recordAgentSessionProviderHandle({ record, fence, link, now: context.now() })
+      : record
+  } catch {
+    return record
+  }
+}
+
+async function applyRewindAtStart(
   context: StructuredAgentSessionProviderStartedContext,
   sessionId: string,
   session: StructuredAgentSessionHostSession,
-  signal?: AbortSignal
+  evidence: StructuredRewindRecoveryEvidence | 'failed'
 ): Promise<boolean> {
+  if (evidence === 'failed') {
+    return false
+  }
   try {
-    await recoverStructuredRewind(
+    await applyStructuredRewindRecovery(
       context.deps,
       sessionId,
       session.journal,
       structuredAgentSessionConversationFence(context.deps.store, sessionId),
-      context.deps.adapter,
-      context.now,
-      undefined,
-      signal
+      evidence
     )
     return true
   } catch (error) {
-    if (signal?.aborted) {
-      return false
-    }
+    rewindRecoveryFailed(context, sessionId, error)
+    return false
+  }
+}
+
+function rewindRecoveryFailed(
+  context: StructuredAgentSessionProviderStartedContext,
+  sessionId: string,
+  error: unknown,
+  signal?: AbortSignal
+): 'failed' {
+  if (!signal?.aborted) {
     context.deps.logger.warn('settling a rewind in doubt at the start failed', {
       scope: 'rewind-recovery',
       sessionId,
       error
     })
-    return false
   }
+  return 'failed'
 }
 
 /** The handle the child's protocol session answered with, recorded before it is handed anything:
  *  without it a later start could not resume what this child ran. False when there is none. */
 async function recordStartedHandle(
   context: StructuredAgentSessionProviderStartedContext,
-  event: StructuredAgentSessionStartedEvent
+  event: OpenedProvider
 ): Promise<boolean> {
   const { store, logger } = context.deps
   const { link } = event
   if (!link) {
-    // Only an acquisition that already held its handle may prove its start without one.
+    // Only a spawn that already held its handle may prove its open without one.
     return store.getRecord(event.sessionId)?.lease.provenHandleLinkId != null
   }
   try {
@@ -159,8 +227,7 @@ export function noteStructuredAgentSessionProviderStarted(
   }
 }
 
-/** What a ready child reports later, such as a read that came after its start: persisted as the
- *  start's report is, never ahead of a send. */
+/** A ready child's later read can enrich the saved account catalog. */
 export async function settleStructuredAgentSessionOptionsReported(
   context: StructuredAgentSessionProviderStartedContext,
   event: StructuredAgentSessionOptionsReportedEvent
@@ -175,6 +242,12 @@ export async function settleStructuredAgentSessionOptionsReported(
       return
     }
   }
+  await noteStructuredAgentSessionReportedOptions(
+    context,
+    event.sessionId,
+    event.fence,
+    event.reportedOptions
+  )
   if (event.catalogListing) {
     void saveStructuredAgentSessionStartReadbackListing(context, event, event.catalogListing)
   }

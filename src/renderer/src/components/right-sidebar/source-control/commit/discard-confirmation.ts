@@ -75,8 +75,15 @@ export function getDiscardAreaConfirmationCopy(
         title: count === 1 ? 'Delete 1 untracked file?' : `Delete ${count} untracked files?`,
         description:
           count === 1
-            ? 'This will permanently delete this untracked file. This cannot be undone.'
-            : `This will permanently delete these ${count} untracked files. This cannot be undone.`,
+            ? translate(
+                'sourceControl.discard.deleteUntrackedFileDescription',
+                'This will permanently delete this untracked file. This cannot be undone.'
+              )
+            : translate(
+                'sourceControl.discard.deleteUntrackedFilesDescription',
+                'This will permanently delete these {{count}} untracked files. This cannot be undone.',
+                { count }
+              ),
         confirmLabel: count === 1 ? 'Delete' : `Delete ${count}`
       }
     case 'staged':
@@ -99,8 +106,15 @@ export function getDiscardAreaConfirmationCopy(
         ),
         description:
           count === 1
-            ? 'This will revert the unstaged changes in 1 file. This cannot be undone.'
-            : `This will revert unstaged changes in ${count} files. This cannot be undone.`,
+            ? translate(
+                'sourceControl.discard.unstagedSelectionIncludingUntrackedDescription',
+                'This will revert unstaged changes and permanently delete any untracked files in this selection. This cannot be undone.'
+              )
+            : translate(
+                'sourceControl.discard.unstagedFilesIncludingUntrackedDescription',
+                'This will revert unstaged changes and permanently delete any untracked files among these {{count}} files. This cannot be undone.',
+                { count }
+              ),
         confirmLabel: 'Discard all'
       }
   }

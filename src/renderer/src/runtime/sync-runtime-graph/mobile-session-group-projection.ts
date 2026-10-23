@@ -1,5 +1,6 @@
 import type { RuntimeMobileSessionTabGroup } from '../../../../shared/runtime-types'
 import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../../shared/tab-types'
+import { structuredAgentSessionHostTabId } from '../../../../shared/structured-agent-session-host-tab-id'
 import {
   getActiveTabNavOrder,
   getGroupVisibleTabOrder,
@@ -185,17 +186,25 @@ export function buildMobileSessionGroupProjection(
     if (visibleOrder.length === 0) {
       continue
     }
-    const tabOrder = visibleOrder.map((item) => item.tabId ?? item.id)
-    const tabOrderSet = new Set(tabOrder)
+    // Why: main publishes chat rows under their session id; listing the window's tab id instead
+    // left main no position for them, so every chat landed after the other tabs on mobile.
+    const publishedIdByTabId = new Map(
+      visibleOrder.map((item) => [
+        item.tabId ?? item.id,
+        item.type === 'agent-session'
+          ? structuredAgentSessionHostTabId(item.id)
+          : (item.tabId ?? item.id)
+      ])
+    )
     for (const item of visibleOrder) {
       order.push(item)
     }
     tabGroups.push({
       id: group.id,
-      activeTabId:
-        group.activeTabId && tabOrderSet.has(group.activeTabId) ? group.activeTabId : null,
-      tabOrder,
-      recentTabIds: group.recentTabIds?.filter((tabId) => tabOrderSet.has(tabId)) ?? []
+      activeTabId: (group.activeTabId && publishedIdByTabId.get(group.activeTabId)) ?? null,
+      tabOrder: [...publishedIdByTabId.values()],
+      recentTabIds:
+        group.recentTabIds?.flatMap((tabId) => publishedIdByTabId.get(tabId) ?? []) ?? []
     })
   }
   const validGroupIds = new Set(tabGroups.map((group) => group.id))

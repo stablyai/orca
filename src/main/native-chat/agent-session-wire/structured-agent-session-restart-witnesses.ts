@@ -34,7 +34,6 @@ export function createStructuredAgentSessionRestartWitnesses(deps: {
   getRecord: (sessionId: string) => AgentSessionRecord | null
   childWork: WorkingAtStopInput['childWork']
   childWorkOpen: WorkingAtStopInput['childWorkOpen']
-  startAnswered: NonNullable<WorkingAtStopInput['startAnswered']>
   capsule?: Pick<AgentSessionRecoveryCapsule, 'record'>
   teardownId: string
   now: () => number
@@ -75,7 +74,6 @@ export function createStructuredAgentSessionRestartWitnesses(deps: {
         getRecord: deps.getRecord,
         childWork: deps.childWork,
         childWorkOpen: deps.childWorkOpen,
-        startAnswered: deps.startAnswered,
         trigger,
         teardownId: deps.teardownId,
         now: deps.now()

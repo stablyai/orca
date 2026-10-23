@@ -16,7 +16,6 @@ import {
 import { filterWorkspaceCleanupRemovalCandidates } from './workspace-cleanup-removal-candidates'
 import { createWorkspaceCleanupSnapshotPruneBatch } from './workspace-cleanup-snapshot-prune-batch'
 import { useWorkspaceCleanupUnverifiedRemoval } from './use-workspace-cleanup-unverified-removal'
-import { withWorkspaceCleanupFocusAfterDelete } from './workspace-cleanup-focus-after-delete'
 import {
   useWorkspaceCleanupAgentStopGate,
   type WorkspaceCleanupAgentStopRequest
@@ -216,10 +215,7 @@ export function useWorkspaceCleanupRemoval({
       const snapshotPruneBatch = createWorkspaceCleanupSnapshotPruneBatch()
       startWorkspaceCleanupBackgroundRemoval({
         candidates: removableCandidates,
-        removeCandidates: withWorkspaceCleanupFocusAfterDelete(
-          removeCandidates,
-          removableCandidates
-        ),
+        removeCandidates,
         snapshotPruneBatch,
         onProgress: (progress) => {
           if (mountedRef.current) {

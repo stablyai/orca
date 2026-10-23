@@ -4,10 +4,11 @@ import { Switch } from '@/components/ui/switch'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { sortNativeChatSessionOptions } from '../../../../shared/native-chat-session-option-snapshot'
-import type {
-  SessionOptionDescriptor,
-  SessionOptionSelectChoice,
-  SessionOptionValue
+import {
+  isReadOnlySessionOptionValue,
+  type SessionOptionDescriptor,
+  type SessionOptionSelectChoice,
+  type SessionOptionValue
 } from '../../../../shared/native-chat-session-options'
 import {
   nativeChatSessionChoiceLabel,
@@ -125,6 +126,20 @@ function OptionRow(props: {
     )
   }
   const current = descriptor.kind.currentValue
+  const only = descriptor.kind.choices[0]
+  if (only && isReadOnlySessionOptionValue(descriptor)) {
+    // A row kept from the previous model names no value under this one, as a switched-off row.
+    return (
+      <div className="flex min-h-7 items-center justify-between gap-3 px-2 text-xs">
+        <span className="text-muted-foreground">{label}</span>
+        {gone ? null : (
+          <span className="text-foreground">
+            {nativeChatSessionChoiceLabel(only, descriptor.id)}
+          </span>
+        )}
+      </div>
+    )
+  }
   return (
     <div className="flex min-h-7 flex-wrap items-center justify-between gap-x-3 gap-y-1 pl-2">
       <span id={labelId} className="text-xs text-muted-foreground">

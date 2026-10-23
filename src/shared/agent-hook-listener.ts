@@ -1,4 +1,4 @@
-import { readAgentProcessIdentity } from './agent-process-presence'
+import { readHookAgentProcess } from './agent-process-presence'
 import { resolveAgentStatusIdentity } from './agent-status-identity'
 import { sameAgentStatusTerminalOwner } from './agent-status-terminal-owner'
 import { normalizeAgentStatusPayload, type AgentMainAgentStatus } from './agent-status-types'
@@ -146,6 +146,7 @@ export function normalizeHookPayload(
     return null
   }
   const previousStatus = state.lastStatusByPaneKey.get(paneKey)
+  const agentProcess = readHookAgentProcess(source, record.agentProcess)
   const previousReceivedAt =
     previousStatus &&
     'receivedAt' in previousStatus &&
@@ -169,6 +170,7 @@ export function normalizeHookPayload(
         agentPresence: previousStatus.providerSessionOnly ? undefined : previousStatus.agentPresence
       },
       incoming: source,
+      incomingProcess: agentProcess,
       now: Date.now()
     }).inheritedFromActivePane
   ) {
@@ -214,9 +216,6 @@ export function normalizeHookPayload(
     }
   }
 
-  // Why: presence needs the agent's own process; without it the hook cannot speak for liveness.
-  const agentProcess =
-    source === 'claude' ? readAgentProcessIdentity(record.agentProcess) : undefined
   const agentPresence = agentProcess
     ? { agent: source, process: agentProcess, sessionOwner: true as const }
     : undefined
@@ -296,13 +295,13 @@ export function normalizeHookPayload(
           : undefined
         : hasExplicitUserPrompt(
             source,
-            eventName,
+            dispatched.eventName,
             extractedPrompt,
             dispatched.resolvedPromptText,
             dispatched.hasTranscriptPromptEvidence
           ),
     promptInteractionKey: dispatched.promptInteractionKey,
-    hookEventName: typeof eventName === 'string' ? eventName : undefined,
+    hookEventName: typeof dispatched.eventName === 'string' ? dispatched.eventName : undefined,
     providerPromptId:
       source === 'grok' ? (grokActiveTurn?.promptId ?? providerPromptId) : providerPromptId,
     grokPromptBoundary: grokActiveTurn ? true : undefined,
@@ -321,6 +320,7 @@ export function normalizeHookPayload(
       : {}),
     ...(providerSession ? { providerSession } : {}),
     ...(providerSessionOnly ? { providerSessionOnly: true } : {}),
+    ...dispatched.hostTurnSignals,
     payload: transportPayload
   }
 }

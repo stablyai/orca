@@ -5,12 +5,14 @@ import {
   getConnectionExecutionHostId,
   getExecutionHostLabel,
   getLocalExecutionHostLabel,
+  getRepoDialableSshTargetId,
   getRepoExecutionHostId,
   getRepoSshConnectionId,
   getSettingsFocusedExecutionHostId,
-  getSshTargetIdForExecutionHost,
   getWorktreeExecutionHostId,
+  isOwnedSshTargetId,
   isRepoOnCatalogHost,
+  isRuntimeOwnedSshTargetId,
   isUnresolvedOwnerHostId,
   normalizeExecutionHostOrder,
   normalizeExecutionHostScope,
@@ -134,14 +136,18 @@ describe('execution host identity', () => {
   it('distinguishes the SSH target holding a row from the connection this client may dial', () => {
     // Legacy spelling: `connectionId` alone *is* the host, so both answers agree.
     expect(getRepoSshConnectionId({ connectionId: 'openclaw' })).toBe('openclaw')
-    expect(getSshTargetIdForExecutionHost('ssh:openclaw')).toBe('openclaw')
+    expect(getRepoDialableSshTargetId({ connectionId: 'openclaw' })).toBe('openclaw')
     // Unified spelling, no legacy field.
     expect(getRepoSshConnectionId({ executionHostId: 'ssh:m4air' })).toBe('m4air')
+    expect(getRepoDialableSshTargetId({ executionHostId: 'ssh:m4air' })).toBe('m4air')
 
     // A row declaring itself local hands out no SSH connection, whatever the legacy field says:
     // `local` has no SSH namespace to nest in, so the two spellings are contradicting each other.
     expect(
       getRepoSshConnectionId({ executionHostId: 'local', connectionId: 'openclaw' })
+    ).toBeNull()
+    expect(
+      getRepoDialableSshTargetId({ executionHostId: 'local', connectionId: 'openclaw' })
     ).toBeNull()
 
     // A runtime host does have its own namespace, and a nested target appears only in this field.
@@ -151,7 +157,9 @@ describe('execution host identity', () => {
       getRepoSshConnectionId({ executionHostId: 'runtime:env-a', connectionId: 'ssh-nested' })
     ).toBe('ssh-nested')
     // ...but that id is not dialable from this client alone, so the routing answer stays null.
-    expect(getSshTargetIdForExecutionHost('runtime:env-a')).toBeNull()
+    expect(
+      getRepoDialableSshTargetId({ executionHostId: 'runtime:env-a', connectionId: 'ssh-nested' })
+    ).toBeNull()
     // A runtime host with no nested target is simply not on SSH.
     expect(getRepoSshConnectionId({ executionHostId: 'runtime:env-a' })).toBeNull()
 
@@ -216,5 +224,16 @@ describe('isRepoOnCatalogHost', () => {
     // A stale connection id contradicts `local`; an unknown host id is not proven local.
     expect(isRepoOnCatalogHost({ executionHostId: 'local', connectionId: 'ssh-1' })).toBe(false)
     expect(isRepoOnCatalogHost({ executionHostId: 'future:host' })).toBe(false)
+  })
+})
+
+describe('owned SSH target ids', () => {
+  it('hides recipe-VM and machine targets but keeps the recipe-VM meaning narrow', () => {
+    expect(isOwnedSshTargetId('runtime-ssh-vm-1')).toBe(true)
+    expect(isOwnedSshTargetId('machine-0123456789abcdef0123')).toBe(true)
+    expect(isOwnedSshTargetId('ssh-1792393612859-abc123')).toBe(false)
+    expect(isOwnedSshTargetId(null)).toBe(false)
+    // Only recipe VMs carry "replaced every provision" semantics.
+    expect(isRuntimeOwnedSshTargetId('machine-0123456789abcdef0123')).toBe(false)
   })
 })

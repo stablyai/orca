@@ -31,13 +31,14 @@ import {
   RelayAssignmentRowBusyError,
   RelayCellInReserveModeError,
   RelayHomeCellUnavailableError,
+  type AssignOptions,
   type CellFenceAttemptEvidence,
   type RelayAssignment,
   type RelayAssignmentStore,
   type ResolvedRelayAssignment
 } from './assignment-store.js'
-import { ASSIGNMENT_LEASE_AUDIENCE, assignmentLeaseKeyId } from './assignment-lease.js'
-import { AssignmentRejectionLogWindow } from './assignment-rejection-log-window.js'
+import { ASSIGNMENT_LEASE_AUDIENCE, assignmentLeaseKeyId } from './assignment/assignment-lease.js'
+import { AssignmentRejectionLogWindow } from './assignment/assignment-rejection-log-window.js'
 import { CELL_ADMISSION_STATES } from './cell-admission-selector.js'
 import { registerCellSeatFeedRoute } from './cell-seat-feed-route.js'
 import { ReservePaceError, type ReserveAssignment, type ReservePlan } from './reserve-assignment.js'
@@ -143,6 +144,7 @@ export function createRelayApp(
     cellReserverPoll?: () => void
     cellAdmitModeEffective?: () => 'db' | 'reserve'
     cellAdmitModeRaw?: () => 'db' | 'reserve'
+    cellPhonePathEffective?: () => 'db' | 'memory'
     cellReserveCounts?: () => {
       bookings: number
       intake: { perSec: number; burst: number; tokens: number }
@@ -459,13 +461,14 @@ export function createRelayApp(
         .setExpirationTime('5m')
         .sign(config.assignmentSigningKey)
     // Step 5: switched-on cells answer from the map; anything else keeps today's path below.
-    let step5: { epochFloor?: number; placeFresh?: () => Promise<RelayAssignment | null> } = {}
-    if (operations.reservePlacement && !body.data.regionCorrection) {
+    let step5: Pick<AssignOptions, 'epochFloor' | 'placeFresh' | 'regionReserve'> = {}
+    if (operations.reservePlacement && body.data.regionCorrection?.action !== 'report') {
       let plan: ReservePlan
       try {
         plan = await operations.reservePlacement.plan(identity, {
           reconnect: Boolean(body.data.reconnect),
-          region: targetRegion
+          region: targetRegion,
+          regionCorrection: body.data.regionCorrection !== undefined
         })
       } catch (error) {
         if (!(error instanceof ReservePaceError)) throw error
@@ -491,7 +494,7 @@ export function createRelayApp(
         context.header('Retry-After', String(plan.retryAfterSeconds))
         return context.json({ error: 'assignment_temporarily_unavailable' }, 503)
       }
-      step5 = { epochFloor: plan.epochFloor, placeFresh: plan.placeFresh }
+      step5 = { epochFloor: plan.epochFloor, placeFresh: plan.placeFresh, regionReserve: plan.regionReserve }
     }
     let admission: { release(): void } | null = null
     let lane: AssignmentAdmissionLane = 'placement'
@@ -890,6 +893,9 @@ export function createRelayApp(
         : {}),
       ...(operations.cellAdmitModeEffective
         ? { admitModeEffective: operations.cellAdmitModeEffective() }
+        : {}),
+      ...(operations.cellPhonePathEffective
+        ? { phonePathEffective: operations.cellPhonePathEffective() }
         : {}),
       // Placement as built, not as configured: `on` only when this director books reserve cells.
       ...(config.role === 'director'
@@ -2369,7 +2375,6 @@ function operationError(error: unknown): string {
   return error instanceof Error ? error.message : 'operation_failed'
 }
 
-export { relayHostLogDigest }
 
 // `suppressed` is present only on a window-closing line, and counts the rejections
 // that line stands for beyond the one already logged when the window opened.

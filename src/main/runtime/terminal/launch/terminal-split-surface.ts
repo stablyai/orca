@@ -9,6 +9,7 @@ import { runtimeSplitPlacement } from '../../runtime-terminal-spawn-placement'
 import { REJECTED_SPLIT_PTY_STOP_TIMEOUT_MS, ownerSurfacing } from '../../orca-runtime-core'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { spawnInAdmittedPane, withdrawRuntimePane } from '../../runtime-pane-admission'
+import { UNMEASURED_PTY_SIZE } from '../../../ipc/pty/pty-first-size'
 
 export type TerminalSplitOptions = {
   direction?: 'horizontal' | 'vertical'
@@ -34,8 +35,9 @@ export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeW
     if (!pty.connected) {
       throw new Error('terminal_exited')
     }
-    const parsedPaneKey = parsePaneKey(pty.paneKey ?? '')
-    const parentTabId = pty.tabId?.trim()
+    const recorded = this.paneOfPty(pty)
+    const parsedPaneKey = parsePaneKey(recorded.paneKey ?? '')
+    const parentTabId = recorded.tabId?.trim()
     if (!parentTabId || !parsedPaneKey) {
       throw new Error('terminal_handle_stale')
     }
@@ -59,8 +61,8 @@ export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeW
     const preAllocatedHandle = this.createPreAllocatedTerminalHandle()
     const paneKey = makePaneKey(parentTabId, leafId)
     const splitArgs: Parameters<typeof spawnInAdmittedPane>[2] = {
-      cols: 120,
-      rows: 40,
+      // Why unmeasured: a new split pane has no size of its own until the window lays it out.
+      ...UNMEASURED_PTY_SIZE,
       cwd: workspace.path,
       command: opts.command,
       commandDelivery: 'provider',
@@ -80,6 +82,8 @@ export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeW
       leafId,
       persistHostSessionBinding: true,
       placement: runtimeSplitPlacement(parsedPaneKey.leafId, direction),
+      // Layout-owner build: views mounting the pane from main's frame attach, never spawn.
+      ...this.paneStartStatusArgs({}),
       ...(sourceAuthority.persisted
         ? {
             expectedSourceBinding: {
@@ -187,7 +191,7 @@ export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeW
         }
       }
       try {
-        this.ptyController.retireRejectedPty?.(result.id, stopped)
+        this.ptyController.retireRejectedPty?.(result.id, stopped, result.incarnationId)
       } catch {
         // Best-effort cleanup; preserve the original split authority error.
       }

@@ -14,6 +14,7 @@ import {
 import type { DescendantTreeVerdict } from '../pty-descendant-exit-verification'
 import { isMissingProviderExecutable } from './provider-executable-missing'
 import { supervisedProviderSpawnFailure } from './provider-spawn-failure-report'
+import { guardSupervisedProviderGroup } from './provider-group-orphan-guard'
 import {
   acceptProviderRootExit,
   closeProviderProcess,
@@ -44,8 +45,10 @@ type ManagedProviderProcessOptions = {
   lifetime?: ProviderSupervisorLifetime
   /** Any stdout or stderr chunk: the child is doing something. */
   onOutput?: () => void
-  /** Each complete stderr line; true withholds it from the retained tail. */
-  onStderrLine?: (line: string) => boolean
+  /** Each stderr line, `cut` past `stderrLineMaxChars`; true withholds it from the tail. */
+  onStderrLine?: (line: string, cut: boolean) => boolean
+  /** How much of one stderr line is kept to classify; the retained tail stays at its own size. */
+  stderrLineMaxChars?: number
 }
 
 export type ManagedProviderProcess = {
@@ -94,8 +97,9 @@ export function spawnManagedProviderProcess(
     cwd: spec.cwd,
     env: spec.env,
     detached: spec.detached,
-    stdio: ['pipe', 'pipe', 'pipe']
+    stdio: ['pipe', 'pipe', 'pipe', ...spec.groupReportStdio]
   })
+  guardSupervisedProviderGroup(child, { site: options.site, supervised: spec.supervised })
   const listeners = new Set<(exit: ProviderProcessExit) => void>()
   let observed: ProviderProcessExit | null = null
   let spawnFailed = false
@@ -105,10 +109,11 @@ export function spawnManagedProviderProcess(
   let stderrTail = ''
   let stderrLine = ''
   let lineCut = false
+  const lineMaxChars = options.stderrLineMaxChars ?? STDERR_TAIL_MAX_CHARS
   // A line cut at the cap was classified on its prefix only, so an unrecognised one is dropped,
   // not kept: whatever follows the prefix (a sign-in URL) must never reach the tail.
   const retainLine = (line: string, cut: boolean): void => {
-    if (line && !options.onStderrLine?.(line) && !cut) {
+    if (line && !options.onStderrLine?.(line, cut) && !cut) {
       stderrTail = `${stderrTail}${line}\n`.slice(-STDERR_TAIL_MAX_CHARS)
     }
   }
@@ -119,8 +124,8 @@ export function spawnManagedProviderProcess(
       const pending = lines.pop() ?? ''
       // Keep the prompt prefix until the complete line can be classified.
       lines.forEach((line, index) => retainLine(line, index === 0 && lineCut))
-      lineCut = (lines.length === 0 && lineCut) || pending.length > STDERR_TAIL_MAX_CHARS
-      stderrLine = pending.slice(0, STDERR_TAIL_MAX_CHARS)
+      lineCut = (lines.length === 0 && lineCut) || pending.length > lineMaxChars
+      stderrLine = pending.slice(0, lineMaxChars)
     } else {
       stderrTail = (stderrTail + chunk).slice(-STDERR_TAIL_MAX_CHARS)
     }
@@ -196,7 +201,10 @@ export function spawnManagedProviderProcess(
       return exitProof.run(async () => {
         // The one already-exited guard. It observed nothing, so an earlier close's findings stay.
         if (observed && !tree) {
-          const result: ProviderProcessCloseResult = { root: 'exited', tree: null }
+          const result: ProviderProcessCloseResult = {
+            root: 'exited',
+            tree: null
+          }
           lastCloseResult ??= result
           return result
         }

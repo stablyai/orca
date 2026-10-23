@@ -45,7 +45,11 @@ export class StructuredAgentSessionOpenChildWork {
     return session?.open.has(handleId) ? session.history.get(handleId)?.token : undefined
   }
 
-  matches(sessionId: string, handleId: string, captured: ChildWorkLifetimeToken | undefined): boolean {
+  matches(
+    sessionId: string,
+    handleId: string,
+    captured: ChildWorkLifetimeToken | undefined
+  ): boolean {
     return this.capture(sessionId, handleId) === captured
   }
 

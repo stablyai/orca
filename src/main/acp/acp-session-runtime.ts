@@ -1,11 +1,7 @@
 import type { Readable, Writable } from 'node:stream'
 import { z } from 'zod'
-import {
-  AcpAgentError,
-  AcpAuthRequiredError,
-  AcpInvalidResponseError,
-  AcpRpcError
-} from './acp-errors'
+import { AcpRpcError } from './acp-errors'
+import { callAcpSession } from './acp-response-settlement'
 import { AcpJsonRpcPeer, type AcpPeerOptions, type AcpRequestContext } from './acp-json-rpc-peer'
 import {
   answerAcpPermission,
@@ -13,11 +9,8 @@ import {
   type AcpPermissionHandler
 } from './acp-permission-requests'
 import { readAcpSessionEvent, type AcpSessionEvent } from './acp-session-events'
-import {
-  setupAcpSession,
-  type AcpSessionStarted,
-  type AcpSessionStartOptions
-} from './acp-session-setup'
+import { setupAcpSession } from './acp-session-setup'
+import type { AcpSessionStarted, AcpSessionStartOptions } from './acp-session-setup'
 export type { AcpSessionStarted, AcpSessionStartOptions } from './acp-session-setup'
 export type { AcpSessionEvent } from './acp-session-events'
 import {
@@ -61,6 +54,10 @@ export type AcpSessionRuntimeOptions = {
   onExtensionNotification?: (method: string, params: unknown) => void
   onDiagnostic?: (message: string) => void
   onClose?: (error: Error) => void
+  /** A stdout line that is not a protocol message. */
+  onOtherLine?: (line: string, cut?: boolean) => void
+  /** Authentication answers, published synchronously as responses are accepted. */
+  onAuthAnswered?: (signedIn: boolean) => void
 }
 
 /** Stream-level protocol seam; production agents use createAcpAgentConnection. */
@@ -85,7 +82,8 @@ export class AcpSessionRuntime {
         onRequest: (method, params, context) => this.handleRequest(method, params, context),
         onNotification: (method, params) => this.handleNotification(method, params),
         onDiagnostic: options.onDiagnostic,
-        onClose: options.onClose
+        onClose: options.onClose,
+        onOtherLine: options.onOtherLine
       },
       options.peer
     )
@@ -151,6 +149,9 @@ export class AcpSessionRuntime {
     const params = { sessionId, cwd, mcpServers: [] }
     return (await this.call('session/fork', params, ForkSessionResponseSchema)).sessionId
   }
+
+  /** Deletes saved session `sessionId` (`session/delete`). Ask only an agent that advertises it. */
+  deleteSession = (sessionId: string) => this.call('session/delete', { sessionId }, z.unknown())
 
   start(options: AcpSessionStartOptions): Promise<AcpSessionStarted> {
     if (this.started) {
@@ -262,22 +263,8 @@ export class AcpSessionRuntime {
     return this.started.sessionId
   }
 
-  private async call<T>(method: string, params: unknown, schema: z.ZodType<T>): Promise<T> {
-    const result = await this.peer.request(method, params, { timeoutMs: null }).catch((error) => {
-      if (error instanceof AcpAgentError && error.code === -32000) {
-        throw new AcpAuthRequiredError(error.message, error.data)
-      }
-      throw error
-    })
-    const parsed = schema.safeParse(result)
-    if (!parsed.success) {
-      throw new AcpInvalidResponseError(
-        `Invalid ACP response: ${method}`,
-        result,
-        parsed.error.issues
-      )
-    }
-    return parsed.data
+  private call<T>(method: string, params: unknown, schema: z.ZodType<T>): Promise<T> {
+    return callAcpSession(this.peer, method, params, schema, this.options.onAuthAnswered)
   }
 
   private handleRequest(method: string, params: unknown, context: AcpRequestContext): unknown {

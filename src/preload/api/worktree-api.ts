@@ -10,6 +10,7 @@ import type {
 } from '../../shared/detected-worktree-provider-contract'
 import type { NestedWorktreeRemovalApproval } from '../../shared/worktree/nested-removal'
 import type { ExecutionHostId } from '../../shared/execution-host'
+import type { WorkspaceSleepOutcome, WorkspaceSleepRequest } from '../../shared/workspace-sleep'
 import type { RetiredNameRegistry } from '../../shared/worktree/retired-name-registry'
 import type {
   FolderWorkspacePathStatus,
@@ -92,6 +93,12 @@ export type WorktreeApi = {
     worktreeId: string
     hostId?: ExecutionHostId
   }) => Promise<GitWorktreeInfo[]>
+  /** Main sleeps each workspace on its hosts; the window shows the outcome. */
+  sleep: (request: WorkspaceSleepRequest) => Promise<WorkspaceSleepOutcome[]>
+  /** The user opened a workspace whose sleep main is still running. */
+  sleepReopened: (worktreeId: string) => Promise<void>
+  /** Main resumes a slept pane; true once it runs, so the pane's own spawn attaches to it. */
+  resumeSleptPane: (pane: { worktreeId: string; tabId: string; leafId: string }) => Promise<boolean>
   remove: (args: {
     worktreeId: string
     hostId?: ExecutionHostId
@@ -133,7 +140,7 @@ export type WorktreeApi = {
     parentWorktreeId?: string
     noParent?: boolean
   }) => Promise<WorktreeLineage | null>
-  persistSortOrder: (args: { orderedIds: string[] }) => Promise<void>
+  persistSortOrder: (args: { orderedIds: string[]; hostIds?: string[] }) => Promise<void>
   /** Full CLI output of the last branch auto-rename generation failure, held
    *  in main memory only — null after a restart or once the failure clears. */
   getBranchRenameFailureOutput: (args: { worktreeId: string }) => Promise<string | null>

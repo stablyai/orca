@@ -2,6 +2,7 @@ import * as mocks from './orca-runtime-test-mocks.spec'
 import type { MockInstance } from 'vitest'
 import * as worktreeChangeInvalidators from '../ipc/worktree-change-invalidators'
 import { awaitBackgroundRemovalsInRuntimeTests } from './orca-runtime-background-removal-test-support'
+import { commitFakeSpawnsInRuntimeTests } from './bind-first-pane.test-fixture'
 import {
   _resetPendingWorktreeRemovalsForTests,
   _settlePendingWorktreeRemovalsForTests
@@ -17,13 +18,13 @@ const { afterEach, applyAgentStatusHooksEnabledMock, assertWorktreeCleanForRemov
   mocks
 const { cancelLegacyWorkerTerminalRecoveryRetriesForTests, closeGitLabMRMock } = mocks
 const { clearConfiguredWorktreeSharedDirectoriesCacheForTests } = mocks
-const { closeLocalWatcherForWorktreePathMock, closeRemoteWatcherForWorktreePathMock } = mocks
+const { closeLocalWatcherForWorktreePathMock } = mocks
 const { computeWorktreePathMock, countGitHubWorkItemsMock, createGitHubIssueMock } = mocks
 const { createGitLabIssueMock, createHostedReviewMock, createSetupRunnerScript } = mocks
 const { createStackedHostedReviewMock, detectInstalledAgentsWithShellPathHydrationMock } = mocks
 const { electronMocks, ensurePathWithinWorkspaceMock } = mocks
 const { findExistingWorktreeSymlinkPathsMock, forceDeleteLocalBranchMock } = mocks
-const { forgetLocalWatcherRemovalSnapshotMock, forgetRemoteWatcherRemovalSnapshotMock } = mocks
+const { forgetLocalWatcherRemovalSnapshotMock } = mocks
 const { describeCreatedWorktree } = mocks
 const { getDefaultTabsLaunch, getEffectiveHooks } = mocks
 const { getEffectiveHooksFromConfig, getGitHubPRCheckDetailsMock, getGitHubPRChecksMock } = mocks
@@ -53,8 +54,7 @@ const { removeWorktreeLinkedPathsMock, reopenGitLabMRMock, requestGitHubPRReview
 const { rerunGitHubPRChecksMock, resetPlatform, resolveGitHubReviewThreadMock } = mocks
 const { resolveGitLabMRDiscussionMock, resolveLocalGitUsernameMock, resolveSetupRunnerShell } =
   mocks
-const { restoreLocalWatcherAfterFailedRemovalMock, restoreRemoteWatcherAfterFailedRemovalMock } =
-  mocks
+const { restoreLocalWatcherAfterFailedRemovalMock } = mocks
 const { retryGitLabJobMock, runHook, scanLocalRepoWorktreesForResolutionMock } = mocks
 const { setGitHubPRAutoMergeMock, setGitHubPRFileViewedMock, setRuntimeBrowserCommandsFactory } =
   mocks
@@ -66,6 +66,7 @@ const { updateGitLabIssueMock, updateGitLabMRMock, updateGitLabMRReviewersMock, 
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the prototype carries the removal method the wrapper replaces.
 awaitBackgroundRemovalsInRuntimeTests(mocks.OrcaRuntimeService.prototype as never)
+commitFakeSpawnsInRuntimeTests(mocks.OrcaRuntimeService.prototype)
 
 function resetRuntimeTestMocks(): void {
   _resetCanonicalRepoKeyCacheForTests()
@@ -111,11 +112,8 @@ function resetRuntimeTestMocks(): void {
   electronMocks.ipcMain.removeListener.mockClear()
   electronMocks.ipcMain.emit.mockClear()
   closeLocalWatcherForWorktreePathMock.mockReset().mockResolvedValue(undefined)
-  closeRemoteWatcherForWorktreePathMock.mockReset().mockResolvedValue(undefined)
   restoreLocalWatcherAfterFailedRemovalMock.mockReset().mockResolvedValue(undefined)
-  restoreRemoteWatcherAfterFailedRemovalMock.mockReset().mockResolvedValue(undefined)
   forgetLocalWatcherRemovalSnapshotMock.mockReset()
-  forgetRemoteWatcherRemovalSnapshotMock.mockReset()
   vi.mocked(listWorktrees).mockResolvedValue(MOCK_GIT_WORKTREES)
   vi.mocked(listWorktreesStrict).mockResolvedValue(MOCK_GIT_WORKTREES)
   vi.mocked(describeCreatedWorktree).mockResolvedValue(undefined)

@@ -227,11 +227,18 @@ export function handleTerminalWorkspaceKeyDown(
   ) {
     return
   }
-  if (!event.repeat && matchShortcut('tab.previousRecent')) {
+  // Why: a held tab chord is claimed on every repeat but switches once; an unclaimed repeat
+  // would reach the newly active terminal as its own key (Cmd+Right as Ctrl+E).
+  const claimTabSwitch = (): boolean => {
     event.preventDefault()
     event.stopPropagation()
     event.stopImmediatePropagation()
-    dispatchWorkspaceTabCommand({ type: 'previous-recent' })
+    return !event.repeat
+  }
+  if (matchShortcut('tab.previousRecent')) {
+    if (claimTabSwitch()) {
+      dispatchWorkspaceTabCommand({ type: 'previous-recent' })
+    }
     return
   }
   const switchSameTypeDirection = matchShortcut('tab.nextSameType')
@@ -244,10 +251,10 @@ export function handleTerminalWorkspaceKeyDown(
     : matchShortcut('tab.previousAllTypes')
       ? -1
       : null
-  if (!event.repeat && (switchSameTypeDirection !== null || switchAllTypesDirection !== null)) {
-    event.preventDefault()
-    event.stopPropagation()
-    event.stopImmediatePropagation()
+  if (switchSameTypeDirection !== null || switchAllTypesDirection !== null) {
+    if (!claimTabSwitch()) {
+      return
+    }
     notifyTerminalCapture(
       switchAllTypesDirection !== null
         ? switchAllTypesDirection === 1
@@ -268,10 +275,7 @@ export function handleTerminalWorkspaceKeyDown(
     : matchShortcut('tab.previousTerminal')
       ? -1
       : null
-  if (!event.repeat && terminalTabDirection !== null) {
-    event.preventDefault()
-    event.stopPropagation()
-    event.stopImmediatePropagation()
+  if (terminalTabDirection !== null && claimTabSwitch()) {
     dispatchWorkspaceTabCommand({
       type: 'switch',
       direction: terminalTabDirection,

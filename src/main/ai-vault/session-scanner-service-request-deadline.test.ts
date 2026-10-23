@@ -67,7 +67,7 @@ describe('AI Vault service request deadlines', () => {
   it('forwards only its own scan work to the scan listener', async () => {
     const { children, client } = setup()
     const work = vi.fn()
-    const scan = client.request(SCAN, undefined, { sent: () => undefined, work })
+    const scan = client.request(SCAN, undefined, { work })
     const child = children[0]!
     readyAiVaultServiceChild(child)
     await Promise.resolve()

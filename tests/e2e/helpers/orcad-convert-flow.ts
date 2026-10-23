@@ -1,5 +1,5 @@
 /**
- * The connect that converts a relay-era SSH host, and the source's retention then retirement,
+ * The connect that converts a relay-era SSH host, and the source's retention across reconnects,
  * shared by the runtime relay-era cell and the upgraded-profile cell.
  */
 import type { Page } from '@stablyai/playwright-test'
@@ -121,7 +121,7 @@ export type ConvertedHost = {
   sessionFilePath: string
 }
 
-/** Connects with the template in place, then proves conversion, retention and retirement. */
+/** Connects with the template in place, then proves conversion and retention. */
 export async function convertAndRetain(
   page: Page,
   userData: string,
@@ -154,9 +154,10 @@ export async function convertAndRetain(
     )
     .toBe('managed')
   const environments = await page.evaluate(() => window.api.runtimeEnvironments.list())
-  const environment = environments.find(
-    (entry) => entry.orcadDeployment?.sshTargetId === host.targetId
-  )
+  const environment = environments.find((entry) => {
+    const deployment = entry.orcadDeployment
+    return deployment && deployment.kind !== 'wsl' && deployment.sshTargetId === host.targetId
+  })
   expect(environment, 'a managed server registered for the host').toBeTruthy()
   expect(await serverCall(page, environment!.id, 'repo.list')).toContain(jsonText(host.repoPath))
   expect(await serverCall(page, environment!.id, 'folderWorkspace.list')).toContain(

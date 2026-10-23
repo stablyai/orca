@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '../../store'
 import { useDaemonActions } from '../shared/useDaemonActions'
@@ -33,12 +33,17 @@ import {
 } from './runtime-host-resources'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 
+import { useResourceViewVisible } from './use-resource-view-visible'
+import { useResourcePtyActions } from './use-resource-pty-actions'
+import { useResourceMemorySnapshot } from './use-resource-memory-snapshot'
+
+let lastSelectedResourceTab: 'resources' | 'ptys' = 'resources'
+
 const POLL_MS = 2_000
 
 export function useResourceUsageStatusController() {
   const snapshot = useAppStore((s) => s.memorySnapshot)
   const memorySnapshotError = useAppStore((s) => s.memorySnapshotError)
-  const fetchSnapshot = useAppStore((s) => s.fetchMemorySnapshot)
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
   const setActiveView = useAppStore((s) => s.setActiveView)
   const openModal = useAppStore((s) => s.openModal)
@@ -50,18 +55,34 @@ export function useResourceUsageStatusController() {
   const workspaceSpaceScanning = useAppStore((s) => s.workspaceSpaceScanning)
 
   const [open, setOpen] = useState(false)
+  const [selectedTab, setSelectedTabState] = useState(lastSelectedResourceTab)
+  const setSelectedTab = (tab: string): void => {
+    if (tab !== 'resources' && tab !== 'ptys') {
+      return
+    }
+    lastSelectedResourceTab = tab
+    setSelectedTabState(tab)
+  }
+  const windowVisible = useResourceViewVisible()
+  const resourceViewActive = windowVisible && open && selectedTab === 'resources'
+  const ptyViewActive = windowVisible && open && selectedTab === 'ptys'
+  const viewActive = resourceViewActive || ptyViewActive
+  const fetchSnapshot = useResourceMemorySnapshot(resourceViewActive)
+  const localPtyInventory = useResourceSessionInventory(workspaceSessionReady, ptyViewActive, true)
+  const ptyActions = useResourcePtyActions(localPtyInventory)
   const [sortOption, setSortOption] = useState<SortOption>('memory')
   const [collapsedRepos, setCollapsedRepos] = useState<Set<string>>(new Set())
   const [collapsedWorktrees, setCollapsedWorktrees] = useState<Set<string>>(new Set())
   const [appCollapsed, setAppCollapsed] = useState(true)
   const {
     sessionInventory,
+    observedAt: resourcesObservedAt,
     sessionsError,
     refreshSessions,
     clearSessionsError,
     removeSession,
     removeSessions
-  } = useResourceSessionInventory(workspaceSessionReady)
+  } = useResourceSessionInventory(workspaceSessionReady, resourceViewActive)
   const sessions = sessionInventory.sessions
   const [killConfirm, setKillConfirm] = useState<UnifiedSessionRow | null>(null)
   const [killing, setKilling] = useState(false)
@@ -74,24 +95,28 @@ export function useResourceUsageStatusController() {
   )
   // Why: tab titles churn on every keystroke; subscribe to those maps only while open so closed badges don't rerender.
   const runtimePaneTitlesByTabId = useAppStore((s) =>
-    getResourceUsageRuntimePaneTitlesByTabId(s, open)
+    getResourceUsageRuntimePaneTitlesByTabId(s, viewActive)
   )
-  const repos = useAppStore((s) => getResourceUsageRepos(s, open))
-  const gitWorktrees = useAppStore((s) => getResourceUsageAllWorktrees(s, open))
-  const folders = useAppStore((s) => getResourceUsageFolderWorkspaces(s, open))
-  const projectGroups = useAppStore((s) => getResourceUsageProjectGroups(s, open))
+  const repos = useAppStore((s) => getResourceUsageRepos(s, viewActive))
+  const gitWorktrees = useAppStore((s) => getResourceUsageAllWorktrees(s, viewActive))
+  const folders = useAppStore((s) => getResourceUsageFolderWorkspaces(s, viewActive))
+  const projectGroups = useAppStore((s) => getResourceUsageProjectGroups(s, viewActive))
   const allWorktrees = useMemo(
     () => [...gitWorktrees, ...folders.map(folderWorkspaceToWorktree)],
     [gitWorktrees, folders]
   )
-  const tabsByWorktree = useAppStore((s) => getResourceUsageTabsByWorktree(s, open))
-  const browserTabsByWorktree = useAppStore((s) => getResourceUsageBrowserTabsByWorktree(s, open))
+  const tabsByWorktree = useAppStore((s) => getResourceUsageTabsByWorktree(s, viewActive))
+  const browserTabsByWorktree = useAppStore((s) =>
+    getResourceUsageBrowserTabsByWorktree(s, viewActive)
+  )
   // Why: full binding maps stay behind open sentinels so unchanged counts don't rerender the closed segment.
-  const ptyIdsByTabId = useAppStore((s) => getResourceUsagePtyIdsByTabId(s, open))
-  const terminalLayoutsByTabId = useAppStore((s) => getResourceUsageTerminalLayoutsByTabId(s, open))
+  const ptyIdsByTabId = useAppStore((s) => getResourceUsagePtyIdsByTabId(s, viewActive))
+  const terminalLayoutsByTabId = useAppStore((s) =>
+    getResourceUsageTerminalLayoutsByTabId(s, viewActive)
+  )
   // Why: sessions awaiting SSH reattach are live on the remote host with no other binding.
   const deferredSshSessionIdsByTabId = useAppStore((s) =>
-    getResourceUsageDeferredSshSessionIdsByTabId(s, open)
+    getResourceUsageDeferredSshSessionIdsByTabId(s, viewActive)
   )
   const resourceSnapshot = snapshot
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
@@ -103,7 +128,11 @@ export function useResourceUsageStatusController() {
       ]),
     [repos, allWorktrees]
   )
-  const runtimeHostResults = useRuntimeHostResources(open, runtimeEnvironmentIds, POLL_MS)
+  const runtimeHostResults = useRuntimeHostResources(
+    resourceViewActive,
+    runtimeEnvironmentIds,
+    POLL_MS
+  )
   const { runtimeHostResources, runtimeHostNotices } = useMemo(() => {
     const hostLabel = (environmentId: string): string =>
       runtimeEnvironments.find((environment) => environment.id === environmentId)?.name ||
@@ -181,40 +210,8 @@ export function useResourceUsageStatusController() {
   }
   const spaceScanReady = nextSpaceScanSnapshot.ready
 
-  // Why: seed RAM after session restore so the closed chip does not require a
-  // click; the session-inventory hook independently seeds daemon PTYs.
-  useEffect(() => {
-    if (workspaceSessionReady) {
-      void fetchSnapshot()
-    }
-  }, [workspaceSessionReady, fetchSnapshot])
-
-  // Poll memory only while the popover is open. Session inventory is still
-  // explicit-on-open/action/seed (not a closed interval) because full
-  // listSessions can pause input with large preserved-session sets.
-  useEffect(() => {
-    if (!open) {
-      return
-    }
-    void fetchSnapshot()
-    void refreshSessions()
-    // Why: only memory polls on an interval; session inventory is explicit on open/action since it's expensive with many terminals.
-    const memTimer = window.setInterval(() => {
-      void fetchSnapshot()
-    }, POLL_MS)
-    return () => {
-      window.clearInterval(memTimer)
-    }
-  }, [open, fetchSnapshot, refreshSessions])
-
-  useEffect(() => {
-    if (!open) {
-      clearSessionsError()
-    }
-  }, [open, clearSessionsError])
-
   const derived = useResourceUsageDerivedModel({
-    open,
+    open: resourceViewActive,
     resourceSnapshot,
     runtimeHostResources,
     sessions,
@@ -225,7 +222,7 @@ export function useResourceUsageStatusController() {
     projectGroups,
     browserTabsByWorktree,
     workspaceSessionReady,
-    sessionCount: sessionInventory.count,
+    sessionCount: resourcesObservedAt === null ? null : sessionInventory.count,
     sessionsError,
     memorySnapshotError,
     snapshot,
@@ -257,6 +254,21 @@ export function useResourceUsageStatusController() {
   return {
     open,
     setOpen,
+    selectedTab,
+    setSelectedTab,
+    ptyViewActive,
+    resourceViewActive,
+    localPtyInventory,
+    ptyActions,
+    resourceSessionBindings,
+    runtimePaneTitlesByTabId,
+    repos,
+    projectGroups,
+    allWorktrees,
+    refreshResources: () => {
+      void fetchSnapshot()
+      void refreshSessions()
+    },
     sortOption,
     setSortOption,
     collapsedRepos,

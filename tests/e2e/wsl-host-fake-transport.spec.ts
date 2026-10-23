@@ -358,16 +358,13 @@ test('adds a WSL distro as a host, adds a project on it, and runs a terminal the
     await expect.poll(() => hubTerminalsIn(projectPath), { timeout: 30_000 }).toBe(0)
     await expect.poll(() => hubHasRepo(projectPath), { timeout: 30_000 }).toBe(false)
 
-    // An orphan: a terminal whose project the host already forgot (left by older builds).
-    // realpath: the host reports workspace paths resolved (/private/var on macOS).
-    const orphanPath = realpathSync(createGitProject())
-    cleanupDirs.push(orphanPath)
-    const orphanRepo = await hubRuntime.call<{ repo: { id: string } }>('repo.add', {
-      path: orphanPath
-    })
-    await hubRuntime.call('terminal.create', { worktree: `path:${orphanPath}` })
-    await hubRuntime.call('repo.rm', { repo: orphanRepo.result.repo.id })
-    expect(await hubTerminalsIn(orphanPath)).toBeGreaterThan(0)
+    // A shell only the host knows of: no desktop pane ever opened it. Why not a removed project's
+    // orphan: repo.rm now ends the project's shells on the host itself (#29964).
+    const hostOnlyPath = realpathSync(createGitProject())
+    cleanupDirs.push(hostOnlyPath)
+    await hubRuntime.call('repo.add', { path: hostOnlyPath })
+    await hubRuntime.call('terminal.create', { worktree: `path:${hostOnlyPath}` })
+    expect(await hubTerminalsIn(hostOnlyPath)).toBeGreaterThan(0)
 
     // Experiment off: the host stays listed so its projects never seem to vanish, but turned off.
     await setWslHostsEnabled(page, false)
@@ -394,7 +391,7 @@ test('adds a WSL distro as a host, adds a project on it, and runs a terminal the
       state?.openSettingsTarget({ pane: 'servers', repoId: null })
     })
     // A WSL host is listed only as a WSL host, never among the generic remote servers.
-    await expect(page.getByText('No saved servers.')).toBeVisible()
+    await expect(page.getByText('No saved servers', { exact: true })).toBeVisible()
     const section = page.locator('[data-settings-section="wsl-hosts"]')
     await section.scrollIntoViewIfNeeded()
     await expect(section).toContainText('WSL hosts are turned off in Settings → Experimental')
@@ -404,7 +401,8 @@ test('adds a WSL distro as a host, adds a project on it, and runs a terminal the
 
     // Remove asks first, with WSL-specific copy, then drops the host.
     await setWslHostsEnabled(page, true)
-    await section.getByRole('button', { name: 'Remove' }).click()
+    await section.getByRole('button', { name: `More actions for ${WSL_HOST_LABEL}` }).click()
+    await page.getByRole('menuitem', { name: 'Remove…' }).click()
     const confirm = page.getByRole('dialog', { name: `Remove ${WSL_HOST_LABEL}?` })
     await expect(confirm).toContainText(
       'ends its open terminals and stops Orca’s server in that distro'
@@ -414,8 +412,8 @@ test('adds a WSL distro as a host, adds a project on it, and runs a terminal the
     await page.screenshot({ path: testInfo.outputPath('wsl-host-remove-confirm.png') })
     await confirm.getByRole('button', { name: 'Remove host' }).click()
     await expect(confirm).toBeHidden({ timeout: 30_000 })
-    // Closed by handle, so the orphan ends too, and nothing is reported left running.
-    await expect.poll(() => hubTerminalsIn(orphanPath), { timeout: 30_000 }).toBe(0)
+    // Closed by handle, so the host-only shell ends too, and nothing is reported left running.
+    await expect.poll(() => hubTerminalsIn(hostOnlyPath), { timeout: 30_000 }).toBe(0)
     await expect(page.getByText(/something in the distro is still running/)).toHaveCount(0)
     await expect
       .poll(() =>
@@ -548,7 +546,7 @@ test('with the internal gate closed, no WSL host surface shows and a saved host 
     await page.evaluate(() =>
       window.__store?.getState().openSettingsTarget({ pane: 'servers', repoId: null })
     )
-    await expect(page.getByText('No saved servers.')).toBeVisible()
+    await expect(page.getByText('No saved servers', { exact: true })).toBeVisible()
     await expect(page.locator('[data-settings-section="wsl-hosts"]')).toHaveCount(0)
     await expect(page.getByText(WSL_HOST_LABEL)).toHaveCount(0)
 

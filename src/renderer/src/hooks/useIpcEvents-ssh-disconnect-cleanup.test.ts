@@ -163,7 +163,7 @@ describe('useIpcEvents updater integration', () => {
           onOpenFileFromMobile: () => () => {},
           onOpenDiffFromMobile: () => () => {},
           onCloseTerminal: () => () => {},
-          onSleepWorktree: () => () => {},
+          onWorkspaceSleep: () => () => {},
           onResumeSleepingAgents: () => () => {},
           onNewBrowserTab: () => () => {},
           onNewMarkdownTab: () => () => {},

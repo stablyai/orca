@@ -186,12 +186,7 @@ function emitCaughtUp(
     refreshPublishedWork(port, subscriber, current.journal, work, shared)
     return
   }
-  if (
-    emitCheckpoint ||
-    shared.activity !== undefined ||
-    commandsChanged ||
-    queuedChanged
-  ) {
+  if (emitCheckpoint || shared.activity !== undefined || commandsChanged || queuedChanged) {
     port.emit(
       subscriber,
       {

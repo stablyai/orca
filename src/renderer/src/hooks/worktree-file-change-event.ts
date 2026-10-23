@@ -13,3 +13,15 @@ declare global {
     'orca:worktree-file-change': CustomEvent<WorktreeFileChangeEventDetail>
   }
 }
+
+// Why: a switch-back catch-up is synthesized in the renderer, so consumers on the raw IPC bus never see it.
+const catchUpPayloads = new WeakSet<FsChangedPayload>()
+
+export function markWorktreeCatchUpPayload(payload: FsChangedPayload): FsChangedPayload {
+  catchUpPayloads.add(payload)
+  return payload
+}
+
+export function isWorktreeCatchUpPayload(payload: FsChangedPayload): boolean {
+  return catchUpPayloads.has(payload)
+}

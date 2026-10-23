@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { committingSpawn, registerLivePty } from '../bind-first-pane.test-fixture'
 import {
   OrcaRuntimeService,
   getDefaultWorkspaceSession,
@@ -24,93 +25,185 @@ import {
   spawnedPtyEnv,
   store
 } from '../orca-runtime-test-fixtures.spec'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { collectLeafIds } from '../../../shared/terminal-pane-layout-tree'
 
 describe('OrcaRuntimeService', () => {
-  it('returns the exact pre-minted leaf for concurrent renderer-backed splits', async () => {
-    const tabId = 'tab-concurrent-splits'
-    const sourceLeafId = '11111111-1111-4111-8111-111111111111'
-    const splitTerminal = vi.fn()
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setNotifier({ splitTerminal } as never)
-    runtime.syncWindowGraph(1, {
-      tabs: [
-        {
-          tabId,
-          worktreeId: TEST_WORKTREE_ID,
-          title: 'shell',
-          activeLeafId: sourceLeafId,
-          layout: null
-        }
-      ],
-      leaves: [
-        {
-          tabId,
-          worktreeId: TEST_WORKTREE_ID,
-          leafId: sourceLeafId,
-          paneRuntimeId: 1,
-          ptyId: 'pty-source',
-          paneTitle: null
-        }
-      ]
-    })
-    const sourceHandle = runtime.getTerminalHandleForPaneKey(makePaneKey(tabId, sourceLeafId))
-    expect(sourceHandle).not.toBeNull()
+  it.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)(
+    'returns the exact pre-minted leaf for concurrent renderer-backed splits, each started by main',
+    async () => {
+      const tabId = 'tab-concurrent-splits'
+      const sourceLeafId = HEADLESS_LEAF_ID
+      const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
+        makeWorkspaceSessionWithHeadlessTerminal({
+          tabsByWorktree: {
+            [TEST_WORKTREE_ID]: [
+              {
+                id: tabId,
+                ptyId: 'pty-source',
+                worktreeId: TEST_WORKTREE_ID,
+                title: 'shell',
+                customTitle: null,
+                color: null,
+                sortOrder: 0,
+                createdAt: 1
+              }
+            ]
+          },
+          terminalLayoutsByTabId: {
+            [tabId]: makeHeadlessTerminalLayout({ [sourceLeafId]: 'pty-source' })
+          }
+        })
+      )
+      const splitTerminal = vi.fn()
+      const spawn = vi.fn(async (args: { leafId?: string }) => ({ id: `pty-${args.leafId}` }))
+      const runtime = new OrcaRuntimeService(runtimeStore)
+      runtime.setNotifier({ splitTerminal } as never)
+      runtime.setPtyController({
+        spawn,
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      runtime.syncWindowGraph(1, {
+        tabs: [
+          {
+            tabId,
+            worktreeId: TEST_WORKTREE_ID,
+            title: 'shell',
+            activeLeafId: sourceLeafId,
+            layout: null
+          }
+        ],
+        leaves: [
+          {
+            tabId,
+            worktreeId: TEST_WORKTREE_ID,
+            leafId: sourceLeafId,
+            paneRuntimeId: 1,
+            ptyId: 'pty-source',
+            paneTitle: null
+          }
+        ]
+      })
+      registerLivePty(runtime, 'pty-source', TEST_WORKTREE_ID, null, {
+        tabId,
+        leafId: sourceLeafId
+      })
+      const sourceHandle = runtime.getTerminalHandleForPaneKey(makePaneKey(tabId, sourceLeafId))
+      expect(sourceHandle).not.toBeNull()
 
-    const horizontal = runtime.splitTerminal(sourceHandle!, { direction: 'horizontal' })
-    const vertical = runtime.splitTerminal(sourceHandle!, { direction: 'vertical' })
-    await vi.waitFor(() => expect(splitTerminal).toHaveBeenCalledTimes(2))
-    const horizontalLeafId = splitTerminal.mock.calls.find(
-      (call) => call[2]?.direction === 'horizontal'
-    )?.[2]?.newLeafId
-    const verticalLeafId = splitTerminal.mock.calls.find(
-      (call) => call[2]?.direction === 'vertical'
-    )?.[2]?.newLeafId
-    expect(horizontalLeafId).toEqual(expect.any(String))
-    expect(verticalLeafId).toEqual(expect.any(String))
-    expect(horizontalLeafId).not.toBe(verticalLeafId)
+      const [horizontal, vertical] = await Promise.all([
+        runtime.splitTerminal(sourceHandle!, { direction: 'horizontal' }),
+        runtime.splitTerminal(sourceHandle!, { direction: 'vertical' })
+      ])
 
-    runtime.syncWindowGraph(1, {
-      tabs: [
-        {
-          tabId,
-          worktreeId: TEST_WORKTREE_ID,
-          title: 'shell',
-          activeLeafId: verticalLeafId,
-          layout: null
-        }
-      ],
-      // Reverse publication order so a first-new-leaf heuristic would swap the receipts.
-      leaves: [
-        {
-          tabId,
-          worktreeId: TEST_WORKTREE_ID,
-          leafId: verticalLeafId!,
-          paneRuntimeId: 3,
-          ptyId: 'pty-vertical',
-          paneTitle: null
-        },
-        {
-          tabId,
-          worktreeId: TEST_WORKTREE_ID,
-          leafId: horizontalLeafId!,
-          paneRuntimeId: 2,
-          ptyId: 'pty-horizontal',
-          paneTitle: null
-        },
-        {
-          tabId,
-          worktreeId: TEST_WORKTREE_ID,
-          leafId: sourceLeafId,
-          paneRuntimeId: 1,
-          ptyId: 'pty-source',
-          paneTitle: null
-        }
-      ]
-    })
+      // Main splits itself: no window is asked, and each split names its own pane.
+      expect(splitTerminal).not.toHaveBeenCalled()
+      expect(horizontal.leafId).not.toBe(vertical.leafId)
+      const leafIds = collectLeafIds(getSession().terminalLayoutsByTabId[tabId]?.root)
+      expect(leafIds).toEqual(
+        expect.arrayContaining([sourceLeafId, horizontal.leafId, vertical.leafId])
+      )
+      // Each started under its own pane key, in the tab it split.
+      for (const split of [horizontal, vertical]) {
+        expect(split.tabId).toBe(tabId)
+        const leafId = split.leafId ?? ''
+        const call = spawn.mock.calls.find(([args]) => args.leafId === leafId)
+        expect(spawnedPtyEnv(call?.[0]).ORCA_PANE_KEY).toBe(makePaneKey(tabId, leafId))
+      }
+      expect(spawn).toHaveBeenCalledTimes(2)
+    }
+  )
 
-    await expect(horizontal).resolves.toMatchObject({ leafId: horizontalLeafId })
-    await expect(vertical).resolves.toMatchObject({ leafId: verticalLeafId })
-  })
+  it.skipIf(ORCA_LAYOUT_OWNER_IS_MAIN)(
+    'returns the exact pre-minted leaf for concurrent renderer-backed splits',
+    async () => {
+      const tabId = 'tab-concurrent-splits'
+      const sourceLeafId = '11111111-1111-4111-8111-111111111111'
+      const splitTerminal = vi.fn()
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setNotifier({ splitTerminal } as never)
+      runtime.syncWindowGraph(1, {
+        tabs: [
+          {
+            tabId,
+            worktreeId: TEST_WORKTREE_ID,
+            title: 'shell',
+            activeLeafId: sourceLeafId,
+            layout: null
+          }
+        ],
+        leaves: [
+          {
+            tabId,
+            worktreeId: TEST_WORKTREE_ID,
+            leafId: sourceLeafId,
+            paneRuntimeId: 1,
+            ptyId: 'pty-source',
+            paneTitle: null
+          }
+        ]
+      })
+      const sourceHandle = runtime.getTerminalHandleForPaneKey(makePaneKey(tabId, sourceLeafId))
+      expect(sourceHandle).not.toBeNull()
+
+      const horizontal = runtime.splitTerminal(sourceHandle!, { direction: 'horizontal' })
+      const vertical = runtime.splitTerminal(sourceHandle!, { direction: 'vertical' })
+      await vi.waitFor(() => expect(splitTerminal).toHaveBeenCalledTimes(2))
+      const horizontalLeafId = splitTerminal.mock.calls.find(
+        (call) => call[2]?.direction === 'horizontal'
+      )?.[2]?.newLeafId
+      const verticalLeafId = splitTerminal.mock.calls.find(
+        (call) => call[2]?.direction === 'vertical'
+      )?.[2]?.newLeafId
+      expect(horizontalLeafId).toEqual(expect.any(String))
+      expect(verticalLeafId).toEqual(expect.any(String))
+      expect(horizontalLeafId).not.toBe(verticalLeafId)
+
+      runtime.syncWindowGraph(1, {
+        tabs: [
+          {
+            tabId,
+            worktreeId: TEST_WORKTREE_ID,
+            title: 'shell',
+            activeLeafId: verticalLeafId,
+            layout: null
+          }
+        ],
+        // Reverse publication order so a first-new-leaf heuristic would swap the receipts.
+        leaves: [
+          {
+            tabId,
+            worktreeId: TEST_WORKTREE_ID,
+            leafId: verticalLeafId!,
+            paneRuntimeId: 3,
+            ptyId: 'pty-vertical',
+            paneTitle: null
+          },
+          {
+            tabId,
+            worktreeId: TEST_WORKTREE_ID,
+            leafId: horizontalLeafId!,
+            paneRuntimeId: 2,
+            ptyId: 'pty-horizontal',
+            paneTitle: null
+          },
+          {
+            tabId,
+            worktreeId: TEST_WORKTREE_ID,
+            leafId: sourceLeafId,
+            paneRuntimeId: 1,
+            ptyId: 'pty-source',
+            paneTitle: null
+          }
+        ]
+      })
+
+      await expect(horizontal).resolves.toMatchObject({ leafId: horizontalLeafId })
+      await expect(vertical).resolves.toMatchObject({ leafId: verticalLeafId })
+    }
+  )
 
   it('splits visible pty-backed terminal sessions through the parent renderer tab', async () => {
     const spawn = vi
@@ -121,7 +214,7 @@ describe('OrcaRuntimeService', () => {
     const splitTerminal = vi.fn()
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null
@@ -136,7 +229,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -367,7 +459,10 @@ describe('OrcaRuntimeService', () => {
           })
       )
     const kill = vi.fn(() => true)
-    const runtime = new OrcaRuntimeService(store)
+    const { runtimeStore, setSession } = makeRuntimeStoreWithWorkspaceSession(
+      getDefaultWorkspaceSession()
+    )
+    const runtime = new OrcaRuntimeService(runtimeStore)
     runtime.setPtyController({
       spawn,
       write: () => true,
@@ -381,6 +476,8 @@ describe('OrcaRuntimeService', () => {
     await vi.waitFor(() => expect(spawn).toHaveBeenCalledTimes(2))
 
     runtime['mobileSessionTabsByWorktree'].delete(TEST_WORKTREE_ID)
+    // The source pane closes in main's layout while the split starts.
+    setSession(getDefaultWorkspaceSession())
     resolveSplitSpawn({ id: 'retired-projected-split-pty' })
 
     await expect(split).rejects.toThrow('terminal_split_source_not_found')
@@ -401,7 +498,7 @@ describe('OrcaRuntimeService', () => {
       createFolderWorkspaceRuntimeStore(folderWorkspace, projectGroup) as never
     )
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null
@@ -416,7 +513,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -561,7 +657,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })

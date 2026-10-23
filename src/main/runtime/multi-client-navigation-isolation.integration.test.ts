@@ -78,7 +78,6 @@ describe('paired runtime navigation isolation', () => {
         renameTerminal: vi.fn(),
         focusTerminal,
         closeTerminal: vi.fn(),
-        sleepWorktree: vi.fn(),
         terminalFitOverrideChanged: vi.fn(),
         terminalDriverChanged: vi.fn()
       })
@@ -807,7 +806,7 @@ describe('paired runtime navigation isolation', () => {
     )
     expect(remembered.activeTabId).toBe('client-a-tab')
     expect(remembered.tabs.find((tab) => tab.isActive)?.id).toBe('client-a-tab')
-    // Why: an unknown device must still start from deterministic topology, not inherit another device's restored state.
+    // Why: an unknown device starts from the host's view, not another device's restored state.
     const freshDevice = await restarted.listMobileSessionTabs(
       `id:${SESSION_WORKTREE_ID}`,
       'device-b'

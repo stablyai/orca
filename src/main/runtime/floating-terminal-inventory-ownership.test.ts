@@ -1,6 +1,7 @@
 // #23428: a floating serve- PTY whose cwd is inside a folder workspace must stay floating.
 import { describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
+import { committingSpawn } from './bind-first-pane.test-fixture'
 
 // Fragments stay side-effect ordered: mocks, then lifecycle, then fixtures.
 const { OrcaRuntimeService } = await import('./orca-runtime-test-mocks.spec')
@@ -20,12 +21,22 @@ function makeRuntime() {
     getSettings: () => ({ ...store.getSettings(), floatingTerminalCwd: HOME_FOLDER })
   }
   const live = new Set<string>()
-  const spawn = vi.fn(async (args: { sessionId?: string }) => {
-    const id = args.sessionId ?? 'serve-fallback'
-    live.add(id)
-    return { id }
-  })
   const runtime = new OrcaRuntimeService(runtimeStore)
+  const spawn = vi.fn(
+    committingSpawn(
+      runtime,
+      async (args: {
+        sessionId?: string
+        worktreeId?: string
+        tabId?: string
+        leafId?: string
+      }) => {
+        const id = args.sessionId ?? 'serve-fallback'
+        live.add(id)
+        return { id }
+      }
+    )
+  )
   runtime.setPtyController({
     spawn,
     write: () => true,

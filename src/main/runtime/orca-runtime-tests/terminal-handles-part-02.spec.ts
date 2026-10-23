@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { movePaneFirst, registerBoundPty } from '../bind-first-pane.test-fixture'
 import {
   HEADLESS_LEAF_ID,
   TEST_WINDOW_ID,
@@ -160,7 +161,7 @@ describe('OrcaRuntimeService', () => {
     const appPtyId = 'ssh:ssh-target@@pty-8'
     const runtime = createRuntimeWithSshLease(appPtyId, leaseTabId)
     const paneKey = makePaneKey(currentTabId, HEADLESS_LEAF_ID)
-    runtime.registerPty(appPtyId, TEST_WORKTREE_ID, 'ssh-target', {
+    registerBoundPty(runtime, appPtyId, TEST_WORKTREE_ID, 'ssh-target', {
       tabId: currentTabId,
       leafId: HEADLESS_LEAF_ID
     })
@@ -196,12 +197,18 @@ describe('OrcaRuntimeService', () => {
     const appPtyId = 'ssh:ssh-target@@pty-9'
     const runtime = createRuntimeWithSshLease(appPtyId, leaseTabId)
     const stalePaneKey = makePaneKey(leaseTabId, HEADLESS_LEAF_ID)
-    runtime.registerPty(appPtyId, TEST_WORKTREE_ID, 'ssh-target', {
+    registerBoundPty(runtime, appPtyId, TEST_WORKTREE_ID, 'ssh-target', {
       tabId: leaseTabId,
       leafId: HEADLESS_LEAF_ID
     })
     const staleHandle = runtime.resolveTerminalPane(stalePaneKey, TEST_WORKTREE_ID).handle
     // The move: same leaf, same PTY, new tab.
+    movePaneFirst(runtime, leaseTabId, {
+      worktreeId: TEST_WORKTREE_ID,
+      tabId: currentTabId,
+      leafId: HEADLESS_LEAF_ID,
+      ptyId: appPtyId
+    })
     runtime.registerPty(appPtyId, TEST_WORKTREE_ID, 'ssh-target', {
       tabId: currentTabId,
       leafId: HEADLESS_LEAF_ID

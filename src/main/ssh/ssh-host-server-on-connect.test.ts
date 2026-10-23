@@ -1,3 +1,4 @@
+import type { ManagedServerUpdateDeps } from './managed-server-update-check'
 import { describe, expect, it, vi } from 'vitest'
 import type { SshTarget } from '../../shared/ssh-types'
 import {
@@ -11,6 +12,10 @@ import {
 import { hostServerDepsStub } from './ssh-host-server-on-connect-test-deps'
 import { unservedServerStatus } from './ssh-host-unserved-status'
 import { admitSshManagedServerStatus } from '../../shared/ssh-managed-server-status-admission'
+
+// The retry decision is read under the host's lifecycle lock, so the stub's last call answers it.
+const failedBeforeOf = (autoUpdate: ManagedServerUpdateDeps['autoUpdate']) =>
+  vi.mocked(autoUpdate).mock.lastCall?.[1].failedBefore()
 
 const target: SshTarget = { id: 'ssh-1', label: 'Box', host: 'box', port: 22, username: 'me' }
 
@@ -470,10 +475,7 @@ describe('which server an SSH host runs on connect', () => {
         route: 'managed',
         environmentId: 'env-9'
       })
-      expect(d.autoUpdate).toHaveBeenCalledWith(
-        'env-9',
-        expect.objectContaining({ failedBefore: false })
-      )
+      expect(failedBeforeOf(d.autoUpdate)).toBe(false)
       expect(d.progress).not.toHaveBeenCalledWith(target, 'updating')
     })
 
@@ -560,10 +562,7 @@ describe('which server an SSH host runs on connect', () => {
       await expect(resolveHostServerOnConnect(target, later)).resolves.toMatchObject({
         update: { state: 'failed', detail: reason }
       })
-      expect(later.autoUpdate).toHaveBeenCalledWith(
-        'env-9',
-        expect.objectContaining({ failedBefore: true })
-      )
+      expect(failedBeforeOf(later.autoUpdate)).toBe(true)
       expect(later.recordUpdateFailure).not.toHaveBeenCalled()
     })
 
@@ -581,7 +580,8 @@ describe('which server an SSH host runs on connect', () => {
       })
       await expect(resolveHostServerOnConnect(target, d)).resolves.toEqual({
         route: 'managed',
-        environmentId: 'env-9'
+        environmentId: 'env-9',
+        update: { state: 'check-failed', detail: 'ssh dropped' }
       })
       expect(d.recordUpdateFailure).not.toHaveBeenCalled()
     })

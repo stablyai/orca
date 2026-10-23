@@ -48,6 +48,12 @@ describe('BrowserClientPageCommandExecutor', () => {
         authorityConnectionIdentity: 'authority-record-a',
         executionHostIdentity: 'execution-host-record-a'
       },
+      compatibleIdentity: {
+        orcaProfileId: 'orca-profile-a',
+        browserProfileId: 'profile-a',
+        authorityConnectionIdentity: 'pairing-authority-record-a',
+        executionHostIdentity: 'execution-host-record-a'
+      },
       legacyIdentity: {
         orcaProfileId: 'orca-profile-a',
         browserProfileId: 'profile-a',
@@ -526,6 +532,7 @@ describe('BrowserClientPageCommandExecutor', () => {
     expect(() =>
       executor.completeAuthorityTransition({
         authorityConnectionIdentity: 'authority-record-b',
+        pairingAuthorityConnectionIdentity: 'pairing-authority-record-b',
         legacyAuthorityConnectionIdentity: 'legacy-authority-record-b'
       })
     ).toThrow('browser_client_page_authority_transition_unavailable')

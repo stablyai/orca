@@ -1,63 +1,52 @@
-// Browser tab and page changes in a layout-owner build (phase C5). The window still draws first
-// and saves its whole copy; main records each change under the window's own ids, so a later
-// command naming the tab or page finds it. Nothing to undo on any answer: the window's next save
-// carries the change when main cannot take it.
+// A browser page create, close, convert or profile switch in a layout-owner build: the window sends
+// the command first and changes nothing until main answers. Main's frame shows the tab's own
+// fields (its pages, its profile); the window then writes what only it holds (each page's state).
+// A refusal leaves the tab as it was.
 
-import type { BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
-import { recordLayoutApply, type sendLayoutApply } from '@/runtime/layout-apply-send'
-import { newGroupSplitOf } from '@/runtime/layout-owner-new-group-split'
-import type { AppState } from '../../types'
+import { sendLayoutApply, type WindowLayoutCommand } from '@/runtime/layout-apply-send'
+import { beginPendingTab } from '@/runtime/layout-owner-pending-tabs'
+import type { BrowserSliceGet } from './browser-slice-contract'
 
-type BrowserCommandState = Parameters<typeof sendLayoutApply>[0] &
-  Pick<AppState, 'unifiedTabsByWorktree' | 'groupsByWorktree' | 'layoutByWorktree'>
+type BrowserLayoutCommand = Extract<
+  WindowLayoutCommand,
+  { type: 'openBrowserPage' | 'closeBrowserPage' | 'replaceBrowserPage' | 'setBrowserTabProfile' }
+>
 
-/** The open of a browser tab the window just drew, placed where the window drew it. */
-export function recordBrowserTabOpen(state: BrowserCommandState, tab: BrowserWorkspace): void {
-  const entry = browserTabEntry(state, tab.worktreeId, tab.id)
-  const pageId = tab.pageIds?.[0]
-  if (!entry || !pageId) {
-    return
-  }
-  const order = state.groupsByWorktree[tab.worktreeId]?.find(
-    (group) => group.id === entry.groupId
-  )?.tabOrder
-  const position = order?.indexOf(entry.id) ?? -1
-  const afterTabId = position > 0 ? order?.[position - 1] : undefined
-  recordLayoutApply(state, tab.worktreeId, {
-    type: 'openBrowserTab',
-    tabId: entry.id,
-    browserTabId: tab.id,
-    pageId,
-    profileId: tab.sessionProfileId ?? null,
-    sessionPartition: tab.sessionPartition ?? null,
-    groupId: entry.groupId,
-    ...(afterTabId ? { afterTabId } : position === 0 ? { index: 0 } : {}),
-    createdAt: entry.createdAt,
-    browserCreatedAt: tab.createdAt,
-    // Open to the side: main makes the window's new split with the tab.
-    ...newGroupSplitOf(state, tab.worktreeId, entry.groupId, entry.id)
-  })
-}
-
-/** The close of a browser tab whose tab-bar entry the window is about to remove. */
-export function recordBrowserTabClose(
-  state: BrowserCommandState,
+/**
+ * False when main is not asked (a paired server owns the workspace's layout): the caller writes
+ * the change as today. `here` is today's write, for a twin main may route to a paired server;
+ * `shown` runs once main's frame is in.
+ */
+export function sendBrowserLayoutCommand(
+  get: BrowserSliceGet,
   worktreeId: string,
-  browserTabId: string,
-  reason: 'user' | 'cleanup'
-): void {
-  const entry = browserTabEntry(state, worktreeId, browserTabId)
-  if (entry) {
-    recordLayoutApply(state, worktreeId, {
-      type: 'closeTabs',
-      tabIds: [entry.id],
-      recordClose: reason
-    })
+  command: BrowserLayoutCommand,
+  write: { here: () => void; shown?: () => void }
+): boolean {
+  // A page being added is pending on its tab: a caller acting on the tab's pages waits for it.
+  const settle =
+    command.type === 'openBrowserPage'
+      ? beginPendingTab(command.pageId, worktreeId, command.browserTabId, { kind: 'open' })
+      : () => {}
+  const sent = sendLayoutApply(get(), worktreeId, command, {
+    apply: () => {
+      try {
+        write.shown?.()
+      } finally {
+        settle(command.browserTabId)
+      }
+    },
+    asToday: () => {
+      try {
+        write.here()
+      } finally {
+        settle(command.browserTabId)
+      }
+    },
+    refused: () => settle(null)
+  })
+  if (!sent) {
+    settle(null)
   }
-}
-
-function browserTabEntry(state: BrowserCommandState, worktreeId: string, browserTabId: string) {
-  return state.unifiedTabsByWorktree[worktreeId]?.find(
-    (entry) => entry.contentType === 'browser' && entry.entityId === browserTabId
-  )
+  return sent
 }

@@ -9,6 +9,7 @@ import type { TerminalSideEffectBatch } from './terminal-side-effect-facts'
 import type { RuntimeNativeChatLaunchDraftResolution } from './runtime-types'
 import type { RuntimeNavigationTarget } from './runtime-navigation'
 import type { WorktreeSortOrderUpdate } from './worktree/sort-order-update'
+import type { SidebarInputsChangedEvent } from './sidebar-list/sidebar-inputs-feed-contract'
 
 export type RuntimeClientEvent =
   | { type: 'reposChanged' }
@@ -23,6 +24,8 @@ export type RuntimeClientEvent =
     }
   | ({ type: 'nativeChatLaunchDraftResolved' } & RuntimeNativeChatLaunchDraftResolution)
   | { type: 'terminalSideEffects'; batch: TerminalSideEffectBatch }
+  /** Only while this host's own phone reads the sidebar feed; every other reader drops it. */
+  | SidebarInputsChangedEvent
   // Why: SSH connections live on the runtime host; paired clients have no IPC
   // channel for ssh:state-changed, so without this event their reconnect
   // overlays never learn the host connected (STA-1468).

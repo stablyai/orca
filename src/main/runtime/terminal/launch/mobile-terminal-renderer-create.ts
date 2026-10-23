@@ -1,4 +1,4 @@
-import { applyClaudeTerminalImageViewerEnv } from '../../terminal-image-viewer-env'
+import { applyRemoteViewerLaunchEnv } from '../../remote-viewer-launch-env'
 import type { MobileTerminalCommandOptions, MobileTerminalCommand } from './mobile-terminal-startup'
 import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
 import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
@@ -18,6 +18,7 @@ import {
 import { rendererPublicationThrottle } from '../../../window/renderer-publication-throttle'
 import { deterministicAgentSessionUuid } from '../../runtime-agent-launch-resolution'
 import { assertMobileTerminalShellSupported } from './mobile-terminal-shell-refusal'
+import { anchorTabOfCreate, mainPlacedAfter } from './mobile-terminal-create-anchor'
 
 export type MobileTerminalCreateOptions = {
   terminalImageViewerSupported?: boolean
@@ -108,18 +109,12 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
         graphEpoch
       })
     }
-    let afterDesktopTabId: string | undefined
-    if (requestedAfterTabId) {
-      const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
-      const anchor = snapshot?.tabs.find((tab) => tab.id === requestedAfterTabId)
-      if (!anchor) {
-        throw new Error('after_tab_not_found')
-      }
-      if (afterTabId) {
-        afterDesktopTabId = anchor.type === 'terminal' ? anchor.parentTabId : anchor.id
-      }
-    }
-    const startupCommand = applyClaudeTerminalImageViewerEnv(
+    const afterDesktopTabId = anchorTabOfCreate(
+      this.mobileSessionTabsByWorktree.get(worktreeId)?.tabs,
+      requestedAfterTabId,
+      afterTabId !== undefined
+    )
+    const startupCommand = applyRemoteViewerLaunchEnv(
       await this.resolveMobileSessionTerminalCommand(workspace, opts),
       opts.terminalImageViewerSupported
     )
@@ -166,6 +161,10 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           launchAgent: startupCommand.launchAgent,
           viewMode: opts.viewMode,
           targetGroupId: opts.targetGroupId,
+          ...mainPlacedAfter(
+            () => this.mainLayoutTabOfRow(worktreeId, requestedAfterTabId),
+            afterDesktopTabId
+          ),
           supportsSplitGroupPlacement: opts.supportsSplitGroupPlacement,
           launchConfig: startupCommand.launchConfig,
           launchRuntime: startupCommand.launchRuntime,

@@ -7,6 +7,7 @@ import type {
   LayoutContentFacts
 } from './workspace-layout-beside'
 import type { LayoutLoadChange } from './workspace-layout-load-report'
+import type { LayoutEditorView } from './layout-editor-view'
 import type { WorkspaceLayoutModel } from './workspace-layout-model'
 
 export type WorkspaceLayoutLoadContext = {
@@ -17,6 +18,10 @@ export type WorkspaceLayoutLoadContext = {
   mintId: (seed: string) => string
   /** Mints pane ids (UUIDs) for a repeated pane id or a legacy row's one pane; `seed` as above. */
   mintLeafId: (seed: string) => string
+  /** A live pane's binding generation (main's, in memory); absent when the context has none. */
+  ptyGenerationOf?: (leafId: string) => number | undefined
+  /** A workspace's editor tab views (main's, in memory: never saved); absent when it has none. */
+  editorViewsOf?: (workspaceKey: string) => Readonly<Record<string, LayoutEditorView>> | undefined
 }
 
 /** A stored session partition, split into the layout and what is kept beside it. */

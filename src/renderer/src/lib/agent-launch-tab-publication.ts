@@ -17,6 +17,7 @@ import { useAppStore } from '../store'
 import { resolveUnifiedTabCreatePlacement } from '../store/slices/tabs/tabs-create-placement'
 import { insertUnifiedTabAfterAnchor } from './unified-tab-anchor-insertion'
 import { rememberAgentLaunchPanePrompt } from './agent-launch-pane-prompt'
+import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 
 function landedGroupId(worktreeId: string, tabId: string): string | undefined {
   return useAppStore
@@ -88,7 +89,7 @@ export function publishAgentLaunchTab(
     lookupWorktrees: () =>
       [
         ...(store.allWorktrees?.() ?? []),
-        ...(store.folderWorkspaces ?? []).map(folderWorkspaceToWorktree)
+        ...(selectFolderWorkspaces(store) ?? []).map(folderWorkspaceToWorktree)
       ].filter((worktree) => worktree.id === worktreeId)
   })
   const focuses = request.viewer === 'focus-window' || request.viewer === 'focus-in-workspace'

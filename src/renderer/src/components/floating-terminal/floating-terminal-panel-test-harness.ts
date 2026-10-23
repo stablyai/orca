@@ -155,6 +155,8 @@ function resetStore(tabs: TerminalTab[] = []): void {
     groupsByWorktree: {},
     unifiedTabsByWorktree: {},
     openFiles: [],
+    editorBufferIdOf: {},
+    editorBufferViews: {},
     activeGroupIdByWorktree: {},
     activeTabIdByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: tabs[0]?.id ?? null },
     layoutByWorktree: {},

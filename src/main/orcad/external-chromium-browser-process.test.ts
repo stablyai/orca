@@ -31,6 +31,7 @@ import {
   setRuntimeBrowserCommandsFactory
 } from '../runtime/runtime-browser-commands-factory'
 import type { RuntimeBrowserCommandHost } from '../runtime/browser/browser-command-contracts'
+import { RuntimeBrowserPageRegistry } from '../runtime/runtime-browser-page-registry'
 
 vi.mock('./orcad-browser-provider', () => ({ resolveOrcadBrowserProvider: vi.fn() }))
 afterEach(() => setRuntimeBrowserCommandsFactory(null))
@@ -75,7 +76,10 @@ it('forwards tab commands through startup to the Chromium provider', async () =>
   const startup = startOrcadBrowserProvider({ userDataPath: '/state' })
   await startup.ready
   try {
-    const host: RuntimeBrowserCommandHost = Object.create(null)
+    // The runtime that composes the provider owns a page registry, which startup consults.
+    const host: RuntimeBrowserCommandHost = Object.assign(Object.create(null), {
+      getRuntimeBrowserPageRegistry: () => new RuntimeBrowserPageRegistry()
+    })
     const commands = createRuntimeBrowserCommands(host)
     const params = { worktree: 'wt-a' }
     createTab.mockResolvedValueOnce({ browserPageId: 'page-a' })

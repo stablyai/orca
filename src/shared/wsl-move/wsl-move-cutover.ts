@@ -3,12 +3,12 @@
  * profile store, in its own directory, so a build that knows only SSH journals never reads one.
  */
 import { z } from 'zod'
-import {
-  parseOrcadMigrationManifest,
-  type OrcadMigrationLocalWslManifestSource,
-  type OrcadMigrationManifest
-} from '../orcad-migration-manifest'
-import { isOrcadMigrationLocalWslSource } from '../orcad-migration-source-kind'
+import { parseOrcadMigrationManifest } from '../orcad-migration/orcad-migration-manifest-validation'
+import type {
+  OrcadMigrationLocalWslManifestSource,
+  OrcadMigrationManifest
+} from '../orcad-migration/orcad-migration-manifest'
+import { isOrcadMigrationLocalWslSource } from '../orcad-migration/orcad-migration-source-kind'
 
 export const WSL_MOVE_CUTOVER_VERSION = 1
 

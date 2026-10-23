@@ -8,16 +8,18 @@ import { parsePaneKey } from '../../shared/stable-pane-id'
 import type { OrchestrationCompatibilityTerminalAuthority } from './runtime-terminal-contracts'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import type { OrchestrationDb } from './orchestration/db'
-import { runtimeWorktreeIdsEqual } from './runtime-worktree-path-identity'
 import {
   buildWorkerAttentionContext,
   projectWorkerAttentionContext
 } from './orchestration/worker-attention-context'
+import { worktreeIdsEqual } from '../../shared/worktree/id'
+import type { PtyPaneOf } from './terminal/surface/pty-pane-query'
 
 type RuntimeAgentOrchestrationDependencies = {
   getDb(): OrchestrationDb | null
   getLeaves(): Iterable<RuntimeLeafRecord>
   getPtys(): Iterable<RuntimePtyWorktreeRecord>
+  paneOf: PtyPaneOf
   issueLeafHandle(leaf: RuntimeLeafRecord): string
   issuePtyHandle(pty: RuntimePtyWorktreeRecord): string
   makePaneKey(leaf: RuntimeLeafRecord): string
@@ -60,7 +62,8 @@ export class RuntimeAgentOrchestrationProjection {
       }
     }
     for (const pty of this.deps.getPtys()) {
-      if (!pty.paneKey || contexts[pty.paneKey]) {
+      const { paneKey } = this.deps.paneOf(pty)
+      if (!paneKey || contexts[paneKey]) {
         continue
       }
       const handle = this.deps.issuePtyHandle(pty)
@@ -69,12 +72,12 @@ export class RuntimeAgentOrchestrationProjection {
       }
       queriedHandles.add(handle)
       const context = this.getForHandle(handle, db, {
-        paneKey: pty.paneKey,
-        evidence: evidenceByPaneKey.get(pty.paneKey),
+        paneKey,
+        evidence: evidenceByPaneKey.get(paneKey),
         deferAttention: batchAttention
       })
       if (context) {
-        contexts[pty.paneKey] = context
+        contexts[paneKey] = context
       }
     }
     const entries = Object.entries(contexts)
@@ -145,7 +148,7 @@ export class RuntimeAgentOrchestrationProjection {
       legacyActiveRun &&
       handleWorktreeId &&
       coordinatorWorktreeId &&
-      runtimeWorktreeIdsEqual(coordinatorWorktreeId, handleWorktreeId)
+      worktreeIdsEqual(coordinatorWorktreeId, handleWorktreeId)
         ? legacyActiveRun
         : undefined
     const coordinatorHandle = runCoordinatorHandle ?? scopedLegacyRun?.coordinator_handle

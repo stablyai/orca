@@ -6,9 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createAcpAgentConnection, type AcpAgentConnection } from '../acp/acp-agent-connection'
 import type { InitializeResponse } from '../acp/generated/acp-protocol.generated'
-import {
-  runAgentModelCatalogSession
-} from '../native-chat/agent-model-catalog/agent-model-catalog-probe-runner'
+import { runAgentModelCatalogSession } from '../native-chat/agent-model-catalog/agent-model-catalog-probe-runner'
 import { ANTIGRAVITY_ACP_ENV, scrubAntigravityAcpEnvironment } from './antigravity-acp-environment'
 
 const PROBE_TIMEOUT_MS = 90_000

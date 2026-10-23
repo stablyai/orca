@@ -9,6 +9,10 @@ vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: vi.fn(() => ({ nth_repo_added: 2 }))
 }))
+// The fixture's owner process is fictional; the pane's owning Claude is still running.
+vi.mock('../../shared/agent-process-presence-probe', () => ({
+  probeAgentProcessPresence: vi.fn(async () => 'live')
+}))
 
 beforeEach(() => {
   _internals.resetCachesForTests()

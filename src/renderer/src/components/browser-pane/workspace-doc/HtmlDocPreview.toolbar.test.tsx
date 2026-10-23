@@ -123,6 +123,7 @@ const storeState = {
     store.pageStateUpdates.push({ pageId, updates })
   },
   browserUrlHistory: [],
+  browserPagesByWorkspace: {},
   workspaceDocHistory: [],
   recordWorkspaceDocVisit: () => undefined,
   browserDefaultSearchEngine: 'google',

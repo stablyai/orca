@@ -24,7 +24,7 @@ vi.mock('@/hooks/useInstalledAgentSkills', () => ({
 }))
 
 vi.mock('@/hooks/useActiveProjectSkillRuntime', () => ({
-  useActiveProjectSkillRuntime: () => ({ canUseLocalSkillFreshness: true })
+  useActiveProjectSkillRuntime: () => ({ canUseSkillFreshness: true })
 }))
 
 vi.mock('./AgentSkillSetupPanel', () => ({

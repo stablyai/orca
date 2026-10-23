@@ -11,7 +11,7 @@ const { detectInstallDirs, guestMounts } = vi.hoisted(() => {
   }
 })
 
-vi.mock('../ipc/local-agent-install-dir-detection', () => ({
+vi.mock('../../shared/local-agent-install-dir-detection', () => ({
   detectCommandsInInstallDirs: detectInstallDirs
 }))
 vi.mock('../ipc/preflight-command-exec', () => ({

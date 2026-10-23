@@ -6,6 +6,7 @@ import { bootstrapProfileStateAuthority } from './profile-state-authority-bootst
 import type { ProfileStateStorageClassification } from './profile-state-storage-classification'
 
 export type ProfileStateStoreFactoryOptions = {
+  userDataPath?: string
   dataFile: string
   databaseFile: string
   profileId: string

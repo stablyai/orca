@@ -38,6 +38,7 @@ const PERSISTED_WORKSPACE_SESSION_FIELDS = {
   activeBrowserTabIdByWorktree: true,
   clientHostedBrowserPagesByWorktree: true,
   clientHostedBrowserCloseIntentsByEnvironment: true,
+  pairedTerminalTabCloseIntentsByEnvironment: true,
   activeTabTypeByWorktree: true,
   browserUrlHistory: true,
   workspaceDocHistory: true,
@@ -54,7 +55,8 @@ const PERSISTED_WORKSPACE_SESSION_FIELDS = {
   terminalPtyIncarnationsByPaneKey: true,
   terminalTopologyRevisionByRepoId: true,
   terminalSurfaceTombstonesByPaneKey: true,
-  closedTerminalTabTombstonesByTabId: true
+  closedTerminalTabTombstonesByTabId: true,
+  closedTerminalPanesByPaneKey: true
 } satisfies Record<keyof WorkspaceSessionState, true>
 
 const MINIMAL_SESSION = {

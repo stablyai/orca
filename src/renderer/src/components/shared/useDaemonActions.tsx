@@ -292,7 +292,8 @@ export function DaemonActionDialog({
       }}
     >
       <DialogContent
-        className="max-w-md"
+        className="z-[80] max-w-md"
+        overlayClassName="z-[80]"
         showCloseButton={!isBusy}
         onPointerDownOutside={(e) => {
           if (isBusy) {

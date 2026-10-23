@@ -14,6 +14,7 @@ import {
   decodeOmpTranscriptLine
 } from './transcript-line-decoders'
 import { transcriptFallbackId } from './transcript-fallback-id'
+import { inTranscriptFileOrder } from './transcript-file-order'
 import { extendTranscriptBoundary } from './transcript-file-version'
 import {
   nativeChatTurnLifecycleDecoderForAgent,
@@ -69,6 +70,8 @@ export async function readNativeChatTranscriptTailFile(
   consumedTo: number
   hasMore: boolean
   beforeOffset: number
+  /** Newest row time up to `consumedTo`, where an incremental read continues. */
+  latestTimestamp?: number
   malformedRecordCount?: number
   oversizedRecordCount?: number
 }> {
@@ -165,7 +168,12 @@ export async function readNativeChatTranscriptTailFile(
     if (cursor === 0 && lineParts.length > 0 && newestFirst.length <= limit && !scan?.stop()) {
       decodeLine(0, newestFirst)
     }
-    const chronological = newestFirst.toReversed()
+    let latest = Number.NEGATIVE_INFINITY
+    const chronological = newestFirst.toReversed().map((entry) => {
+      const ordered = inTranscriptFileOrder(entry.message, latest)
+      latest = ordered.latest
+      return { message: ordered.message, offset: entry.offset }
+    })
     // Why: slice(-0) returns the whole array, so a non-positive limit must
     // window to nothing explicitly rather than leak every buffered record.
     const selected = limit > 0 ? chronological.slice(Math.max(0, chronological.length - limit)) : []
@@ -175,6 +183,7 @@ export async function readNativeChatTranscriptTailFile(
       consumedTo,
       hasMore: limit > 0 && chronological.length > limit,
       beforeOffset: selected[0]?.offset ?? end,
+      ...(Number.isFinite(latest) ? { latestTimestamp: latest } : {}),
       ...(malformedRecordCount > 0 ? { malformedRecordCount } : {}),
       ...(oversizedRecordCount > 0 ? { oversizedRecordCount } : {})
     }

@@ -4,7 +4,7 @@ import type {
   WatcherProcessCallback,
   WatcherProcessHooks,
   WatcherProcessSubscription
-} from '../ipc/parcel-watcher-process'
+} from '../ipc/parcel-watcher-process-subscription'
 import { WatcherProcessFailure } from '../ipc/parcel-watcher-process-failure'
 import {
   WATCHER_IGNORE_DIRS,

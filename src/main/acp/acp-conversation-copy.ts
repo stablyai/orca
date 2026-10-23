@@ -1,8 +1,5 @@
 import { normalizeAgentProviderSession } from '../../shared/agent-session-resume'
-import {
-  assertOpenCodeCopyUsesLocalStore,
-  OpenCodeCopyServerRouteError
-} from '../../shared/opencode-launch-command'
+import { OpenCodeCopyServerRouteError } from '../../shared/opencode-launch-command'
 // The chat protocol saves an independent conversation; its ordinary CLI opens that copy.
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
 import {
@@ -48,12 +45,11 @@ export async function copyAcpConversation(
   let connection: AcpStructuredConnection | null = null
   try {
     signal.throwIfAborted()
-    if (deps.spec.agent === 'opencode') {
-      const args = await waitForPromiseWithSignal(
-        Promise.resolve(deps.resolveLaunchArgs?.() ?? []),
-        signal
+    const assertCopyLaunchArgs = deps.spec.assertCopyLaunchArgs
+    if (assertCopyLaunchArgs) {
+      assertCopyLaunchArgs(
+        await waitForPromiseWithSignal(Promise.resolve(deps.resolveLaunchArgs?.() ?? []), signal)
       )
-      assertOpenCodeCopyUsesLocalStore(args)
     }
     signal.throwIfAborted()
     const launch = await waitForPromiseWithSignal(deps.readLaunch(input.identity), signal)

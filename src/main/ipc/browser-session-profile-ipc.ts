@@ -20,6 +20,15 @@ import {
   getBrowserIdentityModeStatus,
   setBrowserIdentityMode
 } from '../browser/browser-identity-mode-store'
+import {
+  listBrowserSitePermissions,
+  setBrowserSitePermissionDecisions
+} from '../browser/browser-site-permission-store'
+import {
+  isBrowserSitePermission,
+  isBrowserSitePermissionDecision,
+  type BrowserSitePermissionEntry
+} from '../../shared/browser-site-permission'
 
 export function registerBrowserSessionProfileHandlers(): void {
   ipcMain.removeHandler('browser:session:listProfiles')
@@ -29,6 +38,8 @@ export function registerBrowserSessionProfileHandlers(): void {
   ipcMain.removeHandler('browser:identity:set')
   ipcMain.removeHandler('browser:session:importCookies')
   ipcMain.removeHandler('browser:session:resolvePartition')
+  ipcMain.removeHandler('browser:sitePermissions:list')
+  ipcMain.removeHandler('browser:sitePermissions:set')
 
   ipcMain.handle('browser:session:listProfiles', (event): BrowserSessionProfile[] => {
     if (!isTrustedBrowserRenderer(event.sender)) {
@@ -117,6 +128,47 @@ export function registerBrowserSessionProfileHandlers(): void {
         return null
       }
       return browserSessionRegistry.resolvePartition(args.profileId)
+    }
+  )
+
+  ipcMain.handle(
+    'browser:sitePermissions:list',
+    (event, args: { profileId: string }): BrowserSitePermissionEntry[] => {
+      if (
+        !isTrustedBrowserRenderer(event.sender) ||
+        !browserSessionRegistry.getProfile(args.profileId)
+      ) {
+        return []
+      }
+      return listBrowserSitePermissions(args.profileId)
+    }
+  )
+
+  ipcMain.handle(
+    'browser:sitePermissions:set',
+    (
+      event,
+      args: { profileId: string; origin: string; permission: unknown; decision: unknown }
+    ): BrowserSitePermissionEntry[] => {
+      if (
+        !isTrustedBrowserRenderer(event.sender) ||
+        !browserSessionRegistry.getProfile(args.profileId)
+      ) {
+        return []
+      }
+      if (
+        !isBrowserSitePermission(args.permission) ||
+        (args.decision !== null && !isBrowserSitePermissionDecision(args.decision))
+      ) {
+        throw new Error('Unsupported site permission change')
+      }
+      setBrowserSitePermissionDecisions(
+        args.profileId,
+        args.origin,
+        [args.permission],
+        args.decision
+      )
+      return listBrowserSitePermissions(args.profileId)
     }
   )
 

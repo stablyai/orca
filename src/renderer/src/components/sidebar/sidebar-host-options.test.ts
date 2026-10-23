@@ -217,6 +217,8 @@ describe('sidebar host options', () => {
     expect(getSidebarHostHealthLabel('available')).toBe('Connected')
     expect(getSidebarHostHealthLabel('connecting')).toBe('Connecting')
     expect(getSidebarHostHealthLabel('blocked')).toBe('Update needed')
+    expect(getSidebarHostHealthLabel('blocked', 'incompatible')).toBe('Update needed')
+    expect(getSidebarHostHealthLabel('blocked', 'access-revoked')).toBe('Re-pair needed')
     expect(getSidebarHostHealthLabel('error')).toBe('Needs attention')
   })
 

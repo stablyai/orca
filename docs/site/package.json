@@ -7,7 +7,7 @@
     "dev": "next dev --port 3004",
     "build": "next build",
     "start": "next start --port 3004",
-    "lint": "eslint",
+    "lint": "oxlint --config .oxlintrc.json .",
     "test": "node --test tests/*.test.mjs",
     "postinstall": "fumadocs-mdx",
     "prebuild": "fumadocs-mdx"
@@ -28,39 +28,16 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/mdx": "^2.0.13",
-    "@types/node": "^22.20.4",
+    "@types/node": "^24.19.2",
     "@types/react": "~19.2.18",
     "@types/react-dom": "~19.2.7",
-    "eslint": "^9",
-    "eslint-config-next": "16.3.8",
+    "oxlint": "1.88.0",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vercel": "64.0.2"
   },
   "engines": {
-    "node": "22.x"
+    "node": "24.x"
   },
-  "packageManager": "pnpm@10.34.6",
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild",
-      "sharp",
-      "unrs-resolver"
-    ],
-    "overrides": {
-      "@vercel/node>undici": "6.28.1",
-      "@vercel/python-analysis>js-yaml": "4.3.2",
-      "@vercel/python-analysis>minimatch": "10.2.6",
-      "vercel>smol-toml": "1.9.1",
-      "vercel>undici": "6.28.1",
-      "@vercel/python-analysis>smol-toml": "1.9.1",
-      "@vercel/rust>smol-toml": "1.9.1",
-      "@vercel/static-config>ajv": "8.18.0",
-      "@vercel/backends>path-to-regexp": "8.4.0",
-      "@vercel/express>path-to-regexp": "8.4.0",
-      "@vercel/hono>path-to-regexp": "8.4.0",
-      "@vercel/container>tar": "7.5.22",
-      "@vercel/container>smol-toml": "1.9.1"
-    }
-  }
+  "packageManager": "pnpm@12.14.0+sha512.c18ba6d87993d3d164cb5e8948f32b2c06ee854487e06cd8d86781342fb3e5bb4634367034711e86802baa9c37bea906ce1929ad08d70884c97d801df13389a6"
 }

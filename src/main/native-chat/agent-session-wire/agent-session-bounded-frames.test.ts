@@ -135,13 +135,15 @@ describe('a bounded row', () => {
       })
     ]
     for (const row of rows) {
-      expect(jsonBytes(boundedFrameItem(row))).toBeLessThanOrEqual(BOUNDED_FRAME_ROW_BYTES)
+      const formed = boundedFrameItem({ item: row, bytes: jsonBytes(row) })
+      expect(formed.bytes).toBe(jsonBytes(formed.item))
+      expect(formed.bytes).toBeLessThanOrEqual(BOUNDED_FRAME_ROW_BYTES)
     }
   })
 
   it('is the stored row when it already fits', () => {
     const row = rendered({ body: message('hello') })
-    expect(boundedFrameItem(row)).toBe(row)
+    expect(boundedFrameItem({ item: row, bytes: jsonBytes(row) }).item).toBe(row)
   })
 })
 
@@ -174,7 +176,15 @@ describe('frames to a bounded-frame subscriber', () => {
     let held: ReadonlySet<string> = new Set()
     const subscribers = new AgentSessionSubscribers({
       readCurrentWork: () =>
-        new StructuredAgentSessionCurrentWork(journal, 1, 0, undefined, undefined, false, () => held)
+        new StructuredAgentSessionCurrentWork(
+          journal,
+          1,
+          0,
+          undefined,
+          undefined,
+          false,
+          () => held
+        )
     })
     const frames: AgentSessionSubscribeEvent[] = []
     const emit = (event: AgentSessionSubscribeEvent) => frames.push(event)
@@ -197,9 +207,9 @@ describe('frames to a bounded-frame subscriber', () => {
         }
       }
       expect([...delivered.keys()].sort()).toEqual([...ids].sort())
-      expect([...delivered.values()].every((submission) => submission.dispatchState === state)).toBe(
-        true
-      )
+      expect(
+        [...delivered.values()].every((submission) => submission.dispatchState === state)
+      ).toBe(true)
     }
     const close = subscribers.open({
       id: 'phone',

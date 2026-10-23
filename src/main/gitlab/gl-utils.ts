@@ -15,21 +15,17 @@ export {
   _resetKnownHostsCache,
   _resetProjectRefCache,
   getGlabKnownHosts,
-  getIssueProjectRef,
   getProjectRef,
   getProjectRefForRemote,
   glabHostEnvOptions,
   glabHostnameArgs,
   glabRepoExecOptions,
   parseGlabAuthStatusHosts,
-  parseGitLabProjectRef,
-  resolveIssueSource
+  parseGitLabProjectRef
 } from './gitlab-project-ref-resolution'
-export type {
-  LocalGitExecOptions,
-  ProjectRef,
-  ResolvedIssueSource
-} from './gitlab-project-ref-resolution'
+export type { LocalGitExecOptions, ProjectRef } from './gitlab-project-ref-resolution'
+export { getIssueProjectRef, resolveIssueSource } from './gitlab-issue-source-resolution'
+export type { ResolvedIssueSource } from './gitlab-issue-source-resolution'
 export {
   parseGlabApiResponse,
   parseGlabJsonList,

@@ -33,3 +33,36 @@ export function isGitHubWorkItemsSshRemoteRequiredError(error: unknown): boolean
 export function sortWorkItemsByNumber<T extends { number: number }>(items: T[]): T[] {
   return [...items].sort((left, right) => right.number - left.number)
 }
+
+// Why: GitHub 422s search pages that start past its 1000-result window.
+export const GITHUB_SEARCH_RESULT_WINDOW = 1000
+
+export function taskPageToGitHubApiPage(taskPage: number): number {
+  return Math.max(0, Math.floor(taskPage)) + 1
+}
+
+// Why: provider pages cannot spill truncated rows into the next page. Divide
+// the display budget up front so every fetched row remains reachable.
+export function getTaskPagePerRepoLimit(
+  repoCount: number,
+  maxPerRepo: number,
+  displayLimit: number
+): number {
+  const normalizedRepoCount = Math.max(1, Math.floor(repoCount))
+  return Math.max(1, Math.min(maxPerRepo, Math.floor(displayLimit / normalizedRepoCount)))
+}
+
+// Why: repos advance independently by page, so take the max across repos — a sum/page-width
+// undercounts when one repo owns most results.
+export function getWorkItemCountedTotalPages(
+  counts: readonly number[],
+  perRepoLimit: number
+): number {
+  const normalizedLimit = Math.max(1, Math.floor(perRepoLimit))
+  const maxReachablePages = Math.max(1, Math.ceil(GITHUB_SEARCH_RESULT_WINDOW / normalizedLimit))
+  return counts.reduce(
+    (maxPages, count) =>
+      Math.max(maxPages, Math.min(Math.ceil(count / normalizedLimit), maxReachablePages)),
+    0
+  )
+}

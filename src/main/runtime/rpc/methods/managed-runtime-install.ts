@@ -1,6 +1,7 @@
 // The runtime Orca installs for an agent, on the host that receives the call: the one that runs
-// that agent's chats. Needs no workspace. Negotiated by `managed-runtime.install.v1`. Status is
-// pushed: a snapshot on subscribe, then one per state revision.
+// that agent's chats. Needs no workspace. Negotiated by `managed-runtime.install.v1`; Remove by
+// `managed-runtime.remove.v1`. Status is pushed: a snapshot on subscribe, then one per state
+// revision.
 
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import {
@@ -12,6 +13,7 @@ import { resolveAcpLaunchCommand } from '../../../acp/acp-structured-launch-reso
 import { ManagedRuntimeInstallation } from '../../../node-runtime/managed-runtime-installation'
 import { isAgentSessionPreSpawnError } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
+import { stopStructuredAgentChats } from '../../structured-agent-chat-stop'
 import { resolveHostStructuredAgentLaunchEnvironment } from '../../structured-agent-launch-support'
 import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
 import { defineMethod, defineStreamingMethod } from '../core'
@@ -47,12 +49,20 @@ function installationFor(agent: string, runtime: OrcaRuntimeService): ManagedRun
       throw error
     }
   }
+  const { launchGate } = spec
+  const managedRuntime = spec.managedRuntime
+  // Chats, starts, copies, sign-ins and children not proven gone all hold the gate's fence.
+  const fence = (work: () => Promise<void>): Promise<void> =>
+    launchGate
+      ? launchGate.run(() => stopStructuredAgentChats(agent, managedRuntime.label), work)
+      : Promise.reject(new Error(`${managedRuntime.label} cannot be removed on this host.`))
   const installation =
     installations.get(agent) ??
     // The chat host's own state root, where its launches look.
-    new ManagedRuntimeInstallation(agent, spec.managedRuntime, {
+    new ManagedRuntimeInstallation(agent, managedRuntime, {
       dataDirectory,
-      findExternal
+      findExternal,
+      fence
     })
   installations.set(agent, installation)
   return installation
@@ -121,6 +131,16 @@ export const MANAGED_RUNTIME_INSTALL_METHODS = [
     handler: async ({ agent, operationId }, { runtime }) => {
       // The outcome once the run has unwound: `cancelled`, or `succeeded` if it had committed.
       return await installationFor(agent, runtime).cancel(operationId)
+    }
+  }),
+  defineMethod({
+    name: 'managedRuntime.remove',
+    permission: 'host-admin',
+    params: ManagedRuntimeAgentParams,
+    handler: async ({ agent }, { runtime }) => {
+      const installation = installationFor(agent, runtime)
+      installation.remove()
+      return installation.status()
     }
   })
 ] as const

@@ -6,8 +6,10 @@ import type { TerminalLayoutSnapshot, TerminalTab } from './terminal-tab-types'
 import type { BrowserHistoryEntry, BrowserPage, BrowserWorkspace } from './browser-workspace-types'
 import type { WorkspaceDocHistoryEntry } from './workspace-doc-history'
 import type { ClientHostedBrowserCloseIntent } from './client-hosted-browser-close-intent'
+import type { PairedTerminalTabCloseIntent } from './paired-terminal-tab-close-intent'
 import type { PersistedClientHostedBrowserPage } from './client-hosted-browser-page-record'
 import type { ClosedTerminalTabTombstonesByTabId } from './closed-terminal-tab-tombstones'
+import type { ClosedTerminalPanesByPaneKey } from './closed-terminal-panes'
 
 /** Minimal subset of OpenFile persisted across restarts.
  *  Only edit-mode files are saved — diffs, conflict reviews, and other
@@ -93,6 +95,11 @@ export type WorkspaceSessionState = {
    * the user deliberately closed while the host was down.
    */
   clientHostedBrowserCloseIntentsByEnvironment?: Record<string, ClientHostedBrowserCloseIntent[]>
+  /**
+   * Client-authored: user closes of a paired runtime host's session tabs that never reached it,
+   * keyed by runtime environment ID. Replayed when a host snapshot still lists the tab.
+   */
+  pairedTerminalTabCloseIntentsByEnvironment?: Record<string, PairedTerminalTabCloseIntent[]>
   /** Per-worktree active tab type (terminal vs editor vs browser) at shutdown. */
   activeTabTypeByWorktree?: Record<string, WorkspaceVisibleTabType>
   /** Global browser URL history for address bar autocomplete. */
@@ -151,6 +158,9 @@ export type WorkspaceSessionState = {
   /** Terminal tabs this client watched the user close, kept until the host's own snapshot stops
    *  listing them. See shared/closed-terminal-tab-tombstones.ts for why absence alone cannot say it. */
   closedTerminalTabTombstonesByTabId?: ClosedTerminalTabTombstonesByTabId
+  /** Layout-owner builds: panes main's layout dropped while their terminals may run on. See
+   *  shared/closed-terminal-panes.ts. */
+  closedTerminalPanesByPaneKey?: ClosedTerminalPanesByPaneKey
 }
 
 export type WorkspaceSessionPatch = Partial<WorkspaceSessionState>

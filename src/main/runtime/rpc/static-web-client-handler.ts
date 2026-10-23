@@ -1,7 +1,8 @@
 import { createReadStream } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import type { IncomingMessage, RequestListener, ServerResponse } from 'node:http'
-import { extname, isAbsolute, posix, relative, resolve } from 'node:path'
+import { basename, extname, isAbsolute, posix, relative, resolve } from 'node:path'
+import { readBundledWebClientFiles } from '../../../shared/bundled-web-client-manifest'
 
 const STATIC_WEB_ALLOWED_PATHS = new Set(['/web-index.html'])
 const STATIC_WEB_ALLOWED_PREFIXES = ['/assets/', '/cmaps/', '/standard_fonts/', '/wasm/']
@@ -24,13 +25,25 @@ export const answerWithoutWebClient: RequestListener = (_request, response) => {
 
 export function createStaticWebClientHandler(staticRoot: string): RequestListener {
   const resolvedRoot = resolve(staticRoot)
+  let files: ReadonlySet<string> | undefined
+  try {
+    files = readBundledWebClientFiles(resolvedRoot)
+  } catch (error) {
+    // Why: a damaged install must disable only the browser client, not the runtime server.
+    console.warn(`[ws-transport] browser client disabled: ${String(error)}`)
+    return answerWithoutWebClient
+  }
+  if (basename(resolvedRoot) === 'renderer' && !files) {
+    return answerWithoutWebClient
+  }
   return (request, response) => {
-    void handleStaticRequest(resolvedRoot, request, response)
+    void handleStaticRequest(resolvedRoot, files, request, response)
   }
 }
 
 async function handleStaticRequest(
   staticRoot: string,
+  files: ReadonlySet<string> | undefined,
   request: IncomingMessage,
   response: ServerResponse
 ): Promise<void> {
@@ -48,7 +61,7 @@ async function handleStaticRequest(
     writeHttpStatus(response, 400)
     return
   }
-  if (!isAllowedStaticWebPath(pathname)) {
+  if (!isAllowedStaticWebPath(pathname) || (files && !files.has(pathname.slice(1)))) {
     writeHttpStatus(response, 404)
     return
   }

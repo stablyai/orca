@@ -1,6 +1,6 @@
 import { rememberLiveBrowserUrl } from '@/components/browser-pane/describe-page/live-browser-url-registry'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
-import { resolveBrowserSourceUnifiedTab } from '@/lib/browser-workspace-source-resolution'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { openUrlInTabBesideBrowserPage } from '@/lib/browser-page-tab-opening'
 import { redactKagiSessionToken } from '../../../../shared/browser-url'
 import { useAppStore } from '../../store'
 import {
@@ -11,7 +11,8 @@ import { acquireBrowserAutomationBootstrapLease } from './browser-automation-boo
 import {
   beginAgentInputFocusGuard,
   clearAgentInputFocusGuards,
-  endAgentInputFocusGuard
+  endAgentInputFocusGuard,
+  watchUserComposition
 } from '@/components/browser-pane/host-guest/agent-input-focus-guard'
 
 /**
@@ -104,16 +105,18 @@ export function registerBrowserStateIpcBridge(
   const unsubscribeAgentInputFocusGuard = window.api.browser.onAgentInputFocusGuard?.(
     ({ browserPageId, token, active }) => {
       if (active) {
-        beginAgentInputFocusGuard(browserPageId, token)
-        window.api.browser.agentInputFocusGuardReady(token)
+        const answer = beginAgentInputFocusGuard(browserPageId, token)
+        window.api.browser.agentInputFocusGuardReady(token, answer === 'composing')
       } else {
         endAgentInputFocusGuard(token)
       }
     }
   )
   if (unsubscribeAgentInputFocusGuard) {
+    const unwatchUserComposition = watchUserComposition()
     unsubs.push(() => {
       unsubscribeAgentInputFocusGuard()
+      unwatchUserComposition()
       clearAgentInputFocusGuards()
     })
   }
@@ -135,32 +138,14 @@ export function registerBrowserStateIpcBridge(
       const sourcePage = Object.values(store.browserPagesByWorkspace)
         .flat()
         .find((page) => page.id === browserPageId)
-      if (!sourcePage || getRuntimeEnvironmentIdForWorktree(store, sourcePage.worktreeId)) {
+      if (!sourcePage || runtimeEnvironmentIdOrLocalUnlessTwin(store, sourcePage.worktreeId)) {
         return
       }
-      // Why: the link inherits the opener's cookie jar. Falling back to the default profile would let
-      // a page in an isolated session hand its links to the default one, silently crossing profiles.
-      const sourceTab = (store.browserTabsByWorktree[sourcePage.worktreeId] ?? []).find(
-        (tab) => tab.id === sourcePage.workspaceId
-      )
-      const sourceUnifiedTab = resolveBrowserSourceUnifiedTab(
-        store,
-        browserPageId,
-        sourcePage.worktreeId
-      )
-      store.createBrowserTab(sourcePage.worktreeId, url, {
-        title: url,
-        activate: activate ?? true,
-        ...(sourceUnifiedTab ? { afterTabId: sourceUnifiedTab.id } : {}),
-        ...(sourceUnifiedTab?.executionHostId
-          ? { executionHostId: sourceUnifiedTab.executionHostId }
-          : {}),
-        ...(sourceTab
-          ? {
-              sessionProfileId: sourceTab.sessionProfileId,
-              sessionPartition: sourceTab.sessionPartition
-            }
-          : {})
+      openUrlInTabBesideBrowserPage({
+        sourcePageId: browserPageId,
+        worktreeId: sourcePage.worktreeId,
+        url,
+        activate: activate ?? true
       })
     })
   )

@@ -6,12 +6,25 @@ import {
   type ExecutionHostId
 } from '../../shared/execution-host'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
+import type { Repo } from '../../shared/repo-types'
+import { getFolderWorkspaceHostId } from '../../shared/folder-workspace-execution-host'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
-import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
+import { getRepoIdFromWorktreeId, splitWorktreeId } from '../../shared/worktree/id'
 import { workspaceSessionPartitionHostId } from '../../shared/workspace-session-partition-owner'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { workspaceSessionListsTerminalTab } from '../../shared/workspace-session-terminal-tab-close'
 import type { RuntimeStore } from './runtime-store-contract'
+import { resolveTwinRepoSessionHostId, type CachedWorktreeHost } from './twin-repo-session-host'
+
+/**
+ * Where a layout-owner build routes a folder: the rule the window stamps and saves its rows by, so
+ * both sides pick one partition. It reads no repos, so a mixed-host folder never throws here;
+ * terminal starts still refuse it.
+ */
+function layoutOwnerFolderHostId(workspace: FolderWorkspace, store: RuntimeStore): ExecutionHostId {
+  return getFolderWorkspaceHostId(workspace, store.getProjectGroups?.() ?? [])
+}
 
 type RuntimeWorkspaceSessionDependencies = {
   getStore: () => RuntimeStore | null
@@ -21,6 +34,7 @@ type RuntimeWorkspaceSessionDependencies = {
     worktreeId: string,
     tabs: WorkspaceSessionState['tabsByWorktree'][string]
   ) => boolean
+  getCachedWorktrees?: () => readonly CachedWorktreeHost[] | null
 }
 
 export class RuntimeWorkspaceSessionController {
@@ -35,6 +49,10 @@ export class RuntimeWorkspaceSessionController {
       if (!workspace) {
         return null
       }
+      // Switch point: a window-owned build keeps today's routing, which throws on a mixed-host folder.
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        return layoutOwnerFolderHostId(workspace, store)
+      }
       // An explicit host is authoritative for folder workspaces. The connection
       // id is only a legacy fallback for records written before host ids existed.
       if (workspace.executionHostId != null) {
@@ -47,10 +65,38 @@ export class RuntimeWorkspaceSessionController {
       return getConnectionExecutionHostId(this.deps.resolveFolderConnectionId(workspace))
     }
     const resolvedWorktreeId = scope?.type === 'worktree' ? scope.worktreeId : worktreeId
-    const repo = store?.getRepo?.(getRepoIdFromWorktreeId(resolvedWorktreeId))
+    const repoId = getRepoIdFromWorktreeId(resolvedWorktreeId)
+    const twinHostId = this.getTwinRepoHostId(store, repoId, resolvedWorktreeId)
+    if (twinHostId) {
+      return twinHostId
+    }
+    const repo = store?.getRepo?.(repoId)
     return repo
       ? workspaceSessionPartitionHostId(getRepoExecutionHostId(repo))
       : LOCAL_EXECUTION_HOST_ID
+  }
+
+  // Why: a twin repo's first row is arbitrary; the window saves to the host chosen here.
+  private getTwinRepoHostId(
+    store: RuntimeStore,
+    repoId: string,
+    worktreeId: string,
+    repos?: readonly Repo[]
+  ): ExecutionHostId | null {
+    if (!ORCA_LAYOUT_OWNER_IS_MAIN || !splitWorktreeId(worktreeId)) {
+      return null
+    }
+    // Why: routing is hot; only a registered repo can have a twin, and getRepo skips hydrating every row.
+    const inventory = repos ?? (store.getRepo?.(repoId) ? store.getRepos?.() : undefined)
+    return inventory
+      ? resolveTwinRepoSessionHostId(
+          store,
+          inventory,
+          repoId,
+          worktreeId,
+          this.deps.getCachedWorktrees?.() ?? null
+        )
+      : null
   }
 
   private resolveHostId(
@@ -174,6 +220,9 @@ export class RuntimeWorkspaceSessionController {
     )
     const folderHostIdByWorkspaceId = new Map(
       (store?.getFolderWorkspaces?.() ?? []).map((workspace) => {
+        if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+          return [workspace.id, layoutOwnerFolderHostId(workspace, store)] as const
+        }
         const explicitHostId =
           workspace.executionHostId != null
             ? (parseExecutionHostId(workspace.executionHostId)?.id ?? null)
@@ -202,12 +251,14 @@ export class RuntimeWorkspaceSessionController {
     for (const [hostId, session] of sessionsByHostId) {
       for (const [worktreeId, tabs] of Object.entries(session.tabsByWorktree ?? {})) {
         const scope = parseWorkspaceKey(worktreeId)
+        const rawWorktreeId = scope?.type === 'worktree' ? scope.worktreeId : worktreeId
+        const repoId = getRepoIdFromWorktreeId(rawWorktreeId)
         const catalogOwnerHostId =
           scope?.type === 'folder'
             ? (folderHostIdByWorkspaceId.get(scope.folderWorkspaceId) ?? null)
-            : (repoHostIdByRepoId.get(
-                getRepoIdFromWorktreeId(scope?.type === 'worktree' ? scope.worktreeId : worktreeId)
-              ) ?? LOCAL_EXECUTION_HOST_ID)
+            : (this.getTwinRepoHostId(store, repoId, rawWorktreeId, repos) ??
+              repoHostIdByRepoId.get(repoId) ??
+              LOCAL_EXECUTION_HOST_ID)
         const ownerHostId = this.resolveHostId(
           worktreeId,
           catalogOwnerHostId ?? LOCAL_EXECUTION_HOST_ID,

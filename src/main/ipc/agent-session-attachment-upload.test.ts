@@ -17,7 +17,7 @@ let serverStore: AgentSessionAttachmentStore
 let failMethod: string | null = null
 
 // The paired server, played by a real store: every call answers as the RPC handler would.
-vi.mock('./runtime-environment-transport-routing', () => ({
+vi.mock('./runtime-environments/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: async (
     _userDataPath: string,
     _environmentId: string,
@@ -124,6 +124,16 @@ describe('uploadExternalPathsToAgentSessionAttachments', () => {
       expect(call.revision).toBe(7)
       expect(call.options?.expectedEnvironmentRuntimeId).toBe('runtime-a')
     }
+  })
+
+  it('names an extensionless dropped image by its bytes', async () => {
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0x0d])
+    await writeFile(join(workDir, 'noname'), png)
+    await uploadExternalPathsToAgentSessionAttachments(context(), [join(workDir, 'noname')])
+    expect(calls[0]).toMatchObject({
+      method: 'agentSessionAttachment.uploadStart',
+      params: { name: 'noname.png' }
+    })
   })
 
   it('skips a folder as unsupported without walking into it', async () => {

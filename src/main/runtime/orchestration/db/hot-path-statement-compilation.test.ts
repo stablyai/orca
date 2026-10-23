@@ -89,6 +89,7 @@ function buildProjection(db: OrchestrationDb): RuntimeAgentOrchestrationProjecti
     getDb: () => db,
     getLeaves: () => leaves,
     getPtys: () => [],
+    paneOf: () => ({ tabId: null, paneKey: null, recordedAtGraphSequence: 0 }),
     issueLeafHandle: (leaf) => handleByLeaf.get(leaf) ?? '',
     issuePtyHandle: () => '',
     makePaneKey: (leaf) => paneByLeaf.get(leaf) ?? '',

@@ -129,6 +129,7 @@ export function createStructuredSessionMocks() {
       }
       isWorking?: boolean
       isStopping?: boolean
+      unavailableHint?: string
       afterStop?: 'queue' | 'send'
       steerQueued?: () => boolean
       onStop?: () => void
@@ -189,6 +190,7 @@ export function createStructuredSessionMocks() {
         }) => {
           mocks.controllerProps = props
           return {
+            contextClear: { clearing: false, clears: 0 },
             journalItems: mocks.journalItems,
             messages: mocks.messages ?? [
               {

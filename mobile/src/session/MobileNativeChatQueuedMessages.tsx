@@ -122,7 +122,7 @@ export function MobileNativeChatQueuedMessages({
   return (
     <View style={styles.list}>
       {/* One box: the header is its first row, and the capped list of cards below it. */}
-      <View style={styles.box}>
+      <View style={styles.box} testID="queued-box">
         {/* A polite region, as the app's other notices: React Native has no status role. */}
         <View
           testID="queued-header"
@@ -165,9 +165,7 @@ export function MobileNativeChatQueuedMessages({
             )}
           </View>
         </View>
-        {/* While a card is edited at large text, the line yields its height to the editor: with
-            the keyboard up, a small phone has no room for both. */}
-        {largeText && headerActions && !editor ? (
+        {largeText && headerActions ? (
           <View style={[styles.headerActionsLine, styles.headerPaused]}>{headerActions}</View>
         ) : null}
         {expanded ? (

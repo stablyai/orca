@@ -1,10 +1,4 @@
 import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session-provider-handle'
-import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
-import { agentJournalLinkageFields } from '../../../shared/agent-session-journal-producer'
-import {
-  agentJournalSubmissionKey,
-  parseAgentJournalItemKey
-} from '../../../shared/agent-session-journal-item-key'
 import type { JournalOperationReceipt } from '../agent-session-journal/journal-row-writer'
 import type {
   AgentSessionRewindParams,
@@ -12,7 +6,6 @@ import type {
   AgentSessionRewindResult
 } from '../../../shared/agent-session-rewind'
 import type { AgentSessionMutationResult } from '../../../shared/agent-session-wire'
-import { AGENT_SESSION_HISTORY_MAX_PAGE_BYTES } from './agent-session-history-page-bounds'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
 import {
   runWithReadyStructuredAgentSessionOperation,
@@ -26,13 +19,13 @@ import { hostStructuredAgentSessionCurrentWork } from './structured-agent-sessio
 import { conversationCommandBlocked } from './structured-conversation-command-admission'
 import { completedStructuredRewind } from './structured-rewind-replay'
 import { rewindRefusal, rewindRefusalBehindClear } from './structured-rewind-refusal'
-import { renameRewindTurnOpener } from './structured-rewind-journal-body'
-import { persistRewindRecord, recoverStructuredRewind } from './structured-rewind-recovery'
 import {
-  mergeRetainedHostLifecycleRows,
-  rewindProviderRows
-} from './structured-rewind-retained-host-rows'
-import { rewindInDoubt } from './structured-agent-session-send-preparation'
+  isStructuredRewindTarget,
+  providerItemIdOf,
+  structuredRewindCut
+} from './structured-rewind-cut'
+import { persistRewindRecord, recoverStructuredRewind } from './structured-rewind-recovery'
+import { rewindInDoubt, sendPreparation } from './structured-agent-session-send-preparation'
 
 export async function rewindStructuredAgentSession(
   context: StructuredAgentSessionMutationContext,
@@ -48,6 +41,11 @@ export async function rewindStructuredAgentSession(
   } = context
   const fields = { itemId: params.itemId, expectedEpoch: params.expectedEpoch }
   const operation = { method: 'agentSession.rewind', fields }
+  // A fork can be saved without a running agent; other rewinds require the provider itself.
+  const agent = store.getRecord(sessionId)?.provider
+  const rewindsByFork =
+    agent !== undefined &&
+    context.deps.agents.registration(agent)?.adapter.forkForRewind !== undefined
   const run = async (selection: ReadyOperationSelection) => {
     let completionReceipt: JournalOperationReceipt | undefined
     const result = await admitAndRunAgentSessionMutation<AgentSessionRewindResult>({
@@ -57,8 +55,10 @@ export async function rewindStructuredAgentSession(
       logger: context.deps.logger,
       callerKey: caller.callerKey,
       envelope: params.envelope,
-      // Only the provider can do this, so an agent at rest is started first.
-      prepareSession: openWithReadyStructuredAgentSessionChild(context, params.envelope, selection),
+      // A provider's own rewind needs it running, so an agent at rest is started first.
+      prepareSession: rewindsByFork
+        ? sendPreparation(context, params.envelope, { refusesInRun: true }, selection)
+        : openWithReadyStructuredAgentSessionChild(context, params.envelope, selection),
       journal: () => context.sessions.get(sessionId)?.journal,
       currentWork: () =>
         hostStructuredAgentSessionCurrentWork({ store, sessions: context.sessions }, sessionId),
@@ -66,6 +66,8 @@ export async function rewindStructuredAgentSession(
       now: context.now,
       plan: {
         ...operation,
+        // A fork is written to the conversation, not the agent, so whoever owns the agent does not matter.
+        ...(rewindsByFork ? { conversationWrite: true } : {}),
         recoverUnknownFromDurableState: true,
         settledOutcome: (rewind: AgentSessionRewindResult) => ({
           status: 'succeeded' as const,
@@ -101,120 +103,61 @@ export async function rewindStructuredAgentSession(
           if (conversationCommandBlocked(ctx, record, childWork, 'handover')) {
             return rewindRefusal('busy')
           }
-          const snapshot = ctx.journal.snapshot()
-          const contextFloor = ctx.journal.context.floor()
-          const contextStart = contextFloor
-            ? snapshot.items.findIndex((item) => item.sequence > contextFloor.sequence)
-            : 0
-          const providerKeys = new Map(
-            snapshot.submissions.flatMap((submission) =>
-              submission.dispatchState === 'accepted' && submission.providerItemId
-                ? [
-                    [
-                      agentJournalSubmissionKey(submission.clientMessageId),
-                      submission.providerItemId
-                    ] as const
-                  ]
-                : []
-            )
-          )
-          const providerKey = (itemId: string) => providerKeys.get(itemId) ?? itemId
           if (ctx.journal.cursor().epoch !== params.expectedEpoch) {
             return rewindRefusal('stale-epoch')
           }
-          const selected = snapshot.items.findIndex((item) => item.itemId === params.itemId)
-          const key =
-            selected === -1 ||
-            (contextFloor && snapshot.items[selected].sequence <= contextFloor.sequence)
-              ? null
-              : parseAgentJournalItemKey(providerKey(params.itemId))
+          if (!isStructuredRewindTarget(ctx.journal, params.itemId)) {
+            return rewindRefusal('invalid-target')
+          }
           // The head belongs to the record's provider: the record store refuses any other.
           const head = agentSessionProviderHandleChainHead(record.providerHandleChain)?.handle
-          if (!key || !head || key.provider !== record.provider) {
+          const cut = head
+            ? structuredRewindCut(ctx.journal, {
+                itemId: params.itemId,
+                provider: record.provider,
+                nativeId: head.nativeId
+              })
+            : null
+          if (!cut) {
             return rewindRefusal('invalid-target')
           }
-          let boundary = selected
-          if (key.provider === 'codex') {
-            if (key.threadId !== head.nativeId) {
-              return rewindRefusal('invalid-target')
-            }
-            boundary = snapshot.items.findIndex((item) => {
-              if (contextFloor && item.sequence <= contextFloor.sequence) {
-                return false
-              }
-              const identity = parseAgentJournalItemKey(providerKey(item.itemId))
-              return (
-                (identity?.provider === 'codex' &&
-                  identity.threadId === key.threadId &&
-                  identity.turnId === key.turnId) ||
-                readAgentJournalTurn(item.body)?.turnId === key.turnId
-              )
-            })
-          } else {
-            return rewindRefusal('invalid-target')
+          const fork =
+            'beforeMessage' in cut
+              ? await ctx.adapter.forkForRewind?.({
+                  record,
+                  beforeMessage: cut.beforeMessage,
+                  rewindOperationId: clientOperationId
+                })
+              : undefined
+          if (fork && !fork.ok) {
+            return rewindRefusal(fork.reason)
           }
-          const retained = snapshot.items
-            .slice(Math.max(0, contextStart), boundary)
-            .map(({ itemId, observedAt, turnScope, ...linkage }) => {
-              const body = ctx.journal.itemBody(itemId)
-              if (!body) {
-                throw new Error('agent_session_rewind:missing-retained-item')
-              }
-              const { ownerFence, executionOwner } = ctx.journal.itemProvenance(itemId)
-              return {
-                itemId: providerKey(itemId),
-                body: renameRewindTurnOpener(body, providerKey),
-                observedAt,
-                ...(turnScope ? { turnScope } : {}),
-                ...(ownerFence === undefined ? {} : { ownerFence }),
-                ...(executionOwner === undefined ? {} : { executionOwner }),
-                ...agentJournalLinkageFields(linkage)
-              }
-            })
-          if (
-            retained.length > 10_000 ||
-            Buffer.byteLength(JSON.stringify(retained), 'utf8') >
-              AGENT_SESSION_HISTORY_MAX_PAGE_BYTES
-          ) {
-            return rewindRefusal('history-limit')
-          }
-          let prepared: AgentSessionRewindRecord = {
+          const contextFloor = ctx.journal.context.floor()
+          const prepared: AgentSessionRewindRecord = {
             operationId: clientOperationId,
             callerKey: caller.callerKey,
             itemId: params.itemId,
-            providerItemId: providerKey(params.itemId),
+            providerItemId: providerItemIdOf(ctx.journal, params.itemId),
             expectedEpoch: params.expectedEpoch,
             phase: 'prepared',
+            ...(fork?.ok ? { providerFork: fork.fork } : {}),
             ...(contextFloor && record.providerContextBoundary
               ? {
                   contextClearOperationId: record.providerContextBoundary.operationId,
                   contextClearSequence: contextFloor.sequence
                 }
-              : {}),
-            retained
+              : {})
           }
           await persistRewindRecord(store, sessionId, ctx.fence, prepared)
           ctx.publish()
-          const provider = await ctx.adapter.rewind!({
-            sessionId,
-            fence: ctx.fence,
-            beforeTurnId: key.provider === 'codex' ? key.turnId : '',
-            onPrepared: async (items) => {
-              const retained = mergeRetainedHostLifecycleRows(
-                prepared.retained,
-                rewindProviderRows(items, ctx.now(), ctx.fence)
-              )
-              if (
-                retained.length > 10_000 ||
-                Buffer.byteLength(JSON.stringify(retained), 'utf8') >
-                  AGENT_SESSION_HISTORY_MAX_PAGE_BYTES
-              ) {
-                throw new Error('agent_session_rewind:history-limit')
-              }
-              prepared = { ...prepared, retained }
-              await persistRewindRecord(store, sessionId, ctx.fence, prepared)
-            }
-          })
+          const provider =
+            'beforeTurnId' in cut
+              ? await ctx.adapter.rewind!({
+                  sessionId,
+                  fence: ctx.fence,
+                  beforeTurnId: cut.beforeTurnId
+                })
+              : await stopForFork(context, sessionId)
           const fence = store.getRecord(sessionId)!.lease.runtimeFence
           if (!provider.ok) {
             const reason = provider.reason
@@ -222,8 +165,7 @@ export async function rewindStructuredAgentSession(
               await persistRewindRecord(store, sessionId, fence, {
                 ...prepared,
                 phase: 'refused',
-                reason,
-                retained: []
+                reason
               })
               const currentJournal = context.sessions.get(sessionId)?.journal
               if (currentJournal) {
@@ -232,24 +174,9 @@ export async function rewindStructuredAgentSession(
             }
             return rewindRefusal(reason)
           }
-          const confirmed = provider.items
-            ? mergeRetainedHostLifecycleRows(
-                prepared.retained,
-                rewindProviderRows(provider.items, ctx.now(), ctx.fence)
-              )
-            : prepared.retained
-          if (
-            confirmed.length > 10_000 ||
-            Buffer.byteLength(JSON.stringify(confirmed), 'utf8') >
-              AGENT_SESSION_HISTORY_MAX_PAGE_BYTES
-          ) {
-            throw new Error('agent_session_rewind:history-limit')
-          }
           await persistRewindRecord(store, sessionId, fence, {
             ...prepared,
-            retained: confirmed,
-            phase: 'provider-succeeded',
-            hydrationVerified: true
+            phase: 'provider-succeeded'
           })
           const journal = context.sessions.get(sessionId)!.journal
           await attachContext.runtimeState.flushEventSink(sessionId)
@@ -259,7 +186,6 @@ export async function rewindStructuredAgentSession(
             journal,
             fence,
             undefined,
-            ctx.now,
             (rewind, currentFence, cursor) => {
               completionReceipt = store.conversationReceipts.rewind(
                 sessionId,
@@ -297,7 +223,17 @@ export async function rewindStructuredAgentSession(
     operation,
     run,
     {
+      needsAgent: () => !rewindsByFork,
       beforeAgent: () => rewindRefusalBehindClear(context.sessions.get(sessionId)?.journal, params)
     }
   )
+}
+
+/** The rewound conversation must not keep running: the next launch continues in the fork. */
+async function stopForFork(
+  context: StructuredAgentSessionMutationContext,
+  sessionId: string
+): Promise<{ ok: true }> {
+  await context.stopAgent(sessionId, { cause: 'evict', resting: true })
+  return { ok: true }
 }

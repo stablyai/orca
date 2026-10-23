@@ -1,4 +1,4 @@
-import type { Tab, TabContentType, TabGroup } from '../../../../shared/tab-types'
+import type { Tab, TabGroup } from '../../../../shared/tab-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
@@ -139,8 +139,13 @@ export function pushRecentTabId(recent: string[] | undefined, tabId: string): st
 export function pickNextActiveTab(
   tabOrder: string[],
   recentTabIds: string[] | undefined,
-  closingTabId: string
+  closingTabId: string,
+  tabs?: readonly Pick<Tab, 'id'>[]
 ): string | null {
+  if (tabs) {
+    const realIds = new Set(tabs.map((tab) => tab.id))
+    tabOrder = tabOrder.filter((id) => realIds.has(id))
+  }
   const sanitized = sanitizeRecentTabIds(recentTabIds, tabOrder)
   // The closing tab is typically at the tail (it's the active tab). Walk back
   // from the tail looking for the most-recent *other* tab still present.
@@ -158,11 +163,7 @@ export function updateGroup(groups: TabGroup[], updated: TabGroup): TabGroup[] {
   return groups.map((g) => (g.id === updated.id ? updated : g))
 }
 
-export function isTransientEditorContentType(contentType: TabContentType): boolean {
-  return (
-    contentType === 'diff' || contentType === 'conflict-review' || contentType === 'check-details'
-  )
-}
+export { isTransientEditorContentType } from '../../../../shared/workspace-layout/saved-editor-tab-restore'
 
 export function getPersistedEditFileIdsByWorktree(
   session: WorkspaceSessionState

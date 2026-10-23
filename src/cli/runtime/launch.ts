@@ -1,5 +1,4 @@
 import { spawn, type SpawnOptions } from 'node:child_process'
-import { resolve } from 'node:path'
 import { spawnProcess } from '@orca/process-host'
 import type { ProcessSpec } from '@orca/process-host/process-spec'
 import {
@@ -13,8 +12,6 @@ import {
 } from './launch-user-data-path'
 import { foregroundServeIsolatedProfileSwitches } from '../../shared/electron-isolated-profile-switches'
 import { headlessServeOzonePlatformSwitches } from '../../shared/headless-serve-ozone-platform'
-import { ELECTRON_NO_SANDBOX_REQUEST_ENV } from '../../shared/electron-no-sandbox-request'
-import { needsElectronNoSandbox } from './electron-sandbox-switch'
 import { getMacAppBundlePath } from './mac-app-update-bundle'
 import { getPlatformUserDataPath } from './metadata'
 import { isSameUserDataPath } from '../../shared/serve-user-data-path'
@@ -24,14 +21,17 @@ import {
   superviseForegroundServe
 } from './serve-update-supervisor'
 import { RuntimeClientError } from './types'
+import {
+  getExecutableAppArgs,
+  resolveAppRoot,
+  resolveForegroundOrcaExecutable,
+  stripElectronRunAsNode
+} from './orca-app-executable'
 import { SERVE_RUNTIME_ELECTRON, SERVE_RUNTIME_ENV } from '../../shared/orcad-local-serve-selection'
 import { findBundledWebClientRoot } from '../../shared/bundled-web-client-root'
-import {
-  resolveLocalServeRuntime,
-  serveOptionArgs,
-  serveWithOrcad,
-  type ServeOrcaAppArgs
-} from './serve-orcad-launch'
+import { resolveLocalServeRuntime, serveWithOrcad } from './serve-orcad-launch'
+import { findAppSpeechRecognizerDir } from './serve-speech-recognizer'
+import { serveOptionArgs, type ServeOrcaAppArgs } from '../../shared/orcad-serve-argv'
 import { waitForRecipeJson } from './serve-recipe-json'
 import {
   preflightElectronServe,
@@ -42,13 +42,13 @@ import { MacServeStartupAbortError } from './serve-signal-exit-diagnostic'
 import { superviseServeService } from './serve-supervised-service'
 import { reexecThisServeUnderInitReaper } from './serve-pid1-init-reaper'
 import { supervisedAppImageUpdate } from './serve-appimage-update'
+import { relocateThisServeSupervisor } from './serve-supervisor-relocation'
 import {
-  relocateThisServeSupervisor,
-  SERVE_SUPERVISOR_APP_ROOT_ENV
-} from './serve-supervisor-relocation'
-import { serverOnlyServeMessage } from './serve-app-launcher'
+  noteServeSupervisorStart,
+  restartThisServeSupervisorIfReplaced
+} from './serve-replaced-app-restart'
 import { isSupervisedSpawnHeld } from './serve-supervised-stop'
-import { openServeBundlePark } from './serve-bundle-park'
+import { openServeBundlePark } from '../../shared/serve-bundle-park'
 import {
   redactingSpawn,
   shouldRedactSupervisedStdout,
@@ -135,6 +135,7 @@ function spawnDetached(command: string, args: string[], options: SpawnOptions): 
 export function serveOrcaApp(args: ServeOrcaAppArgs = {}): Promise<number> {
   // Why first: as a container or PrivatePIDs init, nothing would reap orphaned descendants.
   reexecThisServeUnderInitReaper()
+  noteServeSupervisorStart()
   const executable = resolveForegroundOrcaExecutable()
   // Why one value: the selector, orcad and Electron must all serve the profile the caller chose.
   const userDataPath = resolveLaunchUserDataPath()
@@ -198,7 +199,8 @@ async function serveWithSelectedRuntime(
       args,
       userDataPath,
       stripElectronRunAsNode(process.env),
-      findBundledWebClientRoot(resolveAppRoot())
+      findBundledWebClientRoot(resolveAppRoot()),
+      findAppSpeechRecognizerDir(resolveAppRoot())
     )
   }
   if (selection.reason) {
@@ -259,9 +261,18 @@ function spawnElectronServe(
           : 'inherit',
     env: childEnv
   }
-  const spawnServeChild: ServeSpawnChild = shouldRedactSupervisedStdout(args.supervise === true)
+  const spawnServer: ServeSpawnChild = shouldRedactSupervisedStdout(args.supervise === true)
     ? redactingSpawn(spawnProcess)
     : spawnProcess
+  // Why in the spawn: every server start (first, resumed, after an install or a park) passes here,
+  // after its stop and park gates. Only our own executable: an update never deletes an override.
+  const spawnServeChild: ServeSpawnChild =
+    handoffPath && executable === process.execPath
+      ? (childSpec) => {
+          restartThisServeSupervisorIfReplaced(resolveAppRoot())
+          return spawnServer(childSpec)
+        }
+      : spawnServer
   const interruptedHandoff = handoffPath ? readServeUpdateHandoffSync(handoffPath) : null
   if (interruptedHandoff?.phase === 'install-requested') {
     // Why: the node-mode CLI is not an NSRunningApplication, so it can retain launchd ownership while ShipIt swaps the app.
@@ -296,43 +307,6 @@ function spawnElectronServe(
   })
 }
 
-export function getExecutableAppArgs(executable: string): string[] {
-  const args = process.env.ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT === '1' ? [resolveAppRoot()] : []
-  if (needsElectronNoSandbox(executable)) {
-    args.push('--no-sandbox')
-  }
-  return args
-}
-
 function getExecutableSpawnOptions(executable: string): Pick<SpawnOptions, 'shell'> {
   return process.platform === 'win32' && /\.(?:cmd|bat)$/i.test(executable) ? { shell: true } : {}
-}
-
-export function resolveAppRoot(): string {
-  // Why: dev-mode resource resolution in the Electron child may consult
-  // process.cwd(). Pin it to the app root so `orca serve` behaves the same
-  // regardless of the shell directory it was launched from. A supervisor re-run from its copy
-  // outside the app must still start the app's own files.
-  return process.env[SERVE_SUPERVISOR_APP_ROOT_ENV] || resolve(__dirname, '../../..')
-}
-
-export function resolveForegroundOrcaExecutable(): string {
-  const overrideExecutable = process.env.ORCA_APP_EXECUTABLE
-  if (typeof overrideExecutable === 'string' && overrideExecutable.trim().length > 0) {
-    return overrideExecutable
-  }
-  if (process.env.ELECTRON_RUN_AS_NODE === '1') {
-    return process.execPath
-  }
-  throw new RuntimeClientError('runtime_serve_failed', serverOnlyServeMessage(process.platform))
-}
-
-export function stripElectronRunAsNode(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  const next = { ...env }
-  delete next.ELECTRON_RUN_AS_NODE
-  // Why: the request is applied as a switch; the server's terminals must not inherit it.
-  delete next[ELECTRON_NO_SANDBOX_REQUEST_ENV]
-  // Why: only the relocated supervisor itself may resolve its app root this way.
-  delete next[SERVE_SUPERVISOR_APP_ROOT_ENV]
-  return next
 }

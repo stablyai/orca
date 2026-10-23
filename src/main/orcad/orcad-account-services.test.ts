@@ -9,6 +9,7 @@ import { eraseRpcMethods, isStreamingMethod } from '../runtime/rpc/core'
 import { ACCOUNT_METHODS } from '../runtime/rpc/methods/accounts'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import { createOrcadAccountServices } from './orcad-account-services'
+import { USAGE_CREDENTIALS_RUNTIME_CAPABILITY } from '../../shared/account-runtime-capabilities'
 import type { OrcadRuntimeCleanup } from './orcad-runtime-lifetime'
 
 const directories: string[] = []
@@ -102,6 +103,9 @@ describe('orcad account services', () => {
   it('serves accounts.* from this host', async () => {
     const { runtime, store } = createRuntime()
     expect(install(runtime, store, false)).not.toBeNull()
+    // Saved MiniMax/GLM keys refresh this host's own usage poller.
+    expect(runtime.getUsageRateLimits()).not.toBeNull()
+    expect(runtime.getStatus().capabilities).toContain(USAGE_CREDENTIALS_RUNTIME_CAPABILITY)
 
     await expect(call(runtime, 'accounts.list', { refreshUsage: false })).resolves.toMatchObject({
       claude: { accounts: [], activeAccountId: null },
@@ -156,6 +160,9 @@ describe('orcad account services', () => {
   it('leaves a WSL host to the desktop that owns its accounts', async () => {
     const { runtime, store } = createRuntime()
     expect(install(runtime, store, true)).toBeNull()
+    expect(runtime.getUsageRateLimits()).toBeNull()
+    // No poller here reads a saved key, so clients are not offered the methods that save one.
+    expect(runtime.getStatus().capabilities).not.toContain(USAGE_CREDENTIALS_RUNTIME_CAPABILITY)
 
     await expect(call(runtime, 'accounts.list', { refreshUsage: false })).rejects.toThrow(
       'Account services are not configured on this runtime'

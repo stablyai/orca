@@ -4,7 +4,7 @@ import {
   detectExplicitPiAgentKindFromCommand,
   isPiCompatibleAgentType
 } from '../../../../shared/pi-agent-kind'
-import { applyTerminalGitCredentialPromptGuard } from '../../terminal-git-credential-guard'
+import { applyTerminalGitCredentialPromptGuard } from '../../../../shared/terminal-git-credential-guard'
 import { ensureOpenCodeStartupPromptForLaunch } from '../../../opencode/opencode-startup-prompt-installer'
 import { mimoCodeHookService } from '../../../mimo/hook-service'
 import { agentHookServer } from '../../../agent-hooks/server'
@@ -27,9 +27,9 @@ import {
   isMimoLaunchCommand,
   resolveMimocodeSourceHome,
   resolvePiAgentSourceDir,
-  resolveScopedPiAgentSourceDir,
-  restoreOrStripOverlayEnv
+  resolveScopedPiAgentSourceDir
 } from './pi-agent'
+import { restoreOrStripOverlayEnv } from '../../../../shared/agent-overlay-env'
 import { AGENT_HOOK_RUNTIME_ENV_KEYS } from './spawn-env-keys'
 import { applyManagedDataAccountEnvironment } from '../../../managed-data-accounts/launch-environment'
 import { applyOpenCodeStatusPluginEnv, captureOpenCodeSourceConfig } from './opencode-config'

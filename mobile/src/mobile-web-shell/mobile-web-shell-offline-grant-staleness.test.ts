@@ -45,7 +45,7 @@ vi.mock('../transport/mobile-endpoint-supervisor-support', () => ({
 vi.mock('../components/host-protocol-gates-context', () => ({
   useHostProtocolGates: () => doubles.gates
 }))
-vi.mock('../transport/client-context', () => ({ useHostClient: () => doubles.connection }))
+vi.mock('../transport/host-client-hooks', () => ({ useHostClient: () => doubles.connection }))
 vi.mock('../transport/rpc-operation', () => ({
   defineRpcOperation: (definition: unknown) => definition,
   runRpcOperation: async () => {
@@ -126,6 +126,7 @@ async function cacheGeneration(
   const fetched: MobileWebBundleFetchResult = {
     manifest,
     assets: new Map(ASSETS.map((asset) => [asset.path, new Uint8Array(asset.byteLength).fill(7)])),
+    reused: [],
     totalBytes: TOTAL_BYTES,
     elapsedMs: 1
   }

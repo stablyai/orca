@@ -205,7 +205,7 @@ test('manual workflow freezes source and limits Windows occupancy without changi
     (step) => step.uses === './.github/actions/install-node-dependencies'
   )
   assert.equal(install.with['native-runtime'], 'none')
-  assert.equal(install.with['node-version'], '24.21.0')
+  assert.equal(install.with['node-version'], '24.22.1')
   assert.equal(install.with['cache-pnpm-store'], 'false')
   assert.equal(workflow.jobs.compare.steps.at(-1).if, 'always()')
   assert(!Object.hasOwn(workflow.jobs, 'verify'))

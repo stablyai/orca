@@ -1,7 +1,8 @@
 // Runs the headless-server suites under the pinned Node (design D4/D4a), not the host's.
 import { join, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { globSync, readFileSync } from 'node:fs'
+import { globSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import {
   ORCAD_CLI_ENTRY_FILENAME,
   ORCAD_SERVER_ENTRY_FILENAME,
@@ -18,7 +19,6 @@ import { currentTarget } from './server-build-target.mjs'
 import { UNIT_INCLUDE } from './ci-unit-files.mjs'
 import { runProcessSync } from '@orca/process-host'
 import { describeProcessFailure } from './process-failure-message.mjs'
-import { resolveBuildSourceCommit } from './build-source-commit.mjs'
 import {
   CROSS_RUNTIME_TEST_PATHS,
   nodeServerTestPaths,
@@ -82,33 +82,7 @@ if (artifact) {
   )
   process.stdout.write(`${JSON.stringify({ target, ...response })}\n`)
 
-  const source = `https://github.com/stablyai/orca/tree/${resolveBuildSourceCommit()}`
-  const cli = runProcessSync({
-    program: runtimePath,
-    args: [
-      join(packageDir, ORCAD_CLI_ENTRY_FILENAME),
-      'skills',
-      'install',
-      '--skill',
-      'orca-cli',
-      '--agent',
-      'universal',
-      '--dry-run'
-    ],
-    cwd: root,
-    env,
-    timeoutMs: 90_000
-  })
-  if (
-    cli.code !== 0 ||
-    cli.timedOut ||
-    cli.outputTruncated ||
-    !cli.stdout.split('\n')[0].split(' ').includes(source)
-  ) {
-    throw new Error(
-      `Bundled CLI skills source did not match ${source}: ${describeProcessFailure(cli)}`
-    )
-  }
+  assertBundledCliPlansSkillInstall()
 }
 run(runtimePath, [
   join(root, 'node_modules/vitest/vitest.mjs'),
@@ -129,4 +103,51 @@ function defaultTestArgs() {
     .filter((path) => selectors.some((selector) => path.includes(selector)))
     .filter((path) => !path.endsWith('.electron.test.ts') && !skipped.has(path))
     .sort()
+}
+
+/** The server's own CLI must plan an install of Orca's bundled skills, offline and npx-free. */
+function assertBundledCliPlansSkillInstall() {
+  // Why the real path: the planner reports real paths, and macOS tmpdir is a /var symlink.
+  const home = realpathSync(mkdtempSync(join(tmpdir(), 'orcad-skills-home-')))
+  const { ORCA_CLI_CWD: _forwarded, ...hostEnv } = env
+  try {
+    const cli = runProcessSync({
+      program: runtimePath,
+      args: [
+        join(packageDir, ORCAD_CLI_ENTRY_FILENAME),
+        'skills',
+        'install',
+        '--skill',
+        'orca-cli',
+        '--agent',
+        'universal',
+        '--dry-run',
+        '--json'
+      ],
+      cwd: home,
+      env: { ...hostEnv, HOME: home, USERPROFILE: home },
+      timeoutMs: 90_000
+    })
+    const failure = describeProcessFailure(cli)
+    if (cli.code !== 0 || cli.timedOut || cli.outputTruncated) {
+      throw new Error(`Bundled CLI skills dry-run failed: ${failure}`)
+    }
+    const result = JSON.parse(cli.stdout)
+    const ops = result.plan?.skills?.find((skill) => skill.name === 'orca-cli')?.ops ?? []
+    if (
+      result.executed !== false ||
+      !/^[0-9a-f]{64}$/.test(result.planDigest) ||
+      ops.length === 0 ||
+      !ops.every((op) => op.path.startsWith(home))
+    ) {
+      throw new Error(`Bundled CLI did not plan orca-cli into ${home}: ${cli.stdout}`)
+    }
+    if (readdirSync(home).length > 0) {
+      throw new Error(
+        `Bundled CLI skills dry-run wrote into ${home}: ${readdirSync(home).join(', ')}`
+      )
+    }
+  } finally {
+    rmSync(home, { recursive: true, force: true })
+  }
 }

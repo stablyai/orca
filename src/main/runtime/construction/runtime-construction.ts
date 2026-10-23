@@ -1,4 +1,7 @@
-import type { RuntimeConstructionDependencies } from './runtime-construction-dependencies'
+import type {
+  RuntimeConstructionBindings,
+  RuntimeConstructionDependencies
+} from './runtime-construction-dependencies'
 import type { OrcaRuntimeWithRuntimeId as IdentityState } from './runtime-identity-state'
 import type { OrcaRuntimeWithStopRequestedPtyIds as ServiceState } from './runtime-service-state'
 import type { OrcaRuntimeWithPreservedBranchCleanup as HostServices } from './runtime-host-services'
@@ -14,6 +17,7 @@ import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-
 import { OrcaRuntimeWithLinearCommands } from '../integrations/linear/linear-commands'
 
 import type { RuntimeStore } from '../runtime-store-contract'
+import type { WorkspaceSleepPlatform } from '../workspaces/workspace-sleep-platform'
 import type { StatsCollector } from '../../stats/collector'
 
 import type { PrepareClaudeAuth } from '../../ipc/pty/host-env/types'
@@ -25,10 +29,8 @@ import { installRuntimeGitCommandSurface } from '../runtime-git-command-surface'
 import { installRuntimeRepositoryCommandSurface } from '../runtime-repository-command-surface'
 import { installRuntimeReviewCommandSurface } from '../runtime-review-command-surface'
 import { installRuntimeServiceCommandSurface } from '../runtime-service-command-surface'
-import {
-  RuntimeSkillCommands,
-  installRuntimeSkillCommandSurface
-} from '../runtime-skill-command-surface'
+import { RuntimeSkillCommands } from '../runtime-skill-command-surface'
+import { installRuntimeSkillCommandSurface } from '../runtime-skill-command-contract'
 import { getAppEnvironment } from '../../../shared/app-environment'
 import { RuntimeClientSettingsController } from '../runtime-client-settings'
 import { RuntimeSessionSearchSettingsController } from '../runtime-session-search-settings'
@@ -40,6 +42,7 @@ import { createEphemeralAgentSessionClaimSigner } from '../agent-session-claim-i
 import { registerConptyDa1OverrideInstaller } from '../terminal-model-query-authority'
 import { registerTerminalViewAttributesApplier } from '../terminal-view-attribute-store'
 import { RuntimeMachineName } from '../runtime-machine-name'
+import { setPRConflictSummaryRemoteFetches } from '../../github/conflict-summary'
 
 // oxlint-disable-next-line typescript/no-unsafe-declaration-merging -- SAFETY: The constructor installs every checked canonical surface.
 export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
@@ -47,6 +50,7 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
   declare protected readonly getLocalProviderFn: HostServices['getLocalProviderFn']
   declare readonly onPtyStopped: HostServices['onPtyStopped']
   declare protected readonly onTerminalAgentStatus: HostServices['onTerminalAgentStatus']
+  declare protected readonly onTerminalProgramStatusFacet: HostServices['onTerminalProgramStatusFacet']
   declare protected readonly onTerminalSideEffects: HostServices['onTerminalSideEffects']
   declare protected readonly onClaudeTerminalEvidence: HostServices['onClaudeTerminalEvidence']
   declare readonly getAgentStatusSnapshotFn: HostServices['getAgentStatusSnapshotFn']
@@ -56,7 +60,14 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
   declare protected readonly getAgentProviderSessionRowsForPaneFn: HostServices['getAgentProviderSessionRowsForPaneFn']
   declare protected readonly attestAgentHookCompatibilityAuthorityFn: HostServices['attestAgentHookCompatibilityAuthorityFn']
   declare protected readonly retireAgentHookCompatibilityAuthorityFn: HostServices['retireAgentHookCompatibilityAuthorityFn']
+  declare protected readonly readHookCliWriterObservationFn:
+    | RuntimeConstructionBindings['readHookCliWriterObservation']
+    | null
   declare protected readonly checkHookAgentPresenceFn: HostServices['checkHookAgentPresenceFn']
+  /** Hook-reported provider session changes; null on a host without a hook store. */
+  declare readonly subscribeAgentProviderSessionChangesFn:
+    | RuntimeConstructionBindings['subscribeAgentProviderSessionChanges']
+    | null
   declare protected readonly reconcileAgentStatusForEndedProcessFn: HostServices['reconcileAgentStatusForEndedProcessFn']
   declare protected readonly forgetHookAgentExitFn: HostServices['forgetHookAgentExitFn']
   declare protected readonly dropAgentStatusForRemovedWorktreeFn: HostServices['dropAgentStatusForRemovedWorktreeFn']
@@ -85,6 +96,8 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
   protected abstract ensureNativeWindowsConptyDa1Override(ptyId: string): void
 
   protected readonly prepareClaudeAuth?: PrepareClaudeAuth
+
+  readonly workspaceSleepPlatform: WorkspaceSleepPlatform | null
 
   protected readonly getAgentStatusSnapshotForPaneFn:
     | ((paneKey: string) => AgentStatusIpcPayload[])
@@ -188,6 +201,7 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
       this.store?.setMobileClientTabSelections?.(state)
     })
     this.orchestrationEnvironmentTransport = deps?.orchestrationEnvironmentTransport ?? null
+    this.workspaceSleepPlatform = deps?.workspaceSleepPlatform ?? null
     this.orchestrationFederation = new RuntimeOrchestrationFederation(
       runtime,
       this.orchestrationEnvironmentTransport
@@ -207,7 +221,9 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
       deps?.attestAgentHookCompatibilityAuthority ?? null
     this.retireAgentHookCompatibilityAuthorityFn =
       deps?.retireAgentHookCompatibilityAuthority ?? null
+    this.readHookCliWriterObservationFn = deps?.readHookCliWriterObservation ?? null
     this.checkHookAgentPresenceFn = deps?.checkHookAgentPresence ?? null
+    this.subscribeAgentProviderSessionChangesFn = deps?.subscribeAgentProviderSessionChanges ?? null
     this.reconcileAgentStatusForEndedProcessFn = deps?.reconcileAgentStatusForEndedProcess ?? null
     this.forgetHookAgentExitFn = deps?.forgetHookAgentExit ?? null
     this.dropAgentStatusForRemovedWorktreeFn = deps?.dropAgentStatusForRemovedWorktree ?? null
@@ -233,6 +249,7 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
     this.getLocalProviderFn = deps?.getLocalProvider ?? null
     this.onPtyStopped = deps?.onPtyStopped ?? null
     this.onTerminalAgentStatus = deps?.onTerminalAgentStatus ?? null
+    this.onTerminalProgramStatusFacet = deps?.onTerminalProgramStatusFacet ?? null
     this.onClaudeTerminalEvidence = deps?.onClaudeTerminalEvidence ?? null
     this.buildAgentHookPtyEnv = deps?.buildAgentHookPtyEnv ?? null
     this.getDesktopWindowStatusFn = deps?.getDesktopWindowStatus ?? (() => 'openable')
@@ -256,6 +273,8 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
         state.emulator.applyPushedViewAttributes(attributes)
       }
     })
+    // Why: PR conflict previews fetch the same base branches a create refreshes; one owner queues them.
+    setPRConflictSummaryRemoteFetches(this.remoteFetches)
   }
 }
 

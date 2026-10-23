@@ -25,10 +25,19 @@ import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { readStructuredChatHostPermissionVerdict } from '@/runtime/structured-chat-host-permission'
 import { notifyHostPermissionRefused } from '@/lib/structured-agent-session-launch-permission-notice'
+import { structuredChatUnavailableText } from '@/lib/structured-agent-session-launch-failure'
+import type { WebRuntimeTerminalCreateOutcome } from '@/runtime/web-runtime-session-types'
+
+export type AgentTerminalLaunchCompletion = {
+  outcome: WebRuntimeTerminalCreateOutcome
+  tabId?: string
+}
 
 /** What a host's "no" opens instead: the terminal the launch would have opened had it known. */
 export type StructuredLaunchTerminal = {
   opened: boolean
+  tabId?: string
+  completion?: Promise<AgentTerminalLaunchCompletion>
   promptDeliveryResult?: Promise<StructuredPromptDeliveryResult>
 }
 
@@ -50,8 +59,23 @@ type AdmittedLaunch = {
 
 const DELIVERED: StructuredPromptDeliveryResult = { delivered: true, failureNotified: false }
 const NOT_DELIVERED: StructuredPromptDeliveryResult = { delivered: false, failureNotified: false }
+const NOT_DELIVERED_NOTIFIED: StructuredPromptDeliveryResult = {
+  delivered: false,
+  failureNotified: true
+}
 
-function notifyHostDeclined(agent: TuiAgent): void {
+function notifyExplicitChatFailure(agent: TuiAgent, reason?: string): void {
+  toast.error(
+    translate(
+      'auto.components.tab.bar.QuickLaunchButton.chatUnavailableAfterSelection',
+      "Couldn't start a {{value0}} chat.",
+      { value0: structuredAgentLabel(agent) }
+    ),
+    { description: structuredChatUnavailableText(reason) }
+  )
+}
+
+export function notifyHostDeclined(agent: TuiAgent, explain = true): void {
   const agentLabel = structuredAgentLabel(agent)
   toast.info(
     translate(
@@ -59,13 +83,15 @@ function notifyHostDeclined(agent: TuiAgent): void {
       'Opened {{value0}} in a terminal',
       { value0: agentLabel }
     ),
-    {
-      description: translate(
-        'components.native-chat.structuredSessionHostDeclinedDescription',
-        "This server can't run a {{value0}} chat in this workspace.",
-        { value0: agentLabel }
-      )
-    }
+    explain
+      ? {
+          description: translate(
+            'components.native-chat.structuredSessionHostDeclinedDescription',
+            "This workspace can't run a {{value0}} chat.",
+            { value0: agentLabel }
+          )
+        }
+      : undefined
   )
 }
 
@@ -92,7 +118,7 @@ function notifyHostUnreachable(agent: TuiAgent, executionHostId: ExecutionHostId
 /** What the caller's own terminal launch would have carried beyond the plan's agent and prompt. */
 export type DeclinedStructuredLaunchTerminalOptions = Pick<
   LaunchAgentInNewTabArgs,
-  'agentArgs' | 'launchPlatform' | 'launchSource' | 'initialCwd'
+  'agentArgs' | 'launchPlatform' | 'launchSource' | 'initialCwd' | 'activate'
 >
 
 /** A caller with no terminal path of its own gets the one a new agent tab would open. */
@@ -109,7 +135,7 @@ export async function openDeclinedStructuredLaunchTerminal(args: {
     agent: args.plan.agent,
     worktreeId: args.worktreeId,
     ...(args.targetGroupId ? { groupId: args.targetGroupId } : {}),
-    ...(args.plan.prompt ? { prompt: args.plan.prompt } : {}),
+    ...(args.terminal?.activate !== false && args.plan.prompt ? { prompt: args.plan.prompt } : {}),
     ...(args.plan.promptDelivery ? { promptDelivery: args.plan.promptDelivery } : {}),
     ...(args.plan.onPromptDelivered ? { onPromptDelivered: args.plan.onPromptDelivered } : {}),
     ...(args.plan.promptKeptByCaller ? { promptKeptByCaller: true as const } : {}),
@@ -122,6 +148,8 @@ export async function openDeclinedStructuredLaunchTerminal(args: {
   })
   return {
     opened: result !== null,
+    ...(result?.surface.kind === 'local-terminal' ? { tabId: result.surface.tabId } : {}),
+    ...(result?.terminalCompletion ? { completion: result.terminalCompletion } : {}),
     ...(result?.promptDeliveryResult ? { promptDeliveryResult: result.promptDeliveryResult } : {})
   }
 }
@@ -159,6 +187,17 @@ export function beginHostAdmittedStructuredLaunch(args: {
         resolveDelivery = resolve
       })
     : undefined
+  // Reached by an explicit chat that carries a prompt; one without opens before its host answers,
+  // and its chat says why instead.
+  const failBeforeSurface = (error: unknown, reason?: string): StructuredAgentLaunchSettlement => {
+    if (plan.requestedSurface === 'chat' && !admitted) {
+      notifyExplicitChatFailure(plan.agent, reason)
+      resolveDelivery(NOT_DELIVERED_NOTIFIED)
+      return { kind: 'failed', error, notified: true }
+    }
+    resolveDelivery(NOT_DELIVERED)
+    return { kind: 'failed', error }
+  }
   // Released once the surface that answers the launch has opened, or nothing will.
   const releaseHold = holdEmptyWorkspaceDefaultSurfaceForLaunch(args.worktreeId)
   const settlement = (async (): Promise<StructuredAgentLaunchSettlement> => {
@@ -190,20 +229,16 @@ export function beginHostAdmittedStructuredLaunch(args: {
         }
       }
       if (admission.kind === 'declined') {
-        if (plan.resumeFrom) {
-          resolveDelivery(NOT_DELIVERED)
-          return {
-            kind: 'failed',
-            error: new StructuredAgentSessionCreateRefusalError(
-              'structured_agent_session_unsupported'
-            )
-          }
-        }
-        // The notice explains a server's refusal; on this machine the terminal opening is the answer.
-        if (paired) {
-          notifyHostDeclined(plan.agent)
+        if (plan.resumeFrom || plan.requestedSurface === 'chat') {
+          return failBeforeSurface(
+            new StructuredAgentSessionCreateRefusalError('structured_agent_session_unsupported'),
+            admission.reason
+          )
         }
         const terminal = await args.onHostDeclined(args.target)
+        if (paired && terminal.opened) {
+          notifyHostDeclined(plan.agent)
+        }
         void (
           terminal.promptDeliveryResult ??
           Promise.resolve(terminal.opened ? DELIVERED : NOT_DELIVERED)
@@ -242,10 +277,7 @@ export function beginHostAdmittedStructuredLaunch(args: {
     } finally {
       releaseHold()
     }
-  })().catch((error: unknown): StructuredAgentLaunchSettlement => {
-    resolveDelivery(NOT_DELIVERED)
-    return { kind: 'failed', error }
-  })
+  })().catch(failBeforeSurface)
   return {
     sessionId: null,
     tab: null,

@@ -121,6 +121,11 @@ function observeRunningWslDistros(
   return result
 }
 
+/** Last confirmed running list without probing; null before any probe has succeeded. */
+export function peekConfirmedRunningWslDistros(): readonly string[] | null {
+  return cache
+}
+
 export function _resetRunningWslDistroCacheForTests(): void {
   cache = null
   retryAfterMs = 0

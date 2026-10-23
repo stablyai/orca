@@ -1,4 +1,5 @@
 import { buildProcessBoundaryGround } from '../../shared/terminal-mode-reset-profiles'
+import { closesAppOsc133Zone } from '../../shared/terminal-osc133-command-finished'
 import type { TerminalOwner } from '../../shared/terminal-owner'
 import { TerminalArmedInputModes } from './terminal-armed-input-modes'
 
@@ -60,6 +61,8 @@ export class TerminalShellLifecycleScanner {
   private generationState = 0
   private altActive = false
   private commandEnteredAlternateScreen = false
+  // OSC 133 markers seen back to back since the last other output.
+  private adjacentMarkers = ''
   private readonly inputModes = new TerminalArmedInputModes()
 
   get owner(): TerminalOwner | undefined {
@@ -109,6 +112,9 @@ export class TerminalShellLifecycleScanner {
     // with no escape introducer must not pay the regex pass. Split sequences
     // stay correct because a partial one always left a non-empty scanTail.
     if (this.scanTail.length === 0 && !chunk.includes('\x1b') && !chunk.includes('\x9b')) {
+      if (chunk.length > 0) {
+        this.adjacentMarkers = ''
+      }
       return events
     }
     const previousTailLength = this.scanTail.length
@@ -117,8 +123,13 @@ export class TerminalShellLifecycleScanner {
     // The shared regex is safe because scan() is synchronous and never re-enters.
     SEQUENCE_RE.lastIndex = 0
     let match: RegExpExecArray | null
+    let outputEnd = 0
     while ((match = SEQUENCE_RE.exec(input)) !== null) {
       const oscPayload = match[1]
+      const markersBefore = match.index > outputEnd ? '' : this.adjacentMarkers
+      outputEnd = match.index + match[0].length
+      this.adjacentMarkers =
+        oscPayload === undefined ? '' : (markersBefore + oscPayload.slice(0, 1)).slice(-2)
       if (match[0] === '\x1bc') {
         this.revoke()
         this.inputModes.reset()
@@ -137,7 +148,8 @@ export class TerminalShellLifecycleScanner {
         if (marker === 'A') {
           this.inputModes.markPrompt()
         }
-        if (marker !== 'D') {
+        // Why: an app closing its own zone is still running, so its `D` proves no exit (#10923).
+        if (marker !== 'D' || closesAppOsc133Zone(markersBefore, oscPayload)) {
           continue
         }
         // An alternate screen or a command's input mode still up at command-finished
@@ -207,6 +219,9 @@ export class TerminalShellLifecycleScanner {
           }
         }
       }
+    }
+    if (input.length - this.scanTail.length > outputEnd) {
+      this.adjacentMarkers = ''
     }
     return events
   }

@@ -135,6 +135,29 @@ describe('gitlab project ref resolution', () => {
     expect(gitRemoteGetUrlCalls('origin')).toHaveLength(1)
   })
 
+  it('finds the GitLab project on other remotes, preferring one named gitlab like glab', async () => {
+    mockGitRemoteCommands({
+      origin: 'git@github.com:stablyai/orca.git\n',
+      'a-fork': 'git@gitlab.com:someone/orca.git\n',
+      gitlab: 'git@gitlab.com:stablyai/orca.git\n'
+    })
+
+    await expect(getIssueProjectRef('/repo')).resolves.toEqual({
+      host: 'gitlab.com',
+      path: 'stablyai/orca'
+    })
+  })
+
+  it('adds no glab probe for extra remotes on a GitHub-only repo', async () => {
+    mockGitRemoteCommands({
+      origin: 'git@github.com:stablyai/orca.git\n',
+      fork: 'git@github.com:someone/orca.git\n'
+    })
+
+    await expect(getIssueProjectRef('/repo')).resolves.toBeNull()
+    expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(1)
+  })
+
   it('does not mix origin and upstream cache entries for the same repo path', async () => {
     mockGitRemoteCommands({
       origin: 'git@gitlab.com:fork/orca.git\n',

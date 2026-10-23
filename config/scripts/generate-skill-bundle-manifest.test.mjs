@@ -19,9 +19,11 @@ import {
   classifyFile,
   collectPackageFiles,
   describeFile,
+  findDroppedReleasedDigests,
   normalizeText,
   packageDigest,
-  sortManifestFiles
+  sortManifestFiles,
+  withDigests
 } from './generate-skill-bundle-manifest.mjs'
 
 const temporaryDirectories = []
@@ -31,6 +33,13 @@ async function createPackage() {
   const directory = await mkdtemp(path.join(tmpdir(), 'orca-skill-manifest-'))
   temporaryDirectories.push(directory)
   return directory
+}
+
+// Why strip GITHUB_*: on a CI pull_request the add-only check looks for a base the sandbox lacks.
+function localEnv() {
+  return Object.fromEntries(
+    Object.entries(process.env).filter(([name]) => !name.startsWith('GITHUB_'))
+  )
 }
 
 // Why: the generator resolves its repo root from its own location, so a copy of
@@ -44,11 +53,36 @@ async function createGeneratorSandbox() {
   const script = path.join(root, 'config', 'scripts', 'generate-skill-bundle-manifest.mjs')
   await mkdir(path.dirname(script), { recursive: true })
   await mkdir(skillRoot, { recursive: true })
-  await copyFile(path.join(import.meta.dirname, 'generate-skill-bundle-manifest.mjs'), script)
+  for (const name of ['generate-skill-bundle-manifest.mjs', 'git-pull-request-diff-base.mjs']) {
+    await copyFile(path.join(import.meta.dirname, name), path.join(path.dirname(script), name))
+  }
   await writeFile(path.join(skillRoot, 'SKILL.md'), 'demo skill\n')
+  const run = (env, args) =>
+    execFileSync(process.execPath, [script, ...args], { stdio: 'pipe', env })
   return {
-    generate: (...args) => execFileSync(process.execPath, [script, ...args], { stdio: 'pipe' }),
+    root,
+    generate: (...args) => run(localEnv(), args),
+    generateOnPullRequest: (...args) =>
+      run({ ...localEnv(), GITHUB_EVENT_NAME: 'pull_request' }, args),
+    git: (...args) =>
+      execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], {
+        cwd: root,
+        stdio: 'pipe',
+        env: localEnv()
+      }),
     read: (name) => readFile(path.join(root, 'resources', 'skills', name), 'utf8'),
+    readSources: () =>
+      readFile(
+        path.join(
+          root,
+          'src',
+          'main',
+          'skills',
+          'bundled-skill-install',
+          'bundled-skill-sources.ts'
+        ),
+        'utf8'
+      ),
     editSkill: (body) => writeFile(path.join(skillRoot, 'SKILL.md'), body)
   }
 }
@@ -120,6 +154,55 @@ describe('skill bundle manifest generator', () => {
 
     await sandbox.editSkill('changed\n')
     expect(() => sandbox.generate()).toThrow()
+  })
+
+  it('keeps every shipped SKILL.md digest and embeds the current LF bytes', async () => {
+    const sandbox = await createGeneratorSandbox()
+    sandbox.generate('--write')
+    const [first] = JSON.parse(await sandbox.read('released-digests.json')).skills.demo
+
+    await sandbox.editSkill('changed\r\n')
+    sandbox.generate('--write')
+    const ledger = JSON.parse(await sandbox.read('released-digests.json'))
+    expect(ledger.skills.demo).toHaveLength(2)
+    expect(ledger.skills.demo).toContain(first)
+    expect(await sandbox.readSources()).toContain(
+      JSON.stringify({ name: 'demo', text: 'changed\n', releasedDigests: ledger.skills.demo })
+    )
+    expect(() => sandbox.generate()).not.toThrow()
+  })
+
+  it('collects every SKILL.md version in git history, even ones never generated', async () => {
+    const sandbox = await createGeneratorSandbox()
+    sandbox.git('init', '-q')
+    sandbox.git('add', 'skills')
+    sandbox.git('commit', '-qm', 'one')
+    await sandbox.editSkill('second version\n')
+    sandbox.git('commit', '-qam', 'two')
+    await sandbox.editSkill('third version\n')
+    sandbox.generate('--write')
+    expect(JSON.parse(await sandbox.read('released-digests.json')).skills.demo).toHaveLength(3)
+    expect(() => sandbox.generate()).not.toThrow()
+  })
+
+  it('fails when a digest is missing or the pull request base cannot be read', async () => {
+    const sandbox = await createGeneratorSandbox()
+    sandbox.generate('--write')
+    expect(() => sandbox.generateOnPullRequest()).toThrow(/Cannot read the pull request base/)
+    await writeFile(
+      path.join(sandbox.root, 'resources', 'skills', 'released-digests.json'),
+      `${JSON.stringify({ schemaVersion: 1, skills: { demo: [] } }, null, 2)}\n`
+    )
+    expect(() => sandbox.generate()).toThrow(/stale/)
+  })
+
+  it('merges digests without duplicates and reports any the base had but HEAD lost', () => {
+    const merged = withDigests({ skills: { demo: ['b'] } }, [['demo', ['a', 'b', 'a']]])
+    expect(merged.skills.demo).toEqual(['a', 'b'])
+    expect(findDroppedReleasedDigests({ skills: { demo: ['a', 'b'] } }, merged)).toEqual([])
+    expect(
+      findDroppedReleasedDigests({ skills: { demo: ['a', 'c'], gone: ['d'] } }, merged)
+    ).toEqual(['demo:c', 'gone:d'])
   })
 
   it.runIf(process.platform !== 'win32')(

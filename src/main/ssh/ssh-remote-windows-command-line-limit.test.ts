@@ -2,12 +2,12 @@ import { gunzipSync } from 'node:zlib'
 import { describe, expect, it } from 'vitest'
 import { CMD_EXE_COMMAND_LINE_MAX_CHARS } from '../providers/windows-shell-args'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
-import { tryStealInstallLockCommand } from './ssh-relay-install-lock-commands'
+import { tryStealInstallLockCommand } from '../managed-server/install/remote-install-lock-commands'
 import { decodeRemotePowerShellScript, powerShellCommand } from './ssh-remote-powershell'
 import {
   makeWindowsPublishStagedFileCommand,
   makeWindowsWriteFileCommand
-} from './system-ssh-windows-file-write'
+} from './system-transport/system-ssh-windows-file-write'
 
 const windows = getRemoteHostPlatform('win32-x64')
 // Why: sshd runs an exec request through its DefaultShell, which is cmd.exe on a

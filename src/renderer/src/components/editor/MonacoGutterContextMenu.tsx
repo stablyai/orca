@@ -13,6 +13,7 @@ import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { getRuntimeGitRemoteFileUrl } from '@/runtime/runtime-git-working-tree-client'
 import { formatPathLineReference } from './line-copy-path'
 import { translate } from '@/i18n/i18n'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 type MonacoGutterContextMenuProps = {
   open: boolean
@@ -69,7 +70,7 @@ export function MonacoGutterContextMenu({
             if (!activeFile) {
               return
             }
-            const worktree = findWorktreeById(state.worktreesByRepo, activeFile.worktreeId)
+            const worktree = findWorktreeById(selectWorktreesByRepo(state), activeFile.worktreeId)
             if (!worktree) {
               return
             }

@@ -18,8 +18,7 @@ import { getPtyExecutionHost } from '../../../../shared/terminal-execution-host'
 import {
   createIncrementalResolvedWorktreeLookup,
   findResolvedWorktreeIdForPath,
-  inferWorktreeIdFromPtyId,
-  runtimeWorktreeIdsEqual
+  inferWorktreeIdFromPtyId
 } from '../../runtime-worktree-path-identity'
 import {
   indexPersistedPtySurfaceBindings,
@@ -31,6 +30,9 @@ import { indexFloatingSnapshotPtyBindings } from '../../floating-snapshot-pty-bi
 import { NO_OBSERVING_PROVIDER_REASON } from '../../../../shared/pty-liveness-verdict'
 import { buildControllerTerminalIdentities } from '../../orca-runtime-build-controller-terminal-identities'
 import { retireOrchestrationAuthorityAbsentFromInventory } from '../../runtime-restored-orchestration-authority-sweep'
+import { worktreeIdsEqual } from '../../../../shared/worktree/id'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { exitingPtyIdsOf } from '../adoption/unshown-live-terminal-placement'
 
 export abstract class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory extends OrcaRuntimeWithRefreshPtyWorktreeRecordsFromController {
   protected async refreshPtyWorktreeRecordsWithControllerInventory(
@@ -161,12 +163,13 @@ export abstract class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInve
         persistedWorktreeId === FLOATING_TERMINAL_WORKTREE_ID ||
         floatingPtyBindings.has(session.id) ||
         this.ptysById.get(session.id)?.worktreeId === FLOATING_TERMINAL_WORKTREE_ID
-      const hasMigrationEvidence =
-        Boolean(session.worktreeId) &&
+      const hasMigrationEvidence = Boolean(
+        session.worktreeId &&
         !providerWorktree &&
-        Boolean(persistedWorktree) &&
-        Boolean(inferredWorktreeId) &&
-        runtimeWorktreeIdsEqual(session.worktreeId as string, inferredWorktreeId as string)
+        persistedWorktree &&
+        inferredWorktreeId &&
+        worktreeIdsEqual(session.worktreeId, inferredWorktreeId)
+      )
       // Why: an unresolved explicit provider owner remains authoritative unless the session id proves it was frozen before a persisted rename migration.
       const worktreeId = providerWorktree
         ? providerWorktree.id
@@ -182,26 +185,20 @@ export abstract class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInve
         persistedSurface &&
         session.incarnationId &&
         persistedSurface.incarnationId === session.incarnationId &&
-        Boolean(worktreeId) &&
-        runtimeWorktreeIdsEqual(persistedSurface.worktreeId, worktreeId as string)
+        !!worktreeId &&
+        worktreeIdsEqual(persistedSurface.worktreeId, worktreeId)
       this.adoptControllerTerminalHandle(
         session.id,
         controllerIdentity?.handle ?? session.terminalHandle,
         controllerIdentity?.incarnationId ?? session.incarnationId,
         { exactRestoredSurface: Boolean(restoresExactSurface && controllerIdentity) }
       )
-      if (
-        !targetWorktreeId ||
-        (worktreeId && runtimeWorktreeIdsEqual(worktreeId, targetWorktreeId))
-      ) {
+      if (!targetWorktreeId || (worktreeId && worktreeIdsEqual(worktreeId, targetWorktreeId))) {
         selectedLivePtyIds.add(session.id)
       }
-      if (
-        targetWorktreeId &&
-        (!worktreeId || !runtimeWorktreeIdsEqual(worktreeId, targetWorktreeId))
-      ) {
+      if (targetWorktreeId && (!worktreeId || !worktreeIdsEqual(worktreeId, targetWorktreeId))) {
         const receipt = this.restoredOrchestrationAuthorityByPtyId.get(session.id)
-        if (receipt && runtimeWorktreeIdsEqual(receipt.worktreeId, targetWorktreeId)) {
+        if (receipt && worktreeIdsEqual(receipt.worktreeId, targetWorktreeId)) {
           this.restoredOrchestrationAuthorityByPtyId.delete(session.id)
         }
         continue
@@ -255,15 +252,17 @@ export abstract class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInve
         }
         continue
       }
-      if (!allLivePtyIds.has(pty.ptyId) && !this.leafExistsForPty(pty.ptyId)) {
+      if (
+        !allLivePtyIds.has(pty.ptyId) &&
+        (this.mainDecidesLiveness(pty.worktreeId) || !this.leafExistsForPty(pty.ptyId))
+      ) {
         const currentVerdict = this.ptyLivenessVerdictByPtyId.get(pty.ptyId)
         if (
           currentVerdict &&
           currentVerdict.observedAt > livenessObservationAtStart &&
           currentVerdict.verdict.status === 'unverifiable'
         ) {
-          pty.connected = false
-          pty.disconnectedAt ??= Date.now()
+          this.setPtyConnected(pty, false)
           continue
         }
         const observed = this.ptyController.hasPty?.(pty.ptyId)
@@ -272,17 +271,15 @@ export abstract class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInve
           allLivePtyIds.add(pty.ptyId)
           if (
             !targetWorktreeId ||
-            (pty.worktreeId && runtimeWorktreeIdsEqual(pty.worktreeId, targetWorktreeId))
+            (pty.worktreeId && worktreeIdsEqual(pty.worktreeId, targetWorktreeId))
           ) {
             selectedLivePtyIds.add(pty.ptyId)
           }
-          pty.connected = true
-          pty.disconnectedAt = null
+          this.setPtyConnected(pty, true)
           this.markPtyLivenessLive(pty.ptyId, livenessObservationAtStart)
           continue
         }
-        pty.connected = false
-        pty.disconnectedAt ??= Date.now()
+        this.setPtyConnected(pty, false)
         pty.agentSessionOwners = []
         // Why: this list only enumerates registered providers, so a dropped relay
         // clears `connected` for every one of its PTYs at once. Only `false` here
@@ -306,7 +303,9 @@ export abstract class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInve
       livePtyIds: targetWorktreeId ? selectedLivePtyIds : allLivePtyIds,
       allLivePtyIds,
       terminalIdentityByPtyId: controllerIdentityByPtyId,
-      queriedHostIds
+      queriedHostIds,
+      // Switch point: main places live terminals itself and must skip ones being killed.
+      ...(ORCA_LAYOUT_OWNER_IS_MAIN ? { exitingPtyIds: exitingPtyIdsOf(sessions) } : {})
     }
   }
 }

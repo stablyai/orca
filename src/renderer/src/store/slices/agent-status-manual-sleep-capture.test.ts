@@ -431,4 +431,22 @@ describe('manual sleep agent session capture', () => {
       providerSession: { key: 'session_id', id: 'session-tab-1:stale' }
     })
   })
+
+  it('takes the records of a sleep main ran from main, and captures none of its own', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(NOW)
+    const store = createTestStore()
+    seedTabs(store)
+    store.setState({
+      agentStatusByPaneKey: { 'tab-1:fresh': makeAgentEntry({ paneKey: 'tab-1:fresh' }) }
+    })
+    const mains = makeSleepingRecord({ paneKey: 'tab-1:leaf-9', origin: 'worktree-sleep' })
+
+    await store.getState().shutdownWorktreeTerminals('wt-1', {
+      keepIdentifiers: true,
+      hostStop: Promise.resolve({ failed: false, records: [mains] })
+    })
+
+    expect(store.getState().sleepingAgentSessionsByPaneKey).toEqual({ 'tab-1:leaf-9': mains })
+  })
 })

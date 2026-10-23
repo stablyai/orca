@@ -1,4 +1,5 @@
 import React from 'react'
+import type { RuntimeGitContext } from '@/runtime/runtime-git-client-context'
 import {
   Dialog,
   DialogContent,
@@ -32,6 +33,8 @@ export type SourceControlAgentActionDialogProps = {
   promptDelivery?: 'auto-submit' | 'draft' | 'submit-after-ready'
   launchPlatform?: NodeJS.Platform
   launchSource: LaunchSource
+  /** Set only for paused-operation recovery, which must not start over Orca's own running Git work. */
+  recoveryContext?: RuntimeGitContext | null
   savedAgentId?: TuiAgent | null
   onSaveAgentDefault?: (
     target: SourceControlAiWriteTarget,

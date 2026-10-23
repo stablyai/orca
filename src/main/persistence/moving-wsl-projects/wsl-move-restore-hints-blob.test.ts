@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { parseOrcadMigrationBlobDescriptor } from '../../../shared/orcad-migration-blob-transfer'
-import { parseOrcadMigrationTerminalRestoreHintsText } from '../../../shared/orcad-migration-terminal-restore-hints'
+import { parseOrcadMigrationBlobDescriptor } from '../../../shared/orcad-migration/orcad-migration-blob-transfer'
+import { parseOrcadMigrationTerminalRestoreHintsText } from '../../../shared/orcad-migration/orcad-migration-terminal-restore-hints'
 import { buildWslMoveRestoreHintsBlob } from './wsl-move-restore-hints-blob'
 
 const hints = [

@@ -15,6 +15,7 @@ import {
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { useAppStore } from '../store'
 import type { ResumeWorkspaceGroup } from './native-chat-resume-on-restart-grouping'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 // Store lookups the resume tree makes for its workspaces, each on the workspace's own host.
 
@@ -50,7 +51,7 @@ export function useRepoIdByWorkspace(
 export function useLineageAncestors(
   workspaces: readonly ResumeWorkspaceGroup[]
 ): (group: ResumeWorkspaceGroup) => readonly string[] {
-  const worktreesByRepo = useAppStore((store) => store.worktreesByRepo)
+  const worktreesByRepo = useAppStore((store) => selectWorktreesByRepo(store))
   const worktreeLineageById = useAppStore((store) => store.worktreeLineageById)
   const ancestors = useMemo(() => {
     const state = { worktreesByRepo }

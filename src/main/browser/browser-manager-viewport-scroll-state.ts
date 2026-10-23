@@ -22,6 +22,11 @@ export abstract class BrowserManagerViewportScrollState {
   protected readonly viewportPresetByTabId = new Map<string, ViewportPresetState>()
   protected readonly viewportScrollStateByTabId = new Map<string, BrowserViewportScrollState>()
 
+  protected isViewportPresetActive(browserTabId: string, guestWebContentsId: number): boolean {
+    const state = this.viewportPresetByTabId.get(browserTabId)
+    return state?.guestWebContentsId === guestWebContentsId && state.requested !== null
+  }
+
   setViewportScrollState(
     browserTabId: string,
     rendererWebContentsId: number,

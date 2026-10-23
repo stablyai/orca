@@ -9,7 +9,7 @@ import {
 } from '../../shared/ai-vault-types'
 import { toRuntimeExecutionHostId } from '../../shared/execution-host'
 import { listEnvironments } from '../../shared/runtime-environment-store'
-import { callRuntimeEnvironment } from '../ipc/runtime-environment-transport-routing'
+import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
 import type {
   AiVaultPrepareSessionResumeRequest,
   AiVaultPrepareSessionResumeResult
@@ -21,11 +21,7 @@ import type {
 import { parseAiVaultListResult } from './session-list-result-validation'
 import { parseAiVaultSessionTitlesResult } from './session-title-result-validation'
 import { isGatedOffWslHost } from '../wsl/wsl-host-gate'
-
-export type RuntimeAiVaultHostInfo = {
-  environmentId: string
-  executionHostId: `runtime:${string}`
-}
+import type { RuntimeAiVaultHostInfo } from '../ipc/ai-vault-runtime-scan'
 
 export type RuntimeAiVaultScanOptions = {
   timeoutMs?: number
@@ -53,7 +49,10 @@ export function getSavedRuntimeAiVaultHostInfos(
     .filter((environment) => !isGatedOffWslHost(environment))
     .map((environment) => ({
       environmentId: environment.id,
-      executionHostId: toRuntimeExecutionHostId(environment.id)
+      executionHostId: toRuntimeExecutionHostId(environment.id),
+      ...(environment.connectionDependency
+        ? { connectionDependency: environment.connectionDependency }
+        : {})
     }))
 }
 

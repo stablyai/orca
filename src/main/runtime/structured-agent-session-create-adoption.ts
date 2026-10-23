@@ -1,12 +1,18 @@
 import { stat } from 'node:fs/promises'
-import { agentSessionRefusalError, isAgentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
+import {
+  agentSessionRefusalError,
+  isAgentSessionRefusalError
+} from '../../shared/agent-session-wire-refusals'
 import { prepareCodexAdoption } from '../native-chat/codex-adoption-preparation'
 import type { NativeCodexResumePreparation } from '../codex/codex-ai-vault-session-resume'
 import type { StructuredAgentSessionResumeSource } from '../../shared/structured-agent-session-create'
 import type { StructuredAgentCliSourceEvidence } from '../native-chat/structured-agent-cli-source'
 import type { AgentSessionAccountHome } from '../../shared/agent-session-account-home'
 import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
-import type { StructuredAgentId } from '../../shared/agent-session-provider-handle'
+import type {
+  AgentSessionProviderHandle,
+  StructuredAgentId
+} from '../../shared/agent-session-provider-handle'
 import { agentSessionExecutionLocationsEqual } from '../../shared/agent-session-record'
 import type { AgentSessionAttachParams } from '../native-chat/agent-session-wire/structured-agent-session-attach'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
@@ -112,9 +118,13 @@ export async function resolveStructuredAgentSessionAdoptionForCreate(input: {
     const stores = new Map<AgentSessionAccountHome, string | null>()
     const storeOf = (accountHome: AgentSessionAccountHome): string | null => {
       if (!stores.has(accountHome)) {
-        stores.set(accountHome, input.transcriptImport.conversationStore({
-          accountHome, launchEnv: input.launchEnv
-        }))
+        stores.set(
+          accountHome,
+          input.transcriptImport.conversationStore({
+            accountHome,
+            launchEnv: input.launchEnv
+          })
+        )
       }
       return stores.get(accountHome) ?? null
     }
@@ -145,8 +155,13 @@ export async function resolveStructuredAgentSessionAdoptionForCreate(input: {
               return exact
             }
           } catch (error) {
-            if (!(error instanceof Error && 'code' in error &&
-                (error.code === 'ENOENT' || error.code === 'ENOTDIR'))) {
+            if (
+              !(
+                error instanceof Error &&
+                'code' in error &&
+                (error.code === 'ENOENT' || error.code === 'ENOTDIR')
+              )
+            ) {
               throw error
             }
           }
@@ -165,7 +180,10 @@ export async function resolveStructuredAgentSessionAdoptionForCreate(input: {
         if (!found) {
           return null
         }
-        const path = await input.transcriptImport.admitTranscriptPath({ store, transcriptPath: found })
+        const path = await input.transcriptImport.admitTranscriptPath({
+          store,
+          transcriptPath: found
+        })
         if (!path) {
           throw new Error('The conversation path is outside its account storage.')
         }
@@ -175,13 +193,44 @@ export async function resolveStructuredAgentSessionAdoptionForCreate(input: {
       workspaceCwd: input.workspaceCwd
     })
     return input.agent === 'codex'
-      ? await prepareCodexAdoption(adoption, input.providerSessionId, input.prepareCodexResume, candidates)
+      ? await prepareCodexAdoption(
+          adoption,
+          input.providerSessionId,
+          input.prepareCodexResume,
+          candidates
+        )
       : adoption
   } catch (error) {
     if (isAgentSessionRefusalError(error)) {
       throw error
     }
-    throw agentSessionRefusalError('agent_session_identity_required',
-      { reason: 'transcriptUnreadable' }, error instanceof Error ? error.message : String(error))
+    throw agentSessionRefusalError(
+      'agent_session_identity_required',
+      { reason: 'transcriptUnreadable' },
+      error instanceof Error ? error.message : String(error)
+    )
+  }
+}
+
+/** `adopt` is what makes the reservation seed the handle chain. Presence of `providerHandle` alone
+ *  must not: `agentSession.ensure` already passes one today without adopting anything. */
+export function structuredAgentSessionAdoptAttach(input: {
+  definition: {
+    handleTransport: AgentSessionProviderHandle['transport']
+    agent: AgentSessionProviderHandle['agent']
+  }
+  handleNamesTranscript: boolean | undefined
+  transcriptPath: string
+  providerSessionId: string
+  workspaceCwd: string
+}): NonNullable<AgentSessionAttachParams['adopt']> {
+  return {
+    providerHandle: {
+      transport: input.definition.handleTransport,
+      agent: input.definition.agent,
+      nativeId: input.handleNamesTranscript ? input.transcriptPath : input.providerSessionId
+    },
+    transcriptPath: input.transcriptPath,
+    source: { providerSessionId: input.providerSessionId, workspaceCwd: input.workspaceCwd }
   }
 }

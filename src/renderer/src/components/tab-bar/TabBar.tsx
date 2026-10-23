@@ -28,6 +28,7 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
   const createMenu = useTabBarCreateMenuController({
     worktreeId,
     resolvedGroupId: runtime.resolvedGroupId,
+    showAgentLaunchItems: props.showAgentLaunchItems,
     terminalOnly,
     mobileEmulatorEnabled: runtime.mobileEmulatorEnabled,
     managedBrowserCreationEnabled: runtime.managedBrowserCreationEnabled,
@@ -37,8 +38,8 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     projectRuntimeShellMenuMode: runtime.projectRuntimeShellMenuMode,
     defaultWindowsShell: runtime.defaultWindowsShell,
     defaultWindowsPowerShellImplementation: runtime.defaultWindowsPowerShellImplementation,
+    agentDetectionTarget: runtime.agentDetectionTarget,
     windowsTerminalCapabilities: runtime.windowsTerminalCapabilities,
-    agentLaunchOptions: runtime.agentLaunchOptions,
     onNewTerminalTab,
     onNewTerminalWithShell,
     onNewBrowserTab,

@@ -1,4 +1,4 @@
-FROM node:22-bookworm-slim
+FROM node:22.23.4-bookworm-slim
 
 ENV container=docker
 ENV ORCA_BACKGROUND_LAUNCH=1

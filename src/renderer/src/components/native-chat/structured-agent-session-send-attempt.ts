@@ -11,11 +11,13 @@ import type {
   AgentSessionSendResult
 } from '../../../../shared/agent-session-wire'
 import {
+  AGENT_SESSION_MESSAGE_TOO_LARGE_PARTS,
   agentSessionWriteNoticeParts,
   agentSessionWriteNotDoneParts
 } from '../../../../shared/agent-session-refusal-notice'
 import type { AgentSessionWriteNoticePart } from '../../../../shared/agent-session-write-notice-copy'
 import { structuredAgentSessionMessageSendMutation } from '../../../../shared/structured-agent-session-send-mutation'
+import { structuredAgentSessionBlocksTooLarge } from '../../../../shared/rpc-contract/structured-agent-session-message-params'
 import {
   structuredAgentSessionSendEvidence,
   type StructuredAgentSessionSendAnswer,
@@ -108,6 +110,10 @@ export async function attemptStructuredAgentSessionSend(args: {
   abandoned: () => boolean
 }): Promise<StructuredAgentSessionSendAttempt | null> {
   const { entry, target } = args
+  // Measured as the host measures it, so a message it would refuse comes back saying why.
+  if (structuredAgentSessionBlocksTooLarge(entry.body.blocks)) {
+    return { kind: 'not-sent', parts: [...AGENT_SESSION_MESSAGE_TOO_LARGE_PARTS] }
+  }
   let fence: number | null
   try {
     if (target.kind === 'environment') {
@@ -130,7 +136,10 @@ export async function attemptStructuredAgentSessionSend(args: {
     expectedRuntimeFence: fence,
     body: entry.body,
     ...(entry.delivery ? { delivery: entry.delivery } : {}),
-    ...(entry.options ? { options: entry.options } : {})
+    ...(entry.options ? { options: entry.options } : {}),
+    ...(entry.usageLimitContinuationOfTurnItemId
+      ? { usageLimitContinuationOfTurnItemId: entry.usageLimitContinuationOfTurnItemId }
+      : {})
   })
   type SendAnswer = AgentSessionMutationResult<AgentSessionSendResult>
   let answer: StructuredAgentSessionSendAnswer

@@ -12,7 +12,7 @@ import type { Automation } from '../../shared/automations-types'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { isRepoOnCatalogHost } from '../../shared/execution-host'
-import type { OrcadMigrationSourceCutover } from '../../shared/orcad-migration-source-cutover'
+import type { OrcadMigrationSourceCutover } from '../../shared/orcad-migration/orcad-migration-source-cutover'
 import type { Repo } from '../../shared/repo-types'
 import type { SshManagedServerLinkedProject } from '../../shared/ssh-types'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
@@ -32,7 +32,8 @@ import {
   folderWorkspacesHeldByServer,
   type OrcadServerFolderCatalog
 } from './orcad-server-folder-workspaces'
-import type { SshTargetOrcadClaims } from './ssh-target-orcad-claims'
+import { projectGroupsHeldByServer, serverHeldProjectGroups } from './orcad-server-project-groups'
+import type { SshTargetOrcadClaims } from './targets/ssh-target-orcad-claims'
 
 export type OrcadServerRepository = Pick<Repo, 'id' | 'path'> & {
   connectionId?: string | null
@@ -78,62 +79,27 @@ async function serverHeldRowsToLink(
   destination: OrcadMigrationDestinationCatalog,
   server: readonly OrcadServerRepository[],
   serverFolders: OrcadServerFolderCatalog
-): Promise<{ repositoryIds: string[]; folderWorkspaceIds: string[] }> {
+): Promise<{ repositoryIds: string[]; folderWorkspaceIds: string[]; projectGroupIds: string[] }> {
   const { payload } = cutover.manifest
   const held = repositoriesHeldByServer(payload.repositories, server)
   const heldFolders = folderWorkspacesHeldByServer(payload.folderWorkspaces, serverFolders, server)
-  if (held.sameId.length === 0 && heldFolders.length === 0) {
-    return { repositoryIds: held.otherId, folderWorkspaceIds: [] }
+  const heldGroups = projectGroupsHeldByServer(payload.projectGroups, serverFolders)
+  const otherIdOnly = { repositoryIds: held.otherId, folderWorkspaceIds: [], projectGroupIds: [] }
+  if (held.sameId.length === 0 && heldFolders.length === 0 && heldGroups.length === 0) {
+    return otherIdOnly
   }
   const state = await destination.readState(cutover.manifest)
   return state.state === 'committed'
-    ? { repositoryIds: held.otherId, folderWorkspaceIds: [] }
-    : { repositoryIds: [...held.otherId, ...held.sameId], folderWorkspaceIds: heldFolders }
-}
-
-/**
- * Source groups the server's projects sit in, and their ancestors, renamed there perhaps since:
- * re-importing this desktop's retained copy would conflict with the server's. An ancestor the
- * server may lack still moves while a moving row needs it.
- */
-function serverHeldProjectGroups(
-  payload: OrcadMigrationSourceCutover['manifest']['payload'],
-  linked: { repositoryIds: ReadonlySet<string>; folderWorkspaceIds: ReadonlySet<string> },
-  server: readonly { projectGroupId?: string | null }[]
-): string[] {
-  const parentById = new Map(payload.projectGroups.map((group) => [group.id, group.parentGroupId]))
-  const held = new Set(server.flatMap((row) => (row.projectGroupId ? [row.projectGroupId] : [])))
-  const withAncestors = (ids: (string | null | undefined)[], stopAt: ReadonlySet<string>) => {
-    const out = new Set<string>()
-    while (ids.length > 0) {
-      const id = ids.pop()
-      if (id && !out.has(id) && !stopAt.has(id) && parentById.has(id)) {
-        out.add(id)
-        ids.push(parentById.get(id))
+    ? otherIdOnly
+    : {
+        repositoryIds: [...held.otherId, ...held.sameId],
+        folderWorkspaceIds: heldFolders,
+        projectGroupIds: heldGroups
       }
-    }
-    return out
-  }
-  const candidates = withAncestors([...held], new Set())
-  const needed = withAncestors(
-    [
-      ...payload.repositories
-        .filter((repo) => !linked.repositoryIds.has(repo.id))
-        .map((repo) => repo.projectGroupId),
-      ...payload.folderWorkspaces
-        .filter((workspace) => !linked.folderWorkspaceIds.has(workspace.id))
-        .map((workspace) => workspace.projectGroupId),
-      ...payload.projectGroups
-        .filter((group) => !candidates.has(group.id))
-        .map((group) => group.parentGroupId)
-    ],
-    held
-  )
-  return [...candidates].filter((id) => !needed.has(id))
 }
 
 /** The source the cutover was cut from: the real store less any project or group it linked. */
-export function linkedOrcadMigrationSource(
+function linkedOrcadMigrationSource(
   store: Store,
   cutover: Pick<
     OrcadMigrationSourceCutover,
@@ -276,17 +242,18 @@ export async function linkServerHeldRepositories(args: {
     return cutover
   }
   const serverRepositories = await args.serverRepositories()
-  const serverFolders =
-    cutover.manifest.payload.folderWorkspaces.length > 0
-      ? ((await args.serverFolderCatalog?.()) ?? NO_SERVER_FOLDERS)
-      : NO_SERVER_FOLDERS
-  const { repositoryIds: linked, folderWorkspaceIds: folders } = await serverHeldRowsToLink(
-    cutover,
-    args.destination,
-    serverRepositories,
-    serverFolders
-  )
-  if (linked.length === 0 && folders.length === 0) {
+  const { folderWorkspaces, projectGroups } = cutover.manifest.payload
+  const serverCatalog =
+    folderWorkspaces.length > 0 || projectGroups.length > 0
+      ? await args.serverFolderCatalog?.()
+      : undefined
+  const serverFolders = serverCatalog ?? NO_SERVER_FOLDERS
+  const {
+    repositoryIds: linked,
+    folderWorkspaceIds: folders,
+    projectGroupIds: heldGroups
+  } = await serverHeldRowsToLink(cutover, args.destination, serverRepositories, serverFolders)
+  if (linked.length === 0 && folders.length === 0 && heldGroups.length === 0) {
     return cutover
   }
   assertNoRelayTerminalsIn(args.store, cutover, linked, folders)
@@ -306,7 +273,8 @@ export async function linkServerHeldRepositories(args: {
           repositoryIds: new Set(linkedRepositoryIds),
           folderWorkspaceIds: new Set(linkedFolderWorkspaceIds)
         },
-        [...serverRepositories, ...serverFolders.folderWorkspaces]
+        [...serverRepositories, ...serverFolders.folderWorkspaces],
+        serverCatalog
       )
     ])
   ]

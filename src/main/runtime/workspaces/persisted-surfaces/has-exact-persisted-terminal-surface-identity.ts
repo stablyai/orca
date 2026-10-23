@@ -1,16 +1,13 @@
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
-import { OrcaRuntimeWithAutomationOperations } from './automation-operations'
+import { OrcaRuntimeWithRestoredTerminalPlacement } from './restored-terminal-placement'
 import type {
   RuntimeTerminalOrphanAdoptionRequest,
   RuntimeTerminalOrphanAdoptionResult
 } from '../../../../shared/runtime-types'
 
 import type { PtyControllerInventory } from '../../runtime-pty-controller-contract'
-import {
-  resolveTerminalSessionWorktreeId,
-  runtimeWorktreeIdsEqual
-} from '../../runtime-worktree-path-identity'
+import { resolveTerminalSessionWorktreeId } from '../../runtime-worktree-path-identity'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import { layoutContainsLeafId } from '../../../persistence/restoring-sessions/terminal-layout-normalization'
@@ -34,8 +31,10 @@ import type {
   ArtifactPublishedLink,
   ArtifactWriteRequest
 } from '../../../../shared/artifacts'
+import { worktreeIdsEqual } from '../../../../shared/worktree/id'
+import { forgetPtySurface } from '../../pty-recorded-surface-topology'
 
-export abstract class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity extends OrcaRuntimeWithAutomationOperations {
+export abstract class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity extends OrcaRuntimeWithRestoredTerminalPlacement {
   protected abstract getOwnWorkspaceSessionForWorktree(
     worktreeId: string
   ): WorkspaceSessionState | null
@@ -120,7 +119,7 @@ export abstract class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity ex
     const pty = this.ptysById.get(candidate.ptyId)
     if (
       leaf?.ptyId === candidate.ptyId &&
-      runtimeWorktreeIdsEqual(leaf.worktreeId, candidate.worktreeId)
+      worktreeIdsEqual(leaf.worktreeId, candidate.worktreeId)
     ) {
       this.leaves.delete(leafKey)
       const surfaceHandle = this.handleByLeafKey.get(leafKey)
@@ -139,9 +138,8 @@ export abstract class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity ex
         this.tabs.delete(candidate.tabId)
       }
     }
-    if (pty?.tabId === candidate.tabId) {
-      pty.tabId = null
-      pty.paneKey = null
+    if (pty && this.paneOfPty(pty).tabId === candidate.tabId) {
+      forgetPtySurface(pty)
     }
     this.notifier?.resolveLegacyWorkerTerminalRecovery?.(
       candidate.paneKey,
@@ -217,7 +215,7 @@ export abstract class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity ex
     const identity = reveal?.identity
     return Boolean(
       identity &&
-      runtimeWorktreeIdsEqual(identity.worktreeId, candidate.worktreeId) &&
+      worktreeIdsEqual(identity.worktreeId, candidate.worktreeId) &&
       identity.tabId === candidate.tabId &&
       identity.leafId === candidate.leafId &&
       identity.ptyId === candidate.ptyId

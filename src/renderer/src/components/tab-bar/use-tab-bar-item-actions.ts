@@ -19,6 +19,7 @@ type TabBarItemActionSource = {
     | 'onCloseOthers'
     | 'onCloseToRight'
     | 'onCloseToLeft'
+    | 'onCloseSplitPane'
     | 'onCloseAllFiles'
     | 'onSetCustomTitle'
     | 'onSetTabColor'
@@ -41,6 +42,7 @@ export type TabBarItemActions = {
   closeOthers: (tabId: string) => void
   closeToRight: (tabId: string) => void
   closeToLeft: (tabId: string) => void
+  closeSplitPane: () => void
   closeAllFiles: () => void
   setCustomTitle: (tabId: string, title: string | null) => void
   setTabColor: (tabId: string, color: string | null) => void
@@ -80,6 +82,7 @@ export function useTabBarItemActions(source: TabBarItemActionSource): TabBarItem
       closeOthers: (tabId) => latest.current.props.onCloseOthers(tabId),
       closeToRight: (tabId) => latest.current.props.onCloseToRight(tabId),
       closeToLeft: (tabId) => latest.current.props.onCloseToLeft(tabId),
+      closeSplitPane: () => latest.current.props.onCloseSplitPane?.(),
       closeAllFiles: () => latest.current.props.onCloseAllFiles?.(),
       setCustomTitle: (tabId, title) => latest.current.props.onSetCustomTitle(tabId, title),
       setTabColor: (tabId, color) => latest.current.props.onSetTabColor(tabId, color),

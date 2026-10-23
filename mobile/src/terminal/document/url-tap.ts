@@ -19,7 +19,7 @@ export function findTerminalUrlAtColumn(lineText: unknown, col: number, source: 
   if (typeof lineText !== 'string' || lineText.length === 0) {
     return null
   }
-  const re = new RegExp(source, 'gi')
+  const re = new RegExp(source, 'giu')
   let match: RegExpExecArray | null
   while ((match = re.exec(lineText)) !== null) {
     const end = match.index + match[0].length

@@ -1,4 +1,4 @@
-import type { AiVaultSession } from '../../shared/ai-vault-types'
+import type { AiVaultAgent, AiVaultSession } from '../../shared/ai-vault-types'
 import type { ResumableSessionParseState } from './session-scanner-types'
 import type { SessionSidecarObservation } from './session-sidecar-stat'
 import type { TranscriptMessageChannel } from './session-transcript-channel'
@@ -44,6 +44,8 @@ export type SessionParseCacheEntry = {
   resume: SessionParseResumePoint | null
   // The dropped resume point's skipped records, so its notice outlives it.
   skippedRecords?: SkippedTranscriptRecord[]
+  // The agent whose parser folded this row. In-memory only: a stored row names it on `session`.
+  agent?: AiVaultAgent
 }
 
 // Persisted subset of a cache entry: the non-serializable parser state is
@@ -51,8 +53,23 @@ export type SessionParseCacheEntry = {
 // session whose sibling moved rather than storing every row twice.
 export type PersistedSessionParseCacheEntry = Omit<
   SessionParseCacheEntry,
-  'resume' | 'foldSession' | 'skippedRecords'
+  'resume' | 'foldSession' | 'skippedRecords' | 'agent'
 >
+
+// A transcript version's cwd for scope membership: null means the version is
+// known to have none, so no scope holds it.
+export type SessionScopeCwdStamp = Pick<
+  PersistedSessionParseCacheEntry,
+  'mtimeMs' | 'sizeBytes' | 'platform' | 'sidecar'
+> & { cwd: string | null }
+
+// `parsed` (from a parse row) outranks `read` (learned without a parse).
+export type SessionScopeCwdLookup = { parsed?: SessionScopeCwdStamp; read?: SessionScopeCwdStamp }
+export type SessionScopeCwdRead = {
+  found: Map<string, SessionScopeCwdLookup>
+  parsed: boolean
+  read: boolean
+}
 
 // The database behind this map (session-parse-cache-persistence.ts). A row the
 // map's bounds drop is read back from it rather than re-parsed.
@@ -60,6 +77,8 @@ export type SessionParseCacheColdTier = {
   read(path: string): PersistedSessionParseCacheEntry | undefined
   stored(path: string, entry: PersistedSessionParseCacheEntry): void
   deleted(path: string): void
+  readScopeCwds?(paths: readonly string[]): SessionScopeCwdRead
+  storedScopeCwd?(path: string, stamp: SessionScopeCwdStamp): void
 }
 
 const cache = new Map<string, SessionParseCacheEntry>()
@@ -70,10 +89,19 @@ const listedPaths = new Set<string>()
 // count-bounded sets.
 const unlistedPaths = new Set<string>()
 const resumePaths = new Set<string>()
+// Scope cwds learned without a parse, for the paths the latest scope walk found.
+const readScopeCwds = new Map<string, SessionScopeCwdStamp>()
+const scopeKnowledge = new Map<string, SessionScopeCwdStamp | 'absent' | 'changed' | 'unresolved'>()
 let coldTier: SessionParseCacheColdTier | null = null
 
 export function setSessionParseCacheColdTier(next: SessionParseCacheColdTier | null): void {
   coldTier = next
+  clearSessionScopeCwdKnowledge()
+  readScopeCwds.clear()
+}
+
+export function clearSessionScopeCwdKnowledge(): void {
+  scopeKnowledge.clear()
 }
 
 export function resetSessionParseCacheForTests(): void {
@@ -81,16 +109,42 @@ export function resetSessionParseCacheForTests(): void {
   listedPaths.clear()
   unlistedPaths.clear()
   resumePaths.clear()
+  readScopeCwds.clear()
+  clearSessionScopeCwdKnowledge()
   coldTier = null
 }
 
-// Drops one entry after its file is deleted, or to force a whole re-read. The
-// cold tier drops it too, or the next lookup would read it back.
+// Why: OMP also honors Pi's PI_CODING_AGENT_DIR, so both can list one transcript. The path's row
+// stays with the agent that folded it first; the other keeps its own row beside it.
+const SHARED_TRANSCRIPT_AGENTS: ReadonlySet<string> = new Set<AiVaultAgent>(['pi', 'omp'])
+
+export function sessionParseCacheKey(agent: AiVaultAgent, path: string): string {
+  if (!SHARED_TRANSCRIPT_AGENTS.has(agent)) {
+    return path
+  }
+  // Peeked, not placed: a listing names its row before the row enters memory.
+  const hot = cache.get(path)
+  const owner = hot?.agent ?? (hot ?? peekSessionParseCacheEntry(path))?.session?.agent
+  return owner === undefined || owner === agent ? path : `${path}#${agent}`
+}
+
+/** The transcript a row's key names. */
+export function sessionParseCacheTranscriptPath(key: string): string {
+  const agent = key.slice(key.lastIndexOf('#') + 1)
+  return SHARED_TRANSCRIPT_AGENTS.has(agent) ? key.slice(0, -agent.length - 1) : key
+}
+
+// Drops one transcript's rows after its file is deleted, or to force a whole re-read. The
+// cold tier drops them too, or the next lookup would read them back.
 export function invalidateSessionParseCacheEntry(path: string): void {
-  unlistedPaths.delete(path)
-  resumePaths.delete(path)
-  cache.delete(path)
-  coldTier?.deleted(path)
+  for (const key of [path, ...[...SHARED_TRANSCRIPT_AGENTS].map((agent) => `${path}#${agent}`)]) {
+    unlistedPaths.delete(key)
+    resumePaths.delete(key)
+    cache.delete(key)
+    readScopeCwds.delete(key)
+    scopeKnowledge.delete(key)
+    coldTier?.deleted(key)
+  }
 }
 
 export function noteSessionParseCacheListed(path: string): void {
@@ -100,7 +154,7 @@ export function noteSessionParseCacheListed(path: string): void {
 
 export function getSessionParseCacheEntry(path: string): SessionParseCacheEntry | undefined {
   const entry = cache.get(path)
-  if (entry !== undefined || coldTier === null) {
+  if (entry !== undefined || coldTier === null || scopeKnowledge.get(path) === 'unresolved') {
     return entry
   }
   const persisted = coldTier.read(path)
@@ -113,7 +167,90 @@ export function getSessionParseCacheEntry(path: string): SessionParseCacheEntry 
   return restored
 }
 
+/** A row's stored fields without placing it in memory: a scope walk checks thousands. */
+export function peekSessionParseCacheEntry(
+  path: string
+): PersistedSessionParseCacheEntry | undefined {
+  return (
+    cache.get(path) ??
+    (scopeKnowledge.get(path) === 'unresolved' ? undefined : coldTier?.read(path))
+  )
+}
+
+/** Scope cwds for many paths at once: memory first, then one batched database read. */
+export function lookupSessionScopeCwds(paths: readonly string[]): void {
+  const cold = paths.filter((path) => !cache.has(path))
+  const stored =
+    coldTier === null || cold.length === 0
+      ? { found: new Map<string, SessionScopeCwdLookup>(), parsed: true, read: true }
+      : coldTier.readScopeCwds?.(cold)
+  for (const path of paths) {
+    const row = stored?.found.get(path)
+    const parsed = row?.parsed ?? (stored?.parsed ? 'absent' : 'unresolved')
+    scopeKnowledge.set(path, cache.has(path) ? 'changed' : parsed)
+    const read = row?.read
+    if (read && !readScopeCwds.has(path)) {
+      readScopeCwds.set(path, read)
+    }
+  }
+}
+
+export function resolveSessionScopeCwd(
+  path: string,
+  matches: (stamp: SessionScopeCwdStamp) => boolean
+): { cwd: string | null } | 'read' | 'parse' {
+  const hot = cache.get(path)
+  let parsed = hot ? scopeCwdStampOf(hot) : scopeKnowledge.get(path)
+  if (parsed === 'changed') {
+    const stored = coldTier?.readScopeCwds?.([path]).found.get(path)
+    parsed = stored?.parsed ?? 'unresolved'
+    scopeKnowledge.set(path, parsed)
+    if (stored?.read && !readScopeCwds.has(path)) {
+      readScopeCwds.set(path, stored.read)
+    }
+  }
+  if (parsed === undefined || parsed === 'unresolved') {
+    scopeKnowledge.set(path, 'unresolved')
+    return 'parse'
+  }
+  for (const stamp of [typeof parsed === 'object' ? parsed : undefined, readScopeCwds.get(path)]) {
+    if (stamp && matches(stamp)) {
+      return { cwd: stamp.cwd }
+    }
+  }
+  return 'read'
+}
+
+export function storeSessionScopeCwd(path: string, stamp: SessionScopeCwdStamp): void {
+  readScopeCwds.set(path, stamp)
+  coldTier?.storedScopeCwd?.(path, stamp)
+}
+
+/** Keeps in memory only the read cwds of transcripts the latest scope walk found. */
+export function pruneSessionScopeCwds(discoveredPaths: ReadonlySet<string>): void {
+  for (const map of [readScopeCwds, scopeKnowledge]) {
+    for (const path of map.keys()) {
+      if (!discoveredPaths.has(path)) {
+        map.delete(path)
+      }
+    }
+  }
+}
+
+export function scopeCwdStampOf(entry: PersistedSessionParseCacheEntry): SessionScopeCwdStamp {
+  return {
+    mtimeMs: entry.mtimeMs,
+    sizeBytes: entry.sizeBytes,
+    platform: entry.platform,
+    cwd: entry.session?.cwd ?? null,
+    ...(entry.sidecar === undefined ? {} : { sidecar: entry.sidecar })
+  }
+}
+
 export function storeSessionParseCacheEntry(path: string, entry: SessionParseCacheEntry): void {
+  if (scopeKnowledge.has(path)) {
+    scopeKnowledge.set(path, 'changed')
+  }
   const previous = cache.get(path)
   const changed =
     previous === undefined ||

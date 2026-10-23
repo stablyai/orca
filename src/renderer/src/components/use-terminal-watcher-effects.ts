@@ -252,11 +252,8 @@ export function useTerminalWatcherEffects(controller: TerminalWatcherController)
         // Switch point: main decides whether the workspace gets its first tab.
         if (
           ORCA_LAYOUT_OWNER_IS_MAIN &&
-          createInitialTerminalThroughLayoutOwner(useAppStore.getState, activeWorktreeId, (ids) =>
-            createTab(activeWorktreeId, undefined, undefined, {
-              pendingActivationSpawn: true,
-              ...(ids ? { id: ids.tabId, initialLeafId: ids.leafId } : {})
-            })
+          createInitialTerminalThroughLayoutOwner(useAppStore.getState, activeWorktreeId, () =>
+            createTab(activeWorktreeId, undefined, undefined, { pendingActivationSpawn: true })
           )
         ) {
           return

@@ -12,6 +12,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
+import { ORCA_LINEAR_SKILL_NAME } from '@/lib/agent-feature-skill-names'
 import { translate } from '@/i18n/i18n'
 
 type AgentSkillSetupPanelProps = ComponentProps<typeof AgentSkillSetupPanel>
@@ -21,10 +22,8 @@ type LinearAgentSkillSetupDialogProps = {
   showSuccess: boolean
   successDescription: string
   missingLabel: string
-  command: string
-  installedCommand: string
-  terminalShellOverride?: string
   terminalRuntime?: AgentSkillSetupPanelProps['terminalRuntime']
+  updateSkillName: string
   installed: boolean
   loading: boolean
   error: string | null
@@ -39,9 +38,7 @@ export function LinearAgentSkillSetupDialog({
   showSuccess,
   successDescription,
   missingLabel,
-  command,
-  installedCommand,
-  terminalShellOverride,
+  updateSkillName,
   terminalRuntime,
   installed,
   loading,
@@ -94,8 +91,8 @@ export function LinearAgentSkillSetupDialog({
                 </DialogTitle>
                 <DialogDescription className="sr-only">
                   {translate(
-                    'auto.components.sidebar.LinearAgentSkillSetupPrompt.modalDescription',
-                    'Install the Linear skill from a terminal.'
+                    'auto.components.sidebar.LinearAgentSkillSetupPrompt.modalInstallDescription',
+                    'Install the Linear skill for your agents.'
                   )}
                 </DialogDescription>
               </DialogHeader>
@@ -118,19 +115,8 @@ export function LinearAgentSkillSetupDialog({
                 'Enable Linear ticket access'
               )}
               description={missingLabel}
-              command={command}
-              installedCommand={installedCommand}
-              terminalTitle={translate(
-                'auto.components.sidebar.LinearAgentSkillSetupPrompt.terminalTitle',
-                'Install Linear agent skill'
-              )}
-              terminalAriaLabel={translate(
-                'auto.components.sidebar.LinearAgentSkillSetupPrompt.terminalAria',
-                'Linear agent skill installer terminal'
-              )}
-              terminalWorktreeId="sidebar-linear-agent-skill-setup"
-              terminalHeightPx={240}
-              terminalShellOverride={terminalShellOverride}
+              skillNames={[ORCA_LINEAR_SKILL_NAME]}
+              installedSkillNames={[updateSkillName]}
               terminalRuntime={terminalRuntime}
               installed={installed}
               loading={loading}

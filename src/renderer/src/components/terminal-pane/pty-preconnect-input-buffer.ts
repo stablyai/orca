@@ -292,11 +292,17 @@ export function createPtyPreconnectInputBuffer(
           resolve(false)
           return
         }
+        const onAbort = (): void => withdraw(input)
+        // Why: a long-lived caller signal would otherwise pin every settled input through its listener.
+        const settle = (accepted: boolean): void => {
+          signal?.removeEventListener('abort', onAbort)
+          resolve(accepted)
+        }
         const input = createInput(
           data,
           'accepted',
           inputKind,
-          resolve,
+          settle,
           signal,
           options?.inputOrigin
         )
@@ -304,7 +310,7 @@ export function createPtyPreconnectInputBuffer(
           resolve(false)
           return
         }
-        signal?.addEventListener('abort', () => withdraw(input), { once: true })
+        signal?.addEventListener('abort', onAbort, { once: true })
         notifyRetained(onRetained, input)
       })
     },

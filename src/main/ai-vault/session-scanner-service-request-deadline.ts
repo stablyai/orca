@@ -4,9 +4,8 @@ import type { AiVaultScanWork } from '../../shared/ai-vault-scan-progress'
 
 export const AI_VAULT_SERVICE_INTERACTIVE_TIMEOUT_MS = 15_000
 
-/** Follows one scan request: when the child received it, and each report of its work. */
+/** Follows one scan request's reports of its work. */
 export type AiVaultServiceScanListener = {
-  sent: () => void
   work: (work: AiVaultScanWork) => void
 }
 
@@ -43,7 +42,6 @@ export function sendAiVaultServiceCall(
   }
   armAiVaultServiceRequestDeadline(call, onTimeout)
   call.sent = true
-  call.scanListener?.sent()
   child.send(call.request)
 }
 

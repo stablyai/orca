@@ -1,4 +1,4 @@
-import { OrcaRuntimeWithWriteTerminalAgentPrompt } from './terminal-agent-prompt'
+import { OrcaRuntimeWithSubmitTerminalAgentPrompt } from './terminal-agent-prompt-submit'
 import {
   CLAUDE_AGENT_PROMPT_RENDER_MARKER,
   CLAUDE_AGENT_PROMPT_RENDER_QUIET_MS,
@@ -8,8 +8,9 @@ import type {
   RuntimeTerminalWait,
   RuntimeTerminalWaitCondition
 } from '../../../../shared/runtime-types'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
-export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRuntimeWithWriteTerminalAgentPrompt {
+export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRuntimeWithSubmitTerminalAgentPrompt {
   protected createAgentPromptRenderGate(
     ptyId: string,
     pasteIngestMs: number
@@ -139,6 +140,25 @@ export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRun
       launchReadiness?: boolean
     }
   ): Promise<RuntimeTerminalWait> {
+    // Switch point: a saved pane main holds with no terminal yet starts first (once, shared).
+    const starting = ORCA_LAYOUT_OWNER_IS_MAIN
+      ? this.startRestoredHandlePane(handle, options ?? {})
+      : null
+    if (starting) {
+      const startedAt = Date.now()
+      return starting.then(async (target) => {
+        // The start spent part of the caller's deadline.
+        const timeoutMs = options?.timeoutMs
+        const left = timeoutMs && timeoutMs > 0 ? timeoutMs - (Date.now() - startedAt) : timeoutMs
+        if (timeoutMs && timeoutMs > 0 && left !== undefined && left <= 0) {
+          throw new Error('timeout')
+        }
+        return {
+          ...(await this.terminalWait.wait(target, { ...options, timeoutMs: left })),
+          handle
+        }
+      })
+    }
     return this.terminalWait.wait(handle, options)
   }
 }
