@@ -11,7 +11,7 @@ import {
   type TraversalFolder
 } from './nested-repo-scan-rules'
 
-async function hasGitMarker(dirPath: string): Promise<boolean> {
+export async function hasGitMarker(dirPath: string): Promise<boolean> {
   try {
     const marker = await stat(join(dirPath, '.git'))
     if (marker.isDirectory() || marker.isFile()) {
@@ -84,11 +84,21 @@ export async function scanNestedRepos(args: {
     args.onProgress?.(buildResult('non_git_folder'))
   }
 
-  if (await filesystem.isSelectedPathGitRepo(args.path)) {
+  const selectedPathIsGitRepo = await filesystem.isSelectedPathGitRepo(args.path)
+  if (selectedPathIsGitRepo && !options.scanInsideGitRepo) {
     return buildResult('git_repo')
   }
+  // A plain folder inside a repo passes `rev-parse` but is not a root; listing it only yields denied status calls.
+  if (selectedPathIsGitRepo && (await filesystem.hasGitMarker(args.path))) {
+    repos.push({
+      path: args.path,
+      displayName: filesystem.basename(args.path),
+      depth: 0
+    })
+    emitProgress()
+  }
   if (noteAbort()) {
-    return buildResult('non_git_folder')
+    return buildResult(selectedPathIsGitRepo ? 'git_repo' : 'non_git_folder')
   }
 
   const foldersToTraverse: (TraversalFolder | undefined)[] = [
@@ -128,15 +138,17 @@ export async function scanNestedRepos(args: {
     if (noteAbort()) {
       break
     }
-    const currentIgnoreRules = [
-      ...currentFolder.ignoreRules,
-      ...(await readNestedRepoGitignoreRules({
-        folderPath: currentFolder.path,
-        entries,
-        filesystem,
-        baseSegments: currentFolder.segments
-      }))
-    ]
+    const currentIgnoreRules = options.includeGitignored
+      ? currentFolder.ignoreRules
+      : [
+          ...currentFolder.ignoreRules,
+          ...(await readNestedRepoGitignoreRules({
+            folderPath: currentFolder.path,
+            entries,
+            filesystem,
+            baseSegments: currentFolder.segments
+          }))
+        ]
 
     const dirs = entries
       .filter((entry) => entry.isDirectory && !entry.isSymlink)
@@ -155,7 +167,12 @@ export async function scanNestedRepos(args: {
         break
       }
       const childSegments = [...currentFolder.segments, name]
-      if (isIgnoredNestedRepoDirectory(name, childSegments, currentIgnoreRules)) {
+      if (
+        isIgnoredNestedRepoDirectory(name, childSegments, currentIgnoreRules, {
+          gitignore: options.includeGitignored,
+          hidden: options.includeHidden
+        })
+      ) {
         continue
       }
       const childPath = filesystem.joinPath(currentFolder.path, name)
@@ -189,5 +206,5 @@ export async function scanNestedRepos(args: {
     }
   }
 
-  return buildResult('non_git_folder')
+  return buildResult(selectedPathIsGitRepo ? 'git_repo' : 'non_git_folder')
 }

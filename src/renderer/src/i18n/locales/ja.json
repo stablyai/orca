@@ -14907,6 +14907,7 @@
             "addProject": "新規プロジェクトを追加",
             "label": "プロジェクト",
             "browse": "プロジェクトを参照",
+            "openReview": "PR を開く",
             "listLabel": "プロジェクト",
             "noProjects": "まだプロジェクトがありません。"
           },
@@ -20251,6 +20252,17 @@
   "sourceControl": {
     "unlinkedPr": {
       "status": "PR #{{number}} のリンクが解除されました"
+    },
+    "nestedFolder": {
+      "workspaceRoot": "このワークスペース",
+      "pickTitle": "フォルダ内の Git リポジトリを表示",
+      "browse": "参照…",
+      "clear": "フォルダをクリア",
+      "scanning": "Git リポジトリを検索しています…",
+      "empty": "このフォルダに Git リポジトリはありません",
+      "outsideWorkspace": "選択したフォルダはこのワークスペースの外です",
+      "commitHint": "コミットと PR 作成は選択中のリポジトリに対して行われます",
+      "openReview": "PR を開く"
     },
     "discard": {
       "deleteUntrackedFileDescription": "この未追跡ファイルは完全に削除されます。この操作は元に戻せません。",

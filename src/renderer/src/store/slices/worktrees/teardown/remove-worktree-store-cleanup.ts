@@ -1,3 +1,4 @@
+import { nestedStatusKeysForWorktrees } from '@/lib/nested-status-key'
 import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { forgetCombinedDiffViewsForWorktrees } from '@/components/editor/combined-diff/remember-view/combined-diff-view-cache'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
@@ -81,7 +82,10 @@ export function applyRemoveWorktreeSuccessState(
       // Why: file search state is worktree-scoped; clear it so another worktree can't inherit stale matches.
       fileSearchStateByWorktree: omitByWorktree(s.fileSearchStateByWorktree),
       // Why: these worktree-keyed maps are re-keyed on rename but were missed by removal, leaking one entry each.
-      remoteStatusesByWorktree: omitByWorktree(s.remoteStatusesByWorktree),
+      remoteStatusesByWorktree: omitRecordKeys(s.remoteStatusesByWorktree, [
+        ...worktreeIds,
+        ...nestedStatusKeysForWorktrees(s.remoteStatusesByWorktree, worktreeIds)
+      ]),
       recentlyClosedEditorTabsByWorktree: omitByWorktree(s.recentlyClosedEditorTabsByWorktree),
       recentlyClosedTerminalTabsByWorktree: omitByWorktree(s.recentlyClosedTerminalTabsByWorktree),
       // Why: a deleted worktree's tabs can never be reopened; purge the kind list with the snapshot stacks above.

@@ -382,6 +382,38 @@ describe('scanNestedRepos', () => {
     expect(result.repos).toEqual([])
   })
 
+  it('scans nested git repos inside a git parent when requested', async () => {
+    const root = await tempRoot()
+    await makeGitRepo(root)
+    await mkdir(join(root, 'child'), { recursive: true })
+    await makeGitRepo(join(root, 'child'))
+
+    const result = await scanNestedRepos({
+      path: root,
+      options: { scanInsideGitRepo: true }
+    })
+
+    expect(result.selectedPathKind).toBe('git_repo')
+    expect(result.repos.map((repo) => repo.path).sort()).toEqual([root, join(root, 'child')].sort())
+  })
+
+  it('finds gitignored and hidden nested repos when those flags are on', async () => {
+    const root = await tempRoot()
+    await writeFile(join(root, '.gitignore'), '/.worktrees/\n')
+    await mkdir(join(root, '.worktrees', '001_plan', 'theme-a'), { recursive: true })
+    await makeGitRepo(join(root, '.worktrees', '001_plan', 'theme-a'))
+
+    const hiddenByDefault = await scanNestedRepos({ path: root })
+    expect(hiddenByDefault.repos).toEqual([])
+
+    const result = await scanNestedRepos({
+      path: root,
+      options: { includeGitignored: true, includeHidden: true, maxDepth: 4 }
+    })
+
+    expect(result.repos.map((repo) => repo.displayName)).toEqual(['theme-a'])
+  })
+
   it.skipIf(process.platform === 'win32')(
     'does not follow symlinked directories outside the selected folder',
     async () => {

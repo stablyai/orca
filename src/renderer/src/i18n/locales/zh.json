@@ -14907,6 +14907,7 @@
             "addProject": "添加新项目",
             "label": "项目",
             "browse": "浏览项目",
+            "openReview": "打开 PR",
             "listLabel": "项目",
             "noProjects": "尚无项目。"
           },
@@ -20251,6 +20252,17 @@
   "sourceControl": {
     "unlinkedPr": {
       "status": "PR #{{number}} 未链接"
+    },
+    "nestedFolder": {
+      "workspaceRoot": "当前工作区",
+      "pickTitle": "显示文件夹中的 Git 仓库",
+      "browse": "浏览…",
+      "clear": "清除文件夹",
+      "scanning": "正在查找 Git 仓库…",
+      "empty": "此文件夹中没有 Git 仓库",
+      "outsideWorkspace": "所选文件夹不在当前工作区内",
+      "commitHint": "提交和创建 PR 作用于所选仓库",
+      "openReview": "打开 PR"
     },
     "discard": {
       "deleteUntrackedFileDescription": "这将永久删除此未跟踪文件。此操作无法撤销。",

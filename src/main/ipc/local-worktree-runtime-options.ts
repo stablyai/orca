@@ -1,4 +1,5 @@
 import { resolve } from 'node:path'
+import { isDescendantOrEqual } from './filesystem-path-containment'
 import type { RuntimeStore } from '../runtime/runtime-store-contract'
 import {
   getLocalProjectWorktreeGitOptions,
@@ -49,7 +50,7 @@ export function getLocalRepoForRegisteredWorktree(
   // Built at most once, and only when a repo actually needs it, so the meta table is never
   // rescanned per repo — 59 IPC call sites hit this, some per keystroke.
   let repoIdsWithMeta: Set<string> | undefined
-  return store
+  const exact = store
     .getRepos()
     .find(
       (repo) =>
@@ -59,6 +60,25 @@ export function getLocalRepoForRegisteredWorktree(
             repo.id
           ))
     )
+  if (exact) {
+    return exact
+  }
+  // Nested independent git roots live under a registered parent; keep the parent's
+  // runtime git options instead of falling through to host defaults.
+  let closest: { repo: Repo; pathLength: number } | undefined
+  for (const repo of store.getRepos()) {
+    if (repo.connectionId) {
+      continue
+    }
+    const repoPath = resolve(repo.path)
+    if (!isDescendantOrEqual(resolvedWorktreePath, repoPath)) {
+      continue
+    }
+    if (!closest || repoPath.length > closest.pathLength) {
+      closest = { repo, pathLength: repoPath.length }
+    }
+  }
+  return closest?.repo
 }
 
 /** Git options for a repo already resolved by `getLocalRepoForRegisteredWorktree`,

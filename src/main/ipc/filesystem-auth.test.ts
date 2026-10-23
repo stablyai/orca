@@ -192,6 +192,21 @@ describe('filesystem auth worktree roots', () => {
     )
   })
 
+  it('authorizes nested git roots under a registered worktree', async () => {
+    const scratch = await mkdtemp(join(await realpath(tmpdir()), 'orca-nested-git-'))
+    const nested = join(scratch, '.worktrees', '001', 'theme-a')
+    const notARepo = join(scratch, '.worktrees', '001', 'files')
+    await mkdir(join(nested, '.git'), { recursive: true })
+    await mkdir(notARepo, { recursive: true })
+    const parentRepo: Repo = { ...repo, path: scratch }
+    const store = makeStore([parentRepo])
+    registerCreatedWorktreeRoot(store, parentRepo.id, scratch)
+
+    await expect(resolveRegisteredWorktreePath(nested, store)).resolves.toBe(resolve(nested))
+    await expect(resolveRegisteredWorktreePath(notARepo, store)).rejects.toThrow('Access denied')
+    await rm(scratch, { recursive: true, force: true })
+  })
+
   it('bounds concurrent repo probes while rebuilding authorized roots', async () => {
     const repos = Array.from({ length: 20 }, (_, index) => ({
       ...repo,

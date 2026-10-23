@@ -31,6 +31,7 @@ export function useSourceControlReviewContext(panelState: SourceControlPanelStat
     hostedReviewEntryData,
     isBranchVisible,
     isFolder,
+    isNestedRepo,
     remoteStatus,
     settings,
     worktreeMap,
@@ -73,7 +74,8 @@ export function useSourceControlReviewContext(panelState: SourceControlPanelStat
     compareBaseRef,
     isFolder,
     branchName,
-    isBranchVisible,
+    // Branch compare is stored per worktree id, so a nested repo must not write over the workspace's.
+    isBranchVisible: isBranchVisible && !isNestedRepo,
     activeGitStatusHead,
     remoteStatus
   })

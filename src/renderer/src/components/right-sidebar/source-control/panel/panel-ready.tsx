@@ -1,4 +1,8 @@
 import { BulkActionBar } from '../commit/bulk-action-bar'
+import { NestedFolderPicker } from '../nested/nested-folder-picker'
+import { NestedRepoSection } from '../nested/nested-repo-section'
+import { NestedScanStatus } from '../nested/nested-scan-status'
+import type { NestedFolderScope } from '../nested/use-nested-folder-scope'
 import { SourceControlHeaderToolbar } from './header-toolbar'
 import { SourceControlNotesShelf } from '../notes/notes-shelf'
 import { SourceControlPanelContent } from './panel-content'
@@ -6,8 +10,12 @@ import { SourceControlPanelDialogs } from './panel-dialogs'
 import type { SourceControlPanelReadyProps } from './panel-props'
 
 /** The panel chrome: toolbar, notes shelf, the scrolling file surface, bulk bar and dialog layer. */
-export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
-  const { model, worktreePath } = props
+export function SourceControlPanelReady(
+  props: SourceControlPanelReadyProps & {
+    nestedFolderScope: NestedFolderScope
+  }
+) {
+  const { model, nestedFolderScope, worktreePath } = props
   const {
     activeGroupId,
     activeWorktreeId,
@@ -92,6 +100,9 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
           manualReviewUrl={manualReviewUrl}
         />
 
+        <NestedFolderPicker worktreePath={worktreePath} scope={nestedFolderScope} />
+        <NestedScanStatus scope={nestedFolderScope} />
+
         {/* Why: hidden when count is 0 — notes are created from the diff view, so an empty Notes shelf here is pure chrome. */}
         {activeWorktreeId && worktreePath && diffCommentCount > 0 && (
           <SourceControlNotesShelf
@@ -114,7 +125,18 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
           className="relative flex flex-1 flex-col overflow-auto scrollbar-sleek pt-1"
           style={{ paddingBottom: selectedKeys.size > 0 ? 50 : undefined }}
         >
-          <SourceControlPanelContent {...props} />
+          {nestedFolderScope.folderPath && nestedFolderScope.statuses.length > 0 ? (
+            nestedFolderScope.statuses.map((entry) => (
+              <NestedRepoSection
+                key={entry.repo.path}
+                entry={entry}
+                scope={nestedFolderScope}
+                parentProps={props}
+              />
+            ))
+          ) : (
+            <SourceControlPanelContent {...props} />
+          )}
         </div>
 
         {selectedKeys.size > 0 && (

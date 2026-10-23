@@ -14907,6 +14907,7 @@
             "addProject": "새 프로젝트 추가",
             "label": "프로젝트",
             "browse": "프로젝트 검색",
+            "openReview": "PR 열기",
             "listLabel": "프로젝트",
             "noProjects": "아직 프로젝트가 없습니다."
           },
@@ -20251,6 +20252,17 @@
   "sourceControl": {
     "unlinkedPr": {
       "status": "PR #{{number}} 연결 해제됨"
+    },
+    "nestedFolder": {
+      "workspaceRoot": "이 워크스페이스",
+      "pickTitle": "폴더 안의 Git 저장소 표시",
+      "browse": "찾아보기…",
+      "clear": "폴더 지우기",
+      "scanning": "Git 저장소를 찾는 중…",
+      "empty": "이 폴더에 Git 저장소가 없습니다",
+      "outsideWorkspace": "선택한 폴더가 이 워크스페이스 밖에 있습니다",
+      "commitHint": "커밋과 PR 생성은 선택한 저장소에 적용됩니다",
+      "openReview": "PR 열기"
     },
     "discard": {
       "deleteUntrackedFileDescription": "이 추적되지 않은 파일은 영구적으로 삭제됩니다. 이 작업은 취소할 수 없습니다.",

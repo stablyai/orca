@@ -15179,6 +15179,7 @@
             "addProject": "Add project",
             "label": "Project",
             "browse": "Browse projects",
+            "openReview": "Open PR",
             "listLabel": "Projects",
             "noProjects": "No projects yet."
           },
@@ -20282,6 +20283,17 @@
     },
     "unlinkedPr": {
       "status": "PR #{{number}} unlinked"
+    },
+    "nestedFolder": {
+      "workspaceRoot": "This workspace",
+      "pickTitle": "Show git repos inside a folder",
+      "browse": "Browse…",
+      "clear": "Clear folder",
+      "scanning": "Looking for git repos…",
+      "empty": "No git repos in this folder",
+      "outsideWorkspace": "Selected folder is outside this workspace",
+      "commitHint": "Commit and Create PR use the selected repo",
+      "openReview": "Open PR"
     }
   },
   "agentsSidebarIntro": {

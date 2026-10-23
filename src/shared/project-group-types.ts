@@ -21,6 +21,12 @@ export type NestedRepoScanOptions = {
   maxDepth?: number
   maxRepos?: number
   timeoutMs?: number | null
+  /** Keep walking when the selected path is itself a git repo. */
+  scanInsideGitRepo?: boolean
+  /** Still report independent clones listed in a parent .gitignore. */
+  includeGitignored?: boolean
+  /** Still enter dot-directories such as `.worktrees` (VCS metadata stays skipped). */
+  includeHidden?: boolean
 }
 
 export type NestedRepoCandidate = {

@@ -14923,6 +14923,7 @@
             "addProject": "Add a new project",
             "label": "Project",
             "browse": "Browse projects",
+            "openReview": "Abrir PR",
             "listLabel": "Projects",
             "noProjects": "No projects yet."
           },
@@ -20663,6 +20664,17 @@
     },
     "unlinkedPr": {
       "status": "PR #{{number}} desvinculada"
+    },
+    "nestedFolder": {
+      "workspaceRoot": "Este espacio de trabajo",
+      "pickTitle": "Mostrar repositorios Git de una carpeta",
+      "browse": "Examinar…",
+      "clear": "Quitar carpeta",
+      "scanning": "Buscando repositorios Git…",
+      "empty": "No hay repositorios Git en esta carpeta",
+      "outsideWorkspace": "La carpeta seleccionada está fuera de este espacio de trabajo",
+      "commitHint": "Commit y Crear PR usan el repositorio seleccionado",
+      "openReview": "Abrir PR"
     }
   },
   "aiVault": {

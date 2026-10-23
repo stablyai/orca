@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   loadSessionCommitDrafts,
-  saveSessionCommitDrafts
+  loadSessionNestedCommitDraft,
+  saveSessionCommitDrafts,
+  saveSessionNestedCommitDraft
 } from '@/lib/source-control-commit-draft-session'
 import type { GitConflictOperation } from '../../../../../../shared/git-status-types'
 import type { SourceControlActionError } from '../sync/action-error'
@@ -13,6 +15,11 @@ import type { CreatePrIntentNotice } from '../commit/commit-area-types'
 import { readCommitDraftForWorktree, type CommitDraftsByWorktree } from '../commit/commit-drafts'
 import { clearRemoteActionErrorsForCompletedConflictOperations } from '../sync/remote-refresh'
 
+function initialNestedDrafts(worktreeId: string | null, key: string): CommitDraftsByWorktree {
+  const draft = loadSessionNestedCommitDraft(key)
+  return worktreeId && draft ? { [worktreeId]: draft } : {}
+}
+
 /**
  * Owns every per-worktree record the panel keeps outside the store — commit drafts and errors,
  * remote-action errors, and the in-flight flags for commit, abort, generation and Create PR —
@@ -21,17 +28,22 @@ import { clearRemoteActionErrorsForCompletedConflictOperations } from '../sync/r
 export function useSourceControlWorktreeOperationState({
   activeWorktreeId,
   conflictOperationsByWorktree,
-  worktreeMap
+  worktreeMap,
+  nestedDraftKey
 }: {
   activeWorktreeId: string | null
   conflictOperationsByWorktree: Record<string, GitConflictOperation>
   worktreeMap: ReadonlyMap<string, unknown>
+  // Nested-repo sections share the worktree id, so their drafts persist under their own key.
+  nestedDraftKey?: string
 }) {
   // Why: setState is async, so a double-click can pass the isCommitting guard before re-render; a synchronously-flipped ref gives a true single-flight lock.
   const commitInFlightRef = useRef<Record<string, boolean>>({})
   // Why: Source Control unmounts on tab switch; keep commit drafts in a module-scoped session cache and restore on remount.
   const [commitDrafts, setCommitDrafts] = useState<CommitDraftsByWorktree>(() =>
-    loadSessionCommitDrafts()
+    nestedDraftKey
+      ? initialNestedDrafts(activeWorktreeId, nestedDraftKey)
+      : loadSessionCommitDrafts()
   )
   const commitDraftsRef = useRef<CommitDraftsByWorktree>(commitDrafts)
   const commitErrorsRef = useRef<Record<string, string | null>>({})
@@ -117,7 +129,10 @@ export function useSourceControlWorktreeOperationState({
   )
   const setCommitErrorForWorktree = useCallback(
     (worktreeId: string, message: string | null): void => {
-      commitErrorsRef.current = { ...commitErrorsRef.current, [worktreeId]: message }
+      commitErrorsRef.current = {
+        ...commitErrorsRef.current,
+        [worktreeId]: message
+      }
       setCommitErrors((prev) => ({ ...prev, [worktreeId]: message }))
     },
     []
@@ -172,8 +187,15 @@ export function useSourceControlWorktreeOperationState({
   }, [updateCommitDrafts, worktreeMap])
 
   useEffect(() => {
-    saveSessionCommitDrafts(commitDrafts)
-  }, [commitDrafts])
+    if (nestedDraftKey) {
+      saveSessionNestedCommitDraft(
+        nestedDraftKey,
+        readCommitDraftForWorktree(commitDrafts, activeWorktreeId)
+      )
+    } else {
+      saveSessionCommitDrafts(commitDrafts)
+    }
+  }, [activeWorktreeId, commitDrafts, nestedDraftKey])
 
   useEffect(() => {
     // Why: conflicts are often resolved in a terminal; clear the stale failure banner once git status sees the operation end.

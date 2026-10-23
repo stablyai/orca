@@ -15076,6 +15076,7 @@
             "addProject": "Ajouter un nouveau projet",
             "label": "Projet",
             "browse": "Parcourir les projets",
+            "openReview": "Ouvrir la PR",
             "listLabel": "Projets",
             "noProjects": "Aucun projet pour le moment."
           },
@@ -20237,6 +20238,17 @@
   "sourceControl": {
     "unlinkedPr": {
       "status": "PR #{{number}} non lié"
+    },
+    "nestedFolder": {
+      "workspaceRoot": "Cet espace de travail",
+      "pickTitle": "Afficher les dépôts Git d'un dossier",
+      "browse": "Parcourir…",
+      "clear": "Effacer le dossier",
+      "scanning": "Recherche de dépôts Git…",
+      "empty": "Aucun dépôt Git dans ce dossier",
+      "outsideWorkspace": "Le dossier sélectionné est hors de cet espace de travail",
+      "commitHint": "Le commit et la création de PR portent sur le dépôt sélectionné",
+      "openReview": "Ouvrir la PR"
     },
     "discard": {
       "deleteUntrackedFileDescription": "Cela supprimera définitivement ce fichier non suivi. Cette action est irréversible.",

@@ -1,5 +1,7 @@
 import { ipcMain } from 'electron'
 import { posix, resolve } from 'node:path'
+import { relativePathInsideRoot } from '../../shared/cross-platform-path'
+import { isDescendantOrEqual } from './filesystem-path-containment'
 import type {
   CreateHostedReviewArgs,
   CreateStackedHostedReviewArgs,
@@ -15,6 +17,7 @@ import {
 } from '../source-control/hosted-review-creation'
 import { createStackedHostedReview } from '../source-control/stacked-hosted-review-creation'
 import { getHostedReviewForBranch } from '../source-control/hosted-review'
+import { worktreePathBelongsToRepo } from './registered-worktree-nested-git'
 import { resolveRegisteredWorktreePath } from './registered-worktree-roots-cache'
 import { listRepoWorktreeGraph } from '../repo-worktrees'
 import {
@@ -76,9 +79,12 @@ async function resolveHostedReviewWorktreePath(
     const remoteWorktreePath = normalizeRemoteHostedReviewPath(worktreePath)
     const repoWorktrees = await listRepoWorktreeGraph(repo)
     if (
-      !repoWorktrees.some(
-        (worktree) => normalizeRemoteHostedReviewPath(worktree.path) === remoteWorktreePath
-      )
+      !(await worktreePathBelongsToRepo(
+        remoteWorktreePath,
+        normalizeRemoteHostedReviewPath(repo.path),
+        repoWorktrees.map((worktree) => normalizeRemoteHostedReviewPath(worktree.path)),
+        (target, ancestor) => relativePathInsideRoot(ancestor, target) !== null
+      ))
     ) {
       throw new Error('Access denied: worktree does not belong to repository')
     }
@@ -90,7 +96,14 @@ async function resolveHostedReviewWorktreePath(
     Object.keys(localGitOptions).length > 0
       ? await listRepoWorktreeGraph(repo, localGitOptions)
       : await listRepoWorktreeGraph(repo)
-  if (!repoWorktrees.some((worktree) => resolve(worktree.path) === resolvedWorktreePath)) {
+  if (
+    !(await worktreePathBelongsToRepo(
+      resolvedWorktreePath,
+      resolve(repo.path),
+      repoWorktrees.map((worktree) => resolve(worktree.path)),
+      isDescendantOrEqual
+    ))
+  ) {
     throw new Error('Access denied: worktree does not belong to repository')
   }
   return resolvedWorktreePath

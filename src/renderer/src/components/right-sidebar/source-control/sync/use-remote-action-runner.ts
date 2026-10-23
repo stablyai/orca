@@ -57,6 +57,7 @@ export function useSourceControlRemoteActionRunner({
   remoteStatus,
   remoteStatusForActions,
   setRemoteActionErrors,
+  statusKey,
   syncBranch,
   worktreePath
 }: {
@@ -79,6 +80,7 @@ export function useSourceControlRemoteActionRunner({
   remoteStatus: SourceControlWorktreeContext['remoteStatus']
   remoteStatusForActions: SourceControlWorktreeContext['remoteStatus']
   setRemoteActionErrors: SourceControlWorktreeOperationState['setRemoteActionErrors']
+  statusKey?: string
   syncBranch: SourceControlStoreActions['syncBranch']
   worktreePath: string | null
 }) {
@@ -126,7 +128,7 @@ export function useSourceControlRemoteActionRunner({
             true,
             target.connectionId,
             target.pushTarget,
-            { runtimeTarget: target.target }
+            { runtimeTarget: target.target, statusKey }
           )
           return { status: 'ok' }
         }
@@ -138,7 +140,7 @@ export function useSourceControlRemoteActionRunner({
             false,
             target.connectionId,
             target.pushTarget,
-            { runtimeTarget: target.target }
+            { runtimeTarget: target.target, statusKey }
           )
           return { status: 'ok' }
         }
@@ -149,7 +151,7 @@ export function useSourceControlRemoteActionRunner({
             false,
             target.connectionId,
             target.pushTarget,
-            { forceWithLease: true, runtimeTarget: target.target }
+            { forceWithLease: true, runtimeTarget: target.target, statusKey }
           )
           return { status: 'ok' }
         }
@@ -160,7 +162,8 @@ export function useSourceControlRemoteActionRunner({
             target.connectionId,
             target.pushTarget,
             {
-              runtimeTarget: target.target
+              runtimeTarget: target.target,
+              statusKey
             }
           )
           return { status: 'ok' }
@@ -171,7 +174,7 @@ export function useSourceControlRemoteActionRunner({
             target.worktreePath,
             target.connectionId,
             target.pushTarget,
-            { runtimeTarget: target.target }
+            { runtimeTarget: target.target, statusKey }
           )
           return { status: 'ok' }
         }
@@ -182,7 +185,8 @@ export function useSourceControlRemoteActionRunner({
             target.connectionId,
             target.pushTarget,
             {
-              runtimeTarget: target.target
+              runtimeTarget: target.target,
+              statusKey
             }
           )
           return { status: 'ok' }
@@ -198,7 +202,7 @@ export function useSourceControlRemoteActionRunner({
             baseRef,
             target.connectionId,
             target.pushTarget,
-            { runtimeTarget: target.target }
+            { runtimeTarget: target.target, statusKey }
           )
           return { status: 'ok' }
         }
@@ -208,11 +212,15 @@ export function useSourceControlRemoteActionRunner({
           target.connectionId,
           target.pushTarget,
           {
-            runtimeTarget: target.target
+            runtimeTarget: target.target,
+            statusKey
           }
         )
         if (remoteActionErrorSequenceByWorktreeRef.current[target.worktreeId] === sequence) {
-          setRemoteActionErrors((prev) => ({ ...prev, [target.worktreeId]: null }))
+          setRemoteActionErrors((prev) => ({
+            ...prev,
+            [target.worktreeId]: null
+          }))
         }
         return { status: 'ok' }
       } catch (error) {
@@ -231,7 +239,10 @@ export function useSourceControlRemoteActionRunner({
           entriesSnapshotTotalCount: recoveryEntrySnapshot.totalCount,
           sequence
         }
-        setRemoteActionErrors((prev) => ({ ...prev, [target.worktreeId]: actionError }))
+        setRemoteActionErrors((prev) => ({
+          ...prev,
+          [target.worktreeId]: actionError
+        }))
         return { status: 'failed', error: actionError }
       } finally {
         if (!options?.target) {
@@ -262,6 +273,7 @@ export function useSourceControlRemoteActionRunner({
       refreshGitHistoryRef,
       remoteActionErrorSequenceByWorktreeRef,
       setRemoteActionErrors,
+      statusKey,
       syncBranch,
       worktreePath
     ]

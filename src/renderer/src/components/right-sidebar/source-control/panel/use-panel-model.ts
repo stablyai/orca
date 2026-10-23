@@ -10,14 +10,15 @@ import { useSourceControlActionModel } from '../review/use-action-model'
 import { useSourceControlCreatePrIntentFlows } from '../review/use-create-pr-intent-flows'
 import { useSourceControlReviewFlows } from '../review/use-review-flows'
 import { useSourceControlUpstreamStatusFetch } from '../sync/use-upstream-status-fetch'
+import type { NestedRepoTarget } from '../nested/use-nested-folder-scope'
 import { useSourceControlPanelFoundation } from './use-panel-foundation'
 
 /**
  * The panel's single entry point: foundation, then the flows that act on it, then the action model
  * the chrome renders from. The rendered tree reads only this.
  */
-export function useSourceControlPanelModel() {
-  const foundation = useSourceControlPanelFoundation()
+export function useSourceControlPanelModel(nestedTarget?: NestedRepoTarget) {
+  const foundation = useSourceControlPanelFoundation(nestedTarget)
   const commitFlows = useSourceControlCommitFlows(foundation)
   const reviewFlows = useSourceControlReviewFlows(foundation)
   const createPrIntentFlows = useSourceControlCreatePrIntentFlows(
@@ -63,6 +64,7 @@ export function useSourceControlPanelModel() {
     refreshActiveGitStatusAfterMutation,
     remoteStatus,
     remoteStatusForActions,
+    remoteStatusKey,
     resolveSplitTargetGroupId,
     setIsExecutingBulk,
     sourceControlRef,
@@ -141,6 +143,7 @@ export function useSourceControlPanelModel() {
     fetchUpstreamStatus,
     isBranchVisible,
     isFolder,
+    statusKey: remoteStatusKey,
     worktreePath
   })
   const gitHistoryCommitActions = useGitHistoryCommitActions({

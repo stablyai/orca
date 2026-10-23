@@ -28,7 +28,12 @@ export function createGitRemoteSync(
       let pushStageToastShown = false
       let pushed = false
       try {
-        const context = { target: runtimeTarget, worktreeId, worktreePath, connectionId }
+        const context = {
+          target: runtimeTarget,
+          worktreeId,
+          worktreePath,
+          connectionId
+        }
         await fetchRuntimeGit(context, pushTarget)
         const upstreamStatusBeforePull = await getRuntimeGitUpstreamStatus(context, pushTarget)
         if (shouldForcePushWithLeaseForUpstream(upstreamStatusBeforePull)) {
@@ -76,11 +81,12 @@ export function createGitRemoteSync(
         get().endRemoteOperation()
       }
       void get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId, pushTarget, {
-        runtimeTarget
+        runtimeTarget,
+        statusKey: options?.statusKey
       })
       if (pushed) {
         const refreshGitHubForWorktree = get().refreshGitHubForWorktree
-        if (typeof refreshGitHubForWorktree === 'function') {
+        if (typeof refreshGitHubForWorktree === 'function' && !options?.statusKey) {
           refreshGitHubForWorktree(worktreeId)
         }
       }
@@ -107,10 +113,11 @@ export function createGitRemoteSync(
         get().endRemoteOperation()
       }
       void get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId, pushTarget, {
-        runtimeTarget
+        runtimeTarget,
+        statusKey: options?.statusKey
       })
       const refreshGitHubForWorktree = get().refreshGitHubForWorktree
-      if (typeof refreshGitHubForWorktree === 'function') {
+      if (typeof refreshGitHubForWorktree === 'function' && !options?.statusKey) {
         refreshGitHubForWorktree(worktreeId)
       }
     },
@@ -130,7 +137,8 @@ export function createGitRemoteSync(
         get().endRemoteOperation()
       }
       void get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId, pushTarget, {
-        runtimeTarget
+        runtimeTarget,
+        statusKey: options?.statusKey
       })
     }
   }

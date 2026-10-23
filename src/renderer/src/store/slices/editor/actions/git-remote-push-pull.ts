@@ -50,22 +50,29 @@ export function createGitRemotePushPull(
       } finally {
         get().endRemoteOperation()
         if (shouldRefreshAfterRejectedPush) {
-          const context = { target: runtimeTarget, worktreeId, worktreePath, connectionId }
+          const context = {
+            target: runtimeTarget,
+            worktreeId,
+            worktreePath,
+            connectionId
+          }
           // Why: the rejected push proved the branch moved; fetch first so legacy base-tracking worktrees discover origin/<branch>, then refresh ahead/behind.
           void fetchRuntimeGit(context, pushTarget)
             .catch(() => undefined)
             .then(() =>
               get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId, pushTarget, {
-                runtimeTarget
+                runtimeTarget,
+                statusKey: options?.statusKey
               })
             )
         }
       }
       void get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId, pushTarget, {
-        runtimeTarget
+        runtimeTarget,
+        statusKey: options?.statusKey
       })
       const refreshGitHubForWorktree = get().refreshGitHubForWorktree
-      if (typeof refreshGitHubForWorktree === 'function') {
+      if (typeof refreshGitHubForWorktree === 'function' && !options?.statusKey) {
         refreshGitHubForWorktree(worktreeId)
       }
     },
@@ -84,10 +91,11 @@ export function createGitRemotePushPull(
         get().endRemoteOperation()
       }
       void get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId, pushTarget, {
-        runtimeTarget
+        runtimeTarget,
+        statusKey: options?.statusKey
       })
       const refreshGitHubForWorktree = get().refreshGitHubForWorktree
-      if (typeof refreshGitHubForWorktree === 'function') {
+      if (typeof refreshGitHubForWorktree === 'function' && !options?.statusKey) {
         refreshGitHubForWorktree(worktreeId)
       }
     },
@@ -106,10 +114,11 @@ export function createGitRemotePushPull(
         get().endRemoteOperation()
       }
       void get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId, pushTarget, {
-        runtimeTarget
+        runtimeTarget,
+        statusKey: options?.statusKey
       })
       const refreshGitHubForWorktree = get().refreshGitHubForWorktree
-      if (typeof refreshGitHubForWorktree === 'function') {
+      if (typeof refreshGitHubForWorktree === 'function' && !options?.statusKey) {
         refreshGitHubForWorktree(worktreeId)
       }
     }

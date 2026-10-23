@@ -1,11 +1,24 @@
 import { translate } from '@/i18n/i18n'
+import { useNestedFolderScope } from '../nested/use-nested-folder-scope'
 import { SourceControlPanelReady } from './panel-ready'
 import { useSourceControlPanelModel } from './use-panel-model'
 
 /** Resolves the panel model and guards the two states that have no source control to show. */
 export function SourceControlPanel() {
   const model = useSourceControlPanelModel()
-  const { activeRepo, activeWorktree, isFolder, worktreePath } = model
+  const {
+    activeConnectionId,
+    activeRepo,
+    activeWorktree,
+    activeWorktreeId,
+    isFolder,
+    worktreePath
+  } = model
+  const nestedFolderScope = useNestedFolderScope({
+    worktreeId: activeWorktreeId,
+    worktreePath,
+    connectionId: activeConnectionId
+  })
 
   if (!activeWorktree || !activeRepo || !worktreePath) {
     return (
@@ -34,6 +47,7 @@ export function SourceControlPanel() {
       activeWorktree={activeWorktree}
       currentWorktreeId={activeWorktree.id}
       model={model}
+      nestedFolderScope={nestedFolderScope}
       worktreePath={worktreePath}
     />
   )
