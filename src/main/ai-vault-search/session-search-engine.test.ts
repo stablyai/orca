@@ -267,6 +267,50 @@ describe('filters narrow retrieval, not just the page', () => {
       ids(engine.search({ query: 'resolveTerminalPath', filters: { scopePaths: ['/target'] } }))
     ).toEqual(['2'])
   })
+
+  it('reads `since` as an instant, whatever offset it is spelled with', async () => {
+    const { db, engine } = await open('ss-engine-since-offset')
+    addSyntheticSession(db, { id: 1, text: 'needle', updatedAt: '2026-10-11T23:00:00.000Z' })
+    addSyntheticSession(db, { id: 2, text: 'needle', updatedAt: '2026-10-12T00:00:00.492Z' })
+    addSyntheticSession(db, { id: 3, text: 'needle', updatedAt: '2026-10-12T09:00:00.000Z' })
+    for (const since of [
+      '2026-10-12T00:00:00Z',
+      '2026-10-12T08:00:00+08:00',
+      '2026-10-11T16:00:00-08:00'
+    ]) {
+      const result = engine.search({ query: 'needle', filters: { since, sort: 'newest' } })
+      expect(ids(result)).toEqual(['3', '2'])
+    }
+  })
+
+  it('leaves out a session from just before a sub-millisecond `since`', async () => {
+    const { db, engine } = await open('ss-engine-since-sub-ms')
+    addSyntheticSession(db, { id: 1, text: 'needle', updatedAt: '2026-10-12T00:00:00.000Z' })
+    addSyntheticSession(db, { id: 2, text: 'needle', updatedAt: '2026-10-12T00:00:00.001Z' })
+    const result = engine.search({
+      query: 'needle',
+      filters: { since: '2026-10-12T00:00:00.0005Z', sort: 'newest' }
+    })
+    expect(ids(result)).toEqual(['2'])
+  })
+
+  it('pages one instant as one query, whatever offset it is spelled with', async () => {
+    const { db, engine } = await open('ss-engine-since-cursor')
+    addSyntheticSession(db, { id: 1, text: 'needle', updatedAt: '2026-10-12T01:00:00.000Z' })
+    addSyntheticSession(db, { id: 2, text: 'needle', updatedAt: '2026-10-12T02:00:00.000Z' })
+    const first = engine.search({
+      query: 'needle',
+      limit: 1,
+      filters: { since: '2026-10-12T00:00:00Z', sort: 'newest' }
+    })
+    const next = engine.search({
+      query: 'needle',
+      limit: 1,
+      cursor: first.page.cursor ?? undefined,
+      filters: { since: '2026-10-12T08:00:00+08:00', sort: 'newest' }
+    })
+    expect([...ids(first), ...ids(next)]).toEqual(['2', '1'])
+  })
 })
 
 describe('evidence', () => {
