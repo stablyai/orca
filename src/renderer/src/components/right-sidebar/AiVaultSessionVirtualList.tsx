@@ -154,6 +154,11 @@ export function AiVaultSessionVirtualList({
       if (measured > 0) {
         return measured
       }
+      // Preserve cached geometry while hidden so restoring the list does not shift its scroll anchor.
+      const cached = measureVirtualElementSize(element, undefined, instance)
+      if (cached > 0) {
+        return cached
+      }
       const index = Number.parseInt(element.getAttribute('data-index') ?? '', 10)
       return estimateVaultVirtualRowSize(
         Number.isNaN(index) ? undefined : vaultRows[index],
