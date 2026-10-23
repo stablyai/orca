@@ -11,7 +11,7 @@ vi.mock('../source-control/hosted-review-branch-cache', () => ({
 }))
 
 import { RuntimeGitLabMutationCommands } from './runtime-gitlab-mutation-commands'
-import { getRepoHostedReviewExecutionHostId } from '../source-control/hosted-review-execution-host'
+import { getStoredRepoExecutionHostId } from '../repo-execution-host'
 
 const repo: Repo = {
   id: 'repo-1',
@@ -44,8 +44,8 @@ describe('RuntimeGitLabMutationCommands.updateGitLabRepoMR', () => {
     )
     expect(invalidateMock).toHaveBeenCalledWith(
       '/remote/repo',
-      getRepoHostedReviewExecutionHostId(repo)
+      getStoredRepoExecutionHostId(repo)
     )
-    expect(getRepoHostedReviewExecutionHostId(repo)).toBe('ssh:ssh-1')
+    expect(getStoredRepoExecutionHostId(repo)).toBe('ssh:ssh-1')
   })
 })
