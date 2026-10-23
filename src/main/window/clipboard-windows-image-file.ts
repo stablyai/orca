@@ -1,4 +1,5 @@
 import { win32 } from 'node:path'
+import { clipboardFilePathsFromUriList } from './clipboard-file-urls'
 import type { FileHandle } from 'node:fs/promises'
 import type { NativeImage } from 'electron'
 import {
@@ -14,6 +15,7 @@ type WindowsClipboardImageFileDeps = {
 }
 
 export type WindowsClipboardFileFormats = {
+  uriList?: Buffer
   fileNameW: Buffer
   shellIdListArray: Buffer
 }
@@ -78,9 +80,18 @@ function hasAtMostOneShellItem(value: Buffer): boolean {
 
 /** The one file Explorer copied; null when it copied none or several. */
 export function readWindowsCopiedFilePath({
+  uriList,
   fileNameW,
   shellIdListArray
 }: WindowsClipboardFileFormats): string | null {
+  if (uriList?.length) {
+    try {
+      const paths = clipboardFilePathsFromUriList(uriList, 'win32')
+      return paths.length === 1 && isFullyQualifiedWindowsPath(paths[0]) ? paths[0] : null
+    } catch {
+      return null
+    }
+  }
   return hasAtMostOneShellItem(shellIdListArray) ? decodeFileNameW(fileNameW) : null
 }
 

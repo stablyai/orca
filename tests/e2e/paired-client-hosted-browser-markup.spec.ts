@@ -110,9 +110,13 @@ test('draws and copies a screenshot from a client-hosted browser without replaci
     await client.app.evaluate(({ clipboard }) => clipboard.clear())
     await overlay.getByRole('button', { name: 'Copy Markup', exact: true }).click()
     await expect(overlay).toHaveCount(0)
-    expect(await client.app.evaluate(({ clipboard }) => clipboard.readImage().isEmpty())).toBe(
-      false
-    )
+    expect(
+      await client.app.evaluate(async ({ clipboard }) => {
+        const items = await clipboard.read()
+        const item = items.find((entry) => entry.types.includes('image/png'))
+        return item ? (await item.getType('image/png')).size : 0
+      })
+    ).toBeGreaterThan(0)
     await waitForRenderedClientWebview(client.page, target, 'guest was not restored after copying')
 
     await draw.click()

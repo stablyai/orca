@@ -218,7 +218,7 @@ importers:
         version: 0.27.0
       electron-updater:
         specifier: ^6.8.10
-        version: 6.8.10(electron@43.7.8(supports-color@7.2.0))(supports-color@7.2.0)
+        version: 6.8.10(electron@45.0.0(supports-color@7.2.0))(supports-color@7.2.0)
       fflate:
         specifier: 0.8.3
         version: 0.8.3
@@ -303,7 +303,7 @@ importers:
         version: 1.88.0
       '@playwright/test':
         specifier: ^1.63.0
-        version: 1.63.0(electron@43.7.8(supports-color@7.2.0))
+        version: 1.63.0(electron@45.0.0(supports-color@7.2.0))
       '@sanity/diff-match-patch':
         specifier: ^3.2.1
         version: 3.2.1
@@ -312,7 +312,7 @@ importers:
         version: 0.1.5(eslint@10.10.0(@types/keyv@3.1.4)(jiti@2.7.0)(supports-color@7.2.0))
       '@stablyai/playwright-test':
         specifier: ^2.1.16
-        version: 2.1.16(@playwright/test@1.63.0(electron@43.7.8(supports-color@7.2.0)))(zod@4.6.7)
+        version: 2.1.16(@playwright/test@1.63.0(electron@45.0.0(supports-color@7.2.0)))(zod@4.6.7)
       '@tailwindcss/vite':
         specifier: ^4.3.3
         version: 4.3.3(vite@8.3.4(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
@@ -446,14 +446,14 @@ importers:
         specifier: 3.4.16
         version: 3.4.16
       electron:
-        specifier: 43.7.8
-        version: 43.7.8(supports-color@7.2.0)
+        specifier: 45.0.0
+        version: 45.0.0(supports-color@7.2.0)
       electron-builder:
         specifier: 26.15.3
         version: 26.15.3(electron-builder-squirrel-windows@26.15.3)(supports-color@7.2.0)
       electron-vite:
         specifier: ^6.0.0
-        version: 6.0.0(@swc/core@1.16.2)(electron@43.7.8(supports-color@7.2.0))(supports-color@7.2.0)(vite@8.3.4(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+        version: 6.0.0(@swc/core@1.16.2)(electron@45.0.0(supports-color@7.2.0))(supports-color@7.2.0)(vite@8.3.4(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
       emoji-picker-react:
         specifier: ^4.22.3
         version: 4.22.3(@types/react@19.2.18)(react@19.2.8)
@@ -522,7 +522,7 @@ importers:
         version: 6.3.289
       playwright-core:
         specifier: 1.64.0
-        version: 1.64.0(electron@43.7.8(supports-color@7.2.0))
+        version: 1.64.0(electron@45.0.0(supports-color@7.2.0))
       pngjs:
         specifier: ^7.0.0
         version: 7.0.0
@@ -5092,8 +5092,8 @@ packages:
     resolution: {integrity: sha512-bO3y10YikuUwUuDUQRM4KfwNkKhnpVO7IPdbsrejwN9/AABJzzTQ4GeHwyzNSrVO+tEH3/Np255a3sVZpZDjvg==}
     engines: {node: '>=8.0.0'}
 
-  electron@43.7.8:
-    resolution: {integrity: sha512-h9qnttBn9b+pmnJjagrpjvK97Wb9WbsyIB03BV6NnhnPqSq1Jw7500hNkqHPkosHCE0zL/806v4zf9d3VrII0w==}
+  electron@45.0.0:
+    resolution: {integrity: sha512-yjz4uhMBcO6L5X7CWgRMobf2EMJPnb9j4zuf+nu/TU/6E4Sqfx7fn/a2eACo4qngjml/0JnsoZhxYroJLxLd2w==}
     engines: {node: '>= 22.12.0'}
     hasBin: true
 
@@ -9165,9 +9165,9 @@ snapshots:
       tslib: 2.8.1
       webcrypto-core: 1.9.2
 
-  '@playwright/test@1.63.0(electron@43.7.8(supports-color@7.2.0))':
+  '@playwright/test@1.63.0(electron@45.0.0(supports-color@7.2.0))':
     dependencies:
-      playwright: 1.63.0(electron@43.7.8(supports-color@7.2.0))
+      playwright: 1.63.0(electron@45.0.0(supports-color@7.2.0))
     transitivePeerDependencies:
       - '@types/electron'
       - electron
@@ -10179,28 +10179,28 @@ snapshots:
 
   '@stablelib/base64@1.0.1': {}
 
-  '@stablyai/playwright-base@2.1.16(@playwright/test@1.63.0(electron@43.7.8(supports-color@7.2.0)))(zod@4.6.7)':
+  '@stablyai/playwright-base@2.1.16(@playwright/test@1.63.0(electron@45.0.0(supports-color@7.2.0)))(zod@4.6.7)':
     dependencies:
-      '@playwright/test': 1.63.0(electron@43.7.8(supports-color@7.2.0))
+      '@playwright/test': 1.63.0(electron@45.0.0(supports-color@7.2.0))
       jpeg-js: 0.4.4
       p-retry: 4.6.2
       pngjs: 7.0.0
     optionalDependencies:
       zod: 4.6.7
 
-  '@stablyai/playwright-test@2.1.16(@playwright/test@1.63.0(electron@43.7.8(supports-color@7.2.0)))(zod@4.6.7)':
+  '@stablyai/playwright-test@2.1.16(@playwright/test@1.63.0(electron@45.0.0(supports-color@7.2.0)))(zod@4.6.7)':
     dependencies:
-      '@playwright/test': 1.63.0(electron@43.7.8(supports-color@7.2.0))
-      '@stablyai/playwright': 2.1.16(@playwright/test@1.63.0(electron@43.7.8(supports-color@7.2.0)))(zod@4.6.7)
-      '@stablyai/playwright-base': 2.1.16(@playwright/test@1.63.0(electron@43.7.8(supports-color@7.2.0)))(zod@4.6.7)
+      '@playwright/test': 1.63.0(electron@45.0.0(supports-color@7.2.0))
+      '@stablyai/playwright': 2.1.16(@playwright/test@1.63.0(electron@45.0.0(supports-color@7.2.0)))(zod@4.6.7)
+      '@stablyai/playwright-base': 2.1.16(@playwright/test@1.63.0(electron@45.0.0(supports-color@7.2.0)))(zod@4.6.7)
     transitivePeerDependencies:
       - '@types/zod'
       - zod
 
-  '@stablyai/playwright@2.1.16(@playwright/test@1.63.0(electron@43.7.8(supports-color@7.2.0)))(zod@4.6.7)':
+  '@stablyai/playwright@2.1.16(@playwright/test@1.63.0(electron@45.0.0(supports-color@7.2.0)))(zod@4.6.7)':
     dependencies:
-      '@playwright/test': 1.63.0(electron@43.7.8(supports-color@7.2.0))
-      '@stablyai/playwright-base': 2.1.16(@playwright/test@1.63.0(electron@43.7.8(supports-color@7.2.0)))(zod@4.6.7)
+      '@playwright/test': 1.63.0(electron@45.0.0(supports-color@7.2.0))
+      '@stablyai/playwright-base': 2.1.16(@playwright/test@1.63.0(electron@45.0.0(supports-color@7.2.0)))(zod@4.6.7)
     transitivePeerDependencies:
       - '@types/zod'
       - zod
@@ -11806,7 +11806,7 @@ snapshots:
 
   electron-to-chromium@1.5.422: {}
 
-  electron-updater@6.8.10(electron@43.7.8(supports-color@7.2.0))(supports-color@7.2.0):
+  electron-updater@6.8.10(electron@45.0.0(supports-color@7.2.0))(supports-color@7.2.0):
     dependencies:
       builder-util-runtime: 9.7.0(supports-color@7.2.0)
       fs-extra: 10.1.0
@@ -11817,16 +11817,16 @@ snapshots:
       semver: 7.7.4
       tiny-typed-emitter: 2.1.0
     optionalDependencies:
-      electron: 43.7.8(supports-color@7.2.0)
+      electron: 45.0.0(supports-color@7.2.0)
     transitivePeerDependencies:
       - supports-color
 
-  electron-vite@6.0.0(@swc/core@1.16.2)(electron@43.7.8(supports-color@7.2.0))(supports-color@7.2.0)(vite@8.3.4(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)):
+  electron-vite@6.0.0(@swc/core@1.16.2)(electron@45.0.0(supports-color@7.2.0))(supports-color@7.2.0)(vite@8.3.4(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)):
     dependencies:
       '@babel/core': 7.29.7(supports-color@7.2.0)
       '@babel/plugin-transform-arrow-functions': 7.29.7(@babel/core@7.29.7(supports-color@7.2.0))
       cac: 7.1.0
-      electron: 43.7.8(supports-color@7.2.0)
+      electron: 45.0.0(supports-color@7.2.0)
       magic-string: 1.4.2
       picocolors: 1.1.1
       rolldown: 1.2.14
@@ -11850,7 +11850,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  electron@43.7.8(supports-color@7.2.0):
+  electron@45.0.0(supports-color@7.2.0):
     dependencies:
       '@electron-internal/extract-zip': 1.0.4
       '@electron/get': 5.0.0(supports-color@7.2.0)
@@ -13900,17 +13900,17 @@ snapshots:
       pvutils: 1.1.5
       tslib: 2.8.1
 
-  playwright-core@1.63.0(electron@43.7.8(supports-color@7.2.0)):
+  playwright-core@1.63.0(electron@45.0.0(supports-color@7.2.0)):
     optionalDependencies:
-      electron: 43.7.8(supports-color@7.2.0)
+      electron: 45.0.0(supports-color@7.2.0)
 
-  playwright-core@1.64.0(electron@43.7.8(supports-color@7.2.0)):
+  playwright-core@1.64.0(electron@45.0.0(supports-color@7.2.0)):
     optionalDependencies:
-      electron: 43.7.8(supports-color@7.2.0)
+      electron: 45.0.0(supports-color@7.2.0)
 
-  playwright@1.63.0(electron@43.7.8(supports-color@7.2.0)):
+  playwright@1.63.0(electron@45.0.0(supports-color@7.2.0)):
     dependencies:
-      playwright-core: 1.63.0(electron@43.7.8(supports-color@7.2.0))
+      playwright-core: 1.63.0(electron@45.0.0(supports-color@7.2.0))
     transitivePeerDependencies:
       - '@types/electron'
       - electron

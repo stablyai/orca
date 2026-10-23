@@ -25,6 +25,7 @@ function fakeGuest(url: string): FakeGuest {
     id: nextGuestId++,
     url,
     level: 0,
+    setZoomMode: vi.fn(),
     mediaSent: [],
     isDestroyed: () => false,
     getURL: () => guest.url,

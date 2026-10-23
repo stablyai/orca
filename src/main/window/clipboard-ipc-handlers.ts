@@ -1,9 +1,11 @@
+import { clipboardFormatReader, writeClipboardBuffer, writeClipboardPng } from './clipboard-formats'
 import {
   app,
   clipboard,
   ipcMain,
   nativeImage,
   type IpcMainInvokeEvent,
+  type NativeImage,
   type WebContents
 } from 'electron'
 import { randomUUID } from 'node:crypto'
@@ -25,8 +27,7 @@ import {
 import {
   assertClipboardImageBase64LengthWithinLimit,
   assertClipboardImageByteLengthWithinLimit,
-  assertClipboardImageDimensionsWithinLimit,
-  type ClipboardImageThumbnail
+  assertClipboardImageDimensionsWithinLimit
 } from '../../shared/clipboard-image'
 import {
   writeFileToClipboard,
@@ -129,13 +130,16 @@ export function registerClipboardHandlers(
 
   ipcMain.handle('clipboard:readText', async (event, options?: ReadClipboardTextOptions) => {
     assertTrustedClipboardTextSender(event)
-    return assertClipboardTextWithinLimitWithYield(clipboard.readText(), options)
+    return assertClipboardTextWithinLimitWithYield(await clipboard.readText(), options)
   })
   ipcMain.handle(
     'clipboard:readSelectionText',
     async (event, options?: ReadClipboardTextOptions) => {
       assertTrustedClipboardSender(event)
-      return assertClipboardTextWithinLimitWithYield(clipboard.readText('selection'), options)
+      return assertClipboardTextWithinLimitWithYield(
+        process.platform === 'linux' ? await clipboard.selection.readText() : '',
+        options
+      )
     }
   )
   ipcMain.handle('clipboard:restoreNativeChatPastes', (event, paths: unknown) => {
@@ -144,23 +148,23 @@ export function registerClipboardHandlers(
   })
   // Why: an unanswered paste reads as a dropped paste, so the composer probes
   // the clipboard in memory before the (slower) save lands.
-  ipcMain.handle('clipboard:readImageThumbnail', (event): ClipboardImageThumbnail | null => {
+  ipcMain.handle('clipboard:readImageThumbnail', async (event) => {
     assertTrustedClipboardSender(event)
     try {
-      return buildClipboardImageThumbnail(readClipboardNativeImage())
+      return buildClipboardImageThumbnail(await readClipboardNativeImage())
     } catch {
       // The save call reports rejected source data; the preview is best effort.
       return null
     }
   })
-  ipcMain.handle('clipboard:hasImage', (event): boolean => {
+  ipcMain.handle('clipboard:hasImage', async (event): Promise<boolean> => {
     assertTrustedClipboardSender(event)
-    return readClipboardImageSource(clipboard) !== null
+    return (await readClipboardImageSource(clipboardFormatReader)) !== null
   })
   // Why: a file-manager copy also carries the files' names as text, which a paste must not type.
-  ipcMain.handle('clipboard:readFilePaths', (event): string[] => {
+  ipcMain.handle('clipboard:readFilePaths', async (event): Promise<string[]> => {
     assertTrustedClipboardSender(event)
-    return readClipboardCopiedFilePaths(clipboard)
+    return readClipboardCopiedFilePaths(clipboardFormatReader)
   })
   // Why: terminals need to detect clipboard images to support tools like Claude
   // Code that accept image input via paste. Writes the clipboard image to a
@@ -169,11 +173,11 @@ export function registerClipboardHandlers(
     'clipboard:saveImageAsTempFile',
     async (event, args?: SaveClipboardImageAsTempFileArgs) => {
       assertTrustedClipboardSender(event)
-      const source = readClipboardImageSource(clipboard)
+      const source = await readClipboardImageSource(clipboardFormatReader)
       if (!source) {
         return null
       }
-      const image = readClipboardNativeImage()
+      const image = await readClipboardNativeImage()
       if (image.isEmpty()) {
         if (!source.windowsFileFormats) {
           return null
@@ -223,7 +227,7 @@ export function registerClipboardHandlers(
         platform: process.platform,
         desktop: process.env.XDG_CURRENT_DESKTOP,
         resolveFilePath,
-        writeBuffer: (format, buffer) => clipboard.writeBuffer(format, buffer),
+        writeBuffer: writeClipboardBuffer,
         runProcess
       })
     }
@@ -245,46 +249,34 @@ export function registerClipboardHandlers(
   })
   ipcMain.handle('clipboard:writeSelectionText', async (event, text: string) => {
     assertTrustedClipboardSender(event)
-    return clipboard.writeText(
-      await assertClipboardTextWriteWithinLimitWithYield(text),
-      'selection'
-    )
+    const safeText = await assertClipboardTextWriteWithinLimitWithYield(text)
+    if (process.platform === 'linux') {
+      await clipboard.selection.writeText(safeText)
+    }
   })
-  ipcMain.handle('clipboard:writeImage', (event, dataUrl: string) => {
+  ipcMain.handle('clipboard:writeImage', async (event, dataUrl: string) => {
     assertTrustedClipboardSender(event)
-    // Why: only accept validated PNG data URIs to prevent writing arbitrary
-    // data to the clipboard. The renderer already validates the prefix, but
-    // defense-in-depth applies here too.
+    // Validate here too: renderer checks do not authorize arbitrary clipboard formats.
     const prefix = 'data:image/png;base64,'
     if (typeof dataUrl !== 'string' || !dataUrl.startsWith(prefix)) {
       return
     }
     const contentBase64 = dataUrl.slice(prefix.length)
+    let image: NativeImage
     try {
       assertClipboardImageBase64LengthWithinLimit(contentBase64.length)
-    } catch {
-      return
-    }
-    // Why: use createFromBuffer instead of createFromDataURL — the latter
-    // silently returns an empty image on some macOS + Electron combinations
-    // when the data URL is large (>500KB). Decoding the base64 manually and
-    // using createFromBuffer is more reliable.
-    const buffer = Buffer.from(contentBase64, 'base64')
-    try {
+      const buffer = Buffer.from(contentBase64, 'base64')
       assertClipboardImageByteLengthWithinLimit(buffer.byteLength)
-    } catch {
-      return
-    }
-    const image = nativeImage.createFromBuffer(buffer)
-    if (image.isEmpty()) {
-      return
-    }
-    try {
+      // createFromDataURL can silently reject large images on macOS.
+      image = nativeImage.createFromBuffer(buffer)
+      if (image.isEmpty()) {
+        return
+      }
       assertClipboardImageDimensionsWithinLimit(image.getSize())
     } catch {
       return
     }
-    clipboard.writeImage(image)
+    await writeClipboardPng(image.toPNG())
   })
 }
 

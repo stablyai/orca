@@ -15,6 +15,7 @@ packages:
 minimumReleaseAge: 4320
 # Latest requested releases are still within the three-day delay; exempt only these versions.
 minimumReleaseAgeExclude:
+  - 'electron@45.0.0'
   - '@oxc-project/types@0.154.0'
   - '@rolldown/binding-android-arm-eabi@1.2.14'
   - '@rolldown/binding-android-arm64@1.2.14'

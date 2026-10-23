@@ -22,7 +22,7 @@ type ClipboardTextPublisherDeps = {
   helperPath: () => string | Promise<string>
   run: typeof runProcess
   clearCache: () => void
-  write: (text: string, kind: ClipboardTextWriteKind) => void
+  write: (text: string, kind: ClipboardTextWriteKind) => void | Promise<void>
   validate: (text: string) => Promise<string>
 }
 
@@ -40,9 +40,6 @@ export function createClipboardTextPublisher(
     if (text.length > CLIPBOARD_TEXT_WRITE_MAX_BYTES) {
       return Promise.reject(new Error(CLIPBOARD_TEXT_WRITE_TOO_LARGE_ERROR))
     }
-    if (!deps.isWayland()) {
-      return deps.validate(text).then((safeText) => deps.write(safeText, kind))
-    }
     if (
       count >= MAX_PENDING_CLIPBOARD_WRITES ||
       text.length > CLIPBOARD_TEXT_WRITE_MAX_BYTES - queuedCodeUnits
@@ -55,6 +52,10 @@ export function createClipboardTextPublisher(
     const next = pending
       .then(async () => {
         const safeText = await deps.validate(text)
+        if (!deps.isWayland()) {
+          await deps.write(safeText, kind)
+          return
+        }
         const result = await deps.run({
           program: await deps.helperPath(),
           input: safeText,
@@ -130,12 +131,7 @@ export const publishClipboardText = createClipboardTextPublisher({
     return runProcess({ ...spec, env })
   },
   clearCache: () => clipboard.clear(),
-  write: (text, kind) => {
-    if (kind === 'terminal') {
-      writeClipboardTextAndVerify(text)
-    } else {
-      clipboard.writeText(text)
-    }
-  },
+  write: (text, kind) =>
+    kind === 'terminal' ? writeClipboardTextAndVerify(text) : clipboard.writeText(text),
   validate: assertClipboardTextWriteWithinLimitWithYield
 })

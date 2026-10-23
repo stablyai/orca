@@ -74,6 +74,14 @@ export async function initializeReadyFoundation(): Promise<void> {
     )
     handleBrowserGuestLogin(event, webContents, details, authInfo, callback)
   })
+  app.on('select-client-certificate', (event, webContents, _url, _certificates, callback) => {
+    if (webContents !== null) {
+      return
+    }
+    // Background net requests must not silently present the user's first matching certificate.
+    event.preventDefault()
+    callback()
+  })
   const canonicalUserDataPath = getCanonicalUserDataPath()
   preservePreviousHangDetection(canonicalUserDataPath)
   installMainThreadHangWatchdog({ userDataPath: canonicalUserDataPath })

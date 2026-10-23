@@ -123,6 +123,7 @@ docs/**
 !docs/reference/cross-platform-support.md
 !docs/reference/git-workflow.md
 !docs/reference/test-antipatterns.md
+!docs/reference/electron-45-upgrade.md
 !docs/audits/
 !docs/audits/crashpad-read-limit/
 !docs/audits/crashpad-read-limit/source-hashes.json

@@ -72,14 +72,19 @@ describe.each(['darwin', 'win32'] as const)('%s clipboard compatibility', (platf
     expect(mocks.clear).not.toHaveBeenCalled()
   })
 
-  it('does not apply the native helper queue limit to concurrent Electron writes', async () => {
+  it('serializes asynchronous terminal writes before verifying each read-back', async () => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
-
+    let contents = ''
+    mocks.writeText.mockImplementation(async (text: string) => {
+      await Promise.resolve()
+      contents = text
+    })
+    mocks.readText.mockImplementation(async () => contents)
     await Promise.all(
-      Array.from({ length: 40 }, (_, index) => publishClipboardText(String(index), 'ordinary'))
+      Array.from({ length: 20 }, (_, index) => publishClipboardText(String(index), 'terminal'))
     )
-    expect(mocks.writeText).toHaveBeenCalledTimes(40)
+    expect(contents).toBe('19')
+    expect(mocks.readText).toHaveBeenCalledTimes(20)
     expect(mocks.runProcess).not.toHaveBeenCalled()
-    expect(mocks.clear).not.toHaveBeenCalled()
   })
 })

@@ -1,3 +1,12 @@
+vi.mock('./clipboard-native-image', () => ({
+  readClipboardNativeImage: async () => mocks.readImage()
+}))
+vi.mock('./clipboard-formats', () => ({
+  clipboardFormatReader: {
+    availableFormats: async () => ['image/png'],
+    readBuffer: async () => Buffer.alloc(0)
+  }
+}))
 // A structured chat keeps pasted images in its host's attachment store, not in a temp directory: a
 // temp path has no owner, so nothing can tell a sent paste from an abandoned one.
 import { mkdtemp, readFile, rm } from 'node:fs/promises'

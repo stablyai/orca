@@ -105,7 +105,7 @@ describe('dashboard popout clipboard access', () => {
     await expect(handlers.get('clipboard:saveImageAsTempFile')?.(popoutEvent)).rejects.toThrow(
       'Unauthorized clipboard IPC sender'
     )
-    expect(() => handlers.get('clipboard:readFilePaths')?.(popoutEvent)).toThrow(
+    await expect(handlers.get('clipboard:readFilePaths')?.(popoutEvent)).rejects.toThrow(
       'Unauthorized clipboard IPC sender'
     )
     expect(() =>
@@ -117,9 +117,9 @@ describe('dashboard popout clipboard access', () => {
         connectionId: 'ssh-secret'
       })
     ).toThrow('Unauthorized clipboard IPC sender')
-    expect(() =>
+    await expect(
       handlers.get('clipboard:writeImage')?.(popoutEvent, 'data:image/png;base64,AAAA')
-    ).toThrow('Unauthorized clipboard IPC sender')
+    ).rejects.toThrow('Unauthorized clipboard IPC sender')
 
     expect(clipboardReadImage).not.toHaveBeenCalled()
     expect(clipboardWriteImage).not.toHaveBeenCalled()

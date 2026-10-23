@@ -1,5 +1,6 @@
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
+import { pathToFileURL } from 'node:url'
 import path from 'node:path'
 import { runProcess } from '@orca/process-host'
 import { windowsPowerShellPath } from '@orca/process-host/windows-system-binary'
@@ -58,11 +59,13 @@ test.describe('file explorer Copy on Windows', () => {
     // Waits for the copy to land; the paste below is what proves it.
     await expect
       .poll(() =>
-        electronApp.evaluate(({ clipboard }) =>
-          clipboard.readBuffer('FileNameW').toString('utf16le').replace(/\0+$/, '')
-        )
+        electronApp.evaluate(async ({ clipboard }) => {
+          const items = await clipboard.read()
+          const item = items.find((entry) => entry.types.includes('text/uri-list'))
+          return item ? (await (await item.getType('text/uri-list')).text()).trim() : ''
+        })
       )
-      .toBe(path.join(source, FILE_NAME))
+      .toBe(pathToFileURL(path.join(source, FILE_NAME)).href)
 
     await shellPasteInto(pasteTarget)
     await expect

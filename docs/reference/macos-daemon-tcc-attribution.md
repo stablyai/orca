@@ -60,7 +60,7 @@ folder prompts naming it, and a new Full Disk Access row for every user.
 The helper's Node declares `LC_BUILD_VERSION minos 13.5`, which is also the helper's
 `LSMinimumSystemVersion` and `NODE_RUNTIME_DARWIN_MINIMUM_OS`. Packaging fails if a Node pin bump
 changes it. Below 13.5 the launcher returns before copying and the fork runs, so those Macs keep the
-pre-#25848 behaviour; Orca itself still supports macOS 12.0.
+pre-#25848 behaviour; Orca requires macOS 13.0 as of Electron 45.
 
 ## First launch
 

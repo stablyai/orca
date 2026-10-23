@@ -1,3 +1,16 @@
+vi.mock('./clipboard-native-image', () => ({
+  readClipboardNativeImage: async () => ({
+    isEmpty: () => false,
+    getSize: () => ({ width: 1, height: 1 }),
+    toPNG: () => PNG
+  })
+}))
+vi.mock('./clipboard-formats', () => ({
+  clipboardFormatReader: {
+    availableFormats: async () => ['image/png'],
+    readBuffer: async () => Buffer.alloc(0)
+  }
+}))
 // Nested Remote Orca Server -> SSH image paste (#17679). This process serves no SSH filesystem, so
 // any route that resolved the runtime's SSH target locally would fail the way the report did.
 import { beforeEach, describe, expect, it, vi } from 'vitest'

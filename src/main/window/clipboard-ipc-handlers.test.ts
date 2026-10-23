@@ -89,6 +89,10 @@ vi.mock('electron', () => ({
     getPath: vi.fn(() => '/tmp')
   },
   clipboard: {
+    selection: {
+      readText: () => clipboardReadTextMock('selection'),
+      writeText: (text: string) => clipboardWriteTextMock(text, 'selection')
+    },
     readText: clipboardReadTextMock,
     readBuffer: clipboardReadBufferMock,
     writeText: clipboardWriteTextMock,
@@ -110,6 +114,18 @@ vi.mock('../ipc/runtime-environments/runtime-environment-transport-routing', () 
   callRuntimeEnvironment: callRuntimeEnvironmentMock
 }))
 vi.mock('./dashboard-popout-window', () => ({ isDashboardPopoutRenderer: () => false }))
+
+vi.mock('./clipboard-formats', () => ({
+  clipboardFormatReader: {
+    availableFormats: clipboardAvailableFormatsMock,
+    readBuffer: clipboardReadBufferMock,
+    has: () => false
+  },
+  writeClipboardBuffer: clipboardWriteBufferMock
+}))
+vi.mock('./clipboard-native-image', () => ({
+  readClipboardNativeImage: async () => clipboardReadImageMock()
+}))
 
 import {
   registerClipboardHandlers,
@@ -219,6 +235,7 @@ describe('registerClipboardHandlers', () => {
   })
 
   it('registers normal and selection text clipboard IPC handlers', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
     const values = { standard: 'standard text', selection: 'selection text' }
     clipboardReadTextMock.mockImplementation((type?: string) =>
       type === 'selection' ? values.selection : values.standard
@@ -269,9 +286,9 @@ describe('registerClipboardHandlers', () => {
     expect(() =>
       handlers.get('clipboard:writeFile')?.(untrustedEvent, '/tmp/copied-file.txt')
     ).toThrow('Unauthorized clipboard IPC sender')
-    expect(() =>
+    await expect(
       handlers.get('clipboard:writeImage')?.(untrustedEvent, 'data:image/png;base64,AAAA')
-    ).toThrow('Unauthorized clipboard IPC sender')
+    ).rejects.toThrow('Unauthorized clipboard IPC sender')
 
     expect(clipboardReadTextMock).not.toHaveBeenCalled()
     expect(clipboardWriteTextMock).not.toHaveBeenCalled()
@@ -340,6 +357,7 @@ describe('registerClipboardHandlers', () => {
   })
 
   it('rejects oversized text clipboard IPC reads without returning clipboard contents', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
     clipboardReadTextMock.mockImplementation((clipboardType?: string) =>
       clipboardType === 'selection' ? 'selection secret' : 'standard secret'
     )
@@ -466,7 +484,11 @@ describe('registerClipboardHandlers', () => {
       const png = Buffer.from([4, 3, 2, 1])
       clipboardReadImageMock.mockReturnValue({ isEmpty: () => true })
       clipboardReadBufferMock.mockImplementation((format: string) =>
-        format === 'FileNameW' ? Buffer.from(`${sourcePath}\0`, 'utf16le') : shellIdListArray(1)
+        format === 'FileNameW'
+          ? Buffer.from(`${sourcePath}\0`, 'utf16le')
+          : format === 'Shell IDList Array'
+            ? shellIdListArray(1)
+            : Buffer.alloc(0)
       )
       const source = Buffer.alloc(24)
       Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).copy(source)
@@ -493,8 +515,8 @@ describe('registerClipboardHandlers', () => {
         registerClipboardHandlers({} as never)
 
         const probe = getRegisteredHandlers().get('clipboard:hasImage')
-        expect(probe?.(makeClipboardEvent())).toBe(true)
-        expect(() => probe?.(makeClipboardEvent({ id: 42 }))).toThrow()
+        await expect(probe?.(makeClipboardEvent())).resolves.toBe(true)
+        await expect(probe?.(makeClipboardEvent({ id: 42 }))).rejects.toThrow()
         const handler = getRegisteredHandlers().get('clipboard:saveImageAsTempFile')
         await expect(handler?.(makeClipboardEvent())).resolves.toMatch(
           /orca-paste-1760000000000-00000000-0000-4000-8000-000000000000\.png$/

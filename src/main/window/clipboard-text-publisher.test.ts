@@ -85,6 +85,28 @@ describe('terminal clipboard writes', () => {
     expect(clearCache).not.toHaveBeenCalled()
   })
 
+  it('waits for asynchronous Electron verification before the next copy and recovers on failure', async () => {
+    let rejectVerification: (error: Error) => void = () => undefined
+    write.mockImplementationOnce(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          rejectVerification = reject
+        })
+    )
+    const copy = writer(false)
+    const firstRejected = expect(copy('first')).rejects.toThrow('verification failed')
+    const second = copy('second', 'ordinary')
+    await vi.waitFor(() => expect(write).toHaveBeenCalledTimes(1))
+    expect(write).toHaveBeenLastCalledWith('first', 'terminal')
+    rejectVerification(new Error('verification failed'))
+    await firstRejected
+    await second
+    expect(write.mock.calls).toEqual([
+      ['first', 'terminal'],
+      ['second', 'ordinary']
+    ])
+  })
+
   it('rejects unsupported desktops without poisoning the Electron cache', async () => {
     run.mockResolvedValueOnce({ ...ok, code: 78 })
     await expect(writer()('copy')).rejects.toThrow('Wayland clipboard write failed')

@@ -37,7 +37,9 @@ function harness(overrides: Partial<RendererRecoveryPromptDeps> & { responses?: 
         checkboxChecked: false
       }
     },
-    copyToClipboard: (text) => copied.push(text),
+    copyToClipboard: (text) => {
+      copied.push(text)
+    },
     reload,
     quit,
     ...rest

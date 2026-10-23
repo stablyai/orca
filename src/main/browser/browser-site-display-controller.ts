@@ -58,6 +58,7 @@ export class BrowserSiteDisplayController {
   }
 
   onGuestRegistered(guest: Electron.WebContents, profileId: string | null): void {
+    guest.setZoomMode('isolated')
     const previous = this.guests.get(guest.id)
     previous?.stopWatchingDomReady()
     // Why dom-ready: once Orca's UI zoom has changed, Electron copies it onto the guest at some

@@ -15,7 +15,7 @@ export type ClipboardFileDeps = {
   resolveFilePath: (
     path: string
   ) => Promise<{ ok: true; path: string } | { ok: false; reason: string }>
-  writeBuffer: (format: string, buffer: Buffer) => void
+  writeBuffer: (format: string, buffer: Buffer) => void | Promise<void>
   runProcess: (spec: ProcessSpec) => Promise<ProcessResult>
 }
 
@@ -42,7 +42,10 @@ export async function writeFileToClipboard(
     // macOS reads `public.file-url` and synthesizes the legacy file types Finder
     // needs, so a single buffer is enough.
     try {
-      deps.writeBuffer('public.file-url', Buffer.from(pathToFileURL(clipboardPath).href, 'utf8'))
+      await deps.writeBuffer(
+        'public.file-url',
+        Buffer.from(pathToFileURL(clipboardPath).href, 'utf8')
+      )
       return { ok: true }
     } catch {
       return { ok: false, reason: 'clipboard-write-failed' }

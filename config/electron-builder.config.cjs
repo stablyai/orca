@@ -70,6 +70,7 @@ const {
 } = require('./scripts/appimage-node-runtime.cjs')
 const { signWindowsUninstallerViaSignPath } = require('./scripts/windows-uninstaller-signing.cjs')
 const { buildMacShipItScheduling } = require('./scripts/macos-shipit-scheduling.cjs')
+const { packageWindowsWerHelper } = require('./scripts/package-windows-wer-helper.cjs')
 
 // Why: dev-channel builds must carry the *release* identity — same bundle id,
 // Developer ID signature, and notarization ticket — or Squirrel.Mac refuses to
@@ -427,6 +428,9 @@ module.exports = {
     }
   },
   afterPack: async (context) => {
+    if (context.electronPlatformName === 'win32') {
+      packageWindowsWerHelper(context.appOutDir, context.packager.appInfo.productFilename)
+    }
     const resourcesDir =
       context.electronPlatformName === 'darwin'
         ? join(
@@ -624,6 +628,7 @@ module.exports = {
     include: resolve(__dirname, 'nsis', 'orca-installer-hooks.nsh')
   },
   mac: {
+    minimumSystemVersion: '13.0',
     // Why rank Alternate: Orca joins Finder's "Open With" list without claiming
     // LSHandlerRank ownership, so whichever editor the user already prefers stays the default.
     // Why one entry per extension: app-builder-lib globs `*.${ext}`, which an array would break.
