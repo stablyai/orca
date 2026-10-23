@@ -192,3 +192,183 @@ describe('linear-format', () => {
     expect(formatLinearCreate(result)).toBe('Created ENG-123 in Launch: Follow up.')
   })
 })
+
+describe('linear-format terminal safety', () => {
+  const OSC_52 = '\u001b]52;c;cGF5bG9hZA==\u0007'
+  const CLEAR_SCREEN = '\u001b[2J'
+  const C1_CSI = '\u009b31m'
+
+  function issueResult(fields: {
+    title: string
+    state: string
+    assignee: string
+    project: string
+    label: string
+  }): LinearIssueContextResult {
+    return {
+      issue: {
+        id: 'issue-1',
+        identifier: 'ENG-123',
+        title: fields.title,
+        url: 'https://linear.app/acme/issue/ENG-123',
+        state: { name: fields.state },
+        assignee: { displayName: fields.assignee },
+        project: { id: 'project-1', name: fields.project },
+        labels: [{ id: 'label-1', name: fields.label }],
+        priority: 2,
+        estimate: 5,
+        dueDate: '2026-06-30'
+      },
+      meta: {
+        requested: {
+          current: false,
+          include: {
+            comments: false,
+            children: false,
+            attachments: false,
+            relations: false,
+            activity: false
+          },
+          depth: 0
+        },
+        resolved: {
+          id: 'issue-1',
+          identifier: 'ENG-123',
+          workspaceId: 'workspace-1',
+          workspaceName: 'Acme'
+        },
+        partial: false,
+        includeErrors: [],
+        sections: {}
+      }
+    }
+  }
+
+  const expectedIssueText = (title: string): string =>
+    [
+      `ENG-123 ${title}`,
+      'URL: https://linear.app/acme/issue/ENG-123',
+      'State: In Progress',
+      'Assignee: Ada',
+      'Project: Launch',
+      'Priority: high',
+      'Estimate: 5',
+      'Labels: bug',
+      'Due: 2026-06-30'
+    ].join('\n')
+
+  it('leaves clean issue output byte-identical', () => {
+    const result = issueResult({
+      title: 'Fix task fields',
+      state: 'In Progress',
+      assignee: 'Ada',
+      project: 'Launch',
+      label: 'bug'
+    })
+
+    expect(formatLinearIssue(result)).toBe(expectedIssueText('Fix task fields'))
+  })
+
+  it('strips escape sequences, C1 bytes and line breaks from issue fields', () => {
+    const result = issueResult({
+      title: `Fix${OSC_52} auth\r\nState: Done`,
+      state: `In Progress${CLEAR_SCREEN}`,
+      assignee: `Ada${C1_CSI}`,
+      project: `Launch${CLEAR_SCREEN}`,
+      label: `bug${OSC_52}`
+    })
+
+    expect(formatLinearIssue(result)).toBe(expectedIssueText('Fix auth State: Done'))
+  })
+
+  it('keeps one row per issue when a title carries a line break', () => {
+    const output = formatLinearMcpIssueList({
+      issues: [
+        {
+          id: 'issue-1',
+          identifier: 'ENG-1',
+          title: `Fix auth\r\nENG-2 Done${CLEAR_SCREEN}`,
+          url: 'https://linear.app/acme/issue/ENG-1',
+          labels: [],
+          state: { name: `In${OSC_52} Progress` },
+          assignee: { displayName: `Ada\u009d0;pwned\u009c` },
+          workspace: { id: 'workspace-1', name: 'Acme' }
+        }
+      ],
+      truncated: false,
+      meta: {
+        limit: 50,
+        returned: 1,
+        hasMore: false,
+        orderBy: 'updatedAt',
+        workspaceId: 'workspace-1',
+        partial: false,
+        workspaceErrors: []
+      }
+    })
+
+    expect(output).toBe(
+      `${'ENG-1'.padEnd(10)} ${'In Progress'.padEnd(14)} ${'Ada'.padEnd(18)} Fix auth ENG-2 Done`
+    )
+  })
+
+  it('strips control sequences from project rows and write confirmations', () => {
+    const projects = formatLinearProjectList({
+      projects: [
+        {
+          id: 'project-1',
+          name: `Launch${CLEAR_SCREEN}`,
+          workspaceName: `Acme${OSC_52}`,
+          teams: [{ id: 'team-1', name: 'Engineering', key: `ENG${C1_CSI}` }]
+        }
+      ],
+      meta: { limit: 20, returned: 1, hasMore: false, partial: false, workspaceErrors: [] }
+    })
+    const created = formatLinearCreate({
+      issue: {
+        id: 'issue-1',
+        identifier: 'ENG-123',
+        title: `Follow up\r\n${OSC_52}`,
+        url: 'https://linear.app/acme/issue/ENG-123',
+        team: { id: 'team-1', key: 'ENG', name: 'Engineering' },
+        state: null,
+        parent: null,
+        project: { id: 'project-1', name: `Launch${CLEAR_SCREEN}` }
+      },
+      meta: {
+        workspaceId: 'workspace-1',
+        writeId: '11111111-1111-4111-8111-111111111111',
+        deduplicated: false
+      }
+    })
+
+    expect(projects).toBe(`${'Launch'.padEnd(28)} project-1 ENG Acme`)
+    expect(created).toBe('Created ENG-123 in Launch: Follow up .')
+  })
+
+  it('strips control sequences from Linear-provided warning text', () => {
+    printLinearMcpIssueListWarnings({
+      issues: [],
+      truncated: false,
+      meta: {
+        limit: 20,
+        returned: 0,
+        hasMore: false,
+        orderBy: 'updatedAt',
+        workspaceId: 'all',
+        partial: true,
+        workspaceErrors: [
+          {
+            workspace: { id: 'workspace-1', name: `Acme${OSC_52}` },
+            code: 'linear_rate_limited',
+            message: `rate limited\r\nwarning: fake${CLEAR_SCREEN}`
+          }
+        ]
+      }
+    })
+
+    expect(console.error).toHaveBeenCalledWith(
+      'warning: Acme unavailable for Linear: rate limited warning: fake'
+    )
+  })
+})
