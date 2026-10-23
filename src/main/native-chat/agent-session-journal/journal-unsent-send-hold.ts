@@ -16,10 +16,12 @@ import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-qu
 import { USER_MESSAGE_SOURCE } from '../../../shared/agent-session-message-source'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
-import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
 import type { AgentSessionJournal } from './journal-store'
-import type { JournalRowTransactionHook } from './journal-row-writer'
-import type { QueuedMessagePositionMove } from './queued-message-positions'
+import type { JournalQueueCardChange } from './journal-queue-events'
+import type { JournalQueuePlan } from './journal-queued-messages'
+
+/** A card the batch places, by its id. */
+type QueuedMessagePositionMove = { messageId: string; position: number }
 
 /** Why the host can no longer hand a send over, which also says which sends it is. */
 export type UnsentSendHold =
@@ -29,7 +31,7 @@ export type UnsentSendHold =
   | { cause: 'chatClosed'; which?: (submission: AgentJournalSubmission) => boolean }
 
 /** The body an unsent send is kept with, or null when it is rejected instead:
- *  - a card's own hand-off: its rejection already returns the card (`rejectedDraftSettlement`);
+ *  - a card's own hand-off: its rejection already returns the card (`queuedHandOffOutcome`);
  *  - `/compact` and other commands: a command in flight is not resumed, the person re-runs it;
  *  - a direct image: it retains the existing rejected-send recovery instead of becoming a card;
  *  - a send not from a person: orchestration mail (the mailbox re-sends it), a dispatch preamble
@@ -82,7 +84,6 @@ export async function holdUnsentSends(
   journal: AgentSessionJournal,
   input: {
     fence: number
-    hostInstance: string
     hold: UnsentSendHold
     /** In place of the queued sends: those a child that ended before it answered its start was
      *  handed and never echoed. It ran none, so each is unsent as surely as a queued one. */
@@ -122,37 +123,38 @@ export async function holdUnsentSends(
     const moves = [
       // The cards an earlier settlement kept move with the first row.
       ...(index === 0 ? positions.earlier : []),
-      ...(submission.queuedMessageId !== undefined
-        ? positions.placed.filter(
-            (entry) => 'consumedAs' in entry && entry.consumedAs === clientMessageId
-          )
-        : [])
+      ...positions.placed.filter((entry) => entry.messageId === submission.queuedMessageId)
     ]
-    const position = positions.placed.find(
-      (entry) => 'messageId' in entry && entry.messageId === clientMessageId
-    )?.position
+    const position = positions.placed.find((entry) => entry.messageId === clientMessageId)?.position
     const card = body && position !== undefined ? { body, position } : null
-    const keep: JournalRowTransactionHook | undefined =
+    const keep: (() => JournalQueuePlan) | undefined =
       card || moves.length > 0
-        ? (db) => {
-            journal.queuedMessages.holdInTransaction(db, {
-              card: card
-                ? {
-                    messageId: clientMessageId,
-                    body: card.body,
-                    fingerprint: agentSessionSendBodyFingerprint(
-                      journal.queuedMessages.sessionId,
-                      card.body
-                    ),
-                    hostInstance: input.hostInstance,
-                    queuedAt: { epoch, sequence: submission.acceptedSequence ?? 0 },
-                    position: card.position,
-                    // Kept with the message, so the card runs on what it was sent with.
-                    ...(submission.options ? { options: submission.options } : {})
-                  }
-                : null,
-              positions: moves
-            })
+        ? () => {
+            const { queuedMessages } = journal
+            const changes: JournalQueueCardChange[] = moves.flatMap((move) =>
+              queuedMessages.get(move.messageId)?.position === move.position
+                ? []
+                : [
+                    {
+                      messageId: move.messageId,
+                      change: { op: 'moved' as const, position: move.position }
+                    }
+                  ]
+            )
+            // A card by that id already stands: it is not written again.
+            if (card && !queuedMessages.get(clientMessageId)) {
+              const queuedAt = { epoch, sequence: submission.acceptedSequence ?? 0 }
+              const change = {
+                op: 'queued' as const,
+                body: card.body,
+                position: card.position,
+                queuedAt,
+                // Kept with the message, so the card runs on what it was sent with.
+                ...(submission.options ? { options: submission.options } : {})
+              }
+              changes.push({ messageId: clientMessageId, change })
+            }
+            return queuedMessages.plan(changes)
           }
         : undefined
     const reject = {
@@ -218,18 +220,16 @@ function headOfQueuePositions(
     if (body && !earlier.includes(clientMessageId)) {
       placed.push({ messageId: clientMessageId, position: 0 })
     } else if (
-      // Kept by its settlement (`rejectedDraftSettlement`): a Send the person asked for.
+      // Kept by its settlement (`queuedHandOffOutcome`): a Send the person asked for.
       submission.origin === 'client' &&
+      submission.queuedMessageId !== undefined &&
       cards.some((card) => card.consumedAs === clientMessageId)
     ) {
-      placed.push({ consumedAs: clientMessageId, position: 0 })
+      placed.push({ messageId: submission.queuedMessageId, position: 0 })
     }
   }
   const inHead = (card: (typeof cards)[number]): boolean =>
-    earlier.includes(card.messageId) ||
-    placed.some((move) =>
-      'messageId' in move ? move.messageId === card.messageId : move.consumedAs === card.consumedAs
-    )
+    earlier.includes(card.messageId) || placed.some((move) => move.messageId === card.messageId)
   const others = cards.filter((card) => !inHead(card)).map((card) => card.position)
   const anchor = others.length > 0 ? Math.min(...others) : 1
   const first = anchor - earlier.length - placed.length

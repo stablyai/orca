@@ -4,7 +4,6 @@ import { createBrowserFindSubscriptions } from './browser-find-subscriptions'
 import { registerRendererRestartIpcRelays } from './renderer-restart-wiring'
 import { createUpdaterQuitAbortRelay } from '../shared/renderer-restart-preparation'
 import { ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT } from '../shared/updater-renderer-events'
-/** Joins the synchronous unload checkpoint with its durable renderer write. */
 export async function awaitBeforeUnloadCheckpoint(): Promise<void> {
   const result = (await ipcRenderer.invoke('app:await-before-unload-checkpoint')) as {
     ok?: unknown
@@ -37,7 +36,6 @@ export const browserClientPageRendererRequests = createBrowserClientPageRenderer
 })
 let browserFindListenerInstalled = false
 
-/** Registers browser find forwarding once for this preload context. */
 export function installBrowserFindListener(): void {
   if (browserFindListenerInstalled) {
     return

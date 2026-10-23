@@ -90,9 +90,17 @@ function journalClosedSets() {
 
 /** Recorded with the row version it holds for. Change it only together with that decision. */
 const SNAPSHOT = {
-  v: 3,
+  v: 4,
   closed: {
-    'row.kind': ['dispatch', 'epoch', 'item', 'lifecycle-batch', 'submission', 'tombstone'],
+    'row.kind': [
+      'dispatch',
+      'epoch',
+      'item',
+      'lifecycle-batch',
+      'queue',
+      'submission',
+      'tombstone'
+    ],
     'row.mutations[].kind': ['item', 'tombstone'],
     'body.contextUsage.used.kind': ['estimate', 'report', 'unknown'],
     'body.contextUsage.used.categories[].deferred': [true]

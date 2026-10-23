@@ -11,7 +11,22 @@ import { join } from 'node:path'
 // own delivery with a canary; this is the same idea for the Node path.
 const PROBE_TIMEOUT_MS = 2_000
 
+// Why: a negative is re-measured after this, so one timeout during a noisy
+// moment cannot fail every later shallow subscribe in the process.
+const NEGATIVE_RECHECK_MS = 30_000
+
+let delivered = false
 let probe: Promise<boolean> | null = null
+let negativeAt: number | null = null
+
+/** Records that fs.watch delivered at least once in this process. */
+export function noteShallowWatchDelivered(): void {
+  delivered = true
+}
+
+export function hasShallowWatchDelivered(): boolean {
+  return delivered
+}
 
 export async function measureShallowWatchDelivery(timeoutMs = PROBE_TIMEOUT_MS): Promise<boolean> {
   let directory: string | null = null
@@ -46,12 +61,28 @@ export async function measureShallowWatchDelivery(timeoutMs = PROBE_TIMEOUT_MS):
 
 /** Resolves false when this host accepts fs.watch registrations but never
  *  delivers events, so callers can fall back instead of going silently stale.
- *  Measured once per process. */
+ *  A success is kept for the process; a failure is re-measured after a delay. */
 export function detectShallowWatchDelivery(): Promise<boolean> {
-  probe ??= measureShallowWatchDelivery()
+  if (delivered) {
+    return Promise.resolve(true)
+  }
+  if (negativeAt !== null && Date.now() - negativeAt < NEGATIVE_RECHECK_MS) {
+    return Promise.resolve(false)
+  }
+  probe ??= measureShallowWatchDelivery().then((works) => {
+    probe = null
+    if (works) {
+      delivered = true
+    } else {
+      negativeAt = Date.now()
+    }
+    return works
+  })
   return probe
 }
 
 export function resetShallowWatchDeliveryProbeForTests(): void {
+  delivered = false
   probe = null
+  negativeAt = null
 }

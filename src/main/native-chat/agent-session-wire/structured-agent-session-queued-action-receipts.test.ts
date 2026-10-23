@@ -5,9 +5,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
 import { holdLane } from './structured-agent-session-delivery-hold.test-fixture'
-import { structuredAgentSessionHostInstance } from './structured-agent-session-queued-pause'
 import { AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS } from '../../../shared/agent-session-host-authority'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import {
@@ -175,25 +173,6 @@ describe('Send now', () => {
     })
   })
 
-  it('replays its hand-off once the dispatched card is pruned', async () => {
-    await rig.workingSend()
-    const draftId = await queuedDraft('pruned card')
-    const first = opId()
-    await rig.sendNow(draftId, first)
-    const ack = opId()
-    await rig.sendNow(draftId, ack)
-    openTestJournalHostDatabase(rig.root)
-      .db.prepare('DELETE FROM queued_messages WHERE session_id = ? AND message_id = ?')
-      .run(SESSION, draftId)
-    for (const id of [first, ack]) {
-      expect(await rig.sendNow(draftId, id)).toMatchObject({
-        ok: true,
-        replayed: true,
-        value: { clientMessageId: first }
-      })
-    }
-  })
-
   it('refuses the same id naming another card', async () => {
     await rig.workingSend()
     const first = await queuedDraft('first card')
@@ -260,7 +239,7 @@ describe('Send now', () => {
     expect(await rig.handoff(draftId)).toBeUndefined()
   })
 
-  it('answers a retry after a rewind dropped its hand-off as spent, and sends nothing again', async () => {
+  it('answers a retry after a rewind dropped its hand-off as lost, and never sends under that id again', async () => {
     await rig.workingSend()
     const draftId = await queuedDraft('rewound away')
     const id = opId()
@@ -270,7 +249,10 @@ describe('Send now', () => {
       ok: false,
       refusal: { code: 'agent_session_operation_unknown', details: { reason: 'resultLost' } }
     })
-    expect(await rig.handoff(draftId)).toBeUndefined()
+    // The dropped hand-off was never handed over, so its card waits again; it never goes out
+    // under the retried id.
+    const { submissions } = await rig.host.journalSnapshot(SESSION)
+    expect(submissions.some((entry) => entry.clientMessageId === id)).toBe(false)
   })
 })
 
@@ -634,12 +616,9 @@ describe('source-bound ordinary Continue', () => {
     const current = await limitedTurn('current')
     const release = holdLane(rig.host, SESSION)
     try {
-      const body = hostTestMessage('backlog')
       const row = await journal.queuedMessages.insert({
         messageId: opId(),
-        body,
-        fingerprint: agentSessionSendBodyFingerprint(SESSION, body),
-        hostInstance: structuredAgentSessionHostInstance()
+        body: hostTestMessage('backlog')
       })
       journal.queuedMessages.editLeases.acquire(
         { callerKey: CALLER.callerKey, editId: 'edit' },

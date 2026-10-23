@@ -658,7 +658,9 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
           clientMessageId: 'real-cli-queued-stop-b',
           state: 'rejected',
           reason: 'provider_cancelled_before_start',
-          rejection: { kind: 'cancelled' }
+          rejection: { kind: 'cancelled' },
+          // Claude cancelled it unrun: a queued card's hand-off records that as proof.
+          unrun: true
         })
       } finally {
         await adapter.closeAll()

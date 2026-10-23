@@ -1,0 +1,258 @@
+{
+  "batch": "mobile-0002",
+  "reviewer": "audit_mobile",
+  "source_commit": "6d473f4bea1d190cb3649af97e04f1cdde170c5f",
+  "scope": {
+    "files_reviewed": 50,
+    "original_declarations_reviewed": 283,
+    "case_decisions": {
+      "keep": 264,
+      "remove": 9,
+      "fix": 6,
+      "consolidate": 4
+    },
+    "first_path": "mobile/src/browser/mobile-browser-pane-frame-layers.test.tsx",
+    "last_path": "mobile/src/components/inline-text-selection.test.ts",
+    "next_path": "mobile/src/components/keyed-bottom-drawer.test.tsx"
+  },
+  "changes": {
+    "modified_test_files": [
+      "mobile/src/browser/use-browser-binary-screencast-grant.web.test.tsx",
+      "mobile/src/components/ConnectionLog.test.tsx",
+      "mobile/src/components/MobileHostCard.test.ts",
+      "mobile/src/components/MobileRichMarkdownToolbar.test.tsx",
+      "mobile/src/components/NewWorktreeModal.test.tsx",
+      "mobile/src/components/auth-failed-banner-actions-page.test.tsx",
+      "mobile/src/components/auth-failed-banner-actions.test.tsx",
+      "mobile/src/components/codex-reset-credit-capability.test.ts"
+    ],
+    "removed_test_files": [
+      "mobile/src/components/codex-reset-credit-reply-schema.test.ts",
+      "mobile/src/components/inline-text-selection.test.ts"
+    ],
+    "added_test_lines": 52,
+    "deleted_test_lines": 248,
+    "net_test_lines": -196,
+    "production_files_modified": []
+  },
+  "checks": [
+    {
+      "id": "baseline",
+      "working_directory": "mobile",
+      "environment": {
+        "ORCA_BACKGROUND_LAUNCH": "1"
+      },
+      "command": [
+        "pnpm",
+        "test",
+        "src/browser/mobile-browser-pane-frame-layers.test.tsx",
+        "src/browser/mobile-browser-pane-in-page-unmount.test.tsx",
+        "src/browser/mobile-browser-view-mode-state.test.ts",
+        "src/browser/use-browser-binary-screencast-grant.web.test.tsx",
+        "src/browser/use-mobile-browser-commands-click-fallback.test.tsx",
+        "src/cache/repo-cache.test.ts",
+        "src/cache/worktree-cache.test.ts",
+        "src/components/AgentLaunchNotice.test.tsx",
+        "src/components/CodexResetCreditAction.test.ts",
+        "src/components/ConnectionLog.test.tsx",
+        "src/components/DragReorderList.test.tsx",
+        "src/components/HostProtocolGate.test.ts",
+        "src/components/HostRouteNoticeBanner.test.tsx",
+        "src/components/MobileDiffReviewDrawers.test.tsx",
+        "src/components/MobileHomeQuickActions.test.ts",
+        "src/components/MobileHostCard-truthful-status.test.tsx",
+        "src/components/MobileHostCard.test.ts",
+        "src/components/MobileMarkdown.file-links.test.ts",
+        "src/components/MobileMarkdown.rendering.test.tsx",
+        "src/components/MobileMarkdown.test.ts",
+        "src/components/MobileRichMarkdownToolbar.test.tsx",
+        "src/components/MobileSourceCopyButton.web.test.tsx",
+        "src/components/NewWorktreeModal.test.tsx",
+        "src/components/PickerModal.accessibility.test.ts",
+        "src/components/ProtocolBlockScreen.test.ts",
+        "src/components/StatusDot.test.ts",
+        "src/components/WorktreeAgentList.test.tsx",
+        "src/components/WorktreeAgentRow.visual-line.test.tsx",
+        "src/components/WorktreeListRow.test.ts",
+        "src/components/WorktreeMetaGlyphs.test.tsx",
+        "src/components/account-usage-state.test.ts",
+        "src/components/accounts-snapshot.test.ts",
+        "src/components/agent-monitoring-indicators.test.ts",
+        "src/components/auth-failed-banner-actions-page.test.tsx",
+        "src/components/auth-failed-banner-actions.test.tsx",
+        "src/components/bottom-drawer-back-while-hiding.test.tsx",
+        "src/components/bottom-drawer-close-lifecycle.test.ts",
+        "src/components/bottom-drawer-fill-height.test.ts",
+        "src/components/bottom-drawer-keyboard-inset.test.ts",
+        "src/components/bottom-drawer-modal-host.test.tsx",
+        "src/components/bottom-drawer-mount-state.test.ts",
+        "src/components/bottom-drawer-window-handback.test.ts",
+        "src/components/codex-reset-credit-capability.test.ts",
+        "src/components/codex-reset-credit-reply-schema.test.ts",
+        "src/components/codex-reset-credit.test.ts",
+        "src/components/custom-key-modal-save-refusal.test.tsx",
+        "src/components/drag-reorder-positions.test.ts",
+        "src/components/html-preview-inert-links.test.ts",
+        "src/components/html-preview-link-affordance.test.tsx",
+        "src/components/inline-text-selection.test.ts"
+      ],
+      "result": "passed",
+      "test_files": 50,
+      "tests": 334,
+      "log": "/tmp/orca-mobile-0002-baseline.log"
+    },
+    {
+      "id": "retained-batch-final",
+      "working_directory": "mobile",
+      "environment": {
+        "ORCA_BACKGROUND_LAUNCH": "1"
+      },
+      "command": [
+        "pnpm",
+        "test",
+        "src/browser/mobile-browser-pane-frame-layers.test.tsx",
+        "src/browser/mobile-browser-pane-in-page-unmount.test.tsx",
+        "src/browser/mobile-browser-view-mode-state.test.ts",
+        "src/browser/use-browser-binary-screencast-grant.web.test.tsx",
+        "src/browser/use-mobile-browser-commands-click-fallback.test.tsx",
+        "src/cache/repo-cache.test.ts",
+        "src/cache/worktree-cache.test.ts",
+        "src/components/AgentLaunchNotice.test.tsx",
+        "src/components/CodexResetCreditAction.test.ts",
+        "src/components/ConnectionLog.test.tsx",
+        "src/components/DragReorderList.test.tsx",
+        "src/components/HostProtocolGate.test.ts",
+        "src/components/HostRouteNoticeBanner.test.tsx",
+        "src/components/MobileDiffReviewDrawers.test.tsx",
+        "src/components/MobileHomeQuickActions.test.ts",
+        "src/components/MobileHostCard-truthful-status.test.tsx",
+        "src/components/MobileHostCard.test.ts",
+        "src/components/MobileMarkdown.file-links.test.ts",
+        "src/components/MobileMarkdown.rendering.test.tsx",
+        "src/components/MobileMarkdown.test.ts",
+        "src/components/MobileRichMarkdownToolbar.test.tsx",
+        "src/components/MobileSourceCopyButton.web.test.tsx",
+        "src/components/NewWorktreeModal.test.tsx",
+        "src/components/PickerModal.accessibility.test.ts",
+        "src/components/ProtocolBlockScreen.test.ts",
+        "src/components/StatusDot.test.ts",
+        "src/components/WorktreeAgentList.test.tsx",
+        "src/components/WorktreeAgentRow.visual-line.test.tsx",
+        "src/components/WorktreeListRow.test.ts",
+        "src/components/WorktreeMetaGlyphs.test.tsx",
+        "src/components/account-usage-state.test.ts",
+        "src/components/accounts-snapshot.test.ts",
+        "src/components/agent-monitoring-indicators.test.ts",
+        "src/components/auth-failed-banner-actions-page.test.tsx",
+        "src/components/auth-failed-banner-actions.test.tsx",
+        "src/components/bottom-drawer-back-while-hiding.test.tsx",
+        "src/components/bottom-drawer-close-lifecycle.test.ts",
+        "src/components/bottom-drawer-fill-height.test.ts",
+        "src/components/bottom-drawer-keyboard-inset.test.ts",
+        "src/components/bottom-drawer-modal-host.test.tsx",
+        "src/components/bottom-drawer-mount-state.test.ts",
+        "src/components/bottom-drawer-window-handback.test.ts",
+        "src/components/codex-reset-credit-capability.test.ts",
+        "src/components/codex-reset-credit.test.ts",
+        "src/components/custom-key-modal-save-refusal.test.tsx",
+        "src/components/drag-reorder-positions.test.ts",
+        "src/components/html-preview-inert-links.test.ts",
+        "src/components/html-preview-link-affordance.test.tsx"
+      ],
+      "result": "passed",
+      "exit_code": 0,
+      "test_files": 48,
+      "tests": 323,
+      "log": "/tmp/orca-mobile-0002-final-validation.log"
+    },
+    {
+      "id": "existing-selection-coverage",
+      "working_directory": "mobile",
+      "environment": {
+        "ORCA_BACKGROUND_LAUNCH": "1"
+      },
+      "command": [
+        "pnpm",
+        "test",
+        "src/components/mobile-markdown-selectable.test.tsx",
+        "src/components/mobile-markdown-android-selection.test.tsx"
+      ],
+      "result": "passed",
+      "test_files": 2,
+      "tests": 12,
+      "log": "/tmp/orca-mobile-0002-selection-validation.log"
+    },
+    {
+      "id": "mobile-tests-typecheck",
+      "working_directory": "mobile",
+      "environment": {
+        "ORCA_BACKGROUND_LAUNCH": "1"
+      },
+      "command": ["pnpm", "run", "check:tests-typecheck"],
+      "result": "passed",
+      "test_files_in_program": 1110,
+      "grandfathered_files": 116,
+      "intentionally_excluded_files": 5,
+      "log": "/tmp/orca-mobile-0002-typecheck.log"
+    },
+    {
+      "id": "changed-test-lint",
+      "working_directory": ".",
+      "command": [
+        "pnpm",
+        "exec",
+        "oxlint",
+        "mobile/src/browser/use-browser-binary-screencast-grant.web.test.tsx",
+        "mobile/src/components/ConnectionLog.test.tsx",
+        "mobile/src/components/MobileHostCard.test.ts",
+        "mobile/src/components/MobileRichMarkdownToolbar.test.tsx",
+        "mobile/src/components/NewWorktreeModal.test.tsx",
+        "mobile/src/components/auth-failed-banner-actions-page.test.tsx",
+        "mobile/src/components/auth-failed-banner-actions.test.tsx",
+        "mobile/src/components/codex-reset-credit-capability.test.ts"
+      ],
+      "result": "passed",
+      "exit_code": 0
+    },
+    {
+      "id": "changed-test-format",
+      "working_directory": ".",
+      "command": [
+        "pnpm",
+        "exec",
+        "oxfmt",
+        "--check",
+        "mobile/src/browser/use-browser-binary-screencast-grant.web.test.tsx",
+        "mobile/src/components/ConnectionLog.test.tsx",
+        "mobile/src/components/MobileHostCard.test.ts",
+        "mobile/src/components/MobileRichMarkdownToolbar.test.tsx",
+        "mobile/src/components/NewWorktreeModal.test.tsx",
+        "mobile/src/components/auth-failed-banner-actions-page.test.tsx",
+        "mobile/src/components/auth-failed-banner-actions.test.tsx",
+        "mobile/src/components/codex-reset-credit-capability.test.ts"
+      ],
+      "result": "passed",
+      "exit_code": 0
+    },
+    {
+      "id": "diff-whitespace",
+      "working_directory": ".",
+      "command": [
+        "git",
+        "diff",
+        "--check",
+        "--",
+        "mobile/src",
+        "docs/audits/test-value/reviews/mobile-0002.jsonl"
+      ],
+      "result": "passed",
+      "exit_code": 0
+    }
+  ],
+  "review_evidence": {
+    "source_snapshot": "Original sha256 and source_commit are recorded per file; every original declaration has its original line/title and an individual decision.",
+    "final_content": "Every retained file reviewed_sha256 matches the final formatted contents; removed files use null.",
+    "implementation_review": "Read all actual test bodies and relevant production implementations, including cache provenance, bridge grants, component hooks, parser output, scoped reset-credit decoding, drawer ownership and serialized storage.",
+    "mutation_checks": "None in batch 0002; assertions were inspected against actual callback wiring and held-promise boundaries."
+  }
+}

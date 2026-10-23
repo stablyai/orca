@@ -1,5 +1,19 @@
 import { unitConsumers } from './ci-unit-dependency-graph.mjs'
 import { balanceFiles } from './ci-shard-assignment.mjs'
+import { UNIT_SETUP_FILES } from './ci-unit-files.mjs'
+
+const RUNTIME_ENTRY_POINTS = new Set([
+  'config/vitest.config.ts',
+  'config/scripts/run-vitest.mjs',
+  ...UNIT_SETUP_FILES
+])
+
+function isUnitRuntimeEntryPoint(file) {
+  return (
+    RUNTIME_ENTRY_POINTS.has(file) ||
+    (/^config\/scripts\/vitest[^/]*\.(?:ts|mjs)$/.test(file) && !file.includes('.test.'))
+  )
+}
 
 export function selectUnitFiles(files, changed, graphInput) {
   const full = (reason) => ({ files, reason, full: true })
@@ -15,6 +29,9 @@ export function selectUnitFiles(files, changed, graphInput) {
   }
   for (const file of changed) {
     const consumers = unitConsumers([file], graph.reverse)
+    if ([...consumers].some(isUnitRuntimeEntryPoint)) {
+      return full('Shared unit runtime input')
+    }
     if (!files.some((test) => consumers.has(test))) {
       return full('No proven test coverage for changed inputs')
     }

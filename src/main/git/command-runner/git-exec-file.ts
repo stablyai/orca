@@ -100,6 +100,7 @@ async function gitExecFileAsyncUnlocked(
           signal: options.signal,
           terminationBarrier: options.terminationBarrier,
           admissionTier: options.admissionTier,
+          spawnOnWorkerThread: options.spawnOnWorkerThread,
           onChildTerminated: reportTerminated,
           ...(options.onStderr ? { onStderr: options.onStderr } : {}),
           ...(timeoutMs === undefined

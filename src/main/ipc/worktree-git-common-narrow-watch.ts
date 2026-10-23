@@ -11,6 +11,7 @@ import type {
 import { createSingleFlight } from './single-flight-promise'
 import { createGitCommonWatchReconciliation } from './worktree-git-common-watch-reconciliation'
 import { startGitCommonPolling } from './worktree-git-common-polling'
+import { createNativeUpgradePoll } from './worktree-git-common-native-upgrade-poll'
 
 // The native stream is hosted in the crash-isolated watcher child, never the
 // Electron main process: watcher.node teardown races heap-corrupt the hosting
@@ -78,8 +79,8 @@ export async function startGitCommonNarrowWatch(
         .unsubscribe()
         .catch(() => {})
         .then(() =>
-          // Crash fuse tripped: this poller is now the sole change signal until a
-          // future existence-poll upgrade (follow-up: #17878). Its own per-entry
+          // Crash fuse tripped: this poller is the sole change signal until the
+          // upgrade poll gets a native stream back. Its own per-entry
           // dir-signature gate (worktree-git-common-entry-snapshot.ts) already keeps
           // an unchanged entry to a single stat, so a fixed `pollIntervalMs` cadence
           // stays cheap at high worktree counts without needing to stretch itself.
@@ -98,8 +99,41 @@ export async function startGitCommonNarrowWatch(
             return
           }
           subscription = fallback
+          upgradePoll.arm()
         })
     })
+
+  const upgradeFromPollingFallback = async (): Promise<void> => {
+    if (
+      disposed ||
+      subscribing ||
+      !usingPollingFallback ||
+      pollingFallback.pending() ||
+      !visibility.isWindowVisible()
+    ) {
+      return
+    }
+    const fallback = subscription
+    const attemptGeneration = nativeSubscriptionGeneration + 1
+    subscribing = true
+    try {
+      const installed = await trySubscribe()
+      // A torn-down attempt bumps the generation and may have swapped pollers.
+      if (!installed || disposed || nativeSubscriptionGeneration !== attemptGeneration) {
+        return
+      }
+      upgradePoll.stop()
+      usingPollingFallback = false
+      await fallback?.unsubscribe().catch(() => {})
+      await reconciliation.ensureStarted()
+      // Resync past the polling window now that native events resume.
+      onEvents([{ type: 'update', path: worktreesDir }])
+    } finally {
+      subscribing = false
+    }
+  }
+
+  const upgradePoll = createNativeUpgradePoll(upgradeFromPollingFallback)
 
   const tryUpgradeToNarrowWatch = async (): Promise<void> => {
     if (disposed || subscribing || subscription) {
@@ -268,6 +302,9 @@ export async function startGitCommonNarrowWatch(
         return false
       }
       if (shouldUsePollingFallback(error)) {
+        if (usingPollingFallback) {
+          return false
+        }
         await ensurePollingFallback()
         return subscription !== null
       }
@@ -286,6 +323,7 @@ export async function startGitCommonNarrowWatch(
     unsubscribe: async () => {
       disposed = true
       stopExistencePoll()
+      upgradePoll.stop()
       unsubscribeVisibility()
       await pollingFallback.pending()?.catch(() => {})
       nativeSubscriptionGeneration++

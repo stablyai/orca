@@ -15,6 +15,19 @@ packages:
 minimumReleaseAge: 4320
 # Latest requested releases are still within the three-day delay; exempt only these versions.
 minimumReleaseAgeExclude:
+  - 'bun@1.4.4'
+  - '@oven/bun-darwin-aarch64@1.4.4'
+  - '@oven/bun-darwin-x64@1.4.4'
+  - '@oven/bun-freebsd-aarch64@1.4.4'
+  - '@oven/bun-freebsd-x64@1.4.4'
+  - '@oven/bun-linux-aarch64-android@1.4.4'
+  - '@oven/bun-linux-aarch64-musl@1.4.4'
+  - '@oven/bun-linux-aarch64@1.4.4'
+  - '@oven/bun-linux-x64-android@1.4.4'
+  - '@oven/bun-linux-x64-musl@1.4.4'
+  - '@oven/bun-linux-x64@1.4.4'
+  - '@oven/bun-windows-aarch64@1.4.4'
+  - '@oven/bun-windows-x64@1.4.4'
   - '@oxc-project/types@0.154.0'
   - '@rolldown/binding-android-arm-eabi@1.2.14'
   - '@rolldown/binding-android-arm64@1.2.14'
@@ -166,7 +179,7 @@ packageExtensions:
 
 overrides:
   hono@>=4.12.4 <4.13.11: 4.13.11
-  monaco-editor>dompurify: 3.4.16
+  monaco-editor>dompurify: 3.4.17
   # Upstream markdown/math packages still require the vulnerable 0.16 line.
   katex@>=0.11.0 <0.18.2: 0.18.10
 

@@ -192,6 +192,7 @@ export function useEditorPanelExternalContentEvents({
       }
       const file = openFilesRef.current.find((openFile) => openFile.id === detail.fileId)
       const recordViewIds = detail.recordViewIds ?? [detail.fileId]
+      updateSavedPreviewTabs(openFilesRef.current, detail, setFileContents)
       if (!file) {
         // Why: the saving tab closed mid-save; the record's other views still move to the disk text.
         setFileContents((prev) =>
@@ -205,7 +206,6 @@ export function useEditorPanelExternalContentEvents({
           [file.id]: { content: detail.content, isBinary: false }
         }))
       }
-      updateSavedPreviewTabs(openFilesRef.current, detail, setFileContents)
       if (file.mode === 'edit' || file.mode === 'markdown-preview') {
         return
       }
@@ -259,9 +259,11 @@ function updateSavedPreviewTabs(
   detail: EditorFileSavedDetail,
   setFileContents: Dispatch<SetStateAction<Record<string, FileContent>>>
 ): void {
+  // Why the record's views: the saving view may have closed while its siblings' previews remain.
+  const sources = new Set<string | undefined>([detail.fileId, ...(detail.recordViewIds ?? [])])
   const previewTabs = openFiles.filter(
     (openFile) =>
-      openFile.mode === 'markdown-preview' && openFile.markdownPreviewSourceFileId === detail.fileId
+      openFile.mode === 'markdown-preview' && sources.has(openFile.markdownPreviewSourceFileId)
   )
   if (previewTabs.length === 0) {
     return

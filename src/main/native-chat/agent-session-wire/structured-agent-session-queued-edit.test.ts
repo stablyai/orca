@@ -190,9 +190,7 @@ describe('saving a queued card in place', () => {
     const body = { ...hostTestMessage('/compact'), command: { name: 'compact' } }
     const command = await journal().queuedMessages.insert({
       messageId: 'command-card',
-      body,
-      fingerprint: agentSessionSendBodyFingerprint(HOST_TEST_SESSION, body),
-      hostInstance: 'host'
+      body
     })
     expect(await hold(command.messageId)).toEqual({ status: 'not-editable' })
     expect(await update(command.messageId, command.fingerprint, 'text')).toMatchObject({

@@ -2156,6 +2156,8 @@
           "01f45d3d8a": "sidebar",
           "021538e1d1": "SSH disconnected",
           "1d66d84f0b": "string",
+          "57eaa61b55": "Hide child workspaces",
+          "8cb634cda6": "Show child workspaces",
           "93aebe4529": "Folder",
           "automationCreated": "Created by automation",
           "branchFolderPathIdentity": "Branch or folder path",

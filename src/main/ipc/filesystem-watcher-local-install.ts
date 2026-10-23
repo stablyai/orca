@@ -18,6 +18,13 @@ import {
 } from './filesystem-watcher-listener-lifecycle'
 import { cancelLocalBatchFlush } from './filesystem-watcher-batch-control'
 
+function isCrashFuseFailure(error: unknown): boolean {
+  return (
+    isWatcherProcessFailure(error) &&
+    (error.code === 'supervisor_crash_fuse' || error.code === 'process_unavailable')
+  )
+}
+
 export async function installLocalWatcher(
   rootKey: string,
   rootPath: string,
@@ -68,7 +75,11 @@ export async function installLocalWatcher(
         scheduleCapacityRetry(cancelToken.listeners)
         return 'capacity'
       }
-      rememberUnwatchableRoot(rootKey)
+      // Why: the crash fuse half-opens after its cooldown; caching these would
+      // keep the root unwatched until shutdown.
+      if (!isCrashFuseFailure(error)) {
+        rememberUnwatchableRoot(rootKey)
+      }
       return 'unavailable'
     }
   } finally {

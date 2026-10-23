@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
-  AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
+  AGENT_SESSION_JOURNAL_TURN_ITEM_SCHEMA_VERSION,
   type AgentSessionJournalIdentity,
   type AgentSessionJournalProviderHandle
 } from '../../../src/shared/agent-session-journal-types'
@@ -115,7 +115,8 @@ async function journalWithNewerRow(
   )
   const seq = journal.cursor().sequence + 1
   const newer = JSON.stringify({
-    v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
+    // A version the older build reads, so it meets the kind rather than a newer version.
+    v: AGENT_SESSION_JOURNAL_TURN_ITEM_SCHEMA_VERSION,
     epoch: journal.epoch,
     seq,
     fence: 1,

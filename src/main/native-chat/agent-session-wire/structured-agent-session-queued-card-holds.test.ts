@@ -22,10 +22,7 @@ import {
   readQueuePublication,
   structuredQueueSendGate
 } from './structured-agent-session-queued-publication'
-import {
-  structuredAgentSessionHostInstance,
-  structuredQueuePauses
-} from './structured-agent-session-queued-pause'
+import { structuredQueuePauses } from './structured-agent-session-queued-pause'
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
 import {
   HOST_TEST_SESSION,
@@ -547,9 +544,7 @@ describe('where the host would refuse the send', () => {
     const card = 'left-behind'
     await journal.queuedMessages.insert({
       messageId: card,
-      body: hostTestMessage('queued after clear'),
-      fingerprint: 'fp-left-behind',
-      hostInstance: structuredAgentSessionHostInstance()
+      body: hostTestMessage('queued after clear')
     })
     const record = rig.store.getRecord(HOST_TEST_SESSION)
     if (!record) {

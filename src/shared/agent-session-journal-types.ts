@@ -27,8 +27,11 @@ export { type AgentType }
 /** v3 introduced the `turn` item. A row without one is still written at v2 so
  *  an older host keeps reading it; the first v3 row stops that host writing the chat
  *  (a released one keeps it read-only, this build fails its load) instead of truncating. */
-export const AGENT_SESSION_JOURNAL_SCHEMA_VERSION = 3
+export const AGENT_SESSION_JOURNAL_SCHEMA_VERSION = 4
 export const AGENT_SESSION_JOURNAL_TURN_ITEM_SCHEMA_VERSION = 3
+/** v4 introduced the `queue` row: an older build keeps a chat holding one read-only rather than
+ *  meeting a kind it does not know. Every other row keeps its own version. */
+export const AGENT_SESSION_JOURNAL_QUEUE_SCHEMA_VERSION = 4
 const AGENT_SESSION_JOURNAL_PRE_TURN_SCHEMA_VERSION = 2
 
 export function journalRowSchemaVersion(bodies: readonly { kind: string }[]): number {

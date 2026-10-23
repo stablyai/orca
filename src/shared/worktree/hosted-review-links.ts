@@ -15,16 +15,20 @@ export const HOSTED_REVIEW_LINK_KEYS: readonly HostedReviewLinkKey[] = [
   'linkedGiteaPR'
 ]
 
-/** Linked reviews and the push target are branch-scoped: a branch switch clears all of them. */
-export const CLEARED_HOSTED_REVIEW_LINK_UPDATES: Pick<
-  WorktreeMeta,
-  HostedReviewLinkKey | 'pushTarget'
-> = {
+export const CLEARED_HOSTED_REVIEW_SELECTION_UPDATES: Pick<WorktreeMeta, HostedReviewLinkKey> = {
   linkedPR: null,
   linkedGitLabMR: null,
   linkedBitbucketPR: null,
   linkedAzureDevOpsPR: null,
-  linkedGiteaPR: null,
+  linkedGiteaPR: null
+}
+
+/** Branch switches clear the active review and push target, preserving workspace references. */
+export const CLEARED_HOSTED_REVIEW_LINK_UPDATES: Pick<
+  WorktreeMeta,
+  HostedReviewLinkKey | 'pushTarget'
+> = {
+  ...CLEARED_HOSTED_REVIEW_SELECTION_UPDATES,
   pushTarget: undefined
 }
 

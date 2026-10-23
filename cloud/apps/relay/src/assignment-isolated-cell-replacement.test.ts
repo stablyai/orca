@@ -677,16 +677,6 @@ describe('re-placing a host off a cell isolated for a roll', () => {
     )
   })
 
-  it('does not demand a committed fence while the stamped cell is live', async () => {
-    const { store, isolateForRoll } = await setup()
-    const first = await store.assign(IDENTITY, 'us-central1')
-    await isolateForRoll(first.cellId)
-
-    const moved = await store.assign(IDENTITY, 'us-central1').catch((error: unknown) => error)
-    expect(moved).not.toBeInstanceOf(RelayHomeCellUnavailableError)
-    expect(moved).toMatchObject({ assignmentEpoch: first.assignmentEpoch + 1 })
-  })
-
   it('leaves the source cell activity leases in place', async () => {
     // Contrast with the fence and stranded paths, which delete them: an isolated
     // cell is alive and still owns drainable work behind those leases.

@@ -24,10 +24,7 @@ import type {
 } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionChildExit } from './structured-agent-session-child-exit'
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
-import {
-  markStructuredQueueReopen,
-  structuredAgentSessionHostInstance
-} from './structured-agent-session-queued-pause'
+import { markStructuredQueueReopen } from './structured-agent-session-queued-pause'
 import type { StructuredAgentSessionStopCause } from './structured-agent-session-adapter'
 import type { AgentSessionResumeTrigger } from '../../../shared/agent-session-resume-marker'
 import {
@@ -88,7 +85,6 @@ export async function holdClosedStructuredAgentSessionSends(
   const { which } = close
   const settled = await holdUnsentSends(journal, {
     fence,
-    hostInstance: structuredAgentSessionHostInstance(),
     hold: { cause: 'chatClosed', ...(which ? { which } : {}) }
   }).then(
     (newest) => ({ ok: true, newest }),
@@ -119,12 +115,7 @@ export async function holdRestartedStructuredAgentSessionSends(
   journal: StructuredAgentSessionHostSession['journal'],
   fence: number
 ): Promise<void> {
-  const hostInstance = structuredAgentSessionHostInstance()
-  const settled = await holdUnsentSends(journal, {
-    fence,
-    hostInstance,
-    hold: { cause: 'hostRestarted' }
-  })
+  const settled = await holdUnsentSends(journal, { fence, hold: { cause: 'hostRestarted' } })
   if (settled !== null) {
     await markStructuredQueueReopen(sessionId, journal, fence, logger, settled + 1)
   }

@@ -7,7 +7,6 @@ import type {
   AgentSessionMutationResult
 } from '../../../shared/agent-session-wire'
 import { admitAndRunAgentSessionMutation } from './structured-agent-session-mutation-admission'
-import { agentSessionOperationKey } from '../../../shared/agent-session-operation-ledger'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
 import { sendPreparation } from './structured-agent-session-send-preparation'
 import {
@@ -157,8 +156,7 @@ async function clearUnderSerialize(
         }
         await ctx.journal.context.clear(
           providerContextBoundaryForClear(clear),
-          ctx.operationReceipt,
-          agentSessionOperationKey(caller.callerKey, clientOperationId)
+          ctx.operationReceipt
         )
         return { ok: true, value: completed }
       }
