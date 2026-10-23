@@ -8,6 +8,18 @@ function isSignInLine(line: string): boolean {
   return line.endsWith(SSH_SIGN_IN_AWAITED_SUFFIX) || line.endsWith(SSH_SIGN_IN_CANCELLED_SUFFIX)
 }
 
+export function isSshConnectionPendingTerminalError(error: string): boolean {
+  const lines = error.split('\n').filter((line) => line.trim().length > 0)
+  return (
+    lines.length > 0 &&
+    lines.every(
+      (line) =>
+        line.endsWith(SSH_SIGN_IN_AWAITED_SUFFIX) ||
+        /\bConnection to .+ is already in progress$/.test(line)
+    )
+  )
+}
+
 /** The host is waiting for the user to sign in: an expected state, not a bug to report. */
 export function isSshSignInRequiredTerminalError(error: string): boolean {
   const lines = error.split('\n').filter((line) => line.trim().length > 0)
