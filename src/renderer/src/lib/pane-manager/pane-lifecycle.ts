@@ -10,6 +10,10 @@ import { activateOrcaTerminalUnicodeProvider } from '../../../../shared/terminal
 import { attachTerminalMouseWheelMultiplier } from './pane-terminal-mouse-wheel'
 import { attachTerminalScrollIntentTracking } from './terminal-scroll-intent-dom-tracking'
 import {
+  attachTerminalWheelSmoothScroll,
+  resolveTerminalWheelScrollAnimationMs
+} from './terminal-wheel-smooth-scroll'
+import {
   installTerminalLinkifierHoverResetOnMouseLeave,
   installTerminalLinkifierHoverResetOnWindowBlur
 } from './terminal-linkifier-hover-reset-on-mouseleave'
@@ -42,6 +46,7 @@ export function openTerminal(
     xtermContainer,
     linkTooltip,
     terminalTuiScrollSensitivity,
+    terminalSmoothScrolling,
     fitAddon,
     searchAddon,
     serializeAddon,
@@ -64,10 +69,19 @@ export function openTerminal(
   attachTerminalMouseWheelMultiplier(terminal, {
     getTuiMouseWheelMultiplier: terminalTuiScrollSensitivity
   })
+  const isSmoothScrollingEnabled = (): boolean => terminalSmoothScrolling?.() === true
+  pane.wheelSmoothScrollDisposable = attachTerminalWheelSmoothScroll(
+    terminal,
+    isSmoothScrollingEnabled
+  )
   pane.terminalScrollIntentDisposable = attachTerminalScrollIntentTracking(
     terminal,
     xtermContainer,
-    pane.leafId
+    pane.leafId,
+    {
+      wheelScrollAnimationMs: (event) =>
+        resolveTerminalWheelScrollAnimationMs(isSmoothScrollingEnabled(), event)
+    }
   )
   // Why: a link streamed into a visible pane under a stationary pointer would
   // otherwise stay un-underlined/un-clickable until the mouse crosses to a new
@@ -207,6 +221,8 @@ export function disposePane(
   pane.focusClassSyncCleanup = null
   pane.domBlockFillCleanup?.()
   pane.domBlockFillCleanup = null
+  pane.wheelSmoothScrollDisposable?.dispose()
+  pane.wheelSmoothScrollDisposable = null
   pane.terminalScrollIntentDisposable?.dispose()
   pane.terminalScrollIntentDisposable = null
   pane.mouseEncodingTrackerDisposable?.dispose()

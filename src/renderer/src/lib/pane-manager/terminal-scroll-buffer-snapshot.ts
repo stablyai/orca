@@ -1,3 +1,5 @@
+import { ensureImmediateTerminalScroll } from './terminal-wheel-smooth-scroll'
+
 export type TerminalScrollBufferType = 'normal' | 'alternate'
 
 export type TerminalScrollBufferTarget = {
@@ -40,7 +42,12 @@ export function clampTerminalViewportY(viewportY: number, baseY: number): number
   return Math.max(0, Math.min(viewportY, baseY))
 }
 
-export function safeTerminalScrollCall(scroll: () => void): boolean {
+/** Runs a restore-style scroll that must land synchronously, tolerating renderer teardown. */
+export function safeTerminalScrollCall<Terminal extends object>(
+  terminal: Terminal,
+  scroll: () => void
+): boolean {
+  ensureImmediateTerminalScroll(terminal)
   try {
     scroll()
     return true

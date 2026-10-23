@@ -1,4 +1,5 @@
 import type { Terminal } from '@xterm/xterm'
+import { ensureImmediateTerminalScroll } from './terminal-wheel-smooth-scroll'
 
 // Why: xterm 6 can leave its scrollbar thumb stale when ydisp is unchanged.
 // A synchronous one-line jiggle updates the scrollbar without a visible paint.
@@ -9,6 +10,7 @@ export function forceTerminalViewportScrollbarSync(terminal: Terminal): void {
     // after split-pane resizes; scrollToBottom already places the thumb there.
     return
   }
+  ensureImmediateTerminalScroll(terminal)
   if (buf.viewportY > 0) {
     safeScrollCall(() => terminal.scrollLines(-1))
     safeScrollCall(() => terminal.scrollLines(1))

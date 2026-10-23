@@ -19944,7 +19944,9 @@
       "TerminalInteraction": {
         "copyTrimsGutter": "Trim Gutter on Copy",
         "copyTrimsGutterDescription": "Drop the left gutter agent output is painted behind, so copied text is not indented. Only the indent every selected line shares is removed.",
-        "copyOnSelectDescription": "Automatically copy text you select in a terminal or chat to the clipboard."
+        "copyOnSelectDescription": "Automatically copy text you select in a terminal or chat to the clipboard.",
+        "smoothScrolling": "Smooth Scrolling",
+        "smoothScrollingDescription": "Animate mouse-wheel scrolling through terminal scrollback. Trackpads and full-screen terminal apps are unaffected."
       },
       "terminal": {
         "clipboard": {
@@ -19959,6 +19961,10 @@
             "whitespace": "whitespace",
             "spaces": "spaces"
           }
+        },
+        "search": {
+          "smooth": "smooth",
+          "animation": "animation"
         }
       },
       "nativeChat": {

@@ -19724,7 +19724,9 @@
       "TerminalInteraction": {
         "copyTrimsGutter": "修剪副本上的装订线",
         "copyTrimsGutterDescription": "将左侧装订线智能体输出绘制在后面，因此复制的文本不会缩进。仅删除每个选定行共享的缩进。",
-        "copyOnSelectDescription": "自动将在终端或聊天中选择的文本复制到剪贴板。"
+        "copyOnSelectDescription": "自动将在终端或聊天中选择的文本复制到剪贴板。",
+        "smoothScrolling": "平滑滚动",
+        "smoothScrollingDescription": "使用鼠标滚轮滚动终端回滚内容时显示动画。触控板和全屏终端应用不受影响。"
       },
       "terminal": {
         "clipboard": {
@@ -19739,6 +19741,10 @@
             "highlight": "高亮",
             "chat": "聊天"
           }
+        },
+        "search": {
+          "smooth": "平滑",
+          "animation": "动画"
         }
       },
       "nativeChat": {
