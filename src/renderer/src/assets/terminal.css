@@ -443,11 +443,23 @@
   stroke-width: 2.75px;
 }
 
-.pane-title-bar[data-active-pane] .pane-title-split-trigger,
-.pane-title-bar[data-active-pane] .pane-title-close,
+.pane-title-overlay-layer:not([data-header-buttons='hover'])
+  .pane-title-bar[data-active-pane]
+  .pane-title-split-trigger,
+.pane-title-overlay-layer:not([data-header-buttons='hover'])
+  .pane-title-bar[data-active-pane]
+  .pane-title-close,
 .pane-title-bar:hover .pane-title-split-trigger,
 .pane-title-bar:focus-within .pane-title-split-trigger {
   opacity: 1;
+}
+
+/* Why: without a hovering pointer, hover-only buttons would be unreachable on touch screens. */
+@media (hover: none) {
+  .pane-title-bar[data-active-pane] .pane-title-split-trigger,
+  .pane-title-bar[data-active-pane] .pane-title-close {
+    opacity: 1;
+  }
 }
 
 .pane-title-bar:hover .pane-title-close,

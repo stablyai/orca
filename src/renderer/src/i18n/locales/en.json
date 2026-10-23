@@ -19959,6 +19959,12 @@
             "whitespace": "whitespace",
             "spaces": "spaces"
           }
+        },
+        "search": {
+          "header": "header",
+          "buttons": "buttons",
+          "hover": "hover",
+          "hide": "hide"
         }
       },
       "nativeChat": {
@@ -19976,6 +19982,13 @@
         "shellEnvSearchVariables": "environment variables",
         "shellEnvSearchPath": "PATH",
         "shellEnvSearchProxy": "proxy"
+      },
+      "TerminalPaneAppearance": {
+        "headerButtons": "Pane Header Buttons",
+        "headerButtonsDescription": "Show the active pane's chat, split, and close buttons whenever the pane is active, or only while the pointer is over them or one of them has keyboard focus.",
+        "headerButtonsHelper": "Hover over the top-right corner of a pane to reveal hidden buttons.",
+        "headerButtonsAlways": "When active or hovered",
+        "headerButtonsOnHover": "On hover or keyboard focus"
       }
     },
     "agentChildRow": {

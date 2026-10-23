@@ -79,6 +79,7 @@ export function TerminalPaneSurface({
     openDiskSpaceAnalyzer,
     openQuickCommandEditor,
     paneCount,
+    paneHeaderButtonsOnHover,
     paneTitleBackground,
     paneTitleOverlayRects,
     paneTitles,
@@ -325,6 +326,7 @@ export function TerminalPaneSurface({
         worktreeId={worktreeId}
         cwd={cwd ?? ''}
         showAlwaysOnHeaders={isActive && terminalContentVisible}
+        headerButtonsOnHover={paneHeaderButtonsOnHover}
         showSplitButton={showSplitButton}
         isTabPinned={isTabPinned}
         paneCount={paneCount}

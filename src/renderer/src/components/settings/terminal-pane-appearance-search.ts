@@ -30,6 +30,25 @@ export const getTerminalPaneAppearanceSearchEntries = createLocalizedCatalog(() 
       ...translateSearchKeyword('auto.components.settings.terminal.search.781f49d942', 'divider'),
       ...translateSearchKeyword('auto.components.settings.terminal.search.f637a7dee9', 'thickness')
     ]
+  },
+  {
+    title: translate(
+      'components.settings.TerminalPaneAppearance.headerButtons',
+      'Pane Header Buttons'
+    ),
+    description: translate(
+      'components.settings.TerminalPaneAppearance.headerButtonsDescription',
+      "Show the active pane's chat, split, and close buttons whenever the pane is active, or only while the pointer is over them or one of them has keyboard focus."
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.terminal.search.846a7a1204', 'pane'),
+      ...translateSearchKeyword('components.settings.terminal.search.header', 'header'),
+      ...translateSearchKeyword('components.settings.terminal.search.buttons', 'buttons'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.de7bc1d5f5', 'split'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.close_terminal', 'close'),
+      ...translateSearchKeyword('components.settings.terminal.search.hover', 'hover'),
+      ...translateSearchKeyword('components.settings.terminal.search.hide', 'hide')
+    ]
   }
 ])
 

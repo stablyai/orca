@@ -22,6 +22,7 @@ import { useAppStore } from '@/store'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { resolvePaneAgentSessionId } from './pane-agent-session-id'
 import { canPaneOfferResumeInNewChat } from '../tab-bar/tab-session-history-switch'
+import { resolvePaneHeaderButtonsOnHover } from './terminal-pane-header-buttons-mode'
 
 export function useTerminalPaneProjection(controller: TerminalPaneMobileController) {
   const {
@@ -71,6 +72,11 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
       backgroundOpacity: settings?.terminalBackgroundOpacity
     }) ?? (titleUsesLightSurface ? '#ffffff' : '#000000')
   const terminalContentVisible = isVisible || shouldMeasureHiddenStartup
+  const activeContextualTourId = useAppStore((state) => state.activeContextualTourId)
+  const paneHeaderButtonsOnHover = resolvePaneHeaderButtonsOnHover(
+    settings?.terminalPaneHeaderButtons,
+    activeContextualTourId
+  )
   const hiddenStartupStyle: CSSProperties = shouldMeasureHiddenStartup
     ? { opacity: 0, pointerEvents: 'none' }
     : {}
@@ -207,6 +213,7 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     terminalBackground,
     titleUsesLightSurface,
     paneTitleBackground,
+    paneHeaderButtonsOnHover,
     terminalContentVisible,
     hiddenStartupStyle,
     terminalContainerStyle,

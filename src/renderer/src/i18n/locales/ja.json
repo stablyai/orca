@@ -19739,6 +19739,12 @@
             "highlight": "ハイライト",
             "chat": "チャット"
           }
+        },
+        "search": {
+          "header": "ヘッダー",
+          "buttons": "ボタン",
+          "hover": "ホバー",
+          "hide": "非表示"
         }
       },
       "nativeChat": {
@@ -19756,6 +19762,13 @@
         "shellEnvSearchVariables": "環境変数",
         "shellEnvSearchPath": "PATH",
         "shellEnvSearchProxy": "プロキシ"
+      },
+      "TerminalPaneAppearance": {
+        "headerButtons": "ペインヘッダーのボタン",
+        "headerButtonsDescription": "アクティブなペインのチャット、分割、閉じるボタンを、ペインがアクティブな間は表示するか、ポインターを重ねている間またはキーボードでフォーカスしている間だけ表示するかを選びます。",
+        "headerButtonsHelper": "ペインの右上隅にポインターを重ねると、隠れているボタンが表示されます。",
+        "headerButtonsAlways": "アクティブ時またはホバー時",
+        "headerButtonsOnHover": "ホバー時またはキーボードフォーカス時"
       }
     },
     "agentChildRow": {

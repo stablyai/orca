@@ -19739,6 +19739,12 @@
             "highlight": "강조",
             "chat": "채팅"
           }
+        },
+        "search": {
+          "header": "헤더",
+          "buttons": "버튼",
+          "hover": "호버",
+          "hide": "숨기기"
         }
       },
       "nativeChat": {
@@ -19756,6 +19762,13 @@
         "shellEnvSearchVariables": "환경 변수",
         "shellEnvSearchPath": "PATH",
         "shellEnvSearchProxy": "프록시"
+      },
+      "TerminalPaneAppearance": {
+        "headerButtons": "창 헤더 버튼",
+        "headerButtonsDescription": "활성 창의 채팅, 분할, 닫기 버튼을 창이 활성 상태일 때 표시하거나, 포인터를 올리거나 키보드 포커스가 있을 때만 표시합니다.",
+        "headerButtonsHelper": "창의 오른쪽 위 모서리에 포인터를 올리면 숨겨진 버튼이 나타납니다.",
+        "headerButtonsAlways": "활성 상태 또는 호버 시",
+        "headerButtonsOnHover": "호버 또는 키보드 포커스 시"
       }
     },
     "agentChildRow": {
