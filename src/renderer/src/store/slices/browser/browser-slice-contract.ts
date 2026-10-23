@@ -123,6 +123,10 @@ export type BrowserSlice = {
   browserTabsByWorktree: Record<string, BrowserWorkspace[]>
   browserPagesByWorkspace: Record<string, BrowserPage[]>
   browserCertificateFailuresByPageId: Record<string, BrowserCertificateFailure>
+  /** Main reports false when a page's guest goes away, so closed pages drop out. */
+  browserAudiblePageIds: Record<string, true>
+  /** Tab mute lives for the tab's life; each new guest of its pages is muted again. */
+  browserAudioMutedTabIds: Record<string, true>
   browserAnnotationsByPageId: Record<string, BrowserPageAnnotation[]>
   browserAnnotationMarkerIdsByPageId: Record<string, string[]>
   remoteBrowserPageHandlesByPageId: Record<string, RemoteBrowserPageHandle>
@@ -198,6 +202,8 @@ export type BrowserSlice = {
     pageId: string,
     failure: BrowserCertificateFailure | null
   ) => void
+  setBrowserPageAudible: (pageId: string, audible: boolean) => void
+  setBrowserTabAudioMuted: (tabId: string, muted: boolean) => void
   setBrowserTabUrl: (pageId: string, url: string) => void
   setBrowserPageUrl: (pageId: string, url: string, options?: SetBrowserPageUrlOptions) => void
   setRemoteBrowserPageHandle: (pageId: string, handle: RemoteBrowserPageHandle) => void

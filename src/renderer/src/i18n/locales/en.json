@@ -19702,7 +19702,9 @@
           "switchToChatView": "Continue in Chat UI"
         },
         "BrowserTab": {
-          "closeOthers": "Close Others"
+          "closeOthers": "Close Others",
+          "muteTab": "Mute Tab",
+          "unmuteTab": "Unmute Tab"
         },
         "EditorFileTabContextMenu": {
           "closeOthers": "Close Others"

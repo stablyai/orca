@@ -68,6 +68,8 @@ export function createBrowserCloseActions(
           const nextBrowserCertificateFailuresByPageId = {
             ...s.browserCertificateFailuresByPageId
           }
+          const nextBrowserAudioMutedTabIds = { ...s.browserAudioMutedTabIds }
+          delete nextBrowserAudioMutedTabIds[tabId]
           for (const page of closedPages) {
             delete nextBrowserAnnotationsByPageId[page.id]
             delete nextBrowserAnnotationMarkerIdsByPageId[page.id]
@@ -186,6 +188,7 @@ export function createBrowserCloseActions(
             recentlyClosedBrowserPagesByWorkspace: nextRecentlyClosedBrowserPagesByWorkspace,
             remoteBrowserPageHandlesByPageId: nextRemoteBrowserPageHandlesByPageId,
             browserCertificateFailuresByPageId: nextBrowserCertificateFailuresByPageId,
+            browserAudioMutedTabIds: nextBrowserAudioMutedTabIds,
             browserAnnotationsByPageId: nextBrowserAnnotationsByPageId,
             browserAnnotationMarkerIdsByPageId: nextBrowserAnnotationMarkerIdsByPageId
           }

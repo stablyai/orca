@@ -72,6 +72,8 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
     }
     this.certificateTrustController?.onGuestRegistered(webContentsId, browserTabId)
     this.siteDisplayController?.onGuestRegistered(guest, sessionProfileId ?? null)
+    // Earlier audio events had no page; this report also cues the renderer to re-apply a tab's mute.
+    this.notifyAudioStateChanged(browserTabId, guest.isCurrentlyAudible())
 
     this.setupContextMenu(browserTabId, guest)
     this.setupGrabShortcut(browserTabId, guest)
@@ -99,6 +101,7 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
     // Resolve pending grabs before removing their registration.
     this.cancelGrabOp(browserTabId, 'evicted')
     cancelBrowserPagePrompts(browserTabId)
+    this.notifyAudioStateChanged(browserTabId, false)
 
     const guestWebContentsId = this.webContentsIdByTabId.get(browserTabId)
     if (guestWebContentsId !== undefined) {

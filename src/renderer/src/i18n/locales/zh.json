@@ -19372,7 +19372,9 @@
           "switchToChatView": "在聊天界面中继续"
         },
         "BrowserTab": {
-          "closeOthers": "关闭其他"
+          "closeOthers": "关闭其他",
+          "muteTab": "静音标签",
+          "unmuteTab": "取消静音标签"
         },
         "EditorFileTabContextMenu": {
           "closeOthers": "关闭其他"

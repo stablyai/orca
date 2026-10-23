@@ -19373,7 +19373,9 @@
           "switchToChatView": "Continuar en la interfaz de chat"
         },
         "BrowserTab": {
-          "closeOthers": "Cerrar otras"
+          "closeOthers": "Cerrar otras",
+          "muteTab": "Silenciar pestaña",
+          "unmuteTab": "Reactivar sonido de la pestaña"
         },
         "EditorFileTabContextMenu": {
           "closeOthers": "Cerrar otras"

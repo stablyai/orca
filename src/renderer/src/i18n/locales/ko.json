@@ -19407,7 +19407,9 @@
           "switchToChatView": "채팅 UI에서 계속하기"
         },
         "BrowserTab": {
-          "closeOthers": "다른 탭 닫기"
+          "closeOthers": "다른 탭 닫기",
+          "muteTab": "탭 음소거",
+          "unmuteTab": "탭 음소거 해제"
         },
         "EditorFileTabContextMenu": {
           "closeOthers": "다른 탭 닫기"

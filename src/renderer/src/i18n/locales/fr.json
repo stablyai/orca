@@ -19513,7 +19513,9 @@
           "switchToChatView": "Continuer dans l’interface de chat"
         },
         "BrowserTab": {
-          "closeOthers": "Fermer les autres"
+          "closeOthers": "Fermer les autres",
+          "muteTab": "Couper le son de l'onglet",
+          "unmuteTab": "Réactiver le son de l'onglet"
         },
         "EditorFileTabContextMenu": {
           "closeOthers": "Fermer les autres"
