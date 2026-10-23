@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH } from '../../../src/shared/runtime-types'
 import type { LayoutChangeEvent } from 'react-native'
 import { Bot } from 'lucide-react-native'
 import { readInitialMobileAgentHistoryWorktrees } from '../agent-history/mobile-agent-history-worktree-cache'
@@ -62,7 +63,16 @@ function recentCardWorktrees(rows: readonly unknown[] | undefined): RecentCardWo
   )
 }
 
-function recentCardSnapshotTabs(value: unknown): { id: string; terminal?: string }[] | null {
+function isUnpublishedSnapshot(snapshot: unknown): boolean {
+  return (
+    typeof snapshot === 'object' &&
+    snapshot !== null &&
+    'publicationEpoch' in snapshot &&
+    snapshot.publicationEpoch === UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH
+  )
+}
+
+function recentCardSnapshotTabs(value: unknown): { id: string; terminal?: string | null }[] | null {
   if (
     typeof value !== 'object' ||
     value === null ||
@@ -81,7 +91,9 @@ function recentCardSnapshotTabs(value: unknown): { id: string; terminal?: string
           {
             id: item.id,
             terminal:
-              'terminal' in item && typeof item.terminal === 'string' ? item.terminal : undefined
+              'terminal' in item && (typeof item.terminal === 'string' || item.terminal === null)
+                ? item.terminal
+                : undefined
           }
         ]
       : []
@@ -271,9 +283,10 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
       await Promise.allSettled(
         ids.map(async (targetId) => {
           const reply = await sessionTabsListRead.request(client, { worktree: `id:${targetId}` })
+          const snapshot = !cancelled && reply.ok ? sessionTabsListRead.interpret(reply) : null
           const liveTabs =
-            !cancelled && reply.ok
-              ? recentCardSnapshotTabs(sessionTabsListRead.interpret(reply))
+            snapshot !== null && !isUnpublishedSnapshot(snapshot)
+              ? recentCardSnapshotTabs(snapshot)
               : null
           if (liveTabs !== null) {
             reconcileRecentSessionCardsForWorktree({
@@ -353,7 +366,9 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
       })
       if (!response.ok) {
         setPendingCrossWorktreeTabTarget(null)
-        removeRecentSessionCard(hostId, card.worktreeId, card.tabId)
+        if (response.error.code === 'repo_not_found') {
+          removeRecentSessionCard(hostId, card.worktreeId, card.tabId)
+        }
         if (
           response.error.code === 'repo_not_found' ||
           response.error.code === 'selector_not_found'

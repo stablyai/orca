@@ -65,22 +65,59 @@ export function readLastVisitedWorktreeOnHost(
   return record?.hostId === hostId ? { worktreeId: record.worktreeId } : null
 }
 
-function extractRecentCards(raw: string | null): unknown[] | undefined {
+function extractRecentCardFields(raw: string | null): {
+  recentCards?: unknown[]
+  recentCardsMaxDisplay?: number
+} {
   if (!raw) {
-    return undefined
+    return {}
   }
   try {
     const parsed: unknown = JSON.parse(raw)
-    if (
-      !isRecord(parsed) ||
-      !Array.isArray(parsed.recentCards) ||
-      parsed.recentCards.length === 0
-    ) {
-      return undefined
+    if (!isRecord(parsed)) {
+      return {}
     }
-    return parsed.recentCards
+    const recentCards =
+      Array.isArray(parsed.recentCards) && parsed.recentCards.length > 0
+        ? parsed.recentCards
+        : undefined
+    const recentCardsMaxDisplay =
+      typeof parsed.recentCardsMaxDisplay === 'number' &&
+      Number.isFinite(parsed.recentCardsMaxDisplay)
+        ? parsed.recentCardsMaxDisplay
+        : undefined
+    return {
+      ...(recentCards ? { recentCards } : {}),
+      ...(recentCardsMaxDisplay !== undefined ? { recentCardsMaxDisplay } : {})
+    }
   } catch {
-    return undefined
+    return {}
+  }
+}
+
+/** Merge recent cards into an existing visit record. Null when there is no visit to keep. */
+export function withRecentCards(
+  raw: string | null,
+  cards: readonly unknown[],
+  extras?: { recentCardsMaxDisplay?: number }
+): string | null {
+  if (!raw || readLastVisitedWorktreeRecord(raw) === null) {
+    return null
+  }
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    if (!isRecord(parsed)) {
+      return null
+    }
+    const next: Record<string, unknown> = { ...parsed, recentCards: cards }
+    if (extras?.recentCardsMaxDisplay !== undefined) {
+      next.recentCardsMaxDisplay = extras.recentCardsMaxDisplay
+    } else {
+      delete next.recentCardsMaxDisplay
+    }
+    return JSON.stringify(next)
+  } catch {
+    return null
   }
 }
 
@@ -97,13 +134,13 @@ export function withLastVisitedWorktree(
   // Re-inserted so the map's order is oldest visit first, which is what the cap drops.
   byHost.delete(record.hostId)
   byHost.set(record.hostId, visitOf(record.worktreeId, record.executionHost))
-  const recentCards = extractRecentCards(raw)
+  const recentFields = extractRecentCardFields(raw)
   const serialize = () =>
     JSON.stringify({
       hostId: record.hostId,
       worktreeId: record.worktreeId,
       byHost: Object.fromEntries(byHost),
-      ...(recentCards ? { recentCards } : {})
+      ...recentFields
     })
   let value = serialize()
   while (

@@ -53,6 +53,7 @@ export function readLastVisitedWorktreeRepoId(raw: string | null, hostId: string
 }
 
 function extractRecentCardsExtras(raw: string | null | undefined): {
+  byHost?: Record<string, unknown>
   recentCards?: unknown[]
   recentCardsMaxDisplay?: number
 } {
@@ -64,6 +65,7 @@ function extractRecentCardsExtras(raw: string | null | undefined): {
     if (!isRecord(parsed)) {
       return {}
     }
+    const byHost = isRecord(parsed.byHost) ? parsed.byHost : undefined
     const recentCards =
       Array.isArray(parsed.recentCards) && parsed.recentCards.length > 0
         ? parsed.recentCards
@@ -74,6 +76,7 @@ function extractRecentCardsExtras(raw: string | null | undefined): {
         ? parsed.recentCardsMaxDisplay
         : undefined
     return {
+      ...(byHost ? { byHost } : {}),
       ...(recentCards ? { recentCards } : {}),
       ...(recentCardsMaxDisplay !== undefined ? { recentCardsMaxDisplay } : {})
     }

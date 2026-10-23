@@ -199,6 +199,12 @@ describe('MobileSessionHeaderMoreActionsSheet', () => {
     expect(texts(tree)).toContain('10m')
     expect(texts(tree)).toContain('5m')
     expect(
+      tree.root.findByProps({ testID: 'recent-session-card-wt-1-tab-1' }).props.accessibilityLabel
+    ).toBe('Ship notes, Orca, Current, just now')
+    expect(
+      tree.root.findByProps({ testID: 'recent-session-card-wt-1-tab-3' }).props.accessibilityLabel
+    ).toBe('Other notes, Orca, 10m')
+    expect(
       tree.root.findAllByProps({ testID: 'recent-session-card-current-icon-wt-1-tab-3' })
     ).toHaveLength(0)
     expect(
@@ -226,7 +232,7 @@ describe('MobileSessionHeaderMoreActionsSheet', () => {
     expect(
       tree.root.findByProps({ testID: 'recent-session-card-wt-long-tab-long' }).props
         .accessibilityLabel
-    ).toBe('Verify PRs, zhangxaochen/mobile-agent-history-stack')
+    ).toBe('Verify PRs, zhangxaochen/mobile-agent-history-stack, 5m')
   })
 
   it('hides Recently Used until the screen offers it', () => {

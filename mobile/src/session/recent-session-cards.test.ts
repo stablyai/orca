@@ -305,19 +305,69 @@ describe('storage hydration', () => {
     expect(readAllRecentSessionCardsSync()).toEqual([arrived])
   })
 
-  it('keeps piggybacked cards when the last-visited writer runs', async () => {
+  it('keeps byHost when recent cards or the last-visited writer update the record', async () => {
+    const byHost = {
+      'host-1': { worktreeId: 'wt-1' },
+      'host-2': { worktreeId: 'wt-9', executionHost: 'runtime:env-1' }
+    }
+    await persistMirrored(
+      LAST_VISITED_WORKTREE_STORAGE_KEY,
+      JSON.stringify({ hostId: 'host-1', worktreeId: 'wt-1', byHost })
+    )
     recordRecentSessionCardVisit(card({ tabId: 'tab-1', lastVisitedAt: 5 }))
     await settleWrites()
-    writeLastVisitedWorktree({ hostId: 'host-2', worktreeId: 'wt-9' })
-    await settleWrites()
 
-    const raw = storage.items.get(LAST_VISITED_WORKTREE_STORAGE_KEY)
-    const parsed: unknown = raw ? JSON.parse(raw) : null
-    expect(parsed).toMatchObject({
-      hostId: 'host-2',
-      worktreeId: 'wt-9',
+    const afterCards = storage.items.get(LAST_VISITED_WORKTREE_STORAGE_KEY)
+    const parsedCards: unknown = afterCards ? JSON.parse(afterCards) : null
+    expect(parsedCards).toMatchObject({
+      hostId: 'host-1',
+      worktreeId: 'wt-1',
+      byHost,
       recentCards: [expect.objectContaining({ tabId: 'tab-1' })]
     })
+
+    writeLastVisitedWorktree({ hostId: 'host-3', worktreeId: 'wt-3' })
+    await settleWrites()
+    const afterVisit = storage.items.get(LAST_VISITED_WORKTREE_STORAGE_KEY)
+    const parsedVisit: unknown = afterVisit ? JSON.parse(afterVisit) : null
+    expect(parsedVisit).toMatchObject({
+      hostId: 'host-3',
+      worktreeId: 'wt-3',
+      byHost,
+      recentCards: [expect.objectContaining({ tabId: 'tab-1' })]
+    })
+  })
+
+  it('drops a card removed before hydration can merge the stored copy back', async () => {
+    removeRecentSessionCard('host-1', 'wt-1', 'gone')
+    await persistMirrored(
+      RECENT_SESSION_CARDS_STORAGE_KEY,
+      JSON.stringify([
+        card({ tabId: 'gone', lastVisitedAt: 3 }),
+        card({ tabId: 'kept', lastVisitedAt: 1 })
+      ])
+    )
+
+    await expect(hydrateRecentSessionCards()).resolves.toEqual([
+      card({ tabId: 'kept', lastVisitedAt: 1 })
+    ])
+  })
+
+  it('lets a later visit restore a card removed before hydration', async () => {
+    removeRecentSessionCard('host-1', 'wt-1', 'gone')
+    await persistMirrored(
+      RECENT_SESSION_CARDS_STORAGE_KEY,
+      JSON.stringify([
+        card({ tabId: 'gone', lastVisitedAt: 3 }),
+        card({ tabId: 'kept', lastVisitedAt: 1 })
+      ])
+    )
+    recordRecentSessionCardVisit(card({ tabId: 'gone', lastVisitedAt: 9 }))
+
+    await expect(hydrateRecentSessionCards()).resolves.toEqual([
+      card({ tabId: 'gone', lastVisitedAt: 9 }),
+      card({ tabId: 'kept', lastVisitedAt: 1 })
+    ])
   })
 
   it('prunes closed tabs via removeRecentSessionCard and reconcileRecentSessionCardsForWorktree', () => {

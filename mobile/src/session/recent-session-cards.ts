@@ -3,10 +3,8 @@ import {
   readMirroredKeyOrStore,
   readMirroredStorage
 } from '../storage/mirrored-storage-keys'
-import {
-  LAST_VISITED_WORKTREE_STORAGE_KEY,
-  readLastVisitedWorktreeRecord
-} from '../worktree/last-visited-worktree-repo'
+import { LAST_VISITED_WORKTREE_STORAGE_KEY } from '../worktree/last-visited-worktree-repo'
+import { withRecentCards } from '../worktree/last-visited-worktree-by-host'
 import type { MobileSessionTab, MobileSessionTabType } from './mobile-session-route-types'
 import {
   getMobileSessionTabTitle,
@@ -40,10 +38,18 @@ type ReadonlyCards = readonly RecentSessionCardRecord[]
 type IdTab = { id: string; terminal?: string | null }
 type LiveWorktree = { worktreeId: string; displayName?: string; isArchived?: boolean }
 
+type PendingRemoval = {
+  hostId: string
+  worktreeId: string
+  tabId?: string
+  handle?: string
+}
+
 let memory: Cards | null = null
 let maxDisplayMemory: number | null = null
 let hydrated = false
 const listeners = new Set<() => void>()
+const pendingRemovals: PendingRemoval[] = []
 
 export const subscribeRecentSessionCards = (l: () => void): (() => void) => (
   listeners.add(l),
@@ -57,6 +63,14 @@ const str = (v: unknown): string | undefined =>
 const cardKey = (c: RecentSessionCardRecord): string => `${c.hostId}\0${c.worktreeId}\0${c.tabId}`
 const matchesTab = (c: RecentSessionCardRecord, t: IdTab): boolean =>
   t.id === c.tabId || (Boolean(c.terminalHandle) && t.terminal === c.terminalHandle)
+const removalDrops = (item: RecentSessionCardRecord, removal: PendingRemoval): boolean =>
+  item.hostId === removal.hostId &&
+  item.worktreeId === removal.worktreeId &&
+  ((removal.tabId === undefined && removal.handle === undefined) ||
+    item.tabId === removal.tabId ||
+    (removal.handle !== undefined && item.terminalHandle === removal.handle))
+const withoutPendingRemovals = (cards: ReadonlyCards): Cards =>
+  cards.filter((item) => !pendingRemovals.some((removal) => removalDrops(item, removal)))
 const clampLimit = (n: number): number =>
   Math.min(
     MAX_RECENT_SESSION_CARDS_LIMIT,
@@ -88,7 +102,7 @@ export function getRecentSessionCardsMaxDisplaySync(): number {
 export function setRecentSessionCardsMaxDisplay(limit: number): number {
   const current = readAllRecentSessionCardsSync()
   maxDisplayMemory = clampLimit(limit)
-  persistCards(current, current[0] ?? { hostId: '', worktreeId: '' })
+  persistCards(current)
   return maxDisplayMemory
 }
 
@@ -177,13 +191,16 @@ export async function hydrateRecentSessionCards(): Promise<Cards> {
   const storedLimit = parseMaxDisplay(dRaw) ?? parseMaxDisplay(lRaw)
   maxDisplayMemory ??= storedLimit
   const stored = capCards(
-    mergeByRecency(parseRecentSessionCards(dRaw), parseRecentSessionCards(lRaw))
+    withoutPendingRemovals(
+      mergeByRecency(parseRecentSessionCards(dRaw), parseRecentSessionCards(lRaw))
+    )
   )
+  pendingRemovals.length = 0
   if (memory !== null) {
     const combined = memory.reduceRight((acc, visit) => applyVisit(acc, visit), stored)
     hydrated = true
     memory = combined
-    return combined[0] ? persistCards(combined, combined[0]).slice() : (notify(), combined.slice())
+    return combined[0] ? persistCards(combined).slice() : (notify(), combined.slice())
   }
   hydrated = true
   memory = stored.length > 0 ? stored : memory
@@ -193,22 +210,20 @@ export async function hydrateRecentSessionCards(): Promise<Cards> {
   return stored.slice()
 }
 
-function persistCards(next: Cards, fallback: { hostId: string; worktreeId: string }): Cards {
+function persistCards(next: Cards): Cards {
   const maxDisplay = getRecentSessionCardsMaxDisplaySync()
   const custom = maxDisplay !== MAX_RECENT_SESSION_CARDS_DISPLAY
   memory = next
   notify()
   const dRaw = custom ? JSON.stringify({ recentCards: next, maxDisplay }) : JSON.stringify(next)
   void persistMirrored(RECENT_SESSION_CARDS_STORAGE_KEY, dRaw).catch(() => {})
-  const last = readLastVisitedWorktreeRecord(
-    readMirroredStorage(M_KEYS)[LAST_VISITED_WORKTREE_STORAGE_KEY] ?? null
+  const merged = withRecentCards(
+    readMirroredStorage(M_KEYS)[LAST_VISITED_WORKTREE_STORAGE_KEY] ?? null,
+    next,
+    custom ? { recentCardsMaxDisplay: maxDisplay } : undefined
   )
-  const hostId = last?.hostId || fallback.hostId
-  const worktreeId = last?.worktreeId || fallback.worktreeId
-  if (hostId && worktreeId) {
-    const extra = custom ? { recentCardsMaxDisplay: maxDisplay } : {}
-    const lRaw = JSON.stringify({ hostId, worktreeId, recentCards: next, ...extra })
-    void persistMirrored(LAST_VISITED_WORKTREE_STORAGE_KEY, lRaw).catch(() => {})
+  if (merged) {
+    void persistMirrored(LAST_VISITED_WORKTREE_STORAGE_KEY, merged).catch(() => {})
   }
   return next
 }
@@ -219,7 +234,7 @@ export function recordRecentSessionCardVisit(r: RecentSessionCardRecord): Cards 
   }
   const next = applyVisit(readAllRecentSessionCardsSync(), r)
   if (hydrated) {
-    return persistCards(next, r)
+    return persistCards(next)
   }
   memory = next
   notify()
@@ -233,6 +248,16 @@ export function removeRecentSessionCard(
   tabId?: string | null,
   handle?: string | null
 ): Cards {
+  if (!hydrated) {
+    const removal: PendingRemoval = { hostId, worktreeId }
+    if (typeof tabId === 'string' && tabId.length > 0) {
+      removal.tabId = tabId
+    }
+    if (typeof handle === 'string' && handle.length > 0) {
+      removal.handle = handle
+    }
+    pendingRemovals.push(removal)
+  }
   const current = readAllRecentSessionCardsSync()
   const scoped = tabId != null || handle != null
   const next = current.filter(
@@ -241,7 +266,7 @@ export function removeRecentSessionCard(
       i.worktreeId !== worktreeId ||
       (scoped && (tabId == null || i.tabId !== tabId) && (!handle || i.terminalHandle !== handle))
   )
-  return next.length === current.length ? current : persistCards(next, { hostId, worktreeId })
+  return next.length === current.length ? current : persistCards(next)
 }
 
 export function reconcileRecentSessionCardsForWorktree(p: {
@@ -260,13 +285,14 @@ export function reconcileRecentSessionCardsForWorktree(p: {
       i.worktreeId !== p.worktreeId ||
       p.liveTabs.some((t) => matchesTab(i, t))
   )
-  return next.length === current.length ? current : persistCards(next, p)
+  return next.length === current.length ? current : persistCards(next)
 }
 
 export const clearRecentSessionCardsForTests = (): void => {
   memory = null
   maxDisplayMemory = null
   hydrated = false
+  pendingRemovals.length = 0
 }
 
 export function getVisibleRecentSessionCards(p: {

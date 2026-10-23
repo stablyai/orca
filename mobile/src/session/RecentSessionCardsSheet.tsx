@@ -1,4 +1,5 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
+import { useMobileTranslation } from '../i18n/mobile-translation'
 import {
   File,
   FileText,
@@ -93,7 +94,11 @@ export function RecentSessionCardsSection({
   onChangeMaxDisplay,
   onSelectCard
 }: RecentSessionCardsSectionProps) {
+  const { translate } = useMobileTranslation()
   const now = useNow(30_000)
+  const sectionTitle = translate('recentSessionCardsSectionTitle', 'Recently Used')
+  const emptyLabel = translate('recentSessionCardsEmpty', 'No other recent cards yet')
+  const currentSessionLabel = translate('recentSessionCardsCurrentSession', 'Current')
   const effectiveMaxDisplay = maxDisplay ?? getRecentSessionCardsMaxDisplaySync()
   const handleUpdateMaxDisplay = onChangeMaxDisplay ?? setRecentSessionCardsMaxDisplay
   const canDecrease = effectiveMaxDisplay > MIN_RECENT_SESSION_CARDS_DISPLAY
@@ -102,7 +107,7 @@ export function RecentSessionCardsSection({
   return (
     <View style={styles.section}>
       <View style={styles.header}>
-        <Text style={styles.title}>Recently Used</Text>
+        <Text style={styles.title}>{sectionTitle}</Text>
         <View style={styles.limitStepper}>
           <Pressable
             testID="recent-cards-limit-decrease"
@@ -141,7 +146,7 @@ export function RecentSessionCardsSection({
       </View>
       <View style={styles.panel}>
         {visibleCards.length === 0 ? (
-          <Text style={styles.emptyText}>No other recent cards yet</Text>
+          <Text style={styles.emptyText}>{emptyLabel}</Text>
         ) : (
           visibleCards.map((card, index) => {
             const workspaceLabel = getWorktreeLabel(card.worktreeName, card.worktreeId)
@@ -152,13 +157,16 @@ export function RecentSessionCardsSection({
               Boolean(currentWorktreeId) && card.worktreeId === currentWorktreeId
             const isCurrentCard =
               isCurrentWorkspace && Boolean(currentTabId) && card.tabId === currentTabId
+            const accessibilityLabel = isCurrentCard
+              ? `${card.title}, ${workspaceLabel}, ${currentSessionLabel}, ${timeAgo}`
+              : `${card.title}, ${workspaceLabel}, ${timeAgo}`
             return (
               <View key={key}>
                 {index > 0 ? <View style={styles.separator} /> : null}
                 <Pressable
                   testID={`recent-session-card-${card.worktreeId}-${card.tabId}`}
                   accessibilityRole="button"
-                  accessibilityLabel={`${card.title}, ${workspaceLabel}`}
+                  accessibilityLabel={accessibilityLabel}
                   disabled={jumpingCardKey !== null}
                   onPress={() => onSelectCard(card)}
                   style={({ pressed }) => [
