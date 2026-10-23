@@ -1,3 +1,8 @@
+import {
+  AGENT_SESSION_FOUNDING_FENCE,
+  agentSessionNeverStarted
+} from '../../shared/agent-session-conversation-view'
+export { AGENT_SESSION_FOUNDING_FENCE } from '../../shared/agent-session-conversation-view'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../shared/agent-chat-permission-mode'
 import {
   AGENT_SESSION_RECORD_SCHEMA_VERSION,
@@ -40,21 +45,7 @@ export function agentSessionRecordIdentityFields(
 }
 
 /** The fence a founded conversation starts at; every reservation moves it. */
-export const AGENT_SESSION_FOUNDING_FENCE = 1
-
-/** A founded row with no reservation, owner, or provider handle has never started an agent. */
-export function structuredSessionNeverStarted(record: AgentSessionRecord): boolean {
-  const { lease } = record
-  return (
-    lease.claimStatus === 'released' &&
-    lease.runtimeFence === AGENT_SESSION_FOUNDING_FENCE &&
-    lease.minimumNextFence === undefined &&
-    lease.ownerProcess === null &&
-    lease.reservedSpawnToken === null &&
-    lease.handoffStage === null &&
-    record.providerHandleChain.length === 0
-  )
-}
+export const structuredSessionNeverStarted = agentSessionNeverStarted
 
 /**
  * A conversation no agent has run yet, at rest: its first send starts one. The empty handle chain

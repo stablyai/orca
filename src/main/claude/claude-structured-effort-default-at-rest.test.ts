@@ -1,3 +1,6 @@
+import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
+import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
 // Independent discovery supplies defaults; saved choices and actual-run reports remain chat-owned.
 
 import { describe, expect, it } from 'vitest'
@@ -145,19 +148,22 @@ async function startChild(
 
 function restingRecord(
   options: Record<string, string>,
-  providerHandleChain: { origin: string }[] = []
+  providerHandleChain: { origin: 'created' | 'adopted' }[] = []
 ): AgentSessionRecord {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resting read and the catalog key touch only these fields.
-  return {
+  return agentSessionRecordFixture({
     sessionId: SESSION,
     provider: 'claude',
     accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: ACCOUNT_HOME },
-    providerHandleChain,
+    providerHandleChain: providerHandleChain.map(({ origin }, index) => ({
+      origin,
+      linkId: `link-${index}`,
+      mintedAtFence: 1,
+      observedAt: 0,
+      handle: claudeProviderHandle('thread-1', null)
+    })),
     location: { executionHostId: 'local', wslDistro: null },
-    // Why released: a chat at rest has no live claim, so its next start reads the current account.
-    lease: { claimStatus: 'released' },
     options
-  } as unknown as AgentSessionRecord
+  })
 }
 
 function exactKey(record: AgentSessionRecord): string {
@@ -175,6 +181,10 @@ function catalogDefault(store: AgentModelCatalogStore, model: string): string | 
 function catalogService(store: AgentModelCatalogStore, record: AgentSessionRecord) {
   return createAgentModelCatalogService({
     store,
+    getConversation: () => {
+      const saved = record
+      return saved ? agentSessionConversationView(saved) : undefined
+    },
     getRecord: () => record,
     drivesRecord: () => true,
     resolveAccountHome: async () => ({ variable: 'CLAUDE_CONFIG_DIR', path: ACCOUNT_HOME }),
@@ -203,7 +213,11 @@ function readAtRest(store: AgentModelCatalogStore, record: AgentSessionRecord) {
     deps: {
       adapter: {},
       agents: claudeAndCodexAgents(),
-      store: { getRecord: () => record },
+      store: {
+        getRecord: () => record,
+        getConversation: () => (record ? agentSessionConversationView(record) : null),
+        requireWritableRecord: () => record
+      },
       modelCatalog
     },
     serialize: (_sessionId: string, task: () => Promise<unknown>) => task(),
@@ -324,14 +338,14 @@ describe('Claude effort default at rest', () => {
 
   it('lists an unlisted Codex model at rest exactly as its live child does', async () => {
     const store = new AgentModelCatalogStore()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resting read and the catalog key touch only these fields.
-    const record = {
+    const record = agentSessionRecordFixture({
+      sessionId: SESSION,
       provider: 'codex',
       accountHome: { variable: 'CODEX_HOME', path: '/accounts/codex' },
       providerHandleChain: [],
       location: { executionHostId: 'local', wslDistro: null },
       options: { model: 'gpt-unlisted', effort: 'high' }
-    } as unknown as AgentSessionRecord
+    })
     const listing = {
       models: [
         {
@@ -408,14 +422,14 @@ describe('Claude effort default at rest', () => {
   })
 
   it("keeps a Codex model's effort at rest with no catalog yet, from the client's own defaults", async () => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resting read and the catalog key touch only these fields.
-    const record = {
+    const record = agentSessionRecordFixture({
+      sessionId: SESSION,
       provider: 'codex',
       accountHome: { variable: 'CODEX_HOME', path: '/accounts/codex' },
       providerHandleChain: [],
       location: { executionHostId: 'local', wslDistro: null },
       options: { model: 'gpt-5.5', effort: 'high' }
-    } as unknown as AgentSessionRecord
+    })
 
     const resting = await readAtRest(new AgentModelCatalogStore(), record)
 
@@ -428,14 +442,14 @@ describe('Claude effort default at rest', () => {
 
   it("leaves a Codex chat's unsaved effort blank at rest, as its live child does", async () => {
     const store = new AgentModelCatalogStore()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resting read and the catalog key touch only these fields.
-    const record = {
+    const record = agentSessionRecordFixture({
+      sessionId: SESSION,
       provider: 'codex',
       accountHome: { variable: 'CODEX_HOME', path: '/accounts/codex' },
       providerHandleChain: [],
       location: { executionHostId: 'local', wslDistro: null },
       options: { model: 'gpt-5.5' }
-    } as unknown as AgentSessionRecord
+    })
     store.recordSuccess(
       exactKey(record),
       'codex',

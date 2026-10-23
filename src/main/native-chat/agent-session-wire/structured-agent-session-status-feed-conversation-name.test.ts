@@ -1,3 +1,4 @@
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -39,7 +40,7 @@ async function namedFeed() {
   const sessions = new Map([['session', indexedStatusFeedSession({ journal })]])
   const feed = new StructuredAgentSessionStatusFeed({
     sessions,
-    getRecord: () => record,
+    getConversation: () => agentSessionConversationView(record),
     namingFailure: () => failure,
     now: () => 100,
     logger: createStructuredAgentSessionLogger()

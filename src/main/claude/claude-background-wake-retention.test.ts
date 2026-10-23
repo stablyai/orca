@@ -72,7 +72,7 @@ async function wiredSession() {
         }
       ]
     ]),
-    getRecord: () => null,
+    getConversation: () => null,
     now: () => Date.now(),
     statusSink: () => ({
       publish: (summary, subject) => host.ingestStructuredStatus(summary, subject),

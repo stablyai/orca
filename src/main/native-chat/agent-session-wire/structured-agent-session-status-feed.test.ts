@@ -1,3 +1,4 @@
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -97,7 +98,8 @@ function feedFor(
       }
     } as unknown as ReadonlyMap<string, ReturnType<typeof indexed>>,
     // A partial record still has a lease: the feed reads the conversation's fence off it.
-    getRecord: () => (record ? { ...agentSessionRecordFixture(), ...record } : null),
+    getConversation: () =>
+      record ? agentSessionConversationView({ ...agentSessionRecordFixture(), ...record }) : null,
     now: () => (now += 1)
   })
   const events: AgentSessionStatusEvent[] = []

@@ -1,3 +1,4 @@
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session-account-home'
 import {
@@ -41,6 +42,7 @@ function rig(agent = 'grok') {
   )
   const service = createAgentModelCatalogService({
     store,
+    getConversation: () => undefined,
     getRecord: () => undefined,
     drivesRecord: () => true,
     resolveAccountHome: async () => HOME,
@@ -72,11 +74,16 @@ describe('a saved-only catalog read', () => {
     }
     const store = new AgentModelCatalogStore({ now: () => now })
     const probe = vi.fn(async () => listing('grok-4.7'))
+    const resolveAccountHome = vi.fn(async () => HOME)
     const service = createAgentModelCatalogService({
       store,
-      getRecord: (sessionId) => (sessionId === record.sessionId ? record : undefined),
+      getConversation: (sessionId) => {
+        const saved = sessionId === record.sessionId ? record : undefined
+        return saved ? agentSessionConversationView(saved) : undefined
+      },
+      getRecord: () => undefined,
       drivesRecord: () => true,
-      resolveAccountHome: async () => HOME,
+      resolveAccountHome,
       probes: { grok: probe }
     })
 
@@ -95,6 +102,7 @@ describe('a saved-only catalog read', () => {
     })
     expect(probe).not.toHaveBeenCalled()
 
+    expect(resolveAccountHome).not.toHaveBeenCalled()
     await service.read({ agent: 'grok' })
     expect(probe).toHaveBeenCalledOnce()
   })

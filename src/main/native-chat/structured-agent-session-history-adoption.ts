@@ -10,8 +10,9 @@ import type {
   AgentSessionProviderHandleLink,
   StructuredAgentId
 } from '../../shared/agent-session-provider-handle'
-import type { AgentSessionLease, AgentSessionRecord } from '../../shared/agent-session-record'
-import { agentSessionLeaseAdmitsWriter } from '../../shared/agent-session-lease-adjudication'
+import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionOwnerObservation } from '../../shared/agent-session-conversation-view'
+import { agentSessionOwnerObservationIsLive } from '../../shared/agent-session-lease-adjudication'
 import {
   agentSessionAccountHomesEqual,
   type AgentSessionAccountHome
@@ -23,7 +24,7 @@ export type StructuredAgentSessionAdoptionOwnership = {
   /** Any agent's chat may hold the conversation, though only one with an importer adopts. */
   provider: StructuredAgentId
   providerSessionId: string
-  lease: AgentSessionLease
+  ownerObservation: AgentSessionOwnerObservation
 }
 
 export type StructuredAgentSessionAdoption = {
@@ -106,7 +107,7 @@ export function structuredAdoptionConflictError(
   ownership: StructuredAgentSessionAdoptionOwnership
 ): Error {
   return agentSessionRefusalError(
-    agentSessionLeaseAdmitsWriter(ownership.lease)
+    agentSessionOwnerObservationIsLive(ownership.ownerObservation)
       ? 'agent_session_conflict'
       : 'agent_session_ownership_unknown',
     {

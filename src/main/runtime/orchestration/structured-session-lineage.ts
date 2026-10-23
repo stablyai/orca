@@ -4,24 +4,37 @@
  * Derived from the records every time; nothing is rewritten at a clear.
  */
 
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { structuredWorkerHostScope } from '../structured-worker-identity'
 
 export type AgentSessionRecordReader = {
-  getRecord: (sessionId: string) => AgentSessionRecord | null
-  listRecords: () => AgentSessionRecord[]
+  getRecord: (sessionId: string) => AgentSessionConversationView | null
+  listRecords: () => AgentSessionConversationView[]
   /** Absent on a store that predates tab visibility; every session then counts as open. */
   getVisibleSessionTabIndex?: () => { present: boolean; sessionIds: string[] }
 }
 
 /** Null until the agent-session host is installed; callers that must see records ensure it first. */
 export function readAgentSessionRecordStore(): AgentSessionRecordReader | null {
-  return getStructuredAgentSessionHost()?.deps.store ?? null
+  const store = getStructuredAgentSessionHost()?.deps.store
+  return store ? conversationRecordReader(store) : null
+}
+
+export function conversationRecordReader(store: {
+  getConversation: AgentSessionRecordReader['getRecord']
+  listConversations: AgentSessionRecordReader['listRecords']
+  getVisibleSessionTabIndex: NonNullable<AgentSessionRecordReader['getVisibleSessionTabIndex']>
+}): AgentSessionRecordReader {
+  return {
+    getRecord: store.getConversation,
+    listRecords: store.listConversations,
+    getVisibleSessionTabIndex: store.getVisibleSessionTabIndex
+  }
 }
 
 /** The session a committed `/clear` continued this one in, if any. */
-export function clearedInto(record: AgentSessionRecord): string | null {
+export function clearedInto(record: AgentSessionConversationView): string | null {
   const command = record.conversationCommand
   return command?.command === 'clear' && command.phase === 'committed'
     ? (command.replacementSessionId ?? null)
@@ -31,7 +44,7 @@ export function clearedInto(record: AgentSessionRecord): string | null {
 /** The session running a lineage now, its record, and every session of the lineage up to it. */
 export type RunningStructuredSession = {
   readonly sessionId: string
-  readonly record: AgentSessionRecord
+  readonly record: AgentSessionConversationView
   readonly lineage: readonly string[]
 }
 
@@ -60,7 +73,7 @@ export function resolveLineageRunningSession(
   }
   let current = sessionId
   for (;;) {
-    let record: AgentSessionRecord | null
+    let record: AgentSessionConversationView | null
     try {
       record = store.getRecord(current)
     } catch {
@@ -97,7 +110,7 @@ export function resolveLineageRunningSession(
 export function lineageLiveSession(
   store: AgentSessionRecordReader,
   sessionId: string
-): AgentSessionRecord | null {
+): AgentSessionConversationView | null {
   const running = resolveLineageRunningSession(store, sessionId)
   return running.kind === 'unverifiable' ? null : running.record
 }

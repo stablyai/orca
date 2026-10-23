@@ -9,7 +9,9 @@ import type { AgentSessionJournal } from '../agent-session-journal/journal-store
  *  its returned card, never the rejected submission, or the same text would
  *  render twice — on a Retry row AND the card. */
 export function queuedSendAnswer(
-  journal: Pick<AgentSessionJournal, 'queuedMessages' | 'submission' | 'submissions'>,
+  journal: Pick<AgentSessionJournal, 'submission' | 'submissions'> & {
+    queuedMessages: Pick<AgentSessionJournal['queuedMessages'], 'get'>
+  },
   clientMessageId: string
 ): AgentSessionSendResult | null {
   const draft = journal.queuedMessages.get(clientMessageId)

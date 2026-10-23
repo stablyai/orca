@@ -188,3 +188,13 @@ function requireSubmission(
   // The answer as of this step: the journal settles its own row in place afterwards.
   return { ...submission }
 }
+
+export type AgentSessionReplayContext = Pick<
+  AgentSessionTurnContext,
+  'sessionId' | 'fence' | 'currentWork' | 'agent' | 'persistedOptions' | 'now'
+> & {
+  journal: Pick<
+    AgentSessionJournal,
+    'cursor' | 'submission' | 'submissions' | 'epoch' | 'threadGoal'
+  > & { queuedMessages: Pick<AgentSessionJournal['queuedMessages'], 'get'> }
+}

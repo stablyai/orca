@@ -1,3 +1,4 @@
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 // The one settlement of what ended generations left unfinished. An observed exit runs it, with
 // what it saw.
 //
@@ -64,7 +65,7 @@ export async function settleStructuredAgentSessionLeftovers(
     const replaced = input.store.replacedRuntime?.(sessionId)
     // Everything below the live generation is ended; with none live, all of it is.
     const liveFence = structuredAgentSessionLiveFence({
-      record,
+      record: agentSessionConversationView(record),
       replaced,
       ...(input.ended ? { ended: input.ended } : {})
     })

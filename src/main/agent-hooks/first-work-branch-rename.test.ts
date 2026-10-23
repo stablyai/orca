@@ -138,7 +138,7 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
             }
           ]
         ]),
-        getRecord: () => null,
+        getConversation: () => null,
         now: () => 1,
         onStatusChanged: observe
       })
@@ -226,7 +226,7 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     const feed = new StructuredAgentSessionStatusFeed({
       logger: createStructuredAgentSessionLogger(),
       sessions: new Map([['session', { journal, params: { location, provider: 'codex' } }]]),
-      getRecord: () => null,
+      getConversation: () => null,
       now: () => 1,
       onStatusChanged: (summary, options) => {
         expect(summary.workspaceId).toBe(workspaceId)

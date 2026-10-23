@@ -1,3 +1,4 @@
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
 // A sender's name snapshot, read from the sources production fills: dispatch tasks in the
 // orchestration database, the chat tabs and terminal tabs of the workspace session this host
 // mirrors, and the terminal's own pty.
@@ -151,7 +152,13 @@ beforeEach(() => {
   records = new Map([[CHAT, { ...base, location: { ...base.location, workspaceId: WORKTREE } }]])
   hostRef.current = {
     deps: {
-      store: { getRecord: (id: string) => records.get(id) ?? null, listRecords: () => [] }
+      store: {
+        getConversation: (id: string) => {
+          const record = records.get(id)
+          return record ? agentSessionConversationView(record) : null
+        },
+        listConversations: () => []
+      }
     }
   }
 })

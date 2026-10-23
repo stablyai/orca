@@ -12,7 +12,7 @@ import type { StructuredAgentSessionHostSession } from './structured-agent-sessi
 
 /** The host's sessions and lease store, as the projection reads them. */
 export type StructuredAgentSessionCurrentWorkHost = {
-  store: Pick<AgentSessionRecordStore, 'getRecord' | 'replacedRuntime'>
+  store: Pick<AgentSessionRecordStore, 'getConversation' | 'replacedRuntime'>
   sessions: {
     get(
       sessionId: string
@@ -48,7 +48,7 @@ export function heldStructuredAgentSessionCurrentWork(
 ): StructuredAgentSessionCurrentWork {
   const ended = session?.lastEndedChild
   return structuredAgentSessionCurrentWork(journal, {
-    record: store.getRecord(sessionId),
+    record: store.getConversation(sessionId),
     replaced: store.replacedRuntime(sessionId),
     child: session?.child ?? null,
     ...(ended ? { ended } : {}),

@@ -26,11 +26,11 @@ import type {
 
 /** Throws its refusal as the code itself. */
 export async function revealStructuredAgentSession(
-  deps: { store: Pick<StructuredAgentSessionHostDeps['store'], 'getRecord'> },
+  deps: { store: Pick<StructuredAgentSessionHostDeps['store'], 'getConversation'> },
   sessionId: string,
   openConversation: (sessionId: string) => Promise<unknown>
 ): Promise<StructuredAgentSessionReveal> {
-  const record = deps.store.getRecord(sessionId)
+  const record = deps.store.getConversation(sessionId)
   if (!record) {
     throw agentSessionRefusalError('agent_session_identity_required', { reason: 'recordMissing' })
   }

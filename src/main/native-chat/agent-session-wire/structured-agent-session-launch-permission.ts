@@ -14,7 +14,7 @@ import type { StructuredAgentSessionHostDeps } from './structured-agent-session-
  *  options read names its default. */
 async function listedAutoModeSupport(
   catalog: StructuredAgentSessionHostDeps['modelCatalog'],
-  record: AgentSessionRecord
+  record: Pick<AgentSessionRecord, 'sessionId' | 'provider' | 'options' | 'permissionMode'>
 ): Promise<boolean> {
   const listing = await catalog
     ?.read({
@@ -35,7 +35,7 @@ async function listedAutoModeSupport(
 /** Null for an agent whose chats offer no modes, or one this runtime did not register. */
 export async function structuredAgentSessionLaunchPermission(
   deps: Pick<StructuredAgentSessionHostDeps, 'agents' | 'modelCatalog'>,
-  record: AgentSessionRecord
+  record: Pick<AgentSessionRecord, 'sessionId' | 'provider' | 'options' | 'permissionMode'>
 ): Promise<AgentChatPermissionMode | null> {
   const support = agentChatPermissionModes(record.provider)
   if (!support || !deps.agents.definition(record.provider)) {

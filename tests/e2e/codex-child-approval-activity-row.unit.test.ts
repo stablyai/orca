@@ -146,7 +146,7 @@ async function openHost() {
     sessions: new Map([
       [SESSION, indexedStatusFeedSession({ journal, child: { phase: 'ready' } })]
     ]),
-    getRecord: () => null,
+    getConversation: () => null,
     now: () => 1
   })
   const events: AgentSessionStatusEvent[] = []

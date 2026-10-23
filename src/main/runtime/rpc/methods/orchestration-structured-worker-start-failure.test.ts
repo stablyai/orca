@@ -1,3 +1,8 @@
+import { hostTestState } from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../../../shared/agent-session-record.test-fixture'
 /**
  * A worker start that fails AFTER its structured session exists is the fourth settlement path.
  *
@@ -55,31 +60,19 @@ const WORKTREE = 'wt_1'
 function installHost() {
   const closed: string[] = []
   const visibility: [string, boolean][] = []
-  setStructuredAgentSessionHost({
-    setSessionTabVisibility: async (sessionId: string, visible: boolean) => {
-      visibility.push([sessionId, visible])
-    },
-    close: async (sessionId: string) => {
-      closed.push(sessionId)
-    },
-    hasSession: () => true,
-    hold: async () => {},
-    release: () => {},
-    subscribe: () => () => {},
-    deps: {
-      store: {
-        getRecord: () => ({
-          location: { executionHostId: 'local', wslDistro: null },
-          lease: {
-            runtimeKind: 'native',
-            claimStatus: 'live',
-            deathEvidence: null,
-            runtimeFence: 1
-          }
-        })
-      }
-    }
-  } as never)
+  const { host, store } = hostTestState()
+  vi.spyOn(host, 'setSessionTabVisibility').mockImplementation(async (sessionId, visible) => {
+    visibility.push([sessionId, visible])
+  })
+  vi.spyOn(host, 'close').mockImplementation(async (sessionId) => {
+    closed.push(sessionId)
+  })
+  vi.spyOn(host, 'hasSession').mockReturnValue(true)
+  vi.spyOn(host, 'subscribe').mockResolvedValue(() => {})
+  vi.spyOn(store, 'requireWritableRecord').mockImplementation((sessionId) =>
+    agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId, runtimeFence: 1 }))
+  )
+  setStructuredAgentSessionHost(host)
   return { closed, visibility }
 }
 

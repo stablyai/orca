@@ -1,3 +1,7 @@
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../../../../../shared/agent-session-record.test-fixture'
 /**
  * A fresh worker starts through the shared launch executor, and its durable dispatch records must
  * read exactly as they did when the placement sequenced the launch itself: the same effects, the
@@ -102,11 +106,14 @@ function place(
 }
 
 function installHost() {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a worker create reads only `subscribe` and the record's location.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the host supplies subscribe and a complete writable record for the newly minted id.
   setStructuredAgentSessionHost({
     subscribe: () => () => {},
     deps: {
-      store: { getRecord: () => ({ location: { executionHostId: 'local', wslDistro: null } }) }
+      store: {
+        requireWritableRecord: (sessionId: string) =>
+          agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId }))
+      }
     }
   } as never)
 }

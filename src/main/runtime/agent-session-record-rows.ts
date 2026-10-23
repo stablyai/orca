@@ -1,3 +1,4 @@
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
 // The agent-session store's rows in the host's chat journal database: every row loaded once at open,
 // and exactly the rows a transaction changed written back.
 //
@@ -7,6 +8,7 @@
 import {
   AGENT_SESSION_RECORD_SCHEMA_VERSION,
   isPersistedAgentSessionRecord,
+  isPersistedAgentSessionObservationRecord,
   type AgentSessionLease
 } from '../../shared/agent-session-record'
 import { decodePersistedAgentSessionRecord } from '../../shared/agent-session-record-stored-form'
@@ -112,9 +114,20 @@ export function loadAgentSessionStoreRows(db: Database.Database): AgentSessionSt
         lease: { ...withoutRetiredLeaseLatches(record.lease), unreconciled: true }
       })
     } else {
+      const decoded =
+        isPersistedAgentSessionObservationRecord(value) && value.sessionId === sessionId
+          ? decodePersistedAgentSessionRecord(structuredClone(value)).record
+          : undefined
+      const conversation = decoded
+        ? agentSessionConversationView({
+            ...decoded,
+            lease: { ...decoded.lease, unreconciled: true }
+          })
+        : undefined
       state.unreadableRecords.set(sessionId, {
         reason: unreadableRecordReason(value),
-        raw: value
+        raw: value,
+        ...(conversation ? { conversation: Object.freeze(conversation) } : {})
       })
     }
   }

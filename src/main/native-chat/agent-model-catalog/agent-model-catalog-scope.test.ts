@@ -101,6 +101,7 @@ describe('a picker read with the CLI missing', () => {
       let now = 1_000
       const service = createAgentModelCatalogService({
         store: new AgentModelCatalogStore({ now: () => now }),
+        getConversation: () => undefined,
         getRecord: () => undefined,
         drivesRecord: () => true,
         resolveAccountHome: async () => ({ variable: 'CLAUDE_CONFIG_DIR', path: root }),

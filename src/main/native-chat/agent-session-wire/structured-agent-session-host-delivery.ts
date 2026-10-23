@@ -100,7 +100,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
           childWork: () => input.clientDelivery.readChildWork(sessionId),
           childWorkOpen: () => input.clientDelivery.childWorkOpen(sessionId),
           hasOpenDispatch: () => {
-            const record = deps.store.getRecord(sessionId)
+            const record = deps.store.getConversation(sessionId)
             return record !== null && deps.hasOpenDispatch?.(record) === true
           },
           providerHoldsDispatch: () => deps.adapter.holdsDispatch?.(sessionId) === true
@@ -109,7 +109,10 @@ export function createStructuredAgentSessionConversationDelivery(input: {
           const record = deps.store.getRecord(sessionId)
           return record ? structuredAgentSessionLaunchPermission(deps, record) : null
         },
-        stopAgent: input.stopOutgrownAgent,
+        stopAgent: (sessionId) => {
+          deps.store.requireWritableRecord(sessionId)
+          return input.stopOutgrownAgent(sessionId)
+        },
         logger: deps.logger
       })
     },
@@ -129,7 +132,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     },
     failureTextContext: (sessionId) =>
       structuredAgentSessionFailureWordsContext(
-        deps.store.getRecord(sessionId),
+        deps.store.getConversation(sessionId),
         sessions.get(sessionId)?.journal
       ),
     logger: deps.logger,

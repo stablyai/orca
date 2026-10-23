@@ -1,3 +1,7 @@
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../../../../../shared/agent-session-record.test-fixture'
 /**
  * A structured worker whose launch throws after its session exists: the caller never gets a
  * placement to tear down, so the placement itself must discard the session.
@@ -57,11 +61,14 @@ beforeEach(() => {
   discard.mockClear()
   surfaced.sessionId = null
   structuredWorkerIdentities.clear()
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a worker create reads only `subscribe` and the record's location.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the host supplies subscribe and a complete writable record for the newly minted id.
   setStructuredAgentSessionHost({
     subscribe: () => () => {},
     deps: {
-      store: { getRecord: () => ({ location: { executionHostId: 'local', wslDistro: null } }) }
+      store: {
+        requireWritableRecord: (sessionId: string) =>
+          agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId }))
+      }
     }
   } as never)
 })

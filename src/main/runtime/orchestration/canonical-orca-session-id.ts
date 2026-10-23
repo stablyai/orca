@@ -12,7 +12,7 @@ import {
  */
 export function canonicalOrcaSessionId(
   orcaSessionId: OrcaSessionId,
-  store: AgentSessionRecordReader | null = readAgentSessionRecordStore()
+  store: Pick<AgentSessionRecordReader, 'listRecords'> | null = readAgentSessionRecordStore()
 ): OrcaSessionId {
   if (!store) {
     return orcaSessionId

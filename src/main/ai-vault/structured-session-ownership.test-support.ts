@@ -1,3 +1,4 @@
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import {
   agentSessionLeaseFixture,
@@ -28,32 +29,39 @@ export function installOwnership(
     workspaceId: 'workspace-1',
     provider: handle?.agent ?? 'codex',
     providerSessionId: PROVIDER_SESSION,
-    lease: agentSessionLeaseFixture(),
+    ownerObservation: agentSessionConversationView(agentSessionRecordFixture()).ownerObservation,
     ...ownershipOverrides
   }
-  const record = agentSessionRecordFixture(ownership.lease)
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the ownership read touches only `deps.store.listRecords`; the rest of the host is never reached.
+  const record = agentSessionRecordFixture(
+    agentSessionLeaseFixture({ sessionId: ownership.sessionId })
+  )
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the ownership read touches only `deps.store.listConversations`; the rest of the host is never reached.
   setStructuredAgentSessionHost({
     deps: {
       store: {
-        listRecords: () => [
+        listConversations: () => [
           {
-            ...record,
-            sessionId: ownership.sessionId,
-            location: { ...record.location, workspaceId: ownership.workspaceId },
-            provider: ownership.provider,
-            providerHandleChain: [
-              {
-                ...record.providerHandleChain[0]!,
-                handle:
-                  handle ??
-                  (ownership.provider === 'claude'
-                    ? claudeProviderHandle(ownership.providerSessionId, null)
-                    : codexProviderHandle(ownership.providerSessionId))
-              }
-            ],
-            lease: { ...ownership.lease, sessionId: ownership.sessionId },
-            ...(ownership.conversationName ? { conversationName: ownership.conversationName } : {})
+            ...agentSessionConversationView({
+              ...record,
+              sessionId: ownership.sessionId,
+              location: { ...record.location, workspaceId: ownership.workspaceId },
+              provider: ownership.provider,
+              providerHandleChain: [
+                {
+                  ...record.providerHandleChain[0]!,
+                  handle:
+                    handle ??
+                    (ownership.provider === 'claude'
+                      ? claudeProviderHandle(ownership.providerSessionId, null)
+                      : codexProviderHandle(ownership.providerSessionId))
+                }
+              ],
+              lease: record.lease,
+              ...(ownership.conversationName
+                ? { conversationName: ownership.conversationName }
+                : {})
+            }),
+            ownerObservation: ownership.ownerObservation
           }
         ]
       }
@@ -83,6 +91,9 @@ export function installCopyingChat(
     deps: {
       store: {
         listRecords: () => [record, ...otherRecords],
+        listConversations: () => [record, ...otherRecords].map(agentSessionConversationView),
+        selectWritableRecord: () => ({ kind: 'writable', record }),
+        requireWritableRecord: () => record,
         getRecord: (sessionId: string) => (sessionId === record.sessionId ? record : null)
       },
       adapter: { copyConversation: copy }

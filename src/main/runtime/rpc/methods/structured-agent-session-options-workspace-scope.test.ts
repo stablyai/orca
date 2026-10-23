@@ -106,6 +106,7 @@ async function chatAtRest(repoConfig: {
   )
   const modelCatalog = createAgentModelCatalogService({
     store,
+    getConversation: (sessionId) => rig.store.getConversation(sessionId) ?? undefined,
     getRecord: (sessionId) => rig.store.getRecord(sessionId) ?? undefined,
     drivesRecord: () => true,
     resolveAccountHome: async () => rig.store.getRecord(SESSION)!.accountHome,

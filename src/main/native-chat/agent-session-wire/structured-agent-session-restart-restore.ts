@@ -25,7 +25,7 @@ const JOURNAL_RESTORE_CONCURRENCY = 4
 
 export type StructuredAgentSessionReadRestoreDeps = {
   openDeps: StructuredAgentSessionConversationOpenDeps & {
-    store: Pick<AgentSessionRecordStore, 'getRecord' | 'listRecords'>
+    store: Pick<AgentSessionRecordStore, 'getRecord' | 'listConversations'>
   }
   // Lease bookkeeping. Neither throws: a read grants no writer, so bookkeeping must not block it.
   /** Whether every lease on this host is settled. */
@@ -74,7 +74,9 @@ async function restoreOneStructuredAgentSessionReadUnderSerialize(
 }
 
 export async function restoreStructuredAgentSessionsOnRestart(
-  input: StructuredAgentSessionReadRestoreDeps & { records: AgentSessionRecord[] }
+  input: StructuredAgentSessionReadRestoreDeps & {
+    records: Pick<AgentSessionRecord, 'sessionId'>[]
+  }
 ): Promise<void> {
   if (input.records.length === 0) {
     return
@@ -86,6 +88,7 @@ export async function restoreStructuredAgentSessionsOnRestart(
     // A session latched in recovery exits here at startup, without waiting for a client.
     if (
       settled &&
+      input.openDeps.store.getRecord(sessionId) &&
       !((await input.reconcile(sessionId)) && (await input.resolveRecovery(sessionId)))
     ) {
       settled = false

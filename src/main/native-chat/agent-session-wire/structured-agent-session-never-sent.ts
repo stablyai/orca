@@ -6,7 +6,7 @@ import type { AgentSessionJournal } from '../agent-session-journal/journal-store
  *  pins. When unsure (history it was taken from, any turn even before a context clear, a rewind,
  *  or a journal founded afresh for a chat whose agent already ran), it has sent. */
 export function structuredAgentSessionNeverSent(
-  record: AgentSessionRecord | null,
+  record: Pick<AgentSessionRecord, 'providerHandleChain' | 'rewind'> | null,
   journal: Pick<AgentSessionJournal, 'submissions' | 'visitItems' | 'wroteBeforeOpen'>
 ): boolean {
   if (

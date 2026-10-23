@@ -136,7 +136,7 @@ type SendAdmissionModules = {
     plan: unknown
     envelope: SentMessage['envelope']
     journal: () => undefined
-    store: { getRecord: () => null }
+    store: { getRecord: () => null; selectWritableRecord: () => { kind: 'missing' } }
   }) => Promise<unknown>
 }
 
@@ -151,7 +151,7 @@ async function admitSend(
     plan: build.sendPlan(sent),
     envelope: sent.envelope,
     journal: () => undefined,
-    store: { getRecord: () => null }
+    store: { getRecord: () => null, selectWritableRecord: () => ({ kind: 'missing' }) }
   })
 }
 

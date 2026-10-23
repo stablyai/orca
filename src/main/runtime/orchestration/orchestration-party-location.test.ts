@@ -1,3 +1,4 @@
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 // Where a message's sender opens: the host's read of a party, over the records production keeps.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -60,7 +61,13 @@ function clearedChat(): AgentSessionRecordReader {
     ],
     [LIVE, record(LIVE)]
   ])
-  return { getRecord: (id) => records.get(id) ?? null, listRecords: () => [...records.values()] }
+  return {
+    getRecord: (id) => {
+      const record = records.get(id)
+      return record ? agentSessionConversationView(record) : null
+    },
+    listRecords: () => [...records.values()].map(agentSessionConversationView)
+  }
 }
 
 /** This run issued `term_now` for PANE; any other handle is from an earlier run. */

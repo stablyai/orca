@@ -1,3 +1,4 @@
+import type { StructuredAgentSessionConversations } from './structured-agent-session-conversations'
 // The host's half of a session's lifetime: stopping its agent, and closing its conversation.
 //
 // Two operations, because they end two different things. Stopping the agent ends the provider
@@ -65,7 +66,7 @@ export type StructuredAgentSessionLifetimeContext = {
 }
 
 type ConversationCloseDeps = Pick<StructuredAgentSessionHostDeps, 'logger'> & {
-  store: Pick<StructuredAgentSessionHostDeps['store'], 'getRecord'>
+  store: Pick<StructuredAgentSessionHostDeps['store'], 'getConversation'>
 }
 
 /** What is still queued when the chat closes will not be handed over: a person's message is kept
@@ -184,12 +185,12 @@ export async function stopStructuredAgentSessionAgentUnderSerialize(
     }
     // The exit handler has settled the turn by now, so the row reads its verdict.
     if ('quit' in ending && ending.quit) {
-      const record = context.deps.store.getRecord(sessionId)
+      const record = context.deps.store.getConversation(sessionId)
       await recordStructuredAgentSessionShutdownCut({
         journal: session.journal,
         sessionId,
         fence: child.fence,
-        rowFence: Math.max(child.fence, record?.lease.runtimeFence ?? child.fence),
+        rowFence: Math.max(child.fence, record?.currentFence ?? child.fence),
         generation: child.generation ?? 'unknown',
         turnItemId: quitCuts,
         trigger: ending.quit,
@@ -287,4 +288,18 @@ export async function evictOwnedStructuredAgentSessions(
   if (failures.length > 0) {
     throw new AggregateError(failures, 'structured agent-session child eviction failed')
   }
+}
+
+export type StructuredAgentSessionConversationLifetimeDeps = {
+  /** Resolved per call: the host's collaborators are assigned after this is built. */
+  context: () => StructuredAgentSessionLifetimeContext
+  sessions: StructuredAgentSessionConversations
+  serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
+  /** PR 1's one open function, for a caller inside the session's serialize. */
+  open: (sessionId: string) => Promise<StructuredAgentSessionHostSession | null>
+  deliveryActive: (sessionId: string) => boolean
+  /** The handle closed: `listed` keeps the chat's row in the agent-status store for its tab. */
+  closeStatus: (sessionId: string, options: { listed: boolean }) => void
+  /** Child work the provider reported running and not over, recorded or not. */
+  childWorkOpen: (sessionId: string) => boolean
 }

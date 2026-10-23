@@ -1,3 +1,4 @@
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -97,7 +98,7 @@ it('observes a first empty real input without broadcasting an unchanged visible 
   const events: AgentSessionStatusEvent[] = []
   const feed = new StructuredAgentSessionStatusFeed({
     sessions: new Map([['session', indexedStatusFeedSession({ journal })]]),
-    getRecord: () => agentSessionRecordFixture(),
+    getConversation: () => agentSessionConversationView(agentSessionRecordFixture()),
     now: () => 100,
     logger: createStructuredAgentSessionLogger(),
     onStatusChanged: observer

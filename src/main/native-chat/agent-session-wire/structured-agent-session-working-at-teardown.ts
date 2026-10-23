@@ -185,7 +185,9 @@ type WorkingCandidateSession = {
 export function structuredAgentSessionWorkingAtStop(input: {
   sessionId: string
   session: WorkingCandidateSession | undefined
-  getRecord: (sessionId: string) => AgentSessionRecord | null
+  getRecord: (
+    sessionId: string
+  ) => Pick<AgentSessionRecord, 'providerHandleChain' | 'providerContextBoundary'> | null
   /** The session's child records, the same read the status feed publishes. */
   childWork: (sessionId: string) => readonly AgentChildWorkView[] | undefined
   /** Child work the provider reported running and not over, recorded or not. */

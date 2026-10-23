@@ -22,6 +22,8 @@ export function pinAgentSessionRecordLaunchDirectory(
  * The pinned directory a launch is held to, or undefined when the workspace id decides. Only the
  * floating id names a setting rather than a place, so only a floating session is held to its pin.
  */
-export function agentSessionPinnedLaunchDirectory(record: AgentSessionRecord): string | undefined {
+export function agentSessionPinnedLaunchDirectory(
+  record: Pick<AgentSessionRecord, 'launchDirectory' | 'location'>
+): string | undefined {
   return isFloatingWorkspaceId(record.location.workspaceId) ? record.launchDirectory : undefined
 }

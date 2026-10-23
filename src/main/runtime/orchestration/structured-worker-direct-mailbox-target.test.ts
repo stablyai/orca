@@ -1,5 +1,10 @@
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../../shared/agent-session-record.test-fixture'
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
+import type { AgentSessionLease } from '../../../shared/agent-session-record'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 
 const hostRef: { current: unknown } = { current: null }
 
@@ -24,16 +29,21 @@ abstract class MailboxTargetProbe extends OrcaRuntimeWithGetPtyRecordForPaneKey 
   }
 }
 
-function installRecord(lease: { runtimeKind: string; claimStatus: string }): void {
+function installRecord(lease: Pick<AgentSessionLease, 'runtimeKind' | 'claimStatus'>): void {
   hostRef.current = {
     deps: {
       store: {
-        getRecord: (sessionId: string) =>
-          ({
-            sessionId,
-            location: { executionHostId: 'local', wslDistro: null },
-            lease: { ...lease, runtimeFence: 1, deathEvidence: null }
-          }) as unknown as AgentSessionRecord
+        getConversation: (sessionId: string) =>
+          agentSessionConversationView(
+            agentSessionRecordFixture(
+              agentSessionLeaseFixture({
+                ...lease,
+                sessionId,
+                runtimeFence: 1,
+                deathEvidence: null
+              })
+            )
+          )
       }
     },
     hasSession: () => true

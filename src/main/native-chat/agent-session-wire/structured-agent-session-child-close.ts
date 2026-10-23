@@ -103,6 +103,7 @@ function closeProviderRoot(
   if (!stop) {
     return Promise.resolve(true)
   }
+  context.deps.store.requireWritableRecord(sessionId)
   return stopAgentSessionProviderRoot(
     () => stop.call(adapter, sessionId),
     // The exit is proven; a child process left behind, or a write after it, is reported only.

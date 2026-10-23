@@ -192,7 +192,7 @@ export function sendPreparation(
 /** Who a failure sentence names: the chat's agent, when the record says; and, given the journal,
  *  the command a failed start leaves to run again. */
 export function structuredAgentSessionFailureWordsContext(
-  record: AgentSessionRecord | null,
+  record: Pick<AgentSessionRecord, 'provider'> | null,
   journal?: StructuredAgentSessionAwaitedCommandJournal
 ): AgentSessionFailureWordsContext {
   const command = journal && structuredAgentSessionAwaitedCommand(journal)

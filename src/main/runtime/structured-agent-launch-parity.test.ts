@@ -1,3 +1,4 @@
+import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
 // Parity oracle for native-chat launches: the exact child every agent spawns, read at the spawn
 // boundary, with production's own dependency wiring. A refactor of the launch path must leave the
 // snapshot file unchanged.
@@ -465,6 +466,19 @@ function eventSink(): StructuredAgentSessionEventSink {
 function adapterContext(): StructuredAgentAdapterContext {
   const store = {
     getRecord: (sessionId: string) => records.get(sessionId) ?? null,
+    selectWritableRecord: (sessionId: string) => {
+      const record = records.get(sessionId)
+      return record ? { kind: 'writable' as const, record } : { kind: 'missing' as const }
+    },
+    requireWritableRecord: (sessionId: string) => {
+      const record = records.get(sessionId)
+      if (!record) {
+        throw agentSessionRefusalError('agent_session_identity_required', {
+          reason: 'recordMissing'
+        })
+      }
+      return record
+    },
     pinLaunchDirectory: async (sessionId: string, directory: string) => {
       pins.push({ sessionId, directory })
       const record = records.get(sessionId)

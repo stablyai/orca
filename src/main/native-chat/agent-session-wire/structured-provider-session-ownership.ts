@@ -1,4 +1,7 @@
-import type { AgentSessionLease, AgentSessionRecord } from '../../../shared/agent-session-record'
+import type {
+  AgentSessionOwnerObservation,
+  AgentSessionConversationView
+} from '../../../shared/agent-session-conversation-view'
 import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
 import { structuredAgentRuntimeMetadata } from '../../runtime/structured-agent-runtime-metadata'
 
@@ -8,13 +11,13 @@ export type StructuredProviderSessionOwnership = {
   provider: StructuredAgentId
   providerSessionId: string
   conversationName?: string
-  lease: AgentSessionLease
+  ownerObservation: AgentSessionOwnerObservation
 }
 
 /** Which chat owns each conversation, under the Session History row id its agent's registration
  *  names: the one index both the duplicate-adoption check and Session History ownership read. */
 export function listStructuredProviderSessionOwnership(
-  records: readonly AgentSessionRecord[]
+  records: readonly AgentSessionConversationView[]
 ): StructuredProviderSessionOwnership[] {
   return records.flatMap((record) => {
     const history = structuredAgentRuntimeMetadata(record.provider)?.sessionHistory
@@ -25,7 +28,7 @@ export function listStructuredProviderSessionOwnership(
           provider: record.provider,
           providerSessionId: history.rowSessionId(link),
           conversationName: record.conversationName,
-          lease: record.lease
+          ownerObservation: record.ownerObservation
         }))
       : []
   })

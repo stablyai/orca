@@ -1,3 +1,9 @@
+import {
+  listAgentSessionConversations,
+  selectWritableAgentSessionRecord,
+  requireWritableAgentSessionRecord,
+  type AgentSessionStoreState
+} from './agent-session-store-state'
 /**
  * Reservation admission: what a reserve request means against the persisted state.
  *
@@ -37,7 +43,6 @@ import {
   type AgentSessionRecord
 } from '../../shared/agent-session-record'
 import { isAgentSessionLaunchArgs } from '../../shared/agent-session-launch-args'
-import { isAgentSessionSurfaceTabId } from '../../shared/agent-session-surface-tab-id'
 import {
   agentSessionProviderHandleRoot,
   type StructuredAgentId,
@@ -47,9 +52,10 @@ import {
   reserveAgentSessionOwner,
   type AgentSessionReservation
 } from './agent-session-lease-transitions'
-import type { AgentSessionStoreState } from './agent-session-store-state'
 import { agentSessionRecordIdentityFields } from './agent-session-record-founding'
 import { agentSessionAccountHomesEqual } from '../../shared/agent-session-account-home'
+import { assertReservedTabUnheld } from './agent-session-tab-table'
+export { assertReservedTabUnheld } from './agent-session-tab-table'
 
 export type AgentSessionReserveRequest = {
   /** Host-resolved floating directory committed with the first owner reservation. */
@@ -116,13 +122,12 @@ export function requireAgentSessionRecordForReplay(
   sessionId: string
 ): AgentSessionRecord {
   const replayedId = row.outcome.status === 'succeeded' ? row.outcome.sessionId : sessionId
-  const record = state.records.get(replayedId)
-  if (!record) {
+  if (selectWritableAgentSessionRecord(state, replayedId).kind === 'missing') {
     // Why: the recorded effect is no longer reconstructable, and re-running it would be a second
     // spawn rather than a replay.
     throw agentSessionRefusalError('agent_session_ownership_unknown', { reason: 'recordMissing' })
   }
-  return record
+  return requireWritableAgentSessionRecord(state, replayedId)
 }
 
 export function admitPendingAgentSessionReservationReplay(
@@ -182,17 +187,18 @@ export function applyAgentSessionReservation(
   // pre-commit check passes for both. Codex would then hold one thread from two app-servers, which
   // it permits silently and which corrupts the conversation rather than erroring.
   assertAdoptedConversationUnowned(state, request)
-  const existing = state.records.get(request.sessionId)
-  if (!existing) {
-    if (state.unreadableRecords.has(request.sessionId)) {
-      throw agentSessionRefusalError('execution_owner_reconciling', { reason: 'recordUnreadable' })
-    }
+  const selected = selectWritableAgentSessionRecord(state, request.sessionId)
+  if (selected.kind === 'unreadable') {
+    requireWritableAgentSessionRecord(state, request.sessionId)
+  }
+  if (selected.kind !== 'writable') {
     if (request.expectedFence !== null) {
       throw agentSessionRefusalError('agent_session_checkpoint_stale', { reason: 'recordMissing' })
     }
     assertReservedTabUnheld(state, request)
     return { record: createAgentSessionRecord(request, reservation), disposition: 'created' }
   }
+  const existing = selected.record
   if (
     !agentSessionExecutionLocationsEqual(existing.location, request.location) ||
     existing.provider !== request.provider ||
@@ -246,7 +252,7 @@ export function assertAdoptedConversationUnowned(
     return
   }
   const root = agentSessionProviderHandleRoot(adopted.handle)
-  for (const record of state.records.values()) {
+  for (const record of listAgentSessionConversations(state)) {
     if (record.sessionId === request.sessionId) {
       continue
     }
@@ -264,29 +270,6 @@ export function assertAdoptedConversationUnowned(
         owner: { sessionId: record.sessionId, workspaceId: record.location.workspaceId }
       })
     }
-  }
-}
-
-/**
- * A tab id names one conversation, so a reserved id another session's tab holds is a conflict.
- * Checked, not claimed: the id is taken when the chat's tab is published, so a create that never
- * gets that far leaves nothing in the table to restore or release.
- */
-export function assertReservedTabUnheld(
-  state: AgentSessionStoreState,
-  request: AgentSessionReserveRequest
-): void {
-  if (request.surfaceTabId === undefined) {
-    return
-  }
-  if (!isAgentSessionSurfaceTabId(request.surfaceTabId)) {
-    throw agentSessionRefusalError('agent_session_operation_invalid', {
-      reason: 'requestMalformed'
-    })
-  }
-  const holder = state.sessionTabs?.sessionIdFor(request.surfaceTabId)
-  if (holder !== undefined && holder !== request.sessionId) {
-    throw agentSessionRefusalError('agent_session_conflict', { reason: 'tabIdTaken' })
   }
 }
 

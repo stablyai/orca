@@ -1,3 +1,8 @@
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../../../shared/agent-session-record.test-fixture'
+import { agentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
 /**
  * The structured `worker-read --source transcript` cursor across a MUTATING journal.
  *
@@ -62,7 +67,12 @@ function approval(itemId: string, resolved: boolean, revision = 1): AgentJournal
 function installJournal(items: AgentJournalRenderItem[]): void {
   hostRef.current = {
     deps: {
-      store: { getRecord: () => ({ location: { executionHostId: 'local', wslDistro: null } }) }
+      store: {
+        getConversation: () =>
+          agentSessionConversationView(
+            agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId: IDENTITY.sessionId }))
+          )
+      }
     },
     hasSession: () => true,
     history: () => ({ page: { items, hasOlder: false } })

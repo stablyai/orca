@@ -1,3 +1,4 @@
+import type { AgentSessionConversationView } from '../../shared/agent-session-conversation-view'
 /**
  * Orchestration identity for a NATIVE-BORN structured agent session.
  *
@@ -15,10 +16,7 @@
  */
 
 import { randomUUID } from 'node:crypto'
-import type {
-  AgentSessionExecutionLocation,
-  AgentSessionRecord
-} from '../../shared/agent-session-record'
+import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import {
   structuredAgentSessionPaneKey,
@@ -150,14 +148,14 @@ export function structuredWorkerHostScope(
  * with the tab gone is retired. `tabListed` is the persisted tab index's answer.
  */
 export function structuredWorkerRecordIsCurrent(
-  record: AgentSessionRecord | null | undefined,
+  record: AgentSessionConversationView | null | undefined,
   tabListed: boolean
 ): boolean {
   return Boolean(
     record &&
     // Why: a conflicted claim may name a terminal an older build recorded as owner, not this worker.
-    record.lease.claimStatus !== 'conflicted' &&
-    (record.lease.claimStatus !== 'released' || tabListed) &&
+    record.ownerObservation.claimStatus !== 'conflicted' &&
+    (record.ownerObservation.claimStatus !== 'released' || tabListed) &&
     structuredWorkerHostScope(record.location)
   )
 }

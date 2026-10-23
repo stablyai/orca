@@ -30,7 +30,10 @@ import {
   createStructuredAgentSessionLogger,
   neverThrowingStructuredAgentSessionLogger
 } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
-import { openAgentSessionRecordStoreOnce } from '../agent-session-record-store-slot'
+import {
+  openAgentSessionRecordStoreOnce,
+  peekOpenedAgentSessionRecordStore
+} from '../agent-session-record-store-slot'
 import type { AgentSessionRecordStore } from '../agent-session-record-store'
 import { maybeAutoRenameWorkspaceOnFirstStructuredTurn } from '../../agent-hooks/first-work-structured-session-rename'
 import { firstWorkRenameDeps } from '../../agent-hooks/first-work-rename-runtime'
@@ -221,6 +224,11 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
       logger: neverThrowingStructuredAgentSessionLogger(createStructuredAgentSessionLogger())
     })
     return store
+  }
+
+  /** The launch record when it is already open, for a reader that must not wait for it. */
+  openedAgentSessionRecordStore(): AgentSessionRecordStore | null {
+    return peekOpenedAgentSessionRecordStore()
   }
 
   /**

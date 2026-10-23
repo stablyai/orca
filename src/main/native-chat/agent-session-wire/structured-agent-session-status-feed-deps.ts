@@ -1,6 +1,6 @@
 // What a status feed reads of the host: its held sessions, their records, and where it reports.
 
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
@@ -18,7 +18,10 @@ import type { StructuredAgentSessionStatusSink } from './structured-agent-sessio
 
 export type StatusFeedSession = {
   journal: AgentSessionJournal
-  params: { location: AgentSessionRecord['location']; provider: AgentSessionRecord['provider'] }
+  params: {
+    location: AgentSessionConversationView['location']
+    provider: AgentSessionConversationView['provider']
+  }
   child?: Pick<StructuredAgentSessionProviderChild, 'phase' | 'generation' | 'fence'> | null
   /** What the current-work projection reads of the last child this host saw end. */
   lastEndedChild?: Pick<StructuredAgentSessionEndedChild, 'fence' | 'rootGone'>
@@ -28,8 +31,8 @@ export type StatusFeedSession = {
 
 export type StructuredAgentSessionStatusFeedDeps = {
   sessions: ReadonlyMap<string, StatusFeedSession>
-  getRecord: (sessionId: string) => AgentSessionRecord | null
-  /** `AgentSessionRecordStore.replacedRuntime`; absent where no runtime was replaced. */
+  getConversation: (sessionId: string) => AgentSessionConversationView | null
+  /** `AgentSessionConversationViewStore.replacedRuntime`; absent where no runtime was replaced. */
   replacedRuntime?: (sessionId: string) => { fence: number } | undefined
   now: () => number
   /** Where a failing sink or observer is reported; neither may cost subscribers their event. */

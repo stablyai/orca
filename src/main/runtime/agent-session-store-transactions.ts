@@ -1,3 +1,4 @@
+import { requireWritableAgentSessionRecord } from './agent-session-store-state'
 // Every agent-session store mutation: draft the published state, apply, check and write exactly the
 // changed rows in one journal transaction, then publish the draft. A throw anywhere discards the
 // draft, so memory never holds a change the database does not.
@@ -166,7 +167,7 @@ export class AgentSessionStoreTransactions {
         // The ledger and wake share one draft as well as one commit.
         staged = this.stage((draft) => {
           apply(draft)
-          const record = admitted ? draft.records.get(admitted) : undefined
+          const record = admitted ? requireWritableAgentSessionRecord(draft, admitted) : undefined
           if (record?.sleptAt !== undefined) {
             const { sleptAt: _sleptAt, ...awake } = record
             draft.records.set(record.sessionId, {

@@ -1,3 +1,4 @@
+import { conversationRecordReader } from '../../../orchestration/structured-session-lineage'
 /**
  * A chat assignee's task, sent as any agent's message into a chat is: the composer's queued send,
  * held as a card while the chat is busy, recording the Dispatch it is from. The operation id is
@@ -45,7 +46,9 @@ export async function sendChatTask(args: {
   const sessionId = chatAssigneeSessionId(args.dispatch.assignee_handle)
   const host = getStructuredAgentSessionHost()
   const observed =
-    sessionId && host ? observeChatAssignee(sessionId, args.db, host.deps.store) : null
+    sessionId && host
+      ? observeChatAssignee(sessionId, args.db, conversationRecordReader(host.deps.store))
+      : null
   if (!host || observed?.status !== 'live') {
     throw new OrchestrationError(
       'dispatch_preamble_undelivered',
@@ -68,7 +71,7 @@ export async function sendChatTask(args: {
       // As a person's message is: a busy chat queues it as a card, sent when the queue reaches it.
       delivery: 'queue',
       operationId: chatTaskOperationId(args.dispatch),
-      expectedRuntimeFence: observed.session.lease.runtimeFence
+      expectedRuntimeFence: observed.session.currentFence
     }
   })
   switch (outcome.kind) {

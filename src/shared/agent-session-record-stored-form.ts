@@ -6,7 +6,8 @@
 import {
   leaseCarriesLegacyHandoffValues,
   normalizeLegacyHandoffLease,
-  type PersistedAgentSessionRecord
+  type PersistedAgentSessionRecord,
+  type PersistedAgentSessionObservationLease
 } from './agent-session-legacy-handoff-lease'
 import {
   decodePersistedAgentSessionProviderHandleChain,
@@ -16,10 +17,9 @@ import type { AgentSessionRecord } from './agent-session-record'
 
 /** The in-memory record, plus whether decode changed anything the store must write back. A
  *  handle's stored form is not such a change: every build writes it the same way. */
-export function decodePersistedAgentSessionRecord(record: PersistedAgentSessionRecord): {
-  record: AgentSessionRecord
-  normalized: boolean
-} {
+export function decodePersistedAgentSessionRecord<L extends PersistedAgentSessionObservationLease>(
+  record: Omit<PersistedAgentSessionRecord, 'lease'> & { lease: L }
+) {
   const providerHandleChain = decodePersistedAgentSessionProviderHandleChain(
     record.providerHandleChain
   )

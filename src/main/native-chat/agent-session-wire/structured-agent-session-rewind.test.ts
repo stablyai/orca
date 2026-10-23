@@ -209,6 +209,27 @@ async function params(itemId: string, epoch?: string) {
 const LATE = { provider: 'codex' as const, threadId: HOST_TEST_THREAD, turnId: 'late', ordinal: 0 }
 
 describe('host rewind', () => {
+  it('answers a saved rewind after floor damage without another provider rewind', async () => {
+    const request = await params(await seed())
+    expect(await host.rewind(caller, request)).toMatchObject({ ok: true })
+    await host.flushAllStreamedEvents()
+    openTestJournalHostDatabase(directory)
+      .db.prepare(
+        "UPDATE agent_session_records SET record_json = json_set(record_json, '$.lease.minimumNextFence', 'bad') WHERE session_id = ?"
+      )
+      .run(HOST_TEST_SESSION)
+    const reopened = await openTestAgentSessionRecordStore(directory)
+    const restored = new StructuredAgentSessionHost({ ...host.deps, store: reopened })
+    const effects = rewind.mock.calls.length
+    expect(await restored.rewind(caller, request)).toMatchObject({
+      ok: true,
+      replayed: true,
+      fence: reopened.getConversation(HOST_TEST_SESSION)?.currentFence
+    })
+    expect(rewind).toHaveBeenCalledTimes(effects)
+    await restored.flushAllStreamedEvents()
+  })
+
   it('replays the original ordinary rewind after another rewind replaces its record', () =>
     expectSupersededRewindReplay({ host, store, rewind, recoverRewind, seed, params }))
 

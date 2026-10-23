@@ -19,7 +19,10 @@ describe('structured session cold restoration', () => {
     setStructuredAgentSessionHost({
       deps: {
         store: {
-          getRecord: () => ({ location: { workspaceId: 'workspace-1' }, conversationName: name })
+          getConversation: () => ({
+            location: { workspaceId: 'workspace-1' },
+            conversationName: name
+          })
         }
       },
       conversationReplacements: () => []

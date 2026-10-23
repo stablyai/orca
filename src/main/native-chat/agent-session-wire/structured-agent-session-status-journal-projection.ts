@@ -4,7 +4,7 @@ import { isStructuredAgentSessionCommandEntry } from '../../../shared/structured
 // The status feed's per-journal projection, cached per commit: what a session's journal says its
 // row is, and the user's newest send the provider accepted.
 
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { projectStructuredAgentSessionStatusState } from '../../../shared/structured-agent-session-projection'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
@@ -45,7 +45,7 @@ export class StructuredAgentSessionJournalProjections {
     StructuredAgentSessionJournalProjection
   >()
 
-  /** `AgentSessionRecordStore.replacedRuntime`, which ends what a replaced runtime held. */
+  /** `AgentSessionConversationViewStore.replacedRuntime`, which ends what a replaced runtime held. */
   constructor(
     private readonly replacedRuntime?: (
       sessionId: string
@@ -54,7 +54,7 @@ export class StructuredAgentSessionJournalProjections {
 
   read(
     journal: AgentSessionJournal,
-    record: AgentSessionRecord | null,
+    record: AgentSessionConversationView | null,
     /** What this host saw end (`StructuredAgentSessionHostSession`). */
     seen?: {
       lastEndedChild?: StructuredAgentSessionWorkEvidence['ended']
@@ -64,7 +64,7 @@ export class StructuredAgentSessionJournalProjections {
   ): StructuredAgentSessionJournalProjection {
     const cursor = journal.cursor()
     // The conversation's fence, which a child's end moves: its unanswered sends stop counting.
-    const fence = record?.lease.runtimeFence
+    const fence = record?.currentFence
     const ended = seen?.lastEndedChild
     const work = structuredAgentSessionCurrentWork(journal, {
       record,

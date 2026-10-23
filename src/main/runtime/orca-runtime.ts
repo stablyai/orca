@@ -1,3 +1,4 @@
+import { conversationRecordReader } from './orchestration/structured-session-lineage'
 import type { RuntimeLinearCommandSurface } from './runtime-linear-command-surface'
 import { installRuntimeLinearCommandSurface } from './runtime-linear-command-surface'
 import { publishWorkspaceViewChanges } from './runtime-workspace-view-change-events'
@@ -18,7 +19,6 @@ import type {
   AgentLaunchPaneVerdict
 } from '../../shared/agent-launch-pane-verdict'
 import { registerWorktreeChangeInvalidator } from '../ipc/worktree-change-invalidators'
-import type { AgentSessionRecordStore } from './agent-session-record-store'
 import { peekOpenedAgentSessionRecordStore } from './agent-session-record-store-slot'
 import { createAgentLaunchRecordWarmupGate } from './agent-launch-record-warmup-gate'
 import { WorkspaceLayoutStream, type WorkspaceLayoutReads } from './workspace-layout-stream'
@@ -158,7 +158,7 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
         createReferenceAgentIndex(
           this,
           this.getOrchestrationDbIfAvailable(),
-          await this.openAgentSessionRecordStore(),
+          conversationRecordReader(await this.openAgentSessionRecordStore()),
           workspaceKeys,
           referenceConnectionHosts(this.listRepos())
         )
@@ -283,11 +283,6 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
   /** This desktop's display-only copy of each paired server's layout (`layout.getRemoteSnapshots`). */
   getRemoteLayoutSnapshots(): Record<string, RemoteLayoutSnapshot> {
     return this.store?.getRemoteLayoutSnapshots?.() ?? {}
-  }
-
-  /** The launch record when it is already open, for a reader that must not wait for it. */
-  openedAgentSessionRecordStore(): AgentSessionRecordStore | null {
-    return peekOpenedAgentSessionRecordStore()
   }
 }
 // Linear installs these methods on the final runtime prototype below.

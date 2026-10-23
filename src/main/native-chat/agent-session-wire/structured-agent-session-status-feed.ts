@@ -10,7 +10,6 @@
 // each chat is reopened. Restart is the one boundary that forgets, and restoring readable sessions
 // republishes them.
 
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
@@ -190,7 +189,9 @@ export class StructuredAgentSessionStatusFeed {
   ): StructuredAgentSessionJournalProjection | null {
     const session = this.deps.sessions.get(sessionId)
     const source = journal ?? session?.journal
-    return source ? this.projections.read(source, this.deps.getRecord(sessionId), session) : null
+    return source
+      ? this.projections.read(source, this.deps.getConversation(sessionId), session)
+      : null
   }
 
   /** Re-projects one session after its journal changed; equal projections are not re-sent. */
@@ -200,7 +201,7 @@ export class StructuredAgentSessionStatusFeed {
       return
     }
     const source = journal ?? session.journal
-    const record = this.deps.getRecord(sessionId)
+    const record = this.deps.getConversation(sessionId)
     const projection = this.projections.read(source, record, session)
     this.retireSettledChildrenOnNewTurn(sessionId, session, projection.acceptedSendKey)
     const summary = structuredAgentSessionStatusSummary({
@@ -358,7 +359,7 @@ export class StructuredAgentSessionStatusFeed {
   /** A failing sink must never cost the subscribers their status event. */
   private sink(
     summary: AgentSessionStatusSummary,
-    location?: AgentSessionRecord['location']
+    location?: StatusFeedSession['params']['location']
   ): void {
     try {
       this.ownership.publish(summary, location)

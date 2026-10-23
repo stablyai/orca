@@ -12,6 +12,7 @@ import {
   resolveStructuredWorkerIdentityForRoot
 } from '../structured-worker-authority'
 import { canonicalOrcaSessionId } from './canonical-orca-session-id'
+import type { AgentSessionRecordReader } from './structured-session-lineage'
 import type { OrchestrationDb } from './db'
 import { mailboxAddressOf, type OrchestrationCallerIdentity } from './orchestration-caller-identity'
 import { OrchestrationError } from './orchestration-error'
@@ -41,9 +42,10 @@ export const ORCHESTRATION_TARGET_PARAM: Readonly<
 /** The party an Orca session id names. Throws when it is a worker this host lost the identity of. */
 export function resolveOrcaSessionParty(
   orcaSessionId: OrcaSessionId,
-  db: OrchestrationDb | null | undefined
+  db: OrchestrationDb | null | undefined,
+  store?: Pick<AgentSessionRecordReader, 'listRecords'> | null
 ): OrchestrationSessionParty {
-  const id = canonicalOrcaSessionId(orcaSessionId)
+  const id = canonicalOrcaSessionId(orcaSessionId, store)
   const worker = resolveStructuredWorkerIdentityForRoot(id, db)
   if (!worker && db && isRecordedStructuredWorkerSession(id, db)) {
     // Why: handle-less, it would split one worker into two parties and bind like a chat.

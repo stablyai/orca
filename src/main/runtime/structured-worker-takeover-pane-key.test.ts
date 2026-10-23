@@ -1,3 +1,4 @@
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionLease } from '../../shared/agent-session-record'
 import {
@@ -26,11 +27,18 @@ function installRecord(lease: Pick<AgentSessionLease, 'runtimeKind' | 'claimStat
   hostRef.current = {
     deps: {
       store: {
-        getRecord: (sessionId: string) =>
-          agentSessionRecordFixture(
-            agentSessionLeaseFixture({ ...lease, sessionId, runtimeFence: 1, deathEvidence: null })
+        getConversation: (sessionId: string) =>
+          agentSessionConversationView(
+            agentSessionRecordFixture(
+              agentSessionLeaseFixture({
+                ...lease,
+                sessionId,
+                runtimeFence: 1,
+                deathEvidence: null
+              })
+            )
           ),
-        listRecords: () => []
+        listConversations: () => []
       }
     },
     hasSession: () => true

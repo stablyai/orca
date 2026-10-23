@@ -258,7 +258,7 @@ describe('AgentSessionSubscribers', () => {
           }
         ]
       ]),
-      getRecord: () => null,
+      getConversation: () => null,
       now: () => 1_000
     })
     const subscribers = new AgentSessionSubscribers({

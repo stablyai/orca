@@ -34,17 +34,8 @@ describe('a send addressed to an agent session', () => {
   let visible: string[]
 
   beforeEach(() => {
-    h = createSessionCallerHarness(hostRef)
+    h = createSessionCallerHarness(hostRef, () => ({ present: true, sessionIds: visible }))
     visible = [SESSION_X, SESSION_Y]
-    hostRef.current = {
-      deps: {
-        store: {
-          getRecord: (sessionId: string) => h.records.get(sessionId) ?? null,
-          listRecords: () => [...h.records.values()],
-          getVisibleSessionTabIndex: () => ({ present: true, sessionIds: visible })
-        }
-      }
-    }
   })
 
   afterEach(() => {

@@ -1,3 +1,5 @@
+import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { structuredAgentSessionCapabilityView } from './structured-agent-session-option-models'
 import { claudeFallbackModelOptions } from '../../claude/claude-structured-session-options'
 import { acquired, fakeClaude } from '../../claude/claude-structured-session-test-support'
@@ -14,8 +16,10 @@ import type { StructuredAgentSessionLiveOptions } from './structured-agent-sessi
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentJournalItemBody } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionProviderHandleLink } from '../../../shared/agent-session-provider-handle'
-import type { AgentSessionRewindRecord } from '../../../shared/agent-session-rewind'
+import {
+  claudeProviderHandle,
+  codexProviderHandle
+} from '../../../shared/agent-session-provider-handle-encoding'
 import type { AgentSessionModelOption } from '../../../shared/agent-session-wire'
 import { createAgentModelCatalogService } from '../agent-model-catalog/agent-model-catalog-service'
 import {
@@ -40,10 +44,10 @@ import {
 
 const SESSION = 'session-1'
 
-type RestingFacts = Pick<Partial<AgentSessionRecord>, 'options' | 'provider'> & {
-  providerHandleChain?: Pick<AgentSessionProviderHandleLink, 'origin'>[]
-  rewind?: Pick<AgentSessionRewindRecord, 'phase'>
-}
+type RestingFacts = Pick<
+  Partial<AgentSessionRecord>,
+  'options' | 'provider' | 'providerHandleChain' | 'rewind'
+>
 
 function restingJournal(items: AgentJournalItemBody[] = [], wroteBeforeOpen = false) {
   return {
@@ -58,15 +62,14 @@ function restingJournal(items: AgentJournalItemBody[] = [], wroteBeforeOpen = fa
 }
 
 function restingRecord(): AgentSessionRecord {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resting read and the catalog key touch only these fields.
-  return {
+  return agentSessionRecordFixture({
+    sessionId: SESSION,
     provider: 'codex',
     accountHome: { variable: 'CODEX_HOME', path: '/homes/a' },
     providerHandleChain: [],
     location: { executionHostId: 'local', wslDistro: null },
-    lease: { claimStatus: 'released', ownerProcess: null, runtimeFence: 1 },
     options: {}
-  } as unknown as AgentSessionRecord
+  })
 }
 
 describe('options at rest', () => {
@@ -94,7 +97,11 @@ describe('options at rest', () => {
       deps: {
         adapter: {},
         agents: NO_STRUCTURED_AGENTS,
-        store: { getRecord: () => record },
+        store: {
+          getRecord: () => record,
+          getConversation: () => (record ? agentSessionConversationView(record) : null),
+          requireWritableRecord: () => record
+        },
         modelCatalog: { read }
       },
       serialize: (_sessionId: string, task: () => Promise<unknown>) => task(),
@@ -144,7 +151,11 @@ describe('options at rest', () => {
           })
         },
         agents: NO_STRUCTURED_AGENTS,
-        store: { getRecord: () => record },
+        store: {
+          getRecord: () => record,
+          getConversation: () => (record ? agentSessionConversationView(record) : null),
+          requireWritableRecord: () => record
+        },
         modelCatalog: { read: async () => ({ origin: 'probe', models: [listed], fetchedAt: 1 }) }
       },
       serialize: (_sessionId: string, task: () => Promise<unknown>) => task(),
@@ -169,6 +180,10 @@ describe('options at rest', () => {
       const probe = vi.fn(() => new Promise<AgentModelCatalogSuccess>(() => {}))
       const modelCatalog = createAgentModelCatalogService({
         store: new AgentModelCatalogStore(),
+        getConversation: () => {
+          const saved = record
+          return saved ? agentSessionConversationView(saved) : undefined
+        },
         getRecord: () => record,
         drivesRecord: () => true,
         resolveAccountHome: async () => ({ variable: 'CODEX_HOME', path: '/homes/a' }),
@@ -187,7 +202,11 @@ describe('options at rest', () => {
         deps: {
           adapter: { readOptions: async () => withLiveCatalogListing(reader.read()) },
           agents: NO_STRUCTURED_AGENTS,
-          store: { getRecord: () => record },
+          store: {
+            getRecord: () => record,
+            getConversation: () => (record ? agentSessionConversationView(record) : null),
+            requireWritableRecord: () => record
+          },
           modelCatalog
         },
         serialize: (_sessionId: string, task: () => Promise<unknown>) => task(),
@@ -233,7 +252,15 @@ describe('options at rest', () => {
 })
 
 describe('a chat at rest, read by the host', () => {
-  const created: RestingFacts['providerHandleChain'] = [{ origin: 'created' }]
+  const created = [
+    {
+      origin: 'created',
+      linkId: 'link-1',
+      mintedAtFence: 1,
+      observedAt: 1,
+      handle: codexProviderHandle('provider-session-1')
+    }
+  ] satisfies AgentSessionRecord['providerHandleChain']
   const turn: AgentJournalItemBody = { kind: 'turn', turnId: 'turn-1', state: 'completed' }
   const fast = [{ value: 'priority', label: 'Fast' }]
   const flex = [...fast, { value: 'flex', label: 'Flex' }]
@@ -266,7 +293,11 @@ describe('a chat at rest, read by the host', () => {
       deps: {
         adapter: liveOptions ? { readOptions: async () => liveOptions } : {},
         agents: claudeAndCodexAgents(),
-        store: { getRecord: () => record },
+        store: {
+          getRecord: () => record,
+          getConversation: () => (record ? agentSessionConversationView(record) : null),
+          requireWritableRecord: () => record
+        },
         modelCatalog: catalog(models, verified)
       },
       serialize: (_sessionId: string, task: () => Promise<unknown>) => task(),
@@ -278,10 +309,30 @@ describe('a chat at rest, read by the host', () => {
 
   it.each<[string, RestingFacts, AgentJournalItemBody[], boolean, string[]]>([
     ['started here names its default as its own', {}, [], false, []],
-    ['taken from history', { providerHandleChain: [{ origin: 'adopted' }] }, [], true, ['model']],
+    [
+      'taken from history',
+      { providerHandleChain: [{ ...created[0]!, origin: 'adopted' }] },
+      [],
+      true,
+      ['model']
+    ],
     // A context clear hides the turn from the newest-turn read, not from history.
     ['with a turn before a context clear', {}, [turn], true, ['model']],
-    ['after a rewind', { rewind: { phase: 'completed' } }, [], true, ['model']],
+    [
+      'after a rewind',
+      {
+        rewind: {
+          phase: 'completed',
+          operationId: 'rewind-1',
+          callerKey: 'caller-1',
+          itemId: 'item-1',
+          expectedEpoch: 'epoch-1'
+        }
+      },
+      [],
+      true,
+      ['model']
+    ],
     // A journal founded afresh proves nothing for a chat whose agent already ran.
     ['whose journal went missing', { providerHandleChain: created }, [], false, ['model']]
   ])('%s', async (_name, facts, items, wroteBeforeOpen, defaulted) => {
@@ -373,7 +424,16 @@ describe('a chat at rest, read by the host', () => {
     )
     expect(structuredAgentSessionSendSelection(state)).toEqual(model ? { model } : undefined)
     const resumed = await readAtRest(
-      { provider: 'claude', providerHandleChain: [{ origin: 'adopted' }] },
+      {
+        provider: 'claude',
+        providerHandleChain: [
+          {
+            ...created[0]!,
+            origin: 'adopted',
+            handle: claudeProviderHandle('provider-session-1', null)
+          }
+        ]
+      },
       [],
       true,
       installed,
@@ -482,7 +542,12 @@ describe('a chat at rest, read by the host', () => {
   ) {
     let record: AgentSessionRecord = { ...restingRecord(), options, provider }
     const store = {
+      getConversation: () => {
+        const saved = record
+        return saved ? agentSessionConversationView(saved) : undefined
+      },
       getRecord: () => record,
+      requireWritableRecord: () => record,
       replaceSessionOptions: vi.fn(),
       reviseSessionOptions: async <A>(
         revise: (held: AgentSessionRecord, args: A) => AgentSessionRecord,
@@ -569,7 +634,11 @@ describe('a chat at rest, read by the host', () => {
       deps: {
         adapter: { prepareReadOptions },
         agents: NO_STRUCTURED_AGENTS,
-        store: { getRecord: () => record }
+        store: {
+          getRecord: () => record,
+          getConversation: () => (record ? agentSessionConversationView(record) : null),
+          requireWritableRecord: () => record
+        }
       },
       serialize: (sessionId: string, task: () => Promise<unknown>) =>
         queue.serialize(sessionId, task),
@@ -612,7 +681,11 @@ describe('a chat at rest, read by the host', () => {
           }
         },
         agents: NO_STRUCTURED_AGENTS,
-        store: { getRecord: () => restingRecord() }
+        store: {
+          getRecord: () => restingRecord(),
+          getConversation: () => agentSessionConversationView(restingRecord()),
+          requireWritableRecord: () => restingRecord()
+        }
       },
       serialize: (sessionId: string, task: () => Promise<unknown>) =>
         queue.serialize(sessionId, task),
@@ -645,7 +718,11 @@ describe('a chat at rest, read by the host', () => {
       deps: {
         adapter: { prepareReadOptions },
         agents: NO_STRUCTURED_AGENTS,
-        store: { getRecord: () => restingRecord() }
+        store: {
+          getRecord: () => restingRecord(),
+          getConversation: () => agentSessionConversationView(restingRecord()),
+          requireWritableRecord: () => restingRecord()
+        }
       },
       serialize: (sessionId: string, task: () => Promise<unknown>) =>
         queue.serialize(sessionId, task),

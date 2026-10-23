@@ -83,7 +83,7 @@ export type StructuredQueueGateInput = {
 export function structuredQueueHold(input: StructuredQueueGateInput): StructuredQueueHold | null {
   // Whatever refuses any send refuses the queue too: an uncertain rewind or a source a
   // clear superseded. One rule, the immediate path's own.
-  if (structuredAgentSessionSendBlock(input.record)) {
+  if (!input.record || structuredAgentSessionSendBlock(input.record)) {
     return 'blocked'
   }
   // `prompt` outranks `working`: it is the one wait Send-now may not override,

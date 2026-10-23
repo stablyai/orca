@@ -1,3 +1,6 @@
+import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { afterEach, expect, it, vi } from 'vitest'
 import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
 import {
@@ -53,7 +56,7 @@ it('files nothing for a chat the user moved on in before its attempt, and spends
 // The continuation is accepted and its agent then fails to start: the message is rejected with the
 // cause, the failure is filed, and the chat says the agent did not carry on.
 it('says so in the chat when the agent cannot start for the continuation', async () => {
-  const { host, acquire } = await interruptedRestart()
+  const { host, acquire, root } = await interruptedRestart()
   await host.restartResume.list()
   acquire.mockRejectedValueOnce(new Error('provider could not reconnect'))
   // Before the action, the quit's cut reads with its one notice.
@@ -70,6 +73,21 @@ it('says so in the chat when the agent cannot start for the continuation', async
   })
   // The refusal note is now the one explanation: the cut is not said a second time beside it.
   expect(await readerNotes(host)).toEqual(await statusNotes(host))
+  await host.flushAllStreamedEvents()
+  openTestJournalHostDatabase(root)
+    .db.prepare(
+      "UPDATE agent_session_records SET record_json = json_set(record_json, '$.lease.minimumNextFence', 'bad') WHERE session_id = ?"
+    )
+    .run(SESSION)
+  const store = await openTestAgentSessionRecordStore(root)
+  const restarted = new StructuredAgentSessionHost({ ...host.deps, store })
+  const starts = acquire.mock.calls.length
+  expect(await restarted.restartResume.listFailures()).toMatchObject([
+    { sessionId: SESSION, outcome: 'refused', retryable: false }
+  ])
+  expect(await restarted.restartResume.list()).toEqual([])
+  expect(acquire).toHaveBeenCalledTimes(starts)
+  await restarted.flushAllStreamedEvents()
 })
 
 // A continuation that carries on, chosen in the prompt or automatically at launch, does not stand in

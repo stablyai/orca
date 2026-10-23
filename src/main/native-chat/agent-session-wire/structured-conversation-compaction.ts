@@ -54,7 +54,7 @@ export async function runStructuredCompaction(
   const { sessionId, clientOperationId } = params.envelope
   // An older build ran this operation id and recorded it on the session: answered, never rerun.
   const priorRecord = (): AgentSessionConversationCommandResult | null => {
-    const prior = context.deps.store.getRecord(sessionId)?.conversationCommand
+    const prior = context.deps.store.getConversation(sessionId)?.conversationCommand
     if (prior?.operationId !== clientOperationId || prior.callerKey !== caller.callerKey) {
       return null
     }
@@ -97,7 +97,7 @@ export async function runStructuredCompaction(
     value: compactionReply(
       settled && 'submission' in settled.value ? settled.value.submission : undefined,
       {
-        ...structuredAgentSessionFailureWordsContext(context.deps.store.getRecord(sessionId)),
+        ...structuredAgentSessionFailureWordsContext(context.deps.store.getConversation(sessionId)),
         command: 'compact'
       }
     )
@@ -192,7 +192,7 @@ function acceptUnderSerialize(
                 : { clientMessageId: value.submission.clientMessageId }
           }
         }
-        const record = context.deps.store.getRecord(ctx.sessionId)
+        const record = context.deps.store.requireWritableRecord(ctx.sessionId)
         const refusal =
           record &&
           conversationCommandBlocked(

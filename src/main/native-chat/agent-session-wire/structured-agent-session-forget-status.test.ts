@@ -1,3 +1,4 @@
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 // Removing a session from the host's map and removing its status row are ONE operation.
 //
@@ -150,7 +151,10 @@ async function workingSession(): Promise<{
   const feed = new StructuredAgentSessionStatusFeed({
     logger: createStructuredAgentSessionLogger(),
     sessions,
-    getRecord: (sessionId) => records.get(sessionId) ?? null,
+    getConversation: (sessionId) => {
+      const record = records.get(sessionId)
+      return record ? agentSessionConversationView(record) : null
+    },
     now: () => 1,
     statusSink: () => ({
       publish: (summary, subject) => server.ingestStructuredStatus(summary, subject),
@@ -178,7 +182,7 @@ function attachContext(
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial context double; the attach reads only the members defined here.
   return {
     deps: {
-      store: { getRecord: () => null },
+      store: { getRecord: () => null, getConversation: () => null },
       claimKeyId: 'key-1',
       journalDatabase: openTestJournalHostDatabase(root)
     },

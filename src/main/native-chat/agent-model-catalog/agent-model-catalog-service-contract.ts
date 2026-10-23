@@ -8,12 +8,17 @@ import type {
   AgentModelCatalogLiveListing,
   AgentModelCatalogProbe
 } from './agent-model-catalog-store'
-import type { AgentModelCatalogWorkspaceDeps } from './agent-model-catalog-workspace'
+import type { AgentSessionConversationView } from '../../../shared/agent-session-conversation-view'
+import type {
+  AgentModelCatalogWorkspaceDeps,
+  AgentModelCatalogRecord
+} from './agent-model-catalog-workspace'
 export type AgentModelCatalogServiceDeps = AgentModelCatalogWorkspaceDeps & {
+  getConversation: (sessionId: string) => AgentSessionConversationView | undefined
   getRecord: (sessionId: string) => AgentSessionRecord | undefined
   /** Whether this build can start the record's agent as the record pins it; a record it cannot
    *  names no account a probe may start that agent's CLI under. */
-  drivesRecord: (record: AgentSessionRecord) => boolean
+  drivesRecord: (record: AgentModelCatalogRecord) => boolean
   /** The account home a structured launch for this agent would pin right now —
    *  the SAME resolver the create path fills `record.accountHome` with, so a
    *  record-less read can never answer from another account's listing. */

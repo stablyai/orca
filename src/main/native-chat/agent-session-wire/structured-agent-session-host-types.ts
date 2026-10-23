@@ -160,7 +160,9 @@ export type StructuredAgentSessionHostDeps = {
    *  host constants. */
   startupLimits?: Partial<StructuredAgentSessionStartupLimits>
   /** Whether an orchestration dispatch still owns this session's worker; absent answers no. */
-  hasOpenDispatch?: (record: AgentSessionRecord) => boolean
+  hasOpenDispatch?: (
+    record: Pick<AgentSessionRecord, 'sessionId' | 'location' | 'conversationCommand'>
+  ) => boolean
   /** A chat tab left the screen: closed, or its workspace removed. Advisory; a throw is logged. */
   onSessionTabHidden?: (sessionId: string) => void
   /** Where every failure the host carries on past is reported. Required: a host without one would

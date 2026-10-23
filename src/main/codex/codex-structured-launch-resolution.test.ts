@@ -1,3 +1,4 @@
+import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
 import {
   createCodexStructuredLaunchResolver,
   TEST_SPAWN_TOKEN
@@ -41,7 +42,7 @@ async function withPlatform<T>(platform: NodeJS.Platform, run: () => Promise<T>)
 }
 
 function record(overrides: Partial<AgentSessionRecord> = {}): AgentSessionRecord {
-  return {
+  return agentSessionRecordFixture({
     sessionId: SESSION_ID,
     provider: 'codex',
     location: {
@@ -53,7 +54,7 @@ function record(overrides: Partial<AgentSessionRecord> = {}): AgentSessionRecord
     accountHome: { variable: 'CODEX_HOME', path: '/home/work/.codex' },
     providerHandleChain: [],
     ...overrides
-  } as AgentSessionRecord
+  })
 }
 
 function resolverFor(

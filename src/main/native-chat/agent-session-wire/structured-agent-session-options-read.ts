@@ -41,7 +41,7 @@ async function readStructuredAgentSessionOptionsAtRest(
   sessionId: string,
   reader: StructuredAgentSessionOptionsReader
 ): Promise<RestingOptions> {
-  const record = deps.store.getRecord(sessionId)
+  const record = deps.store.getConversation(sessionId)
   if (!record) {
     throw new Error('agent_session_identity_required')
   }
@@ -154,6 +154,7 @@ export async function readStructuredAgentSessionOptions(
     if (!child || child.phase === 'starting') {
       return { kind: 'rest' as const }
     }
+    store.requireWritableRecord(sessionId)
     const prepared = adapter.prepareReadOptions?.({ sessionId, fence: child.fence })
     if (prepared) {
       return { kind: 'prepared' as const, child, prepared }
@@ -174,6 +175,7 @@ export async function readStructuredAgentSessionOptions(
         ? await started.prepared.then((apply) =>
             context.serialize(sessionId, async () => {
               const child = (await context.openConversation(sessionId))?.child
+              store.requireWritableRecord(sessionId)
               return child === started.child ? apply() : null
             })
           )
@@ -187,13 +189,13 @@ export async function readStructuredAgentSessionOptions(
     options = answer
     // A child with no listing of its own reads the saved one, as at rest, so a row reads the same.
     // With no record there is nothing saved to read, and the answer stays the child's own.
-    if (!catalogListing && !answer.listedModelIds && store.getRecord(sessionId)) {
+    if (!catalogListing && !answer.listedModelIds && store.getConversation(sessionId)) {
       const { listedModelIds } = await atRest()
       options = listedModelIds ? { ...answer, listedModelIds } : answer
     }
     if (
       catalogListing &&
-      !independentAgentModelCatalog(store.getRecord(sessionId)?.provider ?? '')
+      !independentAgentModelCatalog(store.getConversation(sessionId)?.provider ?? '')
     ) {
       // Check prior membership before saving: a launch-added row cannot verify itself.
       const listedModelIds = context.deps.modelCatalog
@@ -208,7 +210,7 @@ export async function readStructuredAgentSessionOptions(
   }
   // Re-acquired after the reads above: the handle they saw may have closed and reopened since.
   const session = await context.conversation(sessionId)
-  const record = store.getRecord(sessionId)
+  const record = store.getConversation(sessionId)
   const phase = record?.rewind?.phase
   const agent = session.params.provider
   const capabilities = agents.capabilities(agent)

@@ -12,7 +12,7 @@ import type {
   AgentSessionResumeFailureInput,
   AgentSessionResumeFailureRecord
 } from '../../runtime/agent-session-recovery-capsule-entries'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import type {
   AgentSessionResumeFailureOutcome,
   AgentSessionResumeMarker
@@ -40,7 +40,7 @@ type FailureCapsule = Pick<
 export type StructuredAgentSessionRestartFailureLedger = {
   /** The stored records, current or not. */
   read: () => Promise<AgentSessionResumeFailureRecord[]>
-  /** The records as rows a surface can show; sessions this build cannot run are left out. */
+  /** Saved failure rows a surface can show; retry eligibility is checked separately. */
   list: () => Promise<StructuredAgentSessionResumeFailure[]>
   /** Settles one operation's reservations: the agent carried on, or the failure is filed. Rows the
    *  operation still owns after that are reopened. */
@@ -76,7 +76,7 @@ export function continuationFailureOutcome(
 
 export function createStructuredAgentSessionRestartFailureLedger(deps: {
   capsule?: FailureCapsule
-  getRecord: (sessionId: string) => AgentSessionRecord | null
+  getRecord: (sessionId: string) => AgentSessionConversationView | null
   /** The predicate a retry applies to the failure's marker. */
   retryable: (marker: AgentSessionResumeMarker) => boolean
   /** Whether a newer Orca saved the chat: its failure is kept for that Orca but not shown here,

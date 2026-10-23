@@ -1,3 +1,4 @@
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
 // Grok's session-free listing can name a model (`initialize`'s currentModelId) other than the one a
 // session runs. The user's case: the listing said Grok 4.7, every chat ran Grok 4.6. Through the
 // real Grok probe, adapter and host, a new chat's first frame names only what a chat ran.
@@ -47,7 +48,9 @@ const OTHER_CHAT = 'grok-chat-2'
 /** Another Grok chat in the same workspace, as the host's record of it. */
 function otherChat(store: AgentSessionRecordStore | null) {
   const first = store?.getRecord(SESSION)
-  return first ? { ...first, sessionId: OTHER_CHAT } : undefined
+  return first
+    ? { ...first, sessionId: OTHER_CHAT, lease: { ...first.lease, sessionId: OTHER_CHAT } }
+    : undefined
 }
 
 const agents: AcpScriptedAgent[] = []
@@ -118,6 +121,11 @@ async function openGrokHost(runs: string, create?: StructuredAgentSessionFirstMe
   const discovery = GROK.modelDiscovery
   const catalog = createAgentModelCatalogService({
     store: new AgentModelCatalogStore(),
+    getConversation: (id) => {
+      const saved =
+        records.store?.getRecord(id) ?? (id === OTHER_CHAT ? otherChat(records.store) : undefined)
+      return saved ? agentSessionConversationView(saved) : undefined
+    },
     getRecord: (sessionId) =>
       records.store?.getRecord(sessionId) ??
       (sessionId === OTHER_CHAT ? otherChat(records.store) : undefined),

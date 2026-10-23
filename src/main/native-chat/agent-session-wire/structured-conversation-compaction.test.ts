@@ -1,3 +1,4 @@
+import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 // `/compact` travels the send path: accepted as the user's message, carried out by the delivery loop
 // as a turn of its own, settled by re-reading the journal. Each case reads what a subscriber that
 // was open before the command saw, or the journal a client would load.
@@ -213,6 +214,20 @@ it('replays the reply for the same operation without running it again (B16)', as
     replayed: true
   })
   expect(compact).toHaveBeenCalledOnce()
+  await state.host.flushAllStreamedEvents()
+  openTestJournalHostDatabase(state.root)
+    .db.prepare(
+      "UPDATE agent_session_records SET record_json = json_set(record_json, '$.lease.minimumNextFence', 'bad') WHERE session_id = ?"
+    )
+    .run('session-alpha')
+  const store = await openTestAgentSessionRecordStore(state.root)
+  const restored = new StructuredAgentSessionHost({ ...state.host.deps, store })
+  expect(await restored.conversationCommand(CALLER, params)).toMatchObject({
+    ok: true,
+    replayed: true
+  })
+  expect(compact).toHaveBeenCalledOnce()
+  await restored.flushAllStreamedEvents()
 })
 
 it('holds messages sent during the command and delivers them after it, in order (B2)', async () => {

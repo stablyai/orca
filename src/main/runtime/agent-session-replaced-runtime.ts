@@ -1,3 +1,4 @@
+import { listAgentSessionConversations } from './agent-session-store-state'
 // What this runtime took over from the Orca runtimes that ran chats on this state directory before
 // it. It loaded their records holding the profile's instance lock, so none of them is still running:
 // every provider they started lost its pipes with them, and nothing it did after can reach the chat.
@@ -22,7 +23,9 @@ export function agentSessionReplacedRuntimes(
   args: { hostId: string; incarnation: string }
 ): ReadonlyMap<string, AgentSessionReplacedRuntime> {
   const replaced = new Map<string, AgentSessionReplacedRuntime>()
-  for (const [sessionId, { lease }] of state.records) {
+  for (const { sessionId, ownerObservation: lease, currentFence } of listAgentSessionConversations(
+    state
+  )) {
     const owner = lease.ownerProcess
     // A terminal's own agent never wrote through Orca's pipes; another host's runtime is not one this
     // replaced; and an owner this runtime recorded (a host reinstalled in one process) may still be held.
@@ -34,7 +37,7 @@ export function agentSessionReplacedRuntimes(
     }
     const runtimeEnd = owner?.runtime ? state.runtimeEnds?.get(owner.runtime) : undefined
     replaced.set(sessionId, {
-      fence: lease.runtimeFence,
+      fence: currentFence,
       ...(owner ? { lastProvenAliveAt: lease.lastRenewedAt } : {}),
       ...(runtimeEnd ? { runtimeEnd } : {})
     })

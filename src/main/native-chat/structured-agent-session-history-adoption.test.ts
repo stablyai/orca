@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
@@ -63,7 +64,7 @@ function ownership(
     workspaceId: 'workspace-owner',
     provider: 'codex',
     providerSessionId: 'thread-1',
-    lease: agentSessionLeaseFixture(),
+    ownerObservation: agentSessionConversationView(agentSessionRecordFixture()).ownerObservation,
     ...overrides
   }
 }
@@ -235,7 +236,11 @@ describe('structuredAdoptionConflictError', () => {
     // Neither verdict admits a second writer; they differ only in what the user is told.
     expect(
       structuredAdoptionConflictError(
-        ownership({ lease: agentSessionLeaseFixture(leaseOverrides) })
+        ownership({
+          ownerObservation: agentSessionConversationView(
+            agentSessionRecordFixture(agentSessionLeaseFixture(leaseOverrides))
+          ).ownerObservation
+        })
       ).message
     ).toBe('agent_session_ownership_unknown')
   })

@@ -34,7 +34,7 @@ it("publishes the desktop's chat tab name over the saved name, and the saved nam
   setStructuredAgentSessionHost({
     deps: {
       store: {
-        getRecord: () => ({
+        getConversation: () => ({
           location: { workspaceId: TEST_WORKTREE_ID },
           conversationName: 'auth/login'
         })

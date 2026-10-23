@@ -83,7 +83,7 @@ async function feedWithChildren(provider: AgentSessionHandleProvider = 'codex') 
   const feed = new StructuredAgentSessionStatusFeed({
     logger: createStructuredAgentSessionLogger(),
     sessions: new Map([[SESSION, indexedStatusFeedSession({ journal, provider })]]),
-    getRecord: () => null,
+    getConversation: () => null,
     now: () => (now += 1),
     statusSink: () => sink,
     onChildWorkChanged: (sessionId) => changed.push(sessionId)
@@ -371,7 +371,7 @@ describe('structured status feed over the real child-record store', () => {
     const feed = new StructuredAgentSessionStatusFeed({
       logger: createStructuredAgentSessionLogger(),
       sessions: new Map([[SESSION, indexedStatusFeedSession({ journal })]]),
-      getRecord: () => null,
+      getConversation: () => null,
       now: () => 1_000,
       statusSink: () => sink
     })

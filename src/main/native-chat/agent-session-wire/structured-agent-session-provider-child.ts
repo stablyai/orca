@@ -23,10 +23,10 @@ type ChildBearer = Pick<StructuredAgentSessionHostSession, 'child' | 'lastEndedC
 /** The fence a conversation write carries: the record's, which is where the next child starts. A
  *  child's own writes carry `child.fence`, which equals it while that child holds the lease. */
 export function structuredAgentSessionConversationFence(
-  store: Pick<AgentSessionRecordStore, 'getRecord'>,
+  store: Pick<AgentSessionRecordStore, 'getConversation'>,
   sessionId: string
 ): number {
-  return store.getRecord(sessionId)?.lease.runtimeFence ?? 0
+  return store.getConversation(sessionId)?.currentFence ?? 0
 }
 
 /** For the end of a successful attach only: a failed one never wrote a child to take back. */

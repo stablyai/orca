@@ -1,8 +1,12 @@
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../../shared/agent-session-record.test-fixture'
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
 import {
   closeTestJournalHostDatabases,
@@ -28,7 +32,16 @@ afterAll(() => {
 })
 
 const NO_OPEN_DEPS = {
-  store: { getRecord: () => null, listRecords: () => [], replacedRuntime: () => undefined },
+  store: {
+    getRecord: (sessionId: string) =>
+      agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId })),
+    getConversation: (sessionId: string) =>
+      agentSessionConversationView(
+        agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId }))
+      ),
+    listConversations: () => [],
+    replacedRuntime: () => undefined
+  },
   journalDatabase: openTestJournalHostDatabase(stateDirectory),
   logger: recordingStructuredAgentSessionLogger().logger
 }
@@ -54,10 +67,7 @@ describe('restart journal restoration', () => {
         }
       }
     })
-    const records = Array.from(
-      { length: 12 },
-      (_, index) => ({ sessionId: `session-${index}` }) as AgentSessionRecord
-    )
+    const records = Array.from({ length: 12 }, (_, index) => ({ sessionId: `session-${index}` }))
 
     const restoration = restoreStructuredAgentSessionsOnRestart({
       openDeps: NO_OPEN_DEPS,
@@ -95,11 +105,7 @@ describe('restart journal restoration', () => {
       turnsSeen.add(turns)
       return null
     })
-    const records = Array.from(
-      { length: 12 },
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the restore reads only the record's session id here.
-      (_, index) => ({ sessionId: `session-${index}` }) as AgentSessionRecord
-    )
+    const records = Array.from({ length: 12 }, (_, index) => ({ sessionId: `session-${index}` }))
 
     await restoreStructuredAgentSessionsOnRestart({
       openDeps: NO_OPEN_DEPS,
@@ -148,8 +154,7 @@ describe('restart journal restoration', () => {
     })
 
     await restoreStructuredAgentSessionsOnRestart({
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the restore reads only the record's session id here.
-      records: [{ sessionId: 'session-1' } as AgentSessionRecord],
+      records: [{ sessionId: 'session-1' }],
       openDeps: NO_OPEN_DEPS,
       reconcileAll: async () => true,
       reconcile: async () => true,
@@ -169,11 +174,7 @@ describe('restart journal restoration', () => {
 
   // Each failed bookkeeping call stands for one refused store write.
   describe('once lease bookkeeping fails in a pass', () => {
-    const records = Array.from(
-      { length: 8 },
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the restore reads only the record's session id here.
-      (_, index) => ({ sessionId: `session-${index}` }) as AgentSessionRecord
-    )
+    const records = Array.from({ length: 8 }, (_, index) => ({ sessionId: `session-${index}` }))
     const restore = (
       bookkeeping: Pick<
         Parameters<typeof restoreStructuredAgentSessionsOnRestart>[0],
@@ -247,11 +248,7 @@ describe('restart journal restoration', () => {
     })
     const readable: string[] = []
     const log = recordingStructuredAgentSessionLogger()
-    const records = Array.from(
-      { length: 12 },
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the restore reads only the record's session id here.
-      (_, index) => ({ sessionId: `session-${index}` }) as AgentSessionRecord
-    )
+    const records = Array.from({ length: 12 }, (_, index) => ({ sessionId: `session-${index}` }))
 
     await expect(
       restoreStructuredAgentSessionsOnRestart({
@@ -282,8 +279,7 @@ describe('restart journal restoration', () => {
     })
 
     await restoreStructuredAgentSessionsOnRestart({
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the restore reads only the record's session id here.
-      records: [{ sessionId: 'session-1' } as AgentSessionRecord],
+      records: [{ sessionId: 'session-1' }],
       openDeps: NO_OPEN_DEPS,
       reconcileAll: async () => true,
       reconcile: async () => true,

@@ -1,3 +1,6 @@
+import { isAgentSessionSurfaceTabId } from '../../shared/agent-session-surface-tab-id'
+import type { AgentSessionReserveRequest } from './agent-session-reservation-admission'
+import { hasAgentSessionConversation } from './agent-session-store-state'
 import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
 import { structuredAgentSessionTabId } from '../../shared/structured-agent-session-projection'
 import type { AgentSessionStoreState } from './agent-session-store-state'
@@ -86,7 +89,9 @@ export class AgentSessionTabTable {
 
 /** The sessions whose chat tab is shown, in tab order, skipping any without a record. */
 export function listVisibleAgentSessionIds(state: AgentSessionStoreState): string[] {
-  return (state.sessionTabs?.sessionIds() ?? []).filter((sessionId) => state.records.has(sessionId))
+  return (state.sessionTabs?.sessionIds() ?? []).filter((sessionId) =>
+    hasAgentSessionConversation(state, sessionId)
+  )
 }
 
 export function agentSessionVisibleTabIndex(state: AgentSessionStoreState): {
@@ -102,7 +107,7 @@ export function setAgentSessionTabVisibility(
   visible: boolean,
   tabId?: string
 ): void {
-  if (visible && !state.records.has(sessionId)) {
+  if (visible && !hasAgentSessionConversation(state, sessionId)) {
     throw agentSessionRefusalError('agent_session_identity_required', { reason: 'recordMissing' })
   }
   state.sessionTabs ??= new AgentSessionTabTable()
@@ -118,10 +123,33 @@ export function showAgentSessionTabs(
   sessionIds: readonly string[]
 ): void {
   for (const sessionId of sessionIds) {
-    if (state.records.has(sessionId)) {
+    if (hasAgentSessionConversation(state, sessionId)) {
       setAgentSessionTabVisibility(state, sessionId, true)
     }
   }
 }
 
 export type PersistedAgentSessionTab = { tabId: string; sessionId: string }
+
+/**
+ * A tab id names one conversation, so a reserved id another session's tab holds is a conflict.
+ * Checked, not claimed: the id is taken when the chat's tab is published, so a create that never
+ * gets that far leaves nothing in the table to restore or release.
+ */
+export function assertReservedTabUnheld(
+  state: AgentSessionStoreState,
+  request: AgentSessionReserveRequest
+): void {
+  if (request.surfaceTabId === undefined) {
+    return
+  }
+  if (!isAgentSessionSurfaceTabId(request.surfaceTabId)) {
+    throw agentSessionRefusalError('agent_session_operation_invalid', {
+      reason: 'requestMalformed'
+    })
+  }
+  const holder = state.sessionTabs?.sessionIdFor(request.surfaceTabId)
+  if (holder !== undefined && holder !== request.sessionId) {
+    throw agentSessionRefusalError('agent_session_conflict', { reason: 'tabIdTaken' })
+  }
+}
