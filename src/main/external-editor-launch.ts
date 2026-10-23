@@ -6,6 +6,7 @@ import { posix, win32 } from 'node:path'
 import { parseWslUncPath } from '../shared/wsl-paths'
 import { isVsCodeLauncherExecutable } from '../shared/vscode-remote-ssh-launcher'
 import { resolveCliCommand } from './codex-cli/command'
+import { removeAppImageRuntimeEnv } from './pty/appimage-terminal-env'
 import {
   getLauncherBaseName,
   hasMatchingOuterQuotes,
@@ -246,12 +247,40 @@ export function resolveVsCodeRemoteSshLaunchSpec(
   }
 }
 
+// Why: an AppImage launch exports ARGV0/APPDIR and mount-path PATH entries that the editor's
+// integrated shells would inherit; elsewhere the editor keeps Orca's env untouched.
+function buildExternalEditorEnv(): NodeJS.ProcessEnv | undefined {
+  if (process.platform !== 'linux') {
+    return undefined
+  }
+  const env: Record<string, string> = {}
+  for (const [key, value] of Object.entries(process.env)) {
+    if (value !== undefined) {
+      env[key] = value
+    }
+  }
+  removeAppImageRuntimeEnv(env)
+  return env
+}
+
 function startExternalEditorProcess(launchSpec: ExternalEditorLaunchSpec): ChildProcess {
+  const env = buildExternalEditorEnv()
   if (launchSpec.kind === 'shell') {
     const { spawnCmd, spawnArgs, hideWindowsConsole } = launchSpec
     return hideWindowsConsole
-      ? spawnProcess({ program: spawnCmd, args: spawnArgs, detached: true, stdio: 'ignore' })
-      : spawn(spawnCmd, spawnArgs, { detached: true, stdio: 'ignore', windowsHide: false })
+      ? spawnProcess({
+          program: spawnCmd,
+          args: spawnArgs,
+          detached: true,
+          stdio: 'ignore',
+          env
+        })
+      : spawn(spawnCmd, spawnArgs, {
+          detached: true,
+          stdio: 'ignore',
+          windowsHide: false,
+          env
+        })
   }
   if (launchSpec.hideWindowsConsole && !launchSpec.detachedGui) {
     // Why process-host owns the batch hop: its /s line keeps quoted arguments intact, while a
@@ -260,7 +289,8 @@ function startExternalEditorProcess(launchSpec: ExternalEditorLaunchSpec): Child
       program: launchSpec.spawnCmd,
       args: launchSpec.spawnArgs,
       detached: true,
-      stdio: 'ignore'
+      stdio: 'ignore',
+      env
     })
   }
   // Why: only shims flagged during resolution (JetBrains) take the start /B detach.
@@ -273,9 +303,20 @@ function startExternalEditorProcess(launchSpec: ExternalEditorLaunchSpec): Child
   )
   if (!launchSpec.hideWindowsConsole) {
     // Why direct: process-host always hides the console, and a terminal editor on Windows needs one.
-    return spawn(spawnCmd, spawnArgs, { detached: true, stdio: 'ignore', windowsHide: false })
+    return spawn(spawnCmd, spawnArgs, {
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: false,
+      env
+    })
   }
-  return spawnProcess({ program: spawnCmd, args: spawnArgs, detached: true, stdio: 'ignore' })
+  return spawnProcess({
+    program: spawnCmd,
+    args: spawnArgs,
+    detached: true,
+    stdio: 'ignore',
+    env
+  })
 }
 
 export async function launchExternalEditor(launchSpec: ExternalEditorLaunchSpec): Promise<void> {

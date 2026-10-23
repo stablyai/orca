@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { delimiter } from 'node:path'
 
 const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }))
 
@@ -114,5 +115,65 @@ describe('VS Code Remote-SSH launch through @orca/process-host', () => {
       stdio: 'ignore',
       windowsHide: false
     })
+  })
+})
+
+describe('external editor launch environment', () => {
+  const mount = '/tmp/.mount_orca123'
+  const executableSpec: ExternalEditorLaunchSpec = {
+    kind: 'executable',
+    hideWindowsConsole: true,
+    spawnCmd: '/usr/bin/code',
+    spawnArgs: ['/home/ada/project']
+  }
+  const shellSpec: ExternalEditorLaunchSpec = {
+    kind: 'shell',
+    hideWindowsConsole: true,
+    spawnCmd: '/bin/sh',
+    spawnArgs: ['-c', 'code --new-window /home/ada/project']
+  }
+
+  beforeEach(() => {
+    spawnMock.mockReset()
+    spawnMock.mockImplementation(spawnedChild)
+    vi.stubEnv('APPIMAGE', '/data/apps/orca.appimage')
+    vi.stubEnv('APPDIR', mount)
+    vi.stubEnv('ARGV0', '/data/apps/orca.appimage')
+    vi.stubEnv('OWD', '/home/ada')
+    vi.stubEnv('APPIMAGE_LIBRARY_PATH', `${mount}/usr/lib`)
+    vi.stubEnv('PATH', [mount, `${mount}/usr/sbin`, '/usr/bin'].join(delimiter))
+    vi.stubEnv('LD_LIBRARY_PATH', [`${mount}/usr/lib`, '/opt/audio/lib'].join(delimiter))
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    if (platformDescriptor) {
+      Object.defineProperty(process, 'platform', platformDescriptor)
+    }
+  })
+
+  function spawnedEnv(): NodeJS.ProcessEnv | undefined {
+    const options: { env?: NodeJS.ProcessEnv } | undefined = spawnMock.mock.calls[0]?.[2]
+    return options?.env
+  }
+
+  it.each([
+    ['executable', executableSpec],
+    ['shell', shellSpec]
+  ] as const)('strips the AppImage runtime env from a Linux %s launch', async (_kind, spec) => {
+    setPlatform('linux')
+    await launchExternalEditor(spec)
+    const env = spawnedEnv()
+    for (const key of ['APPIMAGE', 'APPDIR', 'ARGV0', 'OWD', 'APPIMAGE_LIBRARY_PATH']) {
+      expect(env).not.toHaveProperty(key)
+    }
+    expect(env).toMatchObject({ PATH: '/usr/bin', LD_LIBRARY_PATH: '/opt/audio/lib' })
+    expect(process.env.ARGV0).toBe('/data/apps/orca.appimage')
+  })
+
+  it('leaves the inherited env untouched on macOS', async () => {
+    setPlatform('darwin')
+    await launchExternalEditor(executableSpec)
+    expect(spawnedEnv()).toBeUndefined()
   })
 })
