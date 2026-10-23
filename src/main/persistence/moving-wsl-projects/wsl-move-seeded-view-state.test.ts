@@ -33,11 +33,12 @@ const local = {
 }
 
 describe('withWslMoveSeededViewState', () => {
-  it("lays this desktop's draft and its disk baseline over the seeded file", () => {
+  it("lays this desktop's draft and its disk baseline over the seeded file, owned by the host", () => {
     const next = withWslMoveSeededViewState(seed(), local, scope, new Set([HOST]))
 
+    // Without the host as owner the draft opens as this desktop's file, and the mirror drops it.
     expect(next?.openFilesByWorktree?.[HOST]).toEqual([
-      file('/home/dev/app/README.md', HOST, '# unsaved')
+      { ...file('/home/dev/app/README.md', HOST, '# unsaved'), runtimeEnvironmentId: 'wsl:Ubuntu' }
     ])
   })
 

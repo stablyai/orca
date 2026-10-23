@@ -64,8 +64,9 @@ export function reapplyWslMoveRewritesAtUnload(
         profile.updateUI(updates)
         writes += 1
       }
-      // Empty: the window's save replaced the partition, so what the seed added may be gone.
-      if (applyWslMoveHostSessionSeed(profile, cutover, scope, new Set()).length > 0) {
+      // The window's save replaced the partition with its mirror of the host's tabs, which lacks
+      // what only the seed carries (browser tabs, drafts): seed those workspaces again over it.
+      if (applyWslMoveHostSessionSeed(profile, cutover, scope, new Set(), true).length > 0) {
         writes += 1
       }
     }

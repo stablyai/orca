@@ -77,8 +77,10 @@ function withDrafts(
         continue
       }
       const next = [...held]
+      // Owned by the host now, as the SSH move's draft rename makes it, so saves reach the host.
       next[index] = {
         ...held[index],
+        runtimeEnvironmentId: scope.destinationEnvironmentId,
         dirtyDraftContent: file.dirtyDraftContent,
         ...(file.lastKnownDiskSignature !== undefined
           ? { lastKnownDiskSignature: file.lastKnownDiskSignature }

@@ -68,27 +68,32 @@ export type WslMoveHostSessionSeed = {
 /**
  * `existing` plus the carried rows of every moved workspace it names nothing for and no earlier
  * run seeded, or null when there is none: what the host published, and a seeded tab the user
- * has since closed, are never replaced.
+ * has since closed, are never replaced. `replaceEchoes` drops those workspaces' rows first: only
+ * for a window that was open across the move, whose rows there can only echo the host's tabs.
  */
 export function wslMoveHostSessionSeed(
   carried: WorkspaceSessionState,
   existing: WorkspaceSessionState,
   scope: WslMoveRewriteScope,
-  alreadySeeded: ReadonlySet<string> = new Set()
+  alreadySeeded: ReadonlySet<string> = new Set(),
+  replaceEchoes = false
 ): WslMoveHostSessionSeed | null {
-  const published = workspaceIdsNamedByPartition(existing)
   const stripped = withoutChatTabs(withoutPtyBindings(carried))
-  const seeded = new Set(
+  const candidates = new Set(
     [...workspaceIdsNamedByPartition(stripped)].filter(
-      (workspaceId) =>
-        scope.inScope(workspaceId) && !published.has(workspaceId) && !alreadySeeded.has(workspaceId)
+      (workspaceId) => scope.inScope(workspaceId) && !alreadySeeded.has(workspaceId)
     )
   )
+  const base = replaceEchoes
+    ? filterWorkspaceRows(existing, (workspaceId) => !candidates.has(workspaceId))
+    : existing
+  const published = workspaceIdsNamedByPartition(base)
+  const seeded = new Set([...candidates].filter((workspaceId) => !published.has(workspaceId)))
   if (seeded.size === 0) {
     return null
   }
   const rows = filterWorkspaceRows(stripped, (workspaceId) => seeded.has(workspaceId))
-  const next = structuredClone(existing)
+  const next = structuredClone(base)
   for (const [field, ownership] of Object.entries(WORKSPACE_SESSION_FIELD_OWNERSHIP)) {
     if (
       !isSessionField(field) ||

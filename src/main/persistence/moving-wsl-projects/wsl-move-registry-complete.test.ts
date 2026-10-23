@@ -371,6 +371,28 @@ describe('WSL move with the complete desktop rewrite registry', () => {
     expect(journal()).toEqual([finished])
   })
 
+  it("seeds again over the old window's echo of the host's tabs at unload", async () => {
+    // awin verify-4: the moving window saved its mirror of the host's tabs (no browser tab, no
+    // draft) over the seed, and the unload's redo skipped the workspace because the echo named it.
+    windowOpen = true
+    seedWslMoveCutover(testState.dir, committedMove())
+    loadWslMoveFence(testState.dir)
+    await runWslMoveDesktopRewritePass({ userDataPath: testState.dir })
+    recordRendererStores()
+    store.setWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        tabsByWorktree: {
+          [MOVED_ON_HOST]: [terminalTab('tab-echo', MOVED_ON_HOST, '/home/dev/app', null)]
+        }
+      },
+      HOST
+    )
+
+    expect(reapplyWslMoveRewritesAtUnload(testState.dir, store)).toBeGreaterThan(0)
+    expect(hostTabIds()).toEqual(['tab-1'])
+  })
+
   it('leaves the additive rewrites alone at unload when no window saw the rewrite', async () => {
     seedWslMoveCutover(testState.dir, committedMove())
     loadWslMoveFence(testState.dir)

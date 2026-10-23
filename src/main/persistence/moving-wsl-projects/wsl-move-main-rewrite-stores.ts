@@ -115,7 +115,8 @@ export function applyWslMoveHostSessionSeed(
   profile: Pick<Store, 'getWorkspaceSession' | 'setWorkspaceSession'>,
   cutover: Pick<WslMoveCutover, 'manifest' | 'destinationEnvironmentId'>,
   scope: WslMoveRewriteScope,
-  alreadySeeded: ReadonlySet<string>
+  alreadySeeded: ReadonlySet<string>,
+  replaceEchoes = false
 ): string[] {
   const carried = cutover.manifest.payload.dormantState?.workspaceSession
   if (!carried) {
@@ -126,7 +127,8 @@ export function applyWslMoveHostSessionSeed(
     carried,
     profile.getWorkspaceSession(hostId),
     scope,
-    alreadySeeded
+    alreadySeeded,
+    replaceEchoes
   )
   if (!seed) {
     return []
