@@ -3,13 +3,13 @@ import { isStructuredHumanReply } from './structured-reply-origin'
 import { replySnapshotFixture } from './structured-reply-origin.test-fixture'
 
 describe('S8: host journal source and exact completed chat turn', () => {
-  it.each(['claude', 'codex', 'steered'] as const)(
+  it.each(['claude', 'codex', 'steered', 'claude-echo'] as const)(
     'accepts a user send in the %s shape',
     (shape) => {
       expect(isStructuredHumanReply(replySnapshotFixture('user', shape), 'turn-A')).toBe(true)
     }
   )
-  it.each(['claude', 'codex', 'steered'] as const)(
+  it.each(['claude', 'codex', 'steered', 'claude-echo'] as const)(
     'rejects wake and unknown send sources in the %s shape',
     (shape) => {
       expect(isStructuredHumanReply(replySnapshotFixture('agent', shape), 'turn-A')).toBe(false)

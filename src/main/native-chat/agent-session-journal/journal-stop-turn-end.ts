@@ -42,8 +42,11 @@ type TurnEndState = Pick<
 
 /** The send whose journal item `userItemId` (a turn's opener, by its own or its provider key) is.
  *  Only says whether a send's turn has opened; it never decides whose a turn's end is. */
-function openingSubmission(
-  state: TurnEndState,
+export function openingSubmission(
+  state: {
+    aliases: ReadonlyMap<string, string>
+    submissions: ReadonlyMap<string, AgentJournalSubmission>
+  },
   userItemId: string | undefined
 ): AgentJournalSubmission | undefined {
   if (userItemId === undefined) {

@@ -1,9 +1,13 @@
-import type { AgentJournalSnapshot } from '../../shared/agent-session-journal-types'
+import type { StructuredReplyJournalSnapshot } from '../native-chat/agent-session-wire/structured-agent-session-reply-journal'
+import { openingSubmission } from '../native-chat/agent-session-journal/journal-stop-turn-end'
 import { agentJournalSubmissionKey } from '../../shared/agent-session-journal-item-key'
 import { latestStructuredAgentSessionTurn } from '../../shared/structured-agent-session-live-turn'
 
 /** Uses the host's submission source and exact journal turn, including steered sends. */
-export function isStructuredHumanReply(snapshot: AgentJournalSnapshot, turnId: string): boolean {
+export function isStructuredHumanReply(
+  snapshot: StructuredReplyJournalSnapshot,
+  turnId: string
+): boolean {
   if (
     snapshot.items.some(
       (item) => !item.agentId && item.body.kind === 'turn' && item.body.state === 'running'
@@ -22,7 +26,15 @@ export function isStructuredHumanReply(snapshot: AgentJournalSnapshot, turnId: s
   ) {
     return false
   }
-  const userItemId = turn.body.userItemId
+  const opener = openingSubmission(
+    {
+      aliases: snapshot.aliases,
+      submissions: new Map(
+        snapshot.submissions.map((submission) => [submission.clientMessageId, submission])
+      )
+    },
+    turn.body.userItemId
+  )
   return snapshot.submissions.some((submission) => {
     if (
       submission.source?.kind !== 'user' ||
@@ -32,11 +44,8 @@ export function isStructuredHumanReply(snapshot: AgentJournalSnapshot, turnId: s
       return false
     }
     const key = agentJournalSubmissionKey(submission.clientMessageId)
-    // The turn it opened names it by its key (Codex) or by the provider item the key aliases
-    // (Claude); a send steered into a running turn is scoped to that turn.
     return (
-      (userItemId !== undefined &&
-        (userItemId === key || userItemId === submission.providerItemId)) ||
+      submission === opener ||
       snapshot.items.some(
         (item) =>
           item.itemId === key &&

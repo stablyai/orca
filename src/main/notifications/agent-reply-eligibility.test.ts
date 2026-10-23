@@ -1,7 +1,5 @@
-import type {
-  AgentJournalCursor,
-  AgentJournalSnapshot
-} from '../../shared/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../shared/agent-session-journal-types'
+import type { StructuredReplyJournalSnapshot } from '../native-chat/agent-session-wire/structured-agent-session-reply-journal'
 import { replySnapshotFixture } from './structured-reply-origin.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TerminalRunFactsRegister } from '../runtime/terminal-run-facts'
@@ -16,7 +14,7 @@ const callbacks = vi.hoisted(() => {
   } = {}
   const chat: {
     enabled: boolean
-    snapshot: AgentJournalSnapshot | null
+    snapshot: StructuredReplyJournalSnapshot | null
     floors: Map<string, AgentJournalCursor>
   } = { enabled: false, snapshot: null, floors: new Map() }
   const chatHost = { replyJournal: { cursors: () => chat.floors, snapshot: () => chat.snapshot } }

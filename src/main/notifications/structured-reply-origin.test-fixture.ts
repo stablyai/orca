@@ -1,4 +1,5 @@
-import type { AgentJournalSnapshot } from '../../shared/agent-session-journal-types'
+import type { StructuredReplyJournalSnapshot } from '../native-chat/agent-session-wire/structured-agent-session-reply-journal'
+import { agentSessionSendBodyFingerprint } from '../../shared/structured-agent-session-send-mutation'
 import { agentJournalSubmissionKey } from '../../shared/agent-session-journal-item-key'
 import {
   applyJournalRow,
@@ -11,7 +12,7 @@ const EPOCH = 'epoch'
 const TURN_ROW = 'legacy:claude:invented-session:turn-lifecycle%3Aturn-A'
 
 /** `steered`: a program send opens the turn and this send is handed over into it. */
-type ChatShape = 'claude' | 'codex' | 'steered'
+type ChatShape = 'claude' | 'codex' | 'steered' | 'claude-echo'
 
 /** Persisted journal rows replayed through the production parser and reducer. The Claude rows
  *  mirror a captured composer send to Claude Code 2.1.301: the handed-over message stays in the
@@ -21,7 +22,7 @@ type ChatShape = 'claude' | 'codex' | 'steered'
 export function replySnapshotFixture(
   source: 'user' | 'agent' | undefined,
   shape: ChatShape = 'claude'
-): AgentJournalSnapshot {
+): StructuredReplyJournalSnapshot {
   const rows: Record<string, unknown>[] = []
   const row = (fields: Record<string, unknown>, v = 2) =>
     rows.push({ v, epoch: EPOCH, seq: rows.length + 1, ts: rows.length + 1, ...fields })
@@ -31,7 +32,11 @@ export function replySnapshotFixture(
     row({
       kind: 'submission',
       clientMessageId: send,
-      payloadFingerprint: `invented-${send}`,
+      payloadFingerprint: agentSessionSendBodyFingerprint('session', {
+        kind: 'message',
+        role: 'user',
+        blocks: [{ type: 'text', text: 'invented input' }]
+      }),
       providerHandle: { kind: 'opaque', agent: 'claude', value: 'pending' },
       body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'invented input' }] },
       fence: 1,
@@ -79,9 +84,28 @@ export function replySnapshotFixture(
   })
   const starter = shape === 'steered' ? 'program' : 'send'
   submit(starter, shape === 'steered' ? 'agent' : source, { kind: 'thread' })
-  const starterItem = shape === 'codex' ? agentJournalSubmissionKey(starter) : providerItem(starter)
+  const starterItem =
+    shape === 'codex'
+      ? agentJournalSubmissionKey(starter)
+      : shape === 'claude-echo'
+        ? providerItem('echo')
+        : providerItem(starter)
   turn('running', starterItem)
   accept(starter)
+  if (shape === 'claude-echo') {
+    row(
+      {
+        kind: 'item',
+        itemId: starterItem,
+        revision: 1,
+        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'invented input' }] },
+        fence: 2,
+        ownerFence: 2,
+        turnScope: { kind: 'thread' }
+      },
+      3
+    )
+  }
   if (shape === 'steered') {
     submit('send', source, { kind: 'turn', turnItemId: TURN_ROW })
     accept('send')
@@ -107,5 +131,5 @@ export function replySnapshotFixture(
     }
     applyJournalRow(state, parsed.row)
   }
-  return renderJournalState(state)
+  return { ...renderJournalState(state), aliases: new Map(state.aliases) }
 }
