@@ -26,6 +26,10 @@ export type RestoredPaneStartPorts = {
   /** The pane's stored terminal, or null for a pane main no longer holds. */
   boundPtyId: (pane: RestoredPane) => string | null | undefined
   isLive: (ptyId: string) => boolean
+  /** Shows the pane starting, before any await, so no view starts it too. */
+  starting?: (pane: RestoredPane) => void
+  /** Shows a start that failed, with its reason; the pane keeps what it restores from. */
+  failed?: (pane: RestoredPane, error: unknown) => void
   /** Starts the pane in place, resuming its recorded agent; resolves to the terminal bound to it. */
   start: (
     pane: RestoredPane,
@@ -46,6 +50,8 @@ export function restoredPaneStartPlan(
 
 export class RestoredPaneStarter {
   private readonly inFlight = new Map<string, Promise<StartedPty | null>>()
+  /** Each pane's last started terminal: its bind write can land after the start resolves. */
+  private readonly started = new Map<string, StartedPty>()
 
   constructor(private readonly ports: RestoredPaneStartPorts) {}
 
@@ -62,18 +68,32 @@ export class RestoredPaneStarter {
     }
     const bound = this.ports.boundPtyId(pane)
     if (bound === null) {
+      this.started.delete(key)
       return Promise.resolve(null)
     }
     if (this.isOwnLive(pane, bound)) {
+      this.started.delete(key)
       return Promise.resolve({ id: bound })
     }
+    const started = this.started.get(key)
+    // Why: until the started terminal's binding is written, the stored layout still names the old one.
+    if (started && this.ports.isLive(started.id)) {
+      return Promise.resolve(started)
+    }
+    this.started.delete(key)
+    this.ports.starting?.(pane)
     const start = this.ports
       .start(pane, restoredPaneStartPlan(pane, bound), trigger)
+      .then((pty) => {
+        this.started.set(key, pty)
+        return pty
+      })
       .catch((error: unknown) => {
         const winner = this.ports.boundPtyId(pane)
         if (this.isOwnLive(pane, winner)) {
           return { id: winner }
         }
+        this.ports.failed?.(pane, error)
         throw error
       })
       .finally(() => {
@@ -83,6 +103,15 @@ export class RestoredPaneStarter {
       })
     this.inFlight.set(key, start)
     return start
+  }
+
+  /** A stopped terminal is no pane's start any more, so a restart into its pane starts afresh. */
+  forget(ptyId: string): void {
+    for (const [key, started] of this.started) {
+      if (started.id === ptyId) {
+        this.started.delete(key)
+      }
+    }
   }
 
   // A live terminal another workspace owns is never this pane's: it starts fresh instead.

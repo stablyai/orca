@@ -1,14 +1,14 @@
 import { expect } from '@stablyai/playwright-test'
 import type { Page } from '@stablyai/playwright-test'
 import { buildSidebarFeedRows } from '../../../src/shared/sidebar-list/sidebar-feed-rows'
-import {
-  HostSidebarFeedReader,
-  type HostSidebarFeedRead
-} from '../../../mobile/src/host-screen/host-sidebar-feed-reader'
 import { buildSidebarFeedCatalog } from '../../../src/shared/sidebar-list/sidebar-feed-catalog'
 import { buildHostFeedView } from '../../../mobile/src/host-screen/host-sidebar-feed-inputs'
 import { buildHostFeedSections } from '../../../mobile/src/host-screen/host-sidebar-feed-sections'
-import { readHostSidebarFeed } from '../../../mobile/src/host-screen/use-host-sidebar-feed'
+import {
+  readHostSidebarFeed,
+  type HostSidebarFeedRead
+} from '../../../mobile/src/host-screen/use-host-sidebar-feed'
+import { createHostSidebarFeedReader } from '../../../mobile/src/host-screen/host-sidebar-feed-connection'
 import { readHostMethodReply } from '../../../mobile/src/host-screen/host-sidebar-feed-operations'
 import {
   hostPlatformRead,
@@ -99,11 +99,11 @@ export async function openPhoneFeedList(
 ) {
   const socket = await phone.openSocket()
   const port = socketPort(socket)
-  let read: HostSidebarFeedRead = { installed: null, unavailable: false }
+  let read: HostSidebarFeedRead = { snapshot: null, unavailable: false }
   const installListeners = new Set<() => void>()
-  const reader = new HostSidebarFeedReader(port, (next) => {
-    const installed = next.installed && next.installed !== read.installed
-    read = next
+  const reader = createHostSidebarFeedReader(port, ({ snapshot, unavailable }) => {
+    const installed = snapshot !== null && snapshot !== read.snapshot
+    read = { snapshot, unavailable }
     if (installed) {
       installListeners.forEach((listener) => listener())
     }

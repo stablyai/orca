@@ -197,7 +197,7 @@ async function deployOwnOrcad(
     ...slot,
     localOrcadDir,
     target: context.serverTarget,
-    ...managedOrcadDeployPolicy(context, appVersion, args.force),
+    ...managedOrcadDeployPolicy(context, appVersion, args.force ? 'force' : 'connect'),
     force: args.force,
     appVersion
   })

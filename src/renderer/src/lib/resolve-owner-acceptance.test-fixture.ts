@@ -1,5 +1,5 @@
-/** Hand-reviewed owner per matrix case for `resolveOwnerWithLegacyFallback` (round-3 design §5). */
-export const LEGACY_FALLBACK_OWNER_ACCEPTANCE: Record<string, string> = {
+/** Hand-reviewed owner per matrix case for `resolveOwnerOrLocal` (round-3 design §5). */
+export const OWNER_OR_LOCAL_ACCEPTANCE: Record<string, string> = {
   'focused | global-floating-terminal': 'self@local',
   'focused | local-repo::wt': 'self@local',
   'focused | legacy-repo::wt': 'self@local',

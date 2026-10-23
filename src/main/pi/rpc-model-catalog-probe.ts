@@ -2,7 +2,7 @@ import { homedir } from 'node:os'
 import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
 import { parsePiModels } from '../../shared/commit-message-model-parsers'
 import type { resolveCliCommand } from '../../shared/node-cli-command-resolution'
-import type { probeAgentCliVersion } from '../agent-cli-version-probe'
+import type { AgentCliVersionReader } from '../agent-cli-version-probe'
 import type {
   AgentModelCatalogProbe,
   AgentModelCatalogSuccess
@@ -10,7 +10,7 @@ import type {
 import { runAgentModelCatalogListing } from '../native-chat/agent-model-catalog/agent-model-catalog-probe-runner'
 import type { StructuredAgentCommandSettings } from '../native-chat/structured-agent-command-resolution'
 import { buildPiRpcLaunch, piRpcSessionlessEnvironment } from './rpc-launch'
-import { piRpcVersionSupported, resolvePiRpcInvocation } from './rpc-launch-resolution'
+import { checkPiRpcVersion, resolvePiRpcInvocation } from './rpc-launch-resolution'
 import { PI_UNMAPPED_THINKING_LEVELS } from './rpc-options'
 
 export type PiModelCatalogProbeDeps = {
@@ -20,7 +20,7 @@ export type PiModelCatalogProbeDeps = {
   resolveCommandSettings?: () => StructuredAgentCommandSettings
   resolveCommand?: typeof resolveCliCommand
   /** Test seams; production runs the shared supervised listing. */
-  probeVersion?: typeof probeAgentCliVersion
+  probeVersion?: AgentCliVersionReader
   runListing?: typeof runAgentModelCatalogListing
   homePath?: string
 }
@@ -50,7 +50,7 @@ export function createPiModelCatalogProbe(deps: PiModelCatalogProbeDeps): AgentM
       refreshEnvironmentAfterMiss: deps.refreshEnvironmentAfterMiss,
       resolveWorkingDirectory: () => cwd
     })
-    if (!(await piRpcVersionSupported({ command, cwd, env }, deps.probeVersion))) {
+    if ((await checkPiRpcVersion({ command, cwd, env }, deps.probeVersion)).status === 'tooOld') {
       throw new Error(`pi at ${command} does not run structured chats`)
     }
     // The chat launch's own env rules; only the arguments differ.

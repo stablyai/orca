@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SidebarFeedDomains } from '../../../shared/sidebar-list/sidebar-feed-domains'
 import { buildWorkspaceRows, type WorkspaceRow } from '../../../shared/sidebar-list/workspace-rows'
 import type { PairedServerWorkspaceRow } from '../../../shared/sidebar-list/paired-server-rows'
+import { parseExecutionHostId } from '../../../shared/execution-host'
+import { composeWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 import {
   makeFolderWorkspace,
   makeRepo,
@@ -31,7 +33,12 @@ function domains(
   serverRows: PairedServerWorkspaceRow[] = []
 ): SidebarFeedDomains {
   return {
-    workspaces: new Map(rows.map((row) => [`${row.hostId}|${row.id}`, row])),
+    workspaces: new Map(
+      rows.map((row) => [
+        composeWorktreeHostIdentity(parseExecutionHostId(row.hostId)?.id, row.id),
+        row
+      ])
+    ),
     activity: new Map(),
     review: new Map(),
     creations: new Map(),

@@ -48,7 +48,7 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('@/lib/worktree-runtime-owner', () => ({
-  runtimeEnvironmentIdWithLegacyFallbackUnlessTwin: () => ownerRuntime.environmentId
+  runtimeEnvironmentIdOrLocalUnlessTwin: () => ownerRuntime.environmentId
 }))
 
 vi.mock(import('@/lib/reveal-in-file-manager'), async (importOriginal) => ({

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import { OrcaRuntimeService } from './orca-runtime'
 
@@ -17,7 +18,7 @@ function runtimeWithSpawnedPty(): OrcaRuntimeService {
   return runtime
 }
 
-describe('restampMovedPtySurface', () => {
+describe.skipIf(ORCA_LAYOUT_OWNER_IS_MAIN)('restampMovedPtySurface', () => {
   it('re-points the PTY record at the tab and pane key it moved to', () => {
     const runtime = runtimeWithSpawnedPty()
     const toPaneKey = makePaneKey('tab-target', LEAF_ID)
@@ -37,5 +38,19 @@ describe('restampMovedPtySurface', () => {
 
     expect(runtime['ptysById'].get('pty-unknown')).toBeUndefined()
     expect(runtime['ptysById'].get(PTY_ID)).toMatchObject({ tabId: 'tab-source' })
+  })
+})
+
+describe.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)('restampMovedPtySurface in layout-owner builds', () => {
+  it("leaves no pane claim on the record, because main's layout answers for the moved pane", () => {
+    const runtime = runtimeWithSpawnedPty()
+
+    runtime.restampMovedPtySurface(PTY_ID, 'tab-target', makePaneKey('tab-target', LEAF_ID))
+
+    const record = runtime['ptysById'].get(PTY_ID)
+    expect(record).toBeDefined()
+    expect(record).not.toHaveProperty('tabId')
+    expect(record).not.toHaveProperty('paneKey')
+    expect(record).not.toHaveProperty('surfaceRecordedAtGraphSequence')
   })
 })

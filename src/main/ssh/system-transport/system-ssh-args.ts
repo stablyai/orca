@@ -63,6 +63,19 @@ export function buildSshArgs(target: SshTarget, options?: SystemSshBuildArgsOpti
     args.push('-o', 'ServerAliveCountMax=3')
   }
 
+  appendSshTargetDestinationArgs(args, target, options)
+  return args
+}
+
+/**
+ * Who to log in as and how to reach the host, ending `-- destination`: the part of a dial that
+ * belongs to the saved target rather than to Orca's transport (multiplexing, batch mode, `-T`).
+ */
+export function appendSshTargetDestinationArgs(
+  args: string[],
+  target: SshTarget,
+  options?: Pick<SystemSshBuildArgsOptions, 'aliasClaimedByConfig' | 'gssapiOnly'>
+): void {
   const useConfigHost = shouldUseOpenSshConfigHost(target)
 
   // Why: a wildcard `Host *` block supplies ProxyCommand/ProxyJump for every alias, so an alias
@@ -109,8 +122,6 @@ export function buildSshArgs(target: SshTarget, options?: SystemSshBuildArgsOpti
   // must not override a fresh wildcard, Include, or Match result.
   const userHost = useConfigHost ? host : target.username ? `${target.username}@${host}` : host
   args.push('--', userHost)
-
-  return args
 }
 
 /**

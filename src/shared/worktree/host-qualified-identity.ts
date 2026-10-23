@@ -110,6 +110,16 @@ export function getWorktreeIdFromHostIdentity(identity: string): string {
   return identity.slice(identity.indexOf(HOST_SEPARATOR) + 1)
 }
 
+/** A wire key back as a typed identity, or null when it is not one (a bare id). */
+export function parseWorktreeHostIdentity(identity: string): HostScopedWorktreeKey | null {
+  return isWorktreeHostIdentity(identity)
+    ? composeWorktreeHostIdentity(
+        getExecutionHostIdFromWorktreeHostIdentity(identity),
+        getWorktreeIdFromHostIdentity(identity)
+      )
+    : null
+}
+
 /** True only for the canonical host-qualified form, not a legacy id containing `|`. */
 export function isWorktreeHostIdentity(identity: string): boolean {
   const separator = identity.indexOf(HOST_SEPARATOR)

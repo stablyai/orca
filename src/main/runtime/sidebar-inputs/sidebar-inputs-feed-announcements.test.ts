@@ -10,7 +10,10 @@ import type { WslHostService } from '../../wsl/wsl-host-service'
 import { setWslHostService } from '../../wsl/wsl-host-service-instance'
 import { getGitHubPRCacheKeyCandidates } from '../../../shared/github/github-cache-key'
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
-import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
+import {
+  getWorktreeHostIdentity,
+  hostWorktreeTarget
+} from '../../../shared/worktree/host-qualified-identity'
 import {
   prGroupOfReviewFact,
   WorkspaceReviewFactsSnapshotSchema,
@@ -82,10 +85,11 @@ async function host() {
       catalogs: () => []
     } as unknown as SidebarInputsFeedSources['pairedServerRows'],
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: as above.
-    workspaceCreations: {
+    workspaceLifecycle: {
       revision: revisions.creations,
-      snapshot: () => ({ creations: {} })
-    } as unknown as SidebarInputsFeedSources['workspaceCreations'],
+      creationsSnapshot: () => ({ creations: {} }),
+      hints: () => ({})
+    } as unknown as SidebarInputsFeedSources['workspaceLifecycle'],
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: as above; one cached worktree, already scanned.
     workspaceRows: {
       revision: revisions.rows,
@@ -115,7 +119,8 @@ async function host() {
         store.patchWorkspaceSession({ activeTabId: 'tab-1' }, toRuntimeExecutionHostId('env-1'))
     },
     temporal: { 'retention owner': () => temporal.forEach((listener) => listener()) },
-    creations: { 'creation registry': () => revisions.creations.bump() },
+    creations: { 'lifecycle queue': () => revisions.creations.bump() },
+    inProgress: { 'lifecycle queue': () => revisions.creations.bump() },
     workspaces: { 'workspace rows producer': () => revisions.rows.bump() },
     detected: { 'detected checkouts producer': () => revisions.detected.bump() },
     liveContent: { 'live content producer': () => revisions.liveContent.bump() },
@@ -212,7 +217,8 @@ describe('sidebar inputs feed announcements', () => {
       detach?.()
       return heard.some((change) => change?.urgent === true)
     }
-    expect(urgency('creations', 'creation registry')).toBe(true)
+    expect(urgency('creations', 'lifecycle queue')).toBe(true)
+    expect(urgency('inProgress', 'lifecycle queue')).toBe(true)
     expect(urgency('desktop', 'pin write')).toBe(true)
     expect(urgency('view', 'ui write')).toBe(true)
   })
@@ -245,7 +251,7 @@ describe('sidebar inputs feed announcements', () => {
     }
     phone.notice(notice)
     await phone.settle()
-    const fact = phone.view().review?.[worktree.id]
+    const fact = phone.view().review?.[getWorktreeHostIdentity(worktree)]
     expect(fact).toEqual({ provider: 'github', reviewState: 'merged' })
     expect(prGroupOfReviewFact(feedReviewFact(fact))).toBe('done')
     phone.disconnect()

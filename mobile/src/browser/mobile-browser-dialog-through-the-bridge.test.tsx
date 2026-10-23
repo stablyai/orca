@@ -17,6 +17,8 @@ vi.mock('./use-browser-binary-screencast-grant', () => ({
   useBrowserBinaryScreencastGrant: vi.fn(() => true)
 }))
 
+vi.mock('./MobileBrowserLoadProgress', () => ({ MobileBrowserLoadProgress: () => null }))
+
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
   AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) },

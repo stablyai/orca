@@ -181,6 +181,25 @@ describe('terminal WebView tap routing', () => {
     ).toEqual(['terminal-input', 'terminal-tap'])
   })
 
+  it('marks the mouse report a touch tap sends as a click', async () => {
+    // Why: the program may move its cursor to the tapped cell, so the app orders this report
+    // against the live field's text instead of the wheel queue.
+    const { posted } = boot('interactive prompt', undefined, 'drag')
+    await settle()
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: JSON.stringify({ type: 'write', data: '\u001b[?1006l' })
+      })
+    )
+
+    fireTouch('touchstart', [{ x: 20, y: tapY }])
+    fireTouch('touchend', [])
+
+    const inputs = posted.filter((message) => message.type === 'terminal-input')
+    expect(inputs).toHaveLength(1)
+    expect(inputs[0]?.click).toBe(true)
+  })
+
   it('focuses native input without mouse bytes while the tracking encoding is unproven', async () => {
     const { posted } = boot('interactive prompt', undefined, 'drag')
     await settle()

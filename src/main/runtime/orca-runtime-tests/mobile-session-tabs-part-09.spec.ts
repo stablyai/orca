@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { bindPaneFirst, committingSpawn, registerBoundPty } from '../bind-first-pane.test-fixture'
 import {
   OrcaRuntimeService,
   electronMocks,
@@ -89,7 +90,6 @@ describe('OrcaRuntimeService', () => {
         renameTerminal: vi.fn(),
         focusTerminal: vi.fn(),
         closeTerminal: vi.fn(),
-        sleepWorktree: vi.fn(),
         resumeSleepingAgents,
         terminalFitOverrideChanged: vi.fn(),
         terminalDriverChanged: vi.fn()
@@ -301,7 +301,11 @@ describe('OrcaRuntimeService', () => {
       expect(tap.spawn.mock.calls[0]?.[0]).toMatchObject({ spawnIntent: 'user-resume' })
     })
 
-    function makeRuntimeWithOtherPaneHolder(ptyIds: string[], verdict?: 'exited' | 'unverifiable') {
+    function makeRuntimeWithOtherPaneHolder(
+      ptyIds: string[],
+      verdict?: 'exited' | 'unverifiable',
+      registered = true
+    ) {
       const { runtimeStore } = makeParkedSessionStore('worktree-sleep')
       const parked = makeParkedRuntime(runtimeStore, {
         livePtyIds: ptyIds,
@@ -316,10 +320,17 @@ describe('OrcaRuntimeService', () => {
           ]
         }
       })
-      parked.runtime.registerPty('other-pty', TEST_WORKTREE_ID, null, {
-        tabId: 'other-tab',
-        leafId: HEADLESS_SECOND_LEAF_ID
-      })
+      const otherPane = { tabId: 'other-tab', leafId: HEADLESS_SECOND_LEAF_ID }
+      if (registered) {
+        registerBoundPty(parked.runtime, 'other-pty', TEST_WORKTREE_ID, null, otherPane)
+      } else {
+        // A restart: main's layout saved the pane; its terminal has not re-registered yet.
+        bindPaneFirst(parked.runtime, {
+          ...otherPane,
+          worktreeId: TEST_WORKTREE_ID,
+          ptyId: 'other-pty'
+        })
+      }
       return parked
     }
 
@@ -351,18 +362,7 @@ describe('OrcaRuntimeService', () => {
     })
 
     it('does not resume while the other holder has no host terminal record yet', async () => {
-      const { runtimeStore } = makeParkedSessionStore('worktree-sleep')
-      const { runtime, spawn } = makeParkedRuntime(runtimeStore, {
-        deps: {
-          getAgentProviderSessionSnapshot: () => [
-            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resume guard reads only paneKey and providerSession.
-            {
-              paneKey: `other-tab:${HEADLESS_SECOND_LEAF_ID}`,
-              providerSession: { key: 'session_id', id: 'provider-session-1' }
-            } as never
-          ]
-        }
-      })
+      const { runtime, spawn } = makeRuntimeWithOtherPaneHolder([], undefined, false)
 
       await userActivate(runtime)
 
@@ -711,7 +711,7 @@ describe('OrcaRuntimeService', () => {
     const spawn = vi.fn().mockImplementation(async () => ({ id: `headless-pty-${++nextPty}` }))
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null
@@ -762,7 +762,7 @@ describe('OrcaRuntimeService', () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'headless-pty-solo' })
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null
@@ -785,7 +785,7 @@ describe('OrcaRuntimeService', () => {
     const spawn = vi.fn().mockImplementation(async () => ({ id: `attached-pty-${++nextPty}` }))
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null

@@ -12,7 +12,7 @@ import {
 // policy, decided where the wire is.
 
 // Bump to drop and rebuild: the index is a cache over the transcripts, never a source.
-export const SESSION_SEARCH_SCHEMA_VERSION = 6
+export const SESSION_SEARCH_SCHEMA_VERSION = 7
 
 // unicode61 keeps `_ . - /` inside tokens so paths and identifiers match exactly;
 // the `identifiers` column carries the split form (see session-search-identifier-split).
@@ -78,7 +78,8 @@ CREATE TABLE IF NOT EXISTS messages(
   id INTEGER PRIMARY KEY,
   session_row_id INTEGER NOT NULL,
   role TEXT NOT NULL,
-  ts TEXT
+  ts TEXT,
+  text_truncated INTEGER NOT NULL DEFAULT 0
 );
 -- Both the replace delete and the orphan drain walk a session's rows through this.
 CREATE INDEX IF NOT EXISTS messages_session ON messages(session_row_id);
@@ -99,10 +100,22 @@ export function openSessionSearchDatabase(path: string): SyncDatabase {
   return openVersionedCacheDatabase(path, {
     version: SESSION_SEARCH_SCHEMA_VERSION,
     sql: SCHEMA_SQL,
-    afterSchema: (db) =>
-      db
-        .prepare('INSERT OR IGNORE INTO meta(key, value) VALUES (?, ?)')
-        .run('index_incarnation', randomUUID())
+    afterSchema: (db) => {
+      db.prepare('INSERT OR IGNORE INTO meta(key, value) VALUES (?, ?)').run(
+        'index_incarnation',
+        randomUUID()
+      )
+      // Older Cursor rows omitted the file-time fallback; repair metadata without rereading transcripts.
+      db.exec(`
+        UPDATE sessions SET updated_at = (
+          SELECT strftime('%Y-%m-%dT%H:%M:%fZ', CAST(files.mtime_ms AS INTEGER) / 1000.0, 'unixepoch')
+          FROM files WHERE files.path = sessions.file_path AND files.session_row_id = sessions.id
+        )
+        WHERE agent = 'cursor' AND updated_at IS NULL
+          AND EXISTS (SELECT 1 FROM files WHERE files.path = sessions.file_path
+            AND files.session_row_id = sessions.id)
+      `)
+    }
   })
 }
 

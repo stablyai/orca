@@ -6,7 +6,6 @@ import { resolvePtyBoundActiveLeafId } from '@/components/terminal-pane/terminal
 import type { AppState } from '@/store/types'
 import { layoutContainsLeafId } from '../../../shared/workspace-layout/terminal-pane-tree'
 import type { PublishedWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-published'
-import type { WorkspaceLayoutCache } from '@/store/workspace-layout-cache'
 import { isDrawnTabHeld } from './layout-owner-drawn-tab-holds'
 import { isTabPaneTreeHeld } from './layout-owner-pane-intents'
 
@@ -70,22 +69,4 @@ export function terminalLayoutsWithFrameBindings(
     next = { ...next, [tab.entityId]: { ...current, ptyIdsByLeafId, activeLeafId } }
   }
   return next
-}
-
-/** Every rebound workspace's bindings shown, and the workspaces only a build shows so. */
-export function terminalLayoutsWithReboundFrames(
-  layouts: TerminalLayouts,
-  cache: WorkspaceLayoutCache,
-  rebound: ReadonlyMap<string, ReadonlySet<string>>
-): { layouts: TerminalLayouts; unshown: string[] } {
-  const unshown: string[] = []
-  for (const [key, tabIds] of rebound) {
-    const next = terminalLayoutsWithFrameBindings(layouts, key, cache[key]!, tabIds)
-    if (next) {
-      layouts = next
-    } else {
-      unshown.push(key)
-    }
-  }
-  return { layouts, unshown }
 }

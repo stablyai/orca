@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import { isEditableTarget } from '@/lib/editable-target'
 import {
   NativeChatPasteRequest,
+  findNativeChatAnswerField,
   findNativeChatPasteField,
   nativeChatPasteUnavailableNotice,
   NATIVE_CHAT_PASTE_REQUEST_EVENT
@@ -21,13 +22,37 @@ type NativeChatPasteBridgeRefs = {
   questionAnswerInputRef?: RefObject<HTMLInputElement | null>
 }
 
+/** Text-only on purpose: an answer input takes no image attachments. */
+function pasteClipboardTextInto(input: HTMLInputElement, stillTarget: () => boolean): void {
+  void (async () => {
+    const text = await window.api.ui
+      .readClipboardText({ maxBytes: TEXT_CONTROL_PASTE_MAX_BYTES })
+      .catch(() => '')
+    if (text.length > 0 && stillTarget()) {
+      await pasteTextIntoTextControl(input, text, {
+        source: 'programmatic',
+        canContinue: stillTarget
+      })
+    }
+  })()
+}
+
 export function useNativeChatPasteBridge({
   rootRef,
   composerRef,
   questionAnswerInputRef
-}: NativeChatPasteBridgeRefs): (origin?: HTMLTextAreaElement) => void {
+}: NativeChatPasteBridgeRefs): (origin?: HTMLTextAreaElement | HTMLInputElement) => void {
   const pasteClipboardIntoComposer = useCallback(
-    (origin?: HTMLTextAreaElement, mode: 'paste' | 'paste-and-match-style' = 'paste') => {
+    (
+      origin?: HTMLTextAreaElement | HTMLInputElement,
+      mode: 'paste' | 'paste-and-match-style' = 'paste'
+    ) => {
+      if (origin instanceof HTMLInputElement) {
+        if (findNativeChatAnswerField(origin, rootRef.current) === origin) {
+          pasteClipboardTextInto(origin, () => origin.isConnected)
+        }
+        return
+      }
       if (origin) {
         if (findNativeChatPasteField(origin, rootRef.current) === origin) {
           origin.focus({ preventScroll: true })
@@ -46,21 +71,9 @@ export function useNativeChatPasteBridge({
         return
       }
       const answerInput = questionAnswerInputRef?.current
-      if (!answerInput) {
-        return
+      if (answerInput) {
+        pasteClipboardTextInto(answerInput, () => questionAnswerInputRef?.current === answerInput)
       }
-      // Text-only on purpose: the answer input takes no image attachments.
-      void (async () => {
-        const text = await window.api.ui
-          .readClipboardText({ maxBytes: TEXT_CONTROL_PASTE_MAX_BYTES })
-          .catch(() => '')
-        if (text.length > 0 && questionAnswerInputRef?.current === answerInput) {
-          await pasteTextIntoTextControl(answerInput, text, {
-            source: 'programmatic',
-            canContinue: () => questionAnswerInputRef?.current === answerInput
-          })
-        }
-      })()
     },
     [composerRef, questionAnswerInputRef, rootRef]
   )

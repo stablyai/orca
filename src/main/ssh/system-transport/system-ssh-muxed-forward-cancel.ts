@@ -7,7 +7,7 @@ import { buildSshArgs, type SystemSshBuildArgsOptions } from './system-ssh-args'
 import { findSystemSsh } from './system-ssh-binary'
 import type { SshTarget } from '../../../shared/ssh-types'
 
-export const SYSTEM_SSH_MUXED_FORWARD_CANCEL_TIMEOUT_MS = 5_000
+const SYSTEM_SSH_MUXED_FORWARD_CANCEL_TIMEOUT_MS = 5_000
 
 /** `ssh -G` with the target's own args: the control socket its commands multiplex through. */
 export function buildControlPathQueryArgs(

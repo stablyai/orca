@@ -14,8 +14,8 @@ import { fileSha256 } from '../node-runtime/pinned-runtime-materializer'
 export type ArtifactSource = { filename: string; path: string; executable?: boolean }
 export type ExpectedSha256 = { sha256: string; label: string }
 type SignedSource = OrcadArtifactVerificationRecord['sources'][number]
-export type RecordedSlot = NonNullable<OrcadArtifactVerificationRecord['slot']>
-export type ArtifactIdentity = {
+type RecordedSlot = NonNullable<OrcadArtifactVerificationRecord['slot']>
+type ArtifactIdentity = {
   fullVersion: string
   contentDigest: string
   sourceHashes: Map<string, string>

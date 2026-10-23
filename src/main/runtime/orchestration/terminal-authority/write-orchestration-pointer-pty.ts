@@ -51,11 +51,12 @@ export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRu
       return null
     }
     const pty = this.ptysById.get(ptyId)
+    const pane = pty?.connected ? this.paneOfPty(pty) : null
     const leaf = parked
       ? pty?.connected &&
-        pty.tabId === stagedLeaf.tabId &&
+        pane?.tabId === stagedLeaf.tabId &&
         isTerminalLeafId(stagedLeaf.leafId) &&
-        pty.paneKey === makePaneKey(stagedLeaf.tabId, stagedLeaf.leafId)
+        pane.paneKey === makePaneKey(stagedLeaf.tabId, stagedLeaf.leafId)
         ? {
             ...stagedLeaf,
             writable: true,

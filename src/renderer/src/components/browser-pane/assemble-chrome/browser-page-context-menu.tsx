@@ -8,17 +8,9 @@ import {
   type MutableRefObject
 } from 'react'
 import { createPortal } from 'react-dom'
-import { useAppStore } from '@/store'
-import { translate } from '@/i18n/i18n'
-import { normalizeExternalBrowserUrl } from '../../../../../shared/browser-url'
-import { resolveBrowserSourceUnifiedTab } from '@/lib/browser-workspace-source-resolution'
 import type { BrowserPageContextMenuState } from '../describe-page/browser-page-types'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
-
-// `focus:` rather than `focus-visible:` — items are only ever focused programmatically
-// while the menu is open, so every focus here is keyboard navigation.
-const MENU_ITEM_CLASS =
-  'relative flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium outline-none select-none hover:bg-black/8 focus:bg-black/8 disabled:pointer-events-none disabled:opacity-50 dark:hover:bg-white/14 dark:focus:bg-white/14'
+import { BrowserPageContextMenuItems } from './browser-page-context-menu-items'
 
 export function BrowserPageContextMenu({
   browserPageId,
@@ -35,7 +27,6 @@ export function BrowserPageContextMenu({
   webviewRef: MutableRefObject<Electron.WebviewTag | null>
   onReload: () => void
 }): React.JSX.Element | null {
-  const createBrowserTab = useAppStore((s) => s.createBrowserTab)
   const [contextMenu, setContextMenu] = useState<BrowserPageContextMenuState | null>(null)
   const contextMenuRef = useRef<HTMLDivElement>(null)
 
@@ -50,9 +41,12 @@ export function BrowserPageContextMenu({
       setContextMenu({
         x,
         y,
+        pagePoint: { x: event.x, y: event.y },
         linkUrl: event.linkUrl,
         pageUrl: event.pageUrl,
-        selectionText: event.selectionText ?? ''
+        selectionText: event.selectionText ?? '',
+        editable: event.editable,
+        image: event.image
       })
     })
   }, [browserPageId])
@@ -180,152 +174,18 @@ export function BrowserPageContextMenu({
         onKeyDown={handleMenuKeyDown}
         data-testid="browser-context-menu"
         style={{ left: contextMenu.x, top: contextMenu.y }}
-        className="fixed z-50 min-w-[13rem] overflow-hidden rounded-[11px] border border-black/14 bg-[rgba(255,255,255,0.82)] p-1 text-black shadow-[0_16px_36px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-2xl dark:border-white/14 dark:bg-[rgba(0,0,0,0.72)] dark:text-white dark:shadow-[0_20px_44px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,255,255,0.04)]"
+        className="fixed z-50 max-h-screen min-w-[13rem] scrollbar-sleek overflow-y-auto rounded-[11px] border border-black/14 bg-[rgba(255,255,255,0.82)] p-1 text-black shadow-[0_16px_36px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-2xl dark:border-white/14 dark:bg-[rgba(0,0,0,0.72)] dark:text-white dark:shadow-[0_20px_44px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,255,255,0.04)]"
       >
-        {contextMenu.linkUrl ? (
-          <>
-            <button
-              role="menuitem"
-              className={MENU_ITEM_CLASS}
-              onClick={() => {
-                const sourceUnifiedTab = resolveBrowserSourceUnifiedTab(
-                  useAppStore.getState(),
-                  browserPageId,
-                  worktreeId
-                )
-                createBrowserTab(worktreeId, contextMenu.linkUrl!, {
-                  title: contextMenu.linkUrl!,
-                  activate: false,
-                  ...(sourceUnifiedTab ? { afterTabId: sourceUnifiedTab.id } : {}),
-                  ...(sourceUnifiedTab?.executionHostId
-                    ? { executionHostId: sourceUnifiedTab.executionHostId }
-                    : {})
-                })
-                closeMenu()
-              }}
-            >
-              {translate(
-                'auto.components.browser.pane.BrowserPane.b5b87d6cbb',
-                'Open Link In Orca Browser'
-              )}
-            </button>
-            <button
-              role="menuitem"
-              className={MENU_ITEM_CLASS}
-              onClick={() => {
-                const targetUrl = normalizeExternalBrowserUrl(contextMenu.linkUrl!)
-                if (targetUrl) {
-                  void window.api.shell.openUrl(targetUrl)
-                }
-                closeMenu()
-              }}
-            >
-              {translate(
-                'auto.components.browser.pane.BrowserPane.8ce4f6b12e',
-                'Open Link In Default Browser'
-              )}
-            </button>
-            <button
-              role="menuitem"
-              className={MENU_ITEM_CLASS}
-              onClick={() => {
-                void window.api.ui.writeClipboardText(contextMenu.linkUrl ?? '')
-                closeMenu()
-              }}
-            >
-              {translate(
-                'auto.components.browser.pane.BrowserPane.efb0e8f7f3',
-                'Copy Link Address'
-              )}
-            </button>
-            <div className="my-1 h-px bg-border/70" />
-          </>
-        ) : null}
-        {contextMenu.selectionText.trim() ? (
-          <>
-            <button
-              role="menuitem"
-              className={MENU_ITEM_CLASS}
-              onClick={() => {
-                void window.api.ui.writeClipboardText(contextMenu.selectionText)
-                closeMenu()
-              }}
-            >
-              {translate('auto.components.browser.pane.BrowserPane.2a4c4b8e1f', 'Copy')}
-            </button>
-            <div className="my-1 h-px bg-border/70" />
-          </>
-        ) : null}
-        <button
-          role="menuitem"
-          disabled={!canGoBack}
-          className={MENU_ITEM_CLASS}
-          onClick={() => {
-            webviewRef.current?.goBack()
-            closeMenu()
-          }}
-        >
-          {translate('auto.components.browser.pane.BrowserPane.40edfa75cb', 'Back')}
-        </button>
-        <button
-          role="menuitem"
-          disabled={!canGoForward}
-          className={MENU_ITEM_CLASS}
-          onClick={() => {
-            webviewRef.current?.goForward()
-            closeMenu()
-          }}
-        >
-          {translate('auto.components.browser.pane.BrowserPane.250a9b3e42', 'Forward')}
-        </button>
-        <button
-          role="menuitem"
-          className={MENU_ITEM_CLASS}
-          onClick={() => {
-            onReload()
-            closeMenu()
-          }}
-        >
-          {translate('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')}
-        </button>
-        <div className="my-1 h-px bg-border/70" />
-        <button
-          role="menuitem"
-          className={MENU_ITEM_CLASS}
-          onClick={() => {
-            const targetUrl = normalizeExternalBrowserUrl(contextMenu.pageUrl)
-            if (targetUrl) {
-              void window.api.shell.openUrl(targetUrl)
-            }
-            closeMenu()
-          }}
-        >
-          {translate(
-            'auto.components.browser.pane.BrowserPane.f7ab83f7ed',
-            'Open Page In Default Browser'
-          )}
-        </button>
-        <button
-          role="menuitem"
-          className={MENU_ITEM_CLASS}
-          onClick={() => {
-            void window.api.ui.writeClipboardText(contextMenu.pageUrl)
-            closeMenu()
-          }}
-        >
-          {translate('auto.components.browser.pane.BrowserPane.1b179ab561', 'Copy Page URL')}
-        </button>
-        <div className="my-1 h-px bg-border/70" />
-        <button
-          role="menuitem"
-          className={MENU_ITEM_CLASS}
-          onClick={() => {
-            void window.api.browser.openDevTools({ browserPageId })
-            closeMenu()
-          }}
-        >
-          {translate('auto.components.browser.pane.BrowserPane.a8f37f70c3', 'Inspect Page')}
-        </button>
+        <BrowserPageContextMenuItems
+          menu={contextMenu}
+          browserPageId={browserPageId}
+          worktreeId={worktreeId}
+          canGoBack={canGoBack}
+          canGoForward={canGoForward}
+          webviewRef={webviewRef}
+          onReload={onReload}
+          onClose={closeMenu}
+        />
       </div>
     </>,
     document.body

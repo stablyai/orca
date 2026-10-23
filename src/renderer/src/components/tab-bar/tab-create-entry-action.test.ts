@@ -27,7 +27,8 @@ describe('openTabEntryWithOperations', () => {
     return {
       createRuntimePath: vi.fn().mockResolvedValue(undefined),
       openWorkspaceBrowserTab: vi.fn().mockResolvedValue(undefined),
-      openWorkspaceFile: vi.fn(),
+      openHtmlFilePreview: vi.fn(),
+      openFile: vi.fn(),
       statRuntimePath: vi.fn().mockResolvedValue({ size: 1, isDirectory: false, mtime: 1 }),
       statUserOpenedPath: vi.fn().mockResolvedValue({ isDirectory: false, escapesWorktree: false }),
       assertAbsolutePathAllowed: vi.fn(),
@@ -50,44 +51,6 @@ describe('openTabEntryWithOperations', () => {
     searchEngine: 'google' as const
   }
 
-  it.each(['report.html', '/repo/report.html'])(
-    'requests the default file view for an existing HTML file: %s',
-    async (query) => {
-      const operations = makeOperations()
-      await openTabEntryWithOperations({
-        ...baseArgs,
-        fileList: readyFiles(['report.html']),
-        query,
-        operations
-      })
-      expect(operations.openWorkspaceFile).toHaveBeenCalledWith(
-        expect.objectContaining({
-          kind: 'file',
-          file: expect.objectContaining({ filePath: '/repo/report.html' }),
-          options: { preview: false, targetGroupId: 'group-1' }
-        })
-      )
-      expect(operations.createRuntimePath).not.toHaveBeenCalled()
-    }
-  )
-
-  it('requests source for newly created HTML so it can be edited', async () => {
-    const operations = makeOperations()
-    await openTabEntryWithOperations({ ...baseArgs, query: 'new.html', operations })
-    expect(operations.openWorkspaceFile).toHaveBeenCalledWith({
-      kind: 'file',
-      intent: 'source',
-      file: {
-        filePath: '/repo/new.html',
-        relativePath: 'new.html',
-        worktreeId: 'wt-1',
-        language: 'html',
-        mode: 'edit'
-      },
-      options: { preview: false, targetGroupId: 'group-1' }
-    })
-  })
-
   it.each([true, false])(
     'previews HTML file URLs without creating files (local paths: %s)',
     async (allowAbsolutePaths) => {
@@ -101,8 +64,7 @@ describe('openTabEntryWithOperations', () => {
         query: 'file:///repo/docs/report%20%E4%B8%AD.html',
         operations
       })
-      expect(operations.openWorkspaceFile).toHaveBeenCalledWith({
-        kind: 'preview',
+      expect(operations.openHtmlFilePreview).toHaveBeenCalledWith({
         filePath: '/repo/docs/report 中.html',
         worktreeId: 'wt-1',
         targetGroupId: 'group-1'
@@ -121,7 +83,7 @@ describe('openTabEntryWithOperations', () => {
     await expect(
       openTabEntryWithOperations({ ...baseArgs, query: 'src/index.ts', operations })
     ).rejects.toThrow('Cannot open a directory')
-    expect(operations.openWorkspaceFile).not.toHaveBeenCalled()
+    expect(operations.openFile).not.toHaveBeenCalled()
   })
 
   it('creates new files and opens them in the target group', async () => {
@@ -139,16 +101,13 @@ describe('openTabEntryWithOperations', () => {
       '/repo/docs/new.md',
       'file'
     )
-    expect(operations.openWorkspaceFile).toHaveBeenCalledWith(
+    expect(operations.openFile).toHaveBeenCalledWith(
       expect.objectContaining({
-        kind: 'file',
-        file: expect.objectContaining({
-          filePath: '/repo/docs/new.md',
-          relativePath: 'docs/new.md',
-          worktreeId: 'wt-1'
-        }),
-        options: { preview: false, targetGroupId: 'group-1' }
-      })
+        filePath: '/repo/docs/new.md',
+        relativePath: 'docs/new.md',
+        worktreeId: 'wt-1'
+      }),
+      { preview: false, targetGroupId: 'group-1' }
     )
   })
 
@@ -168,12 +127,9 @@ describe('openTabEntryWithOperations', () => {
     })
 
     expect(operations.createRuntimePath).not.toHaveBeenCalled()
-    expect(operations.openWorkspaceFile).toHaveBeenCalledWith(
-      expect.objectContaining({
-        kind: 'file',
-        file: expect.objectContaining({ relativePath: 'README.md' }),
-        options: { preview: false, targetGroupId: 'group-1' }
-      })
+    expect(operations.openFile).toHaveBeenCalledWith(
+      expect.objectContaining({ relativePath: 'README.md' }),
+      { preview: false, targetGroupId: 'group-1' }
     )
   })
 
@@ -204,15 +160,12 @@ describe('openTabEntryWithOperations', () => {
       '/repo/.tmp/direct-entry-validation/created.md',
       'file'
     )
-    expect(operations.openWorkspaceFile).toHaveBeenCalledWith(
+    expect(operations.openFile).toHaveBeenCalledWith(
       expect.objectContaining({
-        kind: 'file',
-        file: expect.objectContaining({
-          filePath: '/repo/.tmp/direct-entry-validation/created.md',
-          relativePath: '.tmp/direct-entry-validation/created.md'
-        }),
-        options: { preview: false, targetGroupId: 'group-1' }
-      })
+        filePath: '/repo/.tmp/direct-entry-validation/created.md',
+        relativePath: '.tmp/direct-entry-validation/created.md'
+      }),
+      { preview: false, targetGroupId: 'group-1' }
     )
   })
 
@@ -236,7 +189,7 @@ describe('openTabEntryWithOperations', () => {
       '/repo/docs/new.md',
       'file'
     )
-    expect(operations.openWorkspaceFile).toHaveBeenCalled()
+    expect(operations.openFile).toHaveBeenCalled()
   })
 
   it('rejects invalid new file paths before creating parent directories', async () => {
@@ -247,7 +200,7 @@ describe('openTabEntryWithOperations', () => {
     ).rejects.toThrow('File paths cannot contain . or .. segments.')
 
     expect(operations.createRuntimePath).not.toHaveBeenCalled()
-    expect(operations.openWorkspaceFile).not.toHaveBeenCalled()
+    expect(operations.openFile).not.toHaveBeenCalled()
   })
 
   it('stats and opens when create loses an EEXIST race to a file', async () => {
@@ -261,7 +214,7 @@ describe('openTabEntryWithOperations', () => {
     await openTabEntryWithOperations({ ...baseArgs, query: 'docs/race.md', operations })
 
     expect(operations.statRuntimePath).toHaveBeenCalledWith(runtimeContext, '/repo/docs/race.md')
-    expect(operations.openWorkspaceFile).toHaveBeenCalled()
+    expect(operations.openFile).toHaveBeenCalled()
   })
 
   it('routes URL classifications through the workspace browser opener', async () => {
@@ -349,16 +302,13 @@ describe('openTabEntryWithOperations', () => {
     })
 
     expect(operations.statUserOpenedPath).toHaveBeenCalledWith(runtimeContext, '/tmp/notes.md')
-    expect(operations.openWorkspaceFile).toHaveBeenCalledWith(
+    expect(operations.openFile).toHaveBeenCalledWith(
       expect.objectContaining({
-        kind: 'file',
-        file: expect.objectContaining({
-          filePath: '/tmp/notes.md',
-          relativePath: '/tmp/notes.md',
-          worktreeId: 'wt-1'
-        }),
-        options: { preview: false, targetGroupId: 'group-1' }
-      })
+        filePath: '/tmp/notes.md',
+        relativePath: '/tmp/notes.md',
+        worktreeId: 'wt-1'
+      }),
+      { preview: false, targetGroupId: 'group-1' }
     )
   })
 
@@ -372,15 +322,12 @@ describe('openTabEntryWithOperations', () => {
       operations
     })
 
-    expect(operations.openWorkspaceFile).toHaveBeenCalledWith(
+    expect(operations.openFile).toHaveBeenCalledWith(
       expect.objectContaining({
-        kind: 'file',
-        file: expect.objectContaining({
-          filePath: '/repo/src/index.ts',
-          relativePath: 'src/index.ts'
-        }),
-        options: { preview: false, targetGroupId: 'group-1' }
-      })
+        filePath: '/repo/src/index.ts',
+        relativePath: 'src/index.ts'
+      }),
+      { preview: false, targetGroupId: 'group-1' }
     )
   })
 
@@ -396,15 +343,12 @@ describe('openTabEntryWithOperations', () => {
       operations
     })
 
-    expect(operations.openWorkspaceFile).toHaveBeenCalledWith(
+    expect(operations.openFile).toHaveBeenCalledWith(
       expect.objectContaining({
-        kind: 'file',
-        file: expect.objectContaining({
-          filePath: '/repo/docs-link/secret.md',
-          relativePath: '/repo/docs-link/secret.md'
-        }),
-        options: { preview: false, targetGroupId: 'group-1' }
-      })
+        filePath: '/repo/docs-link/secret.md',
+        relativePath: '/repo/docs-link/secret.md'
+      }),
+      { preview: false, targetGroupId: 'group-1' }
     )
   })
 
@@ -423,7 +367,7 @@ describe('openTabEntryWithOperations', () => {
 
     expect(operations.statUserOpenedPath).not.toHaveBeenCalled()
     expect(operations.createRuntimePath).not.toHaveBeenCalled()
-    expect(operations.openWorkspaceFile).not.toHaveBeenCalled()
+    expect(operations.openFile).not.toHaveBeenCalled()
   })
 
   it('rejects Windows path syntax before touching a native POSIX path', async () => {
@@ -439,7 +383,7 @@ describe('openTabEntryWithOperations', () => {
     ).rejects.toThrow('Enter an absolute path for this computer.')
 
     expect(operations.statUserOpenedPath).not.toHaveBeenCalled()
-    expect(operations.openWorkspaceFile).not.toHaveBeenCalled()
+    expect(operations.openFile).not.toHaveBeenCalled()
   })
 
   it('normalizes and opens Windows drive paths on Windows', async () => {
@@ -448,11 +392,7 @@ describe('openTabEntryWithOperations', () => {
     await openTabEntryWithOperations({
       ...baseArgs,
       localPlatform: 'windows',
-      getFileContext: () => ({
-        worktreePath: 'C:/repo',
-        runtimeContext,
-        assertCurrent: () => {}
-      }),
+      getFileContext: () => ({ worktreePath: 'C:/repo', runtimeContext, assertCurrent: () => {} }),
       classification: { kind: 'absolute-file', filePath: 'C:\\tmp\\notes.md' },
       query: 'C:\\tmp\\notes.md',
       operations
@@ -492,6 +432,6 @@ describe('openTabEntryWithOperations', () => {
     releaseStat?.()
     await rejection
 
-    expect(operations.openWorkspaceFile).not.toHaveBeenCalled()
+    expect(operations.openFile).not.toHaveBeenCalled()
   })
 })

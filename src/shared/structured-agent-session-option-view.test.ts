@@ -82,7 +82,7 @@ describe('a Claude model its CLI no longer lists', () => {
     }
   })
 
-  it('keeps a remembered model for a new chat, and offers no effort under a listed model with none', () => {
+  it('keeps a remembered model and effort, including under a model with no listed effort', () => {
     // The placeholder stands until the host answers with the chat's own model; create seeds it.
     expect(carried(withHostList(), remembered)).toBeUndefined()
     const haiku = { id: 'haiku', label: 'Haiku', isDefault: false, efforts: [] }
@@ -91,7 +91,7 @@ describe('a Claude model its CLI no longer lists', () => {
       listedModelIds: ['opus[1m]', 'haiku'],
       current: { model: 'haiku', effort: 'high' }
     })
-    expect(shown(listed, undefined, {})).toEqual({ model: 'haiku', effort: undefined })
+    expect(shown(listed, undefined, {})).toEqual({ model: 'haiku', effort: 'high' })
   })
 })
 

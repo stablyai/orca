@@ -504,7 +504,7 @@ describe('the actual Bun build and profile-test dependency graph', () => {
 
   it.each([
     'config/scripts/ci-shard-timings.json',
-    'config/scripts/mobile-web-app-terminal-render.test.mjs',
+    'config/scripts/mobile-web-app/mobile-web-app-terminal-render.test.mjs',
     'src/renderer/src/components/terminal/pty-running-work-probe.ts',
     'src/renderer/src/runtime/runtime-terminal-inspection.ts',
     'src/main/ssh/ssh-relay-upload-stage-commands.test.ts',

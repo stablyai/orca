@@ -21,8 +21,8 @@ vi.mock('@/store', () => ({ useAppStore: { getState: () => mocks.state } }))
 vi.mock('@/store/selectors', () => ({ getWorktreeOnHostFromState: mocks.getWorktree }))
 vi.mock('@/lib/worktree-activation', () => ({ activateAndRevealWorktree: mocks.activate }))
 vi.mock('@/runtime/runtime-git-status-client', () => ({ getRuntimeGitStatus: mocks.gitStatus }))
-vi.mock('@/lib/workspace-file-open', () => ({
-  openWorkspaceFile: mocks.openEntry
+vi.mock('../right-sidebar/source-control/listing/open-uncommitted-entry', () => ({
+  openUncommittedEntry: mocks.openEntry
 }))
 vi.mock('sonner', () => ({ toast: { error: mocks.error } }))
 
@@ -61,14 +61,13 @@ describe('Space change inspection', () => {
         providesInitialSurface: true,
         executionHostId: hostId
       })
-      expect(mocks.openEntry).toHaveBeenCalledWith({
-        kind: 'uncommitted',
-        intent: 'diff',
-        worktreeId: 'same-id',
-        worktreePath: '/server/workspace',
+      expect(mocks.openEntry).toHaveBeenCalledWith(
+        mocks.state,
+        'same-id',
+        '/server/workspace',
         entry,
-        options: { preview: true, runtimeEnvironmentId }
-      })
+        { preview: true, runtimeEnvironmentId }
+      )
     }
   )
 
@@ -89,7 +88,7 @@ describe('Space change inspection', () => {
     const conflict = { ...entry, conflictKind: 'both_deleted', conflictStatus: 'unresolved' }
     mocks.gitStatus.mockResolvedValue({ entries: [conflict] })
     await revealWorkspaceSpaceChange('same-id', 'local', entry)
-    expect(mocks.openEntry.mock.calls[0][0].entry).toBe(conflict)
+    expect(mocks.openEntry.mock.calls[0][3]).toBe(conflict)
   })
 
   it('reports a stale change without navigating or opening a file', async () => {

@@ -390,6 +390,8 @@ export type AgentSessionOptionChoice = {
 }
 
 export type AgentSessionModelOption = {
+  resolvedModel?: string | null
+  effortsKnown?: false
   id: string
   label: string
   description?: string

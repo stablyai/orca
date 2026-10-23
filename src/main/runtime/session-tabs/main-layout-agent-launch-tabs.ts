@@ -9,6 +9,8 @@ import type {
 import type { AgentLaunchPlacementReceipt } from '../../../shared/agent-launch-intent'
 import type { AgentLaunchPaneAddress } from '../../../shared/agent-launch-pane-verdict'
 import { parseExecutionHostId } from '../../../shared/execution-host'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import type { RuntimePtyWorktreeRecord } from '../runtime-terminal-state-records'
 
 /** Where the tab landed against where the launch asked for it, as the window reports it. */
 function placementFallback(
@@ -23,6 +25,18 @@ function placementFallback(
 }
 
 export abstract class OrcaRuntimeWithMainLayoutAgentLaunchTabs extends OrcaRuntimeWithCloseStructuredAgentSessionTab {
+  protected abstract getPtyRecordForPaneKey(paneKey: string): RuntimePtyWorktreeRecord | null
+
+  /** Whether a running process holds this pane now: such a pane is attached to, never launched into. */
+  hasLiveTerminalForPaneKey(paneKey: string): boolean {
+    const pty = this.getPtyRecordForPaneKey(paneKey)
+    // Switch point: a terminal main's layout still binds may run through a host's listing gap, as
+    // the window kept it connected; only a certified exit frees the pane.
+    return ORCA_LAYOUT_OWNER_IS_MAIN
+      ? !!pty && this.getPtyLivenessVerdict(pty.ptyId)?.status !== 'exited'
+      : pty?.connected === true
+  }
+
   /** Whether main's layout holds the tab's workspace, so main writes the tab itself. */
   private ownsLaunchTab(worktreeId: string, tabId: string): boolean {
     const hostId = this.getWorkspaceSessionHostIdForTab(worktreeId, tabId)

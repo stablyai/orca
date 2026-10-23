@@ -33,22 +33,22 @@ type RemoteInstallProbeOptions = {
 }
 
 /**
- * Read the local relay's content-hashed version (e.g. "0.1.0+0a5fe134d020") from
- * `${localRelayDir}/.version`. Throws on missing/empty so the caller can't
+ * Read the local build's content-hashed version (e.g. "0.1.0+0a5fe134d020") from
+ * `${localDir}/.version`. Throws on missing/empty so the caller can't
  * silently fall back to a path where a stale-generation daemon may be running.
  */
-export function readLocalFullVersion(localRelayDir: string): string {
-  const versionFile = join(localRelayDir, '.version')
+export function readLocalFullVersion(localDir: string): string {
+  const versionFile = join(localDir, '.version')
   if (!existsSync(versionFile)) {
     throw new Error(
-      `Orca's local relay build is missing its version marker at ${versionFile}. ` +
+      `Orca's local server build is missing its version marker at ${versionFile}. ` +
         `This usually indicates a packaging or build problem; reinstall Orca.`
     )
   }
   const v = readFileSync(versionFile, 'utf-8').trim()
   if (!v) {
     throw new Error(
-      `Orca's local relay version marker at ${versionFile} is empty. ` +
+      `Orca's local server version marker at ${versionFile} is empty. ` +
         `This usually indicates a packaging or build problem; reinstall Orca.`
     )
   }

@@ -21,6 +21,7 @@ import { assemblePtyIpcSpawnEnv } from './spawn-env'
 import { preparePtyIpcQoderCommand } from './spawn-qoder-command'
 import { buildPtyIpcSpawnOptions } from './spawn-options'
 import { executePtyIpcSpawn } from './spawn-execute'
+import { attachOnlyViewOf } from '../pane/attach-only-view'
 import { commitPtyIpcSpawn } from './spawn-commit'
 import { createPtyIpcSpawnState, type PtyIpcSpawnState } from './spawn-state'
 import { triggerPtySpawnPushTargetMaterialization } from './spawn-push-target-materialization'
@@ -121,6 +122,7 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, args: PtySpawnIpcArg
         connectionId: args.connectionId,
         renderer: true,
         keepAbsentBinding: keepAbsentBindingForSwap(ctx),
+        attachOnlyView: attachOnlyViewOf(args),
         spawnFresh: async (scope) => (completed = await complete(scope))
       })
       if (adopted) {
@@ -161,6 +163,7 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, args: PtySpawnIpcArg
       reservation: ctx.paneSpawnReservation ?? undefined,
       stoppedPtyId: ctx.replacedPaneOwner?.ptyId,
       keepAbsentBinding: keepAbsentBindingForSwap(ctx),
+      attachOnlyView: attachOnlyViewOf(args),
       spawnFresh: async (operation) => (freshResult = await fresh(operation))
     })
     if (adopted) {

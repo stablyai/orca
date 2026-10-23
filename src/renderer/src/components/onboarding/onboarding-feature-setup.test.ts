@@ -4,12 +4,11 @@ import type {
   ComputerUsePermissionStatusResult
 } from '../../../../shared/computer-use-permissions-types'
 import {
-  buildAgentFeatureSkillInstallCommand,
   COMPUTER_USE_SKILL_NAME,
   ORCA_CLI_SKILL_NAME,
   ORCA_LINEAR_SKILL_NAME,
   ORCHESTRATION_SKILL_NAME
-} from '@/lib/agent-feature-install-commands'
+} from '@/lib/agent-feature-skill-names'
 import { BROWSER_USE_ENABLED_STORAGE_KEY } from '@/lib/browser-use-setup-state'
 import {
   ORCHESTRATION_ENABLED_STORAGE_KEY,
@@ -17,26 +16,19 @@ import {
 } from '@/lib/orchestration-setup-state'
 import {
   DEFAULT_ONBOARDING_FEATURE_SETUP_SELECTION,
-  buildOnboardingFeatureSetupClipboardText,
-  onboardingFeatureSetupRunTelemetry,
+  onboardingFeatureSetupSkillNames,
   onboardingFeatureSetupTelemetryFeature,
-  onboardingFeatureSetupTelemetrySelection,
   runOnboardingFeatureSetup,
   type OnboardingFeatureSetupDeps,
   type OnboardingFeatureSetupSelection
 } from './onboarding-feature-setup'
-import { getOnboardingFeatureSetupAgentRuntime } from './onboarding-feature-setup-runtime'
-import { SKILLS_CLI_VERSION } from '../../../../shared/agent-feature-install-commands'
 
-const ALL_SKILL_INSTALL_COMMAND = buildAgentFeatureSkillInstallCommand([
+const ALL_SKILL_NAMES = [
   ORCA_CLI_SKILL_NAME,
   COMPUTER_USE_SKILL_NAME,
   ORCHESTRATION_SKILL_NAME,
   ORCA_LINEAR_SKILL_NAME
-])
-const ORCHESTRATION_ONLY_SKILL_INSTALL_COMMAND = buildAgentFeatureSkillInstallCommand([
-  ORCHESTRATION_SKILL_NAME
-])
+]
 
 const GRANTED_COMPUTER_USE_STATUS: ComputerUsePermissionStatusResult = {
   platform: 'darwin',
@@ -59,16 +51,10 @@ function createDeps(
   overrides: Partial<OnboardingFeatureSetupDeps> = {}
 ): OnboardingFeatureSetupDeps & {
   storage: Map<string, string>
-  clipboardWrites: string[]
 } {
   const storage = new Map<string, string>()
-  const clipboardWrites: string[] = []
   return {
     storage,
-    clipboardWrites,
-    writeClipboardText: vi.fn(async (text: string) => {
-      clipboardWrites.push(text)
-    }),
     getComputerUsePermissionStatus: vi.fn(async () => GRANTED_COMPUTER_USE_STATUS),
     openComputerUsePermissionSetup: vi.fn(async () => OPENED_COMPUTER_USE_SETUP),
     setStorageItem: vi.fn((key: string, value: string) => {
@@ -80,11 +66,6 @@ function createDeps(
     notifyOrchestrationStateChanged: vi.fn(),
     ...overrides
   }
-}
-
-const WSL_RUNTIME_CONTEXT = {
-  agentRuntime: { runtime: 'wsl' as const, wslDistro: 'Ubuntu', label: 'WSL Ubuntu' },
-  installDisabledReason: null
 }
 
 describe('onboarding feature setup runner', () => {
@@ -101,98 +82,27 @@ describe('onboarding feature setup runner', () => {
     })
   })
 
-  it('builds one skill command for selected onboarding feature setup skills', () => {
-    const text = buildOnboardingFeatureSetupClipboardText({
-      browserUse: true,
-      computerUse: true,
-      orchestration: true,
-      linearTickets: true
-    })
-
-    expect(text).toBe(ALL_SKILL_INSTALL_COMMAND)
-    expect(text).toBe(
-      `npx skills@${SKILLS_CLI_VERSION} add https://github.com/stablyai/orca/tree/${ORCA_BUILD_COMMIT} --skill orca-cli --skill computer-use --skill orchestration --skill orca-linear --global`
-    )
-  })
-
-  it('keeps the copied command valid for the WSL target shell', () => {
-    const text = buildOnboardingFeatureSetupClipboardText(
-      { browserUse: false, computerUse: false, orchestration: true, linearTickets: false },
-      { runtime: 'wsl', wslDistro: 'Ubuntu', label: 'WSL Ubuntu' }
-    )
-
-    expect(text).toBe(ORCHESTRATION_ONLY_SKILL_INSTALL_COMMAND)
-  })
-
-  it('leaves the copied command bare for a host runtime', () => {
-    const text = buildOnboardingFeatureSetupClipboardText(
-      { browserUse: false, computerUse: false, orchestration: true, linearTickets: false },
-      { runtime: 'host', label: 'Windows' }
-    )
-
-    expect(text).toBe(ORCHESTRATION_ONLY_SKILL_INSTALL_COMMAND)
-  })
-
-  it('falls back to the host when the selected runtime needs repair', () => {
+  it('lists the skills for the selected onboarding feature setup items', () => {
     expect(
-      getOnboardingFeatureSetupAgentRuntime({
-        agentRuntime: { runtime: 'wsl', wslDistro: 'Missing', label: 'WSL Missing' },
-        installDisabledReason: 'The selected WSL distro is unavailable.'
+      onboardingFeatureSetupSkillNames({
+        browserUse: true,
+        computerUse: true,
+        orchestration: true,
+        linearTickets: true
       })
-    ).toBeUndefined()
+    ).toEqual(ALL_SKILL_NAMES)
+    expect(
+      onboardingFeatureSetupSkillNames({
+        browserUse: false,
+        computerUse: false,
+        orchestration: true,
+        linearTickets: false
+      })
+    ).toEqual([ORCHESTRATION_SKILL_NAME])
   })
 
-  it('keeps the runner on the host when the selected WSL runtime needs repair', async () => {
-    const deps = createDeps()
-
-    await runOnboardingFeatureSetup(
-      { browserUse: false, computerUse: false, orchestration: true, linearTickets: false },
-      deps,
-      {
-        agentRuntime: { runtime: 'wsl', wslDistro: 'Missing', label: 'WSL Missing' },
-        installDisabledReason: 'The selected WSL distro is unavailable.'
-      }
-    )
-
-    expect(deps.clipboardWrites).toEqual([ORCHESTRATION_ONLY_SKILL_INSTALL_COMMAND])
-  })
-
-  it('builds privacy-safe telemetry payloads for selected feature setup items', () => {
-    const selection: OnboardingFeatureSetupSelection = {
-      browserUse: true,
-      computerUse: false,
-      orchestration: true,
-      linearTickets: true
-    }
-
+  it('maps feature setup items to privacy-safe telemetry ids', () => {
     expect(onboardingFeatureSetupTelemetryFeature('browserUse')).toBe('browser_use')
-    expect(onboardingFeatureSetupTelemetrySelection(selection)).toEqual({
-      browser_use: true,
-      computer_use: false,
-      linear_tickets: true,
-      orchestration: true,
-      selected_count: 2
-    })
-    expect(
-      onboardingFeatureSetupRunTelemetry(selection, {
-        selectedIds: ['browserUse', 'orchestration', 'linearTickets'],
-        skillCommandsCopied: false,
-        skillInstallCommand: ORCHESTRATION_ONLY_SKILL_INSTALL_COMMAND,
-        computerUsePermissionsOpened: false,
-        warnings: [{ featureId: 'skills', message: 'Clipboard unavailable' }]
-      })
-    ).toEqual({
-      browser_use: true,
-      computer_use: false,
-      linear_tickets: true,
-      orchestration: true,
-      selected_count: 2,
-      cli_touched: false,
-      skill_commands_copied: false,
-      skill_install_command_prepared: true,
-      computer_use_permissions_opened: false,
-      warning_count: 1
-    })
   })
 
   it('runs selected feature setup through injected deps only', async () => {
@@ -217,8 +127,7 @@ describe('onboarding feature setup runner', () => {
 
     expect(result).toEqual({
       selectedIds: ['browserUse', 'computerUse', 'orchestration', 'linearTickets'],
-      skillCommandsCopied: true,
-      skillInstallCommand: ALL_SKILL_INSTALL_COMMAND,
+      skillNames: ALL_SKILL_NAMES,
       computerUsePermissionsOpened: true,
       warnings: []
     })
@@ -228,17 +137,6 @@ describe('onboarding feature setup runner', () => {
     expect(deps.storage.get(ORCHESTRATION_ENABLED_STORAGE_KEY)).toBe('1')
     expect(deps.removeStorageItem).toHaveBeenCalledWith(ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY)
     expect(deps.notifyOrchestrationStateChanged).toHaveBeenCalledTimes(1)
-    expect(deps.clipboardWrites).toEqual([ALL_SKILL_INSTALL_COMMAND])
-  })
-
-  it('installs WSL skills without checking or changing CLI registration', async () => {
-    const deps = createDeps()
-    const result = await runOnboardingFeatureSetup(
-      { browserUse: false, computerUse: false, orchestration: true, linearTickets: false },
-      deps,
-      WSL_RUNTIME_CONTEXT
-    )
-    expect(result.skillInstallCommand).toBe(ORCHESTRATION_ONLY_SKILL_INSTALL_COMMAND)
   })
 
   it('keeps invasive Browser Use and Computer Use setup untouched when only Orchestration is selected', async () => {
@@ -253,14 +151,12 @@ describe('onboarding feature setup runner', () => {
     const result = await runOnboardingFeatureSetup(selection, deps)
 
     expect(result.selectedIds).toEqual(['orchestration'])
-    expect(result.skillCommandsCopied).toBe(true)
-    expect(result.skillInstallCommand).toBe(ORCHESTRATION_ONLY_SKILL_INSTALL_COMMAND)
+    expect(result.skillNames).toEqual([ORCHESTRATION_SKILL_NAME])
     expect(result.computerUsePermissionsOpened).toBe(false)
     expect(deps.getComputerUsePermissionStatus).not.toHaveBeenCalled()
     expect(deps.openComputerUsePermissionSetup).not.toHaveBeenCalled()
     expect(deps.storage.get(BROWSER_USE_ENABLED_STORAGE_KEY)).toBe('0')
     expect(deps.storage.get(ORCHESTRATION_ENABLED_STORAGE_KEY)).toBe('1')
-    expect(deps.clipboardWrites).toEqual([ORCHESTRATION_ONLY_SKILL_INSTALL_COMMAND])
   })
 
   it('clears feature markers when no setup items are selected', async () => {
@@ -273,41 +169,16 @@ describe('onboarding feature setup runner', () => {
 
     expect(result).toEqual({
       selectedIds: [],
-      skillCommandsCopied: false,
-      skillInstallCommand: null,
+      skillNames: [],
       computerUsePermissionsOpened: false,
       warnings: []
     })
     expect(deps.storage.get(BROWSER_USE_ENABLED_STORAGE_KEY)).toBe('0')
     expect(deps.storage.get(ORCHESTRATION_ENABLED_STORAGE_KEY)).toBe('0')
     expect(deps.getComputerUsePermissionStatus).not.toHaveBeenCalled()
-    expect(deps.clipboardWrites).toEqual([])
   })
 
-  it('warns when selected skill commands cannot be copied', async () => {
-    const deps = createDeps({
-      writeClipboardText: vi.fn(async () => {
-        throw new Error('Clipboard unavailable')
-      })
-    })
-
-    const result = await runOnboardingFeatureSetup(
-      { browserUse: false, computerUse: false, orchestration: true, linearTickets: false },
-      deps
-    )
-
-    expect(result.skillCommandsCopied).toBe(false)
-    expect(result.skillInstallCommand).toBe(ORCHESTRATION_ONLY_SKILL_INSTALL_COMMAND)
-    expect(result.warnings).toEqual([
-      {
-        featureId: 'skills',
-        message: 'Clipboard unavailable'
-      }
-    ])
-    expect(deps.clipboardWrites).toEqual([])
-  })
-
-  it('skips openSetup and warns when the macOS Computer Use helper app is unavailable', async () => {
+  it('keeps main’s skill selection but skips permissions when the Computer Use helper is unavailable', async () => {
     // Why: getComputerUsePermissionStatus reports helperUnavailableReason with
     // all permissions set to not-granted when the helper app is missing (e.g.
     // a dev build that never ran `pnpm build:computer-macos`). The runner must
@@ -332,6 +203,7 @@ describe('onboarding feature setup runner', () => {
       deps
     )
 
+    expect(result.skillNames).toEqual(['orca-cli', 'computer-use', 'orchestration', 'orca-linear'])
     expect(result.computerUsePermissionsOpened).toBe(false)
     expect(openComputerUsePermissionSetup).not.toHaveBeenCalled()
     expect(result.warnings).toContainEqual({

@@ -76,7 +76,7 @@ describe('OrchestrationDb', () => {
       const m1 = d.insertMessage({ runId, from: 'a', to: 'b', subject: 'one' })
       const m2 = d.insertMessage({ runId, from: 'a', to: 'b', subject: 'two' })
 
-      d.markAsDelivered([m1.id])
+      d.markAsDelivered([m1.id], 'b')
 
       // Push delivery query: only undelivered, unread.
       const pending = d.getUndeliveredUnreadMessages('b')

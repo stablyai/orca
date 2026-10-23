@@ -10,6 +10,7 @@ import {
   STRUCTURED_LAUNCH_SEED_OPTION_IDS
 } from './native-chat-session-option-defaults'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from './agent-chat-permission-mode'
+import { usesInstalledAgentModelCatalog } from './agent-model-catalog-ownership'
 import {
   structuredAgentSessionDescribedModel,
   structuredAgentSessionShownModel
@@ -49,7 +50,7 @@ export function structuredAgentSessionOptionCatalog(
 
 export type StructuredAgentSessionOptionState = {
   catalog: AgentSessionOptionCatalog | null
-  /** What produced `catalog`; a weaker source never replaces a stronger one. `seed` is the
+  /** What answered `catalog`, not proof of current child eligibility. `seed` is the
    *  built-in list before the host answered (shown as the quiet placeholder); `builtin` is the
    *  same list once the host said it has none, usable but naming nothing the host may replace. */
   catalogSource: 'seed' | 'builtin' | 'host' | 'live' | null
@@ -65,6 +66,8 @@ export type StructuredAgentSessionOptionState = {
   /** The permission mode the host or launch last stated; null shows no picker. */
   permissionMode: string | null
   pendingId: string | null
+  listingInProgress?: boolean
+  fastModeRestricted?: boolean
 }
 
 /** With `seedCatalog`, the state holds the static seed from the first frame, but the picker shows
@@ -85,9 +88,13 @@ export function createStructuredAgentSessionOptionState(
 /** The host answered with no list (none saved, a failed read, or an older host): the built-in
  *  list becomes usable, still naming nothing until a host or session list does. */
 export function settleStructuredAgentSessionBuiltinCatalog(
-  state: StructuredAgentSessionOptionState
+  state: StructuredAgentSessionOptionState,
+  listingInProgress = state.listingInProgress
 ): StructuredAgentSessionOptionState {
-  return state.catalogSource === 'seed' ? { ...state, catalogSource: 'builtin' } : state
+  const catalogSource = state.catalogSource === 'seed' ? 'builtin' : state.catalogSource
+  return catalogSource === state.catalogSource && state.listingInProgress === listingInProgress
+    ? state
+    : { ...state, catalogSource, listingInProgress }
 }
 
 function isListedModelRow(row: unknown): row is { id: string } {
@@ -116,16 +123,20 @@ export function finishedListingIds(catalog: AgentSessionModelCatalogResult): str
 /**
  * Applies the host's stored model catalog: models only, no current selection
  * and no record writes, so nothing here reads as a committed value — the pick
- * stays provisional until a live options result confirms it. A live catalog
- * is never replaced by this.
+ * stays provisional until an options result confirms it.
  */
 export function applyStructuredAgentSessionModelCatalog(
   state: StructuredAgentSessionOptionState,
   seed: AgentSessionOptionCatalog,
   catalog: AgentSessionModelCatalogResult,
-  options: { newLaunch: boolean }
+  options: { newLaunch: boolean; coherentCatalog?: boolean }
 ): StructuredAgentSessionOptionState {
-  if (state.catalogSource === 'live') {
+  const installed = usesInstalledAgentModelCatalog(state.record.agent, options.coherentCatalog)
+  const listingInProgress = installed && catalog.listingInProgress === true
+  if (Boolean(state.listingInProgress) !== listingInProgress) {
+    state = { ...state, listingInProgress }
+  }
+  if (state.catalogSource === 'live' && !installed) {
     return state
   }
   const models =
@@ -134,7 +145,7 @@ export function applyStructuredAgentSessionModelCatalog(
       : catalog.models.map((model) =>
           discoveredModel(model, catalog.fastModeSupport?.supported === true)
         )
-  if (catalog.origin === 'unknown' || models.length === 0) {
+  if (catalog.origin === 'unknown' || (!installed && models.length === 0)) {
     return settleStructuredAgentSessionBuiltinCatalog(state)
   }
   // The host says whether its listed default is what this launch runs; an older host never says,
@@ -147,11 +158,12 @@ export function applyStructuredAgentSessionModelCatalog(
     // `isDefault` came from a real listing, so a launch's CLI default is nameable —
     // as a provisional `default`-source value, never a confirmed one.
     catalog: {
-      ...seed,
+      ...(state.catalogSource === 'live' ? (state.catalog ?? seed) : seed),
       models,
       ...(namesDefault ? { defaultModelIsCliDefault: true } : {})
     },
-    catalogSource: 'host'
+    ...(installed ? { verifiedModelIds: finishedListingIds(catalog) } : {}),
+    catalogSource: state.catalogSource === 'live' ? 'live' : 'host'
   }
 }
 
@@ -161,9 +173,10 @@ export function applyStructuredAgentSessionOptions(
   result: AgentSessionOptionsResult,
   /** Whether this view started the chat, which runs the default it shows until its first send.
    *  Absent reads as a chat it did not start, which never names a default as its own. */
-  launch: { newLaunch: boolean } = { newLaunch: false }
+  launch: { newLaunch: boolean; coherentCatalog?: boolean } = { newLaunch: false }
 ): StructuredAgentSessionOptionState {
   const { current } = result
+  const installed = usesInstalledAgentModelCatalog(state.record.agent, launch.coherentCatalog)
   // A value the host supplied from a catalog default is context for the picker, not the chat's own.
   replaceStructuredAgentSessionAnsweredValues(
     state.record,
@@ -182,11 +195,19 @@ export function applyStructuredAgentSessionOptions(
   )
   return {
     ...state,
-    catalog: structuredAgentSessionOptionCatalog(seed, result),
-    catalogSource: 'live',
+    catalog: installed ? state.catalog : structuredAgentSessionOptionCatalog(seed, result),
+    fastModeRestricted:
+      installed &&
+      result.fastModeSupport?.supported === false &&
+      result.fastModeSupport.reason !== 'model-not-supported',
+    catalogSource: installed && state.catalogSource === 'seed' ? 'seed' : 'live',
     olderHost: current.defaulted === undefined ? true : undefined,
     defaultsUnsent: current.defaulted !== undefined && !launch.newLaunch ? true : undefined,
-    verifiedModelIds: result.listedModelIds?.length ? result.listedModelIds : undefined,
+    verifiedModelIds: installed
+      ? state.verifiedModelIds
+      : result.listedModelIds?.length
+        ? result.listedModelIds
+        : undefined,
     permissionMode: result.current.permissionMode ?? null
   }
 }

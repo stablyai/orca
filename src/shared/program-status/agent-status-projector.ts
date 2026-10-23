@@ -10,6 +10,7 @@ import {
   programStatusFacetsEqual,
   type ProgramStatusFacet
 } from './facet'
+import { isTurnScopedProgramStatusKind } from './protocol'
 import { ProgramStatusRecordSet, type ProgramStatusRecord } from './records'
 
 /** OSC 7501 `app` ids whose Orca agent id differs. Other apps pass through verbatim. */
@@ -40,8 +41,8 @@ function boundedChildId(id: string): string {
 }
 
 function blockedState(record: ProgramStatusRecord): 'waiting' | 'blocked' {
-  // Why: Orca's hooks report approvals and questions as `waiting`; auth and unnamed blocks stay `blocked`.
-  return record.kind === 'permission' || record.kind === 'question' ? 'waiting' : 'blocked'
+  // Why: Orca's hooks report approvals and questions as `waiting`.
+  return isTurnScopedProgramStatusKind(record.kind) ? 'waiting' : 'blocked'
 }
 
 function subagentState(record: ProgramStatusRecord): AgentSubagentState | null {

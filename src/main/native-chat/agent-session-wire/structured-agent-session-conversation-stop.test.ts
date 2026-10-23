@@ -197,13 +197,14 @@ async function statusRows(): Promise<string[]> {
 }
 
 describe('a Stop that names no turn', () => {
-  it('does not let a stalled catalog hold an option pick, steer, Stop, or replacement send', async () => {
+  it('does not let independent discovery hold an option pick, Stop, or replacement send', async () => {
     const pending = Promise.withResolvers<unknown>()
     const codex = fakeCodex({ 'model/list': () => pending.promise })
     codex.routes['turn/start'] = answerWithOpenedTurn(codex, 'turn-1')
     codex.routes['turn/steer'] = () => ({ turn: { id: 'turn-1' } })
     const adapter = adapterFor(codex, { codexHome: '/codex/home' }, [], {
-      modelCatalog: new AgentModelCatalogStore()
+      modelCatalog: new AgentModelCatalogStore(),
+      demandModelCatalog: () => pending.promise
     })
     await acquireReadyCodexForTest(adapter, {
       identity: identityFor(SESSION),
@@ -255,7 +256,9 @@ describe('a Stop that names no turn', () => {
       codex.connections[0].calls.filter((call) => call.method === 'turn/start')[1]?.params
     ).toMatchObject({ serviceTier: 'priority' })
     pending.resolve({ data: [], nextCursor: null })
-    await expect(listing).rejects.toThrow('no available models')
+    await expect(listing).resolves.toMatchObject({
+      current: { model: 'gpt-next', serviceTier: 'priority' }
+    })
   })
 
   // Codex can abort a turn before it starts: it answers the interrupt, then ends the turn it never
@@ -390,7 +393,8 @@ describe('a Stop that names no turn', () => {
       return answerWithOpenedTurn(codex, 'turn-ok')(params)
     }
     const adapter = adapterFor(codex, { codexHome: '/codex/home' }, [], {
-      modelCatalog: new AgentModelCatalogStore()
+      modelCatalog: new AgentModelCatalogStore(),
+      demandModelCatalog: () => pending.promise
     })
     await acquireReadyCodexForTest(adapter, {
       identity: identityFor(SESSION),

@@ -6,7 +6,7 @@ import type {
 } from './agent-session-journal-types'
 import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
 import { isQueuedAgentJournalSubmission } from './agent-session-queued-submission'
-import { collapseProviderRetryRuns } from './native-chat-provider-retry-runs'
+import { collapseProviderRetryRuns } from './native-chat/native-chat-provider-retry-runs'
 import {
   keepStoppedSendsInSendOrder,
   placeStoppedSends,

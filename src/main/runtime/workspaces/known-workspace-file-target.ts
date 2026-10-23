@@ -15,6 +15,7 @@ import { findRuntimeWorkspaceFileOwner } from '../../../shared/runtime-workspace
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { randomUUID } from 'node:crypto'
 import type { PtyIncarnationId } from '../../../shared/pty-incarnation'
+import { forgetPtySurface } from '../pty-recorded-surface-topology'
 
 export abstract class OrcaRuntimeWithResolveKnownWorkspaceFileTarget extends OrcaRuntimeWithPersistHeadlessTerminalTitle {
   protected abstract listResolvedWorktrees(
@@ -228,8 +229,7 @@ export abstract class OrcaRuntimeWithResolveKnownWorkspaceFileTarget extends Orc
     if (changedIncarnation) {
       const priorHandle = this.handleByPtyId.get(ptyId)
       this.invalidateAllHandlesForPty(ptyId)
-      pty!.tabId = null
-      pty!.paneKey = null
+      forgetPtySurface(pty!)
       // Reusing an exported handle would make stale client metadata name the replacement process.
       if (priorHandle === trimmed) {
         return

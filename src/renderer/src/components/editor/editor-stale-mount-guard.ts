@@ -50,9 +50,13 @@ export function settleStaleCacheReload(fileId: string): void {
 export function mayPushTabTextIntoModel(fileId: string): boolean {
   const state = useAppStore.getState()
   const file = state.openFiles.find((openFile) => openFile.id === fileId)
-  if (!file || file.isDirty) {
-    // Why: a dirty tab's text is its own edits.
+  if (!file) {
     return true
+  }
+  if (file.isDirty) {
+    // Why: a dirty view's text is its draft; with no draft (host-mirrored dirty, dropped draft) its
+    // text is disk-derived and must not overwrite the shared model's unsaved edits.
+    return state.editorDrafts[fileId] !== undefined
   }
   // Why backstop: a clean tab's leftover draft is never restored into the model, whatever its state.
   if (state.editorDrafts[fileId] !== undefined) {

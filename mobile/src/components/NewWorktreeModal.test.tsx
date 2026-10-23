@@ -84,8 +84,11 @@ function sourceInputs(renderer: ReactTestRenderer) {
   )
 }
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the modal only sends requests.
-const requestsOnly = (sendRequest: unknown) => ({ sendRequest }) as unknown as RpcClient
+function requestsOnly(sendRequest: RpcClient['sendRequest']): RpcClient {
+  const client = new FakeSession('connected')
+  client.sendRequest.mockImplementation(sendRequest)
+  return client
+}
 
 function runTargetPicker(renderer: ReactTestRenderer) {
   return renderer.root
@@ -122,7 +125,7 @@ describe('NewWorktreeModal project targets', () => {
       }
       return new Promise(() => {})
     })
-    const client = { sendRequest } as unknown as RpcClient
+    const client = requestsOnly(sendRequest)
 
     await act(async () => {
       renderer = create(
@@ -161,8 +164,8 @@ describe('NewWorktreeModal project targets', () => {
         upstream: { owner: 'stablyai', repo: 'orca' }
       }
     ]
-    const client = {
-      sendRequest: vi.fn().mockImplementation((method: string) => {
+    const client = requestsOnly(
+      vi.fn().mockImplementation((method: string) => {
         if (method === 'repo.list') {
           return Promise.resolve({ ok: true, result: { repos: listedRepos } })
         }
@@ -171,7 +174,7 @@ describe('NewWorktreeModal project targets', () => {
         }
         return new Promise(() => {})
       })
-    } as unknown as RpcClient
+    )
 
     await act(async () => {
       renderer = create(
@@ -248,7 +251,7 @@ describe('NewWorktreeModal project targets', () => {
       }
       return Promise.resolve({ ok: true, result: {} })
     })
-    const client = { sendRequest } as unknown as RpcClient
+    const client = requestsOnly(sendRequest)
 
     await act(async () => {
       renderer = create(
@@ -304,7 +307,7 @@ describe('NewWorktreeModal project targets', () => {
       }
       return Promise.resolve({ ok: true, result: {} })
     })
-    const client = { sendRequest } as unknown as RpcClient
+    const client = requestsOnly(sendRequest)
 
     await act(async () => {
       renderer = create(
@@ -320,7 +323,7 @@ describe('NewWorktreeModal project targets', () => {
     await flushUpdates()
 
     expect(renderer.root.findAll((node) => node.props.label === 'Workspace name')).toHaveLength(1)
-    expect(sendRequest).toHaveBeenCalledWith('preflight.detectAgents')
+    expect(sendRequest).toHaveBeenCalledWith('preflight.detectAgents', { repoId: 'folder-1' })
     expect(sendRequest).not.toHaveBeenCalledWith('ssh.getState', expect.anything())
     expect(sendRequest.mock.calls.map(([method]) => method)).not.toContain(
       'worktree.prefetchCreateBase'
@@ -465,16 +468,16 @@ describe('NewWorktreeModal project targets', () => {
     const listCalls = () =>
       desktop.sendRequest.mock.calls.filter(([method]) => method === MOBILE_RELAY_HOSTS_LIST_METHOD)
     // The host list's own names: no server rows have loaded behind a sheet opened from Home.
-    const sheet = (routeVisible: boolean) =>
+    const sheet = (visible: boolean) =>
       createElement(NewWorktreeModalController, {
-        routeVisible,
+        visible,
         client: desktop,
         hostCapabilities: [MOBILE_DESKTOP_RELAY_RUNTIME_CAPABILITY],
         hostId: 'host-1',
         hostLabelById: new Map(),
         openExternalUrl: () => {},
         onCreated: () => {},
-        onRouteVisibleChange: () => {}
+        onClose: () => {}
       })
 
     await act(async () => {
@@ -556,16 +559,16 @@ describe('NewWorktreeModal project targets', () => {
       resolveOldList = resolve
     })
     const freshRepo = { ...repos[0]!, id: 'repo-fresh', displayName: 'fresh' }
-    const oldClient = {
-      sendRequest: vi.fn().mockImplementation((method: string) => {
+    const oldClient = requestsOnly(
+      vi.fn().mockImplementation((method: string) => {
         if (method === 'repo.list') {
           return oldList
         }
         return new Promise(() => {})
       })
-    } as unknown as RpcClient
-    const freshClient = {
-      sendRequest: vi.fn().mockImplementation((method: string) => {
+    )
+    const freshClient = requestsOnly(
+      vi.fn().mockImplementation((method: string) => {
         if (method === 'repo.list') {
           return Promise.resolve({ ok: true, result: { repos: [freshRepo] } })
         }
@@ -574,7 +577,7 @@ describe('NewWorktreeModal project targets', () => {
         }
         return new Promise(() => {})
       })
-    } as unknown as RpcClient
+    )
     const modalProps = {
       visible: true,
       hostId: 'host-1',
@@ -605,7 +608,7 @@ describe('NewWorktreeModal project targets', () => {
 
   it('remounts before the reopened session renders, so no stale instance sees visible', async () => {
     const sendRequest = vi.fn().mockImplementation(() => new Promise(() => {}))
-    const client = { sendRequest } as unknown as RpcClient
+    const client = requestsOnly(sendRequest)
     const modalProps = {
       client,
       hostId: 'host-1',
@@ -630,8 +633,8 @@ describe('NewWorktreeModal project targets', () => {
   // remounted the modal mid-edit and silently threw away the picked source.
   it('keeps the picked source when a reconnect swaps the client for the same host', async () => {
     const makeClient = () =>
-      ({
-        sendRequest: vi.fn().mockImplementation((method: string) => {
+      requestsOnly(
+        vi.fn().mockImplementation((method: string) => {
           if (method === 'repo.list') {
             return Promise.resolve({ ok: true, result: { repos } })
           }
@@ -640,7 +643,7 @@ describe('NewWorktreeModal project targets', () => {
           }
           return new Promise(() => {})
         })
-      }) as unknown as RpcClient
+      )
     const modalProps = {
       visible: true,
       hostId: 'host-1',
@@ -681,9 +684,7 @@ describe('NewWorktreeModal project targets', () => {
 
   it('keeps the form when a host switch renders but never commits', async () => {
     setCachedRepos('host-2', repos)
-    const client = {
-      sendRequest: vi.fn().mockImplementation(() => new Promise(() => {}))
-    } as unknown as RpcClient
+    const client = requestsOnly(vi.fn().mockImplementation(() => new Promise(() => {})))
     const modalProps = { visible: true, client, onCreated: () => {}, onClose: () => {} }
     let frozen = false
     const tree = (hostId: string) =>
@@ -708,9 +709,7 @@ describe('NewWorktreeModal project targets', () => {
   })
 
   it('keeps the form when a close renders but never commits', async () => {
-    const client = {
-      sendRequest: vi.fn().mockImplementation(() => new Promise(() => {}))
-    } as unknown as RpcClient
+    const client = requestsOnly(vi.fn().mockImplementation(() => new Promise(() => {})))
     const modalProps = {
       client,
       hostId: 'host-1',
@@ -744,9 +743,7 @@ describe('NewWorktreeModal project targets', () => {
 
   it('starts a fresh form session when the modal switches hosts', async () => {
     setCachedRepos('host-2', repos)
-    const client = {
-      sendRequest: vi.fn().mockImplementation(() => new Promise(() => {}))
-    } as unknown as RpcClient
+    const client = requestsOnly(vi.fn().mockImplementation(() => new Promise(() => {})))
     const modalProps = { visible: true, client, onCreated: () => {}, onClose: () => {} }
 
     await act(async () => {
@@ -762,9 +759,7 @@ describe('NewWorktreeModal project targets', () => {
   })
 
   it('starts with fresh form state after closing and reopening', async () => {
-    const client = {
-      sendRequest: vi.fn().mockImplementation(() => new Promise(() => {}))
-    } as unknown as RpcClient
+    const client = requestsOnly(vi.fn().mockImplementation(() => new Promise(() => {})))
     const modalProps = {
       client,
       hostId: 'host-1',

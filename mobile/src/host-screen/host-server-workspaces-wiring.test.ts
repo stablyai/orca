@@ -126,7 +126,7 @@ async function mountScreen(first: RpcClient, hostCapabilities: string[]): Promis
   function Probe(): null {
     const [, setTick] = useState(0)
     rerender = () => setTick((tick) => tick + 1)
-    const state = useHostScreenState('host-1', undefined)
+    const state = useHostScreenState('host-1')
     state.clientRef.current = client
     const catalog = useHostWorktreeCatalog({
       client,

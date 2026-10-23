@@ -23,6 +23,7 @@ import type {
 } from '../../../shared/workspace-layout/workspace-layout-beside'
 import { loadWorkspaceLayoutWithoutReport } from '../../../shared/workspace-layout/workspace-layout-load'
 import { nameBasedLoadContext } from '../../../shared/workspace-layout/workspace-layout-minted-ids'
+import { withPendingTabFacts } from './layout-owner-pending-tab-facts'
 
 /** What the window's own commands hold as drawn; see buildLayoutFrameStorePatch. */
 export type LayoutFrameBuildHolds = {
@@ -45,7 +46,8 @@ function patchFromSlices(
 ): LayoutFrameBuildPatch {
   const built = buildLayoutFrameSlices({
     layouts: Object.fromEntries(keys.map((key) => [key, cache[key]!])),
-    facts,
+    // A tab this window asked main to open draws with the window's facts for it.
+    facts: withPendingTabFacts(facts, keys),
     view
   })
   return buildLayoutFrameStorePatch(

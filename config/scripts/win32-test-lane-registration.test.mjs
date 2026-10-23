@@ -295,7 +295,7 @@ function readWindowsWorkflow() {
       )
     }
     const run = String(step.run ?? '')
-    if (!run.includes('vitest run')) {
+    if (!/(?:vitest|vitest\.mjs) run/.test(run)) {
       throw new Error(`The "${name}" step no longer invokes vitest; this guard is stale.`)
     }
     return run

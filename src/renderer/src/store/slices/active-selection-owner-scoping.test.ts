@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import { createBrowserMockApi, createTestStore } from './browser-slice-test-harness'
+import { createBrowserMockApi } from './browser-slice-test-harness'
 import { createEditorTabsStore } from './editor-slice-test-harness'
 import { createTestStore as createAppStore, makeWorktree, seedStore } from './store-test-helpers'
 import { drawTabsFromMain } from './tabs-drawn-from-main.test-fixture'
@@ -127,12 +127,17 @@ describe('selection in a workspace other than the active one', () => {
     expect(store.getState().activeFileId).toBe(fileId)
   })
 
-  it('records a browser selection in its own workspace without moving the global surface', () => {
-    const store = createTestStore()
+  it('records a browser selection in its own workspace without moving the global surface', async () => {
+    const store = createAppStore()
+    seedStore(store, { activeWorktreeId: 'wt-1' })
+    // A layout-owner build draws the tabs from main's frame before they can be selected.
+    const main = await drawTabsFromMain(store)
     const mainTab = store.getState().createBrowserTab('wt-1', 'https://main.example.com')
     const floatingTab = store
       .getState()
       .createBrowserTab(FLOATING_TERMINAL_WORKTREE_ID, 'https://floating.example.com')
+    await main.settle()
+    main.close()
     store.getState().setActiveBrowserTab(mainTab.id)
     store.setState({ activeTabType: 'editor' })
 
@@ -145,9 +150,13 @@ describe('selection in a workspace other than the active one', () => {
     expect(state.activeTabTypeByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toBe('browser')
   })
 
-  it('still moves the global browser surface for the active workspace', () => {
-    const store = createTestStore()
+  it('still moves the global browser surface for the active workspace', async () => {
+    const store = createAppStore()
+    seedStore(store, { activeWorktreeId: 'wt-1' })
+    const main = await drawTabsFromMain(store)
     const tab = store.getState().createBrowserTab('wt-1', 'https://main.example.com')
+    await main.settle()
+    main.close()
     store.setState({ activeTabType: 'editor' })
 
     store.getState().setActiveBrowserTab(tab.id)

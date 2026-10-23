@@ -137,6 +137,10 @@ function ImageHarness({
       </button>
       <p>text</p>
       <textarea aria-label="composer" />
+      <div role="textbox" aria-label="prompt" contentEditable suppressContentEditableWarning>
+        typo
+        <span contentEditable={false}>pill</span>
+      </div>
       {menu}
     </div>
   )
@@ -223,12 +227,28 @@ describe('useNativeChatContextMenu', () => {
     expect(copyTextItem()).toBeUndefined()
   })
 
-  it('offers Paste in a text field but not on the transcript', () => {
+  it.each(['composer', 'prompt'])(
+    'leaves a right-click in the %s field to the native menu with spelling suggestions',
+    (name) => {
+      const markPlainTextContextMenuTarget = vi.fn()
+      vi.stubGlobal('api', { ui: { markPlainTextContextMenuTarget } })
+      render(<ImageHarness />)
+      const field = screen.getByRole('textbox', { name })
+
+      // fireEvent returns false when the handler prevented the default.
+      expect(fireEvent.pointerDown(field, { button: 2 })).toBe(true)
+      expect(fireEvent.contextMenu(field)).toBe(true)
+      expect(markPlainTextContextMenuTarget).toHaveBeenCalledOnce()
+      expect(pasteItem()).toBeUndefined()
+    }
+  )
+
+  it('keeps the chat menu on the transcript and on a pill inside the prompt', () => {
     render(<ImageHarness />)
-    fireEvent.contextMenu(screen.getByText('text'))
+    expect(fireEvent.contextMenu(screen.getByText('text'))).toBe(false)
     expect(pasteItem()).toBeUndefined()
 
-    fireEvent.contextMenu(screen.getByRole('textbox', { name: 'composer' }))
+    expect(fireEvent.contextMenu(screen.getByText('pill'))).toBe(false)
     expect(pasteItem()).toBeDefined()
   })
 

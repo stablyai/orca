@@ -3,7 +3,7 @@
 
 import type { AgentType } from './agent-status-types'
 import { getVerifiedNativeChatCommands } from './native-chat-agent-profiles'
-import { surfaceSkillInvocationUserTurns } from './native-chat-command-envelope'
+import { surfaceSkillInvocationUserTurns } from './native-chat/native-chat-command-envelope'
 import { surfaceNativeChatCommandOutputs } from './native-chat-command-output'
 import { normalizeImageTranscriptMessages } from './native-chat-image-transcript-markers'
 import type { NativeChatMessage } from './native-chat-types'

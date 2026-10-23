@@ -26,12 +26,14 @@ import type { TerminalTabTitleUpdate } from '@/store/slices/terminal-tab-title-b
 import type { WorkspaceLayoutChangeFrame } from '../../../shared/workspace-layout/workspace-layout-stream-frames'
 import { liveTitleUpdates } from './workspace-layout-frame-changes'
 import { terminalLayoutsWithFramePaneTrees } from './workspace-layout-frame-pane-trees'
-import { showFramePaneStarts } from './workspace-layout-frame-pane-starts'
+import { framePaneFactsShown, showFramePaneStarts } from './workspace-layout-frame-pane-starts'
 import {
   layoutFrameFlushPatch,
   type LayoutFrameBuildHolds,
   type LayoutFrameBuildPatch
 } from './workspace-layout-frame-builds'
+import { eitherHeld } from '@/store/workspace-layout-frame-held-tabs'
+import { heldTabGroupFocus } from './held-tab-group-follow'
 import { shownContentRekeyPatch } from './layout-owner-content-rekeys'
 import { provideLayoutFrameWorkspaces } from './layout-frame-workspaces'
 import {
@@ -94,7 +96,7 @@ export function openWorkspaceLayoutFrameSync(
   /** Workspaces whose pane trees the store may still lack: a build ran for them, or a tab the
    *  window's own command held skipped one. */
   let paneTreeKeys = new Set<string>()
-  const paneStartsShown = new Map<string, ReadonlySet<string>>()
+  const paneStartsShown = framePaneFactsShown()
 
   /** The moved tabs' selections this flush's writes took. */
   let selectionsTaken: MovedTabSelection[] = []
@@ -145,6 +147,7 @@ export function openWorkspaceLayoutFrameSync(
     const rowFieldsTaken = new Map<string, Partial<TerminalTab>>()
     const holds: LayoutFrameBuildHolds = {
       ...FRAME_BUILD_HOLDS,
+      held: eitherHeld(FRAME_BUILD_HOLDS.held, source.heldTabs),
       newRowFields: (tabId) => {
         const fields = takeTabRowFields(tabId)
         if (fields) {
@@ -206,7 +209,10 @@ export function openWorkspaceLayoutFrameSync(
       store.getState().updateTabTitles(titleUpdates)
     }
     showFramePaneStarts(store, changed, cache, paneStartsShown)
-    for (const key of [...fullBuilt, ...workspaceBuilt]) {
+    // Run after the apply check: the focus is the user's selection, not the frame's.
+    const builtKeys = [...fullBuilt, ...workspaceBuilt]
+    const followHeldTabs = heldTabGroupFocus(base, store, builtKeys, holds.held)
+    for (const key of builtKeys) {
       shown.add(key)
       // Against the store, not the frame: a held tab's tree may lag the pane trees drawn since.
       paneTreeKeys.add(key)
@@ -214,6 +220,7 @@ export function openWorkspaceLayoutFrameSync(
     // A closed stream's cache is frozen: answers the window draws itself (a split, close or create)
     // show then; any other change waits for the reopened stream's snapshot.
     if (!streamOpen) {
+      followHeldTabs()
       return
     }
     if (paneTreeKeys.size > 0) {
@@ -227,8 +234,10 @@ export function openWorkspaceLayoutFrameSync(
       fullBuilt,
       workspaceBuilt,
       rowFieldsTaken,
+      held: holds.held,
       selectTakenMovedTabs: (state) => withMovedTabsSelected(state, selectionsTaken)
     })
+    followHeldTabs()
   }
 
   const scheduleFlush = (): void => {

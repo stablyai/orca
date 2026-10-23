@@ -25,9 +25,9 @@ type Runtime = ReturnType<typeof surfaceRuntime>['runtime']
 
 /**
  * A windowless host whose saved tab gained a third pane no terminal is bound to yet. Its start
- * records the binding as the host's controller does, unless `bindsOnStart` is false (a late bind).
+ * records the binding before it answers, as the host's spawn commit does.
  */
-async function restoredPane({ bindsOnStart = true } = {}) {
+async function restoredPane() {
   const { runtime, store, setSession } = surfaceRuntime()
   runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
   const session = store.getSession()
@@ -60,11 +60,12 @@ async function restoredPane({ bindsOnStart = true } = {}) {
       }
     })
   }
+  // The host lists what it runs, the started terminal included: a pane main owns vouches for none.
+  const running = new Set<string>(Object.values(SURFACE_PTYS))
   const spawn = vi.fn(async () => {
     const result = await started.promise
-    if (bindsOnStart) {
-      bindThirdPane(result.id)
-    }
+    bindThirdPane(result.id)
+    running.add(result.id)
     return result
   })
   const write = vi.fn(() => true)
@@ -75,12 +76,12 @@ async function restoredPane({ bindsOnStart = true } = {}) {
     stopAndWait: async () => true,
     getForegroundProcess: async () => null,
     listProcesses: async () =>
-      Object.values(SURFACE_PTYS).map((id) => ({ id, cwd: TEST_WORKTREE_PATH, title: 'sh' }))
+      [...running].map((id) => ({ id, cwd: TEST_WORKTREE_PATH, title: 'sh' }))
   })
   await new Promise((resolve) => setTimeout(resolve, 0))
   const listed = await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)
   const handle = listed.terminals.find((terminal) => terminal.leafId === THIRD_LEAF_ID)!.handle
-  return { runtime, handle, spawn, started, write, bindThirdPane }
+  return { runtime, handle, spawn, started, write }
 }
 
 const DRIVING = { inputKind: 'driving' } as const
@@ -188,16 +189,13 @@ describe('a CLI trigger on a saved pane with no terminal (layout-owner build)', 
     expect(write).not.toHaveBeenCalled()
   })
 
+  // Why: main binds the pane before it registers the terminal (bind-first), so no late bind exists.
   it('a wait that started the pane survives main binding it, and answers under the caller handle', async () => {
-    const { runtime, handle, spawn, started, write, bindThirdPane } = await restoredPane({
-      bindsOnStart: false
-    })
+    const { runtime, handle, spawn, started, write } = await restoredPane()
 
     const wait = runtime.waitForTerminal(handle, { condition: 'exit', timeoutMs: 5_000 })
     await vi.waitFor(() => expect(spawn).toHaveBeenCalled())
     started.resolve({ id: 'pty-c' })
-    await new Promise((resolve) => setTimeout(resolve, 10))
-    bindThirdPane('pty-c')
     await new Promise((resolve) => setTimeout(resolve, 10))
     // The caller's own handle now names the bound pane (adopted), not only the started terminal's.
     expect(runtime.resolveLiveLeafForHandle(handle)?.ptyId).toBe('pty-c')

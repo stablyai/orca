@@ -90,22 +90,6 @@ export function broadcastPortForwards(
   })
 }
 
-export function broadcastDetectedPorts(
-  getMainWindow: () => BrowserWindow | null,
-  targetId: string,
-  ports: DetectedPort[],
-  options?: Parameters<typeof enrichSshDetectedPorts>[3]
-): void {
-  const win = getMainWindow()
-  if (!win || win.isDestroyed()) {
-    return
-  }
-  win.webContents.send('ssh:detected-ports-changed', {
-    targetId,
-    ports: enrichDetected(targetId, ports, options)
-  })
-}
-
 function listForwardsEnriched(targetId: string): ReturnType<SshPortForwardManager['listForwards']> {
   const raw = portForwardManager!.listForwards(targetId)
   if (!persistedStore) {

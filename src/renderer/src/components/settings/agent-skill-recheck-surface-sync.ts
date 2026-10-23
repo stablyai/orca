@@ -9,7 +9,7 @@ export function syncSurfacesAfterAgentSkillRecheck(freshnessSkillName?: string):
   }
 }
 
-export function recheckSurfacesAfterAgentSkillTerminal(
+export function recheckSurfacesAfterAgentSkillInstall(
   onRecheck: () => void | Promise<unknown>,
   freshnessSkillName?: string
 ): void {

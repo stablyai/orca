@@ -5,17 +5,22 @@ import { SIDEBAR_INPUTS_SEMANTICS_VERSION } from '../../../src/shared/sidebar-li
 import type { InstalledSidebarInputs } from '../../../src/shared/sidebar-list/sidebar-inputs-feed-installer'
 import type { RpcClient } from '../transport/rpc-client'
 import type { Section } from '../worktree/workspace-list-types'
-import type { HostSidebarFeedRead } from './host-sidebar-feed-reader'
+import type { SidebarFeedReaderRead } from '../../../src/shared/sidebar-feed-client/sidebar-feed-reader'
+import { installSidebarFeedSnapshot } from '../../../src/shared/sidebar-feed-client/sidebar-feed-snapshot'
 import { FEED_ROWS, liveRow, phoneView } from './host-sidebar-feed.test-fixture'
 
-const readers = vi.hoisted((): { onRead: ((read: HostSidebarFeedRead) => void)[] } => ({
+const readers = vi.hoisted((): { onRead: ((read: SidebarFeedReaderRead) => void)[] } => ({
   onRead: []
 }))
 
 vi.mock('../../../src/shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
-vi.mock('./host-sidebar-feed-reader', () => ({
-  HostSidebarFeedReader: class {
-    constructor(_client: unknown, onRead: (read: HostSidebarFeedRead) => void) {
+vi.mock('../../../src/shared/sidebar-feed-client/sidebar-feed-reader', () => ({
+  SidebarFeedReader: class {
+    constructor(
+      _transport: unknown,
+      _options: unknown,
+      onRead: (read: SidebarFeedReaderRead) => void
+    ) {
       readers.onRead.push(onRead)
     }
     refresh(): void {}
@@ -93,8 +98,10 @@ async function open(hostId: string): Promise<void> {
     renderers.push(create(createElement(List, { hostId })))
   })
 }
-async function read(next: HostSidebarFeedRead): Promise<void> {
-  await act(async () => readers.onRead.at(-1)?.(next))
+const SNAPSHOT = installSidebarFeedSnapshot(INSTALLED, null)
+
+async function read(next: Omit<SidebarFeedReaderRead, 'settledBy'>): Promise<void> {
+  await act(async () => readers.onRead.at(-1)?.({ ...next, settledBy: null }))
 }
 const rowIds = () => drawn.flatMap((section) => section.data.map((row) => row.worktreeId))
 
@@ -111,14 +118,14 @@ describe("the host list's first frame under the feed", () => {
     await open('host-1')
     expect(kind).toBe('loading')
     expect(drawn).toEqual([])
-    await read({ installed: INSTALLED, unavailable: false })
+    await read({ snapshot: SNAPSHOT, unavailable: false })
     expect(drawn[0]?.icon).toBe('pin')
     expect(rowIds()).toContain('orca::/w/parent')
   })
 
   it("opens the list again on the host's last installed feed, not on worktree.ps", async () => {
     await open('host-1')
-    await read({ installed: INSTALLED, unavailable: false })
+    await read({ snapshot: SNAPSHOT, unavailable: false })
     const desktopList = drawn
     act(() => renderers.splice(0).forEach((renderer) => renderer.unmount()))
 
@@ -129,7 +136,7 @@ describe("the host list's first frame under the feed", () => {
 
   it("never opens one host's list on another's feed", async () => {
     await open('host-1')
-    await read({ installed: INSTALLED, unavailable: false })
+    await read({ snapshot: SNAPSHOT, unavailable: false })
     await open('host-2')
     expect(kind).toBe('loading')
     expect(drawn).toEqual([])
@@ -137,15 +144,15 @@ describe("the host list's first frame under the feed", () => {
 
   it('still lists an older desktop that has no feed, from worktree.ps', async () => {
     await open('host-1')
-    await read({ installed: null, unavailable: true })
+    await read({ snapshot: null, unavailable: true })
     expect(kind).toBe('reopen')
     expect(rowIds()).toEqual(LISTED.map((row) => row.worktreeId))
   })
 
   it('forgets a feed the host stopped serving', async () => {
     await open('host-1')
-    await read({ installed: INSTALLED, unavailable: false })
-    await read({ installed: INSTALLED, unavailable: true })
+    await read({ snapshot: SNAPSHOT, unavailable: false })
+    await read({ snapshot: SNAPSHOT, unavailable: true })
     act(() => renderers.splice(0).forEach((renderer) => renderer.unmount()))
     await open('host-1')
     expect(kind).toBe('loading')

@@ -39,7 +39,7 @@ import { isUnconfirmedSshCommandTermination } from '../../ssh/remote-exec/remote
 
 const DEFAULT_REMOTE_HOST = getRemoteHostPlatform('linux-x64')
 
-export type RemoteInstallGcOptions = {
+type RemoteInstallGcOptions = {
   /**
    * Model-specific "someone is using this directory" probe. It must answer TRUE when
    * inconclusive — an unanswered probe is never evidence a tree is idle.

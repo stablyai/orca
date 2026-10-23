@@ -2,6 +2,7 @@ import { mkdtempSync, mkdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, test } from './helpers/orca-app'
+import { makeResourceManagerFixtureVisible } from './helpers/resource-manager-visible-fixture'
 import { waitForSessionReady } from './helpers/store'
 import { createRestartSession } from './helpers/orca-restart'
 
@@ -10,6 +11,7 @@ test.use({ seedTestRepo: false })
 for (const theme of ['dark', 'light'] as const) {
   test(`Resource Manager names folder workspaces and their groups (${theme})`, async ({
     orcaPage,
+    electronApp,
     registerPostElectronShutdownCleanup
   }, testInfo) => {
     const root = mkdtempSync(join(tmpdir(), 'orca-resource-folders-'))
@@ -53,11 +55,11 @@ for (const theme of ['dark', 'light'] as const) {
             initiallyHidden: true
           })
         }
-        await window.__store!.getState().fetchMemorySnapshot()
       },
       { theme, folders }
     )
 
+    await makeResourceManagerFixtureVisible(electronApp, orcaPage)
     await orcaPage.getByRole('button', { name: /^Resource Manager,/ }).click()
     const popover = orcaPage.getByRole('dialog')
     await expect(popover.getByText('Resource Manager', { exact: true })).toBeVisible()
@@ -124,7 +126,7 @@ test('names a folder terminal recovered from the daemon after restart without an
     const page = launched.page
     await waitForSessionReady(page)
     await page.setViewportSize({ width: 1200, height: 900 })
-    await page.evaluate(() => window.__store!.getState().fetchMemorySnapshot())
+    await makeResourceManagerFixtureVisible(launched.app, page)
     await page.getByRole('button', { name: /^Resource Manager,/ }).click()
     const popover = page.getByRole('dialog')
     await expect(popover.getByText('Resource Manager', { exact: true })).toBeVisible()

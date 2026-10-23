@@ -34,34 +34,30 @@ function harness(worktrees: Worktree[]) {
     worktrees: Worktree[]
     active: Set<string>
     tabsOpen: Set<string>
-    /** When set, the next listing waits for its own release. */
-    holdNextListing: boolean
-    releases: (() => void)[]
+    /** False until the workspaces producer's first scan applied. */
+    scanned: boolean
   } = {
     showSleeping: false,
     worktrees,
     active: new Set(),
     tabsOpen: new Set(),
-    holdNextListing: false,
-    releases: []
+    scanned: true
   }
+  const rowsChanged = new Set<() => void>()
   const owner = new SidebarRetentionOwner(new SidebarClock(), {
     showSleepingWorkspaces: () => world.showSleeping,
-    listRowKeys: async () => {
-      const rows = world.worktrees
-      if (world.holdNextListing) {
-        world.holdNextListing = false
-        await new Promise<void>((resolve) => world.releases.push(resolve))
-      }
-      return rows.map(getWorktreeHostIdentity)
+    rowKeys: () => (world.scanned ? world.worktrees.map(getWorktreeHostIdentity) : null),
+    watchRowKeys: (changed) => {
+      rowsChanged.add(changed)
+      return () => rowsChanged.delete(changed)
     },
     retentionCandidates: () => ({
-      ids: world.active,
       isActive: (id) => world.active.has(id),
       isUnverifiableGap: (id) => world.tabsOpen.has(id)
     })
   })
-  return { world, owner }
+  const bumpRows = (): void => rowsChanged.forEach((changed) => changed())
+  return { world, owner, bumpRows, rowsChanged }
 }
 
 const flush = async (): Promise<void> => {
@@ -78,8 +74,8 @@ describe('SidebarRetentionOwner', () => {
   })
 
   it('stays idle until a window begins a session, and after dispose', async () => {
-    const { world, owner } = harness([worktree('a')])
-    owner.noteCatalogChange()
+    const { world, owner, bumpRows, rowsChanged } = harness([worktree('a')])
+    bumpRows()
     world.active = new Set(['a'])
     owner.noteActivityChange()
     await flush()
@@ -91,6 +87,7 @@ describe('SidebarRetentionOwner', () => {
     owner.noteActivityChange()
     await flush()
     expect(vi.getTimerCount()).toBe(0)
+    expect(rowsChanged.size).toBe(0)
   })
 
   it('holds a live row through a rebind gap, then lets it go on its own deadline', async () => {
@@ -114,34 +111,31 @@ describe('SidebarRetentionOwner', () => {
     expect(owner.snapshot().retention).toBeNull()
   })
 
-  it('publishes nothing until a listing lands, then host-qualifies from the newest one', async () => {
+  it('publishes nothing until the rows scan, then host-qualifies from the rows as they are', async () => {
     const remote = worktree('a', { hostId: 'ssh:box' })
-    const { world, owner } = harness([])
-    // The session's own listing is slow and read no rows.
-    world.holdNextListing = true
+    const { world, owner, bumpRows } = harness([])
+    world.scanned = false
     owner.beginSession('s1')
+    await flush()
     world.active = new Set(['a'])
     world.tabsOpen = new Set(['a'])
     owner.noteActivityChange()
     expect(owner.snapshot().retention).toBeNull()
 
-    // A catalog change lists again, and that newer listing lands first.
+    // The rows' revision moves with the scan that lists the new row: no listing of its own.
+    world.scanned = true
     world.worktrees = [remote]
     const before = owner.snapshot().revision
-    owner.noteCatalogChange()
+    bumpRows()
     await flush()
     // Readers learn that retention is now published.
     expect(owner.snapshot().revision).toBeGreaterThan(before)
     world.active = new Set()
     owner.noteActivityChange()
     expect(owner.snapshot().retention?.retainedIds).toEqual([getWorktreeHostIdentity(remote)])
-
-    world.releases.forEach((release) => release())
-    await flush()
-    expect(owner.snapshot().retention?.retainedIds).toEqual([getWorktreeHostIdentity(remote)])
   })
 
-  it('retains every host’s row of a same-id pair, as activity is by bare id', async () => {
+  it('retains every host’s row of a same-id pair, as this host’s session is by bare id', async () => {
     const local = worktree('a', { hostId: 'local' })
     const remote = worktree('a', { hostId: 'ssh:box' })
     const { world, owner } = harness([local, remote])
@@ -153,5 +147,22 @@ describe('SidebarRetentionOwner', () => {
     world.active = new Set()
     owner.noteActivityChange()
     expect(owner.snapshot().retention?.retainedIds).toEqual(['local|a', 'ssh:box|a'])
+  })
+
+  it('gives each host’s row of a same-id pair its own grace window', async () => {
+    const local = worktree('a', { hostId: 'local' })
+    const { world, owner, bumpRows } = harness([local])
+    owner.beginSession('s1')
+    await flush()
+    world.active = new Set(['a'])
+    world.tabsOpen = new Set(['a'])
+    owner.noteActivityChange()
+    world.active = new Set()
+    owner.noteActivityChange()
+    // A twin listed only after the id went idle was never seen live, so it earns no grace.
+    world.worktrees = [local, worktree('a', { hostId: 'ssh:box' })]
+    bumpRows()
+    await flush()
+    expect(owner.snapshot().retention?.retainedIds).toEqual(['local|a'])
   })
 })

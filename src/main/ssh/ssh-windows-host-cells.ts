@@ -7,22 +7,22 @@ import { isWindowsServerTarget, type WindowsServerTarget } from '../../shared/no
 import type { SshTarget } from '../../shared/ssh-types'
 
 /** Managed orcad on the pinned node.exe, per DefaultShell: deploy, readiness, stop request, exit. */
-export const WINDOWS_ORCAD_CELL_IDS = ['orcad-cmd', 'orcad-powershell'] as const
-export type WindowsOrcadCellId = (typeof WINDOWS_ORCAD_CELL_IDS)[number]
+const WINDOWS_ORCAD_CELL_IDS = ['orcad-cmd', 'orcad-powershell'] as const
+type WindowsOrcadCellId = (typeof WINDOWS_ORCAD_CELL_IDS)[number]
 
 export function isWindowsOrcadCellId(id: string): id is WindowsOrcadCellId {
   return WINDOWS_ORCAD_CELL_IDS.some((candidate) => candidate === id)
 }
 
 /** The app connects a relay-era host and converts it to managed orcad (tests/e2e). */
-export const WINDOWS_CONVERT_CELL_ID = 'orcad-convert'
+const WINDOWS_CONVERT_CELL_ID = 'orcad-convert'
 
 /** The bundled CLI against a managed host (tests/e2e/ssh-orcad-windows-cli-matrix.spec.ts). */
-export const WINDOWS_CLI_MATRIX_CELL_IDS = ['orcad-cli-managed', 'orcad-cli-convert'] as const
-export type WindowsCliMatrixCellId = (typeof WINDOWS_CLI_MATRIX_CELL_IDS)[number]
+const WINDOWS_CLI_MATRIX_CELL_IDS = ['orcad-cli-managed', 'orcad-cli-convert'] as const
+type WindowsCliMatrixCellId = (typeof WINDOWS_CLI_MATRIX_CELL_IDS)[number]
 
 /** Written by config/ci/windows-ssh-provider/invoke-windows-host-cells.ps1, one per run. */
-export type WindowsHostCellDescriptor = {
+type WindowsHostCellDescriptor = {
   cell: WindowsOrcadCellId | typeof WINDOWS_CONVERT_CELL_ID | WindowsCliMatrixCellId
   target: WindowsServerTarget
   host: string

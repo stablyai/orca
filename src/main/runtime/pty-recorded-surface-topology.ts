@@ -7,15 +7,15 @@
  * against a claim some graph statement had the standing to contradict — which a spawn ahead of the
  * graph (#7587) and a graph that went away (leaves cleared, sequence not bumped) do not.
  */
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { parsePaneKey } from '../../shared/stable-pane-id'
+import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
+import type { PtyPane } from './terminal/surface/pty-pane-query'
 
-export type RecordedPtySurface = {
-  ptyId: string
-  tabId: string | null
-  paneKey: string | null
-  /** Value of `graphSequence` when this surface was last written. */
-  surfaceRecordedAtGraphSequence: number
-}
+export type RecordedPtySurface = Pick<
+  RuntimePtyWorktreeRecord,
+  'ptyId' | 'tabId' | 'paneKey' | 'surfaceRecordedAtGraphSequence'
+>
 
 /**
  * The standing a surface claim gets when its writer does not name one. A persisted replay, a stored
@@ -34,17 +34,26 @@ export function spawnSurfaceClaimSequence(graphSequence: number): number {
   return graphSequence + 1
 }
 
-/** The one way to name a PTY's surface: a bare `paneKey =` leaves the stamp behind. */
+/**
+ * The one way to name a PTY's surface: a bare `paneKey =` leaves the stamp behind. Layout-owner
+ * builds keep no copy: main's layout answers (paneOfPty).
+ */
 export function recordPtySurfaceClaim(
   pty: RecordedPtySurface,
   paneKey: string | null,
   graphSequence: number
 ): void {
+  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+    return
+  }
   // Replaying the claim already on the record is not new evidence, but it must not retract the
   // standing that claim already had.
   pty.surfaceRecordedAtGraphSequence =
     paneKey === pty.paneKey
-      ? Math.max(pty.surfaceRecordedAtGraphSequence, graphSequence)
+      ? Math.max(
+          pty.surfaceRecordedAtGraphSequence ?? SURFACE_CLAIM_WITHOUT_STANDING,
+          graphSequence
+        )
       : graphSequence
   pty.paneKey = paneKey
 }
@@ -55,8 +64,20 @@ export function recordPtySurface(
   paneKey: string,
   graphSequence: number
 ): void {
+  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+    return
+  }
   pty.tabId = tabId
   recordPtySurfaceClaim(pty, paneKey, graphSequence)
+}
+
+/** Drops a PTY's surface claim; layout-owner builds keep none. */
+export function forgetPtySurface(pty: RecordedPtySurface): void {
+  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+    return
+  }
+  pty.tabId = null
+  pty.paneKey = null
 }
 
 export type PtySurfaceTopology = {
@@ -71,15 +92,16 @@ export type PtySurfaceTopology = {
  * the standing to contradict it yet. False is the reportable state: a live PTY with no surface.
  */
 export function ptyHoldsRecordedSurface(
-  pty: RecordedPtySurface,
+  ptyId: string,
+  recorded: PtyPane,
   topology: PtySurfaceTopology
 ): boolean {
-  const pane = parsePaneKey(pty.paneKey ?? '')
-  if (!pty.tabId || !pane || pane.tabId !== pty.tabId) {
+  const pane = parsePaneKey(recorded.paneKey ?? '')
+  if (!recorded.tabId || !pane || pane.tabId !== recorded.tabId) {
     return false
   }
-  if (pty.surfaceRecordedAtGraphSequence >= topology.graphSequence) {
+  if (recorded.recordedAtGraphSequence >= topology.graphSequence) {
     return true
   }
-  return topology.ptyIdHoldingPane(pane.tabId, pane.leafId) === pty.ptyId
+  return topology.ptyIdHoldingPane(pane.tabId, pane.leafId) === ptyId
 }

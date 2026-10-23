@@ -40,9 +40,9 @@ it.each([
   expect(probe.peak()).toBe(cap)
 })
 
-it('caps the server worker at poolMax - 1 connections', async () => {
+it('bounds server claims before they enter the background pool', async () => {
   const probe = concurrencyProbe()
-  const server = createPushServer({ ...testPushConfig(), databasePoolMax: 3 }, probe.database, {
+  const server = createPushServer({ ...testPushConfig(), databasePoolMax: 6 }, probe.database, {
     fcmAccessToken: async () => 'token',
     fcmTransport: async () => ({ status: 200, body: '{}' })
   })
@@ -51,5 +51,5 @@ it('caps the server worker at poolMax - 1 connections', async () => {
   } finally {
     await server.worker.stop()
   }
-  expect(probe.peak()).toBe(2)
+  expect(probe.peak()).toBe(3)
 })

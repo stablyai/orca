@@ -5,7 +5,7 @@ import { initSshHostKeyStoreFile } from '../ssh/ssh-host-key-store'
 import { initOrcadHeldFenceTokenFile } from '../ssh/orcad-held-fence-tokens'
 import { emitOrcadProfileStateAuthoritySelected } from './orcad-profile-state-telemetry'
 
-export type OrcadProfileStateStartup = {
+type OrcadProfileStateStartup = {
   store: ProfileStateStoreFactoryResult['store']
   authority: {
     backend: ProfileStateStoreFactoryResult['backend']
@@ -26,6 +26,7 @@ export async function createOrcadProfileStateStartup(
   // "empty", so a server that pairs and lists nothing looks healthy. As the runtime authority,
   // orcad must not load as 'desktop', which would orphan its own scheduled automations.
   const result = await createProfileStateStoreForStartup({
+    userDataPath,
     dataFile: profile.dataFile,
     databaseFile: profile.stateDatabaseFile,
     profileId: profile.profile.id,

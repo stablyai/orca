@@ -1,23 +1,26 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../src/shared/sidebar-inputs-switch'
+import type { SidebarFeedDomains } from '../../../src/shared/sidebar-list/sidebar-feed-domains'
+import type {
+  SidebarFeedNotice,
+  SidebarFeedReader
+} from '../../../src/shared/sidebar-feed-client/sidebar-feed-reader'
 import {
-  SIDEBAR_INPUTS_SEMANTICS_VERSION,
-  type SidebarInputsChangedEvent
-} from '../../../src/shared/sidebar-list/sidebar-inputs-feed-contract'
-import type { InstalledSidebarInputs } from '../../../src/shared/sidebar-list/sidebar-inputs-feed-installer'
-import {
-  readSidebarFeedDomains,
-  type SidebarFeedDomains
-} from '../../../src/shared/sidebar-list/sidebar-feed-domains'
+  isReadableSidebarFeed,
+  type SidebarFeedSnapshot
+} from '../../../src/shared/sidebar-feed-client/sidebar-feed-snapshot'
+import { RememberedSidebarFeeds } from '../../../src/shared/sidebar-feed-client/remembered-sidebar-feeds'
 import type { RpcClient } from '../transport/rpc-client'
 import {
-  HostSidebarFeedReader,
-  type HostSidebarFeedRead,
+  createHostSidebarFeedReader,
   type HostSidebarFeedTriggers
-} from './host-sidebar-feed-reader'
+} from './host-sidebar-feed-connection'
 
-/** What this page's list rules mean; a host publishing another meaning would build another list. */
-const SUPPORTED_SIDEBAR_SEMANTICS_VERSIONS: readonly number[] = [SIDEBAR_INPUTS_SEMANTICS_VERSION]
+export type HostSidebarFeedRead = {
+  snapshot: SidebarFeedSnapshot | null
+  /** The host has no feed (method_not_found, or forbidden by an older mobile allowlist). */
+  unavailable: boolean
+}
 
 export type HostSidebarFeed =
   | { kind: 'loading' }
@@ -31,54 +34,38 @@ export type HostSidebarFeedControls = {
   triggers: HostSidebarFeedTriggers
 }
 
-const NOTHING_READ: HostSidebarFeedRead = { installed: null, unavailable: false }
+const NOTHING_READ: HostSidebarFeedRead = { snapshot: null, unavailable: false }
 
-const MAX_REMEMBERED_HOSTS = 20
 /** Each paired host's last installed feed, for this document's next list of it. */
-const rememberedFeeds = new Map<string, InstalledSidebarInputs>()
-
-function rememberFeed(hostId: string, installed: InstalledSidebarInputs | null): void {
-  rememberedFeeds.delete(hostId)
-  if (!installed) {
-    return
-  }
-  rememberedFeeds.set(hostId, installed)
-  if (rememberedFeeds.size > MAX_REMEMBERED_HOSTS) {
-    const oldest = rememberedFeeds.keys().next().value
-    if (oldest !== undefined) {
-      rememberedFeeds.delete(oldest)
-    }
-  }
-}
+const rememberedFeeds = new RememberedSidebarFeeds(20)
 
 /** The host's last installed feed while a fresh read is out: the desktop's list, if not its newest. */
 function rememberedRead(hostId: string | undefined): HostSidebarFeedRead {
-  const installed = hostId ? rememberedFeeds.get(hostId) : undefined
+  const snapshot = hostId ? rememberedFeeds.recall(hostId) : null
   // One this page cannot read would flash "Reopen" for a host whose fresh read may be fine.
-  return installed && SUPPORTED_SIDEBAR_SEMANTICS_VERSIONS.includes(installed.semanticsVersion)
-    ? { installed, unavailable: false }
+  return snapshot && isReadableSidebarFeed(snapshot)
+    ? { snapshot, unavailable: false }
     : NOTHING_READ
 }
 
 /** Test seam: a fresh document remembers nothing. */
 export function forgetRememberedSidebarFeeds(): void {
-  rememberedFeeds.clear()
+  rememberedFeeds.forgetAll()
 }
 
 export function readHostSidebarFeed({
-  installed,
+  snapshot,
   unavailable
 }: HostSidebarFeedRead): HostSidebarFeed {
   if (unavailable) {
     return { kind: 'reopen' }
   }
-  if (!installed) {
+  if (!snapshot) {
     return { kind: 'loading' }
   }
-  if (!SUPPORTED_SIDEBAR_SEMANTICS_VERSIONS.includes(installed.semanticsVersion)) {
-    return { kind: 'reopen' }
-  }
-  return { kind: 'ready', domains: readSidebarFeedDomains(installed) }
+  return isReadableSidebarFeed(snapshot)
+    ? { kind: 'ready', domains: snapshot.domains }
+    : { kind: 'reopen' }
 }
 
 /**
@@ -89,7 +76,7 @@ export function useHostSidebarFeed(
   client: RpcClient | null,
   hostId: string | undefined
 ): HostSidebarFeedControls {
-  const readerRef = useRef<HostSidebarFeedReader | null>(null)
+  const readerRef = useRef<SidebarFeedReader | null>(null)
   const installListenersRef = useRef(new Set<() => void>())
   const [read, setRead] = useState(() => rememberedRead(hostId))
 
@@ -98,16 +85,21 @@ export function useHostSidebarFeed(
     if (!client) {
       return
     }
-    let lastInstalled: HostSidebarFeedRead['installed'] = null
-    const reader = new HostSidebarFeedReader(client, (next) => {
-      setRead(next)
-      if (hostId) {
-        rememberFeed(hostId, next.unavailable ? null : next.installed)
+    let last: HostSidebarFeedRead = NOTHING_READ
+    const reader = createHostSidebarFeedReader(client, ({ snapshot, unavailable }) => {
+      // A read that settles on what is installed changes nothing this list draws.
+      if (snapshot === last.snapshot && unavailable === last.unavailable) {
+        return
       }
-      if (next.installed && next.installed !== lastInstalled) {
+      const installed = snapshot !== null && snapshot !== last.snapshot
+      last = { snapshot, unavailable }
+      setRead(last)
+      if (hostId) {
+        rememberedFeeds.remember(hostId, unavailable ? null : snapshot)
+      }
+      if (installed) {
         installListenersRef.current.forEach((listener) => listener())
       }
-      lastInstalled = next.installed
     })
     readerRef.current = reader
     return () => {
@@ -121,8 +113,7 @@ export function useHostSidebarFeed(
   const triggers = useMemo(
     (): HostSidebarFeedTriggers => ({
       refresh: () => readerRef.current?.refresh(),
-      changed: (notice: Pick<SidebarInputsChangedEvent, 'generation' | 'revision'>) =>
-        readerRef.current?.changed(notice),
+      changed: (notice: SidebarFeedNotice) => readerRef.current?.changed(notice),
       onInstalled: (listener: () => void) => {
         installListenersRef.current.add(listener)
         return () => installListenersRef.current.delete(listener)

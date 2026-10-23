@@ -136,7 +136,7 @@ export async function isRelayGcClaimOwned(
   return output.trim() === 'OWNED'
 }
 
-export type RelayGcClaimReleaseResult = 'released' | 'lost' | 'unknown'
+type RelayGcClaimReleaseResult = 'released' | 'lost' | 'unknown'
 
 export async function releaseRelayGcClaim(
   conn: RemoteInstallTransport,

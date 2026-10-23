@@ -5,13 +5,11 @@ import {
   onRuntimeEnvironmentsRetired,
   replaceRuntimeEnvironmentRevisions
 } from '@/runtime/runtime-environment-revision'
+import { detachedEditorBufferId } from './editor-buffer-views'
 import {
-  detachedEditorBufferId,
   editorBufferIdentityOf,
   editorBufferPathKey,
-  isEditorBufferIdentityRetired,
-  type EditorBufferHostFacts,
-  type EditorBufferHostPathFlavor
+  isEditorBufferIdentityRetired
 } from './editor-buffer-identity'
 
 const LOCAL: WorktreeOperationRoute = { executionHostId: 'local', runtimeEnvironmentId: null }
@@ -45,18 +43,12 @@ function file(overrides: Partial<OpenFile> = {}, route?: WorktreeOperationRoute)
   }
 }
 
-const HOST_A: EditorBufferHostFacts = { capturedSshEndpoint: 'host-a:22' }
-
-function keyOf(tab: OpenFile, facts: EditorBufferHostFacts = HOST_A): string | undefined {
-  return editorBufferIdentityOf(tab, {}, facts)?.key
+function keyOf(tab: OpenFile): string | undefined {
+  return editorBufferIdentityOf(tab, {})?.key
 }
 
-function pathKey(
-  filePath: string,
-  flavor: EditorBufferHostPathFlavor = 'unknown',
-  foldWsl = false
-) {
-  return JSON.stringify(editorBufferPathKey(filePath, flavor, foldWsl))
+function pathKey(filePath: string, windows = false) {
+  return editorBufferPathKey(filePath, windows)
 }
 
 function runtimeTab(id: string, pairingRevision?: number): OpenFile {
@@ -96,50 +88,27 @@ describe('editorBufferPathKey', () => {
     expect(pathKey(left)).toBe(pathKey(right))
   })
 
-  it('folds the UNC server name of a forward-slash path on a Windows host only', () => {
-    expect(pathKey('//SERVER/share/a.ts', 'windows')).toBe(
-      pathKey('//server/share/a.ts', 'windows')
-    )
-    expect(pathKey('\\\\server\\share\\a.ts', 'windows')).toBe(
-      pathKey('//SERVER/share/a.ts', 'windows')
-    )
+  it('folds the UNC server name of a forward-slash path on a Windows client only', () => {
+    expect(pathKey('//SERVER/share/a.ts', true)).toBe(pathKey('//server/share/a.ts', true))
+    expect(pathKey('\\\\server\\share\\a.ts', true)).toBe(pathKey('//SERVER/share/a.ts', true))
   })
 
   it.each([
     ['C:/Repo/A.ts', 'C:/repo/a.ts'],
     ['\\\\server\\share\\A.ts', '\\\\server\\share\\a.ts'],
     ['\\\\server\\Share\\a.ts', '\\\\server\\share\\a.ts'],
-    ['//wsl$/Ubuntu/home/me/A.ts', '//wsl$/Ubuntu/home/me/a.ts'],
+    ['\\\\wsl$\\Ubuntu\\home\\me\\a.ts', '\\\\wsl.localhost\\Ubuntu\\home\\me\\a.ts'],
     ['/repo/A.ts', '/repo/a.ts'],
     ['/repo/a\\b.ts', '/repo/a/b.ts']
-  ])('never folds path case or POSIX backslashes: %s is not %s', (left, right) => {
-    expect(pathKey(left, 'windows', true)).not.toBe(pathKey(right, 'windows', true))
+  ])('never folds path case, WSL aliases or POSIX backslashes: %s is not %s', (left, right) => {
+    expect(pathKey(left, true)).not.toBe(pathKey(right, true))
   })
 
-  it('keeps an ambiguous `//` path exact unless the host is known Windows', () => {
+  it('keeps an ambiguous `//` path exact unless the client is Windows', () => {
     // Valid POSIX names on Linux or an SSH host: a backslash is part of the file name.
     expect(pathKey('//repo/a\\b.ts')).not.toBe(pathKey('//repo/a/b.ts'))
     expect(pathKey('//SERVER/share/a.ts')).not.toBe(pathKey('//server/share/a.ts'))
-    expect(pathKey('//repo/a\\b.ts', 'windows')).toBe(pathKey('//repo/a/b.ts', 'windows'))
-  })
-
-  it.each([
-    ['\\\\wsl$\\Ubuntu\\home\\me\\a.ts', '\\\\wsl.localhost\\ubuntu\\home\\me\\a.ts'],
-    ['//wsl$/Ubuntu/home/me/a.ts', '\\\\wsl.localhost\\Ubuntu\\home\\me\\a.ts']
-  ])('folds the WSL aliases %s and %s only when asked', (left, right) => {
-    expect(pathKey(left, 'windows', true)).toBe(pathKey(right, 'windows', true))
-    expect(pathKey(left, 'windows')).not.toBe(pathKey(right, 'windows'))
-  })
-
-  it('never lets a folded WSL key equal a real share named wsl', () => {
-    const folded = pathKey('\\\\wsl$\\Ubuntu\\home\\a.ts', 'windows', true)
-    for (const real of [
-      '\\\\wsl\\ubuntu\\home\\a.ts',
-      '//wsl/ubuntu/home/a.ts',
-      '\\\\wsl\\Ubuntu\\home\\a.ts'
-    ]) {
-      expect(pathKey(real, 'windows', true)).not.toBe(folded)
-    }
+    expect(pathKey('//repo/a\\b.ts', true)).toBe(pathKey('//repo/a/b.ts', true))
   })
 })
 
@@ -148,25 +117,19 @@ describe('editorBufferIdentityOf', () => {
     expect(keyOf(file({}, LOCAL))).toBe(keyOf(file({ id: 'b', worktreeId: 'wt-2' }, LOCAL)))
   })
 
-  it('folds WSL aliases for a local Windows client only', () => {
+  it('keeps WSL aliases apart on a local Windows client', () => {
+    vi.stubGlobal('navigator', { userAgent: 'Mozilla/5.0 (Windows NT 10.0)' })
     const wslDollar = file({ filePath: '\\\\wsl$\\Ubuntu\\home\\a.ts' }, LOCAL)
     const wslLocalhost = file({ id: 'b', filePath: '\\\\wsl.localhost\\Ubuntu\\home\\a.ts' }, LOCAL)
-    vi.stubGlobal('navigator', { userAgent: 'Mozilla/5.0 (Macintosh)' })
     expect(keyOf(wslDollar)).not.toBe(keyOf(wslLocalhost))
-
-    vi.stubGlobal('navigator', { userAgent: 'Mozilla/5.0 (Windows NT 10.0)' })
-    expect(keyOf(wslDollar)).toBe(keyOf(wslLocalhost))
-    const ssh: WorktreeOperationRoute = {
-      executionHostId: 'ssh:target',
-      runtimeEnvironmentId: null
-    }
-    expect(keyOf(file({ filePath: wslDollar.filePath }, ssh))).not.toBe(
-      keyOf(file({ filePath: wslLocalhost.filePath }, ssh))
-    )
   })
 
-  it('keys an SSH target by its runtime environment as well as its target id', () => {
+  it('keys an SSH file by its connection target and runtime environment', () => {
     const direct = keyOf(file({ externalSshTargetId: 'target', runtimeEnvironmentId: null }))
+    const directElsewhere = keyOf(
+      file({ id: 'b', worktreeId: 'wt-2', externalSshTargetId: 'target' })
+    )
+    const otherTarget = keyOf(file({ externalSshTargetId: 'target-2' }))
     const nested = keyOf(file({ externalSshTargetId: 'target', runtimeEnvironmentId: 'env' }))
     const nestedElsewhere = keyOf(
       file({
@@ -181,41 +144,19 @@ describe('editorBufferIdentityOf', () => {
     )
 
     expect(direct).toBeDefined()
-    expect(new Set([direct, nested, otherRuntime]).size).toBe(3)
+    expect(direct).toBe(directElsewhere)
+    expect(new Set([direct, otherTarget, nested, otherRuntime]).size).toBe(4)
     expect(nested).toBe(nestedElsewhere)
   })
 
-  it('keys SSH tabs by the endpoint each captured, never the target id alone', () => {
-    const tab = (id: string) =>
-      file({ id, externalSshTargetId: 'target', runtimeEnvironmentId: null })
-    // The target id now points at B; the old tab still carries the endpoint it opened on.
-    const openedOnA = keyOf(tab('a'), { capturedSshEndpoint: 'host-a:22' })
-    const openedOnB = keyOf(tab('b'), { capturedSshEndpoint: 'host-b:22' })
-    expect(openedOnA).toBeDefined()
-    expect(openedOnA).not.toBe(openedOnB)
-    // A reconnect to the same machine captures the same endpoint.
-    expect(keyOf(tab('c'), { capturedSshEndpoint: 'host-a:22' })).toBe(openedOnA)
-  })
-
-  it('never shares an SSH tab with no captured endpoint', () => {
-    const tab = file({ externalSshTargetId: 'target', runtimeEnvironmentId: null })
-    expect(keyOf(tab, {})).toBeUndefined()
-    expect(keyOf(tab, { capturedSshEndpoint: '' })).toBeUndefined()
-  })
-
-  it('folds a forward-slash UNC server only on a remote host verified as Windows', () => {
+  it('keeps a remote forward-slash UNC path apart from its backslash form', () => {
     const route: WorktreeOperationRoute = {
       executionHostId: 'runtime:env',
       runtimeEnvironmentId: 'env'
     }
-    const upper = file({ filePath: '//SERVER/share/a.ts' }, route)
+    const slash = file({ filePath: '//SERVER/share/a.ts' }, route)
     const backslash = file({ id: 'b', filePath: '\\\\SERVER\\share\\a.ts' }, route)
-    expect(keyOf(upper, { remotePathFlavor: 'windows' })).toBe(
-      keyOf(backslash, { remotePathFlavor: 'windows' })
-    )
-    for (const remotePathFlavor of ['posix', 'unknown'] as const) {
-      expect(keyOf(upper, { remotePathFlavor })).not.toBe(keyOf(backslash, { remotePathFlavor }))
-    }
+    expect(keyOf(slash)).not.toBe(keyOf(backslash))
   })
 
   it('keeps a runtime host and the local machine apart for one path', () => {
@@ -223,8 +164,8 @@ describe('editorBufferIdentityOf', () => {
   })
 
   it('never shares a tab whose owner is unresolved, or a non-edit tab', () => {
-    expect(editorBufferIdentityOf(file({ runtimeEnvironmentId: null }), {}, HOST_A)).toBeNull()
-    expect(editorBufferIdentityOf(file({ mode: 'diff' }, LOCAL), {}, HOST_A)).toBeNull()
+    expect(editorBufferIdentityOf(file({ runtimeEnvironmentId: null }), {})).toBeNull()
+    expect(editorBufferIdentityOf(file({ mode: 'diff' }, LOCAL), {})).toBeNull()
   })
 
   it('joins a re-pair proven to be the same machine', () => {
@@ -250,12 +191,12 @@ describe('editorBufferIdentityOf', () => {
   it('quarantines a retired host: its replacement with the same path stays apart', () => {
     replaceRuntimeEnvironmentRevisions([{ id: 'env', createdAt: 0, pairingRevision: 1 }])
     const old = runtimeTab('old')
-    const local = editorBufferIdentityOf(file({}, LOCAL), {}, HOST_A)
+    const local = editorBufferIdentityOf(file({}, LOCAL), {})
     const quarantine = new Map<string, string>()
     // Retirement fires before the new revision is published, while the old key still stands.
     const stop = onRuntimeEnvironmentsRetired((retired) => {
       for (const [viewId, identity] of [
-        ['old', editorBufferIdentityOf(old, {}, HOST_A)],
+        ['old', editorBufferIdentityOf(old, {})],
         ['local', local]
       ] as const) {
         if (identity && isEditorBufferIdentityRetired(identity, retired)) {

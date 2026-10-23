@@ -3,7 +3,11 @@ import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import { useAppStore } from '@/store'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { getDefaultSettings } from '../../../shared/constants'
-import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
+import {
+  getWorkspaceRuntimePreference,
+  resolveProjectExecutionRuntime,
+  type ProjectExecutionRuntimeResolution
+} from '../../../shared/project-execution-runtime'
 import type * as localPreflightContext from '@/lib/local-preflight-context'
 import {
   buildPaneAccountRestartStartup,
@@ -260,4 +264,37 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
 
     expect(resolveAgentAccountRestartResumeStartup('claude', pane)).toBeNull()
   })
+
+  // Why both: a WSL worktree's UNC path and a WSL Windows runtime default each resolve a WSL runtime.
+  it.each([
+    [
+      'a WSL worktree path',
+      '\\\\wsl.localhost\\Ubuntu-24.04\\home\\dev\\repo',
+      { kind: 'windows-host' }
+    ],
+    ['a WSL runtime default', 'C:\\repo', { kind: 'wsl', distro: 'Ubuntu-24.04' }]
+  ] as const)(
+    'resumes a Claude session whose project runs in WSL through %s',
+    (_, path, global) => {
+      seedAgentStatus({
+        agentType: 'claude',
+        state: 'done',
+        providerSession: { key: 'session_id', id: SESSION_ID }
+      })
+      projectRuntimeContext = resolveProjectExecutionRuntime({
+        appPlatform: 'win32',
+        projectId: 'project-1',
+        projectRuntimePreference: getWorkspaceRuntimePreference(undefined, path),
+        globalWindowsRuntimeDefault: global,
+        wslAvailable: true,
+        availableWslDistros: ['Ubuntu-24.04']
+      })
+      expect(projectRuntimeContext).toMatchObject({ status: 'resolved', runtime: { kind: 'wsl' } })
+
+      const startup = buildPaneAccountRestartStartup('claude', pane)
+
+      expect(startup?.command).toBe(`claude '--resume' '${SESSION_ID}'`)
+      expect(startup?.resumeProviderSession?.id).toBe(SESSION_ID)
+    }
+  )
 })

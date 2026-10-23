@@ -46,7 +46,7 @@ describe('agent model catalog store', () => {
   it('serves an entry at any age and flags staleness at the refresh threshold', () => {
     let at = 1_000
     const store = new AgentModelCatalogStore({ now: () => at })
-    store.recordSuccess('fp-1', 'codex', success('gpt-a'), 'discovery')
+    store.recordSuccess('fp-1', 'grok', success('gpt-a'), 'discovery')
     const entry = store.get('fp-1')!
     expect(entry.models.map((model) => model.id)).toEqual(['gpt-a'])
     expect(store.isStale(entry)).toBe(false)
@@ -61,7 +61,7 @@ describe('agent model catalog store', () => {
     expect(
       store.recordSuccess(
         'fp-1',
-        'codex',
+        'grok',
         {
           models: [],
           origin: 'live-session'
@@ -75,7 +75,7 @@ describe('agent model catalog store', () => {
   it('holds a failure under its TTL without touching the last good entry', () => {
     let at = 1_000
     const store = new AgentModelCatalogStore({ now: () => at })
-    store.recordSuccess('fp-1', 'codex', success('gpt-a'), 'discovery')
+    store.recordSuccess('fp-1', 'grok', success('gpt-a'), 'discovery')
     store.recordFailure('fp-1', 'timed out')
     expect(store.get('fp-1')!.models.map((model) => model.id)).toEqual(['gpt-a'])
     expect(store.hasActiveFailure('fp-1')).toBe(true)
@@ -92,8 +92,8 @@ describe('agent model catalog store', () => {
       () => new Promise<AgentModelCatalogSuccess>((resolve) => (settle = resolve))
     )
     const session = liveLister(store)
-    const first = store.refresh('fp-1', 'codex', session, fetch)
-    const second = store.refresh('fp-1', 'codex', session, fetch)
+    const first = store.refresh('fp-1', 'grok', session, fetch)
+    const second = store.refresh('fp-1', 'grok', session, fetch)
     expect(fetch).toHaveBeenCalledTimes(1)
     settle(success('gpt-a'))
     const [entryA, entryB] = await Promise.all([first, second])
@@ -106,12 +106,12 @@ describe('agent model catalog store', () => {
     let failProbe!: (error: Error) => void
     const hungProbe: AgentModelCatalogProbe = () =>
       new Promise<AgentModelCatalogSuccess>((_resolve, reject) => (failProbe = reject))
-    const probe = store.refresh('fp-1', 'codex', hungProbe, () =>
-      hungProbe({ variable: 'CODEX_HOME', path: '/homes/a' })
+    const probe = store.refresh('fp-1', 'grok', hungProbe, () =>
+      hungProbe({ variable: 'GROK_HOME', path: '/homes/a' })
     )
     expect(store.shouldRefresh('fp-1')).toBe(false)
 
-    const live = await store.refresh('fp-1', 'codex', liveLister(store), async () =>
+    const live = await store.refresh('fp-1', 'grok', liveLister(store), async () =>
       success('gpt-live')
     )
     expect(live!.models[0]!.id).toBe('gpt-live')
@@ -130,13 +130,13 @@ describe('agent model catalog store', () => {
     let settleSecond!: (success: AgentModelCatalogSuccess) => void
     void store.refresh(
       'fp-1',
-      'codex',
+      'grok',
       liveLister(store),
       () => new Promise<AgentModelCatalogSuccess>((_resolve, reject) => (failFirst = reject))
     )
     void store.refresh(
       'fp-1',
-      'codex',
+      'grok',
       liveLister(store),
       () => new Promise<AgentModelCatalogSuccess>((resolve) => (settleSecond = resolve))
     )
@@ -145,7 +145,7 @@ describe('agent model catalog store', () => {
     settleSecond(success('gpt-second'))
     expect((await pending)!.models[0]!.id).toBe('gpt-second')
 
-    void store.refresh('fp-2', 'codex', liveLister(store), async () => {
+    void store.refresh('fp-2', 'grok', liveLister(store), async () => {
       throw new Error('no provider')
     })
     expect(await store.pendingListing('fp-2')).toBeNull()
@@ -158,7 +158,7 @@ describe('agent model catalog store', () => {
       let settle!: (success: AgentModelCatalogSuccess) => void
       const listing = store.refresh(
         'fp-1',
-        'codex',
+        'grok',
         liveLister(store),
         () => new Promise<AgentModelCatalogSuccess>((resolve) => (settle = resolve))
       )
@@ -178,11 +178,11 @@ describe('agent model catalog store', () => {
     let settleSlow!: (success: AgentModelCatalogSuccess) => void
     const slow = store.refresh(
       'fp-1',
-      'codex',
+      'grok',
       liveLister(store),
       () => new Promise<AgentModelCatalogSuccess>((resolve) => (settleSlow = resolve))
     )
-    await store.refresh('fp-1', 'codex', liveLister(store), async () => success('gpt-fast'))
+    await store.refresh('fp-1', 'grok', liveLister(store), async () => success('gpt-fast'))
     at += AGENT_MODEL_CATALOG_FRESH_MS
     expect(store.shouldRefresh('fp-1')).toBe(false)
 
@@ -200,11 +200,11 @@ describe('agent model catalog store', () => {
     let settleOlder!: (success: AgentModelCatalogSuccess) => void
     const older = store.refresh(
       'fp-1',
-      'codex',
+      'grok',
       liveLister(store),
       () => new Promise<AgentModelCatalogSuccess>((resolve) => (settleOlder = resolve))
     )
-    const newer = await store.refresh('fp-1', 'codex', liveLister(store), async () =>
+    const newer = await store.refresh('fp-1', 'grok', liveLister(store), async () =>
       success('gpt-new')
     )
     settleOlder(success('gpt-old'))
@@ -221,10 +221,10 @@ describe('agent model catalog store', () => {
     let settleProbe!: (success: AgentModelCatalogSuccess) => void
     const probe: AgentModelCatalogProbe = () =>
       new Promise<AgentModelCatalogSuccess>((resolve) => (settleProbe = resolve))
-    const pending = store.refresh('fp-1', 'codex', probe, () =>
-      probe({ variable: 'CODEX_HOME', path: '/homes/a' })
+    const pending = store.refresh('fp-1', 'grok', probe, () =>
+      probe({ variable: 'GROK_HOME', path: '/homes/a' })
     )
-    store.recordSuccess('fp-1', 'codex', success('gpt-live'), 'discovery')
+    store.recordSuccess('fp-1', 'grok', success('gpt-live'), 'discovery')
     settleProbe({ ...success('gpt-probe'), origin: 'probe' })
     expect((await pending)!.models[0]!.id).toBe('gpt-probe')
     expect(store.get('fp-1')!.models[0]!.id).toBe('gpt-live')
@@ -235,10 +235,10 @@ describe('agent model catalog store', () => {
     let settleProbe!: (success: AgentModelCatalogSuccess) => void
     const probe: AgentModelCatalogProbe = () =>
       new Promise<AgentModelCatalogSuccess>((resolve) => (settleProbe = resolve))
-    const pending = store.refresh('fp-1', 'codex', probe, () =>
-      probe({ variable: 'CODEX_HOME', path: '/homes/a' })
+    const pending = store.refresh('fp-1', 'grok', probe, () =>
+      probe({ variable: 'GROK_HOME', path: '/homes/a' })
     )
-    store.recordSuccess('fp-1', 'codex', success('gpt-live'), 'live')
+    store.recordSuccess('fp-1', 'grok', success('gpt-live'), 'live')
     settleProbe({ ...success('gpt-probe'), origin: 'probe' })
     await pending
     const entry = store.get('fp-1')!
@@ -246,7 +246,7 @@ describe('agent model catalog store', () => {
     expect(entry.live!.models[0]!.id).toBe('gpt-live')
     // A live save neither postpones the next discovery nor clears its failure back-off.
     store.recordFailure('fp-1', 'timed out')
-    store.recordSuccess('fp-1', 'codex', success('gpt-live'), 'live')
+    store.recordSuccess('fp-1', 'grok', success('gpt-live'), 'live')
     expect(store.hasActiveFailure('fp-1')).toBe(true)
   })
 
@@ -255,13 +255,13 @@ describe('agent model catalog store', () => {
     let settleOlder!: (success: AgentModelCatalogSuccess) => void
     const older = store.refresh(
       'fp-1',
-      'codex',
+      'grok',
       liveLister(store),
       () => new Promise<AgentModelCatalogSuccess>((resolve) => (settleOlder = resolve))
     )
-    await store.refresh('fp-1', 'codex', liveLister(store), async () => success('gpt-new'))
+    await store.refresh('fp-1', 'grok', liveLister(store), async () => success('gpt-new'))
     for (let index = 0; index < AGENT_MODEL_CATALOG_MAX_ENTRIES; index++) {
-      store.recordSuccess(`other-${index}`, 'codex', success('other'), 'discovery')
+      store.recordSuccess(`other-${index}`, 'grok', success('other'), 'discovery')
     }
     expect(store.get('fp-1')).toBeNull()
     const save = vi.fn()
@@ -277,7 +277,7 @@ describe('agent model catalog store', () => {
 
   it('records a failed refresh as a failure and resolves null without rejecting', async () => {
     const store = new AgentModelCatalogStore()
-    const entry = await store.refresh('fp-1', 'codex', liveLister(store), async () => {
+    const entry = await store.refresh('fp-1', 'grok', liveLister(store), async () => {
       throw new Error('no provider')
     })
     expect(entry).toBeNull()
@@ -288,27 +288,27 @@ describe('agent model catalog store', () => {
 
   it('keys entries by fingerprint so one account never answers for another', () => {
     const fingerprintA = agentModelCatalogFingerprint({
-      agent: 'codex',
-      accountHomeVariable: 'CODEX_HOME',
+      agent: 'grok',
+      accountHomeVariable: 'GROK_HOME',
       accountHomePath: '/homes/a',
       wslDistro: null
     })
     const fingerprintB = agentModelCatalogFingerprint({
-      agent: 'codex',
-      accountHomeVariable: 'CODEX_HOME',
+      agent: 'grok',
+      accountHomeVariable: 'GROK_HOME',
       accountHomePath: '/homes/b',
       wslDistro: null
     })
     expect(fingerprintA).not.toBe(fingerprintB)
     const store = new AgentModelCatalogStore()
-    store.recordSuccess(fingerprintA, 'codex', success('gpt-a'), 'discovery')
+    store.recordSuccess(fingerprintA, 'grok', success('gpt-a'), 'discovery')
     expect(store.get(fingerprintB)).toBeNull()
   })
 
   it('derives the record fingerprint from the pinned account home', () => {
     const record: Pick<AgentSessionRecord, 'provider' | 'accountHome' | 'location'> = {
-      provider: 'codex',
-      accountHome: { variable: 'CODEX_HOME', path: '/homes/a' },
+      provider: 'grok',
+      accountHome: { variable: 'GROK_HOME', path: '/homes/a' },
       location: {
         executionHostId: LOCAL_EXECUTION_HOST_ID,
         wslDistro: null,
@@ -318,8 +318,8 @@ describe('agent model catalog store', () => {
     }
     expect(agentModelCatalogFingerprintForRecord(record)).toBe(
       agentModelCatalogFingerprint({
-        agent: 'codex',
-        accountHomeVariable: 'CODEX_HOME',
+        agent: 'grok',
+        accountHomeVariable: 'GROK_HOME',
         accountHomePath: '/homes/a',
         wslDistro: null
       })
@@ -331,12 +331,12 @@ describe('agent model catalog store', () => {
     const store = new AgentModelCatalogStore({ now: () => at })
     const save = vi.fn()
     void store.attachPersistence({ load: async () => [], save, flush: async () => {} })
-    store.recordSuccess('fp', 'claude', success('opus'), 'discovery')
+    store.recordSuccess('fp', 'grok', success('opus'), 'discovery')
     at += AGENT_MODEL_CATALOG_FRESH_MS
-    store.recordSuccess('fp', 'claude', success('opus'), 'discovery')
+    store.recordSuccess('fp', 'grok', success('opus'), 'discovery')
     expect(save).toHaveBeenCalledTimes(1)
     expect(store.shouldRefresh('fp')).toBe(false)
-    store.recordSuccess('fp', 'claude', success('opus', 'sonnet'), 'discovery')
+    store.recordSuccess('fp', 'grok', success('opus', 'sonnet'), 'discovery')
     expect(save).toHaveBeenCalledTimes(2)
   })
 
@@ -360,9 +360,9 @@ describe('agent model catalog store', () => {
       ],
       origin: 'live-session'
     })
-    store.recordSuccess('fp', 'claude', listing('medium'), 'live')
-    // A session-less probe never names Claude's default.
-    store.recordSuccess('fp', 'claude', { ...listing(), origin: 'probe' }, 'discovery')
+    store.recordSuccess('fp', 'grok', listing('medium'), 'live')
+    // A session-less probe never names the provider's default.
+    store.recordSuccess('fp', 'grok', { ...listing(), origin: 'probe' }, 'discovery')
     expect(store.get('fp')!.models[0]!.defaultEffort).toBe('medium')
     await store.flushPersistence()
     const restarted = new AgentModelCatalogStore()
@@ -370,11 +370,11 @@ describe('agent model catalog store', () => {
     expect(restarted.get('fp')!.models[0]!.defaultEffort).toBe('medium')
 
     // A newer report replaces it; a model that stops offering it drops it.
-    store.recordSuccess('fp', 'claude', listing('high'), 'live')
+    store.recordSuccess('fp', 'grok', listing('high'), 'live')
     expect(store.get('fp')!.models[0]!.defaultEffort).toBe('high')
     store.recordSuccess(
       'fp',
-      'claude',
+      'grok',
       {
         ...listing(),
         models: [{ id: 'opus', label: 'Opus', isDefault: true, efforts: [efforts[0]!] }]
@@ -392,11 +392,11 @@ describe('agent model catalog store', () => {
     store.recordConfiguredDefault('fp', { modelId: 'sonnet' })
     expect(store.get('fp')).toBeNull()
 
-    store.recordSuccess('fp', 'claude', success('opus', 'sonnet'), 'live')
+    store.recordSuccess('fp', 'grok', success('opus', 'sonnet'), 'live')
     store.recordConfiguredDefault('fp', { modelId: 'sonnet', effort: 'high' })
     store.recordSuccess(
       'fp',
-      'claude',
+      'grok',
       { ...success('opus', 'sonnet'), origin: 'probe' },
       'discovery'
     )
@@ -426,7 +426,7 @@ describe('agent model catalog store', () => {
     const directory = mkdtempSync(join(tmpdir(), 'agent-model-catalog-'))
     const store = new AgentModelCatalogStore()
     await store.attachPersistence(createAgentModelCatalogFilePersistence(directory))
-    store.recordSuccess('fp-1', 'codex', success('gpt-a'), 'discovery')
+    store.recordSuccess('fp-1', 'grok', success('gpt-a'), 'discovery')
     store.recordFailure('fp-2', 'timed out')
     await vi.waitFor(
       async () => {
@@ -454,7 +454,7 @@ describe('agent model catalog store', () => {
     ]
     store.recordSuccess(
       'fp-tiers',
-      'codex',
+      'grok',
       {
         models: [{ id: 'gpt-a', label: 'A', isDefault: true, efforts: [], serviceTiers }],
         origin: 'probe'
@@ -470,7 +470,7 @@ describe('agent model catalog store', () => {
     const directory = mkdtempSync(join(tmpdir(), 'agent-model-catalog-'))
     const store = new AgentModelCatalogStore()
     await store.attachPersistence(createAgentModelCatalogFilePersistence(directory))
-    store.recordSuccess('fp-1', 'codex', success('gpt-a'), 'discovery')
+    store.recordSuccess('fp-1', 'grok', success('gpt-a'), 'discovery')
     await store.flushPersistence()
     const persisted = await createAgentModelCatalogFilePersistence(directory).load()
     expect(persisted.map((entry) => entry.fingerprint)).toEqual(['fp-1'])

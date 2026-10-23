@@ -158,7 +158,7 @@ describe('a server file keeps its id across a restart', () => {
     expect(restarted.openFiles.map((file) => file.id).sort()).toEqual([localId, serverId].sort())
   })
 
-  it('keeps the same server path in two workspaces apart, before and after a restart', async () => {
+  it('keeps the same server path in two workspaces as two tabs of one record, through a restart', async () => {
     const store = prepareStore()
     const main = await drawTabsFromMain(store)
     const idA = openServerFile(store, WT_A, ENV)
@@ -175,7 +175,8 @@ describe('a server file keeps its id across a restart', () => {
     const restarted = restart(store)
     expect(editorEntityIds(restarted, WT_A)).toEqual([idA])
     expect(editorEntityIds(restarted, WT_B)).toEqual([idB])
-    expect(restarted.editorDrafts[idA]).toBe('draft a')
+    // One file, one record: the last edit is the draft both tabs hold.
+    expect(restarted.editorDrafts[idA]).toBe('draft b')
     expect(restarted.editorDrafts[idB]).toBe('draft b')
   })
 

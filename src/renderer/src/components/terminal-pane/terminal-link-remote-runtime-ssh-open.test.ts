@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { openDetectedFilePath } from './terminal-link-handlers'
 import { getConnectionId } from '@/lib/connection-context'
 import { getWorkspaceFilePreviewPlan, openFileInBrowserTab } from '@/lib/file-preview'
-import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
+import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { downloadAndOpenRemoteTerminalFile } from './terminal-remote-file-download-open'
 import { createTerminalLinkTestDoubles } from './terminal-link-handlers-test-fixtures'
 import {
@@ -47,7 +47,7 @@ vi.mock('./terminal-remote-file-download-open', () => ({
 
 vi.mock('@/lib/file-preview', () => ({
   getWorkspaceFilePreviewPlan: vi.fn(() => ({ status: 'doc-preview' })),
-  openFileInBrowserTab: vi.fn(() => ({ status: 'doc-preview' }))
+  openFileInBrowserTab: vi.fn()
 }))
 
 installTerminalLinkTestEnvironment(doubles)
@@ -254,9 +254,8 @@ describe('handleOscLink', () => {
     })
     // Why: the preview tab is the surface — activation must not re-seed a shell into a
     // workspace whose last terminal the user closed.
-    expect(activateAndRevealWorkspace).toHaveBeenCalledWith('wt-1', {
-      providesInitialSurface: true,
-      executionHostId: 'ssh:ssh-1'
+    expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-1', {
+      providesInitialSurface: true
     })
   })
 

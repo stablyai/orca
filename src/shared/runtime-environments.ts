@@ -68,8 +68,6 @@ export const RuntimeSshAccessLinkSchema = RuntimeSshTunnelLinkSchema.extend({
   previousPreferredEndpointId: z.string().min(1)
 })
 
-export type RuntimeSshAccessLink = z.infer<typeof RuntimeSshAccessLinkSchema>
-
 export const RuntimeSshAccessOperationSchema = RuntimeSshTunnelLinkSchema.omit({ localPort: true })
   .extend({
     requestId: z.string().min(1),

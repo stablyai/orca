@@ -46,8 +46,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
     expect(codex.connections[0].calls.map((call) => call.method)).toEqual([
       'initialize',
       'thread/start',
-      'skills/list',
-      'model/list'
+      'skills/list'
     ])
   })
 
@@ -92,7 +91,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
     })
   })
 
-  it('leaves a rejected listing as a catalog error after the thread opens', async () => {
+  it('keeps current intent usable without inventing controls when a listing fails', async () => {
     const codex = fakeCodex({
       'model/list': () => {
         throw new Error('stub model/list rejected')
@@ -103,16 +102,38 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
     await acquireReadyCodexForTest(adapter, {
       identity: identityFor('session-1'),
       fence: 7,
-      spawnToken: 'spawn-9'
+      spawnToken: 'spawn-9',
+      options: { model: 'gpt-live', effort: 'medium' }
     })
 
     expect(codexStartReport(adapter).reportedOptions).toEqual({
       model: 'gpt-live',
       effort: 'medium'
     })
-    await expect(adapter.readOptions({ sessionId: 'session-1', fence: 7 })).rejects.toThrow(
-      'stub model/list rejected'
-    )
+    await expect(adapter.readOptions({ sessionId: 'session-1', fence: 7 })).resolves.toEqual({
+      current: { model: 'gpt-live', effort: 'medium' },
+      models: [
+        {
+          id: 'gpt-live',
+          label: 'gpt-live',
+          isDefault: false,
+          efforts: [],
+          effortsKnown: false
+        }
+      ]
+    })
+    codex.routes['turn/start'] = answerWithOpenedTurn(codex, 'turn-1')
+    await expect(
+      adapter.dispatch({
+        sessionId: 'session-1',
+        clientMessageId: 'after-listing-failure',
+        body: USER_MESSAGE,
+        fence: 7
+      })
+    ).resolves.toMatchObject({ state: 'admitted' })
+    expect(
+      codex.connections[0].calls.findLast((call) => call.method === 'turn/start')?.params
+    ).toMatchObject({ model: 'gpt-live', effort: 'medium' })
     expect(codex.connections[0].closeCount).toBe(0)
   })
 

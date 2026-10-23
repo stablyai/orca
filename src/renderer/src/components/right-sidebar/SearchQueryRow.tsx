@@ -36,7 +36,7 @@ export function SearchQueryRow({
 }: SearchQueryRowProps): React.JSX.Element {
   return (
     <div
-      className="flex h-7 items-center gap-1 rounded-sm border border-border bg-input/50 px-1.5 focus-within:border-ring"
+      className="flex h-8 items-center gap-1 rounded-md border border-border bg-input/50 px-2 focus-within:border-ring focus-within:ring-1 focus-within:ring-ring"
       data-ignore-file-explorer-keys="true"
     >
       <SearchIcon className="size-3.5 shrink-0 text-muted-foreground" />
@@ -44,7 +44,8 @@ export function SearchQueryRow({
         ref={inputRef}
         type="text"
         data-file-search-input="true"
-        className="min-w-0 flex-1 bg-transparent py-1 text-xs text-foreground outline-none placeholder:text-muted-foreground/50"
+        data-explorer-query-input="search"
+        className="min-w-0 flex-1 bg-transparent py-1 text-xs text-foreground outline-none placeholder:text-muted-foreground/60"
         aria-label={translate(
           'auto.components.right.sidebar.SearchQueryRow.queryLabel',
           'Search files'

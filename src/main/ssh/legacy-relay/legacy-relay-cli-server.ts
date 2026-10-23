@@ -61,7 +61,7 @@ const LEGACY_RELAY_CLI_HELP =
   'This terminal was started by an older version of Orca. It runs orca orchestration check, ' +
   'inbox, send, ask and reply; open a new terminal on this host for full orca help.'
 
-export type LegacyRelayCliServerDeps = {
+type LegacyRelayCliServerDeps = {
   targetId: string
   runtime: () => OrcaRuntimeService | null
   /** The per-host switch, read on every call so turning it off applies to the next command. */

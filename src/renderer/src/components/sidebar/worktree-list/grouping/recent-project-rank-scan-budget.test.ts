@@ -71,6 +71,7 @@ describe('recent project rank scan budget', () => {
       collapsedGroups: new Set(grouped.map(([key]) => key)),
       workspaceStatuses: [],
       repoMap: new Map(),
+      repoOf: () => undefined,
       defaultHostId: 'local',
       hostLabelById: undefined,
       projectIndex: null,

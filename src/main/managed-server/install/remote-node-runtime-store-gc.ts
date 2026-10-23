@@ -51,7 +51,7 @@ import {
 const MAX_REMOVALS_PER_PASS = 8
 const ABANDONED_TOMBSTONE_MS = 30 * 60_000
 
-export type RuntimeStoreGcPlan = {
+type RuntimeStoreGcPlan = {
   /** `node-<sha>` entries to rename away and delete. */
   remove: string[]
   /** Abandoned tombstones whose runtime is still unwanted. */
@@ -119,7 +119,7 @@ export function planRuntimeStoreGc(
   return plan
 }
 
-export type RuntimeStoreGcResult =
+type RuntimeStoreGcResult =
   | { state: 'skipped'; reason: string }
   | {
       state: 'collected'

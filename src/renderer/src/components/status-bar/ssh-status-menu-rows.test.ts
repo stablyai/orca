@@ -52,20 +52,18 @@ describe('findSshHostMatches', () => {
       target('east-prod', 'disconnected'),
       target('PROD', 'disconnected')
     ]
-    const { matches, moreCount } = findSshHostMatches(targets, ' prod ', 5)
-    expect(matches[0]?.id).toBe('PROD')
-    expect(matches).toHaveLength(5)
-    expect(moreCount).toBe(27)
-    expect(findSshHostMatches(targets, 'east', 5).matches.map((row) => row.id)).toEqual([
-      'east-prod'
-    ])
+    const { shown, hiddenCount } = findSshHostMatches(targets, ' prod ', 5)
+    expect(shown[0]?.id).toBe('PROD')
+    expect(shown).toHaveLength(5)
+    expect(hiddenCount).toBe(27)
+    expect(findSshHostMatches(targets, 'east', 5).shown.map((row) => row.id)).toEqual(['east-prod'])
   })
 
   it('leaves out connected hosts, which the menu already lists', () => {
-    const { matches } = findSshHostMatches(
+    const { shown } = findSshHostMatches(
       [target('web-1', 'connected'), target('web-2', 'disconnected')],
       'web'
     )
-    expect(matches.map((row) => row.id)).toEqual(['web-2'])
+    expect(shown.map((row) => row.id)).toEqual(['web-2'])
   })
 })

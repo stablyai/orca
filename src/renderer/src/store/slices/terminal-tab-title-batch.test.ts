@@ -16,13 +16,6 @@ vi.mock('@/components/terminal-pane/shutdown-buffer-captures', () => ({
 }))
 
 const main = layoutApplyTestDouble()
-/** The generated titles sent to main, by tab-bar id; its frame (not modelled here) draws them. */
-const titlesSentToMain = (): Record<string, string | null> =>
-  Object.fromEntries(
-    main.commands.flatMap((command) =>
-      command.type === 'renameTabs' ? command.renames.map((r) => [r.tabId, r.title]) : []
-    )
-  )
 // @ts-expect-error -- minimal preload API stub for the slice's IPC writes
 globalThis.window = { api: { runtime: { call: main.call } } }
 
@@ -234,11 +227,10 @@ describe('terminal tab title batches', () => {
       'Second visible'
     ])
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      // Main takes the generated title for the tab's first row; its frame draws it, so the window
-      // writes none of its own.
-      await vi.waitFor(() =>
-        expect(Object.values(titlesSentToMain())).toContain('Generated duplicate title for remote')
-      )
+      // Main derives the generated title from its own agent status and its frame draws it: the
+      // window sends and writes none.
+      await new Promise<void>((resolve) => setTimeout(resolve, 0))
+      expect(main.commands).toEqual([])
       expect(store.getState().tabsByWorktree.owner?.map((tab) => tab.generatedTitle)).toEqual([
         undefined,
         undefined
@@ -340,22 +332,21 @@ describe('terminal tab title batches', () => {
     main.commands.length = 0
     store.getState().setGeneratedTabTitlesFromAgentPrompts(updates)
 
-    // A layout-owner build sends main the batch as one rename; main's frame (not modelled here)
-    // is its one store write, so the window writes none.
-    await vi.waitFor(() =>
-      expect(main.commands.map((command) => command.type)).toEqual(
-        ORCA_LAYOUT_OWNER_IS_MAIN ? ['renameTabs'] : []
-      )
-    )
     await new Promise<void>((resolve) => setTimeout(resolve, 0))
     unsubscribe()
-    expect(publications).toBe(ORCA_LAYOUT_OWNER_IS_MAIN ? 0 : 1)
-    // A layout-owner build adds a second linear pass: the dry run that picks main's renames.
-    expect(fixture.getIdReads()).toBeLessThanOrEqual(ORCA_LAYOUT_OWNER_IS_MAIN ? 710 : 305)
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      // Main derives the batch's titles from its own agent status (agent-generated-tab-titles.test.ts
+      // pins the same first-write and replacement rule there): the window sends and writes none.
+      expect(main.commands).toEqual([])
+      expect(publications).toBe(0)
+      expect(store.getState().tabsByWorktree['wt-0']?.[0]?.generatedTitle).toBeUndefined()
+      return
+    }
+    expect(main.commands).toEqual([])
+    expect(publications).toBe(1)
+    expect(fixture.getIdReads()).toBeLessThanOrEqual(305)
     const titleOf = (worktreeId: string): string | null | undefined =>
-      ORCA_LAYOUT_OWNER_IS_MAIN
-        ? titlesSentToMain()[store.getState().unifiedTabsByWorktree[worktreeId]![0]!.id]
-        : store.getState().tabsByWorktree[worktreeId]?.[0]?.generatedTitle
+      store.getState().tabsByWorktree[worktreeId]?.[0]?.generatedTitle
     expect(titleOf('wt-0')).toBe('Replacement title for a newer dispatch')
     expect(titleOf('wt-99')).toBe('Refactor remote module 99 for startup')
   })

@@ -44,7 +44,6 @@ export type WorktreeBaseWatchTarget = {
   key: string
   kind: WorktreeBaseWatchKind
   path: string
-  connectionId?: string
   repos: Map<string, WorktreeBaseRepoWatchConfig>
   /** Exact upstream leaf selected by accepted active-worktree status. */
   gitStatusRefPaths?: ReadonlySet<string>

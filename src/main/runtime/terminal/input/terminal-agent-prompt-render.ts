@@ -1,4 +1,4 @@
-import { OrcaRuntimeWithWriteTerminalAgentPrompt } from './terminal-agent-prompt'
+import { OrcaRuntimeWithSubmitTerminalAgentPrompt } from './terminal-agent-prompt-submit'
 import {
   CLAUDE_AGENT_PROMPT_RENDER_MARKER,
   CLAUDE_AGENT_PROMPT_RENDER_QUIET_MS,
@@ -10,7 +10,7 @@ import type {
 } from '../../../../shared/runtime-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
-export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRuntimeWithWriteTerminalAgentPrompt {
+export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRuntimeWithSubmitTerminalAgentPrompt {
   protected createAgentPromptRenderGate(
     ptyId: string,
     pasteIngestMs: number

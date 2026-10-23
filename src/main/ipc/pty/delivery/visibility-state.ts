@@ -9,6 +9,9 @@ export const interactiveOutputCharsByPty = new Map<string, number>()
 export const activeRendererPtys = new Set<string>()
 export const visibleRendererPtys = new Set<string>()
 export const rendererVisibilityKnownPtys = new Set<string>()
+// Layout-owner build: terminals visible window views are attaching to, so main's start of them
+// stays visible; `skippedHide` records that it did, so a failed attach hides it again.
+export const attachingRendererViewPtys = new Map<string, { views: number; skippedHide: boolean }>()
 // Why null-init + wrapper fns: see debug.ts — rolldown const-folds `export let fn = noop` bridges (STA-5661).
 let invalidatePendingPtyDrainPriorityImpl: ((id?: string, schedule?: boolean) => void) | null = null
 let invalidatePendingPtyDrainPolicyImpl: ((id?: string, schedule?: boolean) => void) | null = null

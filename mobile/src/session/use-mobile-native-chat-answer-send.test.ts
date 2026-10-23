@@ -285,6 +285,20 @@ describe('useMobileNativeChatAnswerSend', () => {
     ])
   })
 
+  it('sends a Codex async answer as one ordinary message, not selector keystrokes', async () => {
+    const sendRequest = vi.fn().mockResolvedValue(acceptedResponse())
+    await mount({ sendRequest } as unknown as RpcClient, vi.fn(), 'codex')
+    const prompt: AskPrompt = {
+      replyAsMessage: true,
+      questions: [{ question: 'Which color?', multiSelect: false, options: [{ label: 'Red' }] }]
+    }
+
+    await expect(answerSend?.answerAsk(prompt, [{ indices: [0] }])).resolves.toBe(true)
+    expect(sendRequest.mock.calls.map((call) => call[1])).toEqual([
+      expect.objectContaining({ text: '\x1b[200~> Which color?\r\rRed\x1b[201~', enter: true })
+    ])
+  })
+
   it('submits a non-selector answer as pasted label text with a single Enter', async () => {
     const sendRequest = vi.fn().mockResolvedValue(acceptedResponse())
     await mount({ sendRequest } as unknown as RpcClient, vi.fn(), 'grok')

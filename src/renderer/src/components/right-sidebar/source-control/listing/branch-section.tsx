@@ -29,7 +29,7 @@ export function SourceControlBranchSection({
   worktreePath,
   revealInExplorer,
   activeConnectionId,
-  openBranchFile,
+  openCommittedDiff,
   openBranchAllDiffs,
   diffCommentCountByPath
 }: {
@@ -47,7 +47,7 @@ export function SourceControlBranchSection({
   worktreePath: string
   revealInExplorer: (worktreeId: string, absolutePath: string) => void
   activeConnectionId: string | null
-  openBranchFile: (entry: GitBranchChangeEntry, event?: SourceControlRowOpenEvent) => void
+  openCommittedDiff: (entry: GitBranchChangeEntry, event?: SourceControlRowOpenEvent) => void
   openBranchAllDiffs: (
     worktreeId: string,
     worktreePath: string,
@@ -130,7 +130,7 @@ export function SourceControlBranchSection({
                   depth={node.depth}
                   onRevealInExplorer={revealInExplorer}
                   connectionId={activeConnectionId}
-                  onOpen={(event) => openBranchFile(node.entry, event)}
+                  onOpen={(event) => openCommittedDiff(node.entry, event)}
                   commentCount={diffCommentCountByPath.get(node.entry.path) ?? 0}
                   showPathHint={false}
                 />
@@ -150,7 +150,7 @@ export function SourceControlBranchSection({
                 worktreePath={worktreePath}
                 onRevealInExplorer={revealInExplorer}
                 connectionId={activeConnectionId}
-                onOpen={(event) => openBranchFile(entry, event)}
+                onOpen={(event) => openCommittedDiff(entry, event)}
                 commentCount={diffCommentCountByPath.get(entry.path) ?? 0}
               />
             )}

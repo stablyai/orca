@@ -159,6 +159,8 @@ function spawnShellAndReadEnvironment(
 }
 
 export type ResolveLoginShellEnvironmentOptions = {
+  /** Reads the last capture or process fallback without starting or awaiting shell work. */
+  cachedOnly?: boolean
   /** Only a run that started at or after this time answers; one is started if none has. */
   startedAfter?: number
   /** Serves the last result, rerunning the shell in the background once the last run is older. */
@@ -221,6 +223,9 @@ export function captureLoginShellEnvironment(
     return capture
   }
   const { running, last } = entry
+  if (options.cachedOnly) {
+    return Promise.resolve(last ?? fellBack)
+  }
   if (options.startedAfter !== undefined) {
     return running && running.startedAt >= options.startedAfter ? running.capture : run()
   }

@@ -1,56 +1,83 @@
-// Main's pane starts, as the window's store shows them: a status-only frame changes this map and no
-// pane tree, so the pane's view stays mounted.
+// Main's pane starts and their resume outcomes, as the window's store shows them: a status-only
+// frame changes these maps and no pane tree, so the pane's view stays mounted.
 
 import type { AppState } from '@/store/types'
-import type { TerminalPaneStart } from '@/store/terminals/terminal-state'
+import type { TerminalPaneResumeOutcome, TerminalPaneStart } from '@/store/terminals/terminal-state'
 import { paneKeyOf } from '../../../shared/workspace-layout/workspace-layout-model'
-import type { PublishedWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-published'
+import type {
+  PublishedPane,
+  PublishedWorkspaceLayout
+} from '../../../shared/workspace-layout/workspace-layout-published'
 
 type PaneStarts = AppState['terminalPaneStartsByPaneKey']
+type ShownByKey = Map<string, ReadonlySet<string>>
 
-function startsOf(layout: PublishedWorkspaceLayout | undefined): Map<string, TerminalPaneStart> {
-  const starts = new Map<string, TerminalPaneStart>()
+/** The pane keys each workspace last showed, per map, so a fact that ended drops from it. */
+export type FramePaneFactsShown = { starts: ShownByKey; resumeOutcomes: ShownByKey }
+
+export function framePaneFactsShown(): FramePaneFactsShown {
+  return { starts: new Map(), resumeOutcomes: new Map() }
+}
+
+type PaneFact<T> = {
+  of: (pane: PublishedPane) => T | null
+  same: (a: T | undefined, b: T) => boolean
+}
+
+const START: PaneFact<TerminalPaneStart> = {
+  of: (pane) =>
+    pane.status
+      ? { status: pane.status, ...(pane.statusReason ? { reason: pane.statusReason } : {}) }
+      : null,
+  same: (a, b) => a?.status === b.status && a.reason === b.reason
+}
+
+const RESUME_OUTCOME: PaneFact<TerminalPaneResumeOutcome> = {
+  of: ({ resumeOutcome: outcome, ptyId, ptyGeneration }) =>
+    outcome && ptyId
+      ? { ptyId, ...(ptyGeneration !== undefined ? { ptyGeneration } : {}), outcome }
+      : null,
+  same: (a, b) =>
+    a?.ptyId === b.ptyId && a.ptyGeneration === b.ptyGeneration && a.outcome === b.outcome
+}
+
+function factsOf<T>(
+  layout: PublishedWorkspaceLayout | undefined,
+  fact: PaneFact<T>
+): Map<string, T> {
+  const facts = new Map<string, T>()
   for (const tab of layout?.tabs ?? []) {
     for (const pane of tab.terminal?.panes ?? []) {
-      if (pane.status) {
-        starts.set(paneKeyOf(tab.entityId, pane.leafId), {
-          status: pane.status,
-          ...(pane.statusReason ? { reason: pane.statusReason } : {})
-        })
+      const found = fact.of(pane)
+      if (found) {
+        facts.set(paneKeyOf(tab.entityId, pane.leafId), found)
       }
     }
   }
-  return starts
+  return facts
 }
 
-const sameStart = (a: TerminalPaneStart | undefined, b: TerminalPaneStart): boolean =>
-  a?.status === b.status && a.reason === b.reason
-
-/**
- * `current` with each of `keys`' panes showing what its workspace's frame says, the same object
- * when nothing changed. `shownByKey` holds the pane keys each workspace last showed, so a start
- * that ended (the pane bound, or left) drops from the map; it is updated in place.
- */
-export function paneStartsWithFrames(
-  current: PaneStarts,
+function paneFactsWithFrames<T>(
+  current: Record<string, T>,
   keys: Iterable<string>,
   frames: Readonly<Record<string, PublishedWorkspaceLayout | undefined>>,
-  shownByKey: Map<string, ReadonlySet<string>>
-): PaneStarts {
+  shownByKey: ShownByKey,
+  fact: PaneFact<T>
+): Record<string, T> {
   let next = current
-  const write = (): PaneStarts => (next === current ? { ...current } : next)
+  const write = (): Record<string, T> => (next === current ? { ...current } : next)
   for (const key of keys) {
-    const now = startsOf(frames[key])
+    const now = factsOf(frames[key], fact)
     for (const paneKey of shownByKey.get(key) ?? []) {
       if (!now.has(paneKey) && paneKey in next) {
         next = write()
         delete next[paneKey]
       }
     }
-    for (const [paneKey, start] of now) {
-      if (!sameStart(next[paneKey], start)) {
+    for (const [paneKey, found] of now) {
+      if (!fact.same(next[paneKey], found)) {
         next = write()
-        next[paneKey] = start
+        next[paneKey] = found
       }
     }
     if (now.size > 0) {
@@ -62,17 +89,46 @@ export function paneStartsWithFrames(
   return next
 }
 
+/**
+ * `current` with each of `keys`' panes showing what its workspace's frame says, the same object
+ * when nothing changed. `shownByKey` holds the pane keys each workspace last showed, so a start
+ * that ended (the pane bound, or left) drops from the map; it is updated in place.
+ */
+export function paneStartsWithFrames(
+  current: PaneStarts,
+  keys: Iterable<string>,
+  frames: Readonly<Record<string, PublishedWorkspaceLayout | undefined>>,
+  shownByKey: ShownByKey
+): PaneStarts {
+  return paneFactsWithFrames(current, keys, frames, shownByKey, START)
+}
+
 /** Shows the starts of the `changed` workspaces, and drops those of workspaces main stopped sending. */
 export function showFramePaneStarts(
   store: { getState: () => AppState; setState: (patch: Partial<AppState>) => void },
   changed: readonly string[],
   cache: Readonly<Record<string, PublishedWorkspaceLayout | undefined>>,
-  shownByKey: Map<string, ReadonlySet<string>>
+  shown: FramePaneFactsShown
 ): void {
-  const starts = store.getState().terminalPaneStartsByPaneKey
-  const gone = [...shownByKey.keys()].filter((key) => !(key in cache))
-  const next = paneStartsWithFrames(starts, [...changed, ...gone], cache, shownByKey)
-  if (next !== starts) {
-    store.setState({ terminalPaneStartsByPaneKey: next })
+  const state = store.getState()
+  const keysOf = (shownByKey: ShownByKey): string[] => [
+    ...changed,
+    ...[...shownByKey.keys()].filter((key) => !(key in cache))
+  ]
+  const starts = state.terminalPaneStartsByPaneKey
+  const nextStarts = paneStartsWithFrames(starts, keysOf(shown.starts), cache, shown.starts)
+  const outcomes = state.terminalPaneResumeOutcomesByPaneKey
+  const nextOutcomes = paneFactsWithFrames(
+    outcomes,
+    keysOf(shown.resumeOutcomes),
+    cache,
+    shown.resumeOutcomes,
+    RESUME_OUTCOME
+  )
+  if (nextStarts !== starts || nextOutcomes !== outcomes) {
+    store.setState({
+      ...(nextStarts !== starts ? { terminalPaneStartsByPaneKey: nextStarts } : {}),
+      ...(nextOutcomes !== outcomes ? { terminalPaneResumeOutcomesByPaneKey: nextOutcomes } : {})
+    })
   }
 }

@@ -1,6 +1,7 @@
 import type { IDisposable, Terminal } from '@xterm/xterm'
 import {
   isTerminalLinkifierHoverActive,
+  refreshStaleTerminalLinkifierHover,
   resetTerminalLinkifierHoverState
 } from './terminal-linkifier-hover-reset'
 
@@ -34,6 +35,10 @@ export function installTerminalLinkifierHoverResetOnWrite(terminal: Terminal): I
   }
   let timer: ReturnType<typeof setTimeout> | null = null
   const flush = (): void => {
+    if (refreshStaleTerminalLinkifierHover(terminal)) {
+      timer = null
+      return
+    }
     // Why: never invalidate the cache while the user is hovering a link — it
     // would clear+re-query the active link (async for file paths), flickering
     // its underline/tooltip. Re-arm instead of dropping the pending reset: if

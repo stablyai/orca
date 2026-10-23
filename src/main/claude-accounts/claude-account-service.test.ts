@@ -544,4 +544,32 @@ describe('ClaudeAccountService', () => {
       'That Claude account belongs to a different runtime.'
     )
   })
+
+  it('selects and clears a WSL account across casing while retaining its recorded distro', async () => {
+    const f = fixture([
+      account('a'),
+      account('w', {
+        managedAuthRuntime: 'wsl',
+        wslDistro: 'Ubuntu',
+        wslLinuxAuthPath: '/home/u/.local/share/orca/claude-profiles/w/home'
+      })
+    ])
+    const selected = await f.service.selectAccountForTarget('w', {
+      runtime: 'wsl',
+      wslDistro: 'ubuntu'
+    })
+    expect(selected.activeAccountIdsByRuntime).toEqual({ host: 'a', wsl: { Ubuntu: 'w' } })
+    expect(f.runtimeAuth.syncForCurrentSelection).toHaveBeenCalledWith({
+      runtime: 'wsl',
+      wslDistro: 'Ubuntu'
+    })
+    await expect(
+      f.service.selectAccountForTarget('w', { runtime: 'wsl', wslDistro: 'Debian' })
+    ).rejects.toThrow('different runtime')
+    const cleared = await f.service.selectAccountForTarget(null, {
+      runtime: 'wsl',
+      wslDistro: 'ubuntu'
+    })
+    expect(cleared.activeAccountIdsByRuntime).toEqual({ host: 'a', wsl: { Ubuntu: null } })
+  })
 })

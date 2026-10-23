@@ -128,35 +128,9 @@ export function parseHandshakeMessage(payload: Buffer): HandshakeMessage {
 export const KEEPALIVE_SEND_MS = 5_000
 export const TIMEOUT_MS = 20_000
 
-// ── Streaming constants (see docs/relay-file-stream-design.md) ─────
-
 export const STREAM_CHUNK_SIZE = 256 * 1024
 export const MAX_CONCURRENT_STREAMS = 16
-
-/** Max unacked fs.streamChunk frames in flight per stream when the client
- * requested `flowControl: 'ack'`. Bounds how many bulk bytes an interactive
- * pty.data frame can queue behind on the shared SSH channel (~1MB raw) while
- * keeping the pipe full across one ack round-trip on fast links. */
 export const STREAM_ACK_WINDOW_CHUNKS = 4
-
-/** Safety-valve poll interval for a pump stalled on acks: re-checks stream
- * abort/staleness so a client that vanished mid-stream cannot park the pump
- * (and its open file handle) forever. */
-export const STREAM_ACK_STALL_RECHECK_MS = 1_000
-
-// ── Git response streaming (see docs/relay-git-response-stream-design.md) ──
-
-/** Serialized-JSON size above which a streamable git response (diff family +
- * exec) is chunked onto the bulk lane instead of one JSON-RPC frame, so a large
- * diff cannot head-of-line-block interactive pty.data echo on the shared SSH
- * channel. Below this, single-frame is cheaper and avoids stream overhead. */
-export const GIT_RESPONSE_STREAM_THRESHOLD = 256 * 1024
-
-/** Per-chunk size (UTF-8 bytes of the serialized result) for git response
- * streaming. Independent from STREAM_CHUNK_SIZE — this offset math is not
- * shared with fs streams, so tuning it here is cross-version safe as long as
- * the client reassembles by concatenation (it does not depend on chunk size). */
-export const GIT_RESPONSE_CHUNK_SIZE = 128 * 1024
 
 /** Sentinel result returned in place of a large git response: the real payload
  * follows as git.responseChunk frames on the bulk lane. Old relays never emit

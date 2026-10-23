@@ -9,7 +9,6 @@ const {
   browserWindowMock,
   nativeUpdaterMock,
   autoUpdaterMock,
-  isMock,
   killAllPtyMock,
   recordUpdaterLifecycleMock
 } = vi.hoisted(() => {
@@ -79,7 +78,7 @@ const {
     browserWindowMock: { getAllWindows: vi.fn(() => []) },
     nativeUpdaterMock: { on: vi.fn() },
     autoUpdaterMock,
-    isMock: { dev: false },
+
     killAllPtyMock: vi.fn(),
     recordUpdaterLifecycleMock: vi.fn()
   }
@@ -98,7 +97,6 @@ vi.mock('electron-updater', () => ({ autoUpdater: autoUpdaterMock }))
 vi.mock('./electron-updater-loader', () => ({
   loadElectronAutoUpdater: () => autoUpdaterMock
 }))
-vi.mock('@electron-toolkit/utils', () => ({ is: isMock }))
 vi.mock('./ipc/pty/kill-all', () => ({ killAllPty: killAllPtyMock }))
 vi.mock('./updater-changelog', () => ({
   fetchChangelog: vi.fn().mockResolvedValue(null)
@@ -196,7 +194,7 @@ describe('quitAndInstall failure carries the updater cause', () => {
     appMock.getVersion.mockReturnValue('1.4.162')
     appMock.quit.mockReset()
     appMock.isPackaged = true
-    isMock.dev = false
+
     killAllPtyMock.mockReset()
     recordUpdaterLifecycleMock.mockReset()
     Object.defineProperty(process, 'platform', {

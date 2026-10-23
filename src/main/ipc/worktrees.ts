@@ -1,3 +1,4 @@
+import { registerWorktreeSleepHandlers } from './worktrees/sleep/register-worktree-sleep-handlers'
 import { ipcMain, type BrowserWindow } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
 import type { OrcaRuntimeService, RuntimeWorktreeLifecycleEvent } from '../runtime/orca-runtime'
@@ -42,6 +43,9 @@ const WORKTREE_HANDLER_CHANNELS = [
   'worktrees:resolvePrBase',
   'worktrees:resolveMrBase',
   'worktrees:remove',
+  'worktrees:sleep',
+  'worktrees:sleepReopened',
+  'worktrees:resumeSleptPane',
   'worktrees:previewNestedRemoval',
   'worktrees:forgetLocal',
   'worktrees:forceDeletePreservedBranch',
@@ -90,6 +94,7 @@ export function registerWorktreeHandlers(
   registerWorktreeCreateHandlers(context)
   registerReviewBaseHandlers(context)
   registerWorktreeRemovalHandlers(context)
+  registerWorktreeSleepHandlers(context)
   registerWorktreeForgetHandlers(context)
   registerWorktreeMetadataHandlers(context)
   registerWorktreeHookCheckHandler(context)

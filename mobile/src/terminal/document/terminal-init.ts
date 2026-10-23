@@ -16,6 +16,7 @@ import {
   updateMouseModeFromData
 } from './mouse-mode-decset-scan'
 import { captureInitialOscLinkTexts } from './osc-link-tap'
+import { attachOsc52ClipboardBridge } from './osc52-clipboard-bridge'
 import { attachTerminalQueryReplyBridge, resetTerminalDataReplyAuthority } from './query-reply'
 import { cancelSelect } from './selection-mode'
 import { resetEvictionCounter } from './selection-state-and-eviction'
@@ -50,6 +51,7 @@ function openTerminal(scope: TerminalDocumentScope, cols: number, rows: number) 
     allowProposedApi: true
   })
   scope.term = term
+  attachOsc52ClipboardBridge(scope, term)
   term.open(scope.surface!)
   attachWebglAddon(scope, true)
   try {

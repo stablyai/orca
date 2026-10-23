@@ -1,3 +1,8 @@
+import type {
+  PtyFencedTerminationRequest,
+  PtyFencedTerminationOutcome
+} from '../../../../shared/pty-fenced-termination'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import { getPtyIpc } from '../../pty-host-bindings'
 import type { Store } from '../../../persistence'
@@ -35,6 +40,9 @@ export type PtyKillIpcDeps = {
 export function installPtyKillIpcHandler(deps: PtyKillIpcDeps): void {
   getPtyIpc().handle('pty:kill', (_event, args: { id: string; keepHistory?: boolean }) =>
     stopRendererOwnedPty(deps, args)
+  )
+  getPtyIpc().handle('pty:killFenced', (_event, args: PtyFencedTerminationRequest | undefined) =>
+    stopFencedRendererPty(deps, args)
   )
 }
 
@@ -133,5 +141,57 @@ async function stopRendererOwnedPtyProcess(
   const incarnationId = finishPtyShutdown(args.id, connectionId, store, proof)
   if (proof.source !== 'exit-observed') {
     publishSyntheticExit(deps, args.id, -1, incarnationId, proof)
+  }
+}
+
+async function stopFencedRendererPty(
+  deps: PtyKillIpcDeps,
+  args: PtyFencedTerminationRequest | undefined
+): Promise<PtyFencedTerminationOutcome> {
+  if (
+    !args ||
+    typeof args.id !== 'string' ||
+    !args.id ||
+    typeof args.expectedIncarnationId !== 'string' ||
+    !args.expectedIncarnationId ||
+    typeof args.requireNoAgentOwner !== 'boolean' ||
+    typeof args.requireUnattached !== 'boolean' ||
+    isRemoteRuntimePtyId(args.id) ||
+    resolvePtyExecutionHost(args.id) !== LOCAL_EXECUTION_HOST_ID
+  ) {
+    return { outcome: 'refused', reason: 'unsupported' }
+  }
+  try {
+    await deps.getLocalPtyProviderStartupPromise(LOCAL_EXECUTION_HOST_ID)
+    const provider = tryGetProviderForPty(args.id)
+    if (!provider?.killFenced) {
+      return { outcome: 'refused', reason: 'unsupported' }
+    }
+    const result = await provider.killFenced(args)
+    if (
+      (result.outcome === 'ended' || result.outcome === 'already_exited') &&
+      ptyIncarnationById.get(args.id) === args.expectedIncarnationId
+    ) {
+      deps.runtime?.markPtyStopRequested?.(args.id)
+      finishPtyShutdown(
+        args.id,
+        null,
+        deps.store,
+        PtyExitProof.from(
+          result.outcome === 'ended' ? 'shutdown-acknowledged' : 'absent',
+          args.expectedIncarnationId
+        )
+      )
+      deps.runtime?.onPtyExit(args.id, -1, args.expectedIncarnationId)
+      deps.rememberSyntheticKillExit(args.id, args.expectedIncarnationId)
+      deps.sendPtyExitToRenderer({
+        id: args.id,
+        code: -1,
+        incarnationId: args.expectedIncarnationId
+      })
+    }
+    return result
+  } catch {
+    return { outcome: 'refused', reason: 'unverifiable' }
   }
 }

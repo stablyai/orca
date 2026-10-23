@@ -3,6 +3,7 @@ import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { useDroppable } from '@dnd-kit/core'
 import { useAppStore } from '../../store'
 import TabBar from '../tab-bar/TabBar'
+import { WorkspaceEmptyState } from '../WorkspaceEmptyState'
 
 import { TabBarQuickCommandsButton } from '../tab-bar/TabBarQuickCommandsButton'
 import { TabGroupPaneActionsMenu } from './TabGroupPaneActionsMenu'
@@ -329,6 +330,12 @@ export default function TabGroupPanel({
         className="relative flex-1 min-h-0 overflow-hidden"
         style={bodyAnchorStyle}
       >
+        {isVisible &&
+        !activeTab &&
+        model.groupTabs.length === 0 &&
+        clientHostedRows.length === 0 ? (
+          <WorkspaceEmptyState worktreeId={worktreeId} groupId={groupId} />
+        ) : null}
         {/* Why: empty anchor so the agent-sessions tour reads as a terminal-area tip, not toolbar chrome. */}
         {isFocused ? (
           <div

@@ -53,12 +53,18 @@ describe('openSessionSearchDatabase', () => {
     const path = await tempDatabasePath()
     const first = openSessionSearchDatabase(path)
     first.prepare("INSERT INTO files(path,byte_offset,mtime_ms) VALUES ('a',1,1)").run()
+    first
+      .prepare("INSERT INTO messages(session_row_id,role,text_truncated) VALUES (1,'user',1)")
+      .run()
     first.close()
 
     const second = openSessionSearchDatabase(path)
     expect(schemaVersion(second)).toBe(String(SESSION_SEARCH_SCHEMA_VERSION))
     expect(second.prepare('SELECT COUNT(*) AS c FROM files').get()).toEqual({
       c: 1
+    })
+    expect(second.prepare('SELECT text_truncated FROM messages').get()).toEqual({
+      text_truncated: 1
     })
     second.close()
   })
@@ -99,7 +105,8 @@ describe('openSessionSearchDatabase', () => {
     stale.prepare("INSERT INTO files(path,byte_offset,mtime_ms) VALUES ('a',1,1)").run()
     stale
       .prepare("UPDATE meta SET value = ? WHERE key = 'schema_version'")
-      .run(String(SESSION_SEARCH_SCHEMA_VERSION + 1))
+      .run(String(SESSION_SEARCH_SCHEMA_VERSION - 1))
+    stale.exec('ALTER TABLE messages DROP COLUMN text_truncated')
     stale.close()
     // Why: a stale sidecar must go with the main file, or SQLite replays it into the new one.
     await writeFile(`${path}-wal`, 'stale wal bytes')
@@ -110,6 +117,7 @@ describe('openSessionSearchDatabase', () => {
     expect(fresh.prepare('SELECT COUNT(*) AS c FROM files').get()).toEqual({
       c: 0
     })
+    expect(fresh.prepare('SELECT text_truncated FROM messages').all()).toEqual([])
     fresh.close()
     // Why not inode: ext4 hands a freed inode straight back to the next create.
     // The planted sidecar is gone (a fresh WAL is checkpointed away on close).

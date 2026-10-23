@@ -55,6 +55,9 @@ vi.mock('./browser-session-registry', () => ({
 vi.mock('../codex-accounts/fs-utils', () => ({
   copyFileWithWindowsRetry: copyFileWithWindowsRetryMock
 }))
+vi.mock('../../shared/windows-retry-file-operations', () => ({
+  copyFileWithWindowsRetry: copyFileWithWindowsRetryMock
+}))
 
 import { importCookiesFromBrowser, importCookiesFromFile } from './browser-cookie-import'
 import { createChromiumCookieTestDatabase } from './browser-cookie-import-test-database'

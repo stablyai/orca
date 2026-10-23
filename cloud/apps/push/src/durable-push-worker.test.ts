@@ -9,6 +9,7 @@ import { openInMemoryPushDatabase } from './push-database.js'
 import type { PushDelivery } from './push-delivery-message.js'
 import type { PushProviderOutcome } from './push-provider-outcome.js'
 import { WORKER_DRAINS } from './push-worker-concurrency.js'
+import { pauseAfter, within } from './durable-push-store.test-fixture.js'
 
 const cleanups: (() => Promise<void>)[] = []
 afterEach(async () => {
@@ -217,6 +218,89 @@ it('joins active work on shutdown and leaves unclaimed work for the next instanc
   await resumed.runDue()
   expect(h.send).toHaveBeenCalledTimes(2)
   await resumed.stop()
+})
+
+it('stops queued claim admissions without leasing the remaining device', async () => {
+  const h = await fixture()
+  const other = await h.devices.upsert({
+    hostFingerprint: 'host',
+    deviceId: 'phone-queued',
+    platform: 'android',
+    token: 'queued-token'
+  })
+  if (!other.ok) throw new Error('registration failed')
+  await h.accept(note(1))
+  h.advance(1)
+  await h.store.accept('host', other.registrationId, note(2))
+  const paused = pauseAfter(h.db)
+  const store = new DurablePushStore(h.db, h.now, paused.wrapped)
+  const worker = new DurablePushWorker(store, h.dispatcher, { now: h.now })
+  const pending = worker.runDue()
+  try {
+    await paused.atCandidate
+    const stopping = worker.stop()
+    paused.release()
+    await within(Promise.all([pending, stopping]), 2_000)
+    expect(h.send).toHaveBeenCalledOnce()
+    expect(h.send.mock.calls[0]?.[0].orca.notificationSeq).toBe(1)
+    const [remaining] = await h.db.query(
+      'SELECT attempts, lease_until FROM push_delivery_batches WHERE registration_id = ?',
+      [other.registrationId]
+    )
+    expect(Number(remaining?.attempts)).toBe(0)
+    expect(Number(remaining?.lease_until)).toBe(0)
+  } finally {
+    paused.release()
+    await worker.stop()
+    await pending
+  }
+})
+
+it('claims new devices while an earlier provider response is still pending', async () => {
+  const h = await fixture()
+  const second = await h.devices.upsert({
+    hostFingerprint: 'host',
+    deviceId: 'phone-second',
+    platform: 'android',
+    token: 'second-token'
+  })
+  const third = await h.devices.upsert({
+    hostFingerprint: 'host',
+    deviceId: 'phone-third',
+    platform: 'android',
+    token: 'third-token'
+  })
+  if (!second.ok || !third.ok) throw new Error('registration failed')
+  const held = Promise.withResolvers<PushProviderOutcome>()
+  const entered = Promise.withResolvers<void>()
+  const secondSent = Promise.withResolvers<void>()
+  const thirdSent = Promise.withResolvers<void>()
+  h.send.mockImplementation(async (delivery) => {
+    if (delivery.orca.notificationSeq === 1) {
+      entered.resolve()
+      return await held.promise
+    }
+    if (delivery.orca.notificationSeq === 2) secondSent.resolve()
+    if (delivery.orca.notificationSeq === 3) thirdSent.resolve()
+    return { status: 'sent' }
+  })
+  await h.accept(note(1))
+  h.worker.start()
+  h.worker.wake()
+  try {
+    await within(entered.promise, 2_000)
+    await h.store.accept('host', second.registrationId, note(2))
+    h.worker.wake()
+    await within(secondSent.promise, 2_000)
+    await h.store.accept('host', third.registrationId, note(3))
+    h.worker.wake()
+    await within(thirdSent.promise, 2_000)
+    expect(await h.store.pendingCount(h.registrationId)).toBe(1)
+    expect(h.send).toHaveBeenCalledTimes(3)
+  } finally {
+    held.resolve({ status: 'sent' })
+    await h.worker.stop()
+  }
 })
 
 it('runs due work on its timer and releases the timer on stop', async () => {

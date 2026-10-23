@@ -139,7 +139,8 @@ export async function adoptStablePane(
           resolveOwner,
           preAllocatedHandle: args.preAllocatedHandle,
           renderer: args.renderer,
-          keepAbsentBinding: args.keepAbsentBinding
+          keepAbsentBinding: args.keepAbsentBinding,
+          attachOnlyView: args.attachOnlyView
         })
         if (adopted) {
           args.onAdopted?.(adopted.result)

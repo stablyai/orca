@@ -13,6 +13,7 @@ import {
   FEED_ROWS,
   SERVED_SECTIONS,
   feedDomains,
+  feedKey,
   feedRow,
   liveRow,
   phoneView
@@ -87,6 +88,40 @@ function outline(sections: ReturnType<typeof sectionsFor>): string[] {
 }
 
 describe('the phone list from the sidebar feed', () => {
+  it.each(['repo', 'none', 'workspace-status', 'pr-status'] as const)(
+    'uses host headers instead of repeated card badges in %s grouping',
+    (groupBy) => {
+      const view = phoneView({ groupBy })
+      const live = liveRow({
+        worktreeId: FEED_ROWS.remote.id,
+        repoId: 'lab',
+        hostId: 'ssh:gpu',
+        hostContextLabel: 'GPU box',
+        hostContextHealthLabel: 'Disconnected'
+      })
+      const sections = sectionsFor(
+        { ...view, filters: { ...view.filters, visibleHostIds: ['local', 'ssh:gpu'] } },
+        { live: [live] }
+      )
+      expect(
+        sections.filter((section) => section.key.startsWith('host:')).map((s) => s.title)
+      ).toEqual(['Local Mac', 'GPU box'])
+      const rows = sections.flatMap((section) => section.data)
+      expect(rows).toHaveLength(3)
+      expect(rows.every((row) => row.hostContextLabel === undefined)).toBe(true)
+      expect(rows.find((row) => row.worktreeId === live.worktreeId)?.hostContextHealthLabel).toBe(
+        'Disconnected'
+      )
+
+      const mixed = sectionsFor(view, { live: [live] }).flatMap((section) => section.data)
+      expect(mixed.map((row) => row.hostContextLabel)).toEqual([
+        'Local Mac',
+        'Local Mac',
+        'GPU box'
+      ])
+    }
+  )
+
   it('draws the shared builder’s headers, order and nesting', () => {
     const lines = outline(sectionsFor(phoneView()))
     // The pinned parent carries its nested child.
@@ -137,7 +172,7 @@ describe('the phone list from the sidebar feed', () => {
     const domains = feedDomains({
       workspaces: new Map([
         ...base.workspaces,
-        ['|orca::/w/solo', feedRow({ id: 'orca::/w/solo', manualOrder: 4 })]
+        [feedKey('|orca::/w/solo'), feedRow({ id: 'orca::/w/solo', manualOrder: 4 })]
       ])
     })
     const built = buildSidebarFeedRows(domains, grouped, phoneFeedView(phoneView()))
@@ -209,7 +244,7 @@ describe('the phone list from the sidebar feed', () => {
 
     it('highlights nothing once the row is deleted', () => {
       const workspaces = new Map(feedDomains().workspaces)
-      workspaces.delete('|orca::/w/child')
+      workspaces.delete(feedKey('|orca::/w/child'))
       const domains = feedDomains({ workspaces })
       const sections = sectionsFromDomains(domains, phoneView(), '', {
         worktreeId: 'orca::/w/child'
@@ -324,8 +359,8 @@ describe('the phone list from the sidebar feed', () => {
     const built = buildSidebarFeedRows(
       feedDomains({
         workspaces: new Map([
-          ['|orca::/w/parent', FEED_ROWS.parent],
-          ['|orca::/w/child', feedChild]
+          [feedKey('|orca::/w/parent'), FEED_ROWS.parent],
+          [feedKey('|orca::/w/child'), feedChild]
         ])
       }),
       catalog,

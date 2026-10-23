@@ -1,10 +1,22 @@
 // Layout-owner build: main's starts publish their status on the pane, and a start main could not
 // make leaves its pane showing why, whether it failed before the pane was written or after.
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { isHibernationDoneRecord } from '../../../../shared/hibernation-done-record'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import type { LayoutApplyReply } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 import type * as dependencies from '../../orca-runtime-create-terminal-dependencies'
-import { PaneStartStatuses, paneStartFailure } from '../../pane-start-statuses'
-import type { WindowLayoutCommand } from '../../runtime-layout-apply'
+import {
+  PaneResumeOutcomes,
+  PaneStartStatuses,
+  paneStartFailure,
+  type PaneFactSources
+} from '../../pane-start-statuses'
+import type { LayoutCommandRunOptions, WindowLayoutCommand } from '../../runtime-layout-apply'
+import {
+  runLayoutPaneStarts,
+  startsPanes,
+  stopReplacedTerminals
+} from '../recovery/layout-command-pane-starts'
 import { allocateTerminalPaneIdentity } from '../../runtime-terminal-pane-identity'
 import { OrcaRuntimeWithCreateTerminal } from './terminal-create'
 import { mainOwnsTabLayout } from './main-owned-tab-layout'
@@ -38,10 +50,83 @@ export abstract class OrcaRuntimeWithFailedStartPanes extends OrcaRuntimeWithCre
     ? new PaneStartStatuses(() => this.markPaneLiveTitlesDirty())
     : null
 
+  /** Switch point: whether main's start of a pane resumed its agent, published while it stays bound. */
+  protected readonly paneResumeOutcomes = ORCA_LAYOUT_OWNER_IS_MAIN
+    ? new PaneResumeOutcomes(() => this.markPaneLiveTitlesDirty())
+    : null
+
+  /**
+   * Layout-owner build: main's side of a client's startPane, wake or restartPane, its live start
+   * statuses in and its effects out. Undefined for any other command, and with the switch off.
+   */
+  protected layoutCommandRun(command: WindowLayoutCommand): LayoutCommandRunOptions | undefined {
+    if (!ORCA_LAYOUT_OWNER_IS_MAIN || command.type === 'renameTabs' || !startsPanes(command)) {
+      return undefined
+    }
+    const { workspace } = command
+    return {
+      live: {
+        // Why unverifiable counts as live: lost contact is never evidence the terminal ended.
+        isBindingLive: (paneKey: string, ptyId: string) =>
+          (this.ptysById.get(ptyId)?.connected === true ||
+            this.ptyLivenessVerdictByPtyId.get(ptyId)?.verdict.status === 'unverifiable') &&
+          !this.paneStartStatuses?.peek(paneKey),
+        // Why local only: a remote or SSH terminal may hold output this host never saw.
+        retiresBinding: (paneKey: string, ptyId: string) => {
+          const pty = this.ptysById.get(ptyId)
+          const record =
+            this.getWorkspaceSessionForWorktree(workspace)?.sleepingAgentSessionsByPaneKey?.[
+              paneKey
+            ]
+          return (
+            pty?.connected === true &&
+            pty.connectionId === null &&
+            !isRemoteRuntimePtyId(ptyId) &&
+            pty.lastOutputAt == null &&
+            record !== undefined &&
+            isHibernationDoneRecord(record)
+          )
+        }
+      },
+      stopBeforeWrite: (ptyIds) =>
+        stopReplacedTerminals(ptyIds, (ptyId) => {
+          this.forgetRestoredPaneStart(ptyId)
+          return this.ptyController?.kill(ptyId) ?? false
+        }),
+      onEffects: (effects) =>
+        runLayoutPaneStarts({ type: command.type, workspace }, effects, (pane) =>
+          this.ensureRestoredPaneStarted(pane)
+        )
+    }
+  }
+
+  /** The live start facts main lays over each published pane. */
+  protected paneFactSources(): PaneFactSources {
+    return {
+      paneStartFact: (paneKey, binding) => this.paneStartStatuses?.get(paneKey, binding) ?? null,
+      paneResumeOutcome: (paneKey, binding) =>
+        this.paneResumeOutcomes?.get(paneKey, binding) ?? null
+    }
+  }
+
+  protected showRestoredPaneStart(paneKey: string, start: 'starting' | { failed: unknown }): void {
+    this.paneStartStatuses?.set(
+      paneKey,
+      start === 'starting' ? { status: 'starting' } : paneStartFailure(start.failed)
+    )
+  }
+
   protected paneStartStatusArgs: dependencies.PaneStartArgsOf = (opts) => {
     const sink = this.paneStartStatuses
     return sink
-      ? { startStatus: { sink, keepOnFailure: opts.keepPaneOnStartFailure === true } }
+      ? {
+          startStatus: {
+            sink,
+            keepOnFailure: opts.keepPaneOnStartFailure === true,
+            resumeOutcomes: this.paneResumeOutcomes ?? undefined,
+            resumesSleepingRecord: opts.resumesSleepingRecord === true
+          }
+        }
       : {}
   }
 

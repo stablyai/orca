@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -11,12 +11,16 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { getWorktreeOnHostFromState } from '@/store/selectors'
+import { getAllWorktreesFromState, getWorktreeOnHostFromState } from '@/store/selectors'
+import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
+import { RemovalUnsavedFilesNotice } from './RemovalUnsavedFilesNotice'
+import { confirmUnsavedDiscard } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import type { WorktreeRemovalTarget } from '../../../../shared/worktree/removal'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 export function DeleteNestedWorktreesDialog({
   target,
@@ -34,6 +38,21 @@ export function DeleteNestedWorktreesDialog({
   const [error, setError] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
   const request = useRef(0)
+  const worktreesByRepo = useAppStore((s) => (open ? selectWorktreesByRepo(s) : null))
+  // Why path containment: nested worktrees are the parent's rows on its host inside its folder.
+  const unsavedTargets = useMemo(() => {
+    const hostId = target.executionHostId ?? undefined
+    const rows = worktreesByRepo ? getAllWorktreesFromState({ worktreesByRepo }) : []
+    const parent = rows.find((row) => row.id === target.id && (!hostId || row.hostId === hostId))
+    return parent
+      ? rows
+          .filter(
+            (row) =>
+              (!hostId || row.hostId === hostId) && isPathInsideOrEqual(parent.path, row.path)
+          )
+          .map((row) => ({ id: row.id, hostId: row.hostId }))
+      : [{ id: target.id, hostId }]
+  }, [target, worktreesByRepo])
 
   const review = async (): Promise<void> => {
     const generation = ++request.current
@@ -63,6 +82,7 @@ export function DeleteNestedWorktreesDialog({
     if (!plan || deleting) {
       return
     }
+    const confirmedDiscards = confirmUnsavedDiscard(useAppStore.getState, unsavedTargets)
     setDeleting(true)
     setOpen(false)
     setError(null)
@@ -78,7 +98,10 @@ export function DeleteNestedWorktreesDialog({
     })
     state.markWorktreesDeleting(nestedRows)
     try {
-      const result = await state.removeWorktree(target, true, { approvedNestedWorktrees: plan })
+      const result = await state.removeWorktree(target, true, {
+        approvedNestedWorktrees: plan,
+        confirmedDiscards
+      })
       if (!result.ok) {
         setPlan(null)
         toast.error(
@@ -147,7 +170,7 @@ export function DeleteNestedWorktreesDialog({
           setOpen(next)
         }}
       >
-        <DialogContent showCloseButton={!deleting}>
+        <DialogContent surface="security" showCloseButton={!deleting}>
           <DialogHeader>
             <DialogTitle>
               {translate('worktree.nestedRemoval.title', 'Delete workspace and nested worktrees?')}
@@ -186,6 +209,7 @@ export function DeleteNestedWorktreesDialog({
               {translate('worktree.nestedRemoval.loading', 'Checking nested worktrees…')}
             </p>
           ) : null}
+          <RemovalUnsavedFilesNotice targets={unsavedTargets} enabled={open} />
           <p className="text-sm text-muted-foreground">
             {translate(
               'worktree.nestedRemoval.order',

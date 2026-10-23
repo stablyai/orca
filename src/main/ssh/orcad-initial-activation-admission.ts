@@ -14,7 +14,7 @@ import { orcadWindowsSlotOpCommand } from '../managed-server/install/orcad-remot
 
 const OWNER_RECORD_MAX_BYTES = 64 * 1024
 
-export type OrcadInitialActivationAdmission =
+type OrcadInitialActivationAdmission =
   | { decision: 'proceed' }
   | { decision: 'defer'; code: string; reason: string }
 

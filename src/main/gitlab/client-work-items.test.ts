@@ -119,6 +119,18 @@ describe('gitlab client — combined listWorkItems', () => {
     expect(issuesCallPath.at(-1)).toContain('search=ambiguous%20selector')
   })
 
+  it('looks up `#N` as the issue iid instead of a text search', async () => {
+    glabApiWithHeadersMock.mockResolvedValueOnce({ body: '[]', headers: {} })
+    glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })
+
+    await listWorkItems('/repo', 'opened', 1, 20, undefined, ' #23 ')
+
+    const issuesCallPath = glabExecFileAsyncMock.mock.calls[0][0] as string[]
+    const issueParams = new URLSearchParams(issuesCallPath.at(-1)?.split('?')[1])
+    expect(issueParams.getAll('iids[]')).toEqual(['23'])
+    expect(issueParams.has('search')).toBe(false)
+  })
+
   it('passes the requested page through to merge request and issue fetches', async () => {
     glabApiWithHeadersMock.mockResolvedValueOnce({ body: '[]', headers: {} })
     glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })

@@ -126,7 +126,7 @@ function updateSshTarget(id: string, updates: SshTargetUpdateInput): SshTarget |
   if (environmentId && updated) {
     // Why: the tunnel and the SSH transport under it were built from the old fields, so both go
     // and the next use dials the edited target. Only a host reached through its managed server:
-    // one an older build changed runs on the relay directly, whose session owns the transport.
+    // one an older build changed is unserved, so it has no managed connect to redial.
     const redial =
       !allowsDirectSshRelay(updated) &&
       (!before || fingerprintRuntimeSshTarget(before) !== fingerprintRuntimeSshTarget(updated))

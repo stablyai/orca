@@ -32,6 +32,7 @@ import { createSshConnectionCallbacks } from './ssh-connection-state-callbacks'
 import { resetSshCredentialDeclinesForTests } from '../../ssh/ssh-credential-decline'
 import { resetSshUserDisconnectsForTests } from '../../ssh/ssh-user-disconnect'
 import { registerSshConnectionHandlers } from './ssh-connection-handlers'
+import { registerPlainSshTerminalHandlers } from './plain-ssh-terminal-handlers'
 import {
   registerPowerMonitorReconnect,
   unregisterPowerMonitorReconnect
@@ -135,6 +136,7 @@ export function registerSshHandlers(
   registerSshTargetCrudHandlers()
   registerSshConnectionHandlers()
   registerSshPortForwardHandlers()
+  registerPlainSshTerminalHandlers()
   // COMPAT(legacy-relay-bridge): terminals an older Orca's relay still runs.
   registerLegacyRelayBridgeIpc({
     store,

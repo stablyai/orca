@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import { isRuntimeProviderSearchQueryWithinLimit } from '@/runtime/runtime-provider-search-bounds'
-import { withCurrentSprintClause } from '../../../shared/jira-jql-predicate'
+import { withCurrentSprintClause } from '../../../shared/jira/jira-jql-predicate'
 import {
   buildJiraStatusCatalog,
   getJiraStatusCatalogScopeKey
@@ -18,7 +18,7 @@ import { searchTaskPageJiraIssues } from '@/components/task-page-jira-search'
 import { JIRA_ITEM_LIMIT, TASK_SEARCH_DEBOUNCE_MS } from './task-page-source-context'
 import { readLinkedJiraIssues } from './task-page-jira-linked-issues'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
-import { buildJiraPresetJql } from '../../../shared/jira-preset-jql'
+import { buildJiraPresetJql } from '../../../shared/jira/jira-preset-jql'
 import { restrictJiraQueryToProject } from '../../../shared/jira-project-reference'
 export function useTaskPageJiraListEffects(model: TaskPageLinearCollectionEffectsModel) {
   const {

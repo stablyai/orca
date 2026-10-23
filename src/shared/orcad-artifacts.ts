@@ -120,6 +120,13 @@ export const ORCAD_FOREIGN_SQLITE_READER_ENTRY = 'foreign-sqlite-reader-entry.js
 export const ORCAD_PORT_SCAN_COMMAND_WORKER_ENTRY = 'port-scan-command-worker-entry.js'
 // Equals AI_VAULT_SERVICE_ENTRY_FILENAME: the forked child that lists agent sessions.
 export const ORCAD_SESSION_SCANNER_SERVICE_ENTRY = 'session-scanner-service-entry.js'
+// Equals COMPUTER_SIDECAR_ENTRY_FILENAME, and the desktop's out/main entry name.
+export const ORCAD_COMPUTER_SIDECAR_ENTRY = 'computer-sidecar.js'
+/** Plain scripts, one copy for every target: each platform's sidecar runs only its own. */
+export const ORCAD_COMPUTER_USE_RUNTIME_ARTIFACTS = [
+  'computer-use-linux/runtime.py',
+  'computer-use-windows/runtime.ps1'
+] as const
 
 // Kept here because build-orcad.mjs imports this manifest directly under Node type stripping.
 export const ORCAD_RIPGREP_ARTIFACTS = [
@@ -248,6 +255,9 @@ export const ORCAD_ARTIFACTS: readonly OrcadArtifact[] = [
   { filename: 'claude-profile-setup-worker-entry.js' },
   // Dictation's worker thread; it loads the recognizer `orca serve` names (#31174).
   { filename: 'stt-worker.js' },
+  // `orca computer` forks it; it finds the platform runtimes below beside itself (#31777).
+  { filename: ORCAD_COMPUTER_SIDECAR_ENTRY },
+  ...ORCAD_COMPUTER_USE_RUNTIME_ARTIFACTS.map((filename) => ({ filename })),
   // Target-specific even when the JavaScript bundle is shared across packaged slots.
   { filename: ORCAD_SERVER_TARGET_FILENAME },
   // orcad never depends on a host runtime or host-installed native module.

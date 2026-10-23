@@ -17,7 +17,7 @@ import {
   orderMigrationJournalChain
 } from '../persistence/migrating-orcad-catalog/migration-journal-directory'
 
-export class OrcadMigrationCutoverJournalUnreadableError extends Error {
+class OrcadMigrationCutoverJournalUnreadableError extends Error {
   constructor(detail: string) {
     super(`The migration journal cannot be read, so the SSH host stays fenced: ${detail}`)
     this.name = 'OrcadMigrationCutoverJournalUnreadableError'
