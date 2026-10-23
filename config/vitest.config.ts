@@ -39,6 +39,9 @@ const transforms = {
   },
   resolve: {
     alias: [
+      ...(process.env.ORCA_UNIT_ZOD_BUNDLE
+        ? [{ find: /^zod$/, replacement: process.env.ORCA_UNIT_ZOD_BUNDLE }]
+        : []),
       ...createWorkspaceSourceResolver().aliases,
       { find: '@renderer', replacement: resolve('src/renderer/src') },
       { find: '@', replacement: resolve('src/renderer/src') },
