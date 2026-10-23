@@ -4,10 +4,7 @@ import type {
 } from '../../shared/agent-session-journal-types'
 import type { AgentSessionFailureRowWords } from '../../shared/agent-session-failure-words'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import {
-  boundInlineText,
-  DEFAULT_JOURNAL_PAYLOAD_LIMITS
-} from '../native-chat/agent-session-journal/journal-payload-bounds'
+import { PROVIDER_FRAME_PAYLOAD_LIMITS } from '../native-chat/agent-session-journal/journal-payload-bounds'
 import { CLAUDE_STREAM_JSON_FRAME_KINDS } from '../native-chat/agent-session-wire/claude-stream-json-frame-schema'
 import {
   type UnhandledProviderFrameJournalItemOptions,
@@ -188,17 +185,13 @@ export function createClaudeProviderFrameFallback(
         'claude',
         kind,
         payload,
-        DEFAULT_JOURNAL_PAYLOAD_LIMITS,
+        PROVIDER_FRAME_PAYLOAD_LIMITS,
         options
       )
       if (!translated) {
         return false
       }
       beforeAppend?.()
-      const bounded =
-        typeof display === 'string' && display
-          ? boundInlineText(display, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
-          : null
       const identity = {
         provider: 'orca',
         clientMessageId: `provider-frame:claude:${acquisitionId}:${sequence}`
@@ -206,8 +199,8 @@ export function createClaudeProviderFrameFallback(
       const body: AgentJournalStatusItem =
         display && typeof display === 'object'
           ? { ...translated.body, ...display }
-          : bounded
-            ? { ...translated.body, text: bounded }
+          : typeof display === 'string' && display
+            ? { ...translated.body, text: display }
             : translated.body
       sink.appendItem(identity, body, stamp?.(identity, body) ?? { turnScope: turnScope() })
       sink.publish()

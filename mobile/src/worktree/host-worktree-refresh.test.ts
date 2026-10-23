@@ -8,17 +8,15 @@ const appState = vi.hoisted(() => ({
   remove: vi.fn()
 }))
 
-vi.mock('react-native', () => ({
-  AppState: {
-    get currentState() {
-      return appState.currentState
-    },
-    addEventListener: (_event: string, listener: (state: string) => void) => {
-      appState.listener = listener
-      return { remove: appState.remove }
-    }
+const AppState = {
+  get currentState() {
+    return appState.currentState
+  },
+  addEventListener: (_event: string, listener: (state: string) => void) => {
+    appState.listener = listener
+    return { remove: appState.remove }
   }
-}))
+}
 
 describe('startHostWorktreeRefresh', () => {
   let eventListener: ((payload: unknown) => void) | null
@@ -57,7 +55,8 @@ describe('startHostWorktreeRefresh', () => {
       fetchWorktrees,
       fetchRepoMetadata,
       syncViewSettings,
-      sidebarFeed
+      sidebarFeed,
+      appState: AppState
     })
   }
 
@@ -111,14 +110,20 @@ describe('startHostWorktreeRefresh', () => {
     expect(fetchRepoMetadata).not.toHaveBeenCalled()
   })
 
+  it('reads the Workspace options at start, resending what the last connection left unanswered', () => {
+    start()
+    expect(syncViewSettings).toHaveBeenCalledExactlyOnceWith({ resend: true })
+  })
+
   it('re-reads only the shared Workspace options on workspaceViewChanged', () => {
     start()
     fetchWorktrees.mockClear()
     fetchRepoMetadata.mockClear()
+    syncViewSettings.mockClear()
 
     eventListener?.({ type: 'workspaceViewChanged' })
 
-    expect(syncViewSettings).toHaveBeenCalledOnce()
+    expect(syncViewSettings).toHaveBeenCalledExactlyOnceWith()
     expect(fetchWorktrees).not.toHaveBeenCalled()
     expect(fetchRepoMetadata).not.toHaveBeenCalled()
   })
@@ -173,7 +178,7 @@ describe('startHostWorktreeRefresh', () => {
       expect(sidebarFeed.refresh).toHaveBeenCalledTimes(2)
       eventListener?.({ type: 'ready', subscriptionId: 'events-2' })
       expect(sidebarFeed.refresh).toHaveBeenCalledTimes(3)
-      expect(syncViewSettings).toHaveBeenCalledWith({ reconnected: true })
+      expect(syncViewSettings).toHaveBeenCalledWith({ resend: true })
       appState.listener?.('active')
       expect(sidebarFeed.refresh).toHaveBeenCalledTimes(4)
 

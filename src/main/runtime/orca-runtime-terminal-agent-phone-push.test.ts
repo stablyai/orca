@@ -7,6 +7,9 @@ import { OrcaRuntimeService } from './orca-runtime'
 import type { MobileNotificationEvent } from './runtime-mobile-notification-controller'
 import type { RuntimeStore } from './runtime-store-contract'
 
+// Switched on, as it ships next: that build's host reads hookless agents' titles itself.
+vi.mock('../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
+
 const WT = 'repo-1::/tmp/worktree-a'
 const PANE = 'tab-1:11111111-1111-4111-8111-111111111111'
 
@@ -111,6 +114,28 @@ describe('terminal agent phone push on a headless host', () => {
     const { runtime, report, agentAlerts } = createHost(1)
     runtime.markGraphUnavailable(1)
     report('working')
+    report('done')
+    vi.advanceTimersByTime(AGENT_DONE_QUIET_MS)
+    expect(agentAlerts()).toEqual(['done'])
+  })
+
+  // The detector holds one phase per pane, so the title's turn is the one the hook row finishes.
+  it('pushes the finish of a turn a hookless title started and the first hook row ends', () => {
+    const { runtime, report, agentAlerts } = createHost()
+    runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, {
+      tabs: [{ tabId: 'tab-1', worktreeId: WT, title: 'Agent', activeLeafId: null, layout: null }],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: WT,
+          leafId: PANE.slice('tab-1:'.length),
+          paneRuntimeId: 1,
+          ptyId: 'pty-1',
+          paneTitle: null
+        }
+      ]
+    })
+    runtime.onPtyData('pty-1', '\x1b]0;⠋ Codex working\x07', 1)
     report('done')
     vi.advanceTimersByTime(AGENT_DONE_QUIET_MS)
     expect(agentAlerts()).toEqual(['done'])

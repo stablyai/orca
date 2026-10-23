@@ -33,6 +33,7 @@ export type WorktreeCardProps = {
   contentIndent?: number
   flushSurface?: boolean
   lineageChildCount?: number
+  lineageChildWorktreeIds?: readonly string[]
   lineageCollapsed?: boolean
   lineageChildren?: React.ReactNode
   lineageChildrenStyle?: React.CSSProperties
@@ -92,7 +93,6 @@ export type ResolvedWorktreeCardProps = Omit<WorktreeCardProps, DefaultedWorktre
 }
 
 export const EMPTY_WORKSPACE_PORTS = []
-export const HOSTED_REVIEW_CARD_REFRESH_INTERVAL_MS = 60_000
 
 export function shouldBeginWorktreeRename(
   request: WorktreeRenameRequest | null,

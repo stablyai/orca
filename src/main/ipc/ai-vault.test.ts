@@ -96,6 +96,27 @@ describe('listAiVaultSessions host routing', () => {
     )
   })
 
+  it('gives servers reached over an SSH tunnel the longer all-hosts scan budget', async () => {
+    registerAiVaultHandlers({
+      getActiveRuntimeAiVaultHostInfos: () => [
+        { environmentId: 'lan-server', executionHostId: 'runtime:lan-server' },
+        {
+          environmentId: 'ssh-server',
+          executionHostId: 'runtime:ssh-server',
+          connectionDependency: 'ssh-tunnel'
+        }
+      ],
+      scanRuntimeAiVaultSessions: mocks.scanRuntimeAiVaultSessions
+    })
+
+    await _internals.listAiVaultSessions({ executionHostScope: 'all', force: true })
+
+    const timeoutFor = (environmentId: string): unknown =>
+      mocks.scanRuntimeAiVaultSessions.mock.calls.find(([id]) => id === environmentId)?.[2]
+    expect(timeoutFor('lan-server')).toEqual({ timeoutMs: 3_000 })
+    expect(timeoutFor('ssh-server')).toEqual({ timeoutMs: 15_000 })
+  })
+
   it('keeps direct runtime host scans on the normal runtime timeout', async () => {
     registerAiVaultHandlers({
       getActiveRuntimeAiVaultHostInfos: () => [],

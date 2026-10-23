@@ -3,6 +3,7 @@ import type { OrcaRuntimeWithBindPtyIncarnationHandle as BindPtyIncarnationHandl
 import type { OrcaRuntimeWithResolveWaiter as ResolveWaiterMethods } from '../orca-runtime-resolve-waiter'
 import { OrcaRuntimeWithStopTerminalsForProject } from '../terminal/stop/project-terminal-stop'
 import type { RuntimeRendererReloadFence } from '../orca-runtime-core'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-types'
 
 export abstract class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntimeWithStopTerminalsForProject {
@@ -201,7 +202,8 @@ export abstract class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntime
     }
     this.graphReloadLifecycle.settleActive('cancelled')
     // Why: a closed window never republishes, so a serve host must take its graph back (#27292).
-    if (this.servesHeadlessGraph) {
+    // Switch point: main holds every pane it owns, so it takes the graph back from a closed window.
+    if (ORCA_LAYOUT_OWNER_IS_MAIN || this.servesHeadlessGraph) {
       this.headlessGraphFallbackAvailable = true
     }
     if (this.shouldRestoreHeadlessGraph(windowId)) {

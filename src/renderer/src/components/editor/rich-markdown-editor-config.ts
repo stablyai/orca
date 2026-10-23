@@ -22,7 +22,7 @@ import {
   type ActivateMarkdownLink
 } from './rich-markdown-editor-click-routing'
 import { createRichMarkdownKeyHandler } from './rich-markdown-key-handler'
-import { commitRichMarkdownSerialization } from './rich-markdown-serialization-commit'
+import { staleViewEditEpoch } from './editor-stale-view-edit'
 import {
   createRichMarkdownImageResolverContext,
   setRichMarkdownImageResolverContext
@@ -73,12 +73,16 @@ export type EditorConfigParams = {
   handleEmojiPickRef: MutableRefObject<(menu: SlashMenuState) => void>
   typedEmptyOrderedListMarkerRef: MutableRefObject<boolean>
   cancelAutoFocusRef: MutableRefObject<(() => void) | null>
+  fileId: string
   serializeTimerRef: MutableRefObject<number | null>
+  /** Discard epoch when the pending serialization began. */
+  pendingEditEpochRef: MutableRefObject<number>
   isInitializingRef: MutableRefObject<boolean>
   isApplyingProgrammaticUpdateRef: MutableRefObject<boolean>
   markdownCommentsRef: MutableRefObject<DiffComment[]>
   markdownSourceLineOffsetRef: MutableRefObject<number>
-  flushPendingSerialization: () => void
+  /** Returns true when the pending edit was rejected instead of committed. */
+  flushPendingSerialization: () => boolean
   openSearchRef: MutableRefObject<() => void>
   openAnnotationPopoverRef: MutableRefObject<(requireLiveSelection?: boolean) => boolean>
   syncAnnotationTarget: (editor: Editor) => void
@@ -111,8 +115,6 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
     lastCommittedMarkdownRef,
     originalSourceRef,
     baseCanonicalRef,
-    reconcileRoundTripRef,
-    onContentChangeRef,
     onDirtyStateHintRef,
     onOpenDocLinkRef,
     typedEmptyOrderedListMarkerRef,
@@ -266,22 +268,11 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
       onDirtyStateHintRef.current(true)
       if (serializeTimerRef.current !== null) {
         window.clearTimeout(serializeTimerRef.current)
+      } else {
+        params.pendingEditEpochRef.current = staleViewEditEpoch(params.fileId)
       }
       serializeTimerRef.current = window.setTimeout(() => {
-        serializeTimerRef.current = null
-        try {
-          const { markdown, didSerialize } = commitRichMarkdownSerialization(
-            nextEditor,
-            { originalSourceRef, baseCanonicalRef, lastCommittedMarkdownRef },
-            reconcileRoundTripRef.current
-          )
-          if (didSerialize) {
-            onContentChangeRef.current(markdown)
-          }
-        } catch (error) {
-          // Why: teardown and reconcile failures are handled above; other failures must stay observable.
-          console.error('[editor] rich markdown serialize (debounced) failed', error)
-        }
+        params.flushPendingSerialization()
       }, 300)
     },
     onSelectionUpdate: ({ editor: nextEditor }) => {

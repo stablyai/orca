@@ -26,6 +26,7 @@ import { isMacPlatform, nativeChatToggleShortcutLabel } from './native-chat-shor
 import { TabWorkspaceLayoutMenuSection } from '@/components/tab-bar/TabWorkspaceLayoutMenuSection'
 import { canMoveTabToNewPaneColumn } from '@/components/tab-bar/tab-move-to-pane-column'
 import { isEditableTarget } from '@/lib/editable-target'
+import { findEditablePrimarySelectionPasteTarget } from '@/lib/primary-selection-paste'
 import { NativeChatCopyOrcaSessionIdMenuItem } from './NativeChatCopyOrcaSessionIdMenuItem'
 import { NativeChatSelectionQuote } from './NativeChatSelectionQuote'
 import { NativeChatPaneMenuItems } from './NativeChatPaneMenuItems'
@@ -188,8 +189,15 @@ export function useNativeChatContextMenu({
 
   const onContextMenuCapture = useCallback(
     (event: React.MouseEvent<HTMLElement>) => {
-      event.preventDefault()
       event.stopPropagation()
+      if (opensNativeEditableMenu(event.target)) {
+        // A cancelled event opens no native menu that could consume the hint.
+        if (!event.defaultPrevented) {
+          window.api.ui.markPlainTextContextMenuTarget()
+        }
+        return
+      }
+      event.preventDefault()
       if (!enabled) {
         return
       }
@@ -275,7 +283,7 @@ export function useNativeChatContextMenu({
             rewind={rewind}
           />
           {state.canPaste ? (
-            <DropdownMenuItem onSelect={actions.onPaste}>
+            <DropdownMenuItem onSelect={() => actions.onPaste()}>
               <Clipboard />
               {translate('auto.components.terminal.pane.TerminalContextMenu.0a917b591a', 'Paste')}
             </DropdownMenuItem>
@@ -289,7 +297,7 @@ export function useNativeChatContextMenu({
                   <SquareTerminal />
                   {translate(
                     'components.tab.bar.SortableTabContextMenu.switchToTerminalView',
-                    'Switch to Terminal'
+                    'Continue with Terminal Agent'
                   )}
                   <DropdownMenuShortcut>{shortcutLabel}</DropdownMenuShortcut>
                 </DropdownMenuItem>
@@ -335,9 +343,17 @@ export function useNativeChatContextMenu({
 
 function keepSelectionThroughMenuPress(event: React.PointerEvent<HTMLElement>): void {
   // Why: left alone, the press that opens the menu collapses the selection before contextmenu fires.
-  if (event.button === 2 || (isMacPlatform() && event.ctrlKey)) {
+  if (
+    (event.button === 2 || (isMacPlatform() && event.ctrlKey)) &&
+    !opensNativeEditableMenu(event.target)
+  ) {
     event.preventDefault()
   }
+}
+
+// Why: only Chromium's own menu for a typing target carries the OS spellchecker's suggestions.
+function opensNativeEditableMenu(target: EventTarget | null): boolean {
+  return findEditablePrimarySelectionPasteTarget(target) !== null
 }
 
 function getNativeChatSelectedText(root: HTMLElement | null): string {

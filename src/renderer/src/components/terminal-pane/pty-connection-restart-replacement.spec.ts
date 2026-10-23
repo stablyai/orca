@@ -1,6 +1,13 @@
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushAsyncTicks } from './pty-connection-test-async'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import {
+  bindsPaneInStore,
+  expectWindowStartAskedMain,
+  mainLayoutApplyTransport,
+  mainStartsPaneAs
+} from './pty-connection-test-main-pane-start-fixtures'
 import {
   leafIdForPane,
   createMockTransport,
@@ -44,6 +51,7 @@ export function registerPtyConnectionRestartReplacementTests(): void {
         }
       })
       await installTerminalTestGlobals()
+      ;(await mainLayoutApplyTransport()).reset()
     })
 
     afterEach(async () => {
@@ -73,6 +81,11 @@ export function registerPtyConnectionRestartReplacementTests(): void {
         updatedAt: 1,
         origin: 'live'
       }
+      // Switch on: main's start of the replacement binds the pane to `pty-main`.
+      await mainStartsPaneAs({
+        ptyId: 'pty-main',
+        bind: bindsPaneInStore(() => mockStoreState, 'tab-1', leafIdForPane(2))
+      })
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixtures implement the pane, manager and deps members connectPanePty reads.
       const args = [pane, createManager(1), deps] as unknown as Parameters<typeof connectPanePty>
       const binding = connectPanePty(...args)
@@ -94,7 +107,19 @@ export function registerPtyConnectionRestartReplacementTests(): void {
       const connects = (): number => transport.connect.mock.calls.length
       const lastCommand = (): string | undefined =>
         transport.connect.mock.calls.at(-1)?.[0]?.command
-      return { binding, exit, connects, lastCommand }
+      /** The replacement resumed the agent: the window's own spawn, or, switch on, main's start. */
+      const expectResumed = async (): Promise<void> => {
+        if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
+          expect(lastCommand()).toContain('sess-1')
+          return
+        }
+        await expectWindowStartAskedMain(transport, paneKey, mockStoreState)
+        expect(transport.connect).toHaveBeenLastCalledWith(
+          expect.objectContaining({ sessionId: 'pty-main', attachOnlyView: true })
+        )
+        expect((await mainLayoutApplyTransport()).sentOfType('startPane')).toHaveLength(1)
+      }
+      return { binding, exit, connects, lastCommand, expectResumed }
     }
 
     it('resumes a restart-replaced hidden pane once, when it is next shown', async () => {
@@ -107,7 +132,7 @@ export function registerPtyConnectionRestartReplacementTests(): void {
       pane.binding.noteVisibilityResume()
       await flushAsyncTicks()
       expect(pane.connects()).toBe(before + 1)
-      expect(pane.lastCommand()).toContain('sess-1')
+      await pane.expectResumed()
 
       pane.binding.noteVisibilityResume()
       await flushAsyncTicks()
@@ -121,7 +146,7 @@ export function registerPtyConnectionRestartReplacementTests(): void {
       await pane.exit(true)
 
       expect(pane.connects()).toBe(before + 1)
-      expect(pane.lastCommand()).toContain('sess-1')
+      await pane.expectResumed()
     })
 
     it('spawns nothing for a restart-replaced pane closed before it is shown', async () => {
@@ -168,7 +193,7 @@ export function registerPtyConnectionRestartReplacementTests(): void {
       await flushAsyncTicks()
 
       expect(pane.connects()).toBe(before + 1)
-      expect(pane.lastCommand()).toContain('sess-1')
+      await pane.expectResumed()
     })
 
     it('leaves a pane lost to any other -1 exit without a process', async () => {

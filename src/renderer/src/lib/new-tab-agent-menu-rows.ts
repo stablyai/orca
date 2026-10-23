@@ -1,3 +1,8 @@
+import {
+  structuredAgentLaunchSupport,
+  type AgentLaunchRoutingInput
+} from '@/lib/agent-launch-routing'
+import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY as CATALOG } from '../../../shared/protocol-version'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { isNativeChatProviderDisplayedOn } from '../../../shared/native-chat-providers'
 import {
@@ -10,9 +15,48 @@ import { filterEnabledTuiAgents } from '../../../shared/tui-agent-selection'
 import { orderTabLaunchAgents as orderAgents } from '@/components/tab-bar/tab-agent-launch-options'
 
 /** What the workspace's machine says about opening an agent as a chat, installation aside. */
-export type HostChatAnswer = 'yes' | 'not-yet-known' | 'ssh' | 'wsl' | 'not-on-host' | 'no-chats'
+export type HostChatAnswer =
+  | 'yes'
+  | 'not-yet-known'
+  | 'ssh'
+  | 'wsl'
+  | 'subfolder'
+  | 'not-on-host'
+  | 'no-chats'
 
-export type ChatUnavailableReason = 'check-failed' | 'not-installed' | 'ssh' | 'wsl' | 'not-on-host'
+export function hostChatAnswer(input: AgentLaunchRoutingInput): HostChatAnswer {
+  const support = structuredAgentLaunchSupport(input)
+  if (support.supported) {
+    return 'yes'
+  }
+  switch (support.blocker) {
+    case 'runtime-capability-unknown':
+      return 'not-yet-known'
+    case 'agent-without-structured-session':
+      return !input.hostStructuredAgents && input.hostCapabilities?.includes(CATALOG) !== false
+        ? 'not-yet-known'
+        : 'not-on-host'
+    case 'remote-execution-host':
+      return 'ssh'
+    case 'project-runtime':
+      return 'wsl'
+    case 'runtime-capability':
+    case 'client-capability':
+      return 'no-chats'
+    case 'custom-start-directory':
+      return 'subfolder'
+    case 'reused-terminal':
+      return 'yes'
+  }
+}
+
+export type ChatUnavailableReason =
+  | 'check-failed'
+  | 'not-installed'
+  | 'ssh'
+  | 'wsl'
+  | 'subfolder'
+  | 'not-on-host'
 
 export type NewTabAgentMenuRow = (
   | { kind: 'chat'; agent: TuiAgent }

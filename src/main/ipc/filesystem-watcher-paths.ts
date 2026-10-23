@@ -33,7 +33,3 @@ export function normalizeWatcherEventPath(eventPath: string): string {
   }
   return resolved
 }
-
-export function getRemoteWatcherKey(connectionId: string, worktreePath: string): string {
-  return JSON.stringify([connectionId, normalizeRuntimePathForComparison(worktreePath)])
-}

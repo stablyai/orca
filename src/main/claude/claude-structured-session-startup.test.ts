@@ -8,6 +8,7 @@ import {
 } from './claude-structured-session-test-support'
 import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
 import { CLAUDE_INITIALIZE_TIMEOUT_MS } from './claude-structured-session-startup'
+import { providerRequestTimeoutOf } from '../provider-process/provider-request-timeout'
 
 const ACQUIRE = { identity: identityFor(), fence: 7, spawnToken: 'spawn-9' }
 
@@ -94,7 +95,7 @@ describe('Claude host-awaited open', () => {
         executionOptions: { fastMode: 'true' },
         fence: 7
       })
-    ).resolves.toEqual({ state: 'admitted' })
+    ).resolves.toMatchObject({ state: 'admitted' })
     expect(connection.calls.filter((call) => call.subtype === 'apply_flag_settings')).toEqual([
       { subtype: 'apply_flag_settings', params: { settings: { effortLevel: 'high' } } },
       { subtype: 'apply_flag_settings', params: { settings: { fastMode: true } } }
@@ -126,11 +127,15 @@ describe('Claude host-awaited open', () => {
     const claude = fakeClaude({ initDelayMs: 10 * 60_000 })
     const { adapter } = adapterFor(claude)
     await adapter.acquire(ACQUIRE)
-    const open = expect(claudeOpened(adapter, 'session-1')).rejects.toThrow(
-      'did not answer initialize'
-    )
+    const open = claudeOpened(adapter, 'session-1').catch((error: unknown) => error)
     await vi.advanceTimersByTimeAsync(CLAUDE_INITIALIZE_TIMEOUT_MS)
-    await open
+    const error = await open
+    expect(error).toBeInstanceOf(Error)
+    expect(String(error)).toContain('did not answer initialize')
+    expect(providerRequestTimeoutOf(error)).toEqual({
+      method: 'initialize',
+      timeoutMs: CLAUDE_INITIALIZE_TIMEOUT_MS
+    })
     await adapter.closeSession('session-1')
     expect(claude.connections[0].closeCount).toBe(1)
   })

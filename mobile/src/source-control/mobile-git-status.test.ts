@@ -29,11 +29,7 @@ describe('mobile source control status helpers', () => {
   it('builds sections in the mobile source control order', () => {
     const sections = buildMobileSourceControlSections(entries)
 
-    expect(sections.map((section) => section.title)).toEqual([
-      'Changes',
-      'Untracked Files',
-      'Staged Changes'
-    ])
+    expect(sections.map((section) => section.title)).toEqual(['Changes', 'Staged Changes'])
   })
 
   it('computes actionable path sets', () => {

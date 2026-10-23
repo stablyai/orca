@@ -1,8 +1,7 @@
 import { hasUnambiguousStartTime } from '../pty-descendant-termination'
 import { recordSelfInitiatedTreeKill } from '../crash-reporting/self-initiated-tree-kill-log'
+import { setTimeout as delay } from 'node:timers/promises'
 import { readPosixProcessRow, type ProcessRowRead } from './provider-process-row-read'
-
-export type { ProcessRowRead } from './provider-process-row-read'
 
 // Covers the one stop the supervisor cannot make itself: its own SIGKILL leaves the provider's
 // detached group running, so Orca, which outlives it, finishes the stop. POSIX only: Windows
@@ -25,7 +24,8 @@ export type ProviderGroupGuardDeps = {
   readProcessRow?: (pid: number) => Promise<ProcessRowRead>
   signalGroup?: (pgid: number, signal: NodeJS.Signals | 0) => void
   now?: () => number
-  sleep?: (ms: number) => Promise<void>
+  /** May settle either way once `signal` aborts; the proof checks it after. */
+  sleep?: (ms: number, signal: AbortSignal) => Promise<void>
   onProven?: (identity: ProviderGroupIdentity) => void
   /** `unproven`: no group was reported and proven ours, so nothing was swept. */
   onSwept?: (verdict: ProviderGroupSweepVerdict | 'unproven') => void
@@ -103,7 +103,7 @@ export function guardSupervisedProviderGroup(
   }
   let identity: Promise<ProviderGroupIdentity | null> = Promise.resolve(null)
   // A gone supervisor parents nothing, so a re-read it would wait for can only fail; skip it.
-  const proof = createProofWait(deps.sleep)
+  const proof = new AbortController()
   let channelClosed = false
   let onChannelClosed = (): void => {}
   child.once('disconnect', () => {
@@ -113,7 +113,7 @@ export function guardSupervisedProviderGroup(
   child.once('message', (message: unknown) => {
     const pgid = reportedGroup(message)
     if (pgid !== null) {
-      identity = proveReportedGroup(pgid, supervisorPid, deps, proof)
+      identity = proveReportedGroup(pgid, supervisorPid, deps, proof.signal)
       void identity.then((proven) => proven && deps.onProven?.(proven))
     }
   })
@@ -129,7 +129,7 @@ export function guardSupervisedProviderGroup(
           }
         })
   child.once('exit', () => {
-    proof.stop()
+    proof.abort()
     // Exit can be observed before the report is delivered.
     void untilChannelClosed()
       .then(() => identity)
@@ -143,16 +143,18 @@ export function guardSupervisedProviderGroup(
  * The leader's identity, read while this supervisor still parents it (so its pid was not reused).
  * lstart has one-second resolution, so a start in the read's own second is re-proven after that
  * second ends; otherwise a pid reused within that second would carry the same start time. A
- * supervisor gone by then no longer parents it, so nothing is armed.
+ * supervisor gone by then no longer parents it, so nothing is armed. Accepted: on macOS a
+ * supervisor SIGKILLed within its provider's first second leaves that group unswept.
  */
 async function proveReportedGroup(
   pgid: number,
   supervisorPid: number,
   deps: ProviderGroupGuardDeps,
-  proof: ProofWait
+  signal: AbortSignal
 ): Promise<ProviderGroupIdentity | null> {
   const readRow = deps.readProcessRow ?? readPosixProcessRow
   const now = deps.now ?? Date.now
+  const sleep = deps.sleep ?? sleepUnref
   for (let attempt = 0; attempt < IDENTITY_READ_ATTEMPTS; attempt += 1) {
     // The boundary before ps starts, as the descendant sweep takes it.
     const capturedAtMs = now()
@@ -166,42 +168,16 @@ async function proveReportedGroup(
     ) {
       return { pgid, startedAt: row.startedAt }
     }
-    if (!(await proof.wait(1_000 - (now() % 1_000) + SECOND_BOUNDARY_MARGIN_MS))) {
+    await sleep(1_000 - (now() % 1_000) + SECOND_BOUNDARY_MARGIN_MS, signal).catch(() => {})
+    if (signal.aborted) {
       return null
     }
   }
   return null
 }
 
-type ProofWait = { wait(ms: number): Promise<boolean>; stop(): void }
-
-/** Waits that end early, false, once stopped; their timers never outlive the stop. */
-function createProofWait(sleep?: (ms: number) => Promise<void>): ProofWait {
-  let stopped = false
-  let cancel = (): void => {}
-  return {
-    async wait(ms) {
-      if (stopped) {
-        return false
-      }
-      if (sleep) {
-        await sleep(ms)
-        return !stopped
-      }
-      return new Promise<boolean>((resolve) => {
-        const timer = setTimeout(() => resolve(!stopped), ms)
-        timer.unref?.()
-        cancel = () => {
-          clearTimeout(timer)
-          resolve(false)
-        }
-      })
-    },
-    stop() {
-      stopped = true
-      cancel()
-    }
-  }
+function sleepUnref(ms: number, signal: AbortSignal): Promise<void> {
+  return delay(ms, undefined, { signal, ref: false })
 }
 
 function hasReportChannel(child: GuardedChild): boolean {

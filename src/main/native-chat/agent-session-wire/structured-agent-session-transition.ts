@@ -26,7 +26,7 @@ import { structuredAgentSessionJournalAppendOptions } from './structured-agent-s
 /** What a transition step reads: rows by key, every row, and the turns they joined. */
 export type StructuredAgentSessionTransitionJournal = Pick<
   AgentSessionJournal,
-  'epoch' | 'visitItems' | 'itemBody' | 'item' | 'visitItemsWithLinkage'
+  'epoch' | 'visitItems' | 'itemBody' | 'item' | 'visitItemsWithLinkage' | 'canonicalItemId'
 >
 
 export type StructuredAgentSessionTransitionStep =

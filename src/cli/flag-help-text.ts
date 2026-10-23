@@ -63,6 +63,8 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   'restore-window': '--restore-window     Bring the target app/window forward before the operation',
   session: '--session <id>        Snapshot namespace for a related computer-use workflow',
   setup: '--setup run|skip|inherit Setup policy for repo-defined setup hooks',
+  surface:
+    '--surface chat|terminal Start the agent as a chat or in a terminal, instead of your setting',
   shell: '--shell <shell>        Windows shell the terminal itself runs as',
   terminal: '--terminal <handle>  Runtime-issued terminal handle',
   text: '--text <text>          Text payload to send or type',

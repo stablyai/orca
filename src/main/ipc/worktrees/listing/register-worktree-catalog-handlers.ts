@@ -3,7 +3,7 @@ import { withoutWslMovedRepos } from '../../../persistence/moving-wsl-projects/w
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import {
   getRepoExecutionHostId,
-  getSshTargetIdForExecutionHost,
+  getRepoDialableSshTargetId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { EMPTY_RETIRED_NAME_REGISTRY } from '../../../../shared/worktree/retired-name-registry'
@@ -104,7 +104,7 @@ export function registerWorktreeCatalogHandlers(context: WorktreeIpcContext): vo
 
     // Why: each local repo listing can spawn `git worktree list`; cap fan-out so large fleets don't start unbounded subprocesses.
     const results = await mapWithConcurrency(repos, WORKTREE_LIST_ALL_CONCURRENCY, async (repo) => {
-      const connectionId = getSshTargetIdForExecutionHost(getRepoExecutionHostId(repo))
+      const connectionId = getRepoDialableSshTargetId(repo)
       try {
         const pendingAtScan = snapshotPendingWorktreeRemovals()
         if (isFolderRepo(repo)) {
@@ -170,7 +170,7 @@ export function registerWorktreeCatalogHandlers(context: WorktreeIpcContext): vo
     if (!repo) {
       return []
     }
-    const connectionId = getSshTargetIdForExecutionHost(getRepoExecutionHostId(repo))
+    const connectionId = getRepoDialableSshTargetId(repo)
     const allMeta = connectionId ? readAllWorktreeMetaForRepo(store, repo) : undefined
     const sshWorktreeMetaIndex = connectionId
       ? createSshWorktreeMetaIndex(Object.entries(allMeta ?? {}))

@@ -30,6 +30,7 @@ import { retireOutgrownStructuredAgentSessionChild } from './structured-agent-se
 import { structuredAgentSessionLaunchPermission } from './structured-agent-session-launch-permission'
 import { acceptedNoLaterThan } from './structured-agent-session-start-failure-row'
 import type { StructuredAgentSessionAcquireAborts } from './structured-agent-session-acquire-aborts'
+import { createStructuredAgentSessionRanRecorder } from './structured-agent-session-ran-options'
 
 export type StructuredAgentSessionConversationDelivery = {
   loop: StructuredAgentSessionDeliveryLoop
@@ -140,7 +141,13 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     childWorkOpen: input.clientDelivery.childWorkOpen,
     stopping: input.clientDelivery.readStopping,
     now: () => deps.now?.() ?? Date.now(),
-    acquireAborts: input.acquireAborts
+    acquireAborts: input.acquireAborts,
+    recordRanOptions: (sessionId, fence) =>
+      createStructuredAgentSessionRanRecorder(
+        { deps, sessions, now: () => deps.now?.() ?? Date.now() },
+        sessionId,
+        fence
+      )
   })
   const adoptOpened = async (
     sessionId: string,

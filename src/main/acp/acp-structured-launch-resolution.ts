@@ -14,13 +14,17 @@ import {
 } from '../../shared/agent-session-provider-handle'
 import type { AgentSessionAccountHome } from '../../shared/agent-session-account-home'
 import type { resolveCliCommand } from '../../shared/node-cli-command-resolution'
-import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
 import {
   resolveAgainAfterRefreshOnMissingProgram,
   resolveStructuredAgentCommand,
   type StructuredAgentCommandSettings
 } from '../native-chat/structured-agent-command-resolution'
-import { probeAgentCliVersion } from '../agent-cli-version-probe'
+import {
+  checkAgentCliVersion,
+  type AgentCliVersionCheck,
+  type AgentCliVersionReader
+} from '../agent-cli-version-probe'
+import { AgentCliInstallationError } from '../native-chat/agent-cli-installation-error'
 import {
   copyBesidePinnedMembers,
   resolveInstalledRuntimeRelease
@@ -75,7 +79,7 @@ export type AcpStructuredLaunchPartDeps = {
   homePath?: string
   /** The environment the child process inherits at spawn; this process's own by default. */
   inheritedEnv?: NodeJS.ProcessEnv
-  probeVersion?: typeof probeAgentCliVersion
+  probeVersion?: AgentCliVersionReader
   /** Orca's data folder on this host, which holds the spec's managed runtime. */
   dataDirectory: string
 } & Pick<AcpLaunchVisualsDeps, 'logger'>
@@ -141,37 +145,22 @@ export function resolveAcpLaunchCommand(
   return (found !== spec.command && copyBesidePinnedMembers(found, pin)) || spec.command
 }
 
-/** Whether `command` is a release the spec runs a structured chat on (true when it names none),
- *  and the version it printed. Asked only when the spec names releases or `wantVersion`. */
-export async function probeAcpLaunchVersion(
+/** What `command`'s `--version` says against the spec's minimums; asked only when the spec names
+ *  some or `wantVersion`. */
+export async function checkAcpLaunchVersion(
   spec: AcpLaunchSpec,
   launch: { command: string; cwd: string; env: Record<string, string> },
   wantVersion: boolean,
-  probe: typeof probeAgentCliVersion = probeAgentCliVersion
-): Promise<{ supported: boolean; version: string | null }> {
-  const { supportsVersion } = spec
-  if (!supportsVersion && !wantVersion) {
-    return { supported: true, version: null }
+  read?: AgentCliVersionReader
+): Promise<AgentCliVersionCheck> {
+  if (!spec.minimumVersions && !wantVersion) {
+    return { status: 'unknown', version: null }
   }
-  const seen: { version: string | null } = { version: null }
-  const answered = await probe(
+  return checkAgentCliVersion(
     { program: launch.command, cwd: launch.cwd, env: launch.env },
-    (version) => {
-      seen.version = version
-      return supportsVersion?.(version) ?? true
-    }
+    spec.minimumVersions ?? [],
+    read
   )
-  // Without named releases a failed probe costs only what needed the version.
-  return { supported: answered || !supportsVersion, version: answered ? seen.version : null }
-}
-
-/** Whether `command` is a release the spec runs a structured chat on; true when it names none. */
-export async function acpLaunchVersionSupported(
-  spec: AcpLaunchSpec,
-  launch: { command: string; cwd: string; env: Record<string, string> },
-  probe: typeof probeAgentCliVersion = probeAgentCliVersion
-): Promise<boolean> {
-  return (await probeAcpLaunchVersion(spec, launch, false, probe)).supported
 }
 
 /** The binary and environment any child of this agent runs under for `accountHome`: a session's
@@ -234,16 +223,14 @@ export function acpStructuredLaunchPart(
     const cwd = await basis.launchDirectory()
     const visuals = spec.visualsSkill ? await basis.visuals() : null
     // Again at every launch: the binary on PATH may have changed since the chat was created.
-    const launchVersion = await probeAcpLaunchVersion(
+    const launchVersion = await checkAcpLaunchVersion(
       spec,
       { command, cwd, env },
       visuals !== null,
       deps.probeVersion
     )
-    if (!launchVersion.supported) {
-      throw agentSessionRefusalError('structured_agent_session_unsupported', {
-        reason: 'hostUnsupported'
-      })
+    if (launchVersion.status === 'tooOld') {
+      throw AgentCliInstallationError.tooOld(spec.agent, launchVersion)
     }
     const skill = visuals
       ? await loadAcpVisualsSkill(spec, deps, {

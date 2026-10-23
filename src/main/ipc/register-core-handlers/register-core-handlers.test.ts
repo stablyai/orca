@@ -399,15 +399,15 @@ vi.mock('../terminal-render-desync-evidence', () => ({
   registerTerminalRenderDesyncEvidenceHandler: registerTerminalRenderDesyncEvidenceHandlerMock
 }))
 
-vi.mock('../linear', () => ({
+vi.mock('../linear/register-handlers', () => ({
   registerLinearHandlers: registerLinearHandlersMock
 }))
 
-vi.mock('../jira', () => ({
+vi.mock('../jira/register-handlers', () => ({
   registerJiraHandlers: registerJiraHandlersMock
 }))
 
-vi.mock('../jira-issue-summary-generation', () => ({
+vi.mock('../jira/issue-summary-generation', () => ({
   registerJiraIssueSummaryGenerationHandlers: registerJiraIssueSummaryGenerationHandlersMock
 }))
 

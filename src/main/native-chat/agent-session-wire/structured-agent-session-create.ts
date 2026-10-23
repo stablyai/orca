@@ -35,6 +35,8 @@ import type { AgentSessionExecutionOptions } from '../../../shared/agent-session
 export type StructuredAgentSessionCreateOptions = {
   firstMessage?: { clientMessageId: string; body: AgentJournalMessageItem }
   hostLaunchDirectory?: string
+  /** The saved list the chat's options are admitted against, for the folder its picker read. */
+  catalogModels?: Parameters<typeof reserveRequestFor>[0]['models']
   /** Called after the durable create, before delivery can start the agent. */
   publishTab?: () => Promise<void>
 }
@@ -107,6 +109,7 @@ async function foundConversation(
   const request = reserveRequestFor({
     sessionId,
     params,
+    models: prior ? undefined : options.catalogModels,
     callerKey,
     fingerprint: params.envelope.payloadFingerprint,
     now: context.now(),

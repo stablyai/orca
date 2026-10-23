@@ -1,3 +1,4 @@
+import type { ClaudeBackgroundFailedExit } from '../../../shared/claude-background-run-isolation'
 import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
 // The one way a catalog probe runs an agent CLI: a disposable child under the provider supervisor,
 // one budget for the whole listing, bounded output, and a teardown awaited on every path. A probe
@@ -32,7 +33,8 @@ export class AgentModelCatalogProbeError extends Error {
     message: string,
     readonly reason: AgentModelCatalogProbeFailure,
     /** The listing's own executable was not found, as the spawn or its supervisor reported. */
-    readonly executableMissing = false
+    readonly executableMissing = false,
+    readonly failedExit?: ClaudeBackgroundFailedExit
   ) {
     super(message)
     this.name = 'AgentModelCatalogProbeError'
@@ -92,12 +94,17 @@ export async function runAgentModelCatalogListing(
   let onAbort = (): void => {}
   try {
     return await new Promise<string>((resolve, reject) => {
-      const fail = (message: string, reason: AgentModelCatalogProbeFailure): void =>
+      const fail = (
+        message: string,
+        reason: AgentModelCatalogProbeFailure,
+        failedExit?: ClaudeBackgroundFailedExit
+      ): void =>
         reject(
           new AgentModelCatalogProbeError(
             message,
             reason,
-            reason === 'spawn' && managed.executableMissing
+            reason === 'spawn' && managed.executableMissing,
+            failedExit
           )
         )
       onAbort = () => fail(`${launch.command} listing stopped`, 'stopped')
@@ -132,7 +139,8 @@ export async function runAgentModelCatalogListing(
           const detail = stderrDetail()
           fail(
             `${launch.command} exited ${code ?? 'by signal'}${detail ? `: ${detail}` : ''}`,
-            'exit'
+            'exit',
+            { exitCode: code, stdout: output.text(), stderr: managed.stderrTail() }
           )
         }
       })

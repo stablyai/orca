@@ -8,7 +8,6 @@ const {
   nativeUpdaterMock,
   autoUpdaterMock,
   shellMock,
-  isMock,
   killAllPtyMock,
   getMacUpdateRunningInstancesMock,
   prepareShipItStagingMock,
@@ -87,7 +86,7 @@ const {
     shellMock: {
       openExternal: vi.fn()
     },
-    isMock: { dev: false },
+
     getMacUpdateRunningInstancesMock: vi.fn(async (): Promise<number[]> => []),
     recoverBrowserSidecarsMock: vi.fn(async (_executable: string, pids: number[]) => pids),
     describeBrowserBlockersMock: vi.fn(async (_executable: string, pids: number[]) =>
@@ -113,10 +112,6 @@ vi.mock('electron-updater', () => ({
 
 vi.mock('./electron-updater-loader', () => ({
   loadElectronAutoUpdater: () => autoUpdaterMock
-}))
-
-vi.mock('@electron-toolkit/utils', () => ({
-  is: isMock
 }))
 
 vi.mock('./ipc/pty/kill-all', () => ({ killAllPty: killAllPtyMock }))
@@ -182,7 +177,7 @@ describe('updater mac install handoff', () => {
     appMock.getVersion.mockReturnValue('1.0.51')
     appMock.quit.mockReset()
     appMock.isPackaged = true
-    isMock.dev = false
+
     killAllPtyMock.mockReset()
     getMacUpdateRunningInstancesMock.mockReset().mockResolvedValue([])
     recoverBrowserSidecarsMock

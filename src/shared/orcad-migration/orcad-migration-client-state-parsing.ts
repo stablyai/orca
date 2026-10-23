@@ -95,10 +95,25 @@ export function parseMobileSelections(value: unknown): PersistedMobileClientTabS
         }
         tabs[groupId] = tabId
       }
+      const recentTabIds = rawSelection.recentTabIds
+      if (
+        recentTabIds !== undefined &&
+        !(
+          Array.isArray(recentTabIds) &&
+          recentTabIds.every((tabId): tabId is string => typeof tabId === 'string' && !!tabId)
+        )
+      ) {
+        throw new Error('orcad_migration_dormant_mobile_selection_tabs_invalid')
+      }
       if (!activeTabId && !activeGroupId && Object.keys(tabs).length === 0) {
         continue
       }
-      entries[worktreeId] = { activeTabId, activeGroupId, activeTabIdByGroupId: tabs }
+      entries[worktreeId] = {
+        activeTabId,
+        activeGroupId,
+        activeTabIdByGroupId: tabs,
+        ...(recentTabIds ? { recentTabIds } : {})
+      }
       count += 1
       if (count > MAX_ORCAD_MIGRATION_CLIENT_SELECTIONS) {
         throw new Error('orcad_migration_dormant_mobile_selections_too_many')

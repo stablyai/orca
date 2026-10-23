@@ -61,18 +61,17 @@ test('keeps same-path host models and undo history separate', async ({
         },
         { selection: 'none' }
       )
+      store.getState().markFileDirty(localId, true)
+      store.getState().markFileDirty(remoteId, true)
       store.setState((state) => ({
         openFiles: state.openFiles.map((entry) =>
           entry.id === remoteId
             ? {
                 ...entry,
-                isDirty: true,
                 runtimeEnvironmentId: undefined,
                 operationProvenance: provenance('ssh:fixture-target', null)
               }
-            : entry.id === localId
-              ? { ...entry, isDirty: true }
-              : entry
+            : entry
         ),
         editorDrafts: {
           ...state.editorDrafts,

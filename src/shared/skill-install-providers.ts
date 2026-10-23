@@ -98,12 +98,6 @@ export const SKILL_INSTALL_PROVIDERS = Object.freeze([
     workspaceSegments: ['.codebuddy', 'skills']
   },
   {
-    id: 'qoder',
-    displayName: 'Qoder',
-    globalSegments: ['.qoder', 'skills'],
-    workspaceSegments: ['.qoder', 'skills']
-  },
-  {
     id: 'kiro',
     displayName: 'Kiro',
     globalSegments: ['.kiro', 'skills'],
@@ -117,6 +111,14 @@ export const SKILL_INSTALL_PROVIDERS = Object.freeze([
     displayName: 'Antigravity',
     globalSegments: ['.gemini', 'config', 'skills'],
     workspaceSegments: null
+  },
+  // Why: OpenClaude keeps its own `.openclaude` home; it does not read Claude's folders by default.
+  {
+    id: 'openclaude',
+    displayName: 'OpenClaude',
+    globalSegments: ['.openclaude', 'skills'],
+    workspaceSegments: ['.openclaude', 'skills'],
+    homeEnv: 'OPENCLAUDE_CONFIG_DIR'
   },
   // Why: every agent below reads the canonical .agents/skills root at both scopes.
   {
@@ -212,6 +214,72 @@ export const SKILL_INSTALL_PROVIDERS = Object.freeze([
   {
     id: 'copilot',
     displayName: 'GitHub Copilot',
+    globalSegments: null,
+    workspaceSegments: null
+  },
+  {
+    id: 'opencode2',
+    displayName: 'OpenCode 2',
+    globalSegments: null,
+    workspaceSegments: null
+  },
+  {
+    id: 'mimo-code',
+    displayName: 'MiMo Code',
+    globalSegments: null,
+    workspaceSegments: null
+  },
+  {
+    id: 'omp',
+    displayName: 'OMP',
+    globalSegments: null,
+    workspaceSegments: null
+  },
+  {
+    id: 'prime-agent',
+    displayName: 'Prime Agent',
+    globalSegments: null,
+    workspaceSegments: null
+  },
+  {
+    id: 'qoder',
+    displayName: 'Qoder',
+    globalSegments: null,
+    workspaceSegments: null
+  },
+  {
+    id: 'qoder-cn',
+    displayName: 'Qoder CN',
+    globalSegments: null,
+    workspaceSegments: null
+  },
+  {
+    id: 'codebuff',
+    displayName: 'Codebuff',
+    globalSegments: null,
+    workspaceSegments: null
+  },
+  {
+    id: 'freebuff',
+    displayName: 'Freebuff',
+    globalSegments: null,
+    workspaceSegments: null
+  },
+  {
+    id: 'ante',
+    displayName: 'Ante',
+    globalSegments: null,
+    workspaceSegments: null
+  },
+  {
+    id: 'jcode',
+    displayName: 'Jcode',
+    globalSegments: null,
+    workspaceSegments: null
+  },
+  {
+    id: 'dsh',
+    displayName: 'DeepSeek Harness',
     globalSegments: null,
     workspaceSegments: null
   }

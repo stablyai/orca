@@ -4,7 +4,7 @@ import { restorePortForwards } from './ssh-port-forward-persistence'
 
 const restoring = new Map<string, Promise<void>>()
 
-/** A managed host has no relay session to restore its saved forwards, so its connects do. */
+/** A managed host's connects restore its saved forwards. */
 export function restoreManagedHostPortForwards(targetId: string): Promise<void> {
   if (getSshHostServerStatus(targetId)?.kind !== 'managed') {
     return Promise.resolve()
@@ -12,7 +12,7 @@ export function restoreManagedHostPortForwards(targetId: string): Promise<void> 
   // Why chained: overlapping connects would otherwise both bind the same saved local port.
   const previous = restoring.get(targetId) ?? Promise.resolve()
   const next = previous
-    // Why re-checked: a disconnect or relay fallback queued behind the previous restore ends managed.
+    // Why re-checked: a disconnect queued behind the previous restore may have ended managed.
     .then(() =>
       getSshHostServerStatus(targetId)?.kind === 'managed'
         ? restorePortForwards(targetId, getCurrentMainWindow)

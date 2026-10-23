@@ -8,7 +8,7 @@ import {
 } from './cross-platform-path'
 import { isClipboardTextByteLengthOverLimit } from './clipboard-text'
 import { splitAiVaultSearchQuery } from './ai-vault-search-query-operators'
-import { createAiVaultScopeCwdMatcher } from './ai-vault-scope-cwd-match'
+import { aiVaultSessionInScope, createAiVaultScopeCwdMatcher } from './ai-vault-scope-cwd-match'
 import type {
   AiVaultAgent,
   AiVaultGroup,
@@ -99,7 +99,7 @@ export function filterAiVaultSessions(
       return false
     }
     if (filters.scope === 'workspace') {
-      if (!inWorkspace(session.cwd, session.filePath)) {
+      if (!aiVaultSessionInScope(inWorkspace, session)) {
         return false
       }
     }

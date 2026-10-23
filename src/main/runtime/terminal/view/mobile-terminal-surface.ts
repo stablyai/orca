@@ -1,6 +1,4 @@
 /* eslint-disable unicorn/no-useless-spread */
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { relistPaneMainBinds, withMainTabLayout } from './layout-owner-close-relisting'
 import { OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal } from '../launch/mobile-terminal-owned-create'
 import type { OrcaRuntimeWithResolveTerminalSplitSourceAuthority } from '../launch/terminal-split-source-authority'
 import type {
@@ -137,25 +135,6 @@ export abstract class OrcaRuntimeWithWaitForMobileTerminalSurface extends OrcaRu
     ) {
       return null
     }
-    // Switch point: main binds the pane, so its own record stands while the window's list lags.
-    if (
-      ORCA_LAYOUT_OWNER_IS_MAIN &&
-      !this.findMobileTerminalSurfaceForPty(authority.worktreeId, authority.ptyId)
-    ) {
-      relistPaneMainBinds(authority, live.pty, {
-        hostId: (tabId) => this.getWorkspaceSessionHostIdsForTab(authority.worktreeId, tabId)[0],
-        session: (hostId) => this.store?.getWorkspaceSession?.(hostId),
-        relist: (pty, pane, layout) => {
-          this.publishPtyBackedMobileSessionTerminal(authority.worktreeId, pty, pane)
-          const relisted = this.mobileSessionTabsByWorktree.get(authority.worktreeId)
-          const withLayout =
-            relisted && withMainTabLayout(relisted, { tabId: pane.tabId, ptyId: pty.ptyId }, layout)
-          if (withLayout && withLayout !== relisted) {
-            this.storeMobileSessionSnapshot(authority.worktreeId, withLayout)
-          }
-        }
-      })
-    }
     const surface = this.findMobileTerminalSurfaceForPty(authority.worktreeId, authority.ptyId)
     if (!surface) {
       return null
@@ -226,7 +205,7 @@ export abstract class OrcaRuntimeWithWaitForMobileTerminalSurface extends OrcaRu
       // Why: the renderer's ready publication already landed with the intended mode; only a pending shell needs the main-side rescue.
       return existing
     }
-    const leafId = pty ? parsePaneKey(pty.paneKey ?? '')?.leafId : undefined
+    const leafId = pty ? parsePaneKey(this.paneOfPty(pty).paneKey ?? '')?.leafId : undefined
     if (!pty || !leafId) {
       return existing
     }

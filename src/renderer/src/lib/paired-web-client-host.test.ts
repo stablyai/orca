@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from './worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from './worktree-runtime-owner'
 import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
 import { resolveWorktreeOperationRoute } from './worktree-operation-route'
 import { resolveTerminalHostOwnership } from './terminal-worktree-route'
@@ -42,7 +42,7 @@ describe('a paired web client routes every owner through its server (#9047)', ()
       webState({ activeWorktreeId: WT, activeWorkspaceExecutionHostId: 'local' }),
       webState(UNSTAMPED_LOCAL_ROW)
     ]) {
-      expect(runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(state, WT)).toBe(ENV)
+      expect(runtimeEnvironmentIdOrLocalUnlessTwin(state, WT)).toBe(ENV)
       expect(resolveTerminalHostOwnership(state, WT, 'spawn')).toEqual({
         kind: 'runtime',
         runtimeEnvironmentId: ENV
@@ -64,9 +64,9 @@ describe('a paired web client routes every owner through its server (#9047)', ()
         { id: 'folder-1', projectGroupId: 'group-1', executionHostId: 'local', connectionId: null }
       ]
     })
-    expect(
-      runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(folderState, folderWorkspaceKey('folder-1'))
-    ).toBe(ENV)
+    expect(runtimeEnvironmentIdOrLocalUnlessTwin(folderState, folderWorkspaceKey('folder-1'))).toBe(
+      ENV
+    )
   })
 
   it('keeps an SSH target as the place and the server as the transport', () => {
@@ -88,12 +88,12 @@ describe('a paired web client routes every owner through its server (#9047)', ()
         ]
       }
     })
-    expect(runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(state, WT)).toBeNull()
+    expect(runtimeEnvironmentIdOrLocalUnlessTwin(state, WT)).toBeNull()
   })
 
   it('leaves a desktop window local workspace on this computer', () => {
     const state = webState(UNSTAMPED_LOCAL_ROW)
-    expect(runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(state, WT)).toBeNull()
+    expect(runtimeEnvironmentIdOrLocalUnlessTwin(state, WT)).toBeNull()
     expect(resolveTerminalHostOwnership(state, WT, 'spawn').kind).toBe('local-or-ssh')
   })
 })

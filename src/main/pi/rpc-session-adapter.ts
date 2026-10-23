@@ -225,6 +225,9 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
   holdsDispatch(id: string): boolean {
     return this.sessions.get(id)?.turns.holdsDispatch ?? false
   }
+  heldSends(id: string): ReadonlySet<string> | undefined {
+    return this.sessions.get(id)?.heldSends
+  }
   holdsLiveProviderProcess(id: string, generation: string): boolean {
     const session = this.sessions.get(id)
     return session?.generation === generation && !session.connection.closed

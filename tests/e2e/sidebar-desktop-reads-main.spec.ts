@@ -1,6 +1,7 @@
 /**
  * The desktop sidebar drawn from main's feed (ORCA_SIDEBAR_INPUTS=main): it follows main, not the
- * window's own store, and a drag, create, open or collapse still lands in the frame it is made.
+ * window's own store, and a drag, create, open or collapse still shows at once from the window's
+ * own state.
  */
 import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
@@ -25,50 +26,95 @@ function renderedOrder(page: Page): Promise<string[]> {
   )
 }
 
-/** `sinceInput`: ms since the first pointerup or click after the log started. */
-type Frame = { ids: string[]; shows: boolean; sinceInput: number | null }
+/** One committed sidebar DOM state. `afterInput`: committed once the first input began.
+ *  `inInputTask`: committed within the task of an input, before any later task could run. */
+type DomState = {
+  ids: string[]
+  shows: boolean
+  current: string | null
+  afterInput: boolean
+  inInputTask: boolean
+}
 
-type FrameLog = { stop: () => Promise<Frame[]> }
+type DomLog = { stop: () => Promise<{ states: DomState[]; inputs: string[] }> }
 
-/** Records, every animation frame, the rendered row ids and whether the sidebar shows `text`. */
-async function startFrameLog(page: Page, text = ''): Promise<FrameLog> {
+/**
+ * Records every committed state of the sidebar's DOM (rows top to bottom, whether it shows `text`,
+ * the current row) and whether it landed in the task of an input. Why that bound: the window
+ * applies its own state in the input's task, while main's answer needs an IPC reply, which is a
+ * later task, so it holds on any runner load. No paints: a hidden window may never paint.
+ */
+async function startDomLog(page: Page, text = ''): Promise<DomLog> {
   const handle = await page.evaluateHandle(
     ({ selector, wanted }) => {
-      const frames: Frame[] = []
-      let running = true
-      let inputAt: number | null = null
-      const onInput = (): void => {
-        inputAt ??= performance.now()
-      }
-      window.addEventListener('pointerup', onInput, true)
-      window.addEventListener('mouseup', onInput, true)
-      window.addEventListener('click', onInput, true)
-      const sample = (): void => {
-        if (!running) {
-          return
+      const states: (Omit<DomState, 'afterInput' | 'inInputTask'> & { at: number })[] = []
+      const inputs: { type: string; at: number; nextTaskAt: number }[] = []
+      // Why the event's own time: the app's handlers can commit, and this log record the state,
+      // before this listener runs. A posted message runs in the next task, which ends the window.
+      const onInput = (event: Event): void => {
+        const input = { type: event.type, at: event.timeStamp, nextTaskAt: Infinity }
+        inputs.push(input)
+        const channel = new MessageChannel()
+        channel.port1.onmessage = () => {
+          input.nextTaskAt = performance.now()
+          channel.port1.close()
         }
-        const sidebar = document.querySelector('[data-worktree-sidebar]')
-        frames.push({
-          ids: [...document.querySelectorAll<HTMLElement>(selector)]
-            .sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top)
-            .map((row) => row.dataset.worktreeId ?? ''),
-          shows: wanted !== '' && (sidebar?.textContent ?? '').includes(wanted),
-          sinceInput: inputAt === null ? null : performance.now() - inputAt
-        })
-        requestAnimationFrame(sample)
+        channel.port2.postMessage(null)
       }
-      requestAnimationFrame(sample)
+      // Why drop and dragend: a native drag ends in them, with no mouseup on Linux.
+      const events = ['pointerup', 'mouseup', 'click', 'drop', 'dragend']
+      for (const type of events) {
+        window.addEventListener(type, onInput, true)
+      }
+      const sidebar = document.querySelector('[data-worktree-sidebar]')
+      const record = (): void => {
+        const rows = [...document.querySelectorAll<HTMLElement>(selector)].sort(
+          (a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top
+        )
+        states.push({
+          ids: rows.map((row) => row.dataset.worktreeId ?? ''),
+          shows: wanted !== '' && (sidebar?.textContent ?? '').includes(wanted),
+          current:
+            rows.find((row) => row.getAttribute('aria-current') === 'page')?.dataset.worktreeId ??
+            null,
+          at: performance.now()
+        })
+      }
+      // A mutation callback runs after each commit, so it sees every state React commits.
+      const observer = new MutationObserver(record)
+      if (sidebar) {
+        observer.observe(sidebar, {
+          subtree: true,
+          childList: true,
+          attributes: true,
+          characterData: true
+        })
+      }
+      record()
       return () => {
-        running = false
-        window.removeEventListener('pointerup', onInput, true)
-        window.removeEventListener('mouseup', onInput, true)
-        window.removeEventListener('click', onInput, true)
-        return frames
+        observer.disconnect()
+        for (const type of events) {
+          window.removeEventListener(type, onInput, true)
+        }
+        const firstInputAt = inputs[0]?.at ?? Infinity
+        return {
+          states: states.map(({ at, ...state }) => ({
+            ...state,
+            afterInput: at >= firstInputAt,
+            inInputTask: inputs.some((input) => input.at <= at && at <= input.nextTaskAt)
+          })),
+          inputs: inputs.map((input) => input.type)
+        }
       }
     },
     { selector: ROWS, wanted: text }
   )
   return { stop: () => handle.evaluate((stop) => stop()) }
+}
+
+/** The index of the first state after the input that satisfies `reached`, or -1. */
+function firstAfterInput(states: DomState[], reached: (state: DomState) => boolean): number {
+  return states.findIndex((state) => state.afterInput && reached(state))
 }
 
 async function dragBefore(page: Page, sourceId: string, targetId: string): Promise<void> {
@@ -109,42 +155,53 @@ test('the sidebar lists main’s inputs and keeps drag, create, open and collaps
     await expect.poll(async () => (await ours()).length, { timeout: 30_000 }).toBe(3)
     await orcaPage.screenshot({ path: testInfo.outputPath(`list.png`) })
 
-    // Empty the window's own catalog for one frame: the rows still listed come from main. No
-    // refetch can land within the frame.
-    const listedInEmptiedFrame = await orcaPage.evaluate(async (selector) => {
+    // Empty the window's own catalog for one task: the rows still listed come from main. No
+    // refetch can answer before the next task.
+    const listedWhileEmptied = await orcaPage.evaluate(async (selector) => {
       window.__store!.setState({ worktreesByRepo: {} })
-      await new Promise((resolve) => requestAnimationFrame(resolve))
+      await new Promise((resolve) => setTimeout(resolve, 0))
       return document.querySelectorAll(selector).length
     }, ROWS)
-    expect(listedInEmptiedFrame).toBeGreaterThan(0)
+    expect(listedWhileEmptied).toBeGreaterThan(0)
     await orcaPage.evaluate(() => window.__store!.getState().fetchAllWorktrees())
     await expect.poll(async () => (await ours()).length).toBe(3)
 
-    // Drag: every frame after the drop shows the new order; none snaps back.
+    // Drag: the new order shows in the drop's own task, and no later state snaps back.
     const before = await ours()
     const source = before[2]!
-    const dragLog = await startFrameLog(orcaPage)
+    const dragLog = await startDomLog(orcaPage)
     await dragBefore(orcaPage, source, before[0]!)
     const expected = [source, before[0]!, before[1]!]
     await expect.poll(ours).toEqual(expected)
     await orcaPage.waitForTimeout(400)
-    // From the first frame painted after the drop, every frame shows the new order.
-    const afterDrop = (await dragLog.stop())
-      .filter(({ sinceInput }) => sinceInput !== null)
-      .map(({ ids }) => ids.filter((id) => created.includes(id)).join())
-    expect(afterDrop.length).toBeGreaterThan(0)
-    expect(new Set(afterDrop)).toEqual(new Set([expected.join()]))
+    const drag = await dragLog.stop()
+    const oursIn = (state: DomState): string =>
+      state.ids.filter((id) => created.includes(id)).join()
+    const dropShown = firstAfterInput(drag.states, (state) => oursIn(state) === expected.join())
+    expect(dropShown, `inputs seen: ${drag.inputs.join() || 'none'}`).toBeGreaterThanOrEqual(0)
+    expect(drag.states[dropShown]!.inInputTask).toBe(true)
+    expect(
+      drag.states
+        .slice(dropShown)
+        .map(oursIn)
+        .filter((order) => order !== expected.join())
+    ).toEqual([])
     await orcaPage.screenshot({ path: testInfo.outputPath(`after-drag.png`) })
 
-    // Open: the clicked row is highlighted in the frame of the click.
+    // Open: the clicked row is highlighted in the click's own task.
     const openId = expected[1]!
+    const openLog = await startDomLog(orcaPage)
     await orcaPage
       .locator(`${ROWS}[data-worktree-id=${JSON.stringify(openId)}]`)
       .first()
       .click()
     await expect(
       orcaPage.locator(`${ROWS}[data-worktree-id=${JSON.stringify(openId)}][aria-current="page"]`)
-    ).toHaveCount(1, { timeout: 1_000 })
+    ).toHaveCount(1)
+    const openStates = (await openLog.stop()).states
+    const opened = firstAfterInput(openStates, (state) => state.current === openId)
+    expect(opened).toBeGreaterThanOrEqual(0)
+    expect(openStates[opened]!.inInputTask).toBe(true)
 
     // Cmd/Ctrl+1–9 number the rendered rows.
     const rendered = await renderedOrder(orcaPage)
@@ -154,29 +211,27 @@ test('the sidebar lists main’s inputs and keeps drag, create, open and collaps
       .poll(() => orcaPage.evaluate(() => window.__store!.getState().activeWorktreeId))
       .toBe(rendered[1])
 
-    // Collapse: the section's rows leave in the next frame, without waiting for main.
+    // Collapse: the section's rows leave in the click's own task, without waiting for main.
     await orcaPage.evaluate(() => window.__store!.getState().setGroupBy('repo'))
     await expect.poll(async () => (await ours()).length).toBe(3)
     const header = orcaPage.locator('[data-worktree-sidebar] [data-repo-header-id][aria-expanded]')
-    const collapseLog = await startFrameLog(orcaPage)
+    const collapseLog = await startDomLog(orcaPage)
     await header.first().click()
     await expect.poll(async () => (await ours()).length).toBe(0)
-    // A slow runner can settle the poll before any frame after the click is painted.
-    await orcaPage.evaluate(() => new Promise((resolve) => requestAnimationFrame(resolve)))
-    const collapseFrames = await collapseLog.stop()
-    // The first frame painted after the click already has no rows.
-    expect(
-      collapseFrames
-        .find(({ sinceInput }) => sinceInput !== null)
-        ?.ids.some((id) => created.includes(id))
-    ).toBe(false)
+    const collapseStates = (await collapseLog.stop()).states
+    const collapsed = firstAfterInput(
+      collapseStates,
+      (state) => !state.ids.some((id) => created.includes(id))
+    )
+    expect(collapsed).toBeGreaterThanOrEqual(0)
+    expect(collapseStates[collapsed]!.inInputTask).toBe(true)
     await header.first().click()
     await expect.poll(async () => (await ours()).length).toBe(3)
 
-    // Create: the pending row hands over to the new row with no frame showing neither.
+    // Create: the pending row hands over to the new row with no state showing neither.
     await orcaPage.evaluate(() => window.__store!.getState().setGroupBy('none'))
     const name = `reads-main-new-${Date.now()}`
-    const createLog = await startFrameLog(orcaPage, name)
+    const createLog = await startDomLog(orcaPage, name)
     await openSidebarWorkspaceComposer(orcaPage)
     const dialog = orcaPage.getByRole('dialog', { name: /Create (Workspace|Worktree)/i })
     await dialog.getByPlaceholder(/Type a name/i).fill(name)
@@ -195,10 +250,14 @@ test('the sidebar lists main’s inputs and keeps drag, create, open and collaps
     created.push(newId)
     await expect.poll(async () => (await renderedOrder(orcaPage)).includes(newId)).toBe(true)
     await orcaPage.waitForTimeout(300)
-    const createFrames = await createLog.stop()
-    const pendingShown = createFrames.findIndex(({ shows }) => shows)
+    const createStates = (await createLog.stop()).states
+    const pendingShown = createStates.findIndex(({ shows }) => shows)
     expect(pendingShown).toBeGreaterThanOrEqual(0)
-    const handover = createFrames.slice(pendingShown)
+    // The name shows as the pending row before the new row exists.
+    expect(createStates[pendingShown]!.ids).not.toContain(newId)
+    // The create click's own task lists the pending row, without waiting for main.
+    expect(createStates[pendingShown]!.inInputTask).toBe(true)
+    const handover = createStates.slice(pendingShown)
     expect(handover.filter(({ ids, shows }) => !shows && !ids.includes(newId))).toEqual([])
     const appeared = handover.findIndex(({ ids }) => ids.includes(newId))
     expect(handover.slice(appeared).every(({ ids }) => ids.includes(newId))).toBe(true)
@@ -237,17 +296,24 @@ test('the sidebar lists main’s inputs and keeps drag, create, open and collaps
       )
       .toBe(true)
     await scroller.evaluate((element) => element.scrollTo({ top: element.scrollHeight }))
-    const lastFullyShown = (): Promise<string> =>
+    // The list's last row, once painted at the bottom: rows render after the scroll, so until
+    // then the last mounted row sits mid-viewport, within overscan of the top.
+    const lastRowAtBottom = (): Promise<string> =>
       scroller.evaluate((element, selector) => {
         const box = element.getBoundingClientRect()
-        const shown = [...element.querySelectorAll<HTMLElement>(selector)].filter((row) => {
-          const rect = row.getBoundingClientRect()
-          return rect.top >= box.top && rect.bottom <= box.bottom + 1
-        })
-        return shown.at(-1)?.dataset.worktreeId ?? ''
+        const last = [...element.querySelectorAll<HTMLElement>(selector)]
+          .map((row) => ({ row, rect: row.getBoundingClientRect() }))
+          .sort((left, right) => left.rect.top - right.rect.top)
+          .at(-1)
+        if (!last || last.rect.top < box.top || last.rect.bottom > box.bottom + 1) {
+          return ''
+        }
+        return box.bottom - last.rect.bottom < last.rect.height
+          ? (last.row.dataset.worktreeId ?? '')
+          : ''
       }, ROWS)
-    await expect.poll(lastFullyShown).not.toBe('')
-    const bottomId = await lastFullyShown()
+    await expect.poll(lastRowAtBottom).not.toBe('')
+    const bottomId = await lastRowAtBottom()
     const bottomRow = orcaPage.locator(`${ROWS}[data-worktree-id=${JSON.stringify(bottomId)}]`)
     await expect(bottomRow).toBeInViewport()
     await scroller.evaluate((element) => element.scrollTo({ top: 0 }))

@@ -17,7 +17,11 @@ describe('files.writeIfUnchanged', () => {
       writeFileExplorerFile: vi.fn().mockResolvedValue({ ok: false, diskConflict: 'changed' })
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
-    const diskPrecondition = { expectedSignature: 'a-b-1', allowMissing: true }
+    const diskPrecondition = {
+      expectedSignature: 'a-b-1',
+      allowMissing: true,
+      requireLosslessUtf8: true
+    }
 
     const response = await dispatcher.dispatch(
       makeRequest('files.writeIfUnchanged', {

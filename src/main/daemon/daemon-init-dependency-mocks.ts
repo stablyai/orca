@@ -64,10 +64,16 @@ export function createDaemonInitModuleFactories(state: DaemonInitMockState) {
     readonly resetRespawnWindow: Mock
     readonly shutdown: Mock
     readonly getHandle: Mock
+    readonly staleDaemonRecycleVersion: string | null
     private socketCounter: number
     private handle: MockSpawnerHandle | null
-    constructor(opts: { runtimeDir: string; launcher: unknown }) {
+    constructor(opts: {
+      runtimeDir: string
+      launcher: unknown
+      staleDaemonRecycleVersion?: string | null
+    }) {
       this.launcher = opts.launcher
+      this.staleDaemonRecycleVersion = opts.staleDaemonRecycleVersion ?? null
       this.socketCounter = 0
       this.handle = null
       // Why: each ensureRunning bumps a counter into socketPath so tests can tell the replacement adapter used the second call, not the first.

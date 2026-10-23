@@ -32,11 +32,6 @@ vi.mock('./parcel-watcher-process', async (importOriginal) => {
   }
 })
 
-vi.mock('../providers/ssh-filesystem-dispatch', () => ({
-  getSshFilesystemProvider: vi.fn(),
-  onSshFilesystemProviderRegistered: () => () => {}
-}))
-
 import { closeAllWatchers } from './filesystem-watcher-shutdown'
 import {
   closeLocalWatcherForWorktreePath,
@@ -678,7 +673,8 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
     expect(subscribeParcelWatcher).toHaveBeenCalledTimes(2)
     expect(sender.send).toHaveBeenCalledWith('fs:changed', {
       worktreePath: '/tmp/repo',
-      events: [{ kind: 'overflow', absolutePath: '/tmp/repo' }]
+      events: [{ kind: 'overflow', absolutePath: '/tmp/repo' }],
+      resync: true
     })
   })
 

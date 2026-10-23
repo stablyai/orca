@@ -18,10 +18,11 @@ import type { LegacyRelayEndpoint, LegacyRelayEndpointListing } from './legacy-r
 import { LegacyRelayRetry, LegacyRelayWaiters } from './legacy-relay-bridge-timers'
 import {
   ATTACH_WAIT_MS,
+  liveRouteOf,
   findLivePane,
   leasedAppPtyIds,
   listedLeasesByRelayId,
-  type LegacyRelayPty,
+  type ListedRow,
   PROVEN_EXITED,
   relistedPane,
   seededPanes,
@@ -69,6 +70,7 @@ export class LegacyRelayTargetBridge {
   readonly listedIncarnation = (ptyId: string) => this.panes.get(ptyId)?.listed?.incarnationId
   /** Whether a relay lists a pane now, including one whose stop is owed; undefined when untracked. */
   readonly paneState = (ptyId: string) => this.panes.get(ptyId)?.state
+  readonly paneReplaced = (ptyId: string) => Boolean(this.panes.get(ptyId)?.replaced)
   private readonly attached = new Map<string, Set<number>>()
   private readonly waiters = new LegacyRelayWaiters()
   private readonly retry = new LegacyRelayRetry(() => void this.refresh())
@@ -119,8 +121,8 @@ export class LegacyRelayTargetBridge {
     if (!leased) {
       return { status: 'not-bridged' }
     }
-    const client = pane.endpoint ? this.endpoints.get(pane.endpoint)?.client : null
-    if (pane.state !== 'live' || !client) {
+    const client = this.liveRoute(ptyId)?.client
+    if (!client) {
       return { status: 'unverifiable' }
     }
     // Why before the request: output that races the reply must reach the pane, not be dropped.
@@ -200,7 +202,7 @@ export class LegacyRelayTargetBridge {
     if (this.disposed) {
       return
     }
-    const listedRows: (LegacyRelayPty & { endpoint: string })[] = []
+    const listedRows: ListedRow[] = []
     let complete = listing.kind === 'listed' && listing.exhaustive
     for (const endpoint of listing.kind === 'listed' ? listing.endpoints : []) {
       const listed = await this.listEndpoint(endpoint)
@@ -211,7 +213,7 @@ export class LegacyRelayTargetBridge {
         complete = false
         continue
       }
-      listedRows.push(...listed.map((row) => ({ ...row, endpoint: endpoint.endpoint })))
+      listedRows.push(...listed)
     }
     const next = new Map<string, Pane>()
     // Why re-read: a lease retired while the relays were asked (an exit) must not come back live.
@@ -232,7 +234,7 @@ export class LegacyRelayTargetBridge {
     this.closeIdleClients(new Set([...next.values()].map((pane) => pane.endpoint ?? '')))
     this.replacePanes(next)
     // A contested pane is unverifiable under a complete listing too; only a later one resolves it.
-    if (!complete || [...next.values()].some((pane) => pane.state === 'unverifiable')) {
+    if (!complete || [...next.values()].some((p) => p.state === 'unverifiable' && !p.replaced)) {
       this.retry.schedule()
     } else if (!this.attachFailing) {
       this.retry.reset()
@@ -240,7 +242,7 @@ export class LegacyRelayTargetBridge {
   }
 
   /** The relay's PTYs, an empty list for a relay proven gone, or null when it can't be asked. */
-  private async listEndpoint(endpoint: LegacyRelayEndpoint): Promise<LegacyRelayPty[] | null> {
+  private async listEndpoint(endpoint: LegacyRelayEndpoint): Promise<ListedRow[] | null> {
     const state = this.endpoints.get(endpoint.endpoint) ?? { endpoint, client: null, claim: null }
     this.endpoints.set(endpoint.endpoint, state)
     if (!state.client || state.client.closed) {
@@ -261,8 +263,9 @@ export class LegacyRelayTargetBridge {
         return (await this.deps.endpointExited(endpoint).catch(() => false)) ? [] : null
       }
     }
+    const { client } = state
     try {
-      return await state.client.list()
+      return (await client.list()).map((row) => ({ ...row, endpoint: endpoint.endpoint, client }))
     } catch {
       return null
     }
@@ -271,7 +274,7 @@ export class LegacyRelayTargetBridge {
   private wireClient(endpoint: string, client: LegacyRelayClient): void {
     client.onData((relayPtyId, data) => {
       const ptyId = toAppSshPtyId(this.deps.targetId, relayPtyId)
-      if (this.attached.has(ptyId) && this.deps.owners.speaksFor(relayPtyId, endpoint)) {
+      if (this.attached.has(ptyId) && this.deps.owners.speaksFor(relayPtyId, endpoint, client)) {
         this.deps.onData(ptyId, data)
       }
     })
@@ -279,7 +282,7 @@ export class LegacyRelayTargetBridge {
       const ptyId = toAppSshPtyId(this.deps.targetId, relayPtyId)
       const pane = this.panes.get(ptyId)
       this.deps.owners.noteExit(relayPtyId, endpoint, code)
-      if (pane && this.deps.owners.speaksFor(relayPtyId, endpoint)) {
+      if (pane && this.deps.owners.speaksFor(relayPtyId, endpoint, client)) {
         this.retire(ptyId, pane, code)
       }
     })
@@ -326,9 +329,7 @@ export class LegacyRelayTargetBridge {
 
   /** The connection that carries a live pane, or null while its relay can't be asked. */
   liveRoute(ptyId: string): { client: LegacyRelayClient; relayPtyId: string } | null {
-    const pane = this.panes.get(ptyId)
-    const client = pane?.endpoint ? this.endpoints.get(pane.endpoint)?.client : null
-    return pane?.state === 'live' && client ? { client, relayPtyId: pane.relayPtyId } : null
+    return liveRouteOf(this.panes.get(ptyId), this.endpoints, this.deps.owners)
   }
 
   private replacePanes(next: Map<string, Pane>): void {

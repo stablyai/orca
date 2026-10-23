@@ -1,11 +1,12 @@
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import {
-  collectIdOnlyStoreWrites,
   findIdOnlyLookups,
   findIdOnlyWrites,
-  listStoreOperationClasses,
-  NOT_HOST_TWINNED
+  listStoreOperationClasses
 } from './check-id-only-store-write-ratchet.mjs'
 
 const SOURCE = `export class RowOps {
@@ -73,17 +74,6 @@ describe('findIdOnlyWrites', () => {
   })
 })
 
-describe('collectIdOnlyStoreWrites', () => {
-  it('scans every Store operations class and skips the documented exemptions', () => {
-    expect(listStoreOperationClasses(process.cwd()).length).toBeGreaterThan(10)
-    const entries = collectIdOnlyStoreWrites(process.cwd())
-    expect(entries).not.toContain('RepoLifecycleOperations.updateRepo')
-    for (const exempt of NOT_HOST_TWINNED.keys()) {
-      expect(entries).not.toContain(exempt)
-    }
-  })
-})
-
 const LOOKUP_SOURCE = `export class SetupOps {
   updateProjectHostSetup(args: Args): Result | null {
     const repo = setup.repoId
@@ -117,5 +107,29 @@ describe('findIdOnlyLookups', () => {
       'lookup:ops.ts#pickRepo',
       'lookup:ops.ts#pickOptional'
     ])
+  })
+})
+
+describe('listStoreOperationClasses', () => {
+  it('finds an operations class whose import also brings in a function', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'id-only-ratchet-'))
+    const file = path.join(root, 'src/main/persistence/loading-store/store-domain-composition.ts')
+    fs.mkdirSync(path.dirname(file), { recursive: true })
+    fs.writeFileSync(
+      file,
+      [
+        "import { RowOps } from './row-ops'",
+        "import { scheduleSave, WriteOps } from './write-ops'",
+        'const STORE_DOMAIN_OPERATION_CLASSES = [RowOps, WriteOps]'
+      ].join('\n')
+    )
+    try {
+      expect(listStoreOperationClasses(root)).toEqual([
+        ['RowOps', 'src/main/persistence/loading-store/row-ops.ts'],
+        ['WriteOps', 'src/main/persistence/loading-store/write-ops.ts']
+      ])
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true })
+    }
   })
 })

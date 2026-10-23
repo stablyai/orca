@@ -232,7 +232,8 @@ export type BrowserSlice = {
     summary: BrowserCookieImportSummary | null
     error: string | null
   } | null
-  fetchBrowserSessionProfiles: () => Promise<void>
+  /** Loads one host's profiles; defaults to the host Browser settings is showing. */
+  fetchBrowserSessionProfiles: (hostId?: ExecutionHostId) => Promise<void>
   createBrowserSessionProfile: (
     scope: 'isolated' | 'imported',
     label: string
@@ -259,6 +260,9 @@ export type BrowserSlice = {
   clearDefaultSessionCookies: () => Promise<boolean>
   browserUrlHistory: BrowserHistoryEntry[]
   addBrowserHistoryEntry: (url: string, title: string, faviconUrl?: string | null) => void
+  /** Returns the removed entry so an Undo can put it back with its visit count. */
+  removeBrowserHistoryEntry: (normalizedUrl: string) => BrowserHistoryEntry | null
+  restoreBrowserHistoryEntry: (entry: BrowserHistoryEntry) => void
   workspaceDocHistory: WorkspaceDocHistoryEntry[]
   /** A visit bumps recency and count; a title-only refresh (bump: false) renames the row. */
   recordWorkspaceDocVisit: (

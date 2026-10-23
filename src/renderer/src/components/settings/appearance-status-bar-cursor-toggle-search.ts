@@ -14,7 +14,7 @@ export function getCursorStatusBarToggleSearchEntry(): {
     title: translate('auto.components.settings.appearance.search.cursor.title', 'Cursor Usage'),
     description: translate(
       'auto.components.settings.appearance.search.cursor.description',
-      'Show monthly Cursor plan usage from the Cursor sign-in on this computer.'
+      'Show Cursor plan usage from the Cursor sign-in on this computer.'
     ),
     keywords: [
       ...translateSearchKeyword(

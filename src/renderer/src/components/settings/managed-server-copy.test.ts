@@ -37,7 +37,7 @@ describe('managed server action refusals', () => {
         verdict: 'live'
       })
     ).toBe(
-      'Not done: this server is the default host for new projects. Choose another one in Advanced before stopping it.'
+      'Not done: this server is the default host for new projects. Choose another one under New projects open on before stopping it.'
     )
   })
 

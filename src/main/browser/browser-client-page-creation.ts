@@ -9,6 +9,7 @@ import {
   assertCurrentBrowserClientPageRenderer,
   browserClientPageIdentity
 } from './browser-client-page-command-admission'
+import type { BrowserClientPageAuthorityIdentity } from './browser-client-page-command-executor-dependencies'
 import { BrowserClientPageCommandError } from './browser-client-page-command-failure'
 import type { BrowserClientPageGuestBinding } from './browser-client-page-guest-binding'
 import { createBrowserClientPageInventory } from './browser-client-page-inventory'
@@ -23,10 +24,8 @@ import type {
 import type { BrowserRouteSessionRegistry } from './browser-route-session-registry'
 import type { BrowserRouteSessionHandle } from './browser-route-session-state'
 
-type BrowserClientPageCreationDependencies = {
+type BrowserClientPageCreationDependencies = BrowserClientPageAuthorityIdentity & {
   orcaProfileId: string
-  authorityConnectionIdentity: string
-  legacyAuthorityConnectionIdentity: string
   storageScope: string
   retainNetworkRoute(executionHostKey: string, signal: AbortSignal): Promise<RetainedNetworkRoute>
   retireSupersededExecutionHostPages(route: RetainedNetworkRoute): Promise<void>
@@ -72,6 +71,12 @@ export async function createReservedBrowserClientPage(
         orcaProfileId: dependencies.orcaProfileId,
         browserProfileId: event.command.browserProfileId,
         authorityConnectionIdentity: dependencies.authorityConnectionIdentity,
+        executionHostIdentity: route.executionHostIdentity
+      },
+      compatibleIdentity: {
+        orcaProfileId: dependencies.orcaProfileId,
+        browserProfileId: event.command.browserProfileId,
+        authorityConnectionIdentity: dependencies.pairingAuthorityConnectionIdentity,
         executionHostIdentity: route.executionHostIdentity
       },
       legacyIdentity: {

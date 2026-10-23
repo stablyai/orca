@@ -93,6 +93,12 @@ function workspaceSleepChatAtRest(
   )
 }
 
+export type WorkspaceSleepCloseResult = {
+  fence: number
+  stopped: boolean
+  admittedSends: number
+}
+
 /** The same abort a close gives a registered start, remembering which starts it aborted so the
  *  result is read once they settle, outside the lane their last commits need. */
 export function workspaceSleepStartAborts(
@@ -113,7 +119,7 @@ export function workspaceSleepStartAborts(
     },
     settle: (
       input: Pick<Parameters<typeof stopWorkspaceSleepChat>[0], 'deps' | 'sessions' | 'sessionId'>,
-      result: { fence: number; stopped: boolean } | null
+      result: WorkspaceSleepCloseResult | null
     ) =>
       settleWorkspaceSleepAbortedStarts(input, result, aborted, () =>
         runtimeState().startFlights.has(sessionId)
@@ -125,16 +131,20 @@ export function workspaceSleepStartAborts(
  *  the chat it left at rest counts as stopped. */
 async function settleWorkspaceSleepAbortedStarts(
   input: Pick<Parameters<typeof stopWorkspaceSleepChat>[0], 'deps' | 'sessions' | 'sessionId'>,
-  result: { fence: number; stopped: boolean } | null,
+  result: WorkspaceSleepCloseResult | null,
   abortedStarts: readonly Promise<unknown>[],
   startRunning: () => boolean
-): Promise<{ fence: number; stopped: boolean } | null> {
+): Promise<WorkspaceSleepCloseResult | null> {
   await Promise.allSettled(abortedStarts)
   if (!result || result.stopped || abortedStarts.length === 0 || startRunning()) {
     return result
   }
   const { deps, sessions, sessionId } = input
   return workspaceSleepChatAtRest(deps, sessions, sessionId)
-    ? { fence: deps.store.getRecord(sessionId)?.lease.runtimeFence ?? result.fence, stopped: true }
+    ? {
+        ...result,
+        fence: deps.store.getRecord(sessionId)?.lease.runtimeFence ?? result.fence,
+        stopped: true
+      }
     : result
 }

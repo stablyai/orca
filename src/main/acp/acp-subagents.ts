@@ -14,10 +14,6 @@ import type {
 import { AGENT_CHILD_WORK_ID_MAX_LENGTH } from '../../shared/agent-status-child-work-value-guards'
 import { MAX_SUBAGENT_FIELD_CHARS } from '../../shared/native-chat-subagent-summary'
 import type { NativeChatSubagentState } from '../../shared/native-chat-types'
-import {
-  boundInlineText,
-  DEFAULT_JOURNAL_PAYLOAD_LIMITS
-} from '../native-chat/agent-session-journal/journal-payload-bounds'
 import { boundSubagentLabel } from '../native-chat/agent-session-journal/journal-subagent-item'
 import type { ProviderTimelineJoin } from '../native-chat/agent-session-timeline/provider-timeline-event'
 import type { AcpSubagentUpdate } from './acp-dialects/acp-dialect'
@@ -105,16 +101,15 @@ export class AcpSubagents {
   }
 
   private reply(id: string, subagent: KnownSubagent, text: string): AcpTimelineEvent[] {
-    const bounded = boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
-    if (subagent.reply === bounded) {
+    if (subagent.reply === text) {
       return []
     }
-    subagent.reply = bounded
+    subagent.reply = text
     return [
       {
         type: 'item.update',
         item: `subagent-result:${id}`,
-        body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: bounded }] },
+        body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text }] },
         producer: { agentId: id, producerKind: 'agent' },
         join: subagent.placement
       }

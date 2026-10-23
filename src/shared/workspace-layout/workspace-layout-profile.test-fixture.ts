@@ -195,6 +195,14 @@ export function localDesktopSession(): WorkspaceSessionState {
     closedTerminalTabTombstonesByTabId: {
       'tab-closed': { closedAt: 1_700_000_450_000, worktreeId: GIT_KEY, reason: 'user' }
     },
+    closedTerminalPanesByPaneKey: {
+      'tab-closed:leaf-closed': {
+        ptyId: 'pty-closed',
+        incarnationId: 'inc-closed',
+        worktreeId: GIT_KEY,
+        closedAt: 1_700_000_450_000
+      }
+    },
     clientHostedBrowserCloseIntentsByEnvironment: {}
   }
 }

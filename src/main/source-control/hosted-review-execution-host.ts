@@ -1,5 +1,4 @@
 import type { ExecutionHostId } from '../../shared/execution-host'
-export { getStoredRepoExecutionHostId as getRepoHostedReviewExecutionHostId } from '../repo-execution-host'
 import {
   ExecutionHostNotDispatchableError,
   resolveGitRouteForHost
@@ -15,7 +14,7 @@ import {
  *
  * `runtime:` throws rather than degrading: that environment's server runs its own git, and the SSH
  * target on its repo row is nested in that server's namespace, so dialing it here reaches a
- * same-named box of ours. Store-backed callers ask `getRepoHostedReviewExecutionHostId` first,
+ * same-named box of ours. Store-backed callers ask `getStoredRepoExecutionHostId` first,
  * which is the "what may this client dial" question and never hands a `runtime:` id down.
  */
 export function hostedReviewSshConnectionId(executionHostId: ExecutionHostId): string | null {

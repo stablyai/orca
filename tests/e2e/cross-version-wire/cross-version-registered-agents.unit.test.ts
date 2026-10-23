@@ -135,8 +135,10 @@ function registersAgents(build: AgentSessionWireBuild): boolean {
 }
 
 function baselineReadsRecord(record: AgentSessionRecord): boolean {
+  const stored = encodeAgentSessionRecord(record)
   return baseline.isPersistedAgentSessionRecord(
-    encodeAgentSessionRecord(record),
+    // Historical leases keep the checkpoint so old readers reach agent validation.
+    { ...stored, lease: { ...stored.lease, journalCheckpoint: null } },
     new Set(['claude', 'codex'])
   )
 }

@@ -50,7 +50,6 @@ function runtimeWithDesktopWindow(spawnResult: Record<string, unknown> = { id: '
     renameTerminal: vi.fn(),
     focusTerminal: vi.fn(),
     closeTerminal: vi.fn(),
-    sleepWorktree: vi.fn(),
     terminalFitOverrideChanged: vi.fn(),
     terminalDriverChanged: vi.fn()
   })
@@ -360,6 +359,10 @@ describe('OrcaRuntimeService', () => {
   it('still attaches to a live pane when the caller did not require a fresh one', async () => {
     // `terminal.create` keeps its reattach; only agent.launch opts into the refusal.
     const { runtime, revealTerminalSession } = runtimeWithDesktopWindow(LIVE_PANE_SPAWN)
+    runtime.registerPty('pty-live', TEST_WORKTREE_ID, null, {
+      ...LIVE_PANE_SPAWN.stablePaneOwner,
+      terminalHandle: 'term_live'
+    })
 
     const created = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
       startupAgent: 'claude',

@@ -18,10 +18,6 @@ import {
   type AgentJournalTurnScope
 } from '../../../shared/agent-session-journal-types'
 import {
-  boundInlineText,
-  DEFAULT_JOURNAL_PAYLOAD_LIMITS
-} from '../agent-session-journal/journal-payload-bounds'
-import {
   createAgentSessionDeltaCoalescer,
   type AgentSessionDeltaCoalescerDeps
 } from '../agent-session-wire/agent-session-delta-coalescer'
@@ -241,8 +237,7 @@ export class ProviderTimelineTextStreams {
         this.planText(plan, stream, owed.snapshot.text)
       }
     } else {
-      const text = boundInlineText(finalText, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
-      this.planText(plan, stream, text, true)
+      this.planText(plan, stream, finalText, true)
     }
     this.planRelease(plan, (each) => each === stream)
   }

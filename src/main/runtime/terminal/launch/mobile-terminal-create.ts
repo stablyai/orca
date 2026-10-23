@@ -1,6 +1,6 @@
 import type { MobileTerminalCreateOptions } from './mobile-terminal-renderer-create'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-session-contracts'
-import { OrcaRuntimeWithCreateTerminal } from './terminal-create'
+import { OrcaRuntimeWithFailedStartPanes } from './failed-start-pane'
 import type { WorktreeStartupLaunch } from '../../../../shared/worktree/launch-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type {
@@ -13,7 +13,7 @@ import { navigationTargetsHost } from '../../../../shared/runtime-navigation'
 import { MOBILE_TERMINAL_CREATE_RESULT_TTL_MS } from '../../orca-runtime-core'
 import { seedResumeLaunchIdentity } from '../../../ipc/pty/pane/resume-launch-identity'
 
-export abstract class OrcaRuntimeWithCreateMobileSessionTerminal extends OrcaRuntimeWithCreateTerminal {
+export abstract class OrcaRuntimeWithCreateMobileSessionTerminal extends OrcaRuntimeWithFailedStartPanes {
   protected abstract runCreateMobileSessionTerminal(
     worktreeSelector: string,
     opts?: MobileTerminalCreateOptions
@@ -121,12 +121,13 @@ export abstract class OrcaRuntimeWithCreateMobileSessionTerminal extends OrcaRun
       return
     }
     const pty = this.getLivePtyForHandle(created.tab.terminal)?.pty
+    const paneKey = this.paneOfPty(pty).paneKey
     // Why: an SSH pane's status rows belong to the relay on that host.
-    if (!pty?.paneKey || pty.connectionId) {
+    if (!pty || !paneKey || pty.connectionId) {
       return
     }
     seedResumeLaunchIdentity({
-      paneKey: pty.paneKey,
+      paneKey,
       launchAgent: opts.launchAgent,
       resumeProviderSession: opts.resumeProviderSession,
       worktreeId: pty.worktreeId,

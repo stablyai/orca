@@ -154,6 +154,7 @@ type PtyCallbacks = {
 }
 
 export type PtyTransportRecoveryState = {
+  reason?: 'ownership'
   phase:
     | 'connecting'
     | 'connected'
@@ -179,6 +180,8 @@ export type PtyTransport = {
      *  first byte and the gate + model responder own spawn-time queries.
      *  Ignored by remote-runtime transports (not gate-markable). */
     initiallyHidden?: boolean
+    /** Layout-owner build: attach to `sessionId` or start nothing; main starts the pane. */
+    attachOnlyView?: true
     /** Sent only when this connect resumes an agent, and only to hosts that accept it. */
     resumeSpawnIntent?: RestoreSpawnIntent
     command?: string
@@ -285,7 +288,6 @@ export type IpcPtyTransportOptions = {
   preconnectInput?: readonly PtyPreconnectInputEntry[]
   /** Records newly retained input against a remount-safe deferred split handoff. */
   onPreconnectInput?: (input: PtyPreconnectInputEntry) => void
-  cwdFallback?: 'worktree'
   env?: Record<string, string>
   envToDelete?: string[]
   command?: string

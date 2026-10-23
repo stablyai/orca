@@ -5,7 +5,7 @@ import type { WslRunningDistrosRead } from '../wsl-background-distro-gate'
 import type { WslGuestIdentity } from './wsl-guest-process-identity'
 import type { WslOrcadConnection } from './wsl-orcad-connection'
 import type { WslOrcadConnectionStatus } from './wsl-orcad-connection-status'
-import { WSL_ORCAD_HEARTBEAT_MS } from './wsl-orcad-liveness-model'
+import { WSL_ORCAD_HEARTBEAT_MS } from './wsl-orcad-liveness-state'
 import { WslOrcadLivenessSupervisor } from './wsl-orcad-liveness-supervisor'
 import { WSL_ORCAD_RECONNECT_DELAYS_MS } from './wsl-orcad-reconnect-backoff'
 import type { WslOrcadWatch } from './wsl-orcad-watch'
@@ -234,8 +234,10 @@ describe('WslOrcadLivenessSupervisor', () => {
     const h = harness()
     await h.supervisor.connect('Ubuntu')
     h.state.ensureFails = 1
-    await expect(h.supervisor.connect('Ubuntu', { force: true })).rejects.toThrow('relaunch failed')
-    expect(h.ensure).toHaveBeenLastCalledWith('Ubuntu', { force: true })
+    await expect(h.supervisor.connect('Ubuntu', { intent: 'force' })).rejects.toThrow(
+      'relaunch failed'
+    )
+    expect(h.ensure).toHaveBeenLastCalledWith('Ubuntu', { intent: 'force' })
     expect(h.watches).toHaveLength(2)
     expect(h.lastWatch().closed).toBe(false)
   })

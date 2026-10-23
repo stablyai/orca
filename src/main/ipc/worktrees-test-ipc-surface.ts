@@ -37,6 +37,9 @@ export type TestStore = {
   removeWorktreeMeta: TargetStoreMock
   pruneSessionlessMissingLocalWorktreeMetadataForRepo: StoreMock
   removeWorkspaceSessionStateForWorktree: KeyedStoreMock
+  /** Read by main's switch-on layout purge after a listing. */
+  getWorkspaceSessionHostIds: StoreMock
+  getWorkspaceSession: StoreMock
   getAllWorktreeLineage: StoreMock
   removeWorktreeLineage: TargetStoreMock
   getAllWorkspaceLineage: StoreMock
@@ -72,6 +75,8 @@ export const store: TestStore = {
   removeWorktreeMeta: vi.fn(),
   pruneSessionlessMissingLocalWorktreeMetadataForRepo: vi.fn(),
   removeWorkspaceSessionStateForWorktree: vi.fn(),
+  getWorkspaceSessionHostIds: vi.fn(),
+  getWorkspaceSession: vi.fn(),
   getAllWorktreeLineage: vi.fn(),
   removeWorktreeLineage: vi.fn(),
   getAllWorkspaceLineage: vi.fn(),

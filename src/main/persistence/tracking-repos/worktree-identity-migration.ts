@@ -214,6 +214,15 @@ export function migrateWorktreeIdentity(
       session.closedTerminalTabTombstonesByTabId = nextClosedTombstones
       sessionChanged = true
     }
+    const nextClosedPanes = repointRowRecord(
+      session.closedTerminalPanesByPaneKey,
+      oldWorktreeId,
+      newWorktreeId
+    )
+    if (nextClosedPanes) {
+      session.closedTerminalPanesByPaneKey = nextClosedPanes
+      sessionChanged = true
+    }
     const nextCloseIntents = repointRowArrays(
       session.clientHostedBrowserCloseIntentsByEnvironment,
       oldWorktreeId,

@@ -31,7 +31,7 @@ import { withManagedOrcadLifecycle } from '../../ssh/orcad-runtime-maintenance'
 import { collectManagedTerminalCensus } from '../../ssh/orcad-terminal-census-client'
 import { RemoteInstallLockBusyError } from '../install/remote-install-lock'
 
-export type ManagedOrcadStopPolicy = {
+type ManagedOrcadStopPolicy = {
   isActiveEnvironment: (environmentId: string) => boolean
   /** Invalidates the server's transport and retires its client-side state once it is unlinked. */
   retireLocalState: (environmentId: string) => Promise<void> | void
@@ -55,7 +55,7 @@ export function stopManagedOrcadEnvironment(
       return refuse(
         'live',
         'orcad_stop_active_environment',
-        'This server is the default host for new projects. Choose another one in Advanced before stopping it.'
+        'This server is the default host for new projects. Choose another one under New projects open on before stopping it.'
       )
     }
     const stopped = await stopRemote(userDataPath, environment, deployment, args.signal)
@@ -89,7 +89,7 @@ export function forgetManagedOrcadEnvironment(
       return refuse(
         'live',
         'orcad_forget_active_environment',
-        'This server is the default host for new projects. Choose another one in Advanced before forgetting it.'
+        'This server is the default host for new projects. Choose another one under New projects open on before forgetting it.'
       )
     }
     await unlinkEnvironmentLocally(userDataPath, environment, deployment, policy)

@@ -1,6 +1,7 @@
 import { isFolderRepo } from '../../shared/repo-kind'
 import { commitProvenRepoKindChange } from '../folder-repo-git-conversion'
 import type { Repo } from '../../shared/repo-types'
+import type { RuntimeRepoSelector } from './runtime-repo-selector'
 import type { GhAccountBinding } from '../../shared/github/account-binding'
 import { invalidateAuthorizedRootsCache } from '../ipc/registered-worktree-roots-cache'
 import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
@@ -12,7 +13,7 @@ const PROJECT_TERMINAL_STOP_BUDGET_MS = 10_000
 
 type RuntimeRepositorySettingsDependencies = {
   getStore: () => RuntimeStore | null
-  resolveRepo: (selector: string) => Promise<Repo>
+  resolveRepo: (selector: RuntimeRepoSelector) => Promise<Repo>
   forgetTerminalTopology: (repoId: string) => void
   /** Optional so test doubles and older wiring keep removing without it. */
   stopProjectTerminals?: (
@@ -62,7 +63,7 @@ function omitUndefined<T extends Record<string, unknown>>(value: T): Partial<T> 
 export class RuntimeRepositorySettingsController {
   constructor(private readonly deps: RuntimeRepositorySettingsDependencies) {}
 
-  async show(repoSelector: string): Promise<Repo> {
+  async show(repoSelector: RuntimeRepoSelector): Promise<Repo> {
     return await this.deps.resolveRepo(repoSelector)
   }
 

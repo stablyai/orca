@@ -23,7 +23,7 @@ describe('splitWorktreeSortOrderByHost', () => {
     ])
   })
 
-  it('routes legacy worktrees without an explicit owner to the focused host', () => {
+  it('keeps legacy worktrees without an explicit owner local, whatever server is focused', () => {
     const groups = splitWorktreeSortOrderByHost(
       {
         settings: { activeRuntimeEnvironmentId: 'focused-env' },
@@ -32,9 +32,7 @@ describe('splitWorktreeSortOrderByHost', () => {
       },
       ['legacy::wt']
     )
-    expect(groups).toEqual([
-      { hostId: 'runtime:focused-env', orderedIds: ['legacy::wt'], rowHostIds: ['local'] }
-    ])
+    expect(groups).toEqual([{ hostId: 'local', orderedIds: ['legacy::wt'], rowHostIds: ['local'] }])
   })
 
   it('leaves out a twin and a row only a repo row places on a server', () => {

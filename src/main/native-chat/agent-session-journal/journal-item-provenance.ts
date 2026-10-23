@@ -1,3 +1,4 @@
+import { journalItemEchoRestatement, type JournalItemEcho } from './journal-item-echo'
 // Execution provenance: the generation whose execution produced an item (`JournalItemRow.ownerFence`),
 // kept apart from each row's writer fence. The write that creates an item states it; every revision
 // keeps it. A reusable child's row (a subagent, a Claude background task) a later run resumes also
@@ -13,12 +14,13 @@ export function journalItemExecutionFence(
   return state.itemExecutionOwners.get(itemId) ?? state.itemFences.get(itemId)
 }
 
-/** The item's creator and, when one said, the run executing it, each as stored. */
+/** The item's execution and echo provenance, carried together when history is retained. */
 export function journalItemProvenance(
-  state: Pick<JournalReducerState, 'itemFences' | 'itemExecutionOwners'>,
+  state: Pick<JournalReducerState, 'itemFences' | 'itemExecutionOwners' | 'itemEchoes'>,
   itemId: string
-): { ownerFence?: number; executionOwner?: number } {
+): JournalItemEcho & { ownerFence?: number; executionOwner?: number } {
   return {
+    ...journalItemEchoRestatement(state.itemEchoes, itemId),
     ownerFence: state.itemFences.get(itemId),
     executionOwner: state.itemExecutionOwners.get(itemId)
   }

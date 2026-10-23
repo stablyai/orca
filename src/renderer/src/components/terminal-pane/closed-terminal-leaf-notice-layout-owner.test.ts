@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { CLOSE_TERMINAL_PANE_EVENT } from '@/constants/terminal'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 vi.mock('@/store', () => ({ useAppStore: { getState: () => ({}) } }))
@@ -7,7 +8,6 @@ import { applyClosedTerminalLeafNotice } from './closed-terminal-leaf-notice'
 import {
   _resetTerminalPaneSplitRequestRoutingForTests,
   hasTerminalPaneSplitMountLease,
-  queueTerminalPaneSplitRequest,
   takeQueuedTerminalPaneSplitRequests
 } from './terminal-pane-split-request-routing'
 
@@ -16,22 +16,26 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe('a pane main closed while its split waited for the tab to mount', () => {
-  it('drops the waiting split, so the tab mounts without the closed pane', () => {
-    vi.stubGlobal('window', new EventTarget())
-    queueTerminalPaneSplitRequest({
-      tabId: 'tab-1',
-      worktreeId: 'wt-1',
-      paneRuntimeId: 1,
-      sourceLeafId: '11111111-1111-4111-8111-111111111111',
-      direction: 'vertical',
-      newLeafId: '22222222-2222-4222-8222-222222222222',
-      command: 'make test'
+describe('a pane main closed before its tab mounted, in a layout-owner build', () => {
+  // Main writes and starts every split itself, so no split waits in the window to mount the pane:
+  // the tab mounts from main's layout, which no longer holds it.
+  it('leaves nothing waiting to mount it, and drops it from a mounted tab as before', () => {
+    const target = new EventTarget()
+    vi.stubGlobal('window', target)
+    const closed = vi.fn()
+    target.addEventListener(CLOSE_TERMINAL_PANE_EVENT, (event) => {
+      if (event instanceof CustomEvent) {
+        closed(event.detail)
+      }
     })
 
     applyClosedTerminalLeafNotice('tab-1', '22222222-2222-4222-8222-222222222222')
 
     expect(takeQueuedTerminalPaneSplitRequests('tab-1', 'wt-1')).toEqual([])
     expect(hasTerminalPaneSplitMountLease('tab-1')).toBe(false)
+    expect(closed).toHaveBeenCalledWith({
+      tabId: 'tab-1',
+      leafId: '22222222-2222-4222-8222-222222222222'
+    })
   })
 })

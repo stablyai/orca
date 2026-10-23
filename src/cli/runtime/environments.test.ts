@@ -11,12 +11,12 @@ import {
   resolveEnvironmentPairingOffer
 } from './environments'
 
-function pairingCode(endpoint = 'ws://127.0.0.1:6768'): string {
+function pairingCode(endpoint = 'ws://127.0.0.1:6768', keyFill = 1): string {
   return encodePairingOffer({
     v: 2,
     endpoint,
     deviceToken: 'device-token',
-    publicKeyB64: Buffer.from(new Uint8Array(32).fill(1)).toString('base64')
+    publicKeyB64: Buffer.from(new Uint8Array(32).fill(keyFill)).toString('base64')
   })
 }
 
@@ -71,7 +71,7 @@ describe('CLI runtime environments', () => {
     expect(() =>
       addEnvironmentFromPairingCode(userDataPath, {
         name: 'workstation',
-        pairingCode: pairingCode('ws://127.0.0.1:2222'),
+        pairingCode: pairingCode('ws://127.0.0.1:2222', 2),
         now: 200
       })
     ).toThrow('A server named "workstation" already exists.')
@@ -80,5 +80,23 @@ describe('CLI runtime environments', () => {
       'ws://127.0.0.1:1111'
     )
     expect(listEnvironments(userDataPath)[0]?.id).toBe(first.id)
+  })
+
+  it('refuses saving the same server twice and points at Settings, which can switch its connection', () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-env-store-'))
+    addEnvironmentFromPairingCode(userDataPath, {
+      name: 'workstation',
+      pairingCode: pairingCode('ws://192.0.2.10:6768'),
+      now: 100
+    })
+
+    expect(() =>
+      addEnvironmentFromPairingCode(userDataPath, {
+        name: 'workstation over relay',
+        pairingCode: pairingCode('ws://198.51.100.7:6768'),
+        now: 200
+      })
+    ).toThrow('already paired as "workstation"')
+    expect(listEnvironments(userDataPath)).toHaveLength(1)
   })
 })

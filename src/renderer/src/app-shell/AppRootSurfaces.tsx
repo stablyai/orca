@@ -1,3 +1,6 @@
+import { ModalBoundary, OverlayBoundary } from './app-root-surface-boundaries'
+import { OnboardingLanguageLoading } from '../components/onboarding/OnboardingLanguageLoading'
+import { useLanguageReadiness } from '../i18n/language-readiness'
 import { NotificationCardStack } from '../components/NotificationCardStack'
 import { Suspense } from 'react'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
@@ -18,6 +21,7 @@ import { shouldRenderPetOverlay } from '../components/pet/pet-overlay-visibility
 import { useAppStore } from '../store'
 import type { UpdateStatus } from '../../../shared/update-status-types'
 import { useLazyModalMounts } from './use-lazy-modal-mounts'
+import { usePreloadWorktreeJumpPalette, WorktreeJumpPalette } from './worktree-jump-palette-preload'
 import {
   selectAppRootSurfacePetEnabled,
   selectAppRootSurfaceTelemetryOptedIn,
@@ -27,7 +31,6 @@ import type { FloatingWorkspacePanelState } from './use-floating-workspace-panel
 import type { OnboardingGate } from './use-onboarding-and-feature-tips'
 
 const QuickOpen = lazy(() => import('../components/QuickOpen'))
-const WorktreeJumpPalette = lazy(() => import('../components/WorktreeJumpPalette'))
 const WorkspaceCleanupDialog = lazy(
   () => import('../components/workspace-cleanup/WorkspaceCleanupDialog')
 )
@@ -93,30 +96,6 @@ const PetOverlay = lazy(() => import('../components/pet/PetOverlay'))
 // Why: lazy so onboarding's step modules + assets aren't fetched for users past first-launch.
 const OnboardingFlow = lazy(() => import('../components/onboarding/OnboardingFlow'))
 
-type BoundaryProps = {
-  boundaryId: string
-  resetKey?: string | number | boolean | null
-  title?: string
-  description?: string
-  children: React.ReactNode
-}
-
-function ModalBoundary({ children, ...props }: BoundaryProps): React.JSX.Element {
-  return (
-    <RecoverableRenderErrorBoundary surface="modal" compact {...props}>
-      {children}
-    </RecoverableRenderErrorBoundary>
-  )
-}
-
-function OverlayBoundary({ children, ...props }: BoundaryProps): React.JSX.Element {
-  return (
-    <RecoverableRenderErrorBoundary surface="overlay" compact {...props}>
-      {children}
-    </RecoverableRenderErrorBoundary>
-  )
-}
-
 function shouldMountUpdateCardForStatus(status: UpdateStatus): boolean {
   if (status.state === 'idle') {
     return false
@@ -136,7 +115,9 @@ export function AppRootSurfaces(props: {
   onboardingGate: OnboardingGate
 }): React.JSX.Element {
   const { floatingWorkspace, onboardingGate } = props
+  const languageReady = useLanguageReadiness((state) => state.ready)
   const { mountedLazyModalIds, shouldMountAddRepoDialog } = useLazyModalMounts()
+  usePreloadWorktreeJumpPalette()
   const activeView = useAppStore((s) => s.activeView)
   const activeModal = useAppStore((s) => s.activeModal)
   // Keep this always-mounted surface subscribed only to the settings fields it reads. A
@@ -381,10 +362,14 @@ export function AppRootSurfaces(props: {
               'Retry onboarding or close it and continue in the app.'
             )}
           >
-            <OnboardingFlow
-              onboarding={onboardingGate.onboarding}
-              onOnboardingChange={onboardingGate.setOnboarding}
-            />
+            {languageReady ? (
+              <OnboardingFlow
+                onboarding={onboardingGate.onboarding}
+                onOnboardingChange={onboardingGate.setOnboarding}
+              />
+            ) : (
+              <OnboardingLanguageLoading />
+            )}
           </RecoverableRenderErrorBoundary>
         </Suspense>
       ) : null}

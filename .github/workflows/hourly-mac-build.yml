@@ -122,6 +122,7 @@ jobs:
     if: needs.preflight.outputs.should_build == 'true'
     permissions:
       contents: read
+      actions: read
     uses: ./.github/workflows/node-server-tests.yml
     with:
       ref: ${{ needs.preflight.outputs.head_sha }}
@@ -168,14 +169,13 @@ jobs:
           repositories: orca-hourly
 
       - name: Setup pnpm
-        uses: pnpm/setup@v2
-        with:
-          install: false
+        uses: ./.github/actions/setup-pnpm
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
           cache: pnpm
           cache-dependency-path: |
             pnpm-lock.yaml
@@ -518,6 +518,9 @@ jobs:
     # Only once the mac release is actually live: there is no release to upload
     # into otherwise, and the Windows workflow refuses to create one.
     if: needs.build-hourly-mac.outputs.published == 'true'
+    permissions:
+      contents: read
+      actions: read
     uses: ./.github/workflows/dev-channel-win-build.yml
     secrets: inherit
     with:

@@ -55,7 +55,8 @@ export function buildRuntimeTerminalOrphanSession(args: {
         worktreeId: worktreeId,
         title,
         defaultTitle: title,
-        customTitle: null,
+        // An orphan's rename lives on its PTY until a tab owns it.
+        customTitle: pty.manualTitle ?? null,
         color: null,
         sortOrder: tabsById.size,
         createdAt: Date.now()

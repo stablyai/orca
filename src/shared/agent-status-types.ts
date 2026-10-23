@@ -98,6 +98,10 @@ export type AgentStatusEntry = {
   /** When the main agent's current turn began, as the hook server stamped it. Absent from old hosts
    *  and writers without a turn clock; readers fall back to `stateStartedAt`. */
   turnStartedAt?: number
+  /** The host's turn-end stamp; see `AgentStatusIpcPayload.turnEndedAt`. */
+  turnEndedAt?: number
+  /** How the host identified that end; see `TurnEndDisposition`. */
+  turnEndDisposition?: TurnEndDisposition
   agentType?: AgentType
   /** Provider model currently used by this session. */
   model?: string
@@ -274,6 +278,25 @@ export {
 
 // Why: ReadonlySet<string> so .has() accepts any string without a cast here; the narrowing cast stays on the return line where it's proven safe.
 const VALID_STATES: ReadonlySet<string> = new Set<string>(AGENT_STATUS_STATES)
+
+/** How the execution host identified the current turn end: `identified` (a verified new turn or
+ *  continuation, or a proven repeat of one) or `ambiguous` (a repeat it can't tell from a turn whose
+ *  opening it missed). Absent: legacy (old hosts, replays, unclassified agents). */
+export type TurnEndDisposition = 'identified' | 'ambiguous'
+
+export type HostTurnEndFacts = { turnEndedAt?: number; turnEndDisposition?: TurnEndDisposition }
+
+export function isTurnEndDisposition(value: unknown): value is TurnEndDisposition {
+  return value === 'identified' || value === 'ambiguous'
+}
+
+/** The host's turn-end facts of a row, for the copies that carry them. */
+export function pickHostTurnEnd(row: HostTurnEndFacts): HostTurnEndFacts {
+  return {
+    ...(row.turnEndedAt !== undefined ? { turnEndedAt: row.turnEndedAt } : {}),
+    ...(row.turnEndDisposition !== undefined ? { turnEndDisposition: row.turnEndDisposition } : {})
+  }
+}
 
 export function isAgentStatusState(value: unknown): value is AgentStatusState {
   return typeof value === 'string' && VALID_STATES.has(value)

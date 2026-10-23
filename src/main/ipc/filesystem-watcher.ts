@@ -4,11 +4,6 @@ import {
   forgetLocalWatcherRemovalSnapshot,
   restoreLocalWatcherAfterFailedRemoval
 } from './filesystem-watcher-local-removal'
-import {
-  closeRemoteWatcherForWorktreePath,
-  forgetRemoteWatcherRemovalSnapshot,
-  restoreRemoteWatcherAfterFailedRemoval
-} from './filesystem-watcher-remote-removal'
 
 // ── Public API ───────────────────────────────────────────────────────
 
@@ -19,8 +14,5 @@ export const desktopWorktreeWatcherRemoval: WorktreeWatcherRemoval = {
       ? closeLocalWatcherForWorktreePath(worktreePath, deadline)
       : closeLocalWatcherForWorktreePath(worktreePath),
   restoreLocal: restoreLocalWatcherAfterFailedRemoval,
-  forgetLocal: forgetLocalWatcherRemovalSnapshot,
-  closeRemote: closeRemoteWatcherForWorktreePath,
-  restoreRemote: restoreRemoteWatcherAfterFailedRemoval,
-  forgetRemote: forgetRemoteWatcherRemovalSnapshot
+  forgetLocal: forgetLocalWatcherRemovalSnapshot
 }

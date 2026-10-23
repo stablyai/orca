@@ -18,6 +18,7 @@ import {
   getIndexedWorktreesById as getCachedWorktreesById
 } from './worktree-repo-index'
 import { findKnownWorktreeById } from './slices/worktrees/listing/detected-worktree-meta'
+import { selectWorktreesByRepo } from './workspace-record-selectors'
 
 export { getProjectHostSetupProjectionFromState } from './project-host-setup-selector'
 export {
@@ -120,13 +121,13 @@ export function resetFloatingWorkspaceUnreadSelectorCacheForTest(): void {
 }
 
 export function getAllWorktreesFromState(state: Pick<AppState, 'worktreesByRepo'>): Worktree[] {
-  return getCachedAllWorktrees(state.worktreesByRepo)
+  return getCachedAllWorktrees(selectWorktreesByRepo(state))
 }
 
 export function getWorktreeMapFromState(
   state: Pick<AppState, 'worktreesByRepo'>
 ): Map<string, Worktree> {
-  return getCachedWorktreeMap(state.worktreesByRepo)
+  return getCachedWorktreeMap(selectWorktreesByRepo(state))
 }
 
 /**
@@ -139,12 +140,12 @@ export function getWorktreeOnHostFromState(
   worktreeId: string,
   hostId: ExecutionHostId | undefined
 ): Worktree | undefined {
-  const rows = getCachedWorktreesById(state.worktreesByRepo, worktreeId)
+  const rows = getCachedWorktreesById(selectWorktreesByRepo(state), worktreeId)
   return hostId ? rows.find((row) => row.hostId === hostId) : rows[0]
 }
 
 export function getHasAnyWorktreesFromState(state: Pick<AppState, 'worktreesByRepo'>): boolean {
-  return getCachedHasAnyWorktrees(state.worktreesByRepo)
+  return getCachedHasAnyWorktrees(selectWorktreesByRepo(state))
 }
 
 export function getRepoMapFromState(state: Pick<AppState, 'repos'>): Map<string, Repo> {
@@ -226,9 +227,13 @@ export const useProjectHostSetupProjection = () =>
 // ─── Worktrees ──────────────────────────────────────────────────────
 export const useActiveWorktreeId = () => useAppStore((s) => s.activeWorktreeId)
 export const useWorktreesForRepo = (repoId: string | null) =>
-  useAppStore((s) => (repoId ? (s.worktreesByRepo[repoId] ?? EMPTY_WORKTREES) : EMPTY_WORKTREES))
-export const useAllWorktrees = () => useAppStore((s) => getCachedAllWorktrees(s.worktreesByRepo))
-export const useWorktreeMap = () => useAppStore((s) => getCachedWorktreeMap(s.worktreesByRepo))
+  useAppStore((s) =>
+    repoId ? (selectWorktreesByRepo(s)[repoId] ?? EMPTY_WORKTREES) : EMPTY_WORKTREES
+  )
+export const useAllWorktrees = () =>
+  useAppStore((s) => getCachedAllWorktrees(selectWorktreesByRepo(s)))
+export const useWorktreeMap = () =>
+  useAppStore((s) => getCachedWorktreeMap(selectWorktreesByRepo(s)))
 type WorktreeLookupHostState = Pick<AppState, 'activeWorktreeId' | 'activeWorkspaceExecutionHostId'>
 
 // Why: worktree ids repeat across hosts, so the active id must resolve on the host the user selected.

@@ -71,7 +71,8 @@ export async function callRuntimeFileMutationWithCapabilities<TResult>(
   method: string,
   plan: (capabilities: readonly string[]) => Promise<RuntimeFileMutationPlan<TResult>>,
   timeoutMs: number,
-  expectedEnvironmentPairingRevision?: number
+  expectedEnvironmentPairingRevision?: number,
+  beforeSend?: () => void
 ): Promise<TResult> {
   const requestRevision = captureRuntimeEnvironmentRequestRevision(
     target.environmentId,
@@ -93,6 +94,7 @@ export async function callRuntimeFileMutationWithCapabilities<TResult>(
       ) {
         throw new RuntimeConnectionChangedError()
       }
+      beforeSend?.()
     }
   })
 }
@@ -102,7 +104,8 @@ export async function callRuntimeFileMutation<TResult>(
   method: string,
   params: unknown,
   timeoutMs: number,
-  expectedEnvironmentPairingRevision?: number
+  expectedEnvironmentPairingRevision?: number,
+  beforeSend?: () => void
 ): Promise<TResult> {
   const requestRevision = captureRuntimeEnvironmentRequestRevision(
     target.environmentId,
@@ -111,7 +114,8 @@ export async function callRuntimeFileMutation<TResult>(
   await getRuntimeFileMutationStatus(target, requestRevision)
   return callRuntimeRpc<TResult>(target, method, params, {
     timeoutMs,
-    expectedEnvironmentPairingRevision: requestRevision
+    expectedEnvironmentPairingRevision: requestRevision,
+    beforeSend
   })
 }
 

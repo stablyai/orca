@@ -32,11 +32,6 @@ vi.mock('./parcel-watcher-process', async (importOriginal) => {
   }
 })
 
-vi.mock('../providers/ssh-filesystem-dispatch', () => ({
-  getSshFilesystemProvider: vi.fn(),
-  onSshFilesystemProviderRegistered: () => () => {}
-}))
-
 import { closeAllWatchers } from './filesystem-watcher-shutdown'
 import { closeLocalWatcherForWorktreePath } from './filesystem-watcher-local-removal'
 import { registerFilesystemWatcherHandlers } from './filesystem-watcher-handlers'

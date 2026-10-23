@@ -1,18 +1,28 @@
 import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 
-const { existsSyncMock, spawnMock, connectMock, createServerMock, stopOrphanMock } = vi.hoisted(
-  () => ({
-    existsSyncMock: vi.fn(),
-    spawnMock: vi.fn(),
-    connectMock: vi.fn(),
-    createServerMock: vi.fn(),
-    stopOrphanMock: vi.fn()
-  })
-)
+const {
+  existsSyncMock,
+  spawnMock,
+  connectMock,
+  createServerMock,
+  stopOrphanMock,
+  cancelMuxedMock
+} = vi.hoisted(() => ({
+  existsSyncMock: vi.fn(),
+  spawnMock: vi.fn(),
+  connectMock: vi.fn(),
+  createServerMock: vi.fn(),
+  stopOrphanMock: vi.fn(),
+  cancelMuxedMock: vi.fn()
+}))
 
 vi.mock('./system-ssh-orphaned-forward', () => ({
   stopOrphanedOrcaSshForward: stopOrphanMock
+}))
+
+vi.mock('./system-ssh-muxed-forward-cancel', () => ({
+  cancelMuxedLocalForward: cancelMuxedMock
 }))
 
 vi.mock('fs', async (importOriginal) => {
@@ -122,6 +132,7 @@ describe('system SSH forward process', () => {
     connectMock.mockReset()
     createServerMock.mockReset().mockImplementation(createFakeServer)
     stopOrphanMock.mockReset().mockResolvedValue(false)
+    cancelMuxedMock.mockReset().mockResolvedValue(false)
     mockSystemSshExists()
   })
 
@@ -290,6 +301,8 @@ describe('system SSH forward process', () => {
       startSystemSshPortForwardProcess(createTarget(), 5173, '127.0.0.1', 3000)
     ).rejects.toThrow('Local port 127.0.0.1:5173 is not available')
     expect(stopOrphanMock).toHaveBeenCalledWith(5173, expect.any(Array))
+    // Why: any fixed-port forward reaches here, and the master's forward may be the user's own.
+    expect(cancelMuxedMock).not.toHaveBeenCalled()
     expect(spawnMock).not.toHaveBeenCalled()
   })
 

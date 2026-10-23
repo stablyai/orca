@@ -46,7 +46,7 @@ function nativeChatLaunchNotice({
         )
   const cause =
     lifecycle === 'failed' && failure
-      ? (failure.authStartupMessage ??
+      ? (failure.causeText ??
         agentSessionWriteNoticeText(
           agentSessionRefusalCauseParts(failure, agentLabel ? { agentName: agentLabel } : {})
         ))
@@ -100,8 +100,9 @@ export function structuredSessionNotices({
   /** Why this chat's host may not take a turn, from `useNativeChatHostPermissionGate`. */
   hostPermission?: NativeChatComposerNotice | null
 }): NativeChatComposerNotice[] {
+  // A host held for its permission mode already says why nothing starts; Retry returns with it.
   const launchNotice = nativeChatLaunchNotice({
-    lifecycle: launch.lifecycle,
+    lifecycle: hostPermission ? null : launch.lifecycle,
     failure: launch.failure,
     agentLabel,
     onRetry: launch.retry,

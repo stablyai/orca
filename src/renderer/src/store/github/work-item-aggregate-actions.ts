@@ -28,7 +28,8 @@ import {
   getWorkItemsCacheKeyForOwner,
   isGitHubUnavailableWorkItemsError,
   listGitHubWorkItemsForRepo,
-  getGitHubSourceTarget
+  getGitHubSourceTarget,
+  getGitHubWorkItemRowHostId
 } from './work-item-routing'
 
 export const createWorkItemAggregateActions = (
@@ -160,7 +161,17 @@ export const createWorkItemAggregateActions = (
             failedCount += 1
             return [] as GitHubWorkItem[]
           }
-          return envelope.items.map((item): GitHubWorkItem => ({ ...item, repoId: r.repoId }))
+          const repoHostId = getGitHubWorkItemRowHostId(
+            requestState,
+            r.repoId,
+            r.path,
+            r.sourceContext
+          )
+          return envelope.items.map((item): GitHubWorkItem => ({
+            ...item,
+            repoId: r.repoId,
+            ...(repoHostId ? { repoHostId } : {})
+          }))
         } catch (err) {
           if (isGitHubWorkItemsSshRemoteRequiredError(err)) {
             if (options?.requireComplete) {

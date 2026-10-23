@@ -73,6 +73,11 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
     this.owner(input.sessionId).rewind?.(input) ??
     Promise.resolve({ ok: false, reason: 'unsupported' })
 
+  forkForRewind: NonNullable<StructuredAgentSessionAdapter['forkForRewind']> = (input) =>
+    this.capabilityOwner(input.record.sessionId, input.record.provider)?.adapter.forkForRewind?.(
+      input
+    ) ?? Promise.resolve({ ok: false, reason: 'unsupported' })
+
   recoverRewind: NonNullable<StructuredAgentSessionAdapter['recoverRewind']> = (input) =>
     this.owner(input.sessionId).recoverRewind?.(input) ??
     Promise.resolve({ ok: false, reason: 'unsupported' })
@@ -135,6 +140,10 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   atRestCommands: StructuredAgentSessionAtRestCommands = {
     read: (record) =>
       this.agents.registration(record.provider)?.adapter.atRestCommands?.read(record),
+    settled: async (record, budgetMs) => {
+      const source = this.agents.registration(record.provider)?.adapter.atRestCommands
+      return source?.settled ? source.settled(record, budgetMs) : source?.read(record)
+    },
     onChange: (listener) => {
       const stops = this.adapters().flatMap((adapter) =>
         adapter.atRestCommands ? [adapter.atRestCommands.onChange(listener)] : []
@@ -148,6 +157,9 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
 
   setOption: StructuredAgentSessionAdapter['setOption'] = (input) =>
     this.owner(input.sessionId).setOption(input)
+
+  projectOptions: StructuredAgentSessionAdapter['projectOptions'] = (sessionId, options) =>
+    this.liveOwnerOrNull(sessionId)?.projectOptions?.(sessionId, options)
 
   prepareReadOptions = (input: { sessionId: string; fence: number }) =>
     this.liveOwnerOrNull(input.sessionId)?.prepareReadOptions?.(input)

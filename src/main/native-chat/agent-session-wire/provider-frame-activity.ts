@@ -39,7 +39,7 @@ export function providerActivityText(value: unknown): string | null {
   if (
     !unwrapped ||
     /^[{[]/.test(unwrapped) ||
-    /^[\w.-]+\s*[·-]\s*(?:notification:|message:|item\/)/i.test(unwrapped) ||
+    /^[\w.-]+\s*[\u00B7-]\s*(?:notification:|message:|item\/)/i.test(unwrapped) ||
     (/^[\w:./-]+$/.test(unwrapped) && /[:/]/.test(unwrapped)) ||
     !/\p{L}/u.test(unwrapped)
   ) {

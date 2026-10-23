@@ -52,7 +52,6 @@ function record(overrides: {
       leaseDeadlineAt: 0,
       lastRenewedAt: 0,
       handoffOperationId: null,
-      journalCheckpoint: null,
       claimKeyId: 'k',
       claimStatus: overrides.claimStatus ?? 'live',
       unreconciled: false,

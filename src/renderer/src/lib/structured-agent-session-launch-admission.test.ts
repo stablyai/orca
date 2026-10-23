@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { Worktree } from '../../../shared/worktree/types'
 
 const mocks = vi.hoisted(() => ({
   createSupport: vi.fn(),
@@ -27,6 +28,17 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 vi.mock('@/runtime/structured-chat-host-permission', () => ({
   readStructuredChatHostPermissionVerdict: mocks.hostPermission
 }))
+// Switch-on, main opens this machine's chats and its frames draw them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await importOriginal())
+)
 
 import { useAppStore } from '@/store'
 import { adoptAgentSessionLaunchVerdict } from './agent-session-launch-plan'
@@ -37,6 +49,10 @@ import { getStructuredAgentSessionLaunchSelection } from './structured-agent-ses
 import { peekWebSessionFocusIntent } from '@/runtime/web-session-focus-intent'
 import { LOCAL_ADMISSION_WAIT_MS } from './structured-agent-session-host-admission'
 import { structuredAgentSessionFocusOwner } from '@/runtime/structured-agent-session-owner'
+import {
+  drawTabsFromMain,
+  type TabsDrawnFromMain
+} from '@/store/slices/tabs-drawn-from-main.test-fixture'
 
 const WORKTREE = 'repo-1::/srv/app'
 const INITIAL_SETTINGS = useAppStore.getState().settings
@@ -58,6 +74,32 @@ function pairedPlan(
 
 const localPlan = () => pairedPlan({ executionHostId: 'local' })
 
+/** The workspace's row names the paired server as its owner, whose layout draws its tabs. */
+function seedPairedServerWorkspace(): void {
+  const worktree: Worktree = {
+    id: WORKTREE,
+    repoId: 'repo-1',
+    path: '/srv/app',
+    head: 'abc',
+    branch: 'refs/heads/main',
+    isBare: false,
+    isMainWorktree: true,
+    displayName: 'app',
+    comment: '',
+    linkedIssue: null,
+    linkedPR: null,
+    linkedLinearIssue: null,
+    isArchived: false,
+    isUnread: false,
+    isPinned: false,
+    sortOrder: 0,
+    lastActivityAt: 0,
+    hostId: 'runtime:server-1',
+    runtimeOwnerEnvironmentId: 'server-1'
+  }
+  useAppStore.setState({ worktreesByRepo: { 'repo-1': [worktree] } })
+}
+
 /** Nothing of a chat exists on this machine: no tab, launch, record, queued prompt or intent. */
 function expectNoChatCommitted(): void {
   expect(useAppStore.getState().unifiedTabsByWorktree[WORKTREE] ?? []).toEqual([])
@@ -69,7 +111,9 @@ function expectNoChatCommitted(): void {
   ).toBeNull()
 }
 
-beforeEach(() => {
+let main: TabsDrawnFromMain
+
+beforeEach(async () => {
   vi.clearAllMocks()
   mocks.hostPermission.mockResolvedValue({ kind: 'allowed' })
   localStorage.clear()
@@ -77,11 +121,17 @@ beforeEach(() => {
     activeWorktreeId: WORKTREE,
     activeWorkspaceExecutionHostId: null,
     unifiedTabsByWorktree: {},
+    worktreesByRepo: {},
     settings: INITIAL_SETTINGS
   })
+  main = await drawTabsFromMain(useAppStore)
 })
 
+afterEach(() => main.close())
+
 describe('a structured chat launch on a paired server', () => {
+  beforeEach(seedPairedServerWorkspace)
+
   it('opens only the terminal when the server declines, keeping the workspace selected', async () => {
     mocks.createSupport.mockResolvedValue({ supported: false, reason: 'wsl' })
     const onHostDeclined = vi.fn(() => ({
@@ -105,7 +155,9 @@ describe('a structured chat launch on a paired server', () => {
       failureNotified: false
     })
     expect(onHostDeclined).toHaveBeenCalledOnce()
-    expect(mocks.toastInfo).toHaveBeenCalledOnce()
+    expect(mocks.toastInfo).toHaveBeenCalledWith(expect.any(String), {
+      description: expect.stringContaining("can't run")
+    })
     expect(useAppStore.getState().activeWorktreeId).toBe(WORKTREE)
     expectNoChatCommitted()
   })
@@ -215,7 +267,11 @@ describe('a structured chat launch on a paired server', () => {
         'claude'
       )
       expect(settlement).toEqual(expect.objectContaining({ kind: 'failed', notified: true }))
-      expect(mocks.toastError).toHaveBeenCalledTimes(1)
+      expect(mocks.toastError).toHaveBeenCalledWith(expect.stringContaining('Claude'), {
+        description: expect.stringMatching(
+          kind === 'unverified' ? /confirm the host's permissions for Claude/ : /older Orca/
+        )
+      })
       expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
       expectNoChatCommitted()
     }
@@ -265,7 +321,7 @@ describe('a structured chat launch on this machine', () => {
       delivered: true,
       failureNotified: false
     })
-    expect(onHostDeclined).toHaveBeenCalledExactlyOnceWith({ kind: 'local' })
+    expect(onHostDeclined).toHaveBeenCalledExactlyOnceWith({ kind: 'local' }, undefined)
     expect(mocks.toastInfo).not.toHaveBeenCalled()
     expect(mocks.toastError).not.toHaveBeenCalled()
     expectNoChatCommitted()
@@ -415,6 +471,8 @@ describe('a structured chat launch on this machine', () => {
 })
 
 describe('a paired server that cannot resolve a new workspace yet', () => {
+  beforeEach(seedPairedServerWorkspace)
+
   it('keeps its terminal fallback, as before', async () => {
     mocks.createSupport.mockRejectedValue(new Error('selector_not_found'))
     const onHostDeclined = vi.fn(() => ({ opened: true }))
@@ -431,6 +489,7 @@ describe('a paired server that cannot resolve a new workspace yet', () => {
 })
 
 it('keeps explicit refusal owned by admission and keeps an opened chat failure out of the menu', async () => {
+  seedPairedServerWorkspace()
   for (const supported of [false, true]) {
     mocks.toastError.mockClear()
     mocks.createSupport.mockResolvedValue({ supported, reason: 'wsl' })

@@ -1,11 +1,12 @@
 import { NativeChatFileReferencePill } from './NativeChatFileReferencePill'
-import { NativeChatSkillPill } from './NativeChatSkillPill'
+import { NativeChatSkillPill, skillLabel } from './NativeChatSkillPill'
 import { NativeChatImageReferencePill } from './NativeChatImageReferencePill'
 import { formatNativeChatFileReference } from '../../../../shared/agent-image-paste'
 import { imageReferenceToken } from '../../../../shared/native-chat-image-reference'
-import { IMAGE_REFERENCE_NODE } from './native-chat-prompt-document-text'
+import { FILE_REFERENCE_NODE, IMAGE_REFERENCE_NODE } from './native-chat-prompt-document-text'
 import { ReactNodeViewRenderer, Node, type JSONContent } from '@tiptap/react'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
+import type { AgentJournalSkillRef } from '../../../../shared/agent-session-journal-types'
 export { promptTextContent } from './native-chat-prompt-document-text'
 
 export const NativeChatSkill = Node.create({
@@ -15,7 +16,8 @@ export const NativeChatSkill = Node.create({
   atom: true,
   selectable: true,
   addNodeView: () => ReactNodeViewRenderer(NativeChatSkillPill),
-  addAttributes: () => ({ token: { default: '' } }),
+  // `path`: the file the agent selects the skill by, when it reported one; the text stays the token.
+  addAttributes: () => ({ token: { default: '' }, path: { default: '' } }),
   renderText: ({ node }) => node.attrs.token,
   renderHTML: ({ node }) => [
     'span',
@@ -26,13 +28,13 @@ export const NativeChatSkill = Node.create({
         'inline-flex items-center gap-1 rounded-full border border-border bg-muted px-1.5 text-xs font-medium text-muted-foreground align-baseline select-none'
     },
     ['span', { 'aria-hidden': 'true' }, 'ϟ'],
-    ['span', {}, String(node.attrs.token).slice(1)]
+    ['span', {}, skillLabel(String(node.attrs.token))]
   ]
 })
 
 /** A file attached by path. `token` is the reference the agent reads; the pill shows the filename. */
 export const NativeChatFileReference = Node.create({
-  name: 'nativeChatFileReference',
+  name: FILE_REFERENCE_NODE,
   group: 'inline',
   inline: true,
   atom: true,
@@ -58,6 +60,24 @@ export const NativeChatImageReference = Node.create({
     { 'data-native-chat-image-reference': node.attrs.attachmentId }
   ]
 })
+
+/** The skills a draft picked from the menu with their files, as a send hands them to the agent. */
+export function promptSkillRefs(document: JSONContent | undefined): AgentJournalSkillRef[] {
+  if (!document) {
+    return []
+  }
+  const token = document.attrs?.token
+  const path = document.attrs?.path
+  const own =
+    document.type === NativeChatSkill.name &&
+    typeof token === 'string' &&
+    typeof path === 'string' &&
+    token.length > 1 &&
+    path.length > 0
+      ? [{ name: token.slice(1), path }]
+      : []
+  return [...own, ...(document.content ?? []).flatMap((child) => promptSkillRefs(child))]
+}
 
 export function fileReferenceContent(path: string): JSONContent {
   return {

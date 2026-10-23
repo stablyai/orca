@@ -42,7 +42,7 @@ const BARE_EXECUTABLE = /^[A-Za-z]:\\[A-Za-z0-9._+~\\-]*$/u
 // Leading digits are quoted: PowerShell would read `1e5` as a number and pass `100000`.
 const BARE_ARGUMENT = /^[A-Za-z-][A-Za-z0-9._:+=/\\-]*$/u
 // Expanded by cmd.exe (`%`) or PowerShell (`$`, backtick, typographic quotes) inside "..."
-const UNQUOTABLE = /["%$`\r\n“”„‘’‚‛]/u
+const UNQUOTABLE = /["%$`\r\n\u201C\u201D\u201E\u2018\u2019\u201A\u201B]/u
 
 export class OrcadWindowsCommandLineError extends Error {
   readonly code = ORCAD_WINDOWS_COMMAND_LINE_UNSAFE_CODE
@@ -109,7 +109,7 @@ export function orcadWindowsPinnedNodePath(host: RemoteHostPlatform, baseDir: st
   )
 }
 
-export function orcadWindowsHostScriptPath(host: RemoteHostPlatform, baseDir: string): string {
+function orcadWindowsHostScriptPath(host: RemoteHostPlatform, baseDir: string): string {
   return joinRemotePath(host, baseDir, ORCAD_WINDOWS_HOST_SCRIPT_FILENAME)
 }
 

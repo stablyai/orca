@@ -75,6 +75,11 @@ export class AcpStructuredTurns {
     )
   }
 
+  /** The sends this agent holds: each from its dispatch until its settlement. */
+  get heldSends(): ReadonlySet<string> {
+    return this.unsettled
+  }
+
   /** Steers wait behind the running prompt's cancel. */
   get holdsSteers(): boolean {
     return this.steers.length > 0

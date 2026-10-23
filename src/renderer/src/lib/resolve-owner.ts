@@ -1,6 +1,5 @@
 /**
- * The owner of a workspace as a {@link HostAuthority}, decided from the rows alone. It never reads
- * the "Active Server" focus setting.
+ * The owner of a workspace as a {@link HostAuthority}, decided from the rows alone.
  */
 import {
   getRepoSshConnectionId,
@@ -25,7 +24,6 @@ import {
   getFloatingWorkspaceOperationRoute,
   resolveWorktreeOperationRouteResultForHost,
   resolveWorktreeOperationRouteResult,
-  type WorktreeOperationRoute,
   type WorktreeOperationRouteResolution,
   type WorktreeOperationRouteState
 } from './worktree-operation-route'
@@ -92,7 +90,7 @@ export function namedHostForOwnerRef(
   )
 }
 
-function resolveRoute(
+export function resolveOwner(
   state: WorktreeOperationRouteState,
   ref: WorkspaceOwnerRef
 ): ExecutionHostOwnerMatch<HostAuthority> {
@@ -147,56 +145,6 @@ function nestedRepoTargetId(
     toRuntimeExecutionHostId(environmentId)
   )
   return repo ? getRepoSshConnectionId(repo) : null
-}
-
-export function resolveOwner(
-  state: WorktreeOperationRouteState,
-  ref: WorkspaceOwnerRef
-): ExecutionHostOwnerMatch<HostAuthority> {
-  return resolveRoute(focusFreeRouteState(state), ref)
-}
-
-/**
- * The route for a write that names no host, decided by the rows alone: the "Active Server" focus
- * fallback that terminal reads keep is never reachable for a write.
- */
-export function resolveWriteRouteResult(
-  state: WorktreeOperationRouteState,
-  workspaceId: string
-): WorktreeOperationRouteResolution {
-  return resolveWorktreeOperationRouteResult(focusFreeRouteState(state), workspaceId)
-}
-
-/** {@link resolveWriteRouteResult}, refusing ambiguity and absence alike. */
-export function resolveWriteRoute(
-  state: WorktreeOperationRouteState,
-  workspaceId: string
-): WorktreeOperationRoute | null {
-  const resolution = resolveWriteRouteResult(state, workspaceId)
-  return resolution.kind === 'resolved' ? resolution.route : null
-}
-
-/**
- * Only the fields the route resolvers read, so per-row selectors do not copy the whole store.
- * Focus is the only settings field they read; blanking it makes this focus-free.
- */
-function focusFreeRouteState(state: WorktreeOperationRouteState): {
-  [K in keyof Required<WorktreeOperationRouteState>]: WorktreeOperationRouteState[K]
-} {
-  return {
-    settings: null,
-    runtimeEnvironments: state.runtimeEnvironments,
-    folderWorkspaces: state.folderWorkspaces,
-    projectGroups: state.projectGroups,
-    restoredRuntimeHostIdByWorkspaceSessionKey: state.restoredRuntimeHostIdByWorkspaceSessionKey,
-    activeWorktreeId: state.activeWorktreeId,
-    activeWorkspaceExecutionHostId: state.activeWorkspaceExecutionHostId,
-    repos: state.repos,
-    worktreesByRepo: state.worktreesByRepo,
-    detectedWorktreesByRepo: state.detectedWorktreesByRepo,
-    runtimeEnvironmentCatalogHydrated: state.runtimeEnvironmentCatalogHydrated,
-    removedRuntimeEnvironmentIds: state.removedRuntimeEnvironmentIds
-  }
 }
 
 /** Two hosts publish this workspace (or contest it), so no host-routed action may pick one. */

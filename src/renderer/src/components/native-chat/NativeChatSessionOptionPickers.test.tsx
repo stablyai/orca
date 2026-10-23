@@ -151,25 +151,29 @@ describe('NativeChatSessionOptionPickers', () => {
   it.each(['model', 'effort'])(
     'opens the one picker when a slash command asks for the %s',
     async (id) => {
+      const demandModelCatalog = vi.fn()
+      const demanding = { ...surface, demandModelCatalog }
       const { rerender } = render(
         <NativeChatSessionOptionPickers
-          surface={surface}
+          surface={demanding}
           snapshot={[model(), effort]}
           isWorking={false}
           pickerRequest={null}
         />
       )
       expect(isOpen(pill('Model Opus 4.8, Effort High'))).toBe(false)
+      expect(demandModelCatalog).not.toHaveBeenCalled()
 
       rerender(
         <NativeChatSessionOptionPickers
-          surface={surface}
+          surface={demanding}
           snapshot={[model(), effort]}
           isWorking={false}
           pickerRequest={{ id, consume: () => {} }}
         />
       )
       await waitFor(() => expect(isOpen(pill('Model Opus 4.8, Effort High'))).toBe(true))
+      expect(demandModelCatalog).toHaveBeenCalledTimes(1)
     }
   )
 

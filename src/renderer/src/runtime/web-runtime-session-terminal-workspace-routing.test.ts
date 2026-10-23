@@ -261,7 +261,7 @@ describe('web-runtime-session terminal workspace routing', () => {
 
   it('does not touch the host selection when the caller opted out of selecting', async () => {
     const selection: MutableSelection = {
-      activeWorktreeId: WORKTREE_ID,
+      activeWorktreeId: 'repo::/other',
       activeWorkspaceExecutionHostId: 'local'
     }
     stubSelectableWorkspaceStore(selection)
@@ -276,6 +276,7 @@ describe('web-runtime-session terminal workspace routing', () => {
     })
 
     expect(mocks.setActiveWorktree).not.toHaveBeenCalled()
+    expect(selection.activeWorktreeId).toBe('repo::/other')
     expect(selection.activeWorkspaceExecutionHostId).toBe('local')
   })
 })

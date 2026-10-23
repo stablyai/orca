@@ -257,7 +257,8 @@ describe('registerPtyHandlers', () => {
     expect(runtime.registerPreAllocatedHandleForPty).not.toHaveBeenCalled()
     expect(runtime.cancelPendingPtyRegistration).toHaveBeenCalledWith(
       'different-requested-id',
-      'incarnation-canonical-exited'
+      'incarnation-canonical-exited',
+      undefined
     )
   })
 })

@@ -1,6 +1,7 @@
 // A chat's one send slot: the pending entry that draws a message as sending and keeps any other send
 // of that chat out until it settles.
 
+import type { AgentJournalSkillRef } from '../../../../shared/agent-session-journal-types'
 import { createStructuredAgentSessionOperationId } from '../../../../shared/structured-agent-session-mutation'
 import {
   structuredAgentSessionSendBody,
@@ -26,6 +27,8 @@ export type StructuredAgentSessionSendInput = {
   /** The caller keeps the text if it comes back, instead of the chat's composer. */
   callerKeepsText?: true
   usageLimitContinuationOfTurnItemId?: string
+  /** Skills picked from the menu, by file; only to a host that takes them. */
+  skills?: readonly AgentJournalSkillRef[]
   /** Made while the chat read Stopping: drawn after that turn until the host records it. */
   sentWhileStopping?: true
   now?: number
@@ -33,7 +36,7 @@ export type StructuredAgentSessionSendInput = {
 
 export type StructuredAgentSessionSendRequest = Pick<
   StructuredAgentSessionSendInput,
-  'callerKeepsText' | 'usageLimitContinuationOfTurnItemId'
+  'callerKeepsText' | 'usageLimitContinuationOfTurnItemId' | 'skills'
 > & { onSettled?: (outcome: StructuredAgentSessionSendOutcome) => void }
 
 /** Takes the chat's one send slot, drawn as sending; null while another send of the chat is out. */
@@ -47,7 +50,7 @@ export function takeStructuredAgentSessionSendSlot(
   const entry: StructuredAgentSessionPendingSend = {
     clientMessageId: createStructuredAgentSessionOperationId(createBrowserUuid),
     sessionId: input.sessionId,
-    body: structuredAgentSessionSendBody(input.text, attachments),
+    body: structuredAgentSessionSendBody(input.text, attachments, input.skills),
     previewUris: attachments.map((attachment) => attachment.previewUri),
     queuedAt: input.now ?? Date.now(),
     ...(input.delivery ? { delivery: input.delivery } : {}),

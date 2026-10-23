@@ -1,6 +1,7 @@
 import type { AiVaultConversationCopy } from '../../../shared/ai-vault-resume-preparation'
 import type { AgentSessionAccountKind } from '../../../shared/agent-session-availability'
 import type {
+  AgentSessionRewindFork,
   AgentSessionRewindReason,
   AgentSessionRewindSupport
 } from '../../../shared/agent-session-rewind'
@@ -28,13 +29,11 @@ import type { AgentSessionProviderHandleLink } from '../../../shared/agent-sessi
 import type {
   AgentSessionAccountHome,
   AgentSessionExecutionLocation,
-  AgentSessionProcessIdentity
+  AgentSessionProcessIdentity,
+  AgentSessionRecord
 } from '../../../shared/agent-session-record'
 import type { StructuredAgentSessionAtRestCommands } from './structured-agent-session-at-rest-commands'
-import type {
-  AgentSessionOptionsResult,
-  AgentSessionSlashCommand
-} from '../../../shared/agent-session-wire'
+import type { AgentSessionSlashCommand } from '../../../shared/agent-session-wire'
 import type { AgentSessionThreadGoalChange } from '../../../shared/agent-session-thread-goal-wire'
 import type { AgentSessionRefusalReason } from '../../../shared/agent-session-wire-refusals'
 import type { SubmissionRejectionFact } from '../../../shared/agent-session-failure'
@@ -56,18 +55,16 @@ import type {
   StructuredAgentSessionAcquisitionReceipt
 } from './structured-agent-session-startup-attempt-contract'
 import type { AgentSessionCreatePhaseRecorder } from '../../observability/agent-session-instrumentation'
-import type { AgentModelCatalogLiveListing } from '../agent-model-catalog/agent-model-catalog-entry'
 import type {
   StructuredAgentSessionProviderOpen,
   StructuredAgentSessionProviderOpenResult
 } from './structured-agent-session-provider-open-contract'
 
-/** A live options read, plus what the child listed for its account's saved catalog. The host
- *  saves that listing and strips it before answering; an adapter whose listing reaches the
- *  catalog another way omits it. */
-export type StructuredAgentSessionLiveOptions = AgentSessionOptionsResult & {
-  catalogListing?: AgentModelCatalogLiveListing
-}
+import type {
+  StructuredAgentSessionLiveOptions,
+  StructuredAgentSessionOptionProjection
+} from './structured-agent-session-option-models'
+export type { StructuredAgentSessionLiveOptions } from './structured-agent-session-option-models'
 
 export class AgentSessionAcquisitionRefusal extends Error {
   readonly code = 'agent_session_operation_invalid'
@@ -170,16 +167,23 @@ export type AgentSessionCommandAdmission =
   | AgentSessionDispatchOutcome
   | { state: 'accepted'; providerIdentity: null }
 
+/** In memory only: the model and options the provider took the message under, from its own
+ *  execution (a steer reports its running turn's), never a setting or a picker default. */
+export type AgentSessionRanOptionsEvidence = { ranOptions?: Readonly<Record<string, string>> }
+
 export type AgentSessionDispatchOutcome =
   /** The provider owns the turn now, under this identity. */
-  | { state: 'accepted'; providerIdentity: AgentJournalItemIdentity }
+  | ({
+      state: 'accepted'
+      providerIdentity: AgentJournalItemIdentity
+    } & AgentSessionRanOptionsEvidence)
   /**
    * The provider transport took the message; identity settles later, out of band.
    * The submission stays `pending`: a message queued behind a running turn is
    * acknowledged only when that turn starts, so elapsed time is not evidence of
    * anything and never promotes this to `unknown`.
    */
-  | { state: 'admitted' }
+  | ({ state: 'admitted' } & AgentSessionRanOptionsEvidence)
   /** Words from `agentSessionFailureWords`, never written by hand. `answeredInTurn`: the turn the
    *  provider answered the send into, which ended before the answer was read. */
   | ({
@@ -270,7 +274,8 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     body: AgentJournalMessageItem
     /** Immutable choices of this submission; adapters apply them only to this dispatch. */
     executionOptions?: AgentSessionExecutionOptions
-    /** Host-local cancellation while choices are applied before prompt admission. */
+    /** Host-local cancellation while choices are applied before prompt admission. An abort surfaces
+     *  as the signal's own reason, unwrapped and only before the write: the host reads it as unwritten. */
     signal?: AbortSignal
     fence: number
     /** Host clock on the submission row this send came from; the origin the turn
@@ -278,6 +283,10 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     requestedAt?: number
     /** Revalidate after preparation, immediately before writing to the provider. */
     beforeDispatch?: () => Promise<void>
+    /** Local preparation boundary before choices can mutate the provider. */
+    onInputPreparation?: () => void
+    /** In-process checkpoint after applying choices, before capturing execution evidence. */
+    onExecutionSnapshot?: () => void
   }): Promise<AgentSessionDispatchOutcome>
   /** How this session narrows its agent's declared rewind; `agent` answers for one with no child
    *  running. The router applies the declaration first, so an adapter's answer never widens it. */
@@ -296,6 +305,15 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     fence: number
     beforeTurnId: string
   }): Promise<{ ok: true } | { ok: false; reason: AgentSessionRewindReason }>
+  /** Saves the fork a rewind continues in, before the journal or record changes.
+   *  The agent need not be running; a refusal leaves its conversation unchanged. */
+  forkForRewind?(input: {
+    record: AgentSessionRecord
+    beforeMessage: { sessionId: string; uuid: string }
+    rewindOperationId: string
+  }): Promise<
+    { ok: true; fork: AgentSessionRewindFork } | { ok: false; reason: AgentSessionRewindReason }
+  >
   /** Sends a conversation compaction and answers with the provider's receipt of it, as a dispatch
    *  does. The command's turn is the child's journal translator's to end, from the provider's own
    *  frames; a child that ends first leaves it to the host's settlement of that child. */
@@ -347,8 +365,8 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   /** The provider reported taking a send it has neither answered nor ended, as a queued follow-up
    *  or a silent retry does. Derived from the live child; false with none. */
   holdsDispatch?(sessionId: string): boolean
-  /** The sends the live child still holds as its own work, by client message id; undefined when
-   *  this adapter cannot say, and the host reads an unanswered send as held. */
+  /** The sends the live child still holds as its own work, by client message id; undefined with
+   *  no live child, and the host then reads an unanswered send as held. */
   heldSends?(sessionId: string): ReadonlySet<string> | undefined
   /** The adapter's own child for this exact acquisition has a pid and its root exit has not been
    *  seen: first-hand proof of life for lease renewal. Absent or false falls back to a PID probe. */
@@ -372,11 +390,16 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   setOption(
     input: StructuredAgentSessionSetOptionInput
   ): Promise<void | Readonly<Record<string, string>>>
+  /** Synchronous capability projection; never acquires inventory or changes saved intent. */
+  projectOptions?(
+    sessionId: string,
+    options: Readonly<Record<string, string>>
+  ): StructuredAgentSessionOptionProjection | undefined
   /** Fetch off the lane, then apply the result under the same child's fence. */
   prepareReadOptions?(input: {
     sessionId: string
     fence: number
-  }): Promise<() => AgentSessionOptionsResult> | undefined
+  }): Promise<() => StructuredAgentSessionLiveOptions> | undefined
   readOptions?(input: {
     sessionId: string
     fence: number

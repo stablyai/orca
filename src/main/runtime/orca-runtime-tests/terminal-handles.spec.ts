@@ -1,4 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
+import {
+  dropFromHostInventory,
+  registerBoundPty,
+  registerLivePty
+} from '../bind-first-pane.test-fixture'
 import { OrcaRuntimeService, makePaneKey } from '../orca-runtime-test-mocks.spec'
 import type {
   RuntimeClientEvent,
@@ -155,6 +160,10 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     }
+    registerLivePty(runtime, 'pty-1', 'repo-1::/tmp/worktree-a', null, {
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
     runtime.syncWindowGraph(1, graph)
     const listed = await runtime.listMobileSessionTabs('branch:feature/foo')
     const mobileTab = listed.tabs.find((tab) => tab.type === 'terminal')
@@ -360,12 +369,12 @@ describe('OrcaRuntimeService', () => {
     const tabId = 'tab-recover'
     const runtime = createRuntimeWithSshLease('pty-expired', tabId)
     const paneKey = makePaneKey(tabId, HEADLESS_LEAF_ID)
-    runtime.registerPty('pty-expired', TEST_WORKTREE_ID, null, {
+    registerBoundPty(runtime, 'pty-expired', TEST_WORKTREE_ID, null, {
       tabId,
       leafId: HEADLESS_LEAF_ID
     })
     const expiredHandle = runtime.resolveTerminalPane(paneKey, TEST_WORKTREE_ID).handle
-    runtime.onPtyExit('pty-expired', 0)
+    await dropFromHostInventory(runtime, 'pty-expired')
     const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue({
       handle: 'term-replacement',
       tabId,
@@ -417,7 +426,7 @@ describe('OrcaRuntimeService', () => {
     const runtime = new OrcaRuntimeService(store)
     const tabId = 'tab-live'
     const paneKey = makePaneKey(tabId, HEADLESS_LEAF_ID)
-    runtime.registerPty('pty-live', TEST_WORKTREE_ID, null, {
+    registerBoundPty(runtime, 'pty-live', TEST_WORKTREE_ID, null, {
       tabId,
       leafId: HEADLESS_LEAF_ID
     })
@@ -437,13 +446,13 @@ describe('OrcaRuntimeService', () => {
     const runtime = new OrcaRuntimeService(store)
     const tabId = 'tab-cas'
     const paneKey = makePaneKey(tabId, HEADLESS_LEAF_ID)
-    runtime.registerPty('pty-old', TEST_WORKTREE_ID, null, {
+    registerBoundPty(runtime, 'pty-old', TEST_WORKTREE_ID, null, {
       tabId,
       leafId: HEADLESS_LEAF_ID
     })
     const oldHandle = runtime.resolveTerminalPane(paneKey, TEST_WORKTREE_ID).handle
-    runtime.onPtyExit('pty-old', 0)
-    runtime.registerPty('pty-new', TEST_WORKTREE_ID, null, {
+    await dropFromHostInventory(runtime, 'pty-old')
+    registerBoundPty(runtime, 'pty-new', TEST_WORKTREE_ID, null, {
       tabId,
       leafId: HEADLESS_LEAF_ID
     })
@@ -460,12 +469,12 @@ describe('OrcaRuntimeService', () => {
     const tabId = 'tab-concurrent'
     const runtime = createRuntimeWithSshLease('pty-expired', tabId)
     const paneKey = makePaneKey(tabId, HEADLESS_LEAF_ID)
-    runtime.registerPty('pty-expired', TEST_WORKTREE_ID, null, {
+    registerBoundPty(runtime, 'pty-expired', TEST_WORKTREE_ID, null, {
       tabId,
       leafId: HEADLESS_LEAF_ID
     })
     const expiredHandle = runtime.resolveTerminalPane(paneKey, TEST_WORKTREE_ID).handle
-    runtime.onPtyExit('pty-expired', 0)
+    await dropFromHostInventory(runtime, 'pty-expired')
     let finishCreate!: (result: RuntimeTerminalCreate) => void
     const pendingCreate = new Promise<RuntimeTerminalCreate>((resolve) => {
       finishCreate = resolve
@@ -493,12 +502,12 @@ describe('OrcaRuntimeService', () => {
     const tabId = 'tab-retry'
     const runtime = createRuntimeWithSshLease('pty-expired', tabId)
     const paneKey = makePaneKey(tabId, HEADLESS_LEAF_ID)
-    runtime.registerPty('pty-expired', TEST_WORKTREE_ID, null, {
+    registerBoundPty(runtime, 'pty-expired', TEST_WORKTREE_ID, null, {
       tabId,
       leafId: HEADLESS_LEAF_ID
     })
     const expiredHandle = runtime.resolveTerminalPane(paneKey, TEST_WORKTREE_ID).handle
-    runtime.onPtyExit('pty-expired', 0)
+    await dropFromHostInventory(runtime, 'pty-expired')
     const createTerminal = vi
       .spyOn(runtime, 'createTerminal')
       .mockRejectedValueOnce(new Error('relay_reconnecting'))
@@ -528,12 +537,12 @@ describe('OrcaRuntimeService', () => {
     const appPtyId = 'ssh:ssh-target@@pty-terminated'
     const runtime = createRuntimeWithSshLease(appPtyId, tabId, 'terminated')
     const paneKey = makePaneKey(tabId, HEADLESS_LEAF_ID)
-    runtime.registerPty(appPtyId, TEST_WORKTREE_ID, 'ssh-target', {
+    registerBoundPty(runtime, appPtyId, TEST_WORKTREE_ID, 'ssh-target', {
       tabId,
       leafId: HEADLESS_LEAF_ID
     })
     const handle = runtime.resolveTerminalPane(paneKey, TEST_WORKTREE_ID).handle
-    runtime.onPtyExit(appPtyId, 0)
+    await dropFromHostInventory(runtime, appPtyId)
     const createTerminal = vi.spyOn(runtime, 'createTerminal')
 
     await expect(runtime.recoverTerminalPane(paneKey, TEST_WORKTREE_ID, handle)).rejects.toThrow(
@@ -551,12 +560,12 @@ describe('OrcaRuntimeService', () => {
     const appPtyId = 'ssh:ssh-target@@pty-3'
     const runtime = createRuntimeWithSshLease(appPtyId, tabId)
     const paneKey = makePaneKey(tabId, HEADLESS_LEAF_ID)
-    runtime.registerPty(appPtyId, TEST_WORKTREE_ID, 'ssh-target', {
+    registerBoundPty(runtime, appPtyId, TEST_WORKTREE_ID, 'ssh-target', {
       tabId,
       leafId: HEADLESS_LEAF_ID
     })
     const handle = runtime.resolveTerminalPane(paneKey, TEST_WORKTREE_ID).handle
-    runtime.onPtyExit(appPtyId, 0)
+    await dropFromHostInventory(runtime, appPtyId)
     const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue({
       handle: 'term-replacement',
       tabId,
@@ -589,12 +598,12 @@ describe('OrcaRuntimeService', () => {
       supersededBy: 'pty-6'
     })
     const paneKey = makePaneKey(tabId, HEADLESS_LEAF_ID)
-    runtime.registerPty(appPtyId, TEST_WORKTREE_ID, 'ssh-target', {
+    registerBoundPty(runtime, appPtyId, TEST_WORKTREE_ID, 'ssh-target', {
       tabId,
       leafId: HEADLESS_LEAF_ID
     })
     const handle = runtime.resolveTerminalPane(paneKey, TEST_WORKTREE_ID).handle
-    runtime.onPtyExit(appPtyId, 0)
+    await dropFromHostInventory(runtime, appPtyId)
     const createTerminal = vi.spyOn(runtime, 'createTerminal')
 
     await expect(runtime.recoverTerminalPane(paneKey, TEST_WORKTREE_ID, handle)).rejects.toThrow(
@@ -610,12 +619,12 @@ describe('OrcaRuntimeService', () => {
       relayIdRecycled: true
     })
     const paneKey = makePaneKey(tabId, HEADLESS_LEAF_ID)
-    runtime.registerPty(appPtyId, TEST_WORKTREE_ID, 'ssh-target', {
+    registerBoundPty(runtime, appPtyId, TEST_WORKTREE_ID, 'ssh-target', {
       tabId,
       leafId: HEADLESS_LEAF_ID
     })
     const handle = runtime.resolveTerminalPane(paneKey, TEST_WORKTREE_ID).handle
-    runtime.onPtyExit(appPtyId, 0)
+    await dropFromHostInventory(runtime, appPtyId)
     const createTerminal = vi.spyOn(runtime, 'createTerminal')
 
     await expect(runtime.recoverTerminalPane(paneKey, TEST_WORKTREE_ID, handle)).rejects.toThrow(
@@ -637,7 +646,7 @@ describe('OrcaRuntimeService', () => {
     const ptyId = 'ssh:ssh-target@@pty-3'
     const runtime = createRuntimeWithSshLease(ptyId, tabId)
     const paneKey = makePaneKey(tabId, HEADLESS_LEAF_ID)
-    runtime.registerPty(ptyId, TEST_WORKTREE_ID, 'ssh-target', {
+    registerBoundPty(runtime, ptyId, TEST_WORKTREE_ID, 'ssh-target', {
       tabId,
       leafId: HEADLESS_LEAF_ID
     })
@@ -669,7 +678,7 @@ describe('OrcaRuntimeService', () => {
     const ptyId = 'ssh:ssh-target@@pty-4'
     const runtime = createRuntimeWithSshLease(ptyId, tabId)
     const paneKey = makePaneKey(tabId, HEADLESS_LEAF_ID)
-    runtime.registerPty(ptyId, TEST_WORKTREE_ID, 'ssh-target', {
+    registerBoundPty(runtime, ptyId, TEST_WORKTREE_ID, 'ssh-target', {
       tabId,
       leafId: HEADLESS_LEAF_ID
     })

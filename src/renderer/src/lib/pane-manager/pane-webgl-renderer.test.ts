@@ -5,7 +5,6 @@ import {
   attachWebgl,
   clearTerminalWebglAttachBackoff,
   presentPaneViewport,
-  presentPaneViewportPreservingSynchronizedOutput,
   primeTerminalWebglAddon,
   resetTerminalWebglSuggestion,
   resetWebglTextureAtlas
@@ -183,7 +182,7 @@ describe('terminal WebGL addon lifecycle', () => {
 
   it('falls back to terminal.refresh on an unpaused, unsynchronized pane', () => {
     // Restore-after-replay and other callers use presentPaneViewport even when
-    // forceFullViewportPresent is a no-op (not paused, no DEC 2026).
+    // requestFullViewportPresent is a no-op (not paused, no DEC 2026).
     const refreshRows = vi.fn()
     const renderRows = vi.fn()
     const pane = createPane()
@@ -208,7 +207,7 @@ describe('terminal WebGL addon lifecycle', () => {
     expect(renderRows).not.toHaveBeenCalled()
   })
 
-  it('preserves a synchronized frame on an ordinary reveal present', () => {
+  it('preserves a synchronized frame on a viewport present', () => {
     const refreshRows = vi.fn()
     const renderRows = vi.fn()
     const pane = createPane()
@@ -226,7 +225,7 @@ describe('terminal WebGL addon lifecycle', () => {
       }
     } as never
 
-    presentPaneViewportPreservingSynchronizedOutput(pane)
+    presentPaneViewport(pane)
 
     expect(refreshRows).toHaveBeenCalledWith(0, 23, true)
     expect(renderRows).not.toHaveBeenCalled()

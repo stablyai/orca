@@ -1,8 +1,9 @@
 import { app } from 'electron'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { registerAppHandlers } from '../app'
 import { registerCliHandlers } from '../cli'
 import { registerPreflightHandlers } from '../preflight'
-import type { Store } from '../../persistence'
+import type { Store } from '../../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { StatsCollector } from '../../stats/collector'
 import { registerFilesystemHandlers } from '../filesystem'
@@ -12,9 +13,9 @@ import { registerUsageProviderHandlers } from '../usage-provider-handlers'
 import { registerGitHubHandlers } from '../github'
 import { registerGitLabHandlers } from '../gitlab'
 import { registerHostedReviewHandlers } from '../hosted-review'
-import { registerLinearHandlers } from '../linear'
-import { registerJiraHandlers } from '../jira'
-import { registerJiraIssueSummaryGenerationHandlers } from '../jira-issue-summary-generation'
+import { registerLinearHandlers } from '../linear/register-handlers'
+import { registerJiraHandlers } from '../jira/register-handlers'
+import { registerJiraIssueSummaryGenerationHandlers } from '../jira/issue-summary-generation'
 import { registerBitbucketHandlers } from '../bitbucket'
 import { registerFeedbackHandlers } from '../feedback'
 import { registerCrashReportingHandlers } from '../crash-reporting'
@@ -169,6 +170,13 @@ export function registerCoreHandlers(
 
   registerAppHandlers(store, {
     quitResumeRecordsFor: (session) => runtime.quitResumeRecordsFor(session),
+    // Switch point: main derives what the next startup reconnects instead of taking the window's.
+    ...(ORCA_LAYOUT_OWNER_IS_MAIN
+      ? {
+          reconnectFactsFor: (session, partition) =>
+            runtime.shutdownReconnectFactsFor(session, partition)
+        }
+      : {}),
     onBeforeRelaunch: lifecycleOptions.onBeforeRelaunch,
     // Why here, not onBeforeRelaunch: restart and profile switches quit through will-quit, which closes it.
     onBeforeRelaunchExit: () => closeNotificationDismissalsBeforeRelaunch(runtime)

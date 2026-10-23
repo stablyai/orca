@@ -9,10 +9,15 @@ import type { BrowserRouteElectronSession } from './browser-route-session-policy
 export type BrowserRoutePartitionBindingStore = {
   get(partition: string): string | null
   /** Returns partitions evicted to make room; their storage is now the caller's to destroy. */
-  set(partition: string, fingerprint: string, storageScope: string): readonly string[]
+  set(
+    partition: string,
+    fingerprint: string,
+    storageScope: string,
+    alias?: string
+  ): readonly string[]
   touch(partition: string): void
   findPartitionByFingerprint(fingerprint: string): string | null
-  rebind(partition: string, fingerprint: string, storageScope: string): void
+  rebind(partition: string, fingerprint: string, storageScope: string, alias?: string): void
 }
 
 export type BrowserRouteSessionRegistryDependencies = {

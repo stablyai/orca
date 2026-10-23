@@ -8,6 +8,7 @@ export type MockSpawner = {
   shutdown: Mock
   getHandle: Mock
   launcher: unknown
+  staleDaemonRecycleVersion: string | null
 }
 
 /** Fake DaemonPtyAdapter instance every mocked `new DaemonPtyAdapter()` records. */
@@ -41,6 +42,7 @@ export type MockAdapter = {
 export type MockSpawnerConstructor = new (opts: {
   runtimeDir: string
   launcher: unknown
+  staleDaemonRecycleVersion?: string | null
 }) => MockSpawner
 
 export type MockAdapterConstructor = new (opts: MockAdapter['options']) => MockAdapter

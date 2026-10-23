@@ -38,7 +38,7 @@ on:
         required: false
         type: string
         default: ''
-      # Why only the app builds read it: the orcad template build refuses a dark switch.
+      # Why: the app, orcad and its test template (--dark-test-template) build with it; releases refuse it.
       layout_owner:
         description: Set to main to build with ORCA_LAYOUT_OWNER=main and record save-divergence reports
         required: false
@@ -88,17 +88,21 @@ jobs:
             exit 0
           fi
           read -r -a packages <<< "$ORCA_E2E_APT_PACKAGES"
-          # Why apt-mirrors.txt: runner images resolve mirror+file: sources through it, so editing the lists alone leaves Azure in use.
-          for source in /etc/apt/apt-mirrors.txt /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources; do
-            if [ -f "$source" ]; then
-              sudo sed -i 's|https*://azure\.archive\.ubuntu\.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' "$source"
-            fi
-          done
-          sudo tee /etc/apt/apt.conf.d/99-orca-e2e >/dev/null <<'APTCONF'
+          if [ -f .github/scripts/prepare-ubuntu-apt.sh ]; then
+            bash .github/scripts/prepare-ubuntu-apt.sh
+          else
+            # Dispatched refs can predate the shared preparation script.
+            for source in /etc/apt/apt-mirrors.txt /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources; do
+              if [ -f "$source" ]; then
+                sudo sed -i 's|https*://azure\.archive\.ubuntu\.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' "$source"
+              fi
+            done
+            sudo tee /etc/apt/apt.conf.d/99-orca-ci >/dev/null <<'APTCONF'
           Acquire::http::Timeout "15";
           Acquire::https::Timeout "15";
           Acquire::Retries "1";
           APTCONF
+          fi
           timeout 120 sudo apt-get update
           timeout 300 sudo apt-get install -y "${packages[@]}" || timeout 300 sudo apt-get install -y --fix-missing "${packages[@]}"
 
@@ -471,13 +475,18 @@ jobs:
           slot="$(node config/scripts/build-orcad-prebuilds.mjs --print-slot)"
           pnpm build:orcad-prebuilds
           pnpm build:orcad-prebuilds --require-slots "$slot"
-          # The headless oracle's orcad host must hold the same layout owner as the Electron host.
+          # The headless oracle's orcad host must hold the same layout owner as the Electron host,
+          # and so must the template `orca serve` materializes its server from.
           if [ -n "$LAYOUT_OWNER" ]; then
-            ORCA_LAYOUT_OWNER="$LAYOUT_OWNER" pnpm build:orcad
+            export ORCA_LAYOUT_OWNER="$LAYOUT_OWNER"
+            pnpm build:orcad
+            node config/scripts/build-orcad-template.mjs --targets "$slot" --dark-test-template
+            test -f out/orcad/ORCA_LAYOUT_OWNER_MAIN
+            test -f out/orcad-template/ORCA_LAYOUT_OWNER_MAIN
           else
             pnpm build:orcad
+            node config/scripts/build-orcad-template.mjs --targets "$slot"
           fi
-          node config/scripts/build-orcad-template.mjs --targets "$slot"
       - name: Switch serve hosts on one profile
         if: inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/orcad-serve-mode-switch.spec.ts')
         env:
@@ -485,6 +494,15 @@ jobs:
           ORCA_E2E_ORCAD_SERVE: '1'
           ORCA_E2E_FORWARD_APP_LOGS: '1'
         run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/orcad-serve-mode-switch.spec.ts --project=electron-headless --workers=1
+      # Only this job builds out/orcad, so the spec's orcad case runs here; the e2e shards run its Electron case.
+      - name: Phone Markdown on headless orcad serve
+        if: >-
+          !cancelled() &&
+          (inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/headless-serve-mobile-markdown.spec.ts'))
+        env:
+          SKIP_BUILD: '1'
+          ORCA_E2E_FORWARD_APP_LOGS: '1'
+        run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/headless-serve-mobile-markdown.spec.ts --grep "headless orcad server" --project=electron-headless --workers=1
       # The layout oracle's headless scenarios run on both serve hosts, so they need this job's orcad.
       - name: Layout oracle on headless serve (orcad and Electron)
         if: >-
@@ -557,11 +575,19 @@ jobs:
           name: e2e-build-out${{ inputs.artifact_suffix }}
           path: out/
       # Built to a path the app does not look at by default, so the relay-era phase has no template.
+      # The switch-on leg deploys a switch-on server, so both sides of the host run one layout owner.
       - name: Build the linux-x64-glibc orcad template
+        env:
+          LAYOUT_OWNER: ${{ inputs.layout_owner }}
         run: |
           pnpm build:orcad-prebuilds
           pnpm build:orcad-prebuilds --require-slots linux-x64-glibc
-          node config/scripts/build-orcad-template.mjs --targets linux-x64-glibc
+          if [ -n "$LAYOUT_OWNER" ]; then
+            ORCA_LAYOUT_OWNER="$LAYOUT_OWNER" node config/scripts/build-orcad-template.mjs --targets linux-x64-glibc --dark-test-template
+            test -f out/orcad-template/ORCA_LAYOUT_OWNER_MAIN
+          else
+            node config/scripts/build-orcad-template.mjs --targets linux-x64-glibc
+          fi
           mv out/orcad-template "$RUNNER_TEMP/orcad-convert-template"
       # The Windows CLI matrix collects here too and skips: it needs a Windows host descriptor.
       - name: Run managed SSH specs on a Docker host

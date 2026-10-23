@@ -11,8 +11,10 @@ import {
   diskConflictFromReadFailure,
   FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY,
   FILE_WRITE_IF_UNCHANGED_METHOD,
+  hostEnforcesPrecondition,
+  FILE_WRITE_UNCHANGED,
   parseFileWriteResult,
-  type FileWriteDiskConflict,
+  type FileWriteDiskComparison,
   type FileWriteDiskPrecondition,
   type FileWriteResult
 } from '../../../shared/file-write-disk-precondition'
@@ -135,8 +137,9 @@ async function readWholeTextFile(
 async function checkWebDiskPreconditionFromClient(
   session: WebFileMutationSession,
   file: ResolvedWebRuntimeFile,
-  precondition: FileWriteDiskPrecondition
-): Promise<FileWriteDiskConflict | null> {
+  precondition: FileWriteDiskPrecondition,
+  content: string
+): Promise<FileWriteDiskComparison> {
   let preview: unknown
   try {
     preview = await session.callRuntimeResult('files.readPreview', {
@@ -148,7 +151,7 @@ async function checkWebDiskPreconditionFromClient(
     if (error instanceof Error && error.message === 'file_too_large') {
       // Why undefined on failure: a host that can't page it keeps the earlier answer, 'changed'.
       const text = await readWholeTextFile(session, file).catch(() => undefined)
-      return compareDiskWritePrecondition(precondition, text)
+      return compareDiskWritePrecondition(precondition, text, content)
     }
     return diskConflictFromReadFailure(precondition, error)
   }
@@ -160,7 +163,7 @@ async function checkWebDiskPreconditionFromClient(
     typeof preview.content === 'string'
       ? preview.content
       : undefined
-  return compareDiskWritePrecondition(precondition, text)
+  return compareDiskWritePrecondition(precondition, text, content)
 }
 
 export function createWebFileMutationMethods(
@@ -205,7 +208,7 @@ export function createWebFileMutationMethods(
             if (!diskPrecondition) {
               return { method: 'files.write', params }
             }
-            if (capabilities.includes(FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY)) {
+            if (hostEnforcesPrecondition(capabilities, diskPrecondition)) {
               return {
                 method: FILE_WRITE_IF_UNCHANGED_METHOD,
                 params: { ...params, diskPrecondition }
@@ -214,9 +217,18 @@ export function createWebFileMutationMethods(
             const diskConflict = await checkWebDiskPreconditionFromClient(
               session,
               file,
-              diskPrecondition
+              diskPrecondition,
+              content
             )
-            return diskConflict ? { ok: false, diskConflict } : { method: 'files.write', params }
+            if (diskConflict === 'identical') {
+              return FILE_WRITE_UNCHANGED
+            }
+            if (diskConflict) {
+              return { ok: false, diskConflict }
+            }
+            return capabilities.includes(FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY)
+              ? { method: FILE_WRITE_IF_UNCHANGED_METHOD, params: { ...params, diskPrecondition } }
+              : { method: 'files.write', params }
           },
           diskPrecondition !== undefined
         )

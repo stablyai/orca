@@ -197,6 +197,26 @@ export async function stopAndWaitPtyFromRuntimeController(
   ptyId: string,
   opts?: { keepHistory?: boolean; deadlineMs?: number }
 ): Promise<boolean> {
+  // A final relay stop is owed until the relay proves it, so an unproven one still reads as closing.
+  const relayOwesStop =
+    !opts?.keepHistory && Boolean(getPtySshConnectionId(ptyId)) && isLegacyRelayBridgedPty(ptyId)
+  let stopped = false
+  try {
+    stopped = await stopAndWaitPty(deps, ptyId, opts)
+    return stopped
+  } finally {
+    if (!stopped && !relayOwesStop) {
+      // Refused, failed or thrown: the process may run on, so it must not read as closing.
+      deps.runtime?.clearPtyStopRequest?.(ptyId)
+    }
+  }
+}
+
+async function stopAndWaitPty(
+  deps: PtyRuntimeControllerDeps,
+  ptyId: string,
+  opts?: { keepHistory?: boolean; deadlineMs?: number }
+): Promise<boolean> {
   const {
     runtime,
     store,
@@ -280,7 +300,7 @@ export async function stopAndWaitPtyFromRuntimeController(
     }
   }
   try {
-    if (!(await verifyPtyStopped(provider, ptyId, opts))) {
+    if (!(await verifyPtyStopped(provider, ptyId, opts, providerExitObserved))) {
       runtime?.markPtyLivenessLive?.(ptyId)
       return false
     }

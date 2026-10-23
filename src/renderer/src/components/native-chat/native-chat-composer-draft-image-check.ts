@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
+import { resolveNativeChatDraftOwner } from '@/lib/native-chat-draft-owner'
 import { chatImageAccess } from '@/lib/local-file-access'
 import { isAgentSessionAttachmentStorePath } from '../../../../shared/agent-session-attachments'
 import {
@@ -15,7 +17,6 @@ import {
 import type { NativeChatComposerDraftImage } from './native-chat-composer-draft-storage'
 import {
   isKeptLocalPaste,
-  resolveNativeChatComposerDraftOwner,
   structuredAgentSessionIdOfDraftScope,
   readNativeChatComposerDraft,
   unavailableNativeChatComposerDraftImage,
@@ -65,11 +66,22 @@ export async function findMissingNativeChatComposerDraftImages(
   return missing
 }
 
-function localStoreAuthority(scopeKey: string): string | null {
+function localStoreAuthority(
+  state: AppState,
+  scopeKey: string,
+  checks: readonly DraftImageCheck[]
+): string | null {
+  if (
+    structuredAgentSessionIdOfDraftScope(scopeKey) === null ||
+    !checks.some(
+      ({ image }) => isAgentSessionAttachmentStorePath(image.path) && !image.connectionId
+    )
+  ) {
+    return null
+  }
   const stored = readNativeChatComposerDraft(scopeKey).owner
-  const current = resolveNativeChatComposerDraftOwner(scopeKey)
-  return structuredAgentSessionIdOfDraftScope(scopeKey) !== null &&
-    (stored ?? current)?.executionHostId === 'local' &&
+  const current = resolveNativeChatDraftOwner(state, scopeKey)
+  return (stored ?? current)?.executionHostId === 'local' &&
     (!current || current.executionHostId === 'local')
     ? JSON.stringify([stored, current])
     : null
@@ -105,7 +117,8 @@ function attemptIsCurrent(scopeKey: string, entry: DraftImageCheck): boolean {
     readNativeChatComposerDraft(scopeKey).images.some(
       (image) => restoredImageKey(image) === restoredImageKey(entry.image)
     ) &&
-    entry.attempt.authority === checkAuthority(entry.image, localStoreAuthority(scopeKey))
+    entry.attempt.authority ===
+      checkAuthority(entry.image, localStoreAuthority(useAppStore.getState(), scopeKey, [entry]))
   )
 }
 
@@ -135,7 +148,10 @@ async function runCheck(scopeKey: string, entry: DraftImageCheck): Promise<void>
 export async function verifyRestoredNativeChatComposerDraftImages(scopeKey: string): Promise<void> {
   await Promise.all(
     (restoredImageChecks.get(scopeKey) ?? NO_IMAGE_CHECKS).map(async (entry) => {
-      const authority = checkAuthority(entry.image, localStoreAuthority(scopeKey))
+      const authority = checkAuthority(
+        entry.image,
+        localStoreAuthority(useAppStore.getState(), scopeKey, [entry])
+      )
       if (entry.attempt && entry.attempt.authority !== authority) {
         replaceCheck(scopeKey, entry, { image: entry.image })
       } else if (!entry.attempt && authority !== null) {
@@ -192,7 +208,7 @@ export function useRestoredNativeChatComposerDraftImageCheck(
     subscribe,
     () => restoredImageChecks.get(scopeKey) ?? NO_IMAGE_CHECKS
   )
-  const local = useAppStore(() => localStoreAuthority(scopeKey))
+  const local = useAppStore((state) => localStoreAuthority(state, scopeKey, checks))
   const pending = useMemo(
     () =>
       new Set(

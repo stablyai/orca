@@ -33,12 +33,16 @@ describe('runtime AI Vault session scanner', () => {
   it('lists saved runtime environments as runtime execution hosts', () => {
     mocks.listEnvironments.mockReturnValue([
       { id: 'env-1', name: 'Server 1' },
-      { id: 'env-2', name: 'Server 2' }
+      { id: 'env-2', name: 'Server 2', connectionDependency: 'ssh-tunnel' }
     ])
 
     expect(getSavedRuntimeAiVaultHostInfos('/user-data')).toEqual([
       { environmentId: 'env-1', executionHostId: 'runtime:env-1' },
-      { environmentId: 'env-2', executionHostId: 'runtime:env-2' }
+      {
+        environmentId: 'env-2',
+        executionHostId: 'runtime:env-2',
+        connectionDependency: 'ssh-tunnel'
+      }
     ])
   })
 

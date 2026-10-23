@@ -359,3 +359,24 @@ describe('/shared ai-vault-session-filters (hoisted matchers and sort keys)', ()
     actual.forEach((session, i) => expect(session).toBe(expected[i]))
   })
 })
+
+describe('filterAiVaultSessions symlinked workspace', () => {
+  it('keeps a session recorded under the real path when the host aliased it to the workspace', () => {
+    const recordedUnderRealPath: AiVaultSession = {
+      ...baseSession,
+      cwd: '/data/src/repo',
+      cwdAliases: ['/Users/ada/repo']
+    }
+
+    const filtered = filterAiVaultSessions([recordedUnderRealPath], {
+      query: '',
+      agents: ['claude'],
+      scope: 'workspace',
+      sort: 'updated',
+      activeWorktreePaths: ['/Users/ada/repo'],
+      hideEmptySessions: false
+    })
+
+    expect(filtered.map((entry) => entry.cwd)).toEqual(['/data/src/repo'])
+  })
+})

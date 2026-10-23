@@ -18,6 +18,9 @@ on:
         required: false
 permissions:
   contents: read
+
+# Candidate source must not write caches in the dispatch branch's scope.
+cache-mode: read
 jobs:
   compatibility:
     runs-on: ubuntu-latest

@@ -295,24 +295,9 @@ function resolveOwnerRouteResult(
     return { kind: 'missing' }
   }
 
-  // Why: pre-owner-projection runtimes published no host fields; terminal routing retains their single focused-runtime behavior.
-  const legacyRuntimeEnvironmentId = state.settings?.activeRuntimeEnvironmentId?.trim()
+  // Why no Active Server focus here: the client stamps every server row on arrival, so an
+  // unstamped row is never a server's.
   const savedRuntimeIds = state.runtimeEnvironments?.map((environment) => environment.id.trim())
-  const legacyRuntimeIsUnambiguous =
-    savedRuntimeIds === undefined ||
-    (savedRuntimeIds.length === 1 && savedRuntimeIds[0] === legacyRuntimeEnvironmentId)
-  if (legacyRuntimeEnvironmentId && !legacyRuntimeIsUnambiguous) {
-    return { kind: 'missing' }
-  }
-  if (legacyRuntimeEnvironmentId) {
-    return {
-      kind: 'resolved',
-      route: {
-        executionHostId: `runtime:${encodeURIComponent(legacyRuntimeEnvironmentId)}`,
-        runtimeEnvironmentId: legacyRuntimeEnvironmentId
-      }
-    }
-  }
   // Why: a found repo/worktree record is positive identity evidence, so keep terminal-owner
   // parity with the folder branch below. Every stamped row already routed above, so an unstamped
   // repo row here is a legacy pre-owner-projection row — local by construction, as

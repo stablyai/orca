@@ -6,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   MOBILE_WEB_BUNDLE_CHUNK_BYTES,
   MOBILE_WEB_BUNDLE_CHUNK_METHOD,
-  MOBILE_WEB_BUNDLE_RANGE_BYTES,
   MOBILE_WEB_BUNDLE_RANGE_METHOD
 } from '../../../../shared/mobile-web-bundle/bundle-rpc-contract'
 import { resetBundledMobileWebBundleCacheForTests } from '../../bundled-mobile-web-bundle'
@@ -50,10 +49,10 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-// Both read methods run the same checks in the same order; only the grid differs.
+// Both read methods run the same checks in the same order.
 describe.each([
   { method: MOBILE_WEB_BUNDLE_CHUNK_METHOD, grid: MOBILE_WEB_BUNDLE_CHUNK_BYTES },
-  { method: MOBILE_WEB_BUNDLE_RANGE_METHOD, grid: MOBILE_WEB_BUNDLE_RANGE_BYTES }
+  { method: MOBILE_WEB_BUNDLE_RANGE_METHOD, grid: MOBILE_WEB_BUNDLE_CHUNK_BYTES }
 ])('$method refusals', ({ method, grid }) => {
   let bundle: SyntheticMobileWebBundle
   let script: SyntheticMobileWebBundle['assets'][number]

@@ -3,6 +3,7 @@ import { withDurableRuntimeStore } from '../runtime/runtime-durable-store-fixtur
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { SessionNotFoundError } from '../daemon/daemon-errors'
 import { makePaneKey } from '../../shared/stable-pane-id'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { registerPtyHandlers } from './pty/register-handlers'
 import { setLocalPtyProvider } from './pty/provider/registry'
 import { isHiddenRendererPty } from './pty-hidden-delivery-gate'
@@ -177,8 +178,17 @@ describe('registerPtyHandlers', () => {
       'inc-proven-absent-owner',
       { hostExitConfirmed: true }
     )
-    expect(store.setWorkspaceSession).toHaveBeenCalledOnce()
-    expect(store.flushOrThrow).toHaveBeenCalledOnce()
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      // The dead binding stays until the fresh spawn's one bind swaps it.
+      expect(store.setWorkspaceSession).not.toHaveBeenCalled()
+      const [swap] = vi.mocked(store.persistPtyBinding).mock.calls[0] ?? []
+      expect(typeof swap === 'function' ? swap() : swap).toMatchObject({
+        ptyId: 'pty-proven-absent-owner'
+      })
+    } else {
+      expect(store.setWorkspaceSession).toHaveBeenCalledOnce()
+      expect(store.flushOrThrow).toHaveBeenCalledOnce()
+    }
   })
   it('does not poll after the routed provider confirms absence', async () => {
     const worktreeId = 'repo-1::/tmp/probe-blip-owner'

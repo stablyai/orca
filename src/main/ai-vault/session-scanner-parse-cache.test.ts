@@ -369,4 +369,42 @@ describe('parseAgentSessionFileCached', () => {
     expect(resumed).toEqual(await freshParse(path))
     expect(resumed?.messageCount).toBe(202)
   })
+
+  it('keeps one row each when Pi and OMP list the same transcript', async () => {
+    const root = await makeTempDir()
+    const path = join(root, '2026-04-20T00-00-00-000Z_aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee.jsonl')
+    await writeFile(
+      path,
+      [
+        JSON.stringify({
+          type: 'session',
+          id: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+          timestamp: '2026-04-20T00:00:00.000Z',
+          cwd: '/repo/app'
+        }),
+        JSON.stringify({
+          type: 'message',
+          timestamp: '2026-04-20T00:01:00.000Z',
+          message: { role: 'user', content: [{ type: 'text', text: 'shared dir prompt' }] }
+        }),
+        ''
+      ].join('\n')
+    )
+    const { file } = await claudeCandidate(path)
+    const stats = createSessionParseStats()
+    const scan = (): Promise<(string | undefined)[]> =>
+      Promise.all(
+        (['omp', 'pi'] as const).map(
+          async (agent) =>
+            (await parseAgentSessionFileCached({ agent, file, codexHome: null }, 'linux', stats))
+              ?.agent
+        )
+      )
+
+    expect(await scan()).toEqual(['omp', 'pi'])
+    expect(await scan()).toEqual(['omp', 'pi'])
+    // A rescan reuses both rows instead of each agent re-reading over the other's.
+    expect(stats.fullParses).toBe(2)
+    expect(stats.reused).toBe(2)
+  })
 })

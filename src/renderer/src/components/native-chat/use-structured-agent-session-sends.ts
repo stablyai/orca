@@ -1,3 +1,5 @@
+import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/structured-agent-session-host-capability'
+import { AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY } from '../../../../shared/agent-session-create-capabilities'
 import type { StructuredAgentSessionSendRequest } from './structured-agent-session-send-slot'
 import { useCallback, useEffect, useSyncExternalStore } from 'react'
 import type {
@@ -56,6 +58,12 @@ export function useStructuredAgentSessionSends(args: {
     submissions,
     target
   } = args
+  // An older host refuses a send body carrying `skills`; there the `$name` text stands alone.
+  const takesSkills =
+    useStructuredAgentSessionHostCapabilityState(
+      target,
+      AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY
+    ) === 'supported'
   const subscribe = useCallback(
     (listener: () => void) => subscribeToStructuredAgentSessionPendingSends(sessionId, listener),
     [sessionId]
@@ -113,6 +121,7 @@ export function useStructuredAgentSessionSends(args: {
           : {}),
         ...(delivery ? { delivery } : {}),
         ...(options ? { options } : {}),
+        ...(takesSkills && request?.skills?.length ? { skills: request.skills } : {}),
         ...(stopping ? { sentWhileStopping: true as const } : {})
       })
       // Refused while the chat's send is out: the text stays in the box.
@@ -131,7 +140,7 @@ export function useStructuredAgentSessionSends(args: {
         ? 'queued'
         : true
     },
-    [isWorking, queue, queuedMessageIds, sendOptions, sessionId, stopping, target]
+    [isWorking, queue, queuedMessageIds, sendOptions, sessionId, stopping, takesSkills, target]
   )
 
   return {

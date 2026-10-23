@@ -22,6 +22,7 @@ import {
 } from '../../../../shared/workspace-layout/workspace-layout-session.test-fixture'
 import { bindTabTerminalPanesInSession } from '../../../../main/persistence/restoring-sessions/tab-terminal-pane-binding-repair'
 import { windowViewSaveForMain } from '../../../../main/persistence/window-save-view'
+import { deriveShutdownReconnectFacts } from '../../../../main/runtime/terminal/recovery/shutdown-reconnect-facts'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
 import { buildWorkspaceSessionHostSnapshots } from '@/lib/workspace-session-host-persistence'
 import {
@@ -163,7 +164,17 @@ function quit({ store, stored }: Launched): StoredPartition[] {
     const save = snapshots.find(
       (snapshot) => (snapshot.hostId ?? LOCAL_EXECUTION_HOST_ID) === hostId
     )
-    return { hostId, session: save ? windowViewSaveForMain(session, save.state, hostId) : session }
+    // Main derives what the next startup reconnects from its own terminals and SSH connections.
+    const reconnectFacts = (saved: WorkspaceSessionState) =>
+      deriveShutdownReconnectFacts(saved, {
+        isLiveLocalPty: (ptyId) => ptyId === 'pty-git' || ptyId === 'pty-folder',
+        isKnownExited: () => false,
+        sshStatusByTargetId: new Map([[TARGET_ID, 'connected']])
+      })
+    return {
+      hostId,
+      session: save ? windowViewSaveForMain(session, save.state, hostId, reconnectFacts) : session
+    }
   })
 }
 

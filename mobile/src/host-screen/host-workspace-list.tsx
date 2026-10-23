@@ -8,7 +8,7 @@ import {
   Text,
   View
 } from 'react-native'
-import { ChevronDown, ChevronRight, Pin } from 'lucide-react-native'
+import { ChevronDown, ChevronRight, FolderTree, Pin } from 'lucide-react-native'
 import { AuthFailedBanner } from '../components/AuthFailedBanner'
 import { HostDiagnosticsLink } from '../components/HostDiagnosticsLink'
 import { HostRouteNoticeBanner } from '../components/HostRouteNoticeBanner'
@@ -28,6 +28,8 @@ import { getWorktreeCardDetails } from '../../../src/shared/worktree/card-proper
 import { hostScreenStyles as styles } from './host-screen-styles'
 import { buildRepoLookById } from './host-repo-looks'
 import { HostPendingCreationRow } from './host-pending-creation-row'
+import { useSlowPendingKeys } from './use-slow-pending-keys'
+import { projectGroupHeaderIndent } from '../worktree/project-group-indent'
 import type { HostScreenController } from './use-host-screen-controller'
 
 export function HostWorkspaceList({ controller }: { controller: HostScreenController }) {
@@ -57,10 +59,12 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
   } = controller
   const { rawSections, sections, repoById } = sectionsResult
   const { pending } = settings.pendingViewChanges
-  // A collapse the desktop has not answered spins on its header.
-  const pendingCollapseKeys = useMemo(
-    () => new Set(pending.flatMap((change) => (change.kind === 'collapse' ? [change.key] : []))),
-    [pending]
+  // A collapse the desktop has not answered within SLOW_PENDING_MS spins on its header.
+  const pendingCollapseKeys = useSlowPendingKeys(
+    useMemo(
+      () => new Set(pending.flatMap((change) => (change.kind === 'collapse' ? [change.key] : []))),
+      [pending]
+    )
   )
   const repoLookById = useMemo(() => buildRepoLookById(repoById), [repoById])
   const { worktreeCardProperties, compactWorktreeCards, newCardStyle } = state.view
@@ -133,7 +137,7 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
 
       {/* A feed this page cannot read: the host is older or newer than the page. */}
       {controller.feed?.kind === 'reopen' ? (
-        <HostWorkspaceListReopen />
+        <HostWorkspaceListReopen aboveRows={sections.length > 0} />
       ) : (
         <HostWorkspaceListStates
           connState={connState}
@@ -150,7 +154,7 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
         />
       )}
 
-      {sections.length > 0 && controller.feed?.kind !== 'reopen' && (
+      {sections.length > 0 && (
         <SectionList
           ref={activeWorktreeScroll.sectionListRef}
           sections={sections}
@@ -189,7 +193,15 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
             return (
               <>
                 <Pressable
-                  style={styles.sectionHeader}
+                  style={[
+                    styles.sectionHeader,
+                    section.projectGroupDepth
+                      ? {
+                          paddingLeft:
+                            spacing.lg + projectGroupHeaderIndent(section.projectGroupDepth)
+                        }
+                      : null
+                  ]}
                   onPress={() => settings.toggleCollapsed(section.key)}
                 >
                   {isCollapsed ? (
@@ -200,7 +212,9 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
                   {section.icon === 'pin' && (
                     <Pin size={12} color={colors.textMuted} style={styles.sectionIcon} />
                   )}
-                  {state.view.groupBy === 'repo' ? (
+                  {state.view.groupBy === 'repo' && section.isProjectGroup ? (
+                    <FolderTree size={12} color={colors.textPrimary} style={styles.sectionIcon} />
+                  ) : state.view.groupBy === 'repo' ? (
                     <View style={styles.sectionRepoIcon}>
                       <MobileRepoIcon
                         repoIcon={repoSectionIcon}
@@ -215,7 +229,7 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
                     <ActivityIndicator
                       size="small"
                       color={colors.textMuted}
-                      style={styles.sectionIcon}
+                      style={styles.sectionPendingSpinner}
                     />
                   )}
                 </Pressable>

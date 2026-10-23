@@ -44,7 +44,7 @@ describe('Node.js mirror recovery for a setup that could not download Node', () 
   })
 
   it('names the blocked download on the host row and in the connect toast', () => {
-    const line = sshHostServerStatusLine({}, { managedServer: blocked('unset') })
+    const line = sshHostServerStatusLine({ label: 'Box' }, { managedServer: blocked('unset') })
     expect(line).toEqual({
       tone: 'destructive',
       text: expect.stringContaining('Use a Node.js mirror'),
@@ -54,16 +54,20 @@ describe('Node.js mirror recovery for a setup that could not download Node', () 
       'Check the mirror setting'
     )
     expect(
-      sshHostServerStatusLine({}, { managedServer: blocked('unsupported') })?.text
+      sshHostServerStatusLine({ label: 'Box' }, { managedServer: blocked('unsupported') })?.text
     ).not.toContain('mirror')
   })
 
   it('keeps the held-move and lost-contact lines ahead of the download', () => {
     expect(
-      sshHostServerStatusLine({}, { managedServer: blocked('unset', { held: true }) })?.text
+      sshHostServerStatusLine({ label: 'Box' }, { managedServer: blocked('unset', { held: true }) })
+        ?.text
     ).toContain('paused moving')
     expect(
-      sshHostServerStatusLine({}, { managedServer: blocked('unset', { contactLost: true }) })?.text
+      sshHostServerStatusLine(
+        { label: 'Box' },
+        { managedServer: blocked('unset', { contactLost: true }) }
+      )?.text
     ).toContain('lost contact')
   })
 })

@@ -65,6 +65,15 @@ const CutoverRecordSchema = z.object({
     .array(z.string().min(1).max(1_024))
     .max(MAX_ORCAD_MIGRATION_FOLDER_WORKSPACES)
     .optional(),
+  // Rows the source held, no move took, when the user kept the server's version: never a change.
+  keptRepositoryIds: z
+    .array(z.string().min(1).max(1_024))
+    .max(MAX_ORCAD_MIGRATION_REPOSITORIES)
+    .optional(),
+  keptFolderWorkspaceIds: z
+    .array(z.string().min(1).max(1_024))
+    .max(MAX_ORCAD_MIGRATION_FOLDER_WORKSPACES)
+    .optional(),
   manifest: z.unknown()
 })
 

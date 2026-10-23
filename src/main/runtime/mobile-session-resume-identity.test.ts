@@ -5,6 +5,8 @@ import { agentHookServer } from '../agent-hooks/server'
 const { OrcaRuntimeService } = await import('./orca-runtime-test-mocks.spec')
 await import('./orca-runtime-test-lifecycle.spec')
 const { TEST_REPO_ID, TEST_WORKTREE_ID, store } = await import('./orca-runtime-test-fixtures.spec')
+const { bindPaneFirst, committingSpawn } = await import('./bind-first-pane.test-fixture')
+const { toSshExecutionHostId } = await import('../../shared/execution-host')
 
 const SESSION = { key: 'session_id', id: 'codex-history-session' } as const
 
@@ -15,11 +17,33 @@ function spyOnRecord() {
   return spy
 }
 
-function makeRuntime(runtimeStore: ConstructorParameters<typeof OrcaRuntimeService>[0] = store) {
+// Why a copy of the shared store: main's layout binds panes in the runtime store's session.
+function makeRuntime(
+  runtimeStore: ConstructorParameters<typeof OrcaRuntimeService>[0] = { ...store },
+  sshTargetId?: string
+) {
   const spawn = vi.fn().mockResolvedValue({ id: 'pty-resume' })
   const runtime = new OrcaRuntimeService(runtimeStore)
   runtime.setPtyController({
-    spawn,
+    // An SSH pane's binding lives in its execution host's session.
+    spawn: sshTargetId
+      ? async (args: { worktreeId?: string; tabId?: string; leafId?: string }) => {
+          const result = await spawn(args)
+          if (args.worktreeId && args.tabId && args.leafId) {
+            bindPaneFirst(
+              runtime,
+              {
+                worktreeId: args.worktreeId,
+                tabId: args.tabId,
+                leafId: args.leafId,
+                ptyId: result.id
+              },
+              toSshExecutionHostId(sshTargetId)
+            )
+          }
+          return result
+        }
+      : committingSpawn(runtime, spawn),
     write: () => true,
     kill: () => true,
     getForegroundProcess: async () => null
@@ -82,11 +106,14 @@ describe('a phone resume from Session History', () => {
   it('leaves an SSH pane to the relay that owns its status', async () => {
     const record = spyOnRecord()
     const remoteRepo = { ...store.getRepo(TEST_REPO_ID)!, connectionId: 'ssh-1' }
-    const { runtime } = makeRuntime({
-      ...store,
-      getRepos: () => [remoteRepo],
-      getRepo: (id: string) => (id === TEST_REPO_ID ? remoteRepo : undefined)
-    })
+    const { runtime } = makeRuntime(
+      {
+        ...store,
+        getRepos: () => [remoteRepo],
+        getRepo: (id: string) => (id === TEST_REPO_ID ? remoteRepo : undefined)
+      },
+      'ssh-1'
+    )
 
     await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
       launchAgent: 'codex',

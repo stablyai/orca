@@ -550,8 +550,8 @@ describe('orchestration timeout flag validation', () => {
     expect(getTerminalHandleMock).not.toHaveBeenCalled()
   })
 
-  it.each([String(Number.MAX_SAFE_INTEGER)])(
-    'clamps a safe ask timeout %s before adding transport headroom',
+  it.each(['1', '1800000'])(
+    'accepts an ask timeout %s within the supported range with transport headroom',
     async (rawTimeout) => {
       process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
       callMock.mockResolvedValue({
@@ -569,9 +569,32 @@ describe('orchestration timeout flag validation', () => {
 
       expect(callMock).toHaveBeenCalledWith(
         'orchestration.ask',
-        expect.objectContaining({ timeoutMs: 1_800_000 }),
-        { timeoutMs: 1_805_000 }
+        expect.objectContaining({ timeoutMs: Number(rawTimeout) }),
+        { timeoutMs: Number(rawTimeout) + 5_000 }
       )
+    }
+  )
+
+  it.each(['1800001', String(Number.MAX_SAFE_INTEGER)])(
+    'rejects an oversized ask timeout %s before resolving identity or creating a question',
+    async (timeoutMs) => {
+      process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
+      callMock.mockResolvedValue({
+        result: { answer: 'yes', messageId: 'msg_1', threadId: 'thread_1', timedOut: false }
+      })
+      await expect(
+        invokeAsk(
+          new Map<string, string | boolean>([
+            ['question', 'Proceed?'],
+            ['timeout-ms', timeoutMs]
+          ])
+        )
+      ).rejects.toMatchObject({
+        code: 'invalid_argument',
+        message: expect.stringMatching(/--timeout-ms.*1800000.*30 minutes/)
+      })
+      expect(callMock).not.toHaveBeenCalled()
+      expect(getTerminalHandleMock).not.toHaveBeenCalled()
     }
   )
 

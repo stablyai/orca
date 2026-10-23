@@ -88,6 +88,8 @@ export type AgentSessionAttachmentClaim = {
   /** A client's own new message: every upload of this host's store it names must still be stored,
    *  or the whole message is refused. The host's own writes (a /clear carry, a draft it sends) never refuse. */
   required: boolean
+  /** The body this one replaces: uploads it already named are claimed best effort, never required. */
+  previous?: AgentJournalMessageItem
   now: number
 }
 
@@ -106,20 +108,21 @@ export function claimAgentSessionAttachmentsInTransaction(
   if (uploadIds.size === 0) {
     return
   }
-  if (claim.required) {
-    if (
-      [...uploadIds].some(
-        (uploadId) => isBeingSwept(db, uploadId) || !uploadIsStored(root, uploadId)
-      )
-    ) {
-      throw new AgentSessionAttachmentExpiredError()
-    }
-    insertClaims(db, uploadIds, claim.sessionId, claim.now)
+  const kept = claim.previous
+    ? agentSessionAttachmentReferences(root, claim.previous)
+    : new Set<string>()
+  const required = claim.required ? [...uploadIds].filter((id) => !kept.has(id)) : []
+  if (required.some((uploadId) => isBeingSwept(db, uploadId) || !uploadIsStored(root, uploadId))) {
+    throw new AgentSessionAttachmentExpiredError()
+  }
+  insertClaims(db, required, claim.sessionId, claim.now)
+  const bestEffort = [...uploadIds].filter((id) => !required.includes(id))
+  if (bestEffort.length === 0) {
     return
   }
   db.exec(`SAVEPOINT ${CLAIM_SAVEPOINT}`)
   try {
-    insertClaims(db, uploadIds, claim.sessionId, claim.now)
+    insertClaims(db, bestEffort, claim.sessionId, claim.now)
     db.exec(`RELEASE ${CLAIM_SAVEPOINT}`)
   } catch (error) {
     db.exec(`ROLLBACK TO ${CLAIM_SAVEPOINT}`)

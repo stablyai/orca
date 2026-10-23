@@ -83,7 +83,8 @@ describe.runIf(RUN)('managed orcad on a Windows OpenSSH host', () => {
           ...options,
           target: context.serverTarget,
           census: idle,
-          recountCensus: async () => idle
+          recountCensus: async () => idle,
+          releaseIncumbentAdmission: async () => {}
         })
         receipt.deploy = deployed
         expect(deployed.outcome).toBe('installed-and-activated')

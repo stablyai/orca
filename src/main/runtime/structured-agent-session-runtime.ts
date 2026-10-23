@@ -11,6 +11,7 @@
 // structured request with the refusal that says why.
 
 import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
+import { bindAtRestCommandContexts } from '../native-chat/agent-session-wire/at-rest-command-context'
 import type { StructuredAgentSessionTransportOverrides } from './structured-agent-session-transport-overrides'
 import { existsSync } from 'node:fs'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
@@ -122,6 +123,7 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
   onSessionStatusChanged?: StructuredAgentSessionHostDeps['onSessionStatusChanged']
   /** The agent-status store; see `StructuredAgentSessionHostDeps.statusSink`. */
   statusSink?: StructuredAgentSessionHostDeps['statusSink']
+  conversationNaming?: StructuredAgentSessionHostDeps['conversationNaming']
   /** See `StructuredAgentSessionHostDeps.hasOpenDispatch`. */
   hasOpenDispatch?: StructuredAgentSessionHostDeps['hasOpenDispatch']
   resolveCodexAccountKind?: (home: string) => AgentSessionAccountKind | undefined
@@ -312,6 +314,7 @@ async function installOnJournal(
     logger: deps.logger,
     ...(deps.onSessionStatusChanged ? { onSessionStatusChanged: deps.onSessionStatusChanged } : {}),
     ...(deps.statusSink ? { statusSink: deps.statusSink } : {}),
+    ...(deps.conversationNaming ? { conversationNaming: deps.conversationNaming } : {}),
     ...(deps.hasOpenDispatch ? { hasOpenDispatch: deps.hasOpenDispatch } : {}),
     ...(deps.startupLimits ? { startupLimits: deps.startupLimits } : {}),
     ...(deps.onSessionTabHidden ? { onSessionTabHidden: deps.onSessionTabHidden } : {}),
@@ -341,7 +344,6 @@ async function installOnJournal(
       onState: delivery.reconcile
     })
   }
-  setStructuredAgentSessionHost(host)
   // The host starts with its runtime, local or remote, so this is the runtime-start listing.
   const modelCatalog = host.deps.modelCatalog
   void modelCatalog?.prewarm()
@@ -358,12 +360,22 @@ async function installOnJournal(
         logger: deps.logger
       })
     : undefined
+  const stopCommands = bindAtRestCommandContexts(
+    registrations.map(({ adapter }) => adapter.atRestCommands)
+  )
+  try {
+    setStructuredAgentSessionHost(host)
+  } catch (error) {
+    stopCommands()
+    throw error
+  }
   return {
     host,
     adapter,
     journalDatabase,
     waitForRecovery: lifecycle.drain,
     stopBackgroundWork: () => {
+      stopCommands()
       stopVisualsSweep?.()
       modelCatalog?.stop()
     }

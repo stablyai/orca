@@ -80,6 +80,15 @@ export const styles = StyleSheet.create({
     color: colors.statusRed,
     fontSize: typography.metaSize
   },
+  showFull: {
+    alignSelf: 'flex-start',
+    paddingTop: spacing.xs
+  },
+  showFullText: {
+    color: colors.textMuted,
+    fontSize: typography.metaSize,
+    fontWeight: '600'
+  },
   imageRef: {
     color: colors.textSecondary,
     fontSize: TEXT_SIZE

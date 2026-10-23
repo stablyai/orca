@@ -4,6 +4,7 @@ import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease
 import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type {
+  AgentSessionNamingError,
   AgentSessionStatusSummary,
   AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire'
@@ -12,6 +13,7 @@ import type { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-re
 import type { AgentSessionSpawnTokenScan } from '../../runtime/agent-session-spawn-token-process-scan'
 import type { JournalHostDatabase } from '../agent-session-journal/journal-host-database'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import type { DeferredStructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import type { JournalStopSettle } from '../agent-session-journal/queued-message-pause'
 import type {
   StructuredAgentSessionAdapter,
@@ -79,6 +81,7 @@ export type StructuredAgentSessionProviderChild = StructuredAgentSessionProvider
   readonly permissionMode?: AgentChatPermissionMode
   /** The adapter's `heldSends` for this conversation, read at each decision. */
   readonly heldSends?: () => ReadonlySet<string> | undefined
+  readonly exitObservation?: DeferredStructuredAgentSessionEventSink['exitObservation']
   close?: StructuredAgentSessionChildClose
 }
 
@@ -175,4 +178,18 @@ export type StructuredAgentSessionHostDeps = {
   statusSink?: StructuredAgentSessionStatusSink
   /** Host model catalog surface; absent means every catalog read answers `unknown`. */
   modelCatalog?: AgentModelCatalogService
+  /** The chat-naming job: its last failure per chat, and the user's request to run it again. */
+  conversationNaming?: StructuredAgentSessionConversationNaming
+}
+
+/** A failed naming run, published only while the chat is still named `forName`. */
+export type StructuredChatNamingFailure = AgentSessionNamingError & { forName: string }
+
+export type StructuredAgentSessionConversationNaming = {
+  activeSessionIds: () => string[]
+  failure: (sessionId: string) => StructuredChatNamingFailure | undefined
+  /** The failed run's full agent output, for the local user only; never published. */
+  failureOutput: (sessionId: string) => string | null
+  /** Starts (or joins) one naming run for the chat; false when the host has no such chat. */
+  regenerate: (sessionId: string) => boolean
 }

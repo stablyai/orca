@@ -59,6 +59,9 @@ export function useCombinedDiffSectionRetry({
                 ...section,
                 loading: !collapsed,
                 error: undefined,
+                // Why: a retry refetches from disk, so it also discards edits a refused save kept.
+                dirty: false,
+                saveConflict: undefined,
                 diffResult: null,
                 originalContent: '',
                 modifiedContent: '',

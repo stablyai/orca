@@ -7,6 +7,9 @@ import {
   buildRetractedMirroredTabSweepPatch
 } from './agent-status-primitives'
 import { isWebSessionTabsWorktreeRemovalFrame } from './session-tabs-inventory-absence'
+import { adoptMirroredEditorBuffers } from '../../store/slices/editor/buffers/editor-buffer-record'
+import { buildEditorBufferViewIndex } from '../../store/slices/editor/buffers/editor-buffer-views'
+import { editorBufferIdForFile } from '../../store/slices/editor/buffers/editor-buffer-identity-cache'
 
 type FinalPatchContext = ReturnType<typeof applyActiveStateUpdates>
 
@@ -28,7 +31,6 @@ export function buildWebSessionTabsFinalPatch(
     removedTerminalResourceIds,
     mirroredTerminalIds,
     nextOpenFiles,
-    nextEditorBuffers,
     nextBrowserTabsByWorktree,
     nextUnifiedTabsByWorktree,
     nextGroupsByWorktree,
@@ -92,12 +94,26 @@ export function buildWebSessionTabsFinalPatch(
     mirroredTerminalIds
   )
 
+  const adoptedEditorBuffers =
+    nextOpenFiles === state.openFiles
+      ? null
+      : adoptMirroredEditorBuffers(
+          state.editorBuffers,
+          nextOpenFiles,
+          // Why the live index for existing views: it holds sticky detachments. New views take the
+          // resolver the record middleware uses (host views of one file share a record).
+          buildEditorBufferViewIndex(
+            nextOpenFiles,
+            (file) => state.editorBufferIdOf?.[file.id] ?? editorBufferIdForFile(file, state)
+          )
+        )
+
   const patch: Partial<WebSessionTabsSyncState> = {
     ...agentStatusPatch,
     ...retractedTabSweepPatch,
     ...remirroredClosedTabLiftPatch,
-    ...(nextOpenFiles !== state.openFiles
-      ? { openFiles: nextOpenFiles, editorBuffers: nextEditorBuffers }
+    ...(adoptedEditorBuffers
+      ? { openFiles: adoptedEditorBuffers.views, editorBuffers: adoptedEditorBuffers.editorBuffers }
       : {}),
     ...(nextTabsByWorktree !== state.tabsByWorktree ? { tabsByWorktree: nextTabsByWorktree } : {}),
     ...(nextBrowserTabsByWorktree !== state.browserTabsByWorktree

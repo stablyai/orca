@@ -17,6 +17,7 @@ import {
 } from '../../runtime/runtime-client-target'
 import { catalogOwnsHost, getProjectGroupHostId } from '../slices/project-group-owner-routing'
 import { getFolderWorkspaceHostId } from '../../../../shared/folder-workspace-execution-host'
+import { selectFolderWorkspaces } from '../workspace-record-selectors'
 
 type FolderPathStatusSnapshotState = Pick<
   AppState,
@@ -59,7 +60,7 @@ function getFolderPathStatusScope(
         }
       : null
   }
-  const folders = state.folderWorkspaces.filter(
+  const folders = selectFolderWorkspaces(state).filter(
     (workspace) =>
       workspace.id === request.folderWorkspaceId &&
       catalogOwnsHost(ownerHostId, getFolderWorkspaceHostId(workspace, state.projectGroups))

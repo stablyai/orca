@@ -17,6 +17,17 @@ export const AGENT_CHAT_PERMISSION_MODES = [
   'full-access'
 ] as const satisfies readonly AgentChatPermissionMode[]
 
+/** The lucide glyph each mode shows; desktop and phone resolve the name in their own icon package. */
+export const AGENT_CHAT_PERMISSION_MODE_ICON_NAMES = {
+  ask: 'Hand',
+  'accept-edits': 'FilePenLine',
+  auto: 'ShieldCheck',
+  'full-access': 'ShieldAlert'
+} as const satisfies Record<AgentChatPermissionMode, string>
+
+export type AgentChatPermissionModeIconName =
+  (typeof AGENT_CHAT_PERMISSION_MODE_ICON_NAMES)[AgentChatPermissionMode]
+
 /** The chat option a mode is saved and written under. */
 export const AGENT_CHAT_PERMISSION_MODE_OPTION_ID = 'permissionMode'
 

@@ -64,7 +64,12 @@ import { MANAGED_RUNTIME_INSTALL_METHODS } from './managed-runtime-install'
 import { ARTIFACT_METHODS } from './artifacts'
 import { AGENT_HOOK_METHODS } from './agent-hooks'
 import { AGENT_LAUNCH_METHODS } from './agent-launch'
-import { LAYOUT_APPLY_METHODS, WORKSPACE_LAYOUT_METHODS } from './workspace-layout'
+import { CONNECTOR_METHODS } from './connector'
+import {
+  LAYOUT_APPLY_METHODS,
+  LAYOUT_VIEW_REPORT_METHODS,
+  WORKSPACE_LAYOUT_METHODS
+} from './workspace-layout'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
 
@@ -89,6 +94,7 @@ export const ALL_RPC_METHODS = [
   ...STRUCTURED_AGENT_SESSION_AGENTS_METHODS,
   ...MANAGED_RUNTIME_INSTALL_METHODS,
   ...AGENT_LAUNCH_METHODS,
+  ...CONNECTOR_METHODS,
   ...TERMINAL_METHODS,
   ...TERMINAL_ORPHAN_METHODS,
   ...BROWSER_CORE_METHODS,
@@ -112,7 +118,7 @@ export const ALL_RPC_METHODS = [
   ...SESSION_TAB_METHODS,
   ...WORKSPACE_LAYOUT_METHODS,
   // Switch point: a window-owned build registers no layout command.
-  ...(ORCA_LAYOUT_OWNER_IS_MAIN ? LAYOUT_APPLY_METHODS : []),
+  ...(ORCA_LAYOUT_OWNER_IS_MAIN ? [...LAYOUT_APPLY_METHODS, ...LAYOUT_VIEW_REPORT_METHODS] : []),
   ...NATIVE_CHAT_METHODS,
   ...FILE_METHODS,
   ...GIT_METHODS,

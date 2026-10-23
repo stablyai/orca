@@ -3,7 +3,7 @@ import { isEphemeralSetupTerminalWorktreeId } from '../../../shared/ephemeral-se
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { AppState } from '@/store/types'
-import { resolveOwnerWithLegacyFallback } from './worktree-runtime-owner'
+import { resolveOwnerOrLocal } from './worktree-runtime-owner'
 import { namedHostForOwnerRef, runtimeEnvironmentIdUnlessTwin } from './resolve-owner'
 import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
 import {
@@ -33,9 +33,9 @@ export type TerminalHostOwnership =
   | { kind: 'unresolved'; runtimeEnvironmentId: null }
 
 /**
- * `spawn` asks which host should start a new process, so a merely focused runtime is a fine guess.
- * `teardown` asks which provider can kill an existing one, where that same guess strands the local
- * PTY the surface was actually spawned on.
+ * `spawn` asks which host should start a new process, so a setup terminal may follow the focused
+ * runtime. `teardown` asks which provider can kill an existing one, where that guess strands the
+ * local PTY the surface was actually spawned on.
  */
 export type TerminalHostOwnershipPurpose = 'spawn' | 'teardown'
 
@@ -69,7 +69,7 @@ export function resolveTerminalHostOwnership(
     worktreeId === FLOATING_TERMINAL_WORKTREE_ID ||
     parseWorkspaceKey(worktreeId)?.type === 'folder'
   ) {
-    const owner = resolveOwnerWithLegacyFallback(state, { workspaceId: worktreeId })
+    const owner = resolveOwnerOrLocal(state, { workspaceId: worktreeId })
     if (owner.kind !== 'resolved') {
       // Why: spawn must not pick a twin; a twin's runtime PTYs carry `remote:` ids, so a raw id is
       // local or SSH on either copy.
@@ -107,16 +107,6 @@ export function resolveTerminalHostOwnership(
     return parsed?.kind === 'local' || parsed?.kind === 'ssh'
       ? LOCAL_OR_SSH_TERMINAL_HOST
       : UNRESOLVED_TERMINAL_HOST
-  }
-  if (
-    purpose === 'spawn' &&
-    state.worktreesByRepo === undefined &&
-    state.detectedWorktreesByRepo === undefined &&
-    state.repos === undefined
-  ) {
-    // Why: narrow unit/legacy adapters can omit all owner catalogs; production stores always provide
-    // them and still fail closed above. The `teardown` purpose never takes this fail-open.
-    return ownershipForRuntimeEnvironmentId(getSingleFocusedRuntimeEnvironmentId(state))
   }
   return UNRESOLVED_TERMINAL_HOST
 }
@@ -214,8 +204,9 @@ function resolveFloatingScopeOwnership(
   if (runtimeEnvironmentIdUnlessTwin(state, worktreeId)) {
     return ownershipForRuntimeEnvironmentId(runtimeEnvironmentId)
   }
-  // Why: this surface publishes no runtime owner and only looks runtime-owned because exactly one
-  // runtime is focused — a guess that flips as catalogs hydrate, stranding the local PTY (STA-2639).
+  // Why: this surface publishes no runtime owner and only looks runtime-owned through a guess (the
+  // focused runtime, a web client's server) that flips as catalogs hydrate, stranding the local
+  // PTY (STA-2639).
   return LOCAL_OR_SSH_TERMINAL_HOST
 }
 

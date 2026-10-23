@@ -76,6 +76,9 @@ function loadRecords(session: WorkspaceSessionState): WorkspaceLayoutRecords {
       : {}),
     ...(session.clientHostedBrowserPagesByWorktree
       ? { clientHostedBrowserPagesByWorkspace: session.clientHostedBrowserPagesByWorktree }
+      : {}),
+    ...(session.closedTerminalPanesByPaneKey
+      ? { closedTerminalPanesByPaneKey: session.closedTerminalPanesByPaneKey }
       : {})
   }
 }

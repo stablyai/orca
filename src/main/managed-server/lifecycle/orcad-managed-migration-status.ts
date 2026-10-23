@@ -9,7 +9,7 @@ import {
 } from '../../../shared/runtime-environments'
 import { listOrcadMigrationSourceCutovers } from '../../ssh/orcad-migration-cutover-journal'
 
-export type OrcadManagedPendingMigration = {
+type OrcadManagedPendingMigration = {
   migrationId: string
   environmentId: string
   name: string

@@ -15,7 +15,8 @@ const sessionCommandsSchema = z.looseObject({
         kind: z.enum(['command', 'skill']),
         kindUnspecified: z.literal(true).optional(),
         description: z.string().optional(),
-        argumentHint: z.string().optional()
+        argumentHint: z.string().optional(),
+        path: z.string().optional()
       })
     )
     .optional()

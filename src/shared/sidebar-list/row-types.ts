@@ -7,6 +7,8 @@ import type { ExecutionHostId } from '../execution-host'
 import type { PRGroupKey } from '../workspace-view/workspace-pr-groups'
 
 export type WorktreeGroupBy = 'none' | 'workspace-status' | 'repo' | 'pr-status'
+/** A row's own registration of its repo; the same repo id can be registered on several hosts. */
+export type RepoOfWorktree = (worktree: Worktree) => Repo | undefined
 export type PinnedWorktreeDisplayPolicy = 'single-location' | 'duplicate-in-groups'
 
 export function getPinnedWorktreeDisplayPolicy(
@@ -54,6 +56,7 @@ export type WorktreeRow = {
   groupDepth: number
   isLastLineageChild: boolean
   lineageChildCount: number
+  lineageChildWorktreeIds?: readonly string[]
   lineageGroupKey?: string
   lineageCollapsed?: boolean
   hostContextLabel?: string

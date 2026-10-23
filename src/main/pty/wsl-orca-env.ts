@@ -15,6 +15,7 @@ import {
   RUNTIME_SOURCE_INCARNATION_ENV,
   RUNTIME_SOURCE_PROFILE_PATH_ENV
 } from '../../shared/runtime-source-env'
+import { CODEX_REMOTE_VIEWER_SSH_CONNECTION } from '../ipc/pty/host-env/codex-terminal-clipboard'
 
 const WSLENV_ENTRY_SEPARATOR = ':'
 
@@ -91,6 +92,8 @@ export function addOrcaWslInteropEnv(env: Record<string, string>): void {
     'ORCA_PANE_KEY/u',
     'ORCA_TAB_ID/u',
     'ORCA_WORKTREE_ID/u',
+    // An id, never a path; agent wrappers and the guest CLI read it like ORCA_WORKTREE_ID.
+    'ORCA_WORKSPACE_ID/u',
     'ORCA_AGENT_LAUNCH_TOKEN/u',
     // The guest plugin uses this marker to select the OpenCode variant that
     // owns the pane when both native and WSL installations are present.
@@ -118,6 +121,8 @@ export function addOrcaWslInteropEnv(env: Record<string, string>): void {
     ...(env.ORCA_PI_SOURCE_AGENT_DIR?.startsWith('/') ? ['ORCA_PI_SOURCE_AGENT_DIR/u'] : []),
     `${ORCA_IMAGE_PROTOCOL_ENV}/u`,
     'CLAUDE_CODE_FORCE_TERMINAL_IMAGES/u',
+    // Why only Orca's marker: a real Windows-side SSH session must not leak into bare guest shells.
+    ...(env.SSH_CONNECTION === CODEX_REMOTE_VIEWER_SSH_CONNECTION ? ['SSH_CONNECTION/u'] : []),
     'ORCA_OMP_FRESH_CONFIG/p',
     ...worktreeSetupWslenvEntries(env)
   ]

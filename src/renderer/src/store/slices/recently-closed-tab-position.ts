@@ -1,5 +1,6 @@
 import { recordLayoutApply } from '@/runtime/layout-apply-send'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { tabOrderAnchor } from '../../../../shared/workspace-layout/tab-order'
 import type { AppState } from '../types'
 
 export type RecentlyClosedTabPosition = {
@@ -207,7 +208,8 @@ function recordReopenedTabPosition(
       type: 'moveTab',
       tabId: tab.id,
       toGroupId: group.id,
-      index
+      index,
+      afterTabId: tabOrderAnchor(group.tabOrder, index)
     })
   }
 }

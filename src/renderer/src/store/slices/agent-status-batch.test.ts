@@ -228,7 +228,7 @@ describe('setAgentStatuses', () => {
     unsubscribe()
   })
 
-  it('coalesces 100 generated tab titles into one post-status publication', async () => {
+  it('coalesces 100 generated tab titles into one post-status publication, or leaves them to main', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(BASE_TIME + 10)
     const main = layoutApplyTestDouble()
@@ -241,7 +241,7 @@ describe('setAgentStatuses', () => {
         return [worktreeId, [makeTab({ id: `tab-${index}`, worktreeId })]]
       })
     )
-    // Tab-bar entries, so a layout-owner build sends the titles to main.
+    // Tab-bar entries, so a layout-owner build leaves the titles to main.
     const unifiedTabsByWorktree = Object.fromEntries(
       Array.from({ length: paneCount }, (_, index) => {
         const worktreeId = `wt-${index}`
@@ -271,17 +271,24 @@ describe('setAgentStatuses', () => {
     const outcomes = store.getState().setAgentStatuses(updates)
 
     expect(outcomes).toEqual(Array(paneCount).fill(true))
-    // A layout-owner build shows the titles once main has them: one layout write for the batch.
-    await vi.waitFor(() =>
-      expect(store.getState().tabsByWorktree['wt-99']?.[0]?.generatedTitle).toBe(
-        'Refactor remote startup module 99'
-      )
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      // Main derives the batch's titles from its own agent status; its frame (not modelled here) is
+      // their one store write, so the window writes only the statuses and sends main nothing.
+      for (let turn = 0; turn < 10; turn += 1) {
+        await Promise.resolve()
+      }
+      unsubscribe()
+      expect(publications).toBe(1)
+      expect(store.getState().tabsByWorktree['wt-99']?.[0]?.generatedTitle).toBeUndefined()
+      expect(main.commands).toEqual([])
+      return
+    }
+    expect(store.getState().tabsByWorktree['wt-99']?.[0]?.generatedTitle).toBe(
+      'Refactor remote startup module 99'
     )
     unsubscribe()
     expect(publications).toBe(2)
-    expect(
-      main.commands.map((command) => (command.type === 'renameTabs' ? command.renames.length : 0))
-    ).toEqual(ORCA_LAYOUT_OWNER_IS_MAIN ? [paneCount] : [])
+    expect(main.commands).toEqual([])
   })
 
   it('coalesces batch freshness requests while preserving standalone scheduling', async () => {

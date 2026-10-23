@@ -1,5 +1,10 @@
 import type { BrowserSetAnnotationViewportBridgeArgs } from '../../shared/browser-annotation-viewport-bridge'
 import type {
+  BrowserPageSiteDisplay,
+  BrowserSiteColorScheme
+} from '../../shared/browser-site-display'
+import type { BrowserPageZoomDirection } from '../../shared/browser-page-zoom'
+import type {
   BrowserIdentityModeSetResult,
   BrowserIdentityModeStatus,
   BrowserUserAgentMode
@@ -17,6 +22,11 @@ import type {
   BrowserPagePromptResponse,
   BrowserPagePromptResult
 } from '../../shared/browser-page-prompt'
+import type {
+  BrowserSitePermission,
+  BrowserSitePermissionDecision,
+  BrowserSitePermissionEntry
+} from '../../shared/browser-site-permission'
 import type {
   BrowserSetGrabModeArgs,
   BrowserSetGrabModeResult,
@@ -55,7 +65,7 @@ import type {
 } from '../../shared/browser-client-page-renderer-protocol'
 
 export type BrowserApi = {
-  /** Absent wherever this client hosts no guests of its own, which is how the web client reads. */
+  /** Absent on clients that host no browser guests, including web clients. */
   readClientHostId?: () => string | null
   onClientPageRendererRequest?: (
     callback: (
@@ -86,17 +96,37 @@ export type BrowserApi = {
   onPagePromptRequest: (callback: (request: BrowserPagePromptRequest) => void) => () => void
   onPagePromptClosed: (callback: (event: { requestId: string }) => void) => () => void
   respondPagePrompt: (response: BrowserPagePromptResponse) => Promise<BrowserPagePromptResult>
-  openDevTools: (args: { browserPageId: string }) => Promise<boolean>
+  /** `inspectAt` (guest viewport coordinates) selects the element there. */
+  openDevTools: (args: {
+    browserPageId: string
+    inspectAt?: { x: number; y: number }
+  }) => Promise<boolean>
+  addWordToDictionary: (args: { browserPageId: string; word: string }) => Promise<boolean>
+  copyImageAt: (args: {
+    browserPageId: string
+    point: { x: number; y: number }
+  }) => Promise<boolean>
   setViewportOverride: (args: {
     browserPageId: string
     override: BrowserViewportOverride | null
   }) => Promise<boolean>
+  getPageSiteDisplay: (args: { browserPageId: string }) => Promise<BrowserPageSiteDisplay | null>
+  /** Site zoom is scoped to the browser profile. */
+  zoomPage: (args: {
+    browserPageId: string
+    direction: BrowserPageZoomDirection
+  }) => Promise<BrowserPageSiteDisplay | null>
+  /** Null makes the site match Orca's theme again. */
+  setPageSiteColorScheme: (args: {
+    browserPageId: string
+    colorScheme: BrowserSiteColorScheme | null
+  }) => Promise<BrowserPageSiteDisplay | null>
   reportViewportScrollState?: (args: {
     browserPageId: string
     state: BrowserViewportScrollState
   }) => void
   setAnnotationViewportBridge: (args: BrowserSetAnnotationViewportBridgeArgs) => Promise<boolean>
-  /** Publishes a client-hosted page's url/title to its runtime over that runtime's host lease. */
+  /** Uses the owning runtime's host lease. */
   publishClientPageMetadata: (args: {
     environmentId: string
     params: BrowserClientPageMetadataParams
@@ -188,11 +218,20 @@ export type BrowserApi = {
     browserFamily: string
     browserProfile?: string
   }) => Promise<BrowserCookieImportResult | null>
-  /** Import-source badges for one environment's client-hosted jars, keyed by profile id. */
+  /** Import sources keyed by browser profile ID. */
   sessionClientRouteImportSources: (args: {
     environmentId: string
   }) => Promise<Record<string, BrowserSessionProfileSource>>
   sessionClearDefaultCookies: () => Promise<boolean>
+  /** Site permissions are local to this computer and browser profile. */
+  sitePermissionsList: (args: { profileId: string }) => Promise<BrowserSitePermissionEntry[]>
+  /** Null forgets the answer so the site is asked again. */
+  sitePermissionsSet: (args: {
+    profileId: string
+    origin: string
+    permission: BrowserSitePermission
+    decision: BrowserSitePermissionDecision | null
+  }) => Promise<BrowserSitePermissionEntry[]>
   notifyActiveTabChanged: (args: { browserPageId: string }) => Promise<boolean>
 }
 

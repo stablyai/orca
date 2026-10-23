@@ -10,7 +10,7 @@ import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import type { Store } from '../persistence'
 import { isFrozenOrcadSourceSessionPartition } from '../ssh/orcad-retained-source'
-import { windowViewSaveForMain } from '../persistence/window-save-view'
+import { windowViewSaveForMain, type ReconnectFactsFor } from '../persistence/window-save-view'
 import { reportWindowSaveDrift } from '../persistence/window-save-divergence'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 
@@ -90,17 +90,19 @@ function stagedSessionForMain(
   store: Store,
   state: WorkspaceSessionState,
   hostId: ExecutionHostId | undefined,
-  quitResumeRecordsFor: QuitResumeRecordsFor
+  quitResumeRecordsFor: QuitResumeRecordsFor,
+  reconnectFactsFor: ReconnectFactsFor | undefined
 ): WorkspaceSessionState {
   const session = store.getWorkspaceSession(hostId)
   const stored = withQuitSleepRecords(hostId, session, quitResumeRecordsFor(session))
   reportWindowSaveDrift(stored, state, hostId, 'shutdown-checkpoint')
-  return windowViewSaveForMain(stored, state, hostId)
+  return windowViewSaveForMain(stored, state, hostId, reconnectFactsFor)
 }
 
 export function registerRendererShutdownCheckpointHandler(
   store: Store,
-  quitResumeRecordsFor: QuitResumeRecordsFor = () => []
+  quitResumeRecordsFor: QuitResumeRecordsFor = () => [],
+  reconnectFactsFor?: ReconnectFactsFor
 ): void {
   // Why: beforeunload cannot await, so the sync reply only reports staging.
   // Durability is joined out-of-band by paths that are about to navigate.
@@ -113,7 +115,7 @@ export function registerRendererShutdownCheckpointHandler(
         if (!isFrozenOrcadSourceSessionPartition(store, hostId)) {
           store.stageWorkspaceSessionBeforeUnload(
             ORCA_LAYOUT_OWNER_IS_MAIN
-              ? stagedSessionForMain(store, state, hostId, quitResumeRecordsFor)
+              ? stagedSessionForMain(store, state, hostId, quitResumeRecordsFor, reconnectFactsFor)
               : state,
             hostId
           )

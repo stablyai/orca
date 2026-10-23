@@ -4,10 +4,7 @@ import { detectLanguage } from '@/lib/language-detect'
 import { joinPath } from '@/lib/path'
 
 export function openUncommittedEntry(
-  state: Pick<
-    AppState,
-    'trackConflictPath' | 'openConflictFile' | 'openFile' | 'setEditorViewMode' | 'openDiff'
-  >,
+  state: Pick<AppState, 'trackConflictPath' | 'openConflictFile' | 'openFile' | 'openDiff'>,
   worktreeId: string,
   worktreePath: string,
   entry: GitStatusEntry,
@@ -22,12 +19,15 @@ export function openUncommittedEntry(
     return
   }
   const filePath = joinPath(worktreePath, entry.path)
-  if (language === 'markdown' && entry.area === 'unstaged') {
+  if (
+    language === 'markdown' &&
+    entry.area !== 'staged' &&
+    (entry.status === 'added' || entry.status === 'untracked')
+  ) {
     state.openFile(
       { filePath, relativePath: entry.path, worktreeId, language, mode: 'edit' },
       options
     )
-    state.setEditorViewMode(filePath, 'changes')
     return
   }
   state.openDiff(worktreeId, filePath, entry.path, language, entry.area === 'staged', options)

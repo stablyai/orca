@@ -51,7 +51,7 @@ export default function NativeConnectionLogRoute() {
   const selectedId = resolveDiagnosticsHostId(hosts, params.hostId, manualSelection, routeKey)
   const selected = hosts.find((host) => host.id === selectedId) ?? null
   const { client, state } = useHostClient(selected?.id)
-  const { desktopAppVersion } = useHostStatusGates({
+  const { desktopAppVersion, statusPending } = useHostStatusGates({
     hostId: selected?.id,
     client,
     connState: state
@@ -78,9 +78,13 @@ export default function NativeConnectionLogRoute() {
   const device = useMemo(
     () =>
       selected
-        ? createNativeDiagnosticsOperations(selected, clientContext, desktopAppVersion)
+        ? createNativeDiagnosticsOperations(
+            selected,
+            clientContext,
+            statusPending ? null : desktopAppVersion
+          )
         : null,
-    [selected, clientContext, desktopAppVersion]
+    [selected, clientContext, desktopAppVersion, statusPending]
   )
 
   return (

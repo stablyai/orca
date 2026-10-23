@@ -167,7 +167,7 @@ export function sessionSlashCommandSuggestions(
 }
 
 /** A skill the running session reported: its name, and what it said the skill does. */
-export type NativeChatSessionSkill = Pick<AgentSessionSlashCommand, 'name' | 'description'>
+export type NativeChatSessionSkill = Pick<AgentSessionSlashCommand, 'name' | 'description' | 'path'>
 
 /** The skills the session reported, in the order it reported them. */
 export function sessionReportedSkills(
@@ -175,7 +175,13 @@ export function sessionReportedSkills(
 ): readonly NativeChatSessionSkill[] {
   return reported.flatMap((entry) =>
     entry.kind === 'skill'
-      ? [{ name: entry.name, ...(entry.description ? { description: entry.description } : {}) }]
+      ? [
+          {
+            name: entry.name,
+            ...(entry.description ? { description: entry.description } : {}),
+            ...(entry.path ? { path: entry.path } : {})
+          }
+        ]
       : []
   )
 }

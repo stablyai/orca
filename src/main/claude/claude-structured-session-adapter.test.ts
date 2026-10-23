@@ -177,7 +177,7 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
         body: USER_MESSAGE,
         fence: 7
       })
-    ).resolves.toEqual({ state: 'admitted' })
+    ).resolves.toMatchObject({ state: 'admitted' })
     const sent = claude.connections[0]!.sent[0]!
     claude.connections[0]!.handlers.onMessage?.({
       ...sent,
@@ -219,7 +219,7 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
           fence: 7,
           requestedAt
         })
-      ).resolves.toEqual({ state: 'admitted' })
+      ).resolves.toMatchObject({ state: 'admitted' })
     }
     const echo = (index: number): void => {
       const sent = connection.sent[index]!
@@ -270,7 +270,7 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
         body: USER_MESSAGE,
         fence: 7
       })
-    ).resolves.toEqual({ state: 'admitted' })
+    ).resolves.toMatchObject({ state: 'admitted' })
     expect(connection.sent).toHaveLength(1)
     connection.handlers.onMessage?.({
       ...connection.sent[0],

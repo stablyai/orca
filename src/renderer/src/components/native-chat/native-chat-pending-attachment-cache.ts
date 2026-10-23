@@ -31,6 +31,16 @@ export function nativeChatPendingAttachmentSnapshot(
   return pendingCache.get(scopeKey) ?? EMPTY
 }
 
+/** Pending chips are user content before their file paths settle into the draft. */
+export function nativeChatComposerHasUserContent(scopeKey: string): boolean {
+  const draft = readNativeChatComposerDraft(scopeKey)
+  return (
+    draft.text.trim() !== '' ||
+    draft.images.length > 0 ||
+    nativeChatPendingAttachmentSnapshot(scopeKey).length > 0
+  )
+}
+
 function writePending(scopeKey: string, next: readonly NativeChatComposerImageAttachment[]): void {
   if (next.length === 0) {
     pendingCache.delete(scopeKey)

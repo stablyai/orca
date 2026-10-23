@@ -300,6 +300,7 @@ export function createClaudeJournalTranslator(
     childToolOwner: childQueries.childToolOwner,
     childActivity: childQueries.childActivity,
     retryPendingTaskRows: () => backgroundTasks.retryPendingWrites(),
+    retryPendingCancellations: () => prompts.retryPendingCancellations(),
     get pendingStreamedBlocks() {
       return streamedText.pending + streamedThinking.pending
     },

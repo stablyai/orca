@@ -20,6 +20,13 @@ import {
   registerWorktreeActivationReset
 } from './worktree-activation.test-fixture'
 
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+
 const defaultChat = vi.hoisted(() => ({
   open: vi.fn(),
   awaitsDetection: vi.fn(),

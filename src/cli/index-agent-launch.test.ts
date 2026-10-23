@@ -332,7 +332,8 @@ describe('orca cli agent launch', () => {
   it.each([
     [['--agent', 'codex', '--effort', 'high'], '--effort requires --model'],
     [['--model', 'gpt-5.5'], '--model requires --agent'],
-    [['--agent', 'codex', '--model', 'gpt-5.5', '--effort', 'turbo'], 'does not support effort']
+    [['--agent', 'codex', '--model', 'gpt-5.5', '--effort', 'turbo'], 'does not support effort'],
+    [['--surface', 'terminal'], '--surface requires --agent']
   ])('refuses %j before creating anything', async (flags, message) => {
     const output = await runRefused([
       'worktree',

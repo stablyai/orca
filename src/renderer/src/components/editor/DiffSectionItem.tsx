@@ -19,6 +19,7 @@ import { submitDiffSectionComment } from './diff-section-comment-submit'
 import type { DiffSectionItemProps } from './diff-section-item-props'
 import { useDiffSectionModelLifecycle } from './use-diff-section-model-lifecycle'
 import { hasLayoutBox } from '@/hooks/virtualized-hidden-row-measurement'
+import { DiffSectionSaveConflictBar } from './DiffSectionSaveConflictBar'
 
 export function DiffSectionItem({
   section,
@@ -317,6 +318,12 @@ export function DiffSectionItem({
         trailingContent={renderHeaderTrailingContent?.(section, index)}
       />
 
+      {section.saveConflict && (
+        <DiffSectionSaveConflictBar
+          onReload={() => retrySection(index)}
+          onOverwrite={() => void handleSectionSaveRef.current(index, 'overwrite')}
+        />
+      )}
       {!section.collapsed && (
         <DiffSectionBody
           section={section}

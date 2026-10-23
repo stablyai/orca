@@ -5,7 +5,6 @@ import {
   type CancelledInstallWaiter,
   type CancelledInstallWaiters,
   type LocalWatcherInstallToken,
-  type RemoteWatcherInstallToken,
   UNWATCHABLE_ROOT_CACHE_MAX,
   watcherLifecycleState
 } from './filesystem-watcher-lifecycle-state'
@@ -125,56 +124,6 @@ export function addLocalWatchListener(rootKey: string, sender: WebContents): voi
   registerWatcherSenderCleanup(sender)
 }
 
-export function cancelInFlightRemoteInstallIfUnowned(token: RemoteWatcherInstallToken): void {
-  token.cancelled = token.listeners.size === 0
-  if (!token.cancelled || token.abortScheduled || token.abortController.signal.aborted) {
-    return
-  }
-  token.abortScheduled = true
-  // Why: a replacement sender can synchronously revive the shared install during a renderer handoff; otherwise stop the relay crawl next microtask.
-  queueMicrotask(() => {
-    token.abortScheduled = false
-    if (token.cancelled && token.listeners.size === 0) {
-      token.abortController.abort()
-    }
-  })
-}
-
-export function addInFlightRemoteInstallListener(
-  token: RemoteWatcherInstallToken,
-  sender: WebContents
-): void {
-  if (sender.isDestroyed() || token.abortController.signal.aborted) {
-    return
-  }
-  token.listeners.set(sender.id, sender)
-  token.cancelled = false
-  registerWatcherSenderCleanup(sender)
-}
-
-export function addRemoteWatchListener(key: string, sender: WebContents): void {
-  const state = watcherLifecycleState.remoteWatchers.get(key)
-  if (!state) {
-    return
-  }
-  state.listeners.set(sender.id, sender)
-  registerWatcherSenderCleanup(sender)
-}
-
-export function releaseRemoteWatchListener(key: string, senderId: number): void {
-  const state = watcherLifecycleState.remoteWatchers.get(key)
-  if (!state) {
-    return
-  }
-  state.listeners.delete(senderId)
-  if (state.listeners.size > 0) {
-    return
-  }
-  state.unwatch()
-  state.batch.close()
-  watcherLifecycleState.remoteWatchers.delete(key)
-}
-
 export function addCancelledInstallWaiter(
   waitersByKey: CancelledInstallWaiters,
   key: string,
@@ -216,7 +165,6 @@ export function forgetCancelledInstallWaiter(
 export function registerWatcherSenderCleanup(sender: WebContents): AbortSignal {
   return captureWatcherSenderLifetime(sender, () => {
     cleanupLocalWatchersForSender(sender.id)
-    cleanupRemoteWatchersForSender(sender.id)
   })
 }
 
@@ -247,70 +195,5 @@ function cleanupLocalWatchersForSender(senderId: number): void {
       trackDetachedLocalUnsubscribe(key, watchedRoot)
       watcherLifecycleState.watchedRoots.delete(key)
     }
-  }
-}
-
-function cleanupRemoteWatchersForSender(senderId: number): void {
-  for (const key of Array.from(watcherLifecycleState.cancelledRemoteInstallWaiters.keys())) {
-    forgetCancelledInstallWaiter(watcherLifecycleState.cancelledRemoteInstallWaiters, key, senderId)
-  }
-  for (const key of Array.from(watcherLifecycleState.desiredRemoteWatchers.keys())) {
-    forgetDesiredRemoteWatcher(key, senderId)
-  }
-  for (const resync of watcherLifecycleState.remoteWatcherResyncStates.values()) {
-    resync.listeners.delete(senderId)
-  }
-  for (const [key, suspended] of watcherLifecycleState.suspendedRemoteWatcherListeners) {
-    suspended.listeners.delete(senderId)
-    if (suspended.listeners.size === 0) {
-      watcherLifecycleState.suspendedRemoteWatcherListeners.delete(key)
-    }
-  }
-  for (const token of watcherLifecycleState.inFlightRemoteInstalls.values()) {
-    token.listeners.delete(senderId)
-    cancelInFlightRemoteInstallIfUnowned(token)
-  }
-  for (const [key, retry] of watcherLifecycleState.pendingRemoteWatcherRetryListeners) {
-    retry.listeners.delete(senderId)
-    if (retry.listeners.size === 0) {
-      const timer = watcherLifecycleState.pendingRemoteWatcherRetries.get(key)
-      if (timer) {
-        clearTimeout(timer)
-        watcherLifecycleState.pendingRemoteWatcherRetries.delete(key)
-      }
-      watcherLifecycleState.pendingRemoteWatcherRetryListeners.delete(key)
-    }
-  }
-  for (const key of Array.from(watcherLifecycleState.remoteWatchers.keys())) {
-    releaseRemoteWatchListener(key, senderId)
-  }
-}
-
-export function clearRemoteWatcherResync(key: string): void {
-  const resync = watcherLifecycleState.remoteWatcherResyncStates.get(key)
-  if (resync?.timer) {
-    clearTimeout(resync.timer)
-  }
-  watcherLifecycleState.remoteWatcherResyncStates.delete(key)
-}
-
-export function clearDormantRemoteWatcher(key: string): void {
-  const dormant = watcherLifecycleState.dormantRemoteWatchers.get(key)
-  if (dormant) {
-    clearTimeout(dormant.timer)
-    watcherLifecycleState.dormantRemoteWatchers.delete(key)
-  }
-}
-
-export function forgetDesiredRemoteWatcher(key: string, senderId: number): void {
-  const desired = watcherLifecycleState.desiredRemoteWatchers.get(key)
-  if (!desired) {
-    return
-  }
-  desired.listeners.delete(senderId)
-  if (desired.listeners.size === 0) {
-    watcherLifecycleState.desiredRemoteWatchers.delete(key)
-    clearRemoteWatcherResync(key)
-    clearDormantRemoteWatcher(key)
   }
 }

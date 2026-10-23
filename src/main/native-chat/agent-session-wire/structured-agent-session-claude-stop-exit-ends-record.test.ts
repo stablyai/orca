@@ -42,10 +42,13 @@ let claude: ReturnType<typeof fakeClaude>
 let log: ReturnType<typeof recordingStructuredAgentSessionLogger>
 let persistHandle: ReturnType<typeof vi.fn<() => Promise<void>>>
 let childWork: string[]
+let now: number
+let initialAttach: ReturnType<typeof hostTestAttachParams>
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-claude-stop-exit-ends-record-'))
   resetHostTestOperationIds()
+  now = NOW
   log = recordingStructuredAgentSessionLogger()
   persistHandle = vi.fn(async () => undefined)
   childWork = []
@@ -80,7 +83,7 @@ beforeEach(async () => {
     },
     openConnection: claude.openConnection,
     readProcessStartTime: async () => 1_700_000_000_000,
-    now: () => NOW
+    now: () => now
   })
   store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({
@@ -93,20 +96,21 @@ beforeEach(async () => {
     logger: log.logger,
     // Ticked by hand only, and with no idle window: a tick reaps whatever is at rest.
     idleSweep: { intervalMs: 3_600_000, idleMs: 0 },
-    now: () => NOW
+    now: () => now
   })
-  const params = hostTestAttachParams(null, {
+  initialAttach = hostTestAttachParams(null, {
     provider: 'claude',
     agent: 'claude',
     accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: join(root, 'claude-home') },
     providerHandle: { kind: 'claude', sessionId: PROVIDER_SESSION_ID, leafUuid: null }
   })
-  expect(await host.attach(CALLER, params)).toMatchObject({ ok: true })
+  expect(await host.attach(CALLER, initialAttach)).toMatchObject({ ok: true })
   await vi.waitFor(() => expect(host.readStatusSummary(SESSION)?.hostExecutionPhase).toBe('ready'))
   await Promise.all(lifecycle)
 })
 
 afterEach(async () => {
+  vi.restoreAllMocks()
   await adapter.closeAll()
   await host.flushAllStreamedEvents()
   await rm(root, { recursive: true, force: true })
@@ -524,17 +528,70 @@ it('has the idle reaper join a close still unverifiable, ending the record with 
   expect(host.hasSession(SESSION)).toBe(false)
 })
 
-it("ends a Claude journal-sink failure as Orca's own fault, never a quiet rest", async () => {
+it('retains exit ownership through kept reattach and final-tail failure recovery', async () => {
   const connection = claude.connections[0]!
   await openTurn(connection)
-
-  host['eventRecovery'].recoverAfterSinkFailure(SESSION, new Error('journal write failed'))
-
-  await eventually(() => expect(child()).toBeNull())
+  const pending = await send('also held at exit')
+  await eventually(() => expect(wrote(connection, 'also held at exit')).toBe(true))
+  const exiting = child()!
+  const originalSink = host['runtimeState'].currentEventSink(SESSION)!
+  const lateEvent = deferred<void>()
+  const handle = host.handleAdapterEvent.bind(host)
+  vi.spyOn(host, 'handleAdapterEvent').mockImplementation((event) =>
+    event.type === 'ended' ? lateEvent.promise.then(() => handle(event)) : handle(event)
+  )
+  const journal = host['sessions'].get(SESSION)!.journal
+  const append = journal.appendResolvedItem.bind(journal)
+  vi.spyOn(journal, 'appendResolvedItem').mockImplementationOnce(async (resolve, options) => {
+    await append(resolve, options)
+    now += 30_000
+    throw new Error('final journal write acknowledgement lost')
+  })
+  const reserved = vi.fn()
+  const continueAttach = deferred<void>()
+  const reserve = store.reserveOwner.bind(store)
+  vi.spyOn(store, 'reserveOwner').mockImplementationOnce(async (request) => {
+    const result = await reserve(request)
+    reserved()
+    await continueAttach.promise
+    return result
+  })
+  const recovery = vi.spyOn(host['eventRecovery'], 'recoverAfterSinkFailure')
+  // A repeated attach replays its original operation; a new one cannot take a live lease.
+  const reattaching = host.attach(CALLER, initialAttach)
+  try {
+    await eventually(() => expect(reserved).toHaveBeenCalledOnce())
+    connection.exitVerdict = { root: 'exited', tree: 'unverifiable' }
+    connection.handlers.onExit?.(new Error('claude exited'))
+    await eventually(() => expect(recovery).toHaveBeenCalledOnce())
+    expect(originalSink.state().failed).toBe(true)
+    expect(adapter.heldSends(SESSION)?.size).toBe(0)
+    continueAttach.resolve()
+    await expect(reattaching).resolves.toMatchObject({ ok: true })
+    await eventually(() => expect(child()).toBeNull())
+  } finally {
+    continueAttach.resolve()
+    lateEvent.resolve()
+  }
   expect(host['sessions'].get(SESSION)?.lastEndedChild).toMatchObject({
     cause: 'exit',
     failure: { kind: 'hostFault' }
   })
+  expect(exiting.exitObservation?.()).toMatchObject({ observedAt: NOW })
+  expect(exiting.exitObservation?.().heldSends).toContain(pending)
+  expect(exiting.exitObservation).toBe(originalSink.exitObservation)
+  expect(claude.connections).toHaveLength(1)
+  const snapshot = await host.journalSnapshot(SESSION)
+  expect(snapshot.items).toContainEqual(
+    expect.objectContaining({
+      body: expect.objectContaining({ kind: 'status', failure: { kind: 'hostFault' } })
+    })
+  )
+  expect(snapshot.items).toContainEqual(
+    expect.objectContaining({
+      body: expect.objectContaining({ kind: 'turn', state: 'interrupted', completedAt: NOW })
+    })
+  )
   expect(connection.closeCount).toBe(1)
 })
 

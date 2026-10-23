@@ -30,6 +30,10 @@ import {
   replaceHostTestState
 } from './structured-agent-session-host-test-harness'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
+import {
+  editPersistedTestAgentSessionStore,
+  openTestAgentSessionRecordStore
+} from '../../runtime/agent-session-record-store-test-harness'
 import { StructuredAgentRegistry } from './structured-agent-registry'
 import { CODEX_STRUCTURED_AGENT } from '../../codex/codex-structured-agent-definition'
 import {
@@ -751,18 +755,26 @@ it('ignores a ledger-only compaction record with no command receipt (B15)', asyn
     hostFingerprint: older.envelope.payloadFingerprint,
     now: HOST_TEST_NOW
   })
-  await state.store.setConversationCommand(
-    SESSION,
-    state.store.getRecord(SESSION)!.lease.runtimeFence,
-    {
+  const fence = state.store.getRecord(SESSION)!.lease.runtimeFence
+  await state.host.close(SESSION, 'evict')
+  await state.host.flushAllStreamedEvents()
+  await editPersistedTestAgentSessionStore(state.root, (persisted) => {
+    persisted.records[SESSION].conversationCommand = {
       command: 'compact',
-      runtimeFence: state.store.getRecord(SESSION)!.lease.runtimeFence,
+      runtimeFence: fence,
       operationId: older.envelope.clientOperationId,
       callerKey: CALLER.callerKey,
       phase: 'prepared',
       state: 'unknown'
     }
-  )
+  })
+  const store = await openTestAgentSessionRecordStore(state.root)
+  replaceHostTestState({
+    store,
+    host: new StructuredAgentSessionHost({ ...state.host.deps, store })
+  })
+  state = hostTestState()
+  await state.host.restoreReadableSessions(store.listVisibleSessionIds())
 
   await expect(state.host.send(CALLER, sendParams('still works'))).resolves.toMatchObject({
     ok: true

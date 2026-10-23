@@ -1,4 +1,5 @@
 import type { LocalGitExecOptions } from './repo-default-base-ref'
+import type { GitExecOptions } from './command-runner/git-exec-options'
 import { toWslExecutionSpace } from '../../shared/wsl-paths'
 import { gitExecFileAsync } from './runner'
 import { resolveRevParsePath } from './worktree-path-comparison'
@@ -11,7 +12,8 @@ import { resolveRevParsePath } from './worktree-path-comparison'
  * same repo" means across every worktree that points at it.
  */
 
-export type CanonicalRepoKeyOptions = LocalGitExecOptions
+export type CanonicalRepoKeyOptions = LocalGitExecOptions &
+  Pick<GitExecOptions, 'signal' | 'canStart'>
 
 const CACHE_MAX = 512
 const cache = new Map<string, string>()
@@ -62,7 +64,11 @@ export async function getCanonicalRepoKey(
     if (commonDir) {
       return remember(cacheKey, `${runtimeKey}::${commonDir}`)
     }
-  } catch {
+  } catch (error) {
+    // Cancellation is unavailable identity, not a caller-path identity to cache.
+    if (options.signal?.aborted || (error instanceof Error && error.name === 'AbortError')) {
+      throw error
+    }
     // The caller path remains a safe serialization key when canonicalization fails.
   }
   return remember(cacheKey, cacheKey)

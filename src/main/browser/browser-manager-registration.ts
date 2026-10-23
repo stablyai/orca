@@ -72,6 +72,7 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
       this.worktreeIdByTabId.set(browserTabId, worktreeId)
     }
     this.certificateTrustController?.onGuestRegistered(webContentsId, browserTabId)
+    this.siteDisplayController?.onGuestRegistered(guest, sessionProfileId ?? null)
 
     this.setupContextMenu(browserTabId, guest)
     this.setupGrabShortcut(browserTabId, guest)

@@ -139,7 +139,7 @@ describe('the provider report corrects the pill', () => {
     claude.connections[0]!.handlers.onMessage?.(initFrame('claude-sonnet-5'))
 
     const corrected = await adapter.readOptions({ sessionId: 'session-1', fence: 7 })
-    expect(modelValue(corrected)).toBe('sonnet')
+    expect(modelValue(corrected)).toBe('claude-sonnet-5')
     expect(corrected.current.confirmed).toContain('model')
   })
 
@@ -168,7 +168,7 @@ describe('confirmation never outlives the write it belongs to', () => {
       reportedOptions: {},
       optionMutationSequence: 0,
       confirmedOptions: new Set<string>(),
-      reusableOptions: new Map(),
+      appliedInputOptions: new Map(),
       connection: {
         supportedModels: async () => CATALOG,
         applyFlagSettings: async (s: { effortLevel?: string }) => {

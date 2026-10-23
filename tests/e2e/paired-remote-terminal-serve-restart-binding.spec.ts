@@ -47,6 +47,9 @@ import {
 const scratch = createRetentionFixtureDirectory()
 const fixturePath = path.join(scratch, 'serve-restart-binding-terminal.mjs')
 const sinkPath = path.join(scratch, 'serve-restart-binding-terminal.log')
+const LAYOUT_OWNER_BUILD = existsSync(
+  path.join(process.cwd(), 'out', 'main', 'ORCA_LAYOUT_OWNER_MAIN')
+)
 
 writeFileSync(
   fixturePath,
@@ -634,29 +637,33 @@ test('retains a verified mirrored PTY binding through a serve restart pending sn
     expect(host.app.process().pid, 'The serve Electron process must actually be replaced').not.toBe(
       hostPidBeforeRestart
     )
-    let pendingReceipt: PairedTerminalSnapshotReceipt | null = null
-    await expect
-      .poll(
-        async () => {
-          pendingReceipt =
-            (await readPairedTerminalSnapshotProbe(client!.page)).receipts.find(
-              (receipt) => receipt.status === 'pending-handle'
-            ) ?? null
-          return pendingReceipt
-        },
-        {
-          timeout: 60_000,
-          message: 'Paired renderer never received the replacement host pending-handle frame'
-        }
-      )
-      .not.toBeNull()
-    expect(pendingReceipt).toMatchObject({
-      leafId: terminal.leafId,
-      parentTabId: terminal.parentTabId,
-      ptyId: terminal.ptyId,
-      status: 'pending-handle',
-      terminal: null
-    })
+    // Layout-owner build: main's load binds the pane again from its tab row while the PTY lives, so
+    // the replacement host publishes it ready at once and never pending.
+    if (!LAYOUT_OWNER_BUILD) {
+      let pendingReceipt: PairedTerminalSnapshotReceipt | null = null
+      await expect
+        .poll(
+          async () => {
+            pendingReceipt =
+              (await readPairedTerminalSnapshotProbe(client!.page)).receipts.find(
+                (receipt) => receipt.status === 'pending-handle'
+              ) ?? null
+            return pendingReceipt
+          },
+          {
+            timeout: 60_000,
+            message: 'Paired renderer never received the replacement host pending-handle frame'
+          }
+        )
+        .not.toBeNull()
+      expect(pendingReceipt).toMatchObject({
+        leafId: terminal.leafId,
+        parentTabId: terminal.parentTabId,
+        ptyId: terminal.ptyId,
+        status: 'pending-handle',
+        terminal: null
+      })
+    }
 
     let recoveredSurface: HostSurface | null = null
     await expect
@@ -676,6 +683,10 @@ test('retains a verified mirrored PTY binding through a serve restart pending sn
       ptyId: terminal.ptyId,
       status: 'ready'
     })
+    if (LAYOUT_OWNER_BUILD) {
+      const { receipts } = await readPairedTerminalSnapshotProbe(client.page)
+      expect(receipts.filter((receipt) => receipt.status === 'pending-handle')).toEqual([])
+    }
 
     const recoveredRemotePtyId = toRemoteRuntimePtyId(liveHandle!, client.environmentId)
     await waitForClientBinding(client, worktreeId, terminal, recoveredRemotePtyId)

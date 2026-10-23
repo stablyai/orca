@@ -7,7 +7,11 @@ import {
   isRepoSearchRefsRequestLimit
 } from '../../../shared/repo-search-limits'
 import { isFolderRepo } from '../../../shared/repo-kind'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  getRepoRoutingConnectionId,
+  type ExecutionHostId
+} from '../../../shared/execution-host'
 import { getBaseRefDefault, getRemoteCount, searchBaseRefDetails } from '../../git/repo'
 
 export function registerBaseRefQueryHandlers(store: Store): void {
@@ -23,7 +27,7 @@ export function registerBaseRefQueryHandlers(store: Store): void {
         return { defaultBaseRef: null, remoteCount: 0 }
       }
       // Why: an SSH repo's git data lives on a host this process does not serve.
-      if (repo.connectionId) {
+      if (getRepoRoutingConnectionId(repo)) {
         return { defaultBaseRef: null, remoteCount: 0 }
       }
       // Why: run in parallel; a remote-count failure must not break default detection.
@@ -71,7 +75,7 @@ async function searchBaseRefDetailsForRepo(
   // Keep the public IPC shape forgiving while bounding Git and retained results
   // for callers that request an unusually large page.
   const limit = clampRepoSearchRefsLimit(requestedLimit)
-  if (repo.connectionId) {
+  if (getRepoRoutingConnectionId(repo)) {
     return []
   }
   return searchBaseRefDetails(repo.path, args.query, limit)

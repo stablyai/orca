@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   AUDIT_EVENT_RETENTION_MS,
+  hashCredential,
   CONFIRM_RESULT_RETENTION_MS,
   RelayCredentialStore,
   type RelayIdentity
@@ -342,26 +343,52 @@ describe('credential cleanup invite reaper', () => {
   })
 
   it('still replays a confirm result inside retention', async () => {
-    // The one reader: a retried confirm on the same basis gets the stored answer back.
     const database = await openInMemoryRelayDatabase()
-    const store = new RelayCredentialStore(database, () => NOW)
-    await database.query(
-      `INSERT INTO relay_confirm_results
-       (user_id, relay_host_id, req_id, basis_conn_id, tuple_json, result_json, committed_at)
-       VALUES (?, ?, 'confirm-1', 'basis-1', '{}', ?, ?)`,
-      [identity.userId, identity.relayHostId, JSON.stringify({ v: 1, reqId: 'confirm-1' }), NOW - DAY_MS]
-    )
-
-    await store.cleanup()
-
-    expect(
-      await store.confirmResume({
+    let now = NOW - DAY_MS
+    const store = new RelayCredentialStore(database, () => now)
+    try {
+      const invite = await store.createInvite(identity, 'device-1')
+      const reservation = await store.reserveCredential(identity.relayHostId, invite.inviteToken)
+      if (!reservation) {
+        throw new Error('invite did not reserve')
+      }
+      await store.recordConnectionBasis({
+        ...reservation,
+        basisConnId: 'invite-basis',
+        owningControlGeneration: 1,
+        deadline: reservation.leaseExpiresAt
+      })
+      await store.installCredential({
+        ...identity,
+        relayDeviceId: 'device-1',
+        reqId: 'install-1',
+        newResumeTokenHash: hashCredential('resume-token'),
+        owningControlGeneration: 1,
+        authorization: { mode: 'relay-basis', basisConnId: 'invite-basis' }
+      })
+      const resume = await store.reserveCredential(identity.relayHostId, 'resume-token')
+      if (!resume) {
+        throw new Error('resume did not reserve')
+      }
+      await store.recordConnectionBasis({
+        ...resume,
+        basisConnId: 'resume-basis',
+        owningControlGeneration: 1,
+        deadline: resume.leaseExpiresAt
+      })
+      const request = {
         ...identity,
         reqId: 'confirm-1',
-        basisConnId: 'basis-1',
+        basisConnId: 'resume-basis',
         owningControlGeneration: 1
-      })
-    ).toEqual({ v: 1, reqId: 'confirm-1' })
-    await database.close()
+      }
+      const confirmed = await store.confirmResume(request)
+      expect(confirmed).toMatchObject({ renewed: true, acceptedAs: 'current' })
+      now = NOW
+      await store.cleanup()
+      expect(await store.confirmResume(request)).toEqual(confirmed)
+    } finally {
+      await database.close()
+    }
   })
 })

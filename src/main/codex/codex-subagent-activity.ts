@@ -19,6 +19,9 @@ import {
   readCodexCollabAgentToolCall
 } from './codex-collab-agent-tool-call'
 import type { CodexThreadItem } from './codex-thread-item-identity'
+import { codexSubagentPathLabel, codexSubagentPathSegments } from '../../shared/codex-agent-path'
+
+export { codexSubagentPathSegments } from '../../shared/codex-agent-path'
 
 export const CODEX_SUBAGENT_ITEM_TYPE = 'subAgentActivity'
 export const CODEX_TOKEN_USAGE_METHOD = 'thread/tokenUsage/updated'
@@ -54,11 +57,6 @@ export function readCodexSubagentActivity(item: CodexThreadItem): CodexSubagentA
   }
 }
 
-/** Path segments, empty ones dropped: `/root/list_directory` → 2 segments. */
-export function codexSubagentPathSegments(agentPath: string | null): string[] {
-  return agentPath === null ? [] : agentPath.split('/').filter((part) => part.length > 0)
-}
-
 /** The one path segment that names the parent turn itself rather than a child.
  *  Compared after the same normalization the label uses, not against the raw
  *  string: `/root/` and `/root//` are the same node as `/root`, and a check that
@@ -88,8 +86,7 @@ export function isCodexRootAgentActivity(activity: CodexSubagentActivity): boole
  *  because the caller keys its collision ordinals on this string: ` read ` and
  *  `read` render identically and must therefore collide. */
 export function codexSubagentLabel(activity: CodexSubagentActivity): string | null {
-  const trailing = codexSubagentPathSegments(activity.agentPath).at(-1)?.trim()
-  return trailing !== undefined && trailing.length > 0 ? trailing : null
+  return codexSubagentPathLabel(activity.agentPath)
 }
 
 /** A child the item says exists, from either wire shape Codex announces one with. */

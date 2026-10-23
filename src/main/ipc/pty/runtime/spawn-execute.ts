@@ -9,8 +9,12 @@ import {
   assertSpawnReplyWasLive,
   reconcileAgentSessionOwnerListings
 } from '../pane/agent-session-owners'
-import { spawnForStablePane, resolveStablePaneOwner } from '../pane/stable-owner'
-import { clearProviderPtyState } from '../provider/state-cleanup'
+import { resolveStablePaneOwner } from '../pane/stable-owner'
+import {
+  assertPaneStillExists,
+  excludeAbsentOwnerReplay,
+  PaneOwnerContentionError
+} from '../pane/pane-spawn-operation'
 import { isProviderAgentSessionOwnerLive } from '../provider/liveness'
 import { failPtySpawnExecute } from '../spawn-execute-failure'
 import type { RuntimePtySpawnState } from './spawn-state'
@@ -24,7 +28,14 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
     ? await acquireWorktreeSpawn.call(
         runtime,
         spawnWorktreeTarget(args.worktreeId, args.connectionId),
-        { refuseSleptWorktree: args.refuseSleptWorktree }
+        {
+          refuseSleptWorktree: args.refuseSleptWorktree,
+          // A pre-adopted stable pane attaches to its live owner, not a new terminal.
+          reattachSessionId: ctx.preAdoptedStablePane?.owner.ptyId ?? args.sessionId,
+          requireAttachOnly: () => {
+            ctx.spawnOptions = { ...ctx.spawnOptions, attachOnly: true }
+          }
+        }
       )
     : undefined
   let awaitingAnotherStart = false
@@ -36,20 +47,34 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
       ? ctx.preAdoptedStablePane.owner
       : args.agentSessionEnsure
         ? null
-        : resolveStablePaneOwner(
-            ctx.deps.runtime,
-            ctx.deps.store,
-            ctx.spawnIdentityPaneKey,
-            args.worktreeId,
-            args.connectionId
+        : excludeAbsentOwnerReplay(
+            resolveStablePaneOwner(
+              ctx.deps.runtime,
+              ctx.deps.store,
+              ctx.spawnIdentityPaneKey,
+              args.worktreeId,
+              args.connectionId
+            ),
+            args.paneSpawnOperation?.absentOwner
           )
-    const expectedPtyId =
-      stablePaneOwnerCandidate?.ptyId ?? ctx.effectiveSessionAppId ?? ctx.sessionId
+    if (stablePaneOwnerCandidate) {
+      throw new PaneOwnerContentionError()
+    }
+    if (args.paneSpawnOperation?.mustExist && args.worktreeId && args.tabId && args.leafId) {
+      assertPaneStillExists(
+        ctx.deps.store,
+        args.worktreeId,
+        args.tabId,
+        args.leafId,
+        args.connectionId
+      )
+    }
+    const expectedPtyId = ctx.effectiveSessionAppId ?? ctx.sessionId
     if (!stablePaneOwnerCandidate) {
       markRuntimeSpawnHiddenBeforeSpawn(ctx)
     }
     if (expectedPtyId) {
-      ctx.deps.runtime?.beginPtyRegistration?.(expectedPtyId)
+      ctx.pendingRegistrationClaim = ctx.deps.runtime?.beginPtyRegistration?.(expectedPtyId)
       ctx.pendingRegistrationPtyId = expectedPtyId
     }
     if (ctx.isDaemonHostSpawn && expectedPtyId) {
@@ -74,9 +99,13 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
       const recoveredOwner = agentSessionOwners.find(args.agentSessionEnsure.claim)
       if (recoveredOwner && ctx.pendingRegistrationPtyId !== recoveredOwner.ptyId) {
         if (ctx.pendingRegistrationPtyId) {
-          ctx.deps.runtime?.cancelPendingPtyRegistration?.(ctx.pendingRegistrationPtyId)
+          ctx.deps.runtime?.cancelPendingPtyRegistration?.(
+            ctx.pendingRegistrationPtyId,
+            undefined,
+            ctx.pendingRegistrationClaim
+          )
         }
-        ctx.deps.runtime?.beginPtyRegistration?.(
+        ctx.pendingRegistrationClaim = ctx.deps.runtime?.beginPtyRegistration?.(
           recoveredOwner.ptyId,
           ptyIncarnationById.get(recoveredOwner.ptyId)
         )
@@ -136,48 +165,38 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
       ctx.result.agentSessionEnsure = ensured
     } else {
       assertClientStillConnected()
-      const stablePaneSpawn = ctx.preAdoptedStablePane
-        ? ctx.preAdoptedStablePane
-        : await spawnForStablePane({
-            runtime: ctx.deps.runtime,
-            store: ctx.deps.store,
-            provider: ctx.provider,
-            spawnOptions: ctx.spawnOptions,
-            owner: stablePaneOwnerCandidate,
-            worktreeId: args.worktreeId,
-            connectionId: args.connectionId,
-            resolveOwner: () =>
-              resolveStablePaneOwner(
-                ctx.deps.runtime,
-                ctx.deps.store,
-                ctx.spawnIdentityPaneKey,
-                args.worktreeId,
-                args.connectionId
-              ),
-            onFreshSpawn: ctx.reportPtySpawnCommitted
-          })
-      ctx.result = stablePaneSpawn.result
-      ctx.stablePaneOwner = stablePaneSpawn.owner
-      if (
-        ctx.stablePaneOwner &&
-        ctx.isNewDaemonSession &&
-        ctx.effectiveSessionAppId &&
-        ctx.effectiveSessionAppId !== ctx.result.id
-      ) {
-        clearProviderPtyState(ctx.effectiveSessionAppId)
-      }
+      ctx.result = await ctx.provider.spawn(ctx.spawnOptions)
+      ctx.reportPtySpawnCommitted()
+      ctx.stablePaneOwner = null
       ctx.rejectedRegistrationCandidate = ctx.result
-      assertSpawnReplyWasLive(ctx.result)
     }
     ctx.rejectedRegistrationCandidate ??= ctx.result
     if (ctx.pendingRegistrationPtyId !== ctx.result.id) {
       if (ctx.pendingRegistrationPtyId) {
-        ctx.deps.runtime?.cancelPendingPtyRegistration?.(ctx.pendingRegistrationPtyId)
+        ctx.deps.runtime?.cancelPendingPtyRegistration?.(
+          ctx.pendingRegistrationPtyId,
+          undefined,
+          ctx.pendingRegistrationClaim
+        )
       }
-      ctx.deps.runtime?.beginPtyRegistration?.(ctx.result.id, ctx.result.incarnationId)
+      ctx.pendingRegistrationClaim = ctx.deps.runtime?.beginPtyRegistration?.(
+        ctx.result.id,
+        ctx.result.incarnationId
+      )
       ctx.pendingRegistrationPtyId = ctx.result.id
     }
+    assertSpawnReplyWasLive(ctx.result)
     // Why: admission precedes sequence/context state and every durable publication below.
+    if (
+      ctx.pendingRegistrationClaim &&
+      !ctx.deps.runtime?.narrowPtyRegistration(
+        ctx.result.id,
+        ctx.pendingRegistrationClaim,
+        ctx.result.incarnationId
+      )
+    ) {
+      throw new PaneOwnerContentionError()
+    }
     ctx.deps.runtime?.assertPtyRegistrationAllowed?.(ctx.result.id, ctx.result.incarnationId)
     if (ctx.result.providerSequence) {
       const runtimeSequenceBeforeReconcile =

@@ -33,6 +33,11 @@ function sameRegistration(
   before: CatalogEnvironment | undefined,
   after: CatalogEnvironment | undefined
 ): boolean {
+  // Why a hand-paired server counts only with both keys: main replaces its pairing in place only for
+  // the saved key, so the key check below is the whole proof; without one there is none.
+  if (before && after && !before.orcadDeployment && !after.orcadDeployment) {
+    return Boolean(before.hostKeyFingerprint && after.hostKeyFingerprint)
+  }
   // Why SSH only: a WSL deployment takes the stricter re-pair path until its host identity lands.
   const left = before && getOrcadSshDeployment(before)
   const right = after && getOrcadSshDeployment(after)

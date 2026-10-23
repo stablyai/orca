@@ -45,6 +45,10 @@ export const worktreesApi = {
 
   previewNestedRemoval: (args) => ipcRenderer.invoke('worktrees:previewNestedRemoval', args),
 
+  sleep: (request) => ipcRenderer.invoke('worktrees:sleep', request),
+  sleepReopened: (worktreeId) => ipcRenderer.invoke('worktrees:sleepReopened', worktreeId),
+  resumeSleptPane: (pane) => ipcRenderer.invoke('worktrees:resumeSleptPane', pane),
+
   remove: (args) => ipcRenderer.invoke('worktrees:remove', args),
 
   forgetLocal: (args) => ipcRenderer.invoke('worktrees:forgetLocal', args),

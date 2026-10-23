@@ -39,10 +39,10 @@ jobs:
     if: inputs.qualification_only
     permissions:
       contents: read
-    uses: ./.github/workflows/node-server-tests.yml
+      actions: read
+    uses: ./.github/workflows/qualified-orcad-template.yml
     with:
       ref: ${{ github.sha }}
-      build_template: true
 
   build-mac:
     needs: qualification-template
@@ -91,6 +91,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
           cache: pnpm
           cache-dependency-path: |
             pnpm-lock.yaml

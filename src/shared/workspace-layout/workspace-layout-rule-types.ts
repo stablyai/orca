@@ -22,6 +22,7 @@ export type WorkspaceLayoutRule =
   | 'group_empty'
   | 'group_tree_mismatch'
   | 'leaf_without_pane'
+  | 'leaf_sleeping_and_resume'
   | 'tab_in_two_groups'
   | 'tab_group_mismatch'
   | 'group_lists_missing_tab'

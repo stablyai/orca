@@ -1,3 +1,4 @@
+import type { JournalItemEcho } from './journal-item-echo'
 // Persisted journal row shapes plus read-time upcasting.
 //
 // The journal is append-only, so migration is upcasting on read and never an
@@ -40,6 +41,7 @@ import {
 import { isJournalTag } from '../../../shared/agent-session-journal-open-union'
 import type { StructuredAgentSessionStopCause } from '../agent-session-wire/structured-agent-session-stop-cause'
 import { dropUnusableRowAnnotations } from './journal-row-unusable-annotations'
+import { journalQueueRowContent, type JournalQueueRow } from './journal-queue-events'
 
 /** Producer linkage rides the row BASE rather than the body: older builds read
  *  the two nested prompt shapes strictly, so an unknown key there made the whole
@@ -47,7 +49,7 @@ import { dropUnusableRowAnnotations } from './journal-row-unusable-annotations'
  *  unknown `v` makes a row unreadable (released older hosts keep the chat read-only;
  *  this build fails its load), while an unknown KEY is ignored below, so an older host reads a stamped row and
  *  behaves exactly as it does today. */
-type JournalRowBase = AgentJournalProducerLinkage & {
+export type JournalRowBase = AgentJournalProducerLinkage & {
   /** Schema version of THIS row. */
   v: number
   epoch: string
@@ -69,6 +71,8 @@ export type JournalEpochRow = JournalRowBase & {
   kind: 'epoch'
   reason: AgentJournalEpochReason
   providerHandle: AgentSessionJournalProviderHandle
+  /** Original adoption, restated atomically when a same-conversation replacement retires it. */
+  historyOrigin?: unknown
 }
 
 export const AGENT_JOURNAL_EPOCH_REASONS = [
@@ -93,7 +97,8 @@ type JournalItemProvenance = {
 }
 
 export type JournalItemRow = JournalRowBase &
-  JournalItemProvenance & {
+  JournalItemProvenance &
+  JournalItemEcho & {
     kind: 'item'
     itemId: string
     revision: number
@@ -216,7 +221,8 @@ export type JournalDispatchRow = JournalRowBase & {
  *  ignores the unknown keys and reads the mutation as root, as it always did. */
 export type JournalLifecycleMutation =
   | (AgentJournalProducerLinkage &
-      JournalItemProvenance & {
+      JournalItemProvenance &
+      JournalItemEcho & {
         kind: 'item'
         itemId: string
         revision: number
@@ -242,6 +248,7 @@ export type JournalRow =
   | JournalSubmissionRow
   | JournalDispatchRow
   | JournalLifecycleBatchRow
+  | JournalQueueRow
 
 export type JournalRowParse =
   | { ok: true; row: JournalRow }
@@ -382,7 +389,8 @@ const ROW_CONTENT_CHECK_BY_KIND: Record<
       ),
       ...mutations.map((mutation) => lifecycleMutationContent(mutation))
     )
-  }
+  },
+  queue: journalQueueRowContent
 }
 export const KNOWN_ROW_KINDS = new Map(Object.entries(ROW_CONTENT_CHECK_BY_KIND))
 

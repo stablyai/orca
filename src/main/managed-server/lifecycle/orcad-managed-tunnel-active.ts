@@ -5,15 +5,12 @@ import {
   type KnownRuntimeEnvironment,
   type RuntimeSshTunnelLink
 } from '../../../shared/runtime-environments'
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { PortForwardEntry, SshTarget } from '../../../shared/ssh-types'
 import type { SshConnection } from '../../ssh/connection/ssh-connection'
 import { adoptSshConnection } from '../../ssh/connection/ssh-connection-attribution'
 import type { SshConnectionManager } from '../../ssh/connection/ssh-connection-manager'
 import type { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'
-import type {
-  PortForwardEntry,
-  SshPortForwardManager
-} from '../../ssh/port-forwarding/ssh-port-forward'
+import type { SshPortForwardManager } from '../../ssh/port-forwarding/ssh-port-forward'
 
 export type ActiveOrcadTunnel = {
   connection: SshConnection
@@ -27,7 +24,7 @@ export type ActiveOrcadTunnel = {
   transportGeneration: number
 }
 
-export type ManagedTunnelExpectation = {
+type ManagedTunnelExpectation = {
   environmentId: string
   sshTargetId: string
   sshTargetGeneration: number
@@ -88,14 +85,14 @@ export function resolveManagedTunnelBinding(
   const targetStore = dependencies.getTargetStore()
   const connectionManager = dependencies.getConnectionManager()
   if (!targetStore || !connectionManager) {
-    throw new Error('SSH is unavailable on this client; the managed Orca server is unverifiable.')
+    throw new Error('SSH is unavailable on this client; this host’s Orca server is unverifiable.')
   }
   const target = targetStore.getTarget(deployment.sshTargetId)
   if (!target || target.generation !== deployment.sshTargetGeneration) {
-    throw new Error('The SSH registration for this managed Orca server was removed or re-created.')
+    throw new Error('The SSH registration for this host’s Orca server was removed or re-created.')
   }
   if (getManagedOrcadFenceEnvironmentId(target) !== environment.id) {
-    throw new Error('The SSH target is no longer owned by this managed Orca server.')
+    throw new Error('The SSH target is no longer owned by this host’s Orca server.')
   }
   return { deployment, targetStore, connectionManager, target }
 }
@@ -150,7 +147,7 @@ export function recordActiveOrcadTunnel(
 }
 
 /** A run a close(), ownership change or transport change overtook: it must not read as success. */
-export class OrcadTunnelSupersededError extends Error {
+class OrcadTunnelSupersededError extends Error {
   constructor() {
     super('Orca SSH tunnel setup was superseded.')
     this.name = 'OrcadTunnelSupersededError'

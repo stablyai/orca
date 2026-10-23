@@ -12,6 +12,8 @@ import {
 } from './claude-account-selection'
 import { runClaudeCommandProcess } from './claude-command-process'
 import { runClaudeLoginSession } from './claude-login-session'
+import { runClaudePastedCodeLogin } from './claude-pasted-code-login'
+import type { HostAccountSignInChannel } from '../../shared/host-account-sign-in-types'
 import type { ClaudeRuntimeAuthService } from './runtime-auth-service'
 import type { ClaudeAccountSelectionTarget } from './runtime-selection'
 
@@ -56,6 +58,20 @@ export class ClaudeAccountService {
     copyLink = false
   ): Promise<ClaudeRateLimitAccountsState> {
     return this.signInHidden({ accountId }, copyLink)
+  }
+
+  /** A new host account signed in from another device: Claude's link and code travel via `channel`. */
+  addAccountWithPastedCode(
+    channel: HostAccountSignInChannel
+  ): Promise<ClaudeRateLimitAccountsState> {
+    this.supersedePendingLogin()
+    return this.serializeMutation(() =>
+      this.registration.signIn({ runtime: 'host' }, (folder) =>
+        runClaudePastedCodeLogin(folder, this.runLoginCommand, channel, (cancel) => {
+          this.cancelPendingClaudeLogin = cancel
+        })
+      )
+    )
   }
 
   /** The latest hidden sign-in's link once Claude hands it over; null if it ends without one. */

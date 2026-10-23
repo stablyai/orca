@@ -274,6 +274,12 @@ export type AgentSessionStatusSummary = {
   /** The record's saved conversation name; absent while unnamed and from older hosts. Rides this
    *  feed because a retained summary outlives the chat's tab, so a closed chat keeps its name. */
   conversationName?: string
+  /** Why the host could not name this chat, kept in memory only while the chat still has the
+   *  name the failed run would have replaced. Absent from older hosts; older clients ignore it. */
+  namingError?: AgentSessionNamingError
+  /** The record's Sleep mark: the user's Sleep stopped this chat and nothing has been sent since.
+   *  Absent from older hosts. */
+  sleptAt?: number
   /** Host-path directory the session is held to regardless of its workspace's current directory
    *  (a floating chat's pinned folder). Absent means resolve the workspace id; older hosts omit it. */
   launchDirectory?: string
@@ -284,10 +290,13 @@ export type AgentSessionStatusSummary = {
   statusStartedAt?: number
 }
 
+/** `failedAt` dates the run, so a repeat failure with the same message still republishes. */
+export type AgentSessionNamingError = { message: string; failedAt: number }
+
 /** A summary outlives its provider child: an evicted idle session is still idle, so the host
  *  keeps the last projection and never retracts one. Tabs, not this feed, decide what is listed. */
 export type AgentSessionStatusEvent =
-  | { type: 'snapshot'; sessions: AgentSessionStatusSummary[] }
+  | { type: 'snapshot'; sessions: AgentSessionStatusSummary[]; namingActiveSessionIds?: string[] }
   | { type: 'status'; session: AgentSessionStatusSummary }
   | { type: 'end' }
 
@@ -381,6 +390,8 @@ export type AgentSessionOptionChoice = {
 }
 
 export type AgentSessionModelOption = {
+  resolvedModel?: string | null
+  effortsKnown?: false
   id: string
   label: string
   description?: string
@@ -451,6 +462,8 @@ export type AgentSessionSlashCommand = {
   description?: string
   /** Provider-authored argument sketch, e.g. `<issue-url>`. */
   argumentHint?: string
+  /** The skill file the provider selects this skill by; two skills may share a name. */
+  path?: string
 }
 
 /** The provider's own command surface, read per session. Additive read-only

@@ -6,8 +6,9 @@ import {
   providerDiagnosticOf
 } from '../../../shared/agent-session-failure'
 import type { AgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
+import type { StructuredAgentSessionRanRecorder } from './structured-agent-session-ran-options'
 import { isAgentSessionOptionRejectedError } from './structured-agent-session-option-error'
-import { abortSignalReason } from '../../../shared/abort-signal-reason'
+import { isAbortSignalReason } from '../../../shared/abort-signal-reason'
 import type { StructuredAgentSessionAcquireAborts } from './structured-agent-session-acquire-aborts'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import type {
@@ -35,6 +36,8 @@ export type AgentSessionHandoverContext = StructuredAgentSessionCommandHandoverC
   acquireAborts?: Pick<StructuredAgentSessionAcquireAborts, 'begin'>
   deliveryOrder?: StructuredAgentSessionDeliveryOrder
   workChanged?: () => void
+  /** A message the agent took: a chat keeps, where it has none saved, the options it ran. */
+  recordRanOptions?: ReturnType<StructuredAgentSessionRanRecorder>
 }
 
 /** A handover whose pending row and abort handle are committed: the provider call runs outside the
@@ -89,6 +92,7 @@ export async function beginSubmissionHandover(
     ctx.workChanged
   )
   const attempt = ctx.acquireAborts?.begin(ctx.sessionId, true)
+  const queued = submission.queuedMessageId !== undefined
   try {
     await ctx.journal.resolveDispatch({
       clientMessageId,
@@ -114,8 +118,9 @@ export async function beginSubmissionHandover(
     dispatch: async () => {
       let outcome: AgentSessionDispatchOutcome | null
       try {
+        // Aborted before the call, Orca still held it: a queued card waits again.
         outcome = attempt?.signal.aborted
-          ? cancelledDispatch()
+          ? cancelledDispatch(queued)
           : // A child gone since the row: its end settles the row, and nothing reaches the wire.
             stillCurrent()
             ? await dispatchSafely(
@@ -124,13 +129,22 @@ export async function beginSubmissionHandover(
                 carried ? withStoppedHistory(body, carried.messages) : body,
                 requestedAt,
                 submission.options,
+                queued,
                 attempt?.signal
               )
             : null
       } finally {
         attempt?.end()
       }
-      return () => resolveHandover(ctx, clientMessageId, outcome)
+      return async () => {
+        await resolveHandover(ctx, clientMessageId, outcome)
+        if (outcome?.state === 'accepted' || outcome?.state === 'admitted') {
+          await ctx.recordRanOptions?.({
+            message: submission.options,
+            executed: outcome.ranOptions
+          })
+        }
+      }
     }
   }
 }
@@ -191,6 +205,7 @@ async function dispatchSafely(
   body: AgentJournalMessageItem,
   requestedAt: number,
   executionOptions: AgentSessionExecutionOptions | undefined,
+  queued: boolean,
   signal?: AbortSignal
 ): Promise<AgentSessionDispatchOutcome> {
   try {
@@ -201,12 +216,16 @@ async function dispatchSafely(
       ...(executionOptions ? { executionOptions } : {}),
       ...(signal ? { signal } : {}),
       fence: ctx.fence,
-      requestedAt
+      requestedAt,
+      onInputPreparation: ctx.recordRanOptions?.prepareInput,
+      onExecutionSnapshot: ctx.recordRanOptions?.checkpoint
     })
-    return signal?.aborted && outcome.state === 'rejected' ? cancelledDispatch() : outcome
+    // The agent's own answer stands, aborted or not.
+    return outcome
   } catch (error) {
-    if (signal?.aborted && error === abortSignalReason(signal)) {
-      return cancelledDispatch()
+    // The signal reaches only an adapter's preparation, so its own reason proves nothing was written.
+    if (isAbortSignalReason(signal, error)) {
+      return cancelledDispatch(queued)
     }
     if (isAgentSessionOptionRejectedError(error)) {
       return {
@@ -221,9 +240,14 @@ async function dispatchSafely(
   }
 }
 
-function cancelledDispatch(): AgentSessionDispatchOutcome {
+/** Only a queued card's hand-off records the proof; on a direct send it would owe the message as
+ *  stopped history. */
+function cancelledDispatch(neverReachedAgent: boolean): AgentSessionDispatchOutcome {
   return {
     state: 'rejected',
-    ...agentSessionFailureWords(agentSessionFailureFact('cancelled'), { surface: 'rejection' })
+    ...agentSessionFailureWords(
+      agentSessionFailureFact('cancelled', neverReachedAgent ? { neverReachedAgent } : {}),
+      { surface: 'rejection' }
+    )
   }
 }

@@ -1,4 +1,6 @@
 import { ipcMain } from 'electron'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
+import { placeUnshownLiveTerminalsBestEffort } from '../runtime/terminal/adoption/unshown-live-terminal-placement'
 import { recoverLegacyWorkerTerminalsForRendererStartup } from './legacy-worker-renderer-recovery'
 import { logStartupMilestone } from './startup-diagnostics'
 import { mainProcessState as state } from './main-process-state'
@@ -52,8 +54,16 @@ export function registerMainProcessIpcHandlers(): void {
       managedWslCliStartupBarrierReady: state.managedWslCliStartupBarrierReady,
       localPtyProviderStartupReady: state.localPtyProviderStartupReady,
       reconcile: async () => {
-        await state.runtime?.refreshRestoredOrchestrationAuthority()
-        return state.runtime?.reconcileLegacyWorkerTerminals({ materializeRenderer: true })
+        try {
+          await state.runtime?.refreshRestoredOrchestrationAuthority()
+          return await state.runtime?.reconcileLegacyWorkerTerminals({ materializeRenderer: true })
+        } finally {
+          // Switch point: main shows live terminals no pane shows, after workers take their panes,
+          // even when that recovery failed: the window no longer adopts them itself.
+          if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+            await placeUnshownLiveTerminalsBestEffort(state.runtime)
+          }
+        }
       },
       onDeferredRecoveryError: (error) => {
         console.warn('[orchestration] legacy worker provider-ready recovery failed', error)

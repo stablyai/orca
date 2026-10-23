@@ -38,7 +38,7 @@ export class OrcadManagedIdentityError extends Error {
   constructor(remotePort: number, detail: string) {
     super(
       `${ORCAD_IDENTITY_MISMATCH_CODE}: the server on remote port ${remotePort} is not this ` +
-        `managed Orca server (another Orca may be using that port): ${detail}`
+        `host’s Orca server (another Orca may be using that port): ${detail}`
     )
     this.name = 'OrcadManagedIdentityError'
   }
@@ -51,7 +51,7 @@ export class OrcadManagedPairingRejectedError extends Error {
   readonly code = ORCAD_PAIRING_REJECTED_CODE
   constructor(detail: string) {
     super(
-      `${ORCAD_PAIRING_REJECTED_CODE}: the managed Orca server on this host no longer accepts ` +
+      `${ORCAD_PAIRING_REJECTED_CODE}: this host’s Orca server no longer accepts ` +
         `this desktop's pairing (its saved devices were reset, or this desktop was removed ` +
         `there), so reconnecting alone won't restore access: ${detail}`
     )
@@ -140,7 +140,7 @@ export function deployedOrcadTunnelChecks(
         ? verifyOrcadPairingIdentity(pairedRuntimeConnectionFromOffer(pairing), {
             runtimeId: readiness.runtimeId || null
           })
-        : { verdict: 'foreign', detail: 'The managed Orca server published an invalid pairing.' }
+        : { verdict: 'foreign', detail: 'This host’s Orca server published an invalid pairing.' }
     }
   }
 }

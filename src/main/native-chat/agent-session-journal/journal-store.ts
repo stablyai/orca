@@ -22,7 +22,6 @@ import {
   newestStructuredAgentSessionTurnBySequence,
   runningStructuredAgentSessionTurnItemBySequence
 } from '../../../shared/structured-agent-session-live-turn'
-import type { JournalReplacementItem } from './journal-epoch-replacement'
 import { readJournalSince } from './journal-cursor'
 import type { JournalHostDatabase } from './journal-host-database'
 import { journalRowsAfterReader, type JournalLoad } from './journal-open'
@@ -52,18 +51,14 @@ import type {
   JournalTombstoneInput,
   ResolveDispatchInput
 } from './journal-store-contracts'
-import type { JournalQueuedMessages } from './journal-queued-messages'
+import type { JournalQueuedMessages, JournalQueuePlan } from './journal-queued-messages'
 import {
   journalQueueResumeRowBuilder,
   journalQueueReopenRowBuilder,
   journalStopEventRowBuilder
 } from './journal-stop-and-resume-rows'
 import type { AgentJournalEpochReason, JournalStopEvent } from './journal-row-schema'
-import type {
-  JournalOperationReceipt,
-  JournalRowTransactionHook,
-  JournalRowWriter
-} from './journal-row-writer'
+import type { JournalOperationReceipt, JournalRowWriter } from './journal-row-writer'
 import type { JournalSubmissionWriter } from './journal-submission-writer'
 import type { JournalEpochController } from './journal-epoch-controller'
 import { JournalWriteQueue } from './journal-write-queue'
@@ -97,7 +92,7 @@ export class AgentSessionJournal {
   private readonly submissionWriter: JournalSubmissionWriter
   private readonly stepWriter: JournalStepWriter
   private readonly restore: () => Promise<void>
-  /** Draft rows queued while the agent works; never reducer input or owed work. */
+  /** The cards queued while the agent works (`journal-queue-fold.ts`); never owed work. */
   readonly queuedMessages: JournalQueuedMessages
   readonly stopMarks: JournalStopMarks
   /** A person's Stop accepted (`journal-stop-acceptance.ts`). */
@@ -134,7 +129,7 @@ export class AgentSessionJournal {
       },
       notifyCommitted: () => this.onCommitted?.(),
       journal: () => this,
-      enqueue: (build, receipt) => this.rowWriter.enqueue(build, undefined, receipt)
+      enqueue: (build, receipt) => this.rowWriter.enqueue(build, receipt)
     })
     this.rowWriter = collaborators.rowWriter
     this.epochController = collaborators.epochController
@@ -197,7 +192,7 @@ export class AgentSessionJournal {
     sequence: this.state.lastSequence
   })
 
-  snapshot = (): AgentJournalSnapshot => renderJournalState(this.state)
+  snapshot = (): AgentJournalSnapshot => renderJournalState(this.queuedMessages.displayState())
 
   /** Visits reduced items without allocating and sorting a full snapshot. */
   visitItems = (
@@ -263,10 +258,11 @@ export class AgentSessionJournal {
 
   submissions = (): AgentJournalSubmission[] => [...this.state.submissions.values()]
 
+  historyOrigin = () => this.state.historyOrigin
+
   submission = (clientMessageId: string) => this.state.submissions.get(clientMessageId)
 
-  pendingSubmissions = (): AgentJournalSubmission[] =>
-    this.submissions().filter((entry) => entry.dispatchState === 'pending')
+  pendingSubmissions = () => this.submissions().filter((entry) => entry.dispatchState === 'pending')
 
   /** The durable answer to "did my send land?" — a reconnecting client asking
    *  again gets this instead of re-sending. */
@@ -318,7 +314,7 @@ export class AgentSessionJournal {
   /** A person's Resume of the queue. */
   appendQueueResume(fence: number, receipt?: JournalOperationReceipt): Promise<AgentJournalCursor> {
     const build = journalQueueResumeRowBuilder(() => this.state, fence)
-    return this.rowWriter.append(build, undefined, receipt)
+    return this.rowWriter.append(build, receipt)
   }
 
   /** This open found waiting cards an earlier handle wrote (`queued-message-pause.ts`). */
@@ -361,9 +357,9 @@ export class AgentSessionJournal {
   /** A dispatch transition (`JournalSubmissionWriter.resolveDispatch`). */
   resolveDispatch(
     input: ResolveDispatchInput,
-    hook?: JournalRowTransactionHook
+    cards?: () => JournalQueuePlan
   ): Promise<AgentJournalCursor> {
-    return this.submissionWriter.resolveDispatch(input, hook)
+    return this.submissionWriter.resolveDispatch(input, cards)
   }
 
   /** A provider's late receipt (`JournalSubmissionWriter.acceptLate`). */
@@ -396,11 +392,9 @@ export class AgentSessionJournal {
   }
 
   replaceEpochItems(
-    reason: AgentJournalEpochReason,
-    fence: number,
-    items: readonly JournalReplacementItem[]
+    ...args: Parameters<JournalEpochController['replace']>
   ): Promise<AgentJournalCursor> {
-    return this.epochController.replace(reason, fence, items)
+    return this.epochController.replace(...args)
   }
 
   private adoptLoadedJournal(loaded: JournalLoad): void {

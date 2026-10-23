@@ -12,7 +12,7 @@ import type { AgentJournalStatusItem } from '../../shared/agent-session-journal-
 import { TUI_AGENT_DISPLAY_NAMES } from '../../shared/tui-agent-display-names'
 import {
   boundPayload,
-  DEFAULT_JOURNAL_PAYLOAD_LIMITS
+  PROVIDER_FRAME_PAYLOAD_LIMITS
 } from '../native-chat/agent-session-journal/journal-payload-bounds'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
 import {
@@ -56,7 +56,7 @@ export function codexProviderRetryRowBody(payload: unknown): AgentJournalStatusI
     providerFrame: {
       provider: 'codex',
       kind: 'notification:error',
-      payload: boundPayload(JSON.stringify(payload), DEFAULT_JOURNAL_PAYLOAD_LIMITS)
+      payload: boundPayload(JSON.stringify(payload), PROVIDER_FRAME_PAYLOAD_LIMITS)
     }
   }
 }

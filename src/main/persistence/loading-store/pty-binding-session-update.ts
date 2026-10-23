@@ -10,6 +10,7 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { placedSplitRoot } from '../terminal-topology/terminal-pane-placement-graft'
 import { tabRowPtyIdAfterLeafBinding } from './terminal-tab-pty-ownership'
 import type { PersistPtyBindingArgs } from './pty-binding-persistence'
+import { reusedTerminalIdUnbinding } from './reused-terminal-id-unbind'
 
 export function applyPtyBinding(
   args: PersistPtyBindingArgs,
@@ -38,24 +39,37 @@ export function applyPtyBinding(
       [repoId]: currentRevision + 1
     }
   }
-  if (args.incarnationId) {
-    session.terminalPtyIncarnationsByPaneKey = {
-      ...session.terminalPtyIncarnationsByPaneKey,
-      [paneKey]: args.incarnationId
-    }
-    if (session.terminalSurfaceTombstonesByPaneKey?.[paneKey]) {
-      session.terminalSurfaceTombstonesByPaneKey = {
-        ...session.terminalSurfaceTombstonesByPaneKey
-      }
-      delete session.terminalSurfaceTombstonesByPaneKey[paneKey]
-    }
+  // Switch point: a reused local id leaves the saved pane of the process that had it (P2, L80);
+  // the commit writes the unbinding with its own binding, each field once.
+  const unbound =
+    ORCA_LAYOUT_OWNER_IS_MAIN && args.incarnationId
+      ? reusedTerminalIdUnbinding(session, { ...args, incarnationId: args.incarnationId })
+      : null
+  const stamps =
+    unbound?.terminalPtyIncarnationsByPaneKey ?? session.terminalPtyIncarnationsByPaneKey
+  const { [paneKey]: recordedIncarnation, ...otherIncarnations } = stamps ?? {}
+  if (args.incarnationId || (args.dropsIncarnation && recordedIncarnation)) {
+    session.terminalPtyIncarnationsByPaneKey = args.incarnationId
+      ? { ...stamps, [paneKey]: args.incarnationId }
+      : otherIncarnations
   }
-  const tabs = session.tabsByWorktree?.[bindingWorktreeId]
+  if (args.incarnationId && session.terminalSurfaceTombstonesByPaneKey?.[paneKey]) {
+    session.terminalSurfaceTombstonesByPaneKey = {
+      ...session.terminalSurfaceTombstonesByPaneKey
+    }
+    delete session.terminalSurfaceTombstonesByPaneKey[paneKey]
+  }
+  let rows = unbound?.tabsByWorktree ?? session.tabsByWorktree
+  let layoutsByTab = unbound?.terminalLayoutsByTabId ?? session.terminalLayoutsByTabId
+  const tabs = rows?.[bindingWorktreeId]
   const tab = tabs?.find((t) => t.id === args.tabId)
   if (tab) {
+    if (args.correctStartupCwd !== undefined) {
+      tab.startupCwd = args.correctStartupCwd
+    }
     tab.ptyId = tabRowPtyIdAfterLeafBinding(
       tab,
-      session.terminalLayoutsByTabId?.[args.tabId]?.ptyIdsByLeafId,
+      layoutsByTab?.[args.tabId]?.ptyIdsByLeafId,
       args.leafId,
       args.ptyId
     )
@@ -70,10 +84,7 @@ export function applyPtyBinding(
         existingTabCount: tabs?.length ?? 0
       })
     ]
-    session.tabsByWorktree = {
-      ...session.tabsByWorktree,
-      [bindingWorktreeId]: nextTabs
-    }
+    rows = { ...rows, [bindingWorktreeId]: nextTabs }
     session.activeWorktreeId ??= bindingWorktreeId
     session.activeTabId ??= args.tabId
     session.activeTabIdByWorktree = {
@@ -81,6 +92,7 @@ export function applyPtyBinding(
       [bindingWorktreeId]: session.activeTabIdByWorktree?.[bindingWorktreeId] ?? args.tabId
     }
   }
+  session.tabsByWorktree = rows
   // Why: host-initiated persist snapshots used to omit this write-once guard, so every launch or reattach treated the worktree as never having default terminals applied.
   session.defaultTerminalTabsAppliedByWorktreeId = {
     ...session.defaultTerminalTabsAppliedByWorktreeId,
@@ -96,13 +108,10 @@ export function applyPtyBinding(
       bindingWorktreeId
     ]
   }
-  if (!isTerminalLeafId(args.leafId)) {
-    // Why: keep legacy renderer-local pane ids out of durable leaf-keyed layout state after the UUID migration.
-    advanceTopologyFence()
-    return
-  }
-  const layout = session.terminalLayoutsByTabId?.[args.tabId]
-  if (layout) {
+  // Why: keep legacy renderer-local pane ids out of durable leaf-keyed layout state after the UUID migration.
+  const leafKeyed = isTerminalLeafId(args.leafId)
+  const layout = layoutsByTab?.[args.tabId]
+  if (leafKeyed && layout) {
     if (!layout.root) {
       terminalMembershipChanged = true
       // Why: load names every saved root, but the layout type still allows none; the binding needs a durable one.
@@ -129,11 +138,11 @@ export function applyPtyBinding(
       ...layout.ptyIdsByLeafId,
       [args.leafId]: args.ptyId
     }
-  } else {
+  } else if (leafKeyed) {
     terminalMembershipChanged = true
     // Why: first tab spawn — persist a minimal layout so a SIGKILL before the renderer snapshot can't lose ptyIdsByLeafId.
-    session.terminalLayoutsByTabId = {
-      ...session.terminalLayoutsByTabId,
+    layoutsByTab = {
+      ...layoutsByTab,
       [args.tabId]: {
         root: { type: 'leaf', leafId: args.leafId },
         activeLeafId: args.leafId,
@@ -142,5 +151,6 @@ export function applyPtyBinding(
       }
     }
   }
+  session.terminalLayoutsByTabId = layoutsByTab
   advanceTopologyFence()
 }

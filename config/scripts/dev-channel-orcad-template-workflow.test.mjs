@@ -34,7 +34,7 @@ describe.each(channels)('$name build ships the orcad template', (channel) => {
     const template = jobs['orcad-template']
     expect(template.uses).toBe('./.github/workflows/node-server-tests.yml')
     expect(template.with).toEqual({ ref: channel.pinnedSha, build_template: true })
-    expect(template.permissions).toEqual({ contents: 'read' })
+    expect(template.permissions).toEqual({ contents: 'read', actions: 'read' })
     expect(template.secrets).toBeUndefined()
     expect(mac.steps.find((step) => step.name === 'Checkout').with.ref).toBe(channel.pinnedSha)
   })

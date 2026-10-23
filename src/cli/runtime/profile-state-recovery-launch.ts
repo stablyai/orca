@@ -12,7 +12,7 @@ import {
   resolveAppRoot,
   resolveForegroundOrcaExecutable,
   stripElectronRunAsNode
-} from './launch'
+} from './orca-app-executable'
 import { RuntimeClientError } from './types'
 import { canStartOrcaServer } from './serve-app-launcher'
 

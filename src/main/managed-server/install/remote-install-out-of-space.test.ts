@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RemoteInstallTransport } from './remote-install-transport'
-import { uploadRelayDirectory, writeRelayFile } from './remote-install-transfers'
+import { uploadRemoteInstallDirectory, writeRemoteInstallFile } from './remote-install-transfers'
 import {
   RemoteInstallOutOfSpaceError,
   remoteFreeSpaceProbeCommand
@@ -49,7 +49,7 @@ afterEach(() => rmSync(localDir, { recursive: true, force: true }))
 describe('a failed install write on a full host', () => {
   it('says the disk is full instead of the bare SFTP "Failure"', async () => {
     vi.mocked(execHostCommand).mockResolvedValue(dfLine(12))
-    const upload = uploadRelayDirectory(
+    const upload = uploadRemoteInstallDirectory(
       connection(sftpFailure),
       localDir,
       '/root/.orca-remote/orcad-0.1.0+abc',
@@ -67,7 +67,7 @@ describe('a failed install write on a full host', () => {
   it('sizes a single file write by its contents', async () => {
     vi.mocked(execHostCommand).mockResolvedValue(dfLine(0))
     await expect(
-      writeRelayFile(connection(sftpFailure), posix, '/root/.orca-remote/x/.version', 'abc')
+      writeRemoteInstallFile(connection(sftpFailure), posix, '/root/.orca-remote/x/.version', 'abc')
     ).rejects.toThrow(/has 0 KB free, and Orca needs about 1 KB/)
   })
 
@@ -76,7 +76,7 @@ describe('a failed install write on a full host', () => {
     vi.mocked(execHostCommand).mockResolvedValue(dfLine(1_500))
     const failure = sftpFailure()
     await expect(
-      uploadRelayDirectory(
+      uploadRemoteInstallDirectory(
         connection(() => failure),
         localDir,
         '/root/r',
@@ -89,7 +89,7 @@ describe('a failed install write on a full host', () => {
     vi.mocked(execHostCommand).mockRejectedValue(new Error('df: not found'))
     const failure = sftpFailure()
     await expect(
-      uploadRelayDirectory(
+      uploadRemoteInstallDirectory(
         connection(() => failure),
         localDir,
         '/root/r',
@@ -101,7 +101,7 @@ describe('a failed install write on a full host', () => {
   it('keeps explicit refusals such as permission denied without probing', async () => {
     const denied = Object.assign(new Error('Permission denied'), { code: 3 })
     await expect(
-      uploadRelayDirectory(
+      uploadRemoteInstallDirectory(
         connection(() => denied),
         localDir,
         '/root/r',
@@ -117,7 +117,7 @@ describe('a failed install write on a full host', () => {
       sshChannelCloseConfirmed: false
     })
     await expect(
-      uploadRelayDirectory(
+      uploadRemoteInstallDirectory(
         connection(() => lost),
         localDir,
         '/root/r',
@@ -127,13 +127,13 @@ describe('a failed install write on a full host', () => {
     const controller = new AbortController()
     controller.abort()
     await expect(
-      uploadRelayDirectory(connection(sftpFailure), localDir, '/root/r', posix, {
+      uploadRemoteInstallDirectory(connection(sftpFailure), localDir, '/root/r', posix, {
         signal: controller.signal
       })
     ).rejects.toThrow()
     const failure = sftpFailure()
     await expect(
-      uploadRelayDirectory(
+      uploadRemoteInstallDirectory(
         connection(() => failure),
         localDir,
         'C:/Users/u/r',

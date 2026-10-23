@@ -205,7 +205,7 @@ export function registerPtyConnectionRuntimeOwnerSpawnRoutingTests(): void {
 
       expect(createRemoteRuntimePtyTransport).not.toHaveBeenCalled()
       expect(createIpcPtyTransport).toHaveBeenCalled()
-      expect(createdTransportOptions[0]?.cwdFallback).toBe('worktree')
+      expect(createdTransportOptions[0]).not.toHaveProperty('cwdFallback')
       expect(transport.connect).toHaveBeenCalled()
     })
 

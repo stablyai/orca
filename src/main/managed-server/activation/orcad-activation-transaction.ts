@@ -101,13 +101,13 @@ export type OrcadActivationTransaction =
   | OrcadRollbackTransaction
   | OrcadDecommissionTransaction
 
-export type OrcadActivationTransactionReadResult =
+type OrcadActivationTransactionReadResult =
   | { state: 'absent' }
   | { state: 'ok'; transaction: OrcadActivationTransaction }
   | { state: 'unreadable'; reason: string }
 
 /** What recovery must do; `undo` lists the state to put back once the new slot is quiescent. */
-export type OrcadTransactionRecoveryPlan =
+type OrcadTransactionRecoveryPlan =
   | { action: 'stabilize-committed'; activeVersion: string | null }
   /** The new slot passed its gate and the journal holds the record; only the write was lost. */
   | { action: 'finish-commit'; record: OrcadActivationRecord }

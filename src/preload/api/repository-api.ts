@@ -23,13 +23,11 @@ import type { BaseRefDefaultResult, BaseRefSearchResult, Repo } from '../../shar
 
 export type RepositoryApi = {
   list: () => Promise<Repo[]>
-  // Why: error union matches the IPC handler's return shape; renderer callers branch on `'error' in result`.
   add: (args: {
     path: string
     kind?: 'git' | 'folder'
     displayName?: string
   }) => Promise<{ repo: Repo } | { error: string }>
-  // Forget a project on one execution host only, leaving the same repo id on other hosts intact.
   removeForHost: (args: { repoId: string; hostId: string }) => Promise<void>
   reorder: (args: { orderedIds: string[] }) => Promise<{ status: 'applied' | 'rejected' }>
   reorderForHost: (args: {
@@ -74,7 +72,6 @@ export type RepositoryApi = {
   pickDirectory: () => Promise<string | null>
   clone: (args: { url: string; destination: string }) => Promise<Repo>
   cloneAbort: () => Promise<void>
-  // Why: error union matches the IPC handler's return shape; renderer callers branch on `'error' in result`.
   create: (args: {
     parentPath: string
     name: string

@@ -75,6 +75,7 @@ const deploy = (extra: Partial<Parameters<typeof deployOrcad>[0]> = {}) =>
     target: 'linux-x64-glibc217',
     census: IDLE,
     recountCensus: async () => extra.census ?? IDLE,
+    releaseIncumbentAdmission: async () => {},
     ...extra
   })
 

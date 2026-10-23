@@ -14,7 +14,7 @@ import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultWorkspaceSession } from '../sh
 import { folderWorkspaceKey } from '../shared/workspace-scope'
 import type { WorkspaceSessionState } from '../shared/workspace-session-state-types'
 import type { DetectedWorktreeListResult } from '../shared/worktree/types'
-import type { WorkspaceLayoutEvent } from '../shared/workspace-layout/workspace-layout-stream-frames'
+import { collectLayoutEvents } from './runtime/workspace-layout-stream-events.test-fixture'
 import {
   bumpLocalWorktreeScanGeneration,
   getLocalWorktreeCatalogVersion
@@ -165,8 +165,10 @@ describe('main drops the layout of workspaces the catalog no longer validates', 
         homeHostId: () => 'local',
         liveTitle: () => null
       })
-      const events: WorkspaceLayoutEvent[] = []
-      const { snapshot } = stream.subscribe((event) => events.push(event))
+      const collector = collectLayoutEvents()
+      const { events } = collector
+      const { snapshot } = stream.subscribe(collector.listener)
+      collector.seed(snapshot)
       expect(snapshot.map((entry) => entry.key)).toContain(DELETED)
 
       dropWorkspacesTheListingInvalidates(store, listing([KEPT]))

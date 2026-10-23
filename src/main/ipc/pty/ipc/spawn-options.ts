@@ -1,24 +1,16 @@
 import { isRestoreSpawnIntent } from '../../../../shared/host-spawn-admission'
 import { spawnWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import { beginPtySpawnForWorktree } from '../host-env/fresh-spawn-routing'
-import {
-  makePaneSpawnReservationKey,
-  reservePaneSpawn,
-  paneSpawnReservationsByOwnerKey,
-  pendingRuntimePaneCreatesByOwnerKey
-} from '../pane/spawn-reservation'
+import { makePaneSpawnReservationKey } from '../pane/spawn-reservation'
 import {
   assemblePtySpawnEnvDeletions,
   assemblePtySpawnLaunchOptions,
-  restoreProvisionalPtySize,
   seedPtySpawnSize
 } from '../spawn-options-assembly'
 import type { PtyIpcSpawnState } from './spawn-state'
 
-/** Window lane: the shared spawn options plus this lane's pane reservation. */
-export async function buildPtyIpcSpawnOptions(
-  ctx: PtyIpcSpawnState
-): Promise<{ isReattach: true } | null> {
+/** Carries deletions to provider-owned environments, including persistent older daemons. */
+export async function buildPtyIpcSpawnOptions(ctx: PtyIpcSpawnState): Promise<void> {
   const args = ctx.args
   const settings = ctx.deps.getSettings?.()
   const deletions = assemblePtySpawnEnvDeletions({
@@ -82,39 +74,11 @@ export async function buildPtyIpcSpawnOptions(
   ) {
     throw new Error('terminal_pane_identity_changed')
   }
-  if (!ctx.paneSpawnReservationKey) {
-    ctx.paneSpawnReservationKey = resolvedPaneSpawnReservationKey
-    const pendingRuntimeCreateAfterPreflight = ctx.paneSpawnReservationKey
-      ? pendingRuntimePaneCreatesByOwnerKey.get(ctx.paneSpawnReservationKey)
-      : undefined
-    if (pendingRuntimeCreateAfterPreflight) {
-      await pendingRuntimeCreateAfterPreflight.promise
-    }
-    const existingPaneSpawnAfterPreflight = ctx.paneSpawnReservationKey
-      ? paneSpawnReservationsByOwnerKey.get(ctx.paneSpawnReservationKey)
-      : undefined
-    if (existingPaneSpawnAfterPreflight) {
-      const reattach = {
-        ...(await existingPaneSpawnAfterPreflight.promise),
-        isReattach: true as const
-      }
-      restoreProvisionalPtySize({
-        sessionId: ctx.effectiveSessionId,
-        sessionAppId: ctx.effectiveSessionAppId,
-        reattachId: reattach.id,
-        hadSessionSizeBeforeAttach: ctx.hadSessionSizeBeforeAttach,
-        sessionSizeBeforeAttach: ctx.sessionSizeBeforeAttach
-      })
-      return reattach
-    }
-    ctx.paneSpawnReservation = ctx.paneSpawnReservationKey
-      ? reservePaneSpawn(ctx.paneSpawnReservationKey)
-      : null
-  }
+  ctx.paneSpawnReservationKey = resolvedPaneSpawnReservationKey
   ctx.finishTerminalInstall = beginPtySpawnForWorktree(args.worktreeId, ctx.cwd, args.connectionId)
   ctx.initiallyHidden = args.initiallyHidden === true
   // Why: daemon PTYs can emit before spawn() resolves, so the hidden mark must beat byte zero (terminal-query-authority.md §races); other providers are safe with the post-spawn mark below.
-  // TEMPORARY (C5e): absent-owner cleanup clears the early mark before replacement spawn.
+  // TEMPORARY (attachment-derived delivery lane): a renderer reset may clear the early mark after preflight.
   ctx.preSpawnHiddenMarkId =
     ctx.initiallyHidden && ctx.isDaemonHostSpawn && ctx.effectiveSessionAppId !== undefined
       ? ctx.effectiveSessionAppId
@@ -127,8 +91,14 @@ export async function buildPtyIpcSpawnOptions(
   ctx.releaseWorktreeSpawn = acquireWorktreeSpawn
     ? await acquireWorktreeSpawn.call(
         runtime,
-        spawnWorktreeTarget(args.worktreeId, args.connectionId)
+        spawnWorktreeTarget(args.worktreeId, args.connectionId),
+        {
+          // A pre-adopted stable pane attaches to its live owner, not a new terminal.
+          reattachSessionId: ctx.preAdoptedStablePane?.owner.ptyId ?? args.sessionId,
+          requireAttachOnly: () => {
+            ctx.spawnOptions = { ...ctx.spawnOptions, attachOnly: true }
+          }
+        }
       )
     : undefined
-  return null
 }

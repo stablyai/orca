@@ -1,121 +1,22 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toAppSshPtyId } from '../../../shared/ssh-pty-id'
 import type { SshRemotePtyLease } from '../../../shared/ssh-types'
-import { getRemoteHostPlatform } from '../ssh-remote-platform'
-import type { LegacyRelayClient } from './legacy-relay-client'
 import type { LegacyRelayEndpoint, LegacyRelayEndpointListing } from './legacy-relay-endpoints'
+import {
+  ENDPOINT,
+  type FakeRelay,
+  fakeClient,
+  lease,
+  newFakeRelay,
+  PTY,
+  TARGET
+} from './legacy-relay-fake-relay.test-fixture'
 import { LegacyRelayPaneStops } from './legacy-relay-pane-stops'
 import { LegacyRelayPaneOwners } from './legacy-relay-pane-owners'
 import {
   LegacyRelayTargetBridge,
   type LegacyRelayTargetBridgeDeps
 } from './legacy-relay-target-bridge'
-
-const TARGET = 'ssh-box'
-const PTY = toAppSshPtyId(TARGET, 'pty-1')
-
-type FakeRelay = {
-  ptys: Set<string>
-  attachError: Error | null
-  clients: FakeClient[]
-  openError: Error | null
-  shutdowns: string[]
-  shutdownError: Error | null
-  /** The process identity each listed PTY reports, when the relay reports one. */
-  incarnations: Map<string, string>
-  /** Whether a stop reports `pty.exit` (the relay's normal answer). */
-  exitOnShutdown: boolean
-}
-
-type FakeClient = LegacyRelayClient & {
-  emitData: (id: string, data: string) => void
-  emitExit: (id: string, code: number) => void
-  drop: () => void
-  writes: string[]
-}
-
-function fakeClient(relay: FakeRelay): FakeClient {
-  const data = new Set<(id: string, data: string) => void>()
-  const exits = new Set<(id: string, code: number) => void>()
-  const closes = new Set<() => void>()
-  let closed = false
-  const writes: string[] = []
-  const close = (): void => {
-    if (!closed) {
-      closed = true
-      closes.forEach((listener) => listener())
-    }
-  }
-  const client = {
-    ownerClaim: { ownerGeneration: 1, ownerLease: 'lease' },
-    get closed() {
-      return closed
-    },
-    list: async () =>
-      [...relay.ptys].map((relayPtyId) => {
-        const incarnationId = relay.incarnations.get(relayPtyId)
-        return incarnationId ? { relayPtyId, incarnationId } : { relayPtyId }
-      }),
-    attach: async () => {
-      if (relay.attachError) {
-        throw relay.attachError
-      }
-      return { replay: 'SCREEN' }
-    },
-    shutdown: async (id: string, expectedIncarnationId?: string) => {
-      if (relay.shutdownError) {
-        throw relay.shutdownError
-      }
-      relay.shutdowns.push(expectedIncarnationId ? `${id}#${expectedIncarnationId}` : id)
-      relay.ptys.delete(id)
-      if (relay.exitOnShutdown) {
-        exits.forEach((listener) => listener(id, 0))
-      }
-    },
-    write: (_id: string, chunk: string) => writes.push(chunk),
-    resize: () => {},
-    onData: (listener: (id: string, data: string) => void) => {
-      data.add(listener)
-      return () => data.delete(listener)
-    },
-    onExit: (listener: (id: string, code: number) => void) => {
-      exits.add(listener)
-      return () => exits.delete(listener)
-    },
-    onClose: (listener: () => void) => {
-      closes.add(listener)
-      return () => closes.delete(listener)
-    },
-    close,
-    emitData: (id: string, chunk: string) => data.forEach((listener) => listener(id, chunk)),
-    emitExit: (id: string, code: number) => exits.forEach((listener) => listener(id, code)),
-    drop: close,
-    writes
-  }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the bridge reads only the members this fake implements.
-  return client as unknown as FakeClient
-}
-
-const ENDPOINT: LegacyRelayEndpoint = {
-  endpoint: '/home/me/.orca-remote/relay-0.1.0+abc/relay-x.sock',
-  connectCommand: 'cd x && node relay.js --connect',
-  wrapCommand: true,
-  host: getRemoteHostPlatform('linux-x64'),
-  nodePath: 'node'
-}
-
-function lease(overrides: Partial<SshRemotePtyLease> = {}): SshRemotePtyLease {
-  return {
-    targetId: TARGET,
-    ptyId: 'pty-1',
-    tabId: 'tab-1',
-    leafId: 'leaf-1',
-    state: 'detached',
-    createdAt: 1,
-    updatedAt: 1,
-    ...overrides
-  }
-}
 
 let relay: FakeRelay
 let owners: LegacyRelayPaneOwners
@@ -184,16 +85,7 @@ function bridge(overrides: Partial<LegacyRelayTargetBridgeDeps> = {}): LegacyRel
 
 beforeEach(() => {
   vi.useFakeTimers()
-  relay = {
-    ptys: new Set(['pty-1']),
-    attachError: null,
-    clients: [],
-    openError: null,
-    shutdowns: [],
-    shutdownError: null,
-    incarnations: new Map(),
-    exitOnShutdown: true
-  }
+  relay = newFakeRelay()
   stops = paneStops()
   owners = new LegacyRelayPaneOwners()
   leases = [lease()]
@@ -454,6 +346,7 @@ describe('one target’s legacy relay bridge', () => {
     const client = fakeClient(relay)
     const recycled = {
       paneState: () => 'live' as const,
+      paneReplaced: () => false,
       liveRoute: () => ({ client, relayPtyId: 'pty-1' }),
       listedIncarnation: () => 'inc-2',
       refresh: async () => {}
@@ -483,6 +376,7 @@ describe('one target’s legacy relay bridge', () => {
     }
     const lostReply = {
       paneState: () => 'live' as const,
+      paneReplaced: () => false,
       liveRoute: () => ({ client, relayPtyId: 'pty2:epoch:1' }),
       listedIncarnation: () => undefined,
       refresh: async () => {}

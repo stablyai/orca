@@ -5,7 +5,8 @@ import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { captureNativeChatComposerFocusIntent } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
 import { newAgentPromptOutcome } from '@/lib/new-agent-prompt-outcome'
 import { activeAgentNotesSendFailureMessage } from '@/lib/active-agent-note-send-result'
-import { Settings as SettingsIcon, SquareTerminal } from 'lucide-react'
+import { Settings as SettingsIcon } from 'lucide-react'
+import { AgentTerminalLaunchButton } from '@/components/agent/AgentTerminalLaunchButton'
 import {
   DropdownMenuItem,
   DropdownMenuSeparator,
@@ -66,8 +67,13 @@ export function useTabAgentMenuLaunch({
   onPromptDelivered,
   onPromptHandedOff,
   disabled,
-  onFocusHostTerminal
-}: QuickLaunchAgentMenuItemsProps & { onFocusHostTerminal?: () => void }) {
+  onFocusHostTerminal,
+  onFocusChat
+}: QuickLaunchAgentMenuItemsProps & {
+  onFocusHostTerminal?: () => void
+  /** A New Chat opened at once: its composer takes the focus the menu gives back. */
+  onFocusChat?: (tabId: string) => void
+}) {
   const runLaunch = useCallback(
     (row: NewTabAgentMenuRow) => {
       if (disabled || row.kind === 'chat-unavailable') {
@@ -125,6 +131,10 @@ export function useTabAgentMenuLaunch({
           }
         })
       }
+      if (result.surface.kind === 'local-chat') {
+        onFocusChat?.(result.surface.tabId)
+        return
+      }
       if (result.surface.kind !== 'local-terminal') {
         onFocusHostTerminal?.()
         return
@@ -141,7 +151,8 @@ export function useTabAgentMenuLaunch({
       onPromptDelivered,
       onPromptHandedOff,
       disabled,
-      onFocusHostTerminal
+      onFocusHostTerminal,
+      onFocusChat
     ]
   )
 
@@ -164,7 +175,7 @@ export function ProjectedAgentMenuItems({
   model: NewTabAgentMenuModel
   runLaunch: (row: NewTabAgentMenuRow) => void
 }): React.JSX.Element {
-  const defaultAgent = useAppStore((s) => s.settings?.defaultTuiAgent)
+  const desktopDefaultAgent = useAppStore((s) => s.settings?.defaultTuiAgent)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const newAgentShortcut = useOptionalShortcutLabel('tab.newAgent')
@@ -199,6 +210,7 @@ export function ProjectedAgentMenuItems({
     rows,
     detection: { detectedIds, detectionFailed, needsServerUpdate }
   } = model
+  const defaultAgent = 'defaultTuiAgent' in model ? model.defaultTuiAgent : desktopDefaultAgent
   return (
     <>
       {(detectedIds === null && (detectionFailed || needsServerUpdate)) || rows.length === 0 ? (
@@ -319,13 +331,10 @@ function ChatRow({
       }}
     >
       {children}
-      <button
+      <AgentTerminalLaunchButton
         ref={cliButton}
-        type="button"
-        tabIndex={-1}
         title={cliTitle}
-        aria-label={cliTitle}
-        className="-my-0.5 grid size-6 place-items-center rounded-md opacity-0 outline-none hover:bg-accent focus-visible:bg-accent focus-visible:opacity-100 [[data-highlighted]_&]:opacity-100"
+        className="hover:bg-accent focus-visible:bg-accent [[data-highlighted]_&]:opacity-100"
         onKeyDown={(event) => {
           // Stopped so the row's own Enter handling does not start a chat instead.
           if (event.key === 'Enter' || event.key === ' ') {
@@ -343,9 +352,7 @@ function ChatRow({
             }
           }
         }}
-      >
-        <SquareTerminal />
-      </button>
+      />
     </DropdownMenuItem>
   )
 }

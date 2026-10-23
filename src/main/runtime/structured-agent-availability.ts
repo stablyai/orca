@@ -52,13 +52,13 @@ async function observeHostAgent(
     async () => homedir(),
     runtime,
     false
-  ).catch(() => 'inconclusive' as const)
-  if (seen === 'inconclusive') {
-    return { agent, state: 'unknown' }
+  ).catch(() => ({ status: 'unknown' as const }))
+  if (seen === null || seen.status === 'ready') {
+    return { agent, state: 'available' }
   }
-  return seen === 'supported'
-    ? { agent, state: 'available' }
-    : { agent, state: 'refused', reason: 'agent' }
+  return seen.status === 'tooOld'
+    ? { agent, state: 'refused', reason: 'agent' }
+    : { agent, state: 'unknown' }
 }
 
 /** The runtime's snapshot: taken after a fresh shell capture, initially and on launch settings or
@@ -70,10 +70,10 @@ export function installStructuredAgentAvailability(
   const readers = new Set<StructuredAgentAvailabilityReader>()
   let latest: readonly AgentSessionAgentAvailability[] | undefined
   let pass = 0
-  const derive = (): void => {
+  const derive = (capture = true): void => {
     const mine = ++pass
-    // Every replacement needs fresh facts, even if it supersedes Refresh or predates its listener.
-    void recaptureHostShellEnvironment()
+    // Explicit Refresh already captured; first use and settings changes need fresh facts.
+    void (capture ? recaptureHostShellEnvironment() : Promise.resolve())
       .catch(() => undefined)
       .then(() =>
         Promise.all(
@@ -93,7 +93,7 @@ export function installStructuredAgentAvailability(
       derive()
     }
   })
-  onAgentsRefreshedOnHost(derive)
+  onAgentsRefreshedOnHost(() => derive(false))
   derive()
   return {
     /** Reads the latest snapshot and every later one; returns the release. */

@@ -50,6 +50,9 @@ vi.mock('@/store', () => ({
   }
 }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
+vi.mock('@/runtime/structured-chat-host-permission', () => ({
+  readStructuredChatHostPermissionVerdict: async () => ({ kind: 'allowed' })
+}))
 
 import {
   startStructuredAgentLaunch,
@@ -240,6 +243,71 @@ describe('the first message owned by create', () => {
       }
     }
   )
+
+  it('carries a held tier as the picker draws it, keeps the pick through a refusal, and settles it once', async () => {
+    const tiers = (...values: string[]) => values.map((value) => ({ value, label: value }))
+    const efforts = tiers('medium', 'high')
+    const list = (defaultId: string) => ({
+      origin: 'probe' as const,
+      fetchedAt: 1,
+      listingNamesConfiguredModel: true,
+      defaultHoldsInEveryWorkspace: true as const,
+      models: [
+        ['m1', 'priority'],
+        ['m2', 'flex']
+      ].map(([id, tier]) => ({
+        id,
+        label: id,
+        isDefault: defaultId === id,
+        efforts,
+        serviceTiers: tiers(tier)
+      }))
+    })
+    recordHostModelCatalogSnapshot(target, 'codex', null, list('m1'))
+    const refused = deferred<unknown>()
+    const create = deferred<unknown>()
+    mocks.call.mockReturnValueOnce(refused.promise).mockReturnValueOnce(create.promise)
+    mocks.call.mockResolvedValue({ ok: true, value: { key: 'effort', value: 'medium' } })
+    const launch = start()
+    const tierPick = holdStructuredAgentSessionLaunchOption(
+      launch.sessionId,
+      'serviceTier',
+      'priority'
+    )
+    holdStructuredAgentSessionLaunchOption(launch.sessionId, 'effort', 'high')
+    // The account's default moves before create goes out: Fast runs as Standard under it.
+    recordHostModelCatalogSnapshot(target, 'codex', null, list('m2'))
+    await vi.waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
+    expect(createParams().options).toEqual({ effort: 'high', serviceTier: 'default' })
+    refused.resolve({
+      ok: false,
+      refusal: { code: 'structured_agent_session_unsupported', message: 'no' }
+    })
+    await expect(launch.launchResult).rejects.toBeInstanceOf(
+      StructuredAgentSessionCreateRefusalError
+    )
+    // The default moves back; the retry carries the user's own Fast.
+    recordHostModelCatalogSnapshot(target, 'codex', null, list('m1'))
+    expect(retryStructuredAgentSessionLaunch('workspace-1', launch.sessionId)).toBe(true)
+    await vi.waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2))
+    const retried = CreateIntentParams.parse(mocks.call.mock.calls[1]?.[2])
+    expect(retried.options).toEqual({ effort: 'high', serviceTier: 'priority' })
+    // A pick made while create is out is newer than what it carries, so it applies after.
+    holdStructuredAgentSessionLaunchOption(launch.sessionId, 'effort', 'medium')
+    create.resolve(created())
+    await expect(tierPick).resolves.toEqual({
+      kind: 'accepted',
+      options: { effort: 'high', serviceTier: 'priority' }
+    })
+    await vi.waitFor(() =>
+      expect(mocks.call.mock.calls.map(([, method]) => method)).toEqual([
+        'agentSession.create',
+        'agentSession.create',
+        'agentSession.setOption'
+      ])
+    )
+    expect(mocks.call.mock.calls[2]?.[2]).toMatchObject({ key: 'effort', value: 'medium' })
+  })
 
   it('returns a refused create once after the new draft, with no later send', async () => {
     const create = deferred<unknown>()

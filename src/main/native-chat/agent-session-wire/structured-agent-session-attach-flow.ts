@@ -76,6 +76,8 @@ export type AttachFlowInput = {
   acquireSignal?: AbortSignal
   /** How the steps below meet the session's serialize; absent, the caller holds it. */
   lock?: StructuredAgentSessionAttachLock
+  /** Saved catalog rows a new chat's options are admitted against; transient. */
+  models?: Parameters<typeof reserveRequestFor>[0]['models']
   /** The id the host registered this start under; see `StructuredAgentSessionStartupAttempts`. */
   startupAttemptId?: string
   /** The attempt this attach's acquire runs under, minted before the adapter is called; what it
@@ -169,7 +171,8 @@ export async function performAttach(
             authority: input.authority,
             callerKey: input.callerKey,
             fingerprint: admitted.fingerprint,
-            now: input.now()
+            now: input.now(),
+            models: input.models
           })
         )
       )

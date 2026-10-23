@@ -9,13 +9,14 @@ import { MAX_BROWSER_HISTORY_ENTRIES } from '../shared/workspace-session-browser
 import {
   closeTestStores,
   createSqliteTestStore,
-  readPersistedStateJson,
-  testState,
   createStore,
   dataFile,
-  writeDataFile,
   makeRepo,
-  makeTerminalTab
+  makeTerminalTab,
+  readPersistedStateJson,
+  testState,
+  workspaceRepos,
+  writeDataFile
 } from './persistence-test-harness'
 import {
   TEST_LEAF_1,
@@ -457,7 +458,7 @@ describe('Store', () => {
   it('remaps legacy SSH lease leaf ids when loading legacy workspace layouts', async () => {
     writeDataFile({
       schemaVersion: 1,
-      repos: [],
+      repos: workspaceRepos('wt1'),
       worktreeMeta: {},
       settings: {},
       ui: {},
@@ -519,7 +520,7 @@ describe('Store', () => {
     mkdirSync(agentHooksDir, { recursive: true })
     writeDataFile({
       schemaVersion: 1,
-      repos: [],
+      repos: workspaceRepos('wt1'),
       worktreeMeta: {},
       settings: {},
       ui: {},

@@ -16,7 +16,7 @@ import {
   jiraSearchUsers,
   jiraListIssues
 } from './runtime-jira-client'
-import { JIRA_IMAGE_CAPABILITY } from '../../../shared/jira-attachment-image'
+import { JIRA_IMAGE_CAPABILITY } from '../../../shared/jira/jira-attachment-image'
 import { clearJiraImageCache } from './runtime-jira-image-cache'
 import { clearRuntimeCompatibilityCacheForTests } from './runtime-rpc-client'
 import { createCompatibleRuntimeStatusResponse } from './runtime-compatibility-test-fixture'

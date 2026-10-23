@@ -74,7 +74,12 @@ export function createTerminalLinkTestDoubles(): TerminalLinkTestDoubles {
   // Why: specs assert the legacy openFile(file, options) shape; the link entry point delegates to it
   // and records the view it "opened" so the guarded reveal can find it.
   const openFileForLinkMock = vi.fn(
-    (file: { filePath: string; worktreeId: string }, options: unknown) => {
+    (
+      file: { filePath: string; worktreeId: string },
+      options: unknown,
+      _intent: unknown,
+      onShown?: (shown: { fileId: string; viewStateId: string; groupId: string }) => void
+    ) => {
       const returned: unknown = openFileMock(file, options)
       const fileId =
         typeof returned === 'string'
@@ -85,7 +90,10 @@ export function createTerminalLinkTestDoubles(): TerminalLinkTestDoubles {
         ...storeState.unifiedTabsByWorktree,
         [file.worktreeId]: [...(storeState.unifiedTabsByWorktree[file.worktreeId] ?? []), view]
       }
-      return { fileId, viewStateId: view.id, groupId: view.groupId }
+      const shown = { fileId, viewStateId: view.id, groupId: view.groupId }
+      // As today's store: the view is drawn at once.
+      onShown?.(shown)
+      return shown
     }
   )
   const storeState: TerminalLinkStoreState = {
@@ -101,7 +109,7 @@ export function createTerminalLinkTestDoubles(): TerminalLinkTestDoubles {
     unifiedTabsByWorktree: {},
     groupsByWorktree: {},
     worktreesByRepo: {},
-    folderWorkspaces: [] as []
+    folderWorkspaces: []
   }
 
   return {

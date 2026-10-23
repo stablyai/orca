@@ -1,4 +1,6 @@
 import { AgentTransitionDetector } from '../agent-hooks/agent-transition-detector'
+import type { ExternalConversationSeam } from '../external-conversations/external-conversation-seam'
+import { installExternalConversations } from '../external-conversations/external-conversations-install'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/runtime-session-contracts'
 import { parsePaneKey } from '../../shared/stable-pane-id'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
@@ -6,6 +8,7 @@ import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import { OrcaRuntimeWithMigrationCatalog } from './orca-runtime-migration-catalog'
 import { getRuntimeDesktopSurface } from './runtime-desktop-surface'
 import type { AgentStatusStoreView } from './sidebar-inputs/workspace-activity-facts-producer'
+import { subscribeHookStatusTitles } from './terminal/layout/hook-status-title-subscription'
 import {
   TerminalAgentPhonePush,
   type TerminalAgentWorkspaceLabels
@@ -18,6 +21,7 @@ import {
 export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithMigrationCatalog {
   readonly agentTransitions = new AgentTransitionDetector({
     resolveTabWorktreeId: (tabId) => this.tabs.get(tabId)?.worktreeId,
+    subscribeToPtyExit: (ptyId, listener) => this.subscribeToPtyExit(ptyId, listener),
     now: Date.now
   })
   private readonly terminalAgentPhonePush = new TerminalAgentPhonePush({
@@ -44,14 +48,32 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithMig
     now: Date.now
   })
 
+  private readonly externalConversations = installExternalConversations(this.store, this)
+
+  /** The connector seam while `experimentalConnectors` is on; null refuses every connector call. */
+  getExternalConversationSeam(): ExternalConversationSeam | null {
+    return this.externalConversations.current()
+  }
+
   constructor(...args: ConstructorParameters<typeof OrcaRuntimeWithMigrationCatalog>) {
     super(...args)
     this.agentTransitions.subscribe((change) => this.terminalAgentPhonePush.observe(change))
   }
 
-  /** Attaches the detector; layers above subscribe their readers first. */
+  /** Attaches the detector, and main's generated tab titles; layers above subscribe their readers first. */
   attachAgentStatusStore(store: AgentStatusStoreView): () => void {
-    return this.agentTransitions.attach(store)
+    // Why here: each host attaches its hook store at startup, so an enabled connector seam watches
+    // its links' agent sessions from then rather than from its first call.
+    this.externalConversations.current()
+    const detachTransitions = this.agentTransitions.attach(store)
+    const subscribe = store.subscribeEnrichedStatus?.bind(store)
+    const detachTitles = subscribe
+      ? subscribeHookStatusTitles({ subscribeEnrichedStatus: subscribe }, this)
+      : () => {}
+    return () => {
+      detachTitles()
+      detachTransitions()
+    }
   }
 
   // The window's labels (getNotificationWorkspaceLabels), read from this host's own records.

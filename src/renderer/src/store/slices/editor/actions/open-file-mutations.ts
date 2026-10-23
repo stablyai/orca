@@ -4,11 +4,26 @@ import { isEditorTabContentType } from '../tabs/editor-tab-content-type'
 import type { Tab } from '../../../../../../shared/tab-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 import { withPreviewEnded } from '../../tabs/tab-preview-flag'
+import { previewEditorTabsOf } from '../tabs/editor-tab-layout-owner'
 import {
-  previewEditorTabsOf,
-  recordPromotedEditorTabsInLayoutOwner
-} from '../tabs/editor-tab-layout-owner'
-import { writeEditorBuffer } from '../buffers/editor-buffer-record'
+  endsPreviewHere,
+  promotePreviewTabsThroughLayoutOwner
+} from '../../tabs/preview-tab-promotion'
+import {
+  editorBufferOf,
+  updateEditorBuffer,
+  writeEditorBuffer
+} from '../buffers/editor-buffer-record'
+import { getDiskBaselineSignature } from '../../../../../../shared/disk-baseline-signature'
+import { editorBufferSiblingViewIds } from '../buffers/editor-buffer-views'
+
+function withoutKeys<T>(record: Record<string, T>, keys: readonly string[]): Record<string, T> {
+  const next = { ...record }
+  for (const key of keys) {
+    delete next[key]
+  }
+  return next
+}
 
 export function createOpenFileMutations(
   set: EditorSet,
@@ -19,9 +34,6 @@ export function createOpenFileMutations(
   | 'markFileDirty'
   | 'setExternalMutation'
   | 'setLastKnownDiskSignature'
-  | 'clearPendingDiskBaselineVerification'
-  | 'setPendingDiskBaselineVerification'
-  | 'setPendingLiveDiskVerification'
   | 'clearSelfMoveEcho'
   | 'clearUntitled'
 > {
@@ -66,7 +78,7 @@ export function createOpenFileMutations(
       }
     },
 
-    markFileDirty: (fileId, dirty) => {
+    markFileDirty: (fileId, dirty, opts) => {
       const promoted: Tab[] = []
       set((s) => {
         // Why: this fires on every keystroke; rebuilding openFiles unconditionally thrashes subscribers and caused typing lag, so bail when nothing changes.
@@ -75,11 +87,29 @@ export function createOpenFileMutations(
           return s
         }
         // Why: read-only tabs can never become dirty; hard no-op any stray change/save callback that reached here.
-        if (file.readOnly === true || file.csvPreviewOnly === true) {
+        if (
+          (file.readOnly === true || file.csvPreviewOnly === true) &&
+          (dirty || opts?.written !== true)
+        ) {
           return s
         }
+        const buffer = editorBufferOf(s, file)
         const needsPreviewClear = dirty && file.isPreview
-        if (file.isDirty === dirty && !needsPreviewClear) {
+        // Why: a clean tab holds no draft of the disk text; a kept one could later restore stale
+        // text into a shared model. A draft that differs from disk (whitespace a Markdown view
+        // does not count as an edit) is a real unsaved edit and stays.
+        const draft = s.editorDrafts[fileId]
+        const dropDraft =
+          !dirty &&
+          draft !== undefined &&
+          (buffer.lastKnownDiskSignature === undefined ||
+            getDiskBaselineSignature(draft) === buffer.lastKnownDiskSignature)
+        if (
+          buffer.isDirty === dirty &&
+          file.isDirty === dirty &&
+          !needsPreviewClear &&
+          !dropDraft
+        ) {
           return s
         }
         if (ORCA_LAYOUT_OWNER_IS_MAIN && needsPreviewClear) {
@@ -92,13 +122,20 @@ export function createOpenFileMutations(
             { isDirty: dirty },
             needsPreviewClear ? { isPreview: undefined } : undefined
           ),
+          // Why every view: views of one record share one draft.
+          ...(dropDraft
+            ? { editorDrafts: withoutKeys(s.editorDrafts, editorBufferSiblingViewIds(s, fileId)) }
+            : {}),
           ...(needsPreviewClear
             ? {
                 unifiedTabsByWorktree: Object.fromEntries(
                   Object.entries(s.unifiedTabsByWorktree ?? {}).map(([worktreeId, tabs]) => [
                     worktreeId,
                     tabs.map((tab) =>
-                      tab.entityId === fileId && isEditorTabContentType(tab.contentType)
+                      tab.entityId === fileId &&
+                      isEditorTabContentType(tab.contentType) &&
+                      // Switch point: main's frame ends a preview main owns.
+                      endsPreviewHere(s, worktreeId)
                         ? withPreviewEnded(tab)
                         : tab
                     )
@@ -108,62 +145,17 @@ export function createOpenFileMutations(
             : {})
         }
       })
-      // Switch point: main records that an edit made a preview tab permanent.
+      // Switch point: main makes the edited preview tabs permanent.
       if (ORCA_LAYOUT_OWNER_IS_MAIN && promoted.length > 0) {
-        recordPromotedEditorTabsInLayoutOwner(get(), promoted)
+        promotePreviewTabsThroughLayoutOwner(get(), set, promoted)
       }
     },
 
     setExternalMutation: (fileId, mutation) =>
-      set((s) => {
-        const file = s.openFiles.find((f) => f.id === fileId)
-        if (!file) {
-          return s
-        }
-        const next = mutation ?? undefined
-        if (file.externalMutation === next) {
-          return s
-        }
-        return writeEditorBuffer(s, fileId, { externalMutation: next })
-      }),
+      set((s) => updateEditorBuffer(s, fileId, { externalMutation: mutation ?? undefined })),
 
     setLastKnownDiskSignature: (fileId, signature) =>
-      set((s) => {
-        const file = s.openFiles.find((f) => f.id === fileId)
-        if (!file || file.lastKnownDiskSignature === signature) {
-          return s
-        }
-        return writeEditorBuffer(s, fileId, { lastKnownDiskSignature: signature })
-      }),
-
-    clearPendingDiskBaselineVerification: (fileId) =>
-      set((s) => {
-        const file = s.openFiles.find((f) => f.id === fileId)
-        if (!file?.pendingDiskBaselineVerification) {
-          return s
-        }
-        return writeEditorBuffer(s, fileId, { pendingDiskBaselineVerification: undefined })
-      }),
-
-    setPendingDiskBaselineVerification: (fileId, value) =>
-      set((s) => {
-        const file = s.openFiles.find((f) => f.id === fileId)
-        const next = value || undefined
-        if (!file || file.pendingDiskBaselineVerification === next) {
-          return s
-        }
-        return writeEditorBuffer(s, fileId, { pendingDiskBaselineVerification: next })
-      }),
-
-    setPendingLiveDiskVerification: (fileId, value) =>
-      set((s) => {
-        const file = s.openFiles.find((f) => f.id === fileId)
-        const next = value || undefined
-        if (!file || file.pendingLiveDiskVerification === next) {
-          return s
-        }
-        return writeEditorBuffer(s, fileId, { pendingLiveDiskVerification: next })
-      }),
+      set((s) => updateEditorBuffer(s, fileId, { lastKnownDiskSignature: signature })),
 
     clearSelfMoveEcho: (fileId) =>
       set((s) => {

@@ -1,4 +1,5 @@
 import type { TaskPageJiraCreationMetadataModel } from './use-task-page-jira-creation-metadata'
+import { getWorkItemRepo } from '@/lib/work-item-repo-row'
 import { useCallback, useMemo, useEffect } from 'react'
 import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import { taskPageGitHubItemKey } from '@/components/task-page-github-work-item-mutation-registry'
@@ -13,7 +14,7 @@ import {
 import { sameOptionalGitHubOwnerRepo } from './task-page-github-review-model'
 export function useTaskPageGitHubListProjection(model: TaskPageJiraCreationMetadataModel) {
   const {
-    repoMap,
+    repos,
     fetchPRChecks,
     taskSource,
     githubMode,
@@ -102,7 +103,7 @@ export function useTaskPageGitHubListProjection(model: TaskPageJiraCreationMetad
       if (item.type !== 'pr' || item.checksSummary) {
         return
       }
-      const repo = repoMap.get(item.repoId)
+      const repo = getWorkItemRepo(repos, item)
       if (!repo) {
         return
       }
@@ -134,7 +135,7 @@ export function useTaskPageGitHubListProjection(model: TaskPageJiraCreationMetad
         )
       })
     },
-    [fetchPRChecks, patchTaskPageWorkItemRows, repoMap]
+    [fetchPRChecks, patchTaskPageWorkItemRows, repos]
   )
   useEffect(() => {
     if (taskSource !== 'github' || githubMode !== 'items' || !showPRManagementColumns) {

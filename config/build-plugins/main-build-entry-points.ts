@@ -10,7 +10,7 @@ export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {
   'doc-preview-link-preload': resolve('src/preload/doc-preview-link.ts'),
   'daemon-entry': resolve('src/main/daemon/daemon-entry.ts'),
   'plugin-host-entry': resolve('src/main/plugins/plugin-host-entry.ts'),
-  'computer-sidecar': resolve('src/main/computer/sidecar-entry.ts'),
+  'computer-sidecar': resolve('src/main/computer/computer-sidecar.ts'),
   'stt-worker': resolve('src/main/speech/stt-worker.ts'),
   'warp-theme-parser-worker': resolve('src/main/warp-themes/warp-theme-parser-worker.ts'),
   'foreign-sqlite-reader-entry': resolve(

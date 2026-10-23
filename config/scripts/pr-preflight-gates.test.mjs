@@ -52,7 +52,7 @@ it('shares one setup and overlaps the compiler only after type-aware checks fini
 })
 
 it('uses the shared Bun pin for every current-toolchain workflow', () => {
-  expect(readFileSync('config/.bun-version', 'utf8').trim()).toBe('1.4.3')
+  expect(readFileSync('config/.bun-version', 'utf8').trim()).toBe('1.4.4')
   for (const file of readdirSync('.github/workflows').filter((name) => /\.ya?ml$/.test(name))) {
     const current = parse(readFileSync(`.github/workflows/${file}`, 'utf8'))
     for (const job of Object.values(current.jobs)) {
@@ -247,18 +247,9 @@ it('pins every foreground and background step to its selected phase', () => {
     ['Check reliability gate manifest', staticPhase],
     ['Enforce dead design-system classes', staticPhase],
     ['Check VM runtime rollback compatibility', staticPhase],
-    ['Enforce max-lines ratchet', staticPhase],
-    ['Enforce ts-nocheck ratchet', staticPhase],
-    ['Enforce runtime Electron-import ratchet', staticPhase],
-    ['Enforce focus-read ratchet', staticPhase],
-    ['Enforce layout-writer ratchets', staticPhase],
-    ['Enforce path-literal ratchet', staticPhase],
-    ['Enforce worktree-id composer ratchet', staticPhase],
-    ['Enforce e2e typecheck ratchet', staticPhase],
-    ['Enforce legacy relay fence ratchet', staticPhase],
-    ['Enforce unproven PTY retirement ratchet', staticPhase],
-    ['Enforce id-only store write ratchet', staticPhase],
+    ['Enforce ratchets', staticPhase],
     ['Check Node runtime pin', staticPhase],
+    ['Check root and mobile lock the same shared dependencies', staticPhase],
     ['Decide whether the orcad terminal smoke runs', staticPhase],
     ['Verify the generated RPC params catalog', staticPhase],
     ['Verify the generated ACP protocol schema', staticPhase],

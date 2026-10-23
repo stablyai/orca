@@ -1,10 +1,15 @@
 import type { BrowserExternalAppPrompt } from './browser-external-app'
 import type { BrowserHttpAuthCredentials, BrowserHttpAuthPrompt } from './browser-http-auth'
+import type {
+  BrowserSitePermissionDecision,
+  BrowserSitePermissionPrompt
+} from './browser-site-permission'
 
-/** Every prompt a page in the built-in browser can raise: what it shows, and a yes answer. */
+/** Every prompt a page in the built-in browser can raise: what it shows, and an answer. */
 export type BrowserPagePromptKinds = {
   'external-app': { details: BrowserExternalAppPrompt; answer: true }
   'http-auth': { details: BrowserHttpAuthPrompt; answer: BrowserHttpAuthCredentials }
+  'site-permission': { details: BrowserSitePermissionPrompt; answer: BrowserSitePermissionDecision }
 }
 
 export type BrowserPagePromptKind = keyof BrowserPagePromptKinds
@@ -21,7 +26,7 @@ export type BrowserPagePromptRequest<K extends BrowserPagePromptKind = BrowserPa
 
 export type BrowserPagePromptResponse = {
   requestId: string
-  /** Null: the user declined. */
+  /** Null: the user declined or dismissed it. */
   answer: unknown
 }
 

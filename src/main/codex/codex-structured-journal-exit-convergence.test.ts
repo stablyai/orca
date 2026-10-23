@@ -96,9 +96,7 @@ it('settles a refused Codex exit through the host in one commit, then permits a 
   const deferred = createDeferredStructuredAgentSessionEventSink({
     sessionId: SESSION,
     logger: recording.logger,
-    onFailed,
-    // Small budget exercises the production refusal without multi-megabyte fixtures.
-    watermarks: { maxLifecycleQueuedBytes: 16_384 }
+    onFailed
   })
   deferred.bind({ journal, fence: 7, publish: () => undefined })
   const translator = createCodexJournalTranslator({
@@ -183,20 +181,27 @@ it('settles a refused Codex exit through the host in one commit, then permits a 
     options: new Map(),
     reportedOptions: {}
   }
-  expect(
-    handleCodexSessionExit({
-      sessions: new Map([[SESSION, codexSession]]),
-      sessionId: SESSION,
-      connection: codexSession.connection,
-      error: new Error('codex exited'),
-      logger: recording.logger,
-      onEvent: (event) => {
-        if (event.type === 'ended' && 'cause' in event) {
-          events.push(event)
-        }
+  const gate = Promise.withResolvers<void>()
+  const blocked = journal.readInOrder(() => gate.promise)
+  // A count-refused exit still delegates settlement to the host, as on main.
+  for (let index = 0; index < 1_024; index++) {
+    deferred.sink.publish({ lifecycle: true, coalescingKey: `limit-${index}` })
+  }
+  const exited = handleCodexSessionExit({
+    sessions: new Map([[SESSION, codexSession]]),
+    sessionId: SESSION,
+    connection: codexSession.connection,
+    error: new Error('codex exited'),
+    logger: recording.logger,
+    onEvent: (event) => {
+      if (event.type === 'ended' && 'cause' in event) {
+        events.push(event)
       }
-    })
-  ).toBe(true)
+    }
+  })
+  gate.resolve()
+  await blocked
+  expect(exited).toBe(true)
   expect(admission).toHaveReturnedWith({ accepted: false, reason: 'backpressure' })
   expect(recording.entries).toContainEqual({
     level: 'warn',

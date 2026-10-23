@@ -13,11 +13,15 @@ const readWorkflow = (relativePath) => parse(readFileSync(join(projectDir, relat
 describe('ref-mirroring vet steps', () => {
   it.each(['daily', 'hourly', 'adhoc'])('%s builds only need the current commit', (channel) => {
     const { jobs } = readWorkflow(`.github/workflows/${channel}-mac-build.yml`)
-    const job = jobs[`build-${channel}-mac`]
+    const job = jobs[channel === 'adhoc' ? 'build-adhoc-mac-arch' : `build-${channel}-mac`]
     const identity = channel === 'adhoc' ? jobs['orcad-template-support'] : job
     const checkout = job.steps.find((step) => step.uses === 'actions/checkout@v6')
     expect(checkout.with['fetch-depth']).toBe(1)
-    expect(job.steps.some((step) => step.run?.includes('gh release list'))).toBe(true)
+    expect(
+      (channel === 'adhoc' ? jobs['build-adhoc-mac'] : job).steps.some((step) =>
+        step.run?.includes('gh release list')
+      )
+    ).toBe(true)
     expect(
       identity.steps.some((step) => step.run?.includes('ORCA_PUBLISHED_VERSIONS="$published"'))
     ).toBe(true)
@@ -31,7 +35,9 @@ describe('ref-mirroring vet steps', () => {
     (channel) => {
       const { jobs } = readWorkflow(`.github/workflows/${channel}-mac-build.yml`)
       const identity =
-        channel === 'adhoc' ? jobs['orcad-template-support'] : jobs[`build-${channel}-mac`]
+        channel === 'adhoc'
+          ? jobs['orcad-template-support']
+          : jobs[channel === 'adhoc' ? 'build-adhoc-mac-arch' : `build-${channel}-mac`]
       const step = identity.steps.find(
         (candidate) => candidate.name === `Compute ${channel} version`
       )

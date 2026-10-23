@@ -27,6 +27,10 @@ import {
 import { clearWebSessionReorderIntentsForWorktree } from '../web-session-reorder-intent'
 import { clearWebSessionCloseIntentsForWorktree } from '../web-session-close-intent'
 import {
+  forgetMirroredTerminalHandles,
+  resetMirroredTerminalHandlesForTests
+} from './mirrored-terminal-handle-index'
+import {
   forgetRetiredEpochCensuses,
   resetRetiredEpochCensusesForTests
 } from './retired-epoch-census'
@@ -97,6 +101,7 @@ export function resetWebSessionTabsSnapshotFreshnessForTests(): void {
   sessionTabsTrackingGenerations.reset()
   resetWebSessionBrowserPlacementsForTests()
   resetRetiredEpochCensusesForTests()
+  resetMirroredTerminalHandlesForTests()
 }
 
 export function _getWebSessionTabsTrackingCountsForTest(): {
@@ -149,6 +154,7 @@ export function clearWebSessionTabsTrackingForWorktree(
   clearHostSessionTabIdMappings(environmentId, worktreeId)
   clearWebSessionBrowserPlacementsForWorktree(environmentId, worktreeId)
   clearWebSessionTerminalPlacementsForWorktree(environmentId, worktreeId)
+  forgetMirroredTerminalHandles(environmentId, worktreeId)
 }
 
 export function clearWebSessionTabsTrackingForEnvironment(environmentId: string): void {
@@ -218,6 +224,7 @@ export function clearWebSessionTabsTrackingForEnvironment(environmentId: string)
   clearHostMirrorHandleGapVerdictsForEnvironment(trimmedEnvironmentId)
   clearAllWebRuntimeWakeTerminalRespawn()
   clearWebRuntimeInitialTerminalBootstrapsForEnvironment(trimmedEnvironmentId)
+  forgetMirroredTerminalHandles(trimmedEnvironmentId)
 }
 
 export function getWebSessionTabsTrackingGeneration(environmentId: string): number {

@@ -233,11 +233,11 @@ function TerminalContextMenuItems({
           {isNativeChatView
             ? translate(
                 'components.tab.bar.SortableTabContextMenu.switchToTerminalView',
-                'Switch to Terminal'
+                'Continue with Terminal Agent'
               )
             : translate(
                 'components.tab.bar.SortableTabContextMenu.switchToChatView',
-                'Switch to Chat'
+                'Continue in Chat UI'
               )}
           <DropdownMenuShortcut>{shortcuts.nativeChat}</DropdownMenuShortcut>
         </DropdownMenuItem>

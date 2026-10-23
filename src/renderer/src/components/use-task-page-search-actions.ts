@@ -12,6 +12,7 @@ import { translate } from '@/i18n/i18n'
 import type { GitHubTaskKind } from '@/components/task-page-localized-options'
 import { getTaskPresetQuery } from '../../../shared/task-preset-query'
 import { shouldSuppressEnterSubmit } from '@/lib/new-workspace-enter-guard'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 export function useTaskPageSearchActions(model: TaskPageGitHubQuietRefreshModel) {
   const {
     setTaskResumeState,
@@ -218,13 +219,8 @@ export function useTaskPageSearchActions(model: TaskPageGitHubQuietRefreshModel)
       input.focus()
       input.select()
     }
-    window.addEventListener('keydown', onKeyDown, {
-      capture: true
-    })
-    return () =>
-      window.removeEventListener('keydown', onKeyDown, {
-        capture: true
-      })
+    addAppKeyListener('keydown', onKeyDown)
+    return () => removeAppKeyListener('keydown', onKeyDown)
   }, [
     activeModal,
     dialogWorkItem,

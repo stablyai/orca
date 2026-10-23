@@ -1,3 +1,4 @@
+import { journalItemDeclaresEcho } from './journal-item-echo'
 // THE reducer. One implementation folds rows into the render model, and both
 // the live append path and replay call it — a live-only shortcut is how a
 // reconnect starts disagreeing with the screen it replaced.
@@ -16,6 +17,7 @@ import type {
   AgentJournalSnapshot,
   AgentJournalSubmission
 } from '../../../shared/agent-session-journal-types'
+import { journalHistoryOrigin, type JournalHistoryOrigin } from './journal-history-origin'
 import { journalBatchMutationProducer, journalRenderItem } from './journal-render-item'
 import { compareAgentJournalItems } from '../../../shared/agent-session-journal-position'
 import {
@@ -40,6 +42,11 @@ import {
   foldJournalQueuePauseMark,
   type JournalQueuePauseMarks
 } from './queued-message-pause'
+import {
+  createJournalQueueState,
+  foldJournalQueueRow,
+  type JournalQueueState
+} from './journal-queue-fold'
 
 export const MAX_JOURNAL_APPLIED_SETTLEMENT_IDS = 4_096
 
@@ -68,6 +75,8 @@ export type JournalReducerState = {
   /** Provider item id → the submission slot that adopted it. Stops an accepted
    *  echo from appending a second copy of the user's own message. */
   aliases: Map<string, string>
+  /** First declared echo contract per item, rebuilt from rows and kept through tombstones. */
+  itemEchoes: Map<string, unknown>
   appliedSettlementIds: Set<string>
   /** Scope for rows stored without one; rebuilt by replay, never persisted. */
   derivedTurnScope: JournalDerivedTurnScope
@@ -77,6 +86,15 @@ export type JournalReducerState = {
   queuePauseMarks: JournalQueuePauseMarks
   /** Host-only: each handed-over send's stopped-message history, from its latest `pending` row. */
   stoppedHistoryCarried: Map<string, readonly string[]>
+  /** Where each queued card's hand-off was placed when handed over; never stored. */
+  queuedHandOffPlaces: Map<
+    string,
+    Pick<AgentJournalRenderItem, 'sequence' | 'observedAt' | 'turnScope'>
+  >
+  /** The queued messages, folded from their own rows and their hand-offs (`journal-queue-fold.ts`). */
+  queue: JournalQueueState
+  /** Original adoption evidence, independent of the current epoch's reason/time. */
+  historyOrigin: JournalHistoryOrigin | null
 }
 
 export function createJournalReducerState(sessionId: string, epoch: string): JournalReducerState {
@@ -96,11 +114,15 @@ export function createJournalReducerState(sessionId: string, epoch: string): Jou
     submissions: new Map(),
     receipts: new Map(),
     aliases: new Map(),
+    itemEchoes: new Map(),
     appliedSettlementIds: new Set(),
     derivedTurnScope: new JournalDerivedTurnScope(),
     latestAcceptedTurnSequence: 0,
     queuePauseMarks: createJournalQueuePauseMarks(),
-    stoppedHistoryCarried: new Map()
+    stoppedHistoryCarried: new Map(),
+    queuedHandOffPlaces: new Map(),
+    queue: createJournalQueueState(),
+    historyOrigin: null
   }
 }
 
@@ -109,9 +131,19 @@ export function applyJournalRow(
   row: JournalRow,
   savedAt = row.ts
 ): void {
+  applyJournalRowFacts(state, row, savedAt)
+  foldJournalQueueRow(state, row)
+}
+
+function applyJournalRowFacts(state: JournalReducerState, row: JournalRow, savedAt: number): void {
   state.lastSequence = Math.max(state.lastSequence, row.seq)
   state.highestFence = Math.max(state.highestFence, row.fence)
   if (row.kind === 'epoch') {
+    state.historyOrigin = journalHistoryOrigin(row)
+    return
+  }
+  // A queued card is never activity: it feeds no working status and no idle sweep.
+  if (row.kind === 'queue') {
     return
   }
   state.lastActivityAt = Math.max(state.lastActivityAt, row.ts)
@@ -119,8 +151,13 @@ export function applyJournalRow(
     if (journalItemRevisionIsStale(state, row.itemId, row.revision)) {
       return
     }
+    if (!state.itemEchoes.has(row.itemId) && Object.hasOwn(row, 'echoOf')) {
+      state.itemEchoes.set(row.itemId, row.echoOf)
+    }
     const itemId = resolveJournalItemId(state, row.itemId, row.body)
-    acceptSubmissionFromProviderItem(state, row.itemId, itemId, row)
+    if (!state.itemEchoes.has(row.itemId)) {
+      acceptSubmissionFromProviderItem(state, row.itemId, itemId, row)
+    }
     upsertJournalItem(
       state,
       itemId,
@@ -152,9 +189,14 @@ export function applyJournalRow(
         if (journalItemRevisionIsStale(state, mutation.itemId, mutation.revision)) {
           continue
         }
+        if (!state.itemEchoes.has(mutation.itemId) && Object.hasOwn(mutation, 'echoOf')) {
+          state.itemEchoes.set(mutation.itemId, mutation.echoOf)
+        }
         const { revision, body } = mutation
         const itemId = resolveJournalItemId(state, mutation.itemId, body)
-        acceptSubmissionFromProviderItem(state, mutation.itemId, itemId, row)
+        if (!state.itemEchoes.has(mutation.itemId)) {
+          acceptSubmissionFromProviderItem(state, mutation.itemId, itemId, row)
+        }
         const producer = journalBatchMutationProducer(row, mutation)
         const scope = statedOrDerivedTurnScope(state, mutation)
         const item = journalRenderItem(itemId, revision, body, row, scope, producer, sequenceIndex)
@@ -230,7 +272,11 @@ export function journalEchoClaimant(
   itemId: string,
   body?: AgentJournalRenderItem['body']
 ): string | null {
-  if (!body || !isProviderUserMessageEcho(itemId, body)) {
+  if (
+    !body ||
+    journalItemDeclaresEcho(state.itemEchoes, itemId) ||
+    !isProviderUserMessageEcho(itemId, body)
+  ) {
     return null
   }
   const fingerprint = agentSessionSendBodyFingerprint(state.sessionId, body)

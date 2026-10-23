@@ -11,6 +11,9 @@ import type {
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import { OrcaRuntimeService } from '../../orca-runtime'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { LayoutCommand } from '../../../../shared/workspace-layout/workspace-layout-command-types'
+import { applyCommandToSession } from '../../../persistence/terminal-topology/terminal-pane-admission'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
@@ -113,8 +116,24 @@ function windowGraph(
 /** What the window's list holds for main's new pane when it lands, after main's own. */
 type WindowListing = 'pane-without-terminal' | 'no-new-pane'
 
-function setup(listing: WindowListing) {
+function setup(listing: WindowListing, pinned = false) {
   let session = persistedSession()
+  if (pinned) {
+    session = {
+      ...session,
+      tabsByWorktree: {
+        [WORKTREE_ID]: [{ ...session.tabsByWorktree[WORKTREE_ID]![0]!, isPinned: true }]
+      }
+    }
+  }
+  // The Store tells its write listeners after each write, as main's terminal list relies on.
+  const written = new Set<(hostId: string | null) => void>()
+  const write = (next: WorkspaceSessionState): void => {
+    session = next
+    for (const listener of written) {
+      listener('local')
+    }
+  }
   const repo = {
     id: REPO_ID,
     path: '/workspace',
@@ -127,8 +146,21 @@ function setup(listing: WindowListing) {
       getRepos: () => [repo],
       getRepo: (id: string) => (id === REPO_ID ? repo : undefined),
       getWorkspaceSession: () => session,
+      getWorkspaceSessionHostIds: () => ['local'],
+      onWorkspaceSessionWritten: (listener: (hostId: string | null) => void) => {
+        written.add(listener)
+        return () => written.delete(listener)
+      },
       setWorkspaceSession: (next: WorkspaceSessionState) => {
-        session = next
+        write(next)
+      },
+      // Main's own layout close, as the Store applies it.
+      applyLayoutCommand: async (command: LayoutCommand, hostIds: readonly ExecutionHostId[]) => {
+        const change = applyCommandToSession(hostIds[0]!, session, command)
+        if (change.session) {
+          write(change.session)
+        }
+        return change.value
       },
       persistPtyBinding: () => true,
       flushOrThrow: () => undefined
@@ -149,7 +181,7 @@ function setup(listing: WindowListing) {
     // The real spawn writes the new pane's binding into main's session; the fake does the same.
     spawn: vi.fn(async (args: { tabId?: string; leafId?: string }) => {
       const layout = session.terminalLayoutsByTabId[args.tabId!]!
-      session = {
+      write({
         ...session,
         terminalLayoutsByTabId: {
           ...session.terminalLayoutsByTabId,
@@ -158,7 +190,7 @@ function setup(listing: WindowListing) {
             ptyIdsByLeafId: { ...layout.ptyIdsByLeafId, [args.leafId!]: SPLIT_PTY_ID }
           }
         }
-      }
+      })
       return { id: SPLIT_PTY_ID }
     }),
     write: () => true,
@@ -218,13 +250,13 @@ function setup(listing: WindowListing) {
   const dropPane = (leafId: string): void => {
     const layout = session.terminalLayoutsByTabId[TAB_ID]!
     const { [leafId]: _dropped, ...ptyIdsByLeafId } = layout.ptyIdsByLeafId ?? {}
-    session = {
+    write({
       ...session,
       terminalLayoutsByTabId: {
         ...session.terminalLayoutsByTabId,
         [TAB_ID]: { ...layout, root: sourceLayout().root, ptyIdsByLeafId }
       }
-    }
+    })
   }
   return { runtime, handle, dropPane }
 }
@@ -251,5 +283,24 @@ describe("a tab close by a main-side split's handle while the window's list lags
     dropPane(split.leafId!)
 
     await expect(runtime.closeTerminalTab(split.handle)).rejects.toThrow('terminal_handle_stale')
+  })
+})
+
+describe('a CLI close of a pinned tab main owns, in a layout-owner build', () => {
+  it('refuses the tab close and keeps the tab, as the window-era close did', async () => {
+    const { runtime, handle } = setup('no-new-pane', true)
+
+    await expect(runtime.closeTerminalTab(handle)).rejects.toThrow('terminal_tab_pinned')
+    await expect(runtime.closeTerminal(handle)).rejects.toThrow('terminal_tab_pinned')
+    expect(
+      runtime.getWorkspaceSessionForWorktree(WORKTREE_ID)?.tabsByWorktree[WORKTREE_ID]
+    ).toHaveLength(1)
+  })
+
+  it('still closes one pane of a pinned split tab', async () => {
+    const { runtime, handle } = setup('no-new-pane', true)
+    const split = await runtime.splitTerminal(handle, { direction: 'vertical' })
+
+    await expect(runtime.closeTerminal(split.handle)).resolves.toMatchObject({ tabId: TAB_ID })
   })
 })

@@ -6,18 +6,15 @@ import {
   type WorkspaceRowFactReader,
   type WorkspaceRowFilters
 } from '../workspace-view/workspace-row-filters'
-import {
-  getCyclicProjectedWorktreeLineageIds,
-  getLineageRenderInfo
-} from './worktree-lineage-projection'
+import { getSidebarLineageParentsByIdentity } from './worktree-lineage-projection'
 
 export type VisibleSidebarWorktreeInputs = {
   /** Every catalog row, one per host-qualified identity. */
   rows: readonly Worktree[]
-  /** Non-archived rows by id, the lineage ancestors a visible child may pull in. */
-  ancestorById: ReadonlyMap<string, Worktree>
-  /** Rank of each id in the frozen sort order; unranked rows go last. */
-  rankById: ReadonlyMap<string, number>
+  /** Non-archived rows by host identity, the lineage ancestors a visible child may pull in. */
+  ancestorByIdentity: ReadonlyMap<string, Worktree>
+  /** A row's place in the frozen sort order; unranked rows go last. */
+  rankOf: (worktree: Worktree) => number | undefined
   filters: WorkspaceRowFilters
   facts: WorkspaceRowFactReader<Worktree>
   worktreeLineageById: Record<string, WorktreeLineage>
@@ -30,8 +27,8 @@ export type VisibleSidebarWorktreeInputs = {
 /** The sidebar's visible worktrees, in display order, before grouping. */
 export function selectVisibleSidebarWorktrees({
   rows,
-  ancestorById,
-  rankById,
+  ancestorByIdentity,
+  rankOf,
   filters,
   facts,
   worktreeLineageById,
@@ -49,8 +46,10 @@ export function selectVisibleSidebarWorktrees({
   if (forcedVisibleWorktreeIds && forcedVisibleWorktreeIds.length > 0) {
     const includedIds = new Set(all.map((worktree) => worktree.id))
     for (const worktreeId of forcedVisibleWorktreeIds) {
-      const worktree = ancestorById.get(worktreeId)
-      if (worktree && !includedIds.has(worktreeId)) {
+      const worktree = includedIds.has(worktreeId)
+        ? undefined
+        : [...ancestorByIdentity.values()].find((candidate) => candidate.id === worktreeId)
+      if (worktree) {
         includedIds.add(worktreeId)
         all.push(worktree)
       }
@@ -61,46 +60,40 @@ export function selectVisibleSidebarWorktrees({
   // worktrees before the next sortEpoch bump) are appended at the end.
   // Manual placement belongs to the parent, even when a hidden child has a higher rank.
   if (injectLineageAncestors !== false && preserveLineageParentOrder) {
-    all = addVisibleLineageAncestors(all, ancestorById, worktreeLineageById, selectedRepoIds)
+    all = addVisibleLineageAncestors(all, ancestorByIdentity, worktreeLineageById, selectedRepoIds)
   }
-  all.sort((a, b) => {
-    const ai = rankById.get(a.id) ?? Infinity
-    const bi = rankById.get(b.id) ?? Infinity
-    return ai - bi
-  })
+  all = all
+    .map((worktree) => ({ worktree, rank: rankOf(worktree) ?? Infinity }))
+    .sort((a, b) => a.rank - b.rank)
+    .map(({ worktree }) => worktree)
 
   return injectLineageAncestors === false || preserveLineageParentOrder
     ? all
-    : addVisibleLineageAncestors(all, ancestorById, worktreeLineageById, selectedRepoIds)
+    : addVisibleLineageAncestors(all, ancestorByIdentity, worktreeLineageById, selectedRepoIds)
 }
 
 function addVisibleLineageAncestors(
   worktrees: Worktree[],
-  worktreeById: ReadonlyMap<string, Worktree>,
+  ancestorByIdentity: ReadonlyMap<string, Worktree>,
   lineageById: Record<string, WorktreeLineage>,
   selectedRepoIds: ReadonlySet<string> | null
 ): Worktree[] {
   const result: Worktree[] = []
   const included = new Set<string>()
-  const visiting = new Set<string>()
-  const cyclicLineageIds = getCyclicProjectedWorktreeLineageIds(lineageById, worktreeById)
+  // The parent nesting puts each row under, so an injected ancestor is the one it nests in.
+  const parentByIdentity = getSidebarLineageParentsByIdentity(lineageById, ancestorByIdentity)
 
   const addWithAncestors = (worktree: Worktree): void => {
     const identity = getWorktreeHostIdentity(worktree)
-    if (included.has(identity) || visiting.has(identity)) {
+    if (included.has(identity)) {
       return
     }
-    visiting.add(identity)
-    const lineage = getLineageRenderInfo(worktree, lineageById, worktreeById, cyclicLineageIds)
-    if (
-      lineage.state === 'valid' &&
-      (!selectedRepoIds || selectedRepoIds.has(lineage.parent.repoId))
-    ) {
-      // Why: a repository filter is an explicit boundary; other filters keep
-      // valid ancestors so visible children retain their hierarchy.
-      addWithAncestors(lineage.parent)
+    const parent = parentByIdentity.get(identity)
+    // Why: a repository filter is an explicit boundary; other filters keep
+    // valid ancestors so visible children retain their hierarchy.
+    if (parent && (!selectedRepoIds || selectedRepoIds.has(parent.repoId))) {
+      addWithAncestors(parent)
     }
-    visiting.delete(identity)
     if (!included.has(identity)) {
       included.add(identity)
       result.push(worktree)

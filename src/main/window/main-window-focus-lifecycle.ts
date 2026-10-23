@@ -1,6 +1,7 @@
 import { ipcMain, Menu, type BrowserWindow } from 'electron'
 import { isCrashReportReason } from '../../shared/crash-reporting'
 import {
+  plainTextContextMenuTargetChannel,
   richMarkdownContextMenuTargetChannel,
   type RichMarkdownContextMenuTableTarget
 } from '../../shared/rich-markdown-context-menu'
@@ -104,14 +105,25 @@ export function installMainWindowFocusLifecycle(args: {
     pendingRichMarkdownContextMenuTableTarget = parseRichMarkdownContextMenuTableTarget(value)
   }
   ipcMain.on(richMarkdownContextMenuTargetChannel, onRichMarkdownContextMenuTarget)
+  // Why: the renderer sends this over the same frame IPC pipe just before Chromium reports the menu, so it pairs with the next one.
+  let pendingPlainTextContextMenuTarget = false
+  const onPlainTextContextMenuTarget = (event: Electron.IpcMainEvent): void => {
+    if (event.sender === mainWindow.webContents) {
+      pendingPlainTextContextMenuTarget = true
+    }
+  }
+  ipcMain.on(plainTextContextMenuTargetChannel, onPlainTextContextMenuTarget)
   const onMainContextMenu = (_event: Electron.Event, params: Electron.ContextMenuParams): void => {
     const tableTarget = matchingRichMarkdownContextMenuTableTarget(
       params,
       pendingRichMarkdownContextMenuTableTarget
     )
+    const plainText = pendingPlainTextContextMenuTarget
     pendingRichMarkdownContextMenuTableTarget = null
+    pendingPlainTextContextMenuTarget = false
     const template = buildEditableContextMenuTemplate(params, mainWindow.webContents, {
-      tableTarget
+      tableTarget,
+      plainText
     })
     if (template.length === 0 || mainWindow.isDestroyed()) {
       return
@@ -125,6 +137,7 @@ export function installMainWindowFocusLifecycle(args: {
   const resetMarkdownEditorFocus = (): void => {
     markdownEditorFocused = false
     pendingRichMarkdownContextMenuTableTarget = null
+    pendingPlainTextContextMenuTarget = false
   }
   const resetTerminalInputFocus = (): void => {
     terminalInputFocused = false
@@ -293,6 +306,7 @@ export function installMainWindowFocusLifecycle(args: {
     ipcMain.removeListener(floatingFocusChannel, onFloatingFocus)
     ipcMain.removeListener(shortcutRecorderFocusChannel, onShortcutRecorderFocused)
     ipcMain.removeListener(richMarkdownContextMenuTargetChannel, onRichMarkdownContextMenuTarget)
+    ipcMain.removeListener(plainTextContextMenuTargetChannel, onPlainTextContextMenuTarget)
   }
   return {
     dispose,

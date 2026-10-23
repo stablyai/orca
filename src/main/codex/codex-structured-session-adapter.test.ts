@@ -46,7 +46,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
     expect(codex.connections[0].calls.map((call) => call.method)).toEqual([
       'initialize',
       'thread/start',
-      'model/list'
+      'skills/list'
     ])
   })
 
@@ -91,7 +91,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
     })
   })
 
-  it('leaves a rejected listing as a catalog error after the thread opens', async () => {
+  it('keeps current intent usable without inventing controls when a listing fails', async () => {
     const codex = fakeCodex({
       'model/list': () => {
         throw new Error('stub model/list rejected')
@@ -102,16 +102,38 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
     await acquireReadyCodexForTest(adapter, {
       identity: identityFor('session-1'),
       fence: 7,
-      spawnToken: 'spawn-9'
+      spawnToken: 'spawn-9',
+      options: { model: 'gpt-live', effort: 'medium' }
     })
 
     expect(codexStartReport(adapter).reportedOptions).toEqual({
       model: 'gpt-live',
       effort: 'medium'
     })
-    await expect(adapter.readOptions({ sessionId: 'session-1', fence: 7 })).rejects.toThrow(
-      'stub model/list rejected'
-    )
+    await expect(adapter.readOptions({ sessionId: 'session-1', fence: 7 })).resolves.toEqual({
+      current: { model: 'gpt-live', effort: 'medium' },
+      models: [
+        {
+          id: 'gpt-live',
+          label: 'gpt-live',
+          isDefault: false,
+          efforts: [],
+          effortsKnown: false
+        }
+      ]
+    })
+    codex.routes['turn/start'] = answerWithOpenedTurn(codex, 'turn-1')
+    await expect(
+      adapter.dispatch({
+        sessionId: 'session-1',
+        clientMessageId: 'after-listing-failure',
+        body: USER_MESSAGE,
+        fence: 7
+      })
+    ).resolves.toMatchObject({ state: 'admitted' })
+    expect(
+      codex.connections[0].calls.findLast((call) => call.method === 'turn/start')?.params
+    ).toMatchObject({ model: 'gpt-live', effort: 'medium' })
     expect(codex.connections[0].closeCount).toBe(0)
   })
 
@@ -163,8 +185,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
   it('resumes the thread the durable handle chain names, not the client one', async () => {
     const codex = fakeCodex()
     const adapter = adapterFor(codex, {
-      resumeThreadId: 'thread-proven',
-      resumePath: '/rollouts/thread-proven.jsonl'
+      resumeThreadId: 'thread-proven'
     })
 
     await acquireReadyCodexForTest(adapter, {
@@ -177,8 +198,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       method: 'thread/resume',
       params: expect.objectContaining({
         threadId: 'thread-proven',
-        cwd: '/work/repo',
-        path: '/rollouts/thread-proven.jsonl'
+        cwd: '/work/repo'
       })
     })
     expect(codexStartedLink(adapter)?.origin).toBe('resumed')
@@ -454,7 +474,7 @@ describe('CodexStructuredSessionAdapter.dispatch', () => {
 
     // Identity is not knowable here: a send coalesced into a running turn shares
     // that turn's id, so the echo settles which message landed where.
-    expect(outcome).toEqual({ state: 'admitted' })
+    expect(outcome).toMatchObject({ state: 'admitted' })
     expect(codex.connections[0].calls.find((call) => call.method === 'turn/start')?.params).toEqual(
       {
         threadId: THREAD_ID,
@@ -487,7 +507,7 @@ describe('CodexStructuredSessionAdapter.dispatch', () => {
       fence: 7
     })
 
-    expect(outcome).toEqual({ state: 'admitted' })
+    expect(outcome).toMatchObject({ state: 'admitted' })
     expect(events.at(-1)).toMatchObject({ type: 'notification', method: 'turn/started' })
   })
 
@@ -511,7 +531,7 @@ describe('CodexStructuredSessionAdapter.dispatch', () => {
       fence: 7
     })
 
-    expect(outcome).toEqual({ state: 'admitted' })
+    expect(outcome).toMatchObject({ state: 'admitted' })
     // Each event carries the thread it actually came from, so the journal can
     // keep a subagent's turn out of the root conversation.
     expect(events.map((event) => (event.type === 'notification' ? event.threadId : null))).toEqual([

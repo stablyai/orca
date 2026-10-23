@@ -2,12 +2,13 @@
 // A value the field sets on the editor comes from the draft store, so the editor never saves it
 // back: an echo would make another window's draft, or a late-loaded one, a change of this window.
 import { createElement, createRef } from 'react'
-import { act, cleanup, render } from '@testing-library/react'
+import { act, cleanup, render, renderHook, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as DraftStore from './native-chat-composer-draft-store'
 import type * as DraftCache from './native-chat-draft-cache'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
 import { createMemoryNativeChatComposerDraftStorage } from './native-chat-composer-draft-storage'
+import { promptEditor } from './native-chat-prompt-editor.test-support'
 
 type Renderer = { drafts: typeof DraftCache; store: typeof DraftStore }
 
@@ -102,32 +103,54 @@ describe('the editor and the draft store', () => {
     expect(write).not.toHaveBeenCalled()
   })
 
-  it('keeps the skill chip when the composer itself changes the text, across a remount', async () => {
-    const renderer = await open()
-    renderer.drafts.writeNativeChatDraftDocument(SCOPE, '$review this', SKILL_DOCUMENT)
-    renderer.store.flushNativeChatComposerDrafts()
-    const first = await mountEditor(renderer)
-    await vi.waitFor(() =>
-      expect(window.document.querySelector('[data-native-chat-skill]')).not.toBeNull()
-    )
-    // A mention accepted: the composer writes the text, then the field sets it on the editor.
-    const next = '$review this @src/a.ts '
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-    act(() => {
-      renderer.drafts.writeNativeChatDraftCache(SCOPE, next)
-      first.input().value = next
-    })
-    await act(async () => vi.advanceTimersByTimeAsync(400))
-    await renderer.store.nativeChatComposerDraftWritesSettled()
-    expect(JSON.stringify(storage.drafts.get(SCOPE)?.document ?? null)).toContain('nativeChatSkill')
-
-    first.stopSync()
-    first.unmount()
-    const second = await mountEditor(renderer)
-    await act(async () => vi.advanceTimersByTimeAsync(50))
-    second.stopSync()
-    expect(window.document.querySelector('[data-native-chat-skill]')).not.toBeNull()
-  })
+  it.each([
+    ['insertTypedText', '$review thisReply'],
+    ['appendText', '$review this\n\nReply']
+  ] as const)(
+    'keeps %s key order and saved chips through a quote and remount',
+    async (write, expected) => {
+      const renderer = await open()
+      renderer.drafts.writeNativeChatDraftDocument(SCOPE, '$review this', SKILL_DOCUMENT)
+      renderer.store.flushNativeChatComposerDrafts()
+      const first = await mountEditor(renderer)
+      const input = first.input()
+      input.setSelectionRange(input.value.length, input.value.length)
+      const { useNativeChatTypedInsertion } = await import('./use-native-chat-typed-insertion')
+      const { result } = renderHook(() =>
+        useNativeChatTypedInsertion({
+          textareaRef: { current: first.input() },
+          isComposing: () => false,
+          setDraft: (text) => renderer.drafts.writeNativeChatDraftCache(SCOPE, text),
+          setCaret: () => {},
+          setActiveSuggestion: () => {}
+        })
+      )
+      const editor = promptEditor(screen.getByRole('textbox'))
+      act(() => {
+        result.current[write]('R')
+        editor.view.dispatch(editor.state.tr.insertText('e'))
+      })
+      await act(() => new Promise((resolve) => requestAnimationFrame(resolve)))
+      act(() => editor.view.dispatch(editor.state.tr.insertText('ply')))
+      expect([input.value, input.selectionStart]).toEqual([expected, expected.length])
+      renderer.store.flushNativeChatComposerDrafts()
+      await renderer.store.nativeChatComposerDraftWritesSettled()
+      expect(renderer.store.hasUnsavedNativeChatComposerDraftChange(SCOPE)).toBe(false)
+      await act(async () => {
+        result.current.appendText('> quote\n\n')
+        renderer.store.flushNativeChatComposerDrafts()
+        await renderer.store.nativeChatComposerDraftWritesSettled()
+      })
+      first.stopSync()
+      first.unmount()
+      const second = await mountEditor(renderer)
+      await vi.waitFor(() =>
+        expect(window.document.querySelector('[data-native-chat-skill]')).not.toBeNull()
+      )
+      expect(second.input().value).toBe(`${expected}\n\n> quote\n\n`)
+      second.stopSync()
+    }
+  )
 
   it('lets another window’s send stand, instead of echoing back the draft it showed', async () => {
     const receiving = await open()

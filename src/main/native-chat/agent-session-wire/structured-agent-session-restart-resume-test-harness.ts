@@ -75,7 +75,6 @@ export function record(overrides: { chain?: AgentSessionRecord['providerHandleCh
       leaseDeadlineAt: NOW,
       lastRenewedAt: NOW,
       handoffOperationId: null,
-      journalCheckpoint: null,
       claimKeyId: 'key-1',
       claimStatus: 'released',
       unreconciled: false,

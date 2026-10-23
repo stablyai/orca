@@ -54,8 +54,7 @@ import { getManagedServerActions } from './managed-server-actions-registry'
 import type { WorktreeSortOrderUpdate } from '../../shared/worktree/sort-order-update'
 import { isDesktopBrowserBridgeHostEnabled } from './desktop-browser-bridge/desktop-browser-bridge-registry'
 import { DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY } from '../../shared/desktop-browser-bridge-protocol'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-inputs-switch'
-import { WORKSPACE_UNREAD_HOST_RAISES_CAPABILITY } from '../../shared/workspace-unread-raise-capability'
+import { darkSwitchRuntimeCapabilities } from './dark-switch-runtime-capabilities'
 
 type RuntimeStatusHost = {
   getAvailableAuthoritativeWindow(): unknown
@@ -149,11 +148,7 @@ export abstract class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntime
     if (isDesktopBrowserBridgeHostEnabled()) {
       capabilities.push(DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY)
     }
-    // Switch point: this host raises the workspace unread flag itself. The env lets the e2e play an
-    // older host without keeping an old binary.
-    if (ORCA_SIDEBAR_INPUTS_IS_MAIN && process.env.ORCA_E2E_OLDER_UNREAD_HOST !== '1') {
-      capabilities.push(WORKSPACE_UNREAD_HOST_RAISES_CAPABILITY)
-    }
+    capabilities.push(...darkSwitchRuntimeCapabilities())
     // Why not a static capability: dev trees and `orca serve` installs may carry no
     // out/mobile-web, and advertising a bundle this install cannot produce would promise a
     // download that only ever answers mobile_web_bundle_unavailable.
@@ -298,10 +293,11 @@ export abstract class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntime
       return { tabId: record.tabId, worktreeId: record.worktreeId }
     }
     const pty = record.ptyId ? this.ptysById.get(record.ptyId) : null
+    const pane = this.paneOfPty(pty)
     const tabId =
-      pty?.tabId && !pty.tabId.startsWith('pty:')
-        ? pty.tabId
-        : parsePaneKey(pty?.paneKey ?? '')?.tabId
+      pane.tabId && !pane.tabId.startsWith('pty:')
+        ? pane.tabId
+        : parsePaneKey(pane.paneKey ?? '')?.tabId
     if (!pty || !tabId || tabId.startsWith('pty:')) {
       return null
     }

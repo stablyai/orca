@@ -35,6 +35,7 @@ import { usePersistedUIWriter } from './app-shell/use-persisted-ui-writer'
 import { useRuntimeGraphSync } from './app-shell/use-runtime-graph-sync'
 import { useWindowVisibilityEffects } from './app-shell/use-window-visibility-effects'
 import { SpaceWindowStatePublisher } from './components/workspace-space/SpaceWindowStatePublisher'
+import { PlainSshTerminalPanels } from './components/plain-ssh-terminal/PlainSshTerminalPanels'
 import { installActiveWorktreeRemovalSuccessor } from './lib/active-worktree-removal-successor'
 
 function App(): React.JSX.Element {
@@ -110,6 +111,7 @@ function App(): React.JSX.Element {
           </LinkRoutingPreferenceDialogProvider>
         </ConfirmationDialogProvider>
         <Toaster closeButton toastOptions={{ className: 'font-sans text-sm' }} />
+        <PlainSshTerminalPanels />
       </TooltipProvider>
       <SkillFreshnessNudge />
       <WorktreeBaseFallbackDialog />

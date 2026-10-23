@@ -37,8 +37,8 @@ import {
   type RelayAssignmentStore,
   type ResolvedRelayAssignment
 } from './assignment-store.js'
-import { ASSIGNMENT_LEASE_AUDIENCE, assignmentLeaseKeyId } from './assignment-lease.js'
-import { AssignmentRejectionLogWindow } from './assignment-rejection-log-window.js'
+import { ASSIGNMENT_LEASE_AUDIENCE, assignmentLeaseKeyId } from './assignment/assignment-lease.js'
+import { AssignmentRejectionLogWindow } from './assignment/assignment-rejection-log-window.js'
 import { CELL_ADMISSION_STATES } from './cell-admission-selector.js'
 import { registerCellSeatFeedRoute } from './cell-seat-feed-route.js'
 import { ReservePaceError, type ReserveAssignment, type ReservePlan } from './reserve-assignment.js'
@@ -2375,7 +2375,6 @@ function operationError(error: unknown): string {
   return error instanceof Error ? error.message : 'operation_failed'
 }
 
-export { relayHostLogDigest }
 
 // `suppressed` is present only on a window-closing line, and counts the rejections
 // that line stands for beyond the one already logged when the window opened.

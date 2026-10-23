@@ -17,6 +17,7 @@ import { NativeChatContextClearFade } from './NativeChatContextClearFade'
 import { useStructuredNativeChatSubmitReveal } from './use-structured-native-chat-submit-reveal'
 import { useStructuredPromptResponseHold } from './use-structured-prompt-response-hold'
 import { NativeChatStructuredQuestionCard } from './NativeChatStructuredQuestionCard'
+import { NativeChatStructuredAsyncQuestion } from './NativeChatStructuredAsyncQuestion'
 import { selectNativeChatViewState, structuredChatHistoryPhase } from './native-chat-view-state'
 import { useNativeChatRootInputRouting } from './use-native-chat-root-input-routing'
 import { useNativeChatFontSize } from './use-native-chat-font-size'
@@ -212,6 +213,7 @@ export function NativeChatStructuredSession(
     controller,
     sendThroughLaunch: provisionalLaunch.sendThroughLaunch,
     starting: provisionalLaunch.starting,
+    transportEnabled: provisionalLaunch.transportEnabled,
     worktreeId: ownerWorktreeId ?? undefined,
     optionPickerRequest,
     setOptionPickerRequest,
@@ -219,6 +221,7 @@ export function NativeChatStructuredSession(
     onSubmitted: submits.revealLatest,
     sendBlockedReason: hostPermission.sendBlockedReason ?? install.sendBlockedReason
   })
+  const asyncQuestion = { paneKey, session, send: structuredTransport.send }
   const continuation = useNativeChatInterruptedContinuation({
     ...controller,
     target: props.target,
@@ -340,6 +343,7 @@ export function NativeChatStructuredSession(
             statedFailures={startFailures}
             steerHeld={stopControls.stopping || hostHeld}
             focusComposer={focusComposer}
+            editAttachTo={{ terminalTabId: props.tabId, transport: structuredTransport }}
           />
           <NativeChatStructuredSessionStatus
             sessionId={props.sessionId}
@@ -386,6 +390,7 @@ export function NativeChatStructuredSession(
               answerInputRef={questionAnswerInputRef}
             />
           ) : null}
+          {prompt ? null : <NativeChatStructuredAsyncQuestion {...asyncQuestion} />}
           {composerShown && <NativeChatInstallSlot slot={install.slot} agentLabel={agentLabel} />}
           {composerShown ? (
             <NativeChatComposer

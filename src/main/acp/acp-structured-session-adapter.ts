@@ -189,6 +189,8 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
       return rejectedAcpDispatch(session)
     }
     const { sessionId, fence, signal } = input
+    signal?.throwIfAborted()
+    input.onInputPreparation?.()
     const optionsApplied = await applyAcpMessageOptions(
       session,
       input.executionOptions,
@@ -261,6 +263,7 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
     // Bounded, and abandoned by a close or Stop: the session's queue waits on it.
     await writeAcpSessionOption(session.connection, session.options, write, {
       key: input.key,
+      value: input.value,
       agent: session.spec.agent,
       timeoutMs: this.deps.optionWriteTimeoutMs ?? ACP_OPTION_WRITE_TIMEOUT_MS,
       ...(input.signal ? { signal: input.signal } : {})
@@ -292,6 +295,10 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
       this.children.sessions.delete(sessionId)
     }
   }
+
+  // Undefined until the session opens: the host holds what it handed a starting child.
+  heldSends = (sessionId: string): ReadonlySet<string> | undefined =>
+    this.children.sessions.get(sessionId)?.turns?.heldSends
 
   stopBackgroundTasks: NonNullable<StructuredAgentSessionAdapter['stopBackgroundTasks']> = (
     input

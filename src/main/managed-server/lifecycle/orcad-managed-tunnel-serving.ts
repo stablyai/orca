@@ -27,7 +27,7 @@ export async function checkManagedTunnelServing(input: {
   const active = tunnels.get(environment.id)
   const target = active && input.getTarget(active.targetId)
   if (!active || !target || !input.ensureServing) {
-    return { state: 'unverifiable', detail: 'The managed server tunnel is not up.' }
+    return { state: 'unverifiable', detail: 'The tunnel to this host’s Orca server is not up.' }
   }
   const serving = await input.ensureServing({
     environment,

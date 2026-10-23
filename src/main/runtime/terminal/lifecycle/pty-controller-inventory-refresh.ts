@@ -31,6 +31,8 @@ import { NO_OBSERVING_PROVIDER_REASON } from '../../../../shared/pty-liveness-ve
 import { buildControllerTerminalIdentities } from '../../orca-runtime-build-controller-terminal-identities'
 import { retireOrchestrationAuthorityAbsentFromInventory } from '../../runtime-restored-orchestration-authority-sweep'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { exitingPtyIdsOf } from '../adoption/unshown-live-terminal-placement'
 
 export abstract class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory extends OrcaRuntimeWithRefreshPtyWorktreeRecordsFromController {
   protected async refreshPtyWorktreeRecordsWithControllerInventory(
@@ -250,15 +252,17 @@ export abstract class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInve
         }
         continue
       }
-      if (!allLivePtyIds.has(pty.ptyId) && !this.leafExistsForPty(pty.ptyId)) {
+      if (
+        !allLivePtyIds.has(pty.ptyId) &&
+        (this.mainDecidesLiveness(pty.worktreeId) || !this.leafExistsForPty(pty.ptyId))
+      ) {
         const currentVerdict = this.ptyLivenessVerdictByPtyId.get(pty.ptyId)
         if (
           currentVerdict &&
           currentVerdict.observedAt > livenessObservationAtStart &&
           currentVerdict.verdict.status === 'unverifiable'
         ) {
-          pty.connected = false
-          pty.disconnectedAt ??= Date.now()
+          this.setPtyConnected(pty, false)
           continue
         }
         const observed = this.ptyController.hasPty?.(pty.ptyId)
@@ -271,13 +275,11 @@ export abstract class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInve
           ) {
             selectedLivePtyIds.add(pty.ptyId)
           }
-          pty.connected = true
-          pty.disconnectedAt = null
+          this.setPtyConnected(pty, true)
           this.markPtyLivenessLive(pty.ptyId, livenessObservationAtStart)
           continue
         }
-        pty.connected = false
-        pty.disconnectedAt ??= Date.now()
+        this.setPtyConnected(pty, false)
         pty.agentSessionOwners = []
         // Why: this list only enumerates registered providers, so a dropped relay
         // clears `connected` for every one of its PTYs at once. Only `false` here
@@ -301,7 +303,9 @@ export abstract class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInve
       livePtyIds: targetWorktreeId ? selectedLivePtyIds : allLivePtyIds,
       allLivePtyIds,
       terminalIdentityByPtyId: controllerIdentityByPtyId,
-      queriedHostIds
+      queriedHostIds,
+      // Switch point: main places live terminals itself and must skip ones being killed.
+      ...(ORCA_LAYOUT_OWNER_IS_MAIN ? { exitingPtyIds: exitingPtyIdsOf(sessions) } : {})
     }
   }
 }

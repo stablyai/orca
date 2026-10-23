@@ -315,7 +315,7 @@ export class SessionSearchIndexWriter {
             // session they hang off is written with whatever the parser has
             // decoded rather than left empty until a read that may never end.
             // `add` refuses to chunk without this, so it is never absent here.
-            this.records.updateProvisionalSession(session, named)
+            this.records.updateProvisionalSession(session, named, candidate)
           }
           this.records.upsertFile(
             candidate,

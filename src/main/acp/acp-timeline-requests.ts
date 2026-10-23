@@ -1,8 +1,4 @@
 import { z } from 'zod'
-import {
-  boundInlineText,
-  DEFAULT_JOURNAL_PAYLOAD_LIMITS
-} from '../native-chat/agent-session-journal/journal-payload-bounds'
 import type { ProviderTimelineEvent } from '../native-chat/agent-session-timeline/provider-timeline-event'
 import type { AcpDialect, AcpRequestPresentation } from './acp-dialects/acp-dialect'
 import type { AcpToolTimeline } from './acp-tool-timeline'
@@ -102,7 +98,7 @@ export function translateAcpRequest(
                 body: {
                   kind: 'status',
                   presentation: 'plan-document',
-                  text: boundInlineText(plan, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
+                  text: plan
                 },
                 join
               }

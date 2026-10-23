@@ -6,6 +6,8 @@ import {
   buildBoundedSessionTranscript
 } from '@/lib/agent-session-fork-context'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { resolveOwner } from '@/lib/resolve-owner'
+import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import { useAppStore } from '@/store'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
@@ -173,6 +175,19 @@ export async function copyAgentSessionContextFromPane(pane: ManagedPane): Promis
   }
 }
 
+/** The transport that owns the source: its server, else where this app reaches it (local or SSH). */
+function forkCreationHostId(
+  state: Parameters<typeof resolveOwner>[0],
+  worktreeId: string
+): ExecutionHostId | undefined {
+  const owner = resolveOwner(state, { workspaceId: worktreeId })
+  if (owner.kind !== 'resolved') {
+    return undefined
+  }
+  const { endpoint, at } = owner.owner
+  return endpoint.kind === 'environment' ? toRuntimeExecutionHostId(endpoint.environmentId) : at
+}
+
 export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Promise<boolean> {
   const store = useAppStore.getState()
   const sourceWorktree = store.getKnownWorktreeById(fork.worktreeId)
@@ -211,7 +226,23 @@ export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Pro
       undefined,
       undefined,
       undefined,
-      fork.agent ?? undefined
+      fork.agent ?? undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      // Why: a project two hosts publish refuses a host-less create; the fork belongs on its source's host.
+      { executionHostId: forkCreationHostId(store, fork.worktreeId) }
     )
   } catch (error) {
     toast.error(

@@ -164,12 +164,15 @@ function deriveSlashAutocomplete(
     commandsEnabled: agentCommands.length > 0,
     skillsEnabled,
     items,
-    skillStatus: skillsEnabled
-      ? discovery.status === 'idle'
-        ? 'loading'
-        : discovery.status
-      : 'ready',
-    ...(skillsEnabled && discovery.errorKind ? { skillErrorKind: discovery.errorKind } : {})
+    skillStatus:
+      skillsEnabled && sessionSkills === undefined
+        ? discovery.status === 'idle'
+          ? 'loading'
+          : discovery.status
+        : 'ready',
+    ...(skillsEnabled && sessionSkills === undefined && discovery.errorKind
+      ? { skillErrorKind: discovery.errorKind }
+      : {})
   }
 }
 

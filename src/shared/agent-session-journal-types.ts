@@ -27,8 +27,11 @@ export { type AgentType }
 /** v3 introduced the `turn` item. A row without one is still written at v2 so
  *  an older host keeps reading it; the first v3 row stops that host writing the chat
  *  (a released one keeps it read-only, this build fails its load) instead of truncating. */
-export const AGENT_SESSION_JOURNAL_SCHEMA_VERSION = 3
+export const AGENT_SESSION_JOURNAL_SCHEMA_VERSION = 4
 export const AGENT_SESSION_JOURNAL_TURN_ITEM_SCHEMA_VERSION = 3
+/** v4 introduced the `queue` row: an older build keeps a chat holding one read-only rather than
+ *  meeting a kind it does not know. Every other row keeps its own version. */
+export const AGENT_SESSION_JOURNAL_QUEUE_SCHEMA_VERSION = 4
 const AGENT_SESSION_JOURNAL_PRE_TURN_SCHEMA_VERSION = 2
 
 export function journalRowSchemaVersion(bodies: readonly { kind: string }[]): number {
@@ -82,15 +85,14 @@ export type AgentJournalItemIdentity =
 
 // ─── Bounded payloads ───────────────────────────────────────────────────────
 
-/** A tool output or diff body clipped to a head. The remainder is DISCARDED,
- *  never stored: crossing a bound sets `truncated` and the two fields below
- *  describe what was dropped, so it is marked rather than silently lost. */
+/** A tool output or diff body. A row keeps the whole value (`truncated: false`). `truncated: true`
+ *  marks a head: the copy sent to a client (fetch the whole item with `agentSession.item`), a
+ *  call still running, or a row an older build saved, whose remainder is gone. */
 export type AgentJournalBoundedPayload = {
   head: string
   /** Byte length of the ORIGINAL payload, not of `head`. */
   byteLength: number
-  /** sha256 of the original payload — identification only; nothing stores or
-   *  retrieves the discarded remainder by it. */
+  /** sha256 of the original payload, for identification only. */
   digest: string
   truncated: boolean
 }
@@ -108,6 +110,8 @@ export type AgentJournalMessageSendMode = (typeof AGENT_JOURNAL_MESSAGE_SEND_MOD
 export const AGENT_JOURNAL_MESSAGE_STATES = ['running', 'completed'] as const
 export type AgentJournalMessageState = (typeof AGENT_JOURNAL_MESSAGE_STATES)[number]
 
+export type AgentJournalSkillRef = { name: string; path: string }
+
 export type AgentJournalMessageItem = {
   kind: 'message'
   role: NativeChatRole
@@ -118,6 +122,9 @@ export type AgentJournalMessageItem = {
   /** Present on a conversation command the user sent, such as `/compact`. The text is what the
    *  user typed; this names the command so no reader parses it. Open like `sentAs`. */
   command?: { name: string }
+  /** The skills the user picked from the menu for this message, by the file the agent selects
+   *  each by. The text still carries each `$name`; agents that select by name ignore this. */
+  skills?: AgentJournalSkillRef[]
   /** Present on a message another agent sent through Orca; absent, the person's. Host-written,
    *  outside every fingerprint, never sent to the provider. */
   from?: AgentMessageSource
@@ -444,6 +451,9 @@ export type AgentJournalRenderItem = AgentJournalProducerLinkage & {
   recoveredAt?: number
   /** Absent only from a host that predates it. */
   turnScope?: AgentJournalTurnScope
+  /** Set on the copy sent to a client when text in it was shortened to fit; never saved. The whole
+   *  item comes from `agentSession.item`. A cut tool output or diff also says so in `truncated`. */
+  shortened?: true
 }
 
 // ─── Submissions ────────────────────────────────────────────────────────────

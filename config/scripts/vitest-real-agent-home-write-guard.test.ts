@@ -49,6 +49,18 @@ describe('vitest real-agent-home write guard', () => {
     expect(existsSync(target)).toBe(false)
   })
 
+  it('allows only Claude transcript writes for the real CLI opt-in', () => {
+    vi.stubEnv('ORCA_REAL_CLAUDE_CLI_TEST', '1')
+    const missingTranscript = missingRealFolder(join('.claude', 'projects'))
+    expect(() => rmSync(missingTranscript, { force: true })).not.toThrow()
+    expect(() => rmSync(missingRealFolder('.codex'), { force: true })).toThrow(
+      /real-agent-home guard/
+    )
+    expect(() => rmSync(missingRealFolder('.orca'), { force: true })).toThrow(
+      /real-agent-home guard/
+    )
+  })
+
   it('refuses a promise write under a ~/.claude.json sibling', async () => {
     const target = join(missingRealFolder('.claude.json'), 'x.tmp')
     await expect(writeFile(target, '{}')).rejects.toThrow(/real-agent-home guard/)

@@ -4,7 +4,8 @@ import {
   createFsState,
   installModuleMocks,
   META_PATH,
-  seedMeta
+  seedMeta,
+  seedSitePermissions
 } from './__mocks__/browser-session-registry-persistence-fixture'
 
 describe('BrowserSessionRegistry persistence', () => {
@@ -225,6 +226,8 @@ describe('BrowserSessionRegistry persistence', () => {
       profiles: []
     })
 
+    seedSitePermissions(fsState, { default: { 'https://example.com': { camera: 'allow' } } })
+
     const {
       sessionFromPartitionMock,
       browserManagerHandleGuestWillDownloadMock,
@@ -243,105 +246,94 @@ describe('BrowserSessionRegistry persistence', () => {
     const checkHandler = defaultSession.setPermissionCheckHandler.mock.calls[0][0]
     const guestWc = { id: 401, getURL: vi.fn(() => 'https://example.com/account') }
     const permissionCallback = vi.fn()
+    const decisions = new Map<string, boolean>()
+    const request = (
+      permission: string,
+      details: Partial<Electron.PermissionRequest & Electron.MediaAccessPermissionRequest> = {}
+    ): void =>
+      requestHandler(
+        guestWc,
+        permission,
+        (allowed: boolean) => decisions.set(permission, allowed),
+        details
+      )
 
-    requestHandler(guestWc, 'fullscreen', permissionCallback)
-    requestHandler(guestWc, 'clipboard-read', permissionCallback)
-    requestHandler(guestWc, 'clipboard-sanitized-write', permissionCallback)
-    requestHandler(guestWc, 'notifications', permissionCallback)
-    requestHandler(guestWc, 'persistent-storage', permissionCallback)
-    requestHandler(guestWc, 'geolocation', permissionCallback)
-    requestHandler(guestWc, 'media', permissionCallback, { mediaTypes: ['video'] })
+    // The user allowed this site's camera before; nothing else was answered, and the tab has no
+    // window to ask in.
+    request('fullscreen')
+    request('clipboard-read')
+    request('clipboard-sanitized-write')
+    request('notifications')
+    request('persistent-storage')
+    request('geolocation')
+    request('media', { mediaTypes: ['video'] })
 
-    await vi.waitFor(() =>
-      expect(permissionCallback.mock.calls).toEqual([
-        [true],
-        [true],
-        [true],
-        [true],
-        [true],
-        [false],
-        [true]
-      ])
-    )
-    expect(browserManagerNotifyPermissionDeniedMock).toHaveBeenCalledWith({
-      guestWebContentsId: 401,
-      permission: 'geolocation',
-      rawUrl: 'https://example.com/account'
+    await vi.waitFor(() => expect(decisions.size).toBe(7))
+    expect(Object.fromEntries(decisions)).toEqual({
+      fullscreen: true,
+      'clipboard-read': false,
+      'clipboard-sanitized-write': true,
+      notifications: false,
+      'persistent-storage': true,
+      geolocation: false,
+      media: true
     })
+    // Unanswered questions are not Orca's refusal, so no notice.
+    expect(browserManagerNotifyPermissionDeniedMock).not.toHaveBeenCalled()
 
-    // A subframe denial must name the requester, not its top-level embedder.
-    browserManagerNotifyPermissionDeniedMock.mockClear()
-    requestHandler(guestWc, 'geolocation', permissionCallback, {
+    // What the user cannot decide keeps the denial notice, naming the frame that asked.
+    requestHandler(guestWc, 'mediaKeySystem', permissionCallback, {
       requestingUrl: 'https://widget.example.net/embed',
       isMainFrame: false
     })
-    await vi.waitFor(() =>
-      expect(browserManagerNotifyPermissionDeniedMock).toHaveBeenCalledWith({
-        guestWebContentsId: 401,
-        permission: 'geolocation',
-        rawUrl: 'https://widget.example.net/embed'
-      })
-    )
+    expect(browserManagerNotifyPermissionDeniedMock).toHaveBeenCalledWith({
+      guestWebContentsId: 401,
+      permission: 'mediaKeySystem',
+      rawUrl: 'https://widget.example.net/embed'
+    })
 
     // Missing or empty frame URLs fall back to the visible top-level page.
     browserManagerNotifyPermissionDeniedMock.mockClear()
-    requestHandler(guestWc, 'geolocation', permissionCallback, { isMainFrame: true })
-    await vi.waitFor(() =>
-      expect(browserManagerNotifyPermissionDeniedMock).toHaveBeenCalledWith({
-        guestWebContentsId: 401,
-        permission: 'geolocation',
-        rawUrl: 'https://example.com/account'
-      })
-    )
-
-    browserManagerNotifyPermissionDeniedMock.mockClear()
-    requestHandler(guestWc, 'geolocation', permissionCallback, {
+    requestHandler(guestWc, 'mediaKeySystem', permissionCallback, { isMainFrame: true })
+    requestHandler(guestWc, 'mediaKeySystem', permissionCallback, {
       requestingUrl: '',
       isMainFrame: false
     })
-    await vi.waitFor(() =>
-      expect(browserManagerNotifyPermissionDeniedMock).toHaveBeenCalledWith({
-        guestWebContentsId: 401,
-        permission: 'geolocation',
-        rawUrl: 'https://example.com/account'
-      })
-    )
+    expect(
+      browserManagerNotifyPermissionDeniedMock.mock.calls.map(([args]) => args.rawUrl)
+    ).toEqual(['https://example.com/account', 'https://example.com/account'])
 
     // Opaque frame URLs have no site Orca can name accurately.
     browserManagerNotifyPermissionDeniedMock.mockClear()
-    requestHandler(guestWc, 'geolocation', permissionCallback, {
+    requestHandler(guestWc, 'mediaKeySystem', permissionCallback, {
       requestingUrl: 'about:blank',
       isMainFrame: false
     })
-    await vi.waitFor(() =>
-      expect(browserManagerNotifyPermissionDeniedMock).toHaveBeenCalledWith({
-        guestWebContentsId: 401,
-        permission: 'geolocation',
-        rawUrl: ''
-      })
-    )
-    expect(
-      browserManagerNotifyPermissionDeniedMock.mock.calls.map(([args]) => args.permission)
-    ).toEqual(['geolocation'])
+    expect(browserManagerNotifyPermissionDeniedMock).toHaveBeenCalledWith({
+      guestWebContentsId: 401,
+      permission: 'mediaKeySystem',
+      rawUrl: ''
+    })
     expect(checkHandler(null, 'fullscreen', '')).toBe(true)
-    expect(checkHandler(null, 'clipboard-read', '')).toBe(true)
+    expect(checkHandler(null, 'clipboard-read', 'https://example.com')).toBe(false)
     expect(checkHandler(null, 'clipboard-sanitized-write', '')).toBe(true)
-    expect(checkHandler(null, 'notifications', '')).toBe(true)
+    expect(checkHandler(null, 'notifications', 'https://example.com')).toBe(false)
     expect(checkHandler(null, 'persistent-storage', '')).toBe(true)
-    expect(checkHandler(null, 'geolocation', '')).toBe(false)
-    expect(checkHandler(null, 'media', '', { mediaType: 'video' })).toBe(true)
+    expect(checkHandler(null, 'geolocation', 'https://example.com')).toBe(false)
+    expect(checkHandler(guestWc, 'media', '', { mediaType: 'video' })).toBe(true)
+    expect(checkHandler(guestWc, 'media', '', { mediaType: 'audio' })).toBe(false)
 
     // Why: this session allows unpartitioned third-party cookies, so a cross-site frame already has
     // the access requestStorageAccess() would grant. Denying it protected nothing and only broke
     // sites taking the API's failure path. Red before the grant landed.
-    requestHandler(guestWc, 'storage-access', permissionCallback)
+    requestHandler(guestWc, 'storage-access', permissionCallback, {})
     expect(permissionCallback).toHaveBeenLastCalledWith(true)
     expect(checkHandler(null, 'storage-access', '')).toBe(true)
 
     // Why: requestStorageAccessFor() is a different platform decision — Chromium consults Related
     // Website Sets and has no third-party-cookie auto-grant, and Orca has no such data source. This
     // pins the deliberate denial so a future blanket widening of the allow-set fails loudly.
-    requestHandler(guestWc, 'top-level-storage-access', permissionCallback)
+    requestHandler(guestWc, 'top-level-storage-access', permissionCallback, {})
     expect(permissionCallback).toHaveBeenLastCalledWith(false)
     expect(checkHandler(null, 'top-level-storage-access', '')).toBe(false)
 
@@ -349,7 +341,7 @@ describe('BrowserSessionRegistry persistence', () => {
     // storage-access must no longer raise one, while the deliberate top-level denial still does.
     expect(
       browserManagerNotifyPermissionDeniedMock.mock.calls.map(([args]) => args.permission)
-    ).toEqual(['geolocation', 'top-level-storage-access'])
+    ).toEqual(['mediaKeySystem', 'top-level-storage-access'])
     expect(defaultSession.setDisplayMediaRequestHandler).toHaveBeenCalled()
     const displayMediaHandler = defaultSession.setDisplayMediaRequestHandler.mock.calls[0][0]
     const displayMediaCallback = vi.fn()
@@ -473,6 +465,8 @@ describe('BrowserSessionRegistry persistence', () => {
       profiles: []
     })
 
+    // The user allowed the site, so only the operating system refuses.
+    seedSitePermissions(fsState, { default: { 'https://example.com': { camera: 'allow' } } })
     const {
       sessionFromPartitionMock,
       browserManagerNotifyPermissionDeniedMock,

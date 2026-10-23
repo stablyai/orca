@@ -2,13 +2,8 @@ import { openTranscriptReadStream, wslGatedReadFile } from '../native-chat/wsl-t
 import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
 import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
-import {
-  addPreviewContent,
-  addPreviewMessage,
-  createAccumulator,
-  finalizeSession,
-  updateTimeline
-} from './session-scanner-accumulator'
+import { createAccumulator, finalizeSession, updateTimeline } from './session-scanner-accumulator'
+import { addSessionContent, addSessionText } from './session-scanner-messages'
 import {
   kimiPrimaryAgentWirePath,
   kimiSessionIdFromStatePath,
@@ -21,7 +16,6 @@ import {
   asRecord,
   extractContentText,
   extractString,
-  normalizePreviewText,
   normalizeTitleText,
   numberValue,
   parseJsonObject
@@ -81,15 +75,11 @@ async function consumeKimiWireTranscript(
 ): Promise<void> {
   let pendingAssistantText: string[] = []
   const flushAssistant = (): void => {
-    // Why: previews use the 220-char limit (normalizePreviewText), not the
-    // 96-char title limit — assistant replies are shown in full preview width
-    // like every other agent's. Join raw chunks first so inter-chunk spacing
-    // survives; normalizePreviewText then collapses whitespace and caps length.
-    const text = normalizePreviewText(pendingAssistantText.join(''))
+    const text = pendingAssistantText.join('')
     pendingAssistantText = []
     if (text) {
       accumulator.messageCount++
-      addPreviewMessage(accumulator, { role: 'assistant', text })
+      addSessionText(accumulator, { role: 'assistant', text })
     }
   }
 
@@ -146,7 +136,7 @@ function consumeKimiUserMessage(accumulator: SessionAccumulator, value: unknown)
   accumulator.messageCount++
   // Title uses the 96-char title limit; the preview uses the 220-char limit.
   accumulator.title ??= extractContentText(message.content)
-  addPreviewContent(accumulator, 'user', message.content)
+  addSessionContent(accumulator, 'user', message.content)
 }
 
 function consumeKimiLoopEvent(

@@ -17,6 +17,7 @@ import { refreshCachedCodexTitle } from './session-scanner-codex-cached-title'
 import {
   getSessionParseCacheEntry,
   noteSessionParseCacheListed,
+  sessionParseCacheKey,
   storeSessionParseCacheEntry,
   type SessionParseCacheEntry
 } from './session-parse-cache-store'
@@ -25,7 +26,8 @@ import { sidecarUnchanged } from './session-sidecar-stat'
 import {
   enrichSessionFromSidecar,
   reuseUnchangedSidecarSession,
-  sidecarEnrichesWithoutReparse
+  sidecarEnrichesWithoutReparse,
+  type SidecarEnrichment
 } from './session-scanner-sidecar-enrichment'
 import {
   readResumableTranscript,
@@ -142,7 +144,7 @@ export function parseListedSessionFile(
   stats: SessionParseStats,
   signal?: AbortSignal
 ): Promise<AiVaultSession | null> {
-  noteSessionParseCacheListed(candidate.file.path)
+  noteSessionParseCacheListed(sessionParseCacheKey(candidate.agent, candidate.file.path))
   return parseAgentSessionFileCached(candidate, platform, stats, undefined, signal)
 }
 
@@ -169,10 +171,11 @@ export type SessionParseReadRequirement = 'any' | 'whole'
  */
 function sessionParseCacheCoversTranscript(
   candidate: SessionFileCandidate,
+  key: string,
   platform: NodeJS.Platform
 ): boolean {
   const { file } = candidate
-  const entry = getSessionParseCacheEntry(file.path)
+  const entry = getSessionParseCacheEntry(key)
   return (
     entry !== undefined &&
     entry.platform === platform &&
@@ -189,18 +192,19 @@ async function parseCachedInLane(
   signal?: AbortSignal
 ): Promise<AiVaultSession | null> {
   const { file } = candidate
+  const key = sessionParseCacheKey(candidate.agent, file.path)
   const forceWholeRead =
     requireRead === 'whole' ||
-    (requireRead === 'any' && sessionParseCacheCoversTranscript(candidate, platform))
+    (requireRead === 'any' && sessionParseCacheCoversTranscript(candidate, key, platform))
   if (forceWholeRead) {
     requestWholeTranscriptRead(file.path)
   }
   // Not looked up again after a forced read: a failed database delete would hand the row back.
-  const entry = forceWholeRead ? undefined : getSessionParseCacheEntry(file.path)
+  const entry = forceWholeRead ? undefined : getSessionParseCacheEntry(key)
 
-  if (entry !== undefined && sessionParseCacheCoversTranscript(candidate, platform)) {
+  if (entry !== undefined && sessionParseCacheCoversTranscript(candidate, key, platform)) {
     if (sidecarUnchanged(entry.sidecar, file.sidecar)) {
-      return reuseCachedSession(candidate, entry, stats)
+      return reuseCachedSession(candidate, key, entry, stats)
     }
     // Only the sibling moved. For an agent whose sibling just adds metadata,
     // re-merge it onto the stored fold result; the transcript is not re-read.
@@ -212,7 +216,7 @@ async function parseCachedInLane(
         signal
       )
       const session = reuseUnchangedSidecarSession(entry.session, enriched.session)
-      storeSessionParseCacheEntry(file.path, {
+      storeSessionParseCacheEntry(key, {
         ...entry,
         session,
         sidecar: enriched.refused ? 'unknown' : file.sidecar
@@ -224,6 +228,13 @@ async function parseCachedInLane(
     }
   }
 
+  let enriched: SidecarEnrichment = { session: null, refused: false }
+  const sessionForConsumers = async (
+    session: AiVaultSession | null
+  ): Promise<AiVaultSession | null> => {
+    enriched = await enrichSessionFromSidecar(candidate, session, platform, signal)
+    return enriched.session
+  }
   const stateFactory = resumableStateFactoryFor(candidate)
   if (stateFactory) {
     const read = await readResumableTranscript({
@@ -232,10 +243,11 @@ async function parseCachedInLane(
       resume: entry?.platform === platform ? entry.resume : null,
       stateFactory,
       stats,
-      signal
+      signal,
+      sessionForConsumers
     })
-    const enriched = await enrichSessionFromSidecar(candidate, read.session, platform, signal)
-    storeSessionParseCacheEntry(file.path, {
+    storeSessionParseCacheEntry(key, {
+      agent: candidate.agent,
       mtimeMs: file.mtimeMs,
       sizeBytes: file.sizeBytes ?? null,
       platform,
@@ -250,12 +262,15 @@ async function parseCachedInLane(
     return enriched.session
   }
 
-  const session = await readWholeTranscript({ candidate, platform, stats, signal })
-  // Whole-file agents merge the sibling here just like the resumable branch
-  // does post-read; the raw fold stays in foldSession so a sibling-only change
-  // re-merges without re-reading the transcript.
-  const enriched = await enrichSessionFromSidecar(candidate, session, platform, signal)
-  storeSessionParseCacheEntry(file.path, {
+  const session = await readWholeTranscript({
+    candidate,
+    platform,
+    stats,
+    signal,
+    sessionForConsumers
+  })
+  storeSessionParseCacheEntry(key, {
+    agent: candidate.agent,
     mtimeMs: file.mtimeMs,
     sizeBytes: file.sizeBytes ?? null,
     platform,
@@ -271,6 +286,7 @@ async function parseCachedInLane(
 
 async function reuseCachedSession(
   candidate: SessionFileCandidate,
+  key: string,
   entry: SessionParseCacheEntry,
   stats?: SessionParseStats
 ): Promise<AiVaultSession | null> {
@@ -302,6 +318,6 @@ async function reuseCachedSession(
   if (session && candidate.agent === 'codex') {
     session = await refreshCachedCodexTitle(candidate, session)
   }
-  storeSessionParseCacheEntry(candidate.file.path, { ...entry, session })
+  storeSessionParseCacheEntry(key, { ...entry, session })
   return session
 }

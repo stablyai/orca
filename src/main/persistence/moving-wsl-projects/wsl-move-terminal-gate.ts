@@ -64,43 +64,50 @@ export function assessWslMoveTerminals(inputs: WslMoveGateInputs): WslMoveGateVe
     }
   }
   for (const pane of inputs.panes) {
-    const { agent } = pane
-    if (pane.foreground === 'unverifiable' || !isByteCount(pane.scrollbackBytes)) {
+    // Only an agent that owns the foreground is current; a retained row speaks for nothing.
+    const agent = pane.agent?.ownsForeground ? pane.agent : undefined
+    const hasByteCount = isByteCount(pane.scrollbackBytes)
+    if (pane.foreground === 'unverifiable' || !hasByteCount) {
       block('unverifiable', pane.paneKey, ['wait', 'skip-project'])
     } else if (agent && AGENT_BUSY_STATES.has(agent.state)) {
-      block('agent-working', pane.paneKey, ['wait', 'end'])
-    } else if (pane.foreground === 'process-running' && !agent?.ownsForeground) {
-      block('process-running', pane.paneKey, ['end', 'skip-project'])
+      block('agent-working', pane.paneKey, ['wait', 'end', 'skip-project'])
     } else if (agent && !agent.resumable) {
       block('agent-not-resumable', pane.paneKey, ['end', 'skip-project'])
+    } else if (pane.foreground === 'process-running' && !agent) {
+      block('process-running', pane.paneKey, ['end', 'skip-project'])
     }
-    if (pane.scrollbackBytes > TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT) {
+    if (hasByteCount && pane.scrollbackBytes > TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT) {
       block('scrollback-too-large', pane.paneKey, ['clear-scrollback'])
     }
   }
   for (const id of inputs.runningAutomationRunIds) {
-    block('automation-running', id, ['wait'])
+    block('automation-running', id, ['wait', 'skip-project'])
   }
   for (const id of inputs.activeDispatchIds) {
-    block('dispatch-running', id, ['wait'])
+    block('dispatch-running', id, ['wait', 'skip-project'])
+  }
+  // A pane listed twice is one snapshot: count its largest reported size once.
+  const scrollbackByPane = new Map<string, number>()
+  for (const pane of inputs.panes) {
+    if (isByteCount(pane.scrollbackBytes) && pane.scrollbackBytes > 0) {
+      const bytes = Math.max(scrollbackByPane.get(pane.paneKey) ?? 0, pane.scrollbackBytes)
+      scrollbackByPane.set(pane.paneKey, bytes)
+    }
   }
   // Over the transfer's caps is a blocker, never a truncation; reported together with any
   // per-pane overage so clearing one pane never uncovers a second blocker.
-  const withScrollback = inputs.panes.filter(
-    (pane) => isByteCount(pane.scrollbackBytes) && pane.scrollbackBytes > 0
-  )
-  const total = withScrollback.reduce((sum, pane) => sum + pane.scrollbackBytes, 0)
+  const total = [...scrollbackByPane.values()].reduce((sum, bytes) => sum + bytes, 0)
   if (
     total > MAX_ORCAD_MIGRATION_SCROLLBACK_TOTAL_BYTES ||
-    withScrollback.length > MAX_ORCAD_MIGRATION_SCROLLBACK_SNAPSHOTS
+    scrollbackByPane.size > MAX_ORCAD_MIGRATION_SCROLLBACK_SNAPSHOTS
   ) {
-    for (const pane of withScrollback) {
-      block('scrollback-too-large', pane.paneKey, ['clear-scrollback'])
+    for (const paneKey of scrollbackByPane.keys()) {
+      block('scrollback-too-large', paneKey, ['clear-scrollback'])
     }
   }
   return blockers.size > 0
     ? { verdict: 'blocked', blockers: [...blockers.values()] }
-    : { verdict: 'ready', paneKeys: inputs.panes.map((pane) => pane.paneKey) }
+    : { verdict: 'ready', paneKeys: [...new Set(inputs.panes.map((pane) => pane.paneKey))] }
 }
 
 function isByteCount(value: number): boolean {

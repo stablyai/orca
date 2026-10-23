@@ -23,6 +23,9 @@ import { applyCodexDaemonSocketGuard } from './codex-daemon-socket-path-guard'
 import { stripRuntimeOwnedTomlSections } from './config-toml-runtime-owned-sections'
 import { mergeSystemCodexConfigIntoRuntime } from './codex-config-mirror-merge'
 
+// Why: the runtime copy is Orca-owned and mirrors `mcp_servers` env tokens, so every rewrite is owner-only.
+const RUNTIME_CONFIG_WRITE = { mode: 0o600 } as const
+
 export function syncSystemConfigIntoManagedCodexHome(
   homes: CodexSettingsPromotionHomes = {
     runtimeHomePath: getOrcaManagedCodexHomePath(),
@@ -126,7 +129,12 @@ export function ensureCodexDaemonSocketGuard(runtimeHomePath: string): void {
 function writeCodexDaemonSocketGuard(runtimeHomePath: string, runtimeConfig: string | null): void {
   const guarded = applyCodexDaemonSocketGuard(runtimeConfig ?? '', runtimeHomePath)
   if (guarded !== (runtimeConfig ?? '')) {
-    writeFileAtomicallyIfUnchanged(join(runtimeHomePath, 'config.toml'), runtimeConfig, guarded)
+    writeFileAtomicallyIfUnchanged(
+      join(runtimeHomePath, 'config.toml'),
+      runtimeConfig,
+      guarded,
+      RUNTIME_CONFIG_WRITE
+    )
   }
 }
 
@@ -181,7 +189,12 @@ export function syncSystemConfigIntoLegacySharedCodexHome(
   }
   // Why: stage first, then compare immediately before replace so a retained
   // Codex trust write during mirror preparation wins.
-  writeFileAtomicallyIfUnchanged(runtimeConfigPath, runtimeConfigBeforeMirror, nextRuntimeConfig)
+  writeFileAtomicallyIfUnchanged(
+    runtimeConfigPath,
+    runtimeConfigBeforeMirror,
+    nextRuntimeConfig,
+    RUNTIME_CONFIG_WRITE
+  )
 }
 
 /**
@@ -259,7 +272,7 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
       runtimeHomePath
     )
     const ownership = readMcpServerTomlOwnership(freshRuntimeConfig)
-    writeFileAtomically(runtimeConfigPath, freshRuntimeConfig)
+    writeFileAtomically(runtimeConfigPath, freshRuntimeConfig, RUNTIME_CONFIG_WRITE)
     return {
       status: 'mirrored',
       preservedConflictKeys: new Set(),
@@ -286,7 +299,7 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
   )
   const nextRuntimeConfig = applyCodexDaemonSocketGuard(preserved.content, runtimeHomePath)
   if (nextRuntimeConfig !== runtimeConfig) {
-    writeFileAtomically(runtimeConfigPath, nextRuntimeConfig)
+    writeFileAtomically(runtimeConfigPath, nextRuntimeConfig, RUNTIME_CONFIG_WRITE)
   }
   return {
     status: 'mirrored',

@@ -30,7 +30,7 @@ import {
   type OrcadSlotOptions
 } from '../../ssh/orcad-recovery-slot'
 
-export type OrcadManagedWake =
+type OrcadManagedWake =
   | { outcome: 'serving' | 'not-activated' | 'unverifiable' }
   /** An update, rollback or recovery holds the host; it owns which slot serves. */
   | { outcome: 'fenced' }

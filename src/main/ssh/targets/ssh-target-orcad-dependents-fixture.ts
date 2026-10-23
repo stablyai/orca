@@ -7,6 +7,8 @@ export function emptyDependentStateStore(
 ): DependentStateStore {
   return {
     getAllWorktreeMetaForHost: () => ({}),
+    getProjects: () => [],
+    getRepos: () => [],
     getSshRemotePtyLeases: () => [],
     getWorkspaceSession: () => getDefaultWorkspaceSession(),
     getWorkspaceSessionHostIds: () => ['local'],

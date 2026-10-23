@@ -72,7 +72,10 @@ export function registerMobileHandlers(
   ipcMain.handle(
     'mobile:listNetworkInterfaces',
     async (): Promise<{ interfaces: NetworkInterface[] }> => ({
-      interfaces: await getPairingNetworkInterfaces(getDefaultRouteInterfaceNames)
+      interfaces: await getPairingNetworkInterfaces(
+        rpcServer.getNetworkExposureBindHost(),
+        getDefaultRouteInterfaceNames
+      )
     })
   )
 
@@ -89,7 +92,12 @@ export function registerMobileHandlers(
       // Why: allow the caller to specify which network interface address to
       // embed in the QR code. This supports overlay networks (Tailscale,
       // ZeroTier) where the default LAN IP isn't reachable from the phone.
-      const ip = args?.address ?? (await getDefaultPairingAddress(getDefaultRouteInterfaceNames))
+      const ip =
+        args?.address ??
+        (await getDefaultPairingAddress(
+          rpcServer.getNetworkExposureBindHost(),
+          getDefaultRouteInterfaceNames
+        ))
       // Why: the local address is optional under Relay — the QR carries the relay invite, so a host
       // with nothing auto-advertisable (only container bridges, or no interface at all) still pairs.
       // The offer's endpoint then falls back to loopback, which is the phone's own device: the direct
@@ -148,7 +156,12 @@ export function registerMobileHandlers(
   ipcMain.handle(
     'mobile:getRuntimePairingUrl',
     async (_event, args?: { address?: string; rotate?: boolean; reach?: RuntimePairingReach }) => {
-      const ip = args?.address ?? (await getDefaultPairingAddress(getDefaultRouteInterfaceNames))
+      const ip =
+        args?.address ??
+        (await getDefaultPairingAddress(
+          rpcServer.getNetworkExposureBindHost(),
+          getDefaultRouteInterfaceNames
+        ))
       if (!ip) {
         return { available: false as const }
       }

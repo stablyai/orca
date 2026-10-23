@@ -1,3 +1,5 @@
+import { pruneRetiredPtyIncarnations } from '../../shared/retired-pty-incarnations'
+import { getInspectableTerminalHostSession } from './terminal-host-session-access'
 import { isShellProcess } from '../../shared/agent-detection'
 import { recognizeAgentProcess } from '../../shared/agent-process-recognition'
 import type { PtyChildProcessVerdict } from '../../shared/terminal-process-inspection'
@@ -15,6 +17,7 @@ import {
   rememberSteadyStateAnchor
 } from './terminal-host-steady-state-anchor'
 import { SessionNotFoundError } from './types'
+import type { PtyProcessInspectionOptions } from '../providers/pty-process-inspection'
 
 export type TerminalHostProcessInspection = {
   foregroundProcess: string | null
@@ -200,4 +203,30 @@ function unverifiableEvidence(
     verdict: 'unverifiable',
     reason
   }
+}
+
+export function inspectTerminalHostSession(
+  sessions: ReadonlyMap<string, Session>,
+  retired: Map<string, RetiredIncarnation>,
+  sessionId: string,
+  options: PtyProcessInspectionOptions | undefined,
+  authorityGeneration: string,
+  nextObservationEpoch: () => number
+): Promise<TerminalHostProcessInspection> {
+  pruneRetiredPtyIncarnations(retired)
+  const session = getInspectableTerminalHostSession(
+    sessions,
+    retired,
+    sessionId,
+    options?.expectedIncarnationId
+  )
+  return inspectTerminalHostProcess({
+    sessionId,
+    currentSession: () => sessions.get(sessionId),
+    session: session?.isAlive ? session : null,
+    ...options,
+    retiredIncarnation: retired.get(sessionId),
+    authorityGeneration,
+    nextObservationEpoch
+  })
 }

@@ -58,7 +58,10 @@ export function classifyListIssuesError(stderr: string): ClassifiedError {
 
 // Why: classifyGhError's copy names an "issue"; PR mutations reuse the same
 // classification but must not tell the user their pull request is an issue.
-export function classifyPullRequestUpdateError(stderr: string): ClassifiedError {
+export function classifyPullRequestUpdateError(
+  stderr: string,
+  action = 'update pull request'
+): ClassifiedError {
   const c = classifyGhError(stderr)
   const trimmed = stderr.trim()
   const pullRequestMessages: Record<ClassifiedError['type'], string> = {
@@ -69,7 +72,7 @@ export function classifyPullRequestUpdateError(stderr: string): ClassifiedError 
     validation_error: `Invalid update — ${trimmed}`,
     rate_limited: c.message,
     network_error: c.message,
-    unknown: `Failed to update pull request: ${trimmed}`
+    unknown: `Failed to ${action}: ${trimmed}`
   }
   return { type: c.type, message: pullRequestMessages[c.type] }
 }

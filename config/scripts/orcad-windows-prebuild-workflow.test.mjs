@@ -426,3 +426,20 @@ describe.skipIf(process.platform === 'win32')('Windows prebuild Bash fallback', 
     expect(commands.at(-1)).toBe('pnpm build:orcad-prebuilds')
   })
 })
+
+it.each(['X64', 'ARM64'])(
+  'reuses exact native slots in fast %s qualification but saves only after success',
+  (arch) => {
+    const ctx = context('Windows', arch, 'workflow_dispatch', 'refs/heads/feature', true)
+    ctx.inputs.fast_runners = true
+    ctx.inputs.ref = 'a'.repeat(40)
+    expect(evaluate(identity.if, actionContext(ctx))).toBe(true)
+    expect(evaluate(restore.if, actionContext(ctx))).toBe(true)
+    expect(evaluate(save.if, ctx)).toBe(true)
+    ctx.success = () => false
+    expect(evaluate(save.if, ctx)).toBe(false)
+    ctx.success = () => true
+    ctx.github.event_name = 'pull_request'
+    expect(evaluate(save.if, ctx)).toBe(false)
+  }
+)

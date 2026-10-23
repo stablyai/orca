@@ -1,6 +1,5 @@
 /** User-facing words for whether an SSH host's managed server serves it; all go through the catalog. */
 import type {
-  SSH_MANAGED_SERVER_PHASES,
   SshConnectionState,
   SshManagedServerLinkedProject,
   SshTarget
@@ -11,16 +10,19 @@ import { launchSessionEndedLine } from './ssh-host-launch-session-copy'
 import { bridgedTerminalsLine } from './ssh-host-bridged-terminals-copy'
 import { managedUpdateLine, withDetail } from './ssh-host-server-update-copy'
 import { blockedNodeDownload, nodeDownloadBlockedText } from './ssh-host-node-download-copy'
+import { settingUpLabel, sshHostServerReassurance } from './ssh-host-server-setup-copy'
 
 export type SshHostServerStatusLine = {
   text: string
   tone: 'muted' | 'warning' | 'destructive'
   /** Main's untranslated cause, with the host's orcad.log tail when there is one; shown on request. */
   detail?: string
+  /** A muted second line, e.g. what moving onto the host does and doesn't touch. */
+  hint?: string
 }
 
 export function sshHostServerStatusLine(
-  target: Pick<SshTarget, 'orcadFence' | 'managedServerUnavailable'>,
+  target: Pick<SshTarget, 'label' | 'orcadFence' | 'managedServerUnavailable'>,
   state: Pick<SshConnectionState, 'managedServer'> | undefined
 ): SshHostServerStatusLine | null {
   const status = state?.managedServer
@@ -32,7 +34,8 @@ export function sshHostServerStatusLine(
       tone: 'warning',
       text: translate(
         'auto.components.settings.sshHostServer.notServing',
-        'Orca couldn’t confirm that the managed server is answering.'
+        'Orca couldn’t confirm that its server on {{host}} is answering.',
+        { host: target.label }
       ),
       detail: status.serving.detail
     }
@@ -51,7 +54,14 @@ export function sshHostServerStatusLine(
     return null
   }
   if (status?.kind === 'setting-up') {
-    return { tone: 'muted', text: settingUpLabel(status.phase) }
+    return {
+      tone: 'muted',
+      text: settingUpLabel(status.phase, target.label),
+      // Why only these phases: `starting` and `connecting` run on every reconnect, when nothing moves.
+      ...(status.phase === 'deploying' || status.phase === 'converting'
+        ? { hint: sshHostServerReassurance(target.label) }
+        : {})
+    }
   }
   if (status?.kind === 'relay') {
     // An unverifiable bridged terminal keeps the unverifiable line: nothing proves it still answers.
@@ -71,7 +81,8 @@ export function sshConnectFailureText(
   fallback: string
 ): string {
   const status = state?.managedServer
-  return status?.kind === 'relay' ? unservedLine(status).text : fallback
+  // Why uncapped: the pane and toast have no "Details", and a refusal's way out comes last.
+  return status?.kind === 'relay' ? unservedLine(status, Number.POSITIVE_INFINITY).text : fallback
 }
 
 export function sshTargetConnectFailureText(
@@ -93,7 +104,7 @@ function sourceChangedLine(): SshHostServerStatusLine {
     tone: 'warning',
     text: translate(
       'auto.components.settings.sshHostServer.sourceChanged',
-      'An older version of Orca changed this host’s projects. Move those changes to its managed server, or keep the server’s version, to connect again.'
+      'This computer has projects or folders for this host that its Orca server doesn’t have yet, often added by an older version of Orca. Move them to this host’s Orca server, or keep the server’s version, to connect again.'
     )
   }
 }
@@ -205,7 +216,7 @@ function heldMoveLine(): SshHostServerStatusLine {
     tone: 'warning',
     text: translate(
       'auto.components.settings.sshHostServer.moveHeld',
-      'Orca paused moving this host’s projects to its managed server because it couldn’t confirm the server’s copy. Nothing is lost: the host keeps its projects and stays locked until the move finishes. Connect again to resume. If the server can’t come back, stop or forget it in Settings > Managed servers.'
+      'Orca paused moving this host’s projects to its Orca server because it couldn’t confirm the server’s copy. Nothing is lost: the host keeps its projects and stays locked until the move finishes. Connect again to resume. If the server can’t come back, stop or forget it in Settings > Orca on your SSH hosts.'
     )
   }
 }
@@ -233,38 +244,36 @@ function linkedProjectsLine(
   }
 }
 
-function settingUpLabel(phase: (typeof SSH_MANAGED_SERVER_PHASES)[number]): string {
-  switch (phase) {
-    case 'deploying':
-      return translate(
-        'auto.components.settings.sshHostServer.deploying',
-        'Setting up a managed Orca server…'
+// Why a cap: a refusal can list every blocking tab; the whole text stays behind "Details".
+const REFUSAL_INLINE_CHARS = 280
+
+/** Names what refuses the move; main writes that reason, with the way out, in English. */
+function refusedLine(detail: string | undefined, inlineChars: number): SshHostServerStatusLine {
+  const reason = detail?.trim()
+  if (!reason) {
+    return {
+      tone: 'destructive',
+      text: translate(
+        'auto.components.settings.sshHostServer.refusedBlocked',
+        'Orca isn’t set up on this host yet: something on the host stops the move.'
       )
-    case 'converting':
-      return translate(
-        'auto.components.settings.sshHostServer.converting',
-        'Moving this host’s projects to its managed Orca server…'
-      )
-    case 'connecting':
-      return translate(
-        'auto.components.settings.sshHostServer.connecting',
-        'Connecting to the managed Orca server…'
-      )
-    case 'updating':
-      return translate(
-        'auto.components.settings.sshHostServer.updating',
-        'Updating managed server…'
-      )
-    case 'starting':
-      return translate(
-        'auto.components.settings.sshHostServer.starting',
-        'Starting managed server…'
-      )
+    }
+  }
+  const inline = reason.length > inlineChars ? `${reason.slice(0, inlineChars).trimEnd()}…` : reason
+  return {
+    tone: 'destructive',
+    text: translate(
+      'auto.components.settings.sshHostServer.refusedBlockedReason',
+      'Orca isn’t set up on this host yet. {{reason}}',
+      { reason: inline }
+    ),
+    detail: reason
   }
 }
 
 function unservedLine(
-  status: Extract<NonNullable<SshConnectionState['managedServer']>, { kind: 'relay' }>
+  status: Extract<NonNullable<SshConnectionState['managedServer']>, { kind: 'relay' }>,
+  refusalChars = REFUSAL_INLINE_CHARS
 ): SshHostServerStatusLine {
   switch (status.reason) {
     case 'relay_terminals_live':
@@ -295,15 +304,7 @@ function unservedLine(
     case 'source_changed':
       return sourceChangedLine()
     case 'refused':
-      // `detail` is main's English refusal, so it stays behind "Details".
-      return {
-        tone: 'destructive',
-        text: translate(
-          'auto.components.settings.sshHostServer.refusedBlocked',
-          'Not moved to a managed server: something on this host stops the move.'
-        ),
-        ...withDetail(status.detail)
-      }
+      return refusedLine(status.detail, refusalChars)
     case 'deferred':
     case 'failed': {
       const blocked = blockedNodeDownload(status)

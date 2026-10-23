@@ -821,109 +821,7 @@ describe('relay observability', () => {
   })
 })
 
-// The pre-change implementation, kept verbatim as the differential oracle. Both
-// ranks sorted their own copy and the maximum was a zero-seeded fold.
-function legacyPercentile(values: number[], percentileRank: number): number {
-  if (values.length === 0) return 0
-  const sorted = [...values].sort((left, right) => left - right)
-  return sorted[Math.ceil(percentileRank * sorted.length) - 1] ?? 0
-}
-
-function legacyLatencySummary(samples: number[]): { p50: number; p95: number; max: number } {
-  const round = (value: number): number => Number(value.toFixed(3))
-  return {
-    p50: round(legacyPercentile(samples, 0.5)),
-    p95: round(legacyPercentile(samples, 0.95)),
-    max: round(samples.reduce((highest, sample) => Math.max(highest, sample), 0))
-  }
-}
-
-// `-0` and `NaN` both survive a string round trip, unlike a bare equality check.
-function describeNumber(value: number): string {
-  return Object.is(value, -0) ? '-0' : String(value)
-}
-
-function expectSameNumber(actual: number, expected: number, label: string): void {
-  expect(`${label} = ${describeNumber(actual)}`).toBe(`${label} = ${describeNumber(expected)}`)
-}
-
-function sparseWindow(size: number, filled: Record<number, number>): number[] {
-  const values: number[] = new Array<number>(size)
-  for (const [index, value] of Object.entries(filled)) values[Number(index)] = value
-  return values
-}
-
-// Lehmer generator: stays inside the safe-integer range so the window is
-// byte-identical on every engine the relay runs on.
-function deterministicWindow(size: number): number[] {
-  let seed = 20_260_912
-  return Array.from({ length: size }, () => {
-    seed = (seed * 48_271) % 2_147_483_647
-    return (seed % 4_000_000) / 1_000
-  })
-}
-
-const DENSE_WINDOWS: Array<{ name: string; values: number[] }> = [
-  { name: 'empty', values: [] },
-  { name: 'single', values: [7.5] },
-  { name: 'single negative', values: [-7.5] },
-  { name: 'ascending', values: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] },
-  { name: 'descending', values: [10, 9, 8, 7, 6, 5, 4, 3, 2, 1] },
-  { name: 'duplicates', values: [4, 4, 4, 4, 4] },
-  // The trap: a sorted last element reads -1 here, the zero-seeded fold reads 0.
-  { name: 'all negative', values: [-5, -1, -9, -3, -2] },
-  { name: 'mixed signs', values: [-2, 3, -7, 0, 11, -0.5] },
-  { name: 'signed zero', values: [0, -0, -0, 0] },
-  { name: 'negative then signed zero', values: [-3, -0, -1] },
-  { name: 'nan leading', values: [NaN, 5, 1, 9] },
-  { name: 'nan trailing', values: [5, 1, 9, NaN] },
-  { name: 'nan interleaved', values: [5, NaN, 1, NaN, 9] },
-  { name: 'all nan', values: [NaN, NaN, NaN] },
-  { name: 'positive infinity', values: [Infinity, 3, 1] },
-  { name: 'negative infinity', values: [-Infinity, -3, -1] },
-  { name: 'both infinities', values: [Infinity, -Infinity, 3, -Infinity] },
-  { name: 'infinities and nan', values: [Infinity, NaN, -Infinity, 0] },
-  { name: 'sub-millisecond rounding', values: [0.00049, 0.0005, 0.00051, 0.9995] },
-  { name: 'reservoir sized', values: deterministicWindow(CONTROL_RTT_RESERVOIR_LIMIT) }
-]
-
-// Holes cannot reach the recorders, so they are exercised through `percentile`
-// alone — the surface `host-session-registry` also calls.
-const SPARSE_WINDOWS: Array<{ name: string; values: number[] }> = [
-  { name: 'all holes', values: sparseWindow(4, {}) },
-  { name: 'leading hole', values: sparseWindow(5, { 3: 8, 4: 2 }) },
-  { name: 'trailing hole', values: sparseWindow(5, { 0: 8, 1: 2 }) },
-  { name: 'interleaved holes', values: sparseWindow(6, { 0: 3, 2: -4, 5: 1 }) },
-  { name: 'holes with nan', values: sparseWindow(5, { 1: NaN, 3: 6 }) }
-]
-
-const PERCENTILE_RANKS = [0, 0.05, 0.5, 0.9, 0.95, 0.99, 1]
-
-type SortWork = { sorts: number; comparisons: number; copiedElements: number }
-
-// Every sorted array here is a fresh spread copy, so its length is the number of
-// elements copied to produce it.
-function countSortWork(run: () => void): SortWork {
-  const work: SortWork = { sorts: 0, comparisons: 0, copiedElements: 0 }
-  const original = Array.prototype.sort
-  const patched = Array.prototype as { sort: unknown }
-  patched.sort = function <T>(this: T[], compare?: (left: T, right: T) => number): T[] {
-    work.sorts++
-    work.copiedElements += this.length
-    return original.call(this, (left: T, right: T) => {
-      work.comparisons++
-      return compare ? compare(left, right) : String(left) < String(right) ? -1 : 1
-    })
-  }
-  try {
-    run()
-  } finally {
-    patched.sort = original
-  }
-  return work
-}
-
-function summaryThroughFlush(samples: number[]): { p50: number; p95: number; max: number } {
+function summaryThroughFlush(samples: number[]) {
   const entries: Array<Record<string, unknown>> = []
   const observability = new RelayObservability(
     { role: 'cell', cellId: 'staging-c1', region: 'us-central1' },
@@ -933,68 +831,76 @@ function summaryThroughFlush(samples: number[]): { p50: number; p95: number; max
   observability.flush(counts)
   const entry = entries[0]!
   return {
-    p50: entry.controlRenewalLatencyMsP50 as number,
-    p95: entry.controlRenewalLatencyMsP95 as number,
-    max: entry.controlRenewalLatencyMsMax as number
+    p50: entry.controlRenewalLatencyMsP50,
+    p95: entry.controlRenewalLatencyMsP95,
+    max: entry.controlRenewalLatencyMsMax
   }
 }
 
 describe('latency window summarisation', () => {
-  it('matches the pre-change percentile on every edge-case window', () => {
-    let compared = 0
-    for (const { name, values } of [...DENSE_WINDOWS, ...SPARSE_WINDOWS]) {
-      for (const rank of PERCENTILE_RANKS) {
-        expectSameNumber(
-          percentile(values, rank),
-          legacyPercentile(values, rank),
-          `${name} @ p${rank}`
-        )
-        compared++
-      }
-    }
-    expect(compared).toBe((DENSE_WINDOWS.length + SPARSE_WINDOWS.length) * PERCENTILE_RANKS.length)
+  it.each([
+    { values: [], rank: 0.5, expected: 0 },
+    { values: [10, 1, 5, 3], rank: 0.5, expected: 3 },
+    { values: [10, 1, 5, 3], rank: 0.95, expected: 10 },
+    { values: [10, 1, 5, 3], rank: 0, expected: 0 },
+    { values: [-5, -1, -9, -3, -2], rank: 1, expected: -1 },
+    { values: [0, -0, -0, 0], rank: 0.5, expected: -0 },
+    { values: new Array<number>(4), rank: 0.5, expected: 0 },
+    { values: [Number.NaN, Number.NaN], rank: 1, expected: Number.NaN },
+    { values: [Infinity, -Infinity], rank: 0.5, expected: -Infinity }
+  ])('selects the nearest rank without interpolating (case %#)', ({ values, rank, expected }) => {
+    expect(percentile(values, rank)).toBe(expected)
   })
 
-  it('matches the pre-change p50, p95 and maximum through a flush', () => {
-    let compared = 0
-    for (const { name, values } of DENSE_WINDOWS) {
-      const actual = summaryThroughFlush(values)
-      const expected = legacyLatencySummary(values)
-      expectSameNumber(actual.p50, expected.p50, `${name} p50`)
-      expectSameNumber(actual.p95, expected.p95, `${name} p95`)
-      // The zero-seeded fold, not the sorted last element: all-negative and NaN
-      // windows disagree between the two.
-      expectSameNumber(actual.max, expected.max, `${name} max`)
-      compared += 3
-    }
-    expect(compared).toBe(DENSE_WINDOWS.length * 3)
-    // The trap, spelled out: the sorted window ends at -1 but the fold reports 0.
-    expect(summaryThroughFlush([-5, -1, -9, -3, -2]).max).toBe(0)
-    expect(Number.isNaN(summaryThroughFlush([5, NaN, 1]).max)).toBe(true)
+  it.each([
+    { name: 'empty', values: [], expected: { p50: 0, p95: 0, max: 0 } },
+    { name: 'single', values: [7.5], expected: { p50: 7.5, p95: 7.5, max: 7.5 } },
+    { name: 'unsorted', values: [10, 1, 5, 3], expected: { p50: 3, p95: 10, max: 10 } },
+    { name: 'duplicates', values: [4, 4, 4], expected: { p50: 4, p95: 4, max: 4 } },
+    { name: 'negative', values: [-5, -1, -9, -3, -2], expected: { p50: -3, p95: -1, max: 0 } },
+    { name: 'mixed signs', values: [-2, 3, -7, 0, 11, -0.5], expected: { p50: -0.5, p95: 11, max: 11 } },
+    { name: 'signed zero', values: [0, -0, -0, 0], expected: { p50: 0, p95: 0, max: 0 } },
+    {
+      name: 'NaN',
+      values: [Number.NaN, Number.NaN],
+      expected: { p50: Number.NaN, p95: Number.NaN, max: Number.NaN }
+    },
+    { name: 'positive infinity', values: [Infinity, 3, 1], expected: { p50: 3, p95: Infinity, max: Infinity } },
+    { name: 'negative infinity', values: [-Infinity, -3, -1], expected: { p50: -3, p95: -1, max: 0 } },
+    { name: 'both infinities', values: [Infinity, -Infinity, 3, -Infinity], expected: { p50: -Infinity, p95: Infinity, max: Infinity } },
+    { name: 'rounding', values: [0.00049, 0.0005, 0.00051, 0.9995], expected: { p50: 0.001, p95: 1, max: 1 } }
+  ])('publishes explicit p50, p95 and maximum for $name samples', ({ values, expected }) => {
+    expect(summaryThroughFlush(values)).toEqual(expected)
   })
 
-  it('sorts each latency window once instead of once per rank', () => {
-    const samples = deterministicWindow(CONTROL_RTT_RESERVOIR_LIMIT)
-    const before = countSortWork(() => legacyLatencySummary(samples))
-    const after = countSortWork(() => summaryThroughFlush(samples))
-
-    expect(before.sorts).toBe(2)
-    expect(after.sorts).toBe(1)
-    expect(before.copiedElements).toBe(2 * CONTROL_RTT_RESERVOIR_LIMIT)
-    expect(after.copiedElements).toBe(CONTROL_RTT_RESERVOIR_LIMIT)
-    // Identical input and comparator, so the dropped sort is exactly half the
-    // comparator calls rather than an engine-specific constant.
-    expect(before.comparisons).toBeGreaterThan(CONTROL_RTT_RESERVOIR_LIMIT)
-    expect(after.comparisons).toBe(before.comparisons / 2)
+  it('sorts a full latency reservoir once for all ranks', () => {
+    const samples = Array.from({ length: CONTROL_RTT_RESERVOIR_LIMIT }, (_, index) =>
+      CONTROL_RTT_RESERVOIR_LIMIT - index
+    )
+    const sort = vi.spyOn(Array.prototype, 'sort')
+    try {
+      summaryThroughFlush(samples)
+      const sortedWindows = [...sort.mock.contexts]
+      expect(sortedWindows).toHaveLength(1)
+      expect(sortedWindows[0]).toHaveLength(CONTROL_RTT_RESERVOIR_LIMIT)
+    } finally {
+      sort.mockRestore()
+    }
   })
 
   it('never sorts an empty window and leaves the caller window untouched', () => {
-    const samples = [5, -1, NaN, 3, -0]
-    const before = samples.map(describeNumber)
-    expect(countSortWork(() => summaryThroughFlush([])).sorts).toBe(0)
-    expect(countSortWork(() => percentile([], 0.95)).sorts).toBe(0)
-    countSortWork(() => summaryThroughFlush(samples))
+    const sort = vi.spyOn(Array.prototype, 'sort')
+    try {
+      summaryThroughFlush([])
+      percentile([], 0.95)
+      expect(sort).not.toHaveBeenCalled()
+    } finally {
+      sort.mockRestore()
+    }
+    const samples = [5, -1, Number.NaN, 3, -0]
+    const before = [...samples]
+    summaryThroughFlush(samples)
     percentile(samples, 0.5)
-    expect(samples.map(describeNumber)).toEqual(before)
+    expect(samples).toEqual(before)
   })
 })

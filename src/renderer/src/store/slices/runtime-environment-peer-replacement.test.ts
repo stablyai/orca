@@ -58,11 +58,26 @@ describe('which re-paired environments name a different machine', () => {
     expect(retired(managed(), managed({ generation: 2, pairingRevision: 2 }))).toEqual(['env-1'])
   })
 
-  it('retires a re-paired environment that is not a managed server', () => {
+  it('retires a hand-paired server re-paired to a different key', () => {
     const paired = { id: 'env-1', createdAt: 1, pairingRevision: 1, hostKeyFingerprint: 'k' }
     expect(
-      classifyPeerReplacements([paired], [{ ...paired, pairingRevision: 2 }], ['env-1']).retired
+      classifyPeerReplacements(
+        [paired],
+        [{ ...paired, pairingRevision: 2, hostKeyFingerprint: 'other' }],
+        ['env-1']
+      ).retired
     ).toEqual(['env-1'])
+  })
+
+  it('keeps a hand-paired server whose new pairing carries the same key, so its tabs survive', () => {
+    const paired = { id: 'env-1', createdAt: 1, pairingRevision: 1, hostKeyFingerprint: 'k' }
+    expect(
+      classifyPeerReplacements([paired], [{ ...paired, pairingRevision: 2 }], ['env-1'])
+    ).toEqual({
+      retired: [],
+      sameHost: [{ id: 'env-1', fromRevision: 1, toRevision: 2 }],
+      pending: []
+    })
   })
 
   it('leaves an environment alone while its pairing is unchanged', () => {

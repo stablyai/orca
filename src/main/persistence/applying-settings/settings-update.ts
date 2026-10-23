@@ -1,6 +1,7 @@
 import { normalizeAgentNativeChatPermissionModes } from '../../../shared/agent-chat-permission-mode'
 import { normalizeNativeChatAppearanceSettings } from '../../../shared/native-chat-appearance-settings'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
+import { retireAtRestCommandSettings } from '../../native-chat/agent-session-wire/at-rest-command-context'
 import { normalizeDisabledTuiAgents } from '../../../shared/tui-agent-selection'
 import { normalizeNativeChatProviderChoices } from '../../../shared/native-chat-providers'
 import { resolveNestedWorkerMaxDepth } from '../../../shared/nested-worker-depth'
@@ -49,9 +50,7 @@ import {
 export type SettingsMutationOperations = {
   state: PersistedState
   bumpLocalWorktreeScanGeneration: (repoId: string) => void
-  removeRetainedBlob: (
-    slot: Parameters<ProtectedSecretPersistence['removeRetainedBlob']>[0]
-  ) => void
+  removeRetainedBlob: ProtectedSecretPersistence['removeRetainedBlob']
   scheduleSave: () => void
   notifySettingsChanged: (updates: Partial<GlobalSettings>, originWebContentsId?: number) => void
 }
@@ -305,6 +304,7 @@ export function updateSettings(
       changedUpdates[String(key)] = operations.state.settings[key]
     }
   }
+  retireAtRestCommandSettings(Object.keys(changedUpdates))
   if (options.notifyListeners === true && Object.keys(changedUpdates).length > 0) {
     operations.notifySettingsChanged(changedUpdates, options.originWebContentsId)
   }

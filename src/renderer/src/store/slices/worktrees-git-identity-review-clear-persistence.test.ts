@@ -41,6 +41,7 @@ describe('updateWorktreeGitIdentity', () => {
       repoId: 'repo1',
       path: '/path/wt1',
       branch: 'refs/heads/stack/one',
+      linkedPR: 101,
       pushTarget: { remoteName: 'fork', branchName: 'old/review-head' }
     })
 
@@ -55,6 +56,9 @@ describe('updateWorktreeGitIdentity', () => {
       branch: 'refs/heads/stack/two',
       pushTarget: undefined
     })
+    expect(store.getState().worktreesByRepo.repo1[0]?.linkedItems).toEqual([
+      { provider: 'github', type: 'pr', number: 101 }
+    ])
     expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
       worktreeId: 'repo1::/path/wt1',
       updates: {
@@ -369,6 +373,11 @@ describe('updateWorktreeGitIdentity', () => {
     mockApi.worktrees.list.mockResolvedValue([staleRefetch])
     await store.getState().fetchWorktrees('repo1')
 
+    expect(store.getState().worktreesByRepo.repo1[0]?.linkedItems).toContainEqual({
+      provider: 'github',
+      type: 'pr',
+      number: 101
+    })
     expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({
       branch: 'refs/heads/stack/two',
       head: 'new-head',

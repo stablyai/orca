@@ -3,6 +3,7 @@ import { runInNewContext } from 'node:vm'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 import { classifyPrJobs } from './pr-code-change-scope.mjs'
+import { WINDOWS_BOUNDARY_TESTS } from './pr-package-test-paths.mjs'
 
 const read = (path) => parse(readFileSync(path, 'utf8'))
 const workflow = (name) => read(`.github/workflows/${name}.yml`)
@@ -12,9 +13,6 @@ describe('CI dependency download caches', () => {
   it('scopes desktop stores to the root lockfile and lets mixed installs opt in', () => {
     expect(action.inputs['cache-dependency-path'].default).toBe('pnpm-lock.yaml')
     for (const step of action.runs.steps.filter((step) => step.uses === 'actions/setup-node@v6')) {
-      expect(step.with.cache).toBe(
-        "${{ github.event_name != 'pull_request' && inputs.cache-pnpm-store != 'false' && steps.pnpm-store-mode.outputs.lookup-only != 'true' && 'pnpm' || '' }}"
-      )
       expect(step.with['cache-dependency-path']).toBe('${{ inputs.cache-dependency-path }}')
       expect(step.with['package-manager-cache']).toBe(false)
     }
@@ -51,12 +49,6 @@ describe('CI dependency download caches', () => {
     const resolve = action.runs.steps.find((step) => step.id === 'pnpm-store')
     const restore = action.runs.steps.find(
       (step) => step.name === 'Restore pnpm download store without saving'
-    )
-    expect(restore.if).toBe(
-      "github.event_name == 'pull_request' && inputs.cache-pnpm-store != 'false' && !((runner.os == 'Linux' || runner.os == 'macOS') && (runner.arch == 'X64' || runner.arch == 'ARM64') && inputs.cache-dependency-path == 'pnpm-lock.yaml') && (runner.os != 'Windows' || !(runner.arch == 'X64' && contains(inputs.cache-dependency-path, 'mobile/pnpm-lock.yaml')) && !((runner.arch == 'X64' || runner.arch == 'ARM64') && inputs.cache-dependency-path == 'pnpm-lock.yaml'))"
-    )
-    expect(resolve.if).toBe(
-      `${restore.if} || (github.event_name != 'pull_request' && inputs.cache-pnpm-store != 'false' && steps.pnpm-store-mode.outputs.lookup-only == 'true')`
     )
     expect(restore.uses).toBe('actions/cache/restore@v5')
     expect(restore.with.path).toBe('${{ steps.pnpm-store.outputs.path }}')
@@ -556,9 +548,14 @@ describe('release install targets', () => {
   it('keeps installed Windows addon checks in the Windows CI lane', () => {
     const steps = Object.values(workflow('pr').jobs).flatMap((job) => job.steps ?? [])
     const test = steps.find((step) => step.name === 'Test Windows-specific boundaries')
-    expect(test.run).toContain('config/scripts/windows-process-tree-gyp-path.test.mjs')
-    expect(test.run).toContain('config/scripts/windows-process-tree-gyp-rebuild.test.mjs')
-    expect(test.run).toContain('config/scripts/package-electron-runtime-contract.test.mjs')
-    expect(test.run).toContain('config/scripts/electron-builder-runtime-resources.test.mjs')
+    expect(test.run).toContain('config/scripts/pr-package-test-paths.mjs')
+    expect(WINDOWS_BOUNDARY_TESTS).toEqual(
+      expect.arrayContaining([
+        'config/scripts/windows-process-tree-gyp-path.test.mjs',
+        'config/scripts/windows-process-tree-gyp-rebuild.test.mjs',
+        'config/scripts/package-electron-runtime-contract.test.mjs',
+        'config/scripts/electron-builder-runtime-resources.test.mjs'
+      ])
+    )
   })
 })

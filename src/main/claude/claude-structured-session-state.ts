@@ -84,7 +84,8 @@ export type ClaudeLateDispatchOutcome =
       clientMessageId: string
       providerIdentity: AgentJournalItemIdentity
     }
-  | ({ clientMessageId: string; state: 'rejected' } & AgentJournalDispatchRejection)
+  /** `unrun`: the CLI reported it removed the send without running it. */
+  | ({ clientMessageId: string; state: 'rejected'; unrun?: true } & AgentJournalDispatchRejection)
   /** The CLI took the send and let it go unanswered: it may have run, so it is never re-sent. */
   | { clientMessageId: string; state: 'unknown'; reason: string }
 
@@ -95,8 +96,6 @@ export type ClaudeStructuredSessionAdapterDeps = {
   onEvent?: (event: ClaudeStructuredSessionEvent) => void
   /** Direct settlement path for provider-proven late dispatch outcomes. */
   onDispatchSettledLate?: (input: { sessionId: string } & ClaudeLateDispatchOutcome) => void
-  /** The CLI reported `session_state_changed idle`: its turn is over. */
-  onSessionIdle?: (input: { sessionId: string }) => void
   /** What the session's child work did, delivered after the journal handled the frame. */
   /** `producer`: the reporting child's own sink, which writes what the report changes. */
   onChildWorkEvidence?: (
@@ -159,6 +158,8 @@ export type ClaudeSession = {
   acquisitionGeneration: string
   prompts: ClaudePromptRegistry
   dispatchWaiters: ClaudeDispatchWaiter[]
+  /** Sends the frame being handled settled, until their settlements reach the host. */
+  unreportedSettlements?: ReadonlySet<string>
   /** Bounded identities for dispatches settled without an echo; a late replay still accepts one. */
   retiredDispatchWaiters: ClaudeDispatchWaiter[]
   /** Once a retired waiter is evicted, legacy content-only replay matching is unsafe. */
@@ -170,6 +171,8 @@ export type ClaudeSession = {
   appliedOptions?: { model?: string; effort?: string }
   /** CLI settings resolved before a turn changed them, when no launch override hid that value. */
   configuredDefaults?: { model?: string; effort?: string }
+  /** Mutation at which the provider last reported its Fast routing state. */
+  fastModeReportedMutation?: number
   fastModeState?: AgentSessionFastModeState
   fastModeDisabledReason?: string
   fastModePerSessionOptIn?: boolean
@@ -178,8 +181,8 @@ export type ClaudeSession = {
   reportedModelMutation: number
   /** Options whose recorded value the provider reported, not merely accepted. */
   confirmedOptions: Set<string>
-  /** Value-bound execution evidence, revoked before any possible write. */
-  reusableOptions: Map<string, string>
+  /** Inputs carried by launch or accepted controls, independent of provider reports. */
+  appliedInputOptions: Map<string, string>
   /** The model the child was launched with, as `--model`; null when it runs the CLI's own. */
   launchedModel: string | null
   /** A launched model the CLI answered `model_not_found` for; reported until a new pick. */
@@ -231,6 +234,7 @@ export function mintClaudeAcquisitionGeneration(deps: ClaudeStructuredSessionAda
  * what the ladder observed, not an absence it would otherwise report as proven.
  */
 export type ClaudeSessionExit = {
+  observedAt: number
   connection: ClaudeStreamJsonConnection
   /** Full session identity retained until the exit settles. */
   session: ClaudeSession

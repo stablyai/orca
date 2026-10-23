@@ -213,6 +213,11 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('./handlers/agent-launch.js')).AGENT_LAUNCH_HANDLERS
   },
   {
+    name: 'connector',
+    keys: ['connector start', 'connector send'],
+    load: async () => (await import('./handlers/connector.js')).CONNECTOR_HANDLERS
+  },
+  {
     name: 'profile-state',
     keys: ['profile state exports', 'profile state rollback'],
     load: async () => (await import('./handlers/profile-state.js')).PROFILE_STATE_HANDLERS
@@ -221,6 +226,11 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     name: 'diagnostics',
     keys: ['diagnostics memory', 'terminal-daemon status', 'terminal-daemon restart'],
     load: async () => (await import('./handlers/diagnostics.js')).DIAGNOSTICS_HANDLERS
+  },
+  {
+    name: 'speech',
+    keys: ['speech openai-key status', 'speech openai-key set', 'speech openai-key clear'],
+    load: async () => (await import('./handlers/speech.js')).SPEECH_HANDLERS
   },
   {
     name: 'introspection',

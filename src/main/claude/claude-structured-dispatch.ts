@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { isAbortSignalReason } from '../../shared/abort-signal-reason'
 import {
   forgetRetiredWaiter,
   forgetWaiter,
@@ -59,21 +60,25 @@ export function rejectClaudeDispatchWaiters(
   const retiredWaiters = session.retiredDispatchWaiters.filter((waiter) =>
     named.has(waiter.sentUuid)
   )
-  for (const waiter of activeWaiters) {
-    forgetWaiter(session, waiter)
-    waiter.resolve(null)
-  }
-  for (const waiter of retiredWaiters) {
-    forgetRetiredWaiter(session, waiter)
-  }
-  for (const waiter of [...activeWaiters, ...retiredWaiters]) {
+  // Each released as it is reported: one dropped before its report reads as held by nobody.
+  const report = (waiter: ClaudeDispatchWaiter): void => {
     if (waiter.clientMessageId) {
       onSettledLate?.({
         clientMessageId: waiter.clientMessageId,
         state: 'rejected',
+        unrun: true,
         ...claudeDispatchRejection(fact)
       })
     }
+  }
+  for (const waiter of activeWaiters) {
+    forgetWaiter(session, waiter)
+    waiter.resolve(null)
+    report(waiter)
+  }
+  for (const waiter of retiredWaiters) {
+    forgetRetiredWaiter(session, waiter)
+    report(waiter)
   }
 }
 
@@ -118,6 +123,7 @@ export async function dispatchClaudeTurn(
     requestedAt?: number
     /** The frame's uuid, for a caller that correlates the provider's answer to it. */
     sentUuid?: string
+    signal?: AbortSignal
   },
   beforeDispatch?: () => Promise<void>
 ): Promise<AgentSessionDispatchOutcome> {
@@ -171,7 +177,11 @@ export async function dispatchClaudeTurn(
   } catch (error) {
     const replay = pending.replay
     if (!replay) {
-      if (error instanceof AgentSessionPreDispatchError) {
+      // A Stop during authorization, before the SDK took the frame, stays the abort the host reads.
+      if (
+        error instanceof AgentSessionPreDispatchError ||
+        isAbortSignalReason(input.signal, error)
+      ) {
         throw error
       }
       if (isAgentSessionOptionRejectedError(error)) {

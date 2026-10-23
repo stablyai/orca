@@ -1,0 +1,75 @@
+import type { AgentSessionAccountHome } from '../../../shared/agent-session-record'
+import type {
+  AgentModelCatalogService,
+  AgentModelCatalogServiceDeps
+} from './agent-model-catalog-service-contract'
+import type { AgentModelCatalogProbe, AgentModelCatalogSuccess } from './agent-model-catalog-store'
+import { agentModelCatalogFingerprint } from './agent-model-catalog-fingerprint'
+import { independentAgentModelCatalog } from './agent-model-catalog-discovery'
+
+/** The catalog a new chat of `agent` would read: the account a launch would pin right now. */
+export async function newChatCatalogKey(
+  deps: AgentModelCatalogServiceDeps,
+  agent: string,
+  folder?: string
+): Promise<{ fingerprint: string; accountHome: AgentSessionAccountHome } | null> {
+  let accountHome: AgentSessionAccountHome
+  try {
+    accountHome = await deps.resolveAccountHome(agent)
+  } catch {
+    return null
+  }
+  return {
+    fingerprint: agentModelCatalogFingerprint({ agent, accountHome, wslDistro: null, folder }),
+    accountHome
+  }
+}
+
+async function runBounded<T>(
+  items: readonly T[],
+  limit: number,
+  stopped: AbortSignal,
+  run: (item: T) => Promise<unknown>
+): Promise<void> {
+  const queue = [...items]
+  const worker = async (): Promise<void> => {
+    for (let item = queue.shift(); item !== undefined && !stopped.aborted; item = queue.shift()) {
+      await run(item).catch(() => {})
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, queue.length) }, worker))
+}
+
+export async function prewarmAgentModelCatalog(
+  deps: AgentModelCatalogServiceDeps,
+  signal: AbortSignal,
+  read: AgentModelCatalogService['read'],
+  listWith: (
+    probe: AgentModelCatalogProbe,
+    home: AgentSessionAccountHome
+  ) => () => Promise<AgentModelCatalogSuccess>
+): Promise<void> {
+  if (signal.aborted) {
+    return
+  }
+  const probes = deps.probes ?? {}
+  // An agent never used here waits for its first chat, which shows the quiet placeholder.
+  const used = Object.keys(probes).filter(
+    (agent) =>
+      !deps.listsInChatFolder?.has(agent) &&
+      (deps.store.hasEntryForAgent(agent) || deps.hasChatRecords?.(agent) === true)
+  )
+  await runBounded(used, 2, signal, async (agent) => {
+    if (independentAgentModelCatalog(agent)) {
+      await read({ agent, waitForListing: true })
+      return
+    }
+    const probe = probes[agent]
+    const key = probe ? await newChatCatalogKey(deps, agent) : null
+    // A fresh entry, a listing already running, or a recent failure each mean nothing to do.
+    if (!probe || !key || signal.aborted || !deps.store.probeDue(key.fingerprint)) {
+      return
+    }
+    await deps.store.refresh(key.fingerprint, agent, probe, listWith(probe, key.accountHome))
+  })
+}

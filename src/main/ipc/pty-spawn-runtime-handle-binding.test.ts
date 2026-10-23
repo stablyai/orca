@@ -408,7 +408,9 @@ describe('registerPtyHandlers', () => {
       'term_expected'
     )
     expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:spawned', {
-      id: spawned.id
+      id: spawned.id,
+      incarnationId: expect.any(String),
+      hostId: 'local'
     })
   })
   it('releases the Agent Teams leader of a spawn that loses the pane mid-preflight', async () => {

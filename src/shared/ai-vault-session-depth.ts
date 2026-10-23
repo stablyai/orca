@@ -1,4 +1,4 @@
-import { createAiVaultScopeCwdMatcher } from './ai-vault-scope-cwd-match'
+import { aiVaultSessionInScope, createAiVaultScopeCwdMatcher } from './ai-vault-scope-cwd-match'
 import type { AiVaultListArgs, AiVaultListResult } from './ai-vault-types'
 
 export const DEFAULT_AI_VAULT_SCAN_LIMIT = 1000
@@ -54,7 +54,8 @@ export function truncateAiVaultListResult(
   const inScope = scopePaths.length > 0 ? createAiVaultScopeCwdMatcher(scopePaths) : null
   let outOfScopeCount = 0
   const sessions = result.sessions.filter(
-    (session) => inScope?.(session.cwd, session.filePath) === true || outOfScopeCount++ < depth
+    (session) =>
+      (inScope !== null && aiVaultSessionInScope(inScope, session)) || outOfScopeCount++ < depth
   )
   return {
     ...result,

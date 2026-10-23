@@ -8,6 +8,7 @@ import type { NativeChatStructuredComposerTransport } from './native-chat-compos
 import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime-pty-id'
 
 vi.mock('@/i18n/i18n', () => ({
+  i18n: { language: 'en' },
   translate: (_key: string, fallback: string) => fallback
 }))
 const actions = vi.hoisted((): { sendDisabled: boolean | null } => ({ sendDisabled: null }))

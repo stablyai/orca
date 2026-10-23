@@ -28,7 +28,6 @@ function DropSurface() {
     webviewRef: { current: null },
     activeLoadFailureRef: { current: null },
     lastKnownWebviewUrlRef: { current: null },
-    trackNextLoadingEventRef: { current: false },
     recoveryNavigationValidationRef: { current: null },
     onSetUrlRef: { current: vi.fn() },
     onUpdatePageStateRef: { current: vi.fn() },

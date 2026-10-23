@@ -74,34 +74,46 @@ function responseRuntimeId(response: unknown): string | undefined {
     : undefined
 }
 
+type RuntimeClient = ReturnType<typeof getClientForEnvironment>
+
+async function probeRuntimeStatus(
+  client: RuntimeClient,
+  params: unknown,
+  timeoutMs: number | undefined
+): Promise<RuntimeRpcResponse<unknown>> {
+  const epoch = client.connectionEpoch
+  const response = await client.call('status.get', params, { timeoutMs })
+  const runtimeId = responseRuntimeId(response)
+  if (response.ok && runtimeId && client.connectionEpoch === epoch) {
+    probedConnections.set(client, { epoch, runtimeId })
+  }
+  return response
+}
+
 /**
  * Why: a request shaped for one runtime's capabilities must reach that runtime. The same client
- * reconnects internally, so pin it to the connection the matching status probe ran on; with no
- * such probe, refuse so the caller re-probes.
+ * reconnects internally, so pin it to the connection a matching status probe ran on. Probes that
+ * bypass this wrapper (the status owner's) leave no proof, so a missing or stale one is re-probed.
  */
-function callPinnedToRuntime(
-  client: ReturnType<typeof getClientForEnvironment>,
+async function callPinnedToRuntime(
+  client: RuntimeClient,
   method: string,
   params: unknown,
   timeoutMs: number | undefined,
   expectedEnvironmentRuntimeId: string | undefined
 ): Promise<RuntimeRpcResponse<unknown>> {
   if (method === 'status.get') {
-    const epoch = client.connectionEpoch
-    return client.call(method, params, { timeoutMs }).then((response) => {
-      const runtimeId = responseRuntimeId(response)
-      if (response.ok && runtimeId && client.connectionEpoch === epoch) {
-        probedConnections.set(client, { epoch, runtimeId })
-      }
-      return response
-    })
+    return probeRuntimeStatus(client, params, timeoutMs)
   }
   if (expectedEnvironmentRuntimeId === undefined) {
     return client.call(method, params, { timeoutMs })
   }
+  if (probedConnections.get(client)?.epoch !== client.connectionEpoch) {
+    await probeRuntimeStatus(client, undefined, timeoutMs)
+  }
   const probed = probedConnections.get(client)
   if (probed?.runtimeId !== expectedEnvironmentRuntimeId) {
-    return Promise.reject(new Error(RUNTIME_CONNECTION_CHANGED_MESSAGE))
+    throw new Error(RUNTIME_CONNECTION_CHANGED_MESSAGE)
   }
   return client.call(method, params, { timeoutMs, expectedConnectionEpoch: probed.epoch })
 }

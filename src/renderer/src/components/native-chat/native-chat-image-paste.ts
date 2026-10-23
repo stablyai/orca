@@ -17,6 +17,12 @@ export function isNativeChatPastedImagePath(path: string): boolean {
   return /^orca-paste-.+\.png$/i.test(base)
 }
 
+/** True for a long text paste Orca saved as a file (`orca-paste-<ts>-<uuid>.txt`). */
+export function isNativeChatPastedTextPath(path: string): boolean {
+  const base = path.split(/[\\/]/).findLast(Boolean) ?? path
+  return /^orca-paste-.+\.txt$/i.test(base)
+}
+
 /** True for a local paste in the folder older builds kept them in, judged from the path alone;
  *  main checks the real file before a restore keeps it. */
 export function isNativeChatKeptPastePath(path: string): boolean {

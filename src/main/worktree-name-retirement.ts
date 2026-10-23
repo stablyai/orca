@@ -52,6 +52,14 @@ type RetirementWriteStore = RetirementRuntimeStore & {
   mergeRetiredWorktreeNamesForNamespace?(namespaceKey: string, names: Iterable<string>): boolean
   getSshTarget?: SshTargetLookup
 }
+export function hasRetiredNameRegistryStore<
+  T extends RetirementRuntimeStore & Partial<RetirementReadStore & RetirementBackfillStore>
+>(store: T): store is T & RetirementReadStore & RetirementBackfillStore {
+  return (
+    typeof store.getRetiredWorktreeNameRegistry === 'function' &&
+    typeof store.mergeRetiredWorktreeNames === 'function'
+  )
+}
 type RetirementPathSettings = Pick<GlobalSettings, 'nestWorkspaces' | 'workspaceDir'> & {
   wslMirrorDistro?: string
 }

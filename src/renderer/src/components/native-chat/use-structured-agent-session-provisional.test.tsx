@@ -119,7 +119,9 @@ describe('useStructuredAgentSession provisional launch gate', () => {
     mocks.pending = []
     readState = sessionState()
     mocks.send.mockReturnValue(true)
-    mocks.call.mockResolvedValue(OPTIONS)
+    mocks.call.mockImplementation(async (_target, method) =>
+      method === 'agentSession.modelCatalog' ? { origin: 'unknown' } : OPTIONS
+    )
     resetHostModelCatalogSnapshotsForTests()
   })
 

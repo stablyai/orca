@@ -51,6 +51,8 @@ import {
 
 export type StructuredAgentSessionAttachOptions = {
   hostLaunchDirectory?: string
+  /** The saved list a new chat's options are admitted against, for the folder its picker read. */
+  catalogModels?: AttachFlowInput['models']
   recordPhase?: AgentSessionCreatePhaseRecorder
   onAcquisitionFailed?: AttachFlowInput['onAcquisitionFailed']
   /** The queued message a start is for; see `StructuredAgentSessionProviderChild.startedFor`. */
@@ -218,6 +220,7 @@ async function runAttachUnderAbort(
   const { startupAttempts } = context.runtimeState
   try {
     const attached = await performAttach({
+      models: priorRecord ? undefined : options.catalogModels,
       store: context.deps.store,
       adapter: context.deps.adapter,
       agents: context.deps.agents,

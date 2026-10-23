@@ -15,6 +15,7 @@ import { canResumeAiVaultSessionOnSshHost } from '../../../shared/ai-vault-ssh-r
 import type { AppState } from '@/store/types'
 import { getIndexedWorktreeMap } from '@/store/worktree-repo-index'
 import { getFolderWorkspaceCandidateRepos } from './folder-workspace-connection'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 export type AiVaultResumeTargetStatus = 'local' | 'ssh' | 'runtime' | 'unknown'
 
@@ -135,7 +136,7 @@ export function getAiVaultResumeWorkspaceExecutionHostId(
   }
 
   const worktreeId = workspaceKey?.type === 'worktree' ? workspaceKey.worktreeId : workspaceId
-  const worktree = getIndexedWorktreeMap(state.worktreesByRepo ?? {}).get(worktreeId)
+  const worktree = getIndexedWorktreeMap(selectWorktreesByRepo(state) ?? {}).get(worktreeId)
   const worktreeHostId = normalizeExecutionHostId(worktree?.hostId)
   if (worktreeHostId) {
     return worktreeHostId
@@ -159,7 +160,7 @@ export function getAiVaultResumeWorkspaceTargetStatus(
   }
 
   const worktreeId = workspaceKey?.type === 'worktree' ? workspaceKey.worktreeId : workspaceId
-  const worktree = getIndexedWorktreeMap(state.worktreesByRepo ?? {}).get(worktreeId)
+  const worktree = getIndexedWorktreeMap(selectWorktreesByRepo(state) ?? {}).get(worktreeId)
   const worktreeHost = getAiVaultResumeExecutionHostTargetStatus(worktree?.hostId)
   if (worktreeHost !== 'unknown') {
     return worktreeHost
@@ -172,7 +173,7 @@ function getAiVaultResumeFolderTargetStatus(
   state: Pick<AppState, 'folderWorkspaces' | 'projectGroups' | 'repos'>,
   folderWorkspaceId: string
 ): AiVaultResumeTargetStatus {
-  const workspace = state.folderWorkspaces.find((entry) => entry.id === folderWorkspaceId)
+  const workspace = selectFolderWorkspaces(state).find((entry) => entry.id === folderWorkspaceId)
   if (!workspace) {
     return 'unknown'
   }
@@ -196,7 +197,7 @@ function getAiVaultResumeFolderExecutionHostId(
   state: Pick<AppState, 'folderWorkspaces' | 'projectGroups' | 'repos'>,
   folderWorkspaceId: string
 ): ExecutionHostId | null {
-  const workspace = state.folderWorkspaces.find((entry) => entry.id === folderWorkspaceId)
+  const workspace = selectFolderWorkspaces(state).find((entry) => entry.id === folderWorkspaceId)
   if (!workspace) {
     return null
   }

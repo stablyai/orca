@@ -17,6 +17,7 @@ import type {
   NewExternalWorktreesInboxRow,
   PendingCreationRef,
   PendingCreationRow,
+  RepoOfWorktree,
   Row
 } from './row-types'
 
@@ -66,7 +67,7 @@ export function buildNewExternalWorktreesInboxRow(
 
 export function appendWorktreeRows(
   result: Row[],
-  repoMap: Map<string, Repo>,
+  repoOf: RepoOfWorktree,
   plan: WorktreeOccurrencePlan<Worktree>,
   options: {
     collapsedGroups: Set<string>
@@ -76,9 +77,18 @@ export function appendWorktreeRows(
     hostContextLabelByWorktreeIdentity?: ReadonlyMap<string, string>
   }
 ): void {
-  const occurrences = getExpandedWorktreeOccurrences(
-    plan.bySection.get(options.sectionKey) ?? [],
-    (worktree) => options.collapsedGroups.has(getWorktreeLineageGroupKey(worktree))
+  const sectionOccurrences = plan.bySection.get(options.sectionKey) ?? []
+  // Keep disclosure membership available while child rows are collapsed.
+  const childIdsByParent = new Map<string, string[]>()
+  for (const occurrence of sectionOccurrences) {
+    if (occurrence.parent) {
+      const children = childIdsByParent.get(occurrence.parent.key) ?? []
+      children.push(occurrence.row.id)
+      childIdsByParent.set(occurrence.parent.key, children)
+    }
+  }
+  const occurrences = getExpandedWorktreeOccurrences(sectionOccurrences, (worktree) =>
+    options.collapsedGroups.has(getWorktreeLineageGroupKey(worktree))
   )
   for (const occurrence of occurrences) {
     const worktree = occurrence.row
@@ -88,11 +98,12 @@ export function appendWorktreeRows(
       rowKey: occurrence.key,
       sectionKey: occurrence.sectionKey,
       worktree,
-      repo: repoMap.get(worktree.repoId),
+      repo: repoOf(worktree),
       depth: occurrence.depth,
       groupDepth: options.groupDepth,
       isLastLineageChild: occurrence.isLastChild,
       lineageChildCount: occurrence.childCount,
+      lineageChildWorktreeIds: childIdsByParent.get(occurrence.key),
       showProjectName: occurrence.showProjectName,
       hostContextLabel:
         options.hostContextLabelByWorktreeIdentity?.get(getWorktreeHostIdentity(worktree)) ??

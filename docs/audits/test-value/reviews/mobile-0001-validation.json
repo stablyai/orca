@@ -1,0 +1,26 @@
+{
+  "checks": [
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test <35 audited mobile suites>",
+      "result": "256 tests passed across 35 suites",
+      "log": "/tmp/orca-mobile-0001-final-validation.log"
+    },
+    {
+      "command": "pnpm run check:tests-typecheck",
+      "result": "1112 test files; 5 intentional exclusions; 116 grandfathered files; no new failures",
+      "log": "/tmp/orca-mobile-0001-typecheck.log"
+    }
+  ],
+  "regressions_caught": [
+    "carried base64 reencoded",
+    "mobile density unbudgeted",
+    "dialog accept/dismiss route swapped"
+  ],
+  "batch": "mobile-0001",
+  "platform": "Linux",
+  "reviewed_files": 35,
+  "format_and_lint": "passed",
+  "temporary_production_mutations": "restored; no production diff",
+  "root_review": "All 22 changed test diffs independently inspected; retained serializer integration, previous-revision SQL boundary and failure controls checked.",
+  "log_note": "Local log paths are evidence pointers for this session; results are retained here for durable review."
+}

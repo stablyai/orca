@@ -11,6 +11,92 @@
   },
   "gates": [
     {
+      "id": "agent-session.detached-account-restart-progress",
+      "title": "Independent hidden account restarts progress within a shared spawn limit",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-runtime",
+      "layer": "renderer-store-provider-contract",
+      "surfaces": [
+        "hidden account-switch restart",
+        "Codex restart notices",
+        "Claude move-on-turn-end"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local-daemon", "wsl"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local-daemon"],
+      "coverageNotes": "Real renderer store and scheduler with synthetic PTY IPC. Covers slot admission, later requests, prompt recovery, mounted ownership, stale replacement cleanup and executor reinstall. Physical PTYs and account switches remain unproved. Foreign-runtime and mobile execution are unchanged.",
+      "motivatingLinks": ["https://github.com/stablyai/orca/issues/22243"],
+      "invariant": "One unresolved detached restart must not block independent accepted restarts, and after 90s it must re-ask instead of blocking silently. At most four unexpired claimed restarts may be in flight across sweeps; each claim must recheck current pane ownership before spawning and retain existing late-result adoption or reaping.",
+      "oracle": "Hold the first spawn pending and reject the second; require later panes to rebind and unblock. Add requests during a pending sweep and require four total in flight, with excess requests still queued. Free a slot after a queued tab mounts and require that mounted pane to remain untouched while another pane progresses. Reinstall the executor and settle an older claim to release a slot for new work. Stall four spawns past the deadline and require the fifth pane to restart, the stalled pane to ask again, and its late result to still adopt.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/components/terminal-pane/account-restart-queue-progress.test.ts src/renderer/src/components/terminal-pane/codex-detached-pane-restart.test.ts src/renderer/src/components/terminal-pane/claude-detached-pane-restart.test.ts src/renderer/src/lib/agent-account-restart-startup.test.ts src/renderer/src/lib/codex-session-restart.test.ts"
+      ],
+      "testFiles": [
+        "src/renderer/src/components/terminal-pane/account-restart-queue-progress.test.ts",
+        "src/renderer/src/components/terminal-pane/codex-detached-pane-restart.test.ts",
+        "src/renderer/src/components/terminal-pane/claude-detached-pane-restart.test.ts",
+        "src/renderer/src/lib/agent-account-restart-startup.test.ts",
+        "src/renderer/src/lib/codex-session-restart.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/components/terminal-pane/account-restart-queue-progress.test.ts",
+          "assertions": [
+            "finishes later accepted panes while the first spawn stays pending and a second fails",
+            "admits later requests within a shared limit and rechecks mounted ownership as slots free",
+            "resumes queued work when a claim from an earlier executor installation settles",
+            "asks again and frees the slot when a spawn stalls, then adopts its late result"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/codex-detached-pane-restart.test.ts",
+          "assertions": [
+            "rejects a detached spawn after the tab generation and leaf owner change",
+            "keeps the replacement when a pane mounts during the spawn, since main already stopped the old PTY"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-10-22",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/components/terminal-pane/account-restart-queue-progress.test.ts src/renderer/src/components/terminal-pane/codex-detached-pane-restart.test.ts src/renderer/src/components/terminal-pane/claude-detached-pane-restart.test.ts src/renderer/src/lib/agent-account-restart-startup.test.ts src/renderer/src/lib/codex-session-restart.test.ts",
+          "result": "passed",
+          "durationSeconds": 4.52,
+          "summary": "75 tests pass across five files. Initial serial code fails both progress regressions; a stale installation callback fails the reinstall regression until corrected."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 10,
+        "scope": "deterministic renderer store/provider contracts"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "One local full gate pass; CI soak not collected."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Original serial sweep strands pane three and admits only one later request. Generation-bound settlement callbacks strand the fifth pane after reinstall. All three regressions pass after fixes."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "At most four claimed restart IPCs across all concurrent sweeps; fake-clock test verifies admission and slot reuse. One 90s per-claim timer frees a stalled slot and re-asks; no polling, retries, cancellation or process enumeration. Existing pending store is the queue; no second pending collection."
+      },
+      "promotionCriteria": [
+        "Collect 100 CI passes or 14 days without unexplained flakes.",
+        "Exercise live Codex and Claude hidden account-switch batches on Windows, Linux and macOS."
+      ],
+      "knownGaps": [
+        "A stalled spawn is not cancelled; its pane re-asks after 90s and stays claimed until main settles. Why a real Windows spawn stalls is not proved.",
+        "No live accounts, ConPTY, WSL or rendered prompt interaction exercised; no claim of closing broader restart/continuity reports.",
+        "Remote-runtime and mobile detached executors are unchanged; foreign-machine PTYs still wait for mounted transport."
+      ],
+      "demotionRule": "Keep experimental or demote if pending work spins, the shared limit is exceeded, mounted owners are replaced, or stale results leak or overwrite newer panes."
+    },
+    {
       "id": "terminal-provider.retired-macos-daemon-recovery",
       "title": "Restart releases retired macOS daemon conversation owners across upgrades",
       "maturity": "experimental",
@@ -853,28 +939,23 @@
       "protection": "partial",
       "owner": "runtime-platform",
       "layer": "ipc-contract",
-      "surfaces": [
-        "desktop file explorer watchers",
-        "desktop editor file watchers",
-        "direct SSH file watchers"
-      ],
+      "surfaces": ["desktop file explorer watchers", "desktop editor file watchers"],
       "platforms": ["macos", "linux", "windows"],
-      "providers": ["local", "ssh", "wsl"],
+      "providers": ["local", "wsl"],
       "coveredPlatforms": ["macos"],
-      "coveredProviders": ["local", "ssh", "wsl"],
-      "coverageNotes": "Actual desktop local/WSL subscription and SSH watcher controller logic under mocked filesystem/provider handles on macOS. Document events use an EventEmitter sender. Live remote/native Windows/Linux/WSL and rendered reload reattachment are unproved; PTY/process liveness and wire formats are unaffected.",
+      "coveredProviders": ["local", "wsl"],
+      "coverageNotes": "Actual desktop local/WSL subscription logic under mocked filesystem handles on macOS. Document events use an EventEmitter sender. Native Windows/Linux/WSL and rendered reload reattachment are unproved; PTY/process liveness and wire formats are unaffected. SSH roots have no desktop watcher.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/blob/main/src/main/ipc/filesystem-watcher-listener-lifecycle.ts"
       ],
       "invariant": "A replaced or crashed renderer document retains no file watches or pending ownership and cannot recreate them from an old asynchronous continuation. Shared roots retain live sibling owners; blocked and same-document navigation retain the current document. Shutdown removes registered lifecycle listeners.",
-      "oracle": "Run repeated reloads/crash, pending local/SSH installation cancellation with late success, aborted-install joiners, reconnect retry snapshots, failed-removal restoration and shutdown/reopen. Require zero obsolete roots/intent/listeners, no stale setup/retry, physical handle disposal and preservation of sibling notifications and same-tick remote handoff.",
+      "oracle": "Run repeated reloads/crash, pending installation cancellation with late success, aborted-install joiners, failed-removal restoration and shutdown/reopen. Require zero obsolete roots/listeners, no stale setup, physical handle disposal and preservation of sibling notifications.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/filesystem-watcher-document-lifetime.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-remote-cancellation.test.ts src/main/ipc/filesystem-watcher-native-capacity.test.ts --reporter=dot"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/filesystem-watcher-document-lifetime.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-native-capacity.test.ts --reporter=dot"
       ],
       "testFiles": [
         "src/main/ipc/filesystem-watcher-document-lifetime.test.ts",
         "src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts",
-        "src/main/ipc/filesystem-watcher-remote-cancellation.test.ts",
         "src/main/ipc/filesystem-watcher-native-capacity.test.ts"
       ],
       "assertionRefs": [
@@ -882,22 +963,21 @@
           "file": "src/main/ipc/filesystem-watcher-document-lifetime.test.ts",
           "assertions": [
             "retains zero roots and listeners across 15 reloads and a renderer crash",
-            "does not revive a cancelled %s setup for a joiner whose document reloaded",
-            "does not re-arm an old provider snapshot into the same WebContents after replacement",
-            "does not restore a replaced sibling document after an awaited %s removal recovery",
+            "does not revive a cancelled setup for a joiner whose document reloaded",
+            "does not restore a replaced sibling document after an awaited removal recovery",
             "keeps same-document and blocked navigations alive, and removes lifecycle listeners at shutdown"
           ]
         }
       ],
       "evidenceRuns": [
         {
-          "date": "2026-09-25",
+          "date": "2026-10-22",
           "runner": "local",
           "platform": "macos",
-          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/filesystem-watcher-document-lifetime.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-remote-cancellation.test.ts src/main/ipc/filesystem-watcher-native-capacity.test.ts --reporter=dot",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/filesystem-watcher-document-lifetime.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-native-capacity.test.ts --reporter=dot",
           "result": "passed",
-          "durationSeconds": 1.08,
-          "summary": "45 tests across four focused suites pass. Broader watcher suite passes 146 plus one existing skipped; isolated publication without sibling #22995 passes 145 plus one existing skipped."
+          "durationSeconds": 0.99,
+          "summary": "33 tests across three focused suites pass after the dead SSH watcher was removed."
         }
       ],
       "runtimeBudget": {
@@ -910,14 +990,14 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "Seven permanent regressions fail with HEAD source substituted: cancelled joiner resurrection for local and SSH, restoration into replaced local/SSH documents, stale provider retry, shutdown listener retention, and root retention. All 13 document ownership cases pass after the change."
+        "evidence": "Seven permanent regressions failed with HEAD source substituted when this gate landed: cancelled joiner resurrection, restoration into replaced documents, stale retry, shutdown listener retention and root retention. The SSH cases went with the dead SSH watcher; the local cases remain."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "15 reloads plus crash: retained local/SSH/desired roots 16→0 each; pending setup aborted; sender lifecycle listeners 1→0. Actual ownership modules with synthetic handles; no native process/heap/latency claim. No new timer, polling, process scan or provider fanout; existing root cleanup runs at document end."
+        "evidence": "15 reloads plus crash: retained local roots 16→0; pending setup aborted; sender lifecycle listeners 1→0. Actual ownership modules with synthetic handles; no native process/heap/latency claim. No new timer, polling, process scan or provider fanout; existing root cleanup runs at document end."
       },
       "knownGaps": [
-        "No native Windows/Linux/WSL or live SSH execution.",
+        "No native Windows/Linux/WSL execution.",
         "No rendered Electron reload-reattachment/paint run or CI soak; broader watcher process isolation is a separate gate."
       ],
       "promotionCriteria": [
@@ -944,13 +1024,13 @@
       "invariant": "Decoded stdout and stderr callback contents and order remain unchanged, final tails are the last capped run of raw output bytes with any leading partial UTF-8 sequence dropped, and success or failure releases capture storage without recapturing late output.",
       "oracle": "Compare byte-bounded tails against the old per-chunk model and an independent code-point model across compaction, growth, oversized chunks and mid-character splits. Feed split and malformed UTF-8 through actual stream decoding. Require at most 5 MiB moved through the capture for 4 MiB of output with zero encoding, collectible backing buffers after close and error, zero late capture work with preserved callbacks, one decode per stream, unchanged tails on forced cancellation or synchronous kill-close, and every capture limit clamped to a bounded byte count.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/ephemeral-vm-recipe-process.test.ts src/shared/ephemeral-vm-recipe-output-capture.test.ts src/packages/process-host/src/growing-byte-buffer.test.ts src/main/ephemeral-vm-recipe-runner.test.ts"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/ephemeral-vm-recipe-process.test.ts src/shared/ephemeral-vm-recipe-output-capture.test.ts src/packages/process-host/src/growing-byte-buffer.test.ts src/main/ephemeral-vm/recipe-runner.test.ts"
       ],
       "testFiles": [
         "src/shared/ephemeral-vm-recipe-process.test.ts",
         "src/shared/ephemeral-vm-recipe-output-capture.test.ts",
         "src/packages/process-host/src/growing-byte-buffer.test.ts",
-        "src/main/ephemeral-vm-recipe-runner.test.ts"
+        "src/main/ephemeral-vm/recipe-runner.test.ts"
       ],
       "assertionRefs": [
         {
@@ -981,7 +1061,8 @@
           "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/ephemeral-vm-recipe-process.test.ts src/shared/ephemeral-vm-recipe-output-capture.test.ts src/packages/process-host/src/growing-byte-buffer.test.ts src/main/ephemeral-vm-recipe-runner.test.ts",
           "result": "passed",
           "durationSeconds": 0.48,
-          "summary": "60 tests across four suites passed, including forced-GC lifetime, synchronous SIGKILL-close and the shared byte buffer's head-offset cases."
+          "summary": "60 tests across four suites passed, including forced-GC lifetime, synchronous SIGKILL-close and the shared byte buffer's head-offset cases.",
+          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/ephemeral-vm-recipe-process.test.ts src/shared/ephemeral-vm-recipe-output-capture.test.ts src/packages/process-host/src/growing-byte-buffer.test.ts src/main/ephemeral-vm/recipe-runner.test.ts"
         }
       ],
       "runtimeBudget": {
@@ -3239,7 +3320,7 @@
       "oracle": "Write one ordinary schema-v1 runtime and one provisioned-root runtime. Require the exact pre-#14352 reader to return both, run the old destroy lifecycle against the projected provisioned record, then require the candidate to retain the cleaned state while restoring schema-v2 and checkout-mode metadata. The same old reader must reject affected-main and fix-reverted bytes. Malformed, oversized, unknown-record, and future-version feature sidecars must leave rollback-compatible records accessible and must not be overwritten during compatible lifecycle mutations. Require destroy to have no implicit deadline, stop a hung destroy through the public desktop action, require cleanup_failed plus a fresh successful retry, prove provider or project-host rollback failure retains every ownership record required to retry, and prove missing recipe context cannot leave an unremovable hidden SSH registration. Supply the source ref's captured commit to create, reject a provisioned checkout on the wrong branch/ref, and reject a resume that changes connection mode or SSH ownership.",
       "commands": [
         "node config/scripts/run-ephemeral-vm-runtime-store-rollback-repro.mjs config/scripts/ephemeral-vm-runtime-store-cross-version.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/shared/ephemeral-vm-runtime-store.test.ts src/shared/ephemeral-vm-runtime-store-rollback.test.ts src/shared/ephemeral-vm-recipe-process.test.ts src/main/ephemeral-vm-runtime-service.test.ts src/main/ephemeral-vm-resume-integrity.test.ts src/main/ephemeral-vm-recipe-runner.test.ts src/main/ephemeral-vm-runtime-ssh-cleanup.test.ts src/main/ipc/ephemeral-vm-runtime-handler-cleanup.test.ts src/main/ipc/ephemeral-vm-provision-cancel.test.ts src/main/ipc/ephemeral-vm-provisioned-root-ref.test.ts src/main/ipc/ephemeral-vm.test.ts src/main/provisioned-root-ssh-adoption.test.ts src/renderer/src/components/settings/EphemeralVmRuntimesSection.test.tsx src/renderer/src/lib/ephemeral-vm-failed-create-cleanup.test.ts src/renderer/src/lib/ephemeral-vm-runtime-cleanup.test.ts src/renderer/src/lib/ephemeral-vm-workspace-target.test.ts src/renderer/src/lib/ephemeral-vm-worktree-creation.test.ts src/renderer/src/lib/provisioned-root-create-options.test.ts src/renderer/src/store/slices/repos-ephemeral-vm-cleanup-retention.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/ephemeral-vm-runtime-store.test.ts src/shared/ephemeral-vm-runtime-store-rollback.test.ts src/shared/ephemeral-vm-recipe-process.test.ts src/main/ephemeral-vm/runtime-service.test.ts src/main/ephemeral-vm/resume-integrity.test.ts src/main/ephemeral-vm/recipe-runner.test.ts src/main/ephemeral-vm/runtime-ssh-cleanup.test.ts src/main/ipc/ephemeral-vm-runtime-handler-cleanup.test.ts src/main/ipc/ephemeral-vm-provision-cancel.test.ts src/main/ipc/ephemeral-vm-provisioned-root-ref.test.ts src/main/ipc/ephemeral-vm.test.ts src/main/provisioned-root-ssh-adoption.test.ts src/renderer/src/components/settings/EphemeralVmRuntimesSection.test.tsx src/renderer/src/lib/ephemeral-vm-failed-create-cleanup.test.ts src/renderer/src/lib/ephemeral-vm-runtime-cleanup.test.ts src/renderer/src/lib/ephemeral-vm-workspace-target.test.ts src/renderer/src/lib/ephemeral-vm-worktree-creation.test.ts src/renderer/src/lib/provisioned-root-create-options.test.ts src/renderer/src/store/slices/repos-ephemeral-vm-cleanup-retention.test.ts",
         "pnpm exec playwright test tests/e2e/ephemeral-vm-cleanup-retry.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
@@ -3248,10 +3329,10 @@
         "src/shared/ephemeral-vm-runtime-store-rollback.test.ts",
         "src/shared/ephemeral-vm-runtime-store.test.ts",
         "src/shared/ephemeral-vm-recipe-process.test.ts",
-        "src/main/ephemeral-vm-runtime-service.test.ts",
-        "src/main/ephemeral-vm-recipe-runner.test.ts",
-        "src/main/ephemeral-vm-runtime-ssh-cleanup.test.ts",
-        "src/main/ephemeral-vm-resume-integrity.test.ts",
+        "src/main/ephemeral-vm/runtime-service.test.ts",
+        "src/main/ephemeral-vm/recipe-runner.test.ts",
+        "src/main/ephemeral-vm/runtime-ssh-cleanup.test.ts",
+        "src/main/ephemeral-vm/resume-integrity.test.ts",
         "src/main/ipc/ephemeral-vm-runtime-handler-cleanup.test.ts",
         "src/main/ipc/ephemeral-vm-provision-cancel.test.ts",
         "src/main/ipc/ephemeral-vm-provisioned-root-ref.test.ts",
@@ -3285,7 +3366,7 @@
           ]
         },
         {
-          "file": "src/main/ephemeral-vm-runtime-service.test.ts",
+          "file": "src/main/ephemeral-vm/runtime-service.test.ts",
           "assertions": [
             "an unreadable companion rejects checkout-mode recipes before their create command runs",
             "post-create persistence failure destroys the provider resource when possible",
@@ -3349,7 +3430,7 @@
           ]
         },
         {
-          "file": "src/main/ephemeral-vm-resume-integrity.test.ts",
+          "file": "src/main/ephemeral-vm/resume-integrity.test.ts",
           "assertions": [
             "resume allows host and port rotation",
             "resume rejects connection-mode and stable SSH ownership drift"
@@ -3379,7 +3460,8 @@
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/ephemeral-vm-runtime-store.test.ts src/shared/ephemeral-vm-runtime-store-rollback.test.ts src/shared/ephemeral-vm-recipe-process.test.ts src/main/ephemeral-vm-runtime-service.test.ts src/main/ephemeral-vm-resume-integrity.test.ts src/main/ephemeral-vm-recipe-runner.test.ts src/main/ephemeral-vm-runtime-ssh-cleanup.test.ts src/main/ipc/ephemeral-vm-runtime-handler-cleanup.test.ts src/main/ipc/ephemeral-vm-provision-cancel.test.ts src/main/ipc/ephemeral-vm-provisioned-root-ref.test.ts src/main/ipc/ephemeral-vm.test.ts src/main/provisioned-root-ssh-adoption.test.ts src/renderer/src/components/settings/EphemeralVmRuntimesSection.test.tsx src/renderer/src/lib/ephemeral-vm-failed-create-cleanup.test.ts src/renderer/src/lib/ephemeral-vm-runtime-cleanup.test.ts src/renderer/src/lib/ephemeral-vm-workspace-target.test.ts src/renderer/src/lib/ephemeral-vm-worktree-creation.test.ts src/renderer/src/lib/provisioned-root-create-options.test.ts src/renderer/src/store/slices/repos-ephemeral-vm-cleanup-retention.test.ts",
           "result": "passed",
           "durationSeconds": 3,
-          "summary": "One hundred twenty-two focused store, recipe-process, lifecycle, cleanup-handler, rendered stop-action, retry-context, source-ref, adoption-integrity, resume-integrity, and provisioning-recovery tests passed."
+          "summary": "One hundred twenty-two focused store, recipe-process, lifecycle, cleanup-handler, rendered stop-action, retry-context, source-ref, adoption-integrity, resume-integrity, and provisioning-recovery tests passed.",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/shared/ephemeral-vm-runtime-store.test.ts src/shared/ephemeral-vm-runtime-store-rollback.test.ts src/shared/ephemeral-vm-recipe-process.test.ts src/main/ephemeral-vm/runtime-service.test.ts src/main/ephemeral-vm/resume-integrity.test.ts src/main/ephemeral-vm/recipe-runner.test.ts src/main/ephemeral-vm/runtime-ssh-cleanup.test.ts src/main/ipc/ephemeral-vm-runtime-handler-cleanup.test.ts src/main/ipc/ephemeral-vm-provision-cancel.test.ts src/main/ipc/ephemeral-vm-provisioned-root-ref.test.ts src/main/ipc/ephemeral-vm.test.ts src/main/provisioned-root-ssh-adoption.test.ts src/renderer/src/components/settings/EphemeralVmRuntimesSection.test.tsx src/renderer/src/lib/ephemeral-vm-failed-create-cleanup.test.ts src/renderer/src/lib/ephemeral-vm-runtime-cleanup.test.ts src/renderer/src/lib/ephemeral-vm-workspace-target.test.ts src/renderer/src/lib/ephemeral-vm-worktree-creation.test.ts src/renderer/src/lib/provisioned-root-create-options.test.ts src/renderer/src/store/slices/repos-ephemeral-vm-cleanup-retention.test.ts"
         }
       ],
       "runtimeBudget": {
@@ -4538,8 +4620,8 @@
         "https://github.com/stablyai/orca/pull/7086",
         "https://github.com/stablyai/orca/issues/16477"
       ],
-      "invariant": "Index-only Git activity below the common Git directory must not emit worktrees:changed, invalidate worktree caches, or trigger fetchWorktrees fanout; structural add/remove/HEAD/gitdir/locked/config.worktree changes must still refresh worktrees and nudge Source Control. When the authoritative paired host accepts an external structural change for a uniquely identified server-local repo, each live client for that host must receive one existing host-scoped worktreesChanged invalidation and converge to the same repo/worktree identity without reconnect; duplicate watcher events must coalesce, stale cached or in-flight catalogs must not survive invalidation, and event-ignoring clients must remain compatible. Nested SSH watchers and colliding local/SSH repo IDs must not publish the host-blind event until existing semantics can carry owner identity. External head moves (commit, amend, reset) must reach background worktree rows through spawn-free metadata reads, never through structural fanout. A process generation-scope rollover revokes every direct SSH target and old-scope provider request, not only the target whose counter exhausted.",
-      "oracle": "Classify exact git-common paths as structural, status-only, or ignored; count notifications from debounced watcher events; force the Linux/Windows poll path to emit allowlisted leaf events, detect linked HEAD rewrites independent of entry-directory mtime, and surface in-place index rewrites via the backstop re-stat; diff head identities from metadata-file reads and notify only real head moves; assert Source Control subscribes to both structural and status-only signals with active-repo and visibility filters. Join the real runtime RPC server to two independently authenticated E2EE clients plus an event-ignoring client, advance the host Git inventory, trigger duplicate structural watcher callbacks, and require one host renderer notification plus one runtime event and a refreshed catalog per subscribed client; require the event-ignoring client to refresh safely on explicit read. Hold a scan after it captures old inventory, join it from a second paired client, publish the watcher invalidation, advance Git independently, and require both overlapping RPCs to retry or join one fresh scan before returning. Disconnect one client, advance inventory again, and require reconnect to read current state without stale event replay. Give a watcher a nested SSH connection id or a local repo ID colliding with an SSH owner and require the host renderer refresh while the unqualified runtime event stays absent. Force the real path in isolated Electron apps with git worktree add, a host Git inventory assertion, store-subscription barriers, matching host/client worktree identity, and visible rows in both renderers. For direct SSH, roll one exhausted target into a fresh process generation scope while invalidating sibling target tokens, and fill a partial pushed authority before clearing that target's PTY bindings once.",
+      "invariant": "Index-only Git activity below the common Git directory must not emit worktrees:changed, invalidate worktree caches, or trigger fetchWorktrees fanout; structural add/remove/HEAD/gitdir/locked/config.worktree changes must still refresh worktrees and nudge Source Control. When the authoritative paired host accepts an external structural change for a uniquely identified server-local repo, each live client for that host must receive one existing host-scoped worktreesChanged invalidation and converge to the same repo/worktree identity without reconnect; duplicate watcher events must coalesce, stale cached or in-flight catalogs must not survive invalidation, and event-ignoring clients must remain compatible. Colliding local/SSH repo IDs must not publish the host-blind event until existing semantics can carry owner identity. External head moves (commit, amend, reset) must reach background worktree rows through spawn-free metadata reads, never through structural fanout. A process generation-scope rollover revokes every direct SSH target and old-scope provider request, not only the target whose counter exhausted.",
+      "oracle": "Classify exact git-common paths as structural, status-only, or ignored; count notifications from debounced watcher events; force the Linux/Windows poll path to emit allowlisted leaf events, detect linked HEAD rewrites independent of entry-directory mtime, and surface in-place index rewrites via the backstop re-stat; diff head identities from metadata-file reads and notify only real head moves; assert Source Control subscribes to both structural and status-only signals with active-repo and visibility filters. Join the real runtime RPC server to two independently authenticated E2EE clients plus an event-ignoring client, advance the host Git inventory, trigger duplicate structural watcher callbacks, and require one host renderer notification plus one runtime event and a refreshed catalog per subscribed client; require the event-ignoring client to refresh safely on explicit read. Hold a scan after it captures old inventory, join it from a second paired client, publish the watcher invalidation, advance Git independently, and require both overlapping RPCs to retry or join one fresh scan before returning. Disconnect one client, advance inventory again, and require reconnect to read current state without stale event replay. Give a watcher a local repo ID colliding with an SSH owner and require the host renderer refresh while the unqualified runtime event stays absent. Force the real path in isolated Electron apps with git worktree add, a host Git inventory assertion, store-subscription barriers, matching host/client worktree identity, and visible rows in both renderers. For direct SSH, roll one exhausted target into a fresh process generation scope while invalidating sibling target tokens, and fill a partial pushed authority before clearing that target's PTY bindings once.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/worktree-base-directory-event-filter.test.ts src/main/ipc/worktree-base-directory-watcher.test.ts src/main/ipc/worktree-base-directory-poller.test.ts src/main/ipc/worktree-head-identity-reader.test.ts src/renderer/src/hooks/worktree-head-identity-apply.test.ts src/renderer/src/components/right-sidebar/git-status-push-signal-refresh.test.ts src/renderer/src/hooks/useIpcEvents-browser-tab-create.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/watched-worktree-catalog-notification.test.ts src/main/runtime/external-worktree-paired-client-discovery.integration.test.ts src/main/window/attach-main-window-services.test.ts",
@@ -4580,8 +4662,7 @@
             "linked index bursts produce zero notifyWorktreesChanged calls and one debounced status-only notification",
             "linked HEAD and locked metadata still produce a structural worktree notification",
             "status-only head moves emit head identities without structural fanout and only when heads actually changed",
-            "structural notifications re-baseline head identities silently and SSH watches never read identities",
-            "SSH-shaped index renames are status-only while overflow remains conservatively structural"
+            "structural notifications re-baseline head identities silently"
           ]
         },
         {
@@ -4633,7 +4714,7 @@
             "host inventory and both paired catalogs advance to the same worktree identity after runtime cache invalidation",
             "an invalidated in-flight host scan and a second client's joined read converge through one fresh retry before either can return stale data",
             "a disconnected client reconnects to current catalog state without replaying a stale invalidation",
-            "an event-ignoring client remains compatible, and nested SSH or colliding local/SSH owners do not publish an owner-blind event",
+            "an event-ignoring client remains compatible, and colliding local/SSH owners do not publish an owner-blind event",
             "the shared runtime publication remains valid without a headed renderer notifier"
           ]
         },
@@ -4641,8 +4722,7 @@
           "file": "src/main/ipc/watched-worktree-catalog-notification.test.ts",
           "assertions": [
             "the watcher authority refreshes the host renderer and paired clients from one boundary",
-            "remote publication failure cannot suppress the host renderer refresh",
-            "nested SSH discoveries remain host-local until the existing event can preserve their owner identity"
+            "remote publication failure cannot suppress the host renderer refresh"
           ]
         },
         {
@@ -12869,26 +12949,52 @@
       "providers": ["daemon", "local"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["daemon", "local"],
-      "coverageNotes": "Deterministic provider contracts cover complete, incomplete, conflicting, refused, and identity-invalidated owner inventories; degraded fallback/current/legacy routing; repeated stale-binding classification; and fresh-session reattach without local fallback during unresolved ownership. Main IPC contracts cover exact persisted-binding retirement and one fresh replacement after confirmed absence. Live Linux, Windows, WSL, SSH, paired-runtime, and packaged-upgrade journeys remain uncollected.",
+      "coverageNotes": "Deterministic provider contracts cover complete, incomplete, conflicting, refused, and identity-invalidated owner inventories; degraded fallback/current/legacy routing; repeated stale-binding classification; and fresh-session reattach without local fallback during unresolved ownership. Main IPC contracts cover exact persisted-binding retirement and one fresh replacement after confirmed absence. Acquisition-budget contracts preserve the pre-existing two-second shared RPC cap, one pending acquisition for later deadlines, one index for concurrent resolutions, post-timeout strict cleanup, and exact current-identity recovery while a legacy provider is unavailable. Scoped inventory contracts preserve established input routes while refusing ambiguous target ownership. Live Linux, Windows, WSL, SSH, paired-runtime, and packaged-upgrade journeys remain uncollected.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/6830",
         "https://github.com/stablyai/orca/pull/6866",
         "https://github.com/stablyai/orca/pull/7002",
         "https://github.com/stablyai/orca/pull/12776"
       ],
-      "invariant": "Daemon startup reconciliation must preserve valid live daemon sessions and reap only true orphans. A persisted binding stays fail-closed while any possible owner is incomplete, conflicting, refusing attach, or identity-invalidated, but complete authoritative absence from every configured provider must retire that exact stale binding and let retry or reopen converge without attaching it through local fallback or duplicating a PTY.",
-      "oracle": "Hold exact fallback, current-daemon, and legacy-daemon inventories behind controlled promises. No attach may settle or dispatch until every provider answers. Complete zero-candidate inventories must report SessionNotFound; incomplete, duplicate, refused, and identity-invalidated attempts must remain owner-unverified. In degraded mode, repeated stale attempts scan each eligible provider once per attempt and dispatch no attach, then one explicit fresh spawn and exact reattach use only the recorded fresh route. Main IPC must compare-and-swap retire only the matching persisted PTY/incarnation, emit one synthetic exit, and create one different fresh PTY.",
+      "invariant": "Daemon startup reconciliation must preserve valid live daemon sessions and reap only true orphans. A persisted binding stays fail-closed while any possible owner is incomplete, conflicting, refusing attach, or identity-invalidated, but complete authoritative absence from every configured provider must retire that exact stale binding and let retry or reopen converge without attaching it through local fallback or duplicating a PTY. Scoped inventories must retain complete provider evidence and established input routes. Later reader deadlines must not supersede a pending acquisition or extend its existing two-second RPC cap; explicit identity invalidation must still permit prompt exact-owner recovery.",
+      "oracle": "Hold exact fallback, current-daemon, and legacy-daemon inventories behind controlled promises. Without unique incarnation proof, no attach may settle or dispatch until every provider answers. Complete zero-candidate inventories must report SessionNotFound; incomplete, duplicate, refused, and identity-invalidated attempts must remain owner-unverified. In degraded mode, repeated stale attempts scan each eligible provider once per attempt and dispatch no attach, then one explicit fresh spawn and exact reattach use only the recorded fresh route. Main IPC must compare-and-swap retire only the matching persisted PTY/incarnation, emit one synthetic exit, and create one different fresh PTY. After a deadline-obeying legacy provider times out a restore, a subsequent strict sweep must take a new inventory and stop a terminal created externally. Twenty later strict/diagnostic deadlines must share one provider RPC. One hundred concurrent resolutions over 4,096 rows must perform 8,192 id reads. Invalidating the current provider during a legacy scan must discover and reattach its exact live incarnation within the existing resolution budget. Unrelated ambiguity must not block scoped cleanup, while target ambiguity must still refuse it.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/daemon-session-owner-resolution.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts src/main/ipc/pty-dead-owner-respawn.test.ts src/main/ipc/pty-persisted-incarnation-repair.test.ts --reporter=dot"
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/daemon-session-owner-resolution.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts src/main/ipc/pty-dead-owner-respawn.test.ts src/main/ipc/pty-persisted-incarnation-repair.test.ts --reporter=dot",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/daemon-session-owner-resolution.test.ts src/main/daemon/daemon-inventory-acquisition-budget.test.ts src/main/daemon/daemon-inventory-routing-authority.test.ts src/main/runtime/worktree-teardown-daemon-inventory.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts src/main/ipc/pty-dead-owner-respawn.test.ts src/main/ipc/pty-persisted-incarnation-repair.test.ts --reporter=dot"
       ],
       "testFiles": [
         "src/main/daemon/daemon-session-owner-resolution.test.ts",
+        "src/main/daemon/daemon-inventory-acquisition-budget.test.ts",
+        "src/main/daemon/daemon-inventory-routing-authority.test.ts",
+        "src/main/runtime/worktree-teardown-daemon-inventory.test.ts",
         "src/main/daemon/daemon-pty-router.test.ts",
         "src/main/daemon/degraded-daemon-pty-provider.test.ts",
         "src/main/ipc/pty-dead-owner-respawn.test.ts",
         "src/main/ipc/pty-persisted-incarnation-repair.test.ts"
       ],
       "assertionRefs": [
+        {
+          "file": "src/main/daemon/daemon-inventory-acquisition-budget.test.ts",
+          "assertions": [
+            "strict cleanup after a restore timeout freshly discovers and stops an externally created terminal",
+            "twenty increasing strict and diagnostic deadlines share one pending RPC capped at two seconds",
+            "one hundred concurrent resolutions index a 4,096-row incomplete observation once (8,192 id reads)",
+            "current identity invalidation and exact persisted reattach retain positive ownership despite a deadline-limited legacy provider"
+          ]
+        },
+        {
+          "file": "src/main/daemon/daemon-inventory-routing-authority.test.ts",
+          "assertions": [
+            "diagnostic complete, incomplete and conflicting inventories preserve established input recipients without inventing exact incarnation authority"
+          ]
+        },
+        {
+          "file": "src/main/runtime/worktree-teardown-daemon-inventory.test.ts",
+          "assertions": [
+            "unrelated ambiguity permits scoped cleanup but target ambiguity or unavailable inventories refuse removal",
+            "target terminals stop and unrelated sessions survive for daemon router and degraded providers"
+          ]
+        },
         {
           "file": "src/main/daemon/daemon-session-owner-resolution.test.ts",
           "assertions": [
@@ -12947,7 +13053,7 @@
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "One unresolved attempt performs one concurrent listProcesses call per eligible provider, concurrent pane attempts coalesce onto that inventory, and no polling, sleep, timer, subprocess, listener, or retry loop is added. Confirmed absence is not cached; repeated explicit attempts remain bounded to one fanout each. Reattaching the newly recorded fresh route adds no inventory or daemon spawn."
+        "evidence": "The pre-existing acquisition budget remains min(caller deadline, start plus two seconds). Later deadlines reuse that acquisition without extension or replacement; concurrent resolutions share one index (8,192 id reads for 4,096 rows and 100 readers). No scheduler, partial-index cache, polling, sleep, timer, subprocess, listener, or retry loop is added. Confirmed absence is not cached; repeated explicit attempts remain bounded to one fanout each. Exact fresh-route reattach adds no inventory or daemon spawn. Existing readers may share observations begun before their call within the original capped acquisition window; a universal post-caller freshness boundary and long diagnostic budgets are deferred. Missing-workspace ambiguous-list fallback batching remains pre-existing debt."
       },
       "promotionCriteria": [
         "Wire reconcileOnStartup or mark the production wiring gap explicitly.",

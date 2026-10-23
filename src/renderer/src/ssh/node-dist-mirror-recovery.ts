@@ -7,8 +7,16 @@ import type { SshManagedServerStatus } from '../../../shared/ssh-types'
 import { translate } from '@/i18n/i18n'
 import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
 import { useAppStore } from '@/store'
-import { isSshConnectInFlight, trackSshConnect } from './ssh-connect-in-flight'
-import { nodeMirrorRecovery, type NodeMirrorRecovery } from './ssh-host-node-download-copy'
+import {
+  isSshConnectInFlight,
+  subscribeSshConnectInFlight,
+  trackSshConnect
+} from './ssh-connect-in-flight'
+import {
+  blockedNodeDownload,
+  nodeMirrorRecovery,
+  type NodeMirrorRecovery
+} from './ssh-host-node-download-copy'
 
 export const NODE_DIST_MIRROR_SUGGESTION = 'https://npmmirror.com/mirrors/node/'
 
@@ -107,9 +115,27 @@ export async function saveNodeDistMirrorAndRetry(
             )
     }
   }
-  // Why: a connect already dialing keeps its own attempt; a second one would race it.
-  if (isSshConnectInFlight(targetId)) {
-    return { outcome: 'retrying', retry: Promise.resolve() }
+  if (!isSshConnectInFlight(targetId)) {
+    return { outcome: 'retrying', retry: trackSshConnect(targetId, deps.connect(targetId)) }
   }
-  return { outcome: 'retrying', retry: trackSshConnect(targetId, deps.connect(targetId)) }
+  // Why wait: a second connect would race the one dialing, which may be past the download already.
+  // The status is current once the lock clears: main publishes a failed setup before it rejects.
+  const retry = sshConnectSettled(targetId).then(() =>
+    blockedNodeDownload(useAppStore.getState().sshConnectionStates.get(targetId)?.managedServer)
+      ? trackSshConnect(targetId, deps.connect(targetId))
+      : undefined
+  )
+  return { outcome: 'retrying', retry }
+}
+
+/** Resolves once no connect for `targetId` holds the shared in-flight lock. */
+function sshConnectSettled(targetId: string): Promise<void> {
+  return new Promise((resolve) => {
+    const unsubscribe = subscribeSshConnectInFlight(() => {
+      if (!isSshConnectInFlight(targetId)) {
+        unsubscribe()
+        resolve()
+      }
+    })
+  })
 }

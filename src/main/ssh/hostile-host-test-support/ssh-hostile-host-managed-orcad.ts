@@ -23,6 +23,10 @@ import {
   parseOrcadLiveness
 } from '../../managed-server/install/orcad-remote-launch'
 import { execOrcadRemote } from '../../managed-server/install/orcad-remote-runtime-control'
+import {
+  ORCAD_PID_FILENAME,
+  ORCAD_READINESS_FILENAME
+} from '../../managed-server/install/orcad-remote-host-support'
 import { decommissionRemoteOrcad } from '../../managed-server/install/orcad-remote-decommission'
 import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import {
@@ -52,6 +56,7 @@ export async function proveManagedOrcadCell(
       target: context.serverTarget,
       census: EMPTY_CENSUS,
       recountCensus: async () => EMPTY_CENSUS,
+      releaseIncumbentAdmission: async () => {},
       ...(desktop ? { runtimeCacheRoot: desktop.cacheRoot } : {})
     }).finally(() => desktop?.restore())
     if (expected.outcome === 'unavailable') {
@@ -111,6 +116,7 @@ async function assertLiveThenDecommissioned(
   const liveness = async (): Promise<string> =>
     parseOrcadLiveness(await execOrcadRemote(slot, orcadLivenessProbeCommand(slot.host, slotDir)))
   expect(await liveness()).toBe('LIVE')
+  await assertOrcadRunsAtLoginUmask(slot, slotDir)
   const decommission = await decommissionRemoteOrcad({
     ...slot,
     record: await readOrcadActivationRecord(slot),
@@ -121,6 +127,32 @@ async function assertLiveThenDecommissioned(
     version
   })
   expect(await liveness()).toBe('DEAD')
+}
+
+/**
+ * #31125: orcad runs at the SSH login's umask, so the git, terminals and agents it spawns create
+ * the user's files, while the readiness file holding the pairing token stays owner-only.
+ * Linux only: macOS has no /proc to read another process's umask from.
+ */
+async function assertOrcadRunsAtLoginUmask(slot: OrcadSlotOptions, slotDir: string): Promise<void> {
+  if (slot.host.os !== 'linux') {
+    return
+  }
+  const pidFile = quotePosixShell(posix.join(slotDir, ORCAD_PID_FILENAME))
+  const readiness = quotePosixShell(posix.join(slotDir, ORCAD_READINESS_FILENAME))
+  const [login, daemon, readinessMode] = (
+    await execOrcadRemote(
+      slot,
+      `umask; sed -n 's/^Umask:[[:space:]]*//p' "/proc/$(cat ${pidFile})/status"; stat -c %a ${readiness}`
+    )
+  )
+    .trim()
+    .split('\n')
+    .map((line) => line.trim())
+  expect(Number.parseInt(daemon ?? '', 8), `login ${login}, orcad ${daemon}`).toBe(
+    Number.parseInt(login ?? '', 8)
+  )
+  expect(readinessMode).toBe('600')
 }
 
 /** An empty runtime cache and a refusing network on this computer, until `restore`. */

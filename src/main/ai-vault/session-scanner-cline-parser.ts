@@ -5,12 +5,8 @@ import { openTranscriptReadStream } from '../native-chat/wsl-transcript-fs-acces
 import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import {
-  addPreviewContent,
-  createAccumulator,
-  finalizeSession,
-  updateTimeline
-} from './session-scanner-accumulator'
+import { createAccumulator, finalizeSession, updateTimeline } from './session-scanner-accumulator'
+import { addSessionContent } from './session-scanner-messages'
 import type { FileWithMtime, SessionAccumulator } from './session-scanner-types'
 import type { TranscriptMessageSink } from './session-transcript-consumers'
 import {
@@ -123,7 +119,7 @@ function consumeClineSessionMessage(accumulator: SessionAccumulator, value: unkn
   if (role === 'assistant' && !accumulator.model) {
     accumulator.model = extractString(asRecord(message.modelInfo)?.id)
   }
-  addPreviewContent(accumulator, role, content, message.ts)
+  addSessionContent(accumulator, role, content, message.ts)
 }
 
 export async function parseClineSessionDocuments(

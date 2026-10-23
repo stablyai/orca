@@ -193,15 +193,18 @@ export function registerWslHostHandlers(args: WslHostHandlerArgs): void {
   ipcMain.handle('wslHosts:remove', async (_event, request: { environmentId: string }) => {
     if (args.store.getSettings().activeRuntimeEnvironmentId === request.environmentId) {
       throw new Error(
-        'This server is the default host for new projects. Choose another one in Advanced before removing it.'
+        'This server is the default host for new projects. Choose another one under New projects open on before removing it.'
       )
     }
     return wsl.remove(request.environmentId)
   })
   ipcMain.handle(
     'wslHosts:connect',
-    (_event, request: { environmentId: string; force?: boolean }) =>
-      wsl.connect(request.environmentId, { force: request.force === true })
+    (_event, request: { environmentId: string; intent?: unknown }) =>
+      wsl.connect(
+        request.environmentId,
+        request.intent === 'update' || request.intent === 'force' ? { intent: request.intent } : {}
+      )
   )
   ipcMain.handle('wslHosts:getCapability', (): WslHostCapability => ({
     serverFiles: wsl.hasServerFiles()

@@ -20,7 +20,6 @@ import {
   StructuredAgentSessionHost,
   type StructuredAgentSessionHostDeps
 } from './structured-agent-session-host'
-import { rotateStructuredAgentSessionHostInstanceForTests } from './structured-agent-session-queued-pause'
 import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION,
@@ -238,7 +237,6 @@ export async function createQueuedMessageTestRig(
 
   /** A host process that dies with no close: a new host opens the same state directory. */
   function crashRestartHostProcess(): void {
-    rotateStructuredAgentSessionHostInstanceForTests()
     host = makeHost()
   }
 

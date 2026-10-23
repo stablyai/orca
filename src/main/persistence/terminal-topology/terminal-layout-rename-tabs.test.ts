@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import type { CommandOf } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import { WorkspaceLayoutStream } from '../../runtime/workspace-layout-stream'
@@ -84,8 +85,8 @@ describe('Store.applyTabRenames (layout.apply renameTabs)', () => {
     expect(refused).toEqual([
       { rename: rename(FIXTURE_GIT_WORKTREE_ID, 'missing', 'Gone'), code: 'tab_not_found' }
     ])
-    // Both partitions in one durable mutation: one write notice.
-    expect(written).toHaveLength(1)
+    // Both partitions in one durable mutation: one notice for any partition, or one per partition.
+    expect(written).toEqual(ORCA_LAYOUT_OWNER_IS_MAIN ? ['local', SSH] : [null])
     const reopened = await reopenTopologyStore(store, directory)
     expect(generatedTitles(reopened)).toEqual([
       ['tab-0', 'Fix the login page'],
@@ -103,7 +104,13 @@ describe('Store.applyTabRenames (layout.apply renameTabs)', () => {
       liveTitle: () => null
     })
     const events: string[] = []
-    stream.subscribe((event) => events.push(event.type === 'workspace' ? event.key : event.type))
+    stream.subscribe((event) =>
+      events.push(
+        ...(event.type === 'records'
+          ? event.workspaces.map((change) => change.key)
+          : [event.type === 'workspace' ? event.key : event.type])
+      )
+    )
 
     await store.applyTabRenames([
       {
@@ -129,5 +136,29 @@ describe('Store.applyTabRenames (layout.apply renameTabs)', () => {
 
     expect(refused.map(({ code }) => code)).toEqual(['tab_not_found'])
     expect(store.getWorkspaceSession()).toBe(before)
+  })
+  it('keeps a tab’s first generated title unless a rename replaces it', async () => {
+    const { store, directory } = await storeWithTabs(1)
+    await store.applyTabRenames([
+      { hostId: 'local', renames: [rename(FIXTURE_GIT_WORKTREE_ID, 'tab-0', 'First prompt')] }
+    ])
+
+    const second = rename(FIXTURE_GIT_WORKTREE_ID, 'tab-0', 'Second prompt')
+    expect(await store.applyTabRenames([{ hostId: 'local', renames: [second] }])).toEqual([
+      { rename: second, code: 'generated_title_kept' }
+    ])
+    expect(generatedTitles(store)[0]).toEqual(['tab-0', 'First prompt'])
+
+    const replacing: CommandOf<'renameTab'> = {
+      type: 'renameTab',
+      workspace: FIXTURE_GIT_WORKTREE_ID,
+      tabId: 'tab-0',
+      kind: 'generated',
+      title: 'Replaced title',
+      replaceExisting: true
+    }
+    expect(await store.applyTabRenames([{ hostId: 'local', renames: [replacing] }])).toEqual([])
+    const reopened = await reopenTopologyStore(store, directory)
+    expect(generatedTitles(reopened)[0]).toEqual(['tab-0', 'Replaced title'])
   })
 })

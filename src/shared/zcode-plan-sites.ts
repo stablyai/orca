@@ -8,8 +8,6 @@ import type { SecretAtRestProtection } from './secret-at-rest-protection'
  */
 export type ZcodePlanSite = 'zai' | 'bigmodel'
 
-export const ZCODE_PLAN_SITES: readonly ZcodePlanSite[] = ['zai', 'bigmodel']
-
 export const ZCODE_PLAN_SITE_BASE_URLS: Record<ZcodePlanSite, string> = {
   zai: 'https://api.z.ai',
   bigmodel: 'https://open.bigmodel.cn'

@@ -184,6 +184,7 @@ describePostgres('PostgreSQL control renewal', () => {
     await probe.stalled.promise
     const expiresAt = now + 105_000
 
+    let deadline: ReturnType<typeof setTimeout> | undefined
     try {
       await Promise.race([
         store.renewControlActivity(identity, {
@@ -191,9 +192,9 @@ describePostgres('PostgreSQL control renewal', () => {
           cellId: sourceCell.id,
           expiresAt
         }),
-        new Promise<never>((_resolve, reject) =>
-          setTimeout(() => reject(new Error('renewal_waited_for_identity_queue')), 2_000)
-        )
+        new Promise<never>((_resolve, reject) => {
+          deadline = setTimeout(() => reject(new Error('renewal_waited_for_identity_queue')), 2_000)
+        })
       ])
       const row = (
         await database.query(
@@ -204,6 +205,7 @@ describePostgres('PostgreSQL control renewal', () => {
       )[0]
       expect(Number(row!.expires_at)).toBe(expiresAt)
     } finally {
+      clearTimeout(deadline)
       probe.continue.resolve()
       await queued
     }
@@ -412,33 +414,36 @@ describePostgres('PostgreSQL control renewal', () => {
       locked.resolve()
       await release.promise
     })
-    await locked.promise
+    try {
+      await locked.promise
 
-    const startedAt = performance.now()
-    const outcomes = await store.renewControlActivities(
-      [held, free].map((identity) => ({
-        identity,
-        activityId: controlId(sourceCell.id),
-        cellId: sourceCell.id,
-        expiresAt
-      }))
-    )
-    const elapsedMs = performance.now() - startedAt
-    release.resolve()
-    await holder
-
-    expect(outcomes).toEqual(['assignment_lock_unavailable', 'renewed'])
-    // It skipped rather than queued: a blocking FOR UPDATE would have spent the
-    // pool's whole lock_timeout here and failed the free host too.
-    expect(elapsedMs).toBeLessThan(POSTGRES_LOCK_TIMEOUT_MS)
-    const lease = (
-      await database.query(
-        `SELECT expires_at FROM relay_assignment_activity_leases
-         WHERE user_id = ? AND relay_host_id = ? AND activity_id = ?`,
-        [free.userId, free.relayHostId, controlId(sourceCell.id)]
+      const startedAt = performance.now()
+      const outcomes = await store.renewControlActivities(
+        [held, free].map((identity) => ({
+          identity,
+          activityId: controlId(sourceCell.id),
+          cellId: sourceCell.id,
+          expiresAt
+        }))
       )
-    )[0]
-    expect(Number(lease!.expires_at)).toBe(expiresAt)
+      const elapsedMs = performance.now() - startedAt
+
+      expect(outcomes).toEqual(['assignment_lock_unavailable', 'renewed'])
+      // It skipped rather than queued: a blocking FOR UPDATE would have spent the
+      // pool's whole lock_timeout here and failed the free host too.
+      expect(elapsedMs).toBeLessThan(POSTGRES_LOCK_TIMEOUT_MS)
+      const lease = (
+        await database.query(
+          `SELECT expires_at FROM relay_assignment_activity_leases
+         WHERE user_id = ? AND relay_host_id = ? AND activity_id = ?`,
+          [free.userId, free.relayHostId, controlId(sourceCell.id)]
+        )
+      )[0]
+      expect(Number(lease!.expires_at)).toBe(expiresAt)
+    } finally {
+      release.resolve()
+      await holder
+    }
   })
 
   it('renews both of one host\u2019s control leases in a single batch', async () => {

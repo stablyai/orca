@@ -8,6 +8,13 @@ import {
   MANAGED_BROWSER_UNAVAILABLE_MESSAGE
 } from '@/lib/client-creation-action-policy'
 
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+
 const createWebRuntimeSessionBrowserTabMock = vi.hoisted(() => vi.fn())
 const createWebRuntimeSessionTerminalMock = vi.hoisted(() => vi.fn())
 
@@ -195,6 +202,50 @@ describe('Cmd+J lifted creation actions', () => {
       activate: true
     })
     expect(store.getState().tabsByWorktree['wt-1'] ?? []).toEqual([])
+  })
+
+  it('creates a terminal in the invoking group’s workspace when another workspace is selected', async () => {
+    const store = createTestStore()
+    seedActiveWorkspace(store)
+    store.setState({ activeWorktreeId: 'another-workspace' })
+
+    await store.getState().openNewTerminalTabInActiveWorkspace('group-1')
+
+    expect(createWebRuntimeSessionTerminalMock).toHaveBeenCalledWith({
+      worktreeId: 'wt-1',
+      environmentId: 'runtime-1',
+      targetGroupId: 'group-1',
+      activate: true
+    })
+    expect(store.getState().tabsByWorktree['another-workspace'] ?? []).toEqual([])
+  })
+
+  it('creates a floating terminal locally while a paired workspace is selected', async () => {
+    const store = createTestStore()
+    seedActiveWorkspace(store)
+    store.setState({
+      groupsByWorktree: {
+        ...store.getState().groupsByWorktree,
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          {
+            id: 'floating-group',
+            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+            activeTabId: null,
+            tabOrder: []
+          }
+        ]
+      }
+    })
+
+    await store.getState().openNewTerminalTabInActiveWorkspace('floating-group')
+
+    expect(createWebRuntimeSessionTerminalMock).not.toHaveBeenCalled()
+    expect(store.getState().tabsByWorktree['wt-1'] ?? []).toEqual([])
+    const tabs = store.getState().tabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []
+    expect(tabs).toHaveLength(1)
+    expect(store.getState().unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toEqual([
+      expect.objectContaining({ entityId: tabs[0].id, groupId: 'floating-group' })
+    ])
   })
 
   it('does not create a local folder terminal while paired ownership is unresolved', async () => {

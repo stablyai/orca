@@ -24,7 +24,7 @@ export function unservedServerStatus(
 }
 
 const HELD_MOVE_MESSAGE =
-  'Orca paused moving this host’s projects to its managed server because it couldn’t confirm the server’s copy. Nothing is lost: the host keeps its projects and stays locked until the move finishes. Connect again to resume. If the server can’t come back, stop or forget it in Settings > Managed servers.'
+  'Orca paused moving this host’s projects to its Orca server because it couldn’t confirm the server’s copy. Nothing is lost: the host keeps its projects and stays locked until the move finishes. Connect again to resume. If the server can’t come back, stop or forget it in Settings > Orca on your SSH hosts.'
 
 const NOEXEC_MESSAGE =
   'This host doesn’t allow running programs from ~/.orca-remote, so Orca can’t start its server there. This usually means the home folder is mounted with noexec. Ask the host’s administrator to allow running programs there, then connect again.'
@@ -57,7 +57,7 @@ export function unservedHostServerMessage(decision: UnservedDecision): string {
     case 'refused':
       return decision.detail ?? 'Orca couldn’t set up its server on this host.'
     case 'source_changed':
-      return 'An older version of Orca changed this host’s projects. Move those changes to its managed server in SSH Hosts settings to continue.'
+      return 'This computer has projects or folders for this host that its Orca server doesn’t have yet, often added by an older version of Orca. Move them to this host’s Orca server in SSH Hosts settings to continue.'
     case 'deferred':
     case 'failed':
       if (decision.contactLost) {

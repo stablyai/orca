@@ -1,6 +1,6 @@
 import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
 import {
-  addEnvironmentFromPairingCode,
+  addOrUpdateEnvironmentFromPairingCode,
   resolveEnvironment,
   RuntimeEnvironmentStoreError,
   updateEnvironmentFromPairingCode
@@ -93,10 +93,12 @@ export async function verifyAndAddRuntimeEnvironmentFromPairingCode(
   }
   const { link, runtimeStatus } = verified
   const usesSshTunnel = link.endpointKind === 'loopback' && args.allowLoopback === true
-  let environment: ReturnType<typeof addEnvironmentFromPairingCode>
+  let outcome: ReturnType<typeof addOrUpdateEnvironmentFromPairingCode>
   try {
-    environment = addEnvironmentFromPairingCode(userDataPath, {
+    outcome = addOrUpdateEnvironmentFromPairingCode(userDataPath, {
       ...args,
+      // Why: recorded only if the link is for a saved server, which the key match proves it is.
+      runtimeId: runtimeStatus.runtimeId,
       ...(usesSshTunnel ? { connectionDependency: 'ssh-tunnel' as const } : {})
     })
   } catch (error) {
@@ -111,8 +113,9 @@ export async function verifyAndAddRuntimeEnvironmentFromPairingCode(
   }
   return {
     ok: true,
-    environment: redactRuntimeEnvironment(environment),
-    runtimeStatus
+    environment: redactRuntimeEnvironment(outcome.environment),
+    runtimeStatus,
+    ...(outcome.updatedExisting ? { updatedExisting: true as const } : {})
   }
 }
 

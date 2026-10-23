@@ -4,7 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY } from '../../../../shared/agent-session-optional-model-capability'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/electron-remote-runtime-client-capabilities'
 import {
+  AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY,
   AGENT_SESSION_SNAPSHOT_CATCH_UP_CLIENT_CAPABILITY,
+  RUNTIME_CAPABILITIES,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
 import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from '../../../../shared/agent-session-current-requests-capability'
@@ -152,6 +154,40 @@ describe('agentSession.conversationOutline', () => {
     )
     expect(response).toMatchObject({ ok: false })
     expect(hostCalls.journalSnapshot).not.toHaveBeenCalled()
+  })
+})
+
+describe('agentSession.item', () => {
+  it('returns a whole output that every other read sends a head of', async () => {
+    const output = 'z'.repeat(64 * 1024)
+    const item = {
+      itemId: 'tool-1',
+      revision: 2,
+      sequence: 7,
+      observedAt: 7,
+      body: {
+        kind: 'tool-call',
+        name: 'shell',
+        input: { command: 'cat big.log' },
+        state: 'completed',
+        output: { head: output, byteLength: output.length, digest: 'd', truncated: false }
+      }
+    }
+    hostCalls.journalSnapshot.mockReturnValueOnce({
+      sessionId: SESSION,
+      cursor: { epoch: 'epoch-a', sequence: 7 },
+      items: [item],
+      submissions: []
+    })
+
+    const response = await call(
+      'agentSession.item',
+      { sessionId: SESSION, itemId: 'tool-1' },
+      STRUCTURED_MOBILE_CLIENT
+    )
+
+    expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY)
+    expect(response).toMatchObject({ ok: true, result: { item } })
   })
 })
 
@@ -305,8 +341,7 @@ describe('legacy attach-shaped permission creation', () => {
           structuredAgentSessionLaunchSeedOptions: seed
         })
       ).toMatchObject({ ok: true })
-      expect(hostCalls.attach).toHaveBeenCalledWith(
-        expect.anything(),
+      expect(hostCalls.attach.mock.calls[0]?.[1]).toEqual(
         expect.objectContaining({
           options: { permissionMode: 'full-access' },
           envelope: params.envelope

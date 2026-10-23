@@ -237,7 +237,7 @@ export function seedPtySpawnSize(input: {
   sessionId: string | undefined
   sessionAppId: string | undefined
   isFreshSessionId: boolean
-  /** TEMPORARY (C5e/C6 decide who seeds): window hidden requests are unmeasured; host requests never are. */
+  /** TEMPORARY (C6 decides who seeds): window hidden requests are unmeasured; host requests never are. */
   requestIsUnmeasured: boolean
   cols: number
   rows: number

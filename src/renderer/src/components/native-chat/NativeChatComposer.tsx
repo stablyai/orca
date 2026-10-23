@@ -127,6 +127,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       caret,
       recalledFromHistory: recall.active,
       disabled,
+      isComposing: imeEnterGesture.isComposing,
       structuredTransport,
       editor: { textareaRef, setDraft, setCaret, setActiveSuggestion },
       setNotice
@@ -173,6 +174,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
     const imageBlock = nativeChatImageSendBlock(imageAttachments)
     const sendBlockedReason = imageBlock.reason ?? structuredTransport?.sendBlockedReason ?? null
     const sendHeld =
+      attachments.pastedTextSaving ||
       disabled ||
       structuredTransport?.sendOut === true ||
       imageBlock.holdsSend ||
@@ -199,8 +201,8 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
     const handlePasteEvent = useNativeChatComposerHandle(ref, {
       attachmentScopeKey: draftScopeKey,
       textareaRef,
+      isComposing: imeEnterGesture.isComposing,
       caret,
-      draft,
       setDraft,
       setCaret,
       setActiveSuggestion,
@@ -222,6 +224,8 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       resolvePendingImageAttachment: attachments.pendingChips.resolve,
       revealPendingImageAttachment: attachments.revealPendingImageAttachment,
       dropPendingImageAttachment: attachments.dropPendingImageAttachment,
+      pastesInline: () => goalMode.active,
+      pastedTextEditor: structuredTransport ? attachments.scopeEditor : null,
       setNotice
     })
 
@@ -278,6 +282,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       setNotice
     }
     const sendPty = useNativeChatPtyComposerSend({
+      draftScopeKey,
       ...ptyCommandRouting,
       draft,
       imageAttachments,
@@ -375,7 +380,10 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
         isWorking={isWorking}
         isStopping={isStopping}
         afterStop={afterStop}
-        attachDisabled={disabled}
+        attachDisabled={
+          disabled ||
+          (structuredTransport?.runtime === 'remote' && structuredTransport.sessionPending === true)
+        }
         dictationDisabled={dictation.dictationDisabled}
         isDictating={dictation.isDictating}
         isDictationHoldMode={dictation.isDictationHoldMode}

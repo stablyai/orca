@@ -1,4 +1,6 @@
+import type * as NodeFs from 'node:fs'
 import { EventEmitter } from 'node:events'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS,
@@ -11,12 +13,29 @@ import {
   resetComputerSidecarForTest
 } from './sidecar-client'
 
-const { forkMock } = vi.hoisted(() => ({
-  forkMock: vi.fn()
-}))
+type TestAppEnvironment = { getAppPath(): string; isPackaged(): boolean }
+
+const { forkMock, existsSyncMock, appEnvironment } = vi.hoisted(() => {
+  const environment: { current: TestAppEnvironment | null } = { current: null }
+  return {
+    forkMock: vi.fn(),
+    existsSyncMock: vi.fn((_path: string) => true),
+    appEnvironment: environment
+  }
+})
 
 vi.mock('child_process', () => ({
   fork: forkMock
+}))
+
+vi.mock('node:fs', async (importOriginal) => ({
+  ...(await importOriginal<typeof NodeFs>()),
+  existsSync: existsSyncMock
+}))
+
+vi.mock('../../shared/app-environment', () => ({
+  hasAppEnvironment: () => appEnvironment.current !== null,
+  getAppEnvironment: () => appEnvironment.current
 }))
 
 type SentRequest = {
@@ -72,7 +91,35 @@ describe('computer sidecar client', () => {
   afterEach(() => {
     resetComputerSidecarForTest()
     forkMock.mockReset()
+    existsSyncMock.mockImplementation(() => true)
+    appEnvironment.current = null
     vi.useRealTimers()
+  })
+
+  it('forks the sidecar orcad ships beside orcad.js, not a desktop out/main path', async () => {
+    appEnvironment.current = { getAppPath: () => '/srv/orcad', isPackaged: () => true }
+    existsSyncMock.mockImplementation((path) => path === join('/srv/orcad', 'computer-sidecar.js'))
+
+    const call = callComputerSidecarCapabilities()
+    children[0]!.emit('message', { id: children[0]!.sent[0]!.id, ok: true, result: {} })
+
+    await expect(call).resolves.toEqual({})
+    expect(forkMock).toHaveBeenCalledWith(
+      join('/srv/orcad', 'computer-sidecar.js'),
+      [],
+      expect.anything()
+    )
+  })
+
+  it('says computer use is unavailable when an older server install has no sidecar', async () => {
+    appEnvironment.current = { getAppPath: () => '/srv/orcad', isPackaged: () => true }
+    existsSyncMock.mockImplementation(() => false)
+
+    await expect(callComputerSidecarCapabilities()).rejects.toMatchObject({
+      code: 'unsupported_capability',
+      message: expect.stringContaining("Computer use isn't available on this host")
+    })
+    expect(forkMock).not.toHaveBeenCalled()
   })
 
   it('ignores stale child exit and error after a replacement sidecar starts', async () => {

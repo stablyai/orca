@@ -100,7 +100,6 @@ describe('MobileNativeChatMessage', () => {
     message: NativeChatMessage,
     props: {
       fontScale?: number
-      toolsExpanded?: boolean
       structuredActivityUi?: boolean
       activeTurnIsWorking?: boolean
       trailingRun?: boolean
@@ -653,23 +652,13 @@ describe('MobileNativeChatMessage', () => {
       expect(textIn(tree.root)).toContain('Read 1 file and ran 1 command')
     })
 
-    it('draws nothing for a row its settled turn folded away, unless the Tools toggle is on', () => {
+    it('draws nothing for a row its settled turn folded away', () => {
       const folded = render(toolMessage([settledCall]), {
         structuredActivityUi: true,
         activeTurnIsWorking: false,
         foldedAway: true
       })
       expect(textIn(folded.root)).toEqual([])
-      act(() => folded.unmount())
-
-      // Otherwise the composer's Tools control is a no-op on every settled turn.
-      const revealed = render(toolMessage([settledCall]), {
-        structuredActivityUi: true,
-        activeTurnIsWorking: false,
-        foldedAway: true,
-        toolsExpanded: true
-      })
-      expect(textIn(revealed.root)).toContain('Read 1 file')
     })
 
     it("keeps a settled turn's answer row whole, its own run included", () => {

@@ -8,12 +8,17 @@ import { prefetchWorktreeCreateBase } from '../../../worktree-create-base-prefet
 import { prepareWorktreeCreateForRepo } from '../../../worktree-create-preparation'
 import { getWorktreeCreatePrefetchGitOptions } from '../../../project-runtime-git-options'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import type { LayoutApplyReply } from '../../../../shared/workspace-layout/workspace-layout-command-types'
+import type { WindowLayoutCommand } from '../../runtime-layout-apply'
 import {
   navigationTargetsHost,
   type RuntimeNavigationTarget
 } from '../../../../shared/runtime-navigation'
 
 export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends OrcaRuntimeWithActivateManagedWorktree {
+  abstract applyLayoutCommand(command: WindowLayoutCommand): Promise<LayoutApplyReply>
+
   abstract splitTerminal(
     handle: string,
     opts?: TerminalSplitOptions,
@@ -42,6 +47,10 @@ export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends
   protected getWorktreeTerminalProvisioningHost(
     createdWorktree?: Worktree
   ): WorktreeTerminalProvisioningHost {
+    // Switch point: main writes a default tab's look itself, window or none.
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      return this.getLayoutOwnerTerminalProvisioningHost(createdWorktree)
+    }
     return {
       canSpawn: () => Boolean(this.ptyController?.spawn),
       createTerminal: (selector, options) =>
@@ -69,10 +78,71 @@ export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends
     }
   }
 
+  private getLayoutOwnerTerminalProvisioningHost(
+    createdWorktree?: Worktree
+  ): WorktreeTerminalProvisioningHost {
+    const applied = (reply: LayoutApplyReply): boolean => {
+      if (!reply.ok) {
+        console.warn('[worktree-create] main refused a default tab write:', reply.code)
+      }
+      return reply.ok
+    }
+    return {
+      canSpawn: () => Boolean(this.ptyController?.spawn),
+      createTerminal: (selector, options) =>
+        this.createTerminal(selector, options, createdWorktree),
+      setTabTitle: async (handle, title) => {
+        const { worktreeId, tabId } = this.getProvisionedTerminalTab(handle)
+        const ok = applied(
+          await this.applyLayoutCommand({
+            type: 'renameTab',
+            workspace: worktreeId,
+            tabId,
+            kind: 'custom',
+            title
+          })
+        )
+        // The window draws the title from main's frame; a headless phone still reads its snapshot (L238).
+        if (ok && !this.getAvailableAuthoritativeWindow()) {
+          this.applyHeadlessSessionTabPropsToSnapshot(worktreeId, tabId, {
+            title,
+            customTitle: title.trim() || null
+          })
+        }
+      },
+      setTabColor: async (handle, color) => {
+        const { worktreeId, tabId } = this.getProvisionedTerminalTab(handle)
+        const ok = applied(
+          await this.applyLayoutCommand({
+            type: 'setTabProps',
+            workspace: worktreeId,
+            tabId,
+            color
+          })
+        )
+        if (ok && !this.getAvailableAuthoritativeWindow()) {
+          this.applyHeadlessSessionTabPropsToSnapshot(worktreeId, tabId, { color })
+        }
+      },
+      applyDefaultTabs: async (worktreeId, tabs) => {
+        const reply = await this.applyLayoutCommand({
+          type: 'applyDefaultTabs',
+          workspace: worktreeId,
+          tabs
+        })
+        return applied(reply) && reply.ok ? (reply.result.createdTabs ?? []) : null
+      },
+      getPtyId: (handle) => this.getLivePtyForHandle(handle)?.pty.ptyId,
+      recordSetupCompletionToken: (ptyId, token) =>
+        this.setupCompletionTokenByPtyId.set(ptyId, token)
+    }
+  }
+
   protected getProvisionedTerminalTab(handle: string): { worktreeId: string; tabId: string } {
     const pty = this.getLivePtyForHandle(handle)?.pty
-    if (pty?.tabId) {
-      return { worktreeId: pty.worktreeId, tabId: pty.tabId }
+    const recordedTabId = this.paneOfPty(pty).tabId
+    if (pty && recordedTabId) {
+      return { worktreeId: pty.worktreeId, tabId: recordedTabId }
     }
     // Why: once the window's graph sync adopts the handle it names the window's leaf, not the
     // runtime's pty, as renameTerminal also resolves it.

@@ -415,7 +415,6 @@ export function RuntimePairingUrlGenerator({
         currentGrantId={runtimePairingDeviceId}
         isLoading={isLoadingAccessGrants}
         revokingGrantId={revokingGrantId}
-        onRefresh={() => void loadRuntimeAccessGrants({ showToastOnError: true })}
         onRevoke={(grant) => void revokeRuntimeAccess(grant)}
       />
     </div>

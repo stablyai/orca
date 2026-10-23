@@ -47,6 +47,7 @@ export {
   WORKTREE_CREATE_PREPARATION_LIMIT,
   WORKTREE_CREATE_PREPARATION_TTL_MS
 } from './worktree-create-preparation-pool'
+import { getRepoRoutingConnectionId } from '../shared/execution-host'
 
 /** A prepared checkout is a create that is either in flight or imminent. */
 export function hasPendingWorktreeCreatePreparations(): boolean {
@@ -118,7 +119,7 @@ async function prepareWorktreeCreateInBackground(
   baseBranch: string,
   beforeMaterialization?: Promise<void>
 ): Promise<void> {
-  if (repo.connectionId || isFolderRepo(repo)) {
+  if (getRepoRoutingConnectionId(repo) || isFolderRepo(repo)) {
     return
   }
   const options = getLocalProjectWorktreeGitOptions(store, repo)

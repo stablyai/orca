@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import {
   AI_VAULT_AGENTS,
+  AI_VAULT_SCOPE_PATHS_MAX_COUNT,
   type AiVaultAgent,
   type AiVaultListResult,
   type AiVaultScanIssue,
@@ -51,6 +52,12 @@ const aiVaultSessionSchema = z.object({
   sessionId: z.string(),
   title: z.string(),
   cwd: z.string().nullable(),
+  // Why catch: a malformed alias list must cost only the aliases, never the whole row.
+  cwdAliases: z
+    .array(z.string().min(1).max(4096))
+    .max(AI_VAULT_SCOPE_PATHS_MAX_COUNT)
+    .optional()
+    .catch(undefined),
   branch: z.string().nullable(),
   model: z.string().nullable(),
   filePath: z.string(),

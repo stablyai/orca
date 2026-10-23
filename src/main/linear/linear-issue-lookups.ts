@@ -3,7 +3,7 @@ import type { LinearWorkspaceSelection } from '../../shared/linear/workspace-typ
 import { acquire, release } from './linear-request-concurrency'
 import { clearToken } from './linear-token-store'
 import { getClients, isAuthError } from './client'
-import { getRequiredEntry } from './issue-context-client'
+import { getRequiredEntry } from './issue-context/client'
 import { getDescriptionImageUrls } from './linear-description-images'
 import {
   ATTACHMENT_BY_UUID_QUERY,

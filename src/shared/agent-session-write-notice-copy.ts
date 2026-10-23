@@ -30,6 +30,7 @@ export const AGENT_SESSION_WRITE_NOTICE_COPY = {
   notDoneOption: "The setting wasn't changed.",
   notDoneCommand: "The command didn't run.",
   notDoneGoal: "The goal wasn't changed.",
+  notDoneQueuedEdit: "Your edit wasn't saved.",
   restartFailed: "The agent couldn't restart.",
   capacity:
     'Orca on the computer running this chat has hit a request limit. Update Orca there, then try again.',
@@ -80,6 +81,8 @@ export const AGENT_SESSION_WRITE_NOTICE_COPY = {
   compactAfterSending: 'Your earlier message is still being sent. Run /compact once it has gone.',
   queueTooLarge: 'Too much text is waiting in the queue.',
   shrinkQueue: 'Delete a queued message, or wait for one to go through, then try again.',
+  messageTooLarge: 'It is over the 256 KB limit for one message.',
+  shortenMessage: 'Shorten or split it, then send it again.',
   optionRejected: "The agent didn't accept this setting.",
   goalsUnsupported: "This agent doesn't support goals.",
   agentRefused: 'The agent turned this down.',

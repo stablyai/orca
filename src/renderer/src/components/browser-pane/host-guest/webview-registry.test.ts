@@ -240,21 +240,16 @@ describe('webview registry drag listeners', () => {
     expect(isBrowserPageRendererRecoveryPending('page-1')).toBe(false)
   })
 
-  it('preserves the viewport and zoom only while replacing a guest', async () => {
+  it('preserves the viewport only while replacing a guest', async () => {
     const { destroyPersistentWebview, registerPersistentWebview, replacePersistentWebview } =
       await import('./webview-registry')
-    const { getExplicitBrowserPageZoomLevel, rememberExplicitBrowserPageZoomLevel } =
-      await import('./browser-page-zoom')
 
     registerPersistentWebview('page-1', createWebview())
-    rememberExplicitBrowserPageZoomLevel('page-1', 1.5)
     await replacePersistentWebview('page-1', { preserveViewport: true })
-    expect(getExplicitBrowserPageZoomLevel('page-1')).toBe(1.5)
     expect(viewportMocks.removeBrowserPageViewport).not.toHaveBeenCalled()
 
     registerPersistentWebview('page-1', createWebview())
     await destroyPersistentWebview('page-1')
-    expect(getExplicitBrowserPageZoomLevel('page-1')).toBeNull()
     expect(viewportMocks.clearBrowserPageViewportPresetSize).toHaveBeenCalledWith('page-1')
     expect(viewportMocks.removeBrowserPageViewport).toHaveBeenCalledWith('page-1')
   })
@@ -301,34 +296,6 @@ describe('webview registry drag listeners', () => {
     releaseDrag()
 
     expect(webview.style.pointerEvents).toBe('auto')
-  })
-
-  it('preserves explicit zoom across a parent-drift replacement', async () => {
-    const { registerPersistentWebview, replacePersistentWebview } =
-      await import('./webview-registry')
-    const { getExplicitBrowserPageZoomLevel, rememberExplicitBrowserPageZoomLevel } =
-      await import('./browser-page-zoom')
-
-    registerPersistentWebview('page-1', createWebview())
-    rememberExplicitBrowserPageZoomLevel('page-1', 1.5)
-
-    await replacePersistentWebview('page-1', { preserveViewport: true })
-
-    expect(getExplicitBrowserPageZoomLevel('page-1')).toBe(1.5)
-  })
-
-  it('forgets explicit zoom on a real tab close', async () => {
-    const { destroyPersistentWebview, registerPersistentWebview } =
-      await import('./webview-registry')
-    const { getExplicitBrowserPageZoomLevel, rememberExplicitBrowserPageZoomLevel } =
-      await import('./browser-page-zoom')
-
-    registerPersistentWebview('page-1', createWebview())
-    rememberExplicitBrowserPageZoomLevel('page-1', 1.5)
-
-    destroyPersistentWebview('page-1')
-
-    expect(getExplicitBrowserPageZoomLevel('page-1')).toBeNull()
   })
 
   it('moves focus back to the renderer before detaching the focused webview', async () => {

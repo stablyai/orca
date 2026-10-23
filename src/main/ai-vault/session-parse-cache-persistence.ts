@@ -12,6 +12,7 @@ import { SessionParseCacheDatabase } from './session-parse-cache-database'
 import { importLegacySessionParseCacheJson } from './session-parse-cache-legacy-json'
 import {
   scopeCwdStampOf,
+  sessionParseCacheTranscriptPath,
   setSessionParseCacheColdTier,
   type PersistedSessionParseCacheEntry,
   type SessionScopeCwdRead,
@@ -87,29 +88,31 @@ export function resetSessionParseCachePersistenceForTests(): void {
 export async function flushSessionParseCachePersist(): Promise<void> {
   clearWriteTimer()
   while (pendingWrites.size > 0) {
-    const chunk: [string, PersistedSessionParseCacheEntry][] = []
-    for (const row of pendingWrites) {
-      chunk.push(row)
-      pendingWrites.delete(row[0])
-      if (chunk.length === WRITE_CHUNK_ROWS) {
-        break
-      }
-    }
+    const chunk = takeWriteChunk(pendingWrites)
     openedDatabase()?.write(chunk, Date.now())
     if (pendingWrites.size > 0) {
       await yieldToEventLoop()
     }
   }
   while (pendingScopeCwds.size > 0) {
-    const chunk = [...pendingScopeCwds].slice(0, WRITE_CHUNK_ROWS)
-    for (const [path] of chunk) {
-      pendingScopeCwds.delete(path)
-    }
+    const chunk = takeWriteChunk(pendingScopeCwds)
     openedDatabase()?.writeScopeCwds(chunk, Date.now())
     if (pendingScopeCwds.size > 0) {
       await yieldToEventLoop()
     }
   }
+}
+
+function takeWriteChunk<T>(pending: Map<string, T>): [string, T][] {
+  const chunk: [string, T][] = []
+  for (const row of pending) {
+    chunk.push(row)
+    pending.delete(row[0])
+    if (chunk.length === WRITE_CHUNK_ROWS) {
+      break
+    }
+  }
+  return chunk
 }
 
 // Opened on first need, so Electron main (which never looks rows up) never opens it.
@@ -136,7 +139,7 @@ async function dropRowsForMissingTranscripts(db: SessionParseCacheDatabase): Pro
   let dropped = db.deleteSeenBefore(Date.now() - WSL_EXPIRE_AFTER_MS, WSL_PATH_GLOB)
   const stale = db.pathsSeenBefore(Date.now() - RECHECK_AFTER_MS, RECHECK_BATCH_ROWS, WSL_PATH_GLOB)
   for (const path of stale) {
-    if (await transcriptMissing(path)) {
+    if (await transcriptMissing(sessionParseCacheTranscriptPath(path))) {
       db.delete(path)
       dropped = true
     } else {

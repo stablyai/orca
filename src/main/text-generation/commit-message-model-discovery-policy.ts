@@ -1,3 +1,4 @@
+import { buildClaudeModelListArgs } from '../../shared/claude-model-list-probe'
 import type { CommandTemplateBackslash } from '../../shared/commit-message-prompt'
 import type { CommitMessagePlan } from '../../shared/commit-message-plan'
 import { planAgentBinary } from '../../shared/commit-message-plan'
@@ -75,7 +76,8 @@ export function finalizeModelDiscoveryOutput(
 export function planModelDiscovery(
   spec: AgentModelProbeSpec,
   agentCommandOverride?: string,
-  backslash: CommandTemplateBackslash = 'escape'
+  backslash: CommandTemplateBackslash = 'escape',
+  strictMcp = true
 ): { ok: true; plan: CommitMessagePlan } | { ok: false; error: string } {
   const modelDiscovery = spec.modelDiscovery
   if (!modelDiscovery) {
@@ -85,11 +87,15 @@ export function planModelDiscovery(
   if (!command.ok) {
     return command
   }
+  const args =
+    spec.id === 'claude'
+      ? buildClaudeModelListArgs(strictMcp, command.prefixArgs)
+      : modelDiscovery.args
   return {
     ok: true,
     plan: {
       binary: command.binary,
-      args: [...command.prefixArgs, ...modelDiscovery.args],
+      args: [...command.prefixArgs, ...args],
       stdinPayload: modelDiscovery.stdinPayload ?? null,
       label: spec.label,
       ...(command.env ? { env: command.env } : {})

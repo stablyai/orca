@@ -29,8 +29,8 @@ function EditorStrip({ worktreeId, groupId }: { worktreeId: string; groupId: str
   return <div ref={attach} data-testid="strip" />
 }
 
-function dropFile(target: Element): void {
-  const transfer = { types: ['Files'], files: [new File(['x'], 'shot.png')], dropEffect: 'move' }
+function dropFile(target: Element, name = 'shot.png'): void {
+  const transfer = { types: ['Files'], files: [new File(['x'], name)], dropEffect: 'move' }
   const event = new Event('drop', { bubbles: true, cancelable: true, composed: true })
   Object.defineProperty(event, 'dataTransfer', { value: transfer })
   Object.defineProperty(event, 'isTrusted', { value: true })
@@ -107,6 +107,40 @@ describe('editor group OS file drops on remote workspaces', () => {
       { suppressActiveRuntimeFallback: false, targetGroupId: 'group-runtime' }
     )
   })
+
+  it.each(['report.html', 'notes.txt'])(
+    'refuses opening %s when its workspace changes hosts during upload',
+    async (name) => {
+      let finish: (result: {
+        results: { status: 'imported'; kind: 'file'; destPath: string }[]
+      }) => void = () => undefined
+      mocks.importPaths.mockImplementationOnce(() => new Promise((resolve) => (finish = resolve)))
+      const view = render(<EditorStrip worktreeId="wt-runtime" groupId="group-runtime" />)
+      dropFile(view.getByTestId('strip'), name)
+      await waitFor(() => expect(mocks.importPaths).toHaveBeenCalledTimes(1))
+      useAppStore.setState((state) => ({
+        repos: state.repos.map((repo) =>
+          repo.id === 'repo-rt' ? { ...repo, executionHostId: 'runtime:new-owner' as const } : repo
+        )
+      }))
+      await act(async () =>
+        finish({
+          results: [
+            {
+              status: 'imported',
+              kind: 'file',
+              destPath: joinPath(RUNTIME_PATH, `.orca/drops/${name}`)
+            }
+          ]
+        })
+      )
+      expect(mocks.openFile).not.toHaveBeenCalled()
+      expect(mocks.setActiveTabType).not.toHaveBeenCalled()
+      expect(mocks.toastError).toHaveBeenCalledWith(
+        expect.stringMatching(/Couldn't verify which host owns/)
+      )
+    }
+  )
 
   it.each(['wt-ssh', 'wt-runtime'])(
     'opens nothing when the group closes during upload in %s and keeps preparation feedback',

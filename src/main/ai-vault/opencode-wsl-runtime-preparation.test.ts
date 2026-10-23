@@ -178,8 +178,14 @@ describe('WSL SQLite runtime preparation', () => {
           `/mnt/c/${spec.args.at(-1).includes('.tar.gz') ? 'node $literal.tar.gz' : 'reader $literal.cjs'}`
         )
       }
-      if (spec.script?.startsWith('getconf')) {
-        return success('musl libc')
+      if (
+        spec.script?.includes('getconf GNU_LIBC_VERSION') ||
+        spec.script?.includes('ldd --version')
+      ) {
+        return success('')
+      }
+      if (spec.script?.includes('/lib/ld-musl-')) {
+        return success('musl libc (aarch64)\nVersion 1.2.5')
       }
       if (spec.script?.startsWith('printf')) {
         return success('/home/ada $literal')
@@ -229,7 +235,7 @@ describe('WSL SQLite runtime preparation', () => {
       if (spec.program === 'wslpath') {
         return success('/mnt/c/reader.cjs')
       }
-      if (spec.script?.startsWith('getconf')) {
+      if (spec.script?.includes('getconf GNU_LIBC_VERSION')) {
         return success('glibc 2.31')
       }
       if (spec.script?.startsWith('printf')) {

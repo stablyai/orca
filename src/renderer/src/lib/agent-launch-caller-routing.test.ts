@@ -37,7 +37,7 @@ vi.mock('@/runtime/web-runtime-session-environment', () => ({
 }))
 vi.mock('@/lib/worktree-runtime-owner', () => ({
   getExecutionHostIdForWorktree: () => mockExecutionHostId(),
-  runtimeEnvironmentIdWithLegacyFallbackUnlessTwin: () => 'web-runtime'
+  runtimeEnvironmentIdOrLocalUnlessTwin: () => 'web-runtime'
 }))
 vi.mock('@/lib/launch-agent-web-host-tab', () => ({
   launchAgentInWebHostTab: mockLaunchAgentInWebHostTab

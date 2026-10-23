@@ -144,6 +144,7 @@ function fetchResultFor(manifest: MobileWebBundleManifestRead): MobileWebBundleF
     assets: new Map(
       manifest.assets.map((asset) => [asset.path, new Uint8Array(asset.byteLength).fill(7)])
     ),
+    reused: [],
     totalBytes: TOTAL_BYTES,
     elapsedMs: 1
   }

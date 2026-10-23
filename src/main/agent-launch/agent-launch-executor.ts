@@ -2,8 +2,9 @@
  * The host needs the created workspace to answer; a definitive refusal starts a terminal agent. */
 
 import { assertOpenCodeModelLaunchPreferencesAbsent } from '../opencode/opencode-model-startup-plan'
+import { assertAgentPromptRequestActive } from '../runtime/orca-runtime-core'
 import { parsePaneKey } from '../../shared/stable-pane-id'
-import type { AgentLaunchIntent, AgentLaunchResult } from '../../shared/agent-launch-intent'
+import type { AgentLaunchResult } from '../../shared/agent-launch-intent'
 import { withoutReservedAgentCreateFields } from '../../shared/agent-launch-intent'
 import {
   combineLaunchWarnings,
@@ -24,6 +25,7 @@ import {
   readAgentLaunchModeSettings,
   resolveAgentLaunchModeOnHost,
   type AgentLaunchModeReceipt,
+  type AgentLaunchModeSettlement,
   DEFAULT_LAUNCH_VOCABULARY,
   downgradeAgentLaunchModeForStructuredRefusal,
   warnStructuredLaunchDowngrade
@@ -35,7 +37,9 @@ import {
 } from './agent-launch-legacy-host'
 import {
   AgentLaunchStructuredSessionRefusedError,
-  type AgentLaunchStructuredSurface
+  terminalLaunchInputs,
+  type AgentLaunchStructuredSurface,
+  type AgentLaunchWorkspaceFactory
 } from './agent-launch-surface-factories'
 import type {
   AgentLaunchExecution,
@@ -74,8 +78,11 @@ export async function executeAgentLaunch(
         ? undefined
         : readAgentLaunchModeSettings(runtime, intent.nativeChatDefault),
       ...(execution.terminalOnly ? { terminalOnly: true } : {}),
+      ...(intent.surface ? { surface: intent.surface } : {}),
       vocabulary
     })
+  // A caller's own preparation (intent resolution) may have outlived its request.
+  assertAgentPromptRequestActive(execution.signal)
   // The create's startup terminal is this launch's only surface, and the create delivers the text.
   if (execution.promptPolicy === 'legacy-host') {
     assertLegacyHostTarget(execution)
@@ -140,6 +147,15 @@ export async function executeAgentLaunch(
       }
     }
 
+    // No agent exists yet; only a cancel claims recovery here, so default failures are unchanged.
+    recoverableWorktreeId = execution.signal?.aborted ? placed.worktreeId : undefined
+    assertAgentPromptRequestActive(execution.signal)
+    const settlement: AgentLaunchModeSettlement = {
+      phase: intent.target.kind === 'existing' ? 'before-effects' : 'created-workspace',
+      agent: intent.agent,
+      workspacePath: placed.workspacePath,
+      cwd: intent.cwd
+    }
     execution.onStage?.('mode_settle')
     // A caller's own decision about an existing workspace already carries that host's answer.
     let settled =
@@ -150,11 +166,13 @@ export async function executeAgentLaunch(
             preflight,
             placed.worktreeId,
             intent.agent,
-            vocabulary
+            vocabulary,
+            settlement
           )
 
     execution.onStage?.('surface_create')
     recoverableWorktreeId = placed.worktreeId
+    assertAgentPromptRequestActive(execution.signal)
     let created: CreatedSurface
     try {
       created = await createSurface(execution, placed, settled)
@@ -166,7 +184,9 @@ export async function executeAgentLaunch(
       ) {
         throw error
       }
-      settled = downgradeAgentLaunchModeForStructuredRefusal(settled, vocabulary)
+      // The refusal proves no agent exists; a fallback after cancel would start one, argv prompt and all.
+      assertAgentPromptRequestActive(execution.signal)
+      settled = downgradeAgentLaunchModeForStructuredRefusal(settled, vocabulary, settlement)
       created = await createTerminalSurface(execution, placed)
     }
     // Both CAN be set, so neither may be dropped. The create warns precisely when it produced no
@@ -217,20 +237,12 @@ async function resolveWorkspace(
   execution: AgentLaunchExecution,
   preflight: AgentLaunchModeReceipt,
   onWorkspaceCreated?: (worktreeId: string) => void
-): Promise<{
-  worktreeId: string
-  connectionId?: string | null
-  startupTerminalHandle: string | undefined
-  startupTerminalPaneKey?: string
-  warning?: string
-  /** True when this create folded the prompt into the agent's startup command. */
-  promptRodeLaunchCommand?: boolean
-}> {
+): Promise<Awaited<ReturnType<AgentLaunchWorkspaceFactory['createWorktree']>>> {
   const { intent } = execution
   if (intent.target.kind === 'existing') {
     // Nothing was created, so there is no create warning to carry.
-    const { worktree: worktreeId, connectionId } = intent.target
-    return { worktreeId, connectionId, startupTerminalHandle: undefined }
+    const { worktree: worktreeId, connectionId, workspacePath } = intent.target
+    return { worktreeId, connectionId, workspacePath, startupTerminalHandle: undefined }
   }
   const workspaces = execution.workspaces
   if (!workspaces) {
@@ -302,20 +314,6 @@ async function createSurface(
     }
   }
   return createTerminalSurface(execution, workspace)
-}
-
-/** What every route that builds a terminal agent passes on, so the startup terminal of a new
- *  workspace and the terminal of an existing one start the same agent. */
-function terminalLaunchInputs(intent: AgentLaunchIntent) {
-  return {
-    ...(intent.sessionOptions ? { options: intent.sessionOptions } : {}),
-    // `null` is a value the caller meant, so this tests for absence rather than falsiness.
-    ...(intent.agentArgs !== undefined ? { agentArgs: intent.agentArgs } : {}),
-    ...(intent.cwd ? { cwd: intent.cwd } : {}),
-    ...(intent.launchSource ? { launchSource: intent.launchSource } : {}),
-    ...(intent.paneKey ? { paneKey: intent.paneKey } : {}),
-    ...(intent.accountEnv ? { accountEnv: intent.accountEnv } : {})
-  }
 }
 
 /**

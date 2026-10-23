@@ -139,12 +139,73 @@ export function rememberCombinedDiffView(
   })
 }
 
-export function forgetCombinedDiffViewsShowingPath(relativePath: string): void {
+// Why: a cached view may hold unsaved section edits; invalidation resets only clean, loaded sections so
+// they reload on remount, and a dirty section's guarded save or conflict bar handles a disk change.
+function invalidateCleanSections(
+  view: CachedCombinedDiffViewState,
+  isStale: (section: DiffSection) => boolean
+): CachedCombinedDiffViewState {
+  let changed = false
+  const sections = view.sections.map((section) => {
+    if (
+      section.dirty ||
+      section.saveConflict ||
+      section.loading ||
+      section.loadOnDemand === true ||
+      !isStale(section)
+    ) {
+      return section
+    }
+    changed = true
+    return {
+      ...section,
+      originalContent: '',
+      modifiedContent: '',
+      loading: true,
+      error: undefined,
+      diffResult: null,
+      largeDiffRenderLimit: null,
+      contentGeneration: (section.contentGeneration ?? 0) + 1
+    }
+  })
+  if (!changed) {
+    return view
+  }
+  return {
+    ...view,
+    sections,
+    loadedIndices: view.loadedIndices.filter((index) => sections[index] === view.sections[index])
+  }
+}
+
+function invalidateCachedViews(
+  matches: (memory: CombinedDiffViewMemory) => boolean,
+  isStale: (section: DiffSection) => boolean
+): void {
   for (const [viewKey, memory] of memoryByViewKey) {
-    if (memory.view?.sections.some((section) => section.path === relativePath)) {
-      memoryByViewKey.set(viewKey, { ...memory, view: undefined })
+    if (!memory.view || !matches(memory)) {
+      continue
+    }
+    const view = invalidateCleanSections(memory.view, isStale)
+    if (view !== memory.view) {
+      memoryByViewKey.set(viewKey, { ...memory, view })
     }
   }
+}
+
+export function forgetCombinedDiffViewsShowingPath(relativePath: string): void {
+  invalidateCachedViews(
+    () => true,
+    (section) => section.path === relativePath
+  )
+}
+
+/** An overflow names no paths, so every clean cached section of the workspace may be stale. */
+export function forgetCombinedDiffViewBodiesForWorktree(worktreeId: string): void {
+  invalidateCachedViews(
+    (memory) => memory.worktreeId === worktreeId,
+    () => true
+  )
 }
 
 export function renameCombinedDiffViewOwner(oldWorktreeId: string, newWorktreeId: string): void {

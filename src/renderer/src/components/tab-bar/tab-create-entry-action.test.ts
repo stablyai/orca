@@ -45,7 +45,7 @@ describe('openTabEntryWithOperations', () => {
     fileList: readyFiles(['src/index.ts']),
     worktreeId: 'wt-1',
     groupId: 'group-1',
-    getFileContext: () => ({ worktreePath: '/repo', runtimeContext }),
+    getFileContext: () => ({ worktreePath: '/repo', runtimeContext, assertCurrent: () => {} }),
     allowAbsolutePaths: true,
     localPlatform: 'posix' as const,
     searchEngine: 'google' as const
@@ -392,7 +392,7 @@ describe('openTabEntryWithOperations', () => {
     await openTabEntryWithOperations({
       ...baseArgs,
       localPlatform: 'windows',
-      getFileContext: () => ({ worktreePath: 'C:/repo', runtimeContext }),
+      getFileContext: () => ({ worktreePath: 'C:/repo', runtimeContext, assertCurrent: () => {} }),
       classification: { kind: 'absolute-file', filePath: 'C:\\tmp\\notes.md' },
       query: 'C:\\tmp\\notes.md',
       operations

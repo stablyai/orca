@@ -17,18 +17,18 @@ A `<webview>` guest is an inner WebContents in the window's frame tree. Chromium
 that tree's focus, not by which debugger the command arrived on. A hidden-window probe (host
 `<textarea>` focused, guest page logging its own events) measured:
 
-| Input | Where it lands | Host focus |
-| --- | --- | --- |
-| CDP `Input.dispatchKeyEvent` / `Input.insertText` on the guest's main session | **host textarea** | kept |
-| same, with `Emulation.setFocusEmulationEnabled` | **host textarea** | kept |
-| `webContents.sendInputEvent` key / `char` on the guest | guest | kept |
-| CDP key / `insertText` on a cross-site iframe's own (auto-attached) session | that iframe | kept |
-| `webContents.insertText` with focus in a cross-site iframe | **guest renderer crashed** | — |
-| `sendInputEvent` key with focus in a same-site iframe | that iframe | kept |
-| any mouse press (CDP mouse, touch, tap gesture, `sendInputEvent`) | guest | **moved to the webview** |
-| `inert` / `tabindex=-1` on the `<webview>` during the press | guest | **moved** |
-| press + synchronous host restore on the `<webview>` `focus` event | guest | restored, next user key lands in the host |
-| the restore above with focus emulation enabled first | guest | **not restored** (the host `focus` event never fires) |
+| Input                                                                         | Where it lands             | Host focus                                            |
+| ----------------------------------------------------------------------------- | -------------------------- | ----------------------------------------------------- |
+| CDP `Input.dispatchKeyEvent` / `Input.insertText` on the guest's main session | **host textarea**          | kept                                                  |
+| same, with `Emulation.setFocusEmulationEnabled`                               | **host textarea**          | kept                                                  |
+| `webContents.sendInputEvent` key / `char` on the guest                        | guest                      | kept                                                  |
+| CDP key / `insertText` on a cross-site iframe's own (auto-attached) session   | that iframe                | kept                                                  |
+| `webContents.insertText` with focus in a cross-site iframe                    | **guest renderer crashed** | —                                                     |
+| `sendInputEvent` key with focus in a same-site iframe                         | that iframe                | kept                                                  |
+| any mouse press (CDP mouse, touch, tap gesture, `sendInputEvent`)             | guest                      | **moved to the webview**                              |
+| `inert` / `tabindex=-1` on the `<webview>` during the press                   | guest                      | **moved**                                             |
+| press + synchronous host restore on the `<webview>` `focus` event             | guest                      | restored, next user key lands in the host             |
+| the restore above with focus emulation enabled first                          | guest                      | **not restored** (the host `focus` event never fires) |
 
 With focus emulation on, the press still moves focus and the restore on the `focus` event never
 runs, but restoring when the press ends works and the page sees no blur, so a menu or picker the
@@ -95,12 +95,12 @@ two gaps.
 
 ## Tracker
 
-| Step | PR | State |
-| --- | --- | --- |
-| CDP focus side effects removed (`bringToFront`, `activateTarget`) + this doc | stack 1/3 | in review |
-| Keys and text delivered to the guest directly | stack 2/3 | in review |
-| Presses and CDP-only input borrow focus and give it back; focus emulation | stack 3/3 | in review |
-| Regression spec: user typing in a terminal while an agent clicks, types and presses keys | stack 2/3, 3/3 | in review |
-| Visible-window spec (`@headful`, isolated display only): native focus stays on Orca's window | stack 3/3 | in review |
-| Main-session keys and text for a focused cross-site iframe go to its own session, no focus borrow | follow-up PR | in review |
-| Agent presses are refused while the user's IME composition is open (#28700) | follow-up PR | in review |
+| Step                                                                                              | PR             | State     |
+| ------------------------------------------------------------------------------------------------- | -------------- | --------- |
+| CDP focus side effects removed (`bringToFront`, `activateTarget`) + this doc                      | stack 1/3      | in review |
+| Keys and text delivered to the guest directly                                                     | stack 2/3      | in review |
+| Presses and CDP-only input borrow focus and give it back; focus emulation                         | stack 3/3      | in review |
+| Regression spec: user typing in a terminal while an agent clicks, types and presses keys          | stack 2/3, 3/3 | in review |
+| Visible-window spec (`@headful`, isolated display only): native focus stays on Orca's window      | stack 3/3      | in review |
+| Main-session keys and text for a focused cross-site iframe go to its own session, no focus borrow | follow-up PR   | in review |
+| Agent presses are refused while the user's IME composition is open (#28700)                       | follow-up PR   | in review |

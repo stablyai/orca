@@ -1,8 +1,8 @@
 import { spawn, type ChildProcess } from 'node:child_process'
-import { connect, createServer } from 'node:net'
+import { connect } from 'node:net'
 import { buildForwardProcessSshArgs, type SystemSshBuildArgsOptions } from './system-ssh-args'
 import { findSystemSsh } from './system-ssh-binary'
-import { stopOrphanedOrcaSshForward } from './system-ssh-orphaned-forward'
+import { reserveLocalForwardPort } from './system-ssh-forward-port-reservation'
 import type { SshTarget } from '../../../shared/ssh-types'
 
 export const SYSTEM_SSH_FORWARD_STARTUP_GRACE_MS = 750
@@ -12,7 +12,7 @@ export const SYSTEM_SSH_FORWARD_STOP_TIMEOUT_MS = 2_000
 // either already reaped or beyond anything teardown can do about it.
 export const SYSTEM_SSH_FORWARD_POST_KILL_TIMEOUT_MS = 500
 
-export type SystemSshPortForwardProcess = {
+type SystemSshPortForwardProcess = {
   process: ChildProcess
   /** The local port the forward listens on, chosen here when the caller asked for any (0). */
   localPort: number
@@ -72,6 +72,10 @@ export function buildSystemSshPortForwardArgs(
   return args
 }
 
+/**
+ * An `ssh -N` forward, already listening on the port it reports. Never asks a ControlMaster to
+ * cancel a forward: any fixed port reaches here, so that is the managed tunnel's call alone.
+ */
 export function startSystemSshPortForwardProcess(
   target: SshTarget,
   localPort: number,
@@ -129,46 +133,6 @@ function stopOnOwnListenFailure(process: ChildProcess, localPort: number): void 
   }
   process.stderr?.on('data', onStderr)
   process.once('exit', stop)
-}
-
-/**
- * The port a system SSH forward will listen on. OpenSSH binds `-L 0` to a port it never
- * reports, so port 0 is resolved to a free one here first.
- */
-export async function reserveLocalForwardPort(
-  localPort: number,
-  orphanArgs?: readonly string[]
-): Promise<number> {
-  try {
-    return await bindLocalForwardPort(localPort)
-  } catch (error) {
-    // Why: a fixed port (a managed tunnel's) may be held by the same forward an earlier Orca
-    // orphaned; `orphanArgs` is that forward's argv, the only process recovery may stop.
-    const inUse = error instanceof Error && error.cause === 'EADDRINUSE'
-    if (!orphanArgs || !inUse || !(await stopOrphanedOrcaSshForward(localPort, orphanArgs))) {
-      throw error
-    }
-    return bindLocalForwardPort(localPort)
-  }
-}
-
-function bindLocalForwardPort(localPort: number): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const server = createServer()
-    server.once('error', (err: NodeJS.ErrnoException) => {
-      reject(
-        new Error(`Local port 127.0.0.1:${localPort} is not available: ${err.message}`, {
-          cause: err.code
-        })
-      )
-    })
-    server.once('listening', () => {
-      const address = server.address()
-      const port = typeof address === 'object' && address ? address.port : localPort
-      server.close(() => resolve(port))
-    })
-    server.listen(localPort, '127.0.0.1')
-  })
 }
 
 export function waitForSystemSshForwardStartup(

@@ -16,6 +16,7 @@ import {
 } from './markdown-preview-source-routing'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 import { usePreserveSectionDuringExternalEdit } from './usePreserveSectionDuringExternalEdit'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 export function useMarkdownPreviewSourceFoundation({
   content,
@@ -65,7 +66,7 @@ export function useMarkdownPreviewSourceFoundation({
   const updateDiffComment = useAppStore((s) => s.updateDiffComment)
   const clearDeliveredDiffComments = useAppStore((s) => s.clearDeliveredDiffComments)
   const keybindings = useAppStore((s) => s.keybindings)
-  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
+  const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
   const sourceOpenFile = useAppStore((s) =>
     findMarkdownPreviewSourceOpenFile(s.openFiles, {
       sourceFileId,

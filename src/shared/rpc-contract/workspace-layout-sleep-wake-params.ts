@@ -1,4 +1,4 @@
-// `layout.apply`'s sleep and wake commands (see LayoutApplyParams).
+// `layout.apply`'s sleep, wake and pane start commands (see LayoutApplyParams).
 import { z } from 'zod'
 import { parsePaneKey } from '../stable-pane-id'
 import { sleepingAgentSessionRecordSchema } from '../workspace-session-sleeping-agents'
@@ -44,3 +44,8 @@ export const WakeCommand = z
   })
   .refine((command) => command.recordOnly === true || command.paneKeys.length === 1)
   .refine(paneKeysNameTab)
+
+/** The window's start of one pane it shows that has no live terminal; main starts it, never the window. */
+export const StartPaneCommand = z
+  .object({ type: z.literal('startPane'), ...OnTab, paneKey: z.string().min(1) })
+  .refine((command) => parsePaneKey(command.paneKey)?.tabId === command.tabId)

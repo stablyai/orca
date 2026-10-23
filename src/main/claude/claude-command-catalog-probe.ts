@@ -1,5 +1,4 @@
 import type { AgentSessionSlashCommand } from '../../shared/agent-session-wire'
-import { CLAUDE_MODEL_LIST_ARGS } from '../../shared/claude-model-list-probe'
 import { assertJsonTextStructureWithinLimits } from '../../shared/json-text-structure-limit'
 import { runClaudeListing, type ClaudeModelCatalogProbeDeps } from './claude-model-catalog-probe'
 import { ClaudeSlashCommandCatalog } from './claude-slash-command-catalog'
@@ -14,33 +13,25 @@ const CLAUDE_COMMAND_LIST_STDIN = `${JSON.stringify({
   request: { subtype: 'initialize' }
 })}\n`
 
-// Hooks and MCP servers only slow the answer: a SessionStart hook would run on every refresh,
-// and every configured MCP server would start just to be stopped.
-const CLAUDE_COMMAND_LIST_ARGS = [
-  ...CLAUDE_MODEL_LIST_ARGS,
-  '--strict-mcp-config',
-  '--settings',
-  JSON.stringify({ disableAllHooks: true })
-]
-
 const INITIALIZE_JSON_LIMITS = { structuralTokens: 64 * 1024, nestingDepth: 16 } as const
 
 export type ClaudeCommandCatalogProbe = (request: {
   cwd: string
   accountHomePath: string
+  isCurrent?: () => boolean
 }) => Promise<AgentSessionSlashCommand[]>
 
 /** Asks Claude, in the folder a chat launches in, what its `/` menu holds. */
 export function createClaudeCommandCatalogProbe(
   deps: ClaudeModelCatalogProbeDeps
 ): ClaudeCommandCatalogProbe {
-  return async ({ cwd, accountHomePath }) => {
+  return async ({ cwd, accountHomePath, isCurrent }) => {
     const stdout = await runClaudeListing(deps, {
       accountHomePath,
       cwd,
-      args: CLAUDE_COMMAND_LIST_ARGS,
       stdin: CLAUDE_COMMAND_LIST_STDIN,
-      site: 'claude-command-catalog-probe'
+      site: 'claude-command-catalog-probe',
+      isCurrent
     })
     const commands = readInitializeCommands(stdout)
     // A CLI whose `initialize` answers no commands answers nothing the menu can use.

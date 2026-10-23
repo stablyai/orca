@@ -1,3 +1,4 @@
+import { installRealWorkerThreadChildProcesses } from '../worker-thread-child-process/worker-thread-child-process-real.test-fixtures'
 // Manual benchmark: how long removing a large checkout takes, and how slow a store-style write gets
 // meanwhile. Opt in (it builds ~100k files): ORCA_WORKTREE_REMOVAL_BENCH=1 ./node_modules/.bin/vitest \
 //   run --config config/vitest.config.ts src/main/git/worktree-removal-large-tree.bench.test.ts
@@ -135,3 +136,5 @@ describeBench('worktree removal on a large checkout', () => {
     expect(stdout).not.toContain(worktreePath)
   }, 900_000)
 })
+
+installRealWorkerThreadChildProcesses()

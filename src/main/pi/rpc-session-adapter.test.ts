@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
 import { agentJournalTurnBody } from '../../shared/agent-session-turn-record'
 import { AgentSessionAcquisitionRootExitObservedError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { JsonlRpcResponseError } from '../jsonl-rpc/peer'
@@ -45,42 +46,52 @@ describe('Pi RPC session ownership and delivery', () => {
     expect(h.connections).toHaveLength(2)
   })
 
-  it('retains final events when exit publication times out under journal backpressure', async () => {
-    let blocked = true
-    const h = await setup({}, (sink) => ({
-      ...sink,
-      tryAppendTransition: (transition) =>
-        blocked
-          ? { accepted: false, reason: 'backpressure' }
-          : sink.tryAppendTransition!(transition)
-    }))
-    vi.useFakeTimers()
-    h.connection.receive({
-      type: 'extension_ui_request',
-      id: 'last-dialog',
-      method: 'input',
-      title: 'Final tail'
-    })
-    h.connection.exit()
-    await vi.advanceTimersByTimeAsync(2_001)
-    expect(h.lifecycle).toHaveBeenCalledOnce()
-    h.adapter.acknowledgeSessionRelease(sessionId)
-    let completed = false
-    const drained = h.adapter.drainObservedExits().then(() => {
-      completed = true
-    })
-    await Promise.resolve()
-    expect(completed).toBe(false)
-    blocked = false
-    await vi.advanceTimersByTimeAsync(250)
-    await drained
-    expect(
-      (await h.rig.rows()).some(
-        (row) => row.body.kind === 'question' && row.body.question === 'Final tail'
-      )
-    ).toBe(true)
-    vi.useRealTimers()
+  it('persists final events after exit while journal writes are blocked', async () => {
+    const h = await setup()
+    const gate = Promise.withResolvers<void>()
+    try {
+      const blocked = h.rig.journal.readInOrder(() => {
+        expect(
+          h.rig.eventSink.tryAppendItem?.(
+            { provider: 'legacy', agent: 'pi', sessionId, recordId: 'before' },
+            { kind: 'status', tone: 'info', text: 'before' },
+            { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+          )
+        ).toEqual({ accepted: true })
+        return gate.promise
+      })
+      vi.useFakeTimers()
+      h.connection.receive({
+        type: 'extension_ui_request',
+        id: 'last-dialog',
+        method: 'input',
+        title: 'Final tail'
+      })
+      h.connection.exit()
+      let completed = false
+      const written = h.rig.eventSink.written?.().then((result) => {
+        completed = true
+        return result
+      })
+      await vi.advanceTimersByTimeAsync(2_001)
+      expect(h.lifecycle).toHaveBeenCalledOnce()
+      h.adapter.acknowledgeSessionRelease(sessionId)
+      await h.adapter.drainObservedExits()
+      expect(completed).toBe(false)
+      gate.resolve()
+      await blocked
+      expect(await written).toEqual({ ok: true })
+      expect(
+        (await h.rig.rows()).some(
+          (row) => row.body.kind === 'question' && row.body.question === 'Final tail'
+        )
+      ).toBe(true)
+    } finally {
+      gate.resolve()
+      vi.useRealTimers()
+    }
   })
+
   it('lets a new acquisition proceed while the released child drains final stdout', async () => {
     const h = await setup()
     h.connection.deferExit = true
@@ -152,6 +163,27 @@ describe('Pi RPC session ownership and delivery', () => {
     expect(h.connection.sent[0]).toMatchObject({ type: 'prompt', message: 'hello' })
   })
 
+  it('holds each send from its handover until it settles, and none whose write failed', async () => {
+    const h = await setup()
+    const send = (clientMessageId: string) =>
+      h.adapter.dispatch({
+        sessionId,
+        fence: 7,
+        clientMessageId,
+        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: clientMessageId }] }
+      })
+    vi.spyOn(h.connection, 'send').mockRejectedValueOnce(new Error('stdin closed'))
+    await expect(send('lost')).resolves.toMatchObject({ state: 'unknown' })
+    expect(h.adapter.heldSends(sessionId)).toEqual(new Set())
+
+    await send('first')
+    expect(h.adapter.heldSends(sessionId)).toEqual(new Set(['first']))
+    h.connection.receive({ type: 'agent_start' })
+    await send('steer')
+    // The first is accepted; the steer waits behind its running turn.
+    expect(h.adapter.heldSends(sessionId)).toEqual(new Set(['steer']))
+  })
+
   it('applies each sent model before effort and before prompting Pi', async () => {
     const h = await setup()
     h.connection.requestOverride = (command) =>
@@ -166,6 +198,43 @@ describe('Pi RPC session ownership and delivery', () => {
     expect(result).toEqual({ state: 'admitted' })
     expect(h.connection.requests.slice(-2)).toEqual(['set_model', 'set_thinking_level'])
     expect(h.connection.sent).toMatchObject([{ type: 'prompt', message: 'chosen' }])
+  })
+
+  it('sends model-only choices away from the opening model, back, and away again', async () => {
+    const h = await setup({}, undefined, { thinkingLevel: 'medium' })
+    h.connection.requestOverride = (command) =>
+      command === 'set_thinking_level' ? Promise.resolve({}) : undefined
+    for (const [clientMessageId, model] of [
+      ['away', 'anthropic/model-2'],
+      ['back', 'anthropic/model-1'],
+      ['again', 'anthropic/model-2']
+    ]) {
+      await expect(
+        h.adapter.dispatch({
+          sessionId,
+          fence: 7,
+          clientMessageId,
+          body: {
+            kind: 'message',
+            role: 'user',
+            blocks: [{ type: 'text', text: clientMessageId }]
+          },
+          executionOptions: { model }
+        })
+      ).resolves.toEqual({ state: 'admitted' })
+    }
+    // Back on the opening model, its opening effort is restored; elsewhere Pi keeps its own.
+    expect(h.connection.requests.filter((command) => command.startsWith('set_'))).toEqual([
+      'set_model',
+      'set_model',
+      'set_thinking_level',
+      'set_model'
+    ])
+    expect(h.connection.sent).toMatchObject([
+      { message: 'away' },
+      { message: 'back' },
+      { message: 'again' }
+    ])
   })
 
   it('rejects a known-unsent prompt when an option times out and preserves Stop reason', async () => {
@@ -258,6 +327,16 @@ describe('Pi RPC session ownership and delivery', () => {
     expect(h.connection.requests).toContain('abort')
     expect(await h.adapter.closeSession(sessionId)).toBe(true)
     expect(h.connection.closed).toBe(true)
+  })
+
+  it('stops a run Pi starts on an idle session without a send', async () => {
+    const h = await setup()
+    h.connection.receive({ type: 'agent_start' })
+    await vi.waitFor(async () => expect((await h.rig.turns())[0]?.state).toBe('running'))
+    expect((await h.adapter.cancelTurn({ sessionId, fence: 7 })).cancelled).toBe(true)
+    expect(h.connection.requests).toContain('abort')
+    h.connection.receive({ type: 'agent_settled' })
+    await vi.waitFor(async () => expect((await h.rig.turns())[0]?.outcome).toBe('cancellation'))
   })
 
   it('keeps a pending manual compaction cancellable and reports root/tree proof honestly', async () => {

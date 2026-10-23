@@ -1,3 +1,4 @@
+import { journalItemEchoFields, type JournalItemEcho } from './journal-item-echo'
 import type {
   AgentJournalSubmission,
   AgentJournalItemBody,
@@ -28,7 +29,7 @@ import {
   MAX_JOURNAL_LIFECYCLE_BATCH_BYTES,
   MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS
 } from './journal-row-schema'
-import { boundInlineText, DEFAULT_JOURNAL_PAYLOAD_LIMITS } from './journal-payload-bounds'
+import { boundInlineText, JOURNAL_DISPATCH_REASON_LIMITS } from './journal-payload-bounds'
 import { assertSubmissionIdUnused } from './journal-write-guards'
 import { turnEndAfterStop } from './journal-stop-turn-end'
 import { nextJournalItemRevision } from './journal-item-revision'
@@ -54,6 +55,7 @@ export function journalItemRowBuilder(
   address: AgentJournalItemIdentity | string,
   body: AgentJournalItemBody,
   options: AgentJournalRowAttribution & {
+    echoOf?: JournalItemEcho['echoOf']
     fence: number
     ownerFence?: number
     executionOwner?: number
@@ -67,6 +69,7 @@ export function journalItemRowBuilder(
       state: state(),
       ...(typeof address === 'string' ? { itemId: address } : { identity: address }),
       body,
+      ...journalItemEchoFields(options),
       seq,
       fence: options.fence,
       ownerFence: options.ownerFence,
@@ -168,7 +171,7 @@ function boundedDispatchReason(input: ResolveDispatchInput): string | null {
   if (input.state === 'accepted' || input.state === 'pending' || !input.reason) {
     return null
   }
-  return boundInlineText(input.reason, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
+  return boundInlineText(input.reason, JOURNAL_DISPATCH_REASON_LIMITS).text
 }
 
 export function journalLifecycleBatchRowBuilder(
@@ -237,6 +240,7 @@ export function journalRowBase(
 
 export function buildJournalItemRow(
   input: JournalItemAddress & {
+    echoOf?: JournalItemEcho['echoOf']
     state: JournalReducerState
     body: AgentJournalItemBody
     seq: number
@@ -259,6 +263,7 @@ export function buildJournalItemRow(
   const body = turnEndAfterStop(input.state, resolved, input.body)
   return {
     kind: 'item',
+    ...journalItemEchoFields(input),
     itemId,
     revision,
     body,

@@ -32,8 +32,17 @@ import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
 import type { Repo } from '../../../shared/repo-types'
 import { isWslMoveWorktreeBlocked } from '../../persistence/moving-wsl-projects/wsl-move-background-backoff'
 import { worktreeRowTarget } from '../../persistence/host-qualified-worktree-meta'
+import type { RuntimeRepoSelector } from '../runtime-repo-selector'
+import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspace-layout-command-types'
+import type { WindowLayoutCommand } from '../runtime-layout-apply'
+import { createRuntimeEditorFileOpener } from '../files/editor-open-through-layout-owner'
 
 export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreservedBranchCleanup {
+  protected abstract hydrateHeadlessMobileSessionTabsFromWorkspaceSession(
+    worktreeId?: string,
+    options?: { force?: boolean }
+  ): Set<string>
+  abstract notifyMobileSessionTabsChanged(worktreeId: string): void
   abstract resolveRuntimeFileTarget(worktreeSelector: string): Promise<{
     worktree: ResolvedWorktree
     executionHostId: ExecutionHostId
@@ -93,7 +102,7 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
 
   protected abstract resolveWorktreeSelector(selector: string): Promise<ResolvedWorktree>
 
-  protected abstract resolveRepoSelector(selector: string): Promise<Repo>
+  protected abstract resolveRepoSelector(selector: RuntimeRepoSelector): Promise<Repo>
 
   protected readonly fileCommands = new RuntimeFileCommands({
     getRuntimeId: () => this.runtimeId,
@@ -126,23 +135,15 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
         absolutePath
       }),
     resolveRuntimeGitTarget: (selector) => this.resolveRuntimeGitTarget(selector),
-    openFile: (worktreeId, filePath, relativePath, runtimeEnvironmentId, navigation, position) => {
-      // The UI cannot open a tab in a workspace that has no row.
-      if (isChatScratchWorktreeId(worktreeId)) {
-        throw new Error('chat_scratch_not_openable')
+    openFile: createRuntimeEditorFileOpener({
+      getNotifier: () => this.notifier,
+      applyLayoutCommand: (command) => this.applyLayoutCommand(command),
+      groupFor: (id) => this.editorOpenGroupFor(id),
+      publishHeadlessTabs: (id) => {
+        this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(id, { force: true })
+        this.notifyMobileSessionTabsChanged(id)
       }
-      if (!this.notifier?.openFile) {
-        throw new Error('renderer_unavailable')
-      }
-      this.notifier.openFile(
-        worktreeId,
-        filePath,
-        relativePath,
-        runtimeEnvironmentId,
-        navigation,
-        ...(position ? [position] : [])
-      )
-    },
+    }),
     openDiff: (worktreeId, filePath, relativePath, staged, runtimeEnvironmentId, navigation) => {
       if (isChatScratchWorktreeId(worktreeId)) {
         throw new Error('chat_scratch_not_openable')
@@ -160,6 +161,11 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
       )
     }
   })
+
+  abstract applyLayoutCommand(command: WindowLayoutCommand): Promise<LayoutApplyReply>
+
+  /** The group a file main opens lands in: the window's live one, else the saved view's. */
+  protected abstract editorOpenGroupFor(worktreeId: string): string | undefined
 
   protected readonly fileWatcherRemoval = createRuntimeFileWatcherRemoval(this.fileCommands)
 

@@ -36,6 +36,8 @@ describe('readCodexResetCreditCapability', () => {
   it.each([
     { ok: true, result: { capabilities: ['mobile.tasks.v1'] } },
     { ok: true, result: { capabilities: 'accounts.codex-reset-credit.v1' } },
+    { ok: true, result: { capabilities: [MOBILE_CODEX_RESET_CREDIT_CAPABILITY, 7] } },
+    { ok: true, result: {} },
     { ok: false, error: { code: 'old-host', message: 'unsupported' } }
   ])('fails closed for an unsupported or malformed host response', async (response) => {
     const sendRequest = vi.fn().mockResolvedValue(response)

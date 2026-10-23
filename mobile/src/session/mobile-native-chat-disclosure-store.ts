@@ -1,6 +1,6 @@
 // Desktop parity: `native-chat-disclosure-store`. Where a transcript row's open/closed
 // disclosures live when the row itself may be unmounted: a run or line the reader opened
-// stays open after the list recycles its row, on reload, and across the Tools toggle.
+// stays open after the list recycles its row and on reload.
 
 import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useState } from 'react'
 import {

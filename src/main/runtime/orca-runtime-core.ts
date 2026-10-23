@@ -133,17 +133,6 @@ export async function waitForAgentPromptPromise<T>(
   })
 }
 
-// Generic terminal.send uses setImmediate to let abort/permission/data callbacks run between
-// chunks without paying a full Windows timer tick for every 16 KiB write. Agent prompts use an
-// atomic bracketed-paste write, so they do not rely on this scheduler.
-// Why the global and not node:timers/promises: only the global is intercepted by fake timers,
-// so a chunked paste stays observable on the test clock.
-export function yieldBetweenTerminalInputChunks(): Promise<void> {
-  return new Promise<void>((resolve) => {
-    setImmediate(resolve)
-  })
-}
-
 export async function waitForAgentPromptDelay(
   delayMs: number,
   signal?: AbortSignal

@@ -178,6 +178,62 @@ describe('useMobileNativeChatFileSearch', () => {
     expect(state?.nativeChatFilePaths).toEqual(['docs/guide.md'])
   })
 
+  it.each([false, true])(
+    'retires cached queries after authority migration; legacy=%s',
+    async (legacy) => {
+      let generation = 1
+      const sendRequest = vi.fn(async (method: string) => {
+        if (legacy && method === 'files.searchPaths') {
+          return {
+            id: 'missing',
+            ok: false as const,
+            error: { code: 'method_not_found', message: 'Unknown method' }
+          }
+        }
+        return rpcSuccess([generation === 1 ? 'old/apple.ts' : 'new/apple.ts'])
+      })
+      await mount(fakeClient({ sendRequest, getGeneration: () => generation }))
+      act(() => state?.loadNativeChatFiles('apple'))
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(120)
+      })
+      expect(state?.nativeChatFilePaths).toEqual(['old/apple.ts'])
+      generation = 2
+      act(() => state?.loadNativeChatFiles('apple'))
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(120)
+      })
+      expect(state?.nativeChatFilePaths).toEqual(['new/apple.ts'])
+    }
+  )
+
+  it('rejects an old authority response before it can populate the cache', async () => {
+    let generation = 1
+    let resolveOld: (reply: Awaited<ReturnType<RpcClient['sendRequest']>>) => void = () => {}
+    const oldReply = new Promise<Awaited<ReturnType<RpcClient['sendRequest']>>>((resolve) => {
+      resolveOld = resolve
+    })
+    const sendRequest = vi.fn(() =>
+      generation === 1 ? oldReply : Promise.resolve(rpcSuccess(['new/apple.ts']))
+    )
+    await mount(fakeClient({ sendRequest, getGeneration: () => generation }))
+    act(() => state?.loadNativeChatFiles('apple'))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(120)
+    })
+    generation = 2
+    await act(async () => {
+      resolveOld(rpcSuccess(['old/apple.ts']))
+      await oldReply
+    })
+    expect(state?.nativeChatFilePaths).toEqual([])
+    act(() => state?.loadNativeChatFiles('apple'))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(120)
+    })
+    expect(state?.nativeChatFilePaths).toEqual(['new/apple.ts'])
+  })
+
   it('coalesces overlapping legacy inventory requests on a slow host', async () => {
     let resolveList: (value: Awaited<ReturnType<RpcClient['sendRequest']>>) => void = () => {}
     const listResponse = new Promise<Awaited<ReturnType<RpcClient['sendRequest']>>>((resolve) => {

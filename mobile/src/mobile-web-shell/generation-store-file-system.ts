@@ -27,6 +27,11 @@ export type GenerationFileSystem = {
    *  be read" lead the store to opposite decisions about deleting the cache. */
   readText(uri: string): Promise<string | null>
   fileExists(uri: string): Promise<boolean>
+  /** Null when the file is missing. */
+  fileSize(uri: string): Promise<number | null>
+  /** Copies a file natively, creating the destination's directories. The destination must not
+   *  exist, as on both platforms. Throws when the source is gone or unreadable. */
+  copyFile(fromUri: string, toUri: string): Promise<void>
   /** Recursive, and a no-op when the path is missing. */
   delete(uri: string): Promise<void>
   /** Renames a directory. The destination must not exist: expo moves a directory *into* an existing
@@ -84,6 +89,16 @@ export function createExpoGenerationFileSystem(): GenerationFileSystem {
     },
     async fileExists(uri) {
       return new File(uri).exists
+    },
+    async fileSize(uri) {
+      const file = new File(uri)
+      return file.exists ? file.size : null
+    },
+    async copyFile(fromUri, toUri) {
+      const target = new File(toUri)
+      // iOS copies only into an existing directory.
+      target.parentDirectory.create({ intermediates: true, idempotent: true })
+      new File(fromUri).copy(target)
     },
     async delete(uri) {
       const directory = new Directory(uri)

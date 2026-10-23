@@ -78,6 +78,23 @@ function realAdapter(
   return adapter
 }
 
+/** A temp project with its own SessionStart hook, so the hook frame never depends on the machine's real settings. */
+async function projectWithStartHook(
+  prefix: string,
+  settings: Record<string, unknown> = {}
+): Promise<string> {
+  const cwd = await mkdtemp(join(tmpdir(), prefix))
+  await mkdir(join(cwd, '.claude'), { recursive: true })
+  await writeFile(
+    join(cwd, '.claude', 'settings.json'),
+    JSON.stringify({
+      ...settings,
+      hooks: { SessionStart: [{ hooks: [{ type: 'command', command: 'true' }] }] }
+    })
+  )
+  return cwd
+}
+
 function identity(providerSessionId: string): AgentSessionJournalIdentity {
   return {
     sessionId: 'real-cli-handshake',
@@ -158,7 +175,7 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
       const providerSessionId = randomUUID()
       const claudeConfigDir = process.env.CLAUDE_CONFIG_DIR?.trim() || join(homedir(), '.claude')
       const events: ClaudeStructuredSessionEvent[] = []
-      const cwd = await mkdtemp(join(tmpdir(), 'orca-command-init-'))
+      const cwd = await projectWithStartHook('orca-command-init-')
       await mkdir(join(cwd, '.claude', 'commands'), { recursive: true })
       await writeFile(
         join(cwd, '.claude', 'commands', 'orca-init-catalog-proof.md'),
@@ -211,7 +228,8 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
       const providerSessionId = randomUUID()
       const claudeConfigDir = process.env.CLAUDE_CONFIG_DIR?.trim() || join(homedir(), '.claude')
       const events: ClaudeStructuredSessionEvent[] = []
-      const adapter = realAdapter(providerSessionId, claudeConfigDir, events)
+      const cwd = await projectWithStartHook('orca-effort-readback-', { effortLevel: 'low' })
+      const adapter = realAdapter(providerSessionId, claudeConfigDir, events, cwd)
 
       try {
         await adapter.acquire({
@@ -233,9 +251,10 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
         expect(published.filter((frame) => 'effortLevel' in frame)).toEqual([])
         // Goes red if `effective.effortLevel` is renamed or dropped, which no
         // fixture-backed test can see.
-        expect(options.current.effort).toEqual(expect.any(String))
+        expect(options.current.effort).toBe('low')
       } finally {
         await adapter.closeAll()
+        await rm(cwd, { recursive: true, force: true })
       }
     },
     15_000
@@ -347,7 +366,9 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
         expect(frames[0]?.model).toMatch(/^claude-haiku-/)
         await expect(
           adapter.readOptions({ sessionId: 'real-cli-handshake', fence: 1 })
-        ).resolves.toMatchObject({ current: { model: 'haiku' } })
+        ).resolves.toMatchObject({
+          current: { model: 'haiku', confirmed: expect.arrayContaining(['model']) }
+        })
       } finally {
         await adapter.closeAll()
       }
@@ -468,7 +489,7 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
           fence: 1
         })
         // Read as the write resolves: the CLI had not answered initialize, so nothing held it.
-        expect(dispatched).toEqual({ state: 'admitted' })
+        expect(dispatched).toMatchObject({ state: 'admitted' })
         const deadline = Date.now() + 90_000
         while (!messages().some((m) => m.type === 'result') && Date.now() < deadline) {
           await new Promise((resolve) => setTimeout(resolve, 250))
@@ -543,7 +564,7 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
         const first = events.length
         await expect(
           send('real-cli-stop-1', 'Count from 1 to 300, one number per line, and nothing else.')
-        ).resolves.toEqual({ state: 'admitted' })
+        ).resolves.toMatchObject({ state: 'admitted' })
         const startedBeforeStop = replyStarted(first)
 
         await expect(
@@ -559,7 +580,9 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
         expect(replyStarted(first)).toBe(false)
 
         const second = events.length
-        await expect(send('real-cli-stop-2', 'Reply with the single word ok.')).resolves.toEqual({
+        await expect(
+          send('real-cli-stop-2', 'Reply with the single word ok.')
+        ).resolves.toMatchObject({
           state: 'admitted'
         })
         await expect(result(second)).resolves.toMatchObject({ subtype: 'success' })
@@ -577,14 +600,7 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
     async () => {
       const providerSessionId = randomUUID()
       const claudeConfigDir = process.env.CLAUDE_CONFIG_DIR?.trim() || join(homedir(), '.claude')
-      const cwd = await mkdtemp(join(tmpdir(), 'orca-queued-stop-'))
-      await mkdir(join(cwd, '.claude'), { recursive: true })
-      await writeFile(
-        join(cwd, '.claude', 'settings.json'),
-        JSON.stringify({
-          hooks: { SessionStart: [{ hooks: [{ type: 'command', command: 'true' }] }] }
-        })
-      )
+      const cwd = await projectWithStartHook('orca-queued-stop-')
       const events: ClaudeStructuredSessionEvent[] = []
       const settlements: unknown[] = []
       const adapter = realAdapter(providerSessionId, claudeConfigDir, events, cwd, (settlement) =>
@@ -642,7 +658,9 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
           clientMessageId: 'real-cli-queued-stop-b',
           state: 'rejected',
           reason: 'provider_cancelled_before_start',
-          rejection: { kind: 'cancelled' }
+          rejection: { kind: 'cancelled' },
+          // Claude cancelled it unrun: a queued card's hand-off records that as proof.
+          unrun: true
         })
       } finally {
         await adapter.closeAll()
@@ -688,7 +706,7 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
             },
             fence: 1
           })
-        ).resolves.toEqual({ state: 'admitted' })
+        ).resolves.toMatchObject({ state: 'admitted' })
         await vi.waitFor(
           () => expect(frames()).toContainEqual(expect.objectContaining({ type: 'result' })),
           { timeout: 120_000, interval: 200 }

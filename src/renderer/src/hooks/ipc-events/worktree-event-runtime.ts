@@ -27,6 +27,10 @@ import {
   createWorktreeChangeRefreshQueue,
   type WorktreeChangeRefreshQueue
 } from '../worktree-change-refresh-queue'
+import {
+  selectDetectedWorktreesByRepo,
+  selectWorktreesByRepo
+} from '@/store/workspace-record-selectors'
 
 const WORKTREE_RENAME_PURGE_GRACE_MS = 20_000
 
@@ -37,13 +41,13 @@ function runtimeSortOrderFence(environmentId: string): string {
 const recentlyRenamedWorktreeIdExpiry = new Map<string, number>()
 
 function getAuthoritativeDetectedWorktreeIds(state: AppState, repoId: string): Set<string> | null {
-  const detected = state.detectedWorktreesByRepo[repoId]
+  const detected = selectDetectedWorktreesByRepo(state)[repoId]
   return detected?.authoritative === true
     ? new Set(detected.worktrees.map((worktree) => worktree.id))
     : null
 }
 function getVisibleWorktreeIdsForRepo(state: AppState, repoId: string): Set<string> {
-  return new Set((state.worktreesByRepo[repoId] ?? []).map((worktree) => worktree.id))
+  return new Set((selectWorktreesByRepo(state)[repoId] ?? []).map((worktree) => worktree.id))
 }
 
 type WorktreeEventActivationOptions = {

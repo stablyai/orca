@@ -16,7 +16,6 @@ import {
   NATIVE_CHAT_TOOL_ROW_VERB_COPY,
   nativeChatToolLineLabel
 } from '../../../src/shared/native-chat-tool-line-label'
-import { truncateToolDetail } from '../../../src/shared/native-chat-tool-summary'
 import {
   isToolCallBlock,
   type NativeChatToolCallBlock,
@@ -28,6 +27,7 @@ import { openExternalLink } from '../platform/external-link'
 import { colors } from '../theme/mobile-theme'
 import { highlightMobileCode } from './mobile-file-syntax'
 import { MobileNativeChatToolGlyph } from './MobileNativeChatToolIcon'
+import { MobileNativeChatToolOutput } from './MobileNativeChatFullContent'
 import { useMobileNativeChatOpenedDetail } from './mobile-native-chat-opened-detail'
 import { useMobileNativeChatDisclosure } from './mobile-native-chat-disclosure-store'
 import { toolStyles as styles, toolType } from './mobile-native-chat-tool-styles'
@@ -138,20 +138,12 @@ function ToolLineDetail({
         </MobileNativeChatOwnedScrollView>
       ) : null}
       {body ? (
-        <MobileNativeChatOwnedScrollView
-          rootIdentity={`${memberId ?? body?.callId ?? 'detail'}:output`}
-          positionKey={`${disclosureKey ?? body?.callId ?? 'detail'}:output`}
-          style={[styles.codeBox, styles.codeScroll]}
-          nestedScrollEnabled
-          keyboardShouldPersistTaps="handled"
-        >
-          <Text
-            selectable={INLINE_TEXT_SELECTION}
-            style={[styles.codeText, type, body.isError && styles.errorText]}
-          >
-            {truncateToolDetail(body.output)}
-          </Text>
-        </MobileNativeChatOwnedScrollView>
+        <MobileNativeChatToolOutput
+          body={body}
+          type={type}
+          rootIdentity={`${memberId ?? body.callId ?? 'detail'}:output`}
+          positionKey={`${disclosureKey ?? body.callId ?? 'detail'}:output`}
+        />
       ) : null}
     </View>
   )
@@ -163,23 +155,21 @@ export function MobileNativeChatToolLine({
   memberId,
   block,
   result,
-  defaultExpanded,
   disclosureKey,
   fontScale,
   onOpenFile
 }: {
-  /** Tags the line for the page's place-hold. */
+  /** Tags the line, so the page keeps the reader on it. */
   memberId?: string
   block: NativeChatToolCallBlock | NativeChatToolResultBlock
   /** This call's output, when the run paired one to it. */
   result?: NativeChatToolResultBlock
-  defaultExpanded: boolean
   /** Identity this line's open state is remembered under while it is unmounted. */
   disclosureKey?: string
   fontScale: number
   onOpenFile?: (path: string) => void
 }): React.JSX.Element {
-  const [expanded, setExpanded] = useMobileNativeChatDisclosure(disclosureKey, defaultExpanded)
+  const [expanded, setExpanded] = useMobileNativeChatDisclosure(disclosureKey, false)
   const call = isToolCallBlock(block) ? block : undefined
   const label = call ? nativeChatToolLineLabel(call, result) : null
   const body = call ? result : block.type === 'tool-result' ? block : undefined

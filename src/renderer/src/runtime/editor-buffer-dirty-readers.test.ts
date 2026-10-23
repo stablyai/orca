@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '../store'
 import type { AppState } from '../store/types'
 import { buildEditorSessionData } from '../lib/workspace-session'
@@ -6,20 +6,40 @@ import { sameOpenFiles } from './web-session-tabs-sync/state-equality-files'
 import { buildRuntimeMobileOpenFilesProjection } from './sync-runtime-graph/sync-projections'
 import { buildMobileSessionTabSnapshots } from './sync-runtime-graph/mobile-session-snapshots'
 import { makeState } from './sync-runtime-graph-test-harness'
-import { attachMobileMarkdownBridge } from './mobile-markdown-bridge'
-import {
-  cleanupMobileMarkdownBridgeHarness,
-  openMarkdownFile,
-  resetEditorState,
-  sendRequest,
-  setupWindow
-} from './mobile-markdown-bridge-test-harness'
+import type { Tab } from '../../../shared/tab-types'
 
 vi.mock('@/lib/connection-context', () => ({
   getConnectionIdForFile: () => null
 }))
 
 const FILE_ID = '/repo/README.md'
+
+function resetEditorState(): void {
+  useAppStore.setState({ openFiles: [], editorDrafts: {} })
+  const tab: Tab = {
+    id: 'tab-md',
+    entityId: FILE_ID,
+    groupId: 'group-1',
+    worktreeId: 'wt-1',
+    contentType: 'editor',
+    label: FILE_ID,
+    customLabel: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: 0
+  }
+  useAppStore.setState({ unifiedTabsByWorktree: { 'wt-1': [tab] } })
+}
+
+function openMarkdownFile(): void {
+  useAppStore.getState().openFile({
+    filePath: FILE_ID,
+    relativePath: 'README.md',
+    worktreeId: 'wt-1',
+    language: 'markdown',
+    mode: 'edit'
+  })
+}
 
 /** Dirties the tab through its buffer record and returns the store on either side. */
 function dirtyThroughRecord(): { before: AppState; after: AppState } {
@@ -34,10 +54,6 @@ describe('a dirty change on the buffer record reaches every openFiles reader', (
   beforeEach(() => {
     resetEditorState()
     openMarkdownFile()
-  })
-
-  afterEach(() => {
-    cleanupMobileMarkdownBridgeHarness()
   })
 
   it('web session tab sync sees the open files change', () => {
@@ -80,29 +96,5 @@ describe('a dirty change on the buffer record reaches every openFiles reader', (
     )
     expect(markdownTab(before)).toMatchObject({ isDirty: false })
     expect(markdownTab(after)).toMatchObject({ isDirty: true })
-  })
-
-  it('the mobile markdown bridge reports the tab dirty', async () => {
-    setupWindow({
-      readFile: vi.fn().mockResolvedValue({ content: 'disk', isBinary: false })
-    })
-    const detach = attachMobileMarkdownBridge()
-    dirtyThroughRecord()
-
-    try {
-      const response = await sendRequest({
-        id: 'read-dirty',
-        operation: 'read',
-        worktreeId: 'wt-1',
-        tabId: 'tab-md'
-      })
-
-      expect(response).toMatchObject({
-        ok: true,
-        result: { source: 'file', isDirty: true }
-      })
-    } finally {
-      detach()
-    }
   })
 })

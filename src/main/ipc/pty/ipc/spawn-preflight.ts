@@ -37,19 +37,7 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
     }
   }
   ctx.spawnTiming.mark('stable_adoption_setup')
-  ctx.preAdoptedStablePane =
-    ctx.earlyStablePaneOwner && ctx.earlyWorktreeId
-      ? await ctx.deps.adoptStablePane({
-          cols: args.cols,
-          rows: args.rows,
-          cwd: ctx.cwd,
-          connectionId: args.connectionId,
-          worktreeId: ctx.earlyWorktreeId,
-          tabId: ctx.earlyStablePaneOwner.tabId,
-          leafId: ctx.earlyStablePaneOwner.leafId,
-          ownsPaneSpawnReservation: true
-        })
-      : null
+  ctx.preAdoptedStablePane = null
   ctx.spawnTiming.mark('stable_adoption')
   if (ctx.earlyStablePaneOwner && !ctx.preAdoptedStablePane) {
     const admission = ctx.deps.assertWorkspaceAcceptsNewPty(args.worktreeId, args.sessionId)
@@ -93,16 +81,14 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
     shellOverride: args.shellOverride,
     plannedPty: ctx.paneAgentLaunch?.launchRuntime?.pty,
     projectRuntimeSource: { kind: 'sent', projectRuntime: args.projectRuntime },
-    // Why: reattach needs exact cwd, and successful stable-pane adoption needs no launch preflight.
-    missingCwdFallback:
-      !ctx.preAdoptedStablePane && !args.sessionId && args.cwdFallback === 'worktree'
-        ? { directoryExists: ctx.deps.localStartupCwdDirectoryExists }
-        : undefined,
+    preAdopted: ctx.preAdoptedStablePane !== null,
     getSettings: ctx.deps.getSettings,
     resolveStartupCwd: ctx.deps.resolvePtySpawnStartupCwd
   })
   ctx.cwd = target.cwd
   ctx.prevalidatedCwd = target.prevalidatedCwd
+  ctx.requestedCwd = target.requestedCwd
+  ctx.correctStartupCwd = target.correctStartupCwd
   ctx.startupCwdFallback = target.startupCwdFallback
   ctx.terminalRuntimeOptions = target.terminalRuntimeOptions
   ctx.expectedWslDistro = target.expectedWslDistro

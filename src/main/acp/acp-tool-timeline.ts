@@ -7,9 +7,10 @@ import {
   MAX_PROVIDER_TIMELINE_OPEN_ENTRIES
 } from '../native-chat/agent-session-timeline/provider-timeline-budget'
 import {
-  boundPayload,
   boundToolInput,
-  DEFAULT_JOURNAL_PAYLOAD_LIMITS
+  JOURNAL_RUNNING_PREVIEW_LIMITS,
+  journalPayload,
+  journalToolPayload
 } from '../native-chat/agent-session-journal/journal-payload-bounds'
 import type {
   ProviderTimelineEvent,
@@ -88,6 +89,24 @@ export class AcpToolTimeline {
   private readonly turns = new BoundedMap<string, string>({
     maxEntries: MAX_PROVIDER_TIMELINE_OPEN_ENTRIES
   })
+  // One latest snapshot per live call; the closing event takes ownership. Bytes are a ledger,
+  // not an RSS ceiling: provider frame limits and the live-entry count bound this finite carry.
+  private readonly whole = new BoundedMap<
+    string,
+    {
+      input?: unknown
+      output?: string
+      inputBytes: number
+      outputBytes: number
+    }
+  >({
+    maxEntries: MAX_PROVIDER_TIMELINE_OPEN_ENTRIES,
+    sizeOf: (value, key) => value.inputBytes + value.outputBytes + Buffer.byteLength(key) + 64
+  })
+
+  get retainedToolBytes(): number {
+    return this.whole.retainedBytes
+  }
 
   translate(
     raw: ToolCallUpdate,
@@ -96,7 +115,10 @@ export class AcpToolTimeline {
   ): ProviderTimelineEvent[] {
     const update = dialect.normalizeToolUpdate?.(raw) ?? raw
     const previous = this.tools.get(update.toolCallId)
-    const output = outputText(update)
+    const held = this.whole.get(update.toolCallId)
+    const input = update.rawInput === undefined ? held?.input : update.rawInput
+    const suppliedOutput = outputText(update)
+    const output = suppliedOutput ?? held?.output
     const exitCode = rawExitCodeSchema.safeParse(update.rawOutput).data?.exitCode
     const state =
       update.status === 'completed'
@@ -106,6 +128,29 @@ export class AcpToolTimeline {
           : update.status === 'pending' || update.status === 'in_progress'
             ? 'running'
             : (previous?.body.state ?? 'running')
+    if (state === 'running') {
+      if (!held && this.whole.size >= MAX_PROVIDER_TIMELINE_OPEN_ENTRIES) {
+        throw new Error('ACP tool stream capacity exceeded')
+      }
+      if (
+        !this.whole.set(update.toolCallId, {
+          input,
+          output,
+          inputBytes:
+            update.rawInput === undefined
+              ? (held?.inputBytes ?? 0)
+              : Buffer.byteLength(JSON.stringify(input) ?? ''),
+          outputBytes:
+            suppliedOutput === undefined
+              ? (held?.outputBytes ?? 0)
+              : Buffer.byteLength(JSON.stringify(output) ?? '')
+        })
+      ) {
+        throw new Error('ACP tool snapshot could not be retained')
+      }
+    } else {
+      this.whole.delete(update.toolCallId)
+    }
     const body: AgentJournalToolCallItem = {
       kind: 'tool-call',
       callId: update.toolCallId,
@@ -117,16 +162,25 @@ export class AcpToolTimeline {
         update.kind ??
         'tool',
       input:
-        update.rawInput === undefined
+        input === undefined
           ? (previous?.body.input ?? null)
-          : boundToolInput(update.rawInput, DEFAULT_JOURNAL_PAYLOAD_LIMITS),
+          : state === 'running'
+            ? update.rawInput === undefined && previous
+              ? previous.body.input
+              : boundToolInput(input, JOURNAL_RUNNING_PREVIEW_LIMITS)
+            : input,
       state,
       ...(exitCode === undefined ? {} : { exitCode }),
       ...(output === undefined
         ? previous?.body.output
           ? { output: previous.body.output }
           : {}
-        : { output: boundPayload(output, DEFAULT_JOURNAL_PAYLOAD_LIMITS) })
+        : {
+            output:
+              state === 'running' && suppliedOutput === undefined && previous?.body.output
+                ? previous.body.output
+                : journalToolPayload(output, state === 'running')
+          })
     }
     const turn = join.turn ?? this.turn(update.toolCallId)
     this.turns.delete(update.toolCallId)
@@ -147,9 +201,8 @@ export class AcpToolTimeline {
           body: {
             kind: 'diff',
             path: content.path,
-            patch: boundPayload(
-              boundedDiffPatch(content.path, content.oldText ?? '', content.newText),
-              DEFAULT_JOURNAL_PAYLOAD_LIMITS
+            patch: journalPayload(
+              boundedDiffPatch(content.path, content.oldText ?? '', content.newText)
             )
           },
           join
@@ -175,6 +228,7 @@ export class AcpToolTimeline {
       if (snapshot.turn === turn) {
         this.bytes -= this.size(key, snapshot)
         this.retire(key, snapshot)
+        this.whole.delete(key)
       }
     }
   }

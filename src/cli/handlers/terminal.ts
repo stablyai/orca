@@ -38,7 +38,10 @@ import {
   isSupportedWindowsShellOverride,
   listSupportedWindowsShellOverrides
 } from '../../shared/windows-terminal-shell'
-import { TERMINAL_CREATE_SHELL_SELECTION_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import {
+  TERMINAL_CREATE_SHELL_SELECTION_RUNTIME_CAPABILITY,
+  TERMINAL_SPLIT_RETRY_RUNTIME_CAPABILITY
+} from '../../shared/protocol-version'
 import {
   getBrowserWorktreeSelector,
   getOptionalWorktreeSelector,
@@ -230,10 +233,35 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
     ) {
       throw new RuntimeClientError('invalid_argument', '--direction must be horizontal or vertical')
     }
+    // A blank id (an unset variable) must not fall through to a fresh split of the same command.
+    const retrySplit = flags.has('retry-split')
+      ? getRequiredStringFlag(flags, 'retry-split')
+      : undefined
+    // Why refused rather than sent: an older host strips the unknown param and splits again,
+    // starting a second copy of the command the retry exists to avoid.
+    if (retrySplit !== undefined) {
+      const status = await client.getCliStatus()
+      if (!status.result.runtime.reachable) {
+        throw new RuntimeClientError(
+          'runtime_unavailable',
+          'Orca could not verify --retry-split support on the execution host, so nothing was split. Wait for the execution host to become reachable and retry.'
+        )
+      }
+      if (
+        status.result.runtime.capabilities?.includes(TERMINAL_SPLIT_RETRY_RUNTIME_CAPABILITY) !==
+        true
+      ) {
+        throw new RuntimeClientError(
+          'incompatible_runtime',
+          'This Orca host does not support --retry-split and would split again. Nothing was split; check `orca terminal list --json` for the pane instead.'
+        )
+      }
+    }
     const result = await client.call<{ split: RuntimeTerminalSplit }>('terminal.split', {
       terminal: await getTerminalHandle(flags, cwd, client),
       direction: directionFlag,
-      command: getOptionalStringFlag(flags, 'command')
+      command: getOptionalStringFlag(flags, 'command'),
+      ...(retrySplit !== undefined ? { retrySplit } : {})
     })
     printResult(result, json, formatTerminalSplit)
   }

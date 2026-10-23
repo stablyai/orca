@@ -2,10 +2,9 @@
  * Which hosts the orcad launch/lifecycle path actually supports, declared rather than
  * discovered at runtime.
  *
- * The install transaction is host-agnostic — it is the relay's, and the relay runs on
- * Windows. Every managed-orcad operation runs on Windows through the host script
- * (`orcad-windows-host-script.ts`); the guard below remains only on POSIX command builders
- * that the Windows paths never call.
+ * The install transaction is host-agnostic. Every managed-orcad operation runs on Windows
+ * through the host script (`orcad-windows-host-script.ts`); the guard below remains only on
+ * POSIX command builders that the Windows paths never call.
  */
 import { isWindowsRemoteHost, type RemoteHostPlatform } from '../../ssh/ssh-remote-platform'
 

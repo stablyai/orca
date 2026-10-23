@@ -118,6 +118,8 @@ export type AiVaultSession = {
   sessionId: string
   title: string
   cwd: string | null
+  /** The host's spellings of `cwd` under a symlinked scope path. Scope matching only; resume reads `cwd`. */
+  cwdAliases?: string[]
   branch: string | null
   model: string | null
   filePath: string

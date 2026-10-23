@@ -1,3 +1,4 @@
+import { refreshStructuredAgentSessionCommands } from './structured-agent-session-command-refresh'
 import { useMemo, useRef } from 'react'
 import { useStructuredAgentSessionSendOptions } from './use-structured-agent-session-send-options'
 import { useStructuredAgentSessionSends } from './use-structured-agent-session-sends'
@@ -11,6 +12,7 @@ import { useStructuredLegacyLaunchStop } from '@/lib/structured-agent-session-le
 import {
   useStructuredAgentSessionHostQueuesCommands,
   useStructuredAgentSessionHostEditsQueuedMessages,
+  useStructuredAgentSessionHostEditsQueuedImages,
   useStructuredAgentSessionHostQueuesMessagesState
 } from '@/runtime/structured-agent-session-host-capability'
 import { structuredAgentSessionStopControl } from './structured-agent-session-stop-control'
@@ -231,9 +233,10 @@ export function useStructuredAgentSession(args: {
     transportState.submissions
   )
   const editCapable = useStructuredAgentSessionHostEditsQueuedMessages(target)
+  const imagesCapable = useStructuredAgentSessionHostEditsQueuedImages(target)
   const editTransport = useMemo(
-    () => ({ target, sessionId, capable: editCapable, write }),
-    [editCapable, sessionId, target, write]
+    () => ({ target, sessionId, capable: editCapable, imagesCapable, write }),
+    [editCapable, imagesCapable, sessionId, target, write]
   )
   const queuedController = useStructuredAgentSessionQueuedMessages({
     // Its published list, pause and submissions; the rest is named below.
@@ -305,20 +308,14 @@ export function useStructuredAgentSession(args: {
       ...legacyLaunchStop,
       host: stopControl,
       transportState,
-      sends: {
-        sending,
-        stopSends: sends.stopSends
-      }
+      sends: { sending, stopSends: sends.stopSends }
     }),
     stopPressed: stopControl.pressed,
     queuedMessages: queuedController,
     /** A send made now while the agent works is held as a queued card: the host queues, and this
      *  send asks it to (the setting is on and no pending prompt blocks the queue). */
     sendsQueue: structuredAgentSessionNewSendsQueue(queue),
-    cancel: (
-      turnId: string | undefined,
-      prompt?: Parameters<typeof cancelStructuredAgentSessionPrompt>[3]
-    ) => cancelStructuredAgentSessionPrompt(target, mutate, turnId, prompt),
+    cancel: cancelStructuredAgentSessionPrompt.bind(null, target, mutate),
     stopBackgroundTask: (taskId?: string) =>
       mutate<AgentSessionCancelResult>('agentSession.cancel', 'agentSession.cancel', {
         turnId: 'background-tasks',
@@ -330,6 +327,7 @@ export function useStructuredAgentSession(args: {
     optionSnapshot,
     optionSurface,
     sessionCommands: transportEnabled ? (state.commands ?? undefined) : undefined,
+    refreshCommands: () => refreshStructuredAgentSessionCommands(target, sessionId),
     setStructuredOption,
     /** Why the host's catalog probe says no chat can start here; the chat shows it as a notice. */
     unavailable,

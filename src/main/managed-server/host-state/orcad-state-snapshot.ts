@@ -198,7 +198,7 @@ export function captureOrcadStateSnapshotCommand(
   )
 }
 
-export type OrcadSnapshotCapture = 'captured' | 'empty' | 'failed'
+type OrcadSnapshotCapture = 'captured' | 'empty' | 'failed'
 
 /**
  * The last line that is one of `verdicts`. Why not simply the last line: a gateway that merges
@@ -232,7 +232,7 @@ export function probeOrcadStateSnapshotCommand(
   return `test -f ${archive} && echo PRESENT || echo ABSENT`
 }
 
-export type OrcadSnapshotPresence = 'present' | 'absent' | 'unverifiable'
+type OrcadSnapshotPresence = 'present' | 'absent' | 'unverifiable'
 
 /** A lost probe is `unverifiable`, never `absent`. */
 export function parseOrcadSnapshotPresence(output: string): OrcadSnapshotPresence {
@@ -314,7 +314,7 @@ function removeMembersCommand(members: string): string {
   return `[ -n "$ok" ] && for m in ${members}; do rm -rf "$root/$m" || { ok=; break; }; done;`
 }
 
-export type OrcadSnapshotRestore = 'restored' | 'missing' | 'failed'
+type OrcadSnapshotRestore = 'restored' | 'missing' | 'failed'
 
 export function parseOrcadSnapshotRestore(output: string): OrcadSnapshotRestore {
   const value = lastVerdict(output, ['RESTORED', 'MISSING', 'FAILED'])

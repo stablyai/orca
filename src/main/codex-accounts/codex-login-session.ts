@@ -8,6 +8,7 @@ import { resolveCodexCommand } from '../codex-cli/command'
 import { getSpawnArgsForWindows } from '../win32-utils'
 import { runWslProcess } from '../wsl/wsl-runner'
 import { parseCodexLoginAuthUrl } from './codex-login-auth-url'
+import { DEVICE_AUTH_TIMEOUT_MS, parseCodexDeviceAuthPrompt } from './codex-device-auth-prompt'
 import { loginAuthChanged, readLoginAuthSnapshot } from './codex-login-auth-snapshot'
 import {
   buildWslCodexAvailabilityScript,
@@ -61,6 +62,8 @@ type CodexLoginSessionDependencies = {
   onAuthUrl: (url: string) => void
   /** Opens a WSL login's link on this computer; absent where Orca cannot open one. */
   openWslAuthUrl?: ((url: string) => void) | null
+  /** Runs `codex login --device-auth` on a Linux/macOS host for a person on another device. */
+  deviceAuth?: { onPrompt: (prompt: { url: string; userCode: string }) => void }
 }
 
 type LoginCancellation = {
@@ -100,6 +103,8 @@ async function runCodexLoginProcess(
   cancellation: LoginCancellation
 ): Promise<void> {
   const wslInfo = parseWslUncPath(managedHomePath)
+  const deviceAuth = dependencies.deviceAuth ?? null
+  const loginTimeoutMs = deviceAuth ? DEVICE_AUTH_TIMEOUT_MS : LOGIN_TIMEOUT_MS
   if (wslInfo) {
     await assertWslCodexCliAvailable(wslInfo)
   }
@@ -130,7 +135,7 @@ async function runCodexLoginProcess(
           codexCommand: 'codex',
           interactiveLogin: null
         }
-      : createHostLoginSpawn(managedHomePath)
+      : createHostLoginSpawn(managedHomePath, deviceAuth !== null)
     const child = dependencies.spawn({
       command: spawnConfig.command,
       args: spawnConfig.args,
@@ -158,6 +163,14 @@ async function runCodexLoginProcess(
         return
       }
       stdoutText = `${stdoutText}${chunk.toString()}`.slice(-MAX_LOGIN_OUTPUT_CHARS)
+      if (deviceAuth) {
+        const prompt = parseCodexDeviceAuthPrompt(stdoutText)
+        if (prompt) {
+          publishedAuthUrl = true
+          deviceAuth.onPrompt(prompt)
+        }
+        return
+      }
       const authUrl = parseCodexLoginAuthUrl(stdoutText)
       if (authUrl) {
         publishedAuthUrl = true
@@ -222,7 +235,7 @@ async function runCodexLoginProcess(
     timeout = setTimeout(() => {
       dependencies.killProcessTree(child, spawnConfig.interactiveLogin)
       settle(() => rejectPromise(timeoutError))
-    }, LOGIN_TIMEOUT_MS)
+    }, loginTimeoutMs)
 
     // Why: on Windows the codex login CLI can linger after writing auth.json,
     // and its open handles on the managed home (log/codex-login.log) make the
@@ -293,7 +306,10 @@ async function runCodexLoginProcess(
   })
 }
 
-function createHostLoginSpawn(managedHomePath: string): {
+function createHostLoginSpawn(
+  managedHomePath: string,
+  deviceAuth: boolean
+): {
   command: string
   args: string[]
   env: NodeJS.ProcessEnv
@@ -301,15 +317,16 @@ function createHostLoginSpawn(managedHomePath: string): {
   interactiveLogin: WindowsHostInteractiveLoginSpawn | null
 } {
   const codexCommand = resolveCodexCommand()
+  const loginArgs = deviceAuth ? ['login', '--device-auth'] : ['login']
   // Why: Windows host login needs a real console; otherwise inherit/hide
   // leaves the child unable to read a paste-code / device-auth prompt.
   const interactiveLogin =
     process.platform === 'win32'
-      ? buildWindowsHostInteractiveLoginSpawn(codexCommand, ['login'])
+      ? buildWindowsHostInteractiveLoginSpawn(codexCommand, loginArgs)
       : null
   const { spawnCmd, spawnArgs } = interactiveLogin
     ? { spawnCmd: interactiveLogin.command, spawnArgs: interactiveLogin.args }
-    : getSpawnArgsForWindows(codexCommand, ['login'])
+    : getSpawnArgsForWindows(codexCommand, loginArgs)
   return {
     command: spawnCmd,
     args: spawnArgs,

@@ -2,12 +2,15 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { translate } from '@/i18n/i18n'
-import { resolveWorktreeOperationRouteForHost } from '@/lib/worktree-operation-route'
+import {
+  resolveWorktreeOperationRoute,
+  resolveWorktreeOperationRouteForHost
+} from '@/lib/worktree-operation-route'
 import type { WorktreeRemovalTarget } from '../../../../shared/worktree/removal'
 import { showDeleteWorktreeFailureToast } from './delete-worktree-failure-toast'
 import type { WorktreeDeleteWithToastOptions } from './worktree-delete-request'
 import { getDeleteStateForWorktreeHost } from './worktree-delete-state-host-match'
-import { resolveWriteRoute } from '@/lib/resolve-owner'
+import { blockRemovalForUnsavedFiles } from './removal-unsaved-files'
 
 // A failed delete usually means unresolved changes, so land on the diff panel.
 function viewWorktreeDiff(
@@ -35,7 +38,8 @@ export function runWorktreeDeleteWithToast(
 
   const removeOptions = {
     ...(options.suppressPreservedBranchToast ? { suppressPreservedBranchToast: true } : {}),
-    ...(options.snapshotPruneBatchId ? { snapshotPruneBatchId: options.snapshotPruneBatchId } : {})
+    ...(options.snapshotPruneBatchId ? { snapshotPruneBatchId: options.snapshotPruneBatchId } : {}),
+    ...(options.confirmedDiscards ? { confirmedDiscards: options.confirmedDiscards } : {})
   }
   const showFailureToast = (
     error: string,
@@ -44,7 +48,7 @@ export function runWorktreeDeleteWithToast(
     const currentState = useAppStore.getState()
     const route = target.executionHostId
       ? resolveWorktreeOperationRouteForHost(currentState, worktreeId, target.executionHostId)
-      : resolveWriteRoute(currentState, worktreeId)
+      : resolveWorktreeOperationRoute(currentState, worktreeId)
     const hasKnownChanges =
       (useAppStore.getState().gitStatusByWorktree[worktreeId]?.length ?? 0) > 0
     showDeleteWorktreeFailureToast({
@@ -120,6 +124,16 @@ export function runWorktreeDeleteWithToast(
           ),
         { description, ...viewAction }
       )
+    }
+    // Why: edits made since the first attempt would close unlisted; refuse until saved or closed.
+    if (
+      blockRemovalForUnsavedFiles(
+        useAppStore.getState,
+        [{ id: worktreeId, hostId: target.executionHostId ?? undefined }],
+        worktreeName
+      )
+    ) {
+      return
     }
     useAppStore
       .getState()

@@ -39,6 +39,7 @@ import { resolveBaselineReleaseRef } from './release-checkout'
 import {
   callBuild,
   expectDeclaredSurfaceExecutes,
+  expectItemDetailNegotiation,
   runtimeStub
 } from './structured-agent-session-surface-execution'
 import {
@@ -300,6 +301,7 @@ describe('cross-version structured agent sessions', () => {
           build.capabilities.includes(AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY)
         ).toBe(build.methodNames.includes(CONVERSATION_OUTLINE_METHOD))
       }
+      expectItemDetailNegotiation([current, baseline])
       // Additive surface: bumping the protocol number would strand every paired
       // device on this release rather than degrade one feature.
       expect(current.protocolVersion).toBe(baseline.protocolVersion)
@@ -558,32 +560,28 @@ describe('cross-version structured agent sessions', () => {
     })
 
     it('hides the row from the old client and annotates it for a capable client', async () => {
-      const oldReply = (
-        await callBuild(
-          current,
-          'aiVault.listSessions',
-          {},
-          {
-            clientKind: 'runtime',
-            clientCapabilities: legacyClientCapabilities()
-          },
-          runtime
-        )
-      )[0]
+      const [oldReply] = await callBuild(
+        current,
+        'aiVault.listSessions',
+        {},
+        {
+          clientKind: 'runtime',
+          clientCapabilities: legacyClientCapabilities()
+        },
+        runtime
+      )
       expect(oldReply).toMatchObject({ ok: true, result: { sessions: [] } })
 
-      const capableReply = (
-        await callBuild(
-          current,
-          'aiVault.listSessions',
-          {},
-          {
-            clientKind: 'runtime',
-            clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
-          },
-          runtime
-        )
-      )[0]
+      const [capableReply] = await callBuild(
+        current,
+        'aiVault.listSessions',
+        {},
+        {
+          clientKind: 'runtime',
+          clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
+        },
+        runtime
+      )
       expect(capableReply).toMatchObject({
         ok: true,
         result: {

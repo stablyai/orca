@@ -2,9 +2,8 @@ import type { RuntimeEnvironmentStatus, RuntimeHostBlockedReason } from './runti
 import {
   LOCAL_EXECUTION_HOST_ID,
   getLocalExecutionHostLabel,
-  getRepoExecutionHostId,
   getSettingsFocusedExecutionHostId,
-  getSshTargetIdForExecutionHost,
+  getRepoDialableSshTargetId,
   isOwnedSshTargetId,
   normalizeHostPart,
   parseExecutionHostId,
@@ -274,7 +273,7 @@ export function buildExecutionHostRegistry(args: {
     for (const repo of args.repos) {
       // Why the host, not `connectionId`: a paired-server repo's `connectionId` is the server's
       // own SSH target, which this client cannot dial.
-      const targetId = getSshTargetIdForExecutionHost(getRepoExecutionHostId(repo))
+      const targetId = getRepoDialableSshTargetId(repo)
       if (targetId && !isOwnedSshTargetId(targetId)) {
         sshTargetIds.add(targetId)
       }

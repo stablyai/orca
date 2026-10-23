@@ -1,3 +1,5 @@
+import { adoptMaterializedRuntimePtySpawn } from './spawn-early'
+import { createRuntimePtySpawnState } from './spawn-state'
 import { localProvider } from '../provider/registry'
 import {
   getLocalAutomaticWorkStatus,
@@ -47,7 +49,15 @@ export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): voi
       const ownerKey = makePaneSpawnReservationKey(args.worktreeId, args.connectionId, paneKey)
       return ownerKey ? claimRuntimePaneCreate(ownerKey) : () => {}
     },
-    adoptStablePane,
+    adoptStablePane: async (args) => {
+      const adopted = await adoptStablePane(args)
+      if (adopted) {
+        await adoptMaterializedRuntimePtySpawn(
+          createRuntimePtySpawnState(deps, { ...args, adoptedStablePane: adopted })
+        )
+      }
+      return adopted
+    },
     spawn: async (args) => spawnPtyFromRuntimeController(deps, args),
     // Why the local owner only: an SSH host's gate belongs to that host's own runtime.
     getAutomaticWorkStatus: () => getLocalAutomaticWorkStatus(localProvider),

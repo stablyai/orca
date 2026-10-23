@@ -58,7 +58,7 @@ import {
 import {
   ASSIGNMENT_CONNECTION_HEADROOM_QUERY
 } from './assignment-connection-headroom-query.js'
-import { AssignmentIdentityQueue } from './assignment-identity-queue.js'
+import { AssignmentIdentityQueue } from './assignment/assignment-identity-queue.js'
 import {
   CONTROL_RENEWAL_BATCH_SQL,
   CONTROL_RENEWAL_STATEMENT_OUTCOMES,

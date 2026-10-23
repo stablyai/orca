@@ -5,6 +5,7 @@ import {
   removeStaleDurableWriteTempFiles,
   writeFileDurable
 } from '../durable-file-write'
+import { hasErrorCode } from '../daemon/daemon-process-inspection'
 
 /**
  * One file per distro under `<userData>/wsl-distro-holders/`. Survives a full Orca quit on
@@ -85,7 +86,7 @@ export async function readWslDistroHolderRecord(
   try {
     text = await readFile(recordPath(userDataPath, distro), 'utf8')
   } catch (error) {
-    return isMissingFileError(error) ? { status: 'absent' } : { status: 'unreadable' }
+    return hasErrorCode(error, 'ENOENT') ? { status: 'absent' } : { status: 'unreadable' }
   }
   const record = parseWslDistroHolderRecord(text)
   if (!record || wslDistroHolderKey(record.distro) !== wslDistroHolderKey(distro)) {
@@ -120,7 +121,7 @@ export async function listWslDistroHolderRecordDistros(userDataPath: string): Pr
   try {
     entries = await readdir(directory)
   } catch (error) {
-    if (isMissingFileError(error)) {
+    if (hasErrorCode(error, 'ENOENT')) {
       return []
     }
     throw error
@@ -142,8 +143,4 @@ export async function listWslDistroHolderRecordDistros(userDataPath: string): Pr
     }
   }
   return distros
-}
-
-function isMissingFileError(error: unknown): boolean {
-  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT'
 }

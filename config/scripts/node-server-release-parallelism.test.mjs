@@ -29,7 +29,7 @@ it.each([
   { qualification: 'false', producer: 'skipped', draft: true, expected: false },
   { producer: 'success', event: 'workflow_dispatch', expected: true },
   { producer: 'success', event: 'schedule', expected: true }
-])('preserves mobile producer failure and test-only behavior: %j', (scenario) => {
+])('gates qualification on the bundle while retaining test-only behavior: %j', (scenario) => {
   const ctx = context(scenario)
   expect(persistence.needs).toEqual(['changes', 'mobile_web_bundle'])
   expect(shouldPersist(ctx).coerceString()).toBe(String(scenario.expected))
@@ -73,28 +73,23 @@ it('starts independent Linux qualification without waiting for another platform'
   }
 })
 
-it('requires every platform and compatibility result before publishing a desktop template', () => {
+it('prepares template dependencies before waiting for every qualification lane', () => {
   const template = workflow.jobs.desktop_template
-  const required = [
-    'persistence',
-    'mobile_web_bundle',
-    'linux_glibc_floor',
-    'linux_glibc217_compat',
-    'linux_musl'
-  ]
-  expect(template.needs).toEqual(required)
-  const evaluate = compileAggregateExpression(template.if, ['needs', 'inputs'])
-  const needs = Object.fromEntries(required.map((name) => [name, { result: 'success' }]))
-  const ctx = { needs, inputs: { build_template: true } }
-  expect(evaluate(ctx).coerceString()).toBe('true')
-  expect(evaluate(ctx, true).coerceString()).toBe('false')
-  for (const name of required) {
-    for (const result of ['failure', 'cancelled', 'skipped']) {
-      expect(evaluate({ ...ctx, needs: { ...needs, [name]: { result } } }).coerceString()).toBe(
-        'false'
-      )
-    }
-  }
+  expect(template.needs).toBe('changes')
+  expect(template.permissions).toEqual({ contents: 'read', actions: 'read' })
+  const evaluate = compileAggregateExpression(template.if, ['inputs'])
+  expect(evaluate({ inputs: { build_template: true } }).coerceString()).toBe('true')
+  expect(evaluate({ inputs: { build_template: false } }).coerceString()).toBe('false')
+  expect(evaluate({ inputs: { build_template: true } }, true).coerceString()).toBe('false')
+  const wait = template.steps.findIndex(
+    (step) => step.name === 'Wait for every template qualification lane'
+  )
+  expect(
+    template.steps.findIndex((step) => step.uses?.includes('install-node-dependencies'))
+  ).toBeLessThan(wait)
+  expect(
+    template.steps.findIndex((step) => step.name === "Collect every lane's slot")
+  ).toBeGreaterThan(wait)
 })
 
 it('avoids template download-cache transfers while retaining native and verification caches', () => {
@@ -106,8 +101,59 @@ it('avoids template download-cache transfers while retaining native and verifica
   for (const os of ['Linux', 'macOS', 'Windows']) {
     for (const buildTemplate of [true, false]) {
       expect(
-        runInNewContext(source, { inputs: { build_template: buildTemplate }, runner: { os } })
+        runInNewContext(source, {
+          inputs: { build_template: buildTemplate, fast_runners: false },
+          matrix: { os: '' },
+          runner: { os }
+        })
       ).toBe(!buildTemplate && os !== 'Windows')
     }
   }
+})
+
+it.each(['persistence', 'linux_glibc_floor', 'linux_musl'])(
+  '%s waits through the dependency graph without polling the Actions API',
+  (name) => {
+    const job = workflow.jobs[name]
+    expect(job.needs).toEqual(['changes', 'mobile_web_bundle'])
+    expect(job.steps.some((step) => step.uses?.includes('github-script'))).toBe(false)
+    const evaluate = compileAggregateExpression(job.if, ['needs', 'github', 'inputs'])
+    for (const producer of ['success', 'failure', 'cancelled', 'skipped', 'timed_out']) {
+      const ctx = {
+        ...context({ qualification: 'true', producer }),
+        inputs: { build_template: true }
+      }
+      expect(evaluate(ctx).coerceString()).toBe(String(producer === 'success'))
+    }
+  }
+)
+
+it('prepares every native lane and builds with the shared page', () => {
+  for (const name of ['persistence', 'linux_glibc_floor', 'linux_musl']) {
+    const job = workflow.jobs[name]
+    const download = job.steps.findIndex((step) => step.with?.name === 'orcad-mobile-web-bundle')
+    const prepare = job.steps.findIndex(
+      (step) =>
+        step.uses?.includes('prepare-orcad-prebuilds') ||
+        step.run?.includes('pnpm build:orcad-prebuilds')
+    )
+    expect(job.needs).toEqual(['changes', 'mobile_web_bundle'])
+    expect(prepare).toBeGreaterThan(-1)
+    expect(prepare).toBeLessThan(download)
+    expect(job.permissions).toEqual({ contents: 'read' })
+  }
+  const alpine = workflow.jobs.linux_musl.steps
+  const prepare = alpine.find((step) => step.name === 'Prepare native Alpine artifact')
+  const verify = alpine.find(
+    (step) => step.name === 'Verify native Alpine artifact and persistence'
+  )
+  const cleanup = alpine.find((step) => step.name === 'Clean up the Alpine qualification container')
+  expect(prepare.run).toContain('mkdir -p out/mobile-web')
+  expect(prepare.run).toContain('--detach --name orcad-alpine')
+  expect(prepare.run).toContain('docker exec -i orcad-alpine')
+  expect(prepare.run).not.toContain('pnpm build:orcad\n')
+  expect(verify.run).toContain('docker exec -i orcad-alpine')
+  expect(verify.run).toContain('pnpm build:orcad\n')
+  expect(verify.run).toContain('pnpm test:node-server --artifact')
+  expect(cleanup.if).toBe('always()')
 })

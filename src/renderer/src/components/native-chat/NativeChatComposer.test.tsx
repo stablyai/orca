@@ -295,7 +295,7 @@ describe('NativeChatComposer', () => {
       subscribe: () => () => {}
     } satisfies SessionOptionsSurface
     const optionSnapshot = [{ id: 'model' }] as SessionOptionDescriptor[]
-    render(
+    const composer = (sessionPending = false) => (
       <NativeChatComposer
         terminalTabId="tab-1"
         paneKey="tab-1:structured"
@@ -307,15 +307,21 @@ describe('NativeChatComposer', () => {
           optionsSurface,
           optionSnapshot,
           onError: vi.fn(),
-          runtime: 'local',
+          runtime: 'remote',
           sessionId: 'session-test',
-          runtimeEnvironmentId: null
+          runtimeEnvironmentId: 'paired-host',
+          sessionPending
         }}
       />
     )
+    const { rerender } = render(composer())
 
     expect(mocks.fieldProps?.sessionOptionsSurface).toBe(optionsSurface)
     expect(mocks.fieldProps?.sessionOptionsSnapshot).toBe(optionSnapshot)
+    expect(mocks.fieldProps?.attachDisabled).toBe(false)
+    rerender(composer(true))
+    expect(mocks.fieldProps?.attachDisabled).toBe(true)
+    rerender(composer())
     expect(mocks.fieldProps?.attachDisabled).toBe(false)
     await act(async () => mocks.fieldProps?.onSend?.())
 

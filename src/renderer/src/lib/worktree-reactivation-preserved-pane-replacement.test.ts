@@ -7,11 +7,18 @@ import { waitForWorktreeAgentActivationGateForTests } from './worktree-agent-act
 import { makeCreatedAgentWorktree as makeWorktree } from '@/lib/worktree-activation-created-agent.test-fixture'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from './worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from './worktree-runtime-owner'
 import {
   markHostSessionMirrorHydrated,
   resetHostSessionMirrorHydrationForTests
 } from '@/runtime/host-session-mirror-hydration'
+
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
 
 // Pins the activation contract behind the run6-review-pr-11959 incident shape:
 // a persisted (husk) tab whose pane cannot resume in place gets ONE appended
@@ -324,9 +331,9 @@ describe('preserved-pane replacement contract on workspace activation', () => {
       }
     }))
 
-    expect(
-      runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(useAppStore.getState(), worktree.id)
-    ).toBe(RUNTIME_ENV_ID)
+    expect(runtimeEnvironmentIdOrLocalUnlessTwin(useAppStore.getState(), worktree.id)).toBe(
+      RUNTIME_ENV_ID
+    )
 
     activateAndRevealWorktree(worktree.id, { notifyHostRuntime: false })
     await waitForWorktreeAgentActivationGateForTests(worktree.id)

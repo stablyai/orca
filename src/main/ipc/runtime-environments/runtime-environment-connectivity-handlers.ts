@@ -21,9 +21,9 @@ import type { Store } from '../../persistence'
 import { retireRemovedRuntimeEnvironment } from './runtime-environment-removal-cleanup'
 import { readSettingsWithRuntimeEnvironmentPreference } from './runtime-environment-preference'
 import { verifyAndAddRuntimeEnvironmentFromPairingCode } from './runtime-environment-pairing-verification'
+import { publishVerifiedPairing } from './runtime-environment-verified-pairing-publish'
 import {
   closeRemoteRuntimeRequestConnection,
-  getRuntimeEnvironmentStatusOwner,
   getRuntimeEnvironmentStatusSnapshots,
   retryRemoteRuntimeSharedControlConnectionNow
 } from './runtime-environment-request-connections'
@@ -92,6 +92,7 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
       _event,
       args: { name: string; pairingCode: string }
     ): { environment: PublicKnownRuntimeEnvironment } => {
+      // Why refuse, not refresh: nothing here proves the code works before it would replace one that does.
       const environment = addEnvironmentFromPairingCode(getUserDataPath(), args)
       clearRuntimeEnvironmentManualDisconnect(environment.id)
       return { environment: redactRuntimeEnvironment(environment) }
@@ -102,13 +103,11 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
     async (_event, args: { name: string; pairingCode: string; allowLoopback?: boolean }) => {
       const result = await verifyAndAddRuntimeEnvironmentFromPairingCode(getUserDataPath(), args)
       if (result.ok) {
-        clearRuntimeEnvironmentManualDisconnect(result.environment.id)
-        getRuntimeEnvironmentStatusOwner(getUserDataPath(), result.environment.id).acceptVerified({
-          id: 'status.get',
-          ok: true,
-          result: result.runtimeStatus,
-          _meta: { runtimeId: result.runtimeStatus.runtimeId }
-        })
+        await publishVerifiedPairing(
+          getUserDataPath(),
+          result,
+          result.updatedExisting ? { invalidateTransport } : null
+        )
       }
       return result
     }
@@ -127,7 +126,7 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
       const environment = resolveEnvironment(getUserDataPath(), args.selector)
       if (store.getSettings().activeRuntimeEnvironmentId === environment.id) {
         throw new Error(
-          'This server is the default host for new projects. Choose another one in Advanced before removing it.'
+          'This server is the default host for new projects. Choose another one under New projects open on before removing it.'
         )
       }
       // A closed gate leaves persisted WSL hosts untouched on disk.

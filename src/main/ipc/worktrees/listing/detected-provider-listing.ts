@@ -3,10 +3,7 @@ import {
   snapshotPendingWorktreeRemovals,
   withUnregisteredRemovalCheckouts
 } from '../../../worktree-removal-listing'
-import {
-  getRepoExecutionHostId,
-  getSshTargetIdForExecutionHost
-} from '../../../../shared/execution-host'
+import { getRepoDialableSshTargetId } from '../../../../shared/execution-host'
 import type { Store } from '../../../persistence/loading-store/store'
 import type { Repo } from '../../../../shared/repo-types'
 import type { DetectedWorktreeListResult } from '../../../../shared/worktree/types'
@@ -50,7 +47,7 @@ export async function listDetectedWorktreesForCapturedRepo(
   providerAbort?: { signal: AbortSignal; status: () => 'canceled' | 'timed-out' }
 ): Promise<DetectedWorktreeListResult | { providerAbortStatus: 'canceled' | 'timed-out' } | null> {
   // An `ssh:` repo is not served here, so it lists from metadata, never from this machine's git.
-  const connectionId = getSshTargetIdForExecutionHost(getRepoExecutionHostId(repo))
+  const connectionId = getRepoDialableSshTargetId(repo)
   const abortedResult = () =>
     providerAbort?.signal.aborted
       ? ({ providerAbortStatus: providerAbort.status() } as const)

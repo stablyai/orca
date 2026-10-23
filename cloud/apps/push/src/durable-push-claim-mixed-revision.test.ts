@@ -1,4 +1,4 @@
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import type { PushDatabase } from './push-database.js'
 import { DELIVERY_LEASE_MS, DurablePushStore } from './durable-push-store.js'
 import {
@@ -54,11 +54,23 @@ it.skipIf(!durablePushTestDatabaseUrl)(
     let committed!: () => void
     const currentCommitted = new Promise<void>((resolve) => (committed = resolve))
     const previous = previousRevisionClaim(db, clock, () => currentCommitted)
-    // Room for the previous claim to scan while this revision's lease is still uncommitted.
-    await new Promise((resolve) => setTimeout(resolve, 200))
-    paused.release()
+    try {
+      await vi.waitFor(async () => {
+        const waiting = await db.query(
+          "SELECT 1 FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock' AND wait_event = 'advisory'"
+        )
+        expect(waiting).toHaveLength(1)
+      })
+    } finally {
+      paused.release()
+      try {
+        await current
+      } finally {
+        committed()
+        await previous
+      }
+    }
     const leased = await current
-    committed()
     expect(await previous).toBeNull()
     const [row] = await db.query('SELECT lease_token FROM push_delivery_batches')
     expect(leased?.lease).toBeTruthy()

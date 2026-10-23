@@ -6,6 +6,7 @@ import {
   resolveRuntimeNavigationTarget
 } from '../../../shared/runtime-navigation'
 import { getRepoExecutionHostId } from '../../../shared/execution-host'
+import { phoneWakeReport } from '../../../shared/workspace-sleep'
 import type { Repo } from '../../../shared/repo-types'
 import type { TerminalWorkspaceLaunchScope } from '../runtime-legacy-worker-terminal-recovery-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
@@ -115,32 +116,18 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
       })
       await this.refreshMobileSessionPtyRecords()
       this.notifyMobileSessionTabsChanged(worktree.id)
-      // Why: a phone open must also wake the worktree's slept agents (experimental
-      // agent sleep). Only the host renderer holds the sleeping records + wake
-      // authority, so fire-and-forget ask it — mobile-scoped so web/desktop are
-      // unaffected. Headless serve has no renderer to wake anything, so report
-      // that explicitly instead of letting mobile assume the agents resumed.
+      // Why: main resumes a workspace sleep's agents; only a window wakes its own hibernation.
       if (opts.clientKind === 'mobile') {
-        if (this.getAvailableAuthoritativeWindow()) {
-          this.notifier?.resumeSleepingAgents?.(worktree.id)
-          sleepingAgentWake = 'requested'
-        } else if (
-          // Why: sleeping records are partitioned by execution host; reading
-          // only the local partition would miss slept agents on SSH-host
-          // worktrees and skip the headless warning for them.
-          Object.values(
-            this.store?.getWorkspaceSession?.(getRepoExecutionHostId(repo))
-              .sleepingAgentSessionsByPaneKey ?? {}
-          ).some(
-            // Why: a tab-open record resumes when its tab opens, headless or not.
-            (record) => record.worktreeId === worktree.id && record.restoreOnTabOpenOnly !== true
-          )
-        ) {
-          // Why: headless is only degraded when this worktree actually has a
-          // persisted resume record. Ordinary mobile activation must not show
-          // an unsupported warning merely because no desktop window is open.
-          sleepingAgentWake = 'unsupported-headless'
-        }
+        // Not awaited: behind a running sleep it would outlast the phone's request timeout.
+        const worktreeId = worktree.id
+        void this.queueSleepingAgentWake(worktreeId)
+        // Why the repo's host: records are partitioned by it, so SSH workspaces are not missed.
+        const records = this.store?.getWorkspaceSession?.(getRepoExecutionHostId(repo))
+        sleepingAgentWake = phoneWakeReport(
+          records?.sleepingAgentSessionsByPaneKey,
+          worktreeId,
+          Boolean(this.getAvailableAuthoritativeWindow())
+        )
       }
     }
     return { repoId: repo.id, worktreeId: worktree.id, activated: true, sleepingAgentWake }

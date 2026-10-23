@@ -14,6 +14,7 @@ type MobileTerminalInputActionsProps = {
   readonly isAttaching: boolean
   readonly dictation: DictationState
   readonly dictationMode: string | undefined
+  readonly dictationEnabled?: boolean
   readonly buttonStyle: StyleProp<ViewStyle>
   readonly activeButtonStyle: StyleProp<ViewStyle>
   readonly disabledButtonStyle: StyleProp<ViewStyle>
@@ -32,6 +33,7 @@ export function MobileTerminalInputActions({
   isAttaching,
   dictation,
   dictationMode,
+  dictationEnabled = true,
   buttonStyle,
   activeButtonStyle,
   disabledButtonStyle,
@@ -62,41 +64,47 @@ export function MobileTerminalInputActions({
           <ImagePlus size={17} color={colors.textSecondary} strokeWidth={2.4} />
         )}
       </Pressable>
-      <Pressable
-        style={[buttonStyle, dictationActive && activeButtonStyle, !canSend && disabledButtonStyle]}
-        disabled={!canSend}
-        onPress={dictationMode === 'toggle' ? onDictationToggle : undefined}
-        onPressIn={dictationMode === 'hold' ? onDictationPressIn : undefined}
-        onPressOut={dictationMode === 'hold' ? onDictationPressOut : undefined}
-        onLongPress={
-          dictationMode === 'toggle'
-            ? () => {
-                if (dictation.isRecording || dictation.isProcessing) {
-                  onDictationCancel()
+      {dictationEnabled ? (
+        <Pressable
+          style={[
+            buttonStyle,
+            dictationActive && activeButtonStyle,
+            !canSend && disabledButtonStyle
+          ]}
+          disabled={!canSend}
+          onPress={dictationMode === 'toggle' ? onDictationToggle : undefined}
+          onPressIn={dictationMode === 'hold' ? onDictationPressIn : undefined}
+          onPressOut={dictationMode === 'hold' ? onDictationPressOut : undefined}
+          onLongPress={
+            dictationMode === 'toggle'
+              ? () => {
+                  if (dictation.isRecording || dictation.isProcessing) {
+                    onDictationCancel()
+                  }
                 }
-              }
-            : keepHeldPressThroughLongPress
-        }
-        accessibilityLabel={
-          dictation.isRecording
-            ? 'Stop voice dictation'
-            : dictation.isProcessing
-              ? 'Cancel voice dictation'
-              : dictation.isStarting
-                ? 'Starting voice dictation'
-                : 'Start voice dictation'
-        }
-      >
-        {dictation.isProcessing ? (
-          <ActivityIndicator size="small" color={colors.textSecondary} />
-        ) : (
-          <Mic
-            size={17}
-            color={dictationActive ? colors.textPrimary : colors.textSecondary}
-            strokeWidth={2.4}
-          />
-        )}
-      </Pressable>
+              : keepHeldPressThroughLongPress
+          }
+          accessibilityLabel={
+            dictation.isRecording
+              ? 'Stop voice dictation'
+              : dictation.isProcessing
+                ? 'Cancel voice dictation'
+                : dictation.isStarting
+                  ? 'Starting voice dictation'
+                  : 'Start voice dictation'
+          }
+        >
+          {dictation.isProcessing ? (
+            <ActivityIndicator size="small" color={colors.textSecondary} />
+          ) : (
+            <Mic
+              size={17}
+              color={dictationActive ? colors.textPrimary : colors.textSecondary}
+              strokeWidth={2.4}
+            />
+          )}
+        </Pressable>
+      ) : null}
     </>
   )
 }

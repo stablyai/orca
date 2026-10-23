@@ -1,5 +1,5 @@
 import { markRuntimeOwnedHiddenRendererPty } from '../../pty-hidden-delivery-gate'
-import { visibleRendererPtys } from '../delivery/visibility-state'
+import { attachingRendererViewPtys, visibleRendererPtys } from '../delivery/visibility-state'
 import { closeStartupQueryAuthorityForPty } from '../provider/registry'
 import type { RuntimePtySpawnState } from './spawn-state'
 
@@ -15,6 +15,11 @@ export function markRuntimeSpawnHiddenBeforeSpawn(ctx: RuntimePtySpawnState): vo
     !ctx.isNewDaemonSession ||
     ctx.effectiveSessionAppId === undefined
   ) {
+    return
+  }
+  const attaching = attachingRendererViewPtys.get(ctx.effectiveSessionAppId)
+  if (attaching) {
+    attaching.skippedHide = true
     return
   }
   ctx.preSpawnHiddenMarkId = ctx.effectiveSessionAppId
@@ -35,8 +40,13 @@ export function commitRuntimeSpawnHiddenDelivery(ctx: RuntimePtySpawnState): voi
     releaseRuntimeSpawnPreSpawnHiddenMark(ctx)
     return
   }
-  // Why: a view that mounted visible during spawn already unmarked; re-marking would drop its output.
-  if (visibleRendererPtys.has(id)) {
+  // Why: a view that mounted visible during spawn already unmarked, or is attaching to it now;
+  // marking would drop its output and ask it for a second restore.
+  const attaching = attachingRendererViewPtys.get(id)
+  if (attaching) {
+    attaching.skippedHide = true
+  }
+  if (visibleRendererPtys.has(id) || attaching) {
     releaseRuntimeSpawnPreSpawnHiddenMark(ctx)
     ctx.deps.syncPtyBackgroundedDelivery?.(id, 'spawn')
     return

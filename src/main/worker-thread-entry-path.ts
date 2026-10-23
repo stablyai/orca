@@ -1,4 +1,4 @@
-import { join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { getAppEnvironment, hasAppEnvironment } from '../shared/app-environment'
 
 /**
@@ -38,6 +38,9 @@ export function resolveWorkerThreadEntryPath(
   return join(layout.moduleDir, entryFileName)
 }
 
+// The build's `chunkFileNames` folder; worker entries sit one level up, beside the main entry.
+const SHARED_CHUNK_DIR_NAME = 'chunks'
+
 /**
  * The current process's worker-entry layout.
  * @param moduleDir - The calling module's `__dirname`, used for unpackaged builds.
@@ -50,6 +53,7 @@ export function currentWorkerEntryLayout(moduleDir: string): WorkerEntryLayout {
       'resourcesPath' in process && typeof process.resourcesPath === 'string'
         ? process.resourcesPath
         : undefined,
-    moduleDir
+    // Why: a caller bundled into a shared chunk sees `out/main/chunks` as its `__dirname`.
+    moduleDir: basename(moduleDir) === SHARED_CHUNK_DIR_NAME ? dirname(moduleDir) : moduleDir
   }
 }

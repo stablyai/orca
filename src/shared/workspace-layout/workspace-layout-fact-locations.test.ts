@@ -11,6 +11,7 @@ import {
   type LayoutSource,
   type UnwrittenLayoutSource
 } from './workspace-layout-disk-fields'
+import { EDITOR_FILE_KEY_FIELDS } from './workspace-layout-editor-tab-file'
 import { loadWorkspaceLayout } from './workspace-layout-load'
 import { diskRecords, stableJson } from './workspace-layout-load-report'
 import type { LoadedWorkspaceLayout } from './workspace-layout-load-types'
@@ -57,7 +58,7 @@ const IDENTITY_SOURCES = new Set<LayoutSource>([
   'tab.entityId',
   'tab.kind',
   'group.id',
-  'file.filePath',
+  ...EDITOR_FILE_KEY_FIELDS.map((field) => `file.${field}` as const),
   'browserTab.id',
   'leaf.$key'
 ])
@@ -86,7 +87,9 @@ const writtenOf = (field: string): DiskFieldWritten =>
       : WRITTEN_BY_FIELD.get(field)!
 
 const sourcesOf = (written: DiskFieldWritten): LayoutSource[] =>
-  typeof written === 'string' ? [] : [written.from, ...(written.via ?? [])]
+  typeof written === 'string'
+    ? []
+    : [written.from, ...(written.orFrom ? [written.orFrom] : []), ...(written.via ?? [])]
 
 /** The richest session the fixtures build, with every optional source populated. */
 function richLoaded(): LoadedWorkspaceLayout {
@@ -129,6 +132,7 @@ function populate(loaded: LoadedWorkspaceLayout): LoadedWorkspaceLayout {
   fill(loaded, 'viewPane.activeLeafId', leaf(2), (holder) => holder.activeLeafId === leaf(1))
   fill(loaded, 'viewPane.expandedLeafId', leaf(2), (holder) => holder.activeLeafId === leaf(2))
   fill(loaded, 'scrollback.buffer', 'buffer')
+  fill(loaded, 'leaf.lastGrid', { cols: 91, rows: 33 })
   fill(loaded, 'browserTab.sessionProfileId', 'profile-1')
   fill(loaded, 'browserTab.sessionPartition', 'persist:p')
   fill(loaded, 'browserTab.pageIds', ['page-1', 'page-2'])
@@ -158,15 +162,21 @@ function populate(loaded: LoadedWorkspaceLayout): LoadedWorkspaceLayout {
   fill(loaded, 'carried.pairedTerminalTabCloseIntentsByEnvironment', {
     env: ['host-tab-1', 'host-tab-2']
   })
-  const sleeping = (field: keyof LayoutSleepingRecord, value: unknown) =>
-    fill(loaded, `leaf.sleeping.${field}` as const, value)
-  sleeping('terminalTitle', 'claude')
-  sleeping('lastAssistantMessage', 'done')
-  sleeping('interrupted', true)
-  sleeping('mainAgent', { state: 'done' })
-  sleeping('connectionId', 'conn-1')
-  sleeping('launchConfig', { agentArgs: '', agentEnv: {} })
-  sleeping('restoreOnTabOpenOnly', true)
+  // The fixture's record is a quit capture (leaf.resume); a second pane holds a real sleep.
+  holdersOf(loaded, 'leaf').find((holder) => holder.incarnationId === 'inc-1')!.sleeping = {
+    ...SLEPT_PANE_RECORD
+  }
+  for (const holder of ['leaf.sleeping', 'leaf.resume'] as const) {
+    const record = (field: keyof LayoutSleepingRecord, value: unknown) =>
+      fill(loaded, `${holder}.${field}` as const, value)
+    record('terminalTitle', 'claude')
+    record('lastAssistantMessage', 'done')
+    record('interrupted', true)
+    record('mainAgent', { state: 'done' })
+    record('connectionId', 'conn-1')
+    record('launchConfig', { agentArgs: '', agentEnv: {} })
+    record('restoreOnTabOpenOnly', true)
+  }
   fill(loaded, 'carried.unplacedSleepingRecords', {
     'tab-elsewhere:x': { paneKey: 'tab-elsewhere:x', worktreeId: 'repo-9::/gone', prompt: 'p' }
   })
@@ -185,6 +195,16 @@ function populate(loaded: LoadedWorkspaceLayout): LoadedWorkspaceLayout {
 }
 
 type Holder = Record<string, unknown>
+
+const SLEPT_PANE_RECORD: LayoutSleepingRecord = {
+  agent: 'codex',
+  providerSession: { key: 'session_id', id: 'session-slept' },
+  prompt: 'slept prompt',
+  state: 'done',
+  capturedAt: 1_700_000_600_000,
+  updatedAt: 1_700_000_600_000,
+  origin: 'worktree-sleep'
+}
 
 type PrefixOf<Path> = Path extends `${infer Head}.${infer Rest}`
   ? Rest extends `${string}.${string}`
@@ -213,6 +233,7 @@ function holdersOf(loaded: LoadedWorkspaceLayout, prefix: string): Holder[] {
     browserTab: workspaces.flatMap((workspace) => workspace.browserTabs ?? []),
     leaf: leaves,
     'leaf.sleeping': leaves.flatMap((entry) => entry.sleeping ?? []),
+    'leaf.resume': leaves.flatMap((entry) => entry.resume ?? []),
     closedTab: workspaces.flatMap((workspace) => Object.values(workspace.closedTerminalTabs ?? {})),
     view: [view],
     viewGroup: nested(view.groups),
@@ -299,6 +320,41 @@ describe('each on-disk field has one source', () => {
     expect(empty).toEqual([])
   })
 
+  it('holds each placed pane record in exactly one of its two holders', () => {
+    const loaded = richLoaded()
+    const leaves = Object.values(loaded.layout.workspaces).flatMap((workspace) =>
+      Object.values(workspace.leaves ?? {})
+    )
+    const holders = leaves.map((entry) => [entry.sleeping, entry.resume].filter(Boolean).length)
+    expect(
+      holders.filter((count) => count > 1),
+      'a pane record in both holders'
+    ).toEqual([])
+    const placed = Object.keys(saveWorkspaceLayout(loaded).sleepingAgentSessionsByPaneKey ?? {})
+    const unplaced = Object.keys(loaded.carried.unplacedSleepingRecords ?? {})
+    // Every saved record a pane holds comes from one holder, and every holder is saved.
+    expect(placed.length - unplaced.length).toBe(holders.filter((count) => count === 1).length)
+    for (const origin of [undefined, 'worktree-sleep', 'quit', 'live'] as const) {
+      const session = localDesktopSession()
+      const paneKey = Object.keys(session.sleepingAgentSessionsByPaneKey!)[0]!
+      const stored = session.sleepingAgentSessionsByPaneKey![paneKey]!
+      const { origin: _origin, ...rest } = stored
+      session.sleepingAgentSessionsByPaneKey![paneKey] = origin ? { ...rest, origin } : rest
+      const reloaded = loadWorkspaceLayout(LOCAL_EXECUTION_HOST_ID, session, {
+        mintId: () => 'minted',
+        mintLeafId: () => leaf(9)
+      })
+      const held = Object.values(reloaded.layout.workspaces).flatMap((workspace) =>
+        Object.values(workspace.leaves ?? {}).flatMap((entry) => [
+          ...(entry.sleeping ? ['sleeping'] : []),
+          ...(entry.resume ? ['resume'] : [])
+        ])
+      )
+      const slept = origin === undefined || origin === 'worktree-sleep'
+      expect(held, String(origin)).toEqual([slept ? 'sleeping' : 'resume'])
+    }
+  })
+
   it('changes on disk exactly the fields each source is declared for', () => {
     const base = richLoaded()
     const before = diskValues(saveWorkspaceLayout(base))
@@ -323,7 +379,7 @@ describe('each on-disk field has one source', () => {
         if (
           written &&
           typeof written !== 'string' &&
-          written.from === source &&
+          (written.from === source || written.orFrom === source) &&
           !changed.includes(name)
         ) {
           ineffective.push(`${source} -/-> ${name}`)

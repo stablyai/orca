@@ -79,7 +79,6 @@ export function foundAgentSessionRecord(
       leaseDeadlineAt: lease.now,
       lastRenewedAt: lease.now,
       handoffOperationId: null,
-      journalCheckpoint: null,
       claimKeyId: lease.claimKeyId,
       claimStatus: 'released',
       unreconciled: false,

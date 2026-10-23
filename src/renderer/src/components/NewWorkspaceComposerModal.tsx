@@ -1,3 +1,4 @@
+import type { AgentLaunchSurface } from '@/lib/agent-session-launch-plan'
 import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
@@ -28,6 +29,8 @@ import { translate } from '@/i18n/i18n'
 import { getWorkspaceComposerInitialFocusTarget } from '@/lib/workspace-composer-initial-focus'
 import { getFolderWorkspacePrimaryActionLabel } from '@/components/sidebar/folder-workspace-composer-helpers'
 import type { WorkspaceCreationTargetHint } from '@/lib/project-host-workspace-target'
+import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
 // Why: match App-level AddRepoDialog loading — the add flow is off the hot
 // path for the composer, so keep its clone/SSH machinery out of the entry render.
@@ -132,7 +135,7 @@ function QuickTabBody({
     onComposerNodeChange,
     nameInputRef,
     submitQuick,
-    createDisabled,
+    createDisabled: formDisabled,
     selectAddedProjectRepo
   } = useComposerState({
     initialName: modalData.prefilledName ?? '',
@@ -171,8 +174,6 @@ function QuickTabBody({
   )
   const preferredQuickAgent = useMemo<TuiAgent | null>(() => {
     const pref = settings?.defaultTuiAgent
-    // Why: detection can still be pending when quick-create submits; keep the
-    // prior catalog fallback while filtering disabled agents out of that choice.
     return pickQuickWorkspaceAgent(pref, cardProps.detectedAgentIds, settings?.disabledTuiAgents)
   }, [cardProps.detectedAgentIds, settings?.defaultTuiAgent, settings?.disabledTuiAgents])
   const resolvedQuickAgentSelection = resolveQuickWorkspaceAgentSelection({
@@ -190,10 +191,28 @@ function QuickTabBody({
   const [quickSelectionCleared, setQuickSelectionCleared] = useState(false)
   const quickSetupOnly = quickAgent === null && quickSelectionCleared
 
-  const handleQuickAgentChange = useCallback((agent: TuiAgent | null) => {
-    setQuickAgentOverride(agent)
-    setQuickSelectionCleared(false)
-  }, [])
+  // Why keyed by agent: a pick repaired to another agent must not carry the old one's surface.
+  const [quickAgentPick, setQuickAgentPick] = useState<{
+    agent: TuiAgent | null
+    surface?: AgentLaunchSurface
+  }>({ agent: null })
+  const quickAgentSurface = quickAgentPick.agent === quickAgent ? quickAgentPick.surface : undefined
+  const observation = useAgentMenuObservation(
+    cardProps.agentRows?.target ?? null,
+    active && Boolean(cardProps.agentRows),
+    cardProps.agentRows?.detectionTarget
+  )
+  const launchSelection = observation.selectionFor(quickAgent, quickAgentSurface)
+  const createDisabled = formDisabled || !launchSelection.ready
+
+  const handleQuickAgentChange = useCallback(
+    (agent: TuiAgent | null, surface?: AgentLaunchSurface) => {
+      setQuickAgentOverride(agent)
+      setQuickAgentPick({ agent, surface })
+      setQuickSelectionCleared(false)
+    },
+    []
+  )
 
   const handleQuickSetupOnlySelect = useCallback(() => {
     setQuickAgentOverride(null)
@@ -201,8 +220,14 @@ function QuickTabBody({
   }, [])
 
   const handleCreate = useCallback(async (): Promise<void> => {
-    await submitQuick(quickAgent, { setupOnly: quickSetupOnly })
-  }, [quickAgent, quickSetupOnly, submitQuick])
+    if (createDisabled) {
+      return
+    }
+    await submitQuick(quickAgent, {
+      setupOnly: quickSetupOnly,
+      launchChoice: launchSelection.choice
+    })
+  }, [createDisabled, quickAgent, launchSelection.choice, quickSetupOnly, submitQuick])
   // Why: Add Project layers over the composer as a nested dialog instead of
   // replacing it in the activeModal slot — closing the composer mid-flow (and
   // losing the typed name/prompt) was the old, abrupt behavior. Once opened it
@@ -284,8 +309,8 @@ function QuickTabBody({
       event.preventDefault()
       void handleCreate()
     }
-    window.addEventListener('keydown', onKeyDown, { capture: true })
-    return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
+    addAppKeyListener('keydown', onKeyDown)
+    return () => removeAppKeyListener('keydown', onKeyDown)
   }, [active, composerRef, createDisabled, handleCreate, nestedDialogOpen])
 
   return (
@@ -319,6 +344,18 @@ function QuickTabBody({
         quickSetupOnly={quickSetupOnly}
         onQuickSetupOnlySelect={handleQuickSetupOnlySelect}
         {...cardProps}
+        createDisabled={createDisabled}
+        agentSurfaceRows={
+          cardProps.agentRows
+            ? {
+                model: observation.model,
+                selection: launchSelection,
+                surface: quickAgentSurface,
+                contextKey: observation.contextKey,
+                onPick: handleQuickAgentChange
+              }
+            : undefined
+        }
         primaryActionLabel={primaryActionLabel}
         onOpenAgentSettings={() => setAgentSettingsOpen(true)}
         onCreate={() => void handleCreate()}

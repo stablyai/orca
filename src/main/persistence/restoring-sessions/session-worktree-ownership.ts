@@ -54,7 +54,8 @@ export const WORKSPACE_SESSION_WORKTREE_REFERENCE_KIND = {
   terminalPtyIncarnationsByPaneKey: 'none',
   terminalTopologyRevisionByRepoId: 'none',
   terminalSurfaceTombstonesByPaneKey: 'row-record',
-  closedTerminalTabTombstonesByTabId: 'row-record'
+  closedTerminalTabTombstonesByTabId: 'row-record',
+  closedTerminalPanesByPaneKey: 'row-record'
 } as const satisfies Record<keyof WorkspaceSessionState, WorkspaceSessionWorktreeReferenceKind>
 
 type WorktreeRow = { worktreeId?: string | null }

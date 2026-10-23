@@ -11,6 +11,9 @@ import { createSingleFlight } from './single-flight-promise'
 // bounds silent watcher loss at the existing 30-second backstop without joining
 // the per-repo 2-second timer fleet.
 const NARROW_WATCH_RECONCILIATION_TICKS = 15
+// Why: each reconciliation tick gates entries on their dir signature (one stat
+// plus the in-place leaves); the ungated every-leaf sweep runs every ~5 minutes.
+const RECONCILIATION_FULL_SCAN_EVERY_TICKS = 10
 
 type GitCommonWatchReconciliationOptions = {
   commonDirPath: string
@@ -99,7 +102,7 @@ export function createGitCommonWatchReconciliation({
           undefined,
           false,
           () => [],
-          { forceFullScanEveryTick: true }
+          { reconciliationFullScanEveryTicks: RECONCILIATION_FULL_SCAN_EVERY_TICKS }
         )
         if (startGeneration !== generation || !shouldKeep()) {
           await reconciliation.unsubscribe()

@@ -59,6 +59,12 @@ export const MOBILE_WEB_PAGE_ROUTES = [
     pathname: '/h/[hostId]/accounts',
     grants: ['navigate', 'storage', 'externalLink', 'haptics']
   },
+  // Create Workspace, in Home's native overlay. `navigate` for its close (Back pops the overlay) and
+  // for the session it opens; the rest for the shared form and the host layout.
+  {
+    pathname: '/h/[hostId]/new-workspace',
+    grants: ['navigate', 'storage', 'externalLink', 'haptics']
+  },
   // The file explorer. `navigate` because its Back pops the native stack. `storage` for the shared
   // components the host layout renders above it.
   //

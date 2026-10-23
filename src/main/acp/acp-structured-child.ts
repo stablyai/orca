@@ -6,6 +6,7 @@ import type { AcpStructuredSession } from './acp-structured-session'
 
 export type AcpStructuredChild = Pick<
   AcpStructuredSession,
+  | 'events'
   | 'sessionId'
   | 'fence'
   | 'acquisitionGeneration'

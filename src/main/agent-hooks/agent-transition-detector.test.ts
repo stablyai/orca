@@ -18,12 +18,27 @@ const NOW = 1_000_000
 function createHarness() {
   const changes: AgentPaneChange[] = []
   const observations: AgentPaneChange[] = []
+  const exits = new Map<string, () => void>()
   const detector = new AgentTransitionDetector({
     resolveTabWorktreeId: () => undefined,
+    subscribeToPtyExit: (ptyId, onExit) => {
+      exits.set(ptyId, onExit)
+      return () => exits.delete(ptyId)
+    },
     now: () => NOW
   })
   detector.subscribe((change) => (change.kind === 'observed' ? observations : changes).push(change))
-  return { detector, changes, observations, server: new AgentHookServer() }
+  return { detector, changes, observations, exits, server: new AgentHookServer() }
+}
+
+function noteTitle(detector: AgentTransitionDetector, rawTitle: string, ptyId = 'pty-1'): void {
+  detector.noteTerminalSideEffects({
+    ptyId,
+    seq: 1,
+    worktreeId: WT,
+    paneKey: PANE,
+    facts: [{ kind: 'title', normalizedTitle: rawTitle, rawTitle }]
+  })
 }
 
 function ingest(
@@ -145,14 +160,14 @@ describe('AgentTransitionDetector', () => {
     expect(h.changes.at(-1)).toMatchObject({ transition: 'turn-finished' })
   })
 
-  it('rests a pane whose row goes, and reports whether hooks own a pane', () => {
+  it('rests a pane whose row goes', () => {
     const h = createHarness()
     h.detector.attach(h.server)
     ingest(h.server, { state: 'blocked' })
-    expect(h.detector.hasHookRow(PANE)).toBe(true)
+    expect(h.detector.latestRow(PANE)).not.toBeNull()
     h.changes.length = 0
     h.server.clearPaneState(PANE)
-    expect(h.detector.hasHookRow(PANE)).toBe(false)
+    expect(h.detector.latestRow(PANE)).toBeNull()
     expect(h.changes).toEqual([
       expect.objectContaining({ kind: 'moved', from: 'needs-you', to: 'rest', transition: null })
     ])
@@ -162,6 +177,7 @@ describe('AgentTransitionDetector', () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {})
     const detector = new AgentTransitionDetector({
       resolveTabWorktreeId: () => undefined,
+      subscribeToPtyExit: () => () => {},
       now: () => NOW
     })
     const received: AgentPaneChange[] = []
@@ -205,6 +221,62 @@ describe('AgentTransitionDetector', () => {
     h.detector.attach(h.server)()
     ingest(h.server, { state: 'working' })
     expect(h.changes).toEqual([])
-    expect(h.detector.hasHookRow(PANE)).toBe(false)
+    expect(h.detector.latestRow(PANE)).toBeNull()
+  })
+})
+
+describe('AgentTransitionDetector: hookless titles', () => {
+  const workspace = { worktreeId: WT, sshHostId: null }
+
+  it('seeds a first title, then names its turns, and rests the pane with its terminal', () => {
+    const h = createHarness()
+    h.detector.attach(h.server)
+    noteTitle(h.detector, '⠋ Codex working')
+    expect(h.changes).toEqual([
+      { kind: 'seeded', paneKey: PANE, workspace, phase: 'working', at: NOW, fromTitle: true }
+    ])
+    noteTitle(h.detector, 'Codex')
+    expect(h.changes.at(-1)).toMatchObject({
+      kind: 'moved',
+      to: 'done',
+      transition: 'turn-finished'
+    })
+    noteTitle(h.detector, '⠋ Codex working')
+    expect(h.changes.at(-1)).toMatchObject({ to: 'working', transition: 'prompt-submitted' })
+    h.exits.get('pty-1')!()
+    expect(h.changes.at(-1)).toMatchObject({ from: 'working', to: 'rest', transition: null })
+  })
+
+  it('rests a pane where it was before seeding it in the workspace of a row present at attach', () => {
+    const h = createHarness()
+    ingest(h.server, { state: 'working' }, { worktreeId: OTHER_WT })
+    noteTitle(h.detector, '⠋ Codex working')
+    h.changes.length = 0
+    h.detector.attach(h.server)
+    expect(h.changes.map((change) => [change.kind, change.workspace?.worktreeId])).toEqual([
+      ['moved', WT],
+      ['seeded', OTHER_WT]
+    ])
+  })
+
+  it('finishes a title-tracked turn when the first hook row reports done', () => {
+    const h = createHarness()
+    h.detector.attach(h.server)
+    noteTitle(h.detector, '⠋ Codex working')
+    h.changes.length = 0
+    ingest(h.server, { state: 'done' })
+    expect(h.changes).toEqual([
+      expect.objectContaining({
+        kind: 'moved',
+        from: 'working',
+        to: 'done',
+        transition: 'turn-finished'
+      })
+    ])
+    // The hook row owns the pane now: its titles are not read, and its terminal's exit is the row's.
+    h.changes.length = 0
+    noteTitle(h.detector, '⠋ Codex working')
+    h.exits.get('pty-1')!()
+    expect(h.changes).toEqual([])
   })
 })

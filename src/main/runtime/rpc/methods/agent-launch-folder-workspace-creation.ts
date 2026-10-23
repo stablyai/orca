@@ -33,6 +33,6 @@ export function agentLaunchFolderWorkspaceCreator(
     const scope = await context.runtime.showTerminalWorkspaceLaunchScope(
       `id:${folderWorkspaceKey(workspace.id)}`
     )
-    return { worktreeId: scope.id, connectionId: scope.connectionId }
+    return { worktreeId: scope.id, workspacePath: scope.path, connectionId: scope.connectionId }
   }
 }

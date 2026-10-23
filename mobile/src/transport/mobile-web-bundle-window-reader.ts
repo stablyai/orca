@@ -1,3 +1,5 @@
+import { decodeBase64Bytes } from './base64-byte-codec'
+import { pairedE2EENativeCodec } from './paired-e2ee-native-codec'
 import { mobileWebBundleChunkRead, mobileWebBundleRangeRead } from './mobile-web-bundle-operations'
 import { decodeMobileWebBundleRange } from './mobile-web-bundle-range-decode'
 import type { MobileWebBundleManifestReply } from './mobile-web-bundle-reply-schemas'
@@ -78,12 +80,16 @@ export function mobileWebBundleWindowReader(
   }
 }
 
-/** Metro ships no Buffer; `atob` is the decoder the pairing and E2EE paths already run on Hermes. */
+/** Every host encodes with `Buffer#toString('base64')`, so the strict native decoder refuses nothing a
+ *  host sends; `atob` is the fallback the pairing and E2EE paths already run on Hermes. */
 function decodeBase64(value: string): Uint8Array {
-  const binary = atob(value)
-  const bytes = new Uint8Array(binary.length)
-  for (let index = 0; index < binary.length; index += 1) {
-    bytes[index] = binary.charCodeAt(index)
+  const native = pairedE2EENativeCodec()
+  if (!native) {
+    return decodeBase64Bytes(value)
+  }
+  const bytes = native.decodeBase64(value)
+  if (!bytes) {
+    throw new Error('bundle window is not canonical base64')
   }
   return bytes
 }

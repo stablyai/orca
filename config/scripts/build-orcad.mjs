@@ -40,6 +40,7 @@ import {
   ORCAD_EMOJI_SHORTCODE_DATASET,
   ORCAD_CLI_ENTRY_FILENAME,
   ORCAD_CLI_PACKAGE_FILENAME,
+  ORCAD_COMPUTER_USE_RUNTIME_ARTIFACTS,
   ORCAD_LAUNCHER_FILENAME,
   ORCAD_SERVER_ENTRY_FILENAME,
   ORCAD_NODE_PTY_DIR,
@@ -59,6 +60,8 @@ import { orcadAgentBrowserNativeName } from '../../src/shared/orcad-agent-browse
 import { runProcessSync } from '@orca/process-host'
 import { describeProcessFailure } from './process-failure-message.mjs'
 import { resolveBuildSourceCommit } from './build-source-commit.mjs'
+
+const { darkBuildMarkers } = createRequire(import.meta.url)('../dark-build-switches.cjs')
 
 const ROOT = join(import.meta.dirname, '..', '..')
 const OUT_DIR = process.env.ORCAD_OUT_DIR
@@ -159,6 +162,10 @@ function stageNodePty(target) {
 rmSync(OUT_DIR, { recursive: true, force: true })
 mkdirSync(OUT_DIR, { recursive: true })
 writeFileSync(join(OUT_DIR, ORCAD_SERVER_TARGET_FILENAME), `${BUILD_TARGET}\n`)
+// Outside the artifact list, so the version hash and every deploy ignore it.
+for (const marker of darkBuildMarkers()) {
+  writeFileSync(join(OUT_DIR, marker.fileName), marker.text)
+}
 writeFileSync(
   join(OUT_DIR, ORCAD_NODE_RUNTIME_MARKER_FILENAME),
   `${runtimeAsset.executableSha256}\n`
@@ -204,6 +211,10 @@ cpSync(join(ROOT, 'resources', 'licenses', 'ripgrep'), join(OUT_DIR, 'ripgrep', 
 cpSync(join(ROOT, 'resources', 'native-chat-visuals'), join(OUT_DIR, 'native-chat-visuals'), {
   recursive: true
 })
+for (const artifact of ORCAD_COMPUTER_USE_RUNTIME_ARTIFACTS) {
+  mkdirSync(dirname(join(OUT_DIR, artifact)), { recursive: true })
+  copyFileSync(join(ROOT, 'native', ...artifact.split('/')), join(OUT_DIR, ...artifact.split('/')))
+}
 stageOrcadMobileWebBundle(OUT_DIR)
 
 /** Why one call per child and not one `outdir` build: esbuild mirrors each entry's source
@@ -240,7 +251,7 @@ const childResults = await Promise.all(
 const result = await buildOrcadEntry(SERVER_OUT_FILE)
 const cliResult = await buildOrcadCli(join(OUT_DIR, ORCAD_CLI_ENTRY_FILENAME))
 const { version: cliVersion } = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
-// Why commit: `orca skills install|update` pins official skills to it, as the desktop CLI does.
+// Why commit: the stamp keys one serve-supervisor snapshot per build.
 const cliPackage = {
   type: 'commonjs',
   private: true,

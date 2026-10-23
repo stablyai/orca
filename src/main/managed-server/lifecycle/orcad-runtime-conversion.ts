@@ -188,11 +188,7 @@ async function fenceOrResume(
     (environment) => getOrcadSshDeployment(environment)?.sshTargetId === target.id
   )
   if (converted) {
-    return refuse(
-      'live',
-      'orcad_migration_already_managed',
-      'This SSH host is already a managed server.'
-    )
+    return refuse('live', 'orcad_migration_already_managed', 'Orca already runs on this SSH host.')
   }
   // The fence re-checks leases once it holds.
   const terminalProof = await source.assessTerminals()
