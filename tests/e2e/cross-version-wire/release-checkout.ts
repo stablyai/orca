@@ -1,6 +1,8 @@
 import { execFileSync } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { RPC_PARAMS_CATALOG_PATH } from '../../../config/scripts/generate-rpc-params-catalog.mjs'
 import { selectLatestStableReleaseTag } from '../../../config/scripts/stable-release-tags.mjs'
 import {
   populateReleaseCheckoutSource,
@@ -22,6 +24,7 @@ export { selectLatestStableReleaseTag }
 
 export const REPO_ROOT = resolve(import.meta.dirname, '..', '..', '..')
 const DEFAULT_CACHE_ROOT = join(REPO_ROOT, 'tests', 'e2e', '.cross-version-checkouts')
+const CATALOG_GENERATOR = join(REPO_ROOT, 'config', 'scripts', 'generate-rpc-params-catalog.mjs')
 
 const BASELINE_REF_ENV = 'ORCA_CROSS_VERSION_BASELINE_REF'
 
@@ -180,6 +183,16 @@ export async function materializeReleaseCheckout(
         options.sharedCacheRoot ??
         (await resolveSharedReleaseCacheRoot(REPO_ROOT, options.cacheRoot))
       await populateReleaseCheckoutSource(REPO_ROOT, staging, commit, sharedCacheRoot)
+      // Why: the catalog is build output, so newer releases don't carry it in git. Its
+      // directory arrived with it, so releases without the directory predate the catalog.
+      // Its own process: deriving it loads the release's whole RPC registry.
+      const catalog = join(staging, RPC_PARAMS_CATALOG_PATH)
+      if (existsSync(dirname(catalog)) && !existsSync(catalog)) {
+        execFileSync(process.execPath, [CATALOG_GENERATOR, '--root', staging], {
+          stdio: ['ignore', 'ignore', 'pipe'],
+          windowsHide: true
+        })
+      }
     }
   })
   return { ref, commit, label, root }

@@ -11,7 +11,7 @@
  * This is a reachability check, not a lint rule: the point is precisely the edges
  * that no per-file rule can see.
  *
- * Usage: node config/scripts/check-runtime-electron-ratchet.mjs
+ * Usage: pnpm run check:runtime-electron-ratchet
  */
 import { build } from 'esbuild'
 import { existsSync, readdirSync } from 'node:fs'

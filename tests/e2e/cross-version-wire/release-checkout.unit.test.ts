@@ -17,6 +17,7 @@ import { lock } from 'proper-lockfile'
 import { afterEach, describe, expect, it } from 'vitest'
 import { forceTerminateProcessTree } from '@orca/process-host/process-tree-termination'
 import { spawnProcess } from '@orca/process-host'
+import { RPC_PARAMS_CATALOG_PATH } from '../../../config/scripts/generate-rpc-params-catalog.mjs'
 import {
   importReleaseCheckoutModule,
   materializeReleaseCheckout,
@@ -320,6 +321,19 @@ describe('release checkout materialization', () => {
     ).toBe(true)
     expect(isAdmissible({ window: { tokens: 0, capturedAt: 1 } })).toBe(false)
     expect(isAdmissible({ used: { kind: 'invalid', capturedAt: 1 } })).toBe(false)
+  }, 180_000)
+
+  // HEAD stands in for any release cut after the catalog became gitignored build output.
+  // A throwaway cache under the repo keeps package resolution without keeping a tree per commit.
+  it('derives the RPC params catalog for a release that does not check it in', async () => {
+    const parent = join(REPO_ROOT, 'tests', 'e2e', '.cross-version-checkouts')
+    mkdirSync(parent, { recursive: true })
+    const cacheRoot = mkdtempSync(join(parent, 'head-'))
+    temporaryRoots.push(cacheRoot)
+    const checkout = await materializeReleaseCheckout('HEAD', { cacheRoot })
+    const catalog = await importReleaseCheckoutModule(checkout, RPC_PARAMS_CATALOG_PATH)
+
+    expect(Object.keys(catalog.RPC_PARAMS_BY_METHOD ?? {})).toContain('preflight.detectAgents')
   }, 180_000)
 
   it('keeps an import live while another colliding release label materializes', async () => {

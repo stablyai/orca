@@ -1,5 +1,5 @@
 import { constants } from 'node:fs'
-import { access, mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
+import { access, mkdir, readFile, readdir, rename, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 import { parse } from 'yaml'
@@ -351,18 +351,26 @@ async function buildArtifacts(repoRoot = REPO_ROOT) {
   assertAliasContract(guides)
 
   return [
-    {
-      path: path.join(repoRoot, 'src', 'cli', 'bundled-skill-guides.ts'),
-      content: serializeEmbeddedModule(guides)
-    },
+    { path: embeddedModulePath(repoRoot), content: serializeEmbeddedModule(guides) },
     ...projections
   ]
 }
 
+function embeddedModulePath(repoRoot) {
+  return path.join(repoRoot, 'src', 'cli', 'bundled-skill-guides.ts')
+}
+
 async function writeArtifacts(artifacts) {
   for (const artifact of artifacts) {
+    // Why compare first: an unchanged mtime keeps incremental tsc and dev watchers idle.
+    if ((await readFile(artifact.path, 'utf8').catch(() => null)) === artifact.content) {
+      continue
+    }
     await mkdir(path.dirname(artifact.path), { recursive: true })
-    await writeFile(artifact.path, artifact.content, 'utf8')
+    // Why rename: a concurrent tsc, vitest or dev watcher never reads a half-written module.
+    const staged = `${artifact.path}.${process.pid}.tmp`
+    await writeFile(staged, artifact.content, 'utf8')
+    await rename(staged, artifact.path)
   }
 }
 
@@ -387,9 +395,18 @@ async function verifyArtifacts(artifacts, repoRoot = REPO_ROOT) {
   }
 }
 
+// --write: every output. --embedded: only the gitignored module, so build:packages never
+// rewrites the checked-in projections that --check (the default) verifies.
 async function main() {
   const artifacts = await buildArtifacts()
-  await (process.argv.includes('--write') ? writeArtifacts : verifyArtifacts)(artifacts)
+  const embedded = artifacts.filter((artifact) => artifact.path === embeddedModulePath(REPO_ROOT))
+  if (process.argv.includes('--write')) {
+    await writeArtifacts(artifacts)
+  } else if (process.argv.includes('--embedded')) {
+    await writeArtifacts(embedded)
+  } else {
+    await verifyArtifacts(artifacts.filter((artifact) => !embedded.includes(artifact)))
+  }
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === import.meta.filename) {

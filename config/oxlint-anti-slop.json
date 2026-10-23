@@ -21,7 +21,6 @@
     "**/dist",
     "**/out",
     "cloud/**",
-    "src/shared/rpc-contract/rpc-params-catalog.generated.ts",
     "tests/e2e/.cross-version-checkouts"
   ],
   "rules": {

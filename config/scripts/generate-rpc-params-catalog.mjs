@@ -1,13 +1,13 @@
 // Why: the host registry is the only place that binds a method name to its params
 // schema. Reading it back — instead of hand-listing 600 methods — is what keeps the
 // shared catalog and the dispatcher from drifting apart.
-import { execFileSync } from 'node:child_process'
 import {
   existsSync,
   globSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  renameSync,
   rmSync,
   writeFileSync
 } from 'node:fs'
@@ -15,52 +15,65 @@ import { createRequire } from 'node:module'
 import path from 'node:path'
 import process from 'node:process'
 import * as esbuild from 'esbuild'
-import { resolveOxcCliInvocation } from './oxc-cli-invocation.mjs'
 
 const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..')
-const SHARED_DIR = path.join(REPO_ROOT, 'src', 'shared')
-const CONTRACT_DIR = path.join(SHARED_DIR, 'rpc-contract')
-const RPC_DIR = path.join(REPO_ROOT, 'src', 'main', 'runtime', 'rpc')
-const REGISTRY_ENTRY = path.join(RPC_DIR, 'methods', 'index.ts')
-const OUTPUT_PATH = path.join(CONTRACT_DIR, 'rpc-params-catalog.generated.ts')
+export const RPC_PARAMS_CATALOG_PATH = path.join(
+  'src',
+  'shared',
+  'rpc-contract',
+  'rpc-params-catalog.generated.ts'
+)
 
-// Why mkdirSync first: out/ is gitignored and absent on a fresh checkout, so
-// mkdtempSync threw ENOENT and took `pnpm lint` down with it. Why not os.tmpdir():
-// the bundle keeps its node_modules deps external and oxfmt reads .oxfmtrc.json by
-// walking up, so both scratch files have to sit under the repo to resolve at all.
-function scratchDir(prefix) {
-  const root = path.join(REPO_ROOT, 'out')
-  mkdirSync(root, { recursive: true })
-  return mkdtempSync(path.join(root, prefix))
+// Why a root parameter: the cross-version harness derives the catalog for an extracted
+// release tree, which no longer carries it in git.
+function catalogPaths(root) {
+  const sharedDir = path.join(root, 'src', 'shared')
+  const rpcDir = path.join(root, 'src', 'main', 'runtime', 'rpc')
+  return {
+    root,
+    sharedDir,
+    contractDir: path.join(sharedDir, 'rpc-contract'),
+    rpcDir,
+    registryEntry: path.join(rpcDir, 'methods', 'index.ts'),
+    outputPath: path.join(root, RPC_PARAMS_CATALOG_PATH)
+  }
+}
+
+// Why mkdirSync first: out/ is gitignored and absent on a fresh checkout. Why not
+// os.tmpdir(): the bundle keeps its node_modules deps external, so it has to sit
+// under the tree, and the tree under a directory whose node_modules resolves them.
+function scratchDir(root, prefix) {
+  const out = path.join(root, 'out')
+  mkdirSync(out, { recursive: true })
+  return mkdtempSync(path.join(out, prefix))
 }
 
 const posix = (value) => value.split(path.sep).join('/')
-const repoPath = (absolute) => posix(path.relative(REPO_ROOT, absolute))
 
 // Every module the catalog may import from: the extracted params modules plus the
 // pre-existing src/shared schemas the RPC methods already bind directly.
-function indexableModules() {
-  // Tests are excluded here for the same reason as the RPC_DIR walk below: bundling one pulls
+function indexableModules({ sharedDir, contractDir, rpcDir, outputPath }) {
+  // Tests are excluded here for the same reason as the rpcDir walk below: bundling one pulls
   // vitest into the CJS catalog build, which throws on require().
   const modules = new Set(
-    globSync('*.ts', { cwd: CONTRACT_DIR })
+    globSync('*.ts', { cwd: contractDir })
       .filter((name) => !name.endsWith('.test.ts'))
-      .map((name) => path.join(CONTRACT_DIR, name))
+      .map((name) => path.join(contractDir, name))
   )
-  modules.delete(OUTPUT_PATH)
-  for (const file of globSync('**/*.ts', { cwd: RPC_DIR })) {
+  modules.delete(outputPath)
+  for (const file of globSync('**/*.ts', { cwd: rpcDir })) {
     if (file.endsWith('.test.ts')) {
       continue
     }
-    const source = readFileSync(path.join(RPC_DIR, file), 'utf8')
+    const source = readFileSync(path.join(rpcDir, file), 'utf8')
     for (const [, specifier] of source.matchAll(/from\s+'(\.[^']+)'/g)) {
-      const resolved = `${path.resolve(path.dirname(path.join(RPC_DIR, file)), specifier)}.ts`
-      // Never re-add the generator's own output: a module under RPC_DIR may import the
+      const resolved = `${path.resolve(path.dirname(path.join(rpcDir, file)), specifier)}.ts`
+      // Never re-add the generator's own output: a module under rpcDir may import the
       // catalog for a type-only contract, and bundling a stale catalog makes regeneration
       // crash in exactly the state that requires regenerating.
       if (
-        resolved !== OUTPUT_PATH &&
-        resolved.startsWith(`${SHARED_DIR}${path.sep}`) &&
+        resolved !== outputPath &&
+        resolved.startsWith(`${sharedDir}${path.sep}`) &&
         existsSync(resolved)
       ) {
         modules.add(resolved)
@@ -72,18 +85,19 @@ function indexableModules() {
 
 // Why: one bundle keeps the registry and the shared modules on the same module
 // instances, so schema object identity is what maps a method to its export.
-function loadRegistryAndSchemas(modules) {
-  const buildDir = scratchDir('rpc-params-catalog-')
+function loadRegistryAndSchemas({ root, registryEntry }, modules) {
+  const buildDir = scratchDir(root, 'rpc-params-catalog-')
   try {
     const entry = path.join(buildDir, 'entry.ts')
     const importOf = (file) => JSON.stringify(posix(path.relative(buildDir, file)))
     writeFileSync(
       entry,
       [
-        `export { ALL_RPC_METHODS } from ${importOf(REGISTRY_ENTRY)}`,
+        `export { ALL_RPC_METHODS } from ${importOf(registryEntry)}`,
         'export const SCHEMA_MODULES = {',
         ...modules.map(
-          (file) => `  ${JSON.stringify(repoPath(file))}: require(${importOf(file)}),`
+          (file) =>
+            `  ${JSON.stringify(posix(path.relative(root, file)))}: require(${importOf(file)}),`
         ),
         '}'
       ].join('\n')
@@ -142,7 +156,7 @@ function localNameFor(origin, taken) {
   return candidate
 }
 
-function render({ methods, schemaModules }) {
+function render({ root, contractDir }, { methods, schemaModules }) {
   const index = buildSchemaIndex(schemaModules)
   const entries = []
   const uncataloged = []
@@ -180,7 +194,7 @@ function render({ methods, schemaModules }) {
   const importLines = [...byModule]
     .sort(([left], [right]) => (left < right ? -1 : 1))
     .map(([modulePath, names]) => {
-      let specifier = posix(path.relative(CONTRACT_DIR, path.join(REPO_ROOT, modulePath))).replace(
+      let specifier = posix(path.relative(contractDir, path.join(root, modulePath))).replace(
         /\.ts$/,
         ''
       )
@@ -190,8 +204,8 @@ function render({ methods, schemaModules }) {
       return `import { ${names.sort().join(', ')} } from '${specifier}'`
     })
 
-  return `// GENERATED by config/scripts/generate-rpc-params-catalog.mjs. Do not edit;
-// run \`pnpm run generate:rpc-params-catalog\`.
+  return `// GENERATED by config/scripts/generate-rpc-params-catalog.mjs (run by build:packages).
+// Gitignored build output; do not edit.
 import type { z } from 'zod'
 ${importLines.join('\n')}
 
@@ -221,43 +235,26 @@ export type RpcParams<Method extends RpcMethodName> =
 `
 }
 
-// Why: the drift gate compares bytes, so the generator must emit exactly what the
-// formatter would produce or every run would look like drift.
-function formatted(source) {
-  const buildDir = scratchDir('rpc-params-catalog-fmt-')
-  try {
-    const file = path.join(buildDir, 'rpc-params-catalog.generated.ts')
-    writeFileSync(file, source)
-    const { command, prefixArgs } = resolveOxcCliInvocation('oxfmt', 'oxfmt', REPO_ROOT)
-    execFileSync(command, [...prefixArgs, '--write', file], {
-      stdio: 'ignore',
-      windowsHide: true
-    })
-    return readFileSync(file, 'utf8')
-  } finally {
-    rmSync(buildDir, { recursive: true, force: true })
+/** Derive the catalog for the tree at `root` and write it only when its content changed. */
+export function writeRpcParamsCatalog(root = REPO_ROOT) {
+  const paths = catalogPaths(root)
+  const generated = render(paths, loadRegistryAndSchemas(paths, indexableModules(paths)))
+  // Why compare first: an unchanged mtime keeps incremental tsc and dev watchers idle.
+  if (existsSync(paths.outputPath) && readFileSync(paths.outputPath, 'utf8') === generated) {
+    return false
   }
+  // Why rename: a concurrent tsc, vitest or dev watcher never reads a half-written module.
+  const staged = `${paths.outputPath}.${process.pid}.tmp`
+  writeFileSync(staged, generated)
+  renameSync(staged, paths.outputPath)
+  return true
 }
 
-function main() {
-  const check = process.argv.includes('--check')
-  const generated = formatted(render(loadRegistryAndSchemas(indexableModules())))
-  const current = existsSync(OUTPUT_PATH) ? readFileSync(OUTPUT_PATH, 'utf8') : null
-  if (generated === current) {
-    if (!check) {
-      console.log(`rpc params catalog already up to date: ${repoPath(OUTPUT_PATH)}`)
-    }
-    return
+if (process.argv[1] && path.resolve(process.argv[1]) === import.meta.filename) {
+  const rootFlag = process.argv.indexOf('--root')
+  if (
+    writeRpcParamsCatalog(rootFlag === -1 ? REPO_ROOT : path.resolve(process.argv[rootFlag + 1]))
+  ) {
+    console.log(`wrote ${posix(RPC_PARAMS_CATALOG_PATH)}`)
   }
-  if (check) {
-    console.error(
-      `${repoPath(OUTPUT_PATH)} is out of date. Run \`pnpm run generate:rpc-params-catalog\`.`
-    )
-    process.exitCode = 1
-    return
-  }
-  writeFileSync(OUTPUT_PATH, generated)
-  console.log(`wrote ${repoPath(OUTPUT_PATH)}`)
 }
-
-main()

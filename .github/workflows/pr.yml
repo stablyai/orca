@@ -447,10 +447,6 @@ jobs:
           ORCA_BACKGROUND_LAUNCH: '1'
         run: pnpm run smoke:orcad-terminal
 
-      - name: Verify the generated RPC params catalog
-        if: needs.code_paths.outputs.static_analysis == 'true'
-        run: node config/scripts/generate-rpc-params-catalog.mjs --check
-
       - name: Verify the generated ACP protocol schema
         if: needs.code_paths.outputs.static_analysis == 'true'
         run: node config/scripts/acp/generate-protocol.mjs --check
