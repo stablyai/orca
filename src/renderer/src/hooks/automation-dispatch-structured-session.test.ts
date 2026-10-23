@@ -25,27 +25,30 @@ const {
 }))
 
 let latestStoreSubscriber: (() => void) | null = null
-const state: Record<string, unknown> = {
-  activeView: 'terminal',
-  activeWorktreeId: 'wt-active',
-  activeWorkspaceExecutionHostId: null,
-  activeTabId: 'tab-active',
-  activeTabType: 'terminal',
-  settings: { experimentalNativeChat: true },
-  repos: [{ id: 'repo-1', connectionId: null, executionHostId: null, path: '/repo' }],
-  folderWorkspaces: [],
-  projectGroups: [],
-  worktreesByRepo: {},
-  detectedWorktreesByRepo: {},
-  agentStatusByPaneKey: {},
-  allWorktrees: vi.fn(() => []),
-  getKnownWorktreeById: vi.fn(() => undefined),
-  createWorktree: mockCreateWorktree,
-  setActiveView: vi.fn(),
-  setActiveWorktree: vi.fn(),
-  setActiveTab: vi.fn(),
-  setActiveTabType: vi.fn()
+function createBaseStoreState(): Record<string, unknown> {
+  return {
+    activeView: 'terminal',
+    activeWorktreeId: 'wt-active',
+    activeWorkspaceExecutionHostId: null,
+    activeTabId: 'tab-active',
+    activeTabType: 'terminal',
+    settings: { experimentalNativeChat: true },
+    repos: [{ id: 'repo-1', connectionId: null, executionHostId: null, path: '/repo' }],
+    folderWorkspaces: [],
+    projectGroups: [],
+    worktreesByRepo: {},
+    detectedWorktreesByRepo: {},
+    agentStatusByPaneKey: {},
+    allWorktrees: vi.fn(() => []),
+    getKnownWorktreeById: vi.fn(() => undefined),
+    createWorktree: mockCreateWorktree,
+    setActiveView: vi.fn(),
+    setActiveWorktree: vi.fn(),
+    setActiveTab: vi.fn(),
+    setActiveTabType: vi.fn()
+  }
 }
+let state: Record<string, unknown> = createBaseStoreState()
 
 vi.mock('@/store', () => ({
   useAppStore: {
@@ -114,8 +117,7 @@ describe('automation dispatch structured chat session', () => {
     mockSubmitPromptToAgentPty.mockResolvedValue(true)
     mockObserveExistingAutomationSession.mockResolvedValue(() => {})
     latestStoreSubscriber = null
-    state.settings = { experimentalNativeChat: true }
-    state.agentStatusByPaneKey = {}
+    state = createBaseStoreState()
     mockCreateWorktree.mockResolvedValue({
       worktree: {
         id: 'wt-created',
@@ -692,19 +694,23 @@ describe('automation dispatch structured chat session', () => {
         stateStartedAt: 10,
         stateHistory: []
       }
-      state.settings = { experimentalNativeChat: true }
-      state.agentStatusByPaneKey = { [paneKey]: idleStatus }
-      state.ptyIdsByTabId = { [tabId]: ['pty-1'] }
-      state.terminalLayoutsByTabId = { [tabId]: { ptyIdsByLeafId: { [leafId]: 'pty-1' } } }
-      state.unifiedTabsByWorktree = {
-        'wt-1': [
-          {
-            id: tabId,
-            contentType: structured ? 'agent-session' : 'terminal',
-            entityId: structured ? 'sess-1' : tabId
-          }
-        ]
+      const initialSnapshot = {
+        ...createBaseStoreState(),
+        settings: { experimentalNativeChat: true },
+        agentStatusByPaneKey: { [paneKey]: idleStatus },
+        ptyIdsByTabId: { [tabId]: ['pty-1'] },
+        terminalLayoutsByTabId: { [tabId]: { ptyIdsByLeafId: { [leafId]: 'pty-1' } } },
+        unifiedTabsByWorktree: {
+          'wt-1': [
+            {
+              id: tabId,
+              contentType: structured ? 'agent-session' : 'terminal',
+              entityId: structured ? 'sess-1' : tabId
+            }
+          ]
+        }
       }
+      state = initialSnapshot
 
       let finishHistory: ((runs: unknown[]) => void) | undefined
       mockListAutomationRunsForTarget.mockReturnValue(
@@ -743,18 +749,24 @@ describe('automation dispatch structured chat session', () => {
       })
 
       if (change === 'becomes-busy') {
-        state.agentStatusByPaneKey = {
-          [paneKey]: {
-            ...idleStatus,
-            state: 'working',
-            prompt: 'user task',
-            updatedAt: 20,
-            stateStartedAt: 20
+        state = {
+          ...initialSnapshot,
+          agentStatusByPaneKey: {
+            [paneKey]: {
+              ...idleStatus,
+              state: 'working',
+              prompt: 'user task',
+              updatedAt: 20,
+              stateStartedAt: 20
+            }
           }
         }
       }
       if (change === 'chat-disabled') {
-        state.settings = { experimentalNativeChat: false }
+        state = {
+          ...initialSnapshot,
+          settings: { experimentalNativeChat: false }
+        }
       }
 
       finishHistory?.([
