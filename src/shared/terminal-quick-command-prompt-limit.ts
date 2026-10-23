@@ -1,4 +1,5 @@
 import { getTerminalInputByteLength } from './terminal-input'
+import { structuredAgentSessionBlocksByteLength } from './rpc-contract/structured-agent-session-message-params'
 import { TERMINAL_QUICK_COMMAND_LONG_PROMPTS_RUNTIME_CAPABILITY } from './terminal-quick-command-capabilities'
 import type {
   TerminalQuickCommand,
@@ -45,7 +46,7 @@ export function getTerminalQuickCommandBodyMaxLength(
 
 /** The prompt's size as a chat message's text block, the limit every saved prompt must fit. */
 export function getTerminalQuickCommandPromptMessageBytes(prompt: string): number {
-  return getTerminalInputByteLength(JSON.stringify([{ type: 'text', text: prompt }]))
+  return structuredAgentSessionBlocksByteLength([{ type: 'text', text: prompt }])
 }
 
 export type TerminalQuickCommandBodySize = {

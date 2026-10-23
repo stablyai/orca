@@ -4,7 +4,7 @@ import { DaemonPtyRouter } from './daemon-pty-router'
 import { stubWriteSettlement } from '../providers/settled-pty-write-stub'
 import { SessionNotFoundError, TerminalSessionOwnerUnverifiedError } from './daemon-errors'
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
-import type { PtySpawnResult } from '../providers/pty-provider-contract'
+import type { PtyProcessInfo, PtySpawnResult } from '../providers/pty-provider-contract'
 import {
   AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION,
   AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION
@@ -211,6 +211,80 @@ describe('DaemonPtyRouter', () => {
     expect(router.providesAgentSessionOwnerListings('legacy-session')).toBe(true)
     expect(router.providesAgentSessionOwnerListings(created.id)).toBe(true)
     expect(router.providesAgentSessionOwnerListings('unknown-session')).toBe(false)
+  })
+
+  it.each([false, true])(
+    'keeps newer spawn authority when an older listing completes (duplicate ids: %s)',
+    async (duplicateIds) => {
+      const current = createAdapter('current')
+      const legacy = createAdapter('legacy')
+      current.supportsFencedTermination = () => true
+      current.killFenced = vi.fn(async () => ({ outcome: 'ended' as const }))
+      legacy.supportsFencedTermination = () => false
+      legacy.killFenced = vi.fn(async () => ({
+        outcome: 'refused' as const,
+        reason: 'unsupported' as const
+      }))
+      vi.mocked(current.spawn).mockResolvedValue({ id: 'raced', incarnationId: 'new' })
+      vi.mocked(current.listProcesses).mockResolvedValue(
+        duplicateIds ? [{ id: 'raced', incarnationId: 'old-current', cwd: '', title: '' }] : []
+      )
+      const { promise: oldInventory, resolve: release } = Promise.withResolvers<PtyProcessInfo[]>()
+      vi.mocked(legacy.listProcesses).mockReturnValue(oldInventory)
+      const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+      const oldListing = router.listProcesses()
+      expect(legacy.listProcesses).toHaveBeenCalledOnce()
+      await router.spawn({ sessionId: 'raced', isNewSession: true, cols: 80, rows: 24 })
+      release([{ id: 'raced', incarnationId: 'old-legacy', cwd: '', title: '' }])
+      await expect(oldListing).rejects.toBeInstanceOf(TerminalSessionOwnerUnverifiedError)
+      const request = {
+        id: 'raced',
+        expectedIncarnationId: 'new',
+        requireNoAgentOwner: true,
+        requireUnattached: true
+      }
+
+      expect(router.supportsFencedTermination('raced')).toBe(true)
+      await expect(router.killFenced(request)).resolves.toEqual({ outcome: 'ended' })
+      expect(current.killFenced).toHaveBeenCalledExactlyOnceWith(request)
+      expect(legacy.killFenced).not.toHaveBeenCalled()
+      expect(current.listProcesses).toHaveBeenCalledOnce()
+      expect(legacy.listProcesses).toHaveBeenCalledOnce()
+    }
+  )
+
+  it('does not let an older refresh overwrite a newer discovery route', async () => {
+    const current = createAdapter('current')
+    const legacy = createAdapter('legacy')
+    current.supportsFencedTermination = () => true
+    current.killFenced = vi.fn(async () => ({ outcome: 'ended' as const }))
+    legacy.supportsFencedTermination = () => false
+    const { promise: staleCurrent, resolve: releaseCurrent } =
+      Promise.withResolvers<PtyProcessInfo[]>()
+    const { promise: staleLegacy, resolve: releaseLegacy } =
+      Promise.withResolvers<PtyProcessInfo[]>()
+    vi.mocked(current.listProcesses)
+      .mockReturnValueOnce(staleCurrent)
+      .mockResolvedValueOnce([{ id: 'discovered', incarnationId: 'new', cwd: '', title: '' }])
+    vi.mocked(legacy.listProcesses).mockReturnValueOnce(staleLegacy).mockResolvedValueOnce([])
+    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+    const staleRefresh = router.listProcesses()
+    await router.discoverLegacySessions()
+    releaseCurrent([])
+    releaseLegacy([{ id: 'discovered', incarnationId: 'old', cwd: '', title: '' }])
+    await expect(staleRefresh).rejects.toBeInstanceOf(TerminalSessionOwnerUnverifiedError)
+    const request = {
+      id: 'discovered',
+      expectedIncarnationId: 'new',
+      requireNoAgentOwner: true,
+      requireUnattached: true
+    }
+
+    expect(router.supportsFencedTermination('discovered')).toBe(true)
+    await expect(router.killFenced(request)).resolves.toEqual({ outcome: 'ended' })
+    expect(current.killFenced).toHaveBeenCalledExactlyOnceWith(request)
+    expect(current.listProcesses).toHaveBeenCalledTimes(2)
+    expect(legacy.listProcesses).toHaveBeenCalledTimes(2)
   })
 
   it('does not publish a route when the adapter proves exit before reply', async () => {

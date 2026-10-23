@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
+import { bindPaneFirst, committingSpawn, registerBoundPty } from '../bind-first-pane.test-fixture'
 import { OrcaRuntimeService, electronMocks, ipcMain } from '../orca-runtime-test-mocks.spec'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import {
   HEADLESS_LEAF_ID,
   HEADLESS_SECOND_LEAF_ID,
@@ -63,7 +65,7 @@ describe('OrcaRuntimeService', () => {
         })
       } as never)
       runtime.setPtyController({
-        spawn,
+        spawn: committingSpawn(runtime, spawn),
         write: () => true,
         kill: () => true,
         getForegroundProcess: async () => null
@@ -109,7 +111,7 @@ describe('OrcaRuntimeService', () => {
         })
       } as never)
       runtime.setPtyController({
-        spawn,
+        spawn: committingSpawn(runtime, spawn),
         write: () => true,
         kill: () => true,
         getForegroundProcess: async () => null
@@ -156,7 +158,7 @@ describe('OrcaRuntimeService', () => {
         })
       } as never)
       runtime.setPtyController({
-        spawn,
+        spawn: committingSpawn(runtime, spawn),
         write: () => true,
         kill: () => true,
         getForegroundProcess: async () => null
@@ -188,7 +190,7 @@ describe('OrcaRuntimeService', () => {
       })
     } as never)
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null
@@ -285,7 +287,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       closeTerminal: vi.fn(),
       closeSessionTab: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -296,6 +297,18 @@ describe('OrcaRuntimeService', () => {
         { sender: { send: vi.fn() } },
         { requestId: payload.requestId, error: 'spoofed renderer reply' }
       )
+      bindPaneFirst(runtime, {
+        worktreeId: TEST_WORKTREE_ID,
+        tabId: 'tab-renderer',
+        leafId: HEADLESS_LEAF_ID,
+        ptyId: 'pty-renderer',
+        viewMode: 'chat'
+      })
+      // As the renderer's spawn commit: the bound terminal registers.
+      registerBoundPty(runtime, 'pty-renderer', TEST_WORKTREE_ID, null, {
+        tabId: 'tab-renderer',
+        leafId: HEADLESS_LEAF_ID
+      })
       runtime.syncWindowGraph(1, {
         tabs: [],
         leaves: [
@@ -444,7 +457,12 @@ describe('OrcaRuntimeService', () => {
       ]
     })
 
-    expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toEqual([])
+    // With the switch on the window's graph does not edit main's layout, which still binds the pane.
+    expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toEqual(
+      ORCA_LAYOUT_OWNER_IS_MAIN
+        ? [expect.objectContaining({ parentTabId: 'tab-renderer', ptyId: 'pty-renderer' })]
+        : []
+    )
   })
 
   it('dedupes concurrent mobile terminal creates that share a clientMutationId', async () => {
@@ -460,7 +478,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       closeTerminal: vi.fn(),
       closeSessionTab: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -545,7 +562,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       closeTerminal: vi.fn(),
       closeSessionTab: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })

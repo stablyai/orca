@@ -339,7 +339,7 @@ describe('per-job path classification', () => {
       'config/scripts/build-mobile-web-app-bundle.mjs',
       'config/scripts/run-mobile-web-app-checks.mjs',
       'src/packages/process-host/src/run-process.ts',
-      'config/scripts/mobile-web-app-route-manifest.mjs',
+      'config/scripts/mobile-web-app/mobile-web-app-route-manifest.mjs',
       'config/scripts/mobile-web-app/platform-seams/mobile-web-app-haptics-seam.mjs',
       'config/scripts/mobile-web-app/platform-seams/mobile-web-app-haptics-seam.test.mjs',
       'mobile/web-entry/index.tsx',

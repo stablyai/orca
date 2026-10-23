@@ -102,7 +102,7 @@ export function observeTerminals(runtime: ObservingRuntime, selector: string) {
 }
 
 /** The sync key of an `id:` selector routed by the repo rows; null when only a lookup can say. */
-function explicitKey(
+export function explicitKey(
   repos: readonly LaunchHostRepo[],
   selector: string,
   hostId?: string | null
@@ -161,22 +161,6 @@ export function queueTerminalWorkspaceCommand<T>(
   return key
     ? queue.submit(key, command)
     : queue.submitResolving(() => lookedUpKey(runtime, selector), command)
-}
-
-/** `worktree.sleep`: a phone's or the CLI's sleep of the whole workspace. */
-export function queueWorktreeSleep(
-  runtime: LifecycleRuntime &
-    ObservingRuntime & {
-      sleepManagedWorktree: (selector: string) => Promise<{ worktreeId: string }>
-    },
-  selector: string
-): Promise<{ worktreeId: string }> {
-  return queueTerminalWorkspaceCommand(runtime, selector, {
-    kind: 'sleep',
-    run: () => runtime.sleepManagedWorktree(selector),
-    lostContact: terminalLostContact,
-    observe: observeTerminals(runtime, selector)
-  })
 }
 
 /**

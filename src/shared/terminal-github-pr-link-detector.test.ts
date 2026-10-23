@@ -20,6 +20,22 @@ describe('createTerminalGitHubPRLinkDetector', () => {
     ])
   })
 
+  it('skips nested schemes and continues through mixed HTTP and HTTPS candidates', () => {
+    const observe = createTerminalGitHubPRLinkDetector()
+    const urls = [
+      'https://github.com/acme/orca/pull/1',
+      'http://github.internal/acme/orca/pull/2',
+      'https://github.com/acme/orca/pull/3'
+    ]
+    const output = [
+      'https://example.com/redirect?to=http://github.com/acme/orca/pull/99',
+      ...urls,
+      ''
+    ].join('\n')
+
+    expect(observe(output).map((link) => link.url)).toEqual(urls)
+  })
+
   it('detects issue 8126 Claude Code PR links with attached ANSI reset', () => {
     const observe = createTerminalGitHubPRLinkDetector()
 

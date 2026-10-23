@@ -278,6 +278,7 @@ type LayoutOwnedSessionField = {
 const LAYOUT_SESSION = {
   clientHostedBrowserPagesByWorktree: own('records', 'clientHostedBrowserPagesByWorkspace'),
   defaultTerminalTabsAppliedByWorktreeId: own('records', 'defaultTabsAppliedByWorkspace'),
+  closedTerminalPanesByPaneKey: own('records', 'closedTerminalPanesByPaneKey'),
   terminalTopologyRevisionByRepoId: own('legacy', 'topologyRevisionByRepoId'),
   tabGroupLayouts: { from: 'workspace.groupLayout', via: ['group.id'] },
   // Which workspaces keep a (possibly empty) terminal row list.

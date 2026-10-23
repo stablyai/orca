@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import { SSH_EXIT_UNCONFIRMED_REASON } from '../../shared/pty-liveness-verdict'
+import { registerBoundPty } from './bind-first-pane.test-fixture'
 
 export function registerPtyInventoryLivenessVerdictTests(): void {
   // The aggregate inventory only enumerates registered providers, so a dropped
@@ -20,10 +21,12 @@ export function registerPtyInventoryLivenessVerdictTests(): void {
   }
 
   function makeStore() {
-    const session = getDefaultWorkspaceSession()
+    let session = getDefaultWorkspaceSession()
     return {
       getWorkspaceSession: vi.fn(() => session),
-      setWorkspaceSession: vi.fn(),
+      setWorkspaceSession: vi.fn((next: typeof session) => {
+        session = next
+      }),
       getRepos: vi.fn(() => [
         {
           id: 'repo-1',
@@ -195,7 +198,7 @@ export function registerPtyInventoryLivenessVerdictTests(): void {
       expect(runtime.getPtyLivenessVerdict(REMOTE_PTY_ID)).toBeNull()
 
       runtime.markPtyLivenessUnverifiable(REMOTE_PTY_ID, 'registration raced reconnect')
-      runtime.registerPty(REMOTE_PTY_ID, WORKTREE_ID, 'conn-1', {
+      registerBoundPty(runtime, REMOTE_PTY_ID, WORKTREE_ID, 'conn-1', {
         tabId: 'tab-new',
         leafId: '00000000-0000-4000-8000-000000000001',
         incarnationId: 'incarnation-2'

@@ -49,7 +49,8 @@ export const SESSION_FIELD_OWNERS = {
   // Applied and cleared by the Loader; never written again.
   terminalSurfaceTombstonesByPaneKey: 'legacy',
   closedTerminalTabTombstonesByTabId: 'layout',
-  sessionCustomTitles: 'carried'
+  sessionCustomTitles: 'carried',
+  closedTerminalPanesByPaneKey: 'layout'
 } as const satisfies Record<keyof WorkspaceSessionState, SessionFieldOwner>
 
 type FieldsOwnedBy<Owner extends SessionFieldOwner> = {

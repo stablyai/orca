@@ -166,14 +166,22 @@ export function serverTabIdOf(desktopTabId: string): string {
   return isWebTerminalSurfaceTabId(desktopTabId) ? toHostSessionTabId(desktopTabId) : desktopTabId
 }
 
-/** A desktop editor tab's file id as the server knows it: its own file, owned by no environment. */
-function serverEditorEntityId(entityId: string, layout: PublishedWorkspaceLayout): string {
-  const file = layout.editorFiles.find(
+/** A desktop editor file id as the server knows it: its own file, owned by no environment; unchanged
+ *  when no record names it (`desktopEditorEntityId` then hands it back unchanged too). */
+export function serverEditorFileId(
+  fileId: string,
+  worktreeId: string,
+  files: readonly Pick<PublishedEditorFile, 'filePath' | 'runtimeEnvironmentId'>[]
+): string {
+  const file = files.find(
     (candidate) =>
-      ownedEditorFileId(candidate.filePath, layout.worktreeId, candidate.runtimeEnvironmentId) ===
-      entityId
+      ownedEditorFileId(candidate.filePath, worktreeId, candidate.runtimeEnvironmentId) === fileId
   )
-  return file ? ownedEditorFileId(file.filePath, layout.worktreeId, undefined) : entityId
+  return file ? ownedEditorFileId(file.filePath, worktreeId, undefined) : fileId
+}
+
+function serverEditorEntityId(entityId: string, layout: PublishedWorkspaceLayout): string {
+  return serverEditorFileId(entityId, layout.worktreeId, layout.editorFiles)
 }
 
 /**

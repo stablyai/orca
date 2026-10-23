@@ -58,6 +58,7 @@ let reloadRequests = paneChannel<BrowserPageCommandTarget>()
 let hardReloadRequests = paneChannel<BrowserPageCommandTarget>()
 let zoomRequests = paneChannel<BrowserPageZoomCommand>()
 let openDevTools = vi.fn(async () => true)
+let copyImageAt = vi.fn(async () => true)
 let zoomPage = vi.fn(async (): Promise<BrowserPageSiteDisplay | null> => null)
 let proceedCertificate = vi.fn(async () => ({ ok: true as const }))
 let openUrl = vi.fn(async () => {})
@@ -74,6 +75,7 @@ beforeEach(() => {
   hardReloadRequests = paneChannel()
   zoomRequests = paneChannel()
   openDevTools = vi.fn(async () => true)
+  copyImageAt = vi.fn(async () => true)
   zoomPage = vi.fn(async () => ({
     site: 'example.com',
     zoomLevel: normalizeBrowserPageZoomLevel(1),
@@ -89,6 +91,7 @@ beforeEach(() => {
       onContextMenuDismissed: contextMenuDismissed.subscribe,
       onPermissionDenied: permissionDenied.subscribe,
       openDevTools,
+      copyImageAt,
       proceedCertificate,
       zoomPage
     },
@@ -125,12 +128,54 @@ describe('ClientHostedBrowserPagePane chrome parity', () => {
     expect(webview.goBack).toHaveBeenCalledTimes(1)
 
     act(() => contextMenu.emit(contextMenuEvent()))
-    act(() => screen.getByRole('menuitem', { name: 'Inspect Page' }).click())
-    expect(openDevTools).toHaveBeenCalledWith({ browserPageId: 'page-a' })
+    act(() => screen.getByRole('menuitem', { name: 'Inspect' }).click())
+    expect(openDevTools).toHaveBeenCalledWith({
+      browserPageId: 'page-a',
+      inspectAt: { x: 10, y: 10 }
+    })
 
     act(() => contextMenu.emit(contextMenuEvent()))
     act(() => screen.getByRole('menuitem', { name: 'Copy Page URL' }).click())
     expect(writeClipboardText).toHaveBeenCalledWith('https://example.internal/app')
+  })
+
+  it('shows what was clicked instead of page actions, and runs edits on the guest', () => {
+    const { webview } = renderPane()
+    const editable = {
+      canUndo: false,
+      canRedo: false,
+      canCut: false,
+      canCopy: false,
+      canPaste: true,
+      canSelectAll: true,
+      spelling: { suggestions: ['quick'], misspelledWord: 'quikc' }
+    }
+    const menuLabels = (): (string | null)[] =>
+      screen.getAllByRole('menuitem').map((item) => item.textContent)
+
+    act(() => contextMenu.emit(contextMenuEvent({ x: 30, y: 40, editable })))
+    expect(menuLabels()).not.toContain('Back')
+    expect(screen.getByRole('menuitem', { name: 'Cut' })).toHaveProperty('disabled', true)
+    act(() => screen.getByRole('menuitem', { name: 'quick' }).click())
+    expect(webview.replaceMisspelling).toHaveBeenCalledWith('quick')
+
+    act(() => contextMenu.emit(contextMenuEvent({ editable })))
+    act(() => screen.getByRole('menuitem', { name: 'Paste' }).click())
+    expect(webview.paste).toHaveBeenCalledTimes(1)
+
+    act(() =>
+      contextMenu.emit(
+        contextMenuEvent({
+          x: 30,
+          y: 40,
+          image: { url: 'data:image/png;base64,AA', canCopy: true }
+        })
+      )
+    )
+    // Why: a data: image has no URL a tab can load on its own.
+    expect(menuLabels()).not.toContain('Open Image in New Tab')
+    act(() => screen.getByRole('menuitem', { name: 'Copy Image' }).click())
+    expect(copyImageAt).toHaveBeenCalledWith({ browserPageId: 'page-a', point: { x: 30, y: 40 } })
   })
 
   it('opens Find from the chord in chrome and from the chord forwarded out of the guest', () => {
@@ -397,8 +442,10 @@ function contextMenuEvent(
     selectionText: '',
     canGoBack: true,
     canGoForward: false,
+    editable: null,
+    image: null,
     ...overrides
-  } as BrowserContextMenuRequestedEvent
+  }
 }
 
 function renderPane(
@@ -467,6 +514,8 @@ function createWebview(): Electron.WebviewTag & { setZoomLevel: ReturnType<typeo
     blur: vi.fn(),
     goBack: vi.fn(),
     goForward: vi.fn(),
+    paste: vi.fn(),
+    replaceMisspelling: vi.fn(),
     reload: vi.fn(),
     reloadIgnoringCache: vi.fn(),
     stop: vi.fn(),

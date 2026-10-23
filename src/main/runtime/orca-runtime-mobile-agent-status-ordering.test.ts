@@ -4,6 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import type { AgentStatusEntry, AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import { makePaneKey } from '../../shared/stable-pane-id'
+import { committingSpawn } from './bind-first-pane.test-fixture'
+import { makeRuntimeStoreWithWorkspaceSession } from './orca-runtime-test-fixtures.spec'
+import { getDefaultWorkspaceSession } from '../../shared/constants'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },
@@ -23,7 +26,9 @@ const TRAILING_SPINNER_AT = STOP_AT + 4_534
 const PLAIN_TITLE_AT = STOP_AT + 4_800
 
 async function createRuntime(rows: AgentStatusIpcPayload[]): Promise<OrcaRuntimeService> {
-  const runtime = new OrcaRuntimeService(null, undefined, {
+  // Why a store: main's layout binds the pane in the store's workspace session.
+  const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(getDefaultWorkspaceSession())
+  const runtime = new OrcaRuntimeService(runtimeStore, undefined, {
     getAgentStatusSnapshot: () => rows
   })
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: resolveTerminalWorkspaceLaunchScope is a member of OrcaRuntimeService; the cast only exposes it to the spy.
@@ -38,7 +43,7 @@ async function createRuntime(rows: AgentStatusIpcPayload[]): Promise<OrcaRuntime
     folderWorkspace: null
   })
   runtime.setPtyController({
-    spawn: vi.fn().mockResolvedValue({ id: PTY_ID }),
+    spawn: committingSpawn(runtime, vi.fn().mockResolvedValue({ id: PTY_ID })),
     write: () => true,
     kill: () => true,
     getForegroundProcess: async () => null

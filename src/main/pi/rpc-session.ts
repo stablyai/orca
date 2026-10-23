@@ -25,6 +25,7 @@ import type { PiRpcResolvedLaunch } from './rpc-launch-resolution'
 import type { StructuredAgentSessionProviderOpenResult } from '../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
 import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
 import { PiRpcSessionStartup } from './rpc-session-startup'
+import { PiHistoryCapture, type PiHistoryCaptureDeps } from './rpc-history-capture'
 
 export type PiRpcConnection = Pick<
   JsonlRpcAgentConnection,
@@ -40,7 +41,7 @@ export type PiRpcConnection = Pick<
   | 'lastCloseResult'
   | 'onExit'
 >
-export type PiRpcSessionDeps = {
+export type PiRpcSessionDeps = PiHistoryCaptureDeps & {
   openConnection?: (
     launch: ProviderProcessLaunch,
     handlers: JsonlRpcAgentConnectionOptions
@@ -66,6 +67,7 @@ export class PiRpcSession {
   readonly heldSends = new Set<string>()
   readonly optionProof = { current: new Map<string, string>(), writes: new Map<string, symbol>() }
   readonly startup: PiRpcSessionStartup
+  readonly history = PiHistoryCapture.forSession(this, () => this.deps)
   initialOptions: Readonly<Record<string, string>> = {}
   openedLink: AgentSessionProviderHandleLink | null = null
   requestedClose = false
@@ -109,6 +111,7 @@ export class PiRpcSession {
       request: (command, params, options) => this.connection.request(command, params, options),
       settled: (id, outcome) => this.settle(id, outcome),
       idle: () => this.dialogs.cancelAll(),
+      turnEnded: () => this.history.turnEnded(),
       failed: (error) => this.fail(error),
       diagnostic: (error) =>
         deps.logger.warn('Pi context usage could not be read', {
@@ -178,6 +181,7 @@ export class PiRpcSession {
       ...(result.reportedOptions.effort ? { effort: result.reportedOptions.effort } : {})
     }
     this.openedLink = result.link ?? null
+    this.history.start(this.startup.historyAnchor)
     this.optionProof.current = new Map(Object.entries(this.initialOptions))
     void this.startup
       .readAfterOpen(this.generation, result.reportedOptions)

@@ -1,4 +1,4 @@
-import type { BrowserWindow, IpcMainEvent } from 'electron'
+import type { BrowserWindow, IpcMainEvent, WebContents } from 'electron'
 
 /**
  * The desktop facilities `OrcaRuntimeService` uses, which a Node host does not have.
@@ -24,6 +24,7 @@ export type RuntimeDesktopSurface = {
   showNotification(input: { title: string; body: string }): boolean
   /** The renderer window with this id, or null when there is no desktop. */
   findWindowById(id: number): BrowserWindow | null
+  isResourceViewVisible?(sender: WebContents): boolean
   onIpc(channel: string, listener: (event: IpcMainEvent, ...args: never[]) => void): void
   removeIpcListener(channel: string, listener: (...args: never[]) => void): void
   /** Re-encodes as a PNG fitting `maxEdge`; null if undecodable. Absent on Node hosts. */

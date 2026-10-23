@@ -17,6 +17,8 @@ import {
   getDiff
 } from '../../git/status'
 import { getHistory } from '../../git/history'
+import { isGitWorktreeMutationInFlight } from '../../git/git-worktree-mutation-state'
+import type { GitMutationInFlight } from '../../../shared/git-mutation-in-flight'
 import { checkIgnoredPaths } from '../../git/check-ignored-paths'
 import {
   appendFolderToGitignore,
@@ -195,6 +197,23 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
         worktreePath
       )
       return detectConflictOperation(worktreePath, gitOptions)
+    }
+  )
+
+  ipcMain.handle(
+    'git:mutationInFlight',
+    async (
+      _event,
+      args: { worktreePath: string; connectionId?: string }
+    ): Promise<GitMutationInFlight> => {
+      requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
+      return { inFlight: await isGitWorktreeMutationInFlight(worktreePath, gitOptions) }
     }
   )
 

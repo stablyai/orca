@@ -206,6 +206,7 @@
       "savedEnvironment": "저장된 값 · 바꾸려면 입력",
       "newEnvironment": "값",
       "removeEnvironment": "삭제",
+      "environmentUnclosedQuote": "환경을 저장하려면 따옴표를 닫으세요.",
       "loadingHost": "에이전트 설정 불러오는 중…",
       "updateHost": "에이전트 실행 설정을 편집하려면 이 서버를 업데이트하세요.",
       "readFailed": "에이전트 설정을 읽을 수 없습니다. 호스트 연결을 확인하고 다시 시도하세요.",
@@ -7093,7 +7094,8 @@
           "ee110e1830": "기본 기준 참조 없음"
         },
         "BrowserDefaultZoomSetting": {
-          "265597101f": "기본 줌"
+          "265597101f": "기본 줌",
+          "siteDefault": "아직 확대/축소하지 않은 사이트의 확대/축소"
         },
         "BrowserHomePageSetting": {
           "d4ddcd0056": "저장",
@@ -14487,13 +14489,31 @@
             "sourceActionsUnavailable": "스크립트 소스를 사용할 수 없습니다."
           },
           "AiVaultScanProgressStrip": {
+            "agentChecked": "{{agent}}: 기록 후보 {{total}}개 중 {{settled}}개 확인됨",
             "fileCount_one": "파일 {{value0}}개",
             "fileCount_other": "파일 {{value0}}개",
             "databaseCount_one": "데이터베이스 {{value0}}개",
             "databaseCount_other": "데이터베이스 {{value0}}개",
             "scanning": "{{value0}} 스캔 중",
-            "checking": "확인 중 {{value0}}",
+            "checking": "{{value0}} 확인 중",
             "scanned": "{{value0}} 스캔함"
+          },
+          "run": {
+            "source": {
+              "control": {
+                "agent": {
+                  "action": {
+                    "start": {
+                      "git": {
+                        "operation": {
+                          "running": "실행 중인 Git 작업이 끝날 때까지 기다리세요."
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       },
@@ -16358,6 +16378,9 @@
             },
             "sectionStale": {
               "notice": "이 섹션을 불러온 이후 디스크의 파일이 변경되었습니다."
+            },
+            "notUtf8": {
+              "notice": "{{name}}이(가) UTF-8 텍스트가 아니므로 자동 저장이 일시 중지되었습니다. UTF-8로 변환하려면 직접 저장하세요."
             }
           }
         },
@@ -16598,16 +16621,16 @@
                 "addQuickCommand": "빠른 명령 추가",
                 "newQuickCommand": "새로운 빠른 명령",
                 "splitChatRight": "바로 채팅 분할",
-                "moveChatRight": "채팅을 오른쪽으로 이동",
+                "newChatRight": "오른쪽에 새 채팅",
                 "chatPaneRight": "채팅창 오른쪽",
                 "splitChatDown": "채팅을 분할하다",
-                "moveChatDown": "채팅을 아래로 이동",
+                "newChatBelow": "아래에 새 채팅",
                 "chatPaneBelow": "아래 채팅 창"
               },
               "splitChatRight": "채팅을 오른쪽으로 분할",
-              "splitChatRightDescription": "오른쪽 분할 창에서 활성 채팅을 엽니다.",
+              "splitChatRightDescription": "오른쪽 분할 창에서 새 채팅을 엽니다.",
               "splitChatDown": "채팅 분할",
-              "splitChatDownDescription": "아래 분할 창에서 활성 채팅을 엽니다."
+              "splitChatDownDescription": "아래 분할 창에서 새 채팅을 엽니다."
             }
           },
           "palette": {
@@ -16677,7 +16700,6 @@
             "ec75d0c412": "브라우저 개발자 도구 열기",
             "fc9be38f6f": "페이지 요소에 주석 달기",
             "fdfc7fe0ef": "페이지 요소 가져오기",
-            "a8f37f70c3": "페이지 검사",
             "1b179ab561": "페이지 URL 복사",
             "f7ab83f7ed": "기본 브라우저에서 페이지 열기",
             "0e080d820e": "새로고침",
@@ -16740,7 +16762,21 @@
             "09a9489aa5": "표시",
             "2a4c4b8e1f": "복사",
             "b71dc3d930": "다시 연결",
-            "fileUrlUnsupported": "이 브라우저 탭은 로컬 파일을 열 수 없습니다. 대신 파일에서 \"측면으로 미리보기 열기\"를 사용하세요."
+            "fileUrlUnsupported": "이 브라우저 탭은 로컬 파일을 열 수 없습니다. 대신 파일에서 \"측면으로 미리보기 열기\"를 사용하세요.",
+            "addToDictionary": "사전에 추가",
+            "undo": "실행 취소",
+            "redo": "다시 실행",
+            "cut": "잘라내기",
+            "paste": "붙여넣기",
+            "pasteAndMatchStyle": "서식에 맞춰 붙여넣기",
+            "pasteAsPlainText": "일반 텍스트로 붙여넣기",
+            "selectAll": "모두 선택",
+            "openImageInNewTab": "새 탭에서 이미지 열기",
+            "saveImage": "이미지 저장",
+            "copyImage": "이미지 복사",
+            "copyImageAddress": "이미지 주소 복사",
+            "searchSelection": "{{value0}}에서 “{{value1}}” 검색",
+            "inspect": "검사"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "취소",
@@ -16765,7 +16801,16 @@
             "bf648471c5": "만드는 중…",
             "53bbe3dab4": "파일에서 {{value0}}개의 쿠키를 가져왔습니다.",
             "c5f0e4d3b2a1": "{{value1}} ({{value2}})에서 {{value0}}개의 쿠키를 가져왔습니다.",
-            "d6a1f5e4c3b2": "{{value1}}에서 {{value0}}개의 쿠키를 가져왔습니다."
+            "d6a1f5e4c3b2": "{{value1}}에서 {{value0}}개의 쿠키를 가져왔습니다.",
+            "zoom": "확대/축소",
+            "zoomOut": "축소",
+            "zoomIn": "확대",
+            "resetZoom": "확대/축소 재설정",
+            "appearance": "모양",
+            "appearanceMatchOrca": "Orca와 일치",
+            "appearanceLight": "밝게",
+            "appearanceDark": "어둡게",
+            "zoomPercent": "확대/축소 {{value0}}%"
           },
           "GrabConfirmationSheet": {
             "314a0aaa5b": "AI에 연결",
@@ -18238,6 +18283,21 @@
         "copyFailed": "링크를 복사할 수 없습니다.",
         "signingIn": "로그인 중…",
         "cancel": "취소"
+      },
+      "plainSshTerminal": {
+        "open": "일반 SSH 터미널 열기",
+        "unmanaged": "일반 SSH — 관리되지 않음. Orca 워크스페이스가 아니므로 여기의 에이전트와 탭은 추적되지 않고 이 터미널은 복원되지 않습니다. 닫으면 SSH 세션이 종료됩니다.",
+        "ended": "ssh가 코드 {{code}}로 종료되었습니다. 읽은 후 이 창을 닫으세요.",
+        "title": "일반 SSH · {{host}}",
+        "minimize": "최소화",
+        "close": "닫고 세션 종료",
+        "unknownTarget": "이 SSH 호스트는 더 이상 Orca에 저장되어 있지 않습니다.",
+        "notBlocked": "Orca가 이 호스트에 다시 연결할 수 있으므로 대신 해당 터미널을 사용하세요. 일반 SSH는 Orca가 호스트에서 설정할 수 없는 동안에만 사용합니다.",
+        "alreadyOpen": "다른 Orca 창에서 이 호스트에 대한 일반 SSH 터미널이 이미 열려 있습니다.",
+        "endedBySignal": "ssh가 중지되었습니다(신호 {{signal}}). 읽은 후 이 창을 닫으세요.",
+        "cancelled": "이 일반 SSH 터미널은 시작되기 전에 닫혔습니다.",
+        "terminalUnavailable": "Orca에서 여기의 터미널을 열 수 없습니다.",
+        "openHint": "Orca가 호스트에서 설정할 수 없는 동안에도 호스트에서 계속 작업할 수 있습니다."
       }
     },
     "i18n": {
@@ -18522,6 +18582,8 @@
         "settleEarlierMessage": "앞서 보낸 메시지가 전달될 때까지 기다리거나 다시 시도하세요.",
         "queueTooLarge": "대기열에 기다리는 텍스트가 너무 많습니다.",
         "shrinkQueue": "대기 중인 메시지를 삭제하거나 전달될 때까지 기다린 후 다시 시도하세요.",
+        "messageTooLarge": "메시지 하나의 한도인 256KB를 초과합니다.",
+        "shortenMessage": "줄이거나 나눈 다음 다시 보내세요.",
         "optionRejected": "에이전트가 이 설정을 받아들이지 않았습니다.",
         "goalsUnsupported": "이 에이전트는 목표를 지원하지 않습니다.",
         "agentRefused": "에이전트가 이를 거부했습니다.",
@@ -18564,6 +18626,10 @@
         "uploadingFile": "{{name}} 업로드 중…",
         "removeAttachment": "첨부파일 삭제",
         "pastedImageLabel": "붙여넣은 이미지",
+        "pastedTextLabel": "붙여넣은 텍스트",
+        "pasteNotSavedLabel": "붙여넣기가 저장되지 않음",
+        "pasteNotSaved": "이 붙여넣기는 저장되지 않았습니다. 다시 붙여넣거나 제거하세요.",
+        "pastedTextTooLarge": "이 붙여넣기로 메시지가 메시지당 한도인 256KB를 초과합니다. 줄인 다음 다시 붙여넣으세요.",
         "draftNotSaved": "이 초안을 아직 저장하지 못했습니다. Orca가 계속 다시 시도합니다.",
         "imageNotBroughtBack": "{{name}}을(를) 이 초안과 함께 복원하지 못했습니다. 다시 첨부하거나 제거하세요.",
         "pastedImageNotBroughtBack": "이 붙여넣은 이미지를 이 초안과 함께 복원하지 못했습니다. 제거한 후 필요하면 다시 붙여넣으세요.",
@@ -18651,7 +18717,8 @@
           "minimal": "최소",
           "medium": "중간",
           "xhigh": "매우 높음"
-        }
+        },
+        "imageUnavailable": "미리보기를 사용할 수 없음"
       },
       "tool": {
         "running": "실행 중…",
@@ -18833,7 +18900,9 @@
         "reason": "이유",
         "needsAccess": "접근이 필요한 경로",
         "plan": {
-          "file": "계획 파일"
+          "file": "계획 파일",
+          "reviewTitle": "제안된 계획 검토",
+          "refineHint": "계획 다듬기를 선택하면 검토가 닫히고 변경할 내용을 보낼 수 있습니다."
         }
       },
       "launchPromptNotDelivered": "전달되지 않음 — 터미널을 확인하세요",
@@ -19117,6 +19186,10 @@
       },
       "claudeSignIn": {
         "signingIn": "로그인 중…"
+      },
+      "imagePreview": {
+        "fileActions": "파일 작업",
+        "linkActions": "링크 작업"
       }
     },
     "tab": {
@@ -19809,6 +19882,27 @@
     },
     "request": {
       "pairedServerWorkspace": "이 워크스페이스는 페어링된 서버에서 실행됩니다. 해당 서버의 브라우저 탭을 사용하세요."
+    },
+    "newTab": {
+      "emptyHint": "위에서 검색하거나 주소를 입력하세요. 방문한 사이트, 이 워크스페이스에서 실행 중인 개발 서버, 해당 PR 및 이슈가 여기에 표시됩니다.",
+      "openServerFailed": "{{address}}을(를) 열 수 없습니다",
+      "removedFromHistory": "기록에서 “{{title}}”을(를) 제거했습니다",
+      "removeSuggestion": "기록에서 제거",
+      "state": {
+        "closed": "닫힘",
+        "draft": "초안",
+        "merged": "병합됨",
+        "open": "열림"
+      },
+      "suggested": "추천",
+      "thisWorkspace": "이 워크스페이스",
+      "undo": "실행 취소",
+      "checks": {
+        "failing": "검사 실패",
+        "passing": "검사 통과",
+        "pending": "검사 대기 중"
+      },
+      "runningElsewhere": "다른 워크스페이스에서 {{count}}개 실행 중"
     }
   },
   "runtimeRpc": {
@@ -19968,12 +20062,12 @@
       "status": "PR #{{number}} 연결 해제됨"
     },
     "discard": {
-      "deleteUntrackedFileDescription": "이 추적되지 않는 파일은 영구적으로 삭제됩니다. 이 작업은 취소할 수 없습니다.",
-      "deleteUntrackedFilesDescription": "이 {{count}}개의 추적되지 않는 파일은 영구적으로 삭제됩니다. 이 작업은 취소할 수 없습니다.",
+      "deleteUntrackedFileDescription": "이 추적되지 않은 파일은 영구적으로 삭제됩니다. 이 작업은 취소할 수 없습니다.",
+      "deleteUntrackedFilesDescription": "이 {{count}}개의 추적되지 않은 파일은 영구적으로 삭제됩니다. 이 작업은 취소할 수 없습니다.",
       "restoreStagedVersionDescription": "이렇게 하면 마지막 단계 버전이 복원되고 삭제가 취소됩니다. 이 작업은 취소할 수 없습니다.",
       "unstagedChangesDescription": "이렇게 하면 단계가 지정되지 않은 변경 사항이 이 파일로 되돌아갑니다. 이 작업은 취소할 수 없습니다.",
-      "unstagedSelectionIncludingUntrackedDescription": "스테이징되지 않은 변경 사항을 되돌리고 이 선택 항목의 추적되지 않는 파일을 영구적으로 삭제합니다. 이 작업은 취소할 수 없습니다.",
-      "unstagedFilesIncludingUntrackedDescription": "스테이징되지 않은 변경 사항을 되돌리고 이 {{count}}개 파일 중 추적되지 않는 파일을 영구적으로 삭제합니다. 이 작업은 취소할 수 없습니다."
+      "unstagedSelectionIncludingUntrackedDescription": "스테이징되지 않은 변경 사항을 되돌리고 이 선택 항목의 추적되지 않은 파일을 영구적으로 삭제합니다. 이 작업은 취소할 수 없습니다.",
+      "unstagedFilesIncludingUntrackedDescription": "스테이징되지 않은 변경 사항을 되돌리고 이 {{count}}개 파일 중 추적되지 않은 파일을 영구적으로 삭제합니다. 이 작업은 취소할 수 없습니다."
     }
   },
   "rendererRecovery": {
@@ -20343,7 +20437,12 @@
     }
   },
   "fileSearch": {
-    "failed": "검색에 실패했습니다. 다시 시도하세요."
+    "failed": "검색에 실패했습니다. 다시 시도하세요.",
+    "filters": {
+      "toggle": "검색 세부 정보 전환",
+      "active": "{{count}}개 활성"
+    },
+    "noResults": "결과가 없습니다. 다른 검색을 시도하거나 필터를 조정하세요."
   },
   "csv": {
     "detectingDelimiter": "분리자 감지 중…",
@@ -20660,5 +20759,63 @@
       "loading": "언어 불러오는 중…",
       "saving": "언어 저장 중…"
     }
+  },
+  "resourceManager": {
+    "pty": {
+      "bound": "탭 있음",
+      "unbound": "탭 없음",
+      "unavailable": "사용 불가",
+      "ownerPresent": "있음",
+      "ownerAbsent": "없음",
+      "ownerUnknown": "알 수 없음",
+      "sessionId": "Orca 세션 ID",
+      "incarnation": "인스턴스",
+      "workspace": "워크스페이스",
+      "cwd": "마지막으로 보고된 cwd",
+      "binding": "탭",
+      "agentOwnership": "에이전트 소유 증거",
+      "observationTime": "관찰 시각",
+      "pid": "PID",
+      "idCopied": "Orca 세션 ID를 복사했습니다",
+      "copyFailed": "Orca 세션 ID를 복사할 수 없습니다",
+      "detailsNamed": "{{terminal}} 세부 정보",
+      "goToTerminal": "터미널로 이동",
+      "copyId": "Orca 세션 ID 복사",
+      "refreshBeforeEnd": "PTY를 새로 고칠 때까지 종료할 수 없습니다.",
+      "endUnsupported": "이 터미널은 종료할 수 없습니다. 호스트가 필요한 안전 검사를 지원하지 않습니다. 탭이나 호스트에서 닫으세요.",
+      "checkingTabs": "탭 확인 중…",
+      "endTitle": "{{terminal}}을(를) 종료할까요?",
+      "endDescription": "이 터미널과 하위 프로세스를 종료합니다. 저장하지 않은 작업이 손실될 수 있습니다.",
+      "lastProcess": "마지막으로 확인된 프로세스: {{process}}",
+      "cancel": "취소",
+      "ending": "종료 중…",
+      "end": "터미널 종료",
+      "unassigned": "할당되지 않음",
+      "thisComputer": "이 컴퓨터",
+      "localOwnedCount_one": "이 컴퓨터의 Orca PTY {{count}}개",
+      "localOwnedCount_other": "이 컴퓨터의 Orca PTY {{count}}개",
+      "withoutTab": "탭 없음 {{count}}개",
+      "observedTime": "마지막 관찰: {{time}}",
+      "failed": "확인할 수 없음: 로컬 터미널을 새로 고치지 못했습니다. 마지막으로 관찰된 터미널을 표시합니다.",
+      "retry": "다시 시도",
+      "loading": "터미널 불러오는 중…",
+      "noLocalOrcaPtys": "로컬 Orca PTY 없음",
+      "openNamed": "{{terminal}} 열기",
+      "endNamed": "{{terminal}} 종료",
+      "endShort": "종료",
+      "endHint": "이 터미널과 하위 프로세스를 종료합니다.",
+      "claimed": "이제 에이전트가 이 터미널을 소유합니다. 다시 시도하기 전에 새로 고치세요.",
+      "attached": "이제 클라이언트가 이 터미널에 연결되었습니다. 다시 시도하기 전에 새로 고치세요.",
+      "unverifiableEnd": "확인할 수 없음: 호스트가 결과를 확인하지 못했습니다. 터미널이 아직 실행 중일 수 있습니다."
+    },
+    "resources": "리소스",
+    "ptys": "PTY",
+    "localDaemonScope": "이 컴퓨터의 터미널에 영향을 줍니다.",
+    "countUnavailable": "터미널 수를 사용할 수 없음",
+    "openToObserve": "리소스를 열어 터미널 세션을 관찰하세요.",
+    "refresh": "새로 고침",
+    "restartLocal": "로컬 데몬 다시 시작",
+    "killAllLocal": "모든 로컬 세션 종료",
+    "killFailed": "터미널을 종료할 수 없습니다. 마지막으로 관찰된 세션이 유지됩니다."
   }
 }

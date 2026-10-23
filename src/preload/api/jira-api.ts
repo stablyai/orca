@@ -1,10 +1,10 @@
-import type { JiraMediaFormat } from '../../shared/jira-attachment-image'
-import type { JiraFavouriteFilterList } from '../../shared/jira-favourite-filters'
+import type { JiraMediaFormat } from '../../shared/jira/jira-attachment-image'
+import type { JiraFavouriteFilterList } from '../../shared/jira/jira-favourite-filters'
 import type {
   JiraIssueSummaryGenerationRequest,
   JiraIssueSummaryGenerationCancellation,
   JiraIssueSummaryGenerationResult
-} from '../../shared/jira-issue-summary-generation'
+} from '../../shared/jira/jira-issue-summary-generation'
 import type {
   JiraComment,
   JiraConnectionStatus,

@@ -38,7 +38,9 @@ vi.mock('@/store', () => ({
         throw new Error('no twin fixture store bound')
       }
       return appStore.current.getState()
-    }
+    },
+    subscribe: (listener: Parameters<HostTwinFixture['store']['subscribe']>[0]) =>
+      appStore.current?.subscribe(listener) ?? (() => {})
   }
 }))
 
@@ -47,6 +49,7 @@ vi.mock('sonner', () => ({
 }))
 
 const { sleepWorktreesReportingFailures } = await import('@/components/sidebar/sleep-worktree-flow')
+const { fakeMainSleep } = await import('@/components/sidebar/sleep-worktree-test-main')
 
 const ptyKill = vi.fn()
 
@@ -85,7 +88,9 @@ beforeEach(() => {
         call: vi.fn(answerLikeHost),
         list: vi.fn().mockResolvedValue([{ id: TWIN_RUNTIME_ENV }])
       },
-      ui: { set: vi.fn().mockResolvedValue(undefined) }
+      ui: { set: vi.fn().mockResolvedValue(undefined) },
+      // Main runs the sleep; the window follows its notices as in the app.
+      worktrees: { sleep: fakeMainSleep().sleep, sleepReopened: vi.fn() }
     }
   })
 })

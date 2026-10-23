@@ -14,8 +14,11 @@ import { randomUUID } from 'node:crypto'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { structuredAgentSessionTabId } from '../../shared/structured-agent-session-projection'
 
+/** Where a paired client asked a chat it created to open, in this host's own group and tab ids. */
+export type ChatTabPlacement = { groupId?: string; afterTabId?: string }
+
 export type ChatTabChange =
-  | { open: { sessionId: string; agent: AgentType; tabId: string } }
+  | { open: { sessionId: string; agent: AgentType; tabId: string; placement?: ChatTabPlacement } }
   | { close: string }
 
 /** A chat tab change as main's layout command: a window's, which routes by the chat's tab. */
@@ -24,9 +27,10 @@ export type ChatTabLayoutCommand =
   | (CommandOf<'closeTabs'> & { tabIds: [string] })
 
 /**
- * One change against the workspace's layout as loaded now: a chat opens in the active group (while
- * the workspace still holds it) unless a tab shows it, and a close drops the chat's tab. Null when
- * nothing changes. Main's queue and the windowless save both decide through it.
+ * One change against the workspace's layout as loaded now: a chat opens where its creating client
+ * asked, else in the active group (while the workspace still holds either), unless a tab shows it;
+ * a close drops the chat's tab. Null when nothing changes. Main's queue and the windowless save both
+ * decide through it.
  */
 export function chatTabLayoutCommand(
   workspace: WorkspaceLayout | undefined,
@@ -34,10 +38,21 @@ export function chatTabLayoutCommand(
   worktreeId: string,
   change: ChatTabChange
 ): ChatTabLayoutCommand | null {
-  // A remembered group the workspace no longer holds names nothing: the open mints its own.
-  const groupId = workspace?.groups.some((group) => group.id === activeGroupId)
-    ? activeGroupId
-    : undefined
+  const placement = 'open' in change ? change.open.placement : undefined
+  const holds = (id: string | undefined) => workspace?.groups.some((group) => group.id === id)
+  // The client's group while the workspace still holds it, else the remembered active one; a group
+  // the workspace no longer holds names nothing, and the open mints its own.
+  const groupId = holds(placement?.groupId)
+    ? placement?.groupId
+    : holds(activeGroupId)
+      ? activeGroupId
+      : undefined
+  const after = placement?.afterTabId
+  const afterTabId =
+    after &&
+    workspace?.groups.some((group) => group.id === groupId && group.tabOrder.includes(after))
+      ? after
+      : undefined
   const sessionId = 'close' in change ? change.close : change.open.sessionId
   const tabId =
     workspace?.tabs.find((tab) => tab.kind === 'agent-session' && tab.entityId === sessionId)?.id ??
@@ -48,8 +63,16 @@ export function chatTabLayoutCommand(
   if (tabId) {
     return null
   }
-  const open = { type: 'openAgentSessionTab', workspace: worktreeId, ...change.open } as const
-  return groupId ? { ...open, groupId } : open
+  const { sessionId: openedSessionId, agent, tabId: openedTabId } = change.open
+  return {
+    type: 'openAgentSessionTab',
+    workspace: worktreeId,
+    sessionId: openedSessionId,
+    agent,
+    tabId: openedTabId,
+    ...(groupId ? { groupId } : {}),
+    ...(afterTabId ? { afterTabId } : {})
+  }
 }
 
 /** The layout loaded from a partition, with the worktree's remembered active group. */

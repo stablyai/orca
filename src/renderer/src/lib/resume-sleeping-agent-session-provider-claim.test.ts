@@ -133,7 +133,7 @@ describe('resume sleeping agent provider claims', () => {
 
   it('does not launch a hidden pane whose same provider session is still working', () => {
     const paneKey = makePaneKey('tab-1', LEAF_ID)
-    const record = makeRecord(paneKey, 'worktree-sleep')
+    const record = makeRecord(paneKey, 'quit')
     useAppStore.setState({
       ...makePreservedPaneState(record),
       activeWorktreeId: 'wt-other',

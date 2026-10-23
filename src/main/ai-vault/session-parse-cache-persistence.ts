@@ -88,29 +88,31 @@ export function resetSessionParseCachePersistenceForTests(): void {
 export async function flushSessionParseCachePersist(): Promise<void> {
   clearWriteTimer()
   while (pendingWrites.size > 0) {
-    const chunk: [string, PersistedSessionParseCacheEntry][] = []
-    for (const row of pendingWrites) {
-      chunk.push(row)
-      pendingWrites.delete(row[0])
-      if (chunk.length === WRITE_CHUNK_ROWS) {
-        break
-      }
-    }
+    const chunk = takeWriteChunk(pendingWrites)
     openedDatabase()?.write(chunk, Date.now())
     if (pendingWrites.size > 0) {
       await yieldToEventLoop()
     }
   }
   while (pendingScopeCwds.size > 0) {
-    const chunk = [...pendingScopeCwds].slice(0, WRITE_CHUNK_ROWS)
-    for (const [path] of chunk) {
-      pendingScopeCwds.delete(path)
-    }
+    const chunk = takeWriteChunk(pendingScopeCwds)
     openedDatabase()?.writeScopeCwds(chunk, Date.now())
     if (pendingScopeCwds.size > 0) {
       await yieldToEventLoop()
     }
   }
+}
+
+function takeWriteChunk<T>(pending: Map<string, T>): [string, T][] {
+  const chunk: [string, T][] = []
+  for (const row of pending) {
+    chunk.push(row)
+    pending.delete(row[0])
+    if (chunk.length === WRITE_CHUNK_ROWS) {
+      break
+    }
+  }
+  return chunk
 }
 
 // Opened on first need, so Electron main (which never looks rows up) never opens it.

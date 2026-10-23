@@ -70,6 +70,7 @@ export function MobileSessionActiveContent({
     handleSelectionMode,
     handleSelectionCopy,
     handleSelectionEvicted,
+    handleClipboardWrite,
     handleModesChanged,
     handleKeyboardAvoidanceMetrics,
     handleHaptic,
@@ -223,6 +224,7 @@ export function MobileSessionActiveContent({
           onSelectionMode={handleSelectionMode}
           onSelectionCopy={handleSelectionCopy}
           onSelectionEvicted={handleSelectionEvicted}
+          onClipboardWrite={handleClipboardWrite}
           onModesChanged={handleModesChanged}
           onKeyboardAvoidanceMetrics={handleKeyboardAvoidanceMetrics}
           onHaptic={handleHaptic}

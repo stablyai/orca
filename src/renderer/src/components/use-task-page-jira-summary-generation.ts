@@ -7,7 +7,7 @@ import {
   cancelRuntimeJiraIssueSummary
 } from '@/runtime/runtime-jira-summary-generation-client'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
-import type { JiraIssueSummaryGenerationRequest } from '../../../shared/jira-issue-summary-generation'
+import type { JiraIssueSummaryGenerationRequest } from '../../../shared/jira/jira-issue-summary-generation'
 import { getTaskSourceCacheScope } from '../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
 import type { TaskPageJiraIssueCreationModel } from './use-task-page-jira-issue-creation'

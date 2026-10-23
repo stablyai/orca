@@ -1,4 +1,4 @@
-import { ipcMain, type IpcMainInvokeEvent } from 'electron'
+import { ipcMain, webContents, type IpcMainInvokeEvent } from 'electron'
 import { browserManager } from '../browser/browser-manager'
 import { browserSiteDisplayController } from '../browser/browser-site-display-controller'
 import { isBrowserPageZoomDirection } from '../../shared/browser-page-zoom'
@@ -20,8 +20,21 @@ import {
   type BrowserSetAnnotationViewportBridgeArgs
 } from '../../shared/browser-annotation-viewport-bridge'
 
+function isPagePoint(value: unknown): value is { x: number; y: number } {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'x' in value &&
+    'y' in value &&
+    Number.isFinite(value.x) &&
+    Number.isFinite(value.y)
+  )
+}
+
 export function registerBrowserGuestViewHandlers(): void {
   ipcMain.removeHandler('browser:openDevTools')
+  ipcMain.removeHandler('browser:addWordToDictionary')
+  ipcMain.removeHandler('browser:copyImageAt')
   ipcMain.removeHandler('browser:setViewportOverride')
   ipcMain.removeAllListeners?.('browser:reportViewportScrollState')
   ipcMain.removeHandler('browser:setAnnotationViewportBridge')
@@ -37,6 +50,15 @@ export function registerBrowserGuestViewHandlers(): void {
     isTrustedBrowserRenderer(event.sender) && typeof browserPageId === 'string'
       ? browserManager.getGuestWebContentsId(browserPageId)
       : null
+
+  const pageGuest = (
+    event: IpcMainInvokeEvent,
+    browserPageId: unknown
+  ): Electron.WebContents | null => {
+    const guestId = pageGuestId(event, browserPageId)
+    const guest = guestId === null ? undefined : webContents.fromId(guestId)
+    return guest && !guest.isDestroyed() ? guest : null
+  }
 
   ipcMain.handle(
     'browser:getPageSiteDisplay',
@@ -73,12 +95,41 @@ export function registerBrowserGuestViewHandlers(): void {
     }
   )
 
-  ipcMain.handle('browser:openDevTools', (event, args: { browserPageId: string }) => {
-    if (!isTrustedBrowserRenderer(event.sender)) {
-      return false
+  ipcMain.handle(
+    'browser:openDevTools',
+    (event, args: { browserPageId: string; inspectAt?: unknown }) => {
+      if (!isTrustedBrowserRenderer(event.sender)) {
+        return false
+      }
+      return browserManager.openDevTools(
+        args.browserPageId,
+        isPagePoint(args.inspectAt) ? args.inspectAt : undefined
+      )
     }
-    return browserManager.openDevTools(args.browserPageId)
-  })
+  )
+
+  ipcMain.handle(
+    'browser:addWordToDictionary',
+    (event, args: { browserPageId: string; word: unknown }): boolean => {
+      const guest = pageGuest(event, args?.browserPageId)
+      if (!guest || typeof args.word !== 'string' || !args.word) {
+        return false
+      }
+      return guest.session.addWordToSpellCheckerDictionary(args.word)
+    }
+  )
+
+  ipcMain.handle(
+    'browser:copyImageAt',
+    (event, args: { browserPageId: string; point: unknown }): boolean => {
+      const guest = pageGuest(event, args?.browserPageId)
+      if (!guest || !isPagePoint(args.point)) {
+        return false
+      }
+      guest.copyImageAt(args.point.x, args.point.y)
+      return true
+    }
+  )
 
   ipcMain.handle(
     'browser:setViewportOverride',

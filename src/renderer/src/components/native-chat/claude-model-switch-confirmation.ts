@@ -2,7 +2,7 @@ import { subscribeToPtyData } from '../terminal-pane/pty-data-sidecar-subscripti
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import { subscribeToRuntimeTerminalData } from '@/runtime/runtime-terminal-stream'
-import { NATIVE_CHAT_SUBMIT } from './native-chat-send'
+import { NATIVE_CHAT_SUBMIT } from '../../../../shared/native-chat-paste-bytes'
 import { stripScrollbackAnsi } from './native-chat-scrape-fallback'
 
 const DETECTION_TIMEOUT_MS = 5_000

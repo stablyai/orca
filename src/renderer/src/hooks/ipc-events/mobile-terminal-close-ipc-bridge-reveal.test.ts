@@ -65,7 +65,7 @@ function setup(): {
         onOpenFileFromMobile: noop,
         onOpenDiffFromMobile: noop,
         onCloseTerminal: noop,
-        onSleepWorktree: noop,
+        onWorkspaceSleep: noop,
         onResumeSleepingAgents: noop,
         onRevealEditorTabFromRuntime: (cb: (payload: RuntimeEditorTabReveal) => void) => {
           reveal = cb

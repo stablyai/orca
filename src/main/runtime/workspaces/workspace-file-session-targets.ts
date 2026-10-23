@@ -83,7 +83,7 @@ export abstract class OrcaRuntimeWithPersistHeadlessTerminalTitle extends Runtim
     }
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     if (snapshot) {
-      snapshot.tabs = snapshot.tabs.map((tab) => {
+      const tabs = snapshot.tabs.map((tab) => {
         if (tab.type === 'terminal' && tab.parentTabId === tabId) {
           return {
             ...tab,
@@ -99,6 +99,11 @@ export abstract class OrcaRuntimeWithPersistHeadlessTerminalTitle extends Runtim
           }
         }
         return tab
+      })
+      this.storeMobileSessionSnapshot(worktreeId, {
+        ...snapshot,
+        snapshotVersion: snapshot.snapshotVersion + 1,
+        tabs
       })
     }
     this.updateHeadlessWorkspaceContent(worktreeId, (session) => {

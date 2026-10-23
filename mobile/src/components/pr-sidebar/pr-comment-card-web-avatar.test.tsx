@@ -12,7 +12,7 @@ import type { PRComment } from '../../../../src/shared/github/comment-types'
  * empty-avatar `View` directly on web instead of letting the policy refuse the fetch.
  *
  * Asserted on the element tree rather than on the document, because the negative — no request to
- * the avatar host — is what `config/scripts/mobile-web-app-source-control-render.test.mjs` reads in
+ * the avatar host — is what `config/scripts/mobile-web-app/mobile-web-app-source-control-render.test.mjs` reads in
  * a real browser, and a check that only had the negative would also pass against a card that never
  * rendered at all.
  */

@@ -9,7 +9,8 @@ const MESSAGE_MUTATION_SAVEPOINT = 'message_id_mutation'
 function runBatchedMessageMutation(
   db: OrchestrationDb,
   ids: string[],
-  sqlForPlaceholders: (placeholders: string) => string
+  sqlForPlaceholders: (placeholders: string) => string,
+  leadingBindings: string[] = []
 ): void {
   if (ids.length === 0) {
     return
@@ -19,7 +20,7 @@ function runBatchedMessageMutation(
     for (let offset = 0; offset < ids.length; offset += MESSAGE_ID_UPDATE_BATCH_SIZE) {
       const batch = ids.slice(offset, offset + MESSAGE_ID_UPDATE_BATCH_SIZE)
       const placeholders = batch.map(() => '?').join(',')
-      db.db.prepare(sqlForPlaceholders(placeholders)).run(...batch)
+      db.db.prepare(sqlForPlaceholders(placeholders)).run(...leadingBindings, ...batch)
     }
     db.db.exec(`RELEASE ${MESSAGE_MUTATION_SAVEPOINT}`)
   } catch (error) {
@@ -165,7 +166,8 @@ export function markAsRead(this: OrchestrationDb, ids: string[]): void {
 }
 
 // Why: use datetime('now') so delivered_at matches the space-format UTC shape of the table's other timestamps for correct ordering (§3.2).
-export function markAsDelivered(this: OrchestrationDb, ids: string[]): void {
+// Scoped to the pointed mailbox so a late stamp cannot mark mail since handed elsewhere.
+export function markAsDelivered(this: OrchestrationDb, ids: string[], mailboxHandle: string): void {
   runBatchedMessageMutation(
     this,
     ids,
@@ -173,7 +175,8 @@ export function markAsDelivered(this: OrchestrationDb, ids: string[]): void {
       `UPDATE messages
        SET delivered_at = datetime('now'), pointer_enter_pending = 0,
            pointer_pty_id = NULL, pointer_process_incarnation = NULL
-       WHERE id IN (${placeholders})`
+       WHERE to_handle = ? AND id IN (${placeholders})`,
+    [mailboxHandle]
   )
 }
 

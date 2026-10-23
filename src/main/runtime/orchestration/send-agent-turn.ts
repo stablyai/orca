@@ -21,6 +21,7 @@ import { ORCHESTRATION_READINESS_TIMEOUT_MS } from '../../../shared/orchestratio
 import { structuredAgentSessionMessageSendMutation } from '../../../shared/structured-agent-session-send-mutation'
 import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-host'
 import { dispatchPreambleSendOptions, type DispatchPreambleSendOptions } from './preamble'
+import type { RuntimeAgentPromptWriteOptions } from '../runtime-terminal-contracts'
 
 /**
  * `now` hands the message over at once, joining a running turn as a steer. `queue` asks a busy chat
@@ -59,9 +60,10 @@ export type StructuredSessionTurnSend = {
 
 /**
  * What the typed text is, which decides how it is typed. A dispatch preamble leads with the
- * coordinator's task line; no other kind of message may borrow that.
+ * coordinator's task line; no other kind of message may borrow that. An external message is a
+ * connector thread's follow-up, typed as the user's own.
  */
-export type TerminalTurnPurpose = 'dispatch-preamble'
+export type TerminalTurnPurpose = 'dispatch-preamble' | 'external-message'
 
 /** A terminal has one write: whether a mid-turn prompt waits is the agent TUI's own behaviour. */
 export type TerminalTurn = {
@@ -71,12 +73,18 @@ export type TerminalTurn = {
   operationId: string
 }
 
+/** The writer's opt-in options a terminal turn may carry; no current caller sets them. */
+type TerminalTurnWriteOptions = Pick<
+  RuntimeAgentPromptWriteOptions,
+  'signal' | 'onPermission' | 'expectedBinding'
+>
+
 /** Method syntax on purpose: the runtime's own signature takes the wider write options. */
 type TerminalAgentTurnRuntime<TReceipt> = {
   sendTerminalAgentPrompt(
     handle: string,
     prompt: string,
-    options: DispatchPreambleSendOptions
+    options: DispatchPreambleSendOptions & TerminalTurnWriteOptions
   ): Promise<TReceipt>
 }
 
@@ -87,7 +95,7 @@ export type TerminalTurnSend<TReceipt> = {
   turn: TerminalTurn
   /** Runs before each PTY write; throwing refuses it (`createWorkerBriefWriteGuard`). */
   beforeWrite?: DispatchPreambleSendOptions['beforeWrite']
-}
+} & TerminalTurnWriteOptions
 
 /**
  * `sent` carries the submission as it settled, or as first answered when the wait ran out; it is
@@ -113,7 +121,10 @@ export function sendAgentTurn<TReceipt>(
       // Not async: the caller awaits the runtime's own promise.
       return send.runtime.sendTerminalAgentPrompt(send.handle, send.turn.body, {
         ...terminalTurnOptions(send.turn),
-        ...(send.beforeWrite ? { beforeWrite: send.beforeWrite } : {})
+        ...(send.beforeWrite ? { beforeWrite: send.beforeWrite } : {}),
+        ...(send.signal ? { signal: send.signal } : {}),
+        ...(send.onPermission ? { onPermission: send.onPermission } : {}),
+        ...(send.expectedBinding ? { expectedBinding: send.expectedBinding } : {})
       })
   }
 }
@@ -122,6 +133,14 @@ function terminalTurnOptions(turn: TerminalTurn): DispatchPreambleSendOptions {
   switch (turn.purpose) {
     case 'dispatch-preamble':
       return dispatchPreambleSendOptions(turn.operationId)
+    case 'external-message':
+      // The writer returning is the whole receipt; the turn is read from hooks, not awaited here.
+      return {
+        inputKind: 'driving',
+        acceptQueued: true,
+        observationTimeoutMs: 0,
+        requestId: turn.operationId
+      }
   }
 }
 

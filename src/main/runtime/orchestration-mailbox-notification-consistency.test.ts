@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../shared/protocol-version'
 import { OrchestrationDb } from './orchestration/db'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import {
   checkBoundMailbox,
   createBoundRun,
@@ -472,46 +473,51 @@ describe('orchestration notification mailbox consistency', () => {
     db.close()
   })
 
-  it('serializes equivalent panes while newer mail arrives during Enter delay', async () => {
-    vi.useFakeTimers()
-    const db = new OrchestrationDb(':memory:')
-    const harness = createRuntime(db)
-    const run = createBoundRun(db, 'Equivalent pane Run')
-    const first = insertDirectRunMessage(db, run.id, 'First status')
-    await driveToLiveIdle(harness.runtime)
-    expect(pointerCount(harness.write)).toBe(1)
+  // Window-owned only: main's layout load re-mints a leaf id a second tab repeats, so two live
+  // panes never share a leaf there (workspace-layout-load-bindings.ts loadLeaves).
+  it.skipIf(ORCA_LAYOUT_OWNER_IS_MAIN)(
+    'serializes equivalent panes while newer mail arrives during Enter delay',
+    async () => {
+      vi.useFakeTimers()
+      const db = new OrchestrationDb(':memory:')
+      const harness = createRuntime(db)
+      const run = createBoundRun(db, 'Equivalent pane Run')
+      const first = insertDirectRunMessage(db, run.id, 'First status')
+      await driveToLiveIdle(harness.runtime)
+      expect(pointerCount(harness.write)).toBe(1)
 
-    registerSecondPane(harness.runtime, LEAF_ID)
-    const second = db.insertMessage({
-      from: 'term_worker',
-      to: `run:${run.id}`,
-      subject: 'Second status',
-      runId: run.id
-    })
-    harness.runtime.onPtyData(SECOND_PTY_ID, '\x1b]0;Codex working\x07', 1)
-    harness.runtime.onPtyData(SECOND_PTY_ID, '\x1b]0;Codex done\x07', 2)
-    await Promise.resolve()
-    expect(
-      harness.write.mock.calls.filter(
-        ([ptyId, payload]) => ptyId === SECOND_PTY_ID && isMailboxPointer(payload)
+      registerSecondPane(harness.runtime, LEAF_ID)
+      const second = db.insertMessage({
+        from: 'term_worker',
+        to: `run:${run.id}`,
+        subject: 'Second status',
+        runId: run.id
+      })
+      harness.runtime.onPtyData(SECOND_PTY_ID, '\x1b]0;Codex working\x07', 1)
+      harness.runtime.onPtyData(SECOND_PTY_ID, '\x1b]0;Codex done\x07', 2)
+      await Promise.resolve()
+      expect(
+        harness.write.mock.calls.filter(
+          ([ptyId, payload]) => ptyId === SECOND_PTY_ID && isMailboxPointer(payload)
+        )
+      ).toHaveLength(0)
+
+      await vi.advanceTimersByTimeAsync(500)
+      expect(
+        harness.write.mock.calls.filter(
+          ([ptyId, payload]) => ptyId === PTY_ID && isMailboxPointer(payload)
+        )
+      ).toHaveLength(2)
+      await vi.advanceTimersByTimeAsync(500)
+
+      const checked = await checkBoundMailbox(harness.runtime)
+      expect(checked).toMatchObject({ runId: run.id, count: 2 })
+      expect(checked.messages).toEqual(
+        [first, second].map((message) => expect.objectContaining({ id: message.id }))
       )
-    ).toHaveLength(0)
-
-    await vi.advanceTimersByTimeAsync(500)
-    expect(
-      harness.write.mock.calls.filter(
-        ([ptyId, payload]) => ptyId === PTY_ID && isMailboxPointer(payload)
-      )
-    ).toHaveLength(2)
-    await vi.advanceTimersByTimeAsync(500)
-
-    const checked = await checkBoundMailbox(harness.runtime)
-    expect(checked).toMatchObject({ runId: run.id, count: 2 })
-    expect(checked.messages).toEqual(
-      [first, second].map((message) => expect.objectContaining({ id: message.id }))
-    )
-    db.close()
-  })
+      db.close()
+    }
+  )
 
   it.each([
     ['Codex', '\x1b]0;Codex working\x07', '\x1b]0;Codex done\x07'],

@@ -90,6 +90,12 @@ export const GIT_METHODS = [
     handler: async (params, { runtime }) => runtime.getRuntimeGitConflictOperation(params.worktree)
   }),
   defineMethod({
+    name: 'git.mutationInFlight',
+    permission: 'workspace',
+    params: WorktreeSelector,
+    handler: async (params, { runtime }) => runtime.getRuntimeGitMutationInFlight(params.worktree)
+  }),
+  defineMethod({
     name: 'git.abortMerge',
     permission: 'workspace',
     params: WorktreeSelector,

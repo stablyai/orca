@@ -245,26 +245,29 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
       // the shell taking the pane back (#20626).
       pty.pty.customTitle = normalizedTitle
       pty.pty.manualTitle = normalizedTitle
+      const recordedTabId = (): string | null => this.paneOfPty(pty.pty).tabId
       this.touchMobileSessionSnapshotsForPty(pty.pty.ptyId)
-      const resolvedRealTabId =
-        pty.pty.tabId ?? this.resolveRealTabIdForPty(pty.pty.ptyId, pty.pty.worktreeId, handle)
-      if (resolvedRealTabId && !pty.pty.tabId) {
-        pty.pty.tabId = resolvedRealTabId
+      const layoutTabId =
+        recordedTabId() ??
+        pty.pty.tabId ??
+        this.resolveRealTabIdForPty(pty.pty.ptyId, pty.pty.worktreeId, handle)
+      if (!ORCA_LAYOUT_OWNER_IS_MAIN && layoutTabId && !pty.pty.tabId) {
+        pty.pty.tabId = layoutTabId
       }
-      const tabId = resolvedRealTabId ?? pty.record.tabId
+      const tabId = layoutTabId ?? pty.record.tabId
       this.rememberManualTerminalTitle(tabId, normalizedTitle)
       // Why: without a renderer the rename only lived on the live pty and was
       // lost on restart. Persist customTitle so a headless rebuild keeps it.
-      if (!this.notifier?.renameTerminal && resolvedRealTabId) {
-        this.persistHeadlessTerminalTitle(pty.pty.worktreeId, resolvedRealTabId, normalizedTitle)
+      if (!this.notifier?.renameTerminal && layoutTabId) {
+        this.persistHeadlessTerminalTitle(pty.pty.worktreeId, layoutTabId, normalizedTitle)
         // Why: paired desktops rank their own saved-session title above the live one, so the
         // name has to be published as manual or a resumed session hides it (#29975).
-        this.applyHeadlessSessionTabPropsToSnapshot(pty.pty.worktreeId, resolvedRealTabId, {
+        this.applyHeadlessSessionTabPropsToSnapshot(pty.pty.worktreeId, layoutTabId, {
           customTitle: normalizedTitle,
           // Why: a name set while the pane slept lives in the snapshot title; a reset must drop it.
           ...(normalizedTitle === null
             ? {
-                title: this.headlessTerminalFallbackTitle(pty.pty.worktreeId, resolvedRealTabId)
+                title: this.headlessTerminalFallbackTitle(pty.pty.worktreeId, layoutTabId)
               }
             : {})
         })
@@ -308,7 +311,7 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
     return { handle, tabId: leaf.tabId, title: normalizedTitle }
   }
 
-  private rememberManualTerminalTitle(tabId: string | null, title: string | null): void {
+  protected rememberManualTerminalTitle(tabId: string | null, title: string | null): void {
     if (!tabId) {
       return
     }

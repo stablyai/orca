@@ -27,6 +27,7 @@ import { classifyGitCommand } from '../../../shared/git-command-classification'
 import { createAbortError } from './abort-error'
 import { readCapturedGitBuffer, readCapturedGitString } from './captured-git-output'
 import { runUnlessGitCwdKnownMissing } from './missing-git-spawn-cwd'
+import { trackGitWorktreeMutation } from '../git-worktree-mutation-state'
 
 /**
  * Async git command execution. Drop-in replacement for
@@ -34,7 +35,8 @@ import { runUnlessGitCwdKnownMissing } from './missing-git-spawn-cwd'
  */
 async function gitExecFileAsyncUnlocked(
   args: string[],
-  options: GitExecOptions
+  options: GitExecOptions,
+  terminationState: { current: Promise<void> | null }
 ): Promise<{ stdout: string; stderr: string }> {
   // Why: span the user-visible `git <subcommand>` form, not the resolved binary, so dashboards group by intent.
   return withGitSpan(
@@ -81,7 +83,6 @@ async function gitExecFileAsyncUnlocked(
           })
       span?.setAttribute('git.queue_wait_ms', grant.queueWaitMs)
       const timeoutMs = gitCommandTimeoutMs(args, options.timeout, options.timeoutMsForTest)
-      const terminationState: { current: Promise<void> | null } = { current: null }
       const capture = (
         command: ResolvedCommand
       ): Promise<{ stdout: string | Buffer; stderr: string | Buffer }> => {
@@ -178,18 +179,28 @@ export function gitExecFileAsync(
   args: string[],
   options: GitExecOptions
 ): Promise<{ stdout: string; stderr: string }> {
+  const releaseMutation = trackGitWorktreeMutation(args, options)
+  const terminationState: { current: Promise<void> | null } = { current: null }
   const command = resolveGitFetchHeadCommand(args, options.cwd)
   // Why outside the lock and span: a known-missing folder starts no process, so it records no git.exec.
-  return runUnlessGitCwdKnownMissing(options, () =>
+  const result = runUnlessGitCwdKnownMissing(options, () =>
     command.needsLock
       ? runWithGitFetchHeadLock(
           command.cwd,
           options.signal,
-          () => gitExecFileAsyncUnlocked(args, options),
+          () => gitExecFileAsyncUnlocked(args, options, terminationState),
           command.gitDir
         )
-      : gitExecFileAsyncUnlocked(args, options)
+      : gitExecFileAsyncUnlocked(args, options, terminationState)
   )
+  return result.finally(() => {
+    // A timed-out caller can settle before its child exits.
+    if (terminationState.current) {
+      void terminationState.current.then(releaseMutation)
+    } else {
+      releaseMutation()
+    }
+  })
 }
 
 /**

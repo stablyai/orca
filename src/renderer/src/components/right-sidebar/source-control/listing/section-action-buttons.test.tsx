@@ -62,7 +62,7 @@ function renderUncommittedSections({
         handleContextMenu={vi.fn()}
         revealInExplorer={vi.fn()}
         activeConnectionId={null}
-        openUncommittedFile={vi.fn()}
+        handleOpenDiff={vi.fn()}
         handleStage={vi.fn()}
         handleUnstage={vi.fn()}
         requestDiscardEntry={vi.fn()}

@@ -81,8 +81,7 @@ const COMMANDS: LayoutCommand[] = [
     createdAt: 4,
     browserCreatedAt: 4
   },
-  { ...on, type: 'createTerminalTab', tabId: 'tab-scratch', leafId: leaf(4), createdAt: 5 },
-  { ...on, type: 'closeTabs', tabIds: ['tab-scratch'], force: true, recordClose: 'user' }
+  { ...on, type: 'createTerminalTab', tabId: 'tab-scratch', leafId: leaf(4), createdAt: 5 }
 ]
 
 function windowSave(stored: WorkspaceSessionState): WorkspaceSessionState {
@@ -159,6 +158,21 @@ describe('the session a layout-owner build writes (downgrade probe, ledger L8)',
       leafId: leaf(1),
       ptyId: 'pty-shell',
       incarnationId: 'inc-shell'
+    })
+    // A closed tab keeps the terminals its panes held, for an exit after the close (L80).
+    await store.persistPtyBinding({
+      worktreeId: WORKTREE,
+      tabId: 'tab-scratch',
+      leafId: leaf(4),
+      ptyId: 'pty-scratch',
+      incarnationId: 'inc-scratch'
+    })
+    await apply(store, {
+      ...on,
+      type: 'closeTabs',
+      tabIds: ['tab-scratch'],
+      force: true,
+      recordClose: 'user'
     })
     minting.on = false
     // The window's own save (session:set): its selection and the page its browser tab shows.

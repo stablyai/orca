@@ -11,6 +11,11 @@ import {
   resolveJsonlRpcPeerOptions,
   type JsonlRpcPeerOptions
 } from './peer-limits'
+import {
+  JsonlRpcReplyTooLargeError,
+  oversizedReplyRequest,
+  type JsonlRpcRequestOptions
+} from './peer-oversized-reply'
 
 const recordSchema = z.looseObject({ type: z.string() })
 const responseSchema = z.looseObject({
@@ -59,6 +64,7 @@ export class JsonlRpcPeer {
   private readonly writer: ProviderStdioWriteQueue
   private readonly framer: ReturnType<typeof createIncrementalNdjsonFramer>
   private nextId = 0
+  private nextOptionalId = 0
   private terminalError?: Error
   private inputEndError?: Error
   private readingPaused = false
@@ -83,7 +89,20 @@ export class JsonlRpcPeer {
       (record) => this.dispatch(record),
       (rejected) => {
         if (rejected.kind === 'line-too-long') {
-          this.close(new Error('JSON-lines RPC record exceeded the size limit'))
+          const id = oversizedReplyRequest(rejected, this.nextOptionalId)
+          if (id) {
+            const request = this.pending.get(id)
+            if (request) {
+              const error = new JsonlRpcReplyTooLargeError(
+                request.command,
+                rejected.observedBytes,
+                this.limits.maxLineBytes
+              )
+              this.rejectPending(id, error)
+            }
+          } else {
+            this.close(new Error('JSON-lines RPC record exceeded the size limit'))
+          }
         } else {
           this.diagnose('Ignored non-JSON agent output')
         }
@@ -138,7 +157,7 @@ export class JsonlRpcPeer {
   request(
     command: string,
     params: Record<string, unknown> = {},
-    options: { timeoutMs?: number | null } = {}
+    options: JsonlRpcRequestOptions = {}
   ): Promise<unknown> {
     if (this.terminalError) {
       return Promise.reject(this.terminalError)
@@ -155,7 +174,13 @@ export class JsonlRpcPeer {
     } catch (error) {
       return Promise.reject(error)
     }
-    const id = `orca-${++this.nextId}`
+    if (options.oversizedReply === 'reject' && this.nextOptionalId >= Number.MAX_SAFE_INTEGER) {
+      return Promise.reject(new Error('JSON-lines RPC optional request identity exhausted'))
+    }
+    const id =
+      options.oversizedReply === 'reject'
+        ? `orca-optional-${++this.nextOptionalId}`
+        : `orca-${++this.nextId}`
     const controller = new AbortController()
     return new Promise((resolve, reject) => {
       const timer =

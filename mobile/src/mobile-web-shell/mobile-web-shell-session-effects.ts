@@ -110,10 +110,13 @@ export async function download(args: {
   // Past the fetch, a throw is the store's: the bytes had already verified.
   let fetchedWhole = false
   try {
+    // A cache that cannot be opened is one with nothing to reuse, not a failed download.
+    const reusable = await store.openReusableAssets(hostKey).catch(() => undefined)
     const fetched = await fetchMobileWebBundle({
       client,
       signal: controller.signal,
-      onProgress: (progress) => send({ type: 'fetch-progress', flow, ...progress })
+      onProgress: (progress) => send({ type: 'fetch-progress', flow, ...progress }),
+      reusable
     })
     // The bytes are in; the session they were for may not be. The fetch throws on an abort it sees,
     // but an abort landing between its last read and this line would otherwise still write a

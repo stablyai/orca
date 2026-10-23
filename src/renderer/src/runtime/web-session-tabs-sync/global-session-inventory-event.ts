@@ -137,6 +137,7 @@ export function handleGlobalSessionInventoryEvent({
           frames: applicable.map(({ snapshot }, index) => ({
             environmentId,
             worktreeId: snapshot.worktree,
+            source: snapshot,
             decision: decisions[index]!,
             expectedEnvironmentConnectionGeneration,
             expectedEnvironmentPairingRevision,
@@ -176,7 +177,6 @@ export function handleGlobalSessionInventoryEvent({
         settleHydration?.()
       }
     })
-  // Each subscription opens with one census: the host is reachable again. Chats it lists were
-  // already settled as published above, before any recovery await.
+  // Each subscription opens with one census: recheck launches now that the host is reachable.
   recheckUnconfirmedStructuredAgentLaunches(toRuntimeExecutionHostId(environmentId))
 }

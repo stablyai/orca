@@ -32,6 +32,7 @@ import {
   GITHUB_CALLOUT_SANITIZE_ATTRIBUTE,
   remarkGitHubCallouts
 } from '@/lib/remark-github-callouts'
+import { remarkAutolinkLiteralProseBoundary } from '@/lib/remark-autolink-literal-prose-boundary'
 
 export type { CommentMarkdownLinkClickHandler } from './comment-markdown-element-renderers'
 
@@ -80,7 +81,12 @@ const commentMarkdownFileUriUrlTransform: UrlTransform = (value, key, node) => {
 // plain-text renderer used whitespace-pre-wrap which preserved them. Adding
 // remark-breaks converts single newlines to <br>, keeping backward compat
 // with existing plain-text comments that rely on newline formatting.
-const remarkPlugins = [remarkGfm, remarkGitHubCallouts, remarkBreaks]
+const remarkPlugins = [
+  remarkGfm,
+  remarkAutolinkLiteralProseBoundary,
+  remarkGitHubCallouts,
+  remarkBreaks
+]
 
 const GITHUB_REFERENCE_PATTERN = /(?:\b([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+))?#([1-9][0-9]*)\b/g
 

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { bindPaneFirst } from '../bind-first-pane.test-fixture'
 import { makeAgentStatusStoreWiring } from '../agent-status-store-wiring.test-fixture'
 import {
   OrcaRuntimeService,
@@ -40,6 +41,13 @@ describe('OrcaRuntimeService', () => {
       undefined,
       makeAgentStatusStoreWiring().deps
     )
+    // In the workspace's own partition: this fixture's worktree is local.
+    bindPaneFirst(runtime, {
+      worktreeId: TEST_WORKTREE_ID,
+      tabId: 'ssh-tab',
+      leafId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+      ptyId: 'ssh-osc-pty'
+    })
     runtime['recordPtyWorktree']('ssh-osc-pty', TEST_WORKTREE_ID, {
       connected: true,
       connectionId: 'ssh-osc-1',

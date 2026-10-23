@@ -19,6 +19,7 @@ import { rendererPublicationThrottle } from '../../../window/renderer-publicatio
 import { deterministicAgentSessionUuid } from '../../runtime-agent-launch-resolution'
 import { assertMobileTerminalShellSupported } from './mobile-terminal-shell-refusal'
 import { requestMobileRendererTerminalTabCreate } from './mobile-terminal-renderer-ipc-request'
+import { anchorTabOfCreate, mainPlacedAfter } from './mobile-terminal-create-anchor'
 
 export type MobileTerminalCreateOptions = {
   terminalImageViewerSupported?: boolean
@@ -111,17 +112,11 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
         graphEpoch
       })
     }
-    let afterDesktopTabId: string | undefined
-    if (requestedAfterTabId) {
-      const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
-      const anchor = snapshot?.tabs.find((tab) => tab.id === requestedAfterTabId)
-      if (!anchor) {
-        throw new Error('after_tab_not_found')
-      }
-      if (afterTabId) {
-        afterDesktopTabId = anchor.type === 'terminal' ? anchor.parentTabId : anchor.id
-      }
-    }
+    const afterDesktopTabId = anchorTabOfCreate(
+      this.mobileSessionTabsByWorktree.get(worktreeId)?.tabs,
+      requestedAfterTabId,
+      afterTabId !== undefined
+    )
     const startupCommand = applyRemoteViewerLaunchEnv(
       await this.resolveMobileSessionTerminalCommand(workspace, opts),
       opts.terminalImageViewerSupported
@@ -180,6 +175,10 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           launchAgent: startupCommand.launchAgent,
           viewMode: opts.viewMode,
           targetGroupId: opts.targetGroupId,
+          ...mainPlacedAfter(
+            () => this.mainLayoutTabOfRow(worktreeId, requestedAfterTabId),
+            afterDesktopTabId
+          ),
           supportsSplitGroupPlacement: opts.supportsSplitGroupPlacement,
           launchConfig: startupCommand.launchConfig,
           ...(opts.resumeProviderSession

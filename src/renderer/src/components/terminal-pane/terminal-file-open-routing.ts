@@ -1,11 +1,12 @@
-import { openWorkspaceFile } from '@/lib/workspace-file-open'
+import { absolutePathToFileUri } from '@/components/editor/markdown-internal-links'
+import { getWorkspaceFilePreviewPlan, openFileInBrowserTab } from '@/lib/file-preview'
 import { downloadAndOpenRemoteTerminalFile } from './terminal-remote-file-download-open'
 import { findWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
 import { isPathInsideWorktree, toWorktreeRelativePath } from '@/lib/terminal-links'
 import { canClientOsOpenWorkspaceFile } from '@/lib/workspace-file-host-routing'
 import { isMissingRuntimePathError } from '@/runtime/runtime-file-metadata-client'
 import { useAppStore } from '@/store'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { activateAndRevealWorkspace, activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { resolveKnownWorktreeRootPathLink } from './terminal-worktree-path-link'
 import {
   getTerminalFileContext,
@@ -28,7 +29,7 @@ import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-wor
 import { captureEditorOpenLinkIntent } from '@/store/slices/editor/tabs/editor-open-target-group'
 import { cancelPendingEditorLineRevealFrames } from '@/store/slices/editor/focus/editor-focus-reveal'
 import { showOpenInGroupRefusedToast } from './terminal-file-open-in-group-toast'
-import { isExplicitEditorScopeKept } from '@/lib/editor-file-link-open'
+import { isExplicitEditorScopeKept, openLinkedFileInEditor } from './terminal-file-link-editor-open'
 
 export {
   getTerminalFileContext,
@@ -59,6 +60,28 @@ type TerminalFileOpenDeps = {
   sourceTabId?: string | null
   /** "Open in this group": pins the source tab's group at activation, or refuses. */
   openInSourceGroup?: boolean
+}
+
+export function isHtmlFilePath(filePath: string): boolean {
+  return /\.html?$/i.test(filePath)
+}
+
+function openHtmlFileInBrowser(filePath: string, worktreeId: string, clientLocal: boolean): void {
+  const store = useAppStore.getState()
+  if (worktreeId) {
+    // Why: following an HTML file link changes which worktree is foregrounded,
+    // so it must record a history visit before opening the browser tab — but the
+    // browser tab is the surface, so an emptied workspace must not gain a shell.
+    activateAndRevealWorktree(worktreeId, { providesInitialSurface: true })
+  }
+  const fileUrl = absolutePathToFileUri(filePath)
+  const title = filePath.split(/[/\\]/).pop() ?? filePath
+  store.createBrowserTab(worktreeId, fileUrl, {
+    title,
+    activate: true,
+    // Why: the file is on this computer, so the workspace's paired-server runtime must not adopt the page.
+    ...(clientLocal ? { browserRuntimeEnvironmentId: null } : {})
+  })
 }
 
 export function shouldOpenTerminalFileWithSystemDefault(fileContext: TerminalFileContext): boolean {
@@ -213,6 +236,30 @@ export function openDetectedFilePath(
       return
     }
 
+    // Why: local HTML files render in Orca's browser for ordinary Cmd/Ctrl-click,
+    // and remain the fallback if Shift+Cmd/Ctrl cannot launch the OS default.
+    if (isHtmlFilePath(mappedFilePath) && hostGrantId === null) {
+      if (canOpenWithSystemDefault) {
+        // Why: Orca's browser has no group placement in v1.
+        if (refuseExplicitNonEditorRoute()) {
+          return
+        }
+        openHtmlFileInBrowser(mappedFilePath, worktreeId, clientLocal)
+        return
+      }
+      // Why: the same gesture renders remote HTML too, through the doc preview; only an
+      // unsupported plan (e.g. a paired doc outside the worktree) falls back to source.
+      const plan = getWorkspaceFilePreviewPlan(useAppStore.getState(), worktreeId, mappedFilePath)
+      if (plan.status === 'doc-preview') {
+        if (refuseExplicitNonEditorRoute()) {
+          return
+        }
+        activateAndRevealWorktree(worktreeId, { providesInitialSurface: true })
+        openFileInBrowserTab({ filePath: mappedFilePath, worktreeId })
+        return
+      }
+    }
+
     const store = useAppStore.getState()
     let targetWorktreeId = worktreeId
     const runtimeOwnerId = runtimeTargetEnvironmentId(fileContext.target) ?? sourceRuntimeOwnerId
@@ -254,11 +301,17 @@ export function openDetectedFilePath(
       return
     }
 
-    const opened = openWorkspaceFile({
-      kind: 'link',
-      executionHostId: targetExecutionHostId,
-      clientLocal,
-      file: {
+    if (targetWorktreeId) {
+      // Why: the route may name a folder-workspace key, and the same worktree id can exist
+      // on several hosts — dispatch by workspace shape and keep the resolved host.
+      activateAndRevealWorkspace(targetWorktreeId, {
+        providesInitialSurface: true,
+        executionHostId: targetExecutionHostId
+      })
+    }
+
+    const opened = openLinkedFileInEditor(
+      {
         filePath: mappedFilePath,
         relativePath,
         worktreeId: targetWorktreeId || '',
@@ -276,10 +329,10 @@ export function openDetectedFilePath(
           : {})
       },
       linkIntent,
-      position: { line, column },
-      isCurrentRequest: () => requestId === latestOpenDetectedFilePathRequestId
-    })
-    if (opened.surface === 'refused') {
+      { line, column },
+      () => requestId === latestOpenDetectedFilePathRequestId
+    )
+    if (!opened) {
       refuseExplicitNonEditorRoute()
     }
   })()

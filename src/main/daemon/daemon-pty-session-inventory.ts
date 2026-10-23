@@ -60,6 +60,7 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
             // Why: OSC 7 may not arrive before cleanup; spawn cwd is authoritative until the daemon reports a live cwd.
             cwd: session.cwd ?? this.initialCwds.get(session.sessionId) ?? '',
             title: 'shell',
+            ...(session.foregroundProcess ? { foregroundProcess: session.foregroundProcess } : {}),
             ...(worktreeId ? { worktreeId } : {}),
             ...(session.terminalHandle ? { terminalHandle: session.terminalHandle } : {}),
             ...(session.wslDistro !== undefined ? { wslDistro: session.wslDistro } : {}),

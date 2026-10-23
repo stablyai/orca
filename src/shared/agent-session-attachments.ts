@@ -137,3 +137,8 @@ export type AgentSessionAttachmentClipboardTarget = Omit<
 export function agentSessionPastedImageName(now: number, unique: string): string {
   return `orca-paste-${now}-${unique}.png`
 }
+
+/** `orca-paste-…txt`, the name a long text paste saved as a file gets, so it reads as "Pasted text". */
+export function agentSessionPastedTextName(now: number, unique: string): string {
+  return `orca-paste-${now}-${unique}.txt`
+}

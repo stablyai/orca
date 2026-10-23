@@ -21,6 +21,44 @@ import {
   resetMainWindowMocks
 } from './createMainWindow-test-harness'
 
+function openMainWindowForContextMenu() {
+  const windowHandlers: Record<string, (...args: any[]) => void> = {}
+  const webContents = {
+    on: vi.fn((event, handler) => {
+      windowHandlers[event] = handler
+    }),
+    setZoomLevel: vi.fn(),
+    setBackgroundThrottling: vi.fn(),
+    invalidate: vi.fn(),
+    setWindowOpenHandler: vi.fn(),
+    send: vi.fn(),
+    isDevToolsOpened: vi.fn(),
+    openDevTools: vi.fn(),
+    closeDevTools: vi.fn(),
+    replaceMisspelling: vi.fn(),
+    session: { addWordToSpellCheckerDictionary: vi.fn() }
+  }
+  const browserWindowInstance = {
+    webContents,
+    on: vi.fn(),
+    isDestroyed: vi.fn(() => false),
+    isMaximized: vi.fn(() => true),
+    isFullScreen: vi.fn(() => false),
+    getSize: vi.fn(() => [1200, 800]),
+    setSize: vi.fn(),
+    maximize: vi.fn(),
+    show: vi.fn(),
+    loadFile: vi.fn(() => Promise.resolve()),
+    loadURL: vi.fn(() => Promise.resolve())
+  }
+  browserWindowMock.mockImplementation(function () {
+    return browserWindowInstance
+  })
+
+  createMainWindow(null)
+  return { webContents, windowHandlers, browserWindowInstance }
+}
+
 describe('createMainWindow', () => {
   beforeEach(() => {
     resetMainWindowMocks()
@@ -467,40 +505,7 @@ describe('createMainWindow', () => {
   })
 
   it('opens a table-aware context menu synchronously without a renderer query', () => {
-    const windowHandlers: Record<string, (...args: any[]) => void> = {}
-    const webContents = {
-      on: vi.fn((event, handler) => {
-        windowHandlers[event] = handler
-      }),
-      setZoomLevel: vi.fn(),
-      setBackgroundThrottling: vi.fn(),
-      invalidate: vi.fn(),
-      setWindowOpenHandler: vi.fn(),
-      send: vi.fn(),
-      isDevToolsOpened: vi.fn(),
-      openDevTools: vi.fn(),
-      closeDevTools: vi.fn(),
-      replaceMisspelling: vi.fn(),
-      session: { addWordToSpellCheckerDictionary: vi.fn() }
-    }
-    const browserWindowInstance = {
-      webContents,
-      on: vi.fn(),
-      isDestroyed: vi.fn(() => false),
-      isMaximized: vi.fn(() => true),
-      isFullScreen: vi.fn(() => false),
-      getSize: vi.fn(() => [1200, 800]),
-      setSize: vi.fn(),
-      maximize: vi.fn(),
-      show: vi.fn(),
-      loadFile: vi.fn(() => Promise.resolve()),
-      loadURL: vi.fn(() => Promise.resolve())
-    }
-    browserWindowMock.mockImplementation(function () {
-      return browserWindowInstance
-    })
-
-    createMainWindow(null)
+    const { webContents, windowHandlers, browserWindowInstance } = openMainWindowForContextMenu()
 
     const tableTargetListener = vi
       .mocked(ipcMain.on)
@@ -531,5 +536,39 @@ describe('createMainWindow', () => {
       ])
     )
     expect(menuPopupMock).toHaveBeenCalledWith({ window: browserWindowInstance, x: 42, y: 84 })
+  })
+
+  it('builds the plain edit menu for the one right-click the renderer marks as plain text', () => {
+    const { webContents, windowHandlers } = openMainWindowForContextMenu()
+    const params = {
+      x: 10,
+      y: 20,
+      isEditable: true,
+      formControlType: 'none',
+      dictionarySuggestions: ['reference'],
+      misspelledWord: 'refrence'
+    }
+    const plainTextListener: ((...args: any[]) => void) | undefined = vi
+      .mocked(ipcMain.on)
+      .mock.calls.find(([channel]) => channel === 'editable-context-menu:plain-text-target')?.[1]
+
+    plainTextListener?.({ sender: webContents })
+    windowHandlers['context-menu']({}, params)
+    windowHandlers['context-menu']({}, params)
+
+    expect(buildFromTemplateMock).toHaveBeenNthCalledWith(1, [
+      expect.objectContaining({ label: 'reference' }),
+      { type: 'separator' },
+      expect.objectContaining({ label: 'Add to dictionary' }),
+      { type: 'separator' },
+      { role: 'cut' },
+      { role: 'copy' },
+      expect.objectContaining({ label: 'Paste' }),
+      { role: 'selectAll' }
+    ])
+    expect(buildFromTemplateMock).toHaveBeenNthCalledWith(
+      2,
+      expect.arrayContaining([expect.objectContaining({ label: 'Format' })])
+    )
   })
 })

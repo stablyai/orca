@@ -421,6 +421,7 @@
       "savedEnvironment": "Saved value · enter to replace",
       "newEnvironment": "Value",
       "removeEnvironment": "Remove",
+      "environmentUnclosedQuote": "Close the quote to save the environment.",
       "loadingHost": "Loading agent settings…",
       "updateHost": "Update this server to edit its agent launch settings.",
       "readFailed": "Couldn’t read agent settings. Check the host connection and try again.",
@@ -6458,6 +6459,9 @@
               "retry": "The workspace was kept open. Try again; if the problem continues, check the host connection.",
               "chat": {
                 "partial": "The host could not confirm the chat stopped. Other panels may have closed; check the connection and try again."
+              },
+              "vm": {
+                "running": "The workspace's terminals stopped, but its machine couldn't be suspended and is still running."
               }
             }
           }
@@ -14819,6 +14823,7 @@
             "sourceActionsUnavailable": "The transcript source is unavailable."
           },
           "AiVaultScanProgressStrip": {
+            "agentChecked": "{{agent}}: {{settled}} of {{total}} history candidates checked",
             "fileCount_one": "{{value0}} file",
             "fileCount_other": "{{value0}} files",
             "databaseCount_one": "{{value0}} database",
@@ -14826,6 +14831,23 @@
             "scanning": "Scanning {{value0}}",
             "checking": "Checking {{value0}}",
             "scanned": "Scanned {{value0}}"
+          },
+          "run": {
+            "source": {
+              "control": {
+                "agent": {
+                  "action": {
+                    "start": {
+                      "git": {
+                        "operation": {
+                          "running": "Wait for the running Git operation to finish."
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       },
@@ -16937,16 +16959,16 @@
                 "addQuickCommand": "add quick command",
                 "newQuickCommand": "new quick command",
                 "splitChatRight": "split chat right",
-                "moveChatRight": "move chat right",
+                "newChatRight": "new chat right",
                 "chatPaneRight": "chat pane right",
                 "splitChatDown": "split chat down",
-                "moveChatDown": "move chat down",
+                "newChatBelow": "new chat below",
                 "chatPaneBelow": "chat pane below"
               },
               "splitChatRight": "Split Chat Right",
-              "splitChatRightDescription": "Open the active chat in a split pane to the right.",
+              "splitChatRightDescription": "Open a new chat in a split pane to the right.",
               "splitChatDown": "Split Chat Down",
-              "splitChatDownDescription": "Open the active chat in a split pane below."
+              "splitChatDownDescription": "Open a new chat in a split pane below."
             }
           },
           "palette": {
@@ -17016,7 +17038,6 @@
             "ec75d0c412": "Open browser devtools",
             "fc9be38f6f": "Annotate page element",
             "fdfc7fe0ef": "Grab page element",
-            "a8f37f70c3": "Inspect Page",
             "1b179ab561": "Copy Page URL",
             "f7ab83f7ed": "Open Page In Default Browser",
             "0e080d820e": "Reload",
@@ -17079,7 +17100,21 @@
             "756bfc25c9": "Open",
             "09a9489aa5": "Show",
             "2a4c4b8e1f": "Copy",
-            "fileUrlUnsupported": "This browser tab cannot open local files. Use \"Open Preview to the Side\" on the file instead."
+            "fileUrlUnsupported": "This browser tab cannot open local files. Use \"Open Preview to the Side\" on the file instead.",
+            "addToDictionary": "Add to Dictionary",
+            "undo": "Undo",
+            "redo": "Redo",
+            "cut": "Cut",
+            "paste": "Paste",
+            "pasteAndMatchStyle": "Paste and Match Style",
+            "pasteAsPlainText": "Paste as Plain Text",
+            "selectAll": "Select All",
+            "openImageInNewTab": "Open Image in New Tab",
+            "saveImage": "Save Image",
+            "copyImage": "Copy Image",
+            "copyImageAddress": "Copy Image Address",
+            "searchSelection": "Search {{value0}} for “{{value1}}”",
+            "inspect": "Inspect"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "Cancel",
@@ -18889,6 +18924,8 @@
         "settleEarlierMessage": "Wait for your earlier message to go through, or retry it.",
         "queueTooLarge": "Too much text is waiting in the queue.",
         "shrinkQueue": "Delete a queued message, or wait for one to go through, then try again.",
+        "messageTooLarge": "It is over the 256 KB limit for one message.",
+        "shortenMessage": "Shorten or split it, then send it again.",
         "optionRejected": "The agent didn't accept this setting.",
         "goalsUnsupported": "This agent doesn't support goals.",
         "agentRefused": "The agent turned this down.",
@@ -18997,6 +19034,10 @@
         "uploadingFile": "Uploading {{name}}…",
         "removeAttachment": "Remove attachment",
         "pastedImageLabel": "Pasted image",
+        "pastedTextLabel": "Pasted text",
+        "pasteNotSavedLabel": "Paste not saved",
+        "pasteNotSaved": "This paste was not saved. Paste it again or remove it.",
+        "pastedTextTooLarge": "This paste would put your message over the 256 KB limit for one message. Shorten it, then paste again.",
         "draftNotSaved": "This draft couldn't be saved yet. Orca keeps trying.",
         "imageNotBroughtBack": "{{name}} couldn't be brought back with this draft. Attach it again or remove it.",
         "pastedImageNotBroughtBack": "This pasted image couldn't be brought back with this draft. Remove it, and paste it again if you still need it.",
@@ -21000,5 +21041,63 @@
       "loading": "Loading language…",
       "saving": "Saving language…"
     }
+  },
+  "resourceManager": {
+    "pty": {
+      "bound": "Has tab",
+      "unbound": "No tab",
+      "unavailable": "Unavailable",
+      "ownerPresent": "Present",
+      "ownerAbsent": "Absent",
+      "ownerUnknown": "Unknown",
+      "sessionId": "Orca session ID",
+      "incarnation": "Incarnation",
+      "workspace": "Workspace",
+      "cwd": "Last-reported cwd",
+      "binding": "Tab",
+      "agentOwnership": "Agent ownership evidence",
+      "observationTime": "Observation time",
+      "pid": "PID",
+      "idCopied": "Orca session ID copied",
+      "copyFailed": "Could not copy Orca session ID",
+      "detailsNamed": "Details for {{terminal}}",
+      "goToTerminal": "Go to terminal",
+      "copyId": "Copy Orca session ID",
+      "refreshBeforeEnd": "End is unavailable until PTYs are refreshed.",
+      "endUnsupported": "End is unavailable for this terminal. Its host does not support the required safety checks. Close it from its tab or on its host.",
+      "checkingTabs": "Checking tabs…",
+      "endTitle": "End {{terminal}}?",
+      "endDescription": "This ends the terminal and its child processes. Unsaved work may be lost.",
+      "lastProcess": "Last seen process: {{process}}",
+      "cancel": "Cancel",
+      "ending": "Ending…",
+      "end": "End terminal",
+      "unassigned": "Unassigned",
+      "thisComputer": "This computer",
+      "localOwnedCount_one": "{{count}} Orca PTY on this computer",
+      "localOwnedCount_other": "{{count}} Orca PTYs on this computer",
+      "withoutTab": "{{count}} without a tab",
+      "observedTime": "Last observed {{time}}",
+      "failed": "Unverifiable: local terminals could not be refreshed. Last-observed terminals are shown.",
+      "retry": "Retry",
+      "loading": "Loading terminals…",
+      "noLocalOrcaPtys": "No local Orca PTYs",
+      "openNamed": "Open {{terminal}}",
+      "endNamed": "End {{terminal}}",
+      "endShort": "End",
+      "endHint": "End this terminal and its child processes.",
+      "claimed": "An agent now owns this terminal. Refresh before trying again.",
+      "attached": "A client is now attached to this terminal. Refresh before trying again.",
+      "unverifiableEnd": "Unverifiable: the host could not confirm the result. The terminal may still be running."
+    },
+    "resources": "Resources",
+    "ptys": "PTYs",
+    "localDaemonScope": "This affects terminals on this computer.",
+    "countUnavailable": "terminal count unavailable",
+    "openToObserve": "Open Resources to observe terminal sessions.",
+    "refresh": "Refresh",
+    "restartLocal": "Restart local daemon",
+    "killAllLocal": "Kill all local sessions",
+    "killFailed": "The terminal could not be ended. Last-observed sessions are retained."
   }
 }

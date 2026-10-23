@@ -106,6 +106,68 @@ describe('mobile diff review queue', () => {
     expect(queue[0]).toMatchObject({ noteCount: 2, unsentNoteCount: 1, staleNoteCount: 1 })
   })
 
+  it('keeps scope, rename, and source matching when notes share a path', () => {
+    const queue = buildMobileDiffReviewQueue({
+      worktreeId: 'wt-1',
+      statusEntries: [
+        statusEntry({ area: 'unstaged', status: 'renamed', oldPath: 'old.ts' }),
+        statusEntry({ area: 'staged' }),
+        statusEntry({ path: 'other.ts' })
+      ],
+      branchEntries: [branchEntry({ path: 'src/app.ts', oldPath: 'old.ts' })],
+      comments: [
+        comment({ id: 'legacy', sentAt: 20 }),
+        comment({ id: 'unstaged', scope: 'unstaged' }),
+        comment({ id: 'staged', scope: 'staged' }),
+        comment({ id: 'branch', scope: 'branch' }),
+        comment({ id: 'rename', oldPath: 'old.ts', diffIdentity: 'stale' }),
+        comment({ id: 'wrong-rename', oldPath: 'different.ts' }),
+        comment({ id: 'markdown', source: 'markdown' }),
+        comment({ id: 'unrelated', filePath: 'absent.ts' })
+      ],
+      reviewState: emptyReviewState
+    })
+
+    expect(
+      queue.map(({ scope, filePath, noteCount, unsentNoteCount, staleNoteCount }) => ({
+        scope,
+        filePath,
+        noteCount,
+        unsentNoteCount,
+        staleNoteCount
+      }))
+    ).toEqual([
+      {
+        scope: 'unstaged',
+        filePath: 'other.ts',
+        noteCount: 0,
+        unsentNoteCount: 0,
+        staleNoteCount: 0
+      },
+      {
+        scope: 'unstaged',
+        filePath: 'src/app.ts',
+        noteCount: 3,
+        unsentNoteCount: 2,
+        staleNoteCount: 1
+      },
+      {
+        scope: 'staged',
+        filePath: 'src/app.ts',
+        noteCount: 2,
+        unsentNoteCount: 1,
+        staleNoteCount: 0
+      },
+      {
+        scope: 'branch',
+        filePath: 'src/app.ts',
+        noteCount: 3,
+        unsentNoteCount: 2,
+        staleNoteCount: 1
+      }
+    ])
+  })
+
   it('filters unreviewed files and noted files', () => {
     const reviewState: MobileDiffReviewState = {
       version: 1,

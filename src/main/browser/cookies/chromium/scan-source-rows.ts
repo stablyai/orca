@@ -10,7 +10,7 @@ import {
   chromiumTimestampToUnix,
   buildChromiumCookieInsertParams
 } from '../../browser-cookie-sqlite'
-import { databaseSameSite } from '../../browser-cookie-validation'
+import { databaseSameSite } from '../sources/browser-cookie-validation'
 import {
   buildUndecryptableWarning,
   cookieEncryptionVersion,

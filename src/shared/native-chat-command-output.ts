@@ -7,7 +7,7 @@
 import type { AgentType } from './agent-status-types'
 import { stripAnsiEscapeSequences } from './ansi-escape-sequences'
 import { getVerifiedNativeChatCommands } from './native-chat-agent-profiles'
-import { parseNativeChatCommandEnvelope } from './native-chat-command-envelope'
+import { parseNativeChatCommandEnvelope } from './native-chat/native-chat-command-envelope'
 import { isTextBlock, type NativeChatMessage } from './native-chat-types'
 
 const LOCAL_COMMAND_STDOUT = /^\s*<local-command-stdout>([\s\S]*?)<\/local-command-stdout>\s*$/

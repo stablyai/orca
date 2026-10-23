@@ -7,6 +7,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { makePaneKey } from '../../shared/stable-pane-id'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
+import { bindPaneFirst } from './bind-first-pane.test-fixture'
 
 export function registerPtyExitAgentStatusReconciliationTests(): void {
   const LEAF = '11111111-1111-4111-8111-111111111111'
@@ -21,9 +23,16 @@ export function registerPtyExitAgentStatusReconciliationTests(): void {
     reconcile: (paneKeys: Iterable<string>) => void,
     options: { connectionId?: string } = {}
   ): OrcaRuntimeService {
-    const runtime = new OrcaRuntimeService(null, undefined, {
-      reconcileAgentStatusForEndedProcess: reconcile
-    })
+    // Switch-on main's layout answers which pane holds the terminal, so it needs a store to hold it.
+    const runtime = new OrcaRuntimeService(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: bindPaneFirst fills in the session accessors main's layout reads.
+      ORCA_LAYOUT_OWNER_IS_MAIN ? ({} as never) : null,
+      undefined,
+      {
+        reconcileAgentStatusForEndedProcess: reconcile
+      }
+    )
+    bindPaneFirst(runtime, { worktreeId: 'wt-1', tabId: 'tab-1', leafId: LEAF, ptyId: PTY })
     const ptys = (runtime as unknown as RuntimeInternals).ptysById
     ptys.set(PTY, {
       ptyId: PTY,

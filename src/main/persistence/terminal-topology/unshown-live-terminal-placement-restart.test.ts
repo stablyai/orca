@@ -79,6 +79,12 @@ async function placeOn(
     refreshInventory: async () => ({ workspaceIds: new Set([WORKTREE]) }),
     ptys: () => ptys,
     isStillBinding: () => false,
+    // The pane each fake terminal names stands in for the host's answer.
+    paneOf: (pty) => ({
+      tabId: pty.tabId ?? null,
+      paneKey: pty.paneKey ?? null,
+      recordedAtGraphSequence: 0
+    }),
     hostIds: () => store.getWorkspaceSessionHostIds(),
     session: (hostId) => store.getWorkspaceSession(hostId),
     apply: (command) => store.applyLayoutCommand(command),

@@ -12,7 +12,7 @@ import {
   type LinearIssueListFilterRead,
   shouldForceLinearIssueListRead,
   buildLinearIssueListRequestSignature
-} from '@/components/task-page-linear-issue-request'
+} from '@/components/task-page/linear/task-page-linear-issue-request'
 import type { LinearIssue } from '../../../shared/linear/issue-types'
 import type { LinearCollectionResult } from '../../../shared/linear/workspace-types'
 import { linearIssueAttributeFilterSignature } from '../../../shared/linear/issue-attribute-filter'

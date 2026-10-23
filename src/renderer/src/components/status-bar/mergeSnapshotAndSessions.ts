@@ -56,12 +56,8 @@ export function mergeSnapshotAndSessions(
   // sessions do not appear as Resource Manager orphans before their pane mounts.
   const index = buildResourceSessionBindingIndex(ctx)
   const boundPtyIds = index.boundPtyIds
-  // Why: the daemon list is the only place agent ownership is reported. Snapshot-derived rows
-  // describe the same sessions by id, so carry it across rather than inventing an answer; a
-  // session the daemon never listed is 'unknown', not 'absent'.
-  const ownershipBySessionId = new Map(
-    daemonSessions.map((session) => [session.id, session.agentOwnership])
-  )
+  // Only the daemon inventory supplies ownership and incarnation evidence.
+  const daemonSessionsById = new Map(daemonSessions.map((session) => [session.id, session]))
 
   function ensureRepo(repoId: string, repoName: string): UnifiedProjectGroup {
     const existing = repos.get(repoId)
@@ -109,13 +105,15 @@ export function mergeSnapshotAndSessions(
     const sessions: UnifiedSessionRow[] = wt.sessions.map((s) => {
       seenSessionIds.add(s.sessionId)
       const tabId = index.ptyIdToTabId.get(s.sessionId) ?? null
+      const daemonSession = daemonSessionsById.get(s.sessionId)
       return {
         sessionId: s.sessionId,
+        incarnationId: daemonSession?.incarnationId,
         paneKey: s.paneKey,
         pid: s.pid,
         label: resolveSnapshotSessionLabel(s, row.worktreeId, index),
         bound: ctx.workspaceSessionReady && boundPtyIds.has(s.sessionId),
-        agentOwnership: ownershipBySessionId.get(s.sessionId) ?? 'unknown',
+        agentOwnership: daemonSession?.agentOwnership ?? 'unknown',
         tabId,
         cpu: s.cpu,
         memory: s.memory,
@@ -244,6 +242,7 @@ export function mergeSnapshotAndSessions(
 
     row.sessions.push({
       sessionId: session.id,
+      incarnationId: session.incarnationId,
       paneKey: null,
       pid: 0,
       label: resolveDaemonSessionLabel(session, worktreeId, tabId, ctx, index),

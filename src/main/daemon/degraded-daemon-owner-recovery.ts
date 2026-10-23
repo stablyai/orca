@@ -1,5 +1,6 @@
 import type {
   IPtyProvider,
+  PtyProcessInfo,
   PtySpawnOptions,
   PtySpawnResult
 } from '../providers/pty-provider-contract'
@@ -20,6 +21,9 @@ export class DegradedDaemonOwnerRecovery {
     this.livenessResolver = new DaemonSessionOwnerResolver(daemonAdapters, routes)
   }
 
+  resolveFencedOwner = (id: string, incarnationId: string) =>
+    this.attachResolver.resolveTermination(id, incarnationId)
+
   spawn = async (opts: PtySpawnOptions): Promise<PtySpawnResult> => {
     return opts.attachOnly && opts.sessionId
       ? await this.attachResolver.spawnAttachOnly({ ...opts, sessionId: opts.sessionId })
@@ -30,6 +34,12 @@ export class DegradedDaemonOwnerRecovery {
     await this.livenessResolver.probe(sessionId)
 
   discoverRoutes = async (): Promise<void> => await this.attachResolver.discoverRoutes()
+
+  async listProcesses(
+    opts?: Parameters<IPtyProvider['listProcesses']>[0]
+  ): Promise<PtyProcessInfo[]> {
+    return this.attachResolver.listProcesses(opts)
+  }
 
   async reconcileOnStartup(validWorktreeIds: Set<string>): Promise<{
     alive: string[]

@@ -10,6 +10,8 @@ import type { WorkspaceSessionState } from '../../shared/workspace-session-state
 import { OrcaRuntimeService } from './orca-runtime'
 import { setRuntimeDesktopSurface } from './runtime-desktop-surface'
 import { withDurableRuntimeStore } from './runtime-durable-store-fixture'
+import { bindPaneFirst } from './bind-first-pane.test-fixture'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import type { LayoutCommand } from '../../shared/workspace-layout/workspace-layout-command-types'
 import { applyCommandToSession } from '../persistence/terminal-topology/terminal-pane-admission'
 
@@ -215,8 +217,20 @@ function coldRestoredRuntime(host: RestoreHost = LOCAL_HOST): {
   return { runtime, sessions }
 }
 
+/** As the PTY host's spawn commit: binds the pane in the host's partition, then registers. */
+function registerBound(
+  runtime: OrcaRuntimeService,
+  hostId: ExecutionHostId,
+  ptyId: string,
+  connectionId: string | null,
+  binding: { tabId: string; leafId: string; incarnationId: string }
+) {
+  bindPaneFirst(runtime, { worktreeId: WORKTREE_ID, ptyId, ...binding }, hostId)
+  runtime.registerPty(ptyId, WORKTREE_ID, connectionId, binding)
+}
+
 function registerLeaf(runtime: OrcaRuntimeService, host: RestoreHost, leaf: 'left' | 'right') {
-  runtime.registerPty(host.ptyIds[leaf], WORKTREE_ID, host.connectionId, {
+  registerBound(runtime, host.hostId, host.ptyIds[leaf], host.connectionId, {
     tabId: 'tab',
     leafId: leaf === 'left' ? LEFT : RIGHT,
     incarnationId: `incarnation-${leaf}`
@@ -309,15 +323,20 @@ describe('a restored terminal published before its PTY registers', () => {
     publishRendererFrame(runtime, makeRendererFrame(LOCAL_HOST))
 
     registerLeaf(runtime, LOCAL_HOST, 'left')
-    runtime.registerPty('pty-other', WORKTREE_ID, null, {
+    registerBound(runtime, LOCAL_EXECUTION_HOST_ID, 'pty-other', null, {
       tabId: 'tab-other',
-      leafId: RIGHT,
+      // Main's layout keys a pane by leaf id alone and remints a repeat, so there it is a new leaf.
+      leafId: ORCA_LAYOUT_OWNER_IS_MAIN ? '44444444-4444-4444-8444-444444444444' : RIGHT,
       incarnationId: 'incarnation-other'
     })
 
     expect(await listedSurfaces(runtime)).toEqual([
       `tab::${LEFT}:ready`,
-      `tab::${RIGHT}:pending-handle`
+      `tab::${RIGHT}:pending-handle`,
+      // Main lists the other terminal's own tab from its layout, with or without the window's frame.
+      ...(ORCA_LAYOUT_OWNER_IS_MAIN
+        ? ['tab-other::44444444-4444-4444-8444-444444444444:ready']
+        : [])
     ])
   })
 })
@@ -480,7 +499,7 @@ describe('a surface the host retired stays retired when a restored sibling regis
       getForegroundProcess: async () => null
     } as never)
     publishSshRendererFrame(runtime)
-    runtime.registerPty(SSH_PTY_Y, WORKTREE_ID, 'ssh-1', {
+    registerBound(runtime, SSH_HOST.hostId, SSH_PTY_Y, 'ssh-1', {
       tabId: 'tab-y',
       leafId: RIGHT,
       incarnationId: 'incarnation-y'
@@ -489,7 +508,7 @@ describe('a surface the host retired stays retired when a restored sibling regis
 
     await runtime.closeMobileSessionTab(`id:${WORKTREE_ID}`, 'tab-y', { reason: 'user' })
     expect(kill).toHaveBeenCalledWith(SSH_PTY_Y)
-    runtime.registerPty(SSH_PTY_X, WORKTREE_ID, 'ssh-1', {
+    registerBound(runtime, SSH_HOST.hostId, SSH_PTY_X, 'ssh-1', {
       tabId: 'tab-x',
       leafId: LEFT,
       incarnationId: 'incarnation-x'
@@ -541,7 +560,7 @@ async function runtimeWithUnpublishedPhoneCreate(): Promise<OrcaRuntimeService> 
       if (channel !== 'terminal:requestTabCreate') {
         return
       }
-      runtime.registerPty('pty-phone', WORKTREE_ID, null, {
+      registerBound(runtime, LOCAL_EXECUTION_HOST_ID, 'pty-phone', null, {
         tabId: 'tab-phone',
         leafId: PHONE_LEAF,
         incarnationId: 'incarnation-phone'

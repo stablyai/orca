@@ -366,8 +366,10 @@ describe('host-owned hook presence', () => {
     expect(probe).not.toHaveBeenCalled()
     expect(visible(server)).toBe(true)
     await hook(server, 'SessionStart', 'relaunch', undefined, 4002)
-    await vi.waitFor(() => expect(probe).toHaveBeenCalledOnce())
-    await vi.waitFor(() => expect(visible(server)).toBe(false))
+    expect(probe).toHaveBeenCalledOnce()
+    expect(
+      server.getStatusSnapshot().find((row) => row.paneKey === PANE)?.providerSession?.id
+    ).toBe('relaunch')
     await hook(server, 'UserPromptSubmit', 'relaunch', undefined, 4002)
     expect(state(server)).toBe('working')
   })
@@ -505,9 +507,11 @@ describe('retained agent exit', () => {
           finish = resolve
         })
     )
-    await hook(server, 'SessionStart', 'replacement', undefined, 4002)
+    const replacement = hook(server, 'SessionStart', 'replacement', undefined, 4002)
+    await vi.waitFor(() => expect(probe).toHaveBeenCalledOnce())
     const overlapping = server.checkAgentPresenceSince(PANE, attachedAt)
     finish('exited')
+    await replacement
     expect(await overlapping).not.toBe('exited')
   })
 

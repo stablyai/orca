@@ -8,8 +8,10 @@ import {
   buildCandidateLogicalLinesForBufferPosition,
   openFilePathLinkAtBufferPosition
 } from './terminal-file-link-hit-testing'
-import { isHtmlFilePath } from '../../../../shared/html-file-url'
-import { shouldOpenTerminalFileWithSystemDefault } from './terminal-file-open-routing'
+import {
+  isHtmlFilePath,
+  shouldOpenTerminalFileWithSystemDefault
+} from './terminal-file-open-routing'
 import { fileLinkTargetExists, resolveFileLinkTarget } from './terminal-file-link-target'
 import {
   buildHardWrappedPathLogicalLineCandidates,

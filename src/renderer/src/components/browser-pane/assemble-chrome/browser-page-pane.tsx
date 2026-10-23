@@ -387,6 +387,10 @@ export function BrowserPagePane({
               isBlankTab={isBlankTab}
               containerRef={containerRef}
               markupPortalContainer={pageViewport?.content ?? null}
+              // Why: a preset page box keeps its size, so a footer below it can take pane height without relayout.
+              markupControlsContainer={
+                browserTab.viewportPresetId ? (pageViewport?.shell ?? null) : null
+              }
               browserOverlayViewport={browserOverlayViewport}
               worktreeId={worktreeId}
               grab={grab}

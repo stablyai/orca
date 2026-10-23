@@ -30,6 +30,7 @@ import {
   getPtyDisplayRecord,
   terminalTitleBlocksExplicitAgentStatus
 } from './runtime-worktree-status-projection'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 
 export function projectRuntimeMobileSessionTabs(
   snapshot: RuntimeMobileSessionTabsSnapshot,
@@ -284,7 +285,8 @@ export function projectRuntimeMobileSessionTabs(
     const projectedAgentStatus =
       agentStatus ??
       host.buildPtyStatus(
-        mobileStatusPty,
+        // Switch point: main's layout gives the pane a live leaf, whose terminal holds the status.
+        ORCA_LAYOUT_OWNER_IS_MAIN ? (liveLeafPty ?? mobileStatusPty) : mobileStatusPty,
         tab,
         terminalHandle,
         retainedAgentStatus,

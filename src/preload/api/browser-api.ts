@@ -96,7 +96,16 @@ export type BrowserApi = {
   onPagePromptRequest: (callback: (request: BrowserPagePromptRequest) => void) => () => void
   onPagePromptClosed: (callback: (event: { requestId: string }) => void) => () => void
   respondPagePrompt: (response: BrowserPagePromptResponse) => Promise<BrowserPagePromptResult>
-  openDevTools: (args: { browserPageId: string }) => Promise<boolean>
+  /** `inspectAt` (guest viewport coordinates) selects the element there. */
+  openDevTools: (args: {
+    browserPageId: string
+    inspectAt?: { x: number; y: number }
+  }) => Promise<boolean>
+  addWordToDictionary: (args: { browserPageId: string; word: string }) => Promise<boolean>
+  copyImageAt: (args: {
+    browserPageId: string
+    point: { x: number; y: number }
+  }) => Promise<boolean>
   setViewportOverride: (args: {
     browserPageId: string
     override: BrowserViewportOverride | null

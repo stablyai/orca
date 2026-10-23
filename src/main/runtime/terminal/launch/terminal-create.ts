@@ -240,15 +240,21 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
         const pty = this.getOrCreatePtyWorktreeRecord(result.id)
         if (pty) {
           pty.runtimeSessionOwned = true
-          pty.providerSessionId =
-            launchOpts.resumeProviderSession?.id ?? launchOpts.sessionId ?? null
+          pty.providerSessionId = launchOpts.resumeProviderSession?.id ?? null
           if (!adoptedStablePane) {
-            const titled = applyCreatedTerminalTitle(pty, launchOpts.title, (sessionId) =>
-              this.getSessionCustomTitle(sessionId)
+            const titled = applyCreatedTerminalTitle(
+              pty,
+              presentation === 'background' && !pty.providerSessionId
+                ? undefined
+                : launchOpts.title,
+              (sessionId) => this.getSessionCustomTitle(sessionId)
             )
             if (titled) {
               pty.titleUpdatedAt = this.nextTitleObservationSequence()
               this.setPtyManagementTitleFromObservedTitle(pty, titled, pty.titleUpdatedAt)
+              if (presentation !== 'background' || pty.providerSessionId) {
+                this.rememberManualTerminalTitle(tabId, titled)
+              }
             }
             pty.launchConfig = effectiveLaunchConfig
               ? dependencies.copySleepingAgentLaunchConfig(effectiveLaunchConfig)

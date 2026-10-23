@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { committingSpawn } from '../bind-first-pane.test-fixture'
 import { OrcaRuntimeService, makePaneKey } from '../orca-runtime-test-mocks.spec'
 import type { RuntimeTerminalAgentStatusEvent } from '../orca-runtime-test-mocks.spec'
 import {
@@ -17,7 +18,7 @@ describe('OrcaRuntimeService', () => {
       onTerminalAgentStatus: (event) => statuses.push(event)
     })
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null

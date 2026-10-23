@@ -162,8 +162,9 @@ export class WorkspaceLifecycleQueue {
     return this.creations.snapshot()
   }
 
-  isPaused(key: string): boolean {
-    return this.queues.get(key)?.paused != null
+  /** Host-qualified keys whose last command went unconfirmed by its host. */
+  pausedKeys(): string[] {
+    return [...this.queues].flatMap(([key, queue]) => (queue.paused ? [key] : []))
   }
 
   private enqueue<T>(key: string, command: LifecycleCommand<T>, seq: number): Promise<T> {

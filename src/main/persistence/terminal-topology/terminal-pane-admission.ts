@@ -173,7 +173,9 @@ function applyToSession(
     ...live,
     mintId: randomUUID,
     mintLeafId: randomUUID,
-    now: Date.now
+    now: Date.now,
+    // Every pane write here is a live edit of main's layout.
+    droppedLeafReason: 'live-edit'
   })
   return applied.ok
     ? {

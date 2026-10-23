@@ -3,6 +3,7 @@ import { readFile, realpath, stat } from 'node:fs/promises'
 import { waitForPromiseWithSignal } from './abort-signal-reason'
 import { parseGitdirMarkerPayload } from './gitdir-marker-payload'
 import { runWithGitOperationLock } from './git-operation-lock'
+import { findGitSubcommandIndex, GIT_GLOBAL_OPTIONS_WITH_VALUE } from './git-command-classification'
 import {
   foldWslUncPathCaseInsensitiveParts,
   isWslUncPath,
@@ -14,17 +15,6 @@ function abortError(): Error {
   error.name = 'AbortError'
   return error
 }
-const GLOBAL_OPTIONS_WITH_VALUE = new Set([
-  '-c',
-  '-C',
-  '--git-dir',
-  '--work-tree',
-  '--namespace',
-  '--super-prefix',
-  '--config-env',
-  '--exec-path'
-])
-
 type GitFetchHeadCommand = { needsLock: boolean; cwd: string; gitDir?: string }
 
 export function resolveGitFetchHeadCommand(
@@ -33,8 +23,8 @@ export function resolveGitFetchHeadCommand(
 ): GitFetchHeadCommand {
   let cwd = initialCwd
   let gitDir: string | undefined
-  let subcommandIndex = -1
-  for (let index = 0; index < args.length; index += 1) {
+  const subcommandIndex = findGitSubcommandIndex(args)
+  for (let index = 0; index < args.length && index !== subcommandIndex; index += 1) {
     const arg = args[index]
     if (arg === '-C' && args[index + 1]) {
       cwd = path.resolve(cwd, args[index + 1])
@@ -54,15 +44,9 @@ export function resolveGitFetchHeadCommand(
       gitDir = path.resolve(cwd, arg.slice('--git-dir='.length))
       continue
     }
-    if (GLOBAL_OPTIONS_WITH_VALUE.has(arg)) {
+    if (GIT_GLOBAL_OPTIONS_WITH_VALUE.has(arg)) {
       index += 1
-      continue
     }
-    if (arg.startsWith('-')) {
-      continue
-    }
-    subcommandIndex = index
-    break
   }
   const subcommand = args[subcommandIndex]
   if (subcommand === 'pull') {

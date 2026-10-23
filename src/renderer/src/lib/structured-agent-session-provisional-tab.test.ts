@@ -18,6 +18,10 @@ import {
   addNativeChatPendingAttachment,
   clearNativeChatPendingAttachmentsForTests
 } from '@/components/native-chat/native-chat-pending-attachment-cache'
+import { applyStructuredSessionTabSnapshots } from '@/runtime/local-structured-session-tabs-sync/snapshot-apply'
+import { makeEmptyHostSnapshot } from '@/runtime/host-session-mirror-frame-fixtures'
+import * as unlisted from './structured-agent-session-unlisted-created-chats'
+import { buildFullWorktreePurgeState } from '@/store/slices/worktrees/teardown/worktree-purge-state'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
@@ -403,4 +407,49 @@ describe('a provisional structured chat tab', () => {
     expect(useAppStore.getState().getTab(chat.id)).toBeNull()
     expect(order()?.filter((id) => id !== slot)).toEqual([terminal.id, sibling.id])
   })
+})
+
+afterEach(() => vi.useRealTimers())
+it.each(['expiry', 'purge'])('created pane publication: %s', async (order) => {
+  const store = () => useAppStore.getState()
+  const source = store().createUnifiedTab('wt-1', 'agent-session', { entityId: 'b' })
+  const groupId = store().createEmptySplitGroup('wt-1', source.groupId, 'right')!
+  const chat = store().createUnifiedTab('wt-1', 'agent-session', {
+    entityId: 'created',
+    targetGroupId: groupId
+  })
+  const list = (snapshotVersion: number) =>
+    applyStructuredSessionTabSnapshots([
+      {
+        ...makeEmptyHostSnapshot('wt-1'),
+        publicationEpoch: chat.entityId,
+        snapshotVersion,
+        tabs: ['b'].map((sessionId) => ({
+          type: 'agent-session',
+          id: `agent-session:${sessionId}`,
+          sessionId,
+          agent: 'claude',
+          title: 'Chat',
+          isActive: false
+        }))
+      }
+    ])
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  unlisted.recordUnlistedCreatedChat('wt-1', chat.entityId, 'local')
+  list(100)
+  expect(store().unifiedTabsByWorktree['wt-1']?.find((t) => t.id === chat.id)).toMatchObject({
+    groupId
+  })
+  if (order === 'purge') {
+    useAppStore.setState(buildFullWorktreePurgeState(store(), [{ id: 'wt-1' }]))
+  }
+  await vi.advanceTimersByTimeAsync(30_000)
+  expect(unlisted.isUnlistedCreatedChat('wt-1', chat.entityId)).toBe(false)
+  if (order === 'purge') {
+    expect(store().unifiedTabsByWorktree['wt-1']).toBeUndefined()
+  } else {
+    expect(store().unifiedTabsByWorktree['wt-1']?.some((t) => t.id === chat.id)).toBe(true)
+    list(101)
+    expect(store().unifiedTabsByWorktree['wt-1']?.some((t) => t.id === chat.id)).toBe(false)
+  }
 })

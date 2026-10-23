@@ -140,8 +140,9 @@ export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends
 
   protected getProvisionedTerminalTab(handle: string): { worktreeId: string; tabId: string } {
     const pty = this.getLivePtyForHandle(handle)?.pty
-    if (pty?.tabId) {
-      return { worktreeId: pty.worktreeId, tabId: pty.tabId }
+    const recordedTabId = this.paneOfPty(pty).tabId
+    if (pty && recordedTabId) {
+      return { worktreeId: pty.worktreeId, tabId: recordedTabId }
     }
     // Why: once the window's graph sync adopts the handle it names the window's leaf, not the
     // runtime's pty, as renameTerminal also resolves it.

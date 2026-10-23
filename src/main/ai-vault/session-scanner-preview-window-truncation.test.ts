@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import {
-  addPreviewMessage,
-  createAccumulator,
-  finalizeSession
-} from './session-scanner-accumulator'
+import { createAccumulator, finalizeSession } from './session-scanner-accumulator'
+import { addPreviewMessage } from './session-scanner-messages'
 import type { SessionAccumulator } from './session-scanner-types'
 
 // Mirrors SESSION_PREVIEW_MESSAGE_LIMIT in the module under test.

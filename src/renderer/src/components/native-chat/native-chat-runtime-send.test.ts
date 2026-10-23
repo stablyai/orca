@@ -28,7 +28,10 @@ import {
   NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS,
   sendNativeChatMessageWithImageAttachments
 } from './native-chat-runtime-image-send'
-import { buildNativeChatPasteBytes, NATIVE_CHAT_SUBMIT } from './native-chat-send'
+import {
+  buildNativeChatPasteBytes,
+  NATIVE_CHAT_SUBMIT
+} from '../../../../shared/native-chat-paste-bytes'
 
 const PTY = 'pty-1'
 

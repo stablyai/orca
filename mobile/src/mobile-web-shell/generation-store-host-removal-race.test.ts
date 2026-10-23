@@ -48,6 +48,7 @@ function bundle(): MobileWebBundleFetchResult {
       assets
     },
     assets: new Map([['index.html', new Uint8Array(4).fill(7)]]),
+    reused: [],
     totalBytes: 4,
     elapsedMs: 1
   }

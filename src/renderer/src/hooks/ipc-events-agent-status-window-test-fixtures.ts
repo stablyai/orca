@@ -66,7 +66,7 @@ export function buildWindowApi(args: {
         onOpenFileFromMobile: () => () => {},
         onOpenDiffFromMobile: () => () => {},
         onCloseTerminal: () => () => {},
-        onSleepWorktree: () => () => {},
+        onWorkspaceSleep: () => () => {},
         onResumeSleepingAgents: () => () => {},
         onNewBrowserTab: () => () => {},
         onNewMarkdownTab: () => () => {},

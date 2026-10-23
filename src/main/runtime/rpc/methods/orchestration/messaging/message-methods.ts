@@ -13,6 +13,7 @@ import { exposeMessage } from './mailbox-message-receipt'
 import { resolveOrchestrationParty } from '../../../../orchestration/orchestration-party'
 import { recordReceiptBeforeNudge, replayMutationNudge } from './mutation-replay-nudge'
 import { resolveReplyRecipient } from './recipient-routing'
+import { helperQuestionAnswerer } from './helper-question-answerer'
 import {
   ReplyParams,
   InboxParams,
@@ -71,6 +72,28 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
       }
 
       const question = db.getQuestion(params.id)
+      const creatorAnswerer =
+        question && (params.run === undefined || params.run === question.run_id)
+          ? helperQuestionAnswerer(runtime, {
+              question: original,
+              from: params.from,
+              session: orchestrationCaller,
+              evidence: orchestrationCompatibilityEvidence
+            })
+          : undefined
+      if (question && creatorAnswerer) {
+        const answered = db.answerQuestion({
+          messageId: question.message_id,
+          runId: question.run_id,
+          answeredBy: creatorAnswerer,
+          body: params.body
+        })
+        return recordReceiptBeforeNudge(
+          recordMutationReceipt,
+          { ...answered, message: exposeMessage(answered.message) },
+          () => runtime.notifyMessageArrived(`dispatch:${question.dispatch_id}`, 'status')
+        )
+      }
       if (question) {
         const run = resolveRunScope(runtime, {
           runId: params.run ?? question.run_id,

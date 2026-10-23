@@ -137,17 +137,19 @@ describe('layout-owner build: main closes an exited split pane itself', () => {
     expect(panes(session())).toEqual([LEFT, RIGHT])
   })
 
-  it('closes a split pane on a -1 after a stop was asked for', async () => {
+  // Switch-on variants (ruled behaviour): any negative code keeps the pane, as the window does;
+  // an asked-for close removes the pane through its own close command.
+  it('keeps a split pane on a -1 after a stop was asked for', async () => {
     const { runtime, session } = splitRuntime()
     runtime.markPtyStopRequested('pty-right')
     await runtime.onPtyExit('pty-right', -1)
-    expect(panes(session())).toEqual([LEFT])
+    expect(panes(session())).toEqual([LEFT, RIGHT])
   })
 
-  it('closes a split pane on a -1 the host confirmed', async () => {
+  it('keeps a split pane on a -1 the host confirmed, so recovery can start a shell in it', async () => {
     const { runtime, session } = splitRuntime()
     await runtime.onPtyExit('pty-right', -1, undefined, { hostExitConfirmed: true })
-    expect(panes(session())).toEqual([LEFT])
+    expect(panes(session())).toEqual([LEFT, RIGHT])
   })
 
   it('keeps a split pane whose exit came with no code, as when its socket closed', async () => {

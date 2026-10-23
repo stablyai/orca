@@ -113,6 +113,7 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/ai-vault-search/session-search-fts5-contract.test.ts',
   'src/main/foreign-sqlite-readers/**/*.test.ts',
   'src/main/browser/*cookie*.test.ts',
+  'src/main/browser/cookies/sources/browser-cookie-validation.test.ts',
   // Playwright's CDP transport needs Node's WebSocket implementation.
   'src/main/browser/browser-popup-adapter-compatibility.electron.test.ts',
   'src/main/browser/popup-origin-chrome.electron.test.ts',

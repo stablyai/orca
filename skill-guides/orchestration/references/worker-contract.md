@@ -53,6 +53,21 @@ you were replaced; `consumer_fenced` is the only way you learn that.
 If `send` or `ask` returns `consumer_fenced`, the command ran from another
 party's terminal (a coordinator or another worker); run it from your own terminal.
 
+## Helper workers
+
+When the preamble has a SUB-DISPATCH section, start helpers on your own
+Dispatch's Run. Do not `run-create` or `run-use` for them.
+
+```text
+ORCA orchestration worker-start --from <worker_handle> --spec "<sub-task>" --worktree current --agent <agent> --json
+ORCA orchestration reply --from <worker_handle> --id <message_id> --body "<answer>"
+```
+
+Their questions, escalations, and `worker_done` arrive in your own `check`, next
+to your coordinator's mail. Answer their questions with `reply`, and wait for
+every helper's `worker_done` before sending yours. After you settle, a helper
+still running reports to your coordinator's Run.
+
 ## Escalation
 
 Escalate only before completion and only when the coordinator must intervene:
