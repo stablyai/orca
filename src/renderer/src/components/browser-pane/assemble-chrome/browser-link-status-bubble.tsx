@@ -50,6 +50,7 @@ export function BrowserLinkStatusBubble({
 
   useEffect(() => {
     let shown = false
+    let lastText = ''
     let showTimer: number | undefined
     let hideTimer: number | undefined
     let expandTimer: number | undefined
@@ -62,18 +63,24 @@ export function BrowserLinkStatusBubble({
       if (event.browserPageId !== browserPageId) {
         return
       }
-      clearTimers()
       const text = event.url ? toDisplayUrl(event.url) : ''
+      const pointer = {
+        x: windowDipToCssPx(event.screenX - window.screenX),
+        y: windowDipToCssPx(event.screenY - window.screenY)
+      }
+      // Main repeats the URL while the pointer moves within one link; only the pointer changed.
+      if (text && text === lastText) {
+        setStatus((current) => ({ ...current, pointer }))
+        return
+      }
+      lastText = text
+      clearTimers()
       if (!text) {
         hideTimer = window.setTimeout(() => {
           shown = false
           setStatus((current) => ({ ...current, visible: false, expanded: false }))
         }, HIDE_DELAY_MS)
         return
-      }
-      const pointer = {
-        x: windowDipToCssPx(event.screenX - window.screenX),
-        y: windowDipToCssPx(event.screenY - window.screenY)
       }
       setStatus((current) => ({ ...current, text, pointer }))
       if (!shown) {
@@ -92,6 +99,9 @@ export function BrowserLinkStatusBubble({
     }
   }, [browserPageId])
 
+  // A bubble that stepped aside stays narrow so it can't grow back under the pointer.
+  const expanded = status.expanded && side === 'left'
+
   useLayoutEffect(() => {
     const bubble = bubbleRef.current
     const page = bubble?.offsetParent
@@ -107,11 +117,13 @@ export function BrowserLinkStatusBubble({
       y <= pageRect.bottom &&
       y >= pageRect.bottom - bubble.offsetHeight - POINTER_PADDING_PX
     setSide(overLeftCorner ? 'right' : 'left')
-  }, [status.text, status.pointer])
+    if (overLeftCorner) {
+      // Dropping the expansion keeps a wide bubble from bouncing between corners as it narrows.
+      setStatus((current) => (current.expanded ? { ...current, expanded: false } : current))
+    }
+  }, [status.text, status.pointer, expanded])
 
   const { head, tail } = splitLinkStatusText(status.text)
-  // A bubble that stepped aside stays narrow so it can't grow back under the pointer.
-  const expanded = status.expanded && side === 'left'
   return (
     <div
       ref={bubbleRef}
