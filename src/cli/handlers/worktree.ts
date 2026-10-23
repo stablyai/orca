@@ -42,6 +42,7 @@ import {
   resolveCreateParentSelector
 } from './worktree-create-parent-selector'
 import { getOptionalLinearIssueLinkFlag } from './worktree-linear-issue-link'
+import { getOptionalClickUpTaskLinkFlag } from './worktree-clickup-task-link'
 import { getOptionalWorktreeUnreadFlag } from './worktree-unread-flag'
 import { getReviewTargetLinkFlags } from './worktree-review-link-flags'
 import { withSetupDecisionRecovery } from './worktree-setup-decision-recovery'
@@ -176,6 +177,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       }
     }
     const linearIssueLink = getOptionalLinearIssueLinkFlag(flags, 'linear-issue')
+    const clickUpTaskLink = getOptionalClickUpTaskLinkFlag(flags)
     const activate = flags.get('activate') === true || flags.get('run-hooks') === true
     const name = getRequiredStringFlag(flags, 'name')
     const repoTarget = await getCreateRepoTarget(flags, cwdParentWorktree, client)
@@ -195,6 +197,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       baseBranch: getOptionalStringFlag(flags, 'base-branch'),
       ...reviewLinks,
       ...linearIssueLink,
+      ...clickUpTaskLink,
       ...(linkedItems ? { linkedItems } : {}),
       comment: getOptionalStringFlag(flags, 'comment'),
       runHooks: flags.get('run-hooks') === true,
@@ -233,6 +236,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     const linearIssueLink = getOptionalLinearIssueLinkFlag(flags, 'linear-issue', {
       allowNull: true
     })
+    const clickUpTaskLink = getOptionalClickUpTaskLinkFlag(flags, { allowNull: true })
     const worktree = await getRequiredWorktreeSelector(flags, 'worktree', cwd, client)
     await assertGitLabLinkFlagProjectsMatch(flags, client, { worktree })
     const result = await client.call<RuntimeWorktreeSetResult>('worktree.set', {
@@ -240,6 +244,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       displayName: getOptionalStringFlag(flags, 'display-name'),
       ...reviewLinks,
       ...linearIssueLink,
+      ...clickUpTaskLink,
       comment: getOptionalStringFlag(flags, 'comment'),
       workspaceStatus: getOptionalStringFlag(flags, 'workspace-status'),
       isUnread,

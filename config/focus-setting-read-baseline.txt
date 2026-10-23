@@ -27,6 +27,7 @@
 1 src/renderer/src/components/browser-pane/browser-reopen-on-server.ts
 1 src/renderer/src/components/browser-pane/stream-remote/use-remote-browser-page-stream.ts
 1 src/renderer/src/components/browser-pane/stream-remote/use-remote-browser-stream-activation.ts
+1 src/renderer/src/components/clickup-api-token-dialog.tsx
 2 src/renderer/src/components/cmd-j/quick-action-context.ts
 2 src/renderer/src/components/editor/EditorContent.tsx
 1 src/renderer/src/components/editor/EditorDiffFileSurface.tsx
@@ -96,6 +97,7 @@
 1 src/renderer/src/components/settings/bitbucket-credentials-dialog.tsx
 1 src/renderer/src/components/settings/bitbucket-integration-card.tsx
 3 src/renderer/src/components/settings/cli-source-control-integration-cards.tsx
+2 src/renderer/src/components/settings/clickup-integration-card.tsx
 3 src/renderer/src/components/settings/jira-integration-card.tsx
 1 src/renderer/src/components/settings/linear-agent-skill-install-cta.tsx
 1 src/renderer/src/components/settings/provider-account-scope.ts
@@ -258,6 +260,7 @@
 1 src/renderer/src/lib/worktree-activation.ts
 1 src/renderer/src/lib/worktree-jump-navigation.ts
 1 src/renderer/src/lib/worktree-runtime-owner.ts # a setup terminal with no row spawns on the focused runtime
+3 src/renderer/src/runtime/runtime-clickup-client.ts
 17 src/renderer/src/runtime/runtime-jira-client.ts
 2 src/renderer/src/runtime/runtime-jira-summary-client.ts
 1 src/renderer/src/runtime/runtime-jira-target.ts
@@ -278,7 +281,7 @@
 1 src/renderer/src/runtime/web-session-tabs-sync/tracking-decisions.ts
 3 src/renderer/src/runtime/web-session-tabs-sync/use-web-session-tabs-sync.ts
 2 src/renderer/src/store/github/visible-hosted-review-refresh-targets.ts
-9 src/renderer/src/store/index.ts
+10 src/renderer/src/store/index.ts
 2 src/renderer/src/store/project-groups/project-group-mutations.ts
 1 src/renderer/src/store/repos/all-host-repo-catalog-actions.ts
 2 src/renderer/src/store/repos/repo-add-actions.ts
@@ -293,6 +296,7 @@
 4 src/renderer/src/store/slices/browser/browser-tab-actions.ts
 1 src/renderer/src/store/slices/browser/create-browser-slice.ts
 1 src/renderer/src/store/slices/browser/paired-browser-tab-creator.ts
+9 src/renderer/src/store/slices/clickup.ts
 2 src/renderer/src/store/slices/editor-slice-test-harness.ts
 1 src/renderer/src/store/slices/editor/actions/markdown-link-action.ts
 1 src/renderer/src/store/slices/editor/actions/markdown-preview-actions.ts
@@ -329,7 +333,7 @@
 1 src/renderer/src/store/slices/runtime-status.ts
 2 src/renderer/src/store/slices/settings-owner-hydration-publication.ts
 5 src/renderer/src/store/slices/settings.ts
-8 src/renderer/src/store/slices/store-test-helpers.ts
+9 src/renderer/src/store/slices/store-test-helpers.ts
 1 src/renderer/src/store/slices/terminal-tab-retirement.ts
 3 src/renderer/src/store/slices/workspace-attention/workspace-unread-characterization-fixture.ts
 1 src/renderer/src/store/slices/worktree-visibility-owner-settings.ts

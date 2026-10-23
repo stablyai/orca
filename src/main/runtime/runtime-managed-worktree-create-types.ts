@@ -29,6 +29,8 @@ export type RuntimeManagedWorktreeCreateArgs = {
   linkedLinearIssue?: string
   linkedLinearIssueWorkspaceId?: string | null
   linkedLinearIssueOrganizationUrlKey?: string | null
+  linkedClickUpTaskId?: string
+  linkedClickUpWorkspaceId?: string | null
   linkedGitLabMR?: number | null
   linkedGitLabIssue?: number | null
   linkedBitbucketPR?: number | null

@@ -1,3 +1,8 @@
+import type { ClickUpTask } from '../clickup-types'
+import {
+  buildClickUpSourceRows,
+  type ClickUpSourceRow
+} from './smart-workspace-clickup-source-rows'
 import type { GitHubWorkItem } from '../github/work-item-types'
 import type { GitLabWorkItem } from '../gitlab-types'
 import type { JiraIssue } from '../jira-types'
@@ -18,7 +23,9 @@ export {
   isSmartWorkspaceSourceQueryWithinLimit
 } from './smart-workspace-source-query'
 
-export type SmartNameMode = 'smart' | 'github' | 'gitlab' | 'branches' | 'linear' | 'jira' | 'text'
+type TrackerMode = 'linear' | 'jira' | 'clickup'
+
+export type SmartNameMode = 'smart' | 'github' | 'gitlab' | 'branches' | TrackerMode | 'text'
 
 export type SmartWorkspaceSourceRow =
   | { kind: 'use-name'; value: string; name: string }
@@ -28,6 +35,7 @@ export type SmartWorkspaceSourceRow =
   | { kind: 'branch'; value: string; refName: string; localBranchName: string }
   | { kind: 'linear'; value: string; issue: LinearIssue }
   | { kind: 'jira'; value: string; issue: JiraIssue }
+  | ClickUpSourceRow
 
 type LinearIssueSourceInput = LinearIssue[] | LinearCollectionResult<LinearIssue> | null | undefined
 
@@ -38,6 +46,7 @@ const EMPTY_HINT_BY_MODE: Record<SmartNameMode, string> = {
   branches: 'No matching branches.',
   linear: 'Start typing to search Linear issues.',
   jira: 'Start typing to search Jira issues, or paste an issue URL.',
+  clickup: 'Start typing to search ClickUp tasks.',
   text: ''
 }
 
@@ -215,6 +224,8 @@ export function buildSmartWorkspaceSourceRows({
   linearAvailable,
   linearIssues,
   linearUrlIntentOwnsResults = false,
+  clickUpAvailable = false,
+  clickUpTasks = [],
   mode,
   resultLimit,
   value
@@ -231,6 +242,8 @@ export function buildSmartWorkspaceSourceRows({
   linearAvailable: boolean
   linearIssues: LinearIssueSourceInput
   linearUrlIntentOwnsResults?: boolean
+  clickUpAvailable?: boolean
+  clickUpTasks?: ClickUpTask[]
   mode: SmartNameMode
   resultLimit: number
   value: string
@@ -316,5 +329,6 @@ export function buildSmartWorkspaceSourceRows({
   if (mode === 'jira') {
     nextRows.push(...jiraIssues.map(toJiraSourceRow))
   }
+  nextRows.push(...buildClickUpSourceRows({ clickUpAvailable, clickUpTasks, mode }))
   return nextRows.slice(0, resultLimit + 1)
 }

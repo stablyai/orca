@@ -339,6 +339,12 @@
           }
         }
       },
+      "clickup": {
+        "filters": {
+          "allSprints": "All sprints",
+          "sprint": "Sprint"
+        }
+      },
       "contextual": {
         "tours": {
           "ContextualTourControl": {
@@ -2147,6 +2153,7 @@
           "c7591b6014": "repo"
         },
         "WorkspaceKanbanSettingsMenu": {
+          "4c2eaa78cc": "Moving a linked workspace updates its Linear issue status when a matching workflow state exists.",
           "b45b350eb0": "Move {{value0}} left"
         },
         "WorkspaceStatusAppearancePopover": {

@@ -256,3 +256,4 @@ function ProviderAccountScopeRow({ scope }: { scope: ProviderHostScope }) {
 }
 
 export { JiraIntegrationCard } from './jira-integration-card'
+export { ClickUpIntegrationCard } from './clickup-integration-card'

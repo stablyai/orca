@@ -19,6 +19,8 @@ export const WorktreeAdoptProvisionedRoot = z.object({
   linkedLinearIssue: create.linkedLinearIssue,
   linkedLinearIssueWorkspaceId: create.linkedLinearIssueWorkspaceId,
   linkedLinearIssueOrganizationUrlKey: create.linkedLinearIssueOrganizationUrlKey,
+  linkedClickUpTaskId: create.linkedClickUpTaskId,
+  linkedClickUpWorkspaceId: create.linkedClickUpWorkspaceId,
   linkedGitLabMR: create.linkedGitLabMR,
   linkedGitLabIssue: create.linkedGitLabIssue,
   linkedBitbucketPR: create.linkedBitbucketPR,

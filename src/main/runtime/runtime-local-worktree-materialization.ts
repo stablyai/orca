@@ -110,6 +110,12 @@ export async function materializeRuntimeLocalWorktree<T>(args: {
       ...(request.linkedLinearIssueOrganizationUrlKey !== undefined
         ? { linkedLinearIssueOrganizationUrlKey: request.linkedLinearIssueOrganizationUrlKey }
         : {}),
+      ...(request.linkedClickUpTaskId !== undefined
+        ? { linkedClickUpTaskId: request.linkedClickUpTaskId }
+        : {}),
+      ...(request.linkedClickUpWorkspaceId !== undefined
+        ? { linkedClickUpWorkspaceId: request.linkedClickUpWorkspaceId }
+        : {}),
       ...(request.linkedGitLabIssue !== undefined
         ? { linkedGitLabIssue: request.linkedGitLabIssue }
         : {}),

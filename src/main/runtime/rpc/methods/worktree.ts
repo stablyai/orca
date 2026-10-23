@@ -12,6 +12,7 @@ import { getWorkspaceStatusWarning } from '../../../../shared/workspace-status-w
 import { createWorktreeWithStartupAgent } from '../../../agent-launch/startup-agent-worktree-create'
 import { defineMethod } from '../core'
 import { buildManagedWorktreeCreateArgs, worktreeCreateRepoSelector } from './worktree-create-args'
+import { pickWorktreeSetTrackerLinks } from './worktree-set-tracker-links'
 import { resolvePairedCallerHostId } from './paired-caller-host-id'
 import { resolveRuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
 import { resolveRpcWorkspaceCreatorProvenance } from '../workspace-creator-context'
@@ -161,9 +162,7 @@ export const WORKTREE_METHODS = [
         linkedIssue: params.linkedIssue,
         linkedPR: params.linkedPR,
         suppressedGitHubPR: params.suppressedGitHubPR,
-        linkedLinearIssue: params.linkedLinearIssue,
-        linkedLinearIssueWorkspaceId: params.linkedLinearIssueWorkspaceId,
-        linkedLinearIssueOrganizationUrlKey: params.linkedLinearIssueOrganizationUrlKey,
+        ...pickWorktreeSetTrackerLinks(params),
         linkedGitLabMR: params.linkedGitLabMR,
         linkedGitLabIssue: params.linkedGitLabIssue,
         linkedBitbucketPR: params.linkedBitbucketPR,

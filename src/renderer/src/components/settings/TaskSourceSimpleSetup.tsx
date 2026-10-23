@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { ClickUpApiTokenDialog } from '@/components/clickup-api-token-dialog'
 import { JiraConnectDialog } from '@/components/jira-connect-dialog'
 import { Button } from '@/components/ui/button'
 import { TaskSourceShowInTasksStep } from './TaskSourceShowInTasksStep'
@@ -116,6 +117,55 @@ export function JiraSetupSteps(
         />
       </ol>
       <JiraConnectDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        onConnected={props.onConnected}
+      />
+    </>
+  )
+}
+
+export function ClickUpSetupSteps(
+  props: ConnectStepProps & { onConnected: () => void; onOpenIntegrations: () => void }
+): React.JSX.Element {
+  const [dialogOpen, setDialogOpen] = useState(false)
+
+  return (
+    <>
+      <ol className="divide-y divide-border/50">
+        <TaskSourceStepRow
+          index={1}
+          state={getConnectStepState(props)}
+          title={translate(
+            'auto.components.settings.TasksPane.connectClickUpTitle',
+            'Connect ClickUp'
+          )}
+          description={translate(
+            'auto.components.settings.TasksPane.connectClickUpDescription',
+            'Add a ClickUp account with a personal API token from Settings \u2192 Apps.'
+          )}
+          action={
+            <Button
+              type="button"
+              size="sm"
+              variant={props.connected ? 'outline' : 'default'}
+              onClick={props.connected ? props.onOpenIntegrations : () => setDialogOpen(true)}
+            >
+              {props.connected
+                ? translate('auto.components.settings.TasksPane.manageClickUp', 'Manage tokens')
+                : translate('auto.components.settings.TasksPane.addClickUp', 'Add ClickUp access')}
+            </Button>
+          }
+        />
+        <TaskSourceShowInTasksStep
+          index={2}
+          providerLabel={translate('auto.components.settings.TasksPane.clickupLabel', 'ClickUp')}
+          visible={props.visible}
+          canHide={props.canHide}
+          onToggleVisible={props.onToggleVisible}
+        />
+      </ol>
+      <ClickUpApiTokenDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         onConnected={props.onConnected}

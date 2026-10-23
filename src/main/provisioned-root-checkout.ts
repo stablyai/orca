@@ -30,6 +30,8 @@ export type ProvisionedRootRequest = Pick<
   | 'linkedLinearIssue'
   | 'linkedLinearIssueWorkspaceId'
   | 'linkedLinearIssueOrganizationUrlKey'
+  | 'linkedClickUpTaskId'
+  | 'linkedClickUpWorkspaceId'
   | 'linkedGitLabIssue'
   | 'linkedGitLabMR'
   | 'linkedBitbucketPR'
@@ -154,6 +156,12 @@ export function buildProvisionedRootMeta(
       : {}),
     ...(args.linkedLinearIssueOrganizationUrlKey !== undefined
       ? { linkedLinearIssueOrganizationUrlKey: args.linkedLinearIssueOrganizationUrlKey }
+      : {}),
+    ...(args.linkedClickUpTaskId !== undefined
+      ? { linkedClickUpTaskId: args.linkedClickUpTaskId }
+      : {}),
+    ...(args.linkedClickUpWorkspaceId !== undefined
+      ? { linkedClickUpWorkspaceId: args.linkedClickUpWorkspaceId }
       : {}),
     ...(args.manualOrder !== undefined ? { manualOrder: args.manualOrder } : {}),
     ...(args.workspaceStatus !== undefined ? { workspaceStatus: args.workspaceStatus } : {}),

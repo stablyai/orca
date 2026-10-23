@@ -34,6 +34,7 @@ type IssueSourceActionsInput = Pick<
 import { useCallback, useMemo } from 'react'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { JiraIssue } from '../../../../shared/jira-types'
+import type { ClickUpTask } from '../../../../shared/clickup-types'
 import {
   toLinearLinkedWorkItem,
   getLinkedItemDisplayName,
@@ -46,16 +47,13 @@ import {
 import { getLinearIssueWorkspaceName } from '../../../../shared/workspace-name'
 import { getJiraIssueKeyCasingSeedOptions } from '@/lib/jira-issue-key-casing'
 import {
-  getLinkedWorkItemSuggestedName,
-  getLinkedWorkItemWorkspaceName,
-  type LinkedWorkItemSummary
-} from '@/lib/new-workspace'
-import {
+  buildClickUpWorkspaceSource,
   buildJiraWorkspaceSource,
   buildWorkspaceSourceSelection,
   shouldApplyWorkspaceSourceAutoName
 } from '../../../../shared/new-workspace/workspace-source'
 import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/smart-workspace-name-field-model'
+import { useTrackerSourceSelection } from './tracker-source-selection'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 
 export function useIssueSourceActions(input: IssueSourceActionsInput) {
@@ -162,62 +160,31 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
     ]
   )
 
+  const applyTrackerSourceSelection = useTrackerSourceSelection(input)
+
   const handleSmartJiraIssueSelect = useCallback(
-    (issue: JiraIssue, sourceContext: TaskSourceContext): void => {
-      smartSourceSelectionRef.current = null
-      const linkedItem: LinkedWorkItemSummary = buildJiraWorkspaceSource(issue)
-      setLinkedIssue('')
-      setLinkedPR(null)
-      setLinkedGitLabIssue(null)
-      setLinkedGitLabMR(null)
-      if (baseBranchNamesWorkspace) {
-        setBaseBranch(undefined)
-      }
-      setCompareBaseRef(undefined)
-      setPushTarget(undefined)
-      setBranchNameOverride(undefined)
-      setBranchNameOverridePreservesNameEdits(false)
-      setForkPushWarning(null)
-      branchAutoNameRef.current = ''
-      setLinkedWorkItem(linkedItem)
-      setLinkedTaskSourceContext(sourceContext)
-      const suggestedName =
-        getLinkedWorkItemWorkspaceName(linkedItem, getJiraIssueKeyCasingSeedOptions())?.seedName ??
-        getLinkedWorkItemSuggestedName(linkedItem)
-      // Why: the Jira lookup is async, so a name the user typed while it resolved must survive.
-      if (
-        suggestedName &&
-        shouldApplyWorkspaceSourceAutoName({
-          currentName: name,
-          lastAutoName: lastAutoNameRef.current,
-          lookupTextIsQuery: !linkedWorkItem
-        })
-      ) {
-        setName(suggestedName)
-        lastAutoNameRef.current = suggestedName
-      }
-    },
-    [
-      name,
-      linkedWorkItem,
-      baseBranchNamesWorkspace,
-      branchAutoNameRef,
-      lastAutoNameRef,
-      setBaseBranch,
-      setBranchNameOverride,
-      setBranchNameOverridePreservesNameEdits,
-      setCompareBaseRef,
-      setForkPushWarning,
-      setLinkedGitLabIssue,
-      setLinkedGitLabMR,
-      setLinkedIssue,
-      setLinkedPR,
-      setLinkedTaskSourceContext,
-      setLinkedWorkItem,
-      setName,
-      setPushTarget,
-      smartSourceSelectionRef
-    ]
+    (issue: JiraIssue, sourceContext: TaskSourceContext): void =>
+      applyTrackerSourceSelection(
+        buildJiraWorkspaceSource(issue),
+        sourceContext,
+        getJiraIssueKeyCasingSeedOptions()
+      ),
+    [applyTrackerSourceSelection]
+  )
+
+  const handleSmartClickUpTaskSelect = useCallback(
+    (task: ClickUpTask, sourceContext: TaskSourceContext): void =>
+      applyTrackerSourceSelection(
+        { ...buildClickUpWorkspaceSource(task), clickupWorkspaceId: task.workspaceId },
+        {
+          ...sourceContext,
+          providerIdentity: {
+            provider: 'clickup',
+            workspaceId: task.workspaceId
+          }
+        }
+      ),
+    [applyTrackerSourceSelection]
   )
 
   const handleClearSmartNameSelection = useCallback((): void => {
@@ -290,6 +257,7 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
   return {
     handleSmartLinearIssueSelect,
     handleSmartJiraIssueSelect,
+    handleSmartClickUpTaskSelect,
     handleClearSmartNameSelection,
     smartNameSelection
   }

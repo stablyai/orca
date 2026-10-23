@@ -16,12 +16,16 @@ const mocks = vi.hoisted(() => ({
   refreshPreflightStatus: vi.fn(),
   checkLinearConnection: vi.fn(),
   checkJiraConnection: vi.fn(),
+  checkClickUpConnection: vi.fn(),
   linearSetupProps: [] as {
     connected: boolean
     checking: boolean
     onOpenIntegrations: () => void
   }[],
-  jiraSetupProps: [] as { onOpenIntegrations: () => void }[]
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: empty fixture array typed for captured setup props.
+  jiraSetupProps: [] as { onOpenIntegrations: () => void }[],
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: empty fixture array typed for captured setup props.
+  clickUpSetupProps: [] as { onOpenIntegrations: () => void }[]
 }))
 
 vi.mock('./use-task-source-provider-readiness', () => ({
@@ -65,6 +69,10 @@ vi.mock('./TaskSourceSimpleSetup', () => ({
   JiraSetupSteps: (props: { onOpenIntegrations: () => void }) => {
     mocks.jiraSetupProps.push(props)
     return <div data-testid="jira-setup">Jira setup</div>
+  },
+  ClickUpSetupSteps: (props: { onOpenIntegrations: () => void }) => {
+    mocks.clickUpSetupProps.push(props)
+    return <div data-testid="clickup-setup">ClickUp setup</div>
   }
 }))
 
@@ -76,6 +84,7 @@ vi.mock('@/store', () => ({
       refreshPreflightStatus: () => void
       checkLinearConnection: () => void
       checkJiraConnection: () => void
+      checkClickUpConnection: () => void
       settingsSearchQuery: string
     }) => unknown
   ) =>
@@ -85,6 +94,7 @@ vi.mock('@/store', () => ({
       refreshPreflightStatus: mocks.refreshPreflightStatus,
       checkLinearConnection: mocks.checkLinearConnection,
       checkJiraConnection: mocks.checkJiraConnection,
+      checkClickUpConnection: mocks.checkClickUpConnection,
       settingsSearchQuery: ''
     })
 }))
@@ -124,6 +134,7 @@ describe('TasksPane', () => {
   beforeEach(() => {
     mocks.linearSetupProps = []
     mocks.jiraSetupProps = []
+    mocks.clickUpSetupProps = []
     mocks.openSettingsPage.mockClear()
     mocks.openSettingsTarget.mockClear()
     mocks.readiness = {
@@ -137,7 +148,8 @@ describe('TasksPane', () => {
         skillChecking: false,
         visible: true
       },
-      jira: { connected: false, checking: false, visible: false }
+      jira: { connected: false, checking: false, visible: false },
+      clickup: { connected: false, checking: false, visible: false }
     }
   })
 

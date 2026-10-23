@@ -2685,7 +2685,8 @@
         "linearEmptyHasWorktree": "No Linear tickets are linked to an Orca workspace yet. Start work from a Linear issue to see it here.",
         "linearOpenAttachedWorkspace": "Open workspace attached to {{value0}}",
         "linearWorktreesColumn": "Workspaces",
-        "jiraBoardEmptyColumn": "No issues"
+        "jiraBoardEmptyColumn": "No issues",
+        "616cce0eda": "ClickUp"
       },
       "Terminal": {
         "73768427cf": "Close",
@@ -5915,7 +5916,8 @@
           "fee535205b": "Tasks",
           "d599269755": "Hide from sidebar",
           "artifacts": "Artifacts",
-          "skills": "Skills"
+          "skills": "Skills",
+          "openClickUpTasks": "Open ClickUp tasks"
         },
         "SidebarRepositoryFilterSection": {
           "d3a9c4cea1": "Clear",
@@ -6059,7 +6061,8 @@
           "34f03eb0de": "Board settings",
           "26cbc92150": "Workspace board settings",
           "87d24a0c2f": "Sync board and issue status",
-          "4c2eaa78cc": "Moving a linked workspace updates its Linear issue status when a matching workflow state exists."
+          "4c2eaa78cc": "Moving a linked workspace updates its Linear issue status when a matching workflow state exists.",
+          "taskTrackerSyncDescription": "Moving a linked workspace updates its Linear or ClickUp task when a matching status exists."
         },
         "WorkspaceKanbanStatusLane": {
           "8ad104642b": "Empty",
@@ -6646,7 +6649,10 @@
           "f0a1b2c3d4": "Skipped Linear issue {{value0}}: this workspace is on more than one host.",
           "c7d8e9f0a1": "{{value0}} updated",
           "d8e9f0a1b2": "{{value0}} skipped",
-          "e9f0a1b2c3": "{{value0}} failed"
+          "e9f0a1b2c3": "{{value0}} failed",
+          "clickUpTaskReadFailed": "ClickUp task {{value0}} could not be read.",
+          "clickUpTaskUpdateFailed": "Could not update ClickUp task {{value0}}.",
+          "clickUpTaskSyncFailed": "Could not sync ClickUp task {{value0}}."
         },
         "WorktreeParentPickerPopover": {
           "failedSetParent": "Failed to set parent worktree",
@@ -9205,7 +9211,13 @@
           "integrationsHint": "Credentials for all providers also live under",
           "integrationsLink": "Integrations",
           "skillHint": ". After Linear is connected, usage examples stay under Settings → Linear.",
-          "incompleteBannerBodyWithLinear": "Hide providers you do not use, or expand a card and finish its steps. For Linear: API access, the agent skill, and Show in Tasks."
+          "incompleteBannerBodyWithLinear": "Hide providers you do not use, or expand a card and finish its steps. For Linear: API access, the agent skill, and Show in Tasks.",
+          "connectClickUpTitle": "Connect ClickUp",
+          "connectClickUpDescription": "Add a ClickUp account with a personal API token from Settings → Apps.",
+          "manageClickUp": "Manage tokens",
+          "addClickUp": "Add ClickUp access",
+          "clickupLabel": "ClickUp",
+          "clickupDescription": "Connect ClickUp with a personal API token and show it in Tasks."
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "Thickness of the pane divider line.",
@@ -13092,6 +13104,28 @@
           "turnOn": "Turn on in Experimental",
           "chip": "WSL"
         },
+        "clickup": {
+          "integration": {
+            "card": {
+              "144aa3bdb4": "{{count}} Workspace available",
+              "f4febb8ab8": "{{count}} Workspaces available",
+              "e954702622": "Checking ClickUp access before showing setup actions.",
+              "613dab25ea": "Browse, create, update, and link ClickUp tasks.",
+              "06ec5973d0": "Connected",
+              "a0d9bbb00b": "Not connected",
+              "a9c42f04d2": "Replace token",
+              "5c20166014": "Connect ClickUp",
+              "unknownAccount": "ClickUp",
+              "f8a36a8fd1": "Verified",
+              "20cd559a37": "Testing…",
+              "954f7f9f58": "Test",
+              "5644fc2ebd": "Disconnect ClickUp",
+              "811f58f8c1": "One token grants access to the Workspaces listed above and is stored by the active runtime.",
+              "d43866e406": "Use a Personal API token from ClickUp Settings → Apps.",
+              "7dcc728994": "Re-check"
+            }
+          }
+        },
         "restartServer": {
           "action": "Restart Orca’s server…",
           "title": "Restart Orca’s server",
@@ -15144,6 +15178,8 @@
             "jiraSelectBindFailed": "Couldn’t link this Jira issue. Pick the matching site or reconnect Jira, then try again.",
             "emoji": "Emoji",
             "loadingLinearIssue": "Loading Linear issue…",
+            "clickup": "ClickUp",
+            "clickUpSelectBindFailed": "Couldn’t link this ClickUp task. Reconnect ClickUp, then try again.",
             "linearLoginUnreadableTitle": "Reconnect Linear",
             "linearLoginUnreadableBody": "Unable to read saved Linear login. Reconnect it in Settings."
           },
@@ -15818,7 +15854,7 @@
             "list_end": ", and ",
             "list_pair": " and ",
             "list_mid": ", ",
-            "code_host_tasks_summary": "issues available as tasks · add Linear or Jira if your team plans work there",
+            "code_host_tasks_summary": "issues available as tasks · add Linear, ClickUp, or Jira if your team plans work there",
             "code_host_tasks_caption": "Your code host's issues also work as tasks.",
             "review_step_title": "See PR status while agents work",
             "review_step_description": "Connect a review provider so Orca can show PR or MR status, checks, and reviews.",
@@ -18614,6 +18650,121 @@
         "a62f9db53d": "Cancel",
         "c77189bc0c": "Update filter",
         "19af906d12": "Save filter"
+      },
+      "clickup": {
+        "detail": {
+          "name": "Name",
+          "description": "Description",
+          "status": "Status",
+          "priority": "Priority",
+          "priorityNone": "None",
+          "priorityUrgent": "Urgent",
+          "priorityHigh": "High",
+          "priorityNormal": "Normal",
+          "priorityLow": "Low",
+          "dueDate": "Due date",
+          "comments": "Comments",
+          "commentPlaceholder": "Add a comment…",
+          "addComment": "Add comment",
+          "open": "Open in ClickUp",
+          "startWorkspace": "Start workspace",
+          "save": "Save"
+        },
+        "page": {
+          "connectTitle": "Connect your ClickUp account",
+          "connectDescription": "Browse, create, edit, and start work from ClickUp tasks.",
+          "connect": "Connect ClickUp",
+          "hide": "Hide ClickUp",
+          "allWorkspaces": "All Workspaces",
+          "searchPlaceholder": "Search ClickUp tasks…",
+          "clearSearch": "Clear search",
+          "newTask": "New ClickUp task",
+          "refresh": "Refresh ClickUp tasks",
+          "id": "ID",
+          "name": "Name",
+          "status": "Status",
+          "list": "List",
+          "updated": "Updated",
+          "emptyTitle": "No ClickUp tasks found",
+          "emptyDescription": "Try another filter or search term.",
+          "startWorkspace": "Start workspace",
+          "openTask": "Open in ClickUp",
+          "filterAssigned": "Assigned to me",
+          "filterOpen": "Open",
+          "filterCreated": "Created by me",
+          "filterCompleted": "Completed",
+          "filterAll": "All"
+        },
+        "dialog": {
+          "title": "Connect ClickUp",
+          "description": "Paste a Personal API token. Orca will load every ClickUp Workspace that token can access.",
+          "tokenLabel": "Personal API token",
+          "instructions": "Create the token from ClickUp Settings → Apps. Personal tokens inherit your account permissions.",
+          "openSettings": "Open ClickUp settings",
+          "remoteStorage": "The active remote runtime stores this token with runtime-supported encryption.",
+          "deviceStorage": "This device stores the token with Electron encrypted storage when available.",
+          "cancel": "Cancel",
+          "connecting": "Connecting…",
+          "connect": "Connect"
+        },
+        "token": {
+          "placeholder": "pk_..."
+        },
+        "create": {
+          "title": "Create ClickUp task",
+          "description": "Choose the destination List, then add the task details.",
+          "list": "List",
+          "loadingLists": "Loading Lists…",
+          "selectList": "Select a List",
+          "name": "Name",
+          "taskDescription": "Description",
+          "cancel": "Cancel",
+          "creating": "Creating…",
+          "submit": "Create task"
+        },
+        "rateLimit": {
+          "limited": "ClickUp rate limit reached, retrying in {{seconds}}s",
+          "paced": "Pacing ClickUp requests to stay under the rate limit, resuming in {{seconds}}s"
+        },
+        "gantt": {
+          "zoom": "Timeline zoom",
+          "day": "Day",
+          "week": "Week",
+          "groupList": "Group by List",
+          "groupStatus": "Group by status",
+          "summary": "{{scheduled}} scheduled, {{unscheduled}} unscheduled",
+          "unscheduled": "Unscheduled"
+        },
+        "filters": {
+          "space": "Space",
+          "allSpaces": "All Spaces",
+          "allSprints": "All sprints",
+          "currentSprintNamed": "Current: {{name}}",
+          "noCurrentSprint": "No current sprint",
+          "sprint": "Sprint",
+          "currentSprint": "Current sprint",
+          "anyStatus": "Any status",
+          "statusCount": "{{count}} statuses",
+          "status": "Status",
+          "selectAll": "Select all",
+          "clear": "Clear",
+          "view": "ClickUp view",
+          "list": "List",
+          "gantt": "Gantt",
+          "allLists": "All lists",
+          "sprintOrList": "Sprint / List",
+          "searchSprintsLists": "Search sprints and lists",
+          "sprintFolder": "Sprint folder",
+          "noFolder": "No folder",
+          "noSprintListMatch": "No sprints or lists match.",
+          "sprintsIn": "Sprints · {{folder}}",
+          "sprints": "Sprints",
+          "currentBadge": "Current",
+          "folderlessLists": "Lists without a folder"
+        }
+      },
+      "ClickUpTaskDetailSheet": {
+        "unknownCommentAuthor": "ClickUp user"
       },
       "OrcaSignInProgress": {
         "waiting": "Waiting for sign-in in your browser",

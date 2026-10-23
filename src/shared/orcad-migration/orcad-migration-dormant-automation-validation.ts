@@ -228,7 +228,7 @@ function parseContext(value: unknown, kind: 'workspace-run' | 'task-source'): vo
     )
     requiredString(record.repoId, 'orcad_migration_dormant_automation_context_repo_invalid')
     requiredString(record.path, 'orcad_migration_dormant_automation_context_path_invalid')
-  } else if (!['github', 'gitlab', 'linear', 'jira'].includes(String(record.provider))) {
+  } else if (!['github', 'gitlab', 'linear', 'clickup', 'jira'].includes(String(record.provider))) {
     throw new Error('orcad_migration_dormant_automation_context_provider_invalid')
   }
 }

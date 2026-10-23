@@ -18,6 +18,7 @@ type SmartWorkspaceUrlSourceMode =
   | 'branches'
   | 'linear'
   | 'jira'
+  | 'clickup'
   | 'text'
 
 export type SmartWorkspaceUrlSourceRow =

@@ -119,6 +119,8 @@ export type CreateWorktreeArgs = {
   linkedLinearIssue?: string
   linkedLinearIssueWorkspaceId?: string | null
   linkedLinearIssueOrganizationUrlKey?: string | null
+  linkedClickUpTaskId?: string
+  linkedClickUpWorkspaceId?: string | null
   linkedGitLabIssue?: number
   linkedGitLabMR?: number
   linkedBitbucketPR?: number | null

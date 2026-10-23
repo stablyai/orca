@@ -43,6 +43,8 @@ export function buildManagedWorktreeCreateArgs(
     linkedLinearIssue: params.linkedLinearIssue,
     linkedLinearIssueWorkspaceId: params.linkedLinearIssueWorkspaceId,
     linkedLinearIssueOrganizationUrlKey: params.linkedLinearIssueOrganizationUrlKey,
+    linkedClickUpTaskId: params.linkedClickUpTaskId ?? undefined,
+    linkedClickUpWorkspaceId: params.linkedClickUpWorkspaceId,
     linkedGitLabMR: params.linkedGitLabMR,
     linkedGitLabIssue: params.linkedGitLabIssue,
     linkedBitbucketPR: params.linkedBitbucketPR,

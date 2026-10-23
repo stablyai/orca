@@ -17,30 +17,65 @@ import {
 function formatTaskStatusSyncMessage(message: WorkspaceBoardTaskStatusSyncMessage): string {
   switch (message.kind) {
     case 'issue-read-failed':
+      if (message.provider === 'ClickUp') {
+        return translate(
+          'auto.components.sidebar.WorkspaceKanbanDrawer.clickUpTaskReadFailed',
+          'ClickUp task {{value0}} could not be read.',
+          { value0: message.issueIdentifier }
+        )
+      }
       return translate(
         'auto.components.sidebar.WorkspaceKanbanDrawer.c1d2e3f4a5',
         'Linear issue {{value0}} could not be read.',
         { value0: message.issueIdentifier }
       )
     case 'missing-workflow-state':
+      if (message.provider === 'ClickUp') {
+        return translate(
+          'auto.components.sidebar.WorkspaceKanbanDrawer.clickUpStatusMissing',
+          'No matching ClickUp status for {{value0}}.',
+          { value0: message.statusLabel }
+        )
+      }
       return translate(
         'auto.components.sidebar.WorkspaceKanbanDrawer.d2e3f4a5b6',
         'No matching Linear workflow state for {{value0}}.',
         { value0: message.statusLabel }
       )
     case 'ambiguous-workflow-state':
+      if (message.provider === 'ClickUp') {
+        return translate(
+          'auto.components.sidebar.WorkspaceKanbanDrawer.clickUpStatusAmbiguous',
+          'Multiple ClickUp statuses match {{value0}}.',
+          { value0: message.statusLabel }
+        )
+      }
       return translate(
         'auto.components.sidebar.WorkspaceKanbanDrawer.e3f4a5b6c7',
         'Multiple Linear workflow states match {{value0}}.',
         { value0: message.statusLabel }
       )
     case 'update-failed':
+      if (message.provider === 'ClickUp') {
+        return translate(
+          'auto.components.sidebar.WorkspaceKanbanDrawer.clickUpTaskUpdateFailed',
+          'Could not update ClickUp task {{value0}}.',
+          { value0: message.issueIdentifier }
+        )
+      }
       return translate(
         'auto.components.sidebar.WorkspaceKanbanDrawer.f4a5b6c7d8',
         'Could not update Linear issue {{value0}}.',
         { value0: message.issueIdentifier }
       )
     case 'provider-error':
+      if (message.provider === 'ClickUp') {
+        return translate(
+          'auto.components.sidebar.WorkspaceKanbanDrawer.clickUpTaskSyncFailed',
+          'Could not sync ClickUp task {{value0}}.',
+          { value0: message.issueIdentifier }
+        )
+      }
       return translate(
         'auto.components.sidebar.WorkspaceKanbanDrawer.a5b6c7d8e9',
         'Could not sync Linear issue {{value0}}.',

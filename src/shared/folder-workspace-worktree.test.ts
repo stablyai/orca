@@ -123,6 +123,26 @@ describe('folderWorkspaceToWorktree', () => {
     expect(worktree.linkedGitLabMR).toBeNull()
   })
 
+  it('projects ClickUp IDs from an attached task when no primary task is set', () => {
+    const worktree = folderWorkspaceToWorktree(
+      makeFolderWorkspace({
+        linkedItems: [
+          {
+            provider: 'clickup',
+            type: 'issue',
+            number: 0,
+            identifier: '86abc123',
+            clickupIdentifier: 'CU-123',
+            clickupWorkspaceId: 'team-1'
+          }
+        ]
+      })
+    )
+
+    expect(worktree.linkedClickUpTaskId).toBe('CU-123')
+    expect(worktree.linkedClickUpWorkspaceId).toBe('team-1')
+  })
+
   it('projects durable Jira item and source context without legacy issue zero', () => {
     const linkedTaskSourceContext = {
       kind: 'task-source' as const,

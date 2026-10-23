@@ -42,6 +42,8 @@ export const WorktreeCreate = z
     linkedLinearIssue: z.string().optional(),
     linkedLinearIssueWorkspaceId: z.union([z.string(), z.null()]).optional(),
     linkedLinearIssueOrganizationUrlKey: z.union([z.string(), z.null()]).optional(),
+    linkedClickUpTaskId: z.string().optional(),
+    linkedClickUpWorkspaceId: z.union([z.string(), z.null()]).optional(),
     linkedGitLabMR: TriStateLinkedIssue,
     linkedGitLabIssue: TriStateLinkedIssue,
     linkedBitbucketPR: TriStateLinkedIssue,

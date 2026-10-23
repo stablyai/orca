@@ -339,6 +339,36 @@ describe('Branch source results', () => {
     ])
   })
 
+  it('adds ClickUp tasks to Smart source results with workspace-scoped values', () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the row builder reads only the task fields this fixture sets.
+    const task = {
+      id: '86abc123',
+      workspaceId: 'team-1',
+      name: 'Fix composer crash'
+    } as never
+    const rows = buildSmartWorkspaceSourceRows({
+      mode: 'clickup',
+      value: '',
+      branches: [],
+      githubItems: [],
+      gitlabItems: [],
+      linearIssues: [],
+      clickUpAvailable: true,
+      clickUpTasks: [task],
+      gitlabAvailable: false,
+      linearAvailable: false,
+      resultLimit: 12
+    })
+
+    expect(rows).toEqual([
+      {
+        kind: 'clickup',
+        value: 'clickup-team-1-86abc123',
+        task
+      }
+    ])
+  })
+
   it('keeps GitHub row values unique for the same item number across repos', () => {
     const rows = buildSmartWorkspaceSourceRows({
       mode: 'github',

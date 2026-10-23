@@ -6,6 +6,7 @@ import { useIssueSourceActions } from './issue-source-actions'
 import { resolveDraftBaseBranchNamesWorkspace } from './workspace-identity-state'
 import { useGitHubProviderSelection } from './github-provider-selection'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
+import type { ClickUpTask } from '../../../../shared/clickup-types'
 
 type Input = Parameters<typeof useIssueSourceActions>[0]
 
@@ -19,6 +20,22 @@ const linearIssue: LinearIssue = {
   labels: [],
   labelIds: [],
   priority: 0,
+  updatedAt: ''
+}
+
+const clickUpTask: ClickUpTask = {
+  id: '86abc123',
+  customId: 'CU-12',
+  workspaceId: 'team-1',
+  workspaceName: 'Engineering',
+  name: 'Fix export',
+  url: 'https://app.clickup.com/t/86abc123',
+  status: { name: 'Open', color: '', type: 'custom', orderIndex: 0 },
+  priority: null,
+  assignees: [],
+  tags: [],
+  list: { id: 'list-1', name: 'Backlog' },
+  createdAt: '',
   updatedAt: ''
 }
 
@@ -119,6 +136,28 @@ describe('composer name source selection', () => {
     if (owned) {
       expect(input.setBaseBranch).toHaveBeenCalledWith(undefined)
     }
+  })
+
+  it('binds a selected ClickUp task to its Workspace identity', () => {
+    const input = createInput()
+    const { result } = renderHook(() => useIssueSourceActions(input))
+
+    act(() =>
+      result.current.handleSmartClickUpTaskSelect(clickUpTask, {
+        kind: 'task-source',
+        provider: 'clickup',
+        projectId: 'app',
+        hostId: 'local'
+      })
+    )
+
+    expect(input.setLinkedTaskSourceContext).toHaveBeenCalledWith({
+      kind: 'task-source',
+      provider: 'clickup',
+      projectId: 'app',
+      hostId: 'local',
+      providerIdentity: { provider: 'clickup', workspaceId: 'team-1' }
+    })
   })
 
   it.each([false, true])('clears only source-owned bases when removing a source (%s)', (owned) => {

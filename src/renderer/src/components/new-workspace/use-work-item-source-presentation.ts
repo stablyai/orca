@@ -17,6 +17,9 @@ import {
   isSmartWorkspaceSourceQueryWithinLimit
 } from '../../../../shared/new-workspace/smart-workspace-source-results'
 import { RESULT_LIMIT, type RowEntry } from './smart-workspace-name-field-model'
+import type { ClickUpTask } from '../../../../shared/clickup-types'
+
+const EMPTY_CLICKUP_TASKS: ClickUpTask[] = []
 import type { useWorkItemSourceFoundation } from './use-work-item-source-foundation'
 
 type Foundation = ReturnType<typeof useWorkItemSourceFoundation>
@@ -31,8 +34,14 @@ export function useWorkItemSourcePresentation(
     linearUrlIntent?: ReturnType<typeof parseBoundedSmartWorkspaceLinearIssueUrlIntent>
     linearUrlIntentOwnsInput?: boolean
     linearQuery?: string
+    clickUpAvailable?: boolean
+    clickUpTasks?: ClickUpTask[]
+    clickUpLoading?: boolean
   }
 ) {
+  const clickUpAvailable = options?.clickUpAvailable === true
+  const clickUpTasks = options?.clickUpTasks ?? EMPTY_CLICKUP_TASKS
+  const clickUpLoading = options?.clickUpLoading === true
   const {
     jiraSource,
     branches,
@@ -130,6 +139,12 @@ export function useWorkItemSourcePresentation(
       linearUrlIntentOwnsResults: true,
       githubUrlIntent,
       gitlabUrlIntent,
+      clickUpAvailable,
+      clickUpTasks: getVisibleHeldProviderResults({
+        items: clickUpTasks,
+        value,
+        debouncedQuery
+      }),
       mode,
       resultLimit: RESULT_LIMIT,
       value
@@ -141,6 +156,8 @@ export function useWorkItemSourcePresentation(
     foundation.typedTextEnabled,
     branches,
     branchResultsSource,
+    clickUpAvailable,
+    clickUpTasks,
     debouncedQuery,
     githubItems,
     githubUrlIntent,
@@ -236,7 +253,12 @@ export function useWorkItemSourcePresentation(
     linearLoading && (!linearUrlIntentOwnsInput || showLinearUrlLoadingFeedback)
   const loading = jiraSource.intent
     ? jiraSource.loading
-    : githubLoading || gitlabLoading || branchesLoading || visibleLinearLoading || jiraLoading
+    : githubLoading ||
+      gitlabLoading ||
+      branchesLoading ||
+      visibleLinearLoading ||
+      jiraLoading ||
+      clickUpLoading
   // Why: only spin on first load, not refreshes with retained rows.
   const showSearchSpinner = loading && searchResultRows.length === 0
   const ActiveInputIcon =

@@ -5,7 +5,7 @@ export const WORKTREE_SET_COMMAND_SPEC: CommandSpec = {
   path: ['worktree', 'set'],
   summary: 'Update Orca metadata for a worktree',
   usage:
-    'orca worktree set --worktree <selector> [--display-name <name>] [--issue <number|null>] [--pr <number|null>] [--linear-issue <identifier-or-url|null>] [--gitlab-issue <number-or-url|null>] [--gitlab-mr <number-or-url|null>] [--comment <text>] [--workspace-status <id>] [--unread|--read] [--parent-worktree <selector>|--no-parent] [--json]',
+    'orca worktree set --worktree <selector> [--display-name <name>] [--issue <number|null>] [--pr <number|null>] [--linear-issue <identifier-or-url|null>] [--clickup-task <id-or-url|null>] [--clickup-workspace <id>] [--gitlab-issue <number-or-url|null>] [--gitlab-mr <number-or-url|null>] [--comment <text>] [--workspace-status <id>] [--unread|--read] [--parent-worktree <selector>|--no-parent] [--json]',
   allowedFlags: [
     ...GLOBAL_FLAGS,
     'worktree',
@@ -13,6 +13,8 @@ export const WORKTREE_SET_COMMAND_SPEC: CommandSpec = {
     'issue',
     'pr',
     'linear-issue',
+    'clickup-task',
+    'clickup-workspace',
     'gitlab-issue',
     'gitlab-mr',
     'comment',
@@ -25,6 +27,7 @@ export const WORKTREE_SET_COMMAND_SPEC: CommandSpec = {
   notes: [
     'Workspace status ids match the board columns (defaults: todo, in-progress, in-review, completed); custom statuses use their configured id.',
     'Pass --linear-issue null to clear the Linear issue link.',
+    'Pass --clickup-task null to clear the ClickUp task link.',
     'Pass --pr null, --gitlab-issue null, or --gitlab-mr null to clear only the matching link.',
     'Each link flag updates its own field and leaves unrelated links unchanged. GitLab URLs must match the stored source project or remote; they cannot select a foreign project.'
   ],

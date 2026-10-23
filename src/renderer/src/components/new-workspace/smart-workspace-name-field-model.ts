@@ -4,6 +4,7 @@ import type { parseGitHubIssueOrPRLink, RepoSlug } from '@/lib/github-links'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { JiraIssue, JiraSite } from '../../../../shared/jira-types'
+import type { ClickUpTask } from '../../../../shared/clickup-types'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { BaseRefSearchResult } from '../../../../shared/repo-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
@@ -27,6 +28,8 @@ export type SmartWorkspaceNameFieldProps = {
   onBranchSelect: (refName: string, localBranchName: string) => void
   onLinearIssueSelect: (issue: LinearIssue) => void
   onJiraIssueSelect?: (issue: JiraIssue, sourceContext: TaskSourceContext) => void
+  /** Optional; when omitted, the ClickUp source mode stays hidden. */
+  onClickUpTaskSelect?: (task: ClickUpTask, sourceContext: TaskSourceContext) => void
   onOpenJiraSettings?: () => void
   selectedSource: SmartWorkspaceNameSelection | null
   onClearSelectedSource: () => void
@@ -48,7 +51,15 @@ export type SmartWorkspaceNameFieldProps = {
 }
 
 export type SmartWorkspaceNameSelection = {
-  kind: 'github-pr' | 'github-issue' | 'gitlab-mr' | 'gitlab-issue' | 'branch' | 'linear' | 'jira'
+  kind:
+    | 'github-pr'
+    | 'github-issue'
+    | 'gitlab-mr'
+    | 'gitlab-issue'
+    | 'branch'
+    | 'linear'
+    | 'jira'
+    | 'clickup'
   label: string
   url?: string
 }
@@ -105,7 +116,12 @@ export type WorkItemSourceSearchProps = Pick<
   | 'gitlabSourceContext'
   | 'linearSourceContext'
   | 'jiraSourceContext'
-> & { sourceSelected?: boolean; gitlabEnabled?: boolean; typedTextEnabled?: boolean }
+> & {
+  sourceSelected?: boolean
+  gitlabEnabled?: boolean
+  typedTextEnabled?: boolean
+  clickUpEnabled?: boolean
+}
 export type NormalizedWorkItemSourceSearchProps = WorkItemSourceSearchProps & {
   disabled: boolean
   textOnly: boolean

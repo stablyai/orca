@@ -146,6 +146,18 @@ import {
 } from './browser-params'
 import { ScreencastUnsubscribe } from './browser-screencast-params'
 import { BrowserOpenUrlParams, BrowserTabCreateParams } from './browser-tab-create-params'
+import {
+  ClickUpConnect,
+  ClickUpCreateTask,
+  ClickUpListLists,
+  ClickUpListTasks,
+  ClickUpSearchTasks,
+  ClickUpSelectWorkspace,
+  ClickUpTaskComment,
+  ClickUpTaskId,
+  ClickUpTaskUpdate,
+  ClickUpWorkspaceSelection
+} from './clickup-params'
 import { ClientEventsUnsubscribeParams } from './client-events-params'
 import {
   NativeChatSessionOptionsMutation,
@@ -874,6 +886,22 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.upload': Upload,
   'browser.viewport': Viewport,
   'browser.wait': Wait,
+  'clickup.addTaskComment': ClickUpTaskComment,
+  'clickup.connect': ClickUpConnect,
+  'clickup.createTask': ClickUpCreateTask,
+  'clickup.disconnect': null,
+  'clickup.getTask': ClickUpTaskId,
+  'clickup.listLists': ClickUpListLists,
+  'clickup.listMembers': ClickUpWorkspaceSelection,
+  'clickup.listSpaces': ClickUpWorkspaceSelection,
+  'clickup.listTags': ClickUpWorkspaceSelection,
+  'clickup.listTasks': ClickUpListTasks,
+  'clickup.searchTasks': ClickUpSearchTasks,
+  'clickup.selectWorkspace': ClickUpSelectWorkspace,
+  'clickup.status': null,
+  'clickup.taskComments': ClickUpTaskId,
+  'clickup.testConnection': null,
+  'clickup.updateTask': ClickUpTaskUpdate,
   'clipboard.abortImageUpload': AbortImageUpload,
   'clipboard.appendImageUploadChunk': AppendImageUploadChunk,
   'clipboard.commitImageUpload': CommitImageUpload,
