@@ -9,7 +9,14 @@ import type { ProjectViewTableState } from './useProjectViewTable'
 import { githubProjectHost } from '../../../../shared/github/project-identity'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
-export function ProjectViewToolbar({ tableState }: { tableState: ProjectViewTableState }) {
+export function ProjectViewToolbar({
+  tableState,
+  viewMenu
+}: {
+  tableState: ProjectViewTableState
+  /** The View menu; null until a table is loaded. */
+  viewMenu: React.ReactNode
+}) {
   const {
     activeProject,
     table,
@@ -99,6 +106,7 @@ export function ProjectViewToolbar({ tableState }: { tableState: ProjectViewTabl
           <span className="ml-auto rounded-full border border-border/50 bg-background px-2 py-0.5 text-[11px]">
             {visibleTable?.totalCount ?? table.totalCount}
           </span>
+          {viewMenu}
           {selectedViewUrl ? (
             <Button
               variant="outline"

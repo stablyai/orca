@@ -200,6 +200,9 @@ export type GitHubProjectTable = {
     url: string
   }
   selectedView: GitHubProjectView
+  /** Every project field, including ones the view hides. Optional for wire
+   *  compat — older hosts don't send it; fall back to the view's fields. */
+  projectFields?: GitHubProjectField[]
   rows: GitHubProjectRow[]
   /** Echoes ProjectV2.items.totalCount for the view filter. */
   totalCount: number

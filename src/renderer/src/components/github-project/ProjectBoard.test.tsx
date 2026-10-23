@@ -20,6 +20,7 @@ const STATUS_FIELD: GitHubProjectField = {
     { id: 'opt_done', name: 'Done', color: 'PURPLE' }
   ]
 }
+const LOCAL_TARGET = { kind: 'local' } as const
 const TITLE_FIELD: GitHubProjectField = {
   kind: 'field',
   id: 'f_title',
@@ -116,6 +117,7 @@ describe('ProjectBoard', () => {
   it('renders one column per option (empty included) plus the no-value column', () => {
     render(
       <ProjectBoard
+        sourceTarget={LOCAL_TARGET}
         table={table(
           [TITLE_FIELD, STATUS_FIELD],
           [row('r1', 'Ship it', [status('opt_todo', 'Todo')]), row('r2', 'Loose end', [])]
@@ -135,7 +137,14 @@ describe('ProjectBoard', () => {
       [TITLE_FIELD, STATUS_FIELD],
       [row('r1', 'Ship it', [status('opt_todo', 'Todo')])]
     )
-    render(<ProjectBoard table={boardTable} onEditField={onEditField} fallback={<div>list</div>} />)
+    render(
+      <ProjectBoard
+        sourceTarget={LOCAL_TARGET}
+        table={boardTable}
+        onEditField={onEditField}
+        fallback={<div>list</div>}
+      />
+    )
     fireEvent.drop(screen.getByTestId('board-column-opt_done'), dragData('r1'))
     expect(onEditField).toHaveBeenCalledWith(boardTable.rows[0], 'f_status', {
       kind: 'single-select',
@@ -156,6 +165,7 @@ describe('ProjectBoard', () => {
       const onEditField = vi.fn()
       render(
         <ProjectBoard
+          sourceTarget={LOCAL_TARGET}
           table={table([STATUS_FIELD], [row('r1', 'Ship it', [])])}
           onEditField={onEditField}
           fallback={null}
@@ -174,7 +184,14 @@ describe('ProjectBoard', () => {
       [TITLE_FIELD, STATUS_FIELD],
       [row('r1', 'Ship it', [status('opt_todo', 'Todo')])]
     )
-    render(<ProjectBoard table={boardTable} onEditField={onEditField} fallback={<div>list</div>} />)
+    render(
+      <ProjectBoard
+        sourceTarget={LOCAL_TARGET}
+        table={boardTable}
+        onEditField={onEditField}
+        fallback={<div>list</div>}
+      />
+    )
     fireEvent.drop(screen.getByTestId('board-column-__empty__'), dragData('r1'))
     expect(onEditField).toHaveBeenCalledWith(boardTable.rows[0], 'f_status', null)
   })
@@ -183,6 +200,7 @@ describe('ProjectBoard', () => {
     const onOpenDialog = vi.fn()
     render(
       <ProjectBoard
+        sourceTarget={LOCAL_TARGET}
         table={table(
           [TITLE_FIELD, STATUS_FIELD],
           [
@@ -203,6 +221,7 @@ describe('ProjectBoard', () => {
   it('clears the drop highlight on dragend and on payload-less drops', () => {
     render(
       <ProjectBoard
+        sourceTarget={LOCAL_TARGET}
         table={table(
           [TITLE_FIELD, STATUS_FIELD],
           [row('r1', 'Ship it', [status('opt_todo', 'Todo')])]
@@ -225,17 +244,21 @@ describe('ProjectBoard', () => {
   it('falls back to the caller-supplied list when no column field exists', () => {
     const bare = table([TITLE_FIELD], [row('r1', 'Ship it', [])])
     bare.selectedView.verticalGroupByFields = []
-    render(<ProjectBoard table={bare} fallback={<div>list</div>} />)
+    render(<ProjectBoard sourceTarget={LOCAL_TARGET} table={bare} fallback={<div>list</div>} />)
     expect(screen.getByText('list')).toBeTruthy()
   })
 
   it('uses the shared empty-state copy for unfiltered and filtered boards', () => {
     const empty = table([TITLE_FIELD, STATUS_FIELD], [])
-    const { rerender } = render(<ProjectBoard table={empty} fallback={<div>list</div>} />)
+    const { rerender } = render(
+      <ProjectBoard sourceTarget={LOCAL_TARGET} table={empty} fallback={<div>list</div>} />
+    )
     expect(screen.getByText('This view has no items yet.')).toBeTruthy()
     expect(screen.queryByText("No items match this view's filter.")).toBeNull()
     empty.selectedView.filter = 'status:Done'
-    rerender(<ProjectBoard table={{ ...empty }} fallback={<div>list</div>} />)
+    rerender(
+      <ProjectBoard sourceTarget={LOCAL_TARGET} table={{ ...empty }} fallback={<div>list</div>} />
+    )
     expect(screen.getByText("No items match this view's filter.")).toBeTruthy()
   })
 
@@ -243,6 +266,7 @@ describe('ProjectBoard', () => {
     const onEditField = vi.fn()
     render(
       <ProjectBoard
+        sourceTarget={LOCAL_TARGET}
         table={table(
           [STATUS_FIELD],
           [row('r1', '', [], 'REDACTED'), row('r2', 'Old', [status('deleted', 'Archived')])]
@@ -260,8 +284,166 @@ describe('ProjectBoard', () => {
 
   it('keeps a board without an edit handler read-only', () => {
     render(
-      <ProjectBoard table={table([STATUS_FIELD], [row('r1', 'Read only', [])])} fallback={null} />
+      <ProjectBoard
+        sourceTarget={LOCAL_TARGET}
+        table={table([STATUS_FIELD], [row('r1', 'Read only', [])])}
+        fallback={null}
+      />
     )
     expect(screen.getByLabelText('#7 — Read only').getAttribute('draggable')).toBe('false')
+  })
+
+  describe('swimlanes', () => {
+    const PRIORITY_FIELD: GitHubProjectField = {
+      kind: 'single-select',
+      id: 'f_priority',
+      name: 'Priority',
+      dataType: 'SINGLE_SELECT',
+      options: [
+        { id: 'p_high', name: 'High', color: 'RED' },
+        { id: 'p_low', name: 'Low', color: 'GRAY' }
+      ]
+    }
+    const ASSIGNEES_FIELD: GitHubProjectField = {
+      kind: 'field',
+      id: 'f_assignees',
+      name: 'Assignees',
+      dataType: 'ASSIGNEES'
+    }
+    const priority = (optionId: string, name: string): GitHubProjectFieldValue => ({
+      kind: 'single-select',
+      fieldId: 'f_priority',
+      optionId,
+      name,
+      color: ''
+    })
+    function laneTable(
+      laneField: GitHubProjectField,
+      rows: GitHubProjectRow[]
+    ): GitHubProjectTable {
+      const base = table([TITLE_FIELD, STATUS_FIELD, laneField], rows)
+      base.selectedView.verticalGroupByFields = [STATUS_FIELD]
+      base.selectedView.groupByFields = [laneField]
+      return base
+    }
+
+    it('splits every column across lanes, keeping a no-value lane last', () => {
+      render(
+        <ProjectBoard
+          sourceTarget={LOCAL_TARGET}
+          table={laneTable(PRIORITY_FIELD, [
+            row('r1', 'Hot fix', [status('opt_todo', 'Todo'), priority('p_high', 'High')]),
+            row('r2', 'Someday', [status('opt_done', 'Done')])
+          ])}
+          fallback={null}
+        />
+      )
+      expect(screen.getByTestId('board-cell-p_high-opt_todo').textContent).toContain('Hot fix')
+      expect(screen.getByTestId('board-cell-__empty__-opt_done').textContent).toContain('Someday')
+      expect(screen.getByTestId('board-lane-__empty__').textContent).toContain('No Priority')
+      expect(screen.queryByTestId('board-lane-p_low')).toBeNull()
+    })
+
+    it('writes the column and lane fields when a card crosses both', () => {
+      const onEditField = vi.fn()
+      const boardTable = laneTable(PRIORITY_FIELD, [
+        row('r1', 'Hot fix', [status('opt_todo', 'Todo'), priority('p_high', 'High')]),
+        row('r2', 'Someday', [status('opt_done', 'Done')])
+      ])
+      render(
+        <ProjectBoard
+          sourceTarget={LOCAL_TARGET}
+          table={boardTable}
+          onEditField={onEditField}
+          fallback={null}
+        />
+      )
+      fireEvent.drop(screen.getByTestId('board-cell-__empty__-opt_done'), dragData('r1'))
+      expect(onEditField).toHaveBeenCalledWith(boardTable.rows[0], 'f_status', {
+        kind: 'single-select',
+        optionId: 'opt_done'
+      })
+      expect(onEditField).toHaveBeenCalledWith(boardTable.rows[0], 'f_priority', null)
+      onEditField.mockClear()
+      fireEvent.drop(screen.getByTestId('board-cell-p_high-opt_todo'), dragData('r2'))
+      expect(onEditField).toHaveBeenCalledTimes(2)
+      expect(onEditField).toHaveBeenLastCalledWith(boardTable.rows[1], 'f_priority', {
+        kind: 'single-select',
+        optionId: 'p_high'
+      })
+    })
+
+    it('only moves the column when the lane field cannot be written', () => {
+      const onEditField = vi.fn()
+      const assignee = (login: string): GitHubProjectFieldValue => ({
+        kind: 'users',
+        fieldId: 'f_assignees',
+        users: [{ login, name: null, avatarUrl: null }]
+      })
+      const boardTable = laneTable(ASSIGNEES_FIELD, [
+        row('r1', 'Mine', [status('opt_todo', 'Todo'), assignee('ana')]),
+        row('r2', 'Theirs', [status('opt_todo', 'Todo'), assignee('bo')])
+      ])
+      render(
+        <ProjectBoard
+          sourceTarget={LOCAL_TARGET}
+          table={boardTable}
+          onEditField={onEditField}
+          fallback={null}
+        />
+      )
+      fireEvent.drop(screen.getByTestId('board-cell-raw:bo-opt_done'), dragData('r1'))
+      expect(onEditField).toHaveBeenCalledOnce()
+      expect(onEditField).toHaveBeenCalledWith(boardTable.rows[0], 'f_status', {
+        kind: 'single-select',
+        optionId: 'opt_done'
+      })
+    })
+
+    it('collapses a lane from its header', () => {
+      render(
+        <ProjectBoard
+          sourceTarget={LOCAL_TARGET}
+          table={laneTable(PRIORITY_FIELD, [
+            row('r1', 'Hot fix', [status('opt_todo', 'Todo'), priority('p_high', 'High')])
+          ])}
+          fallback={null}
+        />
+      )
+      fireEvent.click(screen.getByRole('button', { name: /High/ }))
+      expect(screen.queryByTestId('board-cell-p_high-opt_todo')).toBeNull()
+    })
+  })
+
+  it('renders visible fields on cards except the column field, and hides avatars without Assignees', () => {
+    const PRIORITY_FIELD: GitHubProjectField = {
+      kind: 'single-select',
+      id: 'f_priority',
+      name: 'Priority',
+      dataType: 'SINGLE_SELECT',
+      options: [{ id: 'p_high', name: 'High', color: 'RED' }]
+    }
+    const withAvatar = row('r1', 'Ship it', [
+      status('opt_todo', 'Todo'),
+      {
+        kind: 'single-select',
+        fieldId: 'f_priority',
+        optionId: 'p_high',
+        name: 'High',
+        color: 'RED'
+      }
+    ])
+    withAvatar.content.assignees = [{ login: 'ana', name: null, avatarUrl: null }]
+    render(
+      <ProjectBoard
+        sourceTarget={LOCAL_TARGET}
+        table={table([TITLE_FIELD, STATUS_FIELD, PRIORITY_FIELD], [withAvatar])}
+        fallback={null}
+      />
+    )
+    const card = screen.getByLabelText('#7 — Ship it')
+    expect(card.textContent).toContain('High')
+    expect(card.textContent).not.toContain('Todo')
+    expect(screen.queryByTitle('ana')).toBeNull()
   })
 })

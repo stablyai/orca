@@ -2,11 +2,18 @@ import React from 'react'
 import { FileText, GitPullRequest, Lock } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import type { GitHubProjectRow } from '../../../../shared/github/project-types'
+import { ProjectBoardCardFields } from './ProjectBoardCardFields'
+import type { GitHubProjectField, GitHubProjectRow } from '../../../../shared/github/project-types'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
 type Props = {
   row: GitHubProjectRow
   draggable: boolean
+  /** Extra visible fields rendered as chips under the title. */
+  fields: GitHubProjectField[]
+  showAssignees: boolean
+  sourceHost?: string
+  sourceTarget: RuntimeClientTarget
   onOpenDialog?: () => void
   onDragStart: (event: React.DragEvent<HTMLDivElement>) => void
 }
@@ -14,6 +21,10 @@ type Props = {
 export default function ProjectBoardCard({
   row,
   draggable,
+  fields,
+  showAssignees,
+  sourceHost,
+  sourceTarget,
   onOpenDialog,
   onDragStart
 }: Props): React.JSX.Element {
@@ -78,8 +89,16 @@ export default function ProjectBoardCard({
               <span className="truncate">{row.content.repository}</span>
             ) : null}
           </div>
+          {restricted ? null : (
+            <ProjectBoardCardFields
+              row={row}
+              fields={fields}
+              sourceHost={sourceHost}
+              sourceTarget={sourceTarget}
+            />
+          )}
         </div>
-        {row.content.assignees.length > 0 ? (
+        {showAssignees && row.content.assignees.length > 0 ? (
           <div className="flex shrink-0 -space-x-1.5">
             {row.content.assignees.slice(0, 3).map((user) =>
               user.avatarUrl ? (

@@ -1,17 +1,17 @@
 import type { GetProjectViewTableArgs } from '../../../shared/github/project-request-types'
 import type { GetProjectViewTableResult } from '../../../shared/github/project-result-types'
-import type { GitHubProjectTable } from '../../../shared/github/project-types'
+import type { GitHubProjectField, GitHubProjectTable } from '../../../shared/github/project-types'
 import { githubProjectHost } from '../../../shared/github/project-identity'
 import { isRenderableProjectViewLayout } from '../../../shared/github/project-types'
 import { assertPositiveInt, assertSlug } from './internals'
 import {
   fetchProjectViewsPage,
-  fetchViewFieldsContinuation,
+  fetchFieldsContinuation,
   finalizeView,
   matchesSelector,
   type RawProjectView
 } from './project-view-config'
-import type { RawProjectV2Field } from './project-view-field-normalization'
+import { normalizeField, type RawProjectV2Field } from './project-view-field-normalization'
 import { fetchAllItems, fetchItemsCountOnly } from './project-view-items'
 
 // ─── Public: getProjectViewTable ──────────────────────────────────────
@@ -37,6 +37,8 @@ export async function getProjectViewTable(
   // Paginate views until a match is found.
   let cursor: string | null = null
   let project: { id: string; title: string; url: string } | null = null
+  let projectFields: GitHubProjectField[] = []
+  let projectFieldsEndCursor: string | null = null
   let selectedRaw: RawProjectView | null = null
   let matchStrength: 'id' | 'number' | 'name' | 'default' | null = null
   const viewsSeen: RawProjectView[] = []
@@ -46,12 +48,17 @@ export async function getProjectViewTable(
       ownerType: args.ownerType,
       projectNumber: args.projectNumber,
       host: args.host,
-      after: cursor
+      after: cursor,
+      ...(cursor === null ? { includeProjectFields: true } : {})
     })
     if (!page.ok) {
       return { ok: false, error: page.error }
     }
     project = page.project
+    if (cursor === null) {
+      projectFields = [...page.projectFields]
+      projectFieldsEndCursor = page.projectFieldsEndCursor
+    }
     for (const v of page.views) {
       viewsSeen.push(v)
       const m = matchesSelector(v, {
@@ -104,11 +111,23 @@ export async function getProjectViewTable(
   let extraFields: RawProjectV2Field[] = []
   const fieldsPi = selectedRaw.fields?.pageInfo
   if (fieldsPi?.hasNextPage === true && typeof fieldsPi.endCursor === 'string' && selectedRaw.id) {
-    const cont = await fetchViewFieldsContinuation(selectedRaw.id, fieldsPi.endCursor, args.host)
+    const cont = await fetchFieldsContinuation(selectedRaw.id, fieldsPi.endCursor, args.host)
     if (!cont.ok) {
       return { ok: false, error: cont.error }
     }
     extraFields = cont.fields
+  }
+  if (projectFieldsEndCursor !== null) {
+    // Why: project fields only feed the View menu's choices, so a failed page keeps the first page instead of failing the view.
+    const cont = await fetchFieldsContinuation(project.id, projectFieldsEndCursor, args.host)
+    if (cont.ok) {
+      for (const f of cont.fields) {
+        const n = normalizeField(f)
+        if (n) {
+          projectFields.push(n)
+        }
+      }
+    }
   }
 
   const finalized = finalizeView(selectedRaw, extraFields)
@@ -171,6 +190,7 @@ export async function getProjectViewTable(
       url: project.url
     },
     selectedView,
+    ...(projectFields.length > 0 ? { projectFields } : {}),
     rows: items.rows,
     totalCount: items.totalCount,
     parentFieldDropped: items.parentFieldDropped

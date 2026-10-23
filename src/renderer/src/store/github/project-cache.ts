@@ -11,11 +11,12 @@ export function optimisticFieldValueFromMutation(
   fieldId: string,
   value: GitHubProjectFieldMutationValue
 ): GitHubProjectTable['rows'][number]['fieldValuesByFieldId'][string] | null {
-  // Board column fields can be hidden from the view's visible fields.
+  // Board column and View-menu fields can be hidden from the view's visible fields.
   const field = [
     ...table.selectedView.fields,
     ...(table.selectedView.verticalGroupByFields ?? []),
-    ...table.selectedView.groupByFields
+    ...table.selectedView.groupByFields,
+    ...(table.projectFields ?? [])
   ].find((f) => f.id === fieldId)
   switch (value.kind) {
     case 'single-select': {

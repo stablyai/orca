@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  fetchFieldsContinuation,
   fetchProjectViewsPage,
   finalizeView,
   resetVerticalGroupByCapabilityForTests,
@@ -137,6 +138,71 @@ describe('verticalGroupByFields capability fallback', () => {
     const result = await fetchProjectViewsPage(args)
     expect(result.ok).toBe(false)
     expect(vi.mocked(runGraphql)).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('project-level fields', () => {
+  it('queries and normalizes every project field, skipping unreadable nodes', async () => {
+    const page = okPage()
+    vi.mocked(runGraphql).mockResolvedValueOnce({
+      ...page,
+      data: {
+        organization: {
+          projectV2: {
+            ...page.data.organization.projectV2,
+            fields: {
+              pageInfo: { hasNextPage: true, endCursor: 'fields-next' },
+              nodes: [
+                null,
+                {
+                  __typename: 'ProjectV2SingleSelectField',
+                  id: 'f_priority',
+                  name: 'Priority',
+                  dataType: 'SINGLE_SELECT',
+                  options: [{ id: 'p_high', name: 'High', color: 'RED' }]
+                }
+              ]
+            }
+          }
+        }
+      }
+    })
+    const result = await fetchProjectViewsPage({ ...args, includeProjectFields: true })
+    expect(vi.mocked(runGraphql).mock.calls[0]?.[0]).toMatch(/id title url\s+fields\(first:50\)/)
+    expect(result).toMatchObject({
+      ok: true,
+      projectFields: [{ kind: 'single-select', id: 'f_priority', name: 'Priority' }],
+      projectFieldsEndCursor: 'fields-next'
+    })
+  })
+
+  it('continues project fields through the same node query views use', async () => {
+    vi.mocked(runGraphql).mockResolvedValueOnce({
+      ok: true,
+      data: {
+        node: {
+          id: 'project',
+          fields: {
+            pageInfo: { hasNextPage: false, endCursor: null },
+            nodes: [{ id: 'f_51', name: 'Extra', dataType: 'TEXT' }]
+          }
+        }
+      }
+    })
+    const result = await fetchFieldsContinuation('project', 'fields-next')
+    expect(vi.mocked(runGraphql).mock.calls[0]?.[0]).toMatch(/\.\.\. on ProjectV2 \{/)
+    expect(vi.mocked(runGraphql).mock.calls[0]?.[1]).toEqual({
+      nodeId: 'project',
+      after: 'fields-next'
+    })
+    expect(result).toMatchObject({ ok: true, fields: [{ id: 'f_51' }] })
+  })
+
+  it('leaves project fields out of the query unless asked, as the view tab listing does', async () => {
+    vi.mocked(runGraphql).mockResolvedValueOnce(okPage())
+    const result = await fetchProjectViewsPage(args)
+    expect(vi.mocked(runGraphql).mock.calls[0]?.[0]).not.toMatch(/id title url\s+fields\(/)
+    expect(result).toMatchObject({ ok: true, projectFields: [], projectFieldsEndCursor: null })
   })
 })
 

@@ -81,3 +81,62 @@ export function buildBoardColumns(
   })
   return columns
 }
+
+/** GitHub stores board swimlanes as the view's group-by field. */
+export function resolveBoardSwimlaneField(
+  view: GitHubProjectView,
+  columnField: GitHubProjectField | null
+): GitHubProjectField | null {
+  const lane = view.groupByFields[0] ?? null
+  return lane && lane.id !== columnField?.id ? lane : null
+}
+
+/** The mutation that moves a row into a lane; undefined when the lane field can't be written. */
+export function boardSwimlaneDropValue(
+  field: GitHubProjectField,
+  laneKey: string
+): GitHubProjectFieldMutationValue | null | undefined {
+  if (field.kind !== 'single-select' && field.kind !== 'iteration') {
+    return undefined
+  }
+  if (laneKey === EMPTY_PROJECT_GROUP_KEY) {
+    return null
+  }
+  if (field.kind === 'single-select') {
+    return field.options.some((option) => option.id === laneKey)
+      ? { kind: 'single-select', optionId: laneKey }
+      : undefined
+  }
+  return field.iterations.some((iteration) => iteration.id === laneKey)
+    ? { kind: 'iteration', iterationId: laneKey }
+    : undefined
+}
+
+export function fieldValueMatchesDrop(
+  current: GitHubProjectRow['fieldValuesByFieldId'][string] | undefined,
+  drop: GitHubProjectFieldMutationValue | null
+): boolean {
+  if (drop === null) {
+    return current === undefined
+  }
+  if (drop.kind === 'single-select') {
+    return current?.kind === 'single-select' && current.optionId === drop.optionId
+  }
+  return (
+    drop.kind === 'iteration' &&
+    current?.kind === 'iteration' &&
+    current.iterationId === drop.iterationId
+  )
+}
+
+/** One lane's slice of every column, keeping column order and row order. */
+export function boardColumnsForLane(
+  columns: ProjectBoardColumn[],
+  laneRows: GitHubProjectRow[]
+): ProjectBoardColumn[] {
+  const laneRowIds = new Set(laneRows.map((row) => row.id))
+  return columns.map((column) => ({
+    ...column,
+    rows: column.rows.filter((row) => laneRowIds.has(row.id))
+  }))
+}

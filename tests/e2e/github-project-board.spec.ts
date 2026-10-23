@@ -1,6 +1,6 @@
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
-import { githubProjectIdentityKey } from '../../src/shared/github/project-identity'
+import { openStubbedGitHubProjectView } from './helpers/github-project-view'
 import type { GitHubProjectTable } from '../../src/shared/github/project-types'
 import type {
   ClearProjectItemFieldArgs,
@@ -85,16 +85,7 @@ test('board drops cross preload, settle optimistically, and roll back failures',
   seededRepoPath
 }, testInfo) => {
   await waitForSessionReady(orcaPage)
-  await electronApp.evaluate(({ ipcMain }, data) => {
-    const responses = {
-      'gh:repoSlug': () => ({ owner: 'board-proof', repo: 'repo' }),
-      'gh:listProjectViews': () => ({ ok: true, views: [data.selectedView] }),
-      'gh:getProjectViewTable': () => ({ ok: true, data })
-    }
-    for (const [channel, handler] of Object.entries(responses)) {
-      ipcMain.removeHandler(channel)
-      ipcMain.handle(channel, handler)
-    }
+  await electronApp.evaluate(({ ipcMain }) => {
     const calls: BoardFieldCall[] = []
     globalThis.__githubProjectBoardCalls = calls
     ipcMain.removeHandler('gh:updateProjectItemField')
@@ -109,46 +100,11 @@ test('board drops cross preload, settle optimistically, and roll back failures',
       await new Promise((resolve) => setTimeout(resolve, 400))
       return { ok: false, error: { type: 'network_error', message: 'Board verification: offline' } }
     })
-  }, board)
-  await orcaPage.evaluate(
-    ({ project, identity, seededRepoPath }) => {
-      const store = window.__store!
-      const state = store.getState()
-      const repo = state.repos.find((candidate) => candidate.path === seededRepoPath)
-      if (!repo || !state.settings) {
-        throw new Error('Seeded repository/settings missing')
-      }
-      store.setState({
-        repos: state.repos.map((candidate) =>
-          candidate.id === repo.id
-            ? {
-                ...candidate,
-                gitRemoteIdentity: {
-                  canonicalKey: 'github.com/board-proof/repo',
-                  remoteName: 'origin',
-                  remoteUrl: 'https://github.com/board-proof/repo.git'
-                }
-              }
-            : candidate
-        ),
-        settings: {
-          ...state.settings,
-          defaultTaskSource: 'github',
-          defaultRepoSelection: [repo.id],
-          githubProjects: {
-            pinned: [],
-            recent: [],
-            activeProject: project,
-            lastViewByProject: { [identity]: { viewId: 'view' } }
-          }
-        },
-        taskResumeState: { githubMode: 'project' }
-      })
-    },
-    { project, identity: githubProjectIdentityKey(project), seededRepoPath }
-  )
-  await orcaPage.getByRole('button', { name: 'Tasks', exact: true }).click()
-  await orcaPage.getByRole('button', { name: 'Projects', exact: true }).click()
+  })
+  await openStubbedGitHubProjectView({ orcaPage, electronApp, seededRepoPath }, board, {
+    owner: 'board-proof',
+    repo: 'repo'
+  })
   const todo = orcaPage.getByTestId('board-column-todo')
   const done = orcaPage.getByTestId('board-column-done')
   const empty = orcaPage.getByTestId('board-column-__empty__')

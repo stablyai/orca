@@ -20762,6 +20762,25 @@
     "restrictedItem": "Restricted item",
     "itemLabel": "{{number}} — {{title}}"
   },
+  "projectViewMenu": {
+    "layout": {
+      "table": "Table",
+      "board": "Board",
+      "roadmap": "Roadmap"
+    },
+    "layoutLabel": "Layout:",
+    "none": "none",
+    "swimlanes": "Swimlanes:",
+    "groupBy": "Group by:",
+    "triggerModified": "View options (changed in Orca)",
+    "trigger": "View options",
+    "view": "View",
+    "fields": "Fields:",
+    "columnBy": "Column by:",
+    "noSwimlanes": "No swimlanes",
+    "noGrouping": "No grouping",
+    "reset": "Reset to the GitHub view"
+  },
   "projectViews": {
     "layout": {
       "board": "Board"
