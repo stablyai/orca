@@ -56,7 +56,7 @@ describe('runQuickCommandInNewTab', () => {
     mocks.launchAgentInNewTab.mockReset()
   })
 
-  it('flattens multiline quick commands before queuing', () => {
+  it('preserves multiline quick commands and queues shell-ready delivery', () => {
     const result = runQuickCommandInNewTab({
       command: {
         id: 'build',
@@ -72,7 +72,10 @@ describe('runQuickCommandInNewTab', () => {
     expect(result).toEqual({ tabId: 'tab-new' })
     expect(mockState.createTab).toHaveBeenCalledWith('wt-1', 'group-1', undefined, {
       quickCommandLabel: 'Build',
-      pendingStartup: { command: 'cd packages; bun run build; cd ..' }
+      pendingStartup: {
+        command: 'cd packages\nbun run build\ncd ..',
+        startupCommandDelivery: 'shell-ready'
+      }
     })
     expect(mockState.setRecentQuickCommandForGroup).toHaveBeenCalledWith('group-1', 'build')
   })
@@ -137,7 +140,7 @@ describe('runQuickCommandInNewTab', () => {
 
     expect(mockState.createTab).toHaveBeenCalledWith('wt-1', 'group-1', undefined, {
       quickCommandLabel: 'Status',
-      pendingStartup: { command: 'git status' }
+      pendingStartup: { command: 'git status', startupCommandDelivery: 'shell-ready' }
     })
   })
 

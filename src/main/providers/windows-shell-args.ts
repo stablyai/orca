@@ -78,12 +78,16 @@ export type WindowsShellWslContext = {
  * keep the older stdin delivery path.
  */
 function getCmdShellArgStartupCommand(command?: string): string | null {
+  if (command && /[\r\n]/.test(command.replace(/\r\n$|\r$|\n$/, ''))) {
+    throw new Error(
+      'cmd.exe cannot safely run a multiline startup command. Save it as a .cmd file and run that file instead.'
+    )
+  }
   if (!command || command.length > STARTUP_COMMAND_TEXT_MAX_CHARS) {
     return null
   }
-  // Why: node-pty's C-runtime argv escaping changes normal cmd quotes in `/K`
-  // delivery, while the interactive parser preserves them through stdin.
-  if (command.includes('"')) {
+  // Why: node-pty argv escaping changes quotes; stdin preserves them.
+  if (command.includes('"') || /[\r\n]/.test(command)) {
     return null
   }
   const commandArg = `${CMD_UTF8_SETUP_COMMAND} & ${command}`

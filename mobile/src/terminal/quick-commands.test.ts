@@ -27,14 +27,22 @@ describe('mobile quick-command launch', () => {
     expect(supportsMobileQuickCommands(['terminal.quick-commands.v1'])).toBe(true)
   })
 
-  it('joins multiline runnable commands with "; " to match desktop', () => {
-    // Parity with desktop flattenTerminalQuickCommand: the same saved command
-    // must run identically on desktop and mobile.
+  it('preserves multiline runnable commands to match desktop', () => {
     expect(
       buildMobileQuickCommandLaunch(command({ command: 'cd app\nnpm install\nnpm test' }))
     ).toEqual({
       options: {
-        startupCommand: 'cd app; npm install; npm test',
+        startupCommand: 'cd app\nnpm install\nnpm test',
+        startupCommandDelivery: 'shell-ready'
+      }
+    })
+  })
+
+  it('normalizes CRLF without changing script indentation in runnable launches', () => {
+    const script = 'if true; then\r\n  echo ok\r\nfi'
+    expect(buildMobileQuickCommandLaunch(command({ command: script }))).toEqual({
+      options: {
+        startupCommand: 'if true; then\n  echo ok\nfi',
         startupCommandDelivery: 'shell-ready'
       }
     })
@@ -49,12 +57,12 @@ describe('mobile quick-command launch', () => {
     })
   })
 
-  it('keeps append-enter-off commands as unsubmitted terminal input', () => {
+  it('refuses multiline Insert instead of treating interior newlines as unsubmitted input', () => {
     const multiline = 'printf "first\\nsecond"\n# leave this unsubmitted'
     expect(
       buildMobileQuickCommandLaunch(command({ command: multiline, appendEnter: false }))
     ).toEqual({
-      options: { initialPrompt: multiline, enter: false, successToast: 'Command inserted' }
+      error: 'Mobile can insert one line at a time. Use Run for this multiline command.'
     })
   })
 

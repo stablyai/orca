@@ -1,4 +1,5 @@
 import { isTuiAgent, TUI_AGENT_CONFIG } from './tui-agent-config'
+import { wrapTerminalBracketedPasteText } from './terminal-bracketed-paste-text'
 import type {
   TerminalAgentQuickCommand,
   TerminalCommandQuickCommand,
@@ -241,26 +242,18 @@ export function applyTerminalQuickCommandMutation(
   return commands.map((command, index) => (index === existingIndex ? mutation.command : command))
 }
 
-export function buildTerminalQuickCommandInput(command: TerminalCommandQuickCommand): string {
-  return command.appendEnter ? `${command.command}\r` : command.command
+export function normalizeTerminalQuickCommandText(command: string): string {
+  return command.replace(/\r\n|\r/g, '\n')
 }
 
-const LINE_BREAK_RE = /\r\n|\r|\n/
-
-// Why: quick-command lines are independent shell commands; one shell command
-// list prevents foreground programs from reading later lines as stdin.
-export function flattenTerminalQuickCommand(
-  command: TerminalCommandQuickCommand
-): TerminalCommandQuickCommand {
-  if (!LINE_BREAK_RE.test(command.command)) {
-    return command
-  }
-  return {
-    ...command,
-    command: command.command
-      .split(LINE_BREAK_RE)
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0)
-      .join('; ')
-  }
+export function buildTerminalQuickCommandInput(
+  command: TerminalCommandQuickCommand,
+  { bracketedPasteSafe }: { bracketedPasteSafe: boolean } = { bracketedPasteSafe: false }
+): string {
+  const body = normalizeTerminalQuickCommandText(command.command)
+  const input =
+    bracketedPasteSafe && body.includes('\n')
+      ? wrapTerminalBracketedPasteText(body)
+      : body.replace(/\n/g, '\r')
+  return command.appendEnter ? `${input}\r` : input
 }

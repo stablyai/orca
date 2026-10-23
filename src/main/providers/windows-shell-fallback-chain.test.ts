@@ -55,6 +55,29 @@ describe('buildWindowsPowerShellSpawnAttempts', () => {
     expect(attempts[2].shellArgs[0]).toBe('/K')
   })
 
+  it('retains PowerShell multiline delivery while excluding the unsafe cmd.exe fallback', () => {
+    restorePlatform = setPlatform('win32')
+    const command = "Read-Host 'Answer'\nWrite-Output 'MUST_RUN'"
+    const attempts = buildWindowsPowerShellSpawnAttempts({
+      shellPath: 'pwsh.exe',
+      cwd: 'C:\\repo',
+      defaultCwd: 'C:\\Users\\dev',
+      startupCommand: command,
+      resolveOptions: {
+        platform: 'win32',
+        env: WIN_ENV,
+        isRealExecutable: (p) => p === PWSH7 || p === WINDOWS_POWERSHELL
+      }
+    })
+    expect(attempts.map((attempt) => attempt.shellPath)).toEqual([PWSH7, WINDOWS_POWERSHELL])
+    for (const attempt of attempts) {
+      expect(attempt.startupCommandDeliveredInShellArgs).toBe(true)
+      expect(Buffer.from(attempt.shellArgs.at(-1)!, 'base64').toString('utf16le')).toContain(
+        command
+      )
+    }
+  })
+
   it('repro: when pwsh is only a Store alias, the primary attempt is the real Windows PowerShell', () => {
     restorePlatform = setPlatform('win32')
     const aliasStub = 'C:\\Users\\dev\\AppData\\Local\\Microsoft\\WindowsApps\\pwsh.exe'

@@ -65,7 +65,13 @@ export function buildWindowsPowerShellSpawnAttempts(args: {
     return []
   }
   const chain = resolveWindowsPowerShellSpawnChain(basename, args.resolveOptions)
-  return chain.map((candidate) =>
-    toAttempt(candidate, args.cwd, args.defaultCwd, args.wslContext, args.startupCommand)
-  )
+  return chain
+    .filter(
+      (candidate) =>
+        pathWin32.basename(candidate).toLowerCase() !== 'cmd.exe' ||
+        !/[\r\n]/.test((args.startupCommand ?? '').replace(/\r\n$|\r$|\n$/, ''))
+    )
+    .map((candidate) =>
+      toAttempt(candidate, args.cwd, args.defaultCwd, args.wslContext, args.startupCommand)
+    )
 }

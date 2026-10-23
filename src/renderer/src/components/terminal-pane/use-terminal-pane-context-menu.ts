@@ -254,7 +254,8 @@ export function useTerminalPaneContextMenu({
       command,
       pane,
       tabId,
-      transport: paneTransportsRef.current.get(pane.id)
+      transport: paneTransportsRef.current.get(pane.id),
+      onError: onPasteError
     })
   }
 

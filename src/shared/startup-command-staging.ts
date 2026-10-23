@@ -17,13 +17,17 @@ import { quoteStartupArg } from './tui-agent-startup-shell'
 export const STAGED_STARTUP_COMMAND_PREFIX = 'orca-launch-'
 
 /** Which delivery ran for a spawn's typed startup line, decided by the host that owns the PTY. */
-export type StartupLineDelivery = 'typed' | 'staged' | 'typed-after-stage-failed'
+export type StartupLineDelivery =
+  | 'typed'
+  | 'staged'
+  | 'typed-after-stage-failed'
+  | 'refused-after-stage-failed'
 
 /** Age past which a staged script is a crash leftover rather than another host's in-flight launch. */
 export const STAGED_STARTUP_COMMAND_STALE_MS = 60 * 60 * 1000
 
 export type StartupCommandStaging = {
-  /** What the host types: the command itself, or a short line sourcing the staged script. */
+  /** What the host types, or empty when multiline delivery was refused after staging failed. */
   command: string
   delivery: StartupLineDelivery
   /** Present while the script exists; the host unlinks it if the PTY exits before sourcing it. */
@@ -118,9 +122,11 @@ export function stageStartupCommand(args: {
       { mode: 0o600, flag: 'wx' }
     )
   } catch (error) {
+    // Why: a raw multiline fallback lets foreground readers consume later script lines as input.
+    const multiline = /[\r\n]/.test(stripSubmitTerminator(args.command))
     return {
-      command: args.command,
-      delivery: 'typed-after-stage-failed',
+      command: multiline ? '' : args.command,
+      delivery: multiline ? 'refused-after-stage-failed' : 'typed-after-stage-failed',
       failure: error instanceof Error ? error.message : String(error)
     }
   }
@@ -132,8 +138,7 @@ export function stageStartupCommand(args: {
 }
 
 /**
- * The line the host prints to the terminal when staging failed: the full line it types instead may
- * leave the shell waiting for more input, and nothing else would tell the user why.
+ * Explains staging failure and whether the host refused delivery or used the single-line fallback.
  */
 export function startupStagingFailureNotice(staging: StartupCommandStaging): string | null {
   if (staging.failure === undefined) {
@@ -142,6 +147,9 @@ export function startupStagingFailureNotice(staging: StartupCommandStaging): str
   const reason = [...staging.failure]
     .map((char) => (char < ' ' || char === '\x7f' ? ' ' : char))
     .join('')
+  if (staging.delivery === 'refused-after-stage-failed') {
+    return `\r\n[orca] Could not stage the multiline launch command (${reason}); nothing was sent. Save it as a script file and run that file instead.\r\n`
+  }
   return `\r\n[orca] Could not stage the launch command (${reason}); typed it in full. If the shell shows quote> or waits for more input, press Ctrl-C and launch again.\r\n`
 }
 

@@ -110,7 +110,7 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
       setCreateError(reason)
       // Why: the inline error renders only in an empty session; beside open tabs only a toast is seen.
       triggerError()
-      showToast(options?.errorToast ?? reason, 1800)
+      showToast(reason, options?.errorToast ? 3200 : 1800)
     }
 
     try {

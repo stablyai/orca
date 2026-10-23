@@ -260,11 +260,13 @@ async function spawnAndPublishSession(
       }
     }
     // Why: only Orca-wrapped shells advertise the paste-safe startup barrier.
-    session.write(
-      buildStartupCommandSubmission(staging.command, {
-        bracketedPasteSafe: shellReadySupported
-      })
-    )
+    if (staging.delivery !== 'refused-after-stage-failed') {
+      session.write(
+        buildStartupCommandSubmission(staging.command, {
+          bracketedPasteSafe: shellReadySupported
+        })
+      )
+    }
   }
 
   return {

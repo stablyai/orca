@@ -89,6 +89,27 @@ describe('createPtySubprocess', () => {
     validateWorkingDirectoryMock
   })
 
+  it('refuses multiline cmd.exe startup before spawning a daemon PTY', async () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    try {
+      await expect(
+        createPtySubprocess({
+          sessionId: 'multiline-cmd-refusal',
+          cols: 80,
+          rows: 24,
+          shellOverride: 'cmd.exe',
+          command: 'set /p answer=\necho MUST_RUN'
+        })
+      ).rejects.toThrow('Save it as a .cmd file')
+      expect(spawnMock).not.toHaveBeenCalled()
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+  })
+
   it('keeps powershell.exe when the inbox PowerShell implementation is selected on Windows', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)

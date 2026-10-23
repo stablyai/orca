@@ -61,6 +61,14 @@
       "sessionTabs": [],
       "terminals": []
     },
+    "33f6cd41c88f": {
+      "name": "toast",
+      "ordinal": 3,
+      "value": {
+        "durationMs": 3200,
+        "message": "transport failure"
+      }
+    },
     "4694ea73188a": {
       "name": "session.tabs.createTerminal#1",
       "ordinal": 1,
@@ -134,6 +142,14 @@
           "$rpc": "null"
         },
         "message": "Notes sent"
+      }
+    },
+    "567f1d6ae294": {
+      "name": "toast",
+      "ordinal": 3,
+      "value": {
+        "durationMs": 3200,
+        "message": "The host sent a reply this app could not read (session.tabs.createTerminal)"
       }
     },
     "58bef0d5522c": {
@@ -386,11 +402,11 @@
       "sessionTabs": [],
       "terminals": []
     },
-    "b1152db10a02": {
+    "abd9eb292bf7": {
       "name": "toast",
       "ordinal": 3,
       "value": {
-        "durationMs": 1800,
+        "durationMs": 3200,
         "message": "Couldn't run Notes"
       }
     },
@@ -696,11 +712,27 @@
         }
       }
     },
+    "f7cf54865bd5": {
+      "name": "toast",
+      "ordinal": 3,
+      "value": {
+        "durationMs": 3200,
+        "message": "Unknown method"
+      }
+    },
     "fb6329365e0b": {
       "name": "default-live-input",
       "ordinal": 4,
       "value": {
         "handles": ["terminal-1"]
+      }
+    },
+    "ff68f504a02e": {
+      "name": "toast",
+      "ordinal": 3,
+      "value": {
+        "durationMs": 3200,
+        "message": "outer refused"
       }
     }
   },
@@ -782,7 +814,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "76f2a4b2872b",
-          "effects": ["b1152db10a02"]
+          "effects": ["567f1d6ae294"]
         }
       },
       {
@@ -795,7 +827,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "76f2a4b2872b",
-          "effects": ["b1152db10a02"]
+          "effects": ["567f1d6ae294"]
         }
       },
       {
@@ -808,7 +840,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "76f2a4b2872b",
-          "effects": ["b1152db10a02"]
+          "effects": ["567f1d6ae294"]
         }
       },
       {
@@ -821,7 +853,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "76f2a4b2872b",
-          "effects": ["b1152db10a02"]
+          "effects": ["567f1d6ae294"]
         }
       },
       {
@@ -834,7 +866,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "76f2a4b2872b",
-          "effects": ["b1152db10a02"]
+          "effects": ["567f1d6ae294"]
         }
       },
       {
@@ -847,7 +879,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "76f2a4b2872b",
-          "effects": ["b1152db10a02"]
+          "effects": ["567f1d6ae294"]
         }
       },
       {
@@ -860,7 +892,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "76f2a4b2872b",
-          "effects": ["b1152db10a02"]
+          "effects": ["567f1d6ae294"]
         }
       },
       {
@@ -873,7 +905,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "76f2a4b2872b",
-          "effects": ["b1152db10a02"]
+          "effects": ["567f1d6ae294"]
         }
       },
       {
@@ -886,7 +918,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "76f2a4b2872b",
-          "effects": ["b1152db10a02"]
+          "effects": ["567f1d6ae294"]
         }
       },
       {
@@ -899,7 +931,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "76f2a4b2872b",
-          "effects": ["b1152db10a02"]
+          "effects": ["567f1d6ae294"]
         }
       },
       {
@@ -912,7 +944,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "76f2a4b2872b",
-          "effects": ["b1152db10a02"]
+          "effects": ["567f1d6ae294"]
         }
       },
       {
@@ -925,7 +957,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "76f2a4b2872b",
-          "effects": ["b1152db10a02"]
+          "effects": ["567f1d6ae294"]
         }
       },
       {
@@ -938,7 +970,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "76f2a4b2872b",
-          "effects": ["b1152db10a02"]
+          "effects": ["567f1d6ae294"]
         }
       },
       {
@@ -951,7 +983,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "76f2a4b2872b",
-          "effects": ["b1152db10a02"]
+          "effects": ["567f1d6ae294"]
         }
       },
       {
@@ -964,7 +996,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "76f2a4b2872b",
-          "effects": ["b1152db10a02"]
+          "effects": ["567f1d6ae294"]
         }
       },
       {
@@ -977,7 +1009,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "2ae1c681a443",
-          "effects": ["b1152db10a02"]
+          "effects": ["ff68f504a02e"]
         }
       },
       {
@@ -990,7 +1022,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "2ae1c681a443",
-          "effects": ["b1152db10a02"]
+          "effects": ["ff68f504a02e"]
         }
       },
       {
@@ -1003,7 +1035,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "2ae1c681a443",
-          "effects": ["b1152db10a02"]
+          "effects": ["ff68f504a02e"]
         }
       },
       {
@@ -1016,7 +1048,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "a9d892293481",
-          "effects": ["b1152db10a02"]
+          "effects": ["abd9eb292bf7"]
         }
       },
       {
@@ -1029,7 +1061,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "a9d892293481",
-          "effects": ["b1152db10a02"]
+          "effects": ["abd9eb292bf7"]
         }
       },
       {
@@ -1042,7 +1074,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "a9d892293481",
-          "effects": ["b1152db10a02"]
+          "effects": ["abd9eb292bf7"]
         }
       },
       {
@@ -1055,7 +1087,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "d6dddfd9c6a4",
-          "effects": ["b1152db10a02"]
+          "effects": ["f7cf54865bd5"]
         }
       },
       {
@@ -1068,7 +1100,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "d6dddfd9c6a4",
-          "effects": ["b1152db10a02"]
+          "effects": ["f7cf54865bd5"]
         }
       },
       {
@@ -1081,7 +1113,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "d6dddfd9c6a4",
-          "effects": ["b1152db10a02"]
+          "effects": ["f7cf54865bd5"]
         }
       },
       {
@@ -1094,7 +1126,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "96cb96f54156",
-          "effects": ["b1152db10a02"]
+          "effects": ["33f6cd41c88f"]
         }
       },
       {
@@ -1107,7 +1139,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "96cb96f54156",
-          "effects": ["b1152db10a02"]
+          "effects": ["33f6cd41c88f"]
         }
       },
       {
@@ -1120,7 +1152,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "96cb96f54156",
-          "effects": ["b1152db10a02"]
+          "effects": ["33f6cd41c88f"]
         }
       },
       {
@@ -1133,7 +1165,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "a9d892293481",
-          "effects": ["b1152db10a02"]
+          "effects": ["abd9eb292bf7"]
         }
       },
       {
@@ -1146,7 +1178,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "a9d892293481",
-          "effects": ["b1152db10a02"]
+          "effects": ["abd9eb292bf7"]
         }
       },
       {
@@ -1159,7 +1191,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "a9d892293481",
-          "effects": ["b1152db10a02"]
+          "effects": ["abd9eb292bf7"]
         }
       }
     ]

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   applyTerminalQuickCommandMutation,
   buildTerminalQuickCommandInput,
-  flattenTerminalQuickCommand,
+  normalizeTerminalQuickCommandText,
   getTerminalQuickCommandAction,
   getTerminalQuickCommandBody,
   getDefaultTerminalQuickCommands,
@@ -228,6 +228,27 @@ describe('terminal quick commands', () => {
     ).toBeNull()
   })
 
+  it('round-trips the v1 canonical script payload without changing its trimEnd invariant', () => {
+    const v1Payload = {
+      id: 'script',
+      label: 'Script',
+      action: 'terminal-command',
+      command: 'printf "%s\\n" \\\n  "one"\n\nif true; then\n  echo two\nfi',
+      appendEnter: true,
+      scope: { type: 'global' }
+    }
+    const saved = normalizeTerminalQuickCommands([
+      { ...v1Payload, command: `${v1Payload.command}\n \t` }
+    ])
+
+    expect(saved).toEqual([v1Payload])
+    expect(parseNormalizedTerminalQuickCommands(saved)).toEqual([v1Payload])
+    expect(parseNormalizedTerminalQuickCommands([v1Payload])).toEqual(saved)
+    expect(
+      parseNormalizedTerminalQuickCommands([{ ...v1Payload, command: `${v1Payload.command}\n` }])
+    ).toBeNull()
+  })
+
   it('applies targeted mutations without replacing unrelated commands', () => {
     const [first, second] = normalizeTerminalQuickCommands([
       { id: 'first', label: 'First', command: 'echo first', appendEnter: true },
@@ -335,54 +356,44 @@ describe('terminal quick commands', () => {
   })
 })
 
-describe('flattenTerminalQuickCommand', () => {
-  it('returns the same object when there are no line breaks', () => {
-    const command = {
-      id: 'test',
-      label: 'Test',
-      command: 'git status',
-      appendEnter: true
-    } as const
-    expect(flattenTerminalQuickCommand(command)).toBe(command)
+describe('normalizeTerminalQuickCommandText', () => {
+  it('normalizes CRLF and CR without rewriting shell syntax or whitespace', () => {
+    const command = '  printf "%s\\n" \\\n  "one"\n\nif true; then\n  echo two\nfi\n\n'
+    for (const newline of ['\n', '\r\n', '\r']) {
+      expect(normalizeTerminalQuickCommandText(command.replace(/\n/g, newline))).toBe(command)
+    }
+  })
+})
+
+describe('multiline quick-command submission', () => {
+  const command = {
+    id: 'script',
+    label: 'Script',
+    command: 'if true; then\r\n  printf "%s\\n" \\\r\n    "block"\r\nfi\r\n\r\n',
+    appendEnter: true
+  }
+
+  it('keeps the whole body and trailing newlines inside a paste frame', () => {
+    expect(buildTerminalQuickCommandInput(command, { bracketedPasteSafe: true })).toBe(
+      '\x1b[200~if true; then\r  printf "%s\\n" \\\r    "block"\rfi\r\r\x1b[201~\r'
+    )
   })
 
-  it('replaces newlines with semicolons and spaces', () => {
-    const result = flattenTerminalQuickCommand({
-      id: 'test',
-      label: 'Test',
-      command: 'cd packages\nbun run build\ncd ..',
-      appendEnter: true
-    })
-    expect(result.command).toBe('cd packages; bun run build; cd ..')
+  it('inserts a multiline command without sending Enter after its paste frame', () => {
+    expect(
+      buildTerminalQuickCommandInput(
+        { ...command, appendEnter: false },
+        { bracketedPasteSafe: true }
+      )
+    ).toBe('\x1b[200~if true; then\r  printf "%s\\n" \\\r    "block"\rfi\r\r\x1b[201~')
   })
 
-  it('collapses consecutive newlines into a single separator', () => {
-    const result = flattenTerminalQuickCommand({
-      id: 'test',
-      label: 'Test',
-      command: 'echo one\n\n\necho two',
-      appendEnter: true
-    })
-    expect(result.command).toBe('echo one; echo two')
-  })
-
-  it('handles Windows-style CRLF endings', () => {
-    const result = flattenTerminalQuickCommand({
-      id: 'test',
-      label: 'Test',
-      command: 'echo one\r\necho two',
-      appendEnter: true
-    })
-    expect(result.command).toBe('echo one; echo two')
-  })
-
-  it('drops empty edge lines without leaving dangling separators', () => {
-    const result = flattenTerminalQuickCommand({
-      id: 'test',
-      label: 'Test',
-      command: '\n  echo one  \n\n  echo two\n',
-      appendEnter: true
-    })
-    expect(result.command).toBe('echo one; echo two')
+  it('never emits paste escape sequences to a shell without bracketed paste', () => {
+    expect(
+      buildTerminalQuickCommandInput(
+        { ...command, command: 'echo one\r\necho two' },
+        { bracketedPasteSafe: false }
+      )
+    ).toBe('echo one\recho two\r')
   })
 })

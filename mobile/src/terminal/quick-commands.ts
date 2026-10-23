@@ -2,7 +2,7 @@ import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-co
 import type { TuiAgent } from '../../../src/shared/tui-agent'
 import {
   applyTerminalQuickCommandMutation,
-  flattenTerminalQuickCommand,
+  normalizeTerminalQuickCommandText,
   getTerminalQuickCommandBody,
   isTerminalAgentQuickCommand,
   MAX_QUICK_COMMANDS,
@@ -60,7 +60,7 @@ export type MobileQuickCommandLaunch = {
 
 export function buildMobileQuickCommandLaunch(
   command: TerminalQuickCommand
-): MobileQuickCommandLaunch | null {
+): MobileQuickCommandLaunch | { error: string } | null {
   if (isTerminalAgentQuickCommand(command)) {
     if (!command.prompt.trim() || !supportsTerminalAgentQuickCommand(command.agent)) {
       return null
@@ -69,6 +69,9 @@ export function buildMobileQuickCommandLaunch(
   }
   if (!command.command.trim()) {
     return null
+  }
+  if (command.appendEnter === false && /[\r\n]/.test(command.command)) {
+    return { error: 'Mobile can insert one line at a time. Use Run for this multiline command.' }
   }
   return command.appendEnter === false
     ? {
@@ -81,10 +84,8 @@ export function buildMobileQuickCommandLaunch(
     : {
         // Why: raw commands that resemble bare agent launches can otherwise
         // select the fast path and race slow native, WSL, or SSH shell startup.
-        // flattenTerminalQuickCommand joins multiline bodies exactly as desktop
-        // does so the same saved command runs identically on both.
         options: {
-          startupCommand: flattenTerminalQuickCommand(command).command,
+          startupCommand: normalizeTerminalQuickCommandText(command.command),
           startupCommandDelivery: 'shell-ready'
         }
       }

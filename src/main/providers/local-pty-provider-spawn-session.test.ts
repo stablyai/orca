@@ -176,6 +176,28 @@ describe('LocalPtyProvider', () => {
   })
 
   describe('spawn', () => {
+    it('leaves the shell usable without writing multiline input after staging fails', async () => {
+      const onData = vi.fn()
+      provider.configure({ getDefaultShell: () => '/bin/dash', onData })
+      writeFileSyncMock.mockImplementation((file: string) => {
+        if (file.includes('orca-launch-')) {
+          throw new Error('EACCES: staged script is not writable')
+        }
+      })
+      const result = await provider.spawn({
+        cols: 80,
+        rows: 24,
+        command: 'IFS= read -r answer\necho MUST_RUN'
+      })
+      await vi.waitFor(() => {
+        const output = onData.mock.calls.map(([, data]) => String(data)).join('')
+        expect(output).toContain('nothing was sent. Save it as a script file')
+      })
+      expect(mockProc.write).not.toHaveBeenCalled()
+      expect(provider.getPtyProcess(result.id)).toBe(mockProc)
+      await provider.shutdown(result.id, { immediate: true })
+    })
+
     it('retires buffered output and synchronous Bun exit before replying to spawn', async () => {
       const disposeData = vi.fn()
       const disposeExit = vi.fn()

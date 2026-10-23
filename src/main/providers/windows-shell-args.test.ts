@@ -102,6 +102,27 @@ describe('resolveWindowsShellLaunchArgs', () => {
     expect(result.startupCommandDeliveredInShellArgs).toBeUndefined()
   })
 
+  it('refuses multiline cmd.exe scripts before selecting argv or raw stdin delivery', () => {
+    for (const newline of ['\n', '\r\n', '\r']) {
+      for (const command of [
+        `set /p answer=${newline}echo MUST_RUN`,
+        `echo ${'x'.repeat(7000)}${newline}echo MUST_RUN`
+      ]) {
+        expect(() =>
+          resolveWindowsShellLaunchArgs(
+            'cmd.exe',
+            'C:\\Users\\alice',
+            'C:\\Users\\alice',
+            undefined,
+            command
+          )
+        ).toThrow(
+          'cmd.exe cannot safely run a multiline startup command. Save it as a .cmd file and run that file instead.'
+        )
+      }
+    }
+  })
+
   it('keeps large cmd.exe startup commands on stdin delivery', () => {
     const result = resolveWindowsShellLaunchArgs(
       'cmd.exe',

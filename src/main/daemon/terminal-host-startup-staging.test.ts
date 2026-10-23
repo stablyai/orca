@@ -120,4 +120,29 @@ describePosix('daemon startup command staging', () => {
       )
     })
   })
+
+  it.each(['\n', '\r\n', '\r'])(
+    'refuses multiline startup after staging fails (%j) before writing any input',
+    async (newline) => {
+      vi.stubEnv('TMPDIR', join(tempDir, 'missing'))
+      const command = ['IFS= read -r answer', 'echo MUST_RUN'].join(newline)
+      const onData = vi.fn()
+      const sub = mockSubprocess('/bin/bash')
+      const host = new TerminalHost({ spawnSubprocess: () => sub })
+      await host.createOrAttach({
+        sessionId: 's-multiline-stage-failed',
+        cols: 80,
+        rows: 24,
+        command,
+        shellReadySupported: false,
+        streamClient: { onData, onExit: vi.fn() }
+      })
+      expect(sub.write).not.toHaveBeenCalled()
+      await vi.waitFor(() => {
+        const output = onData.mock.calls.map(([data]) => String(data)).join('')
+        expect(output).toContain('nothing was sent. Save it as a script file')
+        expect(output).not.toContain('typed it in full')
+      })
+    }
+  )
 })

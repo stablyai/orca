@@ -32,9 +32,12 @@ export function launchMobileSessionQuickCommand(
     return false
   }
   const launch = buildMobileQuickCommandLaunch(command)
-  if (!launch) {
+  if (!launch || 'error' in launch) {
     triggerError()
-    scope.showToast('Edit this quick command before running it', 1800)
+    scope.showToast(
+      launch ? launch.error : 'Edit this quick command before running it',
+      launch ? 3200 : 1800
+    )
     return false
   }
   const label = command.label.trim() || 'Quick command'

@@ -160,6 +160,21 @@ describe('LocalPtyProvider', () => {
   })
 
   describe('spawn', () => {
+    it('refuses multiline cmd.exe startup before spawning or writing to a PTY', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      await expect(
+        provider.spawn({
+          cols: 80,
+          rows: 24,
+          cwd: 'C:\\repo',
+          shellOverride: 'cmd.exe',
+          command: 'set /p answer=\necho MUST_RUN'
+        })
+      ).rejects.toThrow('Save it as a .cmd file')
+      expect(spawnMock).not.toHaveBeenCalled()
+      expect(mockProc.write).not.toHaveBeenCalled()
+    })
+
     it('passes the guest Claude pointer and injected-home marker through WSLENV', async () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       provider.configure({

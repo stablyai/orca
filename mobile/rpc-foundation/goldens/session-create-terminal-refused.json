@@ -44,6 +44,14 @@
         }
       }
     },
+    "5a3ad55e3166": {
+      "name": "toast",
+      "ordinal": 3,
+      "value": {
+        "durationMs": 3200,
+        "message": "No pty slots left on the host"
+      }
+    },
     "6275ace50da2": {
       "activeHandle": "terminal-0",
       "activeSessionTabId": "tab-0",
@@ -71,14 +79,6 @@
     "9270aeb7d9c6": {
       "status": "pending",
       "startedAt": 0
-    },
-    "b1152db10a02": {
-      "name": "toast",
-      "ordinal": 3,
-      "value": {
-        "durationMs": 1800,
-        "message": "Couldn't run Notes"
-      }
     },
     "b1d637072fc8": {
       "name": "session.tabs.createTerminal#1",
@@ -151,7 +151,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "7853d5a23971",
-          "effects": ["b1152db10a02"]
+          "effects": ["5a3ad55e3166"]
         }
       }
     ]

@@ -1,7 +1,6 @@
 import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
 import {
   buildTerminalQuickCommandInput,
-  flattenTerminalQuickCommand,
   isTerminalAgentQuickCommand
 } from '../../../../shared/terminal-quick-commands'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
@@ -11,6 +10,7 @@ type QuickCommandPane = {
   leafId: string
   terminal: {
     focus: () => void
+    modes: { bracketedPasteMode: boolean }
   }
 }
 
@@ -20,12 +20,14 @@ export function sendTerminalQuickCommandToPane({
   command,
   pane,
   tabId,
-  transport
+  transport,
+  onError
 }: {
   command: TerminalQuickCommand
   pane: QuickCommandPane
   tabId: string
   transport: QuickCommandTransport | null | undefined
+  onError: (message: string) => void
 }): boolean {
   if (isTerminalAgentQuickCommand(command)) {
     return false
@@ -34,8 +36,17 @@ export function sendTerminalQuickCommandToPane({
     return false
   }
 
+  if (/[\r\n]/.test(command.command) && !pane.terminal.modes.bracketedPasteMode) {
+    onError(
+      'This shell cannot safely receive a multiline command here. Use a script file or a shell with bracketed paste.'
+    )
+    return false
+  }
+
   const sent = transport.sendInput(
-    buildTerminalQuickCommandInput(flattenTerminalQuickCommand(command)),
+    buildTerminalQuickCommandInput(command, {
+      bracketedPasteSafe: pane.terminal.modes.bracketedPasteMode
+    }),
     'driving'
   )
   if (sent) {
