@@ -80,6 +80,14 @@ export type WslMoveDriverDeps = {
   gateInputs: (scope: WslMoveTerminalScope) => Promise<WslMoveGateInputs>
   /** The panes the scope's live terminals belong to; read before Sleep ends their sessions. */
   listPanes: (scope: WslMoveTerminalScope) => readonly WslMoveRestoreHintPane[]
+  /**
+   * Panes slept before the move: bindings the saved session or the window still holds, checked
+   * against the scope. Their checkpoints give the folder the restore hints carry.
+   */
+  sleptSessionPanes?: (
+    workspaceIds: readonly string[],
+    reported: readonly WslMoveRestoreHintPane[]
+  ) => readonly WslMoveRestoreHintPane[]
   quiesce: Pick<
     WslMoveQuiesceDeps,
     'sleepWorkspaces' | 'livePtyIds' | 'captureRestoreHints' | 'proveExited'

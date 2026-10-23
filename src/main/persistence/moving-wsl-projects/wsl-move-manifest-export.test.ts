@@ -265,6 +265,29 @@ describe('exportWslMoveManifest', () => {
     expect(exportWslMoveManifest(storeFor(state), REQUEST).blockers).toEqual([])
   })
 
+  it("carries a moving project's unsaved draft instead of refusing it", () => {
+    const state = sourceState()
+    state.workspaceSession.openFilesByWorktree = {
+      [WORKTREE]: [
+        {
+          filePath: `${UNC_WORKTREE}\\todo.md`,
+          relativePath: 'todo.md',
+          worktreeId: WORKTREE,
+          language: 'markdown',
+          dirtyDraftContent: '# unsaved draft'
+        }
+      ]
+    }
+    const exported = exportWslMoveManifest(storeFor(state), REQUEST)
+    expect(exported.blockers).toEqual([])
+    // The tab moves; its contents stay on this desktop until host-session-seed lays them back.
+    const files = Object.values(
+      exported.manifest.payload.dormantState?.workspaceSession?.openFilesByWorktree ?? {}
+    ).flat()
+    expect(files).toEqual([expect.objectContaining({ filePath: '/home/me/app-feature/todo.md' })])
+    expect(files[0]).not.toHaveProperty('dirtyDraftContent')
+  })
+
   it('is not refused by a project an earlier move retained, whose agent stays here', () => {
     const state = sourceState()
     const retainedWorktree = 'old::\\\\wsl.localhost\\Ubuntu\\home\\me\\old'

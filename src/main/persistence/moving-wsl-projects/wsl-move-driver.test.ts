@@ -468,6 +468,25 @@ describe('moveProjectsToWslHost', () => {
       expect(world.slept).toEqual([])
     })
 
+    it('gives panes slept before the move their folder, including ones only the window still binds', async () => {
+      // verify-3 on awin: a pane slept earlier lost its `deep/` folder; only its history moved.
+      const saved = { paneKey: 'tab-0:saved', sessionId: 'saved-session' }
+      const reported = { paneKey: 'tab-0:reported', sessionId: 'reported-session' }
+      const offered: string[] = []
+      world.deps.sleptSessionPanes = (_ids, fromWindow) => {
+        offered.push(...fromWindow.map((pane) => pane.sessionId))
+        return [saved, ...fromWindow]
+      }
+      const hinted: string[] = []
+      world.deps.quiesce.captureRestoreHints = async (panes) => {
+        hinted.push(...panes.map((pane) => pane.sessionId))
+        return { hints: [], unreadablePaneKeys: [], noCwdPaneKeys: [], staleCwdPaneKeys: [] }
+      }
+      await moveProjectsToWslHost(world.deps, { ...request, sleptPanes: [reported] })
+      expect(offered).toEqual(['reported-session'])
+      expect(hinted).toEqual(['session-1', 'saved-session', 'reported-session'])
+    })
+
     it('removes the record when the quiesce refuses before its fence', async () => {
       let calls = 0
       world.deps.gateInputs = async () => ((calls += 1) === 3 ? busy : world.gate)

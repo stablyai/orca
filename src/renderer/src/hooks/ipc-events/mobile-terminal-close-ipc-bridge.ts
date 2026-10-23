@@ -209,9 +209,11 @@ export function registerMobileAndTerminalCloseIpcBridge(
   // Why optional: an older preload lingering through an in-place reload lacks the channel.
   if (window.api.ui.onWorktreeSleepRequest) {
     unsubs.push(
-      window.api.ui.onWorktreeSleepRequest(({ requestId, worktreeIds }) => {
+      window.api.ui.onWorktreeSleepRequest(({ requestId, worktreeIds, keepBrowserTabs }) => {
         void (async () => {
-          const { failedWorktreeIds } = await sleepWorktreesReportingFailures(worktreeIds)
+          const { failedWorktreeIds } = await sleepWorktreesReportingFailures(worktreeIds, {
+            keepBrowserTabs: keepBrowserTabs === true
+          })
           // Main waits on the ack, so the slept state must be durable before it.
           const state = useAppStore.getState()
           await persistWorkspaceSessionByHost(
