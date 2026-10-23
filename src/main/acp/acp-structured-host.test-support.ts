@@ -67,6 +67,7 @@ export function launch(resume: () => boolean, spec = GROK): () => Promise<AcpStr
     env: {},
     envToDelete: [],
     fullAccess: false,
+    mcpServers: [],
     resume: resume()
       ? {
           sessionId: PROVIDER_SESSION,

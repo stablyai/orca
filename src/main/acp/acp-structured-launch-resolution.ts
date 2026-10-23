@@ -6,11 +6,9 @@
 
 import { delimiter } from 'node:path'
 import { homedir } from 'node:os'
-import { parseAgentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import {
   agentSessionProviderHandleChainHead,
-  agentSessionProviderHandleKey,
-  type AgentSessionProviderHandleChain
+  agentSessionProviderHandleKey
 } from '../../shared/agent-session-provider-handle'
 import type { AgentSessionAccountHome } from '../../shared/agent-session-account-home'
 import type { resolveCliCommand } from '../../shared/node-cli-command-resolution'
@@ -30,13 +28,7 @@ import {
   resolveInstalledRuntimeRelease
 } from '../node-runtime/managed-runtime-release'
 import { hasExplicitTuiLaunchCommand } from '../../shared/tui-agent-launch-command-override'
-import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import type { JournalLoad } from '../native-chat/agent-session-journal/journal-open'
-import {
-  isProviderTimelineTurnInNamespace,
-  providerTimelineKeyPart,
-  spelledProviderTimelineItemKey
-} from '../native-chat/agent-session-timeline/provider-timeline-identity'
 import type { StructuredAgentLaunchPartResolver } from '../runtime/structured-agent-launch-composition'
 import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/structured-session-child-env'
 import {
@@ -45,8 +37,10 @@ import {
   withNativeChatVisualsEnv
 } from '../native-chat/native-chat-visuals-delivery'
 import type { AcpLaunchSpec } from './acp-launch-specs'
-import { acpSessionNotRestoredItem } from './acp-session-reopen-failure'
 import { loadAcpVisualsSkill, type AcpLaunchVisualsDeps } from './acp-structured-launch-visuals'
+import { resolveAcpLaunchMcpServers } from './acp-structured-launch-mcp'
+import { nothingExchangedOn, unannouncedLosses } from './acp-structured-resume-history'
+import type { McpServer } from './generated/acp-protocol.generated'
 
 export type AcpStructuredLaunch = {
   spec: AcpLaunchSpec
@@ -58,6 +52,8 @@ export type AcpStructuredLaunch = {
   /** Keys the child must not inherit from this process's own environment. */
   envToDelete: string[]
   fullAccess: boolean
+  /** The MCP servers the workspace config names; the session start passes them to the agent. */
+  mcpServers: McpServer[]
   /** The provider session to load; null starts a new one. */
   resume: {
     sessionId: string
@@ -82,6 +78,9 @@ export type AcpStructuredLaunchPartDeps = {
   probeVersion?: AgentCliVersionReader
   /** Orca's data folder on this host, which holds the spec's managed runtime. */
   dataDirectory: string
+  /** Reads the workspace-trust setting at launch time; absent reads as trusted, which only a
+   *  scripted child relies on. */
+  workspaceMcpTrustEnabled?: () => boolean
 } & Pick<AcpLaunchVisualsDeps, 'logger'>
 
 /** What a launch's binary and environment are read from; a catalog probe reads the same. */
@@ -244,6 +243,11 @@ export function acpStructuredLaunchPart(
       : null
     // The chat's own mode, as the host decided it for this start; a start naming none asks.
     const fullAccess = basis.permissionMode === 'full-access'
+    const mcpServers = await resolveAcpLaunchMcpServers(
+      cwd,
+      deps.logger,
+      () => deps.workspaceMcpTrustEnabled?.() ?? true
+    )
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
     return {
       launch: {
@@ -251,6 +255,7 @@ export function acpStructuredLaunchPart(
         command,
         args: spec.args({ fullAccess, pluginDir: skill?.pluginDir ?? null }),
         fullAccess,
+        mcpServers,
         resume: head
           ? {
               sessionId: head.handle.nativeId,
@@ -273,70 +278,4 @@ export function acpStructuredLaunchPart(
       ]
     }
   }
-}
-
-/** Proof the chat holds no turn of provider session `nativeId`; a journal that does not read whole,
- *  or does not read at all, proves nothing. */
-function nothingExchangedOn(
-  readJournal: AcpStructuredLaunchPartDeps['readJournal'],
-  sessionId: string,
-  nativeId: string
-): boolean {
-  let load: JournalLoad | null
-  try {
-    load = readJournal(sessionId)
-  } catch {
-    return false
-  }
-  if (!load) {
-    return true
-  }
-  if (load.damage || load.newer) {
-    return false
-  }
-  for (const item of load.state.items.values()) {
-    const turn = readAgentJournalTurn(item.body)
-    if (turn && isProviderTimelineTurnInNamespace(turn.turnId, nativeId)) {
-      return false
-    }
-  }
-  return true
-}
-
-/** Derived on every start, never stored: a row an attach failure dropped is written by the next
- *  start that succeeds. A journal that does not read whole proves nothing, so none is written. */
-function unannouncedLosses(
-  readJournal: AcpStructuredLaunchPartDeps['readJournal'],
-  sessionId: string,
-  chain: AgentSessionProviderHandleChain
-): string[] {
-  const lost = chain.flatMap((link) =>
-    link.replaces?.reason === 'restore-failed' ? [link.replaces.key] : []
-  )
-  if (lost.length === 0) {
-    return []
-  }
-  let load: JournalLoad | null
-  try {
-    load = readJournal(sessionId)
-  } catch {
-    return []
-  }
-  if (!load) {
-    return lost
-  }
-  if (load.damage || load.newer) {
-    return []
-  }
-  const written = new Set<string>()
-  for (const itemId of load.state.items.keys()) {
-    const identity = parseAgentJournalItemKey(itemId)
-    const spelled =
-      identity?.provider === 'legacy' ? spelledProviderTimelineItemKey(identity.recordId) : null
-    if (spelled !== null) {
-      written.add(spelled)
-    }
-  }
-  // Any session's row counts: one an unused replacement wrote stays when the agent supersedes it.
-  return lost.filter((key) => !written.has(providerTimelineKeyPart(acpSessionNotRestoredItem(key))))
 }

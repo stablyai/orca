@@ -469,6 +469,7 @@ it('retains an unclosed sign-in child for both launch entry points until its exi
           envToDelete: [...envToDelete],
           spec: ANTIGRAVITY_LAUNCH_SPEC,
           fullAccess: false,
+          mcpServers: [],
           resume: null
         })
       },

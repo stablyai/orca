@@ -434,6 +434,7 @@ describe('ACP startup that never answers', () => {
             env: {},
             envToDelete: [],
             fullAccess: false,
+            mcpServers: [],
             resume: null
           }
         }

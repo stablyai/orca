@@ -17,6 +17,7 @@ import { probeAcpChildStops } from './acp-structured-child-stop'
 import type { AcpStructuredConnection } from './acp-structured-connection'
 import type { AcpStructuredLane } from './acp-structured-lane'
 import type { AcpStructuredLaunch } from './acp-structured-launch-resolution'
+import { filterAcpMcpServersByCapabilities } from './acp-structured-launch-mcp'
 import type { AcpStructuredOptions } from './acp-structured-options'
 import type { AcpStructuredPrompts } from './acp-structured-prompts'
 import type { AcpStructuredSessionAdapterDeps } from './acp-structured-session-adapter-deps'
@@ -63,6 +64,14 @@ export async function initializeAcpStructuredSession(
     env: launch.env
   })
   const setup = { authMethodId, resumePreference: spec.resumePreference }
+  // Stdio is the only transport every ACP agent must support; http and sse are opt-in capabilities
+  // the agent advertises in initialize. A server the agent cannot name would fail a strict start
+  // (session/load refuses, and the fallback session/new fails the same way) or be silently
+  // dropped by a tolerant one, so only the advertised transports ride the start.
+  const mcpServers = filterAcpMcpServersByCapabilities(launch.mcpServers, {
+    http: initialized.agentCapabilities?.mcpCapabilities?.http === true,
+    sse: initialized.agentCapabilities?.mcpCapabilities?.sse === true
+  })
   const resume = launch.resume
   let started: Awaited<ReturnType<AcpStructuredConnection['start']>> | null = null
   let liveLane: AcpStructuredLane | null = null
@@ -73,7 +82,7 @@ export async function initializeAcpStructuredSession(
     try {
       started = await connection.start({
         cwd: launch.cwd,
-        mcpServers: [],
+        mcpServers,
         sessionId: resume.sessionId,
         ...setup
       })
@@ -94,7 +103,7 @@ export async function initializeAcpStructuredSession(
   if (!started || !liveLane) {
     liveLane?.dispose()
     input.lanes.clear()
-    started = await connection.start({ cwd: launch.cwd, mcpServers: [], ...setup })
+    started = await connection.start({ cwd: launch.cwd, mcpServers, ...setup })
     assertStarting()
     liveLane = input.lanes.create(started.sessionId)
   }

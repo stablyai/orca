@@ -60,6 +60,7 @@ const launch: AcpStructuredLaunch = {
   env: { XDG_DATA_HOME: '/data' },
   envToDelete: [],
   fullAccess: false,
+  mcpServers: [],
   resume: {
     sessionId: 'ses_1',
     key: 'acp:opencode:ses_1',

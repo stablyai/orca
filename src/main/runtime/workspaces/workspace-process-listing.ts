@@ -281,6 +281,8 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
         isTuiAgent(agent)
           ? this.structuredAgentLaunchEnv(agent, this.requireStore().getSettings())
           : {},
+      workspaceMcpTrustEnabled: () =>
+        this.requireStore().getSettings().agentWorkspaceTrustEnabled !== false,
       resolveAgentCommandSettings: () => this.requireStore().getSettings(),
       resolveCodexAccountKind: (home) =>
         resolveStructuredCodexAccountKind(home, this.requireStore().getSettings()),

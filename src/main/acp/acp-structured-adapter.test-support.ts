@@ -109,6 +109,7 @@ export async function openAcpAdapterRig(
       env: { ...RIG_ENV, ...account },
       envToDelete: [],
       fullAccess: false,
+      mcpServers: [],
       resume: null,
       ...options.launch
     }))

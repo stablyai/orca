@@ -118,6 +118,7 @@ describe('copying a chat conversation for the CLI', () => {
             env: {},
             envToDelete: [],
             fullAccess: false,
+            mcpServers: [],
             resume: null
           }),
           connect: (...args: ConstructorParameters<typeof FakeAcpChild>) => {

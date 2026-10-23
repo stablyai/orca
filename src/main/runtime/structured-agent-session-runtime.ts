@@ -110,6 +110,9 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
   resolveAgentFullAccess?: (agent: string) => boolean
   /** The user's per-agent environment overlay from settings, laid over every agent's base env. */
   resolveAgentLaunchEnv?: (agent: string) => Record<string, string>
+  /** Reads the workspace-trust setting (`agentWorkspaceTrustEnabled`) at launch time; a workspace
+   *  Orca does not pre-trust hands its `.mcp.json` to no agent. Wired by the real hosts only. */
+  workspaceMcpTrustEnabled?: () => boolean
   /** The settings a per-agent Command override is read from, for the same agents. */
   resolveAgentCommandSettings?: () => StructuredAgentCommandSettings
   resolveEnvironment?: () => Promise<NodeJS.ProcessEnv>

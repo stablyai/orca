@@ -143,7 +143,10 @@ function createAcpAdapter(
       readJournal,
       ...deps.acpLaunchCommand,
       dataDirectory: deps.stateDirectory,
-      logger: deps.logger
+      logger: deps.logger,
+      ...(deps.workspaceMcpTrustEnabled
+        ? { workspaceMcpTrustEnabled: deps.workspaceMcpTrustEnabled }
+        : {})
     })
     return new AcpStructuredSessionAdapter({
       spec,
