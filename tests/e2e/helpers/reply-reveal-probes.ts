@@ -18,10 +18,8 @@ export type ReplyRevealProbeLog = {
   }[]
 }
 
-type ReplyRevealProbeState = ReplyRevealProbeLog & { focused: boolean }
-
 declare global {
-  var __replyRevealProbe: ReplyRevealProbeState | undefined
+  var __replyRevealProbe: ReplyRevealProbeLog | undefined
 }
 
 export async function installReplyRevealProbes(app: ElectronApplication): Promise<void> {
@@ -30,7 +28,7 @@ export async function installReplyRevealProbes(app: ElectronApplication): Promis
       if (globalThis.__replyRevealProbe) {
         return
       }
-      const probe: ReplyRevealProbeState = { banners: [], reveals: [], focused: false }
+      const probe: ReplyRevealProbeLog = { banners: [], reveals: [] }
       globalThis.__replyRevealProbe = probe
       // Why: a captured show() keeps the banner request observable without posting a real
       // notification to the developer's desktop.
@@ -63,24 +61,9 @@ export async function installReplyRevealProbes(app: ElectronApplication): Promis
           }
           send(channel, ...args)
         }
-        // Why: headless windows are never focused; S2 needs main to see a focused Orca.
-        const isFocused = window.isFocused.bind(window)
-        window.isFocused = () => probe.focused || isFocused()
       }
     })
   )
-}
-
-export async function setProbeWindowFocused(
-  app: ElectronApplication,
-  focused: boolean
-): Promise<void> {
-  await app.evaluate((_electron, value) => {
-    const probe = globalThis.__replyRevealProbe
-    if (probe) {
-      probe.focused = value
-    }
-  }, focused)
 }
 
 export async function readReplyRevealProbe(app: ElectronApplication): Promise<ReplyRevealProbeLog> {
@@ -88,15 +71,6 @@ export async function readReplyRevealProbe(app: ElectronApplication): Promise<Re
     const probe = globalThis.__replyRevealProbe
     return { banners: [...(probe?.banners ?? [])], reveals: [...(probe?.reveals ?? [])] }
   })
-}
-
-export async function setBringToFront(page: Page, enabled: boolean): Promise<void> {
-  await page.evaluate(async (value) => {
-    const state = window.__store!.getState()
-    await state.updateSettings({
-      notifications: { ...state.settings!.notifications, bringToFrontOnAgentTaskComplete: value }
-    })
-  }, enabled)
 }
 
 /** Opens a new terminal tab in the active worktree and returns its id once its PTY is live. */

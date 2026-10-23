@@ -1,8 +1,10 @@
 /**
  * Drives one Orca app through reply-reveal scenarios: opens stand-in agent tabs, submits as a person
- * (Playwright keys through xterm) or as Orca (terminal.send, dictation paste), ends turns, and records
+ * (Playwright keys through xterm) or as Orca (terminal.send), ends turns, and records
  * whether main revealed the agent's tab for each completion.
  */
+import { mkdtempSync } from 'node:fs'
+import path from 'node:path'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { expect } from '@stablyai/playwright-test'
 import { RuntimeClient } from '../../../src/cli/runtime-client'
@@ -20,7 +22,6 @@ import { waitForPtyShellEcho } from '../terminal-pty-readiness'
 import {
   controlFakeReplyAgent,
   countAcceptedFakeReplyHooks,
-  readFakeReplyAgentStdin,
   type FakeReplyAgentProvider
 } from './reply-reveal-fake-agent'
 import {
@@ -32,16 +33,9 @@ import {
   type ReplyRevealProbeLog
 } from './reply-reveal-probes'
 
-// Why: desktop completions share a 5s per-workspace burst cooldown; a second completion inside it
-// never reaches the reveal decision, so a "no reveal" there would prove nothing.
-const COOLDOWN_GAP_MS = 5_600
-// Why: covers the renderer's 1.5s done-quiet window plus the async provenance check.
-const SETTLE_MS = 3_500
-// Why: once the banner shows, only the async provenance check (a transcript read) is left.
-const SETTLE_AFTER_BANNER_MS = 1_000
-
 export type ReplyAgentTab = {
   provider: FakeReplyAgentProvider
+  fakeDir: string
   tabId: string
   paneKey: string
   worktreeId: string
@@ -58,7 +52,6 @@ export type ReplyRevealOutcome = {
 
 export class ReplyRevealHarness {
   readonly outcomes: ReplyRevealOutcome[] = []
-  private lastCompletionAt = 0
 
   constructor(
     readonly page: Page,
@@ -70,6 +63,7 @@ export class ReplyRevealHarness {
   ) {}
 
   async openAgent(provider: FakeReplyAgentProvider): Promise<ReplyAgentTab> {
+    const fakeDir = mkdtempSync(path.join(this.fakeDir, `${provider}-`))
     const tabId = await createTerminalTab(this.page)
     const { worktreeId } = await readActiveView(this.page)
     const ptyId = await waitForActivePanePtyId(this.page)
@@ -79,11 +73,15 @@ export class ReplyRevealHarness {
     await sendToTerminal(
       this.page,
       ptyId,
-      `exec node '${this.agentScript}' ${provider} '${this.fakeDir}'\r`
+      `exec node '${this.agentScript}' ${provider} '${fakeDir}'\r`
     )
     await waitForTerminalOutput(this.page, `[fake] ${provider} ready`, 20_000)
     if (provider === 'claude') {
-      await expect.poll(() => this.hooks(provider, 'SessionStart'), { timeout: 20_000 }).toBe(1)
+      await expect
+        .poll(() => countAcceptedFakeReplyHooks(fakeDir, provider, 'SessionStart'), {
+          timeout: 20_000
+        })
+        .toBe(1)
     }
     let handle: string | undefined
     await expect
@@ -96,11 +94,11 @@ export class ReplyRevealHarness {
         { timeout: 20_000 }
       )
       .not.toBeNull()
-    return { provider, tabId, paneKey, worktreeId: worktreeId ?? '', handle: handle ?? '' }
+    return { provider, fakeDir, tabId, paneKey, worktreeId: worktreeId ?? '', handle: handle ?? '' }
   }
 
-  hooks(provider: FakeReplyAgentProvider, name: string): number {
-    return countAcceptedFakeReplyHooks(this.fakeDir, provider, name)
+  hooks(agent: ReplyAgentTab, name: string): number {
+    return countAcceptedFakeReplyHooks(agent.fakeDir, agent.provider, name)
   }
 
   async humanType(agent: ReplyAgentTab, text: string): Promise<void> {
@@ -116,38 +114,8 @@ export class ReplyRevealHarness {
     await this.client.call('terminal.send', { terminal: agent.handle, text, enter: true })
   }
 
-  /** Fills the draft through dictation's insert, which Orca writes as a program paste. */
-  async dictateDraft(agent: ReplyAgentTab, text: string): Promise<void> {
-    await activateTab(this.page, agent.tabId)
-    await focusActiveTerminalInput(this.page)
-    await this.page.evaluate(
-      ({ tabId, text }) => {
-        document.dispatchEvent(new CustomEvent('dictation:insertText', { detail: { tabId, text } }))
-      },
-      { tabId: agent.tabId, text }
-    )
-    await expect
-      .poll(() => this.stdinContains(agent.provider, text), { timeout: 10_000 })
-      .toBe(true)
-  }
-
-  private stdinContains(provider: FakeReplyAgentProvider, text: string): boolean {
-    return readFakeReplyAgentStdin(this.fakeDir, provider).includes(text)
-  }
-
   async waitForSubmissions(agent: ReplyAgentTab, count: number): Promise<void> {
-    await expect
-      .poll(() => this.hooks(agent.provider, 'UserPromptSubmit'), { timeout: 15_000 })
-      .toBe(count)
-  }
-
-  /** Compacts the running turn the way Claude's auto-compaction reports it. */
-  async compact(agent: ReplyAgentTab): Promise<void> {
-    const starts = this.hooks(agent.provider, 'SessionStart')
-    controlFakeReplyAgent(this.fakeDir, agent.provider, 'compact')
-    await expect
-      .poll(() => this.hooks(agent.provider, 'SessionStart'), { timeout: 10_000 })
-      .toBe(starts + 1)
+    await expect.poll(() => this.hooks(agent, 'UserPromptSubmit'), { timeout: 15_000 }).toBe(count)
   }
 
   async lookElsewhere(): Promise<void> {
@@ -169,25 +137,11 @@ export class ReplyRevealHarness {
     })
   }
 
-  /**
-   * Ends the agent's turn (or wakes it) and checks what main did: a reveal of exactly that agent's
-   * pane or none at all, and one banner unless the agent's own workspace is in a focused window.
-   */
-  async complete(
-    scenario: string,
-    agent: ReplyAgentTab,
-    expected: boolean,
-    { wake = false, banners: expectedBanners = 1 }: { wake?: boolean; banners?: 0 | 1 } = {}
-  ): Promise<void> {
-    const wait = this.lastCompletionAt + COOLDOWN_GAP_MS - Date.now()
-    if (wait > 0) {
-      await this.page.waitForTimeout(wait)
-    }
-    const stops = this.hooks(agent.provider, 'Stop')
+  async complete(scenario: string, agent: ReplyAgentTab, expected: boolean): Promise<void> {
+    const stops = this.hooks(agent, 'Stop')
     const before = await readReplyRevealProbe(this.app)
-    controlFakeReplyAgent(this.fakeDir, agent.provider, wake ? 'wake' : 'finish')
-    await expect.poll(() => this.hooks(agent.provider, 'Stop'), { timeout: 15_000 }).toBe(stops + 1)
-    this.lastCompletionAt = Date.now()
+    controlFakeReplyAgent(agent.fakeDir, agent.provider, 'finish')
+    await expect.poll(() => this.hooks(agent, 'Stop'), { timeout: 15_000 }).toBe(stops + 1)
     const since = async (): Promise<ReplyRevealProbeLog> => {
       const log = await readReplyRevealProbe(this.app)
       return {
@@ -199,22 +153,14 @@ export class ReplyRevealHarness {
       log.reveals.filter(
         (reveal) => reveal.channel === 'ui:focusTerminal' && reveal.paneKey === agent.paneKey
       ).length
-    const settle = async (poll: () => Promise<number>, target: number): Promise<void> => {
-      await expect
-        .poll(poll, { timeout: 10_000 })
-        .toBe(target)
-        .catch(() => undefined)
-    }
+    await expect.poll(async () => (await since()).banners.length, { timeout: 10_000 }).toBe(1)
     if (expected) {
-      await settle(async () => paneReveals(await since()), 1)
-    }
-    if (expectedBanners > 0) {
-      await settle(async () => (await since()).banners.length, expectedBanners)
-    }
-    if (!expected) {
-      // Why: the reveal decision runs beside the banner, not before it, so a refusal needs a quiet
-      // window after the dispatch is known to have happened.
-      await this.page.waitForTimeout(expectedBanners > 0 ? SETTLE_AFTER_BANNER_MS : SETTLE_MS)
+      await expect.poll(async () => paneReveals(await since()), { timeout: 10_000 }).toBe(1)
+    } else {
+      // A new submission invalidates this completion, including any provenance still being read.
+      const submitted = this.hooks(agent, 'UserPromptSubmit')
+      await this.programSend(agent, 'next program turn')
+      await this.waitForSubmissions(agent, submitted + 1)
     }
     const log = await since()
     const revealed = paneReveals(log) > 0
@@ -241,7 +187,7 @@ export class ReplyRevealHarness {
     } else {
       expect.soft(log.reveals, `${scenario}: any reveal`).toEqual([])
     }
-    expect.soft(log.banners.length, `${scenario}: banners`).toBe(expectedBanners)
+    expect.soft(log.banners.length, `${scenario}: banners`).toBe(1)
     if (revealed) {
       const view = await readActiveView(this.page)
       expect.soft(view.tabId, `${scenario}: revealed tab`).toBe(agent.tabId)

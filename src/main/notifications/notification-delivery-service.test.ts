@@ -5,6 +5,7 @@ import {
 } from '../runtime/push/push-dispatcher.test-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserWindow } from 'electron'
+import { NOTIFICATION_COOLDOWN_MS } from '../../shared/notification-burst-cooldown'
 import { createNotificationDeliveryService } from './notification-delivery-service'
 import type { NotificationDeliveryDependencies } from './notification-delivery-service'
 import type {
@@ -313,12 +314,6 @@ describe('bringing forward only an eligible completed reply', () => {
       }
     }
   }
-  const settle = async () => {
-    await Promise.resolve()
-    await Promise.resolve()
-    await Promise.resolve()
-  }
-
   it('S1: reveals the same subject, without waiting to deliver its banner', async () => {
     const harness = makeHarness(makeSettings({ bringToFrontOnAgentTaskComplete: true }))
     background(harness)
@@ -331,7 +326,7 @@ describe('bringing forward only an eligible completed reply', () => {
     expect(harness.deliverNative).toHaveBeenCalledOnce()
     expect(harness.deps.bringSubjectToFront).not.toHaveBeenCalled()
     waiting.resolve(true)
-    await settle()
+    await flush()
     expect(harness.deps.bringSubjectToFront).toHaveBeenCalledWith(request)
   })
   type RevealSetup = {
@@ -370,7 +365,7 @@ describe('bringing forward only an eligible completed reply', () => {
     const service = createNotificationDeliveryService(harness.deps)
     await setup({ settings, harness, window, service })
     await service.dispatch(makeRequest(request))
-    await settle()
+    await flush()
     expect(harness.deps.canBringAgentReply).not.toHaveBeenCalled()
     expect(harness.deps.bringSubjectToFront).not.toHaveBeenCalled()
   })
@@ -405,8 +400,35 @@ describe('bringing forward only an eligible completed reply', () => {
     await service.dispatch(makeRequest())
     setup({ settings, harness, window, service })
     waiting.resolve(eligible)
-    await settle()
+    await flush()
     expect(harness.deliverNative).toHaveBeenCalledOnce()
     expect(harness.deps.bringSubjectToFront).not.toHaveBeenCalled()
+  })
+  it('rejects an old pending reveal after a newer completion passes the exact cooldown boundary', async () => {
+    const harness = makeHarness(makeSettings({ bringToFrontOnAgentTaskComplete: true }))
+    background(harness)
+    const older = makeRequest({ paneKey: 'invented-pane' })
+    const newer = makeRequest({ paneKey: 'invented-pane' })
+    const pending = Promise.withResolvers<boolean>()
+    harness.deps.canBringAgentReply = vi
+      .fn()
+      .mockReturnValueOnce(pending.promise)
+      .mockResolvedValueOnce(true)
+    let current = older
+    harness.deps.isAgentReplyCurrent = (request) => request === current
+    const service = createNotificationDeliveryService(harness.deps)
+    await expect(service.dispatch(older)).resolves.toEqual({ delivered: true })
+    now += NOTIFICATION_COOLDOWN_MS - 1
+    expect(service.dispatch(newer)).toEqual({ delivered: false, reason: 'cooldown' })
+    expect(harness.deps.canBringAgentReply).toHaveBeenCalledTimes(1)
+    now += 1
+    current = newer
+    await expect(service.dispatch(newer)).resolves.toEqual({ delivered: true })
+    await flush()
+    expect(harness.deps.bringSubjectToFront).toHaveBeenCalledExactlyOnceWith(newer)
+    pending.resolve(true)
+    await flush()
+    expect(harness.deliverNative).toHaveBeenCalledTimes(2)
+    expect(harness.deps.bringSubjectToFront).toHaveBeenCalledExactlyOnceWith(newer)
   })
 })
