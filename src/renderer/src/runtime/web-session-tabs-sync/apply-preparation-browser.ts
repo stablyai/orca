@@ -20,7 +20,9 @@ import {
   webSessionOpenFilesForWorktree
 } from './state-equality-files'
 import { shouldRetainStructuredAgentSessionLaunchTab } from '@/lib/structured-agent-session-launch-registry'
+import { getKnownExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { executionHostIdForSessionTabsOwner } from '../local-structured-session-owner'
+import { resolveStructuredAgentSessionOwner } from '../structured-agent-session-owner'
 
 export function prepareWebSessionTabsSnapshotBrowser(
   base: ReturnType<typeof prepareWebSessionTabsSnapshotBase>
@@ -39,7 +41,21 @@ export function prepareWebSessionTabsSnapshotBrowser(
   } = base
   const targetGroupId = chooseTargetGroupId(state, snapshot)
   const hostGroupIdByTabId = buildHostGroupIdByTabId(snapshot.tabGroups)
-  const currentUnifiedTabs = state.unifiedTabsByWorktree[worktreeId] ?? []
+  const previousUnifiedTabs = state.unifiedTabsByWorktree[worktreeId] ?? []
+  const legacyOwner =
+    previousUnifiedTabs.some(
+      (tab) => tab.contentType === 'agent-session' && tab.executionHostId === undefined
+    ) && getKnownExecutionHostIdForWorktree(state, worktreeId) !== null
+      ? resolveStructuredAgentSessionOwner(state, worktreeId)
+      : null
+  // Bind a legacy chat's known read owner before another connection can adopt or retire it.
+  const currentUnifiedTabs = legacyOwner
+    ? previousUnifiedTabs.map((tab) =>
+        tab.contentType === 'agent-session' && tab.executionHostId === undefined
+          ? { ...tab, executionHostId: legacyOwner }
+          : tab
+      )
+    : previousUnifiedTabs
   const publishedAgentSessionIds = new Set(
     snapshot.tabs.filter((tab) => tab.type === 'agent-session').map((tab) => tab.sessionId)
   )
