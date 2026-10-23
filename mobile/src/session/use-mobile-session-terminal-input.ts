@@ -14,11 +14,11 @@ import { countTerminalGestureInputSequences } from '../terminal/terminal-gesture
 import {
   isGestureMouseTrackingMode,
   TERMINAL_GESTURE_INPUT_BUCKET_CAPACITY,
-  TERMINAL_GESTURE_INPUT_FLUSH_DELAY_MS,
   TERMINAL_GESTURE_INPUT_MAX_PENDING_SEQUENCES,
   TERMINAL_GESTURE_INPUT_MAX_QUEUE_AGE_MS,
   TERMINAL_GESTURE_INPUT_REFILL_PER_SECOND
 } from './mobile-session-route-helpers'
+import type { TerminalPointerInput } from '../terminal/terminal-webview-contract'
 import type { Terminal, TerminalGestureInputQueue } from './mobile-session-route-types'
 import type { MobileSessionFileActionsModel } from './use-mobile-session-file-actions'
 
@@ -59,6 +59,9 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
     activeHandleRef,
     activeSessionTabTypeRef,
     clearPendingLiveInputCommit,
+    liveInputTerminalHandlesRef,
+    sendLiveInputClick,
+    sendLiveTerminalInputRef,
     showToast,
     getTerminalRef,
     hostQueryReplyInputSupportedRef
@@ -195,6 +198,9 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
         current.bytes += bytes
         current.sequenceCount += sequenceCount
         current.lastUpdatedMs = now
+        if (!terminalGestureInputInFlightRef.current.has(handle)) {
+          void flushTerminalGestureInput(handle)
+        }
         return
       }
 
@@ -209,10 +215,6 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
           current.bytes += bytes
           current.sequenceCount += sequenceCount
           current.lastUpdatedMs = now
-          current.timer = setTimeout(() => {
-            current.timer = null
-            void flushTerminalGestureInput(handle)
-          }, TERMINAL_GESTURE_INPUT_FLUSH_DELAY_MS)
           return
         }
       }
@@ -223,17 +225,17 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
         timer: null,
         lastUpdatedMs: now
       }
-      queued.timer = setTimeout(() => {
-        queued.timer = null
-        void flushTerminalGestureInput(handle)
-      }, TERMINAL_GESTURE_INPUT_FLUSH_DELAY_MS)
       terminalGestureInputQueuesRef.current.set(handle, queued)
+      // Send the leading edge now; an in-flight request's acknowledgement drains later movement.
+      if (!terminalGestureInputInFlightRef.current.has(handle)) {
+        void flushTerminalGestureInput(handle)
+      }
     },
     [flushTerminalGestureInput]
   )
 
   const handleTerminalInput = useCallback(
-    async (handle: string, bytes: string) => {
+    async (handle: string, bytes: string, input?: TerminalPointerInput) => {
       if (!client || connState !== 'connected' || bytes.length === 0) {
         return
       }
@@ -249,12 +251,19 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
       if (sequenceCount == null) {
         return
       }
+      if (input?.click) {
+        // A deliberate click must survive wheel limits and follow text queued for the old cursor.
+        void (liveInputTerminalHandlesRef.current.has(handle)
+          ? sendLiveInputClick(handle, bytes)
+          : sendLiveTerminalInputRef.current(handle, bytes))
+        return
+      }
       if (!allowTerminalGestureInput(handle, sequenceCount)) {
         return
       }
       enqueueTerminalGestureInput(handle, bytes, sequenceCount)
     },
-    [allowTerminalGestureInput, client, connState, enqueueTerminalGestureInput]
+    [allowTerminalGestureInput, client, connState, enqueueTerminalGestureInput, sendLiveInputClick]
   )
 
   const handleTerminalQueryReply = useCallback((handle: string, bytes: string) => {
