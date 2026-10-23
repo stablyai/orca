@@ -1,11 +1,11 @@
 import { Activity } from 'lucide-react-native'
-import { Animated, StyleSheet, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
 import type { AgentDotState } from '../worktree/agent-row-display'
 import { colors } from '../theme/mobile-theme'
-import { useWorkingRingRotation } from './use-working-ring-rotation'
 
 // Per-agent state indicator, 1:1 with desktop AgentStateDot
-// (src/renderer/src/components/AgentStateDot.tsx): yellow spinner for 'working',
+// (src/renderer/src/components/AgentStateDot.tsx): static yellow ring for 'working'
+// on mobile to avoid continuous animation battery drain,
 // emerald for 'done', red for blocked/waiting/failed (attention), muted for a user's Stop
 // ('interrupted'), amber for 'unconfirmed' (desktop's missing-evidence tone), neutral for idle. Distinct from the
 // worktree-level AgentSpinner, which collapses the agent vocabulary into the 5-state
@@ -24,12 +24,10 @@ export const AGENT_WORKING_COLOR = '#eab308'
 /** `unverifiable` is a child row's lost contact: desktop's dashed amber ring, a missing-evidence
  *  mark rather than a state claim. */
 export function AgentStateDot({ state }: { state: AgentDotState | 'unverifiable' }) {
-  const rotate = useWorkingRingRotation(state === 'working')
-
   if (state === 'working') {
     return (
       <View style={styles.wrapper}>
-        <Animated.View style={[styles.spinner, { transform: [{ rotate }] }]} />
+        <View style={styles.spinner} />
       </View>
     )
   }
@@ -74,6 +72,7 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     borderWidth: 1.5,
     borderColor: AGENT_WORKING_COLOR,
-    borderTopColor: 'transparent'
+    borderTopColor: 'transparent',
+    transform: [{ rotate: '225deg' }]
   }
 })
