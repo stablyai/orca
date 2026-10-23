@@ -14,14 +14,16 @@ export function getWindowsPowerShellExecutablePath(): string {
  * Switches for the PowerShell that relays hook output and exit status
  * (#14818 — conhost does neither).
  *
- * The command line spells no flag beyond `-NoProfile`, because AV denies the
- * combinations. #16003 measured, on the reporting Kaspersky host:
+ * The command line keeps only the profile/input flags because AV denies
+ * the policy/window combinations. #16003 measured, on the reporting Kaspersky host:
  *
  *   -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand  126
  *   -NoProfile -WindowStyle Hidden -EncodedCommand                          126
  *   -WindowStyle Hidden -EncodedCommand                                     126
  *   -NoProfile -EncodedCommand                                              0 (5/5)
  *   -NoProfile -ExecutionPolicy Bypass -Command                             0 (5/5)
+ *
+ * This matrix did not measure the added `-NonInteractive` flag on that AV host.
  *
  * The denial is at CreateProcess and is independent of the payload: `exit 0` is
  * denied too, and bash reports it as `Permission denied`. So `-WindowStyle
@@ -43,7 +45,8 @@ export function getWindowsPowerShellExecutablePath(): string {
  * #18875 took that answer for the Claude lifecycle hook, and `wrapWindowsBatchHookCommand`
  * extends it to other `.cmd` hooks: they reach this launcher only when the profile path is not cmd-safe.
  */
-export const WINDOWS_POWERSHELL_HOOK_SWITCHES = '-NoProfile'
+// NonInteractive prevents PowerShell 5.1 from reading hook JSON as interactive input.
+export const WINDOWS_POWERSHELL_HOOK_SWITCHES = '-NoProfile -NonInteractive'
 
 // Why: redirected PowerShell progress becomes CLIXML that can corrupt merged JSON
 // output. It must be the FIRST statement: Set-ExecutionPolicy autoloads
