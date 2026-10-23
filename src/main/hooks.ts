@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { parseOrcaYaml } from '../shared/orca-yaml'
 import { resolveHookCommandSourcePolicy } from '../shared/hook-command-source-policy'
 import { getEffectiveHooksFromConfig } from './effective-hook-config'
+import { resolveArchiveHookCommandForRun } from './archive-hook-command-paths'
 import { getHookRuntimeTarget, getHookWslContext } from './hook-runtime-target'
 import { getSetupEnvVars } from './setup-hook-env-vars'
 import { iterateLfScriptLines } from './setup-runner-script-text'
@@ -220,6 +221,15 @@ export function runHook(
 
   const runtimeTarget = getHookRuntimeTarget(projectRuntime)
   const wslInfo = getHookWslContext(cwd, runtimeTarget)
+  const hostYamlRoot = hooksPath ?? repo.path
+  const command = resolveArchiveHookCommandForRun({
+    script,
+    hookName,
+    hostYamlRoot,
+    shellYamlRoot: wslInfo ? toLinuxPath(hostYamlRoot) : hostYamlRoot,
+    shellCwd: wslInfo ? wslInfo.linuxPath : cwd,
+    shell: wslInfo || process.platform !== 'win32' ? 'posix' : 'cmd'
+  })
 
   if (wslInfo) {
     // Why: hook scripts run inside WSL, so translate the ORCA_* Windows UNC paths to Linux paths.
@@ -247,7 +257,7 @@ export function runHook(
     return runWslProcess({
       distro: wslInfo.distro ?? undefined,
       loginPath: 'preferred',
-      script,
+      script: command,
       // Why pinned: these are user-authored orca.yaml scripts and the native
       // path runs /bin/bash. Defaulting to sh would fail bash-only hooks on WSL
       // only -- a downgrade the user never asked for.
@@ -285,7 +295,7 @@ export function runHook(
     // accepts and ignores it, so the shell never became a group leader and the group signal below
     // had nothing to reach. Passing `shell` as a string keeps Node's own platform invocation, which
     // is what `exec` was being kept for: `cmd.exe /d /s /c` on Windows rather than a bare `-c`.
-    const child = spawn(script, {
+    const child = spawn(command, {
       cwd,
       shell: getHookShell(),
       // Why: hooks run unattended; block Git Credential Manager's interactive prompt while keeping cached auth (issue #7652).
