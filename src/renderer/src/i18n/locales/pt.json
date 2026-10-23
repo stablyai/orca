@@ -10390,7 +10390,25 @@
             "databaseCount_one": "{{value0}} banco de dados",
             "databaseCount_other": "{{value0}} bancos de dados",
             "scanning": "Verificando {{value0}}",
-            "scanned": "Verificação concluída: {{value0}}"
+            "scanned": "Verificação concluída: {{value0}}",
+            "agentChecked": "{{agent}}: {{settled}} de {{total}} candidatos do histórico verificados"
+          },
+          "run": {
+            "source": {
+              "control": {
+                "agent": {
+                  "action": {
+                    "start": {
+                      "git": {
+                        "operation": {
+                          "running": "Aguarde a operação do Git em execução terminar."
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       },
@@ -11552,6 +11570,9 @@
               },
               "chat": {
                 "partial": "O host não conseguiu confirmar que a conversa foi interrompida. Outros painéis podem ter sido fechados; verifique a conexão e tente novamente."
+              },
+              "vm": {
+                "running": "Os terminais do espaço de trabalho foram interrompidos, mas não foi possível suspender a máquina dele, que continua em execução."
               }
             }
           }
@@ -16419,7 +16440,21 @@
             "09a9489aa5": "Mostrar",
             "2a4c4b8e1f": "Copiar",
             "fileUrlUnsupported": "Esta aba do navegador não pode abrir arquivos locais. Use \"Abrir Pré-visualização ao Lado\" no arquivo em vez disso.",
-            "cc4a071d3a": "Anotar elemento da página ({{value0}})"
+            "cc4a071d3a": "Anotar elemento da página ({{value0}})",
+            "addToDictionary": "Adicionar ao Dicionário",
+            "copyImage": "Copiar Imagem",
+            "copyImageAddress": "Copiar Endereço da Imagem",
+            "cut": "Recortar",
+            "inspect": "Inspecionar",
+            "openImageInNewTab": "Abrir Imagem em Nova Aba",
+            "paste": "Colar",
+            "pasteAndMatchStyle": "Colar com o Mesmo Estilo",
+            "pasteAsPlainText": "Colar como Texto Simples",
+            "redo": "Refazer",
+            "saveImage": "Salvar Imagem",
+            "searchSelection": "Buscar “{{value1}}” no {{value0}}",
+            "selectAll": "Selecionar Tudo",
+            "undo": "Desfazer"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "Cancelar",
@@ -20235,6 +20270,14 @@
       "stepDownload": "Baixar",
       "stepUnpack": "Descompactar",
       "stepCheck": "Verificar"
+    },
+    "WorkspaceEmptyState": {
+      "browser": "Abrir um navegador",
+      "description": "Nenhuma aba está aberta aqui. Inicie um agente ou abra uma ferramenta para começar.",
+      "openFile": "Abrir um arquivo",
+      "startAgent": "Iniciar um agente",
+      "terminal": "Abrir um terminal",
+      "title": "O que você gostaria de fazer?"
     }
   },
   "csv": {
@@ -20918,5 +20961,63 @@
       "loading": "Carregando idioma…",
       "saving": "Salvando idioma…"
     }
+  },
+  "resourceManager": {
+    "countUnavailable": "contagem de terminais indisponível",
+    "killAllLocal": "Encerrar todas as sessões locais",
+    "killFailed": "Não foi possível encerrar o terminal. As sessões observadas pela última vez são mantidas.",
+    "localDaemonScope": "Isso afeta os terminais deste computador.",
+    "openToObserve": "Abra Recursos para observar as sessões de terminal.",
+    "pty": {
+      "agentOwnership": "Evidência de propriedade do agente",
+      "attached": "Um cliente agora está conectado a este terminal. Atualize antes de tentar novamente.",
+      "binding": "Aba",
+      "bound": "Tem aba",
+      "cancel": "Cancelar",
+      "checkingTabs": "Verificando abas…",
+      "claimed": "Um agente agora é o proprietário deste terminal. Atualize antes de tentar novamente.",
+      "copyFailed": "Não foi possível copiar o ID de sessão do Orca",
+      "copyId": "Copiar ID de sessão do Orca",
+      "cwd": "Último cwd informado",
+      "detailsNamed": "Detalhes de {{terminal}}",
+      "end": "Encerrar terminal",
+      "endDescription": "Isso encerra o terminal e seus processos filhos. Trabalhos não salvos podem ser perdidos.",
+      "endHint": "Encerra este terminal e seus processos filhos.",
+      "endNamed": "Encerrar {{terminal}}",
+      "endShort": "Encerrar",
+      "endTitle": "Encerrar {{terminal}}?",
+      "endUnsupported": "A opção Encerrar não está disponível para este terminal. O host dele não oferece suporte às verificações de segurança necessárias. Feche-o pela aba dele ou no host.",
+      "ending": "Encerrando…",
+      "failed": "Não verificável: não foi possível atualizar os terminais locais. Os terminais observados pela última vez são exibidos.",
+      "goToTerminal": "Ir para o terminal",
+      "idCopied": "ID de sessão do Orca copiado",
+      "incarnation": "Instância",
+      "lastProcess": "Último processo visto: {{process}}",
+      "loading": "Carregando terminais…",
+      "localOwnedCount_one": "{{count}} PTY do Orca neste computador",
+      "localOwnedCount_other": "{{count}} PTYs do Orca neste computador",
+      "noLocalOrcaPtys": "Nenhum PTY local do Orca",
+      "observationTime": "Horário da observação",
+      "observedTime": "Última observação às {{time}}",
+      "openNamed": "Abrir {{terminal}}",
+      "ownerAbsent": "Ausente",
+      "ownerPresent": "Presente",
+      "ownerUnknown": "Desconhecido",
+      "pid": "PID",
+      "refreshBeforeEnd": "A opção Encerrar fica indisponível até que os PTYs sejam atualizados.",
+      "retry": "Tentar novamente",
+      "sessionId": "ID de sessão do Orca",
+      "thisComputer": "Este computador",
+      "unassigned": "Não atribuído",
+      "unavailable": "Indisponível",
+      "unbound": "Sem aba",
+      "unverifiableEnd": "Não verificável: o host não conseguiu confirmar o resultado. O terminal ainda pode estar em execução.",
+      "withoutTab": "{{count}} sem aba",
+      "workspace": "Espaço de trabalho"
+    },
+    "ptys": "PTYs",
+    "refresh": "Atualizar",
+    "resources": "Recursos",
+    "restartLocal": "Reiniciar daemon local"
   }
 }
