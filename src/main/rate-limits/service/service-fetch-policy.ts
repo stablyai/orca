@@ -54,12 +54,11 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
     )
   }
 
-  // Why: the statusline never carries the Fable window, so for an account that has one the live feed
-  // cannot stand in for the OAuth poll; only accounts the feed fully covers skip it.
+  // The live feed carries neither scoped windows nor credits; OAuth must keep refreshing them.
   protected shouldSkipAutomatedClaudeFetch(limits: ProviderRateLimits | null): boolean {
     return (
       this.isRetryAfterActive(limits) ||
-      (this.isLiveClaudeUsageFresh(limits) && !limits?.fableWeekly)
+      (this.isLiveClaudeUsageFresh(limits) && !limits?.fableWeekly && !limits?.extraUsage)
     )
   }
 
@@ -150,6 +149,7 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
         // Why: the statusline payload has no Fable scoped window; keep the last OAuth-provided one visible
         // and let its presence keep the OAuth poll ungated (see shouldSkipAutomatedClaudeFetch).
         fableWeekly: previous?.fableWeekly ?? null,
+        extraUsage: previous?.extraUsage ?? null,
         updatedAt: Date.now(),
         error: null,
         status: 'ok',
