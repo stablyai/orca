@@ -33,6 +33,7 @@ import {
   normalizeChildWorkText
 } from './agent-status-child-work-value-guards'
 import { agentChildWorkAllowsOperation } from './agent-status-child-work-legality'
+import { mergeAgentChildIdentity } from './agent-child-identity-merge'
 import {
   AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,
   AGENT_STATUS_TOOL_NAME_MAX_LENGTH
@@ -197,7 +198,8 @@ function parseObservationFacts(
 }
 
 /** A sparse observation never erases what the record knows (a roster omission knows only "it is
- *  gone"). `run` is the stored record only when this observation continues its invocation. */
+ *  gone"), except that a changed agent type clears the prior model. `run` is the stored record
+ *  only when this observation continues its invocation. */
 function mergeObservationFacts(
   said: AgentChildWorkFacts,
   prior: AgentChildWorkRecord | undefined,
@@ -207,8 +209,7 @@ function mergeObservationFacts(
     ...mergedAgentChildWorkEnding(said, run),
     name: said.name ?? prior?.name,
     description: said.description ?? prior?.description,
-    agentType: said.agentType ?? prior?.agentType,
-    model: said.model ?? prior?.model,
+    ...mergeAgentChildIdentity(prior, said),
     residency: said.residency ?? prior?.residency,
     // Cumulative, so a late or duplicate frame never shrinks it.
     totalTokens:
