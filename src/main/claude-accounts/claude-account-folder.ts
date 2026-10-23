@@ -104,9 +104,12 @@ export function readClaudeFolderLogin(stateFile: string, maxAgeMs = 0): ClaudeFo
 
 /** readClaudeFolderLogin without blocking, for a state file across a WSL share. */
 export async function readClaudeFolderLoginAsync(
-  stateFile: string
+  stateFile: string,
+  signal?: AbortSignal
 ): Promise<ClaudeFolderLogin | null> {
+  signal?.throwIfAborted()
   const current = await stat(stateFile).catch(() => null)
+  signal?.throwIfAborted()
   if (!current) {
     logins.delete(stateFile)
     return null
@@ -117,11 +120,14 @@ export async function readClaudeFolderLoginAsync(
   }
   let login: ClaudeFolderLogin | null = null
   try {
-    const state: unknown = JSON.parse(await readFile(stateFile, 'utf8'))
+    const contents = await readFile(stateFile, 'utf8')
+    signal?.throwIfAborted()
+    const state: unknown = JSON.parse(contents)
     if (state && typeof state === 'object' && !Array.isArray(state)) {
       login = claudeStateLogin(Object.fromEntries(Object.entries(state)))
     }
   } catch {
+    signal?.throwIfAborted()
     // Unreadable reads as signed out, as on the host.
   }
   logins.set(stateFile, {

@@ -118,6 +118,21 @@ export const SettingsUpdate = z
     defaultRepoSelection: z.array(z.string()).nullable().optional(),
     defaultLinearTeamSelection: z.array(z.string()).nullable().optional(),
     compactWorktreeCards: z.boolean().optional(),
+    usageRequestEnabled: z
+      .object({
+        claude: z.boolean().optional(),
+        codex: z.boolean().optional(),
+        gemini: z.boolean().optional(),
+        'opencode-go': z.boolean().optional(),
+        kimi: z.boolean().optional(),
+        minimax: z.boolean().optional(),
+        grok: z.boolean().optional(),
+        cursor: z.boolean().optional(),
+        zcode: z.boolean().optional()
+      })
+      .strict()
+      .optional(),
+    antigravityUsageEnabled: z.boolean().optional(),
     minimaxGroupId: z.string().optional(),
     minimaxUsageModels: z.string().optional(),
     minimaxEndpoint: z.enum(['overseas', 'cn']).optional(),

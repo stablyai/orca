@@ -6,14 +6,25 @@ import { readKeychainPassword } from '../macos-keychain/generic-password'
 
 const ACTIVE_CLAUDE_SERVICE = 'Claude Code-credentials'
 export async function readActiveClaudeKeychainCredentialsStrict(
-  configDir?: string
+  configDir?: string,
+  signal?: AbortSignal
 ): Promise<string | null> {
+  signal?.throwIfAborted()
   if (!configDir) {
-    return readKeychainPassword(claudeKeychainService(), getKeychainUser())
+    return readKeychainPassword(
+      claudeKeychainService(),
+      getKeychainUser(),
+      ...(signal ? [signal] : [])
+    )
   }
   // Keep both lexical and canonical profile aliases scoped; never try System Default.
   for (const dir of claudeConfigDirKeychainAliases(configDir)) {
-    const credentials = await readKeychainPassword(claudeKeychainService(dir), getKeychainUser())
+    const credentials = await readKeychainPassword(
+      claudeKeychainService(dir),
+      getKeychainUser(),
+      ...(signal ? [signal] : [])
+    )
+    signal?.throwIfAborted()
     if (credentials) {
       return credentials
     }

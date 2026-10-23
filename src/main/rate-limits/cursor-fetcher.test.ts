@@ -3,8 +3,10 @@ import { setMainHttpClient } from '../network/http-client'
 
 const fetchMock = vi.fn()
 
+vi.mock('./cursor-auth', () => ({ readCursorAuthSession: vi.fn() }))
+
 import { fetchCursorRateLimits } from './cursor-fetcher'
-import type { CursorAuthReadResult } from './cursor-auth'
+import { readCursorAuthSession, type CursorAuthReadResult } from './cursor-auth'
 import { parseCursorSessionToken } from './cursor-session-token'
 
 setMainHttpClient({ fetch: fetchMock, proxySession: () => null })
@@ -61,6 +63,7 @@ const SUMMARY = {
 
 beforeEach(() => {
   fetchMock.mockReset()
+  vi.mocked(readCursorAuthSession).mockReset()
 })
 
 describe('fetchCursorRateLimits', () => {
@@ -232,6 +235,90 @@ describe('fetchCursorRateLimits', () => {
     const limits = await fetchCursorRateLimits({ authReadResult: session() })
     expect(limits.status).toBe('unavailable')
     expect(limits.usageMetadata?.failureKind).toBe('usage-unavailable')
+  })
+
+  it.each([false, true])(
+    'returns a pre-aborted result without reading credentials or fetching (injected auth: %s)',
+    async (injectedAuth) => {
+      const limits = await fetchCursorRateLimits({
+        signal: AbortSignal.abort(),
+        ...(injectedAuth ? { authReadResult: session() } : {})
+      })
+      expect(limits).toMatchObject({
+        status: 'error',
+        usageMetadata: { failureKind: 'network' }
+      })
+      expect(readCursorAuthSession).not.toHaveBeenCalled()
+      expect(fetchMock).not.toHaveBeenCalled()
+    }
+  )
+
+  it('returns a cancellation result after a credential read without starting a request', async () => {
+    const controller = new AbortController()
+    vi.mocked(readCursorAuthSession).mockImplementationOnce(async () => {
+      controller.abort()
+      return session()
+    })
+    const limits = await fetchCursorRateLimits({ signal: controller.signal })
+    expect(limits).toMatchObject({
+      status: 'error',
+      usageMetadata: { failureKind: 'network' }
+    })
+    expect(readCursorAuthSession).toHaveBeenCalledOnce()
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('discards a cancelled summary before starting the legacy fallback', async () => {
+    const controller = new AbortController()
+    fetchMock.mockResolvedValueOnce(
+      fakeResponse({
+        ok: true,
+        status: 200,
+        headers: { get: () => null },
+        json: async () => {
+          controller.abort()
+          return { membershipType: 'free' }
+        }
+      })
+    )
+    const limits = await fetchCursorRateLimits({
+      authReadResult: session(),
+      signal: controller.signal
+    })
+    expect(limits).toMatchObject({
+      status: 'error',
+      usageMetadata: { failureKind: 'network', credentialSource: 'keychain' }
+    })
+    expect(fetchMock).toHaveBeenCalledOnce()
+  })
+
+  it('does not recover a cancelled current-period request into a healthy summary', async () => {
+    const controller = new AbortController()
+    fetchMock
+      .mockResolvedValueOnce(
+        jsonResponse({
+          ...SUMMARY,
+          individualUsage: {
+            plan: { enabled: true, used: 0, limit: 5_000, autoPercentUsed: 0, apiPercentUsed: 0 }
+          }
+        })
+      )
+      .mockImplementationOnce(async () => {
+        controller.abort()
+        throw controller.signal.reason
+      })
+    const limits = await fetchCursorRateLimits({
+      authReadResult: session(),
+      signal: controller.signal
+    })
+    expect(limits).toMatchObject({
+      status: 'error',
+      usageMetadata: { failureKind: 'network', credentialSource: 'keychain' }
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchMock.mock.calls[1]?.[0]).toBe(
+      'https://cursor.com/api/dashboard/get-current-period-usage'
+    )
   })
 
   it('reports a network failure without leaking the request internals', async () => {

@@ -107,6 +107,43 @@ describe('resolveKimiHome', () => {
     expect(wslMocks.getWslHomeAsync).not.toHaveBeenCalled()
   })
 
+  it('does not probe a home after cancellation during the running-distro check', async () => {
+    let finishRunning: (distros: string[]) => void = () => {}
+    wslMocks.listRunningWslDistrosAsync.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishRunning = resolve
+      })
+    )
+    const controller = new AbortController()
+    const pending = resolveKimiHome(
+      { runtime: 'wsl', wslDistro: 'Ubuntu' },
+      'win32',
+      controller.signal
+    )
+    const rejection = expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+    controller.abort()
+    finishRunning(['Ubuntu'])
+    await rejection
+    expect(wslMocks.getWslHomeAsync).not.toHaveBeenCalled()
+  })
+
+  it('does not start a running-distro probe after cancellation during default-distro selection', async () => {
+    let finishListing: (distros: string[]) => void = () => {}
+    wslMocks.listWslDistrosAsync.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishListing = resolve
+      })
+    )
+    const controller = new AbortController()
+    const pending = resolveKimiHome({ runtime: 'wsl', wslDistro: null }, 'win32', controller.signal)
+    const rejection = expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+    controller.abort()
+    finishListing(['Ubuntu'])
+    await rejection
+    expect(wslMocks.listRunningWslDistrosAsync).not.toHaveBeenCalled()
+    expect(wslMocks.getWslHomeAsync).not.toHaveBeenCalled()
+  })
+
   it('reports no path when the distro home cannot be probed', async () => {
     wslMocks.getWslHomeAsync.mockResolvedValue(null)
     expect(await resolveKimiHome({ runtime: 'wsl', wslDistro: 'Ubuntu' }, 'win32')).toEqual({

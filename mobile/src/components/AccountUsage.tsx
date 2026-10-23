@@ -1,5 +1,7 @@
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
+import type { ProviderRateLimits } from './account-usage-state'
+import type { UsageRateLimitSource } from '../../../src/shared/rate-limit-types'
 
 // Pure types and selectors live in account-usage-state.ts (no RN imports) so
 // they are unit-testable; re-exported here so existing import sites are stable.
@@ -22,6 +24,27 @@ export {
   hasActiveProviderUsage,
   hasRenderableUsage
 } from './account-usage-state'
+
+export function UsageRequestsDisabledNotice({ limits }: { limits: ProviderRateLimits | null }) {
+  const source = limits?.usageMetadata?.source ?? limits?.usageMetadata?.lastSuccessfulSource
+  const sourceLabels: Record<UsageRateLimitSource, string> = {
+    oauth: 'OAuth',
+    cli: 'CLI',
+    web: 'Web',
+    'live-session': 'Live session'
+  }
+  return (
+    <Text style={styles.policyNotice}>
+      {source === 'live-session'
+        ? 'Usage requests disabled. Live Claude statusLine data can still update.'
+        : 'Usage requests disabled. Cached usage may be stale.'}
+      {limits && limits.updatedAt > 0
+        ? ` Last update: ${new Date(limits.updatedAt).toLocaleString()}.`
+        : ''}
+      {source ? ` Source: ${sourceLabels[source]}.` : ''}
+    </Text>
+  )
+}
 
 // Why: matches desktop StatusBar — bars show percent used (consumption), same
 // as Claude/Codex harness meters. Fresh account is empty/green; depleted is
@@ -85,6 +108,7 @@ export function UsageBar({
 }
 
 const styles = StyleSheet.create({
+  policyNotice: { fontSize: typography.metaSize, color: colors.textSecondary },
   usageBarColumn: {
     flex: 1,
     gap: 2

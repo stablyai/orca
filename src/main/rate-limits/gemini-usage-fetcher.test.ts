@@ -236,4 +236,51 @@ describe('fetchGeminiRateLimits', () => {
     // The second quota call should have been made with the refreshed token.
     expect(quotaCallCount).toBe(2)
   })
+
+  it('does not read credentials for an already-cancelled caller', async () => {
+    const controller = new AbortController()
+    controller.abort()
+    await expect(fetchGeminiRateLimits(true, controller.signal)).rejects.toMatchObject({
+      name: 'AbortError'
+    })
+    expect(readFileMock).not.toHaveBeenCalled()
+    expect(extractCredsMock).not.toHaveBeenCalled()
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('does not fall back to an embedded project ID after cancellation', async () => {
+    setupAuthJsonValid()
+    const controller = new AbortController()
+    fetchMock.mockImplementation(async () => {
+      controller.abort()
+      throw new Error('project lookup interrupted')
+    })
+    await expect(fetchGeminiRateLimits(true, controller.signal)).rejects.toMatchObject({
+      name: 'AbortError'
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock.mock.calls[0][0]).toContain('loadCodeAssist')
+  })
+
+  it('does not save refreshed credentials or request a project after cancellation', async () => {
+    const { writeCredentialFileAtomic } = await import('../integration-credential-file')
+    vi.mocked(writeCredentialFileAtomic).mockClear()
+    readFileMock.mockImplementation(async (p: string) => {
+      if (p.includes('oauth_creds.json')) {
+        return JSON.stringify({ access_token: 'old', refresh_token: 'refresh', expiry_date: 1 })
+      }
+      throw { code: 'ENOENT' }
+    })
+    extractCredsMock.mockResolvedValue({ clientId: 'client', clientSecret: 'secret' })
+    const controller = new AbortController()
+    fetchMock.mockImplementation(async () => {
+      controller.abort()
+      return makeResponse({ access_token: 'new-token', expires_in: 3600 })
+    })
+    await expect(fetchGeminiRateLimits(true, controller.signal)).rejects.toMatchObject({
+      name: 'AbortError'
+    })
+    expect(writeCredentialFileAtomic).not.toHaveBeenCalled()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
 })

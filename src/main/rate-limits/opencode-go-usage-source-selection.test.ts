@@ -140,7 +140,7 @@ describe('fetchOpenCodeGoUsage', () => {
 
     const result = await fetchOpenCodeGoUsage({ cookie: COOKIE })
 
-    expect(fetchWithCookieMock).toHaveBeenCalledWith(COOKIE, undefined, undefined)
+    expect(fetchWithCookieMock).toHaveBeenCalledWith(COOKIE, undefined, undefined, undefined)
     expect(result.status).toBe('ok')
   })
 
@@ -195,7 +195,7 @@ describe('fetchOpenCodeGoUsage', () => {
     })
 
     expect(fetchWithApiKeyMock).not.toHaveBeenCalled()
-    expect(fetchWithCookieMock).toHaveBeenCalledWith(COOKIE, 'wrk_abc', proxy)
+    expect(fetchWithCookieMock).toHaveBeenCalledWith(COOKIE, 'wrk_abc', proxy, undefined)
     expect(result.status).toBe('ok')
   })
 
@@ -229,5 +229,27 @@ describe('fetchOpenCodeGoUsage', () => {
     expect(fetchWithCookieMock).not.toHaveBeenCalled()
     expect(result.status).toBe('unavailable')
     expect(result.usageMetadata?.failureKind).toBe('missing-credentials')
+  })
+
+  it('does not fall back to cookies when the API response arrives after cancellation', async () => {
+    resolveApiKeyMock.mockResolvedValue({ status: 'found', key: API_KEY, tier: 'settings' })
+    const controller = new AbortController()
+    fetchWithApiKeyMock.mockImplementation(async () => {
+      controller.abort()
+      return { kind: 'unauthorized' }
+    })
+    await expect(
+      fetchOpenCodeGoUsage({ cookie: COOKIE, signal: controller.signal })
+    ).rejects.toMatchObject({ name: 'AbortError' })
+    expect(fetchWithCookieMock).not.toHaveBeenCalled()
+  })
+
+  it('does not resolve credentials for an already-cancelled caller', async () => {
+    const controller = new AbortController()
+    controller.abort()
+    await expect(
+      fetchOpenCodeGoUsage({ cookie: COOKIE, signal: controller.signal })
+    ).rejects.toMatchObject({ name: 'AbortError' })
+    expect(resolveApiKeyMock).not.toHaveBeenCalled()
   })
 })

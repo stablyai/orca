@@ -132,3 +132,17 @@ describe('decodeAccountsSnapshot', () => {
     expect(() => decodeAccountsSnapshot(snapshot)).toThrow('Invalid accounts snapshot from host')
   })
 })
+
+it('keeps account usage available when optional policy metadata comes from a future host', () => {
+  const known = decodeAccountsSnapshot(makeSnapshot())
+  const future = decodeAccountsSnapshot({
+    ...known,
+    rateLimits: {
+      ...known.rateLimits,
+      usageRequestPolicy: { version: 2, revision: 7, enabled: {} }
+    }
+  })
+  expect(future.codex.accounts).toEqual(known.codex.accounts)
+  expect(future.rateLimits.codex).toEqual(known.rateLimits.codex)
+  expect(future.rateLimits.usageRequestPolicy).toBeUndefined()
+})

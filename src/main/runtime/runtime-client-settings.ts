@@ -1,3 +1,7 @@
+import {
+  projectUsageRequestSettings,
+  updateUsageRequestSettings
+} from './runtime-client-usage-request-settings'
 import { getAppEnvironment } from '../../shared/app-environment'
 import { isArtifactSharingEnabled } from '../../shared/artifact-sharing-gate'
 import { isAgentSkillSharingEnabled } from '../../shared/agent-skill-sharing-gate'
@@ -41,9 +45,10 @@ export class RuntimeClientSettingsController {
   constructor(
     private readonly store: Pick<
       RuntimeStore,
-      'getSettings' | 'updateSettings' | 'runDurableMutation'
+      'getSettings' | 'updateSettings' | 'runDurableMutation' | 'getUI' | 'updateUI'
     > | null,
-    private readonly notifyReposChanged: (() => void) | undefined = undefined
+    private readonly notifyReposChanged: (() => void) | undefined = undefined,
+    private readonly ownsUsagePoller: () => boolean = () => false
   ) {}
 
   get(): RuntimeClientSettings {
@@ -52,6 +57,7 @@ export class RuntimeClientSettingsController {
     }
     const settings = this.store.getSettings()
     return {
+      ...projectUsageRequestSettings(this.store, this.ownsUsagePoller()),
       defaultTuiAgent: settings.defaultTuiAgent ?? null,
       newWorkspaceSetupOnly: false,
       disabledTuiAgents: settings.disabledTuiAgents ?? [],
@@ -108,12 +114,25 @@ export class RuntimeClientSettingsController {
     if (!this.store?.getSettings || !this.store.updateSettings) {
       throw new Error('runtime_unavailable')
     }
+    if ('usageRequestEnabled' in updates || 'antigravityUsageEnabled' in updates) {
+      await updateUsageRequestSettings(this.store, updates, this.ownsUsagePoller())
+    }
+    const {
+      usageRequestEnabled: _usageRequestEnabled,
+      antigravityUsageEnabled: _antigravityUsageEnabled,
+      ...settingsUpdates
+    } = updates
+    void _usageRequestEnabled
+    void _antigravityUsageEnabled
+    if (Object.keys(settingsUpdates).length === 0) {
+      return this.get()
+    }
     const beforeSettings = this.store.getSettings()
     const before = beforeSettings.agentStatusHooksEnabled !== false
     // Legacy clients can select an agent or a shell, but cannot select None.
     this.store.updateSettings(
       {
-        ...updates,
+        ...settingsUpdates,
         ...(updates.nativeChatPermissionMode !== undefined
           ? { agentNativeChatPermissionModes: {} }
           : {}),

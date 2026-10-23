@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { translate } from '@/i18n/i18n'
 import { UsageRosterPanel } from './UsageRosterPanel'
+import { UsageRequestPolicyContext } from './usage-request-policy-context'
 import {
   STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS,
   shouldOpenStatusBarContextMenu
@@ -80,6 +81,7 @@ export function StatusBarSurface({
     handleOpenProviderAccounts,
     handleRefresh,
     handleUsageDetails,
+    handleUsageRequestSettings,
     handleUsageMenuOpenChange,
     hasVisibleUsageMeters,
     isEmptyUsageState,
@@ -109,7 +111,9 @@ export function StatusBarSurface({
   const usageMode = usageTightestOnly ? 'compact' : statusBarUsageMode
   const unitLabelState = getUsageUnitLabelState(rosterProviders, collapsedUsageProviders, usageMode)
 
-  return (
+  return React.createElement(
+    UsageRequestPolicyContext.Provider,
+    { value: controller.usageRequestPolicy },
     <div
       ref={barRef}
       // Why: one line at any width — density steps down first. overflow-clip (not hidden) so focus can't scroll the bar; the clip margin spares focus rings and badge dots.
@@ -213,6 +217,7 @@ export function StatusBarSurface({
                     canSignIn={canSignInFromUsageRow}
                     onManageAccounts={handleManageAccounts}
                     onUsageDetails={handleUsageDetails}
+                    onUsageRequestSettings={handleUsageRequestSettings}
                     renderRow={(p, rowNode) => {
                       // Why: a placeholder has nothing to drill into; its row opens the host's accounts.
                       if (isOwnerNotSetUpPlaceholder(p)) {

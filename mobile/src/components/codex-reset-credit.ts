@@ -76,15 +76,28 @@ export function getCodexResetCreditSummary(
   }
 }
 
-export function getCodexResetCreditOutcomeCopy(outcome: CodexResetCreditOutcome): {
+export function getCodexResetCreditOutcomeCopy(
+  outcome: CodexResetCreditOutcome,
+  requestsEnabled = true
+): {
   title: string
   message: string
 } {
   switch (outcome) {
     case 'reset':
-      return { title: 'Rate limits reset', message: 'Codex usage has been refreshed.' }
+      return {
+        title: 'Rate limits reset',
+        message: requestsEnabled
+          ? 'Codex usage has been refreshed.'
+          : 'Usage requests are disabled. Cached quota has not been refreshed.'
+      }
     case 'alreadyRedeemed':
-      return { title: 'Reset already applied', message: 'Codex usage has been refreshed.' }
+      return {
+        title: 'Reset already applied',
+        message: requestsEnabled
+          ? 'Codex usage has been refreshed.'
+          : 'Usage requests are disabled. Cached quota has not been refreshed.'
+      }
     case 'nothingToReset':
       return {
         title: 'Nothing to reset',

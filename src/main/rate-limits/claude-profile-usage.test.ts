@@ -257,7 +257,11 @@ it('reads an inactive WSL account where the WSL router says its launches would r
     wslDistro: 'Ubuntu',
     wslLinuxAuthPath: '/home/u/.local/share/orca/claude-accounts/acct/auth'
   })
-  expect(wslRouter.accountUsagePreparation).toHaveBeenCalledWith('Ubuntu', 'acct')
+  expect(wslRouter.accountUsagePreparation).toHaveBeenCalledWith(
+    'Ubuntu',
+    'acct',
+    expect.any(AbortSignal)
+  )
 })
 it('does not read an inactive WSL account through a stopped distro', async () => {
   const { fetchInactiveClaudeAccountUsage } = await import('./claude-managed-account-usage')

@@ -80,11 +80,19 @@ it.each([
   expect(fixture.readCredentials).toHaveBeenCalledWith({
     credentialsFileConfigDir: configDir,
     keychainConfigDir: configDir,
-    unsuffixedKeychainFallback: false
+    unsuffixedKeychainFallback: false,
+    ...(runtime === 'wsl' ? { signal: expect.any(AbortSignal) } : {})
   })
-  expect(fixture.fetchUsage).toHaveBeenCalledWith('synthetic-token', undefined)
+  expect(fixture.fetchUsage).toHaveBeenCalledWith(
+    'synthetic-token',
+    runtime === 'wsl' ? expect.any(AbortSignal) : undefined
+  )
   if (runtime === 'wsl') {
-    expect(fixture.wslPreparation).toHaveBeenCalledWith('SyntheticDistro', 'A')
+    expect(fixture.wslPreparation).toHaveBeenCalledWith(
+      'SyntheticDistro',
+      'A',
+      expect.any(AbortSignal)
+    )
     expect(fixture.hostPreparation).not.toHaveBeenCalled()
   } else {
     expect(fixture.hostPreparation).toHaveBeenCalledWith('A')

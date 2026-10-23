@@ -1,5 +1,6 @@
 // Keep Electron imports out: both desktop and orcad bundle these account services.
 import type { Store } from './persistence'
+import { composeUsageRequestPolicyEnabled } from '../shared/usage-request-policy'
 import { RateLimitService } from './rate-limits/service'
 import { CodexRuntimeHomeService } from './codex-accounts/runtime-home-service'
 import { CodexAccountService } from './codex-accounts/service'
@@ -34,6 +35,13 @@ export function createProviderAccountServices(
   }
 ): ProviderAccountServices {
   const rateLimits = new RateLimitService()
+  rateLimits.setUsageRequestPolicyResolver(() =>
+    composeUsageRequestPolicyEnabled(
+      store.getSettings().usageRequestEnabled,
+      store.getUI().statusBarItems.includes('antigravity')
+    )
+  )
+  store.onUIChanged(() => rateLimits.reconcileUsageRequestPolicy())
   const codexRuntimeHome = new CodexRuntimeHomeService(store)
   const codexAccounts = new CodexAccountService(
     store,
@@ -44,20 +52,30 @@ export function createProviderAccountServices(
   const claudeRuntimeAuth = new ClaudeRuntimeAuthService(store)
   const claudeAccounts = new ClaudeAccountService(store, rateLimits, claudeRuntimeAuth)
   // Background quota polls must not boot stopped distros; user-driven resets may prepare them.
-  rateLimits.setCodexHomePathResolver(async (target) =>
-    target?.runtime === 'wsl' && !(await isWslDistroRunningForBackgroundWork(target.wslDistro))
-      ? { kind: 'skip' }
-      : codexRuntimeHome.prepareForRateLimitFetch(target)
-  )
+  rateLimits.setCodexHomePathResolver(async (target, signal) => {
+    if (signal?.aborted) {
+      return { kind: 'skip' }
+    }
+    if (
+      target?.runtime === 'wsl' &&
+      !(await isWslDistroRunningForBackgroundWork(target.wslDistro, signal))
+    ) {
+      return { kind: 'skip' }
+    }
+    return signal?.aborted ? { kind: 'skip' } : codexRuntimeHome.prepareForRateLimitFetch(target)
+  })
   rateLimits.setCodexFetchTarget(getInitialCodexRateLimitTarget(store.getSettings()))
   // Read credentials where Kimi’s CLI refreshes its token, including WSL (#12370).
-  rateLimits.setKimiHomeResolver(() => resolveKimiHome(getKimiRuntimeTarget(store.getSettings())))
+  rateLimits.setKimiHomeResolver((signal) =>
+    resolveKimiHome(getKimiRuntimeTarget(store.getSettings()), process.platform, signal)
+  )
   rateLimits.setClaudeFetchTarget(getInitialClaudeRateLimitTarget(store.getSettings()))
   const syncAccountRuntimeTargets = createAccountRuntimeTargetSettingsSync(
     rateLimits,
     store.getSettings()
   )
   store.onSettingsChanged((updates, settings) => {
+    rateLimits.reconcileUsageRequestPolicy()
     // Auto runtime selection remains live as provider settings change.
     void syncAccountRuntimeTargets(updates, settings).catch((error) =>
       console.warn('[rate-limits] Failed to apply account runtime target:', error)
@@ -96,9 +114,13 @@ export function createProviderAccountServices(
       })
     }
   })
-  rateLimits.setClaudeAuthPreparationResolver((target) =>
-    claudeRuntimeAuth.prepareForRateLimitFetch(target)
+  rateLimits.setClaudeAuthPreparationResolver((target, signal) =>
+    claudeRuntimeAuth.prepareForRateLimitFetch(target, signal)
   )
+  rateLimits.setClaudeUsageAttributionResolver((target) =>
+    claudeRuntimeAuth.readUsageAttribution(target)
+  )
+  void rateLimits.refreshClaudeUsageAttribution()
   // Live statusLine usage avoids OAuth endpoint polling and its 429s.
   options.setClaudeStatusLineListener((event) => {
     rateLimits.ingestLiveClaudeRateLimits(event)

@@ -25,9 +25,11 @@ export async function fetchActiveClaudeRateLimits(
   if (options?.signal?.aborted) {
     return abortedClaudeRateLimitResult()
   }
+  const readOptions = resolveClaudeOAuthCredentialReadOptions(options?.authPreparation)
   const credentials = await readClaudeOAuthCredentials(
-    resolveClaudeOAuthCredentialReadOptions(options?.authPreparation)
+    options?.signal ? { ...readOptions, signal: options.signal } : readOptions
   )
+  options?.signal?.throwIfAborted()
   const metadata = {
     credentialSource: credentials.source,
     authProvenance: options?.authPreparation?.provenance ?? 'system'
@@ -61,6 +63,7 @@ export async function fetchActiveClaudeRateLimits(
   try {
     return await fetchClaudeOAuthUsage(credentials.token, options?.signal)
   } catch (error) {
+    options?.signal?.throwIfAborted()
     const { failureKind } = classifyClaudeOAuthUsageError(error)
     // Why: the 429 wait gates the poll, and both messages tell the user why usage is missing.
     const retryAfterMs = error instanceof OAuthUsageError ? error.retryAfterMs : null

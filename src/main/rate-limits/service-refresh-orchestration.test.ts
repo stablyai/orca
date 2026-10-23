@@ -133,7 +133,7 @@ describe('RateLimitService', () => {
     expect(service.getState().zcode?.session?.usedPercent).toBe(42)
   })
 
-  it('does not reread Grok auth when callers read state snapshots', () => {
+  it('defers Grok auth until a usage cycle and does not reread it for state snapshots', async () => {
     vi.mocked(readGrokAuthSession).mockReturnValue({
       status: 'ok',
       session: {
@@ -148,6 +148,9 @@ describe('RateLimitService', () => {
     const service = new RateLimitService()
     vi.mocked(readGrokAuthSession).mockClear()
 
+    expect(service.getState().grokAuthConfigured).toBe(false)
+    await service.refreshGrok()
+    vi.mocked(readGrokAuthSession).mockClear()
     expect(service.getState().grokAuthConfigured).toBe(true)
     service.getState()
 
@@ -484,7 +487,7 @@ describe('RateLimitService', () => {
     expect(fetchCodexRateLimits).toHaveBeenCalledWith(
       expect.objectContaining({ networkProxySettings, signal: expect.any(AbortSignal) })
     )
-    expect(fetchGeminiRateLimits).toHaveBeenCalledWith(true)
+    expect(fetchGeminiRateLimits).toHaveBeenCalledWith(true, expect.any(AbortSignal))
     expect(fetchOpenCodeGoUsage).toHaveBeenCalledTimes(1)
     expect(fetchOpenCodeGoUsage).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -527,7 +530,7 @@ describe('RateLimitService', () => {
 
     // Resolved per cycle so a runtime-policy change takes effect without a restart.
     expect(resolver).toHaveBeenCalledTimes(2)
-    expect(fetchKimiRateLimits).toHaveBeenCalledWith({ home })
+    expect(fetchKimiRateLimits).toHaveBeenCalledWith({ home, signal: expect.any(AbortSignal) })
   })
 
   it('reads the host Kimi home when no resolver is wired', async () => {
@@ -537,7 +540,10 @@ describe('RateLimitService', () => {
 
     await service.refresh()
 
-    expect(fetchKimiRateLimits).toHaveBeenCalledWith({ home: undefined })
+    expect(fetchKimiRateLimits).toHaveBeenCalledWith({
+      home: undefined,
+      signal: expect.any(AbortSignal)
+    })
   })
 
   it('preserves Gemini buckets through getState after fetch', async () => {

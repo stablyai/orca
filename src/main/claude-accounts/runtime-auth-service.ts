@@ -48,11 +48,33 @@ export class ClaudeRuntimeAuthService {
   }
 
   async prepareForRateLimitFetch(
-    target?: ClaudeAccountSelectionTarget
+    target?: ClaudeAccountSelectionTarget,
+    signal?: AbortSignal
   ): Promise<ClaudeRuntimeAuthPreparation> {
+    return this.readRoutingPreparation(target, signal)
+  }
+
+  async readUsageAttribution(
+    target?: ClaudeAccountSelectionTarget
+  ): Promise<ClaudeRuntimeAuthPreparation | null> {
+    const effective = this.resolveTarget(target)
+    if (effective.runtime === 'wsl' && !this.wslRouteFor(effective)) {
+      return null
+    }
+    const preparation = await this.readRoutingPreparation(target)
+    return preparation.usageError ? null : preparation
+  }
+
+  private async readRoutingPreparation(
+    target?: ClaudeAccountSelectionTarget,
+    signal?: AbortSignal
+  ): Promise<ClaudeRuntimeAuthPreparation> {
+    signal?.throwIfAborted()
     const wsl = this.wslRouteFor(target)
     // Why: a quota poll is background work and must not boot a stopped distro.
-    if (wsl && !(await this.isDistroRunning(wsl.distro))) {
+    const running = wsl ? await this.isDistroRunning(wsl.distro) : true
+    signal?.throwIfAborted()
+    if (!running && wsl) {
       return {
         configDir: '',
         envPatch: {},
@@ -61,8 +83,13 @@ export class ClaudeRuntimeAuthService {
       }
     }
     try {
-      return await (wsl ? wsl.router.preparation(wsl.distro) : this.router.preparation())
+      const preparation = await (wsl
+        ? wsl.router.preparation(wsl.distro, signal)
+        : this.router.preparation())
+      signal?.throwIfAborted()
+      return preparation
     } catch (error) {
+      signal?.throwIfAborted()
       // Why not thrown: one usage cycle polls every provider, so one account must not stop it.
       return {
         configDir: '',

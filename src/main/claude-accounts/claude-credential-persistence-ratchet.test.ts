@@ -135,11 +135,11 @@ function credentialMutations(text: string, file = ''): string[] {
   // forward argv, and its callers must spell the verb.
   if (
     (file !== SECURITY_RUNNER &&
-      /\b(?:exec(?:File)?(?:Sync|Async)?|spawn(?:Sync)?|runProcess|spawnProcess)\s*\(\s*['"`]security['"`]\s*,\s*(?!\[\s*['"])/.test(
+      /\b(?:exec(?:File)?(?:Sync|Async)?|spawn(?:Sync)?|runProcess|spawnProcess)\s*\(\s*['"`]security['"`]\s*,(?!\s*\[\s*['"])/.test(
         text
       )) ||
-    /\bprogram\s*:\s*['"`]security['"`]\s*,\s*args\s*:\s*(?!\[\s*['"])/.test(text) ||
-    /(?<!function\s)\bexecSecurityCommand\s*\(\s*(?!\[\s*['"])/.test(text)
+    /\bprogram\s*:\s*['"`]security['"`]\s*,\s*args\s*:(?!\s*\[\s*['"])/.test(text) ||
+    /(?<!function\s)\bexecSecurityCommand\s*\((?!\s*\[\s*['"])/.test(text)
   ) {
     found.push('keychain command with a computed verb')
   }
@@ -262,6 +262,9 @@ it.each([
   "execFile('security', [['add', 'generic', 'password'].join('-'), '-s', service])",
   "spawn('security', verbArgs)",
   'execSecurityCommand(args)',
+  "execFile('security',\n  verbArgs\n)",
+  "runProcess({ program: 'security', args:\n  [verb, '-s', service] })",
+  "execSecurityCommand(\n  [verb, '-s', service],\n  signal\n)",
   "const CREDENTIALS_FILE = '.credentials.json'\n\ncopyFileSync(join(from, CREDENTIALS_FILE), join(to, CREDENTIALS_FILE))",
   "const name = '.credentials.json'\nfunction save(dir) {\n  const target = join(dir, name)\n\n  writeFileSync(target, token)\n}"
 ])('mutation control: the credential check rejects %s', (source) => {
@@ -272,6 +275,9 @@ it.each([
   "const file = await readFile(join(home, '.credentials.json'), 'utf8')",
   "readKeychainPassword('Claude Code-credentials', user)",
   "execSecurityCommand(['find-generic-password', '-s', service, '-w'])",
+  "execSecurityCommand(\n  ['find-generic-password', '-s', service, '-w'],\n  signal\n)",
+  "execFile('security',\n  ['find-generic-password', '-s', service, '-w']\n)",
+  "runProcess({ program: 'security', args:\n  ['find-generic-password', '-s', service, '-w'] })",
   "const file = join(home, '.credentials.json')\nconst raw = await readFile(file, 'utf8')"
 ])('the credential check leaves a read alone: %s', (source) => {
   expect(credentialMutations(source)).toEqual([])

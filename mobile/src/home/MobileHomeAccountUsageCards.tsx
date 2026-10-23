@@ -5,6 +5,7 @@ import {
   getUsageBarState,
   hasActiveProviderUsage,
   UsageBar,
+  UsageRequestsDisabledNotice,
   type AccountsSnapshot,
   type ProviderKey
 } from '../components/AccountUsage'
@@ -49,8 +50,18 @@ export function MobileHomeAccountUsageCards(props: {
               if (accounts.length === 0 && !hasActiveProviderUsage(limits)) {
                 return null
               }
-              const sessionBar = getUsageBarState(limits, 'session')
-              const weeklyBar = getUsageBarState(limits, 'weekly')
+              const requestsDisabled =
+                snapshot.rateLimits.usageRequestPolicy?.enabled[provider] === false
+              const sessionBar = getUsageBarState(
+                limits,
+                'session',
+                requestsDisabled ? false : undefined
+              )
+              const weeklyBar = getUsageBarState(
+                limits,
+                'weekly',
+                requestsDisabled ? false : undefined
+              )
               return (
                 <View key={provider} style={styles.row}>
                   <View style={styles.icon}>
@@ -64,6 +75,7 @@ export function MobileHomeAccountUsageCards(props: {
                     <Text style={styles.email} numberOfLines={1}>
                       {active?.email ?? 'System default'}
                     </Text>
+                    {requestsDisabled ? <UsageRequestsDisabledNotice limits={limits} /> : null}
                     <View style={styles.bars}>
                       <UsageBar
                         label="5h"

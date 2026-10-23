@@ -1,3 +1,5 @@
+import type { UsageRequestPolicy } from './usage-request-policy'
+
 export type RateLimitWindow = {
   /** Percentage of the window consumed (0–100). */
   usedPercent: number
@@ -172,6 +174,7 @@ export type CursorAccountStatus = {
 }
 
 export type RateLimitState = {
+  usageRequestPolicy?: UsageRequestPolicy
   claude: ProviderRateLimits | null
   codex: ProviderRateLimits | null
   gemini: ProviderRateLimits | null

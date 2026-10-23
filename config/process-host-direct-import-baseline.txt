@@ -94,7 +94,6 @@ src/main/providers/process-cwd.ts
 src/main/pty-descendant-termination.ts
 src/main/pty/posix-pty-foreground-group.ts
 src/main/pty/windows-environment-path.ts
-src/main/rate-limits/gemini-cli-oauth-extractor.ts
 src/main/runtime/windows-default-route-interfaces.ts
 src/main/runtime/windows-mobile-firewall.ts
 src/main/ssh/connection/ssh-connection.ts

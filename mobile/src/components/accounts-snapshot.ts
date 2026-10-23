@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { USAGE_REQUEST_PROVIDERS } from '../../../src/shared/usage-request-policy'
 
 const TimestampSchema = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
 const AccountIdSchema = z.string().min(1)
@@ -40,7 +41,8 @@ export const ProviderRateLimitsSchema = z
       'minimax',
       'grok',
       'antigravity',
-      'cursor'
+      'cursor',
+      'zcode'
     ]),
     session: RateLimitWindowSchema.nullable(),
     weekly: RateLimitWindowSchema.nullable(),
@@ -50,6 +52,13 @@ export const ProviderRateLimitsSchema = z
       .array(RateLimitWindowSchema.extend({ name: z.string().min(1) }).passthrough())
       .optional(),
     rateLimitResetCredits: RateLimitResetCreditsSchema.nullable().optional(),
+    usageMetadata: z
+      .object({
+        source: z.enum(['oauth', 'cli', 'web', 'live-session']).optional(),
+        lastSuccessfulSource: z.enum(['oauth', 'cli', 'web', 'live-session']).optional()
+      })
+      .passthrough()
+      .optional(),
     updatedAt: TimestampSchema,
     error: z.string().nullable(),
     status: z.enum(['idle', 'fetching', 'ok', 'error', 'unavailable'])
@@ -173,6 +182,14 @@ export const AccountsSnapshotSchema = z
       .passthrough(),
     rateLimits: z
       .object({
+        usageRequestPolicy: z
+          .object({
+            version: z.literal(1),
+            revision: z.number().int().nonnegative(),
+            enabled: z.record(z.enum(USAGE_REQUEST_PROVIDERS), z.boolean())
+          })
+          .optional()
+          .catch(undefined),
         claude: ProviderRateLimitsSchema.nullable(),
         codex: ProviderRateLimitsSchema.nullable(),
         // Why: protocol-compatible hosts from before runtime targeting omit

@@ -101,6 +101,7 @@ function apiFailureResult(
 export async function fetchOpenCodeGoUsage(
   input: OpenCodeGoUsageSourceInput
 ): Promise<ProviderRateLimits> {
+  input.signal?.throwIfAborted()
   const context = input.settingsApiKey?.trim()
     ? {}
     : {
@@ -110,9 +111,12 @@ export async function fetchOpenCodeGoUsage(
       }
   const apiKeyResolution = await resolveOpenCodeGoApiKey({
     settingsOverride: input.settingsApiKey,
+    ...(input.signal ? { signal: input.signal } : {}),
     ...context
   })
+  input.signal?.throwIfAborted()
   input.onApiKeyResolved?.(apiKeyResolution)
+  input.signal?.throwIfAborted()
   const hasCookie = Boolean(normalizeCookieInput(input.cookie))
   if (apiKeyResolution.status === 'credential-database-unreadable' && !hasCookie) {
     return emptyResult(
@@ -126,7 +130,8 @@ export async function fetchOpenCodeGoUsage(
       ? fetchOpenCodeGoRateLimits(
           input.cookie,
           input.workspaceIdOverride,
-          input.networkProxySettings
+          input.networkProxySettings,
+          input.signal
         )
       : emptyResult('No OpenCode Go API key or session cookie configured', 'unavailable', {
           failureKind: 'missing-credentials'
@@ -135,6 +140,7 @@ export async function fetchOpenCodeGoUsage(
 
   const { key, tier } = apiKeyResolution
   const outcome = await fetchOpenCodeGoUsageWithApiKey(key, input.signal)
+  input.signal?.throwIfAborted()
   if (outcome.kind === 'ok') {
     return usageResult(outcome.windows, tier)
   }
@@ -146,7 +152,9 @@ export async function fetchOpenCodeGoUsage(
   const cookieResult = await fetchOpenCodeGoRateLimits(
     input.cookie,
     input.workspaceIdOverride,
-    input.networkProxySettings
+    input.networkProxySettings,
+    input.signal
   )
+  input.signal?.throwIfAborted()
   return cookieResult.status === 'ok' ? cookieResult : apiFailureResult(outcome, tier)
 }

@@ -491,6 +491,38 @@
     "followSymlinkedDirectoriesDescription": "Search linked folders in Quick Open and expand local linked folders in File Explorer.",
     "accounts": {
       "claudeRemoveFolder": "Orca deletes this account's Claude folder and its sign-in from this computer. Chat history shared with System default stays. If it is selected, the next Claude you start uses System default."
+    },
+    "usageRequests": {
+      "accessibleLabel": "{{setting}} on {{host}}",
+      "antigravityShowAndCheck": "Antigravity: Show and check usage",
+      "antigravityVisibility": "Show Antigravity usage meter",
+      "cachedNotice": "Usage requests disabled. Cached usage may be stale.",
+      "check": "{{provider}}: Check usage",
+      "checking": "Checking host usage request settings…",
+      "description": "Off stops Orca’s automatic and manual usage checks. Agents, sign-in, and live Claude statusLine data continue. Cached usage keeps its original timestamp. Meter visibility is separate, except for Antigravity.",
+      "geminiConsent": "Gemini credential permission is separate; enabling usage checks does not grant OAuth consent.",
+      "lastUpdate": "Last update: {{time}}",
+      "liveNotice": "Usage requests disabled. Live Claude statusLine data can still update.",
+      "localHost": "this computer",
+      "localOwner": "Applies to this computer, including its WSL usage checks.",
+      "menu": "Usage request settings…",
+      "outdated": "Update Orca on this host to control usage requests. The current policy is unknown.",
+      "remoteOwner": "Applies to {{host}}, where usage checks run.",
+      "searchDescription": "Control automatic and manual provider usage checks on the selected host.",
+      "showAndCheck": "{{provider}}: Show and check usage",
+      "source": "Source: {{source}}",
+      "sourceCli": "CLI",
+      "sourceLiveSession": "Live session",
+      "sourceOAuth": "OAuth",
+      "sourceWeb": "Web",
+      "title": "Usage requests",
+      "unreachable": "Could not reach this host. Its usage request settings are unknown.",
+      "visibilityMenu": "Meter visibility",
+      "keywords": {
+        "requests": "requests",
+        "polling": "polling",
+        "fetch": "fetch"
+      }
     }
   },
   "menu": {
@@ -4250,7 +4282,18 @@
             "codexSignInError": "Codex sign-in failed. Please try again.",
             "cursorUsageMenu": "Cursor Usage",
             "hiddenUsageProviders": "Also: {{value0}}",
-            "zcodeUsageMenu": "ZCode Usage"
+            "zcodeUsageMenu": "ZCode Usage",
+            "showMeter": {
+              "3885eb74d8": "Show Claude usage meter",
+              "3bbf140864": "Show MiniMax usage meter",
+              "5e59007df4": "Show Kimi usage meter",
+              "8c86cd77b0": "Show OpenCode Go usage meter",
+              "c0909c686e": "Show Codex usage meter",
+              "c1df0d67ec": "Show Gemini usage meter",
+              "cursorUsageMenu": "Show Cursor usage meter",
+              "grokUsageMenu": "Show Grok usage meter",
+              "zcodeUsageMenu": "Show ZCode usage meter"
+            }
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Connect an account",

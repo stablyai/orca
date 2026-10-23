@@ -1,3 +1,4 @@
+import { abortSignalWithTimeout } from '../lib/abort-signal-with-timeout'
 import type { Session } from 'electron'
 import { randomUUID } from 'node:crypto'
 import type { NetworkProxySettings } from '../../shared/network-proxy'
@@ -15,7 +16,8 @@ import {
   isOpenCodeGoExplicitNoAccessPayload,
   makeOpenCodeGoZenBalance,
   parseOpenCodeGoBillingStatusPayload,
-  parseOpenCodeGoStatusPayload
+  parseOpenCodeGoStatusPayload,
+  parseOpenCodeWorkspaceIds
 } from './opencode-go-status-parsing'
 import { classifyThrownUsageRequestError } from './usage-request-failure-kind'
 
@@ -70,24 +72,13 @@ function parseAuthCookies(raw: string): { name: string; value: string }[] {
     .filter((pair): pair is { name: string; value: string } => pair !== null)
 }
 
-function parseWorkspaceIds(text: string): string[] {
-  // Console uses org_/wrk_; wk_ remains accepted for older workspace responses.
-  const ids: string[] = []
-  const workspaceIdRegex = /\bid\s*:\s*["']((?:org|wrk|wk)_[a-zA-Z0-9]+)["']/g
-  for (const match of text.matchAll(workspaceIdRegex)) {
-    const id = match[1]
-    if (id && !ids.includes(id)) {
-      ids.push(id)
-    }
-  }
-  return ids
-}
-
 export async function fetchOpenCodeGoRateLimits(
   cookie: string,
   workspaceIdOverride?: string,
-  networkProxySettings?: NetworkProxySettings
+  networkProxySettings?: NetworkProxySettings,
+  signal?: AbortSignal
 ): Promise<ProviderRateLimits> {
+  signal?.throwIfAborted()
   // Normalize before any guard — bare tokens become auth=<token>.
   const normalizedCookie = normalizeCookieInput(cookie)
 
@@ -121,25 +112,38 @@ export async function fetchOpenCodeGoRateLimits(
   // An isolated session jar lets its network stack attach auth normally.
   let openCodeSession: Session
   try {
-    openCodeSession = await createOpenCodeRequestSession(authCookies, networkProxySettings)
+    openCodeSession = await createOpenCodeRequestSession(authCookies, networkProxySettings, signal)
   } catch (error) {
+    signal?.throwIfAborted()
     return makeOpenCodeError(error instanceof Error ? error.message : 'Unknown error')
   }
 
+  let result: ProviderRateLimits
   try {
-    return await fetchOpenCodeGoRateLimitsWithSession(openCodeSession, workspaceIdOverride)
+    result = await fetchOpenCodeGoRateLimitsWithSession(
+      openCodeSession,
+      workspaceIdOverride,
+      signal
+    )
   } finally {
     await clearOpenCodeSessionCookies(openCodeSession).catch((error: unknown) => {
       console.warn('[opencode-go] failed to clear session cookie jar after fetch', error)
     })
   }
+  signal?.throwIfAborted()
+  return result
 }
 
-function startOptionalBillingFetch(openCodeSession: Session, workspaceId: string) {
+function startOptionalBillingFetch(
+  openCodeSession: Session,
+  workspaceId: string,
+  signal?: AbortSignal
+) {
   const abortController = new AbortController()
   const promise = (async (): Promise<ExtraUsageBalance> => {
     const timeout = setTimeout(() => abortController.abort(), OPTIONAL_BILLING_TIMEOUT_MS)
     try {
+      signal?.throwIfAborted()
       const response = await openCodeSession.fetch(OPENCODE_BILLING_STATUS_URL, {
         method: 'GET',
         headers: {
@@ -148,8 +152,9 @@ function startOptionalBillingFetch(openCodeSession: Session, workspaceId: string
           Referer: `${OPENCODE_BASE_URL}/console/${workspaceId}/billing`,
           'x-org-id': workspaceId
         },
-        signal: abortController.signal
+        signal: signal ? AbortSignal.any([signal, abortController.signal]) : abortController.signal
       })
+      signal?.throwIfAborted()
       if (!response.ok) {
         abortController.abort()
         return makeOpenCodeGoZenBalance(null, 'refresh-failed')
@@ -183,8 +188,10 @@ function makeOpenCodeError(
 
 async function fetchOpenCodeGoRateLimitsWithSession(
   openCodeSession: Session,
-  workspaceIdOverride?: string
+  workspaceIdOverride?: string,
+  signal?: AbortSignal
 ): Promise<ProviderRateLimits> {
+  signal?.throwIfAborted()
   // Step 1: resolve workspace IDs to try.
   let ids: string[] = []
   const override = workspaceIdOverride?.trim()
@@ -211,16 +218,19 @@ async function fetchOpenCodeGoRateLimitsWithSession(
           Origin: OPENCODE_BASE_URL,
           Referer: OPENCODE_BASE_URL
         },
-        signal: AbortSignal.timeout(API_TIMEOUT_MS)
+        signal: abortSignalWithTimeout(signal, API_TIMEOUT_MS)
       })
 
+      signal?.throwIfAborted()
       if (!workspacesRes.ok) {
         return makeOpenCodeError(`Workspaces fetch failed (${workspacesRes.status})`)
       }
 
       const workspacesText = await workspacesRes.text()
-      ids = parseWorkspaceIds(workspacesText)
+      signal?.throwIfAborted()
+      ids = parseOpenCodeWorkspaceIds(workspacesText)
     } catch (err) {
+      signal?.throwIfAborted()
       const message = err instanceof Error ? err.message : 'Unknown error'
       return makeOpenCodeError(message, classifyThrownUsageRequestError(err))
     }
@@ -237,6 +247,7 @@ async function fetchOpenCodeGoRateLimitsWithSession(
   let lastFailure: ProviderRateLimits | null = null
   let balanceOnlyResult: ProviderRateLimits | null = null
   for (const candidateId of ids) {
+    signal?.throwIfAborted()
     let billingTask: ReturnType<typeof startOptionalBillingFetch> | null = null
     try {
       const statusPromise = openCodeSession.fetch(OPENCODE_GO_STATUS_URL, {
@@ -247,10 +258,11 @@ async function fetchOpenCodeGoRateLimitsWithSession(
           Referer: `${OPENCODE_BASE_URL}/console/${candidateId}/go`,
           'x-org-id': candidateId
         },
-        signal: AbortSignal.timeout(API_TIMEOUT_MS)
+        signal: abortSignalWithTimeout(signal, API_TIMEOUT_MS)
       })
-      billingTask = startOptionalBillingFetch(openCodeSession, candidateId)
+      billingTask = startOptionalBillingFetch(openCodeSession, candidateId, signal)
       const statusRes = await statusPromise
+      signal?.throwIfAborted()
       if (!statusRes.ok) {
         billingTask.abort()
         await billingTask.promise
@@ -263,6 +275,7 @@ async function fetchOpenCodeGoRateLimitsWithSession(
       }
 
       const statusText = await statusRes.text()
+      signal?.throwIfAborted()
       const parsed = parseOpenCodeGoStatusPayload(statusText)
       const explicitNoAccess = isOpenCodeGoExplicitNoAccessPayload(statusText)
       if (!parsed && !explicitNoAccess) {
@@ -273,6 +286,7 @@ async function fetchOpenCodeGoRateLimitsWithSession(
       }
 
       const balance = await billingTask.promise
+      signal?.throwIfAborted()
       if (parsed) {
         return {
           provider: 'opencode-go',
@@ -304,13 +318,16 @@ async function fetchOpenCodeGoRateLimitsWithSession(
         billingTask.abort()
         await billingTask.promise
       }
+      signal?.throwIfAborted()
       const message = err instanceof Error ? err.message : 'Unknown error'
       lastFailure = makeOpenCodeError(message, classifyThrownUsageRequestError(err))
     }
   }
 
-  if (balanceOnlyResult) {
-    return balanceOnlyResult
-  }
-  return lastFailure ?? makeOpenCodeError('Could not parse usage data from any available workspace')
+  signal?.throwIfAborted()
+  return (
+    balanceOnlyResult ??
+    lastFailure ??
+    makeOpenCodeError('Could not parse usage data from any available workspace')
+  )
 }

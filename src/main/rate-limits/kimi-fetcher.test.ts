@@ -7,15 +7,20 @@ const fsState = vi.hoisted<{
   credentials: string | null
   readError: Error | null
   readPaths: string[]
+  pendingRead: Promise<string> | null
 }>(() => ({
   credentials: null,
   readError: null,
-  readPaths: []
+  readPaths: [],
+  pendingRead: null
 }))
 
 vi.mock('node:fs/promises', () => ({
   readFile: async (path: string) => {
     fsState.readPaths.push(String(path))
+    if (fsState.pendingRead) {
+      return fsState.pendingRead
+    }
     if (fsState.readError) {
       throw fsState.readError
     }
@@ -71,6 +76,7 @@ describe('fetchKimiRateLimits', () => {
     fsState.credentials = null
     fsState.readError = null
     fsState.readPaths = []
+    fsState.pendingRead = null
   })
 
   afterEach(() => {
@@ -207,5 +213,48 @@ describe('fetchKimiRateLimits', () => {
     await fetchKimiRateLimits()
 
     expect(fsState.readPaths).toEqual([hostCredentialsPath('/home/test/.kimi-code')])
+  })
+
+  it('does not resolve a home or read credentials for an already-cancelled caller', async () => {
+    const controller = new AbortController()
+    controller.abort()
+    await expect(fetchKimiRateLimits({ signal: controller.signal })).rejects.toMatchObject({
+      name: 'AbortError'
+    })
+    expect(fsState.readPaths).toEqual([])
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects a late successful response after cancellation', async () => {
+    fsState.credentials = freshCredentials()
+    const controller = new AbortController()
+    fetchMock.mockImplementation(async (_url, init) => {
+      controller.abort()
+      expect(init.signal.aborted).toBe(true)
+      return jsonResponse(USAGE_RESPONSE)
+    })
+    await expect(fetchKimiRateLimits({ signal: controller.signal })).rejects.toMatchObject({
+      name: 'AbortError'
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('detaches a cancelled caller without cancelling a sibling sharing the credential read', async () => {
+    const { promise, resolve } = Promise.withResolvers<string>()
+    fsState.pendingRead = promise
+    const controller = new AbortController()
+    fetchMock.mockResolvedValue(jsonResponse(USAGE_RESPONSE))
+    const cancelled = fetchKimiRateLimits({ signal: controller.signal })
+    const sibling = fetchKimiRateLimits()
+    await vi.waitFor(() => {
+      expect(fsState.readPaths).toHaveLength(1)
+    })
+    controller.abort()
+    await expect(cancelled).rejects.toMatchObject({ name: 'AbortError' })
+    expect(fetchMock).not.toHaveBeenCalled()
+    resolve(freshCredentials())
+    expect((await sibling).status).toBe('ok')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fsState.readPaths).toHaveLength(1)
   })
 })

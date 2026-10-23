@@ -179,4 +179,39 @@ describe('OpenCode credential execution backend', () => {
     expect(await detectOpenCodeCredentialBackend()).toBeNull()
     expect(runProcess).not.toHaveBeenCalled()
   })
+  it('does not probe another binary after cancellation during command lookup', async () => {
+    const controller = new AbortController()
+    vi.mocked(resolveCommandOnLocalPath).mockImplementationOnce(async () => {
+      controller.abort()
+      return null
+    })
+    await expect(
+      detectOpenCodeCredentialBackend({}, '/task', controller.signal)
+    ).rejects.toMatchObject({ name: 'AbortError' })
+    expect(resolveCommandOnLocalPath).toHaveBeenCalledTimes(1)
+    expect(files.realpath).not.toHaveBeenCalled()
+    expect(runProcess).not.toHaveBeenCalled()
+  })
+
+  it('does not start a version process after cancellation during binary stat', async () => {
+    const controller = new AbortController()
+    files.stat.mockImplementationOnce(async () => {
+      controller.abort()
+      return { dev: 1, ino: 2, size: 3, mtimeMs: 4, ctimeMs: 5 }
+    })
+    await expect(
+      detectOpenCodeCredentialBackend({}, '/task', controller.signal)
+    ).rejects.toMatchObject({ name: 'AbortError' })
+    expect(runProcess).not.toHaveBeenCalled()
+  })
+
+  it('reuses a completed cancellable probe after its caller aborts', async () => {
+    const controller = new AbortController()
+    expect(await detectOpenCodeCredentialBackend({}, '/task', controller.signal)).toBe('v1')
+    controller.abort()
+    expect(await detectOpenCodeCredentialBackend({}, '/task', new AbortController().signal)).toBe(
+      'v1'
+    )
+    expect(runProcess).toHaveBeenCalledTimes(1)
+  })
 })

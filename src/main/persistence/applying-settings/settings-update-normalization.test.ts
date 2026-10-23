@@ -15,6 +15,61 @@ function settingsOperations(settings: Partial<GlobalSettings>): SettingsMutation
   }
 }
 
+describe('updateSettings usage request choices', () => {
+  it('merges partial provider updates without re-enabling another writer’s opt-out', () => {
+    const operations = settingsOperations({ usageRequestEnabled: { claude: false, codex: false } })
+
+    expect(
+      updateSettings(operations, { usageRequestEnabled: { codex: true, gemini: false } })
+        .usageRequestEnabled
+    ).toEqual({ claude: false, codex: true, gemini: false })
+    expect(updateSettings(operations, { terminalFontSize: 15 }).usageRequestEnabled).toEqual({
+      claude: false,
+      codex: true,
+      gemini: false
+    })
+  })
+
+  it('drops malformed and unknown entries while retaining a stored opt-out', () => {
+    const operations = settingsOperations({ usageRequestEnabled: { claude: false } })
+    const updates: Partial<GlobalSettings> = {}
+    Object.assign(updates, {
+      usageRequestEnabled: {
+        claude: 'true',
+        codex: false,
+        gemini: 0,
+        antigravity: false,
+        typo: true
+      }
+    })
+
+    expect(updateSettings(operations, updates).usageRequestEnabled).toEqual({
+      claude: false,
+      codex: false
+    })
+    Object.assign(updates, { usageRequestEnabled: null })
+    expect(updateSettings(operations, updates).usageRequestEnabled).toEqual({
+      claude: false,
+      codex: false
+    })
+  })
+
+  it('notifies paired clients of the normalized merged choice', () => {
+    const operations = settingsOperations({ usageRequestEnabled: { claude: false } })
+
+    updateSettings(
+      operations,
+      { usageRequestEnabled: { codex: false } },
+      { notifyListeners: true, originWebContentsId: 17 }
+    )
+
+    expect(operations.notifySettingsChanged).toHaveBeenCalledWith(
+      { usageRequestEnabled: { claude: false, codex: false } },
+      17
+    )
+  })
+})
+
 describe('updateSettings machineName', () => {
   it('stores the trimmed, bounded form of a written name', () => {
     const operations = settingsOperations({ machineName: '' })

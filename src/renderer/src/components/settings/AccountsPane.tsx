@@ -22,6 +22,7 @@ import {
   getAccountsGrokSearchEntries,
   getAccountsAntigravitySearchEntries,
   getAccountsLocationSearchEntries,
+  getAccountsUsageRequestSearchEntries,
   getAccountsMiniMaxSearchEntries,
   getAccountsOpencodeSearchEntries,
   getAccountsPaneSearchEntries,
@@ -70,6 +71,7 @@ import {
 } from './accounts-pane-provider-setting-sections'
 import { MiniMaxAccountsSection } from './MiniMaxAccountsSection'
 import { useUsageHostSettings } from './use-usage-host-settings'
+import { UsageRequestsSection } from './UsageRequestsSection'
 import { ManagedDataAccountsSection } from './ManagedDataAccountsSection'
 import { renderAccountsRemovalDialogs } from './accounts-pane-removal-dialogs'
 
@@ -238,11 +240,18 @@ export function AccountsPane({
   }
   // Why: MiniMax/GLM keys are read by the selected host's own usage poller, so they live there too.
   const usageCredentialHost = { owner: accountOwner, label: remoteServerLabel }
+  const [usagePolicyRevision, setUsagePolicyRevision] = useState<{
+    ownerKey: string
+    revision: number
+  } | null>(null)
+  const [unreachableUsageOwner, setUnreachableUsageOwner] = useState<string | null>(null)
   const usageHostSettings = useUsageHostSettings(
     accountOwner,
     remoteServerLabel,
     settings,
-    updateSettings
+    updateSettings,
+    usagePolicyRevision?.ownerKey === accountOwnerKey ? usagePolicyRevision.revision : undefined,
+    unreachableUsageOwner === accountOwnerKey
   )
 
   useEffect(() => {
@@ -254,6 +263,13 @@ export function AccountsPane({
     // path resolves once and the close() is a no-op.
     const watcher = watchProviderAccounts(owner, {
       onSnapshot: (snapshot) => {
+        setUnreachableUsageOwner(null)
+        if (snapshot.rateLimits?.usageRequestPolicy) {
+          setUsagePolicyRevision({
+            ownerKey: accountOwnerKey,
+            revision: snapshot.rateLimits.usageRequestPolicy.revision
+          })
+        }
         // Why: a failed provider's half is a substituted empty roster, not
         // authoritative data; keep prior state and leave the loaded gate shut.
         if (!snapshot.failedProviders?.includes('codex')) {
@@ -264,7 +280,15 @@ export function AccountsPane({
           setClaudeAccounts(snapshot.claude)
         }
       },
+      onClosedAfterSnapshot: () => {
+        if (scopeEnvironmentId) {
+          setUnreachableUsageOwner(accountOwnerKey)
+        }
+      },
       onError: (error) => {
+        if (scopeEnvironmentId) {
+          setUnreachableUsageOwner(accountOwnerKey)
+        }
         toast.error(
           translate(
             'auto.components.settings.AccountsPane.loadAccountsFailed',
@@ -277,7 +301,7 @@ export function AccountsPane({
     return () => {
       watcher.close()
     }
-  }, [scopeEnvironmentId])
+  }, [scopeEnvironmentId, accountOwnerKey])
 
   const runCodexAccountAction = createCodexAccountActionRunner({
     settings,
@@ -346,6 +370,13 @@ export function AccountsPane({
     recordOpenCodeSettingEdit
   }
   const visibleSections = [
+    matchesSettingsSearch(searchQuery, getAccountsUsageRequestSearchEntries()) ? (
+      <UsageRequestsSection
+        key={`usage-requests:${accountOwnerKey}`}
+        usageSettings={usageHostSettings}
+        hostLabel={remoteServerLabel}
+      />
+    ) : null,
     !searchQuery || /opencode|devin|account/i.test(searchQuery) ? (
       <div key={accountOwnerKey} className="space-y-8">
         <ManagedDataAccountsSection provider="opencode" target={accountOwner} />

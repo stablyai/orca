@@ -84,6 +84,7 @@ async function fetchDashboardJson(
   signal?: AbortSignal,
   method: 'GET' | 'POST' = 'GET'
 ): Promise<FetchOutcome> {
+  signal?.throwIfAborted()
   const source = usageSource(session)
   // Why on failures too: the account-switch guard downstream can only drop a
   // previous account's figures when the fresh result names an account, and a
@@ -101,6 +102,7 @@ async function fetchDashboardJson(
     ...(method === 'POST' ? { method, body: '{}' } : {}),
     signal: abortSignalWithTimeout(signal, API_TIMEOUT_MS)
   })
+  signal?.throwIfAborted()
   if (res.status === 401) {
     return {
       kind: 'result',
@@ -145,8 +147,11 @@ async function fetchDashboardJson(
     }
   }
   try {
-    return { kind: 'data', data: await res.json() }
+    const data: unknown = await res.json()
+    signal?.throwIfAborted()
+    return { kind: 'data', data }
   } catch {
+    signal?.throwIfAborted()
     return {
       kind: 'result',
       result: result('error', 'Cursor usage response could not be parsed', {
@@ -176,6 +181,7 @@ async function fetchCurrentPeriodUsage(
   try {
     current = await fetchDashboardJson(CURRENT_PERIOD_USAGE_URL, session, signal, 'POST')
   } catch (error) {
+    signal?.throwIfAborted()
     if (unified) {
       throw error
     }
@@ -228,20 +234,23 @@ function credentialFailure(readResult: CursorAuthReadResult): ProviderRateLimits
 export async function fetchCursorRateLimits(
   options: { signal?: AbortSignal; authReadResult?: CursorAuthReadResult } = {}
 ): Promise<ProviderRateLimits> {
-  const readResult = options.authReadResult ?? (await readCursorAuthSession())
-  const failure = credentialFailure(readResult)
-  if (failure || readResult.status !== 'ok') {
-    return failure ?? result('unavailable', SIGNED_OUT_MESSAGE)
-  }
-  const session = readResult.session
-  const source = usageSource(session)
-  const metadata = {
-    source,
-    credentialSource: session.source,
-    authProvenance: accountFingerprint(session)
-  }
-
+  let metadata: ProviderRateLimits['usageMetadata']
   try {
+    options.signal?.throwIfAborted()
+    const readResult =
+      options.authReadResult ?? (await readCursorAuthSession({ signal: options.signal }))
+    options.signal?.throwIfAborted()
+    const failure = credentialFailure(readResult)
+    if (failure || readResult.status !== 'ok') {
+      return failure ?? result('unavailable', SIGNED_OUT_MESSAGE)
+    }
+    const session = readResult.session
+    const source = usageSource(session)
+    metadata = {
+      source,
+      credentialSource: session.source,
+      authProvenance: accountFingerprint(session)
+    }
     const outcome = await fetchDashboardJson(USAGE_SUMMARY_URL, session, options.signal)
     if (outcome.kind === 'result') {
       return outcome.result

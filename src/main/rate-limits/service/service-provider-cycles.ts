@@ -7,12 +7,27 @@ import type { ProviderRateLimits } from './service-types'
 
 export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFullCycleApplication {
   protected async runFetchCodexOnlyCycle(signal: AbortSignal): Promise<void> {
+    if (!this.isUsageRequestEnabled('codex') || signal.aborted) {
+      return
+    }
+    const request = this.beginProviderUsageRequest('codex', signal)
+    try {
+      await this.runAdmittedCodexCycle(request.controller.signal)
+    } finally {
+      request.finish()
+    }
+  }
+
+  private async runAdmittedCodexCycle(signal: AbortSignal): Promise<void> {
     if (signal.aborted) {
       return
     }
     const codexTarget = this.codexFetchTarget
     const codexGeneration = this.codexFetchGeneration
-    const codexHome = await this.resolveCodexHome(codexTarget)
+    const codexHome = await this.resolveCodexHome(codexTarget, signal)
+    if (signal.aborted) {
+      return
+    }
     // Why: return before the "fetching" mark — a skipped cycle never settles it (#STA-4422).
     if (codexHome.skip) {
       if (
@@ -56,7 +71,10 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
       return
     }
 
-    const latestCodexHome = await this.resolveCodexHome(codexTarget)
+    const latestCodexHome = await this.resolveCodexHome(codexTarget, signal)
+    if (signal.aborted) {
+      return
+    }
     if (latestCodexHome.skip && codexGeneration === this.codexFetchGeneration) {
       this.updateState({
         ...this.state,
@@ -82,6 +100,21 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
     signal: AbortSignal,
     options?: { force?: boolean }
   ): Promise<void> {
+    if (!this.isUsageRequestEnabled('claude') || signal.aborted) {
+      return
+    }
+    const request = this.beginProviderUsageRequest('claude', signal)
+    try {
+      await this.runAdmittedClaudeCycle(request.controller.signal, options)
+    } finally {
+      request.finish()
+    }
+  }
+
+  private async runAdmittedClaudeCycle(
+    signal: AbortSignal,
+    options?: { force?: boolean }
+  ): Promise<void> {
     if (signal.aborted) {
       return
     }
@@ -92,7 +125,15 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
     const claudeTarget = this.claudeFetchTarget
     // Why: capture before the resolver await so an account switch during it invalidates both the snapshot and the state apply.
     const claudeGeneration = this.claudeFetchGeneration
-    const claudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
+    const claudeAuthPreparation = await this.claudeAuthPreparationResolver?.(
+      claudeTarget,
+      signal
+    ).catch((error: unknown) => {
+      if (!signal.aborted) {
+        throw error
+      }
+      return undefined
+    })
     if (signal.aborted) {
       return
     }
@@ -124,7 +165,15 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
       return
     }
 
-    const latestClaudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
+    const latestClaudeAuthPreparation = await this.claudeAuthPreparationResolver?.(
+      claudeTarget,
+      signal
+    ).catch((error: unknown) => {
+      if (!signal.aborted) {
+        throw error
+      }
+      return undefined
+    })
     if (signal.aborted) {
       return
     }
@@ -146,6 +195,18 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
   }
 
   protected async runFetchGrokOnlyCycle(signal: AbortSignal): Promise<void> {
+    if (!this.isUsageRequestEnabled('grok') || signal.aborted) {
+      return
+    }
+    const request = this.beginProviderUsageRequest('grok', signal)
+    try {
+      await this.runAdmittedGrokCycle(request.controller.signal)
+    } finally {
+      request.finish()
+    }
+  }
+
+  private async runAdmittedGrokCycle(signal: AbortSignal): Promise<void> {
     if (signal.aborted) {
       return
     }

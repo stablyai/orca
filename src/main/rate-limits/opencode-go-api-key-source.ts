@@ -166,8 +166,10 @@ function selectCredentialKey(database: Database.Database): string | null {
  * `unreadable` when discovery, opening, or querying failed without a key.
  */
 export async function readOpenCodeCredentialDatabaseGoKey(
-  environment: NodeJS.ProcessEnv = process.env
+  environment: NodeJS.ProcessEnv = process.env,
+  signal?: AbortSignal
 ): Promise<OpenCodeCredentialDatabaseGoKeyRead> {
+  signal?.throwIfAborted()
   let sawUnreadable = false
   let paths: string[]
   try {
@@ -179,14 +181,17 @@ export async function readOpenCodeCredentialDatabaseGoKey(
           sawUnreadable = true
         }
       },
-      undefined,
+      signal,
       environment
     )
+    signal?.throwIfAborted()
     paths = [...listed].sort(compareOpenCodeClaimPriority)
   } catch {
+    signal?.throwIfAborted()
     return { status: 'missing' }
   }
   for (const path of paths) {
+    signal?.throwIfAborted()
     // A synchronous open against a 9p/UNC share can hang the main process, and
     // the status bar is never worth that; the other tiers still apply.
     if (isWslUncPath(path)) {
@@ -229,7 +234,10 @@ export async function resolveOpenCodeGoApiKey(input: {
   environment?: NodeJS.ProcessEnv
   backend?: OpenCodeCredentialBackend
   cwd?: string
+  signal?: AbortSignal
 }): Promise<OpenCodeGoApiKeyResolution> {
+  const signal = input.signal
+  signal?.throwIfAborted()
   const override = trimmedKey(input.settingsOverride)
   if (override) {
     return { status: 'found', key: override, tier: 'settings' }
@@ -240,10 +248,13 @@ export async function resolveOpenCodeGoApiKey(input: {
     accounts.restoreOriginalEnvironment(environment)
     Object.assign(environment, accounts.launchEnvironment('opencode'))
   }
-  const backend = input.backend ?? (await detectOpenCodeCredentialBackend(environment, input.cwd))
+  const backend =
+    input.backend ?? (await detectOpenCodeCredentialBackend(environment, input.cwd, signal))
+  signal?.throwIfAborted()
   let databaseUnreadable = false
   if (backend === 'v2') {
-    const fromDatabase = await readOpenCodeCredentialDatabaseGoKey(environment)
+    const fromDatabase = await readOpenCodeCredentialDatabaseGoKey(environment, signal)
+    signal?.throwIfAborted()
     if (fromDatabase.status === 'found') {
       return { status: 'found', key: fromDatabase.key, tier: 'opencode-credential-database' }
     }

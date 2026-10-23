@@ -25,12 +25,16 @@ const renderPane = (scope: SettingsHostScope): React.JSX.Element => (
 
 const fake = vi.hoisted(() => {
   const state: {
+    streamClosed: (() => void) | null
+    rpc: ReturnType<typeof vi.fn>
     pendingSelect: ((roster: unknown) => void) | null
     write: ReturnType<typeof vi.fn>
     rosters: Map<string, unknown>
     watchedTargets: unknown[]
     selects: unknown[][]
   } = {
+    streamClosed: null,
+    rpc: vi.fn(),
     pendingSelect: null,
     write: vi.fn(),
     rosters: new Map(),
@@ -63,6 +67,7 @@ vi.mock('@/store', () => ({
       fetchSettings: fake.write
     })
 }))
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: fake.rpc }))
 vi.mock('@/runtime/runtime-provider-accounts-client', () => {
   const empty = () => ({
     accounts: [],
@@ -76,8 +81,9 @@ vi.mock('@/runtime/runtime-provider-accounts-client', () => {
       target.kind === 'environment' ? target.environmentId : 'local',
     watchProviderAccounts: (
       target: RuntimeClientTarget,
-      handlers: { onSnapshot: (snapshot: unknown) => void }
+      handlers: { onSnapshot: (snapshot: unknown) => void; onClosedAfterSnapshot?: () => void }
     ) => {
+      fake.streamClosed = handlers.onClosedAfterSnapshot ?? null
       fake.watchedTargets.push(target)
       handlers.onSnapshot({
         claude: fake.rosters.get(target.kind === 'environment' ? target.environmentId : 'local'),
@@ -117,6 +123,14 @@ function claudeRoster(id: string, email: string, active: boolean): ClaudeRateLim
 
 beforeEach(() => {
   fake.pendingSelect = null
+  fake.streamClosed = null
+  fake.rpc.mockReset().mockResolvedValue({
+    settings: {
+      usageRequestPolicyVersion: 1,
+      usageRequestEnabled: {},
+      antigravityUsageEnabled: false
+    }
+  })
   fake.watchedTargets = []
   fake.selects = []
   fake.rosters.set('local', claudeRoster('acct-l', 'local@desktop.test', false))
@@ -205,4 +219,22 @@ it("shows a WSL host's distro accounts from this desktop and selects for that di
   expect(fake.selects).toEqual([
     [{ kind: 'local' }, { accountId: 'acct-w', runtime: 'wsl', wslDistro: 'Ubuntu' }]
   ])
+})
+
+it('marks host policy unknown when its account stream closes cleanly after ready', async () => {
+  render(renderPane(scopeFor('server-a')))
+  await act(async () => {})
+  expect(
+    screen.getByRole('switch', { name: 'Claude: Check usage on the remote server' })
+  ).toBeTruthy()
+  expect(fake.streamClosed).not.toBeNull()
+  await act(async () => {
+    fake.streamClosed?.()
+  })
+  expect(
+    screen.queryByRole('switch', { name: 'Claude: Check usage on the remote server' })
+  ).toBeNull()
+  expect(
+    screen.getByText('Could not reach this host. Its usage request settings are unknown.')
+  ).toBeTruthy()
 })

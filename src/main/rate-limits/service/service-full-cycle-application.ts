@@ -1,3 +1,5 @@
+import type { UsageRequestProvider } from '../../../shared/usage-request-policy'
+import type { ProviderUsageRequest } from './service-usage-requests'
 import { RateLimitServiceFullCyclePreparation } from './service-full-cycle-preparation'
 import { isZcodeUsageCredentialCurrent } from '../zcode-usage-credentials'
 import { settleSiblingProviderResult } from './service-sibling-provider-result'
@@ -8,7 +10,24 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     signal: AbortSignal,
     options?: { force?: boolean }
   ): Promise<void> {
-    const prepared = await this.prepareFetchAllCycle(signal, options)
+    const requests = this.beginAllProviderUsageRequests(signal)
+    try {
+      await this.applyFetchAllCycle(signal, options, requests)
+    } finally {
+      for (const request of Object.values(requests)) {
+        request.finish()
+      }
+    }
+  }
+
+  private async applyFetchAllCycle(
+    signal: AbortSignal,
+    options: { force?: boolean } | undefined,
+    requests: Record<UsageRequestProvider, ProviderUsageRequest>
+  ): Promise<void> {
+    const canApply = (provider: UsageRequestProvider): boolean =>
+      this.isProviderUsageRequestCurrent(requests[provider])
+    const prepared = await this.prepareFetchAllCycle(signal, options, requests)
     if (!prepared) {
       return
     }
@@ -128,8 +147,20 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
             status: 'error'
           } satisfies ProviderRateLimits)
 
-    const latestCodexHome = await this.resolveCodexHome(codexTarget)
-    const latestClaudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
+    const latestCodexHome = canApply('codex')
+      ? await this.resolveCodexHome(codexTarget, requests.codex.controller.signal)
+      : { skip: true, homePath: null }
+    const latestClaudeAuthPreparation = canApply('claude')
+      ? await this.claudeAuthPreparationResolver?.(
+          claudeTarget,
+          requests.claude.controller.signal
+        ).catch((error: unknown) => {
+          if (!requests.claude.controller.signal.aborted) {
+            throw error
+          }
+          return undefined
+        })
+      : undefined
     if (signal.aborted) {
       return
     }
@@ -137,20 +168,27 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     // Why: a finishing skip has no provenance, so an in-flight result must never be
     // applied as though the target had become the system default (#STA-4422).
     const shouldApplyCodex =
+      canApply('codex') &&
       !codexFetchGated &&
       !latestCodexHome.skip &&
       codexGeneration === this.codexFetchGeneration &&
       codexProvenance === this.getCodexProvenance(codexTarget, latestCodexHome.homePath)
     const codexBecameUnavailable =
-      !codexFetchGated && latestCodexHome.skip && codexGeneration === this.codexFetchGeneration
+      canApply('codex') &&
+      !codexFetchGated &&
+      latestCodexHome.skip &&
+      codexGeneration === this.codexFetchGeneration
     // Why: a gated cycle made no Claude attempt; applying its passthrough result would grow the failure streak and reset stale-policy clocks for free.
     const shouldApplyClaude =
+      canApply('claude') &&
       !claudeFetchGated &&
       claudeGeneration === this.claudeFetchGeneration &&
       claudeProvenance === latestClaudeProvenance &&
       this.isSameClaudeTarget(claudeTarget, this.claudeFetchTarget)
-    const shouldApplyOpencode = opencodeGeneration === this.opencodeFetchGeneration
-    const shouldApplyMiniMax = miniMaxGeneration === this.minimaxFetchGeneration
+    const shouldApplyOpencode =
+      canApply('opencode-go') && opencodeGeneration === this.opencodeFetchGeneration
+    const shouldApplyMiniMax =
+      canApply('minimax') && miniMaxGeneration === this.minimaxFetchGeneration
 
     if (shouldApplyClaude) {
       this.trackActiveFailureStreak('claude', claude)
@@ -158,11 +196,15 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     if (shouldApplyCodex) {
       this.trackActiveFailureStreak('codex', codex)
     }
-    this.trackActiveFailureStreak('gemini', gemini)
+    if (canApply('gemini')) {
+      this.trackActiveFailureStreak('gemini', gemini)
+    }
     if (shouldApplyOpencode) {
       this.trackActiveFailureStreak('opencode-go', opencodeGo)
     }
-    this.trackActiveFailureStreak('kimi', kimi)
+    if (canApply('kimi')) {
+      this.trackActiveFailureStreak('kimi', kimi)
+    }
     if (shouldApplyMiniMax) {
       this.trackActiveFailureStreak('minimax', miniMax)
     }
@@ -178,13 +220,15 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         : codexBecameUnavailable
           ? codexStateBeforeFetch
           : this.state.codex,
-      gemini: this.applyStalePolicy(gemini, previousState.gemini),
+      gemini: canApply('gemini')
+        ? this.applyStalePolicy(gemini, previousState.gemini)
+        : this.state.gemini,
       opencodeGo: shouldApplyOpencode
         ? opencodeConfigChanged
           ? opencodeGo
           : this.applyStalePolicy(opencodeGo, previousState.opencodeGo)
         : this.state.opencodeGo,
-      kimi: this.applyStalePolicy(kimi, previousState.kimi),
+      kimi: canApply('kimi') ? this.applyStalePolicy(kimi, previousState.kimi) : this.state.kimi,
       minimax: shouldApplyMiniMax
         ? miniMaxConfigChanged
           ? miniMax
@@ -204,17 +248,18 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     const grok = settleSiblingProviderResult('grok', grokSettled)
     const cursor = settleSiblingProviderResult('cursor', cursorSettled)
     const settledZcode = settleSiblingProviderResult('zcode', zcodeSettled)
-    const zcode = isZcodeUsageCredentialCurrent(settledZcode)
-      ? settledZcode
-      : {
-          ...settledZcode,
-          status: 'unavailable' as const,
-          session: null,
-          weekly: null,
-          monthly: null,
-          error: 'ZCode Coding Plan account changed during refresh'
-        }
-    const shouldApplyZcode = zcodeGeneration === this.zcodeFetchGeneration
+    const zcode =
+      !canApply('zcode') || isZcodeUsageCredentialCurrent(settledZcode)
+        ? settledZcode
+        : {
+            ...settledZcode,
+            status: 'unavailable' as const,
+            session: null,
+            weekly: null,
+            monthly: null,
+            error: 'ZCode Coding Plan account changed during refresh'
+          }
+    const shouldApplyZcode = canApply('zcode') && zcodeGeneration === this.zcodeFetchGeneration
     const antigravity = settleSiblingProviderResult('antigravity', antigravitySettled)
     // Why: the stale policy keeps a recent snapshot through a failed refresh, but
     // a snapshot belonging to a different Cursor account must not survive the
@@ -233,16 +278,26 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       previousZcodeAccount !== undefined &&
       zcodeAccount !== undefined &&
       previousZcodeAccount === zcodeAccount
-    this.trackActiveFailureStreak('grok', grok)
-    this.trackActiveFailureStreak('cursor', cursor)
+    if (canApply('grok')) {
+      this.trackActiveFailureStreak('grok', grok)
+    }
+    if (canApply('cursor')) {
+      this.trackActiveFailureStreak('cursor', cursor)
+    }
     if (shouldApplyZcode) {
       this.trackActiveFailureStreak('zcode', zcode)
     }
-    this.trackActiveFailureStreak('antigravity', antigravity)
+    if (canApply('antigravity')) {
+      this.trackActiveFailureStreak('antigravity', antigravity)
+    }
     this.updateState({
       ...this.state,
-      grok: this.applyStalePolicy(grok, previousState.grok),
-      cursor: cursorAccountChanged ? cursor : this.applyStalePolicy(cursor, previousState.cursor),
+      grok: canApply('grok') ? this.applyStalePolicy(grok, previousState.grok) : this.state.grok,
+      cursor: !canApply('cursor')
+        ? this.state.cursor
+        : cursorAccountChanged
+          ? cursor
+          : this.applyStalePolicy(cursor, previousState.cursor),
       zcode: !shouldApplyZcode
         ? this.state.zcode
         : zcodeConfigChanged
@@ -250,7 +305,9 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
           : zcode.status === 'error' && !sameZcodeAccount
             ? zcode
             : this.applyStalePolicy(zcode, previousState.zcode),
-      antigravity: this.applyStalePolicy(antigravity, previousState.antigravity)
+      antigravity: canApply('antigravity')
+        ? this.applyStalePolicy(antigravity, previousState.antigravity)
+        : this.state.antigravity
     })
   }
 }

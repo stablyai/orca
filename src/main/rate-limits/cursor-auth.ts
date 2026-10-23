@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs'
+import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import { z } from 'zod'
 import { readKeychainPassword } from '../macos-keychain/generic-password'
 import {
@@ -75,14 +76,21 @@ type TokenReadResult =
   | { status: 'error'; error: string }
   | { status: 'ok'; token: string }
 
-async function readKeychainToken(): Promise<TokenReadResult> {
+async function readKeychainToken(signal?: AbortSignal): Promise<TokenReadResult> {
+  signal?.throwIfAborted()
   if (process.platform !== 'darwin') {
     return { status: 'missing' }
   }
   try {
-    const token = await readKeychainPassword(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT)
+    const token = await readKeychainPassword(
+      KEYCHAIN_SERVICE,
+      KEYCHAIN_ACCOUNT,
+      ...(signal ? [signal] : [])
+    )
+    signal?.throwIfAborted()
     return token ? { status: 'ok', token } : { status: 'missing' }
   } catch {
+    signal?.throwIfAborted()
     // Why: a denied or locked keychain must not mask a readable auth.json below it.
     return { status: 'error', error: 'Unable to read the Cursor login from the macOS Keychain' }
   }
@@ -129,6 +137,7 @@ function desktopIdentity(profile: CursorDesktopProfile): CursorIdentity {
 }
 
 export type CursorAuthReadOptions = {
+  signal?: AbortSignal
   cliAuthPath?: string
   cliConfigPath?: string
   desktopStateDbPath?: string
@@ -142,6 +151,7 @@ export type CursorAuthReadOptions = {
 export async function readCursorAuthSession(
   options: CursorAuthReadOptions = {}
 ): Promise<CursorAuthReadResult> {
+  options.signal?.throwIfAborted()
   const cliAuthPath = options.cliAuthPath ?? getCursorCliAuthPath()
   const cliConfigPath = options.cliConfigPath ?? getCursorCliConfigPath()
   const desktopDbPath = options.desktopStateDbPath ?? getCursorDesktopStateDbPath()
@@ -162,7 +172,8 @@ export async function readCursorAuthSession(
     return session
   }
 
-  const keychainRead = await readKeychainToken()
+  const keychainRead = await readKeychainToken(options.signal)
+  options.signal?.throwIfAborted()
   if (keychainRead.status === 'error') {
     errors.push(keychainRead.error)
   }
@@ -191,7 +202,11 @@ export async function readCursorAuthSession(
   // Why not pushed to `errors`: the IDE holds a lock on state.vscdb while it runs,
   // so a busy open is transient. Reporting it would pin an alert-triangle bar on
   // every Cursor IDE user who never set Cursor up in Orca.
-  const desktopRead = await readCursorDesktopProfile(desktopDbPath)
+  const desktopRead = await waitForPromiseWithSignal(
+    readCursorDesktopProfile(desktopDbPath),
+    options.signal
+  )
+  options.signal?.throwIfAborted()
   if (desktopRead.status === 'ok' && desktopRead.profile.accessToken) {
     const session = takeLive(
       sessionFrom(desktopRead.profile.accessToken, 'desktop', desktopIdentity(desktopRead.profile))

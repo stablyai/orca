@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useContext } from 'react'
 import { ChevronRight, RefreshCw } from 'lucide-react'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { SettingsSegmentedControl } from '@/components/settings/SettingsFormControls'
@@ -14,6 +14,7 @@ import {
 } from '../../../../shared/usage-percentage-display'
 import { barColor, formatResetCountdown, getWindowSections, ProviderIcon } from './tooltip'
 import { getProviderDisplayName } from './usage-error-copy'
+import { UsageRequestPolicyContext, UsageRequestNotice } from './usage-request-policy-context'
 import { formatPlanLabel, usageTextColorClass } from './usage-roster-formatting'
 import { getUsageRosterRowState, type UsageRosterRowState } from './usage-roster-row-state'
 import type { StatusBarUsageMode } from '../../../../shared/status-bar-usage-mode'
@@ -139,6 +140,8 @@ export function UsageRow({
   now: number
   mode?: StatusBarUsageMode
 }): React.JSX.Element {
+  const policy = useContext(UsageRequestPolicyContext)
+  const requestsDisabled = policy?.enabled[p.provider] === false
   const sections = usedSections(p)
   const hasUsage = sections.length > 0
   const name = getProviderDisplayName(p.provider)
@@ -148,6 +151,7 @@ export function UsageRow({
 
   return (
     <div data-usage-mode={mode} className="flex min-w-0 flex-1 flex-col gap-1">
+      <UsageRequestNotice provider={p} />
       <div className="flex items-center gap-2.5">
         <span className="flex size-5 shrink-0 items-center justify-center rounded-md border border-border bg-secondary">
           <ProviderIcon provider={p.provider} />
@@ -158,9 +162,11 @@ export function UsageRow({
         </span>
         {!hasUsage ? (
           <>
-            <span className="min-w-0 truncate text-[11px] text-muted-foreground">
-              {state.statusLabel}
-            </span>
+            {!requestsDisabled ? (
+              <span className="min-w-0 truncate text-2xs text-muted-foreground">
+                {state.statusLabel}
+              </span>
+            ) : null}
             {showSignInAction ? (
               <span className="ml-auto shrink-0 rounded-md border border-border bg-secondary px-2.5 py-0.5 text-xs text-foreground">
                 {translate('auto.components.status.bar.StatusBar.c35af53b73', 'Sign in')}
@@ -216,6 +222,7 @@ export function UsageRosterPanel({
   canSignIn,
   onManageAccounts,
   onUsageDetails,
+  onUsageRequestSettings,
   renderRow
 }: {
   providers: ProviderRateLimits[]
@@ -229,6 +236,7 @@ export function UsageRosterPanel({
   canSignIn: (provider: ProviderId) => boolean
   onManageAccounts: () => void
   onUsageDetails: () => void
+  onUsageRequestSettings?: () => void
   // Lets the host wrap a provider's row in a richer control (e.g. the
   // Claude/Codex account-switch drill-in submenu); return null to use the
   // default clickable row.
@@ -352,6 +360,15 @@ export function UsageRosterPanel({
         )}
         <ChevronRight size={14} className="text-muted-foreground" />
       </DropdownMenuItem>
+      {onUsageRequestSettings ? (
+        <DropdownMenuItem
+          onSelect={onUsageRequestSettings}
+          className="w-full cursor-pointer justify-between rounded-none px-3.5 py-2.5 text-[13px] text-foreground"
+        >
+          {translate('settings.usageRequests.menu', 'Usage request settings…')}
+          <ChevronRight size={14} className="text-muted-foreground" />
+        </DropdownMenuItem>
+      ) : null}
       <DropdownMenuItem
         onSelect={onManageAccounts}
         className="w-full cursor-pointer justify-between rounded-none px-3.5 py-2.5 text-[13px] text-foreground"

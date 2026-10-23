@@ -109,6 +109,7 @@ describe('OpenCode Go execution-host managed account lookup', () => {
       })
       expect(detectOpenCodeCredentialBackend).toHaveBeenLastCalledWith(
         expect.objectContaining(accounts.launchEnvironment('opencode')),
+        undefined,
         undefined
       )
       await accounts.select('opencode', null)

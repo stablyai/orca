@@ -114,7 +114,10 @@ describe('RateLimitService', () => {
 
     await service.refreshForCodexAccountChange(null, { runtime: 'wsl', wslDistro: 'Ubuntu' })
 
-    expect(resolver).toHaveBeenCalledWith({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+    expect(resolver).toHaveBeenCalledWith(
+      { runtime: 'wsl', wslDistro: 'Ubuntu' },
+      expect.any(AbortSignal)
+    )
     expect(fetchCodexRateLimits).toHaveBeenCalledWith(
       expect.objectContaining({ codexHomePath: wslCodexHome })
     )
@@ -362,7 +365,10 @@ describe('RateLimitService', () => {
 
     await service.refresh()
 
-    expect(resolver).toHaveBeenCalledWith({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+    expect(resolver).toHaveBeenCalledWith(
+      { runtime: 'wsl', wslDistro: 'Ubuntu' },
+      expect.any(AbortSignal)
+    )
     expect(fetchCodexRateLimits).toHaveBeenCalledWith(
       expect.objectContaining({ codexHomePath: wslCodexHome })
     )
@@ -378,7 +384,10 @@ describe('RateLimitService', () => {
 
     await service.refresh()
 
-    expect(resolver).toHaveBeenCalledWith({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+    expect(resolver).toHaveBeenCalledWith(
+      { runtime: 'wsl', wslDistro: 'Ubuntu' },
+      expect.any(AbortSignal)
+    )
     expect(fetchCodexRateLimits).not.toHaveBeenCalled()
     expect(service.getState().codex).toMatchObject({
       provider: 'codex',
@@ -408,7 +417,10 @@ describe('RateLimitService', () => {
 
     await service.refresh()
 
-    expect(resolver).toHaveBeenCalledWith({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+    expect(resolver).toHaveBeenCalledWith(
+      { runtime: 'wsl', wslDistro: 'Ubuntu' },
+      expect.any(AbortSignal)
+    )
     expect(fetchClaudeRateLimits).toHaveBeenCalledWith(
       expect.objectContaining({
         authPreparation: expect.objectContaining({

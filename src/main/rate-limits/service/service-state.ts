@@ -11,6 +11,8 @@ import {
   type CodexHomePathResolver,
   type KimiHomeResolver,
   type ClaudeAuthPreparationResolver,
+  type ClaudeAccountSelectionTarget,
+  type ClaudeRuntimeAuthPreparation,
   type OpenCodeGoRateLimitConfig,
   type MiniMaxRateLimitConfig,
   type AntigravityUsageEnabledResolver,
@@ -22,7 +24,6 @@ import {
   type NetworkProxySettings,
   DEFAULT_POLL_MS
 } from './service-types'
-import { readGrokAuthSession } from '../grok-auth'
 
 export abstract class RateLimitServiceState {
   protected state: InternalRateLimitState = {
@@ -37,9 +38,8 @@ export abstract class RateLimitServiceState {
     cursor: null,
     zcode: null
   }
-  protected grokAuthConfigured = readGrokAuthSession().status === 'ok'
-  // Why: the Cursor probe reads the macOS Keychain, so it cannot run synchronously
-  // at construction the way Grok's auth-file probe does; each fetch cycle sets it.
+  protected grokAuthConfigured = false
+  // Why: credential probes run only in admitted fetch cycles.
   protected cursorAuthConfigured = false
   protected openCodeGoApiKeyConfigured = false
   protected pollInterval: number = DEFAULT_POLL_MS
@@ -97,6 +97,10 @@ export abstract class RateLimitServiceState {
   }
   // Why: resolved per cycle — the local-account runtime policy can flip between fetches.
   protected kimiHomeResolver: KimiHomeResolver | null = null
+  protected claudeUsageAttributionResolver:
+    | ((target?: ClaudeAccountSelectionTarget) => Promise<ClaudeRuntimeAuthPreparation | null>)
+    | null = null
+  protected claudeAttributionGeneration = 0
   protected claudeAuthPreparationResolver: ClaudeAuthPreparationResolver | null = null
   protected claudeFetchTarget: NormalizedClaudeAccountSelectionTarget = {
     runtime: 'host',

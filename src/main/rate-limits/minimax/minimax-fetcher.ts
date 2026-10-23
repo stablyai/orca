@@ -1,3 +1,4 @@
+import { abortSignalWithTimeout } from '../../lib/abort-signal-with-timeout'
 import type { ProviderRateLimits } from '../../../shared/rate-limit-types'
 import type { MiniMaxEndpoint } from '../../../shared/global-settings-types'
 import {
@@ -35,6 +36,7 @@ export type FetchMiniMaxRateLimitsOptions = {
   endpoint?: string
   endpointMode?: MiniMaxEndpoint
   apiKey?: string | null
+  signal?: AbortSignal
 }
 
 async function fetchMiniMaxResponseWithCookie(args: {
@@ -44,9 +46,11 @@ async function fetchMiniMaxResponseWithCookie(args: {
   endpointMode: MiniMaxEndpoint
   signal: AbortSignal
 }): Promise<MiniMaxFetchResponse> {
+  args.signal.throwIfAborted()
   try {
     return await fetchMiniMaxWithSessionCookieJar(args)
   } catch (sessionFetchError) {
+    args.signal.throwIfAborted()
     const message =
       sessionFetchError instanceof Error ? sessionFetchError.message : String(sessionFetchError)
     console.warn(
@@ -64,6 +68,7 @@ async function fetchMiniMaxResponseWithCookie(args: {
 export async function fetchMiniMaxRateLimits(
   options: FetchMiniMaxRateLimitsOptions
 ): Promise<ProviderRateLimits> {
+  options.signal?.throwIfAborted()
   const rawCookie = options.cookie?.trim() ?? ''
   const rawApiKey = options.apiKey?.trim() ?? ''
   const endpointMode: MiniMaxEndpoint = options.endpointMode ?? 'overseas'
@@ -75,7 +80,8 @@ export async function fetchMiniMaxRateLimits(
     return await fetchMiniMaxWithApiKeyFlow({
       apiKey: rawApiKey,
       endpoint,
-      models: options.models
+      models: options.models,
+      signal: options.signal
     })
   }
 
@@ -97,10 +103,14 @@ export async function fetchMiniMaxRateLimits(
       endpoint,
       groupId,
       endpointMode,
-      signal: AbortSignal.timeout(API_TIMEOUT_MS)
+      signal: abortSignalWithTimeout(options.signal, API_TIMEOUT_MS)
     })
-    return await parseMiniMaxUsageResponse(fetchResult, options.models)
+    options.signal?.throwIfAborted()
+    const result = await parseMiniMaxUsageResponse(fetchResult, options.models)
+    options.signal?.throwIfAborted()
+    return result
   } catch (error) {
+    options.signal?.throwIfAborted()
     const message = error instanceof Error ? error.message : 'Unknown MiniMax usage error'
     return makeMiniMaxError(redactMiniMaxSecret(message), 'network')
   }
@@ -110,15 +120,20 @@ async function fetchMiniMaxWithApiKeyFlow(args: {
   apiKey: string
   endpoint: string
   models: MiniMaxModelList
+  signal?: AbortSignal
 }): Promise<ProviderRateLimits> {
   try {
     const fetchResult = await fetchMiniMaxWithApiKey({
       apiKey: args.apiKey,
       endpoint: args.endpoint,
-      signal: AbortSignal.timeout(MINIMAX_API_KEY_TIMEOUT_MS)
+      signal: abortSignalWithTimeout(args.signal, MINIMAX_API_KEY_TIMEOUT_MS)
     })
-    return await parseMiniMaxUsageResponse(fetchResult, args.models)
+    args.signal?.throwIfAborted()
+    const result = await parseMiniMaxUsageResponse(fetchResult, args.models)
+    args.signal?.throwIfAborted()
+    return result
   } catch (error) {
+    args.signal?.throwIfAborted()
     const message = error instanceof Error ? error.message : 'Unknown MiniMax API key error'
     return makeMiniMaxError(redactMiniMaxSecret(message), 'network')
   }

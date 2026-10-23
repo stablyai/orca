@@ -145,6 +145,7 @@ export function useDetectedAgents(
     !isRefreshing &&
     remoteTargetKey !== null &&
     observedRemoteTargetKeysRef.current.has(remoteTargetKey)
+  const localProbePending = targetKind === 'local' && (isLoading || isRefreshing)
   // Why: refresh must hit the same host the list came from — refreshing the
   // local PATH while showing a remote server's agents is a silent no-op.
   const refresh = useCallback((): Promise<TuiAgent[]> => {
@@ -198,7 +199,7 @@ export function useDetectedAgents(
         void state.ensureRuntimeDetectedAgents(targetId, runtimeWorktreeId)
       }
     } else {
-      if (detectedIds === null) {
+      if (detectedIds === null && !localProbePending) {
         void state.ensureDetectedAgents(localWorktreeId)
       }
     }
@@ -209,6 +210,7 @@ export function useDetectedAgents(
     remoteTargetKey,
     pairingRevision,
     detectedIds,
+    localProbePending,
     localWorktreeId,
     runtimeWorktreeId,
     localContextKey

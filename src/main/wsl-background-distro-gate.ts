@@ -47,12 +47,16 @@ export async function isWslDistroRunning(distro: string): Promise<boolean> {
 
 /** Background-work check; a missing distro means the default one, as `wsl.exe` would pick. */
 export async function isWslDistroRunningForBackgroundWork(
-  distro: string | null | undefined
+  distro: string | null | undefined,
+  signal?: AbortSignal
 ): Promise<boolean> {
-  if (process.platform !== 'win32') {
+  if (process.platform !== 'win32' || signal?.aborted) {
     return false
   }
   const target = distro?.trim() || (await listWslDistrosAsync())[0]
+  if (signal?.aborted) {
+    return false
+  }
   return target ? isWslDistroRunning(target) : false
 }
 

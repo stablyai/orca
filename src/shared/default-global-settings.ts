@@ -218,6 +218,7 @@ export function buildDefaultSettings(args: {
     defaultLinearTeamSelection: null,
     opencodeSessionCookie: '',
     opencodeWorkspaceId: '',
+    usageRequestEnabled: {},
     minimaxGroupId: '',
     minimaxUsageModels: 'general',
     minimaxEndpoint: 'overseas',

@@ -644,4 +644,42 @@ describe('fetchMiniMaxRateLimits', () => {
       resetsAt: null
     })
   })
+
+  it('stops cookie writes and fallback after cancellation while preserving cleanup', async () => {
+    const controller = new AbortController()
+    cookiesSetMock.mockImplementationOnce(async () => {
+      controller.abort()
+    })
+    fetchMock.mockResolvedValue(makeResponse(makeOkPayload(50)))
+    await expect(
+      fetchMiniMaxRateLimits({ cookie: FULL_COOKIE, signal: controller.signal })
+    ).rejects.toMatchObject({ name: 'AbortError' })
+    expect(cookiesSetMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(clearStorageDataMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not admit API or cookie work for an already-cancelled caller', async () => {
+    const controller = new AbortController()
+    controller.abort()
+    await expect(
+      fetchMiniMaxRateLimits({ apiKey: 'placeholder', signal: controller.signal })
+    ).rejects.toMatchObject({ name: 'AbortError' })
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(sessionFromPartitionMock).not.toHaveBeenCalled()
+  })
+
+  it('aborts an issued cookie request without admitting the manual-header fallback', async () => {
+    const controller = new AbortController()
+    fetchMock.mockImplementationOnce(async (_url, init) => {
+      controller.abort()
+      expect(init.signal.aborted).toBe(true)
+      throw init.signal.reason
+    })
+    await expect(
+      fetchMiniMaxRateLimits({ cookie: FULL_COOKIE, signal: controller.signal })
+    ).rejects.toMatchObject({ name: 'AbortError' })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(clearStorageDataMock).toHaveBeenCalledTimes(2)
+  })
 })

@@ -164,12 +164,14 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     // Why: a new account/target starts with a clean retry schedule.
     this.activeFailureStreakByProvider.claude = 0
     // Why: statusline posts from the outgoing account's sessions must not land on the incoming account's bar mid-switch.
+    this.claudeAttributionGeneration += 1
     this.lastClaudeAuthSnapshot = null
     this.lastInactiveClaudeFetchAt = 0
     this.updateState({
       ...this.state,
       claude: this.withFetchingStatus(null, 'claude')
     })
+    await this.refreshClaudeUsageAttribution()
     await this.fetchClaudeOnly({ force: true })
     return this.getState()
   }
@@ -182,12 +184,14 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     this.activeFailureStreakByProvider.claude = 0
     if (targetChanged) {
       // Why: statusline posts from the outgoing target's sessions must not land on the incoming target's bar mid-switch.
+      this.claudeAttributionGeneration += 1
       this.lastClaudeAuthSnapshot = null
     }
     this.updateState({
       ...this.state,
       claude: this.withFetchingStatus(targetChanged ? null : this.state.claude, 'claude')
     })
+    await this.refreshClaudeUsageAttribution()
     await this.fetchClaudeOnly({ force: true })
     return this.getState()
   }

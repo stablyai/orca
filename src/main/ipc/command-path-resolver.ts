@@ -4,6 +4,7 @@ import { homedir } from 'node:os'
 import path from 'node:path'
 
 export type ResolveCommandOptions = {
+  signal?: AbortSignal
   /** Defaults to `process.platform`. Lets tests exercise the win32 lookup on posix. */
   platform?: NodeJS.Platform
   /** Env whose PATH/PATHEXT to search. Defaults to `process.env`. */
@@ -145,10 +146,16 @@ export function resolveSelectedLocalCommand(
   return command
 }
 
-async function isExecutableFile(candidate: string, isWin: boolean): Promise<boolean> {
+async function isExecutableFile(
+  candidate: string,
+  isWin: boolean,
+  signal?: AbortSignal
+): Promise<boolean> {
   try {
     // Why: stat (not lstat) so symlinked CLIs resolve to their real target.
+    signal?.throwIfAborted()
     const stats = await stat(candidate)
+    signal?.throwIfAborted()
     if (stats.isDirectory()) {
       // Why: PATH dirs carry the search/exec bit; reject them like `[ ! -d ]`.
       return false
@@ -158,8 +165,10 @@ async function isExecutableFile(candidate: string, isWin: boolean): Promise<bool
       return stats.isFile()
     }
     await access(candidate, fsConstants.X_OK)
+    signal?.throwIfAborted()
     return true
   } catch {
+    signal?.throwIfAborted()
     return false
   }
 }
@@ -202,6 +211,7 @@ async function findLocalCommandPaths(
   options: ResolveCommandOptions,
   stopAtFirst: boolean
 ): Promise<string[]> {
+  options.signal?.throwIfAborted()
   if (!command) {
     return []
   }
@@ -235,7 +245,7 @@ async function findLocalCommandPaths(
         continue
       }
       seen.add(candidateKey)
-      if (await isExecutableFile(candidate, isWin)) {
+      if (await isExecutableFile(candidate, isWin, options.signal)) {
         found.push(candidate)
         if (stopAtFirst || found.length >= (options.maxResults ?? Infinity)) {
           return found

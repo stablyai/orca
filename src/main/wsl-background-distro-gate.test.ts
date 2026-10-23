@@ -59,6 +59,21 @@ describe('isWslDistroRunning', () => {
 })
 
 describe('isWslDistroRunningForBackgroundWork', () => {
+  it('does not probe running distros after cancellation during default-distro selection', async () => {
+    let finishListing: (distros: string[]) => void = () => {}
+    wslMocks.listWslDistrosAsync.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishListing = resolve
+      })
+    )
+    const controller = new AbortController()
+    const pending = isWslDistroRunningForBackgroundWork(null, controller.signal)
+    controller.abort()
+    finishListing(['Ubuntu'])
+    await expect(pending).resolves.toBe(false)
+    expect(wslMocks.listRunningWslDistrosAsync).not.toHaveBeenCalled()
+  })
+
   it('checks the default distro when none is named', async () => {
     await expect(isWslDistroRunningForBackgroundWork(null)).resolves.toBe(false)
     wslMocks.listWslDistrosAsync.mockResolvedValue(['Ubuntu'])

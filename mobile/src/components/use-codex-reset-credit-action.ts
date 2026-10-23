@@ -79,7 +79,12 @@ export function useCodexResetCreditAction({
           })
           return
         }
-        onNotice(getCodexResetCreditOutcomeCopy(result.outcome))
+        onNotice(
+          getCodexResetCreditOutcomeCopy(
+            result.outcome,
+            result.snapshot.rateLimits.usageRequestPolicy?.enabled.codex !== false
+          )
+        )
       } catch (error) {
         onNotice({
           title: 'Could not reset rate limits',

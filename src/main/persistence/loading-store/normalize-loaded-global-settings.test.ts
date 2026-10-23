@@ -22,6 +22,44 @@ function normalizeLegacyProfile(overrides: Record<string, unknown>): PersistedSt
   return normalizeLoadedGlobalSettings(parsed, terminal, profile)
 }
 
+describe('persisted usage request choices', () => {
+  it('drops transport-only policy fields from a saved profile', () => {
+    const settings = normalizeLegacyProfile({
+      antigravityUsageEnabled: false,
+      usageRequestPolicyVersion: 1,
+      usageRequestEnabled: { claude: false }
+    })
+    expect(settings).not.toHaveProperty('antigravityUsageEnabled')
+    expect(settings).not.toHaveProperty('usageRequestPolicyVersion')
+    expect(settings.usageRequestEnabled).toEqual({ claude: false })
+  })
+
+  it('defaults new profiles and profiles predating the setting to a sparse map', () => {
+    expect(getDefaultPersistedState(homedir()).settings.usageRequestEnabled).toEqual({})
+    expect(normalizeLegacyProfile({ usageRequestEnabled: undefined }).usageRequestEnabled).toEqual(
+      {}
+    )
+  })
+
+  it('preserves saved opt-outs and drops malformed or unsupported saved choices', () => {
+    expect(
+      normalizeLegacyProfile({
+        usageRequestEnabled: {
+          claude: false,
+          codex: true,
+          gemini: 'false',
+          kimi: null,
+          antigravity: false,
+          typo: false
+        }
+      }).usageRequestEnabled
+    ).toEqual({ claude: false, codex: true })
+    expect(normalizeLegacyProfile({ usageRequestEnabled: ['claude'] }).usageRequestEnabled).toEqual(
+      {}
+    )
+  })
+})
+
 describe('retired setup placement', () => {
   it.each(['split-vertical', 'split-horizontal', 'new-tab', undefined])(
     'drops saved setup location %s without changing terminal preferences',

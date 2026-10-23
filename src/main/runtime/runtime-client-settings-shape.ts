@@ -23,6 +23,7 @@ export type RuntimeClientSettings = Pick<
   | 'experimentalNewWorktreeCardStyle'
   | 'experimentalNativeChat'
   | 'compactWorktreeCards'
+  | 'usageRequestEnabled'
   | 'minimaxGroupId'
   | 'minimaxUsageModels'
   | 'minimaxEndpoint'
@@ -38,6 +39,8 @@ export type RuntimeClientSettings = Pick<
   /** Older clients still read these; neither is persisted or accepted as an update. */
   openAgentTabsInChatByDefault?: boolean
   experimentalStructuredNativeChat?: boolean
+  usageRequestPolicyVersion?: 1
+  antigravityUsageEnabled?: boolean
   hostSettingOverrides: RuntimeHostDisplayLabelOverrides
   sourceControlAi: RuntimeClientSourceControlAi
 }
@@ -66,6 +69,7 @@ export type RuntimeClientSettingsUpdate = Pick<
   | 'githubProjects'
   | 'experimentalNewWorktreeCardStyle'
   | 'compactWorktreeCards'
+  | 'usageRequestEnabled'
   | 'minimaxGroupId'
   | 'minimaxUsageModels'
   | 'minimaxEndpoint'
@@ -74,4 +78,4 @@ export type RuntimeClientSettingsUpdate = Pick<
   | 'worktreeVisibilityDefaults'
   | 'machineName'
   | 'nativeChatPermissionMode'
->
+> & { antigravityUsageEnabled?: boolean }

@@ -42,20 +42,26 @@ export function getKimiRuntimeTarget(
  */
 export async function resolveKimiHome(
   target: LocalAccountRuntimeTarget,
-  platform: NodeJS.Platform = process.platform
+  platform: NodeJS.Platform = process.platform,
+  signal?: AbortSignal
 ): Promise<KimiHomeResolution> {
+  signal?.throwIfAborted()
   if (target.runtime !== 'wsl' || platform !== 'win32') {
     return { runtime: 'host', wslDistro: null, path: getHostKimiHome() }
   }
   const distro = target.wslDistro?.trim() || (await defaultWslDistro())
+  signal?.throwIfAborted()
   if (!distro) {
     return { runtime: 'wsl', wslDistro: null, path: null }
   }
   // Why: a quota poll is background work and must not boot a stopped distro.
-  if (!(await isWslDistroRunning(distro))) {
+  const running = await isWslDistroRunning(distro)
+  signal?.throwIfAborted()
+  if (!running) {
     return { runtime: 'wsl', wslDistro: distro, path: null }
   }
   const home = await getWslHomeAsync(distro)
+  signal?.throwIfAborted()
   // KIMI_CODE_HOME describes the Windows host process, never the distro's home.
   return { runtime: 'wsl', wslDistro: distro, path: home ? joinKimiHome(home) : null }
 }

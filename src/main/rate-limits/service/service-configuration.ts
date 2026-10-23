@@ -9,6 +9,7 @@ import {
   type KimiHomeResolver,
   type ClaudeAccountSelectionTarget,
   type ClaudeAuthPreparationResolver,
+  type ClaudeRuntimeAuthPreparation,
   type OpenCodeGoRateLimitConfig,
   type MiniMaxRateLimitConfig,
   type AntigravityUsageEnabledResolver,
@@ -39,8 +40,19 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
     this.claudeAuthPreparationResolver = resolver
   }
 
+  setClaudeUsageAttributionResolver(
+    resolver: (
+      target?: ClaudeAccountSelectionTarget
+    ) => Promise<ClaudeRuntimeAuthPreparation | null>
+  ): void {
+    this.claudeUsageAttributionResolver = resolver
+  }
+
   setClaudeFetchTarget(target?: ClaudeAccountSelectionTarget): void {
     this.claudeFetchTarget = normalizeClaudeAccountSelectionTarget(target)
+    this.lastClaudeAuthSnapshot = null
+    this.claudeAttributionGeneration += 1
+    void this.refreshClaudeUsageAttribution()
   }
 
   setOpenCodeGoConfigResolver(
@@ -65,6 +77,7 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
 
   setAntigravityUsageEnabledResolver(resolver: AntigravityUsageEnabledResolver): void {
     this.antigravityUsageEnabledResolver = resolver
+    this.reconcileUsageRequestPolicy()
   }
 
   setNetworkProxySettingsResolver(resolver: () => NetworkProxySettings): void {
@@ -111,6 +124,7 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
   }
 
   start(options: { fetchImmediately?: boolean } = {}): void {
+    void this.refreshClaudeUsageAttribution()
     if (options.fetchImmediately !== false) {
       void this.fetchAll()
     } else {
@@ -137,6 +151,7 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
     this.pruneInactiveCodexState()
     return {
       ...this.state,
+      usageRequestPolicy: this.usageRequestPolicySnapshot(),
       // Why: the cookie lives on the filesystem, not GlobalSettings; surface its presence so the renderer keeps the MiniMax bar across reloads.
       minimaxCookieConfigured: hasMiniMaxSessionCookie(),
       minimaxApiKeyConfigured: hasMiniMaxApiKey(),

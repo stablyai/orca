@@ -99,7 +99,8 @@ describe('RateLimitService', () => {
       groupId: '',
       models: 'general',
       endpointMode: 'overseas',
-      apiKey: ''
+      apiKey: '',
+      signal: expect.any(AbortSignal)
     })
 
     const state = service.getState()
@@ -259,7 +260,8 @@ describe('RateLimitService', () => {
       groupId: '',
       models: 'general',
       endpointMode: 'cn',
-      apiKey: 'sk-cn-key-9876'
+      apiKey: 'sk-cn-key-9876',
+      signal: expect.any(AbortSignal)
     })
   })
 

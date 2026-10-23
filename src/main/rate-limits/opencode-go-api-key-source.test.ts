@@ -445,7 +445,11 @@ describe('resolveOpenCodeGoApiKey', () => {
       const environment: NodeJS.ProcessEnv = { OPENCODE_API_KEY: key }
 
       await expect(resolveOpenCodeGoApiKey({ environment })).resolves.toEqual({ status: 'missing' })
-      expect(detectOpenCodeCredentialBackend).toHaveBeenCalledWith(environment, undefined)
+      expect(detectOpenCodeCredentialBackend).toHaveBeenCalledWith(
+        environment,
+        undefined,
+        undefined
+      )
     }
   )
 
@@ -586,5 +590,19 @@ describe('resolveOpenCodeGoApiKey', () => {
     writeFileSync(join(dataHome, 'opencode', 'auth.json'), '{not json')
 
     expect(readOpenCodeAuthFileGoKey(process.env)).toBeNull()
+  })
+  it('does not read the auth-file fallback after backend discovery is cancelled', async () => {
+    writeAuthFile({ 'opencode-go': { type: 'api', key: AUTH_FILE_KEY } })
+    const controller = new AbortController()
+    vi.mocked(detectOpenCodeCredentialBackend).mockImplementationOnce(async () => {
+      controller.abort()
+      return 'v1'
+    })
+    await expect(
+      resolveOpenCodeGoApiKey({
+        environment: { XDG_DATA_HOME: dataHome },
+        signal: controller.signal
+      })
+    ).rejects.toMatchObject({ name: 'AbortError' })
   })
 })

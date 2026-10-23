@@ -12,7 +12,8 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('@/i18n/i18n', () => ({
-  translate: (_key: string, fallback: string) => fallback
+  translate: (_key: string, fallback: string, values?: Record<string, string>) =>
+    fallback.replace(/\{\{(\w+)\}\}/g, (placeholder, key: string) => values?.[key] ?? placeholder)
 }))
 vi.mock('@/lib/agent-catalog', () => ({
   AgentIcon: ({ agent }: { agent: string }) => <span data-agent-icon={agent} />
@@ -30,6 +31,8 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
 
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { UsageRosterPanel, UsageRow } from './UsageRosterPanel'
+import { UsageRequestPolicyContext } from './usage-request-policy-context'
+import { composeUsageRequestPolicyEnabled } from '../../../../shared/usage-request-policy'
 
 const signedOutCodex: ProviderRateLimits = {
   provider: 'codex',
@@ -40,7 +43,38 @@ const signedOutCodex: ProviderRateLimits = {
   status: 'error'
 }
 
+const disabledCodexPolicy = {
+  version: 1 as const,
+  revision: 2,
+  enabled: composeUsageRequestPolicyEnabled({ codex: false }, false)
+}
+
 describe('UsageRow', () => {
+  it('labels disabled cached data without presenting a fetching status or changing its timestamp', () => {
+    const provider: ProviderRateLimits = {
+      ...signedOutCodex,
+      status: 'fetching',
+      updatedAt: 123_456,
+      usageMetadata: { source: 'web' }
+    }
+    const markup = renderToStaticMarkup(
+      <UsageRequestPolicyContext.Provider value={disabledCodexPolicy}>
+        <UsageRow
+          p={provider}
+          display="used"
+          state={{ kind: 'loading', statusLabel: 'Fetching…' }}
+          showSignInAction={false}
+          now={mocks.now}
+        />
+      </UsageRequestPolicyContext.Provider>
+    )
+    expect(markup.match(/Usage requests disabled/g)).toHaveLength(1)
+    expect(markup).toContain('Cached usage may be stale.')
+    expect(markup).toContain('Source: Web')
+    expect(markup).not.toContain('Fetching…')
+    expect(provider.updatedAt).toBe(123_456)
+  })
+
   beforeEach(() => {
     mocks.useResetCountdownClock.mockClear()
   })

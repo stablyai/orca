@@ -1,9 +1,12 @@
-import { Activity, Plug, Server } from 'lucide-react'
+import { Activity, Plug, Server, Settings } from 'lucide-react'
 import React from 'react'
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { AgentIcon } from '@/lib/agent-catalog'
@@ -19,6 +22,8 @@ export function StatusBarVisibilityMenu({
 }): React.JSX.Element {
   const {
     detectedAgentIds,
+    handleUsageRequestSettings,
+    remoteOwner,
     menuOpen,
     menuPoint,
     recordFeatureInteraction,
@@ -38,6 +43,14 @@ export function StatusBarVisibilityMenu({
         />
       </DropdownMenuTrigger>
       <DropdownMenuContent className="min-w-0 w-fit" sideOffset={0} align="start">
+        <DropdownMenuItem onSelect={handleUsageRequestSettings}>
+          <Settings className="size-3.5" />
+          {translate('settings.usageRequests.menu', 'Usage request settings…')}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel>
+          {translate('settings.usageRequests.visibilityMenu', 'Meter visibility')}
+        </DropdownMenuLabel>
         {isStatusBarItemAvailable('claude', detectedAgentIds) && (
           <DropdownMenuCheckboxItem
             checked={statusBarItems.includes('claude')}
@@ -47,7 +60,10 @@ export function StatusBarVisibilityMenu({
             }}
           >
             <ClaudeIcon size={14} />
-            {translate('auto.components.status.bar.StatusBar.3885eb74d8', 'Claude Usage')}
+            {translate(
+              'auto.components.status.bar.StatusBar.showMeter.3885eb74d8',
+              'Show Claude usage meter'
+            )}
           </DropdownMenuCheckboxItem>
         )}
         {isStatusBarItemAvailable('codex', detectedAgentIds) && (
@@ -59,7 +75,10 @@ export function StatusBarVisibilityMenu({
             }}
           >
             <OpenAIIcon size={14} />
-            {translate('auto.components.status.bar.StatusBar.c0909c686e', 'Codex Usage')}
+            {translate(
+              'auto.components.status.bar.StatusBar.showMeter.c0909c686e',
+              'Show Codex usage meter'
+            )}
           </DropdownMenuCheckboxItem>
         )}
         {isStatusBarItemAvailable('gemini', detectedAgentIds) && (
@@ -71,7 +90,10 @@ export function StatusBarVisibilityMenu({
             }}
           >
             <GeminiIcon size={14} />
-            {translate('auto.components.status.bar.StatusBar.c1df0d67ec', 'Gemini Usage')}
+            {translate(
+              'auto.components.status.bar.StatusBar.showMeter.c1df0d67ec',
+              'Show Gemini usage meter'
+            )}
           </DropdownMenuCheckboxItem>
         )}
         {isStatusBarItemAvailable('antigravity', detectedAgentIds) && (
@@ -83,10 +105,15 @@ export function StatusBarVisibilityMenu({
             }}
           >
             <AgentIcon agent="antigravity" size={14} />
-            {translate(
-              'auto.components.status.bar.StatusBar.antigravityUsage',
-              'Antigravity Usage'
-            )}
+            {remoteOwner
+              ? translate(
+                  'settings.usageRequests.antigravityVisibility',
+                  'Show Antigravity usage meter'
+                )
+              : translate(
+                  'settings.usageRequests.antigravityShowAndCheck',
+                  'Antigravity: Show and check usage'
+                )}
           </DropdownMenuCheckboxItem>
         )}
         <DropdownMenuCheckboxItem
@@ -97,7 +124,10 @@ export function StatusBarVisibilityMenu({
           }}
         >
           <OpenCodeGoIcon size={14} />
-          {translate('auto.components.status.bar.StatusBar.8c86cd77b0', 'OpenCode Go Usage')}
+          {translate(
+            'auto.components.status.bar.StatusBar.showMeter.8c86cd77b0',
+            'Show OpenCode Go usage meter'
+          )}
         </DropdownMenuCheckboxItem>
         {isStatusBarItemAvailable('kimi', detectedAgentIds) && (
           <DropdownMenuCheckboxItem
@@ -108,7 +138,10 @@ export function StatusBarVisibilityMenu({
             }}
           >
             <AgentIcon agent="kimi" size={14} />
-            {translate('auto.components.status.bar.StatusBar.5e59007df4', 'Kimi Usage')}
+            {translate(
+              'auto.components.status.bar.StatusBar.showMeter.5e59007df4',
+              'Show Kimi usage meter'
+            )}
           </DropdownMenuCheckboxItem>
         )}
         <DropdownMenuCheckboxItem
@@ -119,7 +152,10 @@ export function StatusBarVisibilityMenu({
           }}
         >
           <MiniMaxIcon size={14} />
-          {translate('auto.components.status.bar.StatusBar.3bbf140864', 'MiniMax Usage')}
+          {translate(
+            'auto.components.status.bar.StatusBar.showMeter.3bbf140864',
+            'Show MiniMax usage meter'
+          )}
         </DropdownMenuCheckboxItem>
         {isStatusBarItemAvailable('grok', detectedAgentIds) && (
           <DropdownMenuCheckboxItem
@@ -130,7 +166,10 @@ export function StatusBarVisibilityMenu({
             }}
           >
             <AgentIcon agent="grok" size={14} />
-            {translate('auto.components.status.bar.StatusBar.grokUsageMenu', 'Grok Usage')}
+            {translate(
+              'auto.components.status.bar.StatusBar.showMeter.grokUsageMenu',
+              'Show Grok usage meter'
+            )}
           </DropdownMenuCheckboxItem>
         )}
         {isStatusBarItemAvailable('zcode', detectedAgentIds) && (
@@ -142,7 +181,10 @@ export function StatusBarVisibilityMenu({
             }}
           >
             <AgentIcon agent="zcode" size={14} />
-            {translate('auto.components.status.bar.StatusBar.zcodeUsageMenu', 'ZCode Usage')}
+            {translate(
+              'auto.components.status.bar.StatusBar.showMeter.zcodeUsageMenu',
+              'Show ZCode usage meter'
+            )}
           </DropdownMenuCheckboxItem>
         )}
         <DropdownMenuCheckboxItem
@@ -153,7 +195,10 @@ export function StatusBarVisibilityMenu({
           }}
         >
           <AgentIcon agent="cursor" size={14} />
-          {translate('auto.components.status.bar.StatusBar.cursorUsageMenu', 'Cursor Usage')}
+          {translate(
+            'auto.components.status.bar.StatusBar.showMeter.cursorUsageMenu',
+            'Show Cursor usage meter'
+          )}
         </DropdownMenuCheckboxItem>
         <DropdownMenuCheckboxItem
           checked={statusBarItems.includes('ssh')}

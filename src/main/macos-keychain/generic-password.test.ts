@@ -36,6 +36,33 @@ afterEach(() => {
 })
 
 describe('readKeychainPassword', () => {
+  it('does not start a security command for cancelled usage', async () => {
+    respond('placeholder')
+    const controller = new AbortController()
+    controller.abort()
+    await expect(readKeychainPassword('svc', 'acct', controller.signal)).rejects.toMatchObject({
+      name: 'AbortError'
+    })
+    expect(execFileMock).not.toHaveBeenCalled()
+  })
+
+  it('passes cancellation to security and rejects a late successful callback', async () => {
+    const callback = Promise.withResolvers<() => void>()
+    const controller = new AbortController()
+    let capturedSignal: AbortSignal | undefined
+    execFileMock.mockImplementation((_file, _args, options, complete) => {
+      capturedSignal = options.signal
+      callback.resolve(() => complete(null, 'placeholder', ''))
+      return { kill: vi.fn() }
+    })
+    const pending = readKeychainPassword('svc', 'acct', controller.signal)
+    const complete = await callback.promise
+    controller.abort()
+    complete()
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+    expect(capturedSignal).toBe(controller.signal)
+  })
+
   it('returns the trimmed secret for a stored item', async () => {
     respond('  secret-value\n')
     await expect(readKeychainPassword('cursor-access-token', 'cursor-user')).resolves.toBe(

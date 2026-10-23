@@ -1,16 +1,16 @@
-import { execFile } from 'node:child_process'
+import { runProcess } from '@orca/process-host'
 import { access, readdir, readFile, realpath } from 'node:fs/promises'
-import { promisify } from 'node:util'
 import { homedir } from 'node:os'
 import path from 'node:path'
 
-const execFileAsync = promisify(execFile)
-
-async function fileExists(filePath: string): Promise<boolean> {
+async function fileExists(filePath: string, signal?: AbortSignal): Promise<boolean> {
   try {
+    signal?.throwIfAborted()
     await access(filePath)
+    signal?.throwIfAborted()
     return true
   } catch {
+    signal?.throwIfAborted()
     return false
   }
 }
@@ -18,22 +18,22 @@ async function fileExists(filePath: string): Promise<boolean> {
 // The oauth2.js relative path inside a @google/gemini-cli-core package.
 const OAUTH2_SUBPATH = path.join('dist', 'src', 'code_assist', 'oauth2.js')
 
-async function resolveGeminiBinary(): Promise<string | null> {
+async function resolveGeminiBinary(signal?: AbortSignal): Promise<string | null> {
   const [lookup, args] =
     process.platform === 'win32' ? ['where.exe', ['gemini']] : ['which', ['gemini']]
   try {
-    // execFile, not exec: `exec` implies `shell: true`, which silently makes
-    // windowsHide a no-op (see run-process.ts, #14543), so the console-subsystem
-    // `where` would still flash a conhost (#10488).
-    const { stdout } = await execFileAsync(lookup, args, {
-      encoding: 'utf-8',
-      windowsHide: true
-    })
+    signal?.throwIfAborted()
+    const { stdout, code } = await runProcess({ program: lookup, args, signal })
+    signal?.throwIfAborted()
+    if (code !== 0) {
+      throw new Error('Gemini binary lookup failed')
+    }
     const fromPath = stdout.trim().split(/\r?\n/)[0]
-    if (fromPath && (await fileExists(fromPath))) {
+    if (fromPath && (await fileExists(fromPath, signal))) {
       return fromPath
     }
   } catch {
+    signal?.throwIfAborted()
     // ignore which/where failure
   }
 
@@ -47,7 +47,7 @@ async function resolveGeminiBinary(): Promise<string | null> {
       path.join(homedir(), 'bin', 'gemini')
     ]
     for (const candidate of fallbacks) {
-      if (await fileExists(candidate)) {
+      if (await fileExists(candidate, signal)) {
         return candidate
       }
     }
@@ -59,10 +59,14 @@ async function resolveGeminiBinary(): Promise<string | null> {
 // Why: on all platforms the gemini binary may be a symlink (e.g. Homebrew's bin/
 // symlinks into Cellar). We must resolve it before deriving sibling paths — otherwise
 // dirname points to the symlink directory, not the real installation root.
-async function resolveSymlink(filePath: string): Promise<string> {
+async function resolveSymlink(filePath: string, signal?: AbortSignal): Promise<string> {
   try {
-    return await realpath(filePath)
+    signal?.throwIfAborted()
+    const resolved = await realpath(filePath)
+    signal?.throwIfAborted()
+    return resolved
   } catch {
+    signal?.throwIfAborted()
     return filePath
   }
 }
@@ -77,12 +81,16 @@ function parseOAuthCredentials(content: string): { clientId: string; clientSecre
 }
 
 async function tryReadCredentials(
-  filePath: string
+  filePath: string,
+  signal?: AbortSignal
 ): Promise<{ clientId: string; clientSecret: string } | null> {
   try {
+    signal?.throwIfAborted()
     const content = await readFile(filePath, 'utf-8')
+    signal?.throwIfAborted()
     return parseOAuthCredentials(content)
   } catch {
+    signal?.throwIfAborted()
     return null
   }
 }
@@ -90,7 +98,8 @@ async function tryReadCredentials(
 // Why: these are the known stable layouts for every major Gemini CLI install method.
 // Checking explicit paths is fast and avoids walking the entire directory tree.
 async function extractFromKnownPaths(
-  realGeminiPath: string
+  realGeminiPath: string,
+  signal?: AbortSignal
 ): Promise<{ clientId: string; clientSecret: string } | null> {
   const binDir = path.dirname(realGeminiPath)
   const baseDir = path.dirname(binDir)
@@ -138,7 +147,7 @@ async function extractFromKnownPaths(
   ]
 
   for (const candidate of candidates) {
-    const creds = await tryReadCredentials(path.normalize(candidate))
+    const creds = await tryReadCredentials(path.normalize(candidate), signal)
     if (creds) {
       return creds
     }
@@ -151,22 +160,26 @@ async function extractFromKnownPaths(
 // chunks with no oauth2.js source file. Scanning the bundle dir for the credential
 // constants is the only reliable fallback for those installs.
 async function extractFromBundleDir(
-  geminiCliPackageRoot: string
+  geminiCliPackageRoot: string,
+  signal?: AbortSignal
 ): Promise<{ clientId: string; clientSecret: string } | null> {
   const bundleDir = path.join(geminiCliPackageRoot, 'bundle')
-  if (!(await fileExists(bundleDir))) {
+  if (!(await fileExists(bundleDir, signal))) {
     return null
   }
 
   let entries: string[]
   try {
+    signal?.throwIfAborted()
     entries = (await readdir(bundleDir)).filter((f) => f.endsWith('.js'))
   } catch {
+    signal?.throwIfAborted()
     return null
   }
 
+  signal?.throwIfAborted()
   for (const entry of entries) {
-    const creds = await tryReadCredentials(path.join(bundleDir, entry))
+    const creds = await tryReadCredentials(path.join(bundleDir, entry), signal)
     if (creds) {
       return creds
     }
@@ -178,20 +191,26 @@ async function extractFromBundleDir(
 // Resolves the gemini-cli package root directory by walking up the directory
 // tree from the real binary path, looking for package.json with the right name,
 // or the global Node layout under lib/node_modules.
-async function findGeminiPackageRoot(realGeminiPath: string): Promise<string | null> {
+async function findGeminiPackageRoot(
+  realGeminiPath: string,
+  signal?: AbortSignal
+): Promise<string | null> {
   const MAX_ASCENTS = 8
   let current = path.dirname(realGeminiPath)
 
   for (let i = 0; i <= MAX_ASCENTS; i++) {
     const pkgJson = path.join(current, 'package.json')
-    if (await fileExists(pkgJson)) {
+    if (await fileExists(pkgJson, signal)) {
       try {
+        signal?.throwIfAborted()
         const raw = await readFile(pkgJson, 'utf-8')
+        signal?.throwIfAborted()
         const pkg = JSON.parse(raw) as { name?: string }
         if (pkg.name === '@google/gemini-cli') {
           return current
         }
       } catch {
+        signal?.throwIfAborted()
         // malformed package.json — keep walking
       }
     }
@@ -205,7 +224,7 @@ async function findGeminiPackageRoot(realGeminiPath: string): Promise<string | n
       'gemini-cli',
       'package.json'
     )
-    if (await fileExists(globalPkg)) {
+    if (await fileExists(globalPkg, signal)) {
       return path.join(current, 'lib', 'node_modules', '@google', 'gemini-cli')
     }
 
@@ -217,7 +236,7 @@ async function findGeminiPackageRoot(realGeminiPath: string): Promise<string | n
       'gemini-cli',
       'package.json'
     )
-    if (await fileExists(windowsGlobalPkg)) {
+    if (await fileExists(windowsGlobalPkg, signal)) {
       return path.join(current, 'node_modules', '@google', 'gemini-cli')
     }
 
@@ -231,35 +250,37 @@ async function findGeminiPackageRoot(realGeminiPath: string): Promise<string | n
   return null
 }
 
-export async function extractOAuthClientCredentials(): Promise<{
+export async function extractOAuthClientCredentials(signal?: AbortSignal): Promise<{
   clientId: string
   clientSecret: string
 } | null> {
-  const geminiPath = await resolveGeminiBinary()
+  signal?.throwIfAborted()
+  const geminiPath = await resolveGeminiBinary(signal)
   if (!geminiPath) {
     return null
   }
 
-  const realPath = await resolveSymlink(geminiPath)
+  const realPath = await resolveSymlink(geminiPath, signal)
 
   // 1. Known static paths (fast, covers most installs with source layout)
-  const fromKnown = await extractFromKnownPaths(realPath)
+  const fromKnown = await extractFromKnownPaths(realPath, signal)
   if (fromKnown) {
     return fromKnown
   }
 
   // 2. Walk up to find the package root, then try source layout + bundle dir
-  const packageRoot = await findGeminiPackageRoot(realPath)
+  const packageRoot = await findGeminiPackageRoot(realPath, signal)
   if (packageRoot) {
     const fromSource =
       (await tryReadCredentials(
-        path.join(packageRoot, 'node_modules', '@google', 'gemini-cli-core', OAUTH2_SUBPATH)
-      )) ?? (await tryReadCredentials(path.join(packageRoot, OAUTH2_SUBPATH)))
+        path.join(packageRoot, 'node_modules', '@google', 'gemini-cli-core', OAUTH2_SUBPATH),
+        signal
+      )) ?? (await tryReadCredentials(path.join(packageRoot, OAUTH2_SUBPATH), signal))
     if (fromSource) {
       return fromSource
     }
 
-    const fromBundle = await extractFromBundleDir(packageRoot)
+    const fromBundle = await extractFromBundleDir(packageRoot, signal)
     if (fromBundle) {
       return fromBundle
     }

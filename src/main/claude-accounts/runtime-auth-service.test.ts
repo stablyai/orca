@@ -59,6 +59,21 @@ afterEach(() => {
 })
 
 describe('ClaudeRuntimeAuthService', () => {
+  it('does not start WSL credential preparation when usage is disabled during its running probe', async () => {
+    const probe = Promise.withResolvers<boolean>()
+    const preparation = vi.spyOn(fakes.wsl, 'preparation')
+    const auth = service('win32', {}, () => probe.promise)
+    const controller = new AbortController()
+    const pending = auth.prepareForRateLimitFetch(
+      { runtime: 'wsl', wslDistro: 'Ubuntu' },
+      controller.signal
+    )
+    controller.abort()
+    probe.resolve(true)
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+    expect(preparation).not.toHaveBeenCalled()
+  })
+
   it('skips a quota preparation for a stopped distro instead of booting it', async () => {
     const preparation = vi.spyOn(fakes.wsl, 'preparation')
     const auth = service('win32', {}, async () => false)
@@ -71,6 +86,22 @@ describe('ClaudeRuntimeAuthService', () => {
     await expect(
       running.prepareForRateLimitFetch({ runtime: 'wsl', wslDistro: 'Ubuntu' })
     ).resolves.toEqual({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+  })
+
+  it('does not prepare a stopped distro or launch Claude to attribute live usage', async () => {
+    const preparation = vi.spyOn(fakes.wsl, 'preparation')
+    const launch = vi.spyOn(fakes.wsl, 'prepareLaunch')
+    const stopped = service('win32', {}, async () => false)
+    await expect(
+      stopped.readUsageAttribution({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+    ).resolves.toBeNull()
+    expect(preparation).not.toHaveBeenCalled()
+    expect(launch).not.toHaveBeenCalled()
+    const unsupported = service('darwin')
+    await expect(
+      unsupported.readUsageAttribution({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+    ).resolves.toBeNull()
+    expect(preparation).not.toHaveBeenCalled()
   })
 
   it('keeps a stale WSL account setting on the host off Windows', async () => {

@@ -64,13 +64,15 @@ export class ClaudeWslProfileRouter {
     return running.filter((distro) => this.accountIn(distro))
   }
 
-  private async resolve(distro: string) {
+  private async resolve(distro: string, signal?: AbortSignal) {
+    signal?.throwIfAborted()
     const home = parseWslUncPath((await getWslHomeAsync(distro)) ?? '')?.linuxPath
+    signal?.throwIfAborted()
     if (!home?.startsWith('/')) {
       throw new Error(`Could not read the home folder of WSL distro ${distro}.`)
     }
     const selected = this.selectedProfile(home, distro)
-    return { home, selected, profile: await this.routed(distro, home, selected) }
+    return { home, selected, profile: await this.routed(distro, home, selected, signal) }
   }
 
   /** The host router's fallback: an account with no login of its own runs on the guest's ~/.claude
@@ -78,13 +80,19 @@ export class ClaudeWslProfileRouter {
   private async routed(
     distro: string,
     home: string,
-    selected: ClaudeProfileDescriptor | null
+    selected: ClaudeProfileDescriptor | null,
+    signal?: AbortSignal
   ): Promise<ClaudeProfileDescriptor | null> {
-    if (!selected || (await guestLogin(distro, posix.join(selected.home, '.claude.json')))) {
+    signal?.throwIfAborted()
+    if (
+      !selected ||
+      (await guestLogin(distro, posix.join(selected.home, '.claude.json'), signal))
+    ) {
       return selected
     }
     const saved = findClaudeAccount(this.args.getSettings(), selected.accountId)
-    const systemDefault = await guestLogin(distro, posix.join(home, '.claude.json'))
+    const systemDefault = await guestLogin(distro, posix.join(home, '.claude.json'), signal)
+    signal?.throwIfAborted()
     return saved && systemDefault && isSameClaudeLogin(saved, systemDefault) ? null : selected
   }
 
@@ -163,16 +171,22 @@ export class ClaudeWslProfileRouter {
   /** Where an unselected account's usage is read in the guest: where its launches would run. */
   async accountUsagePreparation(
     distro: string,
-    accountId: string
+    accountId: string,
+    signal?: AbortSignal
   ): Promise<ClaudeRuntimeAuthPreparation> {
-    const { home } = await this.resolve(distro)
+    const { home } = await this.resolve(distro, signal)
+    signal?.throwIfAborted()
     const { profile } = wslClaudeProfile(home, distro, accountId)
-    return this.preparationFor(distro, home, await this.routed(distro, home, profile))
+    const routed = await this.routed(distro, home, profile, signal)
+    signal?.throwIfAborted()
+    return this.preparationFor(distro, home, routed)
   }
 
-  async preparation(distro: string): Promise<ClaudeRuntimeAuthPreparation> {
-    const { home, profile } = await this.resolve(distro)
-    await this.assertPresent(distro, profile)
+  async preparation(distro: string, signal?: AbortSignal): Promise<ClaudeRuntimeAuthPreparation> {
+    const { home, profile } = await this.resolve(distro, signal)
+    signal?.throwIfAborted()
+    await this.assertPresent(distro, profile, signal)
+    signal?.throwIfAborted()
     return this.preparationFor(distro, home, profile)
   }
 
@@ -199,8 +213,13 @@ export class ClaudeWslProfileRouter {
   }
 
   /** Falling back would run the wrong account. */
-  private async assertPresent(distro: string, profile: ClaudeProfileDescriptor | null) {
-    if (profile && !(await guestStat(distro, profile.home))?.isDirectory()) {
+  private async assertPresent(
+    distro: string,
+    profile: ClaudeProfileDescriptor | null,
+    signal?: AbortSignal
+  ) {
+    signal?.throwIfAborted()
+    if (profile && !(await guestStat(distro, profile.home, signal))?.isDirectory()) {
       throw claudeProfileMissing()
     }
   }
@@ -242,13 +261,20 @@ export class ClaudeWslProfileRouter {
 }
 
 /** The login a guest state file names, read over the share like the marker. */
-function guestLogin(distro: string, stateFile: string): Promise<ClaudeFolderLogin | null> {
-  return readClaudeFolderLoginAsync(toWindowsWslPath(stateFile, distro))
+function guestLogin(
+  distro: string,
+  stateFile: string,
+  signal?: AbortSignal
+): Promise<ClaudeFolderLogin | null> {
+  return readClaudeFolderLoginAsync(toWindowsWslPath(stateFile, distro), signal)
 }
 
 // Why over the distro's share: a launch must not wait on a guest process for two stats.
-async function guestStat(distro: string, linuxPath: string) {
-  return lstat(toWindowsWslPath(linuxPath, distro)).catch(() => null)
+async function guestStat(distro: string, linuxPath: string, signal?: AbortSignal) {
+  signal?.throwIfAborted()
+  const metadata = await lstat(toWindowsWslPath(linuxPath, distro)).catch(() => null)
+  signal?.throwIfAborted()
+  return metadata
 }
 
 async function hasMarker(distro: string, profile: ClaudeProfileDescriptor): Promise<boolean> {

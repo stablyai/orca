@@ -57,6 +57,8 @@ export function readLegacyTerminalScrollbackSettings(
 }
 
 type RetiredGlobalSettings = {
+  antigravityUsageEnabled?: unknown
+  usageRequestPolicyVersion?: unknown
   setupScriptLaunchMode?: unknown
   terminalScrollbackBytes?: unknown
   enableGitHubAttribution?: unknown
@@ -73,6 +75,8 @@ export function stripRetiredGlobalSettings(
   settings: Partial<GlobalSettings> | undefined
 ): Partial<GlobalSettings> {
   const {
+    antigravityUsageEnabled: _projectedAntigravityUsageEnabled,
+    usageRequestPolicyVersion: _projectedUsageRequestPolicyVersion,
     setupScriptLaunchMode: _legacySetupScriptLaunchMode,
     terminalScrollbackBytes: _legacyScrollbackBytes,
     enableGitHubAttribution: _legacyGitHubAttribution,
@@ -83,6 +87,8 @@ export function stripRetiredGlobalSettings(
     openAgentTabsInChatByDefault: _legacyChatDefaultView,
     ...rest
   } = (settings ?? {}) as Partial<GlobalSettings> & RetiredGlobalSettings
+  void _projectedAntigravityUsageEnabled
+  void _projectedUsageRequestPolicyVersion
   void _legacySetupScriptLaunchMode
   void _legacyScrollbackBytes
   void _legacyGitHubAttribution

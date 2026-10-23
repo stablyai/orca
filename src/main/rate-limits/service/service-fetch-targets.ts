@@ -1,6 +1,10 @@
+import { codexResetUsageVisible } from './service-codex-reset-usage'
+import type { ProviderUsageRequest } from './service-usage-requests'
+import { delayUnlessAborted } from '../../../shared/abort-aware-delay'
 import { RateLimitServiceResultPolicy } from './service-result-policy'
 import { fetchCodexRateLimits } from '../codex-fetcher'
 import { fetchKimiRateLimits } from '../kimi-fetcher'
+import type { KimiHomeResolution } from '../../kimi/kimi-runtime-home'
 import {
   isSystemDefaultClaudeAuth,
   type ClaudeRuntimeAuthPreparation,
@@ -20,35 +24,21 @@ import { ApiKeyFileUnreadableError } from '../../credentials/api-key-file-unread
 const CODEX_RESET_REFRESH_RETRIES = 3
 const CODEX_RESET_REFRESH_DELAY_MS = 250
 
-function waitForCodexResetRefresh(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, CODEX_RESET_REFRESH_DELAY_MS))
-}
-
-function codexResetUsageVisible(
-  fresh: ProviderRateLimits,
-  previous: ProviderRateLimits | null
-): boolean {
-  if (fresh.status !== 'ok') {
-    return false
-  }
-  if (!previous) {
-    return (fresh.session?.usedPercent ?? 0) <= 0 && (fresh.weekly?.usedPercent ?? 0) <= 0
-  }
-  const sessionImproved =
-    fresh.session !== null &&
-    (previous.session === null || fresh.session.usedPercent < previous.session.usedPercent)
-  const weeklyImproved =
-    fresh.weekly !== null &&
-    (previous.weekly === null || fresh.weekly.usedPercent < previous.weekly.usedPercent)
-  return sessionImproved || weeklyImproved
-}
-
 export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResultPolicy {
-  protected async resolveCodexHome(target?: CodexAccountSelectionTarget): Promise<{
+  protected async resolveCodexHome(
+    target?: CodexAccountSelectionTarget,
+    signal?: AbortSignal
+  ): Promise<{
     skip: boolean
     homePath: string | null
   }> {
-    const resolution = await this.codexHomePathResolver?.(target)
+    if (!this.isUsageRequestEnabled('codex') || signal?.aborted) {
+      return { skip: true, homePath: null }
+    }
+    const resolution = await this.codexHomePathResolver?.(target, signal)
+    if (signal?.aborted) {
+      return { skip: true, homePath: null }
+    }
     if (!resolution) {
       return { skip: false, homePath: null }
     }
@@ -59,11 +49,19 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
 
   // Why: resolving a WSL home probes wsl.exe, so it must not run before the other
   // providers' fetches are started; chaining keeps the no-resolver path immediate.
-  protected fetchKimiWithResolvedHome(): Promise<ProviderRateLimits> {
-    const pendingHome = this.kimiHomeResolver?.()
-    return pendingHome
-      ? pendingHome.then((home) => fetchKimiRateLimits({ home }))
-      : fetchKimiRateLimits({ home: undefined })
+  protected fetchKimiWithResolvedHome(signal?: AbortSignal): Promise<ProviderRateLimits> {
+    if (!this.isUsageRequestEnabled('kimi') || signal?.aborted) {
+      return Promise.resolve(this.providerUsagePlaceholder('kimi'))
+    }
+    const fetchWithHome = (home?: KimiHomeResolution): Promise<ProviderRateLimits> => {
+      signal?.throwIfAborted()
+      if (!this.isUsageRequestEnabled('kimi')) {
+        return Promise.resolve(this.providerUsagePlaceholder('kimi'))
+      }
+      return fetchKimiRateLimits({ home, signal })
+    }
+    const home = this.kimiHomeResolver?.(signal)
+    return home ? home.then(fetchWithHome) : fetchWithHome()
   }
 
   protected isSameCodexTarget(
@@ -110,6 +108,30 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
     stateBeforeReset: RateLimitState,
     outcome: CodexRateLimitResetOutcome
   ): Promise<RateLimitState> {
+    if (!this.isUsageRequestEnabled('codex')) {
+      return this.codexResetResultSnapshot(stateBeforeReset, target)
+    }
+    const request = this.beginProviderUsageRequest('codex')
+    try {
+      return await this.fetchAdmittedCodexResetResultState(
+        target,
+        codexHomePath,
+        stateBeforeReset,
+        outcome,
+        request.controller.signal
+      )
+    } finally {
+      request.finish()
+    }
+  }
+
+  private async fetchAdmittedCodexResetResultState(
+    target: NormalizedCodexAccountSelectionTarget,
+    codexHomePath: string | null,
+    stateBeforeReset: RateLimitState,
+    outcome: CodexRateLimitResetOutcome,
+    signal: AbortSignal
+  ): Promise<RateLimitState> {
     let fresh: ProviderRateLimits = stateBeforeReset.codex ?? {
       provider: 'codex',
       session: null,
@@ -124,14 +146,17 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
       attempt += 1
     ) {
       if (attempt > 0) {
-        await waitForCodexResetRefresh()
+        await delayUnlessAborted(CODEX_RESET_REFRESH_DELAY_MS, signal)
+      }
+      if (signal.aborted) {
+        return this.codexResetResultSnapshot(stateBeforeReset, target)
       }
       const controller = this.beginFetchCycle()
       try {
         fresh = await fetchCodexRateLimits({
           codexHomePath,
           networkProxySettings: this.networkProxySettingsResolver?.(),
-          signal: controller.signal
+          signal: AbortSignal.any([signal, controller.signal])
         })
       } catch (error) {
         fresh = {
@@ -150,11 +175,18 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
       }
     }
 
+    if (signal.aborted) {
+      return this.codexResetResultSnapshot(stateBeforeReset, target)
+    }
     const scopedCodex = this.applyStalePolicy(fresh, stateBeforeReset.codex)
-    const currentCodexHome = await this.resolveCodexHome(target)
+    const currentCodexHome = await this.resolveCodexHome(target, signal)
+    if (signal.aborted) {
+      return this.codexResetResultSnapshot(stateBeforeReset, target)
+    }
     // Why: a skip has no provenance to compare, so treat it as no longer active
     // rather than publishing this result against the system-default lane.
     const stillActive =
+      !signal.aborted &&
       !currentCodexHome.skip &&
       this.isSameCodexTarget(this.codexFetchTarget, target) &&
       this.getCodexProvenance(target, currentCodexHome.homePath) ===
@@ -172,7 +204,20 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
 
     // Why: the caller must receive the redeemed target even if the global UI
     // switched targets while the provider mutation was in flight.
-    return { ...stateBeforeReset, codex: scopedCodex, codexTarget: target }
+    return this.codexResetResultSnapshot(stateBeforeReset, target, scopedCodex)
+  }
+
+  private codexResetResultSnapshot(
+    before: RateLimitState,
+    target: NormalizedCodexAccountSelectionTarget,
+    codex = before.codex
+  ): RateLimitState {
+    return {
+      ...before,
+      usageRequestPolicy: this.usageRequestPolicySnapshot(),
+      codex,
+      codexTarget: target
+    }
   }
 
   protected shouldAllowClaudePtyFallback(
@@ -191,7 +236,16 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
     return process.platform !== 'win32'
   }
 
-  protected resolveOpenCodeGoConfig(): OpenCodeGoResolvedConfig {
+  protected resolveOpenCodeGoConfig(request: ProviderUsageRequest): OpenCodeGoResolvedConfig {
+    if (!this.isProviderUsageRequestCurrent(request)) {
+      return {
+        sessionCookie: '',
+        workspaceIdOverride: '',
+        apiKey: '',
+        apiKeyError: null,
+        apiKeyReadSkipped: false
+      }
+    }
     const config = this.openCodeGoConfigResolver?.() ?? {
       sessionCookie: '',
       workspaceIdOverride: ''
@@ -219,7 +273,19 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
     }
   }
 
-  protected resolveMiniMaxConfig(): MiniMaxResolvedConfig {
+  protected resolveMiniMaxConfig(request: ProviderUsageRequest): MiniMaxResolvedConfig {
+    if (!this.isProviderUsageRequestCurrent(request)) {
+      return {
+        config: {
+          sessionCookie: '',
+          groupId: '',
+          models: 'general',
+          endpoint: 'overseas',
+          apiKey: ''
+        },
+        error: null
+      }
+    }
     try {
       return {
         config: this.miniMaxConfigResolver?.() ?? {
@@ -246,7 +312,10 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
     }
   }
 
-  protected resolveZcodePlanConfig(): ZcodePlanResolvedConfig {
+  protected resolveZcodePlanConfig(request: ProviderUsageRequest): ZcodePlanResolvedConfig {
+    if (!this.isProviderUsageRequestCurrent(request)) {
+      return { config: { site: 'zai', apiKey: '' }, error: null }
+    }
     try {
       return {
         config: this.zcodePlanConfigResolver?.() ?? { site: 'zai', apiKey: '' },

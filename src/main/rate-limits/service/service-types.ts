@@ -35,11 +35,13 @@ export type InactiveCodexAccountInfo = {
 }
 
 export type CodexHomePathResolver = (
-  target?: CodexAccountSelectionTarget
+  target?: CodexAccountSelectionTarget,
+  signal?: AbortSignal
 ) => CodexRateLimitHomeResolution | Promise<CodexRateLimitHomeResolution>
-export type KimiHomeResolver = () => Promise<KimiHomeResolution>
+export type KimiHomeResolver = (signal?: AbortSignal) => Promise<KimiHomeResolution>
 export type ClaudeAuthPreparationResolver = (
-  target?: ClaudeAccountSelectionTarget
+  target?: ClaudeAccountSelectionTarget,
+  signal?: AbortSignal
 ) => Promise<ClaudeRuntimeAuthPreparation>
 
 export type OpenCodeGoRateLimitConfig = {

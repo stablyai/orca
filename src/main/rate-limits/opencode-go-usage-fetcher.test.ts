@@ -822,4 +822,61 @@ describe('fetchOpenCodeGoRateLimits', () => {
     expect(result.error).toBe('net::ERR_PROXY_CONNECTION_FAILED')
     expect(result.usageMetadata?.failureKind).toBe('network')
   })
+
+  it('cleans up without requesting status after workspace discovery is cancelled', async () => {
+    const controller = new AbortController()
+    netFetchMock.mockImplementation(async () => {
+      controller.abort()
+      return makeResponse(WORKSPACES_RESPONSE)
+    })
+    await expect(
+      fetchOpenCodeGoRateLimits('auth=placeholder', undefined, undefined, controller.signal)
+    ).rejects.toMatchObject({ name: 'AbortError' })
+    expect(netFetchMock).toHaveBeenCalledTimes(1)
+    expect(clearStorageDataMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('aborts optional billing and never advances to another workspace after cancellation', async () => {
+    const controller = new AbortController()
+    let billingSignal: AbortSignal | null = null
+    netFetchMock.mockImplementation(async (url, init) => {
+      if (String(url).includes('/_server')) {
+        return makeResponse('id: "wrk_FIRST"; id: "wrk_SECOND"')
+      }
+      if (url === CONSOLE_BILLING_STATUS_URL) {
+        billingSignal = init.signal
+        return new Promise<Response>((_resolve, reject) => {
+          init.signal.addEventListener('abort', () => reject(init.signal.reason), { once: true })
+        })
+      }
+      await Promise.resolve()
+      controller.abort()
+      return makeResponse('', 401)
+    })
+    await expect(
+      fetchOpenCodeGoRateLimits('auth=placeholder', undefined, undefined, controller.signal)
+    ).rejects.toMatchObject({ name: 'AbortError' })
+    expect(requestedUrls()).toHaveLength(3)
+    expect(billingSignal).toMatchObject({ aborted: true })
+    expect(clearStorageDataMock).toHaveBeenCalledTimes(2)
+    expect(netFetchMock.mock.calls.filter(([url]) => url === CONSOLE_STATUS_URL)).toHaveLength(1)
+  })
+
+  it('cleans up an interrupted cookie setup before issuing any network request', async () => {
+    const controller = new AbortController()
+    cookiesSetMock.mockImplementationOnce(async () => {
+      controller.abort()
+    })
+    await expect(
+      fetchOpenCodeGoRateLimits(
+        'auth=placeholder; __Host-console_session=placeholder',
+        undefined,
+        undefined,
+        controller.signal
+      )
+    ).rejects.toMatchObject({ name: 'AbortError' })
+    expect(cookiesSetMock).toHaveBeenCalledTimes(1)
+    expect(netFetchMock).not.toHaveBeenCalled()
+    expect(clearStorageDataMock).toHaveBeenCalledTimes(2)
+  })
 })

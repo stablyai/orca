@@ -73,6 +73,32 @@ describe('Store', () => {
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
+  it('round-trips normalized usage opt-outs through partial updates and durable reload', async () => {
+    writeDataFile({
+      settings: {
+        usageRequestEnabled: {
+          claude: false,
+          codex: false,
+          gemini: 'false',
+          antigravity: false,
+          unknown: false
+        }
+      }
+    })
+    const store = await createStore()
+    expect(store.getSettings().usageRequestEnabled).toEqual({ claude: false, codex: false })
+
+    store.updateSettings({ usageRequestEnabled: { codex: true } })
+    store.updateSettings({ usageRequestEnabled: { kimi: false } })
+    store.updateSettings({ theme: 'dark' })
+    store.flush()
+
+    const expected = { claude: false, codex: true, kimi: false }
+    expect(readDataFile()).toMatchObject({ settings: { usageRequestEnabled: expected } })
+    await closeTestStores()
+    expect((await createStore()).getSettings().usageRequestEnabled).toEqual(expected)
+  })
+
   it('updateSettings merges partial updates', async () => {
     const store = await createStore()
     const initial = store.getSettings()

@@ -1,17 +1,15 @@
+import { abortSignalWithTimeout } from '../lib/abort-signal-with-timeout'
 import { readFile } from 'node:fs/promises'
 import { join, win32 as pathWin32 } from 'node:path'
 import { getMainHttpClient } from '../network/http-client'
-import type {
-  ProviderRateLimits,
-  RateLimitWindow,
-  UsageRateLimitMetadata
-} from '../../shared/rate-limit-types'
+import type { ProviderRateLimits, UsageRateLimitMetadata } from '../../shared/rate-limit-types'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { getHostKimiHome, type KimiHomeResolution } from '../kimi/kimi-runtime-home'
 import {
   createAuthFilesystemOperation,
   type SharedAuthFilesystemOperation
 } from './auth-filesystem-operation'
+import { mapKimiUsageResponse } from './kimi-usage-response'
 import { classifyThrownUsageRequestError } from './usage-request-failure-kind'
 
 // Why: Kimi Code's managed coding plan exposes subscription usage at
@@ -21,9 +19,6 @@ import { classifyThrownUsageRequestError } from './usage-request-failure-kind'
 const KIMI_BASE_URL = process.env.KIMI_CODE_BASE_URL ?? 'https://api.kimi.com/coding/v1'
 const API_TIMEOUT_MS = 10_000
 const CREDENTIALS_READ_TIMEOUT_MS = 5_000
-
-const SESSION_WINDOW_MINUTES = 300 // 5h
-const WEEKLY_WINDOW_MINUTES = 10080 // 7d
 
 function getCredentialsPath(kimiHome: string): string {
   // WSL homes arrive as `\\wsl.localhost\<distro>\...`, which only win32 join keeps intact.
@@ -107,13 +102,20 @@ function getCredentialsRead(path: string): SharedAuthFilesystemOperation<Credent
   return read
 }
 
-async function readCredentials(kimiHome: string): Promise<CredentialsReadResult> {
+async function readCredentials(
+  kimiHome: string,
+  signal?: AbortSignal
+): Promise<CredentialsReadResult> {
+  signal?.throwIfAborted()
   const path = getCredentialsPath(kimiHome)
   try {
     // Why: a stopped distro parks a UNC read for minutes; bound it so a WSL home
     // degrades to an error instead of stalling the poll cycle.
-    return await getCredentialsRead(path).wait(AbortSignal.timeout(CREDENTIALS_READ_TIMEOUT_MS))
+    return await getCredentialsRead(path).wait(
+      abortSignalWithTimeout(signal, CREDENTIALS_READ_TIMEOUT_MS)
+    )
   } catch (err) {
+    signal?.throwIfAborted()
     return { status: 'error', error: readErrorMessage(err) }
   }
 }
@@ -127,136 +129,6 @@ function isAccessTokenFresh(creds: KimiCredentials): boolean {
     // expires mid-flight. The CLI refreshes the file on its next run.
     creds.expires_at - Math.floor(Date.now() / 1000) > 5
   )
-}
-
-// ---------------------------------------------------------------------------
-// Usage payload parsing (see packages/oauth/src/managed-usage.ts in the CLI)
-// ---------------------------------------------------------------------------
-
-type KimiUsageDetail = {
-  limit?: string | number
-  remaining?: string | number
-  used?: string | number
-  resetTime?: string
-  resetAt?: string
-}
-
-type KimiUsageWindow = {
-  duration?: number
-  timeUnit?: string
-}
-
-type KimiUsageLimit = {
-  window?: KimiUsageWindow
-  detail?: KimiUsageDetail
-}
-
-type KimiUsageResponse = {
-  usage?: KimiUsageDetail
-  limits?: KimiUsageLimit[]
-}
-
-function toInt(value: string | number | undefined): number | null {
-  if (typeof value === 'number') {
-    return Number.isFinite(value) ? value : null
-  }
-  if (typeof value === 'string') {
-    const parsed = Number(value)
-    return Number.isFinite(parsed) ? parsed : null
-  }
-  return null
-}
-
-function windowToMinutes(window: KimiUsageWindow | undefined): number | null {
-  const duration = toInt(window?.duration)
-  if (duration === null) {
-    return null
-  }
-  const unit = (window?.timeUnit ?? '').toUpperCase()
-  if (unit.includes('MINUTE')) {
-    return duration
-  }
-  if (unit.includes('HOUR')) {
-    return duration * 60
-  }
-  if (unit.includes('DAY')) {
-    return duration * 60 * 24
-  }
-  if (unit.includes('SECOND')) {
-    return Math.round(duration / 60)
-  }
-  return duration
-}
-
-function parseResetDescription(isoString: string | undefined): string | null {
-  if (!isoString) {
-    return null
-  }
-  const date = new Date(isoString)
-  if (Number.isNaN(date.getTime())) {
-    return null
-  }
-  const isToday = date.toDateString() === new Date().toDateString()
-  return isToday
-    ? date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
-    : date.toLocaleDateString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })
-}
-
-function mapWindow(
-  detail: KimiUsageDetail | undefined,
-  windowMinutes: number
-): RateLimitWindow | null {
-  if (!detail) {
-    return null
-  }
-  const limit = toInt(detail.limit)
-  let used = toInt(detail.used)
-  if (used === null) {
-    const remaining = toInt(detail.remaining)
-    if (remaining !== null && limit !== null) {
-      used = limit - remaining
-    }
-  }
-  if (limit === null || limit <= 0 || used === null) {
-    return null
-  }
-  const reset = detail.resetTime ?? detail.resetAt
-  return {
-    usedPercent: Math.min(100, Math.max(0, (used / limit) * 100)),
-    windowMinutes,
-    resetsAt: reset ? new Date(reset).getTime() || null : null,
-    resetDescription: parseResetDescription(reset)
-  }
-}
-
-function mapUsageResponse(data: KimiUsageResponse): ProviderRateLimits {
-  // Why: the top-level `usage` block is the weekly quota; the windowed entries
-  // in `limits` carry shorter rolling windows — the 5h one is the session view.
-  const weekly = mapWindow(data.usage, WEEKLY_WINDOW_MINUTES)
-  let session: RateLimitWindow | null = null
-  for (const limit of data.limits ?? []) {
-    const minutes = windowToMinutes(limit.window) ?? SESSION_WINDOW_MINUTES
-    const mapped = mapWindow(limit.detail, minutes)
-    if (!mapped) {
-      continue
-    }
-    // Prefer the window closest to a 5h session; otherwise keep the first seen.
-    if (
-      session === null ||
-      Math.abs(minutes - SESSION_WINDOW_MINUTES) <
-        Math.abs(session.windowMinutes - SESSION_WINDOW_MINUTES)
-    ) {
-      session = mapped
-    }
-  }
-  return {
-    provider: 'kimi',
-    session,
-    weekly,
-    updatedAt: Date.now(),
-    error: session || weekly ? null : 'Kimi usage response did not include quota windows',
-    status: session || weekly ? 'ok' : 'error'
-  }
 }
 
 // A bare "operation was aborted due to timeout" hides which machine stalled.
@@ -305,7 +177,10 @@ function result(
  */
 export async function fetchKimiRateLimits(options?: {
   home?: KimiHomeResolution
+  signal?: AbortSignal
 }): Promise<ProviderRateLimits> {
+  const signal = options?.signal
+  signal?.throwIfAborted()
   const home: KimiHomeResolution = options?.home ?? {
     runtime: 'host',
     wslDistro: null,
@@ -314,7 +189,8 @@ export async function fetchKimiRateLimits(options?: {
   if (home.path === null) {
     return result('error', `WSL Kimi home unavailable for ${home.wslDistro ?? 'default distro'}`)
   }
-  const readResult = await readCredentials(home.path)
+  const readResult = await readCredentials(home.path, signal)
+  signal?.throwIfAborted()
   if (readResult.status === 'missing') {
     return result('unavailable', 'Not signed in to Kimi Code')
   }
@@ -340,8 +216,9 @@ export async function fetchKimiRateLimits(options?: {
       // Why: identical to the CLI's fetchManagedUsage — bearer token + Accept.
       // No extra User-Agent: the usages endpoint authenticates by token only.
       headers: { Authorization: `Bearer ${creds.access_token}`, Accept: 'application/json' },
-      signal: AbortSignal.timeout(API_TIMEOUT_MS)
+      signal: abortSignalWithTimeout(signal, API_TIMEOUT_MS)
     })
+    signal?.throwIfAborted()
     if (res.status === 401 || res.status === 403) {
       return result('error', `Kimi usage request unauthorized (HTTP ${res.status})`)
     }
@@ -349,8 +226,10 @@ export async function fetchKimiRateLimits(options?: {
       return result('error', `Kimi usage request failed (HTTP ${res.status})`)
     }
     const data: unknown = await res.json()
-    return mapUsageResponse(typeof data === 'object' && data !== null ? data : {})
+    signal?.throwIfAborted()
+    return mapKimiUsageResponse(typeof data === 'object' && data !== null ? data : {})
   } catch (err) {
+    signal?.throwIfAborted()
     return result('error', err instanceof Error ? err.message : 'Kimi usage request failed', {
       failureKind: classifyThrownUsageRequestError(err)
     })

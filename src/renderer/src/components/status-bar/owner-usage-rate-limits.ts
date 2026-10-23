@@ -103,6 +103,16 @@ export function isOwnerNotSetUpPlaceholder(provider: ProviderRateLimits): boolea
   return provider.usageMetadata?.ownerNotSetUp !== undefined
 }
 
+export function hasFetchingUsageRequests(state: RateLimitState): boolean {
+  return USAGE_PROVIDER_KEYS.some((key) => {
+    const provider = state[key]
+    return (
+      provider?.status === 'fetching' &&
+      state.usageRequestPolicy?.enabled[provider.provider] !== false
+    )
+  })
+}
+
 function isSetUpHere(local: RateLimitState, key: UsageProviderKey): boolean {
   const provider = local[key]
   return (

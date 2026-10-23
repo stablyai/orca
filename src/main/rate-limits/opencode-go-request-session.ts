@@ -21,22 +21,31 @@ async function setOpenCodeSessionProxy(
   openCodeSession: Session,
   proxyRules: string,
   proxyBypassRules: string,
-  source: 'settings' | 'env'
+  source: 'settings' | 'env',
+  signal?: AbortSignal
 ): Promise<void> {
+  signal?.throwIfAborted()
   const key = `${source}\0${proxyRules}\0${proxyBypassRules}`
   if (appliedProxyKeys.get(openCodeSession) === key) {
     return
   }
+  appliedProxyKeys.delete(openCodeSession)
   await openCodeSession.setProxy({
     mode: 'fixed_servers',
     proxyRules,
     ...(proxyBypassRules ? { proxyBypassRules } : {})
   })
+  signal?.throwIfAborted()
   await openCodeSession.closeAllConnections()
+  signal?.throwIfAborted()
   appliedProxyKeys.set(openCodeSession, key)
 }
 
-async function ensureEnvironmentProxyForOpenCodeSession(openCodeSession: Session): Promise<void> {
+async function ensureEnvironmentProxyForOpenCodeSession(
+  openCodeSession: Session,
+  signal?: AbortSignal
+): Promise<void> {
+  signal?.throwIfAborted()
   const envProxy = getProxyUrlFromEnvironment(process.env)
   const proxyBypassRules = getProxyBypassRulesFromEnvironment(process.env)
   const envKey =
@@ -45,53 +54,64 @@ async function ensureEnvironmentProxyForOpenCodeSession(openCodeSession: Session
     return
   }
   if (appliedProxyKeys.has(openCodeSession)) {
-    await openCodeSession.setProxy({ mode: 'system' })
-    await openCodeSession.closeAllConnections()
     appliedProxyKeys.delete(openCodeSession)
+    await openCodeSession.setProxy({ mode: 'system' })
+    signal?.throwIfAborted()
+    await openCodeSession.closeAllConnections()
+    signal?.throwIfAborted()
   }
   // Environment proxy bridging is best-effort, matching the app-wide startup path.
   try {
-    if ((await openCodeSession.resolveProxy(OPENCODE_BASE_URL)) !== 'DIRECT') {
+    const resolved = await openCodeSession.resolveProxy(OPENCODE_BASE_URL)
+    signal?.throwIfAborted()
+    if (resolved !== 'DIRECT') {
       return
     }
     if (!envProxy.ok || !envProxy.value) {
       return
     }
-    await setOpenCodeSessionProxy(openCodeSession, envProxy.value, proxyBypassRules, 'env')
+    await setOpenCodeSessionProxy(openCodeSession, envProxy.value, proxyBypassRules, 'env', signal)
   } catch {
+    signal?.throwIfAborted()
     // Direct networking remains available when optional environment bridging fails.
   }
 }
 
 async function ensureProxyForOpenCodeSession(
   openCodeSession: Session,
-  networkProxySettings?: NetworkProxySettings
+  networkProxySettings?: NetworkProxySettings,
+  signal?: AbortSignal
 ): Promise<void> {
+  signal?.throwIfAborted()
   const configuredProxy = normalizeProxyUrl(networkProxySettings?.httpProxyUrl)
   if (configuredProxy.ok && configuredProxy.value) {
     await setOpenCodeSessionProxy(
       openCodeSession,
       configuredProxy.value,
       normalizeProxyBypassRules(networkProxySettings?.httpProxyBypassRules),
-      'settings'
+      'settings',
+      signal
     )
     return
   }
 
-  await ensureEnvironmentProxyForOpenCodeSession(openCodeSession)
+  await ensureEnvironmentProxyForOpenCodeSession(openCodeSession, signal)
 }
 
 export async function createOpenCodeRequestSession(
   authCookies: { name: string; value: string }[],
-  networkProxySettings?: NetworkProxySettings
+  networkProxySettings?: NetworkProxySettings,
+  signal?: AbortSignal
 ): Promise<Session> {
+  signal?.throwIfAborted()
   const openCodeSession = requirePartitionSession(OPENCODE_SESSION_PARTITION, 'OpenCode Go')
-  await clearOpenCodeSessionCookies(openCodeSession)
-  // The isolated cookie jar must still honor Orca, environment, and system proxies.
-  await ensureProxyForOpenCodeSession(openCodeSession, networkProxySettings)
   try {
+    await clearOpenCodeSessionCookies(openCodeSession)
+    signal?.throwIfAborted()
+    await ensureProxyForOpenCodeSession(openCodeSession, networkProxySettings, signal)
     // Sequential writes ensure cleanup cannot race an in-flight cookie write after a rejection.
     for (const { name, value } of authCookies) {
+      signal?.throwIfAborted()
       await openCodeSession.cookies.set({
         url: OPENCODE_BASE_URL,
         name,
@@ -100,6 +120,7 @@ export async function createOpenCodeRequestSession(
         path: '/'
       })
     }
+    signal?.throwIfAborted()
     return openCodeSession
   } catch (error) {
     await clearOpenCodeSessionCookies(openCodeSession).catch(() => undefined)

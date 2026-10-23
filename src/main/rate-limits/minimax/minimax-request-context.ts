@@ -166,22 +166,23 @@ export async function fetchMiniMaxWithSessionCookieJar(args: {
   endpointMode: MiniMaxEndpoint
   signal: AbortSignal
 }): Promise<MiniMaxFetchResponse> {
+  args.signal.throwIfAborted()
   const miniMaxSession = requirePartitionSession(MINIMAX_SESSION_PARTITION, 'MiniMax')
   const cookiePairs = parseCookiePairs(args.cookie)
   const origin = getMiniMaxOrigin(args.endpointMode)
   try {
     await clearMiniMaxSessionCookieJarForSession(miniMaxSession, origin)
-    await Promise.all(
-      cookiePairs.map((pair) =>
-        miniMaxSession.cookies.set({
-          url: origin,
-          name: pair.name,
-          value: pair.value,
-          secure: true,
-          path: '/'
-        })
-      )
-    )
+    for (const pair of cookiePairs) {
+      args.signal.throwIfAborted()
+      await miniMaxSession.cookies.set({
+        url: origin,
+        name: pair.name,
+        value: pair.value,
+        secure: true,
+        path: '/'
+      })
+    }
+    args.signal.throwIfAborted()
     const headers = makeMiniMaxRequestHeaders(args.groupId, args.endpointMode)
     return {
       response: await miniMaxSession.fetch(args.endpoint, {
@@ -207,10 +208,12 @@ export async function fetchMiniMaxWithManualCookieHeader(args: {
   endpointMode: MiniMaxEndpoint
   signal: AbortSignal
 }): Promise<MiniMaxFetchResponse> {
+  args.signal.throwIfAborted()
   const miniMaxSession = requirePartitionSession(MINIMAX_SESSION_PARTITION, 'MiniMax')
   const origin = getMiniMaxOrigin(args.endpointMode)
   try {
     await clearMiniMaxSessionCookieJarForSession(miniMaxSession, origin)
+    args.signal.throwIfAborted()
     const headers = {
       ...makeMiniMaxRequestHeaders(args.groupId, args.endpointMode),
       Cookie: normalizeMiniMaxCookieHeader(args.cookie)
@@ -239,6 +242,7 @@ export async function fetchMiniMaxWithApiKey(args: {
 }): Promise<MiniMaxFetchResponse> {
   // Why: the desktop client routes through Electron's URL stack, matching the cookie
   // transport's surface area and avoiding Node's TLS quirks for CN routing.
+  args.signal.throwIfAborted()
   const headers: Record<string, string> = {
     Authorization: `Bearer ${args.apiKey}`,
     Accept: 'application/json'
@@ -248,6 +252,7 @@ export async function fetchMiniMaxWithApiKey(args: {
     headers,
     signal: args.signal
   })
+  args.signal.throwIfAborted()
   return {
     response,
     requestHeaderNames: Object.keys(headers),

@@ -91,6 +91,9 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
   protected getActiveWindowRefreshPlan(now: number): ActiveWindowRefreshPlan {
     const retryableFailures: ActiveRateLimitProvider[] = []
     for (const { provider, limits } of this.getActiveProviderState()) {
+      if (!this.isUsageRequestEnabled(provider)) {
+        continue
+      }
       if (!limits || limits.status === 'idle' || limits.status === 'fetching') {
         return { kind: 'full' }
       }
@@ -136,6 +139,9 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
       if (!this.isFetching) {
         const now = Date.now()
         for (const { provider, limits } of this.getActiveProviderState()) {
+          if (!this.isUsageRequestEnabled(provider)) {
+            continue
+          }
           if (limits?.status === 'error') {
             this.lastActiveFailureRetryAtByProvider[provider] = now
           }

@@ -72,10 +72,12 @@ export async function fetchOpenCodeGoUsageWithApiKey(
   apiKey: string,
   signal?: AbortSignal
 ): Promise<OpenCodeGoUsageApiOutcome> {
+  signal?.throwIfAborted()
   await ensureElectronProxyFromEnvironment({
     probeUrl: OPENCODE_GO_USAGE_API_URL
   }).catch(() => {})
 
+  signal?.throwIfAborted()
   let response: Response
   try {
     response = await getMainHttpClient().fetch(OPENCODE_GO_USAGE_API_URL, {
@@ -87,6 +89,7 @@ export async function fetchOpenCodeGoUsageWithApiKey(
       signal: abortSignalWithTimeout(signal, API_TIMEOUT_MS)
     })
   } catch (error) {
+    signal?.throwIfAborted()
     // Why fixed prefix: the thrown message can embed the request, and the
     // request carries the key.
     return {
@@ -96,7 +99,9 @@ export async function fetchOpenCodeGoUsageWithApiKey(
     }
   }
 
+  signal?.throwIfAborted()
   const body = await response.text().catch(() => '')
+  signal?.throwIfAborted()
   if (!response.ok) {
     return classifyFailure(response.status, body)
   }

@@ -15,7 +15,7 @@ import { useStatusBarMenuFocusHandoff } from './ProviderDetailsMenu'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
 import { useStatusBarDensity } from './status-bar-density'
 import { getUsageOwnerHostScope, useOwnerUsageRateLimits } from './use-owner-usage-rate-limits'
-import { isOwnerNotSetUpPlaceholder } from './owner-usage-rate-limits'
+import { hasFetchingUsageRequests, isOwnerNotSetUpPlaceholder } from './owner-usage-rate-limits'
 
 export function useStatusBarController(floatingTerminalOpen: boolean) {
   const floatingTerminalShortcut = useShortcutLabel('floatingTerminal.toggle')
@@ -87,7 +87,11 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     if (isRefreshing) {
       return
     }
-    setIsRefreshing(true)
+    setIsRefreshing(
+      rateLimits.usageRequestPolicy
+        ? Object.values(rateLimits.usageRequestPolicy.enabled).some(Boolean)
+        : true
+    )
     try {
       // Why: re-run PATH detection so a freshly-installed/removed CLI's bar appears/hides without restarting Orca.
       await Promise.all([(refreshRemote ?? refreshRateLimits)(), refreshDetectedAgents()])
@@ -96,7 +100,13 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
         setIsRefreshing(false)
       }
     }
-  }, [isRefreshing, refreshRemote, refreshRateLimits, refreshDetectedAgents])
+  }, [
+    isRefreshing,
+    refreshRemote,
+    refreshRateLimits,
+    refreshDetectedAgents,
+    rateLimits.usageRequestPolicy
+  ])
 
   if (!statusBarVisible) {
     return null
@@ -195,17 +205,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   )
   // Why: one-time nudge — once dismissed, stays hidden even if providers reconnect later.
   const showEmptyUsageCta = isEmptyUsageState && !usageEmptyStateDismissed
-  const anyFetching =
-    claude?.status === 'fetching' ||
-    codex?.status === 'fetching' ||
-    gemini?.status === 'fetching' ||
-    opencodeGo?.status === 'fetching' ||
-    kimi?.status === 'fetching' ||
-    antigravity?.status === 'fetching' ||
-    minimax?.status === 'fetching' ||
-    grok?.status === 'fetching' ||
-    cursor?.status === 'fetching' ||
-    zcode?.status === 'fetching'
+  const anyFetching = hasFetchingUsageRequests(rateLimits)
 
   const floatingTerminalActionLabel = floatingTerminalOpen
     ? 'Minimize Floating Workspace'
@@ -235,6 +235,17 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const handleManageAccounts = (): void => {
     setUsageMenuOpen(false)
     openSettingsTarget({ pane: 'accounts', repoId: null, hostScope })
+    openSettingsPage()
+  }
+  const handleUsageRequestSettings = (): void => {
+    setMenuOpen(false)
+    setUsageMenuOpen(false)
+    openSettingsTarget({
+      pane: 'accounts',
+      repoId: null,
+      hostScope,
+      sectionId: 'accounts-usage-requests'
+    })
     openSettingsPage()
   }
   const handleUsageDetails = (): void => {
@@ -282,6 +293,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     handleOpenProviderAccounts,
     handleRefresh,
     handleUsageDetails,
+    handleUsageRequestSettings,
     handleUsageMenuOpenChange,
     hasVisibleUsageMeters,
     isEmptyUsageState,
@@ -310,6 +322,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     usageMenuFocusHandoff,
     usageMenuOpen,
     usagePercentageDisplay,
+    usageRequestPolicy: rateLimits.usageRequestPolicy,
     usageRef,
     usageTightestOnly
   }

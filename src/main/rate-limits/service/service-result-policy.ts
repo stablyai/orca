@@ -87,6 +87,18 @@ export abstract class RateLimitServiceResultPolicy extends RateLimitServiceFetch
     current: ProviderRateLimits | null,
     provider: ActiveRateLimitProvider
   ): ProviderRateLimits {
+    if (!this.isUsageRequestEnabled(provider)) {
+      return (
+        current ?? {
+          provider,
+          session: null,
+          weekly: null,
+          updatedAt: 0,
+          error: 'Usage requests disabled',
+          status: 'unavailable'
+        }
+      )
+    }
     if (!current) {
       return {
         provider,

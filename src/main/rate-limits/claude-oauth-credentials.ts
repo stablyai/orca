@@ -21,6 +21,7 @@ export type ClaudeOAuthCredentialReadResult = {
   unavailable?: boolean
 }
 type ClaudeOAuthCredentialReadOptions = {
+  signal?: AbortSignal
   credentialsFileConfigDir?: string
   keychainConfigDir?: string
   /** System Default only: a managed profile never reads another login's item. */
@@ -55,14 +56,21 @@ export function emptyClaudeOAuthCredentialReadResult(): ClaudeOAuthCredentialRea
 }
 export async function readClaudeCredentialsFromStrictKeychain(
   configDir: string | undefined,
-  source: ClaudeOAuthCredentialSource
+  source: ClaudeOAuthCredentialSource,
+  signal?: AbortSignal
 ): Promise<ClaudeOAuthCredentialReadResult> {
+  signal?.throwIfAborted()
   try {
-    const contents = await readActiveClaudeKeychainCredentialsStrict(configDir)
+    const contents = await readActiveClaudeKeychainCredentialsStrict(
+      configDir,
+      ...(signal ? [signal] : [])
+    )
+    signal?.throwIfAborted()
     return contents
       ? parseClaudeOAuthCredentialsJson(contents, source)
       : emptyClaudeOAuthCredentialReadResult()
   } catch {
+    signal?.throwIfAborted()
     return {
       ...emptyClaudeOAuthCredentialReadResult(),
       unavailable: true,
@@ -74,16 +82,23 @@ async function readClaudeKeychainCredentials(
   options?: ClaudeOAuthCredentialReadOptions
 ): Promise<ClaudeOAuthCredentialReadResult> {
   if (!options?.keychainConfigDir) {
-    return readClaudeCredentialsFromStrictKeychain(undefined, 'legacy-keychain')
+    return readClaudeCredentialsFromStrictKeychain(undefined, 'legacy-keychain', options?.signal)
   }
   const scoped = await readClaudeCredentialsFromStrictKeychain(
     options.keychainConfigDir,
-    'scoped-keychain'
+    'scoped-keychain',
+    options.signal
   )
+  options.signal?.throwIfAborted()
   if (scoped.token || !options.unsuffixedKeychainFallback) {
     return scoped
   }
-  const legacy = await readClaudeCredentialsFromStrictKeychain(undefined, 'legacy-keychain')
+  const legacy = await readClaudeCredentialsFromStrictKeychain(
+    undefined,
+    'legacy-keychain',
+    options.signal
+  )
+  options.signal?.throwIfAborted()
   // Why: as before profiles, a token wins over an unreadable item.
   const candidates = [scoped, legacy]
   return (
@@ -95,25 +110,27 @@ async function readClaudeKeychainCredentials(
 export async function readClaudeOAuthCredentials(
   options?: ClaudeOAuthCredentialReadOptions
 ): Promise<ClaudeOAuthCredentialReadResult> {
+  options?.signal?.throwIfAborted()
   const keychain =
     process.platform === 'darwin'
       ? await readClaudeKeychainCredentials(options)
       : emptyClaudeOAuthCredentialReadResult()
+  options?.signal?.throwIfAborted()
   if (keychain.token) {
     return keychain
   }
   try {
-    return parseClaudeOAuthCredentialsJson(
-      await readFile(
-        path.join(
-          options?.credentialsFileConfigDir ?? path.join(homedir(), '.claude'),
-          '.credentials.json'
-        ),
-        'utf8'
+    const contents = await readFile(
+      path.join(
+        options?.credentialsFileConfigDir ?? path.join(homedir(), '.claude'),
+        '.credentials.json'
       ),
-      'credentials-file'
+      'utf8'
     )
+    options?.signal?.throwIfAborted()
+    return parseClaudeOAuthCredentialsJson(contents, 'credentials-file')
   } catch (error) {
+    options?.signal?.throwIfAborted()
     return isDefinitiveAbsence(error) ? keychain : { ...keychain, unavailable: true }
   }
 }

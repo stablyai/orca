@@ -2,10 +2,15 @@ import { fetchManagedAccountUsage } from '../claude-fetcher'
 import { fetchCodexRateLimits } from '../codex-fetcher'
 import { RateLimitServicePolling } from './service-polling'
 import { INACTIVE_CODEX_PROBE_STAGGER_MS, INACTIVE_FETCH_DEBOUNCE_MS } from './service-types'
+import type { ProviderUsageRequest } from './service-usage-requests'
 import { delayUnlessAborted } from '../../../shared/abort-aware-delay'
 
 export abstract class RateLimitServiceInactiveAccounts extends RateLimitServicePolling {
+  private inactiveClaudeUsageRequest: ProviderUsageRequest | null = null
   async fetchInactiveClaudeAccountsOnOpen(): Promise<void> {
+    if (!this.isUsageRequestEnabled('claude')) {
+      return
+    }
     if (Date.now() - this.lastInactiveClaudeFetchAt < INACTIVE_FETCH_DEBOUNCE_MS) {
       return
     }
@@ -20,7 +25,11 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
       return
     }
     const fetchGeneration = this.inactiveClaudeAccountsGeneration
-    const controller = this.beginFetchCycle()
+    const cycleController = this.beginFetchCycle()
+    const request = this.beginProviderUsageRequest('claude', cycleController.signal)
+    this.inactiveClaudeUsageRequest = request
+    const ownsFetching = (): boolean => this.inactiveClaudeUsageRequest === request
+    const controller = request.controller
     const signal = controller.signal
 
     for (const account of accounts) {
@@ -35,7 +44,9 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
           fetchGeneration !== this.inactiveClaudeAccountsGeneration ||
           !this.isCurrentInactiveClaudeAccount(account.id)
         ) {
-          this.inactiveClaudeFetching.delete(account.id)
+          if (ownsFetching()) {
+            this.inactiveClaudeFetching.delete(account.id)
+          }
           if (!this.isCurrentInactiveClaudeAccount(account.id)) {
             this.inactiveClaudeCache.delete(account.id)
           }
@@ -53,7 +64,9 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
             fetchGeneration !== this.inactiveClaudeAccountsGeneration ||
             !this.isCurrentInactiveClaudeAccount(account.id)
           ) {
-            this.inactiveClaudeFetching.delete(account.id)
+            if (ownsFetching()) {
+              this.inactiveClaudeFetching.delete(account.id)
+            }
             if (!this.isCurrentInactiveClaudeAccount(account.id)) {
               this.inactiveClaudeCache.delete(account.id)
             }
@@ -64,15 +77,13 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
           this.inactiveClaudeCache.set(account.id, this.applyStalePolicy(fresh, cached))
         } catch {
           // Why: per-account try/catch keeps one Keychain/network error from aborting the remaining accounts in the batch.
-          if (
-            signal.aborted ||
-            fetchGeneration !== this.inactiveClaudeAccountsGeneration ||
-            !this.isCurrentInactiveClaudeAccount(account.id)
-          ) {
+          if (!this.isCurrentInactiveClaudeAccount(account.id)) {
             this.inactiveClaudeCache.delete(account.id)
           }
         }
-        this.inactiveClaudeFetching.delete(account.id)
+        if (ownsFetching()) {
+          this.inactiveClaudeFetching.delete(account.id)
+        }
         this.pushToRenderer()
       }
 
@@ -80,11 +91,18 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
         this.lastInactiveClaudeFetchAt = Date.now()
       }
     } finally {
-      this.finishFetchCycle(controller)
+      if (ownsFetching()) {
+        this.inactiveClaudeUsageRequest = null
+      }
+      request.finish()
+      this.finishFetchCycle(cycleController)
     }
   }
 
   async fetchInactiveCodexAccountsOnOpen(): Promise<void> {
+    if (!this.isUsageRequestEnabled('codex')) {
+      return
+    }
     if (Date.now() - this.lastInactiveCodexFetchAt < INACTIVE_FETCH_DEBOUNCE_MS) {
       return
     }
@@ -98,7 +116,9 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
     }
     // Why: account switching can activate a previewed account while its usage fetch is still in flight; ignore stale results.
     const fetchGeneration = this.inactiveCodexAccountsGeneration
-    const controller = this.beginFetchCycle()
+    const cycleController = this.beginFetchCycle()
+    const request = this.beginProviderUsageRequest('codex', cycleController.signal)
+    const controller = request.controller
     const signal = controller.signal
     this.inactiveCodexFetchInFlight = true
 
@@ -163,11 +183,7 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
           this.inactiveCodexCache.set(account.id, this.applyStalePolicy(fresh, cached))
         } catch {
           // Why: per-account try/catch prevents one failure from aborting the batch.
-          if (
-            signal.aborted ||
-            fetchGeneration !== this.inactiveCodexAccountsGeneration ||
-            !this.isCurrentInactiveCodexAccount(account.id)
-          ) {
+          if (!this.isCurrentInactiveCodexAccount(account.id)) {
             this.inactiveCodexCache.delete(account.id)
           }
         }
@@ -180,7 +196,8 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
       }
     } finally {
       this.inactiveCodexFetchInFlight = false
-      this.finishFetchCycle(controller)
+      request.finish()
+      this.finishFetchCycle(cycleController)
     }
   }
 

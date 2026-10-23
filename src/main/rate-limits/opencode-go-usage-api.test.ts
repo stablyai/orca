@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ensureElectronProxyFromEnvironment } from '../network/proxy-settings'
 import { setMainHttpClient } from '../network/http-client'
 
 const fetchMock = vi.fn()
@@ -148,5 +149,16 @@ describe('fetchOpenCodeGoUsageWithApiKey', () => {
     expect(outcome.kind).toBe('failed')
     expect(outcome.kind === 'failed' && outcome.message).not.toContain(API_KEY)
     expect(outcome.kind === 'failed' && outcome.failureKind).toBe('network')
+  })
+  it('does not send a usage request after cancellation during proxy preparation', async () => {
+    const controller = new AbortController()
+    vi.mocked(ensureElectronProxyFromEnvironment).mockImplementationOnce(async () => {
+      controller.abort()
+      return { source: 'none' }
+    })
+    await expect(fetchOpenCodeGoUsageWithApiKey(API_KEY, controller.signal)).rejects.toMatchObject({
+      name: 'AbortError'
+    })
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })

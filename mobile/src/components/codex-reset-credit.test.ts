@@ -155,6 +155,14 @@ describe('Codex reset credit scope', () => {
 })
 
 describe('getCodexResetCreditOutcomeCopy', () => {
+  it.each(['reset', 'alreadyRedeemed'] as const)(
+    'does not claim quota was refreshed after %s when requests are disabled',
+    (outcome) => {
+      expect(getCodexResetCreditOutcomeCopy(outcome, false).message).toBe(
+        'Usage requests are disabled. Cached quota has not been refreshed.'
+      )
+    }
+  )
   it.each([
     ['reset', 'Rate limits reset', 'Codex usage has been refreshed.'],
     ['alreadyRedeemed', 'Reset already applied', 'Codex usage has been refreshed.'],

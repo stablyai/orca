@@ -1,3 +1,5 @@
+import { abortSignalWithTimeout } from '../lib/abort-signal-with-timeout'
+import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import type { ProviderRateLimits } from '../../shared/rate-limit-types'
 import {
   getClaudeProfileRouter,
@@ -21,6 +23,7 @@ export async function fetchInactiveClaudeAccountUsage(
   account: InactiveClaudeAccount,
   options: ClaudeManagedAccountUsageOptions = {}
 ): Promise<ProviderRateLimits> {
+  options.signal?.throwIfAborted()
   if (account.managedAuthRuntime !== 'wsl') {
     // Why the router: a covered account's usage is System default's, as its launches are.
     const authPreparation = getClaudeProfileRouter()?.accountUsagePreparation(account.id)
@@ -35,25 +38,26 @@ export async function fetchInactiveClaudeAccountUsage(
   }
   // Why: a stopped distro parks a UNC read for minutes, and the inactive loop is sequential.
   const guestRoot = toWindowsWslPath('/', distro)
-  if (
-    (await filterPathsToRunningWslDistrosAsync([guestRoot], { requireConfirmed: true })).length ===
-    0
-  ) {
+  const running = await filterPathsToRunningWslDistrosAsync([guestRoot], { requireConfirmed: true })
+  options.signal?.throwIfAborted()
+  if (running.length === 0) {
     return claudeUsageUnavailable()
   }
-  const timeout = AbortSignal.timeout(INACTIVE_WSL_READ_TIMEOUT_MS)
-  const read = router
-    .accountUsagePreparation(distro, account.id)
-    .then((authPreparation) =>
-      fetchActiveClaudeRateLimits({ signal: options.signal, authPreparation })
+  const signal = abortSignalWithTimeout(options.signal, INACTIVE_WSL_READ_TIMEOUT_MS)
+  try {
+    const authPreparation = await waitForPromiseWithSignal(
+      router.accountUsagePreparation(distro, account.id, signal),
+      signal
     )
-    .catch(() => claudeUsageUnavailable())
-  return Promise.race([
-    read,
-    new Promise<ProviderRateLimits>((resolve) =>
-      timeout.addEventListener('abort', () => resolve(claudeUsageUnavailable()), { once: true })
+    signal.throwIfAborted()
+    return await waitForPromiseWithSignal(
+      fetchActiveClaudeRateLimits({ signal, authPreparation }),
+      signal
     )
-  ])
+  } catch {
+    options.signal?.throwIfAborted()
+    return claudeUsageUnavailable()
+  }
 }
 
 function signInAgain(): ProviderRateLimits {

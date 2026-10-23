@@ -184,3 +184,16 @@ export function parseOpenCodeGoStatusPayload(text: string): OpenCodeGoUsageWindo
     monthly: meterToWindow(meters.month, MONTHLY_WINDOW_MINUTES)
   }
 }
+
+export function parseOpenCodeWorkspaceIds(text: string): string[] {
+  // Console uses org_/wrk_; wk_ remains accepted for older workspace responses.
+  const ids: string[] = []
+  const workspaceIdRegex = /\bid\s*:\s*["']((?:org|wrk|wk)_[a-zA-Z0-9]+)["']/g
+  for (const match of text.matchAll(workspaceIdRegex)) {
+    const id = match[1]
+    if (id && !ids.includes(id)) {
+      ids.push(id)
+    }
+  }
+  return ids
+}

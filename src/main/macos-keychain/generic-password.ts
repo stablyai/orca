@@ -1,6 +1,4 @@
-// Why execFile and not runProcess: this is a relocation of the Claude keychain
-// reader's existing exception, kept byte-for-byte so Claude's credential path and
-// its tests are unchanged. See the child_process import allowlist.
+// Preserve the existing Keychain subprocess exception; see the child_process import allowlist.
 import { execFile } from 'node:child_process'
 
 const KEYCHAIN_COMMAND_TIMEOUT_MS = 3_000
@@ -24,7 +22,11 @@ export function isKeychainNotFoundError(error: unknown): boolean {
   return code === 44 || message.includes('could not be found') || message.includes('not be found')
 }
 
-export function execSecurityCommand(args: string[]): Promise<SecurityCommandResult> {
+export function execSecurityCommand(
+  args: string[],
+  signal?: AbortSignal
+): Promise<SecurityCommandResult> {
+  signal?.throwIfAborted()
   return new Promise((resolve, reject) => {
     let settled = false
     let child: ReturnType<typeof execFile> | undefined
@@ -57,7 +59,7 @@ export function execSecurityCommand(args: string[]): Promise<SecurityCommandResu
       child = execFile(
         'security',
         args,
-        { timeout: KEYCHAIN_COMMAND_TIMEOUT_MS },
+        { timeout: KEYCHAIN_COMMAND_TIMEOUT_MS, ...(signal ? { signal } : {}) },
         (error, stdout, stderr) => {
           if (error) {
             settle(() =>
@@ -81,25 +83,25 @@ export function execSecurityCommand(args: string[]): Promise<SecurityCommandResu
 
 export async function readKeychainPassword(
   service: string,
-  account: string
+  account: string,
+  signal?: AbortSignal
 ): Promise<string | null> {
+  signal?.throwIfAborted()
   if (process.platform !== 'darwin') {
     return null
   }
   try {
-    const { stdout } = await execSecurityCommand([
-      'find-generic-password',
-      '-s',
-      service,
-      '-a',
-      account,
-      '-w'
-    ])
+    const { stdout } = await execSecurityCommand(
+      ['find-generic-password', '-s', service, '-a', account, '-w'],
+      signal
+    )
+    signal?.throwIfAborted()
     if (stdout.trim()) {
       return stdout.trim()
     }
     throw new Error(`Could not read macOS Keychain item ${service}/${account}.`)
   } catch (error) {
+    signal?.throwIfAborted()
     if (isKeychainNotFoundError(error)) {
       return null
     }

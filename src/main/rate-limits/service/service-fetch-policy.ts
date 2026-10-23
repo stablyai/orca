@@ -80,6 +80,28 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
     return this.applyStalePolicy(fresh, previous)
   }
 
+  async refreshClaudeUsageAttribution(): Promise<void> {
+    if (!this.claudeUsageAttributionResolver) {
+      return
+    }
+    const generation = ++this.claudeAttributionGeneration
+    const fetchGeneration = this.claudeFetchGeneration
+    const target = this.claudeFetchTarget
+    try {
+      const preparation = await this.claudeUsageAttributionResolver(target)
+      if (
+        generation !== this.claudeAttributionGeneration ||
+        !preparation ||
+        preparation.usageError
+      ) {
+        return
+      }
+      this.rememberClaudeAuthSnapshot(preparation, fetchGeneration, target)
+    } catch {
+      // Attribution remains unknown until a selected launch can establish it.
+    }
+  }
+
   protected rememberClaudeAuthSnapshot(
     authPreparation: ClaudeRuntimeAuthPreparation | undefined,
     claudeGeneration: number,

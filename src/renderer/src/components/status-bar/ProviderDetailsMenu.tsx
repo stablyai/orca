@@ -12,6 +12,7 @@ import { useAppStore } from '../../store'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import { normalizeUsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
 import { ProviderPanel } from './tooltip'
+import { UsageRequestNotice } from './usage-request-policy-context'
 import { ProviderLetterBadge, ProviderSegment } from './StatusBarProviderSegment'
 import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from './status-bar-context-menu-policy'
 
@@ -60,6 +61,7 @@ export function ProviderDetailsMenu({
     <>
       {topContent}
       <div className="p-2">
+        <UsageRequestNotice provider={provider} />
         {/* Why: provider-specific action sections may render richer reset-credit UI. */}
         <ProviderPanel
           p={provider}

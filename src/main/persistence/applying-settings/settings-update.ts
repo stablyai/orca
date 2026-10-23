@@ -1,3 +1,4 @@
+import { sanitizeUsageRequestSettingsUpdate } from './usage-request-settings-update'
 import { normalizeAgentNativeChatPermissionModes } from '../../../shared/agent-chat-permission-mode'
 import { normalizeNativeChatAppearanceSettings } from '../../../shared/native-chat-appearance-settings'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
@@ -42,10 +43,7 @@ import {
 } from '../../protected-secret-persistence'
 import { normalizeNotificationSettings } from './onboarding-normalization'
 import { retireLegacyInstructionsForClearedTextActionRecipes } from './source-control-settings'
-import {
-  buildWorkspaceDirHistoryForUpdate,
-  stripRetiredGlobalSettings
-} from './terminal-settings-migrations'
+import { buildWorkspaceDirHistoryForUpdate } from './terminal-settings-migrations'
 
 export type SettingsMutationOperations = {
   state: PersistedState
@@ -60,7 +58,7 @@ export function updateSettings(
   updates: Partial<GlobalSettings>,
   options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
 ): GlobalSettings {
-  const sanitizedUpdates = stripRetiredGlobalSettings(updates)
+  const sanitizedUpdates = sanitizeUsageRequestSettingsUpdate(operations, updates)
   const linkBehavior = updates.terminalLinkClickBehavior
   if (linkBehavior === 'actions' || linkBehavior === 'open' || linkBehavior === 'none') {
     // Loaded defaults are ambiguous; synchronize the legacy switch only on an explicit write.
