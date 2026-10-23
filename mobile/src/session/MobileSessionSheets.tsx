@@ -240,7 +240,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
               setMarkdownActionTarget(null)
               if (target) {
                 void clipboard
-                  .writeText(target.relativePath || target.filePath)
+                  .writeText(target.filePath || target.relativePath)
                   .then(() => showToast('Path copied'))
                   .catch(() => {
                     triggerError()
