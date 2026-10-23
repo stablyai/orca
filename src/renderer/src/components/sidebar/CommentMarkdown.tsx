@@ -6,9 +6,9 @@ import {
 import Markdown, { defaultUrlTransform, type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkBreaks from 'remark-breaks'
-import remarkMath from 'remark-math'
-import rehypeKatex from 'rehype-katex'
-import { normalizeChatMathDelimiters } from './chat-markdown-math'
+import { remarkChatMath } from './chat-markdown-math'
+import { rehypeChatMath } from './chat-markdown-math-rendering'
+import { copyChatMathSelection } from './chat-markdown-math-selection'
 import rehypeRaw from 'rehype-raw'
 import rehypeSanitize, { defaultSchema, type Options as SanitizeSchema } from 'rehype-sanitize'
 import remend from 'remend'
@@ -194,6 +194,14 @@ const commentMarkdownSanitizeSchema: SanitizeSchema = {
       ...(defaultSchema.attributes?.code ?? []),
       ['className', 'language-math', 'math-inline', 'math-display']
     ],
+    span: [
+      ...(defaultSchema.attributes?.span ?? []),
+      ['className', 'language-math', 'math-inline', 'math-display', 'whitespace-pre-wrap']
+    ],
+    div: [
+      ...(defaultSchema.attributes?.div ?? []),
+      ['className', 'language-math', 'math-inline', 'math-display', 'whitespace-pre-wrap']
+    ],
     td: [...(defaultSchema.attributes?.td ?? []), 'align'],
     th: [...(defaultSchema.attributes?.th ?? []), 'align']
   },
@@ -296,6 +304,7 @@ const CommentMarkdown = React.memo(
       growing = false,
       fadeWords = false,
       extension,
+      onCopy,
       ...rest
     },
     ref
@@ -320,23 +329,17 @@ const CommentMarkdown = React.memo(
     )
     const activeRehypePlugins = React.useMemo<MarkdownPlugins>(() => {
       const plugins = extension ? extensionRehypePlugins(extension) : rehypePlugins
-      return math ? [...plugins, [rehypeKatex, { trust: false }]] : plugins
+      return math ? [...plugins, rehypeChatMath] : plugins
     }, [extension, math])
     const activeRemarkPlugins = React.useMemo(() => {
       const plugins = fileLinkExists
         ? [...remarkPlugins, remarkNativeChatFileLinks(fileLinkExists)]
         : remarkPlugins
-      const withMath: RemarkPlugins = math
-        ? [...plugins, [remarkMath, { singleDollarTextMath: false }]]
-        : plugins
+      const withMath: RemarkPlugins = math ? [...plugins, remarkChatMath] : plugins
       const withExtension = extension ? [...withMath, ...extension.remarkPlugins] : withMath
       return githubRepo ? [...withExtension, remarkGitHubReferences(githubRepo)] : withExtension
     }, [extension, fileLinkExists, githubRepo, math])
-    const normalizedContent = React.useMemo(
-      () => (math ? normalizeChatMathDelimiters(content) : content),
-      [content, math]
-    )
-    const blocks = useMarkdownBlocks(normalizedContent, growing, math)
+    const blocks = useMarkdownBlocks(content, growing, math)
     const [hadWordFade, setHadWordFade] = React.useState(fadeWords)
     if (fadeWords && !hadWordFade) {
       setHadWordFade(true)
@@ -360,6 +363,12 @@ const CommentMarkdown = React.memo(
               'min-w-0 max-w-full [overflow-wrap:anywhere]',
               className
             )}
+            onCopy={(event) => {
+              onCopy?.(event)
+              if (math && !event.defaultPrevented) {
+                copyChatMathSelection(event)
+              }
+            }}
             {...rest}
           >
             {blocks.map((block, index) => (
@@ -374,8 +383,11 @@ const CommentMarkdown = React.memo(
                       : commentMarkdownUrlTransform
                   }
                 >
-                  {growing && index === blocks.length - 1
-                    ? remend(block.text, { linkMode: 'text-only' })
+                  {growing && index === blocks.length - 1 && !block.unclosedMath
+                    ? remend(block.text, {
+                        linkMode: 'text-only',
+                        ...(math ? { katex: false, inlineKatex: false } : {})
+                      })
                     : block.text}
                 </MemoizedMarkdown>
               </CommentMarkdownBlockLineContext.Provider>

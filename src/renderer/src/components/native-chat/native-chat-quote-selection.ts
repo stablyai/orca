@@ -1,3 +1,5 @@
+import { chatMathSelectionText } from '../sidebar/chat-markdown-math-selection'
+
 /** Marks the prose of an agent reply; only a selection inside one of these can be quoted. */
 export const NATIVE_CHAT_QUOTE_SOURCE_PROPS = { 'data-native-chat-quote-source': '' } as const
 
@@ -16,7 +18,7 @@ export function readNativeChatTranscriptSelection(root: HTMLElement): string {
   ) {
     return ''
   }
-  return selection.toString()
+  return chatMathSelectionText(selection, transcript) ?? selection.toString()
 }
 
 /** The selection when all of it sits inside one agent reply of this chat, else null. */
@@ -33,7 +35,7 @@ export function readNativeChatQuotableSelection(
   }
   const edges = selectedTextEdges(range)
   const source = edges?.first.parentElement?.closest(QUOTE_SOURCE_SELECTOR)
-  const text = selection.toString().trim()
+  const text = (chatMathSelectionText(selection, root) ?? selection.toString()).trim()
   if (!edges || !source || !source.contains(edges.last) || text === '') {
     return null
   }

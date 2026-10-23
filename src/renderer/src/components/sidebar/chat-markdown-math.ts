@@ -1,182 +1,302 @@
-import type { Nodes } from 'mdast'
-import remarkGfm from 'remark-gfm'
-import remarkMath from 'remark-math'
-import remarkParse from 'remark-parse'
-import { unified } from 'unified'
+import type { Nodes, Root } from 'mdast'
+import type { Extension as FromMarkdownExtension } from 'mdast-util-from-markdown'
+import type { Code, Construct, State, Token, Tokenizer } from 'micromark-util-types'
+import type { Processor } from 'unified'
+import type { VFile } from 'vfile'
+import type {} from 'remark-parse'
+import type {} from 'remark-math'
 
-type Range = [number, number]
-type Replacement = { start: number; end: number; value: string }
-
-const parser = unified().use(remarkParse).use(remarkGfm).use(remarkMath, {
-  singleDollarTextMath: false
-})
-const protectedTypes = new Set(['code', 'inlineCode', 'html', 'link', 'image', 'definition'])
-const containerTypes = new Set(['listItem', 'blockquote', 'table'])
-const latexDelimiters = /\\\[([\s\S]*?)\\\]|\\\(([^\n]*?)\\\)/g
-
-function overlaps(ranges: Range[], start: number, end: number): boolean {
-  return ranges.some(([a, b]) => a < end && b > start)
-}
-
-function escaped(source: string, offset: number): boolean {
-  let slashes = 0
-  for (let index = offset - 1; index >= 0 && source[index] === '\\'; index--) {
-    slashes++
+declare module 'vfile' {
+  // oxlint-disable-next-line typescript/consistent-type-definitions -- Declaration merging extends upstream file metadata.
+  interface DataMap {
+    chatMathSources: Map<number, string>
   }
-  return slashes % 2 === 1
 }
 
-function collectRanges(node: Nodes, protectedRanges: Range[], displayRanges: Range[]): void {
-  const start = node.position?.start.offset
-  const end = node.position?.end.offset
-  if (start !== undefined && end !== undefined) {
-    if (protectedTypes.has(node.type) || node.type === 'math') {
-      protectedRanges.push([start, end])
-      displayRanges.push([start, end])
-      return
+declare module 'micromark-util-types' {
+  // oxlint-disable-next-line typescript/consistent-type-definitions -- Declaration merging registers parser tokens.
+  interface TokenTypeMap {
+    chatMath: 'chatMath'
+    chatMathMarker: 'chatMathMarker'
+    chatMathData: 'chatMathData'
+  }
+  // oxlint-disable-next-line typescript/consistent-type-definitions -- Declaration merging extends upstream tokens.
+  interface Token {
+    chatMath?: { opener: string; closer: string; flow: boolean; closed: boolean }
+  }
+}
+
+const lineEnding = (code: Code): boolean => code !== null && code < -2
+const whitespace = (code: Code): boolean => code === null || code < 0 || code === 32
+const digit = (code: Code): boolean => code !== null && code >= 48 && code <= 57
+
+function construct(flow: boolean): Construct {
+  const tokenize: Tokenizer = function (effects, ok, nok) {
+    const lazyLines = this.parser.lazy
+    const currentLine = () => this.now().line
+    let opener = ''
+    let closer = ''
+    let body = ''
+    let token: Token
+    let escaped = false
+    let closeIndex = 0
+    let inlineClosing = false
+    const closing: Construct = { partial: true, tokenize: tokenizeClose }
+    return start
+
+    function start(code: Code): State | undefined {
+      token = effects.enter('chatMath')
+      effects.enter('chatMathMarker')
+      effects.consume(code)
+      opener = code === 36 ? '$' : '\\'
+      return opening
     }
-    if (node.type === 'inlineMath') {
-      protectedRanges.push([start, end])
+    function opening(code: Code): State | undefined {
+      if (opener.startsWith('$') && code === 36) {
+        opener += '$'
+        effects.consume(code)
+        return opening
+      }
+      if (opener === '\\') {
+        if (code !== 91 && (flow || code !== 40)) {
+          return nok(code)
+        }
+        opener += String.fromCharCode(code)
+        effects.consume(code)
+        closer = code === 91 ? '\\]' : '\\)'
+      } else {
+        if (flow && opener.length < 2) {
+          return nok(code)
+        }
+        closer = opener
+      }
+      effects.exit('chatMathMarker')
+      token.chatMath = { opener, closer, flow, closed: false }
+      return opener.startsWith('$') ? afterOpen(code) : between
     }
-    if (containerTypes.has(node.type)) {
-      displayRanges.push([start, end])
+    function afterOpen(code: Code): State | undefined {
+      if (opener === '$' && whitespace(code)) {
+        return nok(code)
+      }
+      return between(code)
+    }
+    function between(code: Code): State | undefined {
+      if (code === null) {
+        return finish(code)
+      }
+      if (lineEnding(code)) {
+        if (!flow && (opener === '$' || opener === '\\(')) {
+          return finish(code)
+        }
+        effects.enter('lineEnding')
+        effects.consume(code)
+        effects.exit('lineEnding')
+        body += '\n'
+        return flow ? continuation : between
+      }
+      if (code === closer.charCodeAt(0)) {
+        return effects.attempt(closing, finish, noClose)(code)
+      }
+      return dataStart(code)
+    }
+    function noClose(code: Code): State | undefined {
+      return opener === '$' || inlineClosing ? nok(code) : dataStart(code)
+    }
+    function continuation(code: Code): State | undefined {
+      // A concrete flow consumes blank lines, but cannot escape its Markdown container.
+      return lazyLines[currentLine()] ? finish(code) : between(code)
+    }
+    function dataStart(code: Code): State | undefined {
+      effects.enter('chatMathData')
+      if (code === null) {
+        return data(code)
+      }
+      if (!flow && code === 96) {
+        return nok(code)
+      }
+      effects.consume(code)
+      body += code < 0 ? ' ' : String.fromCharCode(code)
+      escaped = code === 92
+      return data
+    }
+    function data(code: Code): State | undefined {
+      if (code === null || lineEnding(code) || (!escaped && code === closer.charCodeAt(0))) {
+        effects.exit('chatMathData')
+        return between(code)
+      }
+      if (!flow && code === 96) {
+        return nok(code)
+      }
+      effects.consume(code)
+      body += code < 0 ? ' ' : String.fromCharCode(code)
+      escaped = !escaped && code === 92
+      return data
+    }
+    function finish(code: Code): State | undefined {
+      if (opener === '\\[' && /^[\d\s,]+$/.test(body)) {
+        return nok(code)
+      }
+      effects.exit('chatMath')
+      return ok(code)
+    }
+    function tokenizeClose(
+      closeEffects: Parameters<Tokenizer>[0],
+      closeOk: State,
+      closeNok: State
+    ): State {
+      closeIndex = 0
+      closeEffects.enter('chatMathMarker')
+      return sequence
+      function sequence(code: Code): State | undefined {
+        if (closeIndex < closer.length) {
+          if (code !== closer.charCodeAt(closeIndex)) {
+            return closeNok(code)
+          }
+          closeEffects.consume(code)
+          closeIndex++
+          return sequence
+        }
+        if (opener.startsWith('$') && code === 36) {
+          return closeNok(code)
+        }
+        if (opener === '$' && (/\s/.test(body.at(-1) ?? '') || digit(code))) {
+          return closeNok(code)
+        }
+        if (
+          opener === '$' &&
+          /^[+-]?\d[\d,]*(?:\.\d+)?(?:[^\p{ASCII}]|\s)/u.test(body) &&
+          !/[\\_^=<>+*/{}-]/.test(body)
+        ) {
+          return closeNok(code)
+        }
+        closeEffects.exit('chatMathMarker')
+        return flow ? trailing(code) : closed(code)
+      }
+      function trailing(code: Code): State | undefined {
+        if (code === 32 || code === -2 || code === -1) {
+          closeEffects.enter('whitespace')
+          closeEffects.consume(code)
+          closeEffects.exit('whitespace')
+          return trailing
+        }
+        if (code === null || lineEnding(code)) {
+          return closed(code)
+        }
+        inlineClosing = true
+        return closeNok(code)
+      }
+      function closed(code: Code): State | undefined {
+        if (token.chatMath) {
+          token.chatMath.closed = true
+        }
+        return closeOk(code)
+      }
+    }
+  }
+  return {
+    name: flow ? 'chatMathFlow' : 'chatMathText',
+    concrete: flow,
+    tokenize,
+    previous(code) {
+      return code !== 36 || this.events.at(-1)?.[1].type === 'characterEscape'
+    }
+  }
+}
+
+const fromMarkdown: FromMarkdownExtension = {
+  enter: {
+    chatMath(token) {
+      this.enter({ type: 'inlineMath', value: '' }, token)
+      this.buffer()
+    }
+  },
+  exit: {
+    chatMathData(token) {
+      this.config.enter.data.call(this, token)
+      this.config.exit.data.call(this, token)
+    },
+    chatMath(token) {
+      const value = this.resume()
+      const node = this.stack.at(-1)
+      if (node?.type !== 'inlineMath' || !token.chatMath) {
+        return
+      }
+      const { opener, closer, closed, flow } = token.chatMath
+      node.value = closed ? value.trim() : opener + value
+      node.data = {
+        hName: flow ? 'div' : 'span',
+        hProperties: closed
+          ? {
+              className: ['language-math', flow ? 'math-display' : 'math-inline']
+            }
+          : { className: ['whitespace-pre-wrap'] },
+        hChildren: [{ type: 'text', value: node.value }],
+        mathSource: opener + value + (closed ? closer : ''),
+        mathComplete: closed,
+        mathDisplay: opener !== '$' && opener !== '\\('
+      }
+      this.exit(token)
+    }
+  }
+}
+
+function displayMath(node: Nodes): void {
+  if (node.type === 'link' || node.type === 'image') {
+    return
+  }
+  if (
+    node.type === 'paragraph' &&
+    node.children.every(
+      (child) =>
+        (child.type === 'text' && !child.value.trim()) ||
+        child.type === 'break' ||
+        (child.type === 'inlineMath' &&
+          child.data?.mathComplete === true &&
+          child.data?.mathDisplay)
+    )
+  ) {
+    for (const child of node.children) {
+      if (child.type === 'inlineMath' && child.data?.hProperties?.className) {
+        child.data.hProperties.className = ['language-math', 'math-display']
+      }
     }
   }
   if ('children' in node) {
-    for (const child of node.children) {
-      collectRanges(child, protectedRanges, displayRanges)
-    }
+    node.children.forEach(displayMath)
   }
 }
 
-function standaloneDisplay(source: string, ranges: Range[]): Replacement[] {
-  const replacements: Replacement[] = []
-  let offset = 0
-  for (const line of source.split(/(?<=\n)/)) {
-    const raw = line.replace(/[\r\n]+$/, '')
-    const match = /^ {0,3}\$\$([^\r\n]+)\$\$[ \t]*$/.exec(raw)
-    if (
-      match &&
-      match[1].trim() &&
-      !match[1].startsWith('$') &&
-      !match[1].endsWith('$') &&
-      !match[1].includes('$$') &&
-      !escaped(raw, raw.lastIndexOf('$$')) &&
-      !overlaps(ranges, offset, offset + raw.length)
-    ) {
-      replacements.push({
-        start: offset,
-        end: offset + raw.length,
-        value: `\n$$\n${match[1].trim()}\n$$\n`
-      })
-    }
-    offset += line.length
-  }
-  return replacements
-}
-
-function dollarRun(source: string, start: number): number {
-  let end = start
-  while (source[end] === '$') {
-    end++
-  }
-  return end - start
-}
-
-function singleDollarMath(source: string, ranges: Range[]): Replacement[] {
-  const replacements: Replacement[] = []
-  for (let open = 0; open < source.length; open++) {
-    if (source[open] !== '$' || escaped(source, open) || overlaps(ranges, open, open + 1)) {
-      continue
-    }
-    const run = dollarRun(source, open)
-    if (run >= 2) {
-      // An unfinished multi-dollar region must not become a single-dollar expression.
-      let close = open + run
-      for (; close < source.length; close++) {
-        if (source[close] === '$' && !escaped(source, close)) {
-          const closingRun = dollarRun(source, close)
-          if (closingRun === run) {
-            break
+/** Chat grammar consumes original source; the splitter and renderer share these constructs. */
+export function remarkChatMath(this: Processor): (tree: Root, file: VFile) => void {
+  const data = this.data()
+  const flow = construct(true)
+  const text = construct(false)
+  ;(data.micromarkExtensions ??= []).push({
+    flow: { 36: flow, 92: flow },
+    text: { 36: text, 92: text }
+  })
+  ;(data.fromMarkdownExtensions ??= []).push(fromMarkdown)
+  return (tree, file) => {
+    const sources = new Map<number, string>()
+    file.data.chatMathSources = sources
+    // Link labels remain ordinary Markdown even when the label contains delimiters.
+    function literalLinks(node: Nodes, inLink = false): void {
+      if (node.type === 'inlineMath' && node.position?.start.offset !== undefined) {
+        sources.set(node.position.start.offset, String(node.data?.mathSource ?? node.value))
+      }
+      if ('children' in node) {
+        for (const child of node.children) {
+          if ((inLink || node.type === 'link') && child.type === 'inlineMath') {
+            child.data = {
+              hName: 'span',
+              hChildren: [{ type: 'text', value: String(child.data?.mathSource ?? child.value) }]
+            }
           }
-          close += closingRun - 1
+          literalLinks(child, inLink || node.type === 'link')
         }
       }
-      open = close < source.length ? close + run - 1 : source.length
-      continue
     }
-    if (!source[open + 1] || /\s/.test(source[open + 1])) {
-      continue
-    }
-    let close = open + 1
-    for (; close < source.length && !/[\r\n]/.test(source[close]); close++) {
-      if (source[close] === '$' && !escaped(source, close)) {
-        break
-      }
-    }
-    if (close >= source.length || /[\r\n]/.test(source[close])) {
-      continue
-    }
-    const body = source.slice(open + 1, close)
-    if (
-      !body ||
-      /\s/.test(body.at(-1) ?? '') ||
-      /\d/.test(source[close + 1] ?? '') ||
-      dollarRun(source, close) !== 1 ||
-      overlaps(ranges, open, close + 1)
-    ) {
-      continue
-    }
-    // Keep adjacent prices such as $10和$20; explicit operators still allow $10 - 1$.
-    if (
-      /^[+-]?\d[\d,]*(?:\.\d+)?(?:[^\p{ASCII}]|\s)/u.test(body) &&
-      !/[\\_^=<>+*/{}-]/.test(body)
-    ) {
-      continue
-    }
-    replacements.push({ start: open, end: close + 1, value: `$$${body}$$` })
-    open = close
+    literalLinks(tree)
+    displayMath(tree)
   }
-  return replacements
-}
-
-/** Normalize raw delimiters once, so converted inline expressions cannot become display math. */
-export function normalizeChatMathDelimiters(source: string): string {
-  if (!source.includes('$') && !source.includes('\\[') && !source.includes('\\(')) {
-    return source
-  }
-  const protectedRanges: Range[] = []
-  const displayRanges: Range[] = []
-  collectRanges(parser.parse(source), protectedRanges, displayRanges)
-  const replacements = standaloneDisplay(source, displayRanges)
-  const inlineRanges = [
-    ...protectedRanges,
-    ...replacements.map(({ start, end }): Range => [start, end])
-  ]
-  for (const match of source.matchAll(latexDelimiters)) {
-    const start = match.index
-    const end = start + match[0].length
-    if (escaped(source, start) || escaped(source, end - 2) || overlaps(inlineRanges, start, end)) {
-      continue
-    }
-    const block = match[1]
-    const inline = match[2]
-    if (!(block ?? inline).trim()) {
-      continue
-    }
-    replacements.push({
-      start,
-      end,
-      value: block !== undefined ? `\n$$\n${block.trim()}\n$$\n` : `$$${inline}$$`
-    })
-    inlineRanges.push([start, end])
-  }
-  replacements.push(...singleDollarMath(source, inlineRanges))
-  let result = ''
-  let cursor = 0
-  for (const { start, end, value } of replacements.sort((a, b) => a.start - b.start)) {
-    result += source.slice(cursor, start) + value
-    cursor = end
-  }
-  return result + source.slice(cursor)
 }
