@@ -36,8 +36,8 @@ function mode(path: string): number {
 async function launchUnderLoginUmask(): Promise<void> {
   const command = orcadLaunchCommand(posix, {
     remoteInstallDir: slotDir,
-    // No runtime marker in the slot, so this legacy path runs the stub entry below.
-    nodePath: '/bin/sh',
+    // No runtime marker in the slot, so this legacy path runs the stub runtime below.
+    nodePath: join(home, 'node'),
     fullVersion: '0.2.0+bb01',
     userDataDir: join(home, '.orca'),
     bindHost: '127.0.0.1',
@@ -61,6 +61,12 @@ describe.skipIf(process.platform === 'win32')('orcad launch file modes', () => {
     chmodSync(baseDir, 0o755)
     chmodSync(slotDir, 0o755)
     writeFileSync(join(slotDir, 'orcad.js'), `printf '%s\\n' '${READY_LINE}'\n`)
+    // Stands in for node: skips the V8 flags the launch passes, then runs the stub entry.
+    writeFileSync(
+      join(home, 'node'),
+      '#!/bin/sh\nwhile [ "${1#--}" != "$1" ]; do shift; done\nexec /bin/sh "$@"\n',
+      { mode: 0o755 }
+    )
   })
 
   afterEach(() => {

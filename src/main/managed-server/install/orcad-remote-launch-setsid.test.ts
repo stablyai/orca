@@ -46,11 +46,12 @@ describe('the WSL launch (setsid)', () => {
 
   it('has the child record its own PID, since the setsid -f parent exits at once', () => {
     const command = orcadLaunchCommand(host, spec('/d/orcad-1'), 'setsid')
-    const removeStale = command.indexOf(`rm -f '/d/orcad-1/${ORCAD_PID_FILENAME}'`)
+    expect(command.startsWith(`orcad_pid='/d/orcad-1/${ORCAD_PID_FILENAME}';`)).toBe(true)
+    const removeStale = command.indexOf(`rm -f "$orcad_pid"`)
     const recordOwn = command.indexOf(`echo $$ > "$1" && umask "$2" && shift 2 && exec "$@"`)
     expect(removeStale).toBeGreaterThan(-1)
     expect(recordOwn).toBeGreaterThan(removeStale)
-    expect(command.trimEnd().endsWith(`cat '/d/orcad-1/${ORCAD_PID_FILENAME}'`)).toBe(true)
+    expect(command.trimEnd().endsWith(`cat "$orcad_pid"`)).toBe(true)
   })
 
   it('passes host facts the guest cannot read, quoted, and refuses a malformed name', () => {

@@ -98,7 +98,7 @@ const POSIX_HOST_OP_BYTE_BUDGET = 6 * 1024
 // Ops already past the budget, at their measured size. Ceilings may only shrink.
 const OVER_BUDGET_CEILINGS: Readonly<Record<string, number>> = {
   tryStealInstallLockCommand: 9_022,
-  orcadLaunchCommand: 7_130
+  orcadLaunchCommand: 6_812
 }
 
 type HostCase = { host: RemoteHostPlatform; target: NodeRuntimeTarget; nodePath: string }

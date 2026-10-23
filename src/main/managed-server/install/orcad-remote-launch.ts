@@ -86,6 +86,12 @@ export type OrcadLaunchDetach = 'nohup' | 'setsid'
 const ORCAD_SETSID_PID_WAIT_TRIES = 100
 
 /**
+ * V8's default 16 MB semi-spaces keep ~50 MB of young-generation slack resident in an idle server;
+ * a CLI flag because `v8.setFlagsFromString` cannot resize the heap after startup.
+ */
+export const ORCAD_RUNTIME_V8_FLAGS = '--max-semi-space-size=8'
+
+/**
  * Launch the candidate detached and echo its PID.
  *
  * Why `--bind` is always passed explicitly: orcad defaults to loopback, but a default is a
@@ -105,7 +111,9 @@ export function orcadLaunchCommand(
   const readiness = quotePosixShell(ORCAD_READINESS_FILENAME)
   const log = quotePosixShell(ORCAD_LOG_FILENAME)
   // Absolute: a nohup launch backgrounds the whole list, `cd` included, then writes this outside it.
-  const pidFile = quotePosixShell(joinRemotePath(host, spec.remoteInstallDir, ORCAD_PID_FILENAME))
+  const pidPath = quotePosixShell(joinRemotePath(host, spec.remoteInstallDir, ORCAD_PID_FILENAME))
+  // Named once in the launching shell: the slot path is long and the PID file is read up to 5 times.
+  const pidFile = '"$orcad_pid"'
   // Absolute: liveness matches the runtime's args against this path.
   const entry = quotePosixShell(
     joinRemotePath(host, spec.remoteInstallDir, ORCAD_LAUNCHER_FILENAME)
@@ -124,6 +132,7 @@ export function orcadLaunchCommand(
     ...orcadManagedLaunchEnv(spec).map(([name, value]) => `${name}=${quotePosixShell(value)}`)
   ]
   return [
+    `orcad_pid=${pidPath};`,
     ...(recordSession ? [captureOrcadLaunchSshSessionCommand()] : []),
     // The daemon gets this back: the git, terminals and agents it spawns create the user's files.
     'orcad_login_umask=$(umask);',
@@ -152,7 +161,7 @@ export function orcadLaunchCommand(
           ...launchEnv,
           // Keep $! equal to the runtime PID rather than a waiting shell's PID.
           // Older clients identify the live PID by orcad.js; the pinned launcher loads the body in-place.
-          `exec nohup "$orcad_runtime" ${entry}`,
+          `exec nohup "$orcad_runtime" ${ORCAD_RUNTIME_V8_FLAGS} ${entry}`,
           `--json --bind ${quotePosixShell(spec.bindHost)} --port ${String(spec.port)};`,
           `} > ${readiness} 2>> ${log} < /dev/null &`,
           `echo $! > ${pidFile} &&`,
@@ -188,7 +197,7 @@ function setsidLaunchTail(
     // The PID file is written under 077 before the daemon gets the login umask back.
     `sh -c 'echo $$ > "$1" && umask "$2" && shift 2 && exec "$@"' orcad-launch ${pidFile}`,
     '"$orcad_login_umask"',
-    `"$orcad_runtime" ${entry}`,
+    `"$orcad_runtime" ${ORCAD_RUNTIME_V8_FLAGS} ${entry}`,
     `--json --bind ${quotePosixShell(spec.bindHost)} --port ${String(spec.port)}`,
     `> ${readiness} 2>> ${log} < /dev/null &&`,
     `orcad_wait=0; while [ ! -s ${pidFile} ] && [ "$orcad_wait" -lt ${ORCAD_SETSID_PID_WAIT_TRIES} ];`,
