@@ -453,7 +453,7 @@ describe('CI dependency download caches', () => {
     }
   })
 
-  it('seeds the existing Linux PR tool cache from successful main x64 release builds', () => {
+  it('shares Linux PR downloads with main x64 release builds across runner pools', () => {
     const packaging = workflow('pr').jobs.package
     const consumer = packaging.steps.find(
       (step) => step.name === 'Cache electron-builder downloads'
@@ -465,7 +465,7 @@ describe('CI dependency download caches', () => {
     )
     const linux = release.strategy.matrix.include.find((entry) => entry.platform === 'linux-x64')
 
-    expect(packaging['runs-on']).toBe(linux.os)
+    expect([linux.os, 'blacksmith-4vcpu-ubuntu-2404']).toContain(packaging['runs-on'])
     expect(writer.if).toBe("matrix.platform == 'linux-x64' && github.ref == 'refs/heads/main'")
     expect(writer.uses).toBe('actions/cache@v5')
     expect(writer.with.path).toBe(consumer.with.path)
