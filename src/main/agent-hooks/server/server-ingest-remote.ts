@@ -182,9 +182,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       return
     }
     const restartedAuthority =
-      statusDisposition === 'restart' && effectiveSource === 'omp'
-        ? this.restoreRetiredStatusRestart(paneKey)
-        : undefined
+      statusDisposition === 'restart' ? this.restoreRetiredStatusRestart(paneKey) : undefined
     if (restartedAuthority && restartedAuthority.paneKey !== paneKey) {
       paneKey = restartedAuthority.paneKey
       tabId = parsePaneKey(paneKey)?.tabId

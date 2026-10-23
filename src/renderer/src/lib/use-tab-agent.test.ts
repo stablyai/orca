@@ -348,6 +348,28 @@ describe('resolveTabAgentFromSignals', () => {
     ).toBe('claude')
   })
 
+  it('does not let a free-text agent name reclaim a pane from its launch owner (#24854)', () => {
+    expect(
+      resolveTabAgentFromSignals({
+        hasObservedAgentSignal: true,
+        isRemote: false,
+        title: '⠋ Review Codex behavior',
+        hookAgent: null,
+        launchAgent: 'omp'
+      })
+    ).toBe('omp')
+    // An anchored identity is what a real Codex title carries; that still reclaims.
+    expect(
+      resolveTabAgentFromSignals({
+        hasObservedAgentSignal: true,
+        isRemote: false,
+        title: '⠋ fix the parser - Codex',
+        hookAgent: null,
+        launchAgent: 'omp'
+      })
+    ).toBe('codex')
+  })
+
   it('lets focused-pane hook identity override launch metadata in split tabs', () => {
     expect(
       resolveTabAgentFromSignals({

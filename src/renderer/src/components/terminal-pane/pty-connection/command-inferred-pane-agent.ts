@@ -7,7 +7,13 @@ import {
 } from '../../../../../shared/agent-status-types'
 import { registerAgentHookTerminalLifecycleHandler } from '../agent-hook-terminal-lifecycle'
 import type { AgentCompletionStatusSnapshot } from '../agent-completion-coordinator-types'
-import { resolveCompatibleAgentTypeForOwner } from '../../../../../shared/agent-title-owner'
+import {
+  resolveCompatibleAgentTypeForOwner,
+  shareCompatibleTitleIdentityGroup
+} from '../../../../../shared/agent-title-owner'
+import { titleShowsNoAgent } from '../../../../../shared/agent-detection'
+import { parsePaneKey } from '../../../../../shared/stable-pane-id'
+import { retireSupersededHarnessStatus } from './superseded-harness-status'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 import { recognizeAgentLaunchCommand } from '../../../../../shared/agent-command-line-intent'
 import type { TerminalAgent } from '../../../../../shared/terminal-agent'
@@ -41,17 +47,49 @@ export function installCommandInferredPaneAgent(session: ConnectPanePtySession):
     const state = useAppStore.getState()
     const registeredLaunchAgent =
       state.agentLaunchConfigByPaneKey[session.cacheKey]?.identity.agentType
-    // Why: input inside a live TUI can spell another agent command; process or
+    const foreground = state.paneForegroundAgentByPaneKey[session.cacheKey]
+    const tab = (state.tabsByWorktree[session.deps.worktreeId] ?? []).find(
+      (entry) => entry.id === session.deps.tabId
+    )
+    const liveTitle = session.getLivePaneAgentTitle() ?? ''
+    // Why: a finished harness leaves launch metadata behind (#24854); shell evidence retires it.
+    const paneAtShell =
+      foreground?.shellForeground === true ||
+      liveTitle.trim().length === 0 ||
+      titleShowsNoAgent(liveTitle, tab?.defaultTitle)
+    // Why: input inside a live TUI can spell another agent command; a live process read or
     // pane-scoped launch ownership is stronger than typed shell inference.
     const hasStrongerAgentOwnership =
-      Boolean(state.paneForegroundAgentByPaneKey[session.cacheKey]?.agent) ||
-      isTuiAgent(registeredLaunchAgent)
+      (foreground?.agentEvidence === 'process-read' &&
+        Boolean(foreground.agent) &&
+        foreground.shellForeground !== true) ||
+      (!paneAtShell && (Boolean(foreground?.agent) || isTuiAgent(registeredLaunchAgent)))
     const nextAgent = hasStrongerAgentOwnership ? null : candidateAgent
     session.commandInferredPaneAgent = nextAgent
     session.commandInferredPaneAgentGeneration += 1
-    if (nextAgent) {
-      session.startAcceptedInferredCommand(nextAgent)
+    if (!nextAgent) {
+      return
     }
+    session.startAcceptedInferredCommand(nextAgent)
+    const currentLaunchAgent = tab?.launchAgent ?? registeredLaunchAgent
+    let retargetedSingleLeafTab = false
+    if (currentLaunchAgent && !shareCompatibleTitleIdentityGroup(nextAgent, currentLaunchAgent)) {
+      const layoutRoot = state.terminalLayoutsByTabId[session.deps.tabId]?.root
+      // Why: launchAgent is tab-scoped; retargeting it from one split pane would rebrand siblings.
+      if (
+        isTuiAgent(nextAgent) &&
+        layoutRoot?.type === 'leaf' &&
+        layoutRoot.leafId === parsePaneKey(session.cacheKey)?.leafId
+      ) {
+        state.replaceTabLaunchAgent(session.deps.tabId, nextAgent)
+        retargetedSingleLeafTab = true
+      }
+      // Why not re-register: the old harness's resume args must not ride on the new identity.
+      state.clearAgentLaunchConfig(session.cacheKey)
+    }
+    retireSupersededHarnessStatus(session.cacheKey, nextAgent, {
+      allowStaleNonDone: paneAtShell && retargetedSingleLeafTab
+    })
   }
   session.clearCommandInferredPaneAgent = (): void => {
     session.commandInferredPaneAgent = null

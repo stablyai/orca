@@ -7,7 +7,7 @@ import {
   resolveAgentPaneAuthorityKey,
   transferAgentPaneAuthorityAlias
 } from './agent-pane-authority'
-import { createTestStore } from './store-test-helpers'
+import { createTestStore, makeTab } from './store-test-helpers'
 
 const SOURCE = makePaneKey('tab-source', '11111111-1111-4111-8111-111111111111')
 const TARGET = makePaneKey('tab-target', '22222222-2222-4222-8222-222222222222')
@@ -72,6 +72,46 @@ describe('agent pane authority', () => {
     expect(state.agentStatusByPaneKey[SIBLING]).toBeDefined()
     expect(state.recentlyRetiredAgentStatusPaneKeys[TARGET]).toEqual(expect.any(String))
     expect(retirePaneAuthority).toHaveBeenCalledWith(TARGET, expect.any(String))
+  })
+
+  it('rejects an old snapshot replay but accepts a host-confirmed non-OMP restart', () => {
+    const store = createTestStore()
+    store.setState({
+      tabsByWorktree: {
+        'wt-1': [makeTab({ id: 'tab-target', worktreeId: 'wt-1' })]
+      },
+      terminalLayoutsByTabId: {
+        'tab-target': {
+          root: { type: 'leaf', leafId: '22222222-2222-4222-8222-222222222222' }
+        }
+      }
+    })
+    store.getState().setAgentStatus(TARGET, { state: 'working', prompt: 'old Codex turn' })
+    store.getState().retireAgentPaneAuthority(TARGET)
+    const retirementId = store.getState().recentlyRetiredAgentStatusPaneKeys[TARGET]
+    if (typeof retirementId !== 'string') {
+      throw new Error('retirement id was not generated')
+    }
+
+    store.getState().setAgentStatus(TARGET, {
+      state: 'working',
+      prompt: 'old persisted replay',
+      agentType: 'codex'
+    })
+    expect(store.getState().agentStatusByPaneKey[TARGET]).toBeUndefined()
+
+    store
+      .getState()
+      .setAgentStatus(
+        TARGET,
+        { state: 'working', prompt: 'new Claude turn', agentType: 'claude' },
+        undefined,
+        undefined,
+        { worktreeId: 'wt-1' },
+        { authorityRestartId: retirementId }
+      )
+    expect(store.getState().agentStatusByPaneKey[TARGET]?.agentType).toBe('claude')
+    expect(store.getState().recentlyRetiredAgentStatusPaneKeys[TARGET]).toBeUndefined()
   })
 
   it('re-retiring an already-retired pane renews recovery identity without changing epochs', () => {

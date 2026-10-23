@@ -142,20 +142,70 @@ describe('buildWorktreeAgentRows', () => {
     expect(rows[0].agentType).toBe('codex')
   })
 
-  it('prefers an unrelated live title over the launched tab agent for unknown rows', () => {
+  it('keeps the launched owner over a free-text title name for unknown rows', () => {
     const rows = buildWorktreeAgentRows({
-      tabs: [makeTab('tab-1', { launchAgent: 'omp', title: '\u280b Codex' })],
+      tabs: [makeTab('tab-1', { launchAgent: 'omp', title: '⠋ Codex' })],
       entries: [
         makeEntry(PANE_KEY_1, 1000, {
           agentType: undefined,
-          terminalTitle: '\u280b Codex'
+          terminalTitle: '⠋ Codex'
         })
       ],
       retained: [],
       now: 2000
     })
 
+    // Why: `⠋ Codex` is a free-text name mention, not anchored identity (#24854).
+    expect(rows[0].agentType).toBe('omp')
+  })
+
+  it('yields a done row to a different-family process read on the same pane', () => {
+    // Why: #24854 — a closed Codex launch left a done hook row; the reused pane runs OMP.
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { launchAgent: 'omp', title: '⠋ OMP' })],
+      entries: [makeEntry(PANE_KEY_1, 1000, { state: 'done', agentType: 'codex', prompt: '' })],
+      retained: [],
+      ptyIdsByTabId: { 'tab-1': ['pty-1'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSinglePaneLayout(LEAF_ID_1) },
+      paneForegroundAgentByPaneKey: {
+        [PANE_KEY_1]: { agent: 'omp', agentEvidence: 'process-read', shellForeground: false }
+      },
+      now: 2000
+    })
+
+    expect(rows.map((row) => row.paneKey)).toEqual([PANE_KEY_1])
+    expect(rows[0].agentType).toBe('omp')
+  })
+
+  it('keeps a done row when the process read is the same identity family', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { launchAgent: 'omp', title: '⠋ Pi' })],
+      entries: [makeEntry(PANE_KEY_1, 1000, { state: 'done', agentType: 'omp' })],
+      retained: [],
+      ptyIdsByTabId: { 'tab-1': ['pty-1'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSinglePaneLayout(LEAF_ID_1) },
+      paneForegroundAgentByPaneKey: {
+        [PANE_KEY_1]: { agent: 'pi', agentEvidence: 'process-read', shellForeground: false }
+      },
+      now: 2000
+    })
+
+    expect(rows.map((row) => row.paneKey)).toEqual([PANE_KEY_1])
+    expect(rows[0].state).toBe('done')
+  })
+
+  it('keeps a done row when no foreground process read exists', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { launchAgent: 'omp' })],
+      entries: [makeEntry(PANE_KEY_1, 1000, { state: 'done', agentType: 'codex', prompt: '' })],
+      retained: [],
+      ptyIdsByTabId: { 'tab-1': ['pty-1'] },
+      now: 2000
+    })
+
+    expect(rows.map((row) => row.paneKey)).toEqual([PANE_KEY_1])
     expect(rows[0].agentType).toBe('codex')
+    expect(rows[0].state).toBe('done')
   })
 
   it('normalizes live Pi-compatible rows from the launched OMP tab agent', () => {

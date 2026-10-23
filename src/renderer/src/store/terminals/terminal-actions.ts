@@ -121,6 +121,8 @@ export type TerminalActions = {
   ) => void
   setGeneratedTabTitlesFromAgentPrompts: (updates: readonly GeneratedTabTitleUpdate[]) => void
   clearTabLaunchAgent: (tabId: string) => void
+  /** Retargets the tab's launch latch when a different harness is typed at its shell. */
+  replaceTabLaunchAgent: (tabId: string, agent: TuiAgent) => void
   setRuntimePaneTitle: (tabId: string, paneId: number, title: string) => void
   clearRuntimePaneTitle: (tabId: string, paneId: number) => void
   setTabCustomTitle: (
