@@ -4,6 +4,10 @@ import {
   wrapShellSpawnForMacosTccAttribution
 } from '../../providers/macos-tcc-login-shell'
 import type { WindowsShellSpawnAttempt } from '../../providers/windows-shell-fallback-chain'
+import {
+  isWindowsPowerShellShellPath,
+  type WindowsPowerShellStartupCommandStaging
+} from '../../providers/windows-shell-args'
 import { assignHostProcessToKillOnCloseJob } from '../../windows/windows-pty-job'
 import { wrapPtySpawnInTerminalScope } from '../terminal-scopes-runtime'
 
@@ -15,6 +19,7 @@ export type SpawnedDaemonPty = {
   shellPath: string
   spawnCwd: string
   startupCommandDeliveredInShellArgs?: boolean
+  startupCommandStaging?: WindowsPowerShellStartupCommandStaging
   /** False when a wrapper owns the reported status, so no exit code may be read from it. */
   reportsChildExitStatus: boolean
 }
@@ -25,6 +30,7 @@ export async function spawnNativeDaemonPty(args: {
   shellArgs: string[]
   spawnCwd: string
   env: Record<string, string>
+  startupCommandStaging?: WindowsPowerShellStartupCommandStaging
   cols: number
   rows: number
   windowsFallbackAttempts: WindowsShellSpawnAttempt[]
@@ -32,6 +38,11 @@ export async function spawnNativeDaemonPty(args: {
   onMacosTccSpawnStrategy?: (strategy: 'wrapped' | 'direct') => void
 }): Promise<SpawnedDaemonPty> {
   let reportsChildExitStatus = true
+  let activeStaging = args.startupCommandStaging
+  const discardStaging = (): void => {
+    activeStaging?.cleanup()
+    activeStaging = undefined
+  }
   const spawnAt = async (
     shellPath: string,
     shellArgs: string[],
@@ -66,14 +77,28 @@ export async function spawnNativeDaemonPty(args: {
       process: process_,
       shellPath: args.shellPath,
       spawnCwd: args.spawnCwd,
-      reportsChildExitStatus
+      reportsChildExitStatus,
+      ...(activeStaging ? { startupCommandStaging: activeStaging } : {})
     }
   } catch (primaryErr) {
-    args.signal?.throwIfAborted()
+    try {
+      args.signal?.throwIfAborted()
+    } catch (error) {
+      discardStaging()
+      throw error
+    }
     if (process.platform !== 'win32') {
+      discardStaging()
       throw primaryErr
     }
     for (const attempt of args.windowsFallbackAttempts.slice(1)) {
+      if (!isWindowsPowerShellShellPath(attempt.shellPath)) {
+        discardStaging()
+        attempt.startupCommandStaging?.cleanup()
+      } else if (attempt.startupCommandStaging && attempt.startupCommandStaging !== activeStaging) {
+        discardStaging()
+        activeStaging = attempt.startupCommandStaging
+      }
       try {
         const process = await spawnAt(attempt.shellPath, attempt.shellArgs, attempt.effectiveCwd)
         const message = primaryErr instanceof Error ? primaryErr.message : String(primaryErr)
@@ -85,13 +110,20 @@ export async function spawnNativeDaemonPty(args: {
           shellPath: attempt.shellPath,
           spawnCwd: attempt.effectiveCwd,
           startupCommandDeliveredInShellArgs: attempt.startupCommandDeliveredInShellArgs,
-          reportsChildExitStatus
+          reportsChildExitStatus,
+          ...(activeStaging ? { startupCommandStaging: activeStaging } : {})
         }
       } catch {
-        args.signal?.throwIfAborted()
+        try {
+          args.signal?.throwIfAborted()
+        } catch (abortError) {
+          discardStaging()
+          throw abortError
+        }
         // This fallback shell also failed -- try the next link in the chain.
       }
     }
+    discardStaging()
     throw primaryErr
   }
 }

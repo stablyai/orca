@@ -55,6 +55,70 @@ describe('buildWindowsPowerShellSpawnAttempts', () => {
     expect(attempts[2].shellArgs[0]).toBe('/K')
   })
 
+  it('shares one staged startup command between PowerShell attempts', () => {
+    restorePlatform = setPlatform('win32')
+    const startupCommand = `pi "${'每日推进'.repeat(1983)}任"`
+    const attempts = buildWindowsPowerShellSpawnAttempts({
+      shellPath: 'pwsh.exe',
+      cwd: 'C:\\repo',
+      defaultCwd: 'C:\\Users\\dev',
+      startupCommand,
+      resolveOptions: {
+        platform: 'win32',
+        env: WIN_ENV,
+        isRealExecutable: (p) => p === PWSH7 || p === WINDOWS_POWERSHELL
+      }
+    })
+
+    expect(attempts[0].startupCommandStaging).toBeDefined()
+    expect(attempts[1].startupCommandStaging).toBe(attempts[0].startupCommandStaging)
+    expect(attempts[2].startupCommandStaging).toBeUndefined()
+    expect(attempts[2].shellArgs).toEqual(['/K', 'chcp 65001 > nul'])
+    attempts[0].startupCommandStaging?.cleanup()
+  })
+
+  it('still embeds a short quote-free startup command in the cmd.exe fallback', () => {
+    restorePlatform = setPlatform('win32')
+    const attempts = buildWindowsPowerShellSpawnAttempts({
+      shellPath: 'pwsh.exe',
+      cwd: 'C:\\repo',
+      defaultCwd: 'C:\\Users\\dev',
+      startupCommand: 'pi --resume',
+      resolveOptions: {
+        platform: 'win32',
+        env: WIN_ENV,
+        isRealExecutable: (p) => p === PWSH7 || p === WINDOWS_POWERSHELL
+      }
+    })
+
+    expect(attempts[2].startupCommandDeliveredInShellArgs).toBe(true)
+    expect(attempts[2].startupCommandStaging).toBeUndefined()
+    expect(attempts[2].shellArgs).toEqual(['/K', 'chcp 65001 > nul & pi --resume'])
+  })
+
+  it.each([
+    ['quoted', 'pi "hello world"'],
+    ['oversized', 'x'.repeat(6001)]
+  ])('keeps %s cmd.exe startup commands on stdin', (_label, startupCommand) => {
+    restorePlatform = setPlatform('win32')
+    const attempts = buildWindowsPowerShellSpawnAttempts({
+      shellPath: 'pwsh.exe',
+      cwd: 'C:\\repo',
+      defaultCwd: 'C:\\Users\\dev',
+      startupCommand,
+      resolveOptions: {
+        platform: 'win32',
+        env: WIN_ENV,
+        isRealExecutable: (p) => p === PWSH7 || p === WINDOWS_POWERSHELL
+      }
+    })
+
+    expect(attempts[2].startupCommandDeliveredInShellArgs).toBe(false)
+    expect(attempts[2].startupCommandStaging).toBeUndefined()
+    expect(attempts[2].shellArgs).toEqual(['/K', 'chcp 65001 > nul'])
+    attempts[0].startupCommandStaging?.cleanup()
+  })
+
   it('repro: when pwsh is only a Store alias, the primary attempt is the real Windows PowerShell', () => {
     restorePlatform = setPlatform('win32')
     const aliasStub = 'C:\\Users\\dev\\AppData\\Local\\Microsoft\\WindowsApps\\pwsh.exe'

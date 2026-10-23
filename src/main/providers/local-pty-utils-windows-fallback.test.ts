@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as pty from 'node-pty'
 import { spawnShellWithFallback, type WindowsShellSpawnAttempt } from './local-pty-utils'
+import type { WindowsPowerShellStartupCommandStaging } from './windows-shell-args'
 
 function setPlatform(platform: NodeJS.Platform): () => void {
   const original = process.platform
@@ -121,13 +122,99 @@ describe('spawnShellWithFallback on Windows', () => {
     expect(result.startupCommandDeliveredInShellArgs).toBe(true)
   })
 
+  it('cleans staged PowerShell files when cmd.exe wins the fallback chain', () => {
+    restorePlatform = setPlatform('win32')
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const cleanup = vi.fn()
+    const startupCommandStaging: WindowsPowerShellStartupCommandStaging = {
+      directoryPath: 'C:\\Temp\\orca-startup',
+      scriptPath: 'C:\\Temp\\orca-startup\\startup.ps1',
+      cleanup
+    }
+    const attempts: WindowsShellSpawnAttempt[] = [
+      makeAttempt(PWSH7, { startupCommandStaging }),
+      makeAttempt(WINDOWS_POWERSHELL, { startupCommandStaging }),
+      makeAttempt(CMD)
+    ]
+    const ptySpawn = vi.fn<typeof pty.spawn>((shellPath) => {
+      if (shellPath !== CMD) {
+        throw new Error(ACCESS_DENIED_5)
+      }
+      return makeFakePty()
+    })
+
+    const result = spawnShellWithFallback({
+      shellPath: PWSH7,
+      shellArgs: attempts[0].shellArgs,
+      cols: 80,
+      rows: 24,
+      cwd: 'C:\\repo',
+      env: { KEEP: '1' },
+      ptySpawn,
+      startupCommandStaging,
+      windowsFallbackAttempts: attempts
+    })
+
+    expect(result.shellPath).toBe(CMD)
+    expect(cleanup).toHaveBeenCalledOnce()
+    for (const call of ptySpawn.mock.calls) {
+      expect(call[2]?.env).toEqual({ KEEP: '1' })
+    }
+  })
+
+  it('keeps a winning PowerShell fallback staged file until the PTY exits', () => {
+    restorePlatform = setPlatform('win32')
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const cleanup = vi.fn()
+    const startupCommandStaging: WindowsPowerShellStartupCommandStaging = {
+      directoryPath: 'C:\\Temp\\orca-startup',
+      scriptPath: 'C:\\Temp\\orca-startup\\startup.ps1',
+      cleanup
+    }
+    const attempts: WindowsShellSpawnAttempt[] = [
+      makeAttempt(PWSH7, { startupCommandStaging }),
+      makeAttempt(WINDOWS_POWERSHELL, { startupCommandStaging }),
+      makeAttempt(CMD)
+    ]
+    const ptySpawn = vi.fn((shellPath: string) => {
+      if (shellPath === PWSH7) {
+        throw new Error(ACCESS_DENIED_5)
+      }
+      return makeFakePty()
+    }) as unknown as typeof pty.spawn
+
+    const result = spawnShellWithFallback({
+      shellPath: PWSH7,
+      shellArgs: attempts[0].shellArgs,
+      cols: 80,
+      rows: 24,
+      cwd: 'C:\\repo',
+      env: {},
+      ptySpawn,
+      startupCommandStaging,
+      windowsFallbackAttempts: attempts
+    })
+
+    expect(result.shellPath).toBe(WINDOWS_POWERSHELL)
+    expect(result.startupCommandStaging).toBe(startupCommandStaging)
+    expect(cleanup).not.toHaveBeenCalled()
+  })
+
   it('throws a descriptive error when every Windows fallback fails', () => {
     restorePlatform = setPlatform('win32')
     vi.spyOn(console, 'warn').mockImplementation(() => {})
 
+    const cleanup = vi.fn()
+    const startupCommandStaging: WindowsPowerShellStartupCommandStaging = {
+      directoryPath: 'C:\\Temp\\orca-startup',
+      scriptPath: 'C:\\Temp\\orca-startup\\startup.ps1',
+      cleanup
+    }
     const attempts: WindowsShellSpawnAttempt[] = [
-      makeAttempt(PWSH7),
-      makeAttempt(WINDOWS_POWERSHELL),
+      makeAttempt(PWSH7, { startupCommandStaging }),
+      makeAttempt(WINDOWS_POWERSHELL, { startupCommandStaging }),
       makeAttempt(CMD)
     ]
     const ptySpawn = vi.fn(() => {
@@ -146,6 +233,7 @@ describe('spawnShellWithFallback on Windows', () => {
           cwd: 'C:\\repo',
           env: {},
           ptySpawn,
+          startupCommandStaging,
           windowsFallbackAttempts: attempts
         })
       ).toThrow(/Failed to spawn shell.*orca: 1\.4\.178-test/)
@@ -156,5 +244,6 @@ describe('spawnShellWithFallback on Windows', () => {
         process.env.ORCA_APP_VERSION = previousVersion
       }
     }
+    expect(cleanup).toHaveBeenCalled()
   })
 })

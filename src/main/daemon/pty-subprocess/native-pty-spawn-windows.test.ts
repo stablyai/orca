@@ -5,6 +5,7 @@ vi.mock('node-pty', () => nodePty)
 vi.mock('../../windows/windows-pty-job', () => ({ assignHostProcessToKillOnCloseJob: vi.fn() }))
 
 import { spawnNativeDaemonPty } from './native-pty-spawn'
+import type { WindowsPowerShellStartupCommandStaging } from '../../providers/windows-shell-args'
 
 const attempts = ['pwsh.exe', 'powershell.exe', 'cmd.exe'].map((shellPath) => ({
   shellPath,
@@ -55,15 +56,82 @@ describe('Windows shell fallback over node-pty ConPTY', () => {
     expect(result.startupCommandDeliveredInShellArgs).toBe(true)
   })
 
+  it('keeps a winning PowerShell staged file until the PTY exits', async () => {
+    const proc = { pid: 9876 }
+    const cleanup = vi.fn()
+    const startupCommandStaging: WindowsPowerShellStartupCommandStaging = {
+      directoryPath: 'C:\\Temp\\orca-startup',
+      scriptPath: 'C:\\Temp\\orca-startup\\startup.ps1',
+      cleanup
+    }
+    const attemptsWithStaging = attempts.map((attempt) => ({
+      ...attempt,
+      ...(attempt.shellPath === 'cmd.exe' ? {} : { startupCommandStaging })
+    }))
+    nodePty.spawn.mockImplementation((file: string) => {
+      if (file === 'pwsh.exe') {
+        throw new Error('spawn pwsh.exe EACCES')
+      }
+      return proc
+    })
+
+    const result = await spawnNativeDaemonPty({
+      ...args,
+      env: { KEEP: '1' },
+      startupCommandStaging,
+      windowsFallbackAttempts: attemptsWithStaging
+    })
+
+    expect(result.startupCommandStaging).toBe(startupCommandStaging)
+    expect(cleanup).not.toHaveBeenCalled()
+    for (const call of nodePty.spawn.mock.calls) {
+      expect(call[2]?.env).toEqual({ KEEP: '1' })
+    }
+  })
+
+  it('cleans staged PowerShell files when cmd.exe wins', async () => {
+    const cleanup = vi.fn()
+    const startupCommandStaging: WindowsPowerShellStartupCommandStaging = {
+      directoryPath: 'C:\\Temp\\orca-startup',
+      scriptPath: 'C:\\Temp\\orca-startup\\startup.ps1',
+      cleanup
+    }
+    const attemptsWithStaging = attempts.map((attempt) => ({
+      ...attempt,
+      ...(attempt.shellPath === 'cmd.exe' ? {} : { startupCommandStaging })
+    }))
+    nodePty.spawn.mockImplementation((file: string) => {
+      if (file !== 'cmd.exe') {
+        throw new Error(`spawn ${file} EACCES`)
+      }
+      return { pid: 9876 }
+    })
+
+    await spawnNativeDaemonPty({
+      ...args,
+      startupCommandStaging,
+      windowsFallbackAttempts: attemptsWithStaging
+    })
+
+    expect(cleanup).toHaveBeenCalledOnce()
+  })
+
   it('starts no fallback shell once the spawn is canceled', async () => {
     const controller = new AbortController()
+    const cleanup = vi.fn()
+    const startupCommandStaging: WindowsPowerShellStartupCommandStaging = {
+      directoryPath: 'C:\\Temp\\orca-startup',
+      scriptPath: 'C:\\Temp\\orca-startup\\startup.ps1',
+      cleanup
+    }
     nodePty.spawn.mockImplementation(() => {
       controller.abort(new Error('spawn canceled'))
       throw new Error('spawn pwsh.exe EACCES')
     })
-    await expect(spawnNativeDaemonPty({ ...args, signal: controller.signal })).rejects.toThrow(
-      'spawn canceled'
-    )
+    await expect(
+      spawnNativeDaemonPty({ ...args, startupCommandStaging, signal: controller.signal })
+    ).rejects.toThrow('spawn canceled')
     expect(nodePty.spawn).toHaveBeenCalledOnce()
+    expect(cleanup).toHaveBeenCalledOnce()
   })
 })

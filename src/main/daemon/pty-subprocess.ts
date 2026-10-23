@@ -71,46 +71,57 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
   const size = normalizePtySize(opts.cols, opts.rows)
   const env = createDaemonPtyEnvironment(opts)
   const launch = createPtyShellLaunchPlan(opts, env)
+  let handedOffStaging = false
 
-  await preflightPtySpawn({
-    validationCwd: launch.validationCwd,
-    cwdWasExplicit: opts.cwd !== undefined,
-    sessionId: opts.sessionId,
-    ...(opts.cancelSignal ? { signal: opts.cancelSignal } : {})
-  })
-  if (opts.isCanceled?.()) {
-    throw new TerminalAttachCanceledError(opts.sessionId)
-  }
-
-  let spawned: SpawnedDaemonPty
   try {
-    spawned = await spawnNativeDaemonPty({
-      shellPath: launch.shellPath,
-      shellArgs: launch.shellArgs,
-      spawnCwd: launch.spawnCwd,
-      env,
-      cols: size.cols,
-      rows: size.rows,
-      windowsFallbackAttempts: launch.windowsFallbackAttempts,
-      onMacosTccSpawnStrategy: opts.onMacosTccSpawnStrategy
+    await preflightPtySpawn({
+      validationCwd: launch.validationCwd,
+      cwdWasExplicit: opts.cwd !== undefined,
+      sessionId: opts.sessionId,
+      ...(opts.cancelSignal ? { signal: opts.cancelSignal } : {})
     })
-  } catch (error) {
-    if (process.platform === 'win32') {
-      throw formatPtySpawnError(error, launch.shellPath, launch.spawnCwd)
+    if (opts.isCanceled?.()) {
+      throw new TerminalAttachCanceledError(opts.sessionId)
     }
-    throw error
-  }
 
-  return createDaemonPtySubprocessHandle({
-    process: spawned.process,
-    shellPath: spawned.shellPath,
-    spawnCwd: spawned.spawnCwd,
-    env,
-    startupCommandDeliveredInShellArgs:
-      spawned.startupCommandDeliveredInShellArgs ?? launch.startupCommandDeliveredInShellArgs,
-    reportsChildExitStatus: spawned.reportsChildExitStatus,
-    requestedCwd: opts.cwd,
-    sessionId: opts.sessionId,
-    startupAgentRecognition: launch.startupAgentRecognition
-  })
+    let spawned: SpawnedDaemonPty
+    try {
+      spawned = await spawnNativeDaemonPty({
+        shellPath: launch.shellPath,
+        shellArgs: launch.shellArgs,
+        spawnCwd: launch.spawnCwd,
+        env,
+        startupCommandStaging: launch.startupCommandStaging,
+        cols: size.cols,
+        rows: size.rows,
+        windowsFallbackAttempts: launch.windowsFallbackAttempts,
+        onMacosTccSpawnStrategy: opts.onMacosTccSpawnStrategy
+      })
+    } catch (error) {
+      if (process.platform === 'win32') {
+        throw formatPtySpawnError(error, launch.shellPath, launch.spawnCwd)
+      }
+      throw error
+    }
+
+    const handle = createDaemonPtySubprocessHandle({
+      process: spawned.process,
+      shellPath: spawned.shellPath,
+      spawnCwd: spawned.spawnCwd,
+      env,
+      startupCommandDeliveredInShellArgs:
+        spawned.startupCommandDeliveredInShellArgs ?? launch.startupCommandDeliveredInShellArgs,
+      startupCommandStaging: spawned.startupCommandStaging,
+      reportsChildExitStatus: spawned.reportsChildExitStatus,
+      requestedCwd: opts.cwd,
+      sessionId: opts.sessionId,
+      startupAgentRecognition: launch.startupAgentRecognition
+    })
+    handedOffStaging = true
+    return handle
+  } finally {
+    if (!handedOffStaging) {
+      launch.startupCommandStaging?.cleanup()
+    }
+  }
 }

@@ -19,6 +19,7 @@ import {
 } from './windows-powershell'
 import { buildWindowsPowerShellSpawnAttempts } from './windows-shell-fallback-chain'
 import { resolveWindowsShellLaunchArgs } from './windows-shell-args'
+import type { WindowsPowerShellStartupCommandStaging } from './windows-shell-args'
 import { assertSafeAgentStartupCwd } from './pty-default-cwd'
 import type { PtySpawnOptions } from './pty-provider-contract'
 
@@ -47,6 +48,7 @@ export type LocalPtyLaunchPlan = {
   effectiveCwd: string
   validationCwd: string
   startupCommandDeliveredInShellArgs: boolean
+  startupCommandStaging?: WindowsPowerShellStartupCommandStaging
   windowsFallbackAttempts: ReturnType<typeof buildWindowsPowerShellSpawnAttempts>
   shellReadyLaunch: ReturnType<typeof getShellLaunchConfig> | null
   getFallbackShellReadyConfig:
@@ -74,6 +76,7 @@ function finalizeLocalPtyLaunchPlan(
     effectiveCwd: string
     validationCwd: string
     startupCommandDeliveredInShellArgs?: boolean
+    startupCommandStaging?: WindowsPowerShellStartupCommandStaging
     windowsFallbackAttempts?: ReturnType<typeof buildWindowsPowerShellSpawnAttempts>
   }
 ): LocalPtyLaunchPlan {
@@ -93,6 +96,7 @@ function finalizeLocalPtyLaunchPlan(
     effectiveCwd: shell.effectiveCwd,
     validationCwd: shell.validationCwd,
     startupCommandDeliveredInShellArgs: shell.startupCommandDeliveredInShellArgs ?? false,
+    ...(shell.startupCommandStaging ? { startupCommandStaging: shell.startupCommandStaging } : {}),
     windowsFallbackAttempts: shell.windowsFallbackAttempts ?? [],
     shellReadyLaunch: null,
     getFallbackShellReadyConfig: undefined,
@@ -164,6 +168,9 @@ function createWindowsLocalPtyLaunchPlan(
         effectiveCwd: primaryAttempt.effectiveCwd,
         validationCwd: primaryAttempt.validationCwd,
         startupCommandDeliveredInShellArgs: primaryAttempt.startupCommandDeliveredInShellArgs,
+        ...(primaryAttempt.startupCommandStaging
+          ? { startupCommandStaging: primaryAttempt.startupCommandStaging }
+          : {}),
         windowsFallbackAttempts
       })
     }
@@ -180,6 +187,9 @@ function createWindowsLocalPtyLaunchPlan(
       effectiveCwd: resolved.effectiveCwd,
       validationCwd: resolved.validationCwd,
       startupCommandDeliveredInShellArgs: resolved.startupCommandDeliveredInShellArgs === true,
+      ...(resolved.startupCommandStaging
+        ? { startupCommandStaging: resolved.startupCommandStaging }
+        : {}),
       windowsFallbackAttempts
     })
   }

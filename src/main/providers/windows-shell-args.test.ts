@@ -1,12 +1,18 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
+import { rmSync as fsRmSync } from 'fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildWslInteractiveLoginShellCommand } from '../../shared/wsl-login-shell-command'
 import { resolveSetupRunnerCommand } from '../../shared/setup-runner-command'
 import { resolveWindowsShellLaunchArgs } from './windows-shell-args'
 // Why resolved rather than hardcoded: the wrapper tree is content-addressed.
 import { getShellReadyWrapperRoot } from './local-pty-shell-ready-wrapper-root'
+
+vi.mock('fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('fs')>()
+  return { ...actual, rmSync: vi.fn(actual.rmSync) }
+})
 
 const CODEX_LAUNCH_PREFLIGHT = 'C:\\Program Files\\Orca\\orca.exe'
 const CMD_CODEX_LAUNCH_PREFLIGHT =
@@ -41,14 +47,19 @@ function getGitBashRcfilePath(command: string): string {
 describe('resolveWindowsShellLaunchArgs', () => {
   let previousUserDataPath: string | undefined
   let userDataPath: string
+  const stagingCleanups: (() => void)[] = []
 
   beforeEach(() => {
     previousUserDataPath = process.env.ORCA_USER_DATA_PATH
     userDataPath = mkdtempSync(join(tmpdir(), 'windows-shell-args-test-'))
     process.env.ORCA_USER_DATA_PATH = userDataPath
+    vi.mocked(fsRmSync).mockClear()
   })
 
   afterEach(() => {
+    for (const cleanup of stagingCleanups.splice(0)) {
+      cleanup()
+    }
     if (previousUserDataPath === undefined) {
       delete process.env.ORCA_USER_DATA_PATH
     } else {
@@ -220,20 +231,80 @@ describe('resolveWindowsShellLaunchArgs', () => {
     expect(command.trimEnd().endsWith(startupCommand)).toBe(true)
   })
 
-  it('keeps large PowerShell startup commands on stdin delivery', () => {
+  it.each(['powershell.exe', 'pwsh.exe'])(
+    'delivers a 7.9k-character CJK startup command for %s through a staged script',
+    (shellPath) => {
+      const startupCommand = `pi "${'每日推进'.repeat(1983)}任"`
+      expect(startupCommand).toHaveLength(7938)
+      const result = resolveWindowsShellLaunchArgs(
+        shellPath,
+        'C:\\Users\\alice',
+        'C:\\Users\\alice',
+        undefined,
+        startupCommand
+      )
+
+      expect(result.startupCommandDeliveredInShellArgs).toBe(true)
+      expect(result.startupCommandStaging).toBeDefined()
+      const staging = result.startupCommandStaging!
+      stagingCleanups.push(staging.cleanup)
+      expect(existsSync(staging.scriptPath)).toBe(true)
+      expect(readFileSync(staging.scriptPath, 'utf8')).toBe(startupCommand)
+      if (process.platform !== 'win32') {
+        expect(statSync(staging.directoryPath).mode & 0o777).toBe(0o700)
+        expect(statSync(staging.scriptPath).mode & 0o777).toBe(0o600)
+      }
+      expect(result.shellArgs[3]?.length).toBeLessThanOrEqual(28_000)
+      const command = decodePowerShellCommand(result)
+      expect(command).not.toContain(startupCommand)
+      expect(command).toContain('Invoke-Expression (& {')
+      expect(command).toContain('param([string] $__orcaStartupPath)')
+      expect(command).toContain('Get-Content -LiteralPath $__orcaStartupPath -Raw -Encoding UTF8')
+      expect(command).toContain('try { [System.IO.File]::Delete($__orcaStartupPath) } catch {}')
+      expect(command).not.toContain('$__orcaStartupCommand')
+      staging.cleanup()
+      expect(existsSync(staging.directoryPath)).toBe(false)
+    }
+  )
+
+  it('retries staged PowerShell cleanup after a transient removal failure', () => {
     const result = resolveWindowsShellLaunchArgs(
       'powershell.exe',
       'C:\\Users\\alice',
       'C:\\Users\\alice',
       undefined,
-      `orca ${'x'.repeat(7000)}`
+      `pi "${'每日推进'.repeat(1983)}任"`
+    )
+    const staging = result.startupCommandStaging!
+    stagingCleanups.push(staging.cleanup)
+    vi.mocked(fsRmSync).mockImplementationOnce(() => {
+      throw Object.assign(new Error('file is in use'), { code: 'EBUSY' })
+    })
+
+    staging.cleanup()
+    expect(fsRmSync).toHaveBeenCalledOnce()
+    expect(existsSync(staging.directoryPath)).toBe(true)
+
+    staging.cleanup()
+    expect(fsRmSync).toHaveBeenCalledTimes(2)
+    expect(existsSync(staging.directoryPath)).toBe(false)
+  })
+
+  it('keeps PowerShell startup commands over the EncodedCommand budget on stdin delivery', () => {
+    const result = resolveWindowsShellLaunchArgs(
+      'powershell.exe',
+      'C:\\Users\\alice',
+      'C:\\Users\\alice',
+      undefined,
+      `orca ${'x'.repeat(22_000)}`
     )
 
     expect(result.startupCommandDeliveredInShellArgs).toBeUndefined()
+    expect(result.startupCommandStaging).toBeUndefined()
     expect(result.shellArgs).toEqual(['-NoLogo', '-NoExit', '-EncodedCommand', expect.any(String)])
-    expect(decodePowerShellCommand(result)).toContain(
-      expectedPowerShellRestoreCwdCommand("'C:\\Users\\alice'")
-    )
+    const command = decodePowerShellCommand(result)
+    expect(command).toContain(expectedPowerShellRestoreCwdCommand("'C:\\Users\\alice'"))
+    expect(command).not.toContain('Get-Content -LiteralPath $__orcaStartupPath')
   })
 
   it('handles pwsh.exe (PowerShell Core) the same as Windows PowerShell', () => {

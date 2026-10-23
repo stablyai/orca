@@ -11,6 +11,7 @@ import { createPtyForegroundProcessTracker } from './foreground-process-tracker'
 import { PtyPreListenerEvents } from './pre-listener-events'
 import { ptyProcessNameIsSpawnFile } from './spawn-file-foreground-process'
 import { inspectSpawnFileWindowsChildProcesses } from './spawn-file-child-processes'
+import type { WindowsPowerShellStartupCommandStaging } from '../../providers/windows-shell-args'
 
 type DisposableNativePty = pty.IPty & {
   destroy?: () => void
@@ -23,6 +24,7 @@ export function createDaemonPtySubprocessHandle(args: {
   spawnCwd: string
   env: Record<string, string>
   startupCommandDeliveredInShellArgs: boolean
+  startupCommandStaging?: WindowsPowerShellStartupCommandStaging
   reportsChildExitStatus: boolean
   requestedCwd?: string
   sessionId: string
@@ -55,6 +57,7 @@ export function createDaemonPtySubprocessHandle(args: {
   proc.onExit(({ exitCode, signal }) => {
     // Exit listeners may re-enter cleanup; retire signal authority before notifying them.
     dead = true
+    args.startupCommandStaging?.cleanup()
     foreground.markDead()
     // Why: neutralize kill synchronously so a later async socket-close SIGHUP cannot hit a recycled pid.
     if (process.platform !== 'win32') {
@@ -209,6 +212,7 @@ export function createDaemonPtySubprocessHandle(args: {
       }
       disposed = true
       dead = true
+      args.startupCommandStaging?.cleanup()
       events.clear()
       // POSIX destroy() can asynchronously signal a recycled pid; Windows needs kill() to close ConPTY.
       if (process.platform !== 'win32') {

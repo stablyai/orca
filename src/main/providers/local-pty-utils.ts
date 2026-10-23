@@ -10,6 +10,10 @@ import {
   hostReportsChildExitStatus,
   wrapShellSpawnForMacosTccAttribution
 } from './macos-tcc-login-shell'
+import {
+  isWindowsPowerShellShellPath,
+  type WindowsPowerShellStartupCommandStaging
+} from './windows-shell-args'
 import { formatLocalPtyEnvironmentDiag } from './working-directory-validation'
 
 export {
@@ -124,6 +128,7 @@ export type WindowsShellSpawnAttempt = {
   effectiveCwd: string
   validationCwd: string
   startupCommandDeliveredInShellArgs: boolean
+  startupCommandStaging?: WindowsPowerShellStartupCommandStaging
 }
 
 export type ShellSpawnParams = {
@@ -135,6 +140,7 @@ export type ShellSpawnParams = {
   cwd: string
   env: Record<string, string>
   ptySpawn: typeof pty.spawn
+  startupCommandStaging?: WindowsPowerShellStartupCommandStaging
   getShellReadyConfig?: (
     shell: string
   ) => { args: string[] | null; env: Record<string, string> } | null
@@ -159,9 +165,11 @@ export type ShellSpawnResult = {
    *  from this process describes the shell (STA-4536). */
   reportsChildExitStatus?: boolean
   /** True when the winning shell's startup command was already embedded in its
-   *  argv, so callers must not re-deliver it through stdin. Only set when a
+   *  launch, so callers must not re-deliver it through stdin. Only set when a
    *  Windows fallback attempt other than the primary was used. */
   startupCommandDeliveredInShellArgs?: boolean
+  /** Keeps staged PowerShell startup files recoverable until the PTY exits. */
+  startupCommandStaging?: WindowsPowerShellStartupCommandStaging
 }
 
 /**
@@ -186,8 +194,17 @@ function spawnWindowsFallbackChain(
 ): ShellSpawnResult | null {
   const { termName = 'xterm-256color', cols, rows, env, ptySpawn } = params
   const attempts = params.windowsFallbackAttempts ?? []
+  let activeStaging = params.startupCommandStaging
   // Skip the first entry: it is the primary that already failed above.
   for (const attempt of attempts.slice(1)) {
+    if (!isWindowsPowerShellShellPath(attempt.shellPath)) {
+      activeStaging?.cleanup()
+      attempt.startupCommandStaging?.cleanup()
+      activeStaging = undefined
+    } else if (attempt.startupCommandStaging && attempt.startupCommandStaging !== activeStaging) {
+      activeStaging?.cleanup()
+      activeStaging = attempt.startupCommandStaging
+    }
     try {
       const proc = ptySpawn(attempt.shellPath, attempt.shellArgs, {
         name: termName,
@@ -203,7 +220,8 @@ function spawnWindowsFallbackChain(
       return {
         process: proc,
         shellPath: attempt.shellPath,
-        startupCommandDeliveredInShellArgs: attempt.startupCommandDeliveredInShellArgs
+        startupCommandDeliveredInShellArgs: attempt.startupCommandDeliveredInShellArgs,
+        ...(activeStaging ? { startupCommandStaging: activeStaging } : {})
       }
     } catch {
       // This fallback shell also failed -- try the next link in the chain.
@@ -268,7 +286,10 @@ export function spawnShellWithFallback(params: ShellSpawnParams): ShellSpawnResu
           ptySpawn
         }),
         shellPath,
-        reportsChildExitStatus: hostReportsChildExitStatus(wrapped.file)
+        reportsChildExitStatus: hostReportsChildExitStatus(wrapped.file),
+        ...(params.startupCommandStaging
+          ? { startupCommandStaging: params.startupCommandStaging }
+          : {})
       }
     } catch (err) {
       primaryError = err instanceof Error ? err.message : String(err)
@@ -280,6 +301,8 @@ export function spawnShellWithFallback(params: ShellSpawnParams): ShellSpawnResu
     if (fallback) {
       return fallback
     }
+  } else {
+    params.startupCommandStaging?.cleanup()
   }
 
   // Try fallback shells on Unix
@@ -336,6 +359,9 @@ export function spawnShellWithFallback(params: ShellSpawnParams): ShellSpawnResu
   }
 
   const diag = formatLocalPtyEnvironmentDiag({ shell: shellPath, cwd })
+  if (process.platform !== 'win32') {
+    params.startupCommandStaging?.cleanup()
+  }
   throw new Error(
     `Failed to spawn shell "${shellPath}": ${primaryError ?? 'unknown error'} (${diag}). ${TERMINAL_SPAWN_ISSUE_REQUEST}`
   )

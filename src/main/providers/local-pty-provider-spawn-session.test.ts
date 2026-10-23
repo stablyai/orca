@@ -7,7 +7,9 @@ const {
   statSyncMock,
   accessSyncMock,
   mkdirSyncMock,
+  mkdtempSyncMock,
   writeFileSyncMock,
+  rmSyncMock,
   spawnMock,
   prepareMacosTccLoginShellMock,
   resolveAgentForegroundProcessMock,
@@ -21,7 +23,9 @@ const {
   statSyncMock: vi.fn(),
   accessSyncMock: vi.fn(),
   mkdirSyncMock: vi.fn(),
+  mkdtempSyncMock: vi.fn(),
   writeFileSyncMock: vi.fn(),
+  rmSyncMock: vi.fn(),
   spawnMock: vi.fn(),
   prepareMacosTccLoginShellMock: vi.fn(),
   resolveAgentForegroundProcessMock: vi.fn(),
@@ -37,10 +41,11 @@ vi.mock('fs', () => ({
   statSync: statSyncMock,
   accessSync: accessSyncMock,
   mkdirSync: mkdirSyncMock,
+  mkdtempSync: mkdtempSyncMock,
   writeFileSync: writeFileSyncMock,
   chmodSync: vi.fn(),
   renameSync: vi.fn(),
-  rmSync: vi.fn(),
+  rmSync: rmSyncMock,
   constants: { X_OK: 1 }
 }))
 
@@ -162,6 +167,8 @@ describe('LocalPtyProvider', () => {
       wslUncDirectoryExistsAsyncMock,
       createShellPromptReadinessProbeMock
     })
+    mkdtempSyncMock.mockReset()
+    rmSyncMock.mockReset()
 
     exitCb = undefined
     mockProc = createLocalPtyMockProcess({
@@ -586,6 +593,52 @@ describe('LocalPtyProvider', () => {
       expect(provider.getPtyProcess('race-session')).toBe(procA)
       expect(spawnMock).toHaveBeenCalledOnce()
       expect(procA.resize).toHaveBeenCalledWith(132, 44)
+    })
+
+    it('discards a staged PowerShell command when a concurrent spawn reattaches', async () => {
+      spawnMock.mockClear()
+      spawnMock.mockReturnValueOnce({ ...mockProc, pid: 1002 })
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      mkdtempSyncMock
+        .mockReturnValueOnce('/tmp/orca-powershell-race-a')
+        .mockReturnValueOnce('/tmp/orca-powershell-race-b')
+
+      let releasePreflight!: () => void
+      prepareMacosTccLoginShellMock.mockReturnValue(
+        new Promise<void>((resolve) => {
+          releasePreflight = resolve
+        })
+      )
+      provider.configure({
+        getWindowsShell: () => 'powershell.exe',
+        getWindowsPowerShellImplementation: () => 'powershell.exe'
+      })
+
+      const command = `pi "${'每日推进'.repeat(1983)}任"`
+      const spawnA = provider.spawn({
+        cols: 80,
+        rows: 24,
+        sessionId: 'race-staged-session',
+        cwd: 'C:\\repo',
+        command
+      })
+      const spawnB = provider.spawn({
+        cols: 132,
+        rows: 44,
+        sessionId: 'race-staged-session',
+        cwd: 'C:\\repo',
+        command
+      })
+      await vi.waitFor(() => expect(prepareMacosTccLoginShellMock).toHaveBeenCalledTimes(2))
+      releasePreflight()
+
+      const [, b] = await Promise.all([spawnA, spawnB])
+      expect(b.isReattach).toBe(true)
+      expect(spawnMock).toHaveBeenCalledOnce()
+      expect(rmSyncMock).toHaveBeenCalledWith('/tmp/orca-powershell-race-b', {
+        recursive: true,
+        force: true
+      })
     })
 
     it('invokes onSpawned callback', async () => {

@@ -32,9 +32,10 @@ export { encodePowerShellCommand } from '../shared/powershell-command-encoding'
  * token with no `Bypass` beside it.
  *
  * The payload is also not static -- providers/windows-shell-args.ts appends the PTY
- * cwd and the queued startup command. #7978 had to move cmd.exe startup commands off
- * `/K` to stdin because node-pty's argv escaping mangled their quotes; PowerShell
- * never needed that workaround, because `-EncodedCommand` is quoting-proof.
+ * cwd and either the queued startup command or a staged-script reference. #7978 had
+ * to move cmd.exe startup commands off `/K` to stdin because node-pty's argv escaping
+ * mangled their quotes; PowerShell never needed that workaround, because
+ * `-EncodedCommand` is quoting-proof.
  */
 const POWERSHELL_OSC133_BOOTSTRAP = `# Orca OSC 133 shell integration for PowerShell.
 # Profiles have already loaded normally by the time -EncodedCommand runs.

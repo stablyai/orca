@@ -1,5 +1,6 @@
 // Native Windows shell launch: PowerShell implementations, cmd.exe and Git Bash.
 import { describe, expect, it, vi } from 'vitest'
+import { existsSync } from 'node:fs'
 import type * as LocalPtyUtils from '../providers/local-pty-utils'
 
 const {
@@ -270,6 +271,45 @@ describe('createPtySubprocess', () => {
     const command = Buffer.from(encoded, 'base64').toString('utf16le')
     expect(command.trimEnd().endsWith("& 'codex' '--no-alt-screen'")).toBe(true)
     expect(handle!.startupCommandDeliveredInShellArgs).toBe(true)
+  })
+
+  it('delivers a long PowerShell startup command through a staged script', async () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    const startupCommand = `pi "${'每日推进'.repeat(1983)}任"`
+
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+
+    let handle: Awaited<ReturnType<typeof createPtySubprocess>>
+    try {
+      handle = await createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        cwd: 'C:\\repo\\orca',
+        shellOverride: 'powershell.exe',
+        command: startupCommand
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    const lastCall = spawnMock.mock.calls.at(-1)!
+    const launchedCommand = Buffer.from(String(lastCall[1][3]), 'base64').toString('utf16le')
+    expect(launchedCommand).not.toContain(startupCommand)
+    expect(launchedCommand).toContain('Get-Content -LiteralPath $__orcaStartupPath')
+    expect(lastCall[2].env).not.toHaveProperty('ORCA_POWERSHELL_STARTUP_COMMAND')
+    expect(handle!.startupCommandDeliveredInShellArgs).toBe(true)
+    const stagingDirectory = launchedCommand.match(
+      /\[System\.IO\.Directory\]::Delete\('([^']+)'\)/
+    )?.[1]
+    expect(stagingDirectory).toBeDefined()
+    expect(existsSync(stagingDirectory!)).toBe(true)
+    handle!.dispose()
+    expect(existsSync(stagingDirectory!)).toBe(false)
   })
 
   it('keeps oversized Windows startup commands on PTY stdin delivery', async () => {

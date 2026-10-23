@@ -36,6 +36,7 @@ vi.mock('fs', () => ({
   statSync: statSyncMock,
   accessSync: accessSyncMock,
   mkdirSync: mkdirSyncMock,
+  mkdtempSync: () => '/tmp/orca-powershell-startup-test',
   writeFileSync: writeFileSyncMock,
   chmodSync: vi.fn(),
   renameSync: vi.fn(),
@@ -479,6 +480,52 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[0]).toBe(PWSH7_ABS)
       expect(spawnCall[1]).toContain('-EncodedCommand')
       expect(pwshAvailable).not.toHaveBeenCalled()
+    })
+
+    it('delivers a long PowerShell startup command through a staged script', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const startupCommand = `pi "${'每日推进'.repeat(1983)}任"`
+      provider.configure({
+        getWindowsShell: () => 'powershell.exe',
+        getWindowsPowerShellImplementation: () => 'powershell.exe'
+      })
+
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: 'C:\\Users\\jin\\repo',
+        command: startupCommand
+      })
+
+      const spawnCall = spawnMock.mock.calls.at(-1)!
+      expect(spawnCall[0]).toBe(WINDOWS_POWERSHELL_ABS)
+      const launchedCommand = Buffer.from(String(spawnCall[1][3]), 'base64').toString('utf16le')
+      expect(launchedCommand).not.toContain(startupCommand)
+      expect(launchedCommand).toContain('Get-Content -LiteralPath $__orcaStartupPath')
+      expect(spawnCall[2].env).not.toHaveProperty('ORCA_POWERSHELL_STARTUP_COMMAND')
+      expect(mockProc.write).not.toHaveBeenCalled()
+    })
+
+    it('delivers an over-budget PowerShell startup command through stdin once', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const startupCommand = `orca ${'x'.repeat(22_000)}`
+      provider.configure({
+        getWindowsShell: () => 'powershell.exe',
+        getWindowsPowerShellImplementation: () => 'powershell.exe'
+      })
+
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: 'C:\\Users\\jin\\repo',
+        command: startupCommand
+      })
+
+      const spawnCall = spawnMock.mock.calls.at(-1)!
+      const launchedCommand = Buffer.from(String(spawnCall[1][3]), 'base64').toString('utf16le')
+      expect(launchedCommand).not.toContain('Get-Content -LiteralPath $__orcaStartupPath')
+      await vi.waitFor(() => expect(mockProc.write).toHaveBeenCalledOnce())
+      expect(String(mockProc.write.mock.calls[0]?.[0])).toContain(startupCommand)
     })
 
     it('awaits PowerShell availability before resolving an automatic Windows shell', async () => {

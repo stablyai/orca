@@ -46,6 +46,7 @@ export function finalizeWindowsLocalPtySpawnEnvironment(args: {
           plan.validationCwd = resolved.validationCwd
           plan.startupCommandDeliveredInShellArgs =
             resolved.startupCommandDeliveredInShellArgs === true
+          plan.startupCommandStaging = resolved.startupCommandStaging
         }
       }
     } else if (isHostCodexHomeForWsl(env.CODEX_HOME)) {
@@ -94,5 +95,6 @@ export function finalizeWindowsLocalPtySpawnEnvironment(args: {
     plan.effectiveCwd = resolved.effectiveCwd
     plan.validationCwd = resolved.validationCwd
     plan.startupCommandDeliveredInShellArgs = resolved.startupCommandDeliveredInShellArgs === true
+    plan.startupCommandStaging = resolved.startupCommandStaging
   }
 }
