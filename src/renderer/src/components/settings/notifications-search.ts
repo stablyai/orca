@@ -1,3 +1,4 @@
+import { isMacUserAgent } from '@/components/terminal-pane/pane-helpers'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
@@ -124,6 +125,31 @@ export const getNotificationsPaneSearchEntries = createLocalizedCatalog(() => [
       )
     ]
   },
+  ...(isMacUserAgent()
+    ? [
+        {
+          title: translate(
+            'auto.components.settings.NotificationsPane.a5e9bc227c',
+            'Bring Orca to Front'
+          ),
+          description: translate(
+            'auto.components.settings.NotificationsPane.0472617283',
+            'When an agent finishes replying to your prompt while you are in another app, bring Orca forward and switch to its tab.'
+          ),
+          keywords: [
+            ...translateSearchKeyword(
+              'auto.components.settings.notifications.search.foreground',
+              'foreground'
+            ),
+            ...translateSearchKeyword(
+              'auto.components.settings.notifications.search.reply',
+              'reply'
+            ),
+            ...translateSearchKeyword('auto.components.settings.notifications.search.tab', 'tab')
+          ]
+        }
+      ]
+    : []),
   {
     title: translate(
       'auto.components.settings.notifications.search.ea8cb8d9ce',
