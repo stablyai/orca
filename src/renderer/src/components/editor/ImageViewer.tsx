@@ -222,8 +222,8 @@ export default function ImageViewer({
 
   useEffect(() => {
     // Why: PdfViewer answers for PDFs, and a combined diff stacks intrinsic images in one pane,
-    // where Cmd/Ctrl +/- should keep zooming the editor font.
-    if (!isCommandOwner || isPdf || isIntrinsicLayout) {
+    // where Cmd/Ctrl +/- should keep zooming the editor font until one of them opens its popup.
+    if (!isCommandOwner || isPdf || (isIntrinsicLayout && !isPopupOpen)) {
       return
     }
     const applyZoomChange = isPopupOpen ? applyPopupZoomChange : applyInlineZoomChange
