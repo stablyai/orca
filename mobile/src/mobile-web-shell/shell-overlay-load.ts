@@ -1,8 +1,13 @@
 import { useLayoutEffect } from 'react'
+import type { DownloadProgressFeed } from './download-progress-feed'
 import type { MobileWebShellSessionState } from './mobile-web-shell-session-contract'
 import type { ShellPageFrame } from './shell-page-frame'
 
-export type ShellOverlayDownload = { receivedBytes: number; totalBytes: number }
+export type ShellOverlayDownload = {
+  receivedBytes: number
+  totalBytes: number
+  feed: DownloadProgressFeed
+}
 
 /** How far an overlay shell's page is from drawing over the screen beneath. */
 export type ShellOverlayLoad =
@@ -36,7 +41,8 @@ function overlayLoadOf(
 export function useReportedShellOverlayLoad(
   onLoad: ((load: ShellOverlayLoad) => void) | undefined,
   state: MobileWebShellSessionState,
-  pageFrame: ShellPageFrame
+  pageFrame: ShellPageFrame,
+  feed: DownloadProgressFeed
 ): void {
   const kind = overlayLoadOf(state, pageFrame)
   const receivedBytes = state.kind === 'fetching' ? state.receivedBytes : null
@@ -50,9 +56,9 @@ export function useReportedShellOverlayLoad(
       kind === 'loading'
         ? {
             kind,
-            download: receivedBytes === null ? null : { receivedBytes, totalBytes }
+            download: receivedBytes === null ? null : { receivedBytes, totalBytes, feed }
           }
         : { kind }
     )
-  }, [kind, onLoad, receivedBytes, totalBytes])
+  }, [feed, kind, onLoad, receivedBytes, totalBytes])
 }

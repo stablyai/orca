@@ -28,8 +28,8 @@ import { RepositoryGitHubAccountSection } from './RepositoryGitHubAccountSection
 import { translate } from '@/i18n/i18n'
 import { RepositoryWindowsRuntimeSection } from './RepositoryWindowsRuntimeSection'
 import { matchesRepositoryIdentitySearch } from './repository/identity/repository-identity-search'
-import { RepositoryWorktreeDefaultsSection } from './RepositoryWorktreeDefaultsSection'
-import { RepositoryJiraProjectSection } from './RepositoryJiraProjectSection'
+import { RepositoryWorktreeDefaultsSection } from './repository/execution/RepositoryWorktreeDefaultsSection'
+import { RepositoryJiraProjectSection } from './repository/RepositoryJiraProjectSection'
 import { getProjectRuntimeSessionSummary } from './repository-runtime-session-summary'
 import { getRepoOwnerWorktreeVisibilityDefaults } from '../../store/worktree-visibility-defaults-by-host'
 export { getRepositoryPaneSearchEntries }

@@ -156,6 +156,7 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
           {
             environmentId,
             worktreeId: snapshot.worktree,
+            source: recovered,
             decision,
             expectedEnvironmentConnectionGeneration,
             expectedEnvironmentPairingRevision,

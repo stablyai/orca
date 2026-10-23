@@ -72,6 +72,7 @@ export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends Orca
       return proof ? [proof] : []
     })
     const acknowledgeRetirement = this.captureTerminalTabRetirement(worktreeId, closedParentTabId)
+    const liveTerminalOf = this.liveTerminalsOfClosedTab(worktreeId, snapshot, closedParentTabId)
     const projectedPtyIds = await this.closeTerminalSurface(
       worktreeId,
       { kind: 'tab', tabId: closedParentTabId },
@@ -104,7 +105,7 @@ export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends Orca
         this.getMobileTerminalLeafPtyIds(candidate).includes(options.authorizedPty.ptyId)
           ? options.authorizedPty
           : null
-      const livePty = this.findPtyForMobileTerminalTab(worktreeId, candidate) ?? authorizedPty
+      const livePty = liveTerminalOf(candidate) ?? authorizedPty
       const ptyId = livePty?.ptyId ?? candidate.ptyId
       const hasOtherOwner = snapshot.tabs.some(
         (other) =>

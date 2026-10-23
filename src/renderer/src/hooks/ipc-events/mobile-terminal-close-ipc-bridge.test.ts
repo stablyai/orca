@@ -109,7 +109,7 @@ async function setup(viewedSurface: 'editor' | 'terminal'): Promise<{
           return () => {}
         },
         onCloseTerminal: () => () => {},
-        onSleepWorktree: () => () => {},
+        onWorkspaceSleep: () => () => {},
         onResumeSleepingAgents: () => () => {}
       }
     }

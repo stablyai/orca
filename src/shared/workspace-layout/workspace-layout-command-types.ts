@@ -394,6 +394,9 @@ export type LayoutContext = {
   now: () => number
   /** True while a start of this pane is in flight; such a pane is not started again. */
   isStarting?: (leafId: string) => boolean
+  /** Why panes this commit drops are closed: only a live edit's drops run the dropped-leaf step.
+   *  Absent (load, restore, peer merge, moves) records nothing. */
+  droppedLeafReason?: DroppedLeafReason
   /**
    * Whether the pane's bound terminal is live, as the runtime knows it; a binding with a start
    * status, or to a terminal that ended, names what the pane restores from. Absent: live.
@@ -402,6 +405,8 @@ export type LayoutContext = {
   /** Whether the live bound terminal is an empty shell a hibernated agent left: startPane replaces it. */
   retiresBinding?: (paneKey: string, ptyId: string) => boolean
 }
+
+export type DroppedLeafReason = 'live-edit'
 
 export type LayoutApplyResult<Model> =
   | {

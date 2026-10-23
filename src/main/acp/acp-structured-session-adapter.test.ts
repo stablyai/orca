@@ -180,6 +180,35 @@ describe('ACP structured session adapter: turns', () => {
     })
   })
 
+  it('sends model-only choices away from the opening model, back, and away again', async () => {
+    const rig = await openAcpAdapterRig()
+    await rig.acquire()
+    for (const [index, [clientMessageId, model]] of [
+      ['away', 'grok-4.6'],
+      ['back', 'grok-4.7'],
+      ['again', 'grok-4.6']
+    ].entries()) {
+      await expect(
+        rig.adapter.dispatch({
+          sessionId: SESSION,
+          fence: 1,
+          clientMessageId,
+          body: hello,
+          executionOptions: { model }
+        })
+      ).resolves.toEqual({ state: 'admitted' })
+      rig.child().agent.reply(await rig.frame('session/prompt', index), { stopReason: 'end_turn' })
+      await waitFor(() => expect(rig.adapter.holdsDispatch(SESSION)).toBe(false))
+    }
+    // Back on the opening model, its opening effort is restored; elsewhere the agent keeps its own.
+    expect(rig.sent('session/set_config_option').map((frame) => frame.params)).toMatchObject([
+      { configId: 'model', value: 'grok-4.6' },
+      { configId: 'model', value: 'grok-4.7' },
+      { configId: 'reasoning_effort', value: 'high' },
+      { configId: 'model', value: 'grok-4.6' }
+    ])
+  })
+
   it("sends Grok's prompt identity only to an agent whose dialect echoes it", async () => {
     const rig = await openAcpAdapterRig({
       deps: { spec: { ...GROK, dialect: GENERIC_ACP_DIALECT } }

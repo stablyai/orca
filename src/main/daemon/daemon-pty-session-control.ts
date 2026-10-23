@@ -177,6 +177,14 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
       { sessionId: id, immediate: opts.immediate ?? false },
       remainingDaemonRequestTimeoutMs(opts.deadlineMs)
     )
+    await this.completeShutdownWithHistoryLock(id, opts)
+  }
+
+  /** Complete an explicit close without issuing another kill; the caller holds the spawn/history lock. */
+  protected async completeShutdownWithHistoryLock(
+    id: string,
+    opts: { keepHistory?: boolean }
+  ): Promise<void> {
     this.activeSessionIds.delete(id)
     this.clearSessionAwaitingDaemonRecovery(id)
     this.dirtySessionVersions.delete(id)

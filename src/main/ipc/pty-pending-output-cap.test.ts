@@ -293,7 +293,7 @@ describe('PTY producer flow control', () => {
       expect(provider.resumeProducer).toHaveBeenCalledTimes(1)
       expect(mainWindow.webContents.send.mock.calls).toEqual([
         ['pty:data', { id: 'flood-pty', data: finalPendingData }],
-        ['pty:exit', { id: 'flood-pty', code: 0 }]
+        ['pty:exit', { id: 'flood-pty', code: 0, hostId: 'local' }]
       ])
       expect(
         getPtyDataSendCalls().some(

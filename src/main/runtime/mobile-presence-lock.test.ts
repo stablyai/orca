@@ -113,7 +113,6 @@ function createRuntime(mobileAutoRestoreFitMs: number | null = 5_000) {
     renameTerminal: vi.fn(),
     focusTerminal: vi.fn(),
     closeTerminal: vi.fn(),
-    sleepWorktree: vi.fn(),
     terminalFitOverrideChanged: (ptyId, mode, cols, rows) => {
       fitOverrideEvents.push({ ptyId, mode, cols, rows })
     },

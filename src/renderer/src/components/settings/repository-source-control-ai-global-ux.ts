@@ -31,7 +31,7 @@ import {
   DEFAULT_AGENT_VALUE,
   readInheritedCommandTemplate
 } from './repository-source-control-ai-labels'
-import { createRepoAiPersistQueue } from './repository-source-control-ai-persist-queue'
+import { createRepoAiPersistQueue } from './repository/source-control/repository-source-control-ai-persist-queue'
 
 export { normalizeRepoAiDraft as normalizePersistedRepoAi } from './repository-source-control-ai-draft'
 

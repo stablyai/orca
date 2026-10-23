@@ -72,6 +72,8 @@ export type TerminalSelectionEvents = {
   onSelectionMode?: (active: boolean) => void
   onSelectionCopy?: (text: string) => void
   onSelectionEvicted?: () => void
+  // A program in the terminal copied text through OSC 52.
+  onClipboardWrite?: (text: string) => void
   onModesChanged?: (modes: TerminalModes) => void
   onKeyboardAvoidanceMetrics?: (metrics: TerminalKeyboardAvoidanceMetrics) => void
   onHaptic?: (kind: 'selection' | 'success' | 'error' | 'edge-bump') => void

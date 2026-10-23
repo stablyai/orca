@@ -195,7 +195,15 @@ describe('registerPtyHandlers', () => {
 
       expect(mainWindow.webContents.send.mock.calls).toEqual([
         ['pty:data', { id: finalSpawn.id, data: 'final-tail' }],
-        ['pty:exit', { id: finalSpawn.id, code: 0, incarnationId: finalSpawn.incarnationId }]
+        [
+          'pty:exit',
+          {
+            id: finalSpawn.id,
+            code: 0,
+            incarnationId: finalSpawn.incarnationId,
+            hostId: 'local'
+          }
+        ]
       ])
       expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
         rendererInFlightChars: 8 * 1024 * 1024,

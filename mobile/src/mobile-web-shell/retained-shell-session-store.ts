@@ -223,17 +223,19 @@ export function takeRetainedBridgeHost(args: {
   client: object
 }): { host: BridgeHost; binding: RetainedBridgeHostBinding } | null {
   const entry = retainedEntry
-  if (
-    entry === null ||
-    entry.hostId !== args.hostId ||
-    entry.client !== args.client ||
-    entry.bridge === null
-  ) {
+  if (entry === null || entry.bridge === null) {
+    return null
+  }
+  // A client or host that cannot resume this bridge must not leave it parked: its subscriptions
+  // stay on the retired client until some later dispatch happens to dispose it.
+  if (entry.hostId !== args.hostId || entry.client !== args.client) {
+    disposeBridgeOf(entry)
     return null
   }
   if (
     entry.bridge.sessionId !== args.sessionId ||
     entry.bridge.buildId !== args.buildId ||
+    entry.bridge.client !== args.client ||
     entry.bridge.binding.overflowed
   ) {
     disposeBridgeOf(entry)

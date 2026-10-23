@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { committingSpawn } from '../bind-first-pane.test-fixture'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import {
   OrcaRuntimeService,
@@ -496,7 +497,9 @@ describe('OrcaRuntimeService', () => {
     let ptyCounter = 0
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
-      spawn: vi.fn(async () => ({ id: `target-group-pty-${++ptyCounter}` })),
+      spawn: vi.fn(
+        committingSpawn(runtime, async () => ({ id: `target-group-pty-${++ptyCounter}` }))
+      ),
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null

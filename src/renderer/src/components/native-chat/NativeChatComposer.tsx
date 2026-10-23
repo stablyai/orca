@@ -174,6 +174,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
     const imageBlock = nativeChatImageSendBlock(imageAttachments)
     const sendBlockedReason = imageBlock.reason ?? structuredTransport?.sendBlockedReason ?? null
     const sendHeld =
+      attachments.pastedTextSaving ||
       disabled ||
       structuredTransport?.sendOut === true ||
       imageBlock.holdsSend ||
@@ -223,6 +224,8 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       resolvePendingImageAttachment: attachments.pendingChips.resolve,
       revealPendingImageAttachment: attachments.revealPendingImageAttachment,
       dropPendingImageAttachment: attachments.dropPendingImageAttachment,
+      pastesInline: () => goalMode.active,
+      pastedTextEditor: structuredTransport ? attachments.scopeEditor : null,
       setNotice
     })
 
@@ -279,6 +282,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       setNotice
     }
     const sendPty = useNativeChatPtyComposerSend({
+      draftScopeKey,
       ...ptyCommandRouting,
       draft,
       imageAttachments,

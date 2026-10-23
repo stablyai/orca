@@ -46,6 +46,14 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
     pastePayload: string,
     options: RuntimeAgentPromptWriteOptions
   ): Promise<{ submits: number; prompt?: RuntimeTerminalPromptDelivery }>
+  /** The opt-in path (`onPermission: 'wait'`, `expectedBinding`), pinned to `ptyId`. */
+  protected abstract submitTerminalAgentPrompt(
+    handle: string,
+    ptyId: string,
+    prompt: string,
+    payload: string,
+    options: RuntimeAgentPromptWriteOptions
+  ): Promise<RuntimeTerminalSend>
 
   private lastProvenAbsentLeafPtyVerdictPruneAt: number | undefined
 
@@ -238,6 +246,10 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
       }
       const payload = payloadFor(pty.pty.ptyId)
       await assertTerminalInputWithinLimitWithYield(payload)
+      // Only opted-in calls take the extra layer, so every default caller's timing is untouched.
+      if (agentPromptWriteOptsIn(options)) {
+        return await this.submitTerminalAgentPrompt(handle, pty.pty.ptyId, prompt, payload, options)
+      }
       const generation = this.getPtyLifecycleGeneration(pty.pty.ptyId)
       const delivery = await this.serializeAgentPromptSubmission(
         pty.pty.ptyId,
@@ -271,6 +283,9 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
     if (await this.isLeafPtyProvenAbsent(leaf.ptyId)) {
       throw new Error('terminal_not_writable')
     }
+    if (agentPromptWriteOptsIn(options)) {
+      return await this.submitTerminalAgentPrompt(handle, leaf.ptyId, prompt, payload, options)
+    }
     const generation = this.getPtyLifecycleGeneration(leaf.ptyId)
     const delivery = await this.serializeAgentPromptSubmission(leaf.ptyId, generation, async () => {
       this.assertLiveTerminalHandleTargetsPty(handle, leaf.ptyId!)
@@ -288,4 +303,8 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
       ...(delivery.prompt ? { prompt: delivery.prompt } : {})
     }
   }
+}
+
+function agentPromptWriteOptsIn(options: RuntimeAgentPromptWriteOptions): boolean {
+  return options.onPermission === 'wait' || options.expectedBinding !== undefined
 }

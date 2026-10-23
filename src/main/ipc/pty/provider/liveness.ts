@@ -76,12 +76,14 @@ export async function isProviderAgentSessionOwnerLive(
 export async function verifyPtyStopped(
   provider: IPtyProvider,
   ptyId: string,
-  opts: { keepHistory?: boolean; deadlineMs?: number } | undefined
+  opts: { keepHistory?: boolean; deadlineMs?: number } | undefined,
+  exitObserved = false
 ): Promise<boolean> {
   if (await isProviderPtyLive(provider, ptyId, opts?.deadlineMs)) {
     return false
   }
-  if (!opts?.keepHistory) {
+  // Why: this incarnation's observed exit is the proof; the settle poll only guards an unobserved stop.
+  if (!opts?.keepHistory || exitObserved) {
     return true
   }
   const settleDeadline = Date.now() + KEEP_HISTORY_STOP_SETTLE_MS

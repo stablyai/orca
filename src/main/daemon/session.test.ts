@@ -806,7 +806,7 @@ describe('Session', () => {
       expect(vi.getTimerCount()).toBe(0)
     })
 
-    it('keeps late data and the real exit code until physical exit', () => {
+    it('keeps late data and the real exit code while attributing the requested stop', () => {
       createSession()
       subprocess.kill = () => {}
       const onData = vi.fn()
@@ -822,8 +822,7 @@ describe('Session', () => {
       expect(onData).toHaveBeenCalledWith('late output')
       expect(onExit).toHaveBeenCalledTimes(1)
       expect(onExit).toHaveBeenCalledWith(23, session.incarnationId, {
-        kind: 'exited',
-        exitCode: 23
+        kind: 'operator_close'
       })
       expect(session.exitCode).toBe(23)
     })

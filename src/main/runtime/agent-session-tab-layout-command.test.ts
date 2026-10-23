@@ -69,6 +69,62 @@ describe("a host's chat tab change as main's layout command", () => {
     )
   })
 
+  describe("a paired client's chosen place (L270)", () => {
+    /** Two groups: group-1 holds [a, c], group-2 holds [d]; group-1 is remembered active. */
+    function twoGroups(): WorkspaceSessionState {
+      const tabs = [
+        chatTab('a', 'tab-a'),
+        chatTab('c', 'tab-c'),
+        { ...chatTab('d', 'tab-d'), groupId: 'group-2' }
+      ]
+      return {
+        ...session(tabs, 'group-1'),
+        tabGroups: {
+          [WT]: [
+            { id: 'group-1', worktreeId: WT, activeTabId: null, tabOrder: ['tab-a', 'tab-c'] },
+            { id: 'group-2', worktreeId: WT, activeTabId: null, tabOrder: ['tab-d'] }
+          ]
+        }
+      }
+    }
+    const placed = (placement: { groupId?: string; afterTabId?: string }) => ({
+      open: { ...open('b').open, placement }
+    })
+
+    it('opens the chat in the named group, after the named tab', () => {
+      expect(commandOn(twoGroups(), placed({ groupId: 'group-1', afterTabId: 'tab-a' }))).toEqual({
+        type: 'openAgentSessionTab',
+        workspace: WT,
+        tabId: 'agent-session:b',
+        sessionId: 'b',
+        agent: 'codex',
+        groupId: 'group-1',
+        afterTabId: 'tab-a'
+      })
+    })
+
+    it('prefers the named group to the remembered active one', () => {
+      expect(commandOn(twoGroups(), placed({ groupId: 'group-2' }))).toMatchObject({
+        groupId: 'group-2'
+      })
+    })
+
+    it('falls back to the active group for a group the workspace no longer holds', () => {
+      expect(
+        commandOn(twoGroups(), placed({ groupId: 'gone', afterTabId: 'tab-a' }))
+      ).toMatchObject({
+        groupId: 'group-1',
+        afterTabId: 'tab-a'
+      })
+    })
+
+    it('drops an anchor tab that is not in the chosen group', () => {
+      expect(commandOn(twoGroups(), placed({ groupId: 'group-2', afterTabId: 'tab-a' }))).toEqual(
+        expect.not.objectContaining({ afterTabId: expect.anything() })
+      )
+    })
+  })
+
   it('opens nothing for a chat a tab already shows', () => {
     expect(commandOn(session([chatTab('a', 'saved-tab')], 'group-1'), open('a'))).toBeNull()
   })

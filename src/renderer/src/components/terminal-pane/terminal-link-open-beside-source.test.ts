@@ -32,6 +32,10 @@ vi.mock('@/store', () => ({
 
 vi.mock('sonner', () => ({ toast: { error: toastErrorMock } }))
 
+vi.mock('@/lib/language-detect', () => ({
+  detectLanguage: () => 'plaintext'
+}))
+
 vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealWorkspace: vi.fn(),
   activateAndRevealWorktree: vi.fn()
@@ -106,7 +110,7 @@ describe('terminal file links carry their source tab', () => {
     )
   })
 
-  it('opens HTML source in the explicitly requested source group', async () => {
+  it('refuses an explicit request that resolves to Orca browser HTML', async () => {
     setPlatform('Macintosh')
     seedSourceTab()
 
@@ -114,17 +118,8 @@ describe('terminal file links carry their source tab', () => {
     await flushAsyncWork()
 
     expect(createBrowserTabMock).not.toHaveBeenCalled()
-    expect(openFileForLinkMock).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '/tmp/report.html', language: 'html', mode: 'edit' }),
-      { forceContentReload: true },
-      expect.objectContaining({
-        workspaceId: 'wt-1',
-        hostId: null,
-        targetGroupId: 'group-a'
-      }),
-      expect.any(Function)
-    )
-    expect(toastErrorMock).not.toHaveBeenCalled()
+    expect(openFileForLinkMock).not.toHaveBeenCalled()
+    expect(toastErrorMock).toHaveBeenCalledTimes(1)
   })
 
   it('refuses a closed explicit group before activating its workspace', async () => {

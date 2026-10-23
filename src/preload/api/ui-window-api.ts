@@ -18,6 +18,12 @@ export type UiWindowApi = {
     /** With `forNativeChatDraft`: a structured chat on this machine, whose sends claim its pastes. */
     forStructuredChat?: boolean
   }) => Promise<string | null>
+  /** A long text paste saved as a file the chat's agent reads: here, or in its paired server's store. */
+  savePastedTextAsFile: (args: {
+    text: string
+    runtimeEnvironmentId?: string | null
+    agentSessionAttachment?: AgentSessionAttachmentClipboardTarget
+  }) => Promise<string>
   clipboardHasImage: () => Promise<boolean | null>
   /** Paths of files a file manager copied; empty when there are none or the host cannot list them. */
   readClipboardFilePaths: () => Promise<string[]>
@@ -47,6 +53,8 @@ export type UiWindowApi = {
   syncTrafficLights: (zoomFactor: number) => void
   setMarkdownEditorFocused: (focused: boolean) => void
   setRichMarkdownContextMenuTarget: (target: RichMarkdownContextMenuTableTarget | null) => void
+  /** The next editable context menu opens on plain text, not a rich Markdown editor. */
+  markPlainTextContextMenuTarget: () => void
   setTerminalInputFocused: (focused: boolean) => void
   setFloatingFocus: (state: { panelFocused: boolean; terminalFocused: boolean }) => void
   setShortcutRecorderFocused: (focused: boolean) => void

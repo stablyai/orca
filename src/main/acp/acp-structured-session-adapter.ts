@@ -263,6 +263,7 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
     // Bounded, and abandoned by a close or Stop: the session's queue waits on it.
     await writeAcpSessionOption(session.connection, session.options, write, {
       key: input.key,
+      value: input.value,
       agent: session.spec.agent,
       timeoutMs: this.deps.optionWriteTimeoutMs ?? ACP_OPTION_WRITE_TIMEOUT_MS,
       ...(input.signal ? { signal: input.signal } : {})

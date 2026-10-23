@@ -23,6 +23,7 @@ import {
   resolveNativeChatTranscriptAgent,
   shouldStepNativeChatAskAnswer
 } from '../../../src/shared/native-chat-agent-support'
+import { buildNativeChatPasteBytes } from '../../../src/shared/native-chat-paste-bytes'
 
 /** Sends an ask-user answer to the active chat pane. Claude and Codex selectors
  *  use their agent-specific keystrokes; other agents get pasted label text.
@@ -263,7 +264,11 @@ export function useMobileNativeChatAnswerSend(args: {
           // successor's fence. Test the turn slot, not the generation counter —
           // Stop, ask-cancel and a dropped lease all bump the generation with no
           // successor, and there a landed answer IS a success.
-          const sent = (await sendTerminal(formatAskAnswer(prompt, selections), true)) || fail()
+          const sent =
+            (await sendTerminal(
+              buildNativeChatPasteBytes(formatAskAnswer(prompt, selections)),
+              true
+            )) || fail()
           return sent && writeTurnsRef.current.get(handle) === turn
         }
         const groups =

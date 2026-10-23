@@ -165,6 +165,14 @@ export function buildSkillDiscoverySources(
       ['agent-skills'],
       'omp'
     ),
+    source(
+      'home-qoder',
+      'Qoder home',
+      pathApi.join(home, '.qoder', 'skills'),
+      'home',
+      ['agent-skills'],
+      'qoder'
+    ),
     source('home-hermes', 'Hermes home', hermesSkillsRoot, 'home', ['agent-skills'], 'hermes'),
     source(
       'home-prime-agent',
@@ -210,7 +218,15 @@ export function buildSkillDiscoverySources(
         null
       ),
       ...providerRepoSources(repoPath, label, pathApi),
-      // OpenCode also reads its own project folder; it installs into the canonical root above.
+      // OpenCode and Qoder also read their own project folders; they install into the canonical root above.
+      source(
+        `repo-qoder-${stablePathId(repoPath)}`,
+        `${label} .qoder`,
+        pathApi.join(repoPath, '.qoder', 'skills'),
+        'repo',
+        ['agent-skills'],
+        'qoder'
+      ),
       source(
         `repo-opencode-${stablePathId(repoPath)}`,
         `${label} .opencode`,

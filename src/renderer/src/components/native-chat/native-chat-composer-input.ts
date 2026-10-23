@@ -16,6 +16,8 @@ export type NativeChatComposerInput = Pick<
   removeImageReferences?: (attachmentId: string) => void
   /** Inserts each file at the caret as a pill; its text stays the `@path` reference. */
   insertFileReferences?: (paths: string[]) => void
+  /** One user paste transaction; ordinary history retains the replaced rich selection. */
+  stagePastedText?: (token: string) => void
   /** Whether a collapsed caret sits on the first (`start`) or last (`end`) visual line,
    *  counting wrapped lines, so an arrow key there has nowhere left to move it. */
   isCaretOnVisualEdge?: (edge: 'start' | 'end') => boolean

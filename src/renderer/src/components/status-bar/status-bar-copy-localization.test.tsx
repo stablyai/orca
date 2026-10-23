@@ -60,7 +60,10 @@ function setSshTargets(
 }
 
 function triggerText(): string {
-  return screen.getByRole('button').textContent ?? ''
+  const content = document.createElement('div')
+  content.innerHTML = screen.getByRole('button').innerHTML
+  content.querySelectorAll('[aria-hidden="true"]').forEach((element) => element.remove())
+  return content.textContent ?? ''
 }
 
 describe('status-bar copy under a non-English UI language', () => {
@@ -158,9 +161,10 @@ describe('status-bar copy under a non-English UI language', () => {
     expect(triggerText()).toContain('1 台のホスト')
   })
 
-  it('translates the connecting state', () => {
+  it('keeps the translated connected count while a host is connecting', () => {
     setSshTargets([{ id: 'ssh-1', label: 'builder', status: 'connecting' }])
     render(<SshStatusSegment compact={false} iconOnly={false} />)
-    expect(triggerText()).toContain('接続中…')
+    expect(triggerText()).toContain('0 台のホスト')
+    expect(triggerText()).not.toContain('接続中…')
   })
 })

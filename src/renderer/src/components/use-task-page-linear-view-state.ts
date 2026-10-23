@@ -25,7 +25,7 @@ import {
 import type {
   LinearIssueListFilterRead,
   LinearPrimaryTeamObservation
-} from '@/components/task-page-linear-issue-request'
+} from '@/components/task-page/linear/task-page-linear-issue-request'
 import type { LinearProjectTab } from './task-page-linear-issue-model'
 import { useTaskPageLinearContextState } from './use-task-page-linear-context-state'
 export type TaskPageLinearViewStatePreludeModel = ReturnType<

@@ -60,7 +60,7 @@ describe('owned-session teardown policy', () => {
       'project-removal': removal,
       sleep: {
         pty: 'stop',
-        'structured-chat': 'stop-pending-28445',
+        'structured-chat': 'stop',
         'host-browser': 'retain',
         launch: 'retain'
       },
@@ -104,16 +104,22 @@ describe('owned-session teardown policy', () => {
     )
   })
 
-  it('leaves the sleep to an attached renderer', async () => {
+  it('sleeps in main with a window attached, which only follows the notices', async () => {
     const { runtime, sleepPhases } = makeRuntime()
-    const sleepWorktree = vi.fn()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: sleepManagedWorktree reads only sleepWorktree.
-    runtime.setNotifier({ sleepWorktree } as unknown as RuntimeNotifier)
+    const workspaceSleepChanged = vi.fn()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the sleep reads only workspaceSleepChanged.
+    runtime.setNotifier({ workspaceSleepChanged } as unknown as RuntimeNotifier)
 
     await runtime.sleepManagedWorktree(`id:${TEST_WORKTREE_ID}`)
 
-    expect(sleepWorktree).toHaveBeenCalledWith(TEST_WORKTREE_ID)
-    expect(sleepPhases()).toEqual([])
+    expect(workspaceSleepChanged.mock.calls.map(([notice]) => notice.phase)).toEqual([
+      'started',
+      'ended'
+    ])
+    expect(workspaceSleepChanged).toHaveBeenLastCalledWith(
+      expect.objectContaining({ worktreeId: TEST_WORKTREE_ID, slept: true })
+    )
+    expect(sleepPhases()[0]).toBe('started')
   })
 
   it("project removal finds a headless page's workspace through the browser bridge", async () => {

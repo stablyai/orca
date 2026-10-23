@@ -8,11 +8,11 @@ import type { AiVaultSession } from '../../shared/ai-vault-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import {
   accumulatorFoldResumeState,
-  addPreviewMessage,
   createAccumulator,
   timestampIso,
   updateTimeline
 } from './session-scanner-accumulator'
+import { addSessionText } from './session-scanner-messages'
 import { antigravityConversationIdFromTranscriptPath } from './session-scanner-antigravity-paths'
 import { antigravityHistoryPromptHash } from './antigravity-history-prompt'
 import type {
@@ -117,13 +117,13 @@ function consumeAntigravityRecordLine(accumulator: SessionAccumulator, line: str
         : null
     }
     accumulator.title ??= normalizeTitleText(request)
-    addPreviewMessage(accumulator, { role: 'user', text: request, timestamp: record.created_at })
+    addSessionText(accumulator, { role: 'user', text: request, timestamp: record.created_at })
     return
   }
 
   if (source === 'MODEL' && type === 'PLANNER_RESPONSE' && content) {
     accumulator.messageCount++
-    addPreviewMessage(accumulator, {
+    addSessionText(accumulator, {
       role: 'assistant',
       text: content,
       timestamp: record.created_at

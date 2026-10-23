@@ -206,6 +206,7 @@
       "savedEnvironment": "Valor guardado · escribe para reemplazarlo",
       "newEnvironment": "Valor",
       "removeEnvironment": "Eliminar",
+      "environmentUnclosedQuote": "Cierra la comilla para guardar el entorno.",
       "loadingHost": "Cargando la configuración de agentes…",
       "updateHost": "Actualiza este servidor para editar su configuración de inicio de agentes.",
       "readFailed": "No se pudo leer la configuración de agentes. Comprueba la conexión con el host e inténtalo de nuevo.",
@@ -1279,6 +1280,21 @@
       }
     },
     "components": {
+      "plainSshTerminal": {
+        "open": "Abrir terminal SSH normal",
+        "unmanaged": "SSH normal — no administrado. No es un espacio de trabajo de Orca: aquí no se rastrean agentes ni pestañas, y este terminal no se restaura. Al cerrarlo finaliza la sesión SSH.",
+        "ended": "ssh finalizó con el código {{code}}. Cierra esta ventana cuando termines de leer.",
+        "title": "SSH normal · {{host}}",
+        "minimize": "Minimizar",
+        "close": "Cerrar y finalizar sesión",
+        "unknownTarget": "Este host SSH ya no está guardado en Orca.",
+        "notBlocked": "Orca puede volver a acceder a este host, así que usa sus terminales. SSH normal solo se usa mientras Orca no puede configurarse en el host.",
+        "alreadyOpen": "Otra ventana de Orca ya tiene abierto un terminal SSH normal para este host.",
+        "endedBySignal": "ssh se detuvo (señal {{signal}}). Cierra esta ventana cuando termines de leer.",
+        "cancelled": "Este terminal SSH normal se cerró antes de iniciarse.",
+        "terminalUnavailable": "Orca no pudo abrir aquí un terminal.",
+        "openHint": "Te mantiene trabajando en el host mientras Orca no puede configurarse allí."
+      },
       "hostPicker": {
         "searchHosts": "Buscar hosts…",
         "noHostsMatch": "Ningún host coincide.",
@@ -6108,21 +6124,8 @@
                 "62e71f2d5d": "Crear espacio de trabajo para {{value0}}"
               }
             }
-          }
-        },
-        "sidebar": {
-          "project": {
-            "drop": {
-              "669e12dd97": "Carpetas locales y repositorios Git",
-              "ffc769ca29": "Suelta una carpeta para agregar el proyecto",
-              "740e8d0d46": "Usa Agregar proyecto para rutas de host",
-              "e344666fb8": "Servidor activo",
-              "d0f8943f8b": "Preparando el flujo para agregar proyecto",
-              "18d3cf40e9": "Comprobando carpeta",
-              "wslFolder": "Suelta una carpeta de WSL para agregar un proyecto",
-              "wslFolderDescription": "Carpetas en \\\\wsl.localhost"
-            }
-          }
+          },
+          "project": {}
         },
         "sleep": {
           "worktree": {
@@ -7103,7 +7106,8 @@
           "ee110e1830": "Sin ref base predeterminada"
         },
         "BrowserDefaultZoomSetting": {
-          "265597101f": "Zoom predeterminado"
+          "265597101f": "Zoom predeterminado",
+          "siteDefault": "Zoom para sitios que no has ampliado."
         },
         "BrowserHomePageSetting": {
           "d4ddcd0056": "Guardar",
@@ -12958,6 +12962,23 @@
       },
       "right": {
         "sidebar": {
+          "run": {
+            "source": {
+              "control": {
+                "agent": {
+                  "action": {
+                    "start": {
+                      "git": {
+                        "operation": {
+                          "running": "Espera a que termine la operación de Git en curso."
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
           "BulkActionBar": {
             "79a9f5f712": "Unstage (",
             "ef5f5bd06e": "Stage (",
@@ -14482,6 +14503,7 @@
             "sourceActionsUnavailable": "La fuente de la transcripción no está disponible."
           },
           "AiVaultScanProgressStrip": {
+            "agentChecked": "{{agent}}: {{settled}} de {{total}} candidatos del historial comprobados",
             "fileCount_one": "{{value0}} archivo",
             "fileCount_other": "{{value0}} archivos",
             "databaseCount_one": "{{value0}} base de datos",
@@ -16343,6 +16365,9 @@
         },
         "editor": {
           "save": {
+            "notUtf8": {
+              "notice": "La función de guardado automático está pausada para {{name}} porque no es texto UTF-8. Guárdalo manualmente para convertirlo a UTF-8."
+            },
             "failure": {
               "notice": {
                 "8c59ce5075": "Failed to save the file. Please try again."
@@ -16593,16 +16618,16 @@
                 "addQuickCommand": "agregar comando rápido",
                 "newQuickCommand": "nuevo comando rápido",
                 "splitChatRight": "dividir chat a la derecha",
-                "moveChatRight": "mover chat a la derecha",
+                "newChatRight": "nuevo chat a la derecha",
                 "chatPaneRight": "panel de chat a la derecha",
                 "splitChatDown": "dividir chat abajo",
-                "moveChatDown": "mover chat abajo",
+                "newChatBelow": "nuevo chat abajo",
                 "chatPaneBelow": "panel de chat abajo"
               },
               "splitChatRight": "Dividir chat a la derecha",
-              "splitChatRightDescription": "Abre el chat activo en un panel dividido a la derecha.",
+              "splitChatRightDescription": "Abre un chat nuevo en un panel dividido a la derecha.",
               "splitChatDown": "Dividir chat abajo",
-              "splitChatDownDescription": "Abre el chat activo en un panel dividido abajo."
+              "splitChatDownDescription": "Abre un chat nuevo en un panel dividido abajo."
             }
           },
           "palette": {
@@ -16649,6 +16674,20 @@
             "7c31b0da94": "No se pudo recuperar esta pestaña. Revisa la sesión del teléfono e inténtalo de nuevo."
           },
           "BrowserPane": {
+            "addToDictionary": "Agregar al diccionario",
+            "undo": "Deshacer",
+            "redo": "Rehacer",
+            "cut": "Cortar",
+            "paste": "Pegar",
+            "pasteAndMatchStyle": "Pegar y adaptar al estilo",
+            "pasteAsPlainText": "Pegar como texto sin formato",
+            "selectAll": "Seleccionar todo",
+            "openImageInNewTab": "Abrir imagen en una pestaña nueva",
+            "saveImage": "Guardar imagen",
+            "copyImage": "Copiar imagen",
+            "copyImageAddress": "Copiar dirección de la imagen",
+            "searchSelection": "Buscar “{{value1}}” en {{value0}}",
+            "inspect": "Inspeccionar",
             "1ded0d3168": "Copiar captura de pantalla",
             "f30d2d35a7": "Captura de pantalla",
             "fa6ea61de3": "Cancelar",
@@ -16672,7 +16711,6 @@
             "ec75d0c412": "Abrir DevTools del navegador",
             "fc9be38f6f": "Anotar elemento de la página",
             "fdfc7fe0ef": "Capturar elemento de la página",
-            "a8f37f70c3": "Inspeccionar página",
             "1b179ab561": "Copiar URL de página",
             "f7ab83f7ed": "Abrir página en el navegador predeterminado",
             "0e080d820e": "Recargar",
@@ -16741,6 +16779,15 @@
             "429ef481f9": "Cancelar",
             "64f448fb6e": "Nombre del perfil",
             "67e9b9fcd6": "Nuevo perfil del navegador",
+            "zoom": "Zoom",
+            "zoomOut": "Alejar",
+            "zoomIn": "Acercar",
+            "resetZoom": "Restablecer zoom",
+            "appearance": "Apariencia",
+            "appearanceMatchOrca": "Coincidir con Orca",
+            "appearanceLight": "Claro",
+            "appearanceDark": "Oscuro",
+            "zoomPercent": "Zoom {{value0}}%",
             "58f2c81542": "Cambiar",
             "a38f217b46": "Cambiar de perfil recargará esta página. Todos los datos del formulario no guardados se perderán.",
             "fe683eb3b4": "Cambiar perfil",
@@ -18316,6 +18363,7 @@
   },
   "components": {
     "native-chat": {
+      "imagePreview": { "fileActions": "Acciones de archivo", "linkActions": "Acciones de enlace" },
       "install": {
         "checking": "Comprobando si {{agent}} está listo en este host…"
       },
@@ -18482,6 +18530,8 @@
         "settleEarlierMessage": "Espere a que se entregue su mensaje anterior o vuelva a intentarlo.",
         "queueTooLarge": "Hay demasiado texto esperando en la cola.",
         "shrinkQueue": "Elimine un mensaje de la cola o espere a que se entregue uno y vuelva a intentarlo.",
+        "messageTooLarge": "Supera el límite de 256 KB por mensaje.",
+        "shortenMessage": "Acórtalo o divídelo y vuelve a enviarlo.",
         "optionRejected": "El agente no aceptó este ajuste.",
         "goalsUnsupported": "Este agente no admite objetivos.",
         "agentRefused": "El agente lo rechazó.",
@@ -18506,6 +18556,7 @@
         "compactAfterSending": "Su mensaje anterior todavía se está enviando. Ejecute /compact cuando se haya enviado."
       },
       "composer": {
+        "imageUnavailable": "Vista previa no disponible",
         "imageUnsupported": "Este agente no admite pegar imágenes.",
         "send": "Enviar",
         "noPty": "No hay terminal activa: vuelva a alternar para volver a conectarse.",
@@ -18524,6 +18575,10 @@
         "uploadingFile": "Subiendo {{name}}…",
         "removeAttachment": "Quitar archivo adjunto",
         "pastedImageLabel": "Imagen pegada",
+        "pastedTextLabel": "Texto pegado",
+        "pasteNotSavedLabel": "Pegado no guardado",
+        "pasteNotSaved": "Este texto pegado no se guardó. Vuelve a pegarlo o elimínalo.",
+        "pastedTextTooLarge": "Este texto pegado haría que tu mensaje superara el límite de 256 KB por mensaje. Acórtalo y vuelve a pegarlo.",
         "copyImage": "Copiar imagen",
         "copyImageFailed": "No se pudo copiar la imagen",
         "copyImageTooLarge": "La imagen es demasiado grande para copiarla.",
@@ -18793,7 +18848,9 @@
         "reason": "Motivo",
         "needsAccess": "Necesita acceso a",
         "plan": {
-          "file": "Archivo de plan"
+          "file": "Archivo de plan",
+          "reviewTitle": "Revisar el plan propuesto",
+          "refineHint": "Refinar el plan cierra la revisión para que puedas enviar lo que debe cambiarse."
         }
       },
       "launchPromptNotDelivered": "No entregado — revisa la terminal",
@@ -19696,6 +19753,27 @@
     }
   },
   "browser": {
+    "newTab": {
+      "emptyHint": "Busca o introduce una dirección arriba. Aquí aparecerán los sitios que visites, los servidores de desarrollo que se ejecuten en este espacio de trabajo, y su PR e incidencia.",
+      "openServerFailed": "No se pudo abrir {{address}}",
+      "removedFromHistory": "Se eliminó “{{title}}” del historial",
+      "removeSuggestion": "Eliminar del historial",
+      "state": {
+        "closed": "Cerrado",
+        "draft": "Borrador",
+        "merged": "Fusionado",
+        "open": "Abierto"
+      },
+      "suggested": "Sugerido",
+      "thisWorkspace": "Este espacio de trabajo",
+      "undo": "Deshacer",
+      "checks": {
+        "failing": "Comprobaciones fallidas",
+        "passing": "Comprobaciones correctas",
+        "pending": "Comprobaciones pendientes"
+      },
+      "runningElsewhere": "{{count}} ejecutándose en otros espacios de trabajo"
+    },
     "loadFailure": {
       "connectionNotSecure": "La conexión no es segura",
       "cantReachHost": "No se puede acceder a {{value0}}",
@@ -20331,7 +20409,70 @@
     }
   },
   "fileSearch": {
-    "failed": "La búsqueda falló. Reintenta."
+    "failed": "La búsqueda falló. Reintenta.",
+    "filters": {
+      "toggle": "Mostrar u ocultar detalles de búsqueda",
+      "active": "{{count}} activos"
+    },
+    "noResults": "No hay resultados. Prueba otra búsqueda o ajusta los filtros."
+  },
+  "resourceManager": {
+    "pty": {
+      "bound": "Tiene pestaña",
+      "unbound": "Sin pestaña",
+      "unavailable": "No disponible",
+      "ownerPresent": "Presente",
+      "ownerAbsent": "Ausente",
+      "ownerUnknown": "Desconocido",
+      "sessionId": "ID de sesión de Orca",
+      "incarnation": "Instancia",
+      "workspace": "Espacio de trabajo",
+      "cwd": "cwd informado por última vez",
+      "binding": "Pestaña",
+      "agentOwnership": "Evidencia de propiedad del agente",
+      "observationTime": "Hora de observación",
+      "pid": "PID",
+      "idCopied": "ID de sesión de Orca copiado",
+      "copyFailed": "No se pudo copiar el ID de sesión de Orca",
+      "detailsNamed": "Detalles de {{terminal}}",
+      "goToTerminal": "Ir al terminal",
+      "copyId": "Copiar ID de sesión de Orca",
+      "refreshBeforeEnd": "Finalizar no está disponible hasta que se actualicen los PTY.",
+      "endUnsupported": "Finalizar no está disponible para este terminal. Su host no admite las comprobaciones de seguridad necesarias. Ciérralo desde su pestaña o en su host.",
+      "checkingTabs": "Comprobando pestañas…",
+      "endTitle": "¿Finalizar {{terminal}}?",
+      "endDescription": "Esto finaliza el terminal y sus procesos secundarios. El trabajo sin guardar puede perderse.",
+      "lastProcess": "Último proceso visto: {{process}}",
+      "cancel": "Cancelar",
+      "ending": "Finalizando…",
+      "end": "Finalizar terminal",
+      "unassigned": "Sin asignar",
+      "thisComputer": "Este equipo",
+      "localOwnedCount_one": "{{count}} PTY de Orca en este equipo",
+      "localOwnedCount_other": "{{count}} PTY de Orca en este equipo",
+      "withoutTab": "{{count}} sin pestaña",
+      "observedTime": "Última observación: {{time}}",
+      "failed": "No verificable: no se pudieron actualizar los terminales locales. Se muestran los terminales observados por última vez.",
+      "retry": "Reintentar",
+      "loading": "Cargando terminales…",
+      "noLocalOrcaPtys": "No hay PTY de Orca locales",
+      "openNamed": "Abrir {{terminal}}",
+      "endNamed": "Finalizar {{terminal}}",
+      "endShort": "Finalizar",
+      "endHint": "Finaliza este terminal y sus procesos secundarios.",
+      "claimed": "Un agente ahora posee este terminal. Actualiza antes de volver a intentarlo.",
+      "attached": "Un cliente ahora está conectado a este terminal. Actualiza antes de volver a intentarlo.",
+      "unverifiableEnd": "No verificable: el host no pudo confirmar el resultado. Puede que el terminal siga ejecutándose."
+    },
+    "resources": "Recursos",
+    "ptys": "PTY",
+    "localDaemonScope": "Esto afecta a los terminales de este equipo.",
+    "countUnavailable": "recuento de terminales no disponible",
+    "openToObserve": "Abre Recursos para observar las sesiones de terminal.",
+    "refresh": "Actualizar",
+    "restartLocal": "Reiniciar daemon local",
+    "killAllLocal": "Finalizar todas las sesiones locales",
+    "killFailed": "No se pudo finalizar el terminal. Se conservan las sesiones observadas por última vez."
   },
   "csv": {
     "detectingDelimiter": "Detectando delimitador…",

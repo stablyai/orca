@@ -239,11 +239,12 @@ export abstract class OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector
         connectionId
       })
     }
-    if (targets.size === 0 && pty?.paneKey) {
-      targets.set(pty.paneKey, {
+    const recorded = targets.size === 0 && pty ? this.paneOfPty(pty) : null
+    if (pty && recorded?.paneKey) {
+      targets.set(recorded.paneKey, {
         source: 'pty-record',
-        paneKey: pty.paneKey,
-        tabId: pty.tabId ?? undefined,
+        paneKey: recorded.paneKey,
+        tabId: recorded.tabId ?? undefined,
         worktreeId: pty.worktreeId,
         connectionId
       })

@@ -2516,6 +2516,8 @@
             "6d9793d4bc": "Resource Manager - Terminals",
             "996295bff2": "orphan terminal",
             "9e2525c89f": "Resident memory held by Orca plus the processes under each worktree's terminals.",
+            "bd19fd7a59": "Kill all sessions",
+            "c9382662bb": "Restart daemon",
             "e7ccce7e87": "of system RAM"
           },
           "SshStatusSegment": {
@@ -2525,6 +2527,7 @@
             "bc5a3fd41a": "partial",
             "connectedHostCount_one": "{{count}} host",
             "connectedHostCount_other": "{{count}} hosts",
+            "connecting": "Connecting…",
             "d09ec41831": "Remote Hosts",
             "fbb3f9f05e": "conflict",
             "fd9a3c600e": "error",
@@ -3268,6 +3271,7 @@
         "historyUnusable": "Unable to load this chat.",
         "hostReconciling": "Orca is still checking on this chat after restarting.",
         "messageNotSaved": "Couldn't save your message.",
+        "messageTooLarge": "It is over the 256 KB limit for one message.",
         "messagesUnsettled": "A message you sent earlier isn't confirmed yet.",
         "notAvailable": "This isn't available in this chat.",
         "notDoneAnswer": "Your answer was not sent.",
@@ -3298,6 +3302,7 @@
         "savedByNewerOrca": "Chats were saved by a newer Orca.",
         "sendOutcomeLost": "Orca couldn't confirm your message reached the agent. Check the chat, then send it again if needed.",
         "settleEarlierMessage": "Wait for your earlier message to go through, or retry it.",
+        "shortenMessage": "Shorten or split it, then send it again.",
         "shrinkQueue": "Delete a queued message, or wait for one to go through, then try again.",
         "startNewChat": "Start a new chat to continue.",
         "terminalAgentHoldsChat": "This chat is still open in a terminal agent.",
@@ -3396,6 +3401,12 @@
   },
   "menu": {
     "quitApp": "Quit {{appName}}"
+  },
+  "resourceManager": {
+    "pty": {
+      "localOwnedCount_one": "{{count}} Orca PTY on this computer",
+      "localOwnedCount_other": "{{count}} Orca PTYs on this computer"
+    }
   },
   "runtimeRpc": {
     "startupFailure": {

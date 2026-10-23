@@ -9,6 +9,7 @@ import type { ClientHostedBrowserCloseIntent } from './client-hosted-browser-clo
 import type { PairedTerminalTabCloseIntent } from './paired-terminal-tab-close-intent'
 import type { PersistedClientHostedBrowserPage } from './client-hosted-browser-page-record'
 import type { ClosedTerminalTabTombstonesByTabId } from './closed-terminal-tab-tombstones'
+import type { ClosedTerminalPanesByPaneKey } from './closed-terminal-panes'
 
 /** Minimal subset of OpenFile persisted across restarts.
  *  Only edit-mode files are saved — diffs, conflict reviews, and other
@@ -157,6 +158,9 @@ export type WorkspaceSessionState = {
   /** Terminal tabs this client watched the user close, kept until the host's own snapshot stops
    *  listing them. See shared/closed-terminal-tab-tombstones.ts for why absence alone cannot say it. */
   closedTerminalTabTombstonesByTabId?: ClosedTerminalTabTombstonesByTabId
+  /** Layout-owner builds: panes main's layout dropped while their terminals may run on. See
+   *  shared/closed-terminal-panes.ts. */
+  closedTerminalPanesByPaneKey?: ClosedTerminalPanesByPaneKey
 }
 
 export type WorkspaceSessionPatch = Partial<WorkspaceSessionState>

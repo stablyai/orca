@@ -10,7 +10,7 @@ import {
 import {
   reconcileLinearTeamSelection,
   storedLinearTeamSelection
-} from '@/components/task-page-linear-team-selection'
+} from '@/components/task-page/linear/task-page-linear-team-selection'
 import { useTaskPageLinearFilterSelection } from './use-task-page-linear-filter-selection'
 export type TaskPageLinearListSelectionPreludeModel = ReturnType<
   typeof useTaskPageLinearListSelectionPrelude

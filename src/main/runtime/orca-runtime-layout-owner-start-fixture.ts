@@ -8,6 +8,7 @@ import { applyCommandToSession } from '../persistence/terminal-topology/terminal
 import { resolveHostId } from '../persistence/loading-store/session-host-partitions'
 import { withDurableRuntimeStore, withRuntimePaneAdmission } from './runtime-durable-store-fixture'
 import { OrcaRuntimeService } from './orca-runtime'
+import { committingSpawn } from './bind-first-pane.test-fixture'
 import type { RuntimeNotifier } from './runtime-notifier-contract'
 import type { PaneResumeOutcome } from '../../shared/workspace-layout/workspace-layout-published'
 
@@ -74,7 +75,8 @@ export function setupLayoutOwnerRuntime() {
     })
   )
   runtime.setPtyController({
-    spawn,
+    // The host's spawn commit binds the pane before main registers the terminal (bind-first).
+    spawn: committingSpawn(runtime, spawn),
     write: () => true,
     kill: () => true,
     getForegroundProcess: async () => null
@@ -89,7 +91,6 @@ export function setupLayoutOwnerRuntime() {
     renameTerminal,
     focusTerminal: vi.fn(),
     closeTerminal: vi.fn(),
-    sleepWorktree: vi.fn(),
     terminalFitOverrideChanged: vi.fn(),
     terminalDriverChanged: vi.fn()
   })

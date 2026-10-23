@@ -6,7 +6,6 @@ import { isKnownHarnessInjectedUserTurnText } from '../../shared/harness-injecte
 import type { FileWithMtime, ResumableSessionParseState } from './session-scanner-types'
 import type { TranscriptMessageSink } from './session-transcript-consumers'
 import {
-  addPreviewMessage,
   accumulatorSessionIdentity,
   createAccumulator,
   finalizeSession,
@@ -14,6 +13,7 @@ import {
   updateLatestLocation,
   updateTimeline
 } from './session-scanner-accumulator'
+import { addSessionText } from './session-scanner-messages'
 import {
   asRecord,
   extractString,
@@ -129,7 +129,7 @@ export function consumeCodebuddySessionLine(state: CodebuddySessionParseState, l
     const isMetaUserTurn =
       asRecord(record.providerData)?.skipRun === true ||
       (text != null && isKnownHarnessInjectedUserTurnText(text))
-    addPreviewMessage(accumulator, {
+    addSessionText(accumulator, {
       role: 'user',
       text,
       timestamp: record.timestamp,
@@ -141,7 +141,7 @@ export function consumeCodebuddySessionLine(state: CodebuddySessionParseState, l
     return
   }
   if (role === 'assistant') {
-    addPreviewMessage(accumulator, { role: 'assistant', text, timestamp: record.timestamp })
+    addSessionText(accumulator, { role: 'assistant', text, timestamp: record.timestamp })
     const model = extractString(asRecord(record.providerData)?.model)
     if (model) {
       accumulator.model = model

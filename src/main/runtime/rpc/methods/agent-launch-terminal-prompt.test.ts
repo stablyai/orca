@@ -436,6 +436,129 @@ describe('writing a launch prompt into a terminal agent', () => {
   })
 })
 
+describe('cancelling a launch prompt', () => {
+  it('pastes nothing when cancelled during the readiness wait, and forwards the signal', async () => {
+    const controller = new AbortController()
+    const stub = runtimeStub({})
+    stub.waitForTerminal.mockImplementation(async () => {
+      controller.abort()
+      throw new Error('request_aborted')
+    })
+
+    const delivered = await deliverTerminalAgentLaunchPrompt({
+      runtime: stub.runtime,
+      handle: 'term_1',
+      agent: 'claude',
+      freshLaunch: true,
+      text: 'do the thing',
+      signal: controller.signal
+    })
+
+    expect(delivered).toBe(false)
+    expect(stub.waitForFreshWorkerComposer).toHaveBeenCalledWith('term_1', 'claude', 8_000, {
+      requireComposerMarker: false,
+      stopOnDialog: true,
+      signal: controller.signal
+    })
+    expect(stub.waitForTerminal).toHaveBeenCalledWith(
+      'term_1',
+      expect.objectContaining({ signal: controller.signal })
+    )
+    expect(stub.sendTerminalAgentPrompt).not.toHaveBeenCalled()
+  })
+
+  it('stops waiting out a dialog once cancelled', async () => {
+    const controller = new AbortController()
+    const stub = runtimeStub({
+      wait: { satisfied: false, status: 'running', blockedReason: 'agent-approval-prompt' }
+    })
+    const clock = fakeClock()
+
+    const delivered = await deliverTerminalAgentLaunchPrompt({
+      runtime: stub.runtime,
+      handle: 'term_1',
+      agent: 'claude',
+      freshLaunch: false,
+      text: 'do the thing',
+      signal: controller.signal,
+      clock: {
+        now: clock.now,
+        sleep: async (ms) => {
+          await clock.sleep(ms)
+          controller.abort()
+        }
+      }
+    })
+
+    expect(delivered).toBe(false)
+    expect(stub.waitForTerminal).toHaveBeenCalledTimes(1)
+    expect(stub.sendTerminalAgentPrompt).not.toHaveBeenCalled()
+  })
+
+  it('reports text whose Enter was handed over before the cancel as delivered', async () => {
+    const controller = new AbortController()
+    const stub = runtimeStub({
+      send: async (_handle, _text, options) => {
+        const accepted = options.onSubmitWritten
+        if (typeof accepted === 'function') {
+          accepted()
+        }
+        controller.abort()
+        throw new Error('request_aborted')
+      }
+    })
+
+    await expect(
+      deliverTerminalAgentLaunchPrompt({
+        runtime: stub.runtime,
+        handle: 'term_1',
+        agent: 'claude',
+        freshLaunch: false,
+        text: 'do the thing',
+        signal: controller.signal
+      })
+    ).resolves.toBe(true)
+  })
+
+  it('reports text cancelled before its Enter as not delivered', async () => {
+    const controller = new AbortController()
+    const stub = runtimeStub({
+      send: async () => {
+        controller.abort()
+        throw new Error('request_aborted')
+      }
+    })
+
+    await expect(
+      deliverTerminalAgentLaunchPrompt({
+        runtime: stub.runtime,
+        handle: 'term_1',
+        agent: 'claude',
+        freshLaunch: false,
+        text: 'do the thing',
+        signal: controller.signal
+      })
+    ).resolves.toBe(false)
+  })
+
+  it('passes no signal or acceptance hook when the caller gave no signal', async () => {
+    const stub = runtimeStub({})
+
+    await deliverTerminalAgentLaunchPrompt({
+      runtime: stub.runtime,
+      handle: 'term_1',
+      agent: 'claude',
+      freshLaunch: false,
+      text: 'do the thing'
+    })
+
+    const options = stub.sendTerminalAgentPrompt.mock.calls[0]![2]
+    expect(options).not.toHaveProperty('signal')
+    expect(options).not.toHaveProperty('onSubmitWritten')
+    expect(stub.waitForTerminal.mock.calls[0]![1]).not.toHaveProperty('signal')
+  })
+})
+
 function fakeClock() {
   let now = 0
   return {

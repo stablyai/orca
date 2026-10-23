@@ -613,7 +613,7 @@ describe('PTY renderer send recovery', () => {
       expect(getPtyDataSendCalls()).toEqual([['pty:data', { id: 'send-fail-exit', data: pending }]])
       expect(
         mainWindow.webContents.send.mock.calls.filter((call) => call[0] === 'pty:exit')
-      ).toEqual([['pty:exit', { id: 'send-fail-exit', code: 7 }]])
+      ).toEqual([['pty:exit', { id: 'send-fail-exit', code: 7, hostId: 'local' }]])
       expect(
         mainWindow.webContents.send.mock.calls.filter(
           (call) => call[0] === 'pty:modelRestoreNeeded'
@@ -651,7 +651,7 @@ describe('PTY renderer send recovery', () => {
 
       expect(mainWindow.webContents.send.mock.calls).toEqual([
         ['pty:data', { id: 'flood-pty', data: '', droppedOutput: true }],
-        ['pty:exit', { id: 'flood-pty', code: 0 }]
+        ['pty:exit', { id: 'flood-pty', code: 0, hostId: 'local' }]
       ])
       expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
         pendingPtyCount: 0,

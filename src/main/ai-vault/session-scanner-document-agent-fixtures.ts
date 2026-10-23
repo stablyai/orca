@@ -59,6 +59,7 @@ export async function writeDocumentAgentFixtures(
     JSON.stringify({
       role: 'user',
       summary: { title: 'OpenCode title' },
+      content: [{ type: 'text', text: 'OpenCode title' }],
       time: { created: 1_777_634_000_000 },
       tokens: { input: 7, output: 3 }
     })

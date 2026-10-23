@@ -19,7 +19,7 @@ import {
   JIRA_IMAGE_MAX_BYTES,
   JIRA_IMAGE_MAX_REFERENCES,
   type JiraMediaFormat
-} from '../../../shared/jira-attachment-image'
+} from '../../../shared/jira/jira-attachment-image'
 import { registerAttachmentImageGrant } from './image-grants'
 
 const DOWNLOAD_CONCURRENCY = 3

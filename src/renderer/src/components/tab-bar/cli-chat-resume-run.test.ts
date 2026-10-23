@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CliChatResumeSource } from './cli-chat-resume-source'
 import type { AgentSessionWireRefusal } from '../../../../shared/agent-session-wire'
 import type { StructuredAgentSessionCreateParams } from '../../../../shared/structured-agent-session-create'
+import type * as FrameDrawnChatTabPlacementModule from '@/lib/frame-drawn-chat-tab-placement'
 
 const mocks = vi.hoisted(() => {
   const state: { source: CliChatResumeSource | null } = { source: null }
@@ -12,7 +13,8 @@ const mocks = vi.hoisted(() => {
     createCapability: vi.fn(),
     call: vi.fn(),
     toast: vi.fn(),
-    activate: vi.fn(async () => true)
+    activate: vi.fn(async () => true),
+    frameDrawn: false
   }
 })
 vi.mock('./cli-chat-resume-source', () => ({ resolveCliChatResumeSource: () => mocks.source }))
@@ -33,6 +35,19 @@ vi.mock('@/lib/structured-agent-session-create-hydration', () => ({
   publishStructuredAgentSessionCreateHydration: vi.fn()
 }))
 vi.mock('sonner', () => ({ toast: { error: mocks.toast } }))
+// A frame-drawn server workspace's create carries the tab's place, read as it is sent.
+vi.mock('@/lib/frame-drawn-chat-tab-placement', async (importOriginal) => {
+  const actual = await importOriginal<typeof FrameDrawnChatTabPlacementModule>()
+  return {
+    ...actual,
+    withFrameDrawnChatTabPlacement: (
+      intent: Parameters<typeof actual.withFrameDrawnChatTabPlacement>[0]
+    ) =>
+      mocks.frameDrawn
+        ? { ...intent.params, tabPlacement: { groupId: 'g-1' } }
+        : actual.withFrameDrawnChatTabPlacement(intent)
+  }
+})
 vi.mock('@/lib/activate-ai-vault-structured-session', () => ({
   activateAiVaultStructuredSession: mocks.activate
 }))
@@ -136,6 +151,7 @@ beforeEach(async () => {
   useAppStore.setState(useAppStore.getInitialState(), true)
   useAppStore.setState({ activeWorktreeId: 'wt-1' })
   mocks.source = SOURCE
+  mocks.frameDrawn = false
   mocks.sourceCapability.mockResolvedValue(true)
   mocks.createCapability.mockResolvedValue(true)
   mocks.call.mockImplementation(
@@ -322,31 +338,38 @@ describe('CLI identity resume through the existing launch owner', () => {
     expect(tabs()).toHaveLength(1)
   })
 
-  it('still opens an eager History joiner after the terminal closes before create', async () => {
-    const capability = deferred<boolean>()
-    mocks.createCapability.mockReturnValue(capability.promise)
-    const running = runCliChatResume(SOURCE)
-    await vi.waitFor(() => expect(mocks.createCapability).toHaveBeenCalledOnce())
-    const eager = beginStructuredAgentSessionProvisionalLaunch({
-      hooks: {},
-      plan: adoptAgentSessionLaunchVerdict({
-        route: 'structured-native-chat',
-        requestId: newAgentLaunchRequestId(),
-        agent: 'claude',
-        worktreeId: 'wt-1',
-        executionHostId: 'local',
-        resumeFrom: { providerSessionId: 'provider-1' }
+  it.each([false, true])(
+    'still opens an eager History joiner after the terminal closes before create (frame-drawn: %s)',
+    async (frameDrawn) => {
+      mocks.frameDrawn = frameDrawn
+      const capability = deferred<boolean>()
+      mocks.createCapability.mockReturnValue(capability.promise)
+      const running = runCliChatResume(SOURCE)
+      await vi.waitFor(() => expect(mocks.createCapability).toHaveBeenCalledOnce())
+      const eager = beginStructuredAgentSessionProvisionalLaunch({
+        hooks: {},
+        plan: adoptAgentSessionLaunchVerdict({
+          route: 'structured-native-chat',
+          requestId: newAgentLaunchRequestId(),
+          agent: 'claude',
+          worktreeId: 'wt-1',
+          executionHostId: 'local',
+          resumeFrom: { providerSessionId: 'provider-1' }
+        })
       })
-    })
-    mocks.source = null
-    useAppStore.setState({})
-    capability.resolve(true)
-    await Promise.all([running, eager?.settlement])
-    expect(mocks.call).toHaveBeenCalledOnce()
-    expect(mocks.call.mock.calls[0][2].resumeFrom).toEqual({ providerSessionId: 'provider-1' })
-    expect(tabs()).toHaveLength(1)
-    expect(mocks.toast).not.toHaveBeenCalled()
-  })
+      mocks.source = null
+      useAppStore.setState({})
+      capability.resolve(true)
+      await Promise.all([running, eager?.settlement])
+      expect(mocks.call).toHaveBeenCalledOnce()
+      expect(mocks.call.mock.calls[0][2].resumeFrom).toEqual({ providerSessionId: 'provider-1' })
+      expect(mocks.call.mock.calls[0][2].tabPlacement).toEqual(
+        frameDrawn ? { groupId: 'g-1' } : undefined
+      )
+      expect(tabs()).toHaveLength(1)
+      expect(mocks.toast).not.toHaveBeenCalled()
+    }
+  )
 
   it.each([
     ['reply', 'B', 'B E S R', 'B E S D R'],

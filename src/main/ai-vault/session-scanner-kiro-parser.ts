@@ -3,12 +3,8 @@ import { wslGatedReadFile } from '../native-chat/wsl-transcript-fs-access'
 import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import {
-  addPreviewContent,
-  createAccumulator,
-  finalizeSession,
-  updateTimeline
-} from './session-scanner-accumulator'
+import { createAccumulator, finalizeSession, updateTimeline } from './session-scanner-accumulator'
+import { addSessionContent } from './session-scanner-messages'
 import { consumeCompleteJsonlLines } from './session-scanner-jsonl-reader'
 import type { FileWithMtime, SessionAccumulator } from './session-scanner-types'
 import type { TranscriptMessageSink } from './session-transcript-consumers'
@@ -83,15 +79,15 @@ function consumeKiroTranscriptLine(accumulator: SessionAccumulator, line: string
       const timestamp = asRecord(data.meta)?.timestamp
       updateTimeline(accumulator, timestamp)
       accumulator.messageCount++
-      addPreviewContent(accumulator, 'user', content, timestamp)
+      addSessionContent(accumulator, 'user', content, timestamp)
       break
     }
     case 'AssistantMessage':
       accumulator.messageCount++
-      addPreviewContent(accumulator, 'assistant', content)
+      addSessionContent(accumulator, 'assistant', content)
       break
     case 'ToolResults':
-      addPreviewContent(accumulator, 'tool', content)
+      addSessionContent(accumulator, 'tool', content)
       break
     default:
       break

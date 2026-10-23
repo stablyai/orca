@@ -1,5 +1,4 @@
-// Layout-owner build: a sleep of a workspace main owns runs in main, window or not, and the window
-// draws the slept panes from main's frames; a workspace main does not own still goes to the window.
+// Layout-owner build: a sleep runs in main, window or not; the window only follows main's notices.
 import { describe, expect, it, vi } from 'vitest'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
@@ -51,12 +50,12 @@ describe('a worktree sleep in a layout-owner build, with a window attached', () 
     expect(sleepPhases()[0]).toBe('started')
   })
 
-  it("leaves a paired server's workspace to the window, as today", async () => {
+  it('sleeps in main whichever host partition holds the workspace', async () => {
     const { runtime, sleepWorktree, sleepPhases } = sleepRuntime(['runtime:env-1'])
 
     await runtime.sleepManagedWorktree(`id:${TEST_WORKTREE_ID}`)
 
-    expect(sleepWorktree).toHaveBeenCalledWith(TEST_WORKTREE_ID)
-    expect(sleepPhases()).toEqual([])
+    expect(sleepWorktree).not.toHaveBeenCalled()
+    expect(sleepPhases()[0]).toBe('started')
   })
 })

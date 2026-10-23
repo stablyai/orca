@@ -243,20 +243,22 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
       // Why: not pty.title — that is the process's own title evidence, and a name there reads as
       // the shell taking the pane back (#20626).
       pty.pty.manualTitle = title?.trim() || null
+      const recordedTabId = (): string | null => this.paneOfPty(pty.pty).tabId
       this.touchMobileSessionSnapshotsForPty(pty.pty.ptyId)
       // Why: without a renderer the rename only lived on the live pty and was
       // lost on restart. Persist customTitle so a headless rebuild keeps it.
-      if (!this.notifier?.renameTerminal && pty.pty.tabId) {
-        this.persistHeadlessTerminalTitle(pty.pty.worktreeId, pty.pty.tabId, title)
+      const tabIdForTitle = !this.notifier?.renameTerminal ? recordedTabId() : null
+      if (tabIdForTitle) {
+        this.persistHeadlessTerminalTitle(pty.pty.worktreeId, tabIdForTitle, title)
         // Why: paired desktops rank their own saved-session title above the live one, so the
         // name has to be published as manual or a resumed session hides it (#29975).
         const customTitle = title?.trim() || null
-        this.applyHeadlessSessionTabPropsToSnapshot(pty.pty.worktreeId, pty.pty.tabId, {
+        this.applyHeadlessSessionTabPropsToSnapshot(pty.pty.worktreeId, tabIdForTitle, {
           customTitle,
           // Why: a name set while the pane slept lives in the snapshot title; a reset must drop it.
           ...(customTitle === null
             ? {
-                title: this.headlessTerminalFallbackTitle(pty.pty.worktreeId, pty.pty.tabId)
+                title: this.headlessTerminalFallbackTitle(pty.pty.worktreeId, tabIdForTitle)
               }
             : {})
         })
@@ -267,7 +269,7 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
           return { handle, tabId: leaf.tabId, title }
         }
       }
-      const tabId = pty.pty.tabId ?? pty.record.tabId
+      const tabId = recordedTabId() ?? pty.record.tabId
       // A notifier can exist before its pane graph; retain the rename on the known tab.
       if (this.notifier?.renameTerminal && tabId) {
         this.persistHeadlessTerminalTitle(pty.pty.worktreeId, tabId, title)

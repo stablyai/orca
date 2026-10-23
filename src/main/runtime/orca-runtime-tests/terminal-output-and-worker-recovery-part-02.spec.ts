@@ -1,5 +1,6 @@
 import { withDurableRuntimeStore } from '../runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import {
   OrcaRuntimeService,
   getDefaultWorkspaceSession,
@@ -207,10 +208,13 @@ describe('OrcaRuntimeService', () => {
       }))
     })
     expect(secondClient).toMatchObject({ adopted: false, topologyRevision: 1 })
-    expect(agentPty).toMatchObject({
-      tabId: 'tab-agent',
-      paneKey: makePaneKey('tab-agent', HEADLESS_LEAF_ID)
-    })
+    // Switch-on, main's layout holds the binding (listed below); the record copies are never written (L80).
+    if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
+      expect(agentPty).toMatchObject({
+        tabId: 'tab-agent',
+        paneKey: makePaneKey('tab-agent', HEADLESS_LEAF_ID)
+      })
+    }
     expect(listProcesses).toHaveBeenCalledTimes(inventoryCount + 1)
     expect(listProcesses).toHaveBeenLastCalledWith('local', LIST_PROVIDER_DEADLINE)
     expect(
@@ -570,7 +574,12 @@ describe('OrcaRuntimeService', () => {
     expect(resolveLegacyWorkerTerminalRecovery).toHaveBeenCalledWith(workerPaneKey, 'adopted')
     expect(write).not.toHaveBeenCalled()
     expect(kill).not.toHaveBeenCalled()
-    const [terminal] = (await runtime.listTerminals()).terminals
+    const terminal = (await runtime.listTerminals()).terminals.find(
+      (candidate) => candidate.ptyId === 'pty-legacy'
+    )
+    if (!terminal) {
+      throw new Error('expected the legacy worker terminal')
+    }
     await expect(runtime.readTerminal(terminal.handle)).resolves.toMatchObject({
       tail: [' >_ OpenAI Codex (v0.131.0)', ' model:       gpt-5.5 high', ' directory:   /repo']
     })

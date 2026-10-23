@@ -5,6 +5,7 @@ import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusa
 import {
   agentSessionProviderHandleChainHead,
   agentSessionProviderHandleKey,
+  type AgentSessionProviderHandleChain,
   type AgentSessionProviderHandleLink
 } from '../../shared/agent-session-provider-handle'
 import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
@@ -32,6 +33,8 @@ import {
 export type PiRpcResolvedLaunch = PiRpcLaunchOptions & {
   previous: AgentSessionProviderHandleLink | null
   replacement?: 'unsaved' | 'restore-failed'
+  /** The files of the conversation this launch continues, newest first; empty for a new one. */
+  lineage?: readonly string[]
 }
 export type PiRpcLaunchPartDeps = {
   resolveCommand?: typeof resolveCliCommand
@@ -197,6 +200,9 @@ export function piRpcLaunchPart(
         command,
         fullAccess: deps.resolveFullAccess?.() ?? true,
         previous,
+        ...(sessionFile || forkFile
+          ? { lineage: piConversationFiles(record.providerHandleChain) }
+          : {}),
         ...(sessionFile ? { sessionFile } : {}),
         ...(forkFile ? { forkFile } : {}),
         ...(replacement ? { replacement } : {})
@@ -205,6 +211,22 @@ export function piRpcLaunchPart(
       inheritedEnvToDelete: PI_RPC_SESSION_ENV_TO_DELETE
     }
   }
+}
+
+/** The head back through resumes and directory forks, which copy every entry with its id, to the
+ *  session the conversation started as. */
+function piConversationFiles(chain: AgentSessionProviderHandleChain): string[] {
+  const files: string[] = []
+  for (const link of chain.toReversed()) {
+    if (link.handle.transport !== 'jsonl-rpc' || link.handle.agent !== 'pi') {
+      break
+    }
+    files.push(link.handle.nativeId)
+    if (link.origin !== 'resumed' && link.origin !== 'forked') {
+      break
+    }
+  }
+  return files
 }
 
 export function piRpcProviderLink(

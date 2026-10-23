@@ -41,6 +41,7 @@ function buildResult(options: {
     assets:
       options.bytes ??
       new Map(assets.map((asset) => [asset.path, new Uint8Array(asset.byteLength).fill(7)])),
+    reused: [],
     totalBytes,
     elapsedMs: 1
   }
@@ -567,6 +568,67 @@ describe('generation store', () => {
     for (const host of hosts) {
       expect((await store.readActiveGeneration(host))?.buildId).toBe(BUILD)
     }
+  })
+})
+
+describe('reusable assets for the next download', () => {
+  /** The next build: a longer page, and the cached script under a new name. */
+  const NEXT = buildResult({
+    assets: [
+      { path: 'index.html', byteLength: 8 },
+      { path: 'assets/app-2.js', byteLength: 2 }
+    ]
+  })
+  const NEXT_BUILD = NEXT.manifest.buildId
+  const [PAGE, SCRIPT] = NEXT.manifest.assets
+  const DOWNLOADED = new Map([['index.html', new Uint8Array(8).fill(9)]])
+  const LEFT_TO_STAGE = { ...NEXT, assets: DOWNLOADED, reused: ['assets/app-2.js'] }
+
+  it('matches cached assets by content, and checks them without reading them', async () => {
+    const fs = createFakeFileSystem()
+    const store = createGenerationStore({ fileSystem: fs })
+    expect((await store.openReusableAssets(HOST)).has(SCRIPT!)).toBe(false)
+    await activate(store, HOST)
+
+    const reusable = await store.openReusableAssets(HOST)
+
+    // Content, not path: the script was renamed, and the page kept its name but changed length.
+    expect(reusable.has(SCRIPT!)).toBe(true)
+    expect(reusable.has(PAGE!)).toBe(false)
+    expect(await reusable.check(SCRIPT!)).toBe(true)
+    fs.seed(`${HOST}/generations/${BUILD}/assets/app.js`, {
+      kind: 'file',
+      bytes: new Uint8Array(1)
+    })
+    expect(await reusable.check(SCRIPT!)).toBe(false)
+  })
+
+  it('copies the reused assets beside the downloaded ones and commits the whole build', async () => {
+    const fs = createFakeFileSystem()
+    const store = createGenerationStore({ fileSystem: fs })
+    await activate(store, HOST)
+
+    await activate(store, HOST, LEFT_TO_STAGE)
+
+    const generation = `${HOST}/generations/${NEXT_BUILD}`
+    expect(fs.bytes(`${generation}/index.html`)).toEqual(new Uint8Array(8).fill(9))
+    expect(fs.bytes(`${generation}/assets/app-2.js`)).toEqual(new Uint8Array(2).fill(7))
+    expect((await store.readActiveGeneration(HOST))?.buildId).toBe(NEXT_BUILD)
+  })
+
+  it('refuses to stage a reused asset the active generation no longer holds', async () => {
+    const fs = createFakeFileSystem()
+    const store = createGenerationStore({ fileSystem: fs })
+    await activate(store, HOST)
+    fs.failReadsAt(`${HOST}/generations/${BUILD}/assets/app.js`)
+
+    await expect(store.stageGeneration(HOST, LEFT_TO_STAGE)).rejects.toThrow('unreadable')
+    await store.deleteHostCache(HOST)
+    fs.failReadsAt(null)
+    await expect(store.stageGeneration(HOST, LEFT_TO_STAGE)).rejects.toThrow(
+      'no longer holds the reused asset assets/app-2.js'
+    )
+    expect(fs.paths().some((path) => path.includes(`tmp/${NEXT_BUILD}`))).toBe(false)
   })
 })
 

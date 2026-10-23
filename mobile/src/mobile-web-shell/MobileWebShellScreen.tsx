@@ -1,6 +1,6 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native'
-import { useNavigation, useRouter } from 'expo-router'
+import { useNavigation, useNavigationContainerRef, useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
   clearRetainedNativeWebShellSlot,
@@ -32,6 +32,7 @@ import { useMobileWebShellSession } from './use-mobile-web-shell-session'
 import { usePageHostSnapshot } from './use-page-host-snapshot'
 import { useReportedHostAreaServing } from './host-area-serving'
 import { isHostRouteOf } from './page-route-policy'
+import { nativeStackReturn } from './native-stack-return'
 import { PageRouteUnavailableScreen } from './PageRouteUnavailableScreen'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import { storageReadParamsSchema, type BridgeNativeVerb } from './bridge/bridge-native-verbs'
@@ -151,11 +152,13 @@ export function MobileWebShellScreen({
   const overlay = onOverlayLoad !== undefined
   const router = useRouter()
   const navigation = useNavigation()
+  const navigationContainer = useNavigationContainerRef()
   const popShellStack = useShellStackPop()
   const { isWideLayout } = useResponsiveLayout()
   const { droppedBinaryFrames, reportDroppedBinaryFrames } = useMobileWebShellDroppedFrames()
   const {
     state,
+    downloadProgress,
     pageRoutes,
     pageRouteGrants,
     routeGrants,
@@ -260,15 +263,32 @@ export function MobileWebShellScreen({
       console.warn('[web-shell] refused to open this screen', issue)
       reportShellFailure('document-load-failed')
     },
-    // Pushed, never replaced: the page stays mounted underneath, so Back reveals it with no
-    // download and no second `init`.
+    // A new screen is pushed, never replaced: the page stays mounted underneath, so Back reveals it
+    // with no download and no second `init`.
     onNavigate: (href: string) => {
       // An overlay hands its place to where the page went: Back there returns to the screen beneath.
       if (overlay) {
         return void router.replace(href)
       }
-      // Wide, this host's route is the area-owning session below: back to it, or in place of this
-      // one from a cold deep link, never a second on top. `dismissTo` takes the href's params.
+      // A screen already on the stack is returned to, as system Back would: the page's own exits
+      // ask for the screen beneath it, and a push would stack a second copy over a live one.
+      const rootState = navigationContainer.getRootState()
+      const onStack = rootState ? nativeStackReturn(rootState, href) : null
+      if (onStack === 'current') {
+        return
+      }
+      if (onStack) {
+        navigation.dispatch({
+          type: 'POP',
+          payload: { count: onStack.count },
+          target: onStack.target,
+          source: onStack.source
+        })
+        return
+      }
+      // Home, and a wide host route that is not on the stack: `dismissTo` pops to that route with
+      // the href's params, or replaces this one after a cold deep link, so it is never a second
+      // on top.
       if (href === '/' || (isWideLayout && isHostRouteOf(href, hostId))) {
         router.dismissTo(href)
         return
@@ -323,7 +343,17 @@ export function MobileWebShellScreen({
     sendBack: bridge.sendBack,
     setOptions: navigation.setOptions
   })
-  useReportedShellOverlayLoad(onOverlayLoad, state, pageFrame)
+  useReportedShellOverlayLoad(onOverlayLoad, state, pageFrame, downloadProgress)
+
+  const shellKindRef = useRef(state.kind)
+  useLayoutEffect(() => {
+    const previous = shellKindRef.current
+    shellKindRef.current = state.kind
+    // Destroy parks a host view whose slot was cleared before unmount; clear that refill.
+    if (previous === 'ready' && state.kind !== 'ready' && isHostRouteOf(route.pathname, hostId)) {
+      clearRetainedNativeWebShellSlot()
+    }
+  }, [hostId, route.pathname, state.kind])
 
   // A profile read that rejected never becomes a host, so the session would otherwise sit in
   // `ready` behind an un-hidden view with nothing serving it and the page asking forever.
@@ -371,7 +401,11 @@ export function MobileWebShellScreen({
   if (state.kind === 'fetching') {
     return (
       <Centered>
-        <ShellDownloadProgress state={state} host={snapshot?.host ?? null} />
+        <ShellDownloadProgress
+          state={state}
+          feed={downloadProgress}
+          host={snapshot?.host ?? null}
+        />
       </Centered>
     )
   }
@@ -407,7 +441,7 @@ export function MobileWebShellScreen({
         generationDirectory={state.generationDirectory}
         sessionId={state.sessionId}
         bridgeEnabled={bridge.bridgeEnabled}
-        retainsSlot={isHostRouteOf(route.pathname, hostId)}
+        retainsSlot={state.kind !== 'failed' && isHostRouteOf(route.pathname, hostId)}
         onBridgeMessage={bridge.onBridgeMessage}
         onExternalNavigation={(event) => {
           const target = cancelledShellNavigationTarget(event.nativeEvent.url)

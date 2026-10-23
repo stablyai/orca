@@ -7,7 +7,7 @@ import {
   readAppBundle,
   readWrittenBundle,
   copyWrittenBundle
-} from './mobile-web-app-bundle-test-fixture.mjs'
+} from './mobile-web-app/mobile-web-app-bundle-test-fixture.mjs'
 import {
   MOBILE_WEB_APP_NATIVE_PARITY_STYLE,
   MOBILE_WEB_APP_ROOT_RESET,
@@ -20,7 +20,7 @@ import {
 import {
   MOBILE_WEB_APP_ROUTE_ROOT,
   collectMobileWebAppRouteKeys
-} from './mobile-web-app-route-manifest.mjs'
+} from './mobile-web-app/mobile-web-app-route-manifest.mjs'
 import {
   MOBILE_WEB_APP_BUNDLE_MAX_ENTRY_BYTES,
   MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES,
@@ -50,7 +50,7 @@ import {
   MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES,
   MOBILE_WEB_BUNDLE_MAX_ASSETS
 } from '../../src/shared/mobile-web-bundle/manifest-contract.js'
-import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
+import { mobileWebAppDependenciesPresent } from './mobile-web-app/mobile-web-app-bundle-dependencies.mjs'
 
 const projectDir = fileURLToPath(new URL('../..', import.meta.url))
 const appDir = join(projectDir, 'mobile', 'app')

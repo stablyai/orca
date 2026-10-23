@@ -17,6 +17,7 @@ export type NativeChatComposerDraftImage = {
 
 export type NativeChatComposerDraft = {
   readonly text: string
+  readonly pastedTextFiles?: Readonly<Record<string, string>>
   /** The editor's document for exactly `text`; dropped when the text changes without one. */
   readonly document?: JSONContent
   readonly images: readonly NativeChatComposerDraftImage[]
@@ -155,9 +156,22 @@ export function parseStoredNativeChatComposerDraft(
   if (typeof text !== 'string' || typeof savedAt !== 'number' || !Array.isArray(images)) {
     return null
   }
+  const pastedTextFiles = isRecord(value.pastedTextFiles)
+    ? Object.fromEntries(
+        Object.entries(value.pastedTextFiles).flatMap(([id, path]): [string, string][] =>
+          /^[0-9a-f-]{36}$/.test(id) &&
+          typeof path === 'string' &&
+          path !== '' &&
+          text.includes(`[Pasted text](orca-paste:${id})`)
+            ? [[id, path]]
+            : []
+        )
+      )
+    : undefined
   const owner = parseOwner(value.owner)
   return {
     text,
+    ...(pastedTextFiles ? { pastedTextFiles } : {}),
     ...(isEditorDocument(document) ? { document } : {}),
     images: images.flatMap((image) => parseImage(image) ?? []),
     savedAt,

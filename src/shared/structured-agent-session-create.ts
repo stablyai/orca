@@ -32,6 +32,8 @@ export type StructuredAgentSessionCreateParams = {
   /** Sent only to a host advertising `AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY`. */
   firstMessage?: StructuredAgentSessionFirstMessage
   options?: Readonly<Record<string, string>>
+  /** Sent only to a host advertising `AGENT_SESSION_CREATE_TAB_PLACEMENT_RUNTIME_CAPABILITY`. */
+  tabPlacement?: { groupId?: string; afterTabId?: string }
 }
 
 export type StructuredAgentSessionFirstMessage = {
@@ -69,6 +71,8 @@ export function structuredAgentSessionCreateParams(args: {
   tabId?: string
   firstMessage?: StructuredAgentSessionFirstMessage
   options?: Readonly<Record<string, string>>
+  /** A display hint, outside the fingerprint: a retry may name a place that moved. */
+  tabPlacement?: StructuredAgentSessionCreateParams['tabPlacement']
   randomUuid: () => string
   now?: number
 }): StructuredAgentSessionCreateParams {
@@ -90,6 +94,7 @@ export function structuredAgentSessionCreateParams(args: {
         ...fields
       })
     },
-    ...fields
+    ...fields,
+    ...(args.tabPlacement ? { tabPlacement: args.tabPlacement } : {})
   }
 }
