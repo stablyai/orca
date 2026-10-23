@@ -153,14 +153,12 @@ export function exportWslMoveManifest(
       )
     }
   }
-  const dormantState = inspection.payload.workspaceSession
-    ? {
-        ...inspection.payload,
-        // Desktop PTY ids name no host terminal: a moved pane bound to one never reads its history.
-        workspaceSession: withoutWindowsShellChoices(
-          withoutPtyBindings(inspection.payload.workspaceSession)
-        )
-      }
+  // Desktop PTY ids name no host terminal: a moved pane bound to one never reads its history.
+  const workspaceSession =
+    inspection.payload.workspaceSession &&
+    withoutWindowsShellChoices(withoutPtyBindings(inspection.payload.workspaceSession))
+  const dormantState = workspaceSession
+    ? { ...inspection.payload, workspaceSession }
     : inspection.payload
   const rewriter = createUncToLinuxPathRewriter(request.distro)
   const payload = rewriteOrcadMigrationPayloadPaths(
