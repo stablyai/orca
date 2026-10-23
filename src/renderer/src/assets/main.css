@@ -588,6 +588,7 @@ body:has(> [data-slot='dialog-overlay'], > [data-slot='sheet-overlay']) {
 :root,
 .dark,
 .native-chat-appearance {
+  --chat-font-weight: var(--font-weight-normal);
   --chat-source-background: var(--background);
   --chat-source-foreground: var(--foreground);
   --chat-source-muted-foreground: var(--muted-foreground);

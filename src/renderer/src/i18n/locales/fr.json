@@ -293,7 +293,12 @@
         "softer": "Plus doux",
         "sharper": "Plus net",
         "terminalControlledHint": "Défini par l’interface du terminal.",
-        "terminalControlledTooltip": "Suit l’interface du terminal. Désactivez Utiliser l’interface du terminal pour le modifier."
+        "terminalControlledTooltip": "Suit l’interface du terminal. Désactivez Utiliser l’interface du terminal pour le modifier.",
+        "textWeight": "Graisse du texte",
+        "textWeightDescription": "Messages, texte saisi et texte indicatif du champ de saisie. Le gras reste plus épais.",
+        "weightLight": "Léger",
+        "weightRegular": "Normal",
+        "weightMedium": "Moyen"
       }
     },
     "browser": {

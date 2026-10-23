@@ -131,6 +131,7 @@ describe('chat appearance settings controls', () => {
       ...getDefaultSettings('/tmp'),
       nativeChatAppearance: {
         fontSize: 18,
+        fontWeight: 500,
         codeFontSize: 16,
         width: 'wide' as const,
         contrast: 130,
@@ -147,12 +148,45 @@ describe('chat appearance settings controls', () => {
     await waitFor(() => expect(updateSettings).toHaveBeenCalledTimes(2))
     expect(mocks.state.settings?.nativeChatAppearance).toEqual({ futureSetting: 'keep' })
   })
+  it('moves only between the three body weights and preserves other settings', async () => {
+    const settings = {
+      ...getDefaultSettings('/tmp'),
+      nativeChatAppearance: { width: 'wide' as const }
+    }
+    const updateSettings = persistInMock(settings)
+    const { rerender } = render(
+      <AppearanceChatSection settings={settings} updateSettings={updateSettings} />
+    )
+    const slider = screen.getByRole('slider', { name: 'Text weight' })
+    expect(slider.getAttribute('aria-valuetext')).toBe('Regular')
+    for (const [key, weight, label] of [
+      ['Home', 300, 'Light'],
+      ['ArrowRight', 400, 'Regular'],
+      ['ArrowRight', 500, 'Medium'],
+      ['ArrowRight', 500, 'Medium'],
+      ['End', 500, 'Medium'],
+      ['ArrowLeft', 400, 'Regular']
+    ] as const) {
+      fireEvent.keyDown(slider, { key })
+      await waitFor(() =>
+        expect(mocks.state.settings?.nativeChatAppearance?.fontWeight ?? 400).toBe(weight)
+      )
+      rerender(
+        <AppearanceChatSection settings={mocks.state.settings!} updateSettings={updateSettings} />
+      )
+      expect(screen.getByRole('slider', { name: 'Text weight' })).toBe(slider)
+      expect(slider.getAttribute('aria-valuenow')).toBe(String(weight))
+      expect(slider.getAttribute('aria-valuetext')).toBe(label)
+      expect(mocks.state.settings?.nativeChatAppearance?.width).toBe('wide')
+    }
+  })
   it('indexes each row and width choice in Chat settings search', () => {
     const entries = getChatAppearanceSearchEntries()
     for (const query of [
       'Chat',
       'Match terminal interface',
       'Contrast',
+      'Text weight',
       'brighter look',
       'Code text size',
       'tool output',
@@ -180,7 +214,7 @@ describe('chat appearance settings controls', () => {
       <AppearanceChatSection settings={settings} updateSettings={updateSettings} />,
       { wrapper: TooltipProvider }
     )
-    expect(screen.getAllByText('Set by terminal interface.')).toHaveLength(3)
+    expect(screen.getAllByText('Set by terminal interface.')).toHaveLength(4)
     expect(screen.getByRole('spinbutton', { name: 'Text size' }).hasAttribute('disabled')).toBe(
       true
     )
@@ -226,7 +260,8 @@ describe('chat appearance settings controls', () => {
   const controlledControls = [
     ['spinbutton', 'Text size'],
     ['spinbutton', 'Code text size'],
-    ['slider', 'Contrast']
+    ['slider', 'Contrast'],
+    ['slider', 'Text weight']
   ] as const
 
   it.each(controlledControls)(

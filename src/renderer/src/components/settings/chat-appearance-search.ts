@@ -1,3 +1,4 @@
+import { NATIVE_CHAT_FONT_WEIGHTS } from '../../../../shared/native-chat-appearance-settings'
 import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import type { SettingsSearchEntry } from './settings-search'
@@ -50,6 +51,18 @@ const getChatAppearanceCatalog = createLocalizedCatalog(
         targetSectionId: 'chat-text-size',
         title: translate('settings.appearance.chat.textSize', 'Text size'),
         keywords: [translate('settings.appearance.chat.title', 'Chat')]
+      },
+      textWeight: {
+        targetSectionId: 'chat-text-weight',
+        title: translate('settings.appearance.chat.textWeight', 'Text weight'),
+        description: translate(
+          'settings.appearance.chat.textWeightDescription',
+          'Messages and the message box, including placeholder text. Bold text stays heavier.'
+        ),
+        keywords: [
+          translate('settings.appearance.chat.title', 'Chat'),
+          ...NATIVE_CHAT_FONT_WEIGHTS.map(getChatTextWeightLabel)
+        ]
       },
       codeTextSize: {
         targetSectionId: 'chat-code-text-size',
@@ -118,4 +131,14 @@ export function getChatWidthOptions() {
     { value: 'wide', label: translate('settings.appearance.chat.wide', 'Wide') },
     { value: 'full', label: translate('settings.appearance.chat.full', 'Full') }
   ] as const
+}
+
+export function getChatTextWeightLabel(weight: number): string {
+  if (weight === 300) {
+    return translate('settings.appearance.chat.weightLight', 'Light')
+  }
+  if (weight === 500) {
+    return translate('settings.appearance.chat.weightMedium', 'Medium')
+  }
+  return translate('settings.appearance.chat.weightRegular', 'Regular')
 }

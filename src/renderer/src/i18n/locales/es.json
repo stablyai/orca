@@ -153,7 +153,12 @@
         "softer": "Más suave",
         "sharper": "Más nítido",
         "terminalControlledHint": "Lo controla la interfaz del terminal.",
-        "terminalControlledTooltip": "Coincide con la interfaz del terminal. Desactiva Usar la interfaz del terminal para cambiarlo."
+        "terminalControlledTooltip": "Coincide con la interfaz del terminal. Desactiva Usar la interfaz del terminal para cambiarlo.",
+        "textWeight": "Grosor del texto",
+        "textWeightDescription": "Mensajes, texto escrito y texto de ejemplo del cuadro de mensaje. La negrita sigue siendo más gruesa.",
+        "weightLight": "Ligero",
+        "weightRegular": "Normal",
+        "weightMedium": "Medio"
       }
     },
     "browser": {
