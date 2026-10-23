@@ -1,7 +1,9 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import * as Notifications from 'expo-notifications'
+import { useGlobalSearchParams, usePathname, useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { hostStackRouteHref } from '../navigation/host-stack-navigation'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import {
   dismissInAppNotificationBanner,
@@ -11,8 +13,22 @@ import {
 import { getNotificationNavigationTarget } from './notification-routing'
 import { useOpenNotificationRoute } from './use-open-notification-route'
 
-const URGENT_AUTO_DISMISS_MS = 8000
-const COMPLETE_AUTO_DISMISS_MS = 6000
+const URGENT_AUTO_DISMISS_MS = 25000
+const COMPLETE_AUTO_DISMISS_MS = 15000
+
+function paramMatches(actual: string | undefined, expected: string | undefined): boolean {
+  if (!actual || !expected) {
+    return false
+  }
+  if (actual === expected) {
+    return true
+  }
+  try {
+    return decodeURIComponent(actual) === expected
+  } catch {
+    return false
+  }
+}
 
 export function InAppNotificationBanner() {
   const banner = useSyncExternalStore(
@@ -21,18 +37,26 @@ export function InAppNotificationBanner() {
     getCurrentInAppNotificationBanner
   )
   const insets = useSafeAreaInsets()
+  const router = useRouter()
+  const pathname = usePathname()
+  const activeParams = useGlobalSearchParams<{
+    hostId?: string
+    worktreeId?: string
+  }>()
   const openNotificationRoute = useOpenNotificationRoute()
+  const bannerId = banner?.id
+  const bannerTone = banner?.tone
 
   useEffect(() => {
-    if (!banner) {
+    if (!bannerId || !bannerTone) {
       return
     }
-    const timeoutMs = banner.tone === 'urgent' ? URGENT_AUTO_DISMISS_MS : COMPLETE_AUTO_DISMISS_MS
+    const timeoutMs = bannerTone === 'urgent' ? URGENT_AUTO_DISMISS_MS : COMPLETE_AUTO_DISMISS_MS
     const timer = setTimeout(() => {
-      dismissInAppNotificationBanner(banner.id)
+      dismissInAppNotificationBanner(bannerId)
     }, timeoutMs)
     return () => clearTimeout(timer)
-  }, [banner])
+  }, [bannerId, bannerTone])
 
   if (!banner) {
     return null
@@ -41,7 +65,11 @@ export function InAppNotificationBanner() {
   const isUrgent = banner.tone === 'urgent'
   const accentColor = isUrgent ? colors.statusAmber : colors.statusGreen
   const badgeText = isUrgent ? '⚡ Needs input' : '✅ Completed'
-  const canNavigate = typeof banner.hostId === 'string' && banner.hostId.length > 0
+  const canNavigate =
+    typeof banner.hostId === 'string' &&
+    banner.hostId.length > 0 &&
+    typeof banner.worktreeId === 'string' &&
+    banner.worktreeId.length > 0
 
   const handlePress = () => {
     dismissInAppNotificationBanner(banner.id)
@@ -51,15 +79,32 @@ export function InAppNotificationBanner() {
     if (!canNavigate) {
       return
     }
+    const onSameHost =
+      pathname.startsWith('/h/') && paramMatches(activeParams.hostId, banner.hostId)
+    const onSameWorkspace =
+      onSameHost &&
+      pathname.includes('/session/') &&
+      paramMatches(activeParams.worktreeId, banner.worktreeId)
+    if (onSameWorkspace) {
+      if (banner.paneKey) {
+        router.setParams({ paneKey: banner.paneKey })
+      }
+      return
+    }
     const target = getNotificationNavigationTarget({
       hostId: banner.hostId,
       worktreeId: banner.worktreeId,
       paneKey: banner.paneKey,
       executionHost: banner.executionHost
     })
-    if (target) {
-      openNotificationRoute(target)
+    if (!target) {
+      return
     }
+    if (onSameHost && target.sessionTarget) {
+      router.replace(hostStackRouteHref(target.sessionTarget))
+      return
+    }
+    openNotificationRoute(target)
   }
 
   const handleDismiss = () => {
@@ -75,13 +120,9 @@ export function InAppNotificationBanner() {
         accessibilityRole="button"
         accessibilityLabel={`${badgeText}: ${banner.title}. ${banner.body}`}
         onPress={handlePress}
-        style={({ pressed }) => [
-          styles.capsule,
-          isUrgent ? styles.capsuleUrgent : styles.capsuleComplete,
-          pressed && styles.capsulePressed
-        ]}
+        style={({ pressed }) => [styles.capsule, pressed && styles.capsulePressed]}
       >
-        <View style={[styles.accentBar, { backgroundColor: accentColor }]} />
+        <View style={[styles.indicatorBar, { backgroundColor: accentColor }]} />
         <View style={styles.content}>
           <View style={styles.headerRow}>
             <View style={[styles.badge, isUrgent ? styles.badgeUrgent : styles.badgeComplete]}>
@@ -126,35 +167,32 @@ const styles = StyleSheet.create({
   capsule: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.bgRaised,
+    backgroundColor: colors.bgPanel,
     borderRadius: radii.card,
     borderWidth: 1,
-    overflow: 'hidden',
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    paddingVertical: spacing.sm + 2,
+    paddingLeft: spacing.md,
     shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.45,
-    shadowRadius: 12,
-    elevation: 12
-  },
-  capsuleUrgent: {
-    borderColor: colors.statusAmber
-  },
-  capsuleComplete: {
-    borderColor: colors.statusGreen
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.5,
+    shadowRadius: 16,
+    elevation: 14
   },
   capsulePressed: {
-    opacity: 0.9
+    opacity: 0.92
   },
-  accentBar: {
-    width: 4,
-    alignSelf: 'stretch'
+  indicatorBar: {
+    width: 3.5,
+    alignSelf: 'stretch',
+    borderRadius: 2,
+    marginVertical: 2
   },
   content: {
     flex: 1,
-    paddingVertical: spacing.sm,
-    paddingLeft: spacing.md,
+    paddingLeft: spacing.sm + 2,
     paddingRight: spacing.xs,
-    gap: 2
+    gap: 3
   },
   headerRow: {
     flexDirection: 'row',
@@ -194,11 +232,11 @@ const styles = StyleSheet.create({
   body: {
     color: colors.textSecondary,
     fontSize: typography.metaSize,
-    lineHeight: 16
+    lineHeight: 17
   },
   closeButton: {
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.xs,
     alignSelf: 'flex-start'
   },
   closeText: {

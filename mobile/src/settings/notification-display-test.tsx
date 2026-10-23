@@ -111,20 +111,9 @@ export function NotificationDisplayTest({ onTroubleshoot }: { onTroubleshoot: ()
         style={({ pressed }) => [styles.button, pressed && styles.pressed]}
         onPress={() => void run()}
       >
-        <View>
-          <Text
-            accessible={false}
-            numberOfLines={1}
-            style={[styles.buttonText, styles.sizingLabel]}
-          >
-            Send test notification
-          </Text>
-          <View pointerEvents="none" style={styles.buttonLabel}>
-            <Text accessible={false} numberOfLines={1} style={styles.buttonText}>
-              {sending ? 'Sending…' : 'Send test notification'}
-            </Text>
-          </View>
-        </View>
+        <Text accessible={false} style={styles.buttonText}>
+          {sending ? 'Sending…' : 'Send test notification'}
+        </Text>
       </Pressable>
       <Pressable accessibilityRole="link" onPress={onTroubleshoot} style={styles.troubleshootLink}>
         <Text style={styles.linkText}>Troubleshooting</Text>
@@ -143,13 +132,14 @@ const styles = StyleSheet.create({
   detail: { color: colors.textMuted, fontSize: typography.metaSize, lineHeight: 18 },
   button: {
     alignSelf: 'flex-start',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 172,
     backgroundColor: colors.bgRaised,
     borderRadius: 8,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md
   },
-  sizingLabel: { opacity: 0 },
-  buttonLabel: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
   troubleshootLink: { alignSelf: 'flex-start', paddingVertical: spacing.sm },
   linkText: {
     color: colors.textSecondary,

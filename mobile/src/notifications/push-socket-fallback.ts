@@ -191,7 +191,6 @@ export async function sendLocalNotificationDisplayTest(): Promise<void> {
     publishInAppNotificationBanner({
       id: `test:${Date.now()}`,
       tone: 'complete',
-      ...(primaryHost ? { hostId: primaryHost.id } : {}),
       hostName,
       title: 'Orca',
       body: 'Test notification from Orca.',
