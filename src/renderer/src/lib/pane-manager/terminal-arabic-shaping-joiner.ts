@@ -1,4 +1,5 @@
 import type { Terminal } from '@xterm/xterm'
+import { containsIndicScriptText, findIndicClusterRanges } from './terminal-indic-cluster-ranges'
 
 type ArabicShapingTerminal = Pick<Terminal, 'registerCharacterJoiner' | 'deregisterCharacterJoiner'>
 
@@ -161,14 +162,21 @@ export function findRtlJoinRanges(text: string): [number, number][] {
   return ranges
 }
 
-/** Register the RTL shaping joiner; returns a cleanup deregistering it — Terminal.dispose() leaks joiners (xtermjs/xterm.js#3289). */
+// Why: Indic clusters share the lazy joiner so one registration, WebGL gate and wiring cover both scripts; the RTL and Indic ranges can never overlap.
+function findShapingJoinRanges(text: string): [number, number][] {
+  const ranges = findRtlJoinRanges(text)
+  const indicRanges = findIndicClusterRanges(text)
+  return indicRanges.length === 0 ? ranges : [...ranges, ...indicRanges].sort((a, b) => a[0] - b[0])
+}
+
+/** Register the shaping joiner (RTL runs and Indic clusters); returns a cleanup deregistering it — Terminal.dispose() leaks joiners (xtermjs/xterm.js#3289). */
 export function registerArabicShapingJoiner(
   terminal: ArabicShapingTerminal,
   isShapingActive: () => boolean
 ): () => void {
   // Why: DOM renderer letter-spacing breaks grid alignment for joined runs, so join only while WebGL is the live renderer.
   const joinerId = terminal.registerCharacterJoiner((text) =>
-    isShapingActive() ? findRtlJoinRanges(text) : []
+    isShapingActive() ? findShapingJoinRanges(text) : []
   )
   return () => {
     terminal.deregisterCharacterJoiner(joinerId)
@@ -225,7 +233,7 @@ export function ensureArabicShapingJoinerForText(
   const finalCodeUnit = finalCharacter.charCodeAt(0)
   state.trailingHighSurrogate =
     finalCodeUnit >= 0xd800 && finalCodeUnit <= 0xdbff ? finalCharacter : ''
-  if (!containsStrongRtlText(scanText)) {
+  if (!containsStrongRtlText(scanText) && !containsIndicScriptText(scanText)) {
     return
   }
 
