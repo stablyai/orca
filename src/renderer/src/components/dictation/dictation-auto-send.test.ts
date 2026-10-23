@@ -181,10 +181,52 @@ describe('armDictationAutoSend', () => {
 
     expect(submitted).toEqual([])
   })
+
+  // Switching to another app blurs the window but can leave the editor as the active element.
+  it.each([
+    ['the window loses focus', () => window.dispatchEvent(new FocusEvent('blur'))],
+    [
+      'the page is hidden',
+      () => {
+        vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden')
+        document.dispatchEvent(new Event('visibilitychange'))
+      }
+    ]
+  ])('does not send when %s, even after coming back', async (_name, leave) => {
+    const leaveAndComeBack = (): void => {
+      vi.spyOn(document, 'hasFocus').mockReturnValue(false)
+      leave()
+      vi.restoreAllMocks()
+    }
+    const landing = appendComposerEditor()
+    const delivery = deferredDelivery()
+    arm(landing, delivery.promise)
+    leaveAndComeBack()
+    delivery.resolve(true)
+
+    const counting = appendComposerEditor()
+    arm(counting, Promise.resolve(true))
+    await vi.advanceTimersByTimeAsync(0)
+    leaveAndComeBack()
+    await vi.advanceTimersByTimeAsync(1000)
+
+    expect(submitted).toEqual([])
+  })
+
+  it('does not start counting when the text lands while another app is in front', async () => {
+    const editor = appendComposerEditor()
+    vi.spyOn(document, 'hasFocus').mockReturnValue(false)
+    const { onCountdown } = arm(editor, Promise.resolve(true))
+    await vi.advanceTimersByTimeAsync(1000)
+
+    expect(onCountdown).not.toHaveBeenCalled()
+    expect(submitted).toEqual([])
+    vi.restoreAllMocks()
+  })
 })
 
 describe('resolveDictationAutoSendElement', () => {
-  const eligible = { enabled: true, finalTranscriptReceived: true, sessionErrored: false }
+  const eligible = { enabled: true }
 
   it('returns the composer editor', () => {
     const editor = appendComposerEditor()
@@ -196,16 +238,11 @@ describe('resolveDictationAutoSendElement', () => {
     ).toBe(editor)
   })
 
-  it.each([
-    ['the setting is off', { enabled: false }],
-    ['no speech was transcribed', { finalTranscriptReceived: false }],
-    ['the session errored', { sessionErrored: true }]
-  ])('skips when %s', (_name, override) => {
+  it('skips when the setting is off', () => {
     const editor = appendComposerEditor()
     expect(
       resolveDictationAutoSendElement({
-        ...eligible,
-        ...override,
+        enabled: false,
         target: { kind: 'contentEditable', element: editor }
       })
     ).toBeNull()

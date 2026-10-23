@@ -9,10 +9,10 @@ import {
   type DictationAutoSend
 } from './dictation-auto-send'
 
-export type FinishedDictationSession = {
+/** How a stopping dictation ended, known only once its stopped event arrives. */
+export type DictationSessionOutcome = {
   finalTranscriptReceived: boolean
   sessionErrored: boolean
-  target: DictationInsertionTarget | null
 }
 
 async function allDelivered(insertions: readonly Promise<boolean>[]): Promise<boolean> {
@@ -22,10 +22,13 @@ async function allDelivered(insertions: readonly Promise<boolean>[]): Promise<bo
   )
 }
 
-/** Owns the one pending send a finished dictation can start, and everything that cancels it. */
+/** Owns the one pending send a stopping dictation can start, and everything that cancels it. */
 export function useDictationAutoSend(): {
   trackInsertion: (insertion: Promise<boolean>) => void
-  startAfterSession: (session: FinishedDictationSession) => void
+  startWhenStopping: (
+    target: DictationInsertionTarget | null,
+    outcome: Promise<DictationSessionOutcome>
+  ) => void
 } {
   const setPendingDictationAutoSend = useAppStore((s) => s.setPendingDictationAutoSend)
   const dictationState = useAppStore((s) => s.dictationState)
@@ -42,21 +45,24 @@ export function useDictationAutoSend(): {
     pendingInsertionsRef.current.push(insertion)
   }, [])
 
-  const startAfterSession = useCallback(
-    (session: FinishedDictationSession) => {
+  const startWhenStopping = useCallback(
+    (target: DictationInsertionTarget | null, outcome: Promise<DictationSessionOutcome>) => {
       cancel()
-      const insertions = pendingInsertionsRef.current
-      pendingInsertionsRef.current = []
       const voice = useAppStore.getState().settings?.voice
       const element = resolveDictationAutoSendElement({
-        ...session,
+        target,
         enabled: Boolean(voice?.enabled && voice.autoSendAfterDictation)
       })
       if (!element) {
         return
       }
+      const delivered = outcome.then(({ finalTranscriptReceived, sessionErrored }) => {
+        const insertions = pendingInsertionsRef.current
+        pendingInsertionsRef.current = []
+        return finalTranscriptReceived && !sessionErrored && allDelivered(insertions)
+      })
       const autoSend = armDictationAutoSend(element, {
-        delivered: allDelivered(insertions),
+        delivered,
         delayMs: resolveDictationAutoSendDelayMs(voice?.autoSendDelayMs),
         onCountdown: (deadline) => setPendingDictationAutoSend({ deadline }),
         onSettled: () => {
@@ -93,5 +99,5 @@ export function useDictationAutoSend(): {
     }
   }, [cancel])
 
-  return { trackInsertion, startAfterSession }
+  return { trackInsertion, startWhenStopping }
 }

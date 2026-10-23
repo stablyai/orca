@@ -27,15 +27,13 @@ export function resolveDictationAutoSendDelayMs(delayMs: number | undefined): nu
   )
 }
 
-/** The composer element a finished session may send from, or null when it must not send. */
-export function resolveDictationAutoSendElement(session: {
+/** The composer element a stopping dictation may send from, or null when it must not send. */
+export function resolveDictationAutoSendElement(options: {
   enabled: boolean
-  finalTranscriptReceived: boolean
-  sessionErrored: boolean
   target: DictationInsertionTarget | null
 }): HTMLElement | null {
-  const { enabled, finalTranscriptReceived, sessionErrored, target } = session
-  if (!enabled || !finalTranscriptReceived || sessionErrored || !target) {
+  const { enabled, target } = options
+  if (!enabled || !target) {
     return null
   }
   if (target.kind === 'terminal' || target.kind === 'composer') {
@@ -48,9 +46,13 @@ export function resolveDictationAutoSendElement(session: {
   return element
 }
 
+function isAppActive(): boolean {
+  return document.visibilityState === 'visible' && document.hasFocus()
+}
+
 /**
  * Waits for the dictated text to land, then sends after `delayMs`, unless the user types, edits
- * or leaves `element` first, delivery fails, or focus is gone by then.
+ * or leaves `element` or the app first, delivery fails, or focus is gone by then.
  * `onCountdown` runs when the countdown starts; `onSettled` runs once, however it ends.
  */
 export function armDictationAutoSend(
@@ -76,7 +78,15 @@ export function armDictationAutoSend(
     for (const type of listenedEvents) {
       element.removeEventListener(type, handleUserEvent, true)
     }
+    window.removeEventListener('blur', handleAppLeave)
+    document.removeEventListener('visibilitychange', handleAppLeave)
     options.onSettled()
+  }
+  // Why: switching apps can keep the editor as the active element, so no focusout fires.
+  const handleAppLeave = (): void => {
+    if (!isAppActive()) {
+      settle()
+    }
   }
   const handleUserEvent = (event: Event): void => {
     if (event.type === 'input' && !countingDown) {
@@ -95,7 +105,7 @@ export function armDictationAutoSend(
     countingDown = true
     timer = window.setTimeout(() => {
       settle()
-      if (element.isConnected) {
+      if (element.isConnected && isAppActive()) {
         document.dispatchEvent(
           new CustomEvent<DictationSubmitDetail>(DICTATION_SUBMIT_EVENT, { detail: { element } })
         )
@@ -107,12 +117,14 @@ export function armDictationAutoSend(
   for (const type of listenedEvents) {
     element.addEventListener(type, handleUserEvent, true)
   }
+  window.addEventListener('blur', handleAppLeave)
+  document.addEventListener('visibilitychange', handleAppLeave)
   void options.delivered.then((delivered) => {
     if (settled) {
       return
     }
     const focused = element.isConnected && element.contains(element.ownerDocument.activeElement)
-    if (delivered && focused) {
+    if (delivered && focused && isAppActive()) {
       startCountdown()
     } else {
       settle()

@@ -43,13 +43,13 @@ describe('useNativeChatDictationSubmit', () => {
     const staleSend = vi.fn()
     const latestSend = vi.fn()
     const otherSend = vi.fn()
-    const first = renderHook(
-      ({ send }) => useNativeChatDictationSubmit(composerInput(firstEditor), send),
-      {
-        initialProps: { send: staleSend }
-      }
-    )
-    renderHook(() => useNativeChatDictationSubmit(composerInput(secondEditor), otherSend))
+    // Refs created once, as the composer's are: only `send` changes between renders.
+    const firstInput = composerInput(firstEditor)
+    const secondInput = composerInput(secondEditor)
+    const first = renderHook(({ send }) => useNativeChatDictationSubmit(firstInput, send), {
+      initialProps: { send: staleSend }
+    })
+    renderHook(() => useNativeChatDictationSubmit(secondInput, otherSend))
 
     first.rerender({ send: latestSend })
     submit(firstEditor)
