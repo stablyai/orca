@@ -114,7 +114,10 @@ export function collectWslMovedWorkspaceKeysFromSession(
   )
 }
 
-/** The moved workspaces holding chats, by project, in the order the projects are listed. */
+/**
+ * Every moved project, in list order, with its workspaces holding chats. A project without chats
+ * still lists: its entry is the only way to "Use on this computer again".
+ */
 export function selectWslMovedChatWorkspaces(
   state: MovedCatalog & Pick<AppState, 'unifiedTabsByWorktree'>
 ): { project: WslMovedProject; workspaces: { key: string; chats: Tab[] }[] }[] {
@@ -129,10 +132,10 @@ export function selectWslMovedChatWorkspaces(
       byProject.set(project, [...(byProject.get(project) ?? []), { key, chats }])
     }
   }
-  return state.wslMovedProjects.flatMap((project) => {
-    const workspaces = byProject.get(project)
-    return workspaces ? [{ project, workspaces }] : []
-  })
+  return state.wslMovedProjects.map((project) => ({
+    project,
+    workspaces: byProject.get(project) ?? []
+  }))
 }
 
 export type WslMovedWorkspaceSurface = { id: string; path: string }

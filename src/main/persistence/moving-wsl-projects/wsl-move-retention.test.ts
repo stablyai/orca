@@ -28,6 +28,7 @@ import {
 import { planWslMove } from './wsl-move-delta-plan'
 import { installWslMoveRetention, runWslMoveRetentionPass } from './wsl-move-retention'
 import { loadWslMoveFence, resetWslMoveFenceForTests } from './wsl-move-scope-guard'
+import { bringWslMovedProjectBack } from './wsl-move-use-locally'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
@@ -237,8 +238,7 @@ describe('WSL move retention', () => {
     open(profile())
     await pass()
 
-    // What "Use on this computer again" does to the journal.
-    removeWslMoveCutover(testState.dir, 'move-1')
+    expect(bringWslMovedProjectBack(testState.dir, { repoId: 'repo-a' }).released).toBe(true)
     const report = await pass()
 
     expect(report?.rewrittenMarks).toBe(2)

@@ -19834,7 +19834,14 @@
       "cancel": "保留过滤器"
     },
     "wslMoved": {
-      "movedToHost": "已移至 {{distro}} 主机"
+      "movedToHost": "已移至 {{distro}} 主机",
+      "useHere": "重新在此电脑上使用",
+      "useHereTitle": "要重新在此电脑上使用 {{name}} 吗？",
+      "useHereDescription": "Orca 会按移动前的状态在这里打开此项目。你的代码不受影响：它从未移动。移动后在 {{distro}} 主机上所做的更改（例如新标签页和聊天）会留在主机上，不会回来。与它一起移动的项目也会一起回来。在你于 {{distro}} 主机上将其移除之前，项目也会一直保留在那里。此窗口将重新加载。",
+      "useHereConfirm": "在此电脑上使用",
+      "useHereSuperseded": "之后一次移动到 {{distro}} 主机的操作包含此项目。请先将那次移动恢复。",
+      "useHereMoveRunning": "移动到 {{distro}} 主机的操作仍在进行。请在其结束后重试。",
+      "useHereFailed": "无法将此项目恢复到此电脑。"
     }
   },
   "editor": {

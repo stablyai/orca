@@ -43,6 +43,7 @@ import { seedWslMoveCutover } from '../__fixtures__/wsl-mover/wsl-move-journal-s
 import { runWslMoveRetentionPass } from './wsl-move-retention'
 import { loadWslMoveFence, resetWslMoveFenceForTests } from './wsl-move-scope-guard'
 import { runWslMoveStartupRewrite } from './wsl-move-startup-rewrite'
+import { bringWslMovedProjectBack } from './wsl-move-use-locally'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
@@ -378,5 +379,23 @@ describe('WSL move with the complete desktop rewrite registry', () => {
 
     expect(reapplyWslMoveRewritesAtUnload(testState.dir, store)).toBe(0)
     expect(store.getUI().visibleWorkspaceHostIds).toEqual(['local'])
+  })
+
+  it('stops re-applying once "Use on this computer again" drops the move', async () => {
+    windowOpen = true
+    seedWslMoveCutover(testState.dir, committedMove())
+    loadWslMoveFence(testState.dir)
+    await runWslMoveDesktopRewritePass({ userDataPath: testState.dir })
+    recordRendererStores()
+    await retain()
+
+    expect(bringWslMovedProjectBack(testState.dir, { repoId: 'repo-a' }).released).toBe(true)
+    expect(journal()).toEqual([])
+    // The released project's own focus, at the reload's unload and the next start, stays local.
+    staleWindowWrite()
+    expect(reapplyWslMoveRewritesAtUnload(testState.dir, store)).toBe(0)
+    expect(reapplyWslMoveFocusRewrites(testState.dir, store)).toBe(0)
+    expect(store.getUI().lastActiveWorktreeId).toBe(MOVED)
+    expect(store.getWorkspaceSession().activeWorkspaceExecutionHostId).toBe('local')
   })
 })

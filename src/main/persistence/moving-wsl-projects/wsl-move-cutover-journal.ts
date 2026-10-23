@@ -285,3 +285,21 @@ export function removeUncommittedWslMoveCutover(userDataPath: string, migrationI
   }
   removeNewestInChain(userDataPath, record)
 }
+
+/**
+ * "Use on this computer again": drops a committed move so its retained source rows show again as
+ * they were before it. Its fence, retained marks (reconcile) and stale-window re-apply end with it.
+ */
+export function removeCommittedWslMoveCutover(userDataPath: string, migrationId: string): void {
+  const record = listWslMoveCutovers(userDataPath).find(
+    (entry) => entry.migrationId === migrationId
+  )
+  if (
+    record &&
+    WSL_MOVE_CUTOVER_PHASES.indexOf(record.phase) <
+      WSL_MOVE_CUTOVER_PHASES.indexOf('destination-committed')
+  ) {
+    throw new Error('wsl_move_not_committed')
+  }
+  removeNewestInChain(userDataPath, record)
+}

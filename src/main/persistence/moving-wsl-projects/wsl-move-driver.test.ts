@@ -28,6 +28,7 @@ import {
   type WslMoveMovedAutomation
 } from './wsl-move-host-automations-rewrite'
 import { recoverInterruptedWslMoves } from './wsl-move-reset'
+import { bringWslMovedProjectBack } from './wsl-move-use-locally'
 import {
   cancelWslMoveRewriteRetryForTests,
   scheduleWslMoveRewriteRetry
@@ -198,6 +199,27 @@ describe('moveProjectsToWslHost', () => {
     world.deps.quiesce.sleepWorkspaces = sleep
     release()
     expect(await first).toMatchObject({ outcome: 'moved' })
+  })
+
+  it('refuses "Use on this computer again" while the committed move still runs here', async () => {
+    let release: () => void = () => {}
+    const finish = world.deps.finishOnDesktop
+    world.deps.finishOnDesktop = async () => {
+      await new Promise<void>((resolve) => (release = resolve))
+      return finish()
+    }
+    const run = moveProjectsToWslHost(world.deps, request)
+    await vi.waitFor(() => expect(world.progress.map((e) => e.step)).toContain('finishing'))
+    expect(journal()[0]?.phase).toBe('destination-committed')
+
+    expect(bringWslMovedProjectBack(userDataPath, { repoId: 'repo-1' })).toEqual({
+      released: false,
+      reason: 'move-running'
+    })
+    expect(journal()).toHaveLength(1)
+    release()
+    expect(await run).toMatchObject({ outcome: 'moved' })
+    expect(bringWslMovedProjectBack(userDataPath, { repoId: 'repo-1' }).released).toBe(true)
   })
 
   it('refuses a move whose terminals are busy, and shows the blockers in the preview', async () => {

@@ -19834,7 +19834,14 @@
       "cancel": "필터 유지"
     },
     "wslMoved": {
-      "movedToHost": "{{distro}} 호스트로 이동됨"
+      "movedToHost": "{{distro}} 호스트로 이동됨",
+      "useHere": "이 컴퓨터에서 다시 사용",
+      "useHereTitle": "{{name}}을(를) 이 컴퓨터에서 다시 사용할까요?",
+      "useHereDescription": "Orca가 이 프로젝트를 이동 전 상태 그대로 여기에서 엽니다. 코드에는 영향이 없습니다. 코드는 이동되지 않았습니다. 이동 후 {{distro}} 호스트에서 만든 새 탭이나 채팅 같은 변경 사항은 호스트에 남고 돌아오지 않습니다. 함께 이동한 프로젝트도 함께 돌아옵니다. 프로젝트는 {{distro}} 호스트에서 제거할 때까지 그곳에도 남아 있습니다. 이 창이 다시 로드됩니다.",
+      "useHereConfirm": "이 컴퓨터에서 사용",
+      "useHereSuperseded": "이후 {{distro}} 호스트로의 이동에 이 프로젝트가 포함되어 있습니다. 그 이동을 먼저 되돌리세요.",
+      "useHereMoveRunning": "{{distro}} 호스트로의 이동이 아직 진행 중입니다. 끝난 후 다시 시도하세요.",
+      "useHereFailed": "이 프로젝트를 이 컴퓨터로 되돌리지 못했습니다."
     }
   },
   "editor": {

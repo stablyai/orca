@@ -19,8 +19,21 @@ vi.mock('@/store', () => ({
   useAppStore: (selector: (state: MockState) => unknown) => selector(mockState)
 }))
 vi.mock('@/lib/wsl-moved-chat-activation', () => ({ activateWslMovedWorkspace: vi.fn() }))
+vi.mock('@/lib/wsl-moved-project-use-here', () => ({ bringWslMovedProjectBack: vi.fn() }))
+vi.mock('@/components/confirmation-dialog-context', () => ({
+  useConfirmationDialog: () => vi.fn()
+}))
 
 const { default: WslMovedProjectsSection } = await import('./WslMovedProjectsSection')
+const { TooltipProvider } = await import('@/components/ui/tooltip')
+
+// The app shell provides the tooltip context the sidebar renders in.
+const render = (): string =>
+  renderToStaticMarkup(
+    <TooltipProvider>
+      <WslMovedProjectsSection />
+    </TooltipProvider>
+  )
 
 const MOVED = 'repo1::\\\\wsl.localhost\\Ubuntu\\home\\dev\\repo1'
 const chat = (id: string, label: string): Partial<Tab> => ({
@@ -50,20 +63,30 @@ describe('WslMovedProjectsSection', () => {
   })
 
   it('lists the moved project read-only, labeled with its host, with only its chats', () => {
-    const markup = renderToStaticMarkup(<WslMovedProjectsSection />)
+    const markup = render()
     expect(markup).toContain('Repo 1')
     expect(markup).toContain('Moved to Ubuntu host')
     expect(markup).toContain('Fix the parser')
-    // One button per chat, and nothing else: no new terminal, new chat, rename or menu.
-    expect(markup.match(/<button/g)).toHaveLength(2)
+    // One button per chat plus "use here again": no new terminal, new chat, rename or menu.
+    expect(markup.match(/<button/g)).toHaveLength(3)
     expect(markup.match(/data-testid="wsl-moved-chat"/g)).toHaveLength(2)
+    expect(markup.match(/data-testid="wsl-moved-use-here"/g)).toHaveLength(1)
+    expect(markup).toContain('aria-label="Use on this computer again"')
     expect(markup).toContain('data-current="true"')
   })
 
-  it('renders nothing when no moved project has a chat here', () => {
+  it('still lists a moved project without chats here, so it can be used here again', () => {
     mockState.unifiedTabsByWorktree = {
       [MOVED]: [{ ...chat('t', 'Shell'), contentType: 'terminal' }]
     }
-    expect(renderToStaticMarkup(<WslMovedProjectsSection />)).toBe('')
+    const markup = render()
+    expect(markup).toContain('Moved to Ubuntu host')
+    expect(markup.match(/data-testid="wsl-moved-chat"/g)).toBeNull()
+    expect(markup.match(/data-testid="wsl-moved-use-here"/g)).toHaveLength(1)
+  })
+
+  it('renders nothing when no project is moved', () => {
+    mockState.wslMovedProjects = []
+    expect(render()).toBe('')
   })
 })

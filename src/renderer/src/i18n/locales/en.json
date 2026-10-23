@@ -43,7 +43,14 @@
       "cancel": "Keep filters"
     },
     "wslMoved": {
-      "movedToHost": "Moved to {{distro}} host"
+      "movedToHost": "Moved to {{distro}} host",
+      "useHere": "Use on this computer again",
+      "useHereTitle": "Use {{name}} on this computer again?",
+      "useHereDescription": "Orca will open this project here as it was before the move. Your code is not affected: it never moved. Changes made on the {{distro}} host since the move, such as new tabs and chats, stay on the host and do not come back. Projects moved with it come back too. The project also stays on the {{distro}} host until you remove it there. This window reloads.",
+      "useHereConfirm": "Use on this computer",
+      "useHereSuperseded": "A later move to the {{distro}} host includes this project. Bring that one back first.",
+      "useHereMoveRunning": "A move to the {{distro}} host is still running. Try again once it ends.",
+      "useHereFailed": "Could not bring this project back to this computer."
     }
   },
   "app": {

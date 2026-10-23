@@ -1,7 +1,7 @@
 /**
- * IPC for a WSL move: the move itself (preview, start, cancel) and the renderer half of a committed
- * move's desktop rewrite. Every channel answers empty / refuses while the internal WSL hosts gate
- * is closed, before it touches anything.
+ * IPC for a WSL move: the move itself (preview, start, cancel), the renderer half of a committed
+ * move's desktop rewrite, and bringing a moved project back to this computer. Every channel answers
+ * empty / refuses while the internal WSL hosts gate is closed, before it touches anything.
  */
 import { ipcMain, type WebContents } from 'electron'
 import type {
@@ -15,6 +15,7 @@ import type {
   WslMoveUnfinished
 } from '../../shared/wsl-move/wsl-move-driver-types'
 import { parseWslMoveRequest } from '../../shared/wsl-move/wsl-move-request'
+import type { WslMoveUseLocallyResult } from '../../shared/wsl-move/wsl-moved-project'
 import {
   listPendingWslMoveRendererRewrites,
   recordWslMoveRendererStoreRewritten
@@ -28,6 +29,11 @@ import type { WslMoveDriverDeps } from '../persistence/moving-wsl-projects/wsl-m
 import { listUnfinishedWslMoves } from '../persistence/moving-wsl-projects/wsl-move-host-automations-rewrite'
 import { runTrackedWslMove } from '../telemetry/wsl-move-telemetry'
 import { wslHostsGateOpen } from '../wsl/wsl-host-gate'
+import { bringWslMovedProjectBack } from '../persistence/moving-wsl-projects/wsl-move-use-locally'
+import {
+  holdReleasedWslMoveSessions,
+  liftReleasedWslMoveSessionHolds
+} from '../persistence/moving-wsl-projects/wsl-move-release-session-hold'
 
 export const WSL_MOVE_HANDLER_CHANNELS = [
   'wslMove:listPendingRendererRewrites',
@@ -35,7 +41,8 @@ export const WSL_MOVE_HANDLER_CHANNELS = [
   'wslMove:preview',
   'wslMove:start',
   'wslMove:cancel',
-  'wslMove:listUnfinished'
+  'wslMove:listUnfinished',
+  'wslMove:useProjectHereAgain'
 ] as const
 
 type RendererEvent = { sender?: Pick<WebContents, 'id' | 'session'> }
@@ -79,6 +86,7 @@ export function registerWslMoveHandlers(
     }
   )
   registerWslMoveDriverHandlers(getUserDataPath, isMainWindowRenderer, driverDeps)
+  registerWslMoveUseHereHandler(getUserDataPath, isMainWindowRenderer)
 }
 
 function registerWslMoveDriverHandlers(
@@ -130,4 +138,61 @@ function registerWslMoveDriverHandlers(
 
 function invalidRequest(): WslMoveRefusal {
   return { outcome: 'refused', code: 'wsl_move_unavailable', detail: 'invalid-request' }
+}
+
+function registerWslMoveUseHereHandler(
+  getUserDataPath: () => string,
+  isMainWindowRenderer: (senderId: number) => boolean
+): void {
+  ipcMain.handle(
+    'wslMove:useProjectHereAgain',
+    (event: { sender?: WebContents }, request: unknown): WslMoveUseLocallyResult => {
+      // Gate first: with it closed, nothing is read.
+      if (!wslHostsGateOpen()) {
+        return { released: false, reason: 'gated-off' }
+      }
+      const sender = event.sender
+      if (!sender || !isMainWindowRenderer(sender.id)) {
+        return { released: false, reason: 'failed', detail: 'not-main-window' }
+      }
+      if (
+        typeof request !== 'object' ||
+        request === null ||
+        !('kind' in request) ||
+        !('id' in request) ||
+        typeof request.id !== 'string' ||
+        (request.kind !== 'repo' && request.kind !== 'folder')
+      ) {
+        return { released: false, reason: 'not-moved' }
+      }
+      const ref =
+        request.kind === 'repo' ? { repoId: request.id } : { folderWorkspaceId: request.id }
+      const result = bringWslMovedProjectBack(getUserDataPath(), ref)
+      if (result.released) {
+        reloadWithSessionHeld(sender, result)
+      }
+      return result
+    }
+  )
+}
+
+/**
+ * The page holds only the project's chats; reloading hydrates its whole pre-move session from
+ * disk. The hold keeps that session frozen until the new page loaded, so the old page's last
+ * save cannot overwrite it.
+ */
+function reloadWithSessionHeld(
+  sender: WebContents,
+  scope: { repoIds: string[]; folderWorkspaceIds: string[] }
+): void {
+  holdReleasedWslMoveSessions(scope)
+  const lift = (): void => liftReleasedWslMoveSessionHolds()
+  sender.once('did-finish-load', lift)
+  sender.once('destroyed', lift)
+  // After the reply reaches the renderer, so its awaited call settles first.
+  setImmediate(() => {
+    if (!sender.isDestroyed()) {
+      sender.reload()
+    }
+  })
 }

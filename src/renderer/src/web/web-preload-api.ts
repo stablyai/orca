@@ -142,6 +142,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       start: () => Promise.resolve({ outcome: 'refused', code: 'wsl_move_unavailable' }),
       cancel: () => Promise.resolve(false),
       listUnfinished: () => Promise.resolve([]),
+      useProjectHereAgain: () => Promise.resolve({ released: false, reason: 'gated-off' }),
       onProgress: () => () => {}
     },
     pwsh: {

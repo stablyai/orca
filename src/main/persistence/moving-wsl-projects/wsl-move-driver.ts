@@ -16,7 +16,6 @@ import type {
   WslMoveResult
 } from '../../../shared/wsl-move/wsl-move-driver-types'
 import type { WslMoveCutover } from '../../../shared/wsl-move/wsl-move-cutover'
-import { wslMoveJournalKey } from '../../../shared/wsl-move/wsl-move-cutover'
 import {
   listWslMoveCutovers,
   removeWslMoveCutover,
@@ -43,6 +42,7 @@ import { pauseWslMoveScope } from './wsl-move-driver-pause'
 import { quiesceWslMove, type WslMoveQuiesceRefusalReason } from './wsl-move-quiesce'
 import { wslMoveAutomationsPending } from './wsl-move-host-automations-rewrite'
 import { resetWslMoveToZero } from './wsl-move-reset'
+import { claimWslMoveRun, releaseWslMoveRun, type RunningWslMove } from './wsl-move-running-moves'
 
 class WslMoveStop extends Error {}
 
@@ -51,10 +51,7 @@ const WSL_MOVE_TERMINALS_STARTED = 'terminals-started-after-pause'
 /** The quiesce's own wording, so both proofs read alike in the result. */
 const WSL_MOVE_EXIT_UNVERIFIABLE = 'exit-unverifiable'
 
-type RunningMove = { controller: AbortController; commitRequested: boolean }
-
-// One run per distro in this process; the journal's compare-and-swap orders it against others.
-const runningMoves = new Map<string, RunningMove>()
+export { cancelWslMove, isWslMoveRunning } from './wsl-move-running-moves'
 
 export async function previewWslMove(
   deps: WslMoveDriverDeps,
@@ -77,26 +74,14 @@ export async function previewWslMove(
   }
 }
 
-/** Cancels a run that has not asked the host to commit yet; true when one was running. */
-export function cancelWslMove(distro: string): boolean {
-  const running = runningMoves.get(wslMoveJournalKey(distro))
-  if (!running || running.commitRequested) {
-    return false
-  }
-  running.controller.abort()
-  return true
-}
-
 export async function moveProjectsToWslHost(
   deps: WslMoveDriverDeps,
   request: WslMoveRequest
 ): Promise<WslMoveResult> {
-  const key = wslMoveJournalKey(request.distro)
-  if (runningMoves.has(key)) {
+  const running = claimWslMoveRun(request.distro)
+  if (!running) {
     return refusal('wsl_move_already_running')
   }
-  const running: RunningMove = { controller: new AbortController(), commitRequested: false }
-  runningMoves.set(key, running)
   const migrationId = deps.newMigrationId()
   try {
     return await runMove(deps, request, migrationId, running)
@@ -104,7 +89,7 @@ export async function moveProjectsToWslHost(
     // Anything unforeseen: back to zero without the host, which never resets a possible commit.
     return putBack(deps, null, migrationId, describe(error))
   } finally {
-    runningMoves.delete(key)
+    releaseWslMoveRun(request.distro, running)
   }
 }
 
@@ -112,7 +97,7 @@ async function runMove(
   deps: WslMoveDriverDeps,
   request: WslMoveRequest,
   migrationId: string,
-  running: RunningMove
+  running: RunningWslMove
 ): Promise<WslMoveResult> {
   const { signal } = running.controller
   const { distro } = request
@@ -199,7 +184,7 @@ async function moveQuiesced(
   host: WslMoveHost,
   quiesced: WslMoveCutover,
   prepared: WslMovePrepared,
-  running: RunningMove
+  running: RunningWslMove
 ): Promise<WslMoveResult> {
   const { signal } = running.controller
   const { distro } = prepared.plan

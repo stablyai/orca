@@ -19,6 +19,7 @@ import { wslMoveCutoverFixture } from '../../src/main/persistence/__fixtures__/w
 import { seedWslMoveCutover } from '../../src/main/persistence/__fixtures__/wsl-mover/wsl-move-journal-seeding'
 import { seedTestAgentSessionRecordStore } from '../../src/main/runtime/agent-session-record-store-test-harness'
 import { structuredAgentSessionTabId } from '../../src/shared/structured-agent-session-projection'
+import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../src/shared/wsl-host-internal-gate'
 import { closeTestJournalHostDatabases } from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
 import {
   agentSessionLeaseFixture,
@@ -33,7 +34,7 @@ const CHAT_SESSION = 'moved-chat-0001'
 const CHAT = structuredAgentSessionTabId(CHAT_SESSION)
 const CHAT_LABEL = 'Plan the parser rewrite'
 // Visual proof for the PR; outside the repo on purpose.
-const PROOF_DIR = process.env.ORCA_D1B7A_PROOF_DIR
+const PROOF_DIR = process.env.ORCA_D1B7A_PROOF_DIR ?? process.env.ORCA_WSL_USE_HERE_PROOF_DIR
 
 type SessionTabs = {
   tabsByWorktree?: Record<string, unknown[]>
@@ -180,8 +181,8 @@ test("a moved project's existing chats stay listed and openable on this computer
     await expect(entry).toContainText('Moved to Ubuntu host')
     const chat = entry.getByTestId('wsl-moved-chat')
     await expect(chat).toHaveCount(1)
-    // Read-only: the chat is the entry's only control.
-    await expect(entry.getByRole('button')).toHaveCount(1)
+    // Read-only: the chat and "use on this computer again" are the entry's only controls.
+    await expect(entry.getByRole('button')).toHaveCount(2)
     // The project's terminal lives on the host now; only its chat is here.
     expect(await movedTabs(page, worktreeId)).toMatchObject({ unified: [CHAT], terminals: [] })
     if (PROOF_DIR) {
@@ -203,6 +204,87 @@ test("a moved project's existing chats stay listed and openable on this computer
     // The freeze kept the slept terminal for a downgrade, and the chat tab beside it.
     const persisted = sessionOf(readPersistedProfileState(session.userDataDir))
     expect(persisted.tabsByWorktree?.[worktreeId]).toHaveLength(1)
+    expect(persisted.unifiedTabs?.[worktreeId]?.map((tab) => tab.id)).toEqual([TERMINAL, CHAT])
+  } finally {
+    if (launched) {
+      await session.close(launched.app)
+    }
+    await session.dispose()
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('"Use on this computer again" brings a moved project back as it was before the move', async (// oxlint-disable-next-line no-empty-pattern -- Playwright requires destructuring to request no fixtures.
+{}, testInfo) => {
+  const root = mkdtempSync(join(tmpdir(), 'orca-wsl-use-here-'))
+  const repoPath = join(root, 'moved-repo')
+  mkdirSync(repoPath)
+  const gitIdentity = ['-c', 'user.name=e2e', '-c', 'user.email=e2e@example.invalid']
+  execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: repoPath })
+  execFileSync('git', [...gitIdentity, 'commit', '-q', '--allow-empty', '-m', 'init'], {
+    cwd: repoPath
+  })
+  // The escape hatch, like every WSL move action, answers only behind the internal gate.
+  const session = createRestartSession(testInfo, { [WSL_HOSTS_INTERNAL_GATE_ENV]: '1' })
+  let launched: Awaited<ReturnType<typeof session.launch>> | undefined
+  try {
+    launched = await session.launch()
+    await waitForSessionReady(launched.page)
+    const repoId = await addRepo(launched.page, repoPath)
+    const worktreeId = `${repoId}::${realpathSync(repoPath)}`
+    await session.close(launched.app)
+    launched = undefined
+
+    seedMovedProjectTabs(session.userDataDir, worktreeId)
+    await seedChatRecord(session.userDataDir, worktreeId)
+    seedWslMoveCutover(
+      session.userDataDir,
+      wslMoveCutoverFixture('move-1', 'retained', {}, { repoIds: [repoId] })
+    )
+
+    launched = await session.launch()
+    const { page } = launched
+    await waitForSessionReady(page)
+    await page.evaluate(
+      (sessionId) =>
+        window.api.runtime.call({ method: 'agentSession.reveal', params: { sessionId } }),
+      CHAT_SESSION
+    )
+    const entry = page.getByTestId('wsl-moved-project')
+    await expect(entry).toBeVisible({ timeout: 30_000 })
+    const listed = () =>
+      page.evaluate((id) => window.__store!.getState().repos.some((repo) => repo.id === id), repoId)
+    expect(await listed()).toBe(false)
+
+    await entry.getByTestId('wsl-moved-use-here').click()
+    const dialog = page.getByRole('dialog')
+    await expect(dialog).toContainText('Your code is not affected')
+    await expect(dialog).toContainText('stays on the Ubuntu host until you remove it there')
+    if (PROOF_DIR) {
+      mkdirSync(PROOF_DIR, { recursive: true })
+      // Settled, so the proof shows the dialog rather than its fade-in.
+      await dialog.evaluate((element) =>
+        Promise.all(element.getAnimations({ subtree: true }).map((animation) => animation.finished))
+      )
+      await page.screenshot({ path: join(PROOF_DIR, 'use-here-confirm.png') })
+    }
+    // Main reloads the window so the project's whole pre-move session hydrates from disk.
+    const reloaded = page.waitForEvent('load')
+    await dialog.getByRole('button', { name: 'Use on this computer' }).click()
+    await reloaded
+    await waitForSessionReady(page)
+
+    // The retained row lists again, and the read-only entry goes away.
+    await expect.poll(listed, { timeout: 30_000 }).toBe(true)
+    await expect(page.getByTestId('wsl-moved-project')).toHaveCount(0)
+    if (PROOF_DIR) {
+      await page.screenshot({ path: join(PROOF_DIR, 'use-here-done.png') })
+    }
+    await session.close(launched.app)
+    launched = undefined
+
+    // The pre-move session came back with it: the slept terminal and the chat beside it.
+    const persisted = sessionOf(readPersistedProfileState(session.userDataDir))
     expect(persisted.unifiedTabs?.[worktreeId]?.map((tab) => tab.id)).toEqual([TERMINAL, CHAT])
   } finally {
     if (launched) {

@@ -1,11 +1,15 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
-import { MessageSquare } from 'lucide-react'
+import { MessageSquare, Undo2 } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { selectWslMovedChatWorkspaces } from '@/store/repos/wsl-moved-projects'
 import { activateWslMovedWorkspace } from '@/lib/wsl-moved-chat-activation'
+import { bringWslMovedProjectBack } from '@/lib/wsl-moved-project-use-here'
+import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
+import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { Tab } from '../../../../shared/tab-types'
 
 function chatLabel(tab: Tab): string {
@@ -13,12 +17,14 @@ function chatLabel(tab: Tab): string {
 }
 
 /**
- * Projects a WSL host now owns, listed read-only for the chats that stay on this computer. No
- * actions: new chats, terminals and edits belong to the host, which lists the project itself.
+ * Projects a WSL host now owns, listed read-only with the chats that stay on this computer, if any.
+ * The one action brings a project back here as it was before the move (the move result promises
+ * it, so every moved project lists); everything else belongs to the host.
  */
 const WslMovedProjectsSection = React.memo(function WslMovedProjectsSection() {
   // Own language subscription: this memo boundary would otherwise keep the boot language.
   useTranslation()
+  const confirm = useConfirmationDialog()
   const catalog = useAppStore(
     useShallow((state) =>
       // Why: with nothing moved, tab and catalog churn must not re-render this section.
@@ -54,10 +60,27 @@ const WslMovedProjectsSection = React.memo(function WslMovedProjectsSection() {
     >
       {groups.map(({ project, workspaces }) => (
         <div key={`${project.kind}:${project.id}`} data-testid="wsl-moved-project">
-          <div className="flex h-7 min-w-0 items-center px-1">
-            <div className="min-w-0 truncate text-[13px] font-semibold leading-none">
+          <div className="flex h-7 min-w-0 items-center gap-1 px-1">
+            <div className="min-w-0 flex-1 truncate text-[13px] font-semibold leading-none">
               {project.displayName}
             </div>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  data-testid="wsl-moved-use-here"
+                  aria-label={translate('sidebar.wslMoved.useHere', 'Use on this computer again')}
+                  onClick={() => void bringWslMovedProjectBack(project, confirm)}
+                >
+                  <Undo2 />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={4}>
+                {translate('sidebar.wslMoved.useHere', 'Use on this computer again')}
+              </TooltipContent>
+            </Tooltip>
           </div>
           <div className="truncate px-1 pb-1 text-2xs text-muted-foreground">
             {translate('sidebar.wslMoved.movedToHost', 'Moved to {{distro}} host', {

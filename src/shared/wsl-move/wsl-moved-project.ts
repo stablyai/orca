@@ -13,3 +13,12 @@ export type WslMovedProject = {
   path: string
   distro: string
 }
+
+/** "Use on this computer again": the whole move it undid comes back, never part of one. */
+export type WslMoveUseLocallyResult =
+  | { released: true; distro: string; repoIds: string[]; folderWorkspaceIds: string[] }
+  | {
+      released: false
+      reason: 'gated-off' | 'not-moved' | 'superseded' | 'move-running' | 'failed'
+      detail?: string
+    }

@@ -20063,7 +20063,14 @@
       "cancel": "Mantener filtros"
     },
     "wslMoved": {
-      "movedToHost": "Movido al host de {{distro}}"
+      "movedToHost": "Movido al host de {{distro}}",
+      "useHere": "Usar de nuevo en este equipo",
+      "useHereTitle": "¿Usar {{name}} de nuevo en este equipo?",
+      "useHereDescription": "Orca abrirá este proyecto aquí tal como estaba antes de moverlo. Tu código no se ve afectado: nunca se movió. Los cambios hechos en el host {{distro}} desde el traslado, como pestañas y chats nuevos, se quedan en el host y no vuelven. Los proyectos que se movieron junto con este también vuelven. El proyecto también sigue en el host {{distro}} hasta que lo quites allí. Esta ventana se recargará.",
+      "useHereConfirm": "Usar en este equipo",
+      "useHereSuperseded": "Un traslado posterior al host {{distro}} incluye este proyecto. Trae ese de vuelta primero.",
+      "useHereMoveRunning": "Todavía hay un traslado al host {{distro}} en curso. Inténtalo de nuevo cuando termine.",
+      "useHereFailed": "No se pudo devolver este proyecto a este equipo."
     }
   },
   "rendererRecovery": {

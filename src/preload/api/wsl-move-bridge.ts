@@ -12,6 +12,10 @@ import type {
   WslMoveRecordStoreRewrittenRequest,
   WslMoveRecordStoreRewrittenResult
 } from '../../shared/wsl-move/wsl-move-renderer-rewrite-types'
+import type {
+  WslMovedProjectKind,
+  WslMoveUseLocallyResult
+} from '../../shared/wsl-move/wsl-moved-project'
 
 /** A WSL move and the renderer half of its desktop rewrite; main gates every call. */
 export type WslMoveApi = {
@@ -28,6 +32,11 @@ export type WslMoveApi = {
   recordStoreRewritten: (
     request: WslMoveRecordStoreRewrittenRequest
   ) => Promise<WslMoveRecordStoreRewrittenResult>
+  /** Drops the move that took this project, so its pre-move rows show here again. */
+  useProjectHereAgain: (project: {
+    kind: WslMovedProjectKind
+    id: string
+  }) => Promise<WslMoveUseLocallyResult>
 }
 
 export const wslMoveApi: WslMoveApi = {
@@ -42,5 +51,6 @@ export const wslMoveApi: WslMoveApi = {
     return () => ipcRenderer.removeListener(WSL_MOVE_PROGRESS_CHANNEL, handler)
   },
   listPendingRendererRewrites: () => ipcRenderer.invoke('wslMove:listPendingRendererRewrites'),
-  recordStoreRewritten: (request) => ipcRenderer.invoke('wslMove:recordStoreRewritten', request)
+  recordStoreRewritten: (request) => ipcRenderer.invoke('wslMove:recordStoreRewritten', request),
+  useProjectHereAgain: (project) => ipcRenderer.invoke('wslMove:useProjectHereAgain', project)
 }
