@@ -100,9 +100,12 @@ export type GitLabApi = {
     args: GitLabRepoSelectorArgs & {
       iid: number
       type: 'issue' | 'mr'
+      includeImages?: boolean
+      requestToken?: string
       includeReviewDetails?: boolean
     }
   ) => Promise<GitLabWorkItemDetails | null>
+  cancelWorkItemDetails: (args: { requestToken: string }) => Promise<void>
   closeMR: (
     args: GitLabRepoSelectorArgs & {
       iid: number

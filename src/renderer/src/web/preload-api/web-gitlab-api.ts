@@ -6,7 +6,10 @@ export type WebGitLabApi = NonNullable<PreloadApi['gl']>
 
 export function createGitLabApi(): WebGitLabApi {
   return createRuntimeGitLabApi({
-    call: (method, params) => callRuntimeResult(method, params),
+    call: (method, params, signal) =>
+      signal
+        ? callRuntimeResult(method, params, undefined, signal)
+        : callRuntimeResult(method, params),
     supportsCapability: async (capability) => {
       const status = await getRemoteRuntimeStatus().catch(() => null)
       return status?.capabilities?.includes(capability) === true

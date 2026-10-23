@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { chmodSync, copyFileSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 
@@ -29,8 +29,25 @@ createHelperApp()
 
 function buildUniversalBinary() {
   const builtBinaries = universalTriples.map((triple) => {
-    run('swift', ['build', '-c', 'release', '--package-path', packagePath, '--triple', triple])
-    return path.join(packagePath, '.build', triple, 'release', 'orca-computer-use-macos')
+    const buildArgs = [
+      'build',
+      '-c',
+      'release',
+      '--package-path',
+      packagePath,
+      '--triple',
+      triple,
+      '--scratch-path',
+      path.join(packagePath, '.build', 'universal', triple)
+    ]
+    run('swift', buildArgs)
+    const binPath = execFileSync('swift', [...buildArgs, '--show-bin-path'], {
+      encoding: 'utf8'
+    }).trim()
+    if (!path.isAbsolute(binPath)) {
+      throw new Error('Swift did not report an absolute binary output path')
+    }
+    return path.join(binPath, 'orca-computer-use-macos')
   })
   mkdirSync(path.dirname(binaryPath), { recursive: true })
   run('lipo', ['-create', ...builtBinaries, '-output', binaryPath])

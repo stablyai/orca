@@ -16,8 +16,9 @@ function withSourceRepo(params: unknown, sourceRepoId: string | null): unknown {
 function runtimeGitLabApi(environmentId: string, sourceRepoId: string | null): GitLabApi {
   const target = { kind: 'environment', environmentId } as const
   return createRuntimeGitLabApi({
-    call: (method, params) =>
+    call: (method, params, signal) =>
       callRuntimeRpc(target, method, withSourceRepo(params, sourceRepoId), {
+        ...(signal ? { signal } : {}),
         timeoutMs: method === 'gitlab.jobTrace' ? JOB_TRACE_TIMEOUT_MS : GITLAB_RPC_TIMEOUT_MS
       }),
     supportsCapability: (capability) =>

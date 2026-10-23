@@ -17,7 +17,7 @@ import {
   normalizeGitLabPositiveInteger,
   type GitLabIssueListState
 } from '../gitlab/gitlab-preload-args'
-import { getWorkItemDetails } from '../gitlab/work-item-details'
+import { getWorkItemDetails, type GitLabDetailPreviewOptions } from '../gitlab/work-item-details'
 import { getRepoRoutingConnectionId } from '../../shared/execution-host'
 
 type LocalGitArgs = [] | [{ wslDistro?: string }]
@@ -159,12 +159,13 @@ export class RuntimeGitLabQueryCommands {
     )
   }
 
+  /** Forward preview opt-in and the caller transport budget to the GitLab loader. */
   async getGitLabRepoWorkItemDetails(
     repoSelector: string,
     iid: number,
     type: 'issue' | 'mr',
     projectRef?: GitLabProjectRef | null,
-    includeReviewDetails?: boolean
+    previewOptions?: GitLabDetailPreviewOptions
   ): Promise<Awaited<ReturnType<typeof getWorkItemDetails>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
     return getWorkItemDetails(
@@ -175,7 +176,7 @@ export class RuntimeGitLabQueryCommands {
       getRepoRoutingConnectionId(repo),
       projectRef,
       this.deps.getLocalGitArgs(repo)[0] ?? {},
-      { includeReviewDetails }
+      previewOptions
     )
   }
 

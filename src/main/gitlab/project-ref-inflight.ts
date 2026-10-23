@@ -9,9 +9,10 @@ export function clearProjectRefInFlight(): void {
 
 export async function runProjectRefProbeOnce(
   cacheKey: string,
-  createProbe: (ownsKey: () => boolean) => Promise<ProjectRef | null>
+  createProbe: (ownsKey: () => boolean) => Promise<ProjectRef | null>,
+  signal?: AbortSignal
 ): Promise<ProjectRef | null> {
   // Why: joining only a probe that is still young keeps a wedged host's dead
   // promise from pinning every later retry for the process lifetime (P1-D).
-  return runCoalescedProbe(projectRefInFlight, cacheKey, createProbe)
+  return runCoalescedProbe(projectRefInFlight, cacheKey, createProbe, undefined, signal)
 }

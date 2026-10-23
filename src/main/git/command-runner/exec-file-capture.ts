@@ -54,11 +54,13 @@ export async function execFileCaptureToTermination(
     maxOutputBytes: options.maxBuffer ?? DEFAULT_GIT_MAX_BUFFER,
     signal: options.signal,
     terminationBarrier: termination ?? true,
+    captureStdoutAsBytes: options.encoding === 'buffer',
     onChildTerminated: options.onChildTerminated,
     ...(options.stdin === undefined ? {} : { input: options.stdin })
   })
   const result = await pending
-  const stdout = options.encoding === 'buffer' ? Buffer.from(result.stdout) : result.stdout
+  const stdout =
+    options.encoding === 'buffer' ? (result.stdoutBytes ?? Buffer.alloc(0)) : result.stdout
   const cleanStderr = termination?.stripControlOutput(result.stderr) ?? result.stderr
   const stderr = options.encoding === 'buffer' ? Buffer.from(cleanStderr) : cleanStderr
   if (

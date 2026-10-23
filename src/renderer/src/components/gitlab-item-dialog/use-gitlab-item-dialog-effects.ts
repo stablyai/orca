@@ -1,10 +1,12 @@
 /* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: GitLab item dialogs reset draft/provider state and hydrate details from GitLab IPC when the selected item identity changes. */
 import { gitLabApiFor } from '@/runtime/gitlab-owner-api'
 import { useEffect } from 'react'
-import type { GitLabWorkItem, GitLabWorkItemDetails } from '../../../../shared/gitlab-types'
+import { createBrowserUuid } from '../../lib/browser-uuid'
+import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { GitLabDialogRepoSelector } from './gitlab-item-dialog-types'
 import type { GitLabItemDialogState } from './use-gitlab-item-dialog-state'
 
+/** Show text immediately and merge previews only while the selected item is current. */
 export function useGitLabItemDetailsEffect(
   item: GitLabWorkItem | null,
   repoSelector: GitLabDialogRepoSelector | null,
@@ -19,11 +21,13 @@ export function useGitLabItemDetailsEffect(
       setEditingDetails(false)
       return
     }
+    const api = gitLabApiFor(repoSelector)
     let stale = false
+    const requestToken = createBrowserUuid()
     setLoading(true)
     setError(null)
-    void gitLabApiFor(repoSelector)
-      .workItemDetails({ ...repoSelector, iid: item.number, type: item.type })
+    void api
+      .workItemDetails({ ...repoSelector, iid: item.number, type: item.type, requestToken })
       .then((data) => {
         if (stale) {
           return
@@ -32,7 +36,31 @@ export function useGitLabItemDetailsEffect(
           setError('Item not found.')
           return
         }
-        setDetails(data as GitLabWorkItemDetails)
+        setDetails(data)
+        if (
+          ![data.body, ...data.comments.map((comment) => comment.body)].some((body) =>
+            body.includes('/uploads/')
+          )
+        ) {
+          return
+        }
+        // Preview failures must not replace already-visible text or a newer item.
+        void api
+          .workItemDetails({
+            ...repoSelector,
+            iid: item.number,
+            type: item.type,
+            includeImages: true,
+            requestToken
+          })
+          .then((preview) => {
+            if (!stale && preview?.imageSources) {
+              setDetails((current) =>
+                current ? { ...current, imageSources: preview.imageSources } : current
+              )
+            }
+          })
+          .catch(() => {})
       })
       .catch((err) => {
         if (!stale) {
@@ -46,6 +74,7 @@ export function useGitLabItemDetailsEffect(
       })
     return () => {
       stale = true
+      void api.cancelWorkItemDetails({ requestToken }).catch(() => {})
     }
   }, [item, refreshNonce, repoSelector, setDetails, setEditingDetails, setError, setLoading])
 }

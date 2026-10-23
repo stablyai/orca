@@ -581,7 +581,7 @@ describe('GitLab IPC handlers', () => {
       null,
       undefined,
       localGitOptions,
-      { includeReviewDetails: undefined }
+      { includeImages: undefined, includeReviewDetails: undefined }
     )
     await ipcHandlers.get('gitlab:workItemDetails')?.(null, {
       repoPath: '/local/orca',
@@ -597,7 +597,7 @@ describe('GitLab IPC handlers', () => {
       null,
       undefined,
       localGitOptions,
-      { includeReviewDetails: false }
+      { includeImages: undefined, includeReviewDetails: false }
     )
     expect(closeMRMock).toHaveBeenCalledWith(
       '/local/orca',

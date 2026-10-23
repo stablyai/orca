@@ -85,9 +85,14 @@ export const glApi = {
     args: GitLabRepoSelectorArgs & {
       iid: number
       type: 'issue' | 'mr'
+      includeImages?: boolean
+      requestToken?: string
       includeReviewDetails?: boolean
     }
   ) => ipcRenderer.invoke('gitlab:workItemDetails', args),
+
+  cancelWorkItemDetails: (args: { requestToken: string }): Promise<void> =>
+    ipcRenderer.invoke('gitlab:cancelWorkItemDetails', args),
 
   closeMR: (
     args: GitLabRepoSelectorArgs & {

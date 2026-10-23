@@ -1,14 +1,6 @@
 // Single shared RpcClient per host, collapsing the old per-screen WebSocket connections.
 // Design: docs/mobile-shared-client-per-host.md.
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  type ReactNode
-} from 'react'
+import { useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react'
 import type { RpcClient } from './rpc-client'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 import { subscribeConnectionRevivalTriggers } from './connection-revival-triggers'
@@ -35,10 +27,11 @@ import {
 } from './host-client-context-state'
 import type { ConnectionState, HostProfile } from './types'
 import type { RpcClientContextValue } from './rpc-client-context-contract'
+import { RpcClientContext as Ctx } from './rpc-client-react-context'
 
 type StoreEntry = HostClientStoreEntry
 
-const Ctx = createContext<RpcClientContextValue | null>(null)
+export { useRpcClientContext } from './rpc-client-react-context'
 
 export function RpcClientProvider({ children }: { children: ReactNode }) {
   // Why: entries in a ref so state changes don't re-render the whole tree; propagation goes through per-host listener Sets.
@@ -365,12 +358,4 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
   )
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
-}
-
-export function useRpcClientContext(): RpcClientContextValue {
-  const ctx = useContext(Ctx)
-  if (!ctx) {
-    throw new Error('useHostClient must be used inside <RpcClientProvider>')
-  }
-  return ctx
 }

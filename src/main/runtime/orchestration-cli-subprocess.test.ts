@@ -86,6 +86,11 @@ describeIfBuilt('orca orchestration check --wait subprocess (§3.4)', () => {
     vi.spyOn(runtime, 'getLiveTerminalPaneKey').mockImplementation((handle) =>
       runtime.getTerminalPaneKey(handle)
     )
+    db.createRun({
+      objective: 'CLI keepalive fixture',
+      coordinatorHandle: 'term_nobody',
+      coordinatorPaneKey: paneKey
+    })
     const server = new OrcaRuntimeRpcServer({ runtime, userDataPath })
     await server.start()
 
@@ -135,9 +140,14 @@ describeIfBuilt('orca orchestration check --wait subprocess (§3.4)', () => {
         child.once('error', rejectExit)
       })
 
+      expect(
+        exitCode,
+        stderrChunks.map((chunk) => chunk.data).join('') +
+          stdoutChunks.map((chunk) => chunk.data).join('')
+      ).toBe(0)
+
       const stderr = stderrChunks.map((c) => c.data).join('')
       const stdout = stdoutChunks.map((c) => c.data).join('')
-      expect(exitCode, stderr).toBe(0)
 
       const keepaliveLines = stderr
         .split('\n')

@@ -287,6 +287,7 @@
     "electron-vite": "^6.0.0",
     "emoji-picker-react": "^4.22.3",
     "emojibase-data": "17.0.0",
+    "entities": "7.0.1",
     "esbuild": "^0.28.2",
     "happy-dom": "^20.14.5",
     "hast-util-to-jsx-runtime": "2.3.6",

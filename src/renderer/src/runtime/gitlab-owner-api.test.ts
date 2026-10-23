@@ -155,3 +155,43 @@ describe('gitLabApiFor', () => {
     expect(forgeOwnerHostIdForWorkspace({ connectionId: 'devbox' }, null)).toBe('ssh:devbox')
   })
 })
+
+it('cancels a server preview without aborting another dialog or changing its owner', async () => {
+  const signals = new Map<number, AbortSignal>()
+  rpc.call.mockImplementation((_target, _method, params, options) => {
+    signals.set(params.iid, options.signal)
+    return new Promise((_resolve, reject) => {
+      options.signal.addEventListener('abort', () => reject(new Error('cancelled')), { once: true })
+    })
+  })
+  const selector = {
+    repoPath: '/work/app',
+    repoId: 'server-repo',
+    repoOwnerExecutionHostId: 'runtime:owner-server'
+  }
+  const api = gitLabApiFor(selector)
+  const first = api.workItemDetails({
+    ...selector,
+    iid: 1,
+    type: 'issue',
+    requestToken: 'one',
+    includeImages: true
+  })
+  const second = api.workItemDetails({ ...selector, iid: 2, type: 'issue', requestToken: 'two' })
+  const firstRejected = expect(first).rejects.toThrow('cancelled')
+  await api.cancelWorkItemDetails({ requestToken: 'one' })
+  await firstRejected
+  expect(signals.get(1)?.aborted).toBe(true)
+  expect(signals.get(2)?.aborted).toBe(false)
+  expect(rpc.call).toHaveBeenCalledWith(
+    { kind: 'environment', environmentId: 'owner-server' },
+    'gitlab.workItemDetails',
+    expect.objectContaining({ repo: 'id:server-repo', iid: 1, includeImages: true }),
+    expect.objectContaining({ signal: signals.get(1) })
+  )
+  expect(rpc.call.mock.calls[0][2]).not.toHaveProperty('requestToken')
+  expect(rpc.call.mock.calls[0][2]).not.toHaveProperty('repoOwnerExecutionHostId')
+  const secondRejected = expect(second).rejects.toThrow('cancelled')
+  await api.cancelWorkItemDetails({ requestToken: 'two' })
+  await secondRejected
+})

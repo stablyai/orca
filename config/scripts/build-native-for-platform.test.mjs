@@ -336,6 +336,7 @@ describe.skipIf(process.platform !== 'darwin')('parallel native builds', () => {
     )
     await sleep(300)
     build.releaseExit()
+    // Sibling builds finish earlier; snapshot accepted lines only after this compiler exits.
     await waitFor(() =>
       build.events().some(({ event, name }) => event === 'completed' && name.includes('computer'))
     )

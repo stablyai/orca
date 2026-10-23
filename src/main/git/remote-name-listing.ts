@@ -7,6 +7,7 @@ import { gitExecFileAsync } from './runner'
 export type RemoteNameListingGitOptions = {
   wslDistro?: string
   admissionTier?: GitAdmissionTier
+  signal?: AbortSignal
 }
 
 const SIGNED_REMOTE_NAME_LISTING_TTL_MS = 5 * 60_000
@@ -100,47 +101,56 @@ export async function listCachedRemoteNames(
     }
   }
 
-  return runCoalescedProbe(remoteNameListingInFlight, cacheKey, async (ownsKey) => {
-    const configContext = listingGitConfigContext(repoPath, localGitOptions)
-    const configSignatureBefore = await readLocalGitConfigSignature(configContext)
-    const remotes = await listUncachedRemoteNames(repoPath, localGitOptions)
-    if (remotes === null) {
-      return null
-    }
-    if (ownsKey()) {
-      const configSignatureAfter = await readLocalGitConfigSignature(configContext)
-      const configSignature =
-        configSignatureBefore !== undefined && configSignatureBefore === configSignatureAfter
-          ? configSignatureAfter
-          : undefined
-      remoteNameListingCache.set(cacheKey, {
-        remotes,
-        expiresAt:
-          Date.now() +
-          (configSignature
-            ? SIGNED_REMOTE_NAME_LISTING_TTL_MS
-            : UNSIGNED_REMOTE_NAME_LISTING_TTL_MS),
-        ...(configSignature ? { configSignature } : {})
-      })
-      pruneRemoteNameListingCache(Date.now())
-    }
-    return remotes
-  })
+  return runCoalescedProbe(
+    remoteNameListingInFlight,
+    cacheKey,
+    async (ownsKey) => {
+      const configContext = listingGitConfigContext(repoPath, localGitOptions)
+      const configSignatureBefore = await readLocalGitConfigSignature(configContext)
+      const remotes = await listUncachedRemoteNames(repoPath, localGitOptions)
+      if (remotes === null) {
+        return null
+      }
+      if (ownsKey()) {
+        const configSignatureAfter = await readLocalGitConfigSignature(configContext)
+        const configSignature =
+          configSignatureBefore !== undefined && configSignatureBefore === configSignatureAfter
+            ? configSignatureAfter
+            : undefined
+        remoteNameListingCache.set(cacheKey, {
+          remotes,
+          expiresAt:
+            Date.now() +
+            (configSignature
+              ? SIGNED_REMOTE_NAME_LISTING_TTL_MS
+              : UNSIGNED_REMOTE_NAME_LISTING_TTL_MS),
+          ...(configSignature ? { configSignature } : {})
+        })
+        pruneRemoteNameListingCache(Date.now())
+      }
+      return remotes
+    },
+    undefined,
+    localGitOptions.signal
+  )
 }
 
 async function listUncachedRemoteNames(
   repoPath: string,
   localGitOptions: RemoteNameListingGitOptions = {}
 ): Promise<string[] | null> {
+  localGitOptions.signal?.throwIfAborted()
   try {
     const { stdout } = await gitExecFileAsync(['remote'], {
       cwd: repoPath,
+      ...(localGitOptions.signal ? { signal: localGitOptions.signal } : {}),
       timeout: REMOTE_URL_PROBE_TIMEOUT_MS,
       ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
       ...(localGitOptions.admissionTier ? { admissionTier: localGitOptions.admissionTier } : {})
     })
     return parseRemoteNames(stdout)
   } catch {
+    localGitOptions.signal?.throwIfAborted()
     return null
   }
 }

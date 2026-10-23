@@ -460,6 +460,9 @@ importers:
       emojibase-data:
         specifier: 17.0.0
         version: 17.0.0(emojibase@17.0.0)
+      entities:
+        specifier: 7.0.1
+        version: 7.0.1
       esbuild:
         specifier: ^0.28.2
         version: 0.28.2
