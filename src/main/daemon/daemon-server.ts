@@ -23,13 +23,10 @@ import { TerminalHistorySeedTransferRegistry } from './terminal-history-seed-tra
 import { TerminalHost } from './terminal-host'
 import { DaemonAutomaticWorkGuard } from './daemon-automatic-work-guard'
 import { answerAutomaticWorkRequest } from './daemon-automatic-work-protocol'
-import {
-  CLEAN_DISCONNECT_PROTOCOL_VERSION,
-  NOTIFY_PREFIX,
-  PROTOCOL_VERSION,
-  type DaemonRequest
-} from './types'
-import { encodeNdjson } from './ndjson'
+import { HostTerminalPolicy } from './host-terminal-policy'
+import { answerTerminalLimitRequest } from './daemon-terminal-limit-protocol'
+import { CLEAN_DISCONNECT_PROTOCOL_VERSION, PROTOCOL_VERSION, type DaemonRequest } from './types'
+import { answerDaemonControlRequest } from './daemon-control-request'
 
 export class DaemonServer {
   private static readonly INITIAL_ADOPTION_TIMEOUT_MS = 2 * 60 * 1000
@@ -48,12 +45,16 @@ export class DaemonServer {
   private readonly admission: DaemonTerminalAdmission
   private readonly requestRouter: DaemonRequestRouter
   private stopStreamBacklogProbe: () => void = () => {}
+  private readonly terminalPolicy: HostTerminalPolicy
+  private terminalPolicyNonce = ''
 
   constructor(options: DaemonServerOptions) {
     this.log = options.log ?? createNoopDaemonFileLog()
+    this.terminalPolicy = options.terminalLimitPolicy ?? new HostTerminalPolicy()
     this.automaticWork = new DaemonAutomaticWorkGuard({
       markerPath: options.automaticWorkMarkerPath,
       hostTerminalLedgerDir: options.hostTerminalLedgerDir,
+      terminalPolicy: this.terminalPolicy,
       mode: options.spawnAdmission ?? 'observe',
       log: this.log,
       listSessions: () => this.host.listSessions(),
@@ -120,6 +121,7 @@ export class DaemonServer {
       (protocolVersion >= CLEAN_DISCONNECT_PROTOCOL_VERSION
         ? Date.now() - process.uptime() * 1000
         : null)
+    this.terminalPolicyNonce = launchNonce ?? randomUUID()
     const token = randomUUID()
 
     this.connections = new DaemonClientConnections({
@@ -289,26 +291,23 @@ export class DaemonServer {
     clientId: string,
     request: DaemonRequest
   ): Promise<void> {
-    const isNotify = request.id.startsWith(NOTIFY_PREFIX)
-    try {
-      const result =
-        answerAutomaticWorkRequest(request, this.automaticWork, this.endpoint) ??
-        (await this.requestRouter.route(clientId, request))
-      if (!isNotify) {
-        socket.write(encodeNdjson({ id: request.id, ok: true, payload: result }), () => {
-          this.lifecycle.startPendingShutdownReply(clientId, request.id)
-        })
-      }
-    } catch (error) {
-      if (!isNotify) {
-        socket.write(
-          encodeNdjson({
-            id: request.id,
-            ok: false,
-            error: error instanceof Error ? error.message : String(error)
-          })
+    return answerDaemonControlRequest(
+      socket,
+      request,
+      async () => {
+        const limitRequest = answerTerminalLimitRequest(
+          request,
+          this.terminalPolicy,
+          this.terminalPolicyNonce,
+          () => this.lifecycle.isAcceptingWork() && !this.endpoint.hasLostOwnership()
         )
-      }
-    }
+        return (
+          limitRequest ??
+          answerAutomaticWorkRequest(request, this.automaticWork, this.endpoint) ??
+          this.requestRouter.route(clientId, request)
+        )
+      },
+      () => this.lifecycle.startPendingShutdownReply(clientId, request.id)
+    )
   }
 }

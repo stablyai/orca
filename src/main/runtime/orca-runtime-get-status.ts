@@ -1,4 +1,4 @@
-import { OrcaRuntimeWithGetRuntimeId } from './workspaces/session-hosts/get-runtime-id'
+import { OrcaRuntimeWithPtyController } from './orca-runtime-pty-controller'
 import type { RuntimeDegradation, RuntimeStatus } from '../../shared/runtime-types'
 import {
   runtimeBrowserCommandsFactoryIsHeadless,
@@ -36,11 +36,6 @@ import { runtimeTerminalDegradation } from './native-terminal-availability'
 import { isWindowsProcessStartTimeAvailable } from '../windows/windows-process-table'
 import type { RuntimeWorktreeLifecycleEvent } from './orca-runtime-core'
 import { WORKTREE_CREATE_RESULT_TTL_MS } from './orca-runtime-core'
-import type { RuntimePtyController } from './runtime-pty-controller-contract'
-import type {
-  AutomaticWorkResumeOutcome,
-  AutomaticWorkStatus
-} from '../../shared/host-spawn-admission'
 import type { RuntimeNotifier } from './runtime-notifier-contract'
 import type {
   AutomationsChangedPayload,
@@ -76,7 +71,7 @@ function supportsDurableTerminalPromptDelivery(): boolean {
   }
 }
 
-export abstract class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
+export abstract class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithPtyController {
   private asRuntimeStatusHost(): RuntimeStatusHost {
     return this as unknown as RuntimeStatusHost
   }
@@ -210,22 +205,6 @@ export abstract class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntime
    */
   machineNameReady(): Promise<void> {
     return this.machineName.readyWithin(MACHINE_NAME_PUBLISH_WAIT_MS)
-  }
-
-  setPtyController(controller: RuntimePtyController | null): void {
-    // Why: CLI terminal writes must go through the main-owned PTY registry
-    // instead of tunneling back through renderer IPC, or live handles could
-    // drift from the process they are supposed to control during reloads.
-    this.ptyController = controller
-  }
-
-  /** Null when the local terminal owner has no fork gate (in-process fallback, older daemon). */
-  async getAutomaticWorkStatus(): Promise<AutomaticWorkStatus | null> {
-    return (await this.ptyController?.getAutomaticWorkStatus?.()) ?? null
-  }
-
-  async resumeAutomaticWork(): Promise<AutomaticWorkResumeOutcome> {
-    return (await this.ptyController?.resumeAutomaticWork?.()) ?? null
   }
 
   setNotifier(notifier: RuntimeNotifier | null): void {

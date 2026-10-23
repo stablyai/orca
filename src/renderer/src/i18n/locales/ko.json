@@ -83,6 +83,25 @@
         "runAdministratorHelp": "관리자 가이드",
         "standardStatus": "표준 사용자",
         "unknownAdministrator": "확인할 수 없음"
+      },
+      "limit": {
+        "label": "실행 중인 터미널 최대 개수",
+        "description": "이 호스트의 모든 프로젝트에서 실행 중인 터미널 수를 제한합니다.",
+        "system": "시스템 PTY 한도: {{value}}",
+        "unknown": "확인할 수 없음",
+        "shared": "다른 터미널 앱과 공유합니다. 남은 개수가 아닌 전체 용량입니다.",
+        "disconnected": "이 호스트의 연결이 끊겼습니다. 터미널 한도를 확인하거나 변경하려면 다시 연결하세요.",
+        "unsupported": "이 호스트의 터미널 서비스는 아직 한도 변경을 지원하지 않습니다.",
+        "environment": "이 Orca 인스턴스의 터미널 한도는 환경 변수로 설정되어 있습니다. 여기서 편집하려면 이 호스트에서 해당 설정을 제거하세요.",
+        "failed": "터미널 한도를 확인하지 못했습니다. 다시 시도하세요.",
+        "retry": "다시 시도",
+        "unit": "터미널",
+        "search": {
+          "limit": "제한",
+          "maximum": "최대",
+          "pty": "pty",
+          "capacity": "용량"
+        }
       }
     },
     "appearance": {

@@ -19,6 +19,7 @@ import {
 } from '../../shared/host-spawn-admission'
 import { isUnknownRequestTypeError } from './daemon-endpoint-errors'
 import type { AutomaticWorkRequestType } from './daemon-automatic-work-protocol'
+import type { TerminalLimitStatus, TerminalLimitUpdate } from '../../shared/terminal-limit-policy'
 import type { DaemonAsyncIoStatus } from '../../shared/daemon-async-io-health'
 
 export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyProvider {
@@ -217,6 +218,33 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
         )
       }
     })
+  }
+
+  async terminalLimit(update?: TerminalLimitUpdate): Promise<TerminalLimitStatus | null> {
+    await this.ensureConnected()
+    const identity = this.getDaemonIdentity()
+    if (update && identity?.launchNonce !== update.daemonNonce) {
+      throw new Error('Terminal host changed. Refresh the setting and try again.')
+    }
+    try {
+      const status = await this.client.request<TerminalLimitStatus>(
+        update ? 'setTerminalLimit' : 'terminalLimitStatus',
+        update
+      )
+      if (
+        !identity ||
+        this.getDaemonIdentity()?.launchNonce !== identity.launchNonce ||
+        status.daemonNonce !== identity.launchNonce
+      ) {
+        throw new Error('Terminal host changed. Refresh the setting and try again.')
+      }
+      return status
+    } catch (error) {
+      if (isUnknownRequestTypeError(error)) {
+        return null
+      }
+      throw error
+    }
   }
 
   async getAutomaticWorkStatus(): Promise<AutomaticWorkStatus | null> {

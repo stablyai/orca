@@ -1,3 +1,4 @@
+import type { TerminalLimitStatus, TerminalLimitUpdate } from '../../shared/terminal-limit-policy'
 import type { PaneSpawnOperation } from '../ipc/pty/pane/pane-spawn-operation'
 import type { AgentLaunchRuntime } from '../../shared/agent-launch-runtime'
 import type {
@@ -127,6 +128,7 @@ export type RuntimePtyController = {
     savedStartupCwd?: string
   }>
   /** The local terminal owner's automatic-restore state; null when it has no fork gate. */
+  terminalLimit?(update?: TerminalLimitUpdate): Promise<TerminalLimitStatus | null>
   getAutomaticWorkStatus?(): Promise<AutomaticWorkStatus | null>
   resumeAutomaticWork?(): Promise<AutomaticWorkResumeOutcome>
   write(ptyId: string, data: string, inputKind: TerminalInputKind): boolean

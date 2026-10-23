@@ -83,6 +83,25 @@
         "runAdministratorHelp": "管理员指南",
         "standardStatus": "标准用户",
         "unknownAdministrator": "无法确定"
+      },
+      "limit": {
+        "label": "运行中终端的最大数量",
+        "description": "限制此主机上所有项目中正在运行的终端数量。",
+        "system": "系统 PTY 上限：{{value}}",
+        "unknown": "无法获取",
+        "shared": "与其他终端应用共享。这是总容量，并非可用数量。",
+        "disconnected": "此主机已断开连接。请重新连接以查看或更改终端上限。",
+        "unsupported": "此主机的终端服务尚不支持更改此上限。",
+        "environment": "此 Orca 实例的终端上限由环境变量设置。要在此编辑，请先移除此主机上的相应环境设置。",
+        "failed": "无法确认终端上限。请重试。",
+        "retry": "重试",
+        "unit": "个终端",
+        "search": {
+          "limit": "限制",
+          "maximum": "最大值",
+          "pty": "pty",
+          "capacity": "容量"
+        }
       }
     },
     "appearance": {

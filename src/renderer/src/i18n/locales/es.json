@@ -83,6 +83,25 @@
         "runAdministratorHelp": "Guía de administrador",
         "standardStatus": "Usuario estándar",
         "unknownAdministrator": "No se puede determinar"
+      },
+      "limit": {
+        "label": "Máximo de terminales en ejecución",
+        "description": "Limita las terminales en ejecución entre proyectos en este equipo.",
+        "system": "Límite de PTY del sistema: {{value}}",
+        "unknown": "No disponible",
+        "shared": "Compartido con otras aplicaciones de terminal. Es la capacidad total, no los espacios libres.",
+        "disconnected": "Este equipo está desconectado. Vuelve a conectarlo para ver o cambiar su límite de terminales.",
+        "unsupported": "El servicio de terminal de este equipo aún no permite cambiar este límite.",
+        "environment": "El entorno establece el límite de terminales de esta instancia de Orca. Elimina esa configuración en este equipo para editarlo aquí.",
+        "failed": "No se pudo confirmar el límite de terminales. Inténtalo de nuevo.",
+        "retry": "Reintentar",
+        "unit": "terminales",
+        "search": {
+          "limit": "límite",
+          "maximum": "máximo",
+          "pty": "pty",
+          "capacity": "capacidad"
+        }
       }
     },
     "appearance": {

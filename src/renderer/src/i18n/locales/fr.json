@@ -203,6 +203,25 @@
         "runAdministratorHelp": "Guide de l'administrateur",
         "standardStatus": "Utilisateur standard",
         "unknownAdministrator": "Impossible de déterminer"
+      },
+      "limit": {
+        "label": "Nombre maximal de terminaux actifs",
+        "description": "Limite les terminaux actifs de tous les projets sur cet hôte.",
+        "system": "Limite PTY du système : {{value}}",
+        "unknown": "Indisponible",
+        "shared": "Partagée avec les autres applications de terminal. Il s’agit de la capacité totale, pas des places libres.",
+        "disconnected": "Cet hôte est déconnecté. Reconnectez-le pour consulter ou modifier sa limite de terminaux.",
+        "unsupported": "Le service de terminal de cet hôte ne permet pas encore de modifier cette limite.",
+        "environment": "L’environnement définit la limite de terminaux de cette instance d’Orca. Supprimez cette configuration sur cet hôte pour la modifier ici.",
+        "failed": "Impossible de confirmer la limite de terminaux. Réessayez.",
+        "retry": "Réessayer",
+        "unit": "terminaux",
+        "search": {
+          "limit": "limite",
+          "maximum": "maximum",
+          "pty": "pty",
+          "capacity": "capacité"
+        }
       }
     },
     "appearance": {
