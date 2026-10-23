@@ -15,6 +15,12 @@ export type FileTapSessionTab = {
   relativePath?: string
 }
 
+export type MobileFileTapResolvedConfirmation = {
+  title: string
+  displayPath: string
+  copyPath: string
+}
+
 export type OpenMobileFileTapOptions<T extends FileTapSessionTab> = {
   client: RpcOperationSender
   hostId: string
@@ -47,6 +53,13 @@ export type OpenMobileFileTapOptions<T extends FileTapSessionTab> = {
   /** Invoked when the tap cannot open anything (resolve miss, directory, or a
    *  failed open). Omitted on surfaces that keep the historical silent miss. */
   onOpenFailed?: () => void
+  /** Optional confirmation hook invoked once the host confirms the tapped path
+   *  is an existing file. Calling `proceed` completes the open without a second
+   *  resolve round-trip. */
+  confirmResolvedOpen?: (
+    target: MobileFileTapResolvedConfirmation,
+    proceed: () => void
+  ) => void
 }
 
 export function openMobileFileTap<T extends FileTapSessionTab>(
@@ -104,13 +117,48 @@ async function openMobileFileTapAsync<T extends FileTapSessionTab>(
   if (!shouldActivateOpenedMobileSessionTab(options.getActivationState(false))) {
     return
   }
+  if (options.confirmResolvedOpen) {
+    const targetPath =
+      resolved.relativePath ||
+      resolved.openTarget?.absolutePath ||
+      resolved.absolutePath ||
+      options.pathText
+    const locationSuffix =
+      options.line !== null
+        ? `:${options.line}${options.column !== null ? `:${options.column}` : ''}`
+        : ''
+    options.triggerOpenFeedback()
+    options.confirmResolvedOpen(
+      {
+        title: displayNameFromPath(targetPath) ?? 'File',
+        displayPath: `${targetPath}${locationSuffix}`,
+        copyPath: targetPath
+      },
+      () => {
+        void completeResolvedMobileFileTapOpen(options, resolved, false).catch(() => {
+          reportOpenFailure(options)
+        })
+      }
+    )
+    return
+  }
+  await completeResolvedMobileFileTapOpen(options, resolved, true)
+}
+
+async function completeResolvedMobileFileTapOpen<T extends FileTapSessionTab>(
+  options: OpenMobileFileTapOptions<T>,
+  resolved: RuntimeTerminalPathResolution,
+  triggerFeedback: boolean
+): Promise<void> {
   const resolvedWorktreeId = resolved.worktree?.trim() || options.worktreeId
   const resolvedWorktree = `id:${resolvedWorktreeId}`
   const resolvedWorktreeName =
     resolvedWorktreeId === options.worktreeId ? options.worktreeName : undefined
 
   if (resolved.openTarget?.kind === 'absolute-file') {
-    options.triggerOpenFeedback()
+    if (triggerFeedback) {
+      options.triggerOpenFeedback()
+    }
     options.pushPreviewRoute(
       createMobileFilePreviewHref({
         hostId: options.hostId,
@@ -146,7 +194,9 @@ async function openMobileFileTapAsync<T extends FileTapSessionTab>(
     reportOpenFailure(options)
     return
   }
-  options.triggerOpenFeedback()
+  if (triggerFeedback) {
+    options.triggerOpenFeedback()
+  }
   const pushWorktreePreview = (): void =>
     options.pushPreviewRoute(
       createMobileFilePreviewHref({
