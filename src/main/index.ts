@@ -14,6 +14,7 @@ import { registerMainProcessIpcHandlers } from './startup/main-process-ipc-boots
 import { initializeMainProcessReady } from './startup/main-process-ready'
 import { installMainProcessQuitHandlers } from './startup/main-process-quit'
 import { shouldActivateDesktopForSecondInstance } from './startup/single-instance-lock'
+import { folderArgumentsFromLaunch, resolveOsOpenedFolders } from './startup/os-opened-folders'
 import { resolveOsOpenedDocuments } from './startup/os-opened-documents'
 import {
   formatProfileStateStartupFailure,
@@ -51,6 +52,7 @@ function requestDesktopActivation(argv: readonly string[] = []): void {
     state.mainWindow?.webContents.send('ui:openSkillShare', shareId)
   })
   state.osOpenedDocuments.capture(argv, publishOsOpenedDocuments)
+  captureOsOpenedFolders(argv, publishOsOpenedFolders)
   // Why: a duplicate `orca serve` must not drag a headless server into opening a desktop window (#11935).
   if (!shouldActivateDesktopForSecondInstance(argv)) {
     return
@@ -96,6 +98,42 @@ function publishOsOpenedDocuments(): void {
     })
 }
 
+function captureOsOpenedFolders(argv: readonly string[], publish?: () => void): void {
+  if (process.platform !== 'win32' || !shouldActivateDesktopForSecondInstance(argv)) {
+    return
+  }
+  state.osOpenedFolders.capture(folderArgumentsFromLaunch(argv, app.isPackaged), publish)
+}
+
+function publishOsOpenedFolders(): void {
+  const targetWindow = state.mainWindow
+  if (!state.osFolderOpenListenerReady || !targetWindow || targetWindow.isDestroyed()) {
+    return
+  }
+  const paths = state.osOpenedFolders.consume()
+  if (paths.length === 0) {
+    return
+  }
+  void resolveOsOpenedFolders(paths)
+    .then((folders) => {
+      if (
+        !state.osFolderOpenListenerReady ||
+        targetWindow.isDestroyed() ||
+        targetWindow.webContents.isDestroyed()
+      ) {
+        state.osOpenedFolders.restore(paths)
+        return
+      }
+      if (folders.length > 0) {
+        targetWindow.webContents.send('ui:openFolders', folders)
+      }
+    })
+    .catch((error) => {
+      state.osOpenedFolders.restore(paths)
+      console.warn('[os-open] Failed to resolve OS-opened folders:', error)
+    })
+}
+
 const handleMacAppActivation = createMacAppActivationHandler({
   getWindow: () => state.mainWindow,
   requestActivation: requestDesktopActivation
@@ -132,6 +170,7 @@ if (preflightReady) {
   state.skillShareDeepLinks.capture(process.argv)
   // Why no publish: nothing is listening this early, so the first renderer pulls these on mount.
   state.osOpenedDocuments.capture(process.argv)
+  captureOsOpenedFolders(process.argv)
   registerMainProcessIpcHandlers()
   installMainProcessQuitHandlers()
   void app.whenReady().then(async () => {

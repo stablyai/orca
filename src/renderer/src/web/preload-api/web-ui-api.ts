@@ -210,6 +210,8 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onOpenSkillShare: () => noopUnsubscribe,
     consumePendingSkillShare: () => Promise.resolve(null),
     // Why: the web client has no OS shell handing it files, so there is never a queued open.
+    onOpenFolders: () => noopUnsubscribe,
+    consumePendingFolderOpens: () => Promise.resolve([]),
     onOpenMarkdownFiles: () => noopUnsubscribe,
     consumePendingMarkdownFileOpens: () => Promise.resolve([]),
     onOpenSetupGuide: () => noopUnsubscribe,

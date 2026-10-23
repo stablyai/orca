@@ -15,6 +15,7 @@ import { registerDirectSshStateIpcBridge } from './direct-ssh-state-ipc-bridge'
 import { registerMobileAndTerminalCloseIpcBridge } from './mobile-terminal-close-ipc-bridge'
 import { registerMobileDriverIpcBridge } from './mobile-driver-ipc-bridge'
 import { registerOrcaProfileAuthIpcBridge } from './orca-profile-auth-ipc-bridge'
+import { registerOsFolderOpenBridge } from './os-folder-open-bridge'
 import { registerOsMarkdownFileOpenBridge } from './os-markdown-file-open-bridge'
 import { registerProjectCatalogIpcBridge } from './project-catalog-ipc-bridge'
 import { registerRateLimitIpcBridge } from './rate-limit-ipc-bridge'
@@ -88,6 +89,7 @@ export function installAppLifetimeIpcEvents(): () => void {
   registerOrcaProfileAuthIpcBridge(unsubs)
   registerWorkspaceShortcutIpcBridge(unsubs)
   registerOsMarkdownFileOpenBridge(unsubs)
+  registerOsFolderOpenBridge(unsubs)
   registerWslAccountNoticeIpcBridge(unsubs)
   unsubs.push(
     window.api.ui.onActivateWorktree(

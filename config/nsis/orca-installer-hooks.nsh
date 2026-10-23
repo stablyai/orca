@@ -44,6 +44,13 @@
 !macroend
 
 !macro customInstall
+  WriteRegStr SHELL_CONTEXT "Software\Classes\Directory\shell\Orca" "" "Open with ${PRODUCT_NAME}"
+  WriteRegStr SHELL_CONTEXT "Software\Classes\Directory\shell\Orca" "Icon" "$appExe,0"
+  WriteRegStr SHELL_CONTEXT "Software\Classes\Directory\shell\Orca\command" "" '"$appExe" "%1"'
+  WriteRegStr SHELL_CONTEXT "Software\Classes\Directory\Background\shell\Orca" "" "Open with ${PRODUCT_NAME}"
+  WriteRegStr SHELL_CONTEXT "Software\Classes\Directory\Background\shell\Orca" "Icon" "$appExe,0"
+  ; Why "%V.": a drive root expands %V to C:\, and a backslash before the closing quote would escape it.
+  WriteRegStr SHELL_CONTEXT "Software\Classes\Directory\Background\shell\Orca\command" "" '"$appExe" "%V."'
   !insertmacro ORCA_REGISTER_DOCUMENT_PROGID "${MARKDOWN_PROGID}" "Markdown Document"
   !insertmacro ORCA_REGISTER_DOCUMENT_PROGID "${TABULAR_PROGID}" "Tabular Document"
   !insertmacro ORCA_REGISTER_DOCUMENT_OPEN_WITH ".md" "${MARKDOWN_PROGID}"
@@ -107,6 +114,8 @@
   ${endIf}
   ; Why outside the ${isUpdated} guard: customInstall rewrites these on every update, so
   ; dropping them during uninstallOldVersion is correct and keeps the pair symmetric.
+  DeleteRegKey SHELL_CONTEXT "Software\Classes\Directory\shell\Orca"
+  DeleteRegKey SHELL_CONTEXT "Software\Classes\Directory\Background\shell\Orca"
   DeleteRegKey SHELL_CONTEXT "Software\Classes\${MARKDOWN_PROGID}"
   DeleteRegKey SHELL_CONTEXT "Software\Classes\${TABULAR_PROGID}"
   !insertmacro ORCA_UNREGISTER_DOCUMENT_OPEN_WITH ".md" "${MARKDOWN_PROGID}"
