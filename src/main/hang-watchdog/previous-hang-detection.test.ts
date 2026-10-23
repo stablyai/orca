@@ -43,6 +43,30 @@ const marker = {
 }
 
 describe('previous hang detection', () => {
+  it.each([
+    { names: ['git.exec', 'settings.save'], summary: 'git.exec, settings.save' },
+    { names: [], summary: '' },
+    {
+      names: Array.from({ length: 64 }, (_, index) => `operation.${index}.${'x'.repeat(100)}`),
+      summary: `operation.0.${'x'.repeat(100)} (+63 more)`
+    }
+  ])('reports whole span names with an omitted count: $summary', ({ names, summary }) => {
+    const markerPath = hangDetectionMarkerPath(dir)
+    writeHangDetectionMarker(markerPath, { ...marker, activeSpanNames: names })
+    preservePreviousHangDetection(dir)
+    const records: unknown[] = []
+    setActiveSink({ push: (record) => records.push(record), flush() {}, close() {} })
+    expect(reportPreviousHangDetection(dir)?.activeSpanNames).toEqual(names)
+    expect(records).toEqual([
+      expect.objectContaining({
+        attributes: expect.objectContaining({
+          'breadcrumb.data': expect.objectContaining({ activeSpanNames: summary })
+        })
+      })
+    ])
+    expect(summary.length).toBeLessThanOrEqual(240)
+  })
+
   it('retains the previous run across startup and writes it only after a sink exists', () => {
     const markerPath = hangDetectionMarkerPath(dir)
     writeHangDetectionMarker(markerPath, marker)

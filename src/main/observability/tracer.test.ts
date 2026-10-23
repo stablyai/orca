@@ -9,6 +9,7 @@ import {
   getActiveSpanContext,
   setActiveSink,
   startSpan,
+  subscribeSpanActivity,
   withSpan,
   type TracerSink
 } from './tracer'
@@ -44,6 +45,39 @@ afterEach(() => {
 })
 
 describe('tracer — basic span lifecycle', () => {
+  it('publishes activity before completion, including spans filtered from the log', () => {
+    const events: { name: string; active: boolean }[] = []
+    const unsubscribe = subscribeSpanActivity((activity) => events.push(activity))
+    try {
+      const span = startSpan('git.exec', { shouldRecord: () => false })
+      expect(events).toMatchObject([{ name: 'git.exec', active: true }])
+      span.fail('failed')
+      span.end()
+      expect(events).toMatchObject([
+        { name: 'git.exec', active: true },
+        { name: 'git.exec', active: false }
+      ])
+      expect(sink.records).toHaveLength(0)
+      unsubscribe()
+      startSpan('after-unsubscribe').end()
+      expect(events).toHaveLength(2)
+    } finally {
+      unsubscribe()
+    }
+  })
+
+  it('contains failures in activity subscribers', () => {
+    const unsubscribe = subscribeSpanActivity(() => {
+      throw new Error('observer failed')
+    })
+    try {
+      expect(() => startSpan('git.exec').end()).not.toThrow()
+      expect(sink.records).toHaveLength(1)
+    } finally {
+      unsubscribe()
+    }
+  })
+
   it('records a span on end()', () => {
     const span = startSpan('test')
     span.end()

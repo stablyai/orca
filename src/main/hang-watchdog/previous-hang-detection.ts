@@ -12,6 +12,19 @@ function previousMarkerPath(userDataPath: string): string {
   return `${hangDetectionMarkerPath(userDataPath)}.previous`
 }
 
+function summarizeActiveSpanNames(names: readonly string[]): string {
+  const kept: string[] = []
+  for (const name of names) {
+    // Leave room for the omitted count below the crash detail's 240-character limit.
+    if ([...kept, name].join(', ').length > 200) {
+      break
+    }
+    kept.push(name)
+  }
+  const omitted = names.length - kept.length
+  return omitted > 0 ? `${kept.join(', ')} (+${omitted} more)` : kept.join(', ')
+}
+
 export function preservePreviousHangDetection(userDataPath: string): void {
   if (!resolveObservabilityConsent().localFileEnabled) {
     return
@@ -33,7 +46,10 @@ export function reportPreviousHangDetection(userDataPath: string): HangDetection
     recordDurableCrashBreadcrumb('main_thread_hang_detected', {
       unresponsiveMs: marker.unresponsiveMs,
       previousPid: marker.parentPid,
-      selfRecovered: marker.selfRecovered
+      selfRecovered: marker.selfRecovered,
+      ...(marker.activeSpanNames
+        ? { activeSpanNames: summarizeActiveSpanNames(marker.activeSpanNames) }
+        : {})
     })
   }
   return marker

@@ -66,6 +66,10 @@ gh api rate_limit --jq '.resources.core'
 
 ## Logs
 
+Packaged Windows and macOS builds watch for main-thread stalls lasting at least 45 seconds. The independent watchdog writes `main-thread-hang.json` in Orca's user-data directory, including whether the thread recovered. When local tracing is enabled, it also records up to 64 active span names, without their arguments or attributes. These identify instrumented operations in progress; they are not a stack trace or proof of which operation caused the stall. Uninstrumented work has no span name.
+
+On the next launch, Orca consumes the marker and records a `main_thread_hang_detected` breadcrumb after local logging starts. The watchdog only observes; it does not kill or restart the app. Development builds require `ORCA_HANG_WATCHDOG_FORCE=1` to enable it.
+
 **Help → Open Logs** opens the directory with Orca's logs. Attach these when filing a bug.
 
 ## Reporting issues

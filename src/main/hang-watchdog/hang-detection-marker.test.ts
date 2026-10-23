@@ -62,6 +62,22 @@ describe('hang detection marker', () => {
     expect(consumeHangDetectionMarker(hangDetectionMarkerPath(dir))).toBeNull()
   })
 
+  it('bounds and validates optional span names from a prior launch', () => {
+    const markerPath = hangDetectionMarkerPath(dir)
+    writeFileSync(
+      markerPath,
+      JSON.stringify({
+        detectedAt: 1,
+        parentPid: 2,
+        unresponsiveMs: 45_000,
+        activeSpanNames: [null, 42, ...Array.from({ length: 80 }, () => 'x'.repeat(200))]
+      })
+    )
+    const names = consumeHangDetectionMarker(markerPath)?.activeSpanNames
+    expect(names).toHaveLength(64)
+    expect(names?.every((name) => name.length === 120)).toBe(true)
+  })
+
   it.each(['stat', 'read'])('retains a real marker after a transient %s failure', (operation) => {
     const markerPath = hangDetectionMarkerPath(dir)
     const marker = { detectedAt: 1, parentPid: 2, unresponsiveMs: 45000, selfRecovered: false }

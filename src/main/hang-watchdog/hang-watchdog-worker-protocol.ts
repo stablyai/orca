@@ -9,4 +9,9 @@ export type HangWatchdogWorkerData = {
   checkIntervalMs: number
 }
 
-export type MainToHangWatchdogWorkerMessage = { type: 'heartbeat' } | { type: 'shutdown' }
+export type MainToHangWatchdogWorkerMessage =
+  | { type: 'heartbeat' }
+  | { type: 'shutdown' }
+  | { type: 'span'; spanId: string; name: string; active: boolean }
+
+export const HANG_WATCHDOG_MAX_SPANS = 64
