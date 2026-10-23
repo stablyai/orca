@@ -120,8 +120,10 @@ describe('launchAgentInNewTab paired web runtime', () => {
       activate,
       ...(activate ? {} : { selectWorktree: false }),
       agentSessionKind: 'fresh',
-      agent: 'claude',
-      legacyStartupPlan: result?.startupPlan,
+      launchAgent: 'claude',
+      command: result?.startupPlan.launchCommand,
+      env: result?.startupPlan.env,
+      launchConfig: result?.startupPlan.launchConfig,
       viewMode: 'terminal'
     })
     expect(result?.startupPlan.launchConfig.agentArgs).toBe(store.settings.agentDefaultArgs.claude)

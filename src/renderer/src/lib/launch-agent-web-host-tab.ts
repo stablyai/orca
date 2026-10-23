@@ -29,7 +29,6 @@ export function launchAgentInWebHostTab(args: {
   groupId?: string
   cwd?: string | null
   startupPlan: AgentStartupPlan
-  legacyStartupPlan?: AgentStartupPlan
   prompt: string
   promptDelivery: 'auto-submit' | 'draft' | 'submit-after-ready'
   pastePromptAfterReady: string | null
@@ -68,18 +67,14 @@ export function launchAgentInWebHostTab(args: {
     ...(cwd?.trim() ? { cwd } : {}),
     ...(viewMode ? { viewMode } : {}),
     agentSessionKind: 'fresh',
-    ...(args.legacyStartupPlan ? { legacyStartupPlan: args.legacyStartupPlan } : {}),
-    ...(hasPrompt
-      ? {
-          launchAgent: agent,
-          command: startupPlan.launchCommand,
-          ...(startupPlan.env ? { env: startupPlan.env } : {}),
-          launchConfig: startupPlan.launchConfig,
-          ...(startupPlan.startupCommandDelivery
-            ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
-            : {})
-        }
-      : { agent }),
+    // Why: with or without a prompt, the desktop's launch settings decide args (#31986).
+    launchAgent: agent,
+    command: startupPlan.launchCommand,
+    ...(startupPlan.env ? { env: startupPlan.env } : {}),
+    launchConfig: startupPlan.launchConfig,
+    ...(startupPlan.startupCommandDelivery
+      ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
+      : {}),
     ...(hasPrompt && pastePromptAfterReady === null ? { prompt } : {}),
     ...(hasPrompt && pastePromptAfterReady === null
       ? { promptDelivery: structuredPromptDelivery }

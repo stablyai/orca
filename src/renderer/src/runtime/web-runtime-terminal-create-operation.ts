@@ -167,30 +167,21 @@ export async function createWebRuntimeSessionTerminalResult(
           ? { hostAuthorityCapability: resumeHostAuthorityCapability }
           : {}),
         legacy: async () => {
-          const launch = args.legacyStartupPlan
-            ? {
-                command: args.legacyStartupPlan.launchCommand,
-                env: args.legacyStartupPlan.env,
-                launchConfig: args.legacyStartupPlan.launchConfig,
-                launchAgent: args.legacyStartupPlan.agent,
-                startupCommandDelivery: args.legacyStartupPlan.startupCommandDelivery
-              }
-            : args
           const response = await callEnvironment({
             method: 'session.tabs.createTerminal',
             params: {
               worktree: toRuntimeWorktreeSelector(args.worktreeId),
               afterTabId: args.afterTabId ? toHostSessionTabId(args.afterTabId) : undefined,
               targetGroupId: args.targetGroupId,
-              command: launch.command,
+              command: args.command,
               cwd: args.cwd,
-              ...(launch.env ? { env: launch.env } : {}),
+              ...(args.env ? { env: args.env } : {}),
               ...(args.envToDelete ? { envToDelete: args.envToDelete } : {}),
-              startupCommandDelivery: launch.startupCommandDelivery,
-              ...(launch.launchConfig ? { launchConfig: launch.launchConfig } : {}),
+              startupCommandDelivery: args.startupCommandDelivery,
+              ...(args.launchConfig ? { launchConfig: args.launchConfig } : {}),
               ...(args.launchToken ? { launchToken: args.launchToken } : {}),
               ...(args.agent ? { agent: args.agent } : {}),
-              ...(launch.launchAgent ? { launchAgent: launch.launchAgent } : {}),
+              ...(args.launchAgent ? { launchAgent: args.launchAgent } : {}),
               ...(args.viewMode ? { viewMode: args.viewMode } : {}),
               // Why: old hosts understand activate:false; new hosts use select/navigation for caller-local focus.
               activate: false,

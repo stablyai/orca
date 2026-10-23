@@ -87,7 +87,7 @@ describe('createWebRuntimeSessionTerminal', () => {
   })
 
   it.each([false, true])(
-    'uses the captured quick-launch plan only for legacy creation (host authority: %s)',
+    'sends the desktop launch settings for an empty-prompt quick launch (host authority: %s)',
     async (hostAuthority) => {
       const runtimeCall = vi.fn(async (request: { method: string; params?: unknown }) => {
         if (request.method === 'status.get') {
@@ -138,7 +138,6 @@ describe('createWebRuntimeSessionTerminal', () => {
         worktreeId: WORKTREE_ID,
         environmentId: ENVIRONMENT_ID,
         startupPlan,
-        legacyStartupPlan: startupPlan,
         prompt: '',
         promptDelivery: 'auto-submit',
         pastePromptAfterReady: null,
@@ -153,10 +152,11 @@ describe('createWebRuntimeSessionTerminal', () => {
         )
       expect(createRequests).toHaveLength(1)
       if (hostAuthority) {
-        expect(createRequests[0].method).toBe('terminal.createAgentSession')
-        expect(createRequests[0].params).not.toHaveProperty('agentArgs')
+        expect(createRequests[0]).toMatchObject({
+          method: 'terminal.createAgentSession',
+          params: { agent: 'claude', agentArgs: '--model "model with spaces"' }
+        })
         expect(createRequests[0].params).not.toHaveProperty('command')
-        expect(createRequests[0].params).not.toHaveProperty('legacyStartupPlan')
       } else {
         expect(createRequests[0]).toMatchObject({
           method: 'session.tabs.createTerminal',
