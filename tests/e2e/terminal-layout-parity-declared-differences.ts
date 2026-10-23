@@ -24,11 +24,4 @@ export const TERMINAL_LAYOUT_PARITY_DECLARED_DIFFERENCES: readonly DeclaredParit
 ]
 
 /** Paths main itself does not reproduce; reported but not failed. Remove an entry once main is fixed. */
-export const TERMINAL_LAYOUT_PARITY_UNSTABLE_ON_MAIN: readonly UnstableOnMainPath[] = [
-  {
-    scenario: 'close-pane',
-    paths: ['[0].persisted.local.terminalTopologyRevisionByRepoId'],
-    evidence:
-      '--base 2d1ec53533 --head 2d1ec53533: 3 of 4 runs differ 3 -> 2; the closed pane PTY exit sometimes reaches retireMobileSessionSurfacesForPty from both onPtyExit callers.'
-  }
-]
+export const TERMINAL_LAYOUT_PARITY_UNSTABLE_ON_MAIN: readonly UnstableOnMainPath[] = []
