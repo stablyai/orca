@@ -58,11 +58,9 @@ export async function updateIssue(
         await ghExecFileAsync(['issue', 'reopen', String(issueNumber), '--repo', repo], ghOptions)
       }
     } catch (err) {
+      // Why: gh exits 0 for an issue already in the target state, so every failure is real.
       const stderr = err instanceof Error ? err.message : String(err)
-      // Treat "already closed/open" as a no-op
-      if (!stderr.toLowerCase().includes('already')) {
-        errors.push(classifyGhError(stderr).message)
-      }
+      errors.push(classifyGhError(stderr).message)
     } finally {
       release()
     }
