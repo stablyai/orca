@@ -417,25 +417,25 @@ describe('Session', () => {
     // timing behavior is covered by post-ready-flush-gate.test.ts.
     // Also checks writes that arrive during the gate window keep their order
     // — the gate continues to queue even though shellState is already 'ready'.
-    it('defers flush past the shell-ready marker and preserves write order', () => {
+    it('holds the startup command while user input reaches the current reader', () => {
       createSession({ shellReadySupported: true })
       expect(session.shellState).toBe('pending')
 
-      session.write('first\n')
+      session.writeStartupCommand('first\n')
       subprocess.simulateData('\x1b]777;orca-shell-ready\x07')
       expect(session.shellState).toBe('ready' satisfies ShellReadyState)
       session.write('second\n')
-      expect(subprocess.written).toEqual([])
+      expect(subprocess.written).toEqual(['second\n'])
 
       subprocess.simulateData('\r\nuser@host $ ')
       vi.advanceTimersByTime(30)
-      expect(subprocess.written).toEqual(['first\n', 'second\n'])
+      expect(subprocess.written).toEqual(['second\n', 'first\n'])
     })
 
     it('contains live color replies without releasing queued startup input', async () => {
       const reply = '\x1b[?997;1n'
       createSession({ shellReadySupported: true, shellReadyTimeoutMs: 100 })
-      session.write('codex\n')
+      session.writeStartupCommand('codex\n')
 
       session.write(reply)
       await vi.advanceTimersByTimeAsync(0)
@@ -447,7 +447,7 @@ describe('Session', () => {
 
     it('uses the short settle path when marker and prompt bytes arrive together', () => {
       createSession({ shellReadySupported: true })
-      session.write('codex\n')
+      session.writeStartupCommand('codex\n')
 
       subprocess.simulateData('\x1b]777;orca-shell-ready\x07\r\nuser@host $ ')
       expect(session.shellState).toBe('ready' satisfies ShellReadyState)
@@ -460,7 +460,7 @@ describe('Session', () => {
 
     it('does not treat bytes before the marker as post-marker prompt output', () => {
       createSession({ shellReadySupported: true })
-      session.write('codex\n')
+      session.writeStartupCommand('codex\n')
 
       subprocess.simulateData('last login\r\n\x1b]777;orca-shell-ready\x07')
       expect(session.shellState).toBe('ready' satisfies ShellReadyState)
@@ -508,7 +508,7 @@ describe('Session', () => {
       })
 
       subprocess.simulateData('\x1b]777;orca-shell-ready')
-      session.write('codex\n')
+      session.writeStartupCommand('codex\n')
       vi.advanceTimersByTime(100)
 
       expect(session.shellState).toBe('timed_out' satisfies ShellReadyState)
@@ -551,7 +551,7 @@ describe('Session', () => {
 
     it('keeps held marker-prefix bytes during live take-with-snapshot', () => {
       createSession({ shellReadySupported: true, shellReadyTimeoutMs: 100 })
-      session.write('codex\n')
+      session.writeStartupCommand('codex\n')
 
       subprocess.simulateData('\x1b]777;orca-shell-ready')
       const taken = session.takePendingOutput(true)
@@ -577,7 +577,7 @@ describe('Session', () => {
 
     it('cancels the post-ready flush gate when force-disposing the subprocess', async () => {
       createSession({ shellReadySupported: true })
-      session.write('codex\n')
+      session.writeStartupCommand('codex\n')
 
       subprocess.simulateData('\x1b]777;orca-shell-ready\x07')
       expect(session.shellState).toBe('ready' satisfies ShellReadyState)
@@ -591,7 +591,7 @@ describe('Session', () => {
 
     it('transitions to timed_out after 15 seconds', () => {
       createSession({ shellReadySupported: true })
-      session.write('waiting input')
+      session.writeStartupCommand('waiting input')
 
       vi.advanceTimersByTime(15_000)
 
@@ -630,7 +630,7 @@ describe('Session', () => {
           throw new Error('log sink unavailable')
         }
       })
-      session.write('waiting input')
+      session.writeStartupCommand('waiting input')
 
       vi.advanceTimersByTime(15_000)
 
@@ -638,9 +638,9 @@ describe('Session', () => {
       expect(subprocess.written).toEqual(['waiting input'])
     })
 
-    it('honors a shorter shell-ready timeout for Codex startup sessions', () => {
+    it('honors an injected shell-ready timeout', () => {
       createSession({ shellReadySupported: true, shellReadyTimeoutMs: 300 })
-      session.write('codex\n')
+      session.writeStartupCommand('codex\n')
 
       vi.advanceTimersByTime(299)
       expect(subprocess.written).toEqual([])

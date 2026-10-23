@@ -176,6 +176,8 @@ ${indentBlock(getZshShellReadyMarkerRegistrationBlock(spec.readyMarkerEscaped, t
   # precmd_functions is fatal, and KSH_ARRAYS makes the 1-based feature lookup
   # drop whichever feature is listed first.
   builtin emulate -L zsh
+  # Startup files can invoke prompt hooks or nested editors before initialization ends.
+  [[ ":$ZSH_EVAL_CONTEXT:" == *:file:* ]] && return 0
   (( $+_orca_deferred_init_done )) && return 0
   builtin typeset -g _orca_deferred_init_done=1
   builtin typeset -g precmd_functions
