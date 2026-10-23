@@ -227,7 +227,9 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
 
   onBackgroundStreamEvent(callback: (payload: PtyBackgroundStreamEvent) => void): () => void {
     return combineUnsubscribes(
-      this.allProviders().flatMap((provider) => provider.onBackgroundStreamEvent?.(callback) ?? [])
+      this.subscriptionProviders().flatMap(
+        (provider) => provider.onBackgroundStreamEvent?.(callback) ?? []
+      )
     )
   }
 
@@ -236,12 +238,12 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   // adapters only — the local fallback has no dead-socket problem.
   onWriteUnavailable(callback: (payload: { id: string }) => void): () => void {
     return combineUnsubscribes(
-      this.allDaemonAdapters().map((adapter) => adapter.onWriteUnavailable(callback))
+      this.subscriptionAdapters().map((adapter) => adapter.onWriteUnavailable(callback))
     )
   }
 
   onReplay(callback: (payload: { id: string; data: string }) => void): () => void {
-    const unsubscribes = this.allProviders().map((provider) => provider.onReplay(callback))
+    const unsubscribes = this.subscriptionProviders().map((provider) => provider.onReplay(callback))
     let active = true
     const trackedUnsubscribe = (): void => {
       if (!active) {
@@ -362,4 +364,12 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   // Why: a current daemon that failed startup must not mark legacy inventory incomplete.
   private allDaemonAdapters = (): DaemonPtyAdapter[] =>
     this.currentAvailable ? [this.current, ...this.legacy] : [...this.legacy]
+
+  // Why: subscriptions must cover the current daemon even while it is excluded from inventory.
+  private subscriptionAdapters = (): DaemonPtyAdapter[] => [this.current, ...this.legacy]
+
+  private subscriptionProviders = (): IPtyProvider[] => [
+    this.fallback,
+    ...this.subscriptionAdapters()
+  ]
 }

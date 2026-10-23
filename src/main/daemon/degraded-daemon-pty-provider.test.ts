@@ -5,6 +5,7 @@ import type { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { settledWriteStub, stubWriteSettlement } from '../providers/settled-pty-write-stub'
 import type {
   IPtyProvider,
+  PtyBackgroundStreamEvent,
   PtySpawnOptions,
   PtySpawnResult
 } from '../providers/pty-provider-contract'
@@ -605,6 +606,75 @@ describe('DegradedDaemonPtyProvider', () => {
     expect(dataSpy).toHaveBeenCalledWith({ id: 'current-session', data: 'bytes' })
     expect(exitSpy).toHaveBeenCalledWith({ id: 'current-session', code: 0 })
     expect(current.listProcesses).not.toHaveBeenCalled()
+  })
+
+  it('subscribes to the unavailable current daemon without admitting it to inventory', async () => {
+    const current = createDaemonAdapter('daemon', ['current-session'])
+    const legacy = createDaemonAdapter('legacy', ['legacy-session'])
+    const fallback = createProvider('fallback')
+    const backgroundListeners: ((payload: PtyBackgroundStreamEvent) => void)[] = []
+    current.onBackgroundStreamEvent = vi.fn(
+      (callback: (payload: PtyBackgroundStreamEvent) => void) => {
+        backgroundListeners.push(callback)
+        return () => {
+          const idx = backgroundListeners.indexOf(callback)
+          if (idx !== -1) {
+            backgroundListeners.splice(idx, 1)
+          }
+        }
+      }
+    )
+    const provider = new DegradedDaemonPtyProvider({
+      current,
+      legacy: [legacy],
+      fallback,
+      currentAvailable: false
+    })
+    const replaySpy = vi.fn()
+    const backgroundSpy = vi.fn()
+    const recovered: string[] = []
+
+    const unsubscribeReplay = provider.onReplay(replaySpy)
+    const unsubscribeBackground = provider.onBackgroundStreamEvent(backgroundSpy)
+    const unsubscribeWrite = provider.onWriteUnavailable(({ id }) => recovered.push(id))
+    current.emitReplay('current-session', 'current replay')
+    legacy.emitReplay('legacy-session', 'legacy replay')
+    current.triggerWriteUnavailable('current-pane')
+    for (const listener of backgroundListeners) {
+      listener({ id: 'current-session', kind: 'backgroundMarker', background: true })
+    }
+
+    expect(replaySpy.mock.calls).toEqual([
+      [{ id: 'current-session', data: 'current replay' }],
+      [{ id: 'legacy-session', data: 'legacy replay' }]
+    ])
+    expect(recovered).toEqual(['current-pane'])
+    expect(backgroundSpy).toHaveBeenCalledWith({
+      id: 'current-session',
+      kind: 'backgroundMarker',
+      background: true
+    })
+    expect(provider.getAllAdapters()).toEqual([legacy])
+    await provider.listProcesses()
+    expect(current.listProcesses).not.toHaveBeenCalled()
+    expect(legacy.listProcesses).toHaveBeenCalled()
+    expect(current.hasPty('current-session')).toBe(true)
+    current.hasPty.mockClear()
+    expect(provider.hasPty('current-session')).toBe(false)
+    expect(current.hasPty).not.toHaveBeenCalled()
+    expect(provider.hasPty('legacy-session')).toBe(true)
+
+    unsubscribeReplay()
+    unsubscribeBackground()
+    unsubscribeWrite()
+    current.emitReplay('current-session', 'after')
+    current.triggerWriteUnavailable('after')
+    for (const listener of backgroundListeners) {
+      listener({ id: 'current-session', kind: 'backgroundMarker', background: false })
+    }
+    expect(replaySpy).toHaveBeenCalledTimes(2)
+    expect(recovered).toEqual(['current-pane'])
+    expect(backgroundSpy).toHaveBeenCalledTimes(1)
   })
 
   it('admits the current adapter to owner recovery only after its spawn probe succeeds', async () => {

@@ -40,6 +40,10 @@ export async function tryInstallLegacyFallbackOnCurrentFailure(
   if (legacyAdapters.length === 0 && !isHoldingForNewerProtocolDaemon()) {
     throw input.error
   }
+  console.warn(
+    '[daemon] Current daemon unavailable; adopting legacy daemon sessions with local fresh spawns',
+    input.error
+  )
   const degradedProvider = new DegradedDaemonPtyProvider({
     current: input.newAdapter,
     legacy: legacyAdapters,

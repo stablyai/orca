@@ -345,15 +345,33 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
 
   it('recovers fresh spawns through the startup-failure legacy fallback probe', async () => {
     const mod = await importFresh()
+    const failure = new Error('protocol-mismatch')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     ensureRunningOverrides.push(async () => {
-      throw new Error('protocol-mismatch')
+      throw failure
     })
     probeSocketExistsMock.mockImplementation(
       (socketPath?: string) => socketPath?.endsWith('daemon-v49.sock') ?? false
     )
     mockOnlyDaemonSocketAlive('daemon-v49.sock')
 
-    await mod.initDaemonPtyProvider()
+    try {
+      await mod.initDaemonPtyProvider()
+      expect(warn).toHaveBeenCalledWith(
+        '[daemon] Current daemon unavailable; adopting legacy daemon sessions with local fresh spawns',
+        failure
+      )
+      const adoptionWarnIndex = warn.mock.calls.findIndex(
+        (call) =>
+          call[0] ===
+          '[daemon] Current daemon unavailable; adopting legacy daemon sessions with local fresh spawns'
+      )
+      expect(warn.mock.invocationCallOrder[adoptionWarnIndex]).toBeLessThan(
+        setLocalPtyProviderMock.mock.invocationCallOrder[0]
+      )
+    } finally {
+      warn.mockRestore()
+    }
     checkDaemonHealthMock.mockClear()
 
     const { DegradedDaemonPtyProvider } = await import('./degraded-daemon-pty-provider')
@@ -410,12 +428,21 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
   it('disposes the current adapter when disconnectOnly rejects during legacy fallback', async () => {
     const mod = await importFresh()
     const failure = new Error('protocol-mismatch')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     ensureRunningOverrides.push(async () => {
       throw failure
     })
     disconnectOnlyErrors.push(new Error('disconnect failed'))
 
-    await expect(mod.initDaemonPtyProvider()).rejects.toBe(failure)
+    try {
+      await expect(mod.initDaemonPtyProvider()).rejects.toBe(failure)
+      expect(warn).not.toHaveBeenCalledWith(
+        '[daemon] Current daemon unavailable; adopting legacy daemon sessions with local fresh spawns',
+        failure
+      )
+    } finally {
+      warn.mockRestore()
+    }
 
     expect(adapterInstances).toHaveLength(1)
     expect(adapterInstances[0].disconnectOnly).toHaveBeenCalledOnce()
