@@ -1,4 +1,6 @@
 import { detectLanguage } from '@/lib/language-detect'
+import { findWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
+import { isPathInsideWorktree, toWorktreeRelativePath } from '@/lib/terminal-links'
 import { useAppStore } from '@/store'
 import { scheduleEditorLineReveal } from '@/store/slices/editor/focus/editor-focus-reveal'
 import { isLiveEditorOpenGroup } from '@/store/slices/editor/tabs/editor-open-target-group'
@@ -8,6 +10,42 @@ import type {
   EditorOpenResult
 } from '@/store/slices/editor/types/editor-open-link-intent'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
+
+export function resolveTerminalFileEditorTarget(params: {
+  filePath: string
+  worktreeId: string
+  worktreePath: string
+  executionHostId: ExecutionHostId
+  hostGrantId: string | null
+  escapesWorktree: boolean
+}): { worktreeId: string; executionHostId: ExecutionHostId; relativePath: string } {
+  const store = useAppStore.getState()
+  let { worktreeId, executionHostId } = params
+  let relativePath = params.filePath
+  if (params.worktreePath && isPathInsideWorktree(params.filePath, params.worktreePath)) {
+    const maybeRelative = toWorktreeRelativePath(params.filePath, params.worktreePath)
+    // Why: a link out of the project keeps its absolute path so it names the same file after restart.
+    if (maybeRelative !== null && maybeRelative.length > 0 && !params.escapesWorktree) {
+      relativePath = maybeRelative
+    }
+  } else if (
+    params.hostGrantId === null &&
+    !isFloatingWorkspaceId(worktreeId) &&
+    store.openFiles.some(
+      (openFile) => openFile.filePath === params.filePath && openFile.worktreeId !== worktreeId
+    )
+  ) {
+    // Why: early resolution is only needed to avoid an existing sibling-tab collision.
+    const siblingRoute = findWorkspaceFileRoute(store, executionHostId, params.filePath)
+    if (siblingRoute) {
+      worktreeId = siblingRoute.worktreeId
+      executionHostId = siblingRoute.executionHostId
+      relativePath = siblingRoute.relativePath
+    }
+  }
+  return { worktreeId, executionHostId, relativePath }
+}
 
 /** An explicit group request may only end in an editor in the scope it was captured from. */
 export function isExplicitEditorScopeKept(

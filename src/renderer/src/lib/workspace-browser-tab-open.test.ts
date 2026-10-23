@@ -6,6 +6,7 @@ import {
 } from '../../../shared/execution-host'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { BROWSER_SCREENCAST_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import { BROWSER_CLIENT_HOSTING_RUNTIME_CAPABILITIES } from '../../../shared/browser-client-hosting-eligibility'
 import * as clientCreationActionPolicy from './client-creation-action-policy'
 import {
   canOpenWorkspaceBrowserTabOnRuntime,
@@ -539,6 +540,71 @@ describe('openWorkspaceBrowserTab', () => {
       expect.objectContaining({ sessionProfileId: 'ssh-profile', title: 'Search Google' })
     )
   })
+
+  it('opens an asserted runtime link through desktop hosting without screencast support', async () => {
+    mocks.state = {
+      ...ownerState(toRuntimeExecutionHostId('hub-a')),
+      runtimeStatusByEnvironmentId: new Map([
+        ['hub-a', { status: { capabilities: [...BROWSER_CLIENT_HOSTING_RUNTIME_CAPABILITIES] } }]
+      ]),
+      createBrowserTab: vi.fn()
+    }
+
+    expect(canOpenWorkspaceBrowserTabOnRuntime(mocks.getState(), WORKSPACE_ID, 'hub-a')).toBe(true)
+    await openWorkspaceBrowserTab({
+      workspaceId: WORKSPACE_ID,
+      url: 'http://localhost:3000/',
+      intent: { kind: 'url' },
+      expectedRuntimeEnvironmentId: 'hub-a'
+    })
+
+    expect(mocks.createRemote).toHaveBeenCalledWith(
+      expect.objectContaining({ environmentId: 'hub-a', waitForRegistration: true })
+    )
+    expect(mocks.state.createBrowserTab).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['desktop hosting is disabled', [...BROWSER_CLIENT_HOSTING_RUNTIME_CAPABILITIES], false, false],
+    ['an older peer lacks capabilities', undefined, true, false],
+    [
+      'a peer lacks a hosting capability',
+      BROWSER_CLIENT_HOSTING_RUNTIME_CAPABILITIES.slice(1),
+      true,
+      false
+    ],
+    [
+      'the viewing client is paired web',
+      [...BROWSER_CLIENT_HOSTING_RUNTIME_CAPABILITIES],
+      true,
+      true
+    ]
+  ])(
+    'refuses an asserted runtime link when %s',
+    async (_label, capabilities, enabled, pairedWeb) => {
+      mocks.pairedWeb = pairedWeb
+      mocks.state = {
+        ...ownerState(toRuntimeExecutionHostId('hub-a')),
+        settings: { browserClientHostedRemoteEnabled: enabled },
+        runtimeStatusByEnvironmentId: new Map([['hub-a', { status: { capabilities } }]]),
+        createBrowserTab: vi.fn()
+      }
+
+      expect(canOpenWorkspaceBrowserTabOnRuntime(mocks.getState(), WORKSPACE_ID, 'hub-a')).toBe(
+        false
+      )
+      await expect(
+        openWorkspaceBrowserTab({
+          workspaceId: WORKSPACE_ID,
+          url: 'http://localhost:3000/',
+          intent: { kind: 'url' },
+          expectedRuntimeEnvironmentId: 'hub-a'
+        })
+      ).rejects.toThrow('Unable to open URL.')
+      expect(mocks.createRemote).not.toHaveBeenCalled()
+      expect(mocks.state.createBrowserTab).not.toHaveBeenCalled()
+    }
+  )
 
   it('does not fall back locally when the runtime create outcome is unknown', async () => {
     const createBrowserTab = createBrowserTabMock()

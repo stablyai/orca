@@ -111,6 +111,7 @@ export function handleOscLink(
     return finish(
       handleTerminalHttpLink(parsed.toString(), event as MouseEvent, {
         worktreeId: deps.worktreeId,
+        sourceTabId: deps.sourceTabId,
         sourceOwner:
           deps.sourceOwner ??
           (deps.runtimeEnvironmentId

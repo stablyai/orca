@@ -37,6 +37,8 @@ import type { TabSplitTarget } from '../tabs/tabs-slice-contract'
 import type { RuntimeBrowserPlacement } from '../../../../../shared/runtime-browser-placement'
 
 export type CreateBrowserTabOptions = {
+  /** Link-only guard, checked before records and again at the unified-tab mutation. */
+  validateLinkPlacement?: (state: AppState) => void
   activate?: boolean
   browserPageId?: string
   title?: string
@@ -87,6 +89,8 @@ export type ClosedBrowserWorkspaceSnapshot = {
 export type RemoteBrowserPageHandle = {
   environmentId: string
   remotePageId: string
+  /** Profile identity confirmed by the host's current page snapshot. */
+  browserProfileId?: string
   placement?: RuntimeBrowserPlacement
   /** Optimistically staged by this client; the host has not published the page yet. */
   staged?: true

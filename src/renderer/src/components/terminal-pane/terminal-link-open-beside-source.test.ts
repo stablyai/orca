@@ -1,3 +1,5 @@
+import { openRoutedHttpLink } from '@/lib/http-link-destinations'
+import * as browserLinkOpen from './terminal-file-link-browser-open'
 import { describe, expect, it, vi } from 'vitest'
 import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import { openDetectedFilePath } from './terminal-link-handlers'
@@ -122,6 +124,26 @@ describe('terminal file links carry their source tab', () => {
     expect(toastErrorMock).toHaveBeenCalledTimes(1)
   })
 
+  it('reports a refused HTML placement for the internal Open in this group action', async () => {
+    seedSourceTab()
+    const stat = createDeferred<{ isDirectory: boolean }>()
+    statMock.mockImplementationOnce(() => stat.promise)
+
+    openDetectedFilePath('/tmp/report.html', null, null, {
+      ...sourceDeps,
+      openInSourceGroupSurface: 'internal'
+    })
+    storeState.groupsByWorktree = {}
+    stat.resolve({ isDirectory: false })
+    await flushAsyncWork()
+
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
+    expect(openFileForLinkMock).not.toHaveBeenCalled()
+    expect(toastErrorMock).toHaveBeenCalledExactlyOnceWith(
+      "Couldn't open /tmp/report.html in this group"
+    )
+  })
+
   it('refuses a closed explicit group before activating its workspace', async () => {
     setPlatform('Macintosh')
     seedSourceTab()
@@ -187,10 +209,23 @@ describe('terminal file links carry their source tab', () => {
     storeState.settings = { openLinksInApp: true }
     seedSourceTab()
 
+    const browserOpen = vi
+      .spyOn(browserLinkOpen, 'openTerminalHtmlFileInBrowser')
+      .mockReturnValueOnce(true)
     openDetectedFilePath('/tmp/report.html', null, null, sourceDeps)
     await flushAsyncWork()
 
-    expect(createBrowserTabMock).toHaveBeenCalledTimes(1)
+    expect(browserOpen).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: '/tmp/report.html',
+        worktreeId: 'wt-1',
+        fileExecutionHostId: 'local',
+        linkContext: expect.objectContaining({
+          linkIntent: expect.objectContaining({ sourceTabId: 'unified-term' })
+        })
+      })
+    )
+    browserOpen.mockRestore()
     expect(toastErrorMock).not.toHaveBeenCalled()
   })
 })
@@ -211,6 +246,16 @@ describe('terminal file link reveals target the opened view', () => {
       column: 3
     })
     expect(reveal.canApply?.()).toBe(true)
+  })
+
+  it('invalidates an editor line reveal when a browser link is activated', async () => {
+    setPlatform('Macintosh')
+    openDetectedFilePath('/tmp/src/a.ts', 12, 3, deps)
+    await flushAsyncWork()
+    await flushDoubleRaf()
+    const reveal = lastReveal()
+    openRoutedHttpLink('https://example.com/', { worktreeId: 'wt-1', forceDestination: 'orca' })
+    expect(reveal.canApply?.()).toBe(false)
   })
 
   it('invalidates a published reveal when a newer click has no line', async () => {

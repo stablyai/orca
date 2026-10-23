@@ -33,6 +33,7 @@ export function createTabsCreateActions(
       const splitGroupId = init?.split ? createBrowserUuid() : undefined
       let created!: Tab
       set((current) => {
+        init?.validatePlacement?.(current)
         const state =
           init?.split && splitGroupId
             ? {

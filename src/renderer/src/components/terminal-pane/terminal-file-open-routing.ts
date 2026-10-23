@@ -1,12 +1,12 @@
-import { getWorkspaceFilePreviewPlan, openFileInBrowserTab } from '@/lib/file-preview'
 import { downloadAndOpenRemoteTerminalFile } from './terminal-remote-file-download-open'
-import { findWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
-import { isPathInsideWorktree, toWorktreeRelativePath } from '@/lib/terminal-links'
 import { canClientOsOpenWorkspaceFile } from '@/lib/workspace-file-host-routing'
 import { isMissingRuntimePathError } from '@/runtime/runtime-file-metadata-client'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorkspace, activateAndRevealWorktree } from '@/lib/worktree-activation'
-import { resolveKnownWorktreeRootPathLink } from './terminal-worktree-path-link'
+import {
+  resolveKnownWorktreeRootPathLink,
+  terminalFileSourceHost
+} from './terminal-worktree-path-link'
 import {
   getTerminalFileContext,
   mapTerminalFilePath,
@@ -24,12 +24,16 @@ import {
   resolveHostWorkspaceFile,
   type HostWorkspaceFile
 } from './terminal-host-workspace-file'
-import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
 import { captureEditorOpenLinkIntent } from '@/store/slices/editor/tabs/editor-open-target-group'
 import { reserveDetectedFilePathOpenTurn } from './terminal-file-open-turn'
-import { openHtmlFileInBrowser } from './terminal-html-file-browser-open'
-import { showOpenInGroupRefusedToast } from './terminal-file-open-in-group-toast'
-import { isExplicitEditorScopeKept, openLinkedFileInEditor } from './terminal-file-link-editor-open'
+import { openTerminalHtmlFileInBrowser } from './terminal-file-link-browser-open'
+export { isHtmlFilePath } from './local-html-file-destinations'
+import { refuseOpenInGroupRequest } from './terminal-file-open-in-group-toast'
+import {
+  isExplicitEditorScopeKept,
+  openLinkedFileInEditor,
+  resolveTerminalFileEditorTarget
+} from './terminal-file-link-editor-open'
 
 export {
   getTerminalFileContext,
@@ -68,6 +72,8 @@ type TerminalFileOpenDeps = {
   sourceTabId?: string | null
   /** "Open in this group": pins the source tab's group at activation, or refuses. */
   openInSourceGroup?: boolean
+  /** Opt-in menu request; the legacy flag remains editor-only. */
+  openInSourceGroupSurface?: 'internal' | 'browser'
 }
 
 export function shouldOpenTerminalFileWithSystemDefault(fileContext: TerminalFileContext): boolean {
@@ -88,34 +94,38 @@ export function openDetectedFilePath(
     worktreePath,
     terminalLinkWslDistro(deps.wslDistro, runtimeEnvironmentId)
   )
-  const isCurrentOpen = reserveDetectedFilePathOpenTurn()
+  const isCurrentRequest = reserveDetectedFilePathOpenTurn()
+  const explicitGroupRequest =
+    deps.openInSourceGroup === true || deps.openInSourceGroupSurface !== undefined
   // Why: capture at activation; focus may move while the host resolves the path.
   const linkIntent = captureEditorOpenLinkIntent(
     useAppStore.getState(),
     deps.worktreeId,
     deps.sourceTabId,
-    { explicitSourceGroup: deps.openInSourceGroup === true }
+    { explicitSourceGroup: explicitGroupRequest }
   )
-  const explicitGroupRequest = deps.openInSourceGroup === true
-  // Why: an explicit group request never substitutes a browser, system app, or download.
-  const refuseExplicitNonEditorRoute = (): boolean => {
-    if (!explicitGroupRequest) {
-      return false
-    }
-    if (isCurrentOpen()) {
-      showOpenInGroupRefusedToast(mappedFilePath)
-    }
-    return true
+  const refuseExplicitNonEditorRoute = (): boolean =>
+    refuseOpenInGroupRequest(mappedFilePath, explicitGroupRequest, isCurrentRequest)
+  const linkContext = deps.sourceTabId ? { linkIntent, isCurrentRequest } : undefined
+  if (explicitGroupRequest && !linkIntent) {
+    refuseExplicitNonEditorRoute()
+    return
   }
 
   void (async () => {
     let statResult
     let fileContext = getTerminalFileContext(worktreeId, worktreePath, runtimeEnvironmentId)
+    const sourceFileHostId =
+      terminalFileSourceHost(useAppStore.getState(), fileContext) ??
+      getConnectionExecutionHostId(fileContext.connectionId)
     const sourceRuntimeOwnerId = runtimeTargetEnvironmentId(fileContext.target)
     let hostWorkspaceFile: HostWorkspaceFile | null = null
     let hostGrantId: string | null = null
     let clientLocal = false
     if (!fileContext.sourceHostResolved) {
+      if (refuseExplicitNonEditorRoute()) {
+        return
+      }
       // Why: with no owner the host is unknown — refuse rather than touch this machine's files.
       deps.onOpenFailure?.({
         verdict: 'unverifiable',
@@ -136,7 +146,7 @@ export function openDetectedFilePath(
         // Why: root workspace switching must work for SSH/runtime paths without
         // local auth/stat, while still coalescing provider + fallback clicks.
         await Promise.resolve()
-        if (!isCurrentOpen()) {
+        if (!isCurrentRequest()) {
           return
         }
         activateAndRevealWorktree(worktreeRootLink.id, {
@@ -174,7 +184,7 @@ export function openDetectedFilePath(
         statResult = await statUserOpenedPath(fileContext, mappedFilePath)
       }
     } catch (error) {
-      if (isCurrentOpen() && deps.onOpenFailure) {
+      if (isCurrentRequest() && deps.onOpenFailure) {
         // Why: loss of contact with the host is not evidence the file is gone.
         deps.onOpenFailure({
           verdict: isMissingRuntimePathError(error) ? 'missing' : 'unverifiable',
@@ -184,11 +194,15 @@ export function openDetectedFilePath(
       return
     }
 
-    if (!isCurrentOpen()) {
+    if (!isCurrentRequest()) {
       return
     }
 
     const canOpenWithSystemDefault = shouldOpenTerminalFileWithSystemDefault(fileContext)
+    if (explicitGroupRequest && openWithSystemDefault) {
+      refuseExplicitNonEditorRoute()
+      return
+    }
     // Why: a remote workspace's hint and rows promise Orca before the path resolves, and an
     // explicit group request falls through so the HTML branch can refuse it.
     const pageDestination =
@@ -236,58 +250,49 @@ export function openDetectedFilePath(
     // Why: a local HTML file routed to Orca renders in its browser, which also catches a
     // system-browser open the OS could not launch.
     if (isHtmlFilePath(mappedFilePath) && hostGrantId === null) {
-      if (canOpenWithSystemDefault) {
-        // Why: Orca's browser has no group placement in v1.
-        if (refuseExplicitNonEditorRoute()) {
-          return
-        }
-        openHtmlFileInBrowser(mappedFilePath, worktreeId, clientLocal)
+      if (deps.openInSourceGroup) {
+        refuseExplicitNonEditorRoute()
         return
       }
-      // Why: the same gesture renders remote HTML too, through the doc preview; only an
-      // unsupported plan (e.g. a paired doc outside the worktree) falls back to source.
-      const plan = getWorkspaceFilePreviewPlan(useAppStore.getState(), worktreeId, mappedFilePath)
-      if (plan.status === 'doc-preview') {
-        if (refuseExplicitNonEditorRoute()) {
-          return
-        }
-        activateAndRevealWorktree(worktreeId, { providesInitialSurface: true })
-        openFileInBrowserTab({ filePath: mappedFilePath, worktreeId })
+      const fileExecutionHostId = hostWorkspaceFile?.executionHostId ?? sourceFileHostId
+      if (
+        openTerminalHtmlFileInBrowser({
+          filePath: mappedFilePath,
+          worktreeId,
+          clientLocal,
+          canOpenWithSystemDefault,
+          ...(linkContext && !clientLocal ? { fileExecutionHostId } : {}),
+          linkContext,
+          ...(explicitGroupRequest ? { refuseOpenInSourceGroup: refuseExplicitNonEditorRoute } : {})
+        })
+      ) {
         return
       }
     }
 
-    const store = useAppStore.getState()
-    let targetWorktreeId = worktreeId
+    if (deps.openInSourceGroupSurface === 'browser') {
+      refuseExplicitNonEditorRoute()
+      return
+    }
+
     const runtimeOwnerId = runtimeTargetEnvironmentId(fileContext.target) ?? sourceRuntimeOwnerId
-    let targetExecutionHostId =
+    const fileExecutionHostId =
       hostWorkspaceFile?.executionHostId ??
       (runtimeOwnerId
         ? toRuntimeExecutionHostId(runtimeOwnerId)
         : getConnectionExecutionHostId(fileContext.connectionId))
-    let relativePath = mappedFilePath
-    if (worktreePath && isPathInsideWorktree(mappedFilePath, worktreePath)) {
-      const maybeRelative = toWorktreeRelativePath(mappedFilePath, worktreePath)
-      // Why: a link out of the project keeps its absolute path, so the tab reads it as the file
-      // the user named, before and after a restart, instead of being refused as a project file.
-      if (maybeRelative !== null && maybeRelative.length > 0 && !statResult.escapesWorktree) {
-        relativePath = maybeRelative
-      }
-    } else if (
-      hostGrantId === null &&
-      !isFloatingWorkspaceId(worktreeId) &&
-      store.openFiles.some(
-        (openFile) => openFile.filePath === mappedFilePath && openFile.worktreeId !== worktreeId
-      )
-    ) {
-      // Why: early resolution is only needed to avoid an existing sibling-tab collision.
-      const siblingRoute = findWorkspaceFileRoute(store, targetExecutionHostId, mappedFilePath)
-      if (siblingRoute) {
-        targetWorktreeId = siblingRoute.worktreeId
-        targetExecutionHostId = siblingRoute.executionHostId
-        relativePath = siblingRoute.relativePath
-      }
-    }
+    const {
+      worktreeId: targetWorktreeId,
+      executionHostId: targetExecutionHostId,
+      relativePath
+    } = resolveTerminalFileEditorTarget({
+      filePath: mappedFilePath,
+      worktreeId,
+      worktreePath,
+      executionHostId: fileExecutionHostId,
+      hostGrantId,
+      escapesWorktree: statResult.escapesWorktree
+    })
 
     if (
       explicitGroupRequest &&
@@ -327,7 +332,7 @@ export function openDetectedFilePath(
       },
       linkIntent,
       { line, column },
-      isCurrentOpen
+      isCurrentRequest
     )
     if (!opened) {
       refuseExplicitNonEditorRoute()

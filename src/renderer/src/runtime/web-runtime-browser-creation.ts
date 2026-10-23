@@ -50,6 +50,7 @@ export async function createWebRuntimeSessionBrowserTab(
   }
   const context = createWebRuntimeBrowserCreationContext(args, environmentId)
   let stagedWorkspaceId: string | undefined
+  let materializedPageId: string | undefined
   try {
     stageWebRuntimeBrowserCreation(context)
     stagedWorkspaceId = context.staged?.workspaceId
@@ -224,7 +225,8 @@ export async function createWebRuntimeSessionBrowserTab(
     }
     // Why: materialization means the snapshot has taken ownership of these rows, so nothing
     // downstream may still unwind them as an optimistic stage.
-    return completeWebRuntimeBrowserCreation(context)
+    completeWebRuntimeBrowserCreation(context)
+    materializedPageId = created.browserPageId
   } catch (error) {
     const failure = prepareWebRuntimeBrowserCreationFailure(context, error)
     if (failure.cleanupPageId) {
@@ -279,6 +281,10 @@ export async function createWebRuntimeSessionBrowserTab(
       forgetStagedBrowserTabHandover(stagedWorkspaceId)
     }
   }
+  if (materializedPageId) {
+    args.onMaterialized?.(materializedPageId)
+  }
+  return true
 }
 
 registerPairedBrowserTabCreator(createWebRuntimeSessionBrowserTab)

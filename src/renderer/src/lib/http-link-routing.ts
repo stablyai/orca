@@ -1,11 +1,18 @@
+import {
+  localhostLabelRouteForHttpLink,
+  openLabeledLocalhostLink,
+  type LocalhostLinkRepo,
+  type LocalhostLinkProject,
+  type LocalhostLinkWorktree
+} from './http-link-localhost-route'
+import type { BrowserLinkOpenContext } from './browser-link-destination'
+import type { LinkOpenIntent, LinkSourceState } from './link-open-intent'
+import { captureLinkOpenIntent, canOpenLinkInSourceGroup } from './link-open-intent'
+import type { AppState } from '@/store/types'
 import { translate } from '@/i18n/i18n'
 import { isFloatingWorkspaceId } from '../../../shared/floating-workspace-worktree'
-import {
-  parseLoopbackUrlWithPort,
-  type LocalhostWorktreeLabelRoute
-} from '../../../shared/localhost-worktree-labels'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { WorkspacePort, WorkspacePortScanResult } from '../../../shared/workspace-ports'
+import type { WorkspacePortScanResult } from '../../../shared/workspace-ports'
 import { toast } from 'sonner'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { reselectWorkspaceKeepingHost } from './active-workspace-host'
@@ -30,6 +37,7 @@ export type OpenHttpLinkOptions = {
   /** The Shift escape-hatch modifier was held; resolveModifierRouting decides what it means. */
   modifierHeld?: boolean
   sourceOwner?: HttpLinkSourceOwner
+  linkContext?: BrowserLinkOpenContext
 }
 
 export type HttpLinkSourceOwner =
@@ -38,10 +46,14 @@ export type HttpLinkSourceOwner =
   | { kind: 'ssh'; connectionId: string }
   | { kind: 'unknown' }
 
-type StoreAccessor = () => HttpLinkBrowserTabState & {
+export type HttpLinkStoreState = HttpLinkBrowserTabState & {
+  unifiedTabsByWorktree?: LinkSourceState['unifiedTabsByWorktree']
+  groupsByWorktree?: AppState['groupsByWorktree']
+  layoutByWorktree?: AppState['layoutByWorktree']
   settings?: Partial<
     Pick<
       GlobalSettings,
+      | 'openLinksInAppInBackground'
       | 'openLinksInApp'
       | 'openLinksInAppModifierInverts'
       | 'activeRuntimeEnvironmentId'
@@ -59,10 +71,26 @@ type StoreAccessor = () => HttpLinkBrowserTabState & {
   workspacePortScansByKey?: Record<string, WorkspacePortScanResult>
 }
 
+export type HttpLinkGroupActionRequest = {
+  workspaceId: string
+  sourceTabId?: string | null
+  url?: string
+  sourceOwner?: HttpLinkSourceOwner
+}
+let groupActionAvailability: ((request: HttpLinkGroupActionRequest) => boolean) | null = null
+export function registerHttpLinkGroupActionAvailability(
+  check: (request: HttpLinkGroupActionRequest) => boolean
+): void {
+  groupActionAvailability = check
+}
+
+type StoreAccessor = () => HttpLinkStoreState
+
 type WorkspaceHttpLinkBrowserRequest = HttpLinkBrowserRequestFields & {
   workspaceId: string
   url: string
   intent: { kind: 'url' }
+  linkContext?: BrowserLinkOpenContext
   expectedRuntimeEnvironmentId?: string
   expectedSshConnectionId?: string
 }
@@ -70,19 +98,7 @@ type WorkspaceHttpLinkBrowserRequest = HttpLinkBrowserRequestFields & {
 /** Resolves to the page id when the page renders on this desktop, else null. */
 type WorkspaceHttpLinkBrowserOpener = (
   request: WorkspaceHttpLinkBrowserRequest
-) => Promise<string | null>
-
-type LocalhostLinkRepo = {
-  id: string
-  displayName: string
-}
-
-type LocalhostLinkProject = LocalhostLinkRepo
-
-type LocalhostLinkWorktree = {
-  id: string
-  projectId?: string
-}
+) => Promise<string | null | void>
 
 // Why: store access is injected via registerHttpLinkStoreAccessor rather than
 // a direct `import '@/store'` to avoid a circular import — store/slices/editor.ts
@@ -100,6 +116,48 @@ export function registerWorkspaceHttpLinkBrowserOpener(
   fn: WorkspaceHttpLinkBrowserOpener | null
 ): void {
   workspaceHttpLinkBrowserOpener = fn
+}
+
+export function captureHttpLinkIntent(
+  workspaceId: string,
+  sourceTabId?: string | null,
+  explicitSourceGroup = false
+): LinkOpenIntent | null {
+  const state = storeAccessor?.()
+  return state
+    ? captureLinkOpenIntent(
+        { unifiedTabsByWorktree: state.unifiedTabsByWorktree ?? {} },
+        workspaceId,
+        sourceTabId,
+        { explicitSourceGroup }
+      )
+    : null
+}
+
+export function canHttpLinkOpenInSourceGroup(
+  workspaceId: string,
+  sourceTabId?: string | null,
+  url?: string,
+  sourceOwner?: HttpLinkSourceOwner
+): boolean {
+  const state = storeAccessor?.()
+  if (
+    groupActionAvailability &&
+    !groupActionAvailability({ workspaceId, sourceTabId, url, sourceOwner })
+  ) {
+    return false
+  }
+  return state
+    ? canOpenLinkInSourceGroup(
+        {
+          unifiedTabsByWorktree: state.unifiedTabsByWorktree ?? {},
+          groupsByWorktree: state.groupsByWorktree ?? {},
+          layoutByWorktree: state.layoutByWorktree ?? {}
+        },
+        workspaceId,
+        sourceTabId
+      )
+    : false
 }
 
 // Scope: http(s) URLs only. file: URIs and in-worktree markdown targets are
@@ -129,6 +187,9 @@ function resolveModifierRouting(
 }
 
 export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void {
+  if (opts.linkContext?.isCurrentRequest?.() === false) {
+    return
+  }
   const {
     worktreeId,
     allowRemoteInApp,
@@ -173,13 +234,14 @@ export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void 
         url,
         intent: { kind: 'url' },
         ...fields,
+        ...(opts.linkContext ? { linkContext: opts.linkContext } : {}),
         ...(effectiveSourceOwner?.kind === 'runtime'
           ? { expectedRuntimeEnvironmentId: effectiveSourceOwner.runtimeEnvironmentId }
           : effectiveSourceOwner?.kind === 'ssh'
             ? { expectedSshConnectionId: effectiveSourceOwner.connectionId }
             : {})
       }).then(
-        (pageId) => focusHttpLinkPage(fields.focusOnCreate === false ? null : pageId),
+        (pageId) => focusHttpLinkPage(fields.focusOnCreate === false ? null : (pageId ?? null)),
         (error) => {
           toast.error(
             error instanceof Error
@@ -193,24 +255,41 @@ export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void 
   }
 
   if (wantsOrca && sourceIsLocal && worktreeId && state) {
-    // Why: http clicks from inside a worktree should not push a worktree-switch
-    // history entry — the user isn't changing worktrees, they're opening a tab
-    // in the one they're already in. activateAndRevealWorktree is reserved for
-    // file-link jumps that genuinely switch worktrees.
-    if (!isHttpLinkBackgroundOpen(state) && !isFloatingWorkspaceId(worktreeId)) {
-      // Why: the floating workspace uses a synthetic worktree id. Promoting it
-      // to the global activeWorktreeId deselects the real repo workspace.
-      reselectWorkspaceKeepingHost(state, worktreeId)
+    const placement = resolveHttpLinkBrowserPlacement(state, worktreeId)
+    const openLocal = (chosenUrl: string): void => {
+      if (opts.linkContext?.isCurrentRequest?.() === false) {
+        return
+      }
+      if (opts.linkContext && workspaceHttpLinkBrowserOpener) {
+        void workspaceHttpLinkBrowserOpener({
+          workspaceId: worktreeId,
+          url: chosenUrl,
+          intent: { kind: 'url' },
+          linkContext: opts.linkContext,
+          ...(isHttpLinkBackgroundOpen(state)
+            ? { focusOnCreate: false, selectWorktree: false }
+            : {})
+        }).catch((error) => {
+          toast.error(
+            error instanceof Error
+              ? error.message
+              : translate('auto.lib.workspace.browser.tab.open.urlFailed', 'Unable to open URL.')
+          )
+        })
+        return
+      }
+      if (!isHttpLinkBackgroundOpen(state) && !isFloatingWorkspaceId(worktreeId)) {
+        reselectWorkspaceKeepingHost(state, worktreeId)
+      }
+      openLocalHttpLinkTab(storeAccessor?.() ?? state, worktreeId, chosenUrl, placement)
     }
     const localhostRoute = localhostLabelRouteForHttpLink(url, state, sourceOwner)
     if (!localhostRoute) {
-      openLocalHttpLinkTab(state, worktreeId, url)
+      openLocal(url)
       return
     }
-    // Why placed now: the clicked pane is the active group only until the user clicks elsewhere.
-    const placement = resolveHttpLinkBrowserPlacement(state, worktreeId)
     void openLabeledLocalhostLink(url, localhostRoute, (labeledUrl) => {
-      openLocalHttpLinkTab(storeAccessor?.() ?? state, worktreeId, labeledUrl, placement)
+      openLocal(labeledUrl)
     })
     return
   }
@@ -221,26 +300,11 @@ export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void 
     return
   }
   void openLabeledLocalhostLink(url, localhostRoute, (labeledUrl) => {
+    if (opts.linkContext?.isCurrentRequest?.() === false) {
+      return
+    }
     void window.api.shell.openUrl(labeledUrl)
   })
-}
-
-function localhostLabelRouteForHttpLink(
-  url: string,
-  state: ReturnType<StoreAccessor>,
-  sourceOwner?: HttpLinkSourceOwner
-): LocalhostWorktreeLabelRoute | null {
-  if (sourceOwner && sourceOwner.kind !== 'local') {
-    return null
-  }
-  if (!sourceOwner && state.settings?.activeRuntimeEnvironmentId?.trim()) {
-    return null
-  }
-  const sourceScan =
-    sourceOwner?.kind === 'local'
-      ? (state.workspacePortScansByKey?.['local:all'] ?? null)
-      : undefined
-  return localhostLabelRouteForTerminalLink(url, state, sourceOwner?.kind === 'local', sourceScan)
 }
 
 export async function resolveLocalhostHttpLinkDisplayUrl(
@@ -263,90 +327,4 @@ export async function resolveLocalhostHttpLinkDisplayUrl(
   } catch {
     return null
   }
-}
-
-async function openLabeledLocalhostLink(
-  fallbackUrl: string,
-  route: LocalhostWorktreeLabelRoute,
-  open: (url: string) => void
-): Promise<void> {
-  try {
-    const result = await window.api.localhostWorktreeLabels.register(route)
-    open(result.url)
-  } catch {
-    open(fallbackUrl)
-  }
-}
-
-function localhostLabelRouteForTerminalLink(
-  rawUrl: string,
-  state: ReturnType<StoreAccessor>,
-  ignoreActiveRuntime = false,
-  sourceScan?: WorkspacePortScanResult | null
-): LocalhostWorktreeLabelRoute | null {
-  if (
-    state.settings?.localhostWorktreeLabelsEnabled !== true ||
-    (!ignoreActiveRuntime && state.settings?.activeRuntimeEnvironmentId?.trim())
-  ) {
-    return null
-  }
-  // Why: only loopback links we can attribute to a scanned workspace port
-  // should get a worktree label; everything else must stay as-is.
-  const parsed = parseLoopbackUrlWithPort(rawUrl)
-  if (!parsed) {
-    return null
-  }
-  const scan = sourceScan === undefined ? state.workspacePortScan?.result : sourceScan
-  const port = findWorkspacePortByNumber(scan, Number(parsed.port))
-  if (!port) {
-    return null
-  }
-  const repo = state.repos?.find((entry) => entry.id === port.owner.repoId) ?? null
-  if (!repo) {
-    return null
-  }
-  const worktree = findWorktreeById(state, port.owner.worktreeId)
-  const project =
-    worktree?.projectId && state.projects
-      ? (state.projects.find((entry) => entry.id === worktree.projectId) ?? null)
-      : null
-  const projectSource = project ?? repo
-  return {
-    targetUrl: parsed.toString(),
-    projectName: projectSource.displayName,
-    worktreeName: port.owner.displayName,
-    worktreePath: port.owner.path,
-    repoId: repo.id,
-    worktreeId: port.owner.worktreeId
-  }
-}
-
-function findWorkspacePortByNumber(
-  scan: WorkspacePortScanResult | null | undefined,
-  portNumber: number
-): (WorkspacePort & { kind: 'workspace' }) | null {
-  const port =
-    scan?.ports.find(
-      (candidate): candidate is WorkspacePort & { kind: 'workspace' } =>
-        candidate.kind === 'workspace' && candidate.port === portNumber
-    ) ?? null
-  return port
-}
-
-function findWorktreeById(
-  state: ReturnType<StoreAccessor>,
-  worktreeId: string
-): LocalhostLinkWorktree | null {
-  const fromAllWorktrees = state.allWorktrees?.().find((worktree) => worktree.id === worktreeId)
-  if (fromAllWorktrees) {
-    return fromAllWorktrees
-  }
-  const worktreesByRepo = state.worktreesByRepo ?? {}
-  for (const worktrees of Object.values(worktreesByRepo)) {
-    const worktree = worktrees.find((entry) => entry.id === worktreeId)
-    if (worktree) {
-      return worktree
-    }
-  }
-  return null
 }
