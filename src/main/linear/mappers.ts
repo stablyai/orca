@@ -1,10 +1,6 @@
 import type { Issue, IssueSearchResult } from '@linear/sdk'
 import type { LinearIssue, LinearIssueChildSummary } from '../../shared/linear/issue-types'
 
-type IssueWithChildren = Issue & {
-  children: Issue['children']
-}
-
 type MapLinearIssueOptions = {
   includeChildren?: boolean
   includeProject?: boolean
@@ -43,33 +39,36 @@ export async function mapLinearIssue(
     options.includeProject ? optionalRelation(issue.project) : Promise.resolve(undefined)
   ])
 
-  // Why: IssueSearchResult does not expose the labels() relation method — only
-  // the raw labelIds array. For Issue instances we resolve actual label names;
-  // for search results we fall back to empty (label names are a nice-to-have
-  // in the UI, not critical for identification).
-  let labelNames: string[] = []
-  let labelIds: string[] = []
-  if ('labels' in issue && typeof issue.labels === 'function') {
-    try {
-      const labelsConnection = await (issue as Issue).labels()
-      labelNames = labelsConnection.nodes.map((l) => l.name)
-      labelIds = labelsConnection.nodes.map((l) => l.id)
-    } catch {
-      // Swallow — labels are non-critical display data.
+  // Search results expose label IDs but no labels() connection.
+  const labelRead = (async () => {
+    let labelNames: string[] = []
+    let labelIds: string[] = []
+    if ('labels' in issue && typeof issue.labels === 'function') {
+      try {
+        const labelsConnection = await issue.labels()
+        labelNames = labelsConnection.nodes.map((l) => l.name)
+        labelIds = labelsConnection.nodes.map((l) => l.id)
+      } catch {
+        // Swallow — labels are non-critical display data.
+      }
+    } else if ('labelIds' in issue && Array.isArray(issue.labelIds)) {
+      labelIds = issue.labelIds
     }
-  } else if ('labelIds' in issue && Array.isArray(issue.labelIds)) {
-    labelIds = issue.labelIds as string[]
-  }
-
-  let subIssues: LinearIssueChildSummary[] | undefined
-  if (options.includeChildren && 'children' in issue && typeof issue.children === 'function') {
-    try {
-      const childrenConnection = await (issue as IssueWithChildren).children({ first: 25 })
-      subIssues = childrenConnection.nodes.map(mapLinearIssueChild)
-    } catch {
-      // Swallow — child issues are secondary display data and creation still works without them.
+    return { labelNames, labelIds }
+  })()
+  const childRead = (async () => {
+    let subIssues: LinearIssueChildSummary[] | undefined
+    if (options.includeChildren && 'children' in issue && typeof issue.children === 'function') {
+      try {
+        const childrenConnection = await issue.children({ first: 25 })
+        subIssues = childrenConnection.nodes.map(mapLinearIssueChild)
+      } catch {
+        // Swallow — child issues are secondary display data and creation still works without them.
+      }
     }
-  }
+    return subIssues
+  })()
+  const [{ labelNames, labelIds }, subIssues] = await Promise.all([labelRead, childRead])
 
   return {
     id: issue.id,
