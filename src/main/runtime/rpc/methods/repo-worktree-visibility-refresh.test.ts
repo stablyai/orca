@@ -47,16 +47,21 @@ describe('repo.update worktree visibility refresh', () => {
   })
 
   // Why: a CLI `repo set --external-worktree-visibility show` hid the worktree instead of listing it.
-  it('asks clients to re-read worktrees when external worktree visibility changes', async () => {
-    const { runtime, dispatcher } = dispatcherFor({ externalWorktreeVisibility: 'show' })
+  it.each([
+    { externalWorktreeVisibility: 'show' },
+    { importedExternalWorktreePaths: ['/srv/repo-x'] },
+    { agentWorktreeVisibility: 'show' },
+    { worktreeBasePath: '/srv/worktrees' },
+    { customWorktreeVisibilitySources: [{ id: 'scratch', rootPath: '/srv/scratch' }] },
+    { worktreeVisibilitySourcePreferences: { builtIn: { claude: 'show' } } }
+  ])('asks clients to re-read worktrees after a visibility update %o', async (updates) => {
+    const { runtime, dispatcher } = dispatcherFor({})
 
-    await dispatcher.dispatch(
-      makeRequest('repo.update', {
-        repo: 'path:/srv/repo',
-        updates: { externalWorktreeVisibility: 'show' }
-      })
+    const response = await dispatcher.dispatch(
+      makeRequest('repo.update', { repo: 'path:/srv/repo', updates })
     )
 
+    expect(response).toMatchObject({ ok: true })
     expect(runtime.notifyWorktreesChanged).toHaveBeenCalledWith('repo-1')
   })
 

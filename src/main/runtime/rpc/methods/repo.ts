@@ -34,7 +34,9 @@ const WORKTREE_VISIBILITY_UPDATES = [
   'externalWorktreeVisibility',
   'importedExternalWorktreePaths',
   'agentWorktreeVisibility',
-  'worktreeBasePath'
+  'worktreeBasePath',
+  'customWorktreeVisibilitySources',
+  'worktreeVisibilitySourcePreferences'
 ] as const
 
 export const REPO_METHODS = [
