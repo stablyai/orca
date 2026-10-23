@@ -283,6 +283,12 @@ function useMarkdownBlocks(
   return next.blocks
 }
 
+function markdownBlockContent(block: MarkdownBlock): string {
+  return block.literalMath && block.end !== undefined
+    ? block.text.slice(0, block.end - block.start)
+    : block.text
+}
+
 // Why forwardRef + rest props: Radix's HoverCardTrigger asChild merges a ref
 // and event handlers (onPointerEnter, onPointerLeave, data-state, etc.) onto
 // the child. Without forwarding both, the hover card cannot open or position.
@@ -383,12 +389,12 @@ const CommentMarkdown = React.memo(
                       : commentMarkdownUrlTransform
                   }
                 >
-                  {growing && index === blocks.length - 1 && !block.unclosedMath
-                    ? remend(block.text, {
+                  {growing && index === blocks.length - 1 && !block.literalMath
+                    ? remend(markdownBlockContent(block), {
                         linkMode: 'text-only',
                         ...(math ? { katex: false, inlineKatex: false } : {})
                       })
-                    : block.text}
+                    : markdownBlockContent(block)}
                 </MemoizedMarkdown>
               </CommentMarkdownBlockLineContext.Provider>
             ))}

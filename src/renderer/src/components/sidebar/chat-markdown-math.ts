@@ -1,17 +1,9 @@
-import type { Nodes, Root } from 'mdast'
-import type { Extension as FromMarkdownExtension } from 'mdast-util-from-markdown'
+import type { Root } from 'mdast'
 import type { Code, Construct, State, Token, Tokenizer } from 'micromark-util-types'
 import type { Processor } from 'unified'
 import type { VFile } from 'vfile'
 import type {} from 'remark-parse'
-import type {} from 'remark-math'
-
-declare module 'vfile' {
-  // oxlint-disable-next-line typescript/consistent-type-definitions -- Declaration merging extends upstream file metadata.
-  interface DataMap {
-    chatMathSources: Map<number, string>
-  }
-}
+import { chatMathFromMarkdown, transformChatMath } from './chat-markdown-math-nodes'
 
 declare module 'micromark-util-types' {
   // oxlint-disable-next-line typescript/consistent-type-definitions -- Declaration merging registers parser tokens.
@@ -32,15 +24,25 @@ const digit = (code: Code): boolean => code !== null && code >= 48 && code <= 57
 
 function construct(flow: boolean): Construct {
   const tokenize: Tokenizer = function (effects, ok, nok) {
-    const lazyLines = this.parser.lazy
-    const currentLine = () => this.now().line
     let opener = ''
     let closer = ''
     let body = ''
     let token: Token
     let escaped = false
-    let closeIndex = 0
-    let inlineClosing = false
+    let candidate: Token
+    let closeSize = 0
+    const continuation: Construct = {
+      partial: true,
+      tokenize(e, yes, no) {
+        const canContinue = () => !this.parser.lazy[this.now().line]
+        return (code) => {
+          e.enter('lineEnding')
+          e.consume(code)
+          e.exit('lineEnding')
+          return (next) => (canContinue() ? yes(next) : no(next))
+        }
+      }
+    }
     const closing: Construct = { partial: true, tokenize: tokenizeClose }
     return start
 
@@ -85,26 +87,70 @@ function construct(flow: boolean): Construct {
         return finish(code)
       }
       if (lineEnding(code)) {
-        if (!flow && (opener === '$' || opener === '\\(')) {
-          return finish(code)
+        if (flow) {
+          return effects.attempt(continuation, continued, finish)(code)
+        }
+        if (opener === '$' || opener === '\\(') {
+          return nok(code)
         }
         effects.enter('lineEnding')
         effects.consume(code)
         effects.exit('lineEnding')
         body += '\n'
-        return flow ? continuation : between
+        return between
+      }
+      if (code === 36 && opener.startsWith('$')) {
+        candidate = effects.enter('chatMathMarker')
+        closeSize = 0
+        return dollarClose(code)
       }
       if (code === closer.charCodeAt(0)) {
-        return effects.attempt(closing, finish, noClose)(code)
+        return effects.attempt(closing, flow ? trailing : closed, dataStart)(code)
       }
       return dataStart(code)
     }
-    function noClose(code: Code): State | undefined {
-      return opener === '$' || inlineClosing ? nok(code) : dataStart(code)
+    function continued(code: Code): State | undefined {
+      body += '\n'
+      return between(code)
     }
-    function continuation(code: Code): State | undefined {
-      // A concrete flow consumes blank lines, but cannot escape its Markdown container.
-      return lazyLines[currentLine()] ? finish(code) : between(code)
+    function dollarClose(code: Code): State | undefined {
+      if (code === 36) {
+        effects.consume(code)
+        closeSize++
+        return dollarClose
+      }
+      if (closeSize !== closer.length) {
+        candidate.type = 'chatMathData'
+        effects.exit('chatMathData')
+        body += '$'.repeat(closeSize)
+        return between(code)
+      }
+      if (
+        opener === '$' &&
+        (/\s/.test(body.at(-1) ?? '') ||
+          digit(code) ||
+          (/^[+-]?\d[\d,]*(?:\.\d+)?(?:[^\p{ASCII}]|\s)/u.test(body) &&
+            !/[\\_^=<>+*/{}-]/.test(body)))
+      ) {
+        return nok(code)
+      }
+      effects.exit('chatMathMarker')
+      return flow ? trailing(code) : closed(code)
+    }
+    function trailing(code: Code): State | undefined {
+      if (code === 32 || code === -2 || code === -1) {
+        effects.enter('whitespace')
+        effects.consume(code)
+        effects.exit('whitespace')
+        return trailing
+      }
+      return code === null || lineEnding(code) ? closed(code) : nok(code)
+    }
+    function closed(code: Code): State | undefined {
+      if (token.chatMath) {
+        token.chatMath.closed = true
+      }
+      return finish(code)
     }
     function dataStart(code: Code): State | undefined {
       effects.enter('chatMathData')
@@ -133,7 +179,7 @@ function construct(flow: boolean): Construct {
       return data
     }
     function finish(code: Code): State | undefined {
-      if (opener === '\\[' && /^[\d\s,]+$/.test(body)) {
+      if ((!flow && !token.chatMath?.closed) || (opener === '\\[' && /^[\d\s,]+$/.test(body))) {
         return nok(code)
       }
       effects.exit('chatMath')
@@ -144,7 +190,7 @@ function construct(flow: boolean): Construct {
       closeOk: State,
       closeNok: State
     ): State {
-      closeIndex = 0
+      let closeIndex = 0
       closeEffects.enter('chatMathMarker')
       return sequence
       function sequence(code: Code): State | undefined {
@@ -156,39 +202,7 @@ function construct(flow: boolean): Construct {
           closeIndex++
           return sequence
         }
-        if (opener.startsWith('$') && code === 36) {
-          return closeNok(code)
-        }
-        if (opener === '$' && (/\s/.test(body.at(-1) ?? '') || digit(code))) {
-          return closeNok(code)
-        }
-        if (
-          opener === '$' &&
-          /^[+-]?\d[\d,]*(?:\.\d+)?(?:[^\p{ASCII}]|\s)/u.test(body) &&
-          !/[\\_^=<>+*/{}-]/.test(body)
-        ) {
-          return closeNok(code)
-        }
         closeEffects.exit('chatMathMarker')
-        return flow ? trailing(code) : closed(code)
-      }
-      function trailing(code: Code): State | undefined {
-        if (code === 32 || code === -2 || code === -1) {
-          closeEffects.enter('whitespace')
-          closeEffects.consume(code)
-          closeEffects.exit('whitespace')
-          return trailing
-        }
-        if (code === null || lineEnding(code)) {
-          return closed(code)
-        }
-        inlineClosing = true
-        return closeNok(code)
-      }
-      function closed(code: Code): State | undefined {
-        if (token.chatMath) {
-          token.chatMath.closed = true
-        }
         return closeOk(code)
       }
     }
@@ -203,69 +217,6 @@ function construct(flow: boolean): Construct {
   }
 }
 
-const fromMarkdown: FromMarkdownExtension = {
-  enter: {
-    chatMath(token) {
-      this.enter({ type: 'inlineMath', value: '' }, token)
-      this.buffer()
-    }
-  },
-  exit: {
-    chatMathData(token) {
-      this.config.enter.data.call(this, token)
-      this.config.exit.data.call(this, token)
-    },
-    chatMath(token) {
-      const value = this.resume()
-      const node = this.stack.at(-1)
-      if (node?.type !== 'inlineMath' || !token.chatMath) {
-        return
-      }
-      const { opener, closer, closed, flow } = token.chatMath
-      node.value = closed ? value.trim() : opener + value
-      node.data = {
-        hName: flow ? 'div' : 'span',
-        hProperties: closed
-          ? {
-              className: ['language-math', flow ? 'math-display' : 'math-inline']
-            }
-          : { className: ['whitespace-pre-wrap'] },
-        hChildren: [{ type: 'text', value: node.value }],
-        mathSource: opener + value + (closed ? closer : ''),
-        mathComplete: closed,
-        mathDisplay: opener !== '$' && opener !== '\\('
-      }
-      this.exit(token)
-    }
-  }
-}
-
-function displayMath(node: Nodes): void {
-  if (node.type === 'link' || node.type === 'image') {
-    return
-  }
-  if (
-    node.type === 'paragraph' &&
-    node.children.every(
-      (child) =>
-        (child.type === 'text' && !child.value.trim()) ||
-        child.type === 'break' ||
-        (child.type === 'inlineMath' &&
-          child.data?.mathComplete === true &&
-          child.data?.mathDisplay)
-    )
-  ) {
-    for (const child of node.children) {
-      if (child.type === 'inlineMath' && child.data?.hProperties?.className) {
-        child.data.hProperties.className = ['language-math', 'math-display']
-      }
-    }
-  }
-  if ('children' in node) {
-    node.children.forEach(displayMath)
-  }
-}
-
 /** Chat grammar consumes original source; the splitter and renderer share these constructs. */
 export function remarkChatMath(this: Processor): (tree: Root, file: VFile) => void {
   const data = this.data()
@@ -275,28 +226,6 @@ export function remarkChatMath(this: Processor): (tree: Root, file: VFile) => vo
     flow: { 36: flow, 92: flow },
     text: { 36: text, 92: text }
   })
-  ;(data.fromMarkdownExtensions ??= []).push(fromMarkdown)
-  return (tree, file) => {
-    const sources = new Map<number, string>()
-    file.data.chatMathSources = sources
-    // Link labels remain ordinary Markdown even when the label contains delimiters.
-    function literalLinks(node: Nodes, inLink = false): void {
-      if (node.type === 'inlineMath' && node.position?.start.offset !== undefined) {
-        sources.set(node.position.start.offset, String(node.data?.mathSource ?? node.value))
-      }
-      if ('children' in node) {
-        for (const child of node.children) {
-          if ((inLink || node.type === 'link') && child.type === 'inlineMath') {
-            child.data = {
-              hName: 'span',
-              hChildren: [{ type: 'text', value: String(child.data?.mathSource ?? child.value) }]
-            }
-          }
-          literalLinks(child, inLink || node.type === 'link')
-        }
-      }
-    }
-    literalLinks(tree)
-    displayMath(tree)
-  }
+  ;(data.fromMarkdownExtensions ??= []).push(chatMathFromMarkdown)
+  return transformChatMath
 }

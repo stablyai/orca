@@ -7,6 +7,7 @@ import {
   type PointerEventHandler,
   type RefObject
 } from 'react'
+import { chatMathSelectionText } from '../sidebar/chat-markdown-math-selection'
 import { Clipboard, Copy, GitFork, Image as ImageIcon, SquareTerminal } from 'lucide-react'
 import {
   DropdownMenu,
@@ -355,7 +356,7 @@ function getNativeChatSelectedText(root: HTMLElement | null): string {
   if (!nodeBelongsToRoot(anchor, root) || !nodeBelongsToRoot(focus, root)) {
     return ''
   }
-  return selection.toString()
+  return chatMathSelectionText(selection, root) ?? selection.toString()
 }
 
 function nodeBelongsToRoot(node: Node | null, root: HTMLElement): boolean {

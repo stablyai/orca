@@ -7,6 +7,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as I18n from '@/i18n/i18n'
 import type * as ImageBlobPng from '@/lib/image-blob-png'
+import { NativeChatMarkdown } from './NativeChatMarkdown'
 import { CLIPBOARD_IMAGE_MAX_SOURCE_BYTES } from '../../../../shared/clipboard-image'
 import {
   emptyNativeChatContextMenuActions,
@@ -114,10 +115,12 @@ function Harness({
 
 function ImageHarness({
   enabled = true,
-  src = 'blob:full-size'
+  src = 'blob:full-size',
+  source
 }: {
   enabled?: boolean
   src?: string
+  source?: string
 }) {
   const rootRef = createRef<HTMLDivElement>()
   const { menu, onContextMenuCapture, onPointerDownCapture } = useNativeChatContextMenu({
@@ -135,7 +138,13 @@ function ImageHarness({
       <button type="button" data-native-chat-copy-image-src={src}>
         <img alt="shot" src="data:thumbnail" />
       </button>
-      <p>text</p>
+      {source ? (
+        <div data-selection-prose>
+          <NativeChatMarkdown content={source} />
+        </div>
+      ) : (
+        <p>text</p>
+      )}
       <textarea aria-label="composer" />
       {menu}
     </div>
@@ -201,6 +210,29 @@ describe('useNativeChatContextMenu', () => {
     toasts.error.mockReset()
     toasts.success.mockReset()
   })
+
+  it.each(['Before $x^2$ after.', 'Ordinary words.', '```math\nx^2\n```'])(
+    'copies authored selection through the actual menu action: %s',
+    async (source) => {
+      const writeClipboardText = vi.fn().mockResolvedValue(undefined)
+      vi.stubGlobal('api', { ui: { writeClipboardText } })
+      const view = render(<ImageHarness source={source} />)
+      const prose = view.container.querySelector('[data-selection-prose]')
+      if (!prose) {
+        throw new Error('Missing rendered source')
+      }
+      const range = document.createRange()
+      range.selectNodeContents(prose)
+      const selection = document.getSelection()
+      selection?.removeAllRanges()
+      selection?.addRange(range)
+      fireEvent.contextMenu(prose)
+      selection?.removeAllRanges()
+      expect(copyTextItem()).toBeDefined()
+      await act(async () => copyTextItem()?.onSelect?.())
+      expect(writeClipboardText).toHaveBeenCalledExactlyOnceWith(source)
+    }
+  )
 
   it('copies the right-clicked image as a PNG of its full-size source', async () => {
     pngOfText()

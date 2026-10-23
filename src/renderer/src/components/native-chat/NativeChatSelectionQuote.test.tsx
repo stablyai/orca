@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
 import { useAppStore } from '../../store'
 import type { NativeChatComposerHandle } from './native-chat-composer-types'
+import { NativeChatMarkdown } from './NativeChatMarkdown'
 import { NativeChatSelectionQuote } from './NativeChatSelectionQuote'
 import { NATIVE_CHAT_QUOTE_SOURCE_PROPS } from './native-chat-quote-selection'
 
@@ -22,14 +23,18 @@ const composer: NativeChatComposerHandle = {
   contains: () => false
 }
 
-function Chat(): React.JSX.Element {
+function Chat({ mathSource }: { mathSource?: string }): React.JSX.Element {
   const rootRef = useRef<HTMLDivElement>(null)
   return (
     <div ref={rootRef}>
       <div data-native-chat-scroll="">
         <p data-testid="user">my own prompt</p>
         <div {...NATIVE_CHAT_QUOTE_SOURCE_PROPS}>
-          <pre data-testid="first">{'Use the draft store.\n\nIt already appends.'}</pre>
+          {mathSource ? (
+            <NativeChatMarkdown data-testid="first" content={mathSource} variant="document" />
+          ) : (
+            <pre data-testid="first">{'Use the draft store.\n\nIt already appends.'}</pre>
+          )}
         </div>
         <time data-testid="time" style={{ userSelect: 'none' }}>
           10:42
@@ -183,6 +188,25 @@ describe('NativeChatSelectionQuote copy on select', () => {
 
     expect(writeClipboardText).toHaveBeenCalledTimes(1)
     expect(writeClipboardText).toHaveBeenCalledWith(window.getSelection()!.toString())
+  })
+
+  it('copies and quotes the authored formula selection through the existing actions', () => {
+    const source = 'Before $x^2$ after.'
+    render(<Chat mathSource={source} />)
+    const prose = screen.getByTestId('first')
+    fireEvent.pointerDown(prose, { button: 0 })
+    const range = document.createRange()
+    range.selectNodeContents(prose)
+    const selection = window.getSelection()
+    selection?.removeAllRanges()
+    selection?.addRange(range)
+    document.dispatchEvent(new Event('selectionchange'))
+    fireEvent.mouseUp(prose, { button: 0 })
+    settle()
+    expect(writeClipboardText).toHaveBeenCalledExactlyOnceWith(source)
+    fireEvent.click(screen.getByRole('button', { name: 'Add to chat' }))
+    expect(appendText).toHaveBeenCalledWith(`> ${source}\n\n`)
+    appendText.mockClear()
   })
 
   it('copies nothing while the setting is off', () => {

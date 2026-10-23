@@ -26,16 +26,19 @@ export function rehypeChatMath(): (tree: Root, file: VFile) => void {
       ) {
         return
       }
+      const authored = file.data.chatMathSources?.get(element.position?.start.offset ?? -1)
       const source =
-        file.data.chatMathSources?.get(element.position?.start.offset ?? -1) ??
+        authored?.source ??
         (mathElement?.children ?? [])
           .filter((child) => child.type === 'text')
           .map((child) => child.value)
           .join('')
       const fragment: Root = { type: 'root', children: [element] }
       const messagesBefore = file.messages.length
-      typeset(fragment, file)
-      const invalid = file.messages.length > messagesBefore
+      if (authored?.complete !== false) {
+        typeset(fragment, file)
+      }
+      const invalid = authored?.complete === false || file.messages.length > messagesBefore
       const children = invalid ? [{ type: 'text' as const, value: source }] : fragment.children
       const display = classes.includes('math-display') || element.tagName === 'pre'
       const content = children.filter(

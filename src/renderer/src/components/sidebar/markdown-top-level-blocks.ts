@@ -10,6 +10,7 @@ import type { Nodes } from 'mdast'
 import remarkGfm from 'remark-gfm'
 import remarkParse from 'remark-parse'
 import { remarkChatMath } from './chat-markdown-math'
+import { chatMathCodeFences } from './chat-markdown-math-nodes'
 import { unified } from 'unified'
 
 export type MarkdownBlock = {
@@ -18,7 +19,9 @@ export type MarkdownBlock = {
   /** The source line it starts on, from 1; it never moves either. */
   line: number
   text: string
-  unclosedMath?: boolean
+  literalMath?: boolean
+  /** Parser-owned end, excluding separators held for the next block. */
+  end?: number
 }
 
 export type MarkdownBlockSplit = {
@@ -51,18 +54,19 @@ function reachesAcrossBlocks(node: Nodes): boolean {
   return 'children' in node && node.children.some(reachesAcrossBlocks)
 }
 
-function hasUnclosedMath(node: Nodes | undefined): boolean {
+function hasLiteralMath(node: Nodes | undefined): boolean {
   if (!node) {
     return false
   }
   return (
-    (node.type === 'inlineMath' && node.data?.mathComplete === false) ||
-    ('children' in node && node.children.some(hasUnclosedMath))
+    node.data?.mathComplete === false ||
+    node.data?.mathLiteral === true ||
+    ('children' in node && node.children.some(hasLiteralMath))
   )
 }
 
-function wholeDocument(source: string, unclosedMath = false): MarkdownBlockSplit {
-  return { source, blocks: [{ start: 0, line: 1, text: source, unclosedMath }], whole: true }
+function wholeDocument(source: string, literalMath = false): MarkdownBlockSplit {
+  return { source, blocks: [{ start: 0, line: 1, text: source, literalMath }], whole: true }
 }
 
 export function splitMarkdownTopLevelBlocks(
@@ -80,8 +84,11 @@ export function splitMarkdownTopLevelBlocks(
   const baseLine = reparsed?.line ?? 1
   const tail = source.slice(base)
   const tree = (math ? mathBlockParser : blockParser).parse(tail)
+  if (math) {
+    chatMathCodeFences(tree, tail)
+  }
   if (reachesAcrossBlocks(tree)) {
-    return wholeDocument(source, math && hasUnclosedMath(tree))
+    return wholeDocument(source, math && hasLiteralMath(tree))
   }
   // Each block runs to the next one's start, so the blank lines between stay in the source.
   const points = tree.children.map((child) =>
@@ -93,7 +100,12 @@ export function splitMarkdownTopLevelBlocks(
     start: base + start,
     line: baseLine + (index === 0 ? 0 : (points[index]?.line ?? 1) - 1),
     text: tail.slice(start, starts[index + 1]),
-    ...(math ? { unclosedMath: hasUnclosedMath(tree.children[index]) } : {})
+    ...(math
+      ? {
+          literalMath: hasLiteralMath(tree.children[index]),
+          end: base + (tree.children[index]?.position?.end.offset ?? tail.length)
+        }
+      : {})
   }))
   return { source, blocks: [...settled, ...blocks], whole: false }
 }

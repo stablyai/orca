@@ -33,6 +33,11 @@ export function chatMathSelectionText(selection: Selection, root: Element): stri
   fragment.querySelectorAll<HTMLElement>('[data-math-source]').forEach((element) => {
     element.replaceWith(element.dataset.mathSource ?? '')
   })
+  fragment
+    .querySelectorAll(
+      '.select-none, .sr-only, [aria-hidden="true"], button, input, script, style, svg'
+    )
+    .forEach((element) => element.remove())
   fragment.querySelectorAll('br').forEach((element) => element.replaceWith('\n'))
   fragment.querySelectorAll('p,div,blockquote,pre,li,tr,h1,h2,h3,h4,h5,h6').forEach((element) => {
     element.after(element.tagName === 'P' ? '\n\n' : '\n')
@@ -41,6 +46,9 @@ export function chatMathSelectionText(selection: Selection, root: Element): stri
 }
 
 export function copyChatMathSelection(event: ClipboardEvent<HTMLDivElement>): void {
+  if (event.defaultPrevented) {
+    return
+  }
   const selection = event.currentTarget.ownerDocument.getSelection()
   const text = selection && chatMathSelectionText(selection, event.currentTarget)
   if (text === null || text === undefined) {

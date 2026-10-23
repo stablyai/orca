@@ -3,24 +3,50 @@ import { cleanup, fireEvent, render } from '@testing-library/react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Processor } from 'unified'
+import type { Construct, Effects } from 'micromark-util-types'
 import type remarkParsePlugin from 'remark-parse'
-import {
-  readNativeChatQuotableSelection,
-  readNativeChatTranscriptSelection
-} from '../native-chat/native-chat-quote-selection'
 import CommentMarkdown from './CommentMarkdown'
 import { splitMarkdownTopLevelBlocks, type MarkdownBlockSplit } from './markdown-top-level-blocks'
 import { NativeChatMarkdown } from '../native-chat/NativeChatMarkdown'
 
-const parsing = vi.hoisted(() => ({ characters: 0, calls: 0 }))
+const parsing = vi.hoisted(() => ({ characters: 0, calls: 0, operations: 0 }))
 vi.mock('remark-parse', async (original) => {
   const { default: remarkParse } = await original<{ default: typeof remarkParsePlugin }>()
   return {
     default: function (this: Processor) {
       remarkParse.call(this)
+      const measured = new WeakSet<Effects>()
+      const wrapped = new WeakSet<Construct>()
+      const wrap = (construct: Construct): void => {
+        if (wrapped.has(construct) || !construct.name?.startsWith('chatMath')) {
+          return
+        }
+        wrapped.add(construct)
+        const tokenize = construct.tokenize
+        construct.tokenize = function (effects, ok, nok) {
+          if (!measured.has(effects)) {
+            measured.add(effects)
+            const consume = effects.consume
+            effects.consume = (code) => {
+              parsing.operations++
+              consume(code)
+            }
+          }
+          return tokenize.call(this, effects, ok, nok)
+        }
+      }
       const parser = this.parser
       if (parser) {
         this.parser = (source, file) => {
+          for (const extension of this.data().micromarkExtensions ?? []) {
+            for (const constructs of [extension.flow, extension.text]) {
+              for (const value of Object.values(constructs ?? {})) {
+                for (const construct of Array.isArray(value) ? value : value ? [value] : []) {
+                  wrap(construct)
+                }
+              }
+            }
+          }
           parsing.characters += source.length
           parsing.calls++
           return parser(source, file)
@@ -253,18 +279,149 @@ b\]`,
       '$$x',
       '$$\nx',
       String.raw`\(x`,
+      String.raw`Before \[x`,
       '$x'
     ]) {
       expect(documentOf(source).textContent).toBe(
-        source.replaceAll('\\[', '[').replaceAll('\\]', ']')
+        source.replaceAll('\\[', '[').replaceAll('\\]', ']').replaceAll('\\(', '(')
       )
       expect(documentOf(source).querySelector('.katex')).toBeNull()
+      const growing = render(<CommentMarkdown content={source} math growing variant="document" />)
+      expect(growing.container.textContent).toBe(documentOf(source).textContent)
+      growing.unmount()
     }
     const invalid = documentOf(String.raw`$\notACommand{x}$`)
     expect(invalid.textContent).toBe(String.raw`$\notACommand{x}$`)
     expect(invalid.querySelector('.katex-error')).toBeNull()
     expect(documentOf('```math\nx^2\n```').querySelector('.katex')).not.toBeNull()
   })
+
+  it.each(['> ', '- ', '> - '])('ends unfinished math before leaving %s containers', (prefix) => {
+    for (const opener of ['$$', String.raw`\[`]) {
+      for (const gap of ['\n', '\n\n']) {
+        const source = `${prefix}${opener}x${gap}outside\n\n$$y$$`
+        const finished = render(<CommentMarkdown content={source} math variant="document" />)
+        const expected = finished.container
+        expect(
+          expected.querySelector(prefix.includes('-') ? 'li' : 'blockquote')?.textContent?.trim()
+        ).toBe(`${opener}x`)
+        expect(
+          Array.from(expected.querySelectorAll('p')).some((p) => p.textContent === 'outside')
+        ).toBe(true)
+        expect(annotations(expected)).toEqual(['y'])
+        const streamed = render(<CommentMarkdown content="" math growing variant="document" />)
+        let split: MarkdownBlockSplit | null = null
+        for (let end = 1; end <= source.length; end++) {
+          const content = source.slice(0, end)
+          split = splitMarkdownTopLevelBlocks(content, split, true)
+          expect(split.blocks.map((block) => block.text).join('')).toBe(content)
+          streamed.rerender(<CommentMarkdown content={content} math growing variant="document" />)
+        }
+        streamed.rerender(<CommentMarkdown content={source} math variant="document" />)
+        expect(
+          Array.from(streamed.container.firstElementChild?.children ?? [], (node) => node.outerHTML)
+        ).toEqual(Array.from(expected.firstElementChild?.children ?? [], (node) => node.outerHTML))
+        expect(split?.blocks.find((block) => block.text.startsWith('outside'))?.line).toBe(
+          gap === '\n' ? 2 : 3
+        )
+        streamed.unmount()
+        finished.unmount()
+      }
+    }
+  })
+
+  it.each([
+    ['[Donate $5](https://example.com)', 'a', 'Donate $5'],
+    ['![cost $5](image.png)', 'img', null],
+    ['Price $5 and **bold** [link](https://example.com).', 'strong', 'bold'],
+    [String.raw`[text \(x](https://example.com)`, 'a', 'text (x'],
+    [String.raw`Before \[x and **bold** [link](https://example.com).`, 'strong', 'bold']
+  ])('leaves ordinary Markdown actionable after unmatched math: %s', (source, selector, text) => {
+    const streamed = render(<CommentMarkdown content="" math growing variant="document" />)
+    for (let end = 1; end <= source.length; end++) {
+      streamed.rerender(
+        <CommentMarkdown content={source.slice(0, end)} math growing variant="document" />
+      )
+    }
+    const expected = documentOf(source)
+    for (const node of [expected, streamed.container]) {
+      const element = node.querySelector(selector)
+      expect(element).not.toBeNull()
+      if (text) {
+        expect(element?.textContent).toBe(text)
+      }
+      expect(node.querySelector('.katex')).toBeNull()
+      if (selector !== 'img') {
+        expect(node.querySelector('a')?.getAttribute('href')).toBe('https://example.com')
+      } else {
+        expect(element?.getAttribute('src')).toBe('image.png')
+      }
+    }
+  })
+
+  it.each(['```', '~~~', '````', '~~~~'])(
+    'waits for authored %s math fence closure in containers',
+    (marker) => {
+      for (const prefix of ['', '> ', '- ']) {
+        const continuation = prefix === '- ' ? '  ' : prefix
+        const open = `${prefix}${marker}math\n${continuation}x^2\n${continuation}${marker.slice(0, -1)}`
+        const streamed = render(<CommentMarkdown content="" math growing variant="document" />)
+        let split: MarkdownBlockSplit | null = null
+        for (let end = 1; end <= open.length; end++) {
+          const content = open.slice(0, end)
+          split = splitMarkdownTopLevelBlocks(content, split, true)
+          streamed.rerender(<CommentMarkdown content={content} math growing variant="document" />)
+          expect(streamed.container.querySelector('.katex')).toBeNull()
+        }
+        expect(split?.blocks.at(-1)?.literalMath).toBe(true)
+        const authored = open.slice(prefix.length)
+        expect(streamed.container.textContent?.trim()).toBe(authored)
+        expect(documentOf(open).textContent?.trim()).toBe(authored)
+        const complete = open + marker.at(-1)
+        split = splitMarkdownTopLevelBlocks(complete, split, true)
+        expect(split.blocks.at(-1)?.literalMath).toBe(false)
+        streamed.rerender(<CommentMarkdown content={complete} math growing variant="document" />)
+        expect(annotations(streamed.container).map((text) => text.trim())).toEqual(['x^2'])
+        const finished = render(<CommentMarkdown content={complete} math variant="document" />)
+        expect(streamed.container.innerHTML).toBe(finished.container.innerHTML)
+        finished.unmount()
+        expect(
+          streamed.container.querySelector('[data-math-source]')?.getAttribute('data-math-source')
+        ).toBe(complete.slice(prefix.length))
+        const invalid = complete.replace('x^2', String.raw`\notACommand{x}`)
+        expect(documentOf(invalid).textContent?.trim()).toBe(invalid.slice(prefix.length))
+        streamed.unmount()
+      }
+    }
+  )
+
+  it.each(['', 'Prose '])(
+    'consumes malformed closing runs linearly on growing renders (%s)',
+    (prefix) => {
+      function work(size: number): number {
+        const streamed = render(<CommentMarkdown content="" math growing />)
+        const open = `${prefix}${'$'.repeat(size)}\nx`
+        parsing.operations = 0
+        streamed.rerender(<CommentMarkdown content={open} math growing />)
+        streamed.rerender(
+          <CommentMarkdown content={`${open}${'$'.repeat(size - 1)}\n`} math growing />
+        )
+        const operations = parsing.operations
+        expect(streamed.container.querySelector('.katex')).toBeNull()
+        streamed.rerender(<CommentMarkdown content={`${open}${'$'.repeat(size)}`} math growing />)
+        expect(annotations(streamed.container)).toEqual(['x'])
+        streamed.unmount()
+        return operations
+      }
+      const n = work(20)
+      const tenN = work(200)
+      process.stdout.write(
+        `Tokenizer consumes ${JSON.stringify(prefix)}, N=20: ${n}; N=200: ${tenN}\n`
+      )
+      expect(n).toBeGreaterThan(20)
+      expect(tenN).toBeLessThan(n * 12)
+    }
+  )
 
   it('copies selected formulas as source once and keeps surrounding prose', () => {
     const source = 'Before $x^2$ after.'
@@ -286,8 +443,6 @@ b\]`,
     const setData = vi.fn()
     fireEvent.copy(paragraph, { clipboardData: { setData } })
     expect(setData).toHaveBeenCalledWith('text/plain', source)
-    expect(readNativeChatQuotableSelection(rendered.container)?.text).toBe(source)
-    expect(readNativeChatTranscriptSelection(rendered.container)).toBe(source)
     const glyph = paragraph.querySelector('.katex-html')
     if (!glyph) {
       throw new Error('Missing typeset formula')
@@ -298,7 +453,6 @@ b\]`,
     setData.mockClear()
     fireEvent.copy(glyph, { clipboardData: { setData } })
     expect(setData).toHaveBeenCalledWith('text/plain', '$x^2$')
-    expect(readNativeChatQuotableSelection(rendered.container)?.text).toBe('$x^2$')
     selection?.removeAllRanges()
   })
 
