@@ -7,8 +7,9 @@
 //
 // The last projection is kept after the session's provider child is evicted: an idle session is
 // still idle without a process, and a renderer that reloads must not lose every settled row until
-// each chat is reopened. Restart is the one boundary that forgets, and restoring readable sessions
-// republishes them.
+// each chat is reopened. Restart is the one boundary that forgets: the restore publishes each
+// restored chat's row from its record and its journal's saved open turn (`publishAtRest`), and the
+// chat's first open replaces that with the journal's own projection.
 
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type {
@@ -27,10 +28,13 @@ import {
   type StructuredAgentSessionStatusFeedDeps
 } from './structured-agent-session-status-feed-deps'
 import {
+  atRestStructuredStatusSummary,
   renamedStructuredStatusSummary,
-  structuredAgentSessionStatusSummary
+  structuredAgentSessionStatusSummary,
+  withoutLiveExecution,
+  type StructuredAgentSessionAtRest
 } from './structured-agent-session-status-summary'
-import { structuredStatusChildWork } from './structured-agent-session-status-child-work'
+import { structuredStatusSummaryChildWork } from './structured-agent-session-status-child-work'
 import {
   StructuredAgentSessionJournalProjections,
   type StructuredAgentSessionJournalProjection
@@ -141,13 +145,7 @@ export class StructuredAgentSessionStatusFeed {
     if (!previous) {
       return
     }
-    const {
-      hostExecutionOwned: _hostExecutionOwned,
-      hostExecutionPhase: _hostExecutionPhase,
-      stopping: _stopping,
-      restartResume: _restartResume,
-      ...retained
-    } = previous
+    const retained = withoutLiveExecution(previous)
     this.published.set(sessionId, {
       summary: retained,
       firstInputSubmissionKey: publication?.firstInputSubmissionKey ?? null
@@ -191,6 +189,23 @@ export class StructuredAgentSessionStatusFeed {
     const session = this.deps.sessions.get(sessionId)
     const source = journal ?? session?.journal
     return source ? this.projections.read(source, this.deps.getRecord(sessionId), session) : null
+  }
+
+  /** A restored chat this host lists but has not opened, published like any row: to subscribers,
+   *  the sink and the status observer, as a re-projection of what the host already knew. */
+  publishAtRest(sessionId: string, rest: StructuredAgentSessionAtRest): void {
+    const record = this.deps.getRecord(sessionId)
+    if (record && !this.deps.sessions.has(sessionId)) {
+      const summary = atRestStructuredStatusSummary(record, rest, this.deps)
+      this.published.set(sessionId, { summary, firstInputSubmissionKey: null })
+      this.sink(summary, record.location)
+      this.broadcast({ type: 'status', session: summary })
+      try {
+        this.deps.onStatusChanged?.(summary, { replay: true, firstInputSubmissionKey: null })
+      } catch (error) {
+        this.logFailure('status-observer', 'status observer failed', sessionId, error)
+      }
+    }
   }
 
   /** Re-projects one session after its journal changed; equal projections are not re-sent. */
@@ -268,25 +283,11 @@ export class StructuredAgentSessionStatusFeed {
     this.admitChildWork(sessionId, session, [{ type: 'turn-started', observedAt: this.deps.now() }])
   }
 
-  /** The summary's child fields, from the records the store holds for the session. Usage is
-   *  dropped on purpose: a `task_progress` tick would otherwise fail the equality check and
-   *  re-broadcast a full summary to every remote subscriber for a number no session list renders.
-   *  Tokens stay live on the background-task channel. */
-  private childWorkFields(
+  /** The summary's child fields, from the records the store holds for the session. */
+  private childWorkFields = (
     sessionId: string,
     provider: StatusFeedSession['params']['provider']
-  ): Pick<AgentSessionStatusSummary, 'children' | 'backgroundTasks'> {
-    const { children, backgroundTasks } = structuredStatusChildWork(
-      this.readChildWork(sessionId),
-      provider
-    )
-    return {
-      ...(backgroundTasks && backgroundTasks.length > 0
-        ? { backgroundTasks: backgroundTasks.map(({ totalTokens: _tokens, ...task }) => task) }
-        : {}),
-      ...(children ? { children } : {})
-    }
-  }
+  ) => structuredStatusSummaryChildWork(this.readChildWork(sessionId), provider)
 
   /** Child-work evidence for a session this feed publishes; a failing sink costs nothing else.
    *  The summary then re-reads the records, which is also what re-folds the parent's row. */

@@ -21,9 +21,10 @@ import {
   HOST_TEST_SESSION as SESSION
 } from './structured-agent-session-host-test-data'
 
-// Nothing here can continue a chat a newer Orca saved, so it is not offered after a restart and
-// nothing is counted. Its offer is kept: the offers file is shared by every Orca on the host, and
-// the newer one can still act on it. Nothing here writes to that file for such a chat.
+// Nothing here can continue a chat a newer Orca saved, so nothing is counted for it. Its offer is
+// kept: the offers file is shared by every Orca on the host, and the newer one can still act on it.
+// Nothing here writes to that file for such a chat. Listing reads no journal, so a chat whose rows a
+// newer Orca wrote is offered until something opens it; a whole newer database is known up front.
 
 afterEach(() => vi.restoreAllMocks())
 
@@ -61,13 +62,17 @@ function offersFile(root: string): Promise<Buffer> {
 async function keptWithoutAWord(
   host: Awaited<ReturnType<typeof interruptedRestart>>['host'],
   root: string,
-  acquire: ReturnType<typeof vi.fn>
+  acquire: ReturnType<typeof vi.fn>,
+  offeredUntilOpened = false
 ) {
   const before = await offersFile(root)
-  expect(await host.restartResume.list()).toEqual([])
+  expect((await host.restartResume.list()).map((offer) => offer.sessionId)).toEqual(
+    offeredUntilOpened ? [SESSION] : []
+  )
   expect(await offersFile(root)).toEqual(before)
   expect((await host.restartResume.continueAfterRestart([SESSION], 'modal')).continued).toEqual([])
   expect(acquire).not.toHaveBeenCalled()
+  expect(await host.restartResume.list()).toEqual([])
   expect(await host.restartResume.listFailures()).toEqual([])
   expect(await offersFile(root)).toEqual(before)
   const capsule = new AgentSessionRecoveryCapsule(root)
@@ -78,7 +83,7 @@ async function keptWithoutAWord(
 it('keeps the offer of a chat whose journal a newer Orca wrote, and offers, runs and counts nothing', async () => {
   const { host, root, acquire } = await interruptedRestart()
   newerOrcaRow(root)
-  await keptWithoutAWord(host, root, acquire)
+  await keptWithoutAWord(host, root, acquire, true)
 })
 
 // A newer Orca's whole database: every chat in it is a newer Orca's, even one whose tables changed.
@@ -187,8 +192,10 @@ it.each([
     const before = await newerEntry()
 
     if (listFirst) {
+      // Listing reads no journal, so it cannot tell the newer Orca's chat yet; dismissing does.
       expect((await host.restartResume.list()).map((candidate) => candidate.sessionId)).toEqual([
-        SESSION
+        SESSION,
+        NEWER
       ])
     }
     await host.restartResume.dismiss(undefined, audience)

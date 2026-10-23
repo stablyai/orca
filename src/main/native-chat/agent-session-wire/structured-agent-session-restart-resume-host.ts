@@ -119,7 +119,8 @@ export function createStructuredAgentSessionRestartResume(
     audience?: StructuredAgentSessionRestartAudience
   ): Promise<StructuredAgentSessionResumeCandidate[]> => {
     const markers = await readMarkers()
-    await revealMarkers(markers)
+    // Listing opens no chat: the record and the marker are the offer. A send that moved a chat on
+    // started its agent, which withdrew the offer; an open chat is also read against its journal.
     // A live chat remains an offer. The user may have opened it to inspect the context and still
     // explicitly choose whether Orca should ask the agent to continue.
     const { candidates, superseded } = derive(markers, 'may-be-held')

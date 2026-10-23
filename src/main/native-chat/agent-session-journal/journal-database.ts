@@ -7,6 +7,7 @@
 import Database from '../../sqlite/sync-database'
 import { hardenSqliteDatabaseFiles } from '../../sqlite/harden-database-files'
 import {
+  addJournalOpenTurnColumns,
   createAgentSessionRecordTablesSql,
   createJournalTablesSql,
   JOURNAL_DB_OLDEST_RELEASED_VERSION,
@@ -125,6 +126,7 @@ function migrateJournalSchema(db: Database.Database, stored: number): void {
       db.exec(createJournalTablesSql())
     }
     db.exec(createAgentSessionRecordTablesSql())
+    addJournalOpenTurnColumns(db)
     db.pragma(`user_version = ${JOURNAL_DB_SCHEMA_VERSION}`)
   })
 }

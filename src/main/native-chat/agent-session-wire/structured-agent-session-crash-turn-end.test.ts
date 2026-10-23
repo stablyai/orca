@@ -209,6 +209,27 @@ afterEach(async () => {
 })
 
 describe('a turn a crash cut short mid-tool', () => {
+  // The row is read from the journal's saved open turn, so the sidebar says Interrupted at once;
+  // the chat's history is read, and its turn settled, only when something opens it.
+  it('reads Interrupted before anything opens the chat, and the first open settles the turn', async () => {
+    openHost({ probeOwner: async () => ({ outcome: 'pid-absent' }) })
+
+    await host.restoreReadableSessions([SESSION])
+
+    expect(host.hasSession(SESSION)).toBe(false)
+    expect(host.readStatusSummary(SESSION)).toMatchObject({
+      status: 'idle',
+      turnOutcome: 'interruption',
+      latestPrompt: ''
+    })
+    expect(await settledTurn()).toMatchObject(INTERRUPTED_TURN)
+    expect(host.readStatusSummary(SESSION)).toMatchObject({
+      status: 'idle',
+      turnOutcome: 'interruption',
+      latestPrompt: 'run the loop'
+    })
+  })
+
   it('ends at the last renewal, not at the tool call the provider last reported', async () => {
     openHost({ probeOwner: async () => ({ outcome: 'pid-absent' }) })
 

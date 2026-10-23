@@ -19,6 +19,7 @@ import { StructuredAgentSessionSendSettlement } from './structured-agent-session
 import { heldStructuredAgentSessionCurrentWork } from './structured-agent-session-host-current-work'
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
 import type { StructuredAgentSessionStatusSubscriber } from './structured-agent-session-status-feed'
+import type { StructuredAgentSessionAtRest } from './structured-agent-session-status-summary'
 import type { CapturedChildWorkStops } from './structured-agent-session-status-ownership'
 import { createStructuredAgentSessionHostStatusFeed } from './structured-agent-session-host-status-feed'
 import type { StructuredAgentSessionChildWorkProducer } from './structured-agent-session-subagent-rows'
@@ -183,6 +184,10 @@ export class StructuredAgentSessionClientDelivery {
     const journal = this.sessions.get(sessionId)?.journal
     return journal ? this.currentWork(sessionId, journal) : null
   }
+
+  /** A restored chat this host has not opened: its row from the record and journal rest facts. */
+  publishAtRest = (sessionId: string, rest: StructuredAgentSessionAtRest): void =>
+    this.statusFeed.publishAtRest(sessionId, rest)
 
   publishRestored = (sessionId: string): void => {
     this.statusFeed.publish(sessionId, undefined, { replay: true })

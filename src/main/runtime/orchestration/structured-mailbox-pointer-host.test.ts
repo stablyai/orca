@@ -74,6 +74,7 @@ describe('structured mailbox pointer host', () => {
     // wakes it mid-turn.
     const items = [runningTurn(), ...transcript(500)]
     hostRef.current = {
+      hasSession: () => false,
       journalSnapshot: () => ({ items, submissions: [] }),
       currentWork: () => null
     }
@@ -87,6 +88,7 @@ describe('structured mailbox pointer host', () => {
     const submissions = [{ clientMessageId: 'op1', dispatchState: 'unknown' }]
     hostRef.current = {
       deps: { store: { getRecord: () => null } },
+      hasSession: () => false,
       journalSnapshot: () => ({ items: [], submissions }),
       currentWork: () => null
     }
@@ -116,6 +118,7 @@ describe('structured mailbox pointer host', () => {
           getRecord: () => ({ providerContextBoundary: { operationId: 'clear-1', afterFence: 2 } })
         }
       },
+      hasSession: () => false,
       journalSnapshot: () => ({
         items,
         submissions: [pointerSubmission('earlier', 2, 6), current]
@@ -137,6 +140,7 @@ describe('structured mailbox pointer host', () => {
           getRecord: () => ({ providerContextBoundary: { operationId: 'clear-1', afterFence: 2 } })
         }
       },
+      hasSession: () => false,
       journalSnapshot: () => ({
         items: [],
         submissions: [pointerSubmission('earlier', 2, 2), current]
@@ -154,6 +158,7 @@ describe('structured mailbox pointer host', () => {
     // Null retains the pointer; an empty answer would send into a session this runtime cannot see.
     expect(await createStructuredMailboxPointerHost().readSessionFacts('s1')).toBeNull()
     hostRef.current = {
+      hasSession: () => false,
       journalSnapshot: () => {
         throw new Error('agent_session_ownership_unknown')
       }

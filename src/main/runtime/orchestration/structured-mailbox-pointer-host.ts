@@ -6,6 +6,7 @@
  * the send and reports what the host said.
  */
 
+import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
 import { AGENT_SESSION_NOT_ATTACHED } from '../../native-chat/agent-session-wire/structured-agent-session-mutation-admission'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type {
@@ -72,14 +73,28 @@ async function readPointerSessionFacts(
   }
 }
 
+// Mail opens chats no person is looking at, and after a restart many may owe mail at once: those
+// opens take turns, one chat's history at a time, so mail never reads every owed chat together.
+let mailOpens: Promise<unknown> = Promise.resolve()
+
+function openForMailInTurn<T>(open: () => Promise<T>): Promise<T> {
+  const turn = mailOpens.then(async () => {
+    await yieldToEventLoop()
+    return open()
+  })
+  mailOpens = turn.catch(() => undefined)
+  return turn
+}
+
 async function readSessionJournal(sessionId: string): Promise<AgentJournalSnapshot | null> {
   const host = getStructuredAgentSessionHost()
   if (!host) {
     return null
   }
   try {
-    // Opens a conversation the idle sweep closed; that starts no agent.
-    return await host.journalSnapshot(sessionId)
+    // Opens a conversation the idle sweep closed, or a restart never opened; that starts no agent.
+    const read = () => host.journalSnapshot(sessionId)
+    return await (host.hasSession(sessionId) ? read() : openForMailInTurn(read))
   } catch (error) {
     // Not attached is a retain reason, not a failure; anything else is still unreadable.
     if ((error as Error)?.message !== AGENT_SESSION_NOT_ATTACHED.code) {

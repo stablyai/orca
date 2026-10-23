@@ -5,16 +5,36 @@
 // always named: `SELECT *` is uncacheable and can drop a column.
 
 import type Database from '../../sqlite/sync-database'
+import { isRootAgentJournalItem } from '../../../shared/agent-session-journal-producer'
+import {
+  readAgentJournalTurn,
+  readAgentJournalTurnOutcome
+} from '../../../shared/agent-session-turn-record'
 import { parseJournalRow, serializeJournalRow, type JournalRow } from './journal-row-schema'
 import { AgentSessionJournalError } from './journal-write-guards'
 
 export type JournalStoredRow = { epoch: string; seq: number; ts: number; rowJson: string }
 
 const SELECT_EPOCH = 'SELECT epoch FROM journal_sessions WHERE session_id = ?'
+// A new epoch holds no turn until its own rows open one.
 const PUBLISH_SESSION_EPOCH = `INSERT INTO journal_sessions (session_id, workspace_id, epoch)
 VALUES (?, ?, ?)
 ON CONFLICT(session_id) DO UPDATE SET
-  workspace_id = excluded.workspace_id, epoch = excluded.epoch`
+  workspace_id = excluded.workspace_id, epoch = excluded.epoch,
+  open_turn_id = NULL, open_turn_since = NULL`
+// A revision of the turn already open keeps when it started.
+const OPEN_TURN = `UPDATE journal_sessions SET
+  open_turn_since = CASE WHEN open_turn_id IS ? THEN open_turn_since ELSE ? END,
+  open_turn_id = ?
+WHERE session_id = ?`
+const FINISH_TURN = `UPDATE journal_sessions SET open_turn_id = NULL, open_turn_since = NULL
+WHERE session_id = ? AND open_turn_id = ?`
+const SELECT_REST_FACTS = `SELECT s.open_turn_id AS open_turn_id, s.open_turn_since AS open_turn_since,
+  r.seq AS last_seq, r.ts AS last_ts
+FROM journal_sessions s
+LEFT JOIN journal_rows r ON r.session_id = s.session_id AND r.epoch = s.epoch AND r.seq = (
+  SELECT MAX(seq) FROM journal_rows WHERE session_id = s.session_id AND epoch = s.epoch)
+WHERE s.session_id = ?`
 const INSERT_ROW =
   'INSERT INTO journal_rows (session_id, epoch, seq, ts, row_json) VALUES (?, ?, ?, ?, ?)'
 const SELECT_ROWS_AFTER = `SELECT seq, ts, row_json FROM journal_rows
@@ -27,7 +47,32 @@ export function readJournalSessionEpoch(db: Database.Database, sessionId: string
   return typeof epoch === 'string' ? epoch : null
 }
 
-/** Points the chat at `epoch`. Only an epoch change writes this row. */
+/** What a restart reads of a chat without reading its history: its open root turn, and its newest
+ *  row's place and save time. Two primary-key lookups. Null when the chat has no journal. */
+export type JournalRestFacts = {
+  openTurn: { itemId: string; since: number } | null
+  lastSequence: number
+  lastSavedAt: number
+}
+
+export function readJournalRestFacts(
+  db: Database.Database,
+  sessionId: string
+): JournalRestFacts | null {
+  const row = db.prepare(SELECT_REST_FACTS).get(sessionId)
+  if (!row) {
+    return null
+  }
+  const { open_turn_id: itemId, open_turn_since: since, last_seq: seq, last_ts: ts } = row
+  return {
+    openTurn:
+      typeof itemId === 'string' ? { itemId, since: typeof since === 'number' ? since : 0 } : null,
+    lastSequence: typeof seq === 'number' ? seq : 0,
+    lastSavedAt: typeof ts === 'number' ? ts : 0
+  }
+}
+
+/** Points the chat at `epoch`, with no turn open. Only an epoch change writes this row. */
 export function publishJournalSessionEpoch(
   db: Database.Database,
   identity: { sessionId: string; workspaceId: string },
@@ -54,7 +99,33 @@ export function insertJournalRow(
   }
   // The table timestamp records the save; the JSON timestamp can remain pinned to item start.
   db.prepare(INSERT_ROW).run(sessionId, row.epoch, row.seq, savedAt, rowJson)
+  recordJournalOpenTurn(db, sessionId, row)
   return Buffer.byteLength(rowJson, 'utf8')
+}
+
+/** The chat's open root turn follows the turn records this row writes, in the row's own
+ *  transaction, so it can never disagree with the rows. A running record opens its turn; only a
+ *  finish the provider reported closes it. One a stop, crash or quit cut short stays open, which is
+ *  what a restart reads as interrupted. Rows that write no turn record cost nothing here. */
+function recordJournalOpenTurn(db: Database.Database, sessionId: string, row: JournalRow): void {
+  const writes =
+    row.kind === 'item'
+      ? [row]
+      : row.kind === 'lifecycle-batch'
+        ? row.mutations.flatMap((mutation) => (mutation.kind === 'item' ? [mutation] : []))
+        : []
+  for (const write of writes) {
+    const turn = isRootAgentJournalItem(write) ? readAgentJournalTurn(write.body) : null
+    if (turn?.state === 'running') {
+      const since = turn.startedAt ?? turn.requestedAt ?? row.ts
+      db.prepare(OPEN_TURN).run(write.itemId, since, write.itemId, sessionId)
+    } else if (
+      turn?.state === 'completed' &&
+      readAgentJournalTurnOutcome(turn) !== 'cancellation'
+    ) {
+      db.prepare(FINISH_TURN).run(sessionId, write.itemId)
+    }
+  }
 }
 
 // Why pages, not `.iterate()`: a lazily consumed cursor pins a read snapshot for as long as the

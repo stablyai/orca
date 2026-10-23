@@ -118,6 +118,22 @@ async function runningTurn(): Promise<AgentSessionStatusEvent[]> {
   return statuses
 }
 
+/** The next Orca over the files a quit left: the one that reads them, since startup opens none. */
+function relaunch(): void {
+  const { store, root } = hostTestState()
+  host = new StructuredAgentSessionHost({
+    agents: NO_STRUCTURED_AGENTS,
+    logger: createStructuredAgentSessionLogger(),
+    store,
+    adapter: adapter(),
+    journalDatabase: openTestJournalHostDatabase(root),
+    claimKeyId: 'key-1',
+    mintSpawnToken: () => 'spawn-b',
+    now: () => HOST_TEST_NOW
+  })
+  replaceHostTestState({ store, host })
+}
+
 /** What the settle wrote, read back from the journal the next reader opens. */
 async function settledTurn() {
   await host.restoreReadableSessions([SESSION])
@@ -256,6 +272,7 @@ describe('a turn cut short by closing its provider', () => {
     const statuses = await runningTurn()
 
     await host.flushAllStreamedEvents({ trigger: 'quit' })
+    relaunch()
 
     expect(statuses.findLast((event) => event.type === 'status')).toMatchObject({
       session: { status: 'idle', turnOutcome: 'interruption' }
@@ -318,6 +335,7 @@ describe('a turn cut short by closing its provider', () => {
     await runningTurn()
 
     await host.flushAllStreamedEvents({ trigger: 'quit' })
+    relaunch()
 
     const { turn, notices } = await settledTurn()
     expect(turn).toMatchObject({ state: 'interrupted' })

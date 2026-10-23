@@ -8,7 +8,10 @@
 
 import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionBackgroundTask } from '../../../shared/agent-session-wire'
+import type {
+  AgentSessionBackgroundTask,
+  AgentSessionStatusSummary
+} from '../../../shared/agent-session-wire'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import { agentChildWorkViewsEqual } from '../../../shared/agent-status-child-work-view-wire'
 import { structuredChildWorkLegacyTasks } from '../../../shared/structured-agent-session-child-work-legacy'
@@ -43,6 +46,23 @@ export function structuredStatusChildWork(
   // death condition in `structured-agent-session-child-work-legacy`.
   const { tasks } = structuredChildWorkLegacyTasks(children, provider)
   return { children, ...(tasks ? { backgroundTasks: tasks } : {}) }
+}
+
+/** The summary's child fields as published. Usage is dropped on purpose: a `task_progress` tick
+ *  would otherwise fail the equality check and re-broadcast a full summary to every remote
+ *  subscriber for a number no session list renders. Tokens stay live on the background-task
+ *  channel. */
+export function structuredStatusSummaryChildWork(
+  views: readonly AgentChildWorkView[] | undefined,
+  provider: StructuredAgentId
+): Pick<AgentSessionStatusSummary, 'children' | 'backgroundTasks'> {
+  const { children, backgroundTasks } = structuredStatusChildWork(views, provider)
+  return {
+    ...(backgroundTasks && backgroundTasks.length > 0
+      ? { backgroundTasks: backgroundTasks.map(({ totalTokens: _tokens, ...task }) => task) }
+      : {}),
+    ...(children ? { children } : {})
+  }
 }
 
 export function structuredStatusChildrenEqual(

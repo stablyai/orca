@@ -1,6 +1,7 @@
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
+import type { StructuredAgentSessionAtRest } from './structured-agent-session-status-summary'
 
 /**
  * Chat-tab visibility is the deletion funnel: every path that removes a chat as a user-facing
@@ -76,23 +77,31 @@ export function createStructuredAgentSessionTabSurface(
     }
   },
   sessions: TabSessions,
-  forgetStatus: (sessionId: string) => void
+  statuses: {
+    forgetStatus: (sessionId: string) => void
+    publishAtRest: (sessionId: string, rest: StructuredAgentSessionAtRest) => void
+  }
 ) {
-  // Restored chats that could not be opened. Each keeps its tab, whose read says why.
-  const unopened = new Set<string>()
+  // Restored chats, listed from their records: startup opens none of them, and one that cannot
+  // open keeps its tab, whose read says why.
+  const listed = new Set<string>()
   return {
     listSessionTabs: (): StructuredAgentSessionTab[] => [
       ...listStructuredAgentSessionTabs(sessions),
-      ...[...unopened].flatMap((sessionId) => {
+      ...[...listed].flatMap((sessionId) => {
         const record = sessions.has(sessionId) ? null : host.deps.store.getRecord(sessionId)
         return record
           ? [{ sessionId, workspaceId: record.location.workspaceId, agent: record.provider }]
           : []
       })
     ],
-    /** A restore target with a record whose open failed. */
-    markUnopened: (sessionId: string): void => {
-      unopened.add(sessionId)
+    /** A restore target with a record, and its row while nothing has opened it; one whose journal
+     *  could not be read has none until a read says why. */
+    list: (sessionId: string, rest: StructuredAgentSessionAtRest | null): void => {
+      listed.add(sessionId)
+      if (rest) {
+        statuses.publishAtRest(sessionId, rest)
+      }
     },
     getPersistedVisibleSessionTabIndex: () => host.deps.store.getVisibleSessionTabIndex(),
     getSessionTabId: (sessionId: string): string | null =>
@@ -108,14 +117,14 @@ export function createStructuredAgentSessionTabSurface(
     ): Promise<void> => {
       await setStructuredAgentSessionTabVisibility(host, sessionId, visible, tabId)
       if (!visible) {
-        unopened.delete(sessionId)
+        listed.delete(sessionId)
         if (!options?.deferHiddenNotice) {
           notifyTabHidden(host, sessionId)
         }
       }
       // The tab edge of the row's lifetime; the handle close is the other.
       if (!visible && !sessions.get(sessionId)?.child) {
-        forgetStatus(sessionId)
+        statuses.forgetStatus(sessionId)
       }
     }
   }

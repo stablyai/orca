@@ -54,7 +54,8 @@ export class StructuredAgentSessionHost {
     },
     deliverSettleEdge: (id, journal) => this.conversationDelivery.afterSettleEdge(id, journal),
     logger: sessionLogger.deferredStructuredAgentSessionLogger(() => this.deps.logger),
-    onOpened: (sessionId) => this.queued.onOpened(sessionId),
+    // Drafts that waited on it re-derive, and the residency cap makes room for it.
+    onOpened: (id) => [this.queued, this.lifetime.idleSweep].forEach((c) => c.onOpened(id)),
     now: () => this.now()
   })
   private readonly queued = wireStructuredAgentSessionQueuedMessages(this.sessions, () =>
@@ -125,11 +126,9 @@ export class StructuredAgentSessionHost {
       reconcileLeases: this.reconcileLeases,
       reconcileRestartLeases: () => this.reconcileLeases(),
       resolveRecovery: (sessionId) => this.runtimeState.resolveRecovery(sessionId),
-      serialize: (sessionId, task) => this.serialize(sessionId, task),
       hasSession: this.hasSession,
-      // The restorer returns on `hasSession` in this same step, so this never overwrites a live entry.
-      onReadable: this.conversationDelivery.adoptOpened,
-      onUnopened: (sessionId) => this.tabs.markUnopened(sessionId)
+      // Listed in the same step as the `hasSession` check, so no open's own row is overwritten.
+      onListed: (record, rest) => this.tabs.list(record.sessionId, rest)
     })
     this.eventRecovery = new StructuredAgentSessionEventRecovery({
       deps,
@@ -236,7 +235,7 @@ export class StructuredAgentSessionHost {
 
   knownAgentIds = (): readonly string[] => providerSupport.knownAgentIds(this.deps)
 
-  private readonly tabs = createTabs(this, this.sessions, this.clientDelivery.forgetStatus)
+  private readonly tabs = createTabs(this, this.sessions, this.clientDelivery)
   listSessionTabs = this.tabs.listSessionTabs
   getPersistedVisibleSessionTabIndex = this.tabs.getPersistedVisibleSessionTabIndex
   getSessionTabId = this.tabs.getSessionTabId

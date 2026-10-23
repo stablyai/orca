@@ -232,6 +232,12 @@ function turnLifecycle(turnId: string) {
   return item ? { ...readAgentJournalTurn(item.body), recovered: item.recovered } : null
 }
 
+/** A relaunch lists the chat without reading it; its first read opens it and settles it. */
+async function restoreThenOpen(): Promise<void> {
+  await host.restoreReadableSessions()
+  await host.journalSnapshot(SESSION)
+}
+
 function restoredJournal(): AgentSessionJournal {
   const restored = (
     host as unknown as { sessions: Map<string, { journal: AgentSessionJournal }> }
@@ -277,7 +283,7 @@ describe('already-wedged profiles become usable on load', () => {
       await seedRunningTurn(provider)
       openHost()
 
-      await host.restoreReadableSessions()
+      await restoreThenOpen()
 
       expect(host.hasSession(SESSION)).toBe(true)
       const firstCursor = restoredJournal().cursor()
@@ -291,7 +297,7 @@ describe('already-wedged profiles become usable on load', () => {
       await host.flushAllStreamedEvents()
       store = await openTestAgentSessionRecordStore(root)
       openHost()
-      await host.restoreReadableSessions()
+      await restoreThenOpen()
 
       expect(restoredJournal().cursor()).toEqual(firstCursor)
       expect(activeStructuredAgentSessionTurnId(restoredJournal().snapshot().items)).toBe(null)
@@ -345,7 +351,7 @@ describe('already-wedged profiles become usable on load', () => {
           : {})
       })
 
-      await host.restoreReadableSessions()
+      await restoreThenOpen()
 
       expect(acquire).not.toHaveBeenCalled()
       expect(turnLifecycle('turn-1')).toEqual({
@@ -371,8 +377,11 @@ describe('already-wedged profiles become usable on load', () => {
       expect(published.map((summary) => summary.status)).not.toContain('working')
       // A crash is not something the user did: a proven one reads as an interruption and an
       // unprovable one as unconfirmed, so no reader files it as a cancellation the user knows about.
-      expect(published.map((summary) => summary.turnOutcome)).toEqual(
-        published.map(() => (verdict.state === 'interrupted' ? 'interruption' : 'unconfirmed'))
+      // Until the chat is opened its row reads Interrupted: only the open's settle can tell.
+      const outcome = verdict.state === 'interrupted' ? 'interruption' : 'unconfirmed'
+      expect(published.at(-1)?.turnOutcome).toBe(outcome)
+      expect(new Set(published.map((summary) => summary.turnOutcome))).toEqual(
+        new Set(['interruption', outcome])
       )
     }
   )
@@ -473,7 +482,7 @@ describe('already-wedged profiles become usable on load', () => {
       const failing = vi
         .spyOn(JournalLifecycleBatchAppender.prototype, 'appendPlanned')
         .mockRejectedValue(new Error('journal unavailable'))
-      await host.restoreReadableSessions()
+      await restoreThenOpen()
       failing.mockRestore()
       expect(activeStructuredAgentSessionTurnId(restoredJournal().snapshot().items)).toBe('turn-1')
       expect(stopOwnerProcess).toHaveBeenCalledTimes(ownerOutlivedRestart ? 1 : 0)

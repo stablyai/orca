@@ -183,10 +183,11 @@ export function replaceJournalEpoch(input: {
     if (retired !== null) {
       deleteJournalEpochRows(db, sessionId, retired)
     }
+    // Before the rows, which keep the new epoch's open turn on its pointer.
+    publishJournalSessionEpoch(db, input.identity, epoch)
     for (const row of rows) {
       insertJournalRow(db, sessionId, row)
     }
-    publishJournalSessionEpoch(db, input.identity, epoch)
     receipt?.write(db)
   })
 

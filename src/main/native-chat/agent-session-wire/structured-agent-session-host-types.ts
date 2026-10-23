@@ -155,7 +155,7 @@ export type StructuredAgentSessionHostDeps = {
   resolveWorkspacePath?: (workspaceId: string) => Promise<string>
   now?: () => number
   /** The idle sweep's period and window. Tests drive these; production takes the defaults. */
-  idleSweep?: { intervalMs?: number; idleMs?: number }
+  idleSweep?: { intervalMs?: number; idleMs?: number; maxResident?: number }
   /** How long a start may stay silent, and its ceiling. Tests drive these; production takes the
    *  host constants. */
   startupLimits?: Partial<StructuredAgentSessionStartupLimits>

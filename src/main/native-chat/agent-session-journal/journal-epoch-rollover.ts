@@ -46,8 +46,9 @@ export function publishNewEpoch(input: {
     if (retired !== null) {
       deleteJournalEpochRows(db, sessionId, retired)
     }
-    insertJournalRow(db, sessionId, row)
+    // Before the rows, which keep the new epoch's open turn on its pointer.
     publishJournalSessionEpoch(db, input.identity, input.epoch)
+    insertJournalRow(db, sessionId, row)
   })
 
   // COMMIT landed: on disk the superseded prefix is gone and this epoch is the
