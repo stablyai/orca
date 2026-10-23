@@ -34,7 +34,7 @@ function liveRecord(): SleepingAgentSessionRecord {
     paneKey: PANE_KEY,
     tabId: 'tab-live',
     worktreeId: WT,
-    agent: 'claude',
+    agent: 'qwen-code',
     providerSession: SESSION,
     prompt: '',
     state: 'working',
@@ -126,7 +126,7 @@ describe('background wake of a pane whose PTY the host still holds', () => {
       {
         id: LIVE_PTY_ID,
         cwd: '/repo',
-        title: 'claude',
+        title: 'qwen-code',
         agentOwnership: 'present'
       }
     ]

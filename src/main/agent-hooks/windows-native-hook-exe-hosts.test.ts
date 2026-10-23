@@ -89,10 +89,10 @@ function run(
 function hookEnv(extra: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const base = Object.fromEntries(
     Object.entries(process.env).filter(
-      ([key]) => !/^(ORCA_|CLAUDE_|GROK_|DEVIN_)/i.test(key) && key.toUpperCase() !== 'USERPROFILE'
+      ([key]) => !/^(ORCA_|CLAUDE_|GROK_|DEVIN_)/i.test(key) && !/^(HOME|USERPROFILE)$/i.test(key)
     )
   )
-  return { ...base, USERPROFILE: dir, ORCA_BACKGROUND_LAUNCH: '1', ...extra }
+  return { ...base, HOME: dir, USERPROFILE: dir, ORCA_BACKGROUND_LAUNCH: '1', ...extra }
 }
 
 function paneEnv(listener: Listener, extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {

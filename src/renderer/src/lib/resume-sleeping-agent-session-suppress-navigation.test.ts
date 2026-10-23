@@ -26,7 +26,7 @@ function makeRecord(
     paneKey: 'tab-1:leaf-1',
     tabId: 'tab-1',
     worktreeId: 'wt-1',
-    agent: 'claude',
+    agent: 'qwen-code',
     providerSession: { key: 'session_id', id: 'sess-1' },
     prompt: 'finish the task',
     state: 'working',
@@ -69,7 +69,7 @@ describe('resumeSleepingAgentSessionsForWorktree navigation suppression', () => 
     const state = useAppStore.getState()
     const resumedTab = state.tabsByWorktree['wt-1']?.find((tab) => tab.id !== 'tab-1')
     // A resume tab is created for the slept worktree...
-    expect(resumedTab?.launchAgent).toBe('claude')
+    expect(resumedTab?.launchAgent).toBe('qwen-code')
     // ...but the desktop's active worktree/tab/view are untouched (INV-2).
     expect(state.activeWorktreeId).toBe('wt-other')
     expect(state.activeTabId).toBe('other-tab')

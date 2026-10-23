@@ -64,7 +64,7 @@ function makeRecord(worktreeId: string, tabId: string): SleepingAgentSessionReco
     paneKey: makePaneKey(tabId, LEAF_ID),
     tabId,
     worktreeId,
-    agent: 'claude',
+    agent: 'qwen-code',
     providerSession: { key: 'session_id', id: 'closed-elsewhere' },
     origin: 'live',
     state: 'working',

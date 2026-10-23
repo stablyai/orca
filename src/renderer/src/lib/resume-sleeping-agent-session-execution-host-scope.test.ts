@@ -44,7 +44,7 @@ function makeRecord(
     paneKey: 'tab-1:leaf-1',
     tabId: 'tab-1',
     worktreeId: WORKTREE_ID,
-    agent: 'claude',
+    agent: 'qwen-code',
     providerSession: { key: 'session_id', id: SESSION_ID },
     prompt: 'finish the task',
     state: 'working',

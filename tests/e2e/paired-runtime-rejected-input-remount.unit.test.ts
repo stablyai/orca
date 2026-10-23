@@ -334,6 +334,7 @@ describe('host-rejected paired-runtime input reaches a pane remount', () => {
       agentStatusByPaneKey: {},
       retainedAgentsByPaneKey: {},
       paneForegroundAgentByPaneKey: {},
+      automaticAgentResumeClaimsByTabId: {},
       sleepingAgentSessionsByPaneKey: {},
       suppressedPtyExitIds: {},
       agentLaunchConfigByPaneKey: {},
