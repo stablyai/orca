@@ -32,8 +32,17 @@ export async function measureShallowWatchDelivery(timeoutMs = PROBE_TIMEOUT_MS):
   let directory: string | null = null
   try {
     directory = await mkdtemp(join(tmpdir(), 'orca-shallow-probe-'))
+    const probePath = join(directory, 'probe')
+    // macOS shallow subscriptions watch files (kqueue), not directories (FSEvents),
+    // so probe the same notification path they depend on.
+    const watchesFiles = process.platform === 'darwin'
+    if (watchesFiles) {
+      await writeFile(probePath, '0')
+    }
     const { promise, resolve } = Promise.withResolvers<boolean>()
-    const watcher = watch(directory, { persistent: false }, () => resolve(true))
+    const watcher = watch(watchesFiles ? probePath : directory, { persistent: false }, () =>
+      resolve(true)
+    )
     let timer: ReturnType<typeof setTimeout> | undefined
     try {
       watcher.on('error', () => resolve(false))
@@ -41,8 +50,8 @@ export async function measureShallowWatchDelivery(timeoutMs = PROBE_TIMEOUT_MS):
       // has no other pending work at probe time.
       timer = setTimeout(() => resolve(false), timeoutMs)
       // Two writes: some backends coalesce the creation of the first entry.
-      await writeFile(join(directory, 'probe'), '1')
-      await writeFile(join(directory, 'probe'), '2')
+      await writeFile(probePath, '1')
+      await writeFile(probePath, '2')
       return await promise
     } finally {
       if (timer !== undefined) {

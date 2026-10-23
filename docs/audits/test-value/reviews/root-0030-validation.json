@@ -1,0 +1,33 @@
+{
+  "original_declaration_sites": 4,
+  "scenario_cases": 4,
+  "manual_loader_controls": 5,
+  "review_scope": "Complete scenario, source loader, phase/before configurations and loader controls; supporting real plugin install/log/runtime/IPC ports read, not separately counted.",
+  "checks": [
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 ORCA_PLUGIN_LOG_LOADER_OUTPUT=/tmp/orca-root-0030-plugin-loader-results.json node docs/audits/plugin-uninstall-log-retirement/loader-controls.cjs",
+      "exit_code": 1,
+      "result": "Dependency-context reconstruction rejects reverse patch before controls; no current pass.",
+      "log": "/tmp/orca-root-0030-plugin-loader.log"
+    },
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 node -e 'require(\"./docs/audits/plugin-uninstall-log-retirement/sources.cjs\").loadSources()'",
+      "exit_code": 1,
+      "result": "Direct source loader rejects config/scripts/ci-unit-sequencer.mjs hash f932b2ea versus recorded fe7d421e before scenario.",
+      "log": "/tmp/orca-root-0030-plugin-sources.log"
+    }
+  ],
+  "limitations": [
+    "GC controls sample eight rows, not total retained bytes or process RSS.",
+    "Controlled old callback/stdio ordering and fake fork transport do not establish native worker incident frequency.",
+    "successorConnected is measured, not asserted; eight disconnections are independently asserted in first scenario.",
+    "Historical top-level includes inherit a now-child-project base and source graph is rejected before runner."
+  ],
+  "batch": "root-0030",
+  "reviewer": "root",
+  "source_commit": "92dfb4fda69e746e96786ea7af417813ac441394",
+  "reviewed_files": 5,
+  "case_records": 9,
+  "production_changes": false,
+  "test_source_changes": false
+}

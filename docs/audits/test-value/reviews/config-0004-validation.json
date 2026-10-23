@@ -1,0 +1,201 @@
+{
+  "batch": "config-0004",
+  "reviewer": "audit_config",
+  "platform": "Linux",
+  "source_commit": "92dfb4fda69e746e96786ea7af417813ac441394",
+  "upstream_reconciliation": "All 50 saved original SHA-256 values match inventory and source-commit Git bytes. Read-only implementation checks use this audit-4 checkout; candidate modifications are restricted to the three listed test/benchmark files.",
+  "reviewed_files": 50,
+  "standard_suite_files": 4,
+  "special_benchmark_suite_files": 1,
+  "standalone_or_support_files": 45,
+  "original_declarations": 33,
+  "final_declarations": 32,
+  "case_decisions": {
+    "fix": 4,
+    "keep": 28,
+    "consolidate": 1
+  },
+  "changed_test_files": [
+    "config/scripts/agent-status-hot-path-benchmark.ts",
+    "config/scripts/headless-detector-compiler-cache.test.mjs",
+    "config/scripts/hourly-build-version.test.mjs"
+  ],
+  "test_diff": {
+    "added": 31,
+    "deleted": 17,
+    "net": 14
+  },
+  "checks": [
+    {
+      "command": [
+        "node",
+        "config/scripts/run-vitest.mjs",
+        "run",
+        "--config",
+        "config/vitest.config.ts",
+        "config/scripts/headless-detector-compiler-cache.test.mjs",
+        "config/scripts/headless-serve-shutdown-matrix.test.mjs",
+        "config/scripts/hourly-build-version.test.mjs",
+        "config/scripts/hourly-preflight-workflow.test.mjs"
+      ],
+      "environment": {
+        "ORCA_BACKGROUND_LAUNCH": "1"
+      },
+      "exit_code": 0,
+      "result": "4 suites passed, 42 tests passed, no skips",
+      "elapsed_seconds": 1.12,
+      "log": "/tmp/orca-config-0004-tests.log"
+    },
+    {
+      "command": [
+        "node",
+        "config/scripts/run-vitest.mjs",
+        "run",
+        "--config",
+        ".build/orca-config-0004-agent-status.vitest.config.ts",
+        "config/scripts/agent-status-hot-path-benchmark.ts"
+      ],
+      "environment": {
+        "ORCA_BACKGROUND_LAUNCH": "1"
+      },
+      "exit_code": 0,
+      "result": "Exactly the special benchmark candidate ran: 1 suite and 1 test passed. Real routing and capacity-aware committed-entry checks passed. No timing comparison claimed.",
+      "elapsed_seconds": 4.33,
+      "log": "/tmp/orca-config-0004-agent-status-final.log",
+      "temporary_config": "Temporary .build config spread the existing config/vitest.config.ts root, selected its existing Bun child project, and replaced that child project include with only config/scripts/agent-status-hot-path-benchmark.ts; retained all normal aliases/setup and maxWorkers=1/retry=0. File removed immediately after the run; config contents are preserved below."
+    },
+    {
+      "command": [
+        "pnpm",
+        "exec",
+        "oxlint",
+        "config/scripts/agent-status-hot-path-benchmark.ts",
+        "config/scripts/headless-detector-compiler-cache.test.mjs",
+        "config/scripts/hourly-build-version.test.mjs"
+      ],
+      "exit_code": 0,
+      "result": "passed",
+      "log": "/tmp/orca-config-0004-oxlint-final.log"
+    },
+    {
+      "command": [
+        "pnpm",
+        "exec",
+        "oxfmt",
+        "--check",
+        "config/scripts/agent-status-hot-path-benchmark.ts",
+        "config/scripts/headless-detector-compiler-cache.test.mjs",
+        "config/scripts/hourly-build-version.test.mjs"
+      ],
+      "exit_code": 0,
+      "result": "All 3 changed candidate files use the correct format.",
+      "log": "/tmp/orca-config-0004-oxfmt-final.log"
+    },
+    {
+      "command": [
+        "git",
+        "diff",
+        "--check",
+        "--",
+        "config/scripts/agent-status-hot-path-benchmark.ts",
+        "config/scripts/headless-detector-compiler-cache.test.mjs",
+        "config/scripts/hourly-build-version.test.mjs"
+      ],
+      "exit_code": 0,
+      "result": "passed"
+    },
+    {
+      "command": [
+        "pnpm",
+        "run",
+        "check:code-quality:changed",
+        "--",
+        "92dfb4fda69e746e96786ea7af417813ac441394"
+      ],
+      "environment": {
+        "ORCA_BACKGROUND_LAUNCH": "1"
+      },
+      "exit_code": 0,
+      "result": "0 new findings across all 3 changed files at that snapshot: code quality, casting, focused plugins, type-aware, React Doctor, design system and SAFETY checks all passed.",
+      "log": "/tmp/orca-config-0004-code-quality-final.log"
+    },
+    {
+      "command": [
+        "pnpm",
+        "run",
+        "check:react-doctor:changed",
+        "--",
+        "92dfb4fda69e746e96786ea7af417813ac441394"
+      ],
+      "environment": {
+        "ORCA_BACKGROUND_LAUNCH": "1"
+      },
+      "exit_code": 0,
+      "result": "React Doctor changed-lines gate: 0 errors after the cloud reviewer corrected the three previously reported added-line curly findings. This is a whole-worktree snapshot; later concurrent cloud edits require root global validation.",
+      "log": "/tmp/orca-config-0004-react-doctor-resolved.log"
+    },
+    {
+      "command": "node /tmp/orca-config-0004-records.mjs, followed by independent JSONL/file integrity verification: use actual refresh.mjs declaration parser without running refresh; compare original Git bytes and saved originals with inventory SHA-256, original case decisions, retained final destinations and final filesystem hashes",
+      "exit_code": 0,
+      "result": "50 unique exact candidate paths; 50 original Git/saved hashes and 50 final filesystem hashes match; all 33 original declarations have decisions; all 32 final declaration destinations exist; all 116 implementation/support evidence file references exist; no temporary .build directory/config remains.",
+      "artifacts": [
+        "/tmp/orca-config-0004-final-cases.json",
+        "docs/audits/test-value/reviews/config-0004.jsonl"
+      ]
+    }
+  ],
+  "temporary_benchmark_config": "import base from '../config/vitest.config'\n\nconst project = base.test.projects.find((project) => project.test.name === 'bun')\nif (!project) throw new Error('Expected the existing Bun test project')\nexport default {\n  ...base,\n  test: {\n    ...base.test,\n    projects: [{\n      ...project,\n      test: {\n        ...project.test,\n        include: ['config/scripts/agent-status-hot-path-benchmark.ts'],\n        fileParallelism: false,\n        maxWorkers: 1,\n        retry: 0\n      }\n    }]\n  }\n}\n",
+  "intentional_skips": [],
+  "standalone_execution": "Manual benchmarks, native Windows SSH/capability/native-addon/security qualification, Docker descendants/packaged shutdown, archive-removal runtime and computer-use desktop smokes were read/classified rather than executed. PowerShell is unavailable. The one changed special benchmark ran in an isolated ordinary Bun test project with ORCA_BACKGROUND_LAUNCH=1; no native desktop app/focus or computer-use smoke was launched.",
+  "historical_measurement_limits": [
+    "Mirrored normalizer, Command Code transcript scanner, event-loop yield and hibernation Map models do not prove current production correctness, throughput, responsiveness or heap retention.",
+    "Advertised URL watcher benchmark guards/imports reference parsing code now split into advertised-url-parsing.ts; Command Code benchmark constants are still sought in the old listener monolith. These stale guards are retained and honestly documented; they were not bypassed and no current measurement is claimed.",
+    "Several before/current qualification drivers require exact historical Git refs, APIs and source hashes. No missing historical result is reported as passing.",
+    "The raw upstream Unix pty.cc fixture has no identified current filename consumer and is classified as archive material, not as active native coverage.",
+    "Timing-only counters, checksums and source-shape assertions serve revision/workload qualification; independent inline safety/behavior oracles are separately recorded in all 50 reviews."
+  ],
+  "coverage_preserved": [
+    "AST-extracted real PowerShell diagnostics, capability stages/guards/receipts and independent loaded-profile cleanup windows/failure gates",
+    "Independent post-daemon-exit descendant/canary process lifetime oracle and actual archive-hook checkout/Git/content protection",
+    "Real before/current lineage, decoder, skill-walk, explorer projection, transcript reader, CLI import, Git-head and scanner/persistence differential outputs",
+    "Actual compiler-cache trust/activation/import-graph equivalence and exact optional restore/fallback workflow wiring",
+    "Actual shutdown Docker runner ordering/matrix/failure cleanup and exact hourly Bash source/build allocation decisions",
+    "Generated hourly RC ordering, UTC stamps, Pacific DST/noon/midnight, build-number edge cases, version history and published floor identity",
+    "Actual renderer routing owner/parity and every capacity-retained committed status row, with instrumentation kept outside timing"
+  ],
+  "changes": [
+    "Test existing node_modules protection while cache archive is valid, then independently exercise an absent archive on an empty dependency tree.",
+    "Remove one obsolete hardcoded RC-hourly comparator assertion; consolidate same-input meridiem and midnight assertions into existing stronger exact full-title checks, retaining noon and both Pacific seasons.",
+    "Replace benchmark nonempty-map/positive-time checks with actual routing ownership/parity and exact committed key/field checks that respect legitimate rootless capacity eviction."
+  ],
+  "resolved_validation_issues": [
+    {
+      "initial_result": "The existing special benchmark config overrides top-level include, but the base now defines child projects. Invoking it started unrelated unit inventory.",
+      "resolution": "Stopped that attempt with SIGTERM (exit 143), no completion/pass claimed. A temporary config selected and narrowed the existing Bun child project; final candidate-only run passed. The out-of-scope special config was not edited.",
+      "log": "/tmp/orca-config-0004-agent-status.log"
+    },
+    {
+      "initial_result": "Initial stronger benchmark expectation assumed all 634 fixture panes persist; actual rootless status behavior intentionally retains at most 500.",
+      "resolution": "Read real capacity eviction implementation; final oracle requires exactly the capacity-bounded latest distinct input window and exact row values. Final 1-test run passed.",
+      "log": "/tmp/orca-config-0004-agent-status-targeted.log"
+    },
+    {
+      "initial_result": "First changed-line gates also saw a temporary untracked benchmark config and flagged its one-line if without braces.",
+      "resolution": "The temporary config was removed after the successful targeted benchmark and before final gates. Final code-quality gate passed with only the 3 intended config changes.",
+      "logs": ["/tmp/orca-config-0004-code-quality.log", "/tmp/orca-config-0004-react-doctor.log"]
+    },
+    {
+      "initial_result": "Standalone React Doctor later saw three added-line curly errors in concurrent cloud edits: postgres-lost-reply-postgres.test.ts at initial lines 42/68 and registered-migration-inventory.test.ts at initial line 12. A repeated run confirmed the same findings.",
+      "resolution": "The cloud reviewer corrected all three statements with braces; the subsequent whole-worktree React Doctor run passed with 0 errors. No cloud files were edited by audit_config.",
+      "logs": [
+        "/tmp/orca-config-0004-react-doctor-final.log",
+        "/tmp/orca-config-0004-react-doctor-resolved.log"
+      ]
+    }
+  ],
+  "production_changes": "none",
+  "temporary_production_mutations": "none",
+  "commits_or_branch_changes": "none by audit_config",
+  "inventory_or_readme_edits": "none by audit_config",
+  "log_note": "Exact outcomes and limitations are durable here; /tmp paths point to session evidence. Root owns force-add, tracker refresh, global validation, commits and PRs."
+}

@@ -192,6 +192,10 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
     }
     if (!writeResult.ok) {
       clearSelfWrite(liveFile.filePath, liveFile.runtimeEnvironmentId)
+      // Why: an explicit save asks the user to convert instead of pausing autosave with a notice.
+      if (writeResult.diskConflict === 'not-utf8' && trigger === 'user') {
+        return 'not-utf8'
+      }
       markEditorSaveRefusal(
         store.getState(),
         liveEditorRecordView(store.getState(), recordViewIds) ?? liveFile,

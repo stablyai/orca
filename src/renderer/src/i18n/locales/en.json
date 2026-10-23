@@ -16706,7 +16706,13 @@
               "notice": "This file changed on disk since this section loaded."
             },
             "notUtf8": {
-              "notice": "Autosave is paused for {{name}} because it isn't UTF-8 text. Save it yourself to convert it to UTF-8."
+              "notice": "Autosave is paused for {{name}} because it isn't UTF-8 text. Saving it yourself rewrites it as UTF-8 and replaces any characters that aren't valid UTF-8.",
+              "refused": "This file isn't UTF-8 text, so it wasn't saved.",
+              "confirm": {
+                "title": "Save {{name}} as UTF-8?",
+                "description": "This file isn't UTF-8 text. Saving it as UTF-8 replaces any characters that aren't valid UTF-8 with �, and the original bytes can't be recovered.",
+                "action": "Save as UTF-8"
+              }
             }
           }
         },

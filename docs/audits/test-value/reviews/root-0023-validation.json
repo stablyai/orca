@@ -1,0 +1,26 @@
+{
+  "original_declaration_sites": 0,
+  "manual_scenarios": 2,
+  "review_scope": "Complete real-file fixture, before-transform, module seams and actual current importer production path. No current suite reviewed solely by name.",
+  "checks": [
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 timeout 45s node --max-old-space-size=256 docs/audits/legacy-import-source-budget/reproduce.mjs",
+      "exit_code": 1,
+      "result": "Baseline transform rejects changed importer before bundling/temp-file mutation or scenarios. No current proof pass.",
+      "log": "/tmp/orca-root-0023-legacy.log"
+    }
+  ],
+  "limitations": [
+    "Current import accepts a source of any size while bounding retained newest messages and individual record bytes; preserving archive avoids treating intentional product evolution as a failure.",
+    "Journal is an explicit replacement spy, not SQLite durability validation.",
+    "Consumed bytes, grown source size and epoch are measurements; asserted success/refusal and replacement count provide the historical behavior oracle.",
+    "No source hash fence beyond literal before-transform boundaries; effective module hashes are recorded for provenance, not historical runtime reconstruction."
+  ],
+  "batch": "root-0023",
+  "reviewer": "root",
+  "source_commit": "92dfb4fda69e746e96786ea7af417813ac441394",
+  "reviewed_files": 1,
+  "case_records": 2,
+  "production_changes": false,
+  "test_source_changes": false
+}

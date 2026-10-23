@@ -12563,6 +12563,15 @@
             },
             "sectionStale": {
               "notice": "Este arquivo mudou no disco desde que esta seção foi carregada."
+            },
+            "notUtf8": {
+              "notice": "O salvamento automático está pausado para {{name}} porque não é texto UTF-8. Salvá-lo você mesmo o regrava como UTF-8 e substitui os caracteres que não são UTF-8 válido.",
+              "refused": "Este arquivo não é texto UTF-8, então não foi salvo.",
+              "confirm": {
+                "title": "Salvar {{name}} como UTF-8?",
+                "description": "Este arquivo não é texto UTF-8. Salvá-lo como UTF-8 substitui por � os caracteres que não são UTF-8 válido, e os bytes originais não poderão ser recuperados.",
+                "action": "Salvar como UTF-8"
+              }
             }
           }
         },

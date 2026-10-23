@@ -3,7 +3,6 @@ import { useAppStore } from '@/store'
 import { getConnectionIdForFile } from '@/lib/connection-context'
 import type { OpenFile } from '@/store/slices/editor'
 import {
-  getOpenFilesForExternalFileChange,
   ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT,
   ORCA_EDITOR_FILE_CACHE_STALE_EVENT,
   ORCA_EDITOR_FILE_SAVED_EVENT,
@@ -15,8 +14,8 @@ import { isReloadableSingleFileDiffTab } from './editor-panel-diff-reload'
 import { createEditorWatcherReloadCoalescer } from './editor-watcher-reload-coalescer'
 import { markFileChangedOnDisk } from './editor-changed-on-disk-mark'
 import { hasRecentSelfWrite } from './editor-self-write-registry'
-import { editorModelSiblingTabs, isEditorModelDirty } from './editor-save-disk-precondition'
-import { withRecordDiskText } from './editor-buffer-adapter'
+import { isEditorModelDirty } from './editor-save-disk-precondition'
+import { externalChangeRecordViewIds, withRecordDiskText } from './editor-buffer-adapter'
 
 type EditorViewModeByFile = ReturnType<typeof useAppStore.getState>['editorViewMode']
 
@@ -123,15 +122,7 @@ export function useEditorPanelExternalContentEvents({
       const invalidatedDiffFileIds: string[] = []
       const invalidatedFileIds: string[] = []
       const storeState = useAppStore.getState()
-      const matched = getOpenFilesForExternalFileChange(openFilesRef.current, detail)
-      // Why: a tab of another workspace showing the same model is stale too.
-      const siblingIds = new Set(
-        matched.flatMap((file) =>
-          storeState?.openFiles?.some((tab) => tab.id === file.id)
-            ? editorModelSiblingTabs(storeState, file).map((tab) => tab.id)
-            : [file.id]
-        )
-      )
+      const siblingIds = externalChangeRecordViewIds(storeState, openFilesRef.current, detail)
       for (const file of openFilesRef.current.filter((tab) => siblingIds.has(tab.id))) {
         // Why: a dirty file keeps its unsaved buffer (issue #7265) — it is
         // marked changed-on-disk upstream and resolves via the editor banner,

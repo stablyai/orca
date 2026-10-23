@@ -8,6 +8,7 @@ import type { RpcResponse } from '../transport/types'
 type MockClient = {
   sendRequest: ReturnType<typeof vi.fn>
 }
+const mounted: ReactTestRenderer[] = []
 
 const mockTransport = vi.hoisted(
   (): {
@@ -120,6 +121,7 @@ async function renderExplorer(): Promise<ReactTestRenderer> {
   if (!renderer) {
     throw new Error('MobileFileExplorerPanel did not render')
   }
+  mounted.push(renderer)
   return renderer
 }
 
@@ -160,6 +162,9 @@ function renderedText(renderer: ReactTestRenderer): string {
 
 describe('MobileFileExplorerPanel', () => {
   afterEach(() => {
+    for (const renderer of mounted.splice(0)) {
+      act(() => renderer.unmount())
+    }
     vi.restoreAllMocks()
     mockTransport.client = null
     mockTransport.connectionState = 'connected'
@@ -545,6 +550,8 @@ describe('MobileFileExplorerPanel', () => {
           relativePath: 'src'
         })
       )
+      expect(renderedText(renderer)).toContain('app.ts')
+      expect(renderedText(renderer)).not.toContain('read failed')
     })
   })
 })

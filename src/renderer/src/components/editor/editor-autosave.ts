@@ -57,12 +57,14 @@ export type EditorSaveFileTarget = {
   fallbackContent?: string
   /** Only the conflict banner's Overwrite sets this. */
   overwrite?: true
+  /** Only the user's confirmation to replace a non-UTF-8 file's unreadable characters sets this. */
+  convertToUtf8?: true
 }
 
 export type EditorSaveAndCloseDetail = {
   fileId: string
   /** Called at once when the tab stays open, so a waiting dialog needn't time out. */
-  onNotClosed?: (reason: 'blocked-stale' | 'not-saved') => void
+  onNotClosed?: (reason: 'blocked-stale' | 'not-utf8' | 'not-saved') => void
 }
 
 export type EditorSaveFileDetail = EditorSaveFileTarget & {

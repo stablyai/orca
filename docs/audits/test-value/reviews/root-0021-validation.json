@@ -1,0 +1,26 @@
+{
+  "original_declaration_sites": 0,
+  "manual_controls": 12,
+  "review_scope": "Complete driver/source loader and actual current cache/coalescer supporting implementation. Each context and both remembered-probe outcomes recorded separately.",
+  "checks": [
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 node --expose-gc docs/audits/gitlab-known-host-retirement/reproduce.cjs /tmp/orca-root-0021-gitlab-results.json",
+      "exit_code": 1,
+      "result": "Exact reversed-product-patch assertion fails during sources import; no bundle, forced-GC scenario or current result report.",
+      "log": "/tmp/orca-root-0021-gitlab.log"
+    }
+  ],
+  "limitations": [
+    "Current known-host module now keys connection IDs without historical provider-generation dependency and has a global entry cap; historical fixture is preserved as provenance.",
+    "Metadata-array reachability counts do not establish RSS, payload size, OOM or incident causation.",
+    "Fake generation and command outputs exercise actual cache behavior, not network authentication/WSL dispatch.",
+    "Reported dependency hashes record actual bytes but do not independently reject changed dependencies; only the reversed original product hash is fenced."
+  ],
+  "batch": "root-0021",
+  "reviewer": "root",
+  "source_commit": "92dfb4fda69e746e96786ea7af417813ac441394",
+  "reviewed_files": 2,
+  "case_records": 12,
+  "production_changes": false,
+  "test_source_changes": false
+}

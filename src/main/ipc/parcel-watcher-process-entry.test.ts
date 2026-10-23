@@ -13,6 +13,8 @@ const { detectShallowWatchDeliveryMock, statMock, subscribeMock, watchMock, writ
 vi.mock('node:fs', () => ({
   mkdtempSync: vi.fn(() => '/tmp/orca-watcher-canary-test'),
   rmSync: vi.fn(),
+  // Shallow roots and macOS metadata files are stat-ed before watching.
+  statSync: vi.fn(() => ({ isDirectory: () => true, dev: 1n, ino: 1n, birthtimeNs: 0n })),
   watch: watchMock,
   writeFileSync: writeFileSyncMock
 }))
@@ -143,8 +145,14 @@ describe('parcel watcher process canary', () => {
     await vi.advanceTimersByTimeAsync(0)
 
     expect(subscribeMock).toHaveBeenCalledTimes(1)
-    watcherCallbacks.get('/repo/.git')?.('change', 'HEAD')
-    await vi.advanceTimersByTimeAsync(0)
+    // macOS binds the metadata file itself; other platforms bind the directory.
+    if (process.platform === 'darwin') {
+      watcherCallbacks.get('/repo/.git/HEAD')?.('change', 'HEAD')
+    } else {
+      watcherCallbacks.get('/repo/.git')?.('change', 'HEAD')
+    }
+    // macOS confirms the event with a stat after a short coalescing window.
+    await vi.advanceTimersByTimeAsync(200)
     expect(sendMock).toHaveBeenCalledWith(
       {
         op: 'events',

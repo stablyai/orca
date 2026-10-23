@@ -24,10 +24,10 @@ Completion requires no unreviewed or stale test files, no unresolved support/scr
 
 | Area                                             | Reviewer       | Next batch                 |
 | ------------------------------------------------ | -------------- | -------------------------- |
-| `cloud/`                                         | `audit_cloud`  | `cloud-0004`               |
-| `config/`                                        | `audit_config` | `config-0004`              |
-| `mobile/`                                        | `audit_mobile` | `mobile-0004`              |
-| `src/`, `native/`, `tests/`, `.github/`, `docs/` | root           | Continue after `root-0013` |
+| `cloud/`                                         | `audit_cloud`  | `cloud-0005`               |
+| `config/`                                        | `audit_config` | `config-0005` (read-only)  |
+| `mobile/`                                        | `audit_mobile` | `mobile-0005`              |
+| `src/`, `native/`, `tests/`, `.github/`, `docs/` | root           | Continue after `root-0037` |
 
 Ownership is disjoint. Within an area, continue in tracked path order after the last batch; explicitly include nonstandard/inline cases and support candidates before closing the area.
 
@@ -43,7 +43,9 @@ Batch validation lives in `reviews/<area>-<batch>-validation.json`. Local log pa
 
 [PR #32305](https://github.com/stablyai/orca/pull/32305) merged another 210 original files and 1,482 case records, removing 324 net test lines. All required checks and the full PR aggregate passed; squash commit `92dfb4fda69e746e96786ea7af417813ac441394`.
 
-The next batch adds 180 original files and 1,188 case records, plus one re-review after upstream changes. Its 70 changed test files remove 318 net test lines. Case records include static declarations and explicitly classified manual controls; they are not runtime test totals.
+[PR #32353](https://github.com/stablyai/orca/pull/32353) merged another 180 original files and 1,188 case records, plus one re-review after upstream changes. Its 70 changed test files removed 318 net test lines. The full PR aggregate and all other checks passed; squash commit `8f6283b32bcdefa746613e4c28d04bb1fe954eb9`.
+
+The next batch adds 204 original files and 1,104 case records, plus one upstream re-review with nine records. Mobile also separately enumerates 83 auxiliary native/manual/support controls. Its 42 changed test/support files remove 153 net lines. Case records include static declarations and explicitly classified manual controls; they are not runtime test totals.
 
 Further completed review records:
 
@@ -68,6 +70,34 @@ Further completed review records:
 | `mobile-0003` |          50 |          315 | Remove copied inventories; exercise real editor fallback, discard target and hardware-back delivery.              |
 | `config-0003` |          50 |          328 | Use actual file matching, generated versions and Git checkout bytes; require real GC/canvas paths.                |
 | `cloud-0003`  |          53 |          400 | Exercise batch renewal, actual replay/SQL, scoped locks, pagination and deterministic transaction errors.         |
+
+| `root-0014` | 2 | 23 | Classify acknowledged retirement and distinguish memory rollback from disk-failure evidence. |
+| `root-0015` | 3 | 11 | Preserve prompt-retention groups and historical source fences; count WeakRefs as objects. |
+| `root-0016` | 2 | 50 | Review Crashpad parity cases and driver controls with explicit package/source drift limits. |
+| `root-0017` | 1 | 8 | Classify daemon late-exit scenarios across both historical variants. |
+| `root-0018` | 4 | 40 | Review shared-owner lifecycle cycles and fixed-source guards. |
+| `root-0019` | 1 | 3 | Reproduce current real loopback stream pause, drain and unpause behavior. |
+| `root-0020` | 4 | 23 | Classify empty-delta controls and archived dependency fences. |
+| `root-0021` | 2 | 12 | Retain GitLab known-host behavior with explicit reversepatch drift limits. |
+| `root-0022` | 1 | 2 | Classify hydration phases against the retired source boundary. |
+| `root-0023` | 1 | 2 | Classify legacy-import phases and baseline-transform rejection. |
+| `root-0024` | 1 | 2 | Preserve log-tail proof phases and reversepatch guard evidence. |
+| `root-0025` | 4 | 12 | Review native PTY environment fixtures without overwriting historical reports. |
+| `root-0026` | 1 | 6 | Classify nested-repository controls and the historical process-runner limit. |
+| `root-0027` | 4 | 149 | Enumerate OSC133 memory, parity and driver controls with scanner drift limits. |
+| `root-0028` | 2 | 5 | Review pending runtime-close incarnations through real host close with controlled ports. |
+| `root-0029` | 2 | 6 | Review split-close daemon socket/history-lock scenarios and loader fences. |
+| `root-0030` | 5 | 9 | Review plugin-uninstall scenarios, loaders and measured WeakRef limits. |
+| `root-0031` | 3 | 47 | Enumerate plugin-worker output variants and parity/CRLF controls. |
+| `root-0032` | 1 | 12 | Run all current PTY-detector behavior combinations; report heap measurements separately. |
+| `root-0033` | 3 | 21 | Classify queued-graph generated cases, real socket/store fixture and retired module. |
+| `root-0034` | 1 | 16 | Classify retained-text measurements without inventing parity/cap/heap assertions. |
+| `root-0035` | 5 | 22 | Review RPC queue lifetime/resolver controls while preserving historical reports. |
+| `root-0036` | 1 | 3 | Reproduce 1,000-request late-cancellation cleanup in the current VM proof. |
+| `root-0037` | 1 re-review | 9 | Recheck upstream conservative import resolution; all 22 expanded tests pass. |
+| `cloud-0004` | 50 | 347 | Exercise commit revalidation, refreshed leases, scoped locks and deterministic telemetry; trim copied SQL. |
+| `config-0004` | 50 | 33 | Keep the archive present for dependency protection; validate real benchmark routing and committed rows. |
+| `mobile-0004` | 50 | 240 | Await real delayed SSH/hydration and media replies; trim copied native/schema inventories. |
 
 Archived proofs retain historical source/dependency fences. A drift rejection is recorded as a limitation, never as a current-head test pass. Permanent suites read only as supporting evidence remain pending unless they have their own completed review.
 
