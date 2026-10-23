@@ -35,6 +35,7 @@ import {
 } from './native-chat-prompt-document'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
 import { NativeChatImageRowProvider } from './NativeChatImageReferencePill'
+import { DICTATION_AUTO_SEND_ATTRIBUTE } from '../dictation/dictation-auto-send'
 
 type Props = Omit<HTMLAttributes<HTMLDivElement>, 'onChange' | 'onSelect'> & {
   scopeKey?: string
@@ -43,6 +44,8 @@ type Props = Omit<HTMLAttributes<HTMLDivElement>, 'onChange' | 'onSelect'> & {
   inputRef: RefObject<NativeChatComposerInput | null>
   initialValue: string
   disabled: boolean
+  /** Lets dictation send this editor's message when it ends. */
+  dictationAutoSend?: boolean
   placeholder: string
   onChange: (input: NativeChatComposerInput) => void
   onSelect: (input: NativeChatComposerInput) => void
@@ -56,6 +59,7 @@ export function NativeChatPromptEditor({
   inputRef,
   initialValue,
   disabled,
+  dictationAutoSend = false,
   placeholder,
   onChange,
   onSelect,
@@ -104,6 +108,7 @@ export function NativeChatPromptEditor({
           role: 'textbox',
           'aria-multiline': 'true',
           'aria-label': placeholder,
+          ...(dictationAutoSend ? { [DICTATION_AUTO_SEND_ATTRIBUTE]: '' } : {}),
           class: `${className ?? ''} whitespace-pre-wrap break-words [&_p]:m-0 [&_p.is-editor-empty:first-child]:before:content-[attr(data-placeholder)] [&_p.is-editor-empty:first-child]:before:text-chat-foreground-faint [&_p.is-editor-empty:first-child]:before:float-left [&_p.is-editor-empty:first-child]:before:h-0 [&_p.is-editor-empty:first-child]:before:pointer-events-none`,
           ...Object.fromEntries(Object.entries(events).filter(([key]) => key.startsWith('aria-')))
         },

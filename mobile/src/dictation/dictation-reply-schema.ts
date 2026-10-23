@@ -64,11 +64,16 @@ const speechModelSchema = z.looseObject({
  *
  * `enabled` and `selectedModelId` stay salvaged: both are read behind `!`/`===` and a reply missing
  * either renders an off switch and no selected row, which is what main rendered for the same reply.
+ *
+ * `autoSendAfterDictation` and `autoSendDelayMs` are salvaged too: a host older than the setting
+ * sends neither, and the chat composer reads absent as off, which is what that host's desktop does.
  */
 export const dictationSetupSchema = z.looseObject({
   enabled: salvagedOptional('enabled', z.boolean()),
   selectedModelId: salvagedOptional('selectedModelId', z.string()),
   dictationMode: salvagedOptional('dictationMode', z.string()),
+  autoSendAfterDictation: salvagedOptional('autoSendAfterDictation', z.boolean()),
+  autoSendDelayMs: salvagedOptional('autoSendDelayMs', z.number()),
   models: salvagingArray(speechModelSchema)
 })
 

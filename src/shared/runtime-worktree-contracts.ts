@@ -151,6 +151,9 @@ export type RuntimeSpeechSetupState = {
   enabled: boolean
   selectedModelId: string
   dictationMode: 'toggle' | 'hold'
+  /** Absent from hosts older than the setting; the phone treats that as off. */
+  autoSendAfterDictation?: boolean
+  autoSendDelayMs?: number
   models: RuntimeSpeechModelSummary[]
 }
 

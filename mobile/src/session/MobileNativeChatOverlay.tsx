@@ -18,6 +18,7 @@ import {
 } from './mobile-native-chat-reply-reveals'
 import { MobileNativeChatRowOverlaysHost } from './MobileNativeChatRowOverlaysHost'
 import { nativeChatAskRequiresTerminal } from '../../../src/shared/native-chat-agent-support'
+import type { MobileDictationAutoSend } from './mobile-dictation-auto-send'
 
 type Props = {
   controller: MobileNativeChatController
@@ -33,6 +34,7 @@ type Props = {
   onMicPress: (() => void) | undefined
   micActive: boolean
   dictationMode: string | undefined
+  dictationAutoSend?: MobileDictationAutoSend | null
   onMicPressIn: () => void
   onMicPressOut: () => void
   inputLockReason: MobileNativeChatInputLockReason | null
@@ -62,6 +64,7 @@ export function MobileNativeChatOverlay({
   onMicPress,
   micActive,
   dictationMode,
+  dictationAutoSend,
   onMicPressIn,
   onMicPressOut,
   inputLockReason,
@@ -190,6 +193,7 @@ export function MobileNativeChatOverlay({
                 onMicPress={onMicPress}
                 micActive={micActive}
                 dictationMode={dictationMode}
+                dictationAutoSend={dictationAutoSend}
                 onMicPressIn={onMicPressIn}
                 onMicPressOut={onMicPressOut}
                 inputLockReason={inputLockReason}

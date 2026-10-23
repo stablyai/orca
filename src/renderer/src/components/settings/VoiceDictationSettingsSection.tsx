@@ -4,6 +4,7 @@ import { Separator } from '../ui/separator'
 import { Switch } from '../ui/switch'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
+import { VoiceAutoSendSetting } from './VoiceAutoSendSetting'
 import { VoiceMicrophoneSetting } from './VoiceMicrophoneSetting'
 
 type VoiceDictationSettingsSectionProps = {
@@ -83,6 +84,13 @@ export function VoiceDictationSettingsSection({
           ))}
         </div>
       </div>
+
+      <Separator />
+
+      <VoiceAutoSendSetting
+        voiceSettings={voiceSettings}
+        onUpdateVoiceSettings={onUpdateVoiceSettings}
+      />
 
       <Separator />
 

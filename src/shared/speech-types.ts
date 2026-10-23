@@ -73,6 +73,9 @@ export type VoiceSettings = {
   language: string
   dictationMode: DictationMode
   terminalConfirmBeforeInsert: boolean
+  /** Send a native chat message once dictation into its composer ends. */
+  autoSendAfterDictation: boolean
+  autoSendDelayMs: number
   userModels: UserModelConfig[]
   openAiApiKeyConfigured: boolean
   /** null = system default input device */

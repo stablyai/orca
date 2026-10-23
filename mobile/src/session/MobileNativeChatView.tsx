@@ -55,6 +55,7 @@ import { MobileNativeChatRowList } from './MobileNativeChatRowList'
 import { useMobileNativeChatRowRenderer } from './use-mobile-native-chat-row-renderer'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
 import type { OlderPagePhase } from './use-mobile-older-page-loader'
+import type { MobileDictationAutoSend } from './mobile-dictation-auto-send'
 
 /** Why the composer input is locked: the transport is disconnected, or the
  *  terminal subscription has not acknowledged its input lease yet. */
@@ -116,6 +117,7 @@ type Props = ComposerTrayProps & {
   onMicPress?: () => void
   micActive?: boolean
   dictationMode?: string
+  dictationAutoSend?: MobileDictationAutoSend | null
   onMicPressIn?: () => void
   onMicPressOut?: () => void
   inputLockReason?: MobileNativeChatInputLockReason | null
@@ -201,6 +203,7 @@ export function MobileNativeChatView({
   onMicPress,
   micActive,
   dictationMode,
+  dictationAutoSend,
   onMicPressIn,
   onMicPressOut,
   inputLockReason,
@@ -433,6 +436,7 @@ export function MobileNativeChatView({
         onMicPress={onMicPress}
         micActive={micActive}
         dictationMode={dictationMode}
+        dictationAutoSend={dictationAutoSend}
         onMicPressIn={onMicPressIn}
         onMicPressOut={onMicPressOut}
         disabled={lockReason !== null}

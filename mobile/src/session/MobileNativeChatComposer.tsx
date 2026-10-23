@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { ActivityIndicator, Keyboard, Pressable, type TextInput, View } from 'react-native'
+import { ActivityIndicator, Keyboard, Pressable, Text, type TextInput, View } from 'react-native'
 import { ArrowUp, Mic, Plus, Square } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
 import { NATIVE_CHAT_COMPOSER_PLACEHOLDER } from '../../../src/shared/native-chat-turn-status'
@@ -20,6 +20,10 @@ import { useMobileNativeChatComposerMenu } from './use-mobile-native-chat-compos
 import { keepHeldPressThroughLongPress } from './held-press-long-press'
 import { mobileNativeChatComposerShowsStop } from './mobile-native-chat-composer-layout'
 import { MobileNativeChatStopButton } from './MobileNativeChatStopButton'
+import {
+  type MobileDictationAutoSend,
+  useMobileDictationAutoSendCountdown
+} from './mobile-dictation-auto-send'
 import { mobileNativeChatComposerStyles as styles } from './mobile-native-chat-composer-styles'
 
 const NO_FILE_PATHS: string[] = []
@@ -68,6 +72,8 @@ type Props = {
   micActive?: boolean
   /** Dictation trigger style — 'hold' uses press-in/out, 'toggle' uses tap. */
   dictationMode?: string
+  /** The session's pending "send when dictation ends", shown and cancelable here. */
+  dictationAutoSend?: MobileDictationAutoSend | null
   onMicPressIn?: () => void
   onMicPressOut?: () => void
   disabled?: boolean
@@ -98,6 +104,7 @@ export function MobileNativeChatComposer({
   onMicPress,
   micActive = false,
   dictationMode = 'toggle',
+  dictationAutoSend = null,
   onMicPressIn,
   onMicPressOut,
   disabled = false,
@@ -121,7 +128,11 @@ export function MobileNativeChatComposer({
   const files = structured?.files ?? NO_FILES
   const menu = useMobileNativeChatComposerMenu({
     value,
-    onChangeText,
+    // Why: typing and every menu pick edit through here; dictation writes the draft from above.
+    onChangeText: (next) => {
+      dictationAutoSend?.withdraw()
+      onChangeText(next)
+    },
     agent,
     structuredCatalog: structured?.catalog,
     filePaths,
@@ -199,6 +210,10 @@ export function MobileNativeChatComposer({
       setSending(false)
     }
   }
+  const { secondsLeft: autoSendSecondsLeft, announcement: autoSendAnnouncement } =
+    useMobileDictationAutoSendCountdown(dictationAutoSend, sendSurfaceId, () => void handleSend())
+  // Why: withdraw, not cancel, so a transcript still on its way stays a draft too.
+  const cancelAutoSend = (): void => dictationAutoSend?.withdraw()
 
   // A terminal-backed chat has only photos to add, so its + opens the library at once.
   const attachPress = structured ? () => setAttachOpen(true) : onAttachImage
@@ -210,6 +225,29 @@ export function MobileNativeChatComposer({
         <MobileNativeChatComposerMenu rows={menu.rows} onPick={menu.pick} />
       ) : null}
       <View style={styles.composerInset} testID="native-chat-composer-inset">
+        {/* Always mounted so a web live region announces its first text; empty while idle. */}
+        <Text
+          style={styles.autoSendAnnouncement}
+          accessibilityLiveRegion="polite"
+          testID="native-chat-dictation-auto-send-announcement"
+        >
+          {autoSendAnnouncement ?? ''}
+        </Text>
+        {autoSendSecondsLeft !== null ? (
+          <View style={styles.autoSendRow} testID="native-chat-dictation-auto-send">
+            <Text style={styles.autoSendText} aria-hidden>
+              Sending in {autoSendSecondsLeft}s
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Cancel sending"
+              hitSlop={8}
+              onPress={cancelAutoSend}
+            >
+              <Text style={styles.autoSendCancel}>Cancel</Text>
+            </Pressable>
+          </View>
+        ) : null}
         <View style={styles.bar} testID="native-chat-composer">
           <MobileNativeChatComposerAttachments
             images={attachments}
@@ -222,7 +260,10 @@ export function MobileNativeChatComposer({
             value={value}
             skillToken={menu.skillToken}
             onChangeText={menu.onFieldChange}
-            onFocus={() => setFocused(true)}
+            onFocus={() => {
+              cancelAutoSend()
+              setFocused(true)
+            }}
             onBlur={() => setFocused(false)}
             // Controlled only transiently right after an autocomplete insert.
             selection={menu.pendingSelection ?? undefined}
@@ -309,7 +350,10 @@ export function MobileNativeChatComposer({
                   !canSend && styles.sendButtonDisabled,
                   pressed && canSend && styles.pressed
                 ]}
-                onPress={handleSend}
+                onPress={() => {
+                  cancelAutoSend()
+                  void handleSend()
+                }}
                 disabled={!canSend}
               >
                 <ArrowUp

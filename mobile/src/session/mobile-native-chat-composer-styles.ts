@@ -1,5 +1,5 @@
 import { StyleSheet } from 'react-native'
-import { colors, radii, spacing } from '../theme/mobile-theme'
+import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 
 /** Round controls on the action row: the attach button, the mic and Send/Stop. */
 const COMPOSER_CONTROL_SIZE = 38
@@ -15,6 +15,29 @@ const roundControl = {
 } as const
 
 export const mobileNativeChatComposerStyles = StyleSheet.create({
+  autoSendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.md,
+    paddingBottom: spacing.xs
+  },
+  autoSendText: {
+    color: colors.textSecondary,
+    fontSize: typography.metaSize
+  },
+  autoSendCancel: {
+    color: colors.textPrimary,
+    fontSize: typography.metaSize,
+    fontWeight: '600'
+  },
+  // Screen-reader only: present for the live region, invisible on screen.
+  autoSendAnnouncement: {
+    position: 'absolute',
+    width: 1,
+    height: 1,
+    overflow: 'hidden'
+  },
   composerInset: {
     paddingHorizontal: 10,
     paddingTop: COMPOSER_INSET_TOP,
