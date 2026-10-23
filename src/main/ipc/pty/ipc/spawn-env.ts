@@ -9,7 +9,10 @@ import { LocalPtyProvider } from '../../../providers/local-pty-provider'
 import { resolvePathEnvKey } from '../../../pty/windows-environment-path'
 import { routesFreshSpawnsToLocalProvider } from '../host-env/fresh-spawn-routing'
 import { parseValidPaneKey } from '../pane/key-state'
-import { shouldRefreshNativeClaudeAgentTeamsEnv } from '../pane/launch-authority'
+import {
+  capturedLaunchRequestsIterm2Teammates,
+  shouldRefreshNativeClaudeAgentTeamsEnv
+} from '../pane/launch-authority'
 import { selectWindowJcodeRuntimeDir, stampPtySpawnPaneEnv } from '../spawn-pane-env'
 import type { PtyIpcSpawnState } from './spawn-state'
 import { assemblePtyIpcSpawnCodexEnv } from './spawn-env-codex'
@@ -78,7 +81,13 @@ export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<voi
     // Why: Agent Teams ids/tokens are process-local, so the team env must be regenerated for the new leader PTY.
     const prepared = await runtime.prepareClaudeAgentTeamsLeaderForHandle({
       handle: ctx.preAllocatedHandle,
-      baseEnv: ctx.baseEnv ?? {}
+      baseEnv: ctx.baseEnv ?? {},
+      ...(capturedLaunchRequestsIterm2Teammates({
+        command: args.command,
+        launchConfig: args.launchConfig
+      })
+        ? { teammateMode: 'iterm2' as const }
+        : {})
     })
     ctx.agentTeamsLeaderHandle = ctx.preAllocatedHandle
     ctx.baseEnv = {

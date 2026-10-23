@@ -4,6 +4,7 @@ import { isWindowsGitBashShellPath, resolveWindowsGitBashShellPath } from '../..
 import { isPwshAvailable } from '../../pwsh'
 import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../../pty/codex-home-wsl-env'
 import { addOrcaWslInteropEnv } from '../../pty/wsl-orca-env'
+import { applyAgentTeamsProbeShellEnv } from '../../pty/claude-agent-teams-spawn-env'
 import {
   POWERLEVEL10K_WIZARD_DISABLE_ENV,
   seedPowerlevel10kWizardEnv
@@ -223,6 +224,8 @@ export function createPtyShellLaunchPlan(
     )
     Object.assign(env, shellLaunch.env)
     shellArgs = userShellArgs ?? shellLaunch.args ?? ['-l']
+    // Why after the shell choice: SHELL names the probe only once the PTY's real shell is fixed.
+    applyAgentTeamsProbeShellEnv({ env, requestedEnv: opts.env, realShellPath: shellPath })
   }
 
   seedPowerlevel10kWizardEnv(env, { envToDelete: opts.envToDelete })

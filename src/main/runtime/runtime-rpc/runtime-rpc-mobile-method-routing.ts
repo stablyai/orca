@@ -12,6 +12,7 @@ export const EXECUTION_HOST_METHODS = [
   'ui.mutateJiraSavedFilters',
   'agent.launch',
   'agent.launchReplay',
+  'agentTeams.it2Compat',
   'agentTeams.prepareLaunch',
   'agentTeams.tmuxCompat',
   'browser.back',

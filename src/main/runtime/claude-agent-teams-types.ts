@@ -23,6 +23,17 @@ export type AgentTeamsTmuxCompatResponse = {
   exitCode: number
 }
 
+export type AgentTeamsIt2CompatRequest = {
+  teamId: string
+  token: string
+  cwd?: string
+  argv: string[]
+}
+
+export type AgentTeamsIt2CompatResponse = AgentTeamsTmuxCompatResponse
+
+export type ClaudeAgentTeamsIt2Shim = { shimDir: string; probeShell: string }
+
 export type AgentTeamsLaunchEnv = {
   teamId: string
   token: string

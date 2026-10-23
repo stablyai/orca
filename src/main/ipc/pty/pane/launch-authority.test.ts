@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { admitProviderReattachLaunchIdentity } from './launch-authority'
+import {
+  admitProviderReattachLaunchIdentity,
+  shouldRefreshNativeClaudeAgentTeamsEnv
+} from './launch-authority'
 
 describe('admitProviderReattachLaunchIdentity', () => {
   it('binds provider launch identity to a valid reattach incarnation', () => {
@@ -36,5 +39,27 @@ describe('admitProviderReattachLaunchIdentity', () => {
     expect(
       admitProviderReattachLaunchIdentity({ isReattach, launchAgent, incarnationId })
     ).toBeNull()
+  })
+})
+
+describe('shouldRefreshNativeClaudeAgentTeamsEnv', () => {
+  it.each([
+    { command: 'claude --teammate-mode auto', expected: true },
+    { command: 'claude --teammate-mode iterm2', expected: true },
+    { command: 'claude --teammate-mode=iterm2 --resume x', expected: true },
+    { command: 'claude --teammate-mode in-process', expected: false },
+    { command: 'claude --teammate-mode iterm22', expected: false },
+    { command: 'claude', expected: false }
+  ])('reads $command from the command', ({ command, expected }) => {
+    expect(shouldRefreshNativeClaudeAgentTeamsEnv({ command })).toBe(expected)
+  })
+
+  it('reads the teammate mode from captured launch args', () => {
+    expect(
+      shouldRefreshNativeClaudeAgentTeamsEnv({
+        command: 'claude --resume x',
+        launchConfig: { agentCommand: 'claude', agentArgs: '--teammate-mode iterm2', agentEnv: {} }
+      })
+    ).toBe(true)
   })
 })

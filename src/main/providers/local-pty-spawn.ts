@@ -23,6 +23,7 @@ import {
 import { loadLocalPtyRuntimeSpawn } from './local-pty-runtime-spawn'
 import { destroyPtyProcess } from './local-pty-termination'
 import { updateHistoryEnvForFallback } from '../terminal-history'
+import { applyAgentTeamsProbeShellEnv } from '../pty/claude-agent-teams-spawn-env'
 import type { PtySpawnOptions, PtySpawnResult } from './pty-provider-contract'
 
 export async function spawnLocalPty(
@@ -92,6 +93,12 @@ export async function spawnLocalPty(
       plan,
       env: finalEnv
     })
+    // Why after the shell choice: SHELL names the probe only once the PTY's real shell is fixed.
+    applyAgentTeamsProbeShellEnv({
+      env: finalEnv,
+      requestedEnv: args.env,
+      realShellPath: plan.shellPath
+    })
 
     const fallbackHistory = historyResult?.historyDir ? historyResult : undefined
     const [spawn] = await Promise.all([loadLocalPtyRuntimeSpawn(), prepareMacosTccLoginShell()])
@@ -120,9 +127,17 @@ export async function spawnLocalPty(
         getShellReadyConfig: plan.getFallbackShellReadyConfig,
         preLaunchEnv: plan.primaryPreLaunchEnv,
         // Why: on zsh→bash fallback HISTFILE still points to zsh_history; update before spawn so the child inherits it (design doc §8).
-        onBeforeFallbackSpawn: fallbackHistory
-          ? (env, fallbackShell) => updateHistoryEnvForFallback(env, fallbackShell, fallbackHistory)
-          : undefined,
+        onBeforeFallbackSpawn: (env, fallbackShell) => {
+          if (fallbackHistory) {
+            updateHistoryEnvForFallback(env, fallbackShell, fallbackHistory)
+          }
+          // Why: the fallback overwrote SHELL, so the probe mapping must follow the shell that actually runs.
+          applyAgentTeamsProbeShellEnv({
+            env,
+            requestedEnv: args.env,
+            realShellPath: fallbackShell
+          })
+        },
         windowsFallbackAttempts: plan.windowsFallbackAttempts
       })
       const spawnResult = pendingSpawn instanceof Promise ? await pendingSpawn : pendingSpawn

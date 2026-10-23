@@ -31,6 +31,7 @@ import { MANAGED_DATA_ACCOUNT_POSIX_RESTORE } from '../shared/managed-data-accou
  */
 import { getPosixOmpShellWrapper } from './pty/omp-shell-wrapper'
 import { WSL_MANAGED_CLI_PATH_RESTORE } from './wsl-managed-cli-path-restore'
+import { CLAUDE_AGENT_TEAMS_POSIX_ENV_RESTORE } from './claude-agent-teams-shell-env-restore'
 import { getPosixCodexShellLaunchPreflight } from '../shared/codex-shell-function'
 import { getPosixClaudeShellFunction } from '../shared/claude-shell-function'
 import {
@@ -50,7 +51,7 @@ import {
 export type ZshWrapperRestoreSpec = {
   /** The managed WSL CLI dir onto PATH — local wrappers only; a no-op outside WSL. */
   managedWslCli: boolean
-  /** Orca's agent-teams shim dir back onto PATH. */
+  /** Orca's agent-teams shim dirs back onto PATH, and the it2 probe shell back into SHELL. */
   agentTeamsPath: boolean
   /** Remote CLI bin dir onto PATH — relay hosts only. */
   remoteCliBinDir: boolean
@@ -70,15 +71,6 @@ export type ZshStartupHookSpec = {
   overlayRestoreComment: string
   restores: ZshWrapperRestoreSpec
 }
-
-const AGENT_TEAMS_PATH_RESTORE_BLOCK = `__orca_restore_agent_teams_path() {
-  [[ -n "\${ORCA_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0
-  case "$PATH" in
-    "\${ORCA_AGENT_TEAMS_SHIM_DIR}"|"\${ORCA_AGENT_TEAMS_SHIM_DIR}:"*) return 0 ;;
-  esac
-  export PATH="\${ORCA_AGENT_TEAMS_SHIM_DIR}:$PATH"
-}
-__orca_restore_agent_teams_path`
 
 const OPENCODE_CONFIG_DIR_RESTORE = `[[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"`
 const MIMOCODE_HOME_RESTORE = `[[ -n "\${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="\${ORCA_MIMOCODE_HOME}"`
@@ -129,7 +121,7 @@ function featureGuard(name: string, body: (string | null)[]): string | null {
 function getOverlayRestoreBlocks(spec: ZshStartupHookSpec): (string | null)[] {
   return [
     spec.overlayRestoreComment,
-    spec.restores.agentTeamsPath ? AGENT_TEAMS_PATH_RESTORE_BLOCK : null,
+    spec.restores.agentTeamsPath ? CLAUDE_AGENT_TEAMS_POSIX_ENV_RESTORE : null,
     OPENCODE_CONFIG_DIR_RESTORE,
     MANAGED_DATA_ACCOUNT_POSIX_RESTORE,
     MIMOCODE_HOME_RESTORE,

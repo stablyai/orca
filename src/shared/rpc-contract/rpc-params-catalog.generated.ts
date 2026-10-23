@@ -586,6 +586,7 @@ import {
   TerminalSubscribe
 } from './terminal-stream-params'
 import {
+  AgentTeamsIt2Compat,
   AgentTeamsPrepareLaunch,
   AgentTeamsTmuxCompat,
   TerminalCloseAll,
@@ -761,6 +762,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSessionAttachment.uploadAppend': AttachmentUploadAppendParams,
   'agentSessionAttachment.uploadCommit': AttachmentUploadIdParams,
   'agentSessionAttachment.uploadStart': AttachmentUploadStartParams,
+  'agentTeams.it2Compat': AgentTeamsIt2Compat,
   'agentTeams.prepareLaunch': AgentTeamsPrepareLaunch,
   'agentTeams.tmuxCompat': AgentTeamsTmuxCompat,
   'aiVault.listSessions': AiVaultListSessionsParams,

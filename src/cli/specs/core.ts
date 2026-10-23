@@ -35,9 +35,14 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS],
     notes: [
       'Passes all following arguments through to Claude Code after enabling Agent Teams native panes.',
-      'Must be run from inside an Orca terminal. Starts Claude Code Agent Teams in the current pane and opens teammates as native Orca splits.'
+      'Must be run from inside an Orca terminal. Starts Claude Code Agent Teams in the current pane and opens teammates as native Orca splits.',
+      'Pass --teammate-mode iterm2 to drive Orca splits through the Claude Code iTerm2 backend instead of tmux emulation.'
     ],
-    examples: ['orca claude-teams', 'orca claude-teams --resume <session-id>']
+    examples: [
+      'orca claude-teams',
+      'orca claude-teams --resume <session-id>',
+      'orca claude-teams --teammate-mode iterm2'
+    ]
   },
   ...REPO_COMMAND_SPECS,
   {

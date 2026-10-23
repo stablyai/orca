@@ -41,6 +41,15 @@ export function updateMainVerticalAfterSplit(
   }
 }
 
+export function removePane(team: AgentTeam, pane: TeamPane): void {
+  team.panes.delete(pane.fakePaneId)
+  team.paneOrder = team.paneOrder.filter((id) => id !== pane.fakePaneId)
+  if (team.mainVertical?.lastColumnPane === pane.fakePaneId) {
+    team.mainVertical.lastColumnPane =
+      [...team.paneOrder].toReversed().find((id) => id !== team.leaderPane) ?? null
+  }
+}
+
 export function formatContext(team: AgentTeam, pane: TeamPane): Record<string, string> {
   return {
     session_name: team.sessionName,

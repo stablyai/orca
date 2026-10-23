@@ -301,8 +301,17 @@ export const AgentTeamsTmuxCompat = z.object({
   argv: z.array(z.string())
 })
 
+export const AgentTeamsIt2Compat = z.object({
+  teamId: requiredString('Missing agent team ID'),
+  token: requiredString('Missing agent team token'),
+  cwd: OptionalString,
+  argv: z.array(z.string())
+})
+
 export const AgentTeamsPrepareLaunch = z.object({
   paneKey: requiredString('Missing pane key'),
   env: z.record(z.string(), z.string()).optional(),
-  prepareAuth: z.boolean().optional()
+  prepareAuth: z.boolean().optional(),
+  // Older hosts strip this and return an env without the it2 probe shell; the CLI detects that.
+  teammateMode: z.literal('iterm2').optional()
 })

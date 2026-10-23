@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   buildClaudeAgentTeamsLaunchPlan,
+  ensureClaudeAgentTeamsIt2ShimDir,
   ensureClaudeAgentTeamsShimDir,
   resolveClaudeAgentTeamsShimBin,
   windowsClaudeAgentTeamsShimScript
@@ -82,6 +83,51 @@ describe('claude agent teams shim env', () => {
       })
     ).resolves.toBeNull()
   })
+
+  it.skipIf(process.platform === 'win32')(
+    'builds iTerm2 shim env only for an explicit iterm2 teammate mode',
+    async () => {
+      const root = await mkdtemp(join(tmpdir(), 'orca-agent-teams-cli-'))
+      roots.push(root)
+      // Why: the plan writes its shims under ~/.orca.
+      vi.stubEnv('HOME', root)
+      const cliPath = join(root, 'orca-dev')
+      await writeFile(cliPath, '#!/usr/bin/env sh\n', 'utf8')
+      await chmod(cliPath, 0o755)
+
+      const seenIt2: unknown[] = []
+      const build = (command: string, teammateMode?: 'iterm2') =>
+        buildClaudeAgentTeamsLaunchPlan({
+          command,
+          mode: 'native-panes-shim',
+          ...(teammateMode ? { teammateMode } : {}),
+          baseEnv: { PATH: root },
+          createTeamEnv: (_shimDir, _shimBin, it2) => {
+            seenIt2.push(it2)
+            return {}
+          }
+        })
+
+      const iterm2 = await build("claude --teammate-mode iterm2 'hello'", 'iterm2')
+      const auto = await build("claude --teammate-mode auto 'hello'")
+
+      // Why: an explicit mode flag must survive untouched, never gain a competing `auto`.
+      expect(iterm2?.command).toBe("claude --teammate-mode iterm2 'hello'")
+      expect(auto?.command).toBe("claude --teammate-mode auto 'hello'")
+      expect(seenIt2).toEqual([
+        {
+          shimDir: join(root, '.orca', 'claude-agent-teams-it2-bin'),
+          probeShell: join(
+            root,
+            '.orca',
+            'claude-agent-teams-it2-bin',
+            'orca-agent-teams-probe-shell'
+          )
+        },
+        undefined
+      ])
+    }
+  )
 
   it('resolves the dev CLI wrapper for the tmux callback binary', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-agent-teams-cli-'))
@@ -196,4 +242,82 @@ describe('claude agent teams shim env', () => {
     expect(script).toContain('\r\n"%ORCA_SHIM_BIN%" agent-teams-tmux %*\r\n')
     expect(script).toContain('exit /b 127')
   })
+})
+
+describe('claude agent teams it2 shim', () => {
+  it.skipIf(process.platform === 'win32')(
+    'routes it2 to the Orca CLI only through a qualified shim bin',
+    async () => {
+      const root = await mkdtemp(join(tmpdir(), 'orca-agent-teams-it2-'))
+      roots.push(root)
+      const shim = await ensureClaudeAgentTeamsIt2ShimDir(root)
+      const cwd = await mkdtemp(join(tmpdir(), 'orca-agent-teams-cwd-'))
+      roots.push(cwd)
+      const marker = join(cwd, 'hijacked')
+      const decoy = join(cwd, 'orca')
+      await writeFile(decoy, `#!/usr/bin/env sh\ntouch ${JSON.stringify(marker)}\n`, 'utf8')
+      await chmod(decoy, 0o755)
+
+      const it2 = join(shim?.shimDir ?? '', 'it2')
+      const refused = spawnSync(it2, ['session', 'list'], {
+        cwd,
+        env: { PATH: `.:${process.env.PATH ?? ''}` },
+        encoding: 'utf8'
+      })
+
+      expect(refused.status).toBe(127)
+      expect(refused.stderr).toContain('orca agent-teams it2 shim')
+      expect(existsSync(marker)).toBe(false)
+
+      const cli = join(cwd, 'fake-orca')
+      await writeFile(cli, '#!/usr/bin/env sh\necho "ran $*"\n', 'utf8')
+      await chmod(cli, 0o755)
+      const qualified = spawnSync(it2, ['session', 'list'], {
+        cwd,
+        env: { PATH: process.env.PATH ?? '', ORCA_AGENT_TEAMS_SHIM_BIN: cli },
+        encoding: 'utf8'
+      })
+
+      expect(qualified.status).toBe(0)
+      expect(qualified.stdout.trim()).toBe('ran agent-teams-it2 session list')
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'probe shell answers only the it2 lookup and hands every other call to the real shell',
+    async () => {
+      const root = await mkdtemp(join(tmpdir(), 'orca-agent-teams-it2-'))
+      roots.push(root)
+      const shim = await ensureClaudeAgentTeamsIt2ShimDir(root)
+      const probeShell = shim?.probeShell ?? ''
+      const realShell = join(root, 'real-shell')
+      await writeFile(realShell, '#!/bin/sh\necho "real:$*"\n', 'utf8')
+      await chmod(realShell, 0o755)
+      const run = (args: string[], env: Record<string, string>) =>
+        spawnSync(probeShell, args, {
+          env: { PATH: process.env.PATH ?? '', ORCA_AGENT_TEAMS_REAL_SHELL: realShell, ...env },
+          encoding: 'utf8',
+          timeout: 5000
+        })
+      const lookup = ['-lc', 'command -v it2']
+
+      expect(run(lookup, { ORCA_AGENT_TEAMS_IT2_SHIM_DIR: root }).stdout.trim()).toBe(
+        join(root, 'it2')
+      )
+      expect(run(lookup, { ORCA_AGENT_TEAMS_IT2_SHIM_DIR: '' }).stdout.trim()).toBe(
+        'real:-lc command -v it2'
+      )
+      expect(run([...lookup, 'extra'], { ORCA_AGENT_TEAMS_IT2_SHIM_DIR: root }).stdout.trim()).toBe(
+        'real:-lc command -v it2 extra'
+      )
+      expect(run(['-c', 'echo hi'], { ORCA_AGENT_TEAMS_IT2_SHIM_DIR: root }).stdout.trim()).toBe(
+        'real:-c echo hi'
+      )
+
+      // Why: a real shell that points back at the wrapper must not exec itself forever.
+      const looped = run(['-c', 'echo ok'], { ORCA_AGENT_TEAMS_REAL_SHELL: probeShell })
+      expect(looped.status).toBe(0)
+      expect(looped.stdout.trim()).toBe('ok')
+    }
+  )
 })

@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto'
 import type { Repo } from '../../shared/repo-types'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
+import { requestsClaudeTeammateModeIterm2 } from '../../shared/claude-agent-teams-it2-compat'
 import type { ClaudeAgentTeamsMode } from '../../shared/claude-agent-teams-tmux-compat'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
 import {
@@ -11,6 +12,7 @@ import {
 } from '../../shared/agent-launch-runtime'
 import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
+import { composeCapturedAgentLaunch } from '../ipc/pty/pane/launch-authority'
 
 export function mergeTerminalEnvDeletionKeys(
   first: readonly string[] | undefined,
@@ -91,10 +93,11 @@ export function inferCapturedClaudeAgentTeamsMode(
   command: string | undefined,
   currentMode: ClaudeAgentTeamsMode | undefined
 ): ClaudeAgentTeamsMode | undefined {
-  const capturedCommand = launchConfig?.agentCommand?.trim() || command?.trim() || ''
-  const capturedArgs = launchConfig?.agentArgs?.trim() ?? ''
-  const capturedLaunch = `${capturedCommand} ${capturedArgs}`.trim()
-  if (/(^|\s)--teammate-mode(?:=|\s+)auto(?:\s|$)/.test(capturedLaunch)) {
+  const capturedLaunch = composeCapturedAgentLaunch({ command, launchConfig })
+  if (
+    /(^|\s)--teammate-mode(?:=|\s+)auto(?:\s|$)/.test(capturedLaunch) ||
+    requestsClaudeTeammateModeIterm2(capturedLaunch)
+  ) {
     return 'native-panes-shim'
   }
   if (/(^|\s)--teammate-mode(?:=|\s+)in-process(?:\s|$)/.test(capturedLaunch)) {

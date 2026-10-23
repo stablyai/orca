@@ -37,6 +37,7 @@ const METHOD_CASES: readonly (readonly [string, unknown, boolean])[] = [
   ['terminal.close', { terminal: 'term' }, false],
   ['terminal.closeTab', { terminal: 'term' }, false],
   ['agentTeams.tmuxCompat', { teamId: 'team', token: 'token', envPane: 'pane', argv: [] }, false],
+  ['agentTeams.it2Compat', { teamId: 'team', token: 'token', argv: [] }, false],
   ['agentTeams.prepareLaunch', { paneKey: 'pane' }, false],
   ['terminal.setDisplayMode', { terminal: 'term', mode: 'auto' }, false],
   ['terminal.restoreFit', { terminal: 'term' }, false],
@@ -71,11 +72,11 @@ async function invoke(name: string, params: unknown, runtime: Partial<OrcaRuntim
 
 describe('terminal RPC manifest characterization', () => {
   it('preserves all method names, order, streaming flags, and parseable minimum inputs', () => {
-    expect(TERMINAL_METHODS).toHaveLength(40)
+    expect(TERMINAL_METHODS).toHaveLength(41)
     expect(TERMINAL_METHODS.map((method) => [method.name, 'stream' in method])).toEqual(
       METHOD_CASES.map(([name, _params, stream]) => [name, stream])
     )
-    expect(new Set(TERMINAL_METHODS.map((method) => method.name)).size).toBe(40)
+    expect(new Set(TERMINAL_METHODS.map((method) => method.name)).size).toBe(41)
     for (const [name, params] of METHOD_CASES) {
       expect(() => schemaFor(name).parse(params), name).not.toThrow()
     }
@@ -173,6 +174,30 @@ describe('terminal RPC manifest characterization', () => {
     await expect(invoke('terminal.split', { terminal: 'term' }, runtime)).resolves.toEqual({
       split
     })
+  })
+
+  it('routes it2 compat calls and forwards the teammate mode into leader preparation', async () => {
+    const it2 = { ok: true, stdout: 'out', stderr: '', exitCode: 0 }
+    const handleAgentTeamsIt2Compat = vi.fn(async () => it2)
+    const prepareClaudeAgentTeamsLeader = vi.fn(async () => ({ env: {} }))
+    const runtime: Partial<OrcaRuntimeService> = {
+      handleAgentTeamsIt2Compat,
+      prepareClaudeAgentTeamsLeader
+    }
+
+    await expect(
+      invoke('agentTeams.it2Compat', { teamId: 'team', token: 'token', argv: ['session'] }, runtime)
+    ).resolves.toEqual({ it2 })
+    expect(handleAgentTeamsIt2Compat).toHaveBeenCalledWith({
+      teamId: 'team',
+      token: 'token',
+      argv: ['session']
+    })
+
+    await invoke('agentTeams.prepareLaunch', { paneKey: 'pane', teammateMode: 'iterm2' }, runtime)
+    expect(prepareClaudeAgentTeamsLeader).toHaveBeenCalledWith(
+      expect.objectContaining({ paneKey: 'pane', teammateMode: 'iterm2' })
+    )
   })
 
   it('keeps remote and folder selectors opaque through terminal.create', async () => {

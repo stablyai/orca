@@ -1,8 +1,8 @@
 import { getLegacyOpenCodeEnvKeysToDelete } from '../../opencode/legacy-shared-config-dir'
 import { restoreManagedDataAccountEnvironment } from '../../../shared/managed-data-account-environment'
 import { restoreOrStripOverlayEnv } from '../../../shared/agent-overlay-env'
-import { delimiter } from 'node:path'
 import { dropInheritedOrcaFishHistory } from '../../fish-history-session'
+import { promoteAgentTeamsShimPath } from '../../pty/claude-agent-teams-spawn-env'
 import { removeAppImageRuntimeEnv } from '../../pty/appimage-terminal-env'
 import { removeChromiumDisabledSessionBus } from '../../pty/chromium-session-bus-env'
 import { stripInheritedBuildModeEnv } from '../../pty/build-mode-env'
@@ -21,10 +21,7 @@ import {
   ORCA_IMAGE_PROTOCOL_ENV,
   ORCA_IMAGE_PROTOCOL_VALUE
 } from '../../../shared/terminal-image-protocol'
-import {
-  expandWindowsEnvironmentVariables,
-  expandWindowsPathEnvironmentVariables
-} from '../../../shared/windows-environment-expansion'
+import { expandWindowsPathEnvironmentVariables } from '../../../shared/windows-environment-expansion'
 import { applyScrubSafeAgentEnvAliases } from '../../../shared/agent-hook-scrub-safe-env'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { PtySubprocessOptions } from '../pty-subprocess'
@@ -135,28 +132,6 @@ function collapseWindowsPathEnvKeys(
       delete env[key]
     }
   }
-}
-
-/** Promotes the agent-teams shim path ahead of inherited PATH entries. */
-function promoteAgentTeamsShimPath(
-  env: Record<string, string>,
-  requestedPath: string | undefined
-): void {
-  if (!env.ORCA_AGENT_TEAMS_TEAM_ID || !requestedPath) {
-    return
-  }
-  const normalizedRequestedPath =
-    process.platform === 'win32'
-      ? expandWindowsEnvironmentVariables(requestedPath, env)
-      : requestedPath
-  const pathDelimiter = process.platform === 'win32' ? ';' : delimiter
-  const shimDir = normalizedRequestedPath.split(pathDelimiter)[0]
-  if (!shimDir) {
-    return
-  }
-  const pathKey = resolvePathEnvKey(env, process.platform)
-  const currentParts = env[pathKey]?.split(pathDelimiter).filter(Boolean) ?? []
-  env[pathKey] = [shimDir, ...currentParts.filter((part) => part !== shimDir)].join(pathDelimiter)
 }
 
 /** A dev receiver without an endpoint file must not fall back to another runtime's file. */

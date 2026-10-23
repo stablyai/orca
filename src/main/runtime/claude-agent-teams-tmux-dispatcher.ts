@@ -8,6 +8,7 @@ import { describeUnconfirmedAgentStop } from '../../shared/pty-liveness-verdict'
 import {
   formatContext,
   paneEnv,
+  removePane,
   resolveSplitTarget,
   updateMainVerticalAfterSplit
 } from './claude-agent-teams-pane-layout'
@@ -180,7 +181,7 @@ export class ClaudeAgentTeamsTmuxDispatcher {
       })
       pane.handle = split.handle
     } catch (error) {
-      this.removePane(team, pane)
+      removePane(team, pane)
       throw error
     }
     return ''
@@ -275,17 +276,8 @@ export class ClaudeAgentTeamsTmuxDispatcher {
     if (!close.ptyKilled) {
       throw new Error(describeUnconfirmedAgentStop(close))
     }
-    this.removePane(team, pane)
+    removePane(team, pane)
     return ''
-  }
-
-  private removePane(team: AgentTeam, pane: TeamPane): void {
-    team.panes.delete(pane.fakePaneId)
-    team.paneOrder = team.paneOrder.filter((id) => id !== pane.fakePaneId)
-    if (team.mainVertical?.lastColumnPane === pane.fakePaneId) {
-      team.mainVertical.lastColumnPane =
-        [...team.paneOrder].toReversed().find((id) => id !== team.leaderPane) ?? null
-    }
   }
 
   private async lastPane(

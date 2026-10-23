@@ -365,6 +365,39 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[2].env.ORCA_STALE_TEST_ENV).toBeUndefined()
     })
 
+    it('spawns the real shell while exposing the it2 probe shell as SHELL', async () => {
+      // Why: the provider records the real shell on this same env object after spawning.
+      let spawnedEnv: Record<string, string> = {}
+      spawnMock.mockImplementationOnce((_file, _args, options) => {
+        spawnedEnv = { ...options.env }
+        return mockProc
+      })
+
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        env: {
+          SHELL: '/bin/bash',
+          PATH: '/tmp/orca-it2-bin:/tmp/orca-agent-teams-bin:/usr/bin',
+          ORCA_AGENT_TEAMS_TEAM_ID: 'team-test',
+          ORCA_AGENT_TEAMS_SHIM_DIR: '/tmp/orca-agent-teams-bin',
+          ORCA_AGENT_TEAMS_IT2_SHIM_DIR: '/tmp/orca-it2-bin',
+          ORCA_AGENT_TEAMS_IT2_PROBE_SHELL: '/tmp/orca-it2-bin/probe-shell'
+        }
+      })
+
+      expect(spawnMock.mock.calls.at(-1)?.[0]).toBe('/bin/bash')
+      expect(spawnedEnv).toMatchObject({
+        SHELL: '/tmp/orca-it2-bin/probe-shell',
+        ORCA_AGENT_TEAMS_REAL_SHELL: '/bin/bash',
+        CLAUDE_CODE_SHELL: '/bin/bash'
+      })
+      expect(spawnedEnv.PATH.split(':').slice(0, 2)).toEqual([
+        '/tmp/orca-it2-bin',
+        '/tmp/orca-agent-teams-bin'
+      ])
+    })
+
     it('does not re-promote a legacy attribution path for Agent Teams', async () => {
       await provider.spawn({
         cols: 80,

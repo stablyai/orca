@@ -318,53 +318,60 @@ describe('registerPtyHandlers', () => {
       false
     )
   })
-  it('refreshes native Agent Teams env when captured teammate mode lives in launch args', async () => {
-    const leafId = '11111111-1111-4111-8111-111111111111'
-    const runtime = {
-      setPtyController: vi.fn(),
-      createPreAllocatedTerminalHandle: vi.fn(() => 'term_agent_teams'),
-      prepareClaudeAgentTeamsLeaderForHandle: vi.fn(async () => ({
+  it.each([
+    { teammateMode: 'auto', expectedPrepareArgs: {} },
+    { teammateMode: 'iterm2', expectedPrepareArgs: { teammateMode: 'iterm2' } }
+  ])(
+    'refreshes native Agent Teams env when captured $teammateMode teammate mode lives in launch args',
+    async ({ teammateMode, expectedPrepareArgs }) => {
+      const leafId = '11111111-1111-4111-8111-111111111111'
+      const runtime = {
+        setPtyController: vi.fn(),
+        createPreAllocatedTerminalHandle: vi.fn(() => 'term_agent_teams'),
+        prepareClaudeAgentTeamsLeaderForHandle: vi.fn(async () => ({
+          env: {
+            CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
+            ORCA_AGENT_TEAMS_TEAM_ID: 'team-fresh',
+            ORCA_AGENT_TEAMS_TOKEN: 'fresh-token'
+          }
+        })),
+        registerPreAllocatedHandleForPty: vi.fn(),
+        registerPty: vi.fn(),
+        getDriver: vi.fn(() => ({ kind: 'host' })),
+        onPtySpawned: vi.fn(),
+        onPtyExit: vi.fn(),
+        onPtyData: vi.fn()
+      }
+
+      registerPtyHandlers(mainWindow as never, runtime as never)
+      await handlers.get('pty:spawn')!(mainWindowIpcEvent, {
+        cols: 80,
+        rows: 24,
+        cwd: '/repo',
+        command: 'claude --resume claude-session',
+        tabId: 'tab-1',
+        leafId,
+        worktreeId: 'wt-1',
         env: {
-          CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
-          ORCA_AGENT_TEAMS_TEAM_ID: 'team-fresh',
-          ORCA_AGENT_TEAMS_TOKEN: 'fresh-token'
-        }
-      })),
-      registerPreAllocatedHandleForPty: vi.fn(),
-      registerPty: vi.fn(),
-      getDriver: vi.fn(() => ({ kind: 'host' })),
-      onPtySpawned: vi.fn(),
-      onPtyExit: vi.fn(),
-      onPtyData: vi.fn()
+          ORCA_PANE_KEY: `tab-1:${leafId}`,
+          ORCA_TAB_ID: 'tab-1',
+          ORCA_WORKTREE_ID: 'wt-1'
+        },
+        launchConfig: {
+          agentCommand: 'claude',
+          agentArgs: `--teammate-mode ${teammateMode}`,
+          agentEnv: {}
+        },
+        launchAgent: 'claude'
+      })
+
+      expect(runtime.prepareClaudeAgentTeamsLeaderForHandle).toHaveBeenCalledWith({
+        handle: 'term_agent_teams',
+        baseEnv: expect.any(Object),
+        ...expectedPrepareArgs
+      })
     }
-
-    registerPtyHandlers(mainWindow as never, runtime as never)
-    await handlers.get('pty:spawn')!(mainWindowIpcEvent, {
-      cols: 80,
-      rows: 24,
-      cwd: '/repo',
-      command: 'claude --resume claude-session',
-      tabId: 'tab-1',
-      leafId,
-      worktreeId: 'wt-1',
-      env: {
-        ORCA_PANE_KEY: `tab-1:${leafId}`,
-        ORCA_TAB_ID: 'tab-1',
-        ORCA_WORKTREE_ID: 'wt-1'
-      },
-      launchConfig: {
-        agentCommand: 'claude',
-        agentArgs: '--teammate-mode auto',
-        agentEnv: {}
-      },
-      launchAgent: 'claude'
-    })
-
-    expect(runtime.prepareClaudeAgentTeamsLeaderForHandle).toHaveBeenCalledWith({
-      handle: 'term_agent_teams',
-      baseEnv: expect.any(Object)
-    })
-  })
+  )
   it('reuses the runtime background handle in local PTY spawn env', async () => {
     type RuntimeSpawnController = {
       spawn(args: {

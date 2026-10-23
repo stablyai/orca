@@ -233,6 +233,51 @@ describe('orca cli worktree awareness', () => {
     }
   )
 
+  it('relays the it2 shim to the runtime and mirrors its output and exit code', async () => {
+    const previousTeamId = process.env.ORCA_AGENT_TEAMS_TEAM_ID
+    const previousToken = process.env.ORCA_AGENT_TEAMS_TOKEN
+    const previousExitCode = process.exitCode
+    process.env.ORCA_AGENT_TEAMS_TEAM_ID = 'team-1'
+    process.env.ORCA_AGENT_TEAMS_TOKEN = 'token-1'
+    const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    queueFixtures(
+      callMock,
+      okFixture('req_it2', { it2: { stdout: 'session-1\n', stderr: 'warn\n', exitCode: 3 } })
+    )
+    try {
+      await main(['agent-teams-it2', 'session', 'list'], '/tmp/repo')
+
+      expect(callMock).toHaveBeenCalledWith(
+        'agentTeams.it2Compat',
+        {
+          teamId: 'team-1',
+          token: 'token-1',
+          cwd: process.cwd(),
+          argv: ['session', 'list']
+        },
+        { timeoutMs: 10_000 }
+      )
+      expect(stdoutSpy).toHaveBeenCalledWith('session-1\n')
+      expect(stderrSpy).toHaveBeenCalledWith('warn\n')
+      expect(process.exitCode).toBe(3)
+    } finally {
+      stdoutSpy.mockRestore()
+      stderrSpy.mockRestore()
+      process.exitCode = previousExitCode
+      if (previousTeamId === undefined) {
+        delete process.env.ORCA_AGENT_TEAMS_TEAM_ID
+      } else {
+        process.env.ORCA_AGENT_TEAMS_TEAM_ID = previousTeamId
+      }
+      if (previousToken === undefined) {
+        delete process.env.ORCA_AGENT_TEAMS_TOKEN
+      } else {
+        process.env.ORCA_AGENT_TEAMS_TOKEN = previousToken
+      }
+    }
+  })
+
   it('rejects remote `worktree current` without listing worktrees from client cwd', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})

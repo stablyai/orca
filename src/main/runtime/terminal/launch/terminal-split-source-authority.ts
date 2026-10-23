@@ -4,10 +4,13 @@ import { resolveTerminalSessionWorktreeId } from '../../runtime-worktree-path-id
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { terminalLayoutContainsLeaf } from '../../../../shared/workspace-session-pane-ownership'
 import type {
+  AgentTeamsIt2CompatRequest,
+  AgentTeamsIt2CompatResponse,
   AgentTeamsTmuxCompatRequest,
   AgentTeamsTmuxCompatResponse
 } from '../../claude-agent-teams-types'
 import {
+  ensureClaudeAgentTeamsIt2ShimDir,
   ensureClaudeAgentTeamsShimDir,
   resolveClaudeAgentTeamsShimBin
 } from '../../claude-agent-teams-shim-env'
@@ -122,10 +125,24 @@ export abstract class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends
     })
   }
 
+  async handleAgentTeamsIt2Compat(
+    request: AgentTeamsIt2CompatRequest
+  ): Promise<AgentTeamsIt2CompatResponse> {
+    return await this.claudeAgentTeams.handleIt2Compat(request, {
+      splitTerminal: (handle, opts) => this.splitTerminal(handle, opts),
+      readTerminal: (handle, opts) => this.readTerminal(handle, opts),
+      sendTerminal: (handle, action, options) => this.sendTerminal(handle, action, options),
+      focusTerminal: (handle) => this.focusTerminal(handle),
+      closeTerminal: (handle) => this.closeTerminal(handle),
+      showTerminal: (handle) => this.showTerminal(handle)
+    })
+  }
+
   async prepareClaudeAgentTeamsLeader(args: {
     paneKey: string
     baseEnv?: Record<string, string>
     prepareAuth?: boolean
+    teammateMode?: 'iterm2'
   }): Promise<{ env: Record<string, string> }> {
     const handle = this.getTerminalHandleForPaneKey(args.paneKey)
     if (!handle) {
@@ -134,7 +151,8 @@ export abstract class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends
     return await this.prepareClaudeAgentTeamsLeaderForHandle({
       handle,
       baseEnv: args.baseEnv,
-      prepareAuth: args.prepareAuth
+      prepareAuth: args.prepareAuth,
+      teammateMode: args.teammateMode
     })
   }
 
@@ -142,6 +160,7 @@ export abstract class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends
     handle: string
     baseEnv?: Record<string, string>
     prepareAuth?: boolean
+    teammateMode?: 'iterm2'
   }): Promise<{ env: Record<string, string>; envToDelete?: string[] }> {
     const baseEnv = {
       ...process.env,
@@ -153,11 +172,16 @@ export abstract class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends
     }
     const shimDir = await ensureClaudeAgentTeamsShimDir()
     const shimBin = resolveClaudeAgentTeamsShimBin(baseEnv)
+    const it2 =
+      args.teammateMode === 'iterm2' && process.platform !== 'win32'
+        ? await ensureClaudeAgentTeamsIt2ShimDir()
+        : null
     const launch = this.claudeAgentTeams.createLaunchEnv({
       leaderHandle: args.handle,
       baseEnv,
       shimDir,
-      shimBin
+      shimBin,
+      ...(it2 ? { it2 } : {})
     })
     const env = auth ? { ...auth.envPatch, ...launch.env } : launch.env
     return { env }

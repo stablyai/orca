@@ -8,6 +8,7 @@ import {
 } from '../../../../../shared/runtime-navigation'
 import { withTerminalCloseAttribution } from '../../terminal-close-attribution'
 import {
+  AgentTeamsIt2Compat,
   AgentTeamsPrepareLaunch,
   AgentTeamsTmuxCompat,
   TerminalCreateParams,
@@ -258,6 +259,14 @@ export const TERMINAL_LIFECYCLE_METHODS = [
     })
   }),
   defineMethod({
+    name: 'agentTeams.it2Compat',
+    permission: 'workspace',
+    params: AgentTeamsIt2Compat,
+    handler: async (params, { runtime }) => ({
+      it2: await runtime.handleAgentTeamsIt2Compat(params)
+    })
+  }),
+  defineMethod({
     name: 'agentTeams.prepareLaunch',
     permission: 'workspace',
     params: AgentTeamsPrepareLaunch,
@@ -265,7 +274,8 @@ export const TERMINAL_LIFECYCLE_METHODS = [
       launch: await runtime.prepareClaudeAgentTeamsLeader({
         paneKey: params.paneKey,
         baseEnv: params.env,
-        prepareAuth: params.prepareAuth
+        prepareAuth: params.prepareAuth,
+        teammateMode: params.teammateMode
       })
     })
   })

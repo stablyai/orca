@@ -82,13 +82,8 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
             claudeAgentTeamsMode: this.store?.getSettings?.().claudeAgentTeamsMode,
             baseEnv: { ...process.env, ...baseEnv },
             adoptedBeforeLaunch: null,
-            createTeamEnv: (shimDir, shimBin) =>
-              this.claudeAgentTeams.createLaunchEnv({
-                leaderHandle: preAllocatedHandle,
-                baseEnv: { ...process.env, ...baseEnv },
-                shimDir,
-                shimBin
-              }).env
+            claudeAgentTeams: this.claudeAgentTeams,
+            leaderHandle: preAllocatedHandle
           })
           agentTeamsPlan = agentTeams.plan
           sequencedStartupCommand = agentTeams.sequencedStartupCommand

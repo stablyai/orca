@@ -8,6 +8,7 @@ import { BASH_PROMPT_COMMAND_COMPOSITION_BLOCK } from '../bash-prompt-command-co
 import { ORCA_CLI_POSIX_PATH_RESTORE } from '../../shared/orca-cli-shell-path'
 import { MANAGED_DATA_ACCOUNT_POSIX_RESTORE } from '../../shared/managed-data-account-shell'
 import { WSL_MANAGED_CLI_PATH_RESTORE } from '../wsl-managed-cli-path-restore'
+import { CLAUDE_AGENT_TEAMS_POSIX_ENV_RESTORE } from '../claude-agent-teams-shell-env-restore'
 import { getPosixOmpShellWrapper } from '../pty/omp-shell-wrapper'
 import { getPosixCodexShellLaunchPreflight } from '../../shared/codex-shell-function'
 import { getPosixClaudeShellFunction } from '../../shared/claude-shell-function'
@@ -41,14 +42,7 @@ fi
 # Why: preserve bash's normal login-shell contract. Many users already source
 # ~/.bashrc from ~/.bash_profile; forcing ~/.bashrc again here would duplicate
 # PATH edits, hooks, and prompt init in Orca startup-command shells.
-__orca_restore_agent_teams_path() {
-  [[ -n "\${ORCA_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0
-  case "$PATH" in
-    "\${ORCA_AGENT_TEAMS_SHIM_DIR}"|"\${ORCA_AGENT_TEAMS_SHIM_DIR}:"*) return 0 ;;
-  esac
-  export PATH="\${ORCA_AGENT_TEAMS_SHIM_DIR}:$PATH"
-}
-__orca_restore_agent_teams_path
+${CLAUDE_AGENT_TEAMS_POSIX_ENV_RESTORE}
 ${ORCA_CLI_POSIX_PATH_RESTORE}
 ${WSL_MANAGED_CLI_PATH_RESTORE}
 # Why: user startup files may set the default OpenCode config after Orca's

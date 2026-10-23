@@ -1,10 +1,10 @@
-import { basename, delimiter, win32 as pathWin32 } from 'node:path'
+import { basename, win32 as pathWin32 } from 'node:path'
 import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import { parseWslPath } from '../wsl'
-import { resolvePathEnvKey } from '../pty/windows-environment-path'
-import { expandWindowsEnvironmentVariables } from '../../shared/windows-environment-expansion'
 import { resolveSafePtyDefaultCwd } from './pty-default-cwd'
 import { ORCAD_MANAGED_ACTIVATION_ROOT_ENV } from '../../shared/orcad-managed-launch-env'
+
+export { promoteAgentTeamsShimPath } from '../pty/claude-agent-teams-spawn-env'
 
 const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
@@ -29,27 +29,6 @@ export function removeUnspecifiedPaneIdentityEnv(
       delete env[key]
     }
   }
-}
-
-export function promoteAgentTeamsShimPath(
-  env: Record<string, string>,
-  requestedPath: string | undefined
-): void {
-  if (!env.ORCA_AGENT_TEAMS_TEAM_ID || !requestedPath) {
-    return
-  }
-  const normalizedRequestedPath =
-    process.platform === 'win32'
-      ? expandWindowsEnvironmentVariables(requestedPath, env)
-      : requestedPath
-  const pathDelimiter = process.platform === 'win32' ? ';' : delimiter
-  const shimDir = normalizedRequestedPath.split(pathDelimiter)[0]
-  if (!shimDir) {
-    return
-  }
-  const pathKey = resolvePathEnvKey(env, process.platform)
-  const currentParts = env[pathKey]?.split(pathDelimiter).filter(Boolean) ?? []
-  env[pathKey] = [shimDir, ...currentParts.filter((part) => part !== shimDir)].join(pathDelimiter)
 }
 
 export function getWslContextFromWorktreeId(

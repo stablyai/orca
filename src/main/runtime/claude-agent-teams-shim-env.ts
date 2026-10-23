@@ -10,6 +10,9 @@ import {
 } from '../../shared/claude-agent-teams-tmux-compat'
 import { getOrcaCliCommandNameForPlatform } from '../../shared/orca-cli-command-name'
 import { resolvePathEnvKey } from '../pty/windows-path-segment-merge'
+import type { ClaudeAgentTeamsIt2Shim } from './claude-agent-teams-types'
+
+const IT2_PROBE_SHELL_NAME = 'orca-agent-teams-probe-shell'
 
 export type ClaudeAgentTeamsLaunchPlan = {
   command: string
@@ -19,18 +22,37 @@ export type ClaudeAgentTeamsLaunchPlan = {
 
 export async function ensureClaudeAgentTeamsShimDir(root = defaultShimRoot()): Promise<string> {
   await mkdir(root, { recursive: true })
-  await writeIfChanged(join(root, 'tmux'), unixShimScript())
+  await writeIfChanged(join(root, 'tmux'), unixShimScript('tmux'))
   if (process.platform === 'win32') {
     await writeIfChanged(join(root, 'tmux.cmd'), windowsClaudeAgentTeamsShimScript())
   }
   return root
 }
 
+/** Separate from the tmux shim dir so `it2` is on PATH only for the leader that asked for iTerm2 mode. */
+export async function ensureClaudeAgentTeamsIt2ShimDir(
+  root = defaultIt2ShimRoot()
+): Promise<ClaudeAgentTeamsIt2Shim | null> {
+  if (process.platform === 'win32') {
+    return null
+  }
+  await mkdir(root, { recursive: true })
+  const probeShell = join(root, IT2_PROBE_SHELL_NAME)
+  await writeIfChanged(join(root, 'it2'), unixShimScript('it2'))
+  await writeIfChanged(probeShell, it2ProbeShellScript())
+  return { shimDir: root, probeShell }
+}
+
 export async function buildClaudeAgentTeamsLaunchPlan(args: {
   command: string | undefined
   mode: ClaudeAgentTeamsMode | undefined
+  teammateMode?: 'iterm2'
   baseEnv: Record<string, string | undefined>
-  createTeamEnv: (shimDir: string, shimBin: string) => Record<string, string>
+  createTeamEnv: (
+    shimDir: string,
+    shimBin: string,
+    it2?: ClaudeAgentTeamsIt2Shim
+  ) => Record<string, string>
 }): Promise<ClaudeAgentTeamsLaunchPlan | null> {
   const mode = args.mode ?? 'off'
   if (!args.command || mode === 'off' || !isDirectClaudeCommand(args.command)) {
@@ -51,7 +73,8 @@ export async function buildClaudeAgentTeamsLaunchPlan(args: {
     }
   }
   const shimDir = await ensureClaudeAgentTeamsShimDir()
-  const env = args.createTeamEnv(shimDir, shimBin)
+  const it2 = args.teammateMode === 'iterm2' ? await ensureClaudeAgentTeamsIt2ShimDir() : null
+  const env = it2 ? args.createTeamEnv(shimDir, shimBin, it2) : args.createTeamEnv(shimDir, shimBin)
   return {
     command: addClaudeTeammateModeAuto(args.command),
     env,
@@ -85,6 +108,10 @@ export function resolveClaudeAgentTeamsShimBin(
 
 function defaultShimRoot(): string {
   return join(homedir(), '.orca', 'claude-agent-teams-bin')
+}
+
+function defaultIt2ShimRoot(): string {
+  return join(homedir(), '.orca', 'claude-agent-teams-it2-bin')
 }
 
 function bundledLauncherPath(): string | null {
@@ -132,7 +159,7 @@ function isExecutableFile(candidate: string): boolean {
 // Why: an unqualified command name is resolved against the invoking pane's cwd (always on cmd.exe, and via `.`/empty
 // PATH entries on POSIX), so a stray `orca` next to the agent's files would run with the team token. Demand a
 // fully-qualified binary instead of guessing one.
-function unixShimScript(): string {
+function unixShimScript(name: 'tmux' | 'it2'): string {
   return [
     '#!/usr/bin/env sh',
     'set -eu',
@@ -140,11 +167,31 @@ function unixShimScript(): string {
     'case $orca_bin in',
     '  /*|[A-Za-z]:[\\\\/]*) ;;',
     '  *)',
-    '    echo "orca agent-teams tmux shim: ORCA_AGENT_TEAMS_SHIM_BIN must be an absolute path" >&2',
+    `    echo "orca agent-teams ${name} shim: ORCA_AGENT_TEAMS_SHIM_BIN must be an absolute path" >&2`,
     '    exit 127',
     '    ;;',
     'esac',
-    'exec "$orca_bin" agent-teams-tmux "$@"',
+    `exec "$orca_bin" agent-teams-${name} "$@"`,
+    ''
+  ].join('\n')
+}
+
+// Why: Claude finds `it2` via `$SHELL -lc 'command -v it2'`, and login rc files can reorder PATH past the shim dir,
+// so SHELL points here; every other invocation must reach the user's real shell untouched.
+function it2ProbeShellScript(): string {
+  return [
+    '#!/bin/sh',
+    'if [ "$#" -eq 2 ] && [ "$1" = "-lc" ] && [ "$2" = "command -v it2" ] && [ -n "${ORCA_AGENT_TEAMS_IT2_SHIM_DIR:-}" ]; then',
+    '  printf \'%s\\n\' "$ORCA_AGENT_TEAMS_IT2_SHIM_DIR/it2"',
+    '  exit 0',
+    'fi',
+    'real=${ORCA_AGENT_TEAMS_REAL_SHELL:-/bin/zsh}',
+    // Why: a real shell that resolves back to this wrapper would exec itself forever.
+    'case $real in',
+    `  */${IT2_PROBE_SHELL_NAME}) real=/bin/sh ;;`,
+    'esac',
+    '[ -x "$real" ] || real=/bin/sh',
+    'exec "$real" "$@"',
     ''
   ].join('\n')
 }

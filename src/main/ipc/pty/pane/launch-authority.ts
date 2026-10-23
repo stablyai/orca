@@ -2,6 +2,7 @@ import type { TuiAgent } from '../../../../shared/tui-agent'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
 import { isPtyIncarnationId } from '../../../../shared/pty-incarnation'
+import { requestsClaudeTeammateModeIterm2 } from '../../../../shared/claude-agent-teams-it2-compat'
 
 const AGENT_LAUNCH_TOKEN_MAX_LENGTH = 128
 
@@ -45,12 +46,30 @@ export function admitProviderReattachLaunchIdentity(args: {
   return { incarnationId: args.incarnationId, launchAgent: args.launchAgent }
 }
 
+/** The launch text the Agent Teams mode is read from: the captured agent command plus its args. */
+export function composeCapturedAgentLaunch(args: {
+  command?: string
+  launchConfig?: SleepingAgentLaunchConfig
+}): string {
+  const capturedCommand = args.launchConfig?.agentCommand?.trim() || args.command?.trim() || ''
+  const capturedArgs = args.launchConfig?.agentArgs?.trim() ?? ''
+  return `${capturedCommand} ${capturedArgs}`.trim()
+}
+
+export function capturedLaunchRequestsIterm2Teammates(args: {
+  command?: string
+  launchConfig?: SleepingAgentLaunchConfig
+}): boolean {
+  return requestsClaudeTeammateModeIterm2(composeCapturedAgentLaunch(args))
+}
+
 export function shouldRefreshNativeClaudeAgentTeamsEnv(args: {
   command?: string
   launchConfig?: SleepingAgentLaunchConfig
 }): boolean {
-  const capturedCommand = args.launchConfig?.agentCommand?.trim() || args.command?.trim() || ''
-  const capturedArgs = args.launchConfig?.agentArgs?.trim() ?? ''
-  const capturedLaunch = `${capturedCommand} ${capturedArgs}`.trim()
-  return /(^|\s)--teammate-mode(?:=|\s+)auto(?:\s|$)/.test(capturedLaunch)
+  const capturedLaunch = composeCapturedAgentLaunch(args)
+  return (
+    /(^|\s)--teammate-mode(?:=|\s+)auto(?:\s|$)/.test(capturedLaunch) ||
+    requestsClaudeTeammateModeIterm2(capturedLaunch)
+  )
 }

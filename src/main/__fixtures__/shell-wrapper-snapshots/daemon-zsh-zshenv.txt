@@ -113,10 +113,16 @@ __orca_deferred_init() {
     # Why: ~/.zshrc can export the user's default OpenCode config after spawn.
     __orca_restore_agent_teams_path() {
       [[ -n "${ORCA_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0
+      local __orca_agent_teams_lead="${ORCA_AGENT_TEAMS_SHIM_DIR}"
+      [[ -n "${ORCA_AGENT_TEAMS_IT2_SHIM_DIR:-}" ]] && __orca_agent_teams_lead="${ORCA_AGENT_TEAMS_IT2_SHIM_DIR}:${__orca_agent_teams_lead}"
       case "$PATH" in
-        "${ORCA_AGENT_TEAMS_SHIM_DIR}"|"${ORCA_AGENT_TEAMS_SHIM_DIR}:"*) return 0 ;;
+        "${__orca_agent_teams_lead}"|"${__orca_agent_teams_lead}:"*) ;;
+        *) export PATH="${__orca_agent_teams_lead}:$PATH" ;;
       esac
-      export PATH="${ORCA_AGENT_TEAMS_SHIM_DIR}:$PATH"
+      # Why: Claude finds it2 through "$SHELL -lc 'command -v it2'", so a reset SHELL would bypass the shim.
+      if [[ -n "${ORCA_AGENT_TEAMS_IT2_PROBE_SHELL:-}" && "${SHELL:-}" != "${ORCA_AGENT_TEAMS_IT2_PROBE_SHELL}" ]]; then
+        export SHELL="${ORCA_AGENT_TEAMS_IT2_PROBE_SHELL}"
+      fi
     }
     __orca_restore_agent_teams_path
     [[ -n "${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="${ORCA_OPENCODE_CONFIG_DIR}"

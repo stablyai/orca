@@ -594,6 +594,57 @@ describe('createPtySubprocess', () => {
     expect(lastCall[2].env.TERM_PROGRAM).toBeUndefined()
   })
 
+  it('spawns the real shell while exposing the it2 probe shell as SHELL', async () => {
+    spawnMock.mockReturnValue(mockPtyProcess())
+
+    await createPtySubprocess({
+      sessionId: 'test',
+      cols: 80,
+      rows: 24,
+      env: {
+        SHELL: '/bin/bash',
+        PATH: '/tmp/orca-it2-bin:/tmp/orca-agent-teams-bin:/usr/bin',
+        ORCA_AGENT_TEAMS_TEAM_ID: 'team-test',
+        ORCA_AGENT_TEAMS_SHIM_DIR: '/tmp/orca-agent-teams-bin',
+        ORCA_AGENT_TEAMS_IT2_SHIM_DIR: '/tmp/orca-it2-bin',
+        ORCA_AGENT_TEAMS_IT2_PROBE_SHELL: '/tmp/orca-it2-bin/probe-shell'
+      }
+    })
+
+    const [file, , options] = spawnMock.mock.calls.at(-1)!
+    expect(file).toBe('/bin/bash')
+    expect(options.env).toMatchObject({
+      SHELL: '/tmp/orca-it2-bin/probe-shell',
+      ORCA_AGENT_TEAMS_REAL_SHELL: '/bin/bash',
+      CLAUDE_CODE_SHELL: '/bin/bash'
+    })
+    expect(options.env.PATH.split(':').slice(0, 2)).toEqual([
+      '/tmp/orca-it2-bin',
+      '/tmp/orca-agent-teams-bin'
+    ])
+  })
+
+  it('keeps the daemon shell untouched when the request names no probe shell', async () => {
+    spawnMock.mockReturnValue(mockPtyProcess())
+    vi.stubEnv('ORCA_AGENT_TEAMS_IT2_PROBE_SHELL', '/tmp/stale-probe-shell')
+
+    try {
+      await createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        env: { SHELL: '/bin/bash' }
+      })
+    } finally {
+      vi.unstubAllEnvs()
+    }
+
+    const [file, , options] = spawnMock.mock.calls.at(-1)!
+    expect(file).toBe('/bin/bash')
+    expect(options.env.SHELL).toBe('/bin/bash')
+    expect(options.env.ORCA_AGENT_TEAMS_REAL_SHELL).toBeUndefined()
+  })
+
   it('collapses its own env merge onto the requested Windows `Path` spelling', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)

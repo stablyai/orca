@@ -4,6 +4,7 @@ import { MANAGED_DATA_ACCOUNT_POSIX_RESTORE } from '../../shared/managed-data-ac
 import { getPosixCodexShellLaunchPreflight } from '../../shared/codex-shell-function'
 import { getPosixClaudeShellFunction } from '../../shared/claude-shell-function'
 import { BASH_PROMPT_COMMAND_COMPOSITION_BLOCK } from '../bash-prompt-command-composition'
+import { CLAUDE_AGENT_TEAMS_POSIX_ENV_RESTORE } from '../claude-agent-teams-shell-env-restore'
 import { BASH_FEATURE_CHANNEL_BLOCK, SHELL_STARTUP_IDENTITY_MARKER_BLOCK } from '../shell-templates'
 
 export function getDaemonBashShellReadyRcfileContent(): string {
@@ -29,14 +30,7 @@ fi
 # treat each embedded newline as Enter and mangle the prompt into PS2
 # continuation. Modern readline defaults this on; force it for the rest.
 [[ $- == *i* ]] && bind 'set enable-bracketed-paste on' 2>/dev/null
-__orca_restore_agent_teams_path() {
-  [[ -n "\${ORCA_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0
-  case "$PATH" in
-    "\${ORCA_AGENT_TEAMS_SHIM_DIR}"|"\${ORCA_AGENT_TEAMS_SHIM_DIR}:"*) return 0 ;;
-  esac
-  export PATH="\${ORCA_AGENT_TEAMS_SHIM_DIR}:$PATH"
-}
-__orca_restore_agent_teams_path
+${CLAUDE_AGENT_TEAMS_POSIX_ENV_RESTORE}
 ${ORCA_CLI_POSIX_PATH_RESTORE}
 # Why: user startup files may set the default OpenCode config after Orca's
 # spawn env; restore the Orca-managed config dir before the first prompt.

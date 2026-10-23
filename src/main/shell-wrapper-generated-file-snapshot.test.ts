@@ -77,6 +77,8 @@ const CONTRACT_GLOBALS = new Set([
   'XDG_DATA_HOME',
   'XDG_STATE_HOME',
   'PATH',
+  // Restored to the it2 probe shell only when a user startup file replaced it.
+  'SHELL',
   'PROMPT_COMMAND',
   'PS1', // Bash appends its non-printing Readline readiness marker.
   'CURSOR',

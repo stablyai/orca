@@ -81,6 +81,10 @@ export async function main(
     await runAgentTeamsTmuxShim(argv.slice(1))
     return
   }
+  if (argv[0] === 'agent-teams-it2') {
+    await runAgentTeamsIt2Shim(argv.slice(1))
+    return
+  }
   if (argv[0] === 'claude-teams') {
     await runClaudeTeams(argv.slice(1), cwd)
     return
@@ -224,12 +228,27 @@ async function runClaudeTeams(argv: string[], cwd: string): Promise<void> {
   }
 }
 
-async function runAgentTeamsTmuxShim(argv: string[]): Promise<void> {
+type AgentTeamsShimResult = { stdout: string; stderr: string; exitCode: number }
+
+async function runAgentTeamsShim(
+  commandName: string,
+  call: (client: RuntimeClient) => Promise<AgentTeamsShimResult>
+): Promise<void> {
   try {
     const client = new (await loadRuntimeClientClass())(undefined, 10_000)
-    const response = await client.call<{
-      tmux: { stdout: string; stderr: string; exitCode: number }
-    }>(
+    const result = await call(client)
+    process.stdout.write(result.stdout)
+    process.stderr.write(result.stderr)
+    process.exitCode = result.exitCode
+  } catch (error) {
+    reportCliError(error, false, { commandPath: [commandName] })
+    process.exitCode = 1
+  }
+}
+
+async function runAgentTeamsTmuxShim(argv: string[]): Promise<void> {
+  await runAgentTeamsShim('agent-teams-tmux', async (client) => {
+    const response = await client.call<{ tmux: AgentTeamsShimResult }>(
       'agentTeams.tmuxCompat',
       {
         teamId: process.env.ORCA_AGENT_TEAMS_TEAM_ID,
@@ -240,13 +259,24 @@ async function runAgentTeamsTmuxShim(argv: string[]): Promise<void> {
       },
       { timeoutMs: 10_000 }
     )
-    process.stdout.write(response.result.tmux.stdout)
-    process.stderr.write(response.result.tmux.stderr)
-    process.exitCode = response.result.tmux.exitCode
-  } catch (error) {
-    reportCliError(error, false, { commandPath: ['agent-teams-tmux'] })
-    process.exitCode = 1
-  }
+    return response.result.tmux
+  })
+}
+
+async function runAgentTeamsIt2Shim(argv: string[]): Promise<void> {
+  await runAgentTeamsShim('agent-teams-it2', async (client) => {
+    const response = await client.call<{ it2: AgentTeamsShimResult }>(
+      'agentTeams.it2Compat',
+      {
+        teamId: process.env.ORCA_AGENT_TEAMS_TEAM_ID,
+        token: process.env.ORCA_AGENT_TEAMS_TOKEN,
+        cwd: process.cwd(),
+        argv
+      },
+      { timeoutMs: 10_000 }
+    )
+    return response.result.it2
+  })
 }
 
 if (require.main === module) {

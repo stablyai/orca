@@ -290,6 +290,46 @@ describe.skipIf(process.platform === 'win32')('the deferred hook delivers every 
       }
     )
   )
+
+  itWithZsh(
+    'puts the it2 dir ahead of the tmux dir and the probe shell back into SHELL after user config',
+    withHome(
+      {
+        ...USER_FILES,
+        '.zshrc': 'export PATH=/user/bin:/orca/shim:$PATH\nexport SHELL=/bin/zsh\n'
+      },
+      async (home) => {
+        const overlayEnv = {
+          ORCA_AGENT_TEAMS_SHIM_DIR: '/orca/shim',
+          ORCA_AGENT_TEAMS_IT2_SHIM_DIR: '/orca/it2',
+          ORCA_AGENT_TEAMS_IT2_PROBE_SHELL: '/orca/it2/probe-shell'
+        }
+        const features = selectShellStartupFeatures({
+          shellPath: ZSH_PATH,
+          env: { HOME: home, ...overlayEnv },
+          hasStartupCommand: false,
+          waitsForShellReady: false,
+          emitsStartupIdentity: false
+        })
+        const launch = getShellLaunchConfig(ZSH_PATH, features)
+
+        const { values } = await runZshPty({
+          env: {
+            PATH: '/usr/bin:/bin',
+            HOME: home,
+            SHELL: '/orca/it2/probe-shell',
+            ...overlayEnv,
+            ...launch.env,
+            ORCA_ORIG_ZDOTDIR: home
+          },
+          report: ['PATH', 'SHELL']
+        })
+
+        expect(values.PATH.startsWith('/orca/it2:/orca/shim:')).toBe(true)
+        expect(values.SHELL).toBe('/orca/it2/probe-shell')
+      }
+    )
+  )
 })
 
 describe.skipIf(process.platform === 'win32')(
