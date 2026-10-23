@@ -31,6 +31,11 @@ import {
   registerRendererShutdownCheckpointHandler,
   SHUTDOWN_CHECKPOINT_FLUSH_DEADLINE_MS
 } from './renderer-shutdown-checkpoint'
+import {
+  dropUnusedWslMoveWindowWriteHold,
+  holdWslMoveWindowWrites,
+  setWslMoveReloadableWindow
+} from '../persistence/moving-wsl-projects/wsl-move-window-write-hold'
 
 const AWAIT_CHANNEL = 'app:await-before-unload-checkpoint'
 
@@ -90,30 +95,37 @@ describe('registerRendererShutdownCheckpointHandler', () => {
     expect(event.returnValue).toEqual({ ok: true })
   })
 
-  it('corrects what the window staged before the flush', () => {
-    const callOrder: string[] = []
+  it('stages nothing of a window a WSL move holds, and still flushes', () => {
     const store = {
       getWorkspaceSession: vi.fn(() => getDefaultWorkspaceSession()),
-      stageWorkspaceSessionBeforeUnload: vi.fn(() => callOrder.push('session')),
-      updateUI: vi.fn(() => callOrder.push('ui')),
-      flushPendingOrThrowAsync: vi.fn(() => {
-        callOrder.push('persist')
-        return Promise.resolve()
-      })
+      stageWorkspaceSessionBeforeUnload: vi.fn(),
+      updateUI: vi.fn(),
+      flushPendingOrThrowAsync: vi.fn(() => Promise.resolve())
     }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler only calls the four methods stubbed above.
-    registerRendererShutdownCheckpointHandler(store as never, undefined, undefined, () => {
-      callOrder.push('after-stage')
-    })
+    registerRendererShutdownCheckpointHandler(store as never)
+    setWslMoveReloadableWindow(() => ({
+      isDestroyed: () => false,
+      reload: () => {},
+      allowUnload: () => () => {},
+      onLoadedOrGone: () => () => {}
+    }))
+    holdWslMoveWindowWrites()
+    try {
+      const event: { returnValue?: unknown } = {}
+      syncHandlers.get('app:stage-before-unload-sync')?.(event, {
+        sessions: [{ state: {} }],
+        ui: { activeView: 'settings' }
+      })
 
-    const event: { returnValue?: unknown } = {}
-    syncHandlers.get('app:stage-before-unload-sync')?.(event, {
-      sessions: [{ state: {} }],
-      ui: {}
-    })
-
-    expect(callOrder).toEqual(['session', 'ui', 'after-stage', 'persist'])
-    expect(event.returnValue).toEqual({ ok: true })
+      expect(store.stageWorkspaceSessionBeforeUnload).not.toHaveBeenCalled()
+      expect(store.updateUI).not.toHaveBeenCalled()
+      expect(store.flushPendingOrThrowAsync).toHaveBeenCalledTimes(1)
+      expect(event.returnValue).toEqual({ ok: true })
+    } finally {
+      dropUnusedWslMoveWindowWriteHold()
+      setWslMoveReloadableWindow(() => null)
+    }
   })
 
   it('never stages the source partition of a fenced host', () => {

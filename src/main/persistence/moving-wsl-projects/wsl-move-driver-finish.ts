@@ -2,6 +2,7 @@ import type { WslMoveResult } from '../../../shared/wsl-move/wsl-move-driver-typ
 import { listWslMoveCutovers } from './wsl-move-cutover-journal'
 import type { WslMoveDriverDeps } from './wsl-move-driver-ports'
 import { wslMoveAutomationsPending } from './wsl-move-host-automations-rewrite'
+import { reloadWslMoveWindowWithWritesHeld } from './wsl-move-window-write-hold'
 
 /** A committed move's last step on this desktop, from the driver or a reset that found the commit. */
 export async function finishWslMove(
@@ -14,6 +15,8 @@ export async function finishWslMove(
   await deps.finishOnDesktop().catch((error: unknown) => {
     console.warn('[wsl-move] Finishing the move on this desktop paused:', error)
   })
+  // Even after a paused rewrite: the held window must not keep its stale page.
+  reloadWslMoveWindowWithWritesHeld()
   const cutover = listWslMoveCutovers(deps.userDataPath).find(
     (entry) => entry.migrationId === migrationId
   )
