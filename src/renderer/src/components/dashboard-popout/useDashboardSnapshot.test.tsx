@@ -42,15 +42,36 @@ function snapshot(cards: DashboardCard[]): DashboardSnapshot {
 let apply: (next: DashboardSnapshot) => void
 let applyStatus: (next: AgentStatusIpcPayload) => void
 let applyClear: (next: AgentStatusClearIpcPayload) => void
+let rejectReady = false
+const UNHANDLED_REJECTION_SETTLE_MS = 20
 const requestSnapshot = vi.fn(async () => {})
 const startViewTransition = vi.fn((cb: () => void) => {
   cb()
   return {
     finished: Promise.resolve(),
-    ready: Promise.resolve(),
+    ready: rejectReady
+      ? Promise.reject(new Error('View Transition was aborted'))
+      : Promise.resolve(),
     updateCallbackDone: Promise.resolve()
   }
 })
+
+async function collectUnhandledRejections(run: () => void): Promise<unknown[]> {
+  const reasons: unknown[] = []
+  const onUnhandledRejection = (reason: unknown): void => {
+    reasons.push(reason)
+  }
+
+  process.on('unhandledRejection', onUnhandledRejection)
+  try {
+    run()
+    await new Promise((resolve) => setTimeout(resolve, UNHANDLED_REJECTION_SETTLE_MS))
+  } finally {
+    process.off('unhandledRejection', onUnhandledRejection)
+  }
+
+  return reasons
+}
 
 /** A Radix dialog marks its open content with role + data-state; mimic that so
  *  the hook's top-layer-conflict guard sees an "open terminal". */
@@ -89,6 +110,8 @@ describe('useDashboardSnapshot', () => {
   })
   afterEach(() => {
     document.body.innerHTML = ''
+    Reflect.deleteProperty(document, 'visibilityState')
+    rejectReady = false
     vi.clearAllMocks()
   })
 
@@ -112,6 +135,32 @@ describe('useDashboardSnapshot', () => {
     // Why: the card's View Transition snapshot would paint in the browser top
     // layer, above the z-50 dialog — so we jump instead of morphing.
     expect(startViewTransition).not.toHaveBeenCalled()
+    expect(result.current.cards[0].bucket).toBe('working')
+  })
+
+  it('skips the view transition — but still applies the update — while the document is hidden', () => {
+    const { result } = renderHook(() => useDashboardSnapshot())
+    act(() => apply(snapshot([card({ bucket: 'idle' })])))
+    startViewTransition.mockClear() // ignore the initial populate
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' })
+
+    act(() => apply(snapshot([card({ bucket: 'working' })])))
+    expect(startViewTransition).not.toHaveBeenCalled()
+    expect(result.current.cards[0].bucket).toBe('working')
+  })
+
+  it('contains a rejected view transition ready promise', async () => {
+    const { result } = renderHook(() => useDashboardSnapshot())
+    act(() => apply(snapshot([card({ bucket: 'idle' })])))
+    startViewTransition.mockClear() // ignore the initial populate
+    rejectReady = true
+
+    const unhandledRejections = await collectUnhandledRejections(() => {
+      act(() => apply(snapshot([card({ bucket: 'working' })])))
+    })
+
+    expect(unhandledRejections).toEqual([])
+    expect(startViewTransition).toHaveBeenCalledTimes(1)
     expect(result.current.cards[0].bucket).toBe('working')
   })
 
