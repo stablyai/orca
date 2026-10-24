@@ -186,6 +186,17 @@ export const TerminalWait = TerminalHandle.extend({
   timeoutMs: OptionalFiniteNumber
 })
 
+export const TerminalSubmitPrompt = TerminalHandle.extend({
+  requestId: requiredString('Missing prompt request ID').pipe(z.string().max(128)),
+  prompt: requiredString('Missing prompt'),
+  client: TerminalSend.shape.client
+})
+
+export const TerminalWaitPrompt = TerminalHandle.extend({
+  requestId: requiredString('Missing prompt request ID').pipe(z.string().max(128)),
+  timeoutMs: z.number().int().min(0).max(10_000).default(10_000)
+})
+
 const TerminalColorQueryReplyColorsParam = z.object({
   foreground: z.string().max(128).optional(),
   background: z.string().max(128).optional()

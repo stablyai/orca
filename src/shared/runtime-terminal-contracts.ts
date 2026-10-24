@@ -12,6 +12,7 @@ import type { TerminalPaneLayoutNode } from './terminal-tab-types'
 import type { TerminalAgent, TuiAgent } from './terminal-agent'
 export type {
   RuntimeTerminalSend,
+  RuntimeTerminalPromptSubmission,
   RuntimeTerminalPromptStage,
   RuntimeTerminalPromptDelivery
 } from './runtime-terminal-send-contract'

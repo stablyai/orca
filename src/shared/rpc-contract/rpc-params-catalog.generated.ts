@@ -613,7 +613,9 @@ import {
   TerminalSetViewerColors,
   TerminalSplit,
   TerminalStopExact,
-  TerminalWait
+  TerminalSubmitPrompt,
+  TerminalWait,
+  TerminalWaitPrompt
 } from './terminal-unary-params'
 import { TerminalGetAutoRestoreFitParams } from './terminal-viewport-methods-params'
 import {
@@ -1408,10 +1410,12 @@ export const RPC_PARAMS_BY_METHOD = {
   'terminal.split': TerminalSplit,
   'terminal.stop': TerminalCloseAll,
   'terminal.stopExact': TerminalStopExact,
+  'terminal.submitPrompt': TerminalSubmitPrompt,
   'terminal.subscribe': TerminalSubscribe,
   'terminal.unsubscribe': TerminalUnsubscribe,
   'terminal.updateViewport': TerminalUpdateViewport,
   'terminal.wait': TerminalWait,
+  'terminal.waitPrompt': TerminalWaitPrompt,
   'terminalDaemon.restartSevered': TerminalDaemonRestartSeveredParams,
   'terminalDaemon.severedStatus': null,
   'ui.get': null,

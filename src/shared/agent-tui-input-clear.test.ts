@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   AGENT_TUI_CLEAR_INPUT_FORWARD,
   AGENT_TUI_CLEAR_INPUT_LINE,
@@ -14,6 +14,8 @@ const countCtrlU = (bytes: string): number =>
   bytes.split('').filter((char) => char === AGENT_TUI_CLEAR_INPUT_LINE).length
 const countCtrlK = (bytes: string): number =>
   bytes.split('').filter((char) => char === AGENT_TUI_CLEAR_INPUT_FORWARD).length
+
+afterEach(() => vi.restoreAllMocks())
 
 describe('buildAgentTuiClearInput', () => {
   // The measured law: N kills + (N-1) joins. A constant here silently under-clears
@@ -50,17 +52,33 @@ describe('buildAgentTuiClearInput', () => {
 
 describe('countAgentTuiInputLines', () => {
   it.each([
+    ['', 1],
     ['one line', 1],
     ['a\nb', 2],
     ['a\r\nb\r\nc', 3],
     ['a\rb', 2],
-    ['trailing\n', 2]
+    ['trailing\n', 2],
+    ['\n\n', 3],
+    ['\r\r', 3],
+    ['\r\n\r\n', 3],
+    ['a\r\nb\nc\rd\r\r\n', 6],
+    ['a\u2028b\u2029c', 1]
   ])('counts %j as %i logical lines', (text, expected) => {
     expect(countAgentTuiInputLines(text)).toBe(expected)
   })
 
   it('ignores visual wrapping — only logical newlines cost a Ctrl+U', () => {
     expect(countAgentTuiInputLines('x'.repeat(5_000))).toBe(1)
+  })
+
+  it('counts line-dense input without allocating a split array', () => {
+    const text = 'x\r\n'.repeat(100_000)
+    const split = vi.spyOn(String.prototype, 'split')
+    const lines = countAgentTuiInputLines(text)
+    const splitCalls = split.mock.calls.length
+    split.mockRestore()
+    expect(lines).toBe(100_001)
+    expect(splitCalls).toBe(0)
   })
 })
 

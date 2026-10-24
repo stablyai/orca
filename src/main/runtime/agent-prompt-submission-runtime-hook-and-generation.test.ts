@@ -223,6 +223,45 @@ describe('agent prompt submission runtime hook and generation cases', () => {
     })
   })
 
+  it.each(['submitted', 'failed'] as const)(
+    'does not leave a %s browser note ahead of later hook-based verification',
+    async (status) => {
+      vi.useFakeTimers()
+      vi.setSystemTime(1_000)
+      const hook = { state: 'working' as const, stateStartedAt: 1_000 }
+      const { runtime, handle, writes } = await createHookOnlyPromptRuntime(hook, 'codex')
+      const controller = new AbortController()
+
+      await runtime.queueTerminalAgentPrompt(handle, 'browser-note', 'browser feedback', {
+        inputKind: 'driving',
+        signal: controller.signal,
+        onInputAccepted: status === 'failed' ? () => controller.abort() : undefined
+      })
+      await vi.runAllTimersAsync()
+      await expect(
+        runtime.waitForTerminalAgentPrompt(handle, 'browser-note', 0)
+      ).resolves.toMatchObject({
+        status
+      })
+
+      const next = runtime.sendTerminalAgentPrompt(handle, 'orchestration prompt', {
+        inputKind: 'driving',
+        acceptQueued: true,
+        requestId: 'orchestration',
+        observationTimeoutMs: 500,
+        afterWrite: () => {
+          if (writes.at(-1) === '\r') {
+            hook.stateStartedAt = Date.now()
+          }
+        }
+      })
+      await vi.runAllTimersAsync()
+      await expect(next).resolves.toMatchObject({
+        prompt: { stages: ['input_accepted', 'turn_started'] }
+      })
+    }
+  )
+
   it('does not write Enter after the PTY generation changes during settlement', async () => {
     vi.useFakeTimers()
     const { runtime, handle, writes } = await createPromptRuntime(() => undefined)

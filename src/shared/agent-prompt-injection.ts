@@ -98,12 +98,13 @@ export function resolveAgentPromptSubmitDelayForAgent(
   agent: TerminalAgent | null | undefined
 ): number {
   const config = isTuiAgent(agent) ? TUI_AGENT_CONFIG[agent] : undefined
+  const lineSettleMsPerLine = config?.submitLineSettleMsPerLine ?? 0
   return getAgentPromptSubmitDelayMs(
     platform,
     Buffer.byteLength(buildAgentPromptPasteBytes(prompt), 'utf8'),
     {
-      lineSettleMsPerLine: config?.submitLineSettleMsPerLine,
-      lineCount: countAgentTuiInputLines(prompt)
+      lineSettleMsPerLine,
+      lineCount: lineSettleMsPerLine > 0 ? countAgentTuiInputLines(prompt) : 1
     }
   )
 }

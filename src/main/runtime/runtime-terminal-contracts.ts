@@ -297,6 +297,8 @@ export type RuntimeAgentPromptWriteOptions = Omit<RuntimeTerminalWriteOptions, '
   /** The caller just saw this agent's composer accept input, so Enter follows the paste on the
    *  desktop draft paste's timing instead of waiting for the render to settle. */
   composerReady?: boolean
+  /** Active-agent notes can use the host's ingest and settle delay without a startup render marker. */
+  waitForRender?: boolean
   /** See buildAgentPromptPasteBytes. */
   leadLine?: string
   /** Return an accepted receipt as soon as input lands, instead of waiting for the turn. */

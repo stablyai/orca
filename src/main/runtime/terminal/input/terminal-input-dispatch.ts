@@ -1,13 +1,13 @@
 import type { RuntimeTerminalWriteOptions } from '../../runtime-terminal-writer'
 import type { WriteSettlement } from '../../../../shared/pty-write-settlement'
 import type { RuntimeLeafRecord } from '../../runtime-terminal-state-records'
-import type { RuntimeTerminalPromptDelivery } from '../../../../shared/runtime-terminal-send-contract'
-import { OrcaRuntimeWithResolveTerminalPane } from '../recovery/resolve-terminal-pane'
+import type {
+  RuntimeTerminalPromptDelivery,
+  RuntimeTerminalPromptSubmission
+} from '../../../../shared/runtime-terminal-send-contract'
+import { OrcaRuntimeWithTerminalPtyLiveness } from './terminal-pty-liveness'
 import { wrapTerminalBracketedPasteText } from '../../../../shared/terminal-bracketed-paste-text'
-import { PROVEN_ABSENT_LEAF_PTY_TTL_MS } from '../../orca-runtime-core'
-import { pruneExpiredProvenAbsentLeafPtyVerdicts } from '../../proven-absent-leaf-pty-verdicts'
 import type { RuntimeTerminalSend } from '../../../../shared/runtime-types'
-import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
 import type {
   RuntimeAgentPromptWriteOptions,
   TerminalHandleRecord
@@ -21,8 +21,69 @@ import {
   buildAgentPromptPasteBytes
 } from '../../../../shared/agent-prompt-injection'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { TerminalPromptSubmissions } from '../../terminal-prompt-submissions'
+import { recognizeAgentProcess } from '../../../../shared/agent-process-recognition'
+import type { TerminalAgent } from '../../../../shared/terminal-agent'
 
-export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithResolveTerminalPane {
+export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithTerminalPtyLiveness {
+  private readonly terminalPromptSubmissions = new TerminalPromptSubmissions()
+
+  protected async resolveTerminalPromptAgent(ptyId: string): Promise<TerminalAgent | null> {
+    const foreground = await this.ptyForegroundAgent.read(ptyId)
+    const recognized =
+      foreground?.controller === this.ptyController && foreground.available
+        ? recognizeAgentProcess(foreground.process)?.agent
+        : undefined
+    const pty = this.ptysById.get(ptyId)
+    return recognized ?? pty?.foregroundAgent ?? pty?.launchAgent ?? null
+  }
+
+  async queueTerminalAgentPrompt(
+    handle: string,
+    requestId: string,
+    prompt: string,
+    options: RuntimeAgentPromptWriteOptions & { onSettled?: () => void }
+  ): Promise<RuntimeTerminalPromptSubmission> {
+    await assertTerminalInputWithinLimitWithYield(prompt)
+    const ptyId =
+      this.getLivePtyForHandle(handle)?.pty.ptyId ?? this.getLiveLeafForHandle(handle).leaf.ptyId
+    if (!ptyId) {
+      throw new Error('terminal_not_writable')
+    }
+    const generation = this.getPtyLifecycleGeneration(ptyId)
+    return this.terminalPromptSubmissions.enqueue(handle, requestId, prompt, (inputWritten) =>
+      this.sendTerminalAgentPrompt(handle, prompt, {
+        ...options,
+        acceptQueued: true,
+        observationTimeoutMs: 0,
+        waitForRender: false,
+        requestId,
+        beforeWrite: async (id) => {
+          this.assertAgentPromptGeneration(ptyId, generation)
+          this.assertLiveTerminalHandleTargetsPty(handle, ptyId)
+          await options.beforeWrite?.(id)
+        },
+        afterWrite: async (id) => {
+          inputWritten()
+          await options.afterWrite?.(id)
+        }
+      }).finally(() => {
+        // Submission receipts track Enter delivery; no later turn observer owns this registration.
+        this.forgetAgentPromptRequest(ptyId, generation, requestId)
+        options.onSettled?.()
+      })
+    )
+  }
+
+  waitForTerminalAgentPrompt(
+    handle: string,
+    requestId: string,
+    timeoutMs: number,
+    signal?: AbortSignal
+  ): Promise<RuntimeTerminalPromptSubmission> {
+    return this.terminalPromptSubmissions.wait(handle, requestId, timeoutMs, signal)
+  }
+
   protected abstract writeTerminalAction(
     ptyId: string,
     action: { text?: string; enter?: boolean; interrupt?: boolean },
@@ -39,6 +100,11 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
     submit: () => Promise<T>
   ): Promise<T>
   protected abstract assertAgentPromptGeneration(ptyId: string, expected: number): void
+  protected abstract forgetAgentPromptRequest(
+    ptyId: string,
+    generation: number,
+    requestId: string
+  ): void
   protected abstract writeTerminalAgentPrompt(
     handle: string,
     ptyId: string,
@@ -55,82 +121,6 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
     options: RuntimeAgentPromptWriteOptions
   ): Promise<RuntimeTerminalSend>
 
-  private lastProvenAbsentLeafPtyVerdictPruneAt: number | undefined
-
-  private pruneExpiredLeafPtyVerdicts(now: number): void {
-    const lastPruneAt = this.lastProvenAbsentLeafPtyVerdictPruneAt
-    // Per-key expiry stays exact; throttle whole-cache scans on the keystroke path.
-    if (
-      lastPruneAt !== undefined &&
-      now >= lastPruneAt &&
-      now - lastPruneAt < PROVEN_ABSENT_LEAF_PTY_TTL_MS
-    ) {
-      return
-    }
-    this.lastProvenAbsentLeafPtyVerdictPruneAt = now
-    pruneExpiredProvenAbsentLeafPtyVerdicts(
-      this.provenAbsentLeafPtyVerdicts,
-      now,
-      PROVEN_ABSENT_LEAF_PTY_TTL_MS
-    )
-  }
-
-  protected controllerKnowsPtyIsLive(ptyId: string): boolean {
-    try {
-      return this.ptyController?.hasPty?.(ptyId) === true
-    } catch {
-      // Why: liveness lookup failures are doubt; doubt never gates a write.
-      return false
-    }
-  }
-
-  /** True only on controller-proven absence; live, unknown, and probe errors all answer false. */
-  protected isLeafPtyProvenAbsent(ptyId: string): Promise<boolean> {
-    this.pruneExpiredLeafPtyVerdicts(Date.now())
-    // Why hasPty and not ptysById: graph sync mirrors a connected record for
-    // every leaf ptyId — including a prior process's — so runtime records can't
-    // distinguish live from stale. The controller's exact-id hasPty is the
-    // provider's own synchronous inventory: a known id is alive, skip probing
-    // and supersede any cached verdict (the id came back).
-    if (this.controllerKnowsPtyIsLive(ptyId)) {
-      this.provenAbsentLeafPtyVerdicts.delete(ptyId)
-      return Promise.resolve(false)
-    }
-    const verdictAt = this.provenAbsentLeafPtyVerdicts.get(ptyId)
-    if (verdictAt !== undefined) {
-      if (Date.now() - verdictAt < PROVEN_ABSENT_LEAF_PTY_TTL_MS) {
-        return Promise.resolve(true)
-      }
-      this.provenAbsentLeafPtyVerdicts.delete(ptyId)
-    }
-    const probeLiveness = this.ptyController?.probePtyLiveness?.bind(this.ptyController)
-    if (!probeLiveness) {
-      return Promise.resolve(false)
-    }
-    const inFlight = this.leafPtyAbsenceProbes.get(ptyId)
-    if (inFlight) {
-      return inFlight
-    }
-    const probe = (async () => {
-      try {
-        if ((await probeLiveness(ptyId)) !== false) {
-          return false
-        }
-        const now = Date.now()
-        this.pruneExpiredLeafPtyVerdicts(now)
-        this.provenAbsentLeafPtyVerdicts.set(ptyId, now)
-        return true
-      } catch {
-        // Why: a failed probe is unknown, and unknown never rejects a write.
-        return false
-      } finally {
-        this.leafPtyAbsenceProbes.delete(ptyId)
-      }
-    })()
-    this.leafPtyAbsenceProbes.set(ptyId, probe)
-    return probe
-  }
-
   async sendTerminal(
     handle: string,
     action: {
@@ -138,14 +128,8 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
       enter?: boolean
       interrupt?: boolean
     },
-    options: {
-      signal?: AbortSignal
-      beforeWrite?: (ptyId: string) => void | Promise<void>
-      reserveWrite?: (ptyId: string) => void
-      afterWrite?: (ptyId: string) => void | Promise<void>
-      suffixFailureError?: string
-      inputKind: TerminalInputKind
-      requireWriteSettlement?: true
+    options: RuntimeTerminalWriteOptions & {
+      includeSubmitDelay?: true
     }
   ): Promise<RuntimeTerminalSend> {
     // Switch point: a saved pane main holds with no terminal yet starts first (once, shared).
@@ -157,36 +141,20 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
       return { ...(await this.sendTerminal(target, action, options)), handle }
     }
     const pty = this.getLivePtyForHandle(handle)
+    let ptyId: string
     if (pty) {
       if (!pty.pty.connected) {
         throw new Error('terminal_not_writable')
       }
-      const payload = buildTerminalSendPayload(action)
-      if (payload === null) {
-        throw new Error('invalid_terminal_send')
+      ptyId = pty.pty.ptyId
+    } else {
+      const { leaf } = this.getLiveLeafForHandle(handle)
+      if (!leaf.writable || !leaf.ptyId) {
+        throw new Error('terminal_not_writable')
       }
-      await assertTerminalInputWithinLimitWithYield(action.text)
-      const writeSettlement = await this.writeTerminalAction(
-        pty.pty.ptyId,
-        action,
-        payload,
-        options
-      )
-      return {
-        handle,
-        accepted: !writeSettlement || writeSettlement.outcome === 'accepted',
-        ...(writeSettlement ? { writeSettlement } : {}),
-        bytesWritten:
-          !writeSettlement || writeSettlement.outcome === 'accepted'
-            ? Buffer.byteLength(payload, 'utf8')
-            : 0
-      }
+      ptyId = leaf.ptyId
     }
 
-    const { leaf } = this.getLiveLeafForHandle(handle)
-    if (!leaf.writable || !leaf.ptyId) {
-      throw new Error('terminal_not_writable')
-    }
     const payload = buildTerminalSendPayload(action)
     if (payload === null) {
       throw new Error('invalid_terminal_send')
@@ -196,20 +164,28 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
     // a prior process's ptyId — and provider writes to unknown ids are accepted
     // no-ops. Only controller-proven absence rejects; unknown proceeds (a
     // restored daemon session takes writes before its pane remounts).
-    if (await this.isLeafPtyProvenAbsent(leaf.ptyId)) {
+    if (!pty && (await this.isLeafPtyProvenAbsent(ptyId))) {
       throw new Error('terminal_not_writable')
     }
 
-    const writeSettlement = await this.writeTerminalAction(leaf.ptyId, action, payload, options)
-
+    const writeSettlement = await this.writeTerminalAction(ptyId, action, payload, options)
+    const accepted = !writeSettlement || writeSettlement.outcome === 'accepted'
+    const submitText =
+      options.includeSubmitDelay && !action.enter && !action.interrupt ? action.text : undefined
     return {
       handle,
-      accepted: !writeSettlement || writeSettlement.outcome === 'accepted',
+      accepted,
       ...(writeSettlement ? { writeSettlement } : {}),
-      bytesWritten:
-        !writeSettlement || writeSettlement.outcome === 'accepted'
-          ? Buffer.byteLength(payload, 'utf8')
-          : 0
+      bytesWritten: accepted ? Buffer.byteLength(payload, 'utf8') : 0,
+      ...(accepted && submitText
+        ? {
+            submitDelayMs: this.terminalWriter.getSubmitDelayMs(
+              ptyId,
+              submitText,
+              await this.resolveTerminalPromptAgent(ptyId)
+            )
+          }
+        : {})
     }
   }
 

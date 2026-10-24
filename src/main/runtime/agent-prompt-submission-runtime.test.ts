@@ -657,18 +657,31 @@ describe('input original queue, callback and private method contracts', () => {
     vi.useRealTimers()
   })
 
-  it('keeps the private retry lookup on the Root receiver before any delay', async () => {
+  it.each([
+    { agent: null, submits: 0 },
+    { agent: 'claude', submits: 0 },
+    { agent: 'codex', submits: 1 }
+  ] as const)('uses the resolved $agent policy for retrying Enter', async ({ agent, submits }) => {
+    vi.useFakeTimers()
     const target = inputDispatchRuntime()
-    const read = vi.fn(function (this: OrcaRuntimeService, ...args: unknown[]) {
-      expect(this).toBe(target)
-      expect(args).toEqual([PTY])
-      return null
-    })
+    const read = vi.fn(() => 'codex' as const)
     Object.defineProperty(target, 'getPtyAgent', { value: read })
-    await expect(
-      target['resubmitAgentPromptAfterRetryDelay'](PTY, 1, { inputKind: 'driving' })
-    ).resolves.toBe(0)
-    expect(read).toHaveBeenCalledOnce()
+    const write = vi.fn(() => true)
+    target.setPtyController({ write, kill: () => true, getForegroundProcess: async () => null })
+
+    const retry = target['resubmitAgentPromptAfterRetryDelay'](
+      PTY,
+      target['getPtyLifecycleGeneration'](PTY),
+      { inputKind: 'driving' },
+      agent
+    )
+    await vi.advanceTimersByTimeAsync(1_199)
+    expect(write).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
+
+    await expect(retry).resolves.toBe(submits)
+    expect(write.mock.calls).toEqual(submits ? [[PTY, '\r', 'driving']] : [])
+    expect(read).not.toHaveBeenCalled()
   })
 
   it('serializes rejected submissions, isolates generations and keeps a replacement tail', async () => {

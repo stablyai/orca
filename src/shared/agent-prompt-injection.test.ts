@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import * as agentTuiInputClear from './agent-tui-input-clear'
 import {
   AGENT_PROMPT_BRACKETED_PASTE_END,
   AGENT_PROMPT_BRACKETED_PASTE_START,
@@ -15,6 +16,8 @@ import {
 
 const BEGIN = AGENT_PROMPT_BRACKETED_PASTE_START
 const END = AGENT_PROMPT_BRACKETED_PASTE_END
+
+afterEach(() => vi.restoreAllMocks())
 
 describe('agent prompt injection bytes', () => {
   it('joins submit only for OMP', () => {
@@ -125,6 +128,19 @@ describe('agent prompt injection bytes', () => {
     expect(long - short).toBeGreaterThanOrEqual(100 * 45)
     expect(resolveAgentPromptSubmitDelayForAgent('darwin', 'one line', 'aider')).toBe(short - 45)
   })
+
+  it.each(['claude', 'codex', null] as const)(
+    'skips line counting for %s prompts without per-line settlement',
+    (agent) => {
+      const countLines = vi.spyOn(agentTuiInputClear, 'countAgentTuiInputLines')
+      const prompt = 'annotation\r\n'.repeat(1000)
+      const delay = resolveAgentPromptSubmitDelayForAgent('win32', prompt, agent)
+      expect(countLines.mock.calls.length).toBe(0)
+      expect(delay).toBe(
+        getAgentPromptSubmitDelayMs('win32', Buffer.byteLength(buildAgentPromptPasteBytes(prompt)))
+      )
+    }
+  )
 
   it('inverts the host ingest budget without crossing it', () => {
     const bytes = getMaxTerminalPasteBytesForIngestMs('win32', 20_000)
