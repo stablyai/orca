@@ -16908,6 +16908,13 @@
         },
         "useMarkdownDocuments": {
           "listFailed": "Failed to list Markdown documents."
+        },
+        "MarkdownBacklinksPanel": {
+          "title": "Backlinks",
+          "refresh": "Refresh backlinks",
+          "loading": "Searching…",
+          "empty": "No notes link here yet",
+          "truncated": "Search hit its result limit; some backlinks may be missing"
         }
       },
       "diff": {
