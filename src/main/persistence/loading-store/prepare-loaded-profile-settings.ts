@@ -10,6 +10,7 @@ import {
   normalizeMobilePairingCustomAddresses
 } from '../../../shared/mobile-pairing-custom-address'
 import { normalizeSourceControlGroupOrder } from '../../../shared/source-control-group-order'
+import { normalizeSourceControlCommitTimeFormat } from '../../../shared/source-control-commit-time-format'
 import { normalizeProjectGroups } from '../../../shared/project-groups'
 import { normalizeDisabledTuiAgents } from '../../../shared/tui-agent-selection'
 import { hasUnsupportedTuiAgentArgs } from '../../../shared/tui-agent-launch-defaults'
@@ -60,6 +61,7 @@ export type PreparedLoadedProfileSettings = {
   mobilePairingCustomAddresses: GlobalSettings['mobilePairingCustomAddresses']
   normalizedNotifications: GlobalSettings['notifications']
   normalizedSourceControlGroupOrder: GlobalSettings['sourceControlGroupOrder']
+  normalizedSourceControlCommitTimeFormat: GlobalSettings['sourceControlCommitTimeFormat']
   normalizedOnboarding: PersistedState['onboarding']
   normalizedProjectGroups: ProjectGroup[]
 }
@@ -256,6 +258,17 @@ export function prepareLoadedProfileSettings(
   ) {
     markNeedsSave()
   }
+  // Why: this setting is normalized on load only — the write path's sanitizer file sits at its
+  // max-lines budget, and a repaired value persists from here anyway.
+  const normalizedSourceControlCommitTimeFormat = normalizeSourceControlCommitTimeFormat(
+    parsed.settings?.sourceControlCommitTimeFormat
+  )
+  if (
+    parsed.settings?.sourceControlCommitTimeFormat !== undefined &&
+    parsed.settings.sourceControlCommitTimeFormat !== normalizedSourceControlCommitTimeFormat
+  ) {
+    markNeedsSave()
+  }
   return {
     migratedPortugueseUiLanguage,
     migratedExperimentalActivity,
@@ -278,6 +291,7 @@ export function prepareLoadedProfileSettings(
     mobilePairingCustomAddresses,
     normalizedNotifications,
     normalizedSourceControlGroupOrder,
+    normalizedSourceControlCommitTimeFormat,
     normalizedOnboarding,
     normalizedProjectGroups
   }

@@ -39,6 +39,7 @@ import type {
   JiraIssueKeyCasing,
   LeftSidebarAppearanceMode,
   OpenInApplication,
+  SourceControlCommitTimeFormat,
   SourceControlGroupOrder,
   SourceControlViewMode,
   TaskViewPresetId
@@ -256,6 +257,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   sourceControlGroupOrder: SourceControlGroupOrder
   /** Compare base defaults to the branch upstream instead of the repo default; affects only the compare/diff view, not the PR/rebase target. Per-user. */
   sourceControlCompareAgainstUpstream: boolean
+  /** Commit-time column in the Git history list: hidden, relative ("2d ago"), or absolute (date and time). Per-user. */
+  sourceControlCommitTimeFormat: SourceControlCommitTimeFormat
   /** Whether to show the Orca app name in the titlebar. */
   showTitlebarAppName: boolean
   /** Hides the Tasks sidebar button (also removes it from keyboard navigation). */

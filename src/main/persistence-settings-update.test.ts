@@ -668,6 +668,14 @@ describe('Store', () => {
     expect(store.getSettings().sourceControlGroupOrder).toBe('changes-first')
   })
 
+  it('updateSettings persists sourceControlCommitTimeFormat as a user setting', async () => {
+    const store = await createStore()
+    expect(store.getSettings().sourceControlCommitTimeFormat).toBe('hidden')
+
+    store.updateSettings({ sourceControlCommitTimeFormat: 'absolute' })
+    expect(store.getSettings().sourceControlCommitTimeFormat).toBe('absolute')
+  })
+
   it('updateSettings normalizes terminal shortcut policy', async () => {
     const store = await createStore()
 
@@ -724,8 +732,13 @@ describe('Store', () => {
     const store = await createStore()
     expect(store.getSettings().sourceControlViewMode).toBe('list')
     expect(store.getSettings().sourceControlGroupOrder).toBe('changes-first')
+    expect(store.getSettings().sourceControlCommitTimeFormat).toBe('hidden')
 
-    store.updateSettings({ sourceControlViewMode: 'tree', sourceControlGroupOrder: 'staged-first' })
+    store.updateSettings({
+      sourceControlViewMode: 'tree',
+      sourceControlGroupOrder: 'staged-first',
+      sourceControlCommitTimeFormat: 'relative'
+    })
     store.flush()
 
     const persisted = readDataFile() as {
@@ -749,10 +762,14 @@ describe('Store', () => {
     expect(collectPropertyPaths(persisted, 'sourceControlGroupOrder')).toEqual([
       'settings.sourceControlGroupOrder'
     ])
+    expect(collectPropertyPaths(persisted, 'sourceControlCommitTimeFormat')).toEqual([
+      'settings.sourceControlCommitTimeFormat'
+    ])
 
     const reloaded = await createStore()
     expect(reloaded.getSettings().sourceControlViewMode).toBe('tree')
     expect(reloaded.getSettings().sourceControlGroupOrder).toBe('staged-first')
+    expect(reloaded.getSettings().sourceControlCommitTimeFormat).toBe('relative')
     expect(reloaded.getWorkspaceSession().activeWorktreeId).toBe('repo1::/worktree-a')
   })
 })

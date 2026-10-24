@@ -8081,7 +8081,12 @@
           "jiraIssueKeyCasingTitle": "Jira Key Casing",
           "jiraIssueKeyCasingDescription": "Casing of the Jira issue key in the workspace and branch names Orca suggests for new Jira-linked workspaces, such as PROJ-123-fix-login instead of proj-123-fix-login. Existing workspaces and names you type are never changed.",
           "jiraIssueKeyCasingLowercase": "Lowercase",
-          "jiraIssueKeyCasingPreserve": "Uppercase key"
+          "jiraIssueKeyCasingPreserve": "Uppercase key",
+          "commitTimeFormatTitle": "Commit Time Column",
+          "commitTimeFormatDescription": "Show the date and time of each commit in the Git history list, so you can scan how commits are spread over time without expanding them. Hover a commit for its exact time to the second.",
+          "commitTimeFormatHidden": "Hidden",
+          "commitTimeFormatRelative": "Relative",
+          "commitTimeFormatAbsolute": "Absolute"
         },
         "HiddenExperimentalGroup": {
           "7c4e18d2f6": "Arms the bold-glitch capture gestures on this machine: {{samplingShortcut}} starts a sampling burst; {{captureShortcut}} captures pane evidence to disk.",
@@ -10620,7 +10625,17 @@
             "jira": "jira",
             "issueKey": "issue key",
             "uppercase": "uppercase",
-            "lowercase": "lowercase"
+            "lowercase": "lowercase",
+            "commitTimeFormatTitle": "Commit Time Column",
+            "commitTimeFormatDescription": "Show the date and time of each commit in the Git history list, so you can scan how commits are spread over time without expanding them. Hover a commit for its exact time to the second.",
+            "commitTime": "commit time",
+            "commitDate": "commit date",
+            "timestamp": "timestamp",
+            "relative": "relative",
+            "absolute": "absolute",
+            "gitHistory": "git history",
+            "commitList": "commit list",
+            "timeDistribution": "time distribution"
           }
         },
         "input": {

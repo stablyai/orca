@@ -14,6 +14,7 @@ import {
   DEFAULT_LEFT_SIDEBAR_TINT_OPACITY
 } from './left-sidebar-appearance'
 import { DEFAULT_SOURCE_CONTROL_GROUP_ORDER } from './source-control-group-order'
+import { DEFAULT_SOURCE_CONTROL_COMMIT_TIME_FORMAT } from './source-control-commit-time-format'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from './terminal-scrollback-policy'
 
 export function buildDefaultSettings(args: {
@@ -150,6 +151,7 @@ export function buildDefaultSettings(args: {
     sourceControlViewMode: 'list',
     sourceControlGroupOrder: DEFAULT_SOURCE_CONTROL_GROUP_ORDER,
     sourceControlCompareAgainstUpstream: false,
+    sourceControlCommitTimeFormat: DEFAULT_SOURCE_CONTROL_COMMIT_TIME_FORMAT,
     showTitlebarAppName: true,
     showTasksButton: true,
     showAutomationsButton: true,

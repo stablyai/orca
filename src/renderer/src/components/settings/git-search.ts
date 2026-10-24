@@ -138,5 +138,32 @@ export const getGitPaneSearchEntries = createLocalizedCatalog(() => [
       )
     ]
   },
+  {
+    title: translate(
+      'auto.components.settings.git.search.commitTimeFormatTitle',
+      'Commit Time Column'
+    ),
+    description: translate(
+      'auto.components.settings.git.search.commitTimeFormatDescription',
+      'Show the date and time of each commit in the Git history list, so you can scan how commits are spread over time without expanding them. Hover a commit for its exact time to the second.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.git.search.commitTime', 'commit time'),
+      ...translateSearchKeyword('auto.components.settings.git.search.commitDate', 'commit date'),
+      ...translateSearchKeyword('auto.components.settings.git.search.timestamp', 'timestamp'),
+      ...translateSearchKeyword('auto.components.settings.git.search.relative', 'relative'),
+      ...translateSearchKeyword('auto.components.settings.git.search.absolute', 'absolute'),
+      ...translateSearchKeyword('auto.components.settings.git.search.gitHistory', 'git history'),
+      ...translateSearchKeyword('auto.components.settings.git.search.commitList', 'commit list'),
+      ...translateSearchKeyword(
+        'auto.components.settings.git.search.timeDistribution',
+        'time distribution'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.git.search.sourceControl',
+        'source control'
+      )
+    ]
+  },
   ...getAutoRenameBranchSearchEntries()
 ])

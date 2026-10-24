@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { formatGitHistoryTimestamp } from './git-history-format'
+import { formatGitHistoryCommitTimeColumn, formatGitHistoryTimestamp } from './git-history-format'
 
 const commitTime = Date.UTC(2026, 5, 15, 12, 30, 45)
 
@@ -34,5 +34,65 @@ describe.skipIf(process.platform === 'win32')('formatGitHistoryTimestamp local-t
     expect(formatInNewYork(Date.UTC(2026, 10, 1, 5, 30))).not.toBe(
       formatInNewYork(Date.UTC(2026, 10, 1, 6, 30))
     )
+  })
+})
+
+// The list column is opt-in and renders nothing at all when it has nothing trustworthy to show,
+// so a malformed timestamp must not leave an empty cell — or an "Invalid Date" one — behind.
+describe('formatGitHistoryCommitTimeColumn', () => {
+  const now = Date.UTC(2026, 5, 15, 13, 0, 0)
+
+  it('renders no cell while the column is hidden', () => {
+    expect(formatGitHistoryCommitTimeColumn(commitTime, 'hidden', now)).toBeNull()
+  })
+
+  it.each([Number.NaN, Number.MAX_VALUE])(
+    'renders no cell for malformed timestamp %s',
+    (malformedTimestamp) => {
+      expect(formatGitHistoryCommitTimeColumn(malformedTimestamp, 'absolute', now)).toBeNull()
+      expect(formatGitHistoryCommitTimeColumn(malformedTimestamp, 'relative', now)).toBeNull()
+    }
+  )
+
+  it('renders no cell for a commit that carries no timestamp', () => {
+    expect(formatGitHistoryCommitTimeColumn(undefined, 'absolute', now)).toBeNull()
+    expect(formatGitHistoryCommitTimeColumn(undefined, 'relative', now)).toBeNull()
+  })
+
+  // Why: the request was to tell commits apart by when they were made, so the column has to
+  // separate commits that a date-only column renders identically.
+  it.each(['absolute', 'relative'] as const)(
+    'tells apart commits a minute apart in the %s column',
+    (format) => {
+      expect(formatGitHistoryCommitTimeColumn(commitTime, format, now)?.label).not.toBe(
+        formatGitHistoryCommitTimeColumn(commitTime + 60_000, format, now)?.label
+      )
+    }
+  )
+
+  it('tells apart same-day commits a year apart in the absolute column', () => {
+    expect(formatGitHistoryCommitTimeColumn(commitTime, 'absolute', now)?.label).not.toBe(
+      formatGitHistoryCommitTimeColumn(Date.UTC(2025, 5, 15, 12, 30, 45), 'absolute', now)?.label
+    )
+  })
+
+  // Why: today needs no date, and the width that frees is what keeps a run of same-day commits
+  // readable. Local-time construction keeps the assertion true in any time zone.
+  it('drops the date for today, keeps it for an earlier day, and marks only today compact', () => {
+    const localNow = new Date(2026, 5, 15, 13, 0, 0).getTime()
+    const today = formatGitHistoryCommitTimeColumn(
+      new Date(2026, 5, 15, 9, 30, 45).getTime(),
+      'absolute',
+      localNow
+    )
+    const earlierDay = formatGitHistoryCommitTimeColumn(
+      new Date(2026, 5, 14, 9, 30, 45).getTime(),
+      'absolute',
+      localNow
+    )
+
+    expect(today?.compact).toBe(true)
+    expect(earlierDay?.compact).toBe(false)
+    expect((today?.label ?? '').length).toBeLessThan((earlierDay?.label ?? '').length)
   })
 })

@@ -17,6 +17,7 @@ import { TooltipProvider } from '../ui/tooltip'
 import { matchesSettingsSearch } from './settings-search'
 import { SettingsSegmentedControl } from './SettingsFormControls'
 import { CompareAgainstUpstreamSetting } from './CompareAgainstUpstreamSetting'
+import { SourceControlCommitTimeFormatSetting } from './SourceControlCommitTimeFormatSetting'
 
 type ReactElementLike = {
   type: unknown
@@ -71,6 +72,23 @@ function findCompareBaseSegmentedControl(node: unknown): ReactElementLike {
   })
   if (!found) {
     throw new Error('compare-base segmented control not found')
+  }
+  return found
+}
+
+function findCommitTimeSegmentedControl(node: unknown): ReactElementLike {
+  let found: ReactElementLike | null = null
+  const label = translate(
+    'auto.components.settings.GitPane.commitTimeFormatTitle',
+    'Commit Time Column'
+  )
+  visit(node, (entry) => {
+    if (entry.type === SettingsSegmentedControl && entry.props.ariaLabel === label) {
+      found = entry
+    }
+  })
+  if (!found) {
+    throw new Error('commit-time segmented control not found')
   }
   return found
 }
@@ -265,6 +283,74 @@ describe('GitPane', () => {
     )
     ;(branchUpstreamControl.props.onChange as (value: string) => void)('repository-default')
     expect(updateSettings).toHaveBeenCalledWith({ sourceControlCompareAgainstUpstream: false })
+  })
+
+  it('renders the commit time column in Git settings', () => {
+    const markup = renderGitPane('commit time')
+
+    expect(markup).toContain(
+      translate('auto.components.settings.GitPane.commitTimeFormatTitle', 'Commit Time Column')
+    )
+    expect(markup).toContain(
+      translate('auto.components.settings.GitPane.commitTimeFormatHidden', 'Hidden')
+    )
+    expect(markup).toContain(
+      translate('auto.components.settings.GitPane.commitTimeFormatRelative', 'Relative')
+    )
+    expect(markup).toContain(
+      translate('auto.components.settings.GitPane.commitTimeFormatAbsolute', 'Absolute')
+    )
+  })
+
+  it('includes commit time column search metadata', () => {
+    expect(matchesSettingsSearch('timestamp', getGitPaneSearchEntries())).toBe(true)
+    expect(matchesSettingsSearch('commit list', getGitPaneSearchEntries())).toBe(true)
+    expect(matchesSettingsSearch('time distribution', getGitPaneSearchEntries())).toBe(true)
+  })
+
+  it('reflects the commit time format in its own segmented control', () => {
+    const relativeControl = findCommitTimeSegmentedControl(
+      SourceControlCommitTimeFormatSetting({
+        settings: {
+          ...getDefaultSettings(os.homedir()),
+          sourceControlCommitTimeFormat: 'relative'
+        },
+        updateSettings: () => {}
+      })
+    )
+    expect(relativeControl.props.value).toBe('relative')
+
+    const hiddenControl = findCommitTimeSegmentedControl(
+      SourceControlCommitTimeFormatSetting({
+        settings: {
+          ...getDefaultSettings(os.homedir()),
+          sourceControlCommitTimeFormat: 'hidden'
+        },
+        updateSettings: () => {}
+      })
+    )
+    expect(hiddenControl.props.value).toBe('hidden')
+  })
+
+  it('updates the commit time format only when the selected option changes', () => {
+    const updateSettings = vi.fn()
+    const control = findCommitTimeSegmentedControl(
+      SourceControlCommitTimeFormatSetting({
+        settings: {
+          ...getDefaultSettings(os.homedir()),
+          sourceControlCommitTimeFormat: 'hidden'
+        },
+        updateSettings
+      })
+    )
+    const onChange = control.props.onChange as (value: string) => void
+
+    onChange('absolute')
+    expect(updateSettings).toHaveBeenCalledWith({ sourceControlCommitTimeFormat: 'absolute' })
+
+    updateSettings.mockClear()
+    onChange('hidden')
+    expect(updateSettings).not.toHaveBeenCalled()
   })
 })
 

@@ -8,10 +8,18 @@ import { CompareUnavailable } from '../sync/compare-summary'
 import { SourceControlCommitSurface } from './commit-surface'
 import { SourceControlForkPushNotice } from './fork-push-notice'
 import type { SourceControlPanelReadyProps } from './panel-props'
+import { DEFAULT_SOURCE_CONTROL_COMMIT_TIME_FORMAT } from '../../../../../../shared/source-control-commit-time-format'
+import { useAppStore } from '@/store'
 
 /** The scrolling surface: status, commit affordances, the file sections and the history dock. */
 export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
   const { activeWorktree, currentWorktreeId, model, worktreePath } = props
+  // A display preference, so the leaf reads it from the store rather than threading it
+  // through the panel model.
+  const commitTimeFormat = useAppStore(
+    (state) =>
+      state.settings?.sourceControlCommitTimeFormat ?? DEFAULT_SOURCE_CONTROL_COMMIT_TIME_FORMAT
+  )
   const {
     activeConnectionId,
     activeOpenRowKeys,
@@ -216,6 +224,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
           <GitHistoryPanel
             state={gitHistoryState}
             collapsed={collapsedSections.has('history')}
+            commitTimeFormat={commitTimeFormat}
             onToggle={() => toggleSection('history')}
             onRefresh={() => void refreshGitHistory()}
             onOpenCommit={(item) => void openHistoryCommitDiff(item)}

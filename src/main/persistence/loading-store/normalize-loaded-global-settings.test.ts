@@ -287,6 +287,22 @@ describe('the new-chat permission setting', () => {
   })
 })
 
+describe('commit time column', () => {
+  it('defaults a profile that predates the setting', () => {
+    expect(normalizeLegacyProfile({}).sourceControlCommitTimeFormat).toBe('hidden')
+  })
+
+  // A hand-edited profile is the only way a value outside the union reaches storage, and the
+  // load path is what repairs it — the writer stores assignment values as given.
+  it.each([
+    ['absolute', 'absolute'],
+    ['minutes', 'hidden']
+  ] as const)('normalizes a stored %s format', (stored, expected) => {
+    const normalized = normalizeLegacyProfile({ sourceControlCommitTimeFormat: stored })
+    expect(normalized.sourceControlCommitTimeFormat).toBe(expected)
+  })
+})
+
 describe('scoped new-chat permission defaults', () => {
   it('preserves an agent override across load while rejecting unsupported stored modes', () => {
     const normalized = normalizeLegacyProfile({

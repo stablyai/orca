@@ -12,6 +12,9 @@ export type OpenInApplication = {
 export type SourceControlViewMode = 'list' | 'tree'
 export type SourceControlGroupOrder = 'changes-first' | 'staged-first' | 'untracked-first'
 
+/** Granularity of the commit-time column in the Git history list. */
+export type SourceControlCommitTimeFormat = 'hidden' | 'relative' | 'absolute'
+
 export type LeftSidebarAppearanceMode = 'default' | 'match-terminal' | 'tinted'
 
 /** Strategy for the prefix prepended to worktree branch names. */

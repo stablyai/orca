@@ -6,6 +6,7 @@ vi.mock('./i18n', () => ({ getIntlLocale: () => mockIntlLocale.value }))
 
 import {
   formatUiRelativeTime,
+  formatUiRelativeTimeCompact,
   formatUiRelativeTimeFromDate,
   getUiRelativeTimeFormatter
 } from './relative-time-format'
@@ -55,5 +56,30 @@ describe('formatUiRelativeTimeFromDate', () => {
   it('returns the fallback for an invalid date', () => {
     expect(formatUiRelativeTimeFromDate('not-a-date')).toBe('recently')
     expect(formatUiRelativeTimeFromDate('not-a-date', 'unknown')).toBe('unknown')
+  })
+})
+
+describe('formatUiRelativeTimeCompact', () => {
+  // The dense Git history column: "5m ago" fits where "5 minutes ago" would crowd the subject.
+  it('uses the compact form a dense column needs', () => {
+    expect(formatUiRelativeTimeCompact(-5 * 60_000)).toBe('5m ago')
+    expect(formatUiRelativeTimeCompact(-3 * 3_600_000)).toBe('3h ago')
+    expect(formatUiRelativeTimeCompact(-2 * 86_400_000)).toBe('2d ago')
+  })
+
+  // Why: being the shortest form is the whole reason this column fits, and it is the one property
+  // that holds across engines — V8 renders 90 minutes as "90m ago" where Bun narrows it to "1h ago".
+  it('is never wider than the prose form for the same delta', () => {
+    for (const minutes of [-59, -90, -30 * 60, -47 * 60, -48 * 60, -365 * 24 * 60]) {
+      const diffMs = minutes * 60_000
+      expect(formatUiRelativeTimeCompact(diffMs).length).toBeLessThanOrEqual(
+        formatUiRelativeTime(diffMs).length
+      )
+    }
+  })
+
+  it('follows the configured UI language', () => {
+    mockIntlLocale.value = 'ko'
+    expect(formatUiRelativeTimeCompact(-3 * 3_600_000)).toBe('3시간 전')
   })
 })

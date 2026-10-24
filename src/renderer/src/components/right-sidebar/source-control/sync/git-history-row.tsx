@@ -4,8 +4,10 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils'
 import type { GitHistoryItem, GitHistoryItemRef } from '../../../../../../shared/git-history'
 import type { GitHistoryItemViewModel } from '../../../../../../shared/git-history-graph'
+import type { SourceControlCommitTimeFormat } from '../../../../../../shared/ui-chrome-types'
 import { GitHistoryGraphSvg, graphColor } from './git-history-graph-svg'
 import { dedupeRemoteTrackingRefs } from '../../../../../../shared/git-history-ref-display'
+import { formatGitHistoryCommitTimeColumn, formatGitHistoryTimestamp } from './git-history-format'
 import { translate } from '@/i18n/i18n'
 
 function GitHistoryRefBadge({ itemRef }: { itemRef: GitHistoryItemRef }): React.JSX.Element {
@@ -35,6 +37,7 @@ type GitHistoryRowProps = React.HTMLAttributes<HTMLElement> & {
   viewModel: GitHistoryItemViewModel
   expanded?: boolean
   preserveRefIds?: readonly string[]
+  commitTimeFormat?: SourceControlCommitTimeFormat
   onOpenCommit?: (item: GitHistoryItem) => void
   onToggleExpand?: (item: GitHistoryItem) => void
 }
@@ -45,6 +48,7 @@ export const GitHistoryRow = React.forwardRef<HTMLElement, GitHistoryRowProps>(
       viewModel,
       expanded = false,
       preserveRefIds,
+      commitTimeFormat = 'hidden',
       onOpenCommit,
       onToggleExpand,
       className,
@@ -67,8 +71,16 @@ export const GitHistoryRow = React.forwardRef<HTMLElement, GitHistoryRowProps>(
     const visibleRefs = refs.slice(0, 2)
     const hiddenRefs = refs.slice(2)
     const rowTooltip = item.message || item.subject
+    const commitTimeCell = formatGitHistoryCommitTimeColumn(item.timestamp, commitTimeFormat)
+    // Boundary rows carry no commit, and malformed times have no cell, so an absent cell means
+    // no extra grid track to leave a gap — and a compact label hands its spare width to the subject.
+    const commitTimeWidthClassName = commitTimeCell?.compact ? 'min-w-[4.5rem]' : 'min-w-[7rem]'
     const rowClassName = cn(
-      'grid min-h-[26px] w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-1.5 px-3 py-0.5 text-left text-xs transition-colors',
+      'grid min-h-[26px] w-full min-w-0 items-center gap-x-1.5 px-3 py-0.5 text-left text-xs transition-colors',
+      // The time column is the last track, so every row's time right-aligns to the same edge.
+      commitTimeCell
+        ? 'grid-cols-[auto_minmax(0,1fr)_auto_auto]'
+        : 'grid-cols-[auto_minmax(0,1fr)_auto]',
       isInteractive && 'cursor-pointer hover:bg-accent/40 focus-visible:bg-accent/40',
       !isInteractive && 'cursor-default',
       isBoundaryNode && 'text-muted-foreground',
@@ -119,6 +131,24 @@ export const GitHistoryRow = React.forwardRef<HTMLElement, GitHistoryRowProps>(
               </Tooltip>
             )}
           </div>
+        )}
+        {commitTimeCell && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span
+                className={cn(
+                  'col-start-4 shrink-0 text-right text-[10px] leading-none text-muted-foreground tabular-nums whitespace-nowrap',
+                  commitTimeWidthClassName
+                )}
+                data-testid="git-history-commit-time"
+              >
+                {commitTimeCell.label}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={6} className="max-w-72">
+              {formatGitHistoryTimestamp(item.timestamp)}
+            </TooltipContent>
+          </Tooltip>
         )}
       </>
     )

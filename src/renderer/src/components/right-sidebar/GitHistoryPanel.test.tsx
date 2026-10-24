@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 import type { GitHistoryResult } from '../../../../shared/git-history'
 import { GitHistoryPanel } from './source-control/sync/git-history-panel'
+import { formatGitHistoryTimestamp } from './source-control/sync/git-history-format'
 
 vi.mock('@/components/ui/tooltip', () => ({
   Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -100,5 +101,58 @@ describe('GitHistoryPanel', () => {
     expect(markup).not.toContain('title="feature"')
     expect(markup).not.toContain('title="v1.0.0"')
     expect(markup).not.toMatch(/\stitle=/)
+  })
+
+  // The column is opt-in, so the collapsed row stays subject-only until a format is chosen.
+  it('omits the commit time column until a format is chosen', () => {
+    const markup = renderToStaticMarkup(
+      <GitHistoryPanel
+        state={{ status: 'ready', result: makeHistoryResult() }}
+        collapsed={false}
+        onToggle={vi.fn()}
+        onRefresh={vi.fn()}
+        onOpenCommit={vi.fn()}
+      />
+    )
+
+    expect(markup).not.toContain('git-history-commit-time')
+  })
+
+  it.each(['relative', 'absolute'] as const)(
+    'shows the commit time column in the %s format, with the exact time on hover',
+    (commitTimeFormat) => {
+      const markup = renderToStaticMarkup(
+        <GitHistoryPanel
+          state={{ status: 'ready', result: makeHistoryResult() }}
+          collapsed={false}
+          commitTimeFormat={commitTimeFormat}
+          onToggle={vi.fn()}
+          onRefresh={vi.fn()}
+          onOpenCommit={vi.fn()}
+        />
+      )
+
+      expect(markup).toContain('data-testid="git-history-commit-time"')
+      expect(markup).toContain(formatGitHistoryTimestamp(timestamp))
+    }
+  )
+
+  it('leaves a malformed commit time out of the column instead of an empty cell', () => {
+    const result = makeHistoryResult()
+    result.items[0].timestamp = Number.MAX_VALUE
+
+    const markup = renderToStaticMarkup(
+      <GitHistoryPanel
+        state={{ status: 'ready', result }}
+        collapsed={false}
+        commitTimeFormat="absolute"
+        onToggle={vi.fn()}
+        onRefresh={vi.fn()}
+        onOpenCommit={vi.fn()}
+      />
+    )
+
+    expect(markup).toContain('Fix tab overflow')
+    expect(markup).not.toContain('git-history-commit-time')
   })
 })

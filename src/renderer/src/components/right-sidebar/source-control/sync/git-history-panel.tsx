@@ -12,6 +12,8 @@ import {
 } from '../../../../../../shared/git-history-graph'
 import { GitHistoryRow } from './git-history-row'
 import { GitHistoryCommitFiles, type GitHistoryCommitFilesState } from './git-history-commit-files'
+import type { SourceControlCommitTimeFormat } from '../../../../../../shared/ui-chrome-types'
+import { DEFAULT_SOURCE_CONTROL_COMMIT_TIME_FORMAT } from '../../../../../../shared/source-control-commit-time-format'
 import {
   GitHistoryCommitContextMenu,
   type GitHistoryCommitAction
@@ -43,6 +45,7 @@ function clampGitHistoryPanelHeight(height: number): number {
 export function GitHistoryPanel({
   state,
   collapsed,
+  commitTimeFormat = DEFAULT_SOURCE_CONTROL_COMMIT_TIME_FORMAT,
   onToggle,
   onRefresh,
   onOpenCommit,
@@ -52,6 +55,7 @@ export function GitHistoryPanel({
 }: {
   state: GitHistoryPanelState
   collapsed: boolean
+  commitTimeFormat?: SourceControlCommitTimeFormat
   onToggle: () => void
   onRefresh: () => void
   onOpenCommit?: (item: GitHistoryItem) => void
@@ -365,6 +369,7 @@ export function GitHistoryPanel({
                 viewModel={viewModel}
                 expanded={isExpanded}
                 preserveRefIds={result?.baseRef ? [result.baseRef.id] : undefined}
+                commitTimeFormat={commitTimeFormat}
                 onOpenCommit={onOpenCommit}
                 onToggleExpand={canExpand ? handleToggleExpand : undefined}
               />
