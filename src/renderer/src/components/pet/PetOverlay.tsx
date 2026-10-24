@@ -24,6 +24,7 @@ function usePetAnimationName(
   const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
   const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
   const retainedAgentsByPaneKey = useAppStore((s) => s.retainedAgentsByPaneKey)
+  const acknowledgedAgentsByPaneKey = useAppStore((s) => s.acknowledgedAgentsByPaneKey)
   // Re-render when the freshness scheduler ticks so stale live states stop
   // driving pet animations even if no other store value changes, and read the
   // boundary clock in render so the stale frame never paints.
@@ -31,7 +32,8 @@ function usePetAnimationName(
 
   return selectPetAnimationName({
     entries: Object.values(agentStatusByPaneKey),
-    retainedCount: Object.keys(retainedAgentsByPaneKey).length,
+    retainedAgentsByPaneKey,
+    acknowledgedAgentsByPaneKey,
     dragging,
     dragAnimation,
     hovering,
