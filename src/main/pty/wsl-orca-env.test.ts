@@ -87,9 +87,11 @@ describe('addOrcaWslInteropEnv', () => {
       ORCA_OMP_STATUS_EXTENSION: 'C:\\Users\\jin\\.omp\\agent\\extensions\\orca-agent-status.ts',
       ORCA_PRIME_AGENT_STATUS_EXTENSION: 'C:\\stale\\orca-agent-status.ts',
       ORCA_PANE_KEY: 'tab-1:leaf-1',
+      ORCA_AGENT_PANE: 'tab-1:leaf-1',
       ORCA_TAB_ID: 'tab-1',
       ORCA_WORKTREE_ID: 'repo::\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo',
       ORCA_AGENT_LAUNCH_TOKEN: 'launch-secret',
+      ORCA_AGENT_LAUNCH: 'launch-secret',
       ORCA_OPENCODE_AGENT: 'opencode2',
       ORCA_AGENT_HOOK_PORT: '4567',
       ORCA_AGENT_HOOK_TOKEN: 'token',
@@ -117,9 +119,11 @@ describe('addOrcaWslInteropEnv', () => {
     expect(env.WSLENV).toContain('ORCA_OMP_FRESH_CONFIG/p')
     expect(env.WSLENV).not.toContain('ORCA_PRIME_AGENT_STATUS_EXTENSION')
     expect(env.WSLENV).toContain('ORCA_PANE_KEY/u')
+    expect(env.WSLENV).toContain('ORCA_AGENT_PANE/u')
     expect(env.WSLENV).toContain('ORCA_TAB_ID/u')
     expect(env.WSLENV).toContain('ORCA_WORKTREE_ID/u')
     expect(env.WSLENV).toContain('ORCA_AGENT_LAUNCH_TOKEN/u')
+    expect(env.WSLENV).toContain('ORCA_AGENT_LAUNCH/u')
     expect(env.WSLENV).toContain('ORCA_OPENCODE_AGENT/u')
     expect(env.WSLENV).toContain('ORCA_AGENT_HOOK_PORT/u')
     expect(env.WSLENV).toContain('ORCA_AGENT_HOOK_TOKEN/u')
