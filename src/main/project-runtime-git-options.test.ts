@@ -73,6 +73,18 @@ describe('project runtime git options', () => {
     expect(options).toEqual({ cwd: String.raw`C:\repo`, wslDistro: 'Ubuntu' })
   })
 
+  it('runs Windows Git for a WSL project converted to Windows Git', () => {
+    const project = makeProject({
+      localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu', git: 'windows-host' }
+    })
+
+    const options = withPlatform('win32', () =>
+      getLocalProjectGitExecOptions(makeStore(project), makeRepo())
+    )
+
+    expect(options).toEqual({ cwd: String.raw`C:\repo` })
+  })
+
   it('returns repair state for missing cached WSL distro before local git execution', () => {
     _setWslCachesForTests({ available: true, distros: ['Debian'] })
     const project = makeProject({
@@ -147,6 +159,17 @@ describe('project runtime git options', () => {
       expect(
         withPlatform('win32', () => getWorktreeMirrorDistro(makeStore(project), makeRepo()))
       ).toBe('Ubuntu')
+    })
+
+    it('names no distro for a project converted to Windows Git', () => {
+      _setWslCachesForTests({ available: true, distros: ['Ubuntu'] })
+      const project = makeProject({
+        localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu', git: 'windows-host' }
+      })
+
+      expect(
+        withPlatform('win32', () => getWorktreeMirrorDistro(makeStore(project), makeRepo()))
+      ).toBeUndefined()
     })
 
     it('names no distro for a host-runtime project', () => {
