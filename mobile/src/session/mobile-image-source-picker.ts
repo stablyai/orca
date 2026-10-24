@@ -90,7 +90,7 @@ async function* pickFromLibrary(
     mediaTypes: ['images'],
     base64: false,
     allowsMultipleSelection: multiple,
-    ...(multiple ? { selectionLimit: 0, orderedSelection: true } : {}),
+    ...(multiple ? { selectionLimit: 10, orderedSelection: true } : {}),
     quality: 1
   })
   if (result.canceled) {

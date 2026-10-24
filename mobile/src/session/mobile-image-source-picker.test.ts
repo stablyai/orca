@@ -129,7 +129,7 @@ describe('pickMobileImage', () => {
       expect.objectContaining({
         allowsMultipleSelection: true,
         orderedSelection: true,
-        selectionLimit: 0
+        selectionLimit: 10
       })
     )
   })

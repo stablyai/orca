@@ -57,8 +57,7 @@ export function clipboardImageMountAdapters(
               terminal: TERMINAL,
               deviceToken: name === 'anonymous' ? null : DEVICE_TOKEN,
               getConnectionId: () => Promise.resolve(CONNECTION),
-              pickImage: () =>
-                Promise.resolve(name === 'cancelled' ? null : { base64: IMAGE_BASE64 }),
+              pickImages: () => (name === 'cancelled' ? [] : [{ base64: IMAGE_BASE64 }]),
               onUploadStart: () => effect('upload-start', {}),
               beforeTerminalSend: (terminal: string) => {
                 effect('before-terminal-send', { terminal })

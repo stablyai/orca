@@ -30,7 +30,7 @@ type UseMobileImageAttachmentArgs = {
 
 type MobileImageAttachment = {
   readonly attachImage: (source: MobileImageSource) => Promise<void>
-  // True only while the picked image is uploading to the host (not while the
+  // True only while the picked images are uploading to the host (not while the
   // picker is open) — drives the send spinner so the 3-5s transfer isn't a no-op.
   readonly isAttaching: boolean
 }
@@ -66,7 +66,7 @@ export function useMobileImageAttachment({
           terminal: activeHandle,
           deviceToken: deviceTokenRef.current,
           getConnectionId: getActiveWorktreeConnectionId,
-          pickImage: picker.pickImage,
+          pickImages: picker.pickImages,
           onUploadStart: () => setIsAttaching(true),
           beforeTerminalSend
         })
