@@ -20045,6 +20045,23 @@
       "stepDownload": "Télécharger",
       "stepUnpack": "Décompresser",
       "stepCheck": "Vérifier"
+    },
+    "sidebar": {
+      "mergeReview": {
+        "rejectConfirmTitle": "Annuler cette fusion et abandonner les modifications ?",
+        "rejectConfirmBody": "Ces fichiers ont été modifiés dans le worktree principal pendant la revue. Annuler la fusion abandonne aussi ces modifications :",
+        "cancel": "Annuler",
+        "reject": "Annuler la fusion",
+        "accept": "Accepter la fusion",
+        "sync": "Fusionner dans le worktree principal",
+        "andMorePaths": "et {{count}} de plus",
+        "nothingToMerge": "Rien à fusionner — le worktree principal contient déjà ces modifications",
+        "syncConflicts": "Fusionné avec des conflits",
+        "syncSuccess": "Fusionné dans le worktree principal — en attente de revue",
+        "acceptSuccess": "Fusion validée",
+        "stashRestored": "Modifications du worktree principal restaurées",
+        "rejectSuccess": "Fusion annulée"
+      }
     }
   },
   "dashboardPopout": {

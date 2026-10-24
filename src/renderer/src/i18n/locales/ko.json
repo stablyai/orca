@@ -19904,6 +19904,23 @@
       "stepDownload": "다운로드",
       "stepUnpack": "압축 해제",
       "stepCheck": "확인"
+    },
+    "sidebar": {
+      "mergeReview": {
+        "rejectConfirmTitle": "이 병합을 취소하고 변경 사항을 버릴까요?",
+        "rejectConfirmBody": "검토 대기 중 기본 작업 트리에서 다음 파일이 변경되었습니다. 병합을 취소하면 해당 변경 사항도 함께 버려집니다:",
+        "cancel": "취소",
+        "reject": "병합 취소",
+        "accept": "병합 승인",
+        "sync": "기본 작업 트리로 병합",
+        "andMorePaths": "외 {{count}}개",
+        "nothingToMerge": "병합할 변경 사항이 없습니다 — 기본 작업 트리에 이미 반영되어 있습니다",
+        "syncConflicts": "병합했지만 충돌이 있습니다",
+        "syncSuccess": "기본 작업 트리에 병합했습니다 — 검토 대기 중",
+        "acceptSuccess": "병합을 커밋했습니다",
+        "stashRestored": "기본 작업 트리의 변경 사항을 복원했습니다",
+        "rejectSuccess": "병합을 취소했습니다"
+      }
     }
   },
   "dashboardPopout": {

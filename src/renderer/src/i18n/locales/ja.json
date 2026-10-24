@@ -19904,6 +19904,23 @@
       "stepDownload": "ダウンロード",
       "stepUnpack": "展開",
       "stepCheck": "確認"
+    },
+    "sidebar": {
+      "mergeReview": {
+        "rejectConfirmTitle": "このマージを取り消して変更を破棄しますか？",
+        "rejectConfirmBody": "レビュー待ちの間、メインワークツリーで以下のファイルが変更されました。マージを取り消すとこれらの変更も破棄されます:",
+        "cancel": "キャンセル",
+        "reject": "マージを取り消す",
+        "accept": "マージを承認",
+        "sync": "メインワークツリーにマージ",
+        "andMorePaths": "他 {{count}} 件",
+        "nothingToMerge": "マージする変更はありません — メインワークツリーには既に反映されています",
+        "syncConflicts": "マージしましたが競合があります",
+        "syncSuccess": "メインワークツリーにマージしました — レビュー待ち",
+        "acceptSuccess": "マージをコミットしました",
+        "stashRestored": "メインワークツリーの変更を復元しました",
+        "rejectSuccess": "マージを取り消しました"
+      }
     }
   },
   "dashboardPopout": {

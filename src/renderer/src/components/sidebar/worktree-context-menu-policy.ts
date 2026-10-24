@@ -227,6 +227,38 @@ export function preserveDeleteSiblingPosition(scope: HTMLElement | null): () => 
   }
 }
 
+export type WorktreeMergeReviewMenuMode = 'none' | 'sync' | 'pending'
+
+/**
+ * Which merge-review rows this card's context menu shows.
+ *
+ * Why both cards get a mode: a pending review belongs to the main checkout, so
+ * while one is open the main row must offer accept/reject even though it can
+ * never start a sync itself.
+ *
+ * `worktreeBranch` / `mainWorktreeBranch` are full refs, empty when detached.
+ */
+export function getWorktreeMergeReviewMenuMode(args: {
+  isMultiContext: boolean
+  isFolderWorkspace: boolean
+  /** SSH/runtime hosts: the IPC handlers require a local Git route. */
+  isRemote: boolean
+  isMainWorktree: boolean
+  worktreeBranch: string
+  mainWorktreeBranch: string | null
+  phase: 'idle' | 'pending'
+  /** False where the host cannot snapshot a worktree (WSL). Pending review still works. */
+  syncSupported: boolean
+}): WorktreeMergeReviewMenuMode {
+  if (args.isMultiContext || args.isFolderWorkspace || args.isRemote || !args.mainWorktreeBranch) {
+    return 'none'
+  }
+  if (args.phase === 'pending') {
+    return 'pending'
+  }
+  return args.isMainWorktree || !args.worktreeBranch || !args.syncSupported ? 'none' : 'sync'
+}
+
 export type WorkspaceStatusAssignmentPlan =
   | { readonly kind: 'board-sync'; readonly worktreeIds: readonly string[] }
   | { readonly kind: 'local-only'; readonly localWriteIds: readonly string[] }

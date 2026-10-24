@@ -19905,6 +19905,23 @@
       "stepDownload": "Descargar",
       "stepUnpack": "Descomprimir",
       "stepCheck": "Comprobar"
+    },
+    "sidebar": {
+      "mergeReview": {
+        "rejectConfirmTitle": "¿Deshacer esta fusión y descartar los cambios?",
+        "rejectConfirmBody": "Estos archivos se modificaron en el worktree principal mientras la fusión esperaba revisión. Deshacer la fusión también descarta esos cambios:",
+        "cancel": "Cancelar",
+        "reject": "Deshacer fusión",
+        "accept": "Aceptar fusión",
+        "sync": "Fusionar en el worktree principal",
+        "andMorePaths": "y {{count}} más",
+        "nothingToMerge": "No hay nada que fusionar — el worktree principal ya tiene estos cambios",
+        "syncConflicts": "Fusionado con conflictos",
+        "syncSuccess": "Fusionado en el worktree principal — pendiente de revisión",
+        "acceptSuccess": "Fusión confirmada",
+        "stashRestored": "Se restauraron los cambios del worktree principal",
+        "rejectSuccess": "Fusión deshecha"
+      }
     }
   },
   "dashboardPopout": {
