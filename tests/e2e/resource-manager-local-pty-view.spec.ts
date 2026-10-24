@@ -1,6 +1,12 @@
+import { randomUUID } from 'node:crypto'
 import { expect, test } from './helpers/orca-app'
 import { makeResourceManagerFixtureVisible } from './helpers/resource-manager-visible-fixture'
-import { waitForSessionReady } from './helpers/store'
+import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
+import {
+  expectTerminalAccessibilityText,
+  focusActiveTerminalInput,
+  waitForActivePanePtyId
+} from './helpers/terminal'
 
 type PtyViewCounts = { listing: number; metrics: number; kills?: unknown[] }
 
@@ -9,6 +15,138 @@ declare global {
 }
 
 test.use({ seedTestRepo: false })
+
+test.describe('host-qualified local PTY navigation', () => {
+  test.use({ seedTestRepo: true })
+
+  test('retains local navigation and checked End across a same-id remote twin', async ({
+    electronApp,
+    orcaPage
+  }, testInfo) => {
+    await waitForSessionReady(orcaPage)
+    await waitForActiveWorktree(orcaPage)
+    await ensureTerminalVisible(orcaPage)
+    const ptyId = await waitForActivePanePtyId(orcaPage)
+    const { worktreeId, otherWorktreeId, tabId } = await orcaPage.evaluate(() => {
+      const store = window.__store!
+      const state = store.getState()
+      const worktrees = Object.values(state.worktreesByRepo).flat()
+      const target = worktrees.find((workspace) => workspace.id === state.activeWorktreeId)
+      const other = worktrees.find((workspace) => workspace.id !== state.activeWorktreeId)
+      const tabId = state.activeTabId
+      if (!target || !other || !tabId) {
+        throw new Error('Two workspaces are required for PTY navigation')
+      }
+      state.setTabCustomTitle(tabId, 'Local terminal')
+      store.setState({
+        worktreesByRepo: {
+          ...state.worktreesByRepo,
+          [target.repoId]: [
+            { ...target, hostId: 'ssh:host', displayName: 'Remote twin' },
+            { ...target, hostId: 'local' },
+            ...worktrees.filter((workspace) => workspace.id !== target.id)
+          ]
+        },
+        contestedPrimaryHostBySessionKey: { [target.id]: 'local' }
+      })
+      return { worktreeId: target.id, otherWorktreeId: other.id, tabId }
+    })
+    await electronApp.evaluate(
+      ({ ipcMain }, { worktreeId, ptyId }) => {
+        const counts: PtyViewCounts = { listing: 0, metrics: 0, kills: [] }
+        globalThis.__ptyViewCounts = counts
+        for (const channel of [
+          'pty:listSessions',
+          'memory:resourceWindowVisible',
+          'pty:killFenced'
+        ]) {
+          ipcMain.removeHandler(channel)
+        }
+        ipcMain.handle('memory:resourceWindowVisible', () => true)
+        ipcMain.handle('pty:listSessions', () => [
+          {
+            id: ptyId,
+            incarnationId: 'A',
+            worktreeId,
+            cwd: '/',
+            title: 'Twin shell',
+            agentOwnership: 'absent',
+            fencedTermination: true
+          }
+        ])
+        ipcMain.handle('pty:killFenced', (_event, request) => {
+          counts.kills?.push(request)
+          return { outcome: 'refused', reason: 'attached' }
+        })
+      },
+      { worktreeId, ptyId }
+    )
+    await makeResourceManagerFixtureVisible(electronApp, orcaPage)
+    await orcaPage.getByRole('button', { name: /^Resource Manager,/ }).click()
+    await orcaPage.getByRole('tab', { name: 'PTYs', exact: true }).click()
+    const panel = orcaPage.getByRole('tabpanel', { name: /^PTYs/ })
+    await expect(orcaPage.getByRole('option', { name: /Remote twin/ })).toBeVisible()
+    await expect(
+      panel.getByRole('button', { name: 'Open Local terminal', exact: true })
+    ).toBeVisible()
+    await expect(panel.getByText('1 Orca PTY on this computer', { exact: true })).toBeVisible()
+    await orcaPage.screenshot({ path: testInfo.outputPath('local-twin-bound.png') })
+    await panel.getByRole('button', { name: 'End Local terminal', exact: true }).click()
+    await orcaPage.getByRole('button', { name: 'End terminal', exact: true }).click()
+    await expect(
+      panel.getByText('A client is now attached to this terminal. Refresh before trying again.', {
+        exact: true
+      })
+    ).toBeVisible()
+    expect(await electronApp.evaluate(() => globalThis.__ptyViewCounts?.kills)).toEqual([
+      {
+        id: ptyId,
+        expectedIncarnationId: 'A',
+        requireNoAgentOwner: true,
+        requireUnattached: false
+      }
+    ])
+    await orcaPage.evaluate((otherWorktreeId) => {
+      window.__store!.getState().setActiveWorktree(otherWorktreeId, 'local')
+    }, otherWorktreeId)
+    await expect
+      .poll(() => orcaPage.evaluate(() => window.__store!.getState().activeWorktreeId))
+      .toBe(otherWorktreeId)
+    await expect(orcaPage.getByRole('option', { name: /Remote twin/ })).toBeVisible()
+    await panel.getByRole('button', { name: 'Open Local terminal', exact: true }).click()
+    await expect
+      .poll(() =>
+        orcaPage.evaluate(() => ({
+          id: window.__store!.getState().activeWorktreeId,
+          hostId: window.__store!.getState().activeWorkspaceExecutionHostId,
+          tabId: window.__store!.getState().activeTabId
+        }))
+      )
+      .toEqual({ id: worktreeId, hostId: 'local', tabId })
+    const suffix = randomUUID()
+    const outputMarker = `LOCAL_PTY_OPEN_${suffix}`
+    // Split the marker so the echoed command cannot satisfy the rendered-output assertion.
+    const command =
+      process.platform === 'win32'
+        ? `Write-Output ('LOCAL_PTY_OPEN_' + '${suffix}')`
+        : `echo "LOCAL_PTY_OPEN_""${suffix}"`
+    await focusActiveTerminalInput(orcaPage)
+    await orcaPage.keyboard.type(command)
+    await orcaPage.keyboard.press('Enter')
+    await expectTerminalAccessibilityText(orcaPage, tabId, outputMarker)
+    await orcaPage.evaluate((otherWorktreeId) => {
+      window.__store!.getState().setActiveWorktree(otherWorktreeId, 'local')
+    }, otherWorktreeId)
+    await orcaPage.evaluate((worktreeId) => {
+      window.__store!.setState({ contestedPrimaryHostBySessionKey: { [worktreeId]: 'ssh:host' } })
+    }, worktreeId)
+    await expect(panel.getByRole('button', { name: /^Open / })).toHaveCount(0)
+    await expect(
+      panel.getByText('1 Orca PTY on this computer · 1 without a tab', { exact: true })
+    ).toBeVisible()
+    await orcaPage.screenshot({ path: testInfo.outputPath('remote-twin-excluded.png') })
+  })
+})
 
 test('a real hidden window performs no Resource Manager diagnostics and vetoes forced tagged calls', async ({
   electronApp,

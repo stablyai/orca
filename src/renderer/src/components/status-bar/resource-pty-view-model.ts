@@ -8,8 +8,10 @@ import {
 } from '../../../../shared/execution-host'
 import { projectGroupIdFromRepoId } from '../../../../shared/folder-workspace-worktree'
 import { makePaneKey, isTerminalLeafId } from '../../../../shared/stable-pane-id'
+import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
   buildResourceSessionBindingIndex,
+  selectLocalResourceSessionTabs,
   type ResourceSessionBindingInputs
 } from './resource-session-bindings'
 import {
@@ -62,20 +64,26 @@ export function buildResourcePtyRows(args: {
       )
       .map((workspace) => [workspace.id, workspace])
   )
-  const remoteIds = new Set(
-    args.worktrees
-      .filter(
-        (workspace) =>
-          getWorktreeExecutionHostId(
-            workspace,
-            workspace.repoId ? repoById.get(workspace.repoId) : undefined
-          ) !== 'local'
-      )
-      .map((workspace) => workspace.id)
-  )
-  const tabsByWorktree = Object.fromEntries(
-    Object.entries(args.bindings.tabsByWorktree).filter(([id]) => !remoteIds.has(id))
-  )
+  const tabsByWorktree = selectLocalResourceSessionTabs({
+    tabsByWorktree: args.bindings.tabsByWorktree,
+    repos: args.repos,
+    worktreesByRepo: { workspaces: args.worktrees },
+    projectGroups: args.projectGroups,
+    folderWorkspaces: args.worktrees.flatMap((workspace) => {
+      const scope = parseWorkspaceKey(workspace.id)
+      const projectGroupId = projectGroupIdFromRepoId(workspace.repoId)
+      return scope?.type === 'folder' && projectGroupId
+        ? [
+            {
+              id: scope.folderWorkspaceId,
+              projectGroupId,
+              executionHostId: workspace.hostId
+            }
+          ]
+        : []
+    }),
+    contestedPrimaryHostBySessionKey: args.bindings.workspaceSessionHostIdByKey
+  })
   const localTabIds = new Set(
     Object.values(tabsByWorktree).flatMap((tabs) => tabs.map((tab) => tab.id))
   )

@@ -198,7 +198,7 @@ export function ResourceUsageStatusSegment({
               repos={controller.repos}
               projectGroups={controller.projectGroups}
               runtimePaneTitlesByTabId={controller.runtimePaneTitlesByTabId}
-              onNavigate={navigateToTab}
+              onNavigate={controller.navigateToPtyTab}
             />
           </TabsContent>
         </Tabs>

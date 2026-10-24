@@ -17,7 +17,10 @@ import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { UNATTRIBUTED_REPO_ID } from './mergeSnapshotAndSessions'
 import type { DaemonSession, UnifiedSessionRow } from './resource-usage-merge-types'
 import type { ResourceSessionBindingInputs } from './resource-session-bindings'
-import { selectUnboundDaemonSessions } from './resource-session-bindings'
+import {
+  selectLocalResourceSessionTabs,
+  selectUnboundDaemonSessions
+} from './resource-session-bindings'
 import { navigateResourceSessionToTab } from './resource-session-navigation'
 import { requiresKillConfirmation } from './resource-session-kill-confirmation'
 import { resolveResourceManagerWorktreeTarget } from './resource-manager-worktree-target'
@@ -127,6 +130,21 @@ export function useResourceUsageActions({
     },
     [tabsByWorktree, setActiveView, navigateToWorktree]
   )
+
+  const navigateToPtyTab = useCallback((tabId: string, paneKey: string | null): void => {
+    const state = useAppStore.getState()
+    const localTabs = selectLocalResourceSessionTabs(state)
+    if (!Object.values(localTabs).some((tabs) => tabs.some((tab) => tab.id === tabId))) {
+      return
+    }
+    navigateResourceSessionToTab(tabId, paneKey, {
+      tabsByWorktree: localTabs,
+      setActiveView: state.setActiveView,
+      activateAndRevealWorktree: (worktreeId) =>
+        activateAndRevealWorkspace(worktreeId, { executionHostId: 'local' }),
+      activateTabAndFocusPane
+    })
+  }, [])
 
   const deleteWorktree = useCallback(
     (worktreeId: string): void => {
@@ -256,6 +274,7 @@ export function useResourceUsageActions({
     toggleWorktree,
     navigateToWorktree,
     navigateToTab,
+    navigateToPtyTab,
     deleteWorktree,
     handleOpenWorkspaceCleanup,
     handleKillSession,

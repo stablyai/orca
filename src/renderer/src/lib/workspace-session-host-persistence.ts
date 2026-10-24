@@ -41,10 +41,15 @@ import {
 
 export type HostPersistenceState = WorkspaceTabOwnerCatalog & {
   repos: readonly Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>[]
-  projectGroups?: readonly { id: string; executionHostId?: string | null }[]
+  projectGroups?: readonly {
+    id: string
+    connectionId?: string | null
+    executionHostId?: string | null
+  }[]
   folderWorkspaces?: readonly {
     id: string
     projectGroupId: string
+    connectionId?: string | null
     executionHostId?: ExecutionHostId | null
   }[]
   worktreesByRepo: Record<string, readonly WorkspaceRuntimeOwnerProjection[]>
@@ -80,35 +85,47 @@ function getRestoredRuntimeHostId(
   return hostId && parseExecutionHostId(hostId)?.kind === 'runtime' ? hostId : null
 }
 
-function getFolderWorkspacePartitionHostId(
-  state: HostPersistenceState,
-  key: string
-): ExecutionHostId {
-  const scope = parseWorkspaceKey(key)
-  if (scope?.type !== 'folder') {
-    return LOCAL_EXECUTION_HOST_ID
+function indexFirstCatalogEntries<T extends { id: string }>(
+  entries: readonly T[] | undefined
+): Map<string, T> {
+  const byId = new Map<string, T>()
+  for (const entry of entries ?? []) {
+    const id = entry.id
+    if (!byId.has(id)) {
+      byId.set(id, entry)
+    }
   }
-  const workspace = state.folderWorkspaces?.find((entry) => entry.id === scope.folderWorkspaceId)
-  const group = workspace
-    ? state.projectGroups?.find((entry) => entry.id === workspace.projectGroupId)
-    : null
-  const parsed = parseExecutionHostId(workspace?.executionHostId ?? group?.executionHostId)
-  if (parsed) {
-    // Why: every non-local kind owns its own partition, matching main's getPreferredHostId (#12723).
-    return parsed.id
+  return byId
+}
+
+function buildFolderWorkspacePartitionHostId(state: HostPersistenceState): HostIdByWorktreeId {
+  const workspaceById = indexFirstCatalogEntries(state.folderWorkspaces)
+  const groupById = indexFirstCatalogEntries(state.projectGroups)
+  return (key) => {
+    const scope = parseWorkspaceKey(key)
+    if (scope?.type !== 'folder') {
+      return LOCAL_EXECUTION_HOST_ID
+    }
+    const workspace = workspaceById.get(scope.folderWorkspaceId)
+    const group = workspace ? groupById.get(workspace.projectGroupId) : undefined
+    const parsed = parseExecutionHostId(workspace?.executionHostId ?? group?.executionHostId)
+    if (parsed) {
+      // Why: every non-local kind owns its own partition, matching main's getPreferredHostId (#12723).
+      return parsed.id
+    }
+    if (workspace && group) {
+      // Why: once the folder and group catalogs are both known, a missing runtime
+      // owner is authoritative local/SSH persistence, not a startup gap.
+      return LOCAL_EXECUTION_HOST_ID
+    }
+    // Why the read source outranks the runtime-only map here: a folder workspace's partition can be
+    // any kind now, and a boot that has not hydrated the folder catalog must not spill an ssh-owned
+    // row into 'local' on the first save.
+    const restoredHostId =
+      state.contestedPrimaryHostBySessionKey?.[key] ??
+      getRestoredRuntimeHostId(state.restoredRuntimeHostIdByWorkspaceSessionKey, key)
+    return restoredHostId ?? LOCAL_EXECUTION_HOST_ID
   }
-  if (workspace && group) {
-    // Why: once the folder and group catalogs are both known, a missing runtime
-    // owner is authoritative local/SSH persistence, not a startup gap.
-    return LOCAL_EXECUTION_HOST_ID
-  }
-  // Why the read source outranks the runtime-only map here: a folder workspace's partition can be
-  // any kind now, and a boot that has not hydrated the folder catalog must not spill an ssh-owned
-  // row into 'local' on the first save.
-  const restoredHostId =
-    state.contestedPrimaryHostBySessionKey?.[key] ??
-    getRestoredRuntimeHostId(state.restoredRuntimeHostIdByWorkspaceSessionKey, key)
-  return restoredHostId ?? LOCAL_EXECUTION_HOST_ID
 }
 
 export type HostSessionRouting = {
@@ -159,11 +176,13 @@ export function buildHostSessionRouting(state: HostPersistenceState): HostSessio
   const { repoIdByWorktreeId, runtimeHostIdByWorktreeId } = indexWorkspaceRuntimeHostOwnership(
     state.worktreesByRepo
   )
+  let folderWorkspacePartitionHostId: HostIdByWorktreeId | undefined
 
   const hostIdByWorktreeId = (worktreeId: string): ExecutionHostId => {
     const workspaceScope = parseWorkspaceKey(worktreeId)
     if (workspaceScope?.type === 'folder') {
-      return getFolderWorkspacePartitionHostId(state, worktreeId)
+      folderWorkspacePartitionHostId ??= buildFolderWorkspacePartitionHostId(state)
+      return folderWorkspacePartitionHostId(worktreeId)
     }
     const rawWorktreeId =
       workspaceScope?.type === 'worktree' ? workspaceScope.worktreeId : worktreeId

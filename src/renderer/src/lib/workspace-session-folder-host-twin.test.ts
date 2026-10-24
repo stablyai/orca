@@ -7,6 +7,25 @@ import { buildHostIdByWorktreeId } from './workspace-session-host-persistence'
 
 // Main's router is checked against the same table in folder-workspace-mixed-host-routing.test.ts.
 describe("the window's save partition for each folder kind local main lists", () => {
+  it('keeps the first folder and group owner when catalog ids repeat across hosts', () => {
+    const owner = buildHostIdByWorktreeId({
+      repos: [],
+      worktreesByRepo: {},
+      folderWorkspaces: [
+        { id: 'folder-twin', projectGroupId: 'group', executionHostId: 'ssh:first' },
+        { id: 'folder-twin', projectGroupId: 'group', executionHostId: 'local' },
+        { id: 'group-twin', projectGroupId: 'group' }
+      ],
+      projectGroups: [
+        { id: 'group', executionHostId: 'runtime:first' },
+        { id: 'group', executionHostId: 'local' }
+      ]
+    })
+
+    expect(owner(folderWorkspaceKey('folder-twin'))).toBe('ssh:first')
+    expect(owner(folderWorkspaceKey('group-twin'))).toBe('runtime:first')
+  })
+
   it.each(FOLDER_HOST_CASES)('$name', ({ folder, groups, expected }) => {
     const local = { kind: 'local' } as const
     const stampedGroups = groups.map((row) =>

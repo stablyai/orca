@@ -4,19 +4,47 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ResourceManagerWorktreeTarget } from './resource-manager-worktree-target'
 import { ResourceSessionInventoryCache } from './resource-session-inventory-cache'
 import type { DaemonSession, UnifiedSessionRow } from './resource-usage-merge-types'
+import type { AppState } from '../../store/types'
+import { makeRepo, makeTerminalTab, makeWorktree } from '../worktree-jump-palette-test-fixtures'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
 
-const mocks = vi.hoisted(() => ({
-  activateAndRevealWorkspace: vi.fn(),
-  activateAndRevealWorktree: vi.fn(),
-  worktrees: [] as ResourceManagerWorktreeTarget[]
-}))
+const mocks = vi.hoisted(() => {
+  const worktrees: ResourceManagerWorktreeTarget[] = []
+  const state: Pick<
+    AppState,
+    | 'repos'
+    | 'worktreesByRepo'
+    | 'folderWorkspaces'
+    | 'projectGroups'
+    | 'tabsByWorktree'
+    | 'contestedPrimaryHostBySessionKey'
+    | 'setActiveView'
+  > = {
+    repos: [],
+    worktreesByRepo: {},
+    folderWorkspaces: [],
+    projectGroups: [],
+    tabsByWorktree: {},
+    contestedPrimaryHostBySessionKey: {},
+    setActiveView: vi.fn()
+  }
+  return {
+    activateAndRevealWorkspace: vi.fn(),
+    activateAndRevealWorktree: vi.fn(),
+    activateTabAndFocusPane: vi.fn(),
+    state,
+    worktrees
+  }
+})
 
 vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealWorkspace: mocks.activateAndRevealWorkspace,
   activateAndRevealWorktree: mocks.activateAndRevealWorktree
 }))
-vi.mock('@/lib/activate-tab-and-focus-pane', () => ({ activateTabAndFocusPane: vi.fn() }))
-vi.mock('../../store', () => ({ useAppStore: { getState: () => ({}) } }))
+vi.mock('@/lib/activate-tab-and-focus-pane', () => ({
+  activateTabAndFocusPane: mocks.activateTabAndFocusPane
+}))
+vi.mock('../../store', () => ({ useAppStore: { getState: () => mocks.state } }))
 vi.mock('../../store/selectors', () => ({ getAllWorktreesFromState: () => mocks.worktrees }))
 vi.mock('../sidebar/delete-worktree-flow', () => ({ runWorktreeDelete: vi.fn() }))
 
@@ -57,6 +85,16 @@ function renderActions(overrides: Partial<Parameters<typeof useResourceUsageActi
 beforeEach(() => {
   mocks.activateAndRevealWorkspace.mockReset()
   mocks.activateAndRevealWorktree.mockReset()
+  mocks.activateTabAndFocusPane.mockReset()
+  mocks.state = {
+    repos: [],
+    worktreesByRepo: {},
+    folderWorkspaces: [],
+    projectGroups: [],
+    tabsByWorktree: {},
+    contestedPrimaryHostBySessionKey: {},
+    setActiveView: vi.fn()
+  }
   mocks.worktrees = [{ id: 'repo::/notes', hostId: 'ssh:box' }]
 })
 afterEach(() => {
@@ -66,6 +104,62 @@ afterEach(() => {
 })
 
 describe('Resource Manager row navigation', () => {
+  it('pins local PTY navigation to its own twin and preserves generic Resources refusal', () => {
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    mocks.worktrees = [
+      { id: 'wt-1', hostId: 'ssh:host' },
+      { id: 'wt-1', hostId: 'local' }
+    ]
+    mocks.state = {
+      ...mocks.state,
+      repos: [makeRepo()],
+      worktreesByRepo: {
+        'repo-1': [
+          makeWorktree('wt-1', 'Remote', { hostId: 'ssh:host' }),
+          makeWorktree('wt-1', 'Local', { hostId: 'local' })
+        ]
+      },
+      tabsByWorktree: { 'wt-1': [makeTerminalTab('tab', 'wt-1', 'Local')] },
+      contestedPrimaryHostBySessionKey: { 'wt-1': 'local' }
+    }
+    const actions = renderActions({ tabsByWorktree: mocks.state.tabsByWorktree })
+    actions.navigateToPtyTab('tab', makePaneKey('tab', leafId))
+    expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('wt-1', {
+      executionHostId: 'local'
+    })
+    expect(mocks.activateTabAndFocusPane).toHaveBeenCalledWith('tab', leafId, {
+      flashFocusedPane: true,
+      scrollToBottomIfOutputSinceLastView: true
+    })
+    mocks.activateAndRevealWorkspace.mockClear()
+    actions.navigateToTab('tab', null)
+    expect(mocks.activateAndRevealWorkspace).not.toHaveBeenCalled()
+    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
+  })
+
+  it.each(['ssh:host', 'runtime:host'] as const)(
+    'refuses a stale PTY navigation after its tab bucket belongs to %s',
+    (hostId) => {
+      mocks.state = {
+        ...mocks.state,
+        repos: [makeRepo()],
+        worktreesByRepo: {
+          'repo-1': [
+            makeWorktree('wt-1', 'Local', { hostId: 'local' }),
+            makeWorktree('wt-1', 'Remote', { hostId })
+          ]
+        },
+        tabsByWorktree: { 'wt-1': [makeTerminalTab('tab', 'wt-1', 'Remote')] },
+        contestedPrimaryHostBySessionKey: { 'wt-1': hostId }
+      }
+      renderActions().navigateToPtyTab('tab', null)
+      expect(mocks.activateAndRevealWorkspace).not.toHaveBeenCalled()
+      expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
+      expect(mocks.activateTabAndFocusPane).not.toHaveBeenCalled()
+      expect(mocks.state.setActiveView).not.toHaveBeenCalled()
+    }
+  )
+
   it('activates a folder workspace row through the workspace dispatcher', () => {
     renderActions().navigateToWorktree('folder:notes')
 

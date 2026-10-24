@@ -8,7 +8,8 @@ import {
   getResourceUsageRepos,
   getResourceUsageRuntimePaneTitlesByTabId,
   getResourceUsageTerminalLayoutsByTabId,
-  getResourceUsageTabsByWorktree
+  getResourceUsageTabsByWorktree,
+  getResourceUsageWorkspaceSessionHostIds
 } from './resource-usage-open-slices'
 import type { AppState } from '../../store'
 
@@ -58,6 +59,15 @@ describe('resource usage open slices', () => {
   })
 
   it('returns stable empty slices while the popover is closed', () => {
+    const contestedPrimaryHostBySessionKey = { 'wt-1': 'local' as const }
+    const closedHosts = getResourceUsageWorkspaceSessionHostIds(
+      { contestedPrimaryHostBySessionKey },
+      false
+    )
+    expect(closedHosts).toBe(
+      getResourceUsageWorkspaceSessionHostIds({ contestedPrimaryHostBySessionKey: {} }, false)
+    )
+    expect(closedHosts).toEqual({})
     const tabsByWorktree = { 'wt-1': [terminalTab('tab-1')] }
     const ptyIdsByTabId = { 'tab-1': ['pty-1'] }
     const terminalLayoutsByTabId = {
@@ -104,6 +114,10 @@ describe('resource usage open slices', () => {
   })
 
   it('returns live slices while the popover is open', () => {
+    const contestedPrimaryHostBySessionKey = { 'wt-1': 'ssh:host' as const }
+    expect(
+      getResourceUsageWorkspaceSessionHostIds({ contestedPrimaryHostBySessionKey }, true)
+    ).toBe(contestedPrimaryHostBySessionKey)
     const tabsByWorktree = { 'wt-1': [terminalTab('tab-1')] }
     const ptyIdsByTabId = { 'tab-1': ['pty-1'] }
     const terminalLayoutsByTabId = {

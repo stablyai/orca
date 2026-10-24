@@ -16,7 +16,8 @@ import {
   getResourceUsageRepos,
   getResourceUsageRuntimePaneTitlesByTabId,
   getResourceUsageTerminalLayoutsByTabId,
-  getResourceUsageTabsByWorktree
+  getResourceUsageTabsByWorktree,
+  getResourceUsageWorkspaceSessionHostIds
 } from './resource-usage-open-slices'
 import {
   resolveResourceUsageSpaceScanReady,
@@ -106,6 +107,9 @@ export function useResourceUsageStatusController() {
     [gitWorktrees, folders]
   )
   const tabsByWorktree = useAppStore((s) => getResourceUsageTabsByWorktree(s, viewActive))
+  const workspaceSessionHostIdByKey = useAppStore((s) =>
+    getResourceUsageWorkspaceSessionHostIds(s, viewActive)
+  )
   const browserTabsByWorktree = useAppStore((s) =>
     getResourceUsageBrowserTabsByWorktree(s, viewActive)
   )
@@ -148,6 +152,7 @@ export function useResourceUsageStatusController() {
       ptyIdsByTabId,
       tabsByWorktree,
       terminalLayoutsByTabId,
+      workspaceSessionHostIdByKey,
       deferredSshSessionIdsByTabId,
       workspaceSessionReady
     }),
@@ -155,6 +160,7 @@ export function useResourceUsageStatusController() {
       ptyIdsByTabId,
       tabsByWorktree,
       terminalLayoutsByTabId,
+      workspaceSessionHostIdByKey,
       deferredSshSessionIdsByTabId,
       workspaceSessionReady
     ]

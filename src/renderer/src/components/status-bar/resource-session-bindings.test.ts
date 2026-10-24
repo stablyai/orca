@@ -3,8 +3,11 @@ import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/ter
 import {
   buildResourceSessionBindingIndex,
   countUnboundDaemonSessions,
+  selectLocalResourceSessionTabs,
   selectUnboundDaemonSessions
 } from './resource-session-bindings'
+import { makeTerminalTab } from '../worktree-jump-palette-test-fixtures'
+import { buildHostIdByWorktreeId } from '@/lib/workspace-session-host-persistence'
 
 function makeTab(id: string, ptyId: string | null = null): TerminalTab {
   return {
@@ -31,6 +34,113 @@ function makeLayout(ptyIdsByLeafId: Record<string, string>): TerminalLayoutSnaps
 }
 
 describe('resource session bindings', () => {
+  it.each(['repo::/workspace', 'worktree:repo::/workspace'])(
+    'uses current local execution claims after the restored owner of %s is removed',
+    (key) => {
+      const tabsByWorktree = { 'repo::/workspace': [makeTab('local-tab', 'local-pty')] }
+      expect(
+        selectLocalResourceSessionTabs({
+          repos: [{ id: 'repo', executionHostId: 'local' }],
+          worktreesByRepo: {
+            repo: [{ id: 'repo::/workspace', repoId: 'repo', hostId: 'local' }]
+          },
+          contestedPrimaryHostBySessionKey: { [key]: 'runtime:removed' },
+          tabsByWorktree
+        })
+      ).toEqual(tabsByWorktree)
+    }
+  )
+
+  it('does not confuse an ambiguous local persistence fallback with local execution', () => {
+    const state = {
+      repos: [{ id: 'repo' }, { id: 'repo', connectionId: 'box' }],
+      worktreesByRepo: {
+        repo: [{ id: 'repo::/remote', repoId: 'repo', hostId: 'ssh:box' as const }]
+      },
+      tabsByWorktree: { 'repo::/remote': [makeTerminalTab('remote', 'repo::/remote', 'Remote')] }
+    }
+    expect(buildHostIdByWorktreeId(state)('repo::/remote')).toBe('local')
+    expect(selectLocalResourceSessionTabs(state)).toEqual({})
+  })
+
+  it.each(['unknown', 'local', 'twin'] as const)(
+    'checks a restored folder owner against a %s catalog without synthetic worktree rows',
+    (catalog) => {
+      const tabsByWorktree = { 'folder:notes': [makeTerminalTab('tab', 'folder:notes', 'Notes')] }
+      const localFolder = { id: 'notes', projectGroupId: 'local-group' }
+      const remoteFolder = { id: 'notes', projectGroupId: 'remote-group' }
+      const result = selectLocalResourceSessionTabs({
+        repos: [],
+        worktreesByRepo: {},
+        folderWorkspaces:
+          catalog === 'unknown'
+            ? []
+            : catalog === 'twin'
+              ? [remoteFolder, localFolder]
+              : [localFolder],
+        projectGroups: [
+          { id: 'local-group', executionHostId: 'local' },
+          { id: 'remote-group', executionHostId: 'runtime:removed' }
+        ],
+        contestedPrimaryHostBySessionKey: { 'folder:notes': 'runtime:removed' },
+        tabsByWorktree
+      })
+      expect(result).toEqual(catalog === 'local' ? tabsByWorktree : {})
+    }
+  )
+
+  it('keeps legacy SSH folder and group owners out of local bindings', () => {
+    expect(
+      selectLocalResourceSessionTabs({
+        repos: [],
+        worktreesByRepo: {},
+        folderWorkspaces: [
+          { id: 'folder-ssh', projectGroupId: 'local', connectionId: 'box' },
+          { id: 'group-ssh', projectGroupId: 'ssh' }
+        ],
+        projectGroups: [{ id: 'local' }, { id: 'ssh', connectionId: 'box' }],
+        tabsByWorktree: {
+          'folder:folder-ssh': [makeTab('folder-tab')],
+          'folder:group-ssh': [makeTab('group-tab')]
+        }
+      })
+    ).toEqual({})
+  })
+
+  it.each([500, 1000])('bounds folder and group lookup work for %i fresh tab buckets', (size) => {
+    let folderIdReads = 0
+    let groupIdReads = 0
+    const folderWorkspaces = Array.from({ length: size }, (_, index) => ({
+      get id() {
+        folderIdReads++
+        return `folder-${index}`
+      },
+      projectGroupId: `group-${index}`
+    }))
+    const projectGroups = Array.from({ length: size }, (_, index) => ({
+      get id() {
+        groupIdReads++
+        return `group-${index}`
+      },
+      executionHostId: ['local', 'ssh:host', 'runtime:host'][index % 3]
+    }))
+    const entries = Array.from({ length: size }, (_, index): [string, TerminalTab[]] => {
+      const key = `folder:folder-${index}`
+      return [key, [makeTerminalTab(`tab-${index}`, key, 'Shell')]]
+    })
+    const localTabs = selectLocalResourceSessionTabs({
+      repos: [],
+      worktreesByRepo: {},
+      folderWorkspaces,
+      projectGroups,
+      tabsByWorktree: Object.fromEntries(entries)
+    })
+
+    expect(localTabs).toEqual(Object.fromEntries(entries.filter((_, index) => index % 3 === 0)))
+    expect(folderIdReads).toBeLessThanOrEqual(size * 2)
+    expect(groupIdReads).toBeLessThanOrEqual(size * 2)
+  })
+
   it('combines live PTYs with restored tab and split-pane wake hints', () => {
     const index = buildResourceSessionBindingIndex({
       ptyIdsByTabId: {

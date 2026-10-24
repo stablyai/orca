@@ -9,6 +9,7 @@ import type {
 import { useResourcePtyActions } from './use-resource-pty-actions'
 import { useResourceSessionInventory } from './use-resource-session-inventory'
 import { buildResourcePtyRows } from './resource-pty-view-model'
+import { makeRepo, makeTerminalTab, makeWorktree } from '../worktree-jump-palette-test-fixtures'
 
 const session = (incarnationId = 'A'): PtyListedSession => ({
   id: 'one',
@@ -73,6 +74,37 @@ it('always confirms even absent/unbound sessions, and retains the identity seen 
     requireUnattached: true
   })
   expect(result.current.inventory.sessionInventory.sessions).toEqual([session('B')])
+})
+
+it('ends a locally bound twin without requiring it to be unattached', async () => {
+  const { result } = setup()
+  await act(async () => {})
+  const bound = buildResourcePtyRows({
+    sessions: [{ ...session(), worktreeId: 'wt-1' }],
+    bindings: {
+      tabsByWorktree: { 'wt-1': [makeTerminalTab('tab', 'wt-1', 'Terminal')] },
+      ptyIdsByTabId: { tab: ['one'] },
+      workspaceSessionHostIdByKey: { 'wt-1': 'local' },
+      workspaceSessionReady: true
+    },
+    repos: [makeRepo()],
+    worktrees: [
+      makeWorktree('wt-1', 'Local', { hostId: 'local' }),
+      makeWorktree('wt-1', 'Remote', { hostId: 'ssh:host' })
+    ],
+    projectGroups: [],
+    runtimePaneTitlesByTabId: {}
+  })[0]!
+  act(() => result.current.actions.confirm(bound))
+  kill.mockResolvedValue({ outcome: 'ended' })
+  await act(async () => result.current.actions.endConfirmed())
+  expect(kill).toHaveBeenCalledWith({
+    id: 'one',
+    expectedIncarnationId: 'A',
+    requireNoAgentOwner: true,
+    requireUnattached: false
+  })
+  expect(result.current.inventory.sessionInventory.sessions).toEqual([])
 })
 
 it.each(['attached', 'claimed', 'unverifiable', 'unsupported'] as const)(

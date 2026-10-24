@@ -12,6 +12,14 @@ const EMPTY_REPOS: AppState['repos'] = []
 const EMPTY_FOLDER_WORKSPACES: AppState['folderWorkspaces'] = []
 const EMPTY_PROJECT_GROUPS: AppState['projectGroups'] = []
 const EMPTY_WORKTREES: ReturnType<typeof getAllWorktreesFromState> = []
+const EMPTY_WORKSPACE_SESSION_HOST_IDS: AppState['contestedPrimaryHostBySessionKey'] = {}
+
+export function getResourceUsageWorkspaceSessionHostIds(
+  state: Pick<AppState, 'contestedPrimaryHostBySessionKey'>,
+  open: boolean
+): AppState['contestedPrimaryHostBySessionKey'] {
+  return open ? state.contestedPrimaryHostBySessionKey : EMPTY_WORKSPACE_SESSION_HOST_IDS
+}
 
 export function getResourceUsageTabsByWorktree(
   state: Pick<AppState, 'tabsByWorktree'>,

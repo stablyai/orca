@@ -10,6 +10,8 @@ import {
 } from '../worktree-jump-palette-test-fixtures'
 import { makeProjectGroup } from '../sidebar/folder-workspace-composer-submit-fixtures'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { getDefaultWorkspaceSession } from '../../../../shared/constants'
+import { mergeWorkspaceSessionsWithHostShadow } from '@/lib/workspace-session-host-contention'
 
 const leaf = '11111111-1111-4111-8111-111111111111'
 const session = (id: string, overrides: Partial<PtyListedSession> = {}): PtyListedSession => ({
@@ -34,6 +36,164 @@ const base = () => ({
 })
 
 describe('local PTY view model', () => {
+  it.each([false, true])(
+    'keeps the local tab and navigation when a remote twin is listed first: %s',
+    (remoteFirst) => {
+      const inputs = base()
+      const worktrees = [
+        makeWorktree('wt-1', 'Notes', { hostId: 'local' }),
+        makeWorktree('wt-1', 'Remote notes', { hostId: 'ssh:host' })
+      ]
+      const restored = mergeWorkspaceSessionsWithHostShadow({
+        local: { ...getDefaultWorkspaceSession(), tabsByWorktree: inputs.bindings.tabsByWorktree },
+        'ssh:host': {
+          ...getDefaultWorkspaceSession(),
+          tabsByWorktree: { 'wt-1': [makeTerminalTab('remote-tab', 'wt-1', 'Remote')] }
+        }
+      })
+      const rows = buildResourcePtyRows({
+        ...inputs,
+        worktrees: remoteFirst ? worktrees.toReversed() : worktrees,
+        sessions: [session('pty-tab', { worktreeId: 'wt-1' })],
+        bindings: {
+          ...inputs.bindings,
+          tabsByWorktree: restored.session.tabsByWorktree,
+          workspaceSessionHostIdByKey: restored.primaryHostBySessionKey,
+          ptyIdsByTabId: { tab: ['pty-tab'] },
+          terminalLayoutsByTabId: {
+            tab: {
+              root: { type: 'leaf', leafId: leaf },
+              activeLeafId: leaf,
+              expandedLeafId: null,
+              ptyIdsByLeafId: { [leaf]: 'pty-tab' }
+            }
+          }
+        }
+      })
+      expect(rows[0]).toMatchObject({
+        binding: 'bound',
+        tabId: 'tab',
+        paneKey: makePaneKey('tab', leaf),
+        workspaceId: 'wt-1',
+        workspace: 'Notes'
+      })
+      expect(
+        buildResourcePtyRows({
+          ...inputs,
+          worktrees,
+          sessions: [session('pty-tab', { worktreeId: 'wt-1' })],
+          bindings: { ...inputs.bindings, ptyIdsByTabId: { tab: ['pty-tab'] } }
+        })[0]
+      ).toMatchObject({ binding: 'bound', tabId: 'tab' })
+    }
+  )
+
+  it.each(['ssh:host', 'runtime:host'] as const)(
+    'does not borrow active or saved bindings restored from the %s twin',
+    (hostId) => {
+      const inputs = base()
+      const restored = mergeWorkspaceSessionsWithHostShadow({
+        [hostId]: {
+          ...getDefaultWorkspaceSession(),
+          activeWorktreeId: 'wt-1',
+          activeWorkspaceExecutionHostId: hostId,
+          tabsByWorktree: inputs.bindings.tabsByWorktree
+        }
+      })
+      const rows = buildResourcePtyRows({
+        ...inputs,
+        worktrees: [
+          makeWorktree('wt-1', 'Notes', { hostId: 'local' }),
+          makeWorktree('wt-1', 'Remote notes', { hostId })
+        ],
+        sessions: [
+          session('pty-tab', { worktreeId: 'wt-1' }),
+          session('pty-layout', { worktreeId: 'wt-1' }),
+          session('pty-deferred', { worktreeId: 'wt-1' })
+        ],
+        bindings: {
+          ...inputs.bindings,
+          tabsByWorktree: restored.session.tabsByWorktree,
+          workspaceSessionHostIdByKey: restored.primaryHostBySessionKey,
+          ptyIdsByTabId: { tab: ['pty-tab'] },
+          terminalLayoutsByTabId: {
+            tab: {
+              root: { type: 'leaf', leafId: leaf },
+              activeLeafId: leaf,
+              expandedLeafId: null,
+              ptyIdsByLeafId: { [leaf]: 'pty-layout' }
+            }
+          },
+          deferredSshSessionIdsByTabId: { tab: 'pty-deferred' }
+        }
+      })
+      expect(rows).toHaveLength(3)
+      for (const row of rows) {
+        expect(row).toMatchObject({ binding: 'unbound', tabId: null, paneKey: null })
+      }
+    }
+  )
+
+  it('keeps restore and duplicate-generation uncertainty with a same-id remote twin', () => {
+    const inputs = base()
+    const worktrees = [
+      makeWorktree('wt-1', 'Notes', { hostId: 'local' }),
+      makeWorktree('wt-1', 'Remote notes', { hostId: 'ssh:host' })
+    ]
+    expect(
+      buildResourcePtyRows({
+        ...inputs,
+        worktrees,
+        sessions: [session('pty-tab', { worktreeId: 'wt-1' })],
+        bindings: { ...inputs.bindings, workspaceSessionReady: false }
+      })[0]
+    ).toMatchObject({ binding: 'pending', tabId: 'tab' })
+    const rows = buildResourcePtyRows({
+      ...inputs,
+      worktrees,
+      sessions: [
+        session('pty-tab', { incarnationId: 'A', worktreeId: 'wt-1' }),
+        session('pty-tab', { incarnationId: 'B', worktreeId: 'wt-1' })
+      ]
+    })
+    expect(rows).toHaveLength(2)
+    for (const row of rows) {
+      expect(row).toMatchObject({ binding: 'pending', tabId: null, paneKey: null })
+    }
+  })
+
+  it.each(['ssh:host', 'runtime:host'] as const)(
+    'keeps saved %s bindings remote across canonical restore keys before catalogs load',
+    (hostId) => {
+      const inputs = base()
+      expect(
+        buildResourcePtyRows({
+          ...inputs,
+          repos: [],
+          worktrees: [],
+          sessions: [session('pty-tab', { worktreeId: 'wt-1' })],
+          bindings: {
+            ...inputs.bindings,
+            workspaceSessionHostIdByKey: { 'worktree:wt-1': hostId },
+            ptyIdsByTabId: { tab: ['pty-tab'] }
+          }
+        })[0]
+      ).toMatchObject({ binding: 'unbound', tabId: null, paneKey: null })
+    }
+  )
+
+  it('uses explicit SSH execution ownership when duplicate repos make persistence ambiguous', () => {
+    const inputs = base()
+    expect(
+      buildResourcePtyRows({
+        ...inputs,
+        repos: [makeRepo(), { ...makeRepo(), connectionId: 'box' }],
+        worktrees: [makeWorktree('wt-1', 'Remote', { hostId: 'ssh:box' })],
+        bindings: { ...inputs.bindings, ptyIdsByTabId: { tab: ['pty-tab'] } }
+      })[0]
+    ).toMatchObject({ binding: 'unbound', tabId: null, paneKey: null, workspaceId: null })
+  })
+
   it('keeps distinct process generations with the same terminal id as separate rows', () => {
     const rows = buildResourcePtyRows({
       ...base(),
@@ -160,6 +320,60 @@ describe('local PTY view model', () => {
       'unknown'
     )
   })
+
+  it.each(['local', 'ssh:host', 'runtime:host'] as const)(
+    'uses the %s tab partition for colliding folder workspace ids',
+    (hostId) => {
+      const local = folderWorkspaceToWorktree(makeFolderWorkspace({ executionHostId: 'local' }))
+      const remote = folderWorkspaceToWorktree(makeFolderWorkspace({ executionHostId: 'ssh:host' }))
+      const runtime = folderWorkspaceToWorktree(
+        makeFolderWorkspace({ executionHostId: 'runtime:host' })
+      )
+      const restored = mergeWorkspaceSessionsWithHostShadow({
+        [hostId]: {
+          ...getDefaultWorkspaceSession(),
+          tabsByWorktree: { [local.id]: [makeTerminalTab('tab', local.id, 'Shell')] }
+        }
+      })
+      const rows = buildResourcePtyRows({
+        ...base(),
+        worktrees: [remote, local, runtime],
+        sessions: [session('pty-tab', { worktreeId: local.id })],
+        bindings: {
+          tabsByWorktree: restored.session.tabsByWorktree,
+          workspaceSessionHostIdByKey: restored.primaryHostBySessionKey,
+          ptyIdsByTabId: { tab: ['pty-tab'] },
+          workspaceSessionReady: true
+        }
+      })
+      expect(rows[0]).toMatchObject({
+        binding: hostId === 'local' ? 'bound' : 'unbound',
+        tabId: hostId === 'local' ? 'tab' : null
+      })
+    }
+  )
+
+  it.each([
+    { worktree: makeWorktree('wt-1', 'Remote'), repo: { ...makeRepo(), connectionId: 'host' } },
+    {
+      worktree: makeWorktree('wt-1', 'Remote', { runtimeOwnerEnvironmentId: 'host' }),
+      repo: makeRepo()
+    }
+  ])(
+    'keeps legacy SSH and runtime-owner bindings out of local actions: $worktree',
+    ({ worktree, repo }) => {
+      const inputs = base()
+      expect(
+        buildResourcePtyRows({
+          ...inputs,
+          repos: [repo],
+          worktrees: [worktree],
+          sessions: [session('pty-tab', { worktreeId: 'wt-1' })],
+          bindings: { ...inputs.bindings, ptyIdsByTabId: { tab: ['pty-tab'] } }
+        })[0]
+      ).toMatchObject({ binding: 'unbound', tabId: null, paneKey: null })
+    }
+  )
 
   it('keeps saved remote bindings out of local actions', () => {
     const inputs = base()
