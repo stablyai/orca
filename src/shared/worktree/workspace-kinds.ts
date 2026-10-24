@@ -29,9 +29,8 @@ export function isDefaultBranchWorkspace(
   if (!worktree.isMainWorktree || worktree.ephemeralVmCheckoutMode === 'provisioned-root') {
     return false
   }
-  // Why: a folder project's root is its default workspace but has no branch; on a git repo an
-  // empty branch means detached HEAD or an offline SSH row, which stay visible.
-  return worktree.branch.trim() !== '' || (repo !== undefined && isFolderRepo(repo))
+  // Folder roots have no default branch; an empty git branch is detached or offline.
+  return worktree.branch.trim() !== '' && (repo === undefined || !isFolderRepo(repo))
 }
 
 export function isAutomationGeneratedWorkspace(
