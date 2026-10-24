@@ -7,6 +7,7 @@ import { loadHosts } from '../transport/host-store'
 import { useHostClient } from '../transport/host-client-hooks'
 import { colors, spacing } from '../theme/mobile-theme'
 import { styles } from './mobile-accounts-screen-styles'
+import { DeepSeekAccountUsageSection } from './DeepSeekAccountUsageSection'
 import { useNow } from '../hooks/use-now'
 import { ClaudeIcon, OpenAIIcon } from '../components/AgentIcons'
 import {
@@ -389,6 +390,7 @@ export function MobileAccountsScreen() {
           <>
             {renderProviderSection('claude', 'Claude')}
             {renderProviderSection('codex', 'Codex')}
+            <DeepSeekAccountUsageSection snapshot={snapshot} />
             <View style={styles.footerHint}>
               <User size={14} color={colors.textMuted} />
               <Text style={styles.footerHintText}>
