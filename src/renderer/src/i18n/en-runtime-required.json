@@ -73,6 +73,10 @@
         "af6e02c44a": "page",
         "f5a6b38a14": "sheet"
       },
+      "NativeChatResumeOnRestartModal": {
+        "serverResumeHere": "Resume {{count}} chats started here",
+        "serverResumeHereOne": "Resume 1 chat started here"
+      },
       "NewWorkspaceComposerCard": {
         "0e587e31fb": "yaml",
         "2132b670da": "both",

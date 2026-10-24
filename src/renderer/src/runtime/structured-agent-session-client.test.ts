@@ -144,6 +144,21 @@ describe('callStructuredAgentSession timeouts', () => {
     expect(options.timeoutMs).toBeGreaterThan(80_000)
   })
 
+  it('allows restart dispatch settlement while preserving dispatch options', async () => {
+    const params = { sessionIds: ['a'] }
+    const options = { skipCompatibilityCheck: true as const, beforeSend: vi.fn() }
+    await callStructuredAgentSession(target, 'agentSession.restartContinue', params, options)
+    expect(mocks.call).toHaveBeenCalledExactlyOnceWith(
+      target,
+      'agentSession.restartContinue',
+      params,
+      {
+        timeoutMs: 600_000,
+        ...options
+      }
+    )
+  })
+
   it('leaves other reads on the default timeout', async () => {
     await callStructuredAgentSession(target, 'agentSession.options', { sessionId: 'session-1' })
     expect(mocks.call).toHaveBeenCalledExactlyOnceWith(target, 'agentSession.options', {

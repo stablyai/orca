@@ -1,3 +1,4 @@
+import { desktopChatCreationHistory } from '../runtime/desktop-chat-creation-history'
 import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
 import { removeManagedOrcadEnvironment } from '../../shared/runtime-environment-managed-orcad-store'
 import { listEnvironments, removeEnvironment } from '../../shared/runtime-environment-store'
@@ -18,11 +19,13 @@ export async function releaseEphemeralVmRuntimeEnvironments(
   for (const environment of environments) {
     if (!environment.orcadDeployment) {
       removeEnvironment(userDataPath, environment.id)
+      void desktopChatCreationHistory(userDataPath).removeEnvironment(environment.id)
       continue
     }
     const { closeOrcadManagedTunnel } =
       await import('../managed-server/lifecycle/orcad-managed-tunnel')
     await closeOrcadManagedTunnel(environment.id).catch(() => undefined)
     removeManagedOrcadEnvironment(userDataPath, environment.id)
+    void desktopChatCreationHistory(userDataPath).removeEnvironment(environment.id)
   }
 }

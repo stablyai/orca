@@ -1,3 +1,4 @@
+import { desktopChatCreationHistory } from '../../runtime/desktop-chat-creation-history'
 import { clearBrowserRoutePartitionStorageForEnvironment } from '../../browser/browser-route-partition-storage-runtime'
 import { retireBrowserRoutePartitionStorageForEnvironment } from '../../browser/browser-route-partition-storage-retirement'
 import { clearRuntimeEnvironmentCapabilityEvidence } from './runtime-environment-capability-evidence'
@@ -16,8 +17,12 @@ export type RemovedServerStore = RemoteLayoutSnapshotStore & {
 export function retireRemovedRuntimeEnvironment(
   environmentId: string,
   invalidateTransport: (environmentId: string) => Promise<void> | void,
-  store: RemovedServerStore
+  store: RemovedServerStore,
+  userDataPath?: string
 ): Promise<void> {
+  if (userDataPath) {
+    void desktopChatCreationHistory(userDataPath).removeEnvironment(environmentId)
+  }
   clearRuntimeEnvironmentCapabilityEvidence(environmentId)
   // Retained session partitions make listings advertise the removed server as a known host.
   store.removeWorkspaceSessionHost(toRuntimeExecutionHostId(environmentId))

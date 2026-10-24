@@ -82,6 +82,7 @@ export type RuntimeApi = {
     onSidebarInputsChanged: (callback: (event: SidebarInputsChangedEvent) => void) => () => void
   }
   runtimeEnvironments: {
+    desktopCreatedChatIds?: () => Promise<string[]>
     getStatusSnapshots: () => Promise<RuntimeHostStatusSnapshot[]>
     onStatusChanged: (callback: (snapshot: RuntimeHostStatusSnapshot) => void) => () => void
     list: () => Promise<PublicKnownRuntimeEnvironment[]>

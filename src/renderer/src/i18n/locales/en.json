@@ -2357,6 +2357,12 @@
         "9b40d7b018": "Copy"
       },
       "NativeChatResumeOnRestartModal": {
+        "serverTitle": "Resume chats on {{machine}}?",
+        "serverBody": "These chats were working when Orca on {{machine}} restarted. Resuming restores each one where it stopped and asks the agent to carry on. Your own prompt is not re-sent.",
+        "serverDismiss": "Dismiss",
+        "serverResumeAll": "Resume all {{count}} on {{machine}}",
+        "serverResumeHereOne": "Resume 1 chat started here",
+        "serverResumeHere": "Resume {{count}} chats started here",
         "title": "Resume interrupted chats?",
         "body": "These chats were working when Orca closed. Resuming restores each one where it stopped, with its full context, and asks the agent to check what it was doing before carrying on. Your own prompt is not re-sent.",
         "updateBody": "These chats were working when Orca installed an update. Resuming restores each one where it stopped, with its full context, and asks the agent to check what it was doing before carrying on. Your own prompt is not re-sent.",

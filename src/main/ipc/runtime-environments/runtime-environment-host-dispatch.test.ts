@@ -244,7 +244,8 @@ describe('runtimeEnvironments:remove by host kind', () => {
     })
     expect(mocks.wsl.service!.remove).not.toHaveBeenCalled()
     expect(mocks.removeEnvironment).toHaveBeenCalledWith('/u', id)
-    expect(mocks.retire).toHaveBeenCalledWith(id, expect.any(Function), expect.anything())
+    expect(mocks.retire).toHaveBeenCalledWith(id, expect.any(Function), expect.anything(), '/u')
+    // Removed by its own id, so no legacy-selector transport is closed.
     expect(mocks.closeRequest).not.toHaveBeenCalled()
   })
 })
