@@ -11,20 +11,9 @@ import type { AddRepoExistingWorkspaceSource } from '../../../../shared/telemetr
 import type { NestedRepoScanResult } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorktreeFetchOptions } from '@/store/slices/worktree-helpers'
-import { createNestedRepoScanId } from './add-repo-dialog-types'
+import { createNestedRepoScanId, type ShowNestedRepoReview } from './add-repo-dialog-types'
 import { worktreeRefreshOptions } from './add-repo-runtime-owner'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-
-type ShowNestedRepoReview = (args: {
-  scan: NestedRepoScanResult
-  selectedPath: string
-  connectionId: string | null
-  attemptId: string
-  runtimeKind: NestedRepoTelemetryRuntimeKind
-  inProgress: boolean
-  scanId: string | null
-  runtimeEnvironmentId?: string | null
-}) => void
 
 export function useAddRepoServerPathFlow({
   addRepoPath,

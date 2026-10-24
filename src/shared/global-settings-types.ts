@@ -384,6 +384,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   skipDeleteAutomationConfirm: boolean
   /** Why: deleting an artifact breaks a public link others may already hold; keep this skip separate from local deletions. */
   skipDeleteArtifactConfirm: boolean
+  /** Why: Git roots are otherwise auto-detected, so a monorepo subfolder can't be added as its own folder project. */
+  askProjectKindOnAdd: boolean
   /** Why: a Codex rate-limit reset spends a scarce credit on the live account; keep this skip separate from local confirmations. */
   skipCodexRateLimitResetConfirm: boolean
   /** Default preset in the new-workspace GitHub task view. */
