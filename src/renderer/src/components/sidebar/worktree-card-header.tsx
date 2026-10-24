@@ -13,6 +13,7 @@ import { formatSparseDirectoryPreview, shouldBeginWorktreeRename } from './workt
 import type { WorktreeCardPresentation } from './worktree-card-presentation'
 import { WorktreeCardSshHostControl } from './WorktreeCardSshHostControl'
 import { WorktreeTitleInlineRename } from './WorktreeTitleInlineRename'
+import { WorkspaceShortcutHint } from './WorkspaceShortcutHints'
 import type { WorktreeCardController } from './use-worktree-card-controller'
 
 // Why: pinned and compact inline project cues share this chip so both read as the same affordance.
@@ -173,6 +174,7 @@ export function WorktreeCardHeader({
           </RepoIdentityChip>
         )}
 
+        <WorkspaceShortcutHint worktree={worktree} />
         {/* Why: unread alert lives in the left status lane; title-row contrast comes from weight and dimmed read titles. */}
         <WorktreeTitleInlineRename
           displayName={visibleCardTitle}
