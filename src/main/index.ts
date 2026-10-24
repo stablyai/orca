@@ -95,10 +95,22 @@ const handleMacAppActivation = createMacAppActivationHandler({
   requestActivation: requestDesktopActivation
 })
 
-const preflightReady = runMainProcessPreflight({
-  focusExistingWindow,
-  requestDesktopActivation
-})
+// Internal build only (never merge): the launcher passes --user-data-dir; a direct start would open the shared profile.
+const internalBuildProfileMissing = app.isPackaged && !app.commandLine.hasSwitch('user-data-dir')
+if (internalBuildProfileMissing) {
+  dialog.showErrorBox(
+    'Orca internal build',
+    'Start this build with launch-orca-wsl-mover-internal.cmd (or its Desktop shortcut) so it uses its own profile.'
+  )
+  app.exit(1)
+}
+
+const preflightReady =
+  !internalBuildProfileMissing &&
+  runMainProcessPreflight({
+    focusExistingWindow,
+    requestDesktopActivation
+  })
 
 // Skip userData writes after losing the single-instance lock.
 if (preflightReady) {
