@@ -17,11 +17,11 @@ import type {
 import type { WorkspaceKanbanLaneView } from './workspace-kanban-search'
 import { extractWorkspaceKanbanLaneRange } from './workspace-kanban-lane-range'
 import WorkspaceKanbanStatusLane from './WorkspaceKanbanStatusLane'
+import { WORKSPACE_BOARD_LANE_GAP } from './workspace-chrome-metrics'
 
 // Why: a fresh [] per render would defeat the memoized lane on empty lanes.
 const EMPTY_LANE_ITEMS: readonly Worktree[] = []
 const EMPTY_RENDERED_LANE_IDS: ReadonlySet<WorkspaceStatus> = new Set()
-const WORKSPACE_BOARD_LANE_GAP = 12
 const WORKSPACE_BOARD_LANE_OVERSCAN = 1
 
 type WorkspaceKanbanLaneGridProps = {
@@ -33,6 +33,7 @@ type WorkspaceKanbanLaneGridProps = {
   repoMap: Map<string, Repo>
   activeWorktreeIdentity: string | null
   columnWidth: number
+  columnWidthMax?: number
   isResizingColumn: boolean
   dragOverStatus: WorkspaceStatus | null
   renderCards: boolean
@@ -62,6 +63,7 @@ export default function WorkspaceKanbanLaneGrid({
   repoMap,
   activeWorktreeIdentity,
   columnWidth,
+  columnWidthMax,
   isResizingColumn,
   dragOverStatus,
   renderCards,
@@ -94,6 +96,7 @@ export default function WorkspaceKanbanLaneGrid({
         : statuses.findIndex((status) => status.id === focusedStatusId),
     [focusedStatusId, statuses]
   )
+  // Explicit widths preserve fractional positions without rounded DOM measurements.
   const estimateLaneSize = useCallback(() => columnWidth, [columnWidth])
   const getLaneKey = useCallback((index: number) => statuses[index]?.id ?? index, [statuses])
   const rangeExtractor = useCallback(
@@ -189,7 +192,6 @@ export default function WorkspaceKanbanLaneGrid({
         return (
           <div
             key={virtualLane.key}
-            ref={laneVirtualizer.measureElement}
             data-index={virtualLane.index}
             className="absolute left-0 top-0 h-full"
             style={{
@@ -206,6 +208,7 @@ export default function WorkspaceKanbanLaneGrid({
               repoMap={repoMap}
               activeWorktreeIdentity={activeWorktreeIdentity}
               columnWidth={columnWidth}
+              columnWidthMax={columnWidthMax}
               isResizingColumn={isResizingColumn}
               isDragTarget={dragOverStatus === status.id}
               renderCards={renderCards && renderedLaneIds.has(status.id)}
