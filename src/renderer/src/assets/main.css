@@ -17,6 +17,8 @@
   font-weight: 100 900;
   font-style: normal;
   font-display: swap;
+  /* Why: Geist maps lowercase ω to the capital Ω glyph and lacks most Greek, so Greek falls back. */
+  unicode-range: U+0000-036F, U+0400-1EFF, U+2000-10FFFF;
 }
 
 @font-face {
