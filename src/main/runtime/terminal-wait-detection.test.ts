@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   detectTerminalWaitBlockedReason,
+  hasActiveAgentBackgroundWork,
   isKnownReadyPromptPreview,
   isMuseReadyPromptPreview
 } from './terminal-wait-detection'
@@ -580,5 +581,22 @@ describe('isMuseReadyPromptPreview', () => {
     const waitText = waitTextFor([...MUSE_READY_SCREEN_META, ...MUSE_TRUST_DIALOG])
     expect(detectTerminalWaitBlockedReason(waitText)).toBe('agent-trust-workspace')
     expect(isMuseReadyPromptPreview(waitText)).toBe(false)
+  })
+})
+
+describe('hasActiveAgentBackgroundWork', () => {
+  it('sees a Grok Tasks HUD that still lists work', () => {
+    expect(
+      hasActiveAgentBackgroundWork(
+        'Tasks 1\nTask Background sleep 60 for Orca repro  33s\nwatching · 1 command\n> '
+      )
+    ).toBe(true)
+    expect(hasActiveAgentBackgroundWork('watching • 2 commands')).toBe(true)
+  })
+
+  it('ignores a cleared HUD and unrelated task words', () => {
+    expect(hasActiveAgentBackgroundWork('Tasks 0\nNo background tasks\n> ')).toBe(false)
+    expect(hasActiveAgentBackgroundWork('watching · 0 commands')).toBe(false)
+    expect(hasActiveAgentBackgroundWork('I will create a task list')).toBe(false)
   })
 })

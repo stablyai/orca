@@ -49,6 +49,23 @@ export function isKnownReadyPromptPreview(preview: string): boolean {
 }
 
 /**
+ * Grok Build keeps an idle OSC title and a ready composer while background tasks
+ * still run. `tui-idle` is task-complete evidence, so that HUD is not idle (#9905).
+ */
+export function hasActiveAgentBackgroundWork(preview: string): boolean {
+  const normalized = preview.toLowerCase()
+  // "watching · 1 command" / "watching • 2 commands" — Grok task HUD chrome.
+  if (/\bwatching\s*[·.•]\s*[1-9]\d*\s+commands?\b/.test(normalized)) {
+    return true
+  }
+  // "Tasks 1" with a task row still listed. "Tasks 0" does not match.
+  if (/\btasks\s+[1-9]\d*\b/.test(normalized) && /\btask\b/.test(normalized)) {
+    return true
+  }
+  return false
+}
+
+/**
  * The ready-prompt text rules for a pane about to take input. Unlike isKnownReadyPromptPreview
  * (agent presence), nothing counts while a hold anchor shows (Codex's provisional startup header):
  * 0.157 discards input typed behind it while its daemon starts.
