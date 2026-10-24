@@ -183,7 +183,8 @@ export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope)
       reconcileRecentSessionCardsForWorktree({
         hostId,
         worktreeId,
-        liveTabs: sessionTabs
+        liveTabs: sessionTabs,
+        activeTabId: activeSessionTabId
       })
     }
     if (!activeSessionTabId) {

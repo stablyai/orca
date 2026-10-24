@@ -207,7 +207,9 @@ describe('MobileSessionHeaderMoreActionsSheet', () => {
       tree.root.findByProps({ testID: 'recent-session-card-state-dot-wt-2-tab-2' })
     ).toBeTruthy()
     expect(
-      tree.root.findAllByType('AgentStateDot' as unknown as string).map((node) => node.props.state)
+      tree.root
+        .findAll((node) => String(node.type) === 'AgentStateDot')
+        .map((node) => node.props.state)
     ).toEqual(['working', 'done'])
     expect(texts(tree)).not.toContain('Ship notes')
     expect(texts(tree)).toContain('10m')

@@ -67,13 +67,15 @@ export function MobileSessionTabStrip({
   const tabStates = useMemo(() => {
     const states = new Map<string, AgentDotState>()
     for (const tab of visibleTabs) {
-      const state = resolveMobileSessionTabDotState(tab, now)
+      const state = resolveMobileSessionTabDotState(tab, now, {
+        isActiveOnScreen: tab.id === activeSessionTabId
+      })
       if (state) {
         states.set(tab.id, state)
       }
     }
     return states
-  }, [visibleTabs, now])
+  }, [visibleTabs, now, activeSessionTabId])
   const [hiddenTabs, setHiddenTabs] = useState<TabStripHiddenTabs>({ left: [], right: [] })
   const refreshHiddenTabs = () => {
     const next = resolveTabStripHiddenTabs({

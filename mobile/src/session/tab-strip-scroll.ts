@@ -121,7 +121,8 @@ const EDGE_HINT_RANK: Partial<Record<AgentDotState, number>> = {
   blocked: 0,
   waiting: 0,
   working: 1,
-  monitoring: 1
+  monitoring: 1,
+  unread: 2
 }
 
 /** The most urgent working or blocked state among the given hidden tabs. */

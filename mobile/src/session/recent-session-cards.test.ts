@@ -9,6 +9,11 @@ import {
   setPendingCrossWorktreeTabTarget
 } from './mobile-session-tab-activation'
 import {
+  recentCardSnapshotTabs,
+  resolveMobileSessionTabDotState
+} from './mobile-terminal-tab-agent'
+import { PAGE_STORAGE_MAX_VALUE_CHARS } from '../mobile-web-shell/page-storage-keys'
+import {
   MAX_RECENT_SESSION_CARDS_DISPLAY,
   MAX_RECENT_SESSION_CARDS_LIMIT,
   MAX_RECENT_SESSION_CARDS_STORED,
@@ -464,5 +469,151 @@ describe('buildRecentSessionCardFromTab', () => {
       agentId: 'claude',
       agentState: 'working'
     })
+  })
+
+  it('marks non-active tabs and recent cards as unread when a working turn completes until viewed', () => {
+    recordRecentSessionCardVisit(
+      card({
+        worktreeId: 'wt-1',
+        tabId: 'tab-bg',
+        terminalHandle: 'pty-bg',
+        agentState: 'working',
+        lastVisitedAt: 10
+      })
+    )
+
+    // Background tab in the session strip is working, then completes while not active on screen.
+    expect(
+      resolveMobileSessionTabDotState(
+        {
+          type: 'terminal',
+          id: 'tab-bg',
+          terminal: 'pty-bg',
+          isActive: false,
+          agentStatus: {
+            state: 'working',
+            prompt: 'fix bug',
+            paneKey: 'tab-bg:leaf-1',
+            stateHistory: [],
+            updatedAt: 100,
+            stateStartedAt: 90
+          }
+        },
+        100,
+        { isActiveOnScreen: false }
+      )
+    ).toBe('working')
+
+    const completedBgTab = {
+      type: 'terminal' as const,
+      id: 'tab-bg',
+      terminal: 'pty-bg',
+      isActive: false,
+      agentStatus: {
+        state: 'done' as const,
+        prompt: 'fix bug',
+        paneKey: 'tab-bg:leaf-1',
+        stateHistory: [],
+        updatedAt: 200,
+        stateStartedAt: 200
+      }
+    }
+
+    expect(
+      resolveMobileSessionTabDotState(completedBgTab, 200, { isActiveOnScreen: false })
+    ).toBe('unread')
+
+    expect(
+      getVisibleRecentSessionCards({
+        hostId: 'host-1',
+        currentWorktreeId: 'wt-1',
+        currentTabId: 'tab-fg',
+        currentWorktreeTabs: [completedBgTab]
+      })
+    ).toEqual([expect.objectContaining({ tabId: 'tab-bg', agentState: 'unread' })])
+
+    // Once the user views tab-bg on screen, it acknowledges the completion and turns to done.
+    expect(
+      resolveMobileSessionTabDotState(completedBgTab, 210, { isActiveOnScreen: true })
+    ).toBe('done')
+
+    reconcileRecentSessionCardsForWorktree({
+      hostId: 'host-1',
+      worktreeId: 'wt-1',
+      liveTabs: [completedBgTab],
+      activeTabId: 'tab-bg'
+    })
+
+    // Switching back to tab-fg leaves tab-bg as done (green dot) since that turn was acknowledged.
+    expect(
+      resolveMobileSessionTabDotState(completedBgTab, 220, { isActiveOnScreen: false })
+    ).toBe('done')
+    expect(
+      getVisibleRecentSessionCards({
+        hostId: 'host-1',
+        currentWorktreeId: 'wt-1',
+        currentTabId: 'tab-fg',
+        currentWorktreeTabs: [completedBgTab]
+      })
+    ).toEqual([expect.objectContaining({ tabId: 'tab-bg', agentState: 'done' })])
+  })
+
+  it('reconciles shell-masked snapshot tabs against worktree.ps agent rows and bounds storage payload size', async () => {
+    const snapshot = {
+      tabs: [
+        {
+          type: 'terminal',
+          id: 'tab-other',
+          parentTabId: 'tab-other',
+          leafId: 'leaf-1',
+          terminal: 'pty-other',
+          agentStatus: {
+            state: 'done',
+            prompt: '',
+            paneKey: 'tab-other:leaf-1',
+            updatedAt: 100,
+            stateStartedAt: 90
+          }
+        }
+      ]
+    }
+    const worktrees = [
+      {
+        worktreeId: 'wt-2',
+        agents: [
+          {
+            paneKey: 'tab-other:leaf-1',
+            state: 'working',
+            updatedAt: 150,
+            stateStartedAt: 90
+          }
+        ]
+      }
+    ]
+
+    expect(recentCardSnapshotTabs(snapshot, { worktreeId: 'wt-2', worktrees })).toEqual([
+      {
+        id: 'tab-other',
+        terminal: 'pty-other',
+        agentState: 'working',
+        doneStamp: 90
+      }
+    ])
+
+    const hugeTitle = 'x'.repeat(800)
+    for (let i = 0; i < 30; i += 1) {
+      recordRecentSessionCardVisit(
+        card({
+          hostId: i < 15 ? 'host-1' : 'host-2',
+          worktreeId: `wt-${i}`,
+          tabId: `tab-${i}`,
+          title: hugeTitle,
+          lastVisitedAt: i + 1
+        })
+      )
+    }
+    await settleWrites()
+    const rawDedicated = storage.items.get(RECENT_SESSION_CARDS_STORAGE_KEY) ?? ''
+    expect(rawDedicated.length).toBeLessThanOrEqual(PAGE_STORAGE_MAX_VALUE_CHARS)
   })
 })

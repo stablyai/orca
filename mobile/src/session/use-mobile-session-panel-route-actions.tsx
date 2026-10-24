@@ -231,13 +231,17 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
       return
     }
     let cancelled = false
-    void (async () => {
+    const pollRecentCards = async () => {
+      let catalogRows: readonly unknown[] | undefined = getCachedWorktrees(hostId) ?? undefined
       try {
         const reply = await worktreeCatalogRead.request(client, { limit: 10000 })
         const catalog = !cancelled ? worktreeCatalogRead.interpret(reply) : null
-        const next = catalog?.accepted ? recentCardWorktrees(catalog.value.worktrees) : []
-        if (next.length > 0) {
-          setRecentCardsWorktrees(next)
+        if (catalog?.accepted) {
+          catalogRows = catalog.value.worktrees
+          const next = recentCardWorktrees(catalogRows)
+          if (next.length > 0) {
+            setRecentCardsWorktrees(next)
+          }
         }
       } catch {
         // A refused catalog leaves the cached rows in place.
@@ -248,7 +252,10 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
       const ids = Array.from(
         new Set(
           readAllRecentSessionCardsSync()
-            .filter((item) => item.hostId === hostId)
+            .filter(
+              (item) =>
+                item.hostId === hostId && (item.worktreeId !== worktreeId || sessionTabs.length === 0)
+            )
             .map((item) => item.worktreeId)
         )
       )
@@ -258,23 +265,41 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
           const snapshot = !cancelled && reply.ok ? sessionTabsListRead.interpret(reply) : null
           const liveTabs =
             snapshot !== null && !isUnpublishedSnapshot(snapshot)
-              ? recentCardSnapshotTabs(snapshot)
+              ? recentCardSnapshotTabs(snapshot, {
+                  worktreeId: targetId,
+                  worktrees: catalogRows
+                })
               : null
           if (liveTabs !== null) {
             reconcileRecentSessionCardsForWorktree({
               hostId,
               worktreeId: targetId,
               liveTabs,
-              allowEmpty: true
+              allowEmpty: true,
+              activeTabId: targetId === worktreeId ? activeSessionTabId : null
             })
           }
         })
       )
-    })()
+    }
+    void pollRecentCards()
+    const timer = setInterval(() => {
+      void pollRecentCards()
+    }, 2000)
     return () => {
       cancelled = true
+      clearInterval(timer)
     }
-  }, [client, connState, hostId, showHeaderMoreActions, showRecentSessionCards])
+  }, [
+    activeSessionTabId,
+    client,
+    connState,
+    hostId,
+    sessionTabs.length,
+    showHeaderMoreActions,
+    showRecentSessionCards,
+    worktreeId
+  ])
   const recentSessionCards = getVisibleRecentSessionCards({
     hostId,
     currentWorktreeId: worktreeId,

@@ -10,6 +10,7 @@ export type AgentDotState =
   | 'monitoring'
   | 'blocked'
   | 'waiting'
+  | 'unread'
   | 'done'
   | 'idle'
   | 'interrupted'
@@ -112,6 +113,8 @@ export function agentStateLabel(state: AgentDotState): string {
       return 'Failed'
     case 'unconfirmed':
       return 'Couldn’t confirm'
+    case 'unread':
+      return 'Unread'
     case 'done':
       return 'Done'
     case 'idle':

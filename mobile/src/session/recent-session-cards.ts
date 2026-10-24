@@ -3,11 +3,13 @@ import {
   readMirroredKeyOrStore,
   readMirroredStorage
 } from '../storage/mirrored-storage-keys'
+import { PAGE_STORAGE_MAX_VALUE_CHARS } from '../mobile-web-shell/page-storage-keys'
 import { LAST_VISITED_WORKTREE_STORAGE_KEY } from '../worktree/last-visited-worktree-repo'
 import { writeRecentCardsToLastVisitedWorktree } from '../worktree/last-visited-worktree-by-host'
 import type { MobileSessionTabType } from './mobile-session-route-types'
 import {
   buildRecentSessionCardFromTab,
+  clearTabCompletionTrackerForTests,
   parseAgentDotState,
   syncRecentCardWithLiveTab,
   type LiveRecentCardTab,
@@ -192,9 +194,18 @@ export async function hydrateRecentSessionCards(): Promise<Cards> {
 function persistCards(next: Cards): Cards {
   const maxDisplay = getRecentSessionCardsMaxDisplaySync()
   const custom = maxDisplay !== MAX_RECENT_SESSION_CARDS_DISPLAY
+  const dedicatedCards = next.slice()
+  const serializeDedicated = () =>
+    custom
+      ? JSON.stringify({ recentCards: dedicatedCards, maxDisplay })
+      : JSON.stringify(dedicatedCards)
   memory = next
   notify()
-  const dRaw = custom ? JSON.stringify({ recentCards: next, maxDisplay }) : JSON.stringify(next)
+  let dRaw = serializeDedicated()
+  while (dedicatedCards.length > 0 && dRaw.length > PAGE_STORAGE_MAX_VALUE_CHARS) {
+    dedicatedCards.pop()
+    dRaw = serializeDedicated()
+  }
   void persistMirrored(RECENT_SESSION_CARDS_STORAGE_KEY, dRaw).catch(() => {})
   void writeRecentCardsToLastVisitedWorktree(
     next,
@@ -247,6 +258,7 @@ export function reconcileRecentSessionCardsForWorktree(p: {
   worktreeId: string
   liveTabs: readonly IdTab[]
   allowEmpty?: boolean
+  activeTabId?: string | null
 }): Cards {
   const current = readAllRecentSessionCardsSync()
   if (!p.hostId || !p.worktreeId || (!p.liveTabs.length && !p.allowEmpty)) {
@@ -258,7 +270,9 @@ export function reconcileRecentSessionCardsForWorktree(p: {
       return [i]
     }
     const match = p.liveTabs.find((t) => matchesTab(i, t))
-    const updated = match ? withTabState(i, match) : null
+    const isActiveOnScreen =
+      p.activeTabId !== undefined ? p.activeTabId !== null && i.tabId === p.activeTabId : undefined
+    const updated = match ? withTabState(i, match, { isActiveOnScreen }) : null
     changed ||= updated !== i
     return updated ? [updated] : []
   })
@@ -270,6 +284,7 @@ export const clearRecentSessionCardsForTests = (): void => {
   maxDisplayMemory = null
   hydrated = false
   pendingRemovals.length = 0
+  clearTabCompletionTrackerForTests()
 }
 
 export function getVisibleRecentSessionCards(p: {
@@ -301,7 +316,7 @@ export function getVisibleRecentSessionCards(p: {
     .map((i) => {
       const match =
         i.worktreeId === p.currentWorktreeId ? tabs?.find((t) => matchesTab(i, t)) : undefined
-      const synced = withTabState(i, match)
+      const synced = withTabState(i, match, { isActiveOnScreen: false })
       return {
         ...synced,
         worktreeName: live?.get(i.worktreeId)?.displayName || synced.worktreeName
