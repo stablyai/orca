@@ -23,6 +23,7 @@ import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 import type { TerminalAgent } from '../../../shared/terminal-agent'
+import { startTabAgentExitOwner } from './tab-agent-exit-owner'
 import { useTabAgent } from './use-tab-agent'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -90,6 +91,7 @@ function TabAgentProbe(): null {
 }
 
 describe('useTabAgent observed-signal dispatch', () => {
+  let stopOwner: () => void
   let container: HTMLDivElement
   let root: Root | undefined
 
@@ -104,11 +106,13 @@ describe('useTabAgent observed-signal dispatch', () => {
     document.body.appendChild(container)
     probeRenders = 0
     latestAgent = null
+    stopOwner = startTabAgentExitOwner()
     root = createRoot(container)
     act(() => root!.render(<TabAgentProbe />))
   })
 
   afterEach(() => {
+    stopOwner()
     act(() => root?.unmount())
     root = undefined
     container.remove()

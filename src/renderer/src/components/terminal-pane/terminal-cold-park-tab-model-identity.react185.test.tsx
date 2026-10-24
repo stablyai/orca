@@ -12,7 +12,8 @@
  * src/shared/react-update-depth-attribution.ts).
  */
 import { act, useEffect, useState, StrictMode } from 'react'
-import { createRoot, type Root } from 'react-dom/client'
+import type { Root } from 'react-dom/client'
+import { createTerminalParkingTestRoot as createRoot } from './terminal-parking-test-root'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { REACT_NESTED_UPDATE_LIMIT } from '../../../../shared/react-update-depth-attribution'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
@@ -57,8 +58,20 @@ vi.mock('./TerminalOverlaySlot', () => ({ TerminalOverlaySlot: () => null }))
 vi.mock('./terminal-parked-tab-watchers', () => ({
   canWatcherCoverParkedTerminalTab: () => true,
   disposeParkedTerminalWatchersForWorktree: () => {},
-  syncParkedTerminalTabWatchers: (args: { parkedTabIds: ReadonlySet<string> }) => {
-    harness.renderedParkedSets.push([...args.parkedTabIds].sort())
+  terminalWatcherLiveWorkspaceIds: (ids: Iterable<string>) => new Set(ids),
+  pruneParkedTerminalWatchers: () => {},
+  disposeAllParkedTerminalWatchers: () => {},
+  syncParkedTerminalTabWatchersForWorkspaces: (
+    entries: ReadonlyMap<
+      string,
+      { tabs: readonly TerminalTab[]; parkedTabIds: ReadonlySet<string> }
+    >
+  ) => {
+    for (const entry of entries.values()) {
+      ;((args: { parkedTabIds: ReadonlySet<string> }) => {
+        harness.renderedParkedSets.push([...args.parkedTabIds].sort())
+      })(entry)
+    }
   }
 }))
 

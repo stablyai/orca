@@ -15,7 +15,8 @@
  * that cost so the derived burst limit stays regression-tested.
  */
 import { act, useEffect, useRef, useState } from 'react'
-import { createRoot, type Root } from 'react-dom/client'
+import type { Root } from 'react-dom/client'
+import { createTerminalParkingTestRoot as createRoot } from './terminal-parking-test-root'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 
@@ -45,7 +46,10 @@ vi.mock('./terminal-parked-tab-watchers', () => ({
   canWatcherCoverParkedTerminalTab: () => park.coverage,
   disposeParkedTerminalWatchersForWorktree: () => {},
   resolveParkedTerminalPaneCandidates: () => [],
-  syncParkedTerminalTabWatchers: () => {}
+  terminalWatcherLiveWorkspaceIds: (ids: Iterable<string>) => new Set(ids),
+  pruneParkedTerminalWatchers: () => {},
+  disposeAllParkedTerminalWatchers: () => {},
+  syncParkedTerminalTabWatchersForWorkspaces: () => {}
 }))
 
 vi.mock('./terminal-parking-e2e-overrides', () => ({

@@ -1,36 +1,35 @@
 // @vitest-environment happy-dom
-import { act, renderHook } from '@testing-library/react'
+import { act, cleanup, renderHook as renderHookOriginal } from '@testing-library/react'
+import { useAppStore } from '../../store'
+import { TerminalParkingTestRoot } from './terminal-parking-test-root'
+const renderHook: typeof renderHookOriginal = (callback, options) =>
+  renderHookOriginal(callback, { ...options, wrapper: TerminalParkingTestRoot })
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CrashReportBreadcrumbData } from '../../../../shared/crash-reporting'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 
 const harness = vi.hoisted(() => ({
-  state: {
-    pendingStartupByTabId: {},
-    ptyIdsByTabId: {},
-    runtimeStatusByEnvironmentId: new Map(),
-    runtimePaneTitlesByTabId: {},
-    settings: {},
-    terminalLayoutsByTabId: {},
-    sleepingAgentSessionsByPaneKey: {},
-    repos: []
-  },
   breadcrumb: vi.fn<(name: string, data?: CrashReportBreadcrumbData) => void>(),
   syncWatchers: vi.fn()
-}))
-
-vi.mock('../../store', () => ({
-  useAppStore: Object.assign(
-    (selector: (state: typeof harness.state) => unknown) => selector(harness.state),
-    { getState: () => harness.state }
-  )
 }))
 
 vi.mock('./terminal-parked-tab-watchers', () => ({
   canWatcherCoverParkedTerminalTab: () => true,
   resolveParkedTerminalPaneCandidates: () => [],
   disposeParkedTerminalWatchersForWorktree: vi.fn(),
-  syncParkedTerminalTabWatchers: harness.syncWatchers
+  terminalWatcherLiveWorkspaceIds: (ids: Iterable<string>) => new Set(ids),
+  pruneParkedTerminalWatchers: () => {},
+  disposeAllParkedTerminalWatchers: () => {},
+  syncParkedTerminalTabWatchersForWorkspaces: (
+    entries: ReadonlyMap<
+      string,
+      { tabs: readonly TerminalTab[]; parkedTabIds: ReadonlySet<string> }
+    >
+  ) => {
+    for (const [worktreeId, entry] of entries) {
+      harness.syncWatchers({ worktreeId, ...entry })
+    }
+  }
 }))
 
 // Isolate the worktree verdict from the separate per-tab aging policy.
@@ -104,11 +103,15 @@ describe('retention force-parking and churn pins', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000_000)
+    useAppStore.setState({ tabsByWorktree: { [WORKTREE_ID]: [...parkingArgs().terminalTabs] } })
     harness.breadcrumb.mockClear()
     harness.syncWatchers.mockClear()
   })
 
-  afterEach(() => vi.useRealTimers())
+  afterEach(() => {
+    cleanup()
+    vi.useRealTimers()
+  })
 
   it('releases an earned sustained pin when forced, preserving the live-shell exemption', () => {
     const args = parkingArgs()
@@ -205,7 +208,7 @@ describe('retention force-parking and churn pins', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it('clears a live sustained-pin timer when its worktree unmounts', () => {
+  it('clears a live sustained-pin timer when the app root unmounts', () => {
     const args = parkingArgs()
     const { rerender, unmount } = renderHook(useTerminalTabColdParking, { initialProps: args })
     churn(rerender, args)

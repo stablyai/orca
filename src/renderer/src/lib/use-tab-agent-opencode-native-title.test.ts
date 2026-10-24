@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act, createElement } from 'react'
+import { act, createElement, useLayoutEffect } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
@@ -11,6 +11,7 @@ import type { TerminalAgent } from '../../../shared/terminal-agent'
 import { parseWorkspaceSession } from '../../../shared/workspace-session-schema'
 import { resolveTabAgentFromSignals } from './tab-agent-from-signals'
 import { useTabAgent } from './use-tab-agent'
+import { startTabAgentExitOwner } from './tab-agent-exit-owner'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
@@ -30,6 +31,10 @@ const identityScenarios: [
 ]
 
 function HookProbe({ tab }: { tab: TerminalTab }): null {
+  useLayoutEffect(() => {
+    useAppStore.setState({ tabsByWorktree: { [tab.worktreeId]: [tab] } })
+  }, [tab])
+  useLayoutEffect(() => startTabAgentExitOwner(), [])
   latestAgent = useTabAgent(tab)
   return null
 }

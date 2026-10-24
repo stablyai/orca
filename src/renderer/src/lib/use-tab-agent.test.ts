@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act, createElement } from 'react'
+import { act, createElement, useLayoutEffect } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
@@ -10,6 +10,7 @@ import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/termin
 import type { TerminalAgent } from '../../../shared/terminal-agent'
 import { resolveTabAgentFromSignals } from './tab-agent-from-signals'
 import { useTabAgent } from './use-tab-agent'
+import { startTabAgentExitOwner } from './tab-agent-exit-owner'
 
 const initialAppState = useAppStore.getInitialState()
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
@@ -18,6 +19,10 @@ let latestHookAgent: TerminalAgent | null | undefined
 const hookRoots: Root[] = []
 
 function HookProbe({ tab }: { tab: TerminalTab }): null {
+  useLayoutEffect(() => {
+    useAppStore.setState({ tabsByWorktree: { [tab.worktreeId]: [tab] } })
+  }, [tab])
+  useLayoutEffect(() => startTabAgentExitOwner(), [])
   latestHookAgent = useTabAgent(tab)
   return null
 }

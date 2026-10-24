@@ -10,7 +10,8 @@
  * halves: no timer churn under a title flood, and an unchanged park instant.
  */
 import { act, useEffect, useState } from 'react'
-import { createRoot, type Root } from 'react-dom/client'
+import type { Root } from 'react-dom/client'
+import { createTerminalParkingTestRoot as createRoot } from './terminal-parking-test-root'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -40,7 +41,10 @@ vi.mock('./terminal-parked-tab-watchers', () => ({
   canWatcherCoverParkedTerminalTab: () => true,
   disposeParkedTerminalWatchersForWorktree: () => {},
   resolveParkedTerminalPaneCandidates: () => [],
-  syncParkedTerminalTabWatchers: () => {}
+  terminalWatcherLiveWorkspaceIds: (ids: Iterable<string>) => new Set(ids),
+  pruneParkedTerminalWatchers: () => {},
+  disposeAllParkedTerminalWatchers: () => {},
+  syncParkedTerminalTabWatchersForWorkspaces: () => {}
 }))
 
 /** A 60s hysteresis keeps every hidden tab holding a pending recheck timer. */

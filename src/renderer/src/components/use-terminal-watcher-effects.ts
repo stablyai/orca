@@ -3,58 +3,23 @@ import { findActivityTerminalPortal } from './activity/activity-terminal-portal'
 import { shouldAutoCreateInitialTerminal } from './terminal/initial-terminal'
 import {
   canWatcherCoverParkedTerminalTab,
-  disposeAllParkedTerminalWatchers,
-  pruneParkedTerminalWatchers,
-  syncParkedTerminalTabWatchersForWorkspaces,
-  terminalWatcherLiveWorkspaceIds,
   type ParkedTerminalTabWatcherSyncEntry
 } from './terminal-pane/terminal-parked-tab-watchers'
+import { commitTerminalWatcherFallback } from './terminal-pane/terminal-view-parking-owner'
+import { getTerminalParkingInputsKey } from './terminal-pane/terminal-parking-reconciliation-key'
 import { useAppStore } from '@/store'
 import { isTerminalWorkspaceEmptiedOnPurpose } from '../../../shared/closed-terminal-tab-tombstones'
 import { gateWorktreeAgentActivation } from '@/lib/worktree-agent-activation-gate'
 import { createWorkspaceTerminalHostAuthoritySelector } from '@/lib/workspace-terminal-host-authority'
 import { hasStructuredAgentLaunchInWorktree } from '@/lib/structured-agent-session-launch'
 import { isEmptyWorkspaceDefaultSurfacePending } from '@/lib/empty-workspace-default-surface-claims'
-import type { TerminalColdActivationController } from './terminal-cold-activation'
+import type { TerminalWatcherController } from './terminal-watcher-controller'
 import { selectParkedEquivalentMountTabIds } from './terminal/startup-terminal-tab-hold'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { createInitialTerminalThroughLayoutOwner } from '@/store/terminals/terminal-tab-create-through-layout-owner'
 
 // Why shared: surfaces without watchable live tabs need no per-pass allocation.
 const NO_PARKED_TAB_IDS: ReadonlySet<string> = new Set()
-
-type TerminalWatcherController = Pick<
-  TerminalColdActivationController,
-  | 'activationDeferredMountTabIdsByWorktreeRef'
-  | 'activeTabId'
-  | 'activeTabIdByWorktree'
-  | 'activeView'
-  | 'activeWorktreeId'
-  | 'activityTerminalPortals'
-  | 'anyMountedWorktreeHasLayout'
-  | 'backgroundMountRevision'
-  | 'createTab'
-  | 'effectiveParkedTerminalWorktreeIds'
-  | 'evictionExemptTerminalTabIds'
-  | 'getEffectiveLayoutForWorktree'
-  | 'groupsByWorktree'
-  | 'hydrationSucceeded'
-  | 'measurableBackgroundWorktreeIdsRef'
-  | 'mountedWorktreeIdsRef'
-  | 'pairedRuntimeParkingEnvironmentIds'
-  | 'pendingStartupByTabId'
-  | 'reconcileWorktreeTabModel'
-  | 'renderedActiveWorktreeId'
-  | 'startupTerminalTabHold'
-  | 'tabsByWorktree'
-  | 'terminalParkingEnabled'
-  | 'terminalProviderSnapshotCapabilityRevision'
-  | 'terminalSshParkingEnabled'
-  | 'terminalStartupRestorationReady'
-  | 'terminalTitleSnapshotAuthorityEnabled'
-  | 'workspaceSessionReady'
-  | 'workspaceSurfaceIds'
->
 
 export function useTerminalWatcherEffects(controller: TerminalWatcherController): void {
   const {
@@ -69,7 +34,6 @@ export function useTerminalWatcherEffects(controller: TerminalWatcherController)
     createTab,
     effectiveParkedTerminalWorktreeIds,
     evictionExemptTerminalTabIds,
-    getEffectiveLayoutForWorktree,
     groupsByWorktree,
     hydrationSucceeded,
     measurableBackgroundWorktreeIdsRef,
@@ -89,18 +53,35 @@ export function useTerminalWatcherEffects(controller: TerminalWatcherController)
     workspaceSurfaceIds
   } = controller
 
+  const watcherInputsRef = useRef(
+    new Map<string, { tabs: readonly unknown[]; key: string; facts: readonly unknown[] }>()
+  )
   useEffect(() => {
-    pruneParkedTerminalWatchers(terminalWatcherLiveWorkspaceIds(workspaceSurfaceIds))
     const syncEntriesByWorktreeId = new Map<string, ParkedTerminalTabWatcherSyncEntry>()
     for (const workspaceId of workspaceSurfaceIds) {
-      if (
-        anyMountedWorktreeHasLayout &&
-        mountedWorktreeIdsRef.current.has(workspaceId) &&
-        getEffectiveLayoutForWorktree(workspaceId)
-      ) {
+      const tabs = tabsByWorktree[workspaceId] ?? []
+      const previous = watcherInputsRef.current.get(workspaceId)
+      const key = previous?.tabs === tabs ? previous.key : getTerminalParkingInputsKey(tabs)
+      const facts = [
+        anyMountedWorktreeHasLayout,
+        mountedWorktreeIdsRef.current.has(workspaceId),
+        activeView === 'terminal' && workspaceId === renderedActiveWorktreeId,
+        measurableBackgroundWorktreeIdsRef.current.has(workspaceId),
+        effectiveParkedTerminalWorktreeIds.has(workspaceId),
+        activationDeferredMountTabIdsByWorktreeRef.current.get(workspaceId),
+        activityTerminalPortals,
+        evictionExemptTerminalTabIds,
+        startupTerminalTabHold,
+        pairedRuntimeParkingEnvironmentIds,
+        terminalSshParkingEnabled,
+        terminalParkingEnabled,
+        terminalProviderSnapshotCapabilityRevision,
+        terminalTitleSnapshotAuthorityEnabled
+      ]
+      watcherInputsRef.current.set(workspaceId, { tabs, key, facts })
+      if (previous?.key === key && facts.every((fact, index) => fact === previous.facts[index])) {
         continue
       }
-      const tabs = tabsByWorktree[workspaceId] ?? []
       let parkedTabIds: ReadonlySet<string> = NO_PARKED_TAB_IDS
       let deferredTabIds: ReadonlySet<string> | null = null
       if (!anyMountedWorktreeHasLayout && mountedWorktreeIdsRef.current.has(workspaceId)) {
@@ -166,7 +147,17 @@ export function useTerminalWatcherEffects(controller: TerminalWatcherController)
         ...(deferredTabIds ? { restoreTitleOnStartTabIds: deferredTabIds } : {})
       })
     }
-    syncParkedTerminalTabWatchersForWorkspaces(syncEntriesByWorktreeId)
+    const live = new Set(workspaceSurfaceIds)
+    for (const id of watcherInputsRef.current.keys()) {
+      if (!live.has(id)) {
+        watcherInputsRef.current.delete(id)
+        syncEntriesByWorktreeId.set(id, { tabs: [], parkedTabIds: NO_PARKED_TAB_IDS })
+      }
+    }
+    commitTerminalWatcherFallback(
+      syncEntriesByWorktreeId,
+      terminalProviderSnapshotCapabilityRevision
+    )
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs preserve their original stable identities.
   }, [
     activeTabId,
@@ -176,7 +167,6 @@ export function useTerminalWatcherEffects(controller: TerminalWatcherController)
     anyMountedWorktreeHasLayout,
     backgroundMountRevision,
     evictionExemptTerminalTabIds,
-    getEffectiveLayoutForWorktree,
     groupsByWorktree,
     effectiveParkedTerminalWorktreeIds,
     pairedRuntimeParkingEnvironmentIds,
@@ -191,7 +181,6 @@ export function useTerminalWatcherEffects(controller: TerminalWatcherController)
     workspaceSessionReady,
     workspaceSurfaceIds
   ])
-  useEffect(() => () => disposeAllParkedTerminalWatchers(), [])
 
   const startupActivationGateWorktreeIdsRef = useRef(new Set<string>())
   // Why a store subscription rather than a read inside the effects: the verdict flips to `none` the

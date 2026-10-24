@@ -1,6 +1,7 @@
 /** @vitest-environment happy-dom */
 import { act } from 'react'
-import { createRoot, type Root } from 'react-dom/client'
+import type { Root } from 'react-dom/client'
+import { createTerminalParkingTestRoot as createRoot } from './terminal-parking-test-root'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
@@ -21,6 +22,7 @@ vi.mock('../../store', async () => {
     runtimePaneTitlesByTabId: {} as Record<string, Record<number, string>>,
     settings: {} as Record<string, unknown>,
     sleepingAgentSessionsByPaneKey: {} as Record<string, unknown>,
+    tabsByWorktree: {} as Record<string, TerminalTab[]>,
     terminalLayoutsByTabId: {} as Record<string, unknown>
   }))
   return { useAppStore }
@@ -29,7 +31,10 @@ vi.mock('../../store', async () => {
 vi.mock('./terminal-parked-tab-watchers', () => ({
   canWatcherCoverParkedTerminalTab: () => true,
   disposeParkedTerminalWatchersForWorktree: vi.fn(),
-  syncParkedTerminalTabWatchers: vi.fn()
+  terminalWatcherLiveWorkspaceIds: (ids: Iterable<string>) => new Set(ids),
+  pruneParkedTerminalWatchers: () => {},
+  disposeAllParkedTerminalWatchers: () => {},
+  syncParkedTerminalTabWatchersForWorkspaces: () => {}
 }))
 
 vi.mock('@/lib/crash-breadcrumb-recorder', () => ({
@@ -75,7 +80,11 @@ describe('cold-park store subscription narrowing', () => {
 
   beforeEach(() => {
     harness.renders = 0
-    useAppStore.setState({ pendingStartupByTabId: {}, sleepingAgentSessionsByPaneKey: {} })
+    useAppStore.setState({
+      tabsByWorktree: { [WORKTREE_ID]: terminalTabs },
+      pendingStartupByTabId: {},
+      sleepingAgentSessionsByPaneKey: {}
+    })
     container = document.createElement('div')
     document.body.appendChild(container)
     root = createRoot(container)

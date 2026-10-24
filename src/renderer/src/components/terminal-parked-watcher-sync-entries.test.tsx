@@ -1,5 +1,9 @@
 // @vitest-environment happy-dom
-import { act } from 'react'
+import { act, useEffect } from 'react'
+import {
+  flushTerminalViewParking,
+  disposeTerminalViewParkingOwner
+} from './terminal-pane/terminal-view-parking-owner'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useTerminalWatcherEffects } from './use-terminal-watcher-effects'
@@ -38,6 +42,7 @@ let root: Root | undefined
 let rerenderWatcher: () => Promise<void>
 afterEach(async () => {
   await act(async () => root?.unmount())
+  disposeTerminalViewParkingOwner()
   vi.clearAllMocks()
   mocks.canCover.mockReturnValue(true)
 })
@@ -96,6 +101,9 @@ function renderWatcherEffects(overrides: Partial<WatcherController> = {}): Promi
   }
   function Watcher(): null {
     useTerminalWatcherEffects({ ...controller, ...overrides })
+    useEffect(() => {
+      flushTerminalViewParking()
+    })
     return null
   }
   root = createRoot(document.createElement('div'))
@@ -118,7 +126,7 @@ describe('parked terminal watcher sync entries', () => {
     const entries = lastSyncEntries()
     expect(entries.size).toBe(SURFACE_COUNT)
     expect([...entries.keys()]).toEqual(surfaceIds)
-    expect(mocks.prune).toHaveBeenCalledWith(new Set(surfaceIds))
+    expect(mocks.prune).not.toHaveBeenCalled()
   })
 
   it('parks the hidden mounted workspace tabs and exempts the eviction-exempt tab', async () => {

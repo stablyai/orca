@@ -31,7 +31,8 @@
  *   agent-status rows read                         0          0
  *   workspace tab buckets read                 1,394      2,081
  *
- * The current count also includes the later per-workspace sleep-state reader.
+ * These historical counts predate root ownership. This fixture now mounts the
+ * root runtime owner and requires at most one exemption lookup per title update.
  *
  * So notification work is O(mounted workspaces) and this fix does not change
  * that — one shared store means every subscriber is visited. What changes is
@@ -52,6 +53,8 @@ import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { useTerminalTabColdParking } from './use-terminal-tab-cold-parking'
+import { TerminalRuntimeOwners } from '../../app-shell/TerminalRuntimeOwners'
+import type * as ParkedWatchersModule from './terminal-parked-tab-watchers'
 // Why namespace type imports: vi.mock factories are hoisted, and `typeof import()`
 // annotations are banned, so the module shapes come from erased type-only imports.
 import type * as SleepingRecordParkExemptionModule from './sleeping-record-park-exemption'
@@ -76,6 +79,11 @@ const selectorRuns = vi.hoisted(() => ({
   worktreeAgentActivitySummary: 0,
   worktreeCardStatusInputs: 0
 }))
+
+vi.mock('./terminal-parked-tab-watchers', async (importOriginal) => {
+  const actual = await importOriginal<typeof ParkedWatchersModule>()
+  return { ...actual, syncParkedTerminalTabWatchersForWorkspaces: () => {} }
+})
 
 vi.mock('./sleeping-record-park-exemption', async (importOriginal) => {
   const actual = await importOriginal<typeof SleepingRecordParkExemptionModule>()
@@ -296,6 +304,7 @@ function mountAtCaptureScale(): void {
   act(() =>
     root?.render(
       <TooltipProvider>
+        <TerminalRuntimeOwners />
         {mountedWorktreeIds.map((worktreeId) => (
           <MountedWorkspaceProbe key={worktreeId} worktreeId={worktreeId} />
         ))}
@@ -382,12 +391,11 @@ describe('one pane title update: fanout at live-capture scale', () => {
     expect(listeners).toBeLessThan(8_000)
     expect(notifications).toBe(1)
 
-    // Every mounted subscriber's selector still runs. That is unchanged by this
-    // fix and is inherent to one shared store: notification work stays
-    // O(mounted workspaces), ~3,630 instrumented selector executions.
+    // Sidebar subscribers still run; root-owned parking no longer repeats the
+    // global exemption selector for each retained pane.
     expect(selectorRuns.worktreeAgentActivitySummary).toBeGreaterThanOrEqual(WORKSPACE_COUNT)
     expect(selectorRuns.worktreeCardStatusInputs).toBeGreaterThanOrEqual(WORKSPACE_COUNT * 3)
-    expect(selectorRuns.sleepingRecordParkExemption).toBeGreaterThanOrEqual(MOUNTED_WORKTREE_COUNT)
+    expect(selectorRuns.sleepingRecordParkExemption).toBeLessThanOrEqual(1)
 
     // …but every one of those executions is now an identity check. These three
     // counters sit on the state maps themselves, so they catch a walk by ANY of

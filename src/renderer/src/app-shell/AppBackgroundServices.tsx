@@ -1,3 +1,4 @@
+import { TerminalRuntimeOwners } from './TerminalRuntimeOwners'
 import { Suspense } from 'react'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { AgentHibernationGate } from '../components/AgentHibernationGate'
@@ -24,6 +25,7 @@ export function AppBackgroundServices(): React.JSX.Element {
 
   return (
     <>
+      <TerminalRuntimeOwners />
       <WorkspacePortScanner enabled={workspaceSessionReady} />
       {/* Why: plugin language-pack discovery must not re-render the App shell. */}
       <MacosTccPromptNoticeHost />

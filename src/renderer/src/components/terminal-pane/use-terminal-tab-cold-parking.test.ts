@@ -1,5 +1,8 @@
 // @vitest-environment happy-dom
-import { act, renderHook } from '@testing-library/react'
+import { act, cleanup, renderHook as renderHookOriginal } from '@testing-library/react'
+import { useLayoutEffect } from 'react'
+import { useAppStore } from '../../store'
+import { TerminalParkingTestRoot } from './terminal-parking-test-root'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { selectColdParkedTerminalTabs } from './terminal-hidden-view-parking'
@@ -25,13 +28,6 @@ const mocks = vi.hoisted(() => ({
   coldParkSelectCalls: 0,
   /** Toggled to churn the park verdict the way the crash cluster does. */
   watcherCoverage: true
-}))
-
-vi.mock('../../store', () => ({
-  useAppStore: Object.assign(
-    (selector: (state: unknown) => unknown) => selector(mocks.storeState),
-    { getState: () => mocks.storeState }
-  )
 }))
 
 vi.mock('./terminal-hidden-view-parking', async (importOriginal) => {
@@ -68,7 +64,10 @@ vi.mock('./terminal-eviction-exempt-tabs', () => ({
 vi.mock('./terminal-parked-tab-watchers', () => ({
   canWatcherCoverParkedTerminalTab: () => mocks.watcherCoverage,
   disposeParkedTerminalWatchersForWorktree: vi.fn(),
-  syncParkedTerminalTabWatchers: vi.fn()
+  syncParkedTerminalTabWatchersForWorkspaces: vi.fn(),
+  terminalWatcherLiveWorkspaceIds: (ids: Iterable<string>) => new Set(ids),
+  pruneParkedTerminalWatchers: vi.fn(),
+  disposeAllParkedTerminalWatchers: vi.fn()
 }))
 
 vi.mock('@/lib/crash-breadcrumb-recorder', () => ({
@@ -86,7 +85,42 @@ import {
 } from './terminal-park-verdict-flip-telemetry'
 import { BACKGROUND_WORKTREE_MEASURE_WINDOW_MS } from '../terminal/background-terminal-worktree-visibility'
 import { queueTerminalPaneSplitRequest } from './terminal-pane-split-request-routing'
-import { useTerminalTabColdParking } from './use-terminal-tab-cold-parking'
+import { useTerminalTabColdParking as useParking } from './use-terminal-tab-cold-parking'
+import type { TerminalViewParkingInput } from './terminal-view-parking-owner'
+
+const renderHook: typeof renderHookOriginal = (callback, options) =>
+  renderHookOriginal(callback, { ...options, wrapper: TerminalParkingTestRoot })
+function useTerminalTabColdParking(args: TerminalViewParkingInput): ReadonlySet<string> {
+  useLayoutEffect(() => {
+    const previous = useAppStore.getState().tabsByWorktree[args.worktreeId]
+    if (
+      previous?.length === args.terminalTabs.length &&
+      previous.every(
+        (tab, index) =>
+          tab.id === args.terminalTabs[index].id && tab.ptyId === args.terminalTabs[index].ptyId
+      )
+    ) {
+      return
+    }
+    useAppStore.setState({ tabsByWorktree: { [args.worktreeId]: [...args.terminalTabs] } })
+  }, [args.terminalTabs, args.worktreeId])
+  return useParking(args)
+}
+for (const key of [
+  'pendingStartupByTabId',
+  'ptyIdsByTabId',
+  'runtimeStatusByEnvironmentId',
+  'runtimePaneTitlesByTabId',
+  'settings',
+  'terminalLayoutsByTabId',
+  'repos',
+  'sleepingAgentSessionsByPaneKey'
+] as const) {
+  Object.defineProperty(mocks.storeState, key, {
+    get: () => useAppStore.getState()[key],
+    set: (value) => useAppStore.setState({ [key]: value })
+  })
+}
 
 const WORKTREE_ID = 'wt-1'
 
@@ -116,6 +150,7 @@ describe('useTerminalTabColdParking measure-clock contract', () => {
   })
 
   afterEach(() => {
+    cleanup()
     vi.useRealTimers()
     mocks.exemptTabIds = new Set()
     mocks.exemptSelectCalls = 0

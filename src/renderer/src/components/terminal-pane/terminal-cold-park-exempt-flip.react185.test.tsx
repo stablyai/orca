@@ -13,7 +13,8 @@
 /** @vitest-environment happy-dom */
 import { act, StrictMode } from 'react'
 import type * as ReactModule from 'react'
-import { createRoot, type Root } from 'react-dom/client'
+import type { Root } from 'react-dom/client'
+import { createTerminalParkingTestRoot as createRoot } from './terminal-parking-test-root'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
@@ -107,24 +108,33 @@ vi.mock('./terminal-parked-tab-watchers', async () => {
   )
   return {
     ...actual,
-    syncParkedTerminalTabWatchers: (args: {
-      tabs: readonly { id: string }[]
-      parkedTabIds: ReadonlySet<string>
-    }) => {
-      harness.syncCalls += 1
-      if (harness.syncCalls > 400) {
-        throw new Error('harness runaway: watcher sync exceeded 400 reconciliations')
-      }
-      harness.observedParkedCounts.add(args.parkedTabIds.size)
-      for (const tabId of Array.from(harness.watcherEntries)) {
-        if (!args.parkedTabIds.has(tabId)) {
-          harness.watcherEntries.delete(tabId)
-        }
-      }
-      for (const tab of args.tabs) {
-        if (args.parkedTabIds.has(tab.id)) {
-          harness.watcherEntries.add(tab.id)
-        }
+    terminalWatcherLiveWorkspaceIds: (ids: Iterable<string>) => new Set(ids),
+    pruneParkedTerminalWatchers: () => {},
+    disposeAllParkedTerminalWatchers: () => {},
+    syncParkedTerminalTabWatchersForWorkspaces: (
+      entries: ReadonlyMap<
+        string,
+        { tabs: readonly TerminalTab[]; parkedTabIds: ReadonlySet<string> }
+      >
+    ) => {
+      for (const entry of entries.values()) {
+        ;((args: { tabs: readonly { id: string }[]; parkedTabIds: ReadonlySet<string> }) => {
+          harness.syncCalls += 1
+          if (harness.syncCalls > 400) {
+            throw new Error('harness runaway: watcher sync exceeded 400 reconciliations')
+          }
+          harness.observedParkedCounts.add(args.parkedTabIds.size)
+          for (const tabId of Array.from(harness.watcherEntries)) {
+            if (!args.parkedTabIds.has(tabId)) {
+              harness.watcherEntries.delete(tabId)
+            }
+          }
+          for (const tab of args.tabs) {
+            if (args.parkedTabIds.has(tab.id)) {
+              harness.watcherEntries.add(tab.id)
+            }
+          }
+        })(entry)
       }
     },
     disposeParkedTerminalWatchersForWorktree: () => {
