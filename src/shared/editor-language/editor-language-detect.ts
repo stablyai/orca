@@ -43,9 +43,8 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.less': 'less',
   '.html': 'html',
   '.htm': 'html',
-  // Why: stopgap until a real JSP grammar — 'html' colors the markup; <% %> and ${} stay plain.
-  '.jsp': 'html',
-  '.jspf': 'html',
+  '.jsp': 'jsp',
+  '.jspf': 'jsp',
   // Why: Monaco declares Liquid as both '.liquid' and '.html.liquid'; the final-extension
   // lookup below covers the compound form, so the single entry is enough.
   '.liquid': 'liquid',
