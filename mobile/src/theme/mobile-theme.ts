@@ -96,3 +96,10 @@ export const typography = {
   metaSize: 12,
   monoFamily: 'monospace' as const
 } as const
+
+export const springs = {
+  // Slightly underdamped (zeta ~= 0.88): retains a subtle cushion on snap-back
+  // without multi-bounce oscillation.
+  drawer: { damping: 35, stiffness: 400 },
+  listReorder: { damping: 33, stiffness: 350 }
+} as const
