@@ -8678,7 +8678,9 @@
           "builtin_themes": "内置",
           "imported_from": "从 {{value0}} 导入",
           "imported_themes": "已导入",
-          "search_terminal_themes": "搜索终端主题"
+          "search_terminal_themes": "搜索终端主题",
+          "plugin_themes": "插件",
+          "from_plugin": "来自 {{value0}}"
         },
         "SettingsSidebar": {
           "e0900f83e7": "SSH",
@@ -13086,6 +13088,9 @@
           "searchPlaceholder": "搜索构建...",
           "noMatches": "没有匹配的版本。",
           "searchLabel": "搜索构建"
+        },
+        "AppearanceThemeControl": {
+          "useTerminalTheme": "使用其终端配色"
         }
       },
       "right": {

@@ -8678,7 +8678,9 @@
           "builtin_themes": "기본 제공",
           "imported_from": "{{value0}}에서 가져옴",
           "imported_themes": "가져옴",
-          "search_terminal_themes": "터미널 테마 검색"
+          "search_terminal_themes": "터미널 테마 검색",
+          "plugin_themes": "플러그인",
+          "from_plugin": "{{value0}}에서"
         },
         "SettingsSidebar": {
           "e0900f83e7": "SSH",
@@ -13086,6 +13088,9 @@
           "noMatches": "일치하는 빌드가 없습니다.",
           "searchPlaceholder": "빌드 검색…",
           "searchLabel": "빌드 검색"
+        },
+        "AppearanceThemeControl": {
+          "useTerminalTheme": "이 테마의 터미널 색상 사용"
         }
       },
       "right": {

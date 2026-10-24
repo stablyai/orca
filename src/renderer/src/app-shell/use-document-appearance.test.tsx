@@ -3,14 +3,18 @@ import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
 import { useAppStore } from '../store'
+import { usePluginThemeStore } from '../store/plugin-themes'
 
 const mocks = vi.hoisted(() => ({
   applyDocumentTheme: vi.fn(),
+  applyPluginAppTheme: vi.fn(),
   buildAppFontFamily: vi.fn((fontFamily: string | null | undefined) => fontFamily ?? '')
 }))
 
 vi.mock('../lib/document-theme', () => ({
-  applyDocumentTheme: mocks.applyDocumentTheme
+  applyDocumentTheme: mocks.applyDocumentTheme,
+  applyPluginAppTheme: mocks.applyPluginAppTheme,
+  readCachedPluginAppTheme: () => null
 }))
 
 vi.mock('@/lib/app-font-family', () => ({
@@ -74,5 +78,45 @@ describe('useDocumentAppearance', () => {
     expect(mocks.buildAppFontFamily).toHaveBeenLastCalledWith('Monaco')
     expect(mocks.buildAppFontFamily).toHaveBeenCalledTimes(2)
     unmount()
+  })
+
+  it('applies a selected plugin theme and restores the earlier choice when it disappears', async () => {
+    const midnight = {
+      id: 'plugin:samples.midnight/midnight' as const,
+      revision: 'r1',
+      pluginKey: 'samples.midnight',
+      pluginName: 'Midnight',
+      label: 'Midnight',
+      base: 'light' as const,
+      tokens: { '--background': '#fafafa' }
+    }
+    usePluginThemeStore.setState({ entries: [midnight], loaded: true })
+    useAppStore.setState({
+      updateSettings: async (updates) => {
+        const current = useAppStore.getState().settings ?? getDefaultSettings('/tmp')
+        useAppStore.setState({ settings: { ...current, ...updates } })
+      }
+    })
+    act(() => {
+      const settings = useAppStore.getState().settings!
+      useAppStore.setState({
+        settings: {
+          ...settings,
+          theme: midnight.base,
+          themeBeforePlugin: 'dark',
+          pluginAppTheme: midnight.id
+        }
+      })
+    })
+    const { unmount } = renderHook(() => useDocumentAppearance())
+    expect(mocks.applyPluginAppTheme).toHaveBeenLastCalledWith(midnight)
+    expect(mocks.applyDocumentTheme).toHaveBeenLastCalledWith('light')
+
+    act(() => usePluginThemeStore.setState({ entries: [] }))
+    expect(mocks.applyPluginAppTheme).toHaveBeenLastCalledWith(null)
+    // The earlier built-in choice comes back with the built-in colors.
+    await vi.waitFor(() => expect(useAppStore.getState().settings?.theme).toBe('dark'))
+    unmount()
+    usePluginThemeStore.setState({ entries: [], loaded: false })
   })
 })

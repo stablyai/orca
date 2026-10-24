@@ -8709,7 +8709,9 @@
           "builtin_themes": "Integrados",
           "imported_from": "Importado desde {{value0}}",
           "imported_themes": "Importados",
-          "search_terminal_themes": "Buscar temas de terminal"
+          "search_terminal_themes": "Buscar temas de terminal",
+          "plugin_themes": "Plugins",
+          "from_plugin": "De {{value0}}"
         },
         "SettingsSidebar": {
           "e0900f83e7": "SSH",
@@ -13102,6 +13104,9 @@
           "searchLabel": "Buscar compilaciones",
           "noMatches": "No hay compilaciones coincidentes.",
           "searchPlaceholder": "Buscar compilaciones…"
+        },
+        "AppearanceThemeControl": {
+          "useTerminalTheme": "Usar sus colores de terminal"
         }
       },
       "right": {

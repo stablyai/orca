@@ -9042,7 +9042,9 @@
           "search_terminal_themes": "Search terminal themes",
           "cb330ef7f8": " of {{value0}}",
           "c822571b2e": " matching \"{{value0}}\"",
-          "3119c012a5": "string"
+          "3119c012a5": "string",
+          "plugin_themes": "Plugins",
+          "from_plugin": "From {{value0}}"
         },
         "SettingsSidebar": {
           "e0900f83e7": "SSH",
@@ -13416,6 +13418,9 @@
           "manualDeleteWarning": "Only do this if no other machine sharing this home runs Orca for this profile.",
           "close": "Close",
           "reclaimedNotStarted": "The lock was cleared, but Orca’s server did not start."
+        },
+        "AppearanceThemeControl": {
+          "useTerminalTheme": "Use its terminal colors"
         }
       },
       "right": {

@@ -8891,7 +8891,9 @@
           "search_terminal_themes": "Rechercher des thèmes de terminal",
           "cb330ef7f8": " sur {{value0}}",
           "c822571b2e": " correspondant à \"{{value0}}\"",
-          "3119c012a5": "string"
+          "3119c012a5": "string",
+          "plugin_themes": "Plugins",
+          "from_plugin": "De {{value0}}"
         },
         "SettingsSidebar": {
           "e0900f83e7": "SSH",
@@ -13246,6 +13248,9 @@
           "searchPlaceholder": "Rechercher des versions…",
           "searchLabel": "Rechercher des versions",
           "noMatches": "Aucune version correspondante."
+        },
+        "AppearanceThemeControl": {
+          "useTerminalTheme": "Utiliser ses couleurs de terminal"
         }
       },
       "right": {

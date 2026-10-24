@@ -26,3 +26,9 @@ export type TerminalColorOverrides = {
   // or xterm upgrade can honour it without a migration.
   bold?: string
 }
+
+/** A selected plugin terminal theme's palette, saved so every host resolves it. */
+export type TerminalPluginPalette = {
+  id: `plugin:${string}`
+  colors: TerminalColorOverrides
+}

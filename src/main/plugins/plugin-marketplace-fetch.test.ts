@@ -30,7 +30,7 @@ describe('parsePluginMarketplaceIndex', () => {
       owner: 'samples',
       futureHeader: true,
       plugins: [
-        { ...entry, id: 'samples.theme', release: { ...release, types: ['app-theme'] } },
+        { ...entry, id: 'samples.theme', release: { ...release, types: ['icon-theme'] } },
         { ...entry, id: 'samples.broken', release: { ...release, commit: 'nope' } },
         { ...entry, release: { ...release, futureField: 1 }, futureField: 1 }
       ]

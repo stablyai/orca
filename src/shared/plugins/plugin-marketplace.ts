@@ -15,16 +15,12 @@ export const OFFICIAL_PLUGIN_ID_PREFIX = 'orca-'
 export const OFFICIAL_MARKETPLACE_OWNER = 'stablyai'
 export const OFFICIAL_MARKETPLACE_REPOSITORY = 'orca-plugins'
 
-// Why: theme/icon/skill contributions were deferred, so `contributes` now
-// rejects them and any plugin declaring one fails to install wholesale. The
-// shared marketplace index (which this build does not control) still advertises
-// such packs; hide listings that carry these categories so users never hit a
-// dead "install" path until the marketplace catches up.
+// Why: icon-theme and skill contributions are not supported, so a plugin declaring one fails
+// to install. Shared catalogs this build does not control still list such packs; hide them so
+// users never reach a dead install.
 export const UNSUPPORTED_MARKETPLACE_CATEGORIES: readonly string[] = [
-  'themes',
   'icons',
   'icon-themes',
-  'terminal-themes',
   'skills'
 ]
 

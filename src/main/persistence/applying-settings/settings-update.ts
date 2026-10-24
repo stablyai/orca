@@ -9,6 +9,7 @@ import { sanitizeAgentLaunchProfileUpdates } from '../../../shared/tui-agent-lau
 import { normalizeTerminalQuickCommands } from '../../../shared/terminal-quick-commands'
 import { assertTerminalQuickCommandsStorable } from '../../../shared/terminal-quick-command-prompt-limit'
 import { normalizeTerminalCustomThemes } from '../../../shared/terminal-custom-themes'
+import { normalizePluginThemeSettings } from '../../../shared/plugin-theme-settings'
 import { normalizeTerminalDefaultShell } from '../../../shared/terminal-default-shell'
 import { normalizeTerminalCursorStyleDefault } from '../../../shared/terminal-cursor-style-settings'
 import { normalizeDesktopTerminalScrollbackRows } from '../../../shared/terminal-scrollback-policy'
@@ -125,6 +126,7 @@ export function updateSettings(
       updates.terminalCustomThemes
     )
   }
+  Object.assign(sanitizedUpdates, normalizePluginThemeSettings(updates))
   if ('terminalCursorStyle' in updates) {
     Object.assign(
       sanitizedUpdates,

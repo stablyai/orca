@@ -1,3 +1,5 @@
+import { usePluginTerminalThemes } from '@/store/plugin-themes'
+import { withTerminalPluginPalettes } from '@/lib/terminal-plugin-palettes'
 import { useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
@@ -96,7 +98,8 @@ export function TerminalThemeCatalogSection({
     rememberTerminalThemeTarget(nextTarget)
     setTargetState(nextTarget)
   }
-  const themeOptions = getAvailableTerminalThemeOptions(settings)
+  const pluginTerminalThemes = usePluginTerminalThemes()
+  const themeOptions = getAvailableTerminalThemeOptions(settings, pluginTerminalThemes)
   const isLightTarget = target === 'light'
   const matchDarkMode = !settings.terminalUseSeparateLightTheme
   const lightModeMatchesDark = isLightTarget && matchDarkMode
@@ -256,15 +259,14 @@ export function TerminalThemeCatalogSection({
                     const hasColorOverrides =
                       Object.keys(settings.terminalColorOverrides ?? {}).length > 0
                     updateSettings(
-                      isLightTarget
-                        ? {
-                            terminalThemeLight: theme,
-                            ...(hasColorOverrides ? { terminalColorOverrides: undefined } : {})
-                          }
-                        : {
-                            terminalThemeDark: theme,
-                            ...(hasColorOverrides ? { terminalColorOverrides: undefined } : {})
-                          }
+                      withTerminalPluginPalettes(
+                        settings,
+                        {
+                          [isLightTarget ? 'terminalThemeLight' : 'terminalThemeDark']: theme,
+                          ...(hasColorOverrides ? { terminalColorOverrides: undefined } : {})
+                        },
+                        pluginTerminalThemes
+                      )
                     )
                   }}
                   importedHighlightSignal={importedHighlightSignal}

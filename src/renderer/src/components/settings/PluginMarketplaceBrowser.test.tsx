@@ -72,7 +72,9 @@ const preview: PluginMarketplaceHostInstallPreview = {
       languagePacks: [],
       keybindings: [],
       vmRecipes: [],
-      agents: []
+      agents: [],
+      themes: [],
+      terminalThemes: []
     },
     capabilities: [{ kind: 'workspace:read' }]
   }

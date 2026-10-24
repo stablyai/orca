@@ -8715,7 +8715,9 @@
           "search_terminal_themes": "ターミナルテーマを検索",
           "cb330ef7f8": "/{{value0}}",
           "c822571b2e": " 「{{value0}}」に一致",
-          "3119c012a5": "文字列"
+          "3119c012a5": "文字列",
+          "plugin_themes": "プラグイン",
+          "from_plugin": "{{value0}} から"
         },
         "SettingsSidebar": {
           "e0900f83e7": "SSH",
@@ -13086,6 +13088,9 @@
           "searchLabel": "ビルドの検索",
           "searchPlaceholder": "ビルドを検索…",
           "noMatches": "一致するビルドはありません。"
+        },
+        "AppearanceThemeControl": {
+          "useTerminalTheme": "このテーマのターミナル配色を使う"
         }
       },
       "right": {

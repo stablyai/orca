@@ -1,5 +1,7 @@
 import type { GlobalSettings } from './global-settings-types'
 import {
+  hasUsableTerminalThemeColors,
+  normalizeTerminalColorOverrides,
   normalizeTerminalCustomThemes,
   parseCustomTerminalThemeSelection,
   terminalCustomThemeToXtermTheme
@@ -35,11 +37,14 @@ export function selectTerminalTheme(
   return { mode, useLightVariant, themeName }
 }
 
-/** A selection names a user-imported theme or a built-in one; one lookup for both. */
+/** A selection names a plugin, user-imported or built-in theme; one lookup for all three. */
 export function lookupTerminalTheme(
-  settings: Pick<GlobalSettings, 'terminalCustomThemes'> | undefined,
+  settings: Pick<GlobalSettings, 'terminalCustomThemes' | 'terminalPluginPalettes'> | undefined,
   selection: string
 ): TerminalThemeMap[string] | null {
+  if (selection.startsWith('plugin:')) {
+    return pluginPalette(settings?.terminalPluginPalettes, selection)
+  }
   const customId = parseCustomTerminalThemeSelection(selection)
   const custom =
     customId && settings
@@ -52,9 +57,27 @@ export function lookupTerminalTheme(
     : (TERMINAL_THEME_CATALOG[selection] ?? null)
 }
 
+// Why re-validate: settings are persisted and synced, so a snapshot is untrusted input here.
+function pluginPalette(palettes: unknown, selection: string): TerminalThemeMap[string] | null {
+  if (!Array.isArray(palettes)) {
+    return null
+  }
+  const entry: unknown = palettes.find(
+    (candidate: unknown) =>
+      typeof candidate === 'object' &&
+      candidate !== null &&
+      'id' in candidate &&
+      candidate.id === selection
+  )
+  const colors = normalizeTerminalColorOverrides(
+    typeof entry === 'object' && entry !== null && 'colors' in entry ? entry.colors : undefined
+  )
+  return hasUsableTerminalThemeColors(colors) ? colors : null
+}
+
 function themeColors(
   selection: string,
-  settings: Pick<GlobalSettings, 'terminalCustomThemes'>
+  settings: Pick<GlobalSettings, 'terminalCustomThemes' | 'terminalPluginPalettes'>
 ): TerminalOscColorQueryReplyColors | null {
   const theme = lookupTerminalTheme(settings, selection)
   return theme ? { foreground: theme.foreground, background: theme.background } : null
@@ -67,7 +90,10 @@ function themeColors(
  */
 export function resolveConfiguredTerminalColors(
   settings: TerminalThemeSelectionSettings &
-    Pick<GlobalSettings, 'terminalCustomThemes' | 'terminalColorOverrides'>,
+    Pick<
+      GlobalSettings,
+      'terminalCustomThemes' | 'terminalPluginPalettes' | 'terminalColorOverrides'
+    >,
   systemPrefersDark: boolean
 ): TerminalOscColorQueryReplyColors {
   const { themeName, useLightVariant } = selectTerminalTheme(settings, systemPrefersDark)
