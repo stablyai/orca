@@ -5,6 +5,10 @@ import {
 } from '../../../shared/jcode-runtime-dir'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
 import { isValidTerminalTabId } from '../../../shared/terminal-tab-id'
+import {
+  ORCA_PI_DRAFT_BRIDGE_DIR_ENV,
+  ORCA_PI_DRAFT_BRIDGE_TOKEN_ENV
+} from '../../pi/draft-bridge-extension-source'
 
 export type PtySpawnPane = {
   paneKey: string
@@ -43,6 +47,9 @@ export function stampPtySpawnPaneEnv(
     return
   }
   const { pane } = args
+  // Why: a shell nested inside a Pi pane must not answer its parent's bridge.
+  delete env[ORCA_PI_DRAFT_BRIDGE_DIR_ENV]
+  delete env[ORCA_PI_DRAFT_BRIDGE_TOKEN_ENV]
   if (!pane) {
     // Shell/hook identity must name this spawn's own pane, never an unproved renderer key.
     delete env.ORCA_PANE_KEY

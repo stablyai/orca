@@ -115,6 +115,7 @@ docs/**
 !docs/reference/
 !docs/reference/cross-platform-support.md
 !docs/reference/git-workflow.md
+!docs/reference/remote-terminal-draft-editing.md
 !docs/reference/test-antipatterns.md
 !docs/agent-skill-sharing-implementation-checklist.md
 !docs/mobile-terminal-shortcut-bar.md

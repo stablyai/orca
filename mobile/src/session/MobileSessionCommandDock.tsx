@@ -17,6 +17,7 @@ import {
 } from '../terminal/terminal-keyboard-type'
 import { MobileTerminalLiveInputStatus } from './MobileTerminalLiveInputStatus'
 import { MobileTerminalInputActions } from './MobileTerminalInputActions'
+import { MobileRemoteDraftBar, MobileRemoteDraftFetchActions } from './MobileRemoteDraftControls'
 import { keepHeldPressThroughLongPress } from './held-press-long-press'
 import { isTerminalPhoneDisplayMode } from './mobile-session-route-helpers'
 import { colors } from '../theme/mobile-theme'
@@ -28,6 +29,13 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
   const {
     insets,
     bufferedTerminalDraftState,
+    remoteDraftSession,
+    remoteDraftConflict,
+    loadRemoteDraft,
+    saveRemoteDraft,
+    exitRemoteDraft,
+    reloadConflict,
+    keepConflictMine,
     autocompleteEnabled,
     liveInputCapture,
     activeHandle,
@@ -81,7 +89,6 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
           { paddingBottom: insets.bottom, transform: [{ translateY: -keyboardLift }] }
         ]}
       >
-        {/* Accessory keys */}
         <View ref={accessoryBarKeepsKeyboard} style={styles.accessoryBar}>
           {/* Why: fixed keyboard escape hatch; outside ScrollView + shortcut path so it can't scroll away or be hidden (#5106). */}
           {keyboardLift > 0 && (
@@ -257,7 +264,14 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
           </ScrollView>
         </View>
 
-        {/* Input bar */}
+        <MobileRemoteDraftBar
+          editing={Boolean(remoteDraftSession)}
+          changed={Boolean(remoteDraftConflict)}
+          onReload={reloadConflict}
+          onKeepMine={keepConflictMine}
+          onExit={exitRemoteDraft}
+        />
+
         {liveInputEnabled ? (
           <View style={[styles.inputBar, styles.liveInputBar]}>
             <Pressable
@@ -363,6 +377,12 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
               onDictationPressIn={handleDictationPressIn}
               onDictationPressOut={handleDictationPressOut}
               onDictationCancel={cancelDictation}
+            />
+            <MobileRemoteDraftFetchActions
+              canSend={canSend}
+              editing={Boolean(remoteDraftSession)}
+              onLoad={loadRemoteDraft}
+              onSave={() => void saveRemoteDraft()}
             />
             <Pressable
               style={[styles.sendButton, !canSend && styles.sendButtonDisabled]}

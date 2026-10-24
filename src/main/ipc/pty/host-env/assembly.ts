@@ -11,6 +11,7 @@ import { agentHookServer } from '../../../agent-hooks/server'
 import { wslHookRelayManager } from '../../../agent-hooks/wsl-hook-relay-manager'
 import { wslInteropHealthMonitor } from '../../../wsl/wsl-interop-health'
 import { piTitlebarExtensionService } from '../../../pi/titlebar-extension-service'
+import { preparePiDraftBridge, buildPiDraftBridgeEnv } from '../../../pi/draft-bridge-directory'
 import { prependOrcaCliDirToChildPath } from '../../../cli/orca-cli-child-path'
 import { getManagedWslCliDir, getWslCliCommandName } from '../../../cli/wsl-managed-cli'
 import { stripLegacyTerminalShimEnv } from '../../../pty/legacy-terminal-shim-dir'
@@ -184,6 +185,17 @@ export function buildPtyHostEnv(
       // Keep guarded OMP launches supplied with a fresh config even when its
       // managed status extension is disabled.
       Object.assign(baseEnv, piTitlebarExtensionService.buildFreshOmpEnv())
+    }
+
+    // Why: the bridge dir is host-local like the hook endpoint, so a WSL guest cannot see it.
+    if (!opts.isWsl && (shouldInstallPiExtensions || shouldInstallOmpExtensions)) {
+      const paneKey = baseEnv.ORCA_PANE_KEY
+      if (paneKey) {
+        Object.assign(
+          baseEnv,
+          buildPiDraftBridgeEnv(preparePiDraftBridge(opts.userDataPath, id, paneKey))
+        )
+      }
     }
 
     if (shouldInstallPrimeAgentExtensions && piAgentKind === 'prime-agent' && !opts.isWsl) {

@@ -12,6 +12,11 @@ import {
   ORCA_PI_PREFILL_EXTENSION_FILE,
   getPiPrefillExtensionSource
 } from './prefill-extension-source'
+import {
+  ORCA_PI_DRAFT_BRIDGE_EXTENSION_FILE,
+  getPiDraftBridgeExtensionSource
+} from './draft-bridge-extension-source'
+import { clearPiDraftBridge } from './draft-bridge-directory'
 import { ORCA_PI_EXTENSION_FILE, getPiTitlebarExtensionSource } from './titlebar-extension-source'
 import {
   isSafeDescendCandidate as sharedIsSafeDescendCandidate,
@@ -158,6 +163,10 @@ export class PiTitlebarExtensionService {
         join(extensionsDir, ORCA_PI_PREFILL_EXTENSION_FILE),
         withOrcaManagedExtensionMarker(getPiPrefillExtensionSource(kind))
       )
+      this.writeManagedExtension(
+        join(extensionsDir, ORCA_PI_DRAFT_BRIDGE_EXTENSION_FILE),
+        withOrcaManagedExtensionMarker(getPiDraftBridgeExtensionSource())
+      )
     }
     const statusExtensionPath = join(extensionsDir, ORCA_PI_AGENT_STATUS_EXTENSION_FILE)
     const statusSource = withOrcaManagedExtensionMarker(getPiAgentStatusExtensionSource(kind))
@@ -238,6 +247,7 @@ export class PiTitlebarExtensionService {
   }
 
   clearPty(ptyId: string): void {
+    clearPiDraftBridge(getAppEnvironment().getPath('userData'), ptyId)
     // Why: PTY teardown doesn't know which kind was launched (the daemon
     // exit path discards the launch command). Sweep both old PTY-scoped
     // overlay roots for migration cleanup. Source-scoped legacy overlays are

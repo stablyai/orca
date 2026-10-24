@@ -585,6 +585,11 @@ import {
   QueuedMessageUpdateParams
 } from './structured-agent-session-queued-edit-params'
 import { TerminalDaemonRestartSeveredParams } from './terminal-daemon-params'
+import {
+  TerminalDraftBegin,
+  TerminalDraftRelease,
+  TerminalDraftSave
+} from './terminal-draft-params'
 import { TerminalAdoptOrphans } from './terminal-orphan-params'
 import { TerminalQuickCommandsUpdate } from './terminal-quick-command-params'
 import {
@@ -1379,6 +1384,10 @@ export const RPC_PARAMS_BY_METHOD = {
   'terminal.closeTab': TerminalHandle,
   'terminal.create': TerminalCreateParams,
   'terminal.createAgentSession': CreateAgentSessionParams,
+  'terminal.draft.begin': TerminalDraftBegin,
+  'terminal.draft.release': TerminalDraftRelease,
+  'terminal.draft.save': TerminalDraftSave,
+  'terminal.draft.submit': TerminalDraftSave,
   'terminal.ensureAgentSession': EnsureAgentSessionParams,
   'terminal.focus': TerminalFocus,
   'terminal.getAutoRestoreFit': TerminalGetAutoRestoreFitParams,

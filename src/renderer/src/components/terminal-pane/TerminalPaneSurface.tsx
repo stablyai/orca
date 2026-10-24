@@ -2,6 +2,7 @@ import { createPortal } from 'react-dom'
 import { TerminalPaneFileDropOwner } from './TerminalPaneFileDropOwner'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import TerminalSearch from '@/components/TerminalSearch'
+import { TerminalDraftEditor } from './TerminalDraftEditor'
 import { DaemonActionDialog } from '@/components/shared/useDaemonActions'
 import { AgentSessionContinuationDialog } from '@/components/agent-session-continuation/AgentSessionContinuationDialog'
 import { WORKSPACE_FILE_PATH_MIME, WORKSPACE_FILE_PATHS_MIME } from '@/lib/workspace-file-drag'
@@ -30,6 +31,7 @@ import type { TerminalPaneController } from './use-terminal-pane-controller'
 import { useAppStore } from '@/store'
 import { getKnownExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { getRemoteRuntimePtyOwner } from '@/runtime/runtime-terminal-stream'
 
 export function TerminalPaneSurface({
   controller
@@ -122,6 +124,11 @@ export function TerminalPaneSurface({
     worktreeId
   } = controller
   // Why: an SSH, runtime, or not-yet-known host must not be described with this client's OS/shell.
+  const activeDraftPtyId = activePane
+    ? (paneTransportsRef.current.get(activePane.id)?.getPtyId() ?? null)
+    : null
+  const draftTargetPtyId =
+    activeDraftPtyId && getRemoteRuntimePtyOwner(activeDraftPtyId) ? activeDraftPtyId : null
   const paneOnClient = useAppStore(
     (state) => getKnownExecutionHostIdForWorktree(state, worktreeId) === LOCAL_EXECUTION_HOST_ID
   )
@@ -242,6 +249,17 @@ export function TerminalPaneSurface({
           />,
           activePane.container
         )}
+      {activePane?.container && draftTargetPtyId && !effectiveChatViewMode
+        ? createPortal(
+            <TerminalDraftEditor
+              key={draftTargetPtyId}
+              recoveryKey={makePaneKey(tabId, activePane.leafId)}
+              getPtyId={() => paneTransportsRef.current.get(activePane.id)?.getPtyId() ?? null}
+            />,
+            activePane.container,
+            `terminal-draft-${activePane.id}`
+          )
+        : null}
       <SessionRestoredBannerPortals
         panes={managerRef.current?.getPanes() ?? []}
         paneIds={sessionRestoredBannerPaneIds}

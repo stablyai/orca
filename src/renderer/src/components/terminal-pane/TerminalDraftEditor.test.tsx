@@ -1,0 +1,153 @@
+// @vitest-environment happy-dom
+
+import { createRoot, type Root } from 'react-dom/client'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { TerminalDraftEditor } from './TerminalDraftEditor'
+
+const beginDesktopTerminalDraft = vi.fn()
+const saveDesktopTerminalDraft = vi.fn()
+const submitDesktopTerminalDraft = vi.fn()
+const releaseDesktopTerminalDraft = vi.fn()
+
+vi.mock('@/runtime/terminal-draft-client', () => ({
+  beginDesktopTerminalDraft: (...args: unknown[]) => beginDesktopTerminalDraft(...args),
+  saveDesktopTerminalDraft: (...args: unknown[]) => saveDesktopTerminalDraft(...args),
+  submitDesktopTerminalDraft: (...args: unknown[]) => submitDesktopTerminalDraft(...args),
+  releaseDesktopTerminalDraft: (...args: unknown[]) => releaseDesktopTerminalDraft(...args)
+}))
+
+globalThis.IS_REACT_ACT_ENVIRONMENT = false
+
+let root: Root
+let container: HTMLDivElement
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  window.localStorage.clear()
+  releaseDesktopTerminalDraft.mockResolvedValue({ ok: true })
+  container = document.createElement('div')
+  document.body.append(container)
+  root = createRoot(container)
+})
+
+afterEach(() => {
+  root.unmount()
+  container.remove()
+})
+
+async function tick(): Promise<void> {
+  await Promise.resolve()
+  await new Promise((resolve) => setTimeout(resolve, 0))
+}
+
+function renderEditor(getPtyId: () => string | null = () => 'pty-remote'): void {
+  root.render(<TerminalDraftEditor recoveryKey="tab:leaf" getPtyId={getPtyId} />)
+}
+
+async function openEditor(): Promise<void> {
+  await tick()
+  const button = container.querySelector<HTMLButtonElement>(
+    'button[aria-label="Open terminal draft editor"]'
+  )
+  button?.click()
+  await tick()
+  await tick()
+  await tick()
+}
+
+function textarea(): HTMLTextAreaElement | null {
+  return container.querySelector<HTMLTextAreaElement>('textarea[aria-label="Terminal draft text"]')
+}
+
+describe('TerminalDraftEditor', () => {
+  it('shows an honest fallback when the agent exposes no draft bridge', async () => {
+    beginDesktopTerminalDraft.mockResolvedValue({
+      ok: false,
+      supported: false,
+      reason: 'no_bridge'
+    })
+    renderEditor()
+    await openEditor()
+    expect(container.textContent).toContain('does not expose a readable draft')
+    expect(textarea()).toBeNull()
+  })
+
+  it('edits locally and saves the full text only when asked', async () => {
+    beginDesktopTerminalDraft.mockResolvedValue({
+      ok: true,
+      supported: true,
+      adapter: 'pi-editor',
+      epoch: 3,
+      text: 'line one\nline two\nline three',
+      sourceToken: 'token-1'
+    })
+    saveDesktopTerminalDraft.mockResolvedValue({
+      ok: true,
+      status: 'applied',
+      sourceToken: 'token-2'
+    })
+    renderEditor()
+    await openEditor()
+    expect(textarea()?.value).toBe('line one\nline two\nline three')
+    expect(saveDesktopTerminalDraft).not.toHaveBeenCalled()
+
+    const field = textarea()!
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set
+    setter?.call(field, 'line one\nline two EDITED\nline three')
+    field.dispatchEvent(new Event('input', { bubbles: true }))
+    await tick()
+    const saveButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Save draft to terminal without submitting"]'
+    )
+    saveButton?.click()
+    await tick()
+    await tick()
+    expect(saveDesktopTerminalDraft).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ptyId: 'pty-remote',
+        epoch: 3,
+        baseToken: 'token-1',
+        text: 'line one\nline two EDITED\nline three'
+      })
+    )
+    expect(container.textContent).toContain('Saved to terminal')
+  })
+
+  it('restores an unsaved local copy after the editor is closed', async () => {
+    beginDesktopTerminalDraft.mockResolvedValue({
+      ok: true,
+      supported: true,
+      adapter: 'pi-editor',
+      epoch: 4,
+      text: 'remote text',
+      sourceToken: 'token-1'
+    })
+    renderEditor()
+    await openEditor()
+    const field = textarea()!
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set
+    setter?.call(field, 'local text')
+    field.dispatchEvent(new Event('input', { bubbles: true }))
+    await tick()
+    container
+      .querySelector<HTMLButtonElement>('button[aria-label="Close terminal draft editor"]')
+      ?.click()
+    await tick()
+    await openEditor()
+    expect(textarea()?.value).toBe('local text')
+    expect(container.textContent).toContain('Unsaved local changes')
+  })
+
+  it('offers an explicit takeover instead of writing over another device lease', async () => {
+    beginDesktopTerminalDraft.mockResolvedValueOnce({
+      ok: false,
+      supported: true,
+      reason: 'locked',
+      holder: { clientId: 'phone', clientType: 'mobile' }
+    })
+    renderEditor()
+    await openEditor()
+    expect(container.textContent).toContain('Another device is editing')
+    expect(container.textContent).toContain('phone')
+  })
+})

@@ -205,6 +205,7 @@ describe('PiTitlebarExtensionService', () => {
     const extensions = readdirSync(join(piHome, 'extensions')).sort()
     expect(extensions).toEqual([
       'orca-agent-status.ts',
+      'orca-draft-bridge.ts',
       'orca-prefill.ts',
       'orca-titlebar-spinner.ts',
       'user-ext'
@@ -722,6 +723,7 @@ describe('PiTitlebarExtensionService', () => {
         const extensions = readdirSync(join(ompAgentDir, 'extensions')).sort()
         expect(extensions).toEqual([
           'orca-agent-status.ts',
+          'orca-draft-bridge.ts',
           'orca-prefill.ts',
           'orca-titlebar-spinner.ts'
         ])

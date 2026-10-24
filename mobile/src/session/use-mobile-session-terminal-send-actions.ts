@@ -19,9 +19,9 @@ import { useTerminalTextFieldSubmitBinding } from '../terminal/use-terminal-text
 import { useAgentSendKeyboardDismissal } from './use-agent-send-keyboard-dismissal'
 import type { MobileSessionTab } from './mobile-session-route-types'
 import { useMobileSessionTabActionSheetOpener } from './use-mobile-session-tab-action-targets'
-import type { MobileSessionTerminalWebviewModel } from './use-mobile-session-terminal-webview'
+import type { MobileSessionRemoteDraftModel } from './use-mobile-session-remote-draft'
 
-export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminalWebviewModel) {
+export function useMobileSessionTerminalSendActions(scope: MobileSessionRemoteDraftModel) {
   const {
     client,
     activeHandle,
@@ -45,6 +45,8 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
     activeSessionTabTypeRef,
     sendingRef,
     bufferedTerminalDraftState,
+    remoteDraftSession,
+    submitRemoteDraft,
     getSendCompletionGeneration,
     getLiveInteractionGeneration,
     handleLiveInputAccessoryBytes,
@@ -109,6 +111,12 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
 
     const draft = bufferedTerminalDraftState.input
     const text = normalizeTerminalTextInput(draft)
+    const editingTerminalDraft = remoteDraftSession?.handle === activeHandle
+    if (editingTerminalDraft && text.trim().length === 0) {
+      sendingRef.current = false
+      showToast('Write the draft before sending', 1600)
+      return
+    }
     const bufferedDraftSend = bufferedTerminalDraftState.beginBufferedTerminalDraftSend(
       activeHandle,
       draft
@@ -122,6 +130,17 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
       bufferedTerminalDraftState.restoreRejectedDraft(bufferedDraftSend)
 
     try {
+      if (editingTerminalDraft) {
+        // Why: the draft is written whole, then Enter is a separate host fact; a conflict keeps the local text.
+        const outcome = await submitRemoteDraft(draft)
+        if (outcome.applied) {
+          bufferedTerminalDraftState.settleBufferedTerminalDraftSend(bufferedDraftSend)
+        } else {
+          restoreRejectedDraft()
+        }
+        dismissKeyboardAfterAgentSend(sendOrigin, outcome.applied)
+        return
+      }
       // Why: fail now and restore the text — a send parked across a reconnect would execute long after the tap.
       const response = await terminalInputSend.request(
         client,
@@ -290,5 +309,5 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
   }
 }
 
-export type MobileSessionTerminalSendActionsModel = MobileSessionTerminalWebviewModel &
+export type MobileSessionTerminalSendActionsModel = MobileSessionRemoteDraftModel &
   ReturnType<typeof useMobileSessionTerminalSendActions>
