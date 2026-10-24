@@ -6,6 +6,8 @@ export type PluginServiceOptions = {
   userDataPath: string
   hostVersion: string
   isPluginSystemEnabled: () => boolean
+  /** Trusted-worker plugins stay stopped and unapprovable while this is false. */
+  isFullAccessAllowed: () => boolean
   getDisabledPlugins: () => string[]
   getPluginConsents: () => Record<string, string>
   getDevPluginPaths: () => string[]

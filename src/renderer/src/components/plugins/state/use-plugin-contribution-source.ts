@@ -47,8 +47,7 @@ export function useInstalledPluginContributionSource(
       })),
       languages: ours(languagePacks),
       panels: plugin.panels.map((panel) => panel.title),
-      recipes: plugin.vmRecipes?.map((recipe) => recipe.name) ?? [],
-      agents: []
+      recipes: plugin.vmRecipes?.map((recipe) => recipe.name) ?? []
     }
   }, [plugin, appThemes, terminalThemes, iconThemes, syntaxes, languagePacks, failures])
 }

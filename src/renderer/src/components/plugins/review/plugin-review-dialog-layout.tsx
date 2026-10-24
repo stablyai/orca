@@ -1,15 +1,5 @@
 import type React from 'react'
 
-/** Scrolling middle row of a review dialog whose DialogContent uses
- *  `grid-rows-[auto_minmax(0,1fr)_auto]`, so header and footer stay in view. */
-export function PluginReviewBody({ children }: { children: React.ReactNode }): React.JSX.Element {
-  return (
-    <div className="-mx-6 min-h-0 overflow-y-auto px-6 scrollbar-sleek">
-      <div className="divide-y divide-border/60">{children}</div>
-    </div>
-  )
-}
-
 export function PluginReviewSection({
   title,
   headingId,

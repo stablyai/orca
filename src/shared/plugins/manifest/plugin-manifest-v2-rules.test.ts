@@ -47,7 +47,7 @@ describe('manifest format 2 rules', () => {
   it('keeps contributes.agents reserved', () => {
     expect(
       parsePluginManifest(
-        v2({ execution: 'instructional', contributes: { agents: [{ path: 'a.json' }] } })
+        v2({ execution: 'declarative', contributes: { agents: [{ path: 'a.json' }] } })
       )
     ).toEqual({
       ok: false,

@@ -6,7 +6,7 @@ import type { PluginPanelActionOutcome } from '../../../shared/plugins/plugin-pa
 import type { PluginAuditLog } from '../plugin-audit-log'
 
 /**
- * Host API v0 handler bindings — the one place plugin-originated calls
+ * Host API 1 handler bindings — the one place plugin-originated calls
  * (panel bridge, worker hostCall, serve RPC relay) execute. Handlers
  * delegate to runtime services through the structural `PluginHostServices`
  * interface, so this module stays electron-free and the relay conformance

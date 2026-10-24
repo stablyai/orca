@@ -97,7 +97,7 @@ describe('keybinding-file', () => {
       filePath,
       JSON.stringify({
         keybindings: {
-          'plugin:orca-samples.tasks/open': 'Mod+Shift+T',
+          'plugin:samples.tasks/open': 'Mod+Shift+T',
           'plugin:tasks/open': 'Mod+Alt+T'
         }
       }),
@@ -106,15 +106,15 @@ describe('keybinding-file', () => {
 
     const snapshot = readKeybindingFile(filePath, 'linux')
     expect(snapshot.overrides).toEqual({
-      'plugin:orca-samples.tasks/open': ['Mod+Shift+T']
+      'plugin:samples.tasks/open': ['Mod+Shift+T']
     })
     expect(snapshot.diagnostics).toMatchObject([
       { severity: 'warning', actionId: 'plugin:tasks/open' }
     ])
 
-    writeKeybindingOverride(filePath, 'linux', 'plugin:orca-samples.tasks/open', [])
+    writeKeybindingOverride(filePath, 'linux', 'plugin:samples.tasks/open', [])
     expect(readKeybindingFile(filePath, 'linux').overrides).toEqual({
-      'plugin:orca-samples.tasks/open': []
+      'plugin:samples.tasks/open': []
     })
   })
 

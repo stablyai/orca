@@ -29,7 +29,7 @@ async function recipePlugin(
   const manifest = pluginManifestSchema.parse({
     manifestVersion: 1,
     id,
-    publisher: 'orca-samples',
+    publisher: 'samples',
     name: id,
     version: '1.0.0',
     engines: { orca: '>=1.0.0' },
@@ -42,7 +42,7 @@ async function recipePlugin(
     throw new Error(content.error)
   }
   return {
-    pluginKey: `orca-samples.${id}`,
+    pluginKey: `samples.${id}`,
     rootDir,
     manifest,
     consentFingerprint: fingerprintPluginConsent(manifest, content.hash),

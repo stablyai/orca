@@ -4,9 +4,13 @@ import type {
   PluginMarketplaceHostSourceState
 } from '../../../../../preload/api-types'
 import { satisfiesOrcaEngineRange } from '../../../../../shared/plugins/manifest/plugin-manifest'
-import type { PluginCatalogType } from '../../../../../shared/plugins/catalog/plugin-catalog-release'
+import {
+  pluginCatalogReleaseTypes,
+  type PluginCatalogType
+} from '../../../../../shared/plugins/catalog/plugin-catalog-release'
 import { compareAppVersions } from '../../../../../shared/app-version'
 import { pluginDisplayNameFromKey } from './plugin-display-name'
+import type { PluginAutoUpdateState } from '../../../../../shared/plugins/catalog/plugin-update-policy'
 
 /** One plugin as the list and detail page show it, whether installed, listed, or both. */
 export type PluginListEntry = {
@@ -27,8 +31,30 @@ export type PluginListEntry = {
   catalogIds: readonly string[]
   /** The listing comes from the catalog this plugin was installed from, so it can update it. */
   updatable: boolean
+  /** What automatic updates did: the version installed unasked, or an update held for review. */
+  autoUpdate: PluginEntryAutoUpdate
   installed: PluginHostListEntry | null
   listing: PluginMarketplaceHostListing | null
+}
+
+export type PluginEntryAutoUpdate = { updatedTo: string | null; needsReview: boolean }
+
+const NO_AUTO_UPDATE: PluginEntryAutoUpdate = { updatedTo: null, needsReview: false }
+
+function entryAutoUpdate(
+  plugin: PluginHostListEntry,
+  updateVersion: string | null,
+  state: PluginAutoUpdateState | null
+): PluginEntryAutoUpdate {
+  if (!state) {
+    return NO_AUTO_UPDATE
+  }
+  const updatedTo = state.updated[plugin.pluginKey]
+  return {
+    // Why version-matched: a later manual update or rollback makes the note stale.
+    updatedTo: updatedTo && updatedTo === plugin.version ? updatedTo : null,
+    needsReview: Boolean(updateVersion && state.needsReview[plugin.pluginKey])
+  }
 }
 
 // Why: v2 catalogs flatten release fields onto the listing; the raw record covers older hosts.
@@ -58,9 +84,15 @@ export function pluginListEntryFromInstalled(
   listing: PluginMarketplaceHostListing | null = null,
   {
     catalogIds = [],
-    orcaVersion = null
-  }: { catalogIds?: readonly string[]; orcaVersion?: string | null } = {}
+    orcaVersion = null,
+    autoUpdates = null
+  }: {
+    catalogIds?: readonly string[]
+    orcaVersion?: string | null
+    autoUpdates?: PluginAutoUpdateState | null
+  } = {}
 ): PluginListEntry {
+  const updateVersion = newerCatalogVersion(plugin, listing, orcaVersion)
   return {
     pluginKey: plugin.pluginKey,
     name: plugin.name,
@@ -69,11 +101,12 @@ export function pluginListEntryFromInstalled(
     description: plugin.description ?? listing?.description ?? null,
     official: plugin.official,
     categories: listing?.categories ?? [],
-    types: listing?.release?.types ?? [],
+    types: listing?.release ? pluginCatalogReleaseTypes(listing.release) : [],
     minimumOrca: listing?.release?.minimumOrca ?? null,
-    updateVersion: newerCatalogVersion(plugin, listing, orcaVersion),
+    updateVersion,
     catalogIds,
     updatable: plugin.source?.kind === 'marketplace' && listing !== null,
+    autoUpdate: entryAutoUpdate(plugin, updateVersion, autoUpdates),
     installed: plugin,
     listing
   }
@@ -92,11 +125,12 @@ export function pluginListEntryFromListing(
     description: listing.description ?? null,
     official: listing.official,
     categories: listing.categories,
-    types: listing.release?.types ?? [],
+    types: listing.release ? pluginCatalogReleaseTypes(listing.release) : [],
     minimumOrca: listing.release?.minimumOrca ?? null,
     updateVersion: null,
     catalogIds,
     updatable: false,
+    autoUpdate: NO_AUTO_UPDATE,
     installed: null,
     listing
   }
@@ -138,8 +172,13 @@ export function buildPluginListEntries(
   listings: readonly PluginMarketplaceHostListing[],
   {
     sources = [],
-    orcaVersion = null
-  }: { sources?: readonly PluginMarketplaceHostSourceState[]; orcaVersion?: string | null } = {}
+    orcaVersion = null,
+    autoUpdates = null
+  }: {
+    sources?: readonly PluginMarketplaceHostSourceState[]
+    orcaVersion?: string | null
+    autoUpdates?: PluginAutoUpdateState | null
+  } = {}
 ): { installed: PluginListEntry[]; available: PluginListEntry[] } {
   const listingsByKey = new Map<string, PluginMarketplaceHostListing[]>()
   for (const listing of listings) {
@@ -158,9 +197,17 @@ export function buildPluginListEntries(
       )
       const entry = pluginListEntryFromInstalled(plugin, listing, {
         catalogIds: catalogIdsOf(plugin.pluginKey),
-        orcaVersion
+        orcaVersion,
+        autoUpdates
       })
-      return ownCatalog ? entry : { ...entry, updateVersion: null, updatable: false }
+      return ownCatalog
+        ? entry
+        : {
+            ...entry,
+            updateVersion: null,
+            updatable: false,
+            autoUpdate: { ...entry.autoUpdate, needsReview: false }
+          }
     }),
     available: [...listingsByKey.entries()]
       .filter(([pluginKey]) => !installedKeys.has(pluginKey))

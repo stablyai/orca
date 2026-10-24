@@ -43,8 +43,7 @@ it('refuses a crash restart when reviewed bytes changed after the first start', 
     workerFactory: factory,
     executeHostCall: async () => ({ ok: true, value: null }),
     log: () => (_level, line) => lines.push(line),
-    onWorkerStateChange: vi.fn(),
-    onWorkerGone: vi.fn()
+    onWorkerStateChange: vi.fn()
   })
   const verifier = new PluginContentVerifier()
   const spec = {

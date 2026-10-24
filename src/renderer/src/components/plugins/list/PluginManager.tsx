@@ -21,6 +21,7 @@ import { CatalogNotice, PluginCatalogGroups } from '../catalog/PluginCatalogGrou
 import { PluginListToolbar } from './PluginListToolbar'
 import { PluginNoMatches, PluginPageMissing } from './PluginListEmptyStates'
 import { sortByAttention } from '../presentation/plugin-status-presentation'
+import { usePluginAutoUpdatesStore } from '@/store/plugin-auto-updates'
 import { PluginUpdateAllDialog } from '../dialogs/PluginUpdateAllDialog'
 import {
   matchesPluginFilter,
@@ -56,6 +57,8 @@ type PluginManagerProps = {
   logsByPlugin: Readonly<Record<string, PluginLogsState>>
   onShowLogs: (pluginKey: string) => void
   onOpenShortcuts: () => void
+  /** Opens plugin settings at the full access switch. */
+  onOpenFullAccessSetting: () => void
   /** Which plugin's page is open; owned by the pane, which hides its header and cards for it. */
   page: PluginPageNavigation
   sourcesOpen: boolean
@@ -78,6 +81,7 @@ export function PluginManager({
   logsByPlugin,
   onShowLogs,
   onOpenShortcuts,
+  onOpenFullAccessSetting,
   page,
   sourcesOpen,
   setSourcesOpen,
@@ -108,17 +112,20 @@ export function PluginManager({
   })
   const prefetch = usePluginHoverPrefetch(catalog.fetchPreview)
   const orcaVersion = useOrcaVersion()
+  const autoUpdated = usePluginAutoUpdatesStore((state) => state.updated)
+  const autoNeedsReview = usePluginAutoUpdatesStore((state) => state.needsReview)
 
   const entries = useMemo(() => {
     const built = buildPluginListEntries(plugins, catalog.listings, {
       sources: catalog.sources,
-      orcaVersion
+      orcaVersion,
+      autoUpdates: { updated: autoUpdated, needsReview: autoNeedsReview }
     })
     return {
       ...built,
       installed: sortByAttention(built.installed, (entry) => Boolean(entry.updateVersion))
     }
-  }, [plugins, catalog.listings, catalog.sources, orcaVersion])
+  }, [plugins, catalog.listings, catalog.sources, orcaVersion, autoUpdated, autoNeedsReview])
   const query = search.trim()
   const filterSize = pluginFilterSize(listFilter)
   const narrowed = Boolean(query) || filterSize > 0
@@ -168,6 +175,7 @@ export function PluginManager({
     refreshing: catalog.refreshBusy,
     onRemove: handlers.onRemoveRequest,
     onToggleEnabled: handlers.onToggleEnabled,
+    onOpenFullAccessSetting,
     installedHandlers: rowHandlers,
     busyPluginKeys
   }

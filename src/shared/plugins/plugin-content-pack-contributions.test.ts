@@ -5,7 +5,7 @@ function manifest(contributes: Record<string, unknown>): Record<string, unknown>
   return {
     manifestVersion: 1,
     id: 'content-pack',
-    publisher: 'orca-samples',
+    publisher: 'samples',
     name: 'Content pack',
     version: '1.0.0',
     engines: { orca: '>=1.0.0' },
@@ -24,13 +24,12 @@ describe('content-pack manifest contributions', () => {
           {
             id: 'workspace.openTasks',
             title: 'Open tasks',
-            context: 'worktree',
+            context: 'workspace',
             action: 'view.tasks'
           }
         ],
         keybindings: [{ command: 'workspace.openTasks', key: 'Mod+Alt+T' }],
-        vmRecipes: [{ path: 'recipes/fly.json' }],
-        agents: [{ path: 'agents/custom.json' }]
+        vmRecipes: [{ path: 'recipes/fly.json' }]
       })
     )
 
@@ -49,7 +48,6 @@ describe('content-pack manifest contributions', () => {
       languagePacks: [],
       keybindings: [],
       vmRecipes: [],
-      agents: [],
       themes: [],
       terminalThemes: [],
       iconThemes: [],
@@ -96,7 +94,7 @@ describe('content-pack manifest contributions', () => {
     [
       'global binding for a worktree command',
       {
-        commands: [{ id: 'open', title: 'Open', context: 'worktree', action: 'view.tasks' }],
+        commands: [{ id: 'open', title: 'Open', context: 'workspace', action: 'view.tasks' }],
         keybindings: [{ command: 'open', key: 'Mod+K', when: 'global' }]
       },
       'command context'
@@ -125,8 +123,7 @@ describe('content-pack manifest contributions', () => {
   it.each([
     ['language pack', { languagePacks: [{ locale: 'en_US', path: 'locale.json' }] }],
     ['language pack path', { languagePacks: [{ locale: 'pt-BR', path: '../outside.json' }] }],
-    ['VM recipe', { vmRecipes: [{ path: '\\\\server\\recipe.json' }] }],
-    ['agent profile', { agents: [{ path: 'agents/../profile.json' }] }]
+    ['VM recipe', { vmRecipes: [{ path: '\\\\server\\recipe.json' }] }]
   ])('rejects unsafe or malformed %s contributions', (_label, contributes) => {
     expect(parsePluginManifest(manifest(contributes)).ok).toBe(false)
   })

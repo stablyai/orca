@@ -8,6 +8,7 @@ import {
   isOfficialOrganizationGitSource,
   isOfficialPluginIdentity,
   isReservedPluginIdentity,
+  isSameGitRepository,
   parseGitRepositoryIdentity,
   pluginMarketplaceSchema,
   pluginMarketplaceTrustMetadataSchema
@@ -129,6 +130,11 @@ describe('marketplace provenance contracts', () => {
     ['stablyai.skills', true, false],
     ['community.orca-skills', true, false],
     ['community.skills', false, false],
+    ['orca.skills', true, false],
+    ['orca-labs.skills', true, false],
+    ['openai.skills', true, false],
+    ['github.skills', true, false],
+    ['orcas.skills', false, false],
     ['invalid', false, false]
   ])('classifies %s', (pluginKey, reserved, official) => {
     expect(isReservedPluginIdentity(pluginKey)).toBe(reserved)
@@ -148,6 +154,21 @@ describe('marketplace provenance contracts', () => {
       false
     )
     expect(isOfficialOrganizationGitSource('https://gitlab.com/stablyai/orca-skills')).toBe(false)
+    expect(isOfficialOrganizationGitSource('git@github.com:stablyai/../evil/orca-skills.git')).toBe(
+      false
+    )
+  })
+
+  it('rejects a listing whose Git host starts with a dash or contains ..', () => {
+    for (const url of ['git@-oProxyCommand=evil:a/b.git', 'https://github..com/a/b.git']) {
+      expect(
+        pluginMarketplaceSchema.safeParse({
+          name: 'Community plugins',
+          owner: 'community',
+          plugins: [{ ...listing(), source: { kind: 'git', url, ref: 'main' } }]
+        }).success
+      ).toBe(false)
+    }
   })
 
   it('recognizes only the canonical official marketplace repository', () => {
@@ -163,7 +184,8 @@ describe('marketplace provenance contracts', () => {
     expect(parseGitRepositoryIdentity('https://gitlab.com/team/subgroup/plugin.git')).toEqual({
       host: 'gitlab.com',
       owner: 'team',
-      repository: 'plugin'
+      repository: 'plugin',
+      path: 'team/subgroup/plugin'
     })
   })
 
@@ -185,5 +207,22 @@ describe('marketplace provenance contracts', () => {
     for (const supported of ['themes', 'terminal-themes', 'icons', 'icon-themes']) {
       expect(isMarketplaceListingSupported([supported, 'official'])).toBe(true)
     }
+  })
+})
+
+describe('isSameGitRepository', () => {
+  it('matches respellings and treats a GitLab subgroup move as a different repository', () => {
+    expect(
+      isSameGitRepository(
+        'https://gitlab.com/acme/team-a/tool.git',
+        'git@gitlab.com:Acme/Team-A/Tool'
+      )
+    ).toBe(true)
+    expect(
+      isSameGitRepository(
+        'https://gitlab.com/acme/team-a/tool',
+        'https://gitlab.com/acme/evil/tool'
+      )
+    ).toBe(false)
   })
 })

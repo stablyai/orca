@@ -1,6 +1,10 @@
 import { z } from 'zod'
 import { pluginRelativePathSchema } from '../manifest/plugin-manifest-fields'
-import { pluginContentIdSchema } from './plugin-theme-artifact'
+import {
+  pickKnownArtifactKeys,
+  pluginContentIdSchema,
+  type PluginArtifactStrictness
+} from './plugin-theme-artifact'
 
 export const PLUGIN_ICON_THEME_SLOTS = ['file', 'folder', 'folder-open'] as const
 export type PluginIconThemeSlot = (typeof PLUGIN_ICON_THEME_SLOTS)[number]
@@ -40,14 +44,21 @@ function ownKeyRecord<Value>(keySchema: z.ZodType<string>, valueSchema: z.ZodTyp
   })
 }
 
-const pluginIconThemeArtifactSchema = z
-  .object({
+const ICON_SLOT_SET: ReadonlySet<string> = new Set(PLUGIN_ICON_THEME_SLOTS)
+
+function pluginIconThemeArtifactSchema(strictness: PluginArtifactStrictness) {
+  const icons = z.partialRecord(iconSlotSchema, pluginRelativePathSchema)
+  const fields = {
     schemaVersion: z.literal(1),
-    icons: z.partialRecord(iconSlotSchema, pluginRelativePathSchema).default({}),
+    icons: (strictness === 'strict'
+      ? icons
+      : z.preprocess(pickKnownArtifactKeys(ICON_SLOT_SET), icons)
+    ).default({}),
     fileNames: ownKeyRecord(fileNameSchema, pluginRelativePathSchema).default({}),
     fileExtensions: ownKeyRecord(fileExtensionSchema, pluginRelativePathSchema).default({})
-  })
-  .strict()
+  }
+  return strictness === 'strict' ? z.strictObject(fields) : z.object(fields)
+}
 
 export type PluginIconThemeArtifact = {
   icons: Partial<Record<PluginIconThemeSlot, string>>
@@ -56,8 +67,11 @@ export type PluginIconThemeArtifact = {
 }
 
 /** Lowercases name and extension keys so lookups match on case-insensitive filesystems. */
-export function parsePluginIconThemeArtifact(raw: string): PluginIconThemeArtifact {
-  const parsed = pluginIconThemeArtifactSchema.parse(JSON.parse(raw))
+export function parsePluginIconThemeArtifact(
+  raw: string,
+  strictness: PluginArtifactStrictness = 'tolerant'
+): PluginIconThemeArtifact {
+  const parsed = pluginIconThemeArtifactSchema(strictness).parse(JSON.parse(raw))
   const lowercaseKeys = (entries: Record<string, string>, label: string) => {
     // Why: a null prototype keeps keys like `constructor` and `__proto__` plain data.
     const result: Record<string, string> = Object.create(null)

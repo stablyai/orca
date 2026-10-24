@@ -67,7 +67,6 @@ export function pluginContributionSummary(
       (binding) => binding.command
     ),
     ...named('vmRecipes', c.vmRecipes, (recipe) => recipe.path),
-    ...named('agents', c.agents, (agent) => agent.path),
     ...named('themes', c.themes, (theme) => theme.label),
     ...named('terminalThemes', c.terminalThemes, (theme) => theme.label),
     ...named('iconThemes', c.iconThemes, (theme) => theme.label),

@@ -1,5 +1,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { isProtectedPluginTranslationPath } from '../../../src/shared/plugins/artifacts/plugin-language-pack-artifact'
+import { translatablePluginChromeContainer } from '../../../src/shared/plugins/plugin-translatable-chrome'
 
 export const FIXTURE_LANGUAGE_PLUGIN = {
   repository: 'orca-pseudo-language',
@@ -8,12 +10,12 @@ export const FIXTURE_LANGUAGE_PLUGIN = {
   locale: 'en-XA'
 } as const
 
-// Plugin settings copy is protected security text that packs may not replace.
-function isProtectedPath(path: string[]): boolean {
+// Security copy is protected; packs may not replace it, so the fixture leaves it out.
+function isProtectedPath(path: string[], value: unknown): boolean {
+  const joined = path.join('.')
   return (
-    path.length === 4 &&
-    path.slice(0, 3).join('.') === 'auto.components.settings' &&
-    /^plugin/i.test(path[3] ?? '')
+    isProtectedPluginTranslationPath(joined) &&
+    !(typeof value === 'object' && translatablePluginChromeContainer(joined))
   )
 }
 
@@ -21,7 +23,7 @@ function bracketCatalog(source: Record<string, unknown>, path: string[]): Record
   const result: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(source)) {
     const childPath = [...path, key]
-    if (isProtectedPath(childPath)) {
+    if (isProtectedPath(childPath, value)) {
       continue
     }
     // Why the length check: a few catalog values are style blobs past the per-translation cap.

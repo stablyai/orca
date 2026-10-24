@@ -2,22 +2,24 @@ import { createHash } from 'node:crypto'
 import { canonicalizeCapabilitySet } from '../plugin-capabilities'
 import { pluginExecutionAllows, type PluginExecutionProfile } from '../plugin-execution-profile'
 import type { PluginManifest } from '../manifest/plugin-manifest'
+import {
+  PLUGIN_CONTRIBUTION_POINT_POLICY,
+  PLUGIN_CONTRIBUTION_POINTS,
+  type PluginContributionPoint
+} from '../plugin-contribution-points'
 
 type PluginConsentSubject = Pick<PluginManifest, 'capabilities' | 'main'> & {
   execution?: PluginExecutionProfile
-  contributes?: Partial<
-    Pick<PluginManifest['contributes'], 'keybindings' | 'vmRecipes' | 'agents' | 'panels'>
-  >
+  contributes?: Partial<Record<PluginContributionPoint, readonly unknown[]>>
 }
 
-export function hasInstructionalPluginContributions(manifest: PluginConsentSubject): boolean {
-  const contributions = manifest.contributes
-  return Boolean(
-    contributions &&
-    ((contributions.keybindings?.length ?? 0) > 0 ||
-      (contributions.vmRecipes?.length ?? 0) > 0 ||
-      (contributions.agents?.length ?? 0) > 0)
-  )
+// Why from the policy table: a new point must decide here, not be missed by a hand-kept list.
+const CONTENT_BOUND_POINTS = PLUGIN_CONTRIBUTION_POINTS.filter(
+  (point) => PLUGIN_CONTRIBUTION_POINT_POLICY[point].bindsContent
+)
+
+export function hasDeclarativePluginContributions(manifest: PluginConsentSubject): boolean {
+  return CONTENT_BOUND_POINTS.some((point) => (manifest.contributes?.[point]?.length ?? 0) > 0)
 }
 
 // Why v1 too: a worker or panel update must not swap code under an old approval, even though
@@ -30,7 +32,7 @@ function bindsExecutableContent(manifest: PluginConsentSubject): boolean {
 
 /** Whether approval names exact package bytes, so any byte change needs a new review. */
 export function requiresPluginContentApproval(manifest: PluginConsentSubject): boolean {
-  return hasInstructionalPluginContributions(manifest) || bindsExecutableContent(manifest)
+  return hasDeclarativePluginContributions(manifest) || bindsExecutableContent(manifest)
 }
 
 /**
@@ -43,7 +45,7 @@ export function canonicalizePluginConsent(
   contentIdentity?: string
 ): string {
   const capabilities = canonicalizeCapabilitySet(manifest.capabilities)
-  // Why: a data pack that becomes instructional (e.g. adds alias commands) binds no new bytes, yet
+  // Why: a data pack that becomes declarative (e.g. adds alias commands) binds no new bytes, yet
   // crossed the one-click boundary. Data stays out so content packs keep their approval.
   const executionIdentity =
     manifest.execution === undefined || manifest.execution === 'data'
@@ -53,12 +55,12 @@ export function canonicalizePluginConsent(
   const executableIdentity = bindsExecutableContent(manifest)
     ? `\0executable-content:${contentIdentity ?? 'unresolved'}`
     : ''
-  // Instructional bytes execute later under user or agent authority, so
+  // Declarative bytes execute later under user or agent authority, so
   // approval is bound to their immutable install/dev-tree identity.
-  const instructionalIdentity = hasInstructionalPluginContributions(manifest)
+  const declarativeIdentity = hasDeclarativePluginContributions(manifest)
     ? `\0instructional-content:${contentIdentity ?? 'unresolved'}`
     : ''
-  return `${capabilities}${executionIdentity}${workerIdentity}${executableIdentity}${instructionalIdentity}`
+  return `${capabilities}${executionIdentity}${workerIdentity}${executableIdentity}${declarativeIdentity}`
 }
 
 export function fingerprintPluginConsent(

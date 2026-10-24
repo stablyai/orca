@@ -5,7 +5,7 @@ import {
   parsePluginIconThemeArtifact
 } from './plugin-icon-theme-artifact'
 
-const parse = (value: unknown) => parsePluginIconThemeArtifact(JSON.stringify(value))
+const parse = (value: unknown) => parsePluginIconThemeArtifact(JSON.stringify(value), 'strict')
 
 describe('plugin icon theme artifacts', () => {
   it('lowercases name and extension keys', () => {
@@ -30,6 +30,14 @@ describe('plugin icon theme artifacts', () => {
     ['an escaping icon path', { schemaVersion: 1, icons: { file: '../a.svg' } }]
   ])('rejects %s', (_label, value) => {
     expect(() => parse(value)).toThrow()
+  })
+
+  it('skips unknown slots at runtime', () => {
+    expect(
+      parsePluginIconThemeArtifact(
+        JSON.stringify({ schemaVersion: 1, icons: { file: 'f.svg', 'sidebar.search': 'a.svg' } })
+      ).icons
+    ).toEqual({ file: 'f.svg' })
   })
 })
 

@@ -4,18 +4,29 @@ import {
   hasUsableTerminalThemeColors,
   normalizeTerminalColorOverrides
 } from '../../terminal-custom-themes'
-import { pluginContentIdSchema } from './plugin-theme-artifact'
+import {
+  pickKnownArtifactKeys,
+  pluginContentIdSchema,
+  type PluginArtifactStrictness
+} from './plugin-theme-artifact'
 
 const terminalColorKeySchema = z.enum(TERMINAL_COLOR_KEYS)
 const terminalModeSchema = z.enum(['dark', 'light', 'unknown'])
 
-const pluginTerminalThemeArtifactSchema = z
-  .object({
+const TERMINAL_COLOR_KEY_SET: ReadonlySet<string> = new Set(TERMINAL_COLOR_KEYS)
+
+function pluginTerminalThemeArtifactSchema(strictness: PluginArtifactStrictness) {
+  const terminal = z.partialRecord(terminalColorKeySchema, z.string())
+  const fields = {
     schemaVersion: z.literal(1),
     mode: terminalModeSchema.default('unknown'),
-    terminal: z.partialRecord(terminalColorKeySchema, z.string())
-  })
-  .strict()
+    terminal:
+      strictness === 'strict'
+        ? terminal
+        : z.preprocess(pickKnownArtifactKeys(TERMINAL_COLOR_KEY_SET), terminal)
+  }
+  return strictness === 'strict' ? z.strictObject(fields) : z.object(fields)
+}
 
 const pluginTerminalThemeRegistrationSchema = z.object({
   id: pluginContentIdSchema,
@@ -29,9 +40,10 @@ const pluginTerminalThemeRegistrationSchema = z.object({
 export type PluginTerminalThemeRegistration = z.infer<typeof pluginTerminalThemeRegistrationSchema>
 
 export function parsePluginTerminalThemeArtifact(
-  raw: string
+  raw: string,
+  strictness: PluginArtifactStrictness = 'tolerant'
 ): Pick<PluginTerminalThemeRegistration, 'mode' | 'terminal'> {
-  const parsed = pluginTerminalThemeArtifactSchema.parse(JSON.parse(raw))
+  const parsed = pluginTerminalThemeArtifactSchema(strictness).parse(JSON.parse(raw))
   const terminal = normalizeTerminalColorOverrides(parsed.terminal)
   if (Object.keys(terminal).length !== Object.keys(parsed.terminal).length) {
     throw new Error('terminal theme contains an invalid color')

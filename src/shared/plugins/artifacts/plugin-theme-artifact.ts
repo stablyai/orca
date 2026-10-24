@@ -70,7 +70,9 @@ const DERIVED_TOKENS: Record<string, DerivationRule> = {
   '--secondary-foreground': ['--foreground'],
   '--input': ['--border'],
   '--ring': ['--primary'],
-  '--sidebar': ['--background'],
+  // Why a lift: Orca draws no line between the left sidebar and the canvas; the surface step is
+  // the divider, so a sidebar equal to the background leaves no edge at all.
+  '--sidebar': { mixForeground: 8 },
   '--sidebar-foreground': ['--foreground'],
   '--sidebar-primary': ['--primary'],
   '--sidebar-primary-foreground': ['--primary-foreground'],
@@ -144,10 +146,32 @@ const themeFields = {
 const hasRequiredTokens = (theme: { tokens: Record<string, string> }): boolean =>
   PLUGIN_APP_THEME_REQUIRED_TOKENS.every((token) => theme.tokens[token])
 
-const pluginAppThemeArtifactSchema = z
-  .object(themeFields)
-  .strict()
-  .refine(hasRequiredTokens, `must define ${PLUGIN_APP_THEME_REQUIRED_TOKENS.join(' and ')}`)
+/** `validate:plugin` refuses unknown keys; shipped clients skip them, so a token or slot added
+ *  later never fails a whole theme on an older Orca. */
+export type PluginArtifactStrictness = 'strict' | 'tolerant'
+
+/** Keeps only `known` keys of an object; anything else passes through for the schema to reject. */
+export function pickKnownArtifactKeys(known: ReadonlySet<string>) {
+  return (value: unknown): unknown =>
+    typeof value === 'object' && value !== null && !Array.isArray(value)
+      ? Object.fromEntries(Object.entries(value).filter(([key]) => known.has(key)))
+      : value
+}
+
+function pluginAppThemeArtifactSchema(strictness: PluginArtifactStrictness) {
+  const fields = {
+    schemaVersion: z.literal(1).optional(),
+    base: themeFields.base,
+    tokens:
+      strictness === 'strict'
+        ? themeFields.tokens
+        : z.preprocess(pickKnownArtifactKeys(THEME_TOKEN_SET), themeFields.tokens)
+  }
+  return (strictness === 'strict' ? z.strictObject(fields) : z.object(fields)).refine(
+    hasRequiredTokens,
+    `must define ${PLUGIN_APP_THEME_REQUIRED_TOKENS.join(' and ')}`
+  )
+}
 
 /** Host-owned id; plugin keys keep ids from colliding across publishers. */
 export const pluginContentIdSchema = z.templateLiteral(['plugin:', z.string()])
@@ -175,12 +199,15 @@ const pluginThemeRegistrationSchema = z
   })
   .refine(hasRequiredTokens)
 
-export type PluginAppThemeArtifact = z.infer<typeof pluginAppThemeArtifactSchema>
+export type PluginAppThemeArtifact = Pick<PluginThemeRegistration, 'base' | 'tokens'>
 export type PluginThemeRegistration = z.infer<typeof pluginThemeRegistrationSchema>
 
 /** Parses a theme and fills its omitted tokens. */
-export function parsePluginAppThemeArtifact(raw: string): PluginAppThemeArtifact {
-  const theme = pluginAppThemeArtifactSchema.parse(JSON.parse(raw))
+export function parsePluginAppThemeArtifact(
+  raw: string,
+  strictness: PluginArtifactStrictness = 'tolerant'
+): PluginAppThemeArtifact {
+  const theme = pluginAppThemeArtifactSchema(strictness).parse(JSON.parse(raw))
   return { base: theme.base, tokens: completePluginAppThemeTokens(theme.tokens) }
 }
 

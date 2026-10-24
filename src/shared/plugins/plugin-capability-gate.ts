@@ -9,7 +9,7 @@ import type { PluginCapabilityKind } from './plugin-capabilities'
  * cases against the desktop and relay enforcement surfaces.
  *
  * Ported from community PR #5801's electron-free gate, rekeyed to the host
- * API v0 spec table.
+ * API 1 spec table.
  */
 
 export type PluginGateErrorCode =

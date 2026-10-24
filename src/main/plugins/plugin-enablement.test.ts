@@ -8,11 +8,11 @@ import { applyPluginConsent, applyPluginEnablement } from './plugin-enablement'
 import type { ValidDiscoveredPlugin } from './plugin-discovery'
 import type { PluginService } from './plugin-service'
 
-const pluginKey = 'orca-samples.demo'
+const pluginKey = 'samples.demo'
 const manifest = pluginManifestSchema.parse({
   manifestVersion: 1,
   id: 'demo',
-  publisher: 'orca-samples',
+  publisher: 'samples',
   name: 'Demo',
   version: '1.0.0',
   engines: { orca: '>=1.0.0' },
@@ -39,9 +39,12 @@ function createStore(): {
 
 function createPluginService(
   getFingerprint: () => string,
-  overrides: Partial<ValidDiscoveredPlugin> = {}
+  overrides: Partial<ValidDiscoveredPlugin> = {},
+  fullAccessAllowed = true
 ): PluginService {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the enablement paths read only these members.
   return {
+    options: { isFullAccessAllowed: () => fullAccessAllowed },
     findValidPlugin: (requestedKey: string) =>
       requestedKey === pluginKey
         ? {
@@ -58,6 +61,42 @@ function createPluginService(
     reconcileActivationState: vi.fn().mockResolvedValue(undefined)
   } as unknown as PluginService
 }
+
+describe('full access gate', () => {
+  const workerManifest = pluginManifestSchema.parse({ ...manifest, main: 'main.mjs' })
+  const workerService = (allowed: boolean): PluginService =>
+    createPluginService(() => 'sha256-reviewed', { manifest: workerManifest }, allowed)
+
+  it('refuses to approve or enable a trusted worker while full access is off', async () => {
+    const harness = createStore()
+    const pluginService = workerService(false)
+    const request = { store: harness.store, pluginService, pluginKey }
+
+    await expect(
+      applyPluginConsent({
+        ...request,
+        reviewedFingerprint: 'sha256-reviewed',
+        decision: 'approve'
+      })
+    ).rejects.toThrow('Allow full-access plugins')
+    await expect(applyPluginEnablement({ ...request, enabled: true })).rejects.toThrow(
+      'Allow full-access plugins'
+    )
+    expect(harness.updateSettings).not.toHaveBeenCalled()
+  })
+
+  it('approves a trusted worker once full access is on', async () => {
+    const harness = createStore()
+    await applyPluginConsent({
+      store: harness.store,
+      pluginService: workerService(true),
+      pluginKey,
+      reviewedFingerprint: 'sha256-reviewed',
+      decision: 'approve'
+    })
+    expect(harness.getSettings().pluginConsents[pluginKey]).toBe('sha256-reviewed')
+  })
+})
 
 describe('applyPluginConsent', () => {
   it('stores approval only for the fingerprint the user reviewed', async () => {
@@ -122,7 +161,7 @@ describe('applyPluginEnablement', () => {
       applyPluginEnablement({
         store: harness.store,
         pluginService,
-        pluginKey: 'orca-samples.unknown',
+        pluginKey: 'samples.unknown',
         enabled: false
       })
     ).rejects.toThrow('unknown plugin')

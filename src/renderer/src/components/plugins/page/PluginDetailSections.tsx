@@ -87,7 +87,7 @@ export function PluginAccessSection({
   // Why "own files" only then: a panel bounded by no capabilities is sandboxed; anything that
   // runs instructions or a worker reaches further, whatever it asks for.
   const ownFilesOnly =
-    trust !== null && !trust.worker && !trust.instructional && capabilities?.length === 0
+    trust !== null && !trust.worker && !trust.declarative && capabilities?.length === 0
   return (
     <DetailSection
       title={translate('auto.components.settings.PluginDetailSections.access', 'Can access')}
@@ -143,7 +143,7 @@ export function PluginAccessSection({
         />
       ) : (
         <>
-          {trust.worker || trust.instructional
+          {trust.worker || trust.declarative
             ? pluginTrustWarnings(trust).map((warning) => (
                 <DetailRow key={warning} icon={<AlertTriangle />} wrap title={warning} />
               ))

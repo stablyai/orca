@@ -29,7 +29,7 @@ Every key an app theme may set in `tokens` (see [plugin themes](plugin-themes.md
 | `--chart-3` | no | Orca's built-in color |
 | `--chart-4` | no | Orca's built-in color |
 | `--chart-5` | no | Orca's built-in color |
-| `--sidebar` | no | same as `--background` |
+| `--sidebar` | no | `--foreground` mixed 8% into `--background` |
 | `--sidebar-foreground` | no | same as `--foreground` |
 | `--sidebar-primary` | no | same as `--primary` |
 | `--sidebar-primary-foreground` | no | same as `--primary-foreground` |

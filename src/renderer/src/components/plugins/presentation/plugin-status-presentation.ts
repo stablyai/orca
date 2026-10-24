@@ -102,7 +102,8 @@ export function sortByAttention<T extends { installed: PluginHostListEntry | nul
 export function installedPluginPresentation(
   plugin: PluginHostListEntry,
   updateVersion: string | null,
-  busy = false
+  busy = false,
+  autoUpdate: { updatedTo: string | null; needsReview: boolean } | null = null
 ) {
   const kind = pluginStatusKind(plugin)
   const removable = !plugin.bundled && !plugin.isDev
@@ -125,9 +126,14 @@ export function installedPluginPresentation(
     primary,
     enabled: isPluginEnabled(plugin),
     switchable: !busy && kind !== 'review' && kind !== 'invalid' && kind !== 'blocked',
-    statusText: updateVersion
-      ? `${statusWordFor(kind)}, ${translate('auto.components.settings.PluginManagerRows.updateAvailable', 'update {{value0}} available', { value0: updateVersion })}`
-      : statusWordFor(kind)
+    statusText:
+      updateVersion && autoUpdate?.needsReview
+        ? `${statusWordFor(kind)}, ${translate('auto.components.settings.PluginManagerRows.updateNeedsReview', 'update {{value0}} needs review', { value0: updateVersion })}`
+        : updateVersion
+          ? `${statusWordFor(kind)}, ${translate('auto.components.settings.PluginManagerRows.updateAvailable', 'update {{value0}} available', { value0: updateVersion })}`
+          : autoUpdate?.updatedTo
+            ? `${statusWordFor(kind)}, ${translate('auto.components.settings.PluginManagerRows.updatedTo', 'updated to {{value0}}', { value0: autoUpdate.updatedTo })}`
+            : statusWordFor(kind)
   }
 }
 

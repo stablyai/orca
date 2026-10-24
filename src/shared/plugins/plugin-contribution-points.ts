@@ -1,11 +1,10 @@
 import { z } from 'zod'
-import type { PluginCatalogType } from './catalog/plugin-catalog-release'
+import type { PluginCatalogType } from './catalog/plugin-catalog-types'
 import {
   PLUGIN_COMMAND_LIMIT,
   pluginCommandContributionSchema
 } from './plugin-command-contribution'
 import {
-  PLUGIN_AGENT_PROFILE_LIMIT,
   PLUGIN_ICON_THEME_LIMIT,
   PLUGIN_KEYBINDING_LIMIT,
   PLUGIN_LANGUAGE_PACK_LIMIT,
@@ -13,7 +12,6 @@ import {
   PLUGIN_TERMINAL_THEME_LIMIT,
   PLUGIN_THEME_LIMIT,
   PLUGIN_VM_RECIPE_LIMIT,
-  pluginAgentProfileContributionSchema,
   pluginKeybindingContributionSchema,
   pluginLanguagePackContributionSchema,
   pluginSyntaxContributionSchema,
@@ -40,7 +38,6 @@ export const PLUGIN_CONTRIBUTION_POINTS = [
   'languagePacks',
   'keybindings',
   'vmRecipes',
-  'agents',
   'themes',
   'terminalThemes',
   'iconThemes',
@@ -52,14 +49,34 @@ export type PluginContributionPoint = (typeof PLUGIN_CONTRIBUTION_POINTS)[number
 /** `contributes` keys held for planned points, so each can ship later as an additive minor
  *  instead of a new manifest format. Each must stay empty until its format is defined. */
 export const PLUGIN_RESERVED_CONTRIBUTION_POINTS = {
+  agents: 'coding-agent definitions',
   skills: 'agent skills',
   mcpServers: 'MCP server definitions',
   taskSources: 'task sources',
   connections: 'account connections',
-  settings: 'plugin settings'
+  settings: 'plugin settings',
+  statusBarItems: 'status bar items',
+  sidebarCards: 'sidebar cards'
 } as const
 
 export type PluginReservedContributionPoint = keyof typeof PLUGIN_RESERVED_CONTRIBUTION_POINTS
+
+/** The intended shape of each reserved point, in the order the references list them. */
+export const PLUGIN_PLANNED_CONTRIBUTION_POINTS: Readonly<
+  Record<PluginReservedContributionPoint, string>
+> = {
+  taskSources:
+    'Issue and task providers such as Asana, Linear or Jira, declared as data that a worker fills with tasks.',
+  connections:
+    'Account providers with a host-run sign-in, so a plugin never handles credentials itself.',
+  agents: 'New coding-agent harnesses described as data: how to launch them and read their status.',
+  statusBarItems:
+    'Declarative status bar widgets (label, icon, tooltip) whose values a worker updates.',
+  sidebarCards: 'Declarative left-sidebar cards with fixed layouts whose values a worker updates.',
+  mcpServers: 'MCP server definitions that Orca offers to the agents it launches.',
+  skills: 'Agent skills shipped as files that Orca installs for the agents it launches.',
+  settings: 'Typed plugin settings that Orca renders in its own settings UI.'
+}
 
 function reservedList(purpose: string) {
   // Why a refine, not max(0): the issue then carries the reason; maxItems still reaches editors.
@@ -129,12 +146,6 @@ export const pluginContributesFields = {
     'Virtual machine environment recipes.',
     V1
   ),
-  agents: contributionList(
-    pluginAgentProfileContributionSchema,
-    PLUGIN_AGENT_PROFILE_LIMIT,
-    'Reserved for coding-agent definitions; must be empty in manifest format 2 until their format is defined.',
-    V1
-  ),
   themes: contributionList(
     pluginThemeContributionSchema,
     PLUGIN_THEME_LIMIT,
@@ -162,11 +173,14 @@ export const pluginContributesFields = {
 } satisfies Record<PluginContributionPoint, z.ZodType>
 
 export const pluginReservedContributesFields = {
+  agents: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.agents),
   skills: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.skills),
   mcpServers: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.mcpServers),
   taskSources: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.taskSources),
   connections: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.connections),
-  settings: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.settings)
+  settings: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.settings),
+  statusBarItems: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.statusBarItems),
+  sidebarCards: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.sidebarCards)
 } satisfies Record<PluginReservedContributionPoint, z.ZodType>
 
 type ContributionPointPolicy = {
@@ -174,22 +188,25 @@ type ContributionPointPolicy = {
   execution: PluginExecutionProfile
   /** Catalog type a release declares for this point; null when `main` already implies it. */
   catalogType: PluginCatalogType | null
+  /** Its bytes act later under user or agent authority, so approval names the exact content.
+   *  Executable points (panels, events) are bound by their execution profile instead. */
+  bindsContent: boolean
 }
 
 export const PLUGIN_CONTRIBUTION_POINT_POLICY: Record<
   PluginContributionPoint,
   ContributionPointPolicy
 > = {
-  panels: { execution: 'sandboxed-ui', catalogType: 'panel' },
-  commands: { execution: 'instructional', catalogType: 'instructions' },
+  panels: { execution: 'sandboxed-ui', catalogType: 'panel', bindsContent: false },
+  // Why unbound: an alias command only names a built-in action; it carries no bytes.
+  commands: { execution: 'declarative', catalogType: 'instructions', bindsContent: false },
   // Why no catalog type: events need a worker, which `main` already declares.
-  events: { execution: 'trusted-worker', catalogType: null },
-  languagePacks: { execution: 'data', catalogType: 'interface-language' },
-  keybindings: { execution: 'instructional', catalogType: 'instructions' },
-  vmRecipes: { execution: 'instructional', catalogType: 'instructions' },
-  agents: { execution: 'instructional', catalogType: 'instructions' },
-  themes: { execution: 'data', catalogType: 'app-theme' },
-  terminalThemes: { execution: 'data', catalogType: 'terminal-theme' },
-  iconThemes: { execution: 'data', catalogType: 'icon-theme' },
-  syntaxes: { execution: 'data', catalogType: 'syntax' }
+  events: { execution: 'trusted-worker', catalogType: null, bindsContent: false },
+  languagePacks: { execution: 'data', catalogType: 'interface-language', bindsContent: false },
+  keybindings: { execution: 'declarative', catalogType: 'instructions', bindsContent: true },
+  vmRecipes: { execution: 'declarative', catalogType: 'instructions', bindsContent: true },
+  themes: { execution: 'data', catalogType: 'app-theme', bindsContent: false },
+  terminalThemes: { execution: 'data', catalogType: 'terminal-theme', bindsContent: false },
+  iconThemes: { execution: 'data', catalogType: 'icon-theme', bindsContent: false },
+  syntaxes: { execution: 'data', catalogType: 'syntax', bindsContent: false }
 }

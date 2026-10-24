@@ -86,6 +86,7 @@ export async function createUninstallFixture() {
     userDataPath: root,
     hostVersion: '1.4.0',
     isPluginSystemEnabled: () => settings.pluginSystemEnabled,
+    isFullAccessAllowed: () => true,
     getDisabledPlugins: () => settings.disabledPlugins,
     getPluginConsents: () => settings.pluginConsents,
     getDevPluginPaths: () => [],
@@ -113,7 +114,7 @@ export async function createUninstallFixture() {
       pluginApi: 1,
       main: 'worker.js',
       contributes: { commands: [{ id: 'run', title: 'Run' }], ...contributes },
-      capabilities: contributes.events ? [{ kind: 'events:subscribe' }] : []
+      capabilities: contributes.events ? [{ kind: 'workspace:read' }, { kind: 'agents:read' }] : []
     }
     await writeFile(join(sourcePath, 'orca-plugin.json'), JSON.stringify(manifest))
     await writeFile(join(sourcePath, 'worker.js'), 'export default function () {}')

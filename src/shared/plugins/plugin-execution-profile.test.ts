@@ -20,8 +20,8 @@ describe('execution profiles', () => {
   it.each([
     [{ main: 'main.mjs' }, {}, 'trusted-worker'],
     [{}, { panels: [{}] }, 'sandboxed-ui'],
-    [{}, { commands: [{}] }, 'instructional'],
-    [{}, { vmRecipes: [{}] }, 'instructional'],
+    [{}, { commands: [{}] }, 'declarative'],
+    [{}, { vmRecipes: [{}] }, 'declarative'],
     [{}, {}, 'data']
   ])('infers the least profile for a v1 manifest', (top, contributes, expected) => {
     expect(

@@ -99,7 +99,7 @@ it.each(['panel', 'event'] as const)(
     const contributes: Partial<PluginManifest['contributes']> =
       kind === 'panel'
         ? { panels: [{ id: 'panel', title: 'Panel', entry: 'panel.html' }] }
-        : { events: [{ on: 'worktree.created' }] }
+        : { events: [{ on: 'workspace.created' }] }
     const key = await install(`late-${kind}`, contributes)
     const held = uninstallGate()
     if (kind === 'event') {
@@ -111,8 +111,9 @@ it.each(['panel', 'event'] as const)(
       .mockImplementationOnce(() => held.promise)
     const panelResult = kind === 'panel' ? service.panels.readEntry(key, 'panel') : null
     if (kind === 'event') {
-      service.emitEvent('worktree.created', {
-        worktreeId: 'fixture',
+      service.emitEvent('workspace.created', {
+        workspaceId: 'fixture',
+        kind: 'worktree',
         path: 'synthetic-path',
         branch: 'main'
       })

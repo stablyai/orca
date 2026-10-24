@@ -24,12 +24,12 @@ async function plugin(): Promise<ValidDiscoveredPlugin> {
   roots.push(rootDir)
   await writeFile(join(rootDir, 'main.mjs'), 'export default function activate() {}')
   return {
-    pluginKey: 'orca-samples.demo',
+    pluginKey: 'samples.demo',
     rootDir,
     manifest: pluginManifestSchema.parse({
       manifestVersion: 1,
       id: 'demo',
-      publisher: 'orca-samples',
+      publisher: 'samples',
       name: 'Demo',
       version: '1.0.0',
       engines: { orca: '>=1.0.0' },
@@ -80,8 +80,7 @@ function controller(options: {
     invokeCommand: vi.fn(async () => null),
     executeHostCall: vi.fn(async () => ({ ok: true as const, value: null })),
     log: (key) => options.logs?.capture(key) ?? vi.fn(),
-    onStateChanged: vi.fn(),
-    onWorkerGone: vi.fn()
+    onStateChanged: vi.fn()
   })
 }
 
@@ -212,7 +211,7 @@ describe('PluginWorkerController activation authority', () => {
 
   it('restarts a running worker once when its reviewed bytes change', async () => {
     const current = await plugin()
-    const idle = { ...(await plugin()), pluginKey: 'orca-samples.idle' }
+    const idle = { ...(await plugin()), pluginKey: 'samples.idle' }
     const factory = vi.fn<PluginWorkerFactory>(async () => worker(['run']))
     const subject = controller({ factory, verify: async () => undefined, isApproved: () => true })
     await subject.ensure(current)

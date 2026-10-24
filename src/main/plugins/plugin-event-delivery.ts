@@ -1,48 +1,50 @@
 import type { PluginEventName } from '../../shared/plugins/manifest/plugin-manifest'
+import type { PluginCapabilityKind } from '../../shared/plugins/plugin-capabilities'
+import { PLUGIN_EVENT_CAPABILITY } from '../../shared/plugins/plugin-event-contribution'
+import { PLUGIN_EVENT_PAYLOAD_SCHEMAS } from '../../shared/plugins/plugin-events'
 import {
   isInvalidDiscoveredPlugin,
   type DiscoveredPlugin,
   type ValidDiscoveredPlugin
 } from './plugin-discovery'
-import type { PluginEventBus } from './plugin-event-bus'
 import type { PluginWorkerController } from './workers/plugin-worker-controller'
 
+/** Delivers only to plugins whose manifest subscribes and whose grant covers the event's domain. */
 export function deliverPluginEvent(options: {
   event: PluginEventName
   payload: unknown
   plugins: readonly DiscoveredPlugin[]
-  eventBus: PluginEventBus
   workerController: PluginWorkerController
   isRuntimeApproved: (plugin: ValidDiscoveredPlugin) => boolean
+  grantedCapabilities: (pluginKey: string) => readonly PluginCapabilityKind[] | null
   logWarning: (pluginKey: string) => (line: string) => void
 }): void {
-  const projected = options.eventBus.projectPayload(options.event, options.payload)
-  if (!projected.ok) {
+  // Why: payloads are bounded projections, so a malformed one never reaches a plugin.
+  const projected = PLUGIN_EVENT_PAYLOAD_SCHEMAS[options.event].safeParse(options.payload)
+  if (!projected.success) {
     return
   }
+  const required = PLUGIN_EVENT_CAPABILITY[options.event]
   for (const plugin of options.plugins) {
-    if (isInvalidDiscoveredPlugin(plugin) || !options.isRuntimeApproved(plugin)) {
+    if (
+      isInvalidDiscoveredPlugin(plugin) ||
+      !plugin.manifest.main ||
+      !options.isRuntimeApproved(plugin) ||
+      !plugin.manifest.contributes.events.some(
+        (subscription) => subscription.on === options.event
+      ) ||
+      !options.grantedCapabilities(plugin.pluginKey)?.includes(required)
+    ) {
       continue
     }
-    const manifestSubscribed = plugin.manifest.contributes.events.some(
-      (subscription) => subscription.on === options.event
-    )
-    if (manifestSubscribed && plugin.manifest.main) {
-      const logWarning = options.logWarning(plugin.pluginKey)
-      void options.workerController
-        .ensure(plugin)
-        .then((handle) => handle.deliverEvent(options.event, projected.payload))
-        .catch((error) => {
-          logWarning(
-            `event ${options.event} dropped: ${error instanceof Error ? error.message : String(error)}`
-          )
-        })
-    } else if (options.eventBus.isDynamicallySubscribed(plugin.pluginKey, options.event)) {
-      options.workerController.deliverEventIfRunning(
-        plugin.pluginKey,
-        options.event,
-        projected.payload
-      )
-    }
+    const logWarning = options.logWarning(plugin.pluginKey)
+    void options.workerController
+      .ensure(plugin)
+      .then((handle) => handle.deliverEvent(options.event, projected.data))
+      .catch((error) => {
+        logWarning(
+          `event ${options.event} dropped: ${error instanceof Error ? error.message : String(error)}`
+        )
+      })
   }
 }

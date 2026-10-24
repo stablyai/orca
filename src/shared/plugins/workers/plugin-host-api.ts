@@ -1,9 +1,8 @@
 import { z } from 'zod'
-import { PLUGIN_EVENT_NAMES } from '../manifest/plugin-manifest'
 import type { PluginCapabilityKind } from '../plugin-capabilities'
 
 /**
- * Host API v0 — the separately-versioned public facade plugins call. Every
+ * Host API 1 (`pluginApi: 1`) — the separately-versioned public facade plugins call. Every
  * method carries params AND result schemas plus capability/mutation metadata;
  * handlers (bound in main) delegate to runtime services. The raw runtime-RPC
  * registry is never exposed: its methods have no result schemas and evolve at
@@ -13,7 +12,7 @@ import type { PluginCapabilityKind } from '../plugin-capabilities'
  * bridge action set, and the worker SDK. Electron-free by design: desktop
  * main, headless serve, the relay conformance path, and tests all import it.
  *
- * Frozen as v0 (pluginApi major 1): additive only. The policy that binds this
+ * Frozen within major 1: additive only. The policy that binds this
  * table is in docs/reference/plugin-host-api.md, generated from it.
  */
 
@@ -27,7 +26,7 @@ const workspaceReadContextResult = z
   .object({
     branch: z.string().max(PLUGIN_WORKSPACE_LABEL_MAX_LENGTH),
     displayName: z.string().max(PLUGIN_WORKSPACE_LABEL_MAX_LENGTH),
-    /** Terminals of the focused worktree, so callers can address a specific
+    /** Terminals of the focused workspace, so callers can address a specific
      *  terminal id — the API has no "active terminal" write target. */
     terminals: z
       .array(
@@ -90,21 +89,16 @@ const settingsGetResult = z.object({ settings: z.record(z.string(), pluginJsonVa
 const settingsSetParams = z.object({ key: storageKeySchema, value: pluginJsonValueSchema })
 const settingsSetResult = z.object({ ok: z.literal(true) })
 
-const eventsSubscribeParams = z.object({
-  events: z.array(z.enum(PLUGIN_EVENT_NAMES)).min(1).max(PLUGIN_EVENT_NAMES.length)
-})
-const eventsSubscribeResult = z.object({ subscribed: z.array(z.enum(PLUGIN_EVENT_NAMES)) })
-
 export type PluginHostMethodSpec = {
   name: string
   /** One line for the generated reference. */
   summary: string
-  /** pluginApi minor the method appeared in (`1.0` for the v0 set). */
+  /** pluginApi minor the method appeared in (`1.0` for the first set). */
   since: string
   /** pluginApi minor that deprecated it; it keeps working until the next major. */
   deprecatedSince?: string
   /** Machine-readable resource boundary enforced by the host binding. */
-  scope: 'active-worktree' | 'explicit-terminal' | 'plugin-private' | 'desktop' | 'host-events'
+  scope: 'active-workspace' | 'explicit-terminal' | 'plugin-private' | 'desktop'
   capability: PluginCapabilityKind
   /** Mutations are audit-logged with actor `plugin:<id>`. */
   mutation: boolean
@@ -119,12 +113,13 @@ const spec = <P extends z.ZodTypeAny, R extends z.ZodTypeAny>(
   entry: Omit<PluginHostMethodSpec, 'params' | 'result'> & { params: P; result: R }
 ): PluginHostMethodSpec => entry
 
-export const PLUGIN_HOST_API_V0: readonly PluginHostMethodSpec[] = [
+export const PLUGIN_HOST_API: readonly PluginHostMethodSpec[] = [
   spec({
     name: 'workspace.readContext',
-    summary: 'Branch, name and terminal ids of the focused worktree, or null when none is focused.',
+    summary:
+      'Branch, name and terminal ids of the focused workspace, or null when none is focused.',
     since: '1.0',
-    scope: 'active-worktree',
+    scope: 'active-workspace',
     capability: 'workspace:read',
     mutation: false,
     panel: true,
@@ -138,7 +133,8 @@ export const PLUGIN_HOST_API_V0: readonly PluginHostMethodSpec[] = [
     scope: 'explicit-terminal',
     capability: 'terminal:send',
     mutation: true,
-    panel: true,
+    // Why: text plus Enter runs shell commands (local or SSH), so only full-access workers get it.
+    panel: false,
     params: terminalSendTextParams,
     result: terminalSendTextResult
   }),
@@ -158,7 +154,7 @@ export const PLUGIN_HOST_API_V0: readonly PluginHostMethodSpec[] = [
     summary: "Reads a JSON value from the plugin's private store; null when absent.",
     since: '1.0',
     scope: 'plugin-private',
-    capability: 'storage',
+    capability: 'storage:own',
     mutation: false,
     panel: false,
     params: storageGetParams,
@@ -169,7 +165,7 @@ export const PLUGIN_HOST_API_V0: readonly PluginHostMethodSpec[] = [
     summary: "Writes a JSON value to the plugin's private store.",
     since: '1.0',
     scope: 'plugin-private',
-    capability: 'storage',
+    capability: 'storage:own',
     mutation: true,
     panel: false,
     params: storageSetParams,
@@ -180,7 +176,7 @@ export const PLUGIN_HOST_API_V0: readonly PluginHostMethodSpec[] = [
     summary: "Removes a key from the plugin's private store.",
     since: '1.0',
     scope: 'plugin-private',
-    capability: 'storage',
+    capability: 'storage:own',
     mutation: true,
     panel: false,
     params: storageDeleteParams,
@@ -191,7 +187,7 @@ export const PLUGIN_HOST_API_V0: readonly PluginHostMethodSpec[] = [
     summary: "Lists the keys in the plugin's private store.",
     since: '1.0',
     scope: 'plugin-private',
-    capability: 'storage',
+    capability: 'storage:own',
     mutation: false,
     panel: false,
     params: storageKeysParams,
@@ -199,10 +195,10 @@ export const PLUGIN_HOST_API_V0: readonly PluginHostMethodSpec[] = [
   }),
   spec({
     name: 'secrets.get',
-    summary: 'Reads a secret from the OS keychain; null when absent.',
+    summary: "Reads a secret from the plugin's encrypted secrets file; null when absent.",
     since: '1.0',
     scope: 'plugin-private',
-    capability: 'secrets',
+    capability: 'secrets:own',
     mutation: false,
     panel: false,
     params: secretsGetParams,
@@ -210,10 +206,10 @@ export const PLUGIN_HOST_API_V0: readonly PluginHostMethodSpec[] = [
   }),
   spec({
     name: 'secrets.set',
-    summary: 'Stores a secret in the OS keychain.',
+    summary: "Stores a secret in the plugin's encrypted secrets file.",
     since: '1.0',
     scope: 'plugin-private',
-    capability: 'secrets',
+    capability: 'secrets:own',
     mutation: true,
     panel: false,
     params: secretsSetParams,
@@ -221,10 +217,10 @@ export const PLUGIN_HOST_API_V0: readonly PluginHostMethodSpec[] = [
   }),
   spec({
     name: 'secrets.delete',
-    summary: 'Removes a secret from the OS keychain.',
+    summary: "Removes a secret from the plugin's encrypted secrets file.",
     since: '1.0',
     scope: 'plugin-private',
-    capability: 'secrets',
+    capability: 'secrets:own',
     mutation: true,
     panel: false,
     params: secretsDeleteParams,
@@ -251,22 +247,10 @@ export const PLUGIN_HOST_API_V0: readonly PluginHostMethodSpec[] = [
     panel: false,
     params: settingsSetParams,
     result: settingsSetResult
-  }),
-  spec({
-    name: 'events.subscribe',
-    summary:
-      'Starts delivering the named events to the worker; returns every event now subscribed.',
-    since: '1.0',
-    scope: 'host-events',
-    capability: 'events:subscribe',
-    mutation: false,
-    panel: false,
-    params: eventsSubscribeParams,
-    result: eventsSubscribeResult
   })
 ]
 
-const SPEC_BY_NAME = new Map(PLUGIN_HOST_API_V0.map((entry) => [entry.name, entry]))
+const SPEC_BY_NAME = new Map(PLUGIN_HOST_API.map((entry) => [entry.name, entry]))
 
 export function getPluginHostMethodSpec(name: string): PluginHostMethodSpec | null {
   return SPEC_BY_NAME.get(name) ?? null
@@ -274,7 +258,7 @@ export function getPluginHostMethodSpec(name: string): PluginHostMethodSpec | nu
 
 /** Actions sandboxed panels may request over the postMessage bridge. Derived
  *  from the spec table so the panel surface can never drift from the gate. */
-export const PLUGIN_PANEL_ACTIONS = PLUGIN_HOST_API_V0.filter((entry) => entry.panel).map(
+export const PLUGIN_PANEL_ACTIONS = PLUGIN_HOST_API.filter((entry) => entry.panel).map(
   (entry) => entry.name
 )
 

@@ -17,6 +17,34 @@ const { materializePluginGitTree } = loadPluginSchemaModule(
 )
 const { hashPluginTree } = loadPluginSchemaModule('../../main/plugins/plugin-content-hash.ts')
 const { gitExecFileAsync } = loadPluginSchemaModule('../../main/git/runner.ts')
+const { formatPluginSchemaIssues } = loadPluginSchemaModule('manifest/plugin-schema-issues.ts')
+const ARTIFACT_PARSERS = {
+  themes: loadPluginSchemaModule('artifacts/plugin-theme-artifact.ts').parsePluginAppThemeArtifact,
+  terminalThemes: loadPluginSchemaModule('artifacts/plugin-terminal-theme-artifact.ts')
+    .parsePluginTerminalThemeArtifact,
+  iconThemes: loadPluginSchemaModule('artifacts/plugin-icon-theme-artifact.ts')
+    .parsePluginIconThemeArtifact
+}
+
+// Why strict here: Orca skips unknown theme tokens and icon slots at runtime, so authors only
+// learn about a typo from this check.
+function artifactErrors(pluginDir, manifest) {
+  return Object.entries(ARTIFACT_PARSERS).flatMap(([point, parse]) =>
+    manifest.contributes[point].flatMap((contribution) => {
+      let text = ''
+      try {
+        text = readFileSync(path.join(pluginDir, ...contribution.path.split('/')), 'utf8')
+        parse(text, 'strict')
+        return []
+      } catch (error) {
+        const detail = error.issues
+          ? formatPluginSchemaIssues(error.issues, JSON.parse(text))
+          : error.message
+        return [`contributes.${point} "${contribution.id}" (${contribution.path}): ${detail}`]
+      }
+    })
+  )
+}
 
 async function git(cwd, args) {
   return (await gitExecFileAsync(args, { cwd })).stdout.trim()
@@ -93,6 +121,9 @@ for (const target of targets) {
       return { bytes, sha256: createHash('sha256').update(bytes).digest('hex') }
     }
     const errors = validatePluginFile(path.basename(file), raw, readCatalogFile)
+    if (errors.length === 0 && path.basename(file) === 'orca-plugin.json') {
+      errors.push(...artifactErrors(root, parsePluginManifest(raw).manifest))
+    }
     for (const error of errors) {
       console.error(`${file}: ${error}`)
     }

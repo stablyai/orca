@@ -31,14 +31,14 @@ describe('pluginPageExecutionProfile', () => {
             version: '1.0.0',
             commit: 'a'.repeat(40),
             contentHash: 'b'.repeat(64),
-            execution: 'instructional',
+            execution: 'declarative',
             minimumOrca: '1.0.0',
             types: ['instructions']
           }
         },
         previewManifest: null
       })
-    ).toBe('instructional')
+    ).toBe('declarative')
   })
 
   it('derives from the fetched manifest when the catalog has no release record', () => {
@@ -49,7 +49,7 @@ describe('pluginPageExecutionProfile', () => {
         listing: { release: undefined },
         previewManifest: commandManifest
       })
-    ).toBe('instructional')
+    ).toBe('declarative')
   })
 
   it('is unknown until something verified says otherwise', () => {
@@ -79,7 +79,7 @@ describe('pluginPageExecutionProfile', () => {
         listing: null,
         previewManifest: null
       })
-    ).toBe('instructional')
+    ).toBe('declarative')
   })
 })
 
@@ -89,7 +89,7 @@ describe('pluginTrust', () => {
       execution: 'sandboxed-ui',
       points: pluginPointsFromManifest(commandManifest)
     })
-    expect(trust).toEqual({ worker: false, instructional: true, panel: true })
+    expect(trust).toEqual({ worker: false, declarative: true, panel: true })
     expect(pluginTrustWarnings(trust)).toEqual([
       'Its commands and instructions can take actions when you or an agent use them.'
     ])
@@ -103,10 +103,10 @@ describe('pluginTrust', () => {
   })
 
   it('over-warns when the profile or contributions are unknown', () => {
-    expect(pluginTrust({ execution: 'sandboxed-ui', points: null }).instructional).toBe(true)
+    expect(pluginTrust({ execution: 'sandboxed-ui', points: null }).declarative).toBe(true)
     expect(pluginTrust({ execution: null, points: null })).toEqual({
       worker: false,
-      instructional: true,
+      declarative: true,
       panel: false
     })
     expect(pluginTrust({ execution: null, points: null, hasWorker: true }).worker).toBe(true)
@@ -115,7 +115,7 @@ describe('pluginTrust', () => {
   it('claims nothing runs only for content-only plugins', () => {
     expect(pluginTrust({ execution: 'data', points: null })).toEqual({
       worker: false,
-      instructional: false,
+      declarative: false,
       panel: false
     })
   })

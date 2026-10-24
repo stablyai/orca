@@ -85,7 +85,7 @@ async function createPluginSpec(
   pluginRoots.push(rootDir)
   await writeFile(join(rootDir, 'main.mjs'), source)
   return {
-    pluginKey: 'orca-samples.supervision',
+    pluginKey: 'samples.supervision',
     rootDir,
     mainEntry: 'main.mjs',
     grantedCapabilities: []
@@ -109,8 +109,7 @@ describe('real plugin worker supervision', () => {
       entryPath: hostEntryPath,
       executeHostCall: async () => ({ ok: true, value: null }),
       log: () => vi.fn(),
-      onWorkerStateChange: notifications.notify,
-      onWorkerGone: vi.fn()
+      onWorkerStateChange: notifications.notify
     })
     managers.push(manager)
 
@@ -133,8 +132,7 @@ describe('real plugin worker supervision', () => {
       entryPath: hostEntryPath,
       executeHostCall: async () => ({ ok: true, value: null }),
       log: (_pluginKey) => (level, line) => logs.push({ at: performance.now(), level, line }),
-      onWorkerStateChange: notifications.notify,
-      onWorkerGone: vi.fn()
+      onWorkerStateChange: notifications.notify
     })
     managers.push(manager)
 

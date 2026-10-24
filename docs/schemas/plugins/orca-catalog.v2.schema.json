@@ -174,7 +174,7 @@
           "type": "string",
           "enum": [
             "data",
-            "instructional",
+            "declarative",
             "sandboxed-ui",
             "trusted-worker"
           ],
@@ -194,6 +194,14 @@
           ]
         },
         "types": {
+          "description": "Optional; Orca derives it from `contributes` and `execution`. When present, every kind of contribution the release carries, matching its manifest exactly. `instructions` needs the `declarative` profile or higher, `panel` needs `sandboxed-ui`, and `worker` needs `trusted-worker`.",
+          "x-orca-since": "1.4.240",
+          "examples": [
+            [
+              "syntax"
+            ]
+          ],
+          "uniqueItems": true,
           "minItems": 1,
           "maxItems": 8,
           "type": "array",
@@ -209,15 +217,7 @@
               "panel",
               "worker"
             ]
-          },
-          "description": "Every kind of contribution the release carries, matching its manifest exactly. `instructions` needs the `instructional` profile or higher, `panel` needs `sandboxed-ui`, and `worker` needs `trusted-worker`.",
-          "x-orca-since": "1.4.240",
-          "examples": [
-            [
-              "syntax"
-            ]
-          ],
-          "uniqueItems": true
+          }
         },
         "name": {
           "description": "The manifest's `name`, so Orca can suggest the plugin before downloading it.",
@@ -325,11 +325,11 @@
             "type": "string",
             "enum": [
               "workspace:read",
+              "agents:read",
               "terminal:send",
               "notifications:show",
-              "storage",
-              "secrets",
-              "events:subscribe",
+              "storage:own",
+              "secrets:own",
               "settings:own"
             ]
           }
@@ -349,8 +349,7 @@
         "commit",
         "contentHash",
         "execution",
-        "minimumOrca",
-        "types"
+        "minimumOrca"
       ],
       "description": "The exact release the catalog vouches for. Orca refuses bytes that differ."
     },
@@ -519,7 +518,6 @@
             "languagePacks",
             "keybindings",
             "vmRecipes",
-            "agents",
             "themes",
             "terminalThemes",
             "iconThemes",

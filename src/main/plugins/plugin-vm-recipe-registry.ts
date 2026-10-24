@@ -10,7 +10,7 @@ import {
   type DiscoveredPlugin,
   type ValidDiscoveredPlugin
 } from './plugin-discovery'
-import { verifyInstructionalPluginContent } from './plugin-instructional-content-integrity'
+import { verifyDeclarativePluginContent } from './plugin-declarative-content-integrity'
 
 const VM_RECIPE_LOAD_CONCURRENCY = 4
 
@@ -76,7 +76,7 @@ export class PluginVmRecipeRegistry {
           }
           // Verify after reading so the in-memory commands shown/activated are
           // bound to the exact tree identity the user reviewed.
-          await verifyInstructionalPluginContent(plugin)
+          await verifyDeclarativePluginContent(plugin)
           return { pluginKey: plugin.pluginKey, approved, registrations }
         } catch (error) {
           return {

@@ -11,6 +11,7 @@ export const pluginConsentRequestSchema = z
     reviewedFingerprint: z.string().min(1).max(256),
     decision: z.enum(['approve', 'keep-disabled'])
   })
-  .strict()
+  // Why strip: a newer client may send an optional review field; the host stays the gate.
+  .strip()
 
 export type PluginConsentRequest = z.infer<typeof pluginConsentRequestSchema>

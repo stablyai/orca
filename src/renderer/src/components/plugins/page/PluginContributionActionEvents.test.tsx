@@ -8,11 +8,11 @@ const useInstalledPluginManifest = vi.hoisted(() => vi.fn())
 vi.mock('../state/use-plugin-contribution-source', () => ({ useInstalledPluginManifest }))
 
 const plugin: PluginHostListEntry = {
-  pluginKey: 'orca-samples.hello-orca',
+  pluginKey: 'samples.hello-orca',
   consentFingerprint: 'sha256-hello',
   name: 'Hello Orca',
   version: '1.0.0',
-  publisher: 'orca-samples',
+  publisher: 'samples',
   status: 'running',
   needsReconsent: false,
   isDev: false,
@@ -32,12 +32,16 @@ afterEach(() => useInstalledPluginManifest.mockReset())
 it('names each subscribed event once, keyed to the installed revision', () => {
   useInstalledPluginManifest.mockReturnValue({
     contributes: {
-      events: [{ on: 'worktree.created' }, { on: 'worktree.created' }, { on: 'worktree.removed' }]
+      events: [
+        { on: 'workspace.created' },
+        { on: 'workspace.created' },
+        { on: 'workspace.removed' }
+      ]
     }
   })
   const { result } = renderHook(() => usePluginWorkerEvents(plugin))
-  expect(result.current).toEqual(['worktree.created', 'worktree.removed'])
-  expect(useInstalledPluginManifest).toHaveBeenCalledWith('orca-samples.hello-orca', 'sha256-hello')
+  expect(result.current).toEqual(['workspace.created', 'workspace.removed'])
+  expect(useInstalledPluginManifest).toHaveBeenCalledWith('samples.hello-orca', 'sha256-hello')
 })
 
 it('never reads a manifest for a plugin without a worker', () => {

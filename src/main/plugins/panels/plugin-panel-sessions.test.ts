@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { PluginPanelSessions } from './plugin-panel-sessions'
 
 const binding = {
-  pluginKey: 'orca-samples.demo',
+  pluginKey: 'samples.demo',
   panelId: 'dashboard',
-  rootDir: '/plugins/orca-samples.demo/hash-one',
+  rootDir: '/plugins/samples.demo/hash-one',
   manifestRevision: 'manifest-v1'
 }
 

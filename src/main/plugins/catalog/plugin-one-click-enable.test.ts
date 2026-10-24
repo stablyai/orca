@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import { pluginManifestSchema } from '../../shared/plugins/manifest/plugin-manifest'
-import { PLUGIN_MANIFEST_V2_SINCE } from '../../shared/plugins/manifest/plugin-schema-field-docs'
-import type { ValidDiscoveredPlugin } from './plugin-discovery'
+import { pluginManifestSchema } from '../../../shared/plugins/manifest/plugin-manifest'
+import { PLUGIN_MANIFEST_V2_SINCE } from '../../../shared/plugins/manifest/plugin-schema-field-docs'
+import type { ValidDiscoveredPlugin } from '../plugin-discovery'
 import { enableIfDataPlugin } from './plugin-one-click-enable'
 
-function installed(execution: 'data' | 'instructional', contributes: Record<string, unknown>) {
+function installed(execution: 'data' | 'declarative', contributes: Record<string, unknown>) {
   const plugin: ValidDiscoveredPlugin = {
     pluginKey: 'acme.demo',
     rootDir: '/plugins/acme.demo/hash',
@@ -43,7 +43,7 @@ describe('enableIfDataPlugin', () => {
   })
 
   it.each([
-    ['a plugin that adds instructions', installed('instructional', command), 'sha256-installed'],
+    ['a plugin that adds instructions', installed('declarative', command), 'sha256-installed'],
     ['bytes other than the ones just installed', installed('data', theme), 'sha256-other'],
     ['a plugin that failed discovery', null, 'sha256-installed'],
     ['a development override', { ...installed('data', theme), isDev: true }, 'sha256-installed']

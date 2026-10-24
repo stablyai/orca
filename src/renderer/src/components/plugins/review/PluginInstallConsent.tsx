@@ -196,7 +196,19 @@ export function PluginInstallConsent({
                 'Reading what it can access…'
               )}
             </span>
-          ) : null}
+          ) : (
+            <span className="text-xs text-muted-foreground">
+              {trust.worker
+                ? translate(
+                    'auto.components.settings.PluginInstallConsent.fullAccessUpdates',
+                    'Updates that don’t ask for more access install without asking again, and can change what its full-access code does.'
+                  )
+                : translate(
+                    'auto.components.settings.PluginInstallConsent.updatesKeepApproval',
+                    'Updates that don’t ask for more access install without asking again.'
+                  )}
+            </span>
+          )}
           <div className="ml-auto">
             <PluginConsentProvenance official={official} publisher={publisher} source={source} />
           </div>

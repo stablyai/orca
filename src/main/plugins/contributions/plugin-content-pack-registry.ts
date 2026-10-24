@@ -13,7 +13,7 @@ import {
 } from './plugin-theme-registries'
 import { PluginVmRecipeRegistry } from '../plugin-vm-recipe-registry'
 import { PluginCommandRegistry } from '../plugin-command-registry'
-import { verifyInstructionalPluginContent } from '../plugin-instructional-content-integrity'
+import { verifyDeclarativePluginContent } from '../plugin-declarative-content-integrity'
 import type { KeybindingOverrides } from '../../../shared/keybindings'
 
 type ContentFamily = {
@@ -73,7 +73,7 @@ export class PluginContentPackRegistry {
           return
         }
         try {
-          await verifyInstructionalPluginContent(plugin)
+          await verifyDeclarativePluginContent(plugin)
         } catch (error) {
           excluded.add(plugin.pluginKey)
           this.activationErrors.set(

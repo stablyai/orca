@@ -12,7 +12,7 @@ function manifest(overrides: Record<string, unknown> = {}): Record<string, unkno
   return {
     manifestVersion: 1,
     id: 'demo',
-    publisher: 'orca-samples',
+    publisher: 'samples',
     name: 'Demo',
     version: '1.0.0',
     engines: { orca: '>=1.0.0' },
@@ -24,6 +24,48 @@ function manifest(overrides: Record<string, unknown> = {}): Record<string, unkno
 }
 
 describe('pluginManifestSchema boundaries', () => {
+  it('reads format 1 names as their renamed successors', () => {
+    const result = parsePluginManifest(
+      manifest({
+        main: 'main.mjs',
+        contributes: {
+          commands: [{ id: 'run', title: 'Run', context: 'worktree' }],
+          keybindings: [{ command: 'run', key: 'Mod+Shift+R', when: 'worktree' }],
+          events: [{ on: 'worktree.created' }]
+        },
+        capabilities: [{ kind: 'storage' }, { kind: 'secrets' }, { kind: 'events:subscribe' }]
+      })
+    )
+
+    expect(result).toMatchObject({
+      ok: true,
+      manifest: {
+        contributes: {
+          commands: [{ context: 'workspace' }],
+          keybindings: [{ when: 'workspace' }],
+          events: [{ on: 'workspace.created' }]
+        },
+        capabilities: [
+          { kind: 'storage:own' },
+          { kind: 'secrets:own' },
+          { kind: 'workspace:read' },
+          { kind: 'agents:read' }
+        ]
+      }
+    })
+  })
+
+  it('refuses format 1 names in format 2', () => {
+    const result = parsePluginManifest({
+      ...manifest({ capabilities: [{ kind: 'storage' }] }),
+      manifestVersion: 2,
+      execution: 'data',
+      engines: { orca: `>=${PLUGIN_MANIFEST_V2_SINCE}` }
+    })
+
+    expect(result.ok).toBe(false)
+  })
+
   it('accepts documented dotted command namespaces with camel-case actions', () => {
     const result = parsePluginManifest(
       manifest({

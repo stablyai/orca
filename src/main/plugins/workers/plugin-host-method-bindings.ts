@@ -1,12 +1,12 @@
 import {
   getPluginHostMethodSpec,
-  PLUGIN_HOST_API_V0,
+  PLUGIN_HOST_API,
   PLUGIN_TERMINAL_ID_MAX_LENGTH,
   PLUGIN_WORKSPACE_LABEL_MAX_LENGTH,
   PLUGIN_WORKSPACE_TERMINAL_LIMIT,
   type PluginHostMethodSpec
 } from '../../../shared/plugins/workers/plugin-host-api'
-import type { PluginEventName } from '../../../shared/plugins/manifest/plugin-manifest'
+import { shortPluginBranchName } from '../../../shared/plugins/plugin-events'
 
 export type PluginWorktreeContext = {
   worktreeId: string
@@ -46,7 +46,6 @@ export type PluginHostServices = {
     getAll(pluginId: string): Record<string, unknown>
     set(pluginId: string, key: string, value: unknown): { ok: true } | { ok: false; error: string }
   }
-  subscribeEvents(pluginId: string, events: PluginEventName[]): PluginEventName[]
 }
 
 export type BoundPluginHostMethod = {
@@ -78,7 +77,7 @@ const HANDLERS = new Map<string, BoundPluginHostMethod>([
     // Why: Orca worktree ids embed provider paths, so the public projection
     // must select safe fields instead of spreading the internal context.
     return {
-      branch: context.branch.slice(0, PLUGIN_WORKSPACE_LABEL_MAX_LENGTH),
+      branch: shortPluginBranchName(context.branch).slice(0, PLUGIN_WORKSPACE_LABEL_MAX_LENGTH),
       displayName: context.displayName.slice(0, PLUGIN_WORKSPACE_LABEL_MAX_LENGTH),
       terminals: terminals
         .filter(
@@ -163,16 +162,12 @@ const HANDLERS = new Map<string, BoundPluginHostMethod>([
       throw new Error(result.error)
     }
     return { ok: true }
-  }),
-  definePluginMethod('events.subscribe', async (params, { pluginId, services }) => {
-    const { events } = params as { events: PluginEventName[] }
-    return { subscribed: services.subscribeEvents(pluginId, events) }
   })
 ])
 
 // Why: adding a facade schema without a binding must fail at module load,
 // before a plugin can observe transport-specific behavior.
-if (HANDLERS.size !== PLUGIN_HOST_API_V0.length) {
+if (HANDLERS.size !== PLUGIN_HOST_API.length) {
   throw new Error('plugin host API spec table and handler bindings are out of sync')
 }
 

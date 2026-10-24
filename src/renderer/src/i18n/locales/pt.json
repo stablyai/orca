@@ -5949,11 +5949,9 @@
           "enable": "Ativar plugin",
           "capability": {
             "workspaceRead": "Ler o nome, a branch e a lista de terminais da sua worktree em foco",
-            "terminalSend": "Digitar texto em um terminal que você pode ver (sempre um terminal específico)",
             "notificationsShow": "Mostrar notificações de desktop rotuladas com o nome do plugin",
             "storage": "Armazenar dados na própria pasta de armazenamento do plugin",
             "secrets": "Armazenar e ler segredos no próprio cofre criptografado do plugin",
-            "eventsSubscribe": "Ser notificado quando worktrees são criadas ou removidas e quando o status do agente muda",
             "settingsOwn": "Ler e alterar as próprias configurações do plugin"
           },
           "decisionFailed": "Não foi possível salvar a decisão de permissão. Tente novamente."
@@ -7146,7 +7144,6 @@
           "settingsUpdateFailed": "Não foi possível salvar as configurações do plugin.",
           "install": "Instalar plugin",
           "title": "Plugins",
-          "experimental": "Experimental",
           "description": "Instale e gerencie plugins do Orca. Os plugins são executados neste computador, mesmo para espaços de trabalho SSH.",
           "logsFailed": "Não foi possível carregar os logs do plugin.",
           "rollbackFailed": "Não foi possível reverter este plugin. Uma versão imutável anterior pode não estar disponível."
@@ -7937,7 +7934,6 @@
           "saveFailed": "Não foi possível salvar os caminhos de plugin de desenvolvimento.",
           "pathRequired": "Digite o caminho da pasta do plugin.",
           "title": "Desenvolvimento",
-          "help": "Carregue plugins diretamente de pastas neste computador enquanto os desenvolve. Plugins de dev ainda exigem revisão de permissão. Os workers são executados neste host de desktop; ações de espaço de trabalho SSH são roteadas através do Orca, então os caminhos aqui são caminhos de desktop.",
           "remove": "Remover",
           "pathLabel": "Caminho da pasta do plugin de desenvolvimento",
           "placeholder": "/Users/you/plugins/my-plugin or C:\\Users\\you\\plugins\\my-plugin",

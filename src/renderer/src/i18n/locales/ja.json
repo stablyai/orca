@@ -1298,7 +1298,7 @@
         "linearTitle": "Linear",
         "linearDescription": "Orca での Linear の仕組み、セットアップチェックリスト、Agent スキル、プロンプト例。",
         "pluginsTitle": "プラグイン",
-        "pluginsDescription": "実験的機能の Orca プラグインをインストール・管理します。",
+        "pluginsDescription": "Orca プラグインをインストール・管理します（アルファ版）。",
         "tasksDescription": "プロバイダーを接続し、Linear スキルをインストールして、タスクに表示する項目を選択します。",
         "artifactsTitle": "アーティファクト",
         "artifactsDescription": "HTML および Markdown ファイルをチームと共有し、パブリックリンクを管理します。",
@@ -11938,13 +11938,12 @@
           "keepDisabled": "無効のまま維持",
           "enable": "プラグインを有効にする",
           "capability": {
-            "workspaceRead": "フォーカスされたワークツリーの名前、ブランチ、ターミナルリストを読み取る",
-            "terminalSend": "見えるターミナルにテキストを入力（常に特定のターミナル）",
+            "workspaceRead": "フォーカス中のワークスペースの名前、ブランチ、ターミナル一覧を読み取り、ワークスペースの作成や削除の通知を受ける",
             "notificationsShow": "プラグイン名がラベル付けされたデスクトップ通知を表示",
             "storage": "プラグインの独自ストレージフォルダーにデータを保存",
-            "secrets": "プラグインの独自暗号化保管庫にシークレットを保存および読み取り",
-            "eventsSubscribe": "ワークツリーが作成または削除され、Agent ステータスが変更されたときに通知を受ける",
-            "settingsOwn": "プラグインの独自設定を読み取りおよび変更"
+            "secrets": "プラグイン専用の暗号化ファイルにシークレットを保存・読み取る",
+            "settingsOwn": "プラグインの独自設定を読み取りおよび変更",
+            "agentsRead": "Agent ステータスが変更されたときに通知を受ける"
           },
           "decisionFailed": "権限の選択を保存できませんでした。再試行してください。",
           "whatChanged": "変更点"
@@ -11964,7 +11963,6 @@
           "saveFailed": "開発用プラグインのパスを保存できませんでした。",
           "pathRequired": "プラグインフォルダーのパスを入力してください。",
           "title": "開発",
-          "help": "このコンピューターのフォルダーからプラグインを読み込みます。",
           "remove": "削除",
           "pathLabel": "開発用プラグインのフォルダーパス",
           "placeholder": "/Users/you/plugins/my-plugin or C:\\Users\\you\\plugins\\my-plugin",
@@ -12070,12 +12068,11 @@
           "settingsUpdateFailed": "プラグイン設定を保存できませんでした。",
           "install": "プラグインをインストール",
           "title": "プラグイン",
-          "experimental": "実験的機能",
+          "alpha": "アルファ版",
           "description": "テーマ、言語、コマンドなど。プラグインはこのコンピューターで実行されます。",
           "logsFailed": "プラグインログをロードできませんでした。",
           "rollbackFailed": "このプラグインを以前のバージョンに戻せませんでした。",
           "fileTypeSuggestionsLabel": "不明なファイルにプラグインを提案",
-          "fileTypeSuggestionsDescription": "Orca で開けない、またはハイライトできないファイルにカタログのプラグインを提案します。",
           "restartFailed": "{{value0}} を再起動できませんでした。"
         },
         "PluginCardAction": {
@@ -12190,7 +12187,7 @@
         "plugins": {
           "search": {
             "title": "プラグイン",
-            "description": "実験的機能の Orca プラグインをインストール・管理します。",
+            "description": "Orca プラグインをインストール・管理します（アルファ版）。",
             "install": "プラグインをインストール",
             "permissions": "プラグイン権限",
             "logs": "プラグインログ",
@@ -13262,8 +13259,6 @@
         "PluginUpdateAllDialog": {
           "title": "プラグインをアップデートしますか？",
           "reading": "各アップデートの変更点を読み込み中…",
-          "someGrow": "新しいアクセスを求めるアップデートは下に展開して表示されます。その他は追加内容だけが変わります。",
-          "noneGrow": "どのアップデートも新しいアクセスを求めていません。",
           "previewError": "このアップデートを読み込めませんでした。スキップされます。",
           "newAccess": "新しいアクセス: {{value0}}",
           "noNewAccess": "新しいアクセスなし",
@@ -13297,8 +13292,7 @@
           "dark": "ダーク",
           "light": "ライト",
           "languageIncomplete": "{{value0}}% 翻訳済み。Orca の言語として使うには不完全です",
-          "languageCoverage": "インターフェース言語 · {{value0}}% 翻訳済み",
-          "agent": "Agent プロファイル"
+          "languageCoverage": "インターフェース言語 · {{value0}}% 翻訳済み"
         }
       },
       "right": {

@@ -2,7 +2,6 @@ import {
   PLUGIN_WORKER_IDLE_REAP_MS,
   PLUGIN_WORKER_MAX_ACTIVE_DEFAULT
 } from '../../../shared/plugins/workers/plugin-host-protocol'
-import type { PluginEventName } from '../../../shared/plugins/manifest/plugin-manifest'
 import {
   PluginSupervisor,
   type PluginRestartDecision,
@@ -39,7 +38,6 @@ export type PluginWorkerManagerOptions = {
   ) => ReturnType<PluginWorkerHostCallExecutor>
   log: (pluginKey: string) => (level: 'info' | 'warn' | 'error', line: string) => void
   onWorkerStateChange: (pluginKey: string) => void
-  onWorkerGone: (pluginKey: string) => void
 }
 
 type ActivationRecord = {
@@ -201,7 +199,6 @@ export class PluginWorkerManager {
     context: string,
     error?: unknown
   ): PluginRestartDecision {
-    this.options.onWorkerGone(pluginKey)
     const decision = this.supervisor.markExited(pluginKey, { crashed: true })
     this.options.onWorkerStateChange(pluginKey)
     if (decision.restart) {
@@ -224,10 +221,6 @@ export class PluginWorkerManager {
     return true
   }
 
-  deliverEventIfRunning(pluginKey: string, event: PluginEventName, payload: unknown): void {
-    this.workers.get(pluginKey)?.handle.deliverEvent(event, payload)
-  }
-
   async deactivate(pluginKey: string): Promise<void> {
     this.nextGeneration(pluginKey)
     const activation = this.activations.get(pluginKey)
@@ -236,7 +229,6 @@ export class PluginWorkerManager {
     if (record) {
       this.workers.delete(pluginKey)
     }
-    this.options.onWorkerGone(pluginKey)
     this.supervisor.reset(pluginKey)
     this.known.delete(pluginKey)
     await Promise.all([
@@ -258,7 +250,6 @@ export class PluginWorkerManager {
       this.nextGeneration(pluginKey)
       this.known.delete(pluginKey)
       this.workers.delete(pluginKey)
-      this.options.onWorkerGone(pluginKey)
       this.supervisor.markExited(pluginKey, { crashed: false })
       this.options.log(pluginKey)('info', 'worker reaped after idle period')
       this.options.onWorkerStateChange(pluginKey)
@@ -279,7 +270,6 @@ export class PluginWorkerManager {
     const pluginKeys = new Set([...this.activations.keys(), ...this.workers.keys()])
     for (const key of pluginKeys) {
       this.nextGeneration(key)
-      this.options.onWorkerGone(key)
     }
     const activations = [...this.activations.values()]
     for (const activation of activations) {

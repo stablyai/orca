@@ -1,4 +1,5 @@
-import { enableIfDataPlugin } from '../plugins/plugin-one-click-enable'
+import { installCatalogReleaseWithApproval } from '../plugins/catalog/plugin-update-approval'
+import { pluginUpdateAccessGrowth } from '../../shared/plugins/approval/plugin-update-access-growth'
 import { ipcMain } from 'electron'
 import { z } from 'zod'
 import { PLUGIN_COMMIT_PATTERN } from '../../shared/plugins/plugin-install-lockfile'
@@ -8,6 +9,8 @@ import type { PluginMarketplaceInstaller } from '../plugins/catalog/plugin-marke
 import type { PluginMarketplaceService } from '../plugins/catalog/plugin-marketplace-service'
 import { PLUGIN_MARKETPLACE_SOURCE_ID_PATTERN } from '../plugins/catalog/plugin-marketplace-store'
 import type { PluginService } from '../plugins/plugin-service'
+import type { PluginAutoUpdater } from '../plugins/catalog/plugin-auto-updater'
+import type { PluginAutoUpdateState } from '../../shared/plugins/catalog/plugin-update-policy'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { pluginFileTypeSchema } from '../../shared/plugins/plugin-file-type'
 import { findPluginFileTypeSuggestion } from '../plugins/catalog/plugin-file-type-suggestion'
@@ -15,6 +18,7 @@ import { findPluginFileTypeSuggestion } from '../plugins/catalog/plugin-file-typ
 export type PluginMarketplaceHandlerServices = {
   marketplace: PluginMarketplaceService
   installer: PluginMarketplaceInstaller
+  autoUpdater?: Pick<PluginAutoUpdater, 'getState'>
 }
 
 /** The consent write path (applyPluginConsent), bound to the store by the caller. */
@@ -86,28 +90,28 @@ export function registerPluginMarketplaceHandlers(
   ipcMain.handle('plugins:installMarketplacePlugin', async (event, args: unknown) => {
     const { enableIfData, expectedFingerprint, ...identity } =
       installMarketplacePluginSchema.parse(args)
-    const result = await services.installer.install(identity)
-    if (!result.ok) {
-      return result
-    }
-    await pluginService.refresh()
-    if (!enableIfData) {
-      return result
-    }
-    const { needsReview } = await enableIfDataPlugin({
-      pluginKey: result.pluginKey,
-      installedFingerprint: result.consentFingerprint,
-      ...(expectedFingerprint ? { expectedFingerprint } : {}),
-      findValidPlugin: (key) => pluginService.findValidPlugin(key),
+    return installCatalogReleaseWithApproval({
+      pluginKey: identity.pluginKey,
+      pluginService,
+      install: () => services.installer.install(identity),
       approve: (pluginKey, reviewedFingerprint) =>
-        approveConsent(pluginKey, reviewedFingerprint, event.sender.id)
+        approveConsent(pluginKey, reviewedFingerprint, event.sender.id),
+      ...(enableIfData ? { enableIfData: { expectedFingerprint } } : {})
     })
-    return { ...result, needsReview }
   })
   ipcMain.handle('plugins:previewMarketplaceUpdate', async (_event, args: unknown) => {
     const { pluginKey } = installedPluginSchema.parse(args)
-    return services.installer.previewInstalledUpdate(pluginKey)
+    const preview = await services.installer.previewInstalledUpdate(pluginKey)
+    const installed = pluginService.findValidPlugin(pluginKey)
+    return installed
+      ? { ...preview, accessGrowth: pluginUpdateAccessGrowth(installed.manifest, preview.manifest) }
+      : preview
   })
+  ipcMain.handle(
+    'plugins:getAutoUpdateState',
+    (): PluginAutoUpdateState =>
+      services.autoUpdater?.getState() ?? { updated: {}, needsReview: {} }
+  )
   ipcMain.handle('plugins:getRollbackVersion', (_event, args: unknown) => {
     const { pluginKey } = installedPluginSchema.parse(args)
     return services.installer.rollbackVersion(pluginKey)

@@ -17,18 +17,31 @@ export function PluginSettingsMenu({
   featureEnabled,
   suggestionsEnabled,
   onToggleSuggestions,
+  autoUpdateEnabled,
+  onToggleAutoUpdate,
+  fullAccessEnabled,
+  onToggleFullAccess,
+  open,
+  onOpenChange,
   onSources,
   onDevelopment
 }: {
   featureEnabled: boolean
   suggestionsEnabled: boolean
   onToggleSuggestions: () => void
+  autoUpdateEnabled: boolean
+  onToggleAutoUpdate: () => void
+  fullAccessEnabled: boolean
+  onToggleFullAccess: () => void
+  /** Controlled so a catalog card can open it to the full access switch. */
+  open: boolean
+  onOpenChange: (open: boolean) => void
   onSources: () => void
   onDevelopment: () => void
 }): React.JSX.Element {
   const label = translate('auto.components.settings.PluginSettingsMenu.label', 'Plugin settings')
   return (
-    <DropdownMenu>
+    <DropdownMenu open={open} onOpenChange={onOpenChange}>
       <Tooltip>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
@@ -46,19 +59,52 @@ export function PluginSettingsMenu({
           checked={suggestionsEnabled}
           onCheckedChange={onToggleSuggestions}
           onSelect={(event) => event.preventDefault()}
+        >
+          {translate(
+            'auto.components.settings.PluginsSettingsSection.fileTypeSuggestionsLabel',
+            'Suggest plugins for unknown files'
+          )}
+        </DropdownMenuCheckboxItem>
+        <DropdownMenuCheckboxItem
+          checked={autoUpdateEnabled}
+          disabled={!featureEnabled}
+          onCheckedChange={onToggleAutoUpdate}
+          onSelect={(event) => event.preventDefault()}
           className="items-start"
         >
           <span className="min-w-0">
             <span className="block">
               {translate(
-                'auto.components.settings.PluginsSettingsSection.fileTypeSuggestionsLabel',
-                'Suggest plugins for unknown files'
+                'auto.components.settings.PluginSettingsMenu.autoUpdateLabel',
+                'Update plugins automatically'
               )}
             </span>
             <span className="block text-muted-foreground">
               {translate(
-                'auto.components.settings.PluginsSettingsSection.fileTypeSuggestionsDescription',
-                'Offer a catalog plugin when Orca can’t open or highlight a file.'
+                'auto.components.settings.PluginSettingsMenu.autoUpdateHint',
+                'Updates can change what a plugin does, including full-access ones'
+              )}
+            </span>
+          </span>
+        </DropdownMenuCheckboxItem>
+        <DropdownMenuCheckboxItem
+          checked={fullAccessEnabled}
+          disabled={!featureEnabled}
+          onCheckedChange={onToggleFullAccess}
+          onSelect={(event) => event.preventDefault()}
+          className="items-start"
+        >
+          <span className="min-w-0">
+            <span className="block">
+              {translate(
+                'auto.components.settings.PluginSettingsMenu.fullAccessLabel',
+                'Allow full-access plugins'
+              )}
+            </span>
+            <span className="block text-muted-foreground">
+              {translate(
+                'auto.components.settings.PluginSettingsMenu.fullAccessHint',
+                'Full access to files and network'
               )}
             </span>
           </span>

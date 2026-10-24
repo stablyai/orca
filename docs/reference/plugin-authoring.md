@@ -20,10 +20,12 @@ Pick the lowest `execution` profile that covers what you contribute; it decides 
 asked to approve:
 
 - `data`: themes, terminal themes, icon themes, syntaxes, translations. Installs in one click.
-- `instructional`: commands that run Orca actions, shortcuts, VM recipes. Reviewed before they
+- `declarative`: commands that run Orca actions, shortcuts, VM recipes. Reviewed before they
   are enabled.
 - `sandboxed-ui`: panels, in a sandboxed frame that can only call the host methods marked
   "Panels: yes".
+  Orca's colors reach panel CSS as `--orca-background`, `--orca-foreground`, `--orca-primary`
+  and the rest of its panel token set, so they never collide with a panel's own variables.
 - `trusted-worker`: `main` runs in a separate Node process and can call every host method its
   `capabilities` allow.
 
@@ -62,7 +64,7 @@ for.
 
 1. Commit the plugin and run `pnpm validate:plugin` on the root of its repository. It prints the
    release entry for `HEAD`: version, full commit SHA, `contentHash`, execution profile, minimum
-   Orca, contribution types and summary, capabilities and file types. Every field must match
+   Orca, contribution summary, capabilities and file types. Every field must match
    what Orca finds at install, so paste it rather than writing it by hand.
 2. Add or update the plugin's entry in the catalog's `orca-catalog.json`, newest release first:
 
@@ -87,5 +89,64 @@ for.
    `orca-marketplace.json` as described in the [catalog reference](plugin-catalog.md#clients-before-format-2).
 4. Users add the catalog under Settings → Plugins → **Add marketplace** with its Git URL and ref.
 
-An update that asks for a new capability or changes the execution profile is never applied
-silently. Orca asks the user to approve it again.
+Users approve a plugin once per level of access. An update from the same repository that asks
+for nothing new, code changes included, installs without asking again and stays enabled. Orca
+asks again, listing what is new, when an update adds a capability, raises the execution profile,
+adds a command, shortcut, panel or event subscription, ships virtual machine recipes, or comes from
+a different repository.
+
+With **Update plugins automatically** on (the default), Orca installs such updates for enabled
+catalog plugins by itself, checking at startup and every 6 hours. A release installs only once it
+has been listed for 12 hours, or at once from the official catalog, so a takedown has time to land.
+Only pinned catalog releases (a `releases` entry with its commit and content hash) install by
+themselves; a listing without one updates only when the user clicks Update. This includes
+full-access plugins: an update that asks for nothing new runs its new code with the access the user
+already granted, the same way an editor's extensions update. Turn the setting off to review every
+update. An update that needs approval is not installed: the current version keeps running and the
+plugin shows **Update needs review**.
+
+## Planned contribution points
+
+These `contributes` keys are reserved: a manifest may list them only as empty arrays until
+their format ships. Each is planned as declared data that Orca renders and enforces, not
+arbitrary plugin UI:
+
+- `taskSources`: issue and task providers such as Asana, Linear or Jira, filled by a worker.
+- `connections`: account providers with a host-run sign-in.
+- `agents`: new coding-agent harnesses described as data.
+- `statusBarItems`: declarative status bar widgets whose values a worker updates.
+- `sidebarCards`: declarative left-sidebar cards whose values a worker updates.
+- `mcpServers`: MCP server definitions offered to the agents Orca launches.
+- `skills`: agent skills shipped as files.
+- `settings`: typed plugin settings shown in Orca's settings UI.
+
+See [the manifest reference](plugin-manifest.md#planned-contribution-points) for details.
+
+## Stability
+
+Plugins are in Alpha: the manifest v2 format and catalog format are stable contracts; items
+listed as experimental may change. These parts are stable and change only additively:
+
+- manifest format 2, capability names and execution profiles;
+- host API 1 (`"pluginApi": 1`): method names, params and results;
+- the panel bridge message names (`orca-panel-action`, `-result`, `-ping`, `-pong`) and error
+  codes;
+- theme token names, and theme ids once published (users' settings store them);
+- catalog format 2 (`orca-catalog.json`).
+
+Experimental; these may still change without a new format:
+
+- the `agent.status.changed` payload: `state` and `outcome` are free strings and `paneKey` is
+  not yet a terminal id `terminal.sendText` accepts;
+- the worker process model: Node version, lifecycle and the channel to Orca. Only
+  `activate(orca)` and `orca.host`, `orca.commands`, `orca.events` and `orca.log` are promised,
+  and workers may be stopped at any time;
+- language-pack keys, which change when Orca's source moves or its English copy changes; packs
+  get best-effort coverage per release;
+- `pnpm validate:plugin` output; only its exit codes (`0` valid, `1` invalid, `2` usage) are
+  stable;
+- `settings:own`, which stores untyped values until plugins can declare settings;
+- manifest format 1, which is deprecated. Catalogs need format 2.
+
+Data folders, `orca-plugin-image://` URLs, tab keys and the `pluginRoot` a worker receives are
+internal.

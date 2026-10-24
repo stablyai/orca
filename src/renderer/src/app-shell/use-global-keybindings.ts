@@ -214,7 +214,7 @@ export function useGlobalKeybindings(args: {
         }
       }
 
-      // Plugin chords are user-reviewed instructional content. They win over
+      // Plugin chords are user-reviewed declarative content. They win over
       // built-in defaults only in app focus; terminal/editor/browser handlers
       // retain their own shortcut authority.
       if (context === 'app') {

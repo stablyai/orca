@@ -29,20 +29,20 @@ describe('projectPluginAgentStatusChangedPayload', () => {
       })
     )
     expect(projected).toEqual({
-      worktreeId: 'wt-1',
+      workspaceId: 'wt-1',
       paneKey: PANE,
       state: 'working',
       receivedAt: 1_700_000_000_000,
       mainAgent: { state: 'done', outcome: 'cancellation', stateStartedAt: 1_700_000_000_500 }
     })
-    // The bus validates before delivery; a field the schema strips never reaches a plugin.
+    // Delivery validates first; a field the schema strips never reaches a plugin.
     expect(agentStatusChangedPayloadSchema.parse(projected)).toEqual(projected)
   })
 
   it("leaves `mainAgent` absent for a row that carries none, so an old host's rows look as they did", () => {
     const projected = projectPluginAgentStatusChangedPayload(row())
     expect(projected).toEqual({
-      worktreeId: 'wt-1',
+      workspaceId: 'wt-1',
       paneKey: PANE,
       state: 'working',
       receivedAt: 1_700_000_000_000
@@ -78,7 +78,7 @@ describe('projectPluginAgentStatusChangedPayload', () => {
         }
       })
     )
-    expect(projected?.worktreeId).toBeNull()
+    expect(projected?.workspaceId).toBeNull()
     expect(projected?.mainAgent).toEqual({ state: 'working', stateStartedAt: 7 })
   })
 })

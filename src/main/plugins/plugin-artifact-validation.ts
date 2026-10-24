@@ -17,7 +17,6 @@ export const PLUGIN_WORKER_ENTRY_MAX_BYTES = 50 * 1024 * 1024
 const PLUGIN_ICON_MAX_BYTES = 2 * 1024 * 1024
 export const PLUGIN_LANGUAGE_PACK_MAX_BYTES = 5 * 1024 * 1024
 export const PLUGIN_VM_RECIPE_MAX_BYTES = 256 * 1024
-const PLUGIN_AGENT_PROFILE_MAX_BYTES = 1024 * 1024
 // Why 16 KiB: a theme is a few dozen tokens or palette slots.
 export const PLUGIN_THEME_MAX_BYTES = 16 * 1024
 // Why larger: an icon theme maps up to 512 file names and extensions.
@@ -53,9 +52,6 @@ function declaredArtifactPaths(manifest: PluginManifest): DeclaredArtifact[] {
     ),
     ...c.vmRecipes.flatMap((recipe) =>
       declaredFile('VM recipe', recipe.path, PLUGIN_VM_RECIPE_MAX_BYTES)
-    ),
-    ...c.agents.flatMap((agent) =>
-      declaredFile('agent profile', agent.path, PLUGIN_AGENT_PROFILE_MAX_BYTES)
     ),
     ...c.themes.flatMap((theme) =>
       declaredFile(`theme "${theme.id}"`, theme.path, PLUGIN_THEME_MAX_BYTES)

@@ -32,7 +32,8 @@ async function writeThemePlugin(root: string): Promise<void> {
     join(root, 'app.json'),
     JSON.stringify({
       base: 'dark',
-      tokens: { '--background': '#1b1430', '--foreground': '#e8e0ff' }
+      // Why --sidebar: the left sidebar is set off by its surface step, not a border line.
+      tokens: { '--background': '#1b1430', '--foreground': '#e8e0ff', '--sidebar': '#271d45' }
     })
   )
   await writeFile(
@@ -75,6 +76,14 @@ test('plugin themes apply live and fall back when the plugin goes away', async (
 
     await choose(orcaPage, 'Theme', 'Smoke Dusk')
     await expect.poll(() => background(orcaPage)).toBe('#1b1430')
+    // The left sidebar's surface, its only edge against the canvas, follows the theme.
+    await expect
+      .poll(() =>
+        orcaPage.evaluate(() =>
+          document.documentElement.style.getPropertyValue('--worktree-sidebar')
+        )
+      )
+      .toBe('#271d45')
     await expect
       .poll(() => orcaPage.evaluate(() => window.__store?.getState().settings?.theme))
       .toBe('dark')

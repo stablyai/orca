@@ -7,8 +7,14 @@ import {
   normalizePluginFileTypeSuggestionSettings,
   type PluginFileTypeSuggestionSettingsInput
 } from './plugin-file-type'
+import {
+  normalizePluginUpdatePolicySettings,
+  type PluginUpdatePolicySettingsInput
+} from './catalog/plugin-update-policy'
 
-type PluginOwnedSettingsInput = PluginThemeSettingsInput & PluginFileTypeSuggestionSettingsInput
+type PluginOwnedSettingsInput = PluginThemeSettingsInput &
+  PluginFileTypeSuggestionSettingsInput &
+  PluginUpdatePolicySettingsInput
 
 /** Bounds every setting that plugins or plugin UI write; only keys present in `input` return. */
 export function normalizePluginOwnedSettings(
@@ -16,6 +22,7 @@ export function normalizePluginOwnedSettings(
 ): Partial<GlobalSettings> {
   return {
     ...normalizePluginThemeSettings(input),
-    ...normalizePluginFileTypeSuggestionSettings(input)
+    ...normalizePluginFileTypeSuggestionSettings(input),
+    ...normalizePluginUpdatePolicySettings(input)
   }
 }

@@ -59,7 +59,8 @@ export function installedPluginControls(
   const { kind, enabled, statusText, removable, primary, switchable } = installedPluginPresentation(
     plugin,
     entry.updateVersion,
-    busy
+    busy,
+    entry.autoUpdate
   )
   const needsReview = pluginNeedsReview(plugin)
 
@@ -134,9 +135,11 @@ export function installedPluginControls(
         onClick={() => handlers.onCheckUpdate(entry)}
       >
         <ArrowUpCircle />
-        {translate('auto.components.settings.PluginManagerRows.update', 'Update {{value0}}', {
-          value0: entry.updateVersion
-        })}
+        {entry.autoUpdate.needsReview
+          ? translate('auto.components.settings.PluginManagerRows.reviewUpdate', 'Review update')
+          : translate('auto.components.settings.PluginManagerRows.update', 'Update {{value0}}', {
+              value0: entry.updateVersion
+            })}
       </Button>
     )
   } else if (primary === 'error') {

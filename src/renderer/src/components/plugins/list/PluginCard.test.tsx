@@ -18,6 +18,7 @@ const entry: PluginListEntry = {
   minimumOrca: null,
   updateVersion: null,
   catalogIds: [],
+  autoUpdate: { updatedTo: null, needsReview: false },
   updatable: false,
   installed: null,
   listing: null

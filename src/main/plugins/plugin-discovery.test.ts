@@ -66,7 +66,7 @@ describe('project repositories', () => {
 describe('installed plugin discovery identity', () => {
   it('requires a new review when an installed v2 worker has different bytes', async () => {
     const pluginsDir = await tempPluginsDir()
-    const key = 'orca-samples.worker'
+    const key = 'samples.worker'
     const discoverAt = async (hash: string) => {
       const versionDir = join(pluginsDir, key, hash)
       await mkdir(versionDir, { recursive: true })
@@ -78,7 +78,7 @@ describe('installed plugin discovery identity', () => {
           manifestVersion: 2,
           execution: 'trusted-worker',
           id: 'worker',
-          publisher: 'orca-samples',
+          publisher: 'samples',
           name: 'Worker',
           version: '1.0.0',
           engines: { orca: `>=${PLUGIN_SCHEMA_NEWEST_SINCE}` },
@@ -106,7 +106,7 @@ describe('installed plugin discovery identity', () => {
 
   it('keeps the install directory identity when a manifest is invalid or mismatched', async () => {
     const pluginsDir = await tempPluginsDir()
-    const installedKey = 'orca-samples.expected'
+    const installedKey = 'samples.expected'
     const hash = 'a'.repeat(64)
     const versionDir = join(pluginsDir, installedKey, hash)
     await mkdir(versionDir, { recursive: true })
@@ -116,7 +116,7 @@ describe('installed plugin discovery identity', () => {
       JSON.stringify({
         manifestVersion: 1,
         id: 'different',
-        publisher: 'orca-samples',
+        publisher: 'samples',
         name: 'Different',
         version: '1.0.0',
         engines: { orca: '>=1.0.0' },
@@ -163,7 +163,7 @@ describe('installed plugin discovery identity', () => {
 
   it('keeps a removable qualified identity when the current pointer is missing', async () => {
     const pluginsDir = await tempPluginsDir()
-    const installedKey = 'orca-samples.broken'
+    const installedKey = 'samples.broken'
     await mkdir(join(pluginsDir, installedKey), { recursive: true })
 
     const [plugin] = await discoverPlugins({ pluginsDir, devPluginPaths: [], hostVersion: '1.4.0' })
@@ -174,7 +174,7 @@ describe('installed plugin discovery identity', () => {
 
   it('rejects an oversized current pointer without an unbounded startup read', async () => {
     const pluginsDir = await tempPluginsDir()
-    const installedKey = 'orca-samples.broken'
+    const installedKey = 'samples.broken'
     const pluginDir = join(pluginsDir, installedKey)
     await mkdir(pluginDir, { recursive: true })
     const pointer = join(pluginDir, 'current')
@@ -188,7 +188,7 @@ describe('installed plugin discovery identity', () => {
   })
 })
 
-describe('instructional plugin discovery identity', () => {
+describe('declarative plugin discovery identity', () => {
   it('changes dev consent when a VM recipe command changes', async () => {
     const pluginsDir = await tempPluginsDir()
     const devRoot = await tempPluginsDir()
@@ -198,7 +198,7 @@ describe('instructional plugin discovery identity', () => {
       JSON.stringify({
         manifestVersion: 1,
         id: 'recipes',
-        publisher: 'orca-samples',
+        publisher: 'samples',
         name: 'Recipes',
         version: '1.0.0',
         engines: { orca: '>=1.0.0' },

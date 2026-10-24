@@ -23,14 +23,14 @@ async function createInstalledPlugin(options: { worker: boolean }): Promise<{
 }> {
   const userDataPath = await mkdtemp(join(tmpdir(), 'orca-plugin-service-integrity-'))
   roots.push(userDataPath)
-  const pluginKey = 'orca-samples.demo'
+  const pluginKey = 'samples.demo'
   const pluginDir = join(userDataPath, 'plugins', pluginKey)
   const stagingDir = join(pluginDir, 'staging')
   await mkdir(stagingDir, { recursive: true })
   const manifest = pluginManifestSchema.parse({
     manifestVersion: 1,
     id: 'demo',
-    publisher: 'orca-samples',
+    publisher: 'samples',
     name: 'Demo',
     version: '1.0.0',
     engines: { orca: '>=1.0.0' },
@@ -68,6 +68,7 @@ function createService(
     userDataPath: plugin.userDataPath,
     hostVersion: '1.4.0',
     isPluginSystemEnabled: () => true,
+    isFullAccessAllowed: () => true,
     getDisabledPlugins: () => [],
     getPluginConsents: () => ({ [plugin.pluginKey]: consentFingerprint }),
     getDevPluginPaths: () => [],

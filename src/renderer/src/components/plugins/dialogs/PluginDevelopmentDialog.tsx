@@ -80,8 +80,8 @@ export function PluginDevelopmentDialog({
           </DialogTitle>
           <DialogDescription>
             {translate(
-              'auto.components.settings.PluginDevelopmentSection.help',
-              'Load plugins from folders on this computer.'
+              'auto.components.settings.PluginDevelopmentSection.reviewHelp',
+              'Load plugins from folders on this computer. Each folder is reviewed once; later edits to its code run without another review.'
             )}
           </DialogDescription>
         </DialogHeader>

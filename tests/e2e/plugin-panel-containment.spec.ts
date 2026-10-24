@@ -279,7 +279,8 @@ test('contains hostile panel network and navigation probes', async ({
           )
         })
     )
-    expect(bridgeErrorCode).toBe('invalid_request')
+    // Why the host's code: the renderer checks only the shape, the host gates the method.
+    expect(bridgeErrorCode).toBe('unknown_method')
 
     expect(server.requests).toEqual([])
     expect(orcaPage.url()).toBe(appUrl)

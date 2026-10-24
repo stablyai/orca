@@ -33,14 +33,14 @@ const gleam: PluginHostListEntry = {
 }
 const hello: PluginHostListEntry = {
   ...gleam,
-  pluginKey: 'orca-samples.hello-orca',
+  pluginKey: 'samples.hello-orca',
   consentFingerprint: 'sha256-hello',
   name: 'Hello Orca',
-  publisher: 'orca-samples',
+  publisher: 'samples',
   status: 'running',
   hasWorker: true,
   execution: 'trusted-worker',
-  panels: [{ id: 'hello', title: 'Hello Orca', tabKey: 'plugin:orca-samples.hello-orca/hello' }],
+  panels: [{ id: 'hello', title: 'Hello Orca', tabKey: 'plugin:samples.hello-orca/hello' }],
   commands: [
     {
       id: 'ping',
@@ -52,7 +52,7 @@ const hello: PluginHostListEntry = {
     {
       id: 'here',
       title: 'Hello: Here',
-      context: 'worktree',
+      context: 'workspace',
       handler: { type: 'worker' },
       keybindings: []
     }
@@ -61,7 +61,7 @@ const hello: PluginHostListEntry = {
 const helloManifest = pluginManifestSchema.parse({
   manifestVersion: 1,
   id: 'hello-orca',
-  publisher: 'orca-samples',
+  publisher: 'samples',
   name: 'Hello Orca',
   version: '1.0.0',
   engines: { orca: '>=1.0.0' },
@@ -70,9 +70,9 @@ const helloManifest = pluginManifestSchema.parse({
   contributes: {
     panels: [{ id: 'hello', title: 'Hello Orca', entry: 'panel.html' }],
     commands: [{ id: 'ping', title: 'Hello: Ping' }],
-    events: [{ on: 'worktree.created' }, { on: 'agent.status.changed' }]
+    events: [{ on: 'workspace.created' }, { on: 'agent.status.changed' }]
   },
-  capabilities: [{ kind: 'events:subscribe' }]
+  capabilities: [{ kind: 'workspace:read' }, { kind: 'agents:read' }]
 })
 
 const invokeCommand = vi.fn()
@@ -140,7 +140,7 @@ it('runs a live worker command from its row and shows what came back', async () 
   renderAdds(hello)
   fireEvent.click(screen.getByRole('button', { name: 'Run Hello: Ping' }))
   expect(invokeCommand).toHaveBeenCalledExactlyOnceWith({
-    pluginKey: 'orca-samples.hello-orca',
+    pluginKey: 'samples.hello-orca',
     commandId: 'ping'
   })
   await vi.waitFor(() =>
@@ -162,7 +162,7 @@ it('opens a live panel over the workspace Settings came from', () => {
   fireEvent.click(screen.getByRole('button', { name: 'Open panel: Hello Orca' }))
   const state = useAppStore.getState()
   expect(state.activeView).toBe('terminal')
-  expect(state.rightSidebarTab).toBe('plugin:orca-samples.hello-orca/hello')
+  expect(state.rightSidebarTab).toBe('plugin:samples.hello-orca/hello')
   expect(state.rightSidebarOpen).toBe(true)
 })
 

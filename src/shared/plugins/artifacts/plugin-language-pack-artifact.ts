@@ -15,6 +15,19 @@ const DANGEROUS_CATALOG_KEYS = new Set(['__proto__', 'prototype', 'constructor']
 // listed in plugin-translatable-chrome.ts and stay translatable.
 const PROTECTED_TRANSLATION_ROOT = 'auto.components.settings.'
 const PROTECTED_TRANSLATION_MODULE = /^plugin/i
+// Trust copy outside that root, protected by whole component: a pack must not relabel the
+// Official badge, the catalog suggestion banner, agent Allow/Deny, a run-code trust prompt,
+// the certificate warning, or a site's Allow/Block permission prompt.
+const PROTECTED_TRANSLATION_COMPONENTS = [
+  'auto.components.pluginCatalog.PluginListRow.official',
+  'auto.components.editor.PluginFileTypeSuggestion',
+  'components.native-chat.approval',
+  'auto.components.sidebar.OrcaYamlTrustDialog',
+  'auto.components.editor.IpynbViewer',
+  'browser.loadFailure',
+  'auto.components.browserPane.sitePermission',
+  'settings.browser.sitePermissions'
+]
 
 export type PluginLanguagePackRegistration = {
   id: `plugin:${string}`
@@ -87,6 +100,13 @@ function isCatalogObject(value: unknown): value is Record<string, unknown> {
 
 /** Security copy that no language pack may replace. */
 export function isProtectedPluginTranslationPath(path: string): boolean {
+  if (
+    PROTECTED_TRANSLATION_COMPONENTS.some(
+      (component) => path === component || path.startsWith(`${component}.`)
+    )
+  ) {
+    return true
+  }
   if (!path.startsWith(PROTECTED_TRANSLATION_ROOT)) {
     return false
   }

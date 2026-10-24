@@ -73,9 +73,9 @@ export type PluginListEntry = {
   commands: {
     id: string
     title: string
-    context: 'global' | 'worktree'
+    context: 'global' | 'workspace'
     handler: { type: 'built-in'; action: PluginCommandAliasActionId } | { type: 'worker' }
-    keybindings: { key: string; when: 'global' | 'worktree' }[]
+    keybindings: { key: string; when: 'global' | 'workspace' }[]
   }[]
   hasWorker: boolean
   vmRecipes: {

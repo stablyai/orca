@@ -17,12 +17,12 @@ export function usePluginWorkerEvents(plugin: PluginHostListEntry | null): Plugi
 
 function eventTitle(event: PluginEventName): string {
   switch (event) {
-    case 'worktree.created':
+    case 'workspace.created':
       return translate(
         'auto.components.settings.PluginContributionActionEvents.worktreeCreated',
         'When a workspace is created'
       )
-    case 'worktree.removed':
+    case 'workspace.removed':
       return translate(
         'auto.components.settings.PluginContributionActionEvents.worktreeRemoved',
         'When a workspace is removed'

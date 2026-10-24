@@ -18,6 +18,12 @@ describe('pluginManifestCompatibilityError', () => {
     )
   })
 
+  it('reads the leading floor of a range grammar it does not know', () => {
+    expect(pluginManifestCompatibilityError({ engines: { orca: '>=9.0.0 <10' } }, '1.4.0')).toBe(
+      'requires Orca >=9.0.0 <10 (this is 1.4.0)'
+    )
+  })
+
   it('leaves ordinary mistakes to the schema', () => {
     expect(pluginManifestCompatibilityError({ engines: { orca: '>=1.0.0' } }, '1.4.0')).toBeNull()
     expect(pluginManifestCompatibilityError({ engines: { orca: '^9.0.0' } }, '1.4.0')).toBeNull()
@@ -27,10 +33,10 @@ describe('pluginManifestCompatibilityError', () => {
 
   it('tracks the newest format the schema accepts', () => {
     expect(
-      pluginManifestSchema.options.map((option) => option.shape.manifestVersion.value)
+      pluginManifestSchema.def.out.options.map((option) => option.shape.manifestVersion.value)
     ).toContain(PLUGIN_MANIFEST_VERSION_CURRENT)
     expect(
-      pluginManifestSchema.options.every(
+      pluginManifestSchema.def.out.options.every(
         (option) => option.shape.manifestVersion.value <= PLUGIN_MANIFEST_VERSION_CURRENT
       )
     ).toBe(true)

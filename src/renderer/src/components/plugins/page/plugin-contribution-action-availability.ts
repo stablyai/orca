@@ -1,4 +1,5 @@
 import type { PluginHostListEntry } from '../../../../../preload/api-types'
+import { isWorkspaceScopedPluginContext } from '../../../../../shared/plugins/plugin-command-contribution'
 import { translate } from '@/i18n/i18n'
 import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
 import type { AppState } from '@/store/types'
@@ -13,10 +14,10 @@ export function isPluginContributionLive(
 }
 
 export function pluginCommandUnavailableReason(
-  command: { context: 'global' | 'worktree' },
+  command: { context?: string },
   activeWorktreeId: string | null
 ): string | null {
-  if (command.context === 'worktree' && !activeWorktreeId) {
+  if (isWorkspaceScopedPluginContext(command.context) && !activeWorktreeId) {
     return translate(
       'auto.components.settings.PluginContributionActionCommand.needsWorkspace',
       'Open a workspace to run it.'

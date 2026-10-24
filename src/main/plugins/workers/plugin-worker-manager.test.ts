@@ -50,8 +50,7 @@ function manager(
     idleReapMs: options.idleReapMs,
     executeHostCall: async () => ({ ok: true, value: null }),
     log: () => vi.fn(),
-    onWorkerStateChange: vi.fn(),
-    onWorkerGone: vi.fn()
+    onWorkerStateChange: vi.fn()
   })
 }
 

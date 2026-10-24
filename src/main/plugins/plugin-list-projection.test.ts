@@ -33,7 +33,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 const manifest = pluginManifestSchema.parse({
   manifestVersion: 1,
   id: 'demo',
-  publisher: 'orca-samples',
+  publisher: 'samples',
   name: 'Demo',
   version: '1.0.0',
   engines: { orca: '>=1.0.0' },
@@ -70,7 +70,7 @@ function serviceWith(
 describe('buildPluginList consent identity', () => {
   it('projects the exact current fingerprint for an optimistic consent write', async () => {
     const plugin: ValidDiscoveredPlugin = {
-      pluginKey: 'orca-samples.demo',
+      pluginKey: 'samples.demo',
       rootDir: join(tmpdir(), 'plugins', 'demo'),
       manifest,
       consentFingerprint: 'sha256-current',
@@ -82,14 +82,14 @@ describe('buildPluginList consent identity', () => {
       pluginKey: plugin.pluginKey,
       consentFingerprint: 'sha256-current',
       status: 'pending',
-      // Why instructional: a capability makes it more than content, with no worker in sight.
-      execution: 'instructional'
+      // Why declarative: a capability makes it more than content, with no worker in sight.
+      execution: 'declarative'
     })
   })
 
   it('projects supervised backoff as restarting instead of running', async () => {
     const plugin: ValidDiscoveredPlugin = {
-      pluginKey: 'orca-samples.demo',
+      pluginKey: 'samples.demo',
       rootDir: join(tmpdir(), 'plugins', 'demo'),
       manifest,
       consentFingerprint: 'sha256-current',
@@ -112,7 +112,7 @@ describe('buildPluginList consent identity', () => {
 
   it('does not attribute a shadowing dev plugin to the installed source', async () => {
     const plugin: ValidDiscoveredPlugin = {
-      pluginKey: 'orca-samples.demo',
+      pluginKey: 'samples.demo',
       rootDir: join(tmpdir(), 'development', 'demo'),
       manifest,
       consentFingerprint: 'sha256-current',
@@ -154,13 +154,13 @@ describe('buildPluginList consent identity', () => {
     expect(JSON.stringify(projected)).not.toContain(invalid.rootDir)
   })
 
-  it('projects exact VM lifecycle commands for instructional consent', async () => {
+  it('projects exact VM lifecycle commands for declarative consent', async () => {
     const recipeManifest = pluginManifestSchema.parse({
       ...manifest,
       contributes: { vmRecipes: [{ path: 'recipes/cloud.json' }] }
     })
     const plugin: ValidDiscoveredPlugin = {
-      pluginKey: 'orca-samples.demo',
+      pluginKey: 'samples.demo',
       rootDir: join(tmpdir(), 'plugins', 'demo'),
       manifest: recipeManifest,
       consentFingerprint: 'sha256-current',
@@ -204,12 +204,14 @@ describe('buildPluginList consent identity', () => {
     const commandManifest = pluginManifestSchema.parse({
       ...manifest,
       contributes: {
-        commands: [{ id: 'tasks', title: 'Open Tasks', context: 'worktree', action: 'view.tasks' }],
+        commands: [
+          { id: 'tasks', title: 'Open Tasks', context: 'workspace', action: 'view.tasks' }
+        ],
         keybindings: [{ command: 'tasks', key: 'mod+alt+t' }]
       }
     })
     const plugin: ValidDiscoveredPlugin = {
-      pluginKey: 'orca-samples.demo',
+      pluginKey: 'samples.demo',
       rootDir: join(tmpdir(), 'plugins', 'demo'),
       manifest: commandManifest,
       consentFingerprint: 'sha256-current',
@@ -220,7 +222,7 @@ describe('buildPluginList consent identity', () => {
 
     const [entry] = await buildPluginList(serviceWith(plugin), emptyPluginLockfile())
     // Why: a worker-less commands plugin still runs instructions, so the page must not say content only.
-    expect(entry).toMatchObject({ hasWorker: false, execution: 'instructional' })
+    expect(entry).toMatchObject({ hasWorker: false, execution: 'declarative' })
     expect(
       (
         await buildPluginList(
@@ -230,9 +232,9 @@ describe('buildPluginList consent identity', () => {
                 pluginKey: plugin.pluginKey,
                 id: 'tasks',
                 title: 'Open Tasks',
-                context: 'worktree',
+                context: 'workspace',
                 handler: { type: 'built-in', action: 'view.tasks' },
-                keybindings: [{ key: 'Mod+Alt+T', when: 'worktree' }]
+                keybindings: [{ key: 'Mod+Alt+T', when: 'workspace' }]
               }
             ]
           }),
@@ -243,9 +245,9 @@ describe('buildPluginList consent identity', () => {
       {
         id: 'tasks',
         title: 'Open Tasks',
-        context: 'worktree',
+        context: 'workspace',
         handler: { type: 'built-in', action: 'view.tasks' },
-        keybindings: [{ key: 'Mod+Alt+T', when: 'worktree' }]
+        keybindings: [{ key: 'Mod+Alt+T', when: 'workspace' }]
       }
     ])
   })
@@ -254,8 +256,8 @@ describe('buildPluginList consent identity', () => {
 describe('buildPluginList I/O', () => {
   it('builds the list for installed plugins without reading the plugin directories', async () => {
     const plugin: ValidDiscoveredPlugin = {
-      pluginKey: 'orca-samples.demo',
-      rootDir: join(tmpdir(), 'plugins', 'orca-samples.demo', 'a'.repeat(64)),
+      pluginKey: 'samples.demo',
+      rootDir: join(tmpdir(), 'plugins', 'samples.demo', 'a'.repeat(64)),
       manifest,
       consentFingerprint: 'sha256-current',
       contentHash: 'a'.repeat(64),
@@ -265,7 +267,7 @@ describe('buildPluginList I/O', () => {
     lock.plugins[plugin.pluginKey] = {
       pluginKey: plugin.pluginKey,
       version: '1.0.0',
-      source: { kind: 'git', url: 'https://github.com/orca-samples/demo.git', ref: 'main' },
+      source: { kind: 'git', url: 'https://github.com/samples/demo.git', ref: 'main' },
       resolvedCommit: 'c'.repeat(40),
       contentHash: 'a'.repeat(64),
       consentFingerprint: 'sha256-current',
@@ -281,8 +283,8 @@ describe('buildPluginList I/O', () => {
 
   it('reports the catalog ref a marketplace install came from', async () => {
     const plugin: ValidDiscoveredPlugin = {
-      pluginKey: 'orca-samples.demo',
-      rootDir: join(tmpdir(), 'plugins', 'orca-samples.demo', 'a'.repeat(64)),
+      pluginKey: 'samples.demo',
+      rootDir: join(tmpdir(), 'plugins', 'samples.demo', 'a'.repeat(64)),
       manifest,
       consentFingerprint: 'sha256-current',
       contentHash: 'a'.repeat(64),
@@ -299,7 +301,7 @@ describe('buildPluginList I/O', () => {
           ref: 'stable',
           resolvedCommit: 'f'.repeat(40)
         },
-        plugin: { url: 'https://github.com/orca-samples/demo.git', ref: 'main' }
+        plugin: { url: 'https://github.com/samples/demo.git', ref: 'main' }
       },
       resolvedCommit: 'c'.repeat(40),
       contentHash: 'a'.repeat(64),

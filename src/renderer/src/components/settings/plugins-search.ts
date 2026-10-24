@@ -7,7 +7,7 @@ export const getPluginsPaneSearchEntries = createLocalizedCatalog((): SettingsSe
     title: translate('auto.components.settings.plugins.search.title', 'Plugins'),
     description: translate(
       'auto.components.settings.plugins.search.description',
-      'Install and manage experimental Orca plugins.'
+      'Install and manage Orca plugins (Alpha).'
     ),
     keywords: [
       translate('auto.components.settings.plugins.search.install', 'install plugin'),
@@ -21,10 +21,7 @@ export const getPluginsPaneSearchEntries = createLocalizedCatalog((): SettingsSe
 export function getPluginsSectionPresentation() {
   return {
     title: translate('auto.components.settings.PluginsSettingsSection.title', 'Plugins'),
-    badge: translate(
-      'auto.components.settings.PluginsSettingsSection.experimental',
-      'Experimental'
-    ),
+    badge: translate('auto.components.settings.PluginsSettingsSection.alpha', 'Alpha'),
     description: translate(
       'auto.components.settings.PluginsSettingsSection.description',
       'Themes, languages, commands, and more. Plugins run on this computer.'

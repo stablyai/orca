@@ -1298,7 +1298,7 @@
         "linearTitle": "Linear",
         "linearDescription": "Orca에서 Linear가 작동하는 방식, 설정 체크리스트, 에이전트 스킬, 프롬프트 예시입니다.",
         "pluginsTitle": "플러그인",
-        "pluginsDescription": "실험적인 Orca 플러그인을 설치하고 관리합니다.",
+        "pluginsDescription": "Orca 플러그인을 설치하고 관리합니다(알파).",
         "tasksDescription": "제공업체를 연결하고 Linear 스킬을 설치한 다음 작업에 표시할 항목을 선택하세요.",
         "automationsTitle": "자동화",
         "automationsDescription": "에이전트 작업을 예약하고 사이드바에 자동화 표시 여부를 선택합니다.",
@@ -11938,13 +11938,12 @@
           "keepDisabled": "비활성화 유지",
           "enable": "플러그인 활성화",
           "capability": {
-            "workspaceRead": "포커스된 워크트리의 이름, 브랜치 및 터미널 목록 읽기",
-            "terminalSend": "보이는 터미널에 텍스트 입력 (항상 특정 터미널)",
+            "workspaceRead": "포커스된 워크스페이스의 이름, 브랜치, 터미널 목록을 읽고 워크스페이스가 생성되거나 제거될 때 알림 받기",
             "notificationsShow": "플러그인 이름이 표시된 데스크톱 알림 표시",
             "storage": "플러그인 자체 저장소 폴더에 데이터 저장",
-            "secrets": "플러그인 자체 암호화 금고에 비밀 저장 및 읽기",
-            "eventsSubscribe": "워크트리가 생성되거나 제거되고 에이전트 상태가 변경될 때 알림 받기",
-            "settingsOwn": "플러그인 자체 설정 읽기 및 변경"
+            "secrets": "플러그인 전용 암호화 파일에 비밀 정보를 저장하고 읽기",
+            "settingsOwn": "플러그인 자체 설정 읽기 및 변경",
+            "agentsRead": "에이전트 상태가 변경될 때 알림 받기"
           },
           "decisionFailed": "권한 결정을 저장할 수 없습니다. 다시 시도하세요.",
           "whatChanged": "변경 사항"
@@ -11964,7 +11963,6 @@
           "saveFailed": "개발 플러그인 경로를 저장할 수 없습니다.",
           "pathRequired": "플러그인 폴더 경로를 입력하세요.",
           "title": "개발",
-          "help": "이 컴퓨터의 폴더에서 플러그인을 불러옵니다.",
           "remove": "제거",
           "pathLabel": "개발 플러그인 폴더 경로",
           "placeholder": "/Users/you/plugins/my-plugin or C:\\Users\\you\\plugins\\my-plugin",
@@ -12070,12 +12068,11 @@
           "settingsUpdateFailed": "플러그인 설정을 저장할 수 없습니다.",
           "install": "플러그인 설치",
           "title": "플러그인",
-          "experimental": "실험적",
+          "alpha": "알파",
           "description": "테마, 언어, 명령 등. 플러그인은 이 컴퓨터에서 실행됩니다.",
           "logsFailed": "플러그인 로그를 로드할 수 없습니다.",
           "rollbackFailed": "이 플러그인을 롤백할 수 없습니다.",
           "fileTypeSuggestionsLabel": "알 수 없는 파일에 플러그인 제안",
-          "fileTypeSuggestionsDescription": "Orca가 열거나 강조할 수 없는 파일에 카탈로그 플러그인을 제안합니다.",
           "restartFailed": "{{value0}}을(를) 다시 시작할 수 없습니다."
         },
         "PluginCardAction": {
@@ -12190,7 +12187,7 @@
         "plugins": {
           "search": {
             "title": "플러그인",
-            "description": "실험적 Orca 플러그인을 설치하고 관리하세요.",
+            "description": "Orca 플러그인을 설치하고 관리합니다(알파).",
             "install": "플러그인 설치",
             "permissions": "플러그인 권한",
             "logs": "플러그인 로그",
@@ -13262,8 +13259,6 @@
         "PluginUpdateAllDialog": {
           "title": "플러그인을 업데이트할까요?",
           "reading": "각 업데이트의 변경 사항을 읽는 중…",
-          "someGrow": "새 접근 권한을 요청하는 업데이트는 아래에 펼쳐 표시됩니다. 나머지는 추가되는 항목만 바뀝니다.",
-          "noneGrow": "새 접근 권한을 요청하는 업데이트가 없습니다.",
           "previewError": "이 업데이트를 읽을 수 없습니다. 건너뜁니다.",
           "newAccess": "새 접근 권한: {{value0}}",
           "noNewAccess": "새 접근 권한 없음",
@@ -13297,8 +13292,7 @@
           "dark": "다크",
           "light": "라이트",
           "languageIncomplete": "{{value0}}% 번역됨. Orca 언어로 사용하기에는 너무 불완전합니다",
-          "languageCoverage": "인터페이스 언어 · {{value0}}% 번역됨",
-          "agent": "에이전트 프로필"
+          "languageCoverage": "인터페이스 언어 · {{value0}}% 번역됨"
         }
       },
       "right": {

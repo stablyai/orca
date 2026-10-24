@@ -196,6 +196,7 @@ function Harness({
       logsByPlugin={{}}
       onShowLogs={vi.fn()}
       onOpenShortcuts={vi.fn()}
+      onOpenFullAccessSetting={vi.fn()}
       page={page}
       sourcesOpen={false}
       setSourcesOpen={vi.fn()}
@@ -315,6 +316,28 @@ describe('PluginManager catalog', () => {
       decision: 'approve'
     })
     expect(onInstalled).toHaveBeenCalledWith(listing.pluginKey)
+  })
+
+  it('shows a full-access release as turned off and links to the setting instead of installing', async () => {
+    installApi({
+      listMarketplacePlugins: vi.fn().mockResolvedValue([
+        {
+          ...listing,
+          release: {
+            version: '1.0.0',
+            commit: PLUGIN_COMMIT,
+            contentHash: 'd'.repeat(64),
+            execution: 'trusted-worker',
+            minimumOrca: '1.0.0',
+            types: ['commands']
+          }
+        }
+      ])
+    })
+    const { container } = await render()
+    expect(container.textContent).toContain('Full access · turned off in settings')
+    expect(buttons('Review & install')).toHaveLength(0)
+    expect(buttons('Turn on in settings')).toHaveLength(1)
   })
 
   it('never offers Install for a listing the safety list revoked', async () => {

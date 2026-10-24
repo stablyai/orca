@@ -65,12 +65,17 @@ export type PluginInstallSource = z.infer<typeof pluginInstallSourceSchema>
  * source cannot turn URL parsing into arbitrary command execution. */
 export function isAllowedPluginGitUrl(value: string): boolean {
   const url = value.trim()
-  if (/^[^\s@/:]+@[A-Za-z0-9.-]+:[^\s]+$/.test(url)) {
-    return true
+  const scp = /^([^\s@/:]+)@([A-Za-z0-9.-]+):[^\s]+$/.exec(url)
+  if (scp) {
+    return isSafeGitAuthority(scp[1]!, scp[2]!)
   }
   try {
     const parsed = new URL(url)
-    if (!parsed.hostname || parsed.password) {
+    if (
+      !parsed.hostname ||
+      parsed.password ||
+      !isSafeGitAuthority(parsed.username, parsed.hostname)
+    ) {
       return false
     }
     if (parsed.protocol === 'https:') {
@@ -80,6 +85,11 @@ export function isAllowedPluginGitUrl(value: string): boolean {
   } catch {
     return false
   }
+}
+
+// Why: ssh reads a leading '-' as an option (-oProxyCommand), and '..' is never a real host.
+function isSafeGitAuthority(user: string, host: string): boolean {
+  return !user.startsWith('-') && !host.startsWith('-') && !host.includes('..')
 }
 
 export const pluginLockEntrySchema = z

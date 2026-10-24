@@ -50,7 +50,7 @@ describe('plugin schema issues', () => {
       })
     )
     expect(error.split('; ')).toEqual([
-      'execution: must be one of "data", "instructional", "sandboxed-ui", "trusted-worker"',
+      'execution: must be one of "data", "declarative", "sandboxed-ui", "trusted-worker"',
       'name: is required',
       'contributes.themes[0].label: must not be empty',
       'contributes.syntaxes: must be at most 16 items',

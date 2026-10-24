@@ -34,7 +34,7 @@ function manifest(overrides: ManifestOverrides = {}): PluginManifest {
   return pluginManifestSchema.parse({
     manifestVersion: 1,
     id: 'demo',
-    publisher: 'orca-samples',
+    publisher: 'samples',
     name: 'Demo',
     version: '1.0.0',
     engines: { orca: '>=1.0.0' },
@@ -125,6 +125,7 @@ describe('declared plugin artifacts', () => {
       userDataPath,
       hostVersion: '1.4.0',
       isPluginSystemEnabled: () => true,
+      isFullAccessAllowed: () => true,
       getDisabledPlugins: () => [],
       getPluginConsents: () => ({
         [pluginKey]: fingerprintPluginConsent(pluginManifest)

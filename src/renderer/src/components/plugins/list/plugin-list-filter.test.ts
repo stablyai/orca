@@ -20,6 +20,7 @@ function entry(
     updateVersion: null,
     catalogIds,
     updatable: false,
+    autoUpdate: { updatedTo: null, needsReview: false },
     installed: null,
     listing: sourceId
       ? {

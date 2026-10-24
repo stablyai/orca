@@ -95,6 +95,29 @@ describe('plugin list entries', () => {
     expect(orphan?.updatable).toBe(false)
   })
 
+  it('shows what automatic updates did only while it still matches the installed version', () => {
+    const plugin = fromCatalog(installed('acme.notes', 'Notes'), 'https://mirror.invalid/c.git')
+    const sources = [catalog('mirror', 'https://mirror.invalid/c.git')]
+    const newer = [listing('acme.notes', { marketplaceSourceId: 'mirror', version: '2.0.0' })]
+    const autoUpdates = { updated: {}, needsReview: { 'acme.notes': '2.0.0' } }
+    const [held] = buildPluginListEntries([plugin], newer, { sources, autoUpdates }).installed
+    expect(held?.autoUpdate).toEqual({ updatedTo: null, needsReview: true })
+
+    // Why: once the update is installed (or none is offered) "needs review" no longer applies.
+    const same = [listing('acme.notes', { marketplaceSourceId: 'mirror', version: '1.0.0' })]
+    const updated = { updated: { 'acme.notes': '1.0.0' }, needsReview: { 'acme.notes': '2.0.0' } }
+    const [done] = buildPluginListEntries([plugin], same, {
+      sources,
+      autoUpdates: updated
+    }).installed
+    expect(done?.autoUpdate).toEqual({ updatedTo: '1.0.0', needsReview: false })
+    const [stale] = buildPluginListEntries([{ ...plugin, version: '0.9.0' }], same, {
+      sources,
+      autoUpdates: updated
+    }).installed
+    expect(stale?.autoUpdate.updatedTo).toBeNull()
+  })
+
   it('tells two catalogs at one URL apart by ref', () => {
     const base = fromCatalog(installed('acme.notes', 'Notes'), 'https://official.invalid/c.git')
     const plugin: PluginHostListEntry = {

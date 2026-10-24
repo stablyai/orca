@@ -1438,7 +1438,7 @@
         "linearTitle": "Linear",
         "linearDescription": "Fonctionnement de Linear dans Orca, checklist de configuration, skill d'agent et exemples de prompts.",
         "pluginsTitle": "Plugins",
-        "pluginsDescription": "Installez et gérez les plugins Orca expérimentaux.",
+        "pluginsDescription": "Installez et gérez les plugins Orca (Alpha).",
         "tasksDescription": "Connectez des fournisseurs, installez le skill Linear et choisissez ce qui apparaît dans Tâches.",
         "artifactsTitle": "Artefacts",
         "artifactsDescription": "Partagez des fichiers HTML et Markdown avec votre équipe et gérez leurs liens publics.",
@@ -12089,13 +12089,12 @@
           "keepDisabled": "Garder désactivé",
           "enable": "Activer le plugin",
           "capability": {
-            "workspaceRead": "Lire le nom, la branche et la liste des terminaux de votre worktree actif",
-            "terminalSend": "Saisir du texte dans un terminal visible (toujours un terminal spécifique)",
+            "workspaceRead": "Lire le nom, la branche et la liste des terminaux de l'espace de travail actif, et être notifié quand des espaces de travail sont créés ou supprimés",
             "notificationsShow": "Afficher des notifications de bureau libellées avec le nom du plugin",
             "storage": "Stocker des données dans le dossier de stockage propre au plugin",
-            "secrets": "Stocker et lire des secrets dans le coffre chiffré propre au plugin",
-            "eventsSubscribe": "Être notifié quand des worktrees sont créés ou supprimés et quand le statut d'un agent change",
-            "settingsOwn": "Lire et modifier les paramètres propres au plugin"
+            "secrets": "Stocker et lire des secrets dans le fichier chiffré propre au plugin",
+            "settingsOwn": "Lire et modifier les paramètres propres au plugin",
+            "agentsRead": "Être notifié quand le statut d'un agent change"
           },
           "decisionFailed": "Impossible d'enregistrer la décision d'autorisation. Réessayez.",
           "whatChanged": "Ce qui a changé"
@@ -12115,7 +12114,6 @@
           "saveFailed": "Impossible d'enregistrer les chemins de plugins de développement.",
           "pathRequired": "Saisissez un chemin de dossier de plugin.",
           "title": "Développement",
-          "help": "Chargez des plugins depuis des dossiers de cet ordinateur.",
           "remove": "Supprimer",
           "pathLabel": "Chemin du dossier de plugin de développement",
           "placeholder": "/Users/you/plugins/my-plugin or C:\\Users\\you\\plugins\\my-plugin",
@@ -12221,12 +12219,11 @@
           "settingsUpdateFailed": "Impossible d'enregistrer les paramètres du plugin.",
           "install": "Installer le plugin",
           "title": "Plugins",
-          "experimental": "Expérimental",
+          "alpha": "Alpha",
           "description": "Thèmes, langues, commandes et plus encore. Les plugins s'exécutent sur cet ordinateur.",
           "logsFailed": "Impossible de charger les logs du plugin.",
           "rollbackFailed": "Impossible de restaurer la version précédente de ce plugin.",
           "fileTypeSuggestionsLabel": "Suggérer des plugins pour les fichiers inconnus",
-          "fileTypeSuggestionsDescription": "Propose un plugin du catalogue quand Orca ne peut pas ouvrir ou colorer un fichier.",
           "restartFailed": "Impossible de redémarrer {{value0}}."
         },
         "PluginCardAction": {
@@ -12341,7 +12338,7 @@
         "plugins": {
           "search": {
             "title": "Plugins",
-            "description": "Installez et gérez les plugins Orca expérimentaux.",
+            "description": "Installez et gérez les plugins Orca (Alpha).",
             "install": "installer le plugin",
             "permissions": "permissions du plugin",
             "logs": "logs du plugin",
@@ -13422,8 +13419,6 @@
         "PluginUpdateAllDialog": {
           "title": "Mettre à jour les plugins ?",
           "reading": "Lecture des changements de chaque mise à jour…",
-          "someGrow": "Les mises à jour qui demandent un nouvel accès sont détaillées ci-dessous. Les autres ne changent que ce qu’elles ajoutent.",
-          "noneGrow": "Aucune de ces mises à jour ne demande de nouvel accès.",
           "previewError": "Impossible de lire cette mise à jour. Elle sera ignorée.",
           "newAccess": "Nouvel accès : {{value0}}",
           "noNewAccess": "Aucun nouvel accès",
@@ -13457,8 +13452,7 @@
           "dark": "Sombre",
           "light": "Clair",
           "languageIncomplete": "Traduit à {{value0}} %, trop incomplet pour servir de langue à Orca",
-          "languageCoverage": "Langue de l’interface · traduite à {{value0}} %",
-          "agent": "Profil d’agent"
+          "languageCoverage": "Langue de l’interface · traduite à {{value0}} %"
         }
       },
       "right": {

@@ -12,7 +12,6 @@ export type PluginContributionKind =
   | 'language'
   | 'panel'
   | 'recipe'
-  | 'agent'
 
 /** One named thing a plugin adds, ready to show as a row. */
 export type PluginContribution = {
@@ -39,7 +38,6 @@ export type PluginContributionSource = {
   languages: readonly { locale: string; coverage?: number }[]
   panels: readonly string[]
   recipes: readonly string[]
-  agents: readonly string[]
 }
 
 export const EMPTY_CONTRIBUTION_SOURCE: PluginContributionSource = {
@@ -49,8 +47,7 @@ export const EMPTY_CONTRIBUTION_SOURCE: PluginContributionSource = {
   syntaxes: [],
   languages: [],
   panels: [],
-  recipes: [],
-  agents: []
+  recipes: []
 }
 
 const FILE_LIST_LIMIT = 4
@@ -82,8 +79,7 @@ export function manifestContributionSource(manifest: PluginManifest): PluginCont
     syntaxes: contributes.syntaxes,
     languages: contributes.languagePacks,
     panels: contributes.panels.map((panel) => panel.title),
-    recipes: contributes.vmRecipes.map((recipe) => nameFromContributionPath(recipe.path)),
-    agents: contributes.agents.map((agent) => nameFromContributionPath(agent.path))
+    recipes: contributes.vmRecipes.map((recipe) => nameFromContributionPath(recipe.path))
   }
 }
 
@@ -115,8 +111,7 @@ export function summaryContributionSource(
     })),
     languages: of('languagePacks').map((item) => ({ locale: item.name })),
     panels: of('panels').map((item) => item.name),
-    recipes: of('vmRecipes').map((item) => nameFromContributionPath(item.name)),
-    agents: of('agents').map((item) => nameFromContributionPath(item.name))
+    recipes: of('vmRecipes').map((item) => nameFromContributionPath(item.name))
   }
 }
 
@@ -255,15 +250,6 @@ export function describePluginContributions(
       tone: 'default'
     })
   }
-  for (const [index, title] of source.agents.entries()) {
-    rows.push({
-      key: `agent:${index}`,
-      kind: 'agent',
-      title,
-      detail: translate('auto.components.settings.pluginContributions.agent', 'Agent profile'),
-      tone: 'default'
-    })
-  }
   return rows
 }
 
@@ -274,8 +260,7 @@ const KIND_TYPE: Record<PluginContributionKind, PluginCatalogType> = {
   syntax: 'syntax',
   language: 'interface-language',
   panel: 'panel',
-  recipe: 'instructions',
-  agent: 'instructions'
+  recipe: 'instructions'
 }
 
 /** Catalog types no named row (or command) covers, e.g. a disabled plugin's theme. */

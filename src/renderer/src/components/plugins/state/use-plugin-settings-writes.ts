@@ -1,3 +1,4 @@
+import { isPluginAutoUpdateOn } from '../../../../../shared/plugins/catalog/plugin-update-policy'
 import { useCallback, useState, type MutableRefObject } from 'react'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { translate } from '@/i18n/i18n'
@@ -84,6 +85,31 @@ export function usePluginSettingsWrites({
     }
   }
 
+  const toggleAutoUpdate = async (): Promise<void> => {
+    setSettingsError(null)
+    try {
+      await updateSettings({
+        pluginUpdatePolicy: isPluginAutoUpdateOn(settings) ? 'manual' : 'auto'
+      })
+    } catch {
+      if (mountedRef.current) {
+        setSettingsError(saveFailed())
+      }
+    }
+  }
+
+  const toggleFullAccess = async (): Promise<void> => {
+    setSettingsError(null)
+    try {
+      await updateSettings({ pluginFullAccessEnabled: !settings.pluginFullAccessEnabled })
+      await rediscover()
+    } catch {
+      if (mountedRef.current) {
+        setSettingsError(saveFailed())
+      }
+    }
+  }
+
   return {
     featureBusy,
     devPathsBusy,
@@ -91,6 +117,8 @@ export function usePluginSettingsWrites({
     reset,
     toggleFeature,
     toggleSuggestions,
+    toggleAutoUpdate,
+    toggleFullAccess,
     updateDevPaths
   }
 }

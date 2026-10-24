@@ -98,7 +98,11 @@ export function registerPluginHandlers(
   }
 
   store.onSettingsChanged((updates) => {
-    if ('pluginSystemEnabled' in updates || 'devPluginPaths' in updates) {
+    if (
+      'pluginSystemEnabled' in updates ||
+      'pluginFullAccessEnabled' in updates ||
+      'devPluginPaths' in updates
+    ) {
       // Main owns lifecycle refresh even when a caller crashes before its follow-up refresh.
       void pluginService.refresh().catch((error) => {
         console.warn('[plugins] failed to apply plugin settings change:', error)

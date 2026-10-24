@@ -29,7 +29,7 @@ const items: ActivityBarItem[] = [
   { id: 'ports', icon: Files, title: 'Ports', shortcut: '', sshOnly: true },
   // Plugin panels carry no visibility flags, so they show in every context.
   {
-    id: 'plugin:orca-samples.my-plugin/dashboard',
+    id: 'plugin:samples.my-plugin/dashboard',
     icon: Files,
     title: 'Dashboard',
     shortcut: ''
@@ -44,7 +44,7 @@ describe('getVisibleRightSidebarActivityItems', () => {
         isFolderWorkspace: false,
         hasSshHost: false
       }).map((item) => item.id)
-    ).toEqual(['explorer', 'source-control', 'plugin:orca-samples.my-plugin/dashboard'])
+    ).toEqual(['explorer', 'source-control', 'plugin:samples.my-plugin/dashboard'])
 
     expect(
       getVisibleRightSidebarActivityItems(items, {
@@ -52,7 +52,7 @@ describe('getVisibleRightSidebarActivityItems', () => {
         isFolderWorkspace: false,
         hasSshHost: true
       }).map((item) => item.id)
-    ).toEqual(['explorer', 'source-control', 'ports', 'plugin:orca-samples.my-plugin/dashboard'])
+    ).toEqual(['explorer', 'source-control', 'ports', 'plugin:samples.my-plugin/dashboard'])
   })
 
   it('shows Workspaces only for folder workspaces and hides git tabs for all folder scopes', () => {
@@ -67,7 +67,7 @@ describe('getVisibleRightSidebarActivityItems', () => {
       'workspaces',
       'pr-checks',
       'ports',
-      'plugin:orca-samples.my-plugin/dashboard'
+      'plugin:samples.my-plugin/dashboard'
     ])
 
     expect(
@@ -76,6 +76,6 @@ describe('getVisibleRightSidebarActivityItems', () => {
         isFolderWorkspace: false,
         hasSshHost: true
       }).map((item) => item.id)
-    ).toEqual(['explorer', 'ports', 'plugin:orca-samples.my-plugin/dashboard'])
+    ).toEqual(['explorer', 'ports', 'plugin:samples.my-plugin/dashboard'])
   })
 })

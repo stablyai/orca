@@ -1,6 +1,7 @@
 import { Check } from 'lucide-react'
 import type { PluginMarketplaceHostInstallPreview } from '../../../../../preload/api-types'
 import { pluginExecutionProfile } from '../../../../../shared/plugins/plugin-execution-profile'
+import type { PluginContributionPoint } from '../../../../../shared/plugins/plugin-contribution-points'
 import { pluginContributionSummary } from '../../../../../shared/plugins/plugin-contribution-summary'
 import { translate } from '@/i18n/i18n'
 import type { PluginListEntry } from '../list/plugin-list-entries'
@@ -19,15 +20,80 @@ export type UpdateCandidate = {
   needsOrca: string | null
 }
 
-/** Capabilities the update asks for that the installed version doesn't have. */
-export function newAccess(
+/** The installed repository when main found the catalog now points the update somewhere else. */
+export function movedFromSource(
   entry: PluginListEntry,
   preview: PluginMarketplaceHostInstallPreview
-): string[] {
-  const held = new Set(entry.installed?.capabilities.map((capability) => capability.kind) ?? [])
-  return preview.manifest.capabilities
-    .map((capability) => capability.kind)
-    .filter((kind) => !held.has(kind))
+): string | null {
+  if (!preview.repositoryMoved) {
+    return null
+  }
+  const installed = entry.installed?.source
+  return installed?.kind === 'marketplace' ? installed.reference : ''
+}
+
+const contributionGrowthLabel = (point: PluginContributionPoint): string => {
+  if (point === 'keybindings') {
+    return translate(
+      'auto.components.settings.PluginUpdateAllDialog.newShortcuts',
+      'Adds keyboard shortcuts'
+    )
+  }
+  if (point === 'commands') {
+    return translate('auto.components.settings.PluginUpdateAllDialog.newCommands', 'Adds commands')
+  }
+  if (point === 'panels') {
+    return translate('auto.components.settings.PluginUpdateAllDialog.newPanels', 'Adds panels')
+  }
+  if (point === 'events') {
+    return translate(
+      'auto.components.settings.PluginUpdateAllDialog.newEvents',
+      'Listens for more events'
+    )
+  }
+  if (point === 'vmRecipes') {
+    return translate(
+      'auto.components.settings.PluginUpdateAllDialog.newRecipes',
+      'Changes virtual machine recipes'
+    )
+  }
+  return translate(
+    'auto.components.settings.PluginUpdateAllDialog.newContributions',
+    'Adds new features that act for you'
+  )
+}
+
+/** What main found the update adds over the installed version, as review lines. */
+function updateChanges(preview: PluginMarketplaceHostInstallPreview): {
+  capabilities: string[]
+  warnings: string[]
+} {
+  const growth = preview.accessGrowth
+  const execution = growth?.execution
+    ? pluginTrustWarnings(
+        pluginTrust({
+          execution: growth.execution,
+          points: pluginPointsFromManifest(preview.manifest)
+        })
+      )
+    : []
+  const contributions = (growth?.contributions ?? []).map(contributionGrowthLabel)
+  return {
+    capabilities: growth?.capabilities ?? [],
+    warnings: [...new Set([...execution, ...contributions])]
+  }
+}
+
+export function updateAsksAgain(
+  entry: PluginListEntry,
+  preview: PluginMarketplaceHostInstallPreview
+): boolean {
+  const changes = updateChanges(preview)
+  return (
+    changes.capabilities.length > 0 ||
+    changes.warnings.length > 0 ||
+    movedFromSource(entry, preview) !== null
+  )
 }
 
 export function isCurrent(
@@ -35,20 +101,6 @@ export function isCurrent(
   preview: PluginMarketplaceHostInstallPreview | null
 ): boolean {
   return Boolean(preview && entry.installed?.source?.contentHash === preview.contentHash)
-}
-
-/** Unknown older-host profiles cannot establish that execution authority is unchanged. */
-export function executionChanges(
-  entry: PluginListEntry,
-  preview: PluginMarketplaceHostInstallPreview
-): string[] {
-  const execution = pluginExecutionProfile(preview.manifest)
-  if (execution === 'data' || execution === entry.installed?.execution) {
-    return []
-  }
-  return pluginTrustWarnings(
-    pluginTrust({ execution, points: pluginPointsFromManifest(preview.manifest) })
-  )
 }
 
 export function CandidateRow({
@@ -65,8 +117,10 @@ export function CandidateRow({
   onCheckedChange: (checked: boolean) => void
 }): React.JSX.Element {
   const { entry, preview, error, needsOrca } = candidate
-  const added = preview ? newAccess(entry, preview) : []
-  const execution = preview ? executionChanges(entry, preview) : []
+  const { capabilities: added, warnings } = preview
+    ? updateChanges(preview)
+    : { capabilities: [], warnings: [] }
+  const movedFrom = preview ? movedFromSource(entry, preview) : null
   const checkboxId = `plugin-update-${entry.pluginKey}`
   let note: React.ReactNode
   if (done) {
@@ -114,10 +168,19 @@ export function CandidateRow({
         )}
       </p>
     )
-  } else if (added.length > 0 || execution.length > 0) {
+  } else if (added.length > 0 || warnings.length > 0 || movedFrom !== null) {
     note = (
       <ul className="mt-1.5 space-y-0.5 border-l-2 border-status-warning pl-2 text-xs">
-        {execution.map((warning) => (
+        {movedFrom !== null && preview ? (
+          <li className="text-status-warning-text">
+            {translate(
+              'auto.components.settings.PluginUpdateAllDialog.sourceMoved',
+              'Now comes from a different repository: {{value0}} (was {{value1}})',
+              { value0: preview.source.url, value1: movedFrom }
+            )}
+          </li>
+        ) : null}
+        {warnings.map((warning) => (
           <li key={warning} className="text-status-warning-text">
             {warning}
           </li>
@@ -188,7 +251,7 @@ export function CandidateRow({
                 points: pluginPointsFromManifest(preview.manifest)
               })
             )
-              .filter((warning) => !execution.includes(warning))
+              .filter((warning) => !warnings.includes(warning))
               .map((warning) => (
                 <p key={warning} className="text-xs text-muted-foreground">
                   {warning}

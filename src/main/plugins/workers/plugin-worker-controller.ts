@@ -1,5 +1,4 @@
 import type { PluginCapabilityKind } from '../../../shared/plugins/plugin-capabilities'
-import type { PluginEventName } from '../../../shared/plugins/manifest/plugin-manifest'
 import type { PluginPanelActionOutcome } from '../../../shared/plugins/plugin-panel-bridge'
 import {
   PLUGIN_COMMAND_EXTENSION_POINT,
@@ -34,7 +33,6 @@ export type PluginWorkerControllerOptions = {
   ) => Promise<PluginPanelActionOutcome>
   log: (pluginKey: string) => (level: 'info' | 'warn' | 'error', line: string) => void
   onStateChanged: (pluginKey: string) => void
-  onWorkerGone: (pluginKey: string) => void
 }
 
 export class PluginWorkerController {
@@ -51,8 +49,7 @@ export class PluginWorkerController {
       workerFactory: options.workerFactory,
       executeHostCall: options.executeHostCall,
       log: options.log,
-      onWorkerStateChange: options.onStateChanged,
-      onWorkerGone: options.onWorkerGone
+      onWorkerStateChange: options.onStateChanged
     })
   }
 
@@ -166,10 +163,6 @@ export class PluginWorkerController {
 
   reapIdle(): void {
     this.manager.reapIdle()
-  }
-
-  deliverEventIfRunning(pluginKey: string, event: PluginEventName, payload: unknown): void {
-    this.manager.deliverEventIfRunning(pluginKey, event, payload)
   }
 
   dispose(): Promise<void> {

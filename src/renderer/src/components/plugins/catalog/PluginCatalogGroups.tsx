@@ -1,6 +1,7 @@
 import { AlertTriangle, CircleAlert } from 'lucide-react'
 import type { PluginMarketplaceHostSourceState } from '../../../../../preload/api-types'
 import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
 import { formatShortTimeAgo } from '@/lib/short-time-ago'
 import { Button } from '../../ui/button'
 import type { PluginCatalogFilter } from '../list/PluginCatalogLayout'
@@ -76,6 +77,7 @@ export type CatalogCardHandlers = {
   /** Requests confirmation before deleting plugin data. */
   onRemove: (pluginKey: string) => void
   onToggleEnabled: (pluginKey: string) => void
+  onOpenFullAccessSetting: () => void
 }
 
 function CatalogCard({
@@ -90,20 +92,28 @@ function CatalogCard({
   const listing = entry.listing
   const installed = entry.installed
   const release = listing?.release
+  const fullAccessEnabled = useAppStore((s) => s.settings?.pluginFullAccessEnabled === true)
+  const fullAccessOff = !installed && release?.execution === 'trusted-worker' && !fullAccessEnabled
   // Why the summary only below its cap: a capped list can't rule a command out.
-  const trustLabel = release
-    ? pluginTrustLabel(
-        pluginTrust({
-          execution: release.execution,
-          points:
-            release.contributes && release.contributes.length < PLUGIN_CONTRIBUTION_SUMMARY_LIMIT
-              ? pluginPointsFromSummary(release.contributes)
-              : null
-        })
+  const trustLabel = fullAccessOff
+    ? translate(
+        'auto.components.settings.PluginCatalogGroups.fullAccessOff',
+        'Full access · turned off in settings'
       )
-    : null
+    : release
+      ? pluginTrustLabel(
+          pluginTrust({
+            execution: release.execution,
+            points:
+              release.contributes && release.contributes.length < PLUGIN_CONTRIBUTION_SUMMARY_LIMIT
+                ? pluginPointsFromSummary(release.contributes)
+                : null
+          })
+        )
+      : null
   const statusText = installed
-    ? installedPluginPresentation(installed, entry.updateVersion).statusText
+    ? installedPluginPresentation(installed, entry.updateVersion, false, entry.autoUpdate)
+        .statusText
     : undefined
   return (
     <PluginCard
@@ -139,6 +149,7 @@ function CatalogCard({
           phase={phase}
           orcaVersion={handlers.orcaVersion}
           refreshing={handlers.refreshing}
+          onOpenFullAccessSetting={fullAccessOff ? handlers.onOpenFullAccessSetting : undefined}
           onInstall={() => {
             if (listing) {
               void handlers.install.install(listing)

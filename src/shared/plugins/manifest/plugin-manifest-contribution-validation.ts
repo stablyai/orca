@@ -1,6 +1,7 @@
 import type { RefinementCtx } from 'zod'
 import { isPluginCommandAliasActionId } from '../plugin-command-actions'
 import { getKeybindingConflictIdentity } from '../../keybindings'
+import { PLUGIN_EVENT_CAPABILITY, type PluginEventName } from '../plugin-event-contribution'
 
 type IdentifiedContribution = { id: string }
 type PathContribution = { path: string }
@@ -9,12 +10,11 @@ type ContributionValidationManifest = {
   main?: string
   contributes: {
     panels: IdentifiedContribution[]
-    commands: (IdentifiedContribution & { action?: string; context?: 'global' | 'worktree' })[]
-    events: { on: string }[]
+    commands: (IdentifiedContribution & { action?: string; context?: 'global' | 'workspace' })[]
+    events: { on: PluginEventName }[]
     languagePacks: { locale: string }[]
-    keybindings: { command: string; key: string; when?: 'global' | 'worktree' }[]
+    keybindings: { command: string; key: string; when?: 'global' | 'workspace' }[]
     vmRecipes: PathContribution[]
-    agents: PathContribution[]
     themes: IdentifiedContribution[]
     terminalThemes: IdentifiedContribution[]
     iconThemes: IdentifiedContribution[]
@@ -78,15 +78,13 @@ export function validatePluginManifestContributions(
     'language pack locale',
     ctx
   )
-  for (const path of ['vmRecipes', 'agents'] as const) {
-    rejectDuplicateValues(
-      manifest.contributes[path],
-      (entry) => (entry as PathContribution).path,
-      path,
-      `${path} path`,
-      ctx
-    )
-  }
+  rejectDuplicateValues(
+    manifest.contributes.vmRecipes,
+    (entry) => (entry as PathContribution).path,
+    'vmRecipes',
+    'vmRecipes path',
+    ctx
+  )
   const keybindingIdentities = new Set<string>()
   for (const [index, keybinding] of manifest.contributes.keybindings.entries()) {
     const identities = (['darwin', 'linux', 'win32'] as const).map((platform) =>
@@ -149,14 +147,14 @@ export function validatePluginManifestContributions(
       message: 'required when contributes.events is non-empty'
     })
   }
-  if (
-    manifest.contributes.events.length > 0 &&
-    !manifest.capabilities.some((capability) => capability.kind === 'events:subscribe')
-  ) {
-    ctx.addIssue({
-      code: 'custom',
-      path: ['capabilities'],
-      message: 'events:subscribe capability required when contributes.events is non-empty'
-    })
+  for (const [index, subscription] of manifest.contributes.events.entries()) {
+    const required = PLUGIN_EVENT_CAPABILITY[subscription.on]
+    if (!manifest.capabilities.some((capability) => capability.kind === required)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['contributes', 'events', index, 'on'],
+        message: `${subscription.on} requires the ${required} capability`
+      })
+    }
   }
 }

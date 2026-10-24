@@ -16,14 +16,14 @@ import {
 
 export type PluginCommandKeybinding = {
   key: string
-  when: 'global' | 'worktree'
+  when: 'global' | 'workspace'
 }
 
 export type PluginCommandRegistration = {
   pluginKey: string
   id: string
   title: string
-  context: 'global' | 'worktree'
+  context: 'global' | 'workspace'
   handler: { type: 'built-in'; action: PluginCommandAliasActionId } | { type: 'worker' }
   keybindings: PluginCommandKeybinding[]
 }

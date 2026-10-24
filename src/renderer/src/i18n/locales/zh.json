@@ -1298,7 +1298,7 @@
         "linearTitle": "Linear",
         "linearDescription": "Linear 在 Orca 中的工作方式、设置清单、智能体技能和提示词示例。",
         "pluginsTitle": "插件",
-        "pluginsDescription": "安装和管理实验性 Orca 插件。",
+        "pluginsDescription": "安装和管理 Orca 插件（Alpha 版）。",
         "tasksDescription": "连接提供商、安装 Linear 技能并选择要在任务中显示的内容。",
         "artifactsTitle": "工件",
         "artifactsDescription": "与您的团队共享 HTML 和 Markdown 文件并管理他们的公共链接。",
@@ -11938,13 +11938,12 @@
           "keepDisabled": "保持禁用",
           "enable": "启用插件",
           "capability": {
-            "workspaceRead": "读取您聚焦的工作树的名称、分支和终端列表",
-            "terminalSend": "在您可见的终端中输入文本（始终是特定终端）",
+            "workspaceRead": "读取当前聚焦工作区的名称、分支和终端列表，并在工作区创建或移除时获得通知",
             "notificationsShow": "显示标有插件名称的桌面通知",
             "storage": "在插件自己的存储文件夹中存储数据",
-            "secrets": "在插件自己的加密保险库中存储和读取密钥",
-            "eventsSubscribe": "在工作树创建或移除以及智能体状态更改时获得通知",
-            "settingsOwn": "读取和更改插件自己的设置"
+            "secrets": "在插件自己的加密文件中存储和读取密钥",
+            "settingsOwn": "读取和更改插件自己的设置",
+            "agentsRead": "在智能体状态更改时获得通知"
           },
           "decisionFailed": "无法保存权限决定。请重试。",
           "whatChanged": "变更内容"
@@ -11964,7 +11963,6 @@
           "saveFailed": "无法保存开发插件路径。",
           "pathRequired": "请输入插件文件夹路径。",
           "title": "开发",
-          "help": "从这台电脑上的文件夹加载插件。",
           "remove": "移除",
           "pathLabel": "开发插件文件夹路径",
           "placeholder": "/Users/you/plugins/my-plugin or C:\\Users\\you\\plugins\\my-plugin",
@@ -12070,12 +12068,11 @@
           "settingsUpdateFailed": "无法保存插件设置。",
           "install": "安装插件",
           "title": "插件",
-          "experimental": "实验性",
+          "alpha": "Alpha 版",
           "description": "主题、语言、命令等。插件在这台电脑上运行。",
           "logsFailed": "无法加载插件日志。",
           "rollbackFailed": "无法回滚此插件。",
           "fileTypeSuggestionsLabel": "为未知文件推荐插件",
-          "fileTypeSuggestionsDescription": "当 Orca 无法打开或高亮文件时，推荐插件市场中的插件。",
           "restartFailed": "无法重新启动 {{value0}}。"
         },
         "PluginCardAction": {
@@ -12190,7 +12187,7 @@
         "plugins": {
           "search": {
             "title": "插件",
-            "description": "安装和管理实验性 Orca 插件。",
+            "description": "安装和管理 Orca 插件（Alpha 版）。",
             "install": "安装插件",
             "permissions": "插件权限",
             "logs": "插件日志",
@@ -13262,8 +13259,6 @@
         "PluginUpdateAllDialog": {
           "title": "要更新插件吗？",
           "reading": "正在读取每个更新的变更…",
-          "someGrow": "需要新访问权限的更新在下方展开显示，其余更新只改变所添加的内容。",
-          "noneGrow": "这些更新都不需要新的访问权限。",
           "previewError": "无法读取此更新，将跳过。",
           "newAccess": "新访问权限：{{value0}}",
           "noNewAccess": "无新访问权限",
@@ -13297,8 +13292,7 @@
           "dark": "深色",
           "light": "浅色",
           "languageIncomplete": "已翻译 {{value0}}%，不够完整，无法用作 Orca 的语言",
-          "languageCoverage": "界面语言 · 已翻译 {{value0}}%",
-          "agent": "智能体配置"
+          "languageCoverage": "界面语言 · 已翻译 {{value0}}%"
         }
       },
       "right": {

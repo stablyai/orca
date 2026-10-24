@@ -21,11 +21,11 @@
       "type": "string",
       "enum": [
         "data",
-        "instructional",
+        "declarative",
         "sandboxed-ui",
         "trusted-worker"
       ],
-      "description": "Most authority the plugin needs, least first: `data` (themes, syntaxes, translations), `instructional` (commands, shortcuts, recipes, agents), `sandboxed-ui` (panels), `trusted-worker` (`main` and events). Contributions beyond it fail validation.",
+      "description": "Most authority the plugin needs, least first: `data` (themes, syntaxes, translations), `declarative` (commands, shortcuts, recipes), `sandboxed-ui` (panels), `trusted-worker` (`main` and events). Contributions beyond it fail validation.",
       "x-orca-since": "1.4.240",
       "examples": [
         "data"
@@ -45,7 +45,7 @@
       "type": "string",
       "maxLength": 64,
       "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
-      "description": "Publisher slug, kebab-case, usually your GitHub user or organization. The reserved names `constructor` and `prototype` are refused.",
+      "description": "Publisher slug, kebab-case, usually your GitHub user or organization. The reserved names `constructor` and `prototype` are refused. The publishers `stablyai`, `orca`, `orca-*`, `official`, `anthropic`, `openai` and `github`, and ids starting `orca-`, install only from the stablyai organization.",
       "x-orca-since": "1.4.160",
       "examples": [
         "acme"
@@ -244,16 +244,6 @@
             "$ref": "#/$defs/VmRecipeContribution"
           }
         },
-        "agents": {
-          "default": [],
-          "description": "Reserved for coding-agent definitions; must be empty in manifest format 2 until their format is defined. At most 64.",
-          "x-orca-since": "1.4.160",
-          "maxItems": 64,
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/AgentProfileContribution"
-          }
-        },
         "themes": {
           "default": [],
           "description": "App color themes. At most 64.",
@@ -294,6 +284,13 @@
             "$ref": "#/$defs/SyntaxContribution"
           }
         },
+        "agents": {
+          "description": "Reserved for coding-agent definitions; must be empty until their format is defined.",
+          "x-orca-since": "1.4.240",
+          "maxItems": 0,
+          "type": "array",
+          "items": {}
+        },
         "skills": {
           "description": "Reserved for agent skills; must be empty until their format is defined.",
           "x-orca-since": "1.4.240",
@@ -324,6 +321,20 @@
         },
         "settings": {
           "description": "Reserved for plugin settings; must be empty until their format is defined.",
+          "x-orca-since": "1.4.240",
+          "maxItems": 0,
+          "type": "array",
+          "items": {}
+        },
+        "statusBarItems": {
+          "description": "Reserved for status bar items; must be empty until their format is defined.",
+          "x-orca-since": "1.4.240",
+          "maxItems": 0,
+          "type": "array",
+          "items": {}
+        },
+        "sidebarCards": {
+          "description": "Reserved for sidebar cards; must be empty until their format is defined.",
           "x-orca-since": "1.4.240",
           "maxItems": 0,
           "type": "array",
@@ -385,7 +396,7 @@
       }
     },
     "pluginApi": {
-      "description": "Major version of the plugin host API this plugin targets. Optional (defaults to 1), and refused on `data` and `instructional` plugins, which never call it.",
+      "description": "Major version of the plugin host API this plugin targets. Optional (defaults to 1), and refused on `data` and `declarative` plugins, which never call it.",
       "x-orca-since": "1.4.160",
       "type": "number",
       "const": 1
@@ -426,14 +437,41 @@
           ]
         },
         "icon": {
-          "description": "Lucide icon name shown in the right-sidebar activity bar.",
+          "description": "Icon shown in the right-sidebar activity bar. Defaults to `plug`.",
           "x-orca-since": "1.4.160",
           "examples": [
-            "layout-dashboard"
+            "database"
           ],
           "type": "string",
-          "minLength": 1,
-          "maxLength": 64
+          "enum": [
+            "activity",
+            "bar-chart-3",
+            "bell",
+            "blocks",
+            "book",
+            "bot",
+            "bug",
+            "calendar",
+            "cloud",
+            "code",
+            "database",
+            "file-text",
+            "flag",
+            "folder",
+            "gauge",
+            "globe",
+            "hammer",
+            "layers",
+            "lightbulb",
+            "package",
+            "plug",
+            "puzzle",
+            "rocket",
+            "star",
+            "terminal",
+            "wrench",
+            "zap"
+          ]
         },
         "entry": {
           "type": "string",
@@ -480,12 +518,16 @@
           ]
         },
         "context": {
-          "description": "`worktree` hides the command when no worktree is active. Defaults to `global`.",
+          "description": "`workspace` hides the command when no workspace is active. Defaults to `global`.",
           "x-orca-since": "1.4.160",
+          "x-orca-enum-since": {
+            "global": "1.4.160",
+            "workspace": "1.4.240"
+          },
           "type": "string",
           "enum": [
             "global",
-            "worktree"
+            "workspace"
           ]
         },
         "action": {
@@ -539,7 +581,7 @@
         "title"
       ],
       "additionalProperties": false,
-      "description": "A command palette entry. Requires the `instructional` execution profile or higher."
+      "description": "A command palette entry. Requires the `declarative` execution profile or higher."
     },
     "EventContribution": {
       "type": "object",
@@ -547,15 +589,15 @@
         "on": {
           "type": "string",
           "enum": [
-            "worktree.created",
-            "worktree.removed",
+            "workspace.created",
+            "workspace.removed",
             "agent.status.changed"
           ],
           "description": "Event delivered to the plugin worker.",
           "x-orca-since": "1.4.160",
           "x-orca-enum-since": {
-            "worktree.created": "1.4.160",
-            "worktree.removed": "1.4.160",
+            "workspace.created": "1.4.240",
+            "workspace.removed": "1.4.240",
             "agent.status.changed": "1.4.160"
           }
         }
@@ -564,7 +606,7 @@
         "on"
       ],
       "additionalProperties": false,
-      "description": "An event subscription. Requires `main`, the `trusted-worker` execution profile and the `events:subscribe` capability."
+      "description": "An event subscription. Requires `main`, the `trusted-worker` execution profile and the capability of the event's domain: `workspace:read` for workspace events, `agents:read` for agent events."
     },
     "LanguagePackContribution": {
       "type": "object",
@@ -626,10 +668,14 @@
         "when": {
           "description": "Where the shortcut is active; must match its command's `context`.",
           "x-orca-since": "1.4.160",
+          "x-orca-enum-since": {
+            "global": "1.4.160",
+            "workspace": "1.4.240"
+          },
           "type": "string",
           "enum": [
             "global",
-            "worktree"
+            "workspace"
           ]
         }
       },
@@ -660,27 +706,6 @@
       ],
       "additionalProperties": false,
       "description": "A virtual machine environment recipe."
-    },
-    "AgentProfileContribution": {
-      "type": "object",
-      "properties": {
-        "path": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 1024,
-          "pattern": "^[^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ](?:[\\\\/][^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ])*$",
-          "description": "JSON agent profile file, listed once. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused.",
-          "x-orca-since": "1.4.160",
-          "examples": [
-            "agents/reviewer.json"
-          ]
-        }
-      },
-      "required": [
-        "path"
-      ],
-      "additionalProperties": false,
-      "description": "Reserved for coding-agent definitions. Manifest format 2 refuses a non-empty `agents` list until their format is defined."
     },
     "ThemeContribution": {
       "type": "object",
@@ -831,22 +856,22 @@
           "type": "string",
           "enum": [
             "workspace:read",
+            "agents:read",
             "terminal:send",
             "notifications:show",
-            "storage",
-            "secrets",
-            "events:subscribe",
+            "storage:own",
+            "secrets:own",
             "settings:own"
           ],
           "description": "Capability granted on user consent.",
           "x-orca-since": "1.4.160",
           "x-orca-enum-since": {
             "workspace:read": "1.4.160",
+            "agents:read": "1.4.240",
             "terminal:send": "1.4.160",
             "notifications:show": "1.4.160",
-            "storage": "1.4.160",
-            "secrets": "1.4.160",
-            "events:subscribe": "1.4.160",
+            "storage:own": "1.4.240",
+            "secrets:own": "1.4.240",
             "settings:own": "1.4.160"
           }
         }

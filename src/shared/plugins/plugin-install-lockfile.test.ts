@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { pluginInstallSourceSchema } from './plugin-install-lockfile'
+import { isAllowedPluginGitUrl, pluginInstallSourceSchema } from './plugin-install-lockfile'
 
 describe('pluginInstallSourceSchema marketplace provenance', () => {
   it('records both the marketplace snapshot and plugin Git ref', () => {
@@ -45,5 +45,26 @@ describe('pluginInstallSourceSchema marketplace provenance', () => {
         }
       }).success
     ).toBe(false)
+  })
+})
+
+describe('isAllowedPluginGitUrl', () => {
+  it.each([
+    'https://github.com/stablyai/orca-plugins.git',
+    'ssh://git@github.com/stablyai/orca-plugins.git',
+    'git@github.com:stablyai/orca-plugins.git'
+  ])('accepts %s', (url) => {
+    expect(isAllowedPluginGitUrl(url)).toBe(true)
+  })
+
+  it.each([
+    'git@-oProxyCommand=evil:repo.git',
+    '-oProxyCommand=evil@github.com:repo.git',
+    'ssh://-oProxyCommand=evil/repo.git',
+    'ssh://-user@github.com/repo.git',
+    'git@github..com:repo.git',
+    'https://github..com/repo.git'
+  ])('rejects %s', (url) => {
+    expect(isAllowedPluginGitUrl(url)).toBe(false)
   })
 })

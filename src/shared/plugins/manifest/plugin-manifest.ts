@@ -11,6 +11,7 @@ import { PLUGIN_ICON_RULE_TEXT, pluginManifestImageFields } from '../plugin-imag
 import { validatePluginManifestContributions } from './plugin-manifest-contribution-validation'
 import { validatePluginEngineFloor } from './plugin-engine-floor'
 import { validatePluginManifestV2Rules } from './plugin-manifest-v2-rules'
+import { upgradePluginManifestV1Names } from './plugin-manifest-v1-names'
 import { formatPluginSchemaIssues } from './plugin-schema-issues'
 import { pluginApiMajorSchema } from '../workers/plugin-host-api-major'
 import {
@@ -80,7 +81,7 @@ const pluginManifestFields = {
   // Why both ids: bare-id global uniqueness is unverifiable without a registry.
   publisher: pluginIdSchema.meta(
     pluginFieldDoc(
-      'Publisher slug, kebab-case, usually your GitHub user or organization. The reserved names `constructor` and `prototype` are refused.',
+      'Publisher slug, kebab-case, usually your GitHub user or organization. The reserved names `constructor` and `prototype` are refused. The publishers `stablyai`, `orca`, `orca-*`, `official`, `anthropic`, `openai` and `github`, and ids starting `orca-`, install only from the stablyai organization.',
       V1,
       ['acme']
     )
@@ -161,7 +162,7 @@ export const pluginManifestV2Object = z
       .meta(pluginFieldDoc('Manifest format. Use 2 for new plugins.', NEXT)),
     execution: pluginExecutionProfileSchema.meta(
       pluginFieldDoc(
-        'Most authority the plugin needs, least first: `data` (themes, syntaxes, translations), `instructional` (commands, shortcuts, recipes, agents), `sandboxed-ui` (panels), `trusted-worker` (`main` and events). Contributions beyond it fail validation.',
+        'Most authority the plugin needs, least first: `data` (themes, syntaxes, translations), `declarative` (commands, shortcuts, recipes), `sandboxed-ui` (panels), `trusted-worker` (`main` and events). Contributions beyond it fail validation.',
         NEXT,
         ['data']
       )
@@ -171,27 +172,30 @@ export const pluginManifestV2Object = z
     // Why strict here too: format 2 refuses unknown keys at every level; format 1 never did.
     author: z.strictObject(authorFields).optional().meta(authorDoc),
     engines: z.strictObject(enginesFields).meta(enginesDoc),
-    // Why optional: only code calls the host API, so data and instructional plugins leave it out.
+    // Why optional: only code calls the host API, so data and declarative plugins leave it out.
     pluginApi: pluginApiMajorSchema
       .optional()
       .meta(
         pluginFieldDoc(
-          `${pluginApiDoc} Optional (defaults to 1), and refused on \`data\` and \`instructional\` plugins, which never call it.`,
+          `${pluginApiDoc} Optional (defaults to 1), and refused on \`data\` and \`declarative\` plugins, which never call it.`,
           V1
         )
       )
   })
   .strict()
 
-export const pluginManifestSchema = z.discriminatedUnion('manifestVersion', [
-  pluginManifestV1Object.superRefine(validatePluginManifestContributions),
-  pluginManifestV2Object.superRefine((manifest, ctx) => {
-    validatePluginManifestContributions(manifest, ctx)
-    validatePluginExecutionProfile(manifest, ctx)
-    validatePluginManifestV2Rules(manifest, ctx)
-    validatePluginEngineFloor(pluginManifestV2Object, manifest, ctx)
-  })
-])
+export const pluginManifestSchema = z.preprocess(
+  upgradePluginManifestV1Names,
+  z.discriminatedUnion('manifestVersion', [
+    pluginManifestV1Object.superRefine(validatePluginManifestContributions),
+    pluginManifestV2Object.superRefine((manifest, ctx) => {
+      validatePluginManifestContributions(manifest, ctx)
+      validatePluginExecutionProfile(manifest, ctx)
+      validatePluginManifestV2Rules(manifest, ctx)
+      validatePluginEngineFloor(pluginManifestV2Object, manifest, ctx)
+    })
+  ])
+)
 
 export type PluginManifest = z.infer<typeof pluginManifestSchema>
 export { PLUGIN_PANEL_LIMIT, type PluginPanelContribution } from '../plugin-panel-contribution'

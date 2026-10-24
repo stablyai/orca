@@ -25,6 +25,8 @@ import type {
   PluginMarketplaceService
 } from './plugin-marketplace-service'
 import { marketplaceSourceId } from './plugin-marketplace-store'
+import { fullAccessError, PLUGIN_FULL_ACCESS_OFF_ERROR } from '../plugin-activation-policy'
+import { isSameGitRepository } from '../../../shared/plugins/catalog/plugin-marketplace'
 
 export type PluginMarketplaceInstallPreview = {
   marketplaceSourceId: string
@@ -42,7 +44,12 @@ export type PluginMarketplaceInstallPreview = {
   blockedByKillList?: { reason: string; advisoryUrl?: string }
   /** The manifest's images, verified at preview and cached by hash. */
   images?: PluginHostImages
+  /** Update previews only: the catalog now points at a different repository than the install. */
+  repositoryMoved?: true
 }
+
+/** `repositoryMoved`: this replaced an install that came from a different repository. */
+export type PluginMarketplaceInstallResult = PluginInstallResult & { repositoryMoved?: true }
 
 export type PluginMarketplacePreviewIdentity = Pick<
   PluginMarketplaceInstallPreview,
@@ -54,6 +61,7 @@ export class PluginMarketplaceInstaller {
   private readonly userDataPath: string
   private readonly hostVersion: string
   private readonly blockedPluginReason: (pluginKey: string) => string | null
+  private readonly isFullAccessAllowed: () => boolean
   private readonly imageCache: PluginImageCache | null
 
   constructor(options: {
@@ -61,6 +69,7 @@ export class PluginMarketplaceInstaller {
     userDataPath: string
     hostVersion: string
     blockedPluginReason?: (pluginKey: string) => string | null
+    isFullAccessAllowed?: () => boolean
     imageCache?: PluginImageCache
   }) {
     this.imageCache = options.imageCache ?? null
@@ -68,6 +77,7 @@ export class PluginMarketplaceInstaller {
     this.userDataPath = options.userDataPath
     this.hostVersion = options.hostVersion
     this.blockedPluginReason = options.blockedPluginReason ?? (() => null)
+    this.isFullAccessAllowed = options.isFullAccessAllowed ?? (() => false)
   }
 
   async preview(
@@ -119,12 +129,19 @@ export class PluginMarketplaceInstaller {
     }
   }
 
-  async install(preview: PluginMarketplacePreviewIdentity): Promise<PluginInstallResult> {
+  async install(
+    preview: PluginMarketplacePreviewIdentity,
+    options: { requireInstalled?: boolean } = {}
+  ): Promise<PluginMarketplaceInstallResult> {
     const listing = await this.requireListing(preview.marketplaceSourceId, preview.pluginKey)
     const blockedReason =
       listing.blockedByKillList?.reason ?? this.blockedPluginReason(preview.pluginKey)
     if (blockedReason) {
       return { ok: false, error: `plugin is blocked by Orca's safety list: ${blockedReason}` }
+    }
+    // Why the pinned release: install refuses bytes whose manifest profile differs from it.
+    if (listing.release?.execution === 'trusted-worker' && !this.isFullAccessAllowed()) {
+      return { ok: false, error: PLUGIN_FULL_ACCESS_OFF_ERROR }
     }
     const incompatible = this.releaseCompatibilityError(listing)
     if (incompatible) {
@@ -139,7 +156,9 @@ export class PluginMarketplaceInstaller {
     if (!sourceState) {
       return { ok: false, error: 'marketplace source is no longer configured' }
     }
-    return installPluginFromMarketplace({
+    // Why read first: the install rewrites the lock entry this comparison needs.
+    const repositoryMoved = await this.isRepositoryMoved(preview.pluginKey, listing.source.url)
+    const result = await installPluginFromMarketplace({
       pluginsDir: getUserPluginsDir(this.userDataPath),
       hostVersion: this.hostVersion,
       expectedPluginKey: preview.pluginKey,
@@ -151,8 +170,21 @@ export class PluginMarketplaceInstaller {
       },
       plugin: { url: listing.source.url, ref: listing.source.ref },
       ...(listing.release ? { release: listing.release } : {}),
-      blockedPluginReason: this.blockedPluginReason
+      blockedPluginReason: this.blockedPluginReason,
+      // Why also here: an unpinned listing names no execution profile to check before checkout.
+      manifestError: (manifest) => fullAccessError({ manifest }, this.isFullAccessAllowed),
+      ...(options.requireInstalled ? { requireInstalled: true } : {})
     })
+    return result.ok && repositoryMoved ? { ...result, repositoryMoved: true } : result
+  }
+
+  private async isRepositoryMoved(pluginKey: string, nextUrl: string): Promise<boolean> {
+    const entry = (await readPluginLockfile(getUserPluginsDir(this.userDataPath))).plugins[
+      pluginKey
+    ]
+    return (
+      entry?.source.kind === 'marketplace' && !isSameGitRepository(entry.source.plugin.url, nextUrl)
+    )
   }
 
   async previewInstalledUpdate(pluginKey: string): Promise<PluginMarketplaceInstallPreview> {
@@ -166,7 +198,37 @@ export class PluginMarketplaceInstaller {
       url: entry.source.marketplace.url,
       ref: entry.source.marketplace.ref
     })
-    return this.preview(sourceId, pluginKey)
+    const preview = await this.preview(sourceId, pluginKey)
+    return isSameGitRepository(entry.source.plugin.url, preview.source.url)
+      ? preview
+      : { ...preview, repositoryMoved: true }
+  }
+
+  /** The own-catalog listing an installed plugin would update from, read from caches only. */
+  async findInstalledUpdateListing(pluginKey: string): Promise<{
+    listing: PluginMarketplaceListing
+    officialCatalog: boolean
+  } | null> {
+    const entry = (await readPluginLockfile(getUserPluginsDir(this.userDataPath))).plugins[
+      pluginKey
+    ]
+    if (!entry || entry.source.kind !== 'marketplace') {
+      return null
+    }
+    const sourceId = marketplaceSourceId({
+      kind: 'git',
+      url: entry.source.marketplace.url,
+      ref: entry.source.marketplace.ref
+    })
+    const listing = await this.marketplace.findPlugin(sourceId, pluginKey)
+    if (!listing) {
+      return null
+    }
+    const source = (await this.marketplace.listSources()).find(({ id }) => id === sourceId)
+    return {
+      listing,
+      officialCatalog: source?.official === true
+    }
   }
 
   /** What `rollback` would restore, read only when the UI asks. */

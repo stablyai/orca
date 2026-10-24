@@ -1,6 +1,14 @@
 import { PLUGIN_CATALOG_FILENAME, PLUGIN_CATALOG_VERSION } from '../catalog/plugin-catalog'
 import { PLUGIN_MARKETPLACE_FILENAME } from '../catalog/plugin-marketplace'
 import { PLUGIN_SCHEMA_SINCE_V1 } from './plugin-schema-field-docs'
+import {
+  PLUGIN_PLANNED_CONTRIBUTION_POINTS,
+  PLUGIN_RESERVED_CONTRIBUTION_POINTS
+} from '../plugin-contribution-points'
+
+const reservedKeys = Object.keys(PLUGIN_RESERVED_CONTRIBUTION_POINTS).map((key, index) =>
+  index === 0 ? `\`contributes.${key}\`` : `\`${key}\``
+)
 
 /** Compatibility policy appended to the manifest reference. Prose lives beside the schemas it
  *  explains so the generated pages and the code change together. */
@@ -9,10 +17,18 @@ export const PLUGIN_MANIFEST_POLICY_NOTES: readonly string[] = [
   '',
   '- **What runs is strict.** Orca refuses a manifest with any key it does not know, at every level, so an older Orca never silently ignores something a plugin relies on.',
   '- **`engines.orca` is the only version gate.** It must be at least the newest `Since` of every field and every value (capability, event, built-in action) the manifest uses. Orca checks this when it validates, lists or installs a plugin, so an older Orca can always say "requires Orca >=X (this is Y)" instead of listing unknown fields.',
-  '- **`pluginApi` is optional.** It names the major version of the host API ([reference](plugin-host-api.md)), which only grows within major 1; Orca refuses a major it does not implement. Only `sandboxed-ui` and `trusted-worker` plugins call that API, so `data` and `instructional` plugins must leave it out.',
+  '- **`pluginApi` is optional.** It names the major version of the host API ([reference](plugin-host-api.md)), which only grows within major 1; Orca refuses a major it does not implement. Only `sandboxed-ui` and `trusted-worker` plugins call that API, so `data` and `declarative` plugins must leave it out.',
   '- **New fields, contribution points and values are additive.** They arrive with a `Since` version; nothing else changes. `manifestVersion` rises only if an existing field changes meaning.',
   '- **Deprecation.** A field to be removed is marked deprecated here and keeps working for at least one release; it is removed only together with a higher `engines.orca` requirement, and its name is never reused.',
-  '- **Reserved contribution points.** `contributes.agents`, `skills`, `mcpServers`, `taskSources`, `connections` and `settings` are held for planned features and must stay empty until their format is defined. Each will arrive as an additive point with its own `Since`, without a new manifest format.',
+  `- **Reserved contribution points.** ${reservedKeys.slice(0, -1).join(', ')} and ${reservedKeys.at(-1)} are held for planned features and must stay empty until their format is defined. Each will arrive as an additive point with its own \`Since\`, without a new manifest format.`,
+  '',
+  '## Planned contribution points',
+  '',
+  'Each reserved point is planned as declared data that Orca renders and enforces, never arbitrary plugin UI. The intended shapes, which may still change:',
+  '',
+  ...Object.entries(PLUGIN_PLANNED_CONTRIBUTION_POINTS).map(
+    ([key, plan]) => `- \`${key}\`: ${plan}`
+  ),
   '',
   '## Legacy format 1',
   '',

@@ -6,6 +6,7 @@ import type {
 import type { PluginConsentRequest } from '../../shared/plugins/approval/plugin-consent-request'
 import type { PluginChangeEvent } from '../../shared/plugins/plugin-change-event'
 import type {
+  PluginAutoUpdateEvent,
   PluginHostInstallResult,
   PluginHostInstallSource,
   PluginHostListEntry,
@@ -64,6 +65,15 @@ export const pluginsApi = {
     ipcRenderer.on('plugins:changed', listener)
     return () => {
       ipcRenderer.removeListener('plugins:changed', listener)
+    }
+  },
+  getAutoUpdateState: () => ipcRenderer.invoke('plugins:getAutoUpdateState'),
+  onAutoUpdateChanged: (callback): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, change: PluginAutoUpdateEvent): void =>
+      callback(change)
+    ipcRenderer.on('plugins:autoUpdateChanged', listener)
+    return () => {
+      ipcRenderer.removeListener('plugins:autoUpdateChanged', listener)
     }
   }
 } satisfies PreloadApi['plugins']

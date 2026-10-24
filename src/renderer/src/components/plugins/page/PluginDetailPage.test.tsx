@@ -258,7 +258,7 @@ describe('PluginDetailPage', () => {
     const commandsListing: PluginMarketplaceHostListing = {
       ...listing,
       pluginKey: 'stablyai.shortcuts',
-      release: { ...listing.release!, execution: 'instructional', types: ['instructions'] }
+      release: { ...listing.release!, execution: 'declarative', types: ['instructions'] }
     }
     let resolvePreview: (result: PluginPagePreview) => void = () => {}
     const container = await render(
@@ -328,7 +328,7 @@ describe('PluginDetailPage', () => {
     const codeListing: PluginMarketplaceHostListing = {
       ...listing,
       pluginKey: 'stablyai.shortcuts',
-      release: { ...listing.release!, execution: 'instructional', types: ['instructions'] }
+      release: { ...listing.release!, execution: 'declarative', types: ['instructions'] }
     }
     const container = await render(pluginListEntryFromListing(codeListing), () =>
       Promise.resolve({
@@ -357,7 +357,7 @@ describe('PluginDetailPage', () => {
       ...listing.release!,
       commit: 'd'.repeat(40),
       contentHash: 'e'.repeat(64),
-      execution: 'instructional' as const,
+      execution: 'declarative' as const,
       types: ['instructions' as const]
     }
   }

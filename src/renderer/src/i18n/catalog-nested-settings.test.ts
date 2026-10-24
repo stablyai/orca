@@ -35,8 +35,13 @@ it.each([
   'keeps %s agent settings usable as nested language-pack translations',
   async (locale, catalog) => {
     // Bundled security copy is intentionally unavailable to plugin language packs.
+    const browser = Object.fromEntries(
+      Object.entries(catalog.settings.browser).filter(([key]) => key !== 'sitePermissions')
+    )
     expect(
-      parsePluginLanguagePackArtifact(JSON.stringify({ settings: catalog.settings }))
+      parsePluginLanguagePackArtifact(
+        JSON.stringify({ settings: { ...catalog.settings, browser } })
+      )
     ).toMatchObject({ ok: true })
 
     const instance = i18next.createInstance()

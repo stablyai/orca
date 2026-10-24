@@ -23,19 +23,19 @@ beforeEach(() => {
 describe('plugin consent IPC schema', () => {
   it('requires the fingerprint reviewed by the caller', () => {
     expect(() =>
-      parsePluginConsentArgs({ pluginKey: 'orca-samples.demo', decision: 'approve' })
+      parsePluginConsentArgs({ pluginKey: 'samples.demo', decision: 'approve' })
     ).toThrow()
   })
 
   it('accepts an explicit reviewed fingerprint', () => {
     expect(
       parsePluginConsentArgs({
-        pluginKey: 'orca-samples.demo',
+        pluginKey: 'samples.demo',
         reviewedFingerprint: 'sha256-reviewed',
         decision: 'approve'
       })
     ).toEqual({
-      pluginKey: 'orca-samples.demo',
+      pluginKey: 'samples.demo',
       reviewedFingerprint: 'sha256-reviewed',
       decision: 'approve'
     })

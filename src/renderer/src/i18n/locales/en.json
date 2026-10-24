@@ -916,6 +916,10 @@
             }
           }
         }
+      },
+      "pluginAutoUpdates": {
+        "one": "{{value0}} updated to {{value1}}",
+        "many": "{{value0}} plugins updated"
       }
     },
     "lib": {
@@ -1543,7 +1547,7 @@
         "linearTitle": "Linear",
         "linearDescription": "How Linear works in Orca, setup checklist, agent skill, and example prompts.",
         "pluginsTitle": "Plugins",
-        "pluginsDescription": "Install and manage experimental Orca plugins.",
+        "pluginsDescription": "Install and manage Orca plugins (Alpha).",
         "tasksDescription": "Connect providers, install the Linear skill, and choose what appears in Tasks.",
         "artifactsTitle": "Artifacts",
         "artifactsDescription": "Share HTML and Markdown files with your team and manage their public links.",
@@ -12242,13 +12246,13 @@
           "keepDisabled": "Keep Disabled",
           "enable": "Enable plugin",
           "capability": {
-            "workspaceRead": "Read the name, branch, and terminal list of your focused worktree",
-            "terminalSend": "Type text into a terminal you can see (always a specific terminal)",
+            "workspaceRead": "Read the name, branch, and terminal list of your focused workspace, and get notified when workspaces are created or removed",
             "notificationsShow": "Show desktop notifications labeled with the plugin name",
             "storage": "Store data in the plugin's own storage folder",
-            "secrets": "Store and read secrets in the plugin's own encrypted vault",
-            "eventsSubscribe": "Get notified when worktrees are created or removed and when agent status changes",
-            "settingsOwn": "Read and change the plugin's own settings"
+            "secrets": "Store and read secrets in the plugin's own encrypted file",
+            "settingsOwn": "Read and change the plugin's own settings",
+            "agentsRead": "Get notified when agent status changes",
+            "terminalRun": "Type and run commands in your terminals, local and SSH"
           },
           "decisionFailed": "Could not save the permission decision. Try again.",
           "whatChanged": "What changed"
@@ -12268,12 +12272,12 @@
           "saveFailed": "Could not save development plugin paths.",
           "pathRequired": "Enter a plugin folder path.",
           "title": "Development",
-          "help": "Load plugins from folders on this computer.",
           "remove": "Remove",
           "pathLabel": "Development plugin folder path",
           "placeholder": "/Users/you/plugins/my-plugin or C:\\Users\\you\\plugins\\my-plugin",
           "add": "Add path",
-          "dialogTitle": "Development folders"
+          "dialogTitle": "Development folders",
+          "reviewHelp": "Load plugins from folders on this computer. Each folder is reviewed once; later edits to its code run without another review."
         },
         "PluginInstallDialog": {
           "localRequired": "Enter the plugin folder path.",
@@ -12375,12 +12379,11 @@
           "settingsUpdateFailed": "Could not save plugin settings.",
           "install": "Install plugin",
           "title": "Plugins",
-          "experimental": "Experimental",
+          "alpha": "Alpha",
           "description": "Themes, languages, commands, and more. Plugins run on this computer.",
           "logsFailed": "Could not load plugin logs.",
           "rollbackFailed": "Couldn't roll back this plugin.",
           "fileTypeSuggestionsLabel": "Suggest plugins for unknown files",
-          "fileTypeSuggestionsDescription": "Offer a catalog plugin when Orca can’t open or highlight a file.",
           "restartFailed": "Couldn't restart {{value0}}."
         },
         "PluginSettingsRow": {
@@ -12438,7 +12441,7 @@
         "plugins": {
           "search": {
             "title": "Plugins",
-            "description": "Install and manage experimental Orca plugins.",
+            "description": "Install and manage Orca plugins (Alpha).",
             "install": "install plugin",
             "permissions": "plugin permissions",
             "logs": "plugin logs",
@@ -13519,7 +13522,10 @@
           "needsOrca": "Needs Orca {{value0}}",
           "off": "Off",
           "rollbackTo": "Roll back to {{value0}}…",
-          "copyContentHash": "Copy content hash"
+          "copyContentHash": "Copy content hash",
+          "reviewUpdate": "Review update",
+          "updateNeedsReview": "update {{value0}} needs review",
+          "updatedTo": "updated to {{value0}}"
         },
         "PluginSettingsOverview": {
           "offTitle": "Plugins are off",
@@ -13544,8 +13550,6 @@
         "PluginUpdateAllDialog": {
           "title": "Update plugins?",
           "reading": "Reading what each update changes…",
-          "someGrow": "Updates that ask for new access are expanded below. The others change only what they add.",
-          "noneGrow": "None of these updates asks for new access.",
           "previewError": "Couldn’t read this update. It will be skipped.",
           "newAccess": "New access: {{value0}}",
           "noNewAccess": "No new access",
@@ -13558,7 +13562,16 @@
           "retry": "Try again",
           "updated": "Updated",
           "needsOrca": "Needs Orca {{value0}} or later. Update Orca first.",
-          "current": "This exact plugin content is already installed."
+          "current": "This exact plugin content is already installed.",
+          "sourceMoved": "Now comes from a different repository: {{value0}} (was {{value1}})",
+          "someGrowAsk": "Updates that ask for new access are expanded below and need your approval again. The others install without asking.",
+          "noneGrowKeep": "None of these updates asks for new access, so they install without asking again.",
+          "newShortcuts": "Adds keyboard shortcuts",
+          "newCommands": "Adds commands",
+          "newPanels": "Adds panels",
+          "newEvents": "Listens for more events",
+          "newRecipes": "Changes virtual machine recipes",
+          "newContributions": "Adds new features that act for you"
         },
         "PluginDetailInfo": {
           "previous": "Previous",
@@ -13579,8 +13592,7 @@
           "dark": "Dark",
           "light": "Light",
           "languageIncomplete": "{{value0}}% translated, too incomplete to use as Orca’s language",
-          "languageCoverage": "Interface language · {{value0}}% translated",
-          "agent": "Agent profile"
+          "languageCoverage": "Interface language · {{value0}}% translated"
         },
         "PluginCardAction": {
           "installed": "Installed",
@@ -13591,7 +13603,8 @@
           "moreLabel": "More actions for {{value0}}",
           "disable": "Disable",
           "enable": "Enable",
-          "remove": "Remove"
+          "remove": "Remove",
+          "openFullAccess": "Turn on in settings"
         },
         "PluginInstallConsent": {
           "install": "Install & enable",
@@ -13600,7 +13613,9 @@
           "noOtherAccess": "It asks for no other access.",
           "keepOff": "Keep off",
           "replacesShortcut": "{{value0}} ({{value1}}) replaces your shortcut for {{value2}}.",
-          "reading": "Reading what it can access…"
+          "reading": "Reading what it can access…",
+          "updatesKeepApproval": "Updates that don’t ask for more access install without asking again.",
+          "fullAccessUpdates": "Updates that don’t ask for more access install without asking again, and can change what its full-access code does."
         },
         "PluginPageAction": {
           "failedTitle": "Couldn’t install {{value0}}",
@@ -13608,7 +13623,11 @@
         },
         "PluginSettingsMenu": {
           "label": "Plugin settings",
-          "development": "Development folders…"
+          "development": "Development folders…",
+          "fullAccessLabel": "Allow full-access plugins",
+          "fullAccessHint": "Full access to files and network",
+          "autoUpdateLabel": "Update plugins automatically",
+          "autoUpdateHint": "Updates can change what a plugin does, including full-access ones"
         },
         "PluginThemeUseNow": {
           "label": "Use now:",
@@ -13622,10 +13641,10 @@
           "next": "Next screenshot"
         },
         "pluginConsentCopy": {
-          "runsWorker": "Runs a worker",
           "addsCommands": "Adds commands",
           "addsPanel": "Adds a panel",
-          "contentOnly": "Content only"
+          "contentOnly": "Content only",
+          "fullAccess": "Full access"
         },
         "PluginContributionActionCommand": {
           "run": "Run",
@@ -13668,6 +13687,13 @@
         "pluginThemeApply": {
           "nowUsing": "Now using {{value0}}",
           "switchBack": "Switch back"
+        },
+        "PluginCatalogGroups": {
+          "fullAccessOff": "Full access · turned off in settings"
+        },
+        "PluginChips": {
+          "updateNeedsReview": "Update needs review",
+          "updatedTo": "Updated to {{value0}}"
         }
       },
       "right": {

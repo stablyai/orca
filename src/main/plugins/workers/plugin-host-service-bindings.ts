@@ -1,4 +1,3 @@
-import type { PluginEventName } from '../../../shared/plugins/manifest/plugin-manifest'
 import { PLUGIN_WORKSPACE_TERMINAL_LIMIT } from '../../../shared/plugins/workers/plugin-host-api'
 import type { PluginHostServices } from './plugin-host-methods'
 import { PluginSecretsStore } from '../plugin-secrets-store'
@@ -33,9 +32,8 @@ export type PluginRuntimeDelegate = {
 export function bindPluginHostServices(input: {
   delegate: PluginRuntimeDelegate
   pluginsDataDir: string
-  subscribeEvents: (pluginKey: string, events: PluginEventName[]) => PluginEventName[]
 }): PluginHostServices {
-  const { delegate, pluginsDataDir, subscribeEvents } = input
+  const { delegate, pluginsDataDir } = input
   return {
     resolveActiveWorktreeContext: async () => {
       const context = await delegate.resolveActiveWorktreeContext()
@@ -82,7 +80,6 @@ export function bindPluginHostServices(input: {
       getAll: (key) => new PluginKvStore(pluginsDataDir, key, 'settings.json').getAll(),
       set: (key, itemKey, value) =>
         new PluginKvStore(pluginsDataDir, key, 'settings.json').set(itemKey, value)
-    },
-    subscribeEvents
+    }
   }
 }

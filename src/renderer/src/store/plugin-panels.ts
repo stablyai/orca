@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { create } from 'zustand'
+import { ensurePluginAutoUpdatesWatched } from './plugin-auto-updates'
 import type { PluginHostListEntry, PluginHostPanel } from '../../../preload/api-types'
 
 /** A panel contribution from an enabled plugin, flattened for sidebar use. */
@@ -133,6 +134,7 @@ export function ensurePluginPanelsLoaded(): void {
   if (fetchStatus === 'idle') {
     void fetchPlugins()
   }
+  ensurePluginAutoUpdatesWatched()
   if (!changeSubscriptionStarted && window.api?.plugins?.onChanged) {
     changeSubscriptionStarted = true
     window.api.plugins.onChanged(() => {

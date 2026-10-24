@@ -27,14 +27,14 @@ describe('normalizeRightSidebarTab', () => {
   })
 
   it('preserves well-formed plugin panel tabs', () => {
-    expect(normalizeRightSidebarTab('plugin:orca-samples.my-plugin/dashboard')).toBe(
-      'plugin:orca-samples.my-plugin/dashboard'
+    expect(normalizeRightSidebarTab('plugin:samples.my-plugin/dashboard')).toBe(
+      'plugin:samples.my-plugin/dashboard'
     )
   })
 
   it('normalizes malformed plugin tabs to the default tab', () => {
-    expect(normalizeRightSidebarTab('plugin:orca-samples.my-plugin')).toBe('explorer')
-    expect(normalizeRightSidebarTab('plugin:orca-samples.my-plugin/panel/extra')).toBe('explorer')
+    expect(normalizeRightSidebarTab('plugin:samples.my-plugin')).toBe('explorer')
+    expect(normalizeRightSidebarTab('plugin:samples.my-plugin/panel/extra')).toBe('explorer')
     expect(normalizeRightSidebarTab('plugin:My_Plugin/Panel!')).toBe('explorer')
   })
 

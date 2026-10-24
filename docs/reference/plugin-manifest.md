@@ -13,9 +13,9 @@ Add `"$schema": "https://raw.githubusercontent.com/stablyai/orca/main/docs/schem
 | --- | --- | --- | --- | --- |
 | `$schema` | string | no | 1.4.240 | JSON Schema URL for editor completion. Ignored by Orca. |
 | `manifestVersion` | `2` | yes | 1.4.240 | Manifest format. Use 2 for new plugins. |
-| `execution` | `"data"` \| `"instructional"` \| `"sandboxed-ui"` \| `"trusted-worker"` | yes | 1.4.240 | Most authority the plugin needs, least first: `data` (themes, syntaxes, translations), `instructional` (commands, shortcuts, recipes, agents), `sandboxed-ui` (panels), `trusted-worker` (`main` and events). Contributions beyond it fail validation. Example: `"data"` |
+| `execution` | `"data"` \| `"declarative"` \| `"sandboxed-ui"` \| `"trusted-worker"` | yes | 1.4.240 | Most authority the plugin needs, least first: `data` (themes, syntaxes, translations), `declarative` (commands, shortcuts, recipes), `sandboxed-ui` (panels), `trusted-worker` (`main` and events). Contributions beyond it fail validation. Example: `"data"` |
 | `id` | string | yes | 1.4.160 | Plugin id, kebab-case. The install identity is `<publisher>.<id>`. The reserved names `constructor` and `prototype` are refused. Example: `"gleam-syntax"` |
-| `publisher` | string | yes | 1.4.160 | Publisher slug, kebab-case, usually your GitHub user or organization. The reserved names `constructor` and `prototype` are refused. Example: `"acme"` |
+| `publisher` | string | yes | 1.4.160 | Publisher slug, kebab-case, usually your GitHub user or organization. The reserved names `constructor` and `prototype` are refused. The publishers `stablyai`, `orca`, `orca-*`, `official`, `anthropic`, `openai` and `github`, and ids starting `orca-`, install only from the stablyai organization. Example: `"acme"` |
 | `name` | string | yes | 1.4.160 | Display name. Example: `"Gleam"` |
 | `version` | string | yes | 1.4.160 | Plugin version, semver. Example: `"1.2.0"` |
 | `description` | string | no | 1.4.160 | One or two sentences shown in the plugin list. |
@@ -36,22 +36,24 @@ Add `"$schema": "https://raw.githubusercontent.com/stablyai/orca/main/docs/schem
 | `contributes.languagePacks` | [LanguagePackContribution](#languagepackcontribution)[] | no | 1.4.160 | Interface translations. At most 16. |
 | `contributes.keybindings` | [KeybindingContribution](#keybindingcontribution)[] | no | 1.4.160 | Keyboard shortcuts for contributed commands. At most 256. |
 | `contributes.vmRecipes` | [VmRecipeContribution](#vmrecipecontribution)[] | no | 1.4.160 | Virtual machine environment recipes. At most 64. |
-| `contributes.agents` | [AgentProfileContribution](#agentprofilecontribution)[] | no | 1.4.160 | Reserved for coding-agent definitions; must be empty in manifest format 2 until their format is defined. At most 64. |
 | `contributes.themes` | [ThemeContribution](#themecontribution)[] | no | 1.4.240 | App color themes. At most 64. |
 | `contributes.terminalThemes` | [ThemeContribution](#themecontribution)[] | no | 1.4.240 | Terminal ANSI palettes. At most 64. |
 | `contributes.iconThemes` | [ThemeContribution](#themecontribution)[] | no | 1.4.240 | File icon themes. At most 32. |
 | `contributes.syntaxes` | [SyntaxContribution](#syntaxcontribution)[] | no | 1.4.240 | Syntax highlighting for editor languages. At most 16. |
+| `contributes.agents` | any[] | no | 1.4.240 | Reserved for coding-agent definitions; must be empty until their format is defined. |
 | `contributes.skills` | any[] | no | 1.4.240 | Reserved for agent skills; must be empty until their format is defined. |
 | `contributes.mcpServers` | any[] | no | 1.4.240 | Reserved for MCP server definitions; must be empty until their format is defined. |
 | `contributes.taskSources` | any[] | no | 1.4.240 | Reserved for task sources; must be empty until their format is defined. |
 | `contributes.connections` | any[] | no | 1.4.240 | Reserved for account connections; must be empty until their format is defined. |
 | `contributes.settings` | any[] | no | 1.4.240 | Reserved for plugin settings; must be empty until their format is defined. |
+| `contributes.statusBarItems` | any[] | no | 1.4.240 | Reserved for status bar items; must be empty until their format is defined. |
+| `contributes.sidebarCards` | any[] | no | 1.4.240 | Reserved for sidebar cards; must be empty until their format is defined. |
 | `capabilities` | [Capability](#capability)[] | no | 1.4.160 | Host APIs the plugin asks the user to grant. At most 32. |
 | `cover` | object | no | 1.4.240 | Wide image at the top of the plugin page. |
 | `cover.path` | string | yes | 1.4.240 | Cover image shown on the plugin page, 16:10 recommended (1600×1000). PNG, JPEG, WEBP, static, at least 800×500, at most 1024 KB. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused. Example: `"images/cover.png"` |
 | `cover.alt` | string | yes | 1.4.240 | What the image shows, for screen readers. Required. Example: `"The Dusk theme on a terminal"` |
 | `screenshots` | [Screenshot](#screenshot)[] | no | 1.4.240 | Screenshots for the plugin page, at most 6. All images together may be at most 8 MB. |
-| `pluginApi` | `1` | no | 1.4.160 | Major version of the plugin host API this plugin targets. Optional (defaults to 1), and refused on `data` and `instructional` plugins, which never call it. |
+| `pluginApi` | `1` | no | 1.4.160 | Major version of the plugin host API this plugin targets. Optional (defaults to 1), and refused on `data` and `declarative` plugins, which never call it. |
 
 ## PanelContribution
 
@@ -61,27 +63,27 @@ A sidebar panel. Requires the `sandboxed-ui` execution profile or higher.
 | --- | --- | --- | --- | --- |
 | `id` | string | yes | 1.4.160 | Panel id, unique among this plugin's panels. The reserved names `constructor` and `prototype` are refused. Example: `"dashboard"` |
 | `title` | string | yes | 1.4.160 | Title shown on the panel tab and its tooltip. Example: `"Dashboard"` |
-| `icon` | string | no | 1.4.160 | Lucide icon name shown in the right-sidebar activity bar. Example: `"layout-dashboard"` |
+| `icon` | `"activity"` \| `"bar-chart-3"` \| `"bell"` \| `"blocks"` \| `"book"` \| `"bot"` \| `"bug"` \| `"calendar"` \| `"cloud"` \| `"code"` \| `"database"` \| `"file-text"` \| `"flag"` \| `"folder"` \| `"gauge"` \| `"globe"` \| `"hammer"` \| `"layers"` \| `"lightbulb"` \| `"package"` \| `"plug"` \| `"puzzle"` \| `"rocket"` \| `"star"` \| `"terminal"` \| `"wrench"` \| `"zap"` | no | 1.4.160 | Icon shown in the right-sidebar activity bar. Defaults to `plug`. Example: `"database"` |
 | `entry` | string | yes | 1.4.160 | HTML file, relative to the plugin root, rendered inside a sandboxed panel frame. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused. Example: `"dist/panel.html"` |
 
 ## CommandContribution
 
-A command palette entry. Requires the `instructional` execution profile or higher.
+A command palette entry. Requires the `declarative` execution profile or higher.
 
 | Field | Type | Required | Since | Description |
 | --- | --- | --- | --- | --- |
 | `id` | string | yes | 1.4.160 | Command id, unique among this plugin's commands. Dotted namespaces are allowed. Example: `"jupyter.restartKernel"` |
 | `title` | string | yes | 1.4.160 | Title shown in the command palette. Example: `"Restart kernel"` |
-| `context` | `"global"` \| `"worktree"` | no | 1.4.160 | `worktree` hides the command when no worktree is active. Defaults to `global`. |
+| `context` | `"global"` \| `"workspace"` | no | 1.4.160 | `workspace` hides the command when no workspace is active. Defaults to `global`. |
 | `action` | `"worktree.history.back"` \| `"worktree.history.forward"` \| `"sidebar.left.toggle"` \| `"sidebar.sleepingWorkspaces.toggle"` \| `"floatingWorkspace.maximize"` \| `"tab.rename"` \| `"workspace.rename"` \| `"workspace.openBoard"` \| `"view.tasks"` \| `"sidebar.right.toggle"` \| `"sidebar.explorer.toggle"` \| `"sidebar.search.toggle"` \| `"sidebar.sourceControl.toggle"` \| `"sidebar.checks.toggle"` \| `"sidebar.ports.toggle"` | no | 1.4.160 | Built-in Orca action this command runs. A command with an action is declarative and never starts the plugin worker; one without needs `main`. Example: `"view.tasks"` |
 
 ## EventContribution
 
-An event subscription. Requires `main`, the `trusted-worker` execution profile and the `events:subscribe` capability.
+An event subscription. Requires `main`, the `trusted-worker` execution profile and the capability of the event's domain: `workspace:read` for workspace events, `agents:read` for agent events.
 
 | Field | Type | Required | Since | Description |
 | --- | --- | --- | --- | --- |
-| `on` | `"worktree.created"` \| `"worktree.removed"` \| `"agent.status.changed"` | yes | 1.4.160 | Event delivered to the plugin worker. |
+| `on` | `"workspace.created"` \| `"workspace.removed"` \| `"agent.status.changed"` | yes | 1.4.160 | Event delivered to the plugin worker. |
 
 ## LanguagePackContribution
 
@@ -100,7 +102,7 @@ A keyboard shortcut for a command.
 | --- | --- | --- | --- | --- |
 | `command` | string | yes | 1.4.160 | Id of a command this plugin contributes in `contributes.commands`. Example: `"jupyter.restartKernel"` |
 | `key` | string | yes | 1.4.160 | Key chord Orca recognizes, such as `Mod+Shift+K`. `Mod` is Cmd on macOS and Ctrl elsewhere. Each chord may be bound once on every platform. Example: `"Mod+Shift+K"` |
-| `when` | `"global"` \| `"worktree"` | no | 1.4.160 | Where the shortcut is active; must match its command's `context`. |
+| `when` | `"global"` \| `"workspace"` | no | 1.4.160 | Where the shortcut is active; must match its command's `context`. |
 
 ## VmRecipeContribution
 
@@ -109,14 +111,6 @@ A virtual machine environment recipe.
 | Field | Type | Required | Since | Description |
 | --- | --- | --- | --- | --- |
 | `path` | string | yes | 1.4.160 | JSON environment recipe file, listed once. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused. Example: `"recipes/ubuntu.json"` |
-
-## AgentProfileContribution
-
-Reserved for coding-agent definitions. Manifest format 2 refuses a non-empty `agents` list until their format is defined.
-
-| Field | Type | Required | Since | Description |
-| --- | --- | --- | --- | --- |
-| `path` | string | yes | 1.4.160 | JSON agent profile file, listed once. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused. Example: `"agents/reviewer.json"` |
 
 ## ThemeContribution
 
@@ -148,7 +142,7 @@ A host API the plugin may call once the user consents.
 
 | Field | Type | Required | Since | Description |
 | --- | --- | --- | --- | --- |
-| `kind` | `"workspace:read"` \| `"terminal:send"` \| `"notifications:show"` \| `"storage"` \| `"secrets"` \| `"events:subscribe"` \| `"settings:own"` | yes | 1.4.160 | Capability granted on user consent. |
+| `kind` | `"workspace:read"` \| `"agents:read"` \| `"terminal:send"` \| `"notifications:show"` \| `"storage:own"` \| `"secrets:own"` \| `"settings:own"` | yes | 1.4.160 | Capability granted on user consent. |
 
 ## Screenshot
 
@@ -165,10 +159,23 @@ One screenshot of the plugin in use.
 
 - **What runs is strict.** Orca refuses a manifest with any key it does not know, at every level, so an older Orca never silently ignores something a plugin relies on.
 - **`engines.orca` is the only version gate.** It must be at least the newest `Since` of every field and every value (capability, event, built-in action) the manifest uses. Orca checks this when it validates, lists or installs a plugin, so an older Orca can always say "requires Orca >=X (this is Y)" instead of listing unknown fields.
-- **`pluginApi` is optional.** It names the major version of the host API ([reference](plugin-host-api.md)), which only grows within major 1; Orca refuses a major it does not implement. Only `sandboxed-ui` and `trusted-worker` plugins call that API, so `data` and `instructional` plugins must leave it out.
+- **`pluginApi` is optional.** It names the major version of the host API ([reference](plugin-host-api.md)), which only grows within major 1; Orca refuses a major it does not implement. Only `sandboxed-ui` and `trusted-worker` plugins call that API, so `data` and `declarative` plugins must leave it out.
 - **New fields, contribution points and values are additive.** They arrive with a `Since` version; nothing else changes. `manifestVersion` rises only if an existing field changes meaning.
 - **Deprecation.** A field to be removed is marked deprecated here and keeps working for at least one release; it is removed only together with a higher `engines.orca` requirement, and its name is never reused.
-- **Reserved contribution points.** `contributes.agents`, `skills`, `mcpServers`, `taskSources`, `connections` and `settings` are held for planned features and must stay empty until their format is defined. Each will arrive as an additive point with its own `Since`, without a new manifest format.
+- **Reserved contribution points.** `contributes.agents`, `skills`, `mcpServers`, `taskSources`, `connections`, `settings`, `statusBarItems` and `sidebarCards` are held for planned features and must stay empty until their format is defined. Each will arrive as an additive point with its own `Since`, without a new manifest format.
+
+## Planned contribution points
+
+Each reserved point is planned as declared data that Orca renders and enforces, never arbitrary plugin UI. The intended shapes, which may still change:
+
+- `taskSources`: Issue and task providers such as Asana, Linear or Jira, declared as data that a worker fills with tasks.
+- `connections`: Account providers with a host-run sign-in, so a plugin never handles credentials itself.
+- `agents`: New coding-agent harnesses described as data: how to launch them and read their status.
+- `statusBarItems`: Declarative status bar widgets (label, icon, tooltip) whose values a worker updates.
+- `sidebarCards`: Declarative left-sidebar cards with fixed layouts whose values a worker updates.
+- `mcpServers`: MCP server definitions that Orca offers to the agents it launches.
+- `skills`: Agent skills shipped as files that Orca installs for the agents it launches.
+- `settings`: Typed plugin settings that Orca renders in its own settings UI.
 
 ## Legacy format 1
 

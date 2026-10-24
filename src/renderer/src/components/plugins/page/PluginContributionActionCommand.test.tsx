@@ -42,7 +42,7 @@ it('runs the command as the palette would and shows what it returned', async () 
 })
 
 it('shows a structured result as bounded JSON rather than hiding it in Logs', async () => {
-  executePluginCommand.mockResolvedValue({ 'worktree.created': 2, 'agent.status.changed': 5 })
+  executePluginCommand.mockResolvedValue({ 'workspace.created': 2, 'agent.status.changed': 5 })
   render(
     <PluginContributionActionCommand
       command={command({ type: 'worker' })}
@@ -52,7 +52,7 @@ it('shows a structured result as bounded JSON rather than hiding it in Logs', as
   fireEvent.click(screen.getByRole('button', { name: 'Run Open Tasks' }))
   await vi.waitFor(() =>
     expect(toast.success).toHaveBeenCalledWith('Ran Open Tasks', {
-      description: '{"worktree.created":2,"agent.status.changed":5}'
+      description: '{"workspace.created":2,"agent.status.changed":5}'
     })
   )
 })

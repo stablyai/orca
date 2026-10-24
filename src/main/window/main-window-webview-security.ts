@@ -39,6 +39,8 @@ function isAdmissibleDocPreviewAttach(partition: string, src: string): boolean {
 
 export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): void {
   installPrivilegedWindowNavigationPolicy(mainWindow.webContents)
+  // Why: plugin panels are frames of this renderer; same IP-handling fence as doc preview guests.
+  mainWindow.webContents.setWebRTCIPHandlingPolicy('disable_non_proxied_udp')
   // Why here and on every fresh shell document: the renderer holds the only record of which
   // preview owns which grant, and a reload throws that record away. Grants it can no longer
   // release would stay live read authorities for the rest of the process.

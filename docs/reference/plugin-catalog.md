@@ -48,9 +48,9 @@ The exact release the catalog vouches for. Orca refuses bytes that differ.
 | `version` | string | yes | 1.4.240 | The manifest's `version` for this release. Example: `"1.2.0"` |
 | `commit` | string | yes | 1.4.240 | Full SHA-1 commit Orca checks out for this release. |
 | `contentHash` | string | yes | 1.4.240 | SHA-256 of the plugin's installed files, as Orca computes it at install. |
-| `execution` | `"data"` \| `"instructional"` \| `"sandboxed-ui"` \| `"trusted-worker"` | yes | 1.4.240 | The manifest's `execution` profile. Example: `"data"` |
+| `execution` | `"data"` \| `"declarative"` \| `"sandboxed-ui"` \| `"trusted-worker"` | yes | 1.4.240 | The manifest's `execution` profile. Example: `"data"` |
 | `minimumOrca` | string | yes | 1.4.240 | The manifest's `engines.orca` without `>=`. Older Orca lists the plugin but will not install it. Example: `"1.4.240"` |
-| `types` | (`"interface-language"` \| `"app-theme"` \| `"terminal-theme"` \| `"icon-theme"` \| `"syntax"` \| `"instructions"` \| `"panel"` \| `"worker"`)[] | yes | 1.4.240 | Every kind of contribution the release carries, matching its manifest exactly. `instructions` needs the `instructional` profile or higher, `panel` needs `sandboxed-ui`, and `worker` needs `trusted-worker`. Example: `["syntax"]` |
+| `types` | (`"interface-language"` \| `"app-theme"` \| `"terminal-theme"` \| `"icon-theme"` \| `"syntax"` \| `"instructions"` \| `"panel"` \| `"worker"`)[] | no | 1.4.240 | Optional; Orca derives it from `contributes` and `execution`. When present, every kind of contribution the release carries, matching its manifest exactly. `instructions` needs the `declarative` profile or higher, `panel` needs `sandboxed-ui`, and `worker` needs `trusted-worker`. Example: `["syntax"]` |
 | `name` | string | no | 1.4.240 | The manifest's `name`, so Orca can suggest the plugin before downloading it. Example: `"Gleam"` |
 | `license` | string | no | 1.4.240 | SPDX license expression. Example: `"MIT"` |
 | `repository` | string | no | 1.4.240 | Source repository page, https only. Example: `"https://github.com/acme/orca-gleam-syntax"` |
@@ -60,7 +60,7 @@ The exact release the catalog vouches for. Orca refuses bytes that differ.
 | `images` | [CatalogImages](#catalogimages) | no | 1.4.240 | Images extracted from the release by catalog CI, which re-encodes them and strips metadata. Same rules as the manifest: icon PNG, WEBP, static, at least 128×128, square, at most 256 KB. Cover PNG, JPEG, WEBP, static, at least 800×500, at most 1024 KB. Screenshots PNG, JPEG, WEBP, static, at least 1280×800, at most 1536 KB. Images must not imitate Orca's trust badges. |
 | `themePreview` | [CatalogThemePreview](#catalogthemepreview)[] | no | 1.4.240 | Up to 4 theme palettes for listing art. Display only; the installed theme files decide the real colors. |
 | `contributes` | [CatalogContribution](#catalogcontribution)[] | no | 1.4.240 | What the release adds, as the listing shows it. Generate it with the catalog tooling; Orca refuses an install whose manifest says otherwise. |
-| `capabilities` | (`"workspace:read"` \| `"terminal:send"` \| `"notifications:show"` \| `"storage"` \| `"secrets"` \| `"events:subscribe"` \| `"settings:own"`)[] | no | 1.4.240 | Every capability the release asks for. Orca refuses an install whose manifest asks for different ones. Example: `["notifications:show"]` |
+| `capabilities` | (`"workspace:read"` \| `"agents:read"` \| `"terminal:send"` \| `"notifications:show"` \| `"storage:own"` \| `"secrets:own"` \| `"settings:own"`)[] | no | 1.4.240 | Every capability the release asks for. Orca refuses an install whose manifest asks for different ones. Example: `["notifications:show"]` |
 | `fileTypes` | string[] | no | 1.4.240 | Extensions, without the dot, that this release opens. Orca suggests the plugin when such a file has no viewer. |
 
 ## CatalogImages
@@ -104,7 +104,7 @@ One thing the release adds to Orca.
 
 | Field | Type | Required | Since | Description |
 | --- | --- | --- | --- | --- |
-| `kind` | `"panels"` \| `"commands"` \| `"events"` \| `"languagePacks"` \| `"keybindings"` \| `"vmRecipes"` \| `"agents"` \| `"themes"` \| `"terminalThemes"` \| `"iconThemes"` \| `"syntaxes"` | yes | 1.4.240 | Contribution point. Example: `"themes"` |
+| `kind` | `"panels"` \| `"commands"` \| `"events"` \| `"languagePacks"` \| `"keybindings"` \| `"vmRecipes"` \| `"themes"` \| `"terminalThemes"` \| `"iconThemes"` \| `"syntaxes"` | yes | 1.4.240 | Contribution point. Example: `"themes"` |
 | `name` | string | yes | 1.4.240 | What the item is called in Orca. Example: `"Dusk"` |
 | `detail` | string | no | 1.4.240 | Extra context, such as file extensions. |
 

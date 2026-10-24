@@ -1,4 +1,6 @@
 import type { PluginHostImages } from '../../shared/plugins/plugin-image-url'
+import type { PluginUpdateAccessGrowth } from '../../shared/plugins/approval/plugin-update-access-growth'
+import type { PluginAutoUpdateState } from '../../shared/plugins/catalog/plugin-update-policy'
 import type { PluginExecutionProfile } from '../../shared/plugins/plugin-execution-profile'
 import type {
   PluginIconThemeMetadata,
@@ -67,9 +69,10 @@ export type PluginHostListEntry = {
   commands: {
     id: string
     title: string
-    context: 'global' | 'worktree'
+    // Why `worktree`: hosts from before the rename to `workspace` still send it.
+    context: 'global' | 'workspace' | 'worktree'
     handler: { type: 'built-in'; action: string } | { type: 'worker' }
-    keybindings: { key: string; when: 'global' | 'worktree' }[]
+    keybindings: { key: string; when: 'global' | 'workspace' | 'worktree' }[]
   }[]
   hasWorker: boolean
   vmRecipes?: {
@@ -183,6 +186,10 @@ export type PluginMarketplaceHostInstallPreview = {
   blockedByKillList?: { reason: string; advisoryUrl?: string }
   /** The manifest's images, verified at preview. */
   images?: PluginHostImages
+  /** For an update: what it asks for beyond the installed version. */
+  accessGrowth?: PluginUpdateAccessGrowth
+  /** For an update: the catalog now points at a different repository than the install. */
+  repositoryMoved?: true
 }
 
 export type PluginsApi = {
@@ -250,4 +257,13 @@ export type PluginsApi = {
   /** Re-discovers after settings edits (feature flag, dev paths). */
   refresh: () => Promise<PluginHostListEntry[]>
   onChanged: (callback: (event: PluginChangeEvent) => void) => () => void
+  /** What automatic updates last did. Older hosts reject the call; treat that as nothing. */
+  getAutoUpdateState: () => Promise<PluginAutoUpdateState>
+  /** Fires after each automatic update pass, with the plugins it just updated. */
+  onAutoUpdateChanged: (callback: (event: PluginAutoUpdateEvent) => void) => () => void
+}
+
+export type PluginAutoUpdateEvent = {
+  state: PluginAutoUpdateState
+  updated: { pluginKey: string; name: string; version: string }[]
 }

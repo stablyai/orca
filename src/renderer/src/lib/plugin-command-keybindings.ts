@@ -9,6 +9,7 @@ import {
 } from '../../../shared/keybindings'
 import { translate } from '@/i18n/i18n'
 import { pluginCommandKeybindingActionId as sharedPluginCommandKeybindingActionId } from '../../../shared/plugins/plugin-command-actions'
+import { isWorkspaceScopedPluginContext } from '../../../shared/plugins/plugin-command-contribution'
 
 export function pluginCommandKeybindingActionId(
   command: Pick<ActivePluginCommand, 'pluginKey' | 'id'>
@@ -61,7 +62,7 @@ export function findPluginCommandForKeybinding(
   hasActiveWorktree: boolean
 ): ActivePluginCommand | null {
   for (const command of commands) {
-    if (command.context === 'worktree' && !hasActiveWorktree) {
+    if (isWorkspaceScopedPluginContext(command.context) && !hasActiveWorktree) {
       continue
     }
     const matches = getEffectivePluginCommandKeybindings(command, platform, overrides).some(

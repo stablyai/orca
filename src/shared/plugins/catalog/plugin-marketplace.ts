@@ -220,11 +220,22 @@ export function splitQualifiedPluginKey(pluginKey: string): {
   }
 }
 
+// Why now: reserving a publisher after adoption would break existing installs under it.
+const RESERVED_PLUGIN_PUBLISHERS: readonly string[] = [
+  OFFICIAL_PLUGIN_PUBLISHER,
+  'orca',
+  'official',
+  'anthropic',
+  'openai',
+  'github'
+]
+
 export function isReservedPluginIdentity(pluginKey: string): boolean {
   const identity = splitQualifiedPluginKey(pluginKey)
   return (
     identity !== null &&
-    (identity.publisher === OFFICIAL_PLUGIN_PUBLISHER ||
+    (RESERVED_PLUGIN_PUBLISHERS.includes(identity.publisher) ||
+      identity.publisher.startsWith(OFFICIAL_PLUGIN_ID_PREFIX) ||
       identity.id.startsWith(OFFICIAL_PLUGIN_ID_PREFIX))
   )
 }
@@ -242,6 +253,8 @@ type GitRepositoryIdentity = {
   host: string
   owner: string
   repository: string
+  /** Every path segment, so a GitLab subgroup move is a different repository. */
+  path: string
 }
 
 /** Extracts the host and first owner segment from the HTTPS/SSH Git forms the
@@ -268,14 +281,26 @@ function repositoryIdentity(host: string, repositoryPath: string): GitRepository
     .replace(/^\/+|\/+$/g, '')
     .split('/')
     .filter(Boolean)
-  if (segments.length < 2) {
+  // Why: the scp form is not normalized, so `stablyai/../evil` would read as the official owner.
+  if (segments.length < 2 || segments.includes('..')) {
     return null
   }
   const repository = segments.at(-1)!.replace(/\.git$/i, '')
   if (!repository) {
     return null
   }
-  return { host: host.toLowerCase(), owner: segments[0]!, repository }
+  const path = [...segments.slice(0, -1), repository].join('/').toLowerCase()
+  return { host: host.toLowerCase(), owner: segments[0]!, repository, path }
+}
+
+/** Same repository regardless of URL spelling (https vs scp, `.git`, case). */
+export function isSameGitRepository(left: string, right: string): boolean {
+  const a = parseGitRepositoryIdentity(left)
+  const b = parseGitRepositoryIdentity(right)
+  if (!a || !b) {
+    return left.trim() === right.trim()
+  }
+  return a.host === b.host && a.path === b.path
 }
 
 export function isOfficialOrganizationGitSource(url: string): boolean {

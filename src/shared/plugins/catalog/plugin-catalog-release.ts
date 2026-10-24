@@ -1,13 +1,10 @@
 import { z } from 'zod'
+import { pluginExecutionAllows, pluginExecutionProfileSchema } from '../plugin-execution-profile'
 import {
-  PLUGIN_CONTRIBUTION_POINT_POLICY,
-  PLUGIN_CONTRIBUTION_POINTS
-} from '../plugin-contribution-points'
-import {
-  pluginExecutionAllows,
-  pluginExecutionProfileSchema,
-  type PluginExecutionProfile
-} from '../plugin-execution-profile'
+  PLUGIN_CATALOG_TYPE_PROFILE,
+  PLUGIN_CATALOG_TYPES,
+  pluginCatalogTypes
+} from './plugin-catalog-types'
 import { PLUGIN_CAPABILITY_KINDS } from '../plugin-capabilities'
 import {
   pluginContributionSummary,
@@ -20,6 +17,13 @@ import { pluginFileTypeSchema } from '../plugin-file-type'
 import type { PluginManifest } from '../manifest/plugin-manifest'
 import { pluginFieldDoc, PLUGIN_MANIFEST_V2_SINCE } from '../manifest/plugin-schema-field-docs'
 
+export {
+  PLUGIN_CATALOG_TYPES,
+  pluginCatalogReleaseTypes,
+  pluginCatalogTypes,
+  type PluginCatalogType
+} from './plugin-catalog-types'
+
 const NEXT = PLUGIN_MANIFEST_V2_SINCE
 
 // Why hex only: these are painted directly, so anything that could carry url() or var() is out.
@@ -28,27 +32,6 @@ const hexColor = (description: string) =>
     .string()
     .regex(/^#[0-9a-fA-F]{6}$/, 'must be a #rrggbb color')
     .meta(pluginFieldDoc(description, NEXT, ['#1b1430']))
-
-// Why only installable types: a catalog entry naming any other type fails to parse, so the
-// v2 catalog drops it instead of listing a plugin this client cannot install.
-export const PLUGIN_CATALOG_TYPES = [
-  'interface-language',
-  'app-theme',
-  'terminal-theme',
-  'icon-theme',
-  'syntax',
-  'instructions',
-  'panel',
-  'worker'
-] as const
-
-export type PluginCatalogType = (typeof PLUGIN_CATALOG_TYPES)[number]
-
-const CATALOG_TYPE_PROFILE: Partial<Record<PluginCatalogType, PluginExecutionProfile>> = {
-  instructions: 'instructional',
-  panel: 'sandboxed-ui',
-  worker: 'trusted-worker'
-}
 
 /** The exact release a catalog vouches for. Unknown keys are stripped so a newer catalog
  *  can add optional fields without breaking clients that predate them. */
@@ -91,9 +74,10 @@ export const pluginCatalogReleaseSchema = z
       .min(1)
       .max(PLUGIN_CATALOG_TYPES.length)
       .refine((types) => new Set(types).size === types.length, 'duplicate contribution type')
+      .optional()
       .meta({
         ...pluginFieldDoc(
-          'Every kind of contribution the release carries, matching its manifest exactly. `instructions` needs the `instructional` profile or higher, `panel` needs `sandboxed-ui`, and `worker` needs `trusted-worker`.',
+          'Optional; Orca derives it from `contributes` and `execution`. When present, every kind of contribution the release carries, matching its manifest exactly. `instructions` needs the `declarative` profile or higher, `panel` needs `sandboxed-ui`, and `worker` needs `trusted-worker`.',
           NEXT,
           [['syntax']]
         ),
@@ -187,8 +171,8 @@ export const pluginCatalogReleaseSchema = z
       )
   })
   .superRefine((release, ctx) => {
-    for (const [index, type] of release.types.entries()) {
-      const required = CATALOG_TYPE_PROFILE[type]
+    for (const [index, type] of (release.types ?? []).entries()) {
+      const required = PLUGIN_CATALOG_TYPE_PROFILE[type]
       if (required && !pluginExecutionAllows(release.execution, required)) {
         ctx.addIssue({
           code: 'custom',
@@ -204,20 +188,6 @@ export const pluginCatalogReleaseSchema = z
   })
 
 export type PluginCatalogRelease = z.infer<typeof pluginCatalogReleaseSchema>
-
-export function pluginCatalogTypes(manifest: PluginManifest): PluginCatalogType[] {
-  const declared = new Set<PluginCatalogType>()
-  for (const point of PLUGIN_CONTRIBUTION_POINTS) {
-    const type = PLUGIN_CONTRIBUTION_POINT_POLICY[point].catalogType
-    if (type && manifest.contributes[point].length > 0) {
-      declared.add(type)
-    }
-  }
-  if (manifest.main !== undefined) {
-    declared.add('worker')
-  }
-  return PLUGIN_CATALOG_TYPES.filter((type) => declared.has(type))
-}
 
 /** The release entry a catalog should list for these exact bytes, so authors paste it instead of
  *  hand-copying fields that `pluginCatalogReleaseError` would refuse. */
@@ -242,7 +212,6 @@ export function pluginCatalogReleaseEntry(
     contentHash: pinned.contentHash,
     execution: manifest.execution,
     minimumOrca: manifest.engines.orca.replace(/^>=/, ''),
-    types: pluginCatalogTypes(manifest),
     name: manifest.name,
     contributes: pluginContributionSummary(manifest),
     ...(capabilities.length > 0 ? { capabilities } : {}),
@@ -276,8 +245,10 @@ export function pluginCatalogReleaseError(input: {
   if (manifest.engines.orca !== `>=${release.minimumOrca}`) {
     return 'Orca compatibility does not match the catalog release'
   }
-  const declared = [...release.types].sort().join()
-  if (pluginCatalogTypes(manifest).sort().join() !== declared) {
+  if (
+    release.types &&
+    pluginCatalogTypes(manifest).sort().join() !== [...release.types].sort().join()
+  ) {
     return 'contributions do not match the catalog release'
   }
   // Why: a suggestion must lead to a plugin that really handles the file.

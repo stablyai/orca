@@ -19,7 +19,9 @@ async function openPluginSettings(page: Page): Promise<void> {
     state.openSettingsTarget({ pane: 'plugins', repoId: null })
     state.openSettingsPage()
   })
-  await expect(page.locator('[data-settings-section="plugins"]')).toBeVisible()
+  const section = page.locator('[data-settings-section="plugins"]')
+  await expect(section).toBeVisible()
+  await expect(section.getByText('Alpha', { exact: true })).toBeVisible()
 }
 
 async function openDemoPanel(page: Page): Promise<void> {
@@ -79,7 +81,10 @@ test('runs hello-orca panel, command, and event behind visible consent', async (
 
   try {
     const installed = await orcaPage.evaluate(async (sourcePath) => {
-      const settings = await window.api.settings.set({ pluginSystemEnabled: true })
+      const settings = await window.api.settings.set({
+        pluginSystemEnabled: true,
+        pluginFullAccessEnabled: true
+      })
       window.__store?.setState({ settings })
       const result = await window.api.plugins.install({ kind: 'local-path', path: sourcePath })
       if (!result.ok) {
@@ -142,8 +147,8 @@ test('runs hello-orca panel, command, and event behind visible consent', async (
       })
       return { first, second }
     }, installed.pluginKey)
-    expect(commandResults.first).toEqual({ pong: true, count: 1, args: { source: 'e2e' } })
-    expect(commandResults.second).toEqual({ pong: true, count: 2, args: { source: 'e2e' } })
+    expect(commandResults.first).toBe('Pong! First ping.')
+    expect(commandResults.second).toBe('Pong! 2 pings so far.')
 
     await orcaPage.evaluate(async (sourcePath) => {
       const settings = await window.api.settings.set({ devPluginPaths: [sourcePath] })

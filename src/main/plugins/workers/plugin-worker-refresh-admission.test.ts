@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { fingerprintPluginConsent } from '../../../shared/plugins/approval/plugin-consent-fingerprint'
+import { devFolderConsentIdentity } from '../plugin-discovery'
 import { pluginManifestSchema } from '../../../shared/plugins/manifest/plugin-manifest'
 import { hashPluginTree } from '../plugin-content-hash'
 import type { PluginWorkerHandle } from './plugin-host-process'
@@ -58,7 +59,7 @@ async function harness() {
   if (!hash.ok) {
     throw new Error(hash.error)
   }
-  let consent = fingerprintPluginConsent(manifest, hash.hash)
+  let consent = fingerprintPluginConsent(manifest, await devFolderConsentIdentity(root, hash.hash))
   let disabled: string[] = []
   let devPaths = [root]
   const first = worker()
@@ -67,6 +68,7 @@ async function harness() {
     userDataPath,
     hostVersion: '1.4.0',
     isPluginSystemEnabled: () => true,
+    isFullAccessAllowed: () => true,
     getDisabledPlugins: () => disabled,
     getDevPluginPaths: () => devPaths,
     getPluginConsents: () => ({ [pluginKey]: consent }),

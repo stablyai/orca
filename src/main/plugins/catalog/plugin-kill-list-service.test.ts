@@ -3,7 +3,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PluginKillList } from '../../../shared/plugins/plugin-kill-list'
-import { fetchPluginKillList, PluginKillListService } from './plugin-kill-list-service'
+import {
+  fetchPluginKillList,
+  PLUGIN_KILL_LIST_RETRY_MS,
+  PluginKillListService
+} from './plugin-kill-list-service'
 import type { PluginKillListStore } from './plugin-kill-list-store'
 
 const roots: string[] = []
@@ -137,6 +141,57 @@ describe('PluginKillListService', () => {
     await expect(service.refresh()).rejects.toThrow('older snapshot')
     expect(service.snapshot()?.generatedAt).toBe('2026-07-12T20:00:00Z')
   })
+
+  it('refreshes periodically while plugins are on so long sessions see revocations', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+    let revoked = false
+    const service = new PluginKillListService({
+      pluginsDataDir: await tempRoot(),
+      fetcher: async () =>
+        revoked
+          ? killList('2026-07-13T20:00:00Z')
+          : { version: 1, generatedAt: '2026-07-12T20:00:00Z', plugins: [] }
+    })
+    await service.refresh()
+    const changed = vi.fn()
+    service.onChanged(changed)
+    service.syncPeriodicRefresh(true, 1000)
+    service.syncPeriodicRefresh(true, 1000)
+    revoked = true
+
+    vi.advanceTimersByTime(1000)
+    await vi.waitFor(() => expect(changed).toHaveBeenCalledTimes(1))
+    expect(service.reason('community.unsafe')).toBe('Malware advisory')
+
+    service.syncPeriodicRefresh(false)
+    vi.advanceTimersByTime(5000)
+    await Promise.resolve()
+    expect(changed).toHaveBeenCalledTimes(1)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+})
+
+describe('PluginKillListService retry', () => {
+  it('retries 15 minutes after a failed refresh instead of waiting a full interval', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'setTimeout', 'clearTimeout'] })
+    let online = false
+    const service = new PluginKillListService({
+      pluginsDataDir: await tempRoot(),
+      fetcher: async () => {
+        if (!online) {
+          throw new Error('offline')
+        }
+        return killList()
+      }
+    })
+    service.syncPeriodicRefresh(true)
+    await expect(service.refresh()).rejects.toThrow('offline')
+    online = true
+    await vi.advanceTimersByTimeAsync(PLUGIN_KILL_LIST_RETRY_MS)
+    await vi.waitFor(() => expect(service.reason('community.unsafe')).toBe('Malware advisory'))
+    service.dispose()
+    expect(vi.getTimerCount()).toBe(0)
+  })
 })
 
 describe('fetchPluginKillList', () => {
@@ -149,6 +204,7 @@ describe('fetchPluginKillList', () => {
     )
 
     await expect(fetchPluginKillList(fetcher)).resolves.toEqual(killList())
+    expect(fetcher.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal)
   })
 
   it('rejects non-success responses', async () => {

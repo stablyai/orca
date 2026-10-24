@@ -14,9 +14,9 @@ import {
 } from '../../ui/dialog'
 import {
   CandidateRow,
-  executionChanges,
-  newAccess,
   isCurrent,
+  movedFromSource,
+  updateAsksAgain,
   type UpdateCandidate
 } from '../review/PluginUpdateCandidate'
 import type { PluginListEntry } from '../list/plugin-list-entries'
@@ -103,6 +103,16 @@ export function PluginUpdateAllDialog({
     ).then((next) => {
       if (!stale) {
         setCandidates(next)
+        // Why unticked: a moved source is a different publisher's code until the user opts in.
+        setSkipped(
+          (current) =>
+            new Set([
+              ...current,
+              ...next
+                .filter(({ entry, preview }) => preview && movedFromSource(entry, preview) !== null)
+                .map(({ entry }) => entry.pluginKey)
+            ])
+        )
       }
     })
     return () => {
@@ -120,10 +130,7 @@ export function PluginUpdateAllDialog({
     (candidate) => installable(candidate) && !skipped.has(candidate.entry.pluginKey)
   )
   const growing = (candidates ?? []).filter(
-    (candidate) =>
-      candidate.preview &&
-      (newAccess(candidate.entry, candidate.preview).length > 0 ||
-        executionChanges(candidate.entry, candidate.preview).length > 0)
+    (candidate) => candidate.preview && updateAsksAgain(candidate.entry, candidate.preview)
   ).length
 
   const update = async (): Promise<void> => {
@@ -180,12 +187,12 @@ export function PluginUpdateAllDialog({
                 )
               : growing > 0
                 ? translate(
-                    'auto.components.settings.PluginUpdateAllDialog.someGrow',
-                    'Updates that ask for new access are expanded below. The others change only what they add.'
+                    'auto.components.settings.PluginUpdateAllDialog.someGrowAsk',
+                    'Updates that ask for new access are expanded below and need your approval again. The others install without asking.'
                   )
                 : translate(
-                    'auto.components.settings.PluginUpdateAllDialog.noneGrow',
-                    'None of these updates asks for new access.'
+                    'auto.components.settings.PluginUpdateAllDialog.noneGrowKeep',
+                    'None of these updates asks for new access, so they install without asking again.'
                   )}
           </DialogDescription>
         </DialogHeader>

@@ -15,7 +15,7 @@ describe('PluginKvStore limits', () => {
   it('enforces the value cap in UTF-8 bytes rather than JavaScript code units', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-plugin-storage-'))
     roots.push(root)
-    const store = new PluginKvStore(root, 'orca-samples.demo', 'storage.json')
+    const store = new PluginKvStore(root, 'samples.demo', 'storage.json')
     const value = '😀'.repeat(Math.ceil(PLUGIN_STORAGE_VALUE_MAX_BYTES / 4) + 1)
 
     expect(store.set('large', value)).toMatchObject({

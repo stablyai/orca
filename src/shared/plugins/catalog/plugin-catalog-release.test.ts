@@ -4,6 +4,7 @@ import {
   pluginCatalogReleaseEntry,
   pluginCatalogReleaseError,
   pluginCatalogReleaseSchema,
+  pluginCatalogReleaseTypes,
   type PluginCatalogRelease
 } from './plugin-catalog-release'
 import { pluginContributionSummary } from '../plugin-contribution-summary'
@@ -75,7 +76,7 @@ describe('catalog releases', () => {
       {
         execution: 'trusted-worker',
         main: 'main.mjs',
-        capabilities: [{ kind: 'storage' }],
+        capabilities: [{ kind: 'storage:own' }],
         contributes: {
           syntaxes: [
             {
@@ -93,6 +94,16 @@ describe('catalog releases', () => {
     const subject = manifest(overrides)
     const entry = pluginCatalogReleaseEntry(subject, { commit: COMMIT, contentHash: HASH })
     expect(check(pluginCatalogReleaseSchema.parse(entry), subject)).toBeNull()
+  })
+
+  it('derives types from the summary and profile when the catalog leaves them out', () => {
+    const derived = release({
+      types: undefined,
+      execution: 'trusted-worker',
+      contributes: [{ kind: 'panels', name: 'Dash' }]
+    })
+    expect(pluginCatalogReleaseTypes(derived)).toEqual(['panel', 'worker'])
+    expect(check(release({ types: undefined }))).toBeNull()
   })
 
   it('strips unknown optional fields instead of rejecting the release', () => {
@@ -123,7 +134,7 @@ describe('catalog releases', () => {
 
   it.each([
     ['version', release({ version: '1.3.0' }), 'version'],
-    ['profile', release({ execution: 'instructional' }), 'execution profile'],
+    ['profile', release({ execution: 'declarative' }), 'execution profile'],
     ['compatibility', release({ minimumOrca: '1.5.0' }), 'compatibility']
   ])('rejects a manifest whose %s differs from the release', (_label, record, message) => {
     expect(check(record)).toContain(message)
@@ -131,10 +142,10 @@ describe('catalog releases', () => {
 
   it('rejects declared contributions the manifest does not carry', () => {
     const record = release({
-      execution: 'instructional',
+      execution: 'declarative',
       types: ['interface-language', 'instructions']
     })
-    expect(check(record, manifest({ execution: 'instructional' }))).toContain('contributions')
+    expect(check(record, manifest({ execution: 'declarative' }))).toContain('contributions')
   })
 
   it('accepts file types only when a syntax in the release handles them', () => {
@@ -202,7 +213,7 @@ describe('catalog release summaries', () => {
       })
     ).toBe('the listed contributions do not match the catalog release')
     expect(
-      pluginCatalogReleaseError({ ...base, release: { ...listed, capabilities: ['secrets'] } })
+      pluginCatalogReleaseError({ ...base, release: { ...listed, capabilities: ['secrets:own'] } })
     ).toBe('the listed capabilities do not match the catalog release')
   })
 

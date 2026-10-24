@@ -33,6 +33,8 @@ type PluginSettingsOverviewProps = {
   logsByPlugin: Readonly<Record<string, PluginLogsState>>
   onShowLogs: (pluginKey: string) => void
   onOpenShortcuts: () => void
+  /** Opens plugin settings at the full access switch. */
+  onOpenFullAccessSetting: () => void
   sourcesOpen: boolean
   setSourcesOpen: (open: boolean) => void
   page: PluginPageNavigation
@@ -132,6 +134,7 @@ export function PluginSettingsOverview({
   logsByPlugin,
   onShowLogs,
   onOpenShortcuts,
+  onOpenFullAccessSetting,
   sourcesOpen,
   setSourcesOpen,
   page
@@ -155,6 +158,7 @@ export function PluginSettingsOverview({
           logsByPlugin={logsByPlugin}
           onShowLogs={onShowLogs}
           onOpenShortcuts={onOpenShortcuts}
+          onOpenFullAccessSetting={onOpenFullAccessSetting}
           page={page}
           sourcesOpen={sourcesOpen}
           setSourcesOpen={setSourcesOpen}

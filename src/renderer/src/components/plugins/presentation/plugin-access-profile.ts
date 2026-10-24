@@ -48,7 +48,7 @@ export type PluginTrust = {
   /** Its own process with full access. */
   worker: boolean
   /** Commands, shortcuts, recipes or agent instructions that act under your authority. */
-  instructional: boolean
+  declarative: boolean
   /** A sandboxed panel; bounded by its capabilities. */
   panel: boolean
 }
@@ -77,7 +77,7 @@ function usesProfile(points: PluginKnownPoints, profile: PluginExecutionProfile)
 
 /**
  * Why over-warn when unknown: a profile allows everything below it, and an older host's list
- * hides some instructional points (agents), so only known-absent contributions drop a warning.
+ * hides some declarative points (agents), so only known-absent contributions drop a warning.
  */
 export function pluginTrust({
   execution,
@@ -89,14 +89,13 @@ export function pluginTrust({
   hasWorker?: boolean
 }): PluginTrust {
   if (execution === 'data') {
-    return { worker: false, instructional: false, panel: false }
+    return { worker: false, declarative: false, panel: false }
   }
   const worker =
     execution === 'trusted-worker' || hasWorker || usesProfile(points, 'trusted-worker') === true
-  const instructional =
-    execution === 'instructional' || (usesProfile(points, 'instructional') ?? true)
+  const declarative = execution === 'declarative' || (usesProfile(points, 'declarative') ?? true)
   const panel = execution === 'sandboxed-ui' || points?.has('panels') === true
-  return { worker, instructional, panel }
+  return { worker, declarative, panel }
 }
 
 /** An installed plugin's trust, from its manifest once read, else what its list entry shows. */

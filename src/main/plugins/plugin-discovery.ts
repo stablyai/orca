@@ -1,4 +1,4 @@
-import { readdir } from 'node:fs/promises'
+import { readdir, realpath } from 'node:fs/promises'
 import type { Dirent } from 'node:fs'
 import { join } from 'node:path'
 import { PLUGIN_CONTENT_HASH_PATTERN } from '../../shared/plugins/plugin-install-lockfile'
@@ -13,7 +13,7 @@ import {
 import { pluginManifestCompatibilityError } from '../../shared/plugins/manifest/plugin-manifest-compatibility'
 import {
   fingerprintPluginConsent,
-  hasInstructionalPluginContributions,
+  hasDeclarativePluginContributions,
   requiresPluginContentApproval
 } from '../../shared/plugins/approval/plugin-consent-fingerprint'
 import { validateDeclaredPluginArtifacts } from './plugin-artifact-validation'
@@ -44,7 +44,7 @@ export type ValidDiscoveredPlugin = {
   manifest: PluginManifest
   /** Fingerprint of the capabilities and trusted-worker execution tier. */
   consentFingerprint: string
-  /** Immutable tree identity included in consent for instructional packs. */
+  /** Immutable tree identity included in consent for declarative packs. */
   consentContentHash?: string | null
   /** Content hash the install dir is named by; null for dev plugins. */
   contentHash: string | null
@@ -133,7 +133,7 @@ async function readManifestDir(
   }
   // Why dev trees bind only instructions: dev code is the author's working copy, and
   // binding it would re-prompt on every save.
-  if (isDev && hasInstructionalPluginContributions(manifest)) {
+  if (isDev && hasDeclarativePluginContributions(manifest)) {
     const treeHash = await hashPluginTree(rootDir)
     if (!treeHash.ok) {
       return { pluginKey, rootDir, error: treeHash.error, isDev }
@@ -144,11 +144,25 @@ async function readManifestDir(
     pluginKey,
     rootDir,
     manifest,
-    consentFingerprint: fingerprintPluginConsent(manifest, consentContentIdentity),
+    consentFingerprint: fingerprintPluginConsent(
+      manifest,
+      isDev
+        ? await devFolderConsentIdentity(rootDir, consentContentIdentity)
+        : consentContentIdentity
+    ),
     consentContentHash: consentContentIdentity ?? null,
     contentHash: null,
     isDev
   }
+}
+
+/** Why the folder: otherwise approving one dev folder approves any other claiming the same key. */
+export async function devFolderConsentIdentity(
+  rootDir: string,
+  contentIdentity?: string
+): Promise<string> {
+  const folder = await realpath(rootDir).catch(() => rootDir)
+  return `dev-folder:${folder}\0${contentIdentity ?? ''}`
 }
 
 async function readInstalledPlugin(

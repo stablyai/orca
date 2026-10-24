@@ -9,7 +9,7 @@ import {
 /** Ordered from least to most authority; each profile may carry everything below it. */
 export const PLUGIN_EXECUTION_PROFILES = [
   'data',
-  'instructional',
+  'declarative',
   'sandboxed-ui',
   'trusted-worker'
 ] as const
@@ -39,7 +39,7 @@ export function derivePluginExecutionProfile(manifest: ExecutionSubject): Plugin
   if (manifest.main !== undefined) {
     return 'trusted-worker'
   }
-  let required: PluginExecutionProfile = manifest.capabilities.length > 0 ? 'instructional' : 'data'
+  let required: PluginExecutionProfile = manifest.capabilities.length > 0 ? 'declarative' : 'data'
   for (const point of PLUGIN_CONTRIBUTION_POINTS) {
     const profile = PLUGIN_CONTRIBUTION_POINT_POLICY[point].execution
     if ((manifest.contributes[point]?.length ?? 0) > 0 && rank(profile) > rank(required)) {

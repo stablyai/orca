@@ -162,6 +162,7 @@ export function createRendererRecoveryWindowHarness(): RendererRecoveryWindowHar
     }),
     setZoomLevel: vi.fn(),
     setBackgroundThrottling: vi.fn(),
+    setWebRTCIPHandlingPolicy: vi.fn(),
     invalidate: vi.fn(),
     setWindowOpenHandler: vi.fn(),
     send: vi.fn()

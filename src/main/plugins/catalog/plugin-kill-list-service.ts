@@ -9,6 +9,13 @@ import { PluginKillListStore } from './plugin-kill-list-store'
 
 export const PLUGIN_KILL_LIST_URL = 'https://onorca.dev/plugins/kill-list.json'
 const PLUGIN_KILL_LIST_DOWNLOAD_LIMIT = 4 * 1024 * 1024
+// Why: revocations must reach sessions that stay open for days, not only fresh launches.
+export const PLUGIN_KILL_LIST_REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000
+// Why: a failed refresh must not leave revocations hours stale until the next interval.
+export const PLUGIN_KILL_LIST_RETRY_MS = 15 * 60 * 1000
+const PLUGIN_KILL_LIST_RETRY_CAP_MS = 2 * 60 * 60 * 1000
+// Why: refreshes are chained, so one stalled request would block every later one.
+const PLUGIN_KILL_LIST_FETCH_TIMEOUT_MS = 30_000
 
 type PluginKillListFetcher = () => Promise<PluginKillList>
 
@@ -18,11 +25,10 @@ export class PluginKillListService {
   private readonly listeners = new Set<() => void>()
   private currentList: PluginKillList | null = null
   private loadPromise: Promise<void> | null = null
-  private refreshChain: Promise<PluginKillList> = Promise.resolve({
-    version: 1,
-    generatedAt: '1970-01-01T00:00:00Z',
-    plugins: []
-  })
+  private periodicTimer: ReturnType<typeof setInterval> | null = null
+  private retryTimer: ReturnType<typeof setTimeout> | null = null
+  private failures = 0
+  private refreshChain: Promise<PluginKillList> = Promise.resolve(emptyKillList())
 
   constructor(options: {
     pluginsDataDir: string
@@ -70,7 +76,59 @@ export class PluginKillListService {
       .catch(() => this.currentList ?? emptyKillList())
       .then(() => this.performRefresh())
     this.refreshChain = refresh
+    refresh.then(
+      () => {
+        this.failures = 0
+      },
+      () => this.scheduleRetry()
+    )
     return refresh
+  }
+
+  private scheduleRetry(): void {
+    if (!this.periodicTimer || this.retryTimer) {
+      return
+    }
+    this.failures += 1
+    const delay = Math.min(
+      PLUGIN_KILL_LIST_RETRY_MS * 2 ** (this.failures - 1),
+      PLUGIN_KILL_LIST_RETRY_CAP_MS
+    )
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = null
+      void this.refresh().catch((error) =>
+        console.warn('[plugins] failed to refresh plugin safety list; using cached state:', error)
+      )
+    }, delay)
+    this.retryTimer.unref?.()
+  }
+
+  /** Keeps a background refresh running while plugins are on; stops it when they are off. */
+  syncPeriodicRefresh(enabled: boolean, intervalMs = PLUGIN_KILL_LIST_REFRESH_INTERVAL_MS): void {
+    if (!enabled) {
+      this.dispose()
+      return
+    }
+    if (this.periodicTimer) {
+      return
+    }
+    this.periodicTimer = setInterval(() => {
+      void this.refresh().catch((error) =>
+        console.warn('[plugins] failed to refresh plugin safety list; using cached state:', error)
+      )
+    }, intervalMs)
+    this.periodicTimer.unref?.()
+  }
+
+  dispose(): void {
+    if (this.periodicTimer) {
+      clearInterval(this.periodicTimer)
+      this.periodicTimer = null
+    }
+    if (this.retryTimer) {
+      clearTimeout(this.retryTimer)
+      this.retryTimer = null
+    }
   }
 
   private async performRefresh(): Promise<PluginKillList> {
@@ -98,7 +156,10 @@ export async function fetchPluginKillList(
   fetcher: typeof fetch = fetch,
   url = PLUGIN_KILL_LIST_URL
 ): Promise<PluginKillList> {
-  const response = await fetcher(url, { cache: 'no-store' })
+  const response = await fetcher(url, {
+    cache: 'no-store',
+    signal: AbortSignal.timeout(PLUGIN_KILL_LIST_FETCH_TIMEOUT_MS)
+  })
   if (!response.ok) {
     throw new Error(`plugin kill-list request failed with HTTP ${response.status}`)
   }

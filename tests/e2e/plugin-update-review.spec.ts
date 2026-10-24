@@ -155,6 +155,11 @@ test('confirms card removal and shares single/bulk update review without strandi
       state?.openSettingsPage()
     })
     await page.getByRole('button', { name: 'Turn on plugins', exact: true }).click()
+    // The 1.1.0 updates are full-access workers, which stay blocked behind this second switch.
+    await page.evaluate(async () => {
+      const settings = await window.api.settings.set({ pluginFullAccessEnabled: true })
+      window.__store?.setState({ settings })
+    })
     const appearanceBefore = await page.evaluate(() => {
       const settings = window.__store?.getState().settings
       return {

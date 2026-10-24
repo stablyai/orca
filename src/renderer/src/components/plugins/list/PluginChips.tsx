@@ -2,7 +2,7 @@ import { translate } from '@/i18n/i18n'
 import { Badge } from '../../ui/badge'
 import type { PluginListEntry } from './plugin-list-entries'
 
-/** Dev, Bundled and Unverified facts beside a plugin's name. */
+/** Dev, Bundled, auto-update and Unverified facts beside a plugin's name. */
 export function PluginChips({ entry }: { entry: PluginListEntry }): React.JSX.Element {
   const installed = entry.installed
   const unverified = !entry.official && !installed?.bundled
@@ -16,6 +16,20 @@ export function PluginChips({ entry }: { entry: PluginListEntry }): React.JSX.El
       {installed?.bundled ? (
         <Badge variant="hostContext">
           {translate('auto.components.settings.PluginSettingsRow.bundled', 'Bundled')}
+        </Badge>
+      ) : null}
+      {entry.autoUpdate.needsReview ? (
+        <Badge variant="hostContext">
+          {translate(
+            'auto.components.settings.PluginChips.updateNeedsReview',
+            'Update needs review'
+          )}
+        </Badge>
+      ) : entry.autoUpdate.updatedTo ? (
+        <Badge variant="hostContext">
+          {translate('auto.components.settings.PluginChips.updatedTo', 'Updated to {{value0}}', {
+            value0: entry.autoUpdate.updatedTo
+          })}
         </Badge>
       ) : null}
       {unverified ? (

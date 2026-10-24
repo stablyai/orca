@@ -12,7 +12,8 @@ export function buildPanelDesignTokenCss(): string {
   for (const token of PANEL_DESIGN_TOKEN_ALLOWLIST) {
     const value = styles.getPropertyValue(token).trim()
     if (value.length > 0) {
-      declarations.push(`${token}:${value.replaceAll(/[{}<>;]/g, '')}`)
+      // Why prefixed: bare names collide with a panel's own shadcn/Tailwind variables.
+      declarations.push(`--orca-${token.slice(2)}:${value.replaceAll(/[{}<>;]/g, '')}`)
     }
   }
   return declarations.join(';')

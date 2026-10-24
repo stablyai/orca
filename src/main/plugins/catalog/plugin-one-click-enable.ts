@@ -1,5 +1,5 @@
-import { pluginExecutionProfile } from '../../shared/plugins/plugin-execution-profile'
-import type { ValidDiscoveredPlugin } from './plugin-discovery'
+import { pluginExecutionProfile } from '../../../shared/plugins/plugin-execution-profile'
+import type { ValidDiscoveredPlugin } from '../plugin-discovery'
 
 /**
  * One-click install for content-only plugins. Why main decides: the click counts as consent only

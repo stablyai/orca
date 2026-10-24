@@ -14,7 +14,7 @@ afterEach(() => {
 
 function command(handler: ActivePluginCommand['handler']): ActivePluginCommand {
   return {
-    pluginKey: 'orca-samples.tasks',
+    pluginKey: 'samples.tasks',
     pluginName: 'Tasks',
     id: 'open',
     title: 'Open Tasks',
@@ -47,7 +47,7 @@ describe('plugin command execution', () => {
     const result = await executePluginCommand(command({ type: 'worker' }), 'plugin-keybinding')
 
     expect(invokeCommand).toHaveBeenCalledWith({
-      pluginKey: 'orca-samples.tasks',
+      pluginKey: 'samples.tasks',
       commandId: 'open'
     })
     expect(result).toEqual({ ok: true })

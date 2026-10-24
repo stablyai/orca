@@ -16,7 +16,6 @@ import {
   type DiscoveredPlugin,
   type ValidDiscoveredPlugin
 } from './plugin-discovery'
-import { PluginEventBus } from './plugin-event-bus'
 import { PluginAuditLog } from './plugin-audit-log'
 import { executePluginHostCallRequest } from './workers/plugin-host-call-adapter'
 import { PluginContentVerifier } from './plugin-content-integrity'
@@ -35,6 +34,7 @@ import type { PluginRunState } from './workers/plugin-supervisor'
 import {
   isPluginApproved,
   livePluginActivationState,
+  pluginPolicyBlockError,
   snapshotPluginConsentLists
 } from './plugin-activation-policy'
 import { PluginContentPackRegistry } from './contributions/plugin-content-pack-registry'
@@ -48,7 +48,6 @@ import { PluginInstallationState } from './installation/plugin-installation-stat
 export class PluginService {
   readonly options: PluginServiceOptions
   private readonly registry = createPluginExtensionRegistry()
-  private readonly eventBus = new PluginEventBus()
   private readonly audit: PluginAuditLog
   private readonly workerController: PluginWorkerController
   private readonly contentVerifier = new PluginContentVerifier()
@@ -97,8 +96,7 @@ export class PluginService {
       executeHostCall: (pluginKey, method, params) =>
         this.executeHostCall(pluginKey, method, params, { viaPanel: false }),
       log: (pluginKey) => this.installed.logs.capture(pluginKey),
-      onStateChanged: () => this.notifyChanged(false),
-      onWorkerGone: (pluginKey) => this.eventBus.clear(pluginKey)
+      onStateChanged: () => this.notifyChanged(false)
     })
   }
 
@@ -134,10 +132,14 @@ export class PluginService {
     const enabled = this.options.isPluginSystemEnabled()
     const devPaths = this.options.getDevPluginPaths()
     const consentLists = snapshotPluginConsentLists(this.options)
-    const run = (): Promise<void> => this.performRefresh(enabled, devPaths, consentLists)
-    const refresh = this.refreshChain.then(run)
-    this.refreshChain = refresh.catch(() => undefined)
-    return refresh
+    return this.enqueue(() => this.performRefresh(enabled, devPaths, consentLists))
+  }
+
+  /** Serializes discovery, removal, and reconciliation so none sees another's partial state. */
+  private enqueue(work: () => Promise<void>): Promise<void> {
+    const queued = this.refreshChain.then(work)
+    this.refreshChain = queued.catch(() => undefined)
+    return queued
   }
 
   private async performRefresh(
@@ -212,7 +214,7 @@ export class PluginService {
       this.contentPacksReady &&
       this.activationState(plugin) === 'approved' &&
       !this.contentPacks.error(plugin.pluginKey) &&
-      !this.options.getPluginKillListEntry?.(plugin.pluginKey)
+      !pluginPolicyBlockError(this.options, plugin.pluginKey, plugin)
     )
   }
 
@@ -221,9 +223,8 @@ export class PluginService {
   }
 
   activationError(pluginKey: string): string | null {
-    const blocked = this.options.getPluginKillListEntry?.(pluginKey)
     return (
-      (blocked ? `Blocked by Orca's plugin safety list: ${blocked.reason}` : null) ??
+      pluginPolicyBlockError(this.options, pluginKey, this.findValidPlugin(pluginKey)) ??
       this.contentPacks.error(pluginKey) ??
       this.workerController.activationError(pluginKey)
     )
@@ -255,8 +256,7 @@ export class PluginService {
         services: this.runtimeDelegate
           ? bindPluginHostServices({
               delegate: this.runtimeDelegate,
-              pluginsDataDir: getPluginsDataDir(this.options.userDataPath),
-              subscribeEvents: (key, events) => this.eventBus.subscribe(key, events)
+              pluginsDataDir: getPluginsDataDir(this.options.userDataPath)
             })
           : null,
         audit: this.audit
@@ -285,17 +285,15 @@ export class PluginService {
       event,
       payload,
       plugins: this.installed.discovered,
-      eventBus: this.eventBus,
       workerController: this.workerController,
       isRuntimeApproved: (plugin) => this.canStartPluginWork(plugin),
+      grantedCapabilities: (pluginKey) => this.getGrantedCapabilities(pluginKey),
       logWarning: (pluginKey) => this.installed.captureLog(pluginKey, 'warn')
     })
   }
 
   removePlugin(pluginKey: string, remove: () => Promise<void>): Promise<void> {
-    const removal = this.refreshChain.then(() => this.installed.remove(pluginKey, remove))
-    this.refreshChain = removal.catch(() => undefined)
-    return removal
+    return this.enqueue(() => this.installed.remove(pluginKey, remove))
   }
 
   async deactivatePlugin(pluginKey: string): Promise<void> {
@@ -306,9 +304,7 @@ export class PluginService {
   /** Reconciles live workers and client projections after consent or
    * enablement changes without re-reading plugin files or starting workers. */
   async reconcileActivationState(): Promise<void> {
-    const reconcile = this.refreshChain.then(() => this.performActivationStateReconciliation())
-    this.refreshChain = reconcile.catch(() => undefined)
-    return reconcile
+    return this.enqueue(() => this.performActivationStateReconciliation())
   }
 
   private async performActivationStateReconciliation(): Promise<void> {

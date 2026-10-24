@@ -1,5 +1,4 @@
 import { z } from 'zod'
-import { isPluginPanelAction } from './workers/plugin-host-api'
 
 /**
  * postMessage protocol between a sandboxed plugin panel iframe and the host
@@ -8,7 +7,7 @@ import { isPluginPanelAction } from './workers/plugin-host-api'
  * for trust: the host verifies the sending window's identity and re-validates
  * every payload here; main re-checks capabilities before executing.
  *
- * Param/result schemas come from the host API v0 spec table — the panel
+ * Param/result schemas come from the host API 1 spec table — the panel
  * bridge is a transport, not a second contract.
  */
 
@@ -39,7 +38,9 @@ export const panelActionRequestSchema = z.object({
   type: z.literal(PANEL_ACTION_REQUEST_TYPE),
   /** Plugin-chosen correlation id echoed back on the result message. */
   requestId: z.string().min(1).max(128),
-  action: z.string().min(1).refine(isPluginPanelAction, 'not a panel-callable action'),
+  // Why shape only: the host gate decides which methods panels may call, so a method a newer
+  // host adds reaches it from an older client instead of dying here.
+  action: z.string().min(1).max(128),
   params: z.unknown().optional()
 })
 

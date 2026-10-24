@@ -8,9 +8,9 @@ import type {
   PluginMarketplaceHostInstallPreview
 } from '../../../../../preload/api-types'
 import { pluginManifestSchema } from '../../../../../shared/plugins/manifest/plugin-manifest'
+import type { PluginCapabilityKind } from '../../../../../shared/plugins/plugin-capabilities'
 import type { PluginListEntry } from '../list/plugin-list-entries'
 import { PluginUpdateAllDialog } from './PluginUpdateAllDialog'
-import { newAccess } from '../review/PluginUpdateCandidate'
 
 vi.mock('../../ui/dialog', () => ({
   Dialog: ({ open, children }: { open: boolean; children: React.ReactNode }) =>
@@ -56,6 +56,7 @@ function entry(pluginKey: string, kinds: string[]): PluginListEntry {
     types: [],
     minimumOrca: null,
     catalogIds: [],
+    autoUpdate: { updatedTo: null, needsReview: false },
     updatable: true,
     updateVersion: '1.1.0',
     installed: plugin,
@@ -65,7 +66,7 @@ function entry(pluginKey: string, kinds: string[]): PluginListEntry {
 
 function preview(
   pluginKey: string,
-  kinds: string[],
+  kinds: PluginCapabilityKind[],
   orca?: string
 ): PluginMarketplaceHostInstallPreview {
   return {
@@ -80,6 +81,7 @@ function preview(
     resolvedCommit: 'r',
     contentHash: 'h',
     consentFingerprint: 'f',
+    accessGrowth: { capabilities: kinds, execution: null, contributions: [] },
     manifest: pluginManifestSchema.parse({
       manifestVersion: 1,
       id: 'test',
@@ -135,6 +137,7 @@ describe('PluginUpdateAllDialog', () => {
   it('warns before a content-only plugin becomes a trusted worker with no added capabilities', async () => {
     const worker = preview('a', [])
     worker.manifest = { ...worker.manifest, main: 'worker.js' }
+    worker.accessGrowth = { capabilities: [], execution: 'trusted-worker', contributions: [] }
     installApi({ previewMarketplaceUpdate: vi.fn().mockResolvedValue(worker) })
     const container = await renderDialog([entry('a', [])])
     expect(container.textContent).toContain(
@@ -144,10 +147,67 @@ describe('PluginUpdateAllDialog', () => {
     expect(container.textContent).not.toContain('None of these updates asks for new access')
   })
 
-  it('names only access the installed version lacks', () => {
-    expect(newAccess(entry('a', ['storage']), preview('a', ['storage', 'secrets']))).toEqual([
-      'secrets'
-    ])
+  it('flags an update whose catalog moved it to another repository and leaves it unticked', async () => {
+    const installMarketplacePlugin = vi.fn()
+    installApi({
+      previewMarketplaceUpdate: vi.fn(({ pluginKey }: { pluginKey: string }) =>
+        Promise.resolve({
+          ...preview(pluginKey, []),
+          source: { kind: 'git', url: 'https://example.com/acme/plugin.git', ref: 'main' },
+          ...(pluginKey === 'a' ? { repositoryMoved: true as const } : {})
+        })
+      ),
+      installMarketplacePlugin
+    })
+    const moved = entry('a', [])
+    moved.installed!.source = {
+      kind: 'marketplace',
+      reference: 'git@example.com:acme/original.git',
+      resolvedCommit: 'r0',
+      contentHash: 'h0'
+    }
+    const sameRepo = entry('b', [])
+    sameRepo.installed!.source = {
+      kind: 'marketplace',
+      reference: 'git@example.com:ACME/plugin',
+      resolvedCommit: 'r0',
+      contentHash: 'h0'
+    }
+    const container = await renderDialog([moved, sameRepo])
+
+    expect(container.textContent).toContain(
+      'Now comes from a different repository: https://example.com/acme/plugin.git (was git@example.com:acme/original.git)'
+    )
+    expect(container.querySelector('#plugin-update-a')?.getAttribute('aria-checked')).toBe('false')
+    expect(container.querySelector('#plugin-update-b')?.getAttribute('aria-checked')).toBe('true')
+  })
+
+  it('trusts main on what grows, so a lower execution profile is not new access', async () => {
+    const panel = preview('a', [])
+    panel.manifest = pluginManifestSchema.parse({
+      ...panel.manifest,
+      contributes: { panels: [{ id: 'dash', title: 'Dash', entry: 'panel.html' }] }
+    })
+    installApi({ previewMarketplaceUpdate: vi.fn().mockResolvedValue(panel) })
+    const worker = entry('a', [])
+    worker.installed!.execution = 'trusted-worker'
+    const container = await renderDialog([worker])
+    expect(container.textContent).toContain('No new access')
+  })
+
+  it('expands an update that adds a shortcut even with no new capability', async () => {
+    installApi({
+      previewMarketplaceUpdate: vi.fn(({ pluginKey }: { pluginKey: string }) =>
+        Promise.resolve({
+          ...preview(pluginKey, []),
+          accessGrowth: { capabilities: [], execution: null, contributions: ['keybindings'] }
+        })
+      ),
+      installMarketplacePlugin: vi.fn()
+    })
+    const container = await renderDialog([entry('a', [])])
+    expect(container.textContent).toContain('Adds keyboard shortcuts')
+    expect(container.textContent).toContain('need your approval again')
   })
 
   it('reviews every update in one dialog and installs only the ticked ones', async () => {
@@ -157,7 +217,7 @@ describe('PluginUpdateAllDialog', () => {
       value: {
         plugins: {
           previewMarketplaceUpdate: vi.fn(({ pluginKey }: { pluginKey: string }) =>
-            Promise.resolve(preview(pluginKey, pluginKey === 'a' ? ['secrets'] : []))
+            Promise.resolve(preview(pluginKey, pluginKey === 'a' ? ['secrets:own'] : []))
           ),
           installMarketplacePlugin
         }
@@ -177,7 +237,9 @@ describe('PluginUpdateAllDialog', () => {
         />
       )
     })
-    expect(container.textContent).toContain('Updates that ask for new access are expanded below.')
+    expect(container.textContent).toContain(
+      'Updates that ask for new access are expanded below and need your approval again.'
+    )
     expect(container.textContent).toContain('New access:')
 
     const first = container.querySelector<HTMLButtonElement>('#plugin-update-a')

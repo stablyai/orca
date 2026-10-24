@@ -1,4 +1,5 @@
 import { Blocks } from 'lucide-react'
+import { isWorkspaceScopedPluginContext } from '../../../../shared/plugins/plugin-command-contribution'
 import type { ActivePluginCommand } from '@/store/plugin-panels'
 import { executePluginCommand } from '@/lib/plugin-command-execution'
 import { translate } from '@/i18n/i18n'
@@ -23,7 +24,7 @@ export function buildPluginQuickActions(
       translate('auto.components.cmd.j.pluginQuickActions.keyword', 'plugin command')
     ],
     isAvailable: (context) =>
-      command.context === 'worktree' && !context.activeWorktreeId
+      isWorkspaceScopedPluginContext(command.context) && !context.activeWorktreeId
         ? { available: false, reason: 'no-active-workspace' }
         : { available: true },
     run: async () => {

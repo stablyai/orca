@@ -30,7 +30,7 @@ describe('PluginContentPackRegistry', () => {
     const manifest = pluginManifestSchema.parse({
       manifestVersion: 1,
       id: 'mixed-content',
-      publisher: 'orca-samples',
+      publisher: 'samples',
       name: 'Mixed Content',
       version: '1.0.0',
       engines: { orca: '>=1.0.0' },
@@ -44,7 +44,7 @@ describe('PluginContentPackRegistry', () => {
       capabilities: []
     })
     const plugin: ValidDiscoveredPlugin = {
-      pluginKey: 'orca-samples.mixed-content',
+      pluginKey: 'samples.mixed-content',
       rootDir,
       manifest,
       consentFingerprint: fingerprintPluginConsent(manifest),
@@ -73,7 +73,7 @@ describe('PluginContentPackRegistry', () => {
     const manifest = pluginManifestSchema.parse({
       manifestVersion: 1,
       id: 'mixed-recipes',
-      publisher: 'orca-samples',
+      publisher: 'samples',
       name: 'Mixed Recipes',
       version: '1.0.0',
       engines: { orca: '>=1.0.0' },
@@ -89,7 +89,7 @@ describe('PluginContentPackRegistry', () => {
       throw new Error(content.error)
     }
     const plugin: ValidDiscoveredPlugin = {
-      pluginKey: 'orca-samples.mixed-recipes',
+      pluginKey: 'samples.mixed-recipes',
       rootDir,
       manifest,
       consentFingerprint: fingerprintPluginConsent(manifest, content.hash),
@@ -125,7 +125,7 @@ describe('PluginContentPackRegistry', () => {
     const manifest = pluginManifestSchema.parse({
       manifestVersion: 1,
       id: 'kill-race',
-      publisher: 'orca-samples',
+      publisher: 'samples',
       name: 'Kill Race',
       version: '1.0.0',
       engines: { orca: '>=1.0.0' },
@@ -141,7 +141,7 @@ describe('PluginContentPackRegistry', () => {
       throw new Error(content.error)
     }
     const plugin: ValidDiscoveredPlugin = {
-      pluginKey: 'orca-samples.kill-race',
+      pluginKey: 'samples.kill-race',
       rootDir,
       manifest,
       consentFingerprint: fingerprintPluginConsent(manifest, content.hash),

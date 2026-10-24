@@ -1,5 +1,5 @@
 import type { PluginCatalogRelease } from '../catalog/plugin-catalog-release'
-import { orcaEngineRangeSchema, satisfiesOrcaEngineRange } from './plugin-manifest'
+import { satisfiesOrcaEngineRange } from './plugin-manifest'
 
 /** Newest manifest format this build reads. */
 export const PLUGIN_MANIFEST_VERSION_CURRENT = 2
@@ -13,11 +13,9 @@ export function pluginManifestCompatibilityError(raw: unknown, hostVersion: stri
   const engines = 'engines' in raw ? raw.engines : undefined
   const range =
     typeof engines === 'object' && engines !== null && 'orca' in engines ? engines.orca : undefined
-  if (
-    orcaEngineRangeSchema.safeParse(range).success &&
-    typeof range === 'string' &&
-    !satisfiesOrcaEngineRange(hostVersion, range)
-  ) {
+  // Why only the leading floor: a later range grammar (`>=1.6.0 <2`) must still name the gap here.
+  const floor = typeof range === 'string' ? /^\s*(>=\d+\.\d+\.\d+)/.exec(range)?.[1] : undefined
+  if (typeof range === 'string' && floor && !satisfiesOrcaEngineRange(hostVersion, floor)) {
     return `requires Orca ${range} (this is ${hostVersion})`
   }
   const version = 'manifestVersion' in raw ? raw.manifestVersion : undefined

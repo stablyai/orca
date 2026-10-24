@@ -39,6 +39,7 @@ function serviceOff(userDataPath: string) {
   const service = {
     options: {
       isPluginSystemEnabled: () => false,
+      isFullAccessAllowed: () => true,
       userDataPath,
       hostVersion: PLUGIN_SCHEMA_NEWEST_SINCE,
       getDevPluginPaths: () => [],
