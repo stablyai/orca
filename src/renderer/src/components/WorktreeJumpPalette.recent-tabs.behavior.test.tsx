@@ -150,6 +150,7 @@ async function flushEffects(): Promise<void> {
 async function renderPalette(overrides: Partial<AppState>): Promise<void> {
   useAppStore.setState({
     activeModal: 'worktree-palette',
+    modalData: { view: 'all' },
     activeWorktreeId: null,
     repos: [makeRepo()],
     tabsByWorktree: {},
@@ -163,7 +164,7 @@ async function renderPalette(overrides: Partial<AppState>): Promise<void> {
     alwaysShowDefaultBranchWorkspace: true,
     lastVisitedAtByWorktreeId: {},
     ...overrides
-  } as Partial<AppState>)
+  })
 
   await act(async () => {
     testRoot.render(<WorktreeJumpPalette />)

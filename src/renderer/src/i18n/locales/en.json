@@ -629,7 +629,28 @@
     "taskCreate": "Create workspace",
     "taskSearchLoading": "Searching tasks…",
     "taskSearchFailed": "Some task sources could not be searched",
-    "taskSearchRetry": "Retry"
+    "taskSearchRetry": "Retry",
+    "view": {
+      "ariaLabel": "Result type",
+      "worktrees": "Workspaces",
+      "tabs": "Tabs",
+      "actions": "Actions & Settings",
+      "all": "All",
+      "searchWorktrees": "Search workspaces and projects...",
+      "searchTabs": "Search chats, terminals, and tabs...",
+      "searchActions": "Search actions and settings...",
+      "matchesIn": "{{value0}} in {{value1}}",
+      "show": "Show",
+      "noWorktreeMatches": "No workspaces match",
+      "noTabMatches": "No tabs match",
+      "noActionMatches": "No actions or settings match",
+      "noMatchesAnywhere": "Nothing in other views matches either. Try a different search.",
+      "noWorktrees": "No other workspaces to switch to",
+      "noTabs": "No open tabs",
+      "noActions": "No actions available",
+      "emptySwitch": "Press Tab to switch views.",
+      "switchHint": "Switch view"
+    }
   },
   "auto": {
     "App": {

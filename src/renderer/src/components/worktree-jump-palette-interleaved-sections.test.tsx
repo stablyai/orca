@@ -259,6 +259,7 @@ async function flushEffects(): Promise<void> {
 async function renderPalette(overrides: Partial<AppState>): Promise<void> {
   useAppStore.setState({
     activeModal: 'worktree-palette',
+    modalData: { view: 'all' },
     activeWorktreeId: null,
     repos: [makeRepo()],
     tabsByWorktree: {},
@@ -270,7 +271,7 @@ async function renderPalette(overrides: Partial<AppState>): Promise<void> {
     alwaysShowDefaultBranchWorkspace: true,
     lastVisitedAtByWorktreeId: {},
     ...overrides
-  } as Partial<AppState>)
+  })
 
   await act(async () => {
     testRoot.render(<WorktreeJumpPalette />)
@@ -419,8 +420,9 @@ describe('WorktreeJumpPalette interleaved primary sections', () => {
 
     const rows = getPrimaryRowsBySectionHeader()
     expect(rows).toEqual([{ header: 'Open Tabs', rowId: workspaceTabItemId('wt-tabs', 'tab-0') }])
-    expect(testContainer.textContent).toContain('Open Tabs')
-    expect(testContainer.textContent).not.toContain('Workspaces')
+    const listText = testContainer.querySelector('[data-command-list]')?.textContent
+    expect(listText).toContain('Open Tabs')
+    expect(listText).not.toContain('Workspaces')
   })
 
   it('puts the tab title on the left and the worktree name in the badge rail', async () => {

@@ -165,6 +165,7 @@ export default function PaletteFilterMenu({
           type="button"
           variant={active ? 'secondary' : 'outline'}
           size="xs"
+          data-palette-filter-trigger=""
           aria-label={translate('worktreeJumpPalette.filter.trigger', 'Filter results')}
           data-active={active ? 'true' : undefined}
           className="ml-2"

@@ -11,6 +11,10 @@ import { getWorktreePaletteCreateActionState } from '@/lib/worktree-palette-crea
 import type { CmdJActiveGroupSnapshot } from '@/components/cmd-j/quick-action-context'
 import type { WorkspaceVisibleTabType } from '../../../shared/tab-types'
 import type { PaletteItem } from './worktree-jump-palette-model'
+import {
+  resolveCmdJPaletteOpeningView,
+  type CmdJPaletteView
+} from '@/components/cmd-j/palette-view'
 
 export function useWorktreeJumpPaletteLocalState({
   createLookupGuard,
@@ -26,6 +30,7 @@ export function useWorktreeJumpPaletteLocalState({
       workspaceHostScope: state.workspaceHostScope
     }))
   )
+  const openingView = useAppStore((state) => resolveCmdJPaletteOpeningView(state.modalData))
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
   const liveQueryRef = useRef(query)
@@ -49,6 +54,7 @@ export function useWorktreeJumpPaletteLocalState({
   const [filter, setFilter] = useState<PaletteFilterState>(() =>
     buildPaletteFilterFromSidebarScope(sidebarScope)
   )
+  const [view, setView] = useState<CmdJPaletteView>(openingView)
   const [dialogElement, setDialogElement] = useState<HTMLElement | null>(null)
   const previousWorktreeIdRef = useRef<string | null>(null)
   const previousActiveTabTypeRef = useRef<WorkspaceVisibleTabType>('terminal')
@@ -68,13 +74,17 @@ export function useWorktreeJumpPaletteLocalState({
   // Reset expansion and seed each open before the palette paints.
   const [previousQuery, setPreviousQuery] = useState(query)
   const [previousVisible, setPreviousVisible] = useState(visible)
+  const [previousView, setPreviousView] = useState(view)
   const visibilityChanged = previousVisible !== visible
-  if (previousQuery !== query || visibilityChanged) {
+  if (previousQuery !== query || visibilityChanged || previousView !== view) {
     setPreviousQuery(query)
     setPreviousVisible(visible)
+    setPreviousView(view)
     setExpandedSectionCaps({})
     if (visibilityChanged && visible) {
       setFilter(buildPaletteFilterFromSidebarScope(sidebarScope))
+      setView(openingView)
+      setPreviousView(openingView)
     }
   }
   return {
@@ -94,6 +104,8 @@ export function useWorktreeJumpPaletteLocalState({
     digitShortcutItemsRef,
     filter,
     setFilter,
+    view,
+    setView,
     dialogElement,
     setDialogElement,
     previousWorktreeIdRef,
