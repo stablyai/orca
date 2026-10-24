@@ -83,8 +83,11 @@ describe('useDashboardSnapshot', () => {
         }
       }
     }
-    ;(document as unknown as { startViewTransition: unknown }).startViewTransition =
-      startViewTransition
+    Object.defineProperty(document, 'startViewTransition', {
+      value: startViewTransition,
+      configurable: true,
+      writable: true
+    })
     window.matchMedia = vi.fn().mockReturnValue({ matches: false }) as unknown as typeof matchMedia
   })
   afterEach(() => {
@@ -92,9 +95,11 @@ describe('useDashboardSnapshot', () => {
     vi.clearAllMocks()
   })
 
-  it('runs a view transition when a card changes column', () => {
+  it('runs a view transition when a card changes column', async () => {
     const { result } = renderHook(() => useDashboardSnapshot())
     act(() => apply(snapshot([card({ bucket: 'idle' })])))
+    await Promise.resolve()
+    await Promise.resolve()
     startViewTransition.mockClear() // ignore the initial populate
 
     act(() => apply(snapshot([card({ bucket: 'working' })])))
@@ -265,5 +270,83 @@ describe('useDashboardSnapshot', () => {
     act(() => vi.advanceTimersByTime(1))
     expect(requestSnapshot).toHaveBeenCalledTimes(1)
     vi.useRealTimers()
+  })
+
+  it('absorbs benign InvalidStateError on startViewTransition synchronously and applies snapshot', () => {
+    const throwingStart = vi.fn(() => {
+      const err = new Error('Transition was aborted because of invalid state')
+      err.name = 'InvalidStateError'
+      throw err
+    })
+    Object.defineProperty(document, 'startViewTransition', {
+      value: throwingStart,
+      configurable: true,
+      writable: true
+    })
+
+    const { result } = renderHook(() => useDashboardSnapshot())
+    act(() => apply(snapshot([card({ bucket: 'idle' })])))
+    expect(result.current.cards[0].bucket).toBe('idle')
+
+    act(() => apply(snapshot([card({ bucket: 'working' })])))
+    expect(result.current.cards[0].bucket).toBe('working')
+  })
+
+  it('absorbs benign AbortError rejection from transition.finished promise', async () => {
+    let rejectFinished!: (err: unknown) => void
+    const abortingStart = vi.fn((cb: () => void) => {
+      cb()
+      return {
+        finished: new Promise<void>((_, reject) => {
+          rejectFinished = reject
+        })
+      }
+    })
+    Object.defineProperty(document, 'startViewTransition', {
+      value: abortingStart,
+      configurable: true,
+      writable: true
+    })
+
+    const { result } = renderHook(() => useDashboardSnapshot())
+    act(() => apply(snapshot([card({ bucket: 'idle' })])))
+    expect(result.current.cards[0].bucket).toBe('idle')
+
+    const err = new Error('Transition was skipped')
+    err.name = 'AbortError'
+    rejectFinished(err)
+    await Promise.resolve()
+  })
+
+  it('applies snapshot directly without calling startViewTransition when a transition is already active', async () => {
+    let resolveFirstTransition: () => void = () => {}
+    const firstFinished = new Promise<void>((resolve) => {
+      resolveFirstTransition = resolve
+    })
+    const activeStartViewTransition = vi.fn((cb: () => void) => {
+      cb()
+      return {
+        finished: firstFinished,
+        ready: Promise.resolve(),
+        updateCallbackDone: Promise.resolve()
+      }
+    })
+    Object.defineProperty(document, 'startViewTransition', {
+      value: activeStartViewTransition,
+      configurable: true,
+      writable: true
+    })
+
+    const { result } = renderHook(() => useDashboardSnapshot())
+    act(() => apply(snapshot([card({ bucket: 'idle' })])))
+    expect(activeStartViewTransition).toHaveBeenCalledTimes(1)
+    expect(result.current.cards[0].bucket).toBe('idle')
+
+    act(() => apply(snapshot([card({ bucket: 'working' })])))
+    expect(activeStartViewTransition).toHaveBeenCalledTimes(1)
+    expect(result.current.cards[0].bucket).toBe('working')
+
+    resolveFirstTransition()
+    await Promise.resolve()
   })
 })
