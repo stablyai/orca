@@ -12,6 +12,7 @@ import { stripLeadingAgentTitleDecorationOrEmpty } from './agent-title-decoratio
 import { formatAgentTypeLabel } from './agent-type-label'
 import { isJcodeIdentityTerminalTitle } from './jcode-terminal-title'
 import { isMeaningfulOpenCodeTerminalTitle } from './opencode-terminal-title'
+import { isOrchestrationWorkerTerminalTitle } from './orchestration-worker-terminal-title'
 import { SYNTHETIC_AGENT_TITLE_PROFILES } from './synthetic-agent-title'
 import type { TerminalTab } from './terminal-tab-types'
 
@@ -97,6 +98,7 @@ function conversationNameFromLiveTitle(
     isAgentIdentityStatusTitle(lower, agentType, agentTypeLabelLower) ||
     STATUS_WITH_CONTEXT_RE.test(stripped) ||
     DEFAULT_TERMINAL_TITLE_RE.test(stripped) ||
+    isOrchestrationWorkerTerminalTitle(stripped) ||
     isClaudeManagementTitle(stripped) ||
     // Why: jcode repaints `jcode <codename> · +N -M · last ~23s` every second. The
     // tail is live status and the head is its own identity, so accepting it as a
@@ -129,7 +131,7 @@ export function getAgentRowConversationName(
   providerSessionId?: string
 ): string | null {
   const customTitle = tab.customTitle?.trim()
-  if (customTitle) {
+  if (customTitle && !isOrchestrationWorkerTerminalTitle(customTitle)) {
     return customTitle
   }
   const quickCommandLabel = tab.quickCommandLabel?.trim()
