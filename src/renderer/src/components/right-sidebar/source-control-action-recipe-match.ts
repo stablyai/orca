@@ -19,8 +19,9 @@ import type { Repo } from '../../../../shared/repo-types'
 type NormalizedSourceControlActionRecipe = {
   agentId: SourceControlActionRecipe['agentId'] | null
   commandInputTemplate: string
-  agentArgs: string
+  agentArgs: string | undefined
   launchPreferences: string
+  surface: string
 }
 
 type PersistedSourceControlActionRecipe = {
@@ -28,6 +29,7 @@ type PersistedSourceControlActionRecipe = {
   commandInputTemplate?: string | null
   agentArgs?: string | null
   launchPreferences?: SourceControlActionRecipe['launchPreferences']
+  surface?: SourceControlActionRecipe['surface']
 }
 
 function normalizeSourceControlActionRecipeForComparison(
@@ -40,7 +42,7 @@ function normalizeSourceControlActionRecipeForComparison(
       typeof recipe?.commandInputTemplate === 'string'
         ? recipe.commandInputTemplate.trim()
         : DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES[actionId],
-    agentArgs: typeof recipe?.agentArgs === 'string' ? recipe.agentArgs.trim() : '',
+    agentArgs: typeof recipe?.agentArgs === 'string' ? recipe.agentArgs.trim() : undefined,
     launchPreferences: recipe?.launchPreferences
       ? JSON.stringify([
           recipe.launchPreferences.agentId,
@@ -50,7 +52,8 @@ function normalizeSourceControlActionRecipeForComparison(
           ),
           recipe.launchPreferences.permissionMode ?? null
         ])
-      : ''
+      : '',
+    surface: recipe?.surface ?? ''
   }
 }
 
@@ -62,7 +65,8 @@ function sourceControlActionRecipesMatch(
     left.agentId === right.agentId &&
     left.commandInputTemplate === right.commandInputTemplate &&
     left.agentArgs === right.agentArgs &&
-    left.launchPreferences === right.launchPreferences
+    left.launchPreferences === right.launchPreferences &&
+    left.surface === right.surface
   )
 }
 

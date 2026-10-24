@@ -63,8 +63,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     baseBranch,
     telemetrySource,
     launchSource,
-    agentOverride,
-    agentArgs
+    agentOverride
   } = args
   const store = useAppStore.getState()
   const owner = resolveDirectLaunchOwnerRow(store.repos, repoId)
@@ -161,12 +160,12 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     return false
   }
   const projectContext = projectPreflight.context
-  const { detectedAgentsPromise, prospectiveAgent } = await resolveDirectProspectiveAgent(
-    store,
-    repo,
-    projectContext,
-    agentOverride
-  )
+  const { detectedAgentsPromise, prospectiveAgent, unavailable } =
+    await resolveDirectProspectiveAgent(store, repo, projectContext, args)
+  if (unavailable) {
+    toast.error(unavailableAgentErrorMessage())
+    return false
+  }
   const requestId = newAgentLaunchRequestId()
   const draftContent = await getDirectWorkItemDraftContent(item, repoConnectionId)
   const preflightPlan = await planDirectWorkItemLaunch({
@@ -178,10 +177,11 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     draftContent,
     promptDelivery,
     resolveSessionOptions: args.resolveSessionOptions,
-    sessionOptions: args.sessionOptions
+    sessionOptions: args.sessionOptions,
+    launchChoice: args.launchChoice
   })
   if (!projectContext || preflightPlan?.route !== 'structured-native-chat') {
-    const agentArgsPlan = planAgentCliArgsSuffix(agentArgs, shell)
+    const agentArgsPlan = planAgentCliArgsSuffix(args.agentArgs, shell)
     if (!agentArgsPlan.ok) {
       // Why: direct launches may create a worktree before the agent startup plan
       // is built; reject malformed saved args before touching user workspaces.
@@ -231,20 +231,21 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     worktreeId = result.worktree.id
     worktreePath = result.worktree.path
 
-    const latestStore = useAppStore.getState()
     const launchPreparation = await prepareDirectWorkItemAgentLaunch({
       worktreeId,
       worktreePath,
       repoId,
       agentOverride: preflightPlan?.agent ?? agentOverride,
-      agentArgs,
+      agentLaunchPreferences: args.agentLaunchPreferences,
+      agentArgs: args.agentArgs,
       ...(args.sessionOptions ? { sessionOptions: args.sessionOptions } : {}),
       resolveSessionOptions: args.resolveSessionOptions,
+      launchChoice: args.launchChoice,
       sessionOptionsYieldToAgentArgs: args.sessionOptionsYieldToAgentArgs,
       repoConnectionId,
       repoHost: repo,
       detectedAgentsPromise,
-      latestStore,
+      latestStore: useAppStore.getState(),
       settings,
       draftContent,
       promptDelivery,
@@ -288,7 +289,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       primaryTabId: null,
       beforeOpen: revealWorkspace,
       declinedTerminal: {
-        ...(agentArgs !== undefined ? { agentArgs } : {}),
+        ...(args.agentArgs !== undefined ? { agentArgs: args.agentArgs } : {}),
         sessionOptionsYieldToAgentArgs: args.sessionOptionsYieldToAgentArgs,
         ...(args.launchPlatform ? { launchPlatform: args.launchPlatform } : {}),
         ...(launchSource ? { launchSource } : {})

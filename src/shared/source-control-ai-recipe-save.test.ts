@@ -64,7 +64,6 @@ describe('source-control AI recipe saves', () => {
               agentArgs: '--model sonnet'
             },
             pullRequest: {
-              agentId: null,
               commandInputTemplate: '{basePrompt}\n\nlegacy review'
             }
           },

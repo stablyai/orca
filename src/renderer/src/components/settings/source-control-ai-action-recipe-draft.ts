@@ -7,7 +7,7 @@ import {
 
 export type ActionRecipeDraftValue = {
   commandInputTemplate: string
-  agentArgs: string
+  agentArgs?: string
 }
 
 export type ActionRecipeDraftState = {
@@ -26,7 +26,7 @@ function readActionRecipeInputValue(
   return {
     commandInputTemplate:
       typeof value === 'string' ? value : DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES[actionId],
-    agentArgs: typeof recipe?.agentArgs === 'string' ? recipe.agentArgs : ''
+    agentArgs: recipe?.agentArgs
   }
 }
 

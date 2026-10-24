@@ -1,7 +1,15 @@
+import { useAppStore } from '@/store'
+import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
+import { sourceControlRepoAgentRows } from '@/lib/source-control-agent-picker'
+import {
+  SourceControlActionAgentPickerView,
+  sourceControlActionAgentPreview,
+  canSaveSourceControlActionSurface
+} from './SourceControlActionAgentPicker'
 import type React from 'react'
 import { Terminal } from 'lucide-react'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import { CUSTOM_AGENT_ID } from '../../../../shared/commit-message-agent-spec'
+import { CUSTOM_AGENT_ID, isCustomAgentId } from '../../../../shared/commit-message-agent-spec'
 import type {
   RepoSourceControlAiOverrides,
   SourceControlAiSettings
@@ -9,6 +17,7 @@ import type {
 import {
   SOURCE_CONTROL_ACTION_IDS,
   SOURCE_CONTROL_ACTION_LABELS,
+  type SourceControlActionRecipe,
   type SourceControlActionId,
   type SourceControlActionLaunchPreferences
 } from '../../../../shared/source-control-ai-actions'
@@ -58,7 +67,11 @@ type RepositorySourceControlAiActionRowsProps = {
   source: SourceControlAiSettings
   defaultTuiAgent: TuiAgent | 'blank' | null | undefined
   onActionModeChange: (actionId: SourceControlActionId, mode: string) => void
-  onActionAgentChange: (actionId: SourceControlActionId, value: string) => void
+  onActionAgentChange: (
+    actionId: SourceControlActionId,
+    value: string,
+    choice?: Pick<SourceControlActionRecipe, 'surface'>
+  ) => void
   onActionLaunchPreferencesChange: (
     actionId: SourceControlActionId,
     value: SourceControlActionLaunchPreferences | undefined
@@ -90,6 +103,10 @@ export function RepositorySourceControlAiActionRows({
   onActionSave
 }: RepositorySourceControlAiActionRowsProps): React.JSX.Element {
   useSourceControlActionAgentInventory()
+  const repo = useAppStore((state) => state.repos.find((repo) => repo.id === repoId) ?? null)
+  const rows = sourceControlRepoAgentRows(repo)
+  const observation = useAgentMenuObservation(rows.target, true, rows.detectionTarget)
+  const canSaveSurface = canSaveSourceControlActionSurface(rows.target)
   const resolveAgent = useSourceControlActionAgent(null, defaultTuiAgent ?? null).resolve
   return (
     <div className="space-y-3">
@@ -116,12 +133,22 @@ export function RepositorySourceControlAiActionRows({
           actionId
         })
         const effectiveAgent = recipe.agentId
-        const actual = resolveAgent(effectiveAgent)
+        const isLaunchAction = !SOURCE_CONTROL_TEXT_ACTION_ID_SET.has(actionId)
+        const actual = isLaunchAction
+          ? sourceControlActionAgentPreview(
+              observation,
+              effectiveAgent && !isCustomAgentId(effectiveAgent) ? effectiveAgent : null
+            )
+          : resolveAgent(effectiveAgent)
         const pickerAgent =
           effectiveAgent || actual.status === 'pending'
-            ? resolveAgentArgsPlaceholderAgent(effectiveAgent, source, actionId, defaultTuiAgent)
+            ? resolveAgentArgsPlaceholderAgent(
+                effectiveAgent,
+                source,
+                actionId,
+                isLaunchAction ? observation.preferences.defaultTuiAgent : defaultTuiAgent
+              )
             : actual.agent
-        const isLaunchAction = !SOURCE_CONTROL_TEXT_ACTION_ID_SET.has(actionId)
         // Launch actions pick their model above, so only text actions get a `--model` example.
         const agentArgsPlaceholder =
           hasOverride && agentArgsValue
@@ -205,45 +232,60 @@ export function RepositorySourceControlAiActionRows({
                     'Agent'
                   )}
                 </Label>
-                <Select
-                  value={actionAgentSelectValue(effectiveAgent)}
-                  onValueChange={(value) => onActionAgentChange(actionId, value)}
-                  disabled={!hasOverride}
-                >
-                  <SelectTrigger size="sm" className="h-8 w-full text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={DEFAULT_AGENT_VALUE}>
-                      <span className="flex items-center gap-2">
-                        <Terminal className="size-3.5 text-muted-foreground" />
-                        {translate(
-                          'auto.components.settings.RepositorySourceControlAiActionRows.0ffb081b3a',
-                          'Use default agent'
-                        )}
-                      </span>
-                    </SelectItem>
-                    {SOURCE_CONTROL_TEXT_ACTION_ID_SET.has(actionId) ? (
-                      <SelectItem value={CUSTOM_AGENT_ID}>
+                {isLaunchAction ? (
+                  <SourceControlActionAgentPickerView
+                    agent={
+                      effectiveAgent && !isCustomAgentId(effectiveAgent) ? effectiveAgent : null
+                    }
+                    surface={recipe.surface}
+                    observation={observation}
+                    canSaveSurface={canSaveSurface}
+                    disabled={!hasOverride}
+                    onPick={(agent, choice) =>
+                      onActionAgentChange(actionId, agent ?? DEFAULT_AGENT_VALUE, choice)
+                    }
+                  />
+                ) : (
+                  <Select
+                    value={actionAgentSelectValue(effectiveAgent)}
+                    onValueChange={(value) => onActionAgentChange(actionId, value)}
+                    disabled={!hasOverride}
+                  >
+                    <SelectTrigger size="sm" className="h-8 w-full text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={DEFAULT_AGENT_VALUE}>
                         <span className="flex items-center gap-2">
                           <Terminal className="size-3.5 text-muted-foreground" />
                           {translate(
-                            'auto.components.settings.RepositorySourceControlAiActionRows.2b2f38652b',
-                            'Custom command'
+                            'auto.components.settings.RepositorySourceControlAiActionRows.0ffb081b3a',
+                            'Use default agent'
                           )}
                         </span>
                       </SelectItem>
-                    ) : null}
-                    {agentOptions.map((agent) => (
-                      <SelectItem key={agent.id} value={agent.id}>
-                        <span className="flex items-center gap-2">
-                          <AgentIcon agent={agent.id} size={14} />
-                          {agent.label}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                      {SOURCE_CONTROL_TEXT_ACTION_ID_SET.has(actionId) ? (
+                        <SelectItem value={CUSTOM_AGENT_ID}>
+                          <span className="flex items-center gap-2">
+                            <Terminal className="size-3.5 text-muted-foreground" />
+                            {translate(
+                              'auto.components.settings.RepositorySourceControlAiActionRows.2b2f38652b',
+                              'Custom command'
+                            )}
+                          </span>
+                        </SelectItem>
+                      ) : null}
+                      {agentOptions.map((agent) => (
+                        <SelectItem key={agent.id} value={agent.id}>
+                          <span className="flex items-center gap-2">
+                            <AgentIcon agent={agent.id} size={14} />
+                            {agent.label}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
                 {agentWarningText ? (
                   <p className="text-[11px] text-destructive">{agentWarningText}</p>
                 ) : agentSupportText ? (

@@ -13,6 +13,7 @@ import type { CustomAgentId } from '../../../../shared/commit-message-agent-spec
 import {
   SOURCE_CONTROL_ACTION_IDS,
   setSourceControlActionAgentDefault,
+  type SourceControlActionRecipe,
   type SourceControlActionId,
   type SourceControlActionLaunchPreferences,
   type SourceControlAiActionDefaults
@@ -158,16 +159,25 @@ export function SourceControlAiActionRecipeDefaults({
     }
   }
 
-  const onActionAgentChange = (actionId: SourceControlActionId, value: string): Promise<void> => {
+  const onActionAgentChange = (
+    actionId: SourceControlActionId,
+    value: string,
+    choice?: Pick<SourceControlActionRecipe, 'surface'>
+  ): Promise<void> => {
     const agentId =
       value === '__default_agent__'
         ? null
         : value === CUSTOM_AGENT_ID
           ? CUSTOM_AGENT_ID
           : (value as TuiAgent)
-    return writeActionDefault((actions) =>
-      setSourceControlActionAgentDefault(actions, actionId, agentId)
-    )
+    return writeActionDefault((actions) => {
+      const next = setSourceControlActionAgentDefault(actions, actionId, agentId)
+      if (choice) {
+        const { surface: _previous, ...recipe } = next[actionId] ?? {}
+        next[actionId] = { ...recipe, ...(choice.surface ? { surface: choice.surface } : {}) }
+      }
+      return next
+    })
   }
 
   const onActionLaunchPreferencesChange = (
@@ -234,7 +244,8 @@ export function SourceControlAiActionRecipeDefaults({
                   onReviewRepo={(repoId) => openRepoSourceControlAiSettings(repoId, actionId)}
                 />
               }
-              onAgentChange={(id, value) => void onActionAgentChange(id, value)}
+              surface={recipe?.surface}
+              onAgentChange={(id, value, choice) => void onActionAgentChange(id, value, choice)}
               launchPreferences={recipe?.launchPreferences}
               onLaunchPreferencesChange={(id, value) =>
                 void onActionLaunchPreferencesChange(id, value)

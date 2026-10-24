@@ -20691,6 +20691,7 @@
     }
   },
   "sourceControl": {
+    "actionSaveFailed": "No se pudo guardar esta acción. Intenta guardarla de nuevo en Ajustes.",
     "discard": {
       "deleteUntrackedFileDescription": "Esto eliminará permanentemente este archivo sin seguimiento. No se puede deshacer.",
       "deleteUntrackedFilesDescription": "Esto eliminará permanentemente estos {{count}} archivos sin seguimiento. No se puede deshacer.",

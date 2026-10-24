@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { useAppStore } from '@/store'
 import { useSourceControlAi } from '../ai/use-ai'
 import { useSourceControlFileListing } from '../listing/use-file-listing'
 import { useSourceControlReviewContext } from '../review/use-review-context'
@@ -11,6 +12,7 @@ import { useSourceControlPanelState } from './use-panel-state'
  */
 export function useSourceControlPanelFoundation() {
   const panelState = useSourceControlPanelState()
+  const updateSettingsOrThrow = useAppStore((s) => s.updateSettingsOrThrow)
   const reviewContext = useSourceControlReviewContext(panelState)
   const {
     activeConnectionId,
@@ -91,6 +93,7 @@ export function useSourceControlPanelFoundation() {
     commitError,
     pushRecoveryPrompt: listing.pushRecovery?.prompt ?? null,
     updateSettings,
+    updateSettingsOrThrow,
     updateRepo,
     openSettingsTarget,
     openSettingsPage

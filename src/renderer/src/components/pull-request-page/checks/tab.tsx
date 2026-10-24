@@ -62,7 +62,7 @@ export function ChecksTab({
 }): React.JSX.Element {
   const targetRepoId = repoId ?? item.repoId
   const settings = useAppStore((s) => s.settings)
-  const updateSettings = useAppStore((s) => s.updateSettings)
+  const updateSettingsOrThrow = useAppStore((s) => s.updateSettingsOrThrow)
   const updateRepo = useAppStore((s) => s.updateRepo)
   const repo = useAppStore((s) =>
     targetRepoId ? (s.repos.find((candidate) => candidate.id === targetRepoId) ?? null) : null
@@ -344,7 +344,7 @@ export function ChecksTab({
       repoConnectionId={repo?.connectionId ?? null}
       targetRepoId={targetRepoId}
       item={item}
-      updateSettings={updateSettings}
+      updateSettings={updateSettingsOrThrow}
       updateRepo={updateRepo}
     />
   )

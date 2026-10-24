@@ -34,6 +34,11 @@ function getRecipeOverrideFieldLabel(field: SourceControlActionRecipeOverrideFie
       )
     case 'launchPreferences':
       return translate('settings.sourceControl.actionModel.launchOptions', 'Model and permissions')
+    case 'surface':
+      return translate(
+        'auto.components.settings.SourceControlActionRepoOverrideNote.surface',
+        'Chat or CLI'
+      )
   }
   // Fail at compile time if the override-field union grows a new variant.
   const _exhaustive: never = field

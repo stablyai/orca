@@ -20287,6 +20287,7 @@
     }
   },
   "sourceControl": {
+    "actionSaveFailed": "このアクションを保存できませんでした。設定でもう一度保存してください。",
     "unlinkedPr": {
       "status": "PR #{{number}} のリンクが解除されました"
     },

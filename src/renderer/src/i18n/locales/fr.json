@@ -20273,6 +20273,7 @@
     }
   },
   "sourceControl": {
+    "actionSaveFailed": "Impossible d’enregistrer cette action. Réessayez dans les paramètres.",
     "unlinkedPr": {
       "status": "PR #{{number}} non lié"
     },

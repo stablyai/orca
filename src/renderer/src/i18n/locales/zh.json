@@ -20287,6 +20287,7 @@
     }
   },
   "sourceControl": {
+    "actionSaveFailed": "无法保存此操作。请在设置中重试保存。",
     "unlinkedPr": {
       "status": "PR #{{number}} 未链接"
     },

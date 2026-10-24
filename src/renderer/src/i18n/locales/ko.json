@@ -20287,6 +20287,7 @@
     }
   },
   "sourceControl": {
+    "actionSaveFailed": "이 작업을 저장하지 못했습니다. 설정에서 다시 저장해 보세요.",
     "unlinkedPr": {
       "status": "PR #{{number}} 연결 해제됨"
     },

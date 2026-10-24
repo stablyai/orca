@@ -1,5 +1,4 @@
 import type { SourceControlLaunchActionId } from '../../../src/shared/source-control-ai-actions'
-import { buildSourceControlRecoveryAgentCommandInput } from '../../../src/shared/source-control-recovery-agent-command'
 import type { RpcClient } from '../transport/rpc-client'
 import {
   AGENT_LAUNCH_UPDATE_REQUIRED_MESSAGE,
@@ -11,7 +10,7 @@ import {
   loadMobileAgentLaunchContext
 } from './mobile-new-tab-agent-loader'
 import { resolveMobileSourceControlLaunchAgent } from './mobile-source-control-launch-agent'
-import { resolveSourceControlActionSessionOptions } from '../../../src/shared/source-control-action-launch-preferences'
+import { projectSourceControlActionLaunch } from '../../../src/shared/source-control-action-launch-preferences'
 
 // Launch path for the phone's AI buttons ("Fix checks with AI", "Resolve conflicts with AI", commit
 // recovery, review notes). The host starts the agent and delivers the prompt; the phone never
@@ -57,14 +56,10 @@ export async function launchAgentWithPrompt(args: {
     return { kind: 'not-started', message: resolved.message }
   }
   const { recipe } = resolved
-  // The desktop wraps each action's prompt in the user's saved template the same way.
-  const text = args.actionId
-    ? buildSourceControlRecoveryAgentCommandInput({
-        actionId: args.actionId,
-        commandInputTemplate: recipe?.commandInputTemplate,
-        basePrompt: args.prompt
-      })
-    : args.prompt
+  const projection = projectSourceControlActionLaunch(recipe ?? {}, resolved.agent, {
+    basePrompt: args.prompt
+  })
+  const text = projection.commandInput
   if (!text) {
     return {
       kind: 'not-started',
@@ -72,17 +67,15 @@ export async function launchAgentWithPrompt(args: {
         "This action's saved prompt is empty. Update Source Control AI settings on your computer."
     }
   }
-  const sessionOptions = recipe
-    ? resolveSourceControlActionSessionOptions(recipe, resolved.agent)
-    : undefined
   const launched = await launchAgentInExistingWorkspace({
     client: args.client,
     hostCapabilities: args.hostCapabilities,
     worktreeId: args.worktreeId,
     agent: resolved.agent,
-    ...(sessionOptions ? { chatOptions: sessionOptions } : {}),
-    // Why no saved agent arguments: whether they apply depends on the route and shell the host picks
-    // after this request, so the phone leaves them out and the agent's default arguments apply.
+    ...(projection.sessionOptions ? { chatOptions: projection.sessionOptions } : {}),
+    // The phone lacks the workspace shell needed to project inherited choices over raw flags.
+    agentArgs: projection.sessionOptionsYieldToAgentArgs ? undefined : projection.agentArgs,
+    surface: projection.requestedSurface,
     prompt: { text, delivery: 'submit' },
     launchSource: args.launchSource
   })

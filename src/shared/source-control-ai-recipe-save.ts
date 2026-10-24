@@ -4,7 +4,6 @@ import {
 } from './source-control-ai'
 import {
   DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES,
-  SOURCE_CONTROL_ACTION_IDS,
   SOURCE_CONTROL_TEXT_ACTION_IDS,
   type SourceControlActionId,
   type SourceControlActionRecipe
@@ -43,6 +42,7 @@ type ReadCompatibleActionRecipe = {
   commandInputTemplate?: string | null
   agentArgs?: string | null
   launchPreferences?: SourceControlActionRecipe['launchPreferences']
+  surface?: SourceControlActionRecipe['surface']
 }
 
 const TEXT_ACTION_ID_SET = new Set<SourceControlActionId>(SOURCE_CONTROL_TEXT_ACTION_IDS)
@@ -92,21 +92,15 @@ function normalizeCompleteRecipe(
     agentId: recipe.agentId ?? null,
     commandInputTemplate,
     ...(agentArgs !== undefined ? { agentArgs } : {}),
-    ...(recipe.launchPreferences ? { launchPreferences: recipe.launchPreferences } : {})
+    ...(recipe.launchPreferences ? { launchPreferences: recipe.launchPreferences } : {}),
+    ...(recipe.surface ? { surface: recipe.surface } : {})
   }
 }
 
 function normalizeActionOverrides(
   overrides: RepoSourceControlAiOverrides['actionOverrides']
 ): WritableRepoSourceControlAiOverrides['actionOverrides'] {
-  const normalized: WritableRepoSourceControlAiOverrides['actionOverrides'] = {}
-  for (const actionId of SOURCE_CONTROL_ACTION_IDS) {
-    const recipe = normalizeCompleteRecipe(actionId, overrides?.[actionId])
-    if (recipe) {
-      normalized[actionId] = recipe
-    }
-  }
-  return hasEntries(normalized) ? normalized : undefined
+  return normalizeRepoSourceControlAiOverrides({ actionOverrides: overrides })?.actionOverrides
 }
 
 export function normalizeWritableRepoSourceControlAiOverrides(

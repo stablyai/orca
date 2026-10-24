@@ -41,6 +41,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
     handleUnstage,
     handleUnstagePaths,
     hasUncommittedEntries,
+    isResolvingConflictsWithAI,
     isAbortingOperation,
     isCheckingRecoveryAdmission,
     isExecutingBulk,
@@ -87,7 +88,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
         unresolvedConflictCount={unresolvedConflictReviewEntries.length}
         conflictOperation={conflictOperation}
         sourceControlAiActionsVisible={sourceControlAiActionsVisible}
-        isRecoveryBusy={isCheckingRecoveryAdmission}
+        isRecoveryBusy={isCheckingRecoveryAdmission || isResolvingConflictsWithAI}
         isAbortingOperation={isAbortingOperation}
         onAbortOperation={handleAbortOperationForConflict}
         onResolveWithAi={() => void handleResolveConflictsWithAI()}

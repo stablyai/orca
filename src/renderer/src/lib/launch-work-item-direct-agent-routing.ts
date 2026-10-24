@@ -1,3 +1,4 @@
+import type { AgentLaunchPreferences } from '@/components/settings/use-host-agent-launch-preferences'
 import { agentLaunchCommandErrorMessage } from '@/lib/launch-work-item-direct-messages'
 import { toast } from 'sonner'
 import {
@@ -61,6 +62,7 @@ export function buildDirectWorkItemStartup(args: {
 type PromptDelivery = 'draft' | 'submit-after-ready'
 
 export async function resolveDirectWorkItemAgent(args: {
+  agentLaunchPreferences?: AgentLaunchPreferences
   agentOverride?: TuiAgent
   worktreeId: string
   repoHost: RepoHostFields
@@ -78,13 +80,16 @@ export async function resolveDirectWorkItemAgent(args: {
       ? await args.detectedAgentsPromise
       : await ensureDetectedAgentsForNewWorktree(args.latestStore, args.worktreeId, args.repoHost)
   ).filter(isTuiAgent)
-  const wanted = args.agentOverride ?? useAppStore.getState().settings?.defaultTuiAgent
+  const wanted =
+    args.agentOverride ??
+    (args.agentLaunchPreferences ?? useAppStore.getState().settings)?.defaultTuiAgent
   // Chat facts can only change the pick when the wanted agent's CLI is not detected.
   const choices =
     wanted && wanted !== 'blank' && !ids.includes(wanted)
       ? await acquireAgentLaunchChoices(workspace, async () => ids)
       : null
   const store = useAppStore.getState()
+  const preferences = args.agentLaunchPreferences ?? store.settings
   // A new workspace may not be in the store yet; its own detection answers then.
   const detected = [...(choices?.detected ?? ids)]
   // A chosen agent may open as a chat without its CLI; the automatic pick stays on detected ones.
@@ -92,16 +97,16 @@ export async function resolveDirectWorkItemAgent(args: {
     return {
       agent: args.agentOverride,
       unavailable:
-        !isTuiAgentEnabled(args.agentOverride, store.settings?.disabledTuiAgents) ||
+        !isTuiAgentEnabled(args.agentOverride, preferences?.disabledTuiAgents) ||
         (!detected.includes(args.agentOverride) &&
           !agentChoiceMayOpenAsChat(store, args.agentOverride, workspace, detected))
     }
   }
   return {
     agent: pickTuiAgent(
-      store.settings?.defaultTuiAgent,
+      preferences?.defaultTuiAgent,
       detected,
-      store.settings?.disabledTuiAgents,
+      preferences?.disabledTuiAgents,
       (chosen) => agentChoiceMayOpenAsChat(store, chosen, workspace, detected)
     ),
     unavailable: false

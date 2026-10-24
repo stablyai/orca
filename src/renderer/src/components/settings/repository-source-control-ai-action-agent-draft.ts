@@ -1,4 +1,5 @@
 import type {
+  SourceControlActionRecipe,
   SourceControlActionId,
   SourceControlActionLaunchPreferences
 } from '../../../../shared/source-control-ai-actions'
@@ -18,15 +19,24 @@ export function withRepoAiActionAgent(
   base: RepoSourceControlAiOverrides,
   settings: GlobalSettings | null,
   actionId: SourceControlActionId,
-  agentId: RepoActionRecipe['agentId']
+  agentId: RepoActionRecipe['agentId'],
+  choice?: Pick<SourceControlActionRecipe, 'surface'>
 ): RepoSourceControlAiOverrides {
   const currentRecipe = readCompleteRecipeForDraft(base, settings, actionId)
-  // A model and permission mode are one agent's choices; neither survives a change of agent.
-  const { launchPreferences, ...rest } = currentRecipe
+  // A model, permission mode and chat-or-CLI pick are one agent's choices; none survives a change.
+  const { launchPreferences, surface, ...rest } = currentRecipe
+  const sameAgent = currentRecipe.agentId === agentId
   return normalizeRepoAiDraft(
     setActionOverride(base, actionId, {
       ...rest,
-      ...(launchPreferences && currentRecipe.agentId === agentId ? { launchPreferences } : {}),
+      ...(launchPreferences && sameAgent ? { launchPreferences } : {}),
+      ...(choice
+        ? choice.surface
+          ? { surface: choice.surface }
+          : {}
+        : surface && sameAgent
+          ? { surface }
+          : {}),
       agentId
     })
   )

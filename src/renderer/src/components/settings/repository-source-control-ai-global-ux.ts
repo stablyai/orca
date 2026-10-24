@@ -8,6 +8,7 @@ import type {
 } from '../../../../shared/source-control-ai-types'
 import type { SourceControlAiRepoUpdate } from '../../../../shared/source-control-ai-recipe-save'
 import type {
+  SourceControlActionRecipe,
   SourceControlActionId,
   SourceControlActionLaunchPreferences
 } from '../../../../shared/source-control-ai-actions'
@@ -51,11 +52,7 @@ type UseRepositorySourceControlAiGlobalUxArgs = {
   updateRepo: (repoId: string, updates: SourceControlAiRepoUpdate) => void | Promise<boolean>
 }
 
-/**
- * Match global Source Control AI save UX for per-repo overrides:
- * - Selects / simple controls persist immediately (optimistic UI)
- * - Action CLI args + command template draft until the per-action Save
- */
+/** Simple controls save immediately; arguments and templates stay drafts until Save. */
 export function useRepositorySourceControlAiGlobalUx({
   repoId,
   persistedRepoAi,
@@ -75,7 +72,6 @@ export function useRepositorySourceControlAiGlobalUx({
   const [immediateRepoAi, setImmediateRepoAi] = useState(persistedRepoAi)
   const immediateRepoAiRef = useRef(immediateRepoAi)
   immediateRepoAiRef.current = immediateRepoAi
-  // Local baseline for dirty checks so Save clears before the store prop echo lands.
   const [baselineRepoAi, setBaselineRepoAi] = useState(persistedRepoAi)
   const setBaselineRepoAiRef = useRef(setBaselineRepoAi)
   setBaselineRepoAiRef.current = setBaselineRepoAi
@@ -167,10 +163,6 @@ export function useRepositorySourceControlAiGlobalUx({
     persist((base) => withRepoAiEnabled(base, value))
   }
 
-  const updateCustomCommand = (value: string | undefined): void => {
-    setCustomCommandDraft(value ?? '')
-  }
-
   const commitCustomCommand = (value: string | undefined): void => {
     setCustomCommandDraft(value ?? '')
     // Blur fires even when unchanged — skip the queue for true no-ops.
@@ -183,10 +175,7 @@ export function useRepositorySourceControlAiGlobalUx({
     void queueRef.current
       .persistTransform((base) => withRepoAiCustomCommand(base, value))
       .then((ok) => {
-        if (!endWrite(repoIdForWrite)) {
-          return
-        }
-        if (!ok) {
+        if (!endWrite(repoIdForWrite) || !ok) {
           return
         }
         commitImmediate(withRepoAiCustomCommand(immediateRepoAiRef.current, value))
@@ -212,15 +201,21 @@ export function useRepositorySourceControlAiGlobalUx({
     persist((base) => withRepoAiActionMode(base, settings, actionId, nextMode))
   }
 
-  const updateActionAgent = (actionId: SourceControlActionId, value: string): void => {
+  const updateActionAgent = (
+    actionId: SourceControlActionId,
+    value: string,
+    choice?: Pick<SourceControlActionRecipe, 'surface'>
+  ): void => {
     const agentId =
       value === DEFAULT_AGENT_VALUE
         ? null
         : value === CUSTOM_AGENT_ID
           ? CUSTOM_AGENT_ID
           : (value as TuiAgent)
-    commitImmediate(withRepoAiActionAgent(immediateRepoAiRef.current, settings, actionId, agentId))
-    persist((base) => withRepoAiActionAgent(base, settings, actionId, agentId))
+    commitImmediate(
+      withRepoAiActionAgent(immediateRepoAiRef.current, settings, actionId, agentId, choice)
+    )
+    persist((base) => withRepoAiActionAgent(base, settings, actionId, agentId, choice))
   }
 
   const updateActionLaunchPreferences = (
@@ -316,7 +311,7 @@ export function useRepositorySourceControlAiGlobalUx({
     actionDirtyById,
     savingActionIds,
     updateEnablement,
-    updateCustomCommand,
+    updateCustomCommand: (value: string | undefined) => setCustomCommandDraft(value ?? ''),
     commitCustomCommand,
     updateHostedReviewDefault,
     updateActionMode,
