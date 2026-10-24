@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { removeTreeSync } from '../../src/shared/windows-transient-lock-removal.ts'
@@ -235,3 +235,63 @@ describe('rebuild-native-deps Electron install fallback', () => {
     }
   })
 })
+
+// Why: the addon probe runs inside Electron, so a host without GTK blamed node-pty instead.
+describe.runIf(process.platform === 'linux')(
+  'rebuild-native-deps on a host where Electron cannot start',
+  () => {
+    function writeElectronMissingLibrary(projectDir) {
+      writeFakeUsableElectronPackage(projectDir)
+      const electronPath = join(projectDir, 'node_modules', 'electron', 'dist', 'electron')
+      writeFileSync(
+        electronPath,
+        `#!/bin/sh
+echo "$0: error while loading shared libraries: libatk-1.0.so.0: cannot open shared object file: No such file or directory" >&2
+exit 127
+`
+      )
+      chmodSync(electronPath, 0o755)
+    }
+
+    it('continues postinstall and names the missing library', () => {
+      const projectDir = mkTempProject()
+      try {
+        writeElectronMissingLibrary(projectDir)
+        writeFakeElectronRebuild(projectDir)
+
+        const result = runRebuildScript(projectDir, { npm_lifecycle_event: 'postinstall' })
+
+        expect(result.status, result.stderr).toBe(0)
+        expect(result.stderr).toContain(
+          "Electron can't start on this host: libatk-1.0.so.0 is missing"
+        )
+        expect(result.stderr).toContain('Continuing postinstall')
+        expect(`${result.stdout}${result.stderr}`).not.toContain('Rebuilding failed native modules')
+      } finally {
+        removeTreeSync(projectDir)
+      }
+    })
+
+    it('fails strict postinstall and direct rebuilds', () => {
+      const projectDir = mkTempProject()
+      try {
+        writeElectronMissingLibrary(projectDir)
+        writeFakeElectronRebuild(projectDir)
+
+        const strict = runRebuildScript(projectDir, {
+          npm_lifecycle_event: 'postinstall',
+          ORCA_STRICT_NATIVE_REBUILD: '1'
+        })
+        const direct = runRebuildScript(projectDir)
+
+        for (const result of [strict, direct]) {
+          expect(result.status).toBe(1)
+          expect(result.stderr).toContain('libatk-1.0.so.0 is missing')
+          expect(result.stderr).not.toContain('Continuing postinstall')
+        }
+      } finally {
+        removeTreeSync(projectDir)
+      }
+    })
+  }
+)
