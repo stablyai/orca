@@ -33,6 +33,7 @@ export async function uploadRuntimeFileWithoutClobber(
   expectedExecutionHostId?: 'local' | `ssh:${string}`
 ): Promise<void> {
   const tempRelativePath = makeRuntimeUploadTempPath(relativePath)
+  let tempRemoved = false
   try {
     session.assertCurrent()
     // Why: main owns the file handle and the runtime socket, so it streams the
@@ -56,7 +57,7 @@ export async function uploadRuntimeFileWithoutClobber(
       // main-process throw in "Error invoking remote method '…'".
       throw new Error(extractIpcErrorMessage(error, 'Upload failed'))
     }
-    await callRuntimeFileImportMutation(
+    const result = await callRuntimeFileImportMutation<{ tempRemoved?: boolean }>(
       session,
       'files.commitUpload',
       {
@@ -69,20 +70,25 @@ export async function uploadRuntimeFileWithoutClobber(
       },
       30_000
     )
+    tempRemoved = result?.tempRemoved === true
   } finally {
-    await callRuntimeFileImportMutation(
-      session,
-      'files.delete',
-      {
-        worktree: toRuntimeWorktreeSelector(worktreeId),
-        relativePath: tempRelativePath,
-        recursive: false,
-        expectedSshTargetId,
-        expectedSshConnectionGeneration,
-        expectedExecutionHostId
-      },
-      15_000
-    ).catch(() => {})
+    if (tempRemoved) {
+      session.assertCurrent()
+    } else {
+      await callRuntimeFileImportMutation(
+        session,
+        'files.delete',
+        {
+          worktree: toRuntimeWorktreeSelector(worktreeId),
+          relativePath: tempRelativePath,
+          recursive: false,
+          expectedSshTargetId,
+          expectedSshConnectionGeneration,
+          expectedExecutionHostId
+        },
+        15_000
+      ).catch(() => {})
+    }
   }
 }
 

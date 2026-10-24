@@ -327,34 +327,53 @@ describe('runtime file import pairing revision', () => {
     expectEveryRuntimeCallBoundToCapturedRevision(hubLocalContext)
   })
 
-  it('does not clean up against a replacement HUB after commit', async () => {
-    mockStagedFile('/client/drop.txt', 'drop.txt', 4)
-    runtimeEnvironmentCall.mockImplementation(async (args: RuntimeCallArgs) => {
-      if (args.method === 'status.get') {
-        return runtimeStatusResponse()
-      }
-      if (args.method === 'files.stat') {
-        return missingRuntimePathResponse()
-      }
-      if (args.method === 'files.commitUpload') {
-        setEnvironmentRevision(REPLACEMENT_REVISION)
-      }
-      return successfulRuntimeResponse(args.method)
-    })
+  it.each(['pairing', 'connection'])(
+    'keeps the post-commit guard when %s changes after host-confirmed cleanup',
+    async (change) => {
+      mockStagedFile('/client/drop.txt', 'drop.txt', 4)
+      runtimeEnvironmentCall.mockImplementation(async (args: RuntimeCallArgs) => {
+        if (args.method === 'status.get') {
+          return runtimeStatusResponse()
+        }
+        if (args.method === 'files.stat') {
+          return missingRuntimePathResponse()
+        }
+        if (args.method === 'files.commitUpload') {
+          if (change === 'pairing') {
+            setEnvironmentRevision(REPLACEMENT_REVISION)
+          } else {
+            setRuntimeEnvironmentConnectionGenerationForTests(
+              ENVIRONMENT_ID,
+              REPLACEMENT_CONNECTION_GENERATION
+            )
+          }
+          return {
+            ...successfulRuntimeResponse(args.method),
+            result: { ok: true, tempRemoved: true }
+          }
+        }
+        return successfulRuntimeResponse(args.method)
+      })
 
-    await expect(
-      importExternalPathsToRuntime(nestedSshContext, ['/client/drop.txt'], '/ssh/repo')
-    ).resolves.toMatchObject({
-      results: [{ status: 'failed', reason: 'Runtime pairing changed; retry the import.' }]
-    })
+      await expect(
+        importExternalPathsToRuntime(nestedSshContext, ['/client/drop.txt'], '/ssh/repo')
+      ).resolves.toMatchObject({
+        results: [
+          {
+            status: 'failed',
+            reason: `Runtime ${change} changed; retry the import.`
+          }
+        ]
+      })
 
-    expect(runtimeEnvironmentCall.mock.calls.map(([args]) => args.method)).toEqual([
-      'status.get',
-      'files.stat',
-      'files.commitUpload'
-    ])
-    expectEveryRuntimeCallBoundToCapturedRevision(nestedSshContext)
-  })
+      expect(runtimeEnvironmentCall.mock.calls.map(([args]) => args.method)).toEqual([
+        'status.get',
+        'files.stat',
+        'files.commitUpload'
+      ])
+      expectEveryRuntimeCallBoundToCapturedRevision(nestedSshContext)
+    }
+  )
 
   it('uses the captured revision for temp cleanup and directory rollback', async () => {
     stageExternalPathsForRuntimeUpload.mockResolvedValue({
