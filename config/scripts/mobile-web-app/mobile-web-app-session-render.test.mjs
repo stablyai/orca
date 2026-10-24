@@ -236,6 +236,45 @@ describeRender(
       await opened.page.close()
     }, 120_000)
 
+    it.each([WORKTREE, 'folder:project'])(
+      'deletes %s from the session menu only after confirmation, then returns to the host',
+      async (worktreeId) => {
+        const opened = await openRoute(
+          `${HOST_ROUTE}/session/${encodeURIComponent(worktreeId)}`,
+          'Terminal',
+          { 'worktree.rm': { removed: true } }
+        )
+        const { page } = opened
+        await page.getByRole('button', { name: 'More session actions' }).click()
+        await page.getByText('Delete', { exact: true }).click()
+        await page.getByText('Cancel', { exact: true }).click()
+        expect(
+          await page.evaluate(() =>
+            globalThis.__orcaRenderCheckRequests.filter(
+              (request) => request.method === 'worktree.rm'
+            )
+          )
+        ).toEqual([])
+        await page.getByRole('dialog').waitFor({ state: 'hidden' })
+        await page.getByRole('button', { name: 'More session actions' }).click()
+        await page.getByText('Delete', { exact: true }).click()
+        await page
+          .getByText(worktreeId.startsWith('folder:') ? 'Delete Workspace' : 'Delete Worktree', {
+            exact: true
+          })
+          .waitFor()
+        await page.getByText('Delete', { exact: true }).click()
+        await page.waitForURL(`${origin}${HOST_ROUTE}`)
+        const requests = await waitForRecordedRequests(page, ['worktree.rm'])
+        expect(requests.filter((request) => request.method === 'worktree.rm')).toEqual([
+          { method: 'worktree.rm', params: { worktree: `id:${worktreeId}`, force: true } }
+        ])
+        expect(opened.errors).toEqual([])
+        await page.close()
+      },
+      120_000
+    )
+
     it('puts the Back control in the accessibility tree by name', async () => {
       // Verify the role and label in the rendered accessibility tree.
       const opened = await openRoute(SESSION_ROUTE, 'Terminal')

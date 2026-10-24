@@ -99,9 +99,15 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
   return (
     <>
       <MobileSessionHeaderMoreActionsSheet
+        key={controller.deleteWorkspaceScope}
         visible={showHeaderMoreActions}
         showAgentSessionHistory={showAgentSessionHistoryAction}
         showChecks={showChecksAction}
+        showDelete={!isFloatingWorkspaceRoute}
+        deleteDisabled={controller.deleteWorkspaceDisabled}
+        worktreeName={worktreeName || 'Workspace'}
+        isFolderWorkspace={isFolderWorkspaceRoute}
+        onDelete={() => void controller.handleDeleteWorkspace()}
         onOpenAgentSessionHistory={openAgentSessionHistory}
         onOpenChecks={() => handlePanelTap('pr')}
         onClose={() => setShowHeaderMoreActions(false)}

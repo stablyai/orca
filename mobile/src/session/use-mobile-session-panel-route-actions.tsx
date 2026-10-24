@@ -191,7 +191,8 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
     repoContextLoaded: prRepoContextLoaded,
     hostedChecksSupported: prIsGithubRepo
   })
-  const showHeaderMoreButton = showAgentSessionHistoryAction || showChecksAction
+  const showHeaderMoreButton =
+    showAgentSessionHistoryAction || showChecksAction || !isFloatingWorkspaceRoute
   const createTabBusy = creating || creatingBrowser || creatingMarkdown
   return {
     createTabAgentActions,
