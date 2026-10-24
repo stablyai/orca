@@ -21,6 +21,8 @@ Orca can drive agents on remote machines over SSH — useful for long-running bu
 
 Dirty add/edit forms ignore outside clicks so an accidental click away does not discard your fields; use Escape, Cancel, or × to discard.
 
+The OpenSSH config picker's **In Orca** badge also recognizes a saved target with the same configured hostname, port, and user, even when its label differs from the config alias. Hostnames are compared case-insensitively, but SSH usernames preserve case. A different port or user remains a separate target; entries without `HostName` are matched by alias only.
+
 ## Host key verification
 
 Orca checks built-in SSH connections against your effective OpenSSH `known_hosts` files and keys it previously saved. Existing matches connect silently. With the default policy, Orca accepts and remembers a host on first contact and shows its fingerprint; `StrictHostKeyChecking yes` rejects unknown hosts, while `no` / `off` accepts without saving a trust record.
