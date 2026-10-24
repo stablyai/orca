@@ -11,6 +11,7 @@ import { consumeUserQuitWindowClose } from './user-quit-window-close'
 
 export const WINDOW_QUIT_RENDERER_ACK_TIMEOUT_MS = QUIT_RENDERER_ACK_TIMEOUT_MS
 
+/** Binds window close lifecycle, IPC controls, and quit confirmation handlers. */
 export function installMainWindowCloseLifecycle(args: {
   focus: MainWindowFocusLifecycle
   mainWindow: BrowserWindow
@@ -20,6 +21,13 @@ export function installMainWindowCloseLifecycle(args: {
   store: Store | null
 }): { dispose: () => void } {
   const { focus, mainWindow, opts, rendererWebContentsId, state, store } = args
+  const isMaximizedChannel = 'window:isMaximized'
+  const onIsMaximized = (): boolean => {
+    return !mainWindow.isDestroyed() && mainWindow.isMaximized()
+  }
+  // Reject duplicate ownership before installing listeners on the new window.
+  ipcMain.handle(isMaximizedChannel, onIsMaximized)
+  let isMaximizedOwned = true
   // Intercept close so the renderer can confirm killing running-process terminals (replies window:confirm-close to proceed).
   let windowCloseConfirmed = false
   const confirmCloseChannel = 'window:confirm-close'
@@ -90,7 +98,7 @@ export function installMainWindowCloseLifecycle(args: {
     return true
   }
 
-  mainWindow.on('close', (e) => {
+  const onClose = (e: Electron.Event): void => {
     const userQuitClose = consumeUserQuitWindowClose(mainWindow)
     // Why: Alt+F4/programmatic closes hit the native event; apply the same minimize-to-tray guard the renderer-drawn X uses.
     if (!windowCloseConfirmed && !userQuitClose && hideToTrayIfEnabled()) {
@@ -126,14 +134,14 @@ export function installMainWindowCloseLifecycle(args: {
       isQuitting,
       requestId
     })
-  })
-  mainWindow.webContents.on('will-prevent-unload', () => {
+  }
+  const onWillPreventUnload = (): void => {
     // Why: a prevented beforeunload cancels the quit; release the bounds-persistence freeze so later resizing still saves.
     state.resumeBoundsPersistence()
     clearQuitRendererAckTimer()
     opts?.onQuitAborted?.()
     mainWindow.webContents.send('window:unload-prevented')
-  })
+  }
 
   const onConfirmClose = (): void => {
     clearQuitRendererAckTimer()
@@ -146,7 +154,6 @@ export function installMainWindowCloseLifecycle(args: {
   const onSyncTrafficLights = (_event: Electron.IpcMainEvent, zoomFactor: number): void => {
     syncTrafficLightPosition(mainWindow, zoomFactor)
   }
-  ipcMain.on(trafficLightChannel, onSyncTrafficLights)
 
   // Why: renderer-drawn window controls on Windows/Linux replicate the native title-bar buttons hidden by custom chrome.
   const minimizeChannel = 'window:minimize'
@@ -183,30 +190,40 @@ export function installMainWindowCloseLifecycle(args: {
   const onPopupMenu = (): void => {
     Menu.getApplicationMenu()?.popup({ window: mainWindow })
   }
-  // Why: WindowControls mounts after window:maximize-changed already fired, so expose a synchronous getter to init its icon.
-  const isMaximizedChannel = 'window:isMaximized'
-  const onIsMaximized = (): boolean => {
-    return !mainWindow.isDestroyed() && mainWindow.isMaximized()
-  }
-  ipcMain.on(minimizeChannel, onMinimize)
-  ipcMain.on(maximizeChannel, onMaximize)
-  ipcMain.on(requestCloseChannel, onRequestClose)
-  ipcMain.on(popupMenuChannel, onPopupMenu)
-  ipcMain.handle(isMaximizedChannel, onIsMaximized)
-
-  ipcMain.on(confirmCloseChannel, onConfirmClose)
-  ipcMain.on(closeRequestReceivedChannel, onCloseRequestReceived)
 
   const dispose = (): void => {
     clearQuitRendererAckTimer()
+    if (!mainWindow.isDestroyed()) {
+      mainWindow.removeListener?.('close', onClose)
+      mainWindow.webContents?.removeListener?.('will-prevent-unload', onWillPreventUnload)
+    }
     ipcMain.removeListener(trafficLightChannel, onSyncTrafficLights)
     ipcMain.removeListener(minimizeChannel, onMinimize)
     ipcMain.removeListener(maximizeChannel, onMaximize)
     ipcMain.removeListener(requestCloseChannel, onRequestClose)
     ipcMain.removeListener(popupMenuChannel, onPopupMenu)
-    ipcMain.removeHandler(isMaximizedChannel)
+    if (isMaximizedOwned) {
+      ipcMain.removeHandler(isMaximizedChannel)
+      isMaximizedOwned = false
+    }
     ipcMain.removeListener(confirmCloseChannel, onConfirmClose)
     ipcMain.removeListener(closeRequestReceivedChannel, onCloseRequestReceived)
   }
+
+  try {
+    mainWindow.on('close', onClose)
+    mainWindow.webContents.on('will-prevent-unload', onWillPreventUnload)
+    ipcMain.on(trafficLightChannel, onSyncTrafficLights)
+    ipcMain.on(minimizeChannel, onMinimize)
+    ipcMain.on(maximizeChannel, onMaximize)
+    ipcMain.on(requestCloseChannel, onRequestClose)
+    ipcMain.on(popupMenuChannel, onPopupMenu)
+    ipcMain.on(confirmCloseChannel, onConfirmClose)
+    ipcMain.on(closeRequestReceivedChannel, onCloseRequestReceived)
+  } catch (error) {
+    dispose()
+    throw error
+  }
+
   return { dispose }
 }

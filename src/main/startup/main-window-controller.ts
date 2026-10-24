@@ -16,6 +16,7 @@ import {
 } from './windows-install-dir-acl-recovery'
 import { logStartupMilestone } from './startup-diagnostics'
 import { notifyMainWindowBecameVisible } from '../window/main-window-visibility'
+import { safelyRevealWindow } from '../window/focus-existing-window'
 import { setTrayAttention } from '../tray/system-tray'
 import { createSystemTrayDeferred, showRendererRecoveryPrompt } from './main-window-actions'
 import { attachMainWindowCoreServices } from './main-window-core-services'
@@ -44,7 +45,27 @@ import { isResourceWindowVisible } from '../window/resource-view-admission'
 const TRAY_CREATE_FALLBACK_MS = 12_000
 const AGENT_STATE_CRASH_BREADCRUMB_MIN_INTERVAL_MS = 30_000
 
+/** Reuses or creates the primary application window during startup and activation. */
 export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): BrowserWindow {
+  // Activation can open the window while deferred startup is still waiting.
+  if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+    if (options.revealOnDidFinishLoad === true && !state.mainWindow.isVisible?.()) {
+      if (state.mainWindow.webContents?.isLoading?.()) {
+        state.mainWindow.webContents.once('did-finish-load', () => {
+          if (
+            state.mainWindow &&
+            !state.mainWindow.isDestroyed() &&
+            !state.mainWindow.isVisible?.()
+          ) {
+            safelyRevealWindow(state.mainWindow)
+          }
+        })
+      } else {
+        safelyRevealWindow(state.mainWindow)
+      }
+    }
+    return state.mainWindow
+  }
   logStartupMilestone('open-main-window-start')
   const { store, keybindings } = requireMainWindowServices({
     store: state.store,
