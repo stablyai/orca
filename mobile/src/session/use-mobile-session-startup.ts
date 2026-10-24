@@ -42,7 +42,9 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
     showToast,
     clearTerminalCache,
     fetchTerminals,
-    ensureSessionTabs
+    ensureSessionTabs,
+    terminalUnsubsRef,
+    subscribeToTerminal
   } = scope
   useEffect(() => {
     // Why: Expo reuses this screen across worktrees; reset route state so it can't open stale UI or reject the next snapshot.
@@ -146,6 +148,16 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
       if (disposed) {
         return
       }
+      // Why: if the active terminal stream ended during a disconnect/freeze and
+      // `ensureSessionTabs` rejected the unchanged snapshot epoch/version, resubscribe
+      // the active terminal handle so its output and input lease recover immediately.
+      if (
+        activeSessionTabTypeRef.current === 'terminal' &&
+        activeHandleRef.current &&
+        !terminalUnsubsRef.current.has(activeHandleRef.current)
+      ) {
+        subscribeToTerminal(activeHandleRef.current)
+      }
       await fetchTerminals({ allowEmptyLoaded: false })
       if (disposed) {
         return
@@ -189,6 +201,7 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
     ensureSessionTabs,
     isFloatingWorkspaceRoute,
     showToast,
+    subscribeToTerminal,
     worktreeId
   ])
 }

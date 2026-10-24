@@ -479,4 +479,28 @@ describe('useMobileNativeChatTerminalStream', () => {
     expect(unsubscribe).toHaveBeenNthCalledWith(2, 'terminal-1')
     expect(subscribe).toHaveBeenNthCalledWith(2, 'terminal-1')
   })
+
+  it('resubscribes an uncovered terminal stream torn down on streamRevision bump and bounds retries', async () => {
+    await act(async () => {
+      renderer = create(createElement(Harness, { showNativeChat: false }))
+    })
+    subscribe.mockClear()
+    unsubscribe.mockClear()
+
+    for (let revision = 1; revision <= 5; revision += 1) {
+      subscriptionsRef.current.delete('terminal-1')
+      await act(async () => {
+        renderer?.update(
+          createElement(Harness, {
+            showNativeChat: false,
+            leaseReady: false,
+            streamRevision: revision
+          })
+        )
+      })
+    }
+
+    expect(subscribe).toHaveBeenCalledTimes(3)
+    expect(subscribe).toHaveBeenCalledWith('terminal-1')
+  })
 })

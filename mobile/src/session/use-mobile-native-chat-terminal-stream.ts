@@ -82,7 +82,7 @@ export function useMobileNativeChatTerminalStream(args: {
       // every subscribe with `subscribed`+`end`, so refilling merely because the handle
       // is present now would hand that loop a new budget on each list refresh and undo
       // the bound this hook exists to enforce.
-      const handle = coveredHandleRef.current
+      const handle = coveredHandleRef.current ?? args.activeHandle
       if (handle == null) {
         return
       }
@@ -103,18 +103,18 @@ export function useMobileNativeChatTerminalStream(args: {
       forgetRearmState(handle)
       setRearmBudgetRevision((revision) => revision + 1)
     },
-    [forgetRearmState]
+    [args.activeHandle, forgetRearmState]
   )
   const hasTabsRecoveryNeed = useCallback((): boolean => {
     // Keep polling until a replacement handle arrives; an equal cached snapshot
     // must not consume recovery and strand the composer on the dead handle.
-    const handle = coveredHandleRef.current
+    const handle = coveredHandleRef.current ?? args.activeHandle
     return (
       handle != null &&
       absentSinceExhaustionRef.current.has(handle) &&
       (rearmAttemptsRef.current.get(handle) ?? 0) >= MAX_REARM_ATTEMPTS
     )
-  }, [])
+  }, [args.activeHandle])
   const reconcileStream = useCallback(() => {
     const handle = args.activeHandle
     if (coveredHandleRef.current && coveredHandleRef.current !== handle) {
@@ -135,7 +135,11 @@ export function useMobileNativeChatTerminalStream(args: {
       streamIsLeaseOnly,
       webViewReady: handle != null && args.webReadyRef.current.has(handle)
     })
-    const streamHolding = action === 'none' && streamActive && coveredHandleRef.current === handle
+    const streamHolding =
+      action === 'none' &&
+      streamActive &&
+      (coveredHandleRef.current === handle ||
+        (handle != null && rearmAttemptsRef.current.has(handle)))
     // Any pass that isn't "this covered stream is still up" invalidates a pending
     // proof — the stream it was vouching for is gone or being replaced.
     if (!streamHolding || healthyStreamProofRef.current?.handle !== handle) {
@@ -193,8 +197,20 @@ export function useMobileNativeChatTerminalStream(args: {
     if (coveredHandleRef.current === handle || streamIsLeaseOnly) {
       args.unsubscribe(handle)
       coveredHandleRef.current = null
+      forgetRearmState(handle)
+      args.subscribe(handle)
+      return
+    }
+    // Why: an uncovered terminal view whose stream dropped while disconnected/frozen
+    // needs the same bounded rearm budget so a dead PTY cannot spin forever.
+    const attempts = rearmAttemptsRef.current.get(handle) ?? 0
+    if (attempts >= MAX_REARM_ATTEMPTS) {
+      return
     }
     args.subscribe(handle)
+    if (args.subscribingRef.current.has(handle) || args.subscriptionsRef.current.has(handle)) {
+      rearmAttemptsRef.current.set(handle, attempts + 1)
+    }
   }, [
     args.activeHandle,
     args.activeTabType,

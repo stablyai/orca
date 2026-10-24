@@ -20,8 +20,7 @@ export function useMobileSessionTerminalSubscriptionFoundation(
     subscribeSeqRef,
     layoutSeqRef,
     nativeChatInputLeaseReadyRef,
-    clearNativeChatInputLease,
-    showNativeChatRef
+    clearNativeChatInputLease
   } = scope
   const getTerminalRef = useCallback((handle: string | null) => {
     return handle ? terminalRefs.current.get(handle) : undefined
@@ -49,15 +48,11 @@ export function useMobileSessionTerminalSubscriptionFoundation(
       // double-render this whole route on every chat open.
       const leaseWasOnScreen = nativeChatInputLeaseReadyRef.current
       const leaseDropped = clearNativeChatInputLease(handle)
-      if (
-        (!leaseDropped || !leaseWasOnScreen) &&
-        showNativeChatRef.current &&
-        handle === activeHandleRef.current
-      ) {
+      if ((!leaseDropped || !leaseWasOnScreen) && handle === activeHandleRef.current) {
         setCoveredStreamRevision((revision) => revision + 1)
       }
     },
-    [clearNativeChatInputLease, nativeChatInputLeaseReadyRef, showNativeChatRef]
+    [clearNativeChatInputLease, nativeChatInputLeaseReadyRef]
   )
   const unsubscribeTerminalRef = useRef(unsubscribeTerminal)
   // PTY event callbacks fire before passive effects flush, so they need the current unsubscribe.

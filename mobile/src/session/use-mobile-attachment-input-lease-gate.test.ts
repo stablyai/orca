@@ -23,6 +23,7 @@ describe('useMobileAttachmentInputLeaseGate', () => {
     tabType: { current: string | null }
     leaseReady: { current: boolean }
     showToast: (message: string, durationMs?: number) => void
+    recoverTerminalInputLease?: (handle: string, forceResubscribe: boolean) => void
   }): { gate: () => Gate } {
     let gate: Gate = () => Promise.resolve(false)
     function Probe(): null {
@@ -32,7 +33,8 @@ describe('useMobileAttachmentInputLeaseGate', () => {
         activeHandleRef: args.activeHandle,
         activeSessionTabTypeRef: args.tabType,
         nativeChatInputLeaseReadyRef: args.leaseReady,
-        showToast: args.showToast
+        showToast: args.showToast,
+        recoverTerminalInputLease: args.recoverTerminalInputLease
       })
       return null
     }
@@ -119,6 +121,29 @@ describe('useMobileAttachmentInputLeaseGate', () => {
     refs.connState.current = 'reconnecting'
     await vi.advanceTimersByTimeAsync(3200)
     await expect(result).resolves.toBe(false)
+    expect(showToast).not.toHaveBeenCalled()
+  })
+
+  it('requests terminal input lease recovery immediately and forces a resubscribe after 500ms if still unready', async () => {
+    const refs = baseRefs()
+    refs.leaseReady.current = false
+    const showToast = vi.fn()
+    const recoverTerminalInputLease = vi.fn((_handle: string, force: boolean) => {
+      if (force) {
+        refs.leaseReady.current = true
+      }
+    })
+    const { gate } = renderGate({ ...refs, showToast, recoverTerminalInputLease })
+
+    const result = gate()('terminal-1')
+    await vi.advanceTimersByTimeAsync(100)
+    expect(recoverTerminalInputLease).toHaveBeenCalledTimes(1)
+    expect(recoverTerminalInputLease).toHaveBeenNthCalledWith(1, 'terminal-1', false)
+
+    await vi.advanceTimersByTimeAsync(500)
+    await expect(result).resolves.toBe(true)
+    expect(recoverTerminalInputLease).toHaveBeenCalledTimes(2)
+    expect(recoverTerminalInputLease).toHaveBeenNthCalledWith(2, 'terminal-1', true)
     expect(showToast).not.toHaveBeenCalled()
   })
 })

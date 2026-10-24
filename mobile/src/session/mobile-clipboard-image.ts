@@ -79,13 +79,19 @@ export async function prepareMobileClipboardImageBase64(
 export async function saveMobileClipboardImageAsTempFile(
   client: MobileClipboardImageRpcSender,
   imageData: string,
-  args?: { connectionId?: string | null }
+  args?: { connectionId?: string | null; fileName?: string | null }
 ): Promise<string> {
   const contentBase64 = normalizeMobileClipboardImageBase64(imageData)
   const connectionId = args?.connectionId ?? null
+  const fileName = args?.fileName?.trim() ? args.fileName.trim() : undefined
   for (let retry = 0; ; retry += 1) {
     try {
-      return await uploadMobileClipboardImageTransaction(client, contentBase64, connectionId)
+      return await uploadMobileClipboardImageTransaction(
+        client,
+        contentBase64,
+        connectionId,
+        fileName
+      )
     } catch (error) {
       if (
         !isLogicalClientCutoverError(error) ||
@@ -101,11 +107,13 @@ export async function saveMobileClipboardImageAsTempFile(
 async function uploadMobileClipboardImageTransaction(
   client: MobileClipboardImageRpcSender,
   contentBase64: string,
-  connectionId: string | null
+  connectionId: string | null,
+  fileName?: string
 ): Promise<string> {
   const startResponse = await clipboardImageUploadStart.request(client, {
     expectedBase64Length: contentBase64.length,
-    connectionId
+    connectionId,
+    ...(fileName ? { fileName } : {})
   })
 
   // Why the raw refusal: a host too old to offer a slot answers with a code, and a small enough
@@ -116,7 +124,11 @@ async function uploadMobileClipboardImageTransaction(
       contentBase64.length <= MOBILE_CLIPBOARD_IMAGE_SINGLE_FRAME_FALLBACK_BASE64_CHARS
     ) {
       return clipboardImageSaveAsTempFile.interpret(
-        await clipboardImageSaveAsTempFile.request(client, { contentBase64, connectionId })
+        await clipboardImageSaveAsTempFile.request(client, {
+          contentBase64,
+          connectionId,
+          ...(fileName ? { fileName } : {})
+        })
       )
     }
     throw new Error(startResponse.error.message)

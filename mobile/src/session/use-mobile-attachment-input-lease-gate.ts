@@ -9,12 +9,14 @@ type AttachmentInputLeaseGateArgs = {
   readonly activeSessionTabTypeRef: CurrentRef<string | null>
   readonly nativeChatInputLeaseReadyRef: CurrentRef<boolean>
   readonly showToast: (message: string, durationMs?: number) => void
+  readonly recoverTerminalInputLease?: (handle: string, forceResubscribe: boolean) => void
 }
 
 // Poll cadence + ceiling for riding out a terminal resubscribe (WS reconnect or
 // return-to-terminal) during which the input lease is briefly not ready.
 const LEASE_READY_POLL_MS = 100
 const LEASE_READY_TIMEOUT_MS = 3000
+const LEASE_FORCE_RESUBSCRIBE_POLL_COUNT = 5
 
 /** Gates an image attachment's terminal.send on a ready input lease. Flushes any
  *  pending IME/live input, confirms the send still targets the connected terminal
@@ -28,7 +30,8 @@ export function useMobileAttachmentInputLeaseGate({
   activeHandleRef,
   activeSessionTabTypeRef,
   nativeChatInputLeaseReadyRef,
-  showToast
+  showToast,
+  recoverTerminalInputLease
 }: AttachmentInputLeaseGateArgs): (targetHandle: string) => Promise<boolean> {
   return useCallback(
     async (targetHandle: string): Promise<boolean> => {
@@ -42,9 +45,23 @@ export function useMobileAttachmentInputLeaseGate({
       ) {
         return false
       }
+      if (!nativeChatInputLeaseReadyRef.current) {
+        recoverTerminalInputLease?.(targetHandle, false)
+      }
       const deadline = Date.now() + LEASE_READY_TIMEOUT_MS
+      let polls = 0
       while (!nativeChatInputLeaseReadyRef.current && Date.now() < deadline) {
         await new Promise((resolve) => setTimeout(resolve, LEASE_READY_POLL_MS))
+        polls += 1
+        if (
+          polls === LEASE_FORCE_RESUBSCRIBE_POLL_COUNT &&
+          !nativeChatInputLeaseReadyRef.current &&
+          connStateRef.current === 'connected' &&
+          targetHandle === activeHandleRef.current &&
+          activeSessionTabTypeRef.current === 'terminal'
+        ) {
+          recoverTerminalInputLease?.(targetHandle, true)
+        }
       }
       // Why: the wait can outlive the target too — re-check so a tab/host switch
       // or disconnect mid-wait doesn't send into the wrong (or dead) terminal.
@@ -69,6 +86,7 @@ export function useMobileAttachmentInputLeaseGate({
       connStateRef,
       flushPendingLiveInputBeforeExternalSend,
       nativeChatInputLeaseReadyRef,
+      recoverTerminalInputLease,
       showToast
     ]
   )

@@ -46,4 +46,13 @@ describe('saveClipboardImageBufferAsTempFile', () => {
     )
     expect(writeFileMock).toHaveBeenCalledWith(savedPath, Buffer.from([1, 2, 3]))
   })
+
+  it('preserves the original sanitized file name and extension when provided', async () => {
+    const savedPath = await saveClipboardImageBufferAsTempFile(Buffer.from('hello'), {
+      fileName: '../dir/柴静-看见.txt'
+    })
+
+    expect(dirname(savedPath)).toBe(join('/os/temp'))
+    expect(savedPath).toMatch(/orca-paste-\d+-uuid-1-柴静-看见\.txt$/)
+  })
 })

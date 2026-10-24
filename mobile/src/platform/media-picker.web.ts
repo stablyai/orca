@@ -13,6 +13,7 @@ import {
 import {
   MobileFileTooLargeError,
   type MediaPicker,
+  type MobileImageSource,
   type PickedMobileFile,
   type PickedMobileImage
 } from './media-picker-contract'
@@ -39,24 +40,34 @@ import { mobilePickedFileFallbackName } from './mobile-picked-file-name'
 
 /** No preview URI on the page: the shell's staged file is a path in the app's cache that this
  *  document cannot load, and the composer already falls back to an inline data URI. */
-function pickedImage(base64: string): PickedMobileImage {
-  return { base64 }
+function pickedImage(base64: string, fileName?: string | null): PickedMobileImage {
+  return fileName ? { base64, fileName } : { base64 }
 }
 
 async function* readPicked(
   verbs: NativeVerbs,
-  items: readonly BridgeMediaItem[]
+  items: readonly BridgeMediaItem[],
+  source: MobileImageSource
 ): AsyncGenerator<PickedMobileImage> {
   const unread = [...items]
   try {
+    let index = 0
     while (unread.length > 0) {
       const item = unread[0]!
+      index += 1
+      const fileName =
+        source === 'files'
+          ? ((verbs.canNameMedia ? await verbs.nameMedia(item.handle) : null) ??
+            (item.mime.startsWith('image/')
+              ? null
+              : mobilePickedFileFallbackName(item.mime, index)))
+          : null
       const base64 = await readStagedMediaItem(verbs, item)
       // Released before the yield, not after: the caller may take one image and walk away, and the
       // shell counts what it is still holding against every later pick.
       unread.shift()
       await releaseStagedMedia(verbs, item.handle)
-      yield pickedImage(base64)
+      yield pickedImage(base64, fileName)
     }
   } finally {
     // The item whose read threw, and everything the caller never asked for.
@@ -105,14 +116,14 @@ export function useMediaPicker(): MediaPicker {
   return useMemo<MediaPicker>(
     () => ({
       pickImage: async (source) => {
-        for await (const image of readPicked(verbs, await verbs.pickMedia(source, false))) {
+        for await (const image of readPicked(verbs, await verbs.pickMedia(source, false), source)) {
           return image
         }
         return null
       },
       pickImages: (source) => ({
         [Symbol.asyncIterator]: async function* () {
-          yield* readPicked(verbs, await verbs.pickMedia(source, true))
+          yield* readPicked(verbs, await verbs.pickMedia(source, true), source)
         }
       }),
       pickFiles: () => ({
