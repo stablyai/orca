@@ -49,11 +49,7 @@ export function deriveBrowserRoutePartition(
   }
 }
 
-/**
- * Opaque owner of a partition's storage lifecycle: the local environment record
- * whose explicit removal clears it. Derived without a live connection so
- * lifecycle events can find partitions the client cannot currently re-derive.
- */
+// Lifecycle ownership must remain derivable without a live connection.
 export function deriveBrowserRoutePartitionStorageScope(scope: {
   orcaProfileId: string
   environmentId: string
@@ -66,11 +62,7 @@ export function deriveBrowserRoutePartitionStorageScope(scope: {
   ])
 }
 
-/**
- * Storage scope for a partition owned by a directly-connected SSH target (no
- * paired environment). Distinct digest domain from environment scopes, so the
- * two owner kinds can never collide; removing the SSH target clears it.
- */
+// Use a distinct digest domain for direct SSH ownership, independent of paired environments.
 export function deriveLocalSshBrowserRoutePartitionStorageScope(scope: {
   orcaProfileId: string
   targetId: string

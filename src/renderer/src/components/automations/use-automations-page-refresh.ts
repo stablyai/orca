@@ -4,7 +4,7 @@ import { useAppStore } from '@/store'
 import { AUTOMATIONS_CHANGED_EVENT } from '@/lib/automations-changed-window-event'
 import {
   getAutomationHostTargetKey,
-  getAutomationTargetFromHostId,
+  getAutomationListedTargetFromHostId,
   listAutomationsForTarget
 } from './automation-host-client'
 import { automationAuthorityCatalogKey } from './automation-host-catalog-types'
@@ -26,8 +26,12 @@ export function useAutomationsPageRefresh({
   list: AutomationsPageListState
   destination: AutomationsPageDestinationState
 }) {
-  const { fetchAllWorktrees, startupWorktreeRefreshCompleted, pendingAutomationRunNavigation } =
-    store
+  const {
+    fetchAllWorktrees,
+    startupWorktreeRefreshCompleted,
+    pendingAutomationRunNavigation,
+    runtimeEnvironments
+  } = store
   const {
     setIsLoading,
     setAutomations,
@@ -50,7 +54,7 @@ export function useAutomationsPageRefresh({
       // Until a navigation names a host, the desktop is the only authority the
       // legacy unscoped arm can address without guessing.
       const target = pendingNavigation
-        ? getAutomationTargetFromHostId(pendingNavigation.hostId)
+        ? getAutomationListedTargetFromHostId(pendingNavigation.hostId, useAppStore.getState())
         : { kind: 'local' as const }
       const authorityKey = automationAuthorityCatalogKey(
         target.kind === 'environment'
@@ -117,12 +121,20 @@ export function useAutomationsPageRefresh({
       return
     }
     const pendingTargetKey = getAutomationHostTargetKey(
-      getAutomationTargetFromHostId(pendingAutomationRunNavigation.hostId)
+      getAutomationListedTargetFromHostId(pendingAutomationRunNavigation.hostId, {
+        runtimeEnvironments
+      })
     )
     if (automationHostTargetKey !== pendingTargetKey) {
       void refresh()
     }
-  }, [automationHostTargetKey, isLoading, pendingAutomationRunNavigation, refresh])
+  }, [
+    automationHostTargetKey,
+    isLoading,
+    pendingAutomationRunNavigation,
+    refresh,
+    runtimeEnvironments
+  ])
   useEffect(() => {
     for (const [workspaceId, worktree] of store.worktreeMap) {
       const displayName = worktree.displayName.trim()

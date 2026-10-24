@@ -29,7 +29,7 @@ concurrency:
 jobs:
   updater:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
-    runs-on: macos-15
+    runs-on: blacksmith-6vcpu-macos-15
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6

@@ -1,4 +1,4 @@
-import type { JiraIssue, JiraProjectStatusOrder } from '../../../shared/jira-types'
+import type { JiraIssue, JiraProjectStatusOrder } from '../../../shared/jira/jira-types'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
 import { getEnvironmentRuntimeContextKey } from '@/lib/provider-runtime-context'

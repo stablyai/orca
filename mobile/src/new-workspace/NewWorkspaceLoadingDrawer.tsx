@@ -14,6 +14,10 @@ import { BOTTOM_DRAWER_SHOW_DURATION_MS } from '../components/bottom-drawer-cons
 import { bottomDrawerStyles } from '../components/bottom-drawer-styles'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import { useWindowSafeAreaInsets } from '../layout/side-safe-area'
+import {
+  DownloadProgressBar,
+  downloadedMegabytesCaption
+} from '../mobile-web-shell/DownloadProgressBar'
 import type { ShellOverlayDownload } from '../mobile-web-shell/shell-overlay-load'
 import { SHELL_PAGE_COVER_FADE_MS } from '../mobile-web-shell/ShellWaitingFrame'
 import { colors, spacing, typography } from '../theme/mobile-theme'
@@ -124,27 +128,19 @@ export function NewWorkspaceLoadingDrawer({
 }
 
 function DownloadProgress({ download }: { download: ShellOverlayDownload }) {
-  const fraction =
-    download.totalBytes > 0 ? Math.min(1, download.receivedBytes / download.totalBytes) : 0
   return (
     <>
-      <View
-        style={styles.track}
-        accessibilityRole="progressbar"
+      <DownloadProgressBar
+        feed={download.feed}
+        receivedBytes={download.receivedBytes}
+        totalBytes={download.totalBytes}
         accessibilityLabel="Downloading"
-        accessibilityValue={{ min: 0, max: 100, now: Math.round(fraction * 100) }}
-      >
-        <View style={[styles.fill, { width: `${fraction * 100}%` }]} />
-      </View>
+      />
       <Text style={styles.caption}>
-        Downloading… {megabytes(download.receivedBytes)} of {megabytes(download.totalBytes)} MB
+        Downloading… {downloadedMegabytesCaption(download.receivedBytes, download.totalBytes)}
       </Text>
     </>
   )
-}
-
-function megabytes(bytes: number): string {
-  return (bytes / 1_000_000).toFixed(1)
 }
 
 const styles = StyleSheet.create({
@@ -153,17 +149,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm
-  },
-  track: {
-    width: 180,
-    height: 4,
-    borderRadius: 2,
-    overflow: 'hidden',
-    backgroundColor: colors.bgRaised
-  },
-  fill: {
-    height: '100%',
-    backgroundColor: colors.textSecondary
   },
   caption: {
     fontSize: typography.metaSize,

@@ -12,10 +12,7 @@ import { repairPaneWebglCanvasDprMismatch } from './terminal-canvas-dpr-repair'
 import { recordPaneWebglContextLoss } from './pane-webgl-context-loss-policy'
 import { presentPaneViewport } from './pane-viewport-present'
 
-export {
-  presentPaneViewport,
-  presentPaneViewportPreservingSynchronizedOutput
-} from './pane-viewport-present'
+export { presentPaneViewport } from './pane-viewport-present'
 import {
   getTerminalWebglAddonConstructor,
   primeTerminalWebglAddon,

@@ -236,27 +236,13 @@ describe('a conversation command whose reply lands after the fence moved', () =>
     })
   })
 
-  it('drops a reply the pane stopped waiting on: it left the chat and came back', async () => {
-    const answer = heldWrites()
-    const { result, rerender } = renderPane()
-    let sent: Promise<{ accepted: boolean; error: string | null }> = Promise.resolve({
-      accepted: true,
-      error: null
-    })
-    act(() => {
-      sent = result.current.runConversationCommand('clear')
-    })
-    fence = 5
-    rerender({ sessionId: 'session-2', transportEnabled: true })
-    rerender({ sessionId: 'session-1', transportEnabled: true })
-    await act(async () => {
-      answer(commandReply('clear', NOT_SIGNED_IN))
-      await sent
-    })
-    expect(await sent).toEqual({ accepted: false, error: null })
-  })
-
-  it('drops a reply the pane stopped waiting on: a newer command replaced it', async () => {
+  it.each([
+    ['agentSession.threadGoal', 'agentSession.threadGoal'],
+    ['agentSession.rewind', 'agentSession.threadGoal'],
+    ['agentSession.conversationCommand', 'agentSession.threadGoal'],
+    ['agentSession.setOption', 'agentSession.threadGoal'],
+    ['agentSession.conversationCommand', 'agentSession.conversationCommand']
+  ])('settles %s independently when %s overlaps startup', async (earlier, later) => {
     const answers: ((reply: unknown) => void)[] = []
     mocks.call.mockImplementation(
       () =>
@@ -272,32 +258,17 @@ describe('a conversation command whose reply lands after the fence moved', () =>
         stateRef
       })
     )
-    const command = (): Promise<unknown> =>
-      result.current.write('agentSession.conversationCommand', 'agentSession.conversationCommand', {
-        command: 'clear'
-      })
-    const older = command()
-    const newer = command()
+    const command = (name: string): Promise<unknown> => result.current.write(name, name, {})
+    const older = command(earlier)
+    const newer = command(later)
     stateRef.current.fence = 5
     await act(async () => {
       answers[0](commandReply('clear', NOT_SIGNED_IN))
       answers[1](commandReply('clear'))
       await Promise.all([older, newer])
     })
-    expect(await older).toEqual({ kind: 'dropped' })
+    expect(await older).toEqual({ kind: 'done', value: commandReply('clear', NOT_SIGNED_IN).value })
     expect(await newer).toEqual({ kind: 'done', value: commandReply('clear').value })
-  })
-
-  it('drops a reply once the pane has moved to another chat or closed', async () => {
-    for (const pane of [
-      { sessionId: 'session-2', transportEnabled: true },
-      { sessionId: 'session-1', transportEnabled: false }
-    ]) {
-      fence = 3
-      expect(
-        await commandAcrossFenceMove('clear', commandReply('clear', NOT_SIGNED_IN), pane)
-      ).toEqual({ accepted: false, error: null })
-    }
   })
 })
 
@@ -305,36 +276,16 @@ describe('any other write across a fence move', () => {
   it.each([
     ['a host without the quiet repeated Stop', false],
     ['a host with it', true]
-  ])(
-    'drops the result: it answered for the runtime this pane replaced (%s)',
-    async (_host, quiet) => {
-      mocks.quietRepeatedStop.mockResolvedValueOnce(quiet)
-      const answer = heldWrites()
-      const { result, rerender } = renderPane()
-      let stopped: Promise<unknown> = Promise.resolve('unset')
-      act(() => {
-        stopped = result.current.cancel('turn-1')
-      })
-      fence = 5
-      rerender({ sessionId: 'session-1', transportEnabled: true })
-      await act(async () => {
-        // The Stop reaches the host once the client knows the host's capabilities.
-        await vi.waitFor(() => expect(mocks.call).toHaveBeenCalled())
-        answer({ ok: true, replayed: false, fence: 3, value: { cancelled: true } })
-        await stopped
-      })
-      expect(await stopped).toBeNull()
-      expect(mocks.toastError).not.toHaveBeenCalled()
-    }
-  )
-
-  it('keeps a result the same fence answers', async () => {
+  ])('keeps the Stop result after the provider starts (%s)', async (_host, quiet) => {
+    mocks.quietRepeatedStop.mockResolvedValueOnce(quiet)
     const answer = heldWrites()
-    const { result } = renderPane()
+    const { result, rerender } = renderPane()
     let stopped: Promise<unknown> = Promise.resolve('unset')
     act(() => {
       stopped = result.current.cancel('turn-1')
     })
+    fence = 5
+    rerender({ sessionId: 'session-1', transportEnabled: true })
     await act(async () => {
       // The Stop reaches the host once the client knows the host's capabilities.
       await vi.waitFor(() => expect(mocks.call).toHaveBeenCalled())
@@ -342,5 +293,6 @@ describe('any other write across a fence move', () => {
       await stopped
     })
     expect(await stopped).toEqual({ cancelled: true })
+    expect(mocks.toastError).not.toHaveBeenCalled()
   })
 })

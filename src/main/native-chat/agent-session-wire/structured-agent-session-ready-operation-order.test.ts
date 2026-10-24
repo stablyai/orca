@@ -181,7 +181,7 @@ it.each(['append', 'wait'] as const)(
     expect(await stopped).toMatchObject({ ok: true, value: { cancelled: true } })
     expect(changeThreadGoal).not.toHaveBeenCalled()
     if (phase === 'append') {
-      expect(append.mock.calls.some(([, body]) => body.kind === 'status')).toBe(true)
+      expect(append.mock.calls.some(([, body]) => body.kind === 'status')).toBe(false)
     }
   }
 )

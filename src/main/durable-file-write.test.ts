@@ -60,7 +60,6 @@ describe('durable file write', () => {
       })
 
       it('round-trips a multi-megabyte payload without truncation', async () => {
-        // Why: the real orca-data.json is large; a partial fsync would surface here.
         const final = join(dir, 'big.json')
         const payload = JSON.stringify({ blob: 'x'.repeat(4 * 1024 * 1024) })
         await write(`${final}.tmp`, final, payload)
@@ -77,8 +76,6 @@ describe('durable file write', () => {
       it('surfaces an unwritable temp path instead of silently succeeding', async () => {
         const final = join(dir, 'state.json')
         const tmp = join(dir, 'missing-subdir', 'state.json.tmp')
-        // The sync variant throws synchronously and the async one rejects; both must fail loudly
-        // and neither may publish a partial file.
         let failed = false
         try {
           await write(tmp, final, 'x')

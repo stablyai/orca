@@ -100,7 +100,6 @@ function setup(published: () => ServeReadiness | null) {
   return {
     deps,
     repairs: new ManagedOrcadPairingRepairs(deps),
-    /** The next refusal, seen under whatever pairing is stored now. */
     refuseCurrent: () => pairingRevisionOf(current),
     advance: (ms: number) => {
       now += ms
@@ -130,7 +129,6 @@ describe('ManagedOrcadPairingRepairs', () => {
   it('answers a late refusal of the old pairing with the stored one, without the host', async () => {
     const state = setup(() => readiness(offer('fresh-token')))
     const first = await state.repairs.repair('env-1', REFUSED)
-    // A build that started on the old pairing is refused after the repair landed.
     await expect(state.repairs.repair('env-1', REFUSED)).resolves.toEqual(first)
     expect(state.deps.readReadiness).toHaveBeenCalledOnce()
     expect(state.deps.repaired).toHaveBeenCalledOnce()
@@ -258,7 +256,7 @@ describe('ManagedOrcadPairingRepairs', () => {
     state.repairs.forgetFailures('env-1')
     answer(readiness(offer('refused-token')))
     await expect(inFlight).rejects.toThrow(/still offers/)
-    // Neither the in-flight attempt nor its failure survives the reset: the user gets a full cap.
+    // Explicit reset must discard both in-flight failures and their attempt counts.
     expect(state.repairs.standingFailure('env-1', REFUSED)).toBeNull()
     for (let i = 0; i < MAX_PAIRING_REPAIRS_PER_WINDOW; i++) {
       await expect(state.repairs.repair('env-1', REFUSED)).rejects.toThrow(/still offers/)
@@ -306,7 +304,6 @@ describe('buildWithPairingRepair', () => {
     const deps = { resolve: state.deps.resolve, repairs: state.repairs, ensure: vi.fn() }
     const build = vi.fn().mockRejectedValue(refusal())
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    // Every reconnect of a refused socket asks again, far more often than the hold lasts.
     for (let open = 0; open < 200; open++) {
       await expect(buildWithPairingRepair(deps, 'env-1', build)).rejects.toBeInstanceOf(
         OrcadManagedPairingRepairFailedError
@@ -317,7 +314,6 @@ describe('buildWithPairingRepair', () => {
     expect(build).toHaveBeenCalledTimes(MAX_PAIRING_REPAIRS_PER_WINDOW)
     expect(state.deps.readReadiness).toHaveBeenCalledTimes(MAX_PAIRING_REPAIRS_PER_WINDOW)
     await expect(buildWithPairingRepair(deps, 'env-1', build)).rejects.toThrow(/tried 3 times/)
-    // An explicit connect is the user asking again: the next open builds.
     state.repairs.forgetFailures('env-1')
     await expect(buildWithPairingRepair(deps, 'env-1', build)).rejects.toThrow()
     expect(build).toHaveBeenCalledTimes(MAX_PAIRING_REPAIRS_PER_WINDOW + 1)
@@ -327,7 +323,6 @@ describe('buildWithPairingRepair', () => {
     const { state, recovery: deps } = recovery()
     const newer = environment('updated-token', 9)
     deps.ensure.mockImplementationOnce(async () => {
-      // An update stores a fresh pairing while the repaired one is still being refused.
       state.deps.resolve.mockReturnValue(newer)
       throw refusal()
     })
@@ -345,7 +340,6 @@ describe('buildWithPairingRepair', () => {
   it('keeps a connect pressed during the post-repair handshake from being undone', async () => {
     const { state, recovery: deps } = recovery()
     deps.ensure.mockImplementationOnce(async () => {
-      // The user presses Connect while the handshake on the new pairing is still running.
       state.repairs.forgetFailures('env-1')
       throw refusal()
     })

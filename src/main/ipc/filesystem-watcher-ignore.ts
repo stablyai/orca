@@ -1,7 +1,4 @@
-// Canonical ignore list for recursive worktree watchers (mirrors VS Code's
-// predefined recursive-watch excludes). Shared by the explorer watcher and the
-// runtime file-watcher host so every @parcel/watcher subscription gets the
-// same high-churn exclusions.
+// Share high-churn exclusions across desktop and runtime watchers, following VS Code's recursive-watch defaults.
 export const WATCHER_IGNORE_DIRS: string[] = [
   '.git',
   'node_modules',
@@ -14,17 +11,12 @@ export const WATCHER_IGNORE_DIRS: string[] = [
   '__pycache__'
 ]
 
-// Why: macOS FSEventStreamSetExclusionPaths accepts at most 8 paths and fails
-// closed — one entry over the cap and @parcel/watcher silently loses ALL
-// daemon-side exclusions, so fseventsd delivers every node_modules/.git event
-// to this process (measured ~29x client CPU plus daemon-side delivery load).
-// The first 8 names get root-level daemon exclusions; the regex covers all names at every depth.
+// FSEvents rejects all exclusions above eight paths; regex filtering covers the remaining names at every depth.
 export const MACOS_FSEVENTS_EXCLUSION_PATH_LIMIT = 8
 
 export type ParcelWatcherIgnoreOptions = {
   ignore?: string[]
-  // @parcel/watcher's wrapper preserves this native option even though its
-  // public TypeScript declaration omits it. See parcel-bundler/watcher#244.
+  // Parcel forwards this native option despite omitting it from TS declarations (parcel-bundler/watcher#244).
   ignoreGlobs?: string[]
 }
 
@@ -37,7 +29,7 @@ function buildNestedDirectoryRegex(ignoreDirs: readonly string[]): string {
   if (process.platform === 'win32') {
     return `^(?:[^\\\\/]+[\\\\/])*(?:${alternatives})(?:[\\\\/][\\s\\S]*)?$`
   }
-  // Why: backslash is a legal POSIX filename character, not a path separator.
+  // Backslash is a valid POSIX filename character.
   return `^(?:[^/]+/)*(?:${alternatives})(?:/[\\s\\S]*)?$`
 }
 
@@ -48,15 +40,13 @@ export function buildParcelWatcherIgnoreOptions(
     return {}
   }
   if (process.platform !== 'darwin') {
-    // Why: Parcel 2.5.6 turns leading-** globs into nested-lookahead regexes
-    // that are pathological in native std::regex (10-17x slower upstream).
-    // One component-aware regex preserves nested pruning without that CPU cost.
+    // Parcel 2.5.6 leading-** globs cause pathological std::regex lookaheads; one component regex avoids that cost.
     return { ignoreGlobs: [buildNestedDirectoryRegex(ignoreDirs)] }
   }
   const daemonExcludedDirs = ignoreDirs.slice(0, MACOS_FSEVENTS_EXCLUSION_PATH_LIMIT)
   return {
     ignore: [...daemonExcludedDirs],
-    // Why: plain exclusions resolve under the root, leaving nested generated directories unfiltered.
+    // Plain exclusions cover only the root; regex also prunes nested generated directories.
     ignoreGlobs: [buildNestedDirectoryRegex(ignoreDirs)]
   }
 }

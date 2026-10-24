@@ -42,6 +42,7 @@ import type { AgentStatusIpcPayload } from '../../../shared/agent-status-types'
 import type * as PtyControllerContract from '../runtime-pty-controller-contract'
 import type { RuntimeClientEventBus } from '../runtime-client-event-bus'
 import type { RuntimeRepoSelector } from '../runtime-repo-selector'
+import type { PtyPane, PtyPaneSource } from '../terminal/surface/pty-pane-query'
 
 export abstract class RuntimeConstructionServices {
   abstract getOrchestrationDb(): OrchestrationDb
@@ -109,6 +110,8 @@ export abstract class RuntimeConstructionServices {
     ptyId: string
   ): Promise<RuntimeVisibleTerminalState | null>
   protected abstract getLeafKey(tabId: string, leafId: string): string
+  /** The tab and pane that hold a terminal: the one reader of a record's pane copies (L80). */
+  protected abstract paneOfPty(pty: PtyPaneSource | null | undefined): PtyPane
   protected abstract getLivePtyForHandle(handle: string): {
     record: TerminalHandleRecord
     pty: RuntimePtyWorktreeRecord

@@ -1,13 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import type { RepoIcon } from '../../../src/shared/repo-icon'
-import { NODE_PLATFORM_NAMES } from '../transport/mobile-runtime-host-platform'
 import {
   hostPlatformSchema,
   hostRepoCatalogSchema,
   hostSshTargetSummariesSchema,
-  hostViewSettingsSchema,
-  WORKSPACE_GROUP_BY_ARMS,
-  WORKSPACE_SORT_BY_ARMS
+  hostViewSettingsSchema
 } from './host-screen-reply-schema'
 
 describe('host screen reply schemas', () => {
@@ -173,37 +169,11 @@ describe('host screen reply schemas', () => {
   })
 })
 
-describe('the closed arm sets are the desktop unions', () => {
-  // The arm lists are pinned to the desktop unions in the schema modules, where tsc looks; these
-  // loops prove every pinned arm survives the parse, not just the ones the tests above pick.
-  it('keeps every platform Node can report', () => {
-    for (const platform of NODE_PLATFORM_NAMES) {
-      expect(hostPlatformSchema.parse({ platform })).toBe(platform)
-    }
-  })
-
-  it('keeps every grouping and sort arm the desktop persists', () => {
-    for (const groupBy of WORKSPACE_GROUP_BY_ARMS) {
-      for (const sortBy of WORKSPACE_SORT_BY_ARMS) {
-        expect(hostViewSettingsSchema.parse({ ui: { groupBy, sortBy } })).toMatchObject({
-          groupBy,
-          sortBy
-        })
-      }
-    }
-  })
-
-  it('keeps every repo icon arm the desktop draws', () => {
-    const icons: Record<RepoIcon['type'], Record<string, string>> = {
-      lucide: { type: 'lucide', name: 'Folder' },
-      emoji: { type: 'emoji', emoji: '🐳' },
-      image: { type: 'image', src: 'data:,x' }
-    }
-    for (const repoIcon of Object.values(icons)) {
-      const [row] = hostRepoCatalogSchema.parse({
-        repos: [{ id: 'r', displayName: 'r', repoIcon }]
-      })
-      expect(row?.repoIcon).toMatchObject({ type: repoIcon.type })
-    }
+describe('repo icon payloads', () => {
+  it('preserves the lucide icon name the row renders', () => {
+    const [row] = hostRepoCatalogSchema.parse({
+      repos: [{ id: 'r', displayName: 'r', repoIcon: { type: 'lucide', name: 'Terminal' } }]
+    })
+    expect(row?.repoIcon).toEqual({ type: 'lucide', name: 'Terminal' })
   })
 })

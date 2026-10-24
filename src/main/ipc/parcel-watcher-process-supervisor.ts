@@ -13,6 +13,7 @@ import {
 import { resetWatcherChildRegistryForTest } from './parcel-watcher-child-registry'
 import { WatcherSupervisorCapacityWait } from './parcel-watcher-supervisor-capacity-wait'
 import { WatcherProcessCrashFuse } from './parcel-watcher-crash-fuse'
+import { WatcherDeliveryHealthMonitor } from './parcel-watcher-delivery-health'
 import { cancelInterruptedWatcherSubscribe } from './parcel-watcher-interrupted-cancellation'
 import {
   type PendingWatcherUnsubscribe,
@@ -47,6 +48,7 @@ export class WatcherProcessSupervisor {
   private readonly slot = new WatcherChildSlot()
   private readonly terminationQueue = new termination.WatcherTerminationQueue()
   private readonly records = new Map<number, WatcherProcessSubscriptionRecord>()
+  private readonly deliveryHealth = new WatcherDeliveryHealthMonitor(this.records, this.crashFuse)
   private readonly pendingUnsubscribes = new Map<number, PendingWatcherUnsubscribe>()
   private readonly cancelledSubscribes = new WatcherCancellationTracker()
   private readonly capacityWait = new WatcherSupervisorCapacityWait()
@@ -94,6 +96,7 @@ export class WatcherProcessSupervisor {
     this.shutdown.requested = true
     this.shutdown.disposalRevision++
     this.capacityWait.dispose()
+    this.deliveryHealth.dispose()
     const proc = this.slot.child
     this.slot.child = null
     this.slot.canaryDir = disposeWatcherSupervisor(
@@ -148,10 +151,15 @@ export class WatcherProcessSupervisor {
     }
     this.slot.canaryDir = launched.canaryDir
     this.slot.child = this.ownedChildren.track(launched.child)
+    this.deliveryHealth.childStarted()
     return launched.child
   }
 
   private handleChildMessage(message: WatcherToHostMessage): void {
+    if (message.op === 'delivery-health') {
+      this.deliveryHealth.update(message.state)
+      return
+    }
     const child = this.slot.child
     const disposalRevision = this.shutdown.disposalRevision
     handleWatcherSupervisorMessage(message, {
@@ -193,6 +201,7 @@ export class WatcherProcessSupervisor {
       return
     }
     this.slot.child = null
+    this.deliveryHealth.reset()
     this.cancelledSubscribes.completeForChild(proc)
     resolvePendingWatcherUnsubscribes(this.pendingUnsubscribes)
     recoverWatcherRecordsAfterChildGone(

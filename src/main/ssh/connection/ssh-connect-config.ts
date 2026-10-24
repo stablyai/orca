@@ -7,7 +7,8 @@ import {
   resolveAgentConfigValue,
   resolveAgentSocket,
   resolvePrivateKeys,
-  resolveUnencryptedExplicitPrivateKeys
+  resolveUnencryptedExplicitPrivateKeys,
+  type SkippedIdentityFiles
 } from '../ssh-auth-resolution'
 import { configurePrivateKeyAuthentication } from '../ssh-private-key-authentication'
 import { isOpenSshConfigBackedTarget } from '../system-transport/system-ssh-args'
@@ -18,6 +19,8 @@ export type BuildConnectConfigOptions = {
   includePrivateKey?: boolean
   /** No agent and no key: only the host's keyboard-interactive challenge (and a cached password). */
   keyboardInteractiveOnly?: boolean
+  /** Collects identity files this config could not use, for the attempt's final error. */
+  skippedIdentityFiles?: SkippedIdentityFiles
 }
 
 // Why: ssh2 tries privateKey before agent, but parses encrypted privateKey
@@ -62,8 +65,8 @@ export function buildConnectConfig(
   const keys = options.keyboardInteractiveOnly
     ? []
     : (options.includePrivateKey ?? !agent)
-      ? resolvePrivateKeys(target, resolved)
-      : resolveUnencryptedExplicitPrivateKeys(target, resolved)
+      ? resolvePrivateKeys(target, resolved, options.skippedIdentityFiles)
+      : resolveUnencryptedExplicitPrivateKeys(target, resolved, options.skippedIdentityFiles)
   let deferralDecision: boolean | undefined
   configurePrivateKeyAuthentication(
     config as ConnectConfig,

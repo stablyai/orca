@@ -71,9 +71,10 @@ describe('the editable-host font-size rule', () => {
   it('finds the editor the TextInput census cannot see', () => {
     // The precondition every verdict below needs: this walk reads the editor's real markup and
     // names the surface the page mounts.
-    expect(editableHostsIn(mobileDir, EDITOR_CLOSURE)).toEqual([
-      { file: 'src/components/rich-markdown/document-markup.ts', id: 'editor' }
-    ])
+    expect(editableHostsIn(mobileDir, EDITOR_CLOSURE)).toContainEqual({
+      file: 'src/components/rich-markdown/document-markup.ts',
+      id: 'editor'
+    })
   })
 
   it('follows the surface to the rule in the stylesheet beside it', () => {

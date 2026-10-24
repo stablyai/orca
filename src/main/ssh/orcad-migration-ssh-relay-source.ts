@@ -22,6 +22,7 @@ import {
 } from './orcad-migration-terminal-gate'
 import type { SshTargetOrcadClaims } from './targets/ssh-target-orcad-claims'
 import type { OrcadMigrationPreflightStore } from './targets/ssh-target-orcad-preflight'
+import type { OrcadMigrationPaneLeasePredicate } from './orcad-migration-bridged-panes'
 
 type SshRelayCutoverDeps = {
   userDataPath: string
@@ -53,6 +54,7 @@ export function createSshRelayMigrationSource(
     target: SshTarget
     /** Every relay endpoint on the host's account; without it exit can never be proven. */
     censusHost?: CensusHostRelayTerminals | null
+    isBridgedPaneLease?: OrcadMigrationPaneLeasePredicate
   }
 ): OrcadMigrationSource {
   const { userDataPath, store, target } = deps
@@ -75,6 +77,7 @@ export function createSshRelayMigrationSource(
         store,
         claims: deps.claims,
         targetId: target.id,
+        isBridgedPaneLease: deps.isBridgedPaneLease,
         ...args
       })
   }

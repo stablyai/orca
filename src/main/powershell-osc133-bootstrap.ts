@@ -3,39 +3,8 @@ import { MANAGED_DATA_ACCOUNT_POWERSHELL_RESTORE } from '../shared/managed-data-
 import { getPowerShellAgentWrappers } from '../shared/powershell-agent-wrappers'
 export { encodePowerShellCommand } from '../shared/powershell-command-encoding'
 
-/**
- * Why every PTY site delivers this payload as `-EncodedCommand` and keeps doing so.
- *
- * An MDE report named the base64 a contributing "suspicious PowerShell" signal and
- * pointed at VS Code as the counter-example. VS Code and its forks actually ship
- * `["-noexit","-command",'try { . "{0}\\...\\shellIntegration.ps1" } catch {}']` -- a
- * one-liner that dot-sources a *file*, not inline script. Dot-sourcing is
- * execution-policy gated; inline text is not. Measured on Windows 11:
- *
- *   policy        dot-source .ps1   -Command inline   -EncodedCommand
- *   Restricted    blocked           runs              runs
- *   AllSigned     blocked           runs              runs
- *   RemoteSigned  runs              runs              runs
- *
- * So VS Code's shape silently drops OSC 133 -- and with it foreground-process and
- * exit-code tracking -- on exactly the locked-down fleets MDE runs on; its `catch {}`
- * is that failure being swallowed.
- *
- * Inline `-Command` does carry this payload intact through node-pty/ConPTY (verified
- * on powershell.exe 5.1 and pwsh 7.6.5), so the switch is feasible; it is declined
- * because it costs more signal than it removes. No PTY site spells `-ExecutionPolicy
- * Bypass`, so base64 is the whole of what would go, and AMSI and script-block logging
- * decode it anyway -- nothing is hidden from MDE today. What would change is the
- * process command line, which would then carry `$ExecutionContext.SessionState.
- * LanguageMode`, a `function Global:prompt` override and `[char]27`-assembled control
- * sequences in clear text: higher-signal for command-line heuristics than an opaque
- * token with no `Bypass` beside it.
- *
- * The payload is also not static -- providers/windows-shell-args.ts appends the PTY
- * cwd and the queued startup command. #7978 had to move cmd.exe startup commands off
- * `/K` to stdin because node-pty's argv escaping mangled their quotes; PowerShell
- * never needed that workaround, because `-EncodedCommand` is quoting-proof.
- */
+// Inline scripts work under Restricted/AllSigned policies that block dot-sourced files.
+// EncodedCommand preserves quoting for appended cwd/startup commands; AMSI and script logging still decode it.
 const POWERSHELL_OSC133_BOOTSTRAP = `# Orca OSC 133 shell integration for PowerShell.
 # Profiles have already loaded normally by the time -EncodedCommand runs.
 # Restore managed ownership before the shell-integration compatibility guard.
@@ -101,8 +70,7 @@ ${getPowerShellAgentWrappers()}
 }
 `
 
-// Why strip comment lines: they document the source, but in the payload they only spend the
-// command-line budget that lets a startup command ride along (windows-shell-args.ts).
+// Strip source comments to leave command-line space for appended startup commands.
 const POWERSHELL_OSC133_BOOTSTRAP_PAYLOAD = POWERSHELL_OSC133_BOOTSTRAP.replace(
   /^[ \t]*#.*\n/gm,
   ''

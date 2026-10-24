@@ -10,6 +10,7 @@ import type { HostWorktreeTarget } from '../../../../shared/worktree/host-qualif
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import type { Repo } from '../../../../shared/repo-types'
 import { getRuntimeBrowserPageRegistry } from '../../runtime-browser-page-registry'
+import { deleteRemovedOwnerBrowserProfile } from '../../browser-host/managed-browser-profile-removal'
 import { listFailedAgentLaunchWorktreeIds } from '../../../agent-launch/agent-launch-pane-attachment'
 import {
   TerminalUpdateAdmission,
@@ -162,6 +163,7 @@ export abstract class OrcaRuntimeWithStopTerminalsForProject extends OrcaRuntime
     for (const worktreeId of worktreeIds) {
       this.releaseRemovedWorktreeHostSessions(worktreeId, 'project-removal')
     }
+    deleteRemovedOwnerBrowserProfile({ kind: 'repo', id: repoId })
   }
 
   private async stopProjectPtys(

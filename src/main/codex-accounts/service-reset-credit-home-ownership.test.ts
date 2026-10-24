@@ -161,7 +161,7 @@ describe('Codex reset-credit managed-home ownership', () => {
       fixture.store.replaceCodexResetCreditAttemptLedgerAndFlush.mockClear()
       fixture.store.updateSettings.mockClear()
       const restarted = fixture.createService()
-      // Why: construction mirrors config into every managed home; only the retry itself is under test.
+      // Exclude constructor config mirroring from retry write assertions.
       fsFaults.resetMkdirCalls()
 
       await expect(
@@ -189,7 +189,7 @@ describe('Codex reset-credit managed-home ownership', () => {
     fixture.consume.mockClear()
     fixture.store.replaceCodexResetCreditAttemptLedgerAndFlush.mockClear()
     fixture.store.updateSettings.mockClear()
-    // Why: construction mirrors config into every managed home; only the replay itself is under test.
+    // Exclude constructor config mirroring from replay write assertions.
     const restarted = fixture.createService()
     fsFaults.hold(join(realpathSync(fixture.managedHomePath), '.orca-managed-home'))
     fsFaults.resetMkdirCalls()

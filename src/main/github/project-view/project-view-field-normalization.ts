@@ -7,8 +7,6 @@ import type {
   GitHubProjectUser
 } from '../../../shared/github/project-types'
 
-// ─── Normalizers ───────────────────────────────────────────────────────
-
 export type RawProjectV2Field = {
   __typename?: string
   id?: string
@@ -176,7 +174,7 @@ export function normalizeFieldValue(
     }
     case undefined:
     default:
-      // Unknown __typename → forward-compat: drop silently, don't classify as drift (see design §Error Handling).
+      // Ignore future field types rather than treating compatible schema additions as drift.
       return null
   }
 }

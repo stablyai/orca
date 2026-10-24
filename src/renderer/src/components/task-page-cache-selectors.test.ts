@@ -11,15 +11,17 @@ import {
   selectTaskPageUnresolvedSourceRepos,
   deriveTaskPageGitHubWorkItemsFetchOptions,
   findTaskPageDialogWorkItem,
-  findTaskPageLinearDrawerIssue,
   reconcileTaskPageItemsAfterLandingRefresh,
-  reconcileTaskPageLinearIssuesAfterLandingRefresh,
   reconcileTaskPagePagesAfterLandingRefresh,
   reconcileTaskPagePagesWithWorkItemsCache,
   selectTaskPageWorkItemsCacheEntries,
   shouldResetTaskPagePaginationAfterLandingRefresh,
   shouldReplaceTaskPageItemsAfterRefresh
 } from './task-page-cache-selectors'
+import {
+  findTaskPageLinearIssue,
+  reconcileTaskPageLinearIssuesAfterLandingRefresh
+} from './task-page/linear/task-page-linear-cache-selectors'
 
 function entry<T>(data: T): CacheEntry<T> {
   return { data, fetchedAt: 1 }
@@ -439,9 +441,9 @@ describe('task page cache selectors', () => {
       all: entry<LinearCollectionResult<LinearIssue>>({ items: [listIssue] })
     }
 
-    expect(findTaskPageLinearDrawerIssue(issueCache, searchCache, listCache, null)).toBeNull()
-    expect(findTaskPageLinearDrawerIssue(issueCache, searchCache, listCache, 'LIN-1')).toBe(issue)
-    expect(findTaskPageLinearDrawerIssue({}, searchCache, listCache, 'LIN-2')).toBe(searchIssue)
-    expect(findTaskPageLinearDrawerIssue({}, {}, listCache, 'LIN-3')).toBe(listIssue)
+    expect(findTaskPageLinearIssue(issueCache, searchCache, listCache, null)).toBeNull()
+    expect(findTaskPageLinearIssue(issueCache, searchCache, listCache, 'LIN-1')).toBe(issue)
+    expect(findTaskPageLinearIssue({}, searchCache, listCache, 'LIN-2')).toBe(searchIssue)
+    expect(findTaskPageLinearIssue({}, {}, listCache, 'LIN-3')).toBe(listIssue)
   })
 })

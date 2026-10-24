@@ -38,6 +38,7 @@ function baseArgs(overrides: Partial<HookArgs> = {}): HookArgs {
     deviceTokenRef: { current: null },
     nativeChatScopeKey: 'scope-1',
     nativeChatInputLeaseReady: false,
+    nativeChatAgentConfirmed: true,
     getActiveWorktreeConnectionId: async () => 'conn-1',
     beforeTerminalSend: async () => true,
     nativeChatBaseSend: vi.fn().mockResolvedValue('accepted'),
@@ -128,6 +129,22 @@ describe('useMobileSessionImageAttachments', () => {
         enabled: false,
         structuredNativeChat: true
       })
+    )
+  })
+
+  // A remembered-only chat may sit on a bare shell, where a pasted image path would run as input.
+  it('keeps terminal-backed native-chat image sends off until the live agent is confirmed', () => {
+    render(
+      baseArgs({
+        activeHandleRef: { current: 'term-1' },
+        nativeChatInputLeaseReady: true,
+        nativeChatAgentConfirmed: false,
+        structuredNativeChat: false
+      })
+    )
+
+    expect(mocks.useMobileNativeChatImageAttachments).toHaveBeenCalledWith(
+      expect.objectContaining({ enabled: false, structuredNativeChat: false })
     )
   })
 })

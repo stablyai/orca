@@ -66,7 +66,7 @@ export function buildWindowApi(args: {
         onOpenFileFromMobile: () => () => {},
         onOpenDiffFromMobile: () => () => {},
         onCloseTerminal: () => () => {},
-        onSleepWorktree: () => () => {},
+        onWorkspaceSleep: () => () => {},
         onResumeSleepingAgents: () => () => {},
         onNewBrowserTab: () => () => {},
         onNewMarkdownTab: () => () => {},
@@ -102,6 +102,7 @@ export function buildWindowApi(args: {
         onGuestLoadFailed: () => () => {},
         onPaneFocus: () => () => {},
         onOpenLinkInOrcaTab: () => () => {},
+        onSessionProfilesChanged: () => () => {},
         onNavigationUpdate: () => () => {},
         onActivateView: () => () => {}
       },

@@ -24,15 +24,13 @@ import {
   itemContentSelection
 } from './project-view-query-fragments'
 
-// ─── Items fetch (paginated) ──────────────────────────────────────────
-
 export type RawItemsPage = {
   totalCount?: number
   pageInfo?: { hasNextPage?: boolean; endCursor?: string | null }
   nodes?: (RawItem | null)[]
 }
 
-// Why: unlike runGraphql, return the raw GraphQL error envelope so the parent-field retry decision can re-inspect it.
+// Preserve raw GraphQL errors for parent-field capability retry decisions.
 export async function fetchItemsPageWithRaw(args: {
   owner: string
   ownerType: GitHubProjectOwnerType
@@ -87,8 +85,7 @@ export async function fetchItemsPageWithRaw(args: {
     argsArr.push('-f', `after=${args.after}`)
   }
 
-  // Why: GHES traffic runs against its own quota — only github.com requests
-  // consult/debit the shared snapshot.
+  // Enterprise traffic has separate quota from the shared github.com snapshot.
   const guard = repositoryRateLimitGuard(args, 'graphql')
   if (guard.blocked) {
     return {
@@ -121,7 +118,7 @@ export async function fetchItemsPageWithRaw(args: {
     try {
       parsed = JSON.parse(stdout)
     } catch {
-      // Why: gh exited non-zero with unparseable stdout; classify against stderr so callers see the real cause, not a synthesized drift/not-found.
+      // Unparseable failed stdout must retain stderr's error rather than become missing data.
       if (execFailed) {
         return {
           ok: false,
@@ -137,7 +134,7 @@ export async function fetchItemsPageWithRaw(args: {
         stderr
       }
     }
-    // Why: gh rejected but stdout parsed; fall through to parsed.errors below, else surface the stderr classification rather than not_found.
+    // Prefer parsed GraphQL errors, otherwise classify failed execution from stderr.
     if (execFailed && (!parsed.errors || parsed.errors.length === 0) && !parsed.data) {
       return {
         ok: false,

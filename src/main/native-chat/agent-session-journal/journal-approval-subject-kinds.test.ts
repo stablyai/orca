@@ -1,13 +1,10 @@
-// Every approval subject kind the journal schema knows, against the kinds every supported client
-// draws. A client from before unknown subjects were refused leaves Approve live for a kind it cannot
-// draw, so a new kind ships only behind a client capability that withholds it from such clients.
+// Older clients may leave unsupported approvals actionable; gate new subject kinds by client capability.
 
 import { expect, it } from 'vitest'
 import { AGENT_JOURNAL_APPROVAL_SUBJECT_KINDS } from '../../../shared/agent-session-journal-schemas'
 
-/** Drawn by every supported client. */
 const SUBJECT_KINDS_EVERY_CLIENT_DRAWS = ['plan']
-/** Kinds the host withholds from clients without the capability; none exists yet (STA-9262). */
+// Future capability-gated kinds belong here (STA-9262).
 const CAPABILITY_GATED_SUBJECT_KINDS: string[] = []
 
 it('adds no approval subject kind without a client-capability gate', () => {

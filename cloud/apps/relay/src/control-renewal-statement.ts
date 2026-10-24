@@ -1,4 +1,4 @@
-import type { AssignmentIdentity } from './assignment-identity-queue.js'
+import type { AssignmentIdentity } from './assignment/assignment-identity-queue.js'
 import type { SqlRow } from './database.js'
 
 export type ControlRenewalOutcome =

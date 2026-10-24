@@ -16,6 +16,11 @@ import {
   structuredAgentSessionGoalObjective
 } from '../../../../shared/structured-agent-session-composer'
 
+import {
+  admitNativeChatPastedText,
+  resolveNativeChatPastedText
+} from './native-chat-composer-pasted-text-references'
+
 const GOAL_COMMAND = 'goal'
 
 export type NativeChatComposerGoalMode = {
@@ -75,7 +80,9 @@ export function useNativeChatComposerSubmit(args: {
   // In-flight changes are serialized by the session's goal controller, which
   // answers false to a second submit while the first is unsettled.
   const setGoal = useCallback(() => {
-    const objective = structuredAgentSessionGoalObjective(draft)
+    const objective = structuredAgentSessionGoalObjective(
+      resolveNativeChatPastedText(draftScopeKey, draft)
+    )
     if (!threadGoal || !structuredTransport || objective === '') {
       return
     }
@@ -89,23 +96,32 @@ export function useNativeChatComposerSubmit(args: {
       return
     }
     structuredTransport.onSubmitted?.()
+    const isCurrent = structuredTransport.capturePresentation()
     const submitted = readNativeChatComposerDraft(draftScopeKey)
     void threadGoal.setObjective(objective).then((accepted) => {
       if (!accepted) {
         return
       }
-      structuredTransport.onError(null)
       if (!clearNativeChatComposerDraftIfUnchanged(draftScopeKey, submitted)) {
         return
       }
-      setCaret(0)
-      setEntered(false)
+      if (isCurrent()) {
+        structuredTransport.onError(null)
+        setCaret(0)
+        setEntered(false)
+      }
     })
   }, [draft, draftScopeKey, imageAttachments.length, setCaret, structuredTransport, threadGoal])
 
   const send = useCallback(() => {
     // Before goal mode too: a navigation command must never become an objective.
     if (consumeOrcaCommand?.(draft)) {
+      return
+    }
+    if (
+      structuredTransport &&
+      !admitNativeChatPastedText(draftScopeKey, draft, structuredTransport.onError)
+    ) {
       return
     }
     if (nativeChatImagesHoldSend(imageAttachments)) {
@@ -131,6 +147,7 @@ export function useNativeChatComposerSubmit(args: {
     consumeOrcaCommand,
     disabled,
     draft,
+    draftScopeKey,
     imageAttachments,
     sendPty,
     sendStructured,

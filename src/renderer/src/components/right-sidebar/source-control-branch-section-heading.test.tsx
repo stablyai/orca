@@ -41,7 +41,7 @@ function render(
       worktreePath={join(tmpdir(), 'wt-1')}
       revealInExplorer={vi.fn()}
       activeConnectionId={null}
-      openBranchFile={vi.fn()}
+      openCommittedDiff={vi.fn()}
       openBranchAllDiffs={vi.fn()}
       diffCommentCountByPath={new Map()}
     />

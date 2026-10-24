@@ -4,7 +4,7 @@ import { openTranscriptReadStream } from '../native-chat/wsl-transcript-fs-acces
 import { accumulatorSessionIdentity, updateTimeline } from './session-scanner-accumulator'
 import {
   cloneClaudeSessionParseState,
-  consumeClaudeSessionLine,
+  consumeClaudeSessionRecord,
   createClaudeSessionParseState,
   finalizeClaudeSessionParseState,
   type ClaudeSessionParseState
@@ -40,9 +40,9 @@ function consumeQoderLine(state: ClaudeSessionParseState, line: string): void {
   const message = asRecord(record.message)
   if (message && Array.isArray(message.content)) {
     const content = message.content.filter((block) => asRecord(block)?.type === 'text')
-    consumeClaudeSessionLine(state, JSON.stringify({ ...record, message: { ...message, content } }))
+    consumeClaudeSessionRecord(state, { ...record, message: { ...message, content } })
   } else {
-    consumeClaudeSessionLine(state, line)
+    consumeClaudeSessionRecord(state, record)
   }
   if (
     record.type === 'workspace-directories' &&

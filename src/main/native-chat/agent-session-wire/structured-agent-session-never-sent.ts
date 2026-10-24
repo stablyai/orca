@@ -2,9 +2,7 @@ import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 
-/** Proof a chat started here has sent nothing, so the default it shows is the one its first send
- *  pins. When unsure (history it was taken from, any turn even before a context clear, a rewind,
- *  or a journal founded afresh for a chat whose agent already ran), it has sent. */
+/** Prove local unsent history; adoption, prior turns, rewind or a replacement journal defeat proof. */
 export function structuredAgentSessionNeverSent(
   record: AgentSessionRecord | null,
   journal: Pick<AgentSessionJournal, 'submissions' | 'visitItems' | 'wroteBeforeOpen'>

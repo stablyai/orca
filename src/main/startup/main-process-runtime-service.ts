@@ -12,6 +12,7 @@ import { clearProviderPtyState } from '../ipc/pty/provider/state-cleanup'
 import { agentHookServer } from '../agent-hooks/server'
 import { toAgentStatusIpcPayload } from '../agent-hooks/server/server-status-identity'
 import { browserManager } from '../browser/browser-manager'
+import { browserSessionRegistry } from '../browser/browser-session-registry'
 import { loadAgentSessionClaimSigner } from '../runtime/agent-session-claim-identity'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { codexAiVaultSessionResumePreparation } from '../codex/codex-ai-vault-session-resume'
@@ -27,6 +28,7 @@ import { getPreferredPairedRuntimeConnection } from '../../shared/runtime-enviro
 import { fingerprintOrchestrationPeer } from '../runtime/orchestration/environment-transport'
 import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
 import { mainProcessState as state } from './main-process-state'
+import { suspendEphemeralVmWorkspace } from '../ephemeral-vm/workspace-suspend'
 import { installWslOrcadAccountShim } from './wsl-orcad-account-env-wiring'
 import {
   codexStructuredLaunchHomeResolvers,
@@ -125,9 +127,14 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     prepareCodexCatalogProbeHome: (homePath) =>
       state.codexRuntimeHome?.prepareHostCodexHomeForReadOnlyAppServer(
         homePath,
-        resolveTuiAgentLaunchEnv('codex', store.getSettings().agentDefaultEnv)
+        resolveTuiAgentLaunchEnv('codex', store.getSettings())
       ),
     orchestrationEnvironmentTransport,
+    workspaceSleepPlatform: {
+      callEnvironment: (environmentId, method, params, timeoutMs) =>
+        callRuntimeEnvironment(app.getPath('userData'), environmentId, method, params, timeoutMs),
+      suspendVm: (workspaceId) => suspendEphemeralVmWorkspace(store, workspaceId)
+    },
     // Why the same function the settings IPC handler calls: a paired client's write and a
     // local one must reconcile the scanner child through one path, or they can disagree.
     applySessionSearchSettings: applySessionSearchSettingsChange,
@@ -167,6 +174,7 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
   browserManager.setBrowserGuestStateChangedListener((worktreeId) => {
     runtime.notifyMobileSessionTabsChanged(worktreeId)
   })
+  browserSessionRegistry.onProfilesChanged = () => runtime.notifyBrowserProfilesChanged()
   return runtime
 }
 

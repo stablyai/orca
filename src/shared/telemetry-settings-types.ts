@@ -1,3 +1,5 @@
+import type { AgentDashboardSurface } from './telemetry-agent-dashboard-event-schemas'
+
 export type TelemetrySettings = {
   /** New users: true at install. Existing users: null until they resolve the first-launch banner. */
   optedIn: boolean | null
@@ -7,4 +9,6 @@ export type TelemetrySettings = {
   existedBeforeTelemetryRelease: boolean
   /** Frozen 50/50 assignment for fresh installs; absent for profiles predating the experiment. */
   onboardingLanguageCohort?: 'control' | 'treatment'
+  /** Local UTC-day cursors cap dashboard observations across restarts; at most two writes a day. */
+  agentDashboardActiveDays?: Partial<Record<AgentDashboardSurface, number>>
 }

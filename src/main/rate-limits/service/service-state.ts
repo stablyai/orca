@@ -82,6 +82,8 @@ export abstract class RateLimitServiceState {
   protected fetchIdleResolvers: (() => void)[] = []
   protected codexFetchGeneration = 0
   protected claudeFetchGeneration = 0
+  // Why: cached display receipts cannot establish when the selected account was last checked.
+  protected lastClaudeCheckCompletedAt: number | null = null
   // Why: statusline ingest must attribute live windows to the selected account without re-running the side-effectful auth sync per post.
   protected lastClaudeAuthSnapshot: { configDir: string | null; provenance: string } | null = null
   protected opencodeFetchGeneration = 0

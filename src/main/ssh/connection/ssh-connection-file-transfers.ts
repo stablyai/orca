@@ -102,7 +102,9 @@ export async function createSshFileUploadSession(
         signal,
         hostPlatform: options?.hostPlatform,
         exclusive: uploadOptions?.exclusive,
-        ...buildArgsOptions
+        ...buildArgsOptions,
+        // Why live: the loopback route can die mid-session, and a dead route's port must not be dialled.
+        loopbackRoute: host.systemSshBuildArgsOptions().loopbackRoute
       }),
     close: () => {}
   }

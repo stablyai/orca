@@ -1,8 +1,4 @@
-// One subagent's own journal row: its key, its body, and reading it back.
-//
-// Keyed by the child's own id, so every change and every later run of the child revises the one
-// row its spawn created, and a provider process that restarts finds that row by key instead of
-// scanning for it.
+// Child IDs key reusable rows so later runs revise them directly instead of duplicating or scanning.
 
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type {
@@ -15,12 +11,11 @@ import { MAX_SUBAGENT_FIELD_CHARS } from '../../../shared/native-chat-subagent-s
 import { isSubagentBlock, type NativeChatSubagentBlock } from '../../../shared/native-chat-types'
 import { boundSubagentEntryId } from '../subagent-entry-id-bounds'
 
-/** Scoped by the journal, which is one session's with one provider. */
 export function subagentJournalItemIdentity(id: string): AgentJournalItemIdentity {
   return { provider: 'orca', clientMessageId: `subagent:${boundSubagentEntryId(id)}` }
 }
 
-/** The row: the block, and the sentence an older client draws in its place. */
+/** Include a plain-text fallback for older clients. */
 export function subagentJournalBody(block: NativeChatSubagentBlock): AgentJournalMessageItem {
   const bounded: NativeChatSubagentBlock = {
     ...block,
@@ -37,7 +32,6 @@ export function subagentJournalBody(block: NativeChatSubagentBlock): AgentJourna
   }
 }
 
-/** The child's saved row, read by key; null when none was written. */
 export function journaledSubagent(
   journal: { itemBody: (itemId: string) => AgentJournalItemBody | null },
   id: string
@@ -46,8 +40,7 @@ export function journaledSubagent(
   return body?.kind === 'message' ? (body.blocks.find(isSubagentBlock) ?? null) : null
 }
 
-/** The bound every reader clips a label to. A clip never splits a surrogate pair: a lone one is
- *  malformed in a durable row. */
+/** Preserve surrogate pairs: lone surrogates make durable rows malformed. */
 export function boundSubagentLabel(label: string): string {
   if (label.length <= MAX_SUBAGENT_FIELD_CHARS) {
     return label

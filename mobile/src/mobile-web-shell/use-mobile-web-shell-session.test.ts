@@ -1,10 +1,14 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MOBILE_WEB_BUNDLE_CAPABILITY } from '../../../src/shared/mobile-web-bundle/mobile-web-bundle-capability'
-import type { MobileWebBundleFetchResult } from '../transport/mobile-web-bundle-fetch'
+import type {
+  MobileWebBundleFetchProgress,
+  MobileWebBundleFetchResult
+} from '../transport/mobile-web-bundle-fetch'
 import type { MobileWebBundleManifestRead } from '../transport/mobile-web-bundle-reply-schemas'
 import type { ActiveGeneration, GenerationStore, StagedGeneration } from './generation-store'
+import type { DownloadProgressFeed } from './download-progress-feed'
 import type { MobileWebShellSessionState } from './mobile-web-shell-session-contract'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 
@@ -31,7 +35,11 @@ type Doubles = {
   manifestReads: number
   manifestClients: unknown[]
   manifestRejection: unknown
-  fetches: { signal: AbortSignal; settle: Settle<MobileWebBundleFetchResult> }[]
+  fetches: {
+    signal: AbortSignal
+    onProgress: (progress: MobileWebBundleFetchProgress) => void
+    settle: Settle<MobileWebBundleFetchResult>
+  }[]
   manifest: MobileWebBundleManifestRead
 }
 
@@ -90,13 +98,15 @@ vi.mock('../transport/rpc-operation', () => ({
   }
 }))
 vi.mock('../transport/mobile-web-bundle-fetch', () => ({
-  fetchMobileWebBundle: (args: { signal: AbortSignal }) =>
+  fetchMobileWebBundle: (args: {
+    signal: AbortSignal
+    onProgress: (progress: MobileWebBundleFetchProgress) => void
+  }) =>
     new Promise<MobileWebBundleFetchResult>((resolve) => {
-      doubles.fetches.push({ signal: args.signal, settle: resolve })
+      doubles.fetches.push({ signal: args.signal, onProgress: args.onProgress, settle: resolve })
     })
 }))
 
-import { BRIDGE_READY_RETRY_MAX_MS } from './bridge/bridge-client-init-handshake'
 import { DOCUMENT_LOAD_DEADLINE_MS, PAGE_READY_DEADLINE_MS } from './mobile-web-shell-runtime'
 import { SHELL_STALL_LOG_MS } from './shell-lifecycle-log'
 import { connectionLogStore } from '../transport/persisted-connection-log-store'
@@ -156,6 +166,7 @@ function createFakeStore(): {
     abortStagedGeneration: async () => {
       aborted += 1
     },
+    openReusableAssets: async () => ({ has: () => false, check: async () => false }),
     sweepStagedGenerations: async () => undefined,
     deleteHostCache: async () => undefined,
     recordUpdateFailure: async () => undefined,
@@ -214,12 +225,29 @@ type Mounted = {
   documentLoaded: () => void
   pageReady: () => void
   pagePainted: () => void
+  downloadProgress: () => DownloadProgressFeed
   timers: ReturnType<typeof createTimerSeam>
 }
 
 function live(timers: readonly ArmedTimer[]): ArmedTimer[] {
   return timers.filter((timer) => !timer.cancelled)
 }
+
+const mountedTrees: ReturnType<typeof create>[] = []
+
+function createTracked(element: Parameters<typeof create>[0]): ReturnType<typeof create> {
+  const tree = create(element)
+  mountedTrees.push(tree)
+  return tree
+}
+
+afterEach(async () => {
+  await act(async () => {
+    for (const tree of mountedTrees.splice(0)) {
+      tree.unmount()
+    }
+  })
+})
 
 async function mount(store: GenerationStore): Promise<Mounted> {
   const timers = createTimerSeam()
@@ -231,6 +259,7 @@ async function mount(store: GenerationStore): Promise<Mounted> {
     pagePainted: () => void
     states: MobileWebShellSessionState[]
     handshakes: boolean[]
+    downloadProgress: DownloadProgressFeed | null
   } = {
     retry: () => {},
     documentStarted: () => {},
@@ -238,7 +267,8 @@ async function mount(store: GenerationStore): Promise<Mounted> {
     pageReady: () => {},
     pagePainted: () => {},
     states: [],
-    handshakes: []
+    handshakes: [],
+    downloadProgress: null
   }
   function Probe() {
     const session = useMobileWebShellSession({
@@ -258,11 +288,12 @@ async function mount(store: GenerationStore): Promise<Mounted> {
     handle.pagePainted = session.reportPagePainted
     handle.states.push(session.state)
     handle.handshakes.push(session.pageReady)
+    handle.downloadProgress = session.downloadProgress
     return null
   }
   const rendered: { tree: ReactTestRenderer | null } = { tree: null }
   await act(async () => {
-    rendered.tree = create(createElement(Probe))
+    rendered.tree = createTracked(createElement(Probe))
   })
   const tree = rendered.tree
   if (tree === null) {
@@ -278,6 +309,12 @@ async function mount(store: GenerationStore): Promise<Mounted> {
     documentLoaded: () => handle.documentLoaded(),
     pageReady: () => handle.pageReady(),
     pagePainted: () => handle.pagePainted(),
+    downloadProgress: () => {
+      if (handle.downloadProgress === null) {
+        throw new Error('the hook never rendered')
+      }
+      return handle.downloadProgress
+    },
     timers
   }
 }
@@ -326,6 +363,7 @@ describe('the hybrid shell runner', () => {
     inFlight.settle({
       manifest: doubles.manifest,
       assets: new Map(),
+      reused: [],
       totalBytes: 2048,
       elapsedMs: 1
     })
@@ -364,6 +402,7 @@ describe('the hybrid shell runner', () => {
     inFlight.settle({
       manifest: doubles.manifest,
       assets: new Map(),
+      reused: [],
       totalBytes: 2048,
       elapsedMs: 1
     })
@@ -407,6 +446,28 @@ describe('the hybrid shell runner', () => {
     })
   })
 
+  it('moves the download feed as progress is dispatched, without waiting for a render', async () => {
+    const fake = createFakeStore()
+    const mounted = await mount(fake.store)
+    fake.settleCacheRead(null)
+    await flush()
+    const fetch = doubles.fetches[0]
+    if (fetch === undefined) {
+      throw new Error('no download was started')
+    }
+    const heard: number[] = []
+    mounted.downloadProgress().subscribe((fraction) => heard.push(fraction))
+    const renders = mounted.states().length
+    // Outside act: React commits nothing here, as on a JS thread the replies keep busy.
+    fetch.onProgress({ completedAssets: 0, totalAssets: 2, receivedBytes: 1024, totalBytes: 4096 })
+    fetch.onProgress({ completedAssets: 1, totalAssets: 2, receivedBytes: 4096, totalBytes: 4096 })
+    expect(heard).toEqual([0.25, 1])
+    expect(mounted.states()).toHaveLength(renders)
+    await act(async () => {
+      mounted.tree.unmount()
+    })
+  })
+
   it('abandons the download still in flight when Try again starts a new one', async () => {
     const fake = createFakeStore()
     const mounted = await mount(fake.store)
@@ -420,7 +481,13 @@ describe('the hybrid shell runner', () => {
       mounted.retry()
     })
     expect(first.signal.aborted).toBe(true)
-    first.settle({ manifest: doubles.manifest, assets: new Map(), totalBytes: 2048, elapsedMs: 1 })
+    first.settle({
+      manifest: doubles.manifest,
+      assets: new Map(),
+      reused: [],
+      totalBytes: 2048,
+      elapsedMs: 1
+    })
     await flush()
     expect(fake.staged()).toBe(0)
     await act(async () => {
@@ -455,12 +522,6 @@ describe('the wait for the page to speak', () => {
     expect(mounted.states().at(-1)?.kind).toBe('ready')
     return mounted
   }
-
-  it(`waits out several of the page's own asks before it gives up on one`, () => {
-    // The number the deadline is for: a page whose backoff has widened to the ceiling still gets
-    // several asks inside the wait, so a slow device is never mistaken for a page that never ran.
-    expect(PAGE_READY_DEADLINE_MS / BRIDGE_READY_RETRY_MAX_MS).toBe(5)
-  })
 
   it('fails the generation a finished document never spoke for, and asks to fetch it again', async () => {
     const mounted = await ready()
@@ -502,7 +563,7 @@ describe('the wait for the page to speak', () => {
     })
   })
 
-  it('stops the clock when the page speaks inside it, whichever of the two lands first', async () => {
+  it('stays ready when the page speaks after document load and the timers fire', async () => {
     const mounted = await ready()
     await act(async () => {
       mounted.documentLoaded()
@@ -572,7 +633,7 @@ describe('the wait for the page to speak', () => {
     }
     const rendered: { tree: ReactTestRenderer | null } = { tree: null }
     await act(async () => {
-      rendered.tree = create(createElement(Probe))
+      rendered.tree = createTracked(createElement(Probe))
     })
     const tree = rendered.tree
     if (tree === null) {
@@ -676,6 +737,9 @@ describe('the wait for the page to speak', () => {
     await act(async () => {
       mounted.documentLoaded()
     })
+    expect(
+      live(mounted.timers.armed).filter((timer) => timer.delayMs === PAGE_READY_DEADLINE_MS)
+    ).toHaveLength(1)
     await act(async () => {
       mounted.tree.unmount()
     })

@@ -88,7 +88,6 @@ import { speechApi } from './api/speech-bridge'
 
 installBrowserFindListener()
 
-// Custom APIs for renderer. Each domain bridge owns its IPC contract.
 const telemetryTrackApi: PreloadApi['telemetryTrack'] = (name, props) =>
   ipcRenderer.invoke('telemetry:track', name, props)
 const telemetrySetOptInApi: PreloadApi['telemetrySetOptIn'] = (optedIn) =>

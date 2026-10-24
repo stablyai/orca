@@ -57,13 +57,6 @@ describe('the claim a host holds on the device Back key', () => {
     bridge.host.receive(claim(true))
     bridge.host.dispose()
     expect(bridge.backClaims).toEqual([true])
-  })
-
-  it('hands what the session established to the host that takes over from it', () => {
-    const bridge = harness()
-    bridge.host.receive(ready())
-    bridge.host.receive(claim(true))
-    bridge.host.dispose()
     expect(bridge.host.readSessionBack()).toEqual({ claimed: true })
   })
 
@@ -108,7 +101,7 @@ describe('the claim a host holds on the device Back key', () => {
 })
 
 describe('handing one press to the page', () => {
-  it('posts a back frame to a page that said it takes one', () => {
+  it('posts a back frame to the ready page', () => {
     const bridge = harness()
     bridge.host.receive(ready())
     expect(bridge.host.sendBack()).toBe(true)

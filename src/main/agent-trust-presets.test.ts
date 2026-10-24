@@ -42,8 +42,7 @@ const { runExclusivelyForCodexTrustConfig } =
   await import('./codex/codex-trust-config-mutation-queue')
 const { getLocalCodexTrustConfigFiles } = await import('./codex/codex-home-paths')
 
-// Why: fixture tests pin Orca's half; only the real binary proves Codex reads the key
-// Orca writes. CI sets REQUIRED so a missing binary fails instead of skipping.
+// Real-binary tests prove Codex consumes the key; CI requires the binary instead of skipping.
 const codexTrustContract = {
   binary: process.env.ORCA_CODEX_TRUST_CONTRACT_BINARY,
   version: process.env.ORCA_CODEX_TRUST_CONTRACT_VERSION
@@ -129,7 +128,7 @@ describe('markCopilotFolderTrusted', () => {
     }
     const workspace = mkdtempSync(join(tmpdir(), 'orca-copilot-ws-'))
     const configPath = join(testState.fakeHomeDir, '.copilot', 'config.json')
-    // Why: a restrictive runner umask would mask a dropped mode.
+    // A restrictive runner umask could hide a missing creation mode.
     const originalUmask = process.umask(0o022)
     try {
       mkdirSync(join(testState.fakeHomeDir, '.copilot'), { recursive: true })
@@ -201,8 +200,6 @@ describe('markAntigravityWorkspaceTrusted', () => {
     }
   })
 
-  // Why: the same settings.json also carries model, permissions and toolPermission. A
-  // clobbering write here would silently reset the user's agy configuration.
   it('preserves sibling settings keys and dedups an already-trusted workspace', () => {
     const workspace = mkdtempSync(join(tmpdir(), 'orca-agy-ws-'))
     const realpath = realpathSync(workspace)
@@ -231,8 +228,6 @@ describe('markAntigravityWorkspaceTrusted', () => {
     }
   })
 
-  // Why: agy's trust is exact-path, not inherited — a parent entry does not cover a child,
-  // which is what makes the per-worktree preflight necessary at all.
   it('adds a child worktree even when its parent is already trusted', () => {
     const parent = mkdtempSync(join(tmpdir(), 'orca-agy-parent-'))
     const child = join(parent, 'child-worktree')
@@ -255,9 +250,7 @@ describe('markAntigravityWorkspaceTrusted', () => {
 })
 
 describe('markCodexProjectTrusted', () => {
-  // Why (#16441): a hook install/grant holds this file across an awaited
-  // app-server session; an unqueued write here lands inside its
-  // capture->restore window and is silently reverted.
+  // Hook capture/restore could silently revert an unqueued trust write (#16441).
   it('queues behind an in-flight Codex trust-config mutation', async () => {
     const workspace = mkdtempSync(join(tmpdir(), 'orca-codex-ws-'))
     const configPath = join(testState.fakeHomeDir, '.codex', 'config.toml')
@@ -283,8 +276,7 @@ describe('markCodexProjectTrusted', () => {
     }
   })
 
-  // Why: Codex checks the cwd's own entry before any repo root, so the workspace key
-  // must satisfy it whatever the git layout.
+  // Codex checks the starting folder before the repo root, regardless of Git layout.
   describe('linked worktree trust key', { timeout: 120_000 }, () => {
     let fixtureRoot = ''
     beforeAll(() => {
@@ -336,8 +328,7 @@ describe('markCodexProjectTrusted', () => {
       }
     }
 
-    // Why thread/start: its default sandbox and the TUI trust prompt read the same
-    // project lookup, so workspaceWrite (not readOnly) means no prompt.
+    // thread/start shares the TUI trust lookup; workspaceWrite proves trust without a prompt.
     async function codexSandboxFor(cwd: string, codexHome: string): Promise<unknown> {
       const binary = codexTrustContract.binary!
       return runCodexAppServerSession(

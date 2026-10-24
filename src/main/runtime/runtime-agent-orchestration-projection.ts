@@ -13,11 +13,13 @@ import {
   projectWorkerAttentionContext
 } from './orchestration/worker-attention-context'
 import { worktreeIdsEqual } from '../../shared/worktree/id'
+import type { PtyPaneOf } from './terminal/surface/pty-pane-query'
 
 type RuntimeAgentOrchestrationDependencies = {
   getDb(): OrchestrationDb | null
   getLeaves(): Iterable<RuntimeLeafRecord>
   getPtys(): Iterable<RuntimePtyWorktreeRecord>
+  paneOf: PtyPaneOf
   issueLeafHandle(leaf: RuntimeLeafRecord): string
   issuePtyHandle(pty: RuntimePtyWorktreeRecord): string
   makePaneKey(leaf: RuntimeLeafRecord): string
@@ -60,7 +62,8 @@ export class RuntimeAgentOrchestrationProjection {
       }
     }
     for (const pty of this.deps.getPtys()) {
-      if (!pty.paneKey || contexts[pty.paneKey]) {
+      const { paneKey } = this.deps.paneOf(pty)
+      if (!paneKey || contexts[paneKey]) {
         continue
       }
       const handle = this.deps.issuePtyHandle(pty)
@@ -69,12 +72,12 @@ export class RuntimeAgentOrchestrationProjection {
       }
       queriedHandles.add(handle)
       const context = this.getForHandle(handle, db, {
-        paneKey: pty.paneKey,
-        evidence: evidenceByPaneKey.get(pty.paneKey),
+        paneKey,
+        evidence: evidenceByPaneKey.get(paneKey),
         deferAttention: batchAttention
       })
       if (context) {
-        contexts[pty.paneKey] = context
+        contexts[paneKey] = context
       }
     }
     const entries = Object.entries(contexts)

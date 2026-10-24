@@ -2,6 +2,7 @@ import * as mocks from './orca-runtime-test-mocks.spec'
 import type { MockInstance } from 'vitest'
 import * as worktreeChangeInvalidators from '../ipc/worktree-change-invalidators'
 import { awaitBackgroundRemovalsInRuntimeTests } from './orca-runtime-background-removal-test-support'
+import { commitFakeSpawnsInRuntimeTests } from './bind-first-pane.test-fixture'
 import {
   _resetPendingWorktreeRemovalsForTests,
   _settlePendingWorktreeRemovalsForTests
@@ -65,6 +66,7 @@ const { updateGitLabIssueMock, updateGitLabMRMock, updateGitLabMRReviewersMock, 
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the prototype carries the removal method the wrapper replaces.
 awaitBackgroundRemovalsInRuntimeTests(mocks.OrcaRuntimeService.prototype as never)
+commitFakeSpawnsInRuntimeTests(mocks.OrcaRuntimeService.prototype)
 
 function resetRuntimeTestMocks(): void {
   _resetCanonicalRepoKeyCacheForTests()

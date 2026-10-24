@@ -84,7 +84,6 @@ describe('scan progress reporting', () => {
       () => (now += AI_VAULT_SCAN_PROGRESS_INTERVAL_MS)
     )
 
-    // Same readers, another owner's signal (the index loop or an interactive read).
     await scanAiVaultSessions({
       ...roots,
       platform: 'darwin',

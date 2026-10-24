@@ -9,7 +9,7 @@ import type {
   JiraProject,
   JiraTransition,
   JiraUser
-} from '../../shared/jira-types'
+} from '../../shared/jira/jira-types'
 import { isResolvedJiraIssueMatch, parseJiraIssueUrl } from '../../shared/jira-issue-url'
 import type { CommandHandler, HandlerContext } from '../dispatch'
 import {

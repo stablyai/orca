@@ -47,8 +47,7 @@ describe('notifications:probeDelivery', () => {
   }
 
   function getProbeOnceEventHandler(eventName: string): (...args: unknown[]) => void {
-    // Why: findLast — a test may run several probes, and only the newest
-    // probe's listeners can settle the pending promise.
+    // Only the latest probe's listeners can settle the current pending request.
     const call = notificationOnceMock.mock.calls.findLast((c: unknown[]) => c[0] === eventName)
     if (!call) {
       throw new Error(`Probe notification ${eventName} once handler not registered`)
@@ -123,7 +122,6 @@ describe('notifications:probeDelivery', () => {
     readAuthorizationStatusMock.mockResolvedValue('denied')
     expect(await handler({})).toEqual({ state: 'blocked', authoritative: true })
 
-    // No probe notifications were needed for either readout.
     expect(notificationCtorMock).not.toHaveBeenCalled()
   })
 
@@ -139,7 +137,6 @@ describe('notifications:probeDelivery', () => {
     })
     expect(notificationCtorMock).toHaveBeenCalledTimes(1)
 
-    // Polling again while pending must not spam more probe notifications.
     expect(await handler({}, { force: true })).toEqual({
       state: 'awaiting-decision',
       authoritative: true
@@ -169,7 +166,7 @@ describe('notifications:probeDelivery', () => {
 
     getProbeOnceEventHandler('show')()
     await expect(result).resolves.toEqual({ state: 'delivered', authoritative: false })
-    // No persisted confirmation on purpose: OS permission changes between runs.
+    // Permission evidence cannot persist across OS permission changes between runs.
     expect(store.updateUI).not.toHaveBeenCalledWith({ notificationDeliveryConfirmed: true })
   })
 
@@ -184,11 +181,9 @@ describe('notifications:probeDelivery', () => {
     await expect(probeResult).resolves.toEqual({ state: 'delivered', authoritative: false })
     expect(notificationCtorMock).toHaveBeenCalledTimes(1)
 
-    // Cached session evidence answers non-force calls with no new probe.
     expect(await handler({})).toEqual({ state: 'delivered', authoritative: false })
     expect(notificationCtorMock).toHaveBeenCalledTimes(1)
 
-    // Force bypasses the cache and schedules a fresh probe.
     const forced = handler({}, { force: true }) as Promise<unknown>
     await vi.advanceTimersByTimeAsync(0)
     expect(notificationCtorMock).toHaveBeenCalledTimes(2)
@@ -220,7 +215,7 @@ describe('notifications:probeDelivery', () => {
     await expect(probeResult).resolves.toEqual({ state: 'blocked', authoritative: false })
     expect(notificationCloseMock).toHaveBeenCalledTimes(1)
 
-    // A timeout is ambiguous evidence, so the next non-force call probes again.
+    // Ambiguous timeout must permit another non-force probe.
     const secondResult = handler({}) as Promise<unknown>
     await vi.advanceTimersByTimeAsync(0)
     expect(notificationCtorMock).toHaveBeenCalledTimes(2)

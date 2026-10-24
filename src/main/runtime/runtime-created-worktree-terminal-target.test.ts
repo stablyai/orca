@@ -20,6 +20,7 @@ import type { RuntimeStore } from './runtime-store-contract'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import { mergeWorktree } from '../ipc/worktree-metadata-merge'
 import { resolveCreatedWorktreeTerminalTarget } from './runtime-created-worktree-terminal-target'
+import { committingSpawn } from './bind-first-pane.test-fixture'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },
@@ -114,9 +115,11 @@ function makeFixture(repos: Repo[] = [owner()], hostId: ExecutionHostId = 'local
   }
   runtime.lookup.mockResolvedValue(fallback)
   let ptySequence = 0
-  const spawn = vi.fn(async () => ({ id: `new-pty-${++ptySequence}` }))
+  const spawn = vi.fn(async (_args: { worktreeId?: string; tabId?: string; leafId?: string }) => ({
+    id: `new-pty-${++ptySequence}`
+  }))
   runtime.setPtyController({
-    spawn,
+    spawn: committingSpawn(runtime, spawn),
     write: () => true,
     kill: () => true,
     getForegroundProcess: async () => null
@@ -436,11 +439,13 @@ describe('workspace activation and metadata reentry', () => {
   it.each([
     { label: 'absent notifier', notifier: null },
     { label: 'missing optional notifier method', notifier: {} }
-  ])('skips the sleeping workspace ID read for $label', async ({ notifier }) => {
+  ])("still queues main's wake with $label", async ({ notifier }) => {
     const reads = configureMobileActivation()
     Object.defineProperty(runtime, 'notifier', { value: notifier })
-    await runtime.activateManagedWorktree('selected', { clientKind: 'mobile' })
-    expect(reads()).toBe(4)
+    await expect(
+      runtime.activateManagedWorktree('selected', { clientKind: 'mobile' })
+    ).resolves.toMatchObject({ sleepingAgentWake: 'requested' })
+    expect(reads()).toBe(5)
   })
 
   it('looks up the sleeping callback late and keeps its notifier receiver', async () => {
@@ -461,7 +466,10 @@ describe('workspace activation and metadata reentry', () => {
     })
     await runtime.activateManagedWorktree('selected', { clientKind: 'mobile' })
     expect(reads()).toBe(5)
-    expect(calls).toEqual([{ receiver: notifier, args: [runtime.selectedWorktree.id] }])
+    // The window's callback runs once main's queued resume has.
+    await vi.waitFor(() =>
+      expect(calls).toEqual([{ receiver: notifier, args: [runtime.selectedWorktree.id] }])
+    )
   })
 })
 

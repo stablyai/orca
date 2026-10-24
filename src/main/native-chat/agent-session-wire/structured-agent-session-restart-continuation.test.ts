@@ -12,7 +12,6 @@ import {
 } from './structured-agent-session-restart-continuation'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
-/** The whole continuation: handed over, then its verdict. */
 async function continueStructuredAgentSessionAfterRestart(
   ...args: Parameters<typeof startStructuredAgentSessionContinuation>
 ) {
@@ -92,7 +91,7 @@ it("writes nothing in the chat when the user's own message came first, and still
   expect(deps.note).not.toHaveBeenCalled()
 })
 
-// An ownership refusal would meet the user's own message too, so the note gives no advice to send one.
+// Ownership refusal also blocks personal sends; do not advise sending one.
 it.each([
   ['agent_session_conflict', NOT_CONNECTED],
   ['agent_session_operation_invalid', REFUSED]
@@ -112,7 +111,6 @@ it.each([
   expect(deps.note).toHaveBeenCalledExactlyOnceWith(...note)
 })
 
-// A newer Orca's refusal keeps its reason, as a reference without the wire prose.
 it('reports a newer-Orca send refusal with its reason', async () => {
   const deps = dependencies('accepted')
   const refusal = {
@@ -145,7 +143,6 @@ it('reports an unattached chat without sending', async () => {
   expect(deps.send).not.toHaveBeenCalled()
 })
 
-// A start that failed rejects the continuation before any provider saw it: that is the verdict.
 it('reports a continuation rejected at handover without waiting for the provider', async () => {
   const deps = dependencies('accepted', 'rejected')
 
@@ -156,7 +153,6 @@ it('reports a continuation rejected at handover without waiting for the provider
   expect(deps.note).toHaveBeenCalledExactlyOnceWith(...REFUSED)
 })
 
-// The start completes once the agent took the message; the provider's answer is a later verdict.
 it('returns at handover and leaves the provider verdict to be awaited', async () => {
   const deps = dependencies('accepted')
 
@@ -176,8 +172,6 @@ it('returns at handover and leaves the provider verdict to be awaited', async ()
   expect(deps.note).toHaveBeenCalledOnce()
 })
 
-// A handover wait that ends without an answer — the session closed, or too many waited — proves
-// nothing, so the provider's verdict still decides.
 it('still awaits the verdict when the handover wait ends unanswered', async () => {
   const deps = dependencies('unknown', undefined)
 

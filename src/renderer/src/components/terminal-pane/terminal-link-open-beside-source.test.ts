@@ -32,6 +32,15 @@ vi.mock('@/store', () => ({
 
 vi.mock('sonner', () => ({ toast: { error: toastErrorMock } }))
 
+vi.mock('./terminal-file-other-workspace-hint', () => ({
+  dismissFileInOtherWorkspaceHint: vi.fn(),
+  showFileInOtherWorkspaceHint: vi.fn()
+}))
+
+vi.mock('@/lib/language-detect', () => ({
+  detectLanguage: () => 'plaintext'
+}))
+
 vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealWorkspace: vi.fn(),
   activateAndRevealWorktree: vi.fn()
@@ -106,7 +115,7 @@ describe('terminal file links carry their source tab', () => {
     )
   })
 
-  it('opens HTML source in the explicitly requested source group', async () => {
+  it('refuses an explicit request that resolves to Orca browser HTML', async () => {
     setPlatform('Macintosh')
     seedSourceTab()
 
@@ -114,17 +123,8 @@ describe('terminal file links carry their source tab', () => {
     await flushAsyncWork()
 
     expect(createBrowserTabMock).not.toHaveBeenCalled()
-    expect(openFileForLinkMock).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '/tmp/report.html', language: 'html', mode: 'edit' }),
-      { forceContentReload: true },
-      expect.objectContaining({
-        workspaceId: 'wt-1',
-        hostId: null,
-        targetGroupId: 'group-a'
-      }),
-      expect.any(Function)
-    )
-    expect(toastErrorMock).not.toHaveBeenCalled()
+    expect(openFileForLinkMock).not.toHaveBeenCalled()
+    expect(toastErrorMock).toHaveBeenCalledTimes(1)
   })
 
   it('refuses a closed explicit group before activating its workspace', async () => {
@@ -169,10 +169,9 @@ describe('terminal file links carry their source tab', () => {
     expect(toastErrorMock).toHaveBeenCalledTimes(1)
   })
 
-  it('refuses an explicit request routed to another workspace before activating it', async () => {
+  it('keeps an explicit request for another workspace file in the source group', async () => {
     setPlatform('Macintosh')
     seedSourceTab()
-    storeState.openFiles = [{ filePath: '/other/x.ts', worktreeId: 'wt-2' }]
     findWorkspaceFileRouteMock.mockReturnValueOnce({
       worktreeId: 'wt-2',
       executionHostId: 'local',
@@ -182,13 +181,19 @@ describe('terminal file links carry their source tab', () => {
     openDetectedFilePath('/other/x.ts', null, null, { ...sourceDeps, openInSourceGroup: true })
     await flushAsyncWork()
 
-    expect(activateAndRevealWorkspace).not.toHaveBeenCalled()
-    expect(openFileForLinkMock).not.toHaveBeenCalled()
-    expect(toastErrorMock).toHaveBeenCalledTimes(1)
+    expect(activateAndRevealWorkspace).not.toHaveBeenCalledWith('wt-2', expect.anything())
+    expect(openFileForLinkMock).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '/other/x.ts', worktreeId: 'wt-1', readOnly: true }),
+      expect.anything(),
+      expect.objectContaining({ targetGroupId: 'group-a' }),
+      expect.any(Function)
+    )
+    expect(toastErrorMock).not.toHaveBeenCalled()
   })
 
   it('keeps automatic HTML opens on their existing browser route', async () => {
     setPlatform('Macintosh')
+    storeState.settings = { openLinksInApp: true }
     seedSourceTab()
 
     openDetectedFilePath('/tmp/report.html', null, null, sourceDeps)

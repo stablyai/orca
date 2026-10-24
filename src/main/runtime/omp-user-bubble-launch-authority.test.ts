@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { makeStore } from './runtime-rpc-worktree-store-fixtures'
 import { spawnedPtyEnv } from './spawned-pty-env-fixtures'
+import { committingSpawn } from './bind-first-pane.test-fixture'
 
 // #10923: every OMP user bubble ends with OSC 133 `B C D;0`. Read as the shell's command
 // finishing, that retired the pane's hook authority mid-turn, which deleted its status row and
@@ -29,7 +30,10 @@ async function launchOmpPane(): Promise<{
   paneKey: string
 }> {
   const retire = vi.fn()
-  const spawn = vi.fn().mockResolvedValue({ id: 'pty-omp', incarnationId: 'incarnation-1' })
+  const spawn = vi.fn(async (_args: { worktreeId?: string; tabId?: string; leafId?: string }) => ({
+    id: 'pty-omp',
+    incarnationId: 'incarnation-1'
+  }))
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: makeStore serves the repo reads terminal creation makes; the rest of Store is unreached.
   const runtime = new OrcaRuntimeService(makeStore() as never, undefined, {
     attestAgentHookCompatibilityAuthority: (candidate) => ({
@@ -39,7 +43,7 @@ async function launchOmpPane(): Promise<{
     retireAgentHookCompatibilityAuthority: retire
   })
   runtime.setPtyController({
-    spawn,
+    spawn: committingSpawn(runtime, spawn),
     write: () => true,
     kill: () => true,
     getForegroundProcess: async () => 'omp'

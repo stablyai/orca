@@ -5,6 +5,11 @@ import { OrcaRuntimeWithStopExplicitlyClosedTabPtys } from '../../session-tabs/e
 import type { TerminalPaneSplitSource } from '../../../../shared/feature-education-telemetry'
 import type { RuntimeTerminalSplit } from '../../../../shared/runtime-types'
 import { randomUUID } from 'node:crypto'
+import {
+  RendererSplitLedger,
+  splitRetryUnknownError,
+  type RendererSplit
+} from './terminal-split-retry'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { Worktree } from '../../../../shared/worktree/types'
 
@@ -22,11 +27,9 @@ export abstract class OrcaRuntimeWithSplitTerminal extends OrcaRuntimeWithStopEx
     opts: SplitPaneInMainOptions
   ): Promise<RuntimeTerminalSplit>
 
-  protected abstract waitForLeafInTab(
-    tabId: string,
-    leafId: string,
-    timeoutMs?: number
-  ): Promise<string>
+  protected abstract waitForLeafInTab(tabId: string, leafId: string): Promise<string>
+
+  private readonly rendererSplits = new RendererSplitLedger()
 
   async splitTerminal(
     handle: string,
@@ -40,11 +43,17 @@ export abstract class OrcaRuntimeWithSplitTerminal extends OrcaRuntimeWithStopEx
       // workspace, for splits the user never asked to see.
       surfaceOwner?: false
       telemetrySource?: TerminalPaneSplitSource
+      /** The leaf id a timed-out split reported: wait for that pane instead of splitting again. */
+      retrySplit?: string
     } = {},
     // Internal creation evidence; RPC and preload callers never supply it.
     createdWorktree?: Worktree
   ): Promise<RuntimeTerminalSplit> {
     const livePty = this.getLivePtyForHandle(handle)
+    if (livePty && opts.retrySplit) {
+      // Main starts these splits itself and answers without the window, so none can be pending.
+      throw splitRetryUnknownError(livePty.record.tabId, opts.retrySplit)
+    }
     if (livePty) {
       return await this.splitPtyBackedTerminal(livePty.pty, opts, createdWorktree)
     }
@@ -53,6 +62,9 @@ export abstract class OrcaRuntimeWithSplitTerminal extends OrcaRuntimeWithStopEx
     const direction = opts.direction ?? 'horizontal'
     // Switch point: main writes the split and starts its terminal; the window attaches to it.
     if (ORCA_LAYOUT_OWNER_IS_MAIN && this.ownsTabLayout(leaf.worktreeId, leaf.tabId)) {
+      if (opts.retrySplit) {
+        throw splitRetryUnknownError(leaf.tabId, opts.retrySplit)
+      }
       const cwd = leaf.ptyId
         ? await this.ptyController?.getCwd?.(leaf.ptyId).catch(() => null)
         : null
@@ -69,8 +81,18 @@ export abstract class OrcaRuntimeWithSplitTerminal extends OrcaRuntimeWithStopEx
       )
     }
 
+    if (opts.retrySplit) {
+      // A retry only waits: the window may still be making the pane, and a pane missing from the
+      // graph may be remounting rather than closed, so asking again could run the command twice.
+      const split = this.rendererSplits.get(opts.retrySplit)
+      if (split?.tabId !== leaf.tabId) {
+        throw splitRetryUnknownError(leaf.tabId, opts.retrySplit)
+      }
+      return await this.awaitRendererSplit(split, opts.retrySplit)
+    }
     const newLeafId = randomUUID()
-
+    const split = { tabId: leaf.tabId, paneRuntimeId: leaf.paneRuntimeId }
+    this.rendererSplits.record(newLeafId, split)
     this.notifier?.splitTerminal(leaf.tabId, leaf.paneRuntimeId, {
       direction,
       command: opts.command,
@@ -79,13 +101,14 @@ export abstract class OrcaRuntimeWithSplitTerminal extends OrcaRuntimeWithStopEx
       telemetrySource: opts.telemetrySource,
       newLeafId
     })
+    return await this.awaitRendererSplit(split, newLeafId)
+  }
 
-    const newHandle = await this.waitForLeafInTab(leaf.tabId, newLeafId)
-    return {
-      handle: newHandle,
-      tabId: leaf.tabId,
-      paneRuntimeId: leaf.paneRuntimeId,
-      leafId: newLeafId
-    }
+  private async awaitRendererSplit(
+    split: RendererSplit,
+    leafId: string
+  ): Promise<RuntimeTerminalSplit> {
+    const handle = await this.waitForLeafInTab(split.tabId, leafId)
+    return { handle, tabId: split.tabId, paneRuntimeId: split.paneRuntimeId, leafId }
   }
 }

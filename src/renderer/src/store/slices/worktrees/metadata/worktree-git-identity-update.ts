@@ -2,6 +2,7 @@ import type { WorktreeSlice } from '../../worktree-helpers'
 import { runtimeTargetForWorktreeOwner } from '../listing/worktree-owner-target'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
+import { normalizeWorkspaceAttachmentUpdate } from '../../../../../../shared/workspace-attachments'
 import { getRepoIdFromWorktreeId } from '../../worktree-helpers'
 import { branchName } from '@/lib/git-utils'
 import { detachedHeadAutoDerivedDisplayNames } from './detached-head-display-name'
@@ -108,8 +109,9 @@ export function createUpdateWorktreeGitIdentity(
           head: nextHead,
           branch: nextBranch,
           displayName: nextDisplayName,
-          // Why: linked reviews are branch-scoped; keeping the old link on a branch switch would refresh the old PR.
-          ...(shouldClearHostedReviewContext ? CLEARED_HOSTED_REVIEW_LINK_UPDATES : {})
+          ...(shouldClearHostedReviewContext
+            ? normalizeWorkspaceAttachmentUpdate(worktree, CLEARED_HOSTED_REVIEW_LINK_UPDATES)
+            : {})
         }
       })
 

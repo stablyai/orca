@@ -30,8 +30,7 @@ const repo: Repo = {
   badgeColor: '#000',
   addedAt: 0
 }
-// The same checkout as each Git names it: WSL Git's `/mnt/c/...` translated to the drive spelling
-// every other consumer sends, and host Git reading that `/mnt/c` metadata as a different path.
+// WSL and host Git name this checkout differently when reading the same /mnt/c metadata.
 const worktree = resolve('/wsl-drive/workspaces/feature-extra')
 const hostGitSpelling = resolve('/mnt/c/wsl-drive/workspaces/feature-extra')
 const hostRepo: Repo = { ...repo, id: 'host-repo', path: resolve('/host-drive/repo') }
@@ -133,7 +132,6 @@ describe('authorized worktree roots for a drive repo whose project runtime is WS
       join(worktree, 'file')
     )
     expect(mocks.graph).toHaveBeenLastCalledWith(repo, { wslDistro: DISTRO })
-    // The host-Git listing is retired with its owner, not kept beside the new one.
     await expect(resolveAuthorizedPath(join(hostGitSpelling, 'file'), store)).rejects.toThrow(
       PATH_ACCESS_DENIED_MESSAGE
     )

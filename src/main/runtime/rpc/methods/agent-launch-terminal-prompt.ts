@@ -30,6 +30,7 @@ import {
   type LaunchedAgentReadinessRuntime
 } from '../../launched-agent-composer-readiness'
 import type { OrcaRuntimeService } from '../../orca-runtime'
+import { assertAgentPromptRequestActive } from '../../orca-runtime-core'
 import {
   createLaunchedAgentWriteGuard,
   type LaunchedAgentWriteGuardRuntime
@@ -59,11 +60,12 @@ const REAL_CLOCK: ReadinessClock = {
  * budget ends is reported as it is, and nothing is written into it.
  */
 async function waitThroughBlockingPrompts(
-  runtime: TerminalPromptRuntime,
+  runtime: LaunchedAgentReadinessRuntime,
   handle: string,
   agent: TuiAgent,
   freshLaunch: boolean,
-  clock: ReadinessClock
+  clock: ReadinessClock,
+  signal: AbortSignal | undefined
 ): Promise<RuntimeTerminalWait | undefined> {
   const deadline = clock.now() + AGENT_READY_TIMEOUT_MS
   for (;;) {
@@ -71,14 +73,29 @@ async function waitThroughBlockingPrompts(
     // land past the deadline.
     const timeoutMs = Math.max(1, deadline - clock.now())
     const wait = freshLaunch
-      ? await waitForLaunchedAgentComposer(runtime, handle, agent, timeoutMs)
+      ? await waitForLaunchedAgentComposer(runtime, handle, agent, timeoutMs, signal)
       : // A reused pane was not freshly launched: its composer marker may be long gone.
-        await runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs })
+        await runtime.waitForTerminal(handle, {
+          condition: 'tui-idle',
+          timeoutMs,
+          ...(signal ? { signal } : {})
+        })
     if (!wait?.blockedReason || wait.satisfied || deadline - clock.now() <= BLOCKED_RECHECK_MS) {
       return wait
     }
     await clock.sleep(BLOCKED_RECHECK_MS)
+    assertAgentPromptRequestActive(signal)
   }
+}
+
+/** A freshly started agent's readiness, as a launch prompt waits for it, blocking prompts included. */
+export function waitForStartedAgentReady(
+  runtime: LaunchedAgentReadinessRuntime,
+  handle: string,
+  agent: TuiAgent,
+  signal?: AbortSignal
+): Promise<RuntimeTerminalWait | undefined> {
+  return waitThroughBlockingPrompts(runtime, handle, agent, true, REAL_CLOCK, signal)
 }
 
 /**
@@ -105,6 +122,8 @@ export async function deliverTerminalAgentLaunchPrompt(args: {
   /** See `createLaunchedAgentWriteGuard`; default `refuse`. */
   unprovableHost?: 'refuse' | 'write-unless-shell'
   clock?: ReadinessClock
+  /** Aborting ends the readiness wait and refuses the paste; text already handed over stays so. */
+  signal?: AbortSignal
 }): Promise<boolean> {
   if (args.text.trim().length === 0) {
     return false
@@ -114,13 +133,16 @@ export async function deliverTerminalAgentLaunchPrompt(args: {
   const guard = createLaunchedAgentWriteGuard(args.runtime, args.agent, {
     unprovableHost: args.unprovableHost
   })
+  // Once Enter left, a later throw (an abort during verification) cannot unsend the text.
+  let submitted = false
   try {
     const wait = await waitThroughBlockingPrompts(
       args.runtime,
       args.handle,
       args.agent,
       args.freshLaunch,
-      args.clock ?? REAL_CLOCK
+      args.clock ?? REAL_CLOCK,
+      args.signal
     )
     // An unsatisfied wait is a composer that never opened — a dialog left up, a dead process, an
     // agent that showed no readiness. Pasting anyway would answer whatever is on screen with it.
@@ -142,11 +164,19 @@ export async function deliverTerminalAgentLaunchPrompt(args: {
       requestId: randomUUID(),
       // The launch reply should not wait out a turn that has already been handed over; what the
       // agent does with the text is the pane's to show, and no receipt arm claims it.
-      observationTimeoutMs: 0
+      observationTimeoutMs: 0,
+      ...(args.signal
+        ? {
+            signal: args.signal,
+            onSubmitWritten: () => {
+              submitted = true
+            }
+          }
+        : {})
     })
     return sent.accepted
   } catch (error) {
-    if (isAgentPromptStalledError(error)) {
+    if (isAgentPromptStalledError(error) || submitted) {
       return true
     }
     console.warn(

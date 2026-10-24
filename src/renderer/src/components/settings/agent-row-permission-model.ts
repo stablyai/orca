@@ -49,8 +49,10 @@ export function buildAgentRowPermissions({
         agent,
         resolveTuiAgentPermissionMode({
           agent,
-          agentArgs: resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
-          agentEnv: localEnv ? resolveTuiAgentLaunchEnv(agent, localEnv) : undefined
+          agentArgs: resolveTuiAgentLaunchArgs(agent, settings),
+          agentEnv: localEnv
+            ? resolveTuiAgentLaunchEnv(agent, { agentDefaultEnv: localEnv })
+            : undefined
         })
       )
     }

@@ -223,9 +223,8 @@ export default function TerminalPaneHeaderOverlay({
                       <TooltipTrigger asChild>
                         <Button
                           type="button"
-                          variant="ghost"
+                          variant="pane-title"
                           size="icon-xs"
-                          className="pane-title-split-trigger"
                           aria-label={translate(
                             'components.agentSessionContinuation.handOffToAnotherAgent',
                             'Hand Off to Another Agent'
@@ -251,10 +250,8 @@ export default function TerminalPaneHeaderOverlay({
                       <TooltipTrigger asChild>
                         <Button
                           type="button"
-                          variant="ghost"
+                          variant="pane-title"
                           size="icon-xs"
-                          // Same class as split so it shares the hover/active reveal.
-                          className="pane-title-split-trigger"
                           aria-label={translate(
                             'components.native-chat.toggle.showTerminal',
                             'Show terminal'
@@ -283,9 +280,8 @@ export default function TerminalPaneHeaderOverlay({
                       <TooltipTrigger asChild>
                         <Button
                           type="button"
-                          variant="ghost"
+                          variant="pane-title"
                           size="icon-xs"
-                          className="pane-title-split-trigger"
                           data-contextual-tour-target={
                             isActivePane ? 'terminal-pane-split-target' : undefined
                           }
@@ -308,9 +304,8 @@ export default function TerminalPaneHeaderOverlay({
                       <TooltipTrigger asChild>
                         <Button
                           type="button"
-                          variant="ghost"
+                          variant="pane-title-close"
                           size="icon-xs"
-                          className="pane-title-close"
                           onClick={(event) => {
                             event.stopPropagation()
                             onRemoveTitle(pane.id)
@@ -337,9 +332,8 @@ export default function TerminalPaneHeaderOverlay({
                       <TooltipTrigger asChild>
                         <Button
                           type="button"
-                          variant="ghost"
+                          variant="pane-title-close"
                           size="icon-xs"
-                          className="pane-title-close"
                           onClick={(event) => {
                             event.stopPropagation()
                             onClosePane(pane.id)

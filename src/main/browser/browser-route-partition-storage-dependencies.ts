@@ -23,19 +23,11 @@ export function browserRoutePartitionStorageDependencies(
       await partitionSession.clearCache()
       browserSessionRegistry.clearRoutePartitionPolicies(partition)
     },
-    // Why: force ignores an already-absent directory, keeping the sweep idempotent.
     removePartitionDirectory: (directory) => rm(directory, { recursive: true, force: true })
   }
 }
 
-/**
- * Destroys the storage of partitions the binding store evicted at capacity.
- *
- * Eviction already skipped every retained partition, and the metadata is gone, so
- * leaving the directory behind would strand disk nothing can ever collect. Liveness
- * is re-checked here anyway: this runs after the caller's turn, and a partition
- * re-prepared in between must keep the storage it is now serving.
- */
+// Recheck liveness after eviction because a partition may have been prepared again.
 export async function releaseEvictedBrowserRoutePartitionStorage(
   partitions: readonly string[],
   isPartitionLive: (partition: string) => boolean

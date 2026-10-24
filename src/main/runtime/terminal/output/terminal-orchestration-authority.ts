@@ -40,9 +40,9 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
   /** Every pane key this PTY could be addressed by, including restored receipts. */
   protected collectPaneKeysForPty(ptyId: string): Set<string> {
     const paneKeys = new Set<string>()
-    const pty = this.ptysById.get(ptyId)
-    if (pty?.paneKey && parsePaneKey(pty.paneKey)) {
-      paneKeys.add(pty.paneKey)
+    const ptyPaneKey = this.paneOfPty(this.ptysById.get(ptyId)).paneKey
+    if (ptyPaneKey && parsePaneKey(ptyPaneKey)) {
+      paneKeys.add(ptyPaneKey)
     }
     const receipt = this.restoredOrchestrationAuthorityByPtyId.get(ptyId)
     if (receipt?.paneKey && parsePaneKey(receipt.paneKey)) {
@@ -67,7 +67,7 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
         paneKeys.add(row.paneKey)
       }
     }
-    const ptyPaneKey = this.ptysById.get(ptyId)?.paneKey
+    const ptyPaneKey = this.paneOfPty(this.ptysById.get(ptyId)).paneKey
     if (ptyPaneKey && parseLegacyNumericPaneKey(ptyPaneKey)) {
       paneKeys.add(ptyPaneKey)
     }
@@ -129,7 +129,7 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
       ptyId,
       worktreeId: pty.worktreeId,
       processIncarnation: this.getTerminalProcessIncarnation(terminalHandle),
-      paneKey: pty.paneKey,
+      paneKey: this.paneOfPty(pty).paneKey,
       launchTokenHash: pty.launchToken
         ? createHash('sha256').update(pty.launchToken).digest('hex')
         : null,

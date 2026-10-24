@@ -157,6 +157,31 @@ describe('useMobileNativeChatSessionOptions', () => {
     expect(onAgentPicker).toHaveBeenCalledOnce()
   })
 
+  it.each([null, 'gpt-5.6-terra'])(
+    'tracks an unlisted Codex report after %s without inventing effort choices',
+    async (initialModel) => {
+      mount({ agent: 'codex', reportedModel: initialModel })
+      update({ reportedModel: 'gpt-6.1-sol' })
+      expect(api!.snapshot).toHaveLength(1)
+      expect(api!.snapshot[0]).toMatchObject({
+        valueSource: 'reported',
+        action: { type: 'agent-picker' },
+        kind: {
+          currentValue: 'gpt-6.1-sol',
+          choices: expect.arrayContaining([{ value: 'gpt-6.1-sol', label: 'gpt-6.1-sol' }])
+        }
+      })
+      const snapshot = api!.snapshot
+      update({ reportedModel: null })
+      update({ reportedModel: 'gpt-6.1-sol' })
+      expect(api!.snapshot).toBe(snapshot)
+      await act(async () => {
+        await api!.invokeAction('model')
+      })
+      expect(dispatchCommand).toHaveBeenCalledWith('/model', { delivery: 'type' })
+    }
+  )
+
   it('types the Codex effort picker command', async () => {
     mount({ agent: 'codex', reportedModel: 'gpt-5.5' })
     await act(async () => {

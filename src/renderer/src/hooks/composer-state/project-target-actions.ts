@@ -1,3 +1,6 @@
+import { useAppStore } from '@/store'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
+import type { Repo } from '../../../../shared/repo-types'
 import type { ComposerModel } from './composer-model'
 
 type ProjectTargetActionsInput = Pick<
@@ -84,6 +87,82 @@ export function useProjectTargetActions(input: ProjectTargetActionsInput) {
     workspaceHostScope
   } = input
 
+  const applyProjectGroupSelection = useCallback(
+    (
+      group: ProjectGroup,
+      sourceRepos: readonly Repo[],
+      sourceGroups: readonly ProjectGroup[]
+    ): void => {
+      const nextSourceRepo = getFolderSourceRepos(sourceRepos, sourceGroups, group)[0]
+      smartSourceSelectionRef.current = null
+      setSelectedProjectGroupId(group.id)
+      setProjectError(null)
+      setRepoId(nextSourceRepo?.id ?? '')
+      setLinkedIssue('')
+      setLinkedPR(null)
+      setLinkedGitLabIssue(null)
+      setLinkedGitLabMR(null)
+      if (linkedWorkItem && !shouldPreserveWorkspaceSourceOnRepoChange(linkedWorkItem)) {
+        setLinkedWorkItem(null)
+        setLinkedTaskSourceContext(null)
+      }
+      setSparseEnabled(false)
+      setSparseDirectories('')
+      setSparseSelectedPresetId(null)
+      setBaseBranch(undefined)
+      setPushTarget(undefined)
+      setBranchNameOverride(undefined)
+      // Why (#5181): clear branch-scoped reuse state on a project switch too.
+      setBranchNameOverridePreservesNameEdits(false)
+      setReuseEligibleBranch(null)
+      setReuseSelectedBranch(false)
+      setForkPushWarning(null)
+      setStartFromResetHint(null)
+    },
+    [
+      linkedWorkItem,
+      setRepoId,
+      setSelectedProjectGroupId,
+      setProjectError,
+      setLinkedIssue,
+      setLinkedPR,
+      setLinkedGitLabIssue,
+      setLinkedGitLabMR,
+      setLinkedWorkItem,
+      setLinkedTaskSourceContext,
+      setSparseEnabled,
+      setSparseDirectories,
+      setSparseSelectedPresetId,
+      setBaseBranch,
+      setPushTarget,
+      setBranchNameOverride,
+      setBranchNameOverridePreservesNameEdits,
+      setReuseEligibleBranch,
+      setReuseSelectedBranch,
+      setForkPushWarning,
+      setStartFromResetHint,
+      smartSourceSelectionRef
+    ]
+  )
+
+  const selectAddedProjectGroup = useCallback(
+    (groupId: string): boolean => {
+      const state = useAppStore.getState()
+      const group = findActionableFolderProjectGroup({
+        projectGroups: state.projectGroups,
+        groupId,
+        actionableHostIds
+      })
+      if (!group) {
+        return false
+      }
+      initialProjectGroupAppliedRef.current = true
+      applyProjectGroupSelection(group, state.repos, state.projectGroups)
+      return true
+    },
+    [actionableHostIds, initialProjectGroupAppliedRef, applyProjectGroupSelection]
+  )
+
   const handleProjectChange = useCallback(
     (projectId: string): void => {
       initialProjectGroupAppliedRef.current = true
@@ -104,31 +183,7 @@ export function useProjectTargetActions(input: ProjectTargetActionsInput) {
           )
           return
         }
-        const nextSourceRepo = getFolderSourceRepos(repos, projectGroups, nextProjectGroup)[0]
-        smartSourceSelectionRef.current = null
-        setSelectedProjectGroupId(nextProjectGroup.id)
-        setProjectError(null)
-        setRepoId(nextSourceRepo?.id ?? '')
-        setLinkedIssue('')
-        setLinkedPR(null)
-        setLinkedGitLabIssue(null)
-        setLinkedGitLabMR(null)
-        if (linkedWorkItem && !shouldPreserveWorkspaceSourceOnRepoChange(linkedWorkItem)) {
-          setLinkedWorkItem(null)
-          setLinkedTaskSourceContext(null)
-        }
-        setSparseEnabled(false)
-        setSparseDirectories('')
-        setSparseSelectedPresetId(null)
-        setBaseBranch(undefined)
-        setPushTarget(undefined)
-        setBranchNameOverride(undefined)
-        // Why (#5181): clear branch-scoped reuse state on a project switch too.
-        setBranchNameOverridePreservesNameEdits(false)
-        setReuseEligibleBranch(null)
-        setReuseSelectedBranch(false)
-        setForkPushWarning(null)
-        setStartFromResetHint(null)
+        applyProjectGroupSelection(nextProjectGroup, repos, projectGroups)
         return
       }
 
@@ -150,43 +205,25 @@ export function useProjectTargetActions(input: ProjectTargetActionsInput) {
       handleRepoChange(nextRepoId, { forceResetStartFrom: isProjectGroupTarget })
     },
     [
+      applyProjectGroupSelection,
       eligibleRepos,
       actionableHostIds,
       handleRepoChange,
       isProjectGroupTarget,
-      linkedWorkItem,
       projectGroups,
       projectHostSetups,
       projects,
       repos,
-      setRepoId,
       selectedWorkspaceTarget,
       workspaceHostScope,
       initialProjectGroupAppliedRef,
-      setBaseBranch,
-      setBranchNameOverride,
-      setBranchNameOverridePreservesNameEdits,
-      setForkPushWarning,
-      setLinkedGitLabIssue,
-      setLinkedGitLabMR,
-      setLinkedIssue,
-      setLinkedPR,
-      setLinkedTaskSourceContext,
-      setLinkedWorkItem,
-      setProjectError,
-      setPushTarget,
-      setReuseEligibleBranch,
-      setReuseSelectedBranch,
       setSelectedProjectGroupId,
-      setSparseDirectories,
-      setSparseEnabled,
-      setSparseSelectedPresetId,
-      setStartFromResetHint,
-      smartSourceSelectionRef
+      setProjectError
     ]
   )
 
   return {
-    handleProjectChange
+    handleProjectChange,
+    selectAddedProjectGroup
   }
 }

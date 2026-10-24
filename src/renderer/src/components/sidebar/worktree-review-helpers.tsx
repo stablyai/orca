@@ -69,16 +69,21 @@ function getStateTone(state: WorktreeCardPrDisplay['state']): string {
 export function ReviewIcon({
   review,
   className,
-  variant = 'provider'
+  variant = 'provider',
+  showChecks = true
 }: {
   review: WorktreeCardPrDisplay
   className?: string
   variant?: 'provider' | 'generic'
+  showChecks?: boolean
 }): React.JSX.Element {
   const providerIcon =
     variant === 'provider' && review.provider === 'gitlab' ? GitMerge : PullRequestIcon
   const Icon = getReviewStateIcon(review.state) ?? providerIcon
   return createElement(Icon, {
-    className: cn(className, getCheckTone(review) ?? getStateTone(review.state))
+    className: cn(
+      className,
+      (showChecks ? getCheckTone(review) : null) ?? getStateTone(review.state)
+    )
   })
 }

@@ -200,6 +200,43 @@ describe('Pi RPC session ownership and delivery', () => {
     expect(h.connection.sent).toMatchObject([{ type: 'prompt', message: 'chosen' }])
   })
 
+  it('sends model-only choices away from the opening model, back, and away again', async () => {
+    const h = await setup({}, undefined, { thinkingLevel: 'medium' })
+    h.connection.requestOverride = (command) =>
+      command === 'set_thinking_level' ? Promise.resolve({}) : undefined
+    for (const [clientMessageId, model] of [
+      ['away', 'anthropic/model-2'],
+      ['back', 'anthropic/model-1'],
+      ['again', 'anthropic/model-2']
+    ]) {
+      await expect(
+        h.adapter.dispatch({
+          sessionId,
+          fence: 7,
+          clientMessageId,
+          body: {
+            kind: 'message',
+            role: 'user',
+            blocks: [{ type: 'text', text: clientMessageId }]
+          },
+          executionOptions: { model }
+        })
+      ).resolves.toEqual({ state: 'admitted' })
+    }
+    // Back on the opening model, its opening effort is restored; elsewhere Pi keeps its own.
+    expect(h.connection.requests.filter((command) => command.startsWith('set_'))).toEqual([
+      'set_model',
+      'set_model',
+      'set_thinking_level',
+      'set_model'
+    ])
+    expect(h.connection.sent).toMatchObject([
+      { message: 'away' },
+      { message: 'back' },
+      { message: 'again' }
+    ])
+  })
+
   it('rejects a known-unsent prompt when an option times out and preserves Stop reason', async () => {
     const h = await setup()
     const timeout = new Error('Pi did not answer set_model')
@@ -290,6 +327,16 @@ describe('Pi RPC session ownership and delivery', () => {
     expect(h.connection.requests).toContain('abort')
     expect(await h.adapter.closeSession(sessionId)).toBe(true)
     expect(h.connection.closed).toBe(true)
+  })
+
+  it('stops a run Pi starts on an idle session without a send', async () => {
+    const h = await setup()
+    h.connection.receive({ type: 'agent_start' })
+    await vi.waitFor(async () => expect((await h.rig.turns())[0]?.state).toBe('running'))
+    expect((await h.adapter.cancelTurn({ sessionId, fence: 7 })).cancelled).toBe(true)
+    expect(h.connection.requests).toContain('abort')
+    h.connection.receive({ type: 'agent_settled' })
+    await vi.waitFor(async () => expect((await h.rig.turns())[0]?.outcome).toBe('cancellation'))
   })
 
   it('keeps a pending manual compaction cancellable and reports root/tree proof honestly', async () => {

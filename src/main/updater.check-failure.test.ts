@@ -361,23 +361,19 @@ describe('updater check failure handling', () => {
     await vi.advanceTimersByTimeAsync(0)
     expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
 
-    // First retry keeps the fast 1h cadence for transient release-readiness failures.
     await vi.advanceTimersByTimeAsync(ONE_HOUR_MS)
     expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
 
-    // Second retry doubles to 2h: nothing at +1h, fires by +2h.
     await vi.advanceTimersByTimeAsync(ONE_HOUR_MS)
     expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
     await vi.advanceTimersByTimeAsync(ONE_HOUR_MS)
     expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(3)
 
-    // Third retry doubles to 4h.
     await vi.advanceTimersByTimeAsync(2 * ONE_HOUR_MS)
     expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(3)
     await vi.advanceTimersByTimeAsync(2 * ONE_HOUR_MS)
     expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(4)
 
-    // A completed check resets the backoff to the fast retry.
     autoUpdaterMock.checkForUpdates.mockImplementation(() => {
       autoUpdaterMock.emit('checking-for-update')
       queueMicrotask(() => {

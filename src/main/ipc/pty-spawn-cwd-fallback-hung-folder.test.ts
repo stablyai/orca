@@ -80,7 +80,7 @@ const { handlers, mainWindow } = setupPtyIpcSuite()
 
 beforeEach(() => {
   statMock.mockReset()
-  // The provider still validates through the suite's statSync fake; the folder check reads stat.
+  // Provider validation uses sync stat; folder-workspace validation uses async stat.
   statMock.mockImplementation(async () => directoryStats)
 })
 

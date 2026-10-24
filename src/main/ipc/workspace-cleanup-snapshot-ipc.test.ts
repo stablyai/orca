@@ -129,8 +129,7 @@ describe('workspace cleanup snapshot IPC', () => {
       .mocked(ipcMain.handle)
       .mock.calls.find(([channel]) => channel === 'workspaceCleanup:scan')?.[1]
 
-    // Why: worktreeIds: [] is a targeted scan that returns nothing; persisting
-    // it as broad would wipe the fleet cache.
+    // Empty target lists are still targeted; persisting them as broad would wipe the fleet snapshot.
     await handler?.(makeScanEvent(), { worktreeIds: [], includeAllWorkspaces: true })
 
     expect(persistScanResultMock).not.toHaveBeenCalled()
@@ -191,8 +190,7 @@ describe('workspace cleanup snapshot IPC', () => {
       .mocked(ipcMain.handle)
       .mock.calls.find(([channel]) => channel === 'workspaceCleanup:scan')?.[1]
 
-    // Why: different includeAllWorkspaces modes are separate lanes; one must
-    // not abort the other even from the same renderer.
+    // Legacy and full-list modes are separate cancellation lanes even for one renderer.
     const [legacy, full] = await Promise.allSettled([
       handler?.(makeScanEvent({ id: 7 }), { includeAllWorkspaces: false }) as Promise<unknown>,
       handler?.(makeScanEvent({ id: 7 }), { includeAllWorkspaces: true }) as Promise<unknown>

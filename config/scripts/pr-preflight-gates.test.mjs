@@ -52,7 +52,7 @@ it('shares one setup and overlaps the compiler only after type-aware checks fini
 })
 
 it('uses the shared Bun pin for every current-toolchain workflow', () => {
-  expect(readFileSync('config/.bun-version', 'utf8').trim()).toBe('1.4.3')
+  expect(readFileSync('config/.bun-version', 'utf8').trim()).toBe('1.4.4')
   for (const file of readdirSync('.github/workflows').filter((name) => /\.ya?ml$/.test(name))) {
     const current = parse(readFileSync(`.github/workflows/${file}`, 'utf8'))
     for (const job of Object.values(current.jobs)) {
@@ -400,7 +400,7 @@ it('runs the unchanged Node 18 smoke after every Node 24 step and preserves its 
     expect(joined, background.id).toBeLessThan(steps.indexOf(smoke))
   }
   expect(receipt.name).toBe('managed hooks on Node 18')
-  expect(receipt['runs-on']).toBe('ubuntu-slim')
+  expect(receipt['runs-on']).toBe('blacksmith-2vcpu-ubuntu-2404')
   expect(receipt.steps).toHaveLength(1)
   expect(receipt.steps[0].uses).toBeUndefined()
   expect(receipt.steps[0].env.MANAGED_HOOK_NODE18).toBe(

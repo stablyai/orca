@@ -13,6 +13,8 @@ import {
   callStructuredAgentSession,
   supportsStructuredAgentSessionCreateMessage
 } from '@/runtime/structured-agent-session-client'
+import type { StructuredAgentSessionCreateParams } from '../../../shared/structured-agent-session-create'
+import { withFrameDrawnChatTabPlacement } from './frame-drawn-chat-tab-placement'
 import { publishStructuredAgentSessionCreateHydration } from './structured-agent-session-create-hydration'
 import { askHostCreateSupport } from './structured-agent-session-host-admission'
 import { readStructuredChatHostPermissionVerdict } from '@/runtime/structured-chat-host-permission'
@@ -134,6 +136,8 @@ export async function launchStructuredAgentSession(
     }
   }
   let result: AgentSessionMutationResult<AgentSessionAttachResult>
+  // Typed so an async placement fails to compile: a tick here drops an eager joiner's create.
+  const params: StructuredAgentSessionCreateParams = withFrameDrawnChatTabPlacement(intent)
   // Nothing is created for a chat closed while its host was asked, or whose source retired.
   if (isCancelled() || intent.beforeCreate?.() === false) {
     abandonStructuredAgentSessionLaunchIntent(intent)
@@ -146,7 +150,7 @@ export async function launchStructuredAgentSession(
     result = await callStructuredAgentSession<AgentSessionMutationResult<AgentSessionAttachResult>>(
       intent.target,
       'agentSession.create',
-      intent.params
+      params
     )
   } catch (error) {
     const code = definitiveStructuredAgentSessionCreateErrorCode(error)

@@ -1750,7 +1750,8 @@ describe('RelayAssignmentStore', () => {
     const first = await store.assign(identity)
     const second = await store.assign(identity)
 
-    expect(second).toEqual(first)
+    expect(first.placed).toBe(true)
+    expect(second).toEqual({ ...first, placed: undefined })
     expect(await cellReservations(database!)).toEqual({ 'cell-a': 1, 'cell-b': 0 })
   })
 

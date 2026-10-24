@@ -15,13 +15,7 @@ import {
 } from './gl-utils'
 import { encodedProject } from './project-path-encoding'
 
-/**
- * Update an existing GitLab issue.
- *
- * Why: callers that list through a per-repo issue source preference must
- * mutate the same GitLab project, or identical IIDs on origin/upstream can
- * silently edit the wrong issue.
- */
+/** Mutate the preference-selected project so equal origin/upstream issue numbers cannot retarget edits. */
 export async function updateIssue(
   repoPath: string,
   issueNumber: number,
@@ -52,7 +46,6 @@ export async function updateIssue(
   const repoFlag = projectRef.path
   const errors: string[] = []
 
-  // State change requires a separate command (parallel to github's split).
   if (updates.state) {
     await acquire()
     try {
@@ -62,7 +55,7 @@ export async function updateIssue(
         ...glabHostEnvOptions(projectRef, connectionId)
       })
     } catch (err) {
-      // Why: glab exits 0 for an issue already in the target state, so every failure is real.
+      // glab already-state transitions exit 0; any rejected command remains a real failure.
       const stderr = err instanceof Error ? err.message : String(err)
       errors.push(classifyGlabError(stderr).message)
     } finally {
@@ -93,7 +86,6 @@ export async function updateIssue(
     }
   }
 
-  // Field edits via `glab issue update`.
   const editArgs: string[] = ['issue', 'update', String(issueNumber), '-R', repoFlag]
   let hasEditArgs = false
 
@@ -109,8 +101,7 @@ export async function updateIssue(
     editArgs.push('--unlabel', label)
     hasEditArgs = true
   }
-  // Why: an unprefixed --assignee replaces every assignee and --unassign clears them all; glab
-  // reads a `+`/`-` prefix as add/remove (since at least v1.22).
+  // Bare --assignee replaces everyone; + and - prefixes perform incremental edits (glab >=1.22).
   for (const assignee of updates.addAssignees ?? []) {
     editArgs.push(`--assignee=+${assignee}`)
     hasEditArgs = true

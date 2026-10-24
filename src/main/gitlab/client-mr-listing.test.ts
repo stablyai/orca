@@ -256,7 +256,6 @@ describe('gitlab client — MR operations', () => {
       await listMergeRequests('/repo', 'opened', 1, 20, undefined, 'fix login')
       expect(glabApiWithHeadersMock).not.toHaveBeenCalled()
       const callArgs = glabExecFileAsyncMock.mock.calls[0][0] as string[]
-      // Why (#6263): the cwd-inferred fallback must honor the typed query too.
       const searchIdx = callArgs.indexOf('--search')
       expect(searchIdx).toBeGreaterThanOrEqual(0)
       expect(callArgs[searchIdx + 1]).toBe('fix login')
@@ -312,8 +311,7 @@ describe('gitlab client — MR operations', () => {
       expect(result.items).toEqual([])
     })
 
-    // Why: the title carries a classifier keyword, so this also pins that a wrapped payload stays
-    // out of the substring matcher — classifying it would swap the body for "check your connection".
+    // A classifier keyword in a content title must not replace the opaque response diagnostic.
     it('reports the body instead of ".map is not a function" when the API returns a non-array', async () => {
       glabApiWithHeadersMock.mockResolvedValueOnce({
         body: JSON.stringify({ data: [{ iid: 7, title: 'fix network timeout' }] }),
@@ -337,8 +335,6 @@ describe('gitlab client — MR operations', () => {
       expect(result.error?.message).not.toContain('is not a function')
     })
 
-    // Why: the whole point of surfacing the body — a GitLab error envelope now
-    // classifies like any other glab failure instead of collapsing to 'unknown'.
     it('classifies a GitLab error envelope returned on exit 0', async () => {
       glabApiWithHeadersMock.mockResolvedValueOnce({
         body: JSON.stringify({ message: '403 Forbidden' }),
@@ -349,8 +345,7 @@ describe('gitlab client — MR operations', () => {
       expect(result.error?.type).toBe('permission_denied')
     })
 
-    // Why: the sibling title matches an earlier classifier branch than the envelope does, so this
-    // fails if the payload leaks into classification instead of only the envelope's own message.
+    // Only the envelope message is diagnostic; sibling payload keywords must not change classification.
     it('classifies an error envelope by its message, not its sibling payload', async () => {
       glabApiWithHeadersMock.mockResolvedValueOnce({
         body: JSON.stringify({

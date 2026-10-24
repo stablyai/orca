@@ -291,7 +291,7 @@ export class PaneManager {
     clearPaneWebglTextureAtlases(this.panes.values())
   }
 
-  presentForcedViewports(): void {
+  presentViewports(): void {
     presentPaneViewports(this.panes.values())
   }
 

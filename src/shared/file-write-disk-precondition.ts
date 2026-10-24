@@ -11,7 +11,7 @@ export const FILE_WRITE_IF_UNCHANGED_METHOD = 'files.writeIfUnchanged'
 
 /**
  * Whether the host's guarded write can be sent as is. A v1 host can't check bytes or skip identical
- * text, so only automatic saves (which must refuse non-UTF-8 files) pay for a client-side read first.
+ * text, so only saves that must refuse non-UTF-8 files pay for a client-side read first.
  */
 export function hostEnforcesPrecondition(
   capabilities: readonly unknown[],
@@ -29,11 +29,11 @@ export type FileWriteDiskPrecondition = {
   expectedSignature: string
   /** A missing file is written (recreated) instead of refused. */
   allowMissing?: boolean
-  /** Automatic saves refuse a file that isn't valid UTF-8 rather than convert it unasked. */
+  /** Refuse a file that isn't valid UTF-8 rather than convert it unasked. */
   requireLosslessUtf8?: boolean
 }
 
-/** `not-utf8`: an automatic save met bytes it can't round-trip; older clients read it as `changed`. */
+/** `not-utf8`: a save met bytes it can't round-trip; older clients read it as `changed`. */
 export type FileWriteDiskConflict = 'changed' | 'missing' | 'not-utf8'
 
 export type FileWriteDiskComparison = FileWriteDiskConflict | 'identical' | null

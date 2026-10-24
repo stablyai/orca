@@ -47,7 +47,7 @@ describe('CdpWsProxy agent input focus guard', () => {
       )
     }
     await vi.waitFor(() => expect(guardFocus).toHaveBeenCalledTimes(1))
-    // Why: emulation goes out first; the press itself waits for the pane.
+    // Emulate focus first; await pane readiness before pressing.
     expect(getSendCommandMethods(mock)).toEqual(['Emulation.setFocusEmulationEnabled'])
     ready()
     await bothReplied

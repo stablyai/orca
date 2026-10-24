@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { gunzipSync } from 'node:zlib'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  MOBILE_WEB_BUNDLE_RANGE_BYTES,
+  MOBILE_WEB_BUNDLE_CHUNK_BYTES as RANGE_BYTES,
   MOBILE_WEB_BUNDLE_RANGE_METHOD,
   MobileWebBundleManifestResultSchema,
   MobileWebBundleRangeResultSchema,
@@ -53,11 +53,11 @@ function decoded(result: MobileWebBundleRangeResult): Buffer {
 
 // Period-256 filler compresses by two orders of magnitude; random bytes do not compress at all.
 const COMPRESSIBLE: SyntheticAsset = (() => {
-  const bytes = mobileWebBundleFiller(MOBILE_WEB_BUNDLE_RANGE_BYTES * 2 + 777, 11)
+  const bytes = mobileWebBundleFiller(RANGE_BYTES * 2 + 777, 11)
   return { path: `assets/${sha256Hex(bytes)}.js`, bytes, contentType: 'text/javascript' }
 })()
 const INCOMPRESSIBLE: SyntheticAsset = (() => {
-  const bytes = randomBytes(MOBILE_WEB_BUNDLE_RANGE_BYTES + 4096)
+  const bytes = randomBytes(RANGE_BYTES + 4096)
   return { path: `assets/${sha256Hex(bytes)}.bin`, bytes, contentType: 'application/octet-stream' }
 })()
 
@@ -89,7 +89,7 @@ describe('mobileWeb.bundle.range on an install that carries a bundle', () => {
   it('names the range grid on the manifest reply', async () => {
     const response = await call('mobileWeb.bundle.manifest')
     const result = MobileWebBundleManifestResultSchema.parse(response.ok && response.result)
-    expect(result.rangeBytes).toBe(MOBILE_WEB_BUNDLE_RANGE_BYTES)
+    expect(result.rangeBytes).toBe(RANGE_BYTES)
   })
 
   // The manifest field is the phone's only discovery, and a mobile-scoped call to a method this
@@ -107,7 +107,7 @@ describe('mobileWeb.bundle.range on an install that carries a bundle', () => {
     for (const asset of bundle.assets) {
       const pieces: Buffer[] = []
       let calls = 0
-      for (let offset = 0; ; offset += MOBILE_WEB_BUNDLE_RANGE_BYTES) {
+      for (let offset = 0; ; offset += RANGE_BYTES) {
         const result = body(await range({ buildId: bundle.buildId, path: asset.path, offset }))
         calls++
         expect(result).toMatchObject({
@@ -117,13 +117,15 @@ describe('mobileWeb.bundle.range on an install that carries a bundle', () => {
           assetByteLength: asset.byteLength,
           sha256: asset.sha256
         })
+        expect(decoded(result).byteLength).toBe(Math.min(RANGE_BYTES, asset.byteLength - offset))
+        expect(result.eof).toBe(offset + RANGE_BYTES >= asset.byteLength)
         pieces.push(decoded(result))
         if (result.eof) {
           break
         }
       }
       expect(sha256Hex(Buffer.concat(pieces))).toBe(asset.sha256)
-      expect(calls).toBe(Math.max(1, Math.ceil(asset.byteLength / MOBILE_WEB_BUNDLE_RANGE_BYTES)))
+      expect(calls).toBe(Math.max(1, Math.ceil(asset.byteLength / RANGE_BYTES)))
     }
   })
 
@@ -132,22 +134,15 @@ describe('mobileWeb.bundle.range on an install that carries a bundle', () => {
       await range({
         buildId: bundle.buildId,
         path: COMPRESSIBLE.path,
-        offset: MOBILE_WEB_BUNDLE_RANGE_BYTES
+        offset: RANGE_BYTES
       })
     )
 
     expect(result.encoding).toBe('gzip')
-    expect(Buffer.from(result.dataBase64, 'base64').byteLength).toBeLessThan(
-      MOBILE_WEB_BUNDLE_RANGE_BYTES / 10
+    expect(Buffer.from(result.dataBase64, 'base64').byteLength).toBeLessThan(RANGE_BYTES / 10)
+    expect(decoded(result).equals(COMPRESSIBLE.bytes.subarray(RANGE_BYTES, RANGE_BYTES * 2))).toBe(
+      true
     )
-    expect(
-      decoded(result).equals(
-        COMPRESSIBLE.bytes.subarray(
-          MOBILE_WEB_BUNDLE_RANGE_BYTES,
-          MOBILE_WEB_BUNDLE_RANGE_BYTES * 2
-        )
-      )
-    ).toBe(true)
     expect(result.eof).toBe(false)
   })
 
@@ -159,9 +154,7 @@ describe('mobileWeb.bundle.range on an install that carries a bundle', () => {
 
     expect(result.encoding).toBe('identity')
     expect(
-      Buffer.from(result.dataBase64, 'base64').equals(
-        INCOMPRESSIBLE.bytes.subarray(0, MOBILE_WEB_BUNDLE_RANGE_BYTES)
-      )
+      Buffer.from(result.dataBase64, 'base64').equals(INCOMPRESSIBLE.bytes.subarray(0, RANGE_BYTES))
     ).toBe(true)
   })
 

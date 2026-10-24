@@ -12,10 +12,10 @@ import {
 } from '../orca-runtime-test-fixtures.spec'
 
 const PANE_KEY = `host-tab:${HEADLESS_LEAF_ID}`
-// The host's own pane-owned capture form (#11598), which no window wake relaunches.
+// The host's own pane-owned capture form (#11598), which no wake resumes a second time.
 const PANE_OWNED = { origin: 'worktree-sleep', state: 'done', restoreOnTabOpenOnly: true }
 
-// A running agent's workspace sleep: the window's wake relaunches it, and a windowless host has none.
+// An older window capture of a running agent's workspace sleep, which main resumes in its pane.
 function makeWorkingSleepStore(overrides: Partial<SleepingAgentSessionRecord> = {}) {
   const record: SleepingAgentSessionRecord = {
     paneKey: PANE_KEY,
@@ -57,7 +57,7 @@ function withClaudeLaunchedTab(fixture: ReturnType<typeof makeWorkingSleepStore>
 function openPane(
   runtimeStore: unknown,
   windowStatus: 'blocked' | 'openable',
-  opts: { spawn?: () => Promise<{ id: string }>; withWindow?: boolean } = {}
+  opts: { spawn?: () => Promise<{ id: string }>; withWindow?: boolean; tap?: boolean } = {}
 ) {
   const spawn = vi.fn(opts.spawn ?? (() => Promise.resolve({ id: 'persisted-pty' })))
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture store implements the runtime store methods these tests reach.
@@ -84,6 +84,9 @@ function openPane(
         notifyClients: false,
         clientKind: 'runtime'
       })
+    }
+    if (opts.tap === false) {
+      return null
     }
     return runtime.activateMobileSessionTab(
       `id:${TEST_WORKTREE_ID}`,
@@ -253,19 +256,76 @@ describe('opening a workspace-slept running agent on a host with no window', () 
     expect(spawnedCommand(retried.spawn)).toContain('provider-session-1')
   })
 
-  it('with a window, opens a plain shell for the window to wake, or resumes it itself under main', async () => {
+  it('resumes in the pane with a window present too: main is the one executor', async () => {
     const fixture = makeWorkingSleepStore()
     withClaudeLaunchedTab(fixture)
     const { opened, spawn } = openPane(fixture.runtimeStore, 'openable', { withWindow: true })
 
     await opened
     expect(spawn).toHaveBeenCalledOnce()
-    // Layout-owner build: main owns every wake, so the window never resumes it a second time.
-    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+    expect(spawnedCommand(spawn)).toContain('provider-session-1')
+    expect(fixture.getSession().sleepingAgentSessionsByPaneKey?.[PANE_KEY]).toMatchObject(
+      PANE_OWNED
+    )
+  })
+
+  it("resumes on a phone's open of the workspace, and its queued wake ends with the resume", async () => {
+    const fixture = makeWorkingSleepStore()
+    let landSpawn!: (pty: { id: string }) => void
+    // No tap: only the phone's open of the workspace starts the resume.
+    const { runtime, spawn } = openPane(fixture.runtimeStore, 'blocked', {
+      spawn: () => new Promise((resolve) => (landSpawn = resolve)),
+      tap: false
+    })
+    const resumeSleepingAgents = vi.fn()
+    Object.defineProperty(runtime, 'notifier', { value: { resumeSleepingAgents } })
+
+    await runtime.activateManagedWorktree(`id:${TEST_WORKTREE_ID}`, {
+      notifyClients: false,
+      clientKind: 'mobile'
+    })
+    await vi.waitFor(() => expect(spawn).toHaveBeenCalled())
+    expect(spawnedCommand(spawn)).toContain('provider-session-1')
+    // Rule 3: the wake's queue step is still running until the resume spawn lands.
+    expect(resumeSleepingAgents).not.toHaveBeenCalled()
+    landSpawn({ id: 'persisted-pty' })
+    await vi.waitFor(() => expect(resumeSleepingAgents).toHaveBeenCalledWith(TEST_WORKTREE_ID))
+  })
+
+  describe("the window's open of a slept pane (worktrees:resumeSleptPane)", () => {
+    const pane = { worktreeId: TEST_WORKTREE_ID, tabId: 'host-tab', leafId: HEADLESS_LEAF_ID }
+
+    it('resumes once; a second open after it finished attaches to the same terminal', async () => {
+      const fixture = makeWorkingSleepStore()
+      const { runtime, spawn, opened } = openPane(fixture.runtimeStore, 'openable', {
+        withWindow: true,
+        tap: false
+      })
+      await opened
+      await expect(runtime.resumeSleptPane(pane)).resolves.toBe(true)
+      expect(spawn).toHaveBeenCalledOnce()
       expect(spawnedCommand(spawn)).toContain('provider-session-1')
-    } else {
-      expect(spawnedCommand(spawn)).toBe('')
-    }
-    expect(fixture.getSession().sleepingAgentSessionsByPaneKey?.[PANE_KEY]).toBeDefined()
+
+      await expect(runtime.resumeSleptPane(pane)).resolves.toBe(true)
+      expect(spawn).toHaveBeenCalledOnce()
+    })
+
+    it("a reloaded window's open attaches to the terminal main started, never a second resume", async () => {
+      const fixture = makeWorkingSleepStore()
+      const { runtime, spawn, opened } = openPane(fixture.runtimeStore, 'openable', {
+        withWindow: true,
+        tap: false
+      })
+      await opened
+      await runtime.resumeSleptPane(pane)
+      // The reload: the window's graph restarts and its panes ask again.
+      runtime.attachWindow(TEST_WINDOW_ID)
+      runtime.markGraphReady(TEST_WINDOW_ID)
+      await expect(runtime.resumeSleptPane(pane)).resolves.toBe(true)
+      expect(spawn).toHaveBeenCalledOnce()
+      expect(fixture.getSession().sleepingAgentSessionsByPaneKey?.[PANE_KEY]).toMatchObject(
+        PANE_OWNED
+      )
+    })
   })
 })

@@ -10,7 +10,10 @@ import {
   sendNativeChatMessage,
   resetNativeChatPtySendQueuesForTests
 } from './native-chat-runtime-send'
-import { buildNativeChatPasteBytes, NATIVE_CHAT_SUBMIT } from './native-chat-send'
+import {
+  buildNativeChatPasteBytes,
+  NATIVE_CHAT_SUBMIT
+} from '../../../../shared/native-chat-paste-bytes'
 beforeEach(() => {
   vi.useFakeTimers()
   resetNativeChatPtySendQueuesForTests()

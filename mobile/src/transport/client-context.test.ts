@@ -1,5 +1,7 @@
-import { createElement, type ReactElement } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { createElement } from 'react'
+import type { ReactElement } from 'react'
+import { act, create } from 'react-test-renderer'
+import type { ReactTestRenderer } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ConnectionState } from './types'
 import type { RpcClient } from './rpc-client'
@@ -180,6 +182,7 @@ describe('useHostClient', () => {
     connectMock.mockReturnValueOnce(client1).mockReturnValueOnce(client2)
     loadHostsMock.mockResolvedValue([HOST, host2])
 
+    const selections: { hostId: string; value: ReturnType<typeof useHostClient> }[] = []
     let selectedHostId = HOST.id
     let selectedClient: RpcClient | null = null
     let selectedClientId: string | null = null
@@ -187,6 +190,7 @@ describe('useHostClient', () => {
     let renderer: ReactTestRenderer | null = null
     function Probe(): null {
       const selected = useHostClient(selectedHostId)
+      selections.push({ hostId: selectedHostId, value: selected })
       selectedClient = selected.client
       selectedClientId = selected.clientId
       selectedState = selected.state
@@ -213,6 +217,15 @@ describe('useHostClient', () => {
       expect(selectedClient).toBe(client2)
       expect(selectedClientId).toBe(host2.deviceToken)
       expect(selectedState).toBe('disconnected')
+      for (const { value } of selections.filter(({ hostId }) => hostId === host2.id)) {
+        expect(value.state).toBe('disconnected')
+        if (value.client === null) {
+          expect(value.clientId).toBeNull()
+        } else {
+          expect(value.client).toBe(client2)
+          expect(value.clientId).toBe(host2.deviceToken)
+        }
+      }
       expect(connectMock).toHaveBeenCalledTimes(2)
     } finally {
       act(() => renderer?.unmount())

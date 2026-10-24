@@ -7,8 +7,7 @@ import type {
   ForeignSqliteReaderResponse
 } from './foreign-sqlite-reader-protocol'
 
-// Why two dispatches: the OpenCode one is also bundled into the SSH/WSL relay
-// reader, so the other readers stay out of it and ship only in this entry.
+// Keep OpenCode dispatch separate because SSH/WSL relays bundle it without the other readers.
 
 if (!parentPort) {
   throw new Error('Foreign SQLite reader worker must run with a parent port.')
@@ -38,8 +37,7 @@ port.on('message', (request: ReaderRequest) => {
     try {
       port.postMessage(response)
     } catch {
-      // A non-cloneable result would otherwise post nothing and leave the client
-      // waiting out its timeout; fail that request fast instead.
+      // Reply with a serialization failure instead of leaving the client waiting for its timeout.
       port.postMessage({
         id: request.id,
         ok: false,

@@ -1,4 +1,4 @@
-import { isTailscaleEndpoint } from '../../../src/shared/remote-runtime-tailscale-hint'
+import { isTailscaleEndpoint } from '../../../src/shared/remote-runtime/remote-runtime-tailscale-hint'
 import {
   relayHostReachabilityForCloseCode,
   type RelayHostReachabilityFromCloseCode

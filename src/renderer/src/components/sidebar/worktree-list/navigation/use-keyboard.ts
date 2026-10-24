@@ -1,5 +1,5 @@
 import { textFieldClaimsActionKey } from '@/lib/file-search-shortcut-policy'
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import type React from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import { useAppStore } from '@/store'
@@ -16,7 +16,10 @@ import {
   getCyclableRowIdentity,
   getCyclableWorktreeRows,
   resolveActiveCycleIdentity,
-  resolveCycledWorktreeId
+  resolveCycleAnchorExecutionHostId,
+  resolveCycleAnchorWorktreeId,
+  resolveCycledWorktreeId,
+  type LastActiveCycleWorkspace
 } from '../../worktree-keyboard-cycle'
 import { findPreferredRenderRowIndexForWorktreeIdentity } from './render-row-lookup'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
@@ -44,6 +47,16 @@ export function useWorktreeListKeyboardNavigation(args: {
     markDirectScrollInput
   } = args
   const keybindings = useAppStore((s) => s.keybindings)
+  const lastActiveWorkspaceRef = useRef<LastActiveCycleWorkspace | null>(null)
+  useEffect(() => {
+    // Closing the last tab clears both selection and host; history retains only the id.
+    if (activeWorktreeId !== null) {
+      lastActiveWorkspaceRef.current = {
+        worktreeId: activeWorktreeId,
+        executionHostId: activeWorkspaceExecutionHostId
+      }
+    }
+  }, [activeWorktreeId, activeWorkspaceExecutionHostId])
 
   const navigateWorktree = useCallback(
     (direction: 'up' | 'down') => {
@@ -51,12 +64,24 @@ export function useWorktreeListKeyboardNavigation(args: {
       // means "not now", and a rebuilt near-copy would drift from what is on screen
       // (host sections, pinned placement, folder workspaces).
       const worktreeRows = getCyclableWorktreeRows(rows, pinnedDisplayPolicy)
+      const { worktreeNavHistory, worktreeNavHistoryIndex } = useAppStore.getState()
+      const anchorWorktreeId = resolveCycleAnchorWorktreeId({
+        activeWorktreeId,
+        navHistory: worktreeNavHistory,
+        navHistoryIndex: worktreeNavHistoryIndex,
+        worktreeIds: worktreeRows.map((row) => row.worktree.id)
+      })
       const nextWorktreeIdentity = resolveCycledWorktreeId({
         worktreeIds: worktreeRows.map(getCyclableRowIdentity),
         activeWorktreeId: resolveActiveCycleIdentity({
           rows: worktreeRows,
-          activeWorktreeId,
-          activeWorkspaceExecutionHostId
+          activeWorktreeId: anchorWorktreeId,
+          activeWorkspaceExecutionHostId: resolveCycleAnchorExecutionHostId({
+            anchorWorktreeId,
+            activeWorktreeId,
+            activeWorkspaceExecutionHostId,
+            lastActiveWorkspace: lastActiveWorkspaceRef.current
+          })
         }),
         direction
       })

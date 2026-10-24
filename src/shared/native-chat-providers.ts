@@ -1,6 +1,6 @@
 /**
  * Unchosen agents route to chat when Chat UI is on; only explicit choices are saved.
- * Settings displays unchosen non-built-ins from this computer's native installation inventory.
+ * Settings shows unchosen non-built-ins as on where their CLI or chat program is installed here.
  */
 
 import { isAgentSessionHandleProvider } from './agent-session-provider-handle'

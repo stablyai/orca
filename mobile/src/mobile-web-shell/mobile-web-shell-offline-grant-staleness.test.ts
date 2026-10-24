@@ -126,6 +126,7 @@ async function cacheGeneration(
   const fetched: MobileWebBundleFetchResult = {
     manifest,
     assets: new Map(ASSETS.map((asset) => [asset.path, new Uint8Array(asset.byteLength).fill(7)])),
+    reused: [],
     totalBytes: TOTAL_BYTES,
     elapsedMs: 1
   }

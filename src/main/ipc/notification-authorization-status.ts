@@ -9,15 +9,7 @@ const HELPER_TIMEOUT_MS = 4000
 
 let cachedHelperPath: string | null | undefined
 
-/**
- * Resolves the bundled notification-status helper binary.
- *
- * Why: the helper must live in Contents/MacOS next to the Electron executable
- * — NSBundle resolves the process's bundle by walking up from the executable
- * path, macOS keys notification records to that identity, and macOS 26 aborts
- * UNUserNotificationCenter for executables run from Contents/Resources
- * (#7929). Dev copies and packaged builds (extraFiles) both place it there.
- */
+/** Place the helper beside Electron in Contents/MacOS: bundle identity controls notification records, and macOS 26 aborts helpers under Resources (#7929). */
 function resolveHelperPath(): string | null {
   if (cachedHelperPath !== undefined) {
     return cachedHelperPath
@@ -31,16 +23,7 @@ function resolveHelperPath(): string | null {
   return cachedHelperPath
 }
 
-/**
- * Reads the app's real macOS notification authorization via a helper binary
- * calling UNUserNotificationCenter.getNotificationSettings. Returns null when
- * the helper is unavailable or fails, so callers can fall back to weaker
- * delivery-probe evidence.
- *
- * Why a helper at all: Electron exposes no API for notification authorization
- * (scheduling silently succeeds even while macOS is suppressing display), so
- * the only truthful signal is the native settings read.
- */
+/** Read native authorization absent from Electron APIs; return null on helper failure so callers can use weaker delivery evidence. */
 let readInFlight: Promise<NotificationAuthorizationStatus | null> | null = null
 
 export function readNotificationAuthorizationStatus(): Promise<NotificationAuthorizationStatus | null> {
@@ -48,8 +31,7 @@ export function readNotificationAuthorizationStatus(): Promise<NotificationAutho
   if (!helperPath) {
     return Promise.resolve(null)
   }
-  // Why: simultaneous agent completions across worktrees each consult the
-  // readout — one in-flight helper run answers all of them.
+  // Share one helper read across simultaneous completion notifications.
   if (readInFlight) {
     return readInFlight
   }

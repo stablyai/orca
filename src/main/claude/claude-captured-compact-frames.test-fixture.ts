@@ -1,12 +1,4 @@
-// Claude Code 2.1.283 (SDK 0.3.251) stream-json captures of `/compact`, driven through `query()` with
-// streaming input and cut to the protocol fields Orca reads. The session id and the summary text
-// are replaced, and every frame carried `session_id: CAPTURED_COMPACT_SESSION_ID`; frame order,
-// uuids and the relative clock (`at`, ms) are the captured ones.
-//
-// Verified from these frames: a finished and a stopped `/compact` both end in a `success` result
-// with no `terminal_reason`, naming the command's input in `user_message_uuid`. Only the finished
-// one carries a `compact_boundary`; the stopped one answers with a synthetic "Compaction canceled."
-// instead. `command_lifecycle` frames bracket every input.
+// CLI 2.1.283 / SDK 0.3.251 capture: sanitized session/text; original frame order, UUIDs and relative times.
 
 export type CapturedCompactEvent =
   | { at: number; sent: { text: string; uuid: string } }
@@ -21,7 +13,6 @@ const lifecycle = (commandUuid: string, state: string) => ({
   state
 })
 
-/** A `/compact` left to finish, from its send to its result. */
 export const CAPTURED_COMPACT_SUCCEEDS: CapturedCompactEvent[] = [
   { at: 1750, sent: { text: '/compact', uuid: '563c9bb2-241a-4946-a35b-0f9088fd05de' } },
   { at: 1751, frame: lifecycle('968b34fc-76cc-41bc-adfc-34f8840637a0', 'completed') },
@@ -108,7 +99,7 @@ export const CAPTURED_COMPACT_SUCCEEDS: CapturedCompactEvent[] = [
   }
 ]
 
-/** A `/compact` interrupted 1.5 s in, then the next send and its own answer. */
+/** Interrupt /compact after 1.5 seconds, then send another prompt. */
 export const CAPTURED_COMPACT_STOPPED_THEN_SEND: CapturedCompactEvent[] = [
   { at: 9663, sent: { text: '/compact', uuid: 'a4e04ce1-37ad-4d40-aaf8-e03a1bbbbc7d' } },
   { at: 9664, frame: lifecycle('0be27e6d-49b7-4ee8-a784-744b3fb3b55c', 'completed') },

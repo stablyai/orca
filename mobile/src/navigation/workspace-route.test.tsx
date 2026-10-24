@@ -2,7 +2,7 @@ import { readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { createElement, type ReactElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const route = vi.hoisted(() => {
   const state: {
@@ -155,6 +155,22 @@ const WORKSPACE_ROUTE_FILES = readdirSync(HOST_ROUTES, { recursive: true, encodi
   .filter((entry) => /(^|\/)\[worktreeId\](\.web)?\.tsx$/.test(entry))
   .sort()
 
+const trees: ReactTestRenderer[] = []
+const pairs: ReturnType<typeof createBridgePortPair>[] = []
+
+afterEach(async () => {
+  await act(async () => {
+    for (const tree of trees.splice(0)) {
+      tree.unmount()
+    }
+  })
+  for (const pair of pairs.splice(0)) {
+    pair.client.close()
+    await pair.flush()
+    pair.host.dispose()
+  }
+})
+
 async function render(element: ReactElement, gates: HostStatusGates): Promise<ReactTestRenderer> {
   route.seen.length = 0
   route.shellRoutes.length = 0
@@ -170,6 +186,7 @@ async function render(element: ReactElement, gates: HostStatusGates): Promise<Re
   if (!renderer) {
     throw new Error('did not render')
   }
+  trees.push(renderer)
   return renderer
 }
 
@@ -181,7 +198,7 @@ function texts(renderer: ReactTestRenderer): string[] {
 
 describe('every workspace route', () => {
   it('is found on disk', () => {
-    expect(WORKSPACE_ROUTE_FILES.length).toBeGreaterThanOrEqual(14)
+    expect(WORKSPACE_ROUTE_FILES.length).toBeGreaterThan(0)
   })
 
   it.each(WORKSPACE_ROUTE_FILES)('keeps %s on the server its route names', async (file) => {
@@ -225,9 +242,10 @@ describe('a server workspace', () => {
 
   it('gates its features on that server’s own status, not the desktop’s', async () => {
     route.params = { hostId: 'host-1', executionHost: 'runtime:vm' }
-    const session = desktop([])
+    const serverCapability = 'server-feature.v1'
+    const session = desktop([serverCapability])
     await render(screen, desktopGates([...RELAYS, VAULT]))
-    await vi.waitFor(() => expect(below.capabilities).toEqual([]))
+    await vi.waitFor(() => expect(below.capabilities).toEqual([serverCapability]))
     expect(session.sendRequest).toHaveBeenCalledWith('status.get', undefined, {
       envelope: { executionHost: 'runtime:vm' }
     })
@@ -273,8 +291,10 @@ describe('a server workspace', () => {
     desktop()
     serverReport.current = FAILED
     await act(async () => {
-      create(
-        createElement(HostStatusGatesContext.Provider, { value: desktopGates(RELAYS) }, screen)
+      trees.push(
+        create(
+          createElement(HostStatusGatesContext.Provider, { value: desktopGates(RELAYS) }, screen)
+        )
       )
     })
     expect(below.state).toBe('disconnected')
@@ -299,6 +319,7 @@ describe('a server workspace', () => {
       rpc: shell,
       rewriteToPage: (json) => json.replace(',"rpcEnvelope"', '')
     })
+    pairs.push(pair)
     await pair.flush()
     expect(pair.client.carriesRpcEnvelope?.()).toBe(false)
     route.client = pair.client

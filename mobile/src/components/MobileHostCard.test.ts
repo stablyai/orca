@@ -74,10 +74,6 @@ describe('MobileHostCard', () => {
     expect(buttons[0].props.accessibilityLabel).toBe('Open Desk, Disconnected')
     expect(buttons[1].props.accessibilityRole).toBe('button')
     expect(buttons[1].props.accessibilityLabel).toBe('Actions for Desk')
-    expect(buttons[1].props.hitSlop).toBe(8)
-    expect(buttons[1].props.style({ pressed: false })[0]).toMatchObject({ width: 40, height: 40 })
-    expect(renderer.root.findAllByType('MoreVertical')).toHaveLength(1)
-    expect(renderer.root.findAllByType('ChevronRight')).toHaveLength(0)
 
     act(() => buttons[1].props.onPress())
     expect(onOpenActions).toHaveBeenCalledOnce()

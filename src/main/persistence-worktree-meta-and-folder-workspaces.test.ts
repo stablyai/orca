@@ -16,7 +16,6 @@ import { getDefaultWorkspaceSession } from '../shared/constants'
 import { folderWorkspaceKey } from '../shared/workspace-scope'
 import { hostWorktreeTarget } from '../shared/worktree/host-qualified-identity'
 
-// Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),
   sshConfigHostsToTargetsMock: vi.fn()
@@ -68,7 +67,6 @@ describe('Store', () => {
     await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
-  // ── 8. setWorktreeMeta and getWorktreeMeta ─────────────────────────
 
   it('setWorktreeMeta creates meta with defaults for missing fields', async () => {
     const store = await createStore()
@@ -228,8 +226,7 @@ describe('Store', () => {
 
     expect(store.getWorktreeMeta('wt-sibling')?.linkedWorkItem?.jiraIdentifier).toBe('ORCA-123')
     expect(store.getWorktreeMeta('wt-sibling')?.linkedTaskSourceContext).toBeNull()
-    // Corrupt entries must not survive: gcStaleWorktreeMeta keeps timestamp-less keys, and downstream
-    // consumers deref worktreeMeta values unguarded (also keeps a rollback to an older build loadable).
+    // Reject corrupt rows before unguarded consumers read them, including older builds after rollback.
     expect(store.getAllWorktreeMeta()).not.toHaveProperty('r1::/tmp/wt')
     expect(store.getAllWorktreeMeta()).not.toHaveProperty('r1::/tmp/scalar')
     expect(store.getWorktreeLineage('r1::/tmp/wt')).toBeUndefined()
@@ -380,8 +377,7 @@ describe('Store', () => {
   })
 
   it('trims the group parentPath fallback and rejects a blank one', async () => {
-    // parentPath is persisted verbatim, so a padded scan result would otherwise become a folderPath
-    // that no path comparison matches.
+    // Untrimmed parentPath would produce folder paths that comparisons cannot match.
     const store = await createStore()
     const padded = store.createProjectGroup({
       name: 'Platform',
@@ -685,8 +681,7 @@ describe('Store', () => {
 
     expect(store.removeFolderWorkspace(workspace.id)).toBe(true)
 
-    // Boot enumerates partitions from persistence itself, so a row left in `ssh:target-1` comes
-    // back on the next launch as a workspace the user already deleted.
+    // Persisted host partitions seed startup workspaces; removed rows must not reappear next launch.
     expect(store.getWorkspaceSession('ssh:target-1').tabsByWorktree[key]).toBeUndefined()
   })
 

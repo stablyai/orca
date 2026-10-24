@@ -3,6 +3,7 @@ import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import { useAppStore } from '@/store'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { getDefaultSettings } from '../../../shared/constants'
+import { resolveTuiAgentLaunchArgs } from '../../../shared/tui-agent-launch-defaults'
 import {
   getWorkspaceRuntimePreference,
   resolveProjectExecutionRuntime,
@@ -290,11 +291,20 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
         availableWslDistros: ['Ubuntu-24.04']
       })
       expect(projectRuntimeContext).toMatchObject({ status: 'resolved', runtime: { kind: 'wsl' } })
+      useAppStore.getState().registerAgentLaunchConfig(makePaneKey(TAB_ID, LEAF_ID), {
+        agentArgs: resolveTuiAgentLaunchArgs('claude', {
+          agentPermissionDefault: 'full-access',
+          agentDefaultArgs: { claude: '--tools Read' }
+        }),
+        agentEnv: {}
+      })
 
       const startup = buildPaneAccountRestartStartup('claude', pane)
 
-      expect(startup?.command).toBe(`claude '--resume' '${SESSION_ID}'`)
-      expect(startup?.resumeProviderSession?.id).toBe(SESSION_ID)
+      expect(startup?.command).toBe(
+        `claude '--dangerously-skip-permissions' '--tools' 'Read' '--resume' '${SESSION_ID}'`
+      )
+      expect(startup?.resumeProviderSession).toEqual({ key: 'session_id', id: SESSION_ID })
     }
   )
 })

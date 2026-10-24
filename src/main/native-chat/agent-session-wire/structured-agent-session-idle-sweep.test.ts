@@ -1,6 +1,4 @@
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-// The idle sweep on a real host: what puts an agent to rest, what keeps it running, and what a
-// reader and the session lists see when it does.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
@@ -46,8 +44,6 @@ function lastStatus(): AgentSessionStatusSummary | undefined {
     .findLast((summary) => summary.sessionId === SESSION)
 }
 
-/** A child record as the host's store serves it; a `done` one has settled. */
-/** What the provider reported about one child, as its producer hands it to the host. */
 function childEdge(
   id: string,
   kind: AgentChildWorkKind,
@@ -81,13 +77,11 @@ describe('the idle sweep', () => {
     await vi.waitFor(() => expect(rig.store.getRecord(SESSION)?.lease.claimStatus).toBe('released'))
     await vi.waitFor(() => expect(rig.adapter.acknowledgeSessionRelease).toHaveBeenCalledOnce())
     expect(rig.adapter.acknowledgeSessionRelease).toHaveBeenCalledWith(SESSION)
-    // Listed, idle, and no longer running on this host — never dropped from any list.
     expect(lastStatus()).toMatchObject({ status: 'idle' })
     expect(lastStatus()?.hostExecutionOwned).toBeUndefined()
     expect(rig.sink.forget).not.toHaveBeenCalled()
     expect(reader.events.some((event) => event.type === 'end')).toBe(false)
 
-    // Everything a chat at rest answers still answers, and the next send starts a new agent.
     await expect(rig.host.readOptions(SESSION)).resolves.toMatchObject({ current: {} })
     const sent = await rig.host.send(CALLER, restTestSend('carry on', fence()))
     expect(sent.ok).toBe(true)
@@ -99,13 +93,12 @@ describe('the idle sweep', () => {
   it('never stops an agent a message is queued for, and hands the message over (P2-08)', async () => {
     await foundRestTestChat(rig)
     rig.adapter.closeSession.mockClear()
-    // Only the sweep this test asks for runs, at the step it is asked for.
+    // Disable automatic ticks so sweep timing is explicit.
     rig.host.collaboratorsForTests().lifetime.idleSweep.dispose()
     await sweepTicks(2)
     const reader = collectSubscriber()
     await rig.host.subscribe({ id: 'reader', sessionId: SESSION, emit: reader.emit })
-    // Held, the send is accepted, the agent goes idle past the window, and the sweep runs, all
-    // ahead of the handover the send asks for.
+    // Hold serialization across acceptance, idle expiry and sweep, ahead of delivery handover.
     const held = Promise.withResolvers<void>()
     void rig.host['tasks'].serialize(SESSION, () => held.promise)
     const sending = rig.host.send(CALLER, restTestSend('queued one', fence()))
@@ -130,7 +123,6 @@ describe('the idle sweep', () => {
 
   it('never stops an agent whose background work still runs (P2-09)', async () => {
     await foundRestTestChat(rig)
-    // A Codex subagent thread is one of these records; the host holds both kinds alike.
     reportChildren(childEdge('subagent-1', 'agent', 'working'))
     rig.clock.now += IDLE_MS + 1
 
@@ -141,8 +133,7 @@ describe('the idle sweep', () => {
     await vi.waitFor(() => expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION))
   })
 
-  // A finished child reads done before the lead's wake-up turn writes its first row; stopping the
-  // agent in that gap would lose the wake-up. Owed work is activity, as main's release clock had it.
+  // Leave time for the lead’s wake-up turn after child completion, before its first journal row.
   it('gives an agent a full idle window after its background work ends', async () => {
     await foundRestTestChat(rig)
     reportChildren(childEdge('subagent-1', 'agent', 'working'))
@@ -156,8 +147,7 @@ describe('the idle sweep', () => {
     await vi.waitFor(() => expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION))
   })
 
-  // Owed work is read every tick, not once a window: work that ends just before a window would
-  // have closed still leaves the agent a full window after it.
+  // Recheck each tick so late-finishing work still gets a full idle window.
   it('gives a full window after background work that ends late in a window', async () => {
     await foundRestTestChat(rig)
     reportChildren(childEdge('subagent-1', 'agent', 'working'))
@@ -214,7 +204,6 @@ describe('the idle sweep', () => {
   it('counts the idle window from the last activity (P2-13)', async () => {
     await foundRestTestChat(rig)
     rig.clock.now += IDLE_MS - 60_000
-    // Activity at 29 minutes: a provider row reaching the journal.
     providerEvents().appendItem(
       { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 60 },
       { kind: 'status', text: 'still thinking' },
@@ -245,8 +234,7 @@ describe('the idle sweep', () => {
     await vi.waitFor(() => expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION))
   })
 
-  // A Claude retrying a rate-limited request has taken the send but echoes nothing, so no turn row
-  // exists yet; only the provider can say it still holds the send.
+  // Rate-limited CLIs can hold unacknowledged sends before any turn row; trust provider evidence.
   it('never stops an agent while its provider holds a send, and gives a full window once it lets go', async () => {
     await foundRestTestChat(rig)
     rig.adapter.holdsDispatch.mockReturnValue(true)
@@ -348,7 +336,6 @@ describe('the idle sweep with no child running (P2-22 ii)', () => {
       stopAgent,
       stopStartingAgent: stopAgent,
       closeConversation,
-      // A failed step fails the test.
       logger: {
         warn: (_message, fields) => {
           throw fields.error

@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react'
-import { act, create } from 'react-test-renderer'
+import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BRIDGE_MAX_ROUTE_HREF_CHARS } from '../mobile-web-shell/bridge/bridge-caps'
 import {
@@ -36,7 +36,7 @@ vi.mock('../transport/host-client-hooks', () => ({
 }))
 
 import { RpcClientProvider } from '../transport/client-context.web'
-import { useRouteHandoff, WRAPPED_HREF_MEMBERS } from './route-handoff.web'
+import { useRouteHandoff } from './route-handoff.web'
 
 const INIT = {
   v: BRIDGE_PROTOCOL_VERSION,
@@ -55,6 +55,9 @@ const INIT = {
   pageRoutes: ['/h/[hostId]']
 }
 
+const trees: ReactTestRenderer[] = []
+const clients: BridgeRpcClient[] = []
+
 const held: { handoff: RouteHandoff | null } = { handoff: null }
 
 function Screen(): null {
@@ -62,13 +65,21 @@ function Screen(): null {
   return null
 }
 
-function installChannel(): { posted: string[]; deliver: (frame: unknown) => void } {
+function installChannel(): {
+  posted: string[]
+  deliver: (frame: unknown) => void
+  failPosts: () => void
+} {
+  let failed = false
   const posted: string[] = []
   const channel: {
     postMessage: (json: string) => void
     onmessage: ((event: { data: string }) => void) | null
   } = {
     postMessage: (json) => {
+      if (failed) {
+        throw new Error('page port unavailable')
+      }
       posted.push(json)
     },
     onmessage: null
@@ -76,6 +87,9 @@ function installChannel(): { posted: string[]; deliver: (frame: unknown) => void
   Object.defineProperty(globalThis, 'orcaBridge', { value: channel, configurable: true })
   return {
     posted,
+    failPosts: () => {
+      failed = true
+    },
     deliver: (frame) => {
       channel.onmessage?.({ data: JSON.stringify(frame) })
     }
@@ -83,21 +97,22 @@ function installChannel(): { posted: string[]; deliver: (frame: unknown) => void
 }
 
 /** The page as the entry leaves it: one client, already holding a session. */
-function mount(init: unknown): { posted: string[]; handoff: RouteHandoff } {
+function mount(init: unknown): { posted: string[]; handoff: RouteHandoff; failPosts: () => void } {
   const channel = installChannel()
   const client = createShellPageClient()
   if (client === null) {
     throw new Error('no channel installed')
   }
+  clients.push(client)
   channel.deliver(init)
   act(() => {
-    create(render(client))
+    trees.push(create(render(client)))
   })
   const handoff = held.handoff
   if (handoff === null) {
     throw new Error('no screen mounted')
   }
-  return { posted: channel.posted, handoff }
+  return { posted: channel.posted, handoff, failPosts: channel.failPosts }
 }
 
 function render(client: BridgeRpcClient): ReactElement {
@@ -147,6 +162,14 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  act(() => {
+    for (const tree of trees.splice(0)) {
+      tree.unmount()
+    }
+  })
+  for (const client of clients.splice(0)) {
+    client.close()
+  }
   restoreWarn?.()
   restoreWarn = null
   vi.useRealTimers()
@@ -346,8 +369,12 @@ describe('a back this document cannot serve', () => {
   })
 
   it('does not throw out of a tap handler when there is nowhere to post', () => {
-    const { handoff } = mount({ ...INIT, grants: { ...INIT.grants, native: [] } })
+    const { posted, handoff, failPosts } = mount(INIT)
+    failPosts()
     expect(() => handoff.back()).not.toThrow()
+    expect(backs(posted)).toEqual([])
+    expect(router.back).toHaveBeenCalledTimes(1)
+    expect(JSON.stringify(warned)).toContain('send-failed')
   })
 })
 
@@ -360,10 +387,25 @@ describe('a back this document cannot serve', () => {
  */
 describe('every member that takes a target', () => {
   it('is replaced rather than handed through, all of them', () => {
-    const { handoff } = mount(INIT)
-    for (const member of WRAPPED_HREF_MEMBERS) {
-      expect(typeof handoff[member], member).toBe('function')
-      expect(handoff[member], member).not.toBe(router[member])
+    const options = { withAnchor: false }
+    for (const member of ['push', 'replace', 'navigate', 'dismissTo'] as const) {
+      router[member].mockClear()
+      const { posted, handoff } = mount(INIT)
+      handoff[member]('/h/host-b', options)
+      expect(router[member], member).toHaveBeenCalledExactlyOnceWith('/h/host-b', options)
+      router[member].mockClear()
+      handoff[member]('/h/host-a/session/wt-1')
+      expect(navigations(posted), member).toEqual([
+        {
+          v: BRIDGE_PROTOCOL_VERSION,
+          type: 'notify',
+          name: 'navigate',
+          href: '/h/host-a/session/wt-1'
+        }
+      ])
+      handoff[member]('/h/host-a/tasks#top')
+      expect(navigations(posted), member).toHaveLength(1)
+      expect(router[member], member).not.toHaveBeenCalled()
     }
   })
 

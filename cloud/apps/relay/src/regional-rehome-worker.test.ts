@@ -60,7 +60,7 @@ describe('regional rehome worker', () => {
     )
   })
 
-  it('starts inert on directors so durable control can enable without a restart', async () => {
+  it('starts on directors with no candidates and stays disabled on cells', async () => {
     let now = 0
     const selectIdleRegionalRehomeCandidates = vi.fn().mockResolvedValue([])
     const assignments = {

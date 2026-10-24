@@ -74,9 +74,7 @@ export function useStructuredAgentSession(args: {
 }) {
   const {
     agent,
-    composerScopeKey,
     hostStopping = false,
-    isVisible,
     launch,
     providerStarting = false,
     queueFollowUps = true,
@@ -93,17 +91,20 @@ export function useStructuredAgentSession(args: {
     loadOlder,
     mutate,
     write,
+    admit,
+    capturePresentation,
     providerVisible
   } = useStructuredAgentSessionTransport({
     sessionId,
     target,
-    isVisible,
+    isVisible: args.isVisible,
     enabled: transportEnabled,
     agentName: structuredAgentLabel(agent)
   })
   const commandPending = useRef(false)
   const legacyLaunchStop = useStructuredLegacyLaunchStop(sessionId)
   const transportState = useStructuredAgentSessionTransportState(state, transportEnabled)
+  const journalItems = transportState.journalItems
   const {
     conversationCommands,
     optionSnapshot,
@@ -113,7 +114,7 @@ export function useStructuredAgentSession(args: {
     unavailable,
     threadGoal: threadGoalSupport,
     reportedThreadGoal,
-    contextUsage: contextUsageSupport,
+    contextUsage: usageSupport,
     rewind: rewindSupport,
     acceptsImages
   } = useStructuredAgentSessionOptions({
@@ -121,7 +122,7 @@ export function useStructuredAgentSession(args: {
     sessionId,
     target,
     transportEnabled,
-    isVisible,
+    isVisible: args.isVisible,
     providerVisible,
     providerStarting,
     ...(args.providerRunning ? { providerRunning: true } : {}),
@@ -167,13 +168,9 @@ export function useStructuredAgentSession(args: {
     sendOptions
   })
 
-  const contextUsage = useStructuredAgentSessionContextUsage(
-    transportState.journalItems,
-    contextUsageSupport,
-    state.epoch
-  )
+  const usage = useStructuredAgentSessionContextUsage(journalItems, usageSupport, state.epoch)
 
-  const contextFloor = contextUsageSupport?.contextFloor ?? threadGoalSupport?.contextFloor
+  const contextFloor = usageSupport?.contextFloor ?? threadGoalSupport?.contextFloor
   const railOutline = useStructuredAgentSessionRailOutline({
     sessionId,
     target,
@@ -191,25 +188,26 @@ export function useStructuredAgentSession(args: {
   const rewind = useStructuredAgentSessionRewind({
     sessionId,
     target,
-    composerScopeKey,
+    composerScopeKey: args.composerScopeKey,
     ...args.rewind,
     state,
     support: transportEnabled ? rewindSupport : undefined,
     contextFloor,
     // The host also refuses a rewind behind its queued cards, paused ones included.
     blocked: conversationBusy || commandPending.current || queuedMessageIds.length > 0,
-    write
+    write,
+    capturePresentation
   })
   // A queued send is a card, never a transcript bubble.
   const isWorking = transportState.isWorking || transportState.queueSendsNext
   // A message typed during a command queues behind it on the host.
   const send = (...input: Parameters<typeof sends.send>) =>
     // Legacy: an older host refuses sends while a command runs; removable once those hosts age out.
-    (!commandPending.current || hostStatesTurnScopes(transportState.journalItems)) &&
+    (!commandPending.current || hostStatesTurnScopes(journalItems)) &&
     rewind.admitsSend() &&
     sends.send(...input)
   const threadGoal = useStructuredAgentSessionThreadGoal({
-    journalItems: transportState.journalItems,
+    journalItems,
     journalEpoch: state.epoch,
     support: threadGoalSupport,
     reported: reportedThreadGoal,
@@ -220,7 +218,7 @@ export function useStructuredAgentSession(args: {
     () => pendingSendsOutsideQueuedCards(pending, queuedMessageIds, isWorking),
     [isWorking, pending, queuedMessageIds]
   )
-  const contextClear = useNativeChatContextClearFloor(state.epoch, transportState.journalItems)
+  const contextClear = useNativeChatContextClearFloor(state.epoch, journalItems)
   // What the transcript reads: the journal since the latest /clear, plus the one notice a cut turn
   // with no row gets.
   const transcriptItems = useMemo(
@@ -246,9 +244,11 @@ export function useStructuredAgentSession(args: {
     isWorking,
     // Hidden from the transcript, a queue send on its way reads as sending among the cards.
     sending: pending,
-    composerScopeKey,
+    composerScopeKey: args.composerScopeKey,
     mutate,
-    editTransport
+    editTransport,
+    admit,
+    capturePresentation
   })
   return {
     epoch: state.epoch,
@@ -312,10 +312,12 @@ export function useStructuredAgentSession(args: {
     }),
     stopPressed: stopControl.pressed,
     queuedMessages: queuedController,
+    capturePresentation,
     /** A send made now while the agent works is held as a queued card: the host queues, and this
      *  send asks it to (the setting is on and no pending prompt blocks the queue). */
     sendsQueue: structuredAgentSessionNewSendsQueue(queue),
-    cancel: cancelStructuredAgentSessionPrompt.bind(null, target, mutate),
+    cancel: (turnId: string | undefined, prompt?: { itemId: string; expectedRevision: number }) =>
+      cancelStructuredAgentSessionPrompt(admit(), turnId, prompt),
     stopBackgroundTask: (taskId?: string) =>
       mutate<AgentSessionCancelResult>('agentSession.cancel', 'agentSession.cancel', {
         turnId: 'background-tasks',
@@ -323,7 +325,7 @@ export function useStructuredAgentSession(args: {
         ...(taskId ? { taskId } : {})
       }),
     respond: (item: StructuredPromptItem, response: AgentSessionPromptResponse) =>
-      respondToStructuredAgentSessionPrompt({ item, response, target, mutate }),
+      respondToStructuredAgentSessionPrompt({ item, response, action: admit() }),
     optionSnapshot,
     optionSurface,
     sessionCommands: transportEnabled ? (state.commands ?? undefined) : undefined,
@@ -332,7 +334,7 @@ export function useStructuredAgentSession(args: {
     /** Why the host's catalog probe says no chat can start here; the chat shows it as a notice. */
     unavailable,
     threadGoal,
-    contextUsage,
+    contextUsage: usage,
     /** Whether this session takes images, by its options report; undefined until it answers. */
     acceptsImages
   }

@@ -8,7 +8,7 @@ const store: { current: ReturnType<typeof createTestStore> | null } = vi.hoisted
 }))
 
 vi.mock('../store', () => ({
-  useAppStore: { getState: () => store.current!.getState() }
+  useAppStore: { getState: () => store.current!.getState(), subscribe: () => () => {} }
 }))
 
 import { resolveTerminalAgentTabShortcut } from './terminal-agent-tab-shortcut'
@@ -38,7 +38,11 @@ describe('resolveTerminalAgentTabShortcut', () => {
   // Why (#29599): before the tab bar's probe lands, the shortcut must ask the paired server.
   it("waits for a paired server's agent list instead of reporting no agent", async () => {
     store.current = createTestStore()
-    const ensureRuntimeDetectedAgents = vi.fn(async () => ['claude' as const])
+    const ensureRuntimeDetectedAgents = vi.fn(async () => {
+      const key = getRuntimeAgentInventoryKey('env-1', 'wt-1')
+      store.current!.setState({ runtimeDetectedAgentIds: { [key]: ['claude'] } })
+      return ['claude' as const]
+    })
     const ensureDetectedAgents = vi.fn(async () => [])
     store.current.setState({
       repos: [{ ...TEST_REPO, executionHostId: 'runtime:env-1' }],

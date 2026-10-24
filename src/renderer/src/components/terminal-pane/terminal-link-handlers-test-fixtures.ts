@@ -1,12 +1,18 @@
 import { vi, type Mock } from 'vitest'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
-import type { BrowserPage } from '../../../../shared/browser-workspace-types'
 
 export type TerminalLinkStoreSettings = {
   openLinksInApp?: boolean
   openLinksInAppPreferencePrompted?: boolean
   activeRuntimeEnvironmentId?: string | null
+}
+
+export type TerminalLinkOpenFile = {
+  id?: string
+  filePath: string
+  worktreeId: string
+  readOnly?: boolean
 }
 
 export type TerminalLinkStoreState = {
@@ -18,7 +24,7 @@ export type TerminalLinkStoreState = {
   setPendingEditorReveal: Mock
   setMarkdownViewMode: Mock
   activeFileIdByWorktree: Record<string, string | null>
-  openFiles: { filePath: string; worktreeId: string }[]
+  openFiles: TerminalLinkOpenFile[]
   groupsByWorktree: Record<string, TabGroup[]>
   unifiedTabsByWorktree: Record<
     string,
@@ -36,17 +42,7 @@ export type TerminalLinkStoreState = {
     }[]
   >
   folderWorkspaces: []
-  repos: {
-    id: string
-    displayName: string
-    connectionId?: string | null
-    executionHostId?: ExecutionHostId
-  }[]
-  browserTabsByWorktree: Record<string, { id: string }[]>
-  browserPagesByWorkspace: Record<string, BrowserPage[]>
-  getKnownWorktreeById: (
-    id: string
-  ) => TerminalLinkStoreState['worktreesByRepo'][string][number] | undefined
+  repos?: { id: string; displayName: string }[]
 }
 
 export type TerminalLinkTestDoubles = {
@@ -117,18 +113,11 @@ export function createTerminalLinkTestDoubles(): TerminalLinkTestDoubles {
     setPendingEditorReveal: setPendingEditorRevealMock,
     setMarkdownViewMode: setMarkdownViewModeMock,
     activeFileIdByWorktree: {} as Record<string, string | null>,
-    openFiles: [] as { filePath: string; worktreeId: string }[],
+    openFiles: [],
     unifiedTabsByWorktree: {},
     groupsByWorktree: {},
     worktreesByRepo: {},
-    folderWorkspaces: [],
-    repos: [],
-    browserTabsByWorktree: {},
-    browserPagesByWorkspace: {},
-    getKnownWorktreeById: (id) =>
-      Object.values(storeState.worktreesByRepo)
-        .flat()
-        .find((worktree) => worktree.id === id)
+    folderWorkspaces: []
   }
 
   return {

@@ -17,7 +17,7 @@ import type {
 import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
-import type { TaskPageGitHubWorkItemMutationRunner } from './task-page-linear-jira-list-model'
+import type { TaskPageGitHubWorkItemMutationRunner } from './task-page/linear/task-page-linear-jira-list-model'
 import { buildRequestedReviewUsers } from './task-page-github-review-model'
 
 type ReviewerActionsInput = {

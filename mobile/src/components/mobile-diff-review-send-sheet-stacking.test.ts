@@ -103,6 +103,7 @@ const SAVE_REPLY = { id: 'save', ok: true, result: {}, _meta: { runtimeId: 'runt
 let renderer: ReactTestRenderer | null = null
 let controller: Controller
 let replies: Map<string, Deferred>
+let requests: { method: string; params: unknown }[]
 
 function Screen({ client }: { client: RpcClient }) {
   controller = useMobileDiffReviewController({
@@ -123,14 +124,16 @@ function Screen({ client }: { client: RpcClient }) {
 }
 
 /** Every RPC waits until the test answers it, so each case controls when a load or save lands. */
-async function mountScreen(): Promise<void> {
+async function mountScreen(snapshot: ReviewScreenState = SNAPSHOT): Promise<void> {
   replies = new Map()
-  const sendRequest = vi.fn((method: string) => {
+  requests = []
+  const sendRequest = vi.fn((method: string, params: unknown) => {
+    requests.push({ method, params })
     const reply = deferred()
     replies.set(method, reply)
     return reply.promise
   })
-  loadSnapshot.mockResolvedValue(SNAPSHOT)
+  loadSnapshot.mockResolvedValue(snapshot)
   await act(async () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the operations under test only call `sendRequest`.
     renderer = create(createElement(Screen, { client: { sendRequest } as unknown as RpcClient }))
@@ -300,12 +303,25 @@ describe('review screen sheets never stack', () => {
   })
 
   it('Discard keeps its file through the close and discards the file it showed', async () => {
-    await mountScreen()
+    await mountScreen({
+      ...SNAPSHOT,
+      status: {
+        ...SNAPSHOT.status,
+        entries: [
+          ...SNAPSHOT.status.entries,
+          { path: 'src/b.ts', status: 'modified', area: 'unstaged' }
+        ]
+      }
+    })
     const target = controller.currentItem!
     act(() => controller.openSheet({ kind: 'discard', target }))
+    act(() => controller.moveFile('next'))
+    expect(controller.currentItem?.filePath).toBe('src/b.ts')
     press(drawer('Discard File'), 'Discard')
     expect(shownSheets()).toEqual([])
     expect(textOf(drawer('Discard File')).join(' ')).toContain(target.filePath)
-    expect(replies.has('git.discard')).toBe(true)
+    expect(requests.filter((request) => request.method === 'git.discard')).toEqual([
+      { method: 'git.discard', params: { worktree: 'id:wt-1', filePath: 'src/a.ts' } }
+    ])
   })
 })

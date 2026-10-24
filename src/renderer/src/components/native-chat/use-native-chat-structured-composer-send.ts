@@ -24,6 +24,10 @@ import {
   updateNativeChatComposerDraft
 } from './native-chat-composer-draft-store'
 import { nativeChatComposerDraftLeftAfterSend } from './native-chat-composer-draft-comparison'
+import {
+  admitNativeChatPastedText,
+  resolveNativeChatPastedText
+} from './native-chat-composer-pasted-text-references'
 
 export type UseNativeChatStructuredComposerSendArgs = {
   agent: AgentType
@@ -71,6 +75,10 @@ export function useNativeChatStructuredComposerSend({
       if (!structuredTransport || attachments.some((attachment) => attachment.pending)) {
         return
       }
+      if (!admitNativeChatPastedText(draftScopeKey, text, structuredTransport.onError)) {
+        return
+      }
+      text = resolveNativeChatPastedText(draftScopeKey, text)
       const hostCommand = isNativeChatStructuredHostCommand(text, agent, structuredTransport)
       // A held host takes no turn, and its notice says why; an option command only changes what
       // the next turn runs with.
@@ -99,6 +107,7 @@ export function useNativeChatStructuredComposerSend({
       if (hostCommand && structuredAgentSessionCommandChangesConversation(text)) {
         structuredTransport.onSubmitted?.()
       }
+      const isCurrent = structuredTransport.capturePresentation()
       const submitted = readNativeChatComposerDraft(draftScopeKey)
       await dispatchNativeChatStructuredComposerText(
         structuredTransport,
@@ -107,11 +116,17 @@ export function useNativeChatStructuredComposerSend({
         promptSkillRefs(submitted.document)
       )
         .then(({ accepted, error, refusedWhile, revealsTranscript }) => {
-          structuredTransport.onError(error, refusedWhile ? { refusedWhile } : undefined)
+          if (!hostCommand || isCurrent()) {
+            structuredTransport.onError(error, refusedWhile ? { refusedWhile } : undefined)
+          }
           if (!accepted) {
             return
           }
-          completeNativeChatStructuredUserAction(agent, structuredTransport, revealsTranscript)
+          completeNativeChatStructuredUserAction(
+            agent,
+            structuredTransport,
+            revealsTranscript && (!hostCommand || isCurrent())
+          )
           // Why: the send settles after a round trip, while this or another composer of the same
           // conversation may have changed the draft; only what was sent leaves it.
           const left = nativeChatComposerDraftLeftAfterSend(
@@ -119,6 +134,14 @@ export function useNativeChatStructuredComposerSend({
             submitted
           )
           if (!left) {
+            return
+          }
+          if (hostCommand && !isCurrent()) {
+            updateNativeChatComposerDraft(
+              draftScopeKey,
+              { text: left.text, document: undefined, images: left.images },
+              'immediate'
+            )
             return
           }
           updateNativeChatComposerDraft(draftScopeKey, { images: left.images }, 'immediate')
@@ -129,6 +152,9 @@ export function useNativeChatStructuredComposerSend({
           clearSkillOrigin()
         })
         .catch((error) => {
+          if (hostCommand && !isCurrent()) {
+            return
+          }
           const notice = nativeChatNoticeFromError(
             error,
             error instanceof SkillRefLimitError

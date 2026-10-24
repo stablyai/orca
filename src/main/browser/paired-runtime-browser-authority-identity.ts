@@ -3,7 +3,6 @@ import type { PairedRuntimeConnection } from '../../shared/paired-runtime-connec
 import type { KnownRuntimeEnvironment } from '../../shared/runtime-environments'
 import type { BrowserClientPageAuthorityIdentity } from './browser-client-page-command-executor-dependencies'
 
-/** Authority identities a paired server's client-hosted pages derive their partitions from. */
 export function derivePairedRuntimeBrowserAuthorityIdentity(input: {
   orcaProfileId: string
   environment: Pick<KnownRuntimeEnvironment, 'id' | 'orcadDeployment'>
@@ -19,8 +18,7 @@ export function derivePairedRuntimeBrowserAuthorityIdentity(input: {
     connection
   )
   return {
-    // Why: Orca re-pairs its own deployments (managed SSH, WSL) in place on updates and
-    // refusals, so their jar must outlive the pairing; it still ends with the server's key.
+    // Managed SSH/WSL deployments re-pair in place, so cookie storage must outlive pairing revisions.
     authorityConnectionIdentity: environment.orcadDeployment
       ? deployedAuthorityConnectionIdentity(orcaProfileId, environment.id, connection)
       : pairingIdentity,
@@ -35,14 +33,7 @@ export function derivePairedRuntimeBrowserAuthorityIdentity(input: {
   }
 }
 
-/**
- * Storage identity of the connection to a paired server.
- *
- * Every component is a durable client-side record: the environment, its pairing
- * revision, and the server's public key. The server's `authorityRuntimeId` is
- * deliberately absent -- it is a per-process UUID, and hashing it here minted a
- * fresh partition on every remote restart, dropping the user's cookies.
- */
+// Exclude the per-process authorityRuntimeId so remote restarts preserve cookies.
 function pairingAuthorityConnectionIdentity(
   orcaProfileId: string,
   environmentId: string,
@@ -59,12 +50,7 @@ function pairingAuthorityConnectionIdentity(
   ])
 }
 
-/**
- * Storage identity of a server Orca deployed and re-pairs in place.
- *
- * Pairing revision and device id rotate on every re-pair, so only the environment and the
- * server's public key remain: a server with a different key never reaches this jar.
- */
+// Re-pairing rotates device ids and revisions; the server key still isolates cookie storage.
 function deployedAuthorityConnectionIdentity(
   orcaProfileId: string,
   environmentId: string,

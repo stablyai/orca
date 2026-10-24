@@ -11,7 +11,7 @@ import {
   clearAttachmentImagesForSite,
   _resetAttachmentImageCache
 } from '../../../jira/attachments/image-cache'
-import { decodeJiraImageFrame } from '../../../../shared/jira-image-stream-frame'
+import { decodeJiraImageFrame } from '../../../../shared/jira/jira-image-stream-frame'
 
 const { read } = vi.hoisted(() => ({ read: vi.fn() }))
 vi.mock('../../../jira/attachments/image-read', () => ({ readGrantedAttachmentImage: read }))

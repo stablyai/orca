@@ -1,7 +1,6 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { AgentModelCatalogStore } from './agent-model-catalog-store'
 
-// The settings whose change swaps the account an agent's chats sign in with.
 const ACCOUNT_SETTINGS = {
   claudeManagedAccounts: 'claude',
   activeClaudeManagedAccountId: 'claude',
@@ -11,8 +10,7 @@ const ACCOUNT_SETTINGS = {
   activeCodexManagedAccountIdsByRuntime: 'codex'
 } satisfies Partial<Record<keyof GlobalSettings, string>>
 
-/** A chosen, re-signed or removed account changes what the probe found, so the next catalog
- *  read re-probes instead of serving the old account's answer. */
+/** Account changes invalidate probe answers even when the account path stays the same. */
 export function expireAgentModelCatalogFailuresForSettings(
   store: Pick<AgentModelCatalogStore, 'expireFailures'>,
   updates: Partial<GlobalSettings>
@@ -27,7 +25,6 @@ export function expireAgentModelCatalogFailuresForSettings(
   }
 }
 
-// The settings that pick the binary and environment an agent's probe and chats launch with.
 type AgentLaunchSettings = Partial<Pick<GlobalSettings, 'agentCmdOverrides' | 'agentDefaultEnv'>>
 
 function launchKeys(settings: AgentLaunchSettings): Map<string, string> {
@@ -45,7 +42,6 @@ function launchKeys(settings: AgentLaunchSettings): Map<string, string> {
   return keys
 }
 
-/** Agents whose command or launch env differs between the two settings. */
 export function agentsWithChangedLaunchSettings(
   previous: AgentLaunchSettings,
   next: AgentLaunchSettings
@@ -57,8 +53,7 @@ export function agentsWithChangedLaunchSettings(
   )
 }
 
-/** A settings listener that expires the catalogs a change made stale: an account change expires
- *  the agent's held reasons; a command or env change also marks its catalogs due for a listing. */
+/** Account changes expire failures; command/environment changes also expire saved listings. */
 export function createAgentModelCatalogSettingsExpiry(
   store: Pick<AgentModelCatalogStore, 'expireFailures' | 'expireAgent'>,
   initial: AgentLaunchSettings

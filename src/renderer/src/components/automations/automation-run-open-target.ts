@@ -105,6 +105,7 @@ export function resolveAutomationRunTerminalTarget(
   const mirroredTabId = toWebTerminalSurfaceTabId(tabId)
   const layout = terminals.terminalLayoutsByTabId[mirroredTabId]
   const mirroredPtyId = layout?.ptyIdsByLeafId?.[parsed.leafId]
+  // Why a live PTY only: a slept run's pane is asked of the server, which knows if it still exists.
   if (
     !run.terminalPtyId ||
     !terminals.hasTerminalTab(mirroredTabId) ||

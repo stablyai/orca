@@ -211,8 +211,7 @@ function registeredStackNumber(
   const parentPosition = parentStack.pull_requests.findIndex(
     (pullRequest) => pullRequest.number === parentReview.number
   )
-  // Why: a miss is -1, and -1 + 1 reads the first entry — which reports "already
-  // registered" whenever the current PR heads a stack the parent has left.
+  // A missing parent gives -1; its successor index 0 must not look like an existing pair.
   if (parentPosition === -1) {
     return null
   }

@@ -29,7 +29,7 @@ vi.mock('electron', () => ({
   shell: { showItemInFolder: vi.fn() }
 }))
 
-// Why: only the packaged-marker resolver is faked so the real artifact tracking runs.
+// Use real artifact tracking; fake only package-type detection.
 vi.mock('./linux-update-package-type', () => ({
   getLinuxPackageType: getLinuxPackageTypeMock,
   getLinuxRootPackageType: getLinuxRootPackageTypeMock,
@@ -43,7 +43,7 @@ vi.mock('./updater-changelog', () => ({ fetchChangelog: vi.fn().mockResolvedValu
 vi.mock('./updater-lifecycle-diagnostics', () => ({ recordUpdaterLifecycle: vi.fn() }))
 
 const DEB_PATH = '/home/tester/.cache/orca-updater/pending/orca-ide_1.0.61_amd64.deb'
-// A real 64-byte SHA-512; capture rejects a digest that cannot decode to one.
+// Capture requires a digest that decodes to exactly 64 bytes.
 const DEB_SHA512 =
   'LHlL7dKoqg98gS2nfQv878dK+UoktbAkm4M20/hoJ2Qr0Kqsa3MSL4VmWy/Lll/MYjQFkpvOxduQ/vswentozA=='
 
@@ -171,7 +171,6 @@ describe('registerAutoUpdaterHandlers linux package artifact tracking', () => {
 
     emit('update-downloaded', downloadedEvent())
 
-    // Why: path and digest exist only in the event's own fields, so a trimmed event fails here.
     expect(getArtifact()).toEqual({
       packageType: 'deb',
       version: '1.0.61',
@@ -277,7 +276,6 @@ describe('registerAutoUpdaterHandlers linux package artifact tracking', () => {
 
     expect(handleQuitAndInstallFailure).toHaveBeenCalledTimes(1)
     expect(handleQuitAndInstallFailure.mock.calls[0]?.[0]).toBe(failure)
-    // Recovery owns the event; no generic check/download error follows it.
     expect(context.sendErrorStatus).not.toHaveBeenCalled()
   })
 
@@ -285,8 +283,7 @@ describe('registerAutoUpdaterHandlers linux package artifact tracking', () => {
     const { emit, context, getArtifact } = await register()
     emit('update-downloaded', downloadedEvent())
 
-    // Why: the download already produced this exact status, so the assertion below could pass
-    // on that call alone. Clear it so only the second emit can satisfy it.
+    // Clear the initial download status so only the recheck can satisfy the assertion.
     vi.mocked(context.sendStatus).mockClear()
 
     emit('update-not-available')
@@ -308,8 +305,7 @@ describe('registerAutoUpdaterHandlers linux package artifact tracking', () => {
     const { emit, context, getArtifact } = await register()
     emit('update-downloaded', downloadedEvent())
 
-    // Why: the download already produced this exact status, so the assertion below could pass
-    // on that call alone. Clear it so only the second emit can satisfy it.
+    // Clear the initial download status so only the recheck can satisfy the assertion.
     vi.mocked(context.sendStatus).mockClear()
 
     emit('update-available', { version: '1.0.51' })
@@ -429,9 +425,7 @@ describe('registerAutoUpdaterHandlers linux package artifact tracking', () => {
     expect(getArtifact()).toBeNull()
   })
 
-  // #17702: the externallyManaged flag is spread onto the fallback object only, so a retained
-  // manual-install status must still win. Cross-version case: the host could self-update when it
-  // downloaded, and cannot now.
+  // Management can change after download; retained manual-install recovery must survive the recheck.
   it.each([false, true])(
     'keeps manual-install recovery through a same-version recheck (externallyManaged=%s)',
     async (externallyManaged) => {
@@ -442,8 +436,7 @@ describe('registerAutoUpdaterHandlers linux package artifact tracking', () => {
       })
       emit('update-downloaded', downloadedEvent())
 
-      // Why: the download already emitted the manual-install status, so waitFor would pass on that
-      // call alone. Clear it so the assertion can only be satisfied by the recheck.
+      // Clear the download status so waitFor must observe a new recheck result.
       vi.mocked(context.sendStatus).mockClear()
       status = { state: 'checking' }
       emit('update-available', { version: '1.0.61' })

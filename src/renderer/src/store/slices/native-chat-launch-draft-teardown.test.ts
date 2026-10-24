@@ -39,7 +39,6 @@ vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
 
 const mockApi = {
   worktrees: {
-    list: vi.fn().mockResolvedValue([]),
     remove: vi.fn().mockResolvedValue(undefined),
     forceDeletePreservedBranch: vi.fn().mockResolvedValue({ deleted: true }),
     updateMeta: vi.fn().mockResolvedValue({})

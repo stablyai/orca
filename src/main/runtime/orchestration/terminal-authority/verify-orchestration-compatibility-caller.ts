@@ -190,7 +190,7 @@ export abstract class OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller exte
     terminalHandle: string,
     incarnationId: string
   ): void {
-    const paneKey = pty.paneKey
+    const { paneKey } = this.paneOfPty(pty)
     const hostScope = this.getOrchestrationCompatibilityHostScope(pty)
     if (!paneKey || !parsePaneKey(paneKey) || !hostScope) {
       this.restoredOrchestrationAuthorityByPtyId.delete(pty.ptyId)

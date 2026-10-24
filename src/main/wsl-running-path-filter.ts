@@ -12,7 +12,6 @@ export function filterPathsToWslDistros(
   })
 }
 
-/** Keep host paths and WSL paths whose distro is running now. */
 export async function filterPathsToRunningWslDistrosAsync(
   paths: readonly string[],
   options?: { requireConfirmed?: boolean }

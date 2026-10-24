@@ -5,6 +5,7 @@ import { WebLinksAddon } from '@xterm/addon-web-links'
 import { Terminal } from '@xterm/xterm'
 import type { ILink, ITerminalOptions } from '@xterm/xterm'
 import { createWrappedTerminalHttpLinkProvider } from '../../components/terminal-pane/wrapped-terminal-http-link-provider'
+import { TERMINAL_HTTP_URL_REGEX } from '../../components/terminal-pane/terminal-http-url-extraction'
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 import type { DragReorderCallbacks, DragReorderState } from './pane-drag-reorder'
 import { attachPaneDrag } from './pane-drag-pointer'
@@ -105,10 +106,10 @@ export function createPaneDOM(
   if (options.onLinkClick) {
     terminal.registerLinkProvider(createWrappedTerminalHttpLinkProvider(terminal, linkHandlers))
   }
-  const webLinksAddon = new WebLinksAddon(
-    options.onLinkClick ? linkHandlers.activate : undefined,
-    linkHandlers
-  )
+  const webLinksAddon = new WebLinksAddon(options.onLinkClick ? linkHandlers.activate : undefined, {
+    ...linkHandlers,
+    urlRegex: TERMINAL_HTTP_URL_REGEX
+  })
 
   const panePointerDownHandler = (event: PointerEvent): void => {
     onPointerDown(id, {

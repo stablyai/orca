@@ -132,9 +132,54 @@ describe('workspace package test typecheck', () => {
   })
 })
 
-describe('CI compiler selection', () => {
-  it('checks with Bun by default', () => {
-    expect(parseTypecheckOptions([]).compiler).toBe('bun')
+describe('local and CI compiler selection', () => {
+  it('selects the supported local compiler by default while CI explicitly selects Bun', () => {
+    expect(parseTypecheckOptions([]).compiler).toBe('auto')
+    const manifest = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8'))
+    expect(manifest.scripts['typecheck:ci']).toContain('--compiler=bun')
+  })
+
+  it.each([
+    ['darwin', 'arm64', 'tsrs'],
+    ['linux', 'x64', 'tsrs'],
+    ['linux', 'arm64', 'tsrs'],
+    ['darwin', 'x64', 'bun'],
+    ['win32', 'x64', 'bun'],
+    ['win32', 'arm64', 'bun']
+  ])('selects %s/%s without probing an unsupported binary', (platform, arch, compiler) => {
+    const selection = selectTypecheckCompiler('auto', {
+      root: repoRoot,
+      platform,
+      arch,
+      resolveBunExecutable: () => {
+        if (compiler !== 'bun') {
+          throw new Error('unexpected Bun probe')
+        }
+        return 'pinned-bun'
+      }
+    })
+    expect(selection.compiler).toBe(compiler)
+  })
+
+  it('rejects explicitly requested tsrs on an unsupported platform', () => {
+    expect(() => selectTypecheckCompiler('tsrs', { platform: 'win32', arch: 'x64' })).toThrow(
+      'use --compiler=bun'
+    )
+    expect(parseTypecheckOptions(['--compiler=tsrs']).compiler).toBe('tsrs')
+  })
+
+  it('bounds local tsrs concurrency and respects memory admission', () => {
+    for (const memoryBytes of [4, 16, 128].map((gib) => gib * 1024 ** 3)) {
+      const batches = typecheckBatches(TYPECHECK_PROJECTS, {
+        compiler: 'tsrs',
+        memoryBytes,
+        parallelism: 16
+      })
+      expect(Math.max(...batches.map((batch) => batch.length))).toBeLessThanOrEqual(2)
+      if (memoryBytes === 4 * 1024 ** 3) {
+        expect(batches.every((batch) => batch.length === 1)).toBe(true)
+      }
+    }
   })
 
   it('pins the Bun devDependency to config/.bun-version', () => {

@@ -86,6 +86,21 @@ describe('createBrowserSlice runtime guard', () => {
     ])
   })
 
+  it('keeps the default profile pick when a server profile fetch fails', async () => {
+    const store = createTestStore()
+    runtimeEnvironmentCall.mockRejectedValueOnce(new Error('timed out'))
+    store.setState({
+      settings: settingsWithRuntime('env-1'),
+      defaultBrowserSessionProfileId: 'work',
+      defaultBrowserSessionProfileIdByHostId: { 'runtime:env-1': 'work' }
+    })
+
+    await store.getState().fetchBrowserSessionProfiles()
+
+    expect(store.getState().defaultBrowserSessionProfileId).toBe('work')
+    expect(store.getState().defaultBrowserSessionProfileIdByHostId['runtime:env-1']).toBe('work')
+  })
+
   it('creates a profile in the active runtime environment', async () => {
     const store = createTestStore()
     const profile = {
@@ -347,6 +362,53 @@ describe('createBrowserSlice runtime guard', () => {
         source: null
       }
     ])
+  })
+
+  it('drops the default profile pick once a refreshed list no longer has it', async () => {
+    const store = createTestStore()
+    const listed = (id: string) => ({
+      id,
+      scope: id === 'default' ? ('default' as const) : ('isolated' as const),
+      partition: `persist:${id}`,
+      label: id,
+      source: null
+    })
+    store.setState({
+      defaultBrowserSessionProfileId: 'work',
+      defaultBrowserSessionProfileIdByHostId: { local: 'work' }
+    })
+    mockApi.browser.sessionListProfiles
+      .mockResolvedValueOnce([listed('default'), listed('work')])
+      .mockResolvedValueOnce([listed('default')])
+
+    await store.getState().fetchBrowserSessionProfiles('local')
+    expect(store.getState().defaultBrowserSessionProfileIdByHostId.local).toBe('work')
+
+    await store.getState().fetchBrowserSessionProfiles('local')
+    expect(store.getState().defaultBrowserSessionProfileId).toBeNull()
+    expect(store.getState().defaultBrowserSessionProfileIdByHostId.local).toBeNull()
+  })
+
+  it('keeps the newest listing when an older one answers last', async () => {
+    const store = createTestStore()
+    const listed = (id: string) => ({
+      id,
+      scope: id === 'default' ? ('default' as const) : ('isolated' as const),
+      partition: `persist:${id}`,
+      label: id,
+      source: null
+    })
+    const older = Promise.withResolvers<ReturnType<typeof listed>[]>()
+    mockApi.browser.sessionListProfiles
+      .mockReturnValueOnce(older.promise)
+      .mockResolvedValueOnce([listed('default')])
+
+    const olderFetch = store.getState().fetchBrowserSessionProfiles('local')
+    await store.getState().fetchBrowserSessionProfiles('local')
+    older.resolve([listed('default'), listed('deleted')])
+    await olderFetch
+
+    expect(store.getState().browserSessionProfilesByHostId.local).toEqual([listed('default')])
   })
 
   it('creates a profile through local browser IPC', async () => {

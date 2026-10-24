@@ -214,7 +214,6 @@ describe('CodexAccountService config sync', () => {
       codex: { activeAccountId: account.id }
     })
     expect(consume).toHaveBeenCalledOnce()
-    // A same-offer retry under a key whose reply was lost: the recorded outcome, no second spend.
     await expect(
       service.consumeRateLimitResetCredit('77777777-7777-4777-8777-777777777777', expectedScope)
     ).resolves.toMatchObject({ outcome: 'reset', scope: expectedScope })
@@ -270,7 +269,6 @@ describe('CodexAccountService config sync', () => {
     await expect(service.consumeRateLimitResetCredit(firstKey, expectedScope)).rejects.toThrow(
       'provider response lost'
     )
-    // While the outcome is unknown, a new key resumes the pending attempt under its own key.
     await expect(
       service.consumeRateLimitResetCredit('44444444-4444-4444-8444-444444444444', expectedScope)
     ).resolves.toMatchObject({ outcome: 'alreadyRedeemed', scope: expectedScope })
@@ -407,8 +405,6 @@ describe('CodexAccountService config sync', () => {
       createRuntimeHome() as never
     )
 
-    // The refresh after the unknown outcome moved the offer, so the retry names a newer one; it
-    // resumes the account's unresolved attempt under that attempt's own key and scope.
     await expect(
       restarted.consumeRateLimitResetCredit('99999999-9999-4999-8999-999999999999', {
         ...expectedScope,

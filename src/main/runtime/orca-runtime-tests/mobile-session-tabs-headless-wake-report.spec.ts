@@ -76,19 +76,19 @@ describe('OrcaRuntimeService headless wake report', () => {
     }
   )
 
-  it.each(['worktree-sleep', undefined] as const)(
-    'reports headless wake degradation for a real sleep record (origin %s)',
-    async (origin) => {
-      const { wake } = await activateOnHeadlessServe(makeRecord(origin))
-      expect(wake).toBe('unsupported-headless')
-    }
-  )
+  it('reports headless wake degradation for a legacy sleep record only a window wakes', async () => {
+    const { wake } = await activateOnHeadlessServe(makeRecord(undefined))
+    expect(wake).toBe('unsupported-headless')
+  })
+
+  // Main resumes a workspace sleep's running agent itself, so a headless host wakes it too.
+  it('reports a requested wake for a workspace sleep record, which main resumes', async () => {
+    const { wake } = await activateOnHeadlessServe(makeRecord('worktree-sleep'))
+    expect(wake).toBe('requested')
+  })
 
   it('reads the sleep record from an SSH-host worktree partition', async () => {
-    const { wake, readHostIds } = await activateOnHeadlessServe(
-      makeRecord('worktree-sleep'),
-      'ssh:ssh-1'
-    )
+    const { wake, readHostIds } = await activateOnHeadlessServe(makeRecord(undefined), 'ssh:ssh-1')
     expect(readHostIds).toContain('ssh:ssh-1')
     expect(wake).toBe('unsupported-headless')
   })

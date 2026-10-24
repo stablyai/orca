@@ -1,5 +1,3 @@
-// The graph's own contract, independent of which bytes a reader fed it.
-
 import { describe, expect, it } from 'vitest'
 import {
   ClaudeTranscriptMarkerMissingError,
@@ -60,9 +58,6 @@ describe('createBranchProof ancestry chain', () => {
   })
 
   it('throws rather than reporting empty when the walk never reaches the anchor', () => {
-    // Empty is the window's "nothing followed the anchor". Answering that for a
-    // walk that fell off the graph would report non-delivery for records that
-    // were never looked at, which is the one verdict reconciliation acts on.
     const builder = build(
       [row('anchor', null), row('mid', 'anchor'), row('leaf', 'mid'), MARKER],
       'anchor'

@@ -8,10 +8,9 @@ import {
   readLocalFilePrefix
 } from './local-regular-file-read'
 
-// Why: Monaco degrades features on large files like VS Code, so a 5MB block would needlessly lock out ordinary JSON/log files.
-export const MAX_TEXT_FILE_SIZE = 50 * 1024 * 1024 // 50MB
-// Why: previewable binaries are base64 blobs (not parsed as text), and local IPC has no frame limit (unlike the relay's 10MB), so 50MB is safe.
-export const MAX_PREVIEWABLE_BINARY_SIZE = 50 * 1024 * 1024 // 50MB
+// Monaco degrades features on large files; a 5MB cap would reject ordinary logs and JSON.
+export const MAX_TEXT_FILE_SIZE = 50 * 1024 * 1024
+export const MAX_PREVIEWABLE_BINARY_SIZE = 50 * 1024 * 1024
 export const PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
   '.png': 'image/png',
   '.avif': 'image/avif',
@@ -48,12 +47,12 @@ export async function readLocalFileContent(filePath: string): Promise<LocalFileC
       return {
         content: buffer.toString('base64'),
         isBinary: true,
-        // Why: the renderer keys previewable-binary rendering off `isImage`, so set it for PDFs too to stay compatible.
+        // Existing renderer preview selection uses isImage for PDFs as well.
         isImage: true,
         mimeType
       }
     }
-    // Why: probe large unknown files first so archives aren't fully buffered only to discover they aren't editable text.
+    // Probe large unknown binaries before allocating their whole body.
     if (
       stats.size > BINARY_PROBE_BYTES &&
       isBinaryBuffer(await readLocalFilePrefix(handle, BINARY_PROBE_BYTES))

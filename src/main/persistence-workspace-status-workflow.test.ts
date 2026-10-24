@@ -18,7 +18,6 @@ import {
   WORKFLOW_DEFAULT_WORKSPACE_STATUSES
 } from './persistence-workspace-status-fixtures'
 
-// Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),
   sshConfigHostsToTargetsMock: vi.fn()
@@ -117,7 +116,7 @@ describe('Store', () => {
   })
 
   it('uses recent as the default sort for a fresh install (no persisted sortBy)', async () => {
-    // Why: the legacy-recent→smart migration must gate on the raw persisted value, not the normalized default, or fresh installs get mis-migrated to 'smart'.
+    // Gate migration on the raw stored sort, or normalization would misclassify fresh profiles.
     writeDataFile({
       schemaVersion: 1,
       repos: [],

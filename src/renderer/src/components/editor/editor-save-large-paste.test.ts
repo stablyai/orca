@@ -145,7 +145,11 @@ it('refuses a save after a 70 KiB paste when an agent wrote the file meanwhile',
   expect(writeFile).toHaveBeenCalledWith(
     expect.objectContaining({
       content: `${pasted}base`,
-      diskPrecondition: { expectedSignature: getDiskBaselineSignature('base'), allowMissing: true }
+      diskPrecondition: {
+        expectedSignature: getDiskBaselineSignature('base'),
+        allowMissing: true,
+        requireLosslessUtf8: true
+      }
     })
   )
   expect(files.get(PATH)).toBe('agent rewrite')

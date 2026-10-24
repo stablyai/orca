@@ -12,7 +12,7 @@ import {
   COMPUTER_USE_SKILL_NAME,
   LINEAR_AGENT_SKILL_NAMES,
   ORCHESTRATION_SKILL_NAME
-} from '@/lib/agent-feature-install-commands'
+} from '@/lib/agent-feature-skill-names'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill,
@@ -128,8 +128,8 @@ export function useSettingsStoreModel() {
     discoveryTarget: activeSkillRuntime.discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
-  const skillFreshnessApplies = activeSkillRuntime.canUseLocalSkillFreshness
-  const { inventory: skillFreshnessInventory } = useSkillFreshness(skillFreshnessApplies)
+  const skillFreshnessApplies = activeSkillRuntime.bundledSkillTarget !== null
+  const { plan: skillPlan } = useSkillFreshness(activeSkillRuntime.bundledSkillTarget)
   const [voiceModelStatesLoading, setVoiceModelStatesLoading] = useState(showDesktopOnlySettings)
   // Why: trim platform-only Terminal entries from the shared search index so search never reveals hidden controls.
   const [scrollbackMode, setScrollbackMode] = useState<'preset' | 'custom'>('preset')
@@ -225,7 +225,7 @@ export function useSettingsStoreModel() {
     linearSkill,
     computerUseSkill,
     skillFreshnessApplies,
-    skillFreshnessInventory,
+    skillPlan,
     voiceModelStatesLoading,
     setVoiceModelStatesLoading,
     scrollbackMode,

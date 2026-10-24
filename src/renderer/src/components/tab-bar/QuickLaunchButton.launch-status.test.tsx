@@ -140,7 +140,7 @@ it('shows the existing inventory failure alongside truthful disabled chat rows',
       }}
     />
   )
-  expect(document.body.textContent).toContain('reach this workspace')
+  expect(document.body.textContent).toContain('list terminal agents for this workspace')
   expect(document.body.textContent).toContain('Couldn’t check chat availability')
   expect(document.querySelector('[title]')).toBeNull()
 })

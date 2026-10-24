@@ -51,6 +51,7 @@ import { useAppStore } from '../../store'
 import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-label'
 import { useNativeChatStructuredComposerTransport } from './use-native-chat-structured-composer-transport'
 import { NativeChatStructuredGoalStrip } from './NativeChatStructuredGoalStrip'
+import { nativeChatPaneHeader } from './NativeChatPaneHeader'
 import { structuredAgentSessionReadFailureNotice } from './structured-agent-session-read-failure-notice'
 import { useStructuredAgentSessionDeliveryNotices } from './use-structured-agent-session-delivery-notices'
 import { dispatchWasWithdrawn } from '../../../../shared/structured-agent-session-dispatch-rejection'
@@ -145,8 +146,6 @@ export function NativeChatStructuredSession(
     startFailures,
     agentName: agentLabel
   })
-  // Nothing reads an unread history, so its pane stays blank beside the Retry line.
-  const loadingPane = historyPhase === 'unread' ? null : <NativeChatLoadingCue />
   // A lost contact is the host notice's to say; the read adds only a refusal the host sent.
   const readFailure =
     controller.status === 'error' && !(hostOutage && !controller.readRefusal)
@@ -166,8 +165,10 @@ export function NativeChatStructuredSession(
     rootRef,
     { sessionId: props.sessionId, isVisible: props.isVisible }
   )
+  const fileLinkProps = { onLinkClick, allowFileUriLinks: onLinkClick !== undefined }
   const paneCommands = useStructuredNativeChatPaneCommands({
     tabId: props.tabId,
+    ownerWorktreeId,
     groupId: props.groupId,
     isVisible: props.isVisible,
     rootRef,
@@ -288,10 +289,11 @@ export function NativeChatStructuredSession(
       style={appearanceStyle}
       data-native-chat-scheme={appearanceStyle.colorScheme}
     >
+      {nativeChatPaneHeader(props, ownerWorktreeId, appearanceStyle.colorScheme)}
       <NativeChatContextClearFade clearing={controller.contextClear.clearing}>
         {find.isOpen ? <NativeChatFindBar find={find} isVisible={props.isVisible} /> : null}
         {viewState.kind === 'loading' || (viewState.kind === 'error' && !readFailure) ? (
-          loadingPane
+          historyPhase !== 'unread' && <NativeChatLoadingCue />
         ) : viewState.kind === 'error' ? (
           <NativeChatEmptyState
             kind="error"
@@ -323,8 +325,7 @@ export function NativeChatStructuredSession(
                   awaitingInput={prompt === null ? null : 'shown'}
                   turnActivity={controller.turnActivity}
                   stopping={stopControls.stopping}
-                  onLinkClick={onLinkClick}
-                  allowFileUriLinks={onLinkClick !== undefined}
+                  {...fileLinkProps}
                   runtimeContext={imageRuntimeContext}
                   deliveryNotices={deliveryNotices}
                 />
@@ -375,8 +376,7 @@ export function NativeChatStructuredSession(
               isSubmitting={promptResponse.holds(prompt)}
               onCancel={cancelPrompt}
               shouldFocus={!promptsUnanswerable && props.isVisible && props.isFocusedGroup}
-              onLinkClick={onLinkClick}
-              allowFileUriLinks={onLinkClick !== undefined}
+              {...fileLinkProps}
             />
           ) : null}
           {prompt && questionBody ? (

@@ -13,7 +13,6 @@ import type { GlobalSettings } from '../shared/global-settings-types'
 import type { ExternalWorktreeVisibility } from '../shared/repo-types'
 import { getDefaultPersistedState } from '../shared/constants'
 
-// Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),
   sshConfigHostsToTargetsMock: vi.fn()

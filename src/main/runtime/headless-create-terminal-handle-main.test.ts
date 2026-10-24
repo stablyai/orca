@@ -15,53 +15,57 @@ type Runtime = ReturnType<typeof surfaceRuntime>['runtime']
 
 it.each([
   [
-    'that never had one',
+    'with no window that never had one',
     (runtime: Runtime) => {
       runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
     }
   ],
   [
-    'after its window closed',
+    'with a window, under the same rule (L250)',
+    (runtime: Runtime) => {
+      runtime.attachWindow(1)
+      runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    }
+  ],
+  [
+    'with no window after its window closed',
     (runtime: Runtime) => {
       runtime.attachWindow(1)
       runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
       runtime.markGraphUnavailable(1)
     }
   ]
-])(
-  'creates a terminal on a host with no window, %s, and answers with its live handle',
-  async (_name, setup) => {
-    const { runtime, bindPane } = surfaceRuntime()
-    setup(runtime)
-    runtime.setPtyController({
-      // As the PTY host's spawn commit: it binds the pane before the spawn answers.
-      spawn: vi.fn(async (args: { worktreeId?: string; tabId?: string; leafId?: string }) => {
-        await bindPane({
-          worktreeId: args.worktreeId!,
-          tabId: args.tabId!,
-          leafId: args.leafId!,
-          ptyId: 'pty-new'
-        })
-        return { id: 'pty-new' }
-      }),
-      write: () => true,
-      kill: () => true,
-      stopAndWait: async () => true,
-      getForegroundProcess: async () => null,
-      listProcesses: async () =>
-        ['pty-a', 'pty-b', 'pty-new'].map((id) => ({ id, cwd: TEST_WORKTREE_PATH, title: 'sh' }))
-    })
+])('creates a terminal on a host %s, and answers with its live handle', async (_name, setup) => {
+  const { runtime, bindPane } = surfaceRuntime()
+  setup(runtime)
+  runtime.setPtyController({
+    // As the PTY host's spawn commit: it binds the pane before the spawn answers.
+    spawn: vi.fn(async (args: { worktreeId?: string; tabId?: string; leafId?: string }) => {
+      await bindPane({
+        worktreeId: args.worktreeId!,
+        tabId: args.tabId!,
+        leafId: args.leafId!,
+        ptyId: 'pty-new'
+      })
+      return { id: 'pty-new' }
+    }),
+    write: () => true,
+    kill: () => true,
+    stopAndWait: async () => true,
+    getForegroundProcess: async () => null,
+    listProcesses: async () =>
+      ['pty-a', 'pty-b', 'pty-new'].map((id) => ({ id, cwd: TEST_WORKTREE_PATH, title: 'sh' }))
+  })
 
-    // A subscribed phone: each row publication names its terminal's handle.
-    const unsubscribe = runtime.onMobileSessionTabsChanged(() => {}, 'phone')
-    const created = await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
-      activate: false,
-      select: false,
-      navigation: 'caller',
-      clientNavigationId: 'phone'
-    })
+  // A subscribed phone: each row publication names its terminal's handle.
+  const unsubscribe = runtime.onMobileSessionTabsChanged(() => {}, 'phone')
+  const created = await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+    activate: false,
+    select: false,
+    navigation: 'caller',
+    clientNavigationId: 'phone'
+  })
 
-    unsubscribe()
-    expect(created.tab).toMatchObject({ status: 'ready' })
-  }
-)
+  unsubscribe()
+  expect(created.tab).toMatchObject({ status: 'ready' })
+})

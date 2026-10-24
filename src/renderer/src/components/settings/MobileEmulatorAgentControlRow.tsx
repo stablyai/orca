@@ -1,12 +1,7 @@
 import { Import } from 'lucide-react'
-import {
-  ORCA_CLI_SKILL_INSTALL_COMMAND,
-  ORCA_CLI_SKILL_NAME
-} from '@/lib/agent-feature-install-commands'
-import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
+import { ORCA_CLI_SKILL_NAME } from '@/lib/agent-feature-skill-names'
 import { useMobileEmulatorAgentSetupState } from '../emulator-pane/use-mobile-emulator-agent-setup-state'
 import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
-import { buildSkillCommandForRuntime } from './CliSkillRuntimeSetup'
 import { MobileEmulatorExamples } from './MobileEmulatorExamples'
 import { translate } from '@/i18n/i18n'
 
@@ -19,10 +14,7 @@ const EMULATOR_CLI_COMMANDS = [
 
 export function MobileEmulatorAgentControlRow(): React.JSX.Element {
   const setup = useMobileEmulatorAgentSetupState(true)
-  const activeSkillRuntime = useActiveProjectSkillRuntime()
-  // Why: skill detection here scans the local host only, so keep building host
-  // commands; routing them to a WSL runtime would install where we never look.
-  const cliSkillInstallCommand = buildSkillCommandForRuntime(ORCA_CLI_SKILL_INSTALL_COMMAND)
+  const activeSkillRuntime = setup.skillRuntime
 
   return (
     <div className="rounded-2xl border border-border/60 bg-card/30 p-4">
@@ -55,17 +47,16 @@ export function MobileEmulatorAgentControlRow(): React.JSX.Element {
               'auto.components.settings.MobileEmulatorAgentControlRow.d94ca6a623',
               'Enables agents to use Orca CLI commands, including mobile emulator control.'
             )}
-            command={cliSkillInstallCommand}
-            terminalTitle="Orca CLI skill setup"
-            terminalAriaLabel="Orca CLI skill install terminal"
-            terminalWorktreeId="settings-mobile-emulator-orca-cli-skill-terminal"
-            terminalShellOverride={activeSkillRuntime.terminalShellOverride}
+            skillNames={[ORCA_CLI_SKILL_NAME]}
+            target={activeSkillRuntime.bundledSkillTarget}
+            terminalRuntime={activeSkillRuntime.agentRuntime}
+            installDisabled={Boolean(activeSkillRuntime.installDisabledReason)}
             installed={setup.cliSkillInstalled}
             loading={setup.cliSkillLoading}
             error={setup.cliSkillError}
             onRecheck={setup.refreshCliSkill}
             freshnessSkillName={
-              activeSkillRuntime.canUseLocalSkillFreshness ? ORCA_CLI_SKILL_NAME : undefined
+              activeSkillRuntime.canUseSkillFreshness ? ORCA_CLI_SKILL_NAME : undefined
             }
           />
         </div>

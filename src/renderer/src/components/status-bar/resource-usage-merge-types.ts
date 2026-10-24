@@ -15,6 +15,7 @@ export type DaemonSession = PtyListedSession
 
 export type UnifiedSessionRow = {
   sessionId: string
+  incarnationId?: string
   paneKey: string | null
   pid: number
   label: string

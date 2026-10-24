@@ -148,6 +148,7 @@ export function handleGlobalSessionEvent(args: GlobalSessionEventArgs): void {
               {
                 environmentId,
                 worktreeId: recovered.worktree,
+                source: recovered,
                 decision,
                 expectedEnvironmentConnectionGeneration,
                 expectedEnvironmentPairingRevision,

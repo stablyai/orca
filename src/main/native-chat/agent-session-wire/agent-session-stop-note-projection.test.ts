@@ -408,7 +408,6 @@ it('refreshes a phone within its frames, in bounded pages', async () => {
     boundedFrames: true
   })
   const batches = events.flatMap((event) => (event.type === 'batch' ? [event.batch] : []))
-  // The caught-up checkpoint, then the 205 notes in two pages.
   expect(batches.filter((batch) => batch.items.length > 0)).toHaveLength(2)
   expect(batches.flatMap((batch) => batch.items)).toHaveLength(205)
   for (const event of events) {
