@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_PROMPT_BRACKETED_PASTE_END } from '../../../../shared/agent-prompt-injection'
+import type { RuntimeTerminalSend } from '../../../../shared/runtime-types'
 import { TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { createAgentPromptSubmissionRuntime } from '../../agent-prompt-submission-runtime-test-fixture'
@@ -127,5 +128,73 @@ describe('dsh launch prompt submit readiness', () => {
     expect(paste).toHaveLength(1)
     expect(paste[0]).toContain('Step 40:')
     expect(paste[0]).not.toContain('Review the launch prompt path')
+  })
+
+  it('counts every retry Enter in the acceptance checkpoint bytes', async () => {
+    vi.useFakeTimers()
+    const checkpoints: RuntimeTerminalSend[] = []
+    const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(
+      (runtime, data) => {
+        if (data === '\r' && writes.filter((written) => written === '\r').length === 3) {
+          runtime.onPtyData('pty-prompt', DSH_WORKING_TITLE, Date.now())
+        }
+      },
+      'dsh'
+    )
+
+    const submission = runtime.sendTerminalAgentPrompt(handle, 'Review the launch prompt path', {
+      ...launchOptions,
+      onInputAccepted: (checkpoint) => checkpoints.push(checkpoint)
+    })
+    await vi.runAllTimersAsync()
+
+    await expect(submission).resolves.toMatchObject({ accepted: true })
+    expect(checkpoints).toHaveLength(1)
+    expect(checkpoints[0].bytesWritten).toBe(Buffer.byteLength(writes[0], 'utf8') + enters(writes))
+  })
+
+  it('does not send the retry Enter when the write guard cancels the request', async () => {
+    vi.useFakeTimers()
+    const controller = new AbortController()
+    let guards = 0
+    const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(() => {}, 'dsh')
+
+    const submission = runtime.sendTerminalAgentPrompt(handle, 'Review the launch prompt path', {
+      ...launchOptions,
+      signal: controller.signal,
+      beforeWrite: async () => {
+        guards += 1
+        // Third call: the guard ahead of the first retry Enter.
+        if (guards === 3) {
+          controller.abort()
+        }
+      }
+    })
+    const rejected = expect(submission).rejects.toThrow('request_aborted')
+    await vi.runAllTimersAsync()
+
+    await rejected
+    expect(enters(writes)).toBe(1)
+    expect(pastes(writes)).toHaveLength(1)
+  })
+
+  it('does not send the retry Enter when the turn starts while the guard is pending', async () => {
+    vi.useFakeTimers()
+    let guards = 0
+    const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(() => {}, 'dsh')
+
+    const submission = runtime.sendTerminalAgentPrompt(handle, 'Review the launch prompt path', {
+      ...launchOptions,
+      beforeWrite: async () => {
+        guards += 1
+        if (guards === 3) {
+          runtime.onPtyData('pty-prompt', DSH_WORKING_TITLE, Date.now())
+        }
+      }
+    })
+    await vi.runAllTimersAsync()
+
+    await expect(submission).resolves.toMatchObject({ accepted: true })
+    expect(enters(writes)).toBe(1)
   })
 })

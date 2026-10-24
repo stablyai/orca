@@ -17,8 +17,12 @@ export async function resubmitLaunchPromptUntilTurnStart(args: {
   baseline: AgentPromptActivity
   readActivity: () => AgentPromptActivity
   writeSubmit: () => boolean
-  /** Re-proves the pane still owns the prompt before another Enter (generation plus write guard). */
-  beforeResubmit: () => Promise<void>
+  /**
+   * Re-proves the pane still owns the prompt before another Enter: generation, cancellation and
+   * the write guard, then one activity read. `false` stops the retries (a turn started or a dialog
+   * is up); throwing stops them too, with that error.
+   */
+  beforeResubmit: () => Promise<boolean>
   failureError?: string
   signal?: AbortSignal
 }): Promise<number> {
@@ -28,7 +32,10 @@ export async function resubmitLaunchPromptUntilTurnStart(args: {
     if (observation !== 'waiting' || resubmits >= args.policy.attempts) {
       return resubmits
     }
-    await args.beforeResubmit()
+    // Why: the guard is async — a cancel, respawn, turn start or dialog can land while it waits.
+    if (!(await args.beforeResubmit())) {
+      return resubmits
+    }
     if (!args.writeSubmit()) {
       throw new Error(args.failureError ?? 'terminal_not_writable')
     }

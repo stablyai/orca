@@ -191,7 +191,18 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
           beforeResubmit: async () => {
             assertAgentPromptRequestActive(options.signal)
             this.assertAgentPromptGeneration(ptyId, generation)
+            this.assertAgentPromptExpectedBinding(handle, options.expectedBinding)
             await options.beforeWrite?.(ptyId)
+            // Why again after the async guard: a cancel, respawn, turn start or dialog can land
+            // while it waits, and an Enter typed into that is not this prompt's to send.
+            assertAgentPromptRequestActive(options.signal)
+            this.assertAgentPromptGeneration(ptyId, generation)
+            this.assertAgentPromptExpectedBinding(handle, options.expectedBinding)
+            const current = this.getAgentPromptActivity(handle, ptyId)
+            return (
+              !this.isAgentPromptPermissionBlocked(baseline, current) &&
+              current.workingSequence <= baseline.workingSequence
+            )
           },
           ...(options.suffixFailureError ? { failureError: options.suffixFailureError } : {}),
           ...(options.signal ? { signal: options.signal } : {})
@@ -230,7 +241,7 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
     const checkpoint: RuntimeTerminalSend = {
       handle,
       accepted: true,
-      bytesWritten: Buffer.byteLength(pastePayload, 'utf8') + 1,
+      bytesWritten: Buffer.byteLength(pastePayload, 'utf8') + submits,
       prompt: inputAccepted
     }
     options.onInputAccepted?.(checkpoint)
