@@ -1,4 +1,5 @@
 import type { MigrationUnsupportedPtyEntry } from '../../shared/agent-status-types'
+import { parsePaneKey } from '../../shared/stable-pane-id'
 
 type MigrationUnsupportedPtyEvent =
   | { type: 'set'; entry: MigrationUnsupportedPtyEntry }
@@ -36,6 +37,21 @@ export function clearMigrationUnsupportedPty(ptyId: string): void {
   }
   listener?.({ type: 'clear', ptyId })
   persistenceListener?.(getMigrationUnsupportedPtySnapshot())
+}
+
+/** Follows a moved pane so a source-tab close, which clears by `S:` prefix, keeps the entry. */
+export function rekeyMigrationUnsupportedPtyPaneKey(ptyId: string, toPaneKey: string): void {
+  const entry = entriesByPtyId.get(ptyId)
+  const owner = parsePaneKey(toPaneKey)
+  if (!entry || !owner || entry.paneKey === toPaneKey) {
+    return
+  }
+  setMigrationUnsupportedPty({
+    ...entry,
+    paneKey: toPaneKey,
+    tabId: owner.tabId,
+    leafId: owner.leafId
+  })
 }
 
 export function clearMigrationUnsupportedPtysForPaneKey(paneKey: string): void {

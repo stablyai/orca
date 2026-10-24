@@ -11,6 +11,7 @@ import type { WorkspaceSessionState } from '../../../shared/workspace-session-st
 import { retireLeavesFromTerminalLayout } from '../../../shared/terminal-layout-leaf-retirement'
 import { createMinimalPersistedTerminalTab } from '../restoring-sessions/session-owner-fields'
 import { layoutContainsLeafId } from '../restoring-sessions/terminal-layout-normalization'
+import { aliasEntriesAfterMove } from './terminal-leaf-move-alias'
 import { writeRestorable } from './restorable-write'
 import type { TerminalTopologyCommitContext } from './terminal-topology-commit'
 import {
@@ -259,12 +260,28 @@ export function rekeyMovedLeafProfileRecords(
   )
 }
 
-/** Pane-keyed UI marks and SSH leases follow a moved leaf; returns their restores. */
+/**
+ * Pane-keyed UI marks, SSH leases and, for a bound PTY, the old-key alias follow a moved leaf;
+ * returns their restores. `request.ptyId` is the terminal the committed move bound the pane to.
+ */
 export function writeMovedLeafProfileRecords(
   request: TerminalLeafMoveRequest,
   context: TerminalTopologyCommitContext
 ): (() => void)[] {
-  return writeRekeyedProfileRecords(rekeyMovedLeafProfileRecords(context.state, request), context)
+  const { state } = context
+  const restores = writeRekeyedProfileRecords(rekeyMovedLeafProfileRecords(state, request), context)
+  if (request.ptyId) {
+    // Why: the hook server's own save is debounced; a crash before it would strand the process's old key.
+    restores.push(
+      writeRestorable(
+        () => state.legacyPaneKeyAliasEntries,
+        (entries) => (state.legacyPaneKeyAliasEntries = entries),
+        aliasEntriesAfterMove(state.legacyPaneKeyAliasEntries, request, request.ptyId, Date.now())
+      )
+    )
+    context.markDirty('legacyPaneKeyAliasEntries')
+  }
+  return restores
 }
 
 /** Writes rekeyed UI marks and SSH leases; returns their restores. */

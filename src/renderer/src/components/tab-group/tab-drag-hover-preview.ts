@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, type RefObject } from 'react'
+import { useCallback, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import type { DragMoveEvent, DragOverEvent } from '@dnd-kit/core'
 import { useAppStore } from '../../store'
 import type { useHoveredTabInsertion } from './tab-insertion'
@@ -11,6 +11,7 @@ import {
   type TabGroupPanelGeometrySnapshot
 } from './tab-group-panel-split-target'
 import { isTabDragData, type TabDragItemData, type TabDropZone } from './tab-drag-data'
+import { resolveTabDragLeafTarget, type TabDragLeafTarget } from './tab-drag-leaf-target'
 
 export type HoveredTabDropTarget = {
   groupId: string
@@ -18,9 +19,27 @@ export type HoveredTabDropTarget = {
   panelRect?: DOMRect
 }
 
+function isSameLeafTarget(a: TabDragLeafTarget | null, b: TabDragLeafTarget | null): boolean {
+  return (
+    a === b ||
+    (a !== null &&
+      b !== null &&
+      a.groupId === b.groupId &&
+      a.targetTabId === b.targetTabId &&
+      a.leafId === b.leafId &&
+      a.zone === b.zone &&
+      a.refusal === b.refusal &&
+      a.leafRect.left === b.leafRect.left &&
+      a.leafRect.top === b.leafRect.top &&
+      a.leafRect.width === b.leafRect.width &&
+      a.leafRect.height === b.leafRect.height)
+  )
+}
+
 /** Derives the in-flight hover state of a tab drag: the live preview tab to
- *  activate (deduped through private memo refs) and the hovered pane-column
- *  split target, delegating tab-strip insertion to the injected tabInsertion. */
+ *  activate (deduped through private memo refs), the hovered pane-column split
+ *  target, and the pane edge a terminal tab would join. Tab-strip insertion is
+ *  delegated to the injected tabInsertion. */
 export function useTabDragHoverPreview({
   worktreeId,
   preDragActivationSnapshotRef,
@@ -35,8 +54,12 @@ export function useTabDragHoverPreview({
   clear: () => void
   handleDragUpdate: (event: DragMoveEvent | DragOverEvent) => void
   hoveredDropTarget: HoveredTabDropTarget | null
+  hoveredLeafTarget: TabDragLeafTarget | null
+  shownLeafTargetRef: RefObject<TabDragLeafTarget | null>
 } {
   const [hoveredDropTarget, setHoveredDropTarget] = useState<HoveredTabDropTarget | null>(null)
+  const [hoveredLeafTarget, setHoveredLeafTarget] = useState<TabDragLeafTarget | null>(null)
+  const shownLeafTargetRef = useRef<TabDragLeafTarget | null>(null)
   const lastPreviewRef = useRef<{ groupId: string; tabId: string | null } | null>(null)
   const lastHoveredTabPreviewRef = useRef<{ groupId: string; tabId: string } | null>(null)
 
@@ -96,6 +119,15 @@ export function useTabDragHoverPreview({
     []
   )
 
+  const updateHoveredLeafTarget = useCallback((next: TabDragLeafTarget | null) => {
+    setHoveredLeafTarget((prev) => (isSameLeafTarget(prev, next) ? prev : next))
+  }, [])
+
+  // Only a committed overlay counts as shown: a drop before React draws it must not join.
+  useLayoutEffect(() => {
+    shownLeafTargetRef.current = hoveredLeafTarget
+  }, [hoveredLeafTarget])
+
   const handleDragUpdate = useCallback(
     (event: DragMoveEvent | DragOverEvent) => {
       const activeData = event.active.data.current
@@ -113,7 +145,19 @@ export function useTabDragHoverPreview({
         geometry: dragGeometryRef.current
       })
       updateHoveredDropTargetFromSplit(splitTarget)
-      if (splitTarget) {
+      // The Level 1 band and the interior never overlap, so at most one of the two resolves.
+      const leafTarget =
+        !splitTarget && isTabDragData(activeData)
+          ? resolveTabDragLeafTarget({
+              activeDrag: activeData,
+              pointer: getDragPointer(event),
+              worktreeId,
+              state,
+              geometry: dragGeometryRef.current
+            })
+          : null
+      updateHoveredLeafTarget(leafTarget)
+      if (splitTarget || leafTarget) {
         tabInsertion.clear()
       } else {
         tabInsertion.update(event)
@@ -124,15 +168,18 @@ export function useTabDragHoverPreview({
       tabInsertion,
       updateDragPreviewActivation,
       updateHoveredDropTargetFromSplit,
+      updateHoveredLeafTarget,
       worktreeId
     ]
   )
 
   const clear = useCallback(() => {
     setHoveredDropTarget(null)
+    setHoveredLeafTarget(null)
+    shownLeafTargetRef.current = null
     lastPreviewRef.current = null
     lastHoveredTabPreviewRef.current = null
   }, [])
 
-  return { clear, handleDragUpdate, hoveredDropTarget }
+  return { clear, handleDragUpdate, hoveredDropTarget, hoveredLeafTarget, shownLeafTargetRef }
 }

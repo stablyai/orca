@@ -1,6 +1,7 @@
 import { DndContext, DragOverlay } from '@dnd-kit/core'
 import TabDragPreview from '../tab-bar/TabDragPreview'
 import { TabDragProvider } from './tab-drag-context'
+import TabLeafDropOverlay from './TabLeafDropOverlay'
 import TabPaneColumnSplitDragOverlay from './TabPaneColumnSplitDragOverlay'
 import { useTabDragSplit, type HoveredTabInsertion } from './useTabDragSplit'
 
@@ -71,6 +72,9 @@ export function WorkspaceTabDragLayer({
             panelRect={dragSplit.hoveredDropTarget.panelRect}
             zone={dragSplit.hoveredDropTarget.zone}
           />
+        ) : null}
+        {dragSplit.hoveredLeafTarget ? (
+          <TabLeafDropOverlay target={dragSplit.hoveredLeafTarget} />
         ) : null}
       </DndContext>
     </TabDragProvider>

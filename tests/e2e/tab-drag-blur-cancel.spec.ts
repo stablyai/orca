@@ -17,7 +17,7 @@ for (const theme of ['dark', 'light'] as const) {
 
     const tabs = orcaPage.locator('[data-testid="sortable-tab"]:visible')
     const panels = orcaPage.locator('[data-tab-group-body-id]:visible')
-    const preview = orcaPage.getByText('New split', { exact: true })
+    const preview = orcaPage.getByText('New column', { exact: true })
     await expect(tabs).toHaveCount(2)
     await expect(panels).toHaveCount(1)
     const panel = (await panels.boundingBox())!

@@ -3611,9 +3611,6 @@
             "localSessionSshWorkspaceUnsupported": "此会话的历史记录存储在本机上，因此无法在 SSH 工作区中恢复。请改为将其拖放到本地工作区。",
             "sessionHostMismatchUnsupported": "此会话属于其他主机。请将其拖放到同一主机上的工作区。",
             "oldPayload": "此会话是从较早版本的 Orca 窗口拖入的。请改从会话历史恢复。"
-          },
-          "TabGroupDropOverlay": {
-            "paneColumnLabel": "新建拆分"
           }
         },
         "bar": {

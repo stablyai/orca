@@ -120,3 +120,84 @@ export async function dragPaneOutToTabStrip(
   )
   await page.mouse.up()
 }
+
+export type TabDropSide = 'left' | 'right' | 'top' | 'bottom'
+
+/** Where a pane edge drop lands: inside the group's interior (the panel minus the 20% new-column band), near `side` of the pane. */
+async function readPaneEdgeDropPoint(
+  page: Page,
+  args: { tabId: string; leafId: string; side: TabDropSide }
+): Promise<{ x: number; y: number }> {
+  const point = await page.evaluate(({ tabId, leafId, side }) => {
+    const state = window.__store!.getState()
+    const worktreeId = state.activeWorktreeId!
+    const groupId = (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
+      (tab) => tab.entityId === tabId
+    )?.groupId
+    const body = document.querySelector(
+      `[data-tab-group-body-id="${groupId}"][data-worktree-id="${worktreeId}"]`
+    )
+    const pane = document.querySelector(
+      `[data-terminal-tab-id="${tabId}"] .pane[data-leaf-id="${leafId}"]`
+    )
+    if (!body?.parentElement || !pane) {
+      return null
+    }
+    const panel = body.parentElement.getBoundingClientRect()
+    const bodyRect = body.getBoundingClientRect()
+    const paneRect = pane.getBoundingClientRect()
+    const left = Math.max(paneRect.left, panel.left + panel.width * 0.2)
+    const right = Math.min(paneRect.right, panel.right - panel.width * 0.2)
+    const top = Math.max(paneRect.top, bodyRect.top + bodyRect.height * 0.2)
+    const bottom = Math.min(paneRect.bottom, bodyRect.bottom - bodyRect.height * 0.2)
+    const inset = 0.08
+    return {
+      x:
+        side === 'left'
+          ? left + (right - left) * inset
+          : side === 'right'
+            ? right - (right - left) * inset
+            : (left + right) / 2,
+      y:
+        side === 'top'
+          ? top + (bottom - top) * inset
+          : side === 'bottom'
+            ? bottom - (bottom - top) * inset
+            : (top + bottom) / 2
+    }
+  }, args)
+  if (!point) {
+    throw new Error(`Pane ${args.leafId} of tab ${args.tabId} is not laid out`)
+  }
+  return point
+}
+
+/**
+ * A real pointer drag of a tab onto the edge of a pane inside another tab: over that tab's strip
+ * entry first (which shows it), then to the edge. Waits for the "Join tab" overlay before the drop.
+ */
+export async function dragTabIntoPane(
+  page: Page,
+  args: { sourceTabId: string; targetTabId: string; leafId: string; side: TabDropSide }
+): Promise<void> {
+  const source = await page
+    .locator(`${SORTABLE_TAB}[data-tab-id="${args.sourceTabId}"]`)
+    .boundingBox()
+  const target = await page
+    .locator(`${SORTABLE_TAB}[data-tab-id="${args.targetTabId}"]`)
+    .boundingBox()
+  if (!source || !target) {
+    throw new Error('Source or target tab is not laid out')
+  }
+  await page.mouse.move(source.x + source.width / 2, source.y + source.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 12 })
+  const point = await readPaneEdgeDropPoint(page, {
+    tabId: args.targetTabId,
+    leafId: args.leafId,
+    side: args.side
+  })
+  await page.mouse.move(point.x, point.y, { steps: 20 })
+  await expect(page.locator('[data-leaf-drop-overlay]')).toContainText('Join tab')
+  await page.mouse.up()
+}

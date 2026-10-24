@@ -3,7 +3,7 @@ import type { TabDropZone } from './tab-drag-data'
 /** Matches TabGroupPanel tab row height (`h-[32px]`). */
 export const TAB_GROUP_TAB_STRIP_HEIGHT_PX = 32
 
-type PaneRect = { left: number; top: number; width: number; height: number }
+export type PaneRect = { left: number; top: number; width: number; height: number }
 
 export function resolveDropZone(
   rect: { left: number; top: number; width: number; height: number },
@@ -86,6 +86,57 @@ export function resolvePaneColumnEdgeZone(
     return 'down'
   }
   return null
+}
+
+/** The part of a panel left after the Level 1 band: leaf drops live only here. */
+export function paneColumnInteriorRect(
+  panelRect: PaneRect,
+  options?: { bodyRect?: PaneRect | null; tabStripHeightPx?: number }
+): PaneRect | null {
+  const tabStripHeight = options?.tabStripHeightPx ?? TAB_GROUP_TAB_STRIP_HEIGHT_PX
+  const bodyRect = options?.bodyRect ?? {
+    left: panelRect.left,
+    top: panelRect.top + tabStripHeight,
+    width: panelRect.width,
+    height: Math.max(0, panelRect.height - tabStripHeight)
+  }
+  if (bodyRect.height <= 0 || panelRect.width <= 0) {
+    return null
+  }
+  const horizontalEdge = panelRect.width * 0.2
+  const verticalEdge = bodyRect.height * 0.2
+  return {
+    left: panelRect.left + horizontalEdge,
+    top: bodyRect.top + verticalEdge,
+    width: panelRect.width - horizontalEdge * 2,
+    height: bodyRect.height - verticalEdge * 2
+  }
+}
+
+/** Where in a leaf's effective rect a point falls: its central box, or the nearest edge. */
+export function resolveLeafDropZone(
+  effectiveRect: PaneRect,
+  point: { x: number; y: number }
+): TabDropZone | null {
+  if (effectiveRect.width <= 0 || effectiveRect.height <= 0) {
+    return null
+  }
+  const x = (point.x - effectiveRect.left) / effectiveRect.width
+  const y = (point.y - effectiveRect.top) / effectiveRect.height
+  if (x < 0 || x > 1 || y < 0 || y > 1) {
+    return null
+  }
+  if (x >= 0.25 && x <= 0.75 && y >= 0.25 && y <= 0.75) {
+    return 'center'
+  }
+  // Shares of the rect, not pixels: a wide pane must not favour its sides over its top and bottom.
+  const edges = [
+    { zone: 'left', distance: x },
+    { zone: 'right', distance: 1 - x },
+    { zone: 'up', distance: y },
+    { zone: 'down', distance: 1 - y }
+  ] as const
+  return edges.reduce((nearest, edge) => (edge.distance < nearest.distance ? edge : nearest)).zone
 }
 
 export type PaneColumnSplitTarget = {

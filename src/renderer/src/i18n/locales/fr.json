@@ -3770,9 +3770,6 @@
             "sessionHostMismatchUnsupported": "Cette session appartient à un autre hôte. Déposez-la sur un espace de travail du même hôte.",
             "localSessionSshWorkspaceUnsupported": "L'historique de cette session est stocké sur cette machine ; la reprise est impossible dans un espace de travail SSH. Déposez-la plutôt sur un espace de travail local.",
             "oldPayload": "Cette session a été glissée depuis une fenêtre Orca plus ancienne. Reprenez-la plutôt depuis l'historique des sessions."
-          },
-          "TabGroupDropOverlay": {
-            "paneColumnLabel": "Nouvelle scission"
           }
         },
         "bar": {

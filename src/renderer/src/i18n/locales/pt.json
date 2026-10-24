@@ -16456,9 +16456,6 @@
             "sessionHostMismatchUnsupported": "Esta sessão pertence a um host diferente. Solte-a em um espaço de trabalho no mesmo host.",
             "localSessionSshWorkspaceUnsupported": "O histórico desta sessão está armazenado nesta máquina, então ela não pode ser retomada em um espaço de trabalho SSH. Solte-a em um espaço de trabalho local em vez disso.",
             "oldPayload": "Esta sessão foi arrastada de uma janela antiga do Orca. Retome-a pelo Histórico de sessões."
-          },
-          "TabGroupDropOverlay": {
-            "paneColumnLabel": "Nova divisão"
           }
         }
       },

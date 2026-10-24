@@ -60,6 +60,7 @@ export function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     hasPty: () => Promise.resolve(null),
     // Why: no local main owns a paired client's session, so the move stays in this window.
     moveLeafToNewTab: () => Promise.resolve({ status: 'not_held' }),
+    moveLeafIntoTab: () => Promise.resolve({ status: 'refused', reason: 'unsupported' }),
     getMainBufferSnapshot: () => Promise.resolve(null),
     // Why: remote-runtime PTYs skip local main (no side-effect source); renderer byte parsing stays authoritative.
     onSideEffect: () => noopUnsubscribe,

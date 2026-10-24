@@ -12,8 +12,52 @@ import {
 import { isPaneDropData, isTabDragData, type TabDragItemData } from './tab-drag-data'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { dropTabThroughLayoutOwner } from './tab-group-layout-owner-commands'
+import {
+  isSameJoinTarget,
+  resolveTabDragLeafTarget,
+  type LeafRect,
+  type TabDragLeafTarget
+} from './tab-drag-leaf-target'
+import { resolveTerminalTabIntoPaneEligibility } from '../terminal-pane/terminal-tab-into-pane-eligibility'
+import type {
+  TerminalTabIntoPaneArgs,
+  TerminalTabIntoPaneOutcome
+} from '../terminal-pane/terminal-tab-into-pane-types'
 
 type AppState = ReturnType<typeof useAppStore.getState>
+
+/** What a leaf-edge drop needs beyond the store: the move itself and the DOM it reads leaves from. */
+export type LeafJoinDeps = {
+  moveTabIntoPane: (args: TerminalTabIntoPaneArgs) => Promise<TerminalTabIntoPaneOutcome>
+  readLeafRects: (tabId: string) => LeafRect[]
+  /** The join target the overlay is showing right now. */
+  getShownLeafTarget: () => TabDragLeafTarget | null
+}
+
+/** A drop on a pane edge joins the tab there; a refused join changes nothing, so the hovered tab stays selected. */
+function commitLeafEdgeDrop({
+  leafJoin,
+  leafTarget,
+  activeData,
+  finishDrag
+}: {
+  leafJoin: LeafJoinDeps
+  leafTarget: TabDragLeafTarget
+  activeData: TabDragItemData
+  finishDrag: (restoreSnapshot: boolean) => void
+}): void {
+  // The join activates the target tab itself, so the previewed tab is kept rather than restored.
+  finishDrag(false)
+  if (leafTarget.refusal) {
+    return
+  }
+  void leafJoin.moveTabIntoPane({
+    sourceTabId: activeData.visibleTabId,
+    targetTabId: leafTarget.targetTabId,
+    targetLeafId: leafTarget.leafId,
+    side: leafTarget.side
+  })
+}
 
 /** Turns a finished tab drag into store mutations: pane-column split,
  *  same-group reorder, cross-group move, or pane-body drop — each mirrored to
@@ -24,7 +68,8 @@ export function commitTabDragDrop({
   dragGeometryRef,
   dropUnifiedTab,
   reorderUnifiedTabs,
-  finishDrag
+  finishDrag,
+  leafJoin
 }: {
   event: DragEndEvent
   worktreeId: string
@@ -32,6 +77,7 @@ export function commitTabDragDrop({
   dropUnifiedTab: AppState['dropUnifiedTab']
   reorderUnifiedTabs: AppState['reorderUnifiedTabs']
   finishDrag: (restoreSnapshot: boolean, activeData?: TabDragItemData) => void
+  leafJoin: LeafJoinDeps
 }): void {
   const activeData = event.active.data.current
   const overData = event.over?.data.current
@@ -88,6 +134,36 @@ export function commitTabDragDrop({
         shouldRestorePreDragActivation
       )
     )
+    return
+  }
+
+  const leafTarget = resolveTabDragLeafTarget({
+    activeDrag: activeData,
+    pointer: getDragPointer(event),
+    worktreeId,
+    state,
+    geometry: dragGeometryRef.current,
+    readLeafRects: leafJoin.readLeafRects
+  })
+  // A layout change after the overlay was drawn can move the pointer onto another pane: join only
+  // the target the user was shown, otherwise drop as if no overlay had been shown.
+  if (leafTarget && isSameJoinTarget(leafTarget, leafJoin.getShownLeafTarget())) {
+    commitLeafEdgeDrop({ leafJoin, leafTarget, activeData, finishDrag })
+    return
+  }
+
+  // A shown join that lost eligibility before the drop is a refusal, never a plain drop.
+  const shownTarget = leafJoin.getShownLeafTarget()
+  if (
+    !leafTarget &&
+    shownTarget &&
+    !resolveTerminalTabIntoPaneEligibility(state, {
+      sourceTabId: activeData.visibleTabId,
+      targetTabId: shownTarget.targetTabId,
+      targetLeafId: shownTarget.leafId
+    }).ok
+  ) {
+    finishDrag(false)
     return
   }
 

@@ -3626,9 +3626,6 @@
             "localSessionSshWorkspaceUnsupported": "El historial de esta sesión solo existe en este equipo. Para reanudarla, arrástrala a un workspace local. Los workspaces SSH no tienen acceso a ese historial.",
             "sessionHostMismatchUnsupported": "Esta sesión pertenece a un host diferente. Suéltala en un espacio de trabajo del mismo host.",
             "oldPayload": "Esta sesión se arrastró desde una ventana de Orca más antigua. Reanúdala desde el historial de sesiones."
-          },
-          "TabGroupDropOverlay": {
-            "paneColumnLabel": "Nueva división"
           }
         },
         "bar": {
