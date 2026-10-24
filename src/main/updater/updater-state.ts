@@ -44,6 +44,29 @@ export class ReleaseFeedPreflightError extends Error {
 
 export abstract class UpdaterState {
   protected mainWindowRef: BrowserWindow | null = null
+
+  // Why: renderer restart/teardown can race with async updater callbacks (MacUpdater hourly check).
+  // A destroyed BrowserWindow throws "Object has been destroyed" from the webContents getter itself.
+  protected sendToMainWindow(channel: string, payload?: unknown): void {
+    const win = this.mainWindowRef
+    if (!win || win.isDestroyed?.()) {
+      return
+    }
+    const wc = win.webContents
+    if (!wc || wc.isDestroyed?.()) {
+      return
+    }
+    try {
+      if (payload === undefined) {
+        wc.send(channel)
+      } else {
+        wc.send(channel, payload)
+      }
+    } catch {
+      // Why: isDestroyed() can race with actual destroy mid-send.
+    }
+  }
+
   protected currentStatus: UpdateStatus = { state: 'idle' }
   protected userInitiatedCheck = false
   protected onBeforeQuitCleanup: (() => void | Promise<void>) | null = null

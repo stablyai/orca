@@ -165,7 +165,7 @@ export abstract class UpdaterStatus extends BaseUpdaterState {
       // Why: a forced status must still land before the queued check restarts the cycle.
       if (options?.force) {
         this.currentStatus = decoratedStatus
-        this.mainWindowRef?.webContents.send('updater:status', decoratedStatus)
+        this.sendToMainWindow('updater:status', decoratedStatus)
       }
       this.launchPendingUserInitiatedCheckAfterInFlight(pendingUserInitiatedCheckVariant)
       return
@@ -174,7 +174,7 @@ export abstract class UpdaterStatus extends BaseUpdaterState {
       return
     }
     this.currentStatus = decoratedStatus
-    this.mainWindowRef?.webContents.send('updater:status', decoratedStatus)
+    this.sendToMainWindow('updater:status', decoratedStatus)
   }
 
   protected abstract finishActiveUpdateCheckAttempt(): void
