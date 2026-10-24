@@ -135,6 +135,14 @@ export function primaryAgentCatalogEntries(): AgentCatalogEntry[] {
       homepageUrl: 'https://omp.sh'
     },
     {
+      id: 'omo',
+      label: translate('auto.lib.agent.catalog.omo_label', 'OmO'),
+      cmd: 'omo',
+      searchAliases: ['oh-my-openagent', 'oh my openagent', 'omo-ai'],
+      faviconDomain: 'github.com',
+      homepageUrl: 'https://github.com/code-yeongyu/oh-my-openagent'
+    },
+    {
       id: 'prime-agent',
       label: translate('auto.lib.agent.catalog.d443a47995', 'Prime Agent'),
       cmd: 'prime-agent',

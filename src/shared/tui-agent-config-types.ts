@@ -62,3 +62,9 @@ export type TuiAgentConfig = {
   /** Ctrl+Enter encoding for agents that consume CSI-u without active kitty flags. */
   ctrlEnterEncoding?: 'csi-u'
 }
+
+/** Authoring form: `launchCmd` and `expectedProcess` default to `detectCmd` (true for most agents). */
+export type TuiAgentConfigSource = Omit<TuiAgentConfig, 'launchCmd' | 'expectedProcess'> & {
+  launchCmd?: string
+  expectedProcess?: string
+}
