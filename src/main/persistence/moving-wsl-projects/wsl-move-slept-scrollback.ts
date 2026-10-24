@@ -39,7 +39,7 @@ export type WslMoveSleptScrollback = {
   dispose: () => void
 }
 
-const SPOOL_DIR = 'wsl-move-slept-scrollback'
+export const WSL_MOVE_SLEPT_SPOOL_DIR = 'wsl-move-slept-scrollback'
 const MAX_HISTORY_BYTES = ORCAD_MIGRATION_BLOB_KIND_CONTRACTS['terminal-history'].maxBytes
 
 export function emptyWslMoveSleptScrollback(): WslMoveSleptScrollback {
@@ -236,7 +236,7 @@ export async function readWslMoveSleptScrollbackFromHistory(
 }
 
 export function wslMoveSleptSpoolRoot(userDataPath: string, migrationId: string): string {
-  return join(userDataPath, SPOOL_DIR, migrationId)
+  return join(userDataPath, WSL_MOVE_SLEPT_SPOOL_DIR, migrationId)
 }
 
 // What the daemon's own checkpoint writer would hold for this restore; no log is carried with it.

@@ -19,6 +19,7 @@ import { runWslMoveStartupRewrite } from '../persistence/moving-wsl-projects/wsl
 import { installWslMoveRetention } from '../persistence/moving-wsl-projects/wsl-move-retention'
 import { registerWslMoveDesktopRewriteRegistry } from '../persistence/moving-wsl-projects/wsl-move-desktop-rewrite-registry'
 import { reapplyWslMoveFocusRewrites } from '../persistence/moving-wsl-projects/wsl-move-stale-window-reapply'
+import { sweepOrphanedWslMoveSleptSpools } from '../persistence/moving-wsl-projects/wsl-move-slept-spool-sweep'
 import { enableWslHostAutomations } from '../ipc/wsl-host-automation-enable'
 import { scheduleWslMoveRewriteRetry } from '../persistence/moving-wsl-projects/wsl-move-rewrite-retry'
 import { orchestrationDbFile } from '../runtime/orchestration/db/orchestration-db-file'
@@ -182,10 +183,12 @@ export async function initializeReadyFoundation(): Promise<void> {
   state.wslMoveStartupRewriteReady = runWslMoveStartupRewrite(
     { userDataPath },
     {
-      recover: () =>
-        recoverInterruptedWslMoves(userDataPath, undefined, (distro, distroGuid) =>
+      recover: async () => {
+        await recoverInterruptedWslMoves(userDataPath, undefined, (distro, distroGuid) =>
           isWslDistroRegistered(distro, distroGuid)
-        ),
+        )
+        sweepOrphanedWslMoveSleptSpools(userDataPath)
+      },
       reapply: () => {
         reapplyWslMoveFocusRewrites(userDataPath, store)
       }
