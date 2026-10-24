@@ -39,7 +39,12 @@ export type HostBridgeSessionState = {
   worktreeId?: string
   executionHost?: string
   paneKey?: string
+  pendingClear?: ReturnType<typeof setTimeout>
 }
+
+// Why: the page re-subscribes its tabs stream on re-render; clearing on the gap made viewing
+// fall back to the desktop's active tab exactly when a completion notification arrived.
+export const TABS_STREAM_CLEAR_GRACE_MS = 1500
 
 export const activeInPageHostKeys = new Set<string>()
 export const mountedSessionRouteBridgesByKey = new Map<string, number>()
@@ -177,6 +182,8 @@ export function noteBridgeHostClientMessage(
     const rawExec = message.envelope?.executionHost
     const executionHost = typeof rawExec === 'string' && rawExec.length > 0 ? rawExec : undefined
     if (message.type === 'subscribe') {
+      clearTimeout(state.pendingClear)
+      state.pendingClear = undefined
       state.tabsStreamsById.set(message.id, {
         worktreeId,
         ...(executionHost ? { executionHost } : {}),
@@ -265,19 +272,25 @@ export function noteBridgeHostClientMessage(
   }
 
   if (message.type === 'cancel' && message.target === 'subscription') {
-    if (
-      state.tabsStreamsById.delete(message.id) &&
-      state.tabsStreamsById.size === 0 &&
-      isConnected() &&
-      (mountedSessionRouteBridgesByKey.get(hostKey) ?? 0) === 0
-    ) {
-      state.worktreeId = undefined
-      state.paneKey = undefined
-      state.selectedByWorktree.clear()
-      state.serverActiveTabByWorktree.clear()
-      activeInPageHostKeys.delete(hostKey)
-      inPageViewingSink?.(null)
+    if (!state.tabsStreamsById.delete(message.id) || state.tabsStreamsById.size > 0) {
+      return
     }
+    clearTimeout(state.pendingClear)
+    state.pendingClear = setTimeout(() => {
+      state.pendingClear = undefined
+      if (
+        state.tabsStreamsById.size === 0 &&
+        isConnected() &&
+        (mountedSessionRouteBridgesByKey.get(hostKey) ?? 0) === 0
+      ) {
+        state.worktreeId = undefined
+        state.paneKey = undefined
+        state.selectedByWorktree.clear()
+        state.serverActiveTabByWorktree.clear()
+        activeInPageHostKeys.delete(hostKey)
+        inPageViewingSink?.(null)
+      }
+    }, TABS_STREAM_CLEAR_GRACE_MS)
   }
 }
 

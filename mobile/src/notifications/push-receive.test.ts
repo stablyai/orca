@@ -10,6 +10,7 @@ import {
   noteInPageBackClaim,
   noteInPageStorageWrite
 } from './in-page-notification-navigation'
+import { TABS_STREAM_CLEAR_GRACE_MS } from './bridge-session-viewing-tracker'
 import { withLastVisitedWorktree } from '../worktree/last-visited-worktree-by-host'
 import { LAST_VISITED_WORKTREE_STORAGE_KEY } from '../worktree/last-visited-worktree-repo'
 import { sessionTabPaneKey } from '../session/notification-pane-tab'
@@ -566,6 +567,7 @@ it('tracks active session tab and suppression via BridgeHost RPC even when WebVi
     })
   ).resolves.toBe(false)
 
+  vi.useFakeTimers()
   noteBridgeHostClientMessage(
     'host-1',
     {
@@ -576,6 +578,9 @@ it('tracks active session tab and suppression via BridgeHost RPC even when WebVi
     },
     () => true
   )
+  // Leaving is only trusted once no stream re-subscribes within the grace window.
+  vi.advanceTimersByTime(TABS_STREAM_CLEAR_GRACE_MS)
+  vi.useRealTimers()
 
   await expect(
     canPresentForegroundPush({
@@ -780,6 +785,61 @@ it('decodes session.tabs.subscribe tabsDelta updates, tracks agentSession RPCs, 
       notificationId: 'stay-on-tab-b',
       notificationEpoch: 'epoch',
       notificationSeq: 4
+    })
+  ).resolves.toBe(false)
+
+  // The page re-subscribes its tabs stream on re-render (e.g. when the agent finishes); the gap
+  // between cancel and subscribe must not drop the phone's tab for the desktop's active one.
+  noteBridgeHostClientMessage(
+    'host-1',
+    { v: 1, type: 'cancel', id: 'tabs-delta-sub', target: 'subscription' },
+    () => true
+  )
+  noteBridgeHostClientMessage(
+    'host-1',
+    {
+      v: 1,
+      type: 'subscribe',
+      id: 'tabs-resub',
+      method: 'session.tabs.subscribe',
+      params: { worktree: 'id:repo::/work' }
+    },
+    () => true
+  )
+  noteBridgeHostServerPayload('host-1', 'tabs-resub', {
+    type: 'snapshot',
+    worktree: 'repo::/work',
+    activeTabId: 'tab-a',
+    tabs: [
+      {
+        id: 'tab-a',
+        parentTabId: 'tab-a',
+        leafId: '11111111-1111-4111-8111-111111111111',
+        type: 'terminal',
+        title: 'Shell 1',
+        isActive: true,
+        terminal: 'term-1'
+      },
+      {
+        id: 'tab-b',
+        parentTabId: 'tab-b',
+        leafId: '22222222-2222-4222-8222-222222222222',
+        type: 'terminal',
+        title: 'Claude',
+        isActive: false,
+        terminal: 'term-2'
+      }
+    ]
+  })
+
+  await expect(
+    canPresentForegroundPush({
+      hostFingerprint,
+      worktreeId: 'repo::/work',
+      paneKey: 'tab-b:22222222-2222-4222-8222-222222222222',
+      notificationId: 'resubscribe-keeps-tab-b',
+      notificationEpoch: 'epoch',
+      notificationSeq: 5
     })
   ).resolves.toBe(false)
 })
