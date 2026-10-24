@@ -21,6 +21,26 @@ Install Node 24, pnpm, and the Bun version in [`config/.bun-version`](../config/
 native PTYs, socket liveness, and V8 memory behavior. `pnpm test:node` runs the same suites
 entirely on Node. Builds and dependency installation still use Node and pnpm.
 
+`pnpm install` compiles native modules and checks them in Electron, so it also needs:
+
+- **pnpm**: the version in `packageManager` in [`package.json`](../package.json). `corepack enable`
+  needs Corepack 0.34.5 or newer (`npm install -g corepack@latest`); older ones, including the one
+  bundled with Node 22, can't start pnpm 12. On Windows it writes its shims next to Node, which for
+  the Node.js installer is `C:\Program Files\nodejs`, so outside an elevated shell it fails with
+  `EPERM`. Use `corepack enable --install-directory <a writable directory on PATH>`, or
+  `npm install -g pnpm@<that version>`, which installs into your user npm prefix by default.
+- **Windows**: Python 3 and Visual Studio Build Tools with the "Desktop development with C++"
+  workload, for the `native/windows-*` addons that `node-gyp` builds on install.
+- **Linux**: the desktop libraries Electron loads, even on a headless machine, plus `xvfb` for the
+  `*.electron.test.ts` files `pnpm test` runs. On Ubuntu 24.04+ and Debian 13+:
+
+  ```bash
+  sudo apt-get install -y xvfb libgtk-3-0t64 libatk1.0-0t64 libatk-bridge2.0-0t64 \
+    libatspi2.0-0t64 libcups2t64 libxdamage1 libasound2t64 libnss3 libgbm1
+  ```
+
+  Ubuntu 23.10 and earlier and Debian 12 and earlier use the same names without the `t64` suffix.
+
 ```bash
 pnpm install
 pnpm dev
