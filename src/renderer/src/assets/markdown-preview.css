@@ -700,13 +700,20 @@
   font-family: var(--font-sans, sans-serif);
 }
 
-/* Mermaid diagram container */
-.mermaid-block svg {
+/* Mermaid and d2 diagram containers */
+.mermaid-block svg,
+.d2-block svg {
   max-width: 100%;
   height: auto;
 }
-.mermaid-error {
+.mermaid-error,
+.d2-error {
   color: var(--color-warning, #d29922);
+  font-size: 0.85em;
+  margin-bottom: 0.5em;
+}
+.d2-hint {
+  color: var(--muted-foreground);
   font-size: 0.85em;
   margin-bottom: 0.5em;
 }

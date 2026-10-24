@@ -16427,6 +16427,10 @@
           "7b458e0b7f": "Choose a Markdown template.",
           "1829437fce": "New Markdown"
         },
+        "D2Block": {
+          "diagramError": "Diagram error:",
+          "installHint": "Install the d2 CLI to render this diagram."
+        },
         "DiagramViewerModal": {
           "title": "Diagram"
         },

@@ -5,6 +5,7 @@ import { NodeViewContent, NodeViewWrapper } from '@tiptap/react'
 import type { NodeViewProps } from '@tiptap/react'
 import { Copy, Check } from 'lucide-react'
 import MermaidBlock from './MermaidBlock'
+import D2Block from './D2Block'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 import { translate } from '@/i18n/i18n'
 import {
@@ -149,6 +150,11 @@ export function RichMarkdownCodeBlock({
       {isMermaid && node.textContent.trim() && (
         <div contentEditable={false} className="mermaid-preview">
           <MermaidBlock content={node.textContent.trim()} isDark={isDark} htmlLabels={false} />
+        </div>
+      )}
+      {language === 'd2' && node.textContent.trim() && (
+        <div contentEditable={false} className="d2-preview">
+          <D2Block content={node.textContent.trim()} isDark={isDark} showSource={false} />
         </div>
       )}
     </NodeViewWrapper>

@@ -56,6 +56,7 @@ const {
   registerGitLabHandlersMock,
   registerHostedReviewHandlersMock,
   registerExportHandlersMock,
+  registerD2RenderHandlersMock,
   registerCodexConfigSyncHandlersMock,
   registerOnboardingHandlersMock,
   registerDashboardPopoutHandlersMock,
@@ -127,6 +128,7 @@ const {
   registerGitLabHandlersMock: vi.fn(),
   registerHostedReviewHandlersMock: vi.fn(),
   registerExportHandlersMock: vi.fn(),
+  registerD2RenderHandlersMock: vi.fn(),
   registerCodexConfigSyncHandlersMock: vi.fn(),
   registerOnboardingHandlersMock: vi.fn(),
   registerDashboardPopoutHandlersMock: vi.fn(),
@@ -209,6 +211,10 @@ vi.mock('../feedback', () => ({
 
 vi.mock('../export', () => ({
   registerExportHandlers: registerExportHandlersMock
+}))
+
+vi.mock('../d2-render', () => ({
+  registerD2RenderHandlers: registerD2RenderHandlersMock
 }))
 
 vi.mock('../stats', () => ({
@@ -498,6 +504,7 @@ describe('registerCoreHandlers', () => {
     registerGitLabHandlersMock.mockReset()
     registerHostedReviewHandlersMock.mockReset()
     registerExportHandlersMock.mockReset()
+    registerD2RenderHandlersMock.mockReset()
     registerDashboardPopoutHandlersMock.mockReset()
     registerWorkspaceSpaceWindowHandlersMock.mockReset()
     registerTerminalPreviewHandlersMock.mockReset()

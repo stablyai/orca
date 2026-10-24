@@ -16254,6 +16254,10 @@
           "7b458e0b7f": "Choisissez un modèle Markdown.",
           "1829437fce": "Nouveau Markdown"
         },
+        "D2Block": {
+          "diagramError": "Erreur de diagramme :",
+          "installHint": "Installez la CLI d2 pour afficher ce diagramme."
+        },
         "DiagramViewerModal": {
           "title": "Diagramme"
         },

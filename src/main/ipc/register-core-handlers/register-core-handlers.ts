@@ -20,6 +20,7 @@ import { registerBitbucketHandlers } from '../bitbucket'
 import { registerFeedbackHandlers } from '../feedback'
 import { registerCrashReportingHandlers } from '../crash-reporting'
 import { registerExportHandlers } from '../export'
+import { registerD2RenderHandlers } from '../d2-render'
 import { registerStatsHandlers } from '../stats'
 import { registerMemoryHandlers } from '../memory'
 import { registerRateLimitHandlers } from '../rate-limits'
@@ -202,6 +203,7 @@ export function registerCoreHandlers(
     registerCrashReportingHandlers(crashReports)
   }
   registerExportHandlers()
+  registerD2RenderHandlers()
   registerStatsHandlers(stats)
   registerMemoryHandlers(store)
   registerNotificationHandlers(store, runtime)

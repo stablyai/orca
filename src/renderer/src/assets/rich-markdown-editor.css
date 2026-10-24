@@ -1000,10 +1000,14 @@
   color: var(--foreground);
 }
 
-/* Live mermaid diagram preview rendered below the editable source */
-.mermaid-preview {
+/* Live mermaid and d2 diagram previews rendered below the editable source */
+.mermaid-preview,
+.d2-preview {
   padding: 12px 18px;
   border-top: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
+}
+.d2-preview:empty {
+  display: none;
 }
 
 .rich-markdown-editor pre {

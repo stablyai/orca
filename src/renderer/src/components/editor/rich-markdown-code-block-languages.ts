@@ -17,6 +17,7 @@ const LANGUAGE_ENTRIES: readonly LanguageEntry[] = [
   ['c', null, 'C'],
   ['cpp', 'auto.components.editor.RichMarkdownCodeBlock.4daed43ae3', 'C++'],
   ['css', 'auto.components.editor.RichMarkdownCodeBlock.026653f21f', 'CSS'],
+  ['d2', null, 'D2'],
   ['diff', 'auto.components.editor.RichMarkdownCodeBlock.bf6ee5caaa', 'Diff'],
   ['go', 'auto.components.editor.RichMarkdownCodeBlock.edfcc64182', 'Go'],
   ['graphql', 'auto.components.editor.RichMarkdownCodeBlock.706fd85738', 'GraphQL'],
