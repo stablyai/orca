@@ -131,7 +131,7 @@ describe('buildRuntimeWorktreePsSummaries', () => {
     const summary = (id: string) => summaries.get(id)
 
     expect(summary('main')?.defaultBranch).toBe(true)
-    expect(summary('folder-root')?.defaultBranch).toBe(true)
+    expect(summary('folder-root')?.defaultBranch).toBe(false)
     expect(summary('main-detached')?.defaultBranch).toBe(false)
     expect(summary('main-detached')?.detachedHead).toBe(true)
     expect(summary('provisioned')?.defaultBranch).toBe(false)
