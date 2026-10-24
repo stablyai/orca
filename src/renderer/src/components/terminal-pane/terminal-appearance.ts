@@ -177,6 +177,7 @@ export function applyTerminalAppearance(
     if (pane.terminal.options.minimumContrastRatio !== minimumContrastRatio) {
       pane.terminal.options.minimumContrastRatio = minimumContrastRatio
     }
+    pane.terminal.options.linkUnderlines = settings.terminalLinkUnderlines === 'always'
     // Why clear explicitly: allowTransparency has rendering cost and a stale `true` could bleed in from a prior opacity.
     pane.terminal.options.allowTransparency =
       settings.terminalBackgroundOpacity !== undefined && settings.terminalBackgroundOpacity < 1

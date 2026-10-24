@@ -180,6 +180,7 @@ export function createDaemonPtyEnvironment(opts: PtySubprocessOptions): Record<s
     TERM_PROGRAM: 'Orca',
     TERM_PROGRAM_VERSION: process.env.ORCA_APP_VERSION ?? '0.0.0-dev',
     FORCE_HYPERLINK: '1',
+    PI_FORCE_HYPERLINKS: '1',
     [ORCA_IMAGE_PROTOCOL_ENV]: ORCA_IMAGE_PROTOCOL_VALUE
   } satisfies Record<string, string>
   stripLegacyTerminalShimEnv(env, process.platform)

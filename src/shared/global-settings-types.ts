@@ -134,6 +134,8 @@ export type GlobalSettings = GlobalSettingsBase & {
    *  canvas layers are only created once a pane actually receives an image, so
    *  idle panes retain parser/decoder setup but no decoded image storage. */
   terminalInlineImages: boolean
+  /** OSC 8 link decoration; omitted values use hover-only underlines. ANSI underlines are preserved. */
+  terminalLinkUnderlines?: 'always' | 'hover'
   terminalCursorStyle: 'bar' | 'block' | 'underline'
   /** One-shot migration guard for moving inherited cursor defaults to block. */
   terminalCursorStyleDefaultedToBlock?: boolean
