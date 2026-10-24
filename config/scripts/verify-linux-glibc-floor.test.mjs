@@ -9,7 +9,6 @@ const {
   readElfMachine,
   declaredArchFromPath,
   findArchViolation,
-  ELF_MACHINE_BY_ARCH,
   parseGlibcVersion,
   compareGlibcVersions,
   parseVersionNeeds,
@@ -409,8 +408,8 @@ describe('bundled native binary architecture', () => {
   it('reads e_machine from a little-endian ELF', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'orca-elf-arch-'))
     const file = join(dir, 'pty.node')
-    await writeFile(file, elfHeader(ELF_MACHINE_BY_ARCH.arm64))
-    expect(readElfMachine(file)).toBe(ELF_MACHINE_BY_ARCH.arm64)
+    await writeFile(file, elfHeader(0xb7))
+    expect(readElfMachine(file)).toBe(0xb7)
     await rm(dir, { recursive: true, force: true })
   })
 
@@ -423,7 +422,7 @@ describe('bundled native binary architecture', () => {
     const pkg = join(dir, '@parcel', 'watcher-linux-arm64-glibc')
     await mkdir(pkg, { recursive: true })
     const file = join(pkg, 'watcher.node')
-    await writeFile(file, elfHeader(ELF_MACHINE_BY_ARCH.arm64))
+    await writeFile(file, elfHeader(0xb7))
     expect(declaredArchFromPath(file)).toBe('arm64')
     expect(findArchViolation(file, 'x64')).toBeNull()
     await rm(dir, { recursive: true, force: true })
@@ -435,7 +434,7 @@ describe('bundled native binary architecture', () => {
     const nested = join(dir, 'bin', 'linux-arm64-148')
     await mkdir(nested, { recursive: true })
     const file = join(nested, 'node-pty.node')
-    await writeFile(file, elfHeader(ELF_MACHINE_BY_ARCH.x64))
+    await writeFile(file, elfHeader(0x3e))
     expect(findArchViolation(file, 'arm64')).toMatchObject({ actual: 'x64', expectedArch: 'arm64' })
     // Still caught even when the slice being built is x64.
     expect(findArchViolation(file, 'x64')).toMatchObject({ actual: 'x64', expectedArch: 'arm64' })
@@ -448,7 +447,7 @@ describe('bundled native binary architecture', () => {
     const dir = join(root, 'resources', 'ripgrep', 'linux-x64')
     await mkdir(dir, { recursive: true })
     const file = join(dir, 'rg')
-    await writeFile(file, elfHeader(ELF_MACHINE_BY_ARCH.x64))
+    await writeFile(file, elfHeader(0x3e))
     expect(findArchViolation(file, 'arm64', root)).toBeNull()
     await rm(dirname(root), { recursive: true, force: true })
   })
@@ -456,7 +455,7 @@ describe('bundled native binary architecture', () => {
   it('flags an x86-64 binary in an arm64 slice', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'orca-elf-arch-'))
     const file = join(dir, 'pty.node')
-    await writeFile(file, elfHeader(ELF_MACHINE_BY_ARCH.x64))
+    await writeFile(file, elfHeader(0x3e))
     expect(findArchViolation(file, 'arm64')).toMatchObject({ actual: 'x64' })
     await rm(dir, { recursive: true, force: true })
   })
@@ -464,7 +463,7 @@ describe('bundled native binary architecture', () => {
   it('accepts a matching architecture', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'orca-elf-arch-'))
     const file = join(dir, 'pty.node')
-    await writeFile(file, elfHeader(ELF_MACHINE_BY_ARCH.x64))
+    await writeFile(file, elfHeader(0x3e))
     expect(findArchViolation(file, 'x64')).toBeNull()
     await rm(dir, { recursive: true, force: true })
   })
@@ -472,7 +471,7 @@ describe('bundled native binary architecture', () => {
   it('stays silent when no target architecture is supplied', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'orca-elf-arch-'))
     const file = join(dir, 'pty.node')
-    await writeFile(file, elfHeader(ELF_MACHINE_BY_ARCH.x64))
+    await writeFile(file, elfHeader(0x3e))
     expect(findArchViolation(file, undefined)).toBeNull()
     await rm(dir, { recursive: true, force: true })
   })

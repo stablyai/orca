@@ -109,6 +109,14 @@ describe('useAiVaultPanelScope', () => {
     expect(hook.result.current.collapsedGroups.size).toBe(512)
     expect(hook.result.current.collapsedGroups.has('group-0')).toBe(false)
     expect(hook.result.current.collapsedGroups.has('group-512')).toBe(true)
+
+    act(() => hook.result.current.toggleGroup('group-512'))
+    expect(hook.result.current.collapsedGroups.size).toBe(511)
+    expect(hook.result.current.collapsedGroups.has('group-512')).toBe(false)
+    act(() => hook.result.current.toggleGroup('group-512'))
+    expect(hook.result.current.collapsedGroups.size).toBe(512)
+    expect(hook.result.current.collapsedGroups.has('group-1')).toBe(true)
+    expect(hook.result.current.collapsedGroups.has('group-512')).toBe(true)
   })
 
   it('keeps a dialog local without inheriting or changing sidebar choices', () => {

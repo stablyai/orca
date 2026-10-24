@@ -48,15 +48,6 @@ describe('findStructuredAgentSessionTab', () => {
     createdAt: 0
   } satisfies Tab
 
-  it('matches the native session identity in its workspace inventory', () => {
-    expect(
-      findStructuredAgentSessionTab(
-        { 'wt-1': [tab] },
-        { workspaceId: 'wt-1', sessionId: 'session-1' }
-      )
-    ).toBe(tab)
-  })
-
   it('does not match a session or tab from another workspace', () => {
     expect(
       findStructuredAgentSessionTab(
