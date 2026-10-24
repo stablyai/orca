@@ -3,6 +3,7 @@ import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { MOBILE_SNAPSHOT_BYTE_BUDGET } from '../../../scrollback-limits'
 import { buildSnapshotFrameMeta } from './terminal-snapshot-payload'
 import { serializeBudgetedMobileSnapshot } from './terminal-snapshot-publication'
+import { isMovedPaneHistorySessionId } from '../../../../../shared/orcad-migration/orcad-migration-terminal-history'
 
 function historyRuntime(bytesPerRow: number): Pick<OrcaRuntimeService, 'serializeTerminalBuffer'> {
   return {
@@ -33,6 +34,26 @@ describe('subscribe snapshot scrollback (#20158)', () => {
     const serialized = await serializeBudgetedMobileSnapshot(historyRuntime(bytesPerRow), 'pty-1')
     expect(serialized?.scrollbackRows).toBe(500)
     expect(serialized?.data.endsWith('SCREEN')).toBe(true)
+  })
+})
+
+describe('subscribe snapshot of a WSL-moved pane', () => {
+  it('tries the larger first row count, then the usual ladder within the same byte budget', async () => {
+    const small = historyRuntime(10)
+    expect(
+      (await serializeBudgetedMobileSnapshot(small, 'pty-1', undefined, 5000))?.scrollbackRows
+    ).toBe(5000)
+    // 5000 and 2000 rows are over 512 KiB, 1000 is not.
+    const wide = historyRuntime(Math.floor(MOBILE_SNAPSHOT_BYTE_BUDGET / 1500))
+    expect(
+      (await serializeBudgetedMobileSnapshot(wide, 'pty-1', undefined, 5000))?.scrollbackRows
+    ).toBe(1000)
+  })
+
+  it('names only moved panes by their session id', () => {
+    expect(isMovedPaneHistorySessionId('repo::/w@@moved-0123456789abcdef')).toBe(true)
+    expect(isMovedPaneHistorySessionId('repo::/w@@a1b2c3d4')).toBe(false)
+    expect(isMovedPaneHistorySessionId('moved-0123456789abcdef')).toBe(false)
   })
 })
 
