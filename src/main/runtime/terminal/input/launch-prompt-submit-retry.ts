@@ -3,8 +3,29 @@ import {
   isAgentPromptStalledError,
   verifyAgentPromptSubmission
 } from '../../agent-prompt-submission-verification'
+import type { TerminalAgent } from '../../../../shared/terminal-agent'
+import { TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
 
 export type LaunchPromptSubmitRetryPolicy = { intervalMs: number; attempts: number }
+
+/** The submit-retry policy a fresh launch of `agent` declares, if any. */
+export function launchPromptSubmitRetryPolicy(
+  agent: TerminalAgent | null
+): LaunchPromptSubmitRetryPolicy | undefined {
+  return agent ? TUI_AGENT_CONFIG[agent].submitRetryUntilTurnStart : undefined
+}
+
+/** A turn start can reach the runtime as a title edge, a hook timestamp, or a status flip. */
+export function launchPromptTurnStarted(
+  baseline: AgentPromptActivity,
+  current: AgentPromptActivity
+): boolean {
+  return (
+    current.workingSequence > baseline.workingSequence ||
+    (current.explicitWorkingStartedAt ?? 0) > (baseline.explicitWorkingStartedAt ?? 0) ||
+    (current.status === 'working' && baseline.status !== 'working')
+  )
+}
 
 /**
  * A launch's composer signal can arrive before the TUI can accept Enter: dsh's launchpad paints

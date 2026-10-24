@@ -29,7 +29,11 @@ import {
   resolveAgentPromptEffectTimeoutMs,
   verifyAgentPromptSubmission
 } from '../../agent-prompt-submission-verification'
-import { resubmitLaunchPromptUntilTurnStart } from './launch-prompt-submit-retry'
+import {
+  launchPromptSubmitRetryPolicy,
+  launchPromptTurnStarted,
+  resubmitLaunchPromptUntilTurnStart
+} from './launch-prompt-submit-retry'
 import { TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
 import { AgentPromptPermissionReturnedError } from './agent-prompt-permission-hold'
 
@@ -173,14 +177,11 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
       }
       options.onSubmitWritten?.()
     }
-    let submits =
-      options.composerReady && !submitWithPaste
-        ? 1 + (await this.resubmitAgentPromptAfterRetryDelay(ptyId, generation, options))
-        : 1
+    let submits = 1
     if (options.composerReady && !submitWithPaste) {
+      submits += await this.resubmitAgentPromptAfterRetryDelay(ptyId, generation, options)
       // Why: a fresh launch's composer signal can precede the TUI's own submit readiness.
-      const agent = this.getPtyAgent(ptyId)
-      const retry = agent ? TUI_AGENT_CONFIG[agent].submitRetryUntilTurnStart : undefined
+      const retry = launchPromptSubmitRetryPolicy(this.getPtyAgent(ptyId))
       if (retry) {
         submits += await resubmitLaunchPromptUntilTurnStart({
           policy: retry,
@@ -191,7 +192,6 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
           beforeResubmit: async () => {
             assertAgentPromptRequestActive(options.signal)
             this.assertAgentPromptGeneration(ptyId, generation)
-            this.assertAgentPromptExpectedBinding(handle, options.expectedBinding)
             await options.beforeWrite?.(ptyId)
             // Why again after the async guard: a cancel, respawn, turn start or dialog can land
             // while it waits, and an Enter typed into that is not this prompt's to send.
@@ -200,8 +200,8 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
             this.assertAgentPromptExpectedBinding(handle, options.expectedBinding)
             const current = this.getAgentPromptActivity(handle, ptyId)
             return (
-              !this.isAgentPromptPermissionBlocked(baseline, current) &&
-              current.workingSequence <= baseline.workingSequence
+              !launchPromptTurnStarted(baseline, current) &&
+              !this.isAgentPromptPermissionBlocked(baseline, current)
             )
           },
           ...(options.suffixFailureError ? { failureError: options.suffixFailureError } : {}),
