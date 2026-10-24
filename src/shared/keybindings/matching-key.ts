@@ -23,6 +23,13 @@ export function platformModifiers(
   }
 }
 
+// Why: '+' and '_' need Shift on US keyboards but not on others (German '+', AZERTY '_'), so Shift is how the layout spells them.
+const SHIFT_AGNOSTIC_KEY_TOKENS = new Set(['Plus', 'Underscore'])
+
+export function isShiftAgnosticKeyToken(key: string): boolean {
+  return SHIFT_AGNOSTIC_KEY_TOKENS.has(key)
+}
+
 export function modifierStateMatches(
   parsed: ParsedKeybinding,
   input: KeybindingInput,
@@ -33,7 +40,7 @@ export function modifierStateMatches(
     hasModifier(input, 'meta') === expected.meta &&
     hasModifier(input, 'control') === expected.control &&
     hasModifier(input, 'alt') === expected.alt &&
-    hasModifier(input, 'shift') === expected.shift
+    (isShiftAgnosticKeyToken(parsed.key) || hasModifier(input, 'shift') === expected.shift)
   )
 }
 
