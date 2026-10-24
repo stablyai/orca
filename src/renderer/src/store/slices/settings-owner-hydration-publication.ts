@@ -18,7 +18,12 @@ function mergeOwnerDefaultsIntoCurrentSettings(
   if (!current) {
     return hydrated
   }
-  const { worktreeVisibilityDefaults } = hydrated
+  const {
+    worktreeVisibilityDefaults,
+    refreshLocalBaseRefOnWorktreeCreate,
+    localBaseRefSuggestionDismissed
+  } = hydrated
+  current = { ...current, refreshLocalBaseRefOnWorktreeCreate, localBaseRefSuggestionDismissed }
   const { worktreeVisibilityDefaults: _currentDefaults, ...currentWithoutDefaults } = current
   return worktreeVisibilityDefaults
     ? { ...current, worktreeVisibilityDefaults }

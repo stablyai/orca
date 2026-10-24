@@ -7,8 +7,32 @@ import {
 } from '../orca-runtime-test-mocks.spec'
 import { deferred, store } from '../orca-runtime-test-fixtures.spec'
 import { RuntimeClientSettingsController } from '../runtime-client-settings'
+import { SettingsUpdate } from '../../../shared/rpc-contract/client-settings-params'
 
 describe('OrcaRuntimeService', () => {
+  it('saves and projects local base refresh preferences on the runtime host', async () => {
+    let settings = { ...store.getSettings() }
+    const controller = new RuntimeClientSettingsController({
+      getSettings: () => settings,
+      updateSettings: (updates) => {
+        settings = { ...settings, ...updates }
+      }
+    })
+    const updates = SettingsUpdate.parse({
+      refreshLocalBaseRefOnWorktreeCreate: true,
+      localBaseRefSuggestionDismissed: true
+    })
+    await expect(controller.update(updates)).resolves.toMatchObject(updates)
+    expect(settings).toMatchObject(updates)
+    const disabled = SettingsUpdate.parse({ refreshLocalBaseRefOnWorktreeCreate: false })
+    await expect(controller.update(disabled)).resolves.toMatchObject({
+      refreshLocalBaseRefOnWorktreeCreate: false,
+      localBaseRefSuggestionDismissed: true
+    })
+    expect(SettingsUpdate.safeParse({ refreshLocalBaseRefOnWorktreeCreate: 'true' }).success).toBe(
+      false
+    )
+  })
   it.each([true, false])('projects the single Chat UI switch to older clients (%s)', (enabled) => {
     const controller = new RuntimeClientSettingsController({
       getSettings: () => ({ ...store.getSettings(), experimentalNativeChat: enabled }),
