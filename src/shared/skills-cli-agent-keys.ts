@@ -59,5 +59,8 @@ export const SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT = {
   zcode: 'zcode',
   // Why: DSH ships skills as Cordis plugins, not a `skills --agent` target.
   dsh: null,
-  jcode: null
+  jcode: null,
+  // Why: OmO is not certain to be a `skills --agent` target; null drops it
+  // from `skills add` rather than guessing a key the CLI would reject.
+  omo: null
 } satisfies Record<TuiAgent, string | null>

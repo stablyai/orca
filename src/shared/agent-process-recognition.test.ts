@@ -202,6 +202,33 @@ describe('agent process recognition', () => {
     expect(isExpectedAgentProcess('ante-obsidian', 'ante')).toBe(false)
   })
 
+  it('recognizes OmO without classifying omo-prefixed path fragments as the agent', () => {
+    expect(recognizeAgentProcess('omo')).toEqual({
+      agent: 'omo',
+      processName: 'omo'
+    })
+    expect(recognizeAgentProcess('/Users/dev/.omo/bin/omo')).toEqual({
+      agent: 'omo',
+      processName: 'omo'
+    })
+    expect(isExpectedAgentProcess('/Users/dev/.omo/bin/omo', 'omo')).toBe(true)
+    expect(isRecognizedAgentType('omo')).toBe(true)
+    // Why: 'omo' is a common token in directory and binary names; only the
+    // exact normalized basename may classify as the agent.
+    expect(recognizeAgentProcess('omo-sidecar')).toBeNull()
+    expect(isExpectedAgentProcess('omo-sidecar', 'omo')).toBe(false)
+  })
+
+  it('does not recognize OmO headless one-shot commands as interactive agents', () => {
+    // Why: `omo -p/--print` prints one response and exits (see print-mode-headless-command).
+    expect(recognizeAgentProcessFromCommandLine('omo -p "summarize this diff"')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('omo --print review')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('omo --resume ses_123')).toEqual({
+      agent: 'omo',
+      processName: 'omo'
+    })
+  })
+
   it('does not recognize Ante headless one-shot commands as interactive agents', () => {
     expect(recognizeAgentProcessFromCommandLine('ante -p "summarize this diff"')).toBeNull()
     expect(recognizeAgentProcessFromCommandLine('ante -psummarize')).toBeNull()

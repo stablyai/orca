@@ -60,6 +60,7 @@ export const NEVER_TRANSLATE_VALUES = new Set([
   'Linear',
   'Mistral Vibe',
   'OMP',
+  'OmO',
   'OpenClaude',
   'OpenClaw',
   'OpenCode',

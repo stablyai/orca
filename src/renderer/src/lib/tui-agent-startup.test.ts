@@ -133,6 +133,23 @@ describe('buildAgentStartupPlan', () => {
     })
   })
 
+  it('launches OmO first and injects the draft prompt after startup', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'omo',
+        prompt: 'Summarize the failing tests',
+        cmdOverrides: {},
+        platform: 'linux'
+      })
+    ).toEqual({
+      agent: 'omo',
+      launchCommand: 'omo',
+      expectedProcess: 'omo',
+      followupPrompt: 'Summarize the failing tests',
+      launchConfig: emptyLaunchConfig('omo')
+    })
+  })
+
   it('passes the prompt to Trae as a positional argv behind a `--` separator', () => {
     expect(
       buildAgentStartupPlan({

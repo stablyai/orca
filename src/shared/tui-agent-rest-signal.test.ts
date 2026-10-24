@@ -53,7 +53,8 @@ const EXPECTED_REST_SIGNALS: Record<TuiAgent, TuiAgentRestSignal> = {
   kimi: 'none',
   'mistral-vibe': 'none',
   'qwen-code': 'none',
-  rovo: 'none'
+  rovo: 'none',
+  omo: 'none'
 }
 
 describe('getTuiAgentRestSignal', () => {

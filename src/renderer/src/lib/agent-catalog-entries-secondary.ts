@@ -184,6 +184,13 @@ export function secondaryAgentCatalogEntries(): AgentCatalogEntry[] {
       cmd: 'jcode',
       faviconDomain: 'jcode.sh',
       homepageUrl: 'https://github.com/1jehuang/jcode'
+    },
+    {
+      id: 'omo',
+      label: translate('auto.lib.agent.catalog.omo_label', 'OmO'),
+      cmd: 'omo',
+      faviconDomain: 'github.com',
+      homepageUrl: 'https://github.com/code-yeongyu/oh-my-openagent'
     }
   ]
 }

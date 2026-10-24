@@ -765,6 +765,10 @@ describe('formatAgentTypeLabel', () => {
     expect(formatAgentTypeLabel('unknown')).toBe('Agent')
   })
 
+  it("maps 'omo' to 'OmO'", () => {
+    expect(formatAgentTypeLabel('omo')).toBe('OmO')
+  })
+
   it('passes through arbitrary custom agent names as-is', () => {
     expect(formatAgentTypeLabel('weirdo')).toBe('weirdo')
   })

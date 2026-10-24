@@ -59,6 +59,7 @@ const EXPECTED_LANES: Record<TuiAgent, LaunchedAgentReadinessLane> = {
   autohand: 'tui-idle',
   ante: 'tui-idle',
   trae: 'tui-idle',
+  omo: 'tui-idle',
   'prime-agent': 'tui-idle',
   goose: 'tui-idle',
   amp: 'tui-idle',
