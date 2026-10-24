@@ -164,9 +164,7 @@ async function spawnAndPublishSession(
   const wrappedShellReadySupported =
     (opts.shellReadySupported ?? false) &&
     (subprocess.shellPath === undefined || shellPathSupportsPtyStartupBarrier(subprocess.shellPath))
-  // Why: main cannot tell a pane will be wsl.exe, but the spawned subprocess can, and it already
-  // asked the guest for the ready marker (shell-launch-plan.ts). Without the wait, the command
-  // lands before the distro's login shell is reading and is dropped (#24188).
+  // The WSL guest was asked for a ready marker at spawn; an earlier write is dropped (#24188).
   const wslShellReadySupported = wslStartupCommandWaitsForShellReady({
     shellPath: subprocess.shellPath,
     command: opts.command,
@@ -258,7 +256,7 @@ async function spawnAndPublishSession(
     }
     session.write(
       buildStartupCommandSubmission(staging.command, {
-        // Why not for WSL: the guest may be a shell Orca does not wrap, which would echo ESC[200~.
+        // An unwrapped WSL guest shell would echo ESC[200~.
         bracketedPasteSafe: wrappedShellReadySupported
       })
     )

@@ -190,7 +190,7 @@ export function createPtyShellLaunchPlan(
     if (pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe') {
       addOrcaWslInteropEnv(env)
     }
-    // Why: terminal-host-session-create.ts gates the startup write on the same predicate.
+    // Same predicate as the startup-write gate in terminal-host-session-create.ts.
     if (
       wslStartupCommandWaitsForShellReady({
         shellPath,

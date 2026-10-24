@@ -129,9 +129,7 @@ describe('TerminalHost startup command delivery logging', () => {
   })
 })
 
-// Why: a command typed into wsl.exe before the distro's login shell is reading
-// is dropped (#24188). The daemon learns the pane is WSL only from the spawned
-// subprocess, so the wait has to switch on there, not from main's hint.
+// Only the spawned subprocess knows the pane is WSL, so the wait must switch on there (#24188).
 describe('TerminalHost WSL startup command', () => {
   const origPlatform = process.platform
   let emitData: (data: string) => void

@@ -342,11 +342,9 @@ describe('in-guest wrapper root resolution', () => {
   })
 })
 
-// Why: the host holds a WSL startup command until the guest reports ready
-// (#24188). Only a prompt hook may report it: a marker sent before the shell's
-// startup files lets those files eat the command.
+// A marker sent before the shell's rc files would let them eat the command (#24188).
 describe('guest shell ready reporting', () => {
-  // Why a sentinel: fish's init command spans lines, so output cannot be split on newlines.
+  // Fish's init command spans lines, so output can't be split on newlines.
   const ARGS_END = '<<orca-args-end>>'
   const dispatch = (
     shellName: string,

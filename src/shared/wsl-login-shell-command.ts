@@ -108,21 +108,13 @@ export function buildWslInteractiveLoginShellCommand(): string {
     '    fi',
     '    ;;',
     'esac',
-    // Why no marker for the rest: without a prompt hook it could only come before
-    // the shell's own startup files, which can still eat the command. They wait
-    // out the host's timeout instead. Consumed so it never leaks into the shell.
+    // Shells without a prompt hook can't report ready after their rc files; they wait out the cap.
     '[ -n "$_orca_wsl_shell_wrapped" ] || unset ORCA_SHELL_FEATURES',
     'exec "$_orca_wsl_shell" -l'
   ].join('\n')
 }
 
-/**
- * Guest fish reports ready from its first prompt, after config.fish.
- *
- * Why: fish has no wrapper dir, so the host holds a WSL startup command until
- * this fires (wsl-startup-shell-ready.ts, #24188). Must stay identical to
- * getFishShellReadyInitCommand(SHELL_READY_MARKER_ESCAPED) in src/main/shell-templates.ts.
- */
+// Keep identical to getFishShellReadyInitCommand(SHELL_READY_MARKER_ESCAPED) in shell-templates.ts.
 export const WSL_FISH_SHELL_READY_INIT = [
   'function __orca_shell_ready_marker --on-event fish_prompt',
   '  builtin printf "\\033]777;orca-shell-ready\\007"',

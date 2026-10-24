@@ -333,7 +333,6 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[2].env.HISTFILE).toContain('terminal-history-wsl/Debian')
     })
 
-    // Why: typed before the distro's login shell reads, the command is dropped (#24188).
     it('holds a WSL startup command until the guest shell reports ready', async () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       vi.useFakeTimers()
