@@ -8,11 +8,15 @@ import type { SshRepoReconciliation } from '../slices/superseded-ssh-repo-rows'
 import { reconcileReadoptedSshWorktreesByRepo } from '../slices/readopted-ssh-worktree-rows'
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import { adoptFromEndpoint } from '../adopt-from-endpoint'
 import { getRuntimeTargetHostId } from '../../runtime/runtime-client-target'
 import { fetchProjectHostSetupCompatibility } from '../projects/project-host-routing'
 import { mergeFetchedReposForHost } from './repo-catalog-identity'
+import {
+  worktreeHostMatchOptions,
+  worktreeMatchesHost
+} from '../slices/worktrees/listing/worktree-host-ownership'
 
 export type FetchedRepoCatalog = {
   repos: readonly Repo[]
@@ -112,6 +116,88 @@ export function reconcileReadoptedSshWorktreeState(
     worktreesByRepo,
     detectedWorktreesByRepo,
     sortEpoch: worktreesByRepo === state.worktreesByRepo ? state.sortEpoch : state.sortEpoch + 1
+  }
+}
+
+type HostOwnedWorktree = {
+  hostId?: ExecutionHostId
+  runtimeOwnerEnvironmentId?: string
+}
+
+function pruneRemovedHostRepoRows<T extends HostOwnedWorktree>(
+  rowsByRepo: Record<string, T[]>,
+  repos: readonly Repo[],
+  previousRepos: readonly Repo[],
+  hostId: ExecutionHostId
+): Record<string, T[]> {
+  const repoIdsForHost = new Set(
+    repos.filter((repo) => getRepoExecutionHostId(repo) === hostId).map((repo) => repo.id)
+  )
+  let prunedRowsByRepo = rowsByRepo
+  for (const [repoId, rows] of Object.entries(rowsByRepo)) {
+    if (repoIdsForHost.has(repoId)) {
+      continue
+    }
+    const matchOptions = worktreeHostMatchOptions({ repos: previousRepos }, repoId, hostId)
+    const survivingRows = rows.filter((row) => !worktreeMatchesHost(row, hostId, matchOptions))
+    if (survivingRows.length === rows.length) {
+      continue
+    }
+    if (prunedRowsByRepo === rowsByRepo) {
+      prunedRowsByRepo = { ...rowsByRepo }
+    }
+    if (survivingRows.length === 0) {
+      delete prunedRowsByRepo[repoId]
+    } else {
+      prunedRowsByRepo[repoId] = survivingRows
+    }
+  }
+  return prunedRowsByRepo
+}
+
+/** Removes cached rows for owners absent from the refresh, using pre-refresh ownership for unstamped rows. */
+export function reconcileFetchedHostWorktreeState(
+  state: Pick<AppState, 'repos' | 'worktreesByRepo' | 'detectedWorktreesByRepo' | 'sortEpoch'>,
+  readoptions: readonly SshRepoReadoption[],
+  repos: readonly Repo[],
+  hostId: ExecutionHostId
+): Pick<AppState, 'worktreesByRepo' | 'detectedWorktreesByRepo' | 'sortEpoch'> {
+  const readoptedState = reconcileReadoptedSshWorktreeState(state, readoptions)
+  const worktreesByRepo = pruneRemovedHostRepoRows(
+    readoptedState.worktreesByRepo,
+    repos,
+    state.repos,
+    hostId
+  )
+  const detectedRows = Object.fromEntries(
+    Object.entries(readoptedState.detectedWorktreesByRepo).map(([repoId, result]) => [
+      repoId,
+      result.worktrees
+    ])
+  )
+  const prunedDetectedRows = pruneRemovedHostRepoRows(detectedRows, repos, state.repos, hostId)
+  let detectedWorktreesByRepo = readoptedState.detectedWorktreesByRepo
+  if (prunedDetectedRows !== detectedRows) {
+    detectedWorktreesByRepo = { ...readoptedState.detectedWorktreesByRepo }
+    for (const [repoId, result] of Object.entries(readoptedState.detectedWorktreesByRepo)) {
+      const rows = prunedDetectedRows[repoId]
+      if (rows === result.worktrees) {
+        continue
+      }
+      if (rows === undefined) {
+        delete detectedWorktreesByRepo[repoId]
+      } else {
+        detectedWorktreesByRepo[repoId] = { ...result, worktrees: rows }
+      }
+    }
+  }
+  return {
+    worktreesByRepo,
+    detectedWorktreesByRepo,
+    sortEpoch:
+      worktreesByRepo === readoptedState.worktreesByRepo
+        ? readoptedState.sortEpoch
+        : readoptedState.sortEpoch + 1
   }
 }
 

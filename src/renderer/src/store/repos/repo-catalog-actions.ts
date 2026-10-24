@@ -25,6 +25,7 @@ import {
   fetchRepoCatalogForTarget,
   filterSetupsForPrunedRepoRows,
   mergeFetchedRepoCatalog,
+  reconcileFetchedHostWorktreeState,
   reconcileReadoptedSshWorktreeState,
   reconcileSupersededSshRepos
 } from './repo-catalog-merge'
@@ -125,13 +126,19 @@ export function createRepoCatalogActions(
             repos: prunedRepos,
             hostId: result.hostId
           })
+          const worktreeState = reconcileFetchedHostWorktreeState(
+            s,
+            s.pendingSshRepoReadoptions,
+            prunedRepos,
+            result.hostId
+          )
           finalizedHostRepos = prunedRepos.filter(
             (repo) => getRepoExecutionHostId(repo) === result.hostId
           )
           return {
             repos: prunedRepos,
             pendingSshRepoReadoptions: reconciliation.pendingReadoptions,
-            ...reconcileReadoptedSshWorktreeState(s, s.pendingSshRepoReadoptions),
+            ...worktreeState,
             ...mergedProjectCompatibility,
             ...(arrayElementsUnchanged(prunedRepos, s.repos)
               ? {}

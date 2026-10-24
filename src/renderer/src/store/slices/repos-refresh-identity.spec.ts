@@ -2,8 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Project } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { getSetupScriptPromptDismissalKey } from '../../lib/setup-script-prompt'
+import type { AppState } from '../types'
+import { reconcileFetchedHostWorktreeState } from '../repos/repo-catalog-merge'
 import { getRepoHostIdentityForParts } from './repo-host-identity'
 import { createTestStore } from './store-test-helpers'
+import { makeWorktree } from './worktrees-slice-test-fixtures'
 
 export function registerReposRefreshIdentityTests(): void {
   // Why: every field here is load-bearing. A scalar-only repo reconciles even when the structural
@@ -233,6 +236,107 @@ export function registerReposRefreshIdentityTests(): void {
       expect(store.getState().projects).toHaveLength(1)
       expect(store.getState().projectHostSetups).toHaveLength(1)
     })
+
+    it('prunes cached worktree rows for a repo removed from the refreshed host', async () => {
+      const sshTwin: Repo = {
+        ...secondRepo,
+        executionHostId: 'ssh:host-a',
+        connectionId: 'host-a'
+      }
+      mockRepos(repo, secondRepo, sshTwin)
+      const store = createTestStore()
+      await store.getState().fetchRepos(catalogOwner(store))
+
+      const removedLocalWorktree = makeWorktree({
+        id: 'repo-2::/repo-2',
+        repoId: secondRepo.id,
+        path: secondRepo.path,
+        hostId: 'local'
+      })
+      const sshTwinWorktree = makeWorktree({
+        id: 'repo-2::/remote/repo-2',
+        repoId: secondRepo.id,
+        path: '/remote/repo-2',
+        hostId: 'ssh:host-a'
+      })
+      const removedDetectedWorktree = {
+        ...removedLocalWorktree,
+        ownership: 'orca-managed' as const,
+        selectedCheckout: false,
+        visible: true
+      }
+      const sshTwinDetectedWorktree = {
+        ...sshTwinWorktree,
+        ownership: 'orca-managed' as const,
+        selectedCheckout: false,
+        visible: true
+      }
+      store.setState({
+        worktreesByRepo: {
+          [secondRepo.id]: [removedLocalWorktree, sshTwinWorktree]
+        },
+        detectedWorktreesByRepo: {
+          [secondRepo.id]: {
+            repoId: secondRepo.id,
+            authoritative: true,
+            source: 'git',
+            worktrees: [removedDetectedWorktree, sshTwinDetectedWorktree]
+          }
+        }
+      })
+
+      mockRepos(repo, sshTwin)
+      await store.getState().fetchRepos(catalogOwner(store))
+
+      expect(store.getState().worktreesByRepo[secondRepo.id]).toEqual([sshTwinWorktree])
+      expect(store.getState().detectedWorktreesByRepo[secondRepo.id]?.worktrees).toEqual([
+        sshTwinDetectedWorktree
+      ])
+    })
+
+    it.each([
+      [
+        'SSH',
+        { ...secondRepo, executionHostId: 'ssh:host-a', connectionId: 'host-a' },
+        'ssh:host-a'
+      ],
+      ['runtime', { ...secondRepo, executionHostId: 'runtime:env-1' }, 'runtime:env-1']
+    ] as const)(
+      'prunes an unstamped row when its only %s owner disappears',
+      (_ownerType, vanishedRepo, hostId) => {
+        const unstampedWorktree = makeWorktree({
+          id: `${vanishedRepo.id}::/worktree`,
+          repoId: vanishedRepo.id
+        })
+        const detectedWorktree = {
+          ...unstampedWorktree,
+          ownership: 'orca-managed' as const,
+          selectedCheckout: false,
+          visible: true
+        }
+        const state: Pick<
+          AppState,
+          'repos' | 'worktreesByRepo' | 'detectedWorktreesByRepo' | 'sortEpoch'
+        > = {
+          repos: [vanishedRepo],
+          worktreesByRepo: { [vanishedRepo.id]: [unstampedWorktree] },
+          detectedWorktreesByRepo: {
+            [vanishedRepo.id]: {
+              repoId: vanishedRepo.id,
+              authoritative: true,
+              source: 'git',
+              worktrees: [detectedWorktree]
+            }
+          },
+          sortEpoch: 0
+        }
+
+        const next = reconcileFetchedHostWorktreeState(state, [], [], hostId)
+
+        expect(next.worktreesByRepo[vanishedRepo.id]).toBeUndefined()
+        expect(next.detectedWorktreesByRepo[vanishedRepo.id]).toBeUndefined()
+      }
+    )
 
     it('keeps a project owned only through a repo on another host', async () => {
       // Why: no setup row names this project, so the refreshing host can only be ruled out from the

@@ -15,7 +15,7 @@ import {
   fetchRepoCatalogForTarget,
   filterSetupsForPrunedRepoRows,
   mergeFetchedRepoCatalog,
-  reconcileReadoptedSshWorktreeState,
+  reconcileFetchedHostWorktreeState,
   reconcileSupersededSshRepos
 } from './repo-catalog-merge'
 import { getRuntimeTargetHostId } from '../../runtime/runtime-client-target'
@@ -68,6 +68,12 @@ export function createRuntimeRepoCatalogActions(
             repos: finalizedRepos,
             hostId: result.hostId
           })
+          const worktreeState = reconcileFetchedHostWorktreeState(
+            s,
+            s.pendingSshRepoReadoptions,
+            finalizedRepos,
+            result.hostId
+          )
           finalizedHostRepos = finalizedRepos.filter(
             (repo) => getRepoExecutionHostId(repo) === result.hostId
           )
@@ -105,7 +111,7 @@ export function createRuntimeRepoCatalogActions(
                 : {}
               : {}),
             pendingSshRepoReadoptions: reconciliation.pendingReadoptions,
-            ...reconcileReadoptedSshWorktreeState(s, s.pendingSshRepoReadoptions),
+            ...worktreeState,
             ...mergedProjectCompatibility,
             activeRepoId:
               s.activeRepoId && validRepoIds.has(s.activeRepoId) ? s.activeRepoId : null,
