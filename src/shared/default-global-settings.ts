@@ -266,6 +266,7 @@ export function buildDefaultSettings(args: {
     experimentalConnectors: false,
     experimentalWslHosts: false,
     compactWorktreeCards: false,
+    compactWorktreeCardHover: true,
     // Why: local desktop stays the default until the user picks a saved runtime environment.
     activeRuntimeEnvironmentId: null,
     // Why: hydrate a stable empty shape so renderer optional-chained reads never hit undefined.

@@ -13,8 +13,13 @@ import {
 const setWorktreeCardMode = vi.fn()
 const setWorktreeCardProperties = vi.fn()
 const setAgentActivityDisplayMode = vi.fn()
+const updateSettings = vi.fn()
 
-let settings = { compactWorktreeCards: false, experimentalNewWorktreeCardStyle: false }
+let settings: {
+  compactWorktreeCards: boolean
+  experimentalNewWorktreeCardStyle: boolean
+  compactWorktreeCardHover?: boolean
+} = { compactWorktreeCards: false, experimentalNewWorktreeCardStyle: false }
 let projectGroups: unknown[] = []
 let worktreeCardProperties = [
   'status',
@@ -38,6 +43,7 @@ vi.mock('@/store', () => ({
       setWorktreeCardMode,
       setWorktreeCardProperties,
       settings,
+      updateSettings,
       worktreeCardProperties
     })
 }))
@@ -144,6 +150,7 @@ beforeEach(() => {
   setAgentActivityDisplayMode.mockReset()
   setWorktreeCardMode.mockReset()
   setWorktreeCardProperties.mockReset()
+  updateSettings.mockReset()
 })
 
 afterEach(() => {
@@ -170,6 +177,51 @@ describe('worktree card menu items', () => {
     })
 
     expect(setWorktreeCardMode).toHaveBeenCalledWith('Compact')
+  })
+
+  it('lets compact cards turn off the properties hover', () => {
+    settings = { compactWorktreeCards: true, experimentalNewWorktreeCardStyle: false }
+    renderMenu()
+
+    const hoverToggle = Array.from(document.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Show on hover'
+    )
+    expect(hoverToggle?.dataset.checked).toBe('true')
+    expect(container?.textContent).toContain('Show propertiesHover')
+
+    act(() => {
+      hoverToggle?.click()
+    })
+
+    expect(updateSettings).toHaveBeenCalledWith({ compactWorktreeCardHover: false })
+  })
+
+  it('counts title-row properties once the compact hover is off', () => {
+    settings = {
+      compactWorktreeCards: true,
+      experimentalNewWorktreeCardStyle: false,
+      compactWorktreeCardHover: false
+    }
+    worktreeCardProperties = ['status', 'unread', 'pr', 'comment']
+    renderMenu()
+
+    const hoverToggle = Array.from(document.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Show on hover'
+    )
+    expect(hoverToggle?.dataset.checked).toBe('false')
+    expect(container?.textContent).toContain('Show properties2')
+
+    act(() => {
+      hoverToggle?.click()
+    })
+
+    expect(updateSettings).toHaveBeenCalledWith({ compactWorktreeCardHover: true })
+  })
+
+  it('leaves the hover toggle out of detailed cards', () => {
+    renderMenu()
+
+    expect(container?.textContent).not.toContain('Show on hover')
   })
 
   it('keeps branch-only copy when project groups are unavailable', () => {

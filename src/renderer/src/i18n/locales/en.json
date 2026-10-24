@@ -6063,6 +6063,7 @@
           "projectRuntimeHost": "Project server",
           "95c9754653": "Agent activity layout",
           "3d4b9c4997": "Hover",
+          "compactCardHover": "Show on hover",
           "ba87080fb7": "Show properties",
           "320b675c9a": "Card layout",
           "newCardDisplay": {

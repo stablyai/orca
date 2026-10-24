@@ -129,10 +129,13 @@ export function WorktreeCardPropertiesMenuItem({
 }: CardMenuItemProps): React.JSX.Element {
   const worktreeCardProperties = useAppStore((s) => s.worktreeCardProperties)
   const compact = useAppStore((s) => s.settings?.compactWorktreeCards === true)
+  const compactHover = useAppStore((s) => s.settings?.compactWorktreeCardHover !== false)
+  const updateSettings = useAppStore((s) => s.updateSettings)
   const agentActivityDisplayMode = useAppStore((s) => s.agentActivityDisplayMode)
   const setAgentActivityDisplayMode = useAppStore((s) => s.setAgentActivityDisplayMode)
   const toggleProperty = useToggleCardProperty()
-  const value = getWorkspaceCardPropertiesValue(worktreeCardProperties, compact)
+  // Why: with the hover off, compact cards only show the checked properties as title-row icons.
+  const value = getWorkspaceCardPropertiesValue(worktreeCardProperties, compact && compactHover)
   return (
     <DropdownMenuSub>
       <DropdownMenuSubTrigger>
@@ -159,6 +162,23 @@ export function WorktreeCardPropertiesMenuItem({
         className="w-48"
         data-workspace-board-preserve-open={boardAttr(preserveWorkspaceBoardOpen)}
       >
+        {compact ? (
+          <>
+            <DropdownMenuCheckboxItem
+              checked={compactHover}
+              onCheckedChange={(checked) =>
+                void updateSettings({ compactWorktreeCardHover: checked === true })
+              }
+              onSelect={(e) => e.preventDefault()}
+            >
+              {translate(
+                'auto.components.sidebar.SidebarWorkspaceOptionsMenu.compactCardHover',
+                'Show on hover'
+              )}
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuSeparator />
+          </>
+        ) : null}
         {PROPERTY_OPTIONS.map((opt) => (
           <DropdownMenuCheckboxItem
             key={opt.id}
