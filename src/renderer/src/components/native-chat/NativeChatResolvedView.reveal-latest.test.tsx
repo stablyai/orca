@@ -27,7 +27,7 @@ vi.mock('./NativeChatMessageList', () => ({
   NativeChatMessageList: (props: { ref?: React.Ref<NativeChatMessageListHandle> }) => {
     useImperativeHandle(props.ref, () => ({
       revealLatest: stubs.revealLatest,
-      revealFindMatch: () => {},
+      revealFindMatch: () => false,
       messageCopyText: () => null
     }))
     return null

@@ -2,6 +2,7 @@ import type { RefObject, UIEventHandler } from 'react'
 import type { ReaderGesture } from './native-chat-autoscroll'
 
 export type NativeChatTranscriptScrollOptions = {
+  captureReadingPosition?: (followingEnd: boolean) => void
   scrollRef: RefObject<HTMLDivElement | null>
   contentRef: RefObject<HTMLDivElement | null>
   itemCount: number

@@ -1,3 +1,17 @@
+import { useEffect, useRef } from 'react'
+
+export function useDictationChatInputLease(dictationState: string) {
+  const releaseChatInput = useRef<(() => void) | null>(null)
+  useEffect(() => {
+    if (dictationState === 'idle' || dictationState === 'error') {
+      releaseChatInput.current?.()
+      releaseChatInput.current = null
+    }
+  }, [dictationState])
+  useEffect(() => () => releaseChatInput.current?.(), [])
+  return releaseChatInput
+}
+
 import { yieldToEventLoop } from '../../../../shared/event-loop-yield'
 import { getUtf8ChunkEndIndex } from '../../../../shared/utf8-byte-limits'
 import {

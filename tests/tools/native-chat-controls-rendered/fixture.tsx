@@ -5,12 +5,14 @@ import { NativeChatFindBar } from '@/components/native-chat/NativeChatFindBar'
 import { NativeChatContextClearFade } from '@/components/native-chat/NativeChatContextClearFade'
 import { nativeChatAppearanceStyle } from '@/components/native-chat/native-chat-appearance-style'
 import { useNativeChatFind } from '@/components/native-chat/use-native-chat-find'
+import { useNativeChatRevealLatest } from '@/components/native-chat/use-native-chat-reveal-latest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import './fixture.css'
 
 function Fixture() {
   const root = useRef<HTMLDivElement>(null)
-  const find = useNativeChatFind(false, root, useRef(null), useRef(null))
+  const reveal = useNativeChatRevealLatest()
+  const find = useNativeChatFind(false, root, useRef(null), reveal)
   return (
     <TooltipProvider>
       <button onClick={() => find.open?.()}>Open Find</button>

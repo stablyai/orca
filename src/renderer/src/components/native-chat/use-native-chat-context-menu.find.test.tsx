@@ -1,3 +1,4 @@
+import { useNativeChatRevealLatest } from './use-native-chat-reveal-latest'
 // @vitest-environment happy-dom
 
 import '@testing-library/jest-dom/vitest'
@@ -14,7 +15,7 @@ import {
 import { useNativeChatFind } from './use-native-chat-find'
 import { useNativeChatRootInputRouting } from './use-native-chat-root-input-routing'
 
-function Chat(): React.JSX.Element {
+function Chat({ acquiring }: { acquiring: boolean }): React.JSX.Element {
   const rootRef = useRef<HTMLDivElement>(null)
   const questionAnswerInputRef = useRef<HTMLInputElement>(null)
   const composerElementRef = useRef<HTMLTextAreaElement>(null)
@@ -30,8 +31,8 @@ function Chat(): React.JSX.Element {
     pasteFromClipboard: () => {},
     contains: () => false
   })
-  const messageListRef = useRef({ revealFindMatch: () => {} })
-  const find = useNativeChatFind(true, rootRef, composerRef, messageListRef)
+  const reveal = useNativeChatRevealLatest()
+  const find = useNativeChatFind(true, rootRef, composerRef, reveal)
   const rootInput = useNativeChatRootInputRouting({
     tabId: 'chat-tab',
     rootRef,
@@ -70,7 +71,7 @@ function Chat(): React.JSX.Element {
         editor={{
           messageId: 'queued-1',
           text: 'Queued draft',
-          acquiring: false,
+          acquiring,
           saving: false,
           canSave: true,
           change: () => {},
@@ -97,7 +98,8 @@ it.each([
   async ({ userAgent, button, ctrlKey }) => {
     vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(userAgent)
     const clock = vi.spyOn(Date, 'now').mockReturnValue(0)
-    render(<Chat />)
+    const view = render(<Chat acquiring />)
+    view.rerender(<Chat acquiring={false} />)
     const editor = screen.getByRole('textbox', { name: 'Edit message' })
     expect(editor).toHaveFocus()
 

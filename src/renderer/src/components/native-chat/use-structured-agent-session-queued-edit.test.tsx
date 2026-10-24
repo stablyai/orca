@@ -6,6 +6,7 @@
 
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { NativeChatViewIdentity, retireNativeChatViewState } from './native-chat-view-state-memory'
 import { toast } from 'sonner'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
 import type {
@@ -79,7 +80,11 @@ type Props = {
   imagesCapable?: boolean
   promptOpen?: boolean
 }
-function harness(capable = true, initial: Props = { messages: [message] }) {
+function harness(
+  capable = true,
+  initial: Props = { messages: [message] },
+  identity: string | null = null
+) {
   return renderHook(
     (props: Props) => {
       const submissions = props.submissions ?? []
@@ -98,7 +103,14 @@ function harness(capable = true, initial: Props = { messages: [message] }) {
         promptOpen: props.promptOpen ?? false
       })
     },
-    { initialProps: initial }
+    {
+      initialProps: initial,
+      wrapper: ({ children }) => (
+        <NativeChatViewIdentity.Provider value={identity}>
+          {children}
+        </NativeChatViewIdentity.Provider>
+      )
+    }
   )
 }
 type Hook = ReturnType<typeof harness>
@@ -142,6 +154,34 @@ afterEach(() => {
 })
 
 describe('inline queued editor', () => {
+  it('keeps an acquiring edit, typing and images outside the parked pane, then saves once on return', async () => {
+    const identity = 'queued-edit-cold-return'
+    writeNativeChatDraftCache(SCOPE, 'existing composer')
+    const first = harness(true, { messages: [message], imagesCapable: true }, identity)
+    await begin(first)
+    act(() => first.result.current.editor?.change('edited while parked'))
+    const intake = first.result.current.editor!.images!.intake
+    first.unmount()
+    act(() => intake.append(['/tmp/parked.png']))
+    expect(holdCalls('release')).toHaveLength(0)
+    expect(readNativeChatDraftCache(SCOPE)).toBe('existing composer')
+    const returned = harness(true, { messages: [message], imagesCapable: true }, identity)
+    expect(returned.result.current.editor).toMatchObject({
+      text: 'edited while parked',
+      acquiring: false
+    })
+    act(() => returned.result.current.editor?.save())
+    await waitFor(() => expect(returned.result.current.editor).toBeUndefined())
+    expect(writeSpy).toHaveBeenCalledTimes(1)
+    expect(writeSpy.mock.calls[0]?.[2]).toMatchObject({
+      text: 'edited while parked [Image #1] ',
+      images: [{ path: '/tmp/parked.png' }]
+    })
+    expect(readNativeChatDraftCache(SCOPE)).toBe('existing composer')
+    returned.unmount()
+    retireNativeChatViewState(identity)
+  })
+
   it('holds the card on its host, saves against the full body, and leaves the chat box alone', async () => {
     writeNativeChatDraftCache(SCOPE, 'existing composer')
     const hook = harness()

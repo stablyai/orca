@@ -59,7 +59,7 @@ describe('DashboardPopoutRoot', () => {
     expect(emitAppMenuSelectionAction).not.toBeNull()
 
     await act(async () => emitAppMenuPaste!())
-    act(() => emitAppMenuSelectionAction!('select-all'))
+    await act(async () => emitAppMenuSelectionAction!('select-all'))
     window.removeEventListener(APP_MENU_PASTE_EVENT, onPaste)
     window.removeEventListener(APP_MENU_SELECTION_ACTION_EVENT, onSelectionAction)
 

@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef } from 'react'
 import type { AgentSessionFailureFact } from '../../../../shared/agent-session-failure'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalRenderItem,
+  AgentJournalSubmission
+} from '../../../../shared/agent-session-journal-types'
 import {
   sameAgentSessionFailureFact,
   structuredAgentSessionStartFailureFacts
@@ -30,4 +33,18 @@ export function useStructuredAgentSessionStartFailureFacts(
     previousRef.current = stable
   }, [stable])
   return stable
+}
+
+import { dispatchWasWithdrawn } from '../../../../shared/structured-agent-session-dispatch-rejection'
+import type { QueuedMessageCard } from './structured-agent-session-queued-cards'
+export function needsStartFacts(
+  cards: readonly QueuedMessageCard[],
+  submissions: readonly AgentJournalSubmission[]
+): boolean {
+  return (
+    cards.some((card) => card.state === 'returned') ||
+    submissions.some(
+      (submission) => submission.dispatchState === 'rejected' && !dispatchWasWithdrawn(submission)
+    )
+  )
 }

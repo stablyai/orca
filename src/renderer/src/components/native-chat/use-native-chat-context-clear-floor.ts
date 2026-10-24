@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+import type { StructuredAgentSessionState } from '../../../../shared/structured-agent-session-reducer'
+import type {
+  AgentJournalCursor,
+  AgentJournalRenderItem
+} from '../../../../shared/agent-session-journal-types'
 import {
   agentSessionTranscriptRows,
   latestAgentSessionContextClearSequence
@@ -7,6 +11,8 @@ import {
 
 /** Matches the transcript's `duration-150` fade, so the swap happens while it is invisible. */
 export const NATIVE_CHAT_CONTEXT_CLEAR_FADE_MS = 150
+
+export type NativeChatAppliedCut = { epoch: string; floor: number; tail: number }
 
 type ClearFloorState = {
   epoch: string | null
@@ -25,8 +31,28 @@ type ClearFloorState = {
  */
 export function useNativeChatContextClearFloor(
   epoch: string | null,
-  items: readonly AgentJournalRenderItem[]
-): { rows: readonly AgentJournalRenderItem[]; clearing: boolean; clears: number } {
+  items: readonly AgentJournalRenderItem[],
+  observation: {
+    current: boolean
+    floor?: AgentJournalCursor
+    read?: Pick<StructuredAgentSessionState, 'status' | 'cursor'>
+  } = { current: true }
+): {
+  rows: readonly AgentJournalRenderItem[]
+  clearing: boolean
+  clears: number
+  applied: NativeChatAppliedCut | null
+} {
+  const { current: isCurrent, floor: hostFloor, read } = observation
+  const appliedHostFloor =
+    hostFloor?.epoch === epoch &&
+    isCurrent &&
+    read?.status === 'ready' &&
+    read.cursor &&
+    read.cursor.sequence >= hostFloor.sequence &&
+    (items[0]?.sequence ?? -1) >= hostFloor.sequence
+      ? hostFloor.sequence
+      : undefined
   const latest = useMemo(() => latestAgentSessionContextClearSequence(items), [items])
   const [state, setState] = useState<ClearFloorState>(() => ({
     epoch,
@@ -37,9 +63,6 @@ export function useNativeChatContextClearFloor(
   // The newest row the last commit drew: a divider past it arrived live, not from an older page.
   const tail = items.at(-1)?.sequence ?? 0
   const drawnTail = useRef(tail)
-  useEffect(() => {
-    drawnTail.current = tail
-  }, [tail])
 
   let current = state
   if (epoch !== state.epoch) {
@@ -69,7 +92,20 @@ export function useNativeChatContextClearFloor(
     return () => clearTimeout(timer)
   }, [fading])
 
+  useEffect(() => {
+    if (isCurrent && fading === null) {
+      drawnTail.current = tail
+    }
+  }, [tail, fading, isCurrent])
+  const applied =
+    epoch !== null && isCurrent
+      ? {
+          epoch,
+          floor: fading === null ? Math.max(current.floor, appliedHostFloor ?? 0) : current.floor,
+          tail: fading === null ? tail : drawnTail.current
+        }
+      : null
   const floor = current.floor
   const rows = useMemo(() => agentSessionTranscriptRows(items, floor), [floor, items])
-  return { rows, clearing: fading !== null, clears: current.clears }
+  return { rows, clearing: fading !== null, clears: current.clears, applied }
 }

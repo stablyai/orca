@@ -1,4 +1,8 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import {
+  createNativeChatReturnField,
+  useNativeChatReturnState
+} from './native-chat-view-state-memory'
+import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import type { NativeChatSubagentRow } from '../../../../shared/native-chat-transcript-projection'
 import type { StructuredAgentSubagentRoster } from '../../../../shared/structured-agent-session-subagent-roster'
@@ -11,6 +15,8 @@ import {
   type NativeChatSubagentDisclosure,
   type NativeChatSubagentSections
 } from './native-chat-subagent-sections'
+
+const subagentReturnChoices = createNativeChatReturnField<NativeChatSubagentChoices>()
 
 function choose(
   current: NativeChatSubagentChoices,
@@ -31,6 +37,7 @@ export function useNativeChatSubagentSections(
   subagentRows: ReadonlyMap<string, readonly NativeChatSubagentRow[]>,
   roster?: StructuredAgentSubagentRoster
 ): {
+  resetChoices: () => void
   sections: NativeChatSubagentSections
   /** Every subagent row in transcript order; kept while only the conversation changes. */
   subagentRowsInOrder: readonly NativeChatSubagentRow[]
@@ -48,7 +55,10 @@ export function useNativeChatSubagentSections(
     () => nativeChatSubagentRowsInOrder(subagentRows),
     [subagentRows]
   )
-  const [subagentChoices, setChoices] = useState(NO_NATIVE_CHAT_SUBAGENT_CHOICES)
+  const [subagentChoices, setChoices] = useNativeChatReturnState(
+    subagentReturnChoices,
+    () => NO_NATIVE_CHAT_SUBAGENT_CHOICES
+  )
   const subagentDisclosure = useMemo<NativeChatSubagentDisclosure>(
     () => ({
       setSectionOpen: (agentId, open) =>
@@ -75,7 +85,9 @@ export function useNativeChatSubagentSections(
       )
     )
   }, [])
+  const resetChoices = useCallback(() => setChoices(NO_NATIVE_CHAT_SUBAGENT_CHOICES), [setChoices])
   return {
+    resetChoices,
     sections,
     subagentRowsInOrder,
     subagentChoices,

@@ -1,4 +1,8 @@
-import { useEffect } from 'react'
+import { useLayoutEffect } from 'react'
+import {
+  createNativeChatReturnField,
+  useNativeChatReturnRef
+} from './native-chat-view-state-memory'
 import './native-chat-find.css'
 import { ChevronDown, ChevronUp, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -6,6 +10,8 @@ import { ImeInput } from '@/lib/ime-text-field'
 import { translate } from '@/i18n/i18n'
 import type { NativeChatFind } from './use-native-chat-find'
 import { useNativeChatFindMatches } from './use-native-chat-find-matches'
+
+const selection = createNativeChatReturnField<{ from: number; to: number }>()
 
 /** Find over the chat transcript, at the top-right of the transcript area like the terminal's search. */
 export function NativeChatFindBar({
@@ -15,19 +21,19 @@ export function NativeChatFindBar({
   find: NativeChatFind
   isVisible: boolean
 }): React.JSX.Element {
-  const { query, setQuery, close, rootRef, barRef, inputRef, revealMatch } = find
-  const { matchCount, activeIndex, step } = useNativeChatFindMatches({
-    rootRef,
-    barRef,
-    query,
-    isVisible,
-    revealMatch
-  })
+  const { query, setQuery, close, barRef, inputRef } = find
+  const { matchCount, activeIndex, step } = useNativeChatFindMatches({ ...find, isVisible })
 
-  useEffect(() => {
-    inputRef.current?.focus()
-    inputRef.current?.select()
-  }, [inputRef])
+  const range = useNativeChatReturnRef(selection, () => ({ from: 0, to: 0 }))
+  useLayoutEffect(() => {
+    const input = inputRef.current
+    input?.setSelectionRange(range.current.from, range.current.to)
+    return () => {
+      if (input) {
+        range.current = { from: input.selectionStart ?? 0, to: input.selectionEnd ?? 0 }
+      }
+    }
+  }, [inputRef, range])
 
   const status =
     query && matchCount === 0
@@ -64,6 +70,12 @@ export function NativeChatFindBar({
         ref={inputRef}
         type="text"
         value={query}
+        onSelect={(event) => {
+          range.current = {
+            from: event.currentTarget.selectionStart ?? 0,
+            to: event.currentTarget.selectionEnd ?? 0
+          }
+        }}
         onChange={(event) => setQuery(event.target.value)}
         placeholder={translate('components.native-chat.find.label', 'Find in chat')}
         aria-label={translate('components.native-chat.find.label', 'Find in chat')}

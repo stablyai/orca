@@ -491,7 +491,7 @@ import {
       )
     ]
 
-    it('lets a rail jump supersede a previously revealed diff', () => {
+    it('lets a rail jump supersede a previously revealed diff', async () => {
       const withPrompts = [
         ...items.slice(0, 2),
         journalItem(
@@ -506,7 +506,13 @@ import {
         ),
         ...items.slice(2)
       ].map((item, index) => ({ ...item, sequence: index + 1 }))
-      const scrollTo = vi.fn()
+      const landings: number[] = []
+      const scrollTo = vi.fn(function (this: HTMLElement, options?: ScrollToOptions | number) {
+        if (typeof options === 'object' && options.top !== undefined) {
+          this.scrollTop = options.top
+          landings.push(this.scrollTop)
+        }
+      })
       vi.spyOn(HTMLElement.prototype, 'scrollTo').mockImplementation(scrollTo)
       const transcript = (): React.JSX.Element => (
         <NativeChatMessageList
@@ -517,6 +523,7 @@ import {
         />
       )
       const { container, rerender } = render(transcript())
+      const scroller = container.querySelector<HTMLElement>('[data-native-chat-scroll]')!
       const selectedTop =
         screen.getByText('Second prompt').closest<HTMLElement>('[data-index]')?.offsetTop ?? 0
       expect(selectedTop).toBeGreaterThan(0)
@@ -526,15 +533,28 @@ import {
       expect(screen.getByText('Edited')).toBeInTheDocument()
       scrollTo.mockClear()
       fireEvent.click(screen.getByRole('button', { name: 'Second prompt' }))
-      expect(scrollTo.mock.calls).toEqual([
-        [{ top: 6000, behavior: 'auto' }],
-        [{ top: selectedTop, behavior: 'auto' }]
-      ])
+      expect(scrollTo).toHaveBeenLastCalledWith({ top: selectedTop, behavior: 'auto' })
+      expect(scroller.scrollTop).toBe(selectedTop)
+      fireEvent.scroll(scroller)
+      expect(screen.getByText('Second prompt').getBoundingClientRect().top).toBe(0)
       expect(screen.queryByRole('button', { name: /^Edited .*a\.ts(?:\s|$)/ })).toBeNull()
       scrollTo.mockClear()
+      landings.length = 0
       rerender(transcript())
       rerender(transcript())
-      expect(scrollTo).not.toHaveBeenCalled()
+      let lastScrollTop = scroller.scrollTop
+      await act(async () => {
+        for (let frame = 0; frame < 3; frame += 1) {
+          await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+          if (scroller.scrollTop !== lastScrollTop) {
+            lastScrollTop = scroller.scrollTop
+            fireEvent.scroll(scroller)
+          }
+        }
+      })
+      expect(scroller.scrollTop).toBe(selectedTop)
+      expect(screen.getByText('Second prompt').getBoundingClientRect().top).toBe(0)
+      expect(landings.every((top) => top === selectedTop)).toBe(true)
 
       scrollTranscript(container, 0)
       scrollTo.mockClear()
@@ -544,7 +564,11 @@ import {
         screen.getByText('Edited').closest<HTMLElement>('[data-index]')?.offsetTop ?? 0
       expect(Number.isFinite(diffTop)).toBe(true)
       expect(scrollTo).toHaveBeenCalledWith({ top: diffTop, behavior: 'auto' })
-      expect(scrollTo.mock.calls.some(([options]) => options?.behavior === 'smooth')).toBe(false)
+      expect(
+        scrollTo.mock.calls.some(
+          ([options]) => typeof options === 'object' && options.behavior === 'smooth'
+        )
+      ).toBe(false)
     })
   })
 

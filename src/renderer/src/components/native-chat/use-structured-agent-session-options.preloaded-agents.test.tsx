@@ -99,11 +99,12 @@ function pill(snapshot: readonly SessionOptionDescriptor[]): Pill {
 
 function renderNewChat(agent: string) {
   const frames: Pill[] = []
+  const target = { kind: 'local' } as const
   const view = renderHook(() => {
     const options = useStructuredAgentSessionOptions({
       agent,
       sessionId: `session-${agent}`,
-      target: { kind: 'local' },
+      target,
       transportEnabled: false,
       isVisible: true,
       providerVisible: false,

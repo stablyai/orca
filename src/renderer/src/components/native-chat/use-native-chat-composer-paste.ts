@@ -1,10 +1,10 @@
-import { useCallback, useLayoutEffect, useRef } from 'react'
-import { useNativeChatPasteLifetime } from './use-native-chat-paste-lifetime'
+import { useNativeChatViewLease } from './native-chat-view-parking-owner'
+import { useCallback } from 'react'
+import { useNativeChatPasteLifetime, usePasteAccess } from './use-native-chat-paste-lifetime'
 import { nativeChatAttachmentOwnerUnchanged } from './native-chat-resolved-path-ownership'
 import { assertClipboardTextWithinLimit } from '../../../../shared/clipboard-text'
 import { setNativeChatPasteFailure } from './native-chat-composer-notice'
 import { NATIVE_CHAT_CONTEXT_PASTE_MAX_BYTES } from './native-chat-composer-target'
-import { nativeChatPasteUnavailableNotice } from '@/lib/native-chat-paste-request'
 import { isMacPlatform } from './native-chat-shortcut'
 import {
   clipboardEventCopiedFilePaths,
@@ -24,9 +24,9 @@ import {
 } from './native-chat-clipboard-image-save'
 
 import type { UseNativeChatComposerPasteArgs } from './native-chat-composer-paste-options'
-export type { UseNativeChatComposerPasteArgs } from './native-chat-composer-paste-options'
 
 export function useNativeChatComposerPaste({
+  destinationIsLive,
   targetKey,
   attachmentScopeKey,
   disabled,
@@ -42,22 +42,17 @@ export function useNativeChatComposerPaste({
   insertTypedText,
   setCaret,
   setNotice
-}: UseNativeChatComposerPasteArgs): {
-  handlePaste: (event: ClipboardEventLike) => void
-  pasteFromClipboard: () => void
-} {
-  const disabledRef = useRef(disabled)
-  useLayoutEffect(() => {
-    disabledRef.current = disabled
-  }, [disabled])
+}: UseNativeChatComposerPasteArgs) {
+  const holdInput = useNativeChatViewLease()
   const {
     lifetime,
     startImageChip,
     startClipboardImageChip,
     startClipboardCandidateChips,
     dropImagePaste,
-    keepStoreUploadAfterUnmount
+    keepStoreUploadAfterUnmount: retainUpload
   } = useNativeChatPasteLifetime({
+    destinationIsLive,
     targetKey,
     attachmentScopeKey,
     beginPendingImageAttachment,
@@ -65,13 +60,12 @@ export function useNativeChatComposerPaste({
     revealPendingImageAttachment,
     dropPendingImageAttachment
   })
-  const canPaste = useCallback(() => lifetime.active && !disabledRef.current, [lifetime])
-  // A disabled composer still answers a paste, so it never vanishes silently.
-  const showPasteUnavailable = useCallback(() => {
-    if (lifetime.active) {
-      setNotice(nativeChatPasteUnavailableNotice())
-    }
-  }, [lifetime, setNotice])
+  const { disabledRef, canPaste, showPasteUnavailable } = usePasteAccess(
+    disabled,
+    destinationIsLive,
+    lifetime,
+    setNotice
+  )
 
   /** Settle the operation started at paste time, or attach directly if chips are unavailable. */
   const settleImagePaste = useCallback(
@@ -109,10 +103,11 @@ export function useNativeChatComposerPaste({
       const saved = await saveNativeChatPastedClipboardImage(owner, {
         besideText,
         ready,
-        canNotify: canPaste,
+        // An accepted save reports into its original notice owner, including while parked.
+        canNotify: () => !disabledRef.current,
         setNotice
       })
-      if (keepStoreUploadAfterUnmount(pendingId, saved)) {
+      if (retainUpload(pendingId, saved)) {
         return false
       }
       if (!canPaste() || saved.status !== 'saved') {
@@ -122,7 +117,7 @@ export function useNativeChatComposerPaste({
       settleImagePaste(pendingId, saved.tempPath, owner)
       return true
     },
-    [canPaste, dropImagePaste, keepStoreUploadAfterUnmount, setNotice, settleImagePaste]
+    [canPaste, disabledRef, dropImagePaste, retainUpload, setNotice, settleImagePaste]
   )
 
   const handlePaste = useCallback(
@@ -160,26 +155,29 @@ export function useNativeChatComposerPaste({
           return
         }
         const continueFiles = captureCopiedFiles({ focus: false })
-        void readClipboardPasteText(NATIVE_CHAT_CONTEXT_PASTE_MAX_BYTES, copiedFilePaths).then(
-          (read) => {
-            if (read.copiedFilePaths.length > 0) {
-              void continueFiles(chips.transfer())
-              return
+        const release = holdInput()
+        void readClipboardPasteText(NATIVE_CHAT_CONTEXT_PASTE_MAX_BYTES, copiedFilePaths)
+          .then(
+            (read) => {
+              if (read.copiedFilePaths.length > 0) {
+                void continueFiles(chips.transfer())
+                return
+              }
+              extras.forEach(({ chipId }) => dropImagePaste(chipId))
+              if (read.text && canPaste()) {
+                insertTypedText(read.text)
+              }
+              chips.reveal()
+              void saveClipboardImage(macOwner, primary.chipId, read.text !== '')
+            },
+            (error) => {
+              chips.reserved.forEach(({ chipId }) => dropImagePaste(chipId))
+              if (canPaste()) {
+                setNativeChatPasteFailure(setNotice, error)
+              }
             }
-            extras.forEach(({ chipId }) => dropImagePaste(chipId))
-            if (read.text && canPaste()) {
-              insertTypedText(read.text)
-            }
-            chips.reveal()
-            void saveClipboardImage(macOwner, primary.chipId, read.text !== '')
-          },
-          (error) => {
-            chips.reserved.forEach(({ chipId }) => dropImagePaste(chipId))
-            if (canPaste()) {
-              setNativeChatPasteFailure(setNotice, error)
-            }
-          }
-        )
+          )
+          .finally(release)
         return
       }
       if (copiesFiles) {
@@ -231,6 +229,7 @@ export function useNativeChatComposerPaste({
     [
       attachCopiedFiles,
       canPaste,
+      holdInput,
       captureCopiedFiles,
       caret,
       dropImagePaste,
@@ -256,6 +255,7 @@ export function useNativeChatComposerPaste({
         showPasteUnavailable()
       }
     }
+    const release = holdInput()
     void (async () => {
       const read = await readClipboardPasteText(NATIVE_CHAT_CONTEXT_PASTE_MAX_BYTES).catch(
         (error) => {
@@ -305,9 +305,11 @@ export function useNativeChatComposerPaste({
       // Ownership starts before saving; a thumbnail only supplies its preview.
       const { id: pendingId, reveal } = startClipboardImageChip(owner)
       reveal()
+      release()
       await saveClipboardImage(owner, pendingId, Boolean(read?.text))
-    })()
+    })().finally(release)
   }, [
+    holdInput,
     attachCopiedFiles,
     canPaste,
     insertTypedText,

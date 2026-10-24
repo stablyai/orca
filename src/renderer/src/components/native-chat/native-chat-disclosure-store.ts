@@ -1,3 +1,8 @@
+import {
+  createNativeChatReturnField,
+  useNativeChatReturnState,
+  useNativeChatReturnRef
+} from './native-chat-view-state-memory'
 // Where a transcript row's open/closed disclosures live when the row itself may
 // be unmounted.
 //
@@ -7,12 +12,13 @@
 // the reader's back. Rows read through this store when the transcript provides
 // one, and fall back to their own state when they are rendered standalone.
 
-import { createContext, useCallback, useContext, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useState } from 'react'
 
 /** Where the reader left an opened run's own scroll box. */
 export type NativeChatRunScroll = { top: number; followsEnd: boolean }
 
 export type NativeChatDisclosureStore = {
+  reset: () => void
   read: (key: string) => boolean | undefined
   write: (key: string, open: boolean) => void
   /** By the run's disclosure key, and forgotten when that disclosure closes. A plain map, not
@@ -29,9 +35,12 @@ export const NativeChatMarkdownRowKeyContext = createContext<string | undefined>
  *  should not carry every disclosure it ever opened. */
 export const MAX_NATIVE_CHAT_DISCLOSURES = 512
 
+const disclosures = createNativeChatReturnField<ReadonlyMap<string, boolean>>()
+const runPositions = createNativeChatReturnField<Map<string, NativeChatRunScroll>>()
+
 export function useNativeChatDisclosures(): NativeChatDisclosureStore {
-  const [open, setOpen] = useState<ReadonlyMap<string, boolean>>(() => new Map())
-  const [runScroll] = useState(() => new Map<string, NativeChatRunScroll>())
+  const [open, setOpen] = useNativeChatReturnState(disclosures, () => new Map())
+  const [runScroll] = useNativeChatReturnState(runPositions, () => new Map())
   const write = useCallback(
     (key: string, next: boolean) => {
       if (!next) {
@@ -47,6 +56,7 @@ export function useNativeChatDisclosures(): NativeChatDisclosureStore {
           const oldest = updated.keys().next().value
           if (oldest !== undefined && oldest !== key) {
             updated.delete(oldest)
+            runScroll.delete(oldest)
           }
         }
         return updated
@@ -54,9 +64,13 @@ export function useNativeChatDisclosures(): NativeChatDisclosureStore {
     },
     [runScroll]
   )
+  const reset = useCallback(() => {
+    runScroll.clear()
+    setOpen(new Map())
+  }, [runScroll, setOpen])
   return useMemo(
-    () => ({ read: (key: string) => open.get(key), write, runScroll }),
-    [open, write, runScroll]
+    () => ({ reset, read: (key: string) => open.get(key), write, runScroll }),
+    [open, write, runScroll, reset]
   )
 }
 
@@ -87,4 +101,25 @@ export function useNativeChatDisclosure(
     [initialOpen, key, write]
   )
   return { open, setOpen }
+}
+
+const transcriptEpoch = createNativeChatReturnField<string | null>()
+export function useNativeChatTranscriptEpoch(
+  journalEpoch: string | null | undefined,
+  disclosures: NativeChatDisclosureStore,
+  resetChoices: () => void,
+  setExpandedTurnIds: (value: ReadonlySet<string>) => void
+) {
+  const previousEpoch = useNativeChatReturnRef(transcriptEpoch, () => null)
+  useLayoutEffect(() => {
+    if (!journalEpoch) {
+      return
+    }
+    if (previousEpoch.current && previousEpoch.current !== journalEpoch) {
+      disclosures.reset()
+      resetChoices()
+      setExpandedTurnIds(new Set())
+    }
+    previousEpoch.current = journalEpoch
+  }, [journalEpoch, previousEpoch, disclosures, resetChoices, setExpandedTurnIds])
 }

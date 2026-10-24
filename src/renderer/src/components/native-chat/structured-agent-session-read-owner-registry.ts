@@ -1,5 +1,21 @@
+import {
+  clearStructuredReadResumeCache,
+  forgetStructuredReadResume
+} from './structured-agent-session-read-resume-cache'
+import type { AgentJournalCursor } from '../../../../shared/agent-session-journal-types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { StructuredAgentSessionReadOwner } from './structured-agent-session-read-owner'
+
+const observations = new Map<string, { cursor: AgentJournalCursor; observationKey: string }>()
+export function retainStructuredReadObservation(
+  key: string,
+  observation: { cursor: AgentJournalCursor; observationKey: string }
+): void {
+  observations.set(key, observation)
+}
+export function readStructuredReadObservation(key: string) {
+  return observations.get(key)
+}
 
 const owners = new Map<string, StructuredAgentSessionReadOwner>()
 export function structuredReadOwnerKey(sessionId: string, target: RuntimeClientTarget): string {
@@ -19,6 +35,8 @@ export function retireStructuredAgentSessionReadOwner(
   const key = structuredReadOwnerKey(sessionId, target)
   const owner = owners.get(key)
   owners.delete(key)
+  observations.delete(key)
+  forgetStructuredReadResume(key)
   try {
     owner?.dispose()
   } catch (error) {
@@ -43,20 +61,25 @@ export function adoptStructuredReadOwner(
   owner: StructuredAgentSessionReadOwner
 ): void {
   if (!owners.has(key)) {
+    forgetStructuredReadResume(key)
     owners.set(key, owner)
   }
 }
 export function forgetStructuredReadOwner(
   key: string,
   owner: StructuredAgentSessionReadOwner
-): void {
-  if (owners.get(key) === owner) {
-    owners.delete(key)
+): boolean {
+  if (owners.get(key) !== owner) {
+    return false
   }
+  owners.delete(key)
+  return true
 }
 export function resetStructuredAgentSessionReadOwnersForTests(): void {
   for (const owner of owners.values()) {
     owner.dispose()
   }
   owners.clear()
+  observations.clear()
+  clearStructuredReadResumeCache()
 }

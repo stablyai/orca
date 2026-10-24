@@ -1,3 +1,4 @@
+import { useNativeChatViewLease } from './native-chat-view-parking-owner'
 import { getAgentLabel } from '@/lib/agent-catalog'
 import { formatAgentTypeLabel } from '../../../../shared/agent-type-label'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
@@ -69,6 +70,7 @@ export function useNativeChatStructuredComposerSend({
   setDraft,
   setCaret
 }: UseNativeChatStructuredComposerSendArgs): NativeChatStructuredComposerSend {
+  const acquireLease = useNativeChatViewLease()
   return useCallback<NativeChatStructuredComposerSend>(
     async (text, attachments = imageAttachments): Promise<void> => {
       // A picked command is held like Send: it would carry attachments still uploading, pathless.
@@ -109,6 +111,7 @@ export function useNativeChatStructuredComposerSend({
       }
       const isCurrent = structuredTransport.capturePresentation()
       const submitted = readNativeChatComposerDraft(draftScopeKey)
+      const release = acquireLease()
       await dispatchNativeChatStructuredComposerText(
         structuredTransport,
         text,
@@ -170,12 +173,14 @@ export function useNativeChatStructuredComposerSend({
           )
           structuredTransport.onError(notice.text, { errorText: notice.errorText })
         })
+        .finally(release)
     },
     [
       agent,
       clearSkillOrigin,
       draftScopeKey,
       imageAttachments,
+      acquireLease,
       isComposing,
       setCaret,
       setDraft,

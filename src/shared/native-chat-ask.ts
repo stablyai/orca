@@ -1,3 +1,4 @@
+import type { AgentJournalPosition } from './agent-session-journal-types'
 import type {
   AskOption,
   AskPrompt,
@@ -144,7 +145,14 @@ function reachedAgent(message: NativeChatMessage): boolean {
   )
 }
 
+export function extractPendingMessageReplyAskState(messages: readonly NativeChatMessage[]) {
+  return scanPendingAsks(messages)
+}
+
 function scanPendingAsks(messages: readonly NativeChatMessage[]): {
+  contributions: [string, number, string | null][]
+  contributionAt: AgentJournalPosition | undefined
+  clearedAt: AgentJournalPosition | undefined
   blocking: AskPrompt | null
   replyAsMessage: AskPrompt | null
 } {
@@ -155,6 +163,9 @@ function scanPendingAsks(messages: readonly NativeChatMessage[]): {
   let pendingDepth = -1
   // Each async question stays open past its immediate result until the agent receives a message.
   let asyncQuestions: AskQuestion[] = []
+  let contributions: [string, number, string | null][] = []
+  let contributionAt: AgentJournalPosition | undefined
+  let clearedAt: AgentJournalPosition | undefined
   const asyncCallIds = new Set<string>()
   for (const message of messages) {
     // A new user turn (or an interrupt row) ends the turn that owns whatever
@@ -169,17 +180,22 @@ function scanPendingAsks(messages: readonly NativeChatMessage[]): {
       pendingDepth = -1
       pending = null
       if (interrupted || reachedAgent(message)) {
+        contributions = []
+        contributionAt = undefined
+        clearedAt = message.journalPosition ?? clearedAt
         asyncQuestions = []
         asyncCallIds.clear()
       }
     }
-    for (const block of message.blocks) {
+    for (const [blockIndex, block] of message.blocks.entries()) {
       if (block.type === 'tool-call') {
         const parsed = QUESTION_TOOL_PARSERS.has(block.name)
           ? parseAskFromToolInput(block.name, block.input)
           : parseToolInput(block.name, block.input)
         if (parsed?.replyAsMessage) {
           if (block.callId === undefined || !asyncCallIds.has(block.callId)) {
+            contributions.push([message.id, blockIndex, block.callId ?? null])
+            contributionAt = message.journalPosition
             asyncQuestions = [...asyncQuestions, ...parsed.questions]
           }
           if (block.callId !== undefined) {
@@ -202,6 +218,9 @@ function scanPendingAsks(messages: readonly NativeChatMessage[]): {
     }
   }
   return {
+    contributions,
+    contributionAt,
+    clearedAt,
     blocking: pending,
     replyAsMessage:
       asyncQuestions.length > 0 ? { questions: asyncQuestions, replyAsMessage: true } : null

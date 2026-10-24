@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, type ReactNode } from 'react'
+import { useEffectEvent, useLayoutEffect, useRef, type ReactNode } from 'react'
 import { Pencil, Plus, X } from 'lucide-react'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
@@ -34,11 +34,29 @@ export function NativeChatQueuedMessageEditor({
   const intake = useNativeChatQueuedEditImageIntake(editor, attachTo, field)
   const chips = editor.images?.chips ?? []
   const empty = editor.images?.empty === true
+  const restoreSelection = useEffectEvent(() => {
+    const textarea = field.current
+    const selection = editor.selection
+    if (textarea && selection) {
+      textarea.setSelectionRange(
+        Math.min(selection.from, editor.text.length),
+        Math.min(selection.to, editor.text.length),
+        selection.direction
+      )
+    }
+  })
+  const acquiring = useRef(editor.acquiring)
   useLayoutEffect(() => {
+    const acquired = acquiring.current && !editor.acquiring
+    acquiring.current = editor.acquiring
     if (editor.acquiring) {
       return
     }
     const textarea = field.current
+    restoreSelection()
+    if (!acquired || textarea?.closest('[data-native-chat-focused=false]')) {
+      return
+    }
     textarea?.focus({ preventScroll: true })
     const list = textarea?.closest('ul')
     const row = textarea?.closest('li')
@@ -104,6 +122,14 @@ export function NativeChatQueuedMessageEditor({
         value={editor.text}
         readOnly={editor.acquiring || editor.saving}
         onChange={(event) => editor.change(event.currentTarget.value)}
+        onSelect={(event) => {
+          const input = event.currentTarget
+          editor.select?.({
+            from: input.selectionStart,
+            to: input.selectionEnd,
+            direction: input.selectionDirection
+          })
+        }}
         // Enter or Cmd/Ctrl+Enter saves, Shift+Enter is a newline, Escape cancels; an IME's own
         // Enter and Escape never get here (`ImeTextarea`). Handled keys stay out of the prompt.
         onKeyDown={(event) => {

@@ -1,4 +1,6 @@
 // @vitest-environment happy-dom
+import type { ReactNode } from 'react'
+import { NativeChatViewIdentity } from './native-chat-view-state-memory'
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
@@ -40,6 +42,7 @@ function harness(options: {
   imageAttachments?: NativeChatComposerImageAttachment[]
   /** The PTY lane has no structured transport at all. */
   lane?: 'pty'
+  identity?: string
   capturePresentation?: NativeChatStructuredComposerTransport['capturePresentation']
 }) {
   const onError = vi.fn()
@@ -58,28 +61,77 @@ function harness(options: {
     setCaret: vi.fn()
   }
   writeNativeChatDraftCache(SCOPE, options.draft)
-  const hook = renderHook(
-    (props: { draft: string; caret: number }) =>
-      useNativeChatComposerSubmit({
-        structuredTransport: options.lane === 'pty' ? undefined : structuredTransport,
-        draftScopeKey: SCOPE,
-        draft: props.draft,
-        caret: props.caret,
-        imageAttachments: options.imageAttachments ?? [],
-        disabled: false,
-        ...calls
-      }),
-    { initialProps: { draft: options.draft, caret: options.caret ?? options.draft.length } }
-  )
+  const mount = () =>
+    renderHook(
+      (props: { draft: string; caret: number }) =>
+        useNativeChatComposerSubmit({
+          structuredTransport: options.lane === 'pty' ? undefined : structuredTransport,
+          draftScopeKey: SCOPE,
+          draft: props.draft,
+          caret: props.caret,
+          imageAttachments: options.imageAttachments ?? [],
+          disabled: false,
+          ...calls
+        }),
+      {
+        wrapper: ({ children }: { children: ReactNode }) => (
+          <NativeChatViewIdentity.Provider value={options.identity ?? null}>
+            {children}
+          </NativeChatViewIdentity.Provider>
+        ),
+        initialProps: {
+          draft: readNativeChatDraftCache(SCOPE),
+          caret: options.caret ?? options.draft.length
+        }
+      }
+    )
+  let hook = mount()
+  const park = () => {
+    hook.unmount()
+  }
+  const reveal = () => {
+    hook = mount()
+    return hook
+  }
   /** The user's typing: the draft store and the rendered draft move together. */
   const type = (draft: string, caret: number): void => {
     writeNativeChatDraftCache(SCOPE, draft)
     hook.rerender({ draft, caret })
   }
-  return { hook, calls, onError, onSubmitted, type }
+  return { hook, calls, onError, onSubmitted, type, park, reveal }
 }
 
 describe('composer goal mode', () => {
+  it.each(['picked', 'typed'])(
+    'keeps %s goal semantics through park and reveal before Send',
+    async (entrance) => {
+      const setObjective = vi.fn(async () => false)
+      const h = harness({
+        draft: entrance === 'typed' ? '/goal' : '/go',
+        threadGoal: { setObjective },
+        identity: `goal-return-${entrance}`
+      })
+      act(() =>
+        entrance === 'typed'
+          ? h.hook.result.current.send()
+          : h.hook.result.current.goalMode.interceptPick(vi.fn())(GOAL_ITEM)
+      )
+      h.type('Ship the parser', 15)
+      h.park()
+      let returned = h.reveal()
+      await act(async () => returned.result.current.send())
+      expect(setObjective).toHaveBeenCalledExactlyOnceWith('Ship the parser')
+      expect(h.calls.sendStructured).not.toHaveBeenCalled()
+      h.park()
+      returned = h.reveal()
+      setObjective.mockResolvedValue(true)
+      await act(async () => returned.result.current.send())
+      expect(setObjective).toHaveBeenCalledTimes(2)
+      expect(returned.result.current.goalMode.active).toBe(false)
+      expect(readNativeChatDraftCache(SCOPE)).toBe('')
+    }
+  )
+
   it.each([false, true])(
     'admits the actual ordinary/goal candidate only after completion, goal=%s',
     async (goal) => {

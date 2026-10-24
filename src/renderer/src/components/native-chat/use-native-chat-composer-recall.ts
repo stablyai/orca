@@ -1,4 +1,8 @@
-import { useState, type RefObject } from 'react'
+import {
+  createNativeChatReturnField,
+  useNativeChatReturnState
+} from './native-chat-view-state-memory'
+import type { RefObject } from 'react'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
 import {
   isNativeChatRecallActive,
@@ -7,6 +11,9 @@ import {
   type NativeChatRecallSource
 } from './native-chat-sent-prompt-history'
 
+const recallPosition = createNativeChatReturnField<NativeChatRecallPosition | null>()
+const recallShown = createNativeChatReturnField<NativeChatRecallPosition | null>()
+
 /**
  * Where prompt recall stands. Ends itself once the composer stops holding the recalled
  * text, whoever changed it: an edit, a send, a returned message, another window's draft.
@@ -14,10 +21,10 @@ import {
 export function useNativeChatRecallPosition(
   draft: string
 ): [NativeChatRecallPosition | null, (position: NativeChatRecallPosition | null) => void] {
-  const [position, setPosition] = useState<NativeChatRecallPosition | null>(null)
+  const [position, setPosition] = useNativeChatReturnState(recallPosition, () => null)
   // Why: the position and its draft come from different stores and may not render together,
   // so only a position already seen in the composer can be ended by a mismatch.
-  const [shown, setShown] = useState<NativeChatRecallPosition | null>(null)
+  const [shown, setShown] = useNativeChatReturnState(recallShown, () => null)
   if (position !== null) {
     if (position.recalled === draft) {
       if (shown !== position) {

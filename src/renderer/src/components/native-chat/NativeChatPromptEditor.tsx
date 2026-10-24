@@ -1,3 +1,7 @@
+import {
+  createNativeChatReturnField,
+  useNativeChatReturnRef
+} from './native-chat-view-state-memory'
 import { createNativeChatPastedTextHistory } from './native-chat-pasted-text-history'
 import { resolveNativeChatPastedText } from './native-chat-composer-pasted-text-references'
 import { NativeChatPastedTextScopeProvider } from './native-chat-pasted-text-state'
@@ -7,6 +11,7 @@ import {
 } from './native-chat-draft-cache'
 import {
   subscribeToNativeChatComposerDraft,
+  readNativeChatComposerDraft,
   hasUnsavedNativeChatComposerDraftChange
 } from './native-chat-composer-draft-store'
 import { closeHistory } from '@tiptap/pm/history'
@@ -48,6 +53,26 @@ type Props = Omit<HTMLAttributes<HTMLDivElement>, 'onChange' | 'onSelect'> & {
   onSelect: (input: NativeChatComposerInput) => void
 }
 
+const draftRevisions = new WeakMap<object, number>()
+let nextDraftRevision = 0
+function draftRevision(scopeKey: string | undefined): number {
+  if (!scopeKey) {
+    return 0
+  }
+  const draft = readNativeChatComposerDraft(scopeKey)
+  let revision = draftRevisions.get(draft)
+  if (revision === undefined) {
+    revision = ++nextDraftRevision
+    draftRevisions.set(draft, revision)
+  }
+  return revision
+}
+
+const promptSelection = createNativeChatReturnField<{
+  revision: number
+  anchor: number
+  head: number
+} | null>()
 const NO_IMAGES: readonly string[] = []
 
 export function NativeChatPromptEditor({
@@ -62,6 +87,7 @@ export function NativeChatPromptEditor({
   className,
   ...events
 }: Props): React.JSX.Element {
+  const selection = useNativeChatReturnRef(promptSelection, () => null)
   const historyPaths = useMemo(() => createNativeChatPastedTextHistory(scopeKey ?? ''), [scopeKey])
   const placeholderRef = useRef(placeholder)
   placeholderRef.current = placeholder
@@ -150,10 +176,20 @@ export function NativeChatPromptEditor({
             pastedTextFiles
           )
         }
+        if (transaction.selectionSet || transaction.docChanged) {
+          selection.current = {
+            revision: draftRevision(scopeKey),
+            anchor: promptTextOffset(current.state.doc, current.state.selection.anchor),
+            head: promptTextOffset(current.state.doc, current.state.selection.head)
+          }
+        }
       },
       onUpdate: () => {
         if (inputRef.current) {
           onChange(inputRef.current)
+        }
+        if (selection.current) {
+          selection.current.revision = draftRevision(scopeKey)
         }
       },
       onSelectionUpdate: () => {
@@ -164,6 +200,20 @@ export function NativeChatPromptEditor({
     },
     []
   )
+
+  useLayoutEffect(() => {
+    const saved = selection.current
+    if (!editor || !saved) {
+      return
+    }
+    const doc = editor.state.doc
+    const length = promptText(doc).length
+    const changed = draftRevision(scopeKey) !== saved.revision
+    editor.commands.setTextSelection({
+      from: promptTextPosition(doc, changed ? length : Math.min(saved.anchor, length)),
+      to: promptTextPosition(doc, changed ? length : Math.min(saved.head, length))
+    })
+  }, [editor, scopeKey, selection])
 
   useLayoutEffect(() => {
     if (!editor || !scopeKey) {

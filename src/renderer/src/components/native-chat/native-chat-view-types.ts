@@ -59,3 +59,5 @@ export type NativeChatResolvedViewProps = {
 }
 
 export type NativeChatViewProps = NativeChatBridgeViewProps | NativeChatStructuredViewProps
+
+export type StructuredSessionProps = Omit<NativeChatStructuredViewProps, 'mode'>

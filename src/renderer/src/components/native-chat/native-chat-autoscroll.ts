@@ -111,3 +111,15 @@ export function readerGestureLeavesEnd(gesture: ReaderGesture, geometry: ScrollG
     }
   }
 }
+
+export function geometryOf(element: HTMLElement): ScrollGeometry {
+  return {
+    scrollTop: element.scrollTop,
+    scrollHeight: element.scrollHeight,
+    clientHeight: element.clientHeight
+  }
+}
+
+export function hasMeasurableViewport(element: HTMLElement | null): element is HTMLElement {
+  return element !== null && element.clientHeight > 0
+}

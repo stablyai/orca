@@ -1,10 +1,11 @@
+import type { UseNativeChatExternalAttachmentsArgs } from './native-chat-composer-paste-options'
+export type { UseNativeChatExternalAttachmentsArgs } from './native-chat-composer-paste-options'
 import { useCallback, useLayoutEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { NATIVE_FILE_DROP_MAX_PATHS } from '../../../../shared/native-file-drop'
 import {
   nativeChatAttachmentOwnerUnchanged,
-  type NativeChatAttachmentFocusOptions,
-  type NativeChatResolvedPathOptions
+  type NativeChatAttachmentFocusOptions
 } from './native-chat-resolved-path-ownership'
 import {
   nativeChatAttachmentOwnerChangedNotice,
@@ -21,7 +22,6 @@ import {
 import {
   attachNativeChatSessionAttachmentPaths,
   reserveNativeChatAttachmentChips,
-  type NativeChatPendingAttachmentChips,
   type NativeChatReservedAttachment
 } from './native-chat-session-attachment-drop'
 import { userNamedFileAccess } from '@/lib/local-file-access'
@@ -29,24 +29,6 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import { findTerminalTabWorktreeId } from './native-chat-file-link'
 import { isNativeChatImageAttachmentPath } from './native-chat-image-paste'
 import type { CapturedNativeChatDrop } from './native-chat-pane-file-drop'
-
-export type UseNativeChatExternalAttachmentsArgs = {
-  terminalTabId: string
-  structuredWorktreeId?: string
-  /** The structured chat behind this composer; decides where its uploads are stored. */
-  structuredSession?: NativeChatStructuredAttachmentSession
-  /** Live composer-disabled state; read at await-resume via a ref so a flip
-   *  mid-upload doesn't attach into a guarded composer. */
-  disabled: boolean
-  attachResolvedPaths: (
-    paths: string[],
-    connectionId?: string | null,
-    options?: NativeChatResolvedPathOptions
-  ) => void
-  /** Chips shown while a file uploads, so Send waits for it. */
-  pendingChips: NativeChatPendingAttachmentChips
-  setNotice: (notice: string | null) => void
-}
 
 type ComposerWorkspace = {
   structuredWorktreeId?: string
@@ -70,6 +52,7 @@ function isSameComposerWorkspace(captured: ComposerWorkspace, current: ComposerW
  * can actually read what gets referenced (STA-1465).
  */
 export function useNativeChatExternalAttachments({
+  destinationIsLive,
   terminalTabId,
   structuredWorktreeId,
   structuredSession,
@@ -265,7 +248,11 @@ export function useNativeChatExternalAttachments({
     ) => {
       const intake = captureIntake(destinationIsCurrent, options)
       const deliver: CapturedNativeChatDrop = async (paths: string[]): Promise<void> => {
-        if (paths.length === 0 || disabledRef.current || !mountedRef.current) {
+        if (
+          paths.length === 0 ||
+          disabledRef.current ||
+          !(destinationIsLive?.() ?? mountedRef.current)
+        ) {
           return
         }
         const notice = intake.refusal(paths.length)
@@ -278,7 +265,7 @@ export function useNativeChatExternalAttachments({
       deliver.preparationConsumer = intake.preparationConsumer
       return deliver
     },
-    [captureIntake, mountedRef, setNotice]
+    [captureIntake, destinationIsLive, mountedRef, setNotice]
   )
 
   // Chips a paste reserved before its clipboard said they are files: admitted work, so it may
@@ -308,11 +295,15 @@ export function useNativeChatExternalAttachments({
   )
   const attachExternalPaths = useCallback(
     (paths: string[], options?: NativeChatAttachmentFocusOptions): void => {
-      if (!disabledRef.current && mountedRef.current && paths.length > 0) {
+      if (
+        !disabledRef.current &&
+        (destinationIsLive?.() ?? mountedRef.current) &&
+        paths.length > 0
+      ) {
         void captureExternalDrop(undefined, options)(paths)
       }
     },
-    [captureExternalDrop, mountedRef]
+    [captureExternalDrop, destinationIsLive, mountedRef]
   )
 
   return {

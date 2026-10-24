@@ -1,4 +1,9 @@
 import {
+  createNativeChatReturnField,
+  useNativeChatReturnState,
+  useNativeChatReturnRef
+} from './native-chat-view-state-memory'
+import {
   writeNativeChatComposerText,
   type NativeChatComposerInput
 } from './native-chat-composer-input'
@@ -9,7 +14,6 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
-  useState,
   type Dispatch,
   type RefObject,
   type SetStateAction
@@ -39,6 +43,13 @@ import {
   emitNativeChatPickerOpened,
   emitNativeChatSendClassified
 } from '@/lib/native-chat-telemetry'
+
+const pickerDismissal = createNativeChatReturnField<{
+  context: string
+  triggerKey: string
+} | null>()
+const pickedSkill = createNativeChatReturnField<string | null>()
+const pickerContext = createNativeChatReturnField<string>()
 
 export type NativeChatPickerState = {
   autocomplete: ComposerAutocomplete
@@ -109,8 +120,9 @@ export function useNativeChatPickerState(args: {
   )
   const listboxId = `native-chat-picker-${useId().replaceAll(':', '')}`
   const dismissalContext = `${draftScopeKey}:${agent}`
-  const [dismissed, setDismissed] = useState<{ context: string; triggerKey: string } | null>(null)
-  const skillOriginRef = useRef<string | null>(null)
+  const [dismissed, setDismissed] = useNativeChatReturnState(pickerDismissal, () => null)
+  const skillOriginRef = useNativeChatReturnRef(pickedSkill, () => null)
+  const previousContext = useNativeChatReturnRef(pickerContext, () => dismissalContext)
   const lastOpenKeyRef = useRef<string | null>(null)
   const autocomplete = useMemo<ComposerAutocomplete>(
     () =>
@@ -144,9 +156,12 @@ export function useNativeChatPickerState(args: {
     // Why: suppression is per-trigger-occurrence AND per-context. The composer
     // is reused across pane/agent switches, so a stale dismissal must clear or
     // the picker stays closed for an in-progress token when that context returns.
-    skillOriginRef.current = null
-    setDismissed(null)
-  }, [dismissalContext])
+    if (previousContext.current !== dismissalContext) {
+      previousContext.current = dismissalContext
+      skillOriginRef.current = null
+      setDismissed(null)
+    }
+  }, [dismissalContext, previousContext, setDismissed, skillOriginRef])
 
   useEffect(() => {
     if (autocomplete.mode !== 'slash') {

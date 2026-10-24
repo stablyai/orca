@@ -1,4 +1,12 @@
 // @vitest-environment happy-dom
+import * as Observation from './structured-attention-read-observation'
+import { EMPTY_STRUCTURED_AGENT_SESSION } from '../../../../shared/structured-agent-session-reducer'
+import {
+  retainStructuredReadResume,
+  takeStructuredReadResume,
+  clearStructuredReadResumeCache
+} from './structured-agent-session-read-resume-cache'
+import type { StructuredAgentSessionReadSnapshot } from './structured-agent-session-read-owner-contract'
 
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -20,7 +28,10 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 }))
 
 import { useStructuredAgentSessionRead } from './use-structured-agent-session-read'
-import { resetStructuredAgentSessionReadOwnersForTests } from './structured-agent-session-read-owner'
+import {
+  getStructuredAgentSessionReadOwner,
+  resetStructuredAgentSessionReadOwnersForTests
+} from './structured-agent-session-read-owner'
 
 const LOCAL_TARGET = { kind: 'local' } as const
 
@@ -86,6 +97,58 @@ describe('useStructuredAgentSessionRead history window', () => {
     vi.clearAllMocks()
     resetStructuredAgentSessionReadOwnersForTests()
     mocks.subscribe.mockResolvedValue({ unsubscribe: vi.fn() })
+  })
+
+  it('collects its transport and resumes data and cursor together after a cold return', async () => {
+    const items = Array.from({ length: 1000 }, (_, index) =>
+      message(`deep-${index}`, index + 1, 'assistant')
+    )
+    mocks.call.mockResolvedValueOnce({ ok: true, page: page('tail', items, false) })
+    const first = renderHook(() =>
+      useStructuredAgentSessionRead({ sessionId: 'session-a', target: LOCAL_TARGET })
+    )
+    await waitFor(() => expect(first.result.current.state.items).toHaveLength(1000))
+    const cursor = first.result.current.state.cursor
+    first.unmount()
+    const calls = mocks.call.mock.calls.length
+    const returned = renderHook(() =>
+      useStructuredAgentSessionRead({ sessionId: 'session-a', target: LOCAL_TARGET })
+    )
+    expect(returned.result.current.state.items[99]?.itemId).toBe('deep-99')
+    expect(returned.result.current.state.cursor).toEqual(cursor)
+    expect(mocks.call).toHaveBeenCalledTimes(calls)
+    expect(mocks.subscribe.mock.calls.at(-1)?.[1]).toMatchObject({ cursor })
+  })
+
+  it('projects compact attention once when collecting a reader, rather than on each publication', async () => {
+    const projection = vi.spyOn(Observation, 'structuredAttentionReadObservation')
+    mocks.call.mockResolvedValueOnce({
+      ok: true,
+      page: page('tail', [message('first', 1, 'assistant')], false)
+    })
+    const owner = getStructuredAgentSessionReadOwner('session-a', LOCAL_TARGET)
+    const unsubscribe = owner.subscribe(vi.fn())
+    const deactivate = owner.activate()
+    await waitFor(() => expect(owner.getSnapshot().state.status).toBe('ready'))
+    const onEvent = mocks.subscribe.mock.calls.at(-1)?.[2]
+    for (let index = 0; index < 10; index++) {
+      onEvent?.({
+        type: 'batch',
+        sessionId: 'session-a',
+        batch: {
+          items: [message(`new-${index}`, index + 501, 'assistant')],
+          removedItemIds: [],
+          submissions: [],
+          cursor: { epoch: 'epoch-a', sequence: index + 501 }
+        }
+      })
+    }
+    await waitFor(() => expect(owner.getSnapshot().state.items).toHaveLength(11))
+    expect(projection).not.toHaveBeenCalled()
+    deactivate()
+    unsubscribe()
+    expect(projection).toHaveBeenCalledOnce()
+    projection.mockRestore()
   })
 
   it('restores a realistic 21-turn window across the wire-safe bridge-sized read', async () => {
@@ -537,5 +600,77 @@ describe('useStructuredAgentSessionRead stream failures', () => {
     await waitFor(() => expect(result.current.state.status).toBe('error'))
     expect(result.current.state.error).toBe('journal read failed')
     expect(result.current.state.epoch).toBeNull()
+  })
+})
+
+describe('inactive read data bounds', () => {
+  afterEach(() => {
+    clearStructuredReadResumeCache()
+    vi.useRealTimers()
+  })
+  const snapshot = (error = ''): StructuredAgentSessionReadSnapshot => ({
+    state: {
+      ...EMPTY_STRUCTURED_AGENT_SESSION,
+      epoch: 'cache-epoch',
+      cursor: { epoch: 'cache-epoch', sequence: 17 },
+      error
+    },
+    current: true,
+    loadingOlder: true,
+    olderHistoryGeneration: 0
+  })
+  it.each([100, 1000])(
+    'counts cache traversal and UTF-8 encoding as input-sized work at %s items',
+    (count) => {
+      let itemReads = 0
+      const data = snapshot()
+      data.state.items = Array.from({ length: count }, (_, index) => ({
+        ...message(`item-${index}`, index, 'assistant'),
+        get revision() {
+          itemReads++
+          return 1
+        }
+      }))
+      const encode = vi.spyOn(TextEncoder.prototype, 'encode')
+      retainStructuredReadResume('counted', data)
+      expect(takeStructuredReadResume('counted')?.state.items).toHaveLength(count)
+      expect(itemReads).toBe(count)
+      expect(encode.mock.calls.length).toBeGreaterThan(count)
+      expect(encode.mock.calls.length).toBeLessThan(30 * count)
+      expect(
+        encode.mock.calls.reduce((total, args) => total + (args[0]?.length ?? 0), 0)
+      ).toBeLessThan(400 * count)
+      encode.mockRestore()
+    }
+  )
+
+  it('transfers data with its cursor, expires from release, and bounds count, all fields and total bytes', () => {
+    vi.useFakeTimers()
+    retainStructuredReadResume('transfer', snapshot())
+    expect(takeStructuredReadResume('transfer')).toMatchObject({
+      current: false,
+      loadingOlder: false,
+      state: { cursor: { sequence: 17 } }
+    })
+    expect(takeStructuredReadResume('transfer')).toBeUndefined()
+    for (let index = 0; index < 9; index++) {
+      retainStructuredReadResume(`count-${index}`, snapshot())
+    }
+    expect(takeStructuredReadResume('count-0')).toBeUndefined()
+    vi.advanceTimersByTime(300_001)
+    expect(takeStructuredReadResume('count-8')).toBeUndefined()
+    retainStructuredReadResume('oversize-field', snapshot('x'.repeat(8 * 1024 * 1024)))
+    expect(takeStructuredReadResume('oversize-field')).toBeUndefined()
+    const tooMany = snapshot()
+    tooMany.state.items = Array.from({ length: 5001 }, () => message('item', 1, 'assistant'))
+    retainStructuredReadResume('oversize-items', tooMany)
+    expect(takeStructuredReadResume('oversize-items')).toBeUndefined()
+    const large = snapshot('x'.repeat(6 * 1024 * 1024))
+    for (const key of ['bytes-a', 'bytes-b', 'bytes-c']) {
+      retainStructuredReadResume(key, large)
+    }
+    expect(takeStructuredReadResume('bytes-a')).toBeUndefined()
+    expect(takeStructuredReadResume('bytes-b')).toBeDefined()
+    expect(takeStructuredReadResume('bytes-c')).toBeDefined()
   })
 })

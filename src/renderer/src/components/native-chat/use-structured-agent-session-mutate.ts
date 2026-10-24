@@ -1,3 +1,4 @@
+import { useNativeChatViewLease } from './native-chat-view-parking-owner'
 // One structured-session mutation, fenced and idempotent.
 //
 // Every call is its own action with its own client operation id, so a press is never answered
@@ -99,6 +100,7 @@ export function useStructuredAgentSessionMutate(args: {
   capturePresentation: CaptureStructuredAgentSessionPresentation
 } {
   const { agentName, enabled = true, sessionId, stateRef, target } = args
+  const acquireLease = useNativeChatViewLease()
   const inFlightStops = useRef(new Map<string, Promise<ExecutionResult<unknown>>>())
   const presentation = useRef<object | null>(null)
   const hostKey = structuredAgentSessionHostKey(target)
@@ -171,28 +173,33 @@ export function useStructuredAgentSessionMutate(args: {
       fingerprintMethod: string,
       fields: Record<string, unknown>
     ): Promise<ExecutionResult<T>> => {
-      if (
-        !namesWhatItStops(fingerprintMethod, fields) ||
-        (await supportsStructuredAgentSessionQuietRepeatedStop(target))
-      ) {
-        return send<T>(method, fingerprintMethod, fields, pressedFence)
-      }
-      // Temporary, for a host that predates the quiet repeated Stop: remove once none is supported.
-      const key = `${hostKey}:${sessionId}:${method}:${JSON.stringify(fields)}`
-      const joined = inFlightStops.current.get(key)
-      if (joined) {
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the key names the method and fields, so the joined promise is this very call and settles to its T.
-        return joined as Promise<ExecutionResult<T>>
-      }
-      const stopping = send<T>(method, fingerprintMethod, fields, pressedFence)
-      inFlightStops.current.set(key, stopping)
-      // Gone once it settles, so the next press is a new Stop.
-      void stopping.finally(() => {
-        if (inFlightStops.current.get(key) === stopping) {
-          inFlightStops.current.delete(key)
+      const release = acquireLease()
+      try {
+        if (
+          !namesWhatItStops(fingerprintMethod, fields) ||
+          (await supportsStructuredAgentSessionQuietRepeatedStop(target))
+        ) {
+          return await send<T>(method, fingerprintMethod, fields, pressedFence)
         }
-      })
-      return stopping
+        // Temporary, for a host that predates the quiet repeated Stop: remove once none is supported.
+        const key = `${hostKey}:${sessionId}:${method}:${JSON.stringify(fields)}`
+        const joined = inFlightStops.current.get(key)
+        if (joined) {
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the key names the method and fields, so the joined promise is this very call and settles to its T.
+          return await (joined as Promise<ExecutionResult<T>>)
+        }
+        const stopping = send<T>(method, fingerprintMethod, fields, pressedFence)
+        inFlightStops.current.set(key, stopping)
+        // Gone once it settles, so the next press is a new Stop.
+        void stopping.finally(() => {
+          if (inFlightStops.current.get(key) === stopping) {
+            inFlightStops.current.delete(key)
+          }
+        })
+        return await stopping
+      } finally {
+        release()
+      }
     }
     const mutate: StructuredAgentSessionMutate = async <T>(...writeArgs: WriteArgs) => {
       const outcome = await execute<T>(...writeArgs)
@@ -204,7 +211,7 @@ export function useStructuredAgentSessionMutate(args: {
       return outcome.kind === 'done' ? outcome.value : null
     }
     return { target, write: execute, mutate }
-  }, [capturePresentation, enabled, hostKey, send, sessionId, stateRef, target])
+  }, [acquireLease, capturePresentation, enabled, hostKey, send, sessionId, stateRef, target])
 
   const write = useCallback(
     async <T>(...writeArgs: WriteArgs): Promise<StructuredAgentSessionWriteOutcome<T>> =>

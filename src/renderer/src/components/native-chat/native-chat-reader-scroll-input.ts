@@ -154,11 +154,16 @@ export function useNativeChatReaderScrollInput(
   }: ReaderScrollCallbacks
 ): {
   scrollerProps: NativeChatReaderScrollInputHandlers
+  beginNavigation: () => void
   railWheel: (deltaY: number) => void
   /** A gesture from a surface the transcript's own handlers never hear: reported where the view is now. */
   forwardedGesture: (gesture: ReaderGesture) => void
   /** A find step moves the transcript for the reader, so it ends following like a gesture. */
-  revealFindMatch: (match: Range, bar: DOMRectReadOnly | null) => void
+  revealFindMatch: (
+    match: Range | null,
+    bar: DOMRectReadOnly | null,
+    claim?: () => boolean
+  ) => boolean
 } {
   const onReaderScroll = useCallback(() => {
     onScrollInput()
@@ -194,15 +199,19 @@ export function useNativeChatReaderScrollInput(
     [onLeaveEnd, onReaderScroll, scrollRef]
   )
   const revealFindMatch = useCallback(
-    (match: Range, bar: DOMRectReadOnly | null) => {
+    (match: Range | null, bar: DOMRectReadOnly | null, claim?: () => boolean) => {
       const transcript = scrollRef.current
-      if (!transcript) {
-        return
+      if (!transcript || (claim && !claim())) {
+        return false
       }
+      if (!match) {
+        return true
+      }
+      onReaderScroll()
       const geometry = nativeChatFindGeometry(transcript)
       geometry.scrollIntoBoxes(match)
       if (geometry.inView(match, bar)) {
-        return
+        return true
       }
       const delta = nativeChatFindScrollDelta(
         match.getBoundingClientRect(),
@@ -213,13 +222,19 @@ export function useNativeChatReaderScrollInput(
       const target = Math.min(Math.max(transcript.scrollTop + delta, 0), maxScrollTop)
       // A scroll that cannot move fires no scroll event, so nothing would re-arm following.
       if (Math.abs(target - transcript.scrollTop) < 1) {
-        return
+        return true
       }
-      onReaderScroll()
       onLeaveEnd()
       transcript.scrollTop = target
+      return true
     },
     [onLeaveEnd, onReaderScroll, scrollRef]
   )
-  return { scrollerProps, railWheel, forwardedGesture, revealFindMatch }
+  return {
+    scrollerProps,
+    railWheel,
+    forwardedGesture,
+    revealFindMatch,
+    beginNavigation: onReaderScroll
+  }
 }

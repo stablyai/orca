@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from 'react'
 import type { RefObject } from 'react'
 import { shouldPreserveEditableFocus } from '@/components/terminal-pane/pane-helpers'
 import { scheduleNextFrame } from '@/components/terminal-pane/terminal-ime-input-context-refresh'
@@ -70,6 +70,7 @@ export type NativeChatComposerRevealFocusArgs = {
   tabId: string
   rootRef: RefObject<HTMLElement | null>
   composerRef: RefObject<NativeChatComposerHandle | null>
+  preferredInputRef?: RefObject<HTMLElement | null> | undefined
   isVisible: boolean
   /** This pane's split group is the focused one; false keeps a revealed sibling from fighting. */
   isFocusedGroup: boolean
@@ -81,19 +82,28 @@ export type NativeChatComposerRevealFocusArgs = {
 
 /**
  * Focus the composer whenever this pane reveals it, so a chat you just opened —
- * or switched back to — is ready to type into. Retained panes never unmount, so
- * the reveal edge, not mount, is the signal.
+ * or switched back to — is ready to type into. Warm reveals and cold remounts
+ * share the same focus claim.
  */
 export function useNativeChatComposerRevealFocus({
   tabId,
   rootRef,
   composerRef,
+  preferredInputRef,
   isVisible,
   isFocusedGroup,
   composerReady,
   scheduleFrame = scheduleNextFrame
 }: NativeChatComposerRevealFocusArgs): void {
   const revealed = isVisible && isFocusedGroup
+  const inputReady = composerReady || preferredInputRef !== undefined
+  const focus = useEffectEvent(() => {
+    if (preferredInputRef?.current) {
+      preferredInputRef.current.focus({ preventScroll: true })
+      return true
+    }
+    return composerRef.current?.focus()
+  })
   const claimedRef = useRef(false)
   // An explicit tab activation takes focus from inside the pane too, short of a text field.
   const explicitRef = useRef(false)
@@ -107,7 +117,7 @@ export function useNativeChatComposerRevealFocus({
   }, [composerRef])
 
   useLayoutEffect(() => {
-    if (!revealed || !composerReady) {
+    if (!revealed || !inputReady) {
       return
     }
     const reclaim = (): void => {
@@ -117,10 +127,7 @@ export function useNativeChatComposerRevealFocus({
       const siblingComposer = [...mountedComposers].some(
         (ownerRef) => ownerRef !== composerRef && ownerRef.current?.contains(active)
       )
-      if (
-        (!shouldPreserveEditableFocus(active) || siblingComposer) &&
-        composerRef.current?.focus()
-      ) {
+      if ((!shouldPreserveEditableFocus(active) || siblingComposer) && focus()) {
         explicitRef.current = false
       }
       setReclaimCount((count) => count + 1)
@@ -135,10 +142,10 @@ export function useNativeChatComposerRevealFocus({
         revealedComposerReclaims.delete(tabId)
       }
     }
-  }, [composerReady, composerRef, revealed, rootRef, tabId])
+  }, [inputReady, composerRef, revealed, rootRef, tabId])
 
   useEffect(() => {
-    if (!revealed || !composerReady) {
+    if (!revealed || !inputReady) {
       claimedRef.current = false
       explicitRef.current = false
       return
@@ -203,7 +210,7 @@ export function useNativeChatComposerRevealFocus({
         finish()
         return
       }
-      composerRef.current?.focus()
+      focus()
       attempts += 1
       if (attempts < REVEAL_FOCUS_FRAMES) {
         scheduleFrame(claim)
@@ -218,5 +225,5 @@ export function useNativeChatComposerRevealFocus({
       cancelled = true
       stopWatchingUserIntent()
     }
-  }, [composerReady, composerRef, reclaimCount, revealed, rootRef, scheduleFrame])
+  }, [inputReady, composerRef, reclaimCount, revealed, rootRef, scheduleFrame])
 }

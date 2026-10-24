@@ -85,12 +85,13 @@ const FIRST_TAB_ID = 'structured-agent-session-session-1'
 const SECOND_TAB_ID = 'structured-agent-session-session-2'
 
 describe('StructuredAgentSessionPaneOverlayLayer', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     mocks.focusGroup.mockClear()
     mocks.mountsByTabId.clear()
     mocks.unmountsByTabId.clear()
     mocks.groupIdByTabId.clear()
     mocks.targetByTabId.clear()
+    await act(async () => mocks.store?.setState({ unifiedTabsByWorktree: {} }))
     mocks.store?.setState(createState(FIRST_TAB_ID))
   })
 
@@ -111,24 +112,21 @@ describe('StructuredAgentSessionPaneOverlayLayer', () => {
       kind: 'environment',
       environmentId: 'server-1'
     })
+    act(() =>
+      mocks.store?.setState({ groupsByWorktree: { [WORKTREE_ID]: [createGroup(SECOND_TAB_ID)] } })
+    )
     expect(mocks.targetByTabId.get(SECOND_TAB_ID)).toEqual({ kind: 'local' })
   })
 
-  it('keeps materialized chat surfaces mounted while activation only swaps visibility', () => {
+  it('starts unvisited chats cold and retains visited chats through the switching grace', () => {
     const view = render(
       <StructuredAgentSessionPaneOverlayLayer worktreeId={WORKTREE_ID} isWorktreeActive />
     )
     const firstBefore = chatSurface(view.container, FIRST_TAB_ID)
-    const secondBefore = chatSurface(view.container, SECOND_TAB_ID)
+    expect(view.container.querySelector(`[data-chat-tab-id="${SECOND_TAB_ID}"]`)).toBeNull()
 
     expect(firstBefore.dataset.chatVisible).toBe('true')
-    expect(secondBefore.dataset.chatVisible).toBe('false')
-    expect(mocks.mountsByTabId).toEqual(
-      new Map([
-        [FIRST_TAB_ID, 1],
-        [SECOND_TAB_ID, 1]
-      ])
-    )
+    expect(mocks.mountsByTabId).toEqual(new Map([[FIRST_TAB_ID, 1]]))
 
     act(() => {
       mocks.store?.setState({
@@ -141,7 +139,7 @@ describe('StructuredAgentSessionPaneOverlayLayer', () => {
     const firstAfter = chatSurface(view.container, FIRST_TAB_ID)
     const secondAfter = chatSurface(view.container, SECOND_TAB_ID)
     expect(firstAfter).toBe(firstBefore)
-    expect(secondAfter).toBe(secondBefore)
+    expect(secondAfter).toBeTruthy()
     expect(firstAfter.dataset.chatVisible).toBe('false')
     expect(secondAfter.dataset.chatVisible).toBe('true')
     expect(mocks.mountsByTabId.get(FIRST_TAB_ID)).toBe(1)

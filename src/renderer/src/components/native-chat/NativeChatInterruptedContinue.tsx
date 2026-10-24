@@ -1,4 +1,8 @@
-import { useCallback, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import {
+  createNativeChatReturnField,
+  useNativeChatReturnState
+} from './native-chat-view-state-memory'
+import { useCallback, useId, useLayoutEffect, useMemo, useRef } from 'react'
 import { Play } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -32,6 +36,13 @@ import { useNativeChatLaunchResumePending } from '../native-chat-launch-resume-d
 import type { NativeChatComposerNoticeContent } from './native-chat-composer-notice'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 
+const continueAsked = createNativeChatReturnField<string | null>()
+const continueFailure = createNativeChatReturnField<{
+  turnItemId: string
+  unconfirmed: boolean
+} | null>()
+const continueFailedOn = createNativeChatReturnField<string | null>()
+
 type ContinueAnswer = { outcome?: string }
 
 export type NativeChatInterruptedContinuation = {
@@ -63,6 +74,7 @@ export function useNativeChatInterruptedContinuation(input: {
   /** The composer's send; false when the chat took nothing. */
   transport: NativeChatStructuredComposerTransport
   pending: readonly Pick<StructuredAgentSessionPendingSend, 'phase'>[]
+  readCurrent?: boolean
 }): NativeChatInterruptedContinuation {
   const { target, sessionId, reportComposerError, focusComposer, transport, agent } = input
   const latestTransport = useRef(transport)
@@ -92,13 +104,23 @@ export function useNativeChatInterruptedContinuation(input: {
     [input.journalItems, input.submissions]
   )
   // The cut this client already asked to continue: hidden until the journal shows what came of it.
-  const [asked, setAsked] = useState<string | null>(null)
-  const [usageFailure, setUsageFailure] = useState<{
-    turnItemId: string
-    unconfirmed: boolean
-  } | null>(null)
-  const [failedOn, setFailedOn] = useState<string | null>(null)
+  const [asked, setAsked] = useNativeChatReturnState(continueAsked, () => null)
+  const [usageFailure, setUsageFailure] = useNativeChatReturnState(continueFailure, () => null)
+  const [failedOn, setFailedOn] = useNativeChatReturnState(continueFailedOn, () => null)
   if (usageFailure !== null && input.pending.length > 0) {
+    setUsageFailure(null)
+  }
+  if (input.readCurrent && asked !== null && asked !== cut?.turnItemId) {
+    setAsked(null)
+  }
+  if (input.readCurrent && failedOn !== null && failedOn !== cut?.turnItemId) {
+    setFailedOn(null)
+  }
+  if (
+    input.readCurrent &&
+    usageFailure !== null &&
+    usageFailure.turnItemId !== usageLimitCut?.turnItemId
+  ) {
     setUsageFailure(null)
   }
   const offered =

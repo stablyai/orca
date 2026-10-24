@@ -8,6 +8,7 @@ import { nativeChatPendingAttachmentSnapshot } from './native-chat-pending-attac
  * Preview URLs belong to this composer; pending uploads belong to the draft's attachment cache.
  */
 export function useNativeChatPasteLifetime(args: {
+  destinationIsLive?: () => boolean
   targetKey?: string
   attachmentScopeKey?: string
   /** `serverOwned`: an image the paste saved on the remote target's own server, not a client file. */
@@ -54,6 +55,7 @@ export function useNativeChatPasteLifetime(args: {
   ) => boolean
 } {
   const {
+    destinationIsLive,
     targetKey,
     attachmentScopeKey,
     beginPendingImageAttachment,
@@ -78,6 +80,9 @@ export function useNativeChatPasteLifetime(args: {
     lifetime.active = true
     return () => {
       lifetime.active = false
+      if (destinationIsLive?.()) {
+        return
+      }
       for (const [id, preview] of lifetime.pending) {
         if (preview.startsWith('blob:')) {
           URL.revokeObjectURL(preview)
@@ -94,7 +99,7 @@ export function useNativeChatPasteLifetime(args: {
       }
       lifetime.pending.clear()
     }
-  }, [attachmentScopeKey, lifetime])
+  }, [attachmentScopeKey, destinationIsLive, lifetime])
   const track = useCallback(
     (pendingId: string, preview: string, owner: NativeChatAttachmentOwner) => {
       lifetime.pending.set(pendingId, preview)
@@ -202,7 +207,7 @@ export function useNativeChatPasteLifetime(args: {
   )
   const keepStoreUploadAfterUnmount = useCallback(
     (pendingId: string | null, saved: { status: string; tempPath?: string }): boolean => {
-      if (!pendingId || lifetime.active) {
+      if (!pendingId || (destinationIsLive?.() ?? lifetime.active)) {
         if (pendingId) {
           lifetime.uploads.delete(pendingId)
         }
@@ -229,7 +234,13 @@ export function useNativeChatPasteLifetime(args: {
       }
       return true
     },
-    [attachmentScopeKey, dropPendingImageAttachment, lifetime, resolvePendingImageAttachment]
+    [
+      attachmentScopeKey,
+      destinationIsLive,
+      dropPendingImageAttachment,
+      lifetime,
+      resolvePendingImageAttachment
+    ]
   )
   return {
     lifetime,
@@ -240,4 +251,30 @@ export function useNativeChatPasteLifetime(args: {
     dropImagePaste,
     keepStoreUploadAfterUnmount
   }
+}
+
+import { nativeChatPasteUnavailableNotice } from '@/lib/native-chat-paste-request'
+
+export function usePasteAccess(
+  disabled: boolean,
+  destinationIsLive: (() => boolean) | undefined,
+  lifetime: { active: boolean },
+  setNotice: (notice: string | null) => void
+) {
+  const disabledRef = useRef(disabled)
+  useLayoutEffect(() => {
+    disabledRef.current = disabled
+  }, [disabled])
+  const canPaste = useCallback(
+    () => (destinationIsLive?.() ?? lifetime.active) && !disabledRef.current,
+    [destinationIsLive, lifetime]
+  )
+  // A disabled composer still answers a paste, so it never vanishes silently.
+  const showPasteUnavailable = useCallback(() => {
+    if (lifetime.active) {
+      setNotice(nativeChatPasteUnavailableNotice())
+    }
+  }, [lifetime, setNotice])
+
+  return { disabledRef, canPaste, showPasteUnavailable }
 }

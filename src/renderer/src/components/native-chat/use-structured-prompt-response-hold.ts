@@ -1,9 +1,14 @@
-import { useCallback, useState } from 'react'
+import {
+  createNativeChatReturnField,
+  useNativeChatReturnState
+} from './native-chat-view-state-memory'
+import { useCallback } from 'react'
 import type { useStructuredAgentSession } from './use-structured-agent-session'
 
 type Respond = ReturnType<typeof useStructuredAgentSession>['respond']
 type PromptItem = Parameters<Respond>[0]
 
+const responseHold = createNativeChatReturnField<string | null>()
 const promptKey = (item: PromptItem): string => `${item.itemId}:${item.revision}`
 
 /**
@@ -14,7 +19,7 @@ export function useStructuredPromptResponseHold(respond: Respond): {
   respond: Respond
   holds: (item: PromptItem) => boolean
 } {
-  const [heldKey, setHeldKey] = useState<string | null>(null)
+  const [heldKey, setHeldKey] = useNativeChatReturnState(responseHold, () => null)
   const holdingRespond = useCallback<Respond>(
     async (item, response) => {
       const key = promptKey(item)

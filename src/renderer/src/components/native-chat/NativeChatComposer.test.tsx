@@ -9,6 +9,7 @@ import type {
 import { clearNativeChatSessionOptionCacheForTests } from './native-chat-session-option-cache'
 import { clearNativeChatModelEnrichmentForTests } from './native-chat-session-option-enrichment'
 import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime-pty-id'
+import type * as NativeChatDraftModule from './use-native-chat-draft'
 
 const mocks = vi.hoisted(() => ({
   cancelPendingSends: vi.fn(),
@@ -98,15 +99,14 @@ vi.mock('@/lib/native-chat-telemetry', () => ({
   emitNativeChatPickerOpened: vi.fn(),
   emitNativeChatSendClassified: vi.fn()
 }))
-vi.mock('./use-native-chat-draft', () => ({
+vi.mock('./use-native-chat-draft', async (importOriginal) => ({
+  ...(await importOriginal<typeof NativeChatDraftModule>()),
   useNativeChatDraft: (scopeKey: string) => {
     mocks.draftScopeKeys.push(scopeKey)
     return { draft: mocks.draft, setDraft: mocks.setDraft, flushDraftAppends: () => {} }
   }
 }))
-vi.mock('./native-chat-draft-cache', () => ({
-  readNativeChatDraftCache: () => ''
-}))
+vi.mock('./native-chat-draft-cache', () => ({ readNativeChatDraftCache: () => '' }))
 vi.mock('./NativeChatComposerField', () => ({
   NativeChatComposerField: (props: { onSend?: () => void; onStop?: () => void }) => {
     mocks.fieldProps = props

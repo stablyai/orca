@@ -25,7 +25,7 @@ import { useNativeChatPromptCardPresentation } from './use-native-chat-prompt-ca
 import { NativeChatPromptStrip } from './NativeChatPromptCollapse'
 import { NativeChatEmptyState } from './NativeChatEmptyState'
 import { useNativeChatInteractiveSend } from './use-native-chat-interactive-send'
-import { shouldClearNativeChatWorkingSuppression } from './native-chat-working-suppression'
+import { useNativeChatWorkingSuppression } from './use-native-chat-working-suppression'
 import { resolveNativeChatTerminalTurn } from './native-chat-terminal-turn'
 import { useNativeChatTerminalTurnTiming } from './use-native-chat-terminal-turn-timing'
 import {
@@ -121,10 +121,8 @@ export function NativeChatResolvedView({
   // stop (Stop sends ESC, the agent-TUI interrupt key).
   const send = useNativeChatInteractiveSend(paneKey, targetPtyId, agent)
   // Every send this pane makes brings the latest into view, wherever the reader had scrolled.
-  const { messageListRef, revealLatest } = useNativeChatRevealLatest()
-  const interactiveSend = useNativeChatInteractiveSendReveal(send, targetPtyId, revealLatest)
-  const [workingInterrupted, setWorkingInterrupted] = useState(false)
-  const previousWorkingEpochRef = useRef<number | null>(null)
+  const reveal = useNativeChatRevealLatest(sessionId ?? targetPtyId)
+  const interactiveSend = useNativeChatInteractiveSendReveal(send, targetPtyId, reveal.revealLatest)
   const rootRef = useRef<HTMLDivElement>(null)
   const composerRef = useRef<NativeChatComposerHandle>(null)
   // The question card's free-text row; keeps Paste working while the card
@@ -220,7 +218,9 @@ export function NativeChatResolvedView({
   })
   const { card: shownPromptCard, collapsedCard } = promptCardPresentation
   const mountedPromptCard = shownPromptCard ?? collapsedCard
+  const find = useNativeChatFind(isVisible && isFocusedGroup, rootRef, composerRef, reveal)
   const rootInput = useNativeChatRootInputRouting({
+    preferredInputRef: find.isOpen ? find.inputRef : undefined,
     tabId: terminalTabId,
     rootRef,
     composerRef,
@@ -273,24 +273,10 @@ export function NativeChatResolvedView({
   const viewState = selectNativeChatViewState(sessionWithPending)
 
   const isConversation = viewState.kind === 'ready'
-  useEffect(() => {
-    if (
-      shouldClearNativeChatWorkingSuppression({
-        working: liveWorking,
-        interrupted: workingInterrupted,
-        workingEpoch,
-        previousWorkingEpoch: previousWorkingEpochRef.current
-      })
-    ) {
-      setWorkingInterrupted(false)
-    }
-    if (liveWorking && workingEpoch != null) {
-      previousWorkingEpochRef.current = workingEpoch
-    }
-    if (!liveWorking) {
-      previousWorkingEpochRef.current = null
-    }
-  }, [liveWorking, workingInterrupted, workingEpoch])
+  const [workingInterrupted, setWorkingInterrupted] = useNativeChatWorkingSuppression(
+    liveWorking,
+    workingEpoch
+  )
   const { isWorking, turnActive, awaitingInput } = resolveNativeChatTerminalTurn({
     isConversation,
     working: liveWorking,
@@ -317,7 +303,7 @@ export function NativeChatResolvedView({
 
   // Only the focused conversation accepts chat text-size shortcuts.
   useNativeChatFontSize(isConversation && isVisible && isFocusedGroup, rootRef)
-  const find = useNativeChatFind(isVisible && isFocusedGroup, rootRef, composerRef, messageListRef)
+
   const contextMenu = useNativeChatContextMenu({
     rootRef,
     composerRef,
@@ -328,7 +314,7 @@ export function NativeChatResolvedView({
       down: formatShortcutLabel('terminal.splitDown', keybindings)
     },
     actions: { onPaste, ...(contextMenuActions ?? emptyNativeChatContextMenuActions) },
-    messageListRef,
+    messageListRef: reveal.messageListRef,
     fileLinkContext,
     onFind: find.open
   })
@@ -383,7 +369,8 @@ export function NativeChatResolvedView({
           <NativeChatEmptyState kind="empty" agent={agent} />
         ) : (
           <NativeChatMessageList
-            ref={messageListRef}
+            ref={reveal.messageListRef}
+            onReaderNavigation={find.cancelNavigation}
             session={sessionWithPending}
             isVisible={isVisible}
             isWorking={turnActive}
@@ -434,7 +421,7 @@ export function NativeChatResolvedView({
           onOptimisticSendCanceled={delivery.cancel}
           optimisticSendOutcome={delivery}
           onSlashCommand={onSlashCommand}
-          onSubmitted={revealLatest}
+          onSubmitted={reveal.revealLatest}
           answerCommandLocally={answerLocally}
           onSwitchToTerminal={onSwitchToTerminal}
           readTerminalScreen={readTerminalScreen}

@@ -1,3 +1,7 @@
+import {
+  readStructuredReadObservation,
+  structuredReadOwnerKey
+} from './structured-agent-session-read-owner-registry'
 import { useEffect, useMemo, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import {
@@ -71,7 +75,7 @@ function StructuredAgentSessionOwnedAttention({
       const state = findStructuredAgentSessionReadOwner(tab.entityId, target)?.getSnapshot().state
       const viewed = state?.cursor
         ? { cursor: state.cursor, observationKey: structuredAttentionReadObservation(state) }
-        : undefined
+        : readStructuredReadObservation(structuredReadOwnerKey(tab.entityId, target))
       // Marking the row read covers what lit it, even unmounted or hidden; never a later edge.
       const edge = intent === 'explicit' ? surfaced.current : undefined
       const boundary =

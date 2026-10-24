@@ -1,49 +1,102 @@
-import { useMemo } from 'react'
-import { extractPendingMessageReplyAsk, formatAskAnswer } from '../../../../shared/native-chat-ask'
+import {
+  NativeChatViewIdentity,
+  createNativeChatReturnField,
+  useNativeChatReturnRef,
+  retireNativeChatViewState
+} from './native-chat-view-state-memory'
+import { useContext, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import {
+  extractPendingMessageReplyAskState,
+  formatAskAnswer
+} from '../../../../shared/native-chat-ask'
+import { compareAgentJournalPositions } from '../../../../shared/agent-session-journal-position'
+import type { AgentJournalPosition } from '../../../../shared/agent-session-journal-types'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 import { NativeChatQuestionCard } from './NativeChatQuestionCard'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
-import { useNativeChatPromptCardPresentation } from './use-native-chat-prompt-card-presentation'
 
-/**
- * A question the agent asked without waiting (Codex's async one), pending until the next user
- * message. It sits above the composer rather than in its place, since the agent keeps working:
- * it is answered by an ordinary send, and Cancel only hides it.
- */
+type QuestionRecord = {
+  epoch: string | null
+  identity: string
+  after: AgentJournalPosition | undefined
+  scope: string | null
+  dismissed: boolean
+}
+const currentQuestion = createNativeChatReturnField<QuestionRecord | null>()
+
+/** Async questions are answered by ordinary messages; Cancel only hides this occurrence. */
 export function NativeChatStructuredAsyncQuestion({
-  paneKey,
   session,
-  send
+  send,
+  epoch = null
 }: {
-  paneKey: string
   session: Pick<NativeChatLiveSession, 'messages' | 'readPhase'>
   send: NativeChatStructuredComposerTransport['send']
+  epoch?: string | null
 }): React.JSX.Element | null {
+  const view = useContext(NativeChatViewIdentity)
+  const cell = useNativeChatReturnRef(currentQuestion, () => null)
+  const [held, setHeld] = useState(cell.current)
   const settled = session.readPhase === 'ready'
-  const pending = useMemo(() => {
-    const prompt = settled ? extractPendingMessageReplyAsk(session.messages) : null
-    return prompt ? { kind: 'question' as const, prompt } : null
-  }, [session.messages, settled])
-  const presentation = useNativeChatPromptCardPresentation({
-    paneKey,
-    card: pending,
-    canSend: true,
-    transcriptSettled: settled
-  })
-  const { card } = presentation
-  if (card?.kind !== 'question') {
+  const scan = useMemo(
+    () => (settled ? extractPendingMessageReplyAskState(session.messages) : null),
+    [session.messages, settled]
+  )
+  const prompt = scan?.replyAsMessage ?? null
+  const identity = prompt ? JSON.stringify([scan?.contributions, prompt]) : null
+  const replaced = held && epoch !== null && held.epoch !== null && epoch !== held.epoch
+  const resolved =
+    held?.after && scan?.clearedAt && compareAgentJournalPositions(scan.clearedAt, held.after) > 0
+  let current = replaced || resolved ? null : held
+  if (identity !== null && (current === null || current.identity !== identity)) {
+    current = {
+      epoch: epoch ?? held?.epoch ?? null,
+      identity,
+      after: scan?.contributionAt,
+      scope: view === null ? null : `${view}\0async-question:${JSON.stringify([epoch, identity])}`,
+      dismissed: false
+    }
+  } else if (current && epoch !== null && current.epoch === null) {
+    current = { ...current, epoch }
+  }
+  if (current !== held) {
+    setHeld(current)
+  }
+  const committed = useRef<QuestionRecord | null>(null)
+  useLayoutEffect(() => {
+    const previous = cell.current
+    if (previous?.scope && previous.scope !== held?.scope) {
+      retireNativeChatViewState(previous.scope)
+    }
+    if (!cell.retired) {
+      cell.current = held
+    }
+    committed.current = prompt ? held : null
+    return () => {
+      committed.current = null
+    }
+  }, [cell, held, prompt])
+  const isCurrent = () => held !== null && !cell.retired && committed.current === held
+  const dismiss = () => {
+    if (isCurrent()) {
+      setHeld((value) => (value !== null && value === held ? { ...value, dismissed: true } : value))
+    }
+  }
+  if (!prompt || !held || held.dismissed) {
     return null
   }
   return (
-    <NativeChatQuestionCard
-      key={presentation.occurrenceKey ?? 'async-question'}
-      prompt={card.prompt}
-      onAnswer={(selections) => {
-        if (send(formatAskAnswer(card.prompt, selections), []) !== false) {
-          presentation.dismiss()
-        }
-      }}
-      onCancel={presentation.dismiss}
-    />
+    <NativeChatViewIdentity.Provider value={held.scope}>
+      <NativeChatQuestionCard
+        key={held.scope ?? held.identity}
+        prompt={prompt}
+        onAnswer={(selections) => {
+          if (isCurrent() && send(formatAskAnswer(prompt, selections), []) !== false) {
+            dismiss()
+          }
+        }}
+        onCancel={dismiss}
+      />
+    </NativeChatViewIdentity.Provider>
   )
 }

@@ -1,3 +1,4 @@
+import { useNativeChatRevealLatest } from '../native-chat/use-native-chat-reveal-latest'
 // @vitest-environment happy-dom
 import { act, cleanup, render } from '@testing-library/react'
 import { useContext, useRef } from 'react'
@@ -131,8 +132,8 @@ describe('PDF viewer find shortcut', () => {
     function Chat({ testId }: { testId: string }): React.JSX.Element {
       const rootRef = useRef<HTMLDivElement>(null)
       const composerRef = useRef(null)
-      const listRef = useRef(null)
-      const find = useNativeChatFind(true, rootRef, composerRef, listRef)
+      const reveal = useNativeChatRevealLatest()
+      const find = useNativeChatFind(true, rootRef, composerRef, reveal)
       return (
         <div ref={rootRef} tabIndex={-1} data-native-chat-root="true" data-testid={testId}>
           {find.isOpen ? <div data-testid={`${testId}-find`} /> : null}

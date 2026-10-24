@@ -6,6 +6,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({ call: vi.fn() }))
 let items: AgentJournalRenderItem[] = []
 let unloadedTurnRevisions: number | undefined
+let readCurrent = true
+let epoch: string | null = 'known'
+let cursorSequence = 1000
+let hostFloor: { epoch: string; sequence: number } | undefined
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: mocks.call,
@@ -20,6 +24,8 @@ vi.mock('./use-structured-agent-session-read', () => ({
   useStructuredAgentSessionRead: () => ({
     state: {
       fence: 3,
+      epoch,
+      cursor: { epoch, sequence: cursorSequence },
       items,
       submissions: [],
       status: 'ready',
@@ -28,6 +34,7 @@ vi.mock('./use-structured-agent-session-read', () => ({
       handoff: null,
       unloadedTurnRevisions
     },
+    readCurrent,
     loadingOlder: false,
     loadOlder: vi.fn()
   })
@@ -92,7 +99,7 @@ function answerOptions(answers: (AgentSessionContextUsage | undefined)[]): void 
     return Promise.resolve({
       models: [],
       current: { model: 'opus' },
-      ...(current ? { contextUsage: { current } } : {})
+      ...(current ? { contextUsage: { current, contextFloor: hostFloor } } : {})
     })
   })
 }
@@ -116,6 +123,10 @@ describe('useStructuredAgentSession context usage', () => {
     vi.clearAllMocks()
     items = [messageRow(900)]
     unloadedTurnRevisions = undefined
+    readCurrent = true
+    epoch = 'known'
+    cursorSequence = 1000
+    hostFloor = undefined
   })
 
   it('shows the host whole-journal answer when the loaded page starts after the turn row', async () => {
@@ -202,5 +213,29 @@ describe('useStructuredAgentSession context usage', () => {
     await act(async () => replies[2](175_000))
     expect(result.current.contextUsage).toMatchObject({ usedTokens: 175_000 })
     expect(optionReads()).toBe(3)
+  })
+
+  it('uses an optional host clear floor only after the actual read applies its epoch and boundary', async () => {
+    hostFloor = { epoch: 'known', sequence: 800 }
+    items = [messageRow(700), messageRow(900)]
+    answerOptions([{ used: estimate(150_000), window: WINDOW }])
+    const { result, rerender } = render()
+    await waitFor(() => expect(result.current.contextUsage).not.toBeNull())
+    expect(result.current.contextClear.applied?.floor).toBe(0)
+    items = [messageRow(900)]
+    cursorSequence = 799
+    rerender()
+    expect(result.current.contextClear.applied?.floor).toBe(0)
+    cursorSequence = 1000
+    readCurrent = false
+    rerender()
+    expect(result.current.contextClear.applied).toBeNull()
+    readCurrent = true
+    epoch = 'other'
+    rerender()
+    expect(result.current.contextClear.applied?.floor).toBe(0)
+    epoch = 'known'
+    rerender()
+    expect(result.current.contextClear.applied?.floor).toBe(800)
   })
 })

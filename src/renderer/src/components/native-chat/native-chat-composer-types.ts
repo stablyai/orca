@@ -83,6 +83,8 @@ export type NativeChatOptimisticSendOutcome = {
 }
 
 export type NativeChatComposerProps = {
+  isVisible?: boolean
+
   /** Tab hosting the agent; used to resolve the live ptyId + runtime settings. */
   terminalTabId: string
   /** Stable split-leaf identity; unlike a PTY id, this survives reconnects. */

@@ -128,6 +128,11 @@ export function useNativeChatPasteBridge({
     }
     // Named-pane pastes (terminal context menu, a paste on the cover itself) carry no event data.
     const onPasteRequest = (event: Event): void => {
+      if (event instanceof NativeChatPasteRequest && event.clipboardEvent) {
+        onPaste(event.clipboardEvent)
+        event.preventDefault()
+        return
+      }
       if (composerRef.current || questionAnswerInputRef?.current) {
         event.preventDefault()
         pasteClipboardIntoComposer()

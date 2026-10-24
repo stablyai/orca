@@ -55,6 +55,12 @@ export function useNativeChatQueuedEditImageIntake(
   const transport = attachTo?.transport
   const editable = Boolean(intake && transport && transport.acceptsImages !== false)
   const { change, saving, acquiring } = editor
+  const range = useRef({ from: editor.text.length, to: editor.text.length })
+  useLayoutEffect(() => {
+    if (field.current) {
+      range.current = { from: field.current.selectionStart, to: field.current.selectionEnd }
+    }
+  })
   // Nothing joins an edit until its lease is held, nor while a Save sends the images it read.
   const busy = saving || acquiring
   const [isDragActive, setIsDragActive] = useState(false)
@@ -71,14 +77,23 @@ export function useNativeChatQueuedEditImageIntake(
   const insertText = useCallback(
     (insertion: string): boolean => {
       const input = field.current
-      if (!input || busy || liveIntake.current !== intake) {
+      if (busy || liveIntake.current !== intake) {
         return false
+      }
+      if (!input) {
+        return (
+          editor.insertText?.(
+            insertion,
+            editor.selection?.from ?? range.current.from,
+            editor.selection?.to ?? range.current.to
+          ) ?? false
+        )
       }
       input.setRangeText(insertion, input.selectionStart, input.selectionEnd, 'end')
       change(input.value)
       return true
     },
-    [busy, change, field, intake]
+    [busy, change, editor, field, intake]
   )
   const insertReferences = useCallback(
     (paths: string[]) => {
@@ -128,6 +143,7 @@ export function useNativeChatQueuedEditImageIntake(
   )
   const disabled = !editable || busy
   const external = useNativeChatExternalAttachments({
+    destinationIsLive: intake?.isLive,
     terminalTabId: attachTo?.terminalTabId ?? '',
     structuredWorktreeId: transport?.worktreeId,
     structuredSession: transport
@@ -144,6 +160,7 @@ export function useNativeChatQueuedEditImageIntake(
     [captureReservedAttachments]
   )
   const { handlePaste, pasteFromClipboard } = useNativeChatComposerPaste({
+    destinationIsLive: intake?.isLive,
     targetKey: editor.messageId,
     disabled,
     caret: 0,

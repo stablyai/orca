@@ -333,7 +333,7 @@ export function createStructuredSessionMocks() {
         mocks.messageListProps = props
         useImperativeHandle(props?.ref, () => ({
           revealLatest: mocks.revealLatest,
-          revealFindMatch: () => {},
+          revealFindMatch: () => false,
           messageCopyText: () => null
         }))
         return <DeliveryNoticesMock notices={props?.deliveryNotices} />

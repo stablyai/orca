@@ -1,6 +1,19 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import {
+  createNativeChatReturnField,
+  NativeChatViewIdentity,
+  nativeChatViewRetirements,
+  useNativeChatReturnRef,
+  useNativeChatReturnState
+} from './native-chat-view-state-memory'
+import { useCallback, useEffect, useContext } from 'react'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
 
+const previewRecords = new Map<string, ReadonlyMap<string, string>>()
+nativeChatViewRetirements.add((key) => {
+  previewRecords.get(key)?.forEach(releasePreviewUrl)
+  previewRecords.delete(key)
+})
+const previewField = createNativeChatReturnField<ReadonlyMap<string, string>>()
 const NO_PREVIEWS: ReadonlyMap<string, string> = new Map()
 
 /** Object URLs minted from a clipboard blob leak until revoked; data URLs don't. */
@@ -22,22 +35,36 @@ export function useNativeChatComposerAttachmentPreviews(
   releasePreview: (id: string) => void
   releaseAllPreviews: () => void
 } {
-  const [previews, setPreviews] = useState<ReadonlyMap<string, string>>(NO_PREVIEWS)
+  const [previews, setPreviews] = useNativeChatReturnState(previewField, () => NO_PREVIEWS)
   // Read by callbacks between renders; only they change it, always together with the state.
-  const previewsRef = useRef(previews)
-  const mountedRef = useRef(true)
+  const previewsRef = useNativeChatReturnRef(previewField, () => NO_PREVIEWS)
+  const identity = useContext(NativeChatViewIdentity)
   useEffect(() => {
-    mountedRef.current = true
-    return () => {
-      mountedRef.current = false
-      previewsRef.current.forEach(releasePreviewUrl)
-      previewsRef.current = NO_PREVIEWS
+    if (identity === null) {
+      previewsRef.retired = false
     }
-  }, [])
-  const updatePreviews = useCallback((next: ReadonlyMap<string, string>) => {
-    previewsRef.current = next
-    setPreviews(next)
-  }, [])
+    return () => {
+      if (identity === null) {
+        previewsRef.retired = true
+        previewsRef.current.forEach(releasePreviewUrl)
+        previewsRef.current = NO_PREVIEWS
+      }
+    }
+  }, [identity, previewsRef])
+  const updatePreviews = useCallback(
+    (next: ReadonlyMap<string, string>) => {
+      if (previewsRef.retired) {
+        next.forEach(releasePreviewUrl)
+        return
+      }
+      previewsRef.current = next
+      if (identity !== null) {
+        previewRecords.set(identity, next)
+      }
+      setPreviews(next)
+    },
+    [identity, previewsRef, setPreviews]
+  )
   useEffect(() => {
     const current = previewsRef.current
     const gone = [...current.keys()].filter(
@@ -52,19 +79,15 @@ export function useNativeChatComposerAttachmentPreviews(
       next.delete(id)
     }
     updatePreviews(next)
-  }, [pending, settled, updatePreviews])
+  }, [pending, previewsRef, settled, updatePreviews])
 
   const setPreview = useCallback(
     (id: string, previewUrl: string | undefined) => {
-      if (!mountedRef.current) {
-        releasePreviewUrl(previewUrl)
-        return
-      }
       if (previewUrl) {
         updatePreviews(new Map(previewsRef.current).set(id, previewUrl))
       }
     },
-    [updatePreviews]
+    [previewsRef, updatePreviews]
   )
 
   const releasePreview = useCallback(
@@ -78,13 +101,13 @@ export function useNativeChatComposerAttachmentPreviews(
       next.delete(id)
       updatePreviews(next)
     },
-    [updatePreviews]
+    [previewsRef, updatePreviews]
   )
 
   const releaseAllPreviews = useCallback(() => {
     previewsRef.current.forEach(releasePreviewUrl)
     updatePreviews(NO_PREVIEWS)
-  }, [updatePreviews])
+  }, [previewsRef, updatePreviews])
 
   return { previews, setPreview, releasePreview, releaseAllPreviews }
 }

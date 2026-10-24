@@ -1,4 +1,9 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useNativeChatViewLease } from './native-chat-view-parking-owner'
+import {
+  createNativeChatReturnField,
+  useNativeChatReturnState
+} from './native-chat-view-state-memory'
+import { useCallback, useMemo } from 'react'
 import { translate } from '@/i18n/i18n'
 import {
   applyPickerSuggestion,
@@ -21,6 +26,7 @@ import {
   resolveNativeChatPastedText
 } from './native-chat-composer-pasted-text-references'
 
+const goalEntry = createNativeChatReturnField<boolean>()
 const GOAL_COMMAND = 'goal'
 
 export type NativeChatComposerGoalMode = {
@@ -54,9 +60,10 @@ export function useNativeChatComposerSubmit(args: {
 }): { send: () => void; goalMode: NativeChatComposerGoalMode } {
   const { caret, disabled, draft, draftScopeKey, imageAttachments, sendPty, sendStructured } = args
   const { consumeOrcaCommand, setCaret, setDraft, structuredTransport } = args
+  const acquireLease = useNativeChatViewLease()
   const threadGoal = structuredTransport?.threadGoal
-  const [entered, setEntered] = useState(false)
-  const active = entered && threadGoal !== undefined
+  const [entered, setEntered] = useNativeChatReturnState(goalEntry, () => false)
+  const active = entered
 
   const interceptPick = useCallback(
     <TItem extends NativeChatPickerItem>(pick: (item: TItem) => void) =>
@@ -98,20 +105,33 @@ export function useNativeChatComposerSubmit(args: {
     structuredTransport.onSubmitted?.()
     const isCurrent = structuredTransport.capturePresentation()
     const submitted = readNativeChatComposerDraft(draftScopeKey)
-    void threadGoal.setObjective(objective).then((accepted) => {
-      if (!accepted) {
-        return
-      }
-      if (!clearNativeChatComposerDraftIfUnchanged(draftScopeKey, submitted)) {
-        return
-      }
-      if (isCurrent()) {
-        structuredTransport.onError(null)
-        setCaret(0)
-        setEntered(false)
-      }
-    })
-  }, [draft, draftScopeKey, imageAttachments.length, setCaret, structuredTransport, threadGoal])
+    const release = acquireLease()
+    void threadGoal
+      .setObjective(objective)
+      .then((accepted) => {
+        if (!accepted) {
+          return
+        }
+        if (!clearNativeChatComposerDraftIfUnchanged(draftScopeKey, submitted)) {
+          return
+        }
+        if (isCurrent()) {
+          structuredTransport.onError(null)
+          setCaret(0)
+          setEntered(false)
+        }
+      })
+      .finally(release)
+  }, [
+    acquireLease,
+    draft,
+    draftScopeKey,
+    imageAttachments.length,
+    setCaret,
+    setEntered,
+    structuredTransport,
+    threadGoal
+  ])
 
   const send = useCallback(() => {
     // Before goal mode too: a navigation command must never become an objective.

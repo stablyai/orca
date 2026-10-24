@@ -1,9 +1,18 @@
-import type { RefObject } from 'react'
+import { useContext, useEffect, type RefObject } from 'react'
+import {
+  NativeChatViewIdentity,
+  retireNativeChatViewState,
+  createNativeChatReturnField,
+  useNativeChatReturnRef
+} from './native-chat-view-state-memory'
 import type { AgentJournalQuestion } from '../../../../shared/agent-session-journal-types'
 import type { AgentSessionPromptResponse } from '../../../../shared/agent-session-question-answer'
 import { NativeChatQuestionCard } from './NativeChatQuestionCard'
 
+const lastQuestion = createNativeChatReturnField<string | null>()
+
 export function NativeChatStructuredQuestionCard({
+  occurrenceKey,
   questions,
   onAnswer,
   onCancel,
@@ -11,6 +20,7 @@ export function NativeChatStructuredQuestionCard({
   shouldFocus,
   answerInputRef
 }: {
+  occurrenceKey?: string
   questions: readonly AgentJournalQuestion[]
   onAnswer: (response: AgentSessionPromptResponse) => void
   onCancel: () => void
@@ -18,44 +28,58 @@ export function NativeChatStructuredQuestionCard({
   shouldFocus?: boolean
   answerInputRef?: RefObject<HTMLInputElement | null>
 }): React.JSX.Element {
+  const view = useContext(NativeChatViewIdentity)
+  const identity =
+    view === null
+      ? null
+      : `${view}\0question:${occurrenceKey ?? questions.map((question) => question.id).join(':')}`
+  const previous = useNativeChatReturnRef(lastQuestion, () => null)
+  useEffect(() => {
+    if (previous.current && previous.current !== identity) {
+      retireNativeChatViewState(previous.current)
+    }
+    previous.current = identity
+  }, [identity, previous])
   return (
-    <NativeChatQuestionCard
-      prompt={{
-        questions: questions.map((question) => ({
-          question: question.question,
-          ...(question.header ? { header: question.header } : {}),
-          multiSelect: question.multiSelect,
-          options: question.options.map((option) => ({
-            label: option.label,
-            ...(option.description ? { description: option.description } : {})
+    <NativeChatViewIdentity.Provider value={identity}>
+      <NativeChatQuestionCard
+        prompt={{
+          questions: questions.map((question) => ({
+            question: question.question,
+            ...(question.header ? { header: question.header } : {}),
+            multiSelect: question.multiSelect,
+            options: question.options.map((option) => ({
+              label: option.label,
+              ...(option.description ? { description: option.description } : {})
+            }))
           }))
-        }))
-      }}
-      allowOther={questions.map((question) => Boolean(question.freeTextQuestionId))}
-      freeTextInputs={questions.map((question) => question.freeTextInput)}
-      onAnswer={(answers) => {
-        const chosen = questions.map((question, index) => {
-          const answer = answers[index]
-          const other = question.freeTextInput?.allowEmpty ? answer?.other : answer?.other?.trim()
-          return {
-            questionId: question.id,
-            optionIds: (answer?.indices ?? []).flatMap((optionIndex) => {
-              const id = question.options[optionIndex]?.id
-              return id ? [id] : []
-            }),
-            ...(other !== undefined && (other.length > 0 || question.freeTextInput?.allowEmpty)
-              ? { other }
-              : {})
+        }}
+        allowOther={questions.map((question) => Boolean(question.freeTextQuestionId))}
+        freeTextInputs={questions.map((question) => question.freeTextInput)}
+        onAnswer={(answers) => {
+          const chosen = questions.map((question, index) => {
+            const answer = answers[index]
+            const other = question.freeTextInput?.allowEmpty ? answer?.other : answer?.other?.trim()
+            return {
+              questionId: question.id,
+              optionIds: (answer?.indices ?? []).flatMap((optionIndex) => {
+                const id = question.options[optionIndex]?.id
+                return id ? [id] : []
+              }),
+              ...(other !== undefined && (other.length > 0 || question.freeTextInput?.allowEmpty)
+                ? { other }
+                : {})
+            }
+          })
+          if (chosen.every((answer) => answer.optionIds.length > 0 || answer.other !== undefined)) {
+            onAnswer({ kind: 'answers', answers: chosen })
           }
-        })
-        if (chosen.every((answer) => answer.optionIds.length > 0 || answer.other !== undefined)) {
-          onAnswer({ kind: 'answers', answers: chosen })
-        }
-      }}
-      onCancel={onCancel}
-      isSubmitting={isSubmitting}
-      shouldFocus={shouldFocus}
-      answerInputRef={answerInputRef}
-    />
+        }}
+        onCancel={onCancel}
+        isSubmitting={isSubmitting}
+        shouldFocus={shouldFocus}
+        answerInputRef={answerInputRef}
+      />
+    </NativeChatViewIdentity.Provider>
   )
 }

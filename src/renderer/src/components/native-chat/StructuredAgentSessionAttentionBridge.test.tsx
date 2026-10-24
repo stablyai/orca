@@ -65,6 +65,11 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
   acknowledgeStructuredAgentSessionAttention: mocks.acknowledgeAttention
 }))
 
+import {
+  retainStructuredReadObservation,
+  structuredReadOwnerKey,
+  retireStructuredAgentSessionReadOwner
+} from './structured-agent-session-read-owner-registry'
 import { StructuredAgentSessionAttentionBridge } from './StructuredAgentSessionAttentionBridge'
 import { applyWebSessionTabsSnapshot } from '@/runtime/web-session-tabs-sync/snapshot-api'
 import { resolveNotificationTabOwner } from '@/attention/notification-subject-owner'
@@ -283,6 +288,26 @@ describe('StructuredAgentSessionAttentionBridge', () => {
     })
     // A prompt is not a verdict on any turn.
     expect(request).not.toHaveProperty('agentTurnOutcome')
+  })
+
+  it('marks the last observed frontier read after its live reader has been collected', async () => {
+    const target = { kind: 'local' } as const
+    retainStructuredReadObservation(structuredReadOwnerKey(SESSION, target), {
+      cursor: { epoch: 'parked', sequence: 42 },
+      observationKey: 'parked-prompt'
+    })
+    render(<StructuredAgentSessionAttentionBridge />)
+    await waitFor(() => expect(mocks.subscribeCompletions).toHaveBeenCalledOnce())
+    act(() => hostStream()(promptFrame()))
+    act(() => mocks.store?.getState().acknowledgeAgents([CHAT_SUBJECT]))
+    await waitFor(() =>
+      expect(mocks.acknowledgeAttention).toHaveBeenCalledWith(target, SESSION, {
+        epoch: 'parked',
+        sequence: 42
+      })
+    )
+    expect(indicators().paneDot).toBeUndefined()
+    retireStructuredAgentSessionReadOwner(SESSION, target)
   })
 
   it('does not invent a read boundary before the chat has accepted history', async () => {

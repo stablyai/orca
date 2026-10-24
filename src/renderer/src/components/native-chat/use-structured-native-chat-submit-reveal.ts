@@ -2,30 +2,24 @@
 // host delivery, queued drafts and Stop never move the reader.
 
 import { useCallback, useMemo } from 'react'
-import {
-  useNativeChatRevealLatest,
-  type NativeChatMessageListHandle
-} from './use-native-chat-reveal-latest'
+import { useNativeChatRevealLatest } from './use-native-chat-reveal-latest'
 import type { useStructuredAgentSession } from './use-structured-agent-session'
 import type { StructuredAgentSessionQueuedMessagesController } from './use-structured-agent-session-queued-messages'
 
 type StructuredController = ReturnType<typeof useStructuredAgentSession>
 
 export function useStructuredNativeChatSubmitReveal(
-  controller: Pick<StructuredController, 'respond' | 'queuedMessages' | 'capturePresentation'>,
+  controller: Pick<
+    StructuredController,
+    'respond' | 'queuedMessages' | 'epoch' | 'capturePresentation'
+  >,
   /** Relaunches a start that failed. */
   retryLaunch: () => void,
   /** The host may take no turn: no card is sent now or resumed, and no failed start retried. */
   startsHeld = false
-): {
-  messageListRef: React.RefObject<NativeChatMessageListHandle | null>
-  /** For the composer, which reveals as it sends. */
-  revealLatest: () => void
-  retryLaunch: () => void
-  respond: StructuredController['respond']
-  queuedMessages: StructuredAgentSessionQueuedMessagesController
-} {
-  const { messageListRef, revealLatest } = useNativeChatRevealLatest()
+) {
+  const reveal = useNativeChatRevealLatest(controller.epoch)
+  const { revealLatest } = reveal
   const { respond, queuedMessages, capturePresentation } = controller
   const revealingRetryLaunch = useCallback(() => {
     if (startsHeld) {
@@ -76,8 +70,7 @@ export function useStructuredNativeChatSubmitReveal(
     }
   }, [capturePresentation, queuedMessages, revealLatest, startsHeld])
   return {
-    messageListRef,
-    revealLatest,
+    ...reveal,
     retryLaunch: revealingRetryLaunch,
     respond: revealingRespond,
     queuedMessages: revealingQueue

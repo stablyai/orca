@@ -24,11 +24,14 @@ afterEach(() => {
   expect(unusedChatLeaves.inlineVisual).not.toHaveBeenCalled()
   expect(unusedChatLeaves.openSender).not.toHaveBeenCalled()
 })
+import { createRef } from 'react'
+import type { NativeChatMessageListHandle } from './use-native-chat-reveal-latest'
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem
 } from '../../../../shared/agent-session-journal-types'
 import { projectStructuredItemsToNativeChat } from '../../../../shared/structured-agent-session-projection'
+import { NativeChatViewIdentity } from './native-chat-view-state-memory'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import { NATIVE_CHAT_BOTTOM_THRESHOLD_PX } from './native-chat-autoscroll'
 import { NATIVE_CHAT_ROW_GAP_PX } from './native-chat-row-height-estimate'
@@ -98,6 +101,164 @@ describe('windowed transcript', () => {
   })
 
   const transcript = Array.from({ length: TRANSCRIPT_LENGTH }, (_, index) => marker(index))
+
+  it('returns to the exact retained deep row instead of following a remounted transcript to its tail', async () => {
+    restoreLayout()
+    restoreLayout = stubLayout({ scrollGeometry: true, offsetChain: true })
+    const rect = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockImplementation(function (this: HTMLElement) {
+        const root = this.closest<HTMLElement>('[data-native-chat-scroll]')
+        const top = this.hasAttribute('data-index') ? this.offsetTop - (root?.scrollTop ?? 0) : 0
+        const height = this.hasAttribute('data-index') ? this.offsetHeight : this.clientHeight
+        return new DOMRect(0, top, 800, height)
+      })
+    const identity = 'deep-row-cold-return'
+    const rows = Array.from({ length: 1100 }, (_, index) => marker(index))
+    const first = render(
+      <NativeChatViewIdentity.Provider value={identity}>
+        {list(rows)}
+      </NativeChatViewIdentity.Provider>
+    )
+    paint(first.container)
+    const scroller = scrollRoot(first.container)
+    fireEvent.wheel(scroller, { deltaY: -1 })
+    scrollTranscript(first.container, 100 * ROW_PITCH_PX + 13)
+    paint(first.container)
+    const row = first.container.querySelector<HTMLElement>(
+      '[data-native-chat-row-key="message-100"]'
+    )
+    expect(row).not.toBeNull()
+    const saved = scroller.scrollTop
+    first.unmount()
+    const returned = render(
+      <NativeChatViewIdentity.Provider value={identity}>
+        {list(rows)}
+      </NativeChatViewIdentity.Provider>
+    )
+    fireEvent.scroll(scrollRoot(returned.container))
+    await settleVirtualizer(returned.container)
+    expect(
+      returned.container.querySelector('[data-native-chat-row-key="message-100"]')
+    ).not.toBeNull()
+    expect(Math.abs(scrollRoot(returned.container).scrollTop - saved)).toBeLessThanOrEqual(1)
+    scrollTranscript(returned.container, saved + ROW_PITCH_PX)
+    paint(returned.container)
+    expect(scrollRoot(returned.container).scrollTop).toBeLessThan(105 * ROW_PITCH_PX)
+    rect.mockRestore()
+  })
+
+  it.each(['down', 'up', 'key', 'touch', 'scrollbar', 'latest', 'Find', 'row'] as const)(
+    'yields a cold row correction to %s before its first animation frame',
+    async (takeover) => {
+      restoreLayout()
+      restoreLayout = stubLayout({ scrollGeometry: true, offsetChain: true })
+      const rect = vi
+        .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+        .mockImplementation(function (this: HTMLElement) {
+          const root = this.closest<HTMLElement>('[data-native-chat-scroll]')
+          return new DOMRect(
+            0,
+            this.hasAttribute('data-index') ? this.offsetTop - (root?.scrollTop ?? 0) : 0,
+            800,
+            this.hasAttribute('data-index') ? this.offsetHeight : this.clientHeight
+          )
+        })
+      const width = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(800)
+      const handle = createRef<NativeChatMessageListHandle>()
+      const identity = `takeover-${takeover}`
+      const rows = Array.from({ length: 1100 }, (_, index) =>
+        index === 200
+          ? {
+              ...marker(index),
+              role: 'user' as const,
+              blocks: [{ type: 'text' as const, text: 'Target prompt' }]
+            }
+          : marker(index)
+      )
+      const ui = () => (
+        <NativeChatViewIdentity.Provider value={identity}>
+          <NativeChatMessageList
+            ref={handle}
+            session={session(rows)}
+            isWorking={false}
+            expandSignal={false}
+          />
+        </NativeChatViewIdentity.Provider>
+      )
+      const before = render(ui())
+      paint(before.container)
+      fireEvent.wheel(scrollRoot(before.container), { deltaY: -1 })
+      scrollTranscript(before.container, 100 * ROW_PITCH_PX + 13)
+      paint(before.container)
+      before.unmount()
+      const returned = render(ui())
+      const scroller = scrollRoot(returned.container)
+      if (takeover === 'latest') {
+        act(() => handle.current?.revealLatest())
+      } else if (takeover === 'row') {
+        fireEvent.click(screen.getByRole('button', { name: 'Target prompt' }))
+        fireEvent.scroll(scroller)
+      } else {
+        if (takeover === 'Find') {
+          const row = returned.container.querySelector('[data-native-chat-row-key]')!
+          const match = document.createRange()
+          match.selectNodeContents(row)
+          vi.spyOn(match, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 50, 20, 20))
+          act(() => handle.current?.revealFindMatch(match, null))
+        }
+        if (takeover === 'down' || takeover === 'up') {
+          fireEvent.wheel(scroller, { deltaY: takeover === 'down' ? 100 : -100 })
+        }
+        if (takeover === 'key') {
+          fireEvent.keyDown(scroller, { key: 'PageDown' })
+        }
+        if (takeover === 'touch') {
+          fireEvent.touchMove(scroller)
+        }
+        if (takeover === 'scrollbar') {
+          fireEvent.pointerDown(scroller)
+        }
+        scrollTranscript(returned.container, 120 * ROW_PITCH_PX)
+      }
+      await settleVirtualizer(returned.container)
+      if (takeover === 'row') {
+        const target = returned.container.querySelector<HTMLElement>(
+          '[data-native-chat-row-key="message-200"]'
+        )!
+        expect(target).not.toBeNull()
+        expect(
+          Math.abs(target.getBoundingClientRect().top - scroller.getBoundingClientRect().top)
+        ).toBeLessThanOrEqual(2)
+      } else {
+        expect(scroller.scrollTop).toBe(
+          takeover === 'latest' ? scroller.scrollHeight - scroller.clientHeight : 120 * ROW_PITCH_PX
+        )
+      }
+      width.mockRestore()
+      rect.mockRestore()
+    }
+  )
+
+  it.each([110, 1100])(
+    'captures repeated reading positions from mounted rows at %s cached messages',
+    async (count) => {
+      restoreLayout()
+      restoreLayout = stubLayout({ scrollGeometry: true, offsetChain: true })
+      const rendered = render(list(Array.from({ length: count }, (_, index) => marker(index))))
+      await settleVirtualizer(rendered.container)
+      const root = scrollRoot(rendered.container)
+      const geometry = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      const mounted = rendered.container.querySelectorAll('[data-native-chat-row-key]').length
+      for (let index = 0; index < 10; index++) {
+        fireEvent.wheel(root, { deltaY: -1 })
+        scrollTranscript(rendered.container, 500 + index)
+      }
+      expect(mounted).toBeLessThan(100)
+      expect(geometry.mock.calls.length).toBeLessThanOrEqual(10 * (mounted + 10))
+      geometry.mockRestore()
+    }
+  )
 
   it('mounts a window over the transcript rather than all of it', () => {
     const { container } = render(list(transcript))

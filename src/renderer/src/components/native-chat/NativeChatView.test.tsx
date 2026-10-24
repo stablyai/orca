@@ -1,3 +1,4 @@
+import { useNativeChatRevealLatest } from './use-native-chat-reveal-latest'
 // @vitest-environment happy-dom
 
 import '@testing-library/jest-dom/vitest'
@@ -20,8 +21,8 @@ vi.mock('./NativeChatResolvedView', () => ({ NativeChatResolvedView: ResolvedFin
 function ResolvedFindProbe({ sessionId }: NativeChatResolvedViewProps): React.JSX.Element {
   const rootRef = useRef<HTMLDivElement>(null)
   const composerRef = useRef(null)
-  const messageListRef = useRef(null)
-  const find = useNativeChatFind(true, rootRef, composerRef, messageListRef)
+  const reveal = useNativeChatRevealLatest()
+  const find = useNativeChatFind(true, rootRef, composerRef, reveal)
   return (
     <div ref={rootRef}>
       <span>Session {sessionId ?? 'none'}</span>

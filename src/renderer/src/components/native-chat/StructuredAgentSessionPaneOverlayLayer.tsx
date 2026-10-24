@@ -1,9 +1,11 @@
+import { NativeChatViewIdentity } from './native-chat-view-state-memory'
+import { nativeChatViewKey, useNativeChatViewAdmission } from './native-chat-view-parking-owner'
 import { memo, useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
 import { useAppStore } from '@/store'
 import {
-  structuredAgentSessionOwnerForTab,
+  resolveStructuredAgentSessionOwner,
   structuredAgentSessionTargetForHost
 } from '@/runtime/structured-agent-session-owner'
 import { RetainedPaneHost } from '../tab-group/RetainedPaneHost'
@@ -20,6 +22,7 @@ const EMPTY_GROUPS: readonly TabGroup[] = []
 
 const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOverlaySlot({
   tab,
+  owner,
   groupId,
   isActive,
   isFocusedGroup,
@@ -27,6 +30,7 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
   onFocusOwningGroup
 }: {
   tab: StructuredAgentSessionTab
+  owner: string | null
   groupId: string | undefined
   isActive: boolean
   isFocusedGroup: boolean
@@ -35,9 +39,10 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
 }): React.JSX.Element | null {
   // Each chat is read from the host recorded on its tab, never from its workspace id, which two
   // hosts can share.
-  const owner = useAppStore((state) => structuredAgentSessionOwnerForTab(state, tab))
+  const viewKey = nativeChatViewKey(tab.id, owner, tab.entityId)
+  const admitted = useNativeChatViewAdmission(viewKey, tab.id, isActive)
   const target = useMemo(() => structuredAgentSessionTargetForHost(owner), [owner])
-  if (!target) {
+  if (!target || !admitted) {
     return null
   }
   return (
@@ -48,16 +53,19 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
       data-structured-agent-session-overlay-tab-id={tab.id}
       onFocusOwningGroup={onFocusOwningGroup}
     >
-      <NativeChatView
-        mode="structured"
-        tabId={tab.id}
-        groupId={groupId}
-        sessionId={tab.entityId}
-        agent={tab.agentSessionAgent}
-        isVisible={isActive}
-        isFocusedGroup={isFocusedGroup}
-        target={target}
-      />
+      <NativeChatViewIdentity.Provider value={viewKey}>
+        <NativeChatView
+          key={viewKey}
+          mode="structured"
+          tabId={tab.id}
+          groupId={groupId}
+          sessionId={tab.entityId}
+          agent={tab.agentSessionAgent}
+          isVisible={isActive}
+          isFocusedGroup={isFocusedGroup}
+          target={target}
+        />
+      </NativeChatViewIdentity.Provider>
     </RetainedPaneHost>
   )
 })
@@ -76,6 +84,9 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
         groups: state.groupsByWorktree[worktreeId] ?? EMPTY_GROUPS,
         activeGroupId: state.activeGroupIdByWorktree[worktreeId]
       }))
+    )
+    const workspaceOwner = useAppStore((state) =>
+      resolveStructuredAgentSessionOwner(state, worktreeId)
     )
     const focusGroup = useAppStore((state) => state.focusGroup)
     const focusOwningGroup = useCallback(
@@ -97,6 +108,7 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
           <StructuredAgentSessionOverlaySlot
             key={tab.id}
             tab={tab}
+            owner={tab.executionHostId ?? workspaceOwner}
             groupId={tab.groupId}
             isActive={Boolean(isWorktreeActive && groupActiveTabById.get(tab.groupId) === tab.id)}
             isFocusedGroup={Boolean(

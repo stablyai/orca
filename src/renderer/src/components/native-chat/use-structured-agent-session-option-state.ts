@@ -1,4 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useNativeChatViewLease } from './native-chat-view-parking-owner'
+import {
+  createNativeChatReturnField,
+  useNativeChatReturnState
+} from './native-chat-view-state-memory'
+import { useCallback, useEffect, useRef } from 'react'
 import type { AgentSessionConversationCommand } from '../../../../shared/agent-session-conversation-command'
 import type {
   AgentSessionModelCatalogResult,
@@ -31,6 +36,19 @@ import {
   createCoalescedPollRunner,
   type CoalescedPollRunner
 } from '../right-sidebar/coalesced-poll-runner'
+
+const rememberedSupport = createNativeChatReturnField<{
+  sessionId: string
+  commands: readonly AgentSessionConversationCommand[]
+  threadGoal: AgentSessionOptionsResult['threadGoal']
+  reportedThreadGoal: AgentSessionOptionsResult['reportedThreadGoal']
+  contextUsage: AgentSessionOptionsResult['contextUsage']
+  acceptsImages: boolean | undefined
+  rewind: AgentSessionRewindSupport
+  /** The fence the read answered for; rewind support is only that runtime's. */
+  fence: number | null
+} | null>()
+const rememberedOptions = createNativeChatReturnField<StructuredAgentSessionOptionState>()
 
 /** The first frame: the host's saved list when the renderer already holds it, else the seed,
  *  which shows the quiet placeholder until the host answers. */
@@ -82,22 +100,15 @@ export function useStructuredAgentSessionOptionState(args: {
     turnId,
     worktree
   } = args
-  const [conversationSupport, setConversationSupport] = useState<{
-    sessionId: string
-    commands: readonly AgentSessionConversationCommand[]
-    threadGoal: AgentSessionOptionsResult['threadGoal']
-    reportedThreadGoal: AgentSessionOptionsResult['reportedThreadGoal']
-    contextUsage: AgentSessionOptionsResult['contextUsage']
-    acceptsImages: boolean | undefined
-    rewind: AgentSessionRewindSupport
-    /** The fence the read answered for; rewind support is only that runtime's. */
-    fence: number | null
-  } | null>(null)
+  const [conversationSupport, setConversationSupport] = useNativeChatReturnState(
+    rememberedSupport,
+    () => null
+  )
   // A revision the loaded window dropped can move the host's whole-journal context facts.
   const contextRefresh = conversationSupport?.contextUsage ? (args.unloadedTurnRevisions ?? 0) : 0
   // The first frame is the final one when the renderer holds the host's list; otherwise the quiet
   // placeholder stands until the host answers, never a built-in label the host may replace.
-  const [optionState, setOptionState] = useState(() =>
+  const [optionState, setOptionState] = useNativeChatReturnState(rememberedOptions, () =>
     firstFrameOptionState(agent, target, {
       newLaunch,
       seedsModel,
@@ -265,10 +276,13 @@ export function useStructuredAgentSessionOptionState(args: {
       rereadOptions()
     }
   }
+  const acquireLease = useNativeChatViewLease()
   const beginOptionWrite = (_id: string) => {
+    const release = acquireLease()
     const record = activeOptionRecordRef.current
     writes.current.count += 1
     return (readback: boolean) => {
+      release()
       if (!isCurrentContext() || activeOptionRecordRef.current !== record) {
         return
       }

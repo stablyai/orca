@@ -9,6 +9,7 @@ import {
   screen,
   waitFor
 } from '@testing-library/react'
+import { NativeChatViewIdentity } from './native-chat-view-state-memory'
 import { useRef, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -189,6 +190,39 @@ afterEach(() => {
 })
 
 describe('Continue on a reply an Orca stop cut off', () => {
+  it('keeps Continue admission and a detached refusal through park/reveal, then retries once', async () => {
+    let resolve!: (answer: { outcome: string }) => void
+    mocks.call.mockImplementationOnce(
+      () =>
+        new Promise((done) => {
+          resolve = done
+        })
+    )
+    const returned = () => (
+      <NativeChatViewIdentity.Provider value="continue-park-refusal">
+        <Harness />
+      </NativeChatViewIdentity.Provider>
+    )
+    const first = render(returned())
+    fireEvent.click(continueButton()!)
+    first.unmount()
+    const pending = render(returned())
+    expect(continueButton()).toBeNull()
+    expect(mocks.call).toHaveBeenCalledTimes(1)
+    pending.unmount()
+    await act(async () => resolve({ outcome: 'refused' }))
+    const refused = render(returned())
+    expect(screen.getByTestId('error')).toHaveTextContent(FAILED)
+    expect(continueButton()).not.toBeNull()
+    refused.unmount()
+    render(returned())
+    expect(screen.getByTestId('error')).toHaveTextContent(FAILED)
+    mocks.call.mockResolvedValueOnce({ outcome: 'pending' })
+    fireEvent.click(continueButton()!)
+    expect(mocks.call).toHaveBeenCalledTimes(2)
+    expect(screen.getByTestId('error')).toHaveTextContent('none')
+  })
+
   it("asks the chat's own host, paired or local, to continue that cut turn", () => {
     mocks.call.mockResolvedValue({ outcome: 'pending' })
     render(<Harness />)

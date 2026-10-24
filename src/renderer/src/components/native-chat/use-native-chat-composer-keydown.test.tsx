@@ -1,3 +1,4 @@
+import { NativeChatViewIdentity } from './native-chat-view-state-memory'
 // @vitest-environment happy-dom
 
 import { cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react'
@@ -268,6 +269,32 @@ describe('useNativeChatComposerKeyDown', () => {
         }
       }
     }
+
+    it('continues walking older and newer prompts after the composer parks', () => {
+      const identity = 'keydown-recall-return'
+      const first = render(
+        <NativeChatViewIdentity.Provider value={identity}>
+          <Composer prompts={['one', 'two\nlines']} />
+        </NativeChatViewIdentity.Provider>
+      )
+      const field = first.container.querySelector('textarea')!
+      fireEvent.keyDown(field, { key: 'ArrowUp' })
+      expect(field.value).toBe('two\nlines')
+      const draft = field.value
+      first.unmount()
+      const returned = render(
+        <NativeChatViewIdentity.Provider value={identity}>
+          <Composer prompts={['one', 'two\nlines']} initialDraft={draft} />
+        </NativeChatViewIdentity.Provider>
+      )
+      const input = returned.container.querySelector('textarea')!
+      fireEvent.keyDown(input, { key: 'ArrowUp' })
+      expect(input.value).toBe('one')
+      fireEvent.keyDown(input, { key: 'ArrowDown' })
+      expect(input.value).toBe('two\nlines')
+      fireEvent.keyDown(input, { key: 'ArrowDown' })
+      expect(input.value).toBe('')
+    })
 
     it('walks every prompt in the chat, back to the oldest and forward to an empty draft', () => {
       const { press } = setup({ prompts: ['one', 'two', 'three'] })

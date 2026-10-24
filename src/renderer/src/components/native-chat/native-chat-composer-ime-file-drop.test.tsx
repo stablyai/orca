@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type * as AttachmentUploadModule from './native-chat-attachment-upload'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
+import * as Parking from './native-chat-view-parking-owner'
 import { NativeChatComposerField } from './NativeChatComposerField'
 import { useNativeChatComposerAttachments } from './use-native-chat-composer-attachments'
 import { useNativeChatComposerNotice } from './use-native-chat-composer-notice'
@@ -78,6 +79,8 @@ vi.mock('./NativeChatImageAttachmentPreview', () => ({
 
 type ProbeProps = {
   disabled?: boolean
+  visible?: boolean
+  attached?: boolean
   initialDraft?: string
   structured?: boolean
   /** Overrides only the structured target, leaving the pane's scope key alone. */
@@ -89,6 +92,8 @@ const bubbledDrop = vi.fn()
 
 function ComposerProbe({
   disabled = false,
+  visible = true,
+  attached = true,
   initialDraft = '',
   structured = true,
   structuredWorkspaceId,
@@ -131,50 +136,53 @@ function ComposerProbe({
   return (
     <div onDrop={bubbledDrop}>
       <div>
-        <NativeChatComposerField
-          draftScopeKey={`pane:${workspaceId}`}
-          textareaRef={inputRef}
-          draft={draft}
-          disabled={disabled}
-          hasPty
-          canSend={!disabled}
-          autocomplete={{ mode: 'none' }}
-          activeSuggestion={0}
-          notices={notices}
-          imageAttachments={attachments.imageAttachments}
-          sendButtonDisabled={false}
-          isWorking={false}
-          attachDisabled={disabled}
-          dictationDisabled
-          isDictating={false}
-          isDictationHoldMode={false}
-          imeEnterGesture={imeEnterGesture}
-          onDraftChange={(value, input) => {
-            setDraft(value)
-            setCaret(input.selectionStart ?? value.length)
-          }}
-          onTextareaSelect={(input) => setCaret(input.selectionStart ?? input.value.length)}
-          onKeyDown={() => {}}
-          onImeSettled={(input) => {
-            setDraft(input.value)
-            flushDraftAppends()
-            attachments.flushPendingAttachments()
-          }}
-          onPaste={() => {}}
-          pickerListboxId="picker"
-          onChoosePickerItem={() => {}}
-          onRetrySkills={() => {}}
-          onChooseMentionFile={() => {}}
-          mentionFiles={{ files: [], loading: false, failed: false }}
-          onRemoveImageAttachment={attachments.removeImageAttachment}
-          onAttach={() => {}}
-          onDictationToggle={() => {}}
-          onDictationHoldStart={() => {}}
-          onDictationHoldEnd={() => {}}
-          onSend={() => {}}
-          sessionOptionsSurface={null}
-          sessionOptionsSnapshot={[]}
-        />
+        {attached ? (
+          <NativeChatComposerField
+            isVisible={visible}
+            draftScopeKey={`pane:${workspaceId}`}
+            textareaRef={inputRef}
+            draft={draft}
+            disabled={disabled}
+            hasPty
+            canSend={!disabled}
+            autocomplete={{ mode: 'none' }}
+            activeSuggestion={0}
+            notices={notices}
+            imageAttachments={attachments.imageAttachments}
+            sendButtonDisabled={false}
+            isWorking={false}
+            attachDisabled={disabled}
+            dictationDisabled
+            isDictating={false}
+            isDictationHoldMode={false}
+            imeEnterGesture={imeEnterGesture}
+            onDraftChange={(value, input) => {
+              setDraft(value)
+              setCaret(input.selectionStart ?? value.length)
+            }}
+            onTextareaSelect={(input) => setCaret(input.selectionStart ?? input.value.length)}
+            onKeyDown={() => {}}
+            onImeSettled={(input) => {
+              setDraft(input.value)
+              flushDraftAppends()
+              attachments.flushPendingAttachments()
+            }}
+            onPaste={() => {}}
+            pickerListboxId="picker"
+            onChoosePickerItem={() => {}}
+            onRetrySkills={() => {}}
+            onChooseMentionFile={() => {}}
+            mentionFiles={{ files: [], loading: false, failed: false }}
+            onRemoveImageAttachment={attachments.removeImageAttachment}
+            onAttach={() => {}}
+            onDictationToggle={() => {}}
+            onDictationHoldStart={() => {}}
+            onDictationHoldEnd={() => {}}
+            onSend={() => {}}
+            sessionOptionsSurface={null}
+            sessionOptionsSnapshot={[]}
+          />
+        ) : null}
       </div>
       <button onClick={pickAttachments}>Attach</button>
       <output data-testid="draft">{draft}</output>
@@ -199,6 +207,7 @@ afterEach(() => {
   cleanup()
   clearNativeChatDraftCacheForTests()
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
 })
 
 async function osDrop(target: HTMLElement, names = ['notes.txt']) {
@@ -283,3 +292,28 @@ describe('OS file drops through the real composing chat field', () => {
     )
   })
 })
+
+it.each(['hide', 'prompt replacement'] as const)(
+  'settles preedit and releases its one DOM lease on %s without blur or compositionend',
+  (ending) => {
+    const release = vi.fn()
+    const acquire = vi.fn(() => release)
+    const lease = vi.spyOn(Parking, 'useNativeChatViewLease').mockReturnValue(acquire)
+    const rendered = render(<ComposerProbe />)
+    const editor = screen.getByRole('textbox')
+    fireEvent.compositionStart(editor)
+    changePrompt(editor, '未確定')
+    expect(acquire).toHaveBeenCalledOnce()
+    // The browser has not ended composition; replacing/hiding the owner must settle it.
+    rendered.rerender(
+      <ComposerProbe visible={ending !== 'hide'} attached={ending !== 'prompt replacement'} />
+    )
+    expect(screen.getByTestId('draft').textContent).toBe('未確定')
+    expect(release).toHaveBeenCalledOnce()
+    rendered.rerender(<ComposerProbe />)
+    expect(promptValue(screen.getByRole('textbox'))).toBe('未確定')
+    rendered.unmount()
+    expect(release).toHaveBeenCalledOnce()
+    lease.mockRestore()
+  }
+)

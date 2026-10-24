@@ -50,7 +50,10 @@ vi.mock('./NativeChatMessageList', async () => {
       ref?: React.Ref<unknown>
       journalItems?: Parameters<typeof projectStructuredItemsToNativeChat>[0]
     }) => {
-      useImperativeHandle(props.ref, () => ({ revealLatest: () => {}, revealFindMatch: () => {} }))
+      useImperativeHandle(props.ref, () => ({
+        revealLatest: () => {},
+        revealFindMatch: () => false
+      }))
       return (
         <div data-testid="transcript">
           {projectStructuredItemsToNativeChat(props.journalItems ?? []).map((message) => (

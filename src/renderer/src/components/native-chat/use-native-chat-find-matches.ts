@@ -5,6 +5,7 @@ import {
   type DomTextSearchInstance,
   type DomTextSearchScope
 } from '@/lib/dom-text-search-highlights'
+import type { NativeChatFind, NativeChatFindLocation } from './use-native-chat-find'
 import { nativeChatFindGeometry } from './native-chat-find-visibility'
 
 // Must match the ::highlight() selectors in native-chat-find.css.
@@ -124,18 +125,25 @@ export function useNativeChatFindMatches({
   barRef,
   query,
   isVisible,
-  revealMatch
+  revealMatch,
+  completeSearch,
+  selection,
+  selectMatch
 }: {
   rootRef: React.RefObject<HTMLDivElement | null>
   barRef: React.RefObject<HTMLElement | null>
   query: string
   isVisible: boolean
-  revealMatch: (match: Range) => void
+  revealMatch: NativeChatFind['revealMatch']
+  completeSearch: NativeChatFind['completeSearch']
+  selection: NativeChatFind['selection']
+  selectMatch: NativeChatFind['selectMatch']
 }): NativeChatFindMatches {
   const [instance] = useState<DomTextSearchInstance>(() => ({}))
   const [matchCount, setMatchCount] = useState(0)
   const [activeIndex, setActiveIndex] = useState(-1)
   const matchesRef = useRef<readonly Range[]>([])
+  const locationsRef = useRef<(NativeChatFindLocation | null)[]>([])
   const activeIndexRef = useRef(-1)
   const anchorRef = useRef<MatchAnchor | null>(null)
   const searchedQueryRef = useRef<string | null>(null)
@@ -147,22 +155,41 @@ export function useNativeChatFindMatches({
       activeIndexRef.current = index
       anchorRef.current = anchorOf(matches[index])
       chatFindHighlights.setActive(instance, matches[index])
+      if (index >= 0) {
+        selectMatch(locationsRef.current[index] ?? null)
+      }
       setActiveIndex(index)
     },
-    [instance]
+    [instance, selectMatch]
   )
 
   const search = useCallback(() => {
     const root = rootRef.current
     const column = root?.querySelector<HTMLElement>(TRANSCRIPT_COLUMN_SELECTOR)
     const scroller = root?.querySelector(TRANSCRIPT_SCROLL_SELECTOR) ?? null
-    const found = column
-      ? findDomTextSearchRanges(column, query, visibleTextScope([...matchesRef.current]))
-      : []
+    if (!column || !scroller) {
+      return false
+    }
+    const found = findDomTextSearchRanges(column, query, visibleTextScope([...matchesRef.current]))
     const geometry = scroller ? nativeChatFindGeometry(scroller) : null
     const matches = geometry ? found.filter((match) => !geometry.clippedAway(match)) : found
     const newQuery = searchedQueryRef.current !== query
     searchedQueryRef.current = query
+    const counts = new Map<string, number>()
+    locationsRef.current = matches.map((match) => {
+      const element =
+        match.startContainer instanceof Element
+          ? match.startContainer
+          : match.startContainer.parentElement
+      const row = element?.closest<HTMLElement>('[data-native-chat-row-key]')?.dataset
+        .nativeChatRowKey
+      if (!row) {
+        return null
+      }
+      const occurrence = counts.get(row) ?? 0
+      counts.set(row, occurrence + 1)
+      return { row, occurrence }
+    })
     matchesRef.current = matches
     matchNodesRef.current = new Set(
       matches.flatMap((match) => [match.startContainer, match.endContainer])
@@ -170,26 +197,30 @@ export function useNativeChatFindMatches({
     chatFindHighlights.setMatches(instance, matches)
     setMatchCount(matches.length)
     const anchor = anchorRef.current
-    if (!newQuery && matches.length > 0 && anchor?.node.isConnected) {
-      activate(matches, survivingMatchIndex(matches, anchor))
-      return
-    }
-    // A new query, or the active match's row scrolled out of the window: start from what is on screen.
-    const bar = barRef.current?.getBoundingClientRect() ?? null
-    const first = firstVisibleMatch(matches, scroller, bar)
-    activate(matches, first.index)
-    if (newQuery && first.index !== -1 && !first.inView) {
-      revealMatch(matches[first.index])
-    }
-  }, [activate, barRef, instance, query, revealMatch, rootRef])
+    const saved = selection()
+    const retained = saved
+      ? locationsRef.current.findIndex(
+          (at) => at?.row === saved.row && at.occurrence === saved.occurrence
+        )
+      : -1
+    const index =
+      !newQuery && matches.length > 0 && anchor?.node.isConnected
+        ? survivingMatchIndex(matches, anchor)
+        : retained >= 0
+          ? retained
+          : firstVisibleMatch(matches, scroller, barRef.current?.getBoundingClientRect() ?? null)
+              .index
+    activate(matches, index)
+    return completeSearch(matches[index] ?? null)
+  }, [activate, barRef, instance, query, completeSearch, rootRef, selection])
 
   useEffect(() => {
     const root = rootRef.current
     if (!isVisible || !root) {
       return
     }
-    search()
-    if (!query || typeof MutationObserver === 'undefined') {
+    const attached = search()
+    if ((!query && attached) || typeof MutationObserver === 'undefined') {
       return
     }
     let frame: number | null = null
@@ -203,7 +234,10 @@ export function useNativeChatFindMatches({
         clearTimeout(timer)
         timer = null
       }
-      search()
+      if (search() && !query) {
+        observer.disconnect()
+        root.removeEventListener('animationend', onAnimationEnd)
+      }
     }
     let column = root.querySelector(TRANSCRIPT_COLUMN_SELECTOR)
     const observer = new MutationObserver((records) => {

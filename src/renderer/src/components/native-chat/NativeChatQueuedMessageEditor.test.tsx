@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useEffect, useRef, type ReactNode } from 'react'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { NativeChatViewIdentity, retireNativeChatViewState } from './native-chat-view-state-memory'
 import { NativeChatQueuedMessageEditor } from './NativeChatQueuedMessageEditor'
 import { NativeChatApprovalCard } from './NativeChatApprovalCard'
 import { NativeChatQuestionCard } from './NativeChatQuestionCard'
@@ -39,6 +40,7 @@ import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environmen
 const externalAttachments = ExternalAttachments.useNativeChatExternalAttachments
 let chips: Parameters<typeof externalAttachments>[0]['pendingChips']
 beforeEach(() => {
+  clipboardSave.mockReset().mockResolvedValue({ status: 'saved', tempPath: '/tmp/new.png' })
   vi.spyOn(ExternalAttachments, 'useNativeChatExternalAttachments').mockImplementation((args) => {
     chips = args.pendingChips
     return externalAttachments(args)
@@ -70,9 +72,12 @@ vi.mock('./native-chat-attachment-upload', async (original) => ({
   ...(await original<typeof NativeChatAttachmentUpload>()),
   resolveNativeChatAttachmentOwnerForWorktree: () => ({ kind: 'local' })
 }))
+const clipboardSave = vi.hoisted(() =>
+  vi.fn(async () => ({ status: 'saved', tempPath: '/tmp/new.png' }))
+)
 vi.mock('./native-chat-clipboard-image-save', () => ({
   ownerAcceptsClipboardImage: () => true,
-  saveNativeChatPastedClipboardImage: async () => ({ status: 'saved', tempPath: '/tmp/new.png' })
+  saveNativeChatPastedClipboardImage: clipboardSave
 }))
 afterEach(cleanup)
 function editor(): QueuedMessageInlineEditor {
@@ -137,7 +142,8 @@ describe('queued card textarea', () => {
       const edit = editor()
       const answer = vi.fn()
       const promptCancel = vi.fn()
-      const { rerender } = render(view(edit, null, answer, promptCancel))
+      const { rerender } = render(view({ ...edit, acquiring: true }, null, answer, promptCancel))
+      rerender(view(edit, null, answer, promptCancel))
       const field = screen.getByRole('textbox', { name: 'Edit message' })
       expect(document.activeElement).toBe(field)
       rerender(view(edit, prompt, answer, promptCancel))
@@ -154,7 +160,8 @@ describe('queued card textarea', () => {
     'focuses and saves with a %s already open',
     (prompt) => {
       const edit = editor()
-      render(view(edit, prompt))
+      const { rerender } = render(view({ ...edit, acquiring: true }, prompt))
+      rerender(view(edit, prompt))
       const field = screen.getByRole('textbox', { name: 'Edit message' })
       expect(document.activeElement).toBe(field)
       fireEvent.click(screen.getByRole('button', { name: 'Save' }))
@@ -356,6 +363,104 @@ describe('queued card image edit', () => {
     }
   )
 
+  it.each(['local', 'paired', 'ssh'] as const)(
+    'settles an accepted %s image paste while parked, returns the edit and saves once; cancel retires it',
+    async (host) => {
+      const pending = Promise.withResolvers<{ status: string; tempPath: string }>()
+      replaceRuntimeEnvironmentRevisions([{ id: host, createdAt: 1, pairingRevision: 7 }])
+      clipboardSave.mockReturnValueOnce(pending.promise)
+      writeSpy.mockClear()
+      const identity = `queued-paste-${host}`
+      const ui = () => (
+        <NativeChatViewIdentity.Provider value={identity}>
+          <EditedCard imagesCapable runtimeEnvironmentId={host === 'local' ? null : host} />
+        </NativeChatViewIdentity.Provider>
+      )
+      const mounted = render(ui())
+      await waitFor(() => expect(screen.getByRole('textbox')).toHaveProperty('readOnly', false))
+      const field = screen.getByRole('textbox')
+      fireEvent.change(field, { target: { value: 'kept edit' } })
+      const data = new DataTransfer()
+      data.items.add(new File(['png'], 'image.png', { type: 'image/png' }))
+      fireEvent.paste(field, { clipboardData: data })
+      expect(screen.getByRole('button', { name: 'Save' })).toHaveProperty('disabled', true)
+      mounted.unmount()
+      await act(async () => pending.resolve({ status: 'saved', tempPath: `/host/${host}.png` }))
+      const returned = render(ui())
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: 'Save' })).toHaveProperty('disabled', false)
+      )
+      expect(screen.getByRole('textbox')).toHaveProperty('value', 'kept edit')
+      expect(screen.getAllByRole('button', { name: 'Remove attachment' })).toHaveLength(3)
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+      await waitFor(() => expect(writeSpy).toHaveBeenCalledOnce())
+      expect(savedParams()).toMatchObject({
+        text: expect.stringContaining('kept edit'),
+        images: expect.arrayContaining([expect.objectContaining({ path: `/host/${host}.png` })])
+      })
+      returned.unmount()
+      retireNativeChatViewState(identity)
+
+      const cancelled = Promise.withResolvers<{ status: string; tempPath: string }>()
+      clipboardSave.mockReturnValueOnce(cancelled.promise)
+      const next = render(ui())
+      await waitFor(() => expect(screen.getByRole('textbox')).toHaveProperty('readOnly', false))
+      fireEvent.paste(screen.getByRole('textbox'), { clipboardData: data })
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel editing' }))
+      next.unmount()
+      await act(async () => cancelled.resolve({ status: 'saved', tempPath: '/host/cancelled.png' }))
+      render(ui())
+      await waitFor(() => expect(screen.getByRole('textbox')).toHaveProperty('readOnly', false))
+      expect(screen.getAllByRole('button', { name: 'Remove attachment' })).toHaveLength(2)
+      expect(writeSpy).toHaveBeenCalledOnce()
+      retireNativeChatViewState(identity)
+      replaceRuntimeEnvironmentRevisions([])
+    }
+  )
+
+  it('finishes an accepted drop after parking into the queued images and saved text range', async () => {
+    const owner = vi.spyOn(OsFileDropOwner, 'useOsFileDropOwner')
+    vi.stubGlobal('api', { fs: { stat: async () => ({}) } })
+    writeSpy.mockClear()
+    const ui = () => (
+      <NativeChatViewIdentity.Provider value="queued-drop-return">
+        <EditedCard imagesCapable />
+      </NativeChatViewIdentity.Provider>
+    )
+    try {
+      const before = render(ui())
+      await waitFor(() => expect(screen.getByRole('textbox')).toHaveProperty('readOnly', false))
+      const field = screen.getByRole('textbox')
+      if (!(field instanceof HTMLTextAreaElement)) {
+        throw new Error('Expected queued text field')
+      }
+      fireEvent.change(field, { target: { value: 'alpha WORD omega' } })
+      field.setSelectionRange(6, 10, 'backward')
+      fireEvent.select(field)
+      const destination = owner.mock.calls.at(-1)![1].captureDestination?.(new DragEvent('drop'))
+      if (typeof destination !== 'function') {
+        throw new Error('Expected a captured drop destination')
+      }
+      before.unmount()
+      await act(async () => {
+        await destination(['/tmp/drop.png', '/repo/notes.txt'])
+      })
+      render(ui())
+      await waitFor(() => expect(screen.getByRole('textbox')).toHaveProperty('readOnly', false))
+      expect(screen.getByRole('textbox')).toHaveProperty('value', 'alpha @/repo/notes.txt  omega')
+      expect(screen.getAllByRole('button', { name: 'Remove attachment' })).toHaveLength(3)
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+      await waitFor(() => expect(writeSpy).toHaveBeenCalledOnce())
+      expect(savedParams()).toMatchObject({
+        images: expect.arrayContaining([expect.objectContaining({ path: '/tmp/drop.png' })])
+      })
+    } finally {
+      retireNativeChatViewState('queued-drop-return')
+      owner.mockRestore()
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('pastes into the owning queued edit through native key and menu delivery', async () => {
     let field: HTMLElement
     const ui = {
@@ -545,4 +650,34 @@ describe('queued card image edit', () => {
       text: 'see that'
     })
   })
+})
+
+it('reattaches an acquired edit range without taking sibling focus or scrolling, then honors a fresh Edit acquisition', () => {
+  const edit = { ...editor(), selection: { from: 2, to: 7, direction: 'backward' as const } }
+  const sibling = document.createElement('textarea')
+  document.body.append(sibling)
+  sibling.focus()
+  const geometry = vi
+    .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+    .mockImplementation(function (this: HTMLElement) {
+      return DOMRect.fromRect({ y: this.tagName === 'LI' ? 400 : 0, height: 100, width: 100 })
+    })
+  const rendered = render(view(edit, null))
+  const field = screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Edit message' })
+  const list = field.closest('ul')!
+  expect([field.selectionStart, field.selectionEnd, field.selectionDirection]).toEqual([
+    2,
+    7,
+    'backward'
+  ])
+  expect(document.activeElement).toBe(sibling)
+  expect(list.scrollTop).toBe(0)
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+  expect(edit.save).toHaveBeenCalledOnce()
+  rendered.rerender(view({ ...edit, acquiring: true }, null))
+  rendered.rerender(view(edit, null))
+  expect(document.activeElement).toBe(field)
+  expect(list.scrollTop).toBe(400)
+  geometry.mockRestore()
+  sibling.remove()
 })

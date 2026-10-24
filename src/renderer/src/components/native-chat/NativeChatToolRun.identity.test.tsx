@@ -18,6 +18,7 @@ vi.mock('./NativeChatDiffView', () => ({ NativeChatDiffView: () => null }))
 
 const disclosureWrite = vi.fn()
 const capturedDisclosures = {
+  reset: vi.fn(),
   read: (_key: string) => undefined,
   write: (key: string, open: boolean) => disclosureWrite(key, open),
   runScroll: new Map()

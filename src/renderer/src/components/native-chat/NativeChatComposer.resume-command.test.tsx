@@ -1,7 +1,9 @@
 // @vitest-environment happy-dom
 
 import { act, cleanup, render } from '@testing-library/react'
+import type * as DraftHooks from './use-native-chat-draft'
 import type { RefObject } from 'react'
+import { NativeChatViewIdentity } from './native-chat-view-state-memory'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatPickerItem } from '../../../../shared/native-chat-picker-items'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
@@ -54,7 +56,8 @@ vi.mock('./native-chat-runtime-send', () => ({
   sendNativeChatMessage: vi.fn(),
   sendNativeChatTypedCommand: mocks.sendNativeChatTypedCommand
 }))
-vi.mock('./use-native-chat-draft', () => ({
+vi.mock('./use-native-chat-draft', async (original) => ({
+  ...(await original<typeof DraftHooks>()),
   useNativeChatDraft: () => ({ draft: mocks.draft, setDraft: mocks.setDraft })
 }))
 vi.mock('./NativeChatComposerField', () => ({
@@ -92,7 +95,7 @@ const RESUME: CommandItem = {
   orcaOwned: true
 }
 
-function renderStructuredChat() {
+function renderStructuredChat(identity: string | null = null) {
   const transport: NativeChatStructuredComposerTransport = {
     capturePresentation: () => () => true,
     send: vi.fn(() => true),
@@ -111,16 +114,25 @@ function renderStructuredChat() {
     runtimeEnvironmentId: null
   }
   const chat = () => (
-    <NativeChatComposer
-      terminalTabId="tab-1"
-      paneKey="tab-1:structured"
-      targetPtyId={null}
-      agent="claude"
-      structuredTransport={transport}
-    />
+    <NativeChatViewIdentity.Provider value={identity}>
+      <NativeChatComposer
+        terminalTabId="tab-1"
+        paneKey="tab-1:structured"
+        targetPtyId={null}
+        agent="claude"
+        structuredTransport={transport}
+      />
+    </NativeChatViewIdentity.Provider>
   )
-  const view = render(chat())
-  return { transport, rerender: () => view.rerender(chat()) }
+  let view = render(chat())
+  return {
+    transport,
+    rerender: () => view.rerender(chat()),
+    park: () => view.unmount(),
+    reveal: () => {
+      view = render(chat())
+    }
+  }
 }
 
 describe('/resume in the native chat composer', () => {
@@ -140,7 +152,9 @@ describe('/resume in the native chat composer', () => {
   it("opens a structured chat's history, typed in any case, and sends nothing", () => {
     mocks.draft = '/Resume  auth  retry'
     mocks.imageAttachments = [{ id: 'img-1', path: '/tmp/a.png' }]
-    const { transport } = renderStructuredChat()
+    const { transport, park, reveal } = renderStructuredChat('typed-resume-return')
+    park()
+    reveal()
     let focusedAtOpen: Element | null = null
     mocks.openHistory.mockImplementation(() => (focusedAtOpen = document.activeElement))
 
@@ -169,7 +183,7 @@ describe('/resume in the native chat composer', () => {
 
   it('sends a picked skill named resume to the agent, as the skill it is', () => {
     mocks.draft = '/res'
-    const { transport, rerender } = renderStructuredChat()
+    const { transport, rerender, park, reveal } = renderStructuredChat('picked-resume-return')
     act(() =>
       mocks.fieldProps?.onChoosePickerItem?.({
         kind: 'skill',
@@ -182,6 +196,8 @@ describe('/resume in the native chat composer', () => {
     )
     mocks.draft = '/resume make it one page'
     rerender()
+    park()
+    reveal()
 
     act(() => mocks.fieldProps?.onSend?.())
 

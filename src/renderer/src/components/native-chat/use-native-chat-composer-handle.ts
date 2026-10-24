@@ -1,10 +1,8 @@
+import type { UseNativeChatComposerPasteArgs } from './native-chat-composer-paste-options'
 import { useImperativeHandle, type ForwardedRef } from 'react'
 import type { ClipboardEventLike } from './native-chat-clipboard-payload'
 import type { NativeChatComposerHandle } from './native-chat-composer-types'
-import {
-  useNativeChatComposerPaste,
-  type UseNativeChatComposerPasteArgs
-} from './use-native-chat-composer-paste'
+import { useNativeChatComposerPaste } from './use-native-chat-composer-paste'
 import { useNativeChatTypedInsertion } from './use-native-chat-typed-insertion'
 import { useNativeChatPastedTextFile } from './use-native-chat-pasted-text-file'
 import type { NativeChatComposerInput } from './native-chat-composer-input'

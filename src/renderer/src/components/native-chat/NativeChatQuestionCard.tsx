@@ -1,6 +1,10 @@
+import {
+  createNativeChatReturnField,
+  useNativeChatReturnState
+} from './native-chat-view-state-memory'
 import { ImeInput } from '@/lib/ime-text-field'
 import { Textarea } from '@/components/ui/textarea'
-import { useRef, useState, type RefObject } from 'react'
+import { useRef, type RefObject } from 'react'
 import { Check, Pencil, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
@@ -45,6 +49,10 @@ const TYPED_ANSWER = -1
  * text, and confirms via the trailing action. Number keys pick the numbered row.
  * Multi-question prompts step through tabs across the top. Neutral shadcn tokens.
  */
+const questionIndex = createNativeChatReturnField<number>()
+const questionSelections = createNativeChatReturnField<number[][]>()
+const questionText = createNativeChatReturnField<string[]>()
+
 export function NativeChatQuestionCard({
   prompt,
   isSubmitting = false,
@@ -59,12 +67,14 @@ export function NativeChatQuestionCard({
 }: NativeChatQuestionCardProps): React.JSX.Element {
   const cardRef = useRef<HTMLDivElement>(null)
   const autoAdvance = useNativeChatQuestionAutoAdvance()
-  const [index, setIndex] = useState(0)
+  const [index, setIndex] = useNativeChatReturnState(questionIndex, () => 0)
   useNativeChatPromptCardFocus(cardRef, shouldFocus, index)
   // Keep option identity by index: labels are display text and are not guaranteed
   // unique, while Claude's selector commits the numbered row (STA-1860).
-  const [selections, setSelections] = useState<number[][]>(() => prompt.questions.map(() => []))
-  const [otherText, setOtherText] = useState<string[]>(() =>
+  const [selections, setSelections] = useNativeChatReturnState(questionSelections, () =>
+    prompt.questions.map(() => [])
+  )
+  const [otherText, setOtherText] = useNativeChatReturnState(questionText, () =>
     prompt.questions.map((_, qi) => freeTextInputs?.[qi]?.initialValue ?? '')
   )
 

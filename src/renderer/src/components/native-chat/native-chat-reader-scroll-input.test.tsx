@@ -10,6 +10,8 @@ function harness() {
   const onReaderScroll = vi.fn()
   const onLeaveEnd = vi.fn()
   const onScrollGesture = vi.fn()
+  let revealFindMatch: ReturnType<typeof useNativeChatReaderScrollInput>['revealFindMatch'] = () =>
+    false
   let railWheel: (deltaY: number) => void = () => {}
   let forwardedGesture: (gesture: ReaderGesture) => void = () => {}
   const view = render(<Harness />)
@@ -20,6 +22,7 @@ function harness() {
       onLeaveEnd,
       onScrollGesture
     })
+    revealFindMatch = input.revealFindMatch
     railWheel = input.railWheel
     forwardedGesture = input.forwardedGesture
     return (
@@ -44,7 +47,8 @@ function harness() {
     onLeaveEnd,
     onScrollGesture,
     railWheel,
-    forwardedGesture
+    forwardedGesture,
+    revealFindMatch
   }
 }
 it('leaves transcript following with the nested scroller until it chains upward', () => {
@@ -109,4 +113,27 @@ it('keeps following on downward gestures at the tail, zoom and editing keys', ()
   expect(h.onLeaveEnd, 'editable key').not.toHaveBeenCalled()
   expect(h.onLeaveEnd).not.toHaveBeenCalled()
   expect(h.onReaderScroll).toHaveBeenCalledTimes(3)
+})
+
+it('claims only an attached Find outcome before reader takeover, including in-view and clamped navigation', () => {
+  const h = harness()
+  const range = document.createRange()
+  range.selectNodeContents(h.getByTestId('text'))
+  const claim = vi.fn(() => {
+    expect(h.onReaderScroll).not.toHaveBeenCalled()
+    return true
+  })
+  expect(h.revealFindMatch(range, null, claim)).toBe(true)
+  expect(claim).toHaveBeenCalledOnce()
+  expect(h.onReaderScroll).toHaveBeenCalledOnce()
+  h.onReaderScroll.mockClear()
+  const rejected = vi.fn(() => false)
+  expect(h.revealFindMatch(range, null, rejected)).toBe(false)
+  expect(h.onReaderScroll).not.toHaveBeenCalled()
+  expect(h.revealFindMatch(null, null, claim)).toBe(true)
+  expect(h.onReaderScroll).not.toHaveBeenCalled()
+  h.unmount()
+  claim.mockClear()
+  expect(h.revealFindMatch(null, null, claim)).toBe(false)
+  expect(claim).not.toHaveBeenCalled()
 })

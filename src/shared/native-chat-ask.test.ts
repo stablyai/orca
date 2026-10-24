@@ -6,6 +6,7 @@ import {
 } from './native-chat-types'
 import {
   extractPendingAsk,
+  extractPendingMessageReplyAskState,
   nativeChatAskDismissKey,
   parseAskFromStatus,
   resolveNativeChatAsk
@@ -252,10 +253,12 @@ describe('async questions', () => {
 
   it('keeps every unanswered async question, once per call', () => {
     const first = message('a', [asyncCall('call-a', 'A?'), result()])
-    expect(titles([first, first, message('b', [asyncCall('call-b', 'B?'), result()])])).toEqual([
-      'A?',
-      'B?'
+    const aggregate = [first, first, message('b', [asyncCall('call-b', 'B?'), result()])]
+    expect(extractPendingMessageReplyAskState(aggregate).contributions).toEqual([
+      ['a', 0, 'call-a'],
+      ['b', 0, 'call-b']
     ])
+    expect(titles(aggregate)).toEqual(['A?', 'B?'])
   })
 
   it('stays open until a user message reaches the agent', () => {
@@ -263,6 +266,31 @@ describe('async questions', () => {
     expect(titles([asked, userRow('q', { queued: true }), userRow('u', { unsent: true })])).toEqual(
       ['A?']
     )
-    expect(extractPendingAsk([asked, userRow('sent')])).toBeNull()
+    for (const flags of [
+      { stoppedBeforeStart: true },
+      { awaitsRetry: true },
+      { sentWhileStopping: true }
+    ] as const) {
+      expect(titles([asked, userRow('waiting', flags)])).toEqual(['A?'])
+    }
+    const sent = { ...userRow('sent'), journalPosition: { sequence: 2, index: 0 } }
+    expect(extractPendingAsk([asked, sent])).toBeNull()
+    expect(extractPendingMessageReplyAskState([asked, sent]).clearedAt).toEqual(
+      sent.journalPosition
+    )
+    const later = message('fresh-row', [asyncCall('call-a', 'A?')])
+    expect(extractPendingMessageReplyAskState([asked, sent, later]).contributions).toEqual([
+      ['fresh-row', 0, 'call-a']
+    ])
+    const missing = message('missing', [
+      {
+        type: 'tool-call',
+        name: 'request_user_input_async',
+        input: { questions: [{ title: 'No id?' }] }
+      }
+    ])
+    expect(extractPendingMessageReplyAskState([missing]).contributions).toEqual([
+      ['missing', 0, null]
+    ])
   })
 })

@@ -396,6 +396,7 @@ it('reveals a structured prompt answer at the press, before the host accepts it'
     const transcript = useReviewTranscript()
     const submits = useStructuredNativeChatSubmitReveal(
       {
+        epoch: null,
         capturePresentation: () => () => true,
         respond: async () => host.promise,
         queuedMessages: {

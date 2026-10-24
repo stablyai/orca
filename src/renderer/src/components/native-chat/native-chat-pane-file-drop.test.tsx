@@ -42,6 +42,7 @@ function EditingCard({ disabled = false }: { disabled?: boolean }) {
             chips: [],
             empty: false,
             intake: {
+              isLive: () => true,
               begin: () => null,
               resolve: () => false,
               reveal: IGNORE_DRAG,

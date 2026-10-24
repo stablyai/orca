@@ -1,7 +1,12 @@
 // Where the conversation stood when the reader last looked away from it: the "New" marker draws
 // above the first row that came, or kept growing, while they were away.
 
-import { useCallback, useMemo, useState } from 'react'
+import {
+  createNativeChatReturnField,
+  useNativeChatReturnRef
+} from './native-chat-view-state-memory'
+import type { NativeChatAppliedCut } from './use-native-chat-context-clear-floor'
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useOrcaWindowForegroundFocused } from '@/hooks/use-orca-window-foreground-focused'
 import { compareAgentJournalPositions } from '../../../../shared/agent-session-journal-position'
 import type { AgentJournalPosition } from '../../../../shared/agent-session-journal-types'
@@ -54,9 +59,14 @@ function newestRowPosition(
 
 function nativeChatLeftAt(
   slots: readonly NativeChatTranscriptSlot[],
-  waitingSlots: readonly NativeChatTranscriptSlot[]
-): NativeChatLeftAt {
+  waitingSlots: readonly NativeChatTranscriptSlot[],
+  missed: NativeChatMissedRows | null
+): NativeChatLeftAt | null {
   const all = [...slots, ...waitingSlots]
+  // An unanswered marker that is still placed keeps its original missed interval.
+  if (nativeChatNewRowsMarkerPlacement(all, missed)) {
+    return null
+  }
   // The working turn's latest row of the agent's own, wherever the reader's prompts sit: one
   // delivered into the turn or held behind it comes after the reply and does not stop it growing.
   const writer = slots.findLast(
@@ -145,37 +155,108 @@ export function nativeChatNewRowsMarkerPlacement(
     : { key: nativeChatSlotKey(first), place: 'above-row' }
 }
 
+type Visit = {
+  watching: boolean
+  left: NativeChatLeftAt | null
+  missed: NativeChatMissedRows | null
+  arriving: boolean
+  cut: NativeChatAppliedCut | null
+}
+const visit = createNativeChatReturnField<Visit>()
+
 export function useNativeChatNewRowsMarker(
   slots: readonly NativeChatTranscriptSlot[],
   /** Rows held behind the running turn: seen and missed like any other, drawn outside `slots`. */
   waitingSlots: readonly NativeChatTranscriptSlot[],
   /** The pane is the one showing, and shows what the host holds now. */
-  isShowingLatest: boolean
+  isShowingLatest: boolean,
+  applied: NativeChatAppliedCut | null = null,
+  known = true
 ): {
   marker: NativeChatNewRowsMarkerState | undefined
   /** The reader answered the conversation, so nothing in it is news to them. */
   dismiss: () => void
 } {
   const watching = useOrcaWindowForegroundFocused(isShowingLatest)
-  const [seen, setSeen] = useState<{
-    watching: boolean
-    /** While the reader is away: where they had read to. */
-    left: NativeChatLeftAt | null
-    /** Stands until the reader answers. */
-    missed: NativeChatMissedRows | null
-    arriving: boolean
-  }>({ watching, left: null, missed: null, arriving: false })
-  if (seen.watching !== watching) {
-    const all = [...slots, ...waitingSlots]
-    if (watching) {
-      const missed = seen.left ? nativeChatMissedRows(all, seen.left) : seen.missed
-      setSeen({ watching, left: null, missed, arriving: seen.left !== null && missed !== null })
-    } else {
-      // An unanswered marker whose row still stands is kept: the reader may be midway through it.
-      const marked = nativeChatNewRowsMarkerPlacement(all, seen.missed) !== undefined
-      setSeen({ ...seen, watching, left: marked ? null : nativeChatLeftAt(slots, waitingSlots) })
+  const memory = useNativeChatReturnRef(visit, () => ({
+    watching,
+    left: null,
+    missed: null,
+    arriving: false,
+    cut: applied
+  }))
+  const [seen, setSeen] = useState(memory.current)
+  const source = useRef<{
+    slots: readonly NativeChatTranscriptSlot[]
+    waitingSlots: readonly NativeChatTranscriptSlot[]
+  } | null>(null)
+  let current = seen
+  if (applied) {
+    const prior = seen.cut
+    const replaced =
+      prior &&
+      (applied.epoch !== prior.epoch || (applied.floor > prior.floor && applied.floor > prior.tail))
+    const cut =
+      !prior || applied.epoch !== prior.epoch
+        ? applied
+        : {
+            ...applied,
+            floor: Math.max(prior.floor, applied.floor),
+            tail: Math.max(prior.tail, applied.tail)
+          }
+    if (replaced) {
+      current = { watching, left: null, missed: null, arriving: false, cut }
+    } else if (!prior || cut.floor !== prior.floor || cut.tail !== prior.tail) {
+      current = { ...seen, cut }
     }
   }
+  if (current.watching !== watching) {
+    const snapshot = known ? { slots, waitingSlots } : source.current
+    if (watching) {
+      const missed = current.left
+        ? nativeChatMissedRows([...slots, ...waitingSlots], current.left)
+        : current.missed
+      current = {
+        ...current,
+        watching,
+        left: null,
+        missed,
+        arriving: current.left !== null && missed !== null
+      }
+    } else if (snapshot) {
+      current = {
+        ...current,
+        watching,
+        left: nativeChatLeftAt(snapshot.slots, snapshot.waitingSlots, current.missed)
+      }
+    }
+  }
+  if (current !== seen) {
+    setSeen(current)
+  }
+  useLayoutEffect(() => {
+    if (known) {
+      source.current = { slots, waitingSlots }
+    }
+    if (!memory.retired) {
+      memory.current = seen
+    }
+  }, [known, slots, waitingSlots, memory, seen])
+  useLayoutEffect(
+    () => () => {
+      const held = memory.current
+      const snapshot = source.current
+      if (!memory.retired && held.watching && snapshot) {
+        memory.current = {
+          ...held,
+          watching: false,
+          left: nativeChatLeftAt(snapshot.slots, snapshot.waitingSlots, held.missed)
+        }
+      }
+      source.current = null
+    },
+    [memory]
+  )
   const { missed } = seen
   const placement = useMemo(() => nativeChatNewRowsMarkerPlacement(slots, missed), [slots, missed])
   const dismiss = useCallback(() => {

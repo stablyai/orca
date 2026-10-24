@@ -222,6 +222,7 @@ function renderRevealingController(sessionId = 'session-1', fence: number | null
       const queue = useQueue(sessionId, fence)
       const submits = useStructuredNativeChatSubmitReveal(
         {
+          epoch: null,
           queuedMessages: queue,
           respond: async () => null,
           capturePresentation: queue.capturePresentation

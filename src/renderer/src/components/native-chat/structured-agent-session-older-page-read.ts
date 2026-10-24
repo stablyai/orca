@@ -1,3 +1,4 @@
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 import {
   AGENT_SESSION_HISTORY_MAX_LIMIT,
   type AgentSessionHistoryResult
@@ -59,4 +60,8 @@ export async function readStructuredAgentSessionOlderPage(args: {
     // the next invalidation (re-attach, snapshot, reset) re-enables paging.
     return shouldStop() ? 'superseded' : 'failed'
   }
+}
+
+export function countsTowardInitialHistory(item: AgentJournalRenderItem): boolean {
+  return item.body.kind !== 'status' || !item.body.providerFrame
 }

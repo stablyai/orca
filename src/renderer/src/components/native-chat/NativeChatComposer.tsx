@@ -1,11 +1,15 @@
+import { useNativeChatReturnState } from './native-chat-view-state-memory'
 import { useNativeChatComposerNotice } from './use-native-chat-composer-notice'
 import { useNativeChatMobileHoldNotice } from './use-native-chat-mobile-hold-notice'
-import type { NativeChatComposerInput } from './native-chat-composer-input'
 import { forwardRef, useCallback, useState } from 'react'
 import { useNativeChatComposerInterrupt } from './use-native-chat-composer-interrupt'
 import { useNativeChatContextUsageSummary } from './use-native-chat-context-usage-summary'
 import { useNativeChatMentionFiles } from './use-native-chat-mention-files'
-import { useNativeChatDraft } from './use-native-chat-draft'
+import {
+  useNativeChatDraft,
+  useNativeChatDraftChange,
+  composerCaret
+} from './use-native-chat-draft'
 import { useNativeChatComposerRecall } from './use-native-chat-composer-recall'
 import { useNativeChatLaunchDraftAdoption } from './use-native-chat-launch-draft-adoption'
 import { NativeChatComposerField } from './NativeChatComposerField'
@@ -53,6 +57,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       targetPtyId,
       agent,
       canSend = true,
+      isVisible = true,
       unavailableHint,
       isWorking = false,
       isStopping = false,
@@ -84,7 +89,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       draftScopeKey,
       imeEnterGesture.isComposing
     )
-    const [caret, setCaret] = useState(draft.length)
+    const [caret, setCaret] = useNativeChatReturnState(composerCaret, () => draft.length)
     useNativeChatLaunchDraftAdoption({
       terminalTabId,
       agent,
@@ -348,19 +353,17 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       setCaret
     })
 
-    const handleDraftChange = useCallback(
-      (value: string, element: NativeChatComposerInput) => {
-        const nextCaret = element.selectionStart ?? value.length
-        setDraft(value)
-        setCaret(nextCaret)
-        handleDraftOrCaretChange(value, nextCaret)
-        setActiveSuggestion(0)
-      },
-      [handleDraftOrCaretChange, setDraft]
+    const draftInput = useNativeChatDraftChange(
+      setDraft,
+      setCaret,
+      handleDraftOrCaretChange,
+      setActiveSuggestion,
+      { draft, flushDraftAppends, flushPendingAttachments: attachments.flushPendingAttachments }
     )
 
     return (
       <NativeChatComposerField
+        isVisible={isVisible}
         draftScopeKey={draftScopeKey}
         textareaRef={textareaRef}
         draft={draft}
@@ -388,7 +391,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
         isDictating={dictation.isDictating}
         isDictationHoldMode={dictation.isDictationHoldMode}
         imeEnterGesture={imeEnterGesture}
-        onDraftChange={handleDraftChange}
+        {...draftInput}
         onTextareaSelect={(element) => {
           const value = element.value
           const nextCaret = element.selectionStart ?? value.length
@@ -397,13 +400,6 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
           setActiveSuggestion(0)
         }}
         onKeyDown={handleKeyDown}
-        onImeSettled={(element) => {
-          if (element.value !== draft) {
-            handleDraftChange(element.value, element)
-          }
-          flushDraftAppends()
-          attachments.flushPendingAttachments()
-        }}
         onPaste={handlePasteEvent}
         pickerListboxId={picker.listboxId}
         onChoosePickerItem={goalMode.interceptPick(resume.interceptPick(completeItem))}

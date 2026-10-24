@@ -31,6 +31,7 @@ export type QueuedEditImageState = {
 /** Drives an edit's added images the way an upload or paste drives the chat box's chips. Bound to
  *  one edit, so a late result never lands in another. */
 export type QueuedEditImageIntake = {
+  isLive: () => boolean
   begin: (previewUrl?: string, pendingName?: string) => string | null
   resolve: (id: string, path: string, connectionId?: string | null) => boolean
   reveal: (id: string, previewUrl?: string) => void
@@ -126,6 +127,7 @@ function queuedEditImageIntake(
   }
   const pendingChip = (id: string) => edit().added.find((image) => image.id === id && image.pending)
   return {
+    isLive: live,
     begin: (previewUrl, pendingName) => {
       if (!live()) {
         return null

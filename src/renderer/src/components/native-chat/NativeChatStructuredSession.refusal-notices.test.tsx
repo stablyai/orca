@@ -203,6 +203,7 @@ afterEach(() => {
   }
 
   it('a /clear refused while the agent works is said until the agent stops, then gone', () => {
+    mocks.readCurrent = true
     mocks.turnId = 'turn-1'
     const pane = renderPane()
     composerSays(STILL_WORKING, 'working')
@@ -218,6 +219,7 @@ afterEach(() => {
   })
 
   it('a /clear refused behind background tasks is said until the last one ends, then gone', () => {
+    mocks.readCurrent = true
     mocks.monitoringBackgroundTasks = true
     const pane = renderPane()
     composerSays(BACKGROUND, 'background')

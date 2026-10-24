@@ -7,6 +7,10 @@ import type { NativeChatMessage } from '../../shared/native-chat-types'
 import { decodeClaudeTranscriptLine } from './transcript-line-decoders-claude'
 import { decodeCodexTranscriptLine } from './transcript-line-decoders-codex'
 import { readNativeChatTranscriptTailFile } from './transcript-tail-reader'
+import {
+  recordedCodexAsyncRaw,
+  recordedCodexAsyncMessages
+} from '../../shared/__fixtures__/codex-0163-async-question'
 
 const roots: string[] = []
 
@@ -243,4 +247,11 @@ describe('provider transcript result identity', () => {
     expect(claude?.blocks).toEqual([{ type: 'tool-result', output: 'done' }])
     expect(codex?.blocks).toEqual([{ type: 'tool-result', output: 'done' }])
   })
+})
+
+it('decodes the recorded Codex async question and early acceptance into the renderer contract', () => {
+  const messages = recordedCodexAsyncRaw
+    .split('\n')
+    .map((line, index) => decodeCodexTranscriptLine(line, `recorded-${index}`))
+  expect(messages).toEqual(recordedCodexAsyncMessages)
 })

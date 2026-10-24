@@ -1,3 +1,4 @@
+import { useNativeChatFollowingEnd } from './native-chat-reading-position'
 // The transcript's scroll behaviour: staying pinned to the bottom while a turn
 // streams, offering the way back when the reader has left, and aligning a row or
 // a card to the top.
@@ -15,6 +16,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { UIEventHandler } from 'react'
 import {
+  geometryOf,
+  hasMeasurableViewport,
   distanceFromBottom,
   isNearBottom,
   NATIVE_CHAT_FOLLOW_REARM_PX,
@@ -31,19 +34,8 @@ import type {
 
 export type { NativeChatTranscriptScroll } from './native-chat-transcript-scroll-types'
 
-function geometryOf(element: HTMLElement): ScrollGeometry {
-  return {
-    scrollTop: element.scrollTop,
-    scrollHeight: element.scrollHeight,
-    clientHeight: element.clientHeight
-  }
-}
-
-function hasMeasurableViewport(element: HTMLElement | null): element is HTMLElement {
-  return element !== null && element.clientHeight > 0
-}
-
 export function useNativeChatTranscriptScroll({
+  captureReadingPosition,
   scrollRef,
   contentRef,
   itemCount,
@@ -58,7 +50,7 @@ export function useNativeChatTranscriptScroll({
   reconcileReaderScroll
 }: NativeChatTranscriptScrollOptions): NativeChatTranscriptScroll {
   const [showJump, setShowJump] = useState(false)
-  const followingRef = useRef(true)
+  const followingRef = useNativeChatFollowingEnd()
   const detachedScrollTopRef = useRef<number | null>(null)
   const isVisibleRef = useRef(isVisible)
   const previousIsVisibleRef = useRef(isVisible)
@@ -113,7 +105,7 @@ export function useNativeChatTranscriptScroll({
     detachedScrollTopRef.current = followingRef.current ? null : geometry.scrollTop
     setShowJump(shouldShowJumpToLatest(followingRef.current, geometry))
     return geometry
-  }, [scrollRef])
+  }, [followingRef, scrollRef])
 
   const readerLeavesEnd = useCallback(() => {
     clearForwardedScroll()
@@ -217,12 +209,15 @@ export function useNativeChatTranscriptScroll({
         previousDistanceFromEnd: previousDistanceFromEndRef.current,
         settling: isAlignPending()
       })
+      captureReadingPosition?.(followingRef.current)
       reconcileReaderScroll(false)
       previousDistanceFromEndRef.current = distanceFromBottom(geometry)
       syncScrollState()
     },
     [
+      captureReadingPosition,
       consumeProgrammaticScroll,
+      followingRef,
       isAlignPending,
       observeForwardedMovement,
       reconcileReaderScroll,

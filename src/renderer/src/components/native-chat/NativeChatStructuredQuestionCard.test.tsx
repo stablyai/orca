@@ -1,4 +1,6 @@
 // @vitest-environment happy-dom
+import { NativeChatViewIdentity, retireNativeChatViewState } from './native-chat-view-state-memory'
+import { fireEvent } from '@testing-library/react'
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -100,6 +102,40 @@ describe('structured extension question cards', () => {
       kind: 'answers',
       answers: [{ questionId: 'text', optionIds: [], other: 'prefill, then edited\nsecond line' }]
     })
+  })
+
+  it('keeps a question answer across park, submits once, and starts a new occurrence without stale answers', () => {
+    const answer = vi.fn()
+    const show = (occurrence: string) =>
+      act(() =>
+        root.render(
+          <NativeChatViewIdentity.Provider value="question-return">
+            <NativeChatStructuredQuestionCard
+              occurrenceKey={occurrence}
+              questions={[input]}
+              onAnswer={answer}
+              onCancel={vi.fn()}
+            />
+          </NativeChatViewIdentity.Provider>
+        )
+      )
+    show('item:1')
+    const field = container.querySelector('input')!
+    fireEvent.change(field, { target: { value: 'kept answer' } })
+    act(() => root.render(null))
+    show('item:1')
+    expect(container.querySelector('input')?.value).toBe('kept answer')
+    submit()
+    expect(answer).toHaveBeenCalledExactlyOnceWith({
+      kind: 'answers',
+      answers: [{ questionId: 'text', optionIds: [], other: 'kept answer' }]
+    })
+    show('item:2')
+    expect(container.querySelector('input')?.value).toBe('')
+    act(() => root.render(null))
+    show('item:1')
+    expect(container.querySelector('input')?.value).toBe('')
+    retireNativeChatViewState('question-return')
   })
 
   it('keeps legacy empty input disabled', () => {

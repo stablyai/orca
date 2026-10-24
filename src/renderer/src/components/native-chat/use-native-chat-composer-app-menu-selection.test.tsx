@@ -9,7 +9,7 @@ import {
 import { useAppMenuSelectionActions } from '@/hooks/useAppMenuSelectionActions'
 import { useNativeChatComposerAppMenuSelection } from './use-native-chat-composer-app-menu-selection'
 
-let appMenuListener: ((action: AppMenuSelectionAction) => void) | null = null
+let appMenuListener: ((action: AppMenuSelectionAction) => void | Promise<void>) | null = null
 const performNativeSelectionAction = vi.fn()
 
 function AppMenuBoundary(): null {
@@ -39,12 +39,12 @@ function ComposerHarness(): React.JSX.Element {
   )
 }
 
-function emitAppMenuAction(action: AppMenuSelectionAction): void {
-  act(() => {
+async function emitAppMenuAction(action: AppMenuSelectionAction): Promise<void> {
+  await act(async () => {
     if (!appMenuListener) {
       throw new Error('app menu listener is not registered')
     }
-    appMenuListener(action)
+    await appMenuListener(action)
   })
 }
 
@@ -79,26 +79,26 @@ afterEach(() => {
 })
 
 describe('native chat app-menu selection ownership', () => {
-  it('selects the focused multiline composer through the app-menu boundary', () => {
+  it('selects the focused multiline composer through the app-menu boundary', async () => {
     const { composer } = renderBoundaryAndComposer()
     const textarea = composer.getByRole('textbox', { name: 'Composer' }) as HTMLTextAreaElement
     textarea.focus()
     textarea.setSelectionRange(4, 4)
 
-    emitAppMenuAction('select-all')
+    await emitAppMenuAction('select-all')
 
     expect(textarea.selectionStart).toBe(0)
     expect(textarea.selectionEnd).toBe(textarea.value.length)
     expect(performNativeSelectionAction).not.toHaveBeenCalled()
   })
 
-  it('preserves global fallback when focus is outside the composer', () => {
+  it('preserves global fallback when focus is outside the composer', async () => {
     const { composer } = renderBoundaryAndComposer()
     const textarea = composer.getByRole('textbox', { name: 'Composer' }) as HTMLTextAreaElement
     textarea.setSelectionRange(4, 4)
     composer.getByRole('button', { name: 'Outside composer' }).focus()
 
-    emitAppMenuAction('select-all')
+    await emitAppMenuAction('select-all')
 
     expect(textarea.selectionStart).toBe(4)
     expect(textarea.selectionEnd).toBe(4)
@@ -106,32 +106,32 @@ describe('native chat app-menu selection ownership', () => {
     expect(performNativeSelectionAction).toHaveBeenCalledWith('select-all')
   })
 
-  it('leaves non-select-all actions unclaimed', () => {
+  it('leaves non-select-all actions unclaimed', async () => {
     const { composer } = renderBoundaryAndComposer()
     const textarea = composer.getByRole('textbox', { name: 'Composer' }) as HTMLTextAreaElement
     textarea.focus()
 
-    emitAppMenuAction('copy')
+    await emitAppMenuAction('copy')
 
     expect(performNativeSelectionAction).toHaveBeenCalledOnce()
     expect(performNativeSelectionAction).toHaveBeenCalledWith('copy')
   })
 
-  it('claims select-all during active IME composition without selecting or falling back', () => {
+  it('claims select-all during active IME composition without selecting or falling back', async () => {
     const { composer } = renderBoundaryAndComposer()
     const textarea = composer.getByRole('textbox', { name: 'Composer' }) as HTMLTextAreaElement
     textarea.focus()
     textarea.setSelectionRange(4, 4)
     fireEvent.compositionStart(textarea)
 
-    emitAppMenuAction('select-all')
+    await emitAppMenuAction('select-all')
 
     expect(textarea.selectionStart).toBe(4)
     expect(textarea.selectionEnd).toBe(4)
     expect(performNativeSelectionAction).not.toHaveBeenCalled()
   })
 
-  it('removes composer ownership on cleanup', () => {
+  it('removes composer ownership on cleanup', async () => {
     const addEventListener = vi.spyOn(window, 'addEventListener')
     const removeEventListener = vi.spyOn(window, 'removeEventListener')
     const { composer } = renderBoundaryAndComposer()
@@ -143,7 +143,7 @@ describe('native chat app-menu selection ownership', () => {
 
     expect(listener).toBeDefined()
     expect(removeEventListener).toHaveBeenCalledWith(APP_MENU_SELECTION_ACTION_EVENT, listener)
-    emitAppMenuAction('select-all')
+    await emitAppMenuAction('select-all')
     expect(performNativeSelectionAction).toHaveBeenCalledWith('select-all')
   })
 })

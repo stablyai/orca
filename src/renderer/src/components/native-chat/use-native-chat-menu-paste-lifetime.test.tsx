@@ -1,4 +1,6 @@
 // @vitest-environment happy-dom
+import { NativeChatViewIdentity, retireNativeChatViewState } from './native-chat-view-state-memory'
+import { useNativeChatComposerNotice } from './use-native-chat-composer-notice'
 import { createRef } from 'react'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -41,6 +43,7 @@ afterEach(async () => {
   await nativeChatComposerDraftWritesSettled()
   clearNativeChatPendingAttachmentsForTests()
   clearNativeChatComposerDraftsForTests()
+  retireNativeChatViewState('upload-failure-return')
   window.api = previousApi
 })
 
@@ -68,44 +71,54 @@ async function fixture(acceptsImages = true, source: 'menu' | 'event' = 'menu') 
     }
   })
   const input = createRef<NativeChatComposerInput>()
-  const view = renderHook(() => {
-    const attachments = useNativeChatComposerAttachments({
-      attachmentScopeKey: scope('menu'),
-      allowWithoutTarget: true,
-      imageReferences: true,
-      acceptsImages,
-      caret: 0,
-      disabled: false,
-      isComposing: () => false,
-      resolveTarget: () => null,
-      textareaRef: input,
-      setCaret: () => {},
-      setDraft: (update) =>
-        updateNativeChatComposerDraft(
-          scope('menu'),
-          {
-            text: update(readNativeChatComposerDraft(scope('menu')).text)
-          },
-          'immediate'
-        ),
-      setNotice: () => {}
-    })
-    const paste = useNativeChatComposerPaste({
-      targetKey: 'menu',
-      attachmentScopeKey: scope('menu'),
-      agent: acceptsImages ? 'claude' : 'omp',
-      disabled: false,
-      caret: 0,
-      resolveAttachmentOwner: () => owner,
-      attachCopiedFiles: () => {},
-      captureCopiedFiles: () => async () => {},
-      ...attachments,
-      insertTypedText: () => true,
-      setCaret: () => {},
-      setNotice: () => {}
-    })
-    return { paste, attachments }
-  })
+  const view = renderHook(
+    () => {
+      const notice = useNativeChatComposerNotice()
+      const attachments = useNativeChatComposerAttachments({
+        attachmentScopeKey: scope('menu'),
+        allowWithoutTarget: true,
+        imageReferences: true,
+        acceptsImages,
+        caret: 0,
+        disabled: false,
+        isComposing: () => false,
+        resolveTarget: () => null,
+        textareaRef: input,
+        setCaret: () => {},
+        setDraft: (update) =>
+          updateNativeChatComposerDraft(
+            scope('menu'),
+            {
+              text: update(readNativeChatComposerDraft(scope('menu')).text)
+            },
+            'immediate'
+          ),
+        setNotice: () => {}
+      })
+      const paste = useNativeChatComposerPaste({
+        targetKey: 'menu',
+        attachmentScopeKey: scope('menu'),
+        agent: acceptsImages ? 'claude' : 'omp',
+        disabled: false,
+        caret: 0,
+        resolveAttachmentOwner: () => owner,
+        attachCopiedFiles: () => {},
+        captureCopiedFiles: () => async () => {},
+        ...attachments,
+        insertTypedText: () => true,
+        setCaret: () => {},
+        setNotice: notice.setNotice
+      })
+      return { paste, attachments, notice }
+    },
+    {
+      wrapper: ({ children }) => (
+        <NativeChatViewIdentity.Provider value="upload-failure-return">
+          {children}
+        </NativeChatViewIdentity.Provider>
+      )
+    }
+  )
   await act(async () => {
     if (source === 'menu') {
       view.result.current.paste.pasteFromClipboard()
@@ -247,3 +260,21 @@ it.each([true, false])(
     }
   }
 )
+
+it('keeps an accepted image failure notice while the pane is parked and shows it on return', async () => {
+  const { view, save } = await fixture()
+  view.unmount()
+  await act(async () => save.reject(new Error('upload disconnected')))
+  const returned = renderHook(() => useNativeChatComposerNotice(), {
+    wrapper: ({ children }) => (
+      <NativeChatViewIdentity.Provider value="upload-failure-return">
+        {children}
+      </NativeChatViewIdentity.Provider>
+    )
+  })
+  expect(returned.result.current.notices).toEqual([
+    expect.objectContaining({ kind: 'attachment', text: 'upload disconnected' })
+  ])
+  act(() => returned.result.current.notices[0]?.onDismiss?.())
+  expect(returned.result.current.notices).toEqual([])
+})
