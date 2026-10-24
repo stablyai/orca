@@ -9,6 +9,7 @@ import { useHostSidebarReveal } from '../layout/host-sidebar-reveal'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import type { MobileSessionController } from './use-mobile-session-controller'
 
+/** Exposes device-local actions for every session, including folder and floating sessions. */
 export function MobileSessionHeader({ controller }: { controller: MobileSessionController }) {
   const {
     hostId,
@@ -23,8 +24,7 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
     visibleTabs,
     showConnectionRetry,
     terminalSummary,
-    handlePanelTap,
-    showHeaderMoreButton
+    handlePanelTap
   } = controller
   const revealSidebar = useHostSidebarReveal()
   // Why: a sideways phone is ~390pt tall, so the tabs share the top bar instead of taking a second row.
@@ -89,14 +89,12 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
             onPress={() => handlePanelTap('sourceControl')}
           />
         )}
-        {showHeaderMoreButton ? (
-          <MobileSessionHeaderIconButton
-            active={activePanel === 'pr'}
-            accessibilityLabel="More session actions"
-            icon={MoreHorizontal}
-            onPress={() => setShowHeaderMoreActions(true)}
-          />
-        ) : null}
+        <MobileSessionHeaderIconButton
+          active={activePanel === 'pr'}
+          accessibilityLabel="More session actions"
+          icon={MoreHorizontal}
+          onPress={() => setShowHeaderMoreActions(true)}
+        />
       </View>
 
       {tabsInTopBar ? null : tabStrip}
