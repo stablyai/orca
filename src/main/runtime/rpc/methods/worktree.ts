@@ -11,7 +11,11 @@ import { displayNameUpdatePinsLabel } from '../../../../shared/worktree/display-
 import { getWorkspaceStatusWarning } from '../../../../shared/workspace-status-warning'
 import { createWorktreeWithStartupAgent } from '../../../agent-launch/startup-agent-worktree-create'
 import { defineMethod } from '../core'
-import { buildManagedWorktreeCreateArgs, worktreeCreateRepoSelector } from './worktree-create-args'
+import {
+  buildManagedWorktreeCreateArgs,
+  worktreeCreateRepoSelector,
+  worktreeSetLineage
+} from './worktree-create-args'
 import { resolvePairedCallerHostId } from './paired-caller-host-id'
 import { resolveRuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
 import { resolveRpcWorkspaceCreatorProvenance } from '../workspace-creator-context'
@@ -72,8 +76,7 @@ export const WORKTREE_METHODS = [
     permission: 'workspace',
     params: WorktreeActivate,
     handler: async (params, { runtime, clientKind }) =>
-      // Why: clientKind ('mobile'|'runtime') scopes the host-renderer slept-agent
-      // wake to phones so web/desktop activation behavior is unchanged.
+      // Only phones need a host-renderer wake.
       runtime.activateManagedWorktree(params.worktree, {
         notifyClients: params.notifyClients !== false,
         clientKind,
@@ -102,8 +105,7 @@ export const WORKTREE_METHODS = [
           repo,
           request: params.automationProvenanceRequest
         })
-        // Why: provenance tokens are reserved before creation so retries can recover,
-        // but failed create attempts must release the reservation for a safe retry.
+        // Release failed reservations so a retry can claim them.
         try {
           const result = await createWorktreeWithStartupAgent(
             runtime,
@@ -194,13 +196,7 @@ export const WORKTREE_METHODS = [
         pushTarget: params.pushTarget,
         diffComments: params.diffComments,
         mobileDiffReview: params.mobileDiffReview,
-        lineage:
-          params.parentWorktree || params.noParent === true
-            ? {
-                parentWorktree: params.parentWorktree,
-                noParent: params.noParent === true
-              }
-            : undefined
+        lineage: worktreeSetLineage(params)
       })
       const warning = getWorkspaceStatusWarning(
         params.workspaceStatus,

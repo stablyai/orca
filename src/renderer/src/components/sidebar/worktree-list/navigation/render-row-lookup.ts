@@ -22,7 +22,7 @@ export function getRenderRowSidebarKey(row: RenderRow): string | null {
     return row.rowKey
   }
   if (row.type === 'folder-workspace') {
-    return getFolderWorkspaceHostIdentity(row.folderWorkspace)
+    return row.occurrence?.key ?? getFolderWorkspaceHostIdentity(row.folderWorkspace)
   }
   if (row.type === 'pending-creation') {
     return `pending:${row.creationId}`
@@ -40,7 +40,11 @@ export function rowKeyMatchesRenderRow(row: RenderRow, rowKey: string): boolean 
   if (row.type === 'lineage-group') {
     return row.rows.some((item) => item.rowKey === rowKey)
   }
-  if (row.type === 'folder-workspace' && rowKey === folderWorkspaceKey(row.folderWorkspace.id)) {
+  if (
+    row.type === 'folder-workspace' &&
+    (rowKey === folderWorkspaceKey(row.folderWorkspace.id) ||
+      rowKey === getFolderWorkspaceHostIdentity(row.folderWorkspace))
+  ) {
     return true
   }
   return getRenderRowSidebarKey(row) === rowKey
@@ -108,7 +112,11 @@ export function findPreferredRenderRowIndexForWorktree(
       fallbackIndex = index
     }
     const itemRow = getRenderRowWorktreeItem(row, worktreeId)
-    if (pinnedDisplayPolicy === 'duplicate-in-groups' && itemRow && !isPinnedWorktreeRow(itemRow)) {
+    if (
+      pinnedDisplayPolicy === 'duplicate-in-groups' &&
+      ((row.type === 'folder-workspace' && row.occurrence?.placement !== 'pinned') ||
+        (itemRow && !isPinnedWorktreeRow(itemRow)))
+    ) {
       return index
     }
   }
@@ -132,7 +140,15 @@ export function findPreferredRenderRowIndexForWorktreeIdentity(
         (!worktree.hostId ||
           getWorktreeHostIdentity(folderWorkspaceToWorktree(row.folderWorkspace)) === identity)
       ) {
-        return index
+        if (fallbackIndex === -1) {
+          fallbackIndex = index
+        }
+        if (
+          pinnedDisplayPolicy !== 'duplicate-in-groups' ||
+          row.occurrence?.placement !== 'pinned'
+        ) {
+          return index
+        }
       }
       continue
     }

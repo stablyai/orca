@@ -1,7 +1,9 @@
+import type { WorktreeWithResolvedLineage } from '../../shared/resolved-worktree-lineage'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 
 export type ResolvedWorktreeSnapshot = {
   worktrees: ResolvedWorktree[]
+  folderWorktrees?: WorktreeWithResolvedLineage[]
   platformByRepoId: ReadonlyMap<string, NodeJS.Platform>
 }
 
@@ -15,6 +17,10 @@ export class RuntimeResolvedWorktreeCache {
   private resolved: ResolvedCache | null = null
   private resolvedInFlight: ResolvedInFlight | null = null
   private resolvedGeneration = 0
+
+  get generation(): number {
+    return this.resolvedGeneration
+  }
 
   peek(): ResolvedCache | null {
     return this.resolved

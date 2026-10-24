@@ -37,6 +37,7 @@ export function runWorktreeDeleteWithToast(
   const removeWorktree = useAppStore.getState().removeWorktree
 
   const removeOptions = {
+    ...(options.assertBeforeDispatch ? { assertBeforeDispatch: options.assertBeforeDispatch } : {}),
     ...(options.suppressPreservedBranchToast ? { suppressPreservedBranchToast: true } : {}),
     ...(options.snapshotPruneBatchId ? { snapshotPruneBatchId: options.snapshotPruneBatchId } : {}),
     ...(options.confirmedDiscards ? { confirmedDiscards: options.confirmedDiscards } : {})
@@ -80,7 +81,8 @@ export function runWorktreeDeleteWithToast(
       executionHostId: target.executionHostId,
       worktreeName,
       nestedRemovalTarget: route && !route.runtimeEnvironmentId ? target : undefined,
-      onNestedDeleted: () => options.onForceDeleted?.(target)
+      onNestedDeleted: () => options.onForceDeleted?.(target),
+      assertBeforeDispatch: options.assertBeforeDispatch
     })
   }
 
@@ -138,6 +140,7 @@ export function runWorktreeDeleteWithToast(
     useAppStore
       .getState()
       .removeWorktree(target, retry.force, {
+        ...removeOptions,
         ...(retry.allowUnverifiedPtyStop ? { allowUnverifiedPtyStop: true } : {}),
         ...(retry.allowFailedArchiveHook ? { allowFailedArchiveHook: true } : {})
       })

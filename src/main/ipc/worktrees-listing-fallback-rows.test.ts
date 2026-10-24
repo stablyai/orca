@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { listWorktreesMock } from './worktrees-test-module-mocks'
 import { handlers, setupWorktreeHandlers, store } from './worktrees-test-harness'
 import { makeWorktreeMeta, expectDetectedWorktreeListResult } from './worktrees-test-fixtures'
@@ -84,6 +84,19 @@ vi.mock('./pty/provider/state-cleanup', async () =>
   (await import('./worktrees-test-module-mocks')).ptyStateCleanupModuleMock()
 )
 
+// These setters are spies: they do not change persisted state. Fixture resets do.
+const listeners = new Set<(domains?: readonly string[]) => void>()
+const observableStore = Object.assign(store, {
+  onStateWritten(listener: (domains?: readonly string[]) => void) {
+    listeners.add(listener)
+    return () => {
+      listeners.delete(listener)
+    }
+  }
+})
+afterAll(() => {
+  Reflect.deleteProperty(observableStore, 'onStateWritten')
+})
 async function listDetectedRows(repoId: string): Promise<DetectedWorktree[]> {
   const result = expectDetectedWorktreeListResult(
     await handlers['worktrees:listDetected'](null, {
@@ -95,7 +108,9 @@ async function listDetectedRows(repoId: string): Promise<DetectedWorktree[]> {
 
 describe('registerWorktreeHandlers', () => {
   beforeEach(() => {
+    Reflect.deleteProperty(observableStore, 'getWorktreeLineageMetadata')
     setupWorktreeHandlers()
+    listeners.forEach((listener) => listener())
   })
 
   it('lists a synthetic worktree for folder-mode repos', async () => {
@@ -254,11 +269,11 @@ describe('registerWorktreeHandlers', () => {
     store.getAllWorktreeMeta.mockReturnValue({
       [worktreeId]: makeWorktreeMeta({ displayName: 'Legacy local', hostId: 'local' })
     })
-    ;(
-      store as typeof store & {
-        getAllWorktreeMetaForHost: ReturnType<typeof vi.fn>
-      }
-    ).getAllWorktreeMetaForHost = vi.fn(() => ({ [worktreeId]: canonicalRemote }))
+    Object.assign(store, {
+      getAllWorktreeMetaForHost: (host: string) =>
+        host === 'ssh:conn-1' ? { [worktreeId]: canonicalRemote } : {},
+      getWorktreeLineageMetadata: vi.fn(() => [{ id: worktreeId, meta: canonicalRemote }])
+    })
 
     const listed = await listDetectedRows(repo.id)
 
@@ -371,6 +386,95 @@ describe('registerWorktreeHandlers', () => {
     const listed = await listDetectedRows('repo-ssh')
 
     expect(listed[0].isMainWorktree).toBe(true)
+  })
+
+  it('includes SSH fallback rows from live detected listing alongside healthy local rows', async () => {
+    const sshRepo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'SSH Repo',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1'
+    }
+    const localRepo = {
+      id: 'repo-local',
+      path: '/workspace/local',
+      displayName: 'Local Repo',
+      badgeColor: '#111',
+      addedAt: 0
+    }
+    store.getRepos.mockReturnValue([sshRepo, localRepo])
+    store.getAllWorktreeMeta.mockReturnValue({
+      'repo-ssh::/remote/feature-wt': makeWorktreeMeta({ displayName: 'Remote cached' })
+    })
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/local',
+        head: 'abc123',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      }
+    ])
+
+    const complete = vi.fn()
+    Object.assign(store, { getWorktreeLineageMetadata: complete })
+    const listed = (
+      await Promise.all(store.getRepos().map((repo) => listDetectedRows(repo.id)))
+    ).flat()
+
+    // Raw getter calls are O(1); publication must not enumerate the canonical corpus.
+    expect(complete).not.toHaveBeenCalled()
+    expect(listed).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'repo-ssh::/remote/feature-wt',
+          displayName: 'Remote cached'
+        }),
+        expect.objectContaining({
+          id: 'repo-local::/workspace/local',
+          branch: 'refs/heads/main'
+        })
+      ])
+    )
+  })
+
+  it('does not enumerate the canonical corpus for zero-edge SSH detected listings', async () => {
+    const sshRepoA = {
+      id: 'repo-ssh-a',
+      path: '/remote/a',
+      displayName: 'SSH A',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1'
+    }
+    const sshRepoB = {
+      id: 'repo-ssh-b',
+      path: '/remote/b',
+      displayName: 'SSH B',
+      badgeColor: '#111',
+      addedAt: 0,
+      connectionId: 'conn-2'
+    }
+    store.getRepos.mockReturnValue([sshRepoA, sshRepoB])
+    store.getAllWorktreeMeta.mockReturnValue({
+      'repo-ssh-a::/remote/a/one': makeWorktreeMeta({ displayName: 'One' }),
+      'repo-ssh-b::/remote/b/two': makeWorktreeMeta({ displayName: 'Two' })
+    })
+
+    const complete = vi.fn()
+    Object.assign(store, { getWorktreeLineageMetadata: complete })
+    const listed = (
+      await Promise.all(store.getRepos().map((repo) => listDetectedRows(repo.id)))
+    ).flat()
+
+    // Raw getter calls are O(1); publication must not enumerate the canonical corpus.
+    expect(complete).not.toHaveBeenCalled()
+    expect(listed).toEqual([
+      expect.objectContaining({ id: 'repo-ssh-a::/remote/a/one' }),
+      expect.objectContaining({ id: 'repo-ssh-b::/remote/b/two' })
+    ])
   })
 
   it('loads repo ownership once while building multiple detected rows', () => {

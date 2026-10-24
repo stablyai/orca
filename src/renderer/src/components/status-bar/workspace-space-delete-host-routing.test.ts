@@ -98,7 +98,9 @@ describe('Space Manager delete routes to the row host', () => {
     // resolveWorktreeBatchDeleteTargets refuse every Space delete instead.
     const identities = identitiesForSpaceDelete([spaceRow(SSH)])
 
-    expect(identities).toEqual([{ id: SHARED_ID, instanceId: `instance-${SSH}`, hostId: SSH }])
+    expect(identities).toEqual([
+      { id: SHARED_ID, instanceId: `instance-${SSH}`, hostId: SSH, storeKey: '' }
+    ])
     expect(resolveWorktreeBatchDeleteTargets(identities, lookupOnHost)).not.toBeNull()
   })
 

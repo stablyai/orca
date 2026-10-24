@@ -1,7 +1,12 @@
+import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspace-worktree'
+import { computeVisibleWorktrees } from '../../compute-visible-worktrees'
 import { describe, expect, it } from 'vitest'
 import { buildRows } from './build-rows.test-fixture'
 import { getFolderWorkspaceLaneKey } from '../../../../../../shared/sidebar-list/folder-workspace-lanes'
-import { getPRLaneKey } from '../../../../../../shared/sidebar-list/group-keys'
+import {
+  getPRLaneKey,
+  getWorktreeLineageGroupKey
+} from '../../../../../../shared/sidebar-list/group-keys'
 import { getPRGroupKey } from './pr-group-key'
 import { getRenderRowKey } from '../listing/render-row'
 import type { Row, WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
@@ -48,6 +53,7 @@ const GROUPED_REPO: Repo = { ...repo, projectGroupId: GROUP.id }
 
 function buildSidebarRows(options: {
   groupBy: WorktreeGroupBy
+  nestLineage?: boolean
   folderWorkspaces?: readonly FolderWorkspace[]
   projectGroups?: readonly ProjectGroup[]
   worktrees?: (typeof worktree)[]
@@ -65,7 +71,7 @@ function buildSidebarRows(options: {
     'manual',
     {},
     new Map(worktrees.map((entry) => [entry.id, entry])),
-    false,
+    options.nestLineage ?? false,
     undefined,
     options.projectGroups ?? [GROUP],
     new Set(),
@@ -84,6 +90,58 @@ function folderRows(rows: Row[]): Extract<Row, { type: 'folder-workspace' }>[] {
 }
 
 const ALL_GROUP_BY: WorktreeGroupBy[] = ['repo', 'workspace-status', 'pr-status', 'none']
+
+it.each(ALL_GROUP_BY)('renders one proper folder parent with disclosure in %s', (groupBy) => {
+  for (const isPinned of [false, true]) {
+    const folder = makeFolderWorkspace({ isPinned })
+    const parent = folderWorkspaceToWorktree(folder)
+    const child = {
+      ...worktree,
+      instanceId: 'child',
+      savedLineage: {
+        worktreeId: worktree.id,
+        worktreeInstanceId: 'child',
+        parentWorktreeId: parent.id,
+        parentWorktreeInstanceId: parent.instanceId!,
+        origin: 'manual' as const,
+        capture: { source: 'manual-action' as const, confidence: 'explicit' as const },
+        createdAt: 1
+      }
+    }
+    const visible = computeVisibleWorktrees({ repo: [child] }, [child.id], {
+      folderWorkspaces: [folder],
+      filterRepoIds: [],
+      showSleepingWorkspaces: true,
+      tabsByWorktree: {},
+      ptyIdsByTabId: {},
+      worktreeIdsWithLiveAgent: new Set(),
+      hideDefaultBranchWorkspace: false,
+      hideAutomationGeneratedWorkspaces: false,
+      hideCliCreatedWorkspaces: false,
+      hideDetachedHeadWorkspaces: false,
+      hideWorkspacesFromOtherDevices: false,
+      pairedDeviceIdsByEnvironment: new Map(),
+      repoMap: new Map([[repo.id, repo]]),
+      workspaceHostScope: 'all',
+      defaultHostId: 'local',
+      worktreeLineageById: {}
+    })
+    const options = { groupBy, worktrees: visible, folderWorkspaces: [folder], nestLineage: true }
+    const rows = buildSidebarRows(options)
+    expect(folderRows(rows)).toHaveLength(1)
+    expect(folderRows(rows)[0].occurrence).toMatchObject({ childCount: 1, depth: 0 })
+    expect(rows.find((row) => row.type === 'item')).toMatchObject({
+      worktree: { id: child.id },
+      depth: 1
+    })
+    expect(rows.some((row) => row.type === 'header' && row.label === 'Unknown')).toBe(false)
+    const collapsed = buildSidebarRows({
+      ...options,
+      collapsedGroups: new Set([getWorktreeLineageGroupKey(parent)])
+    })
+    expect(collapsed.some((row) => row.type === 'item')).toBe(false)
+  }
+})
 
 describe('folder workspaces render under every Group by mode', () => {
   // The three non-repo arms are the acceptance evidence; the repo arm is a

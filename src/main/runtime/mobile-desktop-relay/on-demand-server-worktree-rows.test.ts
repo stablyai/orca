@@ -1,3 +1,7 @@
+import { mergeWorktree } from '../../ipc/worktree-metadata-merge'
+import { projectResolvedWorktreeLineage } from '../../../shared/resolved-worktree-lineage'
+import { buildRuntimeWorktreePsSummaries } from '../runtime-worktree-ps-summaries'
+import type { WorktreeLineage } from '../../../shared/worktree/lineage-types'
 // The phone's server catalog with the sidebar-inputs switch off: the suite as it stood before main
 // kept live server rows, run unchanged over the fetch-per-request source.
 import { describe, expect, it, vi } from 'vitest'
@@ -133,6 +137,63 @@ function catalog(
 }
 
 describe('mobile relay host catalog, fetching on demand', () => {
+  it('preserves broader same-install legacy fields and saved intent at the real boundary', async () => {
+    const git = { path: '/child', head: '', branch: '', isBare: false, isMainWorktree: false }
+    const c = {
+      ...mergeWorktree('repo', git, undefined),
+      instanceId: 'c',
+      hostId: 'local' as const,
+      git
+    }
+    const p = {
+      ...c,
+      id: 'other::/parent',
+      repoId: 'other',
+      instanceId: 'p',
+      hostId: 'ssh:inner' as const
+    }
+    const edge: WorktreeLineage = {
+      worktreeId: c.id,
+      worktreeInstanceId: 'c',
+      parentWorktreeId: p.id,
+      parentWorktreeInstanceId: 'p',
+      origin: 'manual',
+      capture: { source: 'manual-action', confidence: 'explicit' },
+      createdAt: 1
+    }
+    const projected = projectResolvedWorktreeLineage([c, p], { [c.id]: edge })
+    const output = [
+      ...buildRuntimeWorktreePsSummaries({
+        store: null,
+        resolvedWorktrees: projected,
+        platformByRepoId: new Map()
+      }).values()
+    ]
+    const { hosts, call } = fakeHosts([
+      { id: 'env', name: 'Box', snapshot: snapshot('env', 'live') }
+    ])
+    call.mockResolvedValue(psReply(output))
+    const result = await catalog(hosts).catalog.worktrees('runtime:env')
+    if (result.worktrees === null) {
+      throw new Error('Expected relayed worktrees')
+    }
+    expect(result.worktrees).toEqual([
+      expect.objectContaining({
+        worktreeId: c.id,
+        hostId: 'runtime:env',
+        parentWorktreeId: p.id,
+        parentWorktreeInstanceId: 'p',
+        savedLineage: edge
+      }),
+      expect.objectContaining({ worktreeId: p.id, hostId: 'runtime:env', worktreeInstanceId: 'p' })
+    ])
+    // The old reader's host/id/instance join can now match after relay stamping.
+    expect(
+      result.worktrees.find((row) => row.worktreeId === p.id && row.hostId === 'runtime:env')
+        ?.worktreeInstanceId
+    ).toBe('p')
+  })
+
   it("lists every configured server with the desktop's health and whether it can relay", async () => {
     const { hosts, call } = fakeHosts([
       { id: 'ready', name: 'Box', snapshot: snapshot('ready', 'live') },

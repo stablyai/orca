@@ -1,3 +1,4 @@
+import { mergeWorktreeMetaForWrite } from '../persistence/loading-store/worktree-meta-write-normalization'
 import { describe, expect, it } from 'vitest'
 import type { NotificationSettings } from '../../shared/notification-settings-types'
 import type { PersistedState } from '../../shared/persisted-state-types'
@@ -58,6 +59,13 @@ function deps(options: {
       getWorktreeMeta: (id) => (options.metaById?.[id] ?? options.meta) as WorktreeMeta | undefined,
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the check reads only worktreeId and parentWorktreeId.
       getAllWorktreeLineage: () => (options.lineage ?? {}) as Record<string, WorktreeLineage>,
+      getAllWorktreeMeta: () =>
+        Object.fromEntries(
+          [WORKSPACE_ID, ...Object.keys(options.lineage ?? {})].map((id) => [
+            id,
+            mergeWorktreeMetaForWrite(undefined, options.metaById?.[id] ?? options.meta ?? {})
+          ])
+        ),
       getFolderWorkspaces: () => options.folders ?? []
     },
     resolvedWorktrees: options.resolved === undefined ? [listed()] : options.resolved
@@ -240,3 +248,67 @@ describe('isWorkspaceNotificationMuted', () => {
     )
   })
 })
+
+it.each([10, 100])(
+  'appends admitted siblings without recopying accumulated buckets at N=%i',
+  (n) => {
+    const root = listed({
+      id: 'root',
+      instanceId: 'root',
+      cliProvenance: { kind: 'created-by-cli', createdAt: 0 }
+    })
+    const children = Array.from({ length: n }, (_, i) =>
+      listed({ id: `child-${i}`, instanceId: `child-${i}` })
+    )
+    const edges = Object.fromEntries(
+      children.map((child) => [
+        child.id,
+        {
+          worktreeId: child.id,
+          worktreeInstanceId: child.instanceId,
+          parentWorktreeId: root.id,
+          parentWorktreeInstanceId: root.instanceId,
+          origin: 'manual' as const,
+          capture: { source: 'manual-action' as const, confidence: 'explicit' as const },
+          createdAt: 1
+        }
+      ])
+    )
+    const args = deps({
+      ui: { hideCliCreatedWorkspaces: true },
+      resolved: [root, ...children],
+      lineage: edges
+    })
+    Object.assign(args.store, {
+      getAllWorktreeMeta: () => Object.fromEntries([root, ...children].map((r) => [r.id, r]))
+    })
+    let appends = 0,
+      recopied = 0
+    const buckets = new WeakSet<object>()
+    const push = Array.prototype.push,
+      iterator = Array.prototype[Symbol.iterator]
+    Array.prototype.push = function (...items) {
+      if (items.length === 1 && typeof items[0] === 'string' && /^\|child-\d+$/.test(items[0])) {
+        appends++
+        buckets.add(this)
+      }
+      return push.apply(this, items)
+    }
+    Array.prototype[Symbol.iterator] = function () {
+      if (buckets.has(this)) {
+        recopied += this.length
+      }
+      return iterator.call(this)
+    }
+    let hidden
+    try {
+      hidden = isWorkspaceHiddenBySidebarFilters(args, root.id)
+    } finally {
+      Array.prototype.push = push
+      Array.prototype[Symbol.iterator] = iterator
+    }
+    expect(hidden).toBe(false)
+    expect(appends).toBe(n)
+    expect(recopied).toBe(0)
+  }
+)

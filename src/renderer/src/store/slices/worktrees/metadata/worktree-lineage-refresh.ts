@@ -1,11 +1,16 @@
+import { WORKTREE_CROSS_MACHINE_LINEAGE_CAPABILITY } from '../../../../../../shared/worktree-runtime-capabilities'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../../types'
 import type {
+  ParentWorktreeRef,
   WorkspaceLineage,
   WorktreeLineage
 } from '../../../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import { callRuntimeRpc } from '../../../../runtime/runtime-rpc-client'
+import {
+  callRuntimeRpc,
+  assertRuntimeEnvironmentCapability
+} from '../../../../runtime/runtime-rpc-client'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import { getRuntimeTargetHostId, type HostRoute } from '../../../../runtime/runtime-client-target'
 import { toRuntimeWorktreeSelector } from '../../../../runtime/runtime-worktree-selector'
@@ -91,7 +96,10 @@ export function projectWorktreeLineageToWorkspaceLineage(
   next[childWorkspaceKey] = {
     childWorkspaceKey,
     childInstanceId: lineage.worktreeInstanceId,
-    parentWorkspaceKey: worktreeWorkspaceKey(lineage.parentWorktreeId),
+    parentStore: lineage.parentStore,
+    parentWorkspaceKey: lineage.parentWorktreeId.startsWith('folder:')
+      ? `folder:${lineage.parentWorktreeId.slice(7)}`
+      : worktreeWorkspaceKey(lineage.parentWorktreeId),
     parentInstanceId: lineage.parentWorktreeInstanceId,
     origin: lineage.origin,
     capture: lineage.capture,
@@ -109,7 +117,7 @@ export function projectWorktreeLineageToWorkspaceLineage(
 export async function setWorktreeLineageForRuntime(
   route: HostRoute,
   worktreeId: string,
-  args: { parentWorktreeId?: string; noParent?: boolean }
+  args: { parentWorktreeId?: string; parentWorktreeRef?: ParentWorktreeRef; noParent?: boolean }
 ): Promise<WorktreeLineageUpdateResult> {
   const { target } = route
   if (target.kind === 'local') {
@@ -119,11 +127,19 @@ export async function setWorktreeLineageForRuntime(
       lineage: await window.api.worktrees.updateLineage({ worktreeId, ...args })
     }
   }
+  if (args.parentWorktreeRef) {
+    await assertRuntimeEnvironmentCapability(
+      target.environmentId,
+      WORKTREE_CROSS_MACHINE_LINEAGE_CAPABILITY,
+      `Update Orca on ${target.environmentId} to nest workspaces across machines`
+    )
+  }
   const result = await callRuntimeRpc<{ worktree: WorktreeWithLineage }>(
     target,
     'worktree.set',
     {
       worktree: toRuntimeWorktreeSelector(worktreeId),
+      parentWorktreeRef: args.parentWorktreeRef,
       ...(args.parentWorktreeId
         ? { parentWorktree: toRuntimeWorktreeSelector(args.parentWorktreeId) }
         : {}),
@@ -131,10 +147,11 @@ export async function setWorktreeLineageForRuntime(
     },
     { timeoutMs: 15_000 }
   )
+  const { savedLineage, lineage } = result.worktree
   return {
     target,
     hostId: getRuntimeTargetHostId(target),
-    lineage: result.worktree.lineage ?? null,
+    lineage: savedLineage !== undefined ? savedLineage : (lineage ?? null),
     updatedRemoteWorktree: result.worktree
   }
 }
@@ -172,6 +189,7 @@ export function projectLocalWorktreeLineageUpdate(
         return {
           ...worktree,
           parentWorktreeId: lineage?.parentWorktreeId ?? null,
+          savedLineage: lineage,
           lineage
         }
       }

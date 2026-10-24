@@ -1,3 +1,4 @@
+import type { WorktreeLineage } from './lineage-types'
 import type { ExecutionHostId } from '../execution-host'
 import type { WorktreeCatalogVersion } from './catalog-version'
 import type { AutomationExecutionTargetType } from '../automations-types'
@@ -100,6 +101,8 @@ export type WorkspaceStatusDefinition = {
 export type Worktree = {
   id: string // `${repoId}::${path}`
   instanceId?: string
+  savedLineage?: WorktreeLineage | null
+  lineage?: WorktreeLineage | null
   /** Immutable host/instance identity. Optional while legacy rows migrate. */
   identity?: WorktreeIdentity
   repoId: string

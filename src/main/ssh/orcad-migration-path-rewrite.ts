@@ -83,6 +83,12 @@ function visit(node: unknown, steps: Step[], map: (value: string) => string): un
     return node
   }
   if (step.type === 'prop') {
+    if (
+      node.parentStore === 'external' &&
+      (step.name === 'parentWorktreeId' || step.name === 'parentWorkspaceKey')
+    ) {
+      return node
+    }
     if (Object.hasOwn(node, step.name)) {
       node[step.name] = visit(node[step.name], rest, map)
     }

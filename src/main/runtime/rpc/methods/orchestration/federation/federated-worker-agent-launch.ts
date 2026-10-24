@@ -93,7 +93,9 @@ export async function launchFederatedWorkerAgent(args: {
           startupLaunchSource: 'orchestration',
           ...(args.launchPreferences ? { startupLaunchPreferences: args.launchPreferences } : {}),
           activate: false,
-          lineage: { noParent: true }
+          lineage: params.parentWorktreeRef
+            ? { parentWorktreeRef: params.parentWorktreeRef }
+            : { noParent: true }
         })
         created = result.worktree
         const terminalHandle = result.startupTerminal?.handle

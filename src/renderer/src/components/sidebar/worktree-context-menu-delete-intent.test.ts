@@ -24,9 +24,19 @@ describe('createWorktreeContextMenuDeleteIntent', () => {
       isMultiContext: false
     })
 
+    expect(intent).toEqual({
+      kind: 'worktree',
+      worktree: { id: 'shared', instanceId: 'ssh-instance', hostId: 'ssh:box', storeKey: '' }
+    })
     runWorktreeContextMenuDeleteIntent(intent)
 
     expect(mocks.runDelete).toHaveBeenCalledWith('shared', {
+      expectedIdentity: {
+        id: 'shared',
+        instanceId: 'ssh-instance',
+        hostId: 'ssh:box',
+        storeKey: ''
+      },
       expectedInstanceId: 'ssh-instance',
       expectedHostId: 'ssh:box'
     })
@@ -45,7 +55,9 @@ describe('createWorktreeContextMenuDeleteIntent', () => {
 
     runWorktreeContextMenuDeleteIntent(intent)
 
-    expect(mocks.runBatchDelete).toHaveBeenCalledWith(worktrees)
+    expect(mocks.runBatchDelete).toHaveBeenCalledWith(
+      worktrees.map((row) => ({ ...row, storeKey: '' }))
+    )
   })
 
   it('preserves the folder owner host in a context-menu delete intent', () => {
@@ -63,7 +75,12 @@ describe('createWorktreeContextMenuDeleteIntent', () => {
     expect(intent).toEqual({
       kind: 'folder',
       folderWorkspaceId: 'shared',
-      executionHostId: 'runtime:env-owner'
+      worktree: {
+        id: 'folder:shared',
+        instanceId: 'runtime-instance',
+        hostId: 'runtime:env-owner',
+        storeKey: 'env-owner'
+      }
     })
   })
 })
@@ -96,6 +113,7 @@ describe('deferWorktreeContextMenuDeleteIntent', () => {
     deferred()
 
     expect(mocks.runDelete).toHaveBeenCalledWith('repo::/work/wt', {
+      expectedIdentity: intent.worktree,
       expectedInstanceId: 'instance-1'
     })
     expect(onDispatched).toHaveBeenCalledOnce()
@@ -128,6 +146,7 @@ describe('deferWorktreeContextMenuDeleteIntent', () => {
     expect(mocks.runDelete).not.toHaveBeenCalled()
     vi.runAllTimers()
     expect(mocks.runDelete).toHaveBeenCalledWith('wt-1', {
+      expectedIdentity: intent.worktree,
       expectedInstanceId: 'instance-1'
     })
   })

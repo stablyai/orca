@@ -51,6 +51,7 @@ export function useVisibleSidebarWorktrees(args: {
     workspaceHostScope
   } = filterState
   const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
+  const folderWorkspaces = useAppStore((s) => s.folderWorkspaces)
   const agentStatusEpoch = useAppStore((s) => (!showSleepingWorkspaces ? s.agentStatusEpoch : 0))
   // Why: skip the clock entirely when the epoch is the opt-out sentinel, so a
   // sleeping-workspaces list cannot evict the sample the live lists share.
@@ -127,6 +128,7 @@ export function useVisibleSidebarWorktrees(args: {
       visibleWorkspaceHostIds,
       defaultHostId,
       worktreeLineageById,
+      folderWorkspaces,
       preserveLineageParentOrder: sortBy === 'manual',
       // Switch point: the stamp sort ranks by host identity (use-sort-order.ts).
       sortedByHostIdentity: ORCA_SIDEBAR_INPUTS_IS_MAIN,
@@ -157,6 +159,7 @@ export function useVisibleSidebarWorktrees(args: {
     sortBy,
     worktreeLineageById,
     worktreesByRepo,
+    folderWorkspaces,
     pairedDeviceIdsByEnvironment,
     worktreeIdsWithStructuredChat
   ])

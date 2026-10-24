@@ -1,7 +1,11 @@
 // @vitest-environment happy-dom
 
+import { act } from 'react'
 import type React from 'react'
-import type * as WorktreeRepoIndex from '@/store/worktree-repo-index'
+import { makeFolderWorkspace } from '../../store/slices/worktrees-slice-test-fixtures'
+import { getLineageInputs } from '../sidebar/visible-worktree-indexes'
+import type * as WorktreeRepoIndex from '../../../../shared/sidebar-list/worktree-lineage-projection'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
@@ -10,6 +14,7 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
 
 type FakeStoreState = {
+  folderWorkspaces?: FolderWorkspace[]
   worktreesByRepo: Record<string, Worktree[]>
   repos: Repo[]
   projectHostSetups: never[]
@@ -33,11 +38,9 @@ const popoverMock = vi.hoisted(() => ({
   onOpenChange: undefined as ((open: boolean) => void) | undefined
 }))
 
-const indexSpies = vi.hoisted(() => ({
-  getIndexedAllWorktrees: vi.fn(),
-  getIndexedWorktreeMap: vi.fn(),
-  getIndexedWorktreeById: vi.fn()
-}))
+const virtualKeys = vi.hoisted((): { current: (string | number)[] } => ({ current: [] }))
+
+const indexSpies = vi.hoisted(() => ({ getWorktreeLineageProjection: vi.fn() }))
 
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
@@ -47,17 +50,23 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (_key: string, fallback: string) => fallback })
 }))
 
-vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: FakeStoreState) => unknown) => selector(storeState)
+const storeWrites = vi.hoisted(() => ({
+  set: (_state: Partial<FakeStoreState>, _replace?: boolean) => {}
 }))
+vi.mock('@/store', async () => {
+  const { createStore, useStore } = await import('zustand')
+  const store = createStore(() => storeState)
+  storeWrites.set = (state, replace) =>
+    replace ? store.setState({ ...storeState, ...state }, true) : store.setState(state)
+  return {
+    useAppStore: (selector: (state: FakeStoreState) => unknown) =>
+      useStore(store, () => selector(storeState))
+  }
+})
 
-// Spies wrap the real projections, so exclusion rules stay under test while call
-// counts prove when enumeration happens.
-vi.mock('@/store/worktree-repo-index', async (importOriginal) => {
+vi.mock('../../../../shared/sidebar-list/worktree-lineage-projection', async (importOriginal) => {
   const actual = await importOriginal<typeof WorktreeRepoIndex>()
-  indexSpies.getIndexedAllWorktrees.mockImplementation(actual.getIndexedAllWorktrees)
-  indexSpies.getIndexedWorktreeMap.mockImplementation(actual.getIndexedWorktreeMap)
-  indexSpies.getIndexedWorktreeById.mockImplementation(actual.getIndexedWorktreeById)
+  indexSpies.getWorktreeLineageProjection.mockImplementation(actual.getWorktreeLineageProjection)
   return { ...actual, ...indexSpies }
 })
 
@@ -90,12 +99,18 @@ vi.mock('@/components/ui/popover', async () => {
 
 // The virtual window needs real layout the test DOM has none of; render every row.
 vi.mock('@tanstack/react-virtual', () => ({
-  useVirtualizer: ({ count }: { count: number }) => ({
+  useVirtualizer: ({
+    count,
+    getItemKey
+  }: {
+    count: number
+    getItemKey: (index: number) => string | number
+  }) => ({
     getTotalSize: () => count * 44,
     getVirtualItems: () =>
       Array.from({ length: count }, (_, index) => ({
         index,
-        key: index,
+        key: (virtualKeys.current[index] = getItemKey(index)),
         start: index * 44,
         size: 44
       })),
@@ -147,6 +162,7 @@ function seed(worktrees: Worktree[], repoIds: string[] = [REPO_ID]): void {
   }
   storeState.worktreesByRepo = byRepo
   storeState.repos = repoIds.map(makeRepo)
+  storeWrites.set(storeState, true)
 }
 
 function trigger(): HTMLButtonElement {
@@ -190,9 +206,9 @@ beforeEach(() => {
   storeState.repos = []
   storeState.worktreeLineageById = {}
   storeState.workspaceLineageByChildKey = {}
-  indexSpies.getIndexedAllWorktrees.mockClear()
-  indexSpies.getIndexedWorktreeMap.mockClear()
-  indexSpies.getIndexedWorktreeById.mockClear()
+  storeState.folderWorkspaces = []
+  indexSpies.getWorktreeLineageProjection.mockClear()
+  storeWrites.set(storeState, true)
 })
 
 afterEach(cleanup)
@@ -203,15 +219,9 @@ describe('ComposerParentWorktreePicker', () => {
 
     render(<ComposerParentWorktreePicker repoId={REPO_ID} value="alpha" onChange={vi.fn()} />)
 
-    // The closed trigger resolves one name from the shared index; it never enumerates.
-    expect(indexSpies.getIndexedWorktreeById).toHaveBeenCalled()
-    expect(indexSpies.getIndexedAllWorktrees).not.toHaveBeenCalled()
-    expect(indexSpies.getIndexedWorktreeMap).not.toHaveBeenCalled()
-
+    expect(indexSpies.getWorktreeLineageProjection).not.toHaveBeenCalled()
     fireEvent.click(trigger())
-
-    expect(indexSpies.getIndexedAllWorktrees).toHaveBeenCalled()
-    expect(indexSpies.getIndexedWorktreeMap).toHaveBeenCalled()
+    expect(indexSpies.getWorktreeLineageProjection).toHaveBeenCalledOnce()
   })
 
   it('shows "No parent" on the closed trigger when nothing is picked', () => {
@@ -239,7 +249,7 @@ describe('ComposerParentWorktreePicker', () => {
     fireEvent.click(trigger())
     fireEvent.click(rowFor('Alpha'))
 
-    expect(onChange).toHaveBeenCalledWith('alpha')
+    expect(onChange).toHaveBeenCalledWith(JSON.stringify(['', null, 'alpha', null]))
     expect(rows()).toHaveLength(0)
   })
 
@@ -273,7 +283,7 @@ describe('ComposerParentWorktreePicker', () => {
     expect(candidateLabels().join(' ')).toContain('Other repo')
   })
 
-  it('offers another project on the same host and excludes another host', () => {
+  it('offers parents in another project and on another host', () => {
     seed([
       makeWorktree({ id: 'same', displayName: 'Same host', hostId: 'local', projectId: 'proj1' }),
       makeWorktree({
@@ -302,7 +312,7 @@ describe('ComposerParentWorktreePicker', () => {
     fireEvent.click(trigger())
 
     expect(candidateLabels().join(' ')).toContain('Same host')
-    expect(candidateLabels().join(' ')).not.toContain('Other host')
+    expect(candidateLabels().join(' ')).toContain('Other host')
     expect(candidateLabels().join(' ')).toContain('Other project')
   })
 
@@ -337,6 +347,7 @@ describe('ComposerParentWorktreePicker', () => {
     })
     const outside = makeWorktree({ id: 'outside', displayName: 'Outside' })
     seed([attached, nested, outside])
+    storeState.folderWorkspaces = [makeFolderWorkspace({ name: 'Folder', folderPath: '/folder' })]
     storeState.workspaceLineageByChildKey = {
       [worktreeWorkspaceKey(attached.id)]: {
         childWorkspaceKey: worktreeWorkspaceKey(attached.id),
@@ -402,7 +413,7 @@ describe('ComposerParentWorktreePicker', () => {
 
     // Regression: the highlight used to reset onto the pinned "No parent" row, so the
     // standard type-then-Enter flow cleared the parent instead of picking the match.
-    expect(onChange).toHaveBeenCalledWith('beta')
+    expect(onChange).toHaveBeenCalledWith(JSON.stringify(['', null, 'beta', null]))
   })
 
   it('clears the parent when Enter is pressed with no search query', () => {
@@ -447,6 +458,7 @@ describe('ComposerParentWorktreePicker', () => {
       instanceId: 'current-instance'
     })
     seed([attached])
+    storeState.folderWorkspaces = [makeFolderWorkspace({ name: 'Folder', folderPath: '/folder' })]
     storeState.workspaceLineageByChildKey = {
       [worktreeWorkspaceKey(attached.id)]: {
         childWorkspaceKey: worktreeWorkspaceKey(attached.id),
@@ -488,3 +500,77 @@ describe('ComposerParentWorktreePicker', () => {
     expect(rows()).toHaveLength(0)
   })
 })
+
+it('opens both same-host store copies with distinct keys and selects the exact searched copy', () => {
+  const a = makeWorktree({
+    id: 'parent',
+    instanceId: 'copy',
+    hostId: 'ssh:shared',
+    runtimeOwnerEnvironmentId: 'A',
+    displayName: 'Alpha'
+  })
+  const b = { ...a, runtimeOwnerEnvironmentId: 'B', displayName: 'Beta' }
+  seed([a, b])
+  const change = vi.fn()
+  render(<ComposerParentWorktreePicker repoId={REPO_ID} value={null} onChange={change} />)
+  fireEvent.click(trigger())
+  expect(virtualKeys.current.slice(1, 3)).toEqual([
+    JSON.stringify(['A', 'ssh:shared', 'parent', 'copy']),
+    JSON.stringify(['B', 'ssh:shared', 'parent', 'copy'])
+  ])
+  expect(new Set(virtualKeys.current.slice(0, 3)).size).toBe(3)
+  fireEvent.change(searchInput(), { target: { value: 'Beta' } })
+  fireEvent.click(rowFor('Beta'))
+  expect(change).toHaveBeenCalledWith(JSON.stringify(['B', 'ssh:shared', 'parent', 'copy']))
+})
+
+it.each([10, 100])(
+  'does not traverse warm closed picker rows on an unrelated store write at N=%i',
+  (n) => {
+    let traversed = 0
+    const items = Array.from({ length: n }, (_, i) => makeWorktree({ id: `row-${i}` }))
+    seed(items)
+    const heldRows = getLineageInputs(storeState).worktreeMap
+    const change = vi.fn()
+    const { rerender } = render(
+      <ComposerParentWorktreePicker repoId={REPO_ID} value="row-0" onChange={change} />
+    )
+    expect(trigger().textContent).toContain('row-0')
+    const nativeValues = heldRows.values
+    const observedValues = vi.spyOn(heldRows, 'values').mockImplementation(function (
+      this: Map<string, Worktree>
+    ) {
+      const iterator = nativeValues.call(this)
+      const next = iterator.next.bind(iterator)
+      iterator.next = () => {
+        const entry = next()
+        if (!entry.done) {
+          traversed++
+        }
+        return entry
+      }
+      return iterator
+    })
+    try {
+      expect([...heldRows.values()]).toEqual(items)
+      expect(traversed).toBe(n)
+      traversed = 0
+      act(() => {
+        storeState.projectHostSetups = []
+        storeWrites.set({ projectHostSetups: [] })
+      })
+      rerender(
+        <ComposerParentWorktreePicker repoId={REPO_ID} value="row-0" onChange={change} disabled />
+      )
+      expect(getLineageInputs(storeState).worktreeMap).toBe(heldRows)
+      expect(traversed).toBe(0)
+      storeState.worktreesByRepo = {
+        [REPO_ID]: [{ ...items[0]!, displayName: 'Renamed' }, ...items.slice(1)]
+      }
+      rerender(<ComposerParentWorktreePicker repoId={REPO_ID} value="row-0" onChange={change} />)
+      expect(trigger().textContent).toContain('Renamed')
+    } finally {
+      observedValues.mockRestore()
+    }
+  }
+)

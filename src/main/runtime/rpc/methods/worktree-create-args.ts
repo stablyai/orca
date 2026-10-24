@@ -1,3 +1,4 @@
+import type { WorktreeSet } from '../../../../shared/rpc-contract/worktree-params'
 import { terminalImageViewerSupported } from '../../terminal-image-viewer-env'
 import type { z } from 'zod'
 import { resolveRuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
@@ -110,10 +111,18 @@ export function buildManagedWorktreeCreateArgs(
       ...(params.parentWorkspaceOrigin ? { parentWorkspaceOrigin: 'manual' as const } : {}),
       envParentWorkspace: params.envParentWorkspace,
       parentWorktree: params.parentWorktree,
+      parentWorktreeRef: params.parentWorktreeRef,
       ...(params.cwdParentWorktree ? { cwdParentWorktree: params.cwdParentWorktree } : {}),
       noParent: params.noParent === true,
       callerTerminalHandle: params.callerTerminalHandle,
       orchestrationContext: params.orchestrationContext
     }
   }
+}
+
+export function worktreeSetLineage(params: z.infer<typeof WorktreeSet>) {
+  const { parentWorktree, parentWorktreeRef, noParent } = params
+  return parentWorktree || parentWorktreeRef || noParent === true
+    ? { parentWorktree, parentWorktreeRef, noParent: noParent === true }
+    : undefined
 }

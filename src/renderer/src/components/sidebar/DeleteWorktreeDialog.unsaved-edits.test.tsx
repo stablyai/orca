@@ -22,6 +22,8 @@ const mocks = vi.hoisted(() => {
     removeWorktree: vi.fn(),
     clearWorktreeDeleteState: vi.fn(),
     allWorktrees,
+    worktreesByRepo: { repo: allWorktrees },
+    folderWorkspaces: [],
     repos,
     worktreeLineageById: {},
     updateSettings: vi.fn(),
@@ -150,6 +152,7 @@ describe('DeleteWorktreeDialog unsaved edits', () => {
       worktreeDeleteIdentities: [{ id: workspace.id, instanceId: workspace.instanceId }]
     }
     mocks.state.allWorktrees = [workspace]
+    mocks.state.worktreesByRepo = { repo: mocks.state.allWorktrees }
     mocks.state.repos = [repo]
     mocks.state.openFiles = []
     mocks.state.editorDrafts = {}

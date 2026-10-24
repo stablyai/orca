@@ -46,7 +46,7 @@ export function hasSleepableWorkspaceActivity(
 
 export function getWorkspaceLineageMenuActions(args: {
   parent: Worktree
-  worktrees: readonly Worktree[]
+  worktrees: readonly Worktree[] | ReadonlyMap<string, Worktree>
   lineageById: Record<string, WorktreeLineage>
   activity: WorkspaceActivityMaps
 }): WorkspaceLineageMenuActions {

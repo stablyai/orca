@@ -30,7 +30,6 @@ import {
 } from '../../../shared/worktree/host-qualified-identity'
 import { anySleepKeyNames } from '../terminal/stop/worktree-terminal-sleep-key'
 import { resolveAgentWorkspaceExecutionHostId } from '../../agent-hooks/restored-status-dead-terminal-sweep'
-import { WORKTREE_METADATA_DOMAINS } from '../../persistence/loading-store/worktree-identity-metadata'
 import {
   isWslMoveProjectBlocked,
   wslMoveProjectRefForWorkspace
@@ -112,12 +111,15 @@ export abstract class OrcaRuntimeWithSidebarTemporal extends OrcaRuntimeWithDete
       },
       { consumesTerminalSideEffects: true }
     )
-    // Every unread write (window, phone, CLI, activation) lands in a record; a Done may re-tier.
-    this.store?.onStateWritten?.((domains) => {
-      if (domains === undefined || WORKTREE_METADATA_DOMAINS.some((d) => domains.includes(d))) {
-        this.sortStamps.noteRecordsWritten()
-      }
-    })
+    // Every catalog change, from IPC or the runtime, reaches clients through this one bus.
+    this.clientEvents.on(
+      (event) => {
+        if (event.type === 'worktreesChanged' || event.type === 'reposChanged') {
+          this.sidebarTemporal.noteCatalogChange()
+        }
+      },
+      { consumesTerminalSideEffects: false }
+    )
   }
 
   getSidebarTemporalSnapshot(): SidebarTemporalSnapshot {

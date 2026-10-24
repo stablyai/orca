@@ -1,12 +1,13 @@
+import { OrchestrationDb } from './runtime/orchestration/db'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../shared/repo-types'
 import type { ExecutionHostId } from '../shared/execution-host'
+import { hostWorktreeTarget } from '../shared/worktree/host-qualified-identity'
 import type { WorktreeLineage } from '../shared/worktree/lineage-types'
 import type { GitWorktreeInfo } from '../shared/worktree/types'
-import { worktreeWorkspaceKey } from '../shared/workspace-scope'
 import { closeTestStores, createStore, testState } from './persistence-test-harness'
 import type { Store } from './persistence'
 import { wslMoveCutoverFixture as cutover } from './persistence/__fixtures__/wsl-mover/wsl-move-cutover-fixture'
@@ -186,6 +187,9 @@ describe('inferred lineage hydration under a WSL move', () => {
       lineage: null,
       git: { path, head: 'abc', branch: `refs/heads/${name}`, isBare: false, isMainWorktree: false }
     }
+    store.setWorktreeMeta(hostWorktreeTarget({ id: worktree.id, hostId }), {
+      instanceId: worktree.instanceId
+    })
     return worktree
   }
 
@@ -200,34 +204,45 @@ describe('inferred lineage hydration under a WSL move', () => {
       ['task_staying', resolved(STAYING, 'parent', 'local')],
       ['task_remote', resolved(MOVING, 'parent-remote', 'ssh:target-1')]
     ])
+    const db = new OrchestrationDb(':memory:')
+    const byHandle = new Map<string, ResolvedWorktree>()
+    children.forEach((child, i) => {
+      const handle = `term-${i}`
+      const parent = parents.get(child.comment.match(/task_\w+/)?.[0] ?? '')
+      if (!parent) {
+        throw new Error('missing parent fixture')
+      }
+      byHandle.set(handle, parent)
+      child.comment = db.createTask({
+        runId: 'run_legacy_local',
+        spec: 'Recover parent',
+        createdByTerminalHandle: handle
+      }).id
+    })
     const controller = new RuntimeWorktreeLineageController({
       getStore: () => store,
-      getDb: () => null,
-      resolveWorktree: async () => {
-        throw new Error('unused')
+      getDb: () => db,
+      resolveWorktree: async (selector) => {
+        const parent = [...byHandle.values()].find((row) => `id:${row.id}` === selector)
+        if (!parent) {
+          throw new Error('missing terminal parent')
+        }
+        return parent
       },
       listResolvedWorktrees: async () => children,
-      showTerminal: async () => {
-        throw new Error('unused')
+      showTerminal: async (handle) => {
+        const parent = byHandle.get(handle)
+        if (!parent) {
+          throw new Error('missing terminal')
+        }
+        return { worktreeId: parent.id }
       }
     })
-    vi.spyOn(controller, 'resolveTaskCandidate').mockImplementation(async (taskId) => {
-      const parent = parents.get(taskId)
-      return parent
-        ? {
-            source: 'orchestration-context',
-            taskId,
-            parent: {
-              type: 'worktree',
-              workspaceKey: worktreeWorkspaceKey(parent.id),
-              worktree: parent,
-              instanceId: parent.instanceId ?? null
-            }
-          }
-        : null
-    })
-
-    await controller.hydrate()
+    try {
+      await controller.hydrate()
+    } finally {
+      db.close()
+    }
 
     expect(store.getWorktreeLineage(children[0].id)).toBeUndefined()
     expect(store.getWorktreeLineage(children[1].id)?.parentWorktreeId).toBe(

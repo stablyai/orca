@@ -1,3 +1,4 @@
+import { getWorktreeLineageRows } from './worktree-lineage-projection'
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
   getWorktreeExecutionHostId,
@@ -124,16 +125,10 @@ export function planSidebarFeedRows(
   const { defaultHostId, groupBy } = view
   const { workspaces, worktrees: allWorktrees, folderWorkspaces, repoMap } = index
   const byIdentity = new Map(workspaces.map((entry) => [entry.identity, entry]))
-  const worktreeMap = new Map<string, Worktree>()
-  const ancestorByIdentity = new Map<string, Worktree>()
+  const worktreeMap = getWorktreeLineageRows(workspaces.map((entry) => entry.worktree))
+  const ancestorByIdentity = worktreeMap
   const worktreesByRepo: Record<string, Worktree[]> = {}
   for (const worktree of allWorktrees) {
-    if (!worktreeMap.has(worktree.id)) {
-      worktreeMap.set(worktree.id, worktree)
-    }
-    if (!worktree.isArchived) {
-      ancestorByIdentity.set(getWorktreeHostIdentity(worktree), worktree)
-    }
     const repoWorktrees = worktreesByRepo[worktree.repoId]
     if (repoWorktrees) {
       repoWorktrees.push(worktree)

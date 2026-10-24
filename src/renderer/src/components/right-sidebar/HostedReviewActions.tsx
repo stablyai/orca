@@ -1,3 +1,4 @@
+import { toWorktreeDeleteIdentities } from '../sidebar/worktree-delete-request'
 import React, { useCallback, useMemo } from 'react'
 import { LoaderCircle, GitMerge, ChevronDown, GitPullRequestClosed } from 'lucide-react'
 import { useAppStore } from '@/store'
@@ -155,8 +156,12 @@ export default function HostedReviewActions({
   const handleDeleteWorktree = useCallback(() => {
     // Why: route every UI delete entry point through the shared funnel so
     // skip-confirm, main-worktree, and child-workspace safeguards cannot drift.
-    runWorktreeDelete(worktree.id, worktree.hostId ? { expectedHostId: worktree.hostId } : {})
-  }, [worktree.hostId, worktree.id])
+    runWorktreeDelete(worktree.id, {
+      expectedIdentity: toWorktreeDeleteIdentities([worktree])[0],
+      expectedHostId: worktree.hostId,
+      expectedInstanceId: worktree.instanceId
+    })
+  }, [worktree])
 
   if (review.state === 'draft' && (review.provider === 'github' || review.provider === 'gitlab')) {
     return (

@@ -607,7 +607,6 @@ describe('buildDashboardSnapshot', () => {
       workspaceStatusId: 'reviewing',
       workspaceStatusLabel: 'Reviewing',
       workspaceStatusColor: 'emerald',
-      parentWorktreeId: 'parent-worktree',
       subagents: [{ name: 'Review loop', dotState: 'working' }]
     })
   })

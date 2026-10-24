@@ -23,6 +23,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 const state = {
   unifiedTabsByWorktree: {},
+  worktreesByRepo: {},
   updateWorktreeMeta: vi.fn(),
   setWorktreesPinnedAndReveal: vi.fn(),
   workspaceStatuses: [

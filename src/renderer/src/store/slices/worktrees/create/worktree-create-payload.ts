@@ -1,3 +1,4 @@
+import type { ParentWorktreeRef } from '../../../../../../shared/worktree/lineage-types'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
 import type { CreateWorktreeArgs } from '../../../../../../shared/worktree/create-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
@@ -39,6 +40,7 @@ export type WorktreeCreateAttempt = {
   name: string
   branchNameOverride?: string
   parentWorkspace?: WorkspaceKey
+  parentWorktreeRef?: ParentWorktreeRef
   manualOrder?: number
 }
 
@@ -81,7 +83,11 @@ function sharedCreateFields(
         }
       : {}),
     ...(attempt.manualOrder !== undefined ? { manualOrder: attempt.manualOrder } : {}),
-    ...(attempt.parentWorkspace ? { parentWorkspace: attempt.parentWorkspace } : {}),
+    ...(attempt.parentWorktreeRef
+      ? { parentWorktreeRef: attempt.parentWorktreeRef }
+      : attempt.parentWorkspace
+        ? { parentWorkspace: attempt.parentWorkspace }
+        : {}),
     ...(request.workspaceStatus !== undefined ? { workspaceStatus: request.workspaceStatus } : {}),
     ...(request.linkedGitLabMR !== undefined ? { linkedGitLabMR: request.linkedGitLabMR } : {}),
     ...(request.linkedGitLabIssue !== undefined

@@ -195,8 +195,20 @@ export function projectWslMoveState(
         withoutKeys([meta], HOST_BINDINGS.worktreeMeta)[0]
       ])
     ),
-    worktreeLineageById: pickKeys(state.worktreeLineageById, ownerInScope),
-    workspaceLineageByChildKey: pickKeys(state.workspaceLineageByChildKey, ownerInScope),
+    worktreeLineageById: Object.fromEntries(
+      Object.entries(state.worktreeLineageById).filter(
+        ([id, edge]) =>
+          ownerInScope(id) &&
+          (edge.parentStore === 'external' || ownerInScope(edge.parentWorktreeId))
+      )
+    ),
+    workspaceLineageByChildKey: Object.fromEntries(
+      Object.entries(state.workspaceLineageByChildKey).filter(
+        ([id, edge]) =>
+          ownerInScope(id) &&
+          (edge.parentStore === 'external' || ownerInScope(edge.parentWorkspaceKey))
+      )
+    ),
     automations: byId(withoutKeys(automations, HOST_BINDINGS.automations).map(withoutSetupId)),
     automationRuns: byId(
       state.automationRuns.filter((run) => automationIds.has(run.automationId)).map(withoutSetupId)

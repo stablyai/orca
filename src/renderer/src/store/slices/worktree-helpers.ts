@@ -1,3 +1,4 @@
+import type { ConfirmedUnsavedDiscards } from './worktrees/teardown/removed-workspace-unsaved-files'
 import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachment-mutation'
 import type { WorkspaceReferenceObservationContext } from '@/lib/workspace-attachment-observed-origin'
 import type { CreateWorktreeCallOptions } from './worktrees/create/worktree-create-payload'
@@ -361,7 +362,10 @@ export type WorktreeSlice = {
    * Called by the `worktrees:changed` listener on server-side deletions and
    * one-shot at hydration time. See design §4.4.
    */
-  purgeWorktreeTerminalState: (worktreeTargets: WorktreePurgeTargets) => void
+  purgeWorktreeTerminalState: (
+    worktreeTargets: WorktreePurgeTargets,
+    confirmedDiscards?: ConfirmedUnsavedDiscards
+  ) => void
   /**
    * Retires every client-store row (repos, project host setups, worktree +
    * detected-worktree rows, and their tab/PTY/browser/editor cascade) owned by a

@@ -380,7 +380,13 @@ describe('createWorktree parent pick on a remote runtime', () => {
 
     const calls = createCalls()
     expect(calls).toHaveLength(2)
-    expect(calls[0]?.params).toMatchObject({ parentWorkspace: folderWorkspaceKey('folder-1') })
+    expect(calls[0]?.params).toMatchObject({
+      parentWorktreeRef: {
+        worktreeId: folderWorkspaceKey('folder-1'),
+        instanceId: folderWorkspaceKey('folder-1'),
+        external: true
+      }
+    })
     expect(calls[1]?.params).not.toHaveProperty('parentWorkspace')
     expect(toast.warning).toHaveBeenCalledWith(
       'Created without nesting under "Design docs"',

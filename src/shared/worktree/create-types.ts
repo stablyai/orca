@@ -14,7 +14,12 @@ import type {
   WorkspaceStatus,
   Worktree
 } from './types'
-import type { WorkspaceLineage, WorktreeLineage, WorktreeLineageWarning } from './lineage-types'
+import type {
+  ParentWorktreeRef,
+  WorkspaceLineage,
+  WorktreeLineage,
+  WorktreeLineageWarning
+} from './lineage-types'
 import type {
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch,
@@ -90,6 +95,7 @@ export type SparsePreset = {
 }
 
 export type CreateWorktreeArgs = {
+  parentWorktreeRef?: ParentWorktreeRef
   repoId: string
   name: string
   /** True only when `name` came from Orca's creature-name generator rather than the user. Gates

@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../shared/execution-host'
+import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import type { FolderWorkspace, WorkspaceKey } from '../../shared/folder-workspace-types'
 import type { WorktreeLineage, WorktreeLineageWarning } from '../../shared/worktree/lineage-types'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
@@ -23,7 +23,10 @@ export type ResolvedWorkspaceParent =
 export type WorktreeLineageResolution =
   | {
       kind: 'lineage'
-      parent: ResolvedWorkspaceParent
+      parent:
+        | ResolvedWorkspaceParent
+        | { type: 'reference'; workspaceKey: WorkspaceKey; instanceId: string; worktreeId: string }
+      parentStore?: 'external'
       origin: WorktreeLineage['origin']
       capture: WorktreeLineage['capture']
       orchestrationRunId?: string
@@ -88,7 +91,8 @@ export async function resolveRuntimeWorktreeCreateLineage(
     return { kind: 'none', warnings: [] }
   }
   if (
-    (input.noParent === true && (input.parentWorkspace || input.parentWorktree)) ||
+    (input.noParent === true &&
+      (input.parentWorkspace || input.parentWorktree || input.parentWorktreeRef)) ||
     (input.parentWorkspace && input.parentWorktree)
   ) {
     throw new RuntimeLineageError(
@@ -98,6 +102,28 @@ export async function resolveRuntimeWorktreeCreateLineage(
   }
   if (input.noParent === true) {
     return { kind: 'none', warnings: [] }
+  }
+  if (input.parentWorktreeRef) {
+    const ref = input.parentWorktreeRef
+    const parsed = parseWorkspaceKey(ref.worktreeId)
+    return {
+      kind: 'lineage',
+      parent: {
+        type: 'reference',
+        workspaceKey:
+          parsed?.type === 'folder'
+            ? `folder:${parsed.folderWorkspaceId}`
+            : worktreeWorkspaceKey(ref.worktreeId),
+        instanceId: ref.instanceId,
+        worktreeId: ref.worktreeId
+      },
+      ...(ref.external ? { parentStore: 'external' as const } : {}),
+      origin: input.parentWorkspaceOrigin === 'manual' ? 'manual' : 'cli',
+      capture: {
+        source: input.parentWorkspaceOrigin === 'manual' ? 'manual-action' : 'explicit-cli-flag',
+        confidence: 'explicit'
+      }
+    }
   }
   if (input.parentWorkspace) {
     try {
@@ -266,40 +292,5 @@ export async function resolveRuntimeWorktreeCreateLineage(
     ...(terminalContextResolved && input.callerTerminalHandle
       ? { createdByTerminalHandle: input.callerTerminalHandle }
       : {})
-  }
-}
-
-/**
- * Create-time half of the lineage host boundary (#12757): update and hydrate refuse a parent on
- * another execution host, and the renderer drops such an edge, so create must not persist one.
- * An explicit parent fails before anything is created; an inferred one is dropped with a warning.
- * An unknown host on either side stays permissive, as in the projection.
- */
-export function enforceCreateLineageHostBoundary(
-  resolution: WorktreeLineageResolution,
-  childHostId: ExecutionHostId | undefined
-): WorktreeLineageResolution {
-  if (resolution.kind !== 'lineage' || resolution.parent.type !== 'worktree') {
-    return resolution
-  }
-  const parentHostId = resolution.parent.worktree.hostId
-  if (!childHostId || !parentHostId || parentHostId === childHostId) {
-    return resolution
-  }
-  const message = 'Parent worktree must be on the same execution host as the new worktree.'
-  if (resolution.capture.confidence === 'explicit') {
-    throw new RuntimeLineageError('LINEAGE_PARENT_CONTEXT_CONFLICT', message, {
-      nextSteps: ['Pass a parent on the same execution host, or retry with --no-parent.']
-    })
-  }
-  return {
-    kind: 'none',
-    warnings: [
-      {
-        code: 'LINEAGE_PARENT_CONTEXT_CONFLICT',
-        message: `Worktree created without lineage. ${message}`,
-        details: { parentWorktreeId: resolution.parent.worktree.id, parentHostId, childHostId }
-      }
-    ]
   }
 }

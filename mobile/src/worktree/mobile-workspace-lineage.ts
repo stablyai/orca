@@ -1,3 +1,4 @@
+import { resolveWorktreeLineageParents } from '../../../src/shared/resolved-worktree-lineage'
 import {
   buildWorktreeOccurrencePlan,
   getExpandedWorktreeOccurrences,
@@ -12,50 +13,34 @@ export function getMobileWorkspaceLineageGroupKey(worktree: WorktreeLineageIdent
   return `workspace-lineage:${encodeURIComponent(getWorktreeRowIdentity(worktree))}`
 }
 
-function hasValidLineageParent(worktree: Worktree, parent: Worktree): boolean {
-  if (
-    worktree.lineageWorktreeInstanceId === undefined &&
-    worktree.parentWorktreeInstanceId === undefined
-  ) {
-    return true
-  }
-  // Why: desktop rejects stale lineage when a path is reused by a new workspace
-  // instance; mobile needs the same guard before nesting parent/child rows.
-  return (
-    worktree.worktreeInstanceId === worktree.lineageWorktreeInstanceId &&
-    parent.worktreeInstanceId === worktree.parentWorktreeInstanceId
-  )
-}
-
-/** Children keyed by parent row identity, over valid edges between the given rows only. */
+/** Children keyed by parent row identity, over valid edges between visible stores. */
 export function getMobileWorkspaceLineageChildren(
   worktrees: readonly Worktree[]
 ): Map<string, Worktree[]> {
-  const worktreeById = new Map(
-    worktrees.map((worktree) => [getWorktreeRowIdentity(worktree), worktree])
+  const rows = worktrees.map((row) => ({
+    ...row,
+    id: row.worktreeId,
+    instanceId: row.worktreeInstanceId
+  }))
+  const parents = resolveWorktreeLineageParents(rows, (row) =>
+    row.savedLineage !== undefined
+      ? row.savedLineage
+      : row.parentWorktreeId
+        ? {
+            parentWorktreeId: row.parentWorktreeId,
+            worktreeInstanceId: row.lineageWorktreeInstanceId,
+            parentWorktreeInstanceId: row.parentWorktreeInstanceId
+          }
+        : null
   )
-  const childrenByParentId = new Map<string, Worktree[]>()
-
-  for (const worktree of worktrees) {
-    const worktreeId = getWorktreeRowIdentity(worktree)
-    const parentId = worktree.parentWorktreeId
-    const parentIdentity = parentId
-      ? getWorktreeRowIdentity({ worktreeId: parentId, hostId: worktree.hostId })
-      : null
-    const parent = parentIdentity ? worktreeById.get(parentIdentity) : undefined
-    if (
-      !parentIdentity ||
-      parentIdentity === worktreeId ||
-      !parent ||
-      !hasValidLineageParent(worktree, parent)
-    ) {
-      continue
-    }
-    const children = childrenByParentId.get(parentIdentity) ?? []
-    children.push(worktree)
-    childrenByParentId.set(parentIdentity, children)
+  const children = new Map<string, Worktree[]>()
+  for (const [child, parent] of parents) {
+    const key = getWorktreeRowIdentity(parent)
+    const siblings = children.get(key) ?? []
+    siblings.push(child)
+    children.set(key, siblings)
   }
-  return childrenByParentId
+  return children
 }
 
 export function getMobileOccurrenceRows(

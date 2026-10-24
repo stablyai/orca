@@ -22,6 +22,7 @@ import {
   requestNativeChatResumeOnRestartDialog
 } from './native-chat-resume-on-restart-dialog'
 import { useAppStore } from '../store'
+import { worktree, lineage } from './native-chat-resume-tree.test-support'
 import { chatBox, namedBox } from './native-chat-resume-on-restart-modal.test-support'
 
 const rpc: Mock<RestartRpc> = vi.hoisted(() => vi.fn<RestartRpc>())
@@ -295,3 +296,73 @@ it('keeps the run out of settings and storage and loses it on a fresh renderer s
     storage.mockRestore()
   }
 })
+
+it.each([
+  { omitted: true, local: 'roots', reverse: false },
+  { omitted: true, local: 'roots', reverse: true },
+  { omitted: false, local: 'missing', reverse: false },
+  { omitted: false, local: 'edge', reverse: false }
+])(
+  'keeps offer authority through the actual modal and selected resume sink: %j',
+  async ({ omitted, local, reverse }) => {
+    const p = worktree('parent')
+    const c = worktree('child')
+    const rp = {
+      ...p,
+      hostId: 'runtime:e' as const,
+      runtimeOwnerEnvironmentId: 'e',
+      instanceId: 'remote-parent',
+      displayName: 'Foreign parent'
+    }
+    const rc = {
+      ...c,
+      hostId: 'runtime:e' as const,
+      runtimeOwnerEnvironmentId: 'e',
+      instanceId: 'remote-child',
+      displayName: 'Foreign child'
+    }
+    rc.savedLineage = lineage(rc, rp)
+    if (local === 'edge') {
+      c.savedLineage = lineage(c, p)
+    }
+    const rows = [...(local === 'missing' ? [] : [p, c]), rp, rc]
+    if (!reverse) {
+      rows.reverse()
+    }
+    useAppStore.setState({
+      repos: [
+        { id: 'repo-1', path: '/repo', displayName: 'Project', badgeColor: '#999', addedAt: 1 }
+      ],
+      worktreesByRepo: { 'repo-1': rows }
+    })
+    const sessions = offered.map((entry, i) => ({ ...entry, workspaceId: i ? c.id : p.id }))
+    if (omitted) {
+      for (const entry of sessions) {
+        delete entry.executionHostId
+      }
+    }
+    fakeHost({ sessions })
+    await mountSurfaces()
+    expect(dialog()).not.toContain('Foreign')
+    // Deselect all using the actual group control, then choose only the offered parent.
+    await act(async () => {
+      chatBox('a').click()
+      chatBox('b').click()
+    })
+    const parentName = local === 'missing' ? p.id : 'parent'
+    await act(async () => namedBox(`Select all chats in ${parentName}`).click())
+    if (local !== 'missing') {
+      await act(async () => button('Collapse parent').click())
+      expect(document.querySelector('[role="checkbox"][aria-label*="Prompt b"]') === null).toBe(
+        local === 'edge'
+      )
+    }
+    const expected = local === 'edge' ? ['a', 'b'] : ['a']
+    await act(async () =>
+      button(`Resume ${expected.length} ${expected.length === 1 ? 'chat' : 'chats'}`).click()
+    )
+    expect(
+      rpc.mock.calls.findLast(([, method]) => method === 'agentSession.restartContinue')?.[2]
+    ).toEqual({ sessionIds: expected })
+  }
+)

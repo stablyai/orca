@@ -1,3 +1,4 @@
+import { getLineageInputs } from './visible-worktree-indexes'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { AppState } from '@/store/types'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
@@ -6,7 +7,7 @@ import {
   getLocalExecutionHostLabel,
   getSettingsFocusedExecutionHostId
 } from '../../../../shared/execution-host'
-import { getRepoMapFromState, getWorktreeMapFromState } from '@/store/selectors'
+import { getRepoMapFromState } from '@/store/selectors'
 import { getProjectHostSetupProjectionFromState } from '@/store/project-host-setup-selector'
 import { planSidebarRows } from '../../../../shared/sidebar-list/sidebar-row-plan'
 import { createSidebarPRGroupReader } from './worktree-list/grouping/pr-group-key'
@@ -84,8 +85,8 @@ export function computeRenderedSidebarRows(
     repoOrder: getLogicalRepoOrderRankById(state.repos.map((repo) => repo.id)),
     workspaceStatuses: state.workspaceStatuses,
     projectOrderBy: state.projectOrderBy,
-    lineageById: state.worktreeLineageById,
-    worktreeMap: getWorktreeMapFromState(state),
+    lineageById: getLineageInputs(state).lineageById,
+    worktreeMap: getLineageInputs(state).worktreeMap,
     nestLineage: true,
     projectGroups: filterProjectGroupsForVisibleHosts(
       projectGroups,

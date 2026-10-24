@@ -1,3 +1,4 @@
+import { projectGroupIdFromRepoId } from '../folder-workspace-worktree'
 import type { OccurrenceSectionPath } from '../worktree-occurrence-plan'
 import {
   compareFolderWorkspacesForDisplay,
@@ -34,7 +35,7 @@ export function appendProjectGroupSections(
   const groupByProjectGroupId = new Map<string | null, OrderedGroupEntry[]>()
   for (const entry of orderedGroups) {
     const repo = entry[1].repo
-    const projectGroupId = repo?.projectGroupId ?? null
+    const projectGroupId = projectGroupIdFromRepoId(entry[0]) ?? repo?.projectGroupId ?? null
     const list = groupByProjectGroupId.get(projectGroupId) ?? []
     list.push(entry)
     groupByProjectGroupId.set(projectGroupId, list)
@@ -95,7 +96,14 @@ export function appendProjectGroupSections(
   }
 
   const getProjectGroupSubtreeCount = (groupId: string): number => {
-    const directCount = groupByProjectGroupId.get(groupId)?.length ?? 0
+    const directCount = (groupByProjectGroupId.get(groupId) ?? []).reduce(
+      (count, [key]) =>
+        count +
+        (projectGroupIdFromRepoId(key)
+          ? (ctx.occurrencePlan.bySection.get(key) ?? []).filter((row) => !row.parent).length
+          : 1),
+      0
+    )
     const folderWorkspaceCount = folderWorkspacesByProjectGroupId.get(groupId)?.length ?? 0
     const children = childGroupsByParentId.get(groupId) ?? []
     return children.reduce(
@@ -121,7 +129,16 @@ export function appendProjectGroupSections(
       for (const pair of folderWorkspacesByProjectGroupId.get(projectGroup.id) ?? []) {
         result.push(buildFolderWorkspaceRow(pair, depth + 1))
       }
-      appendOrderedGroups(ctx, withRepoSectionDisplayLabels(repoEntries), depth + 1)
+      appendOrderedGroups(
+        ctx,
+        repoEntries.filter(([key]) => projectGroupIdFromRepoId(key)),
+        depth + 1
+      )
+      appendOrderedGroups(
+        ctx,
+        withRepoSectionDisplayLabels(repoEntries.filter(([key]) => !projectGroupIdFromRepoId(key))),
+        depth + 1
+      )
       for (const childGroup of childGroups) {
         appendProjectGroup(childGroup, depth + 1)
       }

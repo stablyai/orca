@@ -1,3 +1,4 @@
+import { getLineageInputs } from './visible-worktree-indexes'
 import type { Repo } from '../../../../shared/repo-types'
 import { getSettingsFocusedExecutionHostId } from '../../../../shared/execution-host'
 import { getWorktreeIdsWithLiveAgent } from '@/lib/worktree-activity-state'
@@ -51,7 +52,8 @@ export function buildVisibleWorktreeOptionsFromState(
     workspaceHostScope: state.workspaceHostScope,
     visibleWorkspaceHostIds: state.visibleWorkspaceHostIds,
     defaultHostId: getSettingsFocusedExecutionHostId(state.settings),
-    worktreeLineageById: state.worktreeLineageById,
+    worktreeLineageById: getLineageInputs(state).lineageById,
+    folderWorkspaces: state.folderWorkspaces,
     preserveLineageParentOrder: state.sortBy === 'manual'
   }
 }

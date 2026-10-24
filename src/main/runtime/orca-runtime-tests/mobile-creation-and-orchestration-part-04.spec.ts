@@ -136,6 +136,7 @@ describe('OrcaRuntimeService', () => {
       worktrees: [
         {
           workspaceKind: 'git',
+          savedLineage: null,
           worktreeId: 'repo-1::/tmp/worktree-a',
           repoId: 'repo-1',
           hostId: 'local',

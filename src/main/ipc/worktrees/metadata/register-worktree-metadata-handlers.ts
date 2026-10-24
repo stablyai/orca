@@ -1,3 +1,5 @@
+import { worktreeLineageFromWorkspaceLineage } from '../../../../shared/resolved-worktree-lineage'
+import type { ParentWorktreeRef } from '../../../../shared/worktree/lineage-types'
 import { ipcMain } from 'electron'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import { displayNameUpdatePinsLabel } from '../../../../shared/worktree/display-name-provenance'
@@ -94,17 +96,32 @@ export function registerWorktreeMetadataHandlers(context: WorktreeIpcContext): v
 
   ipcMain.handle(
     'worktrees:updateLineage',
-    async (_event, args: { worktreeId: string; parentWorktreeId?: string; noParent?: boolean }) => {
+    async (
+      _event,
+      args: {
+        worktreeId: string
+        parentWorktreeId?: string
+        parentWorktreeRef?: ParentWorktreeRef
+        noParent?: boolean
+      }
+    ) => {
       await runtime.updateManagedWorktreeMeta(args.worktreeId, {
         lineage:
           args.noParent === true
             ? { noParent: true }
-            : args.parentWorktreeId
-              ? { parentWorktree: `id:${args.parentWorktreeId}` }
-              : undefined
+            : args.parentWorktreeRef
+              ? { parentWorktreeRef: args.parentWorktreeRef }
+              : args.parentWorktreeId
+                ? { parentWorktree: `id:${args.parentWorktreeId}` }
+                : undefined
       })
       notifyWorktreesChanged(mainWindow, parseWorktreeId(args.worktreeId).repoId)
-      return store.getWorktreeLineage(args.worktreeId) ?? null
+      const workspace = args.worktreeId.startsWith('folder:')
+        ? store.getWorkspaceLineage(`folder:${args.worktreeId.slice(7)}`)
+        : undefined
+      return workspace
+        ? worktreeLineageFromWorkspaceLineage(workspace)
+        : (store.getWorktreeLineage(args.worktreeId) ?? null)
     }
   )
 

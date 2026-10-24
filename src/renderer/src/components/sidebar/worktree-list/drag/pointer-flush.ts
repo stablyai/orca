@@ -144,7 +144,8 @@ export function flushWorktreePointerDragFrame(args: WorktreePointerDragFrameArgs
           y: drag.currentY
         })
       : NO_WORKTREE_SIDEBAR_DROP_TARGET,
-    drag.draggedIds
+    drag.draggedIds,
+    drag.draggedCopies
   )
   const lineageParentId = preferredStatusTarget.lineageParentId
   if (lineageParentId) {

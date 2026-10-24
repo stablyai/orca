@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorkspaceLineage, WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { worktreeLineageFromWorkspaceLineage } from '../../../../shared/resolved-worktree-lineage'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
   LINEAGE_CHILDREN_INLINE_OFFSET,
@@ -504,7 +505,7 @@ describe('FolderWorkspaceWorktreesPanel', () => {
     expect(renderedCardIds()).toEqual([parent.id, child.id, grandchild.id])
   })
 
-  it('renders both participants of an upstream-stripped cycle as roots', () => {
+  it('renders saved folder children as siblings despite stale raw cycle records', () => {
     const first = makeWorktree({
       id: 'repo-1::/cycle-a',
       displayName: 'Cycle A',
@@ -517,6 +518,12 @@ describe('FolderWorkspaceWorktreesPanel', () => {
       instanceId: 'cycle-b-instance',
       lastActivityAt: 10
     })
+    first.savedLineage = worktreeLineageFromWorkspaceLineage(
+      makeWorkspaceLineage(first, 'folder-1')
+    )
+    second.savedLineage = worktreeLineageFromWorkspaceLineage(
+      makeWorkspaceLineage(second, 'folder-1')
+    )
     testState.store.worktreesByRepo = { 'repo-1': [first, second] }
     testState.store.workspaceLineageByChildKey = {
       [first.id]: makeWorkspaceLineage(first, 'folder-1'),
@@ -529,7 +536,7 @@ describe('FolderWorkspaceWorktreesPanel', () => {
 
     renderPanel()
 
-    // Why: the lineage projection drops cyclic child ids upstream, so the panel only ever sees roots.
+    // The child-owned saved edges supersede stale raw records before folder membership is derived.
     const ids = renderedCardIds()
     expect(new Set(ids).size).toBe(ids.length)
     expect([...ids].sort()).toEqual([first.id, second.id])

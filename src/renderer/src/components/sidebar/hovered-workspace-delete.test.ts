@@ -1,10 +1,14 @@
+import { createTestStore } from '@/store/slices/worktrees-slice-test-harness'
 import { describe, expect, it, vi, afterEach } from 'vitest'
 import type { AppState } from '@/store/types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { makeFolderWorkspace } from '../worktree-jump-palette-test-fixtures'
+import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
 import {
   deleteHoveredWorkspaceImmediately,
   getHoveredWorkspaceIdentity,
-  resolveHoveredWorkspaceDeleteTarget
+  resolveHoveredWorkspaceDeleteTarget,
+  type HoveredWorkspaceDeleteTarget
 } from './hovered-workspace-delete'
 
 function worktree(overrides: Partial<Worktree> = {}): Worktree {
@@ -38,18 +42,24 @@ function hoveredDocument(...rows: { workspaceId: string; hostIdentity: string }[
   } as unknown as Pick<Document, 'activeElement' | 'querySelectorAll'>
 }
 
-function state(worktrees: Worktree[] = []): AppState {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hover helpers read only these fields.
+function state(
+  worktrees: Worktree[] = [],
+  folderWorkspaces: AppState['folderWorkspaces'] = []
+): AppState {
   return {
+    ...createTestStore().getState(),
+    projectGroups: [],
+    editorBufferIdOf: {},
+    editorBufferViews: {},
     activeModal: 'none',
     activeWorkspaceExecutionHostId: worktrees[0]?.hostId ?? null,
     activeWorktreeId: worktrees[0]?.id ?? null,
     deleteFolderWorkspace: vi.fn(),
     deleteStateByWorktreeId: {},
-    folderWorkspaces: [],
     setActiveWorktree: vi.fn(),
-    worktreesByRepo: { repo: worktrees }
-  } as unknown as AppState
+    worktreesByRepo: { repo: worktrees },
+    folderWorkspaces
+  }
 }
 
 describe('hovered workspace delete', () => {
@@ -77,9 +87,10 @@ describe('hovered workspace delete', () => {
   })
 
   it('retains the hovered host when resolving a folder workspace', () => {
+    const folder = makeFolderWorkspace({ executionHostId: 'runtime:remote-1' })
     expect(
       resolveHoveredWorkspaceDeleteTarget(
-        state(),
+        state([], [folder]),
         hoveredDocument({
           workspaceId: 'folder:folder-1',
           hostIdentity: 'runtime:remote-1|folder:folder-1'
@@ -89,7 +100,8 @@ describe('hovered workspace delete', () => {
       kind: 'folder',
       executionHostId: 'runtime:remote-1',
       folderWorkspaceId: 'folder-1',
-      workspaceKey: 'folder:folder-1'
+      workspaceKey: 'folder:folder-1',
+      worktree: folderWorkspaceToWorktree(folder)
     })
   })
 
@@ -170,28 +182,39 @@ describe('hovered workspace delete', () => {
     ).toBe(true)
     expect(deleteWorktree).toHaveBeenCalledWith(target.id, {
       expectedHostId: 'ssh:build',
-      expectedInstanceId: 'instance-2'
+      expectedInstanceId: 'instance-2',
+      expectedIdentity: {
+        id: target.id,
+        hostId: 'ssh:build',
+        instanceId: 'instance-2',
+        storeKey: ''
+      }
     })
   })
 
   it('removes a hovered folder workspace from Orca without deleting its directory', async () => {
-    const current = state()
+    const folder = makeFolderWorkspace({ executionHostId: 'runtime:remote-1' })
+    const current = state([], [folder])
     current.activeWorktreeId = 'folder:folder-1'
     current.activeWorkspaceExecutionHostId = 'runtime:remote-1'
     current.deleteFolderWorkspace = vi.fn().mockResolvedValue(true)
 
-    expect(
-      deleteHoveredWorkspaceImmediately(
-        current,
-        {
-          kind: 'folder',
-          executionHostId: 'runtime:remote-1',
-          folderWorkspaceId: 'folder-1',
-          workspaceKey: 'folder:folder-1'
-        },
-        { deleteWorktree: vi.fn(), getCurrentState: () => current }
-      )
-    ).toBe(true)
+    const target: HoveredWorkspaceDeleteTarget = {
+      kind: 'folder',
+      executionHostId: 'runtime:remote-1',
+      folderWorkspaceId: 'folder-1',
+      workspaceKey: 'folder:folder-1',
+      worktree: folderWorkspaceToWorktree(folder)
+    }
+    const dependencies = { deleteWorktree: vi.fn(), getCurrentState: () => current }
+    getCurrentState.mockReturnValue({
+      ...current,
+      folderWorkspaces: [{ ...folder, executionHostId: 'runtime:remote-2' }]
+    })
+    expect(deleteHoveredWorkspaceImmediately(current, target, dependencies)).toBe(false)
+    expect(current.deleteFolderWorkspace).not.toHaveBeenCalled()
+    getCurrentState.mockReturnValue(current)
+    expect(deleteHoveredWorkspaceImmediately(current, target, dependencies)).toBe(true)
     await vi.waitFor(() => expect(current.setActiveWorktree).toHaveBeenCalledWith(null))
     expect(current.deleteFolderWorkspace).toHaveBeenCalledWith('folder-1', {
       executionHostId: 'runtime:remote-1'
@@ -200,15 +223,18 @@ describe('hovered workspace delete', () => {
 
   it('rejects a duplicate folder delete while the first request is pending', async () => {
     let finishDelete!: (deleted: boolean) => void
-    const current = state()
+    const folder = makeFolderWorkspace({ id: 'folder-2', executionHostId: 'runtime:remote-2' })
+    const current = state([], [folder])
+    getCurrentState.mockReturnValue(current)
     current.deleteFolderWorkspace = vi.fn(
       () => new Promise<boolean>((resolve) => (finishDelete = resolve))
     )
-    const target = {
-      kind: 'folder' as const,
-      executionHostId: 'runtime:remote-2' as const,
+    const target: HoveredWorkspaceDeleteTarget = {
+      kind: 'folder',
+      executionHostId: 'runtime:remote-2',
       folderWorkspaceId: 'folder-2',
-      workspaceKey: 'folder:folder-2'
+      workspaceKey: 'folder:folder-2',
+      worktree: folderWorkspaceToWorktree(folder)
     }
     const dependencies = { deleteWorktree: vi.fn(), getCurrentState: () => current }
 
@@ -224,7 +250,8 @@ describe('hovered workspace delete', () => {
   })
 })
 
-const { rejectAppStoreAccess } = vi.hoisted(() => ({
+const { rejectAppStoreAccess, getCurrentState } = vi.hoisted(() => ({
+  getCurrentState: vi.fn<() => ReturnType<typeof state>>(),
   rejectAppStoreAccess: vi.fn(() => {
     throw new Error('Pure helper tests must not access the app store')
   })
@@ -232,7 +259,7 @@ const { rejectAppStoreAccess } = vi.hoisted(() => ({
 
 vi.mock('@/store', () => ({
   useAppStore: Object.assign(rejectAppStoreAccess, {
-    getState: rejectAppStoreAccess,
+    getState: getCurrentState,
     getInitialState: rejectAppStoreAccess,
     setState: rejectAppStoreAccess,
     subscribe: rejectAppStoreAccess
@@ -241,4 +268,5 @@ vi.mock('@/store', () => ({
 
 afterEach(() => {
   expect(rejectAppStoreAccess).not.toHaveBeenCalled()
+  getCurrentState.mockReset()
 })

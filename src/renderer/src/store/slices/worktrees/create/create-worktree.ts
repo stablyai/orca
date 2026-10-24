@@ -1,3 +1,4 @@
+import { WORKTREE_CROSS_MACHINE_LINEAGE_CAPABILITY } from '../../../../../../shared/worktree-runtime-capabilities'
 import { runtimeRpcTargetForAuthorityKey } from '@/runtime/runtime-client-target'
 import { repoHostId } from '../listing/worktree-host-ownership'
 import {
@@ -58,6 +59,13 @@ async function runCreateAttempt(
   target: RuntimeTarget,
   clientCreateSettings: ClientWorktreeCreateSettings = {}
 ): Promise<CreateAttemptOutcome> {
+  if (attempt.parentWorktreeRef && target.kind === 'environment') {
+    await assertRuntimeEnvironmentCapability(
+      target.environmentId,
+      WORKTREE_CROSS_MACHINE_LINEAGE_CAPABILITY,
+      `Update Orca on ${target.environmentId} to nest workspaces across machines`
+    )
+  }
   const provisionedRoot = request.options?.provisionedRoot
   const create = async (
     parentWorkspace: WorktreeCreateAttempt['parentWorkspace']
@@ -67,23 +75,39 @@ async function runCreateAttempt(
         ? await adoptRuntimeProvisionedRoot(
             target,
             request,
-            { ...attempt, parentWorkspace },
+            {
+              ...attempt,
+              parentWorkspace,
+              parentWorktreeRef: parentWorkspace ? attempt.parentWorktreeRef : undefined
+            },
             provisionedRoot
           )
         : await window.api.worktrees.adoptProvisionedRoot({
-            ...buildLocalWorktreeCreateArgs(request, { ...attempt, parentWorkspace }),
+            ...buildLocalWorktreeCreateArgs(request, {
+              ...attempt,
+              parentWorkspace,
+              parentWorktreeRef: parentWorkspace ? attempt.parentWorktreeRef : undefined
+            }),
             ...provisionedRoot
           })
       : target.kind === 'local'
         ? // Why local can still reject on the parent: paired web clients route this API to their host.
           await window.api.worktrees.create(
-            buildLocalWorktreeCreateArgs(request, { ...attempt, parentWorkspace })
+            buildLocalWorktreeCreateArgs(request, {
+              ...attempt,
+              parentWorkspace,
+              parentWorktreeRef: parentWorkspace ? attempt.parentWorktreeRef : undefined
+            })
           )
         : await callRuntimeRpc<CreateWorktreeResult>(
             target,
             'worktree.create',
             {
-              ...buildRuntimeWorktreeCreateParams(request, { ...attempt, parentWorkspace }),
+              ...buildRuntimeWorktreeCreateParams(request, {
+                ...attempt,
+                parentWorkspace,
+                parentWorktreeRef: parentWorkspace ? attempt.parentWorktreeRef : undefined
+              }),
               // Why: the host's own store defaults would otherwise override the user's choices.
               ...clientCreateSettings
             },
@@ -241,6 +265,7 @@ export function createCreateWorktree(
                 ? getClientWorktreeCreateCandidate(branchNameOverride, attempt)
                 : undefined,
               parentWorkspace: parent.parentWorkspace,
+              parentWorktreeRef: parent.parentWorktreeRef,
               manualOrder
             },
             target,

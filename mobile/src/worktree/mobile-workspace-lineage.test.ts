@@ -31,6 +31,55 @@ function worktree(overrides: Partial<Worktree> = {}): Worktree {
 }
 
 describe('applyMobileWorkspaceLineage', () => {
+  it('recovers a relayed server child from its saved external edge while a phone paired only to that server stays flat', () => {
+    const parent = worktree({ worktreeId: 'parent', worktreeInstanceId: 'p', hostId: 'local' })
+    const child = worktree({
+      worktreeId: 'child',
+      worktreeInstanceId: 'c',
+      hostId: 'runtime:server',
+      parentWorktreeId: null,
+      savedLineage: {
+        worktreeId: 'child',
+        worktreeInstanceId: 'c',
+        parentWorktreeId: 'parent',
+        parentWorktreeInstanceId: 'p',
+        parentStore: 'external',
+        origin: 'cli',
+        capture: { source: 'explicit-cli-flag', confidence: 'explicit' },
+        createdAt: 1
+      }
+    })
+    expect(
+      applyMobileWorkspaceLineage([parent, child]).find((row) => row.worktreeId === 'child')
+        ?.lineageDepth
+    ).toBe(1)
+    expect(applyMobileWorkspaceLineage([child])[0].lineageDepth).toBe(0)
+    const plan = buildMobileWorkspacePlan(
+      [parent, child, { ...parent, repoId: 'hidden', hostId: 'ssh:copy' }],
+      'name',
+      {
+        filterRepoIds: ['repo-1'],
+        visibleHostIds: null,
+        hideSleepingWorkspaces: false,
+        alwaysShowDefaultBranchWorkspace: true,
+        hideDefaultBranchWorkspace: false,
+        hideAutomationGeneratedWorkspaces: false,
+        hideCliCreatedWorkspaces: false,
+        hideDetachedHeadWorkspaces: false,
+        hideWorkspacesFromOtherDevices: false
+      },
+      '',
+      'repo',
+      new Set()
+    )
+    expect(
+      plan
+        .render(new Set())
+        .flatMap((section) => section.data)
+        .find((row) => row.worktreeId === 'child')?.lineageDepth
+    ).toBe(0)
+  })
+
   it.each([false, true])(
     'keeps deep project identity in each occurrence (duplicate pins: %s)',
     (duplicate) => {

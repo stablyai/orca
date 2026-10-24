@@ -1,3 +1,4 @@
+import type { ParentWorktreeRef } from '../../../shared/worktree/lineage-types'
 import { OrcaRuntimeWithCreateManagedWorktree } from './workspace-creation'
 import type { LocalGitExecOptions } from '../../git/repo-default-base-ref'
 import type { CreateWorktreeResult } from '../../../shared/worktree/create-types'
@@ -121,6 +122,7 @@ export abstract class OrcaRuntimeWithCreateManagedRemoteWorktree extends OrcaRun
       pushTarget?: GitPushTarget | null
       lineage?: {
         parentWorktree?: string
+        parentWorktreeRef?: ParentWorktreeRef
         noParent?: boolean
       }
     }
@@ -133,7 +135,8 @@ export abstract class OrcaRuntimeWithCreateManagedRemoteWorktree extends OrcaRun
       updates,
       store: this.store,
       ports: {
-        resolveWorktree: (selector) => this.resolveWorktreeSelector(selector),
+        resolveWorktree: (selector, instanceId) =>
+          this.resolveWorktreeSelector(selector, instanceId),
         validateParent: (worktree, parent) => this.worktreeLineage.validateParent(worktree, parent),
         invalidateResolved: () => this.invalidateResolvedWorktreeCache(),
         invalidateScan: (repoId) => this.invalidateWorktreeScanCacheForRepo(repoId),

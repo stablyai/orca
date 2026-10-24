@@ -337,28 +337,43 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
-  // #12757: create must refuse the cross-host edge that update refuses and the renderer drops.
-  it('refuses an explicit parent worktree on another execution host before creating', async () => {
+  it('retains an explicit parent on another execution host in this install', async () => {
     const runtime = new OrcaRuntimeService(store)
     const resolveLineage = runtime['resolveLineageForWorktreeCreate'].bind(runtime)
 
     await expect(
       resolveLineage({ parentWorktree: `id:${TEST_WORKTREE_ID}` }, SSH_CHILD_REPO)
-    ).rejects.toMatchObject({ code: 'LINEAGE_PARENT_CONTEXT_CONFLICT' })
+    ).resolves.toMatchObject({
+      kind: 'lineage',
+      parent: {
+        workspaceKey: `worktree:${TEST_WORKTREE_ID}`,
+        instanceId: null,
+        worktree: { id: TEST_WORKTREE_ID }
+      },
+      origin: 'cli',
+      capture: { source: 'explicit-cli-flag', confidence: 'explicit' }
+    })
     await expect(
       resolveLineage({ parentWorktree: `id:${TEST_WORKTREE_ID}` }, LOCAL_CHILD_REPO)
     ).resolves.toMatchObject({ kind: 'lineage' })
   })
 
-  it('drops an inferred parent on another execution host with a warning', async () => {
+  it('retains an inferred parent on another execution host in this install', async () => {
     const runtime = new OrcaRuntimeService(store)
     const resolveLineage = runtime['resolveLineageForWorktreeCreate'].bind(runtime)
 
     await expect(
       resolveLineage({ cwdParentWorktree: `id:${TEST_WORKTREE_ID}` }, SSH_CHILD_REPO)
     ).resolves.toEqual({
-      kind: 'none',
-      warnings: [expect.objectContaining({ code: 'LINEAGE_PARENT_CONTEXT_CONFLICT' })]
+      kind: 'lineage',
+      parent: {
+        type: 'worktree',
+        workspaceKey: `worktree:${TEST_WORKTREE_ID}`,
+        instanceId: null,
+        worktree: expect.objectContaining({ id: TEST_WORKTREE_ID })
+      },
+      origin: 'cli',
+      capture: { source: 'cwd-context', confidence: 'inferred' }
     })
   })
 

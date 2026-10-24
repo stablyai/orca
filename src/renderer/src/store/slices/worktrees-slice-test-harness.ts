@@ -212,12 +212,19 @@ export function createLocalLineageTestStore(lineage: WorktreeLineage) {
       repo1: [
         makeWorktree({
           id: lineage.worktreeId,
+          instanceId: lineage.worktreeInstanceId,
+          repoId: 'repo1',
+          hostId: LOCAL_EXECUTION_HOST_ID
+        }),
+        makeWorktree({
+          id: lineage.parentWorktreeId,
+          instanceId: lineage.parentWorktreeInstanceId,
           repoId: 'repo1',
           hostId: LOCAL_EXECUTION_HOST_ID
         })
       ]
     }
-  } as Partial<AppState>)
+  })
   return store
 }
 

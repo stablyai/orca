@@ -89,14 +89,20 @@ function rekeyLineageRecord(
 ): PersistedState['worktreeLineageById'] {
   const next: PersistedState['worktreeLineageById'] = {}
   for (const [oldKey, lineage] of Object.entries(record)) {
-    if (!worktreeIds.has(oldKey) && !worktreeIds.has(lineage.parentWorktreeId)) {
+    if (
+      !worktreeIds.has(oldKey) ||
+      (lineage.parentStore !== 'external' && !worktreeIds.has(lineage.parentWorktreeId))
+    ) {
       continue
     }
     const newKey = rekeyWorktreeId(oldRepoId, newRepoId, oldKey)
     next[newKey] = {
       ...structuredClone(lineage),
       worktreeId: rekeyWorktreeId(oldRepoId, newRepoId, lineage.worktreeId),
-      parentWorktreeId: rekeyWorktreeId(oldRepoId, newRepoId, lineage.parentWorktreeId)
+      parentWorktreeId:
+        lineage.parentStore === 'external'
+          ? lineage.parentWorktreeId
+          : rekeyWorktreeId(oldRepoId, newRepoId, lineage.parentWorktreeId)
     }
   }
   return next
@@ -110,8 +116,14 @@ function rekeyWorkspaceLineageRecord(
   const next: PersistedState['workspaceLineageByChildKey'] = {}
   for (const [oldKey, lineage] of Object.entries(record)) {
     const newChildKey = rekeyWorkspaceKey(oldRepoId, newRepoId, oldKey as WorkspaceKey)
-    const newParentKey = rekeyWorkspaceKey(oldRepoId, newRepoId, lineage.parentWorkspaceKey)
-    if (newChildKey === oldKey && newParentKey === lineage.parentWorkspaceKey) {
+    const newParentKey =
+      lineage.parentStore === 'external'
+        ? lineage.parentWorkspaceKey
+        : rekeyWorkspaceKey(oldRepoId, newRepoId, lineage.parentWorkspaceKey)
+    if (
+      newChildKey === oldKey ||
+      (lineage.parentStore !== 'external' && newParentKey === lineage.parentWorkspaceKey)
+    ) {
       continue
     }
     next[newChildKey] = {

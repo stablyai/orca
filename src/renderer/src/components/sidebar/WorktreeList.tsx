@@ -1,3 +1,4 @@
+import { getLineageInputs } from './visible-worktree-indexes'
 import React, { useCallback, useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
@@ -67,10 +68,11 @@ const WorktreeList = React.memo(function WorktreeList({
 }: WorktreeListProps) {
   // ── Granular selectors (each is a primitive or shallow-stable ref) ──
   const allWorktrees = useAllWorktrees()
+  const revealWorktreeMap = useWorktreeMap()
   const repoMap = useRepoMap()
-  const worktreeMap = useWorktreeMap()
+  const { worktreeMap, lineageById: viewerLineage } = useAppStore(getLineageInputs)
   const repos = useAppStore((s) => s.repos)
-  const worktreeLineageById = useAppStore((s) => s.worktreeLineageById)
+  const worktreeLineageById = viewerLineage
   const workspaceLineageByChildKey = useAppStore((s) => s.workspaceLineageByChildKey)
   const detectedWorktreesByRepo = useAppStore((s) => selectDetectedWorktreesByRepo(s))
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
@@ -212,7 +214,7 @@ const WorktreeList = React.memo(function WorktreeList({
     visibleFolderWorkspaces: visibleScope.visibleFolderWorkspacesForRows,
     currentSidebarWorktreeId,
     currentSidebarExecutionHostId: activeWorkspaceExecutionHostId,
-    worktreeMap,
+    worktreeMap: revealWorktreeMap,
     worktrees: allWorktrees,
     folderWorkspaces,
     hasFilters,

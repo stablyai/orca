@@ -1,4 +1,9 @@
-// Use agent.launch for surface/model/effort; older hosts fall back to the create startup terminal.
+import { assertCrossMachineLineageSupported } from '../../shared/worktree-runtime-capabilities'
+/**
+ * `worktree create --agent`: the worktree and its agent in one `agent.launch`, so the agent follows
+ * `--surface`, else the user's Chat UI setting, like every other launch. A host older than
+ * `agent.launch` gets the create's own startup terminal, which cannot take a model, effort or surface.
+ */
 
 import type { AgentLaunchResult } from '../../shared/agent-launch-intent'
 import {
@@ -40,6 +45,12 @@ export async function createWorktreeWithAgent(args: {
 }): Promise<void> {
   const { client, flags, create, launch, json, rawArgs } = args
   const capabilities = await getAgentLaunchCapabilities(client)
+  if (create.parentWorktreeRef) {
+    assertCrossMachineLineageSupported(
+      capabilities,
+      client.environmentSelector ?? 'the connected server'
+    )
+  }
   if (
     !capabilities?.includes(AGENT_LAUNCH_LOCAL_PRESENTATION_RUNTIME_CAPABILITY) ||
     (launch.prompt && !capabilities.includes(AGENT_LAUNCH_PROMPT_CARRY_RUNTIME_CAPABILITY))
@@ -97,7 +108,7 @@ export async function createWorktreeWithAgent(args: {
     ...(worktree
       ? {
           worktree,
-          lineage: worktree.lineage,
+          lineage: worktree.savedLineage !== undefined ? worktree.savedLineage : worktree.lineage,
           workspaceLineage: worktree.workspaceLineage ?? null
         }
       : { lineage: null }),

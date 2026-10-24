@@ -157,17 +157,19 @@ describe('recordWorkspaceLineageForCreatedWorktree', () => {
     expect(store.getWorktreeMetaForHost).toHaveBeenCalledWith(foreignParentId, 'local')
   })
 
-  it('skips both lineage records when the parent is on another host', () => {
+  it('records lineage across hosts in the same store', () => {
     const store = createStore({
       metaById: { [PARENT_ID]: parentMeta({ hostId: 'ssh:other-host' }) }
     })
 
     const result = record(store, { parentWorkspace: worktreeWorkspaceKey(PARENT_ID) })
 
-    expect(store.setWorktreeLineage).not.toHaveBeenCalled()
-    expect(result.lineage).toBeNull()
-    expect(store.setWorkspaceLineage).not.toHaveBeenCalled()
-    expect(result.workspaceLineage).toBeNull()
+    expect(store.setWorktreeLineage).toHaveBeenCalledOnce()
+    expect(result.lineage).toMatchObject({ parentWorktreeId: PARENT_ID })
+    expect(store.setWorkspaceLineage).toHaveBeenCalledOnce()
+    expect(result.workspaceLineage).toMatchObject({
+      parentWorkspaceKey: worktreeWorkspaceKey(PARENT_ID)
+    })
   })
 
   it('skips worktree lineage when the parent has no instance identity', () => {
@@ -183,16 +185,16 @@ describe('recordWorkspaceLineageForCreatedWorktree', () => {
     })
   })
 
-  it('records only workspace lineage for a folder-workspace parent', () => {
+  it('records the immutable folder identity in both lineage rows', () => {
     const store = createStore({ folderWorkspaceIds: ['folder-1'] })
 
     const result = record(store, { parentWorkspace: folderWorkspaceKey('folder-1') })
 
-    expect(store.setWorktreeLineage).not.toHaveBeenCalled()
-    expect(result.lineage).toBeNull()
+    expect(store.setWorktreeLineage).toHaveBeenCalledOnce()
+    expect(result.lineage).toMatchObject({ parentWorktreeInstanceId: 'folder:folder-1' })
     expect(result.workspaceLineage).toMatchObject({
       parentWorkspaceKey: folderWorkspaceKey('folder-1'),
-      parentInstanceId: null,
+      parentInstanceId: 'folder:folder-1',
       capture: { source: 'active-workspace', confidence: 'explicit' }
     })
   })

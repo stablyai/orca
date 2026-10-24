@@ -1,51 +1,49 @@
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
-  getCyclicProjectedWorktreeLineageIds,
-  getLineageRenderInfo
+  getWorktreeLineageProjection,
+  findWorktreeLineageRow,
+  getWorktreeLineageIdentity
 } from '../../../../shared/sidebar-list/worktree-lineage-projection'
+import { getSavedWorktreeLineage } from '../../../../shared/resolved-worktree-lineage'
 
 type ParentEligibilityArgs = {
   child: Worktree
   candidateParent: Worktree
   lineageById: Record<string, WorktreeLineage>
   worktreeMap: Map<string, Worktree>
-  cyclicLineageIds?: ReadonlySet<string>
 }
 
 export function canAssignWorktreeParent({
   child,
   candidateParent,
   lineageById,
-  worktreeMap,
-  cyclicLineageIds: precomputedCyclicLineageIds
+  worktreeMap
 }: ParentEligibilityArgs): boolean {
-  if (child.id === candidateParent.id) {
+  const identity = getWorktreeLineageIdentity(child)
+  const graph = getWorktreeLineageProjection(lineageById, worktreeMap)
+  const parent = findWorktreeLineageRow(worktreeMap, candidateParent)
+  const currentChild = findWorktreeLineageRow(worktreeMap, child)
+  if (!parent || !currentChild) {
     return false
   }
-
-  const cyclicLineageIds =
-    precomputedCyclicLineageIds ?? getCyclicProjectedWorktreeLineageIds(lineageById, worktreeMap)
-  const childLineage = getLineageRenderInfo(child, lineageById, worktreeMap, cyclicLineageIds)
-  if (childLineage.state === 'valid' && childLineage.parent.id === candidateParent.id) {
+  if (
+    identity === getWorktreeLineageIdentity(parent) ||
+    graph.parents.get(currentChild) === parent
+  ) {
     return false
   }
-
-  let current: Worktree | undefined = candidateParent
-  const visited = new Set<string>()
+  let current: Worktree | undefined = parent
   while (current) {
-    if (visited.has(current.id) || cyclicLineageIds.has(current.id)) {
+    const key = getWorktreeLineageIdentity(current)
+    if (
+      key === identity ||
+      graph.cyclicIdentities.has(key) ||
+      getSavedWorktreeLineage(current, lineageById)?.parentStore === 'external'
+    ) {
       return false
     }
-    visited.add(current.id)
-    if (current.id === child.id) {
-      return false
-    }
-    const lineageInfo = getLineageRenderInfo(current, lineageById, worktreeMap, cyclicLineageIds)
-    // Why: stale instance links are broken edges for renderer filtering; the
-    // backend remains the authoritative final cycle guard.
-    current = lineageInfo.state === 'valid' ? lineageInfo.parent : undefined
+    current = graph.parents.get(current)
   }
-
   return true
 }

@@ -18,8 +18,6 @@ import { applyRuntimeWorktreePsUnverifiableTerminals } from '../runtime-worktree
 import { attachRuntimeWorktreeAgentRows } from '../runtime-worktree-agent-rows'
 import { compareWorktreePs } from '../runtime-worktree-status-projection'
 import type { Repo } from '../../../shared/repo-types'
-import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { enrichMissingRepoGitRemoteIdentities } from '../../repo-git-remote-identity-enrichment'
 import { ensureStructuredAgentSessionHost as installStructuredAgentSessionHost } from '../structured-agent-session-runtime'
 import {
@@ -69,15 +67,26 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
     if (!Number.isInteger(limit) || limit <= 0) {
       throw new Error('invalid_limit')
     }
-    const { worktrees: resolvedWorktrees, platformByRepoId } = this.visibleResolvedWorktreeSnapshot(
+    let publication = this.visibleResolvedWorktreeSnapshot(
       await this.listResolvedWorktreeSnapshot(),
       sourceDefaultsSupported
     )
-    const freshPtyLiveness = await this.refreshPtyWorktreeRecordsFromController(resolvedWorktrees)
+    const generation = this.resolvedWorktrees.generation
+    const freshPtyLiveness = await this.refreshPtyWorktreeRecordsFromController(
+      publication.worktrees
+    )
+    if (generation !== this.resolvedWorktrees.generation) {
+      publication = this.visibleResolvedWorktreeSnapshot(
+        await this.listResolvedWorktreeSnapshot(),
+        sourceDefaultsSupported
+      )
+    }
+    const { worktrees: resolvedWorktrees, folderWorktrees, platformByRepoId } = publication
     const repoById = new Map((this.store?.getRepos() ?? []).map((repo) => [repo.id, repo]))
     const summaries = buildRuntimeWorktreePsSummaries({
       store: this.store,
       resolvedWorktrees,
+      folderWorktrees,
       platformByRepoId
     })
 
@@ -166,18 +175,6 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
             visibilitySettings
           )
       )
-    }
-  }
-
-  /** The agent's configured env, with the account a desktop that owns this host's accounts chose
-   *  laid over it, as its own launches here carry. */
-  protected structuredAgentLaunchEnv(
-    agent: StructuredAgentId,
-    settings: Pick<GlobalSettings, 'agentDefaultEnv'>
-  ) {
-    return {
-      ...resolveTuiAgentLaunchEnv(agent, settings),
-      ...this.accounts.hostLaunchEnvFor(agent)
     }
   }
 
@@ -281,7 +278,10 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
         preModeChatGetsFullAccess(agent, this.requireStore().getSettings(), process.platform),
       resolveAgentLaunchEnv: (agent) =>
         isTuiAgent(agent)
-          ? this.structuredAgentLaunchEnv(agent, this.requireStore().getSettings())
+          ? {
+              ...resolveTuiAgentLaunchEnv(agent, this.requireStore().getSettings()),
+              ...this.accounts.hostLaunchEnvFor(agent)
+            }
           : {},
       resolveAgentCommandSettings: () => this.requireStore().getSettings(),
       resolveCodexAccountKind: (home) =>

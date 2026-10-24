@@ -192,11 +192,24 @@ export function buildMobileWorkspacePlan(
 ) {
   const filtered = filterWorktrees(worktrees, filters, search, repoHostIdByRepoId)
   const sorted = sortWorktrees(filtered, sortMode, Date.now(), hostSortsByStamps(worktrees))
-  const childrenByParentIdentity = getMobileWorkspaceLineageChildren(
-    filters.filterRepoIds.length > 0
-      ? worktrees.filter((w) => filters.filterRepoIds.includes(w.repoId))
-      : worktrees
-  )
+  const childrenByParentIdentity = getMobileWorkspaceLineageChildren(worktrees)
+  if (filters.filterRepoIds.length > 0) {
+    const projectRows = new Set(
+      worktrees
+        .filter((row) => filters.filterRepoIds.includes(row.repoId))
+        .map(getWorktreeRowIdentity)
+    )
+    for (const [parent, children] of childrenByParentIdentity) {
+      if (!projectRows.has(parent)) {
+        childrenByParentIdentity.delete(parent)
+      } else {
+        childrenByParentIdentity.set(
+          parent,
+          children.filter((child) => projectRows.has(getWorktreeRowIdentity(child)))
+        )
+      }
+    }
+  }
   const repoMap = buildSectionRepoMap(projectCatalog.repos, worktrees)
   const projectIndex = buildProjectGroupingIndex(projectCatalog.grouping ?? undefined)
   const occurrencePlan = buildWorktreeOccurrencePlan({

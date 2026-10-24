@@ -1,3 +1,4 @@
+import type { ParentWorktreeRef } from '../../shared/worktree/lineage-types'
 import type { AgentLaunchPreferences } from '../../shared/agent-session-host-authority'
 import type { CreateWorktreeArgs } from '../../shared/worktree/create-types'
 import type {
@@ -99,6 +100,7 @@ export type RuntimeManagedWorktreeCreateArgs = {
     parentWorkspaceOrigin?: 'manual'
     envParentWorkspace?: string
     parentWorktree?: string
+    parentWorktreeRef?: ParentWorktreeRef
     cwdParentWorktree?: string
     noParent?: boolean
     callerTerminalHandle?: string

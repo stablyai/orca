@@ -101,6 +101,8 @@ export type PendingCreationRow = {
 }
 
 export type FolderWorkspaceRow = {
+  occurrence?: WorktreeOccurrence<Worktree>
+  lineageCollapsed?: boolean
   type: 'folder-workspace'
   key: string
   folderWorkspace: FolderWorkspace

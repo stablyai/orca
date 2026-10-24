@@ -1,3 +1,4 @@
+import { WORKTREE_METADATA_DOMAINS } from '../persistence/loading-store/worktree-identity-metadata'
 import type { RuntimeLinearCommandSurface } from './runtime-linear-command-surface'
 import { installRuntimeLinearCommandSurface } from './runtime-linear-command-surface'
 import { publishWorkspaceViewChanges } from './runtime-workspace-view-change-events'
@@ -9,14 +10,8 @@ import { OrcaRuntimeWithAgentTransitions } from './orca-runtime-agent-transition
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-inputs-switch'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import type { RuntimeCommandSurfaceHost } from './orca-runtime-core'
-import type {
-  AgentLaunchTabPublished,
-  AgentLaunchTabPublishRequest
-} from '../../shared/agent-launch-tab-publication'
-import type {
-  AgentLaunchPaneAddress,
-  AgentLaunchPaneVerdict
-} from '../../shared/agent-launch-pane-verdict'
+import type * as LaunchTab from '../../shared/agent-launch-tab-publication'
+import type * as LaunchPane from '../../shared/agent-launch-pane-verdict'
 import { registerWorktreeChangeInvalidator } from '../ipc/worktree-change-invalidators'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import { peekOpenedAgentSessionRecordStore } from './agent-session-record-store-slot'
@@ -167,6 +162,12 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
 
   constructor(...args: ConstructorParameters<typeof OrcaRuntimeWithAgentTransitions>) {
     super(...args)
+    this.store?.onStateWritten?.((domains) => {
+      if (domains === undefined || WORKTREE_METADATA_DOMAINS.some((d) => domains.includes(d))) {
+        this.invalidateResolvedWorktreeCache()
+        this.sidebarFacts?.sortStamps.noteRecordsWritten()
+      }
+    })
     // Why: the runtime listing re-runs a scan the worktree-change generation overtook and re-lists
     // through this runtime's scan cache, so a worktree change must reach both. The desktop IPC
     // module registers the generation bump at load; a headless host never loads it.
@@ -191,8 +192,8 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
   /** Shows an agent launch's tab before its process exists, in the window that owns the layout;
    *  null when no window does, and the launch's tab then appears when it spawns, as before. */
   publishAgentLaunchTab(
-    request: Omit<AgentLaunchTabPublishRequest, 'requestId'>
-  ): Promise<AgentLaunchTabPublished> | null {
+    request: Omit<LaunchTab.AgentLaunchTabPublishRequest, 'requestId'>
+  ): Promise<LaunchTab.AgentLaunchTabPublished> | null {
     if (!this.notifier?.publishAgentLaunchTab || !this.getAvailableAuthoritativeWindow()) {
       return null
     }
@@ -202,8 +203,8 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
   /** Tells the window a launch pane's fate: it keeps a final one on the tab, clears a settled one,
    *  and takes a withdrawn pane back (the pane alone when the user split the tab). */
   reportAgentLaunchPaneVerdict(
-    pane: AgentLaunchPaneAddress,
-    verdict: AgentLaunchPaneVerdict
+    pane: LaunchPane.AgentLaunchPaneAddress,
+    verdict: LaunchPane.AgentLaunchPaneVerdict
   ): void {
     this.notifier?.agentLaunchPaneVerdict?.({ ...pane, verdict })
   }

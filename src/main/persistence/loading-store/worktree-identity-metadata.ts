@@ -231,6 +231,28 @@ export function getAllWorktreeMetaForHost(
   return projected
 }
 
+/** Canonical alias winners and legacy owners for current complete relationship reads. */
+export function getWorktreeLineageMetadata(
+  state: WorktreeMetaState
+): { id: string; meta: WorktreeMeta }[] {
+  const rows = new Map<string, { id: string; meta: WorktreeMeta }>(
+    Object.entries(state.worktreeMeta).map(([id, meta]) => [
+      composeWorktreeHostIdentity(meta.hostId, id),
+      { id, meta }
+    ])
+  )
+  for (const alias of Object.keys(state.worktreeIdentityAliases ?? {})) {
+    const hostId = getExecutionHostIdFromWorktreeHostIdentity(alias)
+    const key = resolveAliasIdentityKey(state, alias)
+    const meta = key ? state.worktreeMetaByIdentity?.[key] : undefined
+    if (hostId && meta && (!meta.hostId || meta.hostId === hostId)) {
+      const id = getWorktreeIdFromHostIdentity(alias)
+      rows.set(alias, { id, meta: { ...meta, hostId } })
+    }
+  }
+  return [...rows.values()]
+}
+
 export function setWorktreeMetaForHost(
   runtime: MetadataRuntime,
   scheduling: WriteSchedulingOperations,

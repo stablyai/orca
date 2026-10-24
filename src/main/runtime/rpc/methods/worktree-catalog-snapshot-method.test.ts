@@ -1,3 +1,7 @@
+import { mergeWorktree } from '../../../ipc/worktree-metadata-merge'
+import { projectResolvedWorktreeLineage } from '../../../../shared/resolved-worktree-lineage'
+import { buildRuntimeWorktreePsSummaries } from '../../runtime-worktree-ps-summaries'
+import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../orca-runtime'
@@ -29,6 +33,65 @@ function runtimeReturning(...results: RuntimeWorktreePsResult[]) {
 }
 
 describe('worktree.ps catalog snapshots', () => {
+  it('preserves broader same-install legacy fields and saved intent at the real boundary', async () => {
+    const git = { path: '/child', head: '', branch: '', isBare: false, isMainWorktree: false }
+    const c = {
+      ...mergeWorktree('repo', git, undefined),
+      instanceId: 'c',
+      hostId: 'local' as const,
+      git
+    }
+    const p = {
+      ...c,
+      id: 'other::/parent',
+      repoId: 'other',
+      instanceId: 'p',
+      hostId: 'ssh:inner' as const
+    }
+    const edge: WorktreeLineage = {
+      worktreeId: c.id,
+      worktreeInstanceId: 'c',
+      parentWorktreeId: p.id,
+      parentWorktreeInstanceId: 'p',
+      origin: 'manual',
+      capture: { source: 'manual-action', confidence: 'explicit' },
+      createdAt: 1
+    }
+    const projected = projectResolvedWorktreeLineage([c, p], { [c.id]: edge })
+    const output = [
+      ...buildRuntimeWorktreePsSummaries({
+        store: null,
+        resolvedWorktrees: projected,
+        platformByRepoId: new Map()
+      }).values()
+    ]
+    const dispatcher = new RpcDispatcher({
+      runtime: runtimeReturning({ worktrees: output, totalCount: output.length, truncated: false }),
+      methods: WORKTREE_METHODS
+    })
+    const response = await dispatcher.dispatch({
+      id: 'legacy-lineage',
+      authToken: 'token',
+      method: 'worktree.ps',
+      params: { limit: 10_000 }
+    })
+    expect(response).toMatchObject({
+      ok: true,
+      result: {
+        worktrees: [
+          expect.objectContaining({
+            worktreeId: c.id,
+            hostId: 'local',
+            parentWorktreeId: p.id,
+            parentWorktreeInstanceId: 'p',
+            savedLineage: edge
+          }),
+          expect.objectContaining({ worktreeId: p.id, hostId: 'ssh:inner' })
+        ]
+      }
+    })
+  })
+
   it('preserves the exact legacy response when no snapshot field is sent', async () => {
     const runtime = makeRuntime()
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })

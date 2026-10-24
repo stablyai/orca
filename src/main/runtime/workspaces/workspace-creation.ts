@@ -247,9 +247,11 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
     return {
       worktree: {
         ...worktree,
-        parentWorktreeId: lineage?.parentWorktreeId ?? null,
+        savedLineage: lineage,
+        parentWorktreeId:
+          lineage?.parentStore === 'external' ? null : (lineage?.parentWorktreeId ?? null),
         childWorktreeIds: [],
-        lineage,
+        lineage: lineage?.parentStore === 'external' ? null : lineage,
         workspaceLineage,
         git: created
       },

@@ -32,6 +32,7 @@ import { runRetirementBackfillScan } from './worktree-retirement-backfill-scan'
 import { hasCachedWslHome, parseWslPath } from './wsl'
 import { getWorktreeMirrorDistro } from './project-runtime-git-options'
 import type { ProjectRuntimeResolutionStore } from './local-project-runtime-resolution'
+import type { RuntimeStore } from './runtime/runtime-store-contract'
 
 const RETIREMENT_PROBE_NAME = 'orca-retirement-probe'
 
@@ -227,6 +228,22 @@ export async function getRetiredNameRegistryForRepo(
     registry = mergeRetiredNameRegistries(registry, candidateRegistry)
   }
   return registry
+}
+
+export async function listRetiredWorktreeNamesForRepo(
+  store: RuntimeStore | null,
+  resolveRepo: () => Promise<Repo>
+) {
+  if (!store || !hasRetiredNameRegistryStore(store)) {
+    return { retiredNamesByRepo: {}, retiredNameTiersByRepo: {} }
+  }
+  const repo = await resolveRepo()
+  const settings = store.getSettings()
+  const registry = await getRetiredNameRegistryForRepo(store, repo, store.getRepos(), settings)
+  return {
+    retiredNamesByRepo: { [repo.id]: registry.names },
+    retiredNameTiersByRepo: { [repo.id]: registry.exhaustedTiers }
+  }
 }
 
 export async function retireGeneratedWorktreeName(

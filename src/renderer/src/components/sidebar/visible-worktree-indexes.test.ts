@@ -1,8 +1,9 @@
+import { useAppStore } from '@/store'
 import { describe, expect, it, vi } from 'vitest'
 import type * as ResolvedWorktreeLineage from '../../../../shared/resolved-worktree-lineage'
 import type { Repo } from '../../../../shared/repo-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import type { WorkspaceLineage, WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 
@@ -12,18 +13,31 @@ vi.mock('../../../../shared/resolved-worktree-lineage', async (importOriginal) =
   const actual = await importOriginal<typeof ResolvedWorktreeLineage>()
   return {
     ...actual,
-    getCyclicLineageChildKeys: (...args: Parameters<typeof actual.getCyclicLineageChildKeys>) => {
+    resolveWorktreeLineageParents: (
+      ...args: Parameters<typeof actual.resolveWorktreeLineageParents>
+    ) => {
       counters.cycleDetections += 1
-      return actual.getCyclicLineageChildKeys(...args)
+      return actual.resolveWorktreeLineageParents(...args)
     }
   }
 })
 
 import { computeVisibleWorktreeIds } from './compute-visible-worktrees'
 import type { computeVisibleWorktrees } from './compute-visible-worktrees'
-import { getSidebarLineageParentsByIdentity } from '../../../../shared/sidebar-list/worktree-lineage-projection'
-import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
-import { getLineageAncestorIndex, getSortedWorktreeRankIndex } from './visible-worktree-indexes'
+import {
+  findWorktreeLineageRow,
+  getSidebarLineageAncestors,
+  getSidebarLineageParentsByIdentity
+} from '../../../../shared/sidebar-list/worktree-lineage-projection'
+import {
+  requireKnownLineageRow,
+  requireCurrentLineageRow,
+  getLineageInputs,
+  getLineageAncestorIndex,
+  getSortedWorktreeRankIndex
+} from './visible-worktree-indexes'
+import { makeFolderWorkspace } from '@/store/slices/worktrees-slice-test-fixtures'
+import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
 
 type IdentifiedWorktree = Worktree & { instanceId: string }
 
@@ -104,6 +118,100 @@ function visibleOptions(
 }
 
 describe('visible worktree indexes', () => {
+  it('keeps subscriber snapshots stable until rows, folders or either saved edge map changes', () => {
+    const firstParent = makeWorktree('first-parent')
+    const secondParent = makeWorktree('second-parent')
+    const child = makeWorktree('child')
+    const folder = makeFolderWorkspace()
+    const folderKey = folderWorkspaceKey(folder.id)
+    const workspaceEdge: WorkspaceLineage = {
+      childWorkspaceKey: worktreeWorkspaceKey(child.id),
+      childInstanceId: child.instanceId,
+      parentWorkspaceKey: folderKey,
+      parentInstanceId: folderKey,
+      origin: 'manual',
+      capture: { source: 'manual-action', confidence: 'explicit' },
+      createdAt: 1
+    }
+    let state: Parameters<typeof getLineageInputs>[0] = {
+      worktreesByRepo: { repo1: [firstParent, secondParent, child] },
+      folderWorkspaces: [folder],
+      worktreeLineageById: {},
+      workspaceLineageByChildKey: {}
+    }
+    let snapshot = getLineageInputs(state)
+    expect(getLineageInputs({ ...state })).toBe(snapshot)
+    const emptyState = {
+      worktreesByRepo: {},
+      worktreeLineageById: {},
+      workspaceLineageByChildKey: {}
+    }
+    expect(getLineageInputs(emptyState)).toBe(getLineageInputs({ ...emptyState }))
+    const legacyState = { worktreesByRepo: state.worktreesByRepo }
+    expect(getLineageInputs(legacyState)).toBe(getLineageInputs({ ...legacyState }))
+
+    const updates: [Partial<typeof state>, string[]][] = [
+      [{ worktreeLineageById: { [child.id]: makeLineage(child, firstParent) } }, [firstParent.id]],
+      [
+        { worktreeLineageById: { [child.id]: makeLineage(child, secondParent) } },
+        [secondParent.id]
+      ],
+      [{ worktreeLineageById: {} }, []],
+      [
+        { workspaceLineageByChildKey: { [workspaceEdge.childWorkspaceKey]: workspaceEdge } },
+        [folderKey]
+      ],
+      [
+        {
+          workspaceLineageByChildKey: {
+            [workspaceEdge.childWorkspaceKey]: {
+              ...workspaceEdge,
+              parentWorkspaceKey: worktreeWorkspaceKey(secondParent.id),
+              parentInstanceId: secondParent.instanceId
+            }
+          }
+        },
+        [secondParent.id]
+      ],
+      [{ workspaceLineageByChildKey: {} }, []],
+      [
+        { worktreeLineageById: { [child.id]: makeLineage(child, secondParent) } },
+        [secondParent.id]
+      ],
+      [
+        {
+          worktreesByRepo: {
+            repo1: [firstParent, { ...secondParent, instanceId: 'replacement' }, child]
+          }
+        },
+        []
+      ],
+      [{ worktreesByRepo: { repo1: [firstParent, secondParent, child] } }, [secondParent.id]],
+      [
+        {
+          worktreeLineageById: {},
+          workspaceLineageByChildKey: { [workspaceEdge.childWorkspaceKey]: workspaceEdge }
+        },
+        [folderKey]
+      ],
+      [{ folderWorkspaces: [] }, []],
+      [{ folderWorkspaces: [{ ...folder, name: 'Renamed folder' }] }, [folderKey]]
+    ]
+    for (const [patch, ancestors] of updates) {
+      state = { ...state, ...patch }
+      const next = getLineageInputs(state)
+      expect(next).not.toBe(snapshot)
+      expect(getLineageInputs({ ...state })).toBe(next)
+      expect(
+        getSidebarLineageAncestors(child, next.lineageById, next.worktreeMap).map((row) => row.id)
+      ).toEqual(ancestors)
+      snapshot = next
+    }
+    expect(
+      getSidebarLineageAncestors(child, snapshot.lineageById, snapshot.worktreeMap)[0]?.displayName
+    ).toBe('Renamed folder')
+  })
+
   it('reuses the lineage projection instead of rebuilding it on every store write', () => {
     const parent = makeWorktree('parent')
     const child = makeWorktree('child')
@@ -143,7 +251,7 @@ describe('visible worktree indexes', () => {
     )
   })
 
-  it('keeps archived parents out of the cached ancestor index', () => {
+  it('keeps archived candidates without injecting archived ancestors', () => {
     const parent = makeWorktree('parent')
     parent.isArchived = true
     const child = makeWorktree('child')
@@ -162,8 +270,8 @@ describe('visible worktree indexes', () => {
     // phantom ancestor row.
     expect(computeVisibleWorktreeIds(worktreesByRepo, sortedIds, opts)).toEqual([child.id])
     expect(computeVisibleWorktreeIds(worktreesByRepo, sortedIds, opts)).toEqual([child.id])
-    expect(getLineageAncestorIndex(worktreesByRepo).has(getWorktreeHostIdentity(parent))).toBe(
-      false
+    expect(Boolean(findWorktreeLineageRow(getLineageAncestorIndex(worktreesByRepo), parent))).toBe(
+      true
     )
   })
 
@@ -177,7 +285,36 @@ describe('visible worktree indexes', () => {
     const worktreesByRepo = { repo1: [local, remote] }
 
     const index = getLineageAncestorIndex(worktreesByRepo)
-    expect(index.get(getWorktreeHostIdentity(local))?.path).toBe('/tmp/local')
-    expect(index.get(getWorktreeHostIdentity(remote))?.path).toBe('/tmp/remote')
+    expect(findWorktreeLineageRow(index, local)?.path).toBe('/tmp/local')
+    expect(findWorktreeLineageRow(index, remote)?.path).toBe('/tmp/remote')
   })
+})
+
+it('qualifies unstamped local admission without changing canonical bytes and keeps physical SSH owner precedence', () => {
+  const previous = useAppStore.getState()
+  const local = makeWorktree('shared')
+  const remote = {
+    ...local,
+    hostId: 'runtime:e' as const,
+    runtimeOwnerEnvironmentId: 'e',
+    instanceId: 'remote'
+  }
+  try {
+    useAppStore.setState({ worktreesByRepo: { repo1: [remote, local] }, folderWorkspaces: [] })
+    expect(requireKnownLineageRow(useAppStore.getState(), local, 'local')).toBe(local)
+    expect(local.hostId).toBeUndefined()
+    expect(() => requireKnownLineageRow(useAppStore.getState(), local)).toThrow('changed')
+    const ssh = { ...local, hostId: 'ssh:inner' as const, runtimeOwnerEnvironmentId: 'e' }
+    useAppStore.setState({ worktreesByRepo: { repo1: [ssh] } })
+    expect(requireKnownLineageRow(useAppStore.getState(), ssh, 'runtime:e')).toBe(ssh)
+    expect(requireCurrentLineageRow(useAppStore.getState(), ssh)).toBe(ssh)
+    useAppStore.setState({
+      worktreesByRepo: { repo1: [ssh, { ...ssh, runtimeOwnerEnvironmentId: 'rival' }] }
+    })
+    expect(() => requireKnownLineageRow(useAppStore.getState(), ssh, 'runtime:e')).toThrow(
+      'changed'
+    )
+  } finally {
+    useAppStore.setState(previous, true)
+  }
 })

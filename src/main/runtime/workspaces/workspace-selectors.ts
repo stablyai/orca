@@ -1,3 +1,5 @@
+import { readWorktreeLineageCorpus } from '../../worktree-lineage-candidates'
+import { RuntimeLineageError } from '../runtime-worktree-lineage-resolution'
 import { OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree } from '../terminal/launch/terminal-workspace-scope'
 import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
 import { splitWorktreeIdForFilesystem, worktreeIdentityKey } from '../../../shared/worktree/id'
@@ -25,6 +27,7 @@ import type { Repo } from '../../../shared/repo-types'
 import type { RuntimeStore } from '../runtime-store-contract'
 import type { RuntimeWorkspaceCatalog } from './workspace-catalog'
 import { areWorktreePathsEqual } from '../../git/worktree-path-comparison'
+import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { mergeWorktree } from '../../ipc/worktree-metadata-merge'
 
 export abstract class RuntimeWorkspaceSelectors extends OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree {
@@ -40,13 +43,61 @@ export abstract class RuntimeWorkspaceSelectors extends OrcaRuntimeWithResolveBr
     ...args: Parameters<RuntimeWorkspaceCatalog['listResolvedWorktrees']>
   ): ReturnType<RuntimeWorkspaceCatalog['listResolvedWorktrees']>
 
-  protected async resolveWorktreeSelector(selector: string): Promise<ResolvedWorktree> {
+  protected async resolveWorktreeSelector(
+    selector: string,
+    instanceId?: string
+  ): Promise<ResolvedWorktree> {
+    const scope = parseWorkspaceKey(selector.startsWith('id:') ? selector.slice(3) : selector)
+    if (scope?.type === 'folder') {
+      const folder = this.store
+        ?.getFolderWorkspaces?.()
+        .find((row) => row.id === scope.folderWorkspaceId)
+      if (!folder) {
+        throw new Error('selector_not_found')
+      }
+      const row = this.folderWorkspaceToResolvedWorktree(folder)
+      if (instanceId && row.instanceId !== instanceId) {
+        throw new RuntimeLineageError(
+          'LINEAGE_PARENT_INSTANCE_STALE',
+          'The parent workspace changed. Refresh and try again.'
+        )
+      }
+      return row
+    }
     const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(selector)
     // Why only `id:`: every other selector kind is matched across the whole fleet, and their
     // `selector_ambiguous` contract is defined over all repos. Scoping those would silently pick a
     // winner where today they correctly refuse. An `id:` selector already names its repo.
     if (explicitWorktreeId && !this.hasFreshResolvedWorktreeCache()) {
-      const scoped = await this.resolveExplicitWorktreeIdScoped(explicitWorktreeId)
+      let hostId
+      if (instanceId) {
+        const matches = this.store
+          ? readWorktreeLineageCorpus(this.store).rows.filter(
+              (row) =>
+                worktreeIdentityKey(row.id) === worktreeIdentityKey(explicitWorktreeId) &&
+                row.instanceId === instanceId
+            )
+          : []
+        if (matches.length > 1) {
+          throw new Error('selector_ambiguous')
+        }
+        hostId = matches[0]?.hostId
+        if (!hostId) {
+          throw new RuntimeLineageError(
+            'LINEAGE_PARENT_INSTANCE_STALE',
+            'The parent workspace changed. Refresh and try again.'
+          )
+        }
+      }
+      const scoped = instanceId
+        ? await this.resolveExplicitWorktreeIdScoped(explicitWorktreeId, hostId)
+        : await this.resolveExplicitWorktreeIdScoped(explicitWorktreeId)
+      if (instanceId && scoped?.instanceId !== instanceId) {
+        throw new RuntimeLineageError(
+          'LINEAGE_PARENT_INSTANCE_STALE',
+          'The parent workspace changed. Refresh and try again.'
+        )
+      }
       if (scoped) {
         return scoped
       }
@@ -119,6 +170,15 @@ export abstract class RuntimeWorkspaceSelectors extends OrcaRuntimeWithResolveBr
       )
     }
 
+    if (instanceId) {
+      candidates = candidates.filter((row) => row.instanceId === instanceId)
+      if (candidates.length === 0) {
+        throw new RuntimeLineageError(
+          'LINEAGE_PARENT_INSTANCE_STALE',
+          'The parent workspace changed. Refresh and try again.'
+        )
+      }
+    }
     if (candidates.length === 1) {
       return candidates[0]
     }
@@ -128,7 +188,6 @@ export abstract class RuntimeWorkspaceSelectors extends OrcaRuntimeWithResolveBr
     throw new Error('selector_not_found')
   }
 
-  /** `childRepo` scopes the parent to the new worktree's execution host (#12757). */
   protected resolveLineageForWorktreeCreate(
     input?: WorktreeLineageInput,
     childRepo?: Repo
@@ -233,6 +292,7 @@ export abstract class RuntimeWorkspaceSelectors extends OrcaRuntimeWithResolveBr
     return {
       ...merged,
       id: worktreeId,
+      savedLineage: this.store?.getWorktreeLineage?.(worktreeId) ?? null,
       parentWorktreeId: null,
       childWorktreeIds: [],
       lineage: null,

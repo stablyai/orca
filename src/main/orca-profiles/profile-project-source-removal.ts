@@ -56,7 +56,10 @@ function removeRepoWorktreeMetadata(state: TransferProfileState, repoId: string)
     }
   }
   for (const [key, lineage] of Object.entries(state.worktreeLineageById)) {
-    if (isRepoWorktreeId(repoId, key) || isRepoWorktreeId(repoId, lineage.parentWorktreeId)) {
+    if (
+      isRepoWorktreeId(repoId, key) ||
+      (lineage.parentStore !== 'external' && isRepoWorktreeId(repoId, lineage.parentWorktreeId))
+    ) {
       delete state.worktreeLineageById[key]
     }
   }
@@ -65,7 +68,9 @@ function removeRepoWorktreeMetadata(state: TransferProfileState, repoId: string)
     const parent = parseWorkspaceKey(lineage.parentWorkspaceKey)
     if (
       (child?.type === 'worktree' && isRepoWorktreeId(repoId, child.worktreeId)) ||
-      (parent?.type === 'worktree' && isRepoWorktreeId(repoId, parent.worktreeId))
+      (lineage.parentStore !== 'external' &&
+        parent?.type === 'worktree' &&
+        isRepoWorktreeId(repoId, parent.worktreeId))
     ) {
       delete state.workspaceLineageByChildKey[key as WorkspaceKey]
     }

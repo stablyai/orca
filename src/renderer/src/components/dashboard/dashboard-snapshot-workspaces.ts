@@ -1,3 +1,4 @@
+import { worktreeLineageFromWorkspaceLineage } from '../../../../shared/resolved-worktree-lineage'
 import type { AppState } from '@/store/types'
 import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
 import {
@@ -40,7 +41,12 @@ export type DashboardWorkspaceState = Pick<AppState, 'repos' | 'worktreesByRepo'
   Partial<
     Pick<
       AppState,
-      'folderWorkspaces' | 'projectGroups' | 'runtimeEnvironments' | 'settings' | 'sshTargetLabels'
+      | 'folderWorkspaces'
+      | 'projectGroups'
+      | 'runtimeEnvironments'
+      | 'settings'
+      | 'sshTargetLabels'
+      | 'workspaceLineageByChildKey'
     >
   >
 
@@ -120,6 +126,10 @@ export function collectActiveDashboardWorkspaces(
   )
   for (const folderWorkspace of state.folderWorkspaces ?? []) {
     const worktree = folderWorkspaceToWorktree(folderWorkspace)
+    const edge = includeMapMetadata ? state.workspaceLineageByChildKey?.[worktree.id] : undefined
+    if (edge) {
+      worktree.savedLineage = worktreeLineageFromWorkspaceLineage(edge)
+    }
     if (folderWorkspace.isArchived || seenWorkspaceIds.has(worktree.id)) {
       continue
     }

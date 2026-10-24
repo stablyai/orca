@@ -313,12 +313,12 @@ it('gives workspaces the store cannot place no project node', () => {
   expect(container.querySelector('[aria-label="Select all chats in "]')).toBeNull()
 })
 
-// Why: the sidebar nests a child only under a parent on its own host; no host id matches only none.
+// Stable matching instances resolve within the same serving store.
 it.each([
   ['both local', 'local', 'local', true],
   ['neither with a host id', undefined, undefined, true],
-  ['parent without a host id, child local', undefined, 'local', false],
-  ['parent local, child without a host id', 'local', undefined, false]
+  ['parent without a host id, child local', undefined, 'local', true],
+  ['parent local, child without a host id', 'local', undefined, true]
 ] as const)(
   '%s: nests the child exactly as the sidebar does',
   (_, parentHost, childHost, nests) => {
@@ -341,4 +341,29 @@ it('lists every chat when workspace lineage loops', () => {
 
   expect(chatBox('in-a')).toBeTruthy()
   expect(chatBox('in-b')).toBeTruthy()
+})
+
+it('walks past an unoffered nearest ancestor to a genuinely offered current ancestor and refreshes on reparent', () => {
+  const offers = seedTree()
+  const parent = worktree('parent', { hostId: 'local' })
+  const middle = worktree('unoffered', { hostId: 'local' })
+  const child = worktree('child', { hostId: 'local' })
+  useAppStore.setState({
+    worktreesByRepo: { 'repo-1': [child, middle, parent] },
+    worktreeLineageById: {
+      [child.id]: lineage(child, middle),
+      [middle.id]: lineage(middle, parent)
+    }
+  })
+  render({ candidates: offers.slice(0, 3) })
+  expect(treeOutline()).toContain('3:workspace:child')
+  act(() =>
+    useAppStore.setState({
+      worktreeLineageById: {
+        [child.id]: { ...lineage(child, parent), parentWorktreeInstanceId: 'replacement' }
+      }
+    })
+  )
+  expect(treeOutline()).toContain('2:workspace:child')
+  expect(chatBox('in-child')).toBeTruthy()
 })

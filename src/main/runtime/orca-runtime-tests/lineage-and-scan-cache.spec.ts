@@ -93,6 +93,7 @@ describe('OrcaRuntimeService', () => {
         return metaById[worktreeId]
       },
       getWorktreeLineage: () => undefined,
+      setWorkspaceLineage: (lineage: WorkspaceLineage) => lineage,
       setWorktreeLineage
     }
     const runtime = new OrcaRuntimeService(runtimeStore as never)
@@ -370,7 +371,9 @@ describe('OrcaRuntimeService', () => {
       )
       expect(setWorkspaceLineage).toHaveBeenCalled()
     } else {
-      await expect(update).rejects.toThrow('Parent worktree must be on the same execution host.')
+      await expect(update).rejects.toThrow(
+        "Can't move an existing workspace under a parent whose chain reaches another Orca install. Create the new workspace from that parent instead, or clear its parent first."
+      )
       expect(setWorktreeLineage).not.toHaveBeenCalled()
       expect(setWorkspaceLineage).not.toHaveBeenCalled()
     }

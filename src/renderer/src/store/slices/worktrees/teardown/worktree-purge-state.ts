@@ -18,7 +18,10 @@ import {
   retirePurgedTabLaunches
 } from './purged-structured-launch-retirement'
 import { buildWorktreePurgeSurfacePatch } from './worktree-purge-surface-patch'
-import { noticeRemovedUnsavedFiles } from './removed-workspace-unsaved-files'
+import {
+  noticeRemovedUnsavedFiles,
+  type ConfirmedUnsavedDiscards
+} from './removed-workspace-unsaved-files'
 import { mergeEditorBufferKeepRequests } from '../../editor/buffers/editor-buffer-kept'
 import { buildHostTwinPurgeState, collectHostTwinPurgeScopes } from './host-twin-worktree-purge'
 import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
@@ -30,20 +33,27 @@ import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/h
  */
 export function buildWorktreePurgeState(
   s: AppState,
-  worktreeTargets: WorktreePurgeTargets
+  worktreeTargets: WorktreePurgeTargets,
+  confirmedDiscards?: ConfirmedUnsavedDiscards
 ): Partial<AppState> {
   const targets: WorktreePurgeTarget[] = worktreeTargets.map((target) =>
     typeof target === 'string' ? { id: target } : target
   )
   const twinScopes = collectHostTwinPurgeScopes(s, targets)
   if (twinScopes.size === 0) {
-    return buildFullWorktreePurgeState(s, targets)
+    return buildFullWorktreePurgeState(s, targets, confirmedDiscards)
   }
   const twinIds = new Set([...twinScopes.values()].flatMap((twins) => [...twins.keys()]))
   const fullTargets = targets.filter((target) => !target.hostId || !twinIds.has(target.id))
-  let patch = fullTargets.length > 0 ? buildFullWorktreePurgeState(s, fullTargets) : {}
+  let patch =
+    fullTargets.length > 0 ? buildFullWorktreePurgeState(s, fullTargets, confirmedDiscards) : {}
   for (const [hostId, twinHostIds] of twinScopes) {
-    const twinPatch = buildHostTwinPurgeState({ ...s, ...patch }, hostId, twinHostIds)
+    const twinPatch = buildHostTwinPurgeState(
+      { ...s, ...patch },
+      hostId,
+      twinHostIds,
+      confirmedDiscards
+    )
     patch = {
       ...patch,
       ...twinPatch,
@@ -77,7 +87,8 @@ export function buildWorktreePurgeState(
 /** Drops every bucket under the targets' ids; visit recency alone stays host-scoped. */
 export function buildFullWorktreePurgeState(
   s: AppState,
-  normalizedTargets: readonly WorktreePurgeTarget[]
+  normalizedTargets: readonly WorktreePurgeTarget[],
+  confirmedDiscards?: ConfirmedUnsavedDiscards
 ): Partial<AppState> {
   const worktreeIdSet = new Set(normalizedTargets.map((target) => target.id))
   forgetCombinedDiffViewsForWorktrees(worktreeIdSet)
@@ -102,7 +113,11 @@ export function buildFullWorktreePurgeState(
   forgetAmbiguousOwnerWarnings(worktreeIdSet)
 
   const doomed = collectWorktreePurgeDoomedIds(s, worktreeIdSet)
-  const editorBufferKeepRequest = noticeRemovedUnsavedFiles(s, doomed.removedFileIds)
+  const editorBufferKeepRequest = noticeRemovedUnsavedFiles(
+    s,
+    doomed.removedFileIds,
+    confirmedDiscards
+  )
   const omitters = createWorktreePurgeOmitters(s, worktreeIdSet, doomed)
   const {
     omitByWorktree,

@@ -45,13 +45,13 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
         )
       }
       const readinessTimeoutMs = resolveWorkerStartReadinessTimeoutMs(params.timeoutMs)
-      if (params.worktree === 'current' || params.worktree === 'new-child') {
+      if (params.worktree === 'current') {
         throw new OrchestrationError(
           'invalid_argument',
           'A remote worker requires an exact existing worktree or new-top-level.'
         )
       }
-      const createsWorktree = params.worktree === 'new-top-level'
+      const createsWorktree = params.worktree === 'new-top-level' || params.worktree === 'new-child'
       const { agent, launch } = await prepareFederationWorkerLaunchOnHost({
         params,
         createsWorktree,

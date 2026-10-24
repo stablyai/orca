@@ -47,7 +47,6 @@ export function useEffectiveCollapsedGroups(args: {
     visibleWorktrees,
     filterRepoIds,
     repoMap,
-    worktreeMap,
     worktreeLineageById,
     prCache,
     workspaceStatuses,
@@ -60,7 +59,7 @@ export function useEffectiveCollapsedGroups(args: {
     if (!agentSendTargetWorktreeId) {
       return collapsedGroups
     }
-    const targetWorktree = worktreeMap.get(agentSendTargetWorktreeId)
+    const targetWorktree = worktrees.find((row) => row.id === agentSendTargetWorktreeId)
     if (!targetWorktree) {
       // Why: folder workspaces are absent from worktreeMap, so without this the
       // agent-send picker could never open the section hiding one (#15362).
@@ -117,7 +116,6 @@ export function useEffectiveCollapsedGroups(args: {
     repoMap,
     workspaceStatuses,
     worktreeLineageById,
-    worktreeMap,
     folderWorkspaces,
     defaultHostId
   ])

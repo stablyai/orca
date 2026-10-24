@@ -50,6 +50,7 @@ export type Worktree = {
   cliCreated?: true
   detachedHead?: true
   worktreeInstanceId?: string
+  savedLineage?: RuntimeWorktreePsSummary['savedLineage']
   lineageWorktreeInstanceId?: string
   parentWorktreeInstanceId?: string
   parentWorktreeId?: string | null

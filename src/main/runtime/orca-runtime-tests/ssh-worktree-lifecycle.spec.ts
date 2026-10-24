@@ -174,7 +174,7 @@ describe('OrcaRuntimeService', () => {
       childWorkspaceKey: `worktree:${childId}`,
       childInstanceId: metaById[childId].instanceId,
       parentWorkspaceKey: TEST_FOLDER_WORKSPACE_KEY,
-      parentInstanceId: null,
+      parentInstanceId: TEST_FOLDER_WORKSPACE_KEY,
       origin: 'cli',
       capture: { source: 'env-workspace', confidence: 'inferred' }
     })

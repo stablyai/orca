@@ -95,7 +95,8 @@ export async function listDetectedWorktreesForCapturedRepo(
       const worktrees = listDisconnectedSshWorktrees(
         store,
         repo,
-        createSshWorktreeMetaIndex(Object.entries(allMeta ?? {}))
+        createSshWorktreeMetaIndex(Object.entries(allMeta ?? {})),
+        { attachSavedLineage: false }
       )
       return {
         repoId: repo.id,

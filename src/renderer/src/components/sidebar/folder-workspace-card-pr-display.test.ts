@@ -1,10 +1,15 @@
-import { describe, expect, it } from 'vitest'
+import {
+  getWorktreeLineageRows,
+  findWorktreeLineageRow
+} from '../../../../shared/sidebar-list/worktree-lineage-projection'
+import { describe, expect, it, vi } from 'vitest'
 import type { CheckStatus, PRInfo } from '../../../../shared/github/pull-request-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorkspaceLineage, WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
-import { getFolderWorkspaceCardPrDisplay } from './folder-workspace-card-pr-display'
+import { getFolderWorkspaceCardPrDisplay as display } from './folder-workspace-card-pr-display'
+import { mergeWorkspaceLineageRecords } from '../../../../shared/resolved-worktree-lineage'
 
 const repo: Repo = {
   id: 'repo-1',
@@ -46,6 +51,40 @@ function makeWorktree(overrides: Partial<Worktree> & { id: string }): Worktree {
   }
 }
 
+function lineageRows(entries: [string, Worktree][]) {
+  return getWorktreeLineageRows([
+    makeWorktree({
+      id: folderWorkspaceKey('folder-1'),
+      instanceId: folderWorkspaceKey('folder-1'),
+      hostId: 'local'
+    }),
+    ...entries.map(([, row]) => row)
+  ])
+}
+
+function getFolderWorkspaceCardPrDisplay(
+  args: Omit<Parameters<typeof display>[0], 'folderWorktree'> & {
+    folderWorkspaceId: string
+    workspaceLineageByChildKey: Record<string, WorkspaceLineage>
+  }
+) {
+  const folder = findWorktreeLineageRow(
+    args.worktreeMap,
+    folderWorkspaceKey(args.folderWorkspaceId)
+  )
+  if (!folder) {
+    throw new Error('missing held folder fixture')
+  }
+  return display({
+    ...args,
+    folderWorktree: folder,
+    worktreeLineageById: mergeWorkspaceLineageRecords(
+      args.worktreeLineageById,
+      args.workspaceLineageByChildKey
+    )
+  })
+}
+
 function makeWorkspaceLineage(worktree: Worktree): WorkspaceLineage {
   return {
     childWorkspaceKey: worktreeWorkspaceKey(worktree.id),
@@ -78,7 +117,7 @@ describe('getFolderWorkspaceCardPrDisplay', () => {
       folderWorkspaceId: 'folder-1',
       workspaceLineageByChildKey: { [worktree.id]: makeWorkspaceLineage(worktree) },
       worktreeLineageById: {},
-      worktreeMap: new Map([[worktree.id, worktree]]),
+      worktreeMap: lineageRows([[worktree.id, worktree]]),
       repoMap: new LookupOnlyRepoMap([[repo.id, repo]]),
       hostedReviewCache: null,
       prCache: {
@@ -102,7 +141,7 @@ describe('getFolderWorkspaceCardPrDisplay', () => {
         [failing.id]: makeWorkspaceLineage(failing)
       },
       worktreeLineageById: {},
-      worktreeMap: new Map([
+      worktreeMap: lineageRows([
         [passing.id, passing],
         [pending.id, pending],
         [failing.id, failing]
@@ -130,7 +169,7 @@ describe('getFolderWorkspaceCardPrDisplay', () => {
         [pending.id]: makeWorkspaceLineage(pending)
       },
       worktreeLineageById: {},
-      worktreeMap: new Map([
+      worktreeMap: lineageRows([
         [passing.id, passing],
         [pending.id, pending]
       ]),
@@ -156,7 +195,7 @@ describe('getFolderWorkspaceCardPrDisplay', () => {
       folderWorkspaceId: 'folder-1',
       workspaceLineageByChildKey: { [worktree.id]: makeWorkspaceLineage(worktree) },
       worktreeLineageById: {},
-      worktreeMap: new Map([[worktree.id, worktree]]),
+      worktreeMap: lineageRows([[worktree.id, worktree]]),
       repoMap: new Map([[repo.id, repo]]),
       hostedReviewCache: null,
       prCache: { 'repo-1::suppressed': makePrEntry(4, 'failure') }
@@ -173,7 +212,7 @@ describe('getFolderWorkspaceCardPrDisplay', () => {
       folderWorkspaceId: 'folder-1',
       workspaceLineageByChildKey: { [parent.id]: makeWorkspaceLineage(parent) },
       worktreeLineageById: { [nested.id]: makeWorktreeLineage(nested, parent) },
-      worktreeMap: new Map([
+      worktreeMap: lineageRows([
         [parent.id, parent],
         [nested.id, nested]
       ]),
@@ -196,7 +235,7 @@ describe('getFolderWorkspaceCardPrDisplay', () => {
       folderWorkspaceId: 'folder-1',
       workspaceLineageByChildKey: { [parent.id]: makeWorkspaceLineage(parent) },
       worktreeLineageById: {},
-      worktreeMap: new Map([
+      worktreeMap: lineageRows([
         [parent.id, parent],
         [inlineNested.id, inlineNested]
       ]),
@@ -222,7 +261,7 @@ describe('getFolderWorkspaceCardPrDisplay', () => {
           parentWorktreeInstanceId: 'stale-parent'
         }
       },
-      worktreeMap: new Map([
+      worktreeMap: lineageRows([
         [parent.id, parent],
         [inlineNested.id, inlineNested]
       ]),
@@ -235,7 +274,7 @@ describe('getFolderWorkspaceCardPrDisplay', () => {
   })
 
   it.each([['known host', { hostId: 'ssh:remote' as const }, { hostId: 'local' as const }]])(
-    'excludes nested PRs across a %s boundary',
+    'includes nested PRs across a %s within this store',
     (_boundary, childOverrides, parentOverrides) => {
       const parent = makeWorktree({ id: 'parent', instanceId: 'parent', ...parentOverrides })
       const nested = makeWorktree({
@@ -250,7 +289,7 @@ describe('getFolderWorkspaceCardPrDisplay', () => {
         folderWorkspaceId: 'folder-1',
         workspaceLineageByChildKey: { [parent.id]: makeWorkspaceLineage(parent) },
         worktreeLineageById: { [nested.id]: makeWorktreeLineage(nested, parent) },
-        worktreeMap: new Map([
+        worktreeMap: lineageRows([
           [parent.id, parent],
           [nested.id, nested]
         ]),
@@ -262,7 +301,7 @@ describe('getFolderWorkspaceCardPrDisplay', () => {
         prCache: { [`${nested.repoId}::nested`]: makePrEntry(4, 'success') }
       })
 
-      expect(display).toBeNull()
+      expect(display).toMatchObject({ number: 4, status: 'success' })
     }
   )
 
@@ -277,7 +316,7 @@ describe('getFolderWorkspaceCardPrDisplay', () => {
         [parent.id]: makeWorktreeLineage(parent, nested),
         [nested.id]: makeWorktreeLineage(nested, parent)
       },
-      worktreeMap: new Map([
+      worktreeMap: lineageRows([
         [parent.id, parent],
         [nested.id, nested]
       ]),
@@ -296,7 +335,7 @@ describe('getFolderWorkspaceCardPrDisplay', () => {
       folderWorkspaceId: 'folder-1',
       workspaceLineageByChildKey: { [worktree.id]: makeWorkspaceLineage(worktree) },
       worktreeLineageById: {},
-      worktreeMap: new Map([[worktree.id, worktree]]),
+      worktreeMap: lineageRows([[worktree.id, worktree]]),
       repoMap: new Map([[repo.id, repo]]),
       hostedReviewCache: null,
       prCache: {
@@ -314,7 +353,7 @@ describe('getFolderWorkspaceCardPrDisplay', () => {
       folderWorkspaceId: 'folder-1',
       workspaceLineageByChildKey: { [worktree.id]: makeWorkspaceLineage(worktree) },
       worktreeLineageById: {},
-      worktreeMap: new Map([[worktree.id, worktree]]),
+      worktreeMap: lineageRows([[worktree.id, worktree]]),
       repoMap: new Map([[repo.id, repo]]),
       hostedReviewCache: null,
       prCache: {
@@ -335,7 +374,7 @@ describe('getFolderWorkspaceCardPrDisplay', () => {
       folderWorkspaceId: 'folder-1',
       workspaceLineageByChildKey: { [worktree.id]: makeWorkspaceLineage(worktree) },
       worktreeLineageById: {},
-      worktreeMap: new Map([[worktree.id, worktree]]),
+      worktreeMap: lineageRows([[worktree.id, worktree]]),
       repoMap: new Map([[repo.id, repo]]),
       hostedReviewCache: null,
       prCache: {
@@ -368,3 +407,52 @@ function makePrEntry(
 ): { data: PRInfo; fetchedAt: number } {
   return { data: makePr(number, checksStatus), fetchedAt: 2 }
 }
+
+it.each([10, 100])(
+  'shares one held card graph across two folders and refreshes reparent/clear/replacement at N=%i',
+  (n) => {
+    const f = makeWorktree({ id: 'folder:F', instanceId: 'folder:F', hostId: 'local' })
+    const g = { ...f, id: 'folder:G', instanceId: 'folder:G' }
+    const child = makeWorktree({ id: 'child', instanceId: 'child', linkedPR: 8 })
+    const rows = getWorktreeLineageRows([
+      f,
+      g,
+      child,
+      ...Array.from({ length: n }, (_, i) => makeWorktree({ id: `other-${i}` }))
+    ])
+    let traversed = 0
+    const originalValues = rows.values.bind(rows)
+    vi.spyOn(rows, 'values').mockImplementation(() => {
+      const iterator = originalValues()
+      const next = iterator.next.bind(iterator)
+      iterator.next = () => {
+        const result = next()
+        if (!result.done) {
+          traversed++
+        }
+        return result
+      }
+      return iterator
+    })
+    const edge = makeWorktreeLineage(child, f)
+    const args = {
+      worktreeMap: rows,
+      worktreeLineageById: { child: edge },
+      repoMap: new Map([[repo.id, repo]]),
+      hostedReviewCache: null,
+      prCache: { 'repo-1::child': makePrEntry(8, 'success') }
+    }
+    expect(display({ ...args, folderWorktree: f })).toMatchObject({ number: 8 })
+    const initial = traversed
+    for (const folderWorktree of [g, f, g]) {
+      display({ ...args, folderWorktree })
+    }
+    expect(traversed).toBe(initial)
+    expect(display({ ...args, folderWorktree: f, worktreeLineageById: {} })).toBeNull()
+    const moved = { ...args, worktreeLineageById: { child: makeWorktreeLineage(child, g) } }
+    expect(display({ ...moved, folderWorktree: f })).toBeNull()
+    expect(display({ ...moved, folderWorktree: g })).toMatchObject({ number: 8 })
+    const replaced = getWorktreeLineageRows([f, g, { ...child, instanceId: 'replacement' }])
+    expect(display({ ...moved, folderWorktree: g, worktreeMap: replaced })).toBeNull()
+  }
+)

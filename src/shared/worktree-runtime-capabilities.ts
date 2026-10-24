@@ -41,7 +41,21 @@ export const WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY =
 export const WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY =
   'worktree.background-removal.v1' as const
 
+export const WORKTREE_CROSS_MACHINE_LINEAGE_CAPABILITY = 'worktree.lineage.crossMachine' as const
+
+export function assertCrossMachineLineageSupported(
+  capabilities: readonly string[] | undefined | null,
+  server: string
+): void {
+  if (!capabilities?.includes(WORKTREE_CROSS_MACHINE_LINEAGE_CAPABILITY)) {
+    throw new Error(
+      `Update Orca on ${server} to nest workspaces across machines. No workspace was created or moved.`
+    )
+  }
+}
+
 export const WORKTREE_RUNTIME_CAPABILITIES = [
+  WORKTREE_CROSS_MACHINE_LINEAGE_CAPABILITY,
   PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
   PROJECT_HOST_SETUP_HOST_TARGET_RUNTIME_CAPABILITY,
   WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY,

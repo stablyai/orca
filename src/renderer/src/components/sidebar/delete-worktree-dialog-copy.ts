@@ -1,8 +1,9 @@
+import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 
-type WorktreeRepoRef = Pick<Worktree, 'repoId'>
+type WorktreeRepoRef = Pick<Worktree, 'repoId'> & Partial<Pick<Worktree, 'id'>>
 
 export function isFolderWorkspaceDelete(
   repoMap: ReadonlyMap<string, Repo>,
@@ -10,6 +11,9 @@ export function isFolderWorkspaceDelete(
 ): boolean {
   if (!worktree) {
     return false
+  }
+  if (worktree.id && parseWorkspaceKey(worktree.id)?.type === 'folder') {
+    return true
   }
   const repo = repoMap.get(worktree.repoId)
   return repo ? isFolderRepo(repo) : false

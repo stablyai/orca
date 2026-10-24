@@ -131,6 +131,7 @@ for (const hostId of ['local', 'ssh:builder', 'runtime:builder'] as const) {
       createdAt: 1
     }
     const worktreeLineageById = { [child.id]: lineage }
+    child.savedLineage = lineage
     const worktreeMap = new Map(worktrees.map((worktree) => [worktree.id, worktree]))
     const collapsedGroups = new Set([getWorktreeLineageGroupKey(parent)])
     expect(

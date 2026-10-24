@@ -287,8 +287,8 @@ describe('a sidebar drop on one card of a twin', () => {
     )
 
     expect(result.current.getReorderDraggedCopies(copyOf(dragged))).toEqual([
-      { id: dragged.id, hostId: dragged.hostId },
-      { id: childOnDraggedHost.id, hostId: dragged.hostId }
+      dragged,
+      childOnDraggedHost
     ])
   })
 

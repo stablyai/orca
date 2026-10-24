@@ -1,3 +1,4 @@
+import { resolveFederatedWorkerParent } from './federated-worker-parent'
 import type { OrchestrationSessionCaller } from '../../../../orchestration/orchestration-caller-identity'
 import { isTuiAgent } from '../../../../../../shared/tui-agent-config'
 import type { RuntimeStatus } from '../../../../../../shared/runtime-types'
@@ -64,13 +65,13 @@ export async function startFederatedWorker(args: {
     )
   }
   const worktree = params.worktree ?? 'current'
-  if (worktree === 'current' || worktree === 'new-child') {
+  if (worktree === 'current') {
     throw new OrchestrationError(
       'invalid_argument',
       '--on requires an exact remote worktree selector or new-top-level.'
     )
   }
-  const createsWorktree = worktree === 'new-top-level'
+  const createsWorktree = worktree === 'new-top-level' || worktree === 'new-child'
   assertWorkerLaunchPreferencesCreateTerminal(params)
   validateFederatedWorkerStartPlacement(params, createsWorktree)
   const requestedLaunch = createPendingWorkerLaunchReceipt({
@@ -102,6 +103,10 @@ export async function startFederatedWorker(args: {
       `Connected server ${server.name} does not support orchestration federation.`
     )
   }
+  const parentWorktreeRef =
+    worktree === 'new-child'
+      ? await resolveFederatedWorkerParent(args, status.capabilities, server.name)
+      : undefined
   assertWorkerLaunchPreferencesRuntimeSupported({
     model: params.model,
     effort: params.effort,
@@ -172,11 +177,10 @@ export async function startFederatedWorker(args: {
           dispatchId: started.dispatch.id,
           taskId: taskForRemote.id,
           taskSpec: taskForRemote.spec,
-          // Carry the home dispatch depth across the federation boundary so a
-          // remote worker cannot be mistaken for a root when it dispatches again.
           depth: started.dispatch.depth,
           protocolVersion: federationProtocolVersion,
           worktree,
+          parentWorktreeRef,
           name: params.name,
           repo: params.repo,
           baseBranch: params.baseBranch,

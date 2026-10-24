@@ -1,3 +1,4 @@
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
@@ -14,6 +15,7 @@ import { getLineageAncestorIndex, getSortedWorktreeRankIndex } from './visible-w
 // rules live in the shared builder; this binds them to the window's store index and activity facts.
 
 export type VisibleWorktreeOptions = {
+  folderWorkspaces?: readonly FolderWorkspace[]
   filterRepoIds: readonly string[]
   showSleepingWorkspaces: boolean
   tabsByWorktree: Record<string, Pick<TerminalTab, 'id'>[]> | null
@@ -53,7 +55,7 @@ export function computeVisibleWorktrees(
     : (worktree: Worktree) => worktree.id
   return selectVisibleSidebarWorktrees({
     rows: getIndexedAllWorktrees(worktreesByRepo),
-    ancestorByIdentity: getLineageAncestorIndex(worktreesByRepo),
+    ancestorByIdentity: getLineageAncestorIndex(worktreesByRepo, opts.folderWorkspaces),
     rankOf: (worktree) => rankByKey.get(keyOf(worktree)),
     filters: sidebarWorkspaceRowFilters(opts),
     facts: buildDesktopWorkspaceRowFactReader(opts),

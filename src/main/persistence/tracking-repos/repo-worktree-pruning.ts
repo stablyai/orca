@@ -125,7 +125,10 @@ export function pruneWorktreeStateForRepo(
     }
   }
   for (const [childId, lineage] of Object.entries(state.worktreeLineageById)) {
-    if (belongsToHost(childId) || belongsToHost(lineage.parentWorktreeId)) {
+    if (
+      belongsToHost(childId) ||
+      (lineage.parentStore !== 'external' && belongsToHost(lineage.parentWorktreeId))
+    ) {
       delete state.worktreeLineageById[childId]
     }
   }
@@ -136,7 +139,11 @@ export function pruneWorktreeStateForRepo(
       delete state.workspaceLineageByChildKey[childKey as WorkspaceKey]
       continue
     }
-    if (parentScope?.type === 'worktree' && belongsToHost(parentScope.worktreeId)) {
+    if (
+      lineage.parentStore !== 'external' &&
+      parentScope?.type === 'worktree' &&
+      belongsToHost(parentScope.worktreeId)
+    ) {
       delete state.workspaceLineageByChildKey[childKey as WorkspaceKey]
     }
   }

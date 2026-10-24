@@ -24,7 +24,10 @@ import {
   resolveCustomWorktreeVisibilitySources
 } from '../../../../shared/worktree/visibility-sources'
 import { resolveConfiguredWorktreeBasePaths } from '../../../../shared/worktree/configured-worktree-base-path'
-import { projectWorktreeLineageWithHostPeers } from '../../../worktree-lineage-host-peers'
+import {
+  projectWorktreeLineageWithHostPeers,
+  withSavedWorktreeLineage
+} from '../../../worktree-lineage-host-peers'
 import { loggedMalformedWorktreeMetaKeys, warnOnce } from './worktree-listing-diagnostics'
 import {
   getProjectHostSetupMetaUpdates,
@@ -96,7 +99,8 @@ export function synthesizeSshGitWorktree(
 export function listDisconnectedSshWorktrees(
   store: Store,
   repo: Repo,
-  metaIndex: SshWorktreeMetaIndex
+  metaIndex: SshWorktreeMetaIndex,
+  options: { attachSavedLineage?: boolean } = {}
 ): Worktree[] {
   const byWorktreeId = new Map<string, Worktree>()
   const expectedHostId = getRepoExecutionHostId(repo)
@@ -129,7 +133,8 @@ export function listDisconnectedSshWorktrees(
     byWorktreeId.delete(worktree.id)
     byWorktreeId.set(worktree.id, worktree)
   }
-  return [...byWorktreeId.values()]
+  const rows = [...byWorktreeId.values()]
+  return options.attachSavedLineage === false ? rows : withSavedWorktreeLineage(store, repo, rows)
 }
 
 export function buildDetectedGitWorktrees(
@@ -197,5 +202,10 @@ export function buildDetectedGitWorktrees(
       worktreeVisibilitySourceMatcher
     })
   })
-  return projectWorktreeLineageWithHostPeers(store, repo, detected)
+  return projectWorktreeLineageWithHostPeers(
+    store,
+    repo,
+    detected,
+    allMetaOverride === undefined ? allMeta : undefined
+  )
 }

@@ -31,16 +31,16 @@ export function printLineageSummary(
     console.error(`warning: ${warning.message}`)
   }
   if (result.workspaceLineage) {
-    const { parentWorkspaceKey, capture } = result.workspaceLineage
+    const { parentWorkspaceKey, capture, parentStore } = result.workspaceLineage
     console.error(
-      `parent: ${parentWorkspaceKey} (${capture.confidence} from ${getLineageSourceLabel(capture.source)})`
+      `parent: ${parentWorkspaceKey}${parentStore ? ' (parent on another machine)' : ''} (${capture.confidence} from ${getLineageSourceLabel(capture.source)})`
     )
     return
   }
   if (result.lineage) {
-    const { parentWorktreeId, capture } = result.lineage
+    const { parentWorktreeId, capture, parentStore } = result.lineage
     console.error(
-      `parent: ${parentWorktreeId} (${capture.confidence} from ${getLineageSourceLabel(capture.source)})`
+      `parent: ${parentWorktreeId}${parentStore ? ' (parent on another machine)' : ''} (${capture.confidence} from ${getLineageSourceLabel(capture.source)})`
     )
     return
   }

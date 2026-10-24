@@ -1,3 +1,4 @@
+import { getWorktreeLineageSelection } from '../../../../../../shared/sidebar-list/worktree-lineage-projection'
 import type { DraggedWorktreeCopies } from '../drag/dragged-worktree-copies'
 import React from 'react'
 import { cn } from '@/lib/utils'
@@ -120,8 +121,8 @@ export function renderWorktreeItemRow(
   const worktreeIdentity = getWorktreeHostIdentity(itemRow.worktree)
   const isLineageDropTarget =
     ctx.worktreeDragState.draggingWorktreeId &&
-    (ctx.worktreeDragState.lineageDropTargetId === itemRow.worktree.id ||
-      ctx.nativeLineageDropTargetId === itemRow.worktree.id)
+    (ctx.worktreeDragState.lineageDropTargetId === getWorktreeLineageSelection(itemRow.worktree) ||
+      ctx.nativeLineageDropTargetId === getWorktreeLineageSelection(itemRow.worktree))
   const isActiveWorktree = isActiveSidebarWorkspace(itemRow.worktree, {
     worktreeId: ctx.activeWorktreeId,
     hostId: ctx.activeWorkspaceExecutionHostId ?? null
@@ -134,6 +135,7 @@ export function renderWorktreeItemRow(
       aria-selected={ctx.selectedWorktreeIds.has(worktreeIdentity)}
       aria-current={isActiveWorktree ? 'page' : undefined}
       data-worktree-id={itemRow.worktree.id}
+      data-worktree-lineage-selection={getWorktreeLineageSelection(itemRow.worktree)}
       data-worktree-host-identity={worktreeIdentity}
       data-worktree-row-key={itemRow.rowKey}
       data-worktree-section-key={itemRow.sectionKey}

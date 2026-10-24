@@ -30,6 +30,7 @@ type DeleteWorktreeFailureToastOptions = {
   executionHostId?: ExecutionHostId | null
   worktreeName: string
   nestedRemovalTarget?: WorktreeRemovalTarget
+  assertBeforeDispatch?: () => void
   onNestedDeleted?: () => void
 }
 
@@ -55,7 +56,8 @@ function DeleteWorktreeFailureToastBody({
   toastId,
   nestedRemovalTarget,
   worktreeName,
-  onNestedDeleted
+  onNestedDeleted,
+  assertBeforeDispatch
 }: {
   description?: string
   canForceDelete: boolean
@@ -68,6 +70,7 @@ function DeleteWorktreeFailureToastBody({
   toastId: string
   nestedRemovalTarget?: WorktreeRemovalTarget
   worktreeName: string
+  assertBeforeDispatch?: () => void
   onNestedDeleted?: () => void
 }): React.JSX.Element {
   const viewChanges = (): void => {
@@ -95,6 +98,7 @@ function DeleteWorktreeFailureToastBody({
             target={nestedRemovalTarget}
             worktreeName={worktreeName}
             onDeleted={onNestedDeleted}
+            assertBeforeDispatch={assertBeforeDispatch}
             dismissToast={() => toast.dismiss(toastId)}
           />
         ) : null}
@@ -133,7 +137,8 @@ export function showDeleteWorktreeFailureToast({
   executionHostId,
   worktreeName,
   nestedRemovalTarget,
-  onNestedDeleted
+  onNestedDeleted,
+  assertBeforeDispatch
 }: DeleteWorktreeFailureToastOptions): void {
   const toastCopy = getDeleteWorktreeToastCopy(
     worktreeName,
@@ -174,6 +179,7 @@ export function showDeleteWorktreeFailureToast({
         nestedRemovalTarget={nestedTarget}
         worktreeName={worktreeName}
         onNestedDeleted={onNestedDeleted}
+        assertBeforeDispatch={assertBeforeDispatch}
       />
     ),
     // A toast offering a destructive choice must not expire before the user reads the reason.

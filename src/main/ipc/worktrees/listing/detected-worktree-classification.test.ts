@@ -94,7 +94,7 @@ function createStore(meta: Record<string, WorktreeMeta>, repos: Repo[] = [repo])
   } as unknown as Store
 }
 
-/** Preserve the original two-pass implementation as the equivalence oracle. */
+/** The pre-change classification passes, verbatim, as the equivalence oracle. */
 function buildDetectedGitWorktreesTwoPass(
   store: Store,
   target: Repo,
@@ -149,7 +149,16 @@ function buildDetectedGitWorktreesTwoPass(
       worktreeVisibilitySourceMatcher
     })
   })
-  return projectResolvedWorktreeLineage(detectedRows, store.getAllWorktreeLineage?.() ?? {})
+  // Why: the general projector stamps null on edge-free rows; publication omits a saved edge that doesn't exist.
+  return projectResolvedWorktreeLineage(detectedRows, store.getAllWorktreeLineage?.() ?? {}).map(
+    ({ savedLineage, ...row }) => (savedLineage === null ? row : { ...row, savedLineage })
+  )
+}
+
+function expectNoSavedLineage(rows: readonly object[]) {
+  for (const row of rows) {
+    expect(row).not.toHaveProperty('savedLineage')
+  }
 }
 
 describe('buildDetectedGitWorktrees classification passes', () => {
@@ -214,7 +223,9 @@ describe('buildDetectedGitWorktrees classification passes', () => {
         seed ? { [worktreeId]: seed } : {}
       )
 
-    expect(build(buildDetectedGitWorktrees)).toEqual(build(buildDetectedGitWorktreesTwoPass))
+    const rows = build(buildDetectedGitWorktrees)
+    expect(rows).toEqual(build(buildDetectedGitWorktreesTwoPass))
+    expectNoSavedLineage(rows)
   })
 
   it('emits a catalog deep-equal to the two-pass build for a folder-style listing with no host snapshot', () => {
@@ -223,6 +234,8 @@ describe('buildDetectedGitWorktrees classification passes', () => {
     const build = (fn: typeof buildDetectedGitWorktrees) =>
       fn(createStore({ [worktreeId]: seed }), repo, [gitWorktree('/workspace/one')], undefined)
 
-    expect(build(buildDetectedGitWorktrees)).toEqual(build(buildDetectedGitWorktreesTwoPass))
+    const rows = build(buildDetectedGitWorktrees)
+    expect(rows).toEqual(build(buildDetectedGitWorktreesTwoPass))
+    expectNoSavedLineage(rows)
   })
 })

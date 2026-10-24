@@ -4,8 +4,12 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DeleteNestedWorktreesDialog } from './DeleteNestedWorktreesDialog'
 import { toast } from 'sonner'
+import type { Worktree } from '../../../../shared/worktree/types'
+import { createWorktreeDeleteAdmission } from './worktree-delete-request'
+import { makeWorktree } from '../../store/slices/worktrees-slice-test-fixtures'
 
 const mocks = vi.hoisted(() => ({
+  rows: Array<Worktree>(),
   preview: vi.fn(),
   remove: vi.fn(),
   refresh: vi.fn()
@@ -17,7 +21,9 @@ vi.mock('@/store', () => {
     markWorktreesDeleting: vi.fn(),
     clearWorktreeDeleteState: vi.fn(),
     fetchAllWorktrees: mocks.refresh,
-    worktreesByRepo: {},
+    get worktreesByRepo() {
+      return { repo: mocks.rows }
+    },
     detectedWorktreesByRepo: {},
     folderWorkspaces: [],
     projectGroups: [],
@@ -56,6 +62,7 @@ const plan = [
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mocks.rows = []
   mocks.preview.mockResolvedValue(plan)
   mocks.remove.mockResolvedValue({ ok: true })
   mocks.refresh.mockResolvedValue(undefined)
@@ -98,6 +105,7 @@ describe('nested deletion confirmation', () => {
     await vi.waitFor(() => expect(mocks.refresh).toHaveBeenCalled())
     expect(mocks.remove).toHaveBeenCalledWith(target, true, {
       approvedNestedWorktrees: plan,
+      assertBeforeDispatch: undefined,
       confirmedDiscards: expect.any(Map)
     })
     expect(dismissToast).toHaveBeenCalledOnce()
@@ -183,3 +191,55 @@ describe('nested deletion confirmation', () => {
     expect(mocks.remove).not.toHaveBeenCalled()
   })
 })
+
+it.each(['preview', 'approval'] as const)(
+  'retains selected owner through nested %s',
+  async (seam) => {
+    const selected = makeWorktree({
+      id: target.id,
+      repoId: 'repo',
+      path: '/workspaces/parent',
+      hostId: 'local',
+      instanceId: 'copy'
+    })
+    mocks.rows = [selected]
+    const admission = createWorktreeDeleteAdmission(selected)
+    const pending = Promise.withResolvers<typeof plan>()
+    if (seam === 'preview') {
+      mocks.preview.mockReturnValueOnce(pending.promise)
+    }
+    render(
+      <DeleteNestedWorktreesDialog
+        target={target}
+        worktreeName="parent"
+        dismissToast={vi.fn()}
+        assertBeforeDispatch={admission}
+      />
+    )
+    if (seam === 'preview') {
+      fireEvent.click(screen.getByRole('button', { name: 'Delete with nested worktrees…' }))
+      await vi.waitFor(() => expect(mocks.preview).toHaveBeenCalledOnce())
+    } else {
+      await review()
+    }
+    mocks.rows = [{ ...selected, runtimeOwnerEnvironmentId: 'B' }]
+    if (seam === 'preview') {
+      await act(async () => {
+        pending.resolve(plan)
+      })
+      expect(await screen.findByRole('alert')).toHaveTextContent('selected workspace changed')
+      expect(
+        screen.queryByRole('button', { name: 'Delete all listed worktrees' })
+      ).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Review again' })).toBeEnabled()
+    } else {
+      fireEvent.click(screen.getByRole('button', { name: 'Delete all listed worktrees' }))
+      await vi.waitFor(() =>
+        expect(toast.error).toHaveBeenCalledWith('Failed to delete workspace', {
+          description: 'The selected workspace changed. Select it again.'
+        })
+      )
+    }
+    expect(mocks.remove).not.toHaveBeenCalled()
+  }
+)

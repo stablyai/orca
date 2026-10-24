@@ -1,9 +1,12 @@
 // @vitest-environment happy-dom
 
-import { describe, expect, it } from 'vitest'
+import { renderHook, act } from '@testing-library/react'
+import { useAppStore } from '@/store'
+import { useWorktreeLineageDropCommit } from './worktree-list/drag/use-lineage-drop-commit'
+import { getWorktreeLineageSelection } from '../../../../shared/sidebar-list/worktree-lineage-projection'
+import { describe, expect, it, vi } from 'vitest'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { getCyclicProjectedWorktreeLineageIds } from '../../../../shared/sidebar-list/worktree-lineage-projection'
 import {
   getReorderedWorktreeIdsToUnnest,
   getWorktreeLineageDropTargetId,
@@ -151,8 +154,7 @@ describe('getReorderedWorktreeIdsToUnnest', () => {
         draggedIds: ['child', 'child', 'root', 'grandchild'],
         sourceGroupIds: ['child', 'root', 'grandchild'],
         lineageById,
-        worktreeMap,
-        cyclicLineageIds: getCyclicProjectedWorktreeLineageIds(lineageById, worktreeMap)
+        worktreeMap
       })
     ).toEqual(['child', 'grandchild'])
   })
@@ -172,8 +174,7 @@ describe('getReorderedWorktreeIdsToUnnest', () => {
         draggedIds: ['source-child', 'other-child'],
         sourceGroupIds: ['source-child'],
         lineageById,
-        worktreeMap,
-        cyclicLineageIds: getCyclicProjectedWorktreeLineageIds(lineageById, worktreeMap)
+        worktreeMap
       })
     ).toEqual(['source-child'])
   })
@@ -189,8 +190,7 @@ describe('getReorderedWorktreeIdsToUnnest', () => {
         draggedIds: [child.id],
         sourceGroupIds: [child.id],
         lineageById: {},
-        worktreeMap,
-        cyclicLineageIds: getCyclicProjectedWorktreeLineageIds({}, worktreeMap)
+        worktreeMap
       })
     ).toEqual([child.id])
   })
@@ -209,8 +209,7 @@ describe('getReorderedWorktreeIdsToUnnest', () => {
         draggedIds: [child.id],
         sourceGroupIds: [child.id],
         lineageById,
-        worktreeMap,
-        cyclicLineageIds: getCyclicProjectedWorktreeLineageIds(lineageById, worktreeMap)
+        worktreeMap
       })
     ).toEqual([])
   })
@@ -283,3 +282,131 @@ function makeTarget(args: {
   }
   return { container, target }
 }
+
+it.each([10, 100])(
+  'commits exact dragged copies in order with Set membership at K=%i',
+  async (n) => {
+    const previous = useAppStore.getState()
+    const parent = {
+      ...makeWorktree('parent'),
+      hostId: 'ssh:shared' as const,
+      runtimeOwnerEnvironmentId: 'A'
+    }
+    const children = Array.from({ length: n }, (_, i) => ({
+      ...makeWorktree(`child-${i}`),
+      hostId: 'ssh:shared' as const,
+      runtimeOwnerEnvironmentId: 'A'
+    }))
+    const foreign = [parent, ...children].map((row) => ({ ...row, runtimeOwnerEnvironmentId: 'B' }))
+    const copies = children.toReversed()
+    const assign = vi.fn().mockResolvedValue(undefined),
+      update = vi.fn().mockResolvedValue(undefined)
+    useAppStore.setState({
+      worktreesByRepo: { 'repo-1': [...foreign, parent, ...children] },
+      worktreeLineageById: {},
+      assignWorktreeParent: assign,
+      updateWorktreeLineage: update
+    })
+    const view = renderHook(() =>
+      useWorktreeLineageDropCommit({
+        repoMap: new Map([
+          [
+            'repo-1',
+            {
+              id: 'repo-1',
+              path: '/repo',
+              displayName: 'repo',
+              badgeColor: '#999',
+              addedAt: 1,
+              executionHostId: 'local'
+            }
+          ]
+        ]),
+        worktreeMap: new Map(),
+        worktreeLineageById: {},
+        worktreeDragGroups: [{ key: 'source', worktreeIds: children.map((row) => row.id) }]
+      })
+    )
+    const ids = children.map((row) => row.id)
+    const has = Set.prototype.has
+    let checks = 0
+    const spy = vi.spyOn(Set.prototype, 'has').mockImplementation(function (
+      this: Set<unknown>,
+      key
+    ) {
+      if (
+        this.size === n &&
+        this.has === Set.prototype.has &&
+        typeof key === 'string' &&
+        key.startsWith('child-')
+      ) {
+        checks++
+      }
+      return has.call(this, key)
+    })
+    try {
+      const target = {
+        status: null,
+        isPinDrop: false,
+        lineageParentId: getWorktreeLineageSelection(parent)
+      }
+      expect(view.result.current.getEligibleLineageDropTarget(target, ids, copies)).toEqual(target)
+      expect(checks).toBe(n)
+      checks = 0
+      let result = false
+      await act(async () => {
+        result = view.result.current.commitWorktreeLineageParentDrop(
+          ids,
+          getWorktreeLineageSelection(parent),
+          copies
+        )
+      })
+      expect(result).toBe(true)
+      expect(assign.mock.calls).toEqual(
+        copies.map((copy) => [
+          getWorktreeLineageSelection(copy),
+          { parentWorktreeId: getWorktreeLineageSelection(parent) }
+        ])
+      )
+      expect(checks).toBe(2 * n)
+      assign.mockClear()
+      await act(async () => {
+        expect(
+          view.result.current.commitWorktreeLineageParentDrop(
+            ids,
+            getWorktreeLineageSelection(parent),
+            [...copies, children[0]!]
+          )
+        ).toBe(true)
+      })
+      expect(assign.mock.calls.map(([selection]) => selection)).toEqual(
+        [...copies, children[0]!].map(getWorktreeLineageSelection)
+      )
+      act(() =>
+        useAppStore.setState({
+          worktreesByRepo: {
+            'repo-1': [
+              ...foreign,
+              parent,
+              ...children.map((row) => ({ ...row, savedLineage: makeLineage(row, parent) }))
+            ]
+          }
+        })
+      )
+      await act(async () => {
+        view.result.current.clearReorderedWorktreeParents({
+          draggedIds: ids,
+          sourceGroupKey: 'source',
+          draggedCopies: [...copies, children[0]!]
+        })
+      })
+      expect(update.mock.calls).toEqual(
+        copies.map((row) => [getWorktreeLineageSelection(row), { noParent: true }])
+      )
+    } finally {
+      spy.mockRestore()
+      view.unmount()
+      useAppStore.setState(previous, true)
+    }
+  }
+)

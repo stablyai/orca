@@ -42,6 +42,7 @@ type FeedRowFields = Pick<
       | 'isUnread'
       | 'instanceId'
       | 'lineage'
+      | 'savedLineage'
       | 'workspaceStatus'
       | 'sortOrder'
       | 'manualOrder'
@@ -75,6 +76,16 @@ function readFeedRow(
   const hostId = getExecutionHostIdFromWorktreeHostIdentity(identity)
   const owner = parseExecutionHostId(ownerHostId)
   const { defaultBranch, automationCreated, cliCreated, detachedHead, creatorProvenance } = row
+  const edgeRecord = (edge: typeof row.lineage): WorktreeLineage | null =>
+    edge
+      ? {
+          ...edge,
+          worktreeId: id,
+          origin: 'manual',
+          capture: { source: 'manual-action', confidence: 'explicit' },
+          createdAt: 0
+        }
+      : null
   // The inline edge the lineage projection reads off a resolved row (worktree-lineage-projection.ts).
   const worktree: Worktree & { lineage: WorktreeLineage | null } = {
     id,
@@ -103,16 +114,8 @@ function readFeedRow(
     lastActivityAt: row.recentAt ?? 0,
     ...(row.smartTier !== undefined ? { smartTier: row.smartTier, smartAt: row.smartAt } : {}),
     ...extra,
-    // The builder validates only the edge; provenance stays the host's.
-    lineage: row.lineage
-      ? {
-          worktreeId: id,
-          ...row.lineage,
-          origin: 'manual',
-          capture: { source: 'manual-action', confidence: 'explicit' },
-          createdAt: 0
-        }
-      : null
+    savedLineage: edgeRecord(row.savedLineage !== undefined ? row.savedLineage : row.lineage),
+    lineage: edgeRecord(row.lineage)
   }
   return {
     identity,

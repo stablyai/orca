@@ -5,6 +5,7 @@ import { getFolderWorkspaceHostIdentity } from '../folder-workspace-worktree'
 import { getWorktreeLineageGroupKey } from './group-keys'
 import {
   getExpandedWorktreeOccurrences,
+  type WorktreeOccurrence,
   type WorktreeOccurrencePlan
 } from '../worktree-occurrence-plan'
 import type { NoticeHostContext } from './host-labels'
@@ -70,6 +71,7 @@ export function appendWorktreeRows(
   repoOf: RepoOfWorktree,
   plan: WorktreeOccurrencePlan<Worktree>,
   options: {
+    folderByIdentity?: ReadonlyMap<string, RenderableFolderWorkspace>
     collapsedGroups: Set<string>
     groupDepth: number
     sectionKey: string
@@ -83,6 +85,14 @@ export function appendWorktreeRows(
   )
   for (const occurrence of occurrences) {
     const worktree = occurrence.row
+    const folder = options.folderByIdentity?.get(getWorktreeHostIdentity(worktree))
+    if (folder) {
+      result.push({
+        ...buildFolderWorkspaceRow(folder, options.groupDepth, occurrence),
+        lineageCollapsed: options.collapsedGroups.has(getWorktreeLineageGroupKey(worktree))
+      })
+      continue
+    }
     result.push({
       type: 'item',
       occurrence,
@@ -113,14 +123,16 @@ export function appendWorktreeRows(
  *  share a folder id. */
 export function buildFolderWorkspaceRow(
   pair: RenderableFolderWorkspace,
-  groupDepth: number
+  groupDepth: number,
+  occurrence?: WorktreeOccurrence<Worktree>
 ): FolderWorkspaceRow {
   return {
     type: 'folder-workspace',
     key: `folder-workspace:${getFolderWorkspaceHostIdentity(pair.folderWorkspace)}`,
     folderWorkspace: pair.folderWorkspace,
     projectGroup: pair.projectGroup,
-    depth: 0,
-    groupDepth
+    depth: occurrence?.depth ?? 0,
+    groupDepth,
+    ...(occurrence ? { occurrence, key: occurrence.key } : {})
   }
 }

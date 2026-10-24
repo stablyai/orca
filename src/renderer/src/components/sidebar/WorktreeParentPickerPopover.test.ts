@@ -1,11 +1,15 @@
 // @vitest-environment happy-dom
 
+import React from 'react'
+import { render, fireEvent, cleanup } from '@testing-library/react'
+import { getWorktreeLineageSelection } from '../../../../shared/sidebar-list/worktree-lineage-projection'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
   getWorktreeParentPickerFocusRestoreTarget,
   handleWorktreeParentPickerKeyDown,
-  selectWorktreeParent
+  selectWorktreeParent,
+  WorktreeParentPickerPopover
 } from './WorktreeParentPickerPopover'
 import {
   clampWorktreeParentPickerIndex,
@@ -236,6 +240,22 @@ describe('parent picker keyboard input', () => {
   })
 })
 
+const picker = vi.hoisted(() => {
+  const worktreesByRepo: Record<string, Worktree[]> = {}
+  const keys: (string | number)[] = []
+  return {
+    state: {
+      worktreesByRepo,
+      worktreeLineageById: {},
+      workspaceLineageByChildKey: {},
+      activeWorktreeId: null,
+      assignWorktreeParent: vi.fn().mockResolvedValue(undefined)
+    },
+    enabled: false,
+    keys
+  }
+})
+
 const { rejectAppStoreAccess } = vi.hoisted(() => ({
   rejectAppStoreAccess: vi.fn(() => {
     throw new Error('Pure helper tests must not access the app store')
@@ -243,14 +263,85 @@ const { rejectAppStoreAccess } = vi.hoisted(() => ({
 }))
 
 vi.mock('@/store', () => ({
-  useAppStore: Object.assign(rejectAppStoreAccess, {
-    getState: rejectAppStoreAccess,
-    getInitialState: rejectAppStoreAccess,
-    setState: rejectAppStoreAccess,
-    subscribe: rejectAppStoreAccess
-  })
+  useAppStore: Object.assign(
+    (selector: (state: typeof picker.state) => unknown) =>
+      picker.enabled ? selector(picker.state) : rejectAppStoreAccess(),
+    {
+      getState: rejectAppStoreAccess,
+      getInitialState: rejectAppStoreAccess,
+      setState: rejectAppStoreAccess,
+      subscribe: rejectAppStoreAccess
+    }
+  )
 }))
 
 afterEach(() => {
   expect(rejectAppStoreAccess).not.toHaveBeenCalled()
+})
+
+vi.mock('@/store/selectors', () => ({
+  useAllWorktrees: () => Object.values(picker.state.worktreesByRepo).flat(),
+  useRepoMap: () =>
+    new Map([
+      ['repo', { id: 'repo', displayName: 'repo', badgeColor: '#999', executionHostId: 'local' }]
+    ])
+}))
+vi.mock('./use-worktree-activity-statuses', () => ({
+  useWorktreeActivityStatuses: () => new Map()
+}))
+vi.mock('@/components/ui/popover', () => ({
+  Popover: ({ children }: { children: React.ReactNode }) => children,
+  PopoverAnchor: () => null,
+  PopoverContent: ({ children }: { children: React.ReactNode }) => children
+}))
+vi.mock('@tanstack/react-virtual', () => ({
+  useVirtualizer: ({
+    count,
+    getItemKey
+  }: {
+    count: number
+    getItemKey: (i: number) => string | number
+  }) => ({
+    getTotalSize: () => count * 56,
+    getVirtualItems: () =>
+      Array.from({ length: count }, (_, index) => ({
+        index,
+        key: (picker.keys[index] = getItemKey(index)),
+        start: index * 56,
+        size: 56
+      })),
+    scrollToIndex: vi.fn()
+  })
+}))
+it('opens a populated Set Parent list and dispatches its scoped row through the production item key', () => {
+  const child = makeWorktree({ id: 'child', instanceId: 'child' })
+  const parent = makeWorktree()
+  picker.state.worktreesByRepo = { repo: [child, parent] }
+  picker.enabled = true
+  const anchor = document.createElement('div')
+  document.body.append(anchor)
+  try {
+    render(
+      React.createElement(WorktreeParentPickerPopover, {
+        open: true,
+        childWorktreeId: getWorktreeLineageSelection(child),
+        anchorElement: anchor,
+        onOpenChange: vi.fn()
+      })
+    )
+    expect(picker.keys).toEqual([getWorktreeLineageSelection(parent)])
+    const row = document.querySelector('[role="option"]')
+    if (!row) {
+      throw new Error('Missing populated parent option')
+    }
+    fireEvent.click(row)
+    expect(picker.state.assignWorktreeParent).toHaveBeenCalledWith(
+      getWorktreeLineageSelection(child),
+      { parentWorktreeId: getWorktreeLineageSelection(parent) }
+    )
+  } finally {
+    cleanup()
+    picker.enabled = false
+    anchor.remove()
+  }
 })

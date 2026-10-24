@@ -34,12 +34,16 @@ const mocks = vi.hoisted(() => {
         displayName: string
         isMainWorktree: boolean
         hostId?: ExecutionHostId
+        runtimeOwnerEnvironmentId?: string
         removalError?: string
       }
     >(),
     repos: [] as { id: string; displayName: string; connectionId?: string }[],
     worktreeLineageById: {},
     allWorktrees: () => Array.from(state.worktreeMap.values()),
+    get worktreesByRepo() {
+      return { 'repo-1': state.allWorktrees() }
+    },
     clearWorktreeDeleteState: vi.fn((worktreeId: string) => {
       delete state.deleteStateByWorktreeId[worktreeId]
     }),
@@ -121,6 +125,7 @@ function setWorktrees(
     displayName?: string
     isMainWorktree?: boolean
     hostId?: ExecutionHostId
+    runtimeOwnerEnvironmentId?: string
     removalError?: string
   }[]
 ): void {
@@ -135,6 +140,9 @@ function setWorktrees(
         displayName: worktree.displayName ?? worktree.id,
         isMainWorktree: worktree.isMainWorktree ?? false,
         ...(worktree.hostId ? { hostId: worktree.hostId } : {}),
+        ...(worktree.runtimeOwnerEnvironmentId
+          ? { runtimeOwnerEnvironmentId: worktree.runtimeOwnerEnvironmentId }
+          : {}),
         ...(worktree.removalError ? { removalError: worktree.removalError } : {})
       }
     ])
@@ -171,8 +179,8 @@ describe('delete worktree flow', () => {
     expect(mocks.state.openModal).toHaveBeenCalledWith('delete-worktree', {
       worktreeIds: ['wt-1', 'wt-2'],
       worktreeDeleteIdentities: [
-        { id: 'wt-1', instanceId: 'wt-1-instance' },
-        { id: 'wt-2', instanceId: 'wt-2-instance' }
+        { id: 'wt-1', instanceId: 'wt-1-instance', hostId: undefined, storeKey: '' },
+        { id: 'wt-2', instanceId: 'wt-2-instance', hostId: undefined, storeKey: '' }
       ],
       allowSkipConfirm: false
     })
@@ -186,7 +194,9 @@ describe('delete worktree flow', () => {
     expect(started).toBe(true)
     expect(mocks.state.openModal).toHaveBeenCalledWith('delete-worktree', {
       worktreeId: 'wt-1',
-      worktreeDeleteIdentities: [{ id: 'wt-1', instanceId: 'wt-1-instance' }]
+      worktreeDeleteIdentities: [
+        { id: 'wt-1', instanceId: 'wt-1-instance', hostId: undefined, storeKey: '' }
+      ]
     })
   })
 
@@ -222,7 +232,9 @@ describe('delete worktree flow', () => {
     expect(mocks.state.clearWorktreeDeleteState).toHaveBeenCalledTimes(1)
     expect(mocks.state.openModal).toHaveBeenCalledWith('delete-worktree', {
       worktreeId: 'wt-1',
-      worktreeDeleteIdentities: [{ id: 'wt-1', instanceId: 'wt-1-instance' }]
+      worktreeDeleteIdentities: [
+        { id: 'wt-1', instanceId: 'wt-1-instance', hostId: undefined, storeKey: '' }
+      ]
     })
   })
 
@@ -265,8 +277,8 @@ describe('delete worktree flow', () => {
     expect(mocks.state.openModal).toHaveBeenCalledWith('delete-worktree', {
       worktreeIds: ['wt-1', 'wt-2'],
       worktreeDeleteIdentities: [
-        { id: 'wt-1', instanceId: 'instance-1' },
-        { id: 'wt-2', instanceId: 'instance-2' }
+        { id: 'wt-1', instanceId: 'instance-1', hostId: undefined, storeKey: '' },
+        { id: 'wt-2', instanceId: 'instance-2', hostId: undefined, storeKey: '' }
       ],
       allowSkipConfirm: false
     })
@@ -290,15 +302,21 @@ describe('delete worktree flow', () => {
     )
 
     const deletion = runWorktreeDeletesInParallel(targets)
-    await vi.waitFor(() =>
-      expect(mocks.state.removeWorktree).toHaveBeenCalledWith(
-        { id: 'wt-1', executionHostId: 'ssh:builder' },
-        false,
-        {
-          suppressPreservedBranchToast: true
-        }
-      )
+    await vi.waitFor(() => expect(mocks.state.removeWorktree).toHaveBeenCalledOnce())
+    const admission = mocks.state.removeWorktree.mock.calls[0]?.[2]?.assertBeforeDispatch
+    expect(admission).toBeTypeOf('function')
+    expect(mocks.state.removeWorktree).toHaveBeenCalledWith(
+      { id: 'wt-1', executionHostId: 'ssh:builder' },
+      false,
+      { suppressPreservedBranchToast: true, assertBeforeDispatch: admission }
     )
+    expect(() => admission()).not.toThrow()
+    const original = mocks.state.worktreeMap.get('wt-1')!
+    mocks.state.worktreeMap = new Map(mocks.state.worktreeMap).set('wt-1', {
+      ...original,
+      runtimeOwnerEnvironmentId: 'replacement-owner'
+    })
+    expect(() => admission()).toThrow('selected workspace changed')
     setWorktrees([
       {
         id: 'wt-1',
@@ -316,13 +334,10 @@ describe('delete worktree flow', () => {
     finishFirst({ ok: true })
 
     await expect(deletion).resolves.toEqual([{ id: 'wt-1', executionHostId: 'ssh:builder' }])
-    expect(mocks.state.removeWorktree).not.toHaveBeenCalledWith(
-      { id: 'wt-2', executionHostId: 'ssh:builder' },
-      false,
-      {
-        suppressPreservedBranchToast: true
-      }
-    )
+    expect(mocks.state.removeWorktree).toHaveBeenCalledOnce()
+    expect(mocks.state.removeWorktree.mock.calls.map(([target]) => target)).toEqual([
+      { id: 'wt-1', executionHostId: 'ssh:builder' }
+    ])
     expect(toast.info).toHaveBeenCalledWith(
       'Workspace list changed',
       expect.objectContaining({
@@ -346,8 +361,8 @@ describe('delete worktree flow', () => {
     expect(mocks.state.openModal).toHaveBeenCalledWith('delete-worktree', {
       worktreeIds: ['wt-1', 'wt-2'],
       worktreeDeleteIdentities: [
-        { id: 'wt-1', instanceId: 'wt-1-instance' },
-        { id: 'wt-2', instanceId: 'wt-2-instance' }
+        { id: 'wt-1', instanceId: 'wt-1-instance', hostId: undefined, storeKey: '' },
+        { id: 'wt-2', instanceId: 'wt-2-instance', hostId: undefined, storeKey: '' }
       ],
       allowSkipConfirm: false,
       onDeleted
@@ -365,7 +380,8 @@ describe('delete worktree flow', () => {
     expect(mocks.state.openModal).not.toHaveBeenCalled()
     expect(mocks.state.removeWorktree).toHaveBeenCalledWith(
       { id: 'wt-1', executionHostId: null },
-      false
+      false,
+      { assertBeforeDispatch: expect.any(Function) }
     )
     await vi.waitFor(() => {
       expect(onDeleted).toHaveBeenCalledWith([{ id: 'wt-1', executionHostId: null }])
@@ -403,7 +419,8 @@ describe('delete worktree flow', () => {
         { id: 'wt-1', executionHostId: null },
         true,
         {
-          allowUnverifiedPtyStop: true
+          allowUnverifiedPtyStop: true,
+          assertBeforeDispatch: expect.any(Function)
         }
       )
       expect(onDeleted).toHaveBeenCalledWith([{ id: 'wt-1', executionHostId: null }])
@@ -538,10 +555,12 @@ describe('delete worktree flow', () => {
     expect(mocks.state.removeWorktree).not.toHaveBeenCalled()
     expect(mocks.state.openModal).toHaveBeenCalledWith('delete-worktree', {
       worktreeId: 'parent',
-      worktreeDeleteIdentities: [{ id: 'parent', instanceId: 'parent-instance' }],
+      worktreeDeleteIdentities: [
+        { id: 'parent', instanceId: 'parent-instance', hostId: undefined, storeKey: '' }
+      ],
       lineageDeleteIdentities: [
-        { id: 'child', instanceId: 'child-instance' },
-        { id: 'parent', instanceId: 'parent-instance' }
+        { id: 'child', instanceId: 'child-instance', hostId: undefined, storeKey: '' },
+        { id: 'parent', instanceId: 'parent-instance', hostId: undefined, storeKey: '' }
       ],
       allowSkipConfirm: false
     })
@@ -569,10 +588,12 @@ describe('delete worktree flow', () => {
     expect(mocks.state.removeWorktree).not.toHaveBeenCalled()
     expect(mocks.state.openModal).toHaveBeenCalledWith('delete-worktree', {
       worktreeId: 'parent',
-      worktreeDeleteIdentities: [{ id: 'parent', instanceId: 'parent-instance' }],
+      worktreeDeleteIdentities: [
+        { id: 'parent', instanceId: 'parent-instance', hostId: undefined, storeKey: '' }
+      ],
       lineageDeleteIdentities: [
-        { id: 'child', instanceId: 'child-instance' },
-        { id: 'parent', instanceId: 'parent-instance' }
+        { id: 'child', instanceId: 'child-instance', hostId: undefined, storeKey: '' },
+        { id: 'parent', instanceId: 'parent-instance', hostId: undefined, storeKey: '' }
       ],
       allowSkipConfirm: false
     })
@@ -644,7 +665,8 @@ describe('delete worktree flow', () => {
     expect(toast.info).not.toHaveBeenCalled()
     expect(mocks.state.removeWorktree).toHaveBeenCalledWith(
       { id: 'wt-1', executionHostId: null },
-      false
+      false,
+      { assertBeforeDispatch: expect.any(Function) }
     )
   })
 
@@ -669,7 +691,8 @@ describe('delete worktree flow', () => {
     expect(toast.info).not.toHaveBeenCalled()
     expect(mocks.state.removeWorktree).toHaveBeenCalledWith(
       { id: 'wt-1', executionHostId: null },
-      false
+      false,
+      { assertBeforeDispatch: expect.any(Function) }
     )
   })
 
@@ -732,7 +755,9 @@ describe('delete worktree flow', () => {
     expect(mocks.state.removeWorktree).not.toHaveBeenCalled()
     expect(mocks.state.openModal).toHaveBeenCalledWith('delete-worktree', {
       worktreeId: 'wt-1',
-      worktreeDeleteIdentities: [{ id: 'wt-1', instanceId: 'wt-1-instance' }],
+      worktreeDeleteIdentities: [
+        { id: 'wt-1', instanceId: 'wt-1-instance', hostId: undefined, storeKey: '' }
+      ],
       allowSkipConfirm: false,
       onDeleted
     })
@@ -783,7 +808,7 @@ describe('delete worktree flow', () => {
         2,
         { id: 'wt-1', executionHostId: null },
         false,
-        { allowFailedArchiveHook: true }
+        { allowFailedArchiveHook: true, assertBeforeDispatch: expect.any(Function) }
       )
       expect(onDeleted).toHaveBeenCalledWith([{ id: 'wt-1', executionHostId: null }])
     })

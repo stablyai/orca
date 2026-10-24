@@ -30,7 +30,11 @@ import type {
   RemoveWorktreeResult,
   SparsePreset
 } from '../../shared/worktree/create-types'
-import type { WorkspaceLineage, WorktreeLineage } from '../../shared/worktree/lineage-types'
+import type {
+  ParentWorktreeRef,
+  WorkspaceLineage,
+  WorktreeLineage
+} from '../../shared/worktree/lineage-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type {
   DetectedWorktreeListResult,
@@ -125,6 +129,7 @@ export type WorktreeApi = {
   updateLineage: (args: {
     worktreeId: string
     parentWorktreeId?: string
+    parentWorktreeRef?: ParentWorktreeRef
     noParent?: boolean
   }) => Promise<WorktreeLineage | null>
   persistSortOrder: (args: { orderedIds: string[]; hostIds?: string[] }) => Promise<void>

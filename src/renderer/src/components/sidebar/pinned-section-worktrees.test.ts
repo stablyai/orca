@@ -1,3 +1,4 @@
+import { computeVisibleWorktrees } from './compute-visible-worktrees'
 import { describe, expect, it } from 'vitest'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -28,6 +29,35 @@ function makeLineage(child: Worktree, parent: Worktree): WorktreeLineage {
     capture: { source: 'terminal-context', confidence: 'inferred' },
     createdAt: 1
   }
+}
+
+function visibleRows(
+  rows: Worktree[],
+  lineageById: Record<string, WorktreeLineage>,
+  map: Map<string, Worktree>,
+  filterRepoIds: string[] = []
+) {
+  return computeVisibleWorktrees(
+    { repo: [...map.values()] },
+    rows.map((row) => row.id),
+    {
+      filterRepoIds,
+      showSleepingWorkspaces: true,
+      tabsByWorktree: {},
+      ptyIdsByTabId: {},
+      worktreeIdsWithLiveAgent: new Set(),
+      hideDefaultBranchWorkspace: false,
+      hideAutomationGeneratedWorkspaces: false,
+      hideCliCreatedWorkspaces: false,
+      hideDetachedHeadWorkspaces: false,
+      hideWorkspacesFromOtherDevices: false,
+      pairedDeviceIdsByEnvironment: new Map(),
+      repoMap,
+      workspaceHostScope: 'all',
+      defaultHostId: 'local',
+      worktreeLineageById: lineageById
+    }
+  )
 }
 
 describe('getPinnedSectionWorktrees', () => {
@@ -95,16 +125,18 @@ describe('getPinnedSectionWorktrees', () => {
     ).toEqual([pinnedChild.id])
   })
 
-  it('keeps a visible grandchild when the middle parent is absent from the visible list', () => {
+  it('restores the middle parent before deriving pinned descendant placement', () => {
     const pinnedParent = { ...parent, isPinned: true }
     const map = new Map(worktreeMap)
     map.set(pinnedParent.id, pinnedParent)
 
     expect(
-      getPinnedSectionWorktrees([pinnedParent, grandchild], lineageById, map).map(
-        (worktree) => worktree.id
-      )
-    ).toEqual([pinnedParent.id, grandchild.id])
+      getPinnedSectionWorktrees(
+        visibleRows([pinnedParent, grandchild], lineageById, map),
+        lineageById,
+        map
+      ).map((worktree) => worktree.id)
+    ).toEqual([pinnedParent.id, child.id, grandchild.id])
   })
 
   it('breaks inherited pin placement at an explicitly hidden intermediate project', () => {
@@ -113,13 +145,21 @@ describe('getPinnedSectionWorktrees', () => {
     const visible = { ...grandchild, repoId: 'visible-project' }
     const map = new Map([pinnedParent, hidden, visible].map((row) => [row.id, row]))
     const allowed = [pinnedParent.repoId, visible.repoId]
-    expect(getPinnedSectionWorktrees([pinnedParent, visible], lineageById, map, allowed)).toEqual([
-      pinnedParent
-    ])
-    expect(getPinnedSectionWorktrees([pinnedParent, visible], lineageById, map)).toEqual([
-      pinnedParent,
-      visible
-    ])
+    expect(
+      getPinnedSectionWorktrees(
+        visibleRows([pinnedParent, visible], lineageById, map, allowed),
+        lineageById,
+        map,
+        allowed
+      )
+    ).toEqual([pinnedParent])
+    expect(
+      getPinnedSectionWorktrees(
+        visibleRows([pinnedParent, visible], lineageById, map),
+        lineageById,
+        map
+      )
+    ).toEqual([pinnedParent, hidden, visible])
     const rows = buildRows(
       'repo',
       [pinnedParent, visible],
