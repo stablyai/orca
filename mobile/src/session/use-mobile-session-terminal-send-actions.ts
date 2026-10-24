@@ -1,5 +1,8 @@
 import { reportWorkerTerminalUserInput } from '../terminal/worker-terminal-takeover-report'
 import { useCallback } from 'react'
+import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
+import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
+import { readTerminalSendAcknowledgment } from '../../../src/shared/terminal-send-acknowledgment'
 import { Keyboard } from 'react-native'
 import { triggerError } from '../platform/haptics'
 import type { createTerminalLiveAccessoryInput } from '../terminal/terminal-live-accessory-input'
@@ -102,7 +105,14 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
 
   async function handleSend() {
     // Why: the return key still submits while offline; hold the composed text instead of firing a doomed RPC (#6713).
-    if (!client || !activeHandle || sendingRef.current || !canSend) {
+    if (
+      !client ||
+      !activeHandle ||
+      sendingRef.current ||
+      !canSend ||
+      !bufferedTerminalDraftState.recoveryReady() ||
+      bufferedTerminalDraftState.hasUnconfirmedSend(activeHandle)
+    ) {
       return
     }
     sendingRef.current = true
@@ -122,18 +132,38 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
       bufferedTerminalDraftState.restoreRejectedDraft(bufferedDraftSend)
 
     try {
+      if (!(await bufferedTerminalDraftState.prepareSend())) {
+        restoreRejectedDraft()
+        return
+      }
+      if (
+        activeHandleRef.current !== activeHandle ||
+        clientRef.current !== client ||
+        sendOrigin.generation !== getSendCompletionGeneration()
+      ) {
+        restoreRejectedDraft()
+        return
+      }
       // Why: fail now and restore the text — a send parked across a reconnect would execute long after the tap.
       const response = await terminalInputSend.request(
         client,
-        buildTerminalSendParams({
-          terminal: activeHandle,
-          text,
-          enter: true,
-          deviceToken: deviceTokenRef.current
-        }),
+        {
+          ...buildTerminalSendParams({
+            terminal: activeHandle,
+            text,
+            enter: true,
+            deviceToken: deviceTokenRef.current
+          }),
+          requireWriteSettlement: true
+        },
         TERMINAL_INPUT_SEND_OPTIONS
       )
-      const accepted = terminalInputSend.interpret(response) === true
+      const outcome = response.ok ? readTerminalSendAcknowledgment(response.result) : 'refused'
+      if (outcome === 'unverifiable') {
+        bufferedTerminalDraftState.retainUnconfirmedSend(bufferedDraftSend)
+        return
+      }
+      const accepted = outcome === 'accepted'
       if (accepted) {
         reportWorkerTerminalUserInput(client, activeHandle)
       }
@@ -143,10 +173,13 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
       const draftUnchanged =
         accepted && bufferedTerminalDraftState.settleBufferedTerminalDraftSend(bufferedDraftSend)
       dismissKeyboardAfterAgentSend(sendOrigin, accepted && draftUnchanged)
-    } catch {
-      restoreRejectedDraft()
+    } catch (error) {
+      if (isRpcDeliveryUnknown(error) || isLogicalClientCutoverError(error)) {
+        bufferedTerminalDraftState.retainUnconfirmedSend(bufferedDraftSend)
+      } else {
+        restoreRejectedDraft()
+      }
     } finally {
-      bufferedTerminalDraftState.settleBufferedTerminalDraftSend(bufferedDraftSend)
       sendingRef.current = false
     }
   }

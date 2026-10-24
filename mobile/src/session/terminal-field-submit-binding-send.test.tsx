@@ -32,7 +32,7 @@ vi.mock('../terminal/mobile-terminal-operations', () => ({
     request: async (_client: unknown, params: Record<string, unknown>) => {
       mocks.sent.push(params)
       await mocks.acknowledge()
-      return { ok: true }
+      return { ok: true, result: { send: { accepted: true } } }
     },
     interpret: () => true
   }
@@ -89,6 +89,10 @@ function buildScope(session: Session): MobileSessionTerminalWebviewModel {
     sendingRef: { current: false },
     bufferedTerminalDraftState: {
       input: session.draft,
+      recoveryReady: () => true,
+      prepareSend: async () => true,
+      hasUnconfirmedSend: () => false,
+      retainUnconfirmedSend: vi.fn(),
       beginBufferedTerminalDraftSend: (handle: string, draft: string) => ({
         draft,
         handle,
@@ -123,7 +127,7 @@ function Harness({ session }: { readonly session: Session }): null {
 const fieldAsTextInput = field as unknown as RefObject<never>['current']
 
 describe('the buffered field submit the page binds', () => {
-  it('reaches a handleSend that can send, not the one the first render had', () => {
+  it('reaches a handleSend that can send, not the one the first render had', async () => {
     mocks.sent.length = 0
     restoredDrafts = []
     let renderer: ReactTestRenderer | null = null
@@ -134,7 +138,7 @@ describe('the buffered field submit the page binds', () => {
     act(() => {
       renderer?.update(createElement(Harness, { session: READY }))
     })
-    act(() => {
+    await act(async () => {
       field.dispatchEvent(
         new InputEvent('beforeinput', {
           bubbles: true,

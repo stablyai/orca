@@ -1,5 +1,5 @@
 import { useStoredBufferedTerminalDrafts } from './use-stored-buffered-terminal-drafts'
-import { useCallback, useRef } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import type { RefObject } from 'react'
 import {
   type BufferedTerminalDraftRestorationToken,
@@ -19,6 +19,7 @@ interface BufferedTerminalDraftSend {
   readonly draft: string
   readonly handle: string
   readonly token: BufferedTerminalDraftRestorationToken
+  readonly owner: string
 }
 
 interface UseBufferedTerminalDraftsOptions {
@@ -56,13 +57,23 @@ export function useBufferedTerminalDrafts({
   )
   const handlesBySurfaceRef = useRef<Map<string, string>>(new Map())
   const reconciledRef = useRef(false)
-  const [drafts, setDrafts] = useStoredBufferedTerminalDrafts(
-    storageKey,
-    handlesBySurfaceRef,
-    reconciledRef,
-    onStorageError,
-    storageScope
-  )
+  const { drafts, setDrafts, unconfirmed, setUnconfirmed, prepareSend, readDraft, recoveryReady } =
+    useStoredBufferedTerminalDrafts(
+      storageKey,
+      handlesBySurfaceRef,
+      reconciledRef,
+      onStorageError,
+      storageScope
+    )
+  const owner = `${storageKey ?? ''}:${storageScope ?? 'paired'}`
+  const renderedHandleRef = useRef(activeHandle)
+  renderedHandleRef.current = activeHandle
+  const ownerRef = useRef(owner)
+  ownerRef.current = owner
+  const pendingSendsRef = useRef(new Map<string, BufferedTerminalDraftRestorationToken>())
+  const [pendingSend, setPendingSend] = useState<BufferedTerminalDraftSend | null>(null)
+  const unconfirmedRef = useRef(unconfirmed)
+  unconfirmedRef.current = unconfirmed
   const input = activeHandle ? (drafts[activeHandle] ?? '') : ''
 
   const setInput = useCallback(
@@ -80,45 +91,129 @@ export function useBufferedTerminalDrafts({
   const beginBufferedTerminalDraftSend = useCallback(
     (handle: string, draft: string): BufferedTerminalDraftSend => {
       const token = beginBufferedTerminalDraftRestoration(pendingRestorationsRef.current, handle)
+      pendingSendsRef.current.set(handle, token)
+      const send = { draft, handle, token, owner: ownerRef.current }
+      setPendingSend(send)
+      unconfirmedRef.current = { ...unconfirmedRef.current, [handle]: draft }
+      setUnconfirmed((current) => ({ ...current, [handle]: draft }))
       setDrafts((current) => updateBufferedTerminalDraft(current, handle, ''))
-      return { draft, handle, token }
+      return send
     },
-    []
+    [setUnconfirmed]
   )
 
-  const restoreRejectedDraft = useCallback((send: BufferedTerminalDraftSend): void => {
-    if (
-      !settleBufferedTerminalDraftRestoration(
-        pendingRestorationsRef.current,
-        send.handle,
-        send.token
+  const finishSend = useCallback(
+    (send: BufferedTerminalDraftSend, retain: boolean) => {
+      if (
+        send.owner !== ownerRef.current ||
+        !settleBufferedTerminalDraftRestoration(pendingSendsRef.current, send.handle, send.token)
+      ) {
+        return false
+      }
+      setPendingSend((current) => (current === send ? null : current))
+      if (!retain) {
+        setUnconfirmed((current) => {
+          const next = { ...current }
+          delete next[send.token.handle]
+          return next
+        })
+      }
+      return true
+    },
+    [setUnconfirmed]
+  )
+
+  const restoreRejectedDraft = useCallback(
+    (send: BufferedTerminalDraftSend): void => {
+      if (!finishSend(send, false)) {
+        return
+      }
+      if (
+        !settleBufferedTerminalDraftRestoration(
+          pendingRestorationsRef.current,
+          send.handle,
+          send.token
+        )
+      ) {
+        return
+      }
+      setDrafts((current) =>
+        restoreRejectedBufferedTerminalDraft(current, send.token.handle, send.draft)
       )
-    ) {
-      return
-    }
-    setDrafts((current) =>
-      restoreRejectedBufferedTerminalDraft(current, send.token.handle, send.draft)
-    )
-  }, [])
+    },
+    [finishSend]
+  )
 
   const settleBufferedTerminalDraftSend = useCallback(
     (send: BufferedTerminalDraftSend): boolean =>
+      finishSend(send, false) &&
       settleBufferedTerminalDraftRestoration(
         pendingRestorationsRef.current,
         send.handle,
         send.token
       ),
-    []
+    [finishSend]
   )
 
-  const pruneDrafts = useCallback((retainedHandles: ReadonlySet<string>): void => {
-    const retainedMappedHandles = new Set(retainedHandles)
-    for (const handle of handlesBySurfaceRef.current.values()) {
-      retainedMappedHandles.add(handle)
+  const retainUnconfirmedSend = useCallback(
+    (send: BufferedTerminalDraftSend) => {
+      finishSend(send, true)
+      settleBufferedTerminalDraftRestoration(
+        pendingRestorationsRef.current,
+        send.handle,
+        send.token
+      )
+    },
+    [finishSend]
+  )
+  const hasUnconfirmedSend = useCallback(
+    (handle: string) => Object.hasOwn(unconfirmedRef.current, handle),
+    []
+  )
+  const dismissUnconfirmedSend = useCallback(() => {
+    if (
+      !activeHandle ||
+      renderedHandleRef.current !== activeHandle ||
+      ownerRef.current !== owner ||
+      pendingSendsRef.current.has(activeHandle) ||
+      unconfirmedRef.current[activeHandle] !== unconfirmed[activeHandle]
+    ) {
+      return
     }
-    setDrafts((current) => pruneBufferedTerminalDrafts(current, retainedMappedHandles))
-    pruneBufferedTerminalDraftRestorations(pendingRestorationsRef.current, retainedMappedHandles)
-  }, [])
+    const nextUnconfirmed = { ...unconfirmedRef.current }
+    delete nextUnconfirmed[activeHandle]
+    unconfirmedRef.current = nextUnconfirmed
+    setUnconfirmed(nextUnconfirmed)
+  }, [activeHandle, owner, setUnconfirmed, unconfirmed])
+  const editUnconfirmedSend = useCallback(() => {
+    if (
+      !activeHandle ||
+      renderedHandleRef.current !== activeHandle ||
+      ownerRef.current !== owner ||
+      pendingSendsRef.current.has(activeHandle) ||
+      readDraft(activeHandle).length > 0 ||
+      !Object.hasOwn(unconfirmed, activeHandle) ||
+      unconfirmedRef.current[activeHandle] !== unconfirmed[activeHandle]
+    ) {
+      return
+    }
+    setInput(unconfirmed[activeHandle])
+    dismissUnconfirmedSend()
+  }, [activeHandle, owner, dismissUnconfirmedSend, readDraft, setInput, unconfirmed])
+
+  const pruneDrafts = useCallback(
+    (retainedHandles: ReadonlySet<string>): void => {
+      const retainedMappedHandles = new Set(retainedHandles)
+      for (const handle of handlesBySurfaceRef.current.values()) {
+        retainedMappedHandles.add(handle)
+      }
+      setDrafts((current) => pruneBufferedTerminalDrafts(current, retainedMappedHandles))
+      setUnconfirmed((current) => pruneBufferedTerminalDrafts(current, retainedMappedHandles))
+      pruneBufferedTerminalDraftRestorations(pendingSendsRef.current, retainedMappedHandles)
+      pruneBufferedTerminalDraftRestorations(pendingRestorationsRef.current, retainedMappedHandles)
+    },
+    [setUnconfirmed]
+  )
 
   const reconcileTerminalTabs = useCallback(
     (
@@ -169,13 +264,22 @@ export function useBufferedTerminalDrafts({
       }
 
       for (const { previousHandle, nextHandle } of remaps) {
+        remapBufferedTerminalDraftRestoration(pendingSendsRef.current, previousHandle, nextHandle)
         remapBufferedTerminalDraftRestoration(
           pendingRestorationsRef.current,
           previousHandle,
           nextHandle
         )
       }
+      pruneBufferedTerminalDraftRestorations(pendingSendsRef.current, retainedHandles)
       pruneBufferedTerminalDraftRestorations(pendingRestorationsRef.current, retainedHandles)
+      setUnconfirmed((current) => {
+        let next = current
+        for (const { previousHandle, nextHandle } of remaps) {
+          next = remapBufferedTerminalDraft(next, previousHandle, nextHandle)
+        }
+        return pruneBufferedTerminalDrafts(next, retainedHandles)
+      })
       setDrafts((current) => {
         let next = current
         for (const { previousHandle, nextHandle } of remaps) {
@@ -184,21 +288,34 @@ export function useBufferedTerminalDrafts({
         return pruneBufferedTerminalDrafts(next, retainedHandles)
       })
     },
-    []
+    [setUnconfirmed]
   )
 
   const resetDrafts = useCallback((): void => {
     pendingRestorationsRef.current.clear()
+    pendingSendsRef.current.clear()
+    setPendingSend(null)
     handlesBySurfaceRef.current.clear()
     reconciledRef.current = false
     setDrafts((current) => (Object.keys(current).length === 0 ? current : {}))
-  }, [])
+    setUnconfirmed((current) => (Object.keys(current).length === 0 ? current : {}))
+  }, [setUnconfirmed])
 
   const clearPendingRestorations = useCallback((): void => {
     pendingRestorationsRef.current.clear()
   }, [])
 
   return {
+    unconfirmedCommand:
+      activeHandle && Object.hasOwn(unconfirmed, activeHandle) ? unconfirmed[activeHandle] : null,
+    awaitingCommandConfirmation:
+      pendingSend?.owner === owner && pendingSend.token.handle === activeHandle,
+    recoveryReady,
+    prepareSend,
+    hasUnconfirmedSend,
+    retainUnconfirmedSend,
+    editUnconfirmedSend,
+    dismissUnconfirmedSend,
     beginBufferedTerminalDraftSend,
     clearPendingRestorations,
     input,

@@ -19760,6 +19760,7 @@
             "terminal": "terminal-1",
             "text": "ls -la",
             "enter": true,
+            "requireWriteSettlement": true,
             "client": {
               "id": "device-token-1",
               "type": "mobile"
@@ -19819,6 +19820,7 @@
             "terminal": "terminal-1",
             "text": "ls -la",
             "enter": true,
+            "requireWriteSettlement": true,
             "client": {
               "id": "device-token-1",
               "type": "mobile"
