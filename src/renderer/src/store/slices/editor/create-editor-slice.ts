@@ -1,6 +1,7 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { EditorSlice } from './types/editor-slice'
+import { createChangedFileDiffNavigator } from './actions/changed-file-diff-navigator'
 import { createEditorDraftState } from './actions/editor-draft-state'
 import { createRightSidebarState } from './actions/right-sidebar-state'
 import { createExplorerDirState } from './actions/explorer-dir-state'
@@ -31,6 +32,7 @@ import { createHydrateEditorSession } from './actions/hydrate-editor-session'
 import { createEditorBufferIdentityActions } from './actions/editor-buffer-identity-actions'
 
 export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (set, get) => ({
+  ...createChangedFileDiffNavigator(set, get),
   ...createEditorDraftState(set, get),
   ...createRightSidebarState(set, get),
   ...createExplorerDirState(set, get),
