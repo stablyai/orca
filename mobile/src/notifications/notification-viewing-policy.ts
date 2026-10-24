@@ -17,6 +17,20 @@ export type NotificationViewingWorkspace = Readonly<{
 // `executionHost` is the route's server; absent for the desktop's own workspaces.
 let routeViewing: NotificationViewingWorkspace | null = null
 let inPageViewing: NotificationViewingWorkspace | null = null
+let lastLoggedViewing = ''
+
+// Why: suppression bugs are only diagnosable on-device, so every effective change is one logcat line.
+function logViewingChange(source: string): void {
+  const line = `route=${JSON.stringify(routeViewing)} inPage=${JSON.stringify(inPageViewing)}`
+  if (line !== lastLoggedViewing) {
+    lastLoggedViewing = line
+    console.info(`[notif-viewing] ${source} ${line}`)
+  }
+}
+
+export function describeNotificationViewing(): string {
+  return `appState=${AppState.currentState} route=${JSON.stringify(routeViewing)} inPage=${JSON.stringify(inPageViewing)}`
+}
 
 function normalizeParam(value: string): string {
   try {
@@ -63,6 +77,7 @@ export function setNotificationViewingWorkspace(
     ) {
       inPageViewing = null
     }
+    logViewingChange('route')
     return
   }
   if (
@@ -72,6 +87,7 @@ export function setNotificationViewingWorkspace(
   ) {
     inPageViewing = null
   }
+  logViewingChange('route')
   dismissBannerMatchingViewingWorkspace()
   void dismissConsumedTrayNotifications(value)
 }
@@ -80,6 +96,7 @@ export function setInPageNotificationViewingWorkspace(
   value: NotificationViewingWorkspace | null
 ): void {
   inPageViewing = value
+  logViewingChange('inPage')
   if (value !== null) {
     dismissBannerMatchingViewingWorkspace()
     void dismissConsumedTrayNotifications(value)

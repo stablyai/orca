@@ -20,7 +20,10 @@ import {
   type NotificationTone
 } from './in-app-notification-banner-store'
 import { loadNotificationDeliveryPreferences } from './notification-delivery-preferences'
-import { shouldSuppressNotificationWhileViewing } from './notification-viewing-policy'
+import {
+  describeNotificationViewing,
+  shouldSuppressNotificationWhileViewing
+} from './notification-viewing-policy'
 import { deriveHostFingerprint } from './push-host-fingerprint'
 import type { OrcaPushPayload } from './push-payload'
 import { isHostPushRegistered } from './push-registration'
@@ -167,7 +170,7 @@ export async function presentSocketNotificationFallback(
     preferences.suppressWhileViewing
   )
   console.info(
-    `[notif-policy] id=${payload.notificationId ?? 'none'} wt=${payload.worktreeId ?? 'none'} pane=${payload.paneKey ?? 'none'} suppressed=${suppressedWhileViewing}`
+    `[notif-policy] id=${payload.notificationId ?? 'none'} host=${hostId} wt=${payload.worktreeId ?? 'none'} pane=${payload.paneKey ?? 'none'} exec=${payload.executionHost ?? 'none'} pref=${preferences.suppressWhileViewing} suppressed=${suppressedWhileViewing} ${describeNotificationViewing()}`
   )
   if (
     !(await canPresentForegroundPush(payload, hostId)) ||
