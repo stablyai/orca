@@ -4,14 +4,14 @@ import { notify } from './host-notify'
 import { emitKeyboardAvoidanceMetrics } from './keyboard-avoidance-metrics'
 import { emitModesIfChanged } from './mode-mirroring'
 import { reflow } from './reflow'
-import { resumeTerminalDataReplyAuthority } from './query-reply'
+import { resetTerminalDataReplyAuthority, resumeTerminalDataReplyAuthority } from './query-reply'
 import { repositionOverlay } from './selection-overlay'
 import { cancelSelect } from './selection-mode'
 import { resetEvictionCounter } from './selection-state-and-eviction'
 import { applyTerminalTheme } from './terminal-theme'
 import { init, resize, write } from './terminal-init'
 import { applyTextScale } from './text-scaling'
-import { resetWriteQueue } from './write-queue'
+import { enqueueWrite, enqueueWriteBoundary, pumpWrites, resetWriteQueue } from './write-queue'
 
 /** One message from the host. Every field is optional because the router reads them by type. */
 export type TerminalHostMessage = {
@@ -90,7 +90,7 @@ export function handleMsg(scope: TerminalDocumentScope, msg: TerminalHostMessage
   } else if (msg.type === 'clear') {
     scope.terminalGeneration++
     resetWriteQueue(scope)
-    resumeTerminalDataReplyAuthority(scope) // Why: clear drops the replay boundary.
+    resetTerminalDataReplyAuthority(scope)
     scope.statusDotPendingSelector = false
     scope.afterDrainCallbacks = []
     scope.writesDraining = false
@@ -105,6 +105,22 @@ export function handleMsg(scope: TerminalDocumentScope, msg: TerminalHostMessage
     if (scope.term) {
       scope.term.clear()
       scope.term.reset()
+    }
+    const terminal = scope.term
+    if (terminal) {
+      // Why: reset() preserves xterm's parser; cancel an admitted partial control before new output.
+      enqueueWrite(scope, '\x18')
+      enqueueWriteBoundary(scope, () => {
+        terminal.clear()
+        terminal.reset()
+        resumeTerminalDataReplyAuthority(scope)
+        resetEvictionCounter(scope)
+        emitModesIfChanged(scope)
+        emitKeyboardAvoidanceMetrics(scope)
+      })
+      pumpWrites(scope, scope.terminalGeneration)
+    } else {
+      resumeTerminalDataReplyAuthority(scope)
     }
     emitModesIfChanged(scope)
     emitKeyboardAvoidanceMetrics(scope)

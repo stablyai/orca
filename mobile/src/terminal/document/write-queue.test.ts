@@ -1,8 +1,17 @@
 import { transformSync } from 'esbuild'
-import { describe, expect, it } from 'vitest'
+import { Script } from 'node:vm'
+import { describe, expect, it, vi } from 'vitest'
 import { createTerminalDocumentScope } from './document-scope'
 import * as escapeIntroducers from './escape-introducers'
 import { documentModuleSource } from './document-module-source.test-support'
+import {
+  TERMINAL_WRITE_SLICE_UNITS,
+  enqueueWrite,
+  enqueueWriteBoundary,
+  pumpWrites,
+  resetWriteQueue
+} from './write-queue'
+import { XTERM_ENGINE_JS } from '../terminal-webview-engine.generated'
 
 // Why: the two implementations are compared rather than asserted about, so both are evaluated. The
 // shipped one is the module's own source and the pre-change one is that source with the statement
@@ -126,7 +135,7 @@ function drain(queue: WriteQueueHarness): void {
 
 describe('terminal WebView write queue', () => {
   // Distinct contents per chunk: with one shared string the sum below would count the same
-  // 64 KB string 128 times and read identically even if nothing were released.
+  // string 128 times and read identically even if nothing were released.
   function distinctChunks(count: number, codeUnits: number): string[] {
     return Array.from({ length: count }, (_v, i) => {
       const marker = `chunk-${i}:`
@@ -137,7 +146,8 @@ describe('terminal WebView write queue', () => {
   // The measured quantity is a count of queue-reachable string code units, not heap bytes:
   // xterm may still hold the submitted chunk, so this proves only that the queue released it.
   it('retains one chunk instead of every dequeued chunk after 127 of 128 dequeues', () => {
-    const CHUNK_CODE_UNITS = 65_536
+    // One slice each, so the queue holds exactly the chunks it was handed.
+    const CHUNK_CODE_UNITS = TERMINAL_WRITE_SLICE_UNITS
     const CHUNK_COUNT = 128
     const chunks = distinctChunks(CHUNK_COUNT, CHUNK_CODE_UNITS)
     const measure = (source: string): number => {
@@ -184,6 +194,180 @@ describe('terminal WebView write queue', () => {
     // Pre-change: every consumed slot is still reachable. Shipped: only the pending ones.
     expect(previous.codeUnits).toBe(backlog * 64)
     expect(shipped.codeUnits).toBe((backlog - dequeues) * 64)
+  })
+
+  it('slices a large write in order without splitting a surrogate pair', () => {
+    const queue = createWriteQueue(WRITE_QUEUE_SOURCE)
+    // The emoji straddles the first slice boundary.
+    const input = 'a'.repeat(TERMINAL_WRITE_SLICE_UNITS - 1) + '\u{1f600}' + 'b'.repeat(32)
+    queue.enqueue(input)
+    drain(queue)
+
+    expect(queue.writes.join('')).toBe(input)
+    expect(queue.writes).toHaveLength(2)
+    expect(queue.writes.every((chunk) => chunk.length <= TERMINAL_WRITE_SLICE_UNITS)).toBe(true)
+    expect(queue.writes[1]?.codePointAt(0)).toBe(0x1f600)
+  })
+
+  it('hands xterm the text-presentation status dot below and above the slice limit', () => {
+    const queue = createWriteQueue(WRITE_QUEUE_SOURCE)
+    const large = 'a'.repeat(TERMINAL_WRITE_SLICE_UNITS)
+    queue.enqueue('\u23fa small')
+    queue.enqueue(`\u23fa ${large}`)
+    drain(queue)
+
+    expect(queue.writes[0]).toBe('\u23fa\ufe0e small')
+    expect(queue.writes.slice(1).join('')).toBe(`\u23fa\ufe0e ${large}`)
+  })
+
+  it('queues a write frame that carries no text instead of throwing', () => {
+    const queue = createWriteQueue(WRITE_QUEUE_SOURCE)
+    expect(() => queue.enqueue(undefined)).not.toThrow()
+    expect(queue.snapshot().slots).toEqual([undefined])
+  })
+
+  it('finishes every replay slice before a boundary and the following live write', () => {
+    const queue = createWriteQueue(WRITE_QUEUE_SOURCE)
+    const replay = 'replay'.repeat(TERMINAL_WRITE_SLICE_UNITS)
+    queue.enqueue(replay)
+    let replayAtBoundary = ''
+    queue.enqueueBoundary(() => {
+      replayAtBoundary = queue.writes.join('')
+    })
+    queue.enqueue('live')
+    drain(queue)
+    expect(replayAtBoundary).toBe(replay)
+    expect(queue.writes.join('')).toBe(replay + 'live')
+  })
+
+  it('preserves split CSI, OSC and Unicode with the shipped xterm parser', async () => {
+    vi.useFakeTimers()
+    const scope = createTerminalDocumentScope()
+    scope.ready = true
+    const result = { text: '', color: 0, maxWrite: 0, read: () => {} }
+    const window = {}
+    try {
+      new Script(`${XTERM_ENGINE_JS};
+        const terminal = new window.Terminal({ cols: 80, rows: 24 });
+        const write = terminal.write.bind(terminal);
+        terminal.write = function(data, done) {
+          result.maxWrite = Math.max(result.maxWrite, data.length);
+          write(data, done);
+        };
+        scope.term = terminal;
+        result.read = function() {
+          const line = terminal.buffer.active.getLine(0);
+          result.text = line.translateToString(true);
+          result.color = line.getCell(0).getFgColor();
+        };
+      `).runInNewContext({
+        window,
+        self: window,
+        document: {},
+        scope,
+        result,
+        navigator: { platform: 'Linux', userAgent: 'Chrome/74' },
+        structuredClone,
+        performance,
+        setTimeout,
+        clearTimeout,
+        queueMicrotask,
+        console,
+        URL
+      })
+      // CSI's final byte and OSC's terminator straddle separate 4096-unit slices.
+      const padding = '\x00'.repeat(TERMINAL_WRITE_SLICE_UNITS - 4)
+      enqueueWrite(
+        scope,
+        padding +
+          '\x1b[31mRED\x1b[0m' +
+          '\x1b]0;' +
+          't'.repeat(TERMINAL_WRITE_SLICE_UNITS - 13) +
+          '\x1b\\' +
+          '😀'
+      )
+      enqueueWriteBoundary(scope, result.read)
+      pumpWrites(scope, scope.terminalGeneration)
+      await vi.runAllTimersAsync()
+      expect(result.text).toBe('RED😀')
+      expect(result.color).toBe(1)
+      expect(result.maxWrite).toBeLessThanOrEqual(TERMINAL_WRITE_SLICE_UNITS)
+    } finally {
+      scope.term?.dispose()
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps one parse in flight while a sliced backlog compacts and live writes arrive', () => {
+    const queue = createWriteQueue(WRITE_QUEUE_SOURCE)
+    const replay = Array.from({ length: 300 }, (_, index) =>
+      `${index}:`.padEnd(TERMINAL_WRITE_SLICE_UNITS, '.')
+    ).join('')
+    const live = 'live'.repeat(TERMINAL_WRITE_SLICE_UNITS)
+    const boundaries: string[] = []
+    queue.enqueue(replay)
+    queue.enqueueBoundary(() => boundaries.push(queue.writes.join('')))
+    queue.pump()
+    queue.enqueue(live)
+    queue.pump()
+    expect(queue.pendingWrites).toHaveLength(1)
+    expect(queue.writes.join('')).toBe(replay.slice(0, TERMINAL_WRITE_SLICE_UNITS))
+    for (let i = 0; i < 299; i++) {
+      queue.flushWrite()
+      expect(queue.pendingWrites).toHaveLength(1)
+      expect(boundaries).toEqual([])
+    }
+    queue.flushWrite()
+    expect(boundaries).toEqual([replay])
+    drain(queue)
+    expect(queue.writes.join('')).toBe(replay + live)
+    expect(queue.snapshot()).toEqual({ slots: [], head: 0 })
+  })
+
+  it('fences an old slice callback from a replacement terminal and its drain boundary', () => {
+    const scope = createTerminalDocumentScope()
+    const old = createWriteQueue(WRITE_QUEUE_SOURCE)
+    const replacement = createWriteQueue(WRITE_QUEUE_SOURCE)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only write is reached; the held callbacks model xterm completion.
+    scope.term = {
+      write: (data: string, done: () => void) => {
+        old.writes.push(data)
+        old.pendingWrites.push(done)
+      }
+    } as unknown as typeof scope.term
+    scope.ready = true
+    enqueueWrite(scope, 'old'.repeat(TERMINAL_WRITE_SLICE_UNITS))
+    const oldBoundary = vi.fn()
+    enqueueWriteBoundary(scope, oldBoundary)
+    pumpWrites(scope, scope.terminalGeneration)
+    scope.terminalGeneration++
+    resetWriteQueue(scope)
+    scope.writesDraining = false
+    scope.afterDrainCallbacks = []
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: replacement implements the same held xterm write callback.
+    scope.term = {
+      write: (data: string, done: () => void) => {
+        replacement.writes.push(data)
+        replacement.pendingWrites.push(done)
+      }
+    } as unknown as typeof scope.term
+    const next = 'new'.repeat(TERMINAL_WRITE_SLICE_UNITS)
+    enqueueWrite(scope, next)
+    const newBoundary = vi.fn()
+    enqueueWriteBoundary(scope, newBoundary)
+    pumpWrites(scope, scope.terminalGeneration)
+    old.flushWrite()
+    expect(scope.writesDraining).toBe(true)
+    expect(replacement.pendingWrites).toHaveLength(1)
+    expect(newBoundary).not.toHaveBeenCalled()
+    while (replacement.pendingWrites.length) {
+      replacement.flushWrite()
+    }
+    expect(replacement.writes.join('')).toBe(next)
+    expect(old.writes).toHaveLength(1)
+    expect(oldBoundary).not.toHaveBeenCalled()
+    expect(newBoundary).toHaveBeenCalledTimes(1)
+    expect(scope.writeQueue).toEqual([])
   })
 
   it('drains writes in FIFO order', () => {
