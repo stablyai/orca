@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { discoverPlugins, isInvalidDiscoveredPlugin } from './plugin-discovery'
 import { PLUGIN_CURRENT_POINTER_MAX_BYTES } from './installation/plugin-current-pointer'
+import { getPluginActivationState } from '../../shared/plugins/approval/plugin-consent-state'
 
 const roots: string[] = []
 
@@ -17,6 +18,50 @@ async function tempPluginsDir(): Promise<string> {
   roots.push(root)
   return root
 }
+
+describe('project repositories', () => {
+  it('can neither load nor approve a plugin they carry', async () => {
+    const userPlugins = await tempPluginsDir()
+    const worktree = await tempPluginsDir()
+    const manifest = JSON.stringify({
+      manifestVersion: 2,
+      execution: 'sandboxed-ui',
+      id: 'repo-panel',
+      publisher: 'acme',
+      name: 'Repo panel',
+      version: '1.0.0',
+      engines: { orca: `>=${PLUGIN_SCHEMA_NEWEST_SINCE}` },
+      contributes: { panels: [{ id: 'p', title: 'P', entry: 'p.html' }] }
+    })
+    // Every place a repository might plausibly drop a plugin for Orca to pick up.
+    for (const dir of [worktree, join(worktree, '.orca', 'plugins', 'acme.repo-panel')]) {
+      await mkdir(dir, { recursive: true })
+      await writeFile(join(dir, 'orca-plugin.json'), manifest)
+      await writeFile(join(dir, 'p.html'), '<p>repo</p>')
+    }
+    const discover = (devPluginPaths: string[]) =>
+      discoverPlugins({
+        pluginsDir: userPlugins,
+        devPluginPaths,
+        hostVersion: PLUGIN_SCHEMA_NEWEST_SINCE
+      })
+
+    // Why: roots are the user's plugins dir and dev folders the user added, never a workspace.
+    expect(await discover([])).toEqual([])
+    // Even after the user adds the repo as a dev folder, it waits for approval: consent lives
+    // only in user settings, keyed by the reviewed fingerprint.
+    const [plugin] = await discover([worktree])
+    if (!plugin || isInvalidDiscoveredPlugin(plugin)) {
+      throw new Error('expected a valid dev plugin')
+    }
+    expect(
+      getPluginActivationState(plugin.pluginKey, plugin.consentFingerprint, {
+        pluginConsents: {},
+        disabledPlugins: []
+      })
+    ).toBe('pending')
+  })
+})
 
 describe('installed plugin discovery identity', () => {
   it('requires a new review when an installed v2 worker has different bytes', async () => {

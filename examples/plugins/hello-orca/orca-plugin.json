@@ -1,11 +1,12 @@
 {
-  "manifestVersion": 1,
+  "manifestVersion": 2,
+  "execution": "trusted-worker",
   "id": "hello-orca",
   "publisher": "orca-samples",
   "name": "Hello Orca",
   "version": "1.0.0",
   "description": "Sample plugin combining a sandboxed panel, a worker command, and event subscriptions.",
-  "engines": { "orca": ">=1.4.0" },
+  "engines": { "orca": ">=1.4.240" },
   "pluginApi": 1,
   "main": "main.mjs",
   "contributes": {

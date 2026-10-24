@@ -293,6 +293,41 @@
           "items": {
             "$ref": "#/$defs/SyntaxContribution"
           }
+        },
+        "skills": {
+          "description": "Reserved for agent skills; must be empty until their format is defined.",
+          "x-orca-since": "1.4.240",
+          "maxItems": 0,
+          "type": "array",
+          "items": {}
+        },
+        "mcpServers": {
+          "description": "Reserved for MCP server definitions; must be empty until their format is defined.",
+          "x-orca-since": "1.4.240",
+          "maxItems": 0,
+          "type": "array",
+          "items": {}
+        },
+        "taskSources": {
+          "description": "Reserved for task sources; must be empty until their format is defined.",
+          "x-orca-since": "1.4.240",
+          "maxItems": 0,
+          "type": "array",
+          "items": {}
+        },
+        "connections": {
+          "description": "Reserved for account connections; must be empty until their format is defined.",
+          "x-orca-since": "1.4.240",
+          "maxItems": 0,
+          "type": "array",
+          "items": {}
+        },
+        "settings": {
+          "description": "Reserved for plugin settings; must be empty until their format is defined.",
+          "x-orca-since": "1.4.240",
+          "maxItems": 0,
+          "type": "array",
+          "items": {}
         }
       },
       "additionalProperties": false

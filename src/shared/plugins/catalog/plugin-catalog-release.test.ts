@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { PLUGIN_MANIFEST_V2_SINCE } from '../manifest/plugin-schema-field-docs'
 import {
+  pluginCatalogReleaseEntry,
   pluginCatalogReleaseError,
   pluginCatalogReleaseSchema,
   type PluginCatalogRelease
@@ -65,6 +66,33 @@ function manifestInput(): Record<string, unknown> {
 describe('catalog releases', () => {
   it('accepts a release that matches the exact bytes and manifest', () => {
     expect(check(release())).toBeNull()
+  })
+
+  it.each([
+    ['a language pack', {}],
+    [
+      'a worker with capabilities and a syntax',
+      {
+        execution: 'trusted-worker',
+        main: 'main.mjs',
+        capabilities: [{ kind: 'storage' }],
+        contributes: {
+          syntaxes: [
+            {
+              id: 'gleam',
+              label: 'Gleam',
+              scopeName: 'source.gleam',
+              path: 'g.json',
+              extensions: ['.gleam']
+            }
+          ]
+        }
+      }
+    ]
+  ])('builds a release entry for %s that install accepts as is', (_label, overrides) => {
+    const subject = manifest(overrides)
+    const entry = pluginCatalogReleaseEntry(subject, { commit: COMMIT, contentHash: HASH })
+    expect(check(pluginCatalogReleaseSchema.parse(entry), subject)).toBeNull()
   })
 
   it('strips unknown optional fields instead of rejecting the release', () => {

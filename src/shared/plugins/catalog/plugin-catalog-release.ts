@@ -219,6 +219,37 @@ export function pluginCatalogTypes(manifest: PluginManifest): PluginCatalogType[
   return PLUGIN_CATALOG_TYPES.filter((type) => declared.has(type))
 }
 
+/** The release entry a catalog should list for these exact bytes, so authors paste it instead of
+ *  hand-copying fields that `pluginCatalogReleaseError` would refuse. */
+export function pluginCatalogReleaseEntry(
+  manifest: PluginManifest,
+  pinned: { commit: string; contentHash: string }
+): z.input<typeof pluginCatalogReleaseSchema> | null {
+  if (manifest.manifestVersion !== 2) {
+    return null
+  }
+  const fileTypes = [
+    ...new Set(
+      manifest.contributes.syntaxes.flatMap((syntax) =>
+        syntax.extensions.map((extension) => extension.slice(1).toLowerCase())
+      )
+    )
+  ]
+  const capabilities = [...new Set(manifest.capabilities.map((capability) => capability.kind))]
+  return {
+    version: manifest.version,
+    commit: pinned.commit,
+    contentHash: pinned.contentHash,
+    execution: manifest.execution,
+    minimumOrca: manifest.engines.orca.replace(/^>=/, ''),
+    types: pluginCatalogTypes(manifest),
+    name: manifest.name,
+    contributes: pluginContributionSummary(manifest),
+    ...(capabilities.length > 0 ? { capabilities } : {}),
+    ...(fileTypes.length > 0 ? { fileTypes } : {})
+  }
+}
+
 /** Why null-or-message: install and preview surface the first mismatch verbatim. */
 export function pluginCatalogReleaseError(input: {
   release: PluginCatalogRelease

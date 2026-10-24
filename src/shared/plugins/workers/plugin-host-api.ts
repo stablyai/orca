@@ -13,8 +13,8 @@ import type { PluginCapabilityKind } from '../plugin-capabilities'
  * bridge action set, and the worker SDK. Electron-free by design: desktop
  * main, headless serve, the relay conformance path, and tests all import it.
  *
- * EXPERIMENTAL: additive-only within pluginApi major 1 once frozen; no
- * stability promises before then.
+ * Frozen as v0 (pluginApi major 1): additive only. The policy that binds this
+ * table is in docs/reference/plugin-host-api.md, generated from it.
  */
 
 export const PANEL_ACTION_TEXT_MAX_LENGTH = 4096
@@ -97,11 +97,14 @@ const eventsSubscribeResult = z.object({ subscribed: z.array(z.enum(PLUGIN_EVENT
 
 export type PluginHostMethodSpec = {
   name: string
+  /** One line for the generated reference. */
+  summary: string
   /** pluginApi minor the method appeared in (`1.0` for the v0 set). */
   since: string
+  /** pluginApi minor that deprecated it; it keeps working until the next major. */
+  deprecatedSince?: string
   /** Machine-readable resource boundary enforced by the host binding. */
   scope: 'active-worktree' | 'explicit-terminal' | 'plugin-private' | 'desktop' | 'host-events'
-  stability: 'experimental'
   capability: PluginCapabilityKind
   /** Mutations are audit-logged with actor `plugin:<id>`. */
   mutation: boolean
@@ -113,15 +116,13 @@ export type PluginHostMethodSpec = {
 }
 
 const spec = <P extends z.ZodTypeAny, R extends z.ZodTypeAny>(
-  entry: Omit<PluginHostMethodSpec, 'params' | 'result' | 'stability'> & {
-    params: P
-    result: R
-  }
-): PluginHostMethodSpec => ({ ...entry, stability: 'experimental' })
+  entry: Omit<PluginHostMethodSpec, 'params' | 'result'> & { params: P; result: R }
+): PluginHostMethodSpec => entry
 
 export const PLUGIN_HOST_API_V0: readonly PluginHostMethodSpec[] = [
   spec({
     name: 'workspace.readContext',
+    summary: 'Branch, name and terminal ids of the focused worktree, or null when none is focused.',
     since: '1.0',
     scope: 'active-worktree',
     capability: 'workspace:read',
@@ -132,6 +133,7 @@ export const PLUGIN_HOST_API_V0: readonly PluginHostMethodSpec[] = [
   }),
   spec({
     name: 'terminal.sendText',
+    summary: 'Types text into one terminal named by id, optionally pressing Enter.',
     since: '1.0',
     scope: 'explicit-terminal',
     capability: 'terminal:send',
@@ -142,6 +144,7 @@ export const PLUGIN_HOST_API_V0: readonly PluginHostMethodSpec[] = [
   }),
   spec({
     name: 'notifications.show',
+    summary: 'Shows a desktop notification.',
     since: '1.0',
     scope: 'desktop',
     capability: 'notifications:show',
@@ -152,6 +155,7 @@ export const PLUGIN_HOST_API_V0: readonly PluginHostMethodSpec[] = [
   }),
   spec({
     name: 'storage.get',
+    summary: "Reads a JSON value from the plugin's private store; null when absent.",
     since: '1.0',
     scope: 'plugin-private',
     capability: 'storage',
@@ -162,6 +166,7 @@ export const PLUGIN_HOST_API_V0: readonly PluginHostMethodSpec[] = [
   }),
   spec({
     name: 'storage.set',
+    summary: "Writes a JSON value to the plugin's private store.",
     since: '1.0',
     scope: 'plugin-private',
     capability: 'storage',
@@ -172,6 +177,7 @@ export const PLUGIN_HOST_API_V0: readonly PluginHostMethodSpec[] = [
   }),
   spec({
     name: 'storage.delete',
+    summary: "Removes a key from the plugin's private store.",
     since: '1.0',
     scope: 'plugin-private',
     capability: 'storage',
@@ -182,6 +188,7 @@ export const PLUGIN_HOST_API_V0: readonly PluginHostMethodSpec[] = [
   }),
   spec({
     name: 'storage.keys',
+    summary: "Lists the keys in the plugin's private store.",
     since: '1.0',
     scope: 'plugin-private',
     capability: 'storage',
@@ -192,6 +199,7 @@ export const PLUGIN_HOST_API_V0: readonly PluginHostMethodSpec[] = [
   }),
   spec({
     name: 'secrets.get',
+    summary: 'Reads a secret from the OS keychain; null when absent.',
     since: '1.0',
     scope: 'plugin-private',
     capability: 'secrets',
@@ -202,6 +210,7 @@ export const PLUGIN_HOST_API_V0: readonly PluginHostMethodSpec[] = [
   }),
   spec({
     name: 'secrets.set',
+    summary: 'Stores a secret in the OS keychain.',
     since: '1.0',
     scope: 'plugin-private',
     capability: 'secrets',
@@ -212,6 +221,7 @@ export const PLUGIN_HOST_API_V0: readonly PluginHostMethodSpec[] = [
   }),
   spec({
     name: 'secrets.delete',
+    summary: 'Removes a secret from the OS keychain.',
     since: '1.0',
     scope: 'plugin-private',
     capability: 'secrets',
@@ -222,6 +232,7 @@ export const PLUGIN_HOST_API_V0: readonly PluginHostMethodSpec[] = [
   }),
   spec({
     name: 'settings.get',
+    summary: 'Reads every setting the plugin owns.',
     since: '1.0',
     scope: 'plugin-private',
     capability: 'settings:own',
@@ -232,6 +243,7 @@ export const PLUGIN_HOST_API_V0: readonly PluginHostMethodSpec[] = [
   }),
   spec({
     name: 'settings.set',
+    summary: 'Writes one setting the plugin owns.',
     since: '1.0',
     scope: 'plugin-private',
     capability: 'settings:own',
@@ -242,6 +254,8 @@ export const PLUGIN_HOST_API_V0: readonly PluginHostMethodSpec[] = [
   }),
   spec({
     name: 'events.subscribe',
+    summary:
+      'Starts delivering the named events to the worker; returns every event now subscribed.',
     since: '1.0',
     scope: 'host-events',
     capability: 'events:subscribe',

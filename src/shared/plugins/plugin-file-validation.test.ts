@@ -34,7 +34,7 @@ describe('validatePluginFile', () => {
         catalogEntryFixture(),
         catalogEntryFixture({
           id: 'acme.other',
-          releases: [{ version: 'x' }, VALID_RELEASE]
+          releases: [{ ...VALID_RELEASE, commit: 'v1.0.0' }, VALID_RELEASE]
         }),
         catalogEntryFixture({ id: 'acme.broken', releases: [] })
       ])
@@ -43,7 +43,7 @@ describe('validatePluginFile', () => {
       'plugins[0].categories: has invalid, repeated or extra categories',
       'plugins[0].description: must be text of 1 to 4096 characters',
       'plugins[1].id: duplicate plugin id acme.gleam-syntax',
-      'plugins[2].releases: 1 release(s) are unreadable or over the limit',
+      'plugins[2].releases[0]: commit: must be a full lowercase SHA-1 commit',
       'plugins[3]: releases: needs at least one release this Orca can read'
     ])
   })

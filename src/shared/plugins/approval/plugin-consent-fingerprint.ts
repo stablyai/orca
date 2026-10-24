@@ -43,6 +43,12 @@ export function canonicalizePluginConsent(
   contentIdentity?: string
 ): string {
   const capabilities = canonicalizeCapabilitySet(manifest.capabilities)
+  // Why: a data pack that becomes instructional (e.g. adds alias commands) binds no new bytes, yet
+  // crossed the one-click boundary. Data stays out so content packs keep their approval.
+  const executionIdentity =
+    manifest.execution === undefined || manifest.execution === 'data'
+      ? ''
+      : `\0execution:${manifest.execution}`
   const workerIdentity = manifest.main === undefined ? '' : '\0trusted-node-worker'
   const executableIdentity = bindsExecutableContent(manifest)
     ? `\0executable-content:${contentIdentity ?? 'unresolved'}`
@@ -52,7 +58,7 @@ export function canonicalizePluginConsent(
   const instructionalIdentity = hasInstructionalPluginContributions(manifest)
     ? `\0instructional-content:${contentIdentity ?? 'unresolved'}`
     : ''
-  return `${capabilities}${workerIdentity}${executableIdentity}${instructionalIdentity}`
+  return `${capabilities}${executionIdentity}${workerIdentity}${executableIdentity}${instructionalIdentity}`
 }
 
 export function fingerprintPluginConsent(

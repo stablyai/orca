@@ -107,6 +107,51 @@ describe('fingerprintPluginConsent', () => {
     ).toBe(true)
   })
 
+  it('requires re-approval when an update adds a capability', () => {
+    const lists = (approved: string) => ({
+      pluginConsents: { 'orca-samples.demo': approved },
+      disabledPlugins: []
+    })
+    for (const execution of ['data', 'sandboxed-ui', 'trusted-worker'] as const) {
+      const main = execution === 'trusted-worker' ? 'worker.js' : undefined
+      const approved = fingerprintPluginConsent(
+        { execution, main, capabilities: [] },
+        'a'.repeat(64)
+      )
+      const updated = fingerprintPluginConsent(
+        { execution, main, capabilities: [storage] },
+        'a'.repeat(64)
+      )
+      expect(needsReconsent('orca-samples.demo', updated, lists(approved)), execution).toBe(true)
+    }
+  })
+
+  it('requires re-approval whenever an update changes the execution profile', () => {
+    const profiles = ['data', 'instructional', 'sandboxed-ui', 'trusted-worker'] as const
+    const fingerprintFor = (execution: (typeof profiles)[number]) =>
+      fingerprintPluginConsent(
+        {
+          execution,
+          main: execution === 'trusted-worker' ? 'worker.js' : undefined,
+          capabilities: [],
+          // Alias commands only: nothing that binds bytes, so only the profile differs.
+          contributes: {}
+        },
+        'a'.repeat(64)
+      )
+    for (const from of profiles) {
+      for (const to of profiles.filter((profile) => profile !== from)) {
+        expect(
+          needsReconsent('orca-samples.demo', fingerprintFor(to), {
+            pluginConsents: { 'orca-samples.demo': fingerprintFor(from) },
+            disabledPlugins: []
+          }),
+          `${from} -> ${to}`
+        ).toBe(true)
+      }
+    }
+  })
+
   it('keeps data pack consent stable across byte changes', () => {
     const subject = { execution: 'data' as const, capabilities: [] }
     expect(fingerprintPluginConsent(subject, 'a'.repeat(64))).toBe(

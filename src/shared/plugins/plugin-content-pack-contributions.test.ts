@@ -57,10 +57,10 @@ describe('content-pack manifest contributions', () => {
     })
   })
 
-  it('rejects the removed plugin skills contribution', () => {
+  it('refuses items in the reserved skills contribution', () => {
     expect(parsePluginManifest(manifest({ skills: [{ path: 'skills' }] }))).toMatchObject({
       ok: false,
-      error: 'contributes: unknown key "skills"'
+      error: 'contributes.skills: is reserved for agent skills and must be empty for now'
     })
   })
 

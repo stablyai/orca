@@ -5,6 +5,7 @@ import { PLUGIN_ENUM_SINCE_KEY } from './plugin-engine-floor-keys'
 import { PLUGIN_SCHEMA_NEWEST_SINCE, pluginHostVersion } from '../plugin-host-version'
 import { parsePluginManifest } from './plugin-manifest'
 import { PLUGIN_MANIFEST_V2_SINCE } from './plugin-schema-field-docs'
+import { PLUGIN_RESERVED_CONTRIBUTION_POINTS } from '../plugin-contribution-points'
 
 function v2(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -31,6 +32,18 @@ describe('manifest format 2 rules', () => {
     ).toMatchObject({ ok: true })
   })
 
+  it('refuses host API majors this Orca does not implement', () => {
+    const worker = { execution: 'trusted-worker', main: 'main.mjs' }
+    expect(parsePluginManifest(v2({ ...worker, pluginApi: 2 }))).toEqual({
+      ok: false,
+      error: 'pluginApi: targets host API 2, but this Orca supports only 1; update Orca'
+    })
+    expect(parsePluginManifest(v2({ ...worker, pluginApi: 0 }))).toEqual({
+      ok: false,
+      error: 'pluginApi: must be 1'
+    })
+  })
+
   it('keeps contributes.agents reserved', () => {
     expect(
       parsePluginManifest(
@@ -42,6 +55,17 @@ describe('manifest format 2 rules', () => {
         'contributes.agents: is reserved for coding-agent definitions and must be empty for now'
     })
   })
+
+  it.each(Object.entries(PLUGIN_RESERVED_CONTRIBUTION_POINTS))(
+    'reserves contributes.%s: empty is accepted, any item is refused',
+    (key, purpose) => {
+      expect(parsePluginManifest(v2({ contributes: { [key]: [] } }))).toMatchObject({ ok: true })
+      expect(parsePluginManifest(v2({ contributes: { [key]: [{}] } }))).toEqual({
+        ok: false,
+        error: `contributes.${key}: is reserved for ${purpose} and must be empty for now`
+      })
+    }
+  )
 
   it('requires engines.orca to cover every field the manifest uses', () => {
     expect(parsePluginManifest(v2({ engines: { orca: '>=1.4.160' } }))).toEqual({

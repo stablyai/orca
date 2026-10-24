@@ -15,8 +15,8 @@ Each entry is `{ "id", "label", "path" }` pointing at a JSON file of at most 16 
   omitted token is derived from the ones you set (cards and sidebars from `--background`, text
   from `--foreground`, sidebar accents from `--accent`, rings from `--primary`, and so on), so a
   two-token theme still colors the whole app.
-- The public tokens are `PLUGIN_APP_THEME_TOKENS` in
-  `src/shared/plugins/artifacts/plugin-theme-artifact.ts`. Other variables cannot be set.
+- [Theme tokens](plugin-theme-tokens.md) lists every public token and what it falls back to
+  when omitted. Other variables cannot be set.
 - Values must be colors: hex, a color function (`rgb`, `hsl`, `oklch`, …) or a color name.
   `transparent`, `currentColor`, CSS-wide keywords, lengths, `calc()`, `var()` and `url()` are
   refused.
@@ -28,7 +28,11 @@ Each entry is `{ "id", "label", "path" }` pointing at a JSON file of at most 16 
 ## Terminal themes
 
 ```json
-{ "schemaVersion": 1, "mode": "dark", "terminal": { "background": "#1b1430", "foreground": "#e8e0ff", "red": "#ff6b8b" } }
+{
+  "schemaVersion": 1,
+  "mode": "dark",
+  "terminal": { "background": "#1b1430", "foreground": "#e8e0ff", "red": "#ff6b8b" }
+}
 ```
 
 Colors are hex. A palette needs `background`, `foreground` and at least one ANSI color. When a

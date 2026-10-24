@@ -35,6 +35,18 @@ function catalog(plugins: unknown[], extra: Record<string, unknown> = {}) {
 }
 
 describe('plugin catalog', () => {
+  it.each(['main', 'v1.0.0', 'a'.repeat(7), 'A'.repeat(40)])(
+    'drops a release pinned to %s instead of a full commit SHA',
+    (commit) => {
+      const parsed = pluginCatalogSchema.parse(
+        catalog([
+          entry('acme.one', { releases: [{ ...release('2.0.0'), commit }, release('1.0.0')] })
+        ])
+      )
+      expect(parsed.plugins[0]?.releases.map((item) => item.version)).toEqual(['1.0.0'])
+    }
+  )
+
   it('keeps what it can read and skips the rest', () => {
     const parsed = pluginCatalogSchema.parse(
       catalog(

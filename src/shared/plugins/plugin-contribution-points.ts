@@ -49,6 +49,33 @@ export const PLUGIN_CONTRIBUTION_POINTS = [
 
 export type PluginContributionPoint = (typeof PLUGIN_CONTRIBUTION_POINTS)[number]
 
+/** `contributes` keys held for planned points, so each can ship later as an additive minor
+ *  instead of a new manifest format. Each must stay empty until its format is defined. */
+export const PLUGIN_RESERVED_CONTRIBUTION_POINTS = {
+  skills: 'agent skills',
+  mcpServers: 'MCP server definitions',
+  taskSources: 'task sources',
+  connections: 'account connections',
+  settings: 'plugin settings'
+} as const
+
+export type PluginReservedContributionPoint = keyof typeof PLUGIN_RESERVED_CONTRIBUTION_POINTS
+
+function reservedList(purpose: string) {
+  // Why a refine, not max(0): the issue then carries the reason; maxItems still reaches editors.
+  return z
+    .array(z.unknown())
+    .refine((list) => list.length === 0, `is reserved for ${purpose} and must be empty for now`)
+    .optional()
+    .meta({
+      ...pluginFieldDoc(
+        `Reserved for ${purpose}; must be empty until their format is defined.`,
+        PLUGIN_MANIFEST_V2_SINCE
+      ),
+      maxItems: 0
+    })
+}
+
 function contributionList<Item extends z.ZodType>(
   item: Item,
   limit: number,
@@ -133,6 +160,14 @@ export const pluginContributesFields = {
     NEXT
   )
 } satisfies Record<PluginContributionPoint, z.ZodType>
+
+export const pluginReservedContributesFields = {
+  skills: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.skills),
+  mcpServers: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.mcpServers),
+  taskSources: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.taskSources),
+  connections: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.connections),
+  settings: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.settings)
+} satisfies Record<PluginReservedContributionPoint, z.ZodType>
 
 type ContributionPointPolicy = {
   /** Least execution profile allowed to carry a non-empty list of this point. */

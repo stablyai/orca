@@ -1,7 +1,10 @@
 import { z } from 'zod'
 import { pluginCapabilitySchema } from '../plugin-capabilities'
 import { orcaEngineRangeSchema } from './plugin-manifest-engine-range'
-import { pluginContributesFields } from '../plugin-contribution-points'
+import {
+  pluginContributesFields,
+  pluginReservedContributesFields
+} from '../plugin-contribution-points'
 import { pluginIdSchema, pluginRelativePathSchema } from './plugin-manifest-fields'
 import { pluginManifestDetailFields } from '../plugin-detail-fields'
 import { PLUGIN_ICON_RULE_TEXT, pluginManifestImageFields } from '../plugin-image-fields'
@@ -9,6 +12,7 @@ import { validatePluginManifestContributions } from './plugin-manifest-contribut
 import { validatePluginEngineFloor } from './plugin-engine-floor'
 import { validatePluginManifestV2Rules } from './plugin-manifest-v2-rules'
 import { formatPluginSchemaIssues } from './plugin-schema-issues'
+import { pluginApiMajorSchema } from '../workers/plugin-host-api-major'
 import {
   pluginFieldDoc,
   pluginPathFieldDoc,
@@ -27,9 +31,6 @@ import {
  *
  * Lives in `shared` so the desktop app, the headless `orca serve` runtime,
  * the relay, and the CLI validate manifests identically (SSH/remote parity).
- *
- * Everything here is EXPERIMENTAL: no compatibility promises until pluginApi
- * v1 freezes (see the plugin roadmap).
  */
 
 const SEMVER_RE =
@@ -127,7 +128,7 @@ const pluginManifestFields = {
       )
     ),
   contributes: z
-    .object(pluginContributesFields)
+    .object({ ...pluginContributesFields, ...pluginReservedContributesFields })
     .strict()
     // Why prefault: runs `{}` through the schema, so every family's own default applies.
     .prefault({})
@@ -144,7 +145,7 @@ const pluginApiDoc = 'Major version of the plugin host API this plugin targets.'
 const pluginManifestV1Object = z.object({
   manifestVersion: z.literal(1),
   ...pluginManifestFields,
-  pluginApi: z.literal(1).meta(pluginFieldDoc(pluginApiDoc, V1))
+  pluginApi: pluginApiMajorSchema.meta(pluginFieldDoc(pluginApiDoc, V1))
 })
 
 // Why strict: v2 declares its execution profile, so unknown keys must not smuggle in behavior.
@@ -171,8 +172,7 @@ export const pluginManifestV2Object = z
     author: z.strictObject(authorFields).optional().meta(authorDoc),
     engines: z.strictObject(enginesFields).meta(enginesDoc),
     // Why optional: only code calls the host API, so data and instructional plugins leave it out.
-    pluginApi: z
-      .literal(1)
+    pluginApi: pluginApiMajorSchema
       .optional()
       .meta(
         pluginFieldDoc(

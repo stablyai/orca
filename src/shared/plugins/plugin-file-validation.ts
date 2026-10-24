@@ -1,10 +1,12 @@
 import {
   PLUGIN_CATALOG_FILENAME,
+  PLUGIN_CATALOG_RELEASE_LIMIT,
   pluginCatalogEntrySchema,
   pluginCatalogSchema,
   pluginCatalogVersionError
 } from './catalog/plugin-catalog'
 import { PLUGIN_MANIFEST_FILENAME, parsePluginManifest } from './manifest/plugin-manifest'
+import { pluginCatalogReleaseSchema } from './catalog/plugin-catalog-release'
 import { PLUGIN_MARKETPLACE_ENTRY_LIMIT } from './catalog/plugin-marketplace'
 import { readPluginImageHeader } from './plugin-image-format'
 import {
@@ -72,10 +74,17 @@ function validatePluginCatalog(raw: unknown, readCatalogFile?: PluginCatalogFile
     const rawEntry = typeof entry === 'object' && entry !== null ? entry : {}
     const rawReleases =
       'releases' in rawEntry && Array.isArray(rawEntry.releases) ? rawEntry.releases : []
-    if (rawReleases.length !== result.data.releases.length) {
-      errors.push(
-        `${at}.releases: ${rawReleases.length - result.data.releases.length} release(s) are unreadable or over the limit`
-      )
+    // Why per release: the reader drops a bad one silently, e.g. a tag or short SHA as `commit`.
+    for (const [releaseIndex, rawRelease] of rawReleases.entries()) {
+      const release = pluginCatalogReleaseSchema.safeParse(rawRelease)
+      if (!release.success) {
+        errors.push(
+          `${at}.releases[${releaseIndex}]: ${formatPluginSchemaIssues(release.error.issues, rawRelease)}`
+        )
+      }
+    }
+    if (rawReleases.length > PLUGIN_CATALOG_RELEASE_LIMIT) {
+      errors.push(`${at}.releases: must be at most ${PLUGIN_CATALOG_RELEASE_LIMIT} items`)
     }
     const rawCategories =
       'categories' in rawEntry && Array.isArray(rawEntry.categories) ? rawEntry.categories : []
