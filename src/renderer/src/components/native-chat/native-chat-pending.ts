@@ -21,6 +21,16 @@ import {
   type NativeChatGluedUserRow,
   type NativeChatUserRow
 } from './native-chat-pending-occurrence'
+import {
+  clearNativeChatExitSuppressForTests,
+  recordNativeChatOptimisticSendForExitGuard,
+  shouldSuppressNativeChatExitForPane as shouldSuppressNativeChatExitForPaneImpl
+} from './native-chat-exit-suppress'
+
+export {
+  getNativeChatExitSuppressRemainingMs,
+  NATIVE_CHAT_EXIT_SUPPRESS_AFTER_SEND_MS
+} from './native-chat-exit-suppress'
 
 /** An optimistic, not-yet-confirmed composer send. */
 export type NativeChatPendingSend = {
@@ -94,11 +104,18 @@ export function appendPendingSendCache(
     (candidate) => !candidate.delivery || nativeChatPendingContentKey(candidate) !== contentKey
   )
   const next = assignNativeChatPendingOccurrence(existing, entry)
+  recordNativeChatOptimisticSendForExitGuard(scope.paneKey, next.sentAt)
   return writePendingSendCache(scope, [...existing, next])
+}
+
+/** Facade so TerminalPane can query without importing the cache Map. */
+export function shouldSuppressNativeChatExitForPane(paneKey: string, nowMs = Date.now()): boolean {
+  return shouldSuppressNativeChatExitForPaneImpl(paneKey, pendingSendCache, nowMs)
 }
 
 export function clearPendingSendCacheForTests(): void {
   pendingSendCache.clear()
+  clearNativeChatExitSuppressForTests()
   pendingSendCounter = 0
 }
 
