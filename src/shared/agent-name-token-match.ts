@@ -24,6 +24,7 @@ export const AGENT_NAMES = [
   'opencode',
   'opencode2',
   'mimo',
+  'minimax code',
   'openclaw',
   'aider',
   'grok',

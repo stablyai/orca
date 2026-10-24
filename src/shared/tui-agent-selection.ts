@@ -14,6 +14,7 @@ export const TUI_AGENT_AUTO_PICK_ORDER = [
   'opencode2',
   'opencode',
   'mimo-code',
+  'minimax-code',
   'ante',
   'trae',
   'muse',

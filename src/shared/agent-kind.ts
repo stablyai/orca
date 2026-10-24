@@ -23,6 +23,7 @@ const TUI_AGENT_KIND_BY_AGENT = {
   opencode: 'opencode',
   opencode2: 'opencode2',
   'mimo-code': 'mimo-code',
+  'minimax-code': 'minimax-code',
   pi: 'pi',
   omp: 'omp',
   'prime-agent': 'prime-agent',

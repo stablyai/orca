@@ -108,6 +108,7 @@ const ICONABLE_AGENT_TYPES: Record<TerminalAgent, true> = {
   opencode: true,
   opencode2: true,
   'mimo-code': true,
+  'minimax-code': true,
   pi: true,
   omp: true,
   'prime-agent': true,

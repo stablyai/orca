@@ -58,6 +58,15 @@ describe('agent picker search', () => {
     expect(searchAgentPickerEntries(agents, 'cursor-agent')[0]?.id).toBe('cursor')
   })
 
+  it('prefers an exact command over another agent label fuzzy match', () => {
+    const collidingAgents = [
+      entry('mimo-code', 'MiMo Code', 'mimo'),
+      entry('minimax-code', 'MiniMax Code', 'mcode')
+    ]
+
+    expect(searchAgentPickerEntries(collidingAgents, 'mcode')[0]?.id).toBe('minimax-code')
+  })
+
   it('normalizes accepted pasted whitespace without regex replacement', () => {
     const replaceSpy = vi.spyOn(String.prototype, 'replace')
 
