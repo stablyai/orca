@@ -345,7 +345,8 @@ describe('Claude Agent SDK contract pins', () => {
     // Keep the older bypass flag until user-installed CLIs have a compatible minimum version.
     expect(argv.filter((arg) => arg === '--dangerously-skip-permissions')).toHaveLength(1)
     expect(argv).not.toContain('--allow-dangerously-skip-permissions')
-    expect(argv[argv.indexOf('--permission-mode') + 1]).toBe('default')
+    // Full access is the skip flag alone; the CLI starts it in bypass mode whatever the user's settings say.
+    expect(argv).not.toContain('--permission-mode')
     expect(argv[argv.indexOf('--model') + 1]).toBe('claude-sonnet-4-5')
     expect(argv.flatMap((arg, index) => (arg === '--add-dir' ? [argv[index + 1]] : []))).toEqual([
       '/repo/one',

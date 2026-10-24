@@ -326,8 +326,7 @@ describe.skipIf(skip || process.platform === 'win32')('packaged plain-Node struc
           '--output-format',
           '--include-partial-messages',
           '--replay-user-messages',
-          '--permission-prompt-tool',
-          'stdio',
+          '--permission-prompt-tool=stdio',
           `--session-id=${claudeSessionIdForOrcaSession(sessionId)}`,
           '--setting-sources=user,project,local',
           '--dangerously-skip-permissions'
