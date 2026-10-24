@@ -60,6 +60,7 @@ try {
     const runner = new ExtensionRunner(loaded.extensions, loaded.runtime, process.cwd(), SessionManager.inMemory(process.cwd()), undefined)
     const errors = []
     runner.onError(error => errors.push(error))
+    await runner.emit({ type: 'session_start', reason: 'startup' })
     await runner.emit({ type: 'agent_start' })
     await new Promise(resolve => setTimeout(resolve, 250))
     assert.deepEqual(errors, [])
@@ -108,7 +109,7 @@ try {
       const shouldReport = scenario === 'fixed-dead'
       assert.equal(
         received.length - before,
-        shouldReport ? 1 : 0,
+        shouldReport ? (kind === 'omp' ? 1 : 2) : 0,
         `${kind}/${scenario}: HTTP delivery`
       )
       assert.equal(observation.owner, String(shouldReport ? observation.pid : owner))

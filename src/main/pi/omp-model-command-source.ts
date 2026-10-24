@@ -14,6 +14,7 @@ export function getOmpModelCommandSourceLines(): string[] {
     "          ctx.ui.notify('Could not switch model: no API key is available.', 'error')",
     '          return',
     '        }',
+    '        if (!ownsSessionStatus(ctx)) return',
     '        updateRuntimeOmpSessionMetadata(ctx)',
     '        updateModelMetadata({ model })',
     "        post('model_select')",

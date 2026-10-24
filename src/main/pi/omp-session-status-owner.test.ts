@@ -1,204 +1,217 @@
-import { describe, expect, it } from 'vitest'
-import { createAgentStatusExtensionHarness } from './agent-status-extension-test-harness'
+import { describe, expect, it, vi } from 'vitest'
+import {
+  createAgentStatusExtensionHarness,
+  type HookContext
+} from './agent-status-extension-test-harness'
+import { normalizeHookPayload } from '../../shared/agent-hook-listener'
+import {
+  createHookListenerState,
+  clearPaneCacheState
+} from '../../shared/agent-hook-listener/listener-state'
+import { cacheRelayLegacyAgentStatus } from '../../shared/agent-status-legacy-relay-cache'
+import { makePaneKey } from '../../shared/stable-pane-id'
 
-const settle = async (): Promise<void> => {
-  for (let i = 0; i < 10; i++) {
-    await Promise.resolve()
-  }
-}
-
-describe('OMP session status ownership', () => {
-  it.each(['omp', 'pi'] as const)(
-    'fences child callbacks before they change %s pane metadata',
-    async (kind) => {
-      const harness = createAgentStatusExtensionHarness({ kind, argv: ['bun', '/opt/omp/bin/omp'] })
-      const root = {
-        sessionManager: { getSessionId: () => 'root', getSessionFile: () => '/root.jsonl' }
-      }
-      await harness.callHook('session_start', {}, root)
-      await settle()
-      harness.fetchMock.mockClear()
-      const rootHandlers = { ...harness.handlers }
-      harness.reload()
-      const child = {
-        sessionManager: { getSessionId: () => 'child', getSessionFile: () => '/child.jsonl' }
-      }
-      for (const name of [
-        'session_start',
-        'before_agent_start',
-        'agent_start',
-        'tool_call',
-        'tool_execution_start',
-        'tool_execution_end',
-        'tool_approval_requested',
-        'tool_approval_resolved',
-        'message_end',
-        'agent_end',
-        'agent_settled'
-      ]) {
-        await harness.callHook(
-          name,
-          { message: { role: 'assistant', content: 'child answer' } },
-          child
-        )
-        await settle()
-      }
-      expect(harness.fetchMock).not.toHaveBeenCalled()
-      await rootHandlers.agent_start({}, root)
-      await settle()
-      await rootHandlers.agent_end({}, root)
-      await settle()
-      const bodies = harness.fetchMock.mock.calls.map((call) => JSON.parse(call[1].body))
-      expect(bodies.map((body) => body.payload.session_id)).toEqual(['root', 'root'])
-      expect(bodies.map((body) => body.payload.session_file)).toEqual([
-        '/root.jsonl',
-        '/root.jsonl'
-      ])
-      expect(bodies.at(-1).payload.hook_event_name).toBe('agent_end')
-    }
-  )
-
-  it('preserves a headless owner through reload, new, and resume', async () => {
+describe('session selection without declared roles', () => {
+  it('allows a declaration to replace a startup-order guess', async () => {
     const harness = createAgentStatusExtensionHarness({ kind: 'omp' })
-    let sessionId = 'initial'
-    const root = {
-      hasUI: false,
-      sessionManager: { getSessionId: () => sessionId, getSessionFile: () => '/session.jsonl' }
+    const guessed = {
+      sessionManager: { getSessionId: () => 'early', getSessionFile: () => '/early.jsonl' }
     }
-    await harness.callHook('session_start', {}, root)
-    for (const next of ['initial', 'new', 'resumed']) {
-      sessionId = next
-      harness.reload()
-      await harness.callHook('session_start', { reason: 'reload' }, root)
-      await harness.callHook('agent_start', {}, root)
-      await settle()
+    await harness.callHook('session_start', {}, guessed)
+    const declared = harness.registerSession()
+    const main = {
+      agent: { kind: 'main' as const },
+      sessionManager: { getSessionId: () => 'lead', getSessionFile: () => '/lead.jsonl' }
     }
-    expect(
-      harness.fetchMock.mock.calls.map((call) => JSON.parse(call[1].body).payload.session_id)
-    ).toEqual(['initial', 'new', 'resumed'])
-  })
-  it('uses a distinct ownership key when pane and launch change before callbacks', async () => {
-    const harness = createAgentStatusExtensionHarness({ kind: 'omp' })
-    const parent = {
-      sessionManager: { getSessionId: () => 'parent', getSessionFile: () => '/parent.jsonl' }
-    }
-    const separate = {
-      sessionManager: { getSessionId: () => 'separate', getSessionFile: () => '/separate.jsonl' }
-    }
-    await harness.callHook('session_start', {}, parent)
-    harness.processEnv.ORCA_PANE_KEY = 'pane-2'
-    harness.processEnv.ORCA_AGENT_LAUNCH_TOKEN = 'launch-2'
-    harness.reload()
-    await harness.callHook('agent_start', {}, separate)
-    await settle()
-    expect(JSON.parse(harness.fetchMock.mock.calls[0][1].body).payload.session_id).toBe('separate')
-  })
-
-  it('uses OMP parent metadata and nested task paths when the root already owns the pane', async () => {
-    const harness = createAgentStatusExtensionHarness({ kind: 'omp' })
-    const rootFile = '/sessions/root.jsonl'
-    const root = {
-      sessionManager: {
-        getSessionId: () => 'root',
-        getSessionFile: () => rootFile,
-        getHeader: () => ({ parentSession: undefined })
-      }
-    }
-    await harness.callHook('session_start', {}, root)
-    await settle()
-    harness.fetchMock.mockClear()
-    harness.reload()
-    const child = {
-      sessionManager: {
-        getSessionId: () => 'child',
-        getSessionFile: () => '/sessions/root/child.jsonl',
-        getHeader: () => ({ parentSession: rootFile })
-      }
-    }
-    await harness.callHook('agent_start', {}, child)
-    await settle()
-    expect(harness.fetchMock).not.toHaveBeenCalled()
-  })
-
-  it('normalizes Windows task transcript paths', async () => {
-    const harness = createAgentStatusExtensionHarness({ kind: 'omp' })
-    const rootFile = 'C:\\Users\\orca\\root.jsonl'
-    const root = {
-      sessionManager: {
-        getSessionId: () => 'root-win',
-        getSessionFile: () => rootFile,
-        getHeader: () => ({})
-      }
-    }
-    await harness.callHook('session_start', {}, root)
-    harness.reload()
-    const child = {
-      sessionManager: {
-        getSessionId: () => 'child-win',
-        getSessionFile: () => 'c:\\users\\orca\\root\\child.jsonl',
-        getHeader: () => ({})
-      }
-    }
-    await harness.callHook('agent_start', {}, child)
-    await settle()
-    expect(harness.fetchMock).not.toHaveBeenCalled()
-  })
-  it('keeps reporting for legacy callbacks without a session manager', async () => {
-    const harness = createAgentStatusExtensionHarness({ kind: 'omp' })
-    await harness.callHook('agent_start')
-    await settle()
-    await harness.callHook('agent_end')
-    await settle()
-    expect(
-      harness.fetchMock.mock.calls.map((call) => JSON.parse(call[1].body).payload.hook_event_name)
-    ).toEqual(['agent_start', 'agent_end'])
-  })
-})
-
-describe('OMP runtime session provenance', () => {
-  it.each(['omp', 'pi'] as const)(
-    'rejects an earlier child callback before it can claim the %s pane',
-    async (kind) => {
-      const harness = createAgentStatusExtensionHarness({ kind, argv: ['bun', '/opt/omp/bin/omp'] })
-      const child = {
-        agentKind: 'sub',
-        hasUI: false,
-        sessionManager: { getSessionId: () => 'child', getSessionFile: () => '/child.jsonl' }
-      }
-      await harness.callHook('session_start', {}, child)
-      await harness.callHook('agent_start', {}, child)
-      await settle()
-      expect(harness.fetchMock).not.toHaveBeenCalled()
-      harness.reload()
-      const root = {
-        agentKind: 'main',
-        hasUI: false,
-        sessionManager: { getSessionId: () => 'root', getSessionFile: () => '/root.jsonl' }
-      }
-      await harness.callHook('session_start', {}, root)
-      await settle()
-      harness.fetchMock.mockClear()
-      await harness.callHook('agent_start', {}, root)
-      await settle()
-      expect(harness.fetchMock).toHaveBeenCalledTimes(1)
-      expect(JSON.parse(harness.fetchMock.mock.calls[0][1].body).payload.session_id).toBe('root')
-    }
-  )
-
-  it('allows a former child transcript resumed as the runtime main session', async () => {
-    const harness = createAgentStatusExtensionHarness({ kind: 'omp' })
-    const root = {
-      hasUI: false,
-      sessionManager: {
-        getSessionId: () => 'resumed-child',
-        getSessionFile: () => '/sessions/parent/subagent/child.jsonl'
-      }
-    }
-    await harness.callHook('session_start', {}, root)
-    await harness.callHook('agent_start', {}, root)
-    await settle()
-    expect(JSON.parse(harness.fetchMock.mock.calls[0][1].body).payload.session_id).toBe(
-      'resumed-child'
+    await declared.callHook('session_start', {}, main)
+    await declared.callHook('agent_start', {}, main)
+    await vi.waitFor(() =>
+      expect(
+        JSON.parse(String(harness.fetchMock.mock.calls.at(-1)?.[1]?.body)).payload.session_id
+      ).toBe('lead')
     )
+    const count = harness.fetchMock.mock.calls.length
+    await harness.callHook('agent_end', {}, guessed)
+    const undeclared = harness.registerSession()
+    await undeclared.callHook('session_switch', {}, guessed)
+    expect(harness.fetchMock).toHaveBeenCalledTimes(count)
+  })
+
+  it('prunes sequential dead Pi sources at each open and never replays their history on final close', async () => {
+    const context = (id: string, file?: string): HookContext => ({
+      sessionManager: { getSessionId: () => id, getSessionFile: () => file },
+      isIdle: () => true
+    })
+    const receiverEnv = {
+      ORCA_TAB_ID: 'source-lifetime',
+      ORCA_PANE_KEY: makePaneKey('source-lifetime', '44444444-4444-4444-8444-444444444444'),
+      ORCA_AGENT_HOOK_ENV: 'production',
+      ORCA_AGENT_HOOK_VERSION: '1'
+    }
+    const flush = () => vi.advanceTimersByTimeAsync(0)
+    vi.useFakeTimers()
+    try {
+      for (const n of [10, 100]) {
+        let visits = 0
+        let staleProbes = 0
+        const state = createHookListenerState()
+        let admitted: ReturnType<typeof normalizeHookPayload> | undefined
+        const h = createAgentStatusExtensionHarness({
+          kind: 'pi',
+          argv: ['node', '/usr/bin/pi'],
+          existsSync: () => true,
+          env: receiverEnv,
+          onMapEntry: () => visits++,
+          fetchImpl: async (_url, init) => {
+            admitted = normalizeHookPayload(
+              state,
+              'pi',
+              JSON.parse(String(init?.body)),
+              'production'
+            )
+            if (admitted) {
+              expect(
+                cacheRelayLegacyAgentStatus(state, admitted, 16, (pane) =>
+                  clearPaneCacheState(state, pane)
+                )
+              ).toBe(true)
+            }
+            return { ok: true }
+          }
+        })
+        const root = context('lead', '/lead.jsonl')
+        await h.callHook('session_start', {}, root)
+        await h.callHook('agent_start', {}, root)
+        const open = async (i: number) => {
+          const child = h.registerSession()
+          let disposed = false
+          const manager = context('same-sdk-id').sessionManager
+          const ctx: HookContext = {
+            isIdle: () => true,
+            get sessionManager() {
+              if (disposed) {
+                staleProbes++
+                throw new Error('Extension context is no longer active')
+              }
+              return manager
+            }
+          }
+          await child.callHook('session_start', {}, ctx)
+          for (const name of ['tool_call', 'tool_execution_start']) {
+            await child.callHook(
+              name,
+              {
+                toolName: 'ask_user_question',
+                toolCallId: `sdk-${i}`,
+                [name === 'tool_call' ? 'input' : 'args']: {
+                  questions: [{ id: 'choice', question: `Request ${i}?`, options: ['yes', 'no'] }]
+                }
+              },
+              ctx
+            )
+          }
+          return {
+            child,
+            ctx,
+            dispose: () => {
+              disposed = true
+            }
+          }
+        }
+        for (let i = 0; i < n; i++) {
+          const before = visits
+          const previousProbes = staleProbes
+          const source = await open(i)
+          // Each real call/start pair visits at most one old source plus one live record twice.
+          expect(visits - before).toBeLessThanOrEqual(5)
+          expect(staleProbes - previousProbes).toBe(i === 0 ? 0 : 1)
+          source.dispose()
+        }
+        const live = await open(n)
+        expect(staleProbes).toBe(n)
+        const beforeOrdinary = visits
+        await h.callHook('before_agent_start', { prompt: 'Lead prompt' }, root)
+        await h.callHook('agent_start', {}, root)
+        await h.callHook(
+          'message_end',
+          { message: { role: 'assistant', content: 'Lead answer' } },
+          root
+        )
+        await h.callHook('agent_end', {}, root)
+        await flush()
+        expect(visits).toBe(beforeOrdinary)
+        expect(admitted).toMatchObject({
+          providerSession: { id: 'lead' },
+          hookEventName: 'agent_end',
+          payload: { state: 'blocked', prompt: 'Lead prompt', lastAssistantMessage: 'Lead answer' }
+        })
+        expect(
+          JSON.parse(String(h.fetchMock.mock.calls.at(-1)?.[1]?.body)).payload.hook_event_name
+        ).toBe('agent_end')
+        expect(admitted?.payload.interactivePrompt).toContain(`Request ${n}?`)
+        await live.child.callHook(
+          'tool_execution_end',
+          { toolName: 'ask_user_question', toolCallId: `sdk-${n}` },
+          live.ctx
+        )
+        await flush()
+        expect(staleProbes).toBe(n)
+        expect(visits).toBe(beforeOrdinary)
+        expect(admitted?.payload).toMatchObject({
+          state: 'done',
+          prompt: 'Lead prompt',
+          lastAssistantMessage: 'Lead answer'
+        })
+        expect(admitted?.payload.interactivePrompt).toBeUndefined()
+        const a = await open(n + 1)
+        const b = await open(n + 2)
+        a.dispose()
+        const beforeResidual = visits
+        const beforeDead = staleProbes
+        await h.callHook(
+          'message_end',
+          { message: { role: 'assistant', content: 'B remains live' } },
+          root
+        )
+        await flush()
+        expect(visits).toBe(beforeResidual)
+        expect(staleProbes).toBe(beforeDead)
+        expect(admitted?.payload.interactivePrompt).toContain(`Request ${n + 2}?`)
+        await b.child.callHook('tool_execution_end', { toolName: 'ask_user_question' }, b.ctx)
+        await flush()
+        expect(staleProbes - beforeDead).toBe(1)
+        expect(visits - beforeResidual).toBe(1)
+        expect(admitted?.payload).toMatchObject({
+          state: 'done',
+          lastAssistantMessage: 'B remains live'
+        })
+        expect(admitted?.payload.interactivePrompt).toBeUndefined()
+        const burst: Awaited<ReturnType<typeof open>>[] = []
+        for (let i = 0; i < n; i++) {
+          burst.push(await open(n + 3 + i))
+        }
+        for (const source of burst) {
+          source.dispose()
+        }
+        const beforeBurst = visits
+        const beforeBurstDead = staleProbes
+        const survivor = await open(2 * n + 3)
+        expect(staleProbes - beforeBurstDead).toBe(n)
+        expect(visits - beforeBurst).toBe(n + 4)
+        const afterBurst = visits
+        await survivor.child.callHook(
+          'tool_execution_end',
+          { toolName: 'ask_user_question' },
+          survivor.ctx
+        )
+        await flush()
+        expect(visits).toBe(afterBurst)
+        expect(staleProbes - beforeBurstDead).toBe(n)
+        expect(admitted?.payload.state).toBe('done')
+      }
+    } finally {
+      vi.clearAllTimers()
+      vi.useRealTimers()
+    }
   })
 })

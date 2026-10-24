@@ -49,7 +49,8 @@ export function getPiTitlebarExtensionSource(kind: PiAgentKind = 'pi'): string {
       : []
 
   return [
-    ...(kind === 'pi' ? [...getPiOmpRuntimeDetectionSourceLines(`/hook/${kind}`), ''] : []),
+    ...getPiOmpRuntimeDetectionSourceLines(`/hook/${kind}`),
+    '',
     'const BRAILLE_FRAMES = [',
     "  '\\u280b',",
     "  '\\u2819',",

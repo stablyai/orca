@@ -58,6 +58,23 @@ describe('OMP model command', () => {
     release(new Response('', { status: 200 }))
   })
 
+  it('executes a non-selected runner command without publishing its metadata', async () => {
+    const h = createAgentStatusExtensionHarness({ kind: 'omp' })
+    const command = h.commands['orca-model']
+    const child = h.registerSession()
+    await child.callHook('session_start', {}, { sessionManager: { getSessionId: () => 'helper' } })
+    const ctx = { ...commandContext(), sessionManager: { getSessionId: () => 'lead' } }
+    await h.callHook('session_start', {}, ctx)
+    await command.handler('openai/test-model', ctx)
+    expect(h.setModelMock).toHaveBeenCalledWith(model)
+    expect(h.fetchMock).not.toHaveBeenCalled()
+    await child.callHook('agent_start', {}, { sessionManager: { getSessionId: () => 'helper' } })
+    await vi.waitFor(() => expect(h.fetchMock).toHaveBeenCalledOnce())
+    expect(JSON.parse(String(h.fetchMock.mock.calls[0][1]?.body)).payload).not.toHaveProperty(
+      'model'
+    )
+  })
+
   it('does not register for Pi or an inherited child owner', () => {
     expect(createAgentStatusExtensionHarness({ kind: 'pi' }).commands).toEqual({})
     expect(

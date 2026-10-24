@@ -66,7 +66,11 @@ try {
     WSL_DISTRO_NAME: ''
   })
   const handlers = new Map()
-  require(extension).default({ on: (event, handler) => handlers.set(event, handler) })
+  const register = () => {
+    handlers.clear()
+    require(extension).default({ on: (event, handler) => handlers.set(event, handler) })
+  }
+  register()
   let sessionId = 'A'
   const context = {
     isIdle: () => false,
@@ -79,6 +83,7 @@ try {
     assert.ok(handlers.has(event), `Missing lifecycle handler: ${event}`)
     await handlers.get(event)(payload, context)
   }
+  await emit('session_start')
   await emit('agent_start')
   await waitForRequests(1)
   await emit('agent_end')
@@ -113,6 +118,10 @@ try {
     await waitForRequests(2)
     sessionId = 'B'
     await emit(boundary, { reason: 'new' })
+    if (boundary === 'session_shutdown') {
+      register()
+      await emit('session_switch', { reason: 'new' })
+    }
     await emit('agent_start')
     await waitForRequests(4)
     await delay(600)

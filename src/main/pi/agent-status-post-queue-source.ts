@@ -4,15 +4,17 @@ export function getPiAgentStatusPostQueueSourceLines(kind: PiAgentKind): string[
   return [
     'type HookPost = { hookEventName: string; extra: Record<string, unknown>; metadata: Record<string, unknown>; ompRuntime: boolean; revision: number; attempts: number; delivered: boolean; final?: boolean }',
     'type HookPostQueue = { activePost: HookPost | null; pendingPost: HookPost | null; latestPost: HookPost | null; finalPosts: HookPost[]; finalRetryTimer: ReturnType<typeof setTimeout> | null; postRevision: number; retryTimer: ReturnType<typeof setTimeout> | null }',
+    'let postQueue: HookPostQueue = { activePost: null, pendingPost: null, latestPost: null, finalPosts: [], finalRetryTimer: null, postRevision: 0, retryTimer: null }',
+    'function adoptPostQueue(): void {',
     ...(kind === 'pi'
       ? [
-          'declare global { var __orcaPiStatusPostQueue: HookPostQueue | undefined }',
-          // Why: old delivery continuations and a reloaded registration must serialize through one queue.
-          'const postQueue: HookPostQueue = globalThis.__orcaPiStatusPostQueue ??= { activePost: null, pendingPost: null, latestPost: null, finalPosts: [], finalRetryTimer: null, postRevision: 0, retryTimer: null }'
+          '  const queue = Reflect.get(globalThis, "__orcaPiStatusPostQueue")',
+          '  if (queue) postQueue = queue',
+          '  else Reflect.set(globalThis, "__orcaPiStatusPostQueue", postQueue)'
         ]
-      : [
-          'const postQueue: HookPostQueue = { activePost: null, pendingPost: null, latestPost: null, finalPosts: [], finalRetryTimer: null, postRevision: 0, retryTimer: null }'
-        ]),
+      : []),
+    '  resetPostQueue()',
+    '}',
     '',
     'function cancelPostRetry(): void {',
     '  if (postQueue.retryTimer !== null) clearTimeout(postQueue.retryTimer)',

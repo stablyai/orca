@@ -95,6 +95,7 @@ describe('OMP model reporting', () => {
       return { sessionManager }
     }
 
+    await harness.callHook('session_start', {}, session('omp-a'))
     await harness.callHook('agent_start', undefined, { ...session('omp-a'), model: DEEPSEEK })
     await settled(harness.fetchMock, 1)
     await harness.callHook('agent_start', undefined, { ...session('omp-b'), model: null })
@@ -105,14 +106,21 @@ describe('OMP model reporting', () => {
     expect(postedPayloads(harness.fetchMock)).toEqual([
       {
         hook_event_name: 'agent_start',
+        is_idle: false,
         session_id: 'omp-a',
         session_file: '/tmp/omp-a.jsonl',
         model: 'deepseek/deepseek-v4-pro',
         model_switch_command: 'orca-model'
       },
-      { hook_event_name: 'agent_start', session_id: 'omp-b', session_file: '/tmp/omp-b.jsonl' },
       {
         hook_event_name: 'agent_start',
+        is_idle: false,
+        session_id: 'omp-b',
+        session_file: '/tmp/omp-b.jsonl'
+      },
+      {
+        hook_event_name: 'agent_start',
+        is_idle: false,
         session_id: 'omp-b',
         session_file: '/tmp/omp-b.jsonl',
         model: 'minimax-cn/MiniMax-M3',

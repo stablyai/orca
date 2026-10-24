@@ -60,7 +60,11 @@ describe('Pi session changes', () => {
       expect(agentEndCount(harness)).toBe(0)
 
       await harness.replacePiSession(reason, target)
-      await harness.callHook('session_start', { reason }, session('B'))
+      await harness.callHook(
+        'session_start',
+        { reason, previousSessionFile: '/sessions/A.jsonl' },
+        session('B')
+      )
       await vi.advanceTimersByTimeAsync(0)
 
       expect(posts(harness).slice(-2)).toEqual([
@@ -70,7 +74,12 @@ describe('Pi session changes', () => {
           session_file: '/sessions/A.jsonl',
           session_boundary: true
         },
-        { hook_event_name: 'session_start', session_id: 'B', session_file: '/sessions/B.jsonl' }
+        {
+          hook_event_name: 'session_start',
+          is_idle: true,
+          session_id: 'B',
+          session_file: '/sessions/B.jsonl'
+        }
       ])
     }
   )
@@ -99,7 +108,11 @@ describe('Pi session changes', () => {
     await harness.callHook('session_start', { reason: 'startup' }, session('A'))
     await harness.callHook('agent_start', {}, session('A'))
     await harness.replacePiSession('new')
-    await harness.callHook('session_start', { reason: 'new' }, session('B'))
+    await harness.callHook(
+      'session_start',
+      { reason: 'new', previousSessionFile: '/sessions/A.jsonl' },
+      session('B')
+    )
     startAsync(harness, 'run-b', 'scout')
     complete(harness, 'run-b')
     await vi.advanceTimersByTimeAsync(0)
@@ -121,7 +134,11 @@ describe('Pi session changes', () => {
     // Pi aborts the turn before it shuts the session down; that completion queues behind the post in flight.
     await endTurn(harness)
     await harness.replacePiSession('new')
-    await harness.callHook('session_start', { reason: 'new' }, session('B'))
+    await harness.callHook(
+      'session_start',
+      { reason: 'new', previousSessionFile: '/sessions/A.jsonl' },
+      session('B')
+    )
 
     while (releases.length > 0) {
       releases.shift()?.()
@@ -146,7 +163,11 @@ describe('Pi session changes', () => {
     })
     await holdRunOpen(harness)
     await harness.replacePiSession('new')
-    await harness.callHook('session_start', { reason: 'new' }, session('B'))
+    await harness.callHook(
+      'session_start',
+      { reason: 'new', previousSessionFile: '/sessions/A.jsonl' },
+      session('B')
+    )
     await vi.advanceTimersByTimeAsync(5_000)
 
     expect(agentEndCount(harness)).toBe(4)
@@ -158,6 +179,7 @@ describe('Pi session changes', () => {
 
   it('posts nothing for an old session whose run already ended', async () => {
     const harness = createPi()
+    await harness.callHook('session_start', { reason: 'reload' }, session('A'))
     await harness.callHook('agent_start', {}, session('A'))
     await endTurn(harness)
     expect(agentEndCount(harness)).toBe(1)
@@ -178,7 +200,11 @@ describe('Pi session changes', () => {
     )
     await holdRunOpen(harness)
     await harness.replacePiSession('new')
-    await harness.callHook('session_start', { reason: 'new' }, session('B'))
+    await harness.callHook(
+      'session_start',
+      { reason: 'new', previousSessionFile: '/sessions/A.jsonl' },
+      session('B')
+    )
     // A child of the new session must not ride on the old session's last post.
     startAsync(harness, 'run-b', 'scout')
 
@@ -195,18 +221,26 @@ describe('Pi session changes', () => {
   })
 
   it('retries the old session’s completion before sending anything newer', async () => {
-    let attempts = 0
-    const harness = createPi(async () => {
-      attempts += 1
-      // The close-out follows session_start and agent_start; fail its first delivery.
-      if (attempts === 3) {
-        throw new Error('Orca restarting')
+    let failed = false
+    const harness = createAgentStatusExtensionHarness({
+      kind: 'pi',
+      existsSync: () => true,
+      fetchImpl: async (_url, init) => {
+        const payload = JSON.parse(String(init?.body)).payload
+        if (payload.session_boundary === true && !failed) {
+          failed = true
+          throw new Error('Orca restarting')
+        }
+        return { ok: true }
       }
-      return { ok: true }
     })
     await holdRunOpen(harness)
     await harness.replacePiSession('new')
-    await harness.callHook('session_start', { reason: 'new' }, session('B'))
+    await harness.callHook(
+      'session_start',
+      { reason: 'new', previousSessionFile: '/sessions/A.jsonl' },
+      session('B')
+    )
     await vi.advanceTimersByTimeAsync(0)
     // The new session's post waits out the backoff behind the old session's completion.
     expect(postedHookNames(harness).at(-1)).toBe('agent_end')
@@ -260,9 +294,17 @@ describe('Pi session changes', () => {
     await holdRunOpen(harness)
     exitRunner(harness, 'run-a')
     await harness.replacePiSession('new')
-    await harness.callHook('session_start', { reason: 'new' }, session('B'))
+    await harness.callHook(
+      'session_start',
+      { reason: 'new', previousSessionFile: '/sessions/A.jsonl' },
+      session('B')
+    )
     await harness.replacePiSession('resume', '/sessions/A.jsonl')
-    await harness.callHook('session_start', { reason: 'resume' }, session('A'))
+    await harness.callHook(
+      'session_start',
+      { reason: 'resume', previousSessionFile: '/sessions/B.jsonl' },
+      session('A')
+    )
     await vi.advanceTimersByTimeAsync(0)
 
     expect(posts(harness).at(-1)).toMatchObject({
@@ -275,9 +317,17 @@ describe('Pi session changes', () => {
     const harness = createPi()
     await holdRunOpen(harness)
     await harness.replacePiSession('new')
-    await harness.callHook('session_start', { reason: 'new' }, session('B'))
+    await harness.callHook(
+      'session_start',
+      { reason: 'new', previousSessionFile: '/sessions/A.jsonl' },
+      session('B')
+    )
     await harness.replacePiSession('resume', '/sessions/A.jsonl')
-    await harness.callHook('session_start', { reason: 'resume' }, session('A'))
+    await harness.callHook(
+      'session_start',
+      { reason: 'resume', previousSessionFile: '/sessions/B.jsonl' },
+      session('A')
+    )
     await vi.advanceTimersByTimeAsync(0)
     expect(posts(harness).at(-1)).toMatchObject({ hook_event_name: 'agent_start', session_id: 'A' })
     expect(posts(harness).at(-1)?.subagents).toEqual([
@@ -289,6 +339,7 @@ describe('Pi session changes', () => {
     await vi.advanceTimersByTimeAsync(0)
     expect(posts(harness).at(-1)).toEqual({
       hook_event_name: 'agent_end',
+      is_idle: true,
       session_id: 'A',
       session_file: '/sessions/A.jsonl'
     })
@@ -298,15 +349,31 @@ describe('Pi session changes', () => {
     const harness = createPi()
     await holdRunOpen(harness)
     await harness.replacePiSession('new')
-    await harness.callHook('session_start', { reason: 'new' }, session('B'))
+    await harness.callHook(
+      'session_start',
+      { reason: 'new', previousSessionFile: '/sessions/A.jsonl' },
+      session('B')
+    )
     await harness.replacePiSession('resume', '/sessions/A.jsonl')
-    await harness.callHook('session_start', { reason: 'resume' }, session('A'))
+    await harness.callHook(
+      'session_start',
+      { reason: 'resume', previousSessionFile: '/sessions/B.jsonl' },
+      session('A')
+    )
     complete(harness, 'run-a')
     await vi.advanceTimersByTimeAsync(0)
     await harness.replacePiSession('new')
-    await harness.callHook('session_start', { reason: 'new' }, session('B'))
+    await harness.callHook(
+      'session_start',
+      { reason: 'new', previousSessionFile: '/sessions/A.jsonl' },
+      session('B')
+    )
     await harness.replacePiSession('resume', '/sessions/A.jsonl')
-    await harness.callHook('session_start', { reason: 'resume' }, session('A'))
+    await harness.callHook(
+      'session_start',
+      { reason: 'resume', previousSessionFile: '/sessions/B.jsonl' },
+      session('A')
+    )
     await vi.advanceTimersByTimeAsync(0)
 
     expect(posts(harness).at(-1)).toMatchObject({
@@ -320,7 +387,11 @@ describe('Pi session changes', () => {
     const harness = createPi()
     await holdRunOpen(harness)
     await harness.replacePiSession('resume', '/sessions/A.jsonl')
-    await harness.callHook('session_start', { reason: 'resume' }, session('A'))
+    await harness.callHook(
+      'session_start',
+      { reason: 'resume', previousSessionFile: '/sessions/A.jsonl' },
+      session('A')
+    )
     await vi.advanceTimersByTimeAsync(0)
     expect(agentEndCount(harness)).toBe(0)
 
@@ -361,8 +432,10 @@ describe('Pi /reload', () => {
 
   it('keeps the turn counters across a reload, so a child starting afterwards is not read as late', async () => {
     const harness = createPi()
+    await harness.callHook('session_start', { reason: 'reload' }, session('A'))
     await harness.callHook('agent_start', {}, session('A'))
     await harness.reloadPi()
+    await harness.callHook('session_start', { reason: 'reload' }, session('A'))
     startAsync(harness, 'run-a', 'scout')
     complete(harness, 'run-a')
     await vi.advanceTimersByTimeAsync(0)
@@ -374,12 +447,14 @@ describe('Pi /reload', () => {
 
   it('releases a workflow’s pre-reload children when the workflow ends', async () => {
     const harness = createPi()
+    await harness.callHook('session_start', { reason: 'reload' }, session('A'))
     await harness.callHook('agent_start', {}, session('A'))
     startWorkflow(harness)
     startChild(harness, 'child-a')
     await endTurn(harness)
     // Pi drops the old registration's runner-exit events, so child-a never reports its end.
     await harness.reloadPi()
+    await harness.callHook('session_start', { reason: 'reload' }, session('A'))
     complete(harness, WORKFLOW)
     await vi.advanceTimersByTimeAsync(0)
 
@@ -389,14 +464,16 @@ describe('Pi /reload', () => {
 
   it('drops the rows of pre-reload children released while the turn is still running', async () => {
     const harness = createPi()
+    await harness.callHook('session_start', { reason: 'reload' }, session('A'))
     await harness.callHook('agent_start', {}, session('A'))
     startWorkflow(harness)
     startChild(harness, 'child-a')
     await harness.reloadPi()
+    await harness.callHook('session_start', { reason: 'reload' }, session('A'))
     complete(harness, WORKFLOW)
     await vi.advanceTimersByTimeAsync(0)
 
-    expect(posts(harness).at(-1)).toEqual({ hook_event_name: 'subagents_update' })
+    expect(posts(harness).at(-1)).toMatchObject({ hook_event_name: 'subagents_update' })
   })
 
   it.each(['reload', 'resume'] as const)(
@@ -471,6 +548,7 @@ describe('children that start outside a turn', () => {
 
   it('ends a run for a child that started before any turn in this session', async () => {
     const harness = createPi()
+    await harness.callHook('session_start', { reason: 'reload' })
     startAsync(harness, 'run-a', 'scout')
     await vi.advanceTimersByTimeAsync(0)
     complete(harness, 'run-a')
@@ -525,6 +603,7 @@ describe('OMP session switches', () => {
   }
 
   async function holdOmpRunOpen(harness: AgentStatusExtensionHarness, context: HookContext) {
+    await harness.callHook('session_start', {}, context)
     await harness.callHook('agent_start', {}, context)
     harness.emitPiEvent('task:subagent:lifecycle', { id: 'c1', agent: 'task', status: 'started' })
     await harness.callHook('agent_end', {}, context)
@@ -556,6 +635,7 @@ describe('OMP session switches', () => {
   it('ends a turn the switch cut off, under the session that ran it', async () => {
     const harness = createAgentStatusExtensionHarness({ kind: 'omp' })
     const { context, switchTo } = ompSession()
+    await harness.callHook('session_start', {}, context)
     await harness.callHook('agent_start', {}, context)
     switchTo('B')
     await harness.callHook(
@@ -628,6 +708,7 @@ describe('OMP session switches', () => {
         })
     })
     const { context, switchTo } = ompSession()
+    await harness.callHook('session_start', {}, context)
     await harness.callHook('agent_start', {}, context)
     await harness.callHook('agent_end', {}, context)
     switchTo('B')
@@ -719,6 +800,7 @@ describe('OMP session switches', () => {
   it('ends a turn that a reload of the same session cut off', async () => {
     const harness = createAgentStatusExtensionHarness({ kind: 'omp' })
     const { context } = ompSession()
+    await harness.callHook('session_start', {}, context)
     await harness.callHook('agent_start', {}, context)
     await harness.callHook(
       'session_switch',

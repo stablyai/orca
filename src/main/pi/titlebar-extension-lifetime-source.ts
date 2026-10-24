@@ -1,11 +1,19 @@
+import { getSessionSelectionSourceLines } from './omp-session-status-owner-source'
+
 export function getPiTitlebarLifetimeSourceLines(): string[] {
   return [
-    '  // Why: replacement factories share the process realm; retire the old owner before painting.',
+    ...getSessionSelectionSourceLines('process.env.ORCA_PI_STATUS_OWNED'),
     "  const ownersKey = Symbol.for('orca.pi.titlebar.owners')",
     '  const owners = globalThis[ownersKey] ??= new Map()',
     '  const paneKey = process.env.ORCA_PANE_KEY',
-    '  owners.get(paneKey)?.()',
+    '  let active = false',
     '  let disposed = false',
+    '  function activate() {',
+    '    if (active) return',
+    '    owners.get(paneKey)?.()',
+    '    owners.set(paneKey, dispose)',
+    '    active = true',
+    '  }',
     '  function clearOwnedTimers() {',
     '    clearPendingAgentEndCheck()',
     '    clearAnimation()',
@@ -18,13 +26,22 @@ export function getPiTitlebarLifetimeSourceLines(): string[] {
     '    resetPromptState()',
     '    if (owners.get(paneKey) === dispose) owners.delete(paneKey)',
     '  }',
-    '  owners.set(paneKey, dispose)',
     '',
     '  function on(name, handler) {',
     '    pi.on(name, (event, ctx) => {',
-    '      if (!disposed) return handler(event, ctx)',
+    '      if (disposed) return',
+    '      const authority = sessionAuthority(name, event, ctx)',
+    '      if (authority === "main" || authority === "legacy") activate()',
+    '      if (!active) return',
+    '      if (name === "session_shutdown") noteSelectedShutdown(event, ctx)',
+    '      const result = handler(event, ctx)',
+    '      if (name === "session_shutdown") dispose()',
+    '      return result',
     '    })',
     '  }',
+    '  if (scope.legacy) activate()',
+    '  on("session_switch", () => {})',
+    '  on("session_branch", () => {})',
     ''
   ]
 }

@@ -22,7 +22,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
       ? [
           "  onStatus('session_start', (event, ctx) => {",
           '    updateSessionMetadata(ctx)',
-          ...(kind === 'pi' ? ['    piUiPromptDepth = 0'] : []),
+          ...(kind === 'pi' ? ['    piUiState.depth = 0'] : []),
           '    // Why: /reload re-registers the active session, but it is not a',
           '    // turn boundary and must not clear the visible status or unread state.',
           "    if (event.reason === 'reload') return",
@@ -86,7 +86,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     kind === 'prime-agent'
       ? []
       : [
-          `  pi.on('model_select', (event${ctxParam}) => {`,
+          `  onStatus('model_select', (event${ctxParam}) => {`,
           ...captureSessionMetadata,
           '    if (!isOmpRuntime()) return',
           '    updateModelMetadata(event)',
@@ -138,15 +138,13 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '',
     "// Why: child agents inherit the lead's pane env; only its process may",
     '// register status hooks. PID identity keeps in-process reloads reporting.',
-    'export default function (pi): void {',
     ...primeDaemonWorkerGuard,
     `  const ownerPid = process.env.${ownerEnv}`,
     '  const selfPid = String(process.pid)',
     '  if (ownerPid && ownerPid !== selfPid && isStatusOwnerAlive(ownerPid)) return',
     `  process.env.${ownerEnv} = selfPid`,
-    '  resetPostQueue()',
     ...getPiSubagentRosterSetupSourceLines(kind),
-    ...getOmpSessionOwnerHandlerSourceLines(),
+    ...getOmpSessionOwnerHandlerSourceLines(kind),
     ...getAgentStatusSessionBoundaryHandlerSourceLines(kind),
     ...getOmpModelCommandSourceLines(),
     ...sessionStartHandler,
@@ -163,7 +161,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '    lifecycleState.runGeneration += 1',
     // Why: a turn cannot begin under a dialog holding input focus, so this is the one
     // boundary that can recover a modal whose close never arrived.
-    ...(kind === 'pi' ? ['    piUiPromptDepth = 0', '    piTurnInFlight = true'] : []),
+    ...(kind === 'pi' ? ['    piUiState.depth = 0', '    piUiState.turnInFlight = true'] : []),
     "    post('agent_start')",
     '  })',
     '',
@@ -243,7 +241,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '    lifecycleState.completionPostedGeneration = lifecycleState.endedRunGeneration',
     // Why: distinct from the completion guard, which holds the generation of the posted run
     // and so starts clean on a pane that has not run a turn yet — that pane is idle, not busy.
-    ...(kind === 'pi' ? ['    piTurnInFlight = false'] : []),
+    ...(kind === 'pi' ? ['    piUiState.turnInFlight = false'] : []),
     // Why: a run that ends because its session did has not completed; the host records it quietly.
     "    post('agent_end', final ? { session_boundary: true } : {}, final)",
     '    return true',
@@ -301,7 +299,6 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '    pendingAgentEndCheck = setTimeout(checkPendingAgentEnd, 0)',
     "    if (typeof pendingAgentEndCheck.unref === 'function') pendingAgentEndCheck.unref()",
     '  })',
-    '}',
     ''
   ]
 }

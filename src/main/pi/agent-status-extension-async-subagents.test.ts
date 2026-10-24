@@ -171,6 +171,7 @@ describe('Pi child rows', () => {
 
   it('posts each running pi-subagents child with its agent name, never its redacted task', async () => {
     const harness = createAgentStatusExtensionHarness({ kind: 'pi' })
+    await harness.callHook('session_start', { reason: 'reload' })
     startAsync(harness, 'run-scout', 'scout')
     await vi.advanceTimersByTimeAsync(0)
 
@@ -186,6 +187,7 @@ describe('Pi child rows', () => {
 
   it('names workflow children that share an agent by their workflow step key', async () => {
     const harness = createAgentStatusExtensionHarness({ kind: 'pi' })
+    await harness.callHook('session_start', { reason: 'reload' })
     startWorkflow(harness)
     // pi-subagents 0.76.1 tags each scripted-workflow child with the key it was launched under.
     for (const key of ['review-code', 'review-rollout']) {

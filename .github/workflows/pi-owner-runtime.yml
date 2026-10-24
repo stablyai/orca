@@ -6,6 +6,8 @@ on:
       - 'src/main/pi/**'
       - '!src/main/pi/**/*.test.ts'
       - 'tests/tools/pi-owner-runtime-smoke.mjs'
+      - 'tests/tools/pi-session-runtime-smoke.mjs'
+      - 'src/main/pi/agent-status-real-pi-runtime.test.ts'
       - 'tests/tools/omp-completion-runtime-smoke.mjs'
       - '.github/workflows/pi-owner-runtime.yml'
   workflow_dispatch:
@@ -36,3 +38,7 @@ jobs:
         run: node tests/tools/pi-owner-runtime-smoke.mjs .cache/pi-owner/node_modules/@earendil-works/pi-coding-agent
       - name: Verify OMP completion over native HTTP
         run: node tests/tools/omp-completion-runtime-smoke.mjs
+      - name: Install pinned current session runtime
+        run: npm install --prefix .cache/pi-session --ignore-scripts --no-audit --no-fund @earendil-works/pi-coding-agent@1.3.0
+      - name: Verify real session selection and replacement
+        run: node tests/tools/pi-session-runtime-smoke.mjs .cache/pi-session/node_modules/@earendil-works/pi-coding-agent

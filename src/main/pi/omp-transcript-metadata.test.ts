@@ -35,11 +35,16 @@ describe.each([
       id = next
       file = join(root, `${id}.jsonl`)
       await writeFile(file, `${JSON.stringify({ type: 'session', id })}\n`)
-      await harness.callHook('agent_start', undefined, {
-        sessionManager
-      })
+      await harness.callHook(
+        id === 'first' ? 'session_start' : 'session_switch',
+        { reason: 'resume' },
+        { sessionManager }
+      )
+      await harness.callHook('agent_start', undefined, { sessionManager })
       await vi.waitFor(() =>
-        expect(harness.fetchMock).toHaveBeenCalledTimes(id === 'first' ? 1 : 2)
+        expect(
+          JSON.parse(String(harness.fetchMock.mock.lastCall?.[1]?.body)).payload
+        ).toMatchObject({ hook_event_name: 'agent_start', session_id: id })
       )
       const payload = JSON.parse(String(harness.fetchMock.mock.lastCall?.[1]?.body)).payload
       const session = extractAgentProviderSession('omp', payload)
@@ -64,9 +69,11 @@ describe.each([
   it('publishes planned persistent paths, then resolves after delayed creation', async () => {
     const harness = createAgentStatusExtensionHarness(args)
     const file = join(root, 'delayed.jsonl')
-    await harness.callHook('agent_start', undefined, {
+    const context = {
       sessionManager: { getSessionId: () => 'delayed', getSessionFile: () => file }
-    })
+    }
+    await harness.callHook('session_start', {}, context)
+    await harness.callHook('agent_start', undefined, context)
     const payload = JSON.parse(String(harness.fetchMock.mock.lastCall?.[1]?.body)).payload
     const session = extractAgentProviderSession('omp', payload)!
     expect(session.transcriptPath).toBe(file)
@@ -91,12 +98,17 @@ describe.each([
       const harness = createAgentStatusExtensionHarness(args)
       let sessionFile: unknown = join(root, 'p.jsonl')
       const sessionManager = { getSessionId: () => 'same-owner', getSessionFile: () => sessionFile }
+      await harness.callHook('session_start', {}, { sessionManager })
       await harness.callHook('agent_start', undefined, { sessionManager })
       sessionFile = file
       await harness.callHook('agent_end', undefined, { sessionManager })
-      await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(2))
+      await vi.waitFor(() =>
+        expect(
+          JSON.parse(String(harness.fetchMock.mock.lastCall?.[1]?.body)).payload.hook_event_name
+        ).toBe('agent_end')
+      )
       const payload = JSON.parse(String(harness.fetchMock.mock.lastCall?.[1]?.body)).payload
-      expect(payload).toEqual({ hook_event_name: 'agent_end' })
+      expect(payload).toEqual({ hook_event_name: 'agent_end', is_idle: true })
       expect(extractAgentProviderSession('omp', payload)).toBeNull()
     }
   )

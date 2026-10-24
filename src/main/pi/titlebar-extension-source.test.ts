@@ -681,7 +681,7 @@ describe('getPiTitlebarExtensionSource', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it('clears animation and pending idle checks on session replacement', async () => {
+  it('clears animation and pending idle checks and retires the replaced registration', async () => {
     const harness = createHarness({ isIdle: () => false })
     await harness.callHook('agent_start')
     await harness.callHook('agent_end')
@@ -689,7 +689,18 @@ describe('getPiTitlebarExtensionSource', () => {
     await harness.callHook('session_start')
     expect(vi.getTimerCount()).toBe(0)
     await harness.callHook('agent_start')
+    expect(vi.getTimerCount()).toBe(0)
+    const replacement = createHarness()
+    await replacement.callHook('session_start')
+    await replacement.callHook('agent_start')
     expect(vi.getTimerCount()).toBe(1)
+  })
+
+  it('keeps factory-time replacement for a painter from an older build', () => {
+    const dispose = vi.fn()
+    const globals = { [Symbol.for('orca.pi.titlebar.owners')]: new Map([['pane-1', dispose]]) }
+    createHarness({ globals })
+    expect(dispose).toHaveBeenCalledOnce()
   })
 
   it('reload replaces only its pane owner and ignores late old-generation events', async () => {
@@ -701,7 +712,8 @@ describe('getPiTitlebarExtensionSource', () => {
     await old.callHook('agent_end')
     await other.callHook('agent_start')
     const replacement = createHarness({ globals })
-    expect(vi.getTimerCount()).toBe(1)
+    expect(vi.getTimerCount()).toBe(4)
+    await replacement.callHook('session_start')
     await replacement.callHook('agent_start')
     const oldCount = old.titles.length
     await old.callHook('session_shutdown')
@@ -712,7 +724,8 @@ describe('getPiTitlebarExtensionSource', () => {
     expect(replacement.lastTitle()).toMatch(BRAILLE_RE)
     expect(other.lastTitle()).toMatch(BRAILLE_RE)
     const third = createHarness({ globals })
-    expect(vi.getTimerCount()).toBe(1)
+    expect(vi.getTimerCount()).toBe(2)
+    await third.callHook('session_start')
     await third.callHook('agent_start')
     await replacement.callHook('session_shutdown')
     expect(vi.getTimerCount()).toBe(2)

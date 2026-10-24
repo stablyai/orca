@@ -11,6 +11,8 @@ export type AgentQuestionAnsweredInferenceRequest = {
   baselineAgentType: AgentType | undefined
 }
 
+export const ASK_USER_QUESTION_TOOL_NAMES = ['askuserquestion', 'requestuserinput'] as const
+
 /** True for the ask-the-user-a-question tool across agents: Claude's
  *  `AskUserQuestion`, grok/Pi's `ask_user_question`, and Codex ≥0.145's
  *  `request_user_input` (same questions/options input shape).
@@ -18,7 +20,7 @@ export type AgentQuestionAnsweredInferenceRequest = {
  *  clients render as a live card. */
 export function isAskUserQuestionTool(toolName: string | undefined): boolean {
   const normalized = toolName?.replaceAll(/[^a-z0-9]/gi, '').toLowerCase()
-  return normalized === 'askuserquestion' || normalized === 'requestuserinput'
+  return ASK_USER_QUESTION_TOOL_NAMES.some((name) => name === normalized)
 }
 
 const QUESTION_ANSWER_ENTER_INPUTS: ReadonlySet<string> = new Set([

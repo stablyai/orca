@@ -14,7 +14,7 @@ function getPiSessionShutdownHandlerSourceLines(): string[] {
     '      return',
     '    }',
     // Why: pi tears an open dialog down without resolving its promise, so no ui_prompt_end follows.
-    '    piUiPromptDepth = 0',
+    '    piUiState.depth = 0',
     '    const reason = (event as { reason?: unknown } | null)?.reason',
     '    const target = (event as { targetSessionFile?: unknown } | null)?.targetSessionFile',
     // Why: /reload and a resume of the file already open keep the session, and its children still report to it.
@@ -40,7 +40,7 @@ export function getAgentStatusSessionBoundaryHandlerSourceLines(kind: PiAgentKin
   return [
     ...(kind !== 'pi'
       ? [
-          "  pi.on('session_shutdown', () => { resetSubagentRoster(); resetPostQueue(); clearPendingAgentEndCheck() })"
+          "  onStatus('session_shutdown', () => { resetSubagentRoster(); resetPostQueue(); clearPendingAgentEndCheck() })"
         ]
       : []),
     ...(kind !== 'prime-agent'
@@ -61,8 +61,8 @@ export function getAgentStatusSessionBoundaryHandlerSourceLines(kind: PiAgentKin
           '    }',
           '    updateRuntimeOmpSessionMetadata(ctx)',
           '  }',
-          "  pi.on('session_switch', onOmpSessionChange)",
-          "  pi.on('session_branch', onOmpSessionChange)"
+          "  onStatus('session_switch', onOmpSessionChange)",
+          "  onStatus('session_branch', onOmpSessionChange)"
         ]
       : []),
     ...(kind === 'pi' ? getPiSessionShutdownHandlerSourceLines() : [])

@@ -76,12 +76,29 @@ it('recovers a completion on reload without requiring a new turn', async () => {
   await harness.callHook('session_start', { reason: 'startup' }, ctx)
   await harness.callHook('agent_start', {}, ctx)
   await vi.advanceTimersByTimeAsync(0)
+  const child = harness.registerSession()
+  const childCtx = { sessionManager: { getSessionId: () => 'helper' } }
+  await child.callHook('session_start', {}, childCtx)
+  await child.callHook(
+    'tool_call',
+    {
+      toolName: 'ask_user_question',
+      input: { questions: [{ question: 'Captured on completion?' }] }
+    },
+    childCtx
+  )
+  await vi.advanceTimersByTimeAsync(0)
   harness.fetchMock.mockRejectedValueOnce(new Error('offline'))
   await endTurn(harness)
   await harness.reloadPi()
   await harness.callHook('session_start', { reason: 'reload' }, ctx)
   await vi.advanceTimersByTimeAsync(5_000)
   expect(agentEndCount(harness)).toBe(2)
-  expect(posts(harness).at(-1)).toMatchObject({ hook_event_name: 'agent_end', session_id: 'A' })
+  const completion = posts(harness).filter((post) => post.hook_event_name === 'agent_end')
+  expect(completion).toEqual([
+    expect.objectContaining({ tool_name: 'ask_user_question' }),
+    expect.objectContaining({ tool_name: 'ask_user_question' })
+  ])
+  expect(posts(harness).at(-1)).toMatchObject({ hook_event_name: 'tool_call', session_id: 'A' })
   expect(vi.getTimerCount()).toBe(0)
 })
