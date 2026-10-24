@@ -34,6 +34,7 @@ import {
   promptTextPosition
 } from './native-chat-prompt-document'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
+import { NativeChatPromptDirection } from './native-chat-prompt-direction'
 import { NativeChatImageRowProvider } from './NativeChatImageReferencePill'
 
 type Props = Omit<HTMLAttributes<HTMLDivElement>, 'onChange' | 'onSelect'> & {
@@ -88,6 +89,7 @@ export function NativeChatPromptEditor({
         }),
         NativeChatSkill,
         NativeChatFileReference,
+        NativeChatPromptDirection,
         NativeChatImageReference,
         // A disabled box still says why it is disabled, as the plain text box's placeholder does.
         Placeholder.configure({
