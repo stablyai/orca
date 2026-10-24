@@ -7,6 +7,7 @@ import {
   type OrcadActivationRecord
 } from '../managed-server/activation/orcad-activation-record'
 import { getRemoteHostPlatform } from '../ssh/ssh-remote-platform'
+import { OrcadActiveReadinessError } from '../ssh/orcad-active-readiness'
 import type { WslDistroHolder } from './wsl-distro-holder'
 import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
 
@@ -228,6 +229,23 @@ describe('deployAndLaunchWslOrcad', () => {
     mocks.wake.mockResolvedValueOnce({ outcome: 'started', readiness: READINESS })
     await expect(launch()).resolves.toMatchObject({ outcome: 'ready', port: 6790 })
     expect(mocks.wake).toHaveBeenCalledTimes(1)
+  })
+
+  // Real host (win-lowspec, cold systemd distro): the orcad the wake saw serving exited before the probe.
+  it('starts the slot again when the orcad the wake saw serving exits before the probe', async () => {
+    mocks.deploy.mockResolvedValueOnce({ outcome: 'already-active', fullVersion: '1.5.0+ab' })
+    mocks.wake.mockResolvedValueOnce({ outcome: 'serving' })
+    mocks.wake.mockResolvedValueOnce({ outcome: 'started', readiness: READINESS })
+    mocks.probe.mockRejectedValueOnce(new OrcadActiveReadinessError('exited', 'process has exited'))
+    await expect(launch()).resolves.toMatchObject({ outcome: 'ready', port: 6790 })
+    expect(mocks.wake).toHaveBeenCalledTimes(2)
+
+    mocks.deploy.mockResolvedValueOnce({ outcome: 'already-active', fullVersion: '1.5.0+ab' })
+    mocks.wake.mockResolvedValueOnce({ outcome: 'serving' })
+    const refused = new OrcadActiveReadinessError('rejected', 'wrong build')
+    mocks.probe.mockRejectedValueOnce(refused)
+    await expect(launch()).rejects.toBe(refused)
+    expect(mocks.wake).toHaveBeenCalledTimes(3)
   })
 
   // Real host (awin): a Remove that failed partway left orcad serving; the record named nothing.

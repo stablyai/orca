@@ -14,6 +14,8 @@ import { OrcadHostUnsupportedError } from '../orcad/orcad-host-unavailable'
 import type { WslHostDistroCandidate } from './wsl-host-distro-list'
 import { WslHostService, type WslHostConnector } from './wsl-host-service'
 import { WslOrcadLaunchDeferredError } from './wsl-orcad-connection-errors'
+import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
+import { isRecoverableRemoteRuntimeConnectionError } from '../../shared/remote-runtime/remote-runtime-client-error-classification'
 import type { WslOrcadConnection } from './wsl-orcad-connection'
 
 const KEY = Buffer.alloc(32, 3).toString('base64')
@@ -456,6 +458,35 @@ describe('WslHostService', () => {
     service.setVisibleWork(['wsl:ubuntu'])
     await service.ensureForRuntimeCall('wsl:ubuntu')
     expect(connector.connect).not.toHaveBeenCalled()
+  })
+
+  it('reports a failed connect for open work as retryable, but a deferred update as final', async () => {
+    const connector = makeConnector([UBUNTU])
+    const service = makeService(connector)
+    await service.add({ distro: 'Ubuntu' })
+    await connector.disconnect('Ubuntu')
+    service.setVisibleWork(['wsl:ubuntu'])
+    await vi.waitFor(() => expect(connector.connect).toHaveBeenCalledTimes(2))
+    await connector.disconnect('Ubuntu')
+
+    connector.connect.mockRejectedValueOnce(new Error('orcad exited'))
+    const failure = await service
+      .ensureForRuntimeCall('wsl:ubuntu')
+      .catch((error: unknown) => error)
+    expect(failure).toBeInstanceOf(RemoteRuntimeClientError)
+    expect(failure).toMatchObject({ code: 'remote_runtime_unavailable' })
+    expect(isRecoverableRemoteRuntimeConnectionError({ message: String(failure) })).toBe(true)
+
+    const deferred = new WslOrcadLaunchDeferredError({
+      outcome: 'deferred',
+      distro: 'Ubuntu',
+      candidateVersion: '2.0.0',
+      code: 'live-terminals',
+      reason: 'Terminals are still running.',
+      forceable: true
+    })
+    connector.connect.mockRejectedValueOnce(deferred)
+    await expect(service.ensureForRuntimeCall('wsl:ubuntu')).rejects.toBe(deferred)
   })
 
   it('releases the holder of a failed or deferred first add, which no record would ever find', async () => {

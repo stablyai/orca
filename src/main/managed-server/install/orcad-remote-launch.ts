@@ -207,7 +207,10 @@ export function orcadLivenessProbeCommand(
     posixProcessAliveShellFunction({ refuseUnverifiable: true }),
     // PID reuse needs argv identity; absent ps leaves conservative liveness checks to decide.
     `orcad_launcher=${launcher}; orcad_server=${server};`,
-    'orcad_reused() { args=$(ps -o args= -p "$1" 2>/dev/null) && [ -n "$args" ] && ' +
+    // The probe's own shell, or the shell wrapping it, carries the slot paths in its argv; after a
+    // restart either can hold the old PID. A shell elsewhere may be an older launcher's live parent.
+    'orcad_reused() { { [ "$1" = "$$" ] || [ "$1" = "$PPID" ]; } && return 0; ' +
+      'args=$(ps -o args= -p "$1" 2>/dev/null) && [ -n "$args" ] && ' +
       'case "$args" in *"$orcad_launcher"* | *"$orcad_server"*) return 1;; *) return 0;; esac; };',
     `pid=$(cat ${pidFile} 2>/dev/null);`,
     'case "$pid" in',
