@@ -26,6 +26,7 @@ vi.mock('@/components/ui/tooltip', () => ({
 
 vi.mock('@/components/ui/dropdown-menu', async () => {
   const React = await import('react')
+  const Selection = React.createContext<string | undefined>(undefined)
   return {
     DropdownMenu: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
     DropdownMenuTrigger: ({
@@ -45,48 +46,38 @@ vi.mock('@/components/ui/dropdown-menu', async () => {
     DropdownMenuRadioGroup: ({
       children,
       value,
-      onValueChange,
       'aria-label': ariaLabel
     }: {
       children: React.ReactNode
       value?: string
-      onValueChange?: (value: string) => void
       'aria-label'?: string
     }) => (
-      <div role="radiogroup" aria-label={ariaLabel}>
-        {React.Children.map(children, (child) => {
-          if (
-            !React.isValidElement<{
-              value?: string
-              disabled?: boolean
-              children?: React.ReactNode
-              onSelect?: () => void
-            }>(child)
-          ) {
-            return child
-          }
-          const props = child.props
-          return (
-            <button
-              role="radio"
-              aria-checked={props.value === value}
-              disabled={props.disabled}
-              data-value={props.value}
-              onClick={() => {
-                props.onSelect?.()
-                if (props.value !== undefined) {
-                  onValueChange?.(props.value)
-                }
-              }}
-            >
-              {props.children}
-            </button>
-          )
-        })}
-      </div>
+      <Selection.Provider value={value}>
+        <div role="radiogroup" aria-label={ariaLabel}>
+          {children}
+        </div>
+      </Selection.Provider>
     ),
-    DropdownMenuRadioItem: ({ children }: { children: React.ReactNode; value: string }) => (
-      <span>{children}</span>
+    DropdownMenuRadioItem: ({
+      children,
+      value,
+      disabled,
+      onSelect
+    }: {
+      children: React.ReactNode
+      value: string
+      disabled?: boolean
+      onSelect?: () => void
+    }) => (
+      <button
+        role="radio"
+        aria-checked={React.useContext(Selection) === value}
+        disabled={disabled}
+        data-value={value}
+        onClick={onSelect}
+      >
+        {children}
+      </button>
     )
   }
 })

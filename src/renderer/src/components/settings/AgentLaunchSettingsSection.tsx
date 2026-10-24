@@ -12,6 +12,7 @@ import {
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
   AgentLaunchSettingsCatalog,
+  AgentLaunchSettingsLoading,
   type AgentPermissionsRenderer
 } from './AgentLaunchSettingsCatalog'
 import { HostAgentLaunchSettings } from './HostAgentLaunchSettings'
@@ -55,9 +56,7 @@ export function AgentLaunchSettingsSection({
       ) : !hostScope.available ? (
         <SettingsHostScopeUnavailableNotice />
       ) : (
-        <p className="text-sm text-muted-foreground">
-          {translate('settings.agents.loadingHost', 'Loading agent settings…')}
-        </p>
+        <AgentLaunchSettingsLoading />
       )}
     </section>
   )

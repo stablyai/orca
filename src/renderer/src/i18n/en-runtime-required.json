@@ -3458,6 +3458,11 @@
     }
   },
   "settings": {
+    "agents": {
+      "loadingHost": "Loading agent settings…",
+      "permissionChoiceDescription": "Applies where each agent supports this mode. Change one agent below.",
+      "permissionResetsOwnChoices": "Choosing a mode here resets the agents marked as set separately."
+    },
     "browser": {
       "clientHostedRemote": {
         "description": "Render remote workspace pages on this desktop; network traffic still goes through the remote host. Applies to new pages only.",

@@ -263,7 +263,6 @@ export function AgentLaunchSettingsCatalog({
               (agent) => !agentPermissionChoices(agent).includes('auto')
             ).map((agent) => resolveAgentPermission(agent, permissionSettings).choice)
           )}
-          ownChoiceCount={Object.keys(permissionSettings.agentPermissionOverrides ?? {}).length}
           onChange={(choice) => save({ type: 'permission', choice })}
           onChangeWithoutAuto={(choice) => save({ type: 'permission', choice, withoutAuto: true })}
         />
@@ -303,4 +302,28 @@ export function AgentLaunchSettingsCatalog({
 
 function sharedChoice(choices: readonly AgentPermissionChoice[]): AgentPermissionChoice | null {
   return choices.length > 0 && choices.every((choice) => choice === choices[0]) ? choices[0] : null
+}
+
+export function AgentLaunchSettingsLoading(): React.JSX.Element {
+  return (
+    <fieldset disabled className="min-w-0 space-y-8">
+      <AgentDefaultSetting
+        defaultAgent="blank"
+        detectedIds={null}
+        enabledDetectedAgents={[]}
+        catalog={[]}
+        description={translate(
+          'settings.agents.hostDefaults',
+          'Defaults for new agents on the selected host.'
+        )}
+        onSetDefault={() => {}}
+      />
+      <AllAgentsPermissionSetting
+        choice={null}
+        withoutAutoChoice={null}
+        onChange={() => {}}
+        onChangeWithoutAuto={() => {}}
+      />
+    </fieldset>
+  )
 }
