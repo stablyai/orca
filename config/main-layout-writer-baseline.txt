@@ -40,7 +40,6 @@
 3 src/main/persistence/migrating-orcad-catalog/orcad-source-workspace-session-layout.ts
 4 src/main/persistence/migrating-orcad-catalog/orcad-source-workspace-session-subtraction.ts
 1 src/main/persistence/migrating-orcad-catalog/orcad-source-workspace-session.ts
-2 src/main/persistence/moving-wsl-projects/wsl-move-echoed-browser-tabs.ts
 2 src/main/persistence/moving-wsl-projects/wsl-move-main-rewrite-stores.ts
 1 src/main/persistence/restoring-sessions/folder-workspace-operations.ts
 1 src/main/persistence/restoring-sessions/invalid-workspace-layout-purge.ts
