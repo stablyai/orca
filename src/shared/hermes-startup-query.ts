@@ -28,9 +28,32 @@ function tokenizeCommand(value: string, shell: AgentStartupShell): string[] | nu
   return tokenized.ok && tokenized.tokens.length > 0 ? tokenized.tokens : null
 }
 
+// Wrappers keep the `hermes` stem: native launchers (.exe/.cmd/.bat), PowerShell
+// shims (.ps1), POSIX shims (.sh), and interpreter scripts (hermes.py/hermes.js).
+// Recognizing them stops a hard launch failure for configured wrappers; the
+// trailing `chat` anchor in normalizeHermesArgv still guards against false matches.
+const HERMES_WRAPPER_EXTENSIONS = new Set([
+  'exe',
+  'cmd',
+  'bat',
+  'com',
+  'ps1',
+  'sh',
+  'js',
+  'mjs',
+  'cjs',
+  'py',
+  'pyw',
+  'pyz'
+])
+
 function isHermesExecutableToken(value: string): boolean {
   const basename = value.replaceAll('\\', '/').split('/').pop()?.toLowerCase() ?? ''
-  return basename === 'hermes' || basename === 'hermes.exe' || basename === 'hermes.cmd'
+  if (basename === 'hermes') {
+    return true
+  }
+  const parts = basename.split('.')
+  return parts.length === 2 && parts[0] === 'hermes' && HERMES_WRAPPER_EXTENSIONS.has(parts[1])
 }
 
 const HERMES_VALUELESS_FLAGS = new Set([
@@ -166,6 +189,30 @@ function buildQueryCommand(argv: string[], shell: AgentStartupShell): string {
   return `sh -c ${quoteStartupArg(script, shell)}`
 }
 
+// Why: the query transport places the prompt in an env var bounded by
+// QUERY_ENV_LIMIT. Oversized prompts cannot ride that transport, and Hermes has
+// no bracketed-paste readiness handshake, so pasting would race into the wrong
+// pane (the exact regression #7862 removed). Launch Hermes bare with a visible
+// notice instead of silently returning null so the pane is never left dead.
+const OVERSIZED_PROMPT_NOTICE =
+  `Orca: startup prompt exceeds the ${QUERY_ENV_LIMIT}-character native-query limit ` +
+  `and was not auto-delivered. Hermes started without it — paste the task manually.`
+
+function buildBareLaunchCommand(argv: string[], shell: AgentStartupShell): string {
+  // Drop the query placeholder so Hermes opens interactively with the user's
+  // remaining flags but no prompt transport.
+  const bareArgv = argv.filter((token) => token !== QUERY_ARG_PLACEHOLDER)
+  if (shell !== 'posix') {
+    const invocation = buildShellCommandFromArgv(bareArgv, 'powershell')
+    const script = `Write-Warning ${quoteStartupArg(OVERSIZED_PROMPT_NOTICE, 'powershell')}; ${invocation}`
+    return `powershell.exe -NoProfile -EncodedCommand ${encodePowerShellCommand(script)}`
+  }
+  const invocation = buildShellCommandFromArgv(bareArgv, 'posix')
+  const notice = `printf '%s\\n' ${quoteStartupArg(OVERSIZED_PROMPT_NOTICE, 'posix')} >&2`
+  const script = `${notice}; ${invocation}`
+  return `sh -c ${quoteStartupArg(script, 'posix')}`
+}
+
 export function planHermesStartupQuery(args: {
   baseCommand: string
   agentArgs?: string | null
@@ -199,5 +246,10 @@ export function planHermesStartupQuery(args: {
     args.platform === 'win32' ? command.length : new TextEncoder().encode(command).byteLength
   // Why: WSL plans execute as Linux but cross the Windows environment block;
   // the conservative shared bound is safe for every transport host.
-  return commandSize + envSize <= QUERY_ENV_LIMIT ? { command, env } : null
+  if (commandSize + envSize <= QUERY_ENV_LIMIT) {
+    return { command, env }
+  }
+  // Oversized prompts fall back to a bare launch (no prompt env) with a visible
+  // notice instead of a null plan that would leave the pane dead entirely.
+  return { command: buildBareLaunchCommand(argv, args.shell), env: { ...args.agentEnv } }
 }
