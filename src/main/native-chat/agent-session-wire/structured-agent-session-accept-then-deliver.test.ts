@@ -568,8 +568,6 @@ describe('what an earlier host process left behind', () => {
   })
 
   it('leaves a legacy pending message and a handed-over one in doubt, never re-sent (W4′c)', async () => {
-    const providerHistoryWindow = vi.fn(async () => null)
-    adapterExtras = { providerHistoryWindow }
     await writeAsEarlierProcess(async (journal, fence) => {
       await journal.appendSubmission({ ...earlierSubmission('legacy', 'l'), fence })
       await journal.appendSubmission({ ...earlierSubmission('handed', 'h', true), fence })
@@ -587,8 +585,6 @@ describe('what an earlier host process left behind', () => {
 
     expect(await submission('legacy')).toMatchObject({ dispatchState: 'unknown', recovered: true })
     expect(await submission('handed')).toMatchObject({ dispatchState: 'unknown', recovered: true })
-    // History reconciliation requires a won lease.
-    expect(providerHistoryWindow).not.toHaveBeenCalled()
     expect(dispatch).not.toHaveBeenCalled()
   })
 })

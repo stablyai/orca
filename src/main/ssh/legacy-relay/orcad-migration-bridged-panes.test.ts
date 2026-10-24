@@ -4,7 +4,7 @@ import {
   DORMANT_WORKTREE_ID,
   dormantState,
   manifest
-} from '../../persistence-orcad-migration-catalog-fixture'
+} from '../../persistence/migrating-orcad-catalog/persistence-orcad-migration-catalog-fixture'
 import type { SshRemotePtyLease } from '../../../shared/ssh-types'
 import { preservesOrcadMigrationBridgedPanes } from '../orcad-migration-bridged-panes'
 import { isBridgeableLease } from './legacy-relay-bridge-leases'

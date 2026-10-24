@@ -57,6 +57,29 @@ describe('TerminalRemoteRuntimeReconnectBanner', () => {
   })
 })
 
+describe('SSH sign-in wait', () => {
+  it.each(['backoff', 'disconnected'] as const)(
+    'shows the sign-in wait at once during %s, never the runtime-lost copy',
+    async (phase) => {
+      const onReconnect = vi.fn()
+      const user = userEvent.setup()
+      render(
+        <DelayedRemoteRuntimeReconnectBanner
+          epoch={1}
+          phase={phase}
+          onReconnect={onReconnect}
+          awaitingSignIn
+        />
+      )
+
+      expect(screen.getByText('Waiting for SSH sign-in')).toBeInTheDocument()
+      expect(screen.queryByText(/Remote runtime disconnected|Reconnecting/)).not.toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: 'Sign in' }))
+      expect(onReconnect).toHaveBeenCalledOnce()
+    }
+  )
+})
+
 describe('DelayedRemoteRuntimeReconnectBanner', () => {
   it('keeps a brief resubscribe from flashing the retrying banner', () => {
     vi.useFakeTimers()

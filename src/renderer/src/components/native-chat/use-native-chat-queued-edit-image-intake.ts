@@ -178,6 +178,8 @@ export function useNativeChatQueuedEditImageIntake(
   const [sequence] = useState(createOsFileDropSequence)
   const attachOwner = useOsFileDropOwner(ownerRef, {
     consumer: (destination) => destination?.preparationConsumer ?? 'agent',
+    // A paired server's chat uploads the bytes; any other owner refuses with a notice.
+    acceptsBrowserFiles: true,
     sequence,
     canAccept: () => !disabled,
     captureDestination: () => captureExternalDrop(),

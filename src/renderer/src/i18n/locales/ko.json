@@ -3511,7 +3511,10 @@
             "disconnectedTitle": "원격 런타임 연결 끊김",
             "retryingBody": "Orca가 자동으로 재시도합니다. 연결이 복원되면 이 터미널이 재개됩니다.",
             "disconnectedBody": "자동 재시도가 중지되었습니다. 이 터미널 세션을 재개하려면 다시 연결하세요.",
-            "reconnectButton": "다시 연결"
+            "reconnectButton": "다시 연결",
+            "signInTitle": "SSH 로그인 대기 중",
+            "signInBody": "호스트에 로그인하면 이 터미널이 자동으로 계속됩니다.",
+            "signInButton": "로그인"
           },
           "TerminalLinkActionPopover": {
             "openLink": "링크 열기",
@@ -18507,6 +18510,7 @@
       },
       "webRuntimeSession": {
         "remoteHostDisconnected": "워크스페이스가 원격 Orca 호스트에 연결되어 있지 않습니다.",
+        "splitSourceUnpublished": "창을 분할하지 못했습니다: 호스트에서 터미널이 아직 시작되지 않았습니다.",
         "terminalCreateUnconfirmed": "Orca가 호스트에서 새 터미널이 열렸는지 확인할 수 없습니다."
       },
       "gitlabJobTraceClient": {

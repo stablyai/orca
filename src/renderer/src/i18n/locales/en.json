@@ -3829,7 +3829,10 @@
             "disconnectedTitle": "Remote runtime disconnected",
             "retryingBody": "Orca is retrying automatically. This terminal will resume if the connection returns.",
             "disconnectedBody": "Automatic retries stopped. Reconnect to resume this terminal session.",
-            "reconnectButton": "Reconnect"
+            "reconnectButton": "Reconnect",
+            "signInTitle": "Waiting for SSH sign-in",
+            "signInBody": "This terminal continues by itself once you sign in to the host.",
+            "signInButton": "Sign in"
           },
           "TerminalQuickCommandsSubmenu": {
             "3ccc7981bb": "Host unavailable",
@@ -18789,6 +18792,7 @@
       },
       "webRuntimeSession": {
         "remoteHostDisconnected": "The workspace is not connected to a remote Orca host.",
+        "splitSourceUnpublished": "The pane didn’t split: its terminal hasn’t started on the host yet.",
         "terminalCreateUnconfirmed": "Orca couldn’t confirm that the new terminal opened on the host."
       },
       "gitlabJobTraceClient": {

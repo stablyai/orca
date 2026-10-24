@@ -407,7 +407,9 @@ describe('Claude stream-json connection', () => {
         blocks: [{ type: 'text', text: 'STREAMOK_ELEC_64E632' }]
       }
     ])
-    expect(assistant.map((item) => item.itemId)).toEqual([`claude:${SESSION_ID}:uuid-block-start`])
+    expect(assistant.map((item) => item.itemId)).toEqual([
+      `claude:${SESSION_ID}:block%3Amsg_01%3A0`
+    ])
     expect(
       items.flatMap((item) =>
         item.body.kind === 'status' && item.body.providerFrame ? [item.body.providerFrame.kind] : []

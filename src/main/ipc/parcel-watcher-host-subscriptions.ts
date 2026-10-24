@@ -2,7 +2,7 @@ import type { ChildProcess } from 'node:child_process'
 import {
   resetPendingSubscribeAttempt,
   takePendingSubscribe
-} from './parcel-watcher-pending-subscribe'
+} from './filesystem/watcher-process/parcel-watcher-pending-subscribe'
 import { isWatcherProcessFailure, WatcherProcessFailure } from './parcel-watcher-process-failure'
 import type { HostToWatcherMessage, WatcherToHostMessage } from './parcel-watcher-process-protocol'
 import type {

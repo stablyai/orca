@@ -21,6 +21,10 @@ const BUNDLED_MAIN_DEPENDENCIES = new Set([
   'tldts',
   'smol-toml',
   'fflate',
+  // Linear save confirmation; bundled like orcad so packaging needs no extra node_modules.
+  'unified',
+  'remark-parse',
+  'remark-gfm',
   // Why: Windows NSIS deploys app.asar before external resources; bootstrap must
   // not race the later resources/node_modules copy.
   'zod'

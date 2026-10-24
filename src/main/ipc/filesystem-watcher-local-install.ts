@@ -2,7 +2,7 @@ import { stat } from 'node:fs/promises'
 import { isWslPath } from '../wsl'
 import { WATCHER_IGNORE_DIRS } from './filesystem-watcher-ignore'
 import { createWslWatcher, type WatchedRoot } from './filesystem-watcher-wsl'
-import { WatcherChildCapacityError } from './parcel-watcher-child-registry'
+import { WatcherChildCapacityError } from './filesystem/watcher-process/parcel-watcher-child-registry'
 import { isWatcherProcessFailure } from './parcel-watcher-process-failure'
 import type {
   LocalWatcherInstallResult,

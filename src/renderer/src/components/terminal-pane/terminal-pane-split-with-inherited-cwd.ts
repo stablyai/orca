@@ -1,6 +1,11 @@
 import type { TerminalPaneSplitSource } from '../../../../shared/feature-education-telemetry'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import { splitWebRuntimeTerminal } from '@/runtime/web-runtime-terminal-actions'
+import {
+  isHostTabPane,
+  notifyHostTabSplitRefused,
+  readHostPublishedSplitSourcePtyId
+} from '@/runtime/web-runtime-split-source-pty'
 import type { PtyTransport } from './pty-transport-types'
 import { resolveSplitCwd, type PaneCwdMap } from './resolve-split-cwd'
 import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
@@ -26,14 +31,12 @@ type SplitArgs = {
 }
 
 export function splitTerminalPaneWithInheritedCwd(args: SplitArgs): void {
-  const ptyId = args.paneTransports.get(args.pane.id)?.getPtyId() ?? null
-  if (
-    splitWebRuntimeTerminal(ptyId, args.direction, args.source, {
-      worktreeId: args.worktreeId,
-      tabId: args.tabId,
-      leafId: args.pane.leafId
-    })
-  ) {
+  const sourcePane = { worktreeId: args.worktreeId, tabId: args.tabId, leafId: args.pane.leafId }
+  // Why the host's binding: a pane whose attach is still in flight has no transport id yet.
+  const ptyId =
+    args.paneTransports.get(args.pane.id)?.getPtyId() ??
+    readHostPublishedSplitSourcePtyId(sourcePane)
+  if (splitWebRuntimeTerminal(ptyId, args.direction, args.source, sourcePane)) {
     return
   }
   // Switch point: main writes the split and starts its terminal; main's frame draws the pane. A
@@ -53,6 +56,10 @@ export function splitTerminalPaneWithInheritedCwd(args: SplitArgs): void {
     if (splitPaneInMain(request, asToday) || splitServerPane(request)) {
       return
     }
+  }
+  if (isHostTabPane(sourcePane)) {
+    notifyHostTabSplitRefused(sourcePane)
+    return
   }
   splitLocally(args, () => splitCwd(args, ptyId))
 }

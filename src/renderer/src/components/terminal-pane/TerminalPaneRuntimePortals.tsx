@@ -189,6 +189,7 @@ export function TerminalPaneRecoveryPortals({
         if (!recoveryState || recoveryState.reason === 'ownership') {
           return null
         }
+        const awaitingSignIn = recoveryState.reason === 'ssh-sign-in'
         return createPortal(
           <DelayedRemoteRuntimeReconnectBanner
             // Why per pane, not per epoch: a Reconnect click opens a new epoch and must not hide the banner again.
@@ -207,10 +208,27 @@ export function TerminalPaneRecoveryPortals({
                   .finally(retry)
                 return
               }
+              const signInEnvironmentId = awaitingSignIn
+                ? paneTransportsRef.current.get(pane.id)?.getRuntimeEnvironmentId?.()
+                : null
+              if (signInEnvironmentId) {
+                // Why no retry on failure: a rejected password must not re-dial into a second prompt;
+                // the control-ready revival starts the pane once sign-in succeeds.
+                void window.api.runtimeEnvironments
+                  .connect({ selector: signInEnvironmentId })
+                  .then((response) => {
+                    if (response.ok) {
+                      retry()
+                    }
+                  })
+                  .catch(() => undefined)
+                return
+              }
               retry()
             }}
             wslHostUnavailable={wslHostUnavailable}
             pairingRefused={pairingRefusedEnvironmentId !== null}
+            awaitingSignIn={awaitingSignIn}
           />,
           pane.container,
           `remote-runtime-reconnect-${pane.id}`

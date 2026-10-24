@@ -10,6 +10,9 @@ export function dropUnusableRowAnnotations(record: Record<string, unknown>): voi
         dropUnusableProducerLinkage(mutation)
         dropUnusableTurnScope(mutation)
         dropUnusableOwnerFence(mutation)
+        if (mutation.observedAt !== undefined && !Number.isFinite(mutation.observedAt)) {
+          delete mutation.observedAt
+        }
       }
     }
   }
@@ -37,6 +40,7 @@ function dropUnusableTurnScope(record: Record<string, unknown>): void {
     !(
       isPlainObject(scope) &&
       (scope.kind === 'thread' ||
+        scope.kind === 'unknown' ||
         (scope.kind === 'turn' &&
           typeof scope.turnItemId === 'string' &&
           scope.turnItemId.length > 0))

@@ -22,7 +22,7 @@ import { setWorktreeWatcherRemoval } from './worktree-watcher-removal'
 import { createRuntimeFileWatcherRemoval } from '../runtime/runtime-file-watcher-removal'
 import { watcherLifecycleState } from './filesystem-watcher-lifecycle-state'
 import { getLocalWatcherRoot } from './filesystem-watcher-paths'
-import { resetWatcherChildRegistryForTest } from './parcel-watcher-child-registry'
+import { resetWatcherChildRegistryForTest } from './filesystem/watcher-process/parcel-watcher-child-registry'
 
 type Handler = (event: unknown, args: unknown) => unknown
 

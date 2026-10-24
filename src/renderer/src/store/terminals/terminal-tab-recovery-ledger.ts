@@ -31,9 +31,10 @@ export const RECOVERY_COOLDOWN_MS = 15_000
 export const RECOVERY_SETTLEMENT_TIMEOUT_MS = 31_000
 
 /** Why a request exists at all. Only 'automatic' is subject to the
- *  settled-failure refusal: a user pressing Retry, or an external lifecycle
- *  remount, IS the new trigger the refusal is waiting for. */
-export type TerminalRecoveryTrigger = 'automatic' | 'user' | 'external'
+ *  settled-failure refusal: a user pressing Retry, an external lifecycle
+ *  remount, or a host publishing a new process IS the new trigger the refusal
+ *  is waiting for. 'host-evidence' still counts against the window cap. */
+export type TerminalRecoveryTrigger = 'automatic' | 'user' | 'external' | 'host-evidence'
 
 export type TerminalRecoveryRemountRequest = {
   reason: TerminalPaneRecoveryReason
@@ -133,7 +134,7 @@ export function admitTerminalRecoveryRemount(
       retryInMs: recent[0] + RECOVERY_WINDOW_MS - request.now
     }
   }
-  if (request.trigger === 'user') {
+  if (request.trigger === 'user' || request.trigger === 'host-evidence') {
     // The user asking again IS the new evidence. Only the window cap — the
     // backstop against a loop neither side can see — survives it.
     return ADMITTED

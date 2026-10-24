@@ -412,6 +412,56 @@ describe('phone chat CLI fork creation owner', () => {
     expect(resolution?.isTabChatView('ordinary-tab')).toBe(true)
   })
 
+  it('reports the strict saved-conversation refusal without opening a terminal or fallback', async () => {
+    const scope = createScope(
+      clientReturning({
+        ok: false,
+        error: { code: 'chat_fork_source_unavailable', message: 'chat_fork_source_unavailable' }
+      })
+    )
+    scope.hostCapabilities = [SESSION_TABS_CHAT_FORK_CLI_RUNTIME_CAPABILITY]
+    scope.sessionTabsRef.current = [
+      {
+        type: 'agent-session',
+        id: 'chat-tab',
+        title: 'Chat',
+        sessionId: 'chat-1',
+        agent: 'claude',
+        isActive: true
+      }
+    ]
+    let actions: ReturnType<typeof useMobileSessionTerminalCreateActions> | undefined
+    function Harness() {
+      actions = useMobileSessionTerminalCreateActions(scope as never)
+      return null
+    }
+    await act(async () => {
+      renderer = create(createElement(Harness))
+    })
+    await act(async () => {
+      expect(
+        await actions?.handleCreateTerminal(undefined, {
+          sourceChatFork: { sessionId: 'chat-1', agent: 'claude' }
+        })
+      ).toBe('reported-failure')
+    })
+    expect(scope.client.sendRequest).toHaveBeenCalledTimes(1)
+    expect(scope.client.sendRequest).toHaveBeenCalledWith(
+      'session.tabs.createTerminal',
+      expect.objectContaining({
+        sourceChatFork: { sessionId: 'chat-1' }
+      }),
+      { timeoutMs: 120_000 }
+    )
+    expect(scope.setActiveSessionTabId).not.toHaveBeenCalled()
+    expect(scope.setActiveHandle).not.toHaveBeenCalled()
+    expect(scope.setSessionTabs).not.toHaveBeenCalled()
+    expect(scope.nativeChatController.setTabView).not.toHaveBeenCalled()
+    expect(scope.setCreateError).toHaveBeenCalledWith(
+      "Could not open Claude in a new CLI. Check that the chat has a saved conversation and review the agent's command and settings on the host, then try again."
+    )
+  })
+
   it('reports a busy create before sending the chat intent', async () => {
     const scope = createScope(clientReturning())
     scope.hostCapabilities = [SESSION_TABS_CHAT_FORK_CLI_RUNTIME_CAPABILITY]

@@ -4,6 +4,7 @@ import { useNow } from '@/hooks/use-now'
 import { isFolderRepo } from '../../../../../shared/repo-kind'
 import { getGitHubPRCacheKey } from '../../../../../shared/github/github-cache-key'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-identity'
+import { isStaleMergedGitHubReviewForHead } from '@/store/slices/hosted-review-cache-state'
 import { selectReviewCacheEntry } from '../review-cache-entry-selection'
 import { selectChecksPanelReview, type ChecksPanelReview } from '../checks-panel-review'
 import { isGitLabChecksPanelReview } from './gitlab-review-client'
@@ -198,8 +199,10 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
   }
   // Why: background PR refreshes replace the cache map; Checks only renders the entry for the active repo and branch.
   const prCacheEntry = useAppStore((s) => selectReviewCacheEntry(s.prCache, prCacheKey || null))
-  const pr: PRInfo | null = prCacheEntry?.data ?? null
-  const prCachedHasPR = prCacheEntry ? prCacheEntry.data !== null : null
+  const pr: PRInfo | null = isStaleMergedGitHubReviewForHead(prCacheEntry, activeWorktree?.head)
+    ? null
+    : (prCacheEntry?.data ?? null)
+  const prCachedHasPR = prCacheEntry ? pr !== null : null
   const hostedReview = useAppStore((s) =>
     hostedReviewCacheKey ? (s.hostedReviewCache[hostedReviewCacheKey]?.data ?? null) : null
   )

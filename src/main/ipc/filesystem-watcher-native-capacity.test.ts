@@ -23,7 +23,7 @@ import {
   reserveWatcherChild,
   resetWatcherChildRegistryForTest,
   WatcherChildCapacityError
-} from './parcel-watcher-child-registry'
+} from './filesystem/watcher-process/parcel-watcher-child-registry'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
 

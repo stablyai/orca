@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { WATCHER_PROCESS_EXIT_DEADLINE_MS } from './parcel-watcher-child-termination'
+import { WATCHER_PROCESS_EXIT_DEADLINE_MS } from './filesystem/watcher-process/parcel-watcher-child-termination'
 import { WATCHER_PROCESS_UNSUBSCRIBE_TIMEOUT_MS } from './parcel-watcher-host-subscriptions'
 import {
   acknowledgeWatcherSubscribe as ackSubscribe,

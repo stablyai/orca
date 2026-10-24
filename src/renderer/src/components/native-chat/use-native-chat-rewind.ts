@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import type { ConfirmationDialogContextValue } from '@/components/confirmation-dialog-context'
 import { translate } from '@/i18n/i18n'
 import {
+  savedRewindKeys,
   isAgentSessionRewindTarget,
   type AgentSessionRewindReason,
   type AgentSessionRewindResult,
@@ -24,17 +25,12 @@ import type {
 } from './use-structured-agent-session-mutate'
 import { returnMessageToComposer } from './structured-agent-session-message-hand-back'
 import { nativeChatRewindOffered } from './native-chat-rewind-eligibility'
+import type { NativeChatRewindSurface } from './use-native-chat-rewind-host'
 import {
   agentSessionContextFloorSequence,
   latestAgentSessionContextClearSequence
 } from '../../../../shared/agent-session-context-clear'
 import type { AgentJournalCursor } from '../../../../shared/agent-session-journal-types'
-
-export type NativeChatRewindSurface = {
-  disabledReason: string | null
-  eligibleItemIds?: ReadonlySet<string>
-  request: (itemId: string, confirm: ConfirmationDialogContextValue) => Promise<void>
-}
 
 /** How long a confirmed rewind waits for its new conversation before letting go. */
 export const NATIVE_CHAT_REWIND_RESET_TIMEOUT_MS = 120_000
@@ -81,12 +77,13 @@ function rewindFailureReason(failure: AgentSessionWriteFailure): string | undefi
 }
 
 function isRewindTarget(input: RewindInput, itemId: string): boolean {
-  const floor = rewindContextFloor(input)
   const opener = turnOpeners(input.state.items)
+  const keys = savedRewindKeys(input.state.submissions)
   return input.state.items.some(
     (item) =>
       item.itemId === itemId &&
-      item.sequence > floor &&
+      item.sequence > rewindContextFloor(input) &&
+      (keys.nativeIdentity(itemId) !== null || !keys.hasSubmission(itemId)) &&
       isAgentSessionRewindTarget(item, (turn) => opener.get(turn))
   )
 }
@@ -304,15 +301,18 @@ export function useNativeChatRewind(input: RewindInput) {
   const floor = rewindContextFloor(input)
   const eligibleItemIds = useMemo(() => {
     const opener = turnOpeners(input.state.items)
+    const keys = savedRewindKeys(input.state.submissions)
     return new Set(
       input.state.items
         .filter(
           (item) =>
-            item.sequence > floor && isAgentSessionRewindTarget(item, (turn) => opener.get(turn))
+            item.sequence > floor &&
+            (keys.nativeIdentity(item.itemId) !== null || !keys.hasSubmission(item.itemId)) &&
+            isAgentSessionRewindTarget(item, (turn) => opener.get(turn))
         )
         .map((item) => item.itemId)
     )
-  }, [floor, input.state.items])
+  }, [floor, input.state.items, input.state.submissions])
   // Rows re-render only when this changes; none get the action where the provider can never rewind.
   const surface = useMemo<NativeChatRewindSurface | undefined>(
     () => (offered ? { disabledReason, request, eligibleItemIds } : undefined),
@@ -321,10 +321,4 @@ export function useNativeChatRewind(input: RewindInput) {
   return { request, admitsSend, unlessBlocked, surface, disabledReason, pending, blockedRef }
 }
 
-/** What the pane hosting a structured session tells its rewind. */
-export type NativeChatRewindHost = {
-  /** The host's in-doubt latch, from its status feed. */
-  hostBlockedReason?: AgentSessionRewindReason | null
-  onMessageReturned?: () => void
-  isVisible?: boolean
-}
+export type { NativeChatRewindHost, NativeChatRewindSurface } from './use-native-chat-rewind-host'

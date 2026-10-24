@@ -69,6 +69,19 @@ describe('programStatusHookYieldEndsAt', () => {
     }
   })
 
+  it('keeps a question the hooks raised only from a working report that began before it', () => {
+    for (const state of ['waiting', 'blocked'] as const) {
+      const hook = row({ state, agentType: 'pi' })
+      const working = report({ state: 'working', agentType: 'pi' })
+      expect(programStatusHookYieldEndsAt(hook, working, NOW - 1)).toBe(Infinity)
+      expect(programStatusHookYieldEndsAt(hook, working, NOW + 1)).toBe(NOW + SILENCE)
+      expect(programStatusHookYieldEndsAt(hook, working)).toBe(NOW + SILENCE)
+      expect(programStatusHookYieldEndsAt(hook, report({ state: 'done', agentType: 'pi' }))).toBe(
+        NOW + SILENCE
+      )
+    }
+  })
+
   it('yields to a mid-turn hook row under another app id, not to a finished one', () => {
     expect(
       programStatusHookYieldEndsAt(

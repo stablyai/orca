@@ -3511,7 +3511,10 @@
             "disconnectedTitle": "リモートランタイムが切断されました",
             "retryingBody": "Orca は自動的に再試行します。接続が復元されると、このターミナルが再開されます。",
             "disconnectedBody": "自動再試行が停止しました。このターミナルセッションを再開するには再接続してください。",
-            "reconnectButton": "再接続"
+            "reconnectButton": "再接続",
+            "signInTitle": "SSH のサインインを待っています",
+            "signInBody": "ホストにサインインすると、このターミナルは自動的に続行します。",
+            "signInButton": "サインイン"
           },
           "TerminalLinkActionPopover": {
             "openLink": "リンクを開く",
@@ -18507,6 +18510,7 @@
       },
       "webRuntimeSession": {
         "remoteHostDisconnected": "このワークスペースは、リモートの Orca ホストに接続されていません。",
+        "splitSourceUnpublished": "ペインを分割できませんでした: ホスト上でターミナルがまだ起動していません。",
         "terminalCreateUnconfirmed": "Orca は、ホスト上で新規ターミナルが開いたことを確認できませんでした。"
       },
       "gitlabJobTraceClient": {

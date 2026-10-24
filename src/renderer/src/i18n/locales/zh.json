@@ -3511,7 +3511,10 @@
             "disconnectedTitle": "远程运行时已断开连接",
             "retryingBody": "Orca 正在自动重试。如果连接恢复，此终端将恢复。",
             "disconnectedBody": "自动重试已停止。重新连接以恢复此终端会话。",
-            "reconnectButton": "重新连接"
+            "reconnectButton": "重新连接",
+            "signInTitle": "正在等待 SSH 登录",
+            "signInBody": "登录到主机后，此终端会自动继续。",
+            "signInButton": "登录"
           },
           "TerminalLinkActionPopover": {
             "openLink": "打开链接",
@@ -18507,6 +18510,7 @@
       },
       "webRuntimeSession": {
         "remoteHostDisconnected": "工作区未连接到远程 Orca 主机。",
+        "splitSourceUnpublished": "窗格未拆分：其终端尚未在主机上启动。",
         "terminalCreateUnconfirmed": "Orca 无法确认新终端是否在主机上打开。"
       },
       "gitlabJobTraceClient": {

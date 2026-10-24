@@ -32,6 +32,36 @@ describe('useMobileNativeChatTurnDisclosure', () => {
     renderer = null
   })
 
+  it('shows unresolved history without an independent bar or unanchored live work', () => {
+    const messages = [userMessage('follow-up')]
+    const items: AgentJournalRenderItem[] = [
+      {
+        itemId: 'follow-up',
+        revision: 0,
+        sequence: 1,
+        observedAt: 1,
+        body: { kind: 'message', role: 'user', blocks: messages[0]!.blocks },
+        turnScope: { kind: 'unknown' }
+      }
+    ]
+    act(() => {
+      renderer = create(
+        createElement(Harness, {
+          messages,
+          enabled: true,
+          isWorking: true,
+          turnJournal: { items, submissions: [] }
+        })
+      )
+    })
+    const disclosure = renderer!.root.findByType(Result).props.disclosure
+    const row = disclosure.resolveRow(0, messages[0])
+    expect(disclosure.listMessages).toEqual(messages)
+    expect(row.turnKey).toBeUndefined()
+    expect(row.turnStatus).toBeNull()
+    expect(row.activeTurnIsWorking).toBe(false)
+  })
+
   it('does not scan bridge-lane transcripts', () => {
     const messages: NativeChatMessage[] = [
       {

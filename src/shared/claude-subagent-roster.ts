@@ -50,6 +50,10 @@ export type TrackedClaudeSubagent = {
    *  teammate-shaped. Never cleared: the listing mode of an id can't change
    *  mid-life. */
   listedAsSubagentTask?: true
+  /** The `description` of the lead's Agent call that spawned this teammate. Claude lists the
+   *  teammate's `background_tasks` entry under that same description (its id is unrelated), so a
+   *  complete inventory without it means the teammate was stopped (`TaskStop` fires no hook). */
+  teammateTaskDescription?: string
 }
 
 /** Whether a hook ends one child's turn. An API error (e.g. a 429) skips the
@@ -139,7 +143,8 @@ export function stopClaudeSubagent(roster: ClaudeSubagentRoster, id: string): vo
  *    subagent-listed, the list still shows teammate-typed tasks, AND it is
  *    working or TeammateIdle-confirmed: that is a named teammate whose id
  *    simply never appears, and removing it would drop the pane's done-gate
- *    (working) or its parked idle row (confirmed). */
+ *    (working) or its parked idle row (confirmed) — unless its spawn description is
+ *    no longer listed among the teammate-typed tasks, which means it was stopped. */
 export function foldClaudeBackgroundTasksIntoRoster(
   roster: ClaudeSubagentRoster,
   tasks: ClaudeBackgroundAgentTask[],
@@ -154,6 +159,7 @@ export function foldClaudeBackgroundTasksIntoRoster(
   }
   const listedIds = new Set<string>()
   const hasTeammateTypedTask = tasks.some((task) => task.teammate)
+  const listedTeammateDescriptions = readProvableClaudeTeammateDescriptions(roster, tasks)
   for (const task of tasks) {
     if (task.teammate) {
       continue
@@ -204,13 +210,91 @@ export function foldClaudeBackgroundTasksIntoRoster(
         // Why: an idle row that no TeammateIdle ever confirmed is a finished
         // workflow lane wearing a teammate-shaped id — reap it here or the
         // pre-#8825 idle pile rebuilds one lane per lead turn.
-        (tracked.state === 'working' || tracked.confirmedTeammate === true)
+        (tracked.state === 'working' || tracked.confirmedTeammate === true) &&
+        !(
+          listedTeammateDescriptions !== null &&
+          tracked.teammateTaskDescription !== undefined &&
+          !isClaudeTeammateDescriptionListed(
+            tracked.teammateTaskDescription,
+            listedTeammateDescriptions
+          )
+        )
       ) {
         continue
       }
       roster.delete(id)
     }
   }
+}
+
+/** Listed teammate descriptions, or null when they cannot prove which tracked teammate stopped.
+ *  Why: a stop is inferred from absence, so every listed teammate must match a recorded spawn
+ *  description; an undescribed, unknown, or differently formatted entry could be a live row. */
+function readProvableClaudeTeammateDescriptions(
+  roster: ClaudeSubagentRoster,
+  tasks: ClaudeBackgroundAgentTask[]
+): ReadonlySet<string> | null {
+  const recorded: string[] = []
+  for (const tracked of roster.values()) {
+    if (tracked.teammateTaskDescription !== undefined) {
+      recorded.push(tracked.teammateTaskDescription)
+    }
+  }
+  const listed = new Set<string>()
+  for (const task of tasks) {
+    if (!task.teammate) {
+      continue
+    }
+    const description = task.description
+    if (!description || !recorded.some((r) => claudeTeammateDescriptionMatches(r, description))) {
+      return null
+    }
+    listed.add(description)
+  }
+  return listed
+}
+
+function claudeTeammateDescriptionMatches(recorded: string, listed: string): boolean {
+  if (recorded === listed) {
+    return true
+  }
+  // Claude clips inventory descriptions; ambiguous prefix matches must retain every possible owner.
+  const clippingMarker = /\u2026 \[\+\d+ chars\]$/.exec(listed)
+  return clippingMarker !== null && recorded.startsWith(listed.slice(0, clippingMarker.index))
+}
+
+function isClaudeTeammateDescriptionListed(
+  description: string,
+  listedDescriptions: ReadonlySet<string>
+): boolean {
+  for (const listed of listedDescriptions) {
+    if (claudeTeammateDescriptionMatches(description, listed)) {
+      return true
+    }
+  }
+  return false
+}
+
+/** Remember which `background_tasks` description lists a teammate the lead's Agent call spawned. */
+export function recordClaudeTeammateTaskDescription(
+  roster: ClaudeSubagentRoster,
+  agentId: string,
+  fields: { agentType?: string; description: string },
+  now: number
+): void {
+  if (!isClaudeTeammateLifecycleId(agentId) || agentId.length > CLAUDE_SUBAGENT_ID_MAX_LENGTH) {
+    return
+  }
+  // Why idle: hook requests are unordered, so this can precede the SubagentStart that revives the
+  // row to working, or follow the teammate's own stop. Idle never gates the pane, and an
+  // unconfirmed idle row is reaped at the next complete lead-Stop fold.
+  const tracked = roster.get(agentId) ?? {
+    state: 'idle',
+    startedAt: now,
+    agentType: fields.agentType
+  }
+  tracked.teammateTaskDescription = fields.description
+  roster.set(agentId, tracked)
 }
 
 /** Drop restored rows that no current-runtime child activity has confirmed. */

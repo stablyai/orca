@@ -154,7 +154,7 @@ type PtyCallbacks = {
 }
 
 export type PtyTransportRecoveryState = {
-  reason?: 'ownership'
+  reason?: 'ownership' | 'ssh-sign-in'
   phase:
     | 'connecting'
     | 'connected'
@@ -323,6 +323,8 @@ export type IpcPtyTransportOptions = {
   retainDisposedSpawn?: () => boolean
   /** Rebind an existing pane after its provider replaces the PTY identity. */
   onPtyRebind?: (ptyId: string, replacedPtyId: string, incarnationId?: string | null) => void
+  /** The host bound a new live process to a pane this transport already ended on its exit record. */
+  onHostReboundExitedPty?: (ptyId: string) => void
   onBell?: () => void
   onAgentBecameIdle?: (title: string, meta?: AgentIdleEdgeMeta) => void
   onAgentBecameWorking?: () => void

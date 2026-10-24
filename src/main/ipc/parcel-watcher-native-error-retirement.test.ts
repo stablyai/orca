@@ -15,7 +15,7 @@ vi.mock('node:fs', () => ({
 }))
 
 import { WatcherProcessSupervisor } from './parcel-watcher-process-supervisor'
-import { WATCHER_PROCESS_EXIT_DEADLINE_MS } from './parcel-watcher-child-termination'
+import { WATCHER_PROCESS_EXIT_DEADLINE_MS } from './filesystem/watcher-process/parcel-watcher-child-termination'
 
 describe('native watcher error retirement', () => {
   let supervisor: WatcherProcessSupervisor

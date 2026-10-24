@@ -16,7 +16,7 @@ import {
   MAX_PHYSICAL_WATCHER_CHILDREN,
   reserveWatcherChild,
   resetWatcherChildRegistryForTest
-} from './parcel-watcher-child-registry'
+} from './filesystem/watcher-process/parcel-watcher-child-registry'
 import type { WatchedRoot, WslWatcherDeps } from './filesystem-watcher-wsl'
 
 const SNAPSHOT_START = '\x1e'

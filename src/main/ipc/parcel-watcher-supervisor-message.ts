@@ -1,5 +1,5 @@
 import type { ChildProcess } from 'node:child_process'
-import type { WatcherCancellationTracker } from './parcel-watcher-cancellation-tracker'
+import type { WatcherCancellationTracker } from './filesystem/watcher-process/parcel-watcher-cancellation-tracker'
 import {
   handleWatcherHostMessage,
   type PendingWatcherUnsubscribe,
@@ -9,7 +9,7 @@ import {
 import {
   startInterruptedSubscribeTimeout,
   startPendingSubscribeTimeout
-} from './parcel-watcher-pending-subscribe'
+} from './filesystem/watcher-process/parcel-watcher-pending-subscribe'
 import { WatcherProcessFailure } from './parcel-watcher-process-failure'
 import type { WatcherToHostMessage } from './parcel-watcher-process-protocol'
 import type { WatcherProcessSubscriptionRecord } from './parcel-watcher-process-subscription'

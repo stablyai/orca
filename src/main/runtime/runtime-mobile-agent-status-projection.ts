@@ -12,6 +12,46 @@ import { terminalTitleBlocksExplicitAgentStatus } from './runtime-worktree-statu
 import type { HookLiveAgentRow } from './runtime-terminal-contracts'
 import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 
+// Why: only a completed turn's reply is final; mid-turn hook snapshots carry tool stdout.
+function completedTurnFields(
+  status: AgentStatusEntry
+): Pick<
+  AgentStatusEntry,
+  'lastAssistantMessage' | 'lastAssistantMessageIsToolOutput' | 'interrupted'
+> {
+  if (status.state !== 'done') {
+    return {}
+  }
+  return {
+    ...(status.lastAssistantMessage
+      ? {
+          lastAssistantMessage: status.lastAssistantMessage,
+          ...(status.lastAssistantMessageIsToolOutput != null
+            ? { lastAssistantMessageIsToolOutput: status.lastAssistantMessageIsToolOutput }
+            : {})
+        }
+      : {}),
+    ...(status.interrupted != null ? { interrupted: status.interrupted } : {})
+  }
+}
+
+export function demoteRuntimeMobileAgentStatus(
+  status: AgentStatusEntry,
+  pty: RuntimePtyWorktreeRecord | null
+): AgentStatusEntry {
+  return {
+    state: 'done',
+    prompt: '',
+    updatedAt: pty?.lastOscTitleEpochMs ?? status.updatedAt,
+    stateStartedAt: pty?.lastAgentStatusStartedAtEpochMs ?? status.stateStartedAt,
+    paneKey: status.paneKey,
+    stateHistory: [],
+    agentType: status.agentType,
+    ...completedTurnFields(status),
+    ...(status.providerSession ? { providerSession: status.providerSession } : {})
+  }
+}
+
 export function renewRuntimeMobileAgentStatusFromPtyTitle(
   status: AgentStatusEntry | null,
   pty: RuntimePtyWorktreeRecord | null,
@@ -59,7 +99,8 @@ export function renewRuntimeMobileAgentStatusFromPtyTitle(
     ...(status.worktreeId ? { worktreeId: status.worktreeId } : {}),
     ...(status.tabId ? { tabId: status.tabId } : {}),
     ...(status.terminalTitle ? { terminalTitle: status.terminalTitle } : {}),
-    ...(status.providerSession ? { providerSession: status.providerSession } : {})
+    ...(status.providerSession ? { providerSession: status.providerSession } : {}),
+    ...(state === 'done' ? completedTurnFields(status) : {})
   })
   const titleConfirmsState =
     (pty.lastAgentStatus === 'working' && status.state === 'working') ||

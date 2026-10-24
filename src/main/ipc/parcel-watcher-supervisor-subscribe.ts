@@ -1,13 +1,13 @@
 import type { ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { sendToWatcherChild } from './parcel-watcher-child-messaging'
+import { sendToWatcherChild } from './filesystem/watcher-process/parcel-watcher-child-messaging'
 import { createHostWatcherSubscription } from './parcel-watcher-host-subscriptions'
 import type { PendingWatcherUnsubscribe } from './parcel-watcher-host-subscriptions'
 import { subscribeWithInProcessWatcher } from './parcel-watcher-in-process-fallback'
 import {
   installPendingSubscribeControls,
   resetPendingSubscribeAttempt
-} from './parcel-watcher-pending-subscribe'
+} from './filesystem/watcher-process/parcel-watcher-pending-subscribe'
 import { WatcherProcessFailure } from './parcel-watcher-process-failure'
 import { rewriteWatcherEvents, resolveWatcherRootPaths } from './watcher-event-root-path-rewrite'
 import type {

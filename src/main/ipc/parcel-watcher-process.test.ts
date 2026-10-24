@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { WATCHER_PROCESS_CANCEL_TIMEOUT_MS } from './parcel-watcher-cancellation-tracker'
+import { WATCHER_PROCESS_CANCEL_TIMEOUT_MS } from './filesystem/watcher-process/parcel-watcher-cancellation-tracker'
 import {
   terminateWatcherChild,
   WATCHER_PROCESS_EXIT_DEADLINE_MS,
   WATCHER_PROCESS_HARD_KILL_DELAY_MS
-} from './parcel-watcher-child-termination'
+} from './filesystem/watcher-process/parcel-watcher-child-termination'
 import {
   acknowledgeWatcherSubscribe as ackSubscribe,
   currentWatcherChild,

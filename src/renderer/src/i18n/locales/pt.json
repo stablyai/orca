@@ -1038,6 +1038,7 @@
       },
       "webRuntimeSession": {
         "remoteHostDisconnected": "O espaço de trabalho não está conectado a um host Orca remoto.",
+        "splitSourceUnpublished": "O painel não foi dividido: o terminal ainda não foi iniciado no host.",
         "terminalCreateUnconfirmed": "O Orca não conseguiu confirmar que o novo terminal foi aberto no host."
       },
       "gitlabJobTraceClient": {
@@ -15652,7 +15653,10 @@
             "disconnectedBody": "As tentativas automáticas foram interrompidas. Reconecte para retomar esta sessão de terminal.",
             "reconnectButton": "Reconectar",
             "pairingRefusedTitle": "Este host não aceita mais este computador",
-            "pairingRefusedBody": "O Orca não conseguiu parear com ele novamente via SSH. Nada no host foi interrompido. Reconecte para tentar novamente."
+            "pairingRefusedBody": "O Orca não conseguiu parear com ele novamente via SSH. Nada no host foi interrompido. Reconecte para tentar novamente.",
+            "signInTitle": "Aguardando login SSH",
+            "signInBody": "Este terminal continua sozinho quando você entrar no host.",
+            "signInButton": "Entrar"
           },
           "TerminalPane": {
             "ac112e9036": "Remover título",

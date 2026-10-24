@@ -1,9 +1,6 @@
 import type { StructuredAgentSessionAtRestCommands } from './structured-agent-session-at-rest-commands'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
-import type {
-  AgentSessionAccountHome,
-  AgentSessionExecutionLocation
-} from '../../../shared/agent-session-record'
+import type { AgentSessionExecutionLocation } from '../../../shared/agent-session-record'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import type { StructuredAgentSessionAcquisitionReceipt } from './structured-agent-session-startup-attempt-contract'
 import type {
@@ -170,13 +167,6 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
 
   readOptionRestoreFailures = (sessionId: string): readonly string[] =>
     this.owner(sessionId).readOptionRestoreFailures?.(sessionId) ?? []
-
-  providerHistoryWindow = (input: {
-    identity: AgentSessionJournalIdentity
-    accountHome: AgentSessionAccountHome
-  }) =>
-    this.requireAgent(input.identity).adapter.providerHistoryWindow?.(input) ??
-    Promise.resolve(null)
 
   copyConversation: NonNullable<StructuredAgentSessionAdapter['copyConversation']> = (input) => {
     const { adapter } = this.requireAgent(input.identity)

@@ -24,7 +24,7 @@ import { getLocalWatcherRoot } from './filesystem-watcher-paths'
 import {
   resetWatcherChildRegistryForTest,
   WatcherChildCapacityError
-} from './parcel-watcher-child-registry'
+} from './filesystem/watcher-process/parcel-watcher-child-registry'
 
 type Handler = (event: unknown, args: unknown) => unknown
 type Sender = ReturnType<typeof createWatcherSender> & { destroyed: boolean }

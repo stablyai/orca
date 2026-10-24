@@ -15,6 +15,7 @@ import {
   type StructuredAgentSessionHostSupport
 } from './mobile-structured-agent-session-host-support'
 import { agentSessionFailureWords } from '../../../src/shared/agent-session-failure-words'
+import { mobileNativeChatUnsentNotices } from './mobile-native-chat-unsent-notices'
 import { agentJournalSubmissionKey } from '../../../src/shared/agent-session-journal-item-key'
 import {
   useMobileNativeChatSendError,
@@ -270,16 +271,17 @@ describe('mobile structured send actions', () => {
     }
   )
 
-  it('keeps the original unknown host row while allowing another Send', async () => {
+  it('shows a recovered unknown once and a new Send and reply without replay', async () => {
     const original = structuredSendResultFixture('unknown')
     if (!('submission' in original)) {
       throw new Error('expected a submission answer')
     }
+    original.submission.recovered = true
     const event = snapshotEvent()
     event.page.submissions = [original.submission]
     event.page.items = [
       {
-        itemId: 'original-message',
+        itemId: agentJournalSubmissionKey(original.submission.clientMessageId),
         revision: 1,
         sequence: 1,
         observedAt: 10,
@@ -293,6 +295,10 @@ describe('mobile structured send actions', () => {
     act(() => listener?.(event))
     const messages = hook!.session.messages
     expect(messages).toHaveLength(1)
+    expect(messages[0]?.unsent).toBeUndefined()
+    expect(hook!.isWorking).toBe(false)
+    expect(mobileNativeChatUnsentNotices(event.page, agent).size).toBe(0)
+    expect(renderer!.root.findByType('span').children).toEqual([])
     await act(async () => {
       expect(await hook!.sendWithOutcome('same text')).toBe('accepted')
     })
@@ -300,7 +306,42 @@ describe('mobile structured send actions', () => {
     const sent = agentJournalSubmissionKey(sentIds()[0] ?? '')
     expect(hook!.session.messages.map((message) => message.id)).toEqual([messages[0]?.id, sent])
     expect(hook!.session.messages[0]).toEqual(messages[0])
-    expect(event.page.submissions[0]?.dispatchState).toBe('unknown')
+    const followUp = structuredSendResultFixture('accepted')
+    if (!('submission' in followUp)) {
+      throw new Error('expected a submission answer')
+    }
+    const newId = sentIds()[0]!
+    expect(newId).not.toBe(original.submission.clientMessageId)
+    followUp.submission.clientMessageId = newId
+    const reply = snapshotEvent()
+    reply.page.submissions = [original.submission, followUp.submission]
+    reply.page.items = [
+      ...event.page.items,
+      { ...event.page.items[0]!, itemId: sent, sequence: 2, observedAt: 20 },
+      {
+        itemId: 'assistant-reply',
+        revision: 1,
+        sequence: 3,
+        observedAt: 30,
+        body: {
+          kind: 'message',
+          role: 'assistant',
+          blocks: [{ type: 'text', text: 'Reply to the new send' }]
+        }
+      }
+    ]
+    reply.page.liveCursor = { epoch: 'epoch-1', sequence: 3 }
+    act(() => listener?.(reply))
+    expect(hook!.session.messages.map((message) => message.id)).toEqual([
+      messages[0]?.id,
+      sent,
+      'assistant-reply'
+    ])
+    expect(hook!.session.messages.at(-1)?.blocks).toEqual([
+      { type: 'text', text: 'Reply to the new send' }
+    ])
+    expect(hook!.session.messages[0]).toEqual(messages[0])
+    expect(reply.page.submissions[0]).toMatchObject({ dispatchState: 'unknown', recovered: true })
     expect(calls()).toHaveLength(1)
   })
 

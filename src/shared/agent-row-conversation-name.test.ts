@@ -25,8 +25,11 @@ describe('getAgentRowConversationName', () => {
   })
 
   it('keeps OpenCode semantic session titles whole', () => {
-    const tab = makeTab({ title: 'OC | build the release pipeline' })
+    const tab = makeTab({ title: 'OC | build the release pipeline', generatedTitle: 'Older title' })
     expect(getAgentRowConversationName(tab, 'opencode', false)).toBe(
+      'OC | build the release pipeline'
+    )
+    expect(getAgentRowConversationName(tab, 'opencode', true)).toBe(
       'OC | build the release pipeline'
     )
   })
@@ -40,6 +43,11 @@ describe('getAgentRowConversationName', () => {
     expect(getAgentRowConversationName(tab, 'claude', true, undefined, 's1')).toBe(
       'Fix the lease probe'
     )
+    expect(getAgentRowConversationName(tab, 'claude', true, undefined, 's2')).toBe(
+      'Fix intake flow'
+    )
+    expect(getAgentRowConversationName(tab, 'codex', true, undefined, 's1')).toBe('Fix intake flow')
+    expect(getAgentRowConversationName(tab, 'claude', true)).toBe('Fix intake flow')
   })
 
   it('lets a manual rename and a quick command still outrank the provider title', () => {
@@ -208,6 +216,13 @@ describe('getAgentRowConversationName', () => {
   })
 
   it('rejects empty, glyph-only, and default terminal titles', () => {
+    expect(
+      getAgentRowConversationName(
+        makeTab({ title: 'Workbench', defaultTitle: 'Workbench' }),
+        'claude',
+        false
+      )
+    ).toBeNull()
     expect(getAgentRowConversationName(makeTab(), 'claude', false)).toBeNull()
     expect(getAgentRowConversationName(makeTab({ title: '✳' }), 'claude', false)).toBeNull()
     expect(

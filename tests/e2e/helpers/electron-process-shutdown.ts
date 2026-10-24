@@ -215,6 +215,33 @@ export async function forceQuitElectronAppForE2E(
   ).catch(() => undefined)
 }
 
+/**
+ * Stops an `orca serve` process the way a supervisor does, so its detached PTY daemon and terminals
+ * survive for the next serve. Why not closeElectronAppForE2E: macOS serve vetoes Playwright's
+ * unmarked app.quit() (#15537), and that close's fallback kills the whole tree, daemon included.
+ */
+export async function stopServeElectronAppForE2E(app: ElectronApplication): Promise<void> {
+  const proc = app.process()
+  // Why: Windows has no catchable SIGTERM, and its serve has no native-quit veto to bypass.
+  if (process.platform === 'win32' || !proc.pid) {
+    await closeElectronAppForE2E(app)
+    return
+  }
+  if (!hasExited(proc)) {
+    proc.kill('SIGTERM')
+  }
+  if (!(await waitForExit(proc, GRACEFUL_CLOSE_TIMEOUT_MS))) {
+    throw new Error(`orca serve ${proc.pid} did not exit after SIGTERM`)
+  }
+  releaseExitedProcessPipes(proc)
+  // Playwright close can remain pending after the process exits on its own.
+  await withTimeout(
+    app.close(),
+    PROCESS_EXIT_TIMEOUT_MS,
+    'Timed out releasing stopped serve process'
+  ).catch(() => undefined)
+}
+
 export async function closeElectronAppForE2E(
   app: ElectronApplication,
   options: { cleanupDaemonsForUserDataDir?: string } = {}

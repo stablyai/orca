@@ -26,6 +26,7 @@ import {
 } from './comment-markdown-native-chat-file-links'
 import { CommentMarkdownBlockLineContext } from './comment-markdown-code-renderers'
 import { rehypeWordFade } from './comment-markdown-word-fade'
+import { remarkUnknownHtmlAsText } from './comment-markdown-unknown-html-as-text'
 import { CommentMarkdownWords } from './CommentMarkdownWords'
 import {
   splitMarkdownTopLevelBlocks,
@@ -222,6 +223,14 @@ const commentMarkdownSanitizeSchema: SanitizeSchema = {
   }
 }
 
+// Why: runs before remark-breaks so newlines inside the escaped HTML still break.
+const unknownHtmlAsTextRemarkPlugins = [
+  remarkUnknownHtmlAsText(
+    new Set((commentMarkdownSanitizeSchema.tagNames ?? []).map((name) => name.toLowerCase()))
+  ),
+  ...remarkPlugins
+]
+
 // Why: GitHub comments often include safe raw HTML (`<sub>`, `<details>`,
 // `<br />`). Parse it, then sanitize immediately before React renders it.
 const rehypePlugins: MarkdownPlugins = [rehypeRaw, [rehypeSanitize, commentMarkdownSanitizeSchema]]
@@ -267,6 +276,8 @@ type CommentMarkdownProps = React.ComponentPropsWithoutRef<'div'> & {
   /** Give each word its own `data-word` element, for a stylesheet to animate as words arrive. */
   fadeWords?: boolean
   extension?: CommentMarkdownExtension
+  /** Show raw HTML that sanitize would strip as literal text instead of dropping its tags. */
+  unknownHtmlAsText?: boolean
 }
 
 /** One render of the pipeline; memoized so an unchanged block is not parsed again. */
@@ -334,6 +345,7 @@ const CommentMarkdown = React.memo(
       fadeWords = false,
       extension,
       onCopy,
+      unknownHtmlAsText = false,
       ...rest
     },
     ref
@@ -361,13 +373,14 @@ const CommentMarkdown = React.memo(
       [extension]
     )
     const activeRemarkPlugins = React.useMemo(() => {
+      const basePlugins = unknownHtmlAsText ? unknownHtmlAsTextRemarkPlugins : remarkPlugins
       const plugins = fileLinkExists
-        ? [...remarkPlugins, remarkNativeChatFileLinks(fileLinkExists)]
-        : remarkPlugins
+        ? [...basePlugins, remarkNativeChatFileLinks(fileLinkExists)]
+        : basePlugins
       const withMath: RemarkPlugins = math ? [...plugins, remarkChatMath] : plugins
       const withExtension = extension ? [...withMath, ...extension.remarkPlugins] : withMath
       return githubRepo ? [...withExtension, remarkGitHubReferences(githubRepo)] : withExtension
-    }, [extension, fileLinkExists, githubRepo, math])
+    }, [extension, fileLinkExists, githubRepo, math, unknownHtmlAsText])
     const blocks = useMarkdownBlocks(content, growing, math)
     const [hadWordFade, setHadWordFade] = React.useState(fadeWords)
     if (fadeWords && !hadWordFade) {

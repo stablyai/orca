@@ -23,6 +23,7 @@ export type JournalLifecycleMutationInput = JournalItemAddress &
         kind: 'item'
         echoOf?: unknown
         body: AgentJournalItemBody
+        observedAt?: number
         /** Absent means root on creation, existing producer on revision. */
         linkage?: AgentJournalProducerLinkage
         turnScope: AgentJournalTurnScope
@@ -44,16 +45,17 @@ export function journalLifecycleMutationItemId(mutation: JournalItemAddress): st
 
 /** Batches can create rows from mixed producers; absent linkage explicitly means the session agent. */
 export function journalLifecycleItemMutation(
-  attribution: AgentJournalRowAttribution & JournalItemEcho,
+  attribution: AgentJournalRowAttribution & JournalItemEcho & { observedAt?: number },
   identity: AgentJournalItemIdentity,
   body: AgentJournalItemBody
-): JournalLifecycleIdentityMutationInput {
+): Extract<JournalLifecycleIdentityMutationInput, { kind: 'item' }> {
   const { turnScope } = attribution
   return {
     kind: 'item',
     identity,
     body,
     turnScope,
+    ...(attribution.observedAt === undefined ? {} : { observedAt: attribution.observedAt }),
     ...journalItemEchoFields(attribution),
     ...(namesAgentJournalProducer(attribution)
       ? { linkage: agentJournalLinkageFields(attribution) }
@@ -74,6 +76,7 @@ export function journalLifecycleMutationRow(
         itemId,
         revision,
         body: mutation.body,
+        ...(mutation.observedAt === undefined ? {} : { observedAt: mutation.observedAt }),
         ...journalItemEchoFields(mutation),
         turnScope: mutation.turnScope,
         ownerFence,

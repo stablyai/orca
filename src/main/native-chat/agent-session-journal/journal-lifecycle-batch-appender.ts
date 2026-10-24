@@ -171,6 +171,7 @@ export class JournalLifecycleBatchAppender {
                     turnScope: only.turnScope,
                     fence: input.fence,
                     ownerFence: only.ownerFence,
+                    observedAt: only.observedAt,
                     recovered: input.recovered
                   },
                   revisions

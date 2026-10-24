@@ -7,8 +7,6 @@ import { ANTIGRAVITY_ACP_DIALECT } from './acp-dialects/antigravity-dialect'
 import { directoryAccountBinding, type AcpAccountBinding } from './acp-account-binding'
 import { openCodeAcpAccountBinding } from '../opencode/opencode-structured-account-home'
 import { scrubOpenCodeAcpEnvironment } from '../opencode/opencode-acp-environment'
-import { openCodeStoredUserMessagesReader } from '../opencode/opencode-acp-stored-messages'
-import type { AcpStoredUserMessagesReader } from './acp-recovery-history'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { AgentSessionModelOption } from '../../shared/agent-session-wire'
 import type { AgentChatPermissionMode } from '../../shared/agent-chat-permission-mode'
@@ -127,8 +125,6 @@ export type AcpLaunchSpec = {
   compaction?: true
   /** Rejects copy arguments that route the CLI away from the copy's store. */
   assertCopyLaunchArgs?: (args: readonly string[]) => void
-  /** Used only for restart recovery. */
-  readStoredUserMessages?: AcpStoredUserMessagesReader
   modelDiscovery: AcpModelDiscovery
   visualsSkill?: AcpVisualsSkillLoader
   transcriptImport: StructuredAgentTranscriptImport | null
@@ -191,7 +187,6 @@ function openCodeLaunchSpec(
     loginCommand: agentSessionSignInFor(row.agent)?.loginCommand ?? [],
     account: openCodeAcpAccountBinding(),
     installDirectories: ({ homePath }) => [join(homePath, '.opencode', 'bin')],
-    readStoredUserMessages: openCodeStoredUserMessagesReader(),
     visualsSkill: loadOpenCodeVisualsSkill,
     compaction: true,
     assertCopyLaunchArgs: assertOpenCodeCopyUsesLocalStore,
