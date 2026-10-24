@@ -116,13 +116,17 @@ async function openMobileFileTapAsync<T extends FileTapSessionTab>(
     return
   }
   if (options.confirmResolvedOpen) {
+    const targetAbsolutePath =
+      resolved.openTarget && resolved.openTarget.kind !== 'unsupported'
+        ? resolved.openTarget.absolutePath
+        : null
     const displayBasePath =
       resolved.relativePath ||
-      resolved.openTarget?.absolutePath ||
+      targetAbsolutePath ||
       resolved.absolutePath ||
       options.pathText
     const copyPath =
-      resolved.openTarget?.absolutePath ||
+      targetAbsolutePath ||
       resolved.absolutePath ||
       resolved.relativePath ||
       options.pathText
@@ -225,10 +229,14 @@ async function completeResolvedMobileFileTapOpen<T extends FileTapSessionTab>(
     options.openBrowser(filesystemPathToFileUri(resolved.openTarget.absolutePath))
     return
   }
-  const openPosition =
+  const openLine =
     options.line !== null && Number.isSafeInteger(options.line) && options.line >= 1
+      ? options.line
+      : undefined
+  const openPosition =
+    openLine !== undefined
       ? {
-          line: options.line,
+          line: openLine,
           ...(options.column !== null && Number.isSafeInteger(options.column) && options.column >= 1
             ? { column: options.column }
             : {})
@@ -257,8 +265,11 @@ async function completeResolvedMobileFileTapOpen<T extends FileTapSessionTab>(
     reportOpenFailure(options)
     return
   }
-  if (openPosition.line !== undefined) {
-    options.onRevealFileLine?.(openedPath, openPosition.line)
+  if (
+    openLine !== undefined &&
+    shouldActivateOpenedMobileSessionTab(options.getActivationState(false))
+  ) {
+    options.onRevealFileLine?.(openedPath, openLine)
   }
   scheduleOpenedWorktreeTabActivation(options, openedPath)
 }

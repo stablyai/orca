@@ -226,6 +226,78 @@ describe('matchFilePathAtColumn', () => {
       column: null
     })
   })
+
+  it('does not join a preceding prose line onto an indented file path', () => {
+    const rows = [{ text: 'Edited the file' }, { text: '  src/foo.ts:12' }]
+    const expected = {
+      pathText: 'src/foo.ts',
+      line: 12,
+      column: null
+    }
+    expect(matchWrappedFilePathAtRowColumn(rows, 1, colOf(rows[1]!.text, 'foo.ts'))).toEqual(
+      expected
+    )
+    expect(
+      documentMatchWrappedFilePathAtRowColumn(rows, 1, colOf(rows[1]!.text, 'foo.ts'))
+    ).toEqual(expected)
+
+    const longProseRows = [
+      { text: '  • Gently edited the configuration file' },
+      { text: '    src/foo.ts:12' }
+    ]
+    expect(
+      matchWrappedFilePathAtRowColumn(longProseRows, 1, colOf(longProseRows[1]!.text, 'foo.ts'))
+    ).toEqual(expected)
+    expect(
+      documentMatchWrappedFilePathAtRowColumn(
+        longProseRows,
+        1,
+        colOf(longProseRows[1]!.text, 'foo.ts')
+      )
+    ).toEqual(expected)
+  })
+
+  it('does not join a following status row onto an unwrapped path', () => {
+    const rows = [{ text: '  Created /tmp/out' }, { text: '  Done' }]
+    const expected = {
+      pathText: '/tmp/out',
+      line: null,
+      column: null
+    }
+    expect(matchWrappedFilePathAtRowColumn(rows, 0, colOf(rows[0]!.text, 'out'))).toEqual(expected)
+    expect(documentMatchWrappedFilePathAtRowColumn(rows, 0, colOf(rows[0]!.text, 'out'))).toEqual(
+      expected
+    )
+
+    const wideTerminalRows = [
+      { text: '  Created /tmp/some/longer/output/dir/out' },
+      { text: '  Done' }
+    ]
+    expect(
+      matchWrappedFilePathAtRowColumn(
+        wideTerminalRows,
+        0,
+        colOf(wideTerminalRows[0]!.text, 'out'),
+        80
+      )
+    ).toEqual({
+      pathText: '/tmp/some/longer/output/dir/out',
+      line: null,
+      column: null
+    })
+    expect(
+      documentMatchWrappedFilePathAtRowColumn(
+        wideTerminalRows,
+        0,
+        colOf(wideTerminalRows[0]!.text, 'out'),
+        80
+      )
+    ).toEqual({
+      pathText: '/tmp/some/longer/output/dir/out',
+      line: null,
+      column: null
+    })
+  })
 })
 
 describe('injected matchFilePathAtColumn', () => {

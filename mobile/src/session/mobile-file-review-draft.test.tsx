@@ -192,11 +192,13 @@ it('separates diff documents with the same path through the explicit document id
 
 it('scrolls to initialLine after layout and syntax highlighting and on repeated taps', async () => {
   scrollTo.mockClear()
+  const content = Array.from({ length: 200 }, (_, i) => `const line${i + 1} = ${i + 1}`).join('\n')
   const fileDoc: FileDocState = {
     status: 'ready',
     kind: 'file',
-    content: Array.from({ length: 200 }, (_, i) => `const line${i + 1} = ${i + 1}`).join('\n'),
-    truncated: false
+    content,
+    truncated: false,
+    byteLength: content.length
   }
   await act(async () => {
     renderer = create(

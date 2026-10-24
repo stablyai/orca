@@ -189,6 +189,7 @@ type WrappedRowSlice = {
   contentEnd: number
   leadingToken: string
   trailingToken: string
+  stoppedBeforeBoxBorder: boolean
 }
 
 function sliceWrappedRow(text: string): WrappedRowSlice {
@@ -198,12 +199,56 @@ function sliceWrappedRow(text: string): WrappedRowSlice {
   const content = text.slice(contentStart, contentEnd)
   const leadingToken = (/^[A-Za-z0-9._~\-/%+@:\\#()[\]]+/.exec(content) ?? [''])[0]
   const trailingToken = (/[A-Za-z0-9._~\-/%+@:\\#()[\]]+$/.exec(content) ?? [''])[0]
-  return { content, contentStart, contentEnd, leadingToken, trailingToken }
+  const stoppedBeforeBoxBorder = /[ \t]{3,}[│┃║╎╏┆┇┊┋|][ \t]*$/.test(text)
+  return {
+    content,
+    contentStart,
+    contentEnd,
+    leadingToken,
+    trailingToken,
+    stoppedBeforeBoxBorder
+  }
 }
 
-function canRowContinueWrappedPath(prev: WrappedRowSlice, next: WrappedRowSlice) {
+function isFullRowPathToken(slice: WrappedRowSlice) {
+  return slice.leadingToken.length > 0 && slice.leadingToken.length === slice.content.length
+}
+
+function canRowStartWrappedPath(slice: WrappedRowSlice) {
+  return (
+    Boolean(slice.trailingToken) &&
+    (slice.trailingToken.length === slice.content.length || /[\\/]/.test(slice.trailingToken))
+  )
+}
+
+function hasReachedWrapWidth(
+  prev: WrappedRowSlice,
+  next: WrappedRowSlice,
+  terminalCols?: number
+) {
+  if (prev.contentEnd < 35 || prev.stoppedBeforeBoxBorder) {
+    return false
+  }
+  if (!terminalCols || terminalCols <= 35) {
+    return true
+  }
+  const nextBreakIndex = next.leadingToken.indexOf('-')
+  const hyphenWrapSlack = prev.trailingToken.endsWith('-')
+    ? nextBreakIndex >= 0
+      ? nextBreakIndex + 1
+      : next.leadingToken.length
+    : 0
+  return prev.contentEnd + hyphenWrapSlack >= Math.max(35, terminalCols - 8)
+}
+
+function canRowContinueWrappedPath(
+  prev: WrappedRowSlice,
+  next: WrappedRowSlice,
+  terminalCols?: number
+) {
   if (
-    !prev.trailingToken ||
+    !hasReachedWrapWidth(prev, next, terminalCols) ||
+    !canRowStartWrappedPath(prev) ||
     !next.leadingToken ||
     (next.leadingToken === '-' &&
       (next.content.length === 1 || /\s/.test(next.content.charAt(1)))) ||
@@ -216,12 +261,18 @@ function canRowContinueWrappedPath(prev: WrappedRowSlice, next: WrappedRowSlice)
     !/[\\/]\.[A-Za-z0-9_+-]+$/.test(prev.trailingToken)
   ) {
     return (
-      prev.contentEnd >= 35 &&
-      (/^(?::\d+(?:-\d+)?(?::\d+)?|#(?:L|line-?)\d+)/i.test(next.leadingToken) ||
-        (/:\d+$/.test(prev.trailingToken) && /^\d+(?:-\d+)?(?::\d+)?$/.test(next.leadingToken)) ||
-        (/\.[a-z0-9]{1,2}$/.test(prev.trailingToken) &&
-          /^[a-z0-9]{1,4}(?::\d+)*$/.test(next.leadingToken)))
+      /^(?::\d+(?:-\d+)?(?::\d+)?|#(?:L|line-?)\d+)/i.test(next.leadingToken) ||
+      (/:\d+$/.test(prev.trailingToken) && /^\d+(?:-\d+)?(?::\d+)?$/.test(next.leadingToken)) ||
+      (/\.[a-z0-9]{1,2}$/.test(prev.trailingToken) &&
+        /^[a-z0-9]{1,4}(?::\d+)*$/.test(next.leadingToken))
     )
+  }
+  if (
+    !/[\\/.:#]/.test(next.leadingToken) &&
+    !/[\\/\-.:]$/.test(prev.trailingToken) &&
+    /^[A-Z][a-z]+$/.test(next.leadingToken)
+  ) {
+    return false
   }
   return true
 }
@@ -229,7 +280,8 @@ function canRowContinueWrappedPath(prev: WrappedRowSlice, next: WrappedRowSlice)
 export function matchWrappedFilePathAtRowColumn(
   rows: readonly TerminalWrappedLineRow[],
   tappedRowIndex: number,
-  tappedCol: number
+  tappedCol: number,
+  terminalCols?: number
 ) {
   const tappedRow = rows[tappedRowIndex]
   if (!tappedRow) {
@@ -265,20 +317,31 @@ export function matchWrappedFilePathAtRowColumn(
     let hardStart = tappedRowIndex
     while (
       hardStart > 0 &&
-      canRowContinueWrappedPath(slices[hardStart - 1]!, slices[hardStart]!) &&
-      (hardStart === tappedRowIndex ||
-        slices[hardStart]!.leadingToken.length === slices[hardStart]!.content.length)
+      canRowContinueWrappedPath(slices[hardStart - 1]!, slices[hardStart]!, terminalCols) &&
+      (hardStart === tappedRowIndex
+        ? tappedCol < slices[hardStart]!.contentStart + slices[hardStart]!.leadingToken.length &&
+          (isFullRowPathToken(slices[hardStart]!) || /[\\/.:#]/.test(slices[hardStart]!.leadingToken))
+        : isFullRowPathToken(slices[hardStart]!))
     ) {
       hardStart -= 1
+      if (!isFullRowPathToken(slices[hardStart]!)) {
+        break
+      }
     }
     let hardEnd = tappedRowIndex
     while (
       hardEnd + 1 < slices.length &&
-      canRowContinueWrappedPath(slices[hardEnd]!, slices[hardEnd + 1]!) &&
-      (hardEnd === hardStart ||
-        slices[hardEnd]!.trailingToken.length === slices[hardEnd]!.content.length)
+      canRowContinueWrappedPath(slices[hardEnd]!, slices[hardEnd + 1]!, terminalCols) &&
+      (hardEnd === hardStart
+        ? tappedCol >= slices[hardEnd]!.contentEnd - slices[hardEnd]!.trailingToken.length
+        : isFullRowPathToken(slices[hardEnd]!)) &&
+      (isFullRowPathToken(slices[hardEnd + 1]!) ||
+        /[\\/.:#]/.test(slices[hardEnd + 1]!.leadingToken))
     ) {
       hardEnd += 1
+      if (!isFullRowPathToken(slices[hardEnd]!)) {
+        break
+      }
     }
     if (hardEnd > hardStart) {
       let joinedText = ''
@@ -329,6 +392,7 @@ export function filePathAtViewportPoint(
   return matchWrappedFilePathAtRowColumn(
     rows,
     tappedRowIndex,
-    cellColToStringIndex(scope, tapCell.row, tapCell.col)
+    cellColToStringIndex(scope, tapCell.row, tapCell.col),
+    scope.term.cols
   )
 }

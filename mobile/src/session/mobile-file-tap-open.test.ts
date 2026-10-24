@@ -668,6 +668,71 @@ describe('openMobileFileTap', () => {
     expect(switchSessionTab).not.toHaveBeenCalled()
   })
 
+  it('does not reveal a stale file line when a newer tap supersedes an in-flight files.open', async () => {
+    const client = createClient([
+      ok({
+        worktree: 'wt-1',
+        relativePath: 'src/index.ts',
+        absolutePath: '/repo/src/index.ts',
+        exists: true,
+        isDirectory: false,
+        openTarget: {
+          kind: 'worktree-file',
+          provider: 'local',
+          relativePath: 'src/index.ts',
+          absolutePath: '/repo/src/index.ts'
+        }
+      }),
+      ok({ opened: true })
+    ])
+    let latestActivationSeq = 1
+    client.sendRequest.mockImplementation(async (method: string) => {
+      if (method === 'files.open') {
+        latestActivationSeq = 2
+        return ok({ opened: true })
+      }
+      return ok({
+        worktree: 'wt-1',
+        relativePath: 'src/index.ts',
+        absolutePath: '/repo/src/index.ts',
+        exists: true,
+        isDirectory: false,
+        openTarget: {
+          kind: 'worktree-file',
+          provider: 'local',
+          relativePath: 'src/index.ts',
+          absolutePath: '/repo/src/index.ts'
+        }
+      })
+    })
+    const onRevealFileLine = vi.fn()
+
+    openMobileFileTap({
+      client,
+      hostId: 'host-1',
+      worktreeId: 'wt-1',
+      pathText: 'src/index.ts:12',
+      line: 12,
+      column: null,
+      pushPreviewRoute: vi.fn(),
+      openBrowser: vi.fn(),
+      triggerOpenFeedback: vi.fn(),
+      fetchSessionTabs: vi.fn(),
+      getSessionTabs: () => [],
+      getActiveSessionTabId: () => 'terminal-tab',
+      getActivationState: (activated) => ({
+        ...activeTerminalState(activated),
+        latestActivationSeq
+      }),
+      switchSessionTab: vi.fn(),
+      scheduleDelayedAction: vi.fn(),
+      onRevealFileLine
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(onRevealFileLine).not.toHaveBeenCalled()
+  })
+
   async function tapOnHostWithNoDesktopWindow(options: { leaveDuringOpen: boolean }) {
     let latestActivationSeq = 1
     const client = {

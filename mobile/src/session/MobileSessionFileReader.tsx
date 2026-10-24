@@ -88,10 +88,15 @@ function FileReaderDocument({
     fileSyntax.language === syntaxLanguage
   const applyInitialLineScroll = useCallback(
     (height: number) => {
-      if (!initialLine || !revealTargetKey || revealedKeyRef.current === revealTargetKey) {
+      if (
+        !initialLine ||
+        !revealTargetKey ||
+        revealedKeyRef.current === revealTargetKey ||
+        !scrollRef.current
+      ) {
         return
       }
-      scrollRef.current?.scrollTo({
+      scrollRef.current.scrollTo({
         y: scrollOffsetForSessionFileLine(initialLine),
         animated: false
       })
