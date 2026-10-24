@@ -3,7 +3,8 @@ import { AgentModelCatalogUnavailableError } from './agent-model-catalog-unavail
 
 // Only probes establish chat unavailability; live listings cannot replace that verdict.
 
-export const AGENT_MODEL_CATALOG_FAILURE_TTL_MS = 30_000
+import { AGENT_MODEL_CATALOG_FAILURE_TTL_MS } from '../../../shared/agent-model-catalog-refresh-policy'
+export { AGENT_MODEL_CATALOG_FAILURE_TTL_MS }
 
 /** Cancelled or folderless probes establish nothing about account health and are not cached. */
 export class AgentModelCatalogListingStoppedError extends Error {}

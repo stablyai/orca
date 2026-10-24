@@ -130,7 +130,7 @@ describe('native chat session option enrichment', () => {
     expect(readNativeChatEnrichedModels('cursor', 'ssh:two')).toBeNull()
   })
 
-  it('falls back permanently to the seed after a failed once-per-host probe', async () => {
+  it('keeps the seed during the backoff after a failed probe', async () => {
     const discover = vi.fn().mockRejectedValue(new Error('offline'))
     ensureNativeChatModelEnrichment({ agent: 'cursor', hostKey: 'local', discover })
     await vi.waitFor(() => expect(discover).toHaveBeenCalledOnce())
