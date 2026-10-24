@@ -96,7 +96,7 @@ const stubAgentDir = path.join(scratch, 'agents')
 mkdirSync(stubAgentDir)
 writeFileSync(
   path.join(stubAgentDir, 'codex'),
-  '#!/bin/sh\necho "STUB_CODEX_ARGV $*"\necho "STUB_CODEX_CWD $PWD"\nexec cat\n',
+  '#!/bin/sh\necho "STUB_CODEX_ARGV $*"\necho "STUB_CODEX_CWD $PWD"\necho "STUB_CODEX_OLDPWD $OLDPWD"\nexec cat\n',
   {
     mode: 0o755
   }
@@ -168,10 +168,7 @@ test('a moved pane shows its own history once, in its folder, across three reloa
   const marker = `MOVED-${randomUUID().slice(0, 8)}`
   const host = await launchHeadlessPairedRuntimeHost({
     pinnedServePort: true,
-    withoutBrowser: true,
-    // Why: CI runners' login profile cds into GITHUB_WORKSPACE, which moves every login shell,
-    // restored or not; a distro's profile does not. Measure where Orca starts the pane.
-    extraEnv: { GITHUB_WORKSPACE: '' }
+    withoutBrowser: true
   })
   try {
     const added = await host.client.call<{ repo: { id: string } }>('repo.add', {
@@ -389,7 +386,11 @@ test('a moved pane shows its own history once, in its folder, across three reloa
         shown.push(pane)
         if (launch === 0) {
           // The agent resumed in the folder the pane was in (the stub prints where it started).
-          if (!pane.content.includes(`STUB_CODEX_CWD ${deep}`)) {
+          if (
+            ![`STUB_CODEX_CWD ${deep}\r`, `STUB_CODEX_OLDPWD ${deep}\r`].some((line) =>
+              pane.content.includes(line)
+            )
+          ) {
             // Diagnostics for a pane that resumed outside its folder: which terminal, from which history.
             const listed = await host.client.call('terminal.list', { worktree: `id:${worktreeId}` })
             const movedSession = movedPaneHistorySessionId(worktreeId, paneKey)
@@ -416,7 +417,15 @@ test('a moved pane shows its own history once, in its folder, across three reloa
               `[restore-lifecycle] wrong folder: terminals=${JSON.stringify(listed.result)} meta=${read('meta.json')} checkpointCwd=${JSON.stringify(/"cwd":"[^"]*"/.exec(read('checkpoint.json'))?.[0] ?? null)} tail=${JSON.stringify(pane.content.slice(-900))}`
             )
           }
-          expect.soft(pane.content).toContain(`STUB_CODEX_CWD ${deep}`)
+          // Where Orca started the pane's shell. A login profile that cds (CI runners' does, into
+          // GITHUB_WORKSPACE) moves every login shell after it starts; the folder it left is OLDPWD.
+          expect
+            .soft(
+              [`STUB_CODEX_CWD ${deep}\r`, `STUB_CODEX_OLDPWD ${deep}\r`].some((line) =>
+                pane.content.includes(line)
+              )
+            )
+            .toBe(true)
           const moved = await client.page.evaluate(
             ({ id, path: filePath }) => {
               const store = window.__store?.getState()
