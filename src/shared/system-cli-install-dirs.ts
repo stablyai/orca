@@ -20,7 +20,12 @@ import { join } from 'node:path'
  * Deliberate gaps vs that seed: the `sbin` dirs, the generic `~/bin`, and
  * `/opt/homebrew` off darwin -- the seed does push that prefix on every posix,
  * but Linux Homebrew installs to the Linuxbrew prefix below, so off darwin it
- * is a directory no brew install can occupy.
+ * is a directory no brew install can occupy. Nor `/usr/bin` and `/bin`, which
+ * the seed appends for a launch that inherited no PATH at all (#23214): those
+ * two are in this list's gap on purpose, because a missing distro bin is a
+ * broken PATH rather than an unusual install site, and restoring it at the
+ * bottom of PATH fixes every spawn in the app instead of only the ones looked
+ * up here.
  *
  * Lookup-only, deliberately outside `getBaseVersionManagerDirectories`: that
  * list is PREPENDED to PATH by `getVersionManagerBinPaths` callers, and hoisting
