@@ -15,7 +15,7 @@ import {
 // A skip's reader runs only on a reply the policy already admitted, so an unreadable one throws
 // rather than skipping. Both readers that project a list are inside the metadata refresh's own
 // try/catch, which already treats a failed refresh as "retry on the next one"; the view-settings
-// sync's two reads sit inside its own catch the same way. The five writes read no reply body.
+// sync's two reads sit inside its own catch the same way. The six writes read no reply body.
 // host-screen-reply-schema.ts says which members each screen actually reads.
 
 export const hostRepoCatalogRead = bindDeferredRpcOperation(
@@ -123,6 +123,22 @@ export const worktreeRemove = bindDeferredRpcOperation(
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
     read: rpcResultVariant('worktree-removed', hostScreenUnreadReplySchema)
+  })
+)
+
+/**
+ * Renaming a row from Worktree Settings — the desktop's Display Name field on the same method.
+ *
+ * Throws on refusal rather than skipping like the pin write: the settings panel stays open on a
+ * failed save and shows the host's message, so the refusal has to reach it.
+ */
+export const worktreeDisplayNameWrite = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'worktree.set-display-name',
+    method: 'worktree.set',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('display-name-written', hostScreenUnreadReplySchema)
   })
 )
 

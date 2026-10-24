@@ -1,6 +1,6 @@
 import { openExternalLink } from '../platform/external-link'
 import { Pressable, Text, View } from 'react-native'
-import { Moon, Pin, PinOff } from 'lucide-react-native'
+import { Moon, Pin, PinOff, Settings } from 'lucide-react-native'
 import { buildWorktreeNavigationActions } from '../agent-history/worktree-navigation-actions'
 import { workspaceRouteHref } from '../navigation/workspace-execution-host'
 import { useWorkspaceServer } from '../transport/workspace-server'
@@ -10,9 +10,11 @@ import { ConfirmModal } from '../components/ConfirmModal'
 import { NewWorktreeModalController } from '../components/NewWorktreeModalController'
 import { hostNewWorktreeSessionRoute } from '../host-new-worktree-session-route'
 import { isWorktreePinned } from '../worktree/workspace-list-sections'
+import { getWorktreeRowIdentity } from '../worktree/worktree-host-row-identity'
 import { hostScreenStyles as styles } from './host-screen-styles'
 import { WorkspaceOptionsSheet } from './workspace-options-sheet'
 import { WorkspaceDetailsSheet } from './workspace-details-sheet'
+import { WorktreeSettingsPanel } from './worktree-settings-panel'
 import type { HostScreenController } from './use-host-screen-controller'
 
 export function HostScreenOverlays({ controller }: { controller: HostScreenController }) {
@@ -27,6 +29,12 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
     state
   } = controller
   const actionTarget = state.actionTarget
+  const settingsTarget = state.worktreeSettingsTarget
+  const closeActionSheet = () => {
+    state.setConfirmDelete(null)
+    state.setWorktreeSettingsTarget(null)
+    state.setActionTarget(null)
+  }
   // A server row's screens are offered by what that server supports, not the desktop.
   const actionServer = useWorkspaceServer({
     client,
@@ -40,13 +48,7 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
       <WorkspaceOptionsSheet controller={controller} />
 
       {/* Worktree long-press action sheet (inline confirm to avoid double-Modal lag) */}
-      <BottomDrawer
-        visible={actionTarget != null}
-        onClose={() => {
-          state.setConfirmDelete(null)
-          state.setActionTarget(null)
-        }}
-      >
+      <BottomDrawer visible={actionTarget != null} onClose={closeActionSheet}>
         {state.confirmDelete ? (
           <View>
             <View style={styles.confirmContent}>
@@ -85,11 +87,31 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
               </Pressable>
             </View>
           </View>
+        ) : settingsTarget ? (
+          <WorktreeSettingsPanel
+            key={getWorktreeRowIdentity(settingsTarget)}
+            target={settingsTarget}
+            onCancel={closeActionSheet}
+            onSave={async (draft) => {
+              const outcome = await actions.renameWorktree(settingsTarget, draft)
+              if (outcome.ok) {
+                closeActionSheet()
+              }
+              return outcome
+            }}
+          />
         ) : (
           <ActionSheetContent
             actions={
               actionTarget
                 ? [
+                    // Why first: renaming a row is what this sheet is opened for most; the rest
+                    // navigates.
+                    {
+                      label: 'Worktree Settings',
+                      icon: Settings,
+                      onPress: () => state.setWorktreeSettingsTarget(actionTarget)
+                    },
                     ...buildWorktreeNavigationActions({
                       hostId,
                       worktreeId: actionTarget.worktreeId,

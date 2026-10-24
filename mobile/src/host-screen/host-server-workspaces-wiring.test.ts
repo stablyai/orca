@@ -66,24 +66,43 @@ const HOSTS = [
 type Desktop = {
   hostWorktrees?: (hostId: string) => unknown
   carriesRpcEnvelope?: boolean
+  refuseRename?: string
 }
 
-function desktop({ hostWorktrees, carriesRpcEnvelope }: Desktop = {}): FakeSession {
+const displayNameSet = z.object({ worktree: z.string(), displayName: z.string() })
+
+function desktop({ hostWorktrees, carriesRpcEnvelope, refuseRename }: Desktop = {}): FakeSession {
   const client = new FakeSession('connected')
   if (carriesRpcEnvelope !== undefined) {
     Object.assign(client, { carriesRpcEnvelope: () => carriesRpcEnvelope })
   }
+  // Like the host's mergeWorktree: a set name is listed back, and a cleared one reads the branch.
+  const names = new Map<string, string>()
+  const named = (entry: Record<string, unknown>) => {
+    const name = names.get(`id:${String(entry.worktreeId)}`)
+    return name === undefined ? entry : { ...entry, displayName: name || entry.branch }
+  }
   client.sendRequest.mockImplementation(async (method: string, params?: unknown) => {
     switch (method) {
       case 'worktree.ps':
-        return reply({ worktrees: [row('mac-wt', 'local')], snapshotId: 's1' })
+        return reply({ worktrees: [named(row('mac-wt', 'local'))], snapshotId: 's1' })
+      case 'worktree.set': {
+        const rename = displayNameSet.safeParse(params)
+        if (rename.success && refuseRename) {
+          return { id: 'reply', ok: false, error: { code: 'invalid', message: refuseRename } }
+        }
+        if (rename.success) {
+          names.set(rename.data.worktree, rename.data.displayName)
+        }
+        return reply({})
+      }
       case 'mobileRelay.hosts.list':
         return reply({ hosts: HOSTS })
       case 'mobileRelay.hosts.worktrees': {
         const { hostId } = z.object({ hostId: z.string() }).parse(params)
         const result = hostWorktrees
           ? hostWorktrees(hostId)
-          : { worktrees: [row(`${hostId}-wt`, hostId)] }
+          : { worktrees: [named(row(`${hostId}-wt`, hostId))] }
         if (result instanceof Error) {
           throw result
         }
@@ -105,6 +124,7 @@ type Screen = {
   notice: () => string | null
   catalogError: () => string | null
   pin: (worktreeId: string) => void
+  rename: (worktreeId: string, draft: string) => Promise<unknown>
   sleep: (worktreeId: string) => void
   slept: () => ReadonlySet<string> | undefined
   serverWorkspaces: () => unknown
@@ -194,6 +214,16 @@ async function mountScreen(first: RpcClient, hostCapabilities: string[]): Promis
       act(() => {
         held.actions?.togglePin(held.rows.find((entry) => entry.worktreeId === worktreeId)!)
       }),
+    rename: async (worktreeId, draft) => {
+      let outcome: unknown
+      await act(async () => {
+        outcome = await held.actions?.renameWorktree(
+          held.rows.find((entry) => entry.worktreeId === worktreeId)!,
+          draft
+        )
+      })
+      return outcome
+    },
     sleep: (worktreeId) =>
       act(() => {
         held.actions?.putWorktreeToSleep(
@@ -384,6 +414,56 @@ describe("a desktop's server workspaces on the phone", () => {
       { envelope: { executionHost: 'runtime:vm' } }
     )
     expect(screen.rows().find((entry) => entry.worktreeId === 'runtime:vm-wt')?.isPinned).toBe(true)
+  })
+
+  it('renames a server workspace on that server, as the desktop does', async () => {
+    const client = desktop()
+    const screen = await mountScreen(client, RELAYS)
+    expect(await screen.rename('runtime:vm-wt', '  VM box  ')).toEqual({ ok: true })
+    expect(client.sendRequest).toHaveBeenCalledWith(
+      'worktree.set',
+      { worktree: 'id:runtime:vm-wt', displayName: 'VM box' },
+      { envelope: { executionHost: 'runtime:vm' } }
+    )
+    const name = () => screen.rows().find((entry) => entry.worktreeId === 'runtime:vm-wt')
+    expect(name()?.displayName).toBe('VM box')
+    await screen.poll()
+    expect(name()?.displayName).toBe('VM box')
+  })
+
+  it('renames a desktop workspace, and a cleared name returns the row to its branch', async () => {
+    const client = desktop()
+    const screen = await mountScreen(client, RELAYS)
+    const mac = () => screen.rows().find((entry) => entry.worktreeId === 'mac-wt')
+    expect(await screen.rename('mac-wt', 'Feature A')).toEqual({ ok: true })
+    expect(client.sendRequest).toHaveBeenCalledWith('worktree.set', {
+      worktree: 'id:mac-wt',
+      displayName: 'Feature A'
+    })
+    expect(mac()?.displayName).toBe('Feature A')
+    expect(await screen.rename('mac-wt', '   ')).toEqual({ ok: true })
+    expect(client.sendRequest).toHaveBeenCalledWith('worktree.set', {
+      worktree: 'id:mac-wt',
+      displayName: ''
+    })
+    expect(mac()?.displayName).toBe('main')
+  })
+
+  it('writes nothing when the name is unchanged', async () => {
+    const client = desktop()
+    const screen = await mountScreen(client, RELAYS)
+    expect(await screen.rename('mac-wt', ' mac-wt ')).toEqual({ ok: true })
+    expect(calledMethods(client)).not.toContain('worktree.set')
+  })
+
+  it("keeps the old name and reports the host's message when it refuses a rename", async () => {
+    const client = desktop({ refuseRename: 'Worktree not found' })
+    const screen = await mountScreen(client, RELAYS)
+    expect(await screen.rename('mac-wt', 'Feature A')).toEqual({
+      ok: false,
+      error: 'Worktree not found'
+    })
+    expect(screen.rows().find((entry) => entry.worktreeId === 'mac-wt')?.displayName).toBe('mac-wt')
   })
 
   it('sleeps a desktop workspace on the desktop and shows it slept at once', async () => {
