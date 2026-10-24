@@ -35,6 +35,40 @@ import {
 } from '@/attention/agent-attention-notification-delivery'
 
 const AGENT_NOTIFICATION_SNAPSHOT_MAX_AGE_MS = 10_000
+const CODEX_RECAP_PROMPT = 'Write a brief catch-up for a user returning to this Codex task.'
+
+function isCodexRecap(
+  status:
+    | {
+        state?: string
+        agentType?: string
+        prompt?: string
+        lastAssistantMessage?: string
+      }
+    | undefined
+): boolean {
+  if (
+    status?.state !== 'done' ||
+    status?.agentType !== 'codex' ||
+    !status.prompt?.startsWith(CODEX_RECAP_PROMPT) ||
+    !status.lastAssistantMessage
+  ) {
+    return false
+  }
+  try {
+    const message: unknown = JSON.parse(status.lastAssistantMessage)
+    return (
+      typeof message === 'object' &&
+      message !== null &&
+      !Array.isArray(message) &&
+      Object.keys(message).length === 1 &&
+      'recap' in message &&
+      typeof message.recap === 'string'
+    )
+  } catch {
+    return false
+  }
+}
 
 function agentSnapshotMatchesExplicitTitle(
   snapshot: { agentType?: string | null } | undefined,
@@ -124,6 +158,10 @@ export function dispatchTerminalNotification(
     isSupersededAgentCompletionSnapshot(storedAgentStatus, eventAgentStatusSnapshot)
   ) {
     return false
+  }
+  // Codex's background catch-up is a Stop hook, but it is not a user turn to announce.
+  if (event.source === 'agent-task-complete' && isCodexRecap(agentStatus)) {
+    return
   }
   const agentNotificationStateStartedAt =
     eventAgentStatusSnapshot?.stateStartedAt ?? freshStoredAgentStatus?.stateStartedAt
