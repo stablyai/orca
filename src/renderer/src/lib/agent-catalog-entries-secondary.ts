@@ -184,6 +184,13 @@ export function secondaryAgentCatalogEntries(): AgentCatalogEntry[] {
       cmd: 'jcode',
       faviconDomain: 'jcode.sh',
       homepageUrl: 'https://github.com/1jehuang/jcode'
+    },
+    {
+      id: 'mirror',
+      label: translate('auto.lib.agent.catalog.mirror_label', 'Mirror'),
+      cmd: 'mirror',
+      faviconDomain: 'reflection.ai',
+      homepageUrl: 'https://developers.reflection.ai/mirror-cli-reference'
     }
   ]
 }
