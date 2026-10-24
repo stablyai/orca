@@ -71,7 +71,10 @@ describe('terminal multiplex PTY wait queue', () => {
       expect(results()).toContainEqual({
         type: 'error',
         streamId: total + 1,
-        message: 'terminal_stream_limit_exceeded'
+        message: 'terminal_stream_limit_exceeded',
+        active_stream_count: 0,
+        pending_pty_wait_count: total,
+        max_stream_count: total
       })
     )
     expect(
