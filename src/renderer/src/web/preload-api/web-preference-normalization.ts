@@ -199,13 +199,19 @@ function migrateBrowserSavedAgentPermission(
   if (hasTypedAgentPermission(stored) || (!stored.agentDefaultArgs && !stored.agentDefaultEnv)) {
     return {}
   }
-  return migrateAgentPermissionChoice(
-    {
-      agentDefaultArgs: { ...DEFAULT_TUI_AGENT_ARGS, ...stored.agentDefaultArgs },
-      agentDefaultEnv: { ...DEFAULT_TUI_AGENT_ENV, ...stored.agentDefaultEnv }
-    },
-    null
-  )
+  // Mirrors the main loader: a profile already migrated by an older build keeps agents added
+  // later on their own settings; only pre-migration profiles inherit the shipped defaults.
+  const launchProfile =
+    stored.agentYoloDefaultsMigrated === true
+      ? {
+          agentDefaultArgs: { ...stored.agentDefaultArgs },
+          agentDefaultEnv: { ...stored.agentDefaultEnv }
+        }
+      : {
+          agentDefaultArgs: { ...DEFAULT_TUI_AGENT_ARGS, ...stored.agentDefaultArgs },
+          agentDefaultEnv: { ...DEFAULT_TUI_AGENT_ENV, ...stored.agentDefaultEnv }
+        }
+  return migrateAgentPermissionChoice(launchProfile, null)
 }
 
 export function mergeSettings(

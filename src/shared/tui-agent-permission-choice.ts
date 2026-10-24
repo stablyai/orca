@@ -132,7 +132,7 @@ export function normalizeAgentPermissionOverrides(
 export function applyAllAgentsPermission(
   settings: AgentPermissionSettings,
   choice: AgentPermissionChoice
-): Required<AgentPermissionSettings> {
+): Required<Pick<AgentPermissionSettings, 'agentPermissionDefault' | 'agentPermissionOverrides'>> {
   const overrides: Partial<Record<TuiAgent, AgentPermissionChoice>> = {}
   if (choice === 'auto') {
     for (const agent of PERMISSION_CHOICE_AGENTS) {

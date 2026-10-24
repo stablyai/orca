@@ -117,3 +117,19 @@ it('preserves an explicit DSH choice and custom env in a typed browser profile',
     DSH_TUI_THEME: 'dark'
   })
 })
+
+it('matches the main loader for a migrated untyped profile that never stored DSH', () => {
+  const loaded = mergeSettings(
+    getDefaultSettings('~'),
+    migrateStoredWebSettings({
+      agentYoloDefaultsMigrated: true,
+      agentDefaultArgs: {},
+      agentDefaultEnv: {}
+    })
+  )
+
+  expect(loaded.dshAgentPermissionMigrated).toBe(true)
+  expect(resolveAgentPermission('dsh', loaded).choice).toBe('own')
+  expect(resolveTuiAgentLaunchEnv('dsh', loaded)).toEqual({})
+  expect(migrateStoredWebSettings(JSON.parse(JSON.stringify(loaded)))).toEqual(loaded)
+})
