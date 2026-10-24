@@ -69,7 +69,8 @@
     "../src/main/startup/startup-diagnostics.ts",
     "../src/main/window/focus-existing-window.ts",
     "../src/main/window/foreground-activation-policy.ts",
-    "../src/main/window/macos-app-activation.ts"
+    "../src/main/window/macos-app-activation.ts",
+    "../src/main/window/wslg-session.ts"
   ],
   "compilerOptions": {
     "paths": {

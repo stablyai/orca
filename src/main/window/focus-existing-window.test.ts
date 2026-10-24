@@ -7,12 +7,14 @@ type FakeWindowOptions = {
   minimized?: boolean
   visible?: boolean
   alwaysOnTop?: boolean
+  focused?: boolean
 }
 
 function makeFakeWindow(options: FakeWindowOptions = {}): BrowserWindow & {
   calls: {
     restore: ReturnType<typeof vi.fn>
     show: ReturnType<typeof vi.fn>
+    hide: ReturnType<typeof vi.fn>
     focus: ReturnType<typeof vi.fn>
     moveTop: ReturnType<typeof vi.fn>
     setAlwaysOnTop: ReturnType<typeof vi.fn>
@@ -22,19 +24,23 @@ function makeFakeWindow(options: FakeWindowOptions = {}): BrowserWindow & {
   const calls = {
     restore: vi.fn(),
     show: vi.fn(),
+    hide: vi.fn(),
     focus: vi.fn(),
     moveTop: vi.fn(),
     setAlwaysOnTop: vi.fn((value: boolean) => {
       alwaysOnTop = value
     })
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: focusExistingMainWindow only calls the BrowserWindow methods defined here.
   return {
     isDestroyed: vi.fn(() => options.destroyed ?? false),
     isMinimized: vi.fn(() => options.minimized ?? false),
     isVisible: vi.fn(() => options.visible ?? true),
+    isFocused: vi.fn(() => options.focused ?? false),
     isAlwaysOnTop: vi.fn(() => alwaysOnTop),
     restore: calls.restore,
     show: calls.show,
+    hide: calls.hide,
     focus: calls.focus,
     moveTop: calls.moveTop,
     setAlwaysOnTop: calls.setAlwaysOnTop,
@@ -221,7 +227,9 @@ describe('focusExistingMainWindow', () => {
       getWindow: () => currentWindow,
       openWindow,
       platform: 'linux',
-      setTimeout: timer.setTimeout
+      setTimeout: timer.setTimeout,
+      // Why: pinned so this case asserts plain-Linux behavior even when the suite runs on WSLg.
+      isWslgSession: () => false
     })
 
     expect(result).toBe('opened')
@@ -361,5 +369,146 @@ describe('focusExistingMainWindow', () => {
     timer.run(300)
     expect(openWindow).toHaveBeenCalledTimes(3)
     expect(warn).toHaveBeenCalledTimes(3)
+  })
+
+  // A WSLg RDP reconnect leaves the window mapped with no surface on the Windows
+  // desktop. show()/focus() are no-ops on it, so without the remap the relaunch
+  // silently does nothing and the running app is unreachable.
+  it('remaps the WSLg surface after revealing an existing window', () => {
+    const app = makeFakeApp()
+    const window = makeFakeWindow({ focused: false })
+    const timer = makeTimer()
+
+    const result = focusExistingMainWindow({
+      app,
+      getWindow: () => window,
+      openWindow: vi.fn(),
+      platform: 'linux',
+      setTimeout: timer.setTimeout,
+      isWslgSession: () => true
+    })
+
+    expect(result).toBe('focused')
+    expect(window.calls.show).toHaveBeenCalledTimes(1)
+    expect(window.calls.hide).not.toHaveBeenCalled()
+    expect(timer.scheduledMs()).toEqual([250])
+
+    timer.run(250)
+    expect(window.calls.hide).toHaveBeenCalledTimes(1)
+    expect(window.calls.show).toHaveBeenCalledTimes(2)
+    expect(window.calls.focus).toHaveBeenCalledTimes(2)
+    // The second show() must follow the hide(), or the surface is never rebuilt.
+    expect(window.calls.show.mock.invocationCallOrder.at(-1)).toBeGreaterThan(
+      window.calls.hide.mock.invocationCallOrder[0]
+    )
+  })
+
+  // Guards against reintroducing an isFocused()/isVisible() check here: a dropped
+  // WSLg surface reports both true, so such a guard skips the remap precisely in
+  // the case it exists to fix. Verified against the real binary — the window was
+  // IsUnMapped while Electron reported visible=true focused=true.
+  it('remaps a WSLg window even when Electron still reports it focused', () => {
+    const window = makeFakeWindow({ focused: true, visible: true })
+    const timer = makeTimer()
+
+    focusExistingMainWindow({
+      app: makeFakeApp(),
+      getWindow: () => window,
+      openWindow: vi.fn(),
+      platform: 'linux',
+      setTimeout: timer.setTimeout,
+      isWslgSession: () => true
+    })
+
+    expect(window.calls.hide).not.toHaveBeenCalled()
+    timer.run(250)
+    expect(window.calls.hide).toHaveBeenCalledTimes(1)
+    expect(window.calls.show.mock.invocationCallOrder.at(-1)).toBeGreaterThan(
+      window.calls.hide.mock.invocationCallOrder[0]
+    )
+  })
+
+  it('does not remap on plain Linux outside WSLg', () => {
+    const window = makeFakeWindow({ focused: false })
+    const timer = makeTimer()
+
+    focusExistingMainWindow({
+      app: makeFakeApp(),
+      getWindow: () => window,
+      openWindow: vi.fn(),
+      platform: 'linux',
+      setTimeout: timer.setTimeout,
+      isWslgSession: () => false
+    })
+
+    expect(timer.scheduledMs()).toEqual([])
+    timer.run(250)
+    expect(window.calls.hide).not.toHaveBeenCalled()
+  })
+
+  it('never remaps a WSLg window in a background launch', () => {
+    vi.stubEnv('ORCA_BACKGROUND_LAUNCH', '1')
+    const window = makeFakeWindow({ focused: false })
+    const timer = makeTimer()
+
+    focusExistingMainWindow({
+      app: makeFakeApp(),
+      getWindow: () => window,
+      openWindow: vi.fn(),
+      platform: 'linux',
+      setTimeout: timer.setTimeout,
+      isWslgSession: () => true
+    })
+
+    expect(timer.scheduledMs()).toEqual([])
+    timer.run(250)
+    expect(window.calls.hide).not.toHaveBeenCalled()
+  })
+
+  it('does not remap a window destroyed before the delay elapses', () => {
+    const window = makeFakeWindow({ focused: false })
+    const timer = makeTimer()
+
+    focusExistingMainWindow({
+      app: makeFakeApp(),
+      getWindow: () => window,
+      openWindow: vi.fn(),
+      platform: 'linux',
+      setTimeout: timer.setTimeout,
+      isWslgSession: () => true
+    })
+
+    window.isDestroyed = vi.fn(() => true)
+    timer.run(250)
+    expect(window.calls.hide).not.toHaveBeenCalled()
+  })
+
+  it('remaps a WSLg window recovered on the reopen retry path', () => {
+    // Why: the retry callback must get the same WSLg recovery as the sync path.
+    const timer = makeTimer()
+    const openedWindow = makeFakeWindow({ focused: false })
+    let attempts = 0
+    const openWindow = vi.fn(() => {
+      attempts += 1
+      if (attempts < 2) {
+        throw new Error('transient failure')
+      }
+      return openedWindow
+    })
+
+    focusExistingMainWindow({
+      app: makeFakeApp(),
+      getWindow: () => null,
+      openWindow,
+      warn: vi.fn(),
+      platform: 'linux',
+      setTimeout: timer.setTimeout,
+      isWslgSession: () => true
+    })
+
+    timer.run(300)
+    timer.run(250)
+    expect(openedWindow.calls.hide).toHaveBeenCalledTimes(1)
+    expect(openedWindow.calls.show).toHaveBeenCalledTimes(2)
   })
 })
