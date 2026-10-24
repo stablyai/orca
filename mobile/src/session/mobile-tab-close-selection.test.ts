@@ -72,7 +72,8 @@ describe('createBulkCloseSheetActions and confirmation', () => {
     expect(closeSessionTab).not.toHaveBeenCalled()
     expect(onRequestConfirmBulkClose).toHaveBeenCalledExactlyOnceWith({
       anchor: sessionTabs[0],
-      closeCount: 2
+      closeCount: 2,
+      targetIds: ['tab-2', 'tab-3']
     })
   })
 
@@ -91,33 +92,86 @@ describe('createBulkCloseSheetActions and confirmation', () => {
         switchSessionTab,
         closeSessionTab
       },
-      sessionTabs[0]
+      sessionTabs[0],
+      ['tab-2', 'tab-3']
     )
 
     expect(switchSessionTab).toHaveBeenCalledExactlyOnceWith(sessionTabs[0])
     expect(closedIds).toEqual(['tab-2', 'tab-3'])
   })
 
+  it('keeps the confirmed target set fixed when tabs open or become dirty before confirmation', async () => {
+    const switchSessionTab = vi.fn()
+    const closedIds: string[] = []
+    const closeSessionTab = vi.fn(async (target: MobileSessionTab) => {
+      closedIds.push(target.id)
+    })
+    const tabsAtConfirm: MobileSessionTab[] = [
+      sessionTabs[0],
+      {
+        type: 'markdown',
+        id: 'tab-2',
+        title: 'Notes.md',
+        filePath: '/repo/Notes.md',
+        relativePath: 'Notes.md',
+        documentVersion: 'v1',
+        isDirty: false,
+        isActive: false
+      },
+      sessionTabs[2],
+      { type: 'terminal', id: 'tab-4', title: 'New Shell', terminal: 'term-4', isActive: true }
+    ]
+
+    await runBulkCloseSessionTabs(
+      {
+        sessionTabsRef: { current: tabsAtConfirm },
+        markdownDocs: new Map([
+          [
+            'tab-2',
+            {
+              status: 'ready',
+              content: '',
+              localContent: 'unsaved draft',
+              baseVersion: 'v1',
+              isDirty: true,
+              editable: true
+            }
+          ]
+        ]),
+        activeSessionTabIdRef: { current: 'tab-4' },
+        switchSessionTab,
+        closeSessionTab
+      },
+      sessionTabs[0],
+      ['tab-2', 'tab-3']
+    )
+
+    expect(switchSessionTab).not.toHaveBeenCalled()
+    expect(closedIds).toEqual(['tab-3'])
+  })
+
   it('formats singular and plural confirmation copy with the anchor tab title', () => {
     expect(
       describeBulkCloseConfirmation({
         anchor: sessionTabs[0],
-        closeCount: 1
+        closeCount: 1,
+        targetIds: ['tab-2']
       })
     ).toEqual({
       title: 'Close 1 Other Tab?',
-      message: 'Keep only "Build" open and close the other tab?',
+      message: 'Keep "Build" open and close 1 other tab?',
       confirmLabel: 'Close 1 Tab'
     })
 
     expect(
       describeBulkCloseConfirmation({
         anchor: sessionTabs[0],
-        closeCount: 2
+        closeCount: 2,
+        targetIds: ['tab-2', 'tab-3']
       })
     ).toEqual({
       title: 'Close 2 Other Tabs?',
-      message: 'Keep only "Build" open and close all 2 other tabs?',
+      message: 'Keep "Build" open and close 2 other tabs?',
       confirmLabel: 'Close 2 Tabs'
     })
   })

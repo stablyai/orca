@@ -6,16 +6,17 @@ import { getMobileSessionTabTitle } from './mobile-terminal-tab-agent'
 export type PendingBulkCloseConfirmation = {
   anchor: MobileSessionTab
   closeCount: number
+  targetIds: readonly string[]
 }
 
 export function describeBulkCloseConfirmation(pending: PendingBulkCloseConfirmation | null) {
-  const closeCount = pending?.closeCount ?? 0
+  const closeCount = pending?.targetIds.length ?? pending?.closeCount ?? 0
   const anchorTitle = pending ? getMobileSessionTabTitle(pending.anchor) : 'this tab'
   return {
     title: closeCount === 1 ? 'Close 1 Other Tab?' : `Close ${closeCount} Other Tabs?`,
     message: pending
-      ? `Keep only "${anchorTitle}" open and close ${
-          closeCount === 1 ? 'the other tab' : `all ${closeCount} other tabs`
+      ? `Keep "${anchorTitle}" open and close ${
+          closeCount === 1 ? '1 other tab' : `${closeCount} other tabs`
         }?`
       : undefined,
     confirmLabel: closeCount === 1 ? 'Close 1 Tab' : `Close ${closeCount} Tabs`
@@ -49,9 +50,13 @@ export function selectClosableBulkTabs(
 
 export async function runBulkCloseSessionTabs(
   deps: Omit<BulkCloseSheetDeps, 'onRequestConfirmBulkClose'>,
-  anchor: MobileSessionTab
+  anchor: MobileSessionTab,
+  confirmedTargetIds?: readonly string[]
 ): Promise<void> {
-  const targets = selectClosableBulkTabs(deps, anchor.id)
+  const confirmedIdSet = confirmedTargetIds ? new Set(confirmedTargetIds) : null
+  const targets = selectClosableBulkTabs(deps, anchor.id).filter((candidate) =>
+    confirmedIdSet ? confirmedIdSet.has(candidate.id) : true
+  )
   const activeWasTargeted = targets.some(
     (candidate) => candidate.id === deps.activeSessionTabIdRef.current
   )
@@ -84,7 +89,8 @@ export function createBulkCloseSheetActions(deps: BulkCloseSheetDeps) {
     if (closable.length === 0) {
       return []
     }
-    const closeCount = closable.length
+    const targetIds = closable.map((candidate) => candidate.id)
+    const closeCount = targetIds.length
     const requestConfirm = deps.onRequestConfirmBulkClose
     if (requestConfirm) {
       return [
@@ -95,7 +101,7 @@ export function createBulkCloseSheetActions(deps: BulkCloseSheetDeps) {
           // presenting ConfirmModal (same dual-Modal race as Rename/Refresh, #10331).
           closeBeforePress: true,
           onPress: () => {
-            requestConfirm({ anchor, closeCount })
+            requestConfirm({ anchor, closeCount, targetIds })
           }
         }
       ]
@@ -106,7 +112,7 @@ export function createBulkCloseSheetActions(deps: BulkCloseSheetDeps) {
         destructive: true,
         onPress: () => {
           dismiss()
-          void runBulkCloseSessionTabs(deps, anchor)
+          void runBulkCloseSessionTabs(deps, anchor, targetIds)
         }
       }
     ]

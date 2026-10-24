@@ -49,7 +49,7 @@ export function useMobileSessionBulkClose(scope: MobileSessionCloseActionsModel)
     const target = pendingBulkClose
     setPendingBulkClose(null)
     if (target) {
-      void runBulkCloseSessionTabs(bulkCloseDeps, target.anchor)
+      void runBulkCloseSessionTabs(bulkCloseDeps, target.anchor, target.targetIds)
     }
   }
   const cancelBulkClose = () => setPendingBulkClose(null)
