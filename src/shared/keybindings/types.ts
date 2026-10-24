@@ -30,6 +30,7 @@ export type KeybindingActionId =
   | 'worktree.palette'
   | 'worktree.navigateUp'
   | 'worktree.navigateDown'
+  | 'worktree.jumpToNextAttention'
   | 'app.settings'
   | 'app.forceReload'
   | 'workspace.create'
