@@ -120,6 +120,8 @@ export function refreshWslHostPairing(
   if (!record) {
     throw new RuntimeEnvironmentStoreError('invalid_argument', 'This server is not a WSL host.')
   }
+  // Why read first: once the record holds the new port, the overlay sees the old pairing conflict.
+  const current = resolveEnvironmentFromStore(readEnvironmentStore(userDataPath), environmentId)
   if (record.localPort !== args.localPort || record.remotePort !== args.remotePort) {
     writeWslHostDeployment(userDataPath, environmentId, {
       ...record,
@@ -127,9 +129,11 @@ export function refreshWslHostPairing(
       remotePort: args.remotePort
     })
   }
-  const current = resolveEnvironmentFromStore(readEnvironmentStore(userDataPath), environmentId)
   if (samePairing(getPreferredPairingOffer(current), offer)) {
-    return { environment: current, pairingChanged: false }
+    return {
+      environment: resolveEnvironmentFromStore(readEnvironmentStore(userDataPath), environmentId),
+      pairingChanged: false
+    }
   }
   const store = readPersistedEnvironmentStore(userDataPath)
   const existing = resolveEnvironmentFromStore(store, environmentId)
