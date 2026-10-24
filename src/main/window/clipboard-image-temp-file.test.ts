@@ -1,4 +1,4 @@
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { writeFileMock, mkdirMock, getPathMock } = vi.hoisted(() => ({
@@ -28,7 +28,7 @@ describe('saveClipboardImageBufferAsTempFile', () => {
     expect(getPathMock).toHaveBeenCalledWith('temp')
     expect(getPathMock).not.toHaveBeenCalledWith('userData')
     expect(mkdirMock).not.toHaveBeenCalled()
-    expect(dirname(savedPath)).toBe('/os/temp')
+    expect(dirname(savedPath)).toBe(join('/os/temp'))
     expect(writeFileMock).toHaveBeenCalledWith(savedPath, Buffer.from([1, 2, 3]))
   })
 
@@ -54,5 +54,23 @@ describe('saveClipboardImageBufferAsTempFile', () => {
 
     expect(dirname(savedPath)).toBe(join('/os/temp'))
     expect(savedPath).toMatch(/orca-paste-\d+-uuid-1-柴静-看见\.txt$/)
+  })
+
+  it('keeps supplied extensionless file names extensionless instead of appending .png', async () => {
+    const savedPath = await saveClipboardImageBufferAsTempFile(Buffer.from('FROM node:22'), {
+      fileName: '../dir/Dockerfile'
+    })
+
+    expect(basename(savedPath)).toMatch(/^orca-paste-\d+-uuid-1-Dockerfile$/)
+  })
+
+  it('bounds the complete generated file name within 255 UTF-8 bytes for multi-byte names', async () => {
+    const savedPath = await saveClipboardImageBufferAsTempFile(Buffer.from('hello'), {
+      fileName: `${'中'.repeat(90)}.txt`
+    })
+
+    const generatedName = basename(savedPath)
+    expect(generatedName).toMatch(/^orca-paste-\d+-uuid-1-中+\.txt$/)
+    expect(Buffer.byteLength(generatedName, 'utf8')).toBeLessThanOrEqual(255)
   })
 })

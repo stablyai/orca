@@ -21,10 +21,33 @@ export type SaveClipboardImageAsTempFileArgs = {
   forStructuredChat?: boolean
 }
 
-const MAX_SANITIZED_FILE_NAME_CHARS = 120
+const MAX_TEMP_FILE_NAME_BYTES = 255
 
-function sanitizeTempAttachmentFileName(rawName: string | null | undefined): string | null {
-  if (!rawName) {
+function sliceUtf8ByBytes(value: string, maxBytes: number): string {
+  if (maxBytes <= 0) {
+    return ''
+  }
+  if (Buffer.byteLength(value, 'utf8') <= maxBytes) {
+    return value
+  }
+  let result = ''
+  let usedBytes = 0
+  for (const char of value) {
+    const charBytes = Buffer.byteLength(char, 'utf8')
+    if (usedBytes + charBytes > maxBytes) {
+      break
+    }
+    result += char
+    usedBytes += charBytes
+  }
+  return result
+}
+
+function sanitizeTempAttachmentFileName(
+  rawName: string | null | undefined,
+  maxBytes: number
+): string | null {
+  if (!rawName || maxBytes <= 0) {
     return null
   }
   const baseName = rawName.trim().split(/[/\\]/).pop() ?? ''
@@ -37,8 +60,11 @@ function sanitizeTempAttachmentFileName(rawName: string | null | undefined): str
   if (!stem) {
     return null
   }
-  const boundedStem = stem.slice(0, Math.max(1, MAX_SANITIZED_FILE_NAME_CHARS - ext.length))
-  return ext ? `${boundedStem}${ext}` : `${boundedStem}.png`
+  const boundedStem = sliceUtf8ByBytes(stem, maxBytes - Buffer.byteLength(ext, 'utf8'))
+  if (!boundedStem) {
+    return sliceUtf8ByBytes(stem, maxBytes) || null
+  }
+  return `${boundedStem}${ext}`
 }
 
 export async function saveClipboardImageBufferAsTempFile(
@@ -47,10 +73,10 @@ export async function saveClipboardImageBufferAsTempFile(
 ): Promise<string> {
   assertClipboardImageByteLengthWithinLimit(buffer.byteLength)
 
-  const sanitizedFileName = sanitizeTempAttachmentFileName(args?.fileName)
-  const fileName = sanitizedFileName
-    ? `orca-paste-${Date.now()}-${randomUUID()}-${sanitizedFileName}`
-    : `orca-paste-${Date.now()}-${randomUUID()}.png`
+  const prefix = `orca-paste-${Date.now()}-${randomUUID()}`
+  const maxSanitizedBytes = MAX_TEMP_FILE_NAME_BYTES - Buffer.byteLength(`${prefix}-`, 'utf8')
+  const sanitizedFileName = sanitizeTempAttachmentFileName(args?.fileName, maxSanitizedBytes)
+  const fileName = sanitizedFileName ? `${prefix}-${sanitizedFileName}` : `${prefix}.png`
 
   if (args?.connectionId) {
     throw new SshHostNotServedError(args.connectionId)
