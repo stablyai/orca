@@ -1,3 +1,5 @@
+import { isCodewhaleTerminalTitle } from './codewhale-terminal-title'
+
 /** DSH-TUI titles are always `<prefix> 🐋 <session title>` (its Chat screen's
  *  `useTerminalTitle`), and the whale is the only part no other agent emits. It has to
  *  outrank the Gemini glyphs below: DSH's IDLE prefix is `✦`, which is Gemini's WORKING
@@ -6,5 +8,7 @@
 export const DSH_WHALE = '\u{1F40B}' // 🐋
 
 export function isDshTerminalTitle(title: string): boolean {
-  return title.includes(DSH_WHALE)
+  // Why: Codewhale's unfocused animation also paints 🐋; its closed `whale + verb`
+  // shape is the evidence that separates the two.
+  return title.includes(DSH_WHALE) && !isCodewhaleTerminalTitle(title)
 }

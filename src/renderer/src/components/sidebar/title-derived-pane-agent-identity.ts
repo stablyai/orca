@@ -13,6 +13,7 @@ const TITLE_AGENT_LABEL_TO_TYPE: Record<string, AgentType> = {
   Grok: 'grok',
   Devin: 'devin',
   Jcode: 'jcode',
+  Codewhale: 'codewhale',
   Antigravity: 'antigravity',
   OpenCode: 'opencode',
   Aider: 'aider',

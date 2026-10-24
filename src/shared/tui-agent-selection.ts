@@ -49,7 +49,8 @@ export const TUI_AGENT_AUTO_PICK_ORDER = [
   'devin',
   'openclaw',
   'codebuddy',
-  'jcode'
+  'jcode',
+  'codewhale'
 ] as const satisfies readonly TuiAgent[]
 
 // Why: fresh installs should expose Claude Agent Teams in agent pickers; the

@@ -6,7 +6,9 @@ export type AgentPermissionMode = 'yolo' | 'manual' | 'auto' | 'mixed'
 export const AUTO_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = {
   claude: '--permission-mode auto',
   'claude-agent-teams': '--permission-mode auto',
-  codex: '--approve-for-me'
+  codex: '--approve-for-me',
+  // Why: Codewhale's `never` policy runs tools without asking; the sandbox still applies.
+  codewhale: '--approval-policy never'
 }
 
 export const YOLO_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = {
@@ -41,7 +43,9 @@ export const YOLO_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = {
   devin: '--permission-mode bypass --respect-workspace-trust false',
   ante: '--yolo',
   trae: '--yolo',
-  droid: '--auto high'
+  droid: '--auto high',
+  // Why: full access in Codewhale is the approval policy plus an unsandboxed shell.
+  codewhale: '--approval-policy never --sandbox-mode danger-full-access'
 }
 
 export const YOLO_TUI_AGENT_ENV: Partial<Record<TuiAgent, Record<string, string>>> = {

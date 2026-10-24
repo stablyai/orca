@@ -350,7 +350,10 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     promptInjectionMode: 'stdin-after-start'
   },
   // prettier-ignore
-  jcode: { detectCmd: 'jcode', launchCmd: 'jcode', expectedProcess: 'jcode', promptInjectionMode: 'stdin-after-start' }
+  jcode: { detectCmd: 'jcode', launchCmd: 'jcode', expectedProcess: 'jcode', promptInjectionMode: 'stdin-after-start' },
+  // Why: `codewhale [PROMPT]...` submits the task and keeps the TUI alive, so argv matches its own usage.
+  // prettier-ignore
+  codewhale: { detectCmd: 'codewhale', detectCmdAliases: ['codew'], promptInjectionMode: 'argv', preflightTrust: 'codewhale' }
 }
 
 export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = Object.fromEntries(

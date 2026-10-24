@@ -27,6 +27,8 @@ const EXPECTED_REST_SIGNALS: Record<TuiAgent, TuiAgentRestSignal> = {
   // classifier already reads, and this table deliberately trusts a first-party hook `done`
   // only from DSH. Derived, not chosen — getTuiAgentRestSignal('jcode') returns this.
   jcode: 'title',
+  // Why 'title': Codewhale repaints `codewhale` (plus whale/verb frames) as its OSC title.
+  codewhale: 'title',
   aider: 'title',
   openclaw: 'title',
   copilot: 'title',

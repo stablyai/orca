@@ -114,6 +114,21 @@ export function markCodexProjectTrusted(
   return write()
 }
 
+/**
+ * Codewhale stores workspace trust in ~/.codewhale/config.toml under the
+ * canonical workspace path:
+ *   [projects."<realpath>"]
+ *   trust_level = "trusted"
+ *
+ * Same shape as Codex, so the existing TOML upsert handles the write; the file
+ * and its `projects` table belong to Codewhale, which creates them on first run.
+ */
+export function markCodewhaleProjectTrusted(workspacePath: string, home: string): Promise<void> {
+  const configFile = join(home, '.codewhale', 'config.toml')
+  upsertProjectTrustLevel(configFile, canonicalize(workspacePath), 'trusted')
+  return Promise.resolve()
+}
+
 function canonicalize(p: string): string {
   // Match agent trust lookups that compare realpaths, including macOS /tmp symlinks.
   try {

@@ -33,13 +33,15 @@ const PRESETS: readonly AgentTrustPreset[] = [
   'cursor',
   'copilot',
   'qoder',
-  'antigravity'
+  'antigravity',
+  'codewhale'
 ]
 const INHERITING_PRESETS: readonly AgentTrustPreset[] = ['claude', 'copilot', 'qoder']
 const EXACT_OR_SELF_LIMITING_PRESETS: readonly AgentTrustPreset[] = [
   'codex',
   'cursor',
-  'antigravity'
+  'antigravity',
+  'codewhale'
 ]
 
 let root: string
