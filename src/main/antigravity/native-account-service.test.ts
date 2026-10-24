@@ -157,3 +157,81 @@ describe('Antigravity native account identity and selection', () => {
     expect(h.getVault().accounts).toHaveLength(1)
   })
 })
+
+describe('Antigravity selection across silent refreshes without an id_token (#31579)', () => {
+  // agy >= 1.4.7 stores `id_token_email` and no signed `id_token`; a refresh rotates the token.
+  function withoutIdToken(generation: number, email = 'a@example.invalid') {
+    return JSON.stringify({
+      auth_method: 'consumer',
+      id_token_email: email,
+      token: { access_token: `synthetic-${generation}`, refresh_token: `refresh-${generation}` }
+    })
+  }
+
+  function resolverFor(subjectsByToken: Record<string, string | null>) {
+    return vi.fn(async (current: { contents: string }) => {
+      const token = (JSON.parse(current.contents) as { token: { access_token: string } }).token
+        .access_token
+      const subject = subjectsByToken[token] ?? null
+      return subject
+        ? {
+            issuer: 'https://accounts.google.com' as const,
+            subject,
+            email: `${subject}@example.invalid`
+          }
+        : null
+    })
+  }
+
+  it('keeps the selected account launchable after a refresh drops the id_token', async () => {
+    const h = harness()
+    const resolve = resolverFor({ 'synthetic-2': 'a' })
+    const service = new AntigravityAccountService(h.store, h.backend, Date.now, resolve)
+    const id = (await service.addCurrentAccount()).activeAccountId!
+    await service.selectAccount(id)
+    h.setNative(withoutIdToken(2))
+    await expect(service.prepareForLaunch()).resolves.toBeUndefined()
+    const state = await service.listAccounts()
+    expect(state.activeAccountId).toBe(id)
+    expect(state.selectedAccountId).toBe(id)
+    expect(state.currentAccount).toMatchObject({ subject: 'a', identityKnown: true })
+    expect(h.getVault().accounts[0].credentials).toBe(withoutIdToken(2))
+    expect(h.backend.write).not.toHaveBeenCalled()
+    expect(JSON.stringify(state)).not.toContain('synthetic-2')
+  })
+
+  it('still refuses the launch when Google cannot confirm the account', async () => {
+    const h = harness()
+    const service = new AntigravityAccountService(h.store, h.backend, Date.now, resolverFor({}))
+    const id = (await service.addCurrentAccount()).activeAccountId!
+    await service.selectAccount(id)
+    h.setNative(withoutIdToken(2))
+    await expect(service.prepareForLaunch()).rejects.toThrow('native Antigravity account changed')
+    expect(h.backend.write).not.toHaveBeenCalled()
+  })
+
+  it('refuses the launch when Google names a different account, whatever the stored email says', async () => {
+    const h = harness()
+    const service = new AntigravityAccountService(
+      h.store,
+      h.backend,
+      Date.now,
+      resolverFor({ 'synthetic-2': 'b' })
+    )
+    const id = (await service.addCurrentAccount()).activeAccountId!
+    await service.selectAccount(id)
+    h.setNative(withoutIdToken(2, 'a@example.invalid'))
+    await expect(service.prepareForLaunch()).rejects.toThrow('native Antigravity account changed')
+  })
+
+  it('does not ask the resolver for credentials that already carry an id_token', async () => {
+    const h = harness()
+    const resolve = resolverFor({})
+    const service = new AntigravityAccountService(h.store, h.backend, Date.now, resolve)
+    const id = (await service.addCurrentAccount()).activeAccountId!
+    await service.selectAccount(id)
+    h.setNative(credential('a', 2))
+    await expect(service.prepareForLaunch()).resolves.toBeUndefined()
+    expect(resolve).not.toHaveBeenCalled()
+  })
+})

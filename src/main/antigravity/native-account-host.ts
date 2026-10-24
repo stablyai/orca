@@ -4,6 +4,7 @@ import type { AntigravityAccountTarget } from '../../shared/antigravity-account-
 import { createEncryptedAntigravityAccountStore } from './native-account-store'
 import { createAntigravityHostCredentialBackend } from './native-credential-backend'
 import { AntigravityAccountService } from './native-account-service'
+import { createGoogleTokeninfoIdentityResolver } from './native-identity-resolver'
 
 let service: AntigravityAccountService | null = null
 
@@ -22,7 +23,9 @@ export function getAntigravityAccountService(
   const env = getAppEnvironment()
   service ??= new AntigravityAccountService(
     createEncryptedAntigravityAccountStore(getAntigravityAccountVaultPath()),
-    createAntigravityHostCredentialBackend(env.getPath('home'))
+    createAntigravityHostCredentialBackend(env.getPath('home')),
+    Date.now,
+    createGoogleTokeninfoIdentityResolver()
   )
   return service
 }

@@ -4,6 +4,7 @@ import {
   parseAntigravityNativeCredential,
   type AntigravityNativeCredential
 } from './native-credential-codec'
+import type { AntigravityIdentityResolver } from './native-identity-resolver'
 import type {
   AntigravityAccountStore,
   AntigravityAccountVault,
@@ -28,7 +29,8 @@ export class AntigravityAccountService {
   constructor(
     private readonly store: AntigravityAccountStore,
     private readonly backend: AntigravityCredentialBackend,
-    private readonly now: () => number = Date.now
+    private readonly now: () => number = Date.now,
+    private readonly resolveIdentity: AntigravityIdentityResolver | null = null
   ) {}
 
   listAccounts(): Promise<AntigravityAccountState> {
@@ -76,7 +78,7 @@ export class AntigravityAccountService {
       if (!current || !matches(selected, current)) {
         await this.backend.write(selected.credentials, current?.contents ?? null)
       }
-      const readback = await this.backend.read()
+      const readback = await this.readNative()
       if (!readback || !matches(selected, readback)) {
         throw new Error(
           'Antigravity account switching could not be verified; refresh before retrying.'
@@ -103,7 +105,7 @@ export class AntigravityAccountService {
       if (vault.selectedAccountId === id || (current && matches(account, current))) {
         throw new Error('Select another Antigravity account before removing this account.')
       }
-      const readback = await this.backend.read()
+      const readback = await this.readNative()
       const latest = this.store.read()
       const latestAccount = latest.accounts.find((entry) => entry.id === id)
       if (!latestAccount) {
@@ -137,13 +139,24 @@ export class AntigravityAccountService {
   }
 
   private async reconcile() {
-    const current = await this.backend.read()
+    const current = await this.readNative()
     // Re-read after native I/O so a delayed read never restores an older vault.
     const vault = this.store.read()
     if (current && this.updateSnapshot(vault, current)) {
       this.store.write(vault)
     }
     return { vault, current }
+  }
+
+  // Why: credentials without a signed `id_token` (agy >= 1.4.7, or after a silent refresh) have no
+  // local `sub`; ask the injected resolver for Google's identity instead of comparing whole strings.
+  private async readNative(): Promise<AntigravityNativeCredential | null> {
+    const current = await this.backend.read()
+    if (!current || current.identity || !this.resolveIdentity) {
+      return current
+    }
+    const identity = await this.resolveIdentity(current).catch(() => null)
+    return identity ? { ...current, identity } : current
   }
 
   private updateSnapshot(
