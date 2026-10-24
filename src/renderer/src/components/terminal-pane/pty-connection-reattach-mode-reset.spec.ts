@@ -524,6 +524,55 @@ export function registerPtyConnectionReattachModeResetTests(): void {
       })
     })
 
+    it('preserves OpenCode mouse and focus modes after reattach with an OC | title', async () => {
+      // Why: OpenCode OSC titles are `OC | <task>` with no status glyph; treating
+      // them as shells runs the shell reset and wheel-scrolls prompt history (#11123).
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport('tab-pty')
+      transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
+        if (sessionId) {
+          return {
+            id: sessionId,
+            snapshot: '\x1b[?1003h\x1b[?1006h\x1b[?1004h\x1b[?25hopencode mouse snapshot'
+          }
+        }
+        return null
+      })
+      transportFactoryQueue.push(transport)
+      setReattachPaneTitle('OC | Native Stable Session')
+
+      const pane = createPane(1)
+      const textarea = {} as HTMLTextAreaElement
+      configureTerminalFocusMode(pane, textarea)
+      await withMockedDocumentActiveElement(textarea, async () => {
+        const manager = createManager(1)
+        const deps = createDeps({
+          restoredLeafId: LEAF_1,
+          restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
+        })
+
+        connectPanePty(pane as never, manager as never, deps as never)
+        await flushAsyncTicks(20)
+
+        expect(transport.sendInput).toHaveBeenCalledWith('\x1b[I', 'query-reply')
+        expect(pane.terminal.write).toHaveBeenCalledWith(
+          replayEpilogue(POST_REPLAY_LIVE_AGENT_REATTACH_RESET),
+          expect.any(Function)
+        )
+        expect(pane.terminal.write).not.toHaveBeenCalledWith(
+          replayEpilogue(POST_REPLAY_REATTACH_RESET),
+          expect.any(Function)
+        )
+        const writes = (pane.terminal.write as ReturnType<typeof vi.fn>).mock.calls.map(
+          ([data]) => data as string
+        )
+        expect(writes.some((data) => data.includes('\x1b[?1000l'))).toBe(false)
+        expect(writes.some((data) => data.includes('\x1b[?1003l'))).toBe(false)
+        expect(writes.some((data) => data.includes('\x1b[?1006l'))).toBe(false)
+        expect(writes.some((data) => data.includes('\x1b[?1004l'))).toBe(false)
+      })
+    })
+
     it('does not inject focus-in after reattach when the terminal does not own DOM focus', async () => {
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport('tab-pty')
