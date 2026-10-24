@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { parseMobileMarkdownTree } from './mobile-markdown-tree'
+import { splitMobileNativeChatFileAttachments } from '../session/mobile-native-chat-file-attachments'
 
 function inlineNodes(source: string) {
   const [paragraph] = parseMobileMarkdownTree(source, false).children
@@ -18,5 +19,18 @@ describe('CJK emphasis in mobile markdown', () => {
 
   it('keeps CommonMark flanking rules between non-CJK characters', () => {
     expect(inlineNodes('**Note.**Next')).toEqual([{ type: 'text', value: '**Note.**Next' }])
+  })
+
+  it('keeps CJK bold and literal file references while extracting the prose attachment', () => {
+    const path = '/root/.orca/agent-session-attachments/id/report.pdf'
+    const text = `**中文。**后文 \` @${path} \` and @${path} please.`
+    expect(inlineNodes(text)).toContainEqual({
+      type: 'strong',
+      children: [{ type: 'text', value: '中文。' }]
+    })
+    expect(splitMobileNativeChatFileAttachments([{ type: 'text', text }])).toEqual({
+      files: [path],
+      prose: [{ type: 'text', text: `**中文。**后文 \` @${path} \` and please.` }]
+    })
   })
 })

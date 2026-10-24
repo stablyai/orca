@@ -22,6 +22,10 @@ describe('mobile RPC method routing census', () => {
     expect(MOBILE_RPC_METHOD_ROUTES.get(method)).toBe('paired-desktop')
   })
 
+  it('reads chat attachment previews on the execution host that owns the store', () => {
+    expect(MOBILE_RPC_METHOD_ROUTES.get('agentSessionAttachment.read')).toBe('execution-host')
+  })
+
   it('routes no per-section collapse write while the sidebar-inputs switch is off', () => {
     expect(MOBILE_RPC_METHOD_ROUTES.has('ui.setCollapsed')).toBe(false)
   })

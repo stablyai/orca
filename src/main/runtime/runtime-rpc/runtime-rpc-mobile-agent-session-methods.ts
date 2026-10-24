@@ -1,4 +1,4 @@
-/** The structured agent-session methods (and chat attachment uploads) a phone may call; spread into the execution-host routes. */
+/** The structured agent-session methods and stored-attachment operations a phone may call; spread into the execution-host routes. */
 export const MOBILE_AGENT_SESSION_RPC_METHODS = [
   'agentSession.createSupport',
   'agentSession.create',
@@ -28,6 +28,8 @@ export const MOBILE_AGENT_SESSION_RPC_METHODS = [
   'agentSession.subscribeStatus',
   // One visual from the chat's own scratch folder, for the transcript's `::orca-visual` lines.
   'agentSession.readVisual',
+  // Stored previews are read on the execution host that owns their paths.
+  'agentSessionAttachment.read',
   // One item whole, for "Show full output" and "Show full message".
   'agentSession.item',
   // A file the phone attaches to a chat, stored on this host; the agent sees only the host path.

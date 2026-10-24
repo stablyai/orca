@@ -88,6 +88,7 @@ export function MobileFileMarkdownPreview({
           <MobileMarkdown
             content={content}
             onOpenFile={onOpenFile}
+            renderExternalImages
             renderImage={
               worktreeId
                 ? (href, alt) => (

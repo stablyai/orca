@@ -1,3 +1,6 @@
+vi.mock('../layout/side-safe-area', () => ({
+  useWindowSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 })
+}))
 import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -17,7 +20,6 @@ import { structuredQuestionTranscript } from '../../../src/shared/structured-age
 import type { NativeChatResolvedPrompt } from '../../../src/shared/native-chat-resolution-receipt'
 import { colors, typography } from '../theme/mobile-theme'
 import { ANSWERED_PROMPT_ITEMS } from './mobile-native-chat-answered-prompts.test-fixture'
-import { MobileNativeChatRowOverlaysContext } from './mobile-native-chat-row-overlays'
 import { styles } from './mobile-native-chat-message-styles'
 
 vi.mock('react-native', async () => {
@@ -552,38 +554,20 @@ describe('MobileNativeChatMessage', () => {
     const tree = render(userMessage([{ type: 'image-ref', url: 'file:///a.jpg', alt: 'a photo' }]))
     const image = tree.root.findByType('Image' as never)
     expect(image.props.source).toEqual({ uri: 'file:///a.jpg' })
-    expect(image.parent?.props).toMatchObject({
-      accessibilityRole: 'imagebutton',
-      accessibilityLabel: 'a photo'
-    })
+    expect(image.props.accessibilityLabel).toBe('a photo')
+    expect(
+      tree.root.findByProps({ accessibilityLabel: 'Open image 1 of 1' }).props.accessibilityRole
+    ).toBe('button')
   })
 
-  it('opens an attachment full size when tapped', () => {
-    const openImage = vi.fn()
-    act(() => {
-      renderer = create(
-        createElement(
-          MobileNativeChatRowOverlaysContext.Provider,
-          { value: { openImage, openActions: vi.fn() } },
-          createElement(MobileNativeChatMessage, {
-            message: userMessage([{ type: 'image-ref', url: 'file:///a.jpg', alt: 'a photo' }])
-          })
-        )
-      )
-    })
-    act(() => renderer!.root.findByProps({ accessibilityRole: 'imagebutton' }).props.onPress())
-    expect(openImage).toHaveBeenCalledWith({ uri: 'file:///a.jpg', label: 'a photo' })
-  })
-
-  it('draws a picture-only message with nothing else in its bubble, so no gap sits under it', () => {
+  it('draws a picture-only message without an empty text bubble', () => {
     render(userMessage([{ type: 'image-ref', url: 'file:///a.jpg', alt: 'a photo' }]))
-    const bubble = renderer!.root.find(
-      (node) =>
-        String(node.type) === 'View' && [node.props.style].flat().includes(styles.userBubble)
-    )
-    expect(bubble.findAll((node) => node !== bubble && String(node.type) === 'View')).toHaveLength(
-      0
-    )
+    expect(
+      renderer!.root.findAll(
+        (node) =>
+          String(node.type) === 'View' && [node.props.style].flat().includes(styles.userBubble)
+      )
+    ).toHaveLength(0)
   })
 
   it('folds a long message of yours until opened, and the transcript keeps it open', () => {

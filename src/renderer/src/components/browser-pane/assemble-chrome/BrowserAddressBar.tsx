@@ -302,16 +302,13 @@ export default function BrowserAddressBar({
         return
       }
 
-      const isPreviewing = prePreviewValueRef.current !== null
-
       if (event.key === 'ArrowDown') {
         event.preventDefault()
         const idx = suggestions.findIndex((s) => s.url === selectedValue)
         // Why: row 0 stays highlighted while the input still shows the typed
         // query, so the first ArrowDown should advance to the next row instead
         // of redundantly previewing the row Enter already covers.
-        const next = idx !== -1 && idx < suggestions.length - 1 ? idx + 1 : 0
-        selectSuggestionAtIndex(next)
+        selectSuggestionAtIndex(idx !== -1 && idx < suggestions.length - 1 ? idx + 1 : 0)
         return
       }
 
@@ -319,9 +316,8 @@ export default function BrowserAddressBar({
         event.preventDefault()
         const idx = suggestions.findIndex((s) => s.url === selectedValue)
         const startIdx = Math.max(idx, 0)
-        if (!isPreviewing) {
-          const next = startIdx > 0 ? startIdx - 1 : suggestions.length - 1
-          selectSuggestionAtIndex(next)
+        if (prePreviewValueRef.current === null) {
+          selectSuggestionAtIndex(startIdx > 0 ? startIdx - 1 : suggestions.length - 1)
           return
         }
         if (startIdx <= 0) {

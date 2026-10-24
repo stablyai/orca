@@ -12,6 +12,51 @@ export function scaledType(size: number, fontScale: number, leading = 6) {
 export const MONO_SIZE = 12
 
 export const styles = StyleSheet.create({
+  imageGallery: {
+    width: '88%',
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: spacing.xs,
+    marginBottom: spacing.sm
+  },
+  imageGalleryTile: {
+    width: 88,
+    flexShrink: 1,
+    aspectRatio: 1,
+    borderRadius: radii.card,
+    overflow: 'hidden'
+  },
+  imageGalleryFill: { width: '100%', height: '100%' },
+  fileGallery: { flexWrap: 'wrap' },
+  fileTile: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    padding: spacing.sm,
+    backgroundColor: colors.bgRaised
+  },
+  fileName: { color: colors.textPrimary, fontSize: typography.metaSize, textAlign: 'center' },
+  imageGalleryMore: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.bgRaised
+  },
+  imageGalleryCount: { color: colors.textPrimary, fontSize: typography.titleSize },
+  imageGalleryScrim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  imageGalleryOverflowCount: {
+    color: colors.onAccent,
+    fontSize: 24,
+    fontWeight: '600'
+  },
+  imageViewer: { flex: 1, backgroundColor: colors.bgBase },
+  imageViewerHeader: { flexDirection: 'row', alignItems: 'center', padding: spacing.md },
+  imageViewerTitle: { flex: 1, color: colors.textPrimary, fontSize: typography.bodySize },
+  imageViewerClose: { padding: spacing.sm },
   row: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm

@@ -1,3 +1,6 @@
+vi.mock('../layout/side-safe-area', () => ({
+  useWindowSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 })
+}))
 import { createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -130,7 +133,7 @@ describe('MobileNativeChatMessage on Android', () => {
       )
     })
     const [bubble] = byType('Pressable')
-    const picture = renderer!.root.findByProps({ accessibilityRole: 'imagebutton' })
+    const picture = renderer!.root.findByProps({ accessibilityLabel: 'Open image 1 of 1' })
     expect(picture.props.onLongPress).toBe(bubble!.props.onLongPress)
     act(() => picture.props.onLongPress())
     expect(byType('MessageActionsSheet')).toHaveLength(1)

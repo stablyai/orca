@@ -138,6 +138,31 @@ describe('openMobileNativeChatFileTap', () => {
     expect(options.onOpenFailed).not.toHaveBeenCalled()
   })
 
+  it('opens a chat image on the phone even when the desktop cannot open an editor tab', async () => {
+    const sendRequest = vi.fn(async (method: string) =>
+      method === 'files.resolveTerminalPath'
+        ? worktreeFileResolution('charts/chart.png')
+        : ok({ opened: false })
+    )
+    const options = baseOptions({ sendRequest })
+    openMobileNativeChatFileTap({
+      ...options,
+      pathText: '/repo/charts/chart.png',
+      nativeChatContext: { tabId: 'chat-1', sessionId: 'session-1' }
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(options.pushPreviewRoute).toHaveBeenCalledWith({
+      pathname: '/h/[hostId]/files/preview/[worktreeId]',
+      params: expect.objectContaining({
+        source: 'worktree',
+        relativePath: 'charts/chart.png',
+        hostId: 'host-1'
+      })
+    })
+    expect(sendRequest.mock.calls.map(([method]) => method)).toEqual(['files.resolveTerminalPath'])
+    expect(options.onOpenFailed).not.toHaveBeenCalled()
+  })
+
   it('surfaces a resolve miss instead of a silent no-op', async () => {
     const sendRequest = vi.fn(async () =>
       ok({

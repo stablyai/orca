@@ -1,9 +1,9 @@
+import { MobileZoomableImagePreview } from '../files/MobileZoomableImagePreview'
 import { MobileFileMediaPreview } from '../files/MobileFileMediaPreview'
 import type { MobileFilePreviewRpcSender } from '../files/mobile-file-preview-operations'
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
   FlatList,
-  Image,
   View,
   Text,
   ScrollView,
@@ -269,24 +269,7 @@ function FileReaderDocument({
     return <MobileFileMediaPreview media={doc.media} client={client} title={title} />
   }
   if (doc.kind === 'image') {
-    return (
-      <View style={styles.imagePreviewContainer}>
-        <ScrollView
-          style={styles.imagePreviewScroll}
-          contentContainerStyle={styles.imagePreviewContent}
-          maximumZoomScale={4}
-          minimumZoomScale={1}
-          centerContent
-        >
-          <Image
-            source={{ uri: doc.dataUri }}
-            style={styles.imagePreview}
-            resizeMode="contain"
-            accessibilityLabel={`${title} image`}
-          />
-        </ScrollView>
-      </View>
-    )
+    return <MobileZoomableImagePreview uri={doc.dataUri} label={`${title} image`} />
   }
 
   const renderSourceText = (content: string) => (

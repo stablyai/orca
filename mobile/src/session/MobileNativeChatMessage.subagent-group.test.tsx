@@ -1,3 +1,6 @@
+vi.mock('../layout/side-safe-area', () => ({
+  useWindowSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 })
+}))
 // A spawn group's roster row on the phone: drawn from the host's live block, replacing its frozen
 // sentence only when it can draw, outside the settled-tools collapse, and opened by group id from
 // state the transcript holds.

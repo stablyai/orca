@@ -35,6 +35,7 @@ vi.mock('lucide-react-native', () => ({
 }))
 vi.mock('./mobile-session-styles', () => ({ styles: {} }))
 vi.mock('../files/MobileFileMediaPreview', () => ({ MobileFileMediaPreview: () => null }))
+vi.mock('../files/MobileZoomableImagePreview', () => ({ MobileZoomableImagePreview: () => null }))
 vi.mock('../components/MobileHtmlPreview', () => ({ MobileHtmlPreview: () => null }))
 
 let renderer: ReactTestRenderer | undefined

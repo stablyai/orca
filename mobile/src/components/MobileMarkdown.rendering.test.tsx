@@ -3,6 +3,20 @@ import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'rea
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { colors, onBrightColors } from '../theme/mobile-theme'
 import { MobileMarkdown } from './MobileMarkdown'
+import { MobileFileMarkdownPreview } from '../files/MobileFileMarkdownPreview'
+
+vi.mock('../files/MobileMarkdownPreviewImage', () => ({
+  MobileMarkdownPreviewImage: 'DocumentPreviewImage'
+}))
+vi.mock('lucide-react-native', () => ({
+  Code: 'Code',
+  Pencil: 'Pencil',
+  Copy: 'Copy',
+  Check: 'Check'
+}))
+vi.mock('../platform/clipboard', () => ({
+  useClipboardWriter: () => ({ writeText: async () => {} })
+}))
 
 const openURL = vi.fn((_url: string) => Promise.resolve())
 
@@ -57,6 +71,50 @@ function press(tree: ReactTestRenderer, label: string): void {
 }
 
 describe('MobileMarkdown rendering', () => {
+  it.each(['javascript:alert(1)', 'vscode://file/tmp/chart.png', 'ftp://example.test/chart.png'])(
+    'does not admit unsupported image source %s into the gallery',
+    (url) => {
+      const renderImage = vi.fn(() => createElement('ChatImage'))
+      act(() => {
+        renderer = create(
+          createElement(MobileMarkdown, { content: `![Image](${url})`, renderImage })
+        )
+      })
+      expect(renderImage).not.toHaveBeenCalled()
+      expect(openURL).not.toHaveBeenCalled()
+    }
+  )
+  it.each([
+    'data:image/png;base64,AAAA',
+    'blob:https://example.test/image',
+    'content://media/image/1'
+  ])('retains the supported direct image source %s', (url) => {
+    const renderImage = vi.fn(() => createElement('ChatImage'))
+    act(() => {
+      renderer = create(createElement(MobileMarkdown, { content: `![Image](${url})`, renderImage }))
+    })
+    expect(renderImage).toHaveBeenCalledWith(url, 'Image')
+    expect(openURL).not.toHaveBeenCalled()
+  })
+  it.each(['https://example.test/chart.png', 'http://example.test/chart.png'])(
+    'keeps external image %s behind the existing tap instead of fetching a thumbnail',
+    (url) => {
+      const renderImage = vi.fn(() => createElement('ChatImage'))
+      act(() => {
+        renderer = create(
+          createElement(MobileMarkdown, {
+            content: `![Remote chart](${url})`,
+            renderImage
+          })
+        )
+      })
+      expect(renderImage).not.toHaveBeenCalled()
+      expect(openURL).not.toHaveBeenCalled()
+      const target = renderer!.root.find((node) => String(node.type) === 'Pressable')
+      act(() => target.props.onPress())
+      expect(openURL).toHaveBeenCalledWith(url)
+    }
+  )
   it.each([
     [
       'C1: nested lists keep their own markers and numbers',
@@ -125,6 +183,28 @@ describe('MobileMarkdown rendering', () => {
     ]
   ])('%s', (_name, content, expected) => {
     expect(texts(render(content))).toEqual(expected)
+  })
+
+  it('uses the chat image renderer for a standalone Markdown image while preserving inline links', () => {
+    const renderImage = vi.fn((uri: string, alt: string) =>
+      createElement('ChatImage', { uri, alt })
+    )
+    const onOpenFile = vi.fn()
+    act(() => {
+      renderer = create(
+        createElement(MobileMarkdown, {
+          content: '![Final chart](/mnt/data/chart.png)\n\nSee [original](/mnt/data/chart.png).',
+          renderImage,
+          onOpenFile
+        })
+      )
+    })
+    expect(renderer!.root.find((node) => String(node.type) === 'ChatImage').props).toMatchObject({
+      uri: '/mnt/data/chart.png',
+      alt: 'Final chart'
+    })
+    press(renderer!, 'original')
+    expect(onOpenFile).toHaveBeenCalledWith('/mnt/data/chart.png')
   })
 
   it('C12: opens a link with brackets in it, and one with a title, at their own address', () => {
@@ -238,4 +318,23 @@ it('renders document images through the image renderer, including reference synt
   })
   expect(renderImage).toHaveBeenCalledWith('assets/diagram.png', 'Architecture')
   expect(renderImage).toHaveBeenCalledWith('assets/other.png', 'Reference')
+})
+
+it('keeps external and relative images in the actual document preview', () => {
+  act(() => {
+    renderer = create(
+      createElement(MobileFileMarkdownPreview, {
+        content: '![Remote](https://example.test/chart.png)\n\n![Local](assets/chart.png)',
+        relativePath: 'docs/report.md',
+        worktreeId: 'worktree-a',
+        truncated: false,
+        byteLength: 80
+      })
+    )
+  })
+  const images = renderer!.root.findAll((node) => String(node.type) === 'DocumentPreviewImage')
+  expect(images.map((node) => node.props.href)).toEqual([
+    'https://example.test/chart.png',
+    'assets/chart.png'
+  ])
 })

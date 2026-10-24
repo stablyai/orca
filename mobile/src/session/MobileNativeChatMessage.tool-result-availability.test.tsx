@@ -1,3 +1,6 @@
+vi.mock('../layout/side-safe-area', () => ({
+  useWindowSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 })
+}))
 import { createElement, Fragment, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'

@@ -7,13 +7,16 @@ import { useMobileNativeChatPromptPresentation } from './use-mobile-native-chat-
 export function useMobileNativeChatPromptCards({
   terminal,
   structured,
+  structuredAnswer,
   onSendResolved
 }: {
-  terminal: Parameters<typeof useMobileNativeChatPromptPresentation>[0]
+  terminal: Parameters<typeof useMobileNativeChatPromptPresentation>[0] &
+    Pick<MobileNativeChatController, 'handleNativeChatAnswerAsk' | 'handleNativeChatCancelAsk'>
   structured: Pick<
     ReturnType<typeof useMobileStructuredAgentSession>,
     'permission' | 'question' | 'respondPermission' | 'respondQuestion' | 'cancelPrompt' | 'turnId'
   > | null
+  structuredAnswer?: MobileNativeChatController['handleNativeChatAnswerAsk'] | null
   onSendResolved: () => void
 }): Pick<
   MobileNativeChatController,
@@ -25,20 +28,31 @@ export function useMobileNativeChatPromptCards({
   | 'handleNativeChatCancelPrompt'
   | 'collapseNativeChatPrompt'
   | 'nativeChatCollapsedPrompt'
+  | 'handleNativeChatAnswerAsk'
+  | 'handleNativeChatCancelAsk'
 > {
+  const answerAsk = useNativeChatAcceptedAction(
+    structuredAnswer ?? terminal.handleNativeChatAnswerAsk,
+    onSendResolved
+  )
+  const cancelAsk = useNativeChatAcceptedAction(terminal.handleNativeChatCancelAsk, onSendResolved)
   const respond = useNativeChatAcceptedAction(
     structured?.respondPermission ?? terminal.respondPermission,
     onSendResolved
   )
+  const answerQuestion = useNativeChatAcceptedAction(terminal.answerQuestion, onSendResolved)
   const cancel = useNativeChatAcceptedAction(
     structured?.cancelPrompt ?? (async () => false),
     onSendResolved
   )
   const presentation = useMobileNativeChatPromptPresentation({
     ...terminal,
-    respondPermission: respond
+    respondPermission: respond,
+    answerQuestion
   })
   return {
+    handleNativeChatAnswerAsk: answerAsk,
+    handleNativeChatCancelAsk: cancelAsk,
     nativeChatPermission: structured ? structured.permission : presentation.permission,
     nativeChatQuestion: structured ? structured.question : presentation.question,
     nativeChatPromptKey: structured ? null : presentation.occurrenceKey,

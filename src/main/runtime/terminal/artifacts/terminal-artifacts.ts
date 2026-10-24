@@ -1,4 +1,7 @@
 import { constants } from 'node:fs/promises'
+import { join } from 'node:path'
+import { getAgentSessionAttachmentStore } from '../../../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
+import { parseAgentSessionAttachmentStorePath } from '../../../native-chat/agent-session-attachments/agent-session-attachment-references'
 import {
   RuntimeTerminalFileGrants,
   type RuntimeTerminalFileGrantHost,
@@ -51,7 +54,18 @@ export class RuntimeTerminalArtifacts {
     connectionId?: string
   ): Promise<string> {
     requireReachableFilesystemRoute(getConnectionExecutionHostId(connectionId))
-    return canonicalPathForArtifactComparison(absolutePath)
+    const canonical = await canonicalPathForArtifactComparison(absolutePath)
+    const root = getAgentSessionAttachmentStore()?.rootDir
+    const attachment = root ? parseAgentSessionAttachmentStorePath(root, absolutePath) : null
+    if (
+      root &&
+      attachment &&
+      canonical !==
+        join(await canonicalPathForArtifactComparison(root), attachment.uploadId, attachment.name)
+    ) {
+      throw new Error('attachment_path_unauthorized')
+    }
+    return canonical
   }
 
   async resolveAbsoluteFileGrant(args: {

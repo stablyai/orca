@@ -1,16 +1,28 @@
-import { createElement } from 'react'
+import { createElement, useContext } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { MobileNativeChatOverlay } from './MobileNativeChatOverlay'
 import type { MobileNativeChatController } from './use-mobile-native-chat-controller'
+import type { RpcClient } from '../transport/rpc-client'
+import { MobileNativeChatAttachmentContext } from './mobile-native-chat-attachment-read'
+import { MobileNativeChatResourceContext } from './mobile-native-chat-resource-read'
+import { MobileNativeChatItemSourceContext } from './mobile-native-chat-item-read'
 
 vi.mock('react-native', () => ({
   StyleSheet: { create: (styles: unknown) => styles, absoluteFillObject: {} },
   View: 'View'
 }))
 
-vi.mock('./MobileNativeChatView', () => ({ MobileNativeChatView: 'ChatView' }))
+vi.mock('./MobileNativeChatView', () => ({
+  MobileNativeChatView: (props: Record<string, unknown>) =>
+    createElement('ChatView', {
+      ...props,
+      attachmentClient: useContext(MobileNativeChatAttachmentContext),
+      resourceSource: useContext(MobileNativeChatResourceContext),
+      itemSource: useContext(MobileNativeChatItemSourceContext)
+    })
+}))
 vi.mock('../platform/use-reduced-motion', () => ({ useReducedMotionEnabled: () => null }))
 vi.mock('./MobileNativeChatQueuedMessages', () => ({ MobileNativeChatQueuedMessages: 'Queued' }))
 vi.mock('./MobileNativeChatBackgroundTasks', () => ({
@@ -36,6 +48,9 @@ type Tick = {
   /** The host says a person's Stop is ending the turn. */
   stopping?: boolean
   acceptsImages?: boolean
+  visualSource?: MobileNativeChatController['nativeChatVisualSource']
+  resourceSource?: MobileNativeChatController['nativeChatResourceSource']
+  itemSource?: MobileNativeChatController['nativeChatItemSource']
   agent?: string
   structured?: boolean
   activeTabId?: string | null
@@ -51,6 +66,9 @@ function overlayElement(tick: Tick): ReturnType<typeof createElement> {
     nativeChatStructured: tick.structured ?? false,
     setTabView: tick.setTabView ?? vi.fn(),
     nativeChatAcceptsImages: tick.acceptsImages ?? true,
+    nativeChatVisualSource: tick.visualSource ?? null,
+    nativeChatResourceSource: tick.resourceSource ?? null,
+    nativeChatItemSource: tick.itemSource ?? null,
     nativeChatAgentWorking: tick.streamLive ?? false,
     nativeChatTurnIndicator: {
       thinking: false,
@@ -112,6 +130,72 @@ describe('MobileNativeChatOverlay streaming gate', () => {
       renderer?.update(overlayElement(tick))
     })
   }
+
+  it('keeps attachment readers and the OMP terminal route while loading a shortened message', async () => {
+    const sendRequest = vi.fn(async () => ({
+      id: 'item-read',
+      ok: true as const,
+      result: {
+        item: {
+          itemId: 'answer',
+          sequence: 1,
+          observedAt: 1,
+          revision: 1,
+          body: {
+            kind: 'message',
+            role: 'assistant',
+            blocks: [{ type: 'text', text: 'FULL TAIL' }]
+          }
+        }
+      }
+    }))
+    const client: RpcClient = {
+      sendRequest,
+      subscribe: vi.fn(() => () => {}),
+      updateTerminalSubscriptionViewport: vi.fn(),
+      getState: () => 'connected',
+      getReconnectAttempt: () => 0,
+      getLastConnectedAt: () => null,
+      onStateChange: vi.fn(() => () => {}),
+      notifyForeground: vi.fn(),
+      close: vi.fn()
+    }
+    const source = { client, sessionId: 'session-a', attachmentsSupported: true }
+    const resource = {
+      client,
+      hostId: 'remote-a',
+      worktreeId: 'repo::/repo',
+      nativeChatContext: { tabId: 'tab-a', sessionId: 'session-a' }
+    }
+    const setTabView = vi.fn()
+    await render({
+      agent: 'omp',
+      activeTabId: 'tab-a',
+      setTabView,
+      messages: [{ ...assistantTurn('answer', 'head'), shortened: true }],
+      visualSource: source,
+      resourceSource: resource,
+      itemSource: source
+    })
+    const view = () => renderer!.root.find((node) => node.type === 'ChatView')
+    expect(view().props.attachmentClient).toBe(client)
+    expect(view().props.resourceSource).toBe(resource)
+    expect(view().props.askRequiresTerminal).toBe(true)
+    act(() => view().props.onAnswerInTerminal())
+    expect(setTabView).toHaveBeenCalledWith('tab-a', 'terminal')
+    expect(view().props.itemSource?.messageDetail?.state('answer')).toBe('available')
+    await act(async () => {
+      await view().props.itemSource.messageDetail.load('answer')
+    })
+    expect(sendRequest).toHaveBeenCalledWith(
+      'agentSession.item',
+      { sessionId: 'session-a', itemId: 'answer' },
+      expect.objectContaining({ timeoutMs: 30_000, budgetSpansConnect: true })
+    )
+    expect(view().props.folded[0].blocks).toEqual([{ type: 'text', text: 'FULL TAIL' }])
+    expect(view().props.attachmentClient).toBe(client)
+    expect(view().props.resourceSource).toBe(resource)
+  })
 
   /** The bubble text handed to the chat list, or `'hidden'` when chat is off. */
   function streaming(): string | null | 'hidden' {

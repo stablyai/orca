@@ -12,6 +12,7 @@ import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { deriveNativeChatRowContent } from '../../../src/shared/native-chat-row-content'
 import { useMobileNativeChatFullMessage } from './MobileNativeChatFullContent'
 import { MobileMarkdown } from '../components/MobileMarkdown'
+import { renderMobileNativeChatMarkdownImage } from './MobileNativeChatMarkdownImage'
 import { colors } from '../theme/mobile-theme'
 import { MobileNativeChatLongPressContent } from './MobileNativeChatLongPressContent'
 import { CHAT_PROSE_SCALE, styles } from './mobile-native-chat-message-styles'
@@ -122,6 +123,7 @@ export function MobileNativeChatReasoningBody({
       <MobileNativeChatLongPressContent onLongPress={onLongPress} style={styles.reasoning}>
         <MobileMarkdown
           content={markdown}
+          renderImage={renderMobileNativeChatMarkdownImage}
           rangeSelectable
           textScale={CHAT_PROSE_SCALE * fontScale}
           onOpenFile={onOpenFile}

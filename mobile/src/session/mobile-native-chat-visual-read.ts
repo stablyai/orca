@@ -9,6 +9,15 @@ import type { RpcClient } from '../transport/rpc-client'
 export type MobileNativeChatVisualSource = {
   client: RpcClient
   sessionId: string
+  attachmentsSupported?: boolean
+}
+
+export function mobileNativeChatVisualSource(
+  client: RpcClient | null,
+  sessionId: string | null,
+  attachmentsSupported: boolean
+): MobileNativeChatVisualSource | null {
+  return client && sessionId ? { client, sessionId, attachmentsSupported } : null
 }
 
 export type MobileNativeChatVisualRead =

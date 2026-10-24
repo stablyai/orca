@@ -1,7 +1,7 @@
 import '../unused-default-rpc-methods.test-fixture'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcResponse } from '../core'
@@ -43,7 +43,7 @@ afterEach(async () => {
 async function call(
   method: string,
   params: unknown,
-  client: { clientId?: string; clientKind?: 'runtime' | 'mobile'; clientCapabilities?: string[] }
+  client: NonNullable<Parameters<RpcDispatcher['dispatchStreaming']>[2]>
 ): Promise<RpcResponse> {
   const dispatcher = new RpcDispatcher({
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the attachment methods read only the host-install hook and runtime id.
@@ -134,6 +134,28 @@ describe('agentSessionAttachment.*', () => {
     const preview = await call('agentSessionAttachment.read', { path: stored.path }, CLIENT_A)
     expect(preview).toMatchObject({ ok: true, result: { isBinary: true, mimeType: 'image/png' } })
   })
+
+  it.each([false, true])(
+    'serves only stored previews to a mobile caller (delegated: %s)',
+    async (delegated) => {
+      const path = await uploadBytes('shot.png', Buffer.from('png'))
+      const client: NonNullable<Parameters<RpcDispatcher['dispatchStreaming']>[2]> = {
+        ...CLIENT_A,
+        clientKind: 'mobile',
+        callerScope: { kind: 'mobile', delegated }
+      }
+      const preview = await call('agentSessionAttachment.read', { path }, client)
+      expect(preview).toMatchObject({ ok: true, result: { isBinary: true, mimeType: 'image/png' } })
+      const outsidePath = join(root, 'other-host', 'agent-session-attachments', basename(path))
+      await mkdir(dirname(outsidePath), { recursive: true })
+      await writeFile(outsidePath, Buffer.from('png'))
+      const outside = await call('agentSessionAttachment.read', { path: outsidePath }, client)
+      expect(outside).toMatchObject({
+        ok: false,
+        error: { message: 'Not an attachment image' }
+      })
+    }
+  )
 
   it('refuses a client that cannot read structured sessions', async () => {
     const response = await call(

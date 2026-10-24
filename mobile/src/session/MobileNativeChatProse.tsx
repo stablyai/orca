@@ -2,6 +2,7 @@ import { useContext } from 'react'
 import { Image, Pressable, Text } from 'react-native'
 import { INLINE_TEXT_SELECTION } from '../components/inline-text-selection'
 import { MobileMarkdown } from '../components/MobileMarkdown'
+import { renderMobileNativeChatMarkdownImage } from './MobileNativeChatMarkdownImage'
 import { isImageRefBlock, isTextBlock } from '../../../src/shared/native-chat-types'
 import type {
   NativeChatBlock,
@@ -78,6 +79,7 @@ export function Prose({
             : text
         }
         growing={revealing}
+        renderImage={renderMobileNativeChatMarkdownImage}
         renderVisual={renderVisual}
         rangeSelectable
         textScale={CHAT_PROSE_SCALE * fontScale}

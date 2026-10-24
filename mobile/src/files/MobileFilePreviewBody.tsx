@@ -1,6 +1,7 @@
+import { MobileZoomableImagePreview } from './MobileZoomableImagePreview'
 import { MobileFileMediaPreview } from './MobileFileMediaPreview'
 import type { MobileFilePreviewRpcSender } from './mobile-file-preview-operations'
-import { ActivityIndicator, Image, ScrollView, Text, View } from 'react-native'
+import { ActivityIndicator, Text, View } from 'react-native'
 import { colors } from '../theme/mobile-theme'
 import type { MobileFilePreviewResult } from './mobile-file-preview-request'
 import { MobileFileMarkdownPreview } from './MobileFileMarkdownPreview'
@@ -61,23 +62,11 @@ export function MobileFilePreviewBody({ preview, ...options }: Props) {
   }
   if (preview.kind === 'image') {
     return (
-      <View style={styles.imageContainer}>
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={styles.imageScrollContent}
-          maximumZoomScale={4}
-          minimumZoomScale={1}
-          centerContent
-        >
-          <Image
-            source={{ uri: preview.dataUri }}
-            style={[styles.image, { width: options.imageWidth, height: options.imageHeight }]}
-            resizeMode="contain"
-            onError={options.onImageError}
-            accessibilityLabel={`${options.title} image`}
-          />
-        </ScrollView>
-      </View>
+      <MobileZoomableImagePreview
+        uri={preview.dataUri}
+        label={`${options.title} image`}
+        onError={options.onImageError}
+      />
     )
   }
   if (preview.kind === 'markdown') {

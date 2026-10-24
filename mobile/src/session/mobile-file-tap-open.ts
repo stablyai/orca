@@ -163,7 +163,8 @@ async function openMobileFileTapAsync<T extends FileTapSessionTab>(
   if (
     resolvedWorktreeId !== options.worktreeId ||
     options.line !== null ||
-    options.column !== null
+    options.column !== null ||
+    (options.nativeChatContext && classifyMobileArtifact(openedPath) === 'image')
   ) {
     pushWorktreePreview()
     return

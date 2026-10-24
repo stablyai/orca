@@ -3,6 +3,7 @@ import type {
   NativeChatImageRefBlock,
   NativeChatToolResultBlock
 } from '../../shared/native-chat-types'
+import { isAgentSessionAttachmentStorePath } from '../../shared/agent-session-attachments'
 import { asRecord, extractString } from '../ai-vault/session-scanner-values'
 
 export function toolResultOutput(value: unknown): string {
@@ -101,14 +102,15 @@ function imageRefBlock(record: Record<string, unknown>): NativeChatImageRefBlock
   const source = asRecord(record.source)
   const url = extractString(source?.url) ?? extractString(record.url)
   const path = extractString(record.path)
+  const resolvedPath = path && (!url || isAgentSessionAttachmentStorePath(path)) ? path : undefined
   const alt = extractString(record.alt) ?? undefined
-  if (!url && !path) {
+  if (!url && !resolvedPath) {
     return null
   }
   return {
     type: 'image-ref',
-    ...(path ? { path } : {}),
-    ...(url ? { url } : {}),
+    ...(resolvedPath ? { path: resolvedPath } : {}),
+    ...(!resolvedPath && url ? { url } : {}),
     ...(alt ? { alt } : {})
   }
 }

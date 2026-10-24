@@ -25,8 +25,10 @@ type Props = {
   onOpenFile?: (pathText: string) => void
   /** Native-chat assistant prose only: renders `::orca-visual{...}` directive lines. Without it,
    *  a directive line is ordinary text. Must be referentially stable (this component is memoized). */
-  renderImage?: (href: string, alt: string) => ReactNode
   renderVisual?: (directive: NativeChatVisualDirective, index: number) => ReactNode
+  renderImage?: (uri: string, alt: string) => ReactNode
+  /** Document previews opt in; chat keeps external images behind a tap. */
+  renderExternalImages?: boolean
   /** The text is still being appended to: markup its end leaves open is closed, as on desktop,
    *  and a diagram stays code until the text stops. */
   growing?: boolean
@@ -42,6 +44,7 @@ function MobileMarkdownContent({
   onOpenFile,
   renderVisual,
   renderImage,
+  renderExternalImages = false,
   growing = false,
   tone: toneName = 'default'
 }: Props) {
@@ -72,6 +75,7 @@ function MobileMarkdownContent({
     directives,
     renderVisual,
     renderImage,
+    renderExternalImages,
     mermaidOccurrences: new Map()
   }
   // Native-chat range selection is set on each block; nested inline spans inherit it.
