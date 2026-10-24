@@ -10,6 +10,7 @@ import htmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker'
 import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
 import { registerAstroLanguage } from './monaco-languages/register-astro'
 import { registerJsonlLanguage } from './monaco-languages/register-jsonl'
+import { registerHaskellLanguage } from './monaco-languages/register-haskell'
 import { registerNimLanguage } from './monaco-languages/register-nim'
 import { registerQuartoLanguage } from './monaco-languages/register-quarto'
 import { registerShellMarkdownAliases } from './monaco-languages/register-shell-markdown-aliases'
@@ -83,6 +84,7 @@ runMonacoSetupSteps([
   ['Vue language registration', () => registerVueLanguage(monaco)],
   ['Svelte language registration', () => registerSvelteLanguage(monaco)],
   ['Astro language registration', () => registerAstroLanguage(monaco)],
+  ['Haskell language registration', () => registerHaskellLanguage(monaco)],
   ['Nim language registration', () => registerNimLanguage(monaco)],
   ['Typst language registration', () => registerTypstLanguage(monaco)],
   ['JSONL language registration', () => registerJsonlLanguage(monaco)],

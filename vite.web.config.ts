@@ -3,6 +3,7 @@ import { resolve } from 'node:path'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import { createHaskellGrammarNoticesPlugin } from './config/build-plugins/haskell-grammar-notices'
 import { createPdfjsViewerAssetsPlugin } from './config/build-plugins/pdfjs-viewer-assets'
 import { createViteCacheRetentionPlugin } from './config/build-plugins/vite-cache-retention'
 import { resolveBuildSourceCommit } from './config/scripts/build-source-commit.mjs'
@@ -16,6 +17,7 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
+    createHaskellGrammarNoticesPlugin(),
     createPdfjsViewerAssetsPlugin(),
     createViteCacheRetentionPlugin()
   ],

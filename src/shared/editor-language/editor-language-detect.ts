@@ -99,6 +99,8 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.erl': 'erlang',
   '.hrl': 'erlang',
   '.hs': 'haskell',
+  '.hsig': 'haskell',
+  '.hs-boot': 'haskell',
   '.clj': 'clojure',
   // Why: Monaco registers Solidity under the id 'sol'; 'solidity' is only an alias.
   '.sol': 'sol',
