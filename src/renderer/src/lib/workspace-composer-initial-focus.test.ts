@@ -1,7 +1,10 @@
 // @vitest-environment happy-dom
 
 import { describe, expect, it } from 'vitest'
-import { getWorkspaceComposerInitialFocusTarget } from './workspace-composer-initial-focus'
+import {
+  getWorkspaceComposerInitialFocusTarget,
+  getWorkspaceComposerProjectFieldTarget
+} from './workspace-composer-initial-focus'
 
 describe('getWorkspaceComposerInitialFocusTarget', () => {
   it('focuses the workspace name input used by the current composer', () => {
@@ -77,5 +80,45 @@ describe('getWorkspaceComposerInitialFocusTarget', () => {
     root.append(repoTrigger)
 
     expect(getWorkspaceComposerInitialFocusTarget(root)).toBe(repoTrigger)
+  })
+})
+
+describe('getWorkspaceComposerProjectFieldTarget', () => {
+  it('returns the project combobox even when the name input exists', () => {
+    const root = document.createElement('div')
+    root.innerHTML = `
+      <input data-workspace-name-input="true" />
+      <input role="combobox" data-project-combobox-root="true" />
+    `
+
+    expect(getWorkspaceComposerProjectFieldTarget(root)).toBe(
+      root.querySelector('[data-project-combobox-root="true"][role="combobox"]')
+    )
+  })
+
+  it('ignores the project combobox shell that lacks the combobox role', () => {
+    const root = document.createElement('div')
+    root.innerHTML = `
+      <div data-project-combobox-root="true">
+        <input role="combobox" data-project-combobox-root="true" />
+      </div>
+    `
+
+    expect(getWorkspaceComposerProjectFieldTarget(root)).toBe(
+      root.querySelector('input[role="combobox"]')
+    )
+  })
+
+  it('falls back to the legacy repo combobox', () => {
+    const root = document.createElement('div')
+    root.innerHTML = `<button role="combobox" data-repo-combobox-root="true"></button>`
+
+    expect(getWorkspaceComposerProjectFieldTarget(root)).toBe(
+      root.querySelector('[data-repo-combobox-root="true"]')
+    )
+  })
+
+  it('returns null when the composer has no project field', () => {
+    expect(getWorkspaceComposerProjectFieldTarget(document.createElement('div'))).toBeNull()
   })
 })

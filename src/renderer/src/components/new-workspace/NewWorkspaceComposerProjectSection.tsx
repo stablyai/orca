@@ -2,6 +2,7 @@ import React from 'react'
 import { FolderPlus, LoaderCircle, PlugZap } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import ProjectCombobox from '@/components/new-workspace/ProjectCombobox'
 import RunTargetCombobox from '@/components/new-workspace/RunTargetCombobox'
 import { translate } from '@/i18n/i18n'
@@ -20,6 +21,7 @@ type NewWorkspaceComposerProjectSectionProps = Pick<
   | 'projectError'
   | 'showAddProjectButton'
   | 'projectLabel'
+  | 'projectShortcutKeys'
   | 'projectPlaceholder'
   | 'emptyProjectMessage'
   | 'selectedRepoConnectionId'
@@ -57,6 +59,7 @@ export function NewWorkspaceComposerProjectSection({
   projectError,
   showAddProjectButton = true,
   projectLabel,
+  projectShortcutKeys,
   projectPlaceholder,
   emptyProjectMessage,
   projectDescriptionId,
@@ -87,10 +90,20 @@ export function NewWorkspaceComposerProjectSection({
     <fieldset disabled={disabled} className="space-y-1">
       <div className="space-y-1">
         <div className="flex items-center justify-between gap-2">
-          <label className="text-xs font-medium text-muted-foreground">
-            {projectLabel ??
-              translate('auto.components.NewWorkspaceComposerCard.969a8bff66', 'Project')}
-          </label>
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-medium text-muted-foreground">
+              {projectLabel ??
+                translate('auto.components.NewWorkspaceComposerCard.969a8bff66', 'Project')}
+            </label>
+            {projectShortcutKeys ? (
+              <ShortcutKeyCombo
+                keys={projectShortcutKeys}
+                className="gap-0.5"
+                keyCapClassName="min-w-0 px-1 py-0 text-3xs shadow-none"
+                separatorClassName="text-3xs text-muted-foreground"
+              />
+            ) : null}
+          </div>
           {showAddProjectButton ? (
             <Tooltip>
               <TooltipTrigger asChild>

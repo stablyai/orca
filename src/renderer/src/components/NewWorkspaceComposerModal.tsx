@@ -23,13 +23,20 @@ import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { useAgentsOfferedForLaunch } from '@/lib/host-chat-program-acquisition'
 import { shouldAllowComposerEnterSubmitTarget } from '@/lib/new-workspace-enter-guard'
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
+import {
+  getComposerProjectShortcutKeys,
+  isComposerProjectShortcut
+} from '@/lib/composer-project-shortcut'
 import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../shared/workspace-source'
 import type { WorkspaceStatus } from '../../../shared/worktree/types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
-import { getWorkspaceComposerInitialFocusTarget } from '@/lib/workspace-composer-initial-focus'
+import {
+  getWorkspaceComposerInitialFocusTarget,
+  getWorkspaceComposerProjectFieldTarget
+} from '@/lib/workspace-composer-initial-focus'
 import { getFolderWorkspacePrimaryActionLabel } from '@/components/sidebar/folder-workspace-composer-helpers'
 import type { WorkspaceCreationTargetHint } from '@/lib/project-host-workspace-target'
 import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
@@ -305,6 +312,7 @@ function QuickTabBody({
   // Escape here swallowed every first press and left the composer stuck open.
   // Radix also closes only the topmost layer, so nested popovers/selects/dialogs
   // keep their own Escape without needing a guard here.
+  const projectShortcutKeys = useMemo(() => getComposerProjectShortcutKeys(), [])
   const nestedDialogOpen = agentSettingsOpen || addProjectOpen || setLocationOpen
   useEffect(() => {
     if (!active || nestedDialogOpen) {
@@ -313,6 +321,18 @@ function QuickTabBody({
       return
     }
     const onKeyDown = (event: KeyboardEvent): void => {
+      if (isComposerProjectShortcut(event)) {
+        // Why: the dialog opens on the name field, so this jumps back to Project
+        // without tabbing; focusing the type-ahead input opens its list.
+        const projectField = composerRef.current
+          ? getWorkspaceComposerProjectFieldTarget(composerRef.current)
+          : null
+        if (projectField) {
+          event.preventDefault()
+          projectField.focus()
+        }
+        return
+      }
       // Why: workspace creation is screen-local submit behavior, not a
       // user-configurable app command.
       if (!isScreenSubmitShortcut(event)) {
@@ -359,6 +379,7 @@ function QuickTabBody({
         containerClassName="px-2"
         contentClassName="-mx-2 flex-1 overflow-y-auto px-2 pb-1 scrollbar-sleek"
         composerRef={composerRef}
+        projectShortcutKeys={projectShortcutKeys}
         onComposerNodeChange={onComposerNodeChange}
         nameInputRef={nameInputRef}
         quickAgent={quickAgent}
