@@ -206,9 +206,11 @@ export function generationActivated(
           routes: session.offeredRoutes
         }
       : {}
+  const replacingReadyDocument = session.state.kind === 'ready'
   return step(
     session,
     {
+      ...(replacingReadyDocument ? { flow: session.flow + 1 } : {}),
       ...CLEAR_PAGE_DOCUMENT_STATE,
       ...offered,
       requestedBuildId: downloadLanded ? null : session.requestedBuildId,

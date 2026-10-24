@@ -12,7 +12,10 @@ export type TerminalOscLinkService = { getLinkData?: (id: number) => { uri?: str
 
 /** The xterm internals the OSC 8 lookup walks. */
 export type TerminalDocumentCore = {
-  _renderService?: { dimensions?: { css: { cell: { height: number; width: number } } } }
+  _renderService?: {
+    hasRenderer?: () => boolean
+    dimensions?: { css: { cell: { height: number; width: number } } }
+  }
   _oscLinkService?: TerminalOscLinkService
   _inputHandler?: { _oscLinkService?: TerminalOscLinkService }
 }
@@ -48,6 +51,7 @@ export type TerminalDocumentCell = {
 /** One buffer line, as the document inspects it. */
 export type TerminalDocumentLine = {
   readonly length: number
+  readonly isWrapped?: boolean
   translateToString: (trimRight: boolean, startColumn?: number, endColumn?: number) => string
   getCell?: (x: number, cell?: TerminalDocumentCell) => TerminalDocumentCell | undefined
 }
@@ -91,6 +95,12 @@ export type TerminalDocumentTerminal = {
   readonly unicode: { activeVersion: string }
   attachCustomKeyEventHandler: (handler: () => boolean) => void
   onData: (listener: (data: string) => void) => TerminalDocumentDisposable
+  readonly parser?: {
+    registerOscHandler: (
+      ident: number,
+      callback: (data: string) => boolean
+    ) => TerminalDocumentDisposable
+  }
   readonly textarea?: {
     readOnly: boolean
     tabIndex: number

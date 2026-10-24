@@ -2,7 +2,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { laidOutCellBox, reportLaidOutCellBox } from './laid-out-cell-box'
 import { createTerminalDocumentScope, type TerminalDocumentScope } from './document-scope'
-import { startTerminalDocument, stopTerminalDocument } from './create-terminal-document'
+import {
+  createTerminalDocument,
+  startTerminalDocument,
+  stopTerminalDocument
+} from './create-terminal-document'
 import type { TerminalDocumentHost } from './document-host-seams'
 import { fontPxForScale } from './text-scaling'
 import { terminalDocumentDouble } from './document-terminal-double.test-support'
@@ -338,6 +342,83 @@ describe('a started document', () => {
       expect(refits(posted)).toEqual([true])
     } finally {
       stopTerminalDocument(scope)
+    }
+  })
+
+  it('survives consecutive un-committed init replacements when a disposed pending terminal clears its renderer', () => {
+    document.body.innerHTML = TERMINAL_DOCUMENT_MARKUP
+    const posted: Record<string, unknown>[] = []
+    const doc = createTerminalDocument({
+      installHostTransport: () => () => {},
+      hasEngine: () => true,
+      start: () => ({ textScale: 1, shown: false }),
+      postToHost: (message) => posted.push(message),
+      createTerminal: (options: Record<string, unknown>) => {
+        const terminal = terminalDocumentDouble().terminal
+        let disposed = false
+        return Object.assign(terminal, {
+          cols: Number(options.cols),
+          rows: Number(options.rows),
+          options: { ...terminal.options, fontSize: Number(options.fontSize) },
+          dispose: () => {
+            disposed = true
+          },
+          _core: {
+            _renderService: {
+              hasRenderer: () => !disposed,
+              get dimensions() {
+                if (disposed) {
+                  throw new TypeError("Cannot read properties of undefined (reading 'dimensions')")
+                }
+                return { css: { cell: { width: 8, height: 15 } } }
+              }
+            }
+          }
+        })
+      }
+    })
+    try {
+      const initMessage = {
+        type: 'init',
+        cols: 55,
+        rows: 47,
+        initialData: 'hello',
+        preserveScroll: false,
+        theme: { background: '#111111', foreground: '#eeeeee' }
+      }
+      expect(() => {
+        doc.send(initMessage)
+        doc.send(initMessage)
+        doc.send(initMessage)
+      }).not.toThrow()
+      expect(posted.filter((m) => m.type === 'error')).toEqual([])
+    } finally {
+      doc.stop()
+    }
+  })
+
+  it('routes unexpected engine errors from createTerminalDocument.send through error notification instead of throwing to the page boundary', () => {
+    document.body.innerHTML = TERMINAL_DOCUMENT_MARKUP
+    const posted: Record<string, unknown>[] = []
+    const doc = createTerminalDocument({
+      installHostTransport: () => () => {},
+      hasEngine: () => true,
+      start: () => ({ textScale: 1, shown: false }),
+      postToHost: (message) => posted.push(message),
+      createTerminal: () => {
+        const terminal = terminalDocumentDouble().terminal
+        terminal.resize = () => {
+          throw new Error('synthetic resize failure')
+        }
+        return terminal
+      }
+    })
+    try {
+      doc.send({ type: 'init', cols: 55, rows: 47, initialData: '', preserveScroll: false })
+      expect(() => doc.send({ type: 'resize', cols: 60, rows: 48 })).not.toThrow()
+      expect(posted.some((m) => m.type === 'error')).toBe(true)
+    } finally {
+      doc.stop()
     }
   })
 })

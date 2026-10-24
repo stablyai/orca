@@ -1,11 +1,12 @@
 import { sameCellBox, type TerminalLaidOutCellBox } from '../terminal-cell-box'
+import { readRenderDimensions } from './cell-metrics'
 import type { TerminalDocumentScope } from './document-scope'
 import { notify } from './host-notify'
 
 /** The box xterm laid out at the current text scale, with its grid; null before one. */
 export function laidOutCellBox(scope: TerminalDocumentScope): TerminalLaidOutCellBox | null {
   const term = scope.term
-  const dimensions = term && term._core && term._core._renderService?.dimensions
+  const dimensions = readRenderDimensions(scope)
   if (!term || !dimensions) {
     return null
   }
