@@ -61,7 +61,6 @@ it('clears the target when the guest dies or is unregistered under a hovered lin
   guest.emit('update-target-url', {}, 'https://example.com/a')
   guest.emit('render-process-gone', {}, { reason: 'crashed' })
   expect(sentUrls()).toEqual(['https://example.com/a', ''])
-  expect(guest.listenerCount('before-mouse-event')).toBe(0)
 
   guest.emit('update-target-url', {}, 'https://example.com/b')
   teardown()

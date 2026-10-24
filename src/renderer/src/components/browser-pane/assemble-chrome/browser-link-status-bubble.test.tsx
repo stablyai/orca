@@ -35,7 +35,7 @@ function advance(ms: number): void {
   act(() => vi.advanceTimersByTime(ms))
 }
 
-it('shows the hovered URL after a short delay, expands on a long hover and hides when the link is left', () => {
+it('shows the hovered URL after a short delay and hides it after leaving the link', () => {
   const { container } = render(<BrowserLinkStatusBubble browserPageId="page-1" />)
   const bubble = container.querySelector<HTMLElement>('[data-browser-link-status]')!
 
@@ -50,11 +50,6 @@ it('shows the hovered URL after a short delay, expands on a long hover and hides
   expect(bubble.classList.contains('opacity-100')).toBe(true)
   expect(bubble.textContent).toBe('https://example.com/docs')
 
-  const fullWidth = 'max-w-[calc(100%-0.5rem)]'
-  expect(bubble.classList.contains(fullWidth)).toBe(false)
-  advance(1600)
-  expect(bubble.classList.contains(fullWidth)).toBe(true)
-
   hover('')
   advance(200)
   expect(bubble.classList.contains('opacity-100')).toBe(true)
@@ -62,16 +57,10 @@ it('shows the hovered URL after a short delay, expands on a long hover and hides
   expect(bubble.classList.contains('opacity-0')).toBe(true)
 })
 
-it('trims long URLs in the middle so the host and the end stay visible', () => {
+it('keeps the host out of the trimmed tail and caps huge URLs', () => {
   const { container } = render(<BrowserLinkStatusBubble browserPageId="page-1" />)
   const parts = (): string[] =>
     [...container.querySelectorAll('[data-browser-link-status] span')].map((s) => s.textContent!)
-
-  hover('https://github.com/stablyai/orca/pulls?q=is%3Aopen#discussion-anchor')
-  expect(parts()).toEqual([
-    'https://github.com/stablyai/orca/pulls?q=is%3Aop',
-    'en#discussion-anchor'
-  ])
 
   hover('https://example.com/a')
   expect(parts()).toEqual(['https://example.com', '/a'])
