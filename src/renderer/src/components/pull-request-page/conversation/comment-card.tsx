@@ -36,7 +36,8 @@ export function ConversationCommentCard({
   mentionOptions,
   resolvedReplyingTo,
   onToggleReply,
-  onSubmitReply
+  onSubmitReply,
+  onJumpToFile
 }: {
   comment: PRComment
   isReply?: boolean
@@ -53,6 +54,7 @@ export function ConversationCommentCard({
   resolvedReplyingTo: number | null
   onToggleReply: (commentId: number) => void
   onSubmitReply: (comment: PRComment, replyBody: string) => Promise<boolean>
+  onJumpToFile?: (path: string) => void
 }): React.JSX.Element {
   return (
     <div
@@ -81,14 +83,33 @@ export function ConversationCommentCard({
           · {formatRelativeTime(comment.createdAt)}
         </span>
         {comment.path && (
-          <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground/70">
-            {comment.path.split('/').pop()}
-            {comment.line
-              ? translate('auto.components.PullRequestPage.34b9f7c264', ':L{{value0}}', {
-                  value0: comment.line
-                })
-              : ''}
-          </span>
+          onJumpToFile ? (
+            <button
+              type="button"
+              aria-label={translate(
+                'auto.components.PullRequestPage.jumpToFileAriaLabel',
+                'Jump to file in diff'
+              )}
+              className="min-w-0 cursor-pointer truncate font-mono text-[11px] text-muted-foreground/70 underline-offset-2 hover:text-foreground hover:underline"
+              onClick={() => onJumpToFile(comment.path!)}
+            >
+              {comment.path.split('/').pop()}
+              {comment.line
+                ? translate('auto.components.PullRequestPage.34b9f7c264', ':L{{value0}}', {
+                    value0: comment.line
+                  })
+                : ''}
+            </button>
+          ) : (
+            <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground/70">
+              {comment.path.split('/').pop()}
+              {comment.line
+                ? translate('auto.components.PullRequestPage.34b9f7c264', ':L{{value0}}', {
+                    value0: comment.line
+                  })
+                : ''}
+            </span>
+          )
         )}
         {comment.isResolved && (
           <span className="rounded-full border border-border/60 bg-muted/40 px-1.5 py-0.5 text-[11px] text-muted-foreground">

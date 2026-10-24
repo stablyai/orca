@@ -116,4 +116,7 @@ export type PRFilesCombinedDiffViewerProps = {
   pendingViewedPaths: ReadonlySet<string>
   onCommentAdded: (comment: PRComment) => void
   onViewedChange: (path: string, viewed: boolean) => Promise<boolean>
+  // Optional: when set, the viewer scrolls to this file and calls onJumpHandled after.
+  pendingJumpPath?: string | null
+  onJumpHandled?: () => void
 }

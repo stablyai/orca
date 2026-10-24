@@ -32,6 +32,7 @@ export type ConversationCommentCardContext = {
   resolvedReplyingTo: number | null
   setReplyingTo: React.Dispatch<React.SetStateAction<number | null>>
   handleReply: (comment: PRComment, replyBody: string) => Promise<boolean>
+  onJumpToFile?: (path: string) => void
 }
 
 export function renderCommentCard(
@@ -70,14 +71,33 @@ export function renderCommentCard(
           · {formatRelativeTime(comment.createdAt)}
         </span>
         {comment.path && (
-          <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground/70">
-            {comment.path.split('/').pop()}
-            {comment.line
-              ? translate('auto.components.GitHubItemDialog.136542c9ba', ':L{{value0}}', {
-                  value0: comment.line
-                })
-              : ''}
-          </span>
+          ctx.onJumpToFile ? (
+            <button
+              type="button"
+              aria-label={translate(
+                'auto.components.GitHubItemDialog.jumpToFileAriaLabel',
+                'Jump to file in diff'
+              )}
+              className="min-w-0 cursor-pointer truncate font-mono text-[11px] text-muted-foreground/70 underline-offset-2 hover:text-foreground hover:underline"
+              onClick={() => ctx.onJumpToFile!(comment.path!)}
+            >
+              {comment.path.split('/').pop()}
+              {comment.line
+                ? translate('auto.components.GitHubItemDialog.136542c9ba', ':L{{value0}}', {
+                    value0: comment.line
+                  })
+                : ''}
+            </button>
+          ) : (
+            <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground/70">
+              {comment.path.split('/').pop()}
+              {comment.line
+                ? translate('auto.components.GitHubItemDialog.136542c9ba', ':L{{value0}}', {
+                    value0: comment.line
+                  })
+                : ''}
+            </span>
+          )
         )}
         {comment.isResolved && (
           <span className="rounded-full border border-border/60 bg-muted/40 px-1.5 py-0.5 text-[11px] text-muted-foreground">
@@ -188,6 +208,7 @@ export type ConversationTabCommentCardProps = {
   onToggleReply: (commentId: number) => void
   onReply: (comment: PRComment, replyBody: string) => Promise<boolean>
   onCancelReply: () => void
+  onJumpToFile?: (path: string) => void
 }
 
 export function ConversationTabCommentCard({
