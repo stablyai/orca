@@ -37,6 +37,8 @@ export function SourceControlDialogLayer({
   pickerBaseRef,
   onSelectBaseRef,
   onUsePrimaryBaseRef,
+  usePrimaryBaseRefLabel,
+  onSetAsProjectDefault,
   sourceControlAiActionsVisible,
   resolveConflictsComposerOpen,
   recoveryContext,
@@ -79,7 +81,9 @@ export function SourceControlDialogLayer({
   baseRefRepoId: string
   pickerBaseRef: BaseRefPickerProps['currentBaseRef']
   onSelectBaseRef: BaseRefPickerProps['onSelect']
-  onUsePrimaryBaseRef: NonNullable<BaseRefPickerProps['onUsePrimary']>
+  onUsePrimaryBaseRef: BaseRefPickerProps['onUsePrimary']
+  usePrimaryBaseRefLabel: BaseRefPickerProps['usePrimaryLabel']
+  onSetAsProjectDefault: () => void
   sourceControlAiActionsVisible: boolean
   resolveConflictsComposerOpen: boolean
   recoveryContext?: AgentDialogProps['recoveryContext']
@@ -164,8 +168,8 @@ export function SourceControlDialogLayer({
             </DialogTitle>
             <DialogDescription className="text-xs">
               {translate(
-                'auto.components.right.sidebar.SourceControl.c9ad22888e',
-                'Pick the branch compare target for this repository.'
+                'auto.components.right.sidebar.SourceControl.f465692a2e',
+                'Pick the branch compare target for this workspace.'
               )}
             </DialogDescription>
           </DialogHeader>
@@ -175,8 +179,23 @@ export function SourceControlDialogLayer({
               currentBaseRef={pickerBaseRef}
               onSelect={onSelectBaseRef}
               onUsePrimary={onUsePrimaryBaseRef}
+              usePrimaryLabel={usePrimaryBaseRefLabel}
             />
           </div>
+          <DialogFooter className="shrink-0 sm:justify-start">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onSetAsProjectDefault}
+              disabled={!pickerBaseRef}
+            >
+              {translate(
+                'auto.components.right.sidebar.SourceControl.a61a9860e5',
+                'Set as project default'
+              )}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
