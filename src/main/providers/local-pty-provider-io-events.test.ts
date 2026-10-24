@@ -252,16 +252,25 @@ describe('LocalPtyProvider', () => {
         ['', expect.any(Number), echo.length, true],
         ['prompt', expect.any(Number)]
       ])
+      // runtimeFed tells a relaying provider that configure().onData already fed the runtime.
       expect(dataHandler.mock.calls.map(([payload]) => payload)).toEqual([
-        { id, data: '', sequenceChars: query.length, seq: query.length, transformed: true },
+        {
+          id,
+          data: '',
+          sequenceChars: query.length,
+          seq: query.length,
+          transformed: true,
+          runtimeFed: true
+        },
         {
           id,
           data: '',
           sequenceChars: echo.length,
           seq: query.length + echo.length,
-          transformed: true
+          transformed: true,
+          runtimeFed: true
         },
-        { id, data: 'prompt' }
+        { id, data: 'prompt', runtimeFed: true }
       ])
     })
 

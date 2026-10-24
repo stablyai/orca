@@ -6,6 +6,8 @@ export type PtyDataEvent = {
   sequenceChars?: number
   transformed?: boolean
   seq?: number
+  /** The emitting provider already fed this chunk to the runtime through configure().onData. */
+  runtimeFed?: true
 }
 
 /** Notification-bearing fact a thinning transport detected while it held
