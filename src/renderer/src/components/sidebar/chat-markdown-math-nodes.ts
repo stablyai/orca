@@ -7,7 +7,17 @@ import type { VFile } from 'vfile'
 declare module 'vfile' {
   // oxlint-disable-next-line typescript/consistent-type-definitions -- Declaration merging extends upstream file metadata.
   interface DataMap {
-    chatMathSources: Map<number, { source: string; complete: boolean }>
+    chatMathSources: globalThis.Map<number, { source: string; complete: boolean }>
+  }
+}
+
+declare module 'mdast' {
+  // oxlint-disable-next-line typescript/consistent-type-definitions -- Declaration merging registers transient parser metadata.
+  interface Data {
+    mathLiteral?: boolean
+    mathComplete?: boolean
+    mathSource?: string
+    mathDisplay?: boolean
   }
 }
 

@@ -22,6 +22,7 @@ export function useChatMathRendering(enabled: boolean): () => ReturnType<typeof 
       (module) => (loaded = module.typesetChatMath),
       () => {
         pending = undefined
+        return undefined
       }
     )
     void pending.then((render) => {
