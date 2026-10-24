@@ -14,7 +14,7 @@ import {
 import { acquireProfileStateMaintenance } from '../persistence/profile-state/profile-state-access'
 import { rollbackProfileState } from '../persistence/profile-state/profile-state-recovery-command'
 import { applyBackgroundActivationPolicy } from '../window/foreground-activation-policy'
-import { acquireSingleInstanceLock } from './single-instance-lock'
+import { acquireSingleInstanceLock, singleInstanceLaunchPayload } from './single-instance-lock'
 
 /** The process owning both locks performs recovery before Electron can initialize a runtime. */
 export function runProfileStateRecoveryPreflight(argv: readonly string[] = process.argv): boolean {
@@ -106,7 +106,8 @@ function runRecoveryRequest(payload: string | undefined): ProfileStateRecoveryRe
     const maintenance = acquireProfileStateMaintenance(userDataPath)
     try {
       // Force Electron's lock even when ordinary dev or diagnostic launches would bypass it.
-      if (!acquireSingleInstanceLock(app, () => {})) {
+      // Recovery must not present the running app when it loses the lock.
+      if (!acquireSingleInstanceLock(app, () => {}, singleInstanceLaunchPayload(true))) {
         throw new ProfileStateRecoveryCommandError(
           'runtime_error',
           'Stop Orca before profile-state rollback so no process can write the SQLite database.'

@@ -2,14 +2,18 @@ import type { App } from 'electron'
 import { describe, expect, it, vi } from 'vitest'
 import {
   acquireSingleInstanceLock,
+  incomingDesktopLaunchAction,
+  incomingLaunchIsBackground,
   logSingleInstanceLockBypass,
   logSingleInstanceLockFailure,
   shouldActivateDesktopForSecondInstance,
   shouldBypassSingleInstanceLock,
   shouldSkipSingleInstanceLock,
   SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE,
+  SINGLE_INSTANCE_LAUNCH_BACKGROUND,
   SINGLE_INSTANCE_LOCK_BYPASS_MESSAGE,
   SINGLE_INSTANCE_LOCK_FAILURE_MESSAGE,
+  singleInstanceLaunchPayload,
   singleInstanceLockFailureMessage
 } from './single-instance-lock'
 
@@ -34,15 +38,18 @@ function makeFakeApp(lockResult: boolean): {
   return { app, requestSingleInstanceLock, on, listeners }
 }
 
+const userLaunch = singleInstanceLaunchPayload(false)
+
 describe('acquireSingleInstanceLock', () => {
   it('returns false and does NOT register second-instance when the lock is held', () => {
     const onSecondInstance = vi.fn()
     const fake = makeFakeApp(false)
 
-    const acquired = acquireSingleInstanceLock(fake.app, onSecondInstance)
+    const acquired = acquireSingleInstanceLock(fake.app, onSecondInstance, userLaunch)
 
     expect(acquired).toBe(false)
     expect(fake.requestSingleInstanceLock).toHaveBeenCalledTimes(1)
+    expect(fake.requestSingleInstanceLock).toHaveBeenCalledWith(userLaunch)
     // Why: if we registered the listener on a losing process, focusing the
     // existing window would become our job even though the primary owns
     // that UX surface. Verify no listener was added.
@@ -54,7 +61,7 @@ describe('acquireSingleInstanceLock', () => {
     const onSecondInstance = vi.fn()
     const fake = makeFakeApp(true)
 
-    const acquired = acquireSingleInstanceLock(fake.app, onSecondInstance)
+    const acquired = acquireSingleInstanceLock(fake.app, onSecondInstance, userLaunch)
 
     expect(acquired).toBe(true)
     expect(fake.requestSingleInstanceLock).toHaveBeenCalledTimes(1)
@@ -63,18 +70,70 @@ describe('acquireSingleInstanceLock', () => {
     expect(fake.listeners['second-instance']).toHaveLength(1)
   })
 
-  it('forwards the second launch argv so the owner can decide whether to activate', () => {
+  it('forwards the second launch argv and its own launch payload', () => {
     const onSecondInstance = vi.fn()
     const fake = makeFakeApp(true)
+    const backgroundLaunch = singleInstanceLaunchPayload(true)
 
-    acquireSingleInstanceLock(fake.app, onSecondInstance)
+    acquireSingleInstanceLock(fake.app, onSecondInstance, userLaunch)
 
     const [registered] = fake.listeners['second-instance'] ?? []
     expect(registered).toBeDefined()
-    registered?.({}, ['/opt/orca/orca-linux.AppImage', '--serve'], '/home/orca')
+    registered?.({}, ['/opt/orca/orca-linux.AppImage', '--serve'], '/home/orca', backgroundLaunch)
 
     expect(onSecondInstance).toHaveBeenCalledTimes(1)
-    expect(onSecondInstance).toHaveBeenCalledWith(['/opt/orca/orca-linux.AppImage', '--serve'])
+    expect(onSecondInstance).toHaveBeenCalledWith(
+      ['/opt/orca/orca-linux.AppImage', '--serve'],
+      backgroundLaunch
+    )
+  })
+})
+
+describe('incoming launch payload', () => {
+  it('marks only an explicit background launch', () => {
+    expect(singleInstanceLaunchPayload(true)).toEqual({
+      launchKind: SINGLE_INSTANCE_LAUNCH_BACKGROUND
+    })
+    expect(incomingLaunchIsBackground(singleInstanceLaunchPayload(true))).toBe(true)
+    expect(incomingLaunchIsBackground(singleInstanceLaunchPayload(false))).toBe(false)
+    expect(incomingLaunchIsBackground(undefined)).toBe(false)
+    expect(incomingLaunchIsBackground({})).toBe(false)
+  })
+
+  it('presents a user relaunch and ignores serve or another background launch', () => {
+    const desktopArgv = ['/Applications/Orca.app/orca']
+    const serveArgv = ['/opt/orca/orca-linux.AppImage', '--serve']
+    expect(
+      incomingDesktopLaunchAction({
+        argv: desktopArgv,
+        launchPayload: singleInstanceLaunchPayload(false),
+        isSidecar: false
+      })
+    ).toBe('present')
+    expect(
+      incomingDesktopLaunchAction({ argv: desktopArgv, launchPayload: undefined, isSidecar: false })
+    ).toBe('present')
+    expect(
+      incomingDesktopLaunchAction({
+        argv: desktopArgv,
+        launchPayload: singleInstanceLaunchPayload(true),
+        isSidecar: false
+      })
+    ).toBe('ignore')
+    expect(
+      incomingDesktopLaunchAction({
+        argv: serveArgv,
+        launchPayload: singleInstanceLaunchPayload(false),
+        isSidecar: false
+      })
+    ).toBe('ignore')
+    expect(
+      incomingDesktopLaunchAction({
+        argv: desktopArgv,
+        launchPayload: singleInstanceLaunchPayload(false),
+        isSidecar: true
+      })
+    ).toBe('handoff')
   })
 })
 

@@ -10,6 +10,7 @@ import {
   type SystemTrayOptions
 } from '../tray/system-tray'
 import { ensureAutoUpdaterConfigured } from '../window/attach-main-window-services'
+import { acceptUserForegroundRequest } from '../window/foreground-activation-policy'
 import { focusExistingMainWindow, safelyRevealWindow } from '../window/focus-existing-window'
 import { mainProcessState as state } from './main-process-state'
 import { getDashboardPopoutWindow } from '../window/dashboard-popout-window'
@@ -46,6 +47,8 @@ export function focusExistingWindow(): void {
 }
 
 export function showMainWindowFromTray(): void {
+  // A tray click is the user asking for the window, including after a background launch hid it.
+  acceptUserForegroundRequest()
   if (state.mainWindow && !state.mainWindow.isDestroyed()) {
     safelyRevealWindow(state.mainWindow)
     return

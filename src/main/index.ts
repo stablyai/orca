@@ -1,7 +1,11 @@
 import { app, clipboard, dialog, type BrowserWindow } from 'electron'
 import { parseSkillShareId } from '../shared/skill-share-link'
 import { createMacAppActivationHandler } from './window/macos-app-activation'
-import { isBackgroundLaunch, isOrcadSidecarLaunch } from './window/foreground-activation-policy'
+import {
+  acceptUserForegroundRequest,
+  isBackgroundLaunch,
+  isOrcadSidecarLaunch
+} from './window/foreground-activation-policy'
 import { createDesktopHandoff, desktopHandoffArguments } from './window/macos-desktop-handoff'
 import {
   focusExistingWindow as focusExistingWindowAction,
@@ -13,7 +17,7 @@ import { runMainProcessPreflight } from './startup/main-process-preflight'
 import { registerMainProcessIpcHandlers } from './startup/main-process-ipc-bootstrap'
 import { initializeMainProcessReady } from './startup/main-process-ready'
 import { installMainProcessQuitHandlers } from './startup/main-process-quit'
-import { shouldActivateDesktopForSecondInstance } from './startup/single-instance-lock'
+import { incomingDesktopLaunchAction } from './startup/single-instance-lock'
 import { resolveOsOpenedDocuments } from './startup/os-opened-documents'
 import {
   formatProfileStateStartupFailure,
@@ -46,20 +50,27 @@ const requestDesktopHandoff = createDesktopHandoff({
   drainArguments: () => desktopHandoffArguments(state)
 })
 
-function requestDesktopActivation(argv: readonly string[] = []): void {
+function requestDesktopActivation(argv: readonly string[] = [], launchPayload?: unknown): void {
   state.skillShareDeepLinks.capture(argv, (shareId) => {
     state.mainWindow?.webContents.send('ui:openSkillShare', shareId)
   })
   state.osOpenedDocuments.capture(argv, publishOsOpenedDocuments)
-  // Duplicate serve launches must not activate a desktop on a headless server (#11935).
-  if (!shouldActivateDesktopForSecondInstance(argv)) {
-    return
-  }
+  const action = incomingDesktopLaunchAction({
+    argv,
+    launchPayload,
+    isSidecar: isOrcadSidecarLaunch()
+  })
   // The sidecar’s throwaway profile must never become the user’s window.
-  if (isOrcadSidecarLaunch()) {
+  if (action === 'handoff') {
     requestDesktopHandoff()
     return
   }
+  // Serve and a background relaunch must not raise this process. A user launch must,
+  // and the latch has to flip before activation or the reveal still sees windowless.
+  if (action !== 'present') {
+    return
+  }
+  acceptUserForegroundRequest()
   state.desktopActivationGate?.requestActivation()
 }
 

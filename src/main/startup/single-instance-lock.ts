@@ -1,4 +1,5 @@
 import type { App } from 'electron'
+import { isBackgroundLaunch } from '../window/foreground-activation-policy'
 import { argvRequestsServeMode } from './serve-mode-argv'
 import { writeStartupDiagnosticLine, type StartupDiagnosticSink } from './startup-diagnostics'
 
@@ -16,6 +17,48 @@ export { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from '../../shared/single-i
 // the flag form would promote the live headless server to a desktop window, un-fixing #11935.
 export function shouldActivateDesktopForSecondInstance(argv: readonly string[] = []): boolean {
   return !argvRequestsServeMode(argv)
+}
+
+export const SINGLE_INSTANCE_LAUNCH_USER = 'user'
+export const SINGLE_INSTANCE_LAUNCH_BACKGROUND = 'background'
+
+/** Crosses the single-instance lock. Electron forwards this object, not the new process env. */
+export type SingleInstanceLaunchPayload = {
+  launchKind: typeof SINGLE_INSTANCE_LAUNCH_USER | typeof SINGLE_INSTANCE_LAUNCH_BACKGROUND
+}
+
+export function singleInstanceLaunchPayload(background: boolean): SingleInstanceLaunchPayload {
+  return {
+    launchKind: background ? SINGLE_INSTANCE_LAUNCH_BACKGROUND : SINGLE_INSTANCE_LAUNCH_USER
+  }
+}
+
+/** Missing data is a user launch: dock, Open With, and a desktop double-click must still present. */
+export function incomingLaunchIsBackground(payload: unknown): boolean {
+  if (typeof payload !== 'object' || payload === null || !('launchKind' in payload)) {
+    return false
+  }
+  return payload.launchKind === SINGLE_INSTANCE_LAUNCH_BACKGROUND
+}
+
+export type IncomingDesktopLaunchAction = 'ignore' | 'handoff' | 'present'
+
+export function incomingDesktopLaunchAction(options: {
+  argv?: readonly string[]
+  launchPayload?: unknown
+  isSidecar: boolean
+}): IncomingDesktopLaunchAction {
+  if (!shouldActivateDesktopForSecondInstance(options.argv)) {
+    return 'ignore'
+  }
+  // The process that holds the lock is the sidecar, so its window must not become the user's.
+  if (options.isSidecar) {
+    return 'handoff'
+  }
+  if (incomingLaunchIsBackground(options.launchPayload)) {
+    return 'ignore'
+  }
+  return 'present'
 }
 
 /**
@@ -38,12 +81,15 @@ export function shouldActivateDesktopForSecondInstance(argv: readonly string[] =
  */
 export function acquireSingleInstanceLock(
   app: App,
-  onSecondInstance: (argv: readonly string[]) => void
+  onSecondInstance: (argv: readonly string[], launchPayload: unknown) => void,
+  launchPayload: SingleInstanceLaunchPayload = singleInstanceLaunchPayload(isBackgroundLaunch())
 ): boolean {
-  if (!app.requestSingleInstanceLock()) {
+  if (!app.requestSingleInstanceLock(launchPayload)) {
     return false
   }
-  app.on('second-instance', (_event, argv) => onSecondInstance(argv))
+  app.on('second-instance', (_event, argv, _workingDirectory, additionalData) => {
+    onSecondInstance(argv, additionalData)
+  })
   return true
 }
 

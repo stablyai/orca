@@ -1,5 +1,9 @@
 import type { App, BrowserWindow } from 'electron'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  acceptUserForegroundRequest,
+  resetAcceptedUserForegroundForTests
+} from './foreground-activation-policy'
 import { focusExistingMainWindow } from './focus-existing-window'
 
 type FakeWindowOptions = {
@@ -84,7 +88,10 @@ beforeEach(() => {
   vi.stubEnv('ORCA_E2E_HEADLESS', undefined)
   vi.stubEnv('ORCA_E2E_HEADFUL', undefined)
 })
-afterEach(() => vi.unstubAllEnvs())
+afterEach(() => {
+  resetAcceptedUserForegroundForTests()
+  vi.unstubAllEnvs()
+})
 
 describe('focusExistingMainWindow', () => {
   it.each(['darwin', 'linux', 'win32'] as const)(
@@ -109,6 +116,27 @@ describe('focusExistingMainWindow', () => {
       expect(timer.scheduledMs()).toEqual([])
     }
   )
+
+  it('foregrounds a background process after the user asks for the window', () => {
+    vi.stubEnv('ORCA_BACKGROUND_LAUNCH', '1')
+    acceptUserForegroundRequest()
+    const app = makeFakeApp()
+    const window = makeFakeWindow({ minimized: true })
+    const timer = makeTimer()
+
+    focusExistingMainWindow({
+      app,
+      getWindow: () => window,
+      openWindow: vi.fn(),
+      platform: 'win32',
+      setTimeout: timer.setTimeout
+    })
+
+    expect(app.focus).toHaveBeenCalledWith({ steal: true })
+    expect(window.calls.restore).toHaveBeenCalledTimes(1)
+    expect(window.calls.show).toHaveBeenCalledTimes(1)
+    expect(window.calls.moveTop).toHaveBeenCalledTimes(1)
+  })
 
   it('aggressively foregrounds an existing Windows window on second launch', () => {
     const app = makeFakeApp()
