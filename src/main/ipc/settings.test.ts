@@ -242,6 +242,21 @@ describe('registerSettingsHandlers', () => {
     )
   })
 
+  it('returns the current settings after side effects, not the stale write result', async () => {
+    const before = { theme: 'light' }
+    const writeResult = { theme: 'dark' }
+    const latest = { theme: 'dark', terminalFontSize: 16 }
+    store.getSettings.mockReturnValueOnce(before).mockReturnValue(latest)
+    store.updateSettings.mockReturnValue(writeResult)
+    registerSettingsHandlers(store as never)
+    const handler: unknown = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1]
+    if (typeof handler !== 'function') {
+      throw new Error('settings:set handler was not registered')
+    }
+
+    await expect(handler(settingsInvokeEvent, { theme: 'dark' })).resolves.toBe(latest)
+  })
+
   it('propagates a failed durable force-delete preference write through settings:set', async () => {
     store.getSettings.mockReturnValue({ alwaysForceDeleteWorktrees: false })
     store.updateSettingsAndFlush.mockRejectedValue(new Error('Disk full'))
