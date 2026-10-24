@@ -17,6 +17,7 @@ import {
 } from '../../terminal-tail-state'
 import {
   computeTerminalTailWaitState,
+  resolveWaitBlockedAt,
   tailGainedNewerBlockedReason
 } from '../../terminal-wait-tail-state'
 import { extractOscTitleScanTail } from '../../../../shared/osc-title-scan-tail'
@@ -247,11 +248,15 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
         const nextWaitState = computeTerminalTailWaitState(
           nextTail.lines,
           nextTail.partialLine,
-          leaf.preview
+          leaf.preview,
+          leaf.waitBlockedAt !== null
         )
-        if (tailGainedNewerBlockedReason(previousWaitState, nextWaitState, normalized.text)) {
-          leaf.waitBlockedAt = at
-        }
+        leaf.waitBlockedAt = resolveWaitBlockedAt(
+          leaf.waitBlockedAt,
+          tailGainedNewerBlockedReason(previousWaitState, nextWaitState, normalized.text),
+          nextWaitState,
+          at
+        )
         leaf.tailWaitState = nextWaitState
         leaf.tailBuffer = nextTail.lines
         leaf.tailTranscriptBuffer = nextTranscript.lines

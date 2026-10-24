@@ -207,6 +207,13 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     getTabTitle: (tabId) => this.tabs.get(tabId)?.title ?? null,
     getExplicitStatus: (handle) => this.getFreshExplicitAgentStatusForHandle(handle),
     getLifecycleStatus: (ptyId) => this.agentPromptLifecycleByPtyId.get(ptyId),
+    readLiveScreenLines: (ptyId) => {
+      const state = this.headlessTerminals.get(ptyId)
+      if (!state || state.outputSequence !== this.getPtyOutputSequence(ptyId)) {
+        return null
+      }
+      return this.readLiveTerminalScreenLines(ptyId)
+    },
     isRunning: (handle) => this.isTerminalRunningAgent(handle),
     getTitleDisplayClear: (ptyId) => this.getPtyTitleDisplayClear(ptyId)
   })

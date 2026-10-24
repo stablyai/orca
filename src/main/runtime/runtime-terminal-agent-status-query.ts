@@ -23,6 +23,8 @@ import { buildTerminalWaitText } from './terminal-wait-tail-state'
 
 export type RuntimeTerminalAgentStatusSnapshot = {
   waitText: string
+  /** Current whole emulator screen when it is caught up; null falls back to retained tail text. */
+  liveScreenText: string | null
   waitBlockedAt: number | null
   title: string | null
   titleStatus: AgentStatus | null
@@ -41,6 +43,7 @@ type Dependencies = {
   getLifecycleStatus(
     ptyId: string
   ): { status: AgentStatus | null; updatedAt: number } | null | undefined
+  readLiveScreenLines(ptyId: string): readonly string[] | null
   isRunning(handle: string): Promise<boolean>
   getTitleDisplayClear(ptyId: string): TitleDisplayClear | null
 }
@@ -75,7 +78,9 @@ export class RuntimeTerminalAgentStatusQuery {
     const terminal = this.getSnapshot(handle, ptyId, clear)
     const explicitStatus = this.deps.getExplicitStatus(handle)
     const lifecycle = getDisplayPromptLifecycle(this.deps.getLifecycleStatus(ptyId), clear)
-    const blockedByWaitText = detectTerminalWaitBlockedReason(terminal.waitText)
+    const blockedByWaitText = detectTerminalWaitBlockedReason(
+      terminal.liveScreenText ?? terminal.waitText
+    )
     const liveTitleClearsBlockedText =
       terminal.titleStatusIsLive &&
       terminal.titleStatus !== null &&
@@ -198,6 +203,7 @@ export class RuntimeTerminalAgentStatusQuery {
       )
       return {
         waitText,
+        liveScreenText: this.deps.readLiveScreenLines(expectedPtyId)?.join('\n') ?? null,
         waitBlockedAt: pty.pty.waitBlockedAt,
         title: ptyTitle?.title ?? null,
         titleStatus: ptyTitle
@@ -224,6 +230,7 @@ export class RuntimeTerminalAgentStatusQuery {
     )
     return {
       waitText: buildTerminalWaitText(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview),
+      liveScreenText: this.deps.readLiveScreenLines(expectedPtyId)?.join('\n') ?? null,
       waitBlockedAt: leaf.waitBlockedAt,
       title: title?.title ?? null,
       titleStatus: title ? detectAgentStatusFromTitle(title.title) : leaf.lastAgentStatus,

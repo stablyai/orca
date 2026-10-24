@@ -1,7 +1,10 @@
 import type { RuntimeTerminalWaitBlockedReason } from '../../shared/runtime-types'
 import { buildTailLines } from './terminal-tail-state'
 import { tailMayContainBlockedSignal } from './terminal-tail-sentinel-index'
-import { findActionableTerminalWaitBlockedSignal } from './terminal-wait-detection'
+import {
+  findActionableTerminalWaitBlockedSignal,
+  isKnownReadyPromptSettled
+} from './terminal-wait-detection'
 import { terminalWaitBlockedSentinelRe } from './agent-state-rules/blocked-text-layer'
 
 export function buildTerminalWaitText(
@@ -20,6 +23,8 @@ export function buildTerminalWaitText(
 export type TerminalTailWaitState = {
   waitText: string
   signal: { reason: RuntimeTerminalWaitBlockedReason; index: number } | null
+  // Why optional: stamped checks record the settled-ready decision without retaining a rebuilt tail.
+  settledReadyPrompt?: boolean
   // Why: preview is only an empty-tail fallback, recomputed each append, so a preview-derived state can't be reused as the next previous state (gated on fromTail).
   fromTail: boolean
 }
@@ -28,7 +33,8 @@ export type TerminalTailWaitState = {
 export function computeTerminalTailWaitState(
   lines: string[],
   partialLine: string,
-  preview: string
+  preview: string,
+  inspectTailForReadyPrompt = false
 ): TerminalTailWaitState {
   const tailInspection = inspectTerminalWaitTail(lines, partialLine)
   if (!tailInspection.fromTail) {
@@ -38,7 +44,7 @@ export function computeTerminalTailWaitState(
       fromTail: false
     }
   }
-  if (!tailInspection.mayContainBlockedSignal) {
+  if (!tailInspection.mayContainBlockedSignal && !inspectTailForReadyPrompt) {
     // Why: reads waitText only when a signal exists; avoid retaining a rebuilt 256 KiB string in the common case.
     return { waitText: '', signal: null, fromTail: true }
   }
@@ -48,9 +54,14 @@ export function computeTerminalTailWaitState(
     .join('\n')
   const fromTail = tailText.length > 0
   const waitText = fromTail ? tailText : preview
+  const checkedReadyPrompt = inspectTailForReadyPrompt && !tailInspection.mayContainBlockedSignal
   return {
-    waitText,
-    signal: findActionableTerminalWaitBlockedSignal(waitText.toLowerCase()),
+    waitText: checkedReadyPrompt ? '' : waitText,
+    signal: tailInspection.mayContainBlockedSignal
+      ? findActionableTerminalWaitBlockedSignal(waitText.toLowerCase())
+      : null,
+    settledReadyPrompt:
+      checkedReadyPrompt && fromTail ? isKnownReadyPromptSettled(waitText) : undefined,
     fromTail
   }
 }
@@ -94,4 +105,56 @@ export function tailGainedNewerBlockedReason(
     `${previous.waitText}${appendedText}`.toLowerCase()
   )
   return appendCandidateSignal !== null && appendCandidateSignal.index > previous.signal.index
+}
+
+// Why: a blocked stamp is otherwise sticky, and a pane that has gone quiet never
+// runs another check. Only a settled ready tail is positive evidence the dialog
+// is gone. Empty fast-path text, a preview fallback, and a tail that still has
+// a blocked signal are not — failing to gain a newer reason must not clear.
+export function tailSettledReadyClearsBlockedWait(state: TerminalTailWaitState): boolean {
+  if (!state.fromTail || state.signal !== null) {
+    return false
+  }
+  if (state.settledReadyPrompt === true) {
+    return true
+  }
+  if (state.waitText.length === 0) {
+    return false
+  }
+  return isKnownReadyPromptSettled(state.waitText)
+}
+
+export function resolveWaitBlockedAt(
+  current: number | null,
+  gainedNewerBlockedReason: boolean,
+  next: TerminalTailWaitState,
+  at: number
+): number | null {
+  if (gainedNewerBlockedReason) {
+    return at
+  }
+  // A null stamp has nothing to clear. Skip the ready-prompt scan on that hot path.
+  if (current !== null && tailSettledReadyClearsBlockedWait(next)) {
+    return null
+  }
+  return current
+}
+
+/** The deferred check cleared the PTY stamp. Matching leaves share that tail and must drop its copy too. */
+export function clearMirroredLeafWaitStamps<
+  T extends { tailBuffer: unknown; waitBlockedAt: number | null }
+>(
+  ptyWaitBlockedAt: number | null,
+  nextBlockedAt: number | null,
+  ptyTailBuffer: unknown,
+  leaves: readonly T[]
+): void {
+  if (ptyWaitBlockedAt === null || nextBlockedAt !== null) {
+    return
+  }
+  for (const leaf of leaves) {
+    if (leaf.tailBuffer === ptyTailBuffer) {
+      leaf.waitBlockedAt = null
+    }
+  }
 }

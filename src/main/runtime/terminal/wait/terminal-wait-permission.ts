@@ -125,7 +125,9 @@ export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission 
     lifecycle: { status: AgentStatus | null; updatedAt: number } | null | undefined,
     observedOnScreen = false
   ): RuntimeTerminalWaitBlockedReason | null {
-    const blockedByWaitText = detectTerminalWaitBlockedReason(terminal.waitText)
+    const blockedByWaitText = detectTerminalWaitBlockedReason(
+      terminal.liveScreenText ?? terminal.waitText
+    )
     if (!blockedByWaitText) {
       return null
     }
