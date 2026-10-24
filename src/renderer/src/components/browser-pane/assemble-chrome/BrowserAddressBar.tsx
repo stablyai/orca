@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { Globe } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -8,6 +8,9 @@ import { useAppStore } from '@/store'
 import { DEFAULT_SEARCH_ENGINE, type SearchEngine } from '../../../../../shared/browser-url'
 import type { BrowserPageDocLocation } from '../../../../../shared/browser-workspace-types'
 import { buildBrowserAddressBarSuggestions } from './browser-address-bar-suggestions'
+import type { BrowserAddressBarSelection } from './browser-address-bar-edit-session'
+import { useBrowserAddressBarSuggestionPreview } from './use-browser-address-bar-suggestion-preview'
+import { useBrowserAddressBarEscape } from './browser-address-bar-escape'
 import { useBrowserAddressBarInlineCompletion } from './use-browser-address-bar-inline-completion'
 import { useBrowserAddressBarSwitchToTab } from './use-browser-address-bar-switch-to-tab'
 import { useBrowserAddressBarEditHandoff } from './use-browser-address-bar-edit-handoff'
@@ -32,6 +35,10 @@ type BrowserAddressBarProps = {
   onChange: (value: string) => void
   onSubmit: () => void
   onNavigate: (url: string) => void
+  /** The page's own address; the text Escape reverts an edited bar to. */
+  committedAddress: string
+  /** Where focus goes when Escape has nothing left to undo. */
+  onLeaveAddressBar: () => void
   /** Selecting a previewed-document suggestion; without it those rows fall back to onNavigate. */
   onOpenWorkspaceDoc?: (docLocation: BrowserPageDocLocation) => void
   inputRef: React.RefObject<HTMLInputElement | null>
@@ -53,6 +60,8 @@ export default function BrowserAddressBar({
   onChange,
   onSubmit,
   onNavigate,
+  committedAddress,
+  onLeaveAddressBar,
   onOpenWorkspaceDoc,
   inputRef,
   dismissSuggestionsRef,
@@ -64,6 +73,8 @@ export default function BrowserAddressBar({
   const [open, setOpen] = useState(false)
   const [selectedValueOverride, setSelectedValueOverride] = useState<string | null>(null)
   const prePreviewValueRef = useRef<string | null>(null)
+  // Why: where the caret sat before an arrowed suggestion replaced the text; null means at the end.
+  const previewSelectionRef = useRef<BrowserAddressBarSelection | null>(null)
   // Why: while previewing a highlighted suggestion the input shows the full URL,
   // but suggestions must keep matching the original typed query.
   const autocompleteQuery = prePreviewValueRef.current ?? value
@@ -114,6 +125,7 @@ export default function BrowserAddressBar({
     editSession,
     inputRef,
     prePreviewValueRef,
+    previewSelectionRef,
     openedAtRef,
     setSelectedValueOverride,
     setOpen,
@@ -124,67 +136,41 @@ export default function BrowserAddressBar({
     [buildSuggestions, autocompleteQuery, inlineText]
   )
 
-  const clearSuggestionPreview = useCallback((): void => {
-    prePreviewValueRef.current = null
-    setSelectedValueOverride(null)
-    clearInline()
-  }, [clearInline])
+  const { clearSuggestionPreview, selectSuggestionAtIndex, restoreTypedQuery } =
+    useBrowserAddressBarSuggestionPreview({
+      inputRef,
+      suggestions,
+      autocompleteQuery,
+      prePreviewValueRef,
+      previewSelectionRef,
+      setSelectedValueOverride,
+      onChange,
+      clearInline,
+      showInline
+    })
 
-  const previewSuggestion = useCallback(
-    (url: string): void => {
-      if (prePreviewValueRef.current === null) {
-        prePreviewValueRef.current = autocompleteQuery
-      }
-      setSelectedValueOverride(url)
-      onChange(url)
-    },
-    [autocompleteQuery, onChange]
-  )
-
-  const selectSuggestionAtIndex = useCallback(
-    (index: number): void => {
-      const suggestion = suggestions[index]
-      if (!suggestion) {
-        return
-      }
-      if (suggestion.isSearch) {
-        // Why: the search row is what Enter does with the typed query, so the bar keeps the
-        // typed text instead of the search URL.
-        prePreviewValueRef.current = null
-        clearInline()
-        setSelectedValueOverride(suggestion.url)
-        onChange(autocompleteQuery)
-        return
-      }
-      if (suggestion.inlineText !== undefined) {
-        // Why: like Chrome, the completion comes back as typed text plus a selected tail, so
-        // Escape still restores what was typed.
-        setSelectedValueOverride(suggestion.url)
-        showInline(autocompleteQuery, suggestion.inlineText)
-        onChange(suggestion.inlineText)
-        return
-      }
-      previewSuggestion(suggestion.url)
-    },
-    [autocompleteQuery, clearInline, onChange, previewSuggestion, showInline, suggestions]
-  )
-
-  const restoreTypedQuery = useCallback((): void => {
-    const typed = prePreviewValueRef.current
-    if (typed === null) {
-      return
-    }
-    prePreviewValueRef.current = null
-    setSelectedValueOverride(null)
-    clearInline()
-    onChange(typed)
-  }, [clearInline, onChange])
+  const closeSuggestions = useCallback((): void => {
+    clearTimerRef(blurCloseTimerRef)
+    setOpen(false)
+  }, [])
 
   const dismissSuggestions = useCallback((): void => {
-    clearTimerRef(blurCloseTimerRef)
     restoreTypedQuery()
-    setOpen(false)
-  }, [restoreTypedQuery])
+    closeSuggestions()
+  }, [closeSuggestions, restoreTypedQuery])
+
+  const handleEscape = useBrowserAddressBarEscape({
+    inputRef,
+    value,
+    committedAddress,
+    suggestionsShown: open && suggestions.length > 0,
+    prePreviewValueRef,
+    previewSelectionRef,
+    restoreTypedQuery,
+    closeSuggestions,
+    onChange,
+    onLeaveAddressBar
+  })
 
   const switchToTab = useBrowserAddressBarSwitchToTab({
     pageId,
@@ -275,13 +261,20 @@ export default function BrowserAddressBar({
     onSubmit()
   }, [clearSuggestionPreview, onSubmit, value])
 
-  const handleKeyDown = useCallback(
+  const handleKeyDownCapture = useCallback(
     (event: React.KeyboardEvent<HTMLInputElement>) => {
       if (event.key === 'Escape') {
-        dismissSuggestions()
-        return
+        // Why: every Escape step resets the list to its initial state, so Enter no longer aims at a
+        // "Switch to tab" button the user left.
+        switchToTab.clearFocus()
+        handleEscape(event)
       }
+    },
+    [handleEscape, switchToTab]
+  )
 
+  const handleKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLInputElement>) => {
       if (switchToTab.handleTabKey(event, selectedRow)) {
         return
       }
@@ -340,22 +333,11 @@ export default function BrowserAddressBar({
       switchFocused,
       selectSuggestionAtIndex,
       restoreTypedQuery,
-      dismissSuggestions,
       submitTypedValue
     ]
   )
 
-  useBrowserAddressBarDismissal(open, dismissSuggestions)
-
-  useEffect(() => {
-    if (!dismissSuggestionsRef) {
-      return
-    }
-    dismissSuggestionsRef.current = dismissSuggestions
-    return () => {
-      dismissSuggestionsRef.current = null
-    }
-  }, [dismissSuggestions, dismissSuggestionsRef])
+  useBrowserAddressBarDismissal(open, dismissSuggestions, dismissSuggestionsRef)
 
   return (
     // Why: min-w-11 keeps the leading globe a real hit target once the toolbar
@@ -414,6 +396,8 @@ export default function BrowserAddressBar({
               onMouseDown={addressBarClickSelect.onMouseDown}
               onClick={addressBarClickSelect.onClick}
               onBlur={handleBlur}
+              // Capture: Input swallows IME-marked keydowns before bubble handlers, and Escape's IME pair needs them.
+              onKeyDownCapture={handleKeyDownCapture}
               onKeyDown={handleKeyDown}
               onSelect={acceptOnCaretMove}
               data-orca-browser-address-bar="true"
@@ -428,6 +412,7 @@ export default function BrowserAddressBar({
                 // Clearing preview state here also prevents stale hover/selection
                 // from repopulating the input after Cmd+A → Delete.
                 prePreviewValueRef.current = null
+                previewSelectionRef.current = null
                 setSelectedValueOverride(null)
                 switchToTab.clearFocus()
                 // Why: like Chrome, typing after Escape brings the suggestions back.

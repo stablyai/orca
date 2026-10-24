@@ -64,7 +64,7 @@ export function RemoteBrowserPagePane({
   // Why: the screencast <img> only exists once a frame lands, so before the first one the
   // viewport is the only place guest focus can go.
   const guestFocus = useElementGuestFocus(imageRef, remoteViewportRef)
-  const { startAddressBarFocusGrab } = useBrowserPageChromeFocus({
+  const { startAddressBarFocusGrab, leaveAddressBarForPage } = useBrowserPageChromeFocus({
     browserTabId: browserTab.id,
     workspaceId,
     isActive,
@@ -72,7 +72,7 @@ export function RemoteBrowserPagePane({
     addressBarInputRef,
     guestFocus
   })
-  const { addressBarValue, setAddressBarValue, setAddressBarValueFromPage, addressBarEditSession } =
+  const { addressBarValue, setAddressBarValueFromPage, ...addressBar } =
     useBrowserAddressBarEditSession({
       pageId: browserTab.id,
       url: browserTab.url,
@@ -385,14 +385,16 @@ export function RemoteBrowserPagePane({
       <RemoteBrowserPageToolbar
         runtimeEnvironmentId={runtimeEnvironmentId}
         addressBarValue={addressBarValue}
-        onAddressBarChange={setAddressBarValue}
+        onAddressBarChange={addressBar.setAddressBarValue}
+        committedAddress={addressBar.committedAddress}
+        onLeaveAddressBar={leaveAddressBarForPage}
         onSubmitAddressBar={submitAddressBar}
         onNavigateToUrl={navigateToUrl}
         onOpenWorkspaceDoc={(docLocation) =>
           convertBrowserPageToWorkspaceDoc(browserTab.id, docLocation)
         }
         addressBarInputRef={addressBarInputRef}
-        addressBarEditSession={addressBarEditSession}
+        addressBarEditSession={addressBar.addressBarEditSession}
         busy={busy}
         loading={browserTab.loading}
         loadFailed={browserTab.loadError !== null}

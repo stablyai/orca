@@ -1,19 +1,12 @@
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-  type RefObject
-} from 'react'
-import { toDisplayUrl } from '../describe-page/browser-page-url-display'
+import { useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import {
   consumeBrowserAddressBarEditSession,
   type BrowserAddressBarEditSession,
   type BrowserAddressBarPreview,
   type BrowserAddressBarSelection
 } from './browser-address-bar-edit-session'
+import { useBrowserAddressBarText } from './use-browser-address-bar-text'
+import { useAddressBarSelectionAfterCommit } from './use-address-bar-selection-after-commit'
 
 /** The suggestion-list state a resumed edit reopens in. */
 export type BrowserAddressBarResumedChrome = {
@@ -47,28 +40,15 @@ export function useBrowserAddressBarEditSession({
   url: string
   addressBarInputRef: RefObject<HTMLInputElement | null>
   startAddressBarFocusGrab: (selection?: BrowserAddressBarSelection) => () => void
-}): {
-  addressBarValue: string
-  setAddressBarValue: (value: string) => void
-  /** Writes the page's own URL into the bar, unless the user is typing in it. */
-  setAddressBarValueFromPage: (value: string) => void
+}): ReturnType<typeof useBrowserAddressBarText> & {
   addressBarEditSession: BrowserAddressBarEditSessionBinding
 } {
-  const [addressBarValue, setAddressBarValue] = useState(() => toDisplayUrl(url))
+  const text = useBrowserAddressBarText({ url, addressBarInputRef })
+  const { addressBarValue, setAddressBarValue } = text
+  const placeSelection = useAddressBarSelectionAfterCommit(addressBarInputRef, addressBarValue)
   const [resumed, setResumed] = useState<BrowserAddressBarResumedChrome | null>(null)
   const resumedPageIdRef = useRef<string | null>(null)
   const resumedSelectionRef = useRef<BrowserAddressBarSelection | null>(null)
-  const pendingCaretRef = useRef<BrowserAddressBarEditSession | null>(null)
-
-  const setAddressBarValueFromPage = useCallback(
-    (next: string): void => {
-      if (document.activeElement === addressBarInputRef.current) {
-        return
-      }
-      setAddressBarValue(next)
-    },
-    [addressBarInputRef]
-  )
 
   // Why layout and not passive: the client-hosted pane's guest-attach effects run in the same
   // commit, and both focusing the webview and syncing the bar to the guest's URL would undo the
@@ -79,14 +59,14 @@ export function useBrowserAddressBarEditSession({
     // recreates this effect on a pane that never went anywhere. The bar's save runs in between, on
     // a bar this resume just focused and still holding the value the mount rendered with — reading
     // that write back is what wiped the draft.
+    let session: BrowserAddressBarEditSession | null = null
     if (resumedPageIdRef.current !== pageId) {
       resumedPageIdRef.current = pageId
-      const session = consumeBrowserAddressBarEditSession(pageId)
+      session = consumeBrowserAddressBarEditSession(pageId)
       // Why cleared rather than left standing: a page id that arrives with nothing parked must not
       // inherit the previous one's caret. Today's deps make that unreachable; a future one need not.
       resumedSelectionRef.current = session?.selection ?? null
       if (session) {
-        pendingCaretRef.current = session
         setAddressBarValue(session.draft)
         setResumed({ suggestionsOpen: session.suggestionsOpen, preview: session.preview })
       }
@@ -100,36 +80,13 @@ export function useBrowserAddressBarEditSession({
     // nothing holding the bar, and its guest-attach effect takes focus to the page. Re-firing needs
     // no canceller held here — startAddressBarFocusGrab cancels the previous grab itself.
     startAddressBarFocusGrab(selection)
-  }, [pageId, startAddressBarFocusGrab])
-
-  // Why the caret is placed twice: the grab above puts it back against the value still on screen,
-  // and React then resets a focused input's selection as it commits the resumed draft. This is the
-  // commit that lands it — and the only one, so nothing keeps re-aiming a bar the user is typing in.
-  useLayoutEffect(() => {
-    const pending = pendingCaretRef.current
-    if (!pending || pending.draft !== addressBarValue) {
-      return
+    if (session) {
+      placeSelection(session.draft, session.selection, (input) => document.activeElement === input)
     }
-    pendingCaretRef.current = null
-    const input = addressBarInputRef.current
-    if (!input || document.activeElement !== input) {
-      return
-    }
-    input.setSelectionRange(
-      pending.selection.start,
-      pending.selection.end,
-      pending.selection.direction
-    )
-  }, [addressBarInputRef, addressBarValue])
-
-  useEffect(() => {
-    setAddressBarValueFromPage(toDisplayUrl(url))
-  }, [setAddressBarValueFromPage, url])
+  }, [pageId, placeSelection, setAddressBarValue, startAddressBarFocusGrab])
 
   return {
-    addressBarValue,
-    setAddressBarValue,
-    setAddressBarValueFromPage,
+    ...text,
     addressBarEditSession: useMemo(() => ({ pageId, resumed }), [pageId, resumed])
   }
 }

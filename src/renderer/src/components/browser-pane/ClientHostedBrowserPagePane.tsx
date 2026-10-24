@@ -92,21 +92,17 @@ export function ClientHostedBrowserPagePane({
 
   const guestFocus = useWebviewGuestFocus(webviewRef)
   const shortcutOwner = { browserTabId: browserTab.id, workspaceId, isActive, chromeShortcutScope }
-  const { keepAddressBarFocusRef, startAddressBarFocusGrab } = useBrowserPageChromeFocus({
-    ...shortcutOwner,
-    addressBarInputRef,
-    guestFocus
-  })
+  const { keepAddressBarFocusRef, startAddressBarFocusGrab, leaveAddressBarForPage } =
+    useBrowserPageChromeFocus({ ...shortcutOwner, addressBarInputRef, guestFocus })
   // Why the order matters: this resumes an interrupted edit in a layout effect, and the attach
   // effect below syncs the bar to the guest's URL through the setter it hands back. Called after
   // the attach effect, the resume would land on a bar that has already been overwritten.
-  const { addressBarValue, setAddressBarValue, setAddressBarValueFromPage, addressBarEditSession } =
-    useBrowserAddressBarEditSession({
-      pageId: browserTab.id,
-      url: browserTab.url,
-      addressBarInputRef,
-      startAddressBarFocusGrab
-    })
+  const { setAddressBarValueFromPage, ...addressBar } = useBrowserAddressBarEditSession({
+    pageId: browserTab.id,
+    url: browserTab.url,
+    addressBarInputRef,
+    startAddressBarFocusGrab
+  })
   const zoom = useBrowserPageZoomFeedback()
   const reload = useBrowserPageReloadActions({
     browserTab,
@@ -135,7 +131,7 @@ export function ClientHostedBrowserPagePane({
     webviewRef,
     activeLoadFailureRef,
     onUpdatePageState,
-    setAddressBarValue
+    setAddressBarValueFromSubmit: addressBar.setAddressBarValueFromSubmit
   })
   const runDeferredNavigation = useEffectEvent(navigateToUrl)
 
@@ -323,15 +319,17 @@ export function ClientHostedBrowserPagePane({
           addressSlot={
             <BrowserAddressBar
               pageId={browserTab.id}
-              value={addressBarValue}
-              onChange={setAddressBarValue}
-              onSubmit={() => navigateToUrl(addressBarValue)}
+              value={addressBar.addressBarValue}
+              onChange={addressBar.setAddressBarValue}
+              onSubmit={() => navigateToUrl(addressBar.addressBarValue)}
               onNavigate={navigateToUrl}
+              committedAddress={addressBar.committedAddress}
+              onLeaveAddressBar={leaveAddressBarForPage}
               onOpenWorkspaceDoc={(docLocation) =>
                 convertBrowserPageToWorkspaceDoc(browserTab.id, docLocation)
               }
               inputRef={addressBarInputRef}
-              editSession={addressBarEditSession}
+              editSession={addressBar.addressBarEditSession}
               leadingIcon={
                 <RemoteRuntimeEgressIndicator
                   runtimeEnvironmentId={runtimeEnvironmentId}

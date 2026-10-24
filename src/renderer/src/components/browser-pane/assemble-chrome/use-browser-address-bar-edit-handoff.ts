@@ -1,5 +1,8 @@
 import { useLayoutEffect, useRef, type MutableRefObject, type RefObject } from 'react'
-import { saveBrowserAddressBarEditSession } from './browser-address-bar-edit-session'
+import {
+  saveBrowserAddressBarEditSession,
+  type BrowserAddressBarSelection
+} from './browser-address-bar-edit-session'
 import type { BrowserAddressBarEditSessionBinding } from './use-browser-address-bar-edit-session'
 
 /**
@@ -10,6 +13,7 @@ export function useBrowserAddressBarEditHandoff({
   editSession,
   inputRef,
   prePreviewValueRef,
+  previewSelectionRef,
   openedAtRef,
   setSelectedValueOverride,
   setOpen,
@@ -19,6 +23,7 @@ export function useBrowserAddressBarEditHandoff({
   inputRef: RefObject<HTMLInputElement | null>
   /** The typed text while the bar shows a previewed or inline-completed suggestion. */
   prePreviewValueRef: MutableRefObject<string | null>
+  previewSelectionRef: MutableRefObject<BrowserAddressBarSelection | null>
   openedAtRef: MutableRefObject<number>
   setSelectedValueOverride: (url: string | null) => void
   setOpen: (open: boolean) => void
@@ -41,11 +46,19 @@ export function useBrowserAddressBarEditHandoff({
     // left it. Re-arming the blur grace window keeps the resumed focus from closing it again.
     if (resumedChrome.preview) {
       prePreviewValueRef.current = resumedChrome.preview.typedQuery
+      previewSelectionRef.current = resumedChrome.preview.selection
       setSelectedValueOverride(resumedChrome.preview.previewedUrl)
     }
     openedAtRef.current = Date.now()
     setOpen(resumedChrome.suggestionsOpen)
-  }, [openedAtRef, prePreviewValueRef, resumedChrome, setOpen, setSelectedValueOverride])
+  }, [
+    openedAtRef,
+    prePreviewValueRef,
+    previewSelectionRef,
+    resumedChrome,
+    setOpen,
+    setSelectedValueOverride
+  ])
 
   // Why layout and not a passive cleanup: React destroys passive effects for a deleted tree after
   // its DOM is gone, and by then document.activeElement is the body — every edit would read idle.
@@ -79,8 +92,16 @@ export function useBrowserAddressBarEditHandoff({
         preview:
           typedQuery === null || inlineTyped !== null
             ? null
-            : { typedQuery, previewedUrl: liveEditRef.current.value }
+            : {
+                typedQuery,
+                selection: previewSelectionRef.current ?? {
+                  start: typedQuery.length,
+                  end: typedQuery.length,
+                  direction: 'none'
+                },
+                previewedUrl: liveEditRef.current.value
+              }
       })
     }
-  }, [editSessionPageId, inputRef, prePreviewValueRef])
+  }, [editSessionPageId, inputRef, prePreviewValueRef, previewSelectionRef])
 }

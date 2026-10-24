@@ -156,6 +156,7 @@ export function BrowserPagePane({
   const {
     focusAddressBarNow,
     focusGuestNow: focusWebviewNow,
+    leaveAddressBarForPage,
     keepAddressBarFocusRef
   } = useBrowserPageChromeFocus({
     browserTabId: browserTab.id,
@@ -165,10 +166,7 @@ export function BrowserPagePane({
     addressBarInputRef,
     guestFocus
   })
-  const annotationSend = useBrowserPageAnnotationSend({
-    browserTabId: browserTab.id,
-    worktreeId
-  })
+  const annotationSend = useBrowserPageAnnotationSend({ browserTabId: browserTab.id, worktreeId })
   const grab = useGrabMode(browserTab.id)
   const markup = useBrowserPageMarkupCapture(webviewRef)
   const grabAnnotations = useBrowserPageGrabAnnotations({
@@ -211,7 +209,6 @@ export function BrowserPagePane({
     isPaintable,
     slotViewport,
     viewportPresetId: browserTab.viewportPresetId ?? null,
-    addressBarInputRef,
     addressBarValueRef,
     browserTabUrlRef,
     keepAddressBarFocusRef,
@@ -220,7 +217,7 @@ export function BrowserPagePane({
     dismissAddressBarSuggestionsRef,
     onUpdatePageState,
     onSetUrl,
-    setAddressBarValue: nav.setAddressBarValue,
+    setAddressBarValueFromPage: nav.setAddressBarValueFromPage,
     cancelPendingBrowserCapture: grabAnnotations.cancelPendingBrowserCapture,
     setBrowserOverlayViewport,
     setFindOpen,
@@ -349,6 +346,7 @@ export function BrowserPagePane({
         webviewRef={webviewRef}
         addressBarInputRef={addressBarInputRef}
         dismissAddressBarSuggestionsRef={dismissAddressBarSuggestionsRef}
+        leaveAddressBarForPage={leaveAddressBarForPage}
         reload={reload}
         nav={nav}
         grab={grab}

@@ -55,10 +55,12 @@ export function BrowserPageToolbar({
   runReloadTrigger,
   addressBarValue,
   setAddressBarValue,
+  committedAddress,
   submitAddressBar,
   navigateToUrl,
   addressBarInputRef,
   dismissAddressBarSuggestionsRef,
+  leaveAddressBarForPage,
   grab,
   grabIntent,
   startGrabIntent,
@@ -96,10 +98,12 @@ export function BrowserPageToolbar({
   runReloadTrigger: (trigger: BrowserReloadTrigger) => void
   addressBarValue: string
   setAddressBarValue: Dispatch<SetStateAction<string>>
+  committedAddress: string
   submitAddressBar: () => void
   navigateToUrl: (url: string) => void
   addressBarInputRef: RefObject<HTMLInputElement | null>
   dismissAddressBarSuggestionsRef: RefObject<(() => void) | null>
+  leaveAddressBarForPage: () => void
   grab: GrabModeHook
   grabIntent: GrabIntent
   startGrabIntent: (intent: GrabIntent) => void
@@ -171,6 +175,8 @@ export function BrowserPageToolbar({
           onChange={setAddressBarValue}
           onSubmit={submitAddressBar}
           onNavigate={navigateToUrl}
+          committedAddress={committedAddress}
+          onLeaveAddressBar={leaveAddressBarForPage}
           onOpenWorkspaceDoc={(docLocation) =>
             convertBrowserPageToWorkspaceDoc(browserPageId, docLocation)
           }

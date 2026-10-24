@@ -20,7 +20,7 @@ export function useClientHostedPageUrlSubmission(params: {
   webviewRef: RefObject<Electron.WebviewTag | null>
   activeLoadFailureRef: MutableRefObject<BrowserLoadError | null>
   onUpdatePageState: (pageId: string, updates: Partial<BrowserTabPageState>) => void
-  setAddressBarValue: (value: string) => void
+  setAddressBarValueFromSubmit: (value: string) => void
 }): (value: string) => void {
   const {
     browserTabId,
@@ -28,7 +28,7 @@ export function useClientHostedPageUrlSubmission(params: {
     webviewRef,
     activeLoadFailureRef,
     onUpdatePageState,
-    setAddressBarValue
+    setAddressBarValueFromSubmit
   } = params
   return useCallback(
     (value: string) => {
@@ -51,14 +51,14 @@ export function useClientHostedPageUrlSubmission(params: {
         // Why: the page is still an optimistic stage, so park the URL for the attach effect to
         // replay rather than dropping what the user just typed.
         deferBrowserPageNavigation(browserTabId, submission.url)
-        setAddressBarValue(toDisplayUrl(redactKagiSessionToken(submission.url)))
+        setAddressBarValueFromSubmit(toDisplayUrl(redactKagiSessionToken(submission.url)))
         return
       }
       // Why: the store and the address bar must never hold a Kagi session token, and an optimistic
       // title keeps the tab from reading "New Tab" until the guest reports one — as local does.
       const browserModelUrl = redactKagiSessionToken(submission.url)
       activeLoadFailureRef.current = null
-      setAddressBarValue(toDisplayUrl(browserModelUrl))
+      setAddressBarValueFromSubmit(toDisplayUrl(browserModelUrl))
       onUpdatePageState(browserTabId, {
         loading: true,
         loadError: null,
@@ -71,7 +71,7 @@ export function useClientHostedPageUrlSubmission(params: {
       activeLoadFailureRef,
       browserTabId,
       onUpdatePageState,
-      setAddressBarValue,
+      setAddressBarValueFromSubmit,
       webviewRef,
       worktreeId
     ]
