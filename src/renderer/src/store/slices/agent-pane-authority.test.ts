@@ -288,4 +288,37 @@ describe('agent pane authority', () => {
     store.getState().setAgentStatus(SOURCE, { state: 'done', prompt: 'back home' })
     expect(store.getState().agentStatusByPaneKey[SOURCE]?.prompt).toBe('back home')
   })
+
+  it('re-keys a migration-unsupported PTY with its pane so the source tab close keeps it', () => {
+    const store = createTestStore()
+    const entry = {
+      ptyId: 'pty-1',
+      worktreeId: 'wt-1',
+      tabId: 'tab-source',
+      leafId: '11111111-1111-4111-8111-111111111111',
+      paneKey: SOURCE,
+      reason: 'legacy-numeric-pane-key' as const,
+      source: 'local' as const,
+      updatedAt: 5
+    }
+    store.setState({
+      migrationUnsupportedByPtyId: {
+        'pty-1': entry,
+        'pty-other': { ...entry, ptyId: 'pty-other', paneKey: SIBLING, tabId: 'tab-target' }
+      }
+    })
+
+    store
+      .getState()
+      .transferAgentPaneAuthority({ fromPaneKey: SOURCE, toPaneKey: TARGET, ptyId: 'pty-1' })
+    store.getState().dropAgentStatusByTabPrefix('tab-source')
+
+    expect(store.getState().migrationUnsupportedByPtyId['pty-1']).toEqual({
+      ...entry,
+      paneKey: TARGET,
+      tabId: 'tab-target',
+      leafId: '22222222-2222-4222-8222-222222222222'
+    })
+    expect(store.getState().migrationUnsupportedByPtyId['pty-other']?.paneKey).toBe(SIBLING)
+  })
 })
