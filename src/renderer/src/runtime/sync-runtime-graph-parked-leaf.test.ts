@@ -163,7 +163,13 @@ describe('syncRuntimeGraph cold-parked tabs', () => {
     const graph = await captureGraph()
 
     expect(reportedPanes(graph)).toContainEqual(
-      expect.objectContaining({ tabId: TAB_ID, leafId: LEAF, ...withPty(PARKED_PTY), parked: true })
+      expect.objectContaining({
+        tabId: TAB_ID,
+        leafId: LEAF,
+        ...withPty(PARKED_PTY),
+        parked: true,
+        surface: 'background'
+      })
     )
     expect(reportedTabIds(graph)).toContain(TAB_ID)
   })

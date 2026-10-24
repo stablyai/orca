@@ -40,6 +40,8 @@ export function registerTerminalListStaleLeafLivenessTests(): void {
     leafPtyId: string
     controllerSessions: ControllerSession[] | 'unavailable'
     hasPty?: (ptyId: string) => boolean | null
+    surface?: 'background' | 'visible'
+    parked?: boolean
   }): OrcaRuntimeService {
     const runtime = new OrcaRuntimeService(makeStore() as never)
     runtime.setPtyController({
@@ -72,6 +74,8 @@ export function registerTerminalListStaleLeafLivenessTests(): void {
           leafId: LEAF_ID,
           paneRuntimeId: 1,
           ptyId: options.leafPtyId,
+          ...(options.surface ? { surface: options.surface } : {}),
+          ...(options.parked ? { parked: true } : {}),
           paneTitle: null,
           title: ''
         }
@@ -81,6 +85,28 @@ export function registerTerminalListStaleLeafLivenessTests(): void {
   }
 
   describe('listTerminals liveness truth for restored leaves', () => {
+    it('reports an unmounted parked leaf as background', async () => {
+      const runtime = makeRuntimeWithLeaf({
+        leafPtyId: 'pty-parked',
+        controllerSessions: [{ id: 'pty-parked', cwd: '/tmp/probe-worktree' }],
+        surface: 'background'
+      })
+
+      const { terminals } = await runtime.listTerminals(`id:${WORKTREE_ID}`)
+
+      expect(terminals[0]).toMatchObject({ ptyId: 'pty-parked', surface: 'background' })
+    })
+
+    it('reports parked leaves from older renderers as background', async () => {
+      const runtime = makeRuntimeWithLeaf({
+        leafPtyId: 'pty-legacy-parked',
+        controllerSessions: [{ id: 'pty-legacy-parked', cwd: '/tmp/probe-worktree' }],
+        parked: true
+      })
+      const { terminals } = await runtime.listTerminals(`id:${WORKTREE_ID}`)
+      expect(terminals[0]).toMatchObject({ surface: 'background' })
+    })
+
     it('reports a leaf disconnected when the controller inventory proves its local ptyId absent', async () => {
       const runtime = makeRuntimeWithLeaf({
         leafPtyId: 'pty-stale-from-prior-run',

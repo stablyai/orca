@@ -166,6 +166,8 @@ export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRu
         : {}),
       lastOutputAt: leaf.lastOutputAt,
       preview: leaf.preview,
+      // Older renderers expose parked state without the surface field.
+      surface: leaf.surface ?? (leaf.parked ? 'background' : 'visible'),
       ...(leaf.lastExitCause ? { exitCause: leaf.lastExitCause } : {}),
       ...this.terminalExecutionHostField(leaf.ptyId, leaf.worktreeId),
       ...this.resolvePaneAgentIdentityField(

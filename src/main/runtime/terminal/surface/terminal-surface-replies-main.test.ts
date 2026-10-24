@@ -35,12 +35,23 @@ describe('terminal replies from main (switch on)', () => {
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [], mountedLeaves: MOUNTED })
 
-    // Older readers skip the added verdict; every field they read is unchanged.
-    expect(await captureSurfaceReplies(runtime, { ignore: ['verdict'] })).toBe(
+    // Older readers skip the added verdict and surface; every field they read is unchanged.
+    expect(await captureSurfaceReplies(runtime, { ignore: ['verdict', 'surface'] })).toBe(
       golden('terminal-surface-replies-desktop.json')
     )
     const listed = await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)
     expect(listed.terminals.map((terminal) => terminal.verdict)).toEqual(['live', 'live'])
+    expect(listed.terminals.map((terminal) => terminal.surface)).toEqual(['visible', 'visible'])
+    runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mountedLeaves: MOUNTED.map((leaf) => ({ ...leaf, surface: 'background' as const }))
+    })
+    const hidden = await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)
+    expect(hidden.terminals.map((terminal) => terminal.surface)).toEqual([
+      'background',
+      'background'
+    ])
   })
 
   it('list the saved panes with no window, under their saved tab', async () => {
