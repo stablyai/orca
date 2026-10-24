@@ -20027,7 +20027,8 @@
       "TerminalContextMenu": {
         "copySessionId": "Copy Session ID",
         "copySessionIdSuccess": "Session ID copied",
-        "copySessionIdError": "Unable to copy session ID"
+        "copySessionIdError": "Unable to copy session ID",
+        "copySessionIdUnavailable": "No session ID to copy"
       }
     },
     "settings": {

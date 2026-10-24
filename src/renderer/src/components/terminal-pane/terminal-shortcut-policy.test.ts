@@ -484,6 +484,16 @@ describe('resolveTerminalShortcutAction', () => {
     ).toBeNull()
   })
 
+  it('resolves Copy Session ID only when users assign it', () => {
+    const chord = event({ key: 'i', code: 'KeyI', metaKey: true, shiftKey: true })
+    const keybindings = { 'terminal.copySessionId': ['Mod+Shift+I'] }
+
+    expect(resolveTerminalShortcutAction(chord, true)).toBeNull()
+    expect(resolveTerminalShortcutAction(chord, true, 'false', 0, false, keybindings)).toEqual({
+      type: 'copySessionId'
+    })
+  })
+
   it('lets Ctrl+D pass through as EOF on non-Mac, requires Shift for split (#586)', () => {
     // Ctrl+D without Shift on Windows/Linux must NOT trigger split — it's EOF
     expect(

@@ -23,9 +23,6 @@ import {
 } from './terminal-pane-menu-agent-session-actions'
 import { useTerminalPaneSplitActions } from './use-terminal-pane-split-actions'
 import { useTerminalContextMenuTrigger } from './use-terminal-context-menu-trigger'
-import { useAppStore } from '@/store'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
-import { resolvePaneAgentSessionId } from './pane-agent-session-id'
 import { resetTerminalInputModes } from './terminal-input-mode-reset'
 import { equalizeTerminalPanes } from './terminal-pane-layout-owner-commands'
 
@@ -189,13 +186,8 @@ export function useTerminalPaneContextMenu({
     return copyTerminalPaneMenuTerminalId(pane, tabId, ptyId)
   }
 
-  const onCopyAgentSessionId = async (): Promise<void> => {
-    const pane = resolveMenuPane()
-    const sessionId = pane
-      ? resolvePaneAgentSessionId(useAppStore.getState(), makePaneKey(tabId, pane.leafId))
-      : null
-    return copyTerminalPaneMenuAgentSessionId(pane, sessionId)
-  }
+  const onCopyAgentSessionId = async (): Promise<void> =>
+    copyTerminalPaneMenuAgentSessionId(resolveMenuPane(), tabId)
 
   const onPaste = async (): Promise<void> => pasteResolvedPane('context-menu')
 

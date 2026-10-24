@@ -3,6 +3,8 @@ import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { translate } from '@/i18n/i18n'
 import { copyTerminalHandleForPane } from './terminal-handle-copy'
+import { useAppStore } from '@/store'
+import { resolvePaneAgentSessionId } from './pane-agent-session-id'
 import { runTerminalCopy, runTerminalIdentityCopy } from './terminal-copy-rejection-guards'
 import { readTerminalClipboardSelection } from './terminal-clipboard-selection-text'
 
@@ -89,12 +91,22 @@ export const copyTerminalPaneMenuTerminalId = async (
 
 export const copyTerminalPaneMenuAgentSessionId = async (
   pane: ManagedPane | null,
-  sessionId: string | null
+  tabId: string
 ): Promise<void> => {
   if (!pane) {
     return
   }
+  const sessionId = resolvePaneAgentSessionId(
+    useAppStore.getState(),
+    makePaneKey(tabId, pane.leafId)
+  )
   if (!sessionId) {
+    toast.info(
+      translate(
+        'components.terminalPane.TerminalContextMenu.copySessionIdUnavailable',
+        'No session ID to copy'
+      )
+    )
     pane.terminal.focus()
     return
   }

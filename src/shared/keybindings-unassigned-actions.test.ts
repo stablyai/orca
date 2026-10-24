@@ -56,6 +56,17 @@ describe('keybindings', () => {
     ).toBe(true)
   })
 
+  it('lists Copy Session ID with the terminal pane actions and no default chord', () => {
+    const copySessionId = getKeybindingDefinition('terminal.copySessionId')
+
+    expect(copySessionId?.title).toBe('Copy Session ID')
+    expect(copySessionId?.group).toBe('Terminal Panes')
+    expect(copySessionId?.scope).toBe('terminal')
+    expect(getEffectiveKeybindingsForAction('terminal.copySessionId', 'darwin')).toEqual([])
+    expect(getEffectiveKeybindingsForAction('terminal.copySessionId', 'linux')).toEqual([])
+    expect(getEffectiveKeybindingsForAction('terminal.copySessionId', 'win32')).toEqual([])
+  })
+
   it('binds immediate workspace delete without claiming terminal split right', () => {
     const binding = {
       key: 'Backspace',

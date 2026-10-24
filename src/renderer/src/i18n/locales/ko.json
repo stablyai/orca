@@ -19719,7 +19719,8 @@
       "TerminalContextMenu": {
         "copySessionId": "세션 ID 복사",
         "copySessionIdSuccess": "세션 ID를 복사했습니다",
-        "copySessionIdError": "세션 ID를 복사하지 못했습니다"
+        "copySessionIdError": "세션 ID를 복사하지 못했습니다",
+        "copySessionIdUnavailable": "복사할 세션 ID가 없습니다"
       }
     },
     "jiraUserPicker": {

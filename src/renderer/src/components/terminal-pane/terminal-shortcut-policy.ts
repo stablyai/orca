@@ -56,6 +56,7 @@ export type TerminalShortcutAction =
   | { type: 'toggleExpandActivePane' }
   | { type: 'setTitle' }
   | { type: 'clearPaneTitle' }
+  | { type: 'copySessionId' }
   | { type: 'closeActivePane' }
   | { type: 'splitActivePane'; direction: 'vertical' | 'horizontal' }
   | { type: 'scrollViewport'; position: 'top' | 'bottom' }
@@ -127,6 +128,10 @@ export function resolveTerminalShortcutAction(
 
   if (matches('terminal.copySelection')) {
     return { type: 'copySelection' }
+  }
+
+  if (matches('terminal.copySessionId')) {
+    return { type: 'copySessionId' }
   }
 
   if (!event.repeat) {
