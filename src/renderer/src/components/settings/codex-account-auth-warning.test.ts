@@ -29,6 +29,11 @@ describe('codex account auth warning', () => {
         'Error loading configuration: Your authentication session could not be refreshed automatically.'
       )
     ).toBe(true)
+    expect(
+      isCodexAuthError(
+        'Your authentication token has been invalidated. Please try signing in again.'
+      )
+    ).toBe(true)
   })
 
   it('does not treat generic Codex availability failures as auth errors', () => {
