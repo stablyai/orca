@@ -74,6 +74,12 @@ export const MODEL_PRICING: Record<string, CodexModelPricing> = {
     output: 10,
     longContext: { input: 4, cachedInput: 0.4, output: 15 }
   },
+  'gpt-6.1-sol': {
+    input: 2,
+    cachedInput: 0.1,
+    output: 10,
+    longContext: { input: 4, cachedInput: 0.2, output: 15 }
+  },
   'gpt-6-luna': {
     input: 0.1,
     cachedInput: 0.01,
@@ -86,6 +92,7 @@ const REASONING_TIER_SUFFIXES = ['minimal', 'low', 'medium', 'high', 'xhigh', 'a
 // Preserve model names ending in "-max"; only strip max/ultra inside parentheses.
 const PARENTHESIZED_REASONING_TIERS = [...REASONING_TIER_SUFFIXES, 'max', 'ultra']
 
+/** Removes a recognized parenthesized effort; unknown labels remain unpriced. */
 function stripParenthesizedReasoningTier(model: string): string | null {
   const match = model.match(/^(.*)\(([^()]*)\)$/)
   if (!match) {
@@ -98,6 +105,7 @@ function stripParenthesizedReasoningTier(model: string): string | null {
   return match[1]
 }
 
+/** Strips up to four recognized effort suffixes while preserving model names ending in max. */
 function stripDashReasoningTiers(model: string): string {
   let current = model
   for (let index = 0; index < 4; index++) {
@@ -110,6 +118,7 @@ function stripDashReasoningTiers(model: string): string {
   return current
 }
 
+/** Resolves supported model variants to a price entry; unknown models remain unpriced. */
 export function normalizeModelForPricing(model: string | null): string | null {
   if (!model) {
     return null
@@ -183,6 +192,9 @@ export function normalizeModelForPricing(model: string | null): string | null {
   }
   if (normalized === 'gpt-6-sol' || normalized.startsWith('gpt-6-sol-')) {
     return 'gpt-6-sol'
+  }
+  if (normalized === 'gpt-6.1-sol' || normalized.startsWith('gpt-6.1-sol-')) {
+    return 'gpt-6.1-sol'
   }
   if (normalized === 'gpt-6-luna' || normalized.startsWith('gpt-6-luna-')) {
     return 'gpt-6-luna'
