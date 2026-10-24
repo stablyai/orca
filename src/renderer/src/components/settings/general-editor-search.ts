@@ -1,6 +1,31 @@
+import type { SettingsSearchEntry } from './settings-search'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
+
+/** Shared by the section search gate and the Editor Font Size row, so their keywords cannot drift. */
+export const getEditorFontSizeSearchEntry = createLocalizedCatalog(
+  () =>
+    ({
+      title: translate(
+        'auto.components.settings.general.search.editorFontSize',
+        'Editor Font Size'
+      ),
+      description: translate(
+        'auto.components.settings.general.search.editorFontSizeDesc',
+        'Font size used by file editors and diff views. Leave empty to follow the terminal font size.'
+      ),
+      keywords: [
+        ...translateSearchKeyword('auto.components.settings.general.search.e1ee631696', 'editor'),
+        ...translateSearchKeyword('auto.components.settings.general.search.editorFontKw', 'font'),
+        ...translateSearchKeyword(
+          'auto.components.settings.general.search.editorFontSizeKw',
+          'text size'
+        ),
+        ...translateSearchKeyword('auto.components.settings.general.search.3ca5ab78a5', 'code')
+      ]
+    }) satisfies SettingsSearchEntry
+)
 
 export const getGeneralEditorSearchEntries = createLocalizedCatalog(() => [
   {
@@ -44,6 +69,7 @@ export const getGeneralEditorSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.general.search.3ca5ab78a5', 'code')
     ]
   },
+  getEditorFontSizeSearchEntry(),
   {
     title: translate('auto.components.settings.general.search.e61157e926', 'Editor Word Wrap'),
     description: translate(

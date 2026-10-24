@@ -10192,7 +10192,10 @@
             "close": "닫다",
             "omp": "OMP",
             "nodeDistMirror": "미러",
-            "nodeDistNodejs": "nodejs"
+            "nodeDistNodejs": "nodejs",
+            "editorFontSize": "편집기 글꼴 크기",
+            "editorFontSizeDesc": "파일 편집기 및 diff 보기에서 사용되는 글꼴 크기입니다. 비워두면 터미널 글꼴 크기를 따릅니다.",
+            "editorFontSizeKw": "텍스트 크기"
           }
         },
         "git": {
@@ -13086,6 +13089,9 @@
           "noMatches": "일치하는 빌드가 없습니다.",
           "searchPlaceholder": "빌드 검색…",
           "searchLabel": "빌드 검색"
+        },
+        "EditorFontSizeSetting": {
+          "px": "px"
         }
       },
       "right": {

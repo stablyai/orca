@@ -21,6 +21,7 @@ import { RichMarkdownSpellcheckSetting } from './RichMarkdownSpellcheckSetting'
 import { DiffShowWhitespaceSetting } from './DiffShowWhitespaceSetting'
 import { EditorWordWrapSetting } from './EditorWordWrapSetting'
 import { EditorFontFamilySetting } from './EditorFontFamilySetting'
+import { EditorFontSizeSetting } from './EditorFontSizeSetting'
 import {
   createAutoSaveDelayDraftState,
   resolveAutoSaveDelayDraftState,
@@ -157,6 +158,10 @@ export function GeneralEditorSettingsSection({
             min={MIN_EDITOR_AUTO_SAVE_DELAY_MS}
             max={MAX_EDITOR_AUTO_SAVE_DELAY_MS}
             step={250}
+            aria-label={translate(
+              'auto.components.settings.GeneralEditorSettingsSection.d6cf227ca0',
+              'Auto Save Delay'
+            )}
             value={autoSaveDelayDraft}
             onChange={(e) => updateAutoSaveDelayDraft(e.target.value)}
             onBlur={commitAutoSaveDelay}
@@ -231,6 +236,8 @@ export function GeneralEditorSettingsSection({
         fontSuggestions={fontSuggestions}
         onRequestFontSuggestions={onRequestFontSuggestions}
       />
+
+      <EditorFontSizeSetting settings={settings} updateSettings={updateSettings} />
 
       <EditorWordWrapSetting settings={settings} updateSettings={updateSettings} />
 

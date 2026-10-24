@@ -4,7 +4,11 @@ import type { editor } from 'monaco-editor'
 import { installMonacoEditorFindShortcut } from '@/components/editor/editor-shortcuts'
 import { syncContentOnMount, syncContentUpdate } from '@/components/editor/monaco-content-sync'
 import { isMonacoFindWidgetOpen } from '@/components/editor/monaco-find-widget'
-import { computeEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
+import {
+  computeEditorFontSize,
+  resolveEditorBaseFontSize,
+  resolveEditorFontFamily
+} from '@/lib/editor-font-zoom'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 import '@/lib/monaco-setup'
 import { useAppStore } from '@/store'
@@ -72,7 +76,7 @@ export function AutomationEditorPromptEditor({
     onDismissRef.current = onDismiss
   }, [onDismiss])
 
-  const fontSize = computeEditorFontSize(settings?.terminalFontSize ?? 13, editorFontZoomLevel)
+  const fontSize = computeEditorFontSize(resolveEditorBaseFontSize(settings), editorFontZoomLevel)
   const fontFamily = resolveEditorFontFamily(settings)
   const isDark = useDocumentDarkTheme()
   const options = useMemo(

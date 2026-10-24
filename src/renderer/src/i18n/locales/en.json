@@ -10562,7 +10562,10 @@
             "command": "command",
             "confirm": "confirm",
             "close": "close",
-            "omp": "OMP"
+            "omp": "OMP",
+            "editorFontSize": "Editor Font Size",
+            "editorFontSizeDesc": "Font size used by file editors and diff views. Leave empty to follow the terminal font size.",
+            "editorFontSizeKw": "text size"
           }
         },
         "git": {
@@ -13416,6 +13419,9 @@
           "manualDeleteWarning": "Only do this if no other machine sharing this home runs Orca for this profile.",
           "close": "Close",
           "reclaimedNotStarted": "The lock was cleared, but Orca’s server did not start."
+        },
+        "EditorFontSizeSetting": {
+          "px": "px"
         }
       },
       "right": {

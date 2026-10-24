@@ -144,21 +144,31 @@ it('preserves an autosave draft until external settings change or the section hi
   const props = { settings, updateSettings: vi.fn(), fontSuggestions: [] }
   const view = render(<GeneralPane {...props} />)
   await act(async () => {})
-  fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '2500' } })
+  fireEvent.change(screen.getByRole('spinbutton', { name: 'Auto Save Delay' }), {
+    target: { value: '2500' }
+  })
   fake.query = 'Auto Save'
   await act(async () => view.rerender(<GeneralPane {...props} />))
-  expect(screen.getByRole('spinbutton').getAttribute('value')).toBe('2500')
+  expect(screen.getByRole('spinbutton', { name: 'Auto Save Delay' }).getAttribute('value')).toBe(
+    '2500'
+  )
   expect(props.updateSettings).not.toHaveBeenCalled()
   const changedProps = { ...props, settings: { ...settings, editorAutoSaveDelayMs: 3000 } }
   await act(async () => view.rerender(<GeneralPane {...changedProps} />))
-  expect(screen.getByRole('spinbutton').getAttribute('value')).toBe('3000')
-  fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '3500' } })
+  expect(screen.getByRole('spinbutton', { name: 'Auto Save Delay' }).getAttribute('value')).toBe(
+    '3000'
+  )
+  fireEvent.change(screen.getByRole('spinbutton', { name: 'Auto Save Delay' }), {
+    target: { value: '3500' }
+  })
   fake.query = 'Tab Order'
   await act(async () => view.rerender(<GeneralPane {...changedProps} />))
-  expect(screen.queryByRole('spinbutton')).toBeNull()
+  expect(screen.queryByRole('spinbutton', { name: 'Auto Save Delay' })).toBeNull()
   fake.query = 'Auto Save'
   await act(async () => view.rerender(<GeneralPane {...changedProps} />))
-  expect(screen.getByRole('spinbutton').getAttribute('value')).toBe('3000')
+  expect(screen.getByRole('spinbutton', { name: 'Auto Save Delay' }).getAttribute('value')).toBe(
+    '3000'
+  )
   expect(props.updateSettings).not.toHaveBeenCalled()
 })
 it('retains the revealed release picker only while Updates remains visible', async () => {

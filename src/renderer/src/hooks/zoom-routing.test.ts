@@ -139,6 +139,7 @@ describe('registerZoomIpcBridge', () => {
       uiZoomLevel?: number
       nativeChatAppearance?: NativeChatAppearanceSettings
       editorFontZoomLevel?: number
+      editorFontSize?: number
       viewerTakesZoom?: boolean
     } = {}
   ) {
@@ -148,6 +149,7 @@ describe('registerZoomIpcBridge', () => {
       activeElement = makeTarget({ editorClosest: true, hasXtermClass: true }),
       uiZoomLevel = 0,
       editorFontZoomLevel = 0,
+      editorFontSize,
       nativeChatAppearance,
       viewerTakesZoom = false
     } = args
@@ -156,7 +158,7 @@ describe('registerZoomIpcBridge', () => {
     const dispatchZoomLevelChanged = vi.fn()
     const setEditorFontZoomLevel = vi.fn()
     const setUI = vi.fn()
-    const settings = { terminalFontSize: 13, nativeChatAppearance }
+    const settings = { terminalFontSize: 13, editorFontSize, nativeChatAppearance }
     const updateSettings = vi.fn(async (updates: Partial<typeof settings>) => {
       Object.assign(settings, updates)
     })
@@ -328,6 +330,20 @@ describe('registerZoomIpcBridge', () => {
     // 13px base + one step = 14px, reported against the base as 108%.
     expect(zoom.dispatchZoomLevelChanged).toHaveBeenCalledWith('editor', 108)
     expect(zoom.applyUIZoom).not.toHaveBeenCalled()
+  })
+
+  it('reports editor zoom against the editor font size when the user set one', async () => {
+    const zoom = await mountZoomBridge({
+      activeTabType: 'editor',
+      activeElement: makeTarget({}),
+      editorFontZoomLevel: 0,
+      editorFontSize: 20
+    })
+
+    zoom.fire('in')
+
+    // 20px editor base + one step = 21px, reported as 105%; the 13px terminal size plays no part.
+    expect(zoom.dispatchZoomLevelChanged).toHaveBeenCalledWith('editor', 105)
   })
 
   it('hands editor-tab zoom to the PDF it shows instead of editor font zoom', async () => {

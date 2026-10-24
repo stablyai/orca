@@ -10192,7 +10192,10 @@
             "close": "关闭",
             "omp": "OMP",
             "nodeDistMirror": "镜像",
-            "nodeDistNodejs": "nodejs"
+            "nodeDistNodejs": "nodejs",
+            "editorFontSize": "编辑器字体大小",
+            "editorFontSizeDesc": "文件编辑器和差异视图使用的字体大小，留空则跟随终端字体大小。",
+            "editorFontSizeKw": "文字大小"
           }
         },
         "git": {
@@ -13086,6 +13089,9 @@
           "searchPlaceholder": "搜索构建...",
           "noMatches": "没有匹配的版本。",
           "searchLabel": "搜索构建"
+        },
+        "EditorFontSizeSetting": {
+          "px": "像素"
         }
       },
       "right": {

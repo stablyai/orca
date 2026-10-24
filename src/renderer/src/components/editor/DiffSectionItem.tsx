@@ -3,7 +3,11 @@ import type { DiffOnMount } from '@monaco-editor/react'
 import type { editor as monacoEditor } from 'monaco-editor'
 import { detectLanguage } from '@/lib/language-detect'
 import { useAppStore } from '@/store'
-import { computeDiffEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
+import {
+  computeDiffEditorFontSize,
+  resolveEditorBaseFontSize,
+  resolveEditorFontFamily
+} from '@/lib/editor-font-zoom'
 import { selectWorktreeDiffComments } from '@/store/worktree-diff-comments-selector'
 import { useDiffCommentDecorator } from '../diff-comments/useDiffCommentDecorator'
 import { applyDiffEditorLineNumberOptions } from './diff-editor-line-number-options'
@@ -73,7 +77,7 @@ export function DiffSectionItem({
     [section.contentGeneration, section.key, worktreeId]
   )
   const diffEditorFontSize = computeDiffEditorFontSize(
-    settings?.terminalFontSize ?? 13,
+    resolveEditorBaseFontSize(settings),
     editorFontZoomLevel
   )
 
