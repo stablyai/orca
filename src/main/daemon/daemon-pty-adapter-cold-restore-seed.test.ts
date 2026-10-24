@@ -10,7 +10,6 @@ import { TERMINAL_HISTORY_INLINE_SEED_CODE_UNITS } from './terminal-history-seed
 import { createMockSubprocess, startDaemonAdapterHarness } from './daemon-pty-adapter-test-harness'
 import type * as DaemonHealthModule from './daemon-health'
 import type * as DaemonTccAttributionModule from './daemon-tcc-attribution'
-import type * as WslColdRestoreCwdModule from './wsl-cold-restore-cwd'
 
 const { getMacDaemonSystemResolverHealthMock, getMacDaemonTccAttributionHealthMock } = vi.hoisted(
   () => ({
@@ -38,12 +37,6 @@ vi.mock('./daemon-tcc-attribution', async (importOriginal) => {
     getMacDaemonTccAttributionHealth: getMacDaemonTccAttributionHealthMock
   }
 })
-
-// The distro folders these tests restore into exist only in name on this machine.
-vi.mock('./wsl-cold-restore-cwd', async (importOriginal) => ({
-  ...(await importOriginal<typeof WslColdRestoreCwdModule>()),
-  existingWslColdRestoreCwd: async (cwd: string) => cwd
-}))
 
 describe('DaemonPtyAdapter (IPtyProvider)', () => {
   let dir: string
