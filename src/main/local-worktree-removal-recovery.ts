@@ -7,7 +7,7 @@ import { formatWorktreeRemovalError } from './ipc/worktree-logic'
 import { listWorktreesStrict, type GitWorktreeExecOptions } from './git/worktree'
 import { removeLocalWorktreePath } from './local-worktree-filesystem'
 
-type LocalWindowsRemovalRecoveryArgs = {
+type LocalPartialRemovalRecoveryArgs = {
   error: unknown
   force: boolean
   canonicalWorktreePath: string
@@ -20,7 +20,7 @@ type LocalWindowsRemovalRecoveryArgs = {
 }
 
 type StaleLocalWorktreeRegistrationArgs = Omit<
-  LocalWindowsRemovalRecoveryArgs,
+  LocalPartialRemovalRecoveryArgs,
   'error' | 'force' | 'closeWatcher' | 'signal'
 >
 
@@ -105,13 +105,13 @@ async function removeRequiredGitWorktreeRegistration(
   return result ?? preservedBranchResult(args.registeredWorktree, args.deleteBranch)
 }
 
-export async function recoverLocalWindowsWorktreeRemoval(
-  args: LocalWindowsRemovalRecoveryArgs
+export async function recoverPartialLocalWorktreeRemoval(
+  args: LocalPartialRemovalRecoveryArgs
 ): Promise<RemoveWorktreeResult | undefined> {
   // Reject Git locks before recovery can recursively delete files.
   assertWorktreeUnlockedForRemoval(args.registeredWorktree)
 
-  if (!(await isRecoverableWindowsFilesystemRemovalFailure(args))) {
+  if (!(await isRecoverablePartialRemovalFailure(args))) {
     return undefined
   }
 
@@ -129,10 +129,10 @@ export async function recoverLocalWindowsWorktreeRemoval(
   return removeRequiredGitWorktreeRegistration(args, args.force)
 }
 
-async function isRecoverableWindowsFilesystemRemovalFailure(
-  args: LocalWindowsRemovalRecoveryArgs
+async function isRecoverablePartialRemovalFailure(
+  args: LocalPartialRemovalRecoveryArgs
 ): Promise<boolean> {
-  if (process.platform !== 'win32' || typeof args.error !== 'object' || args.error === null) {
+  if (typeof args.error !== 'object' || args.error === null) {
     return false
   }
 
