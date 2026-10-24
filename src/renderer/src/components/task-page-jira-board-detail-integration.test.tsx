@@ -183,6 +183,7 @@ function StoreBackedBoardAndDetail({
         onClose={() => {}}
       />
       <TaskPageJiraBoardView
+        columnOrderScopeKey="board-test"
         issues={[cachedIssue]}
         selectedIssue={cachedIssue}
         sourceContext={sourceContext}

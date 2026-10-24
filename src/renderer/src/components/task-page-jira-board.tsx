@@ -22,6 +22,7 @@ import {
   buildJiraBoardSections,
   type TaskPageJiraBoardSection
 } from './task-page-jira-board-sections'
+import { useJiraBoardColumnOrder } from './use-jira-board-column-order'
 
 export function jiraBoardIssueRefKey(issue: Pick<JiraIssue, 'key' | 'siteId'>): string {
   return `${issue.siteId ?? 'site'}:${issue.key}`
@@ -35,6 +36,8 @@ function matchesDragRef(issue: JiraIssue, ref: JiraBoardIssueDragRef): boolean {
 }
 
 type TaskPageJiraBoardProps = {
+  /** Identifies the board whose saved lane order applies. */
+  columnOrderScopeKey: string
   formatUpdatedAt: (updatedAt: string) => string
   getStatusTone?: (categoryKey: string) => string
   issues: JiraIssue[]
@@ -56,6 +59,7 @@ function isSelectedIssue(issue: JiraIssue, selectedIssue: JiraIssue | null): boo
 }
 
 export function TaskPageJiraBoard({
+  columnOrderScopeKey,
   formatUpdatedAt,
   issues,
   onMoveIssue,
@@ -69,10 +73,21 @@ export function TaskPageJiraBoard({
 }: TaskPageJiraBoardProps): React.JSX.Element {
   const [draggingIssueRefKey, setDraggingIssueRefKey] = useState<string | null>(null)
   const [dragOverSectionKey, setDragOverSectionKey] = useState<string | null>(null)
-  const sections = useMemo(
+  const boardSections = useMemo(
     () => buildJiraBoardSections(issues, statusOrder, statusDirection),
     [issues, statusDirection, statusOrder]
   )
+  const {
+    sections,
+    draggingColumnKey,
+    dragOverColumnKey,
+    onColumnDragStart,
+    onColumnDragEnd,
+    onColumnDragOver,
+    onColumnDrop,
+    moveColumnBy,
+    registerColumnHeader
+  } = useJiraBoardColumnOrder(boardSections, columnOrderScopeKey)
 
   const handleCardDragStart = (issue: JiraIssue, event: React.DragEvent<HTMLDivElement>): void => {
     if (updatingIssueKeys.has(jiraBoardIssueRefKey(issue))) {
@@ -92,7 +107,7 @@ export function TaskPageJiraBoard({
     section: TaskPageJiraBoardSection,
     event: React.DragEvent<HTMLElement>
   ): void => {
-    if (!draggingIssueRefKey) {
+    if (onColumnDragOver(section.key, event) || !draggingIssueRefKey) {
       return
     }
     event.preventDefault()
@@ -104,6 +119,9 @@ export function TaskPageJiraBoard({
     section: TaskPageJiraBoardSection,
     event: React.DragEvent<HTMLElement>
   ): void => {
+    if (onColumnDrop(section.key, event)) {
+      return
+    }
     event.preventDefault()
     event.stopPropagation()
     setDragOverSectionKey(null)
@@ -140,10 +158,30 @@ export function TaskPageJiraBoard({
             onDrop={(event) => handleSectionDrop(section, event)}
             className={cn(
               'w-72 shrink-0 rounded-md border border-border/50 bg-muted/20 transition-[border-color,box-shadow]',
-              dragOverSectionKey === section.key && 'border-ring/70 ring-1 ring-ring/70'
+              (dragOverSectionKey === section.key || dragOverColumnKey === section.key) &&
+                'border-ring/70 ring-1 ring-ring/70',
+              draggingColumnKey === section.key && 'opacity-50'
             )}
           >
-            <div className="flex h-9 items-center justify-between border-b border-border/50 px-3">
+            <div
+              ref={(node) => registerColumnHeader(section.key, node)}
+              role="button"
+              tabIndex={0}
+              draggable
+              aria-label={translate('jira.board.reorderColumn', 'Reorder {{column}}', {
+                column: section.label
+              })}
+              onDragStart={(event) => onColumnDragStart(section.key, event)}
+              onDragEnd={onColumnDragEnd}
+              onKeyDown={(event) => {
+                if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') {
+                  return
+                }
+                event.preventDefault()
+                moveColumnBy(section.key, event.key === 'ArrowLeft' ? -1 : 1)
+              }}
+              className="flex h-9 cursor-grab items-center justify-between border-b border-border/50 px-3 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring active:cursor-grabbing"
+            >
               <Badge variant="secondary">
                 <span className="truncate">{section.label || '—'}</span>
               </Badge>

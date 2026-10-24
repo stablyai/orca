@@ -1,6 +1,7 @@
 import { measureClipboardTextByteLength } from '../../../shared/clipboard-text'
 
 export const JIRA_BOARD_DRAG_ISSUE_MIME = 'application/x-orca-jira-issue-ref'
+export const JIRA_BOARD_DRAG_COLUMN_MIME = 'application/x-orca-jira-board-column'
 export const JIRA_BOARD_DRAG_ISSUE_REF_MAX_BYTES = 1024
 
 // Why: Jira issue keys are only unique per site, so the payload carries both.
@@ -64,6 +65,38 @@ export function readJiraBoardIssueDragData(
     status: 'issue',
     ref: siteId ? { key: parsed.key, siteId } : { key: parsed.key }
   }
+}
+
+export type JiraBoardColumnDragReadResult =
+  | { status: 'column'; key: string }
+  | { status: 'hidden' }
+  | { status: 'missing' }
+  | { status: 'rejected'; reason: 'too-large' }
+
+export function writeJiraBoardColumnDragData(
+  dataTransfer: Pick<DataTransfer, 'setData'> & { effectAllowed: string },
+  key: string
+): boolean {
+  if (!key || isJiraBoardIssueRefTooLarge(key)) {
+    return false
+  }
+  dataTransfer.effectAllowed = 'move'
+  dataTransfer.setData(JIRA_BOARD_DRAG_COLUMN_MIME, key)
+  return true
+}
+
+export function readJiraBoardColumnDragData(
+  dataTransfer: Pick<DataTransfer, 'getData' | 'types'>
+): JiraBoardColumnDragReadResult {
+  const hasTypedPayload = Array.from(dataTransfer.types).includes(JIRA_BOARD_DRAG_COLUMN_MIME)
+  const payload = dataTransfer.getData(JIRA_BOARD_DRAG_COLUMN_MIME)
+  if (!payload) {
+    return hasTypedPayload ? { status: 'hidden' } : { status: 'missing' }
+  }
+  if (isJiraBoardIssueRefTooLarge(payload)) {
+    return { status: 'rejected', reason: 'too-large' }
+  }
+  return { status: 'column', key: payload }
 }
 
 function isJiraBoardIssueRefTooLarge(payload: string): boolean {

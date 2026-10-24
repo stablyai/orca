@@ -55,6 +55,7 @@ export function TaskPageJiraContent({
     toggleJiraColumn,
     displayedJiraIssues,
     displayedJiraStatusOrder,
+    displayedJiraStatusOrderScopeKey,
     sortedJiraIssues,
     setJiraConnectOpen,
     handleUseJiraItem,
@@ -207,6 +208,7 @@ export function TaskPageJiraContent({
               sourceContext={jiraTaskSourceContext}
               target={boardTarget}
               scopeKey={boardScopeKey}
+              columnOrderScopeKey={displayedJiraStatusOrderScopeKey ?? boardScopeKey}
               onOpenIssue={openJiraDetailPage}
               onStartWorkspace={handleUseJiraItem}
               showSiteContext={selectedJiraSiteId === 'all'}

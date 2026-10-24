@@ -20960,7 +20960,8 @@
       "chooseTransition": "ステータス変更を選択:",
       "cancel": "キャンセル",
       "noTransition": "{{key}} では {{column}} へのステータス変更を利用できません。",
-      "queryTooLong": "Jira クエリが長すぎます。クエリを短くするか、フィルターをクリアしてください。"
+      "queryTooLong": "Jira クエリが長すぎます。クエリを短くするか、フィルターをクリアしてください。",
+      "reorderColumn": "{{column}} を並び替え"
     },
     "favourites": {
       "activeLabel": "Jira のお気に入り: {{name}}",
