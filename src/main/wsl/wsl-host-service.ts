@@ -27,6 +27,7 @@ import {
 } from './wsl-host-add-admission'
 import type { WslOrcadConnection } from './wsl-orcad-connection'
 import { registerWslHost } from './wsl-host-registration'
+import { rememberWslHostsToWake } from './wsl-host-early-wake'
 import type { WslOrcadConnectionStatus } from './wsl-orcad-connection-status'
 
 /** The WSL side the service drives: C3 holder, C5 connections, C6 liveness (or an e2e fake). */
@@ -175,6 +176,7 @@ export class WslHostService {
       }
       removeWslHostEnvironment(this.deps.userDataPath(), environmentId)
       this.visible.delete(environmentId)
+      this.rememberVisibleDistros()
     } finally {
       // Why: a failed removal (e.g. EBUSY on Windows) must leave the host usable and removable.
       this.removing.delete(environmentId)
@@ -199,6 +201,7 @@ export class WslHostService {
       return
     }
     this.disableGeneration += 1
+    this.rememberVisibleDistros()
     for (const record of this.records()) {
       await connector.disconnect(record.distro)
       await connector.releaseHolder(record.distro)
@@ -250,6 +253,7 @@ export class WslHostService {
 
   setVisibleWork(environmentIds: readonly string[], previous = this.visible): void {
     this.visible = new Set(environmentIds.filter((id) => !this.removing.has(id)))
+    this.rememberVisibleDistros()
     if (!this.connector || !this.canRun()) {
       return
     }
@@ -261,6 +265,14 @@ export class WslHostService {
         })
       }
     }
+  }
+
+  /** What the next launch boots before its window loads; nothing while the hosts cannot run. */
+  private rememberVisibleDistros(): void {
+    const distros = this.canRun()
+      ? [...this.visible].flatMap((id) => this.recordForEnvironment(id)?.distro ?? [])
+      : []
+    rememberWslHostsToWake(this.deps.userDataPath(), distros)
   }
 
   hasUserVisibleWork(distro: string): boolean {

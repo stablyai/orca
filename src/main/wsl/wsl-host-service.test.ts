@@ -13,6 +13,7 @@ import type { WslHostServerStop, WslHostStatus } from '../../shared/wsl-host-typ
 import { OrcadHostUnsupportedError } from '../orcad/orcad-host-unavailable'
 import type { WslHostDistroCandidate } from './wsl-host-distro-list'
 import { WslHostService, type WslHostConnector } from './wsl-host-service'
+import { wakeRememberedWslHosts } from './wsl-host-early-wake'
 import { WslOrcadLaunchDeferredError } from './wsl-orcad-connection-errors'
 import type { WslOrcadConnection } from './wsl-orcad-connection'
 
@@ -519,6 +520,25 @@ describe('WslHostService', () => {
     })
     await service.add({ distro: 'Ubuntu' })
     expect(knownWhileAdding).toBe(true)
+  })
+
+  it('remembers the distros with open work for the next launch, and forgets them when off', async () => {
+    const connector = makeConnector([UBUNTU])
+    const service = makeService(connector)
+    await service.add({ distro: 'Ubuntu' })
+    const spawn = vi.fn()
+
+    service.setVisibleWork(['wsl:ubuntu'])
+    expect(wakeRememberedWslHosts(userDataPath, spawn)).toEqual(['Ubuntu'])
+
+    service.setVisibleWork([])
+    expect(wakeRememberedWslHosts(userDataPath, spawn)).toEqual([])
+
+    service.setVisibleWork(['wsl:ubuntu'])
+    enabled = false
+    await service.enabledChanged(false)
+    expect(wakeRememberedWslHosts(userDataPath, spawn)).toEqual([])
+    expect(spawn).toHaveBeenCalledOnce()
   })
 
   it('adopts holders at startup only when a WSL host exists', async () => {
