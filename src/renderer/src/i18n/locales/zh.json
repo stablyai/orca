@@ -1449,7 +1449,6 @@
         "0bbdc673c1": "刷新检查失败",
         "e7007aa1d8": "如果没有存储库路径，则无法刷新检查。",
         "675bc0d638": "取消",
-        "a18f669c7a": "{{value0}} {{value1}} 反应{{value2}}",
         "53fe19aefc": "打开 GitHub 合并框",
         "a2495e4784": "PR",
         "ce360fc318": "无法禁用自动合并",
@@ -1582,7 +1581,9 @@
         "8812225174": "重新打开",
         "09d67a0f9b": "无法关闭拉取请求",
         "88809e79db": "无法重新提交拉取请求",
-        "00f55cc17b": "此拉取请求无法访问存储库。"
+        "00f55cc17b": "此拉取请求无法访问存储库。",
+        "reactionCountSingular": "{{count}} {{reaction}} 反应",
+        "reactionCountPlural": "{{count}} {{reaction}} 反应"
       },
       "GitLabItemDialog": {
         "65e784c1f1": "重新打开",
@@ -1643,12 +1644,13 @@
         "22511537d2": "已批准",
         "00f3bab87b": "需要 {{value0}}",
         "11384f99aa": "数字",
-        "40c56b95e2": "{{value0}} 批准{{value1}} 剩余",
         "3a051b8ade": "工作项目",
         "32f8bef818": "无日志输出。",
         "4168eb2c51": "解决",
         "commentTooLarge": "评论过长，无法安全提交。",
-        "gitlabActionFailed": "GitLab 操作失败。"
+        "gitlabActionFailed": "GitLab 操作失败。",
+        "approvalsRemainingSingular": "{{count}} 批准 剩余",
+        "approvalsRemainingPlural": "{{count}} 批准 剩余"
       },
       "JiraIssueWorkspace": {
         "b0b92666c9": "评论",
@@ -2357,10 +2359,8 @@
         "3b11c8e8fc": "数组",
         "e178c0a953": "在创建议题之前选择一个 Jira 项目。",
         "0f7b0d964a": "在 {{value0}} 中创建一个新议题。",
-        "eff9800d4b": "{{value0}} 标签{{value1}}",
         "d7f16d0e32": "选择团队",
         "5301ca0f20": "创建项目",
-        "7719d8daa9": "{{value0}} 成员{{value1}}",
         "5af6f0ae5b": "选择团队",
         "cfb730b73e": "议题",
         "3659f9792a": "看板",
@@ -2462,7 +2462,11 @@
         "jiraColumnStoryPoints": "点数",
         "jiraColumnOriginalEstimate": "预估",
         "jiraColumnRemainingEstimate": "剩余",
-        "jiraBoardEmptyColumn": "没有议题"
+        "jiraBoardEmptyColumn": "没有议题",
+        "labelCountPlural": "{{count}} 标签",
+        "labelCountSingular": "{{count}} 标签",
+        "memberCountPlural": "{{count}} 成员",
+        "memberCountSingular": "{{count}} 成员"
       },
       "Terminal": {
         "73768427cf": "关闭",
@@ -3444,8 +3448,6 @@
             "drop": {
               "handler": {
                 "1e072f611e": "无法上传 {{value0}} {{value1}}。",
-                "53f015fd85": "跳过 {{value0}} 符号链接 {{value1}}。",
-                "29c031b49a": "正在上传 {{value0}} 文件{{value1}} 到运行时...",
                 "0c77693641": "工作树尚未准备好 - 请稍后再试。",
                 "ce8248b835": "工作树路径不可用。",
                 "internalTooManyPaths": "拖放的路径过多，无法安全粘贴到终端。",
@@ -3453,7 +3455,11 @@
                 "internalHostMismatch": "请拖放与此终端位于同一主机的文件。",
                 "b4cf68e889": "已跳过 {{value0}} {{value1}}。",
                 "writeTimeout": "文件拖放已取消：终端在安全超时前未接受路径。",
-                "writeRejected": "文件拖放已取消：终端无法接受路径。"
+                "writeRejected": "文件拖放已取消：终端无法接受路径。",
+                "skippedSymlinkSingular": "跳过 {{count}} 符号链接。",
+                "skippedSymlinkPlural": "跳过 {{count}} 符号链接。",
+                "uploadingFileSingular": "正在上传 {{count}} 文件 到运行时...",
+                "uploadingFilePlural": "正在上传 {{count}} 文件 到运行时..."
               }
             }
           },
@@ -5967,7 +5973,6 @@
           "0cd15956d4": "隐藏 {{value0}} 个子工作区",
           "bd37a57ac8": "为 {{value0}} 创建工作区",
           "b667b59632": "部分项目无法从 Orca 中移除",
-          "f94466bc39": "删除分组后，{{value1}} 个包含项目{{value2}}中仍剩 {{value0}} 个。",
           "groupDeleteFailed": "删除分组失败",
           "groupDeleteFailedDesc": "删除分组时出现问题。没有项目被移除。",
           "7a8b9c0d1e": "需要更新",
@@ -5978,7 +5983,9 @@
           "failedUnnestWorkspace": "展开工作区失败",
           "groupRenameFailed": "重命名组失败",
           "groupRenameFailedDesc": "Orca 无法与该群组的主持人确认新名称。重新连接后重新检查该组。",
-          "hostRepairRequired": "Re-pair required"
+          "hostRepairRequired": "Re-pair required",
+          "groupProjectsRemainedSingular": "删除分组后，{{count}} 个包含项目中仍剩 {{remaining}} 个。",
+          "groupProjectsRemainedPlural": "删除分组后，{{count}} 个包含项目中仍剩 {{remaining}} 个。"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "取消",
@@ -6525,7 +6532,6 @@
           "pairingCommand": "orca serve --pairing-address <host>",
           "pairingHelpSuffix": "，然后粘贴打印出的配对 URL。",
           "sshImportAlreadySynced": "~/.ssh/config 已同步。",
-          "sshImportSynced": "已同步 {{value0}} 个主机{{value1}}。",
           "sshImportFailed": "导入 SSH 配置失败。",
           "sshPersistenceDefault": "此主机上的远程终端会保持运行，直到你结束它们或重置中继。",
           "advanced": "Advanced",
@@ -6560,7 +6566,9 @@
           "identityFileFromConfigHint": "故意留空：Orca 使用 ~/.ssh/config 解析为 {{value0}} 的每个密钥。键入一个路径以仅使用该键。",
           "sshConfigPickerRetry": "重试",
           "sshConfigPickerResolving": "阅读…",
-          "pairingHelpShareComputer": "在另一台电脑上通过“设置 → 远程 Orca 服务器 → 共享此电脑”创建。"
+          "pairingHelpShareComputer": "在另一台电脑上通过“设置 → 远程 Orca 服务器 → 共享此电脑”创建。",
+          "sshImportSyncedPlural": "已同步 {{count}} 个主机。",
+          "sshImportSyncedSingular": "已同步 {{count}} 个主机。"
         },
         "ForgetSshWorkspaceDialog": {
           "reconnectFailed": "重新连接失败",
@@ -13460,7 +13468,6 @@
             "e131cd7128": "源代码管理仅适用于 Git 存储库",
             "c07b236287": "选择一个工作区以查看更改",
             "dc5a6465fc": "{{value0}}（例如 {{value1}}{{value2}}）",
-            "8eb3782a0c": "无法丢弃 {{value0}} 文件{{value1}}",
             "a5e5a11090": "放弃所有失败 - 无法在放弃之前取消暂存文件",
             "8a5ba6a988": "无法加载提交差异",
             "fe5bd1a610": "创建 {{value0}}...",
@@ -13469,7 +13476,6 @@
             "0453ca3a9a": "{{value0}} 已创建，但 Orca 尚无法刷新它。",
             "f99560ab29": "中止 {{value0}} 失败",
             "eae7a1da5f": "无法清除笔记。",
-            "657e0c90ad": "{{value0}} 注{{value1}}",
             "df5040e3c3": "取消暂存",
             "8cde1a2fb0": "暂存",
             "d54dd48b0b": "放弃更改",
@@ -13612,7 +13618,11 @@
             "entryDiscardFailed": "无法丢弃“{{value0}}”",
             "entryDeleteFailed": "删除“{{value0}}”失败",
             "entryFailedInWorkspace": "{{value0}} 在 {{value1}} 中",
-            "diffCommentNotesCopyFailed": "复制笔记失败"
+            "diffCommentNotesCopyFailed": "复制笔记失败",
+            "discardFailedSingular": "无法丢弃 {{count}} 文件",
+            "discardFailedPlural": "无法丢弃 {{count}} 文件",
+            "noteCountSingular": "{{count}} 注",
+            "noteCountPlural": "{{count}} 注"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "无法启动选定的智能体。",
@@ -14145,7 +14155,8 @@
               },
               "compare": {
                 "summary": {
-                  "dd72a6fd37": "{{value0}} 在 {{value2}} 之前提交 {{value1}}"
+                  "commitsAheadSingular": "领先 {{ref}} {{count}} 个提交",
+                  "commitsAheadPlural": "领先 {{ref}} {{count}} 个提交"
                 }
               },
               "conflict": {
@@ -14718,12 +14729,13 @@
           "5c115cb713": "CLI 未安装",
           "217beb0658": "GitHub",
           "4983ae7433": "使用个人 API 密钥添加 Linear 访问权限。完全访问密钥可显示密钥所有者可访问的全部团队。",
-          "b08a6ac93c": "{{value0}} 工作区{{value1}} 已链接。随时添加另一个工作区或更换受限密钥。",
           "93f0c49ad1": "未认证",
           "a3bcf13694": "已连接",
           "d6e5dba05a": "登录",
           "0b4a7d23ab": "登录",
-          "a74c6d6b18": "未安装"
+          "a74c6d6b18": "未安装",
+          "linearWorkspacesLinkedSingular": "{{count}} 工作区 已链接。随时添加另一个工作区或更换受限密钥。",
+          "linearWorkspacesLinkedPlural": "{{count}} 工作区 已链接。随时添加另一个工作区或更换受限密钥。"
         },
         "NotificationStep": {
           "3bede04483": "发送测试通知",

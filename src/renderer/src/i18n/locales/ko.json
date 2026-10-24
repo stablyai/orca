@@ -1449,7 +1449,6 @@
         "0bbdc673c1": "체크를 새로고침하지 못했습니다.",
         "e7007aa1d8": "repos 경로가 없으면 체크를 새로고침할 수 없습니다.",
         "675bc0d638": "취소",
-        "a18f669c7a": "{{value0}} {{value1}} 반응{{value2}}",
         "53fe19aefc": "GitHub 병합 대화상자 열기",
         "a2495e4784": "PR",
         "ce360fc318": "자동 병합을 비활성화하지 못했습니다.",
@@ -1582,7 +1581,9 @@
         "8812225174": "다시 열기",
         "09d67a0f9b": "PR을 닫지 못했습니다.",
         "88809e79db": "PR을 다시 열지 못했습니다.",
-        "00f55cc17b": "이 PR에는 저장소 액세스를 사용할 수 없습니다."
+        "00f55cc17b": "이 PR에는 저장소 액세스를 사용할 수 없습니다.",
+        "reactionCountSingular": "{{reaction}} 반응 {{count}}개",
+        "reactionCountPlural": "{{reaction}} 반응 {{count}}개"
       },
       "GitLabItemDialog": {
         "65e784c1f1": "다시 열기",
@@ -1643,12 +1644,13 @@
         "22511537d2": "승인됨",
         "00f3bab87b": " / 총 {{value0}}개 필요",
         "11384f99aa": "숫자",
-        "40c56b95e2": "{{value0}} 승인{{value1}} 남음",
         "3a051b8ade": "작업 항목",
         "32f8bef818": "로그 출력이 없습니다.",
         "4168eb2c51": "해결",
         "commentTooLarge": "댓글이 너무 길어 안전하게 제출할 수 없습니다.",
-        "gitlabActionFailed": "GitLab 작업이 실패했습니다."
+        "gitlabActionFailed": "GitLab 작업이 실패했습니다.",
+        "approvalsRemainingSingular": "승인 {{count}}개 남음",
+        "approvalsRemainingPlural": "승인 {{count}}개 남음"
       },
       "JiraIssueWorkspace": {
         "b0b92666c9": "댓글",
@@ -2357,10 +2359,8 @@
         "3b11c8e8fc": "배열",
         "e178c0a953": "이슈를 생성하기 전에 Jira 프로젝트를 선택하세요.",
         "0f7b0d964a": "{{value0}}에 새로운 이슈를 생성합니다.",
-        "eff9800d4b": "{{value0}} 라벨{{value1}}",
         "d7f16d0e32": "팀 선택",
         "5301ca0f20": "프로젝트 생성",
-        "7719d8daa9": "{{value0}} 멤버{{value1}}",
         "5af6f0ae5b": "팀 선택",
         "cfb730b73e": "이슈",
         "3659f9792a": "보드",
@@ -2462,7 +2462,11 @@
         "jiraColumnStoryPoints": "포인트",
         "jiraColumnOriginalEstimate": "예상",
         "jiraColumnRemainingEstimate": "남음",
-        "jiraBoardEmptyColumn": "이슈 없음"
+        "jiraBoardEmptyColumn": "이슈 없음",
+        "labelCountPlural": "라벨 {{count}}개",
+        "labelCountSingular": "라벨 {{count}}개",
+        "memberCountPlural": "멤버 {{count}}명",
+        "memberCountSingular": "멤버 {{count}}명"
       },
       "Terminal": {
         "73768427cf": "닫기",
@@ -3444,8 +3448,6 @@
             "drop": {
               "handler": {
                 "1e072f611e": "{{value0}} {{value1}}을(를) 업로드하지 못했습니다.",
-                "53f015fd85": "{{value0}} 심볼릭 링크{{value1}}을 건너뛰었습니다.",
-                "29c031b49a": "{{value0}} 파일{{value1}}을 런타임에 업로드하는 중…",
                 "0c77693641": "Worktree가 준비되지 않았습니다. 잠시 후에 다시 시도하세요.",
                 "ce8248b835": "작업 트리 경로를 사용할 수 없습니다.",
                 "internalTooManyPaths": "터미널에 안전하게 붙여넣기에는 드롭된 경로가 너무 많습니다.",
@@ -3453,7 +3455,11 @@
                 "internalHostMismatch": "이 터미널과 같은 호스트의 파일을 드롭하세요.",
                 "b4cf68e889": "{{value0}} {{value1}}을(를) 건너뛰었습니다.",
                 "writeTimeout": "파일 드롭이 취소되었습니다. 안전 시간 제한 전에 터미널이 경로를 받지 않았습니다.",
-                "writeRejected": "파일 드롭이 취소되었습니다. 터미널이 경로를 받을 수 없습니다."
+                "writeRejected": "파일 드롭이 취소되었습니다. 터미널이 경로를 받을 수 없습니다.",
+                "skippedSymlinkSingular": "심볼릭 링크 {{count}}개를 건너뛰었습니다.",
+                "skippedSymlinkPlural": "심볼릭 링크 {{count}}개를 건너뛰었습니다.",
+                "uploadingFileSingular": "파일 {{count}}개를 런타임에 업로드하는 중…",
+                "uploadingFilePlural": "파일 {{count}}개를 런타임에 업로드하는 중…"
               }
             }
           },
@@ -5967,7 +5973,6 @@
           "0cd15956d4": "{{value0}}개 하위 워크스페이스 숨기기",
           "bd37a57ac8": "{{value0}}에 대한 워크스페이스 만들기",
           "b667b59632": "일부 프로젝트를 Orca에서 제거하지 못했습니다.",
-          "f94466bc39": "그룹 삭제 후에도 {{value0}}/{{value1}} 프로젝트{{value2}}가 남아 있습니다.",
           "groupDeleteFailed": "그룹을 삭제하지 못했습니다.",
           "groupDeleteFailedDesc": "그룹을 삭제하는 중 문제가 발생했습니다. 제거된 프로젝트는 없습니다.",
           "7a8b9c0d1e": "업데이트 필요",
@@ -5978,7 +5983,9 @@
           "failedUnnestWorkspace": "워크트리 펼치기 실패",
           "groupRenameFailed": "그룹 이름을 바꾸지 못했습니다.",
           "groupRenameFailedDesc": "Orca는 그룹 호스트에게 새 이름을 확인할 수 없습니다. 다시 연결한 후 그룹을 다시 확인하세요.",
-          "hostRepairRequired": "Re-pair required"
+          "hostRepairRequired": "Re-pair required",
+          "groupProjectsRemainedSingular": "그룹을 삭제했지만, 포함된 프로젝트 {{count}}개 중 {{remaining}}개가 남아 있습니다.",
+          "groupProjectsRemainedPlural": "그룹을 삭제했지만, 포함된 프로젝트 {{count}}개 중 {{remaining}}개가 남아 있습니다."
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "취소",
@@ -6525,7 +6532,6 @@
           "pairingCommand": "orca serve --pairing-address <host>",
           "pairingHelpSuffix": "한 다음 출력된 페어링 URL을 붙여넣으세요.",
           "sshImportAlreadySynced": "~/.ssh/config가 이미 동기화되어 있습니다.",
-          "sshImportSynced": "{{value0}} 호스트{{value1}}을(를) Orca에 추가했습니다.",
           "sshImportFailed": "SSH 구성을 가져오지 못했습니다.",
           "sshPersistenceDefault": "이 호스트의 원격 터미널은 종료하거나 릴레이를 재설정할 때까지 계속 실행됩니다.",
           "advanced": "고급",
@@ -6560,7 +6566,9 @@
           "identityFileFromConfigHint": "의도적으로 비워 두기: Orca는 ~/.ssh/config가 {{value0}}을 확인하는 모든 키를 사용합니다. 해당 키만 사용하려면 경로를 입력하세요.",
           "sshConfigPickerRetry": "다시 시도하세요",
           "sshConfigPickerResolving": "독서…",
-          "pairingHelpShareComputer": "다른 컴퓨터의 설정 → 원격 Orca 서버 → 이 컴퓨터 공유에서 만드세요."
+          "pairingHelpShareComputer": "다른 컴퓨터의 설정 → 원격 Orca 서버 → 이 컴퓨터 공유에서 만드세요.",
+          "sshImportSyncedPlural": "호스트 {{count}}개를 Orca에 추가했습니다.",
+          "sshImportSyncedSingular": "호스트 {{count}}개를 Orca에 추가했습니다."
         },
         "ForgetSshWorkspaceDialog": {
           "reconnectFailed": "재연결 실패",
@@ -13460,7 +13468,6 @@
             "e131cd7128": "소스 제어는 Git 리포지토리에서만 사용할 수 있습니다.",
             "c07b236287": "변경사항을 보려면 워크스페이스를 선택하세요.",
             "dc5a6465fc": "{{value0}}(예: {{value1}}{{value2}})",
-            "8eb3782a0c": "{{value0}} 파일{{value1}}을(를) 삭제하지 못했습니다.",
             "a5e5a11090": "모든 변경 사항 취소 실패 — 취소 전에 파일의 스테이징을 해제하지 못했습니다.",
             "8a5ba6a988": "commit 차이점을 로드하지 못했습니다.",
             "fe5bd1a610": "{{value0}} 생성 중...",
@@ -13469,7 +13476,6 @@
             "0453ca3a9a": "{{value0}}이(가) 생성되었지만 Orca가 아직 새로 고칠 수 없습니다.",
             "f99560ab29": "중단 {{value0}} 실패",
             "eae7a1da5f": "메모를 지우지 못했습니다.",
-            "657e0c90ad": "{{value0}} 메모{{value1}}",
             "df5040e3c3": "언스테이지",
             "8cde1a2fb0": "스테이지",
             "d54dd48b0b": "변경사항 취소",
@@ -13612,7 +13618,11 @@
             "entryDiscardFailed": "'{{value0}}'을(를) 삭제하지 못했습니다.",
             "entryDeleteFailed": "'{{value0}}'을(를) 삭제하지 못했습니다.",
             "entryFailedInWorkspace": "{{value1}}의 {{value0}}",
-            "diffCommentNotesCopyFailed": "메모를 복사하지 못했습니다."
+            "diffCommentNotesCopyFailed": "메모를 복사하지 못했습니다.",
+            "discardFailedSingular": "파일 {{count}}개의 변경 사항을 버리지 못했습니다.",
+            "discardFailedPlural": "파일 {{count}}개의 변경 사항을 버리지 못했습니다.",
+            "noteCountSingular": "메모 {{count}}개",
+            "noteCountPlural": "메모 {{count}}개"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "선택한 agent를 시작할 수 없습니다.",
@@ -14145,7 +14155,8 @@
               },
               "compare": {
                 "summary": {
-                  "dd72a6fd37": "{{value0}}은 {{value2}}보다 먼저 {{value1}}을 커밋합니다."
+                  "commitsAheadSingular": "{{ref}}보다 커밋 {{count}}개 앞서 있음",
+                  "commitsAheadPlural": "{{ref}}보다 커밋 {{count}}개 앞서 있음"
                 }
               },
               "conflict": {
@@ -14718,12 +14729,13 @@
           "5c115cb713": "CLI가 설치되지 않았습니다.",
           "217beb0658": "GitHub",
           "4983ae7433": "개인 API 키로 Linear를 연결하세요. 전체 액세스 키는 키 소유자가 접근할 수 있는 모든 팀을 표시할 수 있습니다.",
-          "b08a6ac93c": "{{value0}} 워크스페이스{{value1}}이 연결되었습니다. 언제든지 다른 워크스페이스를 추가하거나 제한된 키를 교체하세요.",
           "93f0c49ad1": "인증되지 않은",
           "a3bcf13694": "연결됨",
           "d6e5dba05a": "로그인",
           "0b4a7d23ab": "로그인 중",
-          "a74c6d6b18": "설치되지 않은"
+          "a74c6d6b18": "설치되지 않은",
+          "linearWorkspacesLinkedSingular": "워크스페이스 {{count}}개가 연결되었습니다. 언제든지 다른 워크스페이스를 추가하거나 접근 권한이 제한된 API 키를 교체할 수 있습니다.",
+          "linearWorkspacesLinkedPlural": "워크스페이스 {{count}}개가 연결되었습니다. 언제든지 다른 워크스페이스를 추가하거나 접근 권한이 제한된 API 키를 교체할 수 있습니다."
         },
         "NotificationStep": {
           "3bede04483": "테스트 알림 보내기",

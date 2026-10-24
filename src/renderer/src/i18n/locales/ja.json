@@ -1449,7 +1449,6 @@
         "0bbdc673c1": "チェックの更新に失敗しました",
         "e7007aa1d8": "リポジトリパスがないとチェックを更新できません。",
         "675bc0d638": "キャンセル",
-        "a18f669c7a": "{{value0}} {{value1}} 反応{{value2}}",
         "53fe19aefc": "GitHub マージボックスを開く",
         "a2495e4784": "PR",
         "ce360fc318": "自動マージを無効にできませんでした",
@@ -1582,7 +1581,9 @@
         "8812225174": "再度開く",
         "09d67a0f9b": "PR をクローズできませんでした",
         "88809e79db": "PR の再開に失敗しました",
-        "00f55cc17b": "この PR ではリポジトリにアクセスできません。"
+        "00f55cc17b": "この PR ではリポジトリにアクセスできません。",
+        "reactionCountSingular": "{{count}} {{reaction}} 反応",
+        "reactionCountPlural": "{{count}} {{reaction}} 反応"
       },
       "GitLabItemDialog": {
         "65e784c1f1": "再度開く",
@@ -1643,12 +1644,13 @@
         "22511537d2": "承認された",
         "00f3bab87b": "{{value0}} 個が必要です",
         "11384f99aa": "番号",
-        "40c56b95e2": "{{value0}} 承認{{value1}} 残り",
         "3a051b8ade": "作業項目",
         "32f8bef818": "ログは出力されません。",
         "4168eb2c51": "解決",
         "commentTooLarge": "コメントが大きすぎるため安全に送信できません。",
-        "gitlabActionFailed": "GitLab 操作が失敗しました。"
+        "gitlabActionFailed": "GitLab 操作が失敗しました。",
+        "approvalsRemainingSingular": "{{count}} 承認 残り",
+        "approvalsRemainingPlural": "{{count}} 承認 残り"
       },
       "JiraIssueWorkspace": {
         "b0b92666c9": "コメント",
@@ -2357,10 +2359,8 @@
         "3b11c8e8fc": "配列",
         "e178c0a953": "Issue を作成する前に Jira プロジェクトを選択します。",
         "0f7b0d964a": "{{value0}} で新規 Issue を作成します。",
-        "eff9800d4b": "{{value0}} ラベル{{value1}}",
         "d7f16d0e32": "チームを選択",
         "5301ca0f20": "プロジェクトの作成",
-        "7719d8daa9": "{{value0}} メンバー{{value1}}",
         "5af6f0ae5b": "チームを選択",
         "cfb730b73e": "Issue",
         "3659f9792a": "ボード",
@@ -2462,7 +2462,11 @@
         "jiraColumnStoryPoints": "ポイント",
         "jiraColumnOriginalEstimate": "見積もり",
         "jiraColumnRemainingEstimate": "残り",
-        "jiraBoardEmptyColumn": "Issue はありません"
+        "jiraBoardEmptyColumn": "Issue はありません",
+        "labelCountPlural": "{{count}} ラベル",
+        "labelCountSingular": "{{count}} ラベル",
+        "memberCountPlural": "{{count}} メンバー",
+        "memberCountSingular": "{{count}} メンバー"
       },
       "Terminal": {
         "73768427cf": "閉じる",
@@ -3444,8 +3448,6 @@
             "drop": {
               "handler": {
                 "1e072f611e": "{{value0}} {{value1}} のアップロードに失敗しました。",
-                "53f015fd85": "{{value0}} シンボリックリンク{{value1}} をスキップしました。",
-                "29c031b49a": "{{value0}} ファイル{{value1}} をランタイムにアップロードしています…",
                 "0c77693641": "ワークツリーが準備できていません — しばらくしてから再試行してください。",
                 "ce8248b835": "ワークツリーのパスが使用できません。",
                 "internalTooManyPaths": "安全にターミナルへ貼り付けるにはドロップされたパスが多すぎます。",
@@ -3453,7 +3455,11 @@
                 "internalHostMismatch": "このターミナルと同じホストのファイルをドロップしてください。",
                 "b4cf68e889": "{{value0}} {{value1}} をスキップしました。",
                 "writeTimeout": "ファイルドロップをキャンセルしました: 安全タイムアウト前にターミナルがパスを受け付けませんでした。",
-                "writeRejected": "ファイルドロップをキャンセルしました: ターミナルがパスを受け付けられませんでした。"
+                "writeRejected": "ファイルドロップをキャンセルしました: ターミナルがパスを受け付けられませんでした。",
+                "skippedSymlinkSingular": "{{count}} シンボリックリンク をスキップしました。",
+                "skippedSymlinkPlural": "{{count}} シンボリックリンク をスキップしました。",
+                "uploadingFileSingular": "{{count}} ファイル をランタイムにアップロードしています…",
+                "uploadingFilePlural": "{{count}} ファイル をランタイムにアップロードしています…"
               }
             }
           },
@@ -5967,7 +5973,6 @@
           "0cd15956d4": "{{value0}} 個の子ワークスペースを非表示",
           "bd37a57ac8": "{{value0}} のワークスペースを作成",
           "b667b59632": "一部のプロジェクトを Orca から削除できませんでした",
-          "f94466bc39": "グループ削除後も、含まれていたプロジェクト{{value2}} {{value1}} 件中 {{value0}} 件が残りました。",
           "groupDeleteFailed": "グループの削除に失敗しました",
           "groupDeleteFailedDesc": "グループ削除中に問題が発生しました。プロジェクトは削除されませんでした。",
           "7a8b9c0d1e": "更新が必要です",
@@ -5978,7 +5983,9 @@
           "failedUnnestWorkspace": "ワークスペースの展開に失敗しました",
           "groupRenameFailed": "グループ名の変更に失敗しました",
           "groupRenameFailedDesc": "Orca はグループのホストに新規名前を確認できませんでした。再接続後、グループを再確認してください。",
-          "hostRepairRequired": "Re-pair required"
+          "hostRepairRequired": "Re-pair required",
+          "groupProjectsRemainedSingular": "グループ削除後も、含まれていたプロジェクト {{count}} 件中 {{remaining}} 件が残りました。",
+          "groupProjectsRemainedPlural": "グループ削除後も、含まれていたプロジェクト {{count}} 件中 {{remaining}} 件が残りました。"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "キャンセル",
@@ -6525,7 +6532,6 @@
           "pairingCommand": "orca serve --pairing-address <host>",
           "pairingHelpSuffix": "をサーバーで実行し、出力されたペアリング URL を貼り付けます。",
           "sshImportAlreadySynced": "~/.ssh/config はすでに同期されています。",
-          "sshImportSynced": "{{value0}} ホスト{{value1}} を同期しました。",
           "sshImportFailed": "SSH 構成のインポートに失敗しました。",
           "sshPersistenceDefault": "このホスト上のリモートターミナルは、終了するかリレーをリセットするまで動作し続けます。",
           "advanced": "詳細設定",
@@ -6560,7 +6566,9 @@
           "identityFileFromConfigHint": "意図的に空のままにします: Orca は ~/.ssh/config が {{value0}} に対して解決するすべてのキーを使用します。そのキーのみを使用するパスを入力します。",
           "sshConfigPickerRetry": "再試行",
           "sshConfigPickerResolving": "読む…",
-          "pairingHelpShareComputer": "もう一方のコンピューターで「設定 → リモート Orca サーバー → このコンピューターを共有」から作成します。"
+          "pairingHelpShareComputer": "もう一方のコンピューターで「設定 → リモート Orca サーバー → このコンピューターを共有」から作成します。",
+          "sshImportSyncedPlural": "{{count}} ホスト を同期しました。",
+          "sshImportSyncedSingular": "{{count}} ホスト を同期しました。"
         },
         "ForgetSshWorkspaceDialog": {
           "reconnectFailed": "再接続に失敗しました",
@@ -13460,7 +13468,6 @@
             "e131cd7128": "ソース管理は Git リポジトリでのみ使用できます",
             "c07b236287": "変更を表示するワークスペースを選択",
             "dc5a6465fc": "{{value0}} (例: {{value1}}{{value2}})",
-            "8eb3782a0c": "{{value0}} ファイル{{value1}} を破棄できませんでした",
             "a5e5a11090": "失敗したすべての破棄 - 破棄する前にファイルをステージング解除できません",
             "8a5ba6a988": "コミット差分をロードできませんでした",
             "fe5bd1a610": "{{value0}} を作成しています…",
@@ -13469,7 +13476,6 @@
             "0453ca3a9a": "{{value0}} が作成されましたが、Orca はまだ更新できませんでした。",
             "f99560ab29": "{{value0}} の中止に失敗しました",
             "eae7a1da5f": "メモを消去できませんでした。",
-            "657e0c90ad": "{{value0}} 注{{value1}}",
             "df5040e3c3": "アンステージ",
             "8cde1a2fb0": "ステージ",
             "d54dd48b0b": "変更を破棄する",
@@ -13612,7 +13618,11 @@
             "entryDiscardFailed": "「{{value0}}」を破棄できませんでした",
             "entryDeleteFailed": "「{{value0}}」を削除できませんでした",
             "entryFailedInWorkspace": "{{value0}} の {{value1}}",
-            "diffCommentNotesCopyFailed": "メモのコピーに失敗しました"
+            "diffCommentNotesCopyFailed": "メモのコピーに失敗しました",
+            "discardFailedSingular": "{{count}} ファイル を破棄できませんでした",
+            "discardFailedPlural": "{{count}} ファイル を破棄できませんでした",
+            "noteCountSingular": "{{count}} 注",
+            "noteCountPlural": "{{count}} 注"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "選択した Agent を開始できませんでした。",
@@ -14145,7 +14155,8 @@
               },
               "compare": {
                 "summary": {
-                  "dd72a6fd37": "{{value0}} {{value2}} より先に{{value1}} をコミット"
+                  "commitsAheadSingular": "{{ref}}より{{count}}コミット進んでいます",
+                  "commitsAheadPlural": "{{ref}}より{{count}}コミット進んでいます"
                 }
               },
               "conflict": {
@@ -14718,12 +14729,13 @@
           "5c115cb713": "CLI がインストールされていません",
           "217beb0658": "GitHub",
           "4983ae7433": "Personal API キーを使用して Linear アクセスを追加します。フルアクセスキーは、キーの所有者がアクセスできるすべてのチームを表示できます。",
-          "b08a6ac93c": "{{value0}} ワークスペース{{value1}} がリンクされました。いつでも別のワークスペースを追加したり、制限付きキーを置き換えたりできます。",
           "93f0c49ad1": "未認証",
           "a3bcf13694": "接続されています",
           "d6e5dba05a": "サインイン",
           "0b4a7d23ab": "サインインする",
-          "a74c6d6b18": "未インストール"
+          "a74c6d6b18": "未インストール",
+          "linearWorkspacesLinkedSingular": "{{count}} ワークスペース がリンクされました。いつでも別のワークスペースを追加したり、制限付きキーを置き換えたりできます。",
+          "linearWorkspacesLinkedPlural": "{{count}} ワークスペース がリンクされました。いつでも別のワークスペースを追加したり、制限付きキーを置き換えたりできます。"
         },
         "NotificationStep": {
           "3bede04483": "テスト通知を送信する",

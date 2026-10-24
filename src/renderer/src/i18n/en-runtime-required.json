@@ -2792,7 +2792,8 @@
           "terminal": {
             "drop": {
               "handler": {
-                "29c031b49a": "Uploading {{value0}} file{{value1}} to runtime…"
+                "uploadingFilePlural": "Uploading {{count}} files to runtime…",
+                "uploadingFileSingular": "Uploading {{count}} file to runtime…"
               }
             }
           }

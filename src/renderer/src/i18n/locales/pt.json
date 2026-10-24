@@ -1967,12 +1967,13 @@
           "5c115cb713": "CLI não instalada",
           "217beb0658": "GitHub",
           "4983ae7433": "Adicione acesso ao Linear com uma chave de API pessoal. Chaves com acesso total podem mostrar todas as equipes que o titular da chave pode acessar.",
-          "b08a6ac93c": "{{value0}} workspace{{value1}} vinculado. Adicione outro workspace ou substitua uma chave restrita quando quiser.",
           "93f0c49ad1": "não autenticado",
           "a3bcf13694": "conectado",
           "d6e5dba05a": "Entrar",
           "0b4a7d23ab": "Entrando",
-          "a74c6d6b18": "não instalado"
+          "a74c6d6b18": "não instalado",
+          "linearWorkspacesLinkedSingular": "{{count}} workspace vinculado. Adicione outro workspace ou substitua uma chave restrita quando quiser.",
+          "linearWorkspacesLinkedPlural": "{{count}} workspaces vinculados. Adicione outro workspace ou substitua uma chave restrita quando quiser."
         },
         "NotificationStep": {
           "3bede04483": "Enviar Notificação de Teste",
@@ -9012,7 +9013,6 @@
             "e131cd7128": "O Controle de Versão está disponível somente para repositórios Git",
             "c07b236287": "Selecione um espaço de trabalho para ver as alterações",
             "dc5a6465fc": "{{value0}} (e.g. {{value1}}{{value2}})",
-            "8eb3782a0c": "Falha ao descartar {{value0}} arquivo{{value1}}",
             "a5e5a11090": "Falha ao descartar tudo — não foi possível remover os arquivos do stage antes de descartar",
             "8a5ba6a988": "Falha ao carregar o diff do commit",
             "fe5bd1a610": "Criando {{value0}}...",
@@ -9021,7 +9021,6 @@
             "0453ca3a9a": "{{value0}} criado, mas o Orca ainda não conseguiu atualizá-lo.",
             "f99560ab29": "Falha ao abortar {{value0}}",
             "eae7a1da5f": "Falha ao limpar as notas.",
-            "657e0c90ad": "{{value0}} nota{{value1}}",
             "df5040e3c3": "Remover do stage",
             "8cde1a2fb0": "Adicionar ao stage",
             "d54dd48b0b": "Descartar alterações",
@@ -9164,7 +9163,11 @@
             "entryDiscardFailed": "Falha ao descartar “{{value0}}”",
             "entryDeleteFailed": "Falha ao excluir “{{value0}}”",
             "entryFailedInWorkspace": "{{value0}} em {{value1}}",
-            "diffCommentNotesCopyFailed": "Falha ao copiar as notas"
+            "diffCommentNotesCopyFailed": "Falha ao copiar as notas",
+            "discardFailedSingular": "Falha ao descartar {{count}} arquivo",
+            "discardFailedPlural": "Falha ao descartar {{count}} arquivos",
+            "noteCountSingular": "{{count}} nota",
+            "noteCountPlural": "{{count}} notas"
           },
           "checks": {
             "panel": {
@@ -9566,7 +9569,8 @@
               },
               "compare": {
                 "summary": {
-                  "dd72a6fd37": "{{value0}} commit{{value1}} adiante de {{value2}}"
+                  "commitsAheadSingular": "{{count}} commit adiante de {{ref}}",
+                  "commitsAheadPlural": "{{count}} commits adiante de {{ref}}"
                 }
               },
               "conflict": {
@@ -10518,7 +10522,6 @@
           "pairingCommand": "orca serve --pairing-address <host>",
           "pairingHelpSuffix": "no servidor e cole a URL de pareamento impressa.",
           "sshImportAlreadySynced": "~/.ssh/config já está sincronizado.",
-          "sshImportSynced": "{{value0}} host{{value1}} adicionado(s) ao Orca.",
           "sshImportFailed": "Falha ao importar a configuração SSH.",
           "sshAlreadyExists": "Esse host SSH já está no Orca.",
           "advanced": "Avançado",
@@ -10556,7 +10559,9 @@
           "serverRunsAsYou": "Este dispositivo poderá executar comandos como você neste servidor.",
           "serverSshTitle": "Adicionar host SSH a {{server}}",
           "serverSshDescription": "{{server}} salva este host e se conecta a ele. Senhas e frases-senha são solicitadas ao conectar.",
-          "pairingHelpShareComputer": "Crie isto em Configurações → Servidores Orca remotos → Compartilhar este computador no outro computador."
+          "pairingHelpShareComputer": "Crie isto em Configurações → Servidores Orca remotos → Compartilhar este computador no outro computador.",
+          "sshImportSyncedPlural": "{{count}} hosts adicionados ao Orca.",
+          "sshImportSyncedSingular": "{{count}} host adicionado ao Orca."
         },
         "SidebarWorkspaceOptionsMenu": {
           "hosts": "Hosts",
@@ -10654,7 +10659,6 @@
           "0cd15956d4": "Ocultar {{value0}} espaços de trabalho filhos",
           "bd37a57ac8": "Criar espaço de trabalho para {{value0}}",
           "b667b59632": "Alguns projetos não puderam ser removidos do Orca",
-          "f94466bc39": "{{value0}} de {{value1}} projeto{{value2}} contido(s) permaneceu(ram) após excluir o grupo.",
           "groupDeleteFailed": "Falha ao excluir o grupo",
           "groupDeleteFailedDesc": "Algo deu errado ao excluir o grupo. Nenhum projeto foi removido.",
           "groupRenameFailed": "Falha ao renomear o grupo",
@@ -10662,7 +10666,9 @@
           "failedNestWorkspace": "Falha ao aninhar o espaço de trabalho",
           "sidebarRowMissing": "O destino não existe mais",
           "failedUnnestWorkspace": "Falha ao desaninhar o espaço de trabalho",
-          "hostRepairRequired": "É necessário parear novamente"
+          "hostRepairRequired": "É necessário parear novamente",
+          "groupProjectsRemainedSingular": "{{remaining}} de {{count}} projeto contido permaneceu após excluir o grupo.",
+          "groupProjectsRemainedPlural": "Projetos contidos que permaneceram após excluir o grupo: {{remaining}} de {{count}}."
         },
         "WorktreeCardMeta": {
           "3e65e11cc6": "Metadados do espaço de trabalho",
@@ -14025,10 +14031,8 @@
         "3b11c8e8fc": "array",
         "e178c0a953": "Escolha um projeto do Jira antes de criar a issue.",
         "0f7b0d964a": "Cria uma nova issue em {{value0}}.",
-        "eff9800d4b": "{{value0}} rótulo{{value1}}",
         "d7f16d0e32": "Selecionar Equipe",
         "5301ca0f20": "Criar projeto",
-        "7719d8daa9": "{{value0}} membro{{value1}}",
         "5af6f0ae5b": "Selecionar equipe",
         "cfb730b73e": "issue",
         "3659f9792a": "quadro",
@@ -14133,7 +14137,11 @@
         "jiraColumnStoryPoints": "Pontos",
         "jiraColumnOriginalEstimate": "Estimativa",
         "jiraColumnRemainingEstimate": "Restante",
-        "jiraBoardEmptyColumn": "Nenhuma issue"
+        "jiraBoardEmptyColumn": "Nenhuma issue",
+        "labelCountPlural": "{{count}} rótulos",
+        "labelCountSingular": "{{count}} rótulo",
+        "memberCountPlural": "{{count}} membros",
+        "memberCountSingular": "{{count}} membro"
       },
       "feature": {
         "wall": {
@@ -15302,7 +15310,6 @@
         "0bbdc673c1": "Falha ao atualizar as verificações",
         "e7007aa1d8": "Não é possível atualizar as verificações sem um caminho de repositório.",
         "675bc0d638": "Cancelar",
-        "a18f669c7a": "{{value0}} {{value1}} reação{{value2}}",
         "53fe19aefc": "Abrir a caixa de merge do GitHub",
         "a2495e4784": "Pull request",
         "ce360fc318": "Falha ao desativar o merge automático",
@@ -15435,7 +15442,9 @@
         "8812225174": "Reabrir",
         "09d67a0f9b": "Falha ao fechar o pull request",
         "88809e79db": "Falha ao reabrir o pull request",
-        "00f55cc17b": "O acesso ao repositório não está disponível para este pull request."
+        "00f55cc17b": "O acesso ao repositório não está disponível para este pull request.",
+        "reactionCountSingular": "{{count}} {{reaction}} reação",
+        "reactionCountPlural": "{{count}} {{reaction}} reações"
       },
       "terminal": {
         "pane": {
@@ -15484,8 +15493,6 @@
             "drop": {
               "handler": {
                 "1e072f611e": "Falha ao enviar {{value0}} {{value1}}.",
-                "53f015fd85": "{{value0}} link simbólico{{value1}} ignorado(s).",
-                "29c031b49a": "Enviando {{value0}} arquivo{{value1}} para o runtime…",
                 "0c77693641": "Worktree não está pronta — tente novamente em um momento.",
                 "ce8248b835": "Caminho da worktree não disponível.",
                 "internalTooManyPaths": "O drop contém muitos caminhos para uma colagem segura no terminal.",
@@ -15493,6 +15500,10 @@
                 "b4cf68e889": "{{value0}} {{value1}} ignorado(s).",
                 "writeTimeout": "Drop de arquivo cancelado: o terminal não aceitou o caminho antes do tempo limite de segurança.",
                 "writeRejected": "Drop de arquivo cancelado: o terminal não conseguiu aceitar o caminho.",
+                "skippedSymlinkSingular": "{{count}} link simbólico ignorado.",
+                "skippedSymlinkPlural": "{{count}} links simbólicos ignorados.",
+                "uploadingFileSingular": "Enviando {{count}} arquivo para o runtime…",
+                "uploadingFilePlural": "Enviando {{count}} arquivos para o runtime…",
                 "internalHostMismatch": "Arraste arquivos do mesmo host deste terminal."
               }
             }
@@ -17193,12 +17204,13 @@
         "22511537d2": "Aprovado",
         "00f3bab87b": " de {{value0}} necessário(s)",
         "11384f99aa": "número",
-        "40c56b95e2": "{{value0}} aprovação{{value1}} restante",
         "3a051b8ade": "Item de trabalho",
         "32f8bef818": "Nenhuma saída de log.",
         "4168eb2c51": "Resolver",
         "commentTooLarge": "O comentário é muito grande para ser enviado com segurança.",
-        "gitlabActionFailed": "Falha na ação do GitLab."
+        "gitlabActionFailed": "Falha na ação do GitLab.",
+        "approvalsRemainingSingular": "{{count}} aprovação restante",
+        "approvalsRemainingPlural": "{{count}} aprovações restantes"
       },
       "linear": {
         "api": {

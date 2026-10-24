@@ -13,11 +13,17 @@ export function reportTerminalDropUploadSkipsAndFailures(
     const commonReason = sharedReason(skipped)
     toast.message(
       allSymlinks
-        ? translate(
-            'auto.components.terminal.pane.terminal.drop.handler.53f015fd85',
-            'Skipped {{value0}} symlink{{value1}}.',
-            { value0: skipped.length, value1: skipped.length === 1 ? '' : 's' }
-          )
+        ? skipped.length === 1
+          ? translate(
+              'auto.components.terminal.pane.terminal.drop.handler.skippedSymlinkSingular',
+              'Skipped {{count}} symlink.',
+              { count: skipped.length }
+            )
+          : translate(
+              'auto.components.terminal.pane.terminal.drop.handler.skippedSymlinkPlural',
+              'Skipped {{count}} symlinks.',
+              { count: skipped.length }
+            )
         : translate(
             'auto.components.terminal.pane.terminal.drop.handler.b4cf68e889',
             'Skipped {{value0}} {{value1}}.',

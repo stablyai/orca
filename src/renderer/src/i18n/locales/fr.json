@@ -1608,7 +1608,6 @@
         "0bbdc673c1": "Échec de l'actualisation des vérifications",
         "e7007aa1d8": "Impossible d'actualiser les vérifications sans chemin de dépôt.",
         "675bc0d638": "Annuler",
-        "a18f669c7a": "{{value0}} {{value1}} réaction{{value2}}",
         "53fe19aefc": "Ouvrir la zone de merge GitHub",
         "a2495e4784": "Pull request",
         "ce360fc318": "Échec de la désactivation de l'auto-merge",
@@ -1741,7 +1740,9 @@
         "8812225174": "Rouvrir",
         "09d67a0f9b": "Échec de la fermeture de la pull request",
         "88809e79db": "Échec de la réouverture de la pull request",
-        "00f55cc17b": "L'accès au dépôt est indisponible pour cette pull request."
+        "00f55cc17b": "L'accès au dépôt est indisponible pour cette pull request.",
+        "reactionCountSingular": "{{count}} {{reaction}} réaction",
+        "reactionCountPlural": "{{count}} {{reaction}} réactions"
       },
       "GitLabItemDialog": {
         "65e784c1f1": "Rouvrir",
@@ -1802,12 +1803,13 @@
         "22511537d2": "Approuvé",
         "00f3bab87b": " sur {{value0}} requis",
         "11384f99aa": "nombre",
-        "40c56b95e2": "Il reste {{value0}} approbation{{value1}}",
         "3a051b8ade": "Élément de travail",
         "32f8bef818": "Aucune sortie de log.",
         "4168eb2c51": "Résoudre",
         "commentTooLarge": "Le commentaire est trop volumineux pour être envoyé sans risque.",
-        "gitlabActionFailed": "L'action GitLab a échoué."
+        "gitlabActionFailed": "L'action GitLab a échoué.",
+        "approvalsRemainingSingular": "Il reste {{count}} approbation",
+        "approvalsRemainingPlural": "Il reste {{count}} approbations"
       },
       "JiraIssueWorkspace": {
         "b0b92666c9": "Commentaire",
@@ -2516,10 +2518,8 @@
         "3b11c8e8fc": "tableau",
         "e178c0a953": "Choisissez un projet Jira avant de créer le ticket.",
         "0f7b0d964a": "Crée un nouveau ticket dans {{value0}}.",
-        "eff9800d4b": "{{value0}} label{{value1}}",
         "d7f16d0e32": "Sélectionner l'équipe",
         "5301ca0f20": "Créer le projet",
-        "7719d8daa9": "{{value0}} membre{{value1}}",
         "5af6f0ae5b": "Sélectionner l'équipe",
         "cfb730b73e": "issue",
         "3659f9792a": "tableau",
@@ -2621,7 +2621,11 @@
         "jiraColumnStoryPoints": "Points",
         "jiraColumnOriginalEstimate": "Estimation",
         "jiraColumnRemainingEstimate": "Restant",
-        "jiraBoardEmptyColumn": "Aucune issue"
+        "jiraBoardEmptyColumn": "Aucune issue",
+        "labelCountPlural": "{{count}} labels",
+        "labelCountSingular": "{{count}} label",
+        "memberCountPlural": "{{count}} membres",
+        "memberCountSingular": "{{count}} membre"
       },
       "Terminal": {
         "73768427cf": "Fermer",
@@ -3628,8 +3632,6 @@
             "drop": {
               "handler": {
                 "1e072f611e": "Échec de l'envoi de {{value0}} {{value1}}.",
-                "53f015fd85": "Ignoré : {{value0}} symlink{{value1}}.",
-                "29c031b49a": "Envoi de {{value0}} fichier{{value1}} vers le runtime…",
                 "0c77693641": "Worktree pas encore prêt — réessayez dans un instant.",
                 "ce8248b835": "Chemin du worktree indisponible.",
                 "internalTooManyPaths": "Le contenu déposé contient trop de chemins pour un collage sûr dans le terminal.",
@@ -3637,7 +3639,11 @@
                 "internalHostMismatch": "Déposez des fichiers provenant du même hôte que ce terminal.",
                 "b4cf68e889": "Ignoré : {{value0}} {{value1}}.",
                 "writeTimeout": "Glisser-déposer de fichiers annulé : le terminal n'a pas accepté le chemin avant le délai de sécurité.",
-                "writeRejected": "Glisser-déposer de fichiers annulé : le terminal n'a pas pu accepter le chemin."
+                "writeRejected": "Glisser-déposer de fichiers annulé : le terminal n'a pas pu accepter le chemin.",
+                "skippedSymlinkSingular": "Ignoré : {{count}} symlink.",
+                "skippedSymlinkPlural": "Ignorés : {{count}} symlinks.",
+                "uploadingFileSingular": "Envoi de {{count}} fichier vers le runtime…",
+                "uploadingFilePlural": "Envoi de {{count}} fichiers vers le runtime…"
               }
             }
           },
@@ -6175,7 +6181,6 @@
           "0cd15956d4": "Masquer {{value0}} espaces de travail enfants",
           "bd37a57ac8": "Créer un espace de travail pour {{value0}}",
           "b667b59632": "Certains projets n'ont pas pu être retirés d'Orca",
-          "f94466bc39": "{{value0}} projet{{value2}} sur {{value1}} est resté après la suppression du groupe.",
           "groupDeleteFailed": "Échec de la suppression du groupe",
           "groupDeleteFailedDesc": "Une erreur est survenue lors de la suppression du groupe. Aucun projet n'a été retiré.",
           "groupRenameFailed": "Échec du renommage du groupe",
@@ -6183,7 +6188,9 @@
           "failedNestWorkspace": "Échec de l'imbrication de l'espace de travail",
           "sidebarRowMissing": "La cible n'existe plus",
           "failedUnnestWorkspace": "Échec de la désimbrication de l'espace de travail",
-          "hostRepairRequired": "Re-pair required"
+          "hostRepairRequired": "Re-pair required",
+          "groupProjectsRemainedSingular": "{{remaining}} projet sur {{count}} est resté après la suppression du groupe.",
+          "groupProjectsRemainedPlural": "Projets restés après la suppression du groupe : {{remaining}} sur {{count}}."
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Annuler",
@@ -6646,7 +6653,6 @@
           "pairingCommand": "orca serve --pairing-address <host>",
           "pairingHelpSuffix": "sur le serveur et collez l'URL d'appairage affichée.",
           "sshImportAlreadySynced": "~/.ssh/config est déjà à jour.",
-          "sshImportSynced": "Ajout de {{value0}} hôte{{value1}} à Orca.",
           "sshImportFailed": "Échec de l'import de la config SSH.",
           "sshAlreadyExists": "Cet hôte SSH est déjà dans Orca.",
           "advanced": "Avancé",
@@ -6680,7 +6686,9 @@
           "identityFileFromConfigHint": "Volontairement laissé vide : Orca utilise toutes les clés résolues par ~/.ssh/config pour {{value0}}. Saisissez un chemin pour n'utiliser que cette clé.",
           "sshConfigPickerRetry": "Réessayer",
           "sshConfigPickerResolving": "Lecture…",
-          "pairingHelpShareComputer": "Créez-le dans Réglages → Serveurs Orca distants → Partager cet ordinateur sur l’autre ordinateur."
+          "pairingHelpShareComputer": "Créez-le dans Réglages → Serveurs Orca distants → Partager cet ordinateur sur l’autre ordinateur.",
+          "sshImportSyncedPlural": "Ajout de {{count}} hôtes à Orca.",
+          "sshImportSyncedSingular": "Ajout de {{count}} hôte à Orca."
         },
         "ForgetSshWorkspaceDialog": {
           "reconnectFailed": "Échec de la reconnexion",
@@ -13637,7 +13645,6 @@
             "e131cd7128": "Le contrôle de code source n'est disponible que pour les dépôts Git",
             "c07b236287": "Sélectionnez un espace de travail pour afficher les modifications",
             "dc5a6465fc": "{{value0}} (ex. {{value1}}{{value2}})",
-            "8eb3782a0c": "Échec de l'abandon de {{value0}} fichier{{value1}}",
             "a5e5a11090": "Échec de l'abandon global — impossible de sortir les fichiers de l'index avant l'abandon",
             "8a5ba6a988": "Échec du chargement du diff du commit",
             "fe5bd1a610": "Création de {{value0}}...",
@@ -13646,7 +13653,6 @@
             "0453ca3a9a": "Création de {{value0}} effectuée, mais Orca n'a pas encore pu l'actualiser.",
             "f99560ab29": "Échec de l'abandon de {{value0}}",
             "eae7a1da5f": "Échec de l'effacement des notes.",
-            "657e0c90ad": "{{value0}} note{{value1}}",
             "df5040e3c3": "Déstager",
             "8cde1a2fb0": "Stager",
             "d54dd48b0b": "Abandonner les modifications",
@@ -13789,7 +13795,11 @@
             "entryDiscardFailed": "Échec de la suppression de « {{value0}} »",
             "entryDeleteFailed": "Échec de la suppression de « {{value0}} »",
             "entryFailedInWorkspace": "{{value0}} dans {{value1}}",
-            "diffCommentNotesCopyFailed": "Échec de la copie des notes"
+            "diffCommentNotesCopyFailed": "Échec de la copie des notes",
+            "discardFailedSingular": "Échec de l'abandon de {{count}} fichier",
+            "discardFailedPlural": "Échec de l'abandon de {{count}} fichiers",
+            "noteCountSingular": "{{count}} note",
+            "noteCountPlural": "{{count}} notes"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Impossible de démarrer l'agent sélectionné.",
@@ -14322,7 +14332,8 @@
               },
               "compare": {
                 "summary": {
-                  "dd72a6fd37": "{{value0}} commit{{value1}} d'avance sur {{value2}}"
+                  "commitsAheadSingular": "{{count}} commit d'avance sur {{ref}}",
+                  "commitsAheadPlural": "{{count}} commits d'avance sur {{ref}}"
                 }
               },
               "conflict": {
@@ -14878,12 +14889,13 @@
           "5c115cb713": "CLI non installé",
           "217beb0658": "GitHub",
           "4983ae7433": "Ajoutez l'accès à Linear avec une clé d'API personnelle. Les clés à accès complet peuvent afficher toutes les équipes accessibles au propriétaire de la clé.",
-          "b08a6ac93c": "Espace de travail {{value0}}{{value1}} associé. Ajoutez un autre espace de travail ou remplacez une clé restreinte à tout moment.",
           "93f0c49ad1": "not-authenticated",
           "a3bcf13694": "connecté",
           "d6e5dba05a": "Se connecter",
           "0b4a7d23ab": "Connexion en cours",
-          "a74c6d6b18": "not-installed"
+          "a74c6d6b18": "not-installed",
+          "linearWorkspacesLinkedSingular": "{{count}} espace de travail associé. Ajoutez un autre espace de travail ou remplacez une clé restreinte à tout moment.",
+          "linearWorkspacesLinkedPlural": "{{count}} espaces de travail associés. Ajoutez un autre espace de travail ou remplacez une clé restreinte à tout moment."
         },
         "NotificationStep": {
           "3bede04483": "Envoyer une notification de test",
