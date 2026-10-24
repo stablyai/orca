@@ -223,6 +223,14 @@ describe('humanizeTerminalError', () => {
     expect(humanized).toMatch(/\)\.$/)
   })
 
+  it('explains a terminal that ended during start in words, keeping the issue link', () => {
+    const raw = "Error invoking remote method 'pty:spawn': Error: agent_session_exited_during_start"
+    const humanized = humanizeTerminalError(raw)
+    expect(humanized).not.toContain('agent_session_exited_during_start')
+    expect(humanized).toContain('ended while Orca was starting it')
+    expect(isExplainedTerminalError(raw)).toBe(false)
+  })
+
   it('humanizes a legacy host raw named-pipe error', () => {
     const humanized = humanizeTerminalError(LEGACY_HOST_GONE)
     expect(humanized).not.toContain('connect ENOENT')

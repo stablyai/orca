@@ -3374,7 +3374,8 @@
             "e16012e31e": "El demonio de terminal propietario de esta sesión salió, por lo que no se pudo recuperar la sesión y su desplazamiento hacia atrás. Abra una nueva terminal para continuar.",
             "sessionUnavailable": "Orca no pudo volver a conectarse a la sesión de terminal de este panel en el host. Abra una nueva terminal para continuar.",
             "sourceRestoring": "Reconectando este terminal: se está restableciendo su salida. La sesión aún está en marcha.",
-            "ownerHostMismatch": "La sesión guardada de este terminal pertenece a otra conexión de host, así que Orca no puede reconectarlo aquí. Abre un terminal nuevo para continuar."
+            "ownerHostMismatch": "La sesión guardada de este terminal pertenece a otra conexión de host, así que Orca no puede reconectarlo aquí. Abre un terminal nuevo para continuar.",
+            "exitedDuringStart": "El proceso de este terminal terminó mientras Orca lo iniciaba. Si el terminal no responde, abre uno nuevo."
           },
           "TerminalProcessExitOverlay": {
             "capacityTitle": "Se alcanzó el límite de consolas de Git Bash",

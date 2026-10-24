@@ -3359,7 +3359,8 @@
             "ptyAllocationLimit": "系统无法再分配 pty 设备。请在 Orca 或其他程序中关闭一些不用的终端，然后重试。",
             "terminalProcessLimit": "系统无法再启动终端进程。请关闭不用的终端或退出不用的进程，然后重试。",
             "hostTerminalCap": "主机上运行的终端数量已达到 Orca 允许的上限。请关闭一个不再需要的终端，然后重试。",
-            "ownerHostMismatch": "此终端保存的会话属于另一个主机连接，因此 Orca 无法在此重新附加它。请打开新终端以继续。"
+            "ownerHostMismatch": "此终端保存的会话属于另一个主机连接，因此 Orca 无法在此重新附加它。请打开新终端以继续。",
+            "exitedDuringStart": "Orca 启动此终端时，其进程已结束。如果终端没有响应，请打开新终端。"
           },
           "TerminalProcessExitOverlay": {
             "capacityTitle": "已达到 Git Bash 控制台上限",

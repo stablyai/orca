@@ -3518,7 +3518,8 @@
             "ptyAllocationLimit": "Votre système ne peut plus allouer de périphériques pty. Fermez quelques terminaux inutilisés, dans Orca ou dans un autre programme, puis réessayez.",
             "terminalProcessLimit": "Votre système ne peut pas démarrer un autre processus de terminal. Fermez les terminaux inutilisés ou quittez les processus inutiles, puis réessayez.",
             "hostTerminalCap": "L'hôte exécute déjà autant de terminaux qu'Orca le permet. Fermez un terminal dont vous n'avez plus besoin, puis réessayez.",
-            "ownerHostMismatch": "La session enregistrée de ce terminal appartient à une autre connexion d'hôte : Orca ne peut donc pas le rattacher ici. Ouvrez un nouveau terminal pour continuer."
+            "ownerHostMismatch": "La session enregistrée de ce terminal appartient à une autre connexion d'hôte : Orca ne peut donc pas le rattacher ici. Ouvrez un nouveau terminal pour continuer.",
+            "exitedDuringStart": "Le processus de ce terminal s'est arrêté pendant qu'Orca le démarrait. Si le terminal ne répond pas, ouvrez-en un nouveau."
           },
           "TerminalProcessExitOverlay": {
             "capacityTitle": "Limite de consoles Git Bash atteinte",
