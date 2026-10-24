@@ -40,6 +40,37 @@ const worktree: Worktree = {
 }
 
 describe('buildRuntimeSessionPlaceholders', () => {
+  it('does not name an unloaded project after a restored child worktree', () => {
+    const result = buildRuntimeSessionPlaceholders({
+      repos: [],
+      runtimeHostIdByWorkspaceSessionKey: {
+        'repo-1::/repos/project/experiments/api-backport': 'runtime:host-1'
+      },
+      worktreesByRepo: {}
+    })
+
+    expect(result.repos[0].displayName).toBe('Loading project…')
+    expect(result.worktreesByRepo['repo-1'][0].displayName).toBe('api-backport')
+  })
+
+  it('keeps the authoritative project name once its host catalog arrives', () => {
+    const remoteRepo: Repo = {
+      ...repo,
+      displayName: 'Saved project',
+      executionHostId: 'runtime:host-1'
+    }
+    const result = buildRuntimeSessionPlaceholders({
+      repos: [remoteRepo],
+      runtimeHostIdByWorkspaceSessionKey: {
+        'repo-1::/repos/project/experiments/api-backport': 'runtime:host-1'
+      },
+      worktreesByRepo: {}
+    })
+
+    expect(result.repos[0]).toBe(remoteRepo)
+    expect(result.repos[0].displayName).toBe('Saved project')
+  })
+
   it('returns the original repos array when no placeholder repo is needed', () => {
     const repos = [repo]
     const worktreesByRepo = { 'repo-1': [worktree] }

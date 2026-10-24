@@ -9,6 +9,7 @@ import {
 import { repoRowOwnerStamp } from './workspace-terminal-ssh-placeholders'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
+import { translate } from '@/i18n/i18n'
 
 export function getPathDisplayName(path: string, fallback: string): string {
   const normalized = path.trim().replace(/[\\/]+$/g, '')
@@ -65,7 +66,9 @@ export function buildRuntimeSessionPlaceholders({
         {
           id: parsed.repoId,
           path: parsed.worktreePath,
-          displayName: getPathDisplayName(parsed.worktreePath, parsed.repoId),
+          // The session knows a worktree path, not the project's saved name.
+          displayName: translate('sidebar.loadingProject', 'Loading project…'),
+          isRuntimeSessionPlaceholder: true,
           badgeColor: DEFAULT_REPO_BADGE_COLOR,
           addedAt: 0,
           connectionId: null,

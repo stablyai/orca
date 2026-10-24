@@ -11,6 +11,8 @@ import { project, projectHostSetups, repo, worktree } from './worktree-list-grou
 import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { buildRuntimeSessionPlaceholders } from '../../store/terminals/workspace-terminal-placeholders'
+import { mergeFetchedReposForHost } from '../../store/repos/repo-catalog-identity'
 
 const makeProject = (id: string, repoId: string): Project => ({
   ...project,
@@ -58,6 +60,36 @@ function buildHeaders(repos: Repo[], projects: Project[], setups: ProjectHostSet
 }
 
 describe('sidebar section headers with colliding display names', () => {
+  it('keeps restoring project labels free of worktree paths until their catalog arrives', () => {
+    const restored = buildRuntimeSessionPlaceholders({
+      repos: [],
+      worktreesByRepo: {},
+      runtimeHostIdByWorkspaceSessionKey: {
+        'repo-work::/work/api/experiments/api-backport': 'runtime:host-1',
+        'repo-oss::/oss/api/main': 'runtime:host-1'
+      }
+    })
+
+    expect(buildHeaders([...restored.repos], [], []).map((row) => row.label)).toEqual([
+      'Loading project…',
+      'Loading project…'
+    ])
+    expect(restored.worktreesByRepo['repo-work'][0].displayName).toBe('api-backport')
+
+    const loaded = mergeFetchedReposForHost(
+      restored.repos,
+      [
+        { ...workRepo, executionHostId: 'runtime:host-1' },
+        { ...ossRepo, executionHostId: 'runtime:host-1' }
+      ],
+      'runtime:host-1'
+    )
+    expect(buildHeaders([...loaded], [], []).map((row) => row.label)).toEqual([
+      'work/api',
+      'oss/api'
+    ])
+  })
+
   const workRepo: Repo = { ...repo, id: 'repo-work', path: '/work/api', displayName: 'api' }
   const ossRepo: Repo = { ...repo, id: 'repo-oss', path: '/oss/api', displayName: 'api' }
 

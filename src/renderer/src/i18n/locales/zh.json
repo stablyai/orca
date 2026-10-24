@@ -20160,6 +20160,8 @@
     }
   },
   "sidebar": {
+    "loadingWorkspaces": "正在加载项目和工作区…",
+    "loadingProject": "正在加载项目…",
     "revealFiltered": {
       "title": "显示隐藏的工作区？",
       "description": "活动工作区隐藏在侧边栏中。显示它只会调整隐藏它的过滤器。",

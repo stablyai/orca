@@ -54,6 +54,8 @@ export type Repo = {
   id: string
   path: string
   displayName: string
+  /** Renderer-only session recovery row; replaced by the host's catalog. */
+  isRuntimeSessionPlaceholder?: boolean
   badgeColor: string
   repoIcon?: RepoIcon | null
   /** Set when the repo is a fork: the upstream/parent owner/repo. Drives the

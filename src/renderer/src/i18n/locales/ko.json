@@ -20160,6 +20160,8 @@
     }
   },
   "sidebar": {
+    "loadingWorkspaces": "프로젝트 및 워크스페이스 로드 중…",
+    "loadingProject": "프로젝트 불러오는 중…",
     "revealFiltered": {
       "title": "숨겨진 워크스페이스를 공개하시겠습니까?",
       "description": "활성 워크스페이스는 사이드바에 숨겨져 있습니다. 이를 공개하면 이를 숨기는 필터만 조정됩니다.",

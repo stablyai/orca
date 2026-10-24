@@ -1,4 +1,11 @@
+// @vitest-environment happy-dom
+
+import React, { act } from 'react'
+import { createRoot } from 'react-dom/client'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
+import { ConfirmationDialogContext } from '@/components/confirmation-dialog-context'
+import { i18n } from '@/i18n/i18n'
+import type * as WorktreeCardAgentsModule from './WorktreeCardAgents'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
 import {
@@ -29,7 +36,14 @@ vi.mock('@tanstack/react-virtual', () => createReactVirtualModuleMock())
 vi.mock('@/hooks/useVirtualizedScrollAnchor', () => createVirtualizedScrollAnchorModuleMock())
 vi.mock('./project-header-drag', () => createProjectHeaderDragModuleMock())
 vi.mock('./WorktreeCard', () => createWorktreeCardModuleMock())
-vi.mock('./WorktreeCardAgents', () => createWorktreeCardAgentsModuleMock())
+vi.mock('./WorktreeCardAgents', async (importOriginal) => {
+  const actual = await importOriginal<typeof WorktreeCardAgentsModule>()
+  return {
+    ...createWorktreeCardAgentsModuleMock(),
+    SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT:
+      actual.SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT
+  }
+})
 vi.mock('./WorktreeTitleInlineRename', () => createWorktreeTitleInlineRenameModuleMock())
 vi.mock('./WorktreeContextMenu', () => createWorktreeContextMenuModuleMock())
 vi.mock('@/components/ui/tooltip', () => createTooltipModuleMock())
@@ -117,6 +131,49 @@ describe('WorktreeList lineage child card renderer', () => {
   beforeAll(async () => {
     await loadWorktreeList()
   }, 60_000)
+
+  it.each([true, false])(
+    'updates only pending project labels after a language switch (pending=%s)',
+    async (pending) => {
+      globalThis.IS_REACT_ACT_ENVIRONMENT = true
+      await i18n.changeLanguage('en')
+      setLineageFixtureState('repo')
+      mockStore.state.setVisibleReviewCardWorktreeIds = vi.fn()
+      mockStore.state.repos = [
+        { ...makeRepo(), displayName: 'Loading project…', isRuntimeSessionPlaceholder: pending }
+      ]
+      const { default: WorktreeList } = await import('./WorktreeList')
+      const container = document.createElement('div')
+      document.body.appendChild(container)
+      const root = createRoot(container)
+      try {
+        await act(async () => {
+          root.render(
+            React.createElement(
+              ConfirmationDialogContext.Provider,
+              { value: async () => false },
+              React.createElement(WorktreeList, {
+                scrollOffsetRef: { current: 0 },
+                scrollAnchorRef: { current: null }
+              })
+            )
+          )
+        })
+        expect(container.textContent).toContain('Loading project…')
+        await act(async () => {
+          await i18n.changeLanguage('zh')
+        })
+        expect(container.textContent).toContain(pending ? '正在加载项目…' : 'Loading project…')
+        if (pending) {
+          expect(container.textContent).not.toContain('Loading project…')
+        }
+      } finally {
+        await act(async () => root.unmount())
+        container.remove()
+        await i18n.changeLanguage('en')
+      }
+    }
+  )
 
   it('renders project group headers when repos import before worktree rows load', async () => {
     setProjectGroupWithoutWorktreeRowsState()

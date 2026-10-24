@@ -20447,6 +20447,8 @@
     "failed": "No se pudo abrir el archivo."
   },
   "sidebar": {
+    "loadingWorkspaces": "Cargando proyectos y espacios de trabajo…",
+    "loadingProject": "Cargando proyecto…",
     "revealFiltered": {
       "title": "¿Mostrar el espacio de trabajo oculto?",
       "description": "El espacio de trabajo activo está oculto en la barra lateral. Mostrarlo solo ajustará los filtros que lo ocultan.",

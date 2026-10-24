@@ -20223,6 +20223,8 @@
     }
   },
   "sidebar": {
+    "loadingWorkspaces": "Chargement des projets et des espaces de travail…",
+    "loadingProject": "Chargement du projet…",
     "revealFiltered": {
       "title": "Révéler l'espace de travail caché ?",
       "description": "L'espace de travail actif est masqué dans la barre latérale. Le révéler ajustera uniquement les filtres qui le cachent.",

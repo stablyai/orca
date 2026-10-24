@@ -21,6 +21,8 @@ import { lazyWithRetry } from '@/lib/lazy-with-retry'
 import { LocalGitToolchainScanBanner } from './LocalGitToolchainScanBanner'
 import { SeveredTerminalDaemonBanner } from './SeveredTerminalDaemonBanner'
 import { StalledTerminalDaemonBanner } from './StalledTerminalDaemonBanner'
+import { SidebarListLoadingState } from '../SidebarListLoadingState'
+import { translate } from '@/i18n/i18n'
 
 // Why lazy: the Agents list pulls the whole activity pipeline (virtualizer, markdown
 // previews, thread derivation); users on the workspace view should not load or render any of it.
@@ -193,6 +195,10 @@ function Sidebar({
                   />
                 </ActivityThreadCollapseContext.Provider>
               </React.Suspense>
+            ) : !startupWorktreeRefreshCompleted ? (
+              <SidebarListLoadingState
+                label={translate('sidebar.loadingWorkspaces', 'Loading projects and workspaces…')}
+              />
             ) : (
               <>
                 <LocalGitToolchainScanBanner />

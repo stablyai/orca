@@ -39,6 +39,7 @@ export type ProjectGroupingIndex = {
 export type ProjectSectionRepo = {
   id: string
   displayName: string
+  isRuntimeSessionPlaceholder?: boolean
   path: string
   addedAt?: number
   connectionId?: string | null

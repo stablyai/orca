@@ -109,6 +109,7 @@ function setSidebarState(settings: GlobalSettings, statusBarVisible = true): voi
     agentDashboardDrawerOpen: false,
     setAgentDashboardDrawerOpen: vi.fn(),
     fetchAllWorktrees: vi.fn(),
+    startupWorktreeRefreshCompleted: true,
     repos: [],
     // The toolchain banner indexes this map. The real store always has one.
     detectedWorktreesByRepo: {},
@@ -145,6 +146,29 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('Sidebar', () => {
+  it('reveals the workspace list only after the startup catalogs and scan settle', () => {
+    setSidebarState(getDefaultSettings(tmpdir()))
+    mocks.state = { ...mocks.state, startupWorktreeRefreshCompleted: false }
+    const view = render(sidebarElement())
+    expect(view.queryByTestId('worktree-list')).toBeNull()
+    expect(view.getByRole('status').textContent).toContain('Loading projects and workspaces…')
+    expect(view.getByTestId('sidebar-nav')).toBeTruthy()
+
+    mocks.state = { ...mocks.state, repos: [{ id: 'partial-catalog' }] }
+    view.rerender(sidebarElement())
+    expect(view.queryByTestId('worktree-list')).toBeNull()
+
+    mocks.state = { ...mocks.state, startupWorktreeRefreshCompleted: true }
+    view.rerender(sidebarElement())
+    expect(view.queryByRole('status')).toBeNull()
+    expect(view.getByTestId('worktree-list')).toBeTruthy()
+
+    mocks.state = { ...mocks.state, repos: [{ id: 'background-refresh' }] }
+    view.rerender(sidebarElement())
+    expect(view.queryByRole('status')).toBeNull()
+    expect(view.getByTestId('worktree-list')).toBeTruthy()
+  })
+
   it('anchors the setup script popup to the bottom toolbar', () => {
     setSidebarState(getDefaultSettings(tmpdir()))
     const view = render(sidebarElement())

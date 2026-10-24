@@ -48,6 +48,7 @@ import {
 } from './header-event-guards'
 import type { WorktreeSidebarHeaderDrag } from '../drag/use-header-drag'
 import { getWorktreeOptionId } from './option-dom'
+import { translate } from '@/i18n/i18n'
 
 export type SectionHeaderRowContext = {
   groupBy: WorktreeGroupBy
@@ -152,7 +153,9 @@ export function renderWorktreeSectionHeaderRow(args: {
       : null
   const isPinnedHeader = row.key === PINNED_GROUP_KEY
   const headerVisual = getSidebarHeaderVisual(row.icon, ctx.workspaceStatuses)
-  const label = row.label ?? headerVisual.label ?? ''
+  const label = row.repo?.isRuntimeSessionPlaceholder
+    ? translate('sidebar.loadingProject', 'Loading project…')
+    : (row.label ?? headerVisual.label ?? '')
   const hostContext =
     ctx.groupBy === 'repo' ? ctx.projectHeaderHostContexts?.get(row.key) : undefined
   const repoHeaderColor = resolveProjectGroupHeaderColor({

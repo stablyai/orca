@@ -15,7 +15,9 @@ export function withRepoSectionDisplayLabels<
   E extends ProjectSectionEntry<ActivityItem, ProjectSectionRepo>
 >(entries: readonly [string, E][]): [string, E][] {
   const labelItems = entries.flatMap(([, group]) =>
-    group.repo ? [{ ...group.repo, displayName: group.label }] : []
+    group.repo && !group.repo.isRuntimeSessionPlaceholder
+      ? [{ ...group.repo, displayName: group.label }]
+      : []
   )
   if (labelItems.length === 0) {
     return [...entries]
@@ -23,7 +25,7 @@ export function withRepoSectionDisplayLabels<
   const labelsByPath = getRepoDisplayLabelsByPath(labelItems)
   return entries.map(([key, group]) => [
     key,
-    group.repo
+    group.repo && !group.repo.isRuntimeSessionPlaceholder
       ? { ...group, label: labelsByPath.get(getRepoDisplayLabelKey(group.repo)) ?? group.label }
       : group
   ])
