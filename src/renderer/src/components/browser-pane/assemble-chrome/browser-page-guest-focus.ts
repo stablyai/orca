@@ -30,6 +30,8 @@ export function useWebviewGuestFocus(
           return false
         }
         try {
+          // Why: focusing the element alone can leave keyboard input on the opener guest.
+          window.focus()
           webview.focus()
         } catch {
           // Why: WebViewElement.focus() reads null internals once the guest is destroyed (STA-3448).

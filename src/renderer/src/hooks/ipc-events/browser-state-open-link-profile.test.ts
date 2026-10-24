@@ -143,26 +143,29 @@ describe('link-opened Orca tabs', () => {
   })
 
   // Why: #18832 — focus left on the opener made Cmd/Ctrl+W close the opener instead.
-  it('moves keyboard focus into a foreground link tab but not a background one', () => {
-    storeState.value = {
-      browserPagesByWorkspace: {
-        'workspace-1': [{ id: 'page-1', workspaceId: 'workspace-1', worktreeId: 'worktree-1' }]
-      },
-      browserTabsByWorktree: {},
-      createBrowserTab: createBrowserTabMock
+  it.each([true, undefined])(
+    'focuses foreground links with activate=%s but not background links',
+    (activate) => {
+      storeState.value = {
+        browserPagesByWorkspace: {
+          'workspace-1': [{ id: 'page-1', workspaceId: 'workspace-1', worktreeId: 'worktree-1' }]
+        },
+        browserTabsByWorktree: {},
+        createBrowserTab: createBrowserTabMock
+      }
+      const handler = captureOpenLinkHandler()
+
+      handler({
+        browserPageId: 'page-1',
+        url: 'https://docs.example.com/background',
+        activate: false
+      })
+      expect(dispatchEventMock).not.toHaveBeenCalled()
+
+      handler({ browserPageId: 'page-1', url: 'https://docs.example.com/foreground', activate })
+      expect(dispatchEventMock).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ detail: { pageId: 'new-page', target: 'webview' } })
+      )
     }
-    const handler = captureOpenLinkHandler()
-
-    handler({
-      browserPageId: 'page-1',
-      url: 'https://docs.example.com/background',
-      activate: false
-    })
-    expect(dispatchEventMock).not.toHaveBeenCalled()
-
-    handler({ browserPageId: 'page-1', url: 'https://docs.example.com/foreground' })
-    expect(dispatchEventMock).toHaveBeenCalledWith(
-      expect.objectContaining({ detail: { pageId: 'new-page', target: 'webview' } })
-    )
-  })
+  )
 })

@@ -1,18 +1,11 @@
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  type MutableRefObject,
-  type RefObject
-} from 'react'
+import { useCallback, useEffect, useRef, type MutableRefObject, type RefObject } from 'react'
 import { useAppStore } from '@/store'
 import { getShortcutPlatform } from '@/hooks/useShortcutLabel'
 import { keybindingMatchesAction } from '../../../../../shared/keybindings'
 import {
   consumeBrowserFocusRequest,
-  queueBrowserFocusRequest,
   ORCA_BROWSER_FOCUS_REQUEST_EVENT,
+  peekBrowserFocusRequest,
   type BrowserFocusRequestDetail
 } from '../host-guest/browser-focus'
 import { browserChromeShortcutOwnsEvent } from '../describe-page/browser-overlay-shortcut-target'
@@ -63,11 +56,6 @@ export function useBrowserPageChromeFocus({
   const keybindings = useAppStore((s) => s.keybindings)
   const keepAddressBarFocusRef = useRef(false)
   const addressBarFocusGrabRef = useRef<(() => void) | null>(null)
-  // Why a layout effect: it lands before the previous render's passive cleanups read it.
-  const isActiveRef = useRef(isActive)
-  useLayoutEffect(() => {
-    isActiveRef.current = isActive
-  }, [isActive])
 
   const cancelAddressBarFocusGrab = useCallback((): void => {
     addressBarFocusGrabRef.current?.()
@@ -78,6 +66,9 @@ export function useBrowserPageChromeFocus({
       const input = addressBarInputRef.current
       if (!input) {
         return false
+      }
+      if (!keepAddressBarFocusRef.current) {
+        consumeBrowserFocusRequest(browserTabId)
       }
       guestFocus.blur()
       input.focus()
@@ -90,7 +81,7 @@ export function useBrowserPageChromeFocus({
       }
       return document.activeElement === input
     },
-    [addressBarInputRef, guestFocus]
+    [addressBarInputRef, browserTabId, guestFocus]
   )
 
   const focusGuestNow = useCallback(() => {
@@ -205,20 +196,16 @@ export function useBrowserPageChromeFocus({
     return () => removeAppKeyListener('keydown', handleKeyDown)
   }, [chromeShortcutScope, focusAddressBarNow, keybindings, workspaceId])
 
-  /**
-   * Focuses the page, waiting for a new tab's guest to attach first. Returns a canceller that
-   * requeues an unfinished request unless `{ requeue: false }`, so a re-run still finds it.
-   */
+  // Keep unfinished requests queued for effect replay or a later guest-ready event.
   const startGuestFocusRetry = useCallback(
     ({ firstAttempt }: { firstAttempt: 'now' | 'next-frame' }) => {
       let cancelled = false
-      let settled = false
       let frameId = 0
       let attempts = 0
       let waitedFrames = 0
       const focusAtRequest = document.activeElement
       const runFocus = (): void => {
-        if (cancelled) {
+        if (cancelled || peekBrowserFocusRequest(browserTabId) !== 'webview') {
           return
         }
         // Why: the retry budget starts once there is a guest; focus the user moves meanwhile
@@ -226,7 +213,7 @@ export function useBrowserPageChromeFocus({
         if (attempts === 0) {
           const active = document.activeElement
           if (active !== focusAtRequest && active !== document.body) {
-            settled = true
+            consumeBrowserFocusRequest(browserTabId)
             return
           }
           if (!guestFocus.isAttached() && waitedFrames < GUEST_ATTACH_WAIT_FRAMES) {
@@ -236,8 +223,9 @@ export function useBrowserPageChromeFocus({
           }
         }
         attempts += 1
-        settled = focusGuestNow()
-        if (!settled && attempts < ADDRESS_BAR_FOCUS_FRAMES) {
+        if (focusGuestNow()) {
+          consumeBrowserFocusRequest(browserTabId)
+        } else if (attempts < ADDRESS_BAR_FOCUS_FRAMES) {
           frameId = window.requestAnimationFrame(runFocus)
         }
       }
@@ -246,28 +234,25 @@ export function useBrowserPageChromeFocus({
       } else {
         frameId = window.requestAnimationFrame(runFocus)
       }
-      return ({ requeue = true }: { requeue?: boolean } = {}): void => {
+      return (): void => {
         cancelled = true
         window.cancelAnimationFrame(frameId)
-        // Why: a re-run (StrictMode, a dependency change) mid-wait must still find the request; a
-        // pane the user left drops it, so coming back later doesn't pull focus into the page.
-        if (requeue && !settled && waitedFrames < GUEST_ATTACH_WAIT_FRAMES && isActiveRef.current) {
-          queueBrowserFocusRequest({ pageId: browserTabId, target: 'webview' })
-        }
       }
     },
     [browserTabId, focusGuestNow, guestFocus]
   )
 
   useEffect(() => {
-    if (!isActive) {
+    const focusTarget = peekBrowserFocusRequest(browserTabId)
+    if (focusTarget === 'webview' && (!isActive || chromeShortcutScope === 'inactive')) {
+      consumeBrowserFocusRequest(browserTabId)
       return
     }
-    const focusTarget = consumeBrowserFocusRequest(browserTabId)
-    if (!focusTarget) {
+    if (!isActive || !focusTarget) {
       return
     }
     if (focusTarget === 'address-bar') {
+      consumeBrowserFocusRequest(browserTabId)
       return startAddressBarFocusGrab()
     }
     // Why: lowering the latch is not enough — a grab already in flight would spend its remaining
@@ -278,6 +263,7 @@ export function useBrowserPageChromeFocus({
   }, [
     browserTabId,
     cancelAddressBarFocusGrab,
+    chromeShortcutScope,
     isActive,
     startAddressBarFocusGrab,
     startGuestFocusRetry
@@ -292,33 +278,43 @@ export function useBrowserPageChromeFocus({
       if (!detail || detail.pageId !== browserTabId) {
         return
       }
-      const focusTarget = consumeBrowserFocusRequest(browserTabId)
+      const focusTarget = peekBrowserFocusRequest(browserTabId)
       if (!focusTarget) {
         return
       }
       if (focusTarget === 'address-bar') {
+        consumeBrowserFocusRequest(browserTabId)
         // Why: palette-triggered focus fights the same re-grab as a new tab does, so it takes
         // the bar the same bounded way rather than latching on a single try.
         startAddressBarFocusGrab()
         return
       }
+      if (chromeShortcutScope === 'inactive') {
+        consumeBrowserFocusRequest(browserTabId)
+        return
+      }
       cancelAddressBarFocusGrab()
-      cancelGuestFocus?.({ requeue: false })
+      cancelGuestFocus?.()
       // Why the same retry as on mount: a remote link's request can land after the pane mounted
       // but before its guest attached.
       cancelGuestFocus = startGuestFocusRetry({ firstAttempt: 'now' })
     }
     let cancelGuestFocus: ReturnType<typeof startGuestFocusRetry> | null = null
-    // Why: an already-active page never remounts, so listen for the event to consume the durable focus request immediately.
+    const cancelPendingFocus = (): void => {
+      consumeBrowserFocusRequest(browserTabId)
+    }
     window.addEventListener(ORCA_BROWSER_FOCUS_REQUEST_EVENT, handleBrowserFocusRequest)
+    window.addEventListener('pointerdown', cancelPendingFocus, true)
     return () => {
       window.removeEventListener(ORCA_BROWSER_FOCUS_REQUEST_EVENT, handleBrowserFocusRequest)
+      window.removeEventListener('pointerdown', cancelPendingFocus, true)
       cancelAddressBarFocusGrab()
       cancelGuestFocus?.()
     }
   }, [
     browserTabId,
     cancelAddressBarFocusGrab,
+    chromeShortcutScope,
     isActive,
     startAddressBarFocusGrab,
     startGuestFocusRetry
