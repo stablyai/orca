@@ -71,3 +71,20 @@ it('supports ID-only legacy dismissal while preserving host isolation', async ()
   await dismissHostPushNotification({ type: 'dismiss', notificationId: 'same' }, 'host-a')
   expect(Notifications.dismissNotificationAsync).toHaveBeenCalledExactlyOnceWith('legacy')
 })
+
+it('dismisses the matching in-app notification banner when a socket dismiss arrives', async () => {
+  const { getCurrentInAppNotificationBanner, publishInAppNotificationBanner } =
+    await import('./in-app-notification-banner-store')
+  publishInAppNotificationBanner({
+    id: 'banner-same',
+    tone: 'urgent',
+    hostId: 'host-a',
+    hostName: 'Host A',
+    title: 'orca · main',
+    body: 'Claude needs input',
+    notificationId: 'same',
+    createdAt: 1
+  })
+  await dismissHostPushNotification({ type: 'dismiss', notificationId: 'same' }, 'host-a')
+  expect(getCurrentInAppNotificationBanner()).toBeNull()
+})

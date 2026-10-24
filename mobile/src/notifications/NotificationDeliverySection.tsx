@@ -39,8 +39,8 @@ export function NotificationDeliverySection({ value, disabled, onChange }: Props
         {row('sound', 'Notification sound')}
         {row(
           'suppressWhileViewing',
-          'Suppress while focused',
-          'Skip alerts for the workspace open on this phone.'
+          'Mute the whole open workspace',
+          'The tab open on this phone never alerts. Turn on to also skip its other tabs.'
         )}
       </View>
       <Text style={styles.footer}>

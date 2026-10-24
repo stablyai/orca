@@ -22,6 +22,8 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
     terminalUnsubsRef,
     terminalDiagnosticsRef,
     activeHandleRef,
+    activeSessionTabIdRef,
+    selectedSessionTabIdRef,
     activeSessionTabTypeRef,
     pendingSelectionRef,
     switchSessionTabRef,
@@ -50,6 +52,12 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
       terminalDiagnosticsRef.current.tabSwitch('terminal', matchingTab?.id ?? '', false, handle)
       pendingSelectionRef.current = { kind: 'terminal', handle, tabId: matchingTab?.id ?? null }
       activeSessionTabTypeRef.current = 'terminal'
+      if (activeSessionTabIdRef) {
+        activeSessionTabIdRef.current = matchingTab?.id ?? null
+      }
+      if (selectedSessionTabIdRef) {
+        selectedSessionTabIdRef.current = matchingTab?.id ?? null
+      }
       defaultTerminalHandlesToLiveInput([handle])
       setActiveSessionTabId(matchingTab?.id ?? null)
       const prev = activeHandleRef.current
@@ -102,6 +110,12 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
         triggerSelection()
         pendingSelectionRef.current = { kind: 'tab', tabId: tab.id }
         activeSessionTabTypeRef.current = 'terminal'
+        if (activeSessionTabIdRef) {
+          activeSessionTabIdRef.current = tab.id
+        }
+        if (selectedSessionTabIdRef) {
+          selectedSessionTabIdRef.current = tab.id
+        }
         setActiveSessionTabId(tab.id)
         const prev = activeHandleRef.current
         if (prev) {
@@ -127,6 +141,12 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
       terminalDiagnosticsRef.current.tabSwitch(tab.type, tab.id, false)
       pendingSelectionRef.current = { kind: 'tab', tabId: tab.id }
       activeSessionTabTypeRef.current = tab.type
+      if (activeSessionTabIdRef) {
+        activeSessionTabIdRef.current = tab.id
+      }
+      if (selectedSessionTabIdRef) {
+        selectedSessionTabIdRef.current = tab.id
+      }
       setActiveSessionTabId(tab.id)
       const prev = activeHandleRef.current
       if (prev) {

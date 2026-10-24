@@ -1,10 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as Notifications from 'expo-notifications'
 import { Platform } from 'react-native'
-import { ensureDesktopNotificationChannel } from './desktop-notification-channel'
+import {
+  COMPLETE_VIBRATION_PATTERN,
+  DESKTOP_NOTIFICATION_COMPLETE_CHANNEL_ID,
+  DESKTOP_NOTIFICATION_URGENT_CHANNEL_ID,
+  URGENT_VIBRATION_PATTERN,
+  ensureDesktopNotificationChannel
+} from './desktop-notification-channel'
 
 vi.mock('expo-notifications', () => ({
-  AndroidImportance: { HIGH: 'high' },
+  AndroidImportance: { HIGH: 'high', MAX: 'max' },
   setNotificationChannelAsync: vi.fn()
 }))
 
@@ -20,12 +26,31 @@ beforeEach(() => {
 })
 
 describe('ensureDesktopNotificationChannel', () => {
-  it('creates the channel the gateway payload names', async () => {
+  it('creates the channel the gateway payload names plus urgent and complete channels', async () => {
     await ensureDesktopNotificationChannel()
 
     expect(Notifications.setNotificationChannelAsync).toHaveBeenCalledWith(
       'orca-desktop',
-      expect.objectContaining({ importance: 'high' })
+      expect.objectContaining({
+        importance: 'max',
+        vibrationPattern: COMPLETE_VIBRATION_PATTERN
+      })
+    )
+    expect(Notifications.setNotificationChannelAsync).toHaveBeenCalledWith(
+      DESKTOP_NOTIFICATION_URGENT_CHANNEL_ID,
+      expect.objectContaining({
+        importance: 'max',
+        vibrationPattern: URGENT_VIBRATION_PATTERN,
+        lightColor: '#f59e0b'
+      })
+    )
+    expect(Notifications.setNotificationChannelAsync).toHaveBeenCalledWith(
+      DESKTOP_NOTIFICATION_COMPLETE_CHANNEL_ID,
+      expect.objectContaining({
+        importance: 'max',
+        vibrationPattern: COMPLETE_VIBRATION_PATTERN,
+        lightColor: '#10b981'
+      })
     )
   })
 

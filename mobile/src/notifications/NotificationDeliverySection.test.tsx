@@ -24,7 +24,7 @@ it('shows only phone-specific controls while desktop owns category eligibility',
   expect(switches().map((node) => node.props.accessibilityLabel)).toEqual([
     'Only when away from desktop',
     'Notification sound',
-    'Suppress while focused'
+    'Mute the whole open workspace'
   ])
   expect(JSON.stringify(renderer.toJSON())).toContain(
     'Alert types follow each paired desktop’s notification settings.'

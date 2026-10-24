@@ -5,7 +5,12 @@ import { NotificationDisplayTest } from './notification-display-test'
 
 const mocks = vi.hoisted(() => ({
   loadHosts: vi.fn(),
-  clients: [] as { state: string; client: { sendRequest: ReturnType<typeof vi.fn> } }[]
+  clients: [] as { state: string; client: { sendRequest: ReturnType<typeof vi.fn> } }[],
+  getDevicePushToken: vi.fn(async (): Promise<{ platform: 'android'; token: string } | null> => ({
+    platform: 'android',
+    token: 'fcm-1'
+  })),
+  sendLocalNotificationDisplayTest: vi.fn(async () => {})
 }))
 vi.mock('react-native', () => ({
   Pressable: 'Pressable',
@@ -15,11 +20,17 @@ vi.mock('react-native', () => ({
 }))
 vi.mock('../transport/host-store', () => ({ loadHostCatalog: mocks.loadHosts }))
 vi.mock('../transport/use-all-host-clients', () => ({ useAllHostClients: () => mocks.clients }))
+vi.mock('../notifications/push-token', () => ({ getDevicePushToken: mocks.getDevicePushToken }))
+vi.mock('../notifications/push-socket-fallback', () => ({
+  sendLocalNotificationDisplayTest: mocks.sendLocalNotificationDisplayTest
+}))
 
 let renderer: ReactTestRenderer
 beforeEach(() => {
   mocks.loadHosts.mockReset().mockResolvedValue([{ id: 'first' }, { id: 'second' }])
   mocks.clients = []
+  mocks.getDevicePushToken.mockReset().mockResolvedValue({ platform: 'android', token: 'fcm-1' })
+  mocks.sendLocalNotificationDisplayTest.mockReset().mockResolvedValue(undefined)
 })
 afterEach(() => act(() => renderer?.unmount()))
 
@@ -74,7 +85,27 @@ it('explains when every desktop needs registration or an update', async () => {
     client: { sendRequest: vi.fn().mockResolvedValue(response) }
   }))
   await send()
+  expect(mocks.sendLocalNotificationDisplayTest).not.toHaveBeenCalled()
   expect(JSON.stringify(renderer.toJSON())).toContain('Reconnect to register this phone')
+})
+
+it('sends a local test when no connected desktop can register a phone without push', async () => {
+  mocks.getDevicePushToken.mockResolvedValue(null)
+  const sendRequests = [
+    { ok: true, result: { accepted: false, reason: 'not_registered' } },
+    { ok: true, result: { accepted: false, reason: 'not_registered' } }
+  ].map((response) => vi.fn().mockResolvedValue(response))
+  mocks.clients = sendRequests.map((sendRequest) => ({
+    state: 'connected',
+    client: { sendRequest }
+  }))
+  await send()
+  expect(sendRequests[0]).toHaveBeenCalledOnce()
+  expect(sendRequests[1]).toHaveBeenCalledOnce()
+  expect(mocks.sendLocalNotificationDisplayTest).toHaveBeenCalledOnce()
+  expect(JSON.stringify(renderer.toJSON())).toContain(
+    'Sent a local test notification. Live connection alerts are active on this device.'
+  )
 })
 
 it.each([false, true])('explains missing pairing or connection (paired=%s)', async (paired) => {

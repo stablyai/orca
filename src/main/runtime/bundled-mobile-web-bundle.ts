@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { getAppEnvironment, hasAppEnvironment } from '../../shared/app-environment'
 import {
@@ -38,9 +38,24 @@ export function getBundledMobileWebBundleRoot(): string | undefined {
 // replaces it only by restarting the app, so a stale entry cannot outlive the process that read it.
 // `undefined` means "not looked at yet", `null` means "looked, and this install has no bundle".
 let cachedBundle: BundledMobileWebBundle | null | undefined
+let cachedManifestMtimeMs: number | undefined
+
+function currentManifestMtimeMs(root: string | undefined): number | undefined {
+  if (!root) {
+    return undefined
+  }
+  try {
+    return statSync(join(root, MANIFEST_FILENAME)).mtimeMs
+  } catch {
+    return undefined
+  }
+}
 
 export function loadBundledMobileWebBundle(): BundledMobileWebBundle | null {
-  if (cachedBundle === undefined) {
+  const root = cachedBundle ? cachedBundle.root : getBundledMobileWebBundleRoot()
+  const mtimeMs = currentManifestMtimeMs(root)
+  if (cachedBundle === undefined || (mtimeMs !== undefined && mtimeMs !== cachedManifestMtimeMs)) {
+    cachedManifestMtimeMs = mtimeMs
     cachedBundle = readBundledMobileWebBundle()
   }
   return cachedBundle
@@ -49,6 +64,7 @@ export function loadBundledMobileWebBundle(): BundledMobileWebBundle | null {
 /** Tests own the process, so they own the cache; nothing in the app may call this. */
 export function resetBundledMobileWebBundleCacheForTests(): void {
   cachedBundle = undefined
+  cachedManifestMtimeMs = undefined
 }
 
 function readBundledMobileWebBundle(): BundledMobileWebBundle | null {
