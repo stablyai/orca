@@ -4,6 +4,7 @@ import { assertCallerHandleMatchesEvidence, resolveOrchestrationCaller } from '.
 import { exposeRun } from './run-receipt'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationCallerIdentity } from '../../../../orchestration/orchestration-caller-identity'
+import { bindAfterProbe } from './run-coordinator-liveness'
 import { currentDispatchAssigneeRun } from '../messaging/recipient-routing'
 import {
   RunCreateParams,
@@ -57,7 +58,7 @@ export const ORCHESTRATION_RUN_METHODS = [
     name: 'orchestration.runUse',
     permission: 'workspace',
     params: RunUseParams,
-    handler: (
+    handler: async (
       params,
       {
         runtime,
@@ -89,14 +90,15 @@ export const ORCHESTRATION_RUN_METHODS = [
       assertCallerHandleMatchesEvidence(runtime, params.from, orchestrationCompatibilityEvidence)
       const db = runtime.getOrchestrationDb()
       const priorRun = db.getCurrentRunForCoordinator(caller)
-      const run = db.bindRun({
+      const run = await bindAfterProbe(runtime, db, () => ({
         runId: params.id,
         coordinatorHandle: caller.terminalHandle,
         coordinatorPaneKey: caller.paneKey,
         coordinatorOrcaSessionId: caller.orcaSessionId,
         takeoverLegacy: params.takeoverLegacy,
+        takeover: params.takeover,
         legacyCoordinatorAuthority
-      })
+      }))
       if (!run) {
         throw new OrchestrationError(
           'run_not_found',

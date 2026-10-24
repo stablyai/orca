@@ -281,7 +281,8 @@ describe('orchestration notification mailbox consistency', () => {
       .map(([sql]) => sql)
       .find((sql) => sql.includes('FROM run_coordinator_handles AS coordinator'))
     expect(routingSql).toContain('INDEXED BY idx_messages_undelivered_direct_run')
-    expect(routingSql).not.toContain('NOT EXISTS')
+    // An anti-join per coordinator row is fine; one per candidate message would scan the backlog.
+    expect(routingSql).not.toMatch(/NOT EXISTS \([^)]*candidate\./)
     expect(db.getMessageById(owned.id)?.to_handle).toBe(`run:${ownedRun.id}`)
     expect(db.getUnreadDirectMessageTypes(detachedHandle)).toEqual(['status'])
     db.close()
