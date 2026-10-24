@@ -50,7 +50,8 @@ function setupsByOwnedExecutionHost(
     const key = JSON.stringify([
       setup.hostId,
       setup.executionHostId ?? setup.hostId,
-      setup.runtimeOwnerEnvironmentId ?? null
+      setup.runtimeOwnerEnvironmentId ?? null,
+      setup.repoId ?? null
     ])
     if (!byHost.has(key) || setup.id === selectedSetupId) {
       byHost.set(key, setup)
