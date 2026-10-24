@@ -5,6 +5,7 @@ import React, { createRef, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { useAppStore } from '@/store'
 import type * as I18n from '@/i18n/i18n'
 import type * as ImageBlobPng from '@/lib/image-blob-png'
 import { CLIPBOARD_IMAGE_MAX_SOURCE_BYTES } from '../../../../shared/clipboard-image'
@@ -186,6 +187,26 @@ function pngOfText(): void {
     async (blob: Blob) => new Blob([`png:${await blob.text()}`], { type: 'image/png' })
   )
 }
+
+it('updates nominal toggle labels, including an unassigned binding', () => {
+  const initial = useAppStore.getState()
+  vi.stubGlobal('navigator', { userAgent: 'Windows NT 10.0' })
+  useAppStore.setState({ keybindings: {} })
+  const view = render(<Harness onSwitchToTerminal={() => {}} />)
+  expect(view.container.textContent).toContain('Ctrl+Shift+J')
+  act(() =>
+    useAppStore.setState({
+      keybindings: { 'terminal.toggleNativeChat': ['Mod+Alt+Y', 'Mod+Alt+K'] }
+    })
+  )
+  expect(view.container.textContent).toContain('Ctrl+Alt+Y')
+  act(() => useAppStore.setState({ keybindings: { 'terminal.toggleNativeChat': [] } }))
+  expect(view.container.textContent).not.toContain('Ctrl+Alt+Y')
+  expect(view.container.textContent).not.toContain('Unassigned')
+  view.unmount()
+  useAppStore.setState(initial, true)
+  vi.unstubAllGlobals()
+})
 
 describe('useNativeChatContextMenu', () => {
   beforeEach(() => {

@@ -2,17 +2,14 @@ import { useEffect, useLayoutEffect, useRef } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
-import { fileSearchClaimsTextKey } from '../lib/file-search-shortcut-policy'
 import { getSelectedTextForFileSearch } from '../lib/file-search-selection'
 import { registerAppCommandDispatcher } from '@/lib/app-command-dispatch'
 import { executePluginCommand } from '@/lib/plugin-command-execution'
-import { findPluginCommandForKeybinding } from '@/lib/plugin-command-keybindings'
 import {
-  isFloatingWorkspacePanelFocused,
-  isFloatingWorkspaceTerminalInputTarget,
-  matchFloatingWorkspacePanelChord,
-  shouldMinimizeFloatingWorkspacePanelOnCloseShortcut
-} from '@/lib/floating-workspace-terminal-actions'
+  findPluginCommandForKeybinding,
+  globalShortcutTargetYields
+} from '@/lib/plugin-command-keybindings'
+import { shouldMinimizeFloatingWorkspacePanelOnCloseShortcut } from '@/lib/floating-workspace-terminal-actions'
 import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
 import {
   folderRelativePathToIncludeGlob,
@@ -20,11 +17,7 @@ import {
 } from '../components/right-sidebar/file-search-include-pattern'
 import { usePluginCommands } from '@/store/plugin-panels'
 import { useAppStore } from '../store'
-import {
-  keybindingMatchesAction,
-  type KeybindingActionId,
-  type KeybindingMatchOptions
-} from '../../../shared/keybindings'
+import { keybindingMatchesAction, type KeybindingActionId } from '../../../shared/keybindings'
 import { PLUGIN_COMMAND_ALIAS_ACTION_IDS } from '../../../shared/plugins/plugin-command-actions'
 import {
   ModifierDoubleTapDetector,
@@ -188,30 +181,13 @@ export function useGlobalKeybindings(args: {
         return
       }
 
-      // Skip editable surfaces so TipTap's Cmd+B bold works; this renderer-side fallback covers the blur→press IPC race (docs/markdown-cmd-b-bold-design.md).
-      if (fileSearchClaimsTextKey(input)) {
+      if (
+        globalShortcutTargetYields(input, shortcutPlatform, keybindings, {
+          context,
+          terminalShortcutPolicy
+        })
+      ) {
         return
-      }
-
-      // Let floating-terminal SSH/tmux control chords reach the terminal (xterm's helper textarea isn't a generic editable target).
-      if (isFloatingWorkspaceTerminalInputTarget(input.target)) {
-        return
-      }
-
-      // Only short-circuit chords the floating panel itself claims; suppressing others here would silently no-op them when focus is in the panel.
-      if (isFloatingWorkspacePanelFocused()) {
-        const floatingMatchOptions: KeybindingMatchOptions = { context, terminalShortcutPolicy }
-        if (
-          matchFloatingWorkspacePanelChord(
-            input,
-            shortcutPlatform,
-            null,
-            keybindings,
-            floatingMatchOptions
-          ) !== null
-        ) {
-          return
-        }
       }
 
       // Plugin chords are user-reviewed instructional content. They win over

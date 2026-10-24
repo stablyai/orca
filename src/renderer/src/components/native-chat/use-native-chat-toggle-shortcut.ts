@@ -1,11 +1,23 @@
-import { useEffect } from 'react'
+import { usePluginCommands } from '@/store/plugin-panels'
+import { useEffect, useLayoutEffect, useRef } from 'react'
+import { matchesRecentTabSwitcherChord } from '../../../../shared/window-shortcut-policy'
+import {
+  globalShortcutTargetYields,
+  findPluginCommandForKeybinding
+} from '@/lib/plugin-command-keybindings'
+import { getKeybindingContext } from '../terminal-workspace-model'
+import {
+  ModifierDoubleTapDetector,
+  toModifierDoubleTapEvent
+} from '../../../../shared/modifier-double-tap-detector'
 import { useAppStore } from '../../store'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 import { resolveNativeChatTabAgentEvidence } from '../tab-bar/native-chat-tab-agent-evidence'
 import { canToggleNativeChat } from './native-chat-availability'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
-import { isMacPlatform, matchesNativeChatToggleShortcut } from './native-chat-shortcut'
+import { matchesNativeChatToggleShortcut } from './native-chat-shortcut'
+import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { resolveKeyboardWorkspaceId } from '@/lib/floating-workspace-terminal-actions'
 import {
@@ -42,16 +54,43 @@ export function resolveNativeChatToggleShortcutDetectedAgent({
  *  window or floating panel) so only one listener acts, and to agent terminals so
  *  the chord is inert on plain shells / non-terminal surfaces. */
 export function useNativeChatToggleShortcut(worktreeId: string, isWorktreeActive: boolean): void {
+  const pluginCommands = usePluginCommands()
+  const pluginCommandsRef = useRef(pluginCommands)
+  useLayoutEffect(() => {
+    pluginCommandsRef.current = pluginCommands
+  }, [pluginCommands])
   useEffect(() => {
     if (!isWorktreeActive) {
       return
     }
-    const isMac = isMacPlatform()
-    const onKeyDown = (e: KeyboardEvent): void => {
-      if (e.repeat || !matchesNativeChatToggleShortcut(e, isMac)) {
+    const platform = getShortcutPlatform()
+    const detector = new ModifierDoubleTapDetector()
+    const attemptToggle = (
+      e: KeyboardEvent,
+      input: Parameters<typeof globalShortcutTargetYields>[0]
+    ): void => {
+      const state = useAppStore.getState()
+      if (!matchesNativeChatToggleShortcut(input, platform, state.keybindings)) {
         return
       }
-      const state = useAppStore.getState()
+      const context = getKeybindingContext(e.target)
+      const options = { context, terminalShortcutPolicy: state.settings?.terminalShortcutPolicy }
+      if (
+        matchesRecentTabSwitcherChord(input, platform, state.keybindings, options) ||
+        (context === 'app' &&
+          !input.isComposing &&
+          input.key !== 'Process' &&
+          !globalShortcutTargetYields(input, platform, state.keybindings, options) &&
+          findPluginCommandForKeybinding(
+            pluginCommandsRef.current,
+            input,
+            platform,
+            state.keybindings,
+            Boolean(state.activeWorktreeId)
+          ))
+      ) {
+        return
+      }
       // Why: the floating panel and the main window can both be on screen; only the one the key
       // press came from toggles.
       if (resolveKeyboardWorkspaceId(e.target, state.activeWorktreeId) !== worktreeId) {
@@ -101,13 +140,56 @@ export function useNativeChatToggleShortcut(worktreeId: string, isWorktreeActive
       ) {
         return
       }
-      e.preventDefault()
-      e.stopPropagation()
       state.toggleTabViewMode(tab.id)
+      e.preventDefault()
+      e.stopImmediatePropagation()
     }
-    addAppKeyListener('keydown', onKeyDown)
+    const onInput = (e: KeyboardEvent): void => {
+      if (
+        e.defaultPrevented ||
+        e.repeat ||
+        (e.target instanceof Element && e.target.closest('[data-shortcut-recorder-active]'))
+      ) {
+        detector.reset()
+        return
+      }
+      const detected = detector.process(
+        toModifierDoubleTapEvent({
+          type: e.type === 'keyup' ? 'keyUp' : 'keyDown',
+          key: e.key,
+          code: e.code,
+          meta: e.metaKey,
+          control: e.ctrlKey,
+          alt: e.altKey,
+          shift: e.shiftKey,
+          isAutoRepeat: e.repeat
+        }),
+        Date.now()
+      )
+      if (e.type === 'keydown') {
+        attemptToggle(
+          e,
+          detected
+            ? {
+                doubleTapModifier: detected.modifier,
+                target: e.target,
+                isComposing: e.isComposing,
+                altGraph: e.getModifierState('AltGraph')
+              }
+            : e
+        )
+      }
+    }
+    const reset = (): void => detector.reset()
+    addAppKeyListener('keydown', onInput)
+    addAppKeyListener('keyup', onInput)
+    window.addEventListener('blur', reset)
+    window.addEventListener('focusin', reset)
     return () => {
-      removeAppKeyListener('keydown', onKeyDown)
+      removeAppKeyListener('keydown', onInput)
+      removeAppKeyListener('keyup', onInput)
+      window.removeEventListener('blur', reset)
+      window.removeEventListener('focusin', reset)
     }
   }, [worktreeId, isWorktreeActive])
 }
