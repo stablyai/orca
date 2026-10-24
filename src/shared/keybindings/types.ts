@@ -93,6 +93,7 @@ export type KeybindingActionId =
   | 'editor.save'
   | 'editor.markdownPreview'
   | 'editor.toggleWordWrap'
+  | 'editor.toggleCenteredLayout'
   | 'editor.copyContext'
   | 'editor.previousChange'
   | 'editor.nextChange'

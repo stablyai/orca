@@ -83,6 +83,14 @@ describe('GeneralPane search entries', () => {
     expect(matchesSettingsSearch('horizontal scroll', entries)).toBe(true)
   })
 
+  it('includes file-editor centered-layout keywords', () => {
+    const entries = getGeneralPaneSearchEntries()
+
+    expect(matchesSettingsSearch('centered layout', entries)).toBe(true)
+    expect(matchesSettingsSearch('center editor', entries)).toBe(true)
+    expect(matchesSettingsSearch('ultrawide', entries)).toBe(true)
+  })
+
   it('includes rich Markdown spellcheck keywords', () => {
     const entries = getGeneralPaneSearchEntries()
 

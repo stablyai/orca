@@ -60,6 +60,8 @@ describe('EditorPanelActionsMenu', () => {
         diffWordWrap={false}
         diffShowWhitespace={false}
         editorWordWrap
+        editorCenteredLayout={false}
+        showCenteredLayout
         shouldShowMarkdownExportAction
         canExportMarkdownToPdf
         canShowMarkdownFrontmatterToggle
@@ -67,13 +69,18 @@ describe('EditorPanelActionsMenu', () => {
         onToggleDiffWordWrap={vi.fn()}
         onToggleDiffWhitespace={vi.fn()}
         onToggleEditorWordWrap={vi.fn()}
+        onToggleEditorCenteredLayout={vi.fn()}
         onToggleMarkdownFrontmatter={onToggleMarkdownFrontmatter}
         onExportMarkdownToPdf={vi.fn()}
       />
     )
-    expect(checkboxItems.list.map(({ label }) => label)).toEqual(['Word Wrap', 'Front Matter'])
-    expect(checkboxItems.list[1]?.checked).toBe(true)
-    checkboxItems.list[1]?.onCheckedChange?.(false)
+    expect(checkboxItems.list.map(({ label }) => label)).toEqual([
+      'Word Wrap',
+      'Centered Layout',
+      'Front Matter'
+    ])
+    expect(checkboxItems.list[2]?.checked).toBe(true)
+    checkboxItems.list[2]?.onCheckedChange?.(false)
     expect(onToggleMarkdownFrontmatter).toHaveBeenCalledOnce()
   })
 
@@ -86,6 +93,8 @@ describe('EditorPanelActionsMenu', () => {
         diffWordWrap: false,
         diffShowWhitespace: false,
         editorWordWrap: true,
+        editorCenteredLayout: false,
+        showCenteredLayout: true,
         shouldShowMarkdownExportAction: false,
         canExportMarkdownToPdf: false,
         canShowMarkdownFrontmatterToggle: false,
@@ -93,12 +102,13 @@ describe('EditorPanelActionsMenu', () => {
         onToggleDiffWordWrap,
         onToggleDiffWhitespace: () => {},
         onToggleEditorWordWrap,
+        onToggleEditorCenteredLayout: () => {},
         onToggleMarkdownFrontmatter: () => {},
         onExportMarkdownToPdf: () => {}
       })
     )
 
-    expect(checkboxItems.list).toHaveLength(1)
+    expect(checkboxItems.list).toHaveLength(2)
     expect(checkboxItems.list[0]).toMatchObject({ checked: true, label: 'Word Wrap' })
     checkboxItems.list[0]?.onCheckedChange?.(false)
     expect(onToggleEditorWordWrap).toHaveBeenCalledOnce()
@@ -114,6 +124,8 @@ describe('EditorPanelActionsMenu', () => {
         diffWordWrap: true,
         diffShowWhitespace: false,
         editorWordWrap: false,
+        editorCenteredLayout: true,
+        showCenteredLayout: false,
         shouldShowMarkdownExportAction: false,
         canExportMarkdownToPdf: false,
         canShowMarkdownFrontmatterToggle: false,
@@ -121,6 +133,7 @@ describe('EditorPanelActionsMenu', () => {
         onToggleDiffWordWrap,
         onToggleDiffWhitespace: () => {},
         onToggleEditorWordWrap,
+        onToggleEditorCenteredLayout: () => {},
         onToggleMarkdownFrontmatter: () => {},
         onExportMarkdownToPdf: () => {}
       })
@@ -141,6 +154,8 @@ describe('EditorPanelActionsMenu', () => {
         diffWordWrap: false,
         diffShowWhitespace: true,
         editorWordWrap: false,
+        editorCenteredLayout: true,
+        showCenteredLayout: false,
         shouldShowMarkdownExportAction: false,
         canExportMarkdownToPdf: false,
         canShowMarkdownFrontmatterToggle: false,
@@ -148,6 +163,7 @@ describe('EditorPanelActionsMenu', () => {
         onToggleDiffWordWrap: () => {},
         onToggleDiffWhitespace,
         onToggleEditorWordWrap: () => {},
+        onToggleEditorCenteredLayout: () => {},
         onToggleMarkdownFrontmatter: () => {},
         onExportMarkdownToPdf: () => {}
       })
@@ -160,5 +176,84 @@ describe('EditorPanelActionsMenu', () => {
     })
     checkboxItems.list[1]?.onCheckedChange?.(false)
     expect(onToggleDiffWhitespace).toHaveBeenCalledOnce()
+  })
+
+  it('shows and binds Centered Layout on normal file tabs (#31236)', () => {
+    const onToggleEditorCenteredLayout = vi.fn()
+    renderToStaticMarkup(
+      React.createElement(EditorPanelActionsMenu, {
+        isDiffSurface: false,
+        diffWordWrap: false,
+        diffShowWhitespace: false,
+        editorWordWrap: true,
+        editorCenteredLayout: true,
+        showCenteredLayout: true,
+        shouldShowMarkdownExportAction: false,
+        canExportMarkdownToPdf: false,
+        canShowMarkdownFrontmatterToggle: false,
+        markdownFrontmatterVisible: false,
+        onToggleDiffWordWrap: () => {},
+        onToggleDiffWhitespace: () => {},
+        onToggleEditorWordWrap: () => {},
+        onToggleEditorCenteredLayout,
+        onToggleMarkdownFrontmatter: () => {},
+        onExportMarkdownToPdf: () => {}
+      })
+    )
+
+    expect(checkboxItems.list.map(({ label }) => label)).toEqual(['Word Wrap', 'Centered Layout'])
+    expect(checkboxItems.list[1]).toMatchObject({ checked: true, label: 'Centered Layout' })
+    checkboxItems.list[1]?.onCheckedChange?.(false)
+    expect(onToggleEditorCenteredLayout).toHaveBeenCalledOnce()
+  })
+
+  it('hides Centered Layout on diff surfaces', () => {
+    renderToStaticMarkup(
+      React.createElement(EditorPanelActionsMenu, {
+        isDiffSurface: true,
+        diffWordWrap: false,
+        diffShowWhitespace: false,
+        editorWordWrap: false,
+        editorCenteredLayout: true,
+        showCenteredLayout: false,
+        shouldShowMarkdownExportAction: false,
+        canExportMarkdownToPdf: false,
+        canShowMarkdownFrontmatterToggle: false,
+        markdownFrontmatterVisible: false,
+        onToggleDiffWordWrap: () => {},
+        onToggleDiffWhitespace: () => {},
+        onToggleEditorWordWrap: () => {},
+        onToggleEditorCenteredLayout: () => {},
+        onToggleMarkdownFrontmatter: () => {},
+        onExportMarkdownToPdf: () => {}
+      })
+    )
+
+    expect(checkboxItems.list.map(({ label }) => label)).not.toContain('Centered Layout')
+  })
+
+  it('hides Centered Layout on combined diffs even when Word Wrap stays file-scoped', () => {
+    renderToStaticMarkup(
+      React.createElement(EditorPanelActionsMenu, {
+        isDiffSurface: false,
+        diffWordWrap: false,
+        diffShowWhitespace: false,
+        editorWordWrap: true,
+        editorCenteredLayout: true,
+        showCenteredLayout: false,
+        shouldShowMarkdownExportAction: false,
+        canExportMarkdownToPdf: false,
+        canShowMarkdownFrontmatterToggle: false,
+        markdownFrontmatterVisible: false,
+        onToggleDiffWordWrap: () => {},
+        onToggleDiffWhitespace: () => {},
+        onToggleEditorWordWrap: () => {},
+        onToggleEditorCenteredLayout: () => {},
+        onToggleMarkdownFrontmatter: () => {},
+        onExportMarkdownToPdf: () => {}
+      })
+    )
+
+    expect(checkboxItems.list.map(({ label }) => label)).toEqual(['Word Wrap'])
   })
 })

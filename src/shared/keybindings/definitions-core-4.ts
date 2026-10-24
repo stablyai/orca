@@ -3,6 +3,22 @@ import { platformBindings } from './definitions-support'
 
 export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
   {
+    id: 'editor.toggleCenteredLayout',
+    title: 'Toggle Centered Layout',
+    group: 'Editors',
+    scope: 'editor',
+    searchKeywords: [
+      'shortcut',
+      'editor',
+      'centered layout',
+      'center editor',
+      'max width',
+      'ultrawide'
+    ],
+    // Why: unbound like VS Code's workbench.action.toggleCenteredLayout; users opt in via Shortcuts.
+    defaultBindings: platformBindings([])
+  },
+  {
     id: 'chat.find',
     title: 'Find in chat',
     group: 'Chat',

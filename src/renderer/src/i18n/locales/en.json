@@ -10530,6 +10530,12 @@
             "4497e2e2bb": "Show browser spelling underlines and suggestions while editing rich Markdown.",
             "e61157e926": "Editor Word Wrap",
             "005be5c699": "Wrap long lines in file editors instead of requiring horizontal scrolling.",
+            "editorCenteredLayout": "Centered Layout",
+            "editorCenteredLayoutDesc": "Center the file editor in a readable column on wide panes, like VS Code.",
+            "centeredLayoutKw": "centered layout",
+            "centerEditorKw": "center editor",
+            "maxWidthKw": "max width",
+            "ultrawideKw": "ultrawide",
             "editorFontFamily": "Editor Font Family",
             "editorFontFamilyDesc": "Font used by file editors and diff views. Leave empty to follow the terminal font.",
             "collapseUnchanged": "Collapse Unchanged Regions",
@@ -12138,6 +12144,10 @@
           "title": "Editor Font Family",
           "description": "Font used by file editors and diff views. Leave empty to follow the terminal font.",
           "placeholder": "Same as terminal font"
+        },
+        "EditorCenteredLayoutSetting": {
+          "title": "Centered Layout",
+          "description": "Center the file editor in a readable column on wide panes, like VS Code."
         },
         "GeneralRemoteServerUpdates": {
           "serverCount": "{{value0}} paired servers",
@@ -16281,7 +16291,8 @@
           "631dab0df3": "Next change"
         },
         "EditorPanelActionsMenu": {
-          "fileActions": "File actions"
+          "fileActions": "File actions",
+          "centeredLayout": "Centered Layout"
         },
         "EditorPanelMarkdownActionsMenu": {
           "3e0ce48c24": "Export as PDF",

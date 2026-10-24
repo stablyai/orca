@@ -20,6 +20,7 @@ import { translate } from '@/i18n/i18n'
 import { RichMarkdownSpellcheckSetting } from './RichMarkdownSpellcheckSetting'
 import { DiffShowWhitespaceSetting } from './DiffShowWhitespaceSetting'
 import { EditorWordWrapSetting } from './EditorWordWrapSetting'
+import { EditorCenteredLayoutSetting } from './EditorCenteredLayoutSetting'
 import { EditorFontFamilySetting } from './EditorFontFamilySetting'
 import {
   createAutoSaveDelayDraftState,
@@ -233,6 +234,8 @@ export function GeneralEditorSettingsSection({
       />
 
       <EditorWordWrapSetting settings={settings} updateSettings={updateSettings} />
+
+      <EditorCenteredLayoutSetting settings={settings} updateSettings={updateSettings} />
 
       <DiffShowWhitespaceSetting settings={settings} updateSettings={updateSettings} />
 

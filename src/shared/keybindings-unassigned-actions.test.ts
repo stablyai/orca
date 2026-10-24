@@ -245,6 +245,24 @@ describe('keybindings', () => {
     )
   })
 
+  it('leaves editor centered layout unassigned like VS Code (#31236)', () => {
+    const platforms: readonly KeybindingPlatform[] = ['darwin', 'linux', 'win32']
+    for (const platform of platforms) {
+      expect(getEffectiveKeybindingsForAction('editor.toggleCenteredLayout', platform)).toEqual([])
+    }
+    expect(
+      keybindingMatchesAction(
+        'editor.toggleCenteredLayout',
+        { key: 'l', code: 'KeyL', control: true, meta: false, alt: true, shift: false },
+        'linux',
+        { 'editor.toggleCenteredLayout': ['Mod+Alt+L'] }
+      )
+    ).toBe(true)
+    expect(getKeybindingDefinition('editor.toggleCenteredLayout')?.title).toBe(
+      'Toggle Centered Layout'
+    )
+  })
+
   it('leaves floating workspace minimize unassigned because floating terminal toggle owns show and hide', () => {
     const platforms: readonly KeybindingPlatform[] = ['darwin', 'linux', 'win32']
     const minimizeAction = 'floatingWorkspace.minimize' as KeybindingActionId

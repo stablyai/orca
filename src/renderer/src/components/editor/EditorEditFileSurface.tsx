@@ -21,6 +21,7 @@ import type { FileContent } from './editor-panel-content-types'
 import { ExternalFileChangeBanner } from './ExternalFileChangeBanner'
 import type { useMarkdownDocuments } from './useMarkdownDocuments'
 import { EditorMarkdownFileSurface } from './EditorMarkdownFileSurface'
+import { EditorFileCenteredLayout } from './EditorFileCenteredLayout'
 import type { MarkdownRenderState } from './markdown-render-mode'
 
 const noopEditorContentChange = (_content: string): void => {}
@@ -59,7 +60,8 @@ export function EditorEditFileSurface({
   handleContentChange,
   handleDirtyStateHint,
   handleSave,
-  reloadContent
+  reloadContent,
+  centeredLayout = false
 }: {
   activeFile: OpenFile
   viewStateScopeId: string
@@ -92,6 +94,7 @@ export function EditorEditFileSurface({
   handleDirtyStateHint: (dirty: boolean) => void
   handleSave: (content: string) => Promise<boolean>
   reloadContent: (file: OpenFile) => void
+  centeredLayout?: boolean
 }): React.JSX.Element {
   if (activeFile.conflict?.kind === 'conflict-placeholder') {
     return <ConflictPlaceholderView file={activeFile} />
@@ -312,7 +315,11 @@ export function EditorEditFileSurface({
           conflictNavigation={getConflictNavigation(activeFile, currentContent)}
         />
       )}
-      <div className="min-h-0 flex-1 relative">{editorSurface}</div>
+      <div className="min-h-0 flex-1 relative">
+        <EditorFileCenteredLayout enabled={centeredLayout}>
+          {editorSurface}
+        </EditorFileCenteredLayout>
+      </div>
     </div>
   )
 }

@@ -21,6 +21,10 @@ type EditorPanelActionsMenuProps = {
   diffShowWhitespace: boolean
   /** File editor wrap preference (`settings.editorWordWrap`). */
   editorWordWrap: boolean
+  /** File editor centered-column preference (`settings.editorCenteredLayout`). */
+  editorCenteredLayout: boolean
+  /** Why: keep this item on the same surfaces as the shortcut (#31236). */
+  showCenteredLayout: boolean
   shouldShowMarkdownExportAction: boolean
   canExportMarkdownToPdf: boolean
   canShowMarkdownFrontmatterToggle: boolean
@@ -28,6 +32,7 @@ type EditorPanelActionsMenuProps = {
   onToggleDiffWordWrap: () => void
   onToggleDiffWhitespace: () => void
   onToggleEditorWordWrap: () => void
+  onToggleEditorCenteredLayout: () => void
   onToggleMarkdownFrontmatter: () => void
   onExportMarkdownToPdf: () => void
 }
@@ -38,6 +43,8 @@ export function EditorPanelActionsMenu({
   diffWordWrap,
   diffShowWhitespace,
   editorWordWrap,
+  editorCenteredLayout,
+  showCenteredLayout,
   shouldShowMarkdownExportAction,
   canExportMarkdownToPdf,
   canShowMarkdownFrontmatterToggle,
@@ -45,6 +52,7 @@ export function EditorPanelActionsMenu({
   onToggleDiffWordWrap,
   onToggleDiffWhitespace,
   onToggleEditorWordWrap,
+  onToggleEditorCenteredLayout,
   onToggleMarkdownFrontmatter,
   onExportMarkdownToPdf
 }: EditorPanelActionsMenuProps): React.JSX.Element {
@@ -82,6 +90,17 @@ export function EditorPanelActionsMenu({
             'Word Wrap'
           )}
         </DropdownMenuCheckboxItem>
+        {showCenteredLayout ? (
+          <DropdownMenuCheckboxItem
+            checked={editorCenteredLayout}
+            onCheckedChange={onToggleEditorCenteredLayout}
+          >
+            {translate(
+              'auto.components.editor.EditorPanelActionsMenu.centeredLayout',
+              'Centered Layout'
+            )}
+          </DropdownMenuCheckboxItem>
+        ) : null}
         {isDiffSurface ? (
           <DropdownMenuCheckboxItem
             checked={diffShowWhitespace}
