@@ -1,5 +1,10 @@
-import { useRef, useCallback } from 'react'
-import { Keyboard, Platform, type View } from 'react-native'
+import { useRef, useCallback, useEffect, useState } from 'react'
+import { useFocusEffect } from 'expo-router'
+import { AppState, Keyboard, Platform, type View } from 'react-native'
+import {
+  createTerminalAccessoryRepeatController,
+  createTerminalAccessoryRepeatSender
+} from '../terminal/terminal-accessory-repeat'
 import { useClipboardReader, useClipboardWriter } from '../platform/clipboard'
 import { newTabRepoListRead, type MobileRuntimeRepoSummary } from './mobile-session-read-operations'
 import {
@@ -25,7 +30,11 @@ export function useMobileSessionAccessorySelection(scope: MobileSessionTerminalI
     worktreeId,
     isFloatingWorkspaceRoute,
     client,
+    clientRef,
     connState,
+    connStateRef,
+    activeHandle,
+    activeSessionTabTypeRef,
     setTerminalKeyboardMetrics,
     setSelectModeActive,
     setCanPaste,
@@ -47,33 +56,60 @@ export function useMobileSessionAccessorySelection(scope: MobileSessionTerminalI
   const clipboard = useClipboardWriter()
   const clipboardContents = useClipboardReader().contents
   const trimsGutterRef = useTerminalCopyTrimsGutter(client, connState)
-  // Why: hold-to-repeat matches iOS cadence (400ms then 45ms); non-repeatable keys fire once (holding is destructive).
-  const repeatTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const repeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  // Why: ref keeps repeat firing the current callback; else a mid-hold tab switch/reconnect routes bytes to a stale terminal.
-  const handleAccessoryKeyRef = useRef(handleAccessoryKey)
-  // react-doctor-disable-next-line react-doctor/no-ref-current-in-render
-  handleAccessoryKeyRef.current = handleAccessoryKey
-  const stopAccessoryRepeat = useCallback(() => {
-    if (repeatTimeoutRef.current) {
-      clearTimeout(repeatTimeoutRef.current)
-      repeatTimeoutRef.current = null
-    }
-    if (repeatIntervalRef.current) {
-      clearInterval(repeatIntervalRef.current)
-      repeatIntervalRef.current = null
-    }
-  }, [])
+  const [accessoryRepeat] = useState(() =>
+    createTerminalAccessoryRepeatController<ReturnType<typeof createTerminalLiveAccessoryInput>>()
+  )
+  const appStateRef = useRef(AppState.currentState)
+  const focusedRef = useRef(false)
+  const repeatOwnerRevisionRef = useRef(0)
+  const stopAccessoryRepeat = useCallback(() => accessoryRepeat.stop(), [accessoryRepeat])
+  const cancelAccessoryRepeat = useCallback(() => {
+    repeatOwnerRevisionRef.current += 1
+    accessoryRepeat.cancel()
+  }, [accessoryRepeat])
+  useFocusEffect(
+    useCallback(() => {
+      focusedRef.current = true
+      return () => {
+        focusedRef.current = false
+        cancelAccessoryRepeat()
+      }
+    }, [cancelAccessoryRepeat])
+  )
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      appStateRef.current = state
+      if (state !== 'active') {
+        cancelAccessoryRepeat()
+      }
+    })
+    return () => subscription.remove()
+  }, [cancelAccessoryRepeat])
+  useEffect(
+    () => cancelAccessoryRepeat,
+    [activeHandle, client, connState, worktreeId, cancelAccessoryRepeat]
+  )
   const startAccessoryRepeat = useCallback(
     (input: ReturnType<typeof createTerminalLiveAccessoryInput>) => {
-      stopAccessoryRepeat()
-      repeatTimeoutRef.current = setTimeout(() => {
-        repeatIntervalRef.current = setInterval(() => {
-          void handleAccessoryKeyRef.current(input)
-        }, 45)
-      }, 400)
+      const pressedClient = clientRef.current
+      const pressedGeneration = pressedClient?.getGeneration?.() ?? 0
+      const pressedRevision = repeatOwnerRevisionRef.current
+      const sender = createTerminalAccessoryRepeatSender(
+        activeHandleRef.current,
+        (handle) =>
+          repeatOwnerRevisionRef.current === pressedRevision &&
+          focusedRef.current &&
+          appStateRef.current === 'active' &&
+          clientRef.current === pressedClient &&
+          (pressedClient?.getGeneration?.() ?? 0) === pressedGeneration &&
+          connStateRef.current === 'connected' &&
+          activeHandleRef.current === handle &&
+          activeSessionTabTypeRef.current === 'terminal',
+        handleAccessoryKey
+      )
+      accessoryRepeat.start(input, sender)
     },
-    [stopAccessoryRepeat]
+    [accessoryRepeat, handleAccessoryKey]
   )
   const setMobileSessionRootRef = useCallback(
     (node: View | null): void => {
@@ -89,7 +125,7 @@ export function useMobileSessionAccessorySelection(scope: MobileSessionTerminalI
       clearPendingLiveInputCommit()
       sessionTabActionSheetRequestSeqRef.current += 1
       clearSessionTabActionSheetKeyboardListener()
-      stopAccessoryRepeat()
+      cancelAccessoryRepeat()
     },
     [
       clearPendingLiveInputCommit,
@@ -97,7 +133,7 @@ export function useMobileSessionAccessorySelection(scope: MobileSessionTerminalI
       clearSessionTabActionSheetKeyboardListener,
       clearTerminalCache,
       clearToastHideTimer,
-      stopAccessoryRepeat
+      cancelAccessoryRepeat
     ]
   )
 
@@ -219,9 +255,6 @@ export function useMobileSessionAccessorySelection(scope: MobileSessionTerminalI
     })
   }, [clipboardContents, setCanPaste])
   return {
-    repeatTimeoutRef,
-    repeatIntervalRef,
-    handleAccessoryKeyRef,
     stopAccessoryRepeat,
     startAccessoryRepeat,
     setMobileSessionRootRef,

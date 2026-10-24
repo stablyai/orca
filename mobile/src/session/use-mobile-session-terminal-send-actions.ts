@@ -151,17 +151,29 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
     }
   }
 
-  async function handleAccessoryKey(input: ReturnType<typeof createTerminalLiveAccessoryInput>) {
-    if (!client || !activeHandle || !canSend) {
-      return
+  async function handleAccessoryKey(
+    input: ReturnType<typeof createTerminalLiveAccessoryInput>,
+    targetHandle = activeHandle,
+    isDeliveryTargetCurrent: () => boolean = () => true
+  ): Promise<boolean> {
+    if (
+      !client ||
+      !targetHandle ||
+      targetHandle !== activeHandle ||
+      !canSend ||
+      !isDeliveryTargetCurrent()
+    ) {
+      return false
     }
-    const targetHandle = activeHandle
     const accessoryCommit = await handleLiveInputAccessoryBytes(input)
-    if (accessoryCommit.kind !== 'allow-raw') {
-      return
+    if (!isDeliveryTargetCurrent() || clientRef.current !== client) {
+      return false
     }
-    await sendTerminalLiveAccessoryRawBytes({
-      client: clientRef.current,
+    if (accessoryCommit.kind !== 'allow-raw') {
+      return accessoryCommit.kind === 'handled'
+    }
+    return sendTerminalLiveAccessoryRawBytes({
+      client,
       targetHandle,
       activeHandle: activeHandleRef.current,
       activeSessionTabType: activeSessionTabTypeRef.current,

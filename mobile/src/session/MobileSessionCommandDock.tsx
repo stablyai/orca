@@ -198,7 +198,6 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
                     return
                   }
                   const input = createTerminalLiveAccessoryInput(key)
-                  void handleAccessoryKey(input)
                   startAccessoryRepeat(input)
                 }}
                 onPressOut={() => {
