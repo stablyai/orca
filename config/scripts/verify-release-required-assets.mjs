@@ -47,6 +47,23 @@ export function extractManifestAssetNames(manifestText) {
   return [...names]
 }
 
+export function extractManifestVersion(manifestText) {
+  for (const line of manifestText.split(/\r?\n/)) {
+    const match = line.match(/^\s*version:\s*['"]?([^'"\s]+)['"]?\s*$/)
+    if (match) {
+      return match[1]
+    }
+  }
+  return null
+}
+
+function extractAssetBaseVersion(assetName) {
+  const match = assetName.match(
+    /(?:^|[^0-9])([0-9]+\.[0-9]+\.[0-9]+)(?:[^0-9]|$)/
+  )
+  return match?.[1] ?? null
+}
+
 async function githubFetch(url, token, accept = 'application/vnd.github+json') {
   const res = await fetch(url, {
     headers: {
@@ -96,6 +113,10 @@ export async function verifyRequiredReleaseAssets({ repo, tag, token }) {
     'latest-mac.yml',
     'latest.yml'
   ]
+  const expectedVersion = tag.replace(/^v/i, '')
+  const expectedBaseVersion = expectedVersion.split('-')[0]
+  const manifestVersionErrors = []
+  const manifestAssetVersionErrors = []
 
   for (const manifestName of manifestNames) {
     const manifestAsset = assetsByName.get(manifestName)
@@ -103,7 +124,17 @@ export async function verifyRequiredReleaseAssets({ repo, tag, token }) {
       continue
     }
     const manifestText = await fetchAssetText(repo, manifestAsset, token)
+    const manifestVersion = extractManifestVersion(manifestText)
+    if (manifestVersion !== expectedVersion) {
+      manifestVersionErrors.push(
+        `${manifestName}=${manifestVersion ?? '<missing>'} (expected ${expectedVersion})`
+      )
+    }
     for (const referencedName of extractManifestAssetNames(manifestText)) {
+      const referencedVersion = extractAssetBaseVersion(referencedName)
+      if (referencedVersion && referencedVersion !== expectedBaseVersion) {
+        manifestAssetVersionErrors.push(`${manifestName} -> ${referencedName}`)
+      }
       requiredNames.add(referencedName)
     }
   }
@@ -120,13 +151,25 @@ export async function verifyRequiredReleaseAssets({ repo, tag, token }) {
     .map((asset) => asset.name)
     .sort()
 
-  if (missing.length > 0 || notUploaded.length > 0 || empty.length > 0) {
+  if (
+    missing.length > 0 ||
+    notUploaded.length > 0 ||
+    empty.length > 0 ||
+    manifestVersionErrors.length > 0 ||
+    manifestAssetVersionErrors.length > 0
+  ) {
     throw new Error(
       [
         `Release ${tag} is missing required assets.`,
         missing.length > 0 ? `Missing: ${missing.join(', ')}` : null,
         notUploaded.length > 0 ? `Not uploaded: ${notUploaded.join(', ')}` : null,
-        empty.length > 0 ? `Empty: ${empty.join(', ')}` : null
+        empty.length > 0 ? `Empty: ${empty.join(', ')}` : null,
+        manifestVersionErrors.length > 0
+          ? `Manifest version mismatch: ${manifestVersionErrors.join(', ')}`
+          : null,
+        manifestAssetVersionErrors.length > 0
+          ? `Manifest asset version mismatch: ${manifestAssetVersionErrors.join(', ')}`
+          : null
       ]
         .filter(Boolean)
         .join('\n')

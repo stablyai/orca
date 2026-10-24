@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   extractManifestAssetNames,
+  extractManifestVersion,
   getRequiredReleaseAssetNames,
   verifyRequiredReleaseAssets
 } from './verify-release-required-assets.mjs'
@@ -73,6 +74,13 @@ describe('extractManifestAssetNames', () => {
       )
     ).toEqual(['Orca-1.4.27-arm64-mac.zip', 'orca-windows-setup.exe', 'orca-linux.AppImage'])
   })
+
+  it('extracts the manifest version', () => {
+    expect(
+      extractManifestVersion('version: 1.4.27\npath: Orca-1.4.27-arm64-mac.zip')
+    ).toBe('1.4.27')
+    expect(extractManifestVersion('files:\n  - url: Orca-1.4.27-arm64-mac.zip')).toBeNull()
+  })
 })
 
 describe('verifyRequiredReleaseAssets', () => {
@@ -138,5 +146,32 @@ describe('verifyRequiredReleaseAssets', () => {
     await expect(
       verifyRequiredReleaseAssets({ repo: 'stablyai/orca', tag, token: 'token' })
     ).rejects.toThrow('Missing: orca-linux-arm64.AppImage.blockmap')
+  })
+
+  it('rejects a stale manifest version even when the stale asset is still present', async () => {
+    const tag = 'v1.4.230'
+    const required = getRequiredReleaseAssetNames(tag)
+    const staleAsset = 'Orca-1.4.229-arm64-mac.zip'
+    const release = releaseWithAssets(tag, [...required, staleAsset])
+    const fetchMock = vi.fn(async (url) => {
+      if (url.endsWith('/assets/3')) {
+        return jsonResponse(
+          [
+            'version: 1.4.229',
+            'files:',
+            `  - url: ${staleAsset}`,
+            `path: ${staleAsset}`
+          ].join('\n')
+        )
+      }
+      return url.endsWith('/releases?per_page=100')
+        ? jsonResponse([release])
+        : jsonResponse('version: 1.4.230\n')
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      verifyRequiredReleaseAssets({ repo: 'stablyai/orca', tag, token: 'token' })
+    ).rejects.toThrow('Manifest version mismatch: latest-mac.yml=1.4.229 (expected 1.4.230)')
   })
 })
