@@ -51,17 +51,20 @@ export class SessionShellReadyBarrier {
       this._state = 'pending'
       this.scanState = createShellStartupOutputScanState()
       // Answer DA1 past queued stdin, or a shell waiting for that reply can never emit its ready marker.
-      this.releaseDeviceAttributesResponder = installDeviceAttributesResponder({
-        parser: deps.responderParser,
-        response: STARTUP_DA1_RESPONSE,
-        reply: (data) => deps.subprocess.write(data)
-      })
-      deps.installDeviceAttributesFilter()
+      this.installStartupDeviceAttributes()
       this.readyTimer = setTimeout(() => {
         this.onShellReadyTimeout()
       }, deps.shellReadyTimeoutMs ?? SHELL_READY_TIMEOUT_MS)
     } else {
       this._state = 'unsupported'
+      // Why: the daemon stream client attaches at creation, but the renderer behind it may not exist yet and suppresses replies to replayed bytes.
+      if (process.platform !== 'win32') {
+        this.installStartupDeviceAttributes()
+        this.readyTimer = setTimeout(() => {
+          this.readyTimer = null
+          this.releaseDeviceAttributes()
+        }, SHELL_READY_TIMEOUT_MS)
+      }
     }
 
     this.postReadyFlushGate = new PostReadyFlushGate(
@@ -138,6 +141,15 @@ export class SessionShellReadyBarrier {
     return heldBytes
   }
 
+  /** First client input proves a live renderer, which then answers DA1 itself. */
+  noteClientInput(): void {
+    // Why: fish sends a second blocking DA1 right after the first is answered; a renderer that
+    // does not exist yet cannot reply, and fish would ignore all input for its 10 s timeout.
+    if (this._state === 'unsupported' && this.releaseDeviceAttributesResponder) {
+      this.releaseDeviceAttributes()
+    }
+  }
+
   /** Release startup DA1 authority on every completion path. */
   releaseDeviceAttributes(): void {
     this.releaseDeviceAttributesResponder?.()
@@ -196,6 +208,15 @@ export class SessionShellReadyBarrier {
     } catch {
       // A throwing diagnostic sink must not strand the barrier after its ready timer is cleared.
     }
+  }
+
+  private installStartupDeviceAttributes(): void {
+    this.releaseDeviceAttributesResponder = installDeviceAttributesResponder({
+      parser: this.deps.responderParser,
+      response: STARTUP_DA1_RESPONSE,
+      reply: (data) => this.deps.subprocess.write(data)
+    })
+    this.deps.installDeviceAttributesFilter()
   }
 
   private onShellReadyTimeout(): void {

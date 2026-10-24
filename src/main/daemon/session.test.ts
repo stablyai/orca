@@ -371,12 +371,58 @@ describe('Session', () => {
       ['DECRPM bracketed-paste mode', '\x1b[?2004$p']
     ])('does not reply to %s query', async (_label, query) => {
       createSession({ shellReadySupported: false })
+      // End the startup window, during which the daemon itself answers DA1.
+      vi.advanceTimersByTime(15_000)
       subprocess.simulateData(query)
       // Let nested xterm completion microtasks settle.
       await Promise.resolve()
       await Promise.resolve()
       expect(subprocess.written).toEqual([])
     })
+  })
+
+  describe('startup device attributes for an ungated shell', () => {
+    // The daemon stream client attaches at creation, before any renderer exists to answer DA1.
+    it.skipIf(process.platform === 'win32')(
+      'answers every DA1 until the client sends input, then defers to the client',
+      () => {
+        createSession({ shellReadySupported: false })
+        const received: string[] = []
+        session.attachClient({ onData: (data) => received.push(data), onExit: () => {} })
+
+        // fish 4.x sends a second blocking DA1 right after the first is answered.
+        subprocess.simulateData('\x1b[0c')
+        subprocess.simulateData('\x1b[0c')
+
+        expect(subprocess.written).toEqual(['\x1b[?1;2c', '\x1b[?1;2c'])
+        expect(received.join('')).toBe('')
+        expect(session.takePendingOutput(false)?.records).toEqual([])
+
+        session.write('a')
+        subprocess.simulateData('\x1b[c')
+
+        expect(subprocess.written).toEqual(['\x1b[?1;2c', '\x1b[?1;2c', 'a'])
+        expect(received.join('')).toBe('\x1b[c')
+      }
+    )
+
+    it.skipIf(process.platform === 'win32')(
+      'delivers a held DA1 prefix once when the startup window ends',
+      () => {
+        createSession({ shellReadySupported: false })
+        const received: string[] = []
+        session.attachClient({ onData: (data) => received.push(data), onExit: () => {} })
+
+        subprocess.simulateData('\x1b[')
+        expect(received.join('')).toBe('')
+
+        vi.advanceTimersByTime(15_000)
+        subprocess.simulateData('c')
+
+        expect(received.join('')).toBe('\x1b[c')
+        expect(subprocess.written).toEqual([])
+      }
+    )
   })
 
   describe('shell readiness gating', () => {

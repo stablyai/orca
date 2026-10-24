@@ -140,6 +140,7 @@ export class Session {
     if (this._state === 'exited' || this._disposed) {
       return
     }
+    this.shellReady.noteClientInput()
 
     // Contain cooked query echoes and preserve input order through the post-ready flush window.
     if (this.startupIngress.answerLiveQueryReply(data) || this.shellReady.tryEnqueue(data)) {
