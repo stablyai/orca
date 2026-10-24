@@ -32,12 +32,11 @@ import { collectPersistedTerminalLeafIds } from '../../mobile-session-layout-pro
 import { getDaemonHistoryDir } from '../../../daemon/daemon-launch-paths'
 import { HistoryReader } from '../../../daemon/history-reader'
 import { movedPaneHistorySessionId } from '../../../persistence/migrating-orcad-catalog/orcad-terminal-history-installer'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
 
 function tabHasSolePane(tab: RuntimeMobileSessionTerminalTab): boolean {
   return collectPersistedTerminalLeafIds(tab.parentLayout).length <= 1
 }
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 
 export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs {
