@@ -21374,7 +21374,7 @@
           "reply": {
             "ok": true,
             "result": {
-              "cleared": true
+              "clear": { "handle": "terminal-1", "cleared": true }
             }
           }
         },

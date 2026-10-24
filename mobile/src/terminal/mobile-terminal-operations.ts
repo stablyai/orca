@@ -2,6 +2,7 @@ import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-o
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import {
   terminalAutoRestoreFitSchema,
+  terminalBufferClearedSchema,
   terminalSendAcceptedSchema,
   terminalViewportUpdatedSchema,
   terminalWriteUnreadReplySchema
@@ -79,18 +80,13 @@ export const workerTerminalTakeoverReport = bindDeferredRpcOperation(
   })
 )
 
-/**
- * The terminal menu's buffer clear. A skip rather than a throw because main never looked at the
- * envelope: it reported success on any fulfilled reply and only a transport rejection reached the
- * failure toast, so a refusal telling the user the buffer was cleared is behaviour this preserves
- * rather than repairs.
- */
+/** A clear is successful only when the host confirms its buffer was cleared. */
 export const terminalBufferClear = bindDeferredRpcOperation(
   defineRpcOperation({
-    name: 'terminal.clear-buffer-or-skip',
+    name: 'terminal.clear-buffer',
     method: 'terminal.clearBuffer',
-    acceptance: 'success-result-or-skip',
+    acceptance: 'object-result-or-null',
     barrier: 'after-caller-barrier',
-    read: rpcResultVariant('terminal-buffer-cleared', terminalWriteUnreadReplySchema)
+    read: rpcResultVariant('terminal-buffer-cleared', terminalBufferClearedSchema)
   })
 )

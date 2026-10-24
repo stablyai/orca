@@ -10,7 +10,7 @@ import { handleMsg } from '../terminal/document/host-message-router'
 import type { TerminalDocumentTerminal } from '../terminal/document/document-terminal-shape'
 import { TERMINAL_DOCUMENT_MARKUP } from '../terminal/terminal-webview-html/document-markup'
 import { recoverActiveTerminalAfterForeground } from '../terminal/terminal-foreground-recovery'
-import type { ConnectionState } from '../transport/types'
+import type { ConnectionState, RpcResponse } from '../transport/types'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalWebViewHandle } from '../terminal/terminal-webview-contract'
@@ -20,6 +20,7 @@ import type { MobileSessionTerminalSubscriptionFoundationModel } from './use-mob
 import { useMobileSessionTerminalSubscription } from './use-mobile-session-terminal-subscription'
 import type { MobileSessionTabSwitchingModel } from './use-mobile-session-tab-switching'
 import { useMobileSessionTerminalWebview } from './use-mobile-session-terminal-webview'
+import { useMobileSessionTerminalInput } from './use-mobile-session-terminal-input'
 
 const HANDLE = 'term-1'
 const PHONE = { cols: 55, rows: 44 }
@@ -33,6 +34,7 @@ function subscriptionHarness(opts: {
   frameWidth?: number
   viewport?: typeof PHONE
   synchronousEvents?: unknown[]
+  clearResponse?: Promise<RpcResponse>
 }) {
   let fit = opts.fit
   const order: string[] = []
@@ -66,6 +68,9 @@ function subscriptionHarness(opts: {
   }
   const fields = {
     client: {
+      sendRequest: (): Promise<RpcResponse> =>
+        opts.clearResponse ??
+        Promise.resolve({ id: 'clear', ok: true, result: { clear: { cleared: true } } }),
       subscribe: vi.fn(
         (_method: string, params: Record<string, unknown>, onData: StreamHandler) => {
           order.push(`subscribe ${JSON.stringify(params.viewport ?? null)}`)
@@ -121,6 +126,7 @@ function subscriptionHarness(opts: {
   }
   fields.unsubscribeTerminalRef.current.mockImplementation(fields.unsubscribeTerminal)
   let subscribe: ((handle: string) => void) | undefined
+  let clearHost: (() => Promise<void>) | undefined
   let webReady: ((handle: string) => void) | undefined
   let notifyFrame: ((frame: { width: number; height: number }) => void) | undefined
   function Probe() {
@@ -128,6 +134,13 @@ function subscriptionHarness(opts: {
     const scope = fields as unknown as MobileSessionTerminalSubscriptionFoundationModel
     subscribe = useMobileSessionTerminalSubscription(scope).subscribeToTerminal
     const withSubscribe = { ...fields, subscribeToTerminal: subscribe }
+    const input = useMobileSessionTerminalInput(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Only the clear action is invoked; all of its dependencies are provided here.
+      { ...withSubscribe, clientRef: { current: fields.client } } as unknown as Parameters<
+        typeof useMobileSessionTerminalInput
+      >[0]
+    )
+    clearHost = () => input.handleClearTerminal({ handle: HANDLE, title: 'Shell', isActive: true })
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the web-ready handler reads only the fields built above.
     const webviewScope = withSubscribe as unknown as MobileSessionTabSwitchingModel
     const webview = useMobileSessionTerminalWebview(webviewScope)
@@ -144,6 +157,7 @@ function subscriptionHarness(opts: {
     })
   return {
     order,
+    clearHost: () => clearHost?.(),
     stopStream,
     subscribe: () => act(() => subscribe!(HANDLE)),
     scrollback,
@@ -171,6 +185,36 @@ afterEach(() => {
 })
 
 describe('a terminal first subscribe', () => {
+  it('refreshes cleared scrollback through the stream without erasing output that arrived during the acknowledgement', async () => {
+    let resolve: (reply: RpcResponse) => void = () => {}
+    const clearResponse = new Promise<RpcResponse>((done) => {
+      resolve = done
+    })
+    const h = subscriptionHarness({ fit: PHONE, webReady: true, viewport: PHONE, clearResponse })
+    h.subscribe()
+    h.scrollback(0, PHONE.cols, PHONE.rows)
+    const pending = h.clearHost()
+    h.event(0, { type: 'data', chunk: 'during acknowledgement' })
+    resolve({ id: 'clear', ok: true, result: { clear: { cleared: true } } })
+    await pending
+    expect(h.terminal.clear).not.toHaveBeenCalled()
+    expect(h.fields.client.subscribe).toHaveBeenCalledTimes(2)
+    h.event(1, {
+      type: 'scrollback',
+      cols: PHONE.cols,
+      rows: PHONE.rows,
+      serialized: 'during acknowledgement'
+    })
+    expect(h.terminal.init).toHaveBeenLastCalledWith(
+      expect.objectContaining({ initialData: 'during acknowledgement' })
+    )
+    h.event(0, { type: 'data', chunk: 'retired stream' })
+    h.event(1, { type: 'data', chunk: 'new stream output' })
+    expect(vi.mocked(h.terminal.write).mock.calls).toEqual([
+      ['during acknowledgement'],
+      ['new stream output']
+    ])
+  })
   it('does not subscribe before its document is ready, then subscribes once from its box', async () => {
     const harness = subscriptionHarness({ fit: PHONE, webReady: false })
     harness.subscribe()
