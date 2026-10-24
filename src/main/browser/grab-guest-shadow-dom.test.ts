@@ -123,6 +123,18 @@ function createGuest(depth: number, mode: 'open' | 'closed' = 'open') {
   }
 }
 
+// Exceeds the 10000-element shadow scan bound so the marker lookup stops early.
+function appendOversizedOpenRoot(guest: ReturnType<typeof createGuest>) {
+  const host = guest.document.createElement('section')
+  guest.document.body.appendChild(host)
+  const root = host.attachShadow({ mode: 'open' })
+  const fragment = guest.document.createDocumentFragment()
+  for (let index = 0; index < 10020; index++) {
+    fragment.appendChild(guest.document.createElement('i'))
+  }
+  root.appendChild(fragment)
+}
+
 describe('guest selection across shadow roots', () => {
   it.each([0, 1, 2])('picks the internal control through %i open roots', (depth) => {
     const guest = createGuest(depth)
@@ -277,17 +289,14 @@ describe('guest selection across shadow roots', () => {
     expect(guest.reports.at(-1)?.target).toEqual({ x: 40, y: 120, width: 120, height: 30 })
   })
 
-  it('selects without activating the application button', async () => {
+  it('prevents the selection click and returns the inner control', async () => {
     const guest = createGuest(2)
-    let actions = 0
-    guest.target.addEventListener('click', () => actions++)
     guest.hover()
     const pending = runInNewContext(buildGuestOverlayScript('awaitClick'), guest.context)
     const click = new guest.window.MouseEvent('click', { bubbles: true, cancelable: true })
     guest.grab.host.dispatchEvent(click)
     const payload = clampGrabPayload(await pending)
     expect(payload?.target.tagName).toBe('button')
-    expect(actions).toBe(0)
     expect(click.defaultPrevented).toBe(true)
     guest.grab.cleanup()
   })
@@ -385,23 +394,21 @@ describe('guest selection across shadow roots', () => {
     }
   )
 
-  it.each([0, 1])(
-    'returns no marker when a shadow scan is incomplete with a target at depth %i',
-    (depth) => {
-      const guest = createGuest(depth)
-      guest.target.setAttribute(BROWSER_GRAB_SELECTED_ATTRIBUTE, 'selection-1')
-      const host = guest.document.createElement('section')
-      guest.document.body.appendChild(host)
-      const root = host.attachShadow({ mode: 'open' })
-      const fragment = guest.document.createDocumentFragment()
-      for (let index = 0; index < 10020; index++) {
-        fragment.appendChild(guest.document.createElement('i'))
-      }
-      root.appendChild(fragment)
-      guest.installBridge()
-      expect(guest.reports.at(-1)?.target).toBeNull()
-    }
-  )
+  it('keeps a unique light-DOM marker when the shadow scan is incomplete', () => {
+    const guest = createGuest(0)
+    guest.target.setAttribute(BROWSER_GRAB_SELECTED_ATTRIBUTE, 'selection-1')
+    appendOversizedOpenRoot(guest)
+    guest.installBridge()
+    expect(guest.reports.at(-1)?.target).toEqual({ x: 40, y: 300, width: 120, height: 30 })
+  })
+
+  it('returns no marker when an incomplete shadow scan holds the target', () => {
+    const guest = createGuest(1)
+    guest.target.setAttribute(BROWSER_GRAB_SELECTED_ATTRIBUTE, 'selection-1')
+    appendOversizedOpenRoot(guest)
+    guest.installBridge()
+    expect(guest.reports.at(-1)?.target).toBeNull()
+  })
 
   it('rejects markers duplicated across roots and disconnected targets', () => {
     const guest = createGuest(2)

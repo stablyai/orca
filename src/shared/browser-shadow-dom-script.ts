@@ -42,6 +42,7 @@ export const BROWSER_SHADOW_DOM_SCRIPT = `
       if (selected) return null;
       selected = candidates[i];
     }
+    var lightSelected = selected;
     // Native document queries preserve large light DOMs; only shadow traversal is bounded.
     var stack = [];
     var elements = document.querySelectorAll('*');
@@ -64,7 +65,7 @@ export const BROWSER_SHADOW_DOM_SCRIPT = `
         stack.push(element.shadowRoot.firstElementChild);
       }
     }
-    // An incomplete scan cannot establish that a page-owned marker is unique.
-    return stack.length ? null : selected;
+    // An incomplete shadow scan cannot prove uniqueness, so it keeps the light-DOM result.
+    return stack.length ? lightSelected : selected;
   }
 `
