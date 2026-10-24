@@ -175,16 +175,25 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
         return waitForPendingLiveInputFlush()
       }
 
+      const generation = pendingLiveInputFlushRef.current.generation
       const heldText = heldLiveInputTextRef.current
-      const result =
+      const pendingCommit =
         heldText.length > 0
-          ? await runMirrorStep(handle, sentLiveInputTextRef.current + heldText, true)
-          : await waitForPendingLiveInputFlush()
+          ? runMirrorStep(handle, sentLiveInputTextRef.current + heldText, true)
+          : Promise.resolve(true)
+      const flushed = await waitForPendingLiveInputFlush()
+      const committed = await pendingCommit
+      if (
+        pendingLiveInputFlushRef.current.generation !== generation ||
+        heldLiveInputTextRef.current.length > 0
+      ) {
+        return false
+      }
 
       // Why: an explicit flush ends the field's editing session; the echoed PTY
       // text stays, so local mirror state must restart from empty.
       clearPendingLiveInputCommit()
-      return result
+      return committed && flushed
     },
     [clearPendingLiveInputCommit, runMirrorStep, waitForPendingLiveInputFlush]
   )

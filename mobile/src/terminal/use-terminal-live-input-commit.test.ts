@@ -29,6 +29,7 @@ type TerminalLiveInputCommitHarness = {
   readonly getHandlers: () => TerminalLiveInputCommitHandlers
   readonly handlers: TerminalLiveInputCommitHandlers
   readonly sent: readonly string[]
+  readonly setActiveHandle: (next: string) => void
   readonly setActiveSessionTabType: (next: string | undefined) => void
   readonly setConnected: (next: boolean) => void
   readonly setSendResult: (next: boolean) => void
@@ -36,13 +37,15 @@ type TerminalLiveInputCommitHarness = {
 }
 
 type TerminalLiveInputCommitHarnessOptions = {
+  readonly send?: TerminalLiveInputSender
   readonly sendResult?: boolean
 }
 
 function createTerminalLiveInputCommitHarness({
+  send,
   sendResult = true
 }: TerminalLiveInputCommitHarnessOptions = {}): TerminalLiveInputCommitHarness {
-  const activeHandle = 'terminal-a'
+  let activeHandle = 'terminal-a'
   const activeHandleRef: RefObject<string | null> = { current: activeHandle }
   const activeSessionTabTypeRef: RefObject<string | null> = { current: 'terminal' }
   const captures: string[] = []
@@ -57,9 +60,9 @@ function createTerminalLiveInputCommitHarness({
   const sent: string[] = []
   let currentSendResult = sendResult
   const sendLiveTerminalInputRef: RefObject<TerminalLiveInputSender> = {
-    current: async (_handle, bytes) => {
+    current: async (handle, bytes) => {
       sent.push(bytes)
-      return currentSendResult
+      return send ? send(handle, bytes) : currentSendResult
     }
   }
   // Refs never re-render; only these variables re-run the hook's clear effects.
@@ -101,6 +104,15 @@ function createTerminalLiveInputCommitHarness({
     },
     handlers,
     sent,
+    setActiveHandle: (next: string): void => {
+      activeHandle = next
+      activeHandleRef.current = next
+      liveInputTerminalHandles.add(next)
+      liveInputTerminalHandlesRef.current.add(next)
+      act(() => {
+        renderer?.update(createElement(Harness))
+      })
+    },
     setActiveSessionTabType: (next: string | undefined): void => {
       currentActiveSessionTabType = next
       // Ref and prop derive from the same activeSessionTab in the real route, so
@@ -130,6 +142,279 @@ describe('terminal live input commit hook', () => {
     vi.useRealTimers()
     composingRange.hostReportsNone = false
   })
+
+  it('holds false-reported Cheonjiin jamo through a long pause', async () => {
+    vi.useFakeTimers()
+    const { handlers, sent, captures, unmount } = createTerminalLiveInputCommitHarness()
+    try {
+      changeLiveInput(handlers, '안녕하', false)
+      changeLiveInput(handlers, '안녕하ᄉᆞ', false)
+      await vi.advanceTimersByTimeAsync(3000)
+      expect(sent.join('')).toBe('안녕하')
+      expect(captures.at(-1)).toBe('안녕하ᄉᆞ')
+    } finally {
+      unmount()
+    }
+  })
+
+  it('flushes false-reported Cheonjiin jamo once before submit', async () => {
+    vi.useFakeTimers()
+    const { handlers, sent, captures, unmount } = createTerminalLiveInputCommitHarness()
+    try {
+      changeLiveInput(handlers, '안녕하', false)
+      changeLiveInput(handlers, '안녕하ᄉᆞ', false)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(sent.join('')).toBe('안녕하')
+      expect(await handlers.handleLiveInputSubmit()).toBe(true)
+      expect(sent.join('')).toBe('안녕하ᄉᆞ\r')
+      expect(captures.at(-1)).toBe('')
+    } finally {
+      unmount()
+    }
+  })
+
+  it.each([
+    { initialAccepted: true, conversionAccepted: true },
+    { initialAccepted: false, conversionAccepted: true },
+    { initialAccepted: true, conversionAccepted: false }
+  ])(
+    'waits for a late conversion before Enter (initial=$initialAccepted, conversion=$conversionAccepted)',
+    async ({ initialAccepted, conversionAccepted }) => {
+      vi.useFakeTimers()
+      let acceptInitial: (accepted: boolean) => void = () => {}
+      let acceptConversion: (accepted: boolean) => void = () => {}
+      const { handlers, sent, unmount } = createTerminalLiveInputCommitHarness({
+        send: async (_handle, bytes) => {
+          if (bytes === 'ᄉᆞ') {
+            return new Promise<boolean>((resolve) => {
+              acceptInitial = resolve
+            })
+          }
+          if (bytes === '\x7f\x7f서') {
+            return new Promise<boolean>((resolve) => {
+              acceptConversion = resolve
+            })
+          }
+          return true
+        }
+      })
+      try {
+        changeLiveInput(handlers, 'ᄉᆞ', false)
+        const submitted = handlers.handleLiveInputSubmit()
+        changeLiveInput(handlers, '서', false)
+        acceptInitial(initialAccepted)
+        await vi.advanceTimersByTimeAsync(0)
+        expect(sent).toEqual(['ᄉᆞ', '\x7f\x7f서'])
+
+        acceptConversion(conversionAccepted)
+        expect(await submitted).toBe(initialAccepted && conversionAccepted)
+        expect(sent).toEqual(
+          initialAccepted && conversionAccepted ? ['ᄉᆞ', '\x7f\x7f서', '\r'] : ['ᄉᆞ', '\x7f\x7f서']
+        )
+      } finally {
+        unmount()
+      }
+    }
+  )
+
+  it('suppresses Enter when a prefix before the held commit was refused', async () => {
+    vi.useFakeTimers()
+    let acceptPrefix: (accepted: boolean) => void = () => {}
+    const { handlers, sent, unmount } = createTerminalLiveInputCommitHarness({
+      send: async (_handle, bytes) =>
+        bytes === '하'
+          ? new Promise<boolean>((resolve) => {
+              acceptPrefix = resolve
+            })
+          : true
+    })
+    try {
+      changeLiveInput(handlers, '하', false)
+      changeLiveInput(handlers, '하ᄉᆞ', false)
+      const submitted = handlers.handleLiveInputSubmit()
+      acceptPrefix(false)
+      expect(await submitted).toBe(false)
+      expect(sent).toEqual(['하', 'ᄉᆞ'])
+    } finally {
+      unmount()
+    }
+  })
+
+  it.each([
+    {
+      name: 'appended jamo',
+      initial: 'ᄉᆞ',
+      lateFields: ['ᄉᆞᆞ'],
+      beforeRetry: ['ᄉᆞ'],
+      afterRetry: ['ᄉᆞ', 'ᆞ', '\r']
+    },
+    {
+      name: 'replaced archaic vowel',
+      initial: 'ᄋᆞ',
+      lateFields: ['', 'ᄋᆢ'],
+      beforeRetry: ['ᄋᆞ', '\x7f\x7f'],
+      afterRetry: ['ᄋᆞ', '\x7f\x7f', 'ᄋᆢ', '\r']
+    }
+  ])('preserves $name arriving during submit until explicit retry', async (test) => {
+    vi.useFakeTimers()
+    let acceptInitial: (accepted: boolean) => void = () => {}
+    const { captures, handlers, sent, unmount } = createTerminalLiveInputCommitHarness({
+      send: async (_handle, bytes) =>
+        bytes === test.initial
+          ? new Promise<boolean>((resolve) => {
+              acceptInitial = resolve
+            })
+          : true
+    })
+    try {
+      changeLiveInput(handlers, test.initial, false)
+      const submitted = handlers.handleLiveInputSubmit()
+      for (const text of test.lateFields) {
+        changeLiveInput(handlers, text, false)
+      }
+      acceptInitial(true)
+      expect(await submitted).toBe(false)
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(sent).toEqual(test.beforeRetry)
+      expect(captures.at(-1)).toBe(test.lateFields.at(-1))
+
+      expect(await handlers.handleLiveInputSubmit()).toBe(true)
+      expect(sent).toEqual(test.afterRetry)
+      expect(captures.at(-1)).toBe('')
+    } finally {
+      unmount()
+    }
+  })
+
+  it.each(['terminal-a', 'terminal-b'])(
+    'preserves newer input on %s after a rapid terminal transition',
+    async (nextHandle) => {
+      vi.useFakeTimers()
+      let acceptInitial: (accepted: boolean) => void = () => {}
+      const targets: string[] = []
+      const { captures, getHandlers, handlers, sent, setActiveHandle, unmount } =
+        createTerminalLiveInputCommitHarness({
+          send: async (handle, bytes) => {
+            targets.push(handle)
+            return bytes === 'ᄉᆞ'
+              ? new Promise<boolean>((resolve) => {
+                  acceptInitial = resolve
+                })
+              : true
+          }
+        })
+      try {
+        changeLiveInput(handlers, 'ᄉᆞ', false)
+        const submitted = handlers.handleLiveInputSubmit()
+        changeLiveInput(handlers, '서', false)
+        setActiveHandle('terminal-b')
+        if (nextHandle === 'terminal-a') {
+          setActiveHandle('terminal-a')
+        }
+        changeLiveInput(getHandlers(), '새ᄋᆞ', false)
+        acceptInitial(true)
+        expect(await submitted).toBe(false)
+        expect(captures.at(-1)).toBe('새ᄋᆞ')
+        expect(sent).toEqual(['ᄉᆞ', '새'])
+        expect(await getHandlers().handleLiveInputSubmit()).toBe(true)
+        expect(sent).toEqual(['ᄉᆞ', '새', 'ᄋᆞ', '\r'])
+        expect(targets).toEqual(['terminal-a', nextHandle, nextHandle, nextHandle])
+      } finally {
+        unmount()
+      }
+    }
+  )
+
+  it.each(['Tab', 'accessory Enter', 'external send'] as const)(
+    'ends a false-reported jamo editing session before %s and starts fresh',
+    async (boundary) => {
+      vi.useFakeTimers()
+      const { handlers, sent, captures, unmount } = createTerminalLiveInputCommitHarness()
+      try {
+        changeLiveInput(handlers, '안녕하', false)
+        changeLiveInput(handlers, '안녕하ᄉᆞ', false)
+        if (boundary === 'Tab') {
+          handlers.handleLiveInputKeyPress({ nativeEvent: { key: 'Tab' } })
+        } else if (boundary === 'accessory Enter') {
+          expect(await handlers.handleLiveInputAccessoryBytes({ bytes: '\r' })).toEqual({
+            kind: 'handled'
+          })
+        } else {
+          expect(await handlers.flushPendingLiveInputBeforeExternalSend('terminal-a')).toBe(true)
+        }
+        await vi.advanceTimersByTimeAsync(0)
+        const control = boundary === 'Tab' ? '\t' : boundary === 'accessory Enter' ? '\r' : ''
+        expect(sent.join('')).toBe(`안녕하ᄉᆞ${control}`)
+        expect(captures.at(-1)).toBe('')
+
+        changeLiveInput(handlers, '새', false)
+        expect(await handlers.handleLiveInputSubmit()).toBe(true)
+        await vi.advanceTimersByTimeAsync(3000)
+        expect(sent.join('')).toBe(`안녕하ᄉᆞ${control}새\r`)
+      } finally {
+        unmount()
+      }
+    }
+  )
+
+  it('edits only held jamo with accessory deletion before converting the remaining tail', async () => {
+    vi.useFakeTimers()
+    const { handlers, sent, captures, unmount } = createTerminalLiveInputCommitHarness()
+    try {
+      changeLiveInput(handlers, '안녕하', false)
+      changeLiveInput(handlers, '안녕하ᄉᆞ', false)
+      expect(
+        await handlers.handleLiveInputAccessoryBytes({ bytes: '\x7f', localEdit: 'backspace' })
+      ).toEqual({ kind: 'handled' })
+      expect(captures.at(-1)).toBe('안녕하ᄉ')
+      expect(
+        await handlers.handleLiveInputAccessoryBytes({ bytes: '\x1b[3~', localEdit: 'delete' })
+      ).toEqual({ kind: 'handled' })
+      await vi.advanceTimersByTimeAsync(3000)
+      expect(captures.at(-1)).toBe('안녕하ᄉ')
+      expect(sent.join('')).toBe('안녕하')
+
+      changeLiveInput(handlers, '안녕하세', false)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(sent.join('')).toBe('안녕하세')
+    } finally {
+      unmount()
+    }
+  })
+
+  it.each(['mode clear', 'disconnect', 'nonterminal tab', 'other terminal send'] as const)(
+    'discards a held jamo tail on %s without corrupting fresh input',
+    async (boundary) => {
+      vi.useFakeTimers()
+      const harness = createTerminalLiveInputCommitHarness()
+      const { handlers, sent, captures, unmount } = harness
+      try {
+        changeLiveInput(handlers, '안녕하', false)
+        changeLiveInput(handlers, '안녕하ᄉᆞ', false)
+        await vi.advanceTimersByTimeAsync(0)
+        if (boundary === 'mode clear') {
+          handlers.clearPendingLiveInputCommit()
+        } else if (boundary === 'disconnect') {
+          harness.setConnected(false)
+          harness.setConnected(true)
+        } else if (boundary === 'nonterminal tab') {
+          harness.setActiveSessionTabType('chat')
+          harness.setActiveSessionTabType('terminal')
+        } else {
+          expect(await handlers.flushPendingLiveInputBeforeExternalSend('terminal-b')).toBe(true)
+        }
+        await vi.advanceTimersByTimeAsync(3000)
+        expect(captures.at(-1)).toBe('')
+        expect(sent.join('')).toBe('안녕하')
+
+        changeLiveInput(harness.getHandlers(), '새', false)
+        expect(await harness.getHandlers().handleLiveInputSubmit()).toBe(true)
+        expect(sent.join('')).toBe('안녕하새\r')
+      } finally {
+        unmount()
+      }
+    }
+  )
 
   it('Given Hangul composition and no marked-text report When steps arrive Then no jamo leaks', async () => {
     // Given
