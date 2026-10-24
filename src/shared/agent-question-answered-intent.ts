@@ -17,7 +17,11 @@ export type AgentQuestionAnsweredInferenceRequest = {
  *  Why: this is the structured "pick an option" prompt whose full input the
  *  clients render as a live card. */
 export function isAskUserQuestionTool(toolName: string | undefined): boolean {
-  const normalized = toolName?.replaceAll(/[^a-z0-9]/gi, '').toLowerCase()
+  const normalized = toolName
+    ?.split('.')
+    .at(-1)
+    ?.replaceAll(/[^a-z0-9]/gi, '')
+    .toLowerCase()
   return normalized === 'askuserquestion' || normalized === 'requestuserinput'
 }
 

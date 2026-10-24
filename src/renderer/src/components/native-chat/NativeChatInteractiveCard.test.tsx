@@ -595,3 +595,44 @@ describe('NativeChatInteractiveCard transcript fallback', () => {
     expect(screen.queryByText('Tabs or spaces?')).not.toBeInTheDocument()
   })
 })
+
+describe('namespaced Codex async questions', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    storeState.agentStatusByPaneKey['tab-1:leaf-1'].interactivePrompt = undefined
+    storeState.agentStatusByPaneKey['tab-1:leaf-1'].toolName = undefined
+    mocks.sendAnswer.mockReturnValue({ settleAfterMs: 500 })
+  })
+  afterEach(cleanup)
+
+  it('renders a replayed async question after acknowledgement and submits the selected option', () => {
+    const messages: NativeChatMessage[] = [
+      {
+        id: 'ask-async',
+        role: 'assistant',
+        timestamp: 1,
+        source: 'transcript',
+        blocks: [
+          {
+            type: 'tool-call',
+            name: 'functions.request_user_input_async',
+            callId: 'ask-1',
+            input: JSON.stringify({
+              questions: [{ title: 'Pick a color', options: ['Red', 'Blue'] }]
+            })
+          },
+          { type: 'tool-result', callId: 'ask-1', output: '{"accepted":true}' }
+        ]
+      }
+    ]
+    render(cardElement(true, messages))
+    expect(screen.getByText('Pick a color')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Blue/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
+    expect(mocks.sendAnswer).toHaveBeenCalledWith(
+      expect.objectContaining({ replyAsMessage: true }),
+      [{ indices: [1], other: '' }],
+      expect.any(Function)
+    )
+  })
+})

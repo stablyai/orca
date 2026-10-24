@@ -1,3 +1,4 @@
+import { nativeChatAskRunSubject } from './native-chat-ask-row'
 import { describe, expect, it } from 'vitest'
 import {
   NATIVE_CHAT_INTERRUPTED_STATUS_TEXT,
@@ -235,6 +236,46 @@ describe('resolveNativeChatAsk', () => {
   })
 })
 
+describe('Codex blocking questions', () => {
+  it.each(['request_user_input', 'functions.request_user_input'])(
+    'replays JSON arguments for %s as a blocking selector',
+    (name) => {
+      const asked = message('blocking', [
+        call(
+          name,
+          JSON.stringify({
+            questions: [
+              {
+                id: 'choice',
+                header: 'Choice',
+                question: 'Choose a branch',
+                options: [
+                  { label: 'Main', description: 'Stable' },
+                  { label: 'Dev', description: 'Preview' }
+                ]
+              }
+            ]
+          })
+        )
+      ])
+      expect(extractPendingAsk([asked])).toEqual({
+        questions: [
+          {
+            header: 'Choice',
+            question: 'Choose a branch',
+            multiSelect: false,
+            options: [
+              { label: 'Main', description: 'Stable' },
+              { label: 'Dev', description: 'Preview' }
+            ]
+          }
+        ]
+      })
+      expect(extractPendingAsk([asked, message('answer', [result()])])).toBeNull()
+    }
+  )
+})
+
 describe('async questions', () => {
   const asyncCall = (callId: string, title: string): NativeChatBlock => ({
     type: 'tool-call',
@@ -249,6 +290,33 @@ describe('async questions', () => {
   })
   const titles = (messages: NativeChatMessage[]): string[] | undefined =>
     extractPendingAsk(messages)?.questions.map((question) => question.question)
+
+  it('keeps namespaced JSON async calls actionable after their acknowledgement', () => {
+    const asked = message('async', [
+      {
+        type: 'tool-call',
+        name: 'functions.request_user_input_async',
+        callId: 'call-1',
+        input: JSON.stringify({ questions: [{ title: 'Pick a color', options: ['Red', 'Blue'] }] })
+      },
+      result()
+    ])
+    expect(nativeChatAskRunSubject(asked.blocks)).toEqual({
+      kind: 'question',
+      text: 'Pick a color'
+    })
+    expect(extractPendingAsk([asked])).toEqual({
+      replyAsMessage: true,
+      questions: [
+        {
+          question: 'Pick a color',
+          multiSelect: false,
+          options: [{ label: 'Red' }, { label: 'Blue' }]
+        }
+      ]
+    })
+    expect(extractPendingAsk([asked, userRow('answer')])).toBeNull()
+  })
 
   it('keeps every unanswered async question, once per call', () => {
     const first = message('a', [asyncCall('call-a', 'A?'), result()])

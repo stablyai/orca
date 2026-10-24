@@ -4,6 +4,10 @@ import type { AskPrompt, AskQuestion } from './native-chat-ask-types'
  *  returns `{"accepted":true}` at once and reads the answer from a later user message. */
 export const CODEX_ASYNC_QUESTION_TOOL = 'request_user_input_async'
 
+export function isCodexAsyncQuestionTool(name: string): boolean {
+  return name.split('.').at(-1) === CODEX_ASYNC_QUESTION_TOOL
+}
+
 export function parseCodexAsyncQuestionsInput(input: unknown): AskPrompt | null {
   if (!input || typeof input !== 'object' || !('questions' in input)) {
     return null

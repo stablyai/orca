@@ -45,6 +45,7 @@ vi.mock('./native-chat-runtime-send', () => ({
 }))
 
 import { useNativeChatInteractiveSend } from './use-native-chat-interactive-send'
+import { parseAskFromToolInput } from '../../../../shared/native-chat-ask'
 import type { AskPrompt } from './native-chat-interactive-prompt'
 
 const PROMPT: AskPrompt = {
@@ -134,6 +135,55 @@ describe('useNativeChatInteractiveSend', () => {
     )
     expect(mocks.sendNativeChatAskAnswer).not.toHaveBeenCalled()
   })
+
+  it.each([
+    {
+      tool: 'functions.request_user_input_async',
+      input: { questions: [{ title: 'Pick', options: ['A', 'B'] }] },
+      message: true
+    },
+    {
+      tool: 'functions.request_user_input',
+      input: {
+        questions: [
+          {
+            id: 'pick',
+            header: 'Pick',
+            question: 'Pick',
+            options: [
+              { label: 'A', description: 'First' },
+              { label: 'B', description: 'Second' }
+            ]
+          }
+        ]
+      },
+      message: false
+    }
+  ])(
+    'sends the parsed $tool selection through its own reply protocol',
+    ({ tool, input, message }) => {
+      const prompt = parseAskFromToolInput(tool, JSON.stringify(input))
+      expect(prompt).not.toBeNull()
+      if (!prompt) {
+        throw new Error('Question did not parse')
+      }
+      const { result } = renderHook(() => useNativeChatInteractiveSend(PANE_KEY, 'pty-1', 'codex'))
+      act(() => result.current.sendAnswer(prompt, [{ indices: [1] }]))
+      if (message) {
+        expect(mocks.sendNativeChatMessage).toHaveBeenCalledWith('pty-1', '> Pick\n\nB', {
+          onDeliverySettled: expect.any(Function)
+        })
+        expect(mocks.sendNativeChatAskAnswer).not.toHaveBeenCalled()
+      } else {
+        expect(mocks.sendNativeChatAskAnswer).toHaveBeenCalledWith(
+          'pty-1',
+          [{ raw: '2' }],
+          expect.any(Function)
+        )
+        expect(mocks.sendNativeChatMessage).not.toHaveBeenCalled()
+      }
+    }
+  )
 
   it('routes a Claude answer through the option-number keystroke path', () => {
     const { result } = renderHook(() => useNativeChatInteractiveSend(PANE_KEY, 'pty-1', 'claude'))
