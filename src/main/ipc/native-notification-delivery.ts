@@ -23,9 +23,16 @@ import { getTrustedUIRendererWindow } from './ui'
 export function deliverNativeNotification(
   args: NotificationDispatchRequest,
   notificationOptions: ReturnType<typeof buildNotificationOptions>,
-  settings: NotificationSettings
+  settings: NotificationSettings,
+  options?: { suppressSound?: boolean }
 ): NotificationDispatchResult | Promise<NotificationDispatchResult> {
-  if (getEffectiveNotificationSoundId(settings) !== 'system') {
+  const suppressSound = options?.suppressSound === true
+  if (suppressSound) {
+    // Why checked first: an unmuted-mic suppression must win over the 'system'-sound
+    // branch below, which would otherwise force notificationOptions.sound = 'default'
+    // and make the banner audible again.
+    notificationOptions.silent = true
+  } else if (getEffectiveNotificationSoundId(settings) !== 'system') {
     notificationOptions.silent = true
   } else if (process.platform === 'darwin') {
     // macOS treats unset sound as silent; request the OS default explicitly.
@@ -132,9 +139,9 @@ export function deliverNativeNotification(
         return { delivered: false, reason: 'not-displayed' }
       }
       recordNotificationDeliveryOutcome('delivered')
-      return { delivered: true }
+      return { delivered: true, ...(suppressSound ? { soundSuppressed: true } : {}) }
     })
   }
 
-  return { delivered: true }
+  return { delivered: true, ...(suppressSound ? { soundSuppressed: true } : {}) }
 }

@@ -240,7 +240,12 @@ function prepareMacDevElectronApp() {
   )
   const requiredResourcePaths = [
     chromiumResourcePath,
-    path.join(appPath, 'Contents', 'MacOS', 'orca-keyboard-layout')
+    path.join(appPath, 'Contents', 'MacOS', 'orca-keyboard-layout'),
+    // Why required here too: without this, a bundle cached before this helper existed
+    // (or that failed to build it) would pass copiedAppIsUsable() forever and
+    // buildDevNativeHelper() below would never run again, leaving mic suppression
+    // silently disabled — this check forces a retry on the next launch instead.
+    path.join(appPath, 'Contents', 'MacOS', 'orca-mic-active-status')
   ]
 
   function copiedAppIsUsable() {
@@ -319,46 +324,44 @@ function prepareMacDevElectronApp() {
     setPlistValue(helperPlistPath, key, value)
   }
 
-  // Why: the notification-status helper reads the app's real macOS
-  // notification authorization (UNUserNotificationCenter has no Electron
-  // API). It must live inside the bundle and carry the dev bundle id as its
-  // embedded/code-sign identifier — macOS keys notification records to the
-  // signing identifier. Non-fatal: without swiftc the permission card falls
-  // back to delivery-probe heuristics.
-  try {
-    execFileSync(
-      process.execPath,
-      [
-        path.join(repoRoot, 'config', 'scripts', 'build-notification-status-macos.mjs'),
-        '--bundle-id',
-        bundleId,
-        '--single-arch',
-        '--output',
-        path.join(appPath, 'Contents', 'MacOS', 'orca-notification-status')
-      ],
-      { stdio: 'inherit' }
-    )
-  } catch (error) {
-    console.warn(
-      `[orca-dev] notification-status helper build failed (permission card falls back to probes): ${error?.message ?? error}`
-    )
-  }
+  // Why: these standalone Swift helpers must live inside the bundle and carry the dev bundle id
+  // as their embedded/code-sign identifier — macOS keys notification records to the signing
+  // identifier. Each build is non-fatal: without swiftc, the dependent feature just degrades
+  // (permission card falls back to probes, mic-suppression never suppresses, etc).
+  buildDevNativeHelper('build-notification-status-macos.mjs', 'orca-notification-status', {
+    bundleId,
+    fallbackWarning: 'permission card falls back to probes'
+  })
+  buildDevNativeHelper('build-keyboard-layout-macos.mjs', 'orca-keyboard-layout', {
+    fallbackWarning: 'shifted Option composition stays conservative'
+  })
+  buildDevNativeHelper('build-mic-active-status-macos.mjs', 'orca-mic-active-status', {
+    bundleId,
+    fallbackWarning: 'suppress-while-mic-active will never suppress'
+  })
 
-  try {
-    execFileSync(
-      process.execPath,
-      [
-        path.join(repoRoot, 'config', 'scripts', 'build-keyboard-layout-macos.mjs'),
-        '--single-arch',
-        '--output',
-        path.join(appPath, 'Contents', 'MacOS', 'orca-keyboard-layout')
-      ],
-      { stdio: 'inherit' }
-    )
-  } catch (error) {
-    console.warn(
-      `[orca-dev] keyboard-layout helper build failed (shifted Option composition stays conservative): ${error?.message ?? error}`
-    )
+  function buildDevNativeHelper(
+    scriptName,
+    outputName,
+    { bundleId: helperBundleId, fallbackWarning }
+  ) {
+    try {
+      execFileSync(
+        process.execPath,
+        [
+          path.join(repoRoot, 'config', 'scripts', scriptName),
+          ...(helperBundleId ? ['--bundle-id', helperBundleId] : []),
+          '--single-arch',
+          '--output',
+          path.join(appPath, 'Contents', 'MacOS', outputName)
+        ],
+        { stdio: 'inherit' }
+      )
+    } catch (error) {
+      console.warn(
+        `[orca-dev] ${outputName} helper build failed (${fallbackWarning}): ${error?.message ?? error}`
+      )
+    }
   }
 
   // Why: the plist edits above (and the copy itself) break the bundle's

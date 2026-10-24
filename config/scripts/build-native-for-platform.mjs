@@ -42,9 +42,12 @@ for (const target of [process.stdout, process.stderr]) {
 }
 
 const exitCodes = await Promise.all(
-  ['build:computer-macos', 'build:keyboard-layout-macos', 'build:notification-status-macos'].map(
-    (scriptName) => runPnpmScript(scriptName)
-  )
+  [
+    'build:computer-macos',
+    'build:keyboard-layout-macos',
+    'build:notification-status-macos',
+    'build:mic-active-status-macos'
+  ].map((scriptName) => runPnpmScript(scriptName))
 )
 clearTimeout(forceTimer)
 for (const [signal, handler] of signalHandlers) {
@@ -200,7 +203,9 @@ function pipePrefixed(stream, label, target) {
 }
 
 function runNodeScript(scriptPath) {
-  const result = spawnSync(process.execPath, [scriptPath], { stdio: 'inherit' })
+  const result = spawnSync(process.execPath, [scriptPath], {
+    stdio: 'inherit'
+  })
   if (result.signal) {
     process.kill(process.pid, result.signal)
   }

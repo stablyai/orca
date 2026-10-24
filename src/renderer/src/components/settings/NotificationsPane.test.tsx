@@ -32,6 +32,7 @@ function createSettings(): GlobalSettings {
       agentTaskComplete: true,
       terminalBell: true,
       suppressWhenFocused: true,
+      suppressWhileMicActive: false,
       customSoundId: 'system',
       customSoundPath: null,
       customSoundVolume: 50,
