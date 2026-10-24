@@ -16,6 +16,7 @@ const ALL_CATEGORIES: NativeChatToolCategory[] = [
   'unknown',
   'fileChange',
   'webSearch',
+  'browser',
   'mcpToolCall',
   'subAgentActivity',
   'todoList',
@@ -31,6 +32,7 @@ describe('native chat tool icons', () => {
       unknown: 'square-terminal',
       fileChange: 'pencil',
       webSearch: 'globe',
+      browser: 'globe',
       mcpToolCall: 'plug',
       subAgentActivity: 'bot',
       todoList: 'list-checks',
@@ -39,8 +41,10 @@ describe('native chat tool icons', () => {
     expect(Object.keys(NATIVE_CHAT_TOOL_ICON_NAMES).sort()).toEqual([...ALL_CATEGORIES].sort())
   })
 
-  it('gives each category a distinct glyph so rows are told apart by icon', () => {
-    const glyphs = ALL_CATEGORIES.map((category) => NATIVE_CHAT_TOOL_ICON_NAMES[category])
+  it('gives each category a distinct glyph, except the browser sharing the web globe', () => {
+    const glyphs = ALL_CATEGORIES.filter((category) => category !== 'browser').map(
+      (category) => NATIVE_CHAT_TOOL_ICON_NAMES[category]
+    )
     expect(new Set(glyphs).size).toBe(glyphs.length)
   })
 
@@ -217,6 +221,22 @@ describe('native chat tool icons', () => {
 
       expect(nativeChatToolRunCategory(run)).toBe('unknown')
       expect(nativeChatToolRunIconName(run)).toBe('square-terminal')
+    })
+
+    it('reads shell calls that drive the Orca browser CLI as a browser run', () => {
+      const run = [
+        { name: 'Bash', input: { command: 'orca snapshot' } },
+        { name: 'shell', input: { command: "/bin/zsh -lc 'orca click --element e3'" } }
+      ]
+
+      expect(nativeChatToolRunCategory(run)).toBe('browser')
+      expect(nativeChatToolRunIconName(run)).toBe('globe')
+      expect(
+        nativeChatToolRunCategory([
+          ...run,
+          { name: 'Bash', input: { command: 'orca worktree ls' } }
+        ])
+      ).toBeNull()
     })
 
     it('falls back to the generic tool glyph when the run spans categories', () => {

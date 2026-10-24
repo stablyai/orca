@@ -1,4 +1,5 @@
-import { useEffectEvent, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffectEvent, useLayoutEffect, useRef, useState } from 'react'
+import { useBrowserAgentCursor } from './agent-cursor/use-browser-agent-cursor'
 import { BrowserPageZoomIndicator } from './assemble-chrome/browser-page-zoom-indicator'
 import { useAppStore } from '@/store'
 import type { BrowserLoadError } from '../../../../shared/browser-workspace-types'
@@ -138,6 +139,12 @@ export function ClientHostedBrowserPagePane({
     setAddressBarValue
   })
   const runDeferredNavigation = useEffectEvent(navigateToUrl)
+  // The guest lives in a body-level host that paints above the pane, so the cursor joins it there.
+  const getAgentCursorHost = useCallback(
+    () => webviewRef.current?.parentElement ?? null,
+    [webviewRef]
+  )
+  useBrowserAgentCursor(browserTab.id, webviewRef, getAgentCursorHost)
 
   useLayoutEffect(() => {
     const viewport = viewportRef.current

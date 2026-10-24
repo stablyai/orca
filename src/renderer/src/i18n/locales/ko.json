@@ -18984,6 +18984,8 @@
         "runFileChangeMany": "{{value0}} 파일을 편집했습니다.",
         "runWebSearchOne": "웹을 1회 검색했습니다.",
         "runWebSearchMany": "웹을 {{value0}}번 검색했습니다.",
+        "runBrowserOne": "브라우저를 사용했습니다",
+        "runBrowserMany": "브라우저를 {{value0}}회 사용했습니다",
         "runIntegrationOne": "1개 통합 사용",
         "runIntegrationMany": "{{value0}} 통합 사용",
         "runAgentOne": "에이전트 1명 실행",
@@ -19006,6 +19008,8 @@
         "runLiveFileChangeMany": "{{value0}} 파일 편집 중",
         "runLiveWebSearchOne": "웹 검색 1회",
         "runLiveWebSearchMany": "웹 검색 {{value0}}회",
+        "runLiveBrowserOne": "브라우저 사용 중",
+        "runLiveBrowserMany": "브라우저 {{value0}}회 사용 중",
         "runLiveIntegrationOne": "1개의 통합 사용",
         "runLiveIntegrationMany": "{{value0}} 통합 사용",
         "runLiveAgentOne": "에이전트 1개 실행 중",
@@ -19013,7 +19017,9 @@
         "runLivePlanOne": "계획 업데이트 중",
         "runLivePlanMany": "계획을 {{value0}}번 업데이트 중",
         "runLiveToolOne": "도구 1개 사용",
-        "runLiveToolMany": "{{value0}} 도구 사용"
+        "runLiveToolMany": "{{value0}} 도구 사용",
+        "showBrowserPage": "보기",
+        "showBrowserPageLabel": "{{value0}} 보기"
       },
       "status": {
         "responding": "Agent이 응답 중입니다.",
@@ -21162,5 +21168,8 @@
       "main": "기본 작업 트리가 보호됩니다."
     },
     "rowActions": "{{name}}에 대한 작업"
+  },
+  "browserTab": {
+    "agentDriving": "에이전트가 이 페이지를 사용 중입니다"
   }
 }

@@ -134,6 +134,7 @@ export function NativeChatToolLine({
           <NativeChatToolIcon
             mcpIdentity={block.mcpIdentity}
             rowWord={name}
+            input={block.input}
             className={failed ? 'text-destructive/70' : 'text-chat-foreground-faint'}
           />
         ) : (

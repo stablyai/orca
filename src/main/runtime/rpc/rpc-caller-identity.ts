@@ -20,6 +20,11 @@ export type RpcCallerIdentity =
 
 export const DESKTOP_RPC_CALLER: RpcCallerIdentity = { kind: 'desktop' }
 
+/** The orca CLI agents run, locally or forwarded from a remote host; relayed devices are people. */
+export function isAgentRpcCaller(caller: RpcCallerIdentity | undefined): boolean {
+  return caller?.kind === 'local-cli'
+}
+
 /**
  * A transport that names its caller is believed; one that declares no client at all is the
  * in-process runtime socket, trusted as it always was; one that declares a client it cannot name has

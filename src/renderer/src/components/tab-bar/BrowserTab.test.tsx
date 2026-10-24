@@ -17,6 +17,7 @@ vi.mock('react', async () => {
     // favicon tests never fire pointer events, so non-persistent refs are fine.
     useRef: <T,>(initial: T) => ({ current: initial }),
     useCallback: <T,>(fn: T) => fn,
+    useSyncExternalStore: <T,>(_subscribe: unknown, getSnapshot: () => T) => getSnapshot(),
     useState<T>(initial: T | (() => T)) {
       const stateIndex = reactHookRuntime.index++
       if (!(stateIndex in reactHookRuntime.states)) {

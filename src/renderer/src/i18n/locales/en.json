@@ -19321,6 +19321,8 @@
         "runFileChangeMany": "Edited {{value0}} files",
         "runWebSearchOne": "Searched the web 1 time",
         "runWebSearchMany": "Searched the web {{value0}} times",
+        "runBrowserOne": "Used the browser",
+        "runBrowserMany": "Used the browser {{value0}} times",
         "runIntegrationOne": "Used 1 integration",
         "runIntegrationMany": "Used {{value0}} integrations",
         "runAgentOne": "Ran 1 agent",
@@ -19343,6 +19345,8 @@
         "runLiveFileChangeMany": "Editing {{value0}} files",
         "runLiveWebSearchOne": "Searching the web 1 time",
         "runLiveWebSearchMany": "Searching the web {{value0}} times",
+        "runLiveBrowserOne": "Using the browser",
+        "runLiveBrowserMany": "Using the browser {{value0}} times",
         "runLiveIntegrationOne": "Using 1 integration",
         "runLiveIntegrationMany": "Using {{value0}} integrations",
         "runLiveAgentOne": "Running 1 agent",
@@ -19350,7 +19354,9 @@
         "runLivePlanOne": "Updating the plan",
         "runLivePlanMany": "Updating the plan {{value0}} times",
         "runLiveToolOne": "Using 1 tool",
-        "runLiveToolMany": "Using {{value0}} tools"
+        "runLiveToolMany": "Using {{value0}} tools",
+        "showBrowserPage": "Show",
+        "showBrowserPageLabel": "Show {{value0}}"
       },
       "providerFrame": {
         "byteLength": "{{value0}} bytes"
@@ -21240,5 +21246,8 @@
     "restartLocal": "Restart local daemon",
     "killAllLocal": "Kill all local sessions",
     "killFailed": "The terminal could not be ended. Last-observed sessions are retained."
+  },
+  "browserTab": {
+    "agentDriving": "An agent is using this page"
   }
 }

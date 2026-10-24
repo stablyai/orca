@@ -19094,6 +19094,8 @@
         "runFileChangeMany": "Fichiers {{value0}} modifiés",
         "runWebSearchOne": "J'ai cherché sur le Web 1 fois",
         "runWebSearchMany": "Recherche sur le Web {{value0}} fois",
+        "runBrowserOne": "Navigateur utilisé",
+        "runBrowserMany": "Navigateur utilisé {{value0}} fois",
         "runIntegrationOne": "Utilisé 1 intégration",
         "runIntegrationMany": "Intégrations {{value0}} utilisées",
         "runAgentOne": "J'ai couru 1 agent",
@@ -19116,6 +19118,8 @@
         "runLiveFileChangeMany": "Modification des fichiers {{value0}}",
         "runLiveWebSearchOne": "Recherche sur le Web 1 fois",
         "runLiveWebSearchMany": "Recherche sur le Web {{value0}} fois",
+        "runLiveBrowserOne": "Utilisation du navigateur",
+        "runLiveBrowserMany": "Utilisation du navigateur {{value0}} fois",
         "runLiveIntegrationOne": "Utiliser 1 intégration",
         "runLiveIntegrationMany": "Utilisation des intégrations {{value0}}",
         "runLiveAgentOne": "Exécuter 1 agent",
@@ -19123,7 +19127,9 @@
         "runLivePlanOne": "Mise à jour du plan",
         "runLivePlanMany": "Mettre à jour le plan {{value0}} fois",
         "runLiveToolOne": "Utiliser 1 outil",
-        "runLiveToolMany": "Utiliser les outils {{value0}}"
+        "runLiveToolMany": "Utiliser les outils {{value0}}",
+        "showBrowserPage": "Afficher",
+        "showBrowserPageLabel": "Afficher {{value0}}"
       },
       "status": {
         "responding": "L'agent répond",
@@ -21163,5 +21169,8 @@
       "unavailable": "Cet espace de travail est protégé ou indisponible."
     },
     "rowActions": "Actions pour {{name}}"
+  },
+  "browserTab": {
+    "agentDriving": "Un agent utilise cette page"
   }
 }

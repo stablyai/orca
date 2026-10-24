@@ -99,6 +99,7 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
     // Resolve pending grabs before removing their registration.
     this.cancelGrabOp(browserTabId, 'evicted')
     cancelBrowserPagePrompts(browserTabId)
+    this.agentActivity.end(browserTabId)
 
     const guestWebContentsId = this.webContentsIdByTabId.get(browserTabId)
     if (guestWebContentsId !== undefined) {

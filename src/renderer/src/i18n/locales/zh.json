@@ -18949,6 +18949,8 @@
         "runFileChangeMany": "编辑 {{value0}} 文件",
         "runWebSearchOne": "网上搜索了1次",
         "runWebSearchMany": "网络搜索 {{value0}} 次",
+        "runBrowserOne": "使用了浏览器",
+        "runBrowserMany": "使用了浏览器 {{value0}} 次",
         "runIntegrationOne": "使用 1 集成",
         "runIntegrationMany": "使用 {{value0}} 集成",
         "runAgentOne": "然 1 智能体",
@@ -18971,6 +18973,8 @@
         "runLiveFileChangeMany": "编辑 {{value0}} 文件",
         "runLiveWebSearchOne": "网上搜索1次",
         "runLiveWebSearchMany": "搜索网络 {{value0}} 次",
+        "runLiveBrowserOne": "正在使用浏览器",
+        "runLiveBrowserMany": "正在使用浏览器 {{value0}} 次",
         "runLiveIntegrationOne": "使用 1 集成",
         "runLiveIntegrationMany": "使用 {{value0}} 集成",
         "runLiveAgentOne": "运行 1 个智能体",
@@ -18978,7 +18982,9 @@
         "runLivePlanOne": "更新计划",
         "runLivePlanMany": "更新计划 {{value0}} 次",
         "runLiveToolOne": "使用 1 个工具",
-        "runLiveToolMany": "使用 {{value0}} 工具"
+        "runLiveToolMany": "使用 {{value0}} 工具",
+        "showBrowserPage": "显示",
+        "showBrowserPageLabel": "显示 {{value0}}"
       },
       "status": {
         "responding": "智能体正在回复",
@@ -21162,5 +21168,8 @@
       "unavailable": "该工作区受保护或不可用。"
     },
     "rowActions": "{{name}} 的操作"
+  },
+  "browserTab": {
+    "agentDriving": "智能体正在使用此页面"
   }
 }

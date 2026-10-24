@@ -18955,6 +18955,8 @@
         "runFileChangeMany": "Se editaron {{value0}} archivos",
         "runWebSearchOne": "Se buscó en la web 1 vez",
         "runWebSearchMany": "Se buscó en la web {{value0}} veces",
+        "runBrowserOne": "Se usó el navegador",
+        "runBrowserMany": "Se usó el navegador {{value0}} veces",
         "runIntegrationOne": "Se usó 1 integración",
         "runIntegrationMany": "Se usaron {{value0}} integraciones",
         "runAgentOne": "Se ejecutó 1 agente",
@@ -18976,6 +18978,8 @@
         "runLiveFileChangeMany": "Editando {{value0}} archivos",
         "runLiveWebSearchOne": "Buscando en la web 1 vez",
         "runLiveWebSearchMany": "Buscando en la web {{value0}} veces",
+        "runLiveBrowserOne": "Usando el navegador",
+        "runLiveBrowserMany": "Usando el navegador {{value0}} veces",
         "runLiveIntegrationOne": "Usando 1 integración",
         "runLiveIntegrationMany": "Usando {{value0}} integraciones",
         "runLiveAgentOne": "Ejecutando 1 agente",
@@ -18983,7 +18987,9 @@
         "runLivePlanOne": "Actualizando el plan",
         "runLivePlanMany": "Actualizando el plan {{value0}} veces",
         "runLiveToolOne": "Usando 1 herramienta",
-        "runLiveToolMany": "Usando {{value0}} herramientas"
+        "runLiveToolMany": "Usando {{value0}} herramientas",
+        "showBrowserPage": "Mostrar",
+        "showBrowserPageLabel": "Mostrar {{value0}}"
       },
       "status": {
         "responding": "El agente está respondiendo",
@@ -21163,5 +21169,8 @@
       "pending": "La eliminación está en curso."
     },
     "rowActions": "Acciones para {{name}}"
+  },
+  "browserTab": {
+    "agentDriving": "Un agente está usando esta página"
   }
 }

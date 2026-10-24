@@ -18984,6 +18984,8 @@
         "runFileChangeMany": "編集された{{value0}}ファイル",
         "runWebSearchOne": "ウェブを 1 回検索しました",
         "runWebSearchMany": "ウェブを{{value0}}回検索しました",
+        "runBrowserOne": "ブラウザを使用しました",
+        "runBrowserMany": "ブラウザを{{value0}}回使用しました",
         "runIntegrationOne": "使用済み 1 連携",
         "runIntegrationMany": "{{value0}} 連携を使用しました",
         "runAgentOne": "Agent を 1 人実行しました",
@@ -19006,6 +19008,8 @@
         "runLiveFileChangeMany": "{{value0}} ファイルの編集",
         "runLiveWebSearchOne": "ウェブ検索 1 回",
         "runLiveWebSearchMany": "ウェブを{{value0}}回検索しています",
+        "runLiveBrowserOne": "ブラウザを使用しています",
+        "runLiveBrowserMany": "ブラウザを{{value0}}回使用しています",
         "runLiveIntegrationOne": "1 つの連携を使用する",
         "runLiveIntegrationMany": "{{value0}} 連携の使用",
         "runLiveAgentOne": "1 つの Agent を実行中",
@@ -19013,7 +19017,9 @@
         "runLivePlanOne": "計画を更新する",
         "runLivePlanMany": "計画を{{value0}}回更新しています",
         "runLiveToolOne": "1つのツールを使用する",
-        "runLiveToolMany": "{{value0}} ツールの使用"
+        "runLiveToolMany": "{{value0}} ツールの使用",
+        "showBrowserPage": "表示",
+        "showBrowserPageLabel": "{{value0}} を表示"
       },
       "status": {
         "responding": "Agent が応答中です",
@@ -21162,5 +21168,8 @@
       "pending": "削除が進行中です。"
     },
     "rowActions": "{{name}} の操作"
+  },
+  "browserTab": {
+    "agentDriving": "エージェントがこのページを使用中です"
   }
 }
