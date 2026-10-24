@@ -232,11 +232,6 @@ describe('TerminalDraftEditor', () => {
       text: 'remote',
       sourceToken: 'token-1'
     })
-    saveDesktopTerminalDraft.mockResolvedValueOnce({
-      ok: false,
-      status: 'conflict',
-      conflict: { text: 'changed terminal', sourceToken: 'token-2' }
-    })
     renderEditor()
     await openEditor()
     const field = textarea()!
@@ -244,27 +239,35 @@ describe('TerminalDraftEditor', () => {
     setter?.call(field, 'local')
     field.dispatchEvent(new Event('input', { bubbles: true }))
     await tick()
-    container
-      .querySelector<HTMLButtonElement>(
-        'button[aria-label="Save draft to terminal without submitting"]'
-      )
-      ?.click()
-    for (let index = 0; index < 5; index += 1) {
-      await tick()
-    }
-    container
-      .querySelector<HTMLButtonElement>('button[aria-label="Use the terminal draft version"]')
-      ?.click()
-    await tick()
-    expect(textarea()?.value).toBe('changed terminal')
+
+    // A dirty Reload parks the local copy and conflicts because the terminal changed meanwhile.
     beginDesktopTerminalDraft.mockResolvedValue({
       ok: true,
       supported: true,
       adapter: 'pi-editor',
       epoch: 9,
       text: 'changed terminal',
-      sourceToken: 'token-3'
+      sourceToken: 'token-2'
     })
+    container
+      .querySelector<HTMLButtonElement>('button[aria-label="Reload the terminal draft"]')
+      ?.click()
+    for (let index = 0; index < 6; index += 1) {
+      await tick()
+    }
+    expect(textarea()?.value).toBe('local')
+    expect(container.textContent).toContain('The terminal draft was changed elsewhere.')
+    expect(window.localStorage.getItem('orca:terminal-draft-recovery:v1:tab:leaf')).toContain(
+      'local'
+    )
+
+    container
+      .querySelector<HTMLButtonElement>('button[aria-label="Use the terminal draft version"]')
+      ?.click()
+    await tick()
+    expect(textarea()?.value).toBe('changed terminal')
+    expect(window.localStorage.getItem('orca:terminal-draft-recovery:v1:tab:leaf')).toBeNull()
+
     container
       .querySelector<HTMLButtonElement>('button[aria-label="Reload the terminal draft"]')
       ?.click()
