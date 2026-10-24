@@ -1,12 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
-import { revealElementInScrollContainer } from './worktree-sidebar-reveal'
+import {
+  isElementVisibleInScrollContainer,
+  revealElementInScrollContainer
+} from './worktree-sidebar-reveal'
 
-function makeContainer(scrollTop: number, clientHeight: number) {
+function makeContainer(scrollTop: number, clientHeight: number, contains = true) {
   const scrollTo = vi.fn()
   const container = {
     clientHeight,
     scrollTop,
-    contains: () => true,
+    contains: () => contains,
     getBoundingClientRect: () => ({ top: 0, bottom: clientHeight }) as DOMRect,
     scrollTo
   }
@@ -51,5 +54,22 @@ describe('revealElementInScrollContainer', () => {
     expect(revealed).toBe(true)
     expect(scrollTo).not.toHaveBeenCalled()
     expect(onScrollIssued).not.toHaveBeenCalled()
+  })
+})
+
+describe('isElementVisibleInScrollContainer', () => {
+  it('agrees with revealElementInScrollContainer that an in-view element needs no scroll', () => {
+    const { container } = makeContainer(0, 673)
+    expect(isElementVisibleInScrollContainer(container, makeElement(200, 260))).toBe(true)
+  })
+
+  it('reports an element below the fold as not visible', () => {
+    const { container } = makeContainer(0, 673)
+    expect(isElementVisibleInScrollContainer(container, makeElement(1005, 1060))).toBe(false)
+  })
+
+  it('reports an element outside the container as not visible', () => {
+    const { container } = makeContainer(0, 673, false)
+    expect(isElementVisibleInScrollContainer(container, makeElement(200, 260))).toBe(false)
   })
 })
