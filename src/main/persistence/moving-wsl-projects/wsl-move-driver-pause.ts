@@ -9,6 +9,7 @@ import { refusal } from './wsl-move-driver-plan'
 import type { WslMoveRestoreHintPane } from './wsl-move-restore-hints'
 import { assessWslMoveTerminals } from './wsl-move-terminal-gate'
 import { withSleptSessionPanes } from './wsl-move-slept-scrollback'
+import { sleepUntilPaused } from './wsl-move-quiesce'
 
 const sessionsOf = (panes: readonly WslMoveRestoreHintPane[]): string =>
   JSON.stringify(panes.map((pane) => pane.sessionId).sort())
@@ -41,7 +42,7 @@ export async function pauseWslMoveScope(
     return shellCwd ? { ...pane, shellCwd } : pane
   })
   try {
-    const { failedWorktreeIds } = await deps.quiesce.sleepWorkspaces(scope.workspaceIds)
+    const failedWorktreeIds = await sleepUntilPaused(deps.quiesce, scope.workspaceIds)
     // Panes slept before the move too, so their folders reach the restore hints, not only history.
     return failedWorktreeIds.length > 0
       ? refusal('wsl_move_pause_failed', { detail: 'sleep-failed' })

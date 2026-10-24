@@ -42,13 +42,13 @@ export type WslMoveQuiesceDeps = {
   wait?: (ms: number) => Promise<void>
 }
 
-// A pane still restoring or just spawned can miss its final checkpoint and stay awake once; the
-// next Sleep of the same workspace stops it (awin verify-7, 6e). Only a repeat failure refuses.
+// A Sleep can fail once and succeed when tried again (awin verify-7, 6e); only a repeat refuses.
 const SLEEP_ATTEMPTS = 3
 const SLEEP_RETRY_MS = 1_000
 
-async function sleepUntilPaused(
-  deps: WslMoveQuiesceDeps,
+/** Sleeps the workspaces, again for the ones that failed; returns those that kept failing. */
+export async function sleepUntilPaused(
+  deps: Pick<WslMoveQuiesceDeps, 'sleepWorkspaces' | 'wait'>,
   workspaceIds: readonly string[]
 ): Promise<string[]> {
   let pending = workspaceIds
