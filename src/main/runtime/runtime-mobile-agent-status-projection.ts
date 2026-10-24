@@ -222,3 +222,48 @@ export function resolveRuntimeHookLiveAgentRow(
     ? live
     : null
 }
+
+export function projectPublishedTabAgentStatus(
+  normalizedTabAgentStatus: AgentStatusEntry | null,
+  statusPty: RuntimePtyWorktreeRecord | null,
+  liveTitleEvidence: string | null
+): { agentStatus: AgentStatusEntry } | null {
+  // Why: keep rich status on a live prompt/tool, or interactivePrompt is lost under a non-agent title.
+  const hasLiveAgentSignal =
+    normalizedTabAgentStatus?.interactivePrompt != null ||
+    normalizedTabAgentStatus?.toolName != null
+  const titleAlreadyAdjudicatedByPtyClock =
+    statusPty?.lastOscTitleEpochMs != null &&
+    liveTitleEvidence === (statusPty.lastOscTitle?.trim() || null)
+  // Why: only shell/management evidence proves the agent released the pane
+  // (same predicate as the terminal-status API). A merely neutral live title
+  // — 'Terminal', an editor, a cwd — proves nothing, and treating it as
+  // completion published a synthetic `done` that fought the client's own
+  // live status on every republication.
+  const keepFullAgentStatus =
+    normalizedTabAgentStatus &&
+    (titleAlreadyAdjudicatedByPtyClock ||
+      !terminalTitleBlocksExplicitAgentStatus(liveTitleEvidence) ||
+      hasLiveAgentSignal)
+  if (keepFullAgentStatus) {
+    return { agentStatus: normalizedTabAgentStatus }
+  }
+  // Why: idle live title → drop stale "working" (no spinner) but keep agent identity so native chat can still address the transcript.
+  return normalizedTabAgentStatus?.agentType != null
+    ? {
+        agentStatus: {
+          state: 'done' as const,
+          prompt: '',
+          updatedAt: statusPty?.lastOscTitleEpochMs ?? normalizedTabAgentStatus.updatedAt,
+          stateStartedAt:
+            statusPty?.lastAgentStatusStartedAtEpochMs ?? normalizedTabAgentStatus.stateStartedAt,
+          paneKey: normalizedTabAgentStatus.paneKey,
+          stateHistory: [],
+          agentType: normalizedTabAgentStatus.agentType,
+          ...(normalizedTabAgentStatus.providerSession
+            ? { providerSession: normalizedTabAgentStatus.providerSession }
+            : {})
+        }
+      }
+    : null
+}

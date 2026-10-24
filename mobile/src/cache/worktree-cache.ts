@@ -11,6 +11,7 @@ type CachedWorktrees = {
 }
 
 const cache = new Map<string, CachedWorktrees>()
+const lastKnownByHost = new Map<string, unknown[]>()
 
 const MAX_AGE_MS = 30_000
 const MAX_ENTRIES = 20
@@ -29,19 +30,31 @@ export function setCachedWorktrees(
   // order. Delete first so the re-inserted key becomes the newest entry,
   // giving us true LRU eviction when the cap is hit.
   cache.delete(hostId)
+  lastKnownByHost.delete(hostId)
   // Default false: a caller that has not said where the rows came from must never be taken
   // as grounds for redirecting the user away from a workspace.
   cache.set(hostId, { worktrees, at: Date.now(), proven: options?.proven === true })
+  lastKnownByHost.set(hostId, worktrees)
   if (cache.size > MAX_ENTRIES) {
     const oldest = cache.keys().next().value
     if (oldest) {
       cache.delete(oldest)
     }
   }
+  if (lastKnownByHost.size > MAX_ENTRIES) {
+    const oldest = lastKnownByHost.keys().next().value
+    if (oldest) {
+      lastKnownByHost.delete(oldest)
+    }
+  }
 }
 
 export function getCachedWorktrees(hostId: string): unknown[] | null {
   return readFreshEntry(hostId)?.worktrees ?? null
+}
+
+export function peekCachedWorktrees(hostId: string): unknown[] | null {
+  return readFreshEntry(hostId)?.worktrees ?? lastKnownByHost.get(hostId) ?? null
 }
 
 /** The rows only when the host listed them itself — null whenever absence cannot be trusted,

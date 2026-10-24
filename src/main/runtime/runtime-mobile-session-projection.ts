@@ -14,6 +14,7 @@ import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
 import { resolveTerminalTabTitle } from '../../shared/tab-title-resolution'
 import { indexAgentStatusRowsByPaneKey } from '../agent-hooks/agent-status-pane-index'
 import {
+  projectPublishedTabAgentStatus,
   renewRuntimeMobileAgentStatusFromPtyTitle,
   selectRuntimeHookAgentRowForPane
 } from './runtime-mobile-agent-status-projection'
@@ -23,8 +24,7 @@ import type { RuntimeMobileSessionProjectionHost } from './runtime-mobile-sessio
 import {
   getLatestAgentCandidateTitle,
   getLeafDisplayRecord,
-  getPtyDisplayRecord,
-  terminalTitleBlocksExplicitAgentStatus
+  getPtyDisplayRecord
 } from './runtime-worktree-status-projection'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 
@@ -225,39 +225,11 @@ export function projectRuntimeMobileSessionTabs(
       statusPty,
       { preserveQuestionUnderShellTitle: true }
     )
-    // Why: keep rich status on a live prompt/tool, or interactivePrompt is lost under a non-agent title.
-    const hasLiveAgentSignal =
-      normalizedTabAgentStatus?.interactivePrompt != null ||
-      normalizedTabAgentStatus?.toolName != null
-    // Why: only shell/management evidence proves the agent released the pane
-    // (same predicate as the terminal-status API). A merely neutral live title
-    // — 'Terminal', an editor, a cwd — proves nothing, and treating it as
-    // completion published a synthetic `done` that fought the client's own
-    // live status on every republication.
-    const keepFullAgentStatus =
-      normalizedTabAgentStatus &&
-      (!terminalTitleBlocksExplicitAgentStatus(liveTitleEvidence) || hasLiveAgentSignal)
-    const agentStatus = keepFullAgentStatus
-      ? { agentStatus: normalizedTabAgentStatus }
-      : // Why: idle live title → drop stale "working" (no spinner) but keep agent identity so native chat can still address the transcript.
-        normalizedTabAgentStatus?.agentType != null
-        ? {
-            agentStatus: {
-              state: 'done' as const,
-              prompt: '',
-              updatedAt: statusPty?.lastOscTitleEpochMs ?? normalizedTabAgentStatus.updatedAt,
-              stateStartedAt:
-                statusPty?.lastAgentStatusStartedAtEpochMs ??
-                normalizedTabAgentStatus.stateStartedAt,
-              paneKey: normalizedTabAgentStatus.paneKey,
-              stateHistory: [],
-              agentType: normalizedTabAgentStatus.agentType,
-              ...(normalizedTabAgentStatus.providerSession
-                ? { providerSession: normalizedTabAgentStatus.providerSession }
-                : {})
-            }
-          }
-        : null
+    const agentStatus = projectPublishedTabAgentStatus(
+      normalizedTabAgentStatus,
+      statusPty,
+      liveTitleEvidence
+    )
     // Why: web/mobile clients hold handles across renderer graph syncs; leaf handles are epoch-bound but PTY handles stay streamable.
     const terminalPty = liveLeafPtyId
       ? host.recordPty(liveLeafPtyId, snapshot.worktree, {

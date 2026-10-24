@@ -79,4 +79,50 @@ describe('session tab status on the phone clock', () => {
     )
     expect(dot(reconnected[0], PHONE_NOW + 90 * MINUTE)).toBe('working')
   })
+
+  it('reconciles a shell-masked done tab status with a fresher worktree.ps agent row and retains it across replays', () => {
+    const shellTitleStamp = PHONE_NOW - 10 * MINUTE
+    const hookStartedStamp = PHONE_NOW - 5 * MINUTE
+    const hookUpdatedStamp = PHONE_NOW - 1 * MINUTE
+    const maskedTab: MobileSessionTab = {
+      type: 'terminal',
+      id: 'term::leaf',
+      parentTabId: 'term',
+      leafId: 'leaf',
+      title: 'antigravity',
+      terminal: 'pty-1',
+      isActive: true,
+      agentStatus: {
+        state: 'done',
+        prompt: '',
+        paneKey: 'term:leaf',
+        stateHistory: [],
+        stateStartedAt: hookStartedStamp,
+        updatedAt: shellTitleStamp
+      }
+    }
+    const cachedWorktrees = [
+      {
+        worktreeId: 'wt-1',
+        agents: [
+          {
+            paneKey: 'term:leaf',
+            state: 'working',
+            stateStartedAt: hookStartedStamp,
+            updatedAt: hookUpdatedStamp
+          }
+        ]
+      }
+    ]
+
+    const first = withSessionTabStatusReceipts([maskedTab], [], PHONE_NOW, {
+      cachedWorktrees,
+      worktreeId: 'wt-1'
+    })
+    expect(dot(first[0], PHONE_NOW)).toBe('working')
+
+    // Even after the worktree cache is absent, a replay of the same masked snapshot keeps the reconciled state.
+    const replay = withSessionTabStatusReceipts([maskedTab], first, PHONE_NOW + 2 * MINUTE)
+    expect(dot(replay[0], PHONE_NOW + 2 * MINUTE)).toBe('working')
+  })
 })
