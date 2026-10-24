@@ -63,6 +63,7 @@ it('offers a recovered opener only when its saved native alias arrives, retainin
   }
   const props = {
     sessionId: IDENTITY.sessionId,
+    capturePresentation: () => () => true,
     state,
     support: { supported: true as const },
     blocked: false,
