@@ -25,6 +25,14 @@ export function dropRetirementProofsForLiveSurfaces(
   return retired.filter((surface) => !live.has(surfaceKey(surface)))
 }
 
+/** The host's own removal evidence for a pane, whatever handle it last held. */
+export function hasRetirementProofForSurface(
+  retired: readonly RuntimeMobileSessionRetiredTerminalSurface[] | undefined,
+  surface: { parentTabId: string; leafId: string }
+): boolean {
+  return retired?.some((proof) => surfaceKey(proof) === surfaceKey(surface)) === true
+}
+
 /** Newest evidence wins per exact identity; the oldest identities fall off past the cap. */
 export function appendRetiredTerminalSurfaceProofs(
   existing: readonly RuntimeMobileSessionRetiredTerminalSurface[] | undefined,
