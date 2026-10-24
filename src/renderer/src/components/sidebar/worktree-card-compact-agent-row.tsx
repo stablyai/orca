@@ -100,6 +100,7 @@ type CompactAgentRowProps = {
   onToggleChildAgents?: () => void
   isFocusedPane?: boolean
   hideIdentityIcon?: boolean
+  showModel?: boolean
   cacheTimerActive?: boolean
   isUnvisited?: boolean
 }
@@ -116,6 +117,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   onToggleChildAgents,
   isFocusedPane = false,
   hideIdentityIcon = false,
+  showModel = true,
   cacheTimerActive = true,
   isUnvisited = false
 }: CompactAgentRowProps) {
@@ -252,7 +254,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
           </span>
         </>
       )}
-      {model && (
+      {showModel && model && (
         <span
           className={cn(
             'min-w-0 max-w-24 truncate font-mono text-[10px]',
