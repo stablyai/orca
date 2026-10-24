@@ -4,6 +4,8 @@ import type { AgentTrustPreset } from './agent-trust-presets'
 
 export function workspaceTrustWritten(home: string, preset: AgentTrustPreset): boolean {
   switch (preset) {
+    case 'kimi':
+      return existsSync(join(home, '.kimi-code', 'workspace-trust'))
     case 'claude':
       return 'projects' in JSON.parse(readFileSync(join(home, '.claude.json'), 'utf-8'))
     case 'codex':

@@ -1,6 +1,7 @@
 import { realpathSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { resolve } from 'node:path'
+import { join, resolve } from 'node:path'
+import { markKimiWorkspaceTrusted } from './kimi/workspace-trust'
 import { markQoderWorkspaceTrusted } from './qoder/workspace-trust'
 import {
   type AgentTrustPreset,
@@ -22,6 +23,7 @@ export type WorkspaceTrustHost = {
   homes: readonly (string | null | undefined)[]
   /** The home the launched agent resolves `~` to, where the per-user trust files live. */
   agentHome: string
+  kimiHome?: string
   /** The config Claude reads on this host, or null when this host cannot tell. */
   claudeConfig: () => ClaudeTrustConfigTarget | null
   /** Every config.toml the launched Codex may read, in the hook installer's lock order. */
@@ -39,6 +41,7 @@ export function launchedAgentHome(
 /** Never prewrite home/root trust for agents whose trust lookup includes descendants. */
 export const AGENT_TRUST_INHERITS_FROM_A_HOME: Record<AgentTrustPreset, boolean> = {
   claude: true,
+  kimi: false,
   codex: false,
   cursor: false,
   copilot: true,
@@ -50,6 +53,7 @@ export const AGENT_TRUST_INHERITS_FROM_A_HOME: Record<AgentTrustPreset, boolean>
 /** Trust these agents’ starting folders; a workspace ancestor may not be a valid trust key. */
 export const AGENT_TRUST_KEYED_BY_START_FOLDER: Record<AgentTrustPreset, boolean> = {
   claude: false,
+  kimi: true,
   codex: true,
   cursor: false,
   copilot: false,
@@ -79,6 +83,11 @@ async function writePreset(
   host: WorkspaceTrustHost
 ): Promise<void> {
   switch (preset) {
+    case 'kimi':
+      return markKimiWorkspaceTrusted(
+        storedPath,
+        host.kimiHome || join(host.agentHome, '.kimi-code')
+      )
     case 'claude': {
       const target = host.claudeConfig()
       if (target) {
@@ -109,7 +118,7 @@ export async function applyWorkspaceTrustOnThisHost(
 ): Promise<void> {
   try {
     const host = describeHost()
-    if (AGENT_TRUST_INHERITS_FROM_A_HOME[preset]) {
+    if (AGENT_TRUST_INHERITS_FROM_A_HOME[preset] || preset === 'kimi') {
       const homes = host.homes.filter((home): home is string => Boolean(home))
       if (homes.length === 0 || wouldTrustAHome(workspacePath, homes)) {
         return
