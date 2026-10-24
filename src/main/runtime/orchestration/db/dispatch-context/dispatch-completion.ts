@@ -105,6 +105,17 @@ export function recordHeartbeat(this: OrchestrationDb, dispatchId: string, at: s
     .run(at, dispatchId)
 }
 
+// Why: liveness lives on the Dispatch, so the row is consumed on arrival instead of waking or pinging the coordinator.
+export function consumeHeartbeatMessage(
+  this: OrchestrationDb,
+  messageId: string,
+  dispatchId: string,
+  at: string
+): void {
+  this.recordHeartbeat(dispatchId, at)
+  this.markAsReadAndDelivered([messageId])
+}
+
 // Why: dispatched_at grace skips workers still within their first heartbeat interval; julianday() vs raw-TEXT compare avoids misflagging space-format timestamps as stale (#8452).
 export function getStaleDispatches(
   this: OrchestrationDb,
@@ -240,6 +251,7 @@ export type DispatchCompletionMethods = {
   completeActiveDispatchesForTask: typeof completeActiveDispatchesForTask
   failActiveDispatchForTask: typeof failActiveDispatchForTask
   recordHeartbeat: typeof recordHeartbeat
+  consumeHeartbeatMessage: typeof consumeHeartbeatMessage
   getStaleDispatches: typeof getStaleDispatches
   failDispatch: typeof failDispatch
 }
@@ -250,6 +262,7 @@ export function attachDispatchCompletion(ctor: { prototype: object }): void {
     completeActiveDispatchesForTask,
     failActiveDispatchForTask,
     recordHeartbeat,
+    consumeHeartbeatMessage,
     getStaleDispatches,
     failDispatch
   })

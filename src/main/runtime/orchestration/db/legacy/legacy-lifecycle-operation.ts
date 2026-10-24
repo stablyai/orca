@@ -138,7 +138,8 @@ export function commitLegacyLifecycleOperation(
 
     let settlement: WorkerReportSettlement | undefined
     if (params.lifecycle.kind === 'heartbeat') {
-      this.recordHeartbeat(dispatchId, params.lifecycle.at)
+      this.consumeHeartbeatMessage(message.id, dispatchId, params.lifecycle.at)
+      message = this.getMessageById(message.id) ?? message
     } else if (params.lifecycle.kind === 'worker_report') {
       const persistedOutcome =
         params.message.existingId &&

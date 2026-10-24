@@ -16,6 +16,8 @@ export function promoteLegacyCoordinatorMailForTakeover(
            read = 0, delivered_at = NULL
        WHERE run_id = ? AND delivery_contract = 'legacy_direct'
          AND to_handle = ?
+         -- Why: liveness is already on the Dispatch; promoting a heartbeat would nudge the new coordinator.
+         AND type != 'heartbeat'
          AND EXISTS(
            SELECT 1 FROM dispatch_contexts d
            WHERE d.run_id = messages.run_id

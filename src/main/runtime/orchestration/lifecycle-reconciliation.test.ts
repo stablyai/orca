@@ -485,7 +485,8 @@ describe('lifecycle reconciliation', () => {
     expect(db.getDispatchContextById(dispatch.id)?.last_heartbeat_at).toBeNull()
     expect(db.getMessageById(heartbeat.id)).toMatchObject({
       type: 'heartbeat',
-      subject: 'Rejected heartbeat: alive'
+      subject: 'Rejected heartbeat: alive',
+      read: 1
     })
     // Why: the coordinator's re-read of the already-converted heartbeat must
     // still log the rejection, since the send-path conversion logged nothing.
@@ -497,6 +498,21 @@ describe('lifecycle reconciliation', () => {
       action: 'rejected'
     })
     expect(rereadLogs.some((line) => line.includes('Heartbeat rejected'))).toBe(true)
+  })
+
+  it('consumes a heartbeat that names no Dispatch', () => {
+    db = new OrchestrationDb(':memory:')
+    const heartbeat = db.insertMessage({
+      runId: 'run_legacy_local',
+      from: 'term_worker',
+      to: 'term_coordinator',
+      subject: 'alive',
+      type: 'heartbeat',
+      payload: JSON.stringify({ phase: 'implementing' })
+    })
+
+    expect(reconcileLifecycleMessage(db, heartbeat)).toEqual({ action: 'suppressed' })
+    expect(db.getMessageById(heartbeat.id)).toMatchObject({ read: 1 })
   })
 
   it('surfaces a foreign heartbeat that claims the assignee handle', () => {
@@ -559,10 +575,9 @@ describe('lifecycle reconciliation', () => {
         type: 'heartbeat',
         payload: JSON.stringify({ dispatchId })
       })
+    // Why: unreconciled rows stand in for heartbeats stored unread before arrival consumed them.
     const staleHeartbeat = insertHeartbeat(dispatch.id, 'term_worker')
     const otherHeartbeat = insertHeartbeat(otherDispatch.id, 'term_other')
-    reconcileLifecycleMessage(db, staleHeartbeat)
-    reconcileLifecycleMessage(db, otherHeartbeat)
     const done = db.insertMessage({
       runId: 'run_legacy_local',
       from: 'term_worker',

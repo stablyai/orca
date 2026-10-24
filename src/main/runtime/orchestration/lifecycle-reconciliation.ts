@@ -127,12 +127,13 @@ function reconcileHeartbeatMessage(
   onLog: LogFn
 ): LifecycleReconciliationResult {
   if (!msg.payload) {
-    onLog(`Heartbeat from ${msg.from_handle} missing payload; ignored`)
-    return { action: 'ignored' }
+    onLog(`Heartbeat from ${msg.from_handle} missing payload; suppressed`)
+    db.markAsReadAndDelivered([msg.id])
+    return { action: 'suppressed' }
   }
 
   const payload = parseObjectPayload(msg, () => {
-    onLog(`Heartbeat from ${msg.from_handle} has invalid JSON payload; ignored`)
+    onLog(`Heartbeat from ${msg.from_handle} has invalid JSON payload`)
   })
   const persistedRejection = getPersistedLifecycleRejection(payload)
   if (persistedRejection) {
@@ -143,8 +144,10 @@ function reconcileHeartbeatMessage(
   }
   const dispatchId = payload.dispatchId
   if (typeof dispatchId !== 'string' || dispatchId.length === 0) {
-    onLog(`Heartbeat from ${msg.from_handle} missing dispatchId; ignored`)
-    return { action: 'ignored' }
+    // Why: without a Dispatch the heartbeat records no liveness, so it is not mail either.
+    onLog(`Heartbeat from ${msg.from_handle} missing dispatchId; suppressed`)
+    db.markAsReadAndDelivered([msg.id])
+    return { action: 'suppressed' }
   }
 
   const dispatch = db.getDispatchContextById(dispatchId)
@@ -167,7 +170,7 @@ function reconcileHeartbeatMessage(
 
   // Why: dispatchId-specific writes let the DB ignore late heartbeats for
   // completed/failed retries without masking a newer hung dispatch.
-  db.recordHeartbeat(dispatchId, msg.created_at)
+  db.consumeHeartbeatMessage(msg.id, dispatchId, msg.created_at)
   return { action: 'heartbeat_recorded', dispatchId }
 }
 

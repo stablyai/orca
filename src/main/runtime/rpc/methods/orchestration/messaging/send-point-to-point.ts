@@ -1,4 +1,9 @@
-import type { MessagePriority, MessageType, OrchestrationDb } from '../../../../orchestration/db'
+import type {
+  MessagePriority,
+  MessageRow,
+  MessageType,
+  OrchestrationDb
+} from '../../../../orchestration/db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { reconcileLifecycleMessage } from '../../../../orchestration/lifecycle-reconciliation'
 import { bindCoordinatorMutationPayload } from '../../../../orchestration/dispatch-message-binding'
@@ -55,6 +60,19 @@ export function sendPointToPointMessage(args: {
   const processIncarnation = isDispatchMutationMessageType(messageType)
     ? resolveProcessIncarnation()
     : undefined
+  // Why: a row consumed on arrival must not wake a waiter, now or when a retry replays the receipt.
+  const recordReceiptForStoredRow = (
+    row: MessageRow,
+    receipt: unknown
+  ): { receipt: unknown; nudge: () => void } => {
+    if (row.read === 1) {
+      recordMutationReceipt?.(receipt)
+      return { receipt, nudge: () => undefined }
+    }
+    return recordReceiptForPostCommitNudge(recordMutationReceipt, receipt, () =>
+      runtime.notifyMessageArrived(row.to_handle, row.type)
+    )
+  }
   const commitMessage = (): { receipt: unknown; nudge: () => void } => {
     const dispatch = dispatchId ? db.getDispatchContextById(dispatchId) : undefined
     const msg = db.insertMessage({
@@ -99,45 +117,21 @@ export function sendPointToPointMessage(args: {
             reason: refusal.reason
           }
         })
-        return recordReceiptForPostCommitNudge(recordMutationReceipt, receipt, () =>
-          runtime.notifyMessageArrived(rejection.to_handle, rejection.type)
-        )
+        return recordReceiptForStoredRow(rejection, receipt)
       }
     }
 
     if (msg.type === 'worker_done' || msg.type === 'heartbeat') {
       const reconciled = reconcileLifecycleMessage(db, msg)
-      // Why: a suppressed message is already read, so skip waking a check waiter to an empty result.
-      if (reconciled.action === 'suppressed') {
-        return recordReceiptForPostCommitNudge(
-          recordMutationReceipt,
-          withSendWarnings({ message: exposeMessage(msg) }),
-          () => undefined
-        )
-      }
-      if (reconciled.action === 'rejected') {
-        const rejection = db.getMessageById(msg.id) ?? msg
-        const receipt = withSendWarnings({
-          message: exposeMessage(rejection),
-          lifecycle: reconciled
-        })
-        return recordReceiptForPostCommitNudge(recordMutationReceipt, receipt, () =>
-          runtime.notifyMessageArrived(rejection.to_handle, rejection.type)
-        )
-      }
+      const stored = db.getMessageById(msg.id) ?? msg
       const receipt = withSendWarnings(
-        msg.type === 'worker_done'
-          ? { message: exposeMessage(msg), lifecycle: reconciled }
-          : { message: exposeMessage(msg) }
+        reconciled.action === 'rejected' || msg.type === 'worker_done'
+          ? { message: exposeMessage(stored), lifecycle: reconciled }
+          : { message: exposeMessage(stored) }
       )
-      return recordReceiptForPostCommitNudge(recordMutationReceipt, receipt, () =>
-        runtime.notifyMessageArrived(msg.to_handle, msg.type)
-      )
+      return recordReceiptForStoredRow(stored, receipt)
     }
-    const receipt = withSendWarnings({ message: exposeMessage(msg) })
-    return recordReceiptForPostCommitNudge(recordMutationReceipt, receipt, () =>
-      runtime.notifyMessageArrived(msg.to_handle, msg.type)
-    )
+    return recordReceiptForStoredRow(msg, withSendWarnings({ message: exposeMessage(msg) }))
   }
   // Why: worker_done wakes the Run only after its mailbox row, settlement, and replay receipt commit together.
   if (messageType === 'worker_done') {

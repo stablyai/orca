@@ -466,6 +466,53 @@ describe('OrchestrationDb legacy contract storage', () => {
     ).toThrow(/different input/)
   })
 
+  it('keeps consumed heartbeats out of legacy recovery replay and takeover', () => {
+    const fixture = createCutoverFixture()
+    db = new OrchestrationDb(fixture.dbPath)
+    const runId = db.getLegacyAdoption()!.adopted_run_id
+    const worker = db.commitLegacyCompatibilityPrincipal({
+      runId,
+      dispatchId: fixture.legacyDispatchId,
+      role: 'worker',
+      hostScope: 'local:runtime_1',
+      terminalHandle: 'term_legacy_worker',
+      paneKey: 'tab_legacy:33333333-3333-4333-8333-333333333333',
+      launchTokenHash: 'legacy_launch_hash',
+      processIncarnation: 'process_1'
+    })
+    const heartbeat = db.commitLegacyLifecycleOperation({
+      principalId: worker.principal.id,
+      operationKey: 'invocation_1',
+      method: 'orchestration.send',
+      payloadHash: 'payload_1',
+      message: { to: 'term_legacy_coord', subject: 'alive', type: 'heartbeat' },
+      lifecycle: { kind: 'heartbeat', at: '2026-07-28T12:00:00.000Z' }
+    })
+    const coordinator = db.commitLegacyCompatibilityPrincipal({
+      runId,
+      role: 'coordinator',
+      hostScope: 'local:runtime_1',
+      terminalHandle: 'term_legacy_coord',
+      paneKey: 'tab_coord:44444444-4444-4444-8444-444444444444',
+      launchTokenHash: 'coord_launch_hash',
+      processIncarnation: 'process_coord'
+    })
+
+    const page = db.getLegacyMailPage({ principalId: coordinator.principal.id })
+    expect(page.messages.map((message) => message.id)).not.toContain(heartbeat.message.id)
+
+    db.bindRun({
+      runId,
+      coordinatorHandle: 'term_current_coord',
+      coordinatorPaneKey: 'tab_current:11111111-1111-4111-8111-111111111111',
+      takeoverLegacy: true
+    })
+    expect(db.getMessageById(heartbeat.message.id)).toMatchObject({
+      read: 1,
+      delivery_contract: 'legacy_direct'
+    })
+  })
+
   it('reconstructs a matching pre-receipt settlement without changing its persisted outcome', () => {
     const state = openAdoptedFixture()
     const accepted = db!.insertMessage({

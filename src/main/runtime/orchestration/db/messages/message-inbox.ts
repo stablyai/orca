@@ -84,6 +84,10 @@ export function convertLifecycleMessageToRejection(
        WHERE id = ?`
     )
     .run(`Rejected ${message.type}: ${message.subject}`, body, payload, messageId)
+  if (message.type === 'heartbeat') {
+    // Why: a refused heartbeat records no liveness and the sender sees the refusal, so it must not wake the coordinator.
+    this.markAsReadAndDelivered([messageId])
+  }
   return this.getMessageById(messageId)
 }
 

@@ -528,28 +528,6 @@ describe('orchestration RPC methods', () => {
       expect(db.getTask(task.id)?.status).toBe('dispatched')
     })
 
-    it('records heartbeat returned by unread manual check', async () => {
-      setup()
-      const { task, dispatch } = createDispatchedTask()
-      const msg = db.insertMessage({
-        from: 'term_worker',
-        to: `run:${activeRunId}`,
-        subject: 'alive',
-        type: 'heartbeat',
-        payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id }),
-        runId: activeRunId
-      })
-      reconcileLifecycleMessage(db, msg)
-
-      const result = (await call('orchestration.check', {
-        terminal: 'term_coord',
-        types: 'heartbeat'
-      })) as { count: number }
-
-      expect(result.count).toBe(1)
-      expect(db.getDispatchContextById(dispatch.id)?.last_heartbeat_at).toBe(msg.created_at)
-    })
-
     it('rejects invalid type filters', async () => {
       setup()
       await expect(
