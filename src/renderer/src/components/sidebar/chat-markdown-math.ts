@@ -1,3 +1,5 @@
+/// <reference types="remark-parse" />
+
 import type { Root } from 'mdast'
 import type {
   Code,
@@ -9,7 +11,6 @@ import type {
 } from 'micromark-util-types'
 import type { Processor } from 'unified'
 import type { VFile } from 'vfile'
-import type {} from 'remark-parse'
 import { chatMathFromMarkdown, transformChatMath } from './chat-markdown-math-nodes'
 
 declare module 'micromark-util-types' {

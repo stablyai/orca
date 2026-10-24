@@ -1,7 +1,8 @@
+/// <reference types="remark-math" />
+
 import type { Nodes, Root } from 'mdast'
 import type { Extension as FromMarkdownExtension } from 'mdast-util-from-markdown'
 import type { VFile } from 'vfile'
-import type {} from 'remark-math'
 
 declare module 'vfile' {
   // oxlint-disable-next-line typescript/consistent-type-definitions -- Declaration merging extends upstream file metadata.
