@@ -23,7 +23,7 @@ export async function printServeReady(options: ServeOptions): Promise<void> {
   await state.serveReadinessPublisher.publish(
     {
       runtimeId: runtime.getRuntimeId(),
-      ...(await buildServePairingReadiness(options, runtimeRpc)),
+      ...(await buildServePairingReadiness(options, runtimeRpc, runtimeRpc)),
       // Why: the WSL reconciliation barrier fails open, so 'pending' warns a WSL PTY launch may still race a repair.
       managedWslCliReconciliation: state.managedWslCliReconciliationStatus
     },
