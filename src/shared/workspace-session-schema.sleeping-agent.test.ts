@@ -131,7 +131,8 @@ describe('parseWorkspaceSession sleeping agents', () => {
           state: 'working',
           capturedAt: 10,
           updatedAt: 10,
-          origin: 'live'
+          origin: 'live',
+          resumeScope: 'pane'
         }
       }
     })
@@ -145,6 +146,7 @@ describe('parseWorkspaceSession sleeping agents', () => {
           transcriptPath: '/tmp/pi-session.jsonl'
         }
       )
+      expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.resumeScope).toBe('pane')
     }
   })
 

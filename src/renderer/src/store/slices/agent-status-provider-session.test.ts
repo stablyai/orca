@@ -229,7 +229,8 @@ describe('recordAgentProviderSession', () => {
       agent: 'pi',
       providerSession,
       launchConfig,
-      origin: 'live'
+      origin: 'live',
+      resumeScope: 'pane'
     })
 
     const liveRecord = store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']
@@ -242,6 +243,9 @@ describe('recordAgentProviderSession', () => {
       launchConfig,
       origin: 'worktree-sleep'
     })
+    expect(
+      store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']?.resumeScope
+    ).toBeUndefined()
   })
 
   it('keeps the activity cutoff and manual-unread stamp across a heartbeat for the same pane', () => {
@@ -376,7 +380,8 @@ describe('recordAgentProviderSession', () => {
         providerSession,
         connectionId: 'ssh-connection-1',
         state: 'done',
-        origin: 'live'
+        origin: 'live',
+        ...(agent === 'pi' ? { resumeScope: 'pane' } : {})
       })
 
       store.getState().captureAllSleepingAgentSessions('periodic')
@@ -613,7 +618,8 @@ describe('recordAgentProviderSession', () => {
       expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toMatchObject({
         providerSession,
         connectionId: 'ssh-connection-1',
-        origin: 'live'
+        origin: 'live',
+        ...(agent === 'pi' ? { resumeScope: 'pane' } : {})
       })
 
       store.getState().captureAllSleepingAgentSessions('quit')
