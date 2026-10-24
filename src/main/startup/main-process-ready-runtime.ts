@@ -1,3 +1,4 @@
+import { startProjectTeams } from './project-team-startup'
 import { app, nativeTheme } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { performance } from 'node:perf_hooks'
@@ -152,5 +153,8 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   if (ORCA_LAYOUT_OWNER_IS_MAIN) {
     await repairDuplicatePtyPanesOnStart(store, runtime)
   }
+  runAfterFirstWindowShown(() => {
+    void startProjectTeams().catch(() => console.warn('[project-teams] startup failed'))
+  }, 15000)
   logStartupMilestone('services-initialized')
 }
