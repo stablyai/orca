@@ -1,154 +1,165 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
 import { StyleSheet, type TextStyle } from 'react-native'
 import { colors, onBrightColors, radii, spacing, typography } from '../theme/mobile-theme'
 
-export const styles = StyleSheet.create({
-  root: {
-    gap: spacing.sm
-  },
-  paragraph: {
-    fontSize: 13,
-    lineHeight: 19,
-    color: colors.textPrimary
-  },
-  heading: {
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: '700',
-    color: colors.textPrimary
-  },
-  headingLarge: {
-    fontSize: 15,
-    lineHeight: 21
-  },
-  bold: {
-    fontWeight: '700',
-    color: colors.textPrimary
-  },
-  italic: {
-    fontStyle: 'italic'
-  },
-  strike: {
-    textDecorationLine: 'line-through'
-  },
-  link: {
-    color: colors.accentBlue,
-    textDecorationLine: 'underline'
-  },
-  inlineCode: {
-    fontFamily: typography.monoFamily,
-    fontSize: 12,
-    color: colors.textPrimary,
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.row,
-    paddingHorizontal: 4
-  },
-  inlineCodeLink: {
-    color: colors.accentBlue,
-    textDecorationLine: 'underline'
-  },
-  quote: {
-    borderLeftWidth: 2,
-    borderLeftColor: colors.borderSubtle,
-    paddingLeft: spacing.sm,
-    gap: spacing.xs
-  },
-  quoteText: {
-    fontSize: 13,
-    lineHeight: 19,
-    color: colors.textSecondary
-  },
-  codeBlock: {
-    backgroundColor: colors.bgRaised,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.input,
-    padding: spacing.sm
-  },
-  codeLanguage: {
-    fontSize: 10,
-    color: colors.textMuted,
-    marginBottom: spacing.xs,
-    textTransform: 'uppercase'
-  },
-  codeText: {
-    fontFamily: typography.monoFamily,
-    fontSize: 12,
-    lineHeight: 17,
-    color: colors.textPrimary
-  },
-  imageFrame: {
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.input,
-    backgroundColor: colors.bgRaised,
-    overflow: 'hidden',
-    padding: spacing.sm
-  },
-  imageCaption: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    fontSize: 11,
-    color: colors.textSecondary
-  },
-  table: {
-    borderTopWidth: 1,
-    borderLeftWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.input,
-    overflow: 'hidden',
-    backgroundColor: colors.bgPanel
-  },
-  tableRow: {
-    flexDirection: 'row'
-  },
-  tableCell: {
-    borderRightWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: colors.borderSubtle,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    fontSize: 12,
-    lineHeight: 17,
-    color: colors.textPrimary
-  },
-  tableHeader: {
-    fontWeight: '700',
-    backgroundColor: colors.bgRaised
-  },
-  list: {
-    gap: spacing.xs
-  },
-  listItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm
-  },
-  listMarker: {
-    // A floor, not a width: "10." would wrap inside a fixed 22.
-    minWidth: 22,
-    fontSize: 13,
-    lineHeight: 19,
-    color: colors.textSecondary,
-    fontFamily: typography.monoFamily
-  },
-  listItemBody: {
-    flex: 1,
-    minWidth: 0,
-    gap: spacing.xs
-  },
-  listText: {
-    fontSize: 13,
-    lineHeight: 19,
-    color: colors.textPrimary
-  },
-  footnoteReference: {
-    color: colors.textSecondary
-  },
-  rule: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle
-  }
-})
+export const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    root: {
+      gap: spacing.md
+    },
+    paragraph: {
+      fontSize: 13,
+      lineHeight: 19,
+      color: colors.textPrimary
+    },
+    heading: {
+      fontSize: 14,
+      lineHeight: 20,
+      fontWeight: '700',
+      color: colors.textPrimary
+    },
+    headingLarge: {
+      fontSize: 15,
+      lineHeight: 21
+    },
+    bold: {
+      fontWeight: '700',
+      color: colors.textPrimary
+    },
+    italic: {
+      fontStyle: 'italic'
+    },
+    strike: {
+      textDecorationLine: 'line-through'
+    },
+    link: {
+      color: colors.accentBlue,
+      textDecorationLine: 'underline'
+    },
+    inlineCode: {
+      fontFamily: typography.monoFamily,
+      fontSize: 12,
+      color: colors.textPrimary,
+      backgroundColor: colors.bgRaised,
+      borderRadius: radii.row,
+      paddingHorizontal: 4
+    },
+    inlineCodeLink: {
+      color: colors.accentBlue,
+      textDecorationLine: 'underline'
+    },
+    quote: {
+      borderLeftWidth: 2,
+      borderLeftColor: colors.borderSubtle,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      backgroundColor: colors.bgPanel,
+      borderTopRightRadius: radii.row,
+      borderBottomRightRadius: radii.row,
+      gap: spacing.sm
+    },
+    quoteText: {
+      fontSize: 13,
+      lineHeight: 19,
+      color: colors.textSecondary
+    },
+    codeBlock: {
+      backgroundColor: colors.bgRaised,
+      borderWidth: 1,
+      borderColor: colors.borderSubtle,
+      borderRadius: radii.input,
+      padding: spacing.sm
+    },
+    codeLanguage: {
+      fontSize: 10,
+      color: colors.textMuted,
+      marginBottom: spacing.xs,
+      textTransform: 'uppercase'
+    },
+    codeText: {
+      fontFamily: typography.monoFamily,
+      fontSize: 12,
+      lineHeight: 17,
+      color: colors.textPrimary
+    },
+    imageFrame: {
+      borderWidth: 1,
+      borderColor: colors.borderSubtle,
+      borderRadius: radii.input,
+      backgroundColor: colors.bgRaised,
+      overflow: 'hidden',
+      padding: spacing.sm
+    },
+    imageCaption: {
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.xs,
+      fontSize: 11,
+      color: colors.textSecondary
+    },
+    table: {
+      alignSelf: 'stretch',
+      minWidth: 0,
+      borderWidth: 1,
+      // A 50% muted tone stays visible against the raised header, including antialiased corners.
+      borderColor: `${colors.textMuted}80`,
+      borderRadius: radii.input,
+      overflow: 'hidden',
+      backgroundColor: colors.bgPanel
+    },
+    tableRow: {
+      flexDirection: 'row'
+    },
+    tableCell: {
+      borderRightWidth: 1,
+      borderBottomWidth: 1,
+      borderColor: `${colors.textMuted}80`,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm
+    },
+    tableText: {
+      fontSize: 12,
+      lineHeight: 18,
+      color: colors.textPrimary
+    },
+    tableHeader: {
+      backgroundColor: colors.bgRaised
+    },
+    list: {
+      gap: spacing.xs
+    },
+    listItem: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: spacing.sm
+    },
+    listMarker: {
+      // A floor, not a width: "10." would wrap inside a fixed 22.
+      minWidth: 22,
+      fontSize: 13,
+      lineHeight: 19,
+      color: colors.textSecondary,
+      fontFamily: typography.monoFamily
+    },
+    listItemBody: {
+      flex: 1,
+      minWidth: 0,
+      gap: spacing.xs
+    },
+    listText: {
+      fontSize: 13,
+      lineHeight: 19,
+      color: colors.textPrimary
+    },
+    footnoteReference: {
+      color: colors.textSecondary
+    },
+    rule: {
+      marginVertical: spacing.xs,
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.borderSubtle
+    }
+  })
+)
 
 /** A style's size and line height under the reader's zoom; null at 1x, where the sheet holds. */
 export function scaledMarkdownText(
@@ -168,12 +179,14 @@ export type MarkdownTone = {
 }
 
 /** Colours over the styles above, for one surface. The default tone overrides nothing. */
-export const MARKDOWN_TONES: Record<'default' | 'onBright', MarkdownTone> = {
-  default: { text: null, secondary: null, link: null, inlineCode: null },
-  onBright: StyleSheet.create({
-    text: { color: colors.bgBase },
-    secondary: { color: onBrightColors.secondary },
-    link: { color: onBrightColors.link },
-    inlineCode: { color: colors.bgBase, backgroundColor: onBrightColors.codeBackground }
+export const MARKDOWN_TONES: Record<'default' | 'onBright', MarkdownTone> = createThemedStyles(
+  () => ({
+    default: { text: null, secondary: null, link: null, inlineCode: null },
+    onBright: StyleSheet.create({
+      text: { color: colors.bgBase },
+      secondary: { color: onBrightColors.secondary },
+      link: { color: onBrightColors.link },
+      inlineCode: { color: colors.bgBase, backgroundColor: onBrightColors.codeBackground }
+    })
   })
-}
+)

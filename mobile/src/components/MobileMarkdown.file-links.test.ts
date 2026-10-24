@@ -1,3 +1,7 @@
+vi.mock('../platform/clipboard', () => ({
+  useClipboardWriter: () => ({ writeText: async () => {} })
+}))
+vi.mock('lucide-react-native', () => ({ Copy: 'Copy', Check: 'Check' }))
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer, type ReactTestInstance } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'

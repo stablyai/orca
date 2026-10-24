@@ -37,6 +37,9 @@ const diagramDir = join(mobileDir, 'src/components/pr-sidebar')
 const FIXTURE =
   'graph TD\n  A[Start] --> B{Choice}\n  B -->|yes| C[Ship it]\n  B -->|no| D[Fix it]\n  D --> A'
 
+const CUSTOM =
+  'flowchart LR\n A[Done] --> B[Now] --> C[Next]\n classDef done fill:#e8f5e9,stroke:#43a047\n classDef current fill:#fff3cd,stroke:#e0a800\n classDef future fill:#f5f5f5,stroke:#999\n class A done\n class B current\n class C future'
+
 /** A second valid diagram for the source change: a different shape, so a stale SVG is visible. */
 const SECOND = 'graph LR\n  One --> Two\n  Two --> Three'
 
@@ -274,6 +277,36 @@ function normaliseSvg(html, id) {
     .replace(/ xmlns:xlink="[^"]*"/g, '')
 }
 
+function flowchartLabelColors() {
+  return Array.from(document.querySelectorAll('svg .node')).flatMap((node) => {
+    const shape = node.querySelector('.label-container')
+    return shape
+      ? Array.from(node.querySelectorAll('text, .nodeLabel')).map((text) => [
+          getComputedStyle(shape).fill,
+          text.localName === 'text' || text.localName === 'tspan'
+            ? getComputedStyle(text).fill
+            : getComputedStyle(text).color
+        ])
+      : []
+  })
+}
+
+function labelContrast([background, foreground]) {
+  const luminance = (color) =>
+    color
+      .match(/[\d.]+/g)
+      .slice(0, 3)
+      .map(Number)
+      .map((v) => {
+        v /= 255
+        return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4
+      })
+      .reduce((sum, v, i) => sum + v * [0.2126, 0.7152, 0.0722][i], 0)
+  const a = luminance(background),
+    b = luminance(foreground)
+  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)
+}
+
 describeMermaid(
   'mermaid on the page',
   () => {
@@ -288,6 +321,20 @@ describeMermaid(
         afterAll(async () => {
           await browser?.close()
         })
+
+        it('keeps custom light fills readable in the phone page', async () => {
+          const { page } = await openPage(browser)
+          try {
+            await show(page, CUSTOM)
+            const pairs = await page.evaluate(flowchartLabelColors)
+            expect(pairs.length).toBeGreaterThanOrEqual(3)
+            for (const pair of pairs) {
+              expect(labelContrast(pair)).toBeGreaterThanOrEqual(4.5)
+            }
+          } finally {
+            await page.close()
+          }
+        }, 600_000)
 
         it('paints the diagram with no violation and no JIT', async () => {
           const { page, consoleErrors } = await openPage(browser)

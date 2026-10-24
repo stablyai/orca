@@ -1,6 +1,7 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { INLINE_TEXT_SELECTION } from './inline-text-selection'
 import { memo, useContext, useMemo, type ReactNode } from 'react'
-import { Text as NativeText, View } from 'react-native'
+import { View, Text as NativeText } from 'react-native'
 import { MARKDOWN_TONES, scaledMarkdownText, styles } from './mobile-markdown-styles'
 import { renderBlocks, type MarkdownBlockContext } from './mobile-markdown-blocks'
 import { MarkdownText } from './mobile-markdown-text'
@@ -9,14 +10,15 @@ import { useMobileMarkdownTree } from './use-mobile-markdown-tree'
 import type { NativeChatVisualDirective } from '../../../src/shared/native-chat-visual-directive'
 
 type Props = {
+  tone?: 'default' | 'onBright'
   content?: string
   fallback?: string
   /** Enables iOS range selection for native-chat transcript prose. */
   rangeSelectable?: boolean
   /** Forward long presses from interactive Android transcript spans to the message. */
   onLongPress?: () => void
-  /** Multiplier for every text size. Defaults to 1; the chat view passes >1 so its prose reads
-   *  larger than the compact base. */
+  /** Multiplier for prose font size (paragraphs, lists, quotes). Defaults to 1;
+   *  the chat view passes >1 so agent prose reads larger than the compact base. */
   textScale?: number
   /** When provided, detected file paths and file-target hrefs render as tappable
    *  and invoke this with the path text (worktree-relative or absolute, with an
@@ -30,8 +32,6 @@ type Props = {
   /** The text is still being appended to: markup its end leaves open is closed, as on desktop,
    *  and a diagram stays code until the text stops. */
   growing?: boolean
-  /** The surface under the text: `onBright` for your own message's light fill. */
-  tone?: keyof typeof MARKDOWN_TONES
 }
 
 function MobileMarkdownContent({
@@ -45,29 +45,27 @@ function MobileMarkdownContent({
   growing = false,
   tone: toneName = 'default'
 }: Props) {
+  useMobileTheme()
+
   // Interactive children own their touches and must forward the row action.
   const setup = useContext(MarkdownTextContext)
+  const tone = MARKDOWN_TONES[toneName]
   const text = content?.trim() ?? ''
   const { root, directives } = useMobileMarkdownTree(text, renderVisual !== undefined, growing)
   if (!text) {
     return fallback ? (
-      <MarkdownText selectable={rangeSelectable} style={styles.paragraph}>
+      <MarkdownText selectable={rangeSelectable} style={[styles.paragraph, tone.text]}>
         {fallback}
       </MarkdownText>
     ) : null
   }
-  const tone = MARKDOWN_TONES[toneName]
   const ctx: MarkdownBlockContext = {
     growing,
+    codeSelectable: !setup.androidTranscript,
+    textScale,
     onOpenFile,
     tone,
-    textScale,
-    // Zoomed list text has read a size above the sheet's since it first scaled; kept as it was.
-    listText: [
-      styles.listText,
-      scaledMarkdownText({ fontSize: 14, lineHeight: 20 }, textScale),
-      tone.text
-    ],
+    listText: [styles.listText, scaledMarkdownText(styles.listText, textScale), tone.text],
     rowLongPress: setup.androidTranscript ? setup.onLongPress : undefined,
     directives,
     renderVisual,
@@ -86,6 +84,8 @@ function MobileMarkdownContent({
 }
 
 function MobileMarkdownInner(props: Props): React.JSX.Element | null {
+  useMobileTheme()
+
   const { rangeSelectable = false, onLongPress } = props
   // Other Markdown surfaces retain their existing selection behavior.
   const androidTranscript = rangeSelectable && !INLINE_TEXT_SELECTION

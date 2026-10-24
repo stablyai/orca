@@ -1,41 +1,30 @@
+import { readableMermaidFlowchartSvg } from '../../../../src/shared/mermaid-flowchart-contrast'
+import { useMobileTheme } from '../../theme/use-mobile-theme'
+import { createThemedStyles } from '../../theme/mobile-themed-styles'
 import { memo, useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+export type MermaidDiagramProps = { source: string; base: number }
 import { MERMAID_DIAGRAM_CONFIG } from './mermaid-diagram-config'
-import { loadPageMermaid } from './mermaid-page-engine'
+import { useMobileTranscriptLayoutPending } from '../mobile-transcript-layout'
+import { enqueuePageMermaidRender, loadPageMermaid } from './mermaid-page-engine'
 
-export type MermaidDiagramProps = {
-  source: string
-  base: number
-}
+/** Render sanitized diagrams in the phone page, with source fallback on failure. */
+export const MermaidDiagram = memo(function MermaidDiagram(props: MermaidDiagramProps) {
+  const scheme = useMobileTheme()
+  return <MermaidDiagramRender key={`${scheme}\0${props.source}`} {...props} />
+})
 
-/**
- * The same diagram, drawn by mermaid in this document.
- *
- * Mermaid is a browser library, so the engine is an `import()`, and there is no second content
- * process to sandbox in. The fence is mermaid's own `securityLevel: 'strict'`, which runs the
- * serialized SVG through DOMPurify before handing it back — a `<script>`, an `on*` attribute or a
- * `javascript:` href in a diagram label reaches this document as nothing at all. That is measured
- * in `config/scripts/mobile-web-app/mobile-web-app-mermaid-render.test.mjs`, in both engines, against a hostile
- * fixture. The source is a JS string argument, not text spliced into an inline `<script>`, so it
- * needs no escaping.
- *
- * The import is inside the effect, so a session with no diagram in it evaluates none of the engine
- * (ruling 28). It reaches the engine through `mermaid-page-engine.ts`, which loads one pre-bundled
- * artifact rather than the package: importing the package here emitted 103 scripts, all of them
- * already inside the generation the phone downloaded.
- */
-export const MermaidDiagram = memo(function MermaidDiagram({ source, base }: MermaidDiagramProps) {
+function MermaidDiagramRender({ source, base }: MermaidDiagramProps) {
   const hostRef = useRef<View>(null)
-  // The source that failed, rather than a flag: a flag would need clearing from the effect that
-  // renders the next one, and a render the component has already failed is the only thing the
-  // fallback is about.
-  const [failedSource, setFailedSource] = useState<string | null>(null)
+  // A new source/theme mounts a fresh attempt; obsolete callbacks cannot poison its fallback.
+  const [failed, setFailed] = useState(false)
+  const [settled, setSettled] = useState(false)
+  useMobileTranscriptLayoutPending(!settled && !failed)
   // mermaid writes `#<id>` into the stylesheet it puts inside the SVG, so this has to be a CSS
   // identifier. React spells its own `_R_0_`; the strip is for a React that changes that.
   const suffix = useId().replace(/[^\w-]/g, '')
   const id = `orca-mermaid-${suffix}`
-  const failed = failedSource === source
 
   useEffect(() => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: react-native-web renders View as a div and forwards the ref to it; this module only ever runs in that build.
@@ -44,9 +33,19 @@ export const MermaidDiagram = memo(function MermaidDiagram({ source, base }: Mer
       return
     }
     let disposed = false
-    void (async () => {
+    // A stuck render must not leave every later diagram waiting indefinitely.
+    let timer = setTimeout(() => setFailed(true), 30_000)
+    enqueuePageMermaidRender(async () => {
       try {
+        if (disposed) {
+          return
+        }
+        clearTimeout(timer)
+        timer = setTimeout(() => setFailed(true), 10_000)
         const mermaid = await loadPageMermaid()
+        if (disposed) {
+          return
+        }
         mermaid.initialize(MERMAID_DIAGRAM_CONFIG)
         const { svg } = await mermaid.render(id, source)
         if (disposed) {
@@ -54,20 +53,25 @@ export const MermaidDiagram = memo(function MermaidDiagram({ source, base }: Mer
         }
         // Already sanitized: `securityLevel: 'strict'` is what makes this string safe to parse,
         // and mermaid is the only thing that can sanitize its own serialization.
-        host.innerHTML = svg
+        host.innerHTML = readableMermaidFlowchartSvg(svg, colors.textPrimary, colors.bgRaised)
+        setSettled(true)
       } catch {
         if (!disposed) {
-          setFailedSource(source)
+          setFailed(true)
         }
+      } finally {
+        clearTimeout(timer)
       }
-    })()
+    })
     return () => {
       disposed = true
+      clearTimeout(timer)
       // React owns this element, not what mermaid put inside it, so nothing else clears the
       // previous diagram when the source changes.
       host.replaceChildren()
     }
-  }, [id, source])
+    // A timeout must dispose the attempt before a late SVG can publish.
+  }, [id, source, failed])
 
   if (failed) {
     return (
@@ -89,9 +93,9 @@ export const MermaidDiagram = memo(function MermaidDiagram({ source, base }: Mer
       <View ref={hostRef} style={styles.host} />
     </MermaidFrame>
   )
-})
+}
 
-/** The frame and label, so a diagram and its fallback sit in the same box. */
+/** Diagrams and source fallbacks share one frame. */
 function MermaidFrame({ children }: { children: ReactNode }) {
   return (
     <View style={styles.frame} testID="mermaid-diagram">
@@ -103,29 +107,31 @@ function MermaidFrame({ children }: { children: ReactNode }) {
   )
 }
 
-// No rule reaches the SVG: mermaid emits it with `width="100%"` and its own natural `max-width`.
-const styles = StyleSheet.create({
-  frame: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.row,
-    marginBottom: spacing.sm,
-    overflow: 'hidden',
-    backgroundColor: colors.bgRaised
-  },
-  label: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel
-  },
-  labelText: {
-    color: colors.textSecondary,
-    fontSize: 11,
-    fontFamily: typography.monoFamily
-  },
-  host: { padding: spacing.sm },
-  fallbackScroll: { padding: spacing.sm },
-  fallbackText: { color: colors.textPrimary, fontFamily: typography.monoFamily }
-})
+// Mermaid owns the SVG dimensions.
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    frame: {
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderSubtle,
+      borderRadius: radii.row,
+      marginBottom: spacing.sm,
+      overflow: 'hidden',
+      backgroundColor: colors.bgRaised
+    },
+    label: {
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 2,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.borderSubtle,
+      backgroundColor: colors.bgPanel
+    },
+    labelText: {
+      color: colors.textSecondary,
+      fontSize: 11,
+      fontFamily: typography.monoFamily
+    },
+    host: { padding: spacing.sm },
+    fallbackScroll: { padding: spacing.sm },
+    fallbackText: { color: colors.textPrimary, fontFamily: typography.monoFamily }
+  })
+)

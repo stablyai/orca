@@ -1,3 +1,6 @@
+import { MobileMarkdownCodeBlock } from '../MobileMarkdownCodeBlock'
+import { createThemedStyles } from '../../theme/mobile-themed-styles'
+import { useMobileTheme } from '../../theme/use-mobile-theme'
 import { useMemo, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { openExternalLink } from '../../platform/external-link'
@@ -24,6 +27,8 @@ type Props = {
 // on mount; this renders a small block model and falls back to plain text on any
 // parse error, so it can never crash the comment list.
 export function CommentMarkdown({ content, variant = 'comment' }: Props) {
+  useMobileTheme()
+
   const base = variant === 'document' ? typography.bodySize : 13
   const blocks = useMemo<MarkdownBlock[] | null>(() => {
     try {
@@ -57,6 +62,8 @@ function DetailsBlock({
   body: MarkdownBlock[]
   base: number
 }) {
+  useMobileTheme()
+
   const [open, setOpen] = useState(false)
   const Chevron = open ? ChevronDown : ChevronRight
   return (
@@ -81,24 +88,29 @@ function DetailsBlock({
 }
 
 function BlockView({ block, base }: { block: MarkdownBlock; base: number }) {
+  useMobileTheme()
+
   switch (block.kind) {
     case 'details':
       return <DetailsBlock summary={block.summary} body={block.body} base={base} />
     case 'heading':
       return (
         <Text style={[styles.heading, { fontSize: base + Math.max(0, 4 - block.level) }]}>
-          <Inline text={block.text} base={base} />
+          {renderInline(block.text, base)}
         </Text>
       )
     case 'code':
-      // Mermaid fences render as diagrams (WebView), not as raw code.
+      // Mermaid fences render as diagrams rather than raw code.
       if (block.lang === 'mermaid') {
         return <MermaidDiagram source={block.text} base={base} />
       }
       return (
-        <View style={styles.codeBlock}>
-          <Text style={[styles.codeText, { fontSize: base - 1 }]}>{block.text}</Text>
-        </View>
+        <MobileMarkdownCodeBlock
+          code={block.text}
+          language={block.lang}
+          fontSize={base - 1}
+          style={{ marginBottom: spacing.sm }}
+        />
       )
     case 'table':
       return <TableBlock block={block} base={base} />
@@ -106,7 +118,7 @@ function BlockView({ block, base }: { block: MarkdownBlock; base: number }) {
       return (
         <View style={styles.quote}>
           <Text style={[styles.paragraph, { fontSize: base, lineHeight: base + 7 }]}>
-            <Inline text={block.text} base={base} />
+            {renderInline(block.text, base)}
           </Text>
         </View>
       )
@@ -127,7 +139,7 @@ function BlockView({ block, base }: { block: MarkdownBlock; base: number }) {
                   { fontSize: base, lineHeight: base + 7 }
                 ]}
               >
-                <Inline text={item} base={base} />
+                {renderInline(item, base)}
               </Text>
             </View>
           ))}
@@ -136,7 +148,7 @@ function BlockView({ block, base }: { block: MarkdownBlock; base: number }) {
     case 'paragraph':
       return (
         <Text style={[styles.paragraph, { fontSize: base, lineHeight: base + 7 }]}>
-          <Inline text={block.text} base={base} />
+          {renderInline(block.text, base)}
         </Text>
       )
   }
@@ -168,6 +180,8 @@ function TableBlock({
   block: Extract<MarkdownBlock, { kind: 'table' }>
   base: number
 }) {
+  useMobileTheme()
+
   const columnCount = Math.max(block.headers.length, ...block.rows.map((r) => r.length), 1)
   const columns = Array.from({ length: columnCount }, (_, c) => c)
   return (
@@ -182,7 +196,7 @@ function TableBlock({
           {columns.map((c) => (
             <View key={c} style={[styles.tableCell, { alignItems: alignToFlex(block.align[c]) }]}>
               <Text style={[styles.tableHeaderText, { fontSize: base - 1 }]}>
-                <Inline text={block.headers[c] ?? ''} base={base} />
+                {renderInline(block.headers[c] ?? '', base)}
               </Text>
             </View>
           ))}
@@ -192,7 +206,7 @@ function TableBlock({
             {columns.map((c) => (
               <View key={c} style={[styles.tableCell, { alignItems: alignToFlex(block.align[c]) }]}>
                 <Text style={[styles.tableCellText, { fontSize: base - 1 }]}>
-                  <Inline text={row[c] ?? ''} base={base} />
+                  {renderInline(row[c] ?? '', base)}
                 </Text>
               </View>
             ))}
@@ -203,14 +217,14 @@ function TableBlock({
   )
 }
 
-function Inline({ text, base }: { text: string; base: number }) {
-  const tokens = useMemo<InlineToken[]>(() => {
-    try {
-      return parseInline(text)
-    } catch {
-      return [{ kind: 'text', text }]
-    }
-  }, [text])
+function renderInline(text: string, base: number) {
+  let tokens: InlineToken[]
+  try {
+    tokens = parseInline(text)
+  } catch {
+    tokens = [{ kind: 'text', text }]
+  }
+  const codeOccurrences = new Map<string, number>()
   return (
     <>
       {tokens.map((token, i) => {
@@ -229,8 +243,13 @@ function Inline({ text, base }: { text: string; base: number }) {
           )
         }
         if (token.kind === 'code') {
+          const occurrence = codeOccurrences.get(token.text) ?? 0
+          codeOccurrences.set(token.text, occurrence + 1)
           return (
-            <Text key={i} style={[styles.codeInline, { fontSize: base - 1 }]}>
+            <Text
+              key={`${token.kind}:${token.text}:${occurrence}`}
+              style={[styles.codeInline, { fontSize: base - 1 }]}
+            >
               {token.text}
             </Text>
           )
@@ -248,76 +267,69 @@ function Inline({ text, base }: { text: string; base: number }) {
   )
 }
 
-const styles = StyleSheet.create({
-  paragraph: { color: colors.textPrimary, marginBottom: spacing.sm },
-  heading: { color: colors.textPrimary, fontWeight: '700', marginBottom: spacing.xs },
-  bold: { fontWeight: '700' },
-  italic: { fontStyle: 'italic' },
-  link: { color: colors.textPrimary, textDecorationLine: 'underline' },
-  codeInline: {
-    color: colors.textPrimary,
-    fontFamily: typography.monoFamily,
-    backgroundColor: colors.bgRaised
-  },
-  codeBlock: {
-    backgroundColor: colors.bgRaised,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.row,
-    padding: spacing.sm,
-    marginBottom: spacing.sm
-  },
-  codeText: { color: colors.textPrimary, fontFamily: typography.monoFamily },
-  quote: {
-    borderLeftWidth: 3,
-    borderLeftColor: colors.borderSubtle,
-    backgroundColor: colors.bgRaised,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    marginBottom: spacing.sm
-  },
-  hr: { height: 1, backgroundColor: colors.borderSubtle, marginVertical: spacing.sm },
-  list: { marginBottom: spacing.sm },
-  listItem: { flexDirection: 'row', gap: spacing.xs },
-  listItemText: { flex: 1, marginBottom: 2 },
-  bullet: { color: colors.textSecondary },
-  details: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.row,
-    marginBottom: spacing.sm,
-    overflow: 'hidden'
-  },
-  detailsSummary: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    backgroundColor: colors.bgRaised
-  },
-  detailsSummaryText: { color: colors.textPrimary, fontWeight: '600', flexShrink: 1 },
-  detailsBody: { paddingHorizontal: spacing.sm, paddingTop: spacing.xs },
-  tableScroll: { marginBottom: spacing.sm },
-  table: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.row,
-    overflow: 'hidden'
-  },
-  tableRow: {
-    flexDirection: 'row',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderSubtle
-  },
-  tableHeaderRow: { borderTopWidth: 0, backgroundColor: colors.bgRaised },
-  tableCell: {
-    minWidth: 96,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderLeftWidth: StyleSheet.hairlineWidth,
-    borderLeftColor: colors.borderSubtle
-  },
-  tableHeaderText: { color: colors.textPrimary, fontWeight: '700' },
-  tableCellText: { color: colors.textPrimary }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    paragraph: { color: colors.textPrimary, marginBottom: spacing.sm },
+    heading: { color: colors.textPrimary, fontWeight: '700', marginBottom: spacing.xs },
+    bold: { fontWeight: '700' },
+    italic: { fontStyle: 'italic' },
+    link: { color: colors.textPrimary, textDecorationLine: 'underline' },
+    codeInline: {
+      color: colors.textPrimary,
+      fontFamily: typography.monoFamily,
+      backgroundColor: colors.bgRaised
+    },
+    quote: {
+      borderLeftWidth: 3,
+      borderLeftColor: colors.borderSubtle,
+      backgroundColor: colors.bgPanel,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.xs,
+      marginBottom: spacing.sm
+    },
+    hr: { height: 1, backgroundColor: colors.borderSubtle, marginVertical: spacing.sm },
+    list: { marginBottom: spacing.sm },
+    listItem: { flexDirection: 'row', gap: spacing.xs },
+    listItemText: { flex: 1, marginBottom: 2 },
+    bullet: { color: colors.textSecondary },
+    details: {
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderSubtle,
+      borderRadius: radii.row,
+      marginBottom: spacing.sm,
+      overflow: 'hidden'
+    },
+    detailsSummary: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.xs,
+      backgroundColor: colors.bgRaised
+    },
+    detailsSummaryText: { color: colors.textPrimary, fontWeight: '600', flexShrink: 1 },
+    detailsBody: { paddingHorizontal: spacing.sm, paddingTop: spacing.xs },
+    tableScroll: { marginBottom: spacing.sm },
+    table: {
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderSubtle,
+      borderRadius: radii.row,
+      overflow: 'hidden'
+    },
+    tableRow: {
+      flexDirection: 'row',
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.borderSubtle
+    },
+    tableHeaderRow: { borderTopWidth: 0, backgroundColor: colors.bgPanel },
+    tableCell: {
+      minWidth: 96,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.xs,
+      borderLeftWidth: StyleSheet.hairlineWidth,
+      borderLeftColor: colors.borderSubtle
+    },
+    tableHeaderText: { color: colors.textPrimary, fontWeight: '700' },
+    tableCellText: { color: colors.textPrimary }
+  })
+)

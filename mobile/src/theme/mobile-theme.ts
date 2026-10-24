@@ -1,67 +1,77 @@
 // Orca mobile design tokens — matches desktop graphite/dark palette.
 // All screen files should import from here instead of using inline hex values.
 
-export const colors = {
-  bgBase: '#111111',
-  bgPanel: '#1a1a1a',
-  bgRaised: '#242424',
-  borderSubtle: '#2a2a2a',
-  editorSurface: '#1e1e1e',
-  // The chat composer: one lifted box whose round controls sit a step above it.
-  composerSurface: '#1d1d1d',
-  composerBorder: 'rgba(255, 255, 255, 0.08)',
-  composerControl: '#2a2a2a',
-  // A picked skill inside the composer's text.
-  skillToken: '#8ab4f8',
-  skillTokenSurface: 'rgba(59, 130, 246, 0.2)',
+import { darkColors } from './mobile-dark-colors'
+export { darkColors } from './mobile-dark-colors'
 
-  textPrimary: '#e0e0e0',
-  textSecondary: '#a1a1a1',
-  textMuted: '#8c8c8c',
+export type MobileColorScheme = 'light' | 'dark'
+export type MobileColors = { [Key in keyof typeof darkColors]: string }
 
-  // Crisp near-white surface for the single primary action on a screen (the
-  // worktree FAB). Brighter than textPrimary so it reads as a solid button, not
-  // disabled chrome, while staying monochrome (STYLEGUIDE: color is for state).
-  surfaceBright: '#f5f5f5',
+// Light surfaces follow the desktop neutral palette; status and syntax tones stay readable.
+export const lightColors: MobileColors = {
+  ...darkColors,
+  bgBase: '#ffffff',
+  bgPanel: '#fafafa',
+  bgRaised: '#f5f5f5',
+  borderSubtle: '#e5e5e5',
+  editorSurface: '#ffffff',
+  composerSurface: '#fafafa',
+  composerBorder: '#e5e5e5',
+  composerControl: '#f5f5f5',
+  skillToken: '#1e40af',
+  textPrimary: '#171717',
+  textSecondary: '#525252',
+  textMuted: '#6b6b6b',
+  surfaceBright: '#171717',
+  accentBlue: '#2563eb',
+  statusGreen: '#15803d',
+  statusAmber: '#a16207',
+  statusRed: '#b91c1c',
+  mergeGreen: '#15803d',
+  statusPurple: '#7e22ce',
+  agentWorking: '#a16207',
+  agentDone: '#15803d',
+  agentAttention: '#b91c1c',
+  agentInactive: '#6b6b6b',
+  gitDecorationAdded: '#22863a',
+  gitDecorationDeleted: '#b91c1c',
+  diffAddedBg: 'rgba(34, 134, 58, 0.1)',
+  diffDeletedBg: 'rgba(185, 28, 28, 0.08)',
+  diffAddedGutter: 'rgba(34, 134, 58, 0.26)',
+  diffDeletedGutter: 'rgba(185, 28, 28, 0.22)',
+  // Desktop's diff text mixes 70% decoration with 30% foreground.
+  chatDiffAdded: '#1f6530',
+  chatDiffRemoved: '#881b1b',
+  syntaxComment: '#008000',
+  syntaxKeyword: '#0000ff',
+  syntaxString: '#a31515',
+  syntaxNumber: '#098658',
+  syntaxType: '#267f99',
+  syntaxFunction: '#795e26',
+  syntaxVariable: '#001080',
+  syntaxMeta: '#af00db'
+}
 
-  accentBlue: '#3b82f6',
-  // Text/icon color on a filled accent (accentBlue) button, where the muted
-  // textPrimary would lack contrast against the saturated fill.
-  onAccent: '#ffffff',
-
-  statusGreen: '#22c55e',
-  statusAmber: '#f59e0b',
-  statusRed: '#ef4444',
-  // Merge CTA fill + its on-fill text, mirroring the desktop ChecksPanel's
-  // bg-green-600 "Squash and merge" button (green-600 / white).
-  mergeGreen: '#16a34a',
-  onMergeGreen: '#ffffff',
-  // Merged-PR purple, mirroring the desktop ReviewIcon's purple-400/70 tone.
-  statusPurple: '#a78bfa',
-  gitDecorationAdded: '#81b88b',
-  gitDecorationDeleted: '#c74e39',
-  diffAddedBg: 'rgba(129, 184, 139, 0.1)',
-  diffDeletedBg: 'rgba(199, 78, 57, 0.11)',
-  // Desktop's `--diff-*-gutter`: a tinted row's line-number column.
-  diffAddedGutter: 'rgba(129, 184, 139, 0.3)',
-  diffDeletedGutter: 'rgba(199, 78, 57, 0.32)',
-  // Desktop's `--chat-diff-*`: diff text in the chat, mixed toward the foreground so it reads on a
-  // tinted row where the git decoration colours would not.
-  chatDiffAdded: '#a5ccac',
-  chatDiffRemoved: '#d68273',
-
-  syntaxComment: '#6a9955',
-  syntaxKeyword: '#569cd6',
-  syntaxString: '#ce9178',
-  syntaxNumber: '#b5cea8',
-  syntaxType: '#4ec9b0',
-  syntaxFunction: '#dcdcaa',
-  syntaxVariable: '#9cdcfe',
-  syntaxMeta: '#c586c0',
-
-  // Terminal WebView background (Tokyonight) — separate from app chrome
-  terminalBg: '#1a1b26'
-} as const
+let colorScheme: MobileColorScheme = 'dark'
+export let colors: MobileColors = darkColors
+const themeListeners = new Set<() => void>()
+export const getMobileColorScheme = (): MobileColorScheme => colorScheme
+export function subscribeMobileTheme(listener: () => void): () => void {
+  themeListeners.add(listener)
+  return () => {
+    themeListeners.delete(listener)
+  }
+}
+export function applyMobileColorScheme(next: MobileColorScheme): void {
+  if (next === colorScheme) {
+    return
+  }
+  colorScheme = next
+  colors = next === 'light' ? lightColors : darkColors
+  for (const listener of themeListeners) {
+    listener()
+  }
+}
 
 /** On your own message's fill (`colors.textPrimary`), where the dark palette's light text would
  *  vanish; its body text is `colors.bgBase`. */

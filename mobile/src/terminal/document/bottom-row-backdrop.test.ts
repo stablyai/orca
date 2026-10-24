@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { Terminal } from '@xterm/xterm'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TERMINAL_DOCUMENT_MARKUP } from '../terminal-webview-html/document-markup'
 import { DEFAULT_TERMINAL_THEME } from '../terminal-webview-html/theme'
 import { lastRowBackground, paintBottomRowBackdrop } from './bottom-row-backdrop'
@@ -10,6 +10,8 @@ import { createTerminalDocumentScope, type TerminalDocumentScope } from './docum
 import type { TerminalDocumentCell, TerminalDocumentLine } from './document-terminal-shape'
 import { terminalDocumentDouble } from './document-terminal-double.test-support'
 import { handleMsg } from './host-message-router'
+import { applyTerminalTheme } from './terminal-theme'
+import { applyMobileColorScheme, darkColors } from '../../theme/mobile-theme'
 
 // The phone in the report: a 55x41 grid of 17px rows, with 0.67px of frame left under row 41.
 const CELL = { width: 8, height: 17 }
@@ -83,6 +85,20 @@ const backdrop = () => {
 }
 
 describe('the strip under the last terminal row', () => {
+  it('keeps the dark fallback and repaints the last row under a light app setting', () => {
+    applyMobileColorScheme('light')
+    try {
+      const paintDocumentBackground = vi.fn()
+      const scope = gridScope(uniformRow(NAVY_RGB), { paintDocumentBackground })
+      scope.defaultTheme = { ...scope.defaultTheme, background: '' }
+      applyTerminalTheme(scope, undefined)
+      expect(paintDocumentBackground).toHaveBeenCalledWith(darkColors.terminalBg)
+      expect(backdrop()).toBe(fillFor(NAVY))
+    } finally {
+      applyMobileColorScheme('dark')
+    }
+  })
+
   it("takes a truecolor last row's colour", () => {
     // A TUI that paints its own background left a theme-coloured band here.
     const scope = gridScope(uniformRow(NAVY_RGB))

@@ -91,6 +91,18 @@ describe('getMermaidConfig', () => {
     }
   })
 
+  it('keeps ER attribute text readable on both alternating rows in dark mode', () => {
+    const variables = resolvedDarkTheme()
+    for (const background of ['attributeBackgroundColorOdd', 'attributeBackgroundColorEven']) {
+      const text = luminance(variables.textColor)
+      const fill = luminance(variables[background])
+      expect(
+        (Math.max(text, fill) + 0.05) / (Math.min(text, fill) + 0.05),
+        background
+      ).toBeGreaterThanOrEqual(4.5)
+    }
+  })
+
   it('gives the first three pie categories distinct resolved colors', () => {
     const variables = resolvedDarkTheme()
     expect(new Set([variables.pie1, variables.pie2, variables.pie3]).size).toBe(3)

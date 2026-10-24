@@ -1,3 +1,7 @@
+vi.mock('../platform/clipboard', () => ({
+  useClipboardWriter: () => ({ writeText: async () => {} })
+}))
+vi.mock('lucide-react-native', () => ({ Check: 'Check', Copy: 'Copy' }))
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
@@ -59,6 +63,34 @@ describe('MobileMarkdown tables', () => {
       expect(row).toEqual(widths[0])
     }
     expect(widths[0]![3]).toBeGreaterThan(widths[0]![2]!)
+  })
+
+  it('remeasures the viewport and draws one continuous rounded frame around stretched cells', () => {
+    let renderer!: ReactTestRenderer
+    act(() => {
+      renderer = create(
+        createElement(MobileMarkdown, {
+          content: markdownTable(['Name', 'Description'], [['A', 'Several words wrap in one cell']])
+        })
+      )
+    })
+    const table = renderer.root.findAll(
+      (node) => node.props.style === styles.table && typeof node.type === 'string'
+    )[0]!
+    const widths = () =>
+      renderer.root
+        .findAll((node) => node.props.style === styles.tableRow)
+        .map((row) =>
+          row.children.map((cell) => cellWidth(typeof cell === 'string' ? null : cell.props.style))
+        )
+    act(() => table.props.onLayout({ nativeEvent: { layout: { width: 322 } } }))
+    expect(widths()[0]!.reduce((sum, width) => sum + width, 0)).toBeCloseTo(320)
+    expect(widths()[1]).toEqual(widths()[0])
+    act(() => table.props.onLayout({ nativeEvent: { layout: { width: 642 } } }))
+    expect(widths()[0]!.reduce((sum, width) => sum + width, 0)).toBeCloseTo(640)
+    expect(styles.table).toMatchObject({ borderWidth: 1, overflow: 'hidden' })
+    expect(styles.tableCell).not.toHaveProperty('fontSize')
+    act(() => renderer.unmount())
   })
 
   it('sizes a column by the text it draws, not its markdown source', () => {

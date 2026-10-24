@@ -43,7 +43,10 @@ export function getMermaidConfig(
             excludeBkgColor: colors.background,
             doneTaskBkgColor: colors.background,
             doneTaskBorderColor: colors.border,
-            activeTaskBkgColor: colors.secondary
+            activeTaskBkgColor: colors.secondary,
+            // ER row defaults are white even with darkMode enabled.
+            attributeBackgroundColorOdd: colors.background,
+            attributeBackgroundColorEven: colors.primary
           }
         }
       : {}),
