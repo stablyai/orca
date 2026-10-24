@@ -186,13 +186,14 @@ export function RecentSessionCardsSection({
                       {card.title}
                     </Text>
                     <View style={styles.metaRow}>
-                      <View style={styles.workspaceBadge}>
-                        {isCurrentWorkspace ? (
-                          <View
-                            testID={`recent-session-card-current-dot-${card.worktreeId}-${card.tabId}`}
-                            style={styles.currentWorkspaceDot}
-                          />
-                        ) : null}
+                      <View
+                        testID={
+                          isCurrentWorkspace
+                            ? `recent-session-card-current-workspace-${card.worktreeId}-${card.tabId}`
+                            : undefined
+                        }
+                        style={styles.workspaceBadge}
+                      >
                         <Text
                           numberOfLines={1}
                           ellipsizeMode="tail"
@@ -339,17 +340,10 @@ const styles = StyleSheet.create({
     maxWidth: 132,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
     backgroundColor: colors.bgRaised,
     borderRadius: 4,
     paddingHorizontal: 5,
     paddingVertical: 1
-  },
-  currentWorkspaceDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: colors.accentBlue
   },
   workspaceBadgeText: {
     flexShrink: 1,

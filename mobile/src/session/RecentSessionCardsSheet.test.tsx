@@ -195,10 +195,10 @@ describe('MobileSessionHeaderMoreActionsSheet', () => {
     )
     expect(tree.root.findAllByProps({ testID: 'recent-session-card-wt-1-tab-1' })).toHaveLength(0)
     expect(
-      tree.root.findByProps({ testID: 'recent-session-card-current-dot-wt-1-tab-3' })
+      tree.root.findByProps({ testID: 'recent-session-card-current-workspace-wt-1-tab-3' })
     ).toBeTruthy()
     expect(
-      tree.root.findAllByProps({ testID: 'recent-session-card-current-dot-wt-2-tab-2' })
+      tree.root.findAllByProps({ testID: 'recent-session-card-current-workspace-wt-2-tab-2' })
     ).toHaveLength(0)
     expect(
       tree.root.findByProps({ testID: 'recent-session-card-state-dot-wt-1-tab-3' })
