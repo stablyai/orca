@@ -21425,5 +21425,25 @@
     "restartLocal": "Restart local daemon",
     "killAllLocal": "Kill all local sessions",
     "killFailed": "The terminal could not be ended. Last-observed sessions are retained."
+  },
+  "wslDriveProject": {
+    "label": "Git",
+    "converted": "Orca runs Git on Windows for this project. Terminals and agents still run in {{distro}}.",
+    "checkFailed": "Orca could not check this project.",
+    "convertFailed": "Orca could not switch Git.",
+    "description": "This project is on a Windows drive, where Git in WSL is slow and misses changes made in Windows. Use Git for Windows instead; terminals and agents stay in {{distro}}.",
+    "useWindowsGit": "Use Git for Windows",
+    "review": "Nothing in Orca changes for this project: its tabs, terminals, chats and workspaces stay as they are. Running terminals keep going.",
+    "lineEndings": "Also set core.autocrlf in this repo, so git in WSL terminals stops showing every file as changed.",
+    "cancel": "Cancel",
+    "confirm": "Use Git for Windows",
+    "blocker": {
+      "notWsl": "This project already runs Git on Windows.",
+      "repair": "Fix this project’s WSL runtime first: its distro is missing or WSL is not available.",
+      "notWindowsDrive": "A folder of this project is not on a Windows drive.",
+      "gitMissing": "Git for Windows is not installed. Install it from git-scm.com, then try again.",
+      "wslWorktrees": "WSL Git created these workspaces, and Git for Windows cannot read them: {{paths}}. Remove them, or keep this project on WSL Git.",
+      "worktreeFolder": "New workspaces for this project are set to go inside WSL. Choose a folder on a Windows drive in this project’s settings first."
+    }
   }
 }
