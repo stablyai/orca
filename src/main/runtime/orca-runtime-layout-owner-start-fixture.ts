@@ -33,7 +33,7 @@ export class ProvisioningRuntime extends OrcaRuntimeService {
   }
 }
 
-export function setupLayoutOwnerRuntime() {
+export function setupLayoutOwnerRuntime(getSetupTerminalTitle?: () => string) {
   let session: WorkspaceSessionState = getDefaultWorkspaceSession()
   const store = withDurableRuntimeStore(
     withRuntimePaneAdmission({
@@ -54,7 +54,7 @@ export function setupLayoutOwnerRuntime() {
     })
   )
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake carries every store method a default-tab create reaches.
-  const runtime = new ProvisioningRuntime(store as never)
+  const runtime = new ProvisioningRuntime(store as never, undefined, { getSetupTerminalTitle })
   Object.assign(runtime, {
     resolveTerminalWorkspaceLaunchScope: vi.fn(async () => ({
       id: WORKTREE_ID,

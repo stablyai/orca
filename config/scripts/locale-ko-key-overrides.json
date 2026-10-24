@@ -6503,6 +6503,9 @@
   "auto.components.settings.task.tracker.integration.cards.connectedWorkspacePlural": {
     "ko": "워크스페이스 {{count}}개 연결됨"
   },
+  "worktree.setupTerminalTitle": {
+    "ko": "초기 설정"
+  },
   "auto.components.sidebar.WorktreeContextMenu.sleepWithDescendants": {
     "ko": "하위 항목도 패널 닫기 ({{value0}})"
   },

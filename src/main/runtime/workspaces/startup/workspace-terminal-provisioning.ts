@@ -72,6 +72,7 @@ export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends
         const { worktreeId, tabId } = this.getProvisionedTerminalTab(handle)
         await this.setMobileSessionTabProps(`id:${worktreeId}`, { tabId, color })
       },
+      getSetupTerminalTitle: () => this.getSetupTerminalTitle(),
       getPtyId: (handle) => this.getLivePtyForHandle(handle)?.pty.ptyId,
       recordSetupCompletionToken: (ptyId, token) =>
         this.setupCompletionTokenByPtyId.set(ptyId, token)
@@ -124,6 +125,7 @@ export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends
           this.applyHeadlessSessionTabPropsToSnapshot(worktreeId, tabId, { color })
         }
       },
+      getSetupTerminalTitle: () => this.getSetupTerminalTitle(),
       applyDefaultTabs: async (worktreeId, tabs) => {
         const reply = await this.applyLayoutCommand({
           type: 'applyDefaultTabs',

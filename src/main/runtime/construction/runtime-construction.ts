@@ -95,6 +95,8 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
   ): ProjectExecutionRuntimeResolution | undefined
   protected abstract ensureNativeWindowsConptyDa1Override(ptyId: string): void
 
+  readonly getSetupTerminalTitle: () => string
+
   protected readonly prepareClaudeAuth?: PrepareClaudeAuth
 
   readonly workspaceSleepPlatform: WorkspaceSleepPlatform | null
@@ -115,6 +117,7 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
     super()
     this.store = store
     this.machineName.start()
+    this.getSetupTerminalTitle = deps?.getSetupTerminalTitle ?? (() => 'Setup')
     this.prepareClaudeAuth = deps?.prepareClaudeAuth
     // oxlint-disable-next-line typescript/no-this-alias -- SAFETY: Preserve the constructor receiver captured by callbacks.
     const runtime: this = this

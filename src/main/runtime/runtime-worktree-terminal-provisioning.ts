@@ -29,6 +29,8 @@ export type WorktreeTerminalProvisioningHost = {
   // The title is the tab's own, as the window's setTabCustomTitle sets it, never the pane's title.
   setTabTitle: (handle: string, title: string) => Promise<void>
   setTabColor: (handle: string, color: string) => Promise<void>
+  // Desktop hosts inject localized copy; Node hosts retain the English fallback.
+  getSetupTerminalTitle?: () => string
   /** Layout-owner build: main writes the tabs, titles, colours and mark in one command. False
    *  when it refused them. */
   /** The tabs main made; none when the workspace already had them; null when main refused. */
@@ -236,7 +238,7 @@ export async function provisionWorktreeTerminals(
         )
       const env = { ...args.setup.envVars, ...observed?.env }
       const setupTerminal = await host.createTerminal(args.worktreeSelector, {
-        title: 'Setup',
+        title: host.getSetupTerminalTitle?.() ?? 'Setup',
         command,
         env,
         // Switch point: a setup main could not start stays in its pane, showing why.

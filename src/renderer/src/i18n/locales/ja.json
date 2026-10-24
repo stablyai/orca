@@ -20759,7 +20759,8 @@
       "deleting": "削除中…",
       "confirm": "一覧表示されたすべてのワークツリーを削除",
       "preservedBranches": "一部のネストされたワークツリーブランチは保持されました"
-    }
+    },
+    "setupTerminalTitle": "Setup"
   },
   "mediaPreview": {
     "unavailable": "このメディアファイルを再生できません。ファイルが利用できないか、コーデックが対応していない可能性があります。",

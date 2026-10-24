@@ -20818,7 +20818,8 @@
       "deleting": "Suppression…",
       "confirm": "Supprimer tous les worktrees listés",
       "preservedBranches": "Certaines branches de worktrees imbriqués ont été conservées"
-    }
+    },
+    "setupTerminalTitle": "Setup"
   },
   "mediaPreview": {
     "unavailable": "Impossible de lire ce fichier multimédia. Le fichier peut être indisponible ou utiliser un codec non pris en charge.",

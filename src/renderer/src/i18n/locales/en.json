@@ -20846,7 +20846,8 @@
       "deleting": "Deleting…",
       "confirm": "Delete all listed worktrees",
       "preservedBranches": "Some nested worktree branches were kept"
-    }
+    },
+    "setupTerminalTitle": "Setup"
   },
   "projectBoard": {
     "noColumnField": "This board view has no single-select or iteration field to group by, so Orca is listing items instead.",

@@ -1,5 +1,6 @@
 import type { WorktreeSetupLaunch } from '../../../shared/worktree/launch-types'
 import { buildSetupRunnerCommand } from './setup-runner'
+import { getWorktreeSetupTerminalTitle } from './worktree-setup-terminal-title'
 import type {
   InitialTerminalOptions,
   WorktreeActivationStore
@@ -38,7 +39,9 @@ export function queueSetupAndIssueCommands(
       store.setActiveTab(terminalTabId)
     }
     // Why: customTitle overrides the auto "Terminal N" label everywhere the tab renders, so it's the authoritative label source.
-    store.setTabCustomTitle(setupTab.id, 'Setup', { recordInteraction: false })
+    store.setTabCustomTitle(setupTab.id, getWorktreeSetupTerminalTitle(), {
+      recordInteraction: false
+    })
   }
 
   // Why: issue automation runs in its own split, queued independently from setup so both can start in parallel (separate concerns).
