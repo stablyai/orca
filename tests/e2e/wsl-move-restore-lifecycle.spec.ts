@@ -21,6 +21,7 @@ import {
 } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { z } from 'zod'
 import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { launchPairedElectronClient } from './helpers/paired-electron-client'
@@ -61,6 +62,19 @@ import { toWebTerminalSurfaceTabId } from '../../src/shared/terminal-surface-id'
 const LINES = 2_000
 const LEAF = '6f1b0c3e-8d2a-4c5b-9e7f-1a2b3c4d5e6f'
 const DRAFT = 'unsaved words typed before the move'
+// What the undo e2e reads of a saved session: its agent records, everything else kept as is.
+const SessionWithAgentRecords = z
+  .object({
+    sleepingAgentSessionsByPaneKey: z
+      .record(
+        z.string(),
+        z
+          .object({ providerSession: z.object({ id: z.unknown() }).passthrough().optional() })
+          .passthrough()
+      )
+      .optional()
+  })
+  .passthrough()
 const MOVED_AGENT_SESSION = 'e2e-wsl-moved-resume-session'
 const UNDO_AGENT_SESSION = 'e2e-wsl-undo-resume-session'
 const MIGRATION = { migrationId: 'restore-lifecycle-move', manifestSha256: 'a'.repeat(64) }
@@ -468,21 +482,25 @@ test('"Use on this computer again" after reloads and a restart brings back slept
     launched = undefined
     // Hermetic resume: the agent command echoes its arguments instead of running Codex.
     mutateStoppedProfileState(session.userDataDir, (state) => {
-      const session: unknown = state.workspaceSession
-      const records: unknown =
-        session && typeof session === 'object'
-          ? Reflect.get(session, 'sleepingAgentSessionsByPaneKey')
-          : undefined
-      const record = Object.values(records && typeof records === 'object' ? records : {}).find(
-        (candidate: unknown) =>
-          candidate !== null &&
-          typeof candidate === 'object' &&
-          Reflect.get(Reflect.get(candidate, 'providerSession') ?? {}, 'id') === UNDO_AGENT_SESSION
+      const session = SessionWithAgentRecords.parse(state.workspaceSession)
+      const records = session.sleepingAgentSessionsByPaneKey ?? {}
+      const paneKey = Object.keys(records).find(
+        (key) => records[key]?.providerSession?.id === UNDO_AGENT_SESSION
       )
-      if (!record || typeof record !== 'object') {
+      const record = paneKey ? records[paneKey] : undefined
+      if (!paneKey || !record) {
         throw new Error('the pause kept no resumable agent for pane A')
       }
-      Reflect.set(record, 'launchConfig', { agentCommand: 'echo', agentArgs: '', agentEnv: {} })
+      state.workspaceSession = {
+        ...session,
+        sleepingAgentSessionsByPaneKey: {
+          ...records,
+          [paneKey]: {
+            ...record,
+            launchConfig: { agentCommand: 'echo', agentArgs: '', agentEnv: {} }
+          }
+        }
+      }
     })
 
     // The move committed: startup runs its desktop rewrite and retention, as after a real move.
