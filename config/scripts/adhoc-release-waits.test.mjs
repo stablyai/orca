@@ -95,29 +95,6 @@ describe.each([
   it('times out when no qualified artifact is produced', async () => {
     await expect(execute(templateWait, [{}]).result).rejects.toThrow('Timed out')
   })
-
-  it('prefetches Windows assets before waiting, then mints credentials after Mac succeeds', async () => {
-    const download = publishSteps.findIndex(
-      (step) => step.name === 'Download the staged Windows artifacts'
-    )
-    const wait = publishSteps.indexOf(macWait)
-    const token = publishSteps.findIndex((step) => step.name === 'Mint dev channel repo token')
-    expect(download).toBeLessThan(wait)
-    expect(wait).toBeLessThan(token)
-    await execute(macWait, [
-      { jobs: [job('build-adhoc-mac')] },
-      { jobs: [job('build-adhoc-mac', 'success')] }
-    ]).result
-  })
-
-  it.each(['failure', 'cancelled', 'skipped', 'timed_out'])(
-    'refuses Windows publication when Mac ends with %s',
-    async (conclusion) => {
-      await expect(
-        execute(macWait, [{ jobs: [job('build-adhoc-mac', conclusion)] }]).result
-      ).rejects.toThrow('macOS publication did not succeed')
-    }
-  )
 })
 
 it('keeps the release a draft until qualification and its cleanup finish', async () => {
@@ -136,8 +113,25 @@ it('keeps the release a draft until qualification and its cleanup finish', async
   )
 })
 
-it('uses the same qualification wait on both platforms', () => {
-  const script = (steps) =>
-    steps.find((step) => step.name === 'Wait for the qualified orcad template').with.script
-  expect(script(windows.jobs['build-win'].steps)).toBe(script(macSteps))
+it('prefetches Windows assets before waiting, then mints credentials after Mac succeeds', async () => {
+  const download = publishSteps.findIndex(
+    (step) => step.name === 'Download the staged Windows artifacts'
+  )
+  const wait = publishSteps.indexOf(macWait)
+  const token = publishSteps.findIndex((step) => step.name === 'Mint dev channel repo token')
+  expect(download).toBeLessThan(wait)
+  expect(wait).toBeLessThan(token)
+  await execute(macWait, [
+    { jobs: [job('build-adhoc-mac')] },
+    { jobs: [job('build-adhoc-mac', 'success')] }
+  ]).result
 })
+
+it.each(['failure', 'cancelled', 'skipped', 'timed_out'])(
+  'refuses Windows publication when Mac ends with %s',
+  async (conclusion) => {
+    await expect(
+      execute(macWait, [{ jobs: [job('build-adhoc-mac', conclusion)] }]).result
+    ).rejects.toThrow('macOS publication did not succeed')
+  }
+)

@@ -13,7 +13,7 @@ import {
 } from './service-test-harness'
 import { createCanonicalHookTrustFixture } from './service-hook-trust-test-fixtures'
 
-// Why: temp homes exceed sun_path on macOS but not on Linux; keep asserted config bytes host-independent.
+// Keep asserted config bytes independent of platform socket-path limits.
 vi.mock('../codex/codex-daemon-socket-path-guard', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   applyCodexDaemonSocketGuard: (config: string) => config
@@ -117,7 +117,7 @@ describe('CodexAccountService config sync', () => {
       for (const key of fixture.orcaKeys) {
         expect(entries.has(key)).toBe(false)
       }
-      // The launch-time hook mirror remaps user trust to this home's hooks.json.
+
       expect(entries.has(fixture.userKey)).toBe(false)
     }
 
@@ -216,8 +216,6 @@ describe('CodexAccountService config sync', () => {
     const { CodexAccountService } = await import('./service')
     new CodexAccountService(store as never, rateLimits as never, runtimeHome as never)
 
-    // The first pass remaps the user hook-trust entry into this home; once that
-    // has settled, a later pass must leave the file completely untouched.
     const settledConfig = readFileSync(managedConfigPath, 'utf-8')
     const oldDate = new Date('2024-01-01T00:00:00.000Z')
     utimesSync(managedConfigPath, oldDate, oldDate)
@@ -320,8 +318,6 @@ describe('CodexAccountService config sync', () => {
 
     await service.selectAccount('account-1')
 
-    // Selecting merges canonical settings into the account's own home rather
-    // than overwriting it, so its local approval_policy survives the re-sync.
     expect(readFileSync(join(managedHomePath, 'config.toml'), 'utf-8')).toBe(
       'sandbox_mode = "danger-full-access"\napproval_policy = "untrusted"\n'
     )

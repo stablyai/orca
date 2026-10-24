@@ -13,6 +13,8 @@ import {
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'
+import { worktreeLaunchWorkspace, type AgentLaunchRouteView } from '@/lib/agent-launch-route-input'
+import { agentsOfferedForLaunch } from '@/lib/host-chat-program'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 export type DashboardLaunchDetectionState = Pick<
@@ -92,11 +94,12 @@ function detectedAgentsForWorktree(
     : (state.detectedAgentIds ?? [])
 }
 
-/** Host-detected choices plus providers already proven to run in the workspace. */
+/** Host-detected choices, agents that open as a chat there, and providers proven to run there. */
 export function buildDashboardWorktreeLaunchOptions(
   state: DashboardLaunchOptionState,
   cards: readonly DashboardCard[],
-  workspaces: readonly DashboardWorkspace[] = []
+  workspaces: readonly DashboardWorkspace[] = [],
+  launchRouteStore?: AgentLaunchRouteView
 ): Record<string, TuiAgent[]> {
   const catalog = buildDashboardLaunchCatalog(state)
   const cardsByWorktreeId = new Map<string, DashboardCard[]>()
@@ -121,8 +124,11 @@ export function buildDashboardWorktreeLaunchOptions(
       break
     }
     const worktreeCards = cardsByWorktreeId.get(worktreeId) ?? []
+    const detected = detectedAgentsForWorktree(state, worktreeId, repoId, catalog)
     const available = new Set<TuiAgent>(
-      detectedAgentsForWorktree(state, worktreeId, repoId, catalog)
+      launchRouteStore
+        ? agentsOfferedForLaunch(launchRouteStore, worktreeLaunchWorkspace(worktreeId), detected)
+        : detected
     )
     for (const card of worktreeCards) {
       if (isTuiAgent(card.agentType)) {

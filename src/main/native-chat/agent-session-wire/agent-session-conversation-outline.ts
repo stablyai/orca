@@ -1,10 +1,5 @@
-// The host's conversation outline read: derived from the reduced journal on every
-// request rather than stored, so it can never disagree with the journal it lists.
-//
-// One reply must fit the same budget a history page does. Past it the reply
-// degrades in order of what the rail can best spare: the agent's replies, then
-// shorter previews, then no previews (a tick still marks the message), and only
-// then the oldest entries.
+// Derive outlines from the journal to avoid drift. Under the page budget, drop replies first,
+// shorten then remove previews, and only then discard oldest entries.
 
 import {
   AGENT_SESSION_OUTLINE_PREVIEW_MAX_CHARS,
@@ -19,7 +14,7 @@ import { HISTORY_PAGE_CONTENT_BUDGET_BYTES } from './agent-session-history-page-
 const DEGRADED_PREVIEW_MAX_CHARS = 60
 
 function entryBytes(entry: AgentSessionConversationOutlineEntry): number {
-  // +1 for the array separator.
+  // Include the array separator.
   return Buffer.byteLength(JSON.stringify(entry), 'utf8') + 1
 }
 
@@ -58,7 +53,7 @@ export function readAgentSessionConversationOutline(
     }
     entries = withPreviewCap(entries, maxChars)
   }
-  // Newest entries are kept: they are the ones a reader is likeliest to jump back to.
+  // Favor recent entries as likely jump targets.
   let total = totalBytes(entries)
   let first = 0
   while (total > budgetBytes && first < entries.length) {

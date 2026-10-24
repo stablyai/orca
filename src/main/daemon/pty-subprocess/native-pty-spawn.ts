@@ -19,7 +19,6 @@ export type SpawnedDaemonPty = {
   reportsChildExitStatus: boolean
 }
 
-/** Walks the Windows PowerShell -> cmd.exe fallback chain when ConPTY rejects the primary shell. */
 export async function spawnNativeDaemonPty(args: {
   shellPath: string
   shellArgs: string[]
@@ -39,10 +38,9 @@ export async function spawnNativeDaemonPty(args: {
   ): Promise<pty.IPty> => {
     args.signal?.throwIfAborted()
     const tcc = wrapShellSpawnForMacosTccAttribution(shellPath, shellArgs, args.env)
-    // Linux: exec through systemd-run into this terminal's own scope.
     const wrapped = wrapPtySpawnInTerminalScope(tcc.file, tcc.args, args.env)
     const nodePty = await loadNodePty()
-    // Why: children inherit job membership, so the host job must exist before the first Windows PTY.
+    // Establish the host job before spawning so Windows PTYs inherit membership.
     if (process.platform === 'win32') {
       assignHostProcessToKillOnCloseJob()
     }
@@ -52,7 +50,7 @@ export async function spawnNativeDaemonPty(args: {
       rows: args.rows,
       cwd,
       env: wrapped.env,
-      // Why: bundled ConPTY has the wrap-marker behavior xterm expects.
+      // Bundled ConPTY provides the wrap-marker behavior xterm expects.
       ...(process.platform === 'win32' ? { useConptyDll: true } : {})
     })
     reportsChildExitStatus = hostReportsChildExitStatus(tcc.file)
@@ -89,7 +87,6 @@ export async function spawnNativeDaemonPty(args: {
         }
       } catch {
         args.signal?.throwIfAborted()
-        // This fallback shell also failed -- try the next link in the chain.
       }
     }
     throw primaryErr

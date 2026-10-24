@@ -60,7 +60,7 @@ describe('runProcess barrier with a slow Windows taskkill', () => {
       settled = true
     })
 
-    // Past the caller's 5 s taskkill wait and the 2 s exit grace.
+    // Exceed both the taskkill wait and root-exit grace.
     await vi.advanceTimersByTimeAsync(8_000)
     expect(settled).toBe(false)
     expect(root.kill).not.toHaveBeenCalled()
@@ -85,10 +85,10 @@ describe('runProcess barrier with a slow Windows taskkill', () => {
     })
 
     await vi.advanceTimersByTimeAsync(1_000)
-    // taskkill reached the root; its pipes close while descendants may still be dying.
+    // The root can exit before taskkill finishes its descendants.
     root.emit('exit', 1, null)
     root.emit('close', 1, null)
-    // The git admission slot is a concurrency budget, not a repo lock: it never outlives the root.
+    // The admission budget follows root lifetime, independently of tree verification.
     expect(onChildTerminated).toHaveBeenCalledOnce()
     let settled = false
     void pending.then(() => {

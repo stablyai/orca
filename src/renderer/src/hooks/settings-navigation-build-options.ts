@@ -9,6 +9,7 @@ export type SettingsNavigationBuildOptions = {
   isWebClient: boolean
   nativeChatEnabled: boolean
   hostQueuesMessages: boolean
+  typedChatPermissions?: boolean
   managedBrowserCreationEnabled: boolean
   mobileEmulatorCreationEnabled: boolean
   isDev: boolean

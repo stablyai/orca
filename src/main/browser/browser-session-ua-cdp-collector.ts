@@ -16,8 +16,6 @@ type PendingRequest = {
   headers?: Record<string, string>
 }
 
-// CDP payloads are untyped JSON. Narrow once behind a runtime check instead of asserting a
-// shape at each read, so a protocol change surfaces as a missing value rather than a lie.
 function readRecord(value: unknown): Record<string, unknown> | undefined {
   if (typeof value !== 'object' || value === null) {
     return undefined
@@ -177,8 +175,7 @@ export class BrowserSessionUaCdpCollector {
         const targetId = readString(targetInfo, 'targetId') ?? 'unknown'
         const targetUrl = readString(targetInfo, 'url') ?? ''
         this.diagnostics.push(
-          // wfd records whether the target arrived paused; an unpaused nested target is how a
-          // capture silently comes back empty.
+          // Record paused state to diagnose nested targets that fetch before capture starts.
           `attached:${targetType}:${targetId}:${targetUrl}:${attachedSessionId}:wfd=${String(params?.waitingForDebugger)}`
         )
         this.targetsBySessionId.set(attachedSessionId, targetType)
@@ -234,17 +231,14 @@ export class BrowserSessionUaCdpCollector {
   }
 
   private async prepareTarget(sessionId: string): Promise<void> {
-    // Root auto-attach only reaches browser-level targets; an OOPIF or dedicated worker is auto-
-    // attached — and held paused — only once its own parent session arms auto-attach. Arm it before
-    // the resume below so nested targets arrive paused instead of already fetching.
+    // Arm nested-target auto-attach before resuming parents so early requests are captured.
     const autoAttach = this.send(
       'Target.setAutoAttach',
       {
         autoAttach: true,
         waitForDebuggerOnStart: true,
         flatten: true,
-        // Only nested targets; browser-level ones already attach once through the root session, and
-        // re-attaching them here would double-count every request they make.
+        // Exclude browser-level targets already attached by the root session.
         filter: [{ type: 'iframe' }, { type: 'worker' }]
       },
       sessionId
@@ -268,14 +262,12 @@ export async function waitForBrowserCdpEndpoint(port: number): Promise<void> {
   while (Date.now() < deadline) {
     try {
       const targets = await fetch(`http://127.0.0.1:${port}/json/version`)
-      // The probe only needs the status; an unread body can crash the process (orca#8695).
+      // Cancel the unused body to avoid Electron crashes (orca#8695).
       await cancelUnreadResponseBody(targets)
       if (targets.ok) {
         return
       }
-    } catch {
-      // Electron has not opened the debugger endpoint yet.
-    }
+    } catch {}
     await new Promise((resolve) => setTimeout(resolve, 25))
   }
   throw new Error('browser_cdp_endpoint_timeout')

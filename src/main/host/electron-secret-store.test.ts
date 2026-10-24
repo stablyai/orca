@@ -63,9 +63,7 @@ describe('ElectronSecretStore', () => {
     })
 
     it('keeps sealing AVAILABLE on basic_text so stored credentials still decrypt', () => {
-      // Why this matters more than the warning: flipping isEncryptionAvailable() would
-      // make decryptWithStatus() stop attempting and return every stored secret as
-      // empty. The gap is a trust signal, never a capability switch.
+      // A protection gap must not disable decrypting existing credentials.
       safeStorageMock.getSelectedStorageBackend.mockReturnValue('basic_text')
       withPlatform('linux', () => {
         const store = new ElectronSecretStore()
@@ -119,9 +117,7 @@ describe('ElectronSecretStore', () => {
       })
     })
 
-    // Why these three: on Hyprland/sway/river/niri the desktop is unrecognised, so the
-    // backend is basic_text AND sealing is unavailable — and the old text told those users
-    // to install a keyring that gnome-keyring was already serving the whole time.
+    // Unrecognized tiling desktops may leave an installed keyring unselected.
     it('does not blame a missing keyring when the desktop was simply not recognised', () => {
       safeStorageMock.isEncryptionAvailable.mockReturnValue(false)
       safeStorageMock.getSelectedStorageBackend.mockReturnValue('basic_text')
@@ -166,9 +162,7 @@ describe('ElectronSecretStore', () => {
     })
   })
 
-  // Why this shape: the whole safety argument for the SecretStore refactor is that the
-  // desktop byte path did not change. That is only true if this adapter forwards
-  // verbatim — same argument, same return value, no re-encoding.
+  // Preserve adapter bytes and arguments exactly.
   it('forwards encryptString to safeStorage and returns its buffer unchanged', () => {
     const sealed = new ElectronSecretStore().encryptString('token')
     expect(safeStorageMock.encryptString).toHaveBeenCalledExactlyOnceWith('token')
@@ -181,9 +175,7 @@ describe('ElectronSecretStore', () => {
     expect(safeStorageMock.decryptString).toHaveBeenCalledExactlyOnceWith(cipher)
   })
 
-  // Why the narrower claim: safeStorage is mocked here, so this proves the adapter
-  // pairs encrypt/decrypt without mangling the buffer — NOT that credentials sealed by
-  // a previous build still open. Real-ciphertext compatibility needs a captured fixture.
+  // Mock round-trips cover adapter forwarding; real-ciphertext compatibility needs a captured fixture.
   it('pairs encryptString and decryptString without altering the payload', () => {
     const store = new ElectronSecretStore()
     expect(store.decryptString(store.encryptString('linear-token'))).toBe('linear-token')

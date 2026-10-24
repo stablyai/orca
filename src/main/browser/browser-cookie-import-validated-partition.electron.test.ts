@@ -46,9 +46,6 @@ const EXPECTED_PARTITION_KEY = {
   hasCrossSiteAncestor: true
 }
 
-// Why (STA-4300): the JSON/paste import writes through the same CDP identity store as the native
-// one. These four cookies are the failure-mode table's validated-path row: ordinary, host-prefixed,
-// partitioned, and a partition the exporter described incompletely.
 const SOURCE_COOKIES = [
   {
     domain: '.app.acme-chips.test',
@@ -76,7 +73,6 @@ const SOURCE_COOKIES = [
     secure: true
   },
   {
-    // Only topLevelSite — the shape exporters emit without the cross-site-ancestor bit.
     domain: '.partial.example',
     name: 'partial-chips',
     value: 'must-not-land',
@@ -200,20 +196,16 @@ describe('STA-4300: partitioned cookies on the validated (file/paste) import suc
   it('stores CHIPS and __Host- CHIPS partitioned, and skips an unreadable partition', async () => {
     const result = await runFixture()
 
-    // Non-vacuity breadcrumbs: the fixture reached the import and the jar was empty before it.
     expect(result.step).toBe('import finished')
     expect(result.beforeCookieCount).toBe(0)
     expect(result.importResult.ok).toBe(true)
 
-    // Ordinary cookie: unchanged behavior, no partition invented for it.
     expect(result.afterPlain).toEqual([{ name: 'plain', value: 'plain-ok', partitionKey: null }])
 
-    // Partitioned cookie: Chromium stored the partition the export declared.
     expect(result.afterChips).toEqual([
       { name: 'chips-auth', value: 'keep-me', partitionKey: EXPECTED_PARTITION_KEY }
     ])
 
-    // A host-prefixed cookie can also be partitioned; the __Host- rules must not drop the partition.
     expect(result.afterHostChips).toEqual([
       {
         name: '__Host-chips-session',
@@ -222,7 +214,6 @@ describe('STA-4300: partitioned cookies on the validated (file/paste) import suc
       }
     ])
 
-    // The incompletely-described partition was skipped, not downgraded to an unpartitioned cookie.
     expect(result.afterUnreadable).toEqual([])
     expect(result.importResult.summary?.partitionSkippedCookies).toBe(1)
     expect(result.importResult.summary?.importedCookies).toBe(3)

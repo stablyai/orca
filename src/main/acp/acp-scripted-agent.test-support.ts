@@ -44,7 +44,6 @@ export class AcpScriptedAgent {
   on(method: string, handler: Handler): void {
     this.methods.set(method, handler)
   }
-  /** Confirms every `session/set_config_option`, answering `base` plus the option it set. */
   confirmConfigOptions(base: readonly unknown[]): void {
     this.on('session/set_config_option', (frame) => {
       const { configId: id, value } = setConfigOptionSchema.parse(frame.params)

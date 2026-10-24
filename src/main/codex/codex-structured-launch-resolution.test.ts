@@ -160,7 +160,6 @@ describe('codex structured launch resolution', () => {
       cwd: '/repos/workspace-1',
       codexHome: '/home/work/.codex',
       resumeThreadId: null,
-      // Every launch carries a posture; none is left for config.toml to decide. No mode asks.
       permissionPolicy: {
         approvalPolicy: 'on-request',
         sandbox: 'workspace-write',
@@ -249,7 +248,6 @@ describe('codex structured launch resolution', () => {
     expect(fresh).not.toHaveProperty('supersedeIfUnsaved')
   })
 
-  // app-server owns the permission posture on the thread RPC, not process flags.
   it.each([
     [
       'ask',
@@ -274,7 +272,6 @@ describe('codex structured launch resolution', () => {
     expect(launch.permissionPolicy).toEqual(policy)
   })
 
-  // The chat's mode replaces Agent Permissions: a Yolo terminal setting grants a chat nothing.
   it('ignores the bypass flag the agent Arguments carry', async () => {
     const launch = await resolverFor(record(), undefined, () => [
       '--dangerously-bypass-approvals-and-sandbox'
@@ -283,8 +280,6 @@ describe('codex structured launch resolution', () => {
     expect(launch.permissionPolicy).toMatchObject({ approvalPolicy: 'on-request' })
   })
 
-  // A thread opened on the configured default and then given a turn on the saved model reads to
-  // Codex as a model switch, and it injects the saved model's whole prompt a second time.
   it('opens the thread on the model the record saved', async () => {
     const launch = await resolverFor(
       record({ options: { model: 'gpt-chosen', effort: 'high', fastMode: 'false' } })

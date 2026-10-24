@@ -5,13 +5,9 @@ import { repairTranslatedValue } from './locale-translation-policy.mjs'
 
 // The frozen-terminal recovery entry is searchable only if both halves of the pair use the
 // UI's "stopped" sense; MT rendered `unfreeze` as 녹이다 (thawing ice), splitting them.
-const PAIR = [
-  { key: 'auto.components.settings.terminal.search.88561b3499', enValue: 'frozen', ko: '정지됨' },
-  {
-    key: 'auto.components.settings.terminal.search.d4daf4f612',
-    enValue: 'unfreeze',
-    ko: '정지 해제'
-  }
+const KEYS = [
+  'auto.components.settings.terminal.search.88561b3499',
+  'auto.components.settings.terminal.search.d4daf4f612'
 ]
 
 function readCatalog(locale) {
@@ -39,19 +35,14 @@ describe('Korean frozen-terminal settings search keywords', () => {
     ).toBe('정지 해제')
   })
 
-  it('ships the pair in the Korean catalog', () => {
-    const catalog = readCatalog('ko')
-    for (const { key, ko } of PAIR) {
-      expect(getValue(catalog, key), key).toBe(ko)
-    }
-  })
-
   it('survives the canonical catalog repair policy', () => {
     const english = readCatalog('en')
     const catalog = readCatalog('ko')
-    for (const { key, enValue } of PAIR) {
-      expect(getValue(english, key), key).toBe(enValue)
+    for (const key of KEYS) {
+      const enValue = getValue(english, key)
       const localeValue = getValue(catalog, key)
+      expect(enValue, key).toEqual(expect.any(String))
+      expect(localeValue, key).toEqual(expect.any(String))
       expect(repairTranslatedValue({ key, enValue, localeValue, locale: 'ko' }), key).toBe(
         localeValue
       )

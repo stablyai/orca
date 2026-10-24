@@ -11,8 +11,7 @@ export function appendWatcherEvents(
   batchEvents: WatcherEvent[],
   incomingEvents: WatcherEvent[]
 ): void {
-  // Why: worktree deletion can deliver enough events that `push(...events)`
-  // exceeds V8's argument limit and crashes the main process.
+  // Deletion storms can exceed V8's argument limit if spread into push.
   for (const event of incomingEvents) {
     batchEvents.push(event)
   }
@@ -27,8 +26,7 @@ export function queueWatcherEvents(
   }
 
   if (batch.events.length + incomingEvents.length > MAX_BATCHED_WATCHER_EVENTS) {
-    // Why: once precision is too expensive, keeping every path only burns
-    // memory before flush sends the same conservative overflow refresh.
+    // Once overflow requires a conservative refresh, retaining individual paths only wastes memory.
     batch.events = []
     batch.overflowed = true
     return

@@ -12,12 +12,6 @@ import {
   taskPageWorkItemKeyOrderSignature,
   taskPageWorkItemPaginationBoundary
 } from './task-page-work-item-signatures'
-export {
-  findTaskPageLinearDrawerIssue,
-  findTaskPageLinearIssue,
-  reconcileTaskPageLinearIssuesAfterLandingRefresh,
-  shouldReplaceTaskPageLinearIssuesAfterRefresh
-} from './task-page-linear-cache-selectors'
 
 export type TaskPageRepoCacheInput = {
   id: string

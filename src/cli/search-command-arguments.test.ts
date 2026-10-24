@@ -11,7 +11,6 @@ import { COMMAND_SPECS } from './specs'
 
 const COMMAND_PATHS = COMMAND_SPECS.flatMap((spec) => specPaths(spec))
 
-/** The real registry pipeline, so these assertions cover the shipped spec too. */
 function parseCli(argv: string[]): ParsedArgs {
   const parsed = normalizeCommandPositionals(
     COMMAND_SPECS,

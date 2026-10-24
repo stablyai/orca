@@ -36,7 +36,7 @@ export async function resolveManagedRuntimeEnvironment(
   selector: string
 ): Promise<ReturnType<typeof resolveEnvironment>> {
   const environment = resolveEnvironment(userDataPath, selector)
-  // Every call, subscription and status probe passes here, so a gated-off WSL host is never reached.
+  // Enforce the WSL gate for calls, subscriptions and status probes.
   assertWslHostReachable(environment)
   const host = classifyRuntimeEnvironmentHost(environment)
   switch (host.kind) {
@@ -56,7 +56,7 @@ async function prepareNetworkServerForCall(
   environment: KnownRuntimeEnvironment
 ): Promise<void> {
   await ensureOrcadManagedTunnel(userDataPath, environment.id)
-  // Why: a server that stopped (idle, killed, host rebooted) starts before the call that needs it.
+  // Calls must restart managed servers stopped by idle timeout, kill or host reboot.
   const serving = await verifyOrcadManagedServing(userDataPath, environment.id)
   const createDeps = () => ({
     ...managedServerUpdateDeps(userDataPath),
@@ -67,22 +67,21 @@ async function prepareNetworkServerForCall(
     publish: publishRestoreUpdate
   })
   if (isStoppedElsewhere(serving)) {
-    // Why awaited: this call needs the server, and another desktop's stop can land mid-session.
+    // Await redeployment: another desktop can stop the server mid-session.
     if (await redeployStoppedManagedOrcad(environment.id, createDeps)) {
       const targetId = getOrcadSshDeployment(environment)?.sshTargetId
       if (targetId) {
         await forgetLaunchSessionVerdictLazily(targetId)
       }
-      // Why rebuild: the redeployed server may bind another port than the reused forward targets.
+      // Redeployment may change the server port behind the existing forward.
       await rebuildOrcadManagedTunnel(userDataPath, environment.id)
     }
   } else {
-    // Why here: an auto-restored host may never see an SSH connect, so it would never update.
+    // Auto-restored hosts may never get an SSH connect to trigger their update.
     const update = updateManagedOrcadOnRestore(environment.id, createDeps)
     const targetId = getOrcadSshDeployment(environment)?.sshTargetId
     if (targetId) {
-      // Why after the update: its settled status would otherwise replace the warning.
-      // Why lazy: the note publishes through this module.
+      // Publish the warning after update status settles; import lazily to break the publishing cycle.
       void Promise.resolve(update)
         .then(() => import('../ssh/ssh-host-launch-session-note'))
         .then(({ noteEndedLaunchSshSession }) =>
@@ -93,9 +92,8 @@ async function prepareNetworkServerForCall(
   }
 }
 
-/** This session relaunched the server, so a cached "launch session ended" verdict is stale. */
 async function forgetLaunchSessionVerdictLazily(targetId: string): Promise<void> {
-  // Why lazy: the note module publishes through this one.
+  // Import lazily because the note module publishes through this module.
   const { forgetLaunchSessionVerdict } = await import('../ssh/ssh-host-launch-session-note')
   forgetLaunchSessionVerdict(targetId)
 }
@@ -118,7 +116,6 @@ function publishRestoreUpdate(
   )
 }
 
-/** Shows a managed server's start on the host's status line, wherever the start began. */
 export function installManagedOrcadStartStatus(): void {
   setManagedOrcadStartListener({
     starting: (target) =>
@@ -136,10 +133,9 @@ export function installManagedOrcadStartStatus(): void {
   })
 }
 
-/** A changed host the user resolved (moved or kept) is managed again; its status line says so now. */
 export function publishResolvedChangedHostStatus(target: SshTarget, environmentId: string): void {
   setSshHostServerStatus(target.id, { kind: 'managed', environmentId })
-  // Why a disconnected state too: the move released the relay session, which had the stale line.
+  // Moves release the relay session; publish even when its stale status line is disconnected.
   broadcastSshState(
     getCurrentMainWindow,
     target.id,
@@ -161,14 +157,14 @@ export function publishHostServerStatus(targetId: string, status: SshManagedServ
   }
 }
 
-/** A verified update supersedes the host's update and serving notes; any other host route is kept. */
+/** Clear update/serving notes for this verified server while preserving other host routes. */
 export function clearManagedServerNotes(targetId: string, environmentId: string): void {
   const current = getSshHostServerStatus(targetId)
   if (current?.kind !== 'managed' || current.environmentId !== environmentId) {
     return
   }
   if (current.update || current.serving) {
-    // An update can keep the terminal daemon, so only a verified restart clears that warning.
+    // Updates can preserve the daemon; clearing its warning requires a verified restart.
     publishHostServerStatus(targetId, {
       kind: 'managed',
       environmentId,

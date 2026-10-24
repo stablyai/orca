@@ -150,8 +150,7 @@ describe('CodexStructuredSessionAdapter prompts', () => {
     const codex = fakeCodex()
     const events: CodexStructuredSessionEvent[] = []
     const adapter = await acquired(codex, {}, events)
-    // A shell bridge re-asks per command under one parent tool item, so only the
-    // approval id tells the two requests apart.
+    // Shell-bridge commands share a tool item; approval IDs distinguish their requests.
     const ask = (id: number, approvalId: string): void => {
       codex.connections[0].handlers.onServerRequest?.({
         id,
@@ -205,7 +204,6 @@ describe('CodexStructuredSessionAdapter prompts', () => {
         commit
       })
     ).rejects.toThrow(AgentSessionPromptAnswerRejectedError)
-    // Refused before the journal records an answer the agent never receives.
     expect(commit).not.toHaveBeenCalled()
     expect(codex.connections[0].replies).toEqual([])
   })

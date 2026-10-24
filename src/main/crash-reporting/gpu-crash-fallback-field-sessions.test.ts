@@ -14,8 +14,7 @@ function newTracker(): GpuCrashFallbackTracker {
 
 describe('1.4.190 win32 GPU-child crash cluster', () => {
   it('engages on the session that did reach three crashes (field launch 51b9e93c)', () => {
-    // oom.txt, win32: GPU crashed/exitCode=34 with suppressedSinceLast=2, then
-    // `gpu_fallback_engaged (crashesInWindow=3)` and `gpu_fallback_restart_deferred`.
+    // Field launch 51b9e93c emitted one crash with two coalesced repeats before engaging.
     const tracker = newTracker()
     expect(tracker.recordGpuCrash(3_600_000).shouldEngageFallback).toBe(false)
     expect(tracker.recordGpuCrash(3_601_000).shouldEngageFallback).toBe(false)

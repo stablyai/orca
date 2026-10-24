@@ -60,9 +60,10 @@ describe('Markdown document ripgrep lifecycle', () => {
 
   it.each(['invalid', 'incomplete'] as const)('rejects %s UTF-8 filename bytes', async (kind) => {
     const result = listMarkdownDocuments(root)
+    child.stdout.write('./README.md\0')
     child.stdout.write(Buffer.from(kind === 'invalid' ? [0xff] : [0xe2, 0x82]))
     if (kind === 'incomplete') {
-      child.emit('close', 0, null)
+      child.emit('close', 2, null)
     }
     await expect(result).rejects.toThrow('not valid UTF-8')
   })
@@ -90,18 +91,47 @@ describe('Markdown document ripgrep lifecycle', () => {
     }
   )
 
-  it('rejects an unreadable subtree even after receiving valid documents', async () => {
+  it('returns readable documents when an unrelated subtree is unreadable', async () => {
     const result = listMarkdownDocuments(root)
-    child.stdout.write('./README.md\0')
-    child.stderr.write('Permission denied')
+    child.stdout.write('./docs/guide.md\0./README.md\0')
+    child.stderr.write('rg: ./data/clickhouse/store: Permission denied (os error 13)')
     child.emit('close', 2, null)
-    await expect(result).rejects.toThrow('Permission denied')
+    expect((await result).map((document) => document.relativePath)).toEqual([
+      'docs/guide.md',
+      'README.md'
+    ])
+    expect(child.kill).not.toHaveBeenCalled()
   })
 
-  it('rejects a truncated final path instead of returning partial documents', async () => {
+  it.each(['', './script.ts\0./.md\0'])(
+    'still rejects an unreadable listing without valid Markdown documents: %j',
+    async (output) => {
+      const result = listMarkdownDocuments(root)
+      child.stdout.write(output)
+      child.stderr.write('rg: .: Permission denied (os error 13)')
+      child.emit('close', 2, null)
+      await expect(result).rejects.toThrow('Permission denied')
+    }
+  )
+
+  it('still rejects unexpected exit codes after receiving valid documents', async () => {
+    const result = listMarkdownDocuments(root)
+    child.stdout.write('./README.md\0')
+    child.emit('close', 3, null)
+    await expect(result).rejects.toThrow('Markdown document listing failed (3)')
+  })
+
+  it('still rejects a signalled process after receiving valid documents', async () => {
+    const result = listMarkdownDocuments(root)
+    child.stdout.write('./README.md\0')
+    child.emit('close', 2, 'SIGTERM')
+    await expect(result).rejects.toThrow('Markdown document listing failed (SIGTERM)')
+  })
+
+  it.each([0, 2])('rejects a truncated final path on exit %s', async (code) => {
     const result = listMarkdownDocuments(root)
     child.stdout.write('./README.md\0./unfinished.md')
-    child.emit('close', 0, null)
+    child.emit('close', code, null)
     await expect(result).rejects.toThrow('Incomplete path')
   })
 
@@ -109,6 +139,7 @@ describe('Markdown document ripgrep lifecycle', () => {
     'rejects a path outside the relative listing protocol: %s',
     async (path) => {
       const result = listMarkdownDocuments(root)
+      child.stdout.write('./README.md\0')
       child.stdout.write(`${path}\0`)
       await expect(result).rejects.toThrow('Invalid path')
       expect(child.kill).toHaveBeenCalledWith('SIGKILL')
@@ -215,7 +246,7 @@ it('rejects the 20,001st document without retaining the child', async () => {
 it('cancels the filtered producer and permits a fresh request', async () => {
   const controller = new AbortController()
   const result = listMarkdownDocuments(root, { signal: controller.signal })
-  child.stdout.write('./partial')
+  child.stdout.write('./README.md\0./partial')
   controller.abort(new Error('editor closed'))
   await expect(result).rejects.toThrow('editor closed')
   expect(child.kill).toHaveBeenCalledWith('SIGKILL')

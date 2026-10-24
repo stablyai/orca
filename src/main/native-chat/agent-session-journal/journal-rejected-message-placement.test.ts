@@ -1,6 +1,3 @@
-// A rejected message sits where it was rejected, in no turn: queued, handed over or sent directly.
-// One in doubt stays where it was: it may have reached the agent.
-
 import { describe, expect, it } from 'vitest'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 import {
@@ -66,7 +63,6 @@ function journal() {
         turnScope
       })
     },
-    /** Other work between the send and its settlement, as a turn running ahead of it would write. */
     advance(rows: number) {
       seq += rows
       state.lastSequence = seq

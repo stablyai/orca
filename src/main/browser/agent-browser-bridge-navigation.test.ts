@@ -125,8 +125,6 @@ describe('AgentBrowserBridge', () => {
     }
   })
 
-  // ── goto command ──
-
   it('navigates the registered webContents without spawning agent-browser', async () => {
     const wc = mockWebContents(100, 'https://example.com/start', 'Example')
     webContentsFromIdMock.mockReturnValue(wc)

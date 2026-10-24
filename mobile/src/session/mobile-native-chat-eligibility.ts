@@ -24,12 +24,24 @@ export type MobileNativeChatResolution = {
   /** Hook-reported transcript path. Recent Claude sessions cannot always be
    *  resolved from the provider session id, so mobile forwards this to runtime. */
   transcriptPath: string | null
+  /** False when only this phone's memory names the agent: it may have exited to a
+   *  shell, so the chat is read-only rather than typing into a bare prompt. */
+  agentConfirmed: boolean
+}
+
+/** The last chat identity resolved for a terminal tab, bound to the handle it was seen on. */
+export type MobileNativeChatIdentity = {
+  terminal: string
+  agent: string
+  sessionId: string | null
+  transcriptPath: string | null
 }
 
 export type MobileNativeChatTab = {
   type: string
   launchAgent?: string | null
   agentStatus?: AgentStatusEntry | null
+  nativeChatIdentity?: MobileNativeChatIdentity
   /** Host-provided launch context still parked as an unsent TUI-input draft. */
   launchDraft?: string
   launchDraftCreatedAt?: number
@@ -52,29 +64,73 @@ export function resolveMobileNativeChat(
     // Structured tabs are journal-backed, so any agent the host lists renders here — there is no
     // per-agent transcript layout to know.
     return tab.sessionId && isStructuredAgentId(tab.agent)
-      ? { agent: tab.agent, sessionId: tab.sessionId, transcriptPath: null }
+      ? { agent: tab.agent, sessionId: tab.sessionId, transcriptPath: null, agentConfirmed: true }
       : null
   }
   if (tab.type !== 'terminal') {
     return null
   }
   const liveAgent = tab.agentStatus?.agentType ?? null
+  const remembered = tab.nativeChatIdentity ?? null
   const agent = liveAgent
     ? isNativeChatSupportedAgent(liveAgent)
       ? liveAgent
       : null
-    : tab.launchAgent
+    : // The remembered agent is the latest resolution, so it outranks an older launch hint.
+      (remembered?.agent ?? tab.launchAgent ?? null)
   if (!agent || !isNativeChatSupportedAgent(agent)) {
     return null
   }
   if (nativeChatRequiresLocalTranscript(agent) && !nativeChatTranscriptIsLocalReadable) {
     return null
   }
+  const liveSession = tab.agentStatus?.providerSession
+  // A live agent without a session may be a relaunch; only an identity-less frame inherits one.
+  const rememberedSession = !liveAgent && remembered?.agent === agent ? remembered : null
   return {
     agent,
-    sessionId: tab.agentStatus?.providerSession?.id ?? null,
-    transcriptPath: tab.agentStatus?.providerSession?.transcriptPath ?? null
+    sessionId: liveSession?.id ?? rememberedSession?.sessionId ?? null,
+    transcriptPath: liveSession
+      ? (liveSession.transcriptPath ?? null)
+      : (rememberedSession?.transcriptPath ?? null),
+    agentConfirmed: liveAgent ? true : tab.launchAgent === agent
   }
+}
+
+/** Why: a status frame that omits the agent or its session (an older host, a re-subscribe) is
+ *  missing evidence, not proof the pane changed, so chat must not flip to the terminal. A new
+ *  handle is a new PTY and starts fresh; a pending (null) handle keeps the last identity. */
+// Why structural, not MobileSessionTab: the route types pull React Native globals into e2e.
+export function withRememberedNativeChatIdentity<
+  T extends MobileNativeChatTab & { id: string; terminal?: string | null }
+>(tabs: T[], previous: readonly T[]): T[] {
+  const previousById = new Map(previous.map((tab) => [tab.id, tab]))
+  return tabs.map((tab) => {
+    if (tab.type !== 'terminal') {
+      return tab
+    }
+    const priorTab = previousById.get(tab.id)
+    const prior = priorTab?.type === 'terminal' ? priorTab.nativeChatIdentity : undefined
+    const carried =
+      prior && (tab.terminal == null || tab.terminal === prior.terminal) ? prior : undefined
+    const resolved = resolveMobileNativeChat({ ...tab, nativeChatIdentity: carried }, true)
+    const terminal = tab.terminal ?? carried?.terminal
+    const nativeChatIdentity =
+      resolved && terminal
+        ? {
+            terminal,
+            agent: resolved.agent,
+            sessionId: resolved.sessionId,
+            transcriptPath: resolved.transcriptPath
+          }
+        : undefined
+    return { ...tab, nativeChatIdentity }
+  })
+}
+
+/** False only when this phone's memory alone names the tab's chat agent; chat writes stay locked. */
+export function isMobileNativeChatAgentConfirmed(tab: MobileNativeChatTab | null): boolean {
+  return resolveMobileNativeChat(tab, true)?.agentConfirmed !== false
 }
 
 /** Whether the tab can toggle into native chat — gates the long-press item. */
@@ -90,7 +146,9 @@ export function resolveMobileNativeChatSessionId(tab: MobileNativeChatTab | null
     return tab.sessionId ?? null
   }
   if (tab?.type === 'terminal') {
-    return tab.agentStatus?.providerSession?.id ?? null
+    return (
+      tab.agentStatus?.providerSession?.id ?? resolveMobileNativeChat(tab, true)?.sessionId ?? null
+    )
   }
   return null
 }

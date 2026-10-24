@@ -227,7 +227,6 @@ describe('getGlabKnownHosts', () => {
       'gitlab.com',
       'gitlab.example.com:8080'
     ])
-    // A second probe for the same connection is served from cache.
     await expect(getGlabKnownHosts('conn-1')).resolves.toEqual([
       'gitlab.com',
       'gitlab.example.com:8080'
@@ -243,9 +242,8 @@ describe('getGlabKnownHosts', () => {
         stderr: ''
       })
 
-    // First probe fails → canonical default, NOT cached.
+    // Failed probes leave defaults uncached so recovery can discover the actual host.
     await expect(getGlabKnownHosts('conn-1')).resolves.toEqual(['gitlab.com'])
-    // Re-probe (e.g. after tunnel comes up) discovers the real host.
     await expect(getGlabKnownHosts('conn-1')).resolves.toEqual([
       'gitlab.com',
       'gitlab.example.com:8080'

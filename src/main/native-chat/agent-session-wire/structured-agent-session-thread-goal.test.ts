@@ -114,7 +114,6 @@ describe('performThreadGoalChange', () => {
     }
     expect(journal.snapshot().items.map((item) => item.body)).toEqual([expected])
 
-    // The marker must survive a reopen: the persisted row validator admits it.
     await journal.close()
     const reopened = await openJournal()
     expect(reopened.snapshot().items.map((item) => item.body)).toEqual([expected])
@@ -178,7 +177,6 @@ describe('performThreadGoalChange', () => {
     await expect(performThreadGoalChange(ctx, input)).rejects.toThrow('request timed out')
     expect(journal.snapshot().items).toEqual([])
 
-    // The ledger reruns the same operation id; its tombstoned row revives, not doubles.
     await expect(performThreadGoalChange(ctx, input)).resolves.toEqual({
       ok: true,
       value: { change: 'set' }
@@ -274,7 +272,7 @@ describe('performThreadGoalChange', () => {
       changeThreadGoal
     })
 
-    // Issued, not yet landed: the set's read takes its place behind it in the journal's queue.
+    // Issue without awaiting: the goal read must queue behind this write.
     const landing = appendGoalRow(journal, { status: 'active' })
     await performThreadGoalChange(ctx, {
       clientOperationId: 'op-10',
@@ -304,7 +302,6 @@ describe('threadGoalPlan replay', () => {
 
     expect(paused.recoverUnknownFromDurableState).toBe(true)
     expect(paused.rerunWhenReplayMissing?.(ctx)).toBe(true)
-    // Nothing recorded yet: only a clear reads as applied.
     expect(paused.replay(ctx, unknown)).toBeNull()
     expect(set.replay(ctx, unknown)).toBeNull()
     expect(clear.replay(ctx, unknown)).toEqual({ change: 'clear' })
@@ -314,7 +311,6 @@ describe('threadGoalPlan replay', () => {
     expect(set.replay(ctx, unknown)).toBeNull()
     expect(clear.replay(ctx, unknown)).toBeNull()
 
-    // A settled success always replays; a refusal never does.
     expect(set.replay(ctx, { status: 'succeeded', sessionId: 'session-1' })).toEqual({
       change: 'set'
     })

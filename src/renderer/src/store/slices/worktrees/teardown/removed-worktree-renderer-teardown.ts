@@ -69,6 +69,8 @@ export async function tearDownRemovedWorktreeRendererState(args: {
   await Promise.resolve(
     get().shutdownWorktreeBrowsers(worktreeId, { preserveWorktreeSelection: true })
   )
+  // Why here too: an SSH or paired workspace's pages use this desktop's profile, which that host's removal never reaches.
+  void get().deleteManagedBrowserSessionProfile({ kind: 'worktree', id: worktreeId })
   await get().shutdownWorktreeTerminals(worktreeId, {
     shutdownReason: 'remove-worktree',
     // The backend removal above already killed the workspace's PTYs.

@@ -1,6 +1,5 @@
 import { extname } from 'node:path'
 
-// Why: pets are image-only — render natively via <img> (no 3D engine); main owns this format allowlist.
 const IMAGE_FORMATS: Record<string, string> = {
   '.png': 'image/png',
   '.apng': 'image/apng',

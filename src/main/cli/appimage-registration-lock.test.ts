@@ -22,7 +22,6 @@ describe('withAppImageRegistrationLock', () => {
     await withAppImageRegistrationLock('/cache/orca/appimage', async () => 'done')
 
     const options = lockMock.mock.calls[0][1]
-    // Why: `retries` alone caps attempts, not elapsed time — 1000 x 1s is ~16 minutes.
     expect(options.retries.maxRetryTime).toBeGreaterThan(0)
     expect(options.retries.maxRetryTime).toBeLessThanOrEqual(options.stale)
   })

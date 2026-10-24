@@ -23,8 +23,7 @@ vi.mock('./telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn(() => (
 
 const NOW = 1_800_000_000_000
 
-// Relay-era builds record undelivered stops on the lease; this build writes them only for the
-// legacy relay bridge, and otherwise carries them so a downgrade can still replay them.
+// Only legacy relay paths create pending stops; preserve them for downgrade replay elsewhere.
 describe('persisted SSH pending PTY kills', () => {
   beforeEach(() => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))

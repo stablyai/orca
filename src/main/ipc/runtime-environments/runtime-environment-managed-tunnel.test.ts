@@ -29,7 +29,7 @@ vi.mock('../../../shared/runtime-environment-store', () => ({
       return { id, orcadDeployment: { sshTargetId: 'ssh-1' } }
     }
     mocks.reads[id] = (mocks.reads[id] ?? 0) + 1
-    // A fresh object per read, so a test can tell the re-read after bring-up from the first.
+    // Fresh records distinguish the post-bring-up read from the initial lookup.
     return { ...environment, read: mocks.reads[id] }
   }
 }))
@@ -85,7 +85,6 @@ describe('resolving a managed runtime for a call', () => {
     await resolveManagedRuntimeEnvironment('/u', 'env-1')
     expect(mocks.redeploy).toHaveBeenCalledWith('env-1', expect.any(Function))
     expect(mocks.restoreUpdate).not.toHaveBeenCalled()
-    // The forward is rebuilt for the port the redeployed server bound, not reused.
     expect(mocks.ensureTunnel).toHaveBeenCalledTimes(1)
     expect(mocks.rebuildTunnel).toHaveBeenCalledWith('/u', 'env-1')
   })
@@ -138,7 +137,7 @@ describe('resolving a runtime for a call, by host kind', () => {
   afterEach(() => vi.unstubAllEnvs())
 
   it('brings a WSL host up through its service, never through an SSH tunnel', async () => {
-    // The record re-read after bring-up, which may have moved the bridge port.
+    // Bring-up may change the WSL bridge port.
     await expect(resolveManagedRuntimeEnvironment('/u', 'wsl:ubuntu')).resolves.toEqual({
       ...wsl,
       read: 2

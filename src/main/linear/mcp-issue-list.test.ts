@@ -113,7 +113,6 @@ describe('MCP-compatible Linear issue listing', () => {
       hasMore: true,
       orderBy: 'createdAt'
     })
-    // Stops at the requested cap instead of walking on.
     expect(rawRequest).toHaveBeenCalledTimes(1)
     expect(result.meta.nextCursor).toMatch(/^orca\.linear\.v1\./)
     expect(result.issues[0]).toMatchObject({

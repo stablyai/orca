@@ -6,11 +6,8 @@ import {
   BRIDGE_MAX_PENDING_REQUESTS,
   BRIDGE_MAX_SUBSCRIPTIONS
 } from './bridge-caps'
-import { BRIDGE_MAX_UNACKED_BYTES, BRIDGE_MAX_UNACKED_FRAMES } from '../bridge-host-subscriptions'
-import {
-  BRIDGE_ACK_INTERVAL_BYTES,
-  BRIDGE_ACK_INTERVAL_FRAMES
-} from './bridge-client-subscriptions'
+import { createFakeBridgePortPair } from './bridge-port-pair-test-harness'
+import { BRIDGE_ACK_INTERVAL_FRAMES } from './bridge-client-subscriptions'
 import { BRIDGE_PROTOCOL_VERSION, type BridgeHostMessage } from './bridge-envelope'
 import {
   BRIDGE_READY_RETRY_MAX_MS,
@@ -527,10 +524,24 @@ describe('bridge client caps', () => {
 })
 
 describe('bridge client acks', () => {
-  it('stays well inside the window the shell ends a stream at', () => {
-    // The shell's own numbers, not a copy of them: a window narrowed there has to fail here.
-    expect(BRIDGE_ACK_INTERVAL_FRAMES * 4).toBeLessThanOrEqual(BRIDGE_MAX_UNACKED_FRAMES)
-    expect(BRIDGE_ACK_INTERVAL_BYTES * 4).toBeLessThanOrEqual(BRIDGE_MAX_UNACKED_BYTES)
+  it('keeps a byte-heavy stream alive beyond the host window', async () => {
+    const pair = createFakeBridgePortPair()
+    try {
+      await pair.flush()
+      const seen: unknown[] = []
+      pair.client.subscribe('worktree.events', {}, (payload) => seen.push(payload))
+      await pair.flush()
+      const payload = 'x'.repeat(BRIDGE_MAX_MESSAGE_BYTES - 1024)
+      for (let index = 0; index < 16; index += 1) {
+        pair.rpc.streams[0]?.emit(payload)
+        await pair.flush()
+      }
+      expect(seen).toEqual(Array.from({ length: 16 }, () => payload))
+      expect(pair.rpc.streams[0]?.unsubscribes).toBe(0)
+    } finally {
+      pair.client.close()
+      pair.host.dispose()
+    }
   })
 
   it('acks the last seq it read once the frame interval is due', () => {

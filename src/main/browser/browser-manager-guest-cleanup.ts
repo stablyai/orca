@@ -2,7 +2,7 @@ import { BrowserManagerGuestNavigationPolicy } from './browser-manager-guest-nav
 
 export abstract class BrowserManagerGuestCleanup extends BrowserManagerGuestNavigationPolicy {
   protected retireStaleGuestWebContents(previousWebContentsId: number): void {
-    // Why: after a renderer-process swap, stop the dead guest id resolving to the live page so stale callbacks don't hit the wrong session.
+    // Retire the old guest ID so stale callbacks cannot resolve it to the replacement page.
     this.cleanupGuestPolicyAttachment(previousWebContentsId)
   }
 
@@ -26,7 +26,7 @@ export abstract class BrowserManagerGuestCleanup extends BrowserManagerGuestNavi
     this.pageInitiatedTabBudgetByRootGuestId.delete(guestWebContentsId)
     this.cdpUserAgentOverrideStateByGuestId.delete(guestWebContentsId)
     this.pendingNavigationByGuestId.delete(guestWebContentsId)
-    // Why: a popup must stop inheriting authorization the moment its owner retires, before Chromium destroys the child.
+    // Revoke popup authorization as soon as the owner retires, before child destruction.
     if (isPrimaryGuest) {
       for (const [popupGuestId, owner] of this.popupOwnerContextByGuestId) {
         if (owner.rootGuestWebContentsId === guestWebContentsId) {

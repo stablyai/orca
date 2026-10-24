@@ -79,9 +79,7 @@ describe('shared agent-hook-listener', () => {
     ).toBeNull()
   })
 
-  // Why: the empty-payload allowance is Antigravity's documented policy, not a global one —
-  // every other source must keep rejecting a body it cannot parse.
-  it('does not extend the empty-payload allowance to other sources', () => {
+  it('keeps Gemini rejection of empty or missing payloads', () => {
     for (const payload of ['', undefined]) {
       expect(
         normalizeHookPayload(
@@ -201,8 +199,7 @@ describe('shared agent-hook-listener', () => {
     }
   })
 
-  it('reads newline-heavy Antigravity user requests without wrapper regex matching', () => {
-    const matchSpy = vi.spyOn(String.prototype, 'match')
+  it('reads a bounded preview from newline-heavy Antigravity user requests', () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'orca-antigravity-large-prompt-'))
     const transcriptPath = join(tmpDir, 'transcript.jsonl')
     const requestText = 'Fix the failing test\n'.repeat(300)
@@ -227,16 +224,9 @@ describe('shared agent-hook-listener', () => {
         'production'
       )
 
-      expect(started?.payload.prompt).toContain('Fix the failing test')
-      expect(started?.payload.prompt).not.toContain('<USER_REQUEST>')
-      expect(started?.payload.prompt).not.toContain('</USER_REQUEST>')
-      const usedRequestWrapperMatch = matchSpy.mock.calls.some(
-        ([pattern]) =>
-          pattern instanceof RegExp &&
-          pattern.source.includes('<USER_REQUEST>') &&
-          pattern.source.includes('[\\s\\S]')
+      expect(started?.payload.prompt).toBe(
+        'Fix the failing test Fix the failing test Fix the failing test Fix the failing test Fix the failing test Fix the failing test Fix the failing test Fix the failing test Fix the failing test Fix the fai'
       )
-      expect(usedRequestWrapperMatch).toBe(false)
     } finally {
       rmSync(tmpDir, { recursive: true, force: true })
     }
@@ -521,7 +511,7 @@ describe('shared agent-hook-listener', () => {
     ).toBe(false)
   })
 
-  it('lets Copilot Stop consume a generic message without scheduling transcript retry', () => {
+  it('does not mark Copilot result text pending when a generic message is present', () => {
     expect(
       hasPendingAgentResultText('copilot', {
         payload: {

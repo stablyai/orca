@@ -27,7 +27,7 @@ import type { DaemonEndpointIdentity } from '../daemon/daemon-hello-protocol'
 import type { DaemonSessionInfo } from '../daemon/types'
 import type { DaemonAsyncIoStatus } from '../../shared/daemon-async-io-health'
 
-// Why: poll past the daemon's 5s SIGTERM→SIGKILL ladder (KILL_TIMEOUT_MS in session.ts), else slow-exiting shells falsely look "refused".
+// Poll beyond the daemon's 5s SIGTERM-to-SIGKILL ladder to avoid false refusal reports.
 const MAX_POLL_ATTEMPTS = 65
 const POLL_INTERVAL_MS = 100
 
@@ -40,7 +40,7 @@ function getDaemonAdapters(): DaemonPtyAdapter[] {
   return provider ? [...getAllDaemonAdapters(provider)] : []
 }
 
-// Why: surface degraded mode (daemon alive but cannot spawn fresh PTYs) so the UI can warn new terminals lack persistence.
+// A live daemon unable to spawn means new terminals lack persistence.
 function isDaemonDegraded(): boolean {
   const provider = getDaemonProvider()
   return (
@@ -49,8 +49,7 @@ function isDaemonDegraded(): boolean {
   )
 }
 
-// Why the current adapter only: evidence is keyed to the daemon now spawning terminals, so a
-// legacy adapter's daemon must never satisfy the identity match that keeps the notice up.
+// Match folder-access evidence against the current spawning daemon, never a legacy adapter.
 function readCurrentDaemonIdentity(): DaemonEndpointIdentity | null {
   const provider = getDaemonProvider()
   return provider ? getCurrentDaemonAdapter(provider).getDaemonIdentity() : null
@@ -94,8 +93,7 @@ export function registerDaemonManagementHandlers(): void {
       : { state: 'unverifiable' }
   })
 
-  // Why: a Linux AppImage daemon kept for its live terminals after its files vanished; the
-  // banner polls this and offers the verified restart below.
+  // Live terminals may outlast deleted AppImage runtime files; offer verified restart recovery.
   ipcMain.handle('pty:management:severedDaemon', async () => ({
     severed: await readSeveredDaemonStatus().catch(() => null)
   }))
@@ -110,29 +108,25 @@ export function registerDaemonManagementHandlers(): void {
     }
   )
 
-  // Why: lets Settings warn that macOS privacy grants no longer reach daemon terminals (STA-3491),
-  // and carries the folder-access evidence the notice needs (STA-7948) on the same focus-time poll.
+  // The focus-time poll carries macOS attribution and folder-access evidence (STA-3491, STA-7948).
   ipcMain.handle(
     'pty:management:macTccAttribution',
     async (): Promise<{
       health: MacDaemonTccAttributionHealth
       folderAccessMismatch: DaemonFolderAccessMismatchNotice | null
     }> => {
-      // Why two guards: the two answers are independent evidence, and a failed health read must
-      // not present as "the folder evidence is gone".
+      // Independent evidence reads must not erase folder-access state when health probing fails.
       const health = await getCurrentDaemonMacTccAttributionHealth().catch(
         (): MacDaemonTccAttributionHealth => 'unknown'
       )
       const identity = readCurrentDaemonIdentity()
-      // Why re-probe on the poll: the fix dialog's first step completes in System Settings, and
-      // returning to Orca is the only moment anything can notice. The refresh owns when to skip.
+      // Returning from System Settings is the opportunity to detect completed repair.
       await refreshDaemonFolderAccessProbe(identity).catch(() => {})
       return { health, folderAccessMismatch: getDaemonFolderAccessMismatch(identity) }
     }
   )
 
-  // Why a separate channel from the poll: this one has a side effect — it clears Orca's TCC row and
-  // makes the app touch the folder so macOS re-prompts — and only a user click may trigger it.
+  // Clearing TCC state and prompting require an explicit user action; keep them out of polling.
   ipcMain.handle(
     'pty:management:resetFolderAccess',
     async (): Promise<DaemonFolderAccessResetResult> => {
@@ -152,7 +146,7 @@ export function registerDaemonManagementHandlers(): void {
     }
   )
 
-  // Why: tears down sessions across all adapters (current + legacy); daemon processes survive. See docs/daemon-staleness-ux.md §Phase 1.
+  // Stop sessions across current and legacy adapters while leaving daemon processes alive.
   ipcMain.handle(
     'pty:management:killAll',
     async (): Promise<{
@@ -161,7 +155,7 @@ export function registerDaemonManagementHandlers(): void {
       killedSessionIds: string[]
     }> => {
       const adapters = getDaemonAdapters()
-      // Why: snapshot session IDs up front so mid-kill respawns aren't counted as "remaining".
+      // Exclude panes respawned after the user requested killAll.
       const initial = await collectSessions(adapters)
       const initialIds = new Set(initial.map((s) => s.sessionId))
       const initialCount = initial.length
@@ -170,20 +164,19 @@ export function registerDaemonManagementHandlers(): void {
         return { killedCount: 0, remainingCount: 0, killedSessionIds: [] }
       }
 
-      // Why: no retry — session.kill() is idempotent and runs its own kill ladder; allSettled so one rejection doesn't abort the rest.
+      // Each session owns its kill ladder; one rejection must not abort the others.
       await Promise.allSettled(
         initial.map(async (session) => {
-          // Why: assumes PROTOCOL_VERSION stays distinct from PREVIOUS_DAEMON_PROTOCOL_VERSIONS (types.ts), else legacy sessions misroute here.
+          // Current and legacy protocol versions must remain distinct to route to the owning adapter.
           const owner = adapters.find((a) => a.protocolVersion === session.protocolVersion)
           if (!owner) {
             return
           }
-          // Why: immediate=true only matters to legacy/future adapters; swallow rejections since remainingCount reports stuck sessions.
+          // Legacy/future adapters may use immediate; stuck sessions are reported by remainingCount.
           await owner.shutdown(session.sessionId, { immediate: true }).catch(() => {})
         })
       )
 
-      // Why: count only the initial-snapshot intersection so renderer respawns mid-kill aren't counted as remaining.
       let remainingOriginalCount = initialCount
       let remainingOriginalIds = initialIds
       for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt += 1) {

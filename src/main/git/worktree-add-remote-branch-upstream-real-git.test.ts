@@ -1,4 +1,3 @@
-// Issue #26344: a worktree created from a remote-only branch tracks that remote branch.
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -74,7 +73,6 @@ async function cloneWithRemoteOnlyBranch(): Promise<{ root: string; repo: string
 it('tracks the remote branch it was created from, and nothing else', async () => {
   const { root, repo } = await cloneWithRemoteOnlyBranch()
 
-  // Picking `origin/alex/fix` is not a collision even though `upstream/alex/fix` exists.
   await expect(getBranchConflictKind(repo, 'alex/fix', 'origin/alex/fix')).resolves.toBeNull()
 
   const fixPath = join(root, 'fix')
@@ -84,7 +82,6 @@ it('tracks the remote branch it was created from, and nothing else', async () =>
     await git(repo, 'rev-parse', 'refs/remotes/origin/alex/fix')
   )
 
-  // A new branch off a differently named base keeps the untracked default.
   const otherPath = join(root, 'other')
   await addWorktree(repo, otherPath, 'feature/new', 'origin/main')
   expect(await upstreamOf(otherPath, 'feature/new')).toBeNull()

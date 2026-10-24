@@ -1,18 +1,11 @@
 import type { SubprocessHandle } from './session-subprocess-handle'
 
-// Why: pause is a fire-and-forget notify, so a resume can be lost (main crash, dropped socket); a lost
-// resume must never wedge a shell, so auto-resume after this window — a still-flooded main re-pauses.
+// A dropped resume notification must not wedge a shell; a still-flooded client can pause it again.
 export const PRODUCER_PAUSE_FAILSAFE_MS = 5_000
 
-// Why: a stream pause has no lost-resume problem (the batcher un-pauses from its own drain accounting),
-// but it does have a stalled-consumer problem — a half-open peer (slept laptop, dropped NAT state)
-// neither drains nor closes, so nothing ever calls back and the shell blocks on write() forever. Bound
-// the stall; the owner's callback then sheds the backlog so the session runs again with a visible gap.
-// 60s: far above any healthy drain (the shallow-socket gate turns over in milliseconds), so a slow but
-// live consumer is never mistaken for a wedged one.
+// Bound half-open consumer stalls; shed backlog before resuming the live producer.
 export const STREAM_BACKPRESSURE_STALL_WATCHDOG_MS = 60_000
 
-/** Producer-side flow control for one session's PTY fd, with the lost-resume failsafe. */
 export class SessionProducerPause {
   private paused = false
   private streamBackpressured = false
@@ -22,7 +15,7 @@ export class SessionProducerPause {
 
   constructor(private readonly subprocess: Pick<SubprocessHandle, 'pause' | 'resume'>) {}
 
-  /** Stop reading the PTY fd so a flooding child blocks on write. Arms the failsafe; re-pausing re-arms it. */
+  /** Client pauses refresh the lost-resume failsafe; stream pauses use their own stall watchdog. */
   pause(source?: 'stream', canPauseStream = true, onStreamStall?: () => void): void {
     if (source === 'stream') {
       if (canPauseStream) {
@@ -53,8 +46,7 @@ export class SessionProducerPause {
     const wasStreamBackpressured = this.streamBackpressured
     this.streamBackpressured = paused
     if (paused) {
-      // Only on the transition: refresh() re-asserts an already-standing pause on every enqueue for any
-      // session sharing the client, and re-arming there would let a busy neighbour defer the watchdog forever.
+      // Repeated enqueues from a busy sibling must not postpone this session’s stall watchdog.
       if (!wasStreamBackpressured) {
         this.armStreamStallWatchdog()
       }
@@ -108,8 +100,7 @@ export class SessionProducerPause {
     }
     this.streamStallTimer = setTimeout(() => {
       this.streamStallTimer = null
-      // Shed the backlog BEFORE resuming, so the producer never refills an unbounded queue. Loss of
-      // contact with the consumer says nothing about the child process — nothing here reports an exit.
+      // Shed backlog before resuming; losing the consumer does not imply child exit.
       onStreamStall()
       this.setStreamBackpressured(false)
     }, STREAM_BACKPRESSURE_STALL_WATCHDOG_MS)

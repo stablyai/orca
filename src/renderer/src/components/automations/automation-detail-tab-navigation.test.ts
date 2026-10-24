@@ -134,6 +134,7 @@ describe('shouldHandleAutomationDetailEscapeKey', () => {
   function makeEvent(
     overrides: Partial<{
       key: string
+      defaultPrevented: boolean
       altKey: boolean
       ctrlKey: boolean
       metaKey: boolean
@@ -167,6 +168,10 @@ describe('shouldHandleAutomationDetailEscapeKey', () => {
   it('ignores non-Escape keys', () => {
     expect(shouldHandleAutomationDetailEscapeKey(makeEvent({ key: 'Enter' }))).toBe(false)
     expect(shouldHandleAutomationDetailEscapeKey(makeEvent({ key: 'ArrowLeft' }))).toBe(false)
+  })
+
+  it('ignores Escape already consumed while returning from a run', () => {
+    expect(shouldHandleAutomationDetailEscapeKey(makeEvent({ defaultPrevented: true }))).toBe(false)
   })
 
   it('ignores modified or composing Escape keys', () => {

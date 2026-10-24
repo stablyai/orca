@@ -283,7 +283,7 @@ describe('Daemon mock modified-only source routing', () => {
   it('omits the real D7 route only for the proven unit-support scope', () => {
     expect(selectPrE2eSpecs([helper])).toContain('tests/e2e/orcad-serve-mode-switch.spec.ts')
     expect(selectPrE2eSpecs([helper], undefined, verified)).toEqual([])
-    const companion = 'src/main/codex/codex-app-server-connection.test.ts'
+    const companion = 'config/scripts/process-host-build-dist.test.mjs'
     expect(selectPrE2eSpecs([helper, companion], undefined, verified)).toEqual(
       selectPrE2eSpecs([companion])
     )

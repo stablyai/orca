@@ -28,8 +28,7 @@ export function getLocalProjectGitExecOptions(
   store: ProjectRuntimeResolutionStore,
   repo: Repo
 ): LocalProjectGitExecOptions {
-  // Why: local git must run in the same resolved project runtime as agents,
-  // terminals, and preflight; repair states must not silently fall back to host git.
+  // Keep Git aligned with agent/terminal runtimes; repair states must not silently select host Git.
   return getLocalProjectGitExecOptionsForRuntime(
     repo,
     resolveLocalProjectRuntimeForRepo(store, repo)
@@ -62,12 +61,7 @@ export function getLocalProjectWorktreeGitOptions(
   return wslDistro ? { wslDistro } : {}
 }
 
-/**
- * Execution options for repo-scoped gh calls: the project's WSL routing plus its account binding.
- *
- * Why: every gh call site must resolve options through here — one that reaches for
- * `getLocalProjectWorktreeGitOptions` instead silently runs as the ambient login.
- */
+/** Include the repo’s gh account binding; worktree Git options alone use the ambient login. */
 export function getLocalProjectGhExecOptions(
   store: ProjectRuntimeResolutionStore,
   repo: Repo
@@ -78,14 +72,7 @@ export function getLocalProjectGhExecOptions(
   }
 }
 
-/**
- * Git routing for the speculative worktree-create warm-up.
- *
- * Deliberately non-throwing where `getLocalProjectWorktreeGitOptions` throws: an
- * optimistic prefetch must not report a repair-required runtime as a failure, so
- * an unresolved runtime falls back to the host Git the warm-up used before
- * routing existed.
- */
+/** Speculative prefetch falls back to host Git for unresolved runtimes instead of raising a repair error. */
 export function getWorktreeCreatePrefetchGitOptions(
   store: ProjectRuntimeResolutionStore,
   repo: Repo
@@ -104,19 +91,12 @@ export function getLocalProjectWorktreeGitOptionsForRuntime(
   repo: Repo,
   projectRuntime: ProjectExecutionRuntimeResolution | undefined
 ): LocalProjectWorktreeGitOptions {
-  // Why: callers that already batch-resolved project runtimes must not rescan
-  // every project once per repo on a polling path.
+  // Reuse batch-resolved runtimes to avoid rescanning projects per repo during polls.
   const { wslDistro } = getLocalProjectGitExecOptionsForRuntime(repo, projectRuntime)
   return wslDistro ? { wslDistro } : {}
 }
 
-/**
- * Distro whose filesystem this repo's worktrees belong on, or undefined.
- *
- * Deliberately non-throwing where `getLocalProjectGitExecOptions` throws: a
- * runtime that needs repair must not block creating a worktree, it just falls
- * back to the Windows-side placement that has always been used.
- */
+/** Unresolved runtimes retain Windows-side worktree placement instead of blocking creation. */
 export function getWorktreeMirrorDistro(
   store: ProjectRuntimeResolutionStore,
   repo: Repo

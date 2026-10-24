@@ -14,9 +14,7 @@ export type BrowserClientStagedUpload = {
   localFilePaths: readonly string[]
 }
 
-// Why: staged copies outlive the command (Chromium opens them lazily), so a long-lived page needs a
-// ceiling. Both bounds admit at least one maximum-sized command so a legal upload is never evicted
-// before the guest reads it.
+// Bound copies retained for Chromium’s lazy reads on long-lived pages.
 export const BROWSER_CLIENT_UPLOAD_STAGING_MAX_COMMANDS_PER_PAGE = 4
 export const BROWSER_CLIENT_UPLOAD_STAGING_MAX_BYTES_PER_PAGE =
   2 * BROWSER_CLIENT_FILE_CHANNEL_TRANSFER_MAX_BYTES
@@ -36,8 +34,7 @@ type StagingFilesystem = {
   removeDirectorySync(directory: string): void
 }
 
-// Why: Chromium and AV scanners hold a staged file open briefly, which is EBUSY/EPERM on Windows;
-// `force` only swallows ENOENT, so without retries a transient handle strands the directory.
+// Windows file handles held by Chromium or antivirus can transiently block removal; retry.
 const stagingRemovalOptions = {
   recursive: true,
   force: true,
@@ -60,12 +57,7 @@ const nodeStagingFilesystem: StagingFilesystem = {
   }
 }
 
-/**
- * Owns the desktop-side scratch copies of remote workspace files that a client-placed page uploads.
- * Remote-supplied paths are never resolved against the desktop filesystem; only bytes handed to
- * `stage` reach disk, under a main-owned directory that is removed when the page is fenced or when
- * the page's staged budget evicts it.
- */
+/** Remote paths supply filenames only; staged bytes stay in a main-owned directory. */
 export class BrowserClientUploadStaging {
   private readonly staged = new Map<string, StagedDirectory>()
   private readonly filesystem: StagingFilesystem
@@ -76,11 +68,10 @@ export class BrowserClientUploadStaging {
   ) {
     this.filesystem = filesystem
     try {
-      // Why: an abnormal exit leaves staged remote bytes behind, and nothing else ever revisits this
-      // root — the scope is a pure function of the environment id, so a relaunch reuses it.
+      // Sweep crash leftovers from the staging root reused across relaunches.
       this.filesystem.removeDirectorySync(stagingRoot)
     } catch {
-      // A root that cannot be swept still accepts fresh per-command directories.
+      // Let new commands try even if startup cleanup fails.
     }
   }
 
@@ -113,7 +104,7 @@ export class BrowserClientUploadStaging {
       await this.filesystem.mkdir(directory)
       const localFilePaths: string[] = []
       for (const [index, file] of input.files.entries()) {
-        // Why: one subdirectory per file keeps the exact basename the site receives, with no collisions.
+        // Separate directories keep sanitized basenames from colliding.
         const fileDirectory = path.join(directory, String(index))
         await this.filesystem.mkdir(fileDirectory)
         const localFilePath = path.join(fileDirectory, stagedFilename(file.remotePath))
@@ -123,16 +114,14 @@ export class BrowserClientUploadStaging {
       await this.evictPageOverflow(record)
       return { stagingId, localFilePaths }
     } catch (error) {
-      // Why: the staging failure is the one worth reporting; a removal that fails here keeps its
-      // record so a later release retries the directory.
+      // Preserve the staging error; failed cleanup remains recorded for a later retry.
       await this.release(stagingId).catch(() => undefined)
       throw error
     }
   }
 
-  /** Drops the page's oldest staged commands until the newest one fits the per-page budget. */
   private async evictPageOverflow(current: StagedDirectory): Promise<void> {
-    // Why: Map preserves insertion order, so the page's entries are already oldest-first.
+    // Map insertion order already puts the oldest commands first.
     const owned = [...this.staged.values()].filter(
       (record) => record.browserPageId === current.browserPageId
     )
@@ -157,8 +146,7 @@ export class BrowserClientUploadStaging {
     if (!record) {
       return false
     }
-    // Why: every recovery path iterates `staged`, so dropping the record before the removal lands
-    // would leave the directory unreachable for the life of the machine.
+    // Keep the record until removal succeeds so page cleanup can retry.
     await this.filesystem.removeDirectory(record.directory)
     this.staged.delete(stagingId)
     return true
@@ -178,7 +166,7 @@ export class BrowserClientUploadStaging {
     await this.releaseEach(Array.from(this.staged.keys()))
   }
 
-  /** Every id gets an attempt: one directory that cannot be removed must not strand the rest. */
+  /** Attempt every directory before reporting cleanup failures. */
   private async releaseEach(stagingIds: readonly string[]): Promise<void> {
     const failures: unknown[] = []
     for (const stagingId of stagingIds) {
@@ -202,9 +190,7 @@ export class BrowserClientUploadStaging {
   }
 }
 
-// Why: the guest sees this name in the file input, so keep the remote basename but strip every
-// separator and reserved form first — the remote controls this string. Windows rules are applied on
-// every platform so a staged name never depends on where the desktop runs.
+// Apply Windows filename rules everywhere for consistent, safe upload basenames.
 function stagedFilename(remotePath: string): string {
   const basename = remotePath.replace(/\\/g, '/').split('/').at(-1) ?? ''
   return normalizeBrowserDownloadFilename(basename, 'win32')

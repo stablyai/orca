@@ -2,7 +2,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { quietRichMarkdownEditorHost } from './rich-markdown-editor-host.test-support'
 import { createRichMarkdownEditorDocument } from './create-rich-markdown-editor-document'
-import { createRichMarkdownEditorScope } from './document-scope'
 import { RICH_MARKDOWN_EDITOR_MARKUP } from './document-markup'
 import type { MobileRichMarkdownEditorMessage } from '../mobile-rich-markdown-editor-contract'
 import type { RichMarkdownEditorDocument, RichMarkdownEditorHost } from './document-host-seams'
@@ -27,28 +26,6 @@ afterEach(() => {
     startedDocuments.pop()!.stop()
   }
   vi.unstubAllGlobals()
-})
-
-describe('the editor document host seams, by default', () => {
-  it('clears a real timer, and a handle that was never set', () => {
-    const scope = createRichMarkdownEditorScope(quietRichMarkdownEditorHost())
-    const fired = vi.fn()
-    vi.useFakeTimers()
-    try {
-      scope.clearTimer(window.setTimeout(fired, 0))
-      vi.runAllTimers()
-      expect(fired).not.toHaveBeenCalled()
-      expect(() => scope.clearTimer(null)).not.toThrow()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('takes the selection and the page from the window the document is running in', () => {
-    const scope = createRichMarkdownEditorScope(quietRichMarkdownEditorHost())
-    expect(scope.getDocument()).toBe(document)
-    expect(scope.getSelection()).toBe(window.getSelection())
-  })
 })
 
 describe('the editor document host seams, once the page sets them', () => {

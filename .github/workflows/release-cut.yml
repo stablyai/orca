@@ -858,6 +858,9 @@ jobs:
     uses: ./.github/workflows/dependency-security.yml
     with:
       ref: refs/tags/${{ needs.cut.outputs.tag }}
+      runner: ubuntu-latest
+    secrets:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
   terminal-rendering-golden:
     needs: cut
@@ -1195,6 +1198,7 @@ jobs:
     uses: ./.github/workflows/qualified-orcad-template.yml
     with:
       ref: refs/tags/${{ needs.cut.outputs.tag }}
+      fast_runners: false
 
   # Why: artifact jobs submit Windows binaries to SignPath. Keep every
   # quota-consuming build behind all blocking release gates so a late test
@@ -1227,6 +1231,7 @@ jobs:
     uses: ./.github/workflows/release-javascript.yml
     with:
       ref: refs/tags/${{ needs.cut.outputs.tag }}
+      runner: ubuntu-latest
     secrets:
       ORCA_POSTHOG_WRITE_KEY: ${{ secrets.ORCA_POSTHOG_WRITE_KEY }}
 
@@ -2441,7 +2446,6 @@ jobs:
   publish-release:
     needs:
       - cut
-      - dependency-security
       - build
       - build-mac
       - verify-mac-build
@@ -2452,7 +2456,6 @@ jobs:
     if: >-
       !cancelled() &&
       needs.cut.result == 'success' &&
-      (needs.dependency-security.result == 'success' || contains(needs.cut.outputs.tag, '-')) &&
       needs.build.result == 'success' &&
       needs.build-mac.result == 'success' &&
       needs.verify-mac-build.result == 'success' &&

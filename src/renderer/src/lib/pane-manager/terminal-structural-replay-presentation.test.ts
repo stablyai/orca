@@ -328,25 +328,64 @@ describe('structural replay presentation', () => {
     expect(getContext).not.toHaveBeenCalled()
   })
 
-  it('still retains a DOM frame during synchronized output without repainting it', async () => {
-    const { terminal, screen } = createTerminal()
-    const refreshRows = vi.fn()
-    const synchronized = {
-      ...terminal,
-      _core: {
-        ...terminal._core,
-        coreService: { decPrivateModes: { synchronizedOutput: true } },
-        _renderService: { _isPaused: false, refreshRows }
+  it('keeps the retained frame up until an open synchronized frame closes', async () => {
+    vi.useFakeTimers()
+    try {
+      const { terminal, screen } = createTerminal()
+      const refreshRows = vi.fn()
+      const renderRows = vi.fn()
+      const decPrivateModes = { synchronizedOutput: true }
+      const synchronized = {
+        ...terminal,
+        _core: {
+          ...terminal._core,
+          coreService: { decPrivateModes },
+          _renderService: { _isPaused: false, refreshRows, _renderer: { value: { renderRows } } }
+        }
       }
-    }
-    await createTerminalStructuralReplayCoordinator(synchronized).run(() => {
+      await createTerminalStructuralReplayCoordinator(synchronized).run(() => {
+        expect(screen.style.opacity).toBe('0')
+        expect(refreshRows).not.toHaveBeenCalled()
+      })
+      await vi.advanceTimersByTimeAsync(100)
       expect(screen.style.opacity).toBe('0')
       expect(terminal.element.querySelector('[data-terminal-replay-frame]')?.textContent).toBe(
         'Last coherent frame'
       )
-      expect(refreshRows).not.toHaveBeenCalled()
-    })
-    expect(screen.style.opacity).toBe('')
+      expect(renderRows).not.toHaveBeenCalled()
+
+      decPrivateModes.synchronizedOutput = false
+      await vi.advanceTimersByTimeAsync(20)
+      expect(screen.style.opacity).toBe('')
+      expect(terminal.element.querySelector('[data-terminal-replay-frame]')).toBeNull()
+      expect(renderRows).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('shows the screen at the hold cap when a synchronized frame never closes', async () => {
+    vi.useFakeTimers()
+    try {
+      const { terminal, screen } = createTerminal()
+      const synchronized = {
+        ...terminal,
+        _core: {
+          ...terminal._core,
+          coreService: { decPrivateModes: { synchronizedOutput: true } },
+          _renderService: { _isPaused: false, refreshRows: vi.fn() }
+        }
+      }
+      await createTerminalStructuralReplayCoordinator(synchronized).run(() => {})
+      await vi.advanceTimersByTimeAsync(TERMINAL_REPLAY_PRESENTATION_MAX_HOLD_MS - 1)
+      expect(screen.style.opacity).toBe('0')
+      await vi.advanceTimersByTimeAsync(1)
+      expect(screen.style.opacity).toBe('')
+      expect(terminal.element.querySelector('[data-terminal-replay-frame]')).toBeNull()
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('keeps decorations positioned in the retained frame', async () => {

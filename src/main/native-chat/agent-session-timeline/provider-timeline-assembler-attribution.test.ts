@@ -1,6 +1,3 @@
-// Where a request, a send or a background task belongs is decided from the turn the event names
-// and the journal as it stands, not from what an earlier event left in memory.
-
 import { afterEach, describe, expect, it } from 'vitest'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import { agentJournalTurnBody } from '../../../shared/agent-session-turn-record'
@@ -36,7 +33,6 @@ function identityOf(itemId: string) {
   return identity
 }
 
-/** `p1` opened in `t1` and answered by a client, `t1` over, `t2` running. */
 async function answeredInAnEarlierTurn(): Promise<ProviderTimelineRig> {
   const rig = await openProviderTimelineRig()
   rig.assembler.apply({ type: 'turn.open', turn: 't1', at: 1_000 })
@@ -94,13 +90,13 @@ describe('a request key reused in another turn', () => {
     rig.assembler.apply({ type: 'turn.open', turn: 't1', at: 1_000 })
     rig.assembler.apply({ type: 'request.open', request: '0', body: pendingApproval })
     await rig.rows()
-    // JSON-RPC ids restart with the provider process: the new child asks under `0` again.
+    // Provider restarts reuse JSON-RPC request IDs.
     const restarted = await rig.restart()
     restarted.apply({ type: 'turn.open', turn: 't2', at: 3_000 })
     expect(
       restarted.apply({ type: 'request.open', request: '0', body: pendingApproval }).dropped
     ).toBeUndefined()
-    // The sweep cancelled the old process's prompt; the new one is its own row, still pending.
+    // Process generations must isolate the swept prompt from the new pending request.
     expect((await rig.row(providerItemId('request', '0')))?.body).toMatchObject({
       resolution: { state: 'cancelled' }
     })
@@ -179,7 +175,6 @@ describe('a send that names its turn', () => {
     rig.assembler.apply({ type: 'turn.end', at: 4_000, state: 'completed' })
     rig.assembler.apply({ type: 'turn.open', turn: 't2', at: 5_000 })
     expect((await rig.turn('t1'))?.userItemId).toBe('orca:send-a')
-    // A turn no send named opens as the provider's own.
     expect((await rig.turn('t3'))?.userItemId).toBe(providerTurnItemId('t3'))
     expect((await rig.turn('t2'))?.userItemId).toBe('orca:send-b')
   })
@@ -197,7 +192,6 @@ describe('a background task', () => {
         .dropped
     ).toBeUndefined()
     expect(await backgroundTaskState(rig, 'bg')).toBe('done')
-    // A straggler progress report never re-lights it.
     expect(
       rig.assembler.apply({
         type: 'item.update',

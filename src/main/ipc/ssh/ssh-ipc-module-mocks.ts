@@ -1,8 +1,7 @@
 import { vi } from 'vitest'
 import type { SshIpcMockModules, SshIpcMockState, SshIpcMocks } from './ssh-ipc-mock-shapes'
 
-// Mocked module shapes for the SSH IPC handler tests. Built inside `vi.hoisted` so
-// each test file's own `vi.mock` factories can hand the objects back verbatim.
+// Build inside vi.hoisted so per-suite vi.mock factories can return these objects.
 export function createSshIpcMocks(): SshIpcMocks {
   const state: SshIpcMockState = {
     handleMock: vi.fn(),

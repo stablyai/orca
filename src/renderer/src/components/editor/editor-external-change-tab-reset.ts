@@ -14,7 +14,7 @@ export function createEditorExternalChangeTabReset(store: AppStoreApi): (event: 
 
     const state = store.getState()
     // Why no sibling expansion: views of one file share a record, so each matches by path itself.
-    const matchingFiles = getOpenFilesForExternalFileChange(state.openFiles, detail)
+    const matchingFiles = getOpenFilesForExternalFileChange(state.openFiles, detail, state)
     if (matchingFiles.length === 0) {
       return
     }

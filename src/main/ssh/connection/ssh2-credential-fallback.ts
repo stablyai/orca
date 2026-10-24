@@ -1,6 +1,7 @@
 import type { ConnectConfig } from 'ssh2'
 import type { SshTarget } from '../../../shared/ssh-types'
 import type { SshResolvedConfig } from '../config/ssh-g-config-resolution'
+import type { SkippedIdentityFiles } from '../ssh-auth-resolution'
 import type { SshCredentialKind } from './ssh-connection-callbacks'
 import { buildConnectConfig } from './ssh-connect-config'
 import type { resolveEffectiveProxy } from '../ssh-proxy-command'
@@ -25,6 +26,7 @@ type FailedSsh2Attempt = {
   config: ConnectConfig
   resolved: SshResolvedConfig | null
   effectiveProxy: EffectiveProxy
+  skippedIdentityFiles?: SkippedIdentityFiles
 }
 
 /** What the fallback ladder reads from and drives on its connection attempt; getters read live state. */
@@ -73,7 +75,7 @@ export async function recoverFailedSsh2Attempt(
   attempt: FailedSsh2Attempt,
   host: Ssh2CredentialFallbackHost
 ): Promise<void> {
-  const { config, resolved, effectiveProxy } = attempt
+  const { config, resolved, effectiveProxy, skippedIdentityFiles } = attempt
   if (!(err instanceof Error)) {
     host.killProxyIfCurrent()
     throw err
@@ -127,7 +129,8 @@ export async function recoverFailedSsh2Attempt(
   if (isAgentFallbackError(authError) && config.agent && !config.privateKey) {
     const keyConfig = buildConnectConfig(host.target, resolved, {
       includeAgent: false,
-      includePrivateKey: true
+      includePrivateKey: true,
+      skippedIdentityFiles
     })
     // Why: if the agent path failed, password/passphrase retries must not reuse the same agent-only config.
     credentialRetryConfig = keyConfig

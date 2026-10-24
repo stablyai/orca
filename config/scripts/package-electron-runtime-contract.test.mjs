@@ -4,6 +4,7 @@ import { join, resolve } from 'node:path'
 import { runInNewContext } from 'node:vm'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
+import { compileAggregateExpression } from './pr-aggregate-gate-context.mjs'
 
 const projectDir = resolve(import.meta.dirname, '../..')
 const require = createRequire(import.meta.url)
@@ -110,6 +111,30 @@ describe('Electron runtime package contract', () => {
     )
 
     expect(releaseWorkflowText).not.toContain('blacksmith-')
+    for (const caller of Object.values(releaseWorkflow.jobs)) {
+      if (!caller.uses?.startsWith('./.github/workflows/')) {
+        continue
+      }
+      const child = parse(readProject(caller.uses))
+      const inputs = {
+        ...Object.fromEntries(
+          Object.entries(child.on.workflow_call.inputs).map(([name, input]) => [
+            name,
+            input.default ?? ''
+          ])
+        ),
+        ...caller.with
+      }
+      for (const job of Object.values(child.jobs)) {
+        if (!job['runs-on']) {
+          continue
+        }
+        const runner = job['runs-on'].startsWith('${{')
+          ? compileAggregateExpression(job['runs-on'], ['inputs'])({ inputs }).coerceString()
+          : job['runs-on']
+        expect(runner).not.toMatch(/^(blacksmith-|orca-)/)
+      }
+    }
     expect(releaseWorkflow.jobs['build-mac']['runs-on']).toBe('ubuntu-latest')
     expect(releaseWorkflow.jobs['build-mac'].permissions.actions).toBe('write')
     expect(macDispatchStep.run).toBe(
@@ -146,7 +171,6 @@ describe('Electron runtime package contract', () => {
           for (const cancelled of [false, true]) {
             const needs = {
               cut: { result: 'success', outputs: { should_release: 'true', tag: 'v1.5.0' } },
-              'dependency-security': { result: 'success' },
               build: { result: matrix },
               'build-mac': { result: dispatch },
               'verify-mac-build': { result: verification },
@@ -169,7 +193,6 @@ describe('Electron runtime package contract', () => {
     }
     for (const prerequisite of [
       'cut',
-      'dependency-security',
       'skill-sharing-linux-floor-release-gate',
       'skill-sharing-release-gate',
       'terminal-rendering-golden'
@@ -178,7 +201,6 @@ describe('Electron runtime package contract', () => {
         ['cut', { result: 'success', outputs: { should_release: 'true', tag: 'v1.5.0' } }],
         ...[
           'build',
-          'dependency-security',
           'build-mac',
           'verify-mac-build',
           'skill-sharing-linux-floor-release-gate',

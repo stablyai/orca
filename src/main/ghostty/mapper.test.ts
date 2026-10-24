@@ -171,8 +171,6 @@ describe('mapGhosttyToOrca — background & colors', () => {
   })
 
   it('maps background-blur-radius = 0 to windowBackgroundBlur false without a drop note', () => {
-    // Why: 0 means blur is off — there is no radius value being lost, so the
-    // "radius not preserved" note would be misleading here.
     const result = mapGhosttyToOrca({ 'background-blur-radius': '0' })
     expect(result.diff).toEqual({ windowBackgroundBlur: false })
     expect(result.unsupportedKeys).toEqual([])
@@ -281,9 +279,7 @@ describe('mapGhosttyToOrca — palette', () => {
 })
 
 describe('mapGhosttyToOrca — window & padding', () => {
-  // Why: window-padding-color and window-padding-balance are not imported —
-  // the CSS vars Orca sets for them have no consuming rules today, so the
-  // mapper must treat the keys as unsupported rather than silently dropping.
+  // These window-padding variables have no consuming CSS rules, so importing them would be a silent no-op.
   it('marks window-padding-color as unsupported', () => {
     const result = mapGhosttyToOrca({ 'window-padding-color': '#202020' })
     expect(result.diff).toEqual({})

@@ -61,8 +61,7 @@ describe('runtime spawn commit: adopted agent-session claim', () => {
     )
   })
 
-  // Why: the SSH relay's adopted reply carries neither isReattach nor snapshot dims; the
-  // adoption itself proves a live owner, so main keeps what it held rather than the request.
+  // Adoption proves attach even when relay replies omit isReattach/grid; retain cached geometry.
   it('treats an adoption without a reattach flag as an attach and keeps the held size', async () => {
     ptySizes.set(PTY_ID, LIVE_GRID)
     const { runtime, ctx } = makeAdoptedCtx({})

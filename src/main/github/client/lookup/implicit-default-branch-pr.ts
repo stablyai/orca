@@ -68,7 +68,7 @@ function isForeignSameNamedHead(
   }
   const headRepo = pullRequestHeadRepository(data, prRepo)
   const baseRepo = data.url ? ownerRepoFromPullRequestUrl(data.url) : null
-  // Why: a same-repo PR lives in a checkout remote; its canonical URL survives stale renamed-remote URLs.
+  // Canonical PR URLs remain usable when same-repo remote URLs are stale.
   if (headRepo && baseRepo && githubRepoIdentityKey(headRepo) === githubRepoIdentityKey(baseRepo)) {
     return false
   }

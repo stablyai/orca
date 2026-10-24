@@ -1,6 +1,6 @@
 import type { WorkspaceAttachment } from '../shared/worktree/types'
 import type { RuntimeStatus } from '../shared/runtime-types'
-import type { JiraIssue } from '../shared/jira-types'
+import type { JiraIssue } from '../shared/jira/jira-types'
 import {
   isResolvedJiraIssueMatch,
   JIRA_ISSUE_KEY_PATTERN,

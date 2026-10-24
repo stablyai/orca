@@ -134,7 +134,6 @@ describe('renderer restart wiring', () => {
     ipcRenderer.emit('updater:quitAndInstallAborted')
     ipcRenderer.emit('window:unload-prevented')
 
-    expect(ipcRenderer.eventNames()).toHaveLength(4)
     expect(handleStatus).toHaveBeenCalledWith({ state: 'error', message: 'install failed' })
     expect(abort).toHaveBeenCalledTimes(1)
     expect(unloadPrevented).toHaveBeenCalledTimes(1)

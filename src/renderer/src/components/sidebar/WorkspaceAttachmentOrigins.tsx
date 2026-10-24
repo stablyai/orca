@@ -1,6 +1,8 @@
 import React from 'react'
+import { Terminal } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { resolveNotificationTabOwner } from '@/attention/notification-subject-owner'
 import { terminalLayoutContainsLeaf } from '../../../../shared/workspace-session-pane-ownership'
@@ -24,12 +26,32 @@ function useReferenceTabs(workspace: Worktree): Tab[] {
   })
 }
 
+function focusOrigin(workspace: Worktree, tab: Tab, paneKey: string | undefined): void {
+  const state = useAppStore.getState()
+  if (!state.setActiveWorktree(workspace.id, workspace.hostId)) {
+    return
+  }
+  state.activateTab(tab.id, { worktreeId: workspace.id })
+  const pane = paneKey ? parsePaneKey(paneKey) : null
+  if (
+    tab.contentType === 'terminal' &&
+    pane &&
+    pane.tabId === tab.entityId &&
+    state.tabsByWorktree[workspace.id]?.some((entry) => entry.id === tab.entityId) &&
+    terminalLayoutContainsLeaf(state.terminalLayoutsByTabId[tab.entityId]?.root, pane.leafId)
+  ) {
+    activateTabAndFocusPane(tab.entityId, pane.leafId)
+  }
+}
+
 export function WorkspaceAttachmentOrigins({
   item,
-  workspace
+  workspace,
+  compact = false
 }: {
   item: WorkspaceAttachment
   workspace: Worktree
+  compact?: boolean
 }): React.JSX.Element | null {
   const tabs = useReferenceTabs(workspace)
   const origins = item.origins?.filter((origin) => origin.kind === 'observed') ?? []
@@ -37,7 +59,9 @@ export function WorkspaceAttachmentOrigins({
     return null
   }
   return (
-    <div className="flex flex-wrap items-center gap-1 pl-5">
+    <div
+      className={compact ? 'flex shrink-0 items-center' : 'flex flex-wrap items-center gap-1 pl-5'}
+    >
       {origins.map((origin) => {
         const tab = tabs.find(
           (candidate) =>
@@ -51,6 +75,35 @@ export function WorkspaceAttachmentOrigins({
           origin.agent ||
           translate('workspace.links.terminal', 'Terminal')
         const description = translate('workspace.links.seenIn', 'Seen in {{label}}', { label })
+        if (compact) {
+          const unavailable = translate('workspace.links.unavailableTab', 'Tab unavailable')
+          return (
+            <Tooltip key={getWorkspaceAttachmentOriginKey(origin)}>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="size-4"
+                  aria-disabled={!tab || undefined}
+                  aria-label={tab ? description : `${description} · ${unavailable}`}
+                  onKeyDown={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    if (tab) {
+                      focusOrigin(workspace, tab, origin.paneKey)
+                    }
+                  }}
+                >
+                  <Terminal className="size-3 text-muted-foreground" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={4}>
+                {tab ? description : `${description} · ${unavailable}`}
+              </TooltipContent>
+            </Tooltip>
+          )
+        }
         return tab ? (
           <Button
             key={getWorkspaceAttachmentOriginKey(origin)}
@@ -65,24 +118,7 @@ export function WorkspaceAttachmentOrigins({
             }}
             onClick={(event) => {
               event.stopPropagation()
-              const state = useAppStore.getState()
-              if (!state.setActiveWorktree(workspace.id, workspace.hostId)) {
-                return
-              }
-              state.activateTab(tab.id, { worktreeId: workspace.id })
-              const pane = origin.paneKey ? parsePaneKey(origin.paneKey) : null
-              if (
-                tab.contentType === 'terminal' &&
-                pane &&
-                pane.tabId === tab.entityId &&
-                state.tabsByWorktree[workspace.id]?.some((entry) => entry.id === tab.entityId) &&
-                terminalLayoutContainsLeaf(
-                  state.terminalLayoutsByTabId[tab.entityId]?.root,
-                  pane.leafId
-                )
-              ) {
-                activateTabAndFocusPane(tab.entityId, pane.leafId)
-              }
+              focusOrigin(workspace, tab, origin.paneKey)
             }}
           >
             {description}

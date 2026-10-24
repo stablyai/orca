@@ -33,7 +33,6 @@ describe('a running Codex chat lists and runs the skills Codex loaded', () => {
     await settle()
 
     const reported = adapter.readCommands('session-1') ?? []
-    // Keeps the menu's own rows, since a report replaces them on every client.
     expect(reported.filter((row) => row.kind === 'command').map((row) => row.name)).toEqual(
       expect.arrayContaining(['model', 'clear', 'compact', 'goal'])
     )
@@ -66,9 +65,9 @@ describe('a running Codex chat lists and runs the skills Codex loaded', () => {
         blocks: [{ type: 'text', text: '$review this, then $gone' }],
         skills: [
           { name: 'review', path: REPO_REVIEW },
-          // Edited out of the text: not sent.
+          // Removed from the text after selection.
           { name: 'work-pets:create-pet', path: PET },
-          // Not a file this Codex loaded: left to its `$name`.
+          // Unloaded paths remain plain $name text.
           { name: 'gone', path: '/elsewhere/gone/SKILL.md' }
         ]
       }

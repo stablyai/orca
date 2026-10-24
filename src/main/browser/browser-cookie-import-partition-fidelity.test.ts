@@ -55,9 +55,7 @@ vi.mock('./browser-cookie-clear-store', () => ({
     snapshotClearIdentities: async (items: { cookie: Record<string, unknown>; url: string }[]) =>
       items.map(({ cookie, url }) => ({ url, ...cookie })),
     restoreClearIdentities: async () => undefined,
-    // Why (STA-4300): the import writes land here, not on cookies.set. A store mock missing this
-    // method would throw a TypeError the per-cookie catch swallows, quietly routing every write
-    // down the rejected-cookie path while the suite still looked green.
+    // Implement CDP writes so swallowed missing-method errors cannot fake successful coverage.
     writeCookieIdentity: writeCookieIdentityMock,
     dispose: () => undefined
   })
@@ -93,9 +91,7 @@ function firefoxBrowser(cookiesPath: string): DetectedBrowser {
   }
 }
 
-// Why (STA-4300): cookies.set() silently drops partitionKey, so no user cookie may reach it. Only
-// the __init probe — which writes no user data — is allowed through; anything else is the
-// downgrade returning, and it must fail the test rather than quietly succeed.
+// Only __init may use cookies.set; imported cookies require CDP partition identities.
 const unreachableCookieSet = vi.fn(async (details: { name: string }) => {
   if (details.name !== '__init') {
     throw new Error(`cookies.set was called for user cookie ${details.name}`)
@@ -156,8 +152,6 @@ describe('validated import partition fidelity', () => {
     expect(cookieWriteMock).not.toHaveBeenCalled()
   })
 
-  // Why (STA-4300): a JSON export that carries a full CHIPS partition must reach the jar with it.
-  // cookies.set() drops partitionKey silently, so this only works through the CDP identity store.
   it('carries a complete partitionKey from a JSON export through to the write', async () => {
     const filePath = writeCookieFile([
       {
@@ -181,8 +175,6 @@ describe('validated import partition fidelity', () => {
     expect(result.ok && result.summary.partitionSkippedCookies).toBeUndefined()
   })
 
-  // Why (STA-4300): exporters that emit only topLevelSite carry no ancestor bit. Writing the cookie
-  // unpartitioned would report a clean success the site cannot use, so it is skipped and counted.
   it('skips and reports a cookie whose partitionKey cannot be read faithfully', async () => {
     const filePath = writeCookieFile([
       {
@@ -198,7 +190,6 @@ describe('validated import partition fidelity', () => {
     const result = await importCookiesFromFile(filePath, 'persist:test')
 
     expect(result.ok).toBe(true)
-    // The lossy write is not merely unused — only the readable cookie was ever attempted.
     expect(cookieWriteMock).toHaveBeenCalledTimes(1)
     expect(cookieWriteMock.mock.calls[0][0].name).toBe('plain')
     expect(result.ok && result.summary.partitionSkippedCookies).toBe(1)
@@ -378,9 +369,7 @@ describe('native Chromium import partition fidelity', () => {
     rmSync(tmpDir, { recursive: true, force: true })
   })
 
-  // Why (STA-4300): the native path's in-memory load used cookies.set(), which drops partitionKey
-  // silently. This pins the identity that actually reaches the jar; the end-to-end proof that
-  // Chromium stores it is browser-cookie-import-partition-success.electron.test.ts.
+  // Verify the outgoing identity here; the Electron success fixture checks Chromium’s stored cookie.
   it('carries a partitioned source row through to the write with both partition halves', async () => {
     const sourceCookiesPath = join(tmpDir, 'Chrome', 'Default', 'Network', 'Cookies')
     createChromiumCookieTestDatabase(sourceCookiesPath, [
@@ -464,17 +453,12 @@ describe('native Chromium import partition fidelity', () => {
     const result = await importCookiesFromBrowser(chromeBrowser(sourceCookiesPath), 'persist:test')
 
     expect(result.ok).toBe(true)
-    // Only the readable cookie was ever attempted — the unreadable one reached no writer at all.
     expect(cookieWriteMock).toHaveBeenCalledTimes(1)
     expect(cookieWriteMock.mock.calls[0][0].name).toBe('plain')
     expect(result.ok && result.summary?.partitionSkippedCookies).toBe(1)
     expect(result.ok && result.summary?.importedCookies).toBe(1)
     expect(result.ok && result.summary?.skippedCookies).toBe(1)
-    // Why (STA-4300 §4.3b): this assertion is STRONGER than the one it replaces. bf6dc6fcba staged
-    // an image and merely omitted the unreadable row from it; that image is a whole-database
-    // replacement on the next start, so it would still have erased the preserved family it was
-    // supposed to leave alone. A skip-bearing import now registers NO image at all, which closes
-    // the cold-start channel by construction rather than by a staged predicate that has to be right.
+    // A partition skip disables replay so a staged image cannot erase the preserved family.
     expect(setPendingCookieImportMock).not.toHaveBeenCalled()
   })
 
@@ -541,9 +525,6 @@ describe('native Chromium import partition fidelity', () => {
     expect(setPendingCookieImportMock).not.toHaveBeenCalled()
   })
 
-  // Why: without this, "disable staging on a skip" could be implemented as "disable staging
-  // always" and no test would notice — a real regression to the restart path wearing the disguise
-  // of a safety fix.
   it('still stages a cold-restart image when nothing is preserved', async () => {
     const sourceCookiesPath = join(tmpDir, 'Cookies')
     const legacyDb = new DatabaseSync(sourceCookiesPath)

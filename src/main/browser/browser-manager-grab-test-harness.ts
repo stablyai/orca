@@ -4,8 +4,7 @@ import { browserManager } from './browser-manager'
 export const GRAB_RENDERER_WEB_CONTENTS_ID = 5001
 export const GRAB_GUEST_WEB_CONTENTS_ID = 101
 
-// Why: every grab test file must declare its own vi.hoisted mock bundle (vi.mock
-// factories cannot close over imports), so this is the shape they all produce.
+// Each test declares vi.hoisted mocks; factories cannot capture imported values.
 export type GrabTestMocks = {
   webContentsFromIdMock: Mock
   guestOnMock: Mock

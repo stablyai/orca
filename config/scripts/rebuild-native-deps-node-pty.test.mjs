@@ -550,7 +550,7 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
     }
   })
 
-  it('compiles node-pty when its source carries the denial', () => {
+  it('calls the rebuild API when node-pty source carries the denial', () => {
     const projectDir = mkTempProject()
 
     try {

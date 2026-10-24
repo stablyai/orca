@@ -26,7 +26,12 @@ export function acquireDesktopProfileInstanceLock(
     process.once('exit', () => lock.release())
     return { state: 'acquired', lock }
   } catch (error) {
-    if (error instanceof OrcadInstanceLockError && error.code === 'orcad_instance_lock_held') {
+    // A holder this machine cannot judge may still be running: refusing keeps one writer.
+    if (
+      error instanceof OrcadInstanceLockError &&
+      (error.code === 'orcad_instance_lock_held' ||
+        error.code === 'orcad_instance_lock_holder_unverifiable')
+    ) {
       writeStartupDiagnosticLine(`[single-instance] ${error.message}`, write)
       return { state: 'held', message: error.message }
     }

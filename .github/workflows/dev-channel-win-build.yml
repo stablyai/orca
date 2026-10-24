@@ -62,7 +62,7 @@ on:
       fast_release:
         description: Use the faster unsigned-build runner outside signing provenance
         type: boolean
-        default: false
+        default: true
       javascript_source_sha:
         description: Restore this run's shared dev JavaScript instead of rebuilding it
         type: string
@@ -94,6 +94,11 @@ on:
         description: Version to package, without the leading v
         required: true
         type: string
+
+      fast_release:
+        description: Use Blacksmith for unsigned Windows builds
+        type: boolean
+        default: true
 
 permissions:
   contents: read

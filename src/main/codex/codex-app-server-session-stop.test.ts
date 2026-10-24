@@ -131,7 +131,6 @@ describe('runCodexAppServerSession stop', () => {
     })
     await vi.advanceTimersByTimeAsync(1_000)
     expect(await outcome).toBeInstanceOf(CodexAppServerTimeoutError)
-    // The session's only own signal is the deadline SIGTERM; only the teardown forces.
     expect(child.kill.mock.calls).toEqual([['SIGTERM']])
     expect(killCodexAppServerProcessTree).not.toHaveBeenCalled()
   })
@@ -146,7 +145,6 @@ describe('runCodexAppServerSession stop', () => {
     await vi.advanceTimersByTimeAsync(1_499)
     expect(terminateProviderProcessTree).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(1)
-    // The shared close's Windows teardown (taskkill of the tree), as the Codex connection's.
     expect(terminateProviderProcessTree).toHaveBeenCalledWith(child, {
       site: 'codex-app-server-session',
       platform: 'win32'
@@ -154,8 +152,7 @@ describe('runCodexAppServerSession stop', () => {
 
     await vi.advanceTimersByTimeAsync(1_000)
     expect(await outcome).toBeInstanceOf(CodexAppServerTimeoutError)
-    // The session sends no signal of its own on Windows (a SIGTERM there is TerminateProcess);
-    // the teardowns, mocked here, own the kill.
+    // Windows SIGTERM is TerminateProcess; the mocked teardowns own termination.
     expect(child.kill).not.toHaveBeenCalled()
     expect(killCodexAppServerProcessTree).toHaveBeenCalledTimes(1)
   })

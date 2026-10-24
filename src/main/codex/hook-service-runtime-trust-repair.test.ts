@@ -152,7 +152,6 @@ describe('CodexHookService', () => {
 
       const legacyToml = readFileSync(runtimeTomlPath, 'utf-8')
       expect(legacyToml).toContain(legacyPermissionHeader)
-      // Why partial: Codex on Windows reads only the backslash key, so it would ask to review this hook.
       expect(service.getStatus(managedCodexHome).state).toBe('partial')
 
       expect((await service.install()).state).toBe('installed')
@@ -208,7 +207,6 @@ describe('CodexHookService', () => {
     )
     expect(readFileSync(runtimeTomlPath, 'utf-8').split(permissionRequestHeader)).toHaveLength(3)
 
-    // Why enabled: Orca's own entry is re-enabled, since its setting is the only off switch.
     expect((await service.install()).state).toBe('installed')
 
     const repairedToml = readFileSync(runtimeTomlPath, 'utf-8')

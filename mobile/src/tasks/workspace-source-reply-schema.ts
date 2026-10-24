@@ -61,7 +61,21 @@ export const sshConnectionStateSchema = z
           status: openEnum(SSH_CONNECTION_STATUS, 'disconnected'),
           error: salvagedOptional('error', z.string().nullable()),
           reconnectAttempt: salvagedOptional('reconnectAttempt', z.number()),
-          connectionGeneration: salvagedOptional('connectionGeneration', z.number())
+          connectionGeneration: salvagedOptional('connectionGeneration', z.number()),
+          // Only the start refusal is read, for the desktop-recovery hint; old hosts omit it.
+          managedServer: salvagedOptional(
+            'managedServer',
+            z.looseObject({
+              kind: salvagedOptional('kind', z.string()),
+              serving: salvagedOptional(
+                'serving',
+                z.looseObject({
+                  state: salvagedOptional('state', z.string()),
+                  detail: salvagedOptional('detail', z.string())
+                })
+              )
+            })
+          )
         })
         .nullable()
     )

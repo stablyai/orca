@@ -22,7 +22,6 @@ describe('ClaudeSubagentIds', () => {
     for (let index = 0; index <= 512; index += 1) {
       ids.alias(`toolu_${index}`, `task-${index}`)
     }
-    // Evicted: the id now stands only for itself.
     expect(ids.canonical('toolu_0')).toBe('toolu_0')
     expect(ids.canonical('toolu_512')).toBe('task-512')
     expect(ids.canonical('toolu_1')).toBe('task-1')

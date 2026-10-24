@@ -54,7 +54,7 @@ export async function rewindJournalContext(input: {
           removed.set(agentJournalSubmissionKey(submission.clientMessageId), true)
         }
       }
-      // Ahead of the tombstones: a legacy card read through a hand-off this retires keeps its reading.
+      // Capture adoption before tombstones retire legacy-card handoffs.
       adoption = input.cards.adoptionOfAll()
       const revisions = new Map<string, number>()
       const plan: ((seq: number, ts: number) => JournalRow)[] = [...adoption.rows]

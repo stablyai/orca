@@ -5,10 +5,7 @@ import { pickAllowedEnv, RUNTIME_ENV_ALLOWLIST } from '../ai-vault/session-scann
 
 const PROCESS_ENTRY_FILENAME = 'wsl-transcript-fs-process-entry.js'
 
-// Why: never `...process.env` into a forked transcript reader — an ambient
-// NODE_OPTIONS would halt (--inspect-brk) or --require code into every child,
-// and shell-exported secrets have no business in one. Shares the AI Vault
-// runtime allowlist: only what Node/libuv need to start.
+// Use the runtime allowlist: inherited NODE_OPTIONS may halt/inject child code, and shell secrets are unnecessary.
 export function wslTranscriptFsProcessForkEnv(
   baseEnv: NodeJS.ProcessEnv = process.env,
   platform: NodeJS.Platform = process.platform
@@ -23,9 +20,7 @@ export function resolveWslTranscriptFsProcessEntryPath(
   resourcesPath: string | undefined = process.resourcesPath,
   pathExists: (path: string) => boolean = existsSync
 ): string {
-  // Why: this module compiles into out/main or out/main/chunks, so probe both
-  // levels. ELECTRON_RUN_AS_NODE children (the scanner service) bypass asar and
-  // have no process.resourcesPath, so the __dirname legs must succeed there.
+  // Probe out/main and chunks; scanner Node children lack resourcesPath and need unpacked __dirname paths.
   const toUnpackedDir = (dir: string): string =>
     dir.replace(/([\\/])app\.asar(?=([\\/]|$))/, '$1app.asar.unpacked')
   for (const baseDir of [moduleDir, join(moduleDir, '..')].map(toUnpackedDir)) {

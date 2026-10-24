@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ORCAD_MIGRATION_MANIFEST_VERSION } from '../../shared/orcad-migration/orcad-migration-manifest-validation'
 import type { OrcadMigrationManifest } from '../../shared/orcad-migration/orcad-migration-manifest'
 import { computeOrcadMigrationManifestSha256 } from '../orcad/orcad-migration-manifest-digest'
-import { DORMANT_AUTOMATION } from '../persistence-orcad-migration-catalog-fixture'
+import { DORMANT_AUTOMATION } from '../persistence/migrating-orcad-catalog/persistence-orcad-migration-catalog-fixture'
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../shared/pairing'
 import { AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
 

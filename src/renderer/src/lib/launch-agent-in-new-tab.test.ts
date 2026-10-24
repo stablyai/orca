@@ -549,7 +549,7 @@ describe('launchAgentInNewTab', () => {
       worktreeId: 'wt-1',
       environmentId: 'web-runtime',
       agentSessionKind: 'fresh',
-      agent: 'codex',
+      launchAgent: 'codex',
       viewMode: 'terminal'
     })
   })
@@ -573,7 +573,7 @@ describe('launchAgentInNewTab', () => {
       worktreeId: 'wt-1',
       environmentId: 'web-runtime',
       agentSessionKind: 'fresh',
-      agent: 'codex',
+      launchAgent: 'codex',
       viewMode: 'terminal'
     })
   })

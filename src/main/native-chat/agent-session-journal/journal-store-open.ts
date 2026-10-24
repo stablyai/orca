@@ -19,8 +19,7 @@ export async function openJournalStoreState(input: {
   highestFence: () => number
 }): Promise<void> {
   const loaded = input.replay()
-  // An epoch named but holding no row (a crash inside an older build's repair) has nothing to
-  // keep, so it is founded afresh like a chat with no journal; no row is deleted.
+  // Empty epochs left by older repairs contain nothing to preserve; found afresh without deleting rows.
   if (!loaded || (!loaded.newer && !loaded.damage && loaded.state.lastSequence === 0)) {
     input.start()
     return
@@ -30,7 +29,6 @@ export async function openJournalStoreState(input: {
   await settleStaleSubagentRosters(input, loaded)
 }
 
-/** Retires a `working` subagent roster the previous host never got to settle. */
 async function settleStaleSubagentRosters(
   input: {
     appendItem: (

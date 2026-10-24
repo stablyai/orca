@@ -155,7 +155,7 @@ describe('the allowlist narrowed to one session', () => {
 })
 
 describe('what init may carry', () => {
-  it('keeps a value at the bound and drops the one above it, naming what it dropped', () => {
+  it('keeps an ordinary value and names the oversized value it drops', () => {
     const held = {
       'orca:terminalTextScale': '1',
       'orca:mobileStructuredSendOperations:v1': 'x'.repeat(PAGE_STORAGE_MAX_VALUE_CHARS + 1)
@@ -175,8 +175,10 @@ describe('what init may carry', () => {
       Array.from({ length: PAGE_STORAGE_MAX_ENTRIES + 4 }, (_, index) => [`k${String(index)}`, 'v'])
     )
     const { entries, dropped, oversize } = pageStorageEntriesForInit(held)
-    expect(Object.keys(entries)).toHaveLength(PAGE_STORAGE_MAX_ENTRIES)
-    expect(dropped).toHaveLength(4)
+    expect(entries).toEqual(
+      Object.fromEntries(Object.entries(held).slice(0, PAGE_STORAGE_MAX_ENTRIES))
+    )
+    expect(dropped).toEqual(Object.keys(held).slice(PAGE_STORAGE_MAX_ENTRIES))
     // Room, not size: the page may write any of these four itself, so none is refused (33.6).
     expect(oversize).toEqual([])
   })

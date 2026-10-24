@@ -140,18 +140,13 @@ describe('leaving the file preview', () => {
     expect(leave).not.toHaveBeenCalled()
   })
 
-  it('arms the hardware back press natively', () => {
-    render(false, vi.fn())
-    expect(native.addEventListener).toHaveBeenCalledTimes(1)
-    expect(native.addEventListener.mock.calls[0]?.[0]).toBe('hardwareBackPress')
-  })
-
   // Which module answers is the bundler's, not this hook's: `use-back-claim.web.ts` claims the key
   // from the shell instead, and the census beside it is what holds every site to the one seam.
   it('registers once across a rebuilt handler, rather than per dependency change', () => {
     const leave = vi.fn()
     const renderer = render(false, leave)
     expect(native.addEventListener).toHaveBeenCalledTimes(1)
+    expect(native.addEventListener.mock.calls[0]?.[0]).toBe('hardwareBackPress')
     act(() => {
       renderer.update(createElement(Screen, { hasUnsavedDraft: true, leave }))
     })

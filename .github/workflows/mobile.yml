@@ -107,7 +107,7 @@ jobs:
     # Why ARM: 209s of this job is Vitest and nothing here needs x86: no Android SDK, emulator, gradle,
     # Hermes or Watchman, no docker, and no artifacts. The Gemfile.lock lists the generic `ruby`
     # platform, so frozen bundler installs without an aarch64-linux entry.
-    runs-on: ubuntu-24.04-arm
+    runs-on: blacksmith-4vcpu-ubuntu-2404-arm
 
     env:
       # Why: an unfrozen bundler silently re-resolves when Gemfile.lock drifts
@@ -262,7 +262,7 @@ jobs:
       ORCA_MOBILE_TYPECHECK_COMPILER: 'native'
     if: github.event_name == 'push'
     # Why ARM: the same pure-Node Vitest run `verify` makes on a pull request.
-    runs-on: ubuntu-24.04-arm
+    runs-on: blacksmith-4vcpu-ubuntu-2404-arm
 
     defaults:
       run:

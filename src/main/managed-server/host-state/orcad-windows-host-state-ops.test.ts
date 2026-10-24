@@ -1,7 +1,4 @@
-/**
- * Runs the Windows host script's state ops under this machine's node, against real files:
- * the snapshot a rollback depends on, its comparison and restore, and owner admission.
- */
+// Execute generated Windows state operations with local Node against real files.
 import {
   existsSync,
   mkdirSync,
@@ -135,7 +132,7 @@ describe('the Windows state-mutation lock', () => {
     ['snapshot-clear', () => [root]]
   ] as const
 
-  /** Runs an op with the slot's process-tree addon answering `createdAt` for every pid. */
+  /** Simulate process-tree creation-time proof for every tested PID. */
   async function opWithAddon(createdAt: number, name: OrcadWindowsHostOp, ...args: string[]) {
     const slot = join(dir, 'orcad-0.2.0+bb01')
     mkdirSync(slot, { recursive: true })
@@ -199,7 +196,7 @@ Module._extensions['.node'] = (m, file) => file.endsWith('windows-process-tree.n
 
   it('keeps a live holder it cannot identify, however long it has been quiet, until it exits', async () => {
     expect(await op('snapshot-capture', root, snapshot)).toBe('CAPTURED')
-    // No process-tree addon here, so the creation time is unreadable.
+    // Without a process-tree addon, creation-time proof is unavailable.
     holdLock({ pid: process.pid, creationTimeMs: 1234 })
     utimesSync(lockDir(), new Date(0), new Date(0))
     expect(await op('snapshot-restore', root, snapshot)).toBe('STATE_MUTATION_BUSY')
@@ -218,7 +215,7 @@ Module._extensions['.node'] = (m, file) => file.endsWith('windows-process-tree.n
     const resume = join(dir, 'resume')
     const finished = join(dir, 'finished')
     const preload = join(dir, 'pause-rm.cjs')
-    // Holds the clear inside its first member removal, as a suspended or starved process would.
+    // Pause inside the first removal to model suspension while the host mutation lock remains held.
     writeFileSync(
       preload,
       `const fs = require('fs'); const rm = fs.promises.rm;
@@ -272,12 +269,10 @@ describe('the Windows state-mutation fence heartbeat', () => {
     })
     expect(Date.now() - statSync(fence).mtimeMs).toBeLessThan(60_000)
 
-    // Outside any fence's run, nothing refreshes it.
     utimesSync(fence, new Date(0), new Date(0))
     expect(await op('snapshot-restore', root, snapshot)).toBe('RESTORED')
     expect(statSync(fence).mtimeMs).toBe(0)
 
-    // A run another took the fence over from never mutates, and leaves the successor's token.
     writeFileSync(join(fence, '.orca-fence-owner'), 'successor')
     expect(await fencedOp(fence, 'holder-1', 'snapshot-restore', root, snapshot)).toMatchObject({
       code: 75,

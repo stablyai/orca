@@ -48,7 +48,6 @@ vi.mock('../codex/codex-state-db-backfill-recovery', () =>
 )
 vi.mock('../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
-// Layout-owner build: a view's painted-restore ack is main's to apply, for the pane's current terminal.
 const PANE = { worktreeId: 'repo::/wt', tabId: 'tab-1', leafId: 'leaf-1' }
 
 describe('a painted cold-restore ack in the layout-owner build', () => {

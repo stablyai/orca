@@ -2,12 +2,14 @@ import { rememberLiveBrowserUrl } from '@/components/browser-pane/describe-page/
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { openUrlInTabBesideBrowserPage } from '@/lib/browser-page-tab-opening'
 import { redactKagiSessionToken } from '../../../../shared/browser-url'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { useAppStore } from '../../store'
 import {
   acquireBrowserAutomationVisibility,
   releaseBrowserAutomationVisibility
 } from '@/components/browser-pane/host-guest/browser-automation-visibility'
 import { acquireBrowserAutomationBootstrapLease } from './browser-automation-bootstrap-lease'
+import { markBrowserPageOpenedByPage } from '@/components/browser-pane/host-guest/browser-page-window-close'
 import {
   beginAgentInputFocusGuard,
   clearAgentInputFocusGuards,
@@ -141,12 +143,20 @@ export function registerBrowserStateIpcBridge(
       if (!sourcePage || runtimeEnvironmentIdOrLocalUnlessTwin(store, sourcePage.worktreeId)) {
         return
       }
-      openUrlInTabBesideBrowserPage({
+      const openedPageId = openUrlInTabBesideBrowserPage({
         sourcePageId: browserPageId,
         worktreeId: sourcePage.worktreeId,
         url,
         activate: activate ?? true
       })
+      if (openedPageId) {
+        markBrowserPageOpenedByPage(openedPageId)
+      }
+    })
+  )
+  unsubs.push(
+    window.api.browser.onSessionProfilesChanged(() => {
+      void useAppStore.getState().fetchBrowserSessionProfiles(LOCAL_EXECUTION_HOST_ID)
     })
   )
 }

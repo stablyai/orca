@@ -5,10 +5,6 @@ import { importValidatedCookies, cookieImportTarget } from './browser-cookie-imp
 import type { DetectedBrowser } from './browser-cookie-detection-types'
 import { diag } from './browser-cookie-import-diagnostics'
 
-// ---------------------------------------------------------------------------
-// Safari import
-// ---------------------------------------------------------------------------
-
 export async function importCookiesFromSafari(
   browser: DetectedBrowser,
   targetPartition: string
@@ -20,7 +16,7 @@ export async function importCookiesFromSafari(
     data = readFileSync(browser.cookiesPath)
   } catch (err) {
     diag(`  Safari read failed: ${String(err)}`)
-    // Why: Safari's Cookies.binarycookies is in a sandbox container; reading it needs Full Disk Access.
+    // Safari’s sandboxed cookie file requires Full Disk Access.
     const isPermError =
       err instanceof Error && 'code' in err && (err as NodeJS.ErrnoException).code === 'EPERM'
     if (isPermError) {

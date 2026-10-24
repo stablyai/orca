@@ -5,6 +5,10 @@ import baseConfig from './vitest.config'
 import { nodeRuntimePool } from './scripts/vitest-node-runtime-pool'
 
 const contracts = [
+  'src/shared/tui-agent-permission-choice.test.ts',
+  'src/renderer/src/components/settings/agent-permission-conversion-persistence.test.tsx',
+  'src/main/runtime/rpc/methods/repo.test.ts',
+  'src/renderer/src/components/tab-bar/use-new-tab-agent-menu-host-preferences.test.tsx',
   'src/main/sqlite/sync-database.test.ts',
   'src/main/runtime/orchestration/db/row-column-lists.test.ts',
   'src/shared/native-chat-tool-attribution-allocation.test.ts',

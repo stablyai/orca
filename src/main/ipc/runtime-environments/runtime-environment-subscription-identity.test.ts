@@ -118,7 +118,6 @@ it('does not retain a subscription that closes before setup resolves', async () 
       return value
     }
   )
-  // The renderer hears the close, and the id is not kept for a dead connection.
   await expect(open()).resolves.toMatchObject({ subscriptionId: 'reused-id' })
   expect(sender.send).toHaveBeenCalledWith('runtimeEnvironments:subscriptionEvent', {
     subscriptionId: 'reused-id',

@@ -3,7 +3,7 @@ import { normalizeRepoSourceControlAiOverrides } from '../source-control-ai'
 import { normalizeRepoBadgeColor } from '../repo-badge-color'
 import { sanitizeRepoIcon } from '../repo-icon'
 import { normalizeGhAccountBinding } from '../github/account-binding'
-import { normalizeJiraProjectReference } from '../jira-project-reference'
+import { normalizeJiraProjectReference } from '../jira/jira-project-reference'
 import {
   normalizeCustomWorktreeVisibilitySources,
   normalizeWorktreeVisibilitySourcePreferences

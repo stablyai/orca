@@ -59,14 +59,12 @@ export class AutomationService {
   private readonly allowRemoteHostScheduling: boolean
   private readonly headlessDispatcher: HeadlessAutomationDispatcher | null
   private readonly automationLanes = new Map<string, Promise<void>>()
-  /** Set on a headless host: closes completed, unused run terminals now; resolves how many. */
+  /** Close unused completed terminals on headless hosts; return the count. */
   releaseFinishedRunTerminals: (() => Promise<number>) | null = null
   private readonly publish: PublishAutomationsChanged | null
   private readonly runs: AutomationRunWriter
   private readonly completionWatcher: AutomationRunCompletionWatcher | null
-  /** Installed by desktop IPC registration, where external probes live; null on
-   *  runtime servers. Orca's own automation traffic parks queued external
-   *  probes behind this lease, whichever transport carried it. */
+  /** Desktop automation traffic holds this lease to defer queued external probes. */
   externalProbePriority: (<T>(run: () => T) => T) | null = null
 
   constructor(
@@ -99,8 +97,6 @@ export class AutomationService {
       : null
   }
 
-  /** CRUD callers publish through the service so every authority write lands on
-   *  the same local + runtime client-event pair. */
   publishAutomationsChanged(payload: AutomationsChangedPayload = {}): void {
     this.publish?.(payload)
   }
@@ -112,8 +108,7 @@ export class AutomationService {
 
   setRendererReady(): void {
     this.rendererReady = true
-    // Why: the renderer publishes the desktop window graph, so only after it
-    // attaches can an unresolvable pane mean a lost terminal rather than "not yet".
+    // Pane lookup becomes authoritative after the renderer publishes its window graph.
     this.completionWatcher?.markTerminalSurfaceReady()
     void this.evaluateDueRuns()
   }
@@ -128,11 +123,9 @@ export class AutomationService {
     }, this.tickMs)
     this.completionWatcher?.reconcileRetainedRuns(this.store.listAutomationRuns())
     reportAutomationScheduleDrift(this.store.listAutomations())
-    // Why: headless serve never gets a renderer-ready IPC, but due runs still
-    // need the same startup catch-up pass desktop gets after renderer attach.
+    // Headless hosts need startup catch-up without a renderer-ready notification.
     if (this.rendererReady || this.headlessDispatcher) {
-      // Serve adopts its daemon PTYs and publishes its graph before start(), so
-      // its terminal surface is already as answerable as it will get.
+      // Serve adopts PTYs and publishes its graph before start().
       this.completionWatcher?.markTerminalSurfaceReady()
       void this.evaluateDueRuns()
     }
@@ -161,7 +154,6 @@ export class AutomationService {
     return await this.requestDispatch(automation, run, target, generation)
   }
 
-  /** The run-history row doc:94 pairs with the typed refusal an execute fence throws. */
   async recordRefusedRun(automationId: string): Promise<void> {
     const automation = this.store.listAutomations().find((entry) => entry.id === automationId)
     if (automation) {
@@ -209,10 +201,7 @@ export class AutomationService {
       return run
     }
     this.completionWatcher?.forget(run.id)
-    // Why: the renderer's mark-completed effect can re-fire for the same run
-    // before refresh() flips its status snapshot off 'dispatched'. Re-running
-    // collectRunUsage advances the attribution window and can rewrite an
-    // already-collected 'known' usage to 'unavailable'/'ambiguous_session'.
+    // Duplicate completion effects must not recalculate usage with a later attribution window.
     if (run.usage) {
       return run
     }
@@ -240,8 +229,7 @@ export class AutomationService {
         if (!automation.enabled || automation.nextRunAt > now) {
           continue
         }
-        // Isolated per record (#16303): an unreadable schedule throws out of the
-        // occurrence math, and an uncaught throw here skipped every later due row.
+        // A malformed schedule must not prevent later due rows from running.
         try {
           await this.evaluateAutomation(automation, now)
         } catch (error) {
@@ -274,13 +262,11 @@ export class AutomationService {
       return
     }
 
-    // Resolved before the run exists: a refusal repeats every occurrence, and a
-    // */5 automation would otherwise write ~288 identical rows a day — past
-    // retention, which would evict the automation's real history.
+    // Fold recurring refusals before creating rows so they do not evict real run history.
     const target = this.resolveTarget(automation)
     const canDispatch = this.canDispatchToRenderer() || Boolean(this.headlessDispatcher)
     const refusal = describeScheduledRefusal({ target, canDispatch })
-    // The WSL host runs this one now; a skip per tick would only churn the retained local copy.
+    // Once WSL owns the schedule, avoid churning skips on the retained local copy.
     if (refusal === WSL_MOVE_OWNED_BY_HOST) {
       await this.runs.advanceNextRun(automation.id, now)
       return
@@ -310,11 +296,7 @@ export class AutomationService {
     return Boolean(webContents && !webContents.isDestroyed() && this.rendererReady)
   }
 
-  /**
-   * One run of an automation at a time claims, prechecks, picks, prompts and records its agent,
-   * and headless retention closes that automation's terminals in the same lane, so no two ever
-   * claim one pane. Held only until the run is dispatched, never while its agent works.
-   */
+  /** Serialize dispatch and retention per automation until launch, without holding the lane during agent work. */
   runInAutomationLane<T>(automationId: string, operation: () => Promise<T>): Promise<T> {
     return runKeyedSerializedOperation(this.automationLanes, automationId, operation)
   }

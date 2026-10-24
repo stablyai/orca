@@ -26,7 +26,6 @@ type RegisteredRepoValidationResult =
   | { kind: 'ok'; repo: Repo }
   | { kind: 'denied'; reason: PRRefreshValidationDenialReason; message: string }
 
-/** A registered-repo lookup: the caller's path and id, plus the host it believes owns the row. */
 type RegisteredRepoQuery = {
   repoPath: string
   repoId?: string | null
@@ -49,7 +48,7 @@ function validateRegisteredRepo(
       message: 'Access denied: unknown repository path'
     }
   }
-  // Why id and path together: a twin's rows share the id, so the first id match can be the other host.
+  // Same-ID twins can live on different hosts; match path as well as ID.
   const pathRows = (repoId ? idRows : repos).filter(
     (candidate) => resolve(candidate.path) === resolvedRepoPath
   )
@@ -115,7 +114,6 @@ export function assertRegisteredGitHubRepo(
   return assertRegisteredRepo(registeredRepoQuery(args), store)
 }
 
-/** A manual PR refresh resolves its twin the way the automatic queue does. */
 export function assertRegisteredPRRefreshCandidateRepo(
   candidate: GitHubPRRefreshCandidate,
   store: Store
@@ -123,7 +121,7 @@ export function assertRegisteredPRRefreshCandidateRepo(
   return assertRegisteredRepo(prRefreshCandidateQuery(candidate), store)
 }
 
-/** Pure: a project is still registered at the candidate's path on its execution host (the queue key's identity). */
+/** Match the queue identity: registered path plus execution host. */
 export function isPRRefreshCandidateRegistered(
   candidate: GitHubPRRefreshCandidate,
   repos: readonly Repo[]

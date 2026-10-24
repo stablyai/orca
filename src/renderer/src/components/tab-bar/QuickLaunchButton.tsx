@@ -220,13 +220,13 @@ export function ProjectedAgentMenuItems({
         >
           {needsServerUpdate
             ? translate(
-                'auto.components.tab.bar.QuickLaunchButton.needsServerUpdate',
-                'Update Orca on this server to list this workspace’s agents'
+                'auto.components.tab.bar.QuickLaunchButton.terminalListNeedsServerUpdate',
+                'Update Orca on this server to list terminal agents'
               )
             : detectionFailed
               ? translate(
-                  'auto.components.tab.bar.QuickLaunchButton.hostUnreachable',
-                  'Can’t reach this workspace’s host to list its agents'
+                  'auto.components.tab.bar.QuickLaunchButton.terminalListFailed',
+                  'Couldn’t list terminal agents for this workspace'
                 )
               : detectedIds && detectedIds.length > 0
                 ? translate(

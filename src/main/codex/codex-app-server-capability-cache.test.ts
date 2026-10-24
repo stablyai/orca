@@ -133,9 +133,6 @@ describe('CodexAppServerCapabilityCache', () => {
     expect(cache.shouldTry('wsl:Alpine', 2)).toBe(true)
   })
 
-  // Why (#16441): grants no longer block the main thread, so two pane launches
-  // can reach a cold host at once. Without dedupe each one pays its own
-  // app-server session against a codex that has no such RPC surface.
   it('dedupes concurrent probes on one host to a single app-server session', async () => {
     const cache = new CodexAppServerCapabilityCache()
     let releaseProbe!: (error: unknown) => void

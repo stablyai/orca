@@ -172,8 +172,7 @@ describe('browserManager', () => {
         webviewTag: false
       }
     })
-    // Why: the custom createWindow is what swaps the chrome-less native child
-    // for Orca's origin-bar window without losing the popup contents.
+    // Custom createWindow preserves popup contents while adding an origin bar.
     expect(typeof response.createWindow).toBe('function')
 
     expect(shellOpenExternalMock).not.toHaveBeenCalled()
@@ -181,11 +180,7 @@ describe('browserManager', () => {
   })
 
   it('keeps opener-dependent window.open popups in-app for every disposition', () => {
-    // Regression guard for the reverted #8332: gating the allow on
-    // disposition === 'new-window' silently broke featureless window.open()
-    // OAuth flows, whose returned handle must stay live. A named target that
-    // keeps its opener and a blank URL each mark such a flow, so both keep a
-    // real child window no matter which disposition Chromium reports.
+    // OAuth window handles must stay live regardless of the reported disposition.
     const guest = {
       id: 140,
       isDestroyed: vi.fn(() => false),
@@ -235,7 +230,6 @@ describe('browserManager', () => {
         expect(handler({ ...open, disposition })).toMatchObject({ action: 'allow' })
       }
     }
-    // Chromium reports size/position features as a popup, with or without an opener.
     for (const features of ['width=500,height=600', 'noopener,width=500,height=600']) {
       expect(
         handler({
@@ -362,7 +356,7 @@ describe('browserManager', () => {
       features: string
       disposition: string
     }) => { action: 'allow' | 'deny' }
-    // Chromium reports these as tabs: noopener and noreferrer are not window features.
+    // Chromium does not treat noopener/noreferrer as window size or position features.
     const openerlessOpens = [
       { frameName: '', features: 'noopener,noreferrer' },
       { frameName: '', features: 'noopener' },
@@ -441,14 +435,14 @@ describe('browserManager', () => {
     }
     expect(routedTabCount()).toBe(clicks)
 
-    // One click cannot be replayed: a loop after it draws on the budget.
+    // Each observed input bypasses the budget once.
     inputEventHandler({}, { type: 'mouseUp' })
     for (let index = 0; index < MAX_PAGE_INITIATED_TABS_PER_WINDOW * 2; index++) {
       open(clicks + index)
     }
     expect(routedTabCount()).toBe(clicks + 1 + MAX_PAGE_INITIATED_TABS_PER_WINDOW)
 
-    // A click spent on a popup window cannot fund a later scripted tab.
+    // Spending activation on a popup cannot fund a later tab.
     vi.advanceTimersByTime(PAGE_INITIATED_TAB_WINDOW_MS)
     inputEventHandler({}, { type: 'mouseUp' })
     expect(
@@ -510,7 +504,7 @@ describe('browserManager', () => {
     }
     const handler = guestSetWindowOpenHandlerMock.mock.calls[0][0] as WindowOpenHandler
 
-    // A named child popup keeps a real child window; each one used to start with a fresh budget.
+    // Named child popups must share the root opener budget.
     const openNamedChild = (index: number): WindowOpenHandler => {
       const childSetWindowOpenHandlerMock = vi.fn()
       const child = {
@@ -643,27 +637,21 @@ describe('browserManager', () => {
       expect.any(Function)
     )
     expect(returned).toBe(popupContents)
-    // did-create-window does not fire for createWindow-created children, so
-    // the popup must get guest policies (nav guards, recursive popup handling)
-    // attached directly here.
+    // Custom-created children skip did-create-window, so attach their guest policies directly.
     expect(popupContents.setWindowOpenHandler).toHaveBeenCalledTimes(1)
     expect(popupContents.setBackgroundThrottling).toHaveBeenCalledWith(false)
     expect(popupContents.on.mock.calls.some(([event]) => event === 'dom-ready')).toBe(false)
-    // The renderer notice carries only the sanitized origin, never the URL.
     expect(rendererSendMock).toHaveBeenCalledWith('browser:popup', {
       browserPageId: 'browser-1',
       origin: 'https://sso.example.com',
       action: 'opened-in-orca'
     })
 
-    // Opener-lifecycle parity: destroying the owning guest closes the popup.
     const destroyedCall = guestOnceMock.mock.calls.find(([event]) => event === 'destroyed')
     expect(destroyedCall).toBeDefined()
     ;(destroyedCall as [string, () => void])[1]()
     expect(popupCloseMock).toHaveBeenCalledTimes(1)
 
-    // Popup windows opened by the popup itself keep the owner context, so the
-    // recursive handler still routes to the owning browser tab.
     const popupHandler = popupContents.setWindowOpenHandler.mock.calls[0][0] as (details: {
       url: string
     }) => { action: string }

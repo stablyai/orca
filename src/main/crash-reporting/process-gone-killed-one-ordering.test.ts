@@ -91,11 +91,9 @@ describe('recordProcessGoneCrash killed/1 ordering', () => {
     recordProcessGoneCrash({ record, attachDetails } as never, rendererKill, dedupe, noMinidump)
 
     expect(record).toHaveBeenCalledOnce()
-    // Timing proximity is evidence, not authority to discard an ambiguous report.
     expect(record).toHaveBeenCalledWith(
       expect.objectContaining({
-        // Co-victims of one external tree kill: the label names the evidence
-        // (these died together), not a sibling that caused anything.
+        // Concurrent victims provide no evidence that one process caused the other's death.
         details: expect.objectContaining({
           crashAttribution: 'concurrent-process-deaths',
           siblingProcessDeathCount: 2

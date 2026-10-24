@@ -107,7 +107,7 @@ export function createOrcadAccountServices(args: {
       prepareCodexCatalogProbeHome: (homePath) =>
         codexRuntimeHome.prepareHostCodexHomeForReadOnlyAppServer(
           homePath,
-          resolveTuiAgentLaunchEnv('codex', store.getSettings().agentDefaultEnv)
+          resolveTuiAgentLaunchEnv('codex', store.getSettings())
         ),
       prepareAiVaultSessionResume: (resumeArgs) =>
         prepareCodexAiVaultSessionResume(resumeArgs, {

@@ -1,4 +1,4 @@
-import type { JiraAuthType, JiraViewer } from '../../shared/jira-types'
+import type { JiraAuthType, JiraViewer } from '../../shared/jira/jira-types'
 import { JiraApiError, requestWithCredentials } from './authenticated-request'
 import { resolveJiraGatewayBaseUrl } from './cloud-gateway'
 import { toViewer } from './site-identity'

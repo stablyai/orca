@@ -25,15 +25,9 @@ export async function importChromiumCookies(
     return { ok: false, reason: `${browser.label} cookies database not found.` }
   }
 
-  // Why: cookies.set() rejects many valid values (bytes > 0x7F); instead write plaintext to the `value` column, which CookieMonster reads raw when `encrypted_value` is empty and re-encrypts on flush in packaged builds.
-
-  // Why: CookieMonster can reject otherwise valid imported bytes, so stage a populated copy whose
-  // imported-domain rows can be merged into the live DB on the next cold start.
+  // Stage imported rows for cold-start replay when live writes reject their bytes.
   const targetSession = session.fromPartition(targetPartition)
-  // Why (STA-4601): native imports mutate the live jar and their staged image before the old
-  // clear/write lock was reached. Hold the per-partition lock from the first flush through staging,
-  // live replacement, pending-image bookkeeping, and cleanup so an older image cannot race a newer
-  // import on the same partition.
+  // Lock staging, live mutation, and replay bookkeeping together to prevent stale-image races.
   return withCookieMutationLock(targetSession, async () => {
     let context: ChromiumImportContext | null = null
     try {
@@ -60,7 +54,6 @@ export async function importChromiumCookies(
           /* may already be closed */
         }
         context.closeStagingDb()
-        // Why: drop the staging DB so a stale staged import isn't applied on the next cold start.
         context.discardStagingFile()
       }
       diag(`  SQLite import failed: ${String(err)}`)

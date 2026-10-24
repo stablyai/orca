@@ -1,5 +1,5 @@
 import { homedir } from 'node:os'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { getDefaultPersistedState } from '../../../shared/constants'
 import { normalizeLoadedGlobalSettings } from './normalize-loaded-global-settings'
 import { prepareLoadedTerminalSettings } from './prepare-loaded-terminal-settings'
@@ -7,6 +7,8 @@ import { prepareLoadedProfileSettings } from './prepare-loaded-profile-settings'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { applyAgentPermissionMode } from '../../../shared/tui-agent-permissions'
+import { resolveAgentPermission } from '../../../shared/tui-agent-permission-choice'
+import { resolveTuiAgentLaunchArgs } from '../../../shared/tui-agent-launch-defaults'
 
 // Simulates a profile created before the dedicated Experimental switch was persisted.
 function normalizeLegacyProfile(overrides: Record<string, unknown>): PersistedState['settings'] {
@@ -21,6 +23,22 @@ function normalizeLegacyProfile(overrides: Record<string, unknown>): PersistedSt
   const profile = prepareLoadedProfileSettings(parsed, defaults, noop)
   return normalizeLoadedGlobalSettings(parsed, terminal, profile)
 }
+
+describe('chat worker error preference upgrade', () => {
+  it('defaults a truly missing saved key to on and preserves a saved opt-out', () => {
+    const parsed = getDefaultPersistedState(homedir())
+    delete parsed.settings.orchestrationChatErrorEscalationEnabled
+    const normalize = () =>
+      normalizeLoadedGlobalSettings(
+        parsed,
+        prepareLoadedTerminalSettings(parsed, () => {}),
+        prepareLoadedProfileSettings(parsed, getDefaultPersistedState(homedir()), () => {})
+      )
+    expect(normalize().orchestrationChatErrorEscalationEnabled).toBe(true)
+    parsed.settings.orchestrationChatErrorEscalationEnabled = false
+    expect(normalize().orchestrationChatErrorEscalationEnabled).toBe(false)
+  })
+})
 
 describe('retired setup placement', () => {
   it.each(['split-vertical', 'split-horizontal', 'new-tab', undefined])(
@@ -142,6 +160,112 @@ describe('chat appearance settings', () => {
 })
 
 describe('the new-chat permission setting', () => {
+  it.each<{
+    name: string
+    saved: Partial<GlobalSettings>
+    raw: string[]
+    choices: string[]
+    chat: string
+    terminal: string[]
+  }>([
+    {
+      name: 'mixed terminal permissions before the Chat seed exists',
+      saved: {
+        agentYoloDefaultsMigrated: true,
+        agentDefaultArgs: {
+          claude: '--dangerously-skip-permissions --model sonnet',
+          codex: '--approve-for-me --config tui.animations=false'
+        }
+      },
+      raw: ['--model sonnet', '--config tui.animations=false'],
+      choices: ['full-access', 'auto'],
+      chat: 'ask',
+      terminal: [
+        '--dangerously-skip-permissions --model sonnet',
+        '--approve-for-me --config tui.animations=false'
+      ]
+    },
+    {
+      name: 'explicit empty Arguments with saved Chat defaults',
+      saved: {
+        agentYoloDefaultsMigrated: true,
+        agentDefaultArgs: { claude: '', codex: '' },
+        nativeChatPermissionMode: 'auto'
+      },
+      raw: ['', ''],
+      choices: ['own', 'own'],
+      chat: 'auto',
+      terminal: ['', '']
+    },
+    {
+      name: 'Claude plan text owned by the user',
+      saved: {
+        agentYoloDefaultsMigrated: true,
+        agentDefaultArgs: { claude: '--permission-mode plan --model sonnet', codex: '' },
+        nativeChatPermissionMode: 'accept-edits'
+      },
+      raw: ['--permission-mode plan --model sonnet', ''],
+      choices: ['own', 'own'],
+      chat: 'accept-edits',
+      terminal: ['--permission-mode plan --model sonnet', '']
+    },
+    {
+      name: 'legacy yolo defaults before either migration',
+      saved: { agentYoloDefaultsMigrated: false, agentDefaultArgs: {} },
+      raw: ['', ''],
+      choices: ['full-access', 'full-access'],
+      chat: 'full-access',
+      terminal: ['--dangerously-skip-permissions', '--dangerously-bypass-approvals-and-sandbox']
+    }
+  ])(
+    'loads and reloads $name through the real profile pipeline',
+    ({ saved, raw, choices, chat, terminal }) => {
+      const defaults = getDefaultPersistedState(homedir())
+      const parsed: PersistedState = {
+        ...defaults,
+        settings: {
+          ...defaults.settings,
+          agentPermissionDefault: undefined,
+          agentPermissionOverrides: undefined,
+          nativeChatPermissionMode: undefined,
+          agentNativeChatPermissionModes: { claude: 'ask', codex: 'auto' },
+          agentDefaultEnv: { claude: { QA_LOADER_NOTE: 'preserved' } },
+          ...saved
+        }
+      }
+      const needsSave = vi.fn()
+      const profile = prepareLoadedProfileSettings(parsed, defaults, needsSave)
+      const loaded = normalizeLoadedGlobalSettings(
+        parsed,
+        prepareLoadedTerminalSettings(parsed, needsSave),
+        profile
+      )
+      expect(needsSave).toHaveBeenCalled()
+      expect(loaded.agentYoloDefaultsMigrated).toBe(true)
+      expect(loaded.agentPermissionDefault).toBeDefined()
+      expect(loaded.nativeChatPermissionMode).toBe(chat)
+      expect(loaded.agentNativeChatPermissionModes).toEqual({ claude: 'ask', codex: 'auto' })
+      expect(loaded.agentDefaultEnv?.claude).toEqual({ QA_LOADER_NOTE: 'preserved' })
+      expect(
+        (['claude', 'codex'] as const).map((agent) => loaded.agentDefaultArgs?.[agent])
+      ).toEqual(raw)
+      expect(
+        (['claude', 'codex'] as const).map((agent) => resolveAgentPermission(agent, loaded).choice)
+      ).toEqual(choices)
+      expect(
+        (['claude', 'codex'] as const).map((agent) => resolveTuiAgentLaunchArgs(agent, loaded))
+      ).toEqual(terminal)
+      const reloaded: PersistedState = { ...parsed, settings: JSON.parse(JSON.stringify(loaded)) }
+      expect(
+        normalizeLoadedGlobalSettings(
+          reloaded,
+          prepareLoadedTerminalSettings(reloaded, needsSave),
+          prepareLoadedProfileSettings(reloaded, defaults, needsSave)
+        )
+      ).toEqual(loaded)
+    }
+  )
+
   it.each([
     ['manual', 'ask'],
     ['yolo', 'full-access']

@@ -1,6 +1,4 @@
-// Which serialized ranges each serialize variant covers, and what they hold, for the
-// I1 scope in serialize-grid-roundtrip.ts: a range with an overlong line or a trailing
-// background-only row is where the Orca patch changes bytes on purpose.
+// Limit byte-identity checks to ranges outside intentional serializer changes.
 import type { Terminal } from '@xterm/headless'
 
 type Buffer = Terminal['buffer']['active']
@@ -40,8 +38,7 @@ export function variantOverlong(
   ]
 }
 
-// The patch keeps such rows only when the serializer trims (no scrollback in the range)
-// and the cursor is not wrap-pending; anywhere else its bytes must match the old build.
+// Trailing backgrounds change bytes only when trimming without scrollback or a wrap-pending cursor.
 function hasTrailingBackgroundRow(
   buffer: Buffer,
   start: number,
@@ -52,7 +49,7 @@ function hasTrailingBackgroundRow(
     return false
   }
   const scratch = buffer.getNullCell()
-  // Text as the serializer counts it: width-0 cells (e.g. an orphan combining mark) never are.
+  // Match serializer text detection: width-zero cells do not count as text.
   let lastTextRow = start - 1
   for (let y = start; y < end; y++) {
     const line = buffer.getLine(y)

@@ -69,7 +69,6 @@ vi.mock('./runtime-environment-request-connections', async () => {
       reconnectRemoteRuntimeSharedControlConnectionMock,
     retryRemoteRuntimeSharedControlConnectionsNow:
       retryRemoteRuntimeSharedControlConnectionsNowMock,
-    retryRemoteRuntimeSharedControlConnectionNow: vi.fn(),
     ensureRemoteRuntimeSharedControlConnection: vi.fn(),
     pauseRemoteRuntimeSharedControlRetry: vi.fn(),
     closeRemoteRuntimeRequestConnection: closeRemoteRuntimeRequestConnectionMock
@@ -612,7 +611,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       { ok: true; result: unknown }
     >('runtimeEnvironments:call')
 
-    // A worktree switch lists its tabs; before, each list opened and authenticated a new socket.
+    // Repeated tab reads should reuse the authenticated shared socket.
     for (let i = 0; i < 10; i += 1) {
       await expect(
         call(null, { selector: 'desk', method: 'session.tabs.list', params: { worktree: 'id:w' } })
@@ -628,7 +627,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       'session.tabs.listAll'
     ])
 
-    // The shared socket dropped (a host restart): snapshot recovery goes back to one-shot.
+    // Reconnecting shared sockets must leave one-shot snapshot recovery available.
     getRemoteRuntimeSharedControlDiagnosticsMock.mockReturnValue({ state: 'reconnecting' })
     sendRemoteRuntimeRequestMock.mockResolvedValue({
       id: 'session.tabs.list',

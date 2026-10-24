@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import { createBridgeDiagnosticReporter } from './bridge-diagnostic-log'
 
 let warned: MockInstance<typeof console.warn>
@@ -24,6 +24,7 @@ describe('the bridge diagnostic log', () => {
     report({ kind: 'frame-after-close' })
     report({ kind: 'frame-after-close' })
     report({ kind: 'notify-refused', name: 'fault', why: 'ungranted' })
+    report({ kind: 'notify-refused', name: 'fault', why: 'ungranted' })
     expect(reported).toEqual(['frame-after-close', 'notify-refused'])
     expect(lines()).toHaveLength(2)
   })
@@ -36,13 +37,6 @@ describe('the bridge diagnostic log', () => {
     expect(lines()[0]).toContain('fault')
     expect(lines()[0]).toContain('before-ready')
     expect(lines()[1]).toContain('ungranted')
-  })
-
-  it('still holds one page to a line per refusal, however many frames it posts', () => {
-    const report = createBridgeDiagnosticReporter()
-    report({ kind: 'notify-refused', name: 'fault', why: 'before-ready' })
-    report({ kind: 'notify-refused', name: 'fault', why: 'before-ready' })
-    expect(warned).toHaveBeenCalledTimes(1)
   })
 
   it('says a view outlived its host only for a frame that did', () => {
@@ -134,3 +128,5 @@ describe('the bridge diagnostic log', () => {
     expect(lines()[1]).toContain('stream-2')
   })
 })
+
+afterEach(() => warned.mockRestore())

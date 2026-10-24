@@ -3,13 +3,7 @@ import { readOpenCodeDatabase } from '../../ai-vault/session-scanner-opencode-sq
 import { columnExists, tableExists } from '../../opencode-usage/schema-helpers'
 import type { BinderSessionRow, OpenCodeSessionCursor } from '../opencode-binder-sessions-result'
 
-/**
- * Sessions newer than `cursor`, oldest first. The composite `(time_created, id)`
- * position re-lists rows sharing a millisecond with the cursor, including rows
- * the LIMIT cut off last round. Unknown shapes read as empty so an OpenCode
- * schema move degrades to unbound sessions. An absent store is empty (#24577);
- * any other failed open throws, so the client logs it.
- */
+/** Composite cursor pagination preserves same-millisecond rows; unknown schemas or absent stores return empty. */
 export function readOpenCodeBinderSessions(
   dbPath: string,
   cursor: OpenCodeSessionCursor
@@ -20,8 +14,7 @@ export function readOpenCodeBinderSessions(
   return readOpenCodeDatabase({
     dbPath,
     read: (db) => {
-      // Why `session` only: OpenCode 1 writes it; OpenCode 2 writes `session_v2`, and its
-      // posts name their own pane, so its sessions must never bind.
+      // Exclude OpenCode 2 session_v2 rows: its posts already identify the pane and must not bind again.
       const table = 'session'
       if (
         !tableExists(db, table) ||
@@ -62,7 +55,7 @@ export function readOpenCodeBinderSessions(
   })
 }
 
-// Why stat, not existsSync: a permission failure must surface, not read as an unused store.
+// stat surfaces permission errors that existsSync would confuse with an absent store.
 function storeExists(dbPath: string): boolean {
   try {
     statSync(dbPath)

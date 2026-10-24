@@ -7,7 +7,7 @@ import { RemoteRuntimeClientError } from '../../../shared/remote-runtime-client-
 import {
   openRemoteRuntimePassthroughSocket,
   type RemoteRuntimePassthroughSocket
-} from '../../../shared/remote-runtime-passthrough-socket'
+} from '../../../shared/remote-runtime/remote-runtime-passthrough-socket'
 import { DelegatedPhoneGrantCache } from './delegated-phone-grant-cache'
 import { localHostedBrowserPageRequest } from './hosted-browser-page-route'
 import type { MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
