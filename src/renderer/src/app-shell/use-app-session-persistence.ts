@@ -15,6 +15,7 @@ import {
   buildWorkspaceSessionHostSnapshots,
   patchWorkspaceSessionByHost
 } from '../lib/workspace-session-host-persistence'
+import { persistedWorkspaceSessionKeys } from '../lib/workspace-session-persisted-keys'
 import {
   createShutdownCheckpointBeforeUnloadHandler,
   createShutdownCheckpointGuard
@@ -51,8 +52,12 @@ export function useAppSessionPersistence(): void {
       onPersistError: (error) => console.warn('[session] Session patch failed:', error),
       persist: ({ patch }) => {
         // Why: route each host's worktree-scoped slice to its own partition.
-        return patchWorkspaceSessionByHost(window.api.session, patch, useAppStore.getState())
-          .written
+        return patchWorkspaceSessionByHost(
+          window.api.session,
+          patch,
+          useAppStore.getState(),
+          persistedWorkspaceSessionKeys
+        ).written
       }
     })
   }, [])
@@ -93,7 +98,8 @@ export function useAppSessionPersistence(): void {
         const freshState = useAppStore.getState()
         return buildWorkspaceSessionHostSnapshots(
           buildWorkspaceSessionPayload(freshState),
-          freshState
+          freshState,
+          persistedWorkspaceSessionKeys
         )
       },
       buildUiPatch: () => buildActiveViewUnloadPatch(useAppStore.getState()),

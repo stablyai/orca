@@ -22,6 +22,7 @@ import {
   normalizeWorkspaceSessionKeyToWorktreeId
 } from './workspace-session-host-contention'
 import { nonLocalHostSessionEntries, type HostSessionSlices } from './workspace-session-host-split'
+import { seedPersistedWorkspaceSessionKeys } from './workspace-session-persisted-keys'
 
 type SessionReadApi = {
   get: (hostId?: ExecutionHostId) => Promise<WorkspaceSessionState>
@@ -39,7 +40,7 @@ export type WorkspaceSessionHostRead = {
   contestedPrimaryHostBySessionKey: Record<string, ExecutionHostId>
 }
 
-const WORKSPACE_SESSION_KEYED_FIELDS = [
+export const WORKSPACE_SESSION_KEYED_FIELDS = [
   'tabsByWorktree',
   'openFilesByWorktree',
   'activeFileIdByWorktree',
@@ -244,6 +245,8 @@ export async function fetchWorkspaceSessionWithRuntimeHostOwners(
       primaryHostBySessionKey[workspaceId] = hostId
     }
   }
+  // Why: a restored row closed before any write still has to leave the partition it came from.
+  seedPersistedWorkspaceSessionKeys(session, WORKSPACE_SESSION_KEYED_FIELDS)
   return {
     session,
     // Why the merged slices and not the raw ones: a row parked out of the renderer session must not
